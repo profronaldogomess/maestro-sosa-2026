@@ -11,83 +11,95 @@ import plotly.express as px
 
 st.set_page_config(page_title="SOSA 2026 | Master Intelligence", layout="wide", page_icon="🏫")
 
-# --- OTIMIZAÇÃO VISUAL, LOGO E WIDGETS (CSS PRO - MODO CLARO FORÇADO) ---
+# --- OTIMIZAÇÃO VISUAL: MODO APP MOBILE (CSS V14) ---
 st.markdown("""
     <style>
-        /* 1. FORÇAR MODO CLARO (Fundo e Texto) */
+        /* 1. FORÇAR MODO CLARO E LIMPO */
         .stApp {
-            background-color: #FFFFFF !important; /* Fundo Branco */
-            color: #262730 !important; /* Texto Escuro */
+            background-color: #FFFFFF !important;
+            color: #262730 !important;
         }
         
-        /* 2. Remove cabeçalho padrão e ajusta margens mobile */
-        header[data-testid="stHeader"] {visibility: hidden; height: 0%;}
+        /* 2. REMOVER CABEÇALHO E RODAPÉ (Ganhar espaço no celular) */
+        header[data-testid="stHeader"] {display: none;}
+        footer {display: none;}
+        #MainMenu {display: none;}
+        
+        /* 3. AJUSTE DE MARGENS (Conteúdo cola no topo) */
         .block-container {
             padding-top: 1rem !important;
-            padding-bottom: 1rem !important;
+            padding-bottom: 3rem !important;
             padding-left: 1rem !important;
             padding-right: 1rem !important;
         }
         
-        /* 3. Estilo dos Botões (Largos e Arredondados) */
+        /* 4. TRANSFORMAR MENU LATERAL EM BOTÕES (Estilo App) */
+        /* Esconde as bolinhas do radio button */
+        div[role="radiogroup"] > label > div:first-of-type {
+            display: none;
+        }
+        /* Transforma o texto em botão */
+        div[role="radiogroup"] > label {
+            background-color: #F0F2F6;
+            padding: 12px 20px;
+            border-radius: 10px;
+            margin-bottom: 8px;
+            border: 1px solid #E0E0E0;
+            display: flex;
+            justify-content: center; /* Centraliza texto */
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        /* Efeito ao passar o mouse ou tocar */
+        div[role="radiogroup"] > label:hover {
+            background-color: #E3E7ED;
+            transform: scale(1.02);
+        }
+        /* Botão Selecionado (Fica Azul) */
+        div[role="radiogroup"] > label[data-testid="stMarkdownContainer"] > p {
+            font-weight: bold;
+            font-size: 1rem;
+        }
+        /* Quando selecionado (Hack de CSS) */
+        div[role="radiogroup"] label[aria-checked="true"] {
+            background-color: #2962FF !important;
+            color: white !important;
+            border: none;
+            box-shadow: 0 4px 6px rgba(41, 98, 255, 0.3);
+        }
+        div[role="radiogroup"] label[aria-checked="true"] p {
+            color: white !important;
+        }
+
+        /* 5. BOTÕES DE AÇÃO (Salvar, Gerar) - Grandes e Fortes */
         .stButton button {
             width: 100%;
             border-radius: 12px;
+            height: 50px; /* Mais alto para o dedo */
             font-weight: bold;
-            border: 1px solid #dfe1e5;
-            background-color: #ffffff;
-            color: #262730;
-            transition: all 0.3s;
+            font-size: 16px;
+            background-color: #2962FF;
+            color: white;
+            border: none;
         }
         .stButton button:hover {
-            transform: scale(1.02);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-            border-color: #2962FF;
-            color: #2962FF;
+            background-color: #0039CB;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
         }
 
-        /* 4. WIDGETS (Cartões com Contraste Garantido) */
+        /* 6. CARTÕES (WIDGETS) */
         [data-testid="stMetric"] {
-            background-color: #F8F9FA !important; /* Cinza muito claro */
+            background-color: #F8F9FA !important;
             border: 1px solid #E0E0E0 !important;
-            padding: 15px;
             border-radius: 15px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-            text-align: center;
+            padding: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         }
         
-        /* Título do Widget (Label) - FORÇAR COR ESCURA */
-        [data-testid="stMetricLabel"] {
-            font-size: 0.9rem !important;
-            color: #555555 !important; /* Cinza Escuro */
-            font-weight: 600 !important;
-            justify-content: center;
-        }
-        
-        /* Valor do Widget (Número) - FORÇAR COR AZUL */
-        [data-testid="stMetricValue"] {
-            font-size: 1.8rem !important;
-            color: #2962FF !important; /* Azul Royal */
-            font-weight: 700 !important;
-        }
-
-        /* 5. Ajuste da Sidebar (Barra Lateral) */
-        [data-testid="stSidebar"] {
-            background-color: #F0F2F6 !important; /* Cinza Claro */
-        }
-        [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 {
-            color: #262730 !important;
-        }
-        
-        /* 6. Ajuste de Textos Gerais (Markdown, Títulos) */
-        h1, h2, h3, p, li, span {
-            color: #262730 !important;
-        }
-        
-        /* Exceção para textos dentro de botões ou componentes específicos que precisam ser brancos */
-        .stToast {
-            background-color: #ffffff !important;
-            color: #262730 !important;
+        /* 7. TABELAS (Rolagem Horizontal Suave) */
+        [data-testid="stDataFrame"] {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -1578,3 +1590,4 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                 else:
 
                     st.info("Banco de relatórios vazio.")
+
