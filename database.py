@@ -2,6 +2,7 @@ import gspread
 import pandas as pd
 from google.oauth2 import service_account
 import streamlit as st
+import os  # <--- O ERRO ESTAVA AQUI (FALTAVA ESSA LINHA)
 
 def conectar():
     try:
@@ -18,7 +19,11 @@ def conectar():
             
         return gspread.authorize(creds).open("SOSA_DB_2026")
     except Exception as e:
-        st.error(f"Erro de Conexão: {e}")
+        # Evita mostrar erro na tela se for apenas timeout, tenta reconectar silenciosamente na proxima
+        if "429" in str(e):
+            st.warning("⚠️ Limite de tráfego do Google. Aguarde alguns segundos.")
+        else:
+            st.error(f"Erro de Conexão: {e}")
         return None
 
 def limpar_id(valor):
@@ -222,10 +227,7 @@ def atualizar_necessidade_aluno(id_aluno, nova_necessidade):
         
         if cell:
             # 2. A coluna NECESSIDADES é a 5ª coluna (A=1, B=2, C=3, D=4, E=5)
-            # Atualiza apenas essa célula na linha encontrada
             ws.update_cell(cell.row, 5, nova_necessidade.upper())
-            
-            # 3. Limpa a memória para o sistema ver a mudança na hora
             st.cache_data.clear()
             return True
         else:
@@ -235,12 +237,8 @@ def atualizar_necessidade_aluno(id_aluno, nova_necessidade):
         st.error(f"Erro ao atualizar aluno: {e}")
         return False
     
-    # --- FUNÇÃO PARA O BOLETIM ANUAL (RECUPERAÇÃO FINAL) ---
+# --- FUNÇÃO PARA O BOLETIM ANUAL (RECUPERAÇÃO FINAL) ---
 def salvar_rec_final(id_aluno, nome_aluno, turma, nota_rec_final):
-    """
-    Salva a nota de Recuperação Final como um registro especial na tabela de notas.
-    Usa o 'TRIMESTRE' como 'REC_FINAL'.
-    """
     try:
         wb = conectar()
         ws = wb.worksheet("DB_NOTAS")
@@ -253,36 +251,26 @@ def salvar_rec_final(id_aluno, nome_aluno, turma, nota_rec_final):
                 break
         
         # 2. Salva a nova
-        # Estrutura: ID, NOME, TURMA, TRIMESTRE, VISTOS, TESTE, PROVA, REC, MEDIA_FINAL
-        # Na Rec Final, a nota vai direto na MEDIA_FINAL
         ws.append_row([id_aluno, nome_aluno, turma, "REC_FINAL", 0, 0, 0, 0, str(nota_rec_final).replace('.', ',')])
-        
         st.cache_data.clear()
         return True
     except Exception as e:
         st.error(f"Erro ao salvar Rec Final: {e}")
         return False
     
-    # --- FUNÇÃO ESPECIAL: SALVAR ATA (SUBSTITUI ANTERIOR) ---
+# --- FUNÇÃO ESPECIAL: SALVAR ATA (SUBSTITUI ANTERIOR) ---
 def salvar_ata_conselho(data, turma, tipo, conteudo):
-    """
-    Salva a Ata de Conselho. Se já existir uma para a mesma Turma e Trimestre,
-    ela apaga a antiga para evitar duplicidade.
-    """
     try:
         wb = conectar()
         ws = wb.worksheet("DB_RELATORIOS")
         dados = ws.get_all_values()
         
         # Varre de trás para frente para encontrar e apagar duplicatas
-        # Estrutura: DATA(0), ID(1), NOME(2), TIPO(3), CONTEUDO(4)
         for i in range(len(dados) - 1, 0, -1):
             row = dados[i]
             if len(row) > 3:
-                # Verifica se é ID="TURMA", se é a mesma Turma e o mesmo Trimestre
                 if row[1] == "TURMA" and row[2] == turma and row[3] == tipo:
                     ws.delete_rows(i + 1)
-                    # Não damos break aqui para garantir que limpe todas as duplicatas se houver mais de uma
         
         # Salva a nova versão
         ws.append_row([data, "TURMA", turma, tipo, conteudo])
