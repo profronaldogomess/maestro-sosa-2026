@@ -167,6 +167,205 @@ menu = st.sidebar.radio("Navegação:", [
     "♿ Relatórios PEI / Perfil IA"
 ])
 
+# Função Auxiliar de Visualização com Chaves Dinâmicas
+def exibir_material_estruturado(texto_raw, key_prefix):
+    t1, t2, t3, t4 = st.tabs(["✍️ Lousa/Slides", "📄 Folha", "✅ Gabarito", "🎨 Imagens"])
+    with t1:
+        st.text_area("Conteúdo Principal (Quadro ou Script Gamma AI):", ai.extrair_tag(texto_raw, "LOUSA"), height=400, key=f"{key_prefix}_lousa_txt")
+    with t2:
+        st.text_area("Atividade:", ai.extrair_tag(texto_raw, "FOLHA"), height=400, key=f"{key_prefix}_folha_txt")
+    with t3:
+        st.text_area("Gabarito:", ai.extrair_tag(texto_raw, "GABARITO"), height=200, key=f"{key_prefix}_gab_txt")
+    with t4:
+        st.text_area("Prompts:", ai.extrair_tag(texto_raw, "IMAGENS"), height=150, key=f"{key_prefix}_img_txt")
+
+# ==============================================================================
+# MÓDULO: DASHBOARD INTELIGENTE (V6 - FULL CONTEXT: NOTAS + PDF + AULAS CRIADAS)
+# ==============================================================================
+if menu == "🤖 Maestro Dashboard":
+    st.title("🤖 Maestro Dashboard | Central de Inteligência")
+    st.markdown("---")
+
+    # --- 1. FUNÇÃO DE LIMPEZA DE NOTAS (NORMALIZAÇÃO RECURSIVA) ---
+    def normalizar_nota_agressiva(valor):
+        """
+        Garante matematicamente que a nota fique entre 0 e 10.
+        Usa loop while para corrigir erros como 718 -> 71.8 -> 7.18
+        """
+        try:
+            # Limpeza básica de string
+            s_val = str(valor).replace(',', '.').strip()
+            if not s_val or s_val.lower() == 'nan': return 0.0
+            
+            f_val = float(s_val)
+            
+            # Loop de correção: Enquanto for maior que 10, divide por 10
+            while f_val > 10.0:
+                f_val = f_val / 10.0
+                
+            return f_val
+        except:
+            return 0.0
+
+    # --- 2. PREPARAÇÃO DOS DADOS (CONTEXTO GLOBAL) ---
+    def montar_contexto_global():
+        ctx = "DADOS ESTRUTURADOS DO SISTEMA (ITABUNA 2026):\n\n"
+        
+        # A. Tempo
+        hoje = datetime.now()
+        inicio_aulas = datetime(2026, 2, 2)
+        if hoje < inicio_aulas:
+            ctx += f"DATA HOJE: {hoje.strftime('%d/%m/%Y')} (Período de Planejamento).\n\n"
+        else:
+            semana_num = int((hoje - inicio_aulas).days / 7) + 1
+            trimestre_atual, _ = util.obter_info_trimestre(hoje.date())
+            ctx += f"DATA HOJE: {hoje.strftime('%d/%m/%Y')} (Semana {semana_num}, {trimestre_atual}).\n\n"
+
+        # B. Alunos
+        if not df_alunos.empty:
+            total = len(df_alunos)
+            peis = df_alunos[df_alunos['NECESSIDADES'] != 'NENHUMA']
+            lista_peis = ", ".join([f"{r['NOME_ALUNO']} ({r['NECESSIDADES']})" for _, r in peis.iterrows()])
+            ctx += f"TURMA: {total} alunos. PEI: {lista_peis}.\n"
+        
+        # C. Notas (NORMALIZAÇÃO AGRESSIVA)
+        if not df_notas.empty:
+            ctx += "BOLETIM (Notas Normalizadas 0-10):\n"
+            for _, row in df_notas.iterrows():
+                nome = row['NOME_ALUNO']
+                n_visto = normalizar_nota_agressiva(row.get('NOTA_VISTOS', 0))
+                n_teste = normalizar_nota_agressiva(row.get('NOTA_TESTE', 0))
+                n_prova = normalizar_nota_agressiva(row.get('NOTA_PROVA', 0))
+                n_media = normalizar_nota_agressiva(row.get('MEDIA_FINAL', 0))
+                
+                ctx += f"- {nome}: Média {n_media:.1f} (Vistos: {n_visto}, Teste: {n_teste}, Prova: {n_prova})\n"
+            ctx += "\n"
+
+        # D. Planejamento
+        if not df_planos.empty:
+            planos_prox = df_planos.tail(3) 
+            resumo_planos = " | ".join([f"Semana {r['SEMANA']}: {ai.extrair_tag(r['PLANO_TEXTO'], 'CONTEUDOS_ESPECIFICOS')}" for _, r in planos_prox.iterrows()])
+            ctx += f"PLANEJAMENTO RECENTE: {resumo_planos}.\n"
+
+        # E. Diário
+        if not df_diario.empty:
+            ultimos = df_diario.tail(20)
+            ocorrencias = []
+            for _, r in ultimos.iterrows():
+                tags = str(r['TAGS'])
+                obs = str(r['OBSERVACOES'])
+                if (tags and tags != "nan" and tags != "") or (obs and obs != "nan" and obs != ""):
+                    ocorrencias.append(f"{r['DATA']} - {r['NOME_ALUNO']}: {tags} | {obs}")
+            ctx += f"DIÁRIO (Ocorrências): {'; '.join(ocorrencias)}.\n"
+
+        # F. Materiais Criados (NOVA INTEGRAÇÃO)
+        if not df_aulas.empty:
+            # Pega os últimos 5 materiais criados para dar contexto do que já foi feito
+            ultimos_mats = df_aulas.tail(5)
+            lista_mats = []
+            for _, r in ultimos_mats.iterrows():
+                # Pega um resumo do conteúdo para não estourar o limite de texto
+                resumo_conteudo = str(r['CONTEUDO'])[:150].replace('\n', ' ') + "..."
+                lista_mats.append(f"[{r['DATA']}] Tipo: {r['TIPO_MATERIAL']} (Ref: {r['SEMANA_REF']}) -> Conteúdo: {resumo_conteudo}")
+            
+            ctx += f"MATERIAIS JÁ CRIADOS PELO PROFESSOR (Histórico): {'; '.join(lista_mats)}.\n"
+
+        return ctx
+
+    # --- 3. VISUALIZAÇÃO DE KPIs (CARTÕES) ---
+    col_kpi1, col_kpi2, col_kpi3, col_kpi4 = st.columns(4)
+
+    # KPI 1: Total Alunos
+    col_kpi1.metric("👥 Total de Alunos", len(df_alunos) if not df_alunos.empty else 0)
+
+    # KPI 2: Alunos PEI
+    total_pei = len(df_alunos[df_alunos['NECESSIDADES'] != 'NENHUMA']) if not df_alunos.empty else 0
+    col_kpi2.metric("♿ Alunos PEI/AEE", total_pei)
+
+    # KPI 3: Média Geral
+    media_turma = 0.0
+    delta_media = "Sem dados"
+    if not df_notas.empty:
+        notas_corrigidas = df_notas['MEDIA_FINAL'].apply(normalizar_nota_agressiva)
+        media_turma = notas_corrigidas.mean()
+        delta_media = "Na média" if media_turma >= 6.0 else "Abaixo da meta"
+    
+    col_kpi4.metric("📊 Média Geral (Rede)", f"{media_turma:.1f}", delta=delta_media)
+
+    # KPI 4: Risco
+    risco = 0
+    if not df_notas.empty:
+        risco = len(df_notas[df_notas['MEDIA_FINAL'].apply(normalizar_nota_agressiva) < 6.0])
+    col_kpi4.metric("🚨 Risco (Notas < 6.0)", risco, delta_color="inverse")
+
+
+    # --- 4. CHAT COM VISÃO DE ARQUIVOS (PDFs) ---
+    st.markdown("### 💬 Converse com o Sistema")
+    
+    # PREPARAÇÃO DOS ARQUIVOS (PDFs)
+    arquivos_para_ia = []
+    nomes_arquivos = []
+    if not df_materiais.empty:
+        for _, row in df_materiais.iterrows():
+            uri = row['URI_ARQUIVO']
+            nome = row['NOME_ALUNO'] if 'NOME_ALUNO' in row else row['NOME_ARQUIVO'] 
+            nomes_arquivos.append(nome)
+            arquivos_para_ia.append(types.Part.from_uri(file_uri=uri, mime_type="application/pdf"))
+    
+    # Feedback Visual
+    if arquivos_para_ia:
+        st.success(f"📚 **Biblioteca Conectada:** O Maestro está lendo {len(arquivos_para_ia)} livro(s): {', '.join(nomes_arquivos)}")
+    else:
+        st.warning("⚠️ Nenhum livro PDF encontrado na Base de Conhecimento. O Chat só lerá as planilhas.")
+
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+
+    if prompt := st.chat_input("Ex: 'O que eu criei na semana passada?', 'Resuma a página 23 do livro'"):
+        st.chat_message("user").markdown(prompt)
+        st.session_state.messages.append({"role": "user", "content": prompt})
+
+        with st.chat_message("assistant"):
+            with st.spinner("Processando planilhas, materiais criados e lendo livros..."):
+                
+                contexto_dados = montar_contexto_global()
+                
+                # PROMPT REFORÇADO
+                prompt_final = (
+                    f"VOCÊ É O MAESTRO SOSA, O SISTEMA CENTRAL DA ESCOLA.\n"
+                    f"IMPORTANTE: Você recebeu arquivos PDF anexos (Livros Didáticos). "
+                    f"SE A PERGUNTA FOR SOBRE CONTEÚDO, PÁGINAS OU EXERCÍCIOS, LEIA O PDF ANEXO IMEDIATAMENTE.\n"
+                    f"NÃO DIGA QUE NÃO TEM ACESSO. OS ARQUIVOS ESTÃO NO SEU CONTEXTO.\n\n"
+                    f"DADOS DAS PLANILHAS (NOTAS/DIÁRIO/MATERIAIS CRIADOS):\n{contexto_dados}\n\n"
+                    f"PERGUNTA DO PROFESSOR: {prompt}"
+                )
+                
+                # Envia Prompt + Arquivos
+                resposta = ai.gerar_ia("MAESTRO", prompt_final, partes_arquivos=arquivos_para_ia)
+                
+                st.markdown(resposta)
+        
+        st.session_state.messages.append({"role": "assistant", "content": resposta})
+
+# ==============================================================================
+# MÓDULO: MATERIAL DE SALA (🧪 CRIADOR DE AULAS)
+# ==============================================================================
+elif menu == "🧪 Criador de Aulas":
+    st.header("🧪 Laboratório de Materiais Didáticos")
+    
+    t_lousa, t_avulsa, t_prova, t_prova_pei, t_adaptada, t_hist = st.tabs([
+        "🏫 Lousa/Slides", 
+        "🏠 Atividades Avulsas", 
+        "📝 Avaliações (Regular)", 
+        "♿ Avaliação Adaptada (PEI)", 
+        "🧩 Atividade Global (PEI)", 
+        "🗂️ Histórico"
+    ])
+
     # --- ABA 1: LOUSA / SLIDES ---
     with t_lousa:
         st.subheader("📋 Material de Sala (Baseado no Plano)")
@@ -1411,9 +1610,4 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                     else:
                         st.info("Nenhum histórico para este aluno.")
                 else:
-
                     st.info("Banco de relatórios vazio.")
-
-
-
-
