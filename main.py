@@ -11,10 +11,16 @@ import plotly.express as px
 
 st.set_page_config(page_title="SOSA 2026 | Master Intelligence", layout="wide", page_icon="🏫")
 
-# --- OTIMIZAÇÃO VISUAL, LOGO E WIDGETS (CSS PRO) ---
+# --- OTIMIZAÇÃO VISUAL, LOGO E WIDGETS (CSS PRO - MODO CLARO FORÇADO) ---
 st.markdown("""
     <style>
-        /* 1. Remove cabeçalho padrão e ajusta margens mobile */
+        /* 1. FORÇAR MODO CLARO (Fundo e Texto) */
+        .stApp {
+            background-color: #FFFFFF !important; /* Fundo Branco */
+            color: #262730 !important; /* Texto Escuro */
+        }
+        
+        /* 2. Remove cabeçalho padrão e ajusta margens mobile */
         header[data-testid="stHeader"] {visibility: hidden; height: 0%;}
         .block-container {
             padding-top: 1rem !important;
@@ -23,46 +29,65 @@ st.markdown("""
             padding-right: 1rem !important;
         }
         
-        /* 2. Estilo dos Botões (Largos e Arredondados) */
+        /* 3. Estilo dos Botões (Largos e Arredondados) */
         .stButton button {
             width: 100%;
             border-radius: 12px;
             font-weight: bold;
             border: 1px solid #dfe1e5;
+            background-color: #ffffff;
+            color: #262730;
             transition: all 0.3s;
         }
         .stButton button:hover {
             transform: scale(1.02);
             box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            border-color: #2962FF;
+            color: #2962FF;
         }
 
-        /* 3. WIDGETS (Transforma st.metric em Cartões com Sombra) */
+        /* 4. WIDGETS (Cartões com Contraste Garantido) */
         [data-testid="stMetric"] {
-            background-color: #ffffff;
-            border: 1px solid #e0e0e0;
+            background-color: #F8F9FA !important; /* Cinza muito claro */
+            border: 1px solid #E0E0E0 !important;
             padding: 15px;
             border-radius: 15px;
             box-shadow: 0 2px 5px rgba(0,0,0,0.05);
             text-align: center;
         }
         
-        /* Título do Widget (Label) */
+        /* Título do Widget (Label) - FORÇAR COR ESCURA */
         [data-testid="stMetricLabel"] {
             font-size: 0.9rem !important;
-            color: #666;
+            color: #555555 !important; /* Cinza Escuro */
+            font-weight: 600 !important;
             justify-content: center;
         }
         
-        /* Valor do Widget (Número) */
+        /* Valor do Widget (Número) - FORÇAR COR AZUL */
         [data-testid="stMetricValue"] {
             font-size: 1.8rem !important;
-            color: #2962FF; /* Azul Royal */
-            font-weight: 700;
+            color: #2962FF !important; /* Azul Royal */
+            font-weight: 700 !important;
         }
 
-        /* 4. Ajuste da Sidebar para o Logo */
+        /* 5. Ajuste da Sidebar (Barra Lateral) */
         [data-testid="stSidebar"] {
-            background-color: #f8f9fa;
+            background-color: #F0F2F6 !important; /* Cinza Claro */
+        }
+        [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 {
+            color: #262730 !important;
+        }
+        
+        /* 6. Ajuste de Textos Gerais (Markdown, Títulos) */
+        h1, h2, h3, p, li, span {
+            color: #262730 !important;
+        }
+        
+        /* Exceção para textos dentro de botões ou componentes específicos que precisam ser brancos */
+        .stToast {
+            background-color: #ffffff !important;
+            color: #262730 !important;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -1551,4 +1576,5 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                     else:
                         st.info("Nenhum histórico para este aluno.")
                 else:
+
                     st.info("Banco de relatórios vazio.")
