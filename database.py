@@ -2,7 +2,7 @@ import gspread
 import pandas as pd
 from google.oauth2 import service_account
 import streamlit as st
-import os  # <--- O ERRO ESTAVA AQUI (FALTAVA ESSA LINHA)
+import os
 
 def conectar():
     try:
@@ -19,7 +19,7 @@ def conectar():
             
         return gspread.authorize(creds).open("SOSA_DB_2026")
     except Exception as e:
-        # Evita mostrar erro na tela se for apenas timeout, tenta reconectar silenciosamente na proxima
+        # Evita mostrar erro na tela se for apenas timeout
         if "429" in str(e):
             st.warning("⚠️ Limite de tráfego do Google. Aguarde alguns segundos.")
         else:
@@ -214,7 +214,7 @@ def salvar_lote(aba_nome, lista_de_linhas):
     except Exception as e:
         st.error(f"Erro ao salvar lote: {e}")
         return False
-    
+
 # --- NOVA FUNÇÃO: EDITAR ALUNO (ADICIONADA PARA O SISTEMA V14) ---
 def atualizar_necessidade_aluno(id_aluno, nova_necessidade):
     try:
@@ -236,7 +236,7 @@ def atualizar_necessidade_aluno(id_aluno, nova_necessidade):
     except Exception as e:
         st.error(f"Erro ao atualizar aluno: {e}")
         return False
-    
+
 # --- FUNÇÃO PARA O BOLETIM ANUAL (RECUPERAÇÃO FINAL) ---
 def salvar_rec_final(id_aluno, nome_aluno, turma, nota_rec_final):
     try:
@@ -257,7 +257,7 @@ def salvar_rec_final(id_aluno, nome_aluno, turma, nota_rec_final):
     except Exception as e:
         st.error(f"Erro ao salvar Rec Final: {e}")
         return False
-    
+
 # --- FUNÇÃO ESPECIAL: SALVAR ATA (SUBSTITUI ANTERIOR) ---
 def salvar_ata_conselho(data, turma, tipo, conteudo):
     try:
