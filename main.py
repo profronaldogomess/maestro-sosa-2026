@@ -11,338 +11,161 @@ import plotly.express as px
 
 st.set_page_config(page_title="SOSA 2026 | Master Intelligence", layout="wide", page_icon="🏫")
 
-# --- OTIMIZAÇÃO VISUAL: MODO APP MOBILE (CSS V14) ---
-st.markdown("""
+# --- CONTROLE DE TEMA (DARK/LIGHT) ---
+# Colocamos isso antes de tudo para carregar o CSS certo imediatamente
+with st.sidebar:
+    tema_selecionado = st.radio("Tema Visual:", ["🌞 Claro", "🌙 Escuro"], horizontal=True)
+
+# --- DEFINIÇÃO DAS CORES BASEADAS NA ESCOLHA ---
+if tema_selecionado == "🌞 Claro":
+    # CORES PARA O DIA (Fundo Branco, Letra Escura)
+    cor_fundo = "#FFFFFF"
+    cor_texto = "#262730"
+    cor_sidebar = "#F0F2F6"
+    cor_card_bg = "#F8F9FA"
+    cor_card_borda = "#E0E0E0"
+    cor_titulo_card = "#555555"
+    cor_valor_card = "#2962FF" # Azul
+else:
+    # CORES PARA A NOITE (Fundo Escuro, Letra Clara)
+    cor_fundo = "#0E1117"
+    cor_texto = "#FAFAFA"
+    cor_sidebar = "#262730"
+    cor_card_bg = "#1E2130" # Um pouco mais claro que o fundo
+    cor_card_borda = "#41444C"
+    cor_titulo_card = "#CCCCCC"
+    cor_valor_card = "#82B1FF" # Azul Claro Neon
+
+# --- INJEÇÃO DE CSS DINÂMICO ---
+st.markdown(f"""
     <style>
-        /* 1. FORÇAR MODO CLARO E LIMPO */
-        .stApp {
-            background-color: #FFFFFF !important;
-            color: #262730 !important;
-        }
+        /* 1. APLICAÇÃO DAS CORES GERAIS */
+        .stApp {{
+            background-color: {cor_fundo} !important;
+            color: {cor_texto} !important;
+        }}
         
-        /* 2. REMOVER CABEÇALHO E RODAPÉ (Ganhar espaço no celular) */
-        header[data-testid="stHeader"] {display: none;}
-        footer {display: none;}
-        #MainMenu {display: none;}
+        /* 2. SIDEBAR */
+        [data-testid="stSidebar"] {{
+            background-color: {cor_sidebar} !important;
+        }}
+        /* Força texto da sidebar a seguir o tema */
+        [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3, [data-testid="stSidebar"] p, [data-testid="stSidebar"] span {{
+            color: {cor_texto} !important;
+        }}
+
+        /* 3. REMOVER CABEÇALHO PADRÃO */
+        header[data-testid="stHeader"] {{display: none;}}
+        footer {{display: none;}}
+        #MainMenu {{display: none;}}
         
-        /* 3. AJUSTE DE MARGENS (Conteúdo cola no topo) */
-        .block-container {
+        /* 4. AJUSTE DE MARGENS MOBILE */
+        .block-container {{
             padding-top: 1rem !important;
             padding-bottom: 3rem !important;
             padding-left: 1rem !important;
             padding-right: 1rem !important;
-        }
+        }}
         
-        /* 4. TRANSFORMAR MENU LATERAL EM BOTÕES (Estilo App) */
-        /* Esconde as bolinhas do radio button */
-        div[role="radiogroup"] > label > div:first-of-type {
-            display: none;
-        }
-        /* Transforma o texto em botão */
-        div[role="radiogroup"] > label {
-            background-color: #F0F2F6;
+        /* 5. BOTÕES DO MENU LATERAL (Estilo App) */
+        div[role="radiogroup"] > label > div:first-of-type {{ display: none; }}
+        div[role="radiogroup"] > label {{
+            background-color: {cor_card_bg};
+            color: {cor_texto};
             padding: 12px 20px;
             border-radius: 10px;
             margin-bottom: 8px;
-            border: 1px solid #E0E0E0;
+            border: 1px solid {cor_card_borda};
             display: flex;
-            justify-content: center; /* Centraliza texto */
+            justify-content: center;
             transition: all 0.2s;
             cursor: pointer;
-        }
-        /* Efeito ao passar o mouse ou tocar */
-        div[role="radiogroup"] > label:hover {
-            background-color: #E3E7ED;
+        }}
+        div[role="radiogroup"] > label:hover {{
             transform: scale(1.02);
-        }
-        /* Botão Selecionado (Fica Azul) */
-        div[role="radiogroup"] > label[data-testid="stMarkdownContainer"] > p {
-            font-weight: bold;
-            font-size: 1rem;
-        }
-        /* Quando selecionado (Hack de CSS) */
-        div[role="radiogroup"] label[aria-checked="true"] {
+            border-color: {cor_valor_card};
+        }}
+        /* Botão Selecionado */
+        div[role="radiogroup"] label[aria-checked="true"] {{
             background-color: #2962FF !important;
             color: white !important;
             border: none;
             box-shadow: 0 4px 6px rgba(41, 98, 255, 0.3);
-        }
-        div[role="radiogroup"] label[aria-checked="true"] p {
+        }}
+        div[role="radiogroup"] label[aria-checked="true"] p {{
             color: white !important;
-        }
+        }}
 
-        /* 5. BOTÕES DE AÇÃO (Salvar, Gerar) - Grandes e Fortes */
-        .stButton button {
+        /* 6. BOTÕES DE AÇÃO (Salvar, Gerar) */
+        .stButton button {{
             width: 100%;
             border-radius: 12px;
-            height: 50px; /* Mais alto para o dedo */
+            height: 50px;
             font-weight: bold;
             font-size: 16px;
             background-color: #2962FF;
             color: white;
             border: none;
-        }
-        .stButton button:hover {
-            background-color: #0039CB;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-        }
+        }}
 
-        /* 6. CARTÕES (WIDGETS) */
-        [data-testid="stMetric"] {
-            background-color: #F8F9FA !important;
-            border: 1px solid #E0E0E0 !important;
+        /* 7. CARTÕES (WIDGETS) - CONTRASTE GARANTIDO */
+        [data-testid="stMetric"] {{
+            background-color: {cor_card_bg} !important;
+            border: 1px solid {cor_card_borda} !important;
             border-radius: 15px;
-            padding: 10px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        }
+            padding: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }}
+        [data-testid="stMetricLabel"] {{
+            color: {cor_titulo_card} !important;
+            font-weight: 600 !important;
+        }}
+        [data-testid="stMetricValue"] {{
+            color: {cor_valor_card} !important;
+            font-size: 1.8rem !important;
+        }}
         
-        /* 7. TABELAS (Rolagem Horizontal Suave) */
-        [data-testid="stDataFrame"] {
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
-        }
+        /* 8. TABELAS E TEXTOS GERAIS */
+        h1, h2, h3, p, li {{
+            color: {cor_texto} !important;
+        }}
+        [data-testid="stDataFrame"] {{
+            width: 100%;
+        }}
     </style>
 """, unsafe_allow_html=True)
 
 # --- CARREGAMENTO ---
 wb, (df_alunos, df_curriculo, df_materiais, df_planos, df_aulas, df_notas, df_diario, df_turmas, df_relatorios, df_horarios, df_registro_aulas) = db.carregar_tudo()
 
-# --- SIDEBAR COM LOGOTIPO (MINIMALISTA & CENTRALIZADO) ---
+# --- SIDEBAR COM LOGOTIPO ---
 with st.sidebar:
-    # Tenta carregar logo local
     try:
-        # Truque de Colunas para centralizar e reduzir:
-        # [1, 2, 1] significa: Espaço vazio | Logo (50%) | Espaço vazio
         col_esq, col_meio, col_dir = st.columns([1, 2, 1])
-        
         with col_meio:
-            # Se quiser menor, mude width para 80. Se quiser maior, para 150.
             st.image("logo.png", width=100) 
-            
     except:
-        # Logo genérico texto se não tiver imagem
         st.markdown("### 🏫 **SOSA**")
     
-    # Título discreto abaixo do logo
-    st.markdown("<h3 style='text-align: center; color: #666; margin-top: -15px;'>Ronaldo Gomes</h3>", unsafe_allow_html=True)
-    
-    st.markdown("---") # Linha divisória elegante
+    st.markdown("<h3 style='text-align: center; margin-top: -15px; font-size: 14px;'>Maestro V14</h3>", unsafe_allow_html=True)
+    st.markdown("---")
     
     if st.button("🔄 Sincronizar Dados"):
         st.cache_data.clear()
         st.rerun()
 
-# MENU ATUALIZADO COM A NOVA OPÇÃO
+# MENU DE NAVEGAÇÃO
 menu = st.sidebar.radio("Navegação:", [
     "🤖 Maestro Dashboard",
     "📅 Planejamento (Ponto ID)",
     "🧪 Criador de Aulas",
     "📝 Diário de Bordo Rápido",
     "📊 Painel de Notas & Vistos",
-    "📈 Boletim Anual & Conselho", # <--- NOVO MÓDULO
+    "📈 Boletim Anual & Conselho",
     "👥 Gestão da Turma",
     "📚 Base de Conhecimento",
     "♿ Relatórios PEI / Perfil IA"
 ])
-
-# Função Auxiliar de Visualização com Chaves Dinâmicas
-def exibir_material_estruturado(texto_raw, key_prefix):
-    t1, t2, t3, t4 = st.tabs(["✍️ Lousa/Slides", "📄 Folha", "✅ Gabarito", "🎨 Imagens"])
-    with t1:
-        st.text_area("Conteúdo Principal (Quadro ou Script Gamma AI):", ai.extrair_tag(texto_raw, "LOUSA"), height=400, key=f"{key_prefix}_lousa_txt")
-    with t2:
-        st.text_area("Atividade:", ai.extrair_tag(texto_raw, "FOLHA"), height=400, key=f"{key_prefix}_folha_txt")
-    with t3:
-        st.text_area("Gabarito:", ai.extrair_tag(texto_raw, "GABARITO"), height=200, key=f"{key_prefix}_gab_txt")
-    with t4:
-        st.text_area("Prompts:", ai.extrair_tag(texto_raw, "IMAGENS"), height=150, key=f"{key_prefix}_img_txt")
-
-# ==============================================================================
-# MÓDULO: DASHBOARD INTELIGENTE (V6 - FULL CONTEXT: NOTAS + PDF + AULAS CRIADAS)
-# ==============================================================================
-if menu == "🤖 Maestro Dashboard":
-    st.title("🤖 Maestro Dashboard | Central de Inteligência")
-    st.markdown("---")
-
-    # --- 1. FUNÇÃO DE LIMPEZA DE NOTAS (NORMALIZAÇÃO RECURSIVA) ---
-    def normalizar_nota_agressiva(valor):
-        """
-        Garante matematicamente que a nota fique entre 0 e 10.
-        Usa loop while para corrigir erros como 718 -> 71.8 -> 7.18
-        """
-        try:
-            # Limpeza básica de string
-            s_val = str(valor).replace(',', '.').strip()
-            if not s_val or s_val.lower() == 'nan': return 0.0
-            
-            f_val = float(s_val)
-            
-            # Loop de correção: Enquanto for maior que 10, divide por 10
-            while f_val > 10.0:
-                f_val = f_val / 10.0
-                
-            return f_val
-        except:
-            return 0.0
-
-    # --- 2. PREPARAÇÃO DOS DADOS (CONTEXTO GLOBAL) ---
-    def montar_contexto_global():
-        ctx = "DADOS ESTRUTURADOS DO SISTEMA (ITABUNA 2026):\n\n"
-        
-        # A. Tempo
-        hoje = datetime.now()
-        inicio_aulas = datetime(2026, 2, 2)
-        if hoje < inicio_aulas:
-            ctx += f"DATA HOJE: {hoje.strftime('%d/%m/%Y')} (Período de Planejamento).\n\n"
-        else:
-            semana_num = int((hoje - inicio_aulas).days / 7) + 1
-            trimestre_atual, _ = util.obter_info_trimestre(hoje.date())
-            ctx += f"DATA HOJE: {hoje.strftime('%d/%m/%Y')} (Semana {semana_num}, {trimestre_atual}).\n\n"
-
-        # B. Alunos
-        if not df_alunos.empty:
-            total = len(df_alunos)
-            peis = df_alunos[df_alunos['NECESSIDADES'] != 'NENHUMA']
-            lista_peis = ", ".join([f"{r['NOME_ALUNO']} ({r['NECESSIDADES']})" for _, r in peis.iterrows()])
-            ctx += f"TURMA: {total} alunos. PEI: {lista_peis}.\n"
-        
-        # C. Notas (NORMALIZAÇÃO AGRESSIVA)
-        if not df_notas.empty:
-            ctx += "BOLETIM (Notas Normalizadas 0-10):\n"
-            for _, row in df_notas.iterrows():
-                nome = row['NOME_ALUNO']
-                n_visto = normalizar_nota_agressiva(row.get('NOTA_VISTOS', 0))
-                n_teste = normalizar_nota_agressiva(row.get('NOTA_TESTE', 0))
-                n_prova = normalizar_nota_agressiva(row.get('NOTA_PROVA', 0))
-                n_media = normalizar_nota_agressiva(row.get('MEDIA_FINAL', 0))
-                
-                ctx += f"- {nome}: Média {n_media:.1f} (Vistos: {n_visto}, Teste: {n_teste}, Prova: {n_prova})\n"
-            ctx += "\n"
-
-        # D. Planejamento
-        if not df_planos.empty:
-            planos_prox = df_planos.tail(3) 
-            resumo_planos = " | ".join([f"Semana {r['SEMANA']}: {ai.extrair_tag(r['PLANO_TEXTO'], 'CONTEUDOS_ESPECIFICOS')}" for _, r in planos_prox.iterrows()])
-            ctx += f"PLANEJAMENTO RECENTE: {resumo_planos}.\n"
-
-        # E. Diário
-        if not df_diario.empty:
-            ultimos = df_diario.tail(20)
-            ocorrencias = []
-            for _, r in ultimos.iterrows():
-                tags = str(r['TAGS'])
-                obs = str(r['OBSERVACOES'])
-                if (tags and tags != "nan" and tags != "") or (obs and obs != "nan" and obs != ""):
-                    ocorrencias.append(f"{r['DATA']} - {r['NOME_ALUNO']}: {tags} | {obs}")
-            ctx += f"DIÁRIO (Ocorrências): {'; '.join(ocorrencias)}.\n"
-
-        # F. Materiais Criados (NOVA INTEGRAÇÃO)
-        if not df_aulas.empty:
-            # Pega os últimos 5 materiais criados para dar contexto do que já foi feito
-            ultimos_mats = df_aulas.tail(5)
-            lista_mats = []
-            for _, r in ultimos_mats.iterrows():
-                # Pega um resumo do conteúdo para não estourar o limite de texto
-                resumo_conteudo = str(r['CONTEUDO'])[:150].replace('\n', ' ') + "..."
-                lista_mats.append(f"[{r['DATA']}] Tipo: {r['TIPO_MATERIAL']} (Ref: {r['SEMANA_REF']}) -> Conteúdo: {resumo_conteudo}")
-            
-            ctx += f"MATERIAIS JÁ CRIADOS PELO PROFESSOR (Histórico): {'; '.join(lista_mats)}.\n"
-
-        return ctx
-
-    # --- 3. VISUALIZAÇÃO DE KPIs (CARTÕES) ---
-    col_kpi1, col_kpi2, col_kpi3, col_kpi4 = st.columns(4)
-
-    # KPI 1: Total Alunos
-    col_kpi1.metric("👥 Total de Alunos", len(df_alunos) if not df_alunos.empty else 0)
-
-    # KPI 2: Alunos PEI
-    total_pei = len(df_alunos[df_alunos['NECESSIDADES'] != 'NENHUMA']) if not df_alunos.empty else 0
-    col_kpi2.metric("♿ Alunos PEI/AEE", total_pei)
-
-    # KPI 3: Média Geral
-    media_turma = 0.0
-    delta_media = "Sem dados"
-    if not df_notas.empty:
-        notas_corrigidas = df_notas['MEDIA_FINAL'].apply(normalizar_nota_agressiva)
-        media_turma = notas_corrigidas.mean()
-        delta_media = "Na média" if media_turma >= 6.0 else "Abaixo da meta"
-    
-    col_kpi4.metric("📊 Média Geral (Rede)", f"{media_turma:.1f}", delta=delta_media)
-
-    # KPI 4: Risco
-    risco = 0
-    if not df_notas.empty:
-        risco = len(df_notas[df_notas['MEDIA_FINAL'].apply(normalizar_nota_agressiva) < 6.0])
-    col_kpi4.metric("🚨 Risco (Notas < 6.0)", risco, delta_color="inverse")
-
-
-    # --- 4. CHAT COM VISÃO DE ARQUIVOS (PDFs) ---
-    st.markdown("### 💬 Converse com o Sistema")
-    
-    # PREPARAÇÃO DOS ARQUIVOS (PDFs)
-    arquivos_para_ia = []
-    nomes_arquivos = []
-    if not df_materiais.empty:
-        for _, row in df_materiais.iterrows():
-            uri = row['URI_ARQUIVO']
-            nome = row['NOME_ALUNO'] if 'NOME_ALUNO' in row else row['NOME_ARQUIVO'] 
-            nomes_arquivos.append(nome)
-            arquivos_para_ia.append(types.Part.from_uri(file_uri=uri, mime_type="application/pdf"))
-    
-    # Feedback Visual
-    if arquivos_para_ia:
-        st.success(f"📚 **Biblioteca Conectada:** O Maestro está lendo {len(arquivos_para_ia)} livro(s): {', '.join(nomes_arquivos)}")
-    else:
-        st.warning("⚠️ Nenhum livro PDF encontrado na Base de Conhecimento. O Chat só lerá as planilhas.")
-
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-
-    if prompt := st.chat_input("Ex: 'O que eu criei na semana passada?', 'Resuma a página 23 do livro'"):
-        st.chat_message("user").markdown(prompt)
-        st.session_state.messages.append({"role": "user", "content": prompt})
-
-        with st.chat_message("assistant"):
-            with st.spinner("Processando planilhas, materiais criados e lendo livros..."):
-                
-                contexto_dados = montar_contexto_global()
-                
-                # PROMPT REFORÇADO
-                prompt_final = (
-                    f"VOCÊ É O MAESTRO SOSA, O SISTEMA CENTRAL DA ESCOLA.\n"
-                    f"IMPORTANTE: Você recebeu arquivos PDF anexos (Livros Didáticos). "
-                    f"SE A PERGUNTA FOR SOBRE CONTEÚDO, PÁGINAS OU EXERCÍCIOS, LEIA O PDF ANEXO IMEDIATAMENTE.\n"
-                    f"NÃO DIGA QUE NÃO TEM ACESSO. OS ARQUIVOS ESTÃO NO SEU CONTEXTO.\n\n"
-                    f"DADOS DAS PLANILHAS (NOTAS/DIÁRIO/MATERIAIS CRIADOS):\n{contexto_dados}\n\n"
-                    f"PERGUNTA DO PROFESSOR: {prompt}"
-                )
-                
-                # Envia Prompt + Arquivos
-                resposta = ai.gerar_ia("MAESTRO", prompt_final, partes_arquivos=arquivos_para_ia)
-                
-                st.markdown(resposta)
-        
-        st.session_state.messages.append({"role": "assistant", "content": resposta})
-
-# ==============================================================================
-# MÓDULO: MATERIAL DE SALA (🧪 CRIADOR DE AULAS)
-# ==============================================================================
-elif menu == "🧪 Criador de Aulas":
-    st.header("🧪 Laboratório de Materiais Didáticos")
-    
-    t_lousa, t_avulsa, t_prova, t_prova_pei, t_adaptada, t_hist = st.tabs([
-        "🏫 Lousa/Slides", 
-        "🏠 Atividades Avulsas", 
-        "📝 Avaliações (Regular)", 
-        "♿ Avaliação Adaptada (PEI)", 
-        "🧩 Atividade Global (PEI)", 
-        "🗂️ Histórico"
-    ])
 
     # --- ABA 1: LOUSA / SLIDES ---
     with t_lousa:
@@ -1590,6 +1413,7 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                 else:
 
                     st.info("Banco de relatórios vazio.")
+
 
 
 
