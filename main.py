@@ -579,6 +579,7 @@ elif menu == "🧪 Criador de Aulas":
         _, (_, _, _, _, df_h_raw, _, _, _, _, _, _) = db.carregar_tudo()
         
         if not df_h_raw.empty and 'DATA' in df_h_raw.columns:
+        with st.expander("🔍 Filtros (Toque para abrir)", expanded=False):
             c1, c2 = st.columns(2)
             f_ano = c1.selectbox("Filtrar Ano:", ["Todos", "6º", "7º", "8º", "9º", "GERAL"], key="h_f_ano")
             f_tipo = c2.selectbox("Filtrar Tipo:", ["Todos", "Quadro (Lousa)", "Slides (Roteiro)", "AVULSA", "ADAPTADA", "Teste", "Prova", "Teste (ADAPTADA)", "Prova (ADAPTADA)", "Rec. Paralela", "Rec. Final"])
@@ -1590,4 +1591,5 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                 else:
 
                     st.info("Banco de relatórios vazio.")
+
 
