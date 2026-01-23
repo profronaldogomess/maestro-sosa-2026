@@ -755,33 +755,37 @@ elif menu == "📅 Planejamento (Ponto ID)":
                 with t_obs: obs_edit = st.text_area("Recomposição:", ai.extrair_tag(txt, "OBSERVACAO"), key="v18_edit_obs")
                 with t_pei: pei_edit = st.text_area("Adaptação:", st.session_state.pei_temp, key="v18_edit_pei")
 
-                with t_exp:
-                    st.subheader("🚀 Exportar Planejamento")
-                    nome_doc = st.text_input("Título do Documento:", value=f"PLANO_{ano_p}ANO_{sem_p.split(' ')[1]}", key="v18_name_plan_new")
-                    conteudo_word = f"CONTEÚDO: {c_geral}\n{c_espec}\n\nOBJETIVOS:\n{objs_edit}\n\nMETODOLOGIA:\n{met_edit}\n\nAVALIAÇÃO:\n{ava_edit}\n\nADAPTAÇÃO PEI:\n{pei_edit}"
-                    doc_file = exporter.gerar_docx_profissional(nome_doc.upper(), conteudo_word, {"turma": f"{ano_p}º Ano", "trimestre": "I"})
-                    
-                    st.download_button("📥 BAIXAR WORD", doc_file, f"{nome_doc}.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True)
-                    
-                    if st.button("☁️ SALVAR NO GOOGLE DRIVE", key="v18_btn_drive_new_fix"):
-                        with st.spinner("Enviando..."):
-                            link = db.subir_e_converter_para_google_docs(
-                            doc_file, 
-                            nome_doc, 
-                            trimestre="1º Trimestre", # Ou pegue da variável do sistema
-                            categoria="Planos de Aula"
-                            )
-                            if "https://" in str(link):
-                                st.success("✅ Salvo com sucesso!")
-                                # Versão mais segura do botão de link:
-                                st.link_button("🚀 ABRIR NO DRIVE", str(link))
-                            else:
-                                st.error(link)
-
-                if st.button("💾 Salvar no Banco de Dados", key="v18_save_db_plan"):
-                    final = f"MARKER_CONTEUDO_GERAL {c_geral} MARKER_CONTEUDOS_ESPECIFICOS {c_espec} MARKER_OBJETIVOS_ENSINO {objs_edit} MARKER_METODOLOGIA {met_edit} MARKER_AVALIACAO {ava_edit} MARKER_OBSERVACAO {obs_edit} MARKER_ADAPTACAO_PEI {pei_edit}"
-                    db.salvar_no_banco("DB_PLANOS", [datetime.now().strftime("%d/%m/%Y"), sem_p.split(" (")[0], f"{ano_p}º", "I Trimestre", "PADRÃO", final])
-                    st.success("Salvo!"); del st.session_state.p_temp; st.rerun()
+            with t_exp:
+                st.subheader("🚀 Exportar Plano Semanal")
+                
+                # PRENSA HIDRÁULICA: Remove títulos repetidos que a IA possa ter enviado
+                dados_limpos = {
+                    "geral": c_geral.replace("CONTEÚDO:", "").replace("CONTEUDO:", "").strip(),
+                    "especificos": c_espec.replace("CONTEUDOS ESPECIFICOS:", "").strip(),
+                    "objetivos": objs_edit.replace("OBJETIVOS:", "").strip(),
+                    "metodologia": met_edit.replace("METODOLOGIA:", "").strip(),
+                    "avaliacao": ava_edit.replace("AVALIAÇÃO:", "").replace("AVALIACAO:", "").strip(),
+                    "observacao": obs_edit.replace("OBSERVAÇÃO:", "").replace("OBSERVACAO:", "").strip(),
+                    "pei": pei_edit.replace("ADAPTAÇÃO PEI:", "").replace("ADAPTACAO PEI:", "").strip()
+                }
+                
+                nome_doc = st.text_input("Título do Arquivo:", value=f"PLANO_{ano_p}ANO_{sem_p.split(' ')[1]}", key=f"v18_final_{sem_p}")
+                
+                # Chama o novo exportador V18
+                doc_file = exporter.gerar_docx_plano_pedagogico_v18(
+                    nome_doc.upper(), 
+                    dados_limpos, 
+                    {"ano": f"{ano_p}º Ano", "semana": sem_p.split(" (")[0]}
+                )
+                
+                st.download_button("📥 BAIXAR PLANO SEMANAL", doc_file, f"{nome_doc}.docx", use_container_width=True)
+                
+                if st.button("☁️ SALVAR NO DRIVE", key="v18_drive_final"):
+                    with st.spinner("Arquivando..."):
+                        link = db.subir_e_converter_para_google_docs(doc_file, nome_doc, categoria="Planos de Aula")
+                        if "https://" in str(link):
+                            st.success("✅ Plano arquivado com sucesso!")
+                            st.link_button("🚀 ABRIR NO DRIVE", str(link))
         except Exception as e:
             st.error(f"Erro no Planejador: {e}")
 
