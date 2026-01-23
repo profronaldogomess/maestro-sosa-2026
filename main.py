@@ -812,22 +812,25 @@ elif menu == "📅 Planejamento (Ponto ID)":
                     
                     if st.button("☁️ ENVIAR PARA O DRIVE", key="v18_btn_drive_hist_fix"):
                         with st.spinner("Organizando em Planos de Aula..."):
-                            trim_atual, _ = util.obter_info_trimestre(date.today())
-                            
+                            # ESTRATÉGIA MAESTRO: Extrai o trimestre do nome da semana
+                            # Ex: "Semana 01 (09/02 a 13/02) - I Trimestre" -> vira "I Trimestre"
+                            label_semana = sel_h 
+                            if " - " in label_semana:
+                                trim_pasta = label_semana.split(" - ")[-1]
+                            else:
+                                trim_pasta = "I Trimestre" # Fallback de segurança
+
                             link = db.subir_e_converter_para_google_docs(
                                 doc_file_h, 
                                 nome_doc_h, 
-                                trimestre=trim_atual, 
+                                trimestre=trim_pasta, # Agora ele usa o trimestre da semana!
                                 categoria="Planos de Aula"
                             )
                             if "https://" in str(link):
-                                st.success("✅ Plano arquivado no Drive!")
+                                st.success(f"✅ Plano arquivado em: {trim_pasta}")
                                 st.link_button("🚀 ABRIR NO GOOGLE DOCS", str(link), use_container_width=True)
-                                st.markdown(f"🔗 [Link Direto]({link})")
                             else:
                                 st.error(f"Erro: {link}")
-
-                                st.error(link)
         else:
             st.info("📭 O banco de dados de planos está vazio.")
 
