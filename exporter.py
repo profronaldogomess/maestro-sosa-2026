@@ -217,10 +217,13 @@ def gerar_docx_plano_pedagogico_v18(titulo_arquivo, dados, info):
         run_label.font.bold = True
         run_label.font.size = Pt(11)
         
-        # Texto Normal (Limpando possíveis repetições da IA por segurança)
-        texto_limpo = str(dados.get(chave, "")).replace(label, "").strip()
+        # Texto Limpo (Garante que não repita o label)
+        texto_bruto = str(dados.get(chave, ""))
+        # Remove o label do texto se ele existir
+        texto_limpo = texto_bruto.replace(label, "").replace(label.replace(":", ""), "").strip()
+        if texto_limpo.startswith(":"): texto_limpo = texto_limpo[1:].strip()
+
         p.add_run(f" {texto_limpo}").font.size = Pt(11)
-        p.paragraph_format.space_after = Pt(10)
 
     file_stream = io.BytesIO()
     doc.save(file_stream)
