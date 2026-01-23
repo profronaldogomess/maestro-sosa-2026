@@ -3,6 +3,8 @@ import pandas as pd
 from google.oauth2 import service_account
 import streamlit as st
 import os
+import requests
+import base64
 
 def conectar():
     try:
@@ -292,56 +294,34 @@ def obter_creds_drive():
         return service_account.Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
 
 # --- FUNÇÃO DE UPLOAD ATUALIZADA ---
+import requests
+import base64
+
 def subir_e_converter_para_google_docs(file_stream, nome_arquivo):
     try:
-        from googleapiclient.discovery import build
-        from googleapiclient.http import MediaIoBaseUpload
+        # URL que você copiou do Google Apps Script
+        URL_DA_PONTE = "COLE_AQUI_A_URL_DO_APP_DA_WEB"
         
-        creds = obter_creds_drive()
-        service = build('drive', 'v3', credentials=creds)
-
-        # ID da sua pasta compartilhada
-        ID_DA_SUA_PASTA = "1W8U5R-J36X_vHXeGyDH2TqWc96rEY7Rr" 
-
-        # REMOVEMOS a conversão para 'google-apps.document'
-        # Vamos subir como DOCX puro para não gastar cota de processamento
-        file_metadata = {
-            'name': f"{nome_arquivo}.docx",
-            'parents': [ID_DA_SUA_PASTA]
+        # Prepara o arquivo para envio (converte para texto base64)
+        file_stream.seek(0)
+        file_b64 = base64.b64encode(file_stream.read()).decode('utf-8')
+        
+        payload = {
+            "fileName": f"{nome_arquivo}.docx",
+            "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "fileB64": file_b64
         }
         
-        media = MediaIoBaseUpload(
-            file_stream, 
-            mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            resumable=False # Upload simples é mais rápido e seguro para arquivos pequenos
-        )
+        # Envia para a ponte
+        response = requests.post(URL_DA_PONTE, json=payload)
         
-        # Cria o arquivo
-        file = service.files().create(
-            body=file_metadata, 
-            media_body=media, 
-            fields='id, webViewLink'
-        ).execute()
-        
-        # Apenas dá permissão de leitura/escrita
-        service.permissions().create(
-            fileId=file.get('id'), 
-            body={'type': 'anyone', 'role': 'writer'}
-        ).execute()
-        
-        return file.get('webViewLink')
-
+        if "http" in response.text:
+            return response.text # Retorna o link direto do arquivo
+        else:
+            return f"Erro na Ponte: {response.text}"
+            
     except Exception as e:
-        # Se ainda assim der erro de cota, o problema é na conta de serviço do Google
-        if "quota" in str(e).lower():
-            return "COTA_CHEIA"
-        return f"Erro: {e}"
-
-    except Exception as e:
-        error_msg = str(e)
-        if "quota" in error_msg.lower():
-            return "Erro: A conta de serviço ainda está acusando cota cheia. Tente excluir arquivos antigos da pasta ou verifique se o e-mail pessoal está correto."
-        return f"Erro no Drive: {error_msg}"
+        return f"Erro de Conexão: {e}"
     
 def limpar_todo_drive_da_conta_servico():
     try:
