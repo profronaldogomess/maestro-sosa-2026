@@ -124,11 +124,15 @@ with st.sidebar:
     
     st.markdown("<h3 style='text-align: center; margin-top: -15px; font-size: 14px;'>Maestro V14</h3>", unsafe_allow_html=True)
     st.markdown("---")
+
+    if st.sidebar.button("🚨 Resetar Espaço do Drive"):
+        msg = db.limpar_todo_drive_da_conta_servico()
+        st.sidebar.success(msg)
     
     if st.button("🔄 Sincronizar Dados"):
         st.cache_data.clear()
         st.rerun()
-
+    
 # MENU DE NAVEGAÇÃO
 menu = st.sidebar.radio("Navegação:", [
     "🤖 Maestro Dashboard",
