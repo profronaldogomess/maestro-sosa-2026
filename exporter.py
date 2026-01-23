@@ -157,47 +157,36 @@ def gerar_docx_plano_pedagogico_v18(titulo_arquivo, dados, info):
     section.top_margin, section.bottom_margin = Inches(0.5), Inches(0.5)
     section.left_margin, section.right_margin = Inches(0.6), Inches(0.6)
 
-    # --- CABEÇALHO MODERNO (3 LINHAS) ---
+    # CABEÇALHO MODERNO 3 LINHAS
     table = doc.add_table(rows=3, cols=3)
     table.style = 'Table Grid'
     
-    # Linha 1: LOGO | NOME DA ESCOLA | TÍTULO DO DOCUMENTO
-    c_logo = table.cell(0, 0)
-    c_escola = table.cell(0, 1)
-    c_doc_tipo = table.cell(0, 2)
-    
-    # Logo
-    p_logo = c_logo.paragraphs[0]
-    p_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    # Linha 1
+    table.cell(0, 0).paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
     if os.path.exists("logo_escola.png"):
-        p_logo.add_run().add_picture("logo_escola.png", width=Inches(0.7))
+        table.cell(0, 0).paragraphs[0].add_run().add_picture("logo_escola.png", width=Inches(0.7))
     
-    # Escola
-    p_esc = c_escola.paragraphs[0]
+    p_esc = table.cell(0, 1).paragraphs[0]
     p_esc.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run_esc = p_esc.add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA")
-    run_esc.font.bold, run_esc.font.size = True, Pt(11)
+    p_esc.add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA").font.bold = True
     
-    # Tipo de Documento
-    p_tipo = c_doc_tipo.paragraphs[0]
+    p_tipo = table.cell(0, 2).paragraphs[0]
     p_tipo.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run_tipo = p_tipo.add_run("PLANO DE ENSINO SEMANAL")
-    run_tipo.font.bold, run_tipo.font.size = True, Pt(11)
+    p_tipo.add_run("PLANO DE ENSINO SEMANAL").font.bold = True
 
-    # Linha 2: Professor | Ano
+    # Linha 2
     table.cell(1, 0).merge(table.cell(1, 1))
-    table.cell(1, 0).paragraphs[0].add_run(f"Professor: Ronaldo Gomes").font.size = Pt(10)
-    table.cell(1, 2).paragraphs[0].add_run(f"Ano: {info.get('ano', '')}").font.size = Pt(10)
+    table.cell(1, 0).paragraphs[0].add_run(f"Professor: Ronaldo Gomes")
+    table.cell(1, 2).paragraphs[0].add_run(f"Ano: {info.get('ano', '')}")
 
-    # Linha 3: Semana | Data
+    # Linha 3
     table.cell(2, 0).merge(table.cell(2, 1))
-    table.cell(2, 0).paragraphs[0].add_run(f"Semana: {info.get('semana', '')}").font.size = Pt(10)
-    table.cell(2, 2).paragraphs[0].add_run("Data: [    /    / 2026 ]").font.size = Pt(10)
+    table.cell(2, 0).paragraphs[0].add_run(f"Semana: {info.get('semana', '')}")
+    table.cell(2, 2).paragraphs[0].add_run("Data: [    /    / 2026 ]")
 
-    doc.add_paragraph() # Espaço
+    doc.add_paragraph()
 
-    # --- CORPO DO PLANO (LIMPEZA DE REPETIÇÃO) ---
-    # Lista de tuplas (Rótulo em Negrito, Chave do Dado)
+    # CORPO COM RÓTULOS EM NEGRITO
     campos = [
         ("CONTEÚDO GERAL EIXO:", "geral"),
         ("CONTEÚDOS ESPECÍFICOS:", "especificos"),
@@ -211,19 +200,14 @@ def gerar_docx_plano_pedagogico_v18(titulo_arquivo, dados, info):
     for label, chave in campos:
         p = doc.add_paragraph()
         p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+        p.add_run(label).font.bold = True
         
-        # Rótulo em Negrito
-        run_label = p.add_run(label)
-        run_label.font.bold = True
-        run_label.font.size = Pt(11)
+        # Limpeza de segurança para evitar gagueira
+        texto = str(dados.get(chave, "")).replace(label, "").strip()
+        if texto.startswith(":"): texto = texto[1:].strip()
         
-        # Texto Limpo (Garante que não repita o label)
-        texto_bruto = str(dados.get(chave, ""))
-        # Remove o label do texto se ele existir
-        texto_limpo = texto_bruto.replace(label, "").replace(label.replace(":", ""), "").strip()
-        if texto_limpo.startswith(":"): texto_limpo = texto_limpo[1:].strip()
-
-        p.add_run(f" {texto_limpo}").font.size = Pt(11)
+        p.add_run(f" {texto}")
+        p.paragraph_format.space_after = Pt(10)
 
     file_stream = io.BytesIO()
     doc.save(file_stream)
