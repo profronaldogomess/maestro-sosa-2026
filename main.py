@@ -194,7 +194,12 @@ def exibir_material_estruturado(texto_raw, key_prefix):
                 turma_atual = st.session_state.get('diario_turma', 'Geral')
                 
                 # PASSAMOS A TURMA AQUI (Isso resolve o erro)
-                link = db.subir_e_converter_para_google_docs(doc_file, nome_doc, turma=turma_atual)
+                link = db.subir_e_converter_para_google_docs(
+                doc_file, 
+                nome_doc, 
+                trimestre="1º Trimestre", # Ou pegue da variável do sistema
+                categoria="Planos de Aula"
+            )  
                 
                 if "https://" in str(link):
                     st.success("Enviado e Organizado!")
@@ -751,7 +756,12 @@ elif menu == "📅 Planejamento (Ponto ID)":
                     
                     if st.button("☁️ SALVAR NO GOOGLE DRIVE", key="v18_btn_drive_new_fix"):
                         with st.spinner("Enviando..."):
-                            link = db.subir_e_converter_para_google_docs(doc_file, nome_doc, turma=f"{ano_p}º Ano")
+                            link = db.subir_e_converter_para_google_docs(
+                            doc_file, 
+                            nome_doc, 
+                            trimestre="1º Trimestre", # Ou pegue da variável do sistema
+                            categoria="Planos de Aula"
+                            )
                             if "https://" in str(link):
                                 st.success("✅ Salvo com sucesso!")
                                 # Versão mais segura do botão de link:
@@ -795,7 +805,13 @@ elif menu == "📅 Planejamento (Ponto ID)":
                     
                     if st.button("☁️ ENVIAR PARA O DRIVE", key="v18_btn_drive_hist_fix"):
                         with st.spinner("Sincronizando..."):
-                            link = db.subir_e_converter_para_google_docs(doc_file_h, nome_doc_h, turma=f_ano_h)
+                            link = db.subir_e_converter_para_google_docs(
+                            doc_file, 
+                            nome_doc, 
+                            trimestre="1º Trimestre", 
+                            categoria="Material de Sala",
+                            sub_categoria="Avaliação Adaptada (PEI)"
+                            )
                             if "https://" in str(link):
                                 st.success("✅ Salvo com sucesso!")
                                 # Versão mais segura do botão de link:
