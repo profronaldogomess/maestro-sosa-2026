@@ -300,32 +300,30 @@ import base64
 import requests
 import base64
 
-def subir_e_converter_para_google_docs(file_stream, nome_arquivo):
+def subir_e_converter_para_google_docs(file_stream, nome_arquivo, turma="Geral"):
     try:
-        # COLE A URL NOVA AQUI
-        URL_DA_PONTE = "https://script.google.com/macros/s/AKfycby6JpIPHk6vlCfQSms-wxLcRmUNNw6yVOf6qkBnEuTrco2bVFw8Apl9m0wqTIlOcw01_w/exec"
+        # 1. SUA URL DA PONTE (A mesma que você gerou no Apps Script)
+        URL_DA_PONTE = "COLE_AQUI_A_URL_DO_SEU_APP_SCRIPT"
         
+        # 2. Prepara o arquivo (converte para base64)
         file_stream.seek(0)
         file_b64 = base64.b64encode(file_stream.read()).decode('utf-8')
         
+        # 3. Monta o pacote de dados (Aqui o 'turma' agora está definido)
         payload = {
-            "fileName": f"{nome_arquivo}.docx",
+            "fileName": f"{nome_arquivo}",
+            "turma": turma,  # Agora o Python sabe o que é 'turma'
             "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             "fileB64": file_b64
         }
         
-        # Timeout de 30 segundos para dar tempo do Google processar
+        # 4. Envia para o Google
         response = requests.post(URL_DA_PONTE, json=payload, timeout=30)
         
-        # Se o que voltar começar com "https", deu certo!
         if response.text.startswith("https://"):
             return response.text
-        # Se voltar "Erro", o script nos avisou algo
-        elif "Erro" in response.text:
-            return f"Erro no Script: {response.text}"
-        # Se voltar HTML (o erro que deu antes), é problema de permissão
         else:
-            return "ERRO_PERMISSAO: O Google bloqueou o acesso. Verifique se você configurou 'Quem tem acesso: Qualquer pessoa' e autorizou o script."
+            return f"Erro na Ponte: {response.text}"
             
     except Exception as e:
         return f"Erro de Conexão: {e}"
