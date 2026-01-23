@@ -163,8 +163,8 @@ def exibir_material_estruturado(texto_raw, key_prefix):
     # ABA DE EXPORTAÇÃO (Onde estavam os erros)
     with t_exp:
         st.subheader("🚀 Exportação Profissional")
-        nome_sugerido = f"Material_Matematica_{datetime.now().strftime('%d_%m')}"
-        nome_doc = st.text_input("Título do Documento:", value=nome_sugerido, key=f"name_in_{key_prefix}")
+        nome_sugerido = f"Material_{datetime.now().strftime('%d_%m_%H%M')}" 
+        nome_doc = st.text_input("Título do Documento:", value=nome_sugerido, key=f"name_input_v18_{key_prefix}")
         
         doc_file = exporter.gerar_docx_profissional(nome_doc.upper(), texto_raw)
         
@@ -797,7 +797,13 @@ elif menu == "📅 Planejamento (Ponto ID)":
                 
                 with h_tabs[6]: # Aba EXPORTAR do Histórico
                     st.subheader("🚀 Exportar Plano Antigo")
-                    nome_doc_h = st.text_input("Título:", value=f"PLANO_REVISAO_{sel_h.replace(' ', '_')}", key="v18_name_plan_hist")
+                    # MUDANÇA AQUI: A key muda conforme a semana selecionada (sel_h)
+                    # Isso força o título a atualizar para a semana certa!
+                    nome_doc_h = st.text_input(
+                        "Título:", 
+                        value=f"PLANO_REVISAO_{sel_h.replace(' ', '_')}", 
+                        key=f"v18_name_plan_{sel_h}" 
+                    )
                     txt_word = raw.replace("MARKER_", "\n").replace("_", " ")
                     
                     doc_file_h = exporter.gerar_docx_profissional(nome_doc_h.upper(), txt_word, {"turma": f_ano_h, "trimestre": "I"})
