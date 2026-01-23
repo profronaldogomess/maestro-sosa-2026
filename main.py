@@ -754,65 +754,50 @@ elif menu == "📅 Planejamento (Ponto ID)":
             if "p_temp" in st.session_state:
                 txt = st.session_state.p_temp
                 st.markdown("---")
-                t_cont, t_obj, t_met, t_ava, t_obs, t_pei, t_exp = st.tabs(["📚 Conteúdos", "🎯 Objetivos", "🏫 Metodologia", "📝 Avaliação", "💡 Obs", "♿ PEI", "📥 EXPORTAR"])
                 
-                with t_cont: c_geral = st.text_input("Geral:", ai.extrair_tag(txt, "CONTEUDO_GERAL"), key="v18_edit_cgeral"); c_espec = st.text_area("Específicos:", ai.extrair_tag(txt, "CONTEUDOS_ESPECIFICOS"), key="v18_edit_cespec")
-                with t_obj: objs_edit = st.text_area("Objetivos:", ai.extrair_tag(txt, "OBJETIVOS_ENSINO"), key="v18_edit_obj")
-                with t_met: met_edit = st.text_area("Metodologia:", ai.extrair_tag(txt, "METODOLOGIA"), height=300, key="v18_edit_met")
-                with t_ava: ava_edit = st.text_area("Avaliação:", ai.extrair_tag(txt, "AVALIACAO"), key="v18_edit_ava")
-                with t_obs: obs_edit = st.text_area("Recomposição:", ai.extrair_tag(txt, "OBSERVACAO"), key="v18_edit_obs")
-                with t_pei: pei_edit = st.text_area("Adaptação:", st.session_state.pei_temp, key="v18_edit_pei")
+                # CORREÇÃO: Definindo as abas corretamente para evitar o erro NameError
+                abas_plano = st.tabs(["📚 Conteúdos", "🎯 Objetivos", "🏫 Metodologia", "📝 Avaliação", "💡 Obs", "♿ PEI", "📥 EXPORTAR"])
+                
+                with abas_plano[0]: 
+                    c_geral = st.text_input("Geral:", ai.extrair_tag(txt, "CONTEUDO_GERAL"), key="v18_cgeral")
+                    c_espec = st.text_area("Específicos:", ai.extrair_tag(txt, "CONTEUDOS_ESPECIFICOS"), key="v18_cespec")
+                with abas_plano[1]: 
+                    objs_edit = st.text_area("Objetivos:", ai.extrair_tag(txt, "OBJETIVOS_ENSINO"), key="v18_objs")
+                with abas_plano[2]: 
+                    met_edit = st.text_area("Metodologia:", ai.extrair_tag(txt, "METODOLOGIA"), height=300, key="v18_met")
+                with abas_plano[3]: 
+                    ava_edit = st.text_area("Avaliação:", ai.extrair_tag(txt, "AVALIACAO"), key="v18_ava")
+                with abas_plano[4]: 
+                    obs_edit = st.text_area("Recomposição:", ai.extrair_tag(txt, "OBSERVACAO"), key="v18_obs")
+                with abas_plano[5]: 
+                    pei_edit = st.text_area("Adaptação:", ai.extrair_tag(txt, "ADAPTACAO_PEI"), key="v18_pei")
 
-            with t_exp:
-                st.subheader("🚀 Exportar Plano Semanal")
-                
-                # PRENSA HIDRÁULICA: Remove títulos repetidos que a IA possa ter enviado
-                dados_limpos = {
-                    "geral": c_geral.replace("CONTEÚDO:", "").replace("CONTEUDO:", "").strip(),
-                    "especificos": c_espec.replace("CONTEUDOS ESPECIFICOS:", "").strip(),
-                    "objetivos": objs_edit.replace("OBJETIVOS:", "").strip(),
-                    "metodologia": met_edit.replace("METODOLOGIA:", "").strip(),
-                    "avaliacao": ava_edit.replace("AVALIAÇÃO:", "").replace("AVALIACAO:", "").strip(),
-                    "observacao": obs_edit.replace("OBSERVAÇÃO:", "").replace("OBSERVACAO:", "").strip(),
-                    "pei": pei_edit.replace("ADAPTAÇÃO PEI:", "").replace("ADAPTACAO PEI:", "").strip()
-                }
-                
-                nome_doc = st.text_input("Título do Arquivo:", value=f"PLANO_{ano_p}ANO_{sem_p.split(' ')[1]}", key=f"v18_final_{sem_p}")
-                
-                # Chama o novo exportador V18
-                doc_file = exporter.gerar_docx_plano_pedagogico_v18(
-                    nome_doc.upper(), 
-                    dados_limpos, 
-                    {"ano": f"{ano_p}º Ano", "semana": sem_p.split(" (")[0]}
-                )
-                
-                st.download_button("📥 BAIXAR PLANO SEMANAL", doc_file, f"{nome_doc}.docx", use_container_width=True)
-                if st.button("☁️ SALVAR NO DRIVE", key="v18_drive_final"):
-                    with st.spinner("Arquivando..."):
+                with abas_plano[6]: # ABA EXPORTAR
+                    st.subheader("🚀 Exportar Plano Semanal")
+                    
+                    # PRENSA HIDRÁULICA ANTES DE GERAR O DOCX
+                    dados_limpos = {
+                        "geral": c_geral, "especificos": c_espec, "objetivos": objs_edit,
+                        "metodologia": met_edit, "avaliacao": ava_edit, "observacao": obs_edit, "pei": pei_edit
+                    }
+                    
+                    nome_doc = st.text_input("Título:", value=f"PLANO_{ano_p}ANO_{sem_p.split(' ')[1]}", key="v18_title")
+                    doc_file = exporter.gerar_docx_plano_pedagogico_v18(nome_doc.upper(), dados_limpos, {"ano": f"{ano_p}º Ano", "semana": sem_p.split(" (")[0]})
+                    
+                    st.download_button("📥 BAIXAR WORD", doc_file, f"{nome_doc}.docx", use_container_width=True)
+                    
+                    if st.button("☁️ SALVAR NO DRIVE", key="v18_drive"):
                         link = db.subir_e_converter_para_google_docs(doc_file, nome_doc, categoria="Planos de Aula")
                         if "https://" in str(link):
-                            st.success("✅ Plano arquivado com sucesso!")
+                            db.salvar_link_na_planilha("DB_PLANOS", "SEMANA", sem_p.split(" (")[0], link)
+                            st.success("✅ Arquivado!")
                             st.link_button("🚀 ABRIR NO DRIVE", str(link))
 
-                if st.button("💾 Salvar no Banco de Dados", key="v18_save_db_plan"):
-                    # Aplica a limpeza antes de salvar
-                    c_geral_f = prensa_hidraulica_texto(c_geral, "CONTEÚDO GERAL EIXO")
-                    c_espec_f = prensa_hidraulica_texto(c_espec, "CONTEÚDOS ESPECÍFICOS")
-                    objs_f = prensa_hidraulica_texto(objs_edit, "OBJETIVOS DE ENSINO")
-                    met_f = prensa_hidraulica_texto(met_edit, "METODOLOGIA")
-                    ava_f = prensa_hidraulica_texto(ava_edit, "AVALIAÇÃO")
-                    obs_f = prensa_hidraulica_texto(obs_edit, "OBSERVAÇÃO")
-                    pei_f = prensa_hidraulica_texto(pei_edit, "ADAPTAÇÃO PEI")
-
-                    final = f"MARKER_CONTEUDO_GERAL {c_geral_f} MARKER_CONTEUDOS_ESPECIFICOS {c_espec_f} MARKER_OBJETIVOS_ENSINO {objs_f} MARKER_METODOLOGIA {met_f} MARKER_AVALIACAO {ava_f} MARKER_OBSERVACAO {obs_f} MARKER_ADAPTACAO_PEI {pei_f}"
-                    
-                    if db.salvar_no_banco("DB_PLANOS", [datetime.now().strftime("%d/%m/%Y"), sem_p.split(" (")[0], f"{ano_p}º", "I Trimestre", "PADRÃO", final]):
-                        st.success("✅ Salvo no Banco de Dados!")
-                        # LIMPA O TEXTO GERADO DA TELA
-                        if "p_temp" in st.session_state: del st.session_state.p_temp
-                        if "pei_temp" in st.session_state: del st.session_state.pei_temp
-                        time.sleep(1)
-                        st.rerun()
+                if st.button("💾 Salvar no Banco de Dados", key="v18_save_db"):
+                    # Salva e limpa a tela
+                    final_txt = f"MARKER_CONTEUDO_GERAL {c_geral} MARKER_CONTEUDOS_ESPECIFICOS {c_espec} MARKER_OBJETIVOS_ENSINO {objs_edit} MARKER_METODOLOGIA {met_edit} MARKER_AVALIACAO {ava_edit} MARKER_OBSERVACAO {obs_edit} MARKER_ADAPTACAO_PEI {pei_edit}"
+                    db.salvar_no_banco("DB_PLANOS", [datetime.now().strftime("%d/%m/%Y"), sem_p.split(" (")[0], f"{ano_p}º", "I Trimestre", "PADRÃO", final_txt])
+                    st.success("Salvo!"); del st.session_state.p_temp; time.sleep(1); st.rerun()
         except Exception as e:
             st.error(f"Erro no Planejador: {e}")
 
