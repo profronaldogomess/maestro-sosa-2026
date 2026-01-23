@@ -317,18 +317,8 @@ def subir_e_converter_para_google_docs(file_stream, nome_arquivo, trimestre="I T
         }
         
         response = requests.post(URL_DA_PONTE, json=payload, timeout=30)
-        return response.text
-    except Exception as e:
-        return f"Erro de Conexão: {e}"
-        
-        # 4. Envia para o Google
-        response = requests.post(URL_DA_PONTE, json=payload, timeout=30)
-        
-        if response.text.startswith("https://"):
-            return response.text
-        else:
-            return f"Erro na Ponte: {response.text}"
-            
+        # O .strip() remove espaços ou quebras de linha invisíveis
+        return response.text.strip()
     except Exception as e:
         return f"Erro de Conexão: {e}"
 
