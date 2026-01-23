@@ -300,24 +300,50 @@ def subir_e_converter_para_google_docs(file_stream, nome_arquivo):
         creds = obter_creds_drive()
         service = build('drive', 'v3', credentials=creds)
 
-        # --- CONFIGURAÇÃO OBRIGATÓRIA ---
-        # 1. ID da pasta que você criou e compartilhou com a conta de serviço
-        ID_DA_SUA_PASTA = "1W8U5R-J36X_vHXeGyDH2TqWc96rEY7Rr" 
-        
-        # 2. Seu e-mail pessoal (o dono do Drive com espaço)
-        SEU_EMAIL_PESSOAL = "prof.ronaldogomess@gmail.com" 
+        # --- CONFIGURAÇÃO ---
+        ID_DA_SUA_PASTA = "COLE_AQUI_O_ID_DA_SUA_PASTA" 
+        SEU_EMAIL_PESSOAL = "seu-email@gmail.com" 
 
         file_metadata = {
             'name': nome_arquivo,
-            'mimeType': 'application/vnd.google-apps.document',
             'parents': [ID_DA_SUA_PASTA]
         }
         
+        # TENTATIVA 1: Subir como DOCX puro (Gasta menos cota e é mais seguro)
         media = MediaIoBaseUpload(
             file_stream, 
             mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
             resumable=True
         )
+        
+        file = service.files().create(
+            body=file_metadata, 
+            media_body=media, 
+            fields='id, webViewLink'
+        ).execute()
+        
+        file_id = file.get('id')
+
+        # TENTATIVA DE TRANSFERIR PROPRIEDADE
+        try:
+            service.permissions().create(
+                fileId=file_id,
+                transferOwnership=True,
+                body={'type': 'user', 'role': 'owner', 'emailAddress': SEU_EMAIL_PESSOAL}
+            ).execute()
+        except:
+            # Se falhar a transferência, apenas dá permissão de escrita
+            service.permissions().create(
+                fileId=file_id,
+                body={'type': 'anyone', 'role': 'writer'}
+            ).execute()
+
+        return file.get('webViewLink')
+
+    except Exception as e:
+        if "quota" in str(e).lower():
+            return "⚠️ O Google ainda diz que está cheio. Clique no botão 'Resetar Espaço' na lateral e tente de novo."
+        return f"Erro: {e}"
         
         # 1. Cria o arquivo
         file = service.files().create(body=file_metadata, media_body=media, fields='id, webViewLink').execute()
