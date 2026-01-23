@@ -162,20 +162,29 @@ def exibir_material_estruturado(texto_raw, key_prefix):
     
     # ABA DE EXPORTAÇÃO (Onde estavam os erros)
     with t_exp:
-        st.subheader("🚀 Exportação Profissional")
-        nome_sugerido = f"Material_{datetime.now().strftime('%d_%m_%H%M')}" 
-        nome_doc = st.text_input("Título do Documento:", value=nome_sugerido, key=f"name_input_v18_{key_prefix}")
+        st.subheader("🚀 Exportar Plano Oficial")
         
-        doc_file = exporter.gerar_docx_profissional(nome_doc.upper(), texto_raw)
+        # Organizamos os dados limpos para o exportador
+        dados_para_word = {
+            "geral": c_geral,
+            "especificos": c_espec,
+            "objetivos": objs_edit,
+            "metodologia": met_edit,
+            "avaliacao": ava_edit,
+            "observacao": obs_edit,
+            "pei": pei_edit
+        }
         
-        st.download_button(
-            label="📥 BAIXAR AGORA (Word .docx)",
-            data=doc_file,
-            file_name=f"{nome_doc}.docx",
-            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            use_container_width=True,
-            key=f"btn_dl_{key_prefix}"
+        nome_doc = st.text_input("Título do Arquivo:", value=f"PLANO_{ano_p}ANO_{sem_p.split(' ')[1]}", key="v18_name_plan_final")
+        
+        # Chamamos a nova função de design de PLANO
+        doc_file = exporter.gerar_docx_plano_oficial(
+            nome_doc.upper(), 
+            dados_para_word, 
+            {"turma": f"{ano_p}º Ano", "trimestre": "I"}
         )
+        
+        st.download_button("📥 BAIXAR PLANO (WORD)", doc_file, f"{nome_doc}.docx", use_container_width=True)
 
         st.markdown("---")
         st.write("🛰️ **Opção Nuvem (Google Drive)**")
