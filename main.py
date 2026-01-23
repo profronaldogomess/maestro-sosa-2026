@@ -187,16 +187,18 @@ def exibir_material_estruturado(texto_raw, key_prefix):
         st.markdown("---")
         st.write("🛰️ **Opção Nuvem (Google Drive)**")
         
-        if st.button("☁️ Tentar Enviar para o Drive", key=f"btn_drive_{key_prefix}"):
-            with st.spinner("Enviando..."):
-                link = db.subir_e_converter_para_google_docs(doc_file, nome_doc)
+        if st.button("☁️ Abrir no Google Docs", key=f"btn_drive_{key_prefix}"):
+            with st.spinner("Enviando e organizando pastas..."):
+                
+                # Pegamos a turma selecionada no sistema ou definimos 'Geral'
+                turma_atual = st.session_state.get('diario_turma', 'Geral')
+                
+                # PASSAMOS A TURMA AQUI (Isso resolve o erro)
+                link = db.subir_e_converter_para_google_docs(doc_file, nome_doc, turma=turma_atual)
                 
                 if "https://" in str(link):
-                    st.success("Enviado com sucesso!")
+                    st.success("Enviado e Organizado!")
                     st.link_button("🚀 ABRIR NO DRIVE", link)
-                elif "ERRO_PERMISSAO" in str(link):
-                    st.error("Bloqueio de Segurança do Google.")
-                    st.info("Vá no Apps Script, clique em Implantar -> Gerenciar -> Editar e mude para 'Quem tem acesso: Qualquer pessoa'.")
                 else:
                     st.error(link)
 
@@ -437,6 +439,10 @@ elif menu == "🧪 Criador de Aulas":
                             if st.button("💾 Salvar Material na Semana", key="save_lousa"):
                                 db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m"), f"{sel_p} ({foco_aula})", formato_aula, st.session_state.out_lousa, f"{ano_l}º"])
                                 st.success("Salvo!"); del st.session_state.out_lousa; time.sleep(1); st.rerun()
+                                info_doc = {
+                                "turma": st.session_state.get('diario_turma', '______'),
+                                "trimestre": st.session_state.get('notas_trim', 'III').split(' ')[0]
+                                }
                     else: st.warning(f"Nenhum plano encontrado para o {ano_l}º ano. Crie um plano primeiro.")
                 else: st.error("⚠️ Coluna 'ANO' não encontrada na planilha DB_PLANOS.")
         except Exception as e:
