@@ -300,22 +300,27 @@ import base64
 import requests
 import base64
 
-def subir_e_converter_para_google_docs(file_stream, nome_arquivo, turma="Geral"):
+def subir_e_converter_para_google_docs(file_stream, nome_arquivo, turma="Geral", trimestre="1º Trimestre", categoria="Material de Sala", sub_categoria=""):
     try:
-        # 1. SUA URL DA PONTE (A mesma que você gerou no Apps Script)
         URL_DA_PONTE = "https://script.google.com/macros/s/AKfycby6JpIPHk6vlCfQSms-wxLcRmUNNw6yVOf6qkBnEuTrco2bVFw8Apl9m0wqTIlOcw01_w/exec"
         
-        # 2. Prepara o arquivo (converte para base64)
         file_stream.seek(0)
         file_b64 = base64.b64encode(file_stream.read()).decode('utf-8')
         
-        # 3. Monta o pacote de dados (Aqui o 'turma' agora está definido)
         payload = {
-            "fileName": f"{nome_arquivo}",
-            "turma": turma,  # Agora o Python sabe o que é 'turma'
-            "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "fileName": nome_arquivo,
+            "turma": turma,
+            "trimestre": trimestre,
+            "categoria": categoria,
+            "subCategoria": sub_categoria,
             "fileB64": file_b64
         }
+        
+        response = requests.post(URL_DA_PONTE, json=payload, timeout=30)
+        return response.text
+            
+    except Exception as e:
+        return f"Erro de Conexão: {e}"
         
         # 4. Envia para o Google
         response = requests.post(URL_DA_PONTE, json=payload, timeout=30)
