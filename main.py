@@ -795,26 +795,30 @@ elif menu == "📅 Planejamento (Ponto ID)":
                 with h_tabs[4]: st.write(ai.extrair_tag(raw, "OBSERVACAO"))
                 with h_tabs[5]: st.success(ai.extrair_tag(raw, "ADAPTACAO_PEI"))
                 
-                with h_tabs[6]:
+                with h_tabs[6]: # Aba EXPORTAR do Histórico
                     st.subheader("🚀 Exportar Plano Antigo")
                     nome_doc_h = st.text_input("Título:", value=f"PLANO_REVISAO_{sel_h.replace(' ', '_')}", key="v18_name_plan_hist")
                     txt_word = raw.replace("MARKER_", "\n").replace("_", " ")
+                    
+                    # Geramos o arquivo com o nome doc_file_h
                     doc_file_h = exporter.gerar_docx_profissional(nome_doc_h.upper(), txt_word, {"turma": f_ano_h, "trimestre": "I"})
                     
-                    st.download_button("📥 BAIXAR WORD", doc_file_h, f"{nome_doc_h}.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True)
+                    st.download_button("📥 BAIXAR WORD", doc_file_h, f"{nome_doc_h}.docx", use_container_width=True)
                     
                     if st.button("☁️ ENVIAR PARA O DRIVE", key="v18_btn_drive_hist_fix"):
                         with st.spinner("Sincronizando..."):
+                            # PEGA O TRIMESTRE AUTOMÁTICO
+                            trim_atual, _ = util.obter_info_trimestre(date.today())
+                            
+                            # USAMOS doc_file_h AQUI PARA NÃO DAR NAMEERROR
                             link = db.subir_e_converter_para_google_docs(
-                            doc_file, 
-                            nome_doc, 
-                            trimestre="1º Trimestre", 
-                            categoria="Material de Sala",
-                            sub_categoria="Avaliação Adaptada (PEI)"
+                                doc_file_h, 
+                                nome_doc_h, 
+                                trimestre=trim_atual, 
+                                categoria="Planos de Aula"
                             )
                             if "https://" in str(link):
-                                st.success("✅ Salvo com sucesso!")
-                                # Versão mais segura do botão de link:
+                                st.success("✅ Salvo em Planos de Aula!")
                                 st.link_button("🚀 ABRIR NO DRIVE", str(link))
                             else:
                                 st.error(link)
