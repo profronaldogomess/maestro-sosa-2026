@@ -148,10 +148,11 @@ menu = st.sidebar.radio("Navegação:", [
 
 # Função Auxiliar de Visualização com Aba de Exportação Profissional
 def exibir_material_estruturado(texto_raw, key_prefix):
+    # Criamos as 5 abas. A variável t_exp nasce aqui.
     t1, t2, t3, t4, t_exp = st.tabs(["✍️ Lousa/Slides", "📄 Folha", "✅ Gabarito", "🎨 Imagens", "📥 EXPORTAR"])
     
     with t1:
-        st.text_area("Conteúdo Principal (Quadro ou Script Gamma AI):", ai.extrair_tag(texto_raw, "LOUSA"), height=400, key=f"{key_prefix}_lousa_txt")
+        st.text_area("Conteúdo Principal:", ai.extrair_tag(texto_raw, "LOUSA"), height=400, key=f"{key_prefix}_lousa_txt")
     with t2:
         st.text_area("Atividade:", ai.extrair_tag(texto_raw, "FOLHA"), height=400, key=f"{key_prefix}_folha_txt")
     with t3:
@@ -159,38 +160,44 @@ def exibir_material_estruturado(texto_raw, key_prefix):
     with t4:
         st.text_area("Prompts:", ai.extrair_tag(texto_raw, "IMAGENS"), height=150, key=f"{key_prefix}_img_txt")
     
+    # ABA DE EXPORTAÇÃO (Onde estavam os erros)
     with t_exp:
-        st.subheader("🚀 Exportação com Design Profissional")
+        st.subheader("🚀 Exportação Profissional")
         st.markdown("Gere documentos com cabeçalho oficial, logos e formatação pronta para impressão.")
         
+        # Sugestão de nome para o arquivo
         nome_sugerido = f"Material_Matematica_{datetime.now().strftime('%d_%m')}"
         nome_doc = st.text_input("Título do Documento:", value=nome_sugerido, key=f"name_in_{key_prefix}")
         
-        # Gera o arquivo DOCX em memória usando o novo exporter.py
+        # Gera o arquivo DOCX em memória usando o exporter.py
+        # Note que texto_raw e key_prefix agora estão dentro do escopo da função
         doc_file = exporter.gerar_docx_profissional(nome_doc.upper(), texto_raw)
         
-        col_a, col_b = st.columns(2)
-        
-        with col_a:
-            st.download_button(
-                label="📥 Baixar Word (.docx)",
-                data=doc_file,
-                file_name=f"{nome_doc}.docx",
-                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                key=f"btn_dl_{key_prefix}"
-            )
-            st.caption("Baixa o arquivo com cabeçalho e logos para o seu computador.")
+        # DESTAQUE PARA O DOWNLOAD (Sempre funciona)
+        st.download_button(
+            label="📥 BAIXAR AGORA (Word .docx)",
+            data=doc_file,
+            file_name=f"{nome_doc}.docx",
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            use_container_width=True,
+            key=f"btn_dl_{key_prefix}"
+        )
+        st.info("💡 Dica: Após baixar, você pode abrir no Word ou arrastar para o seu Drive pessoal.")
 
-        with col_b:
-            if st.button("☁️ Abrir no Google Docs", key=f"btn_drive_{key_prefix}"):
-                with st.spinner("Enviando e convertendo para Google Docs..."):
-                    link = db.subir_e_converter_para_google_docs(doc_file, nome_doc)
-                    if "http" in str(link):
-                        st.success("Arquivo criado com sucesso!")
-                        st.link_button("🚀 EDITAR NO NAVEGADOR", link)
-                    else:
-                        st.error(f"Erro: {link}")
-            st.caption("Cria uma cópia editável diretamente no seu Google Drive.")
+        st.markdown("---")
+        st.write("🛰️ **Opção Nuvem (Google Drive)**")
+        
+        if st.button("☁️ Tentar Enviar para o Drive", key=f"btn_drive_{key_prefix}"):
+            with st.spinner("Enviando..."):
+                link = db.subir_e_converter_para_google_docs(doc_file, nome_doc)
+                if link == "COTA_CHEIA":
+                    st.error("O Google bloqueou o upload automático por falta de espaço na conta técnica.")
+                    st.warning("Use o botão azul acima para baixar o arquivo e salve-o manualmente no seu Drive.")
+                elif "http" in str(link):
+                    st.success("Enviado com sucesso!")
+                    st.link_button("🚀 ABRIR NO DRIVE", link)
+                else:
+                    st.error(link)
 
 # ==============================================================================
 # MÓDULO: DASHBOARD INTELIGENTE (V6 - FULL CONTEXT: NOTAS + PDF + AULAS CRIADAS)
