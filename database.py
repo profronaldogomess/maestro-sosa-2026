@@ -300,7 +300,7 @@ import base64
 def subir_e_converter_para_google_docs(file_stream, nome_arquivo):
     try:
         # URL que você copiou do Google Apps Script
-        URL_DA_PONTE = "COLE_AQUI_A_URL_DO_APP_DA_WEB"
+        URL_DA_PONTE = "https://script.google.com/macros/s/AKfycby6JpIPHk6vlCfQSms-wxLcRmUNNw6yVOf6qkBnEuTrco2bVFw8Apl9m0wqTIlOcw01_w/exec"
         
         # Prepara o arquivo para envio (converte para texto base64)
         file_stream.seek(0)
