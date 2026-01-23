@@ -283,26 +283,44 @@ def salvar_ata_conselho(data, turma, tipo, conteudo):
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 
+# --- FUNÇÃO AUXILIAR PARA PEGAR CREDENCIAIS (CORREÇÃO DE ERRO) ---
+def obter_creds_drive():
+    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+    if os.path.exists("credentials.json"):
+        return service_account.Credentials.from_service_account_file("credentials.json", scopes=scope)
+    else:
+        return service_account.Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
+
+# --- FUNÇÃO DE UPLOAD ATUALIZADA ---
 def subir_e_converter_para_google_docs(file_stream, nome_arquivo):
     try:
-        # Reutiliza a conexão que você já tem
-        creds = conectar().auth 
+        from googleapiclient.discovery import build
+        from googleapiclient.http import MediaIoBaseUpload
+        
+        # CORREÇÃO: Obtém as credenciais diretamente, sem passar pelo objeto Spreadsheet
+        creds = obter_creds_drive()
         service = build('drive', 'v3', credentials=creds)
 
         file_metadata = {
             'name': nome_arquivo,
-            'mimeType': 'application/vnd.google-apps.document' # Força conversão para Google Docs
+            'mimeType': 'application/vnd.google-apps.document' # Converte para Google Docs
         }
         
-        media = MediaIoBaseUpload(file_stream, 
-                                  mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                                  resumable=True)
+        media = MediaIoBaseUpload(
+            file_stream, 
+            mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            resumable=True
+        )
         
+        # Cria o arquivo no Drive
         file = service.files().create(body=file_metadata, media_body=media, fields='id, webViewLink').execute()
         
-        # Dá permissão para qualquer pessoa com o link editar (ou apenas você, se preferir)
-        service.permissions().create(fileId=file.get('id'), body={'type': 'anyone', 'role': 'writer'}).execute()
+        # Define permissão de escrita para quem tiver o link (facilita seu acesso)
+        service.permissions().create(
+            fileId=file.get('id'), 
+            body={'type': 'anyone', 'role': 'writer'}
+        ).execute()
         
         return file.get('webViewLink')
     except Exception as e:
-        return f"Erro: {e}"
+        return f"Erro no Drive: {str(e)}"
