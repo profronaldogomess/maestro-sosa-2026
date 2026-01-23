@@ -190,14 +190,16 @@ def exibir_material_estruturado(texto_raw, key_prefix):
         if st.button("☁️ Tentar Enviar para o Drive", key=f"btn_drive_{key_prefix}"):
             with st.spinner("Enviando..."):
                 link = db.subir_e_converter_para_google_docs(doc_file, nome_doc)
-                if link == "COTA_CHEIA":
-                    st.error("O Google bloqueou o upload automático por falta de espaço na conta técnica.")
-                    st.warning("Use o botão azul acima para baixar o arquivo e salve-o manualmente no seu Drive.")
-                elif "http" in str(link):
+                
+                if "https://" in str(link):
                     st.success("Enviado com sucesso!")
                     st.link_button("🚀 ABRIR NO DRIVE", link)
+                elif "ERRO_PERMISSAO" in str(link):
+                    st.error("Bloqueio de Segurança do Google.")
+                    st.info("Vá no Apps Script, clique em Implantar -> Gerenciar -> Editar e mude para 'Quem tem acesso: Qualquer pessoa'.")
                 else:
                     st.error(link)
+
 
 # ==============================================================================
 # MÓDULO: DASHBOARD INTELIGENTE (V6 - FULL CONTEXT: NOTAS + PDF + AULAS CRIADAS)
