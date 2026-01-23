@@ -796,15 +796,6 @@ elif menu == "📅 Planejamento (Ponto ID)":
     # --- ABA 3: PLANO DE CURSO VIVO ---
     with tab_curso:
         st.markdown("### 📚 Plano de Curso Anual (Status em Tempo Real)")
-        if df_curriculo.empty:
-            st.warning("⚠️ Planilha DB_CURRICULO vazia.")
-        else:
-            ano_curso = st.selectbox("Selecione a Série:", [6, 7, 8, 9], key="v18_curso_ano")
-            df_c_ano = df_curriculo[df_curriculo['ANO'] == ano_curso].copy()
-
-    # --- ABA 3: PLANO DE CURSO VIVO ---
-    with tab_curso:
-        st.markdown("### 📚 Plano de Curso Anual (Status em Tempo Real)")
         
         if df_curriculo.empty:
             st.warning("⚠️ Planilha DB_CURRICULO vazia ou não carregada.")
