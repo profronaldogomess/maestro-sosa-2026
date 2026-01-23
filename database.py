@@ -280,7 +280,6 @@ def salvar_ata_conselho(data, turma, tipo, conteudo):
         st.error(f"Erro ao salvar Ata: {e}")
         return False
 
-# Adicionar ao database.py
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 
