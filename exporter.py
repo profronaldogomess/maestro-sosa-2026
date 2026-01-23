@@ -81,3 +81,72 @@ def gerar_docx_profissional(titulo, conteudo_raw, info_extra={}, logo_escola="lo
     doc.save(file_stream)
     file_stream.seek(0)
     return file_stream
+
+def gerar_docx_plano_oficial(titulo_plano, dados_plano, info_extra={}):
+    doc = Document()
+    section = doc.sections[0]
+    section.top_margin = Inches(0.4)
+    
+    # Cabeçalho em Tabela (Estilo PDF enviado)
+    table = doc.add_table(rows=3, cols=4)
+    table.style = 'Table Grid'
+    
+    # Linha 1: Logo | Nome Escola | Trimestre/Identificação
+    c_logo = table.cell(0, 0).merge(table.cell(1, 0))
+    c_escola = table.cell(0, 1).merge(table.cell(0, 2))
+    c_id = table.cell(0, 3).merge(table.cell(1, 3))
+    
+    # Inserir Logo
+    p_logo = c_logo.paragraphs[0]
+    p_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    if os.path.exists("logo_escola.png"):
+        p_logo.add_run().add_picture("logo_escola.png", width=Inches(0.8))
+        
+    # Nome da Escola
+    p_esc = c_escola.paragraphs[0]
+    p_esc.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run_esc = p_esc.add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA")
+    run_esc.font.bold = True
+    run_esc.font.size = Pt(12)
+    
+    # Identificação do Plano
+    p_id = c_id.paragraphs[0]
+    p_id.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_id.add_run(f"{info_extra.get('trimestre', 'I')} TRIMESTRE\n").font.bold = True
+    p_id.add_run(titulo_plano).font.size = Pt(9)
+
+    # Linha 2: Professor e Turma
+    table.cell(1, 1).paragraphs[0].add_run(f"PROF: Ronaldo Gomes").font.size = Pt(10)
+    table.cell(1, 2).paragraphs[0].add_run(f"TURMA: {info_extra.get('turma', '')}").font.size = Pt(10)
+
+    # Linha 3: Data e Espaço em branco
+    table.cell(2, 1).merge(table.cell(2, 3))
+    table.cell(2, 1).paragraphs[0].add_run("DATA: ____/____/2026").font.size = Pt(10)
+
+    doc.add_paragraph() # Espaço
+
+    # CORPO DO PLANO (Tags em Negrito + Texto Normal)
+    ordem_campos = [
+        ("CONTEÚDO GERAL EIXO:", dados_plano.get('geral', '')),
+        ("CONTEÚDOS ESPECÍFICOS:", dados_plano.get('especificos', '')),
+        ("OBJETIVOS DE ENSINO:", dados_plano.get('objetivos', '')),
+        ("METODOLOGIA:", dados_plano.get('metodologia', '')),
+        ("AVALIAÇÃO:", dados_plano.get('avaliacao', '')),
+        ("OBSERVAÇÃO:", dados_plano.get('observacao', '')),
+        ("ADAPTAÇÃO PEI:", dados_plano.get('pei', ''))
+    ]
+
+    for label, texto in ordem_campos:
+        p = doc.add_paragraph()
+        run_label = p.add_run(label)
+        run_label.font.bold = True
+        run_label.font.size = Pt(11)
+        
+        p.add_run(f" {texto}").font.size = Pt(11)
+        p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+        p.paragraph_format.space_after = Pt(12)
+
+    file_stream = io.BytesIO()
+    doc.save(file_stream)
+    file_stream.seek(0)
+    return file_stream
