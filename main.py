@@ -133,6 +133,14 @@ with st.sidebar:
         st.cache_data.clear()
         st.rerun()
     
+def prensa_hidraulica_texto(texto, label):
+    # Remove o rótulo se a IA insistir em escrever, independente de maiúscula/minúscula ou acento
+    limpo = texto.replace(label, "").replace(label.upper(), "").replace(label.lower(), "")
+    # Remove os dois pontos iniciais que costumam sobrar
+    if limpo.startswith(":") or limpo.startswith(" :"):
+        limpo = limpo.split(":", 1)[-1]
+    return limpo.strip()
+
 # MENU DE NAVEGAÇÃO
 menu = st.sidebar.radio("Navegação:", [
     "🤖 Maestro Dashboard",
@@ -779,13 +787,32 @@ elif menu == "📅 Planejamento (Ponto ID)":
                 )
                 
                 st.download_button("📥 BAIXAR PLANO SEMANAL", doc_file, f"{nome_doc}.docx", use_container_width=True)
-                
                 if st.button("☁️ SALVAR NO DRIVE", key="v18_drive_final"):
                     with st.spinner("Arquivando..."):
                         link = db.subir_e_converter_para_google_docs(doc_file, nome_doc, categoria="Planos de Aula")
                         if "https://" in str(link):
                             st.success("✅ Plano arquivado com sucesso!")
                             st.link_button("🚀 ABRIR NO DRIVE", str(link))
+
+                if st.button("💾 Salvar no Banco de Dados", key="v18_save_db_plan"):
+                    # Aplica a limpeza antes de salvar
+                    c_geral_f = prensa_hidraulica_texto(c_geral, "CONTEÚDO GERAL EIXO")
+                    c_espec_f = prensa_hidraulica_texto(c_espec, "CONTEÚDOS ESPECÍFICOS")
+                    objs_f = prensa_hidraulica_texto(objs_edit, "OBJETIVOS DE ENSINO")
+                    met_f = prensa_hidraulica_texto(met_edit, "METODOLOGIA")
+                    ava_f = prensa_hidraulica_texto(ava_edit, "AVALIAÇÃO")
+                    obs_f = prensa_hidraulica_texto(obs_edit, "OBSERVAÇÃO")
+                    pei_f = prensa_hidraulica_texto(pei_edit, "ADAPTAÇÃO PEI")
+
+                    final = f"MARKER_CONTEUDO_GERAL {c_geral_f} MARKER_CONTEUDOS_ESPECIFICOS {c_espec_f} MARKER_OBJETIVOS_ENSINO {objs_f} MARKER_METODOLOGIA {met_f} MARKER_AVALIACAO {ava_f} MARKER_OBSERVACAO {obs_f} MARKER_ADAPTACAO_PEI {pei_f}"
+                    
+                    if db.salvar_no_banco("DB_PLANOS", [datetime.now().strftime("%d/%m/%Y"), sem_p.split(" (")[0], f"{ano_p}º", "I Trimestre", "PADRÃO", final]):
+                        st.success("✅ Salvo no Banco de Dados!")
+                        # LIMPA O TEXTO GERADO DA TELA
+                        if "p_temp" in st.session_state: del st.session_state.p_temp
+                        if "pei_temp" in st.session_state: del st.session_state.pei_temp
+                        time.sleep(1)
+                        st.rerun()
         except Exception as e:
             st.error(f"Erro no Planejador: {e}")
 
