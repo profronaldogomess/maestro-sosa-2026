@@ -300,8 +300,9 @@ import base64
 import requests
 import base64
 
-def subir_e_converter_para_google_docs(file_stream, nome_arquivo, turma="Geral", trimestre="1º Trimestre", categoria="Material de Sala", sub_categoria=""):
+def subir_e_converter_para_google_docs(file_stream, nome_arquivo, trimestre="I Trimestre", categoria="Material de Sala", sub_categoria=""):
     try:
+        # COLE AQUI A SUA NOVA URL DO SCRIPT
         URL_DA_PONTE = "https://script.google.com/macros/s/AKfycby6JpIPHk6vlCfQSms-wxLcRmUNNw6yVOf6qkBnEuTrco2bVFw8Apl9m0wqTIlOcw01_w/exec"
         
         file_stream.seek(0)
@@ -309,7 +310,6 @@ def subir_e_converter_para_google_docs(file_stream, nome_arquivo, turma="Geral",
         
         payload = {
             "fileName": nome_arquivo,
-            "turma": turma,
             "trimestre": trimestre,
             "categoria": categoria,
             "subCategoria": sub_categoria,
@@ -318,7 +318,6 @@ def subir_e_converter_para_google_docs(file_stream, nome_arquivo, turma="Geral",
         
         response = requests.post(URL_DA_PONTE, json=payload, timeout=30)
         return response.text
-            
     except Exception as e:
         return f"Erro de Conexão: {e}"
         
