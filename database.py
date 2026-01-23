@@ -301,8 +301,8 @@ def subir_e_converter_para_google_docs(file_stream, nome_arquivo):
         service = build('drive', 'v3', credentials=creds)
 
         # --- CONFIGURAÇÃO ---
-        ID_DA_SUA_PASTA = "COLE_AQUI_O_ID_DA_SUA_PASTA" 
-        SEU_EMAIL_PESSOAL = "seu-email@gmail.com" 
+        ID_DA_SUA_PASTA = "1W8U5R-J36X_vHXeGyDH2TqWc96rEY7Rr" 
+        SEU_EMAIL_PESSOAL = "prof.ronaldogomess@gmail.com" 
 
         file_metadata = {
             'name': nome_arquivo,
