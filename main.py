@@ -795,42 +795,48 @@ elif menu == "📅 Planejamento (Ponto ID)":
                 with h_tabs[4]: st.write(ai.extrair_tag(raw, "OBSERVACAO"))
                 with h_tabs[5]: st.success(ai.extrair_tag(raw, "ADAPTACAO_PEI"))
                 
-                with h_tabs[6]: # Aba EXPORTAR do Histórico
+                with h_tabs[6]:
                     st.subheader("🚀 Exportar Plano Antigo")
-                    # MUDANÇA AQUI: A key muda conforme a semana selecionada (sel_h)
-                    # Isso força o título a atualizar para a semana certa!
-                    nome_doc_h = st.text_input(
-                        "Título:", 
-                        value=f"PLANO_REVISAO_{sel_h.replace(' ', '_')}", 
-                        key=f"v18_name_plan_{sel_h}" 
-                    )
-                    txt_word = raw.replace("MARKER_", "\n").replace("_", " ")
                     
+                    # Pega os dados da linha selecionada
+                    dados_plano = df_h[df_h['SEMANA'] == sel_h].iloc[0]
+                    # Verifica se já existe link salvo (Coluna LINK_DRIVE)
+                    link_existente = dados_plano.get('LINK_DRIVE', "")
+
+                    nome_doc_h = st.text_input("Título:", value=f"PLANO_REVISAO_{sel_h.replace(' ', '_')}", key=f"v18_name_plan_{sel_h}")
+                    txt_word = raw.replace("MARKER_", "\n").replace("_", " ")
                     doc_file_h = exporter.gerar_docx_profissional(nome_doc_h.upper(), txt_word, {"turma": f_ano_h, "trimestre": "I"})
                     
-                    st.download_button("📥 BAIXAR WORD", doc_file_h, f"{nome_doc_h}.docx", use_container_width=True, key="btn_dl_h_plan")
-                    
-                    if st.button("☁️ ENVIAR PARA O DRIVE", key="v18_btn_drive_hist_fix"):
-                        with st.spinner("Organizando em Planos de Aula..."):
-                            # ESTRATÉGIA MAESTRO: Extrai o trimestre do nome da semana
-                            # Ex: "Semana 01 (09/02 a 13/02) - I Trimestre" -> vira "I Trimestre"
-                            label_semana = sel_h 
-                            if " - " in label_semana:
-                                trim_pasta = label_semana.split(" - ")[-1]
-                            else:
-                                trim_pasta = "I Trimestre" # Fallback de segurança
+                    st.download_button("📥 BAIXAR WORD", doc_file_h, f"{nome_doc_h}.docx", use_container_width=True)
 
-                            link = db.subir_e_converter_para_google_docs(
-                                doc_file_h, 
-                                nome_doc_h, 
-                                trimestre=trim_pasta, # Agora ele usa o trimestre da semana!
-                                categoria="Planos de Aula"
-                            )
-                            if "https://" in str(link):
-                                st.success(f"✅ Plano arquivado em: {trim_pasta}")
-                                st.link_button("🚀 ABRIR NO GOOGLE DOCS", str(link), use_container_width=True)
-                            else:
-                                st.error(f"Erro: {link}")
+                    st.markdown("---")
+
+                    # LÓGICA DE MEMÓRIA MAESTRO
+                    if link_existente and "https" in str(link_existente):
+                        st.success("✅ Este plano já foi arquivado no Drive anteriormente.")
+                        st.link_button("🚀 ABRIR NO GOOGLE DOCS", str(link_existente), use_container_width=True)
+                        if st.button("🔄 Atualizar arquivo no Drive"):
+                            # Se clicar aqui, ele força um novo envio
+                            link_existente = "" 
+                            st.rerun()
+                    else:
+                        if st.button("☁️ ENVIAR PARA O DRIVE", key="v18_btn_drive_hist_fix"):
+                            with st.spinner("Organizando e salvando link no banco..."):
+                                label_semana = sel_h 
+                                trim_pasta = label_semana.split(" - ")[-1] if " - " in label_semana else "I Trimestre"
+
+                                link = db.subir_e_converter_para_google_docs(
+                                    doc_file_h, nome_doc_h, 
+                                    trimestre=trim_pasta, categoria="Planos de Aula"
+                                )
+                                
+                                if "https://" in str(link):
+                                    # SALVA O LINK NO BANCO PARA SEMPRE
+                                    db.salvar_link_na_planilha("DB_PLANOS", "SEMANA", sel_h, link)
+                                    st.success("✅ Arquivado e Vinculado ao Banco!")
+                                    st.link_button("🚀 ABRIR NO GOOGLE DOCS", str(link), use_container_width=True)
+                                else:
+                                    st.error(f"Erro: {link}")
         else:
             st.info("📭 O banco de dados de planos está vazio.")
 
