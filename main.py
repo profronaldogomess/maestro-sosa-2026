@@ -11,138 +11,145 @@ import plotly.express as px
 
 st.set_page_config(page_title="SOSA 2026 | Master Intelligence", layout="wide", page_icon="🏫")
 
-# --- CONTROLE DE TEMA (DARK/LIGHT) ---
+# --- CONTROLE DE TEMA (DESIGN PREMIUM RONALDO GOMES) ---
 with st.sidebar:
-    tema_selecionado = st.radio("Tema Visual:", ["🌞 Claro", "🌙 Escuro"], horizontal=True)
+    tema_selecionado = st.radio("Visual do Sistema:", ["🌙 Dark Mode", "🌞 Light Mode"], horizontal=True)
 
-# --- DEFINIÇÃO DAS CORES BASEADAS NA ESCOLHA ---
-if tema_selecionado == "🌞 Claro":
-    # CORES PARA O DIA
-    cor_fundo = "#FFFFFF"
-    cor_texto = "#262730"
-    cor_sidebar = "#F0F2F6"
-    cor_card_bg = "#F8F9FA"
-    cor_card_borda = "#E0E0E0"
-    cor_titulo_card = "#555555"
-    cor_valor_card = "#2962FF" # Azul
-    cor_botao_bg = "#F0F2F6"
-    cor_botao_txt = "#31333F"
+# --- DEFINIÇÃO DA PALETA DE CORES (BASEADA NA LOGO) ---
+BRAND_BLUE = "#2962FF"  # O azul da sua logo
+BRAND_NAVY = "#000B1A"  # Azul marinho profundo para contraste de elite
+
+if tema_selecionado == "🌙 Dark Mode":
+    cor_fundo = BRAND_NAVY
+    cor_texto = "#FFFFFF"
+    cor_sidebar = "#001226"
+    cor_card_bg = "#001E3C"
+    cor_card_borda = "#003366"
+    cor_titulo_card = "#A0AEC0"
+    cor_valor_card = BRAND_BLUE
+    cor_botao_bg = BRAND_BLUE
+    cor_botao_txt = "#FFFFFF"
 else:
-    # CORES PARA A NOITE
-    cor_fundo = "#0E1117"
-    cor_texto = "#FAFAFA"
-    cor_sidebar = "#262730"
-    cor_card_bg = "#1E2130"
-    cor_card_borda = "#41444C"
-    cor_titulo_card = "#CCCCCC"
-    cor_valor_card = "#82B1FF" # Azul Claro Neon
-    cor_botao_bg = "#262730"
-    cor_botao_txt = "#FAFAFA"
+    cor_fundo = "#F8FAFC"
+    cor_texto = "#1A202C"
+    cor_sidebar = "#FFFFFF"
+    cor_card_bg = "#FFFFFF"
+    cor_card_borda = "#E2E8F0"
+    cor_titulo_card = "#4A5568"
+    cor_valor_card = BRAND_BLUE
+    cor_botao_bg = BRAND_BLUE
+    cor_botao_txt = "#FFFFFF"
 
-# --- INJEÇÃO DE CSS DINÂMICO (COM MENU VISÍVEL) ---
+# --- INJEÇÃO DE CSS DINÂMICO ---
 st.markdown(f"""
     <style>
-        /* 1. APLICAÇÃO DAS CORES GERAIS */
+        /* Importação de Fonte Moderna */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+        
+        * {{ font-family: 'Inter', sans-serif; }}
+
         .stApp {{
             background-color: {cor_fundo} !important;
             color: {cor_texto} !important;
         }}
         
-        /* 2. SIDEBAR */
+        /* SIDEBAR ESTILIZADA */
         [data-testid="stSidebar"] {{
             background-color: {cor_sidebar} !important;
-        }}
-        [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3, [data-testid="stSidebar"] p, [data-testid="stSidebar"] span {{
-            color: {cor_texto} !important;
+            border-right: 1px solid {cor_card_borda};
         }}
 
-        /* 3. CABEÇALHO TRANSPARENTE (Para ver o botão de menu) */
-        header[data-testid="stHeader"] {{
-            background: transparent !important;
-            z-index: 1;
+        /* LOGO E TÍTULOS */
+        .sidebar-title {{
+            color: {cor_texto};
+            font-weight: 800;
+            text-align: center;
+            margin-bottom: 20px;
+            letter-spacing: -1px;
         }}
-        /* Esconde a linha colorida decorativa */
-        [data-testid="stDecoration"] {{
-            display: none;
-        }}
-        
-        /* 4. RODAPÉ E MENU HAMBÚRGUER PADRÃO (Esconde o desnecessário) */
-        footer {{display: none;}}
-        #MainMenu {{display: none;}} /* Esconde o menu antigo, mantém o novo toolbar */
-        
-        /* 5. AJUSTE DE MARGENS MOBILE */
-        .block-container {{
-            padding-top: 3rem !important;
-            padding-bottom: 3rem !important;
-            padding-left: 1rem !important;
-            padding-right: 1rem !important;
-        }}
-        
-        /* 6. BOTÕES DO MENU LATERAL (Estilo App) */
-        div[role="radiogroup"] > label > div:first-of-type {{ display: none; }}
+
+        /* BOTÕES DE NAVEGAÇÃO (ESTILO APP) */
         div[role="radiogroup"] > label {{
-            background-color: {cor_botao_bg};
-            color: {cor_botao_txt};
-            padding: 12px 20px;
-            border-radius: 10px;
-            margin-bottom: 8px;
-            border: 1px solid {cor_card_borda};
-            display: flex;
-            justify-content: center;
-            transition: all 0.2s;
-            cursor: pointer;
+            background-color: transparent;
+            color: {cor_texto};
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin-bottom: 5px;
+            border: 1px solid transparent;
+            transition: all 0.3s ease;
         }}
-        div[role="radiogroup"] > label:hover {{
-            transform: scale(1.02);
-            border-color: {cor_valor_card};
-        }}
-        /* Botão Selecionado */
+        
         div[role="radiogroup"] label[aria-checked="true"] {{
-            background-color: #2962FF !important;
-            color: white !important;
-            border: none;
-            box-shadow: 0 4px 6px rgba(41, 98, 255, 0.3);
-        }}
-        div[role="radiogroup"] label[aria-checked="true"] p {{
-            color: white !important;
+            background-color: {BRAND_BLUE}22 !important; /* Azul com transparência */
+            color: {BRAND_BLUE} !important;
+            border: 1px solid {BRAND_BLUE} !important;
+            font-weight: 600;
         }}
 
-        /* 7. BOTÕES DE AÇÃO (Salvar, Gerar) */
-        .stButton button {{
-            width: 100%;
-            border-radius: 12px;
-            height: 50px;
-            font-weight: bold;
-            font-size: 16px;
-            background-color: #2962FF;
-            color: white;
-            border: none;
-        }}
-
-        /* 8. CARTÕES (WIDGETS) - CONTRASTE GARANTIDO */
-        [data-testid="stMetric"] {{
+        /* CARDS DE MÉTRICAS (CONTRASTE REFORÇADO) */
+        div[data-testid="stMetric"] {{
             background-color: {cor_card_bg} !important;
             border: 1px solid {cor_card_borda} !important;
-            border-radius: 15px;
-            padding: 15px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }}
-        [data-testid="stMetricLabel"] {{
-            color: {cor_titulo_card} !important;
-            font-weight: 600 !important;
-        }}
-        [data-testid="stMetricValue"] {{
-            color: {cor_valor_card} !important;
-            font-size: 1.8rem !important;
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         }}
         
-        /* 9. TABELAS E TEXTOS GERAIS */
-        h1, h2, h3, p, li {{
-            color: {cor_texto} !important;
+        div[data-testid="stMetricLabel"] {{
+            color: {cor_titulo_card} !important;
+            font-size: 0.9rem !important;
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }}
-        [data-testid="stDataFrame"] {{
-            width: 100%;
-            overflow-x: auto;
+        
+        div[data-testid="stMetricValue"] {{
+            color: {cor_valor_card} !important;
+            font-weight: 800 !important;
+            font-size: 2.2rem !important;
+        }}
+
+        /* BOTÕES DE AÇÃO */
+        .stButton button {{
+            background-color: {BRAND_BLUE} !important;
+            color: white !important;
+            border-radius: 10px !important;
+            border: none !important;
+            font-weight: 700 !important;
+            padding: 0.6rem 1rem !important;
+            transition: transform 0.2s ease;
+        }}
+        
+        .stButton button:hover {{
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(41, 98, 255, 0.4);
+        }}
+
+        /* TABS (ABAS) */
+        .stTabs [data-baseweb="tab-list"] {{
+            gap: 10px;
+            background-color: transparent;
+        }}
+
+        .stTabs [data-baseweb="tab"] {{
+            height: 45px;
+            background-color: {cor_card_bg};
+            border-radius: 8px 8px 0px 0px;
+            border: 1px solid {cor_card_borda};
+            color: {cor_titulo_card};
+            padding: 10px 20px;
+        }}
+
+        .stTabs [aria-selected="true"] {{
+            background-color: {BRAND_BLUE} !important;
+            color: white !important;
+        }}
+
+        /* INPUTS */
+        .stTextInput input, .stTextArea textarea {{
+            background-color: {cor_card_bg} !important;
+            color: {cor_texto} !important;
+            border: 1px solid {cor_card_borda} !important;
+            border-radius: 10px !important;
         }}
     </style>
 """, unsafe_allow_html=True)
