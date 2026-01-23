@@ -300,71 +300,42 @@ def subir_e_converter_para_google_docs(file_stream, nome_arquivo):
         creds = obter_creds_drive()
         service = build('drive', 'v3', credentials=creds)
 
-        # --- CONFIGURAÇÃO ---
+        # ID da sua pasta compartilhada
         ID_DA_SUA_PASTA = "1W8U5R-J36X_vHXeGyDH2TqWc96rEY7Rr" 
-        SEU_EMAIL_PESSOAL = "prof.ronaldogomess@gmail.com" 
 
+        # REMOVEMOS a conversão para 'google-apps.document'
+        # Vamos subir como DOCX puro para não gastar cota de processamento
         file_metadata = {
-            'name': nome_arquivo,
+            'name': f"{nome_arquivo}.docx",
             'parents': [ID_DA_SUA_PASTA]
         }
         
-        # TENTATIVA 1: Subir como DOCX puro (Gasta menos cota e é mais seguro)
         media = MediaIoBaseUpload(
             file_stream, 
             mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            resumable=True
+            resumable=False # Upload simples é mais rápido e seguro para arquivos pequenos
         )
         
+        # Cria o arquivo
         file = service.files().create(
             body=file_metadata, 
             media_body=media, 
             fields='id, webViewLink'
         ).execute()
         
-        file_id = file.get('id')
-
-        # TENTATIVA DE TRANSFERIR PROPRIEDADE
-        try:
-            service.permissions().create(
-                fileId=file_id,
-                transferOwnership=True,
-                body={'type': 'user', 'role': 'owner', 'emailAddress': SEU_EMAIL_PESSOAL}
-            ).execute()
-        except:
-            # Se falhar a transferência, apenas dá permissão de escrita
-            service.permissions().create(
-                fileId=file_id,
-                body={'type': 'anyone', 'role': 'writer'}
-            ).execute()
-
+        # Apenas dá permissão de leitura/escrita
+        service.permissions().create(
+            fileId=file.get('id'), 
+            body={'type': 'anyone', 'role': 'writer'}
+        ).execute()
+        
         return file.get('webViewLink')
 
     except Exception as e:
+        # Se ainda assim der erro de cota, o problema é na conta de serviço do Google
         if "quota" in str(e).lower():
-            return "⚠️ O Google ainda diz que está cheio. Clique no botão 'Resetar Espaço' na lateral e tente de novo."
+            return "COTA_CHEIA"
         return f"Erro: {e}"
-        
-        # 1. Cria o arquivo
-        file = service.files().create(body=file_metadata, media_body=media, fields='id, webViewLink').execute()
-        file_id = file.get('id')
-
-        # 2. TRANSFERÊNCIA DE PROPRIEDADE (O "Pulo do Gato")
-        # Isso faz com que VOCÊ seja o dono e o arquivo use o SEU espaço
-        service.permissions().create(
-            fileId=file_id,
-            transferOwnership=True, # Transfere a conta do espaço para você
-            body={
-                'type': 'user',
-                'role': 'owner',
-                'emailAddress': SEU_EMAIL_PESSOAL
-            }
-        ).execute()
-        
-        # 3. Limpa a lixeira da conta de serviço para evitar que ela lote de novo
-        service.files().emptyTrash().execute()
-
-        return file.get('webViewLink')
 
     except Exception as e:
         error_msg = str(e)
