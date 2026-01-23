@@ -297,12 +297,14 @@ def obter_creds_drive():
 import requests
 import base64
 
+import requests
+import base64
+
 def subir_e_converter_para_google_docs(file_stream, nome_arquivo):
     try:
-        # URL que você copiou do Google Apps Script
+        # COLE A URL NOVA AQUI
         URL_DA_PONTE = "https://script.google.com/macros/s/AKfycby6JpIPHk6vlCfQSms-wxLcRmUNNw6yVOf6qkBnEuTrco2bVFw8Apl9m0wqTIlOcw01_w/exec"
         
-        # Prepara o arquivo para envio (converte para texto base64)
         file_stream.seek(0)
         file_b64 = base64.b64encode(file_stream.read()).decode('utf-8')
         
@@ -312,16 +314,22 @@ def subir_e_converter_para_google_docs(file_stream, nome_arquivo):
             "fileB64": file_b64
         }
         
-        # Envia para a ponte
-        response = requests.post(URL_DA_PONTE, json=payload)
+        # Timeout de 30 segundos para dar tempo do Google processar
+        response = requests.post(URL_DA_PONTE, json=payload, timeout=30)
         
-        if "http" in response.text:
-            return response.text # Retorna o link direto do arquivo
+        # Se o que voltar começar com "https", deu certo!
+        if response.text.startswith("https://"):
+            return response.text
+        # Se voltar "Erro", o script nos avisou algo
+        elif "Erro" in response.text:
+            return f"Erro no Script: {response.text}"
+        # Se voltar HTML (o erro que deu antes), é problema de permissão
         else:
-            return f"Erro na Ponte: {response.text}"
+            return "ERRO_PERMISSAO: O Google bloqueou o acesso. Verifique se você configurou 'Quem tem acesso: Qualquer pessoa' e autorizou o script."
             
     except Exception as e:
         return f"Erro de Conexão: {e}"
+
     
 def limpar_todo_drive_da_conta_servico():
     try:
