@@ -12,13 +12,12 @@ import plotly.express as px
 st.set_page_config(page_title="SOSA 2026 | Master Intelligence", layout="wide", page_icon="🏫")
 
 # --- CONTROLE DE TEMA (DARK/LIGHT) ---
-# Colocamos isso antes de tudo para carregar o CSS certo imediatamente
 with st.sidebar:
     tema_selecionado = st.radio("Tema Visual:", ["🌞 Claro", "🌙 Escuro"], horizontal=True)
 
 # --- DEFINIÇÃO DAS CORES BASEADAS NA ESCOLHA ---
 if tema_selecionado == "🌞 Claro":
-    # CORES PARA O DIA (Fundo Branco, Letra Escura)
+    # CORES PARA O DIA
     cor_fundo = "#FFFFFF"
     cor_texto = "#262730"
     cor_sidebar = "#F0F2F6"
@@ -26,85 +25,90 @@ if tema_selecionado == "🌞 Claro":
     cor_card_borda = "#E0E0E0"
     cor_titulo_card = "#555555"
     cor_valor_card = "#2962FF" # Azul
+    cor_botao_bg = "#F0F2F6"
+    cor_botao_txt = "#31333F"
 else:
-    # CORES PARA A NOITE (Fundo Escuro, Letra Clara)
+    # CORES PARA A NOITE
     cor_fundo = "#0E1117"
     cor_texto = "#FAFAFA"
     cor_sidebar = "#262730"
-    cor_card_bg = "#1E2130" # Um pouco mais claro que o fundo
+    cor_card_bg = "#1E2130"
     cor_card_borda = "#41444C"
     cor_titulo_card = "#CCCCCC"
     cor_valor_card = "#82B1FF" # Azul Claro Neon
+    cor_botao_bg = "#262730"
+    cor_botao_txt = "#FAFAFA"
 
-# --- INJEÇÃO DE CSS DINÂMICO ---
-st.markdown("""
+# --- INJEÇÃO DE CSS DINÂMICO (COM MENU VISÍVEL) ---
+st.markdown(f"""
     <style>
-        /* 1. CORES GERAIS (Respeita o tema escolhido no botão) */
-        /* As cores são definidas pelas variáveis do Streamlit, não forçamos aqui para não quebrar o Dark Mode */
+        /* 1. APLICAÇÃO DAS CORES GERAIS */
+        .stApp {{
+            background-color: {cor_fundo} !important;
+            color: {cor_texto} !important;
+        }}
         
-        /* 2. CABEÇALHO TRANSPARENTE (O Truque Mágico) */
-        /* Não removemos o header, apenas deixamos transparente para ver o botão */
-        header[data-testid="stHeader"] {
-            background: transparent;
-            z-index: 1; /* Fica acima do conteúdo */
-        }
-        
-        /* 3. ESCONDER A LINHA COLORIDA (Decoração) */
-        [data-testid="stDecoration"] {
+        /* 2. SIDEBAR */
+        [data-testid="stSidebar"] {{
+            background-color: {cor_sidebar} !important;
+        }}
+        [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3, [data-testid="stSidebar"] p, [data-testid="stSidebar"] span {{
+            color: {cor_texto} !important;
+        }}
+
+        /* 3. CABEÇALHO TRANSPARENTE (Para ver o botão de menu) */
+        header[data-testid="stHeader"] {{
+            background: transparent !important;
+            z-index: 1;
+        }}
+        /* Esconde a linha colorida decorativa */
+        [data-testid="stDecoration"] {{
             display: none;
-        }
+        }}
         
-        /* 4. RODAPÉ E MENU HAMBÚRGUER PADRÃO */
-        footer {display: none;}
+        /* 4. RODAPÉ E MENU HAMBÚRGUER PADRÃO (Esconde o desnecessário) */
+        footer {{display: none;}}
+        #MainMenu {{display: none;}} /* Esconde o menu antigo, mantém o novo toolbar */
         
-        /* 5. AJUSTE DE MARGENS (Sobe o conteúdo, mas deixa espaço para o botão do menu) */
-        .block-container {
-            padding-top: 3rem !important; /* Espaço para não ficar embaixo do botão de menu */
+        /* 5. AJUSTE DE MARGENS MOBILE */
+        .block-container {{
+            padding-top: 3rem !important;
             padding-bottom: 3rem !important;
             padding-left: 1rem !important;
             padding-right: 1rem !important;
-        }
+        }}
         
-        /* 6. TRANSFORMAR MENU LATERAL EM BOTÕES (Estilo App) */
-        div[role="radiogroup"] > label > div:first-of-type { display: none; }
-        div[role="radiogroup"] > label {
+        /* 6. BOTÕES DO MENU LATERAL (Estilo App) */
+        div[role="radiogroup"] > label > div:first-of-type {{ display: none; }}
+        div[role="radiogroup"] > label {{
+            background-color: {cor_botao_bg};
+            color: {cor_botao_txt};
             padding: 12px 20px;
             border-radius: 10px;
             margin-bottom: 8px;
-            border: 1px solid #E0E0E0;
+            border: 1px solid {cor_card_borda};
             display: flex;
             justify-content: center;
             transition: all 0.2s;
             cursor: pointer;
-            background-color: #F0F2F6; /* Cor padrão clara */
-            color: #31333F;
-        }
-        /* Ajuste para Dark Mode automático nos botões */
-        @media (prefers-color-scheme: dark) {
-            div[role="radiogroup"] > label {
-                background-color: #262730;
-                border-color: #41444C;
-                color: #FAFAFA;
-            }
-        }
-
-        div[role="radiogroup"] > label:hover {
+        }}
+        div[role="radiogroup"] > label:hover {{
             transform: scale(1.02);
-        }
-        
-        /* Botão Selecionado (Fica Azul) */
-        div[role="radiogroup"] label[aria-checked="true"] {
+            border-color: {cor_valor_card};
+        }}
+        /* Botão Selecionado */
+        div[role="radiogroup"] label[aria-checked="true"] {{
             background-color: #2962FF !important;
             color: white !important;
             border: none;
             box-shadow: 0 4px 6px rgba(41, 98, 255, 0.3);
-        }
-        div[role="radiogroup"] label[aria-checked="true"] p {
+        }}
+        div[role="radiogroup"] label[aria-checked="true"] p {{
             color: white !important;
-        }
+        }}
 
         /* 7. BOTÕES DE AÇÃO (Salvar, Gerar) */
-        .stButton button {
+        .stButton button {{
             width: 100%;
             border-radius: 12px;
             height: 50px;
@@ -113,24 +117,33 @@ st.markdown("""
             background-color: #2962FF;
             color: white;
             border: none;
-        }
-        .stButton button:hover {
-            background-color: #0039CB;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-        }
+        }}
 
-        /* 8. CARTÕES (WIDGETS) */
-        [data-testid="stMetric"] {
-            border: 1px solid #E0E0E0;
+        /* 8. CARTÕES (WIDGETS) - CONTRASTE GARANTIDO */
+        [data-testid="stMetric"] {{
+            background-color: {cor_card_bg} !important;
+            border: 1px solid {cor_card_borda} !important;
             border-radius: 15px;
-            padding: 10px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        }
+            padding: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }}
+        [data-testid="stMetricLabel"] {{
+            color: {cor_titulo_card} !important;
+            font-weight: 600 !important;
+        }}
+        [data-testid="stMetricValue"] {{
+            color: {cor_valor_card} !important;
+            font-size: 1.8rem !important;
+        }}
         
-        /* 9. TABELAS (Rolagem Horizontal) */
-        [data-testid="stDataFrame"] {
+        /* 9. TABELAS E TEXTOS GERAIS */
+        h1, h2, h3, p, li {{
+            color: {cor_texto} !important;
+        }}
+        [data-testid="stDataFrame"] {{
+            width: 100%;
             overflow-x: auto;
-        }
+        }}
     </style>
 """, unsafe_allow_html=True)
 
