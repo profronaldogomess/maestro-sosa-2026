@@ -279,3 +279,31 @@ def salvar_ata_conselho(data, turma, tipo, conteudo):
     except Exception as e:
         st.error(f"Erro ao salvar Ata: {e}")
         return False
+
+# Adicionar ao database.py
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload
+
+def subir_e_converter_para_google_docs(file_stream, nome_arquivo):
+    try:
+        # Reutiliza a conexão que você já tem
+        creds = conectar().auth 
+        service = build('drive', 'v3', credentials=creds)
+
+        file_metadata = {
+            'name': nome_arquivo,
+            'mimeType': 'application/vnd.google-apps.document' # Força conversão para Google Docs
+        }
+        
+        media = MediaIoBaseUpload(file_stream, 
+                                  mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                                  resumable=True)
+        
+        file = service.files().create(body=file_metadata, media_body=media, fields='id, webViewLink').execute()
+        
+        # Dá permissão para qualquer pessoa com o link editar (ou apenas você, se preferir)
+        service.permissions().create(fileId=file.get('id'), body={'type': 'anyone', 'role': 'writer'}).execute()
+        
+        return file.get('webViewLink')
+    except Exception as e:
+        return f"Erro: {e}"
