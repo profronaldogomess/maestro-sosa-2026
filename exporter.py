@@ -150,3 +150,79 @@ def gerar_docx_plano_oficial(titulo_plano, dados_plano, info_extra={}):
     doc.save(file_stream)
     file_stream.seek(0)
     return file_stream
+
+def gerar_docx_plano_pedagogico_v18(titulo_arquivo, dados, info):
+    doc = Document()
+    section = doc.sections[0]
+    section.top_margin, section.bottom_margin = Inches(0.5), Inches(0.5)
+    section.left_margin, section.right_margin = Inches(0.6), Inches(0.6)
+
+    # --- CABEÇALHO MODERNO (3 LINHAS) ---
+    table = doc.add_table(rows=3, cols=3)
+    table.style = 'Table Grid'
+    
+    # Linha 1: LOGO | NOME DA ESCOLA | TÍTULO DO DOCUMENTO
+    c_logo = table.cell(0, 0)
+    c_escola = table.cell(0, 1)
+    c_doc_tipo = table.cell(0, 2)
+    
+    # Logo
+    p_logo = c_logo.paragraphs[0]
+    p_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    if os.path.exists("logo_escola.png"):
+        p_logo.add_run().add_picture("logo_escola.png", width=Inches(0.7))
+    
+    # Escola
+    p_esc = c_escola.paragraphs[0]
+    p_esc.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run_esc = p_esc.add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA")
+    run_esc.font.bold, run_esc.font.size = True, Pt(11)
+    
+    # Tipo de Documento
+    p_tipo = c_doc_tipo.paragraphs[0]
+    p_tipo.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run_tipo = p_tipo.add_run("PLANO DE ENSINO SEMANAL")
+    run_tipo.font.bold, run_tipo.font.size = True, Pt(11)
+
+    # Linha 2: Professor | Ano
+    table.cell(1, 0).merge(table.cell(1, 1))
+    table.cell(1, 0).paragraphs[0].add_run(f"Professor: Ronaldo Gomes").font.size = Pt(10)
+    table.cell(1, 2).paragraphs[0].add_run(f"Ano: {info.get('ano', '')}").font.size = Pt(10)
+
+    # Linha 3: Semana | Data
+    table.cell(2, 0).merge(table.cell(2, 1))
+    table.cell(2, 0).paragraphs[0].add_run(f"Semana: {info.get('semana', '')}").font.size = Pt(10)
+    table.cell(2, 2).paragraphs[0].add_run("Data: [    /    / 2026 ]").font.size = Pt(10)
+
+    doc.add_paragraph() # Espaço
+
+    # --- CORPO DO PLANO (LIMPEZA DE REPETIÇÃO) ---
+    # Lista de tuplas (Rótulo em Negrito, Chave do Dado)
+    campos = [
+        ("CONTEÚDO GERAL EIXO:", "geral"),
+        ("CONTEÚDOS ESPECÍFICOS:", "especificos"),
+        ("OBJETIVOS DE ENSINO:", "objetivos"),
+        ("METODOLOGIA:", "metodologia"),
+        ("AVALIAÇÃO:", "avaliacao"),
+        ("OBSERVAÇÃO:", "observacao"),
+        ("ADAPTAÇÃO PEI:", "pei")
+    ]
+
+    for label, chave in campos:
+        p = doc.add_paragraph()
+        p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+        
+        # Rótulo em Negrito
+        run_label = p.add_run(label)
+        run_label.font.bold = True
+        run_label.font.size = Pt(11)
+        
+        # Texto Normal (Limpando possíveis repetições da IA por segurança)
+        texto_limpo = str(dados.get(chave, "")).replace(label, "").strip()
+        p.add_run(f" {texto_limpo}").font.size = Pt(11)
+        p.paragraph_format.space_after = Pt(10)
+
+    file_stream = io.BytesIO()
+    doc.save(file_stream)
+    file_stream.seek(0)
+    return file_stream
