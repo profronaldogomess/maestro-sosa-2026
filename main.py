@@ -746,12 +746,18 @@ elif menu == "📅 Planejamento (Ponto ID)":
                     nome_doc = st.text_input("Título do Documento:", value=f"PLANO_{ano_p}ANO_{sem_p.split(' ')[1]}", key="v18_name_plan_new")
                     conteudo_word = f"CONTEÚDO: {c_geral}\n{c_espec}\n\nOBJETIVOS:\n{objs_edit}\n\nMETODOLOGIA:\n{met_edit}\n\nAVALIAÇÃO:\n{ava_edit}\n\nADAPTAÇÃO PEI:\n{pei_edit}"
                     doc_file = exporter.gerar_docx_profissional(nome_doc.upper(), conteudo_word, {"turma": f"{ano_p}º Ano", "trimestre": "I"})
-                    st.download_button("📥 BAIXAR WORD", doc_file, f"{nome_doc}.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True, key="v18_dl_plan_new")
-                    if st.button("☁️ SALVAR NO GOOGLE DRIVE", key="v18_drive_plan_new"):
+                    
+                    st.download_button("📥 BAIXAR WORD", doc_file, f"{nome_doc}.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True)
+                    
+                    if st.button("☁️ SALVAR NO GOOGLE DRIVE", key="v18_btn_drive_new_fix"):
                         with st.spinner("Enviando..."):
                             link = db.subir_e_converter_para_google_docs(doc_file, nome_doc, turma=f"{ano_p}º Ano")
-                            if "https://" in str(link): st.success("Organizado!"); st.link_button("🚀 ABRIR NO DRIVE", link, key="v18_link_drive_new")
-                            else: st.error(link)
+                            if "https://" in str(link):
+                                st.success("✅ Salvo com sucesso!")
+                                # Versão mais segura do botão de link:
+                                st.link_button("🚀 ABRIR NO DRIVE", str(link))
+                            else:
+                                st.error(link)
 
                 if st.button("💾 Salvar no Banco de Dados", key="v18_save_db_plan"):
                     final = f"MARKER_CONTEUDO_GERAL {c_geral} MARKER_CONTEUDOS_ESPECIFICOS {c_espec} MARKER_OBJETIVOS_ENSINO {objs_edit} MARKER_METODOLOGIA {met_edit} MARKER_AVALIACAO {ava_edit} MARKER_OBSERVACAO {obs_edit} MARKER_ADAPTACAO_PEI {pei_edit}"
@@ -784,12 +790,18 @@ elif menu == "📅 Planejamento (Ponto ID)":
                     nome_doc_h = st.text_input("Título:", value=f"PLANO_REVISAO_{sel_h.replace(' ', '_')}", key="v18_name_plan_hist")
                     txt_word = raw.replace("MARKER_", "\n").replace("_", " ")
                     doc_file_h = exporter.gerar_docx_profissional(nome_doc_h.upper(), txt_word, {"turma": f_ano_h, "trimestre": "I"})
-                    st.download_button("📥 BAIXAR WORD", doc_file_h, f"{nome_doc_h}.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True, key="v18_dl_plan_hist")
-                    if st.button("☁️ ENVIAR PARA O DRIVE", key="v18_drive_plan_hist"):
+                    
+                    st.download_button("📥 BAIXAR WORD", doc_file_h, f"{nome_doc_h}.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True)
+                    
+                    if st.button("☁️ ENVIAR PARA O DRIVE", key="v18_btn_drive_hist_fix"):
                         with st.spinner("Sincronizando..."):
                             link = db.subir_e_converter_para_google_docs(doc_file_h, nome_doc_h, turma=f_ano_h)
-                            if "https://" in str(link): st.success("Salvo!"); st.link_button("🚀 ABRIR NO DRIVE", link, key="v18_link_drive_hist")
-                            else: st.error(link)
+                            if "https://" in str(link):
+                                st.success("✅ Salvo com sucesso!")
+                                # Versão mais segura do botão de link:
+                                st.link_button("🚀 ABRIR NO DRIVE", str(link))
+                            else:
+                                st.error(link)
         else:
             st.info("📭 O banco de dados de planos está vazio.")
 
