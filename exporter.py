@@ -45,24 +45,27 @@ def gerar_docx_profissional(titulo, conteudo_raw, info_extra={}, logo_escola="lo
     run_esc = p_esc.add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA")
     run_esc.font.bold, run_esc.font.size = True, Pt(12)
 
-    # 3. Campo Aluno (SEM LINHAS)
+    # 3. Campo Aluno (LIMPO)
     p_alu = c_aluno.paragraphs[0]
     p_alu.add_run("ALUNO(A): ").font.size = Pt(10)
     
-    # 4. Linha de Baixo (SEM LINHAS)
+    # 4. Linha de Baixo (LIMPO)
     table.cell(2, 1).paragraphs[0].add_run("PROF. Ronaldo Gomes").font.italic = True
     table.cell(2, 2).paragraphs[0].add_run(f"TURMA: {info_extra.get('turma', '')}")
-    table.cell(2, 3).paragraphs[0].add_run("DATA:    /    /    ")
+    
+    p_data = table.cell(2, 3).paragraphs[0]
+    p_data.add_run("DATA:    /    /    ")
 
     # 5. Lado Direito
     c_trim.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
     p_trim = c_trim.paragraphs[0]
     p_trim.alignment = WD_ALIGN_PARAGRAPH.CENTER
     run_t1 = p_trim.add_run(f"{info_extra.get('trimestre', 'III')} TRIMESTRE\n")
-    run_t1.font.bold, run_t1.font.size = True, Pt(11)
+    run_t1.font.bold = True
+    run_t1.font.size = Pt(11)
     p_trim.add_run(f"{titulo}").font.size = Pt(9)
 
-    # 6. Campo Nota (SEM LINHAS)
+    # 6. Campo Nota (LIMPO)
     table.cell(2, 4).paragraphs[0].add_run(" NOTA: ")
 
     # Corpo do Texto
