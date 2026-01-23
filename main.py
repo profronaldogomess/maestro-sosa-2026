@@ -163,17 +163,11 @@ def exibir_material_estruturado(texto_raw, key_prefix):
     # ABA DE EXPORTAÇÃO (Onde estavam os erros)
     with t_exp:
         st.subheader("🚀 Exportação Profissional")
-        st.markdown("Gere documentos com cabeçalho oficial, logos e formatação pronta para impressão.")
-        
-        # Sugestão de nome para o arquivo
         nome_sugerido = f"Material_Matematica_{datetime.now().strftime('%d_%m')}"
         nome_doc = st.text_input("Título do Documento:", value=nome_sugerido, key=f"name_in_{key_prefix}")
         
-        # Gera o arquivo DOCX em memória usando o exporter.py
-        # Note que texto_raw e key_prefix agora estão dentro do escopo da função
         doc_file = exporter.gerar_docx_profissional(nome_doc.upper(), texto_raw)
         
-        # DESTAQUE PARA O DOWNLOAD (Sempre funciona)
         st.download_button(
             label="📥 BAIXAR AGORA (Word .docx)",
             data=doc_file,
@@ -182,30 +176,36 @@ def exibir_material_estruturado(texto_raw, key_prefix):
             use_container_width=True,
             key=f"btn_dl_{key_prefix}"
         )
-        st.info("💡 Dica: Após baixar, você pode abrir no Word ou arrastar para o seu Drive pessoal.")
 
         st.markdown("---")
         st.write("🛰️ **Opção Nuvem (Google Drive)**")
         
-        if st.button("☁️ Abrir no Google Docs", key=f"btn_drive_{key_prefix}"):
-            with st.spinner("Enviando e organizando pastas..."):
+        if st.button("☁️ Enviar e Gerar Link no Drive", key=f"btn_drive_{key_prefix}"):
+            with st.spinner("Sincronizando com as pastas do Drive..."):
+                # Identifica o tipo para a subpasta
+                tipo_mat = "Outros"
+                if "lousa" in key_prefix.lower(): tipo_mat = "Lousa e Slides"
+                elif "av" in key_prefix.lower(): tipo_mat = "Atividades Avulsas"
+                elif "prova" in key_prefix.lower(): tipo_mat = "Avaliações (Regular)"
+                elif "adapt" in key_prefix.lower(): tipo_mat = "Avaliação Adaptada (PEI)"
+
+                trim_atual, _ = util.obter_info_trimestre(date.today())
                 
-                # Pegamos a turma selecionada no sistema ou definimos 'Geral'
-                turma_atual = st.session_state.get('diario_turma', 'Geral')
-                
-                # PASSAMOS A TURMA AQUI (Isso resolve o erro)
                 link = db.subir_e_converter_para_google_docs(
-                doc_file, 
-                nome_doc, 
-                trimestre="1º Trimestre", # Ou pegue da variável do sistema
-                categoria="Planos de Aula"
-            )  
+                    doc_file, 
+                    nome_doc, 
+                    trimestre=trim_atual,
+                    categoria="Material de Sala",
+                    sub_categoria=tipo_mat
+                )
                 
                 if "https://" in str(link):
-                    st.success("Enviado e Organizado!")
-                    st.link_button("🚀 ABRIR NO DRIVE", link)
+                    st.success("✅ Arquivo salvo e convertido!")
+                    # Exibe o link de duas formas para garantir
+                    st.link_button("🚀 ABRIR NO GOOGLE DOCS", str(link), use_container_width=True)
+                    st.markdown(f"🔗 [Clique aqui se o botão não abrir]({link})")
                 else:
-                    st.error(link)
+                    st.error(f"Erro na Ponte: {link}")
 
 
 # ==============================================================================
@@ -800,17 +800,14 @@ elif menu == "📅 Planejamento (Ponto ID)":
                     nome_doc_h = st.text_input("Título:", value=f"PLANO_REVISAO_{sel_h.replace(' ', '_')}", key="v18_name_plan_hist")
                     txt_word = raw.replace("MARKER_", "\n").replace("_", " ")
                     
-                    # Geramos o arquivo com o nome doc_file_h
                     doc_file_h = exporter.gerar_docx_profissional(nome_doc_h.upper(), txt_word, {"turma": f_ano_h, "trimestre": "I"})
                     
-                    st.download_button("📥 BAIXAR WORD", doc_file_h, f"{nome_doc_h}.docx", use_container_width=True)
+                    st.download_button("📥 BAIXAR WORD", doc_file_h, f"{nome_doc_h}.docx", use_container_width=True, key="btn_dl_h_plan")
                     
                     if st.button("☁️ ENVIAR PARA O DRIVE", key="v18_btn_drive_hist_fix"):
-                        with st.spinner("Sincronizando..."):
-                            # PEGA O TRIMESTRE AUTOMÁTICO
+                        with st.spinner("Organizando em Planos de Aula..."):
                             trim_atual, _ = util.obter_info_trimestre(date.today())
                             
-                            # USAMOS doc_file_h AQUI PARA NÃO DAR NAMEERROR
                             link = db.subir_e_converter_para_google_docs(
                                 doc_file_h, 
                                 nome_doc_h, 
@@ -818,9 +815,12 @@ elif menu == "📅 Planejamento (Ponto ID)":
                                 categoria="Planos de Aula"
                             )
                             if "https://" in str(link):
-                                st.success("✅ Salvo em Planos de Aula!")
-                                st.link_button("🚀 ABRIR NO DRIVE", str(link))
+                                st.success("✅ Plano arquivado no Drive!")
+                                st.link_button("🚀 ABRIR NO GOOGLE DOCS", str(link), use_container_width=True)
+                                st.markdown(f"🔗 [Link Direto]({link})")
                             else:
+                                st.error(f"Erro: {link}")
+
                                 st.error(link)
         else:
             st.info("📭 O banco de dados de planos está vazio.")
