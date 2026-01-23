@@ -8,6 +8,7 @@ from google.genai import types
 import time
 import os
 import plotly.express as px
+import exporter  # Novo módulo de design DOCX
 
 st.set_page_config(page_title="SOSA 2026 | Master Intelligence", layout="wide", page_icon="🏫")
 
@@ -141,9 +142,10 @@ menu = st.sidebar.radio("Navegação:", [
     "♿ Relatórios PEI / Perfil IA"
 ])
 
-# Função Auxiliar de Visualização com Chaves Dinâmicas
+# Função Auxiliar de Visualização com Aba de Exportação Profissional
 def exibir_material_estruturado(texto_raw, key_prefix):
-    t1, t2, t3, t4 = st.tabs(["✍️ Lousa/Slides", "📄 Folha", "✅ Gabarito", "🎨 Imagens"])
+    t1, t2, t3, t4, t_exp = st.tabs(["✍️ Lousa/Slides", "📄 Folha", "✅ Gabarito", "🎨 Imagens", "📥 EXPORTAR"])
+    
     with t1:
         st.text_area("Conteúdo Principal (Quadro ou Script Gamma AI):", ai.extrair_tag(texto_raw, "LOUSA"), height=400, key=f"{key_prefix}_lousa_txt")
     with t2:
@@ -152,6 +154,39 @@ def exibir_material_estruturado(texto_raw, key_prefix):
         st.text_area("Gabarito:", ai.extrair_tag(texto_raw, "GABARITO"), height=200, key=f"{key_prefix}_gab_txt")
     with t4:
         st.text_area("Prompts:", ai.extrair_tag(texto_raw, "IMAGENS"), height=150, key=f"{key_prefix}_img_txt")
+    
+    with t_exp:
+        st.subheader("🚀 Exportação com Design Profissional")
+        st.markdown("Gere documentos com cabeçalho oficial, logos e formatação pronta para impressão.")
+        
+        nome_sugerido = f"Material_Matematica_{datetime.now().strftime('%d_%m')}"
+        nome_doc = st.text_input("Título do Documento:", value=nome_sugerido, key=f"name_in_{key_prefix}")
+        
+        # Gera o arquivo DOCX em memória usando o novo exporter.py
+        doc_file = exporter.gerar_docx_profissional(nome_doc.upper(), texto_raw)
+        
+        col_a, col_b = st.columns(2)
+        
+        with col_a:
+            st.download_button(
+                label="📥 Baixar Word (.docx)",
+                data=doc_file,
+                file_name=f"{nome_doc}.docx",
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                key=f"btn_dl_{key_prefix}"
+            )
+            st.caption("Baixa o arquivo com cabeçalho e logos para o seu computador.")
+
+        with col_b:
+            if st.button("☁️ Abrir no Google Docs", key=f"btn_drive_{key_prefix}"):
+                with st.spinner("Enviando e convertendo para Google Docs..."):
+                    link = db.subir_e_converter_para_google_docs(doc_file, nome_doc)
+                    if "http" in str(link):
+                        st.success("Arquivo criado com sucesso!")
+                        st.link_button("🚀 EDITAR NO NAVEGADOR", link)
+                    else:
+                        st.error(f"Erro: {link}")
+            st.caption("Cria uma cópia editável diretamente no seu Google Drive.")
 
 # ==============================================================================
 # MÓDULO: DASHBOARD INTELIGENTE (V6 - FULL CONTEXT: NOTAS + PDF + AULAS CRIADAS)
@@ -382,7 +417,10 @@ elif menu == "🧪 Criador de Aulas":
                             if ajuste_l:
                                 st.session_state.out_lousa = ai.gerar_ia("AVALIADOR", f"Material atual: {st.session_state.out_lousa}. Ajuste: {ajuste_l}. Mantenha os MARKERS.")
                                 st.rerun()
+                            
+                            # CHAMADA DA FUNÇÃO COM ABA DE EXPORTAÇÃO
                             exibir_material_estruturado(st.session_state.out_lousa, "view_lousa")
+                            
                             if st.button("💾 Salvar Material na Semana", key="save_lousa"):
                                 db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m"), f"{sel_p} ({foco_aula})", formato_aula, st.session_state.out_lousa, f"{ano_l}º"])
                                 st.success("Salvo!"); del st.session_state.out_lousa; time.sleep(1); st.rerun()
@@ -425,7 +463,10 @@ elif menu == "🧪 Criador de Aulas":
                             if aj_av:
                                 st.session_state.out_avulsa = ai.gerar_ia("AVALIADOR", f"Atual: {st.session_state.out_avulsa}. Ajuste: {aj_av}. Mantenha os MARKERS.")
                                 st.rerun()
+                            
+                            # CHAMADA DA FUNÇÃO COM ABA DE EXPORTAÇÃO
                             exibir_material_estruturado(st.session_state.out_avulsa, "view_av")
+                            
                             if st.button("💾 Salvar Atividade na Semana", key="save_av"):
                                 db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m"), f"{sel_p_av} (AVULSA)", "AVULSA", st.session_state.out_avulsa, f"{ano_av}º"])
                                 st.success("Salvo!"); del st.session_state.out_avulsa; time.sleep(1); st.rerun()
@@ -471,6 +512,7 @@ elif menu == "🧪 Criador de Aulas":
                                 st.session_state.out_prova = ai.gerar_ia("AVALIADOR", f"Atual: {st.session_state.out_prova}. Ajuste: {aj_p}. Mantenha os MARKERS.")
                                 st.rerun()
                             
+                            # CHAMADA DA FUNÇÃO COM ABA DE EXPORTAÇÃO
                             exibir_material_estruturado(st.session_state.out_prova, "view_prova")
                             
                             if st.button("💾 Salvar Avaliação Oficial (Regular)"):
@@ -516,6 +558,8 @@ elif menu == "🧪 Criador de Aulas":
                 
                 if "out_prova_adaptada" in st.session_state:
                     st.success("Versão Adaptada Gerada com Sucesso!")
+                    
+                    # CHAMADA DA FUNÇÃO COM ABA DE EXPORTAÇÃO
                     exibir_material_estruturado(st.session_state.out_prova_adaptada, "view_prova_adapt_tab")
                     
                     if st.button("💾 Salvar Prova Adaptada no Histórico"):
@@ -561,7 +605,9 @@ elif menu == "🧪 Criador de Aulas":
                                 st.session_state.out_adaptada = ai.gerar_ia("CRIADOR_ADAPTADO", prompt)
                         
                         if "out_adaptada" in st.session_state:
+                            # CHAMADA DA FUNÇÃO COM ABA DE EXPORTAÇÃO
                             exibir_material_estruturado(st.session_state.out_adaptada, "view_adaptada")
+                            
                             if st.button("💾 Salvar Atividade Adaptada"):
                                 db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m"), f"{sel_p_ad} ({foco_ad})", "ADAPTADA", st.session_state.out_adaptada, f"{ano_ad}º"])
                                 st.success("Salvo!"); del st.session_state.out_adaptada; time.sleep(1); st.rerun()
@@ -603,6 +649,7 @@ elif menu == "🧪 Criador de Aulas":
                 
                 st.info(f"📅 Data: {df_h.loc[sel_h, 'DATA']} | 🏷️ Tipo: {df_h.loc[sel_h, 'TIPO_MATERIAL']}")
                 
+                # CHAMADA DA FUNÇÃO COM ABA DE EXPORTAÇÃO (Permite baixar materiais antigos também!)
                 exibir_material_estruturado(raw_h, prefixo_unico)
                 
                 if st.button("🗑️ Excluir este Material"):
