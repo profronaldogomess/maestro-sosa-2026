@@ -348,3 +348,27 @@ def limpar_todo_drive_da_conta_servico():
         return f"Sucesso! {len(items)} arquivos inúteis foram apagados e o espaço foi liberado."
     except Exception as e:
         return f"Erro na limpeza: {e}"
+
+def salvar_link_na_planilha(aba_nome, coluna_busca, valor_busca, link_drive):
+    try:
+        wb = conectar()
+        ws = wb.worksheet(aba_nome)
+        dados = ws.get_all_values()
+        
+        # Localiza a coluna LINK_DRIVE (a última)
+        cabecalho = dados[0]
+        col_link_idx = cabecalho.index("LINK_DRIVE") + 1
+        
+        # Localiza a coluna de busca (ex: SEMANA ou CONTEUDO)
+        col_busca_idx = cabecalho.index(coluna_busca)
+        
+        for i, row in enumerate(dados):
+            if i == 0: continue
+            if row[col_busca_idx] == valor_busca:
+                ws.update_cell(i + 1, col_link_idx, link_drive)
+                st.cache_data.clear() # Limpa o cache para o link aparecer na hora
+                return True
+        return False
+    except Exception as e:
+        st.error(f"Erro ao vincular link: {e}")
+        return False
