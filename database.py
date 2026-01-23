@@ -300,13 +300,17 @@ def subir_e_converter_para_google_docs(file_stream, nome_arquivo):
         creds = obter_creds_drive()
         service = build('drive', 'v3', credentials=creds)
 
-        # --- COLOQUE O ID DA SUA PASTA AQUI ---
+        # --- CONFIGURAÇÃO OBRIGATÓRIA ---
+        # 1. ID da pasta que você criou e compartilhou com a conta de serviço
         ID_DA_SUA_PASTA = "1W8U5R-J36X_vHXeGyDH2TqWc96rEY7Rr" 
+        
+        # 2. Seu e-mail pessoal (o dono do Drive com espaço)
+        SEU_EMAIL_PESSOAL = "prof.ronaldogomess@gmail.com" 
 
         file_metadata = {
             'name': nome_arquivo,
-            'mimeType': 'application/pdf' if nome_arquivo.endswith('.pdf') else 'application/vnd.google-apps.document',
-            'parents': [ID_DA_SUA_PASTA] # Força o arquivo a ir para sua pasta pessoal
+            'mimeType': 'application/vnd.google-apps.document',
+            'parents': [ID_DA_SUA_PASTA]
         }
         
         media = MediaIoBaseUpload(
@@ -315,17 +319,29 @@ def subir_e_converter_para_google_docs(file_stream, nome_arquivo):
             resumable=True
         )
         
+        # 1. Cria o arquivo
         file = service.files().create(body=file_metadata, media_body=media, fields='id, webViewLink').execute()
-        
-        # Permissão para você (ou qualquer um com link) editar
+        file_id = file.get('id')
+
+        # 2. TRANSFERÊNCIA DE PROPRIEDADE (O "Pulo do Gato")
+        # Isso faz com que VOCÊ seja o dono e o arquivo use o SEU espaço
         service.permissions().create(
-            fileId=file.get('id'), 
-            body={'type': 'anyone', 'role': 'writer'}
+            fileId=file_id,
+            transferOwnership=True, # Transfere a conta do espaço para você
+            body={
+                'type': 'user',
+                'role': 'owner',
+                'emailAddress': SEU_EMAIL_PESSOAL
+            }
         ).execute()
         
+        # 3. Limpa a lixeira da conta de serviço para evitar que ela lote de novo
+        service.files().emptyTrash().execute()
+
         return file.get('webViewLink')
+
     except Exception as e:
-        # Se o erro persistir, ele vai avisar aqui
-        if "quota" in str(e).lower():
-            return "Erro: O armazenamento da Conta de Serviço está lotado. Por favor, compartilhe uma pasta do seu Drive pessoal com o e-mail da conta de serviço e configure o ID no código."
-        return f"Erro no Drive: {str(e)}"
+        error_msg = str(e)
+        if "quota" in error_msg.lower():
+            return "Erro: A conta de serviço ainda está acusando cota cheia. Tente excluir arquivos antigos da pasta ou verifique se o e-mail pessoal está correto."
+        return f"Erro no Drive: {error_msg}"
