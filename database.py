@@ -297,13 +297,16 @@ def subir_e_converter_para_google_docs(file_stream, nome_arquivo):
         from googleapiclient.discovery import build
         from googleapiclient.http import MediaIoBaseUpload
         
-        # CORREÇÃO: Obtém as credenciais diretamente, sem passar pelo objeto Spreadsheet
         creds = obter_creds_drive()
         service = build('drive', 'v3', credentials=creds)
 
+        # --- COLOQUE O ID DA SUA PASTA AQUI ---
+        ID_DA_SUA_PASTA = "1W8U5R-J36X_vHXeGyDH2TqWc96rEY7Rr" 
+
         file_metadata = {
             'name': nome_arquivo,
-            'mimeType': 'application/vnd.google-apps.document' # Converte para Google Docs
+            'mimeType': 'application/pdf' if nome_arquivo.endswith('.pdf') else 'application/vnd.google-apps.document',
+            'parents': [ID_DA_SUA_PASTA] # Força o arquivo a ir para sua pasta pessoal
         }
         
         media = MediaIoBaseUpload(
@@ -312,10 +315,9 @@ def subir_e_converter_para_google_docs(file_stream, nome_arquivo):
             resumable=True
         )
         
-        # Cria o arquivo no Drive
         file = service.files().create(body=file_metadata, media_body=media, fields='id, webViewLink').execute()
         
-        # Define permissão de escrita para quem tiver o link (facilita seu acesso)
+        # Permissão para você (ou qualquer um com link) editar
         service.permissions().create(
             fileId=file.get('id'), 
             body={'type': 'anyone', 'role': 'writer'}
@@ -323,4 +325,7 @@ def subir_e_converter_para_google_docs(file_stream, nome_arquivo):
         
         return file.get('webViewLink')
     except Exception as e:
+        # Se o erro persistir, ele vai avisar aqui
+        if "quota" in str(e).lower():
+            return "Erro: O armazenamento da Conta de Serviço está lotado. Por favor, compartilhe uma pasta do seu Drive pessoal com o e-mail da conta de serviço e configure o ID no código."
         return f"Erro no Drive: {str(e)}"
