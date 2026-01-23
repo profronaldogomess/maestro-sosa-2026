@@ -11,13 +11,13 @@ import plotly.express as px
 
 st.set_page_config(page_title="SOSA 2026 | Master Intelligence", layout="wide", page_icon="🏫")
 
-# --- CONTROLE DE TEMA (DESIGN PREMIUM RONALDO GOMES) ---
+# --- CONTROLE DE TEMA (DESIGN PREMIUM CORRIGIDO) ---
 with st.sidebar:
     tema_selecionado = st.radio("Visual do Sistema:", ["🌙 Dark Mode", "🌞 Light Mode"], horizontal=True)
 
-# --- DEFINIÇÃO DA PALETA DE CORES (BASEADA NA LOGO) ---
-BRAND_BLUE = "#2962FF"  # O azul da sua logo
-BRAND_NAVY = "#000B1A"  # Azul marinho profundo para contraste de elite
+# --- DEFINIÇÃO DA PALETA DE CORES ---
+BRAND_BLUE = "#2962FF" 
+BRAND_NAVY = "#000B1A" 
 
 if tema_selecionado == "🌙 Dark Mode":
     cor_fundo = BRAND_NAVY
@@ -26,86 +26,77 @@ if tema_selecionado == "🌙 Dark Mode":
     cor_card_bg = "#001E3C"
     cor_card_borda = "#003366"
     cor_titulo_card = "#A0AEC0"
-    cor_valor_card = BRAND_BLUE
-    cor_botao_bg = BRAND_BLUE
-    cor_botao_txt = "#FFFFFF"
 else:
     cor_fundo = "#F8FAFC"
-    cor_texto = "#1A202C"
+    cor_texto = "#1A202C"  # Texto bem escuro para o Light Mode
     cor_sidebar = "#FFFFFF"
     cor_card_bg = "#FFFFFF"
     cor_card_borda = "#E2E8F0"
     cor_titulo_card = "#4A5568"
-    cor_valor_card = BRAND_BLUE
-    cor_botao_bg = BRAND_BLUE
-    cor_botao_txt = "#FFFFFF"
 
-# --- INJEÇÃO DE CSS DINÂMICO ---
+# --- INJEÇÃO DE CSS DINÂMICO (CORREÇÃO DE CONTRASTE) ---
 st.markdown(f"""
     <style>
-        /* Importação de Fonte Moderna */
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
-        
         * {{ font-family: 'Inter', sans-serif; }}
 
         .stApp {{
             background-color: {cor_fundo} !important;
             color: {cor_texto} !important;
         }}
+
+        /* FORÇAR COR DO TEXTO EM TODO O SISTEMA */
+        p, span, label, h1, h2, h3, .stMarkdown {{
+            color: {cor_texto} !important;
+        }}
         
-        /* SIDEBAR ESTILIZADA */
+        /* SIDEBAR */
         [data-testid="stSidebar"] {{
             background-color: {cor_sidebar} !important;
             border-right: 1px solid {cor_card_borda};
         }}
-
-        /* LOGO E TÍTULOS */
-        .sidebar-title {{
-            color: {cor_texto};
-            font-weight: 800;
-            text-align: center;
-            margin-bottom: 20px;
-            letter-spacing: -1px;
+        
+        /* CORRIGIR TEXTO DOS BOTÕES DE RÁDIO (NAVEGAÇÃO) */
+        div[role="radiogroup"] label p {{
+            color: {cor_texto} !important;
+            font-weight: 500;
         }}
 
-        /* BOTÕES DE NAVEGAÇÃO (ESTILO APP) */
-        div[role="radiogroup"] > label {{
-            background-color: transparent;
-            color: {cor_texto};
-            padding: 10px 15px;
-            border-radius: 8px;
-            margin-bottom: 5px;
-            border: 1px solid transparent;
-            transition: all 0.3s ease;
+        /* BOTÃO SELECIONADO (AZUL DA LOGO) */
+        div[role="radiogroup"] label[aria-checked="true"] {{
+            background-color: {BRAND_BLUE}22 !important;
+            border: 1px solid {BRAND_BLUE} !important;
         }}
         
-        div[role="radiogroup"] label[aria-checked="true"] {{
-            background-color: {BRAND_BLUE}22 !important; /* Azul com transparência */
+        div[role="radiogroup"] label[aria-checked="true"] p {{
             color: {BRAND_BLUE} !important;
-            border: 1px solid {BRAND_BLUE} !important;
-            font-weight: 600;
+            font-weight: 700;
         }}
 
-        /* CARDS DE MÉTRICAS (CONTRASTE REFORÇADO) */
+        /* CARDS DE MÉTRICAS */
         div[data-testid="stMetric"] {{
             background-color: {cor_card_bg} !important;
             border: 1px solid {cor_card_borda} !important;
             border-radius: 16px;
-            padding: 20px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         }}
         
-        div[data-testid="stMetricLabel"] {{
+        div[data-testid="stMetricLabel"] p {{
             color: {cor_titulo_card} !important;
-            font-size: 0.9rem !important;
-            text-transform: uppercase;
-            letter-spacing: 1px;
         }}
         
-        div[data-testid="stMetricValue"] {{
-            color: {cor_valor_card} !important;
-            font-weight: 800 !important;
-            font-size: 2.2rem !important;
+        div[data-testid="stMetricValue"] div {{
+            color: {BRAND_BLUE} !important;
+        }}
+
+        /* INPUTS E SELECTBOXES */
+        .stSelectbox div[data-baseweb="select"] {{
+            background-color: {cor_card_bg} !important;
+            color: {cor_texto} !important;
+        }}
+        
+        /* CORRIGIR TEXTO DENTRO DO SELECTBOX */
+        div[data-testid="stSelectbox"] p {{
+            color: {cor_texto} !important;
         }}
 
         /* BOTÕES DE AÇÃO */
@@ -113,43 +104,7 @@ st.markdown(f"""
             background-color: {BRAND_BLUE} !important;
             color: white !important;
             border-radius: 10px !important;
-            border: none !important;
             font-weight: 700 !important;
-            padding: 0.6rem 1rem !important;
-            transition: transform 0.2s ease;
-        }}
-        
-        .stButton button:hover {{
-            transform: translateY(-2px);
-            box-shadow: 0 10px 15px -3px rgba(41, 98, 255, 0.4);
-        }}
-
-        /* TABS (ABAS) */
-        .stTabs [data-baseweb="tab-list"] {{
-            gap: 10px;
-            background-color: transparent;
-        }}
-
-        .stTabs [data-baseweb="tab"] {{
-            height: 45px;
-            background-color: {cor_card_bg};
-            border-radius: 8px 8px 0px 0px;
-            border: 1px solid {cor_card_borda};
-            color: {cor_titulo_card};
-            padding: 10px 20px;
-        }}
-
-        .stTabs [aria-selected="true"] {{
-            background-color: {BRAND_BLUE} !important;
-            color: white !important;
-        }}
-
-        /* INPUTS */
-        .stTextInput input, .stTextArea textarea {{
-            background-color: {cor_card_bg} !important;
-            color: {cor_texto} !important;
-            border: 1px solid {cor_card_borda} !important;
-            border-radius: 10px !important;
         }}
     </style>
 """, unsafe_allow_html=True)
