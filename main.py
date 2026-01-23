@@ -754,26 +754,44 @@ elif menu == "📅 Planejamento (Ponto ID)":
 
         # --- PARTE 2: AMBIENTE DE EDIÇÃO (SÓ APARECE APÓS GERAR) ---
         if "p_temp" in st.session_state:
-            txt_raw = st.session_state.p_temp
+            # 1. PROCESSAMENTO DO REFINAMENTO (DEVE VIR ANTES DE TUDO)
             st.markdown("---")
-            st.success(f"✨ Plano para {sem_p} gerado com sucesso! Refine ou salve abaixo.")
-            
-            # 1. CHAT DE REFINAMENTO
             st.subheader("🤖 Refinar Plano com o Maestro")
-            ajuste_ia = st.chat_input("Diga o que deseja mudar...")
+            
+            # Usamos uma chave única para o chat não se perder
+            ajuste_ia = st.chat_input("Diga o que deseja mudar (ex: 'Melhore a aula 2', 'Simplifique o PEI')...", key="v19_chat_refine")
+            
             if ajuste_ia:
-                with st.spinner("Ajustando plano..."):
-                    prompt_refino = f"PLANO ATUAL: {txt_raw}\n\nSOLICITAÇÃO: {ajuste_ia}\n\nREGRA: Mantenha Conteúdo e Objetivos originais."
-                    st.session_state.p_temp = ai.gerar_ia("PLANE_PEDAGOGICO", prompt_refino)
-                    st.rerun()
+                with st.spinner("O Maestro está reescrevendo a partitura..."):
+                    # Pegamos o texto que está atualmente na memória
+                    texto_atual = st.session_state.p_temp
+                    
+                    prompt_refino = (
+                        f"TEXTO ATUAL DO PLANO:\n{texto_atual}\n\n"
+                        f"SOLICITAÇÃO DE ALTERAÇÃO DO PROFESSOR: {ajuste_ia}\n\n"
+                        f"REGRAS CRÍTICAS:\n"
+                        f"1. Mantenha CONTEÚDO e OBJETIVOS idênticos ao original.\n"
+                        f"2. Aplique a mudança solicitada nas outras seções.\n"
+                        f"3. Use acentuação correta e NÃO use Markdown (** ou #).\n"
+                        f"4. NÃO repita o nome dos campos (ex: não escreva METODOLOGIA:)."
+                    )
+                    
+                    # Chama a IA e atualiza a memória ANTES do rerun
+                    novo_texto = ai.gerar_ia("PLANE_PEDAGOGICO", prompt_refino)
+                    st.session_state.p_temp = novo_texto
+                    st.rerun() # Força o sistema a redesenhar tudo com o novo texto
 
-            # 2. ABAS DE EDIÇÃO (COM LIMPEZA DE ":" E TÍTULOS)
+            # 2. EXIBIÇÃO DO PLANO (SÓ CHEGA AQUI SE NÃO HOUVER REFINAMENTO PENDENTE)
+            txt_raw = st.session_state.p_temp
+            st.success(f"✨ Plano para {sem_p} pronto para edição ou exportação.")
+
+            # Função de limpeza V19 (Prensa Hidráulica)
             def limpar_v19(texto, label):
-                # Remove o rótulo e o caractere ":" que sobra no início
                 t = texto.replace(label, "").replace(label.upper(), "").strip()
                 if t.startswith(":") or t.startswith(" :"): t = t[1:].strip()
                 return t
 
+            # ABAS DE EDIÇÃO
             abas = st.tabs(["📚 Conteúdos", "🎯 Objetivos", "🏫 Metodologia", "📝 Avaliação", "💡 Obs", "♿ PEI", "📥 EXPORTAR"])
             
             with abas[0]:
@@ -794,6 +812,8 @@ elif menu == "📅 Planejamento (Ponto ID)":
                 st.subheader("🚀 Exportação Profissional")
                 nome_doc = st.text_input("Título do Arquivo:", value=f"PLANO_{ano_p}ANO_{sem_p.split(' ')[1]}", key="v19_final_title")
                 dados_docx = {"geral": c_geral, "especificos": c_espec, "objetivos": objs_edit, "metodologia": met_edit, "avaliacao": ava_edit, "observacao": obs_edit, "pei": pei_edit}
+                
+                # Botões de Exportação
                 doc_file = exporter.gerar_docx_plano_pedagogico_v18(nome_doc.upper(), dados_docx, {"ano": f"{ano_p}º Ano", "semana": sem_p.split(" (")[0]})
                 st.download_button("📥 BAIXAR WORD", doc_file, f"{nome_doc}.docx", use_container_width=True)
                 
@@ -805,19 +825,20 @@ elif menu == "📅 Planejamento (Ponto ID)":
                             st.success("✅ Arquivado!")
                             st.link_button("🚀 ABRIR NO DRIVE", str(link))
 
-            # 3. BOTÃO GLOBAL DE SALVAMENTO
+            # 3. BOTÕES GLOBAIS DE FINALIZAÇÃO
             st.markdown("---")
             col_btn1, col_btn2 = st.columns(2)
+            
             if col_btn1.button("💾 FINALIZAR E SALVAR NO BANCO", use_container_width=True, type="primary"):
                 final_txt = f"MARKER_CONTEUDO_GERAL {c_geral} MARKER_CONTEUDOS_ESPECIFICOS {c_espec} MARKER_OBJETIVOS_ENSINO {objs_edit} MARKER_METODOLOGIA {met_edit} MARKER_AVALIACAO {ava_edit} MARKER_OBSERVACAO {obs_edit} MARKER_ADAPTACAO_PEI {pei_edit}"
                 if db.salvar_no_banco("DB_PLANOS", [datetime.now().strftime("%d/%m/%Y"), sem_p.split(" (")[0], f"{ano_p}º", "I Trimestre", "PADRÃO", final_txt]):
-                    st.success("✅ Salvo com sucesso!")
-                    del st.session_state.p_temp
+                    st.success("✅ Plano salvo com sucesso!")
+                    if "p_temp" in st.session_state: del st.session_state.p_temp
                     time.sleep(1.5)
                     st.rerun()
             
             if col_btn2.button("🗑️ DESCARTAR E COMEÇAR NOVO", use_container_width=True):
-                del st.session_state.p_temp
+                if "p_temp" in st.session_state: del st.session_state.p_temp
                 st.rerun()
 
     # --- ABA 2: HISTÓRICO DETALHADO ---
