@@ -372,3 +372,34 @@ def salvar_link_na_planilha(aba_nome, coluna_busca, valor_busca, link_drive):
     except Exception as e:
         st.error(f"Erro ao vincular link: {e}")
         return False
+    
+def atualizar_plano_existente(semana, ano, novo_texto_formatado):
+    try:
+        wb = conectar()
+        ws = wb.worksheet("DB_PLANOS")
+        dados = ws.get_all_values()
+        for i, row in enumerate(dados):
+            # Busca pela combinação única de Semana e Ano
+            if i == 0: continue
+            if row[1] == semana and row[2] == ano:
+                ws.update_cell(i + 1, 6, novo_texto_formatado) # Coluna F (PLANO_TEXTO)
+                st.cache_data.clear()
+                return True
+        return False
+    except Exception as e:
+        st.error(f"Erro ao atualizar: {e}")
+        return False
+
+def excluir_plano_total(semana, ano):
+    try:
+        wb = conectar()
+        ws = wb.worksheet("DB_PLANOS")
+        dados = ws.get_all_values()
+        for i, row in enumerate(dados):
+            if i == 0: continue
+            if row[1] == semana and row[2] == ano:
+                ws.delete_rows(i + 1)
+                st.cache_data.clear()
+                return True
+        return False
+    except: return False
