@@ -700,10 +700,17 @@ elif menu == "🧪 Criador de Aulas":
         else: st.info("Histórico vazio.")
 
 # ==============================================================================
-# MÓDULO: PLANEJAMENTO (PONTO ID) - ARQUITETURA SUPREMA V21
+# MÓDULO: PLANEJAMENTO (PONTO ID) - ARQUITETURA SUPREMA V21.1 (FIX)
 # ==============================================================================
 elif menu == "📅 Planejamento (Ponto ID)":
     st.header("📅 Planejador Estratégico (Ponto ID)")
+
+    # --- FUNÇÃO DE LIMPEZA GLOBAL (Definida fora das abas para evitar NameError) ---
+    def limpar_v21(texto, label):
+        if not texto: return ""
+        t = texto.replace(label, "").replace(label.upper(), "").strip()
+        if t.startswith(":") or t.startswith(" :"): t = t[1:].strip()
+        return t
     
     # Criamos as 4 abas principais
     tab_gerar, tab_hist, tab_curso, tab_mapa = st.tabs([
@@ -713,7 +720,7 @@ elif menu == "📅 Planejamento (Ponto ID)":
         "📊 Mapa de Cobertura"
     ])
     
-    # --- ABA 1: GERAR NOVO PLANO (COM MEMÓRIA E DINAMISMO) ---
+    # --- ABA 1: GERAR NOVO PLANO ---
     with tab_gerar:
         st.subheader("1. Configuração da Aula")
         col_cfg1, col_cfg2 = st.columns([1, 2])
@@ -724,7 +731,6 @@ elif menu == "📅 Planejamento (Ponto ID)":
 
         ano_p = col_cfg1.selectbox("Ano/Série:", [6, 7, 8, 9], key="v21_ano_sel", on_change=reset_plano)
         
-        # Lógica de Semanas Disponíveis
         semanas_ocupadas = []
         if not df_planos.empty and 'ANO' in df_planos.columns:
             semanas_ocupadas = df_planos[df_planos['ANO'] == f"{ano_p}º"]['SEMANA'].tolist()
@@ -742,8 +748,8 @@ elif menu == "📅 Planejamento (Ponto ID)":
                 if not df_f.empty:
                     c1, c2 = st.columns(2)
                     eixo = c1.selectbox("Eixo Temático:", df_f['EIXO'].unique())
-                    cont_esp = c2.multiselect("Conteúdo (Fiel ao Banco):", df_f[df_f['EIXO'] == eixo]['CONTEUDO_ESPECIFICO'].unique())
-                    objs = st.multiselect("Objetivos (Fiel ao Banco):", df_f[df_f['CONTEUDO_ESPECIFICO'].isin(cont_esp)]['OBJETIVOS'].unique())
+                    cont_esp = c2.multiselect("Conteúdo Específico (Fiel ao Banco):", df_f[df_f['EIXO'] == eixo]['CONTEUDO_ESPECIFICO'].unique())
+                    objs = st.multiselect("Objetivos de Ensino (Fiel ao Banco):", df_f[df_f['CONTEUDO_ESPECIFICO'].isin(cont_esp)]['OBJETIVOS'].unique())
                     ctx_fiel = f"EIXO: {eixo}\nCONTEÚDO: {', '.join(cont_esp)}\nOBJETIVOS: {', '.join(objs)}"
                 else: st.error("Base curricular não encontrada.")
             else:
@@ -751,11 +757,10 @@ elif menu == "📅 Planejamento (Ponto ID)":
                 pags = st.text_input("Páginas de Referência:")
                 ctx_fiel = f"LIVRO: {sel_mat} | PÁGINAS: {pags}"
 
-            strat = st.text_area("Sua Estratégia/Observação Inicial:", placeholder="Ex: Aula expositiva com foco em resolução de problemas...")
+            strat = st.text_area("Sua Estratégia/Observação Inicial:", placeholder="Ex: Aula expositiva...")
 
             if st.button("🚀 Compor Planejamento com Memória", use_container_width=True):
                 with st.spinner("Maestro analisando continuidade e redigindo..."):
-                    # --- LÓGICA DE MEMÓRIA (BUSCA SEMANA ANTERIOR) ---
                     contexto_anterior = "Início do período letivo. Sem plano anterior."
                     try:
                         import re
@@ -776,14 +781,12 @@ elif menu == "📅 Planejamento (Ponto ID)":
                     st.session_state.v_plano = 1
                     st.rerun()
 
-        # --- AMBIENTE DINÂMICO DE EDIÇÃO (SÓ APARECE APÓS GERAR) ---
         if "p_temp" in st.session_state:
             st.markdown("---")
             if "v_plano" not in st.session_state: st.session_state.v_plano = 1
             
-            # 1. CHAT DE REFINAMENTO
             st.subheader("🤖 Refinar Plano com o Maestro")
-            comando_refino = st.chat_input("Diga o que deseja mudar (ex: 'Melhore a aula 2')...", key="chat_v21_refine")
+            comando_refino = st.chat_input("Diga o que deseja mudar...", key="chat_v21_refine")
             
             if comando_refino:
                 with st.spinner("Reescrevendo partitura..."):
@@ -796,28 +799,22 @@ elif menu == "📅 Planejamento (Ponto ID)":
             txt_exibicao = st.session_state.p_temp
             v = st.session_state.v_plano
 
-            def limpar_v21(texto, label):
-                t = texto.replace(label, "").replace(label.upper(), "").strip()
-                if t.startswith(":") or t.startswith(" :"): t = t[1:].strip()
-                return t
-
-            # 2. ABAS DE EDIÇÃO
-            abas = st.tabs(["📚 Conteúdos", "🎯 Objetivos", "🏫 Metodologia", "📝 Avaliação", "💡 Obs", "♿ PEI", "📥 EXPORTAR"])
-            with abas[0]:
+            abas_ed = st.tabs(["📚 Conteúdos", "🎯 Objetivos", "🏫 Metodologia", "📝 Avaliação", "💡 Obs", "♿ PEI", "📥 EXPORTAR"])
+            with abas_ed[0]:
                 c_geral = st.text_input("Eixo:", limpar_v21(ai.extrair_tag(txt_exibicao, "CONTEUDO_GERAL"), "CONTEÚDO GERAL EIXO"), key=f"ed_geral_{v}")
                 c_espec = st.text_area("Conteúdos:", limpar_v21(ai.extrair_tag(txt_exibicao, "CONTEUDOS_ESPECIFICOS"), "CONTEÚDOS ESPECÍFICOS"), key=f"ed_espec_{v}")
-            with abas[1]:
+            with abas_ed[1]:
                 objs_edit = st.text_area("Objetivos:", limpar_v21(ai.extrair_tag(txt_exibicao, "OBJETIVOS_ENSINO"), "OBJETIVOS DE ENSINO"), key=f"ed_objs_{v}")
-            with abas[2]:
+            with abas_ed[2]:
                 met_edit = st.text_area("Metodologia:", limpar_v21(ai.extrair_tag(txt_exibicao, "METODOLOGIA"), "METODOLOGIA"), height=350, key=f"ed_met_{v}")
-            with abas[3]:
+            with abas_ed[3]:
                 ava_edit = st.text_area("Avaliação:", limpar_v21(ai.extrair_tag(txt_exibicao, "AVALIACAO"), "AVALIAÇÃO"), key=f"ed_ava_{v}")
-            with abas[4]:
+            with abas_ed[4]:
                 obs_edit = st.text_area("Observação:", limpar_v21(ai.extrair_tag(txt_exibicao, "OBSERVACAO"), "OBSERVAÇÃO"), key=f"ed_obs_{v}")
-            with abas[5]:
+            with abas_ed[5]:
                 pei_edit = st.text_area("Adaptação PEI:", limpar_v21(ai.extrair_tag(txt_exibicao, "ADAPTACAO_PEI"), "ADAPTAÇÃO PEI"), key=f"ed_pei_{v}")
             
-            with abas[6]:
+            with abas_ed[6]:
                 st.subheader("🚀 Exportação Profissional")
                 nome_doc = st.text_input("Título:", value=f"PLANO_{ano_p}ANO_{sem_p.split(' ')[1]}", key=f"v21_title_{v}")
                 dados_docx = {"geral": c_geral, "especificos": c_espec, "objetivos": objs_edit, "metodologia": met_edit, "avaliacao": ava_edit, "observacao": obs_edit, "pei": pei_edit}
@@ -830,7 +827,6 @@ elif menu == "📅 Planejamento (Ponto ID)":
                             db.salvar_link_na_planilha("DB_PLANOS", "SEMANA", sem_p.split(" (")[0], link)
                             st.success("✅ Arquivado!"); st.link_button("🚀 ABRIR NO DRIVE", str(link))
 
-            # 3. BOTÕES GLOBAIS DE SALVAMENTO
             st.markdown("---")
             col_btn1, col_btn2 = st.columns(2)
             if col_btn1.button("💾 FINALIZAR E SALVAR NO BANCO", use_container_width=True, type="primary", key=f"btn_save_{v}"):
@@ -840,7 +836,7 @@ elif menu == "📅 Planejamento (Ponto ID)":
             if col_btn2.button("🗑️ DESCARTAR", use_container_width=True, key=f"btn_drop_{v}"):
                 del st.session_state.p_temp; del st.session_state.v_plano; st.rerun()
 
-    # --- ABA 2: HISTÓRICO DETALHADO (GESTÃO V20) ---
+    # --- ABA 2: HISTÓRICO DETALHADO ---
     with tab_hist:
         if not df_planos.empty:
             f_ano_h = st.selectbox("Filtrar por Ano:", ["Todos", "6º", "7º", "8º", "9º"], key="v21_hist_ano")
@@ -912,7 +908,7 @@ elif menu == "📅 Planejamento (Ponto ID)":
             df_c['STATUS'] = df_c['CONTEUDO_ESPECIFICO'].apply(check_status)
             st.dataframe(df_c[['TRIMESTRE', 'EIXO', 'CONTEUDO_ESPECIFICO', 'STATUS']], use_container_width=True, hide_index=True)
 
-    # --- ABA 4: MAPA DE COBERTURA (NOVIDADE V21) ---
+    # --- ABA 4: MAPA DE COBERTURA ---
     with tab_mapa:
         st.subheader(f"📊 Cobertura Curricular - {ano_p}º Ano")
         if not df_curriculo.empty:
