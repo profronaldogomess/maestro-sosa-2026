@@ -810,35 +810,82 @@ elif menu == "📅 Planejamento (Ponto ID)":
             if col_btn2.button("🗑️ DESCARTAR", use_container_width=True, key=f"btn_drop_{v}"):
                 del st.session_state.p_temp; del st.session_state.v_plano; st.rerun()
 
-    # --- ABA 2: HISTÓRICO DETALHADO (RESTAURADA) ---
+    # --- ABA 2: HISTÓRICO DETALHADO (GESTÃO V20) ---
     with tab_hist:
         if not df_planos.empty:
-            f_ano_h = st.selectbox("Filtrar por Ano:", ["Todos", "6º", "7º", "8º", "9º"], key="v19_hist_ano")
+            f_ano_h = st.selectbox("Filtrar por Ano:", ["Todos", "6º", "7º", "8º", "9º"], key="v20_hist_ano")
             df_h = df_planos.copy()
             if f_ano_h != "Todos": df_h = df_h[df_h['ANO'] == f_ano_h]
             
             if not df_h.empty:
-                sel_h = st.selectbox("Selecione a Semana:", df_h['SEMANA'].tolist(), key="v19_hist_sem")
-                raw_h = df_h[df_h['SEMANA'] == sel_h].iloc[0]['PLANO_TEXTO']
-                link_h = df_h[df_h['SEMANA'] == sel_h].iloc[0].get('LINK_DRIVE', "")
+                sel_h = st.selectbox("Selecione o Plano para Gestão:", df_h['SEMANA'].tolist(), key="v20_hist_sem")
+                dados_linha = df_h[df_h['SEMANA'] == sel_h].iloc[0]
+                raw_h = dados_linha['PLANO_TEXTO']
+                link_h = dados_linha.get('LINK_DRIVE', "")
+                ano_h = dados_linha['ANO']
+
+                st.markdown(f"### 📝 Editando: {sel_h} ({ano_h})")
                 
-                h_tabs = st.tabs(["📚 Conteúdos", "🎯 Objetivos", "🏫 Metodologia", "📝 Avaliação", "💡 Obs", "♿ PEI", "📥 EXPORTAR"])
-                with h_tabs[0]: st.markdown(f"**Eixo:** {ai.extrair_tag(raw_h, 'CONTEUDO_GERAL')}\n\n**Específicos:** {ai.extrair_tag(raw_h, 'CONTEUDOS_ESPECIFICOS')}")
-                with h_tabs[1]: st.write(ai.extrair_tag(raw_h, "OBJETIVOS_ENSINO"))
-                with h_tabs[2]: st.info(ai.extrair_tag(raw_h, "METODOLOGIA"))
-                with h_tabs[3]: st.write(ai.extrair_tag(raw_h, "AVALIACAO"))
-                with h_tabs[4]: st.write(ai.extrair_tag(raw_h, "OBSERVACAO"))
-                with h_tabs[5]: st.success(ai.extrair_tag(raw_h, "ADAPTACAO_PEI"))
+                # Prensa Hidráulica para carregar os dados do histórico nos campos
+                def limpar_v20(texto, label):
+                    t = texto.replace(label, "").replace(label.upper(), "").strip()
+                    if t.startswith(":") or t.startswith(" :"): t = t[1:].strip()
+                    return t
+
+                h_tabs = st.tabs(["📚 Conteúdos", "🎯 Objetivos", "🏫 Metodologia", "📝 Avaliação", "💡 Obs", "♿ PEI", "📥 EXPORTAR & DRIVE"])
+                
+                with h_tabs[0]:
+                    h_geral = st.text_input("Eixo:", limpar_v20(ai.extrair_tag(raw_h, "CONTEUDO_GERAL"), "CONTEÚDO GERAL EIXO"), key=f"h_ed_geral_{sel_h}")
+                    h_espec = st.text_area("Conteúdos:", limpar_v20(ai.extrair_tag(raw_h, "CONTEUDOS_ESPECIFICOS"), "CONTEÚDOS ESPECÍFICOS"), key=f"h_ed_espec_{sel_h}")
+                with h_tabs[1]:
+                    h_objs = st.text_area("Objetivos:", limpar_v20(ai.extrair_tag(raw_h, "OBJETIVOS_ENSINO"), "OBJETIVOS DE ENSINO"), key=f"h_ed_objs_{sel_h}")
+                with h_tabs[2]:
+                    h_met = st.text_area("Metodologia:", limpar_v20(ai.extrair_tag(raw_h, "METODOLOGIA"), "METODOLOGIA"), height=300, key=f"h_ed_met_{sel_h}")
+                with h_tabs[3]:
+                    h_ava = st.text_area("Avaliação:", limpar_v20(ai.extrair_tag(raw_h, "AVALIACAO"), "AVALIAÇÃO"), key=f"h_ed_ava_{sel_h}")
+                with h_tabs[4]:
+                    h_obs = st.text_area("Observação:", limpar_v20(ai.extrair_tag(raw_h, "OBSERVACAO"), "OBSERVAÇÃO"), key=f"h_ed_obs_{sel_h}")
+                with h_tabs[5]:
+                    h_pei = st.text_area("Adaptação PEI:", limpar_v20(ai.extrair_tag(raw_h, "ADAPTACAO_PEI"), "ADAPTAÇÃO PEI"), key=f"h_ed_pei_{sel_h}")
+                
                 with h_tabs[6]:
-                    st.subheader("🚀 Re-exportar Plano")
+                    st.subheader("🚀 Exportação e Nuvem")
+                    # PADRONIZAÇÃO DE NOME: PLANO_ANO_SEMANA
+                    nome_padrao = f"PLANO_{ano_h.replace('º','')}_{sel_h.replace(' ', '')}"
+                    nome_h = st.text_input("Título do Arquivo:", value=nome_padrao, key=f"h_title_{sel_h}")
+                    
+                    dados_h = {"geral": h_geral, "especificos": h_espec, "objetivos": h_objs, "metodologia": h_met, "avaliacao": h_ava, "observacao": h_obs, "pei": h_pei}
+                    doc_h = exporter.gerar_docx_plano_pedagogico_v18(nome_h.upper(), dados_h, {"ano": ano_h, "semana": sel_h})
+                    
+                    st.download_button("📥 BAIXAR WORD ATUALIZADO", doc_h, f"{nome_h}.docx", use_container_width=True, key=f"h_dl_{sel_h}")
+                    
                     if link_h and "https" in str(link_h):
+                        st.success("✅ Este plano já está no Drive.")
                         st.link_button("🚀 ABRIR NO GOOGLE DOCS", str(link_h), use_container_width=True)
-                    nome_h = st.text_input("Título:", value=f"REVISAO_{sel_h}", key=f"v19_hist_title_{sel_h}")
-                    dados_h = {"geral": ai.extrair_tag(raw_h, "CONTEUDO_GERAL"), "especificos": ai.extrair_tag(raw_h, "CONTEUDOS_ESPECIFICOS"), "objetivos": ai.extrair_tag(raw_h, "OBJETIVOS_ENSINO"), "metodologia": ai.extrair_tag(raw_h, "METODOLOGIA"), "avaliacao": ai.extrair_tag(raw_h, "AVALIACAO"), "observacao": ai.extrair_tag(raw_h, "OBSERVACAO"), "pei": ai.extrair_tag(raw_h, "ADAPTACAO_PEI")}
-                    doc_h = exporter.gerar_docx_plano_pedagogico_v18(nome_h.upper(), dados_h, {"ano": f_ano_h, "semana": sel_h})
-                    st.download_button("📥 BAIXAR WORD", doc_h, f"{nome_h}.docx", use_container_width=True, key=f"btn_dl_hist_{sel_h}")
-            else: st.info("Nenhum plano encontrado.")
-        else: st.info("📭 Banco de dados vazio.")
+                    
+                    if st.button("☁️ SINCRONIZAR COM DRIVE", key=f"h_drive_{sel_h}"):
+                        with st.spinner("Atualizando arquivo..."):
+                            link = db.subir_e_converter_para_google_docs(doc_h, nome_h, categoria="Planos de Aula")
+                            if "https://" in str(link):
+                                db.salvar_link_na_planilha("DB_PLANOS", "SEMANA", sel_h, link)
+                                st.success("✅ Drive Sincronizado!"); st.rerun()
+
+                # BOTÕES DE GESTÃO DE BANCO (FORA DAS ABAS)
+                st.markdown("---")
+                col_g1, col_g2 = st.columns(2)
+                
+                if col_g1.button("🆙 ATUALIZAR NO BANCO DE DADOS", use_container_width=True, type="primary", key=f"h_up_{sel_h}"):
+                    novo_raw = f"MARKER_CONTEUDO_GERAL {h_geral} MARKER_CONTEUDOS_ESPECIFICOS {h_espec} MARKER_OBJETIVOS_ENSINO {h_objs} MARKER_METODOLOGIA {h_met} MARKER_AVALIACAO {h_ava} MARKER_OBSERVACAO {h_obs} MARKER_ADAPTACAO_PEI {h_pei}"
+                    if db.atualizar_plano_existente(sel_h, ano_h, novo_raw):
+                        st.success("✅ Alterações salvas na Planilha!"); time.sleep(1); st.rerun()
+                
+                if col_g2.button("🗑️ EXCLUIR PLANO DEFINITIVAMENTE", use_container_width=True, key=f"h_del_{sel_h}"):
+                    if db.excluir_plano_total(sel_h, ano_h):
+                        st.warning("🚨 Plano removido do sistema."); time.sleep(1); st.rerun()
+            else:
+                st.info("Nenhum plano encontrado para este filtro.")
+        else:
+            st.info("📭 Banco de dados vazio.")
 
     # --- ABA 3: PLANO DE CURSO VIVO (RESTAURADA) ---
     with tab_curso:
