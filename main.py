@@ -908,29 +908,92 @@ elif menu == "📅 Planejamento (Ponto ID)":
             df_c['STATUS'] = df_c['CONTEUDO_ESPECIFICO'].apply(check_status)
             st.dataframe(df_c[['TRIMESTRE', 'EIXO', 'CONTEUDO_ESPECIFICO', 'STATUS']], use_container_width=True, hide_index=True)
 
-    # --- ABA 4: MAPA DE COBERTURA ---
+    # --- ABA 4: MAPA DE COBERTURA (V22 - COM FILTROS ESTRATÉGICOS) ---
     with tab_mapa:
-        st.subheader(f"📊 Cobertura Curricular - {ano_p}º Ano")
+        st.subheader("📊 Auditoria de Cobertura Curricular")
+        
+        # 1. LINHA DE FILTROS DO DASHBOARD
+        c_f1, c_f2 = st.columns(2)
+        ano_mapa = c_f1.selectbox("Analisar Ano/Série:", [6, 7, 8, 9], key="v22_ano_mapa")
+        trim_mapa = c_f2.selectbox("Filtrar Período:", ["Todos", "I", "II", "III"], key="v22_trim_mapa")
+
         if not df_curriculo.empty:
-            df_m = df_curriculo[df_curriculo['ANO'] == ano_p].copy()
-            planejados = ""
-            if not df_planos.empty:
-                planejados = " ".join(df_planos[df_planos['ANO'] == f"{ano_p}º"]['PLANO_TEXTO'].astype(str).tolist()).upper()
-            df_m['STATUS'] = df_m['CONTEUDO_ESPECIFICO'].apply(lambda x: 1 if str(x).upper() in planejados else 0)
-            progresso = df_m.groupby('EIXO')['STATUS'].agg(['sum', 'count']).reset_index()
-            progresso['Percentual'] = (progresso['sum'] / progresso['count'] * 100).round(1)
+            # Filtragem inicial por Ano
+            df_m = df_curriculo[df_curriculo['ANO'] == ano_mapa].copy()
             
-            col_m1, col_m2 = st.columns([2, 1])
-            with col_m1:
-                import plotly.express as px
-                fig = px.bar(progresso, x='EIXO', y='Percentual', text='Percentual', title="Progresso por Eixo (%)", color='Percentual', color_continuous_scale='RdYlGn', range_y=[0,100])
-                st.plotly_chart(fig, use_container_width=True)
-            with col_m2:
-                st.markdown("### 🚩 Alertas")
-                for _, r in progresso.iterrows():
-                    if r['Percentual'] < 20: st.warning(f"**{r['EIXO']}**: Lacuna detectada ({r['Percentual']}%).")
-                    elif r['Percentual'] > 80: st.success(f"**{r['EIXO']}**: Quase concluído!")
-            st.dataframe(df_m[['TRIMESTRE', 'EIXO', 'CONTEUDO_ESPECIFICO', 'STATUS']].replace({1: "✅ DADO", 0: "⏳ PENDENTE"}), use_container_width=True, hide_index=True)
+            # Filtragem por Trimestre (se não for "Todos")
+            if trim_mapa != "Todos":
+                df_m = df_m[df_m['TRIMESTRE'] == trim_mapa]
+
+            if df_m.empty:
+                st.warning(f"⚠️ Sem dados curriculares para o {ano_mapa}º Ano no {trim_mapa} Trimestre.")
+            else:
+                # 2. IDENTIFICAÇÃO DE CONTEÚDOS DADOS (MEMÓRIA DO BANCO)
+                planejados = ""
+                if not df_planos.empty:
+                    # Pega todos os planos salvos para este ano específico
+                    planejados = " ".join(df_planos[df_planos['ANO'] == f"{ano_mapa}º"]['PLANO_TEXTO'].astype(str).tolist()).upper()
+                
+                # A "Prensa" verifica se o conteúdo do edital aparece em algum plano salvo
+                df_m['STATUS_NUM'] = df_m['CONTEUDO_ESPECIFICO'].apply(lambda x: 1 if str(x).upper() in planejados else 0)
+                
+                # 3. CÁLCULO DE PROGRESSO POR EIXO
+                progresso = df_m.groupby('EIXO')['STATUS_NUM'].agg(['sum', 'count']).reset_index()
+                progresso['Percentual'] = (progresso['sum'] / progresso['count'] * 100).round(1)
+                
+                # 4. VISUALIZAÇÃO GRÁFICA
+                col_chart, col_alerts = st.columns([2, 1])
+                
+                with col_chart:
+                    import plotly.express as px
+                    fig = px.bar(
+                        progresso, 
+                        x='EIXO', 
+                        y='Percentual', 
+                        text='Percentual',
+                        title=f"Progresso: {ano_mapa}º Ano - {trim_mapa if trim_mapa != 'Todos' else 'Ano Completo'}",
+                        labels={'Percentual': 'Cobertura (%)', 'EIXO': 'Eixo Temático'},
+                        color='Percentual',
+                        color_continuous_scale='RdYlGn', # Vermelho para pouco, Verde para muito
+                        range_y=[0, 105]
+                    )
+                    fig.update_traces(texttemplate='%{text}%', textposition='outside')
+                    st.plotly_chart(fig, use_container_width=True)
+                
+                with col_alerts:
+                    st.markdown("### 🚩 Alertas de Lacuna")
+                    # Filtra eixos com menos de 100% de cobertura
+                    lacunas = progresso[progresso['Percentual'] < 100]
+                    if lacunas.empty:
+                        st.success("✅ Parabéns! Todo o currículo selecionado foi planejado.")
+                    else:
+                        for _, r in lacunas.iterrows():
+                            if r['Percentual'] == 0:
+                                st.error(f"**{r['EIXO']}**: Nenhuma aula dada (0%).")
+                            elif r['Percentual'] < 50:
+                                st.warning(f"**{r['EIXO']}**: Cobertura crítica ({r['Percentual']}%).")
+                            else:
+                                st.info(f"**{r['EIXO']}**: Em andamento ({r['Percentual']}%).")
+
+                # 5. TABELA DETALHADA (PARA CONFERÊNCIA)
+                st.markdown("---")
+                st.subheader("📋 Lista de Verificação de Conteúdos")
+                
+                # Formatação visual da tabela
+                df_view = df_m[['TRIMESTRE', 'EIXO', 'CONTEUDO_ESPECIFICO', 'STATUS_NUM']].copy()
+                df_view['STATUS'] = df_view['STATUS_NUM'].apply(lambda x: "✅ DADO" if x == 1 else "⏳ PENDENTE")
+                
+                st.dataframe(
+                    df_view[['TRIMESTRE', 'EIXO', 'CONTEUDO_ESPECIFICO', 'STATUS']],
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={
+                        "STATUS": st.column_config.TextColumn("Situação", width="small"),
+                        "CONTEUDO_ESPECIFICO": st.column_config.TextColumn("Conteúdo do Edital", width="large")
+                    }
+                )
+        else:
+            st.error("❌ Erro: Planilha DB_CURRICULO não carregada.")
 
 # ==============================================================================
 # MÓDULO: DIÁRIO DE BORDO
