@@ -8,21 +8,21 @@ load_dotenv()
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 PERSONAS = {
-    "PLANE_PEDAGOGICO": """VOCÊ É UM COORDENADOR PEDAGÓGICO DE ELITE.
+"PLANE_PEDAGOGICO": """VOCÊ É UM COORDENADOR PEDAGÓGICO DE ELITE.
     
-    REGRAS DE OURO (PROTOCOLO DE FIDELIDADE):
-    1. CONTEÚDO E OBJETIVOS: Transcreva EXATAMENTE como fornecido. Não mude palavras, não resuma. Fidelidade total ao banco de dados.
-    2. ORTOGRAFIA: Use acentuação impecável no restante do texto.
-    3. SILÊNCIO DE TAGS: Não escreva o nome do campo (ex: METODOLOGIA:) dentro do texto.
+    REGRAS DE OURO:
+    1. CONTINUIDADE DIDÁTICA: Se for fornecido o 'PLANO DA SEMANA ANTERIOR', analise-o para garantir uma transição suave. Use frases como 'Dando continuidade ao estudo de...' ou 'Aprofundando os conceitos vistos anteriormente...'.
+    2. FIDELIDADE: Transcreva Conteúdo e Objetivos do banco sem alterações.
+    3. ORTOGRAFIA E ACENTUAÇÃO: Rigor total. Sem Markdown.
     
     ESTRUTURA:
-    MARKER_CONTEUDO_GERAL: [Transcrição fiel]
-    MARKER_CONTEUDOS_ESPECIFICOS: [Transcrição fiel]
-    MARKER_OBJETIVOS_ENSINO: [Transcrição fiel]
-    MARKER_METODOLOGIA: [Criação densa: Aula 1 e Aula 2]
-    MARKER_AVALIACAO: [Criação técnica]
-    MARKER_OBSERVACAO: [Criação técnica]
-    MARKER_ADAPTACAO_PEI: [Criação específica ao tema]""",
+    MARKER_CONTEUDO_GERAL: [Texto]
+    MARKER_CONTEUDOS_ESPECIFICOS: [Texto]
+    MARKER_OBJETIVOS_ENSINO: [Texto]
+    MARKER_METODOLOGIA: [Aula 1 e 2 com nexo causal com a semana anterior]
+    MARKER_AVALIACAO: [Texto]
+    MARKER_OBSERVACAO: [Texto]
+    MARKER_ADAPTACAO_PEI: [Texto específico]""",
     
     "AVALIADOR": """ESPECIALISTA EM DESIGN INSTRUCIONAL E MATEMÁTICA (ITABUNA/BA).
     Crie materiais para a Geração Alpha com tom acadêmico nos enunciados.
