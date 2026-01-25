@@ -482,16 +482,37 @@ elif menu == "🧪 Criador de Aulas":
                 st.markdown(f"## 🏫 {st.session_state.get('lab_titulo', 'Nova Aula')}")
                 
                 # Chat de Refinamento
-                comando_refino = st.chat_input("Sugerir mudanças (Ex: 'Aumente o nível', 'Mude para 10 questões')")
+                comando_refino = st.chat_input("Sugerir mudanças (Ex: 'Adicione mais 2 questões', 'Mude o texto do professor')")
                 if comando_refino:
-                    with st.spinner("Refinando material..."):
-                        refino_prompt = (f"MATERIAL ATUAL: {st.session_state.lab_prof} / {st.session_state.lab_aluno}\n"
-                                        f"PEDIDO DO PROFESSOR: {comando_refino}\n"
-                                        f"Mantenha a estrutura de MARKERS.")
+                    with st.spinner("Maestro SOSA reeditando material com rigor..."):
+                        # Prompt de Refino Blindado
+                        refino_prompt = (
+                            f"VOCÊ É UM EDITOR. O MATERIAL ATUAL É:\n"
+                            f"TITULO: {st.session_state.lab_titulo}\n"
+                            f"PROFESSOR: {st.session_state.lab_prof}\n"
+                            f"ALUNO: {st.session_state.lab_aluno}\n\n"
+                            f"SOLICITAÇÃO DE ALTERAÇÃO URGENTE: {comando_refino}\n\n"
+                            f"INSTRUÇÃO DE EDIÇÃO: Aplique a mudança acima. Se for para aumentar questões, mantenha as anteriores e crie novas até atingir o total. "
+                            f"Se for para mudar o texto do professor, substitua o trecho solicitado. "
+                            f"Mantenha obrigatoriamente os MARKERS: TITULO, PROFESSOR, ALUNO, IMAGENS, GABARITO."
+                        )
+                        
                         raw_novo = ai.gerar_ia("AVALIADOR_V23", refino_prompt)
-                        st.session_state.lab_prof = ai.extrair_tag(raw_novo, "PROFESSOR")
-                        st.session_state.lab_aluno = ai.extrair_tag(raw_novo, "ALUNO")
-                        st.session_state.lab_gab = ai.extrair_tag(raw_novo, "GABARITO")
+                        
+                        # Atualização forçada do estado
+                        novo_titulo = ai.extrair_tag(raw_novo, "TITULO")
+                        novo_prof = ai.extrair_tag(raw_novo, "PROFESSOR")
+                        novo_aluno = ai.extrair_tag(raw_novo, "ALUNO")
+                        novo_gab = ai.extrair_tag(raw_novo, "GABARITO")
+                        novo_img = ai.extrair_tag(raw_novo, "IMAGENS")
+
+                        # Só atualiza se a IA não retornou vazio por erro
+                        if novo_aluno: st.session_state.lab_aluno = novo_aluno
+                        if novo_prof: st.session_state.lab_prof = novo_prof
+                        if novo_titulo: st.session_state.lab_titulo = novo_titulo
+                        if novo_gab: st.session_state.lab_gab = novo_gab
+                        if novo_img: st.session_state.lab_img = novo_img
+                        
                         st.rerun()
 
                 # ABAS ORGANIZADAS
