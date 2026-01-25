@@ -57,11 +57,11 @@ def carregar_tudo():
                 
                 # --- CORREÇÕES ESPECÍFICAS DE SCHEMA ---
                 if nome == "DB_AULAS_PRONTAS":
-                    mapeamento = {
-                        'ORIGEM': 'DATA', 'LOUSA': 'SEMANA_REF', 
-                        'ATIVIDADE': 'TIPO_MATERIAL', 'GABARITO': 'CONTEUDO', 'IMAGENS': 'ANO'
-                    }
-                    df = df.rename(columns=mapeamento)
+                    # Garante que as colunas existam para evitar KeyError
+                    cols_necessarias = ["DATA", "SEMANA_REF", "CATEGORIA", "TIPO_MATERIAL", "CONTEUDO", "ANO", "LINK_DRIVE", "ORIGEM_LIVRO"]
+                    for col in cols_necessarias:
+                        if col not in df.columns:
+                            df[col] = "" # Cria a coluna vazia se não existir
                 
                 elif nome == "DB_PLANOS":
                     mapeamento_planos = {
