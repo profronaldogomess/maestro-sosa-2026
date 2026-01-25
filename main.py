@@ -398,25 +398,21 @@ if menu == "🤖 Maestro Dashboard":
         st.session_state.messages.append({"role": "assistant", "content": resposta})
 
 # ==============================================================================
-# MÓDULO: LABORATÓRIO DE MATERIAIS V24 (MASTER COMMAND)
+# MÓDULO: LABORATÓRIO DE MATERIAIS V25 (PROTOCOLO DE ELITE)
 # ==============================================================================
 elif menu == "🧪 Criador de Aulas":
     st.header("🧪 Laboratório de Materiais Didáticos")
     
     tab_lab, tab_provas, tab_gavetas = st.tabs([
-        "🏫 Aula da Semana", 
-        "📝 Engenharia de Avaliações", 
-        "🗂️ Arquivo Morto Inteligente"
+        "🏫 Aula da Semana", "📝 Engenharia de Avaliações", "🗂️ Arquivo Morto Inteligente"
     ])
 
     if "v_lab" not in st.session_state: st.session_state.v_lab = 1
 
-    # --- ABA 1: AULA DA SEMANA (AULA 1 E 2) ---
     with tab_lab:
         st.subheader("1. Configuração da Aula")
-        
         if df_planos.empty:
-            st.warning("⚠️ Crie um plano primeiro na aba Planejamento.")
+            st.warning("⚠️ Crie um plano primeiro.")
         else:
             c1, c2, c3 = st.columns([1, 1, 1])
             ano_l = c1.selectbox("Série:", [6, 7, 8, 9], key="lab_ano")
@@ -425,10 +421,8 @@ elif menu == "🧪 Criador de Aulas":
             if not df_f.empty:
                 sel_p = c2.selectbox("Semana:", df_f['SEMANA'].tolist(), key="lab_sem_ref")
                 aula_num = c3.radio("Qual Aula?", ["Aula 1", "Aula 2"], horizontal=True)
-                
                 plano_raw = df_f[df_f['SEMANA'] == sel_p].iloc[0]['PLANO_TEXTO']
                 
-                # EXTRAÇÃO DINÂMICA DE CONTEÚDOS E OBJETIVOS DO PLANO
                 cont_lista = ai.extrair_tag(plano_raw, "CONTEUDOS_ESPECIFICOS").split(",")
                 obj_lista = ai.extrair_tag(plano_raw, "OBJETIVOS_ENSINO").split(";")
                 
@@ -437,134 +431,105 @@ elif menu == "🧪 Criador de Aulas":
                 obj_sel = col_sel2.multiselect("Objetivos desta Aula:", [o.strip() for o in obj_lista if o.strip()])
 
                 st.markdown("---")
-                
-                # DEFINIÇÃO DO TIPO DE AULA
                 tipo_aula = st.selectbox("Tipo de Aula:", ["Conteúdo Normal", "Avaliação (Teste/Prova)", "Projeto (Trabalho/Pesquisa)"])
                 
-                livro_pags = ""
-                partes_pdf = []
-                fmt_prof = "✍️ Quadro/Lousa"
-                atv_aluno = "📓 Caderno"
+                livro_pags = ""; partes_pdf = []
+                fmt_prof = "✍️ Quadro/Lousa"; atv_aluno = "📓 Caderno"
 
                 if tipo_aula == "Conteúdo Normal":
-                    c_f1, c_f2, c_f3 = st.columns(3)
+                    c_f1, c_f2 = st.columns(2)
                     fmt_prof = c_f1.radio("Formato Professor:", ["✍️ Quadro/Lousa", "📊 Slides"])
                     atv_aluno = c_f2.radio("Atividade Aluno:", ["📓 Caderno", "📖 Livro Didático", "🚫 Nenhuma"])
-                    
                     if atv_aluno == "📖 Livro Didático":
-                        obra = st.selectbox("Selecione o Livro:", df_materiais['NOME_ARQUIVO'].tolist())
-                        livro_pags = st.text_input("Páginas do Livro:", placeholder="Ex: 12 a 15")
+                        obra = st.selectbox("Livro:", df_materiais['NOME_ARQUIVO'].tolist())
+                        livro_pags = st.text_input("Páginas:", placeholder="Ex: 12-15")
                         uri_pdf = df_materiais[df_materiais['NOME_ARQUIVO'] == obra]['URI_ARQUIVO'].values[0]
                         partes_pdf.append(types.Part.from_uri(file_uri=uri_pdf, mime_type="application/pdf"))
                 
                 elif tipo_aula == "Projeto (Trabalho/Pesquisa)":
-                    desc_projeto = st.text_area("Descreva o Trabalho/Pesquisa:", placeholder="Instruções detalhadas para os alunos...")
-                    fmt_prof = "Roteiro de Projeto"
-                    atv_aluno = "Folha de Orientação"
-                
-                else: # Avaliação
+                    desc_projeto = st.text_area("Instruções do Trabalho:")
+                    fmt_prof = "Roteiro de Projeto"; atv_aluno = "Folha de Orientação"
+                else:
                     tipo_av = st.radio("Tipo:", ["Teste", "Prova", "Recuperação"])
-                    fmt_prof = f"Aplicação de {tipo_av}"
-                    atv_aluno = "Folha de Prova"
+                    fmt_prof = f"Aplicação de {tipo_av}"; atv_aluno = "Folha de Prova"
 
                 if st.button("🚀 Gerar Materiais da Aula", use_container_width=True):
                     with st.spinner("SOSA processando nexo pedagógico..."):
-                        ctx_base = f"CONTEÚDO: {cont_sel}. OBJETIVOS: {obj_sel}. TIPO: {tipo_aula}."
+                        ctx = f"CONTEÚDO: {cont_sel}. OBJETIVOS: {obj_sel}. TIPO: {tipo_aula}."
+                        # Geração com Filtro Rígido
+                        st.session_state.mat_prof = ai.gerar_ia("GUIA_PROFESSOR", f"{ctx} FORMATO: {fmt_prof}. NÃO GERE OUTRO FORMATO.")
                         
-                        # 1. GUIA DO PROFESSOR (Sempre gera o esquema de lousa/slides)
-                        st.session_state.mat_prof = ai.gerar_ia("GUIA_PROFESSOR", f"{ctx_base} FORMATO: {fmt_prof}")
-                        
-                        # 2. ATIVIDADE REGULAR (Só gera se for caderno/projeto/prova)
                         if atv_aluno in ["📓 Caderno", "Folha de Orientação", "Folha de Prova"]:
-                            st.session_state.mat_regular = ai.gerar_ia("MESTRE_DE_MATERIAIS", f"{ctx_base} ATIVIDADE: {atv_aluno}")
+                            st.session_state.mat_regular = ai.gerar_ia("MESTRE_DE_MATERIAIS", f"{ctx} ATIVIDADE: {atv_aluno}")
                         else:
-                            st.session_state.mat_regular = f"Atividade no Livro: {livro_pags}"
+                            st.session_state.mat_regular = f"MARKER_REGULAR Atividade no Livro: {livro_pags} MARKER_GABARITO Consulte o manual do professor."
                         
-                        # 3. VERSÃO PEI (Sempre gera - Se for livro, lê o PDF para adaptar)
-                        prompt_pei = f"BASE: {ctx_base}. LIVRO/PÁGS: {livro_pags}. Gere atividade adaptada em folha com Boxes PARA LEMBRAR e PASSOS."
-                        st.session_state.mat_adaptado = ai.gerar_ia("ARQUITETO_PEI", prompt_pei, partes_arquivos=partes_pdf)
-                        
+                        st.session_state.mat_adaptado = ai.gerar_ia("ARQUITETO_PEI", f"BASE: {ctx} {livro_pags}. Gere atividade PEI em folha.", partes_arquivos=partes_pdf)
                         st.session_state.v_lab += 1
                         st.rerun()
 
-        # --- ÁREA DE EXIBIÇÃO E SALVAMENTO ---
         if "mat_prof" in st.session_state:
             st.markdown("---")
             v = st.session_state.v_lab
-            t_prof, t_reg, t_pei, t_save = st.tabs(["👨‍🏫 PROFESSOR", "📄 ALUNO REGULAR", "♿ VERSÃO PEI", "💾 SALVAR"])
+            # PRENSA HIDRÁULICA (Limpeza de Markdown)
+            def limpar_md(t): return t.replace("**", "").replace("###", "").replace("#", "").replace("MARKER_REGULAR", "").replace("MARKER_ADAPTADO", "").replace("MARKER_GABARITO", "").strip()
+
+            t_prof, t_reg, t_pei, t_gab, t_save = st.tabs(["👨‍🏫 PROFESSOR", "📄 ALUNO", "♿ PEI", "✅ GABARITO", "💾 SALVAR"])
             
-            with t_prof: st.text_area("Esquema de Lousa/Slides:", st.session_state.mat_prof, height=400, key=f"p_{v}")
-            with t_reg: st.text_area("Atividade Aluno:", st.session_state.mat_regular, height=400, key=f"r_{v}")
-            with t_pei: st.text_area("Versão Adaptada (PEI):", st.session_state.mat_adaptado, height=400, key=f"a_{v}")
+            with t_prof: st.text_area("Esquema:", limpar_md(st.session_state.mat_prof), height=400, key=f"p_{v}")
+            with t_reg: st.text_area("Atividade:", limpar_md(ai.extrair_tag(st.session_state.mat_regular, "REGULAR")), height=400, key=f"r_{v}")
+            with t_pei: st.text_area("Adaptada:", limpar_md(ai.extrair_tag(st.session_state.mat_adaptado, "ADAPTADO")), height=400, key=f"a_{v}")
+            with t_gab: 
+                gab_reg = ai.extrair_tag(st.session_state.mat_regular, "GABARITO")
+                gab_pei = ai.extrair_tag(st.session_state.mat_adaptado, "GABARITO")
+                st.text_area("Respostas:", f"REGULAR:\n{gab_reg}\n\nPEI:\n{gab_pei}", height=300, key=f"g_{v}")
             
             with t_save:
-                st.subheader("Finalizar e Arquivar")
                 nome_doc = st.text_input("Nome do Arquivo:", value=f"AULA_{aula_num.replace(' ','')}_{sel_p.replace(' ','')}", key=f"n_{v}")
-                
                 if st.button("☁️ EXECUTAR SALVAMENTO NO DRIVE", type="primary", key=f"btn_save_{v}"):
-                    with st.status("Iniciando arquivamento...", expanded=True) as status:
-                        status.write("📝 Gerando documento unificado...")
-                        conteudo_full = f"PROFESSOR:\n{st.session_state.mat_prof}\n\nREGULAR:\n{st.session_state.mat_regular}\n\nPEI:\n{st.session_state.mat_adaptado}"
-                        doc_file = exporter.gerar_docx_profissional(nome_doc.upper(), conteudo_full)
+                    with st.status("Arquivando...", expanded=True) as status:
+                        # GERAÇÃO DO CONTEÚDO LIMPO PARA O DOCX
+                        conteudo_full = f"PROFESSOR:\n{limpar_md(st.session_state.mat_prof)}\n\nALUNO:\n{limpar_md(ai.extrair_tag(st.session_state.mat_regular, 'REGULAR'))}\n\nPEI:\n{limpar_md(ai.extrair_tag(st.session_state.mat_adaptado, 'ADAPTADO'))}\n\nGABARITO:\n{gab_reg}"
                         
-                        status.write("🛰️ Enviando para a Ponte SOSA-Drive...")
-                        # Categoria = Semana (Cria a pasta), Sub_Categoria = Aula 1 ou 2
-                        link = db.subir_e_converter_para_google_docs(doc_file, nome_doc, categoria=sel_p, sub_categoria=aula_num)
+                        # FIX DO ERRO SEEK: Garantir que o doc_file é gerado antes do upload
+                        doc_file = exporter.gerar_docx_profissional(nome_doc.upper(), conteudo_full, {"turma": f"{ano_l}º Ano", "trimestre": "I"})
                         
-                        if "https://" in str(link):
-                            status.write("📊 Vinculando link à planilha...")
-                            db.salvar_no_banco("DB_AULAS_PRONTAS", [
-                                datetime.now().strftime("%d/%m"), sel_p, aula_num, tipo_aula, fmt_prof, 
-                                st.session_state.mat_prof[:100], f"{ano_l}º", link, livro_pags
-                            ])
-                            status.update(label="✅ TUDO SALVO COM SUCESSO!", state="complete")
-                            st.link_button("🚀 ABRIR NO GOOGLE DOCS", str(link))
-                        else:
-                            status.update(label=f"❌ ERRO: {link}", state="error")
+                        if doc_file:
+                            link = db.subir_e_converter_para_google_docs(doc_file, nome_doc, categoria=sel_p, sub_categoria=aula_num)
+                            if "https://" in str(link):
+                                db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m"), sel_p, aula_num, tipo_aula, fmt_prof, "CONTEUDO", f"{ano_l}º", link, livro_pags])
+                                status.update(label="✅ SALVO COM SUCESSO!", state="complete")
+                                st.link_button("🚀 ABRIR NO GOOGLE DOCS", str(link))
+                            else: status.update(label=f"❌ ERRO DRIVE: {link}", state="error")
+                        else: status.update(label="❌ ERRO AO GERAR DOCX", state="error")
 
     # --- ABA 2: ENGENHARIA DE AVALIAÇÕES (VARREDURA) ---
     with tab_provas:
-        st.subheader("📝 Gerador de Avaliação por Varredura de Período")
+        st.subheader("📝 Gerador de Avaliação por Varredura")
         if not df_planos.empty:
             c_v1, c_v2, c_v3 = st.columns(3)
             ano_v = c_v1.selectbox("Série:", [6, 7, 8, 9], key="v_ano")
             df_v = df_planos[df_planos['ANO'] == f"{ano_v}º"].sort_values(by="SEMANA")
-            
             if not df_v.empty:
-                sem_ini = c_v2.selectbox("De (Semana):", df_v['SEMANA'].tolist(), key="v_ini")
-                sem_fim = c_v3.selectbox("Até (Semana):", df_v['SEMANA'].tolist(), index=len(df_v)-1, key="v_fim")
-                
-                tipo_av = st.selectbox("Tipo de Avaliação:", ["TESTE (3.0)", "PROVA (4.0)", "REC. PARALELA (10.0)", "REC. FINAL (10.0)"])
-                
-                if st.button("🔥 Iniciar Varredura e Gerar Prova"):
-                    with st.spinner("SOSA escaneando planos do período..."):
-                        # Coleta todos os planos do intervalo selecionado
-                        planos_periodo = df_v[(df_v['SEMANA'] >= sem_ini) & (df_v['SEMANA'] <= sem_fim)]['PLANO_TEXTO'].tolist()
-                        
-                        prompt_av = (
-                            f"VARREDURA DE CONTEÚDO: {planos_periodo}\n"
-                            f"TIPO: {tipo_av} | SÉRIE: {ano_v}º Ano\n"
-                            f"OBJETIVO: Crie uma avaliação oficial. Use o padrão visual CPM. "
-                            f"Gere a versão REGULAR e a versão PEI (3 alternativas e Boxes)."
-                        )
-                        st.session_state.out_av = ai.gerar_ia("SCANNER_AVALIACAO", prompt_av)
+                sem_ini = c_v2.selectbox("De:", df_v['SEMANA'].tolist(), key="v_ini")
+                sem_fim = c_v3.selectbox("Até:", df_v['SEMANA'].tolist(), index=len(df_v)-1, key="v_fim")
+                tipo_av = st.selectbox("Tipo:", ["TESTE (3.0)", "PROVA (4.0)", "REC. PARALELA (10.0)", "REC. FINAL (10.0)"])
+                if st.button("🔥 Gerar Avaliação"):
+                    with st.spinner("Escaneando período..."):
+                        planos = df_v[(df_v['SEMANA'] >= sem_ini) & (df_v['SEMANA'] <= sem_fim)]['PLANO_TEXTO'].tolist()
+                        st.session_state.out_av = ai.gerar_ia("SCANNER_AVALIACAO", f"PLANOS: {planos}. TIPO: {tipo_av}. Gere Regular + PEI.")
                         st.rerun()
-                
-                if "out_av" in st.session_state:
-                    st.text_area("Avaliação Gerada (Regular + PEI):", st.session_state.out_av, height=500)
-            else: st.info("Sem planos para esta série.")
+                if "out_av" in st.session_state: st.text_area("Avaliação:", st.session_state.out_av, height=500)
 
-    # --- ABA 3: GAVETAS (HISTÓRICO) ---
     with tab_gavetas:
         st.subheader("🗂️ Arquivo Morto Inteligente")
         if not df_aulas.empty:
             f_sem = st.selectbox("Filtrar por Semana:", ["Todas"] + sorted(df_aulas['SEMANA_REF'].unique().tolist()))
             df_g = df_aulas if f_sem == "Todas" else df_aulas[df_aulas['SEMANA_REF'] == f_sem]
-            
             for _, row in df_g.iloc[::-1].iterrows():
                 with st.expander(f"{row['DATA']} - {row['SEMANA_REF']} ({row['AULA_NUM']})"):
                     st.write(f"**Tipo:** {row['CATEGORIA']} | **Páginas:** {row.get('PAGINAS', 'N/A')}")
-                    if row['LINK_DRIVE']: st.link_button("🚀 Abrir Documento", str(row['LINK_DRIVE']))
+                    if row['LINK_DRIVE']: st.link_button("🚀 Abrir", str(row['LINK_DRIVE']))
                 
 # ==============================================================================
 # MÓDULO: PLANEJAMENTO (PONTO ID) - ARQUITETURA SUPREMA V21.1 (FIX)
