@@ -403,3 +403,31 @@ def excluir_plano_total(semana, ano):
                 return True
         return False
     except: return False
+
+def buscar_aula_existente(semana, aula_num, ano):
+    """Verifica se a aula já foi produzida para evitar duplicidade."""
+    wb, (_, _, _, _, df_aulas, _, _, _, _, _, _) = carregar_tudo()
+    if df_aulas.empty: return None
+    
+    # Filtro rigoroso
+    match = df_aulas[
+        (df_aulas['SEMANA_REF'] == semana) & 
+        (df_aulas['AULA_NUM'] == aula_num) & 
+        (df_aulas['ANO'] == ano)
+    ]
+    return match.iloc[0] if not match.empty else None
+
+def atualizar_pendencia_aula(semana, aula_num, ano, nova_obs):
+    """Atualiza apenas o campo de pendência de uma aula já salva."""
+    try:
+        wb = conectar()
+        ws = wb.worksheet("DB_AULAS_PRONTAS")
+        dados = ws.get_all_values()
+        for i, row in enumerate(dados):
+            if i == 0: continue
+            if row[1] == semana and row[2] == aula_num and row[6] == ano:
+                ws.update_cell(i + 1, 10, nova_obs) # Coluna J (OBS_PENDENCIA)
+                st.cache_data.clear()
+                return True
+        return False
+    except: return False
