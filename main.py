@@ -489,36 +489,36 @@ elif menu == "🧪 Criador de Aulas":
                 st.markdown(f"## 🏫 {st.session_state.get('lab_titulo', 'Nova Aula')}")
                 
                 # Chat de Refinamento
-                comando_refino = st.chat_input("Sugerir mudanças (Ex: 'Adicione mais 2 questões', 'Mude o texto do professor')")
+                comando_refino = st.chat_input("Sugerir mudanças (Ex: 'Deixe apenas 5 questões', 'Adicione 3 exemplos no quadro')")
                 if comando_refino:
-                    with st.spinner("Maestro SOSA reeditando material com rigor..."):
-                        # Prompt de Refino Blindado
-                        refino_prompt = (
-                            f"VOCÊ É UM EDITOR. O MATERIAL ATUAL É:\n"
-                            f"TITULO: {st.session_state.lab_titulo}\n"
-                            f"PROFESSOR: {st.session_state.lab_prof}\n"
-                            f"ALUNO: {st.session_state.lab_aluno}\n\n"
-                            f"SOLICITAÇÃO DE ALTERAÇÃO URGENTE: {comando_refino}\n\n"
-                            f"INSTRUÇÃO DE EDIÇÃO: Aplique a mudança acima. Se for para aumentar questões, mantenha as anteriores e crie novas até atingir o total. "
-                            f"Se for para mudar o texto do professor, substitua o trecho solicitado. "
-                            f"Mantenha obrigatoriamente os MARKERS: TITULO, PROFESSOR, ALUNO, IMAGENS, GABARITO."
-                        )
+                    with st.spinner("Maestro SOSA realizando cirurgia no material..."):
+                        # Criamos um contexto focado para a IA não se perder
+                        contexto_edicao = f"""
+                        TEXTO DO PROFESSOR ATUAL: {st.session_state.lab_prof}
+                        TEXTO DO ALUNO ATUAL: {st.session_state.lab_aluno}
                         
-                        raw_novo = ai.gerar_ia("AVALIADOR_V23", refino_prompt)
+                        ORDEM DO COMANDANTE: {comando_refino}
                         
-                        # Atualização forçada do estado
-                        novo_titulo = ai.extrair_tag(raw_novo, "TITULO")
+                        INSTRUÇÃO: 
+                        - Se a ordem for sobre questões, edite o TEXTO DO ALUNO.
+                        - Se a ordem for sobre exemplos ou explicações, edite o TEXTO DO PROFESSOR.
+                        - Responda EXATAMENTE com os marcadores MARKER_PROFESSOR e MARKER_ALUNO refletindo as mudanças.
+                        """
+                        
+                        raw_novo = ai.gerar_ia("REFINADOR_CIRURGICO", contexto_edicao)
+                        
+                        # Extração Cirúrgica
                         novo_prof = ai.extrair_tag(raw_novo, "PROFESSOR")
                         novo_aluno = ai.extrair_tag(raw_novo, "ALUNO")
                         novo_gab = ai.extrair_tag(raw_novo, "GABARITO")
-                        novo_img = ai.extrair_tag(raw_novo, "IMAGENS")
 
-                        # Só atualiza se a IA não retornou vazio por erro
-                        if novo_aluno: st.session_state.lab_aluno = novo_aluno
-                        if novo_prof: st.session_state.lab_prof = novo_prof
-                        if novo_titulo: st.session_state.lab_titulo = novo_titulo
-                        if novo_gab: st.session_state.lab_gab = novo_gab
-                        if novo_img: st.session_state.lab_img = novo_img
+                        # Atualização seletiva (Só muda o que a IA de fato retornou)
+                        if novo_prof and len(novo_prof) > 10: 
+                            st.session_state.lab_prof = novo_prof
+                        if novo_aluno and len(novo_aluno) > 10: 
+                            st.session_state.lab_aluno = novo_aluno
+                        if novo_gab and len(novo_gab) > 5:
+                            st.session_state.lab_gab = novo_gab
                         
                         st.rerun()
 
