@@ -213,3 +213,19 @@ def gerar_docx_plano_pedagogico_v18(titulo_arquivo, dados, info):
     doc.save(file_stream)
     file_stream.seek(0)
     return file_stream
+
+def gerar_docx_profissional(titulo, conteudo_raw):
+    doc = Document()
+    # ... (cabeçalho padrão CPM que já temos) ...
+
+    for linha in conteudo_raw.split('\n'):
+        if "[BOX DE IMAGEM:" in linha:
+            # Cria um quadro visual no Word para você saber onde colar
+            p = doc.add_paragraph()
+            run = p.add_run(f"\n      🖼️ {linha.strip()}      \n")
+            run.font.italic = True
+            run.font.color.rgb = RGBColor(100, 100, 100)
+            # Adiciona borda simples via XML se necessário ou apenas o texto destacado
+        else:
+            p = doc.add_paragraph(linha.strip())
+            p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
