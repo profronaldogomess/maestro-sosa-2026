@@ -454,22 +454,29 @@ elif menu == "🧪 Criador de Aulas":
             
             # BOTÃO DE INÍCIO
             if st.button("🚀 Iniciar Composição do Laboratório", use_container_width=True):
-                with st.spinner("Maestro SOSA consultando a Base e redigindo material..."):
+                with st.spinner("Maestro SOSA aplicando rigor de escopo..."):
                     plano_ref = df_planos[(df_planos['ANO'] == ano_lab) & (df_planos['SEMANA'] == sem_lab)].iloc[0]
                     
-                    # Prompt Mestre V23.4 - Agora com os parâmetros de Caderno/Livro
-                    prompt_reg = (f"PLANO DE REFERÊNCIA: {plano_ref['PLANO_TEXTO']}\n"
-                                f"AULA: {aula_num} | FORMATO PROFESSOR: {formato_prof}\n"
-                                f"TIPO DE ATIVIDADE: {params_ativ_texto}\n\n"
-                                f"INSTRUÇÃO: Gere um Título Pedagógico criativo. "
-                                f"No MARKER_PROFESSOR, foque no conteúdo para o quadro. "
-                                f"No MARKER_ALUNO, gere os exercícios conforme a quantidade e nível solicitados. "
-                                f"Gere Prompts de Imagem detalhados. Use MARKERS: TITULO, PROFESSOR, ALUNO, IMAGENS, GABARITO.")
+                    # Definição explícita de dificuldade para a IA
+                    desc_dif = {
+                        "Básica": "Nível Fundamental: Apenas identificação e conversão direta. Sem desafios ou lógica complexa.",
+                        "Intermediária": "Nível Médio: Problemas aplicados e situações do cotidiano.",
+                        "Desafio": "Nível Avançado: Questões de olimpíadas, lógica e pensamento crítico."
+                    }
+                    
+                    prompt_reg = (
+                        f"PLANO: {plano_ref['PLANO_TEXTO']}\n"
+                        f"AULA: {aula_num} | FORMATO: {formato_prof}\n"
+                        f"QUANTIDADE OBRIGATÓRIA: {num_q} questões (NÃO GERE MAIS QUE ISSO).\n"
+                        f"NÍVEL DE DIFICULDADE: {desc_dif[dif_q]}\n\n"
+                        f"INSTRUÇÃO: Gere o Título, o conteúdo do Professor e exatamente {num_q} questões para o Aluno no nível {dif_q}. "
+                        f"Pare imediatamente após a questão {num_q}. Use MARKERS: TITULO, PROFESSOR, ALUNO, IMAGENS, GABARITO."
+                    )
                     
                     raw = ai.gerar_ia("AVALIADOR_V23", prompt_reg)
                     
-                    # Armazenamento Seguro
-                    st.session_state.lab_titulo = ai.extrair_tag(raw, "TITULO") or f"Aula: {sem_lab}"
+                    # Fatiamento e Armazenamento
+                    st.session_state.lab_titulo = ai.extrair_tag(raw, "TITULO")
                     st.session_state.lab_prof = ai.extrair_tag(raw, "PROFESSOR")
                     st.session_state.lab_aluno = ai.extrair_tag(raw, "ALUNO")
                     st.session_state.lab_img = ai.extrair_tag(raw, "IMAGENS")
