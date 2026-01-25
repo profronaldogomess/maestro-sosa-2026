@@ -53,16 +53,22 @@ def carregar_tudo():
                 df = pd.DataFrame(columns=colunas_padrao)
             
             if not df.empty:
+                # Normaliza cabeçalhos: remove espaços e coloca em MAIÚSCULO
                 df.columns = [str(c).strip().upper() for c in df.columns]
                 
-                # --- CORREÇÕES ESPECÍFICAS DE SCHEMA ---
+                # --- CORREÇÃO CRÍTICA V24: DB_AULAS_PRONTAS ---
                 if nome == "DB_AULAS_PRONTAS":
-                    # Garante que as colunas existam para evitar KeyError
-                    cols_necessarias = ["DATA", "SEMANA_REF", "CATEGORIA", "TIPO_MATERIAL", "CONTEUDO", "ANO", "LINK_DRIVE", "ORIGEM_LIVRO"]
-                    for col in cols_necessarias:
+                    # Estas são as colunas que o Laboratório V24 EXIGE para funcionar
+                    cols_v24 = [
+                        "DATA", "SEMANA_REF", "AULA_NUM", "CATEGORIA", 
+                        "TIPO_MATERIAL", "CONTEUDO", "ANO", "LINK_DRIVE", "PAGINAS"
+                    ]
+                    # Auto-Reparo: Se a coluna não existir no Google Sheets, o sistema cria no DataFrame
+                    for col in cols_v24:
                         if col not in df.columns:
-                            df[col] = "" # Cria a coluna vazia se não existir
+                            df[col] = "" 
                 
+                # --- CORREÇÕES DE SCHEMA PARA PLANOS ---
                 elif nome == "DB_PLANOS":
                     mapeamento_planos = {
                         'SERIE': 'ANO', 'SÉRIE': 'ANO', 
@@ -72,6 +78,7 @@ def carregar_tudo():
                     if "ANO" in df.columns:
                         df['ANO'] = df['ANO'].astype(str).apply(lambda x: f"{x}º" if x.isdigit() else x)
 
+                # --- CORREÇÕES PARA RELATÓRIOS E ALUNOS ---
                 elif nome == "DB_RELATORIOS":
                     if "TURMA" in df.columns and "TIPO" not in df.columns:
                         df = df.rename(columns={"TURMA": "TIPO"})
@@ -91,14 +98,15 @@ def carregar_tudo():
                     if "ID_ALUNO" in df.columns:
                         df['ID_ALUNO'] = df['ID_ALUNO'].apply(limpar_id)
                     
-                    # Garante que as colunas de notas existam (Auto-Reparo)
                     cols_essenciais = ["NOTA_VISTOS", "NOTA_TESTE", "NOTA_PROVA", "NOTA_REC", "MEDIA_FINAL"]
                     for col in cols_essenciais:
                         if col not in df.columns:
-                            df[col] = 0.0 # Cria a coluna com zero se não existir
+                            df[col] = 0.0 
 
             return df
-        except: return pd.DataFrame(columns=colunas_padrao)
+        except Exception as e:
+            # Se der erro grave, retorna um DataFrame vazio com as colunas esperadas
+            return pd.DataFrame(columns=colunas_padrao)
 
     cols_planos = ["DATA", "SEMANA", "ANO", "TRIMESTRE", "TURMA", "PLANO_TEXTO"]
     cols_aulas = ["DATA", "SEMANA_REF", "TIPO_MATERIAL", "CONTEUDO", "ANO"]
@@ -131,9 +139,7 @@ def salvar_no_banco(aba_nome, linha):
         
         if not ws.get_all_values():
             if aba_nome == "DB_AULAS_PRONTAS":
-                # Nova Estrutura V23: Rastreabilidade Total
-                ws.append_row(["DATA", "SEMANA_REF", "CATEGORIA", "TIPO_MATERIAL", "CONTEUDO", "ANO", "LINK_DRIVE", "ORIGEM_LIVRO"])
-            # ... (outros cabeçalhos se necessário)
+                ws.append_row(["DATA", "SEMANA_REF", "AULA_NUM", "CATEGORIA", "TIPO_MATERIAL", "CONTEUDO", "ANO", "LINK_DRIVE", "PAGINAS"])
         
         linha_str = [str(x) for x in linha]
         ws.append_row(linha_str)
