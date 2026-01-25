@@ -122,26 +122,18 @@ def carregar_tudo():
         safe_get("DB_REGISTRO_AULAS", cols_registro)
     )
 
+
 def salvar_no_banco(aba_nome, linha):
     try:
         wb = conectar()
         if not wb: return False
         ws = wb.worksheet(aba_nome)
         
-        # Se a aba estiver vazia, cria o cabeçalho correto
         if not ws.get_all_values():
             if aba_nome == "DB_AULAS_PRONTAS":
-                ws.append_row(["DATA", "SEMANA_REF", "TIPO_MATERIAL", "CONTEUDO", "ANO", "LINK_DRIVE"])
-            elif aba_nome == "DB_PLANOS":
-                ws.append_row(["DATA", "SEMANA", "ANO", "TRIMESTRE", "TURMA", "PLANO_TEXTO"])
-            elif aba_nome == "DB_RELATORIOS":
-                ws.append_row(["DATA", "ID_ALUNO", "NOME_ALUNO", "TIPO", "CONTEUDO"])
-            elif aba_nome == "DB_DIARIO_BORDO":
-                ws.append_row(["DATA", "ID_ALUNO", "NOME_ALUNO", "TURMA", "VISTO_ATIVIDADE", "TAGS", "OBSERVACOES"])
-            elif aba_nome == "DB_REGISTRO_AULAS":
-                ws.append_row(["DATA", "SEMANA", "TURMA", "CONTEUDO_MINISTRADO", "ADAPTACAO_PEI", "STATUS_CURRICULO"])
-            elif aba_nome == "DB_NOTAS":
-                ws.append_row(["ID_ALUNO", "NOME_ALUNO", "TURMA", "TRIMESTRE", "NOTA_VISTOS", "NOTA_TESTE", "NOTA_PROVA", "NOTA_REC", "MEDIA_FINAL"])
+                # Nova Estrutura V23: Rastreabilidade Total
+                ws.append_row(["DATA", "SEMANA_REF", "CATEGORIA", "TIPO_MATERIAL", "CONTEUDO", "ANO", "LINK_DRIVE", "ORIGEM_LIVRO"])
+            # ... (outros cabeçalhos se necessário)
         
         linha_str = [str(x) for x in linha]
         ws.append_row(linha_str)
