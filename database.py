@@ -131,7 +131,7 @@ def salvar_no_banco(aba_nome, linha):
         # Se a aba estiver vazia, cria o cabeçalho correto
         if not ws.get_all_values():
             if aba_nome == "DB_AULAS_PRONTAS":
-                ws.append_row(["DATA", "SEMANA_REF", "TIPO_MATERIAL", "CONTEUDO", "ANO"])
+                ws.append_row(["DATA", "SEMANA_REF", "TIPO_MATERIAL", "CONTEUDO", "ANO", "LINK_DRIVE"])
             elif aba_nome == "DB_PLANOS":
                 ws.append_row(["DATA", "SEMANA", "ANO", "TRIMESTRE", "TURMA", "PLANO_TEXTO"])
             elif aba_nome == "DB_RELATORIOS":
