@@ -420,7 +420,6 @@ elif menu == "🧪 Criador de Aulas":
         c1, c2, c3 = st.columns([1, 2, 1])
         ano_lab = c1.selectbox("Série:", ["6º", "7º", "8º", "9º"], key="lab_ano_v23")
         
-        # Busca semanas planejadas no DB_PLANOS
         semanas_plan = df_planos[df_planos['ANO'] == ano_lab]['SEMANA'].unique().tolist() if not df_planos.empty else []
         
         if not semanas_plan:
@@ -434,21 +433,42 @@ elif menu == "🧪 Criador de Aulas":
             formato_prof = col_v1.radio("Formato Professor:", ["✍️ Quadro/Lousa", "📊 Slides"], key="lab_formato")
             tipo_ativ = col_v2.radio("Atividade Aluno:", ["📓 Caderno", "📖 Livro Didático", "🚫 Nenhuma"], key="lab_tipo_ativ")
             
-            # BOTÃO DE INÍCIO - GERA O MATERIAL REGULAR
+            # --- BLOCO DE PARÂMETROS DINÂMICOS (RESTAURADO) ---
+            params_ativ_texto = ""
+            
+            if tipo_ativ == "📓 Caderno":
+                c_cad1, c_cad2 = st.columns(2)
+                num_q = c_cad1.slider("Quantidade de Questões:", 1, 15, 5, key="lab_num_q")
+                dif_q = c_cad2.select_slider("Nível de Dificuldade:", ["Básica", "Intermediária", "Desafio"], value="Básica", key="lab_dif_q")
+                params_ativ_texto = f"Atividade para CADERNO com {num_q} questões de nível {dif_q}."
+                
+            elif tipo_ativ == "📖 Livro Didático":
+                c_liv1, c_liv2 = st.columns(2)
+                # Busca livros cadastrados na Base de Conhecimento
+                lista_livros = df_materiais['NOME_ARQUIVO'].tolist() if not df_materiais.empty else ["Nenhum livro cadastrado"]
+                livro_sel = c_liv1.selectbox("Selecionar Livro da Base:", lista_livros, key="lab_livro_sel")
+                pags_livro = c_liv2.text_input("Páginas de Referência:", placeholder="Ex: 45 a 48", key="lab_pags")
+                params_ativ_texto = f"Atividade baseada no LIVRO '{livro_sel}', páginas {pags_livro}."
+
+            st.markdown("---")
+            
+            # BOTÃO DE INÍCIO
             if st.button("🚀 Iniciar Composição do Laboratório", use_container_width=True):
-                with st.spinner("Maestro SOSA redigindo material de elite..."):
+                with st.spinner("Maestro SOSA consultando a Base e redigindo material..."):
                     plano_ref = df_planos[(df_planos['ANO'] == ano_lab) & (df_planos['SEMANA'] == sem_lab)].iloc[0]
                     
-                    # Prompt Mestre V23: Título Pedagógico + Prompts de Imagem
-                    prompt_reg = (f"PLANO: {plano_ref['PLANO_TEXTO']}\n"
-                                 f"AULA: {aula_num} | FORMATO: {formato_prof}\n"
-                                 f"ATIVIDADE: {tipo_ativ}\n"
-                                 f"INSTRUÇÃO: Gere um Título Pedagógico criativo. Separe o conteúdo do Professor (Quadro) do material do Aluno. "
-                                 f"Gere Prompts de Imagem detalhados para os conceitos principais. Use MARKERS: TITULO, PROFESSOR, ALUNO, IMAGENS, GABARITO.")
+                    # Prompt Mestre V23.4 - Agora com os parâmetros de Caderno/Livro
+                    prompt_reg = (f"PLANO DE REFERÊNCIA: {plano_ref['PLANO_TEXTO']}\n"
+                                f"AULA: {aula_num} | FORMATO PROFESSOR: {formato_prof}\n"
+                                f"TIPO DE ATIVIDADE: {params_ativ_texto}\n\n"
+                                f"INSTRUÇÃO: Gere um Título Pedagógico criativo. "
+                                f"No MARKER_PROFESSOR, foque no conteúdo para o quadro. "
+                                f"No MARKER_ALUNO, gere os exercícios conforme a quantidade e nível solicitados. "
+                                f"Gere Prompts de Imagem detalhados. Use MARKERS: TITULO, PROFESSOR, ALUNO, IMAGENS, GABARITO.")
                     
                     raw = ai.gerar_ia("AVALIADOR_V23", prompt_reg)
                     
-                    # Fatiamento e Armazenamento no Session State
+                    # Armazenamento Seguro
                     st.session_state.lab_titulo = ai.extrair_tag(raw, "TITULO") or f"Aula: {sem_lab}"
                     st.session_state.lab_prof = ai.extrair_tag(raw, "PROFESSOR")
                     st.session_state.lab_aluno = ai.extrair_tag(raw, "ALUNO")
@@ -461,8 +481,8 @@ elif menu == "🧪 Criador de Aulas":
             if st.session_state.lab_status == "GERADO":
                 st.markdown(f"## 🏫 {st.session_state.get('lab_titulo', 'Nova Aula')}")
                 
-                # CAIXA DE DIÁLOGO PARA REFINAMENTO (DINÂMICO)
-                comando_refino = st.chat_input("Sugerir mudanças (Ex: 'Aumente o nível das questões', 'Adicione contexto de Itabuna')")
+                # Chat de Refinamento
+                comando_refino = st.chat_input("Sugerir mudanças (Ex: 'Aumente o nível', 'Mude para 10 questões')")
                 if comando_refino:
                     with st.spinner("Refinando material..."):
                         refino_prompt = (f"MATERIAL ATUAL: {st.session_state.lab_prof} / {st.session_state.lab_aluno}\n"
@@ -474,7 +494,7 @@ elif menu == "🧪 Criador de Aulas":
                         st.session_state.lab_gab = ai.extrair_tag(raw_novo, "GABARITO")
                         st.rerun()
 
-                # EXIBIÇÃO EM ABAS ORGANIZADAS
+                # ABAS ORGANIZADAS
                 t_prof, t_aluno, t_img, t_gab, t_pei = st.tabs(["👨‍🏫 Professor (Quadro)", "📝 Aluno (Folha)", "🎨 Imagens/Prompts", "✅ Gabarito", "♿ PEI"])
                 
                 with t_prof:
@@ -487,7 +507,6 @@ elif menu == "🧪 Criador de Aulas":
                 
                 with t_img:
                     st.subheader("🖼️ Prompts para Geradores de Imagem")
-                    st.write("Copie os prompts abaixo para usar no Imagen 4 ou Nano:")
                     st.code(st.session_state.lab_img)
                 
                 with t_gab:
@@ -501,21 +520,18 @@ elif menu == "🧪 Criador de Aulas":
                     if "lab_pei" in st.session_state:
                         st.session_state.lab_pei = st.text_area("Atividade PEI:", st.session_state.lab_pei, height=400, key="ta_pei_v23")
 
-                # --- FINALIZAÇÃO E LOGÍSTICA DE IMPRESSÃO ---
+                # --- FINALIZAÇÃO ---
                 st.markdown("---")
                 st.subheader("📦 Finalização do Material")
                 
-                # Opção de incluir o quadro na folha (Decisão do Professor)
                 incluir_quadro = st.checkbox("📄 O assunto é extenso. Incluir o conteúdo do quadro na folha impressa do aluno?")
 
                 if st.button("💾 FINALIZAR E SALVAR MASTER DOC", type="primary", use_container_width=True):
-                    with st.spinner("Gerando Documento e Sincronizando com Drive..."):
-                        # Lógica de unificação para a folha do aluno
+                    with st.spinner("Sincronizando com Drive..."):
                         folha_final = st.session_state.lab_aluno
                         if incluir_quadro:
-                            folha_final = f"RESUMO PARA ESTUDO:\n{st.session_state.lab_prof}\n\n---\n{folha_final}"
+                            folha_final = f"RESUMO DA AULA:\n{st.session_state.lab_prof}\n\n---\n{folha_final}"
                         
-                        # Gera o DOCX via exporter (Com quebras de página entre seções)
                         doc_file = exporter.gerar_docx_laboratorio_v23(
                             st.session_state.lab_titulo,
                             st.session_state.lab_prof,
@@ -525,27 +541,17 @@ elif menu == "🧪 Criador de Aulas":
                             {"turma": ano_lab, "semana": sem_lab}
                         )
                         
-                        # Sobe para o Drive (Cria pasta da Semana automaticamente)
                         link = db.subir_e_converter_para_google_docs(doc_file, st.session_state.lab_titulo, sub_categoria=sem_lab)
                         
-                        # Salva no Banco de Dados (DB_AULAS_PRONTAS)
                         db.salvar_no_banco("DB_AULAS_PRONTAS", [
-                            datetime.now().strftime("%d/%m/%Y"), 
-                            sem_lab, 
-                            aula_num, 
-                            "Normal",
-                            formato_prof, 
-                            f"TITULO: {st.session_state.lab_titulo}\n{folha_final}", 
-                            ano_lab, 
-                            link, 
-                            "", # Páginas
-                            "", # Pendência
-                            "", # Data Avaliação
-                            "TODAS"
+                            datetime.now().strftime("%d/%m/%Y"), sem_lab, aula_num, "Normal",
+                            formato_prof, f"TITULO: {st.session_state.lab_titulo}\n{folha_final}", 
+                            ano_lab, link, 
+                            pags_livro if tipo_ativ == "📖 Livro Didático" else "", 
+                            "", "", "TODAS"
                         ])
                         
-                        st.success("✅ Master Doc Salvo com Sucesso! Pasta criada no Drive.")
-                        # Limpa a memória para a próxima aula
+                        st.success("✅ Master Doc Salvo com Sucesso!")
                         st.session_state.lab_status = "IDLE"
                         for key in ["lab_prof", "lab_aluno", "lab_titulo", "lab_img", "lab_gab", "lab_pei"]:
                             if key in st.session_state: del st.session_state[key]
