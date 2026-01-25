@@ -409,32 +409,32 @@ elif menu == "🧪 Criador de Aulas":
         "📊 Dashboard de Produção"
     ])
 
-    # --- ABA A: AULA DA SEMANA (GESTÃO DE CICLO DE VIDA) ---
+    # --- DENTRO DA ABA A: AULA DA SEMANA (V23 CORRIGIDA) ---
     with tab_aula:
         st.subheader("1. Configuração e Vínculo Pedagógico")
         
         c1, c2, c3 = st.columns([1, 2, 1])
         ano_lab = c1.selectbox("Série:", ["6º", "7º", "8º", "9º"], key="lab_ano")
         
-        # Busca semanas planejadas no DB_PLANOS
         semanas_plan = []
         if not df_planos.empty:
             semanas_plan = df_planos[df_planos['ANO'] == ano_lab]['SEMANA'].unique().tolist()
         
         if not semanas_plan:
-            st.warning("⚠️ Nenhum plano encontrado para esta série. Crie o plano primeiro.")
+            st.warning("⚠️ Nenhum plano encontrado. Crie o plano primeiro.")
         else:
             sem_lab = c2.selectbox("Semana do Plano:", semanas_plan)
             aula_num = c3.selectbox("Identificador:", ["Aula 1", "Aula 2"])
             
-            # LÓGICA DE BLOQUEIO / VERIFICAÇÃO DE ESTOQUE
+            # VERIFICAÇÃO DE ESTOQUE
             aula_salva = db.buscar_aula_existente(sem_lab, aula_num, ano_lab)
             
-            if aula_salva is not None:
-                st.success(f"✅ Esta aula já foi produzida em {aula_salva['DATA']}.")
-                with st.expander("Visualizar Material Salvo"):
-                    st.info(f"Formato: {aula_salva['FORMATO']} | Link: {aula_salva['LINK_DRIVE']}")
-                    st.text_area("Conteúdo Atual:", aula_salva['CONTEUDO'], height=300, disabled=True)
+            if aula_salva:
+                st.success(f"✅ Aula já produzida em {aula_salva['DATA']}.")
+                st.link_button("🚀 ABRIR NO GOOGLE DOCS", aula_salva['LINK_DRIVE'], use_container_width=True)
+                
+                with st.expander("Visualizar Conteúdo Salvo"):
+                    st.text_area("Conteúdo:", aula_salva['CONTEUDO'], height=300, disabled=True)
                 
                 nova_pendencia = st.text_area("Anotações de Pendência (Pós-Aula):", value=aula_salva['OBS_PENDENCIA'])
                 if st.button("💾 Atualizar Pendência"):
@@ -442,63 +442,95 @@ elif menu == "🧪 Criador de Aulas":
                     st.success("Pendência registrada!"); time.sleep(1); st.rerun()
             
             else:
-                # MODO GERAÇÃO (AULA NOVA)
+                # --- MODO LABORATÓRIO (CRIAÇÃO PASSO A PASSO) ---
                 st.markdown("---")
-                # Recupera dados do plano para o prompt
                 plano_ref = df_planos[(df_planos['ANO'] == ano_lab) & (df_planos['SEMANA'] == sem_lab)].iloc[0]
-                obj_geral = ai.extrair_tag(plano_ref['PLANO_TEXTO'], "OBJETIVOS_ENSINO")
-                
-                st.write(f"🎯 **Objetivos do Plano:** {obj_geral}")
                 
                 col_v1, col_v2 = st.columns(2)
                 formato_prof = col_v1.radio("Formato Professor:", ["✍️ Quadro/Lousa", "📊 Slides"])
                 tipo_ativ = col_v2.radio("Atividade Aluno:", ["📓 Caderno", "📖 Livro Didático", "🚫 Nenhuma"])
                 
                 c_p1, c_p2 = st.columns(2)
+                params_ativ = ""
                 if tipo_ativ == "📓 Caderno":
                     num_q = c_p1.slider("Qtd de Questões:", 1, 10, 5)
                     dif_q = c_p2.select_slider("Dificuldade:", ["Básica", "Intermediária", "Desafio"])
+                    params_ativ = f"{num_q} questões nível {dif_q}"
                 elif tipo_ativ == "📖 Livro Didático":
                     livro_sel = c_p1.selectbox("Obra:", df_materiais['NOME_ARQUIVO'].tolist() if not df_materiais.empty else ["Nenhum"])
                     pags_livro = c_p2.text_input("Páginas:")
-                
-                if st.button("🚀 Compor Laboratório (Master Doc)", use_container_width=True):
-                    with st.spinner("Maestro SOSA em ação: Unificando Regular + PEI + Gabarito..."):
-                        # Prompt Mestre
-                        prompt_mestre = (
-                            f"BASE: {plano_ref['PLANO_TEXTO']}\n"
-                            f"AULA: {aula_num} | FORMATO: {formato_prof}\n"
-                            f"ATIVIDADE: {tipo_ativ} ({num_q if tipo_ativ=='Caderno' else ''} questões)\n"
-                            f"AÇÃO: Gere o Roteiro do Professor, a Atividade do Aluno e a Versão PEI (Passos 1-2-3)."
-                        )
-                        
-                        res_ia = ai.gerar_ia("AVALIADOR_V23", prompt_mestre)
-                        res_pei = ai.gerar_ia("PEI_ELITE", f"Adapte este conteúdo para PEI: {res_ia}")
-                        
-                        conteudo_final = f"{res_ia}\n\n--- VERSÃO ADAPTADA (PEI) ---\n{res_pei}"
-                        conteudo_limpo = ai.prensa_hidraulica_v23(conteudo_final)
-                        
-                        # Simulação de Link (A ponte Drive fará o real)
-                        link_fake = "https://docs.google.com/..." 
-                        
-                        # Salva no Banco
-                        dados_salvar = [
-                            datetime.now().strftime("%d/%m/%Y"),
-                            sem_lab,
-                            aula_num,
-                            "Conteúdo Normal",
-                            formato_prof,
-                            conteudo_limpo,
-                            ano_lab,
-                            link_fake,
-                            pags_livro if tipo_ativ == "📖 Livro Didático" else "",
-                            "", # Pendência vazia
-                            "", # Data Avaliação
-                            "TODAS"
-                        ]
-                        
-                        if db.salvar_no_banco("DB_AULAS_PRONTAS", dados_salvar):
-                            st.success("✅ Master Doc Gerado e Arquivado!"); time.sleep(1); st.rerun()
+                    params_ativ = f"Livro {livro_sel}, págs {pags_livro}"
+
+                # PASSO 1: GERAR MATERIAL REGULAR
+                if st.button("🚀 Gerar Material Regular", use_container_width=True):
+                    with st.spinner("Maestro compondo material regular..."):
+                        prompt_reg = (f"BASE PEDAGÓGICA: {plano_ref['PLANO_TEXTO']}\n"
+                                    f"AULA: {aula_num} | FORMATO: {formato_prof}\n"
+                                    f"ATIVIDADE: {tipo_ativ} ({params_ativ})\n"
+                                    f"FOCO: Gere apenas o material regular (Professor e Aluno).")
+                        st.session_state.lab_regular = ai.gerar_ia("AVALIADOR_V23", prompt_reg)
+                        st.session_state.lab_step = "REGULAR_PRONTO"
+
+                # EXIBIÇÃO E REFINAMENTO DO REGULAR
+                if "lab_regular" in st.session_state:
+                    st.markdown("### 📝 Material Regular (Para Aprovação)")
+                    
+                    # Chat de Refinamento para o Regular
+                    ajuste = st.chat_input("Deseja ajustar algo no material regular?")
+                    if ajuste:
+                        with st.spinner("Refinando..."):
+                            st.session_state.lab_regular = ai.gerar_ia("AVALIADOR_V23", f"Material: {st.session_state.lab_regular}. Ajuste: {ajuste}")
+                            st.rerun()
+
+                    st.session_state.lab_regular = st.text_area("Edite se necessário:", st.session_state.lab_regular, height=400)
+
+                    # PASSO 2: GERAR PEI (SÓ APÓS O REGULAR EXISTIR)
+                    st.markdown("---")
+                    if st.button("♿ Aprovar e Gerar Versão PEI", type="primary"):
+                        with st.spinner("Especialista adaptando para PEI (Passos 1-2-3)..."):
+                            prompt_pei = f"Com base neste material aprovado: {st.session_state.lab_regular}. Crie a versão adaptada PEI seguindo o protocolo de 3 alternativas e box PARA LEMBRAR."
+                            st.session_state.lab_pei = ai.gerar_ia("PEI_ELITE", prompt_pei)
+                            st.session_state.lab_step = "PEI_PRONTO"
+
+                # EXIBIÇÃO FINAL E SALVAMENTO
+                if "lab_pei" in st.session_state:
+                    st.markdown("### ♿ Versão Adaptada (PEI)")
+                    st.session_state.lab_pei = st.text_area("Revisão PEI:", st.session_state.lab_pei, height=300)
+                    
+                    st.markdown("---")
+                    if st.button("💾 FINALIZAR E SALVAR MASTER DOC"):
+                        with st.spinner("Sincronizando com Drive e Planilha..."):
+                            # Unifica tudo
+                            conteudo_final = f"{st.session_state.lab_regular}\n\n--- VERSÃO ADAPTADA (PEI) ---\n{st.session_state.lab_pei}"
+                            conteudo_limpo = ai.prensa_hidraulica_v23(conteudo_final)
+                            
+                            # 1. Gera o DOCX
+                            nome_doc = f"AULA_{aula_num.replace(' ','')}_{sem_lab.replace(' ','')}_{ano_lab}"
+                            doc_file = exporter.gerar_docx_profissional(nome_doc, conteudo_limpo, {"turma": ano_lab, "trimestre": "I"})
+                            
+                            # 2. Sobe para o Drive (Usando a nova lógica de subpasta=Semana)
+                            link_drive = db.subir_e_converter_para_google_docs(
+                                doc_file, 
+                                nome_doc, 
+                                trimestre="I Trimestre", 
+                                categoria="Material de Sala", 
+                                sub_categoria=sem_lab
+                            )
+                            
+                            # 3. Salva no Banco
+                            dados_banco = [
+                                datetime.now().strftime("%d/%m/%Y"), sem_lab, aula_num, "Conteúdo Normal",
+                                formato_prof, conteudo_limpo, ano_lab, link_drive, 
+                                params_ativ if tipo_ativ == "📖 Livro Didático" else "", "", "", "TODAS"
+                            ]
+                            
+                            if db.salvar_no_banco("DB_AULAS_PRONTAS", dados_banco):
+                                st.success("✅ Master Doc Arquivado com Sucesso!")
+                                # Limpa a memória do laboratório
+                                for key in ["lab_regular", "lab_pei", "lab_step"]:
+                                    if key in st.session_state: del st.session_state[key]
+                                time.sleep(2)
+                                st.rerun()
 
     # --- ABA B: ENGENHARIA DE AVALIAÇÕES ---
     with tab_avalia:
