@@ -398,131 +398,147 @@ if menu == "🤖 Maestro Dashboard":
         st.session_state.messages.append({"role": "assistant", "content": resposta})
 
 # ==============================================================================
-# MÓDULO: LABORATÓRIO DE MATERIAIS (V23 - ELITE)
+# MÓDULO: LABORATÓRIO DE MATERIAIS V23 (ELITE)
 # ==============================================================================
 elif menu == "🧪 Criador de Aulas":
-    st.header("🔬 Laboratório de Materiais de Elite")
+    st.header("🧪 Laboratório de Materiais Didáticos")
     
-    # Definição das Gavetas para organização no Google Drive
-    GAVETAS = {
-        "Lousa/Slides": "01_Lousa_e_Slides",
-        "Atividades": "02_Atividades_Regulares",
-        "Avaliações": "03_Avaliacoes",
-        "PEI": "04_Materiais_Adaptados"
-    }
+    tab_lab, tab_avulsa, tab_provas, tab_gavetas = st.tabs([
+        "🏫 Aula do Dia", 
+        "🏠 Atividades Avulsas", 
+        "📝 Avaliações", 
+        "🗂️ Gavetas de Materiais"
+    ])
 
-    t_lab, t_hist = st.tabs(["🧪 Criar Material (Nexo Ativo)", "🗂️ Histórico por Gavetas"])
+    # --- FUNÇÃO AUXILIAR DE VERSÃO ---
+    if "v_lab" not in st.session_state: st.session_state.v_lab = 1
 
-    with t_lab:
-        if df_planos.empty:
-            st.warning("⚠️ O Laboratório precisa de um Plano Semanal como base. Crie um primeiro.")
-        else:
-            # 1. SELEÇÃO DO NEXO PEDAGÓGICO (Busca no Banco de Planos)
-            c1, c2 = st.columns([1, 2])
-            ano_l = c1.selectbox("Série Alvo:", [6, 7, 8, 9], key="lab_ano")
+    # --- ABA 1: AULA DO DIA (NEXO COM PLANO) ---
+    with tab_lab:
+        st.subheader("1. Vincular ao Planejamento")
+        c1, c2 = st.columns([1, 2])
+        ano_l = c1.selectbox("Ano:", [6, 7, 8, 9], key="lab_ano")
+        
+        # Busca planos salvos para esta turma
+        planos_disp = df_planos[df_planos['ANO'] == f"{ano_l}º"]['SEMANA'].tolist() if not df_planos.empty else []
+        sem_l = c2.selectbox("Selecione a Semana do Plano:", planos_disp if planos_disp else ["Nenhum plano encontrado"])
+        
+        if planos_disp:
+            plano_ref = df_planos[df_planos['SEMANA'] == sem_l].iloc[0]['PLANO_TEXTO']
             
-            df_f = df_planos[df_planos['ANO'] == f"{ano_l}º"]
-            if not df_f.empty:
-                sel_p = c2.selectbox("Vincular ao Plano Semanal:", df_f['SEMANA'].tolist(), key="lab_sem")
-                
-                # Recupera o plano completo para o contexto da IA
-                plano_full = df_f[df_f['SEMANA'] == sel_p].iloc[0]['PLANO_TEXTO']
-                
-                # Exibe o "Nexo" para o professor confirmar
-                with st.expander("🔗 Nexo Pedagógico Detectado", expanded=False):
-                    st.markdown(f"**Conteúdo:** {ai.extrair_tag(plano_full, 'CONTEUDOS_ESPECIFICOS')}")
-                    st.markdown(f"**Objetivo:** {ai.extrair_tag(plano_full, 'OBJETIVOS_ENSINO')}")
-                    st.caption("A IA usará estes dados para garantir a continuidade didática.")
+            st.info("💡 O Maestro lerá seu planejamento para criar o material.")
+            
+            col1, col2, col3 = st.columns(3)
+            formato = col1.radio("Formato Principal:", ["✍️ Lousa (Docs)", "📊 Slides (Apresentação)"])
+            tipo_atv = col2.radio("Atividade:", ["Quadro", "Livro Didático", "Nenhuma"])
+            usar_livro = col3.multiselect("Usar qual Livro?", df_materiais['NOME_ARQUIVO'].tolist()) if tipo_atv == "Livro Didático" else []
 
-                st.markdown("---")
+            if st.button("🚀 Gerar Material Regular", use_container_width=True):
+                with st.spinner("Compondo material base..."):
+                    # Prepara PDFs se houver livro
+                    partes = []
+                    for n in usar_livro:
+                        uri = df_materiais[df_materiais['NOME_ARQUIVO'] == n]['URI_ARQUIVO'].values[0]
+                        partes.append(types.Part.from_uri(file_uri=uri, mime_type="application/pdf"))
+                    
+                    prompt = f"PLANO DE REFERÊNCIA: {plano_ref}. FORMATO: {formato}. ATIVIDADE: {tipo_atv}. LIVROS: {usar_livro}."
+                    st.session_state.mat_regular = ai.gerar_ia("MESTRE_DE_MATERIAIS", prompt, partes_arquivos=partes)
+                    st.session_state.v_lab += 1
+                    st.rerun()
 
-                # 2. CONFIGURAÇÃO DO MATERIAL
-                col1, col2, col3 = st.columns(3)
-                tipo_mat = col1.selectbox("Tipo de Material:", list(GAVETAS.keys()))
-                foco = col2.radio("Foco da Aula:", ["Aula 1", "Aula 2", "Ambas"], horizontal=True)
-                complexidade = col3.select_slider("Nível de Desafio:", ["Básico", "Intermediário", "Avançado"], value="Intermediário")
+        # --- EXIBIÇÃO E ADAPTAÇÃO ---
+        if "mat_regular" in st.session_state:
+            st.markdown("---")
+            v = st.session_state.v_lab
+            
+            # CHAT DE REFINAMENTO REGULAR
+            st.subheader("🤖 Refinar Material Regular")
+            refine_reg = st.chat_input("Ex: 'Adicione um slide sobre frações', 'Mude a questão 2'...", key=f"chat_reg_{v}")
+            if refine_reg:
+                st.session_state.mat_regular = ai.gerar_ia("MESTRE_DE_MATERIAIS", f"ATUAL: {st.session_state.mat_regular}\nAJUSTE: {refine_reg}")
+                st.rerun()
 
-                orient_extra = st.text_area("Instruções Adicionais (Opcional):", placeholder="Ex: Use exemplos com o preço do cacau em Itabuna...")
-
-                if st.button("🚀 Iniciar Ciclo de Produção V23", use_container_width=True):
-                    with st.spinner("Maestro SOSA processando nexo e gerando materiais..."):
-                        # Construção do Prompt com Contexto Total (Nexo Pedagógico)
-                        prompt_lab = (
-                            f"BASE PEDAGÓGICA (PLANO): {plano_full}\n"
-                            f"TIPO DE MATERIAL: {tipo_mat}\n"
-                            f"FOCO: {foco} | DESAFIO: {complexidade}\n"
-                            f"INSTRUÇÕES EXTRAS: {orient_extra}\n"
-                            f"REGRAS: Se for Slides, gere Script para Gamma/Google. Se for PEI, use DUA."
-                        )
-                        
-                        persona_key = "AVALIADOR" if tipo_mat != "PEI" else "CRIADOR_ADAPTADO"
-                        st.session_state.out_lab = ai.gerar_ia(persona_key, prompt_lab)
-                        st.session_state.v_lab = 1 # Controle de versão para o chat
-
-                # 3. REFINAMENTO E EXPORTAÇÃO
-                if "out_lab" in st.session_state:
-                    st.markdown("### 🛠️ Refinamento e Ajustes")
-                    ajuste = st.chat_input("Deseja mudar algo? (Ex: 'Adicione mais 2 questões')")
-                    if ajuste:
-                        st.session_state.out_lab = ai.gerar_ia("AVALIADOR", f"Material: {st.session_state.out_lab}. Ajuste: {ajuste}")
+            t_reg, t_pei, t_exp = st.tabs(["📄 Material Regular", "♿ Versão Adaptada (PEI)", "📥 EXPORTAR"])
+            
+            with t_reg:
+                txt_reg = ai.extrair_tag(st.session_state.mat_regular, "REGULAR")
+                st.text_area("Conteúdo Regular:", txt_reg, height=400, key=f"area_reg_{v}")
+            
+            with t_pei:
+                if st.button("♿ Gerar Adaptação PEI baseada no Regular", key=f"btn_gen_pei_{v}"):
+                    with st.spinner("Criando versão inclusiva..."):
+                        st.session_state.mat_adaptado = ai.gerar_ia("ARQUITETO_PEI", f"MATERIAL BASE: {txt_reg}")
                         st.rerun()
+                
+                if "mat_adaptado" in st.session_state:
+                    txt_pei = ai.extrair_tag(st.session_state.mat_adaptado, "ADAPTADO")
+                    st.text_area("Conteúdo Adaptado:", txt_pei, height=400, key=f"area_pei_{v}")
 
-                    # Exibição Estruturada (Usa a função que já criamos)
-                    exibir_material_estruturado(st.session_state.out_lab, "lab_v23")
+            with t_exp:
+                st.subheader("🚀 Exportação V23")
+                nome_doc = st.text_input("Título do Arquivo:", value=f"MATERIAL_{ano_l}ANO_{sem_l.split(' ')[1]}", key=f"title_lab_{v}")
+                
+                # Botão Drive com Memória
+                if st.button("☁️ SALVAR NO DRIVE (REGULAR + PEI)", key=f"drive_lab_{v}"):
+                    with st.spinner("Arquivando..."):
+                        # Exporta os dois em um único documento ou separados (aqui faremos juntos)
+                        conteudo_final = f"--- MATERIAL REGULAR ---\n{txt_reg}\n\n--- VERSÃO ADAPTADA (PEI) ---\n{st.session_state.get('mat_adaptado', '')}"
+                        doc_file = exporter.gerar_docx_profissional(nome_doc.upper(), conteudo_final)
+                        link = db.subir_e_converter_para_google_docs(doc_file, nome_doc, categoria="Material de Sala", sub_categoria=formato)
+                        if "https://" in str(link):
+                            db.salvar_link_na_planilha("DB_AULAS_PRONTAS", "CONTEUDO", txt_reg[:50], link)
+                            st.success("✅ Salvo e Vinculado!"); st.link_button("🚀 ABRIR", str(link))
 
-                    # Botão de Salvamento Inteligente (Gavetas + Drive)
-                    if st.button("💾 Finalizar e Arquivar na Gaveta", use_container_width=True):
-                        with st.spinner("Sincronizando com o Drive e Planilha..."):
-                            nome_doc = f"{tipo_mat.upper()}_{ano_l}ANO_{sel_p.split(' ')[1]}"
-                            
-                            # Gera o arquivo DOCX
-                            doc_file = exporter.gerar_docx_profissional(
-                                nome_doc, 
-                                st.session_state.out_lab, 
-                                {"turma": f"{ano_l}º Ano", "trimestre": "I"}
-                            )
-                            
-                            # Sobe para o Drive na Gaveta Correta
-                            trim_atual, _ = util.obter_info_trimestre(date.today())
-                            link_drive = db.subir_e_converter_para_google_docs(
-                                doc_file, 
-                                nome_doc, 
-                                trimestre=trim_atual,
-                                categoria="Material de Sala",
-                                sub_categoria=GAVETAS[tipo_mat]
-                            )
-                            
-                            # Salva no Banco de Dados
-                            db.salvar_no_banco("DB_AULAS_PRONTAS", [
-                                date.today().strftime("%d/%m"),
-                                f"{sel_p} ({foco})",
-                                tipo_mat,
-                                st.session_state.out_lab,
-                                f"{ano_l}º",
-                                link_drive
-                            ])
-                            
-                            st.success(f"✅ Material arquivado na gaveta: {GAVETAS[tipo_mat]}")
-                            st.link_button("🚀 Abrir no Google Docs", str(link_drive))
-                            del st.session_state.out_lab
-                            time.sleep(2)
-                            st.rerun()
-            else:
-                st.warning(f"Nenhum plano encontrado para o {ano_l}º ano.")
+    # --- ABA 2: ATIVIDADES AVULSAS (RESTAURADA) ---
+    with tab_avulsa:
+        st.subheader("🏠 Gerador de Atividades de Reforço")
+        c1, c2 = st.columns([2, 1])
+        tema_av = c1.text_input("Tema da Atividade:", placeholder="Ex: Multiplicação de Decimais")
+        qtd_q = c2.slider("Quantidade de Questões:", 1, 20, 5)
+        
+        if st.button("🔥 Gerar Atividade Avulsa"):
+            with st.spinner("Criando folha de exercícios..."):
+                prompt_av = f"Crie uma atividade sobre {tema_av} com {qtd_q} questões. Use notação Unicode. Gere MARKER_REGULAR e MARKER_GABARITO."
+                st.session_state.mat_avulsa = ai.gerar_ia("MESTRE_DE_MATERIAIS", prompt_av)
+                st.rerun()
+        
+        if "mat_avulsa" in st.session_state:
+            st.text_area("Atividade Gerada:", ai.extrair_tag(st.session_state.mat_avulsa, "REGULAR"), height=300)
+            # Lógica de adaptação e exportação similar à Tab 1...
 
-    with t_hist:
-        st.subheader("🗂️ Consulta de Gavetas")
-        if not df_aulas.empty:
-            f_gaveta = st.selectbox("Escolha a Gaveta:", list(GAVETAS.keys()))
-            df_g = df_aulas[df_aulas['TIPO_MATERIAL'] == f_gaveta]
-            
-            if not df_g.empty:
-                for _, row in df_g.iloc[::-1].iterrows():
-                    with st.expander(f"{row['DATA']} - {row['SEMANA_REF']} ({row['ANO']})"):
-                        st.write(f"**Link Drive:** {row.get('LINK_DRIVE', 'Não vinculado')}")
-                        exibir_material_estruturado(row['CONTEUDO'], f"hist_{_}")
-            else:
-                st.info("Gaveta vazia.")
+    # --- ABA 3: AVALIAÇÕES (INTELIGÊNCIA DE SEMANAS) ---
+    with tab_provas:
+        st.subheader("📝 Gerador de Avaliações por Período")
+        c1, c2, c3 = st.columns(3)
+        ano_p = c1.selectbox("Série:", [6, 7, 8, 9], key="prova_ano")
+        sem_ini = c2.selectbox("Da Semana:", planos_disp)
+        sem_fim = c3.selectbox("Até a Semana:", planos_disp, index=len(planos_disp)-1)
+        
+        if st.button("🎯 Gerar Prova sobre este Período"):
+            with st.spinner("Lendo planos de aula e criando questões..."):
+                # Busca todos os planos no intervalo
+                planos_intervalo = df_planos[(df_planos['ANO'] == f"{ano_p}º") & (df_planos['SEMANA'] >= sem_ini) & (df_planos['SEMANA'] <= sem_fim)]
+                contexto_prova = " ".join(planos_intervalo['PLANO_TEXTO'].tolist())
+                
+                prompt_prova = f"Crie uma AVALIAÇÃO REGULAR baseada nestes planos: {contexto_prova}. Qtd: 10 questões. Use MARKER_REGULAR."
+                st.session_state.mat_prova = ai.gerar_ia("MESTRE_DE_MATERIAIS", prompt_prova)
+                st.rerun()
+
+    # --- ABA 4: GAVETAS DE MATERIAIS (HISTÓRICO ORGANIZADO) ---
+    with tab_gavetas:
+        st.subheader("🗂️ Gestão de Arquivos")
+        gaveta = st.selectbox("Escolha a Gaveta:", ["✍️ Lousa e Slides", "🏠 Atividades Avulsas", "📝 Avaliações"])
+        
+        # Mapeamento de categorias para filtro
+        map_gaveta = {"✍️ Lousa e Slides": "✍️ Lousa (Docs)", "🏠 Atividades Avulsas": "AVULSA", "📝 Avaliações": "Teste"}
+        
+        df_gaveta = df_aulas[df_aulas['TIPO_MATERIAL'].str.contains(map_gaveta[gaveta], na=False)]
+        
+        if not df_gaveta.empty:
+            sel_gav = st.selectbox("Selecione o Material:", df_gaveta['SEMANA_REF'].tolist())
+            # Botões de Editar/Excluir similares ao Planejamento...
+        else:
+            st.info(f"A gaveta de {gaveta} está vazia.")
 
 # ==============================================================================
 # MÓDULO: PLANEJAMENTO (PONTO ID) - ARQUITETURA SUPREMA V21.1 (FIX)
