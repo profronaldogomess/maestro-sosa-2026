@@ -431,3 +431,50 @@ def atualizar_pendencia_aula(semana, aula_num, ano, nova_obs):
                 return True
         return False
     except: return False
+
+def buscar_aula_existente(semana, aula_num, ano):
+    """Verifica se a aula já foi produzida para evitar duplicidade."""
+    # Carrega os dados atuais
+    wb, (_, _, _, _, df_aulas, _, _, _, _, _, _) = carregar_tudo()
+    
+    if df_aulas.empty:
+        return None
+    
+    # Filtro rigoroso para encontrar a aula exata
+    # Nota: Certifique-se que os nomes das colunas no seu Google Sheets 
+    # são: SEMANA_REF, AULA_NUM e ANO
+    try:
+        match = df_aulas[
+            (df_aulas['SEMANA_REF'].astype(str) == str(semana)) & 
+            (df_aulas['AULA_NUM'].astype(str) == str(aula_num)) & 
+            (df_aulas['ANO'].astype(str) == str(ano))
+        ]
+        
+        if not match.empty:
+            return match.iloc[0].to_dict() # Retorna a linha como dicionário
+        return None
+    except Exception as e:
+        print(f"Erro na busca de aula: {e}")
+        return None
+
+def atualizar_pendencia_aula(semana, aula_num, ano, nova_obs):
+    """Atualiza o campo de observação/pendência de uma aula já existente."""
+    try:
+        wb = conectar()
+        if not wb: return False
+        ws = wb.worksheet("DB_AULAS_PRONTAS")
+        dados = ws.get_all_values()
+        
+        # Procura a linha correta (Coluna B=Semana, C=Aula, G=Ano)
+        for i, row in enumerate(dados):
+            if i == 0: continue # Pula cabeçalho
+            if len(row) >= 10:
+                if row[1] == str(semana) and row[2] == str(aula_num) and row[6] == str(ano):
+                    # Atualiza a Coluna J (índice 10)
+                    ws.update_cell(i + 1, 10, nova_obs)
+                    st.cache_data.clear()
+                    return True
+        return False
+    except Exception as e:
+        st.error(f"Erro ao atualizar pendência: {e}")
+        return False
