@@ -420,51 +420,56 @@ elif menu == "🧪 Criador de Aulas":
         c1, c2, c3 = st.columns([1, 2, 1])
         ano_lab = c1.selectbox("Série:", ["6º", "7º", "8º", "9º"], key="lab_ano_v23")
         
-        # Busca semanas planejadas no DB_PLANOS
         semanas_plan = df_planos[df_planos['ANO'] == ano_lab]['SEMANA'].unique().tolist() if not df_planos.empty else []
         
         if not semanas_plan:
-            st.warning("⚠️ Crie o plano primeiro na aba 'Planejamento (Ponto ID)'.")
+            st.warning("⚠️ Crie o plano primeiro na aba 'Planejamento'.")
         else:
             sem_lab = c2.selectbox("Semana do Plano:", semanas_plan, key="lab_sem_v23")
             aula_num = c3.selectbox("Identificador:", ["Aula 1", "Aula 2"], key="lab_aula_v23")
             
-            # --- AUDITORIA E SELEÇÃO DE FOCO (RESOLVENDO SUA DÚVIDA) ---
+            # --- AUDITORIA E LÓGICA HIERÁRQUICA ---
             plano_ref = df_planos[(df_planos['ANO'] == ano_lab) & (df_planos['SEMANA'] == sem_lab)].iloc[0]
             texto_plano = plano_ref['PLANO_TEXTO']
             
-            # Extraímos e limpamos os itens para o Multiselect
+            # 1. Extração de Conteúdos (Preservando a frase completa)
             cont_bruto = ai.extrair_tag(texto_plano, 'CONTEUDOS_ESPECIFICOS')
-            obj_bruto = ai.extrair_tag(texto_plano, 'OBJETIVOS_ENSINO')
-            
-            # Transforma strings em listas (separando por vírgula ou ponto e vírgula)
-            lista_cont = [c.strip() for c in cont_bruto.replace(';', ',').split(',') if c.strip()]
-            lista_obj = [o.strip() for o in obj_bruto.replace(';', ',').split(',') if o.strip()]
+            # Split por quebra de linha ou ponto e vírgula para não cortar frases com vírgula
+            lista_cont_plano = [c.strip() for c in cont_bruto.replace('\n', ';').split(';') if len(c.strip()) > 5]
 
             with st.container(border=True):
-                st.markdown("🔍 **Foco Pedagógico desta Aula:**")
-                st.caption("Selecione quais itens do plano semanal serão tratados nesta aula específica.")
-                foco_cont = st.multiselect("Conteúdos Específicos desta Aula:", lista_cont, default=lista_cont)
-                foco_obj = st.multiselect("Objetivos de Ensino desta Aula:", lista_obj, default=lista_obj)
+                st.markdown("🎯 **Passo 1: Selecione o Conteúdo desta Aula**")
+                foco_cont = st.multiselect("Conteúdos do Plano Semanal:", lista_cont_plano, default=lista_cont_plano)
+                
+                # 2. Lógica de Dependência (Busca Objetivos vinculados aos conteúdos selecionados)
+                # Cruzamos com o df_curriculo para saber quais objetivos pertencem a esses conteúdos
+                objetivos_sugeridos = []
+                if foco_cont and not df_curriculo.empty:
+                    # Filtra no currículo apenas os objetivos dos conteúdos selecionados
+                    filtro_curr = df_curriculo[df_curriculo['CONTEUDO_ESPECIFICO'].isin(foco_cont)]
+                    objetivos_sugeridos = filtro_curr['OBJETIVOS'].unique().tolist()
+                
+                # Se não encontrar no currículo, pega do plano para não travar o sistema
+                if not objetivos_sugeridos:
+                    obj_bruto = ai.extrair_tag(texto_plano, 'OBJETIVOS_ENSINO')
+                    objetivos_sugeridos = [o.strip() for o in obj_bruto.replace('\n', ';').split(';') if len(o.strip()) > 5]
+
+                st.markdown("🎯 **Passo 2: Selecione os Objetivos Vinculados**")
+                foco_obj = st.multiselect("Objetivos de Ensino (Filtrados):", objetivos_sugeridos, default=objetivos_sugeridos)
 
             st.markdown("---")
             col_v1, col_v2 = st.columns(2)
             formato_prof = col_v1.radio("Formato Professor:", ["✍️ Quadro/Lousa", "📊 Slides"], key="lab_formato")
             tipo_ativ = col_v2.radio("Atividade Aluno:", ["📓 Caderno", "📖 Livro Didático", "🚫 Nenhuma"], key="lab_tipo_ativ")
             
-            # --- INICIALIZAÇÃO DE SEGURANÇA (EVITA ERRO DE VARIÁVEL NÃO DEFINIDA) ---
-            pags_livro = ""
-            livro_sel = ""
-            num_q = 5
-            dif_q = "Básica"
-            params_ativ_texto = "Nenhuma atividade específica."
+            # Inicialização de segurança
+            pags_livro = ""; livro_sel = ""; num_q = 5; dif_q = "Básica"; params_ativ_texto = "Nenhuma."
 
             if tipo_ativ == "📓 Caderno":
                 c_cad1, c_cad2 = st.columns(2)
                 num_q = c_cad1.slider("Quantidade de Questões:", 1, 15, 5, key="lab_num_q")
                 dif_q = c_cad2.select_slider("Nível de Dificuldade:", ["Básica", "Intermediária", "Desafio"], key="lab_dif_q")
                 params_ativ_texto = f"Gerar EXATAMENTE {num_q} questões de nível {dif_q}."
-            
             elif tipo_ativ == "📖 Livro Didático":
                 c_liv1, c_liv2 = st.columns(2)
                 lista_livros = df_materiais['NOME_ARQUIVO'].tolist() if not df_materiais.empty else ["Nenhum"]
@@ -474,39 +479,37 @@ elif menu == "🧪 Criador de Aulas":
 
             # BOTÃO DE INÍCIO
             if st.button("🚀 Iniciar Composição do Laboratório", use_container_width=True):
-                with st.spinner("Maestro SOSA aplicando Protocolo de Rigor Numérico..."):
-                    # Prompt Mestre V23: Agora enviamos apenas o FOCO selecionado
-                    prompt_reg = (
-                        f"### ORDEM DE ENGENHARIA PEDAGÓGICA ###\n"
-                        f"CONTEÚDO FOCO: {', '.join(foco_cont)}\n"
-                        f"OBJETIVOS FOCO: {', '.join(foco_obj)}\n"
-                        f"AULA: {aula_num} | FORMATO: {formato_prof}\n"
-                        f"RESTRIÇÃO: {params_ativ_texto}\n\n"
-                        f"INSTRUÇÃO DE SAÍDA: Use MARKERS: TITULO, PROFESSOR, ALUNO, GABARITO, IMAGENS."
-                    )
-                    raw = ai.gerar_ia("AVALIADOR_V23", prompt_reg)
-                    
-                    st.session_state.lab_titulo = ai.extrair_tag(raw, "TITULO")
-                    st.session_state.lab_prof = ai.extrair_tag(raw, "PROFESSOR")
-                    st.session_state.lab_aluno = ai.extrair_tag(raw, "ALUNO")
-                    st.session_state.lab_img = ai.extrair_tag(raw, "IMAGENS")
-                    st.session_state.lab_gab = ai.extrair_tag(raw, "GABARITO")
-                    st.session_state.lab_status = "GERADO"
-                    st.rerun()
+                if not foco_cont or not foco_obj:
+                    st.error("🚨 Erro: Selecione ao menos um Conteúdo e um Objetivo para continuar.")
+                else:
+                    with st.spinner("Maestro SOSA aplicando Rigor Hierárquico..."):
+                        prompt_reg = (
+                            f"### ORDEM DE ENGENHARIA PEDAGÓGICA ###\n"
+                            f"CONTEÚDO SELECIONADO: {'; '.join(foco_cont)}\n"
+                            f"OBJETIVOS SELECIONADOS: {'; '.join(foco_obj)}\n"
+                            f"AULA: {aula_num} | FORMATO: {formato_prof}\n"
+                            f"RESTRIÇÃO: {params_ativ_texto}\n\n"
+                            f"INSTRUÇÃO: Gere Título, Professor, Aluno, Gabarito e Imagens. "
+                            f"Respeite rigorosamente o número de questões e o nível solicitado."
+                        )
+                        raw = ai.gerar_ia("AVALIADOR_V23", prompt_reg)
+                        
+                        st.session_state.lab_titulo = ai.extrair_tag(raw, "TITULO")
+                        st.session_state.lab_prof = ai.extrair_tag(raw, "PROFESSOR")
+                        st.session_state.lab_aluno = ai.extrair_tag(raw, "ALUNO")
+                        st.session_state.lab_img = ai.extrair_tag(raw, "IMAGENS")
+                        st.session_state.lab_gab = ai.extrair_tag(raw, "GABARITO")
+                        st.session_state.lab_status = "GERADO"
+                        st.rerun()
 
             # --- EXIBIÇÃO E REFINAMENTO (SÓ APÓS GERAR) ---
             if st.session_state.get("lab_status") == "GERADO":
                 st.markdown(f"## 🏫 {st.session_state.get('lab_titulo', 'Nova Aula')}")
                 
-                # Chat de Refinamento Cirúrgico
-                comando_refino = st.chat_input("Sugerir mudanças (Ex: 'Adicione 2 exemplos', 'Remova a questão 5')")
+                comando_refino = st.chat_input("Sugerir mudanças cirúrgicas...")
                 if comando_refino:
                     with st.spinner("Realizando cirurgia no material..."):
-                        contexto_edicao = f"""
-                        PROFESSOR ATUAL: {st.session_state.lab_prof}
-                        ALUNO ATUAL: {st.session_state.lab_aluno}
-                        ORDEM: {comando_refino}
-                        """
+                        contexto_edicao = f"PROFESSOR: {st.session_state.lab_prof}\nALUNO: {st.session_state.lab_aluno}\nORDEM: {comando_refino}"
                         raw_novo = ai.gerar_ia("REFINADOR_CIRURGICO", contexto_edicao)
                         
                         novo_prof = ai.extrair_tag(raw_novo, "PROFESSOR")
@@ -515,41 +518,35 @@ elif menu == "🧪 Criador de Aulas":
                         if novo_aluno: st.session_state.lab_aluno = novo_aluno
                         st.rerun()
 
-                # ABAS ORGANIZADAS
-                t_prof, t_aluno, t_img, t_gab, t_pei = st.tabs(["👨‍🏫 Professor (Quadro)", "📝 Aluno (Folha)", "🎨 Imagens/Prompts", "✅ Gabarito", "♿ PEI"])
+                t_prof, t_aluno, t_img, t_gab, t_pei = st.tabs(["👨‍🏫 Professor", "📝 Aluno", "🎨 Imagens", "✅ Gabarito", "♿ PEI"])
                 
                 with t_prof:
-                    st.session_state.lab_prof = st.text_area("Conteúdo do Quadro:", st.session_state.lab_prof, height=400, key="ta_prof_v23")
+                    st.session_state.lab_prof = st.text_area("Quadro:", st.session_state.lab_prof, height=400, key="ta_prof_v23")
                 with t_aluno:
-                    st.session_state.lab_aluno = st.text_area("Material do Aluno:", st.session_state.lab_aluno, height=400, key="ta_aluno_v23")
+                    st.session_state.lab_aluno = st.text_area("Folha:", st.session_state.lab_aluno, height=400, key="ta_aluno_v23")
                 with t_img:
-                    st.subheader("🖼️ Prompts para Geradores de Imagem")
                     st.code(st.session_state.lab_img)
                 with t_gab:
                     st.session_state.lab_gab = st.text_area("Gabarito:", st.session_state.lab_gab, height=200, key="ta_gab_v23")
                 with t_pei:
-                    if st.button("♿ Gerar Versão PEI (Baseada no Aluno)"):
-                        with st.spinner("Adaptando..."):
-                            st.session_state.lab_pei = ai.gerar_ia("PEI_ELITE", st.session_state.lab_aluno)
-                            st.rerun()
+                    if st.button("♿ Gerar PEI"):
+                        st.session_state.lab_pei = ai.gerar_ia("PEI_ELITE", st.session_state.lab_aluno)
+                        st.rerun()
                     if "lab_pei" in st.session_state:
-                        st.session_state.lab_pei = st.text_area("Atividade PEI:", st.session_state.lab_pei, height=400, key="ta_pei_v23")
+                        st.session_state.lab_pei = st.text_area("PEI:", st.session_state.lab_pei, height=400, key="ta_pei_v23")
 
                 st.markdown("---")
-                incluir_quadro = st.checkbox("📄 Incluir conteúdo do quadro na folha impressa do aluno?")
+                incluir_quadro = st.checkbox("📄 Incluir conteúdo do quadro na folha do aluno?")
 
                 if st.button("💾 FINALIZAR E SALVAR MASTER DOC", type="primary", use_container_width=True):
-                    with st.spinner("Sincronizando com Drive..."):
+                    with st.spinner("Sincronizando..."):
                         folha_final = st.session_state.lab_aluno
                         if incluir_quadro:
-                            folha_final = f"RESUMO DA AULA:\n{st.session_state.lab_prof}\n\n---\n{folha_final}"
+                            folha_final = f"RESUMO:\n{st.session_state.lab_prof}\n\n{folha_final}"
                         
                         doc_file = exporter.gerar_docx_laboratorio_v23(
-                            st.session_state.lab_titulo,
-                            st.session_state.lab_prof,
-                            folha_final,
-                            st.session_state.get('lab_pei', ''),
-                            st.session_state.lab_gab,
+                            st.session_state.lab_titulo, st.session_state.lab_prof,
+                            folha_final, st.session_state.get('lab_pei', ''), st.session_state.lab_gab,
                             {"turma": ano_lab, "semana": sem_lab}
                         )
                         
@@ -561,12 +558,10 @@ elif menu == "🧪 Criador de Aulas":
                             ano_lab, link, pags_livro, "", "", "TODAS"
                         ])
                         
-                        st.success("✅ Master Doc Salvo com Sucesso!")
-                        st.session_state.lab_status = "IDLE"
+                        st.success("✅ Salvo!"); st.session_state.lab_status = "IDLE"
                         for key in ["lab_prof", "lab_aluno", "lab_titulo", "lab_img", "lab_gab", "lab_pei"]:
                             if key in st.session_state: del st.session_state[key]
-                        time.sleep(2)
-                        st.rerun()
+                        time.sleep(2); st.rerun()
 
     # --- ABA B: ENGENHARIA DE AVALIAÇÕES ---
     with tab_avalia:
