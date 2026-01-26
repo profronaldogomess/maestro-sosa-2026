@@ -478,29 +478,40 @@ elif menu == "🧪 Criador de Aulas":
                 params_ativ_texto = f"Baseado no livro {livro_sel}, páginas {pags_livro}."
 
             # BOTÃO DE INÍCIO
-            if st.button("🚀 Iniciar Composição do Laboratório", use_container_width=True):
-                if not foco_cont or not foco_obj:
-                    st.error("🚨 Erro: Selecione ao menos um Conteúdo e um Objetivo para continuar.")
-                else:
-                    with st.spinner("Maestro SOSA aplicando Rigor Hierárquico..."):
-                        prompt_reg = (
-                            f"### ORDEM DE ENGENHARIA PEDAGÓGICA ###\n"
-                            f"CONTEÚDO SELECIONADO: {'; '.join(foco_cont)}\n"
-                            f"OBJETIVOS SELECIONADOS: {'; '.join(foco_obj)}\n"
-                            f"AULA: {aula_num} | FORMATO: {formato_prof}\n"
-                            f"RESTRIÇÃO: {params_ativ_texto}\n\n"
-                            f"INSTRUÇÃO: Gere Título, Professor, Aluno, Gabarito e Imagens. "
-                            f"Respeite rigorosamente o número de questões e o nível solicitado."
-                        )
-                        raw = ai.gerar_ia("AVALIADOR_V23", prompt_reg)
-                        
-                        st.session_state.lab_titulo = ai.extrair_tag(raw, "TITULO")
-                        st.session_state.lab_prof = ai.extrair_tag(raw, "PROFESSOR")
-                        st.session_state.lab_aluno = ai.extrair_tag(raw, "ALUNO")
-                        st.session_state.lab_img = ai.extrair_tag(raw, "IMAGENS")
-                        st.session_state.lab_gab = ai.extrair_tag(raw, "GABARITO")
-                        st.session_state.lab_status = "GERADO"
-                        st.rerun()
+        if st.button("🚀 Iniciar Composição do Laboratório", use_container_width=True):
+            with st.spinner("Maestro SOSA compondo material de alta performance..."):
+                # Definição de Nível com foco em QUALIDADE, não em simplicidade
+                desc_dif = {
+                    "Básica": "Foco em fundamentos sólidos, definições claras e exercícios de fixação contextualizados. Evite abstrações excessivas, mas mantenha o tom acadêmico.",
+                    "Intermediária": "Foco em aplicação prática, problemas de lógica e conexão entre diferentes conceitos.",
+                    "Desafio": "Foco em alto nível cognitivo, questões estilo Olimpíadas e análise crítica."
+                }
+                
+                prompt_reg = (
+                    f"### REQUISIÇÃO DE MATERIAL DE ELITE ###\n"
+                    f"TEMA BASE: {texto_plano}\n"
+                    f"FOCO DA AULA: {', '.join(foco_cont)}\n"
+                    f"OBJETIVOS: {', '.join(foco_obj)}\n"
+                    f"FORMATO: {formato_prof} | TIPO: {tipo_ativ}\n"
+                    f"QUANTIDADE: {num_q} questões | NÍVEL: {desc_dif[dif_q]}\n\n"
+                    f"INSTRUÇÕES DE COMPOSIÇÃO:\n"
+                    f"1. MARKER_TITULO: Crie um título impactante para a aula.\n"
+                    f"2. MARKER_PROFESSOR: Redija um resumo de quadro completo e um roteiro de fala para o professor. Inclua exemplos resolvidos.\n"
+                    f"3. MARKER_ALUNO: Elabore {num_q} questões de alta qualidade. Use nomes de lugares de Itabuna ou situações do cotidiano baiano para contextualizar.\n"
+                    f"4. MARKER_GABARITO: Respostas comentadas.\n"
+                    f"5. MARKER_IMAGENS: Prompts visuais para o tema."
+                )
+                
+                raw = ai.gerar_ia("AVALIADOR_V23", prompt_reg)
+                
+                # Fatiamento e Armazenamento
+                st.session_state.lab_titulo = ai.extrair_tag(raw, "TITULO")
+                st.session_state.lab_prof = ai.extrair_tag(raw, "PROFESSOR")
+                st.session_state.lab_aluno = ai.extrair_tag(raw, "ALUNO")
+                st.session_state.lab_img = ai.extrair_tag(raw, "IMAGENS")
+                st.session_state.lab_gab = ai.extrair_tag(raw, "GABARITO")
+                st.session_state.lab_status = "GERADO"
+                st.rerun()
 
             # --- EXIBIÇÃO E REFINAMENTO (SÓ APÓS GERAR) ---
             if st.session_state.get("lab_status") == "GERADO":
