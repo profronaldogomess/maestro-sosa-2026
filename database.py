@@ -300,9 +300,8 @@ import base64
 import requests
 import base64
 
-def subir_e_converter_para_google_docs(file_stream, nome_arquivo, trimestre="I Trimestre", categoria="Material de Sala", sub_categoria=""):
+def subir_e_converter_para_google_docs(file_stream, nome_arquivo, trimestre="I Trimestre", categoria="Material de Sala", semana="Semana Geral", aula="Aula Geral"):
     try:
-        # COLE AQUI A SUA NOVA URL DO SCRIPT
         URL_DA_PONTE = "https://script.google.com/macros/s/AKfycby6JpIPHk6vlCfQSms-wxLcRmUNNw6yVOf6qkBnEuTrco2bVFw8Apl9m0wqTIlOcw01_w/exec"
         
         file_stream.seek(0)
@@ -312,16 +311,15 @@ def subir_e_converter_para_google_docs(file_stream, nome_arquivo, trimestre="I T
             "fileName": nome_arquivo,
             "trimestre": trimestre,
             "categoria": categoria,
-            "subCategoria": sub_categoria,
+            "semanaRef": semana, # Novo campo
+            "aulaRef": aula,     # Novo campo
             "fileB64": file_b64
         }
         
-        response = requests.post(URL_DA_PONTE, json=payload, timeout=30)
-        # O .strip() remove espaços ou quebras de linha invisíveis
+        response = requests.post(URL_DA_PONTE, json=payload, timeout=60)
         return response.text.strip()
     except Exception as e:
         return f"Erro de Conexão: {e}"
-
     
 def limpar_todo_drive_da_conta_servico():
     try:
