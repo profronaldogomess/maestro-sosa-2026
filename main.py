@@ -606,39 +606,36 @@ elif menu == "📅 Planejamento (Ponto ID)":
         opcoes_semana = semanas_disponiveis if semanas_disponiveis else ["✅ Todas planejadas!"]
         sem_p = col_cfg2.selectbox("Selecione a Semana Livre:", opcoes_semana, key="v23_sem_sel", on_change=reset_plano)
         
+        # --- NOVO BLOCO DE CURADORIA NO MAIN.PY ---
         if "✅" not in sem_p:
+            st.markdown("---")
+            st.subheader("🎯 Filtro de Precisão Curricular")
+            st.caption("Selecione os itens exatos do banco para garantir a atualização dos gráficos.")
+            
+            df_f = df_curriculo[df_curriculo['ANO'] == ano_p]
+            
+            c_f1, c_f2 = st.columns(2)
+            eixo_sel = c_f1.selectbox("Eixo Temático:", df_f['EIXO'].unique())
+            
+            # O segredo está aqui: o senhor escolhe o que vai para o gráfico
+            cont_esp_manual = st.multiselect(
+                "Conteúdos (Fiel ao Banco):", 
+                options=df_f[df_f['EIXO'] == eixo_sel]['CONTEUDO_ESPECIFICO'].unique()
+            )
+            
+            objs_manual = st.multiselect(
+                "Objetivos (Fiel ao Banco):", 
+                options=df_f[df_f['CONTEUDO_ESPECIFICO'].isin(cont_esp_manual)]['OBJETIVOS'].unique()
+            )
+
             modo_p = st.radio("Método de Elaboração:", ["🎛️ Manual (Banco de Dados)", "📖 Livro Didático"], horizontal=True)
             
-            if modo_p == "🎛️ Manual (Banco de Dados)":
-                df_f = df_curriculo[df_curriculo['ANO'] == ano_p] if not df_curriculo.empty else pd.DataFrame()
-                if not df_f.empty:
-                    st.markdown("### 🎯 Curadoria Curricular (Filtro de Precisão)")
-                    st.caption("Selecione abaixo os itens exatos do banco para garantir o Mapa de Cobertura.")
-                    
-                    c1, c2 = st.columns(2)
-                    # O seletor agora fica disponível para os dois métodos (Livro ou Manual)
-                    eixo_manual = c1.selectbox("Filtrar Eixo:", df_f['EIXO'].unique(), key="filtro_eixo_v25")
-                    
-                    # Busca automática: Se for método livro, a IA sugere, mas o senhor valida aqui
-                    cont_esp_validado = st.multiselect(
-                        "Conteúdos (Fiel ao Banco):", 
-                        options=df_f[df_f['EIXO'] == eixo_manual]['CONTEUDO_ESPECIFICO'].unique(),
-                        key="v25_cont_validado"
-                    )
-                    
-                    objs_validados = st.multiselect(
-                        "Objetivos (Fiel ao Banco):", 
-                        options=df_f[df_f['CONTEUDO_ESPECIFICO'].isin(cont_esp_validado)]['OBJETIVOS'].unique(),
-                        key="v25_obj_validado"
-                    )
-
-                    # O prompt agora envia o que o senhor FILTROU manualmente
-                    ctx_fiel = f"EIXO: {eixo_manual}\nCONTEÚDO SELECIONADO: {', '.join(cont_esp_validado)}\nOBJETIVOS SELECIONADOS: {', '.join(objs_validados)}"
-                else: st.error("Base curricular não encontrada.")
-            else:
+            if modo_p == "📖 Livro Didático":
                 sel_mat = st.multiselect("Selecione o Livro:", df_materiais['NOME_ARQUIVO'].tolist())
                 pags = st.text_input("Páginas de Referência:")
-                ctx_fiel = f"LIVRO: {sel_mat} | PÁGINAS: {pags}"
+                ctx_fiel = f"LIVRO: {sel_mat} | PÁGINAS: {pags} | CONTEÚDOS SELECIONADOS: {cont_esp_manual} | OBJETIVOS SELECIONADOS: {objs_manual}"
+            else:
+                ctx_fiel = f"EIXO: {eixo_sel} | CONTEÚDOS SELECIONADOS: {cont_esp_manual} | OBJETIVOS SELECIONADOS: {objs_manual}"
 
             strat = st.text_area("Sua Estratégia/Observação Inicial:", placeholder="Ex: Aula expositiva...")
 
