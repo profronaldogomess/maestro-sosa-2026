@@ -6,6 +6,7 @@ import os
 import requests
 import base64
 from datetime import datetime
+from googleapiclient.discovery import build
 
 def conectar():
     try:
@@ -21,6 +22,14 @@ def conectar():
         else:
             st.error(f"Erro de Conexão: {e}")
         return None
+
+def obter_creds_drive():
+    """Retorna as credenciais para uso direto com a API do Google Drive."""
+    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+    if os.path.exists("credentials.json"):
+        return service_account.Credentials.from_service_account_file("credentials.json", scopes=scope)
+    else:
+        return service_account.Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
 
 def limpar_id(valor):
     if pd.isna(valor) or valor == "": return ""
@@ -44,13 +53,13 @@ def carregar_tudo():
             df.columns = [str(c).strip().upper() for c in df.columns]
             
             if nome == "DB_AULAS_PRONTAS":
-                # Remove linhas onde as colunas principais estão vazias (limpeza de offset)
                 df = df.dropna(subset=["DATA", "SEMANA_REF"], how="all")
                 if "LINK_DRIVE" not in df.columns: df["LINK_DRIVE"] = ""
 
             elif nome == "DB_PLANOS":
                 if "ANO" in df.columns:
                     df['ANO'] = df['ANO'].astype(str).apply(lambda x: f"{x}º" if x.isdigit() and "º" not in x else x)
+                if "LINK_DRIVE" not in df.columns: df["LINK_DRIVE"] = ""
 
             return df
         except: return pd.DataFrame(columns=colunas_padrao)
@@ -76,13 +85,8 @@ def salvar_no_banco(aba_nome, linha):
         wb = conectar()
         if not wb: return False
         ws = wb.worksheet(aba_nome)
-        
-        # Garante que a linha seja gravada como uma lista de strings limpas
         linha_str = [str(x).strip() for x in linha]
-        
-        # Força a gravação na primeira coluna disponível para evitar o deslocamento (Offset)
         ws.append_row(linha_str, value_input_option="USER_ENTERED", insert_data_option="INSERT_ROWS")
-        
         st.cache_data.clear() 
         return True
     except Exception as e:
@@ -188,6 +192,18 @@ def subir_e_converter_para_google_docs(file_stream, nome_arquivo, trimestre="I T
         return response.text.strip()
     except Exception as e: return f"Erro: {e}"
 
+def limpar_todo_drive_da_conta_servico():
+    try:
+        creds = obter_creds_drive()
+        service = build('drive', 'v3', credentials=creds)
+        results = service.files().list(q="'me' in owners", fields="files(id, name)").execute()
+        items = results.get('files', [])
+        if not items: return "A conta de serviço já está vazia."
+        for item in items: service.files().delete(fileId=item['id']).execute()
+        service.files().emptyTrash().execute()
+        return f"Sucesso! {len(items)} arquivos apagados."
+    except Exception as e: return f"Erro na limpeza: {e}"
+
 def salvar_link_na_planilha(aba_nome, coluna_busca, valor_busca, link_drive):
     try:
         wb = conectar()
@@ -229,3 +245,30 @@ def excluir_plano_total(semana, ano):
                 return True
         return False
     except: return False
+
+def extrair_id_da_url(url):
+    import re
+    match = re.search(r"/d/(.*?)/", url)
+    return match.group(1) if match else None
+
+def excluir_registro_com_drive(aba_nome, valor_conteudo):
+    try:
+        wb = conectar()
+        ws = wb.worksheet(aba_nome)
+        dados = ws.get_all_values()
+        creds = obter_creds_drive()
+        service = build('drive', 'v3', credentials=creds)
+        for i, row in enumerate(dados):
+            if len(row) > 3 and row[3] == valor_conteudo:
+                import re
+                links = re.findall(r"https://docs\.google\.com/document/d/([a-zA-Z0-9-_]+)", row[3])
+                for file_id in links:
+                    try: service.files().delete(fileId=file_id).execute()
+                    except: pass
+                ws.delete_rows(i + 1)
+                st.cache_data.clear()
+                return True
+        return False
+    except Exception as e:
+        st.error(f"Erro na exclusão total: {e}")
+        return False
