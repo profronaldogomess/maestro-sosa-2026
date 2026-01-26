@@ -503,11 +503,35 @@ elif menu == "🧪 Criador de Aulas":
             with t_alu:
                 ed_alu = st.text_area("Folha Aluno:", limpar_v24(ai.extrair_tag(txt_lab, "ALUNO"), "ALUNO"), height=400, key=f"ed_alu_{v}")
             with t_pei:
-                if st.button("♿ Gerar Engenharia PEI"):
-                    with st.spinner("Adaptando..."):
-                        st.session_state.lab_pei = ai.gerar_ia("ARQUITETO_PEI_V24", f"MATERIAL ALUNO: {ed_alu}")
+                st.info("♿ A Engenharia PEI reduz a carga de trabalho pela metade (Máx 5 questões).")
+                if st.button("♿ Gerar Engenharia PEI V24"):
+                    with st.spinner("Calculando redução e fracionando problemas..."):
+                        # LÓGICA DE CONTAGEM MAESTRO
+                        import re
+                        # Conta quantas vezes aparece "Questão" ou "Atividade" no texto do aluno
+                        questoes_encontradas = re.findall(r'(?i)Questão\s*\d+|Atividade\s*\d+', ed_alu)
+                        num_original = len(questoes_encontradas) if questoes_encontradas else 4
+                        
+                        # Define a meta: Metade do original, no máximo 5
+                        meta_pei = max(1, num_original // 2)
+                        if meta_pei > 5: meta_pei = 5
+                        
+                        prompt_pei = (
+                            f"ORDEM DE CORTE: O material original tem {num_original} questões. "
+                            f"Você deve gerar uma folha independente com EXATAMENTE {meta_pei} QUESTÕES ADAPTADAS.\n\n"
+                            f"MATERIAL BASE DO ALUNO REGULAR:\n{ed_alu}\n\n"
+                            f"REGRA: Escolha as {meta_pei} questões mais importantes. "
+                            f"Não use o livro, crie o texto completo para o aluno responder na folha."
+                        )
+                        
+                        st.session_state.lab_pei = ai.gerar_ia("ARQUITETO_PEI_V24", prompt_pei)
                         st.rerun()
-                ed_pei = st.text_area("Versão Adaptada:", limpar_v24(ai.extrair_tag(st.session_state.get('lab_pei',''), "PEI"), "PEI"), height=400, key=f"ed_pei_{v}")
+                
+                if "lab_pei" in st.session_state:
+                    # Exibe o texto com a Prensa Hidráulica para limpar títulos
+                    ed_pei = st.text_area("Versão Adaptada (Reduzida):", limpar_v24(ai.extrair_tag(st.session_state.lab_pei, "PEI"), "PEI"), height=400, key=f"ed_pei_v24_{v}")
+                else:
+                    ed_pei = ""
 
             with t_exp:
                 st.subheader("📥 Downloads e Nuvem")
