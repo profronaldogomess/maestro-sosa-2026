@@ -602,14 +602,13 @@ elif menu == "🧪 Criador de Aulas":
                 if "lab_pei" in st.session_state: del st.session_state.lab_pei
                 st.rerun()
 
-# --- ABA 2: GAVETAS DE MATERIAIS (REESTRUTURADA V25) ---
+    # --- ABA 2: GAVETAS DE MATERIAIS (REESTRUTURADA V25.3) ---
     with tab_gavetas:
         st.subheader("🗂️ Gestão de Materiais Produzidos")
         
         if df_aulas.empty:
             st.info("📭 Nenhuma aula produzida no banco de dados.")
         else:
-            # Filtros de Organização
             c_gav1, c_gav2 = st.columns(2)
             ano_gav = c_gav2.selectbox("Filtrar por Ano:", ["Todos", "6º", "7º", "8º", "9º"], key="gav_ano_v25")
             
@@ -618,51 +617,61 @@ elif menu == "🧪 Criador de Aulas":
                 df_g = df_g[df_g['ANO'].str.contains(ano_gav, na=False)]
             
             if not df_g.empty:
-                # Inverte para mostrar os mais recentes primeiro
                 for _, row in df_g.iloc[::-1].iterrows():
+                    # Identifica se é Aula 1 ou Aula 2 pelo TIPO_MATERIAL
+                    tipo = str(row['TIPO_MATERIAL']).upper()
+                    cor_borda = "#2962FF" if "AULA 1" in tipo else "#00C853"
+                    
                     with st.container(border=True):
-                        # Cabeçalho da Aula
-                        col_h1, col_h2 = st.columns([3, 1])
-                        col_h1.markdown(f"📅 {row['DATA']} ÷ {row['SEMANA_REF']} ÷ {row['ANO']}")
+                        # Cabeçalho com Identificação Clara da Aula
+                        st.markdown(f"<div style='border-left: 5px solid {cor_borda}; padding-left: 10px;'>"
+                                    f"<b>{row['SEMANA_REF']} — {row['TIPO_MATERIAL']}</b><br>"
+                                    f"<small>📅 {row['DATA']} | 🎓 {row['ANO']}</small></div>", unsafe_allow_html=True)
                         
-                        # Extração de Links via Regex para garantir precisão
                         import re
                         texto_cont = str(row['CONTEUDO'])
                         link_alu = re.search(r"Aluno\((.*?)\)", texto_cont)
                         link_prof = re.search(r"Prof\((.*?)\)", texto_cont)
                         link_pei = re.search(r"PEI\((.*?)\)", texto_cont)
 
-                        # Grade de Ações
+                        st.write("")
                         c1, c2, c3, c4 = st.columns(4)
                         
                         # Botão Aluno
                         if link_alu and "https" in link_alu.group(1):
                             c1.link_button("📝 ABRIR ALUNO", link_alu.group(1), use_container_width=True)
-                        else:
-                            c1.button("📝 ALUNO N/A", disabled=True, use_container_width=True)
-                            
-                        # Botão Professor
+                        
+                        # Botão Professor (Se for Slides, vira "Roteiro")
+                        label_prof = "📜 ROTEIRO SLIDES" if "SLIDES" in texto_cont.upper() else "👨‍🏫 ABRIR GUIA"
                         if link_prof and "https" in link_prof.group(1):
-                            c2.link_button("👨‍🏫 ABRIR GUIA", link_prof.group(1), use_container_width=True)
-                        else:
-                            c2.button("👨‍🏫 GUIA N/A", disabled=True, use_container_width=True)
-                            
+                            c2.link_button(label_prof, link_prof.group(1), use_container_width=True)
+                        
                         # Botão PEI
                         if link_pei and "https" in link_pei.group(1):
                             c3.link_button("♿ ABRIR PEI", link_pei.group(1), use_container_width=True)
-                        else:
-                            c3.button("♿ PEI N/A", disabled=True, use_container_width=True)
-                            
-                        # Botão Excluir (Rigor de Segurança)
+                        
+                        # Botão Excluir Total
                         if c4.button("🗑️ APAGAR", key=f"del_v25_{row.name}", use_container_width=True):
                             with st.spinner("Limpando Drive e Banco..."):
-                                # Chamada da nova função que apaga TUDO
                                 if db.excluir_registro_com_drive("DB_AULAS_PRONTAS", row['CONTEUDO']):
-                                    st.success("Removido com sucesso!")
+                                    st.success("Removido!")
                                     time.sleep(0.5)
                                     st.rerun()
+
+                        # --- NOVO: VÍNCULO DE APRESENTAÇÃO ---
+                        if "SLIDES" in texto_cont.upper():
+                            with st.expander("🔗 Vincular Google Apresentação (Slides)"):
+                                link_atual = row.get('LINK_DRIVE', "")
+                                # Se o link salvo for o do Aluno (Doc), permite trocar pelo do Slides
+                                novo_link_slides = st.text_input("Cole aqui o link do Google Slides gerado pelo Gemini:", 
+                                                                value=link_atual if "presentation" in str(link_atual) else "",
+                                                                key=f"link_slide_{row.name}")
+                                if st.button("💾 Salvar Link do Slides", key=f"btn_save_slide_{row.name}"):
+                                    if db.salvar_link_na_planilha("DB_AULAS_PRONTAS", "CONTEUDO", row['CONTEUDO'], novo_link_slides):
+                                        st.success("Link da Apresentação vinculado!")
+                                        st.rerun()
             else:
-                st.warning("Nenhum material encontrado para os filtros selecionados.")
+                st.warning("Nenhum material encontrado.")
                             
 
 # ==============================================================================
