@@ -213,12 +213,21 @@ def exibir_material_estruturado(texto_raw, key_prefix, dados_plano=None, info_au
         
         # Lógica de decisão de formato para o Professor
         if formato == "Slides (Apresentação)":
-            doc_prof_final = exporter.gerar_pptx_v24(f"{nome_base}_PROF", ed_prof)
-            ext_prof = ".pptx"
             with st.container(border=True):
-                st.markdown("### 🤖 Super Prompt para Gemini Slides")
-                super_prompt = f"Crie uma apresentação de slides profissional sobre {sel_cont}. Use a Metodologia Nova Escola com esta estrutura: {ed_prof}. Estilo: Moderno e focado em Matemática."
-                st.text_area("Comando Master:", super_prompt, height=150)
+                st.markdown("### 🤖 Super Comando de Design (Gemini Workspace)")
+                st.caption("Abra o arquivo gerado no Google Slides, clique no Gemini e cole este comando:")
+                
+                # Este comando foca em transformar a estrutura existente em design
+                super_prompt = (
+                    f"Atue como um Designer Instrucional Senior. "
+                    f"REFORMATE esta apresentação sobre {sel_cont} utilizando um tema moderno, acadêmico e tecnológico. "
+                    f"Para cada slide: 1. Aplique um layout visual impactante; "
+                    f"2. Gere uma imagem fotorealista ou infográfico técnico baseado no campo PROMPT IMAGEN 4 de cada slide; "
+                    f"3. Mantenha os textos curtos e organize os tópicos; "
+                    f"4. Certifique-se de que o SCRIPT DO PROFESSOR permaneça nas notas do orador. "
+                    f"O objetivo é uma aula de alta performance para o {ano_lab}º ano."
+                )
+                st.text_area("Comando Master:", super_prompt, height=180)
         else:
             doc_prof_final = exporter.gerar_docx_professor_v24(nome_base, ed_prof, {"ano": f"{ano_lab}º", "semana": sem_lab})
             ext_prof = ".docx"
