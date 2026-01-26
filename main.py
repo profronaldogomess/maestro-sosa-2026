@@ -408,25 +408,10 @@ elif menu == "🧪 Criador de Aulas":
 
     # Função de Limpeza V24
     def limpar_v24(texto, label):
-            if not texto: return ""
-            # 1. Remove a Tag do sistema (ex: [ALUNO])
-            t = texto.replace(f"[{label}]", "").replace(label.upper(), "").replace(label.lower(), "").strip()
-            
-            # 2. PRENSA DE CABEÇALHO: Remove linhas típicas de cabeçalho manual
-            linhas = t.split('\n')
-            linhas_limpas = []
-            termos_proibidos = ["ESCOLA:", "ALUNO:", "ESTUDANTE:", "DATA:", "TURMA:", "PROFESSOR:", "PROF.:", "---"]
-            
-            for linha in linhas:
-                # Se a linha começar com um termo proibido ou for apenas traços, ignora
-                if any(linha.upper().startswith(termo) for termo in termos_proibidos):
-                    continue
-                linhas_limpas.append(linha)
-            
-            resultado = "\n".join(linhas_limpas).strip()
-            if resultado.startswith(":") or resultado.startswith(" :"): 
-                resultado = resultado[1:].strip()
-            return resultado
+        if not texto: return ""
+        t = texto.replace(label, "").replace(label.upper(), "").replace(label.lower(), "").strip()
+        if t.startswith(":") or t.startswith(" :"): t = t[1:].strip()
+        return t
 
     if "v_lab" not in st.session_state: st.session_state.v_lab = 1
 
