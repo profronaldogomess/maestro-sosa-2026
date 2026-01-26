@@ -466,14 +466,20 @@ elif menu == "🧪 Criador de Aulas":
                 ctx_extra = c_font2.text_area("Instruções:", placeholder="Ex: Use exemplos com cacau...")
 
             if st.button("🚀 COMPILAR MATERIAL DA " + aula_num.upper(), use_container_width=True, type="primary"):
-                with st.spinner("IA executando Protocolo de Choque..."):
-                    prompt_v24 = (f"GERAR MATERIAL PARA {ano_lab}º ANO, {sem_lab}, {aula_num}.\n"
-                                 f"CONTEÚDOS: {sel_cont}\nOBJETIVOS: {sel_obj}\n"
-                                 f"FORMATO: {formato}\nQUANTIDADE: {qtd_q} questões.\n"
-                                 f"NÍVEL: {nivel}\nCONTEXTO: {ctx_extra}")
-                    st.session_state.lab_temp = ai.gerar_ia("MESTRE_V24", prompt_v24)
-                    st.session_state.v_lab = 1
-                    st.rerun()
+                if not sel_cont:
+                    st.error("Selecione ao menos um conteúdo.")
+                else:
+                    with st.spinner("IA executando Protocolo de Choque..."):
+                        # REFORÇO DE COMANDO V24.3
+                        prompt_v24 = (f"ORDEM DE ENGENHARIA: GERAR EXATAMENTE {qtd_q} QUESTÕES. "
+                                     f"NÃO ULTRAPASSE O LIMITE DE {qtd_q}.\n\n"
+                                     f"ANO: {ano_lab}º, SEMANA: {sem_lab}, {aula_num}.\n"
+                                     f"CONTEÚDOS: {sel_cont}\nOBJETIVOS: {sel_obj}\n"
+                                     f"FORMATO: {formato}\nNÍVEL: {nivel}.\n"
+                                     f"CONTEXTO: {ctx_extra}")
+                        st.session_state.lab_temp = ai.gerar_ia("MESTRE_V24", prompt_v24)
+                        st.session_state.v_lab = 1
+                        st.rerun()
 
         # --- PASSO 3: LABORATÓRIO DE EDIÇÃO DINÂMICO (COM REFINAMENTO CORRIGIDO) ---
         if "lab_temp" in st.session_state:
