@@ -449,7 +449,7 @@ if menu == "🤖 Maestro Dashboard":
         st.session_state.messages.append({"role": "assistant", "content": resposta})
 
 # ==============================================================================
-# MÓDULO: LABORATÓRIO DE MATERIAIS V25.17 (CONSOLIDAÇÃO MULTIMODAL COMPLETA)
+# MÓDULO: LABORATÓRIO DE MATERIAIS V25.18 (HUB DE DESIGN E ORIENTAÇÃO)
 # ==============================================================================
 elif menu == "🧪 Criador de Aulas":
     st.header("🧪 Laboratório de Materiais (V24)")
@@ -471,7 +471,6 @@ elif menu == "🧪 Criador de Aulas":
             sem_lab = c2.selectbox("Semana:", planos_ano['SEMANA'].tolist(), key="lab_sem_v24")
             aula_num = c3.radio("Foco:", ["Aula 1", "Aula 2"], horizontal=True)
             
-            # RECUPERAÇÃO E DIAGNÓSTICO DO PLANO
             plano_raw = planos_ano[planos_ano['SEMANA'] == sem_lab].iloc[0]['PLANO_TEXTO']
             diag = ai.realizar_diagnostico_v25(plano_raw, df_curriculo, ano_lab)
 
@@ -485,7 +484,6 @@ elif menu == "🧪 Criador de Aulas":
                     st.caption(f"Conteúdo: {diag['conteudo_literal']}")
                     st.caption(f"Objetivo: {diag['objetivo_literal']}")
 
-            # FILTRAGEM DE CONTEÚDOS E OBJETIVOS
             df_base_ano = df_curriculo[df_curriculo['ANO'] == int(ano_lab)]
             cont_no_plano = diag['conteudo_literal'].upper().strip()
             opcoes_conteudo = [c for c in df_base_ano['CONTEUDO_ESPECIFICO'].unique() if str(c).upper().strip() in cont_no_plano or cont_no_plano in str(c).upper().strip()]
@@ -544,7 +542,15 @@ elif menu == "🧪 Criador de Aulas":
             
             with t_prof:
                 if formato == "Slides (Apresentação)":
-                    st.subheader("📺 Estrutura da Apresentação")
+                    st.subheader("📺 Estrutura da Apresentação (Nova Escola)")
+                    # GUIA DE ORIENTAÇÃO PARA O PROFESSOR
+                    with st.container(border=True):
+                        st.markdown("### 📖 Guia de Execução dos Slides")
+                        st.write("1. Vá na aba 🎨 **Imagens** e copie o **Comando Master**.")
+                        st.write("2. Abra o arquivo gerado no Google Slides.")
+                        st.write("3. Use o Gemini (Help me organize) para aplicar o design.")
+                        st.write("4. Os textos abaixo são para sua conferência pedagógica.")
+                    
                     import re
                     slides = re.findall(r"\[SLIDE.*?\](.*?)(?=\[SLIDE|$)", ed_prof, re.DOTALL)
                     if slides:
@@ -580,10 +586,24 @@ elif menu == "🧪 Criador de Aulas":
                     st.write("Clique no botão acima para gerar a versão adaptada.")
 
             with t_img:
-                st.subheader("🎨 Engenharia de Prompts (Imagen 4)")
+                st.subheader("🎨 Hub de Engenharia Visual")
+                
+                # COMANDO MASTER PARA SLIDES (MOVIDO PARA CÁ)
+                if formato == "Slides (Apresentação)":
+                    with st.container(border=True):
+                        st.markdown("### 🤖 Comando Master para Gemini Slides")
+                        st.caption("Copie e cole no Gemini do Google Workspace para criar o design automaticamente.")
+                        super_prompt = (
+                            f"Atue como Designer Instrucional Senior. REFORMATE esta apresentação sobre {sel_cont} "
+                            f"usando um tema moderno e tecnológico. Estrutura: {ed_prof}. "
+                            f"Gere imagens educativas para cada slide e mantenha o SCRIPT DO PROFESSOR nas notas."
+                        )
+                        st.code(super_prompt, language="text")
+                
                 if ed_img_reg:
-                    st.markdown("#### 👨‍🏫 Material Regular")
+                    st.markdown("#### 👨‍🏫 Prompts para Imagen 4 (Material Regular)")
                     st.code(ed_img_reg, language="text")
+                
                 if "lab_pei" in st.session_state:
                     ed_img_pei = ai.extrair_tag(st.session_state.lab_pei, "IMAGENS_PEI")
                     if ed_img_pei:
@@ -599,10 +619,6 @@ elif menu == "🧪 Criador de Aulas":
                 if formato == "Slides (Apresentação)":
                     doc_prof_final = exporter.gerar_pptx_v24(f"{nome_base}_PROF", ed_prof)
                     ext_prof = ".pptx"
-                    with st.container(border=True):
-                        st.markdown("### 🤖 Super Comando Gemini Slides")
-                        super_prompt = f"Atue como Designer Instrucional. REFORMATE esta apresentação sobre {sel_cont} usando um tema moderno. Estrutura: {ed_prof}. Mantenha o SCRIPT DO PROFESSOR nas notas."
-                        st.text_area("Comando Master:", super_prompt, height=150)
                 else:
                     doc_prof_final = exporter.gerar_docx_professor_v24(nome_base, ed_prof, {"ano": f"{ano_lab}º", "semana": sem_lab})
                     ext_prof = ".docx"
@@ -611,7 +627,7 @@ elif menu == "🧪 Criador de Aulas":
                 with c_master1:
                     st.markdown("### ☁️ Nuvem")
                     if st.button("🚀 SALVAR TUDO NO DRIVE E BANCO", use_container_width=True, type="primary"):
-                        with st.spinner("Sincronizando pacote completo e preservando inteligência visual..."):
+                        with st.spinner("Sincronizando pacote completo..."):
                             link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{nome_base}_ALUNO.docx", semana=sem_lab, aula=aula_num)
                             link_prof = db.subir_e_converter_para_google_docs(doc_prof_final, f"{nome_base}_PROF{ext_prof}", semana=sem_lab, aula=aula_num)
                             
@@ -622,7 +638,6 @@ elif menu == "🧪 Criador de Aulas":
                                 link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_base}_PEI.docx", semana=sem_lab, aula=aula_num)
                                 ed_img_pei = ai.extrair_tag(st.session_state.lab_pei, "IMAGENS_PEI")
                             
-                            # PRESERVAÇÃO TOTAL NO BANCO
                             roteiro_preservado = (
                                 f"MARKER_ROTEIRO_PROF\n{ed_prof}\n\n"
                                 f"MARKER_PROMPTS_REGULAR\n{ed_img_reg}\n\n"
