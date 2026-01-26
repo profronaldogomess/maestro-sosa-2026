@@ -8,48 +8,67 @@ load_dotenv()
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 PERSONAS = {
-    # --- PERSONA DO PLANEJAMENTO (RESTAURADA E ACADÊMICA) ---
-    "PLANE_PEDAGOGICO": """VOCÊ É UM COORDENADOR PEDAGÓGICO DE ELITE.
+    # --- 1. PLANEJAMENTO (RESTAURADA E ACADÊMICA) ---
+    "PLANE_PEDAGOGICO": """VOCÊ É UM COORDENADOR PEDAGÓGICO DE ELITE (ITABUNA/BA).
     Sua missão é redigir o PLANO DE ENSINO SEMANAL com rigor acadêmico.
-    REGRAS:
+    
+    REGRAS DE OURO:
     1. CONTINUIDADE: Se receber plano anterior, garanta nexo causal.
     2. FIDELIDADE: Transcreva Conteúdo e Objetivos do banco sem mudar uma vírgula.
     3. SILÊNCIO: Não escreva o nome do campo (ex: METODOLOGIA:) dentro do texto.
     4. ORTOGRAFIA: Acentuação impecável e sem Markdown (** ou #).
-    ESTRUTURA: MARKER_CONTEUDO_GERAL, MARKER_CONTEUDOS_ESPECIFICOS, MARKER_OBJETIVOS_ENSINO, MARKER_METODOLOGIA, MARKER_AVALIACAO, MARKER_OBSERVACAO, MARKER_ADAPTACAO_PEI.""",
+    
+    ESTRUTURA OBRIGATÓRIA (USE ESTES MARKERS):
+    MARKER_CONTEUDO_GERAL: [Texto]
+    MARKER_CONTEUDOS_ESPECIFICOS: [Texto]
+    MARKER_OBJETIVOS_ENSINO: [Texto]
+    MARKER_METODOLOGIA: [Texto]
+    MARKER_AVALIACAO: [Texto]
+    MARKER_OBSERVACAO: [Texto]
+    MARKER_ADAPTACAO_PEI: [Texto]""",
 
-    # --- PERSONAS DO LABORATÓRIO V24 ---
+    # --- 2. LABORATÓRIO V24 (ENGENHARIA DE ELITE) ---
     "MESTRE_V24": """VOCÊ É O ENGENHEIRO PEDAGÓGICO DO MAESTRO SOSA.
     Sua missão é criar materiais de Matemática com RIGOR ESTRUTURAL.
-    REGRAS:
+    
+    REGRAS RÍGIDAS:
     1. PROTOCOLO DE CHOQUE: Gere EXATAMENTE a quantidade de questões pedida. Não numere exemplos.
-    2. SEM TABELAS ASCII: Proibido desenhar quadros com tracinhos (┌─┐). Use apenas texto.
-    3. MARCADORES: Inicie cada seção com: [PROFESSOR], [ALUNO], [GABARITO], [IMAGENS].
-    4. ESTILO: Linguagem acadêmica (Mediação, Sistematização). Sem Markdown.""",
+    2. MARCADORES: Inicie cada seção com: [PROFESSOR], [ALUNO], [GABARITO], [IMAGENS].
+    3. ESTILO: Linguagem acadêmica, sem Markdown, símbolos Unicode (x, ÷, ², ³).""",
 
     "ARQUITETO_PEI_V24": """VOCÊ É O ESPECIALISTA EM INCLUSÃO (PADRÃO RONALDO GOMES).
     Sua missão é criar uma FOLHA DE ATIVIDADE INDEPENDENTE e REDUZIDA.
-    REGRAS:
-    1. REDUÇÃO: Gere no máximo METADE das questões do original (Limite de 5).
-    2. INDEPENDÊNCIA: O aluno não usa livro, escreva o problema todo na folha.
-    3. ENGENHARIA: Boxes 'PARA LEMBRAR', fracionamento em PASSOS e 3 alternativas (A, B, C).
-    4. MARCADOR: Inicie com a tag [PEI].""",
+    REGRAS: Redução de questões (máx 5), boxes 'PARA LEMBRAR', fracionamento em PASSOS e 3 alternativas (A, B, C).
+    MARCADOR: Use a tag [PEI].""",
 
-    # --- PERSONAS DE APOIO E RELATÓRIOS (CONSOLIDADAS) ---
+    # --- 3. PERSONAS ORIGINAIS (PRESERVADAS) ---
+    "AVALIADOR": """ESPECIALISTA EM DESIGN INSTRUCIONAL E MATEMÁTICA (ITABUNA/BA).
+    Sua missão é criar materiais que conectem a Geração Alpha à Matemática Real.
+    REGRA DE OURO (MARKERS): MARKER_LOUSA, MARKER_FOLHA, MARKER_GABARITO, MARKER_IMAGENS.""",
+    
     "MAESTRO": "Você é o Maestro SOSA, assistente do Prof. Ronaldo Gomes.",
-    "AVALIADOR": "Especialista em Design Instrucional e Matemática.",
-    "ESPECIALISTA_INCLUSAO": "Especialista em Neuropsicopedagogia para relatórios PEI.",
-    "ESPECIALISTA_PEI": "Consultor técnico para Seção 1 do PEI oficial.",
-    "ESPECIALISTA_CURRICULO": "Especialista em adaptação curricular específica.",
-    "ESPECIALISTA_ADAPTACAO": "Criador de tabelas de currículo adaptado.",
-    "CRIADOR_ADAPTADO": "Especialista em DUA para atividades globais.",
-    "AVALIADOR_ADAPTADO": "Transformador de provas regulares em adaptadas."
+
+    "ESPECIALISTA_INCLUSAO": """VOCÊ É UM ESPECIALISTA EM EDUCAÇÃO INCLUSIVA E NEUROPSICOPEDAGOGIA.
+    OBJETIVO: Gerar relatórios técnicos para PEI ou comunicados para pais. SEM MARKDOWN.""",
+
+    "ESPECIALISTA_PEI": """VOCÊ É UM CONSULTOR TÉCNICO DA SECRETARIA DE EDUCAÇÃO (ITABUNA/BA).
+    OBJETIVO: Redigir a 'Seção 1 - Plano de Acessibilidade Curricular' do PEI.""",
+
+    "ESPECIALISTA_CURRICULO": """VOCÊ É UM ESPECIALISTA EM CURRÍCULO E ADAPTAÇÃO (ITABUNA/BA).
+    OBJETIVO: Analisar o conteúdo regular e criar uma adaptação para alunos com deficiência intelectual.""",
+
+    "ESPECIALISTA_ADAPTACAO": """VOCÊ É UM ESPECIALISTA EM PEI. Criar a tabela de 'Currículo Adaptado' trimestral.""",
+
+    "CRIADOR_ADAPTADO": """VOCÊ É UM ESPECIALISTA EM DESENHO UNIVERSAL PARA APRENDIZAGEM (DUA).""",
+
+    "AVALIADOR_ADAPTADO": """VOCÊ É UM ESPECIALISTA EM AVALIAÇÃO INCLUSIVA. Transformar PROVA REGULAR em ADAPTADA."""
 }
 
 def gerar_ia(persona_key, comando, partes_arquivos=[], usar_busca=True):
     config = {'tools': [{'google_search': {}}]} if usar_busca else {}
     conteudo_prompt = [types.Part.from_text(text=f"{PERSONAS[persona_key]}\n\n{comando}")]
-    if partes_arquivos: conteudo_prompt.extend(partes_arquivos)
+    if partes_arquivos:
+        conteudo_prompt.extend(partes_arquivos)
     try:
         res = client.models.generate_content(
             model="gemini-3-flash-preview",
@@ -57,28 +76,29 @@ def gerar_ia(persona_key, comando, partes_arquivos=[], usar_busca=True):
             config=config
         )
         return res.text
-    except Exception as e: return f"Erro na IA: {e}"
+    except Exception as e:
+        return f"Erro na IA: {e}"
 
 def extrair_tag(texto, tag):
     """
-    EXTRATOR UNIVERSAL SOSA: 
-    Busca por [TAG] (Novo V24) ou MARKER_TAG (Antigo Planejamento).
+    EXTRATOR UNIVERSAL SOSA V24:
+    Busca por [TAG] (Novo V24) ou MARKER_TAG (Antigo).
     """
     if not texto: return ""
     
-    # Tenta primeiro o formato de colchetes [TAG]
+    # 1. Tenta o formato de colchetes [TAG]
     padrao_novo = rf"\[{tag}\](.*?)(?=\[|$)"
     match = re.search(padrao_novo, texto, re.DOTALL | re.IGNORECASE)
     
     if match:
         resultado = match.group(1)
     else:
-        # Se não achar, tenta o formato antigo MARKER_TAG
+        # 2. Tenta o formato antigo MARKER_TAG
         padrao_antigo = rf"MARKER_{tag}(.*?)(?=MARKER_|$)"
         match = re.search(padrao_antigo, texto, re.DOTALL | re.IGNORECASE)
         resultado = match.group(1) if match else ""
     
-    # Limpeza final de Markdown e espaços
+    # Limpeza de lixo visual
     return resultado.replace("**", "").replace("###", "").replace("##", "").replace("#", "").strip()
 
 def subir_para_google(caminho_arquivo, nome_exibicao):
@@ -88,4 +108,5 @@ def subir_para_google(caminho_arquivo, nome_exibicao):
             config=types.UploadFileConfig(display_name=nome_exibicao)
         )
         return arquivo_google.uri
-    except Exception as e: return f"Erro no upload: {e}"
+    except Exception as e:
+        return f"Erro no upload: {e}"
