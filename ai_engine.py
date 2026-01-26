@@ -156,22 +156,23 @@ def subir_para_google(caminho_arquivo, nome_exibicao):
         return f"Erro no upload: {e}"
     
 def realizar_diagnostico_v25(plano_raw, df_curriculo, ano_sel):
-    """Analisa o plano em busca de marcadores e valida a sincronia curricular."""
-    # 1. Detecção de Modalidade (Busca por palavras-chave no plano)
     texto_upper = plano_raw.upper()
-    modalidade = "CADERNO (Lousa/Exercícios)" # Padrão
-    if "LIVRO" in texto_upper: modalidade = "LIVRO (Material Didático)"
-    elif "AVALIAÇÃO" in texto_upper or "PROVA" in texto_upper: modalidade = "AVALIAÇÃO (Rigor Técnico)"
-    elif "PROJETO" in texto_upper: modalidade = "PROJETO (Trabalho Prático)"
-
-    # 2. Validação de Sincronia (Zona de Cópia Literal)
-    cont_plano = extrair_tag(plano_raw, "CONTEUDOS_ESPECIFICOS").upper()
-    base_ano = df_curriculo[df_curriculo['ANO'] == ano_sel]
     
-    # Verifica se o conteúdo do plano existe no currículo oficial
-    sincronizado = any(str(c).upper() in cont_plano for c in base_ano['CONTEUDO_ESPECIFICO'].unique())
+    # Termos curtos para não quebrar o CSS do Streamlit
+    modalidade = "CADERNO" 
+    if "LIVRO" in texto_upper: modalidade = "LIVRO"
+    elif "AVALIAÇÃO" in texto_upper or "PROVA" in texto_upper: modalidade = "PROVA"
+    elif "PROJETO" in texto_upper: modalidade = "PROJETO"
+
+    cont_plano = extrair_tag(plano_raw, "CONTEUDOS_ESPECIFICOS").upper().strip()
+    base_ano = df_curriculo[df_curriculo['ANO'] == int(ano_sel)]
+    
+    # Validação robusta (ignora espaços extras)
+    lista_curriculo = [str(c).upper().strip() for c in base_ano['CONTEUDO_ESPECIFICO'].unique()]
+    sincronizado = any(c in cont_plano for c in lista_curriculo)
+    
+    status_msg = "Sincronizado" if sincronizado else "Divergente"
     status_cor = "🟢" if sincronizado else "🟡"
-    status_msg = "Sincronizado com Sucesso" if sincronizado else "Divergência Curricular Detectada"
 
     return {
         "modalidade": modalidade,
