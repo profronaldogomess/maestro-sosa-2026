@@ -471,20 +471,22 @@ elif menu == "🧪 Criador de Aulas":
 
             # --- BOTÃO DE INÍCIO (DENTRO DO ELSE) ---
             if st.button("🚀 Iniciar Composição do Laboratório", use_container_width=True):
-                with st.spinner("Maestro SOSA compondo material de alta performance..."):
-                    desc_dif = {
-                        "Básica": "Fundamentos sólidos, definições claras e exercícios contextualizados. Tom acadêmico.",
-                        "Intermediária": "Aplicação prática e problemas de lógica.",
-                        "Desafio": "Alto nível cognitivo e análise crítica."
-                    }
+                with st.spinner(f"Protocolo de Choque: Gerando exatamente {num_q} questões..."):
+                    plano_ref = df_planos[(df_planos['ANO'] == ano_lab) & (df_planos['SEMANA'] == sem_lab)].iloc[0]
                     
                     prompt_reg = (
-                        f"### REQUISIÇÃO DE MATERIAL DE ELITE ###\n"
-                        f"TEMA: {', '.join(foco_cont)}\n"
-                        f"OBJETIVOS: {', '.join(foco_obj)}\n"
-                        f"FORMATO: {formato_prof} | TIPO: {tipo_ativ}\n"
-                        f"QUANTIDADE: {num_q} questões | NÍVEL: {desc_dif[dif_q]}\n\n"
-                        f"INSTRUÇÃO: Gere Título, Professor (Quadro rico com exemplos), Aluno ({num_q} questões contextualizadas em Itabuna/BA), Gabarito e Imagens."
+                        f"### TAREFA DE EXECUÇÃO FORÇADA ###\n"
+                        f"1. LEIA O PLANO: {texto_plano}\n"
+                        f"2. TEMA: {', '.join(foco_cont)}\n"
+                        f"3. OBJETIVO: {', '.join(foco_obj)}\n"
+                        f"4. QUANTIDADE OBRIGATÓRIA: {num_q} QUESTÕES.\n"
+                        f"5. NÍVEL: {dif_q}\n\n"
+                        f"INSTRUÇÃO DE MONTAGEM:\n"
+                        f"- Comece com MARKER_TITULO.\n"
+                        f"- No MARKER_PROFESSOR, faça o quadro rico.\n"
+                        f"- No MARKER_ALUNO, você DEVE listar de 1 até {num_q}. Não pare na 5. Não pare na 7. Pare na {num_q}.\n"
+                        f"- Verifique sua contagem: 'Eu escrevi {num_q} questões?'\n"
+                        f"- Termine com [FIM_DO_MATERIAL]."
                     )
                     
                     raw = ai.gerar_ia("AVALIADOR_V23", prompt_reg)
