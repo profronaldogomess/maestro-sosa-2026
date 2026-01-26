@@ -208,36 +208,48 @@ def exibir_material_estruturado(texto_raw, key_prefix, dados_plano=None, info_au
         st.subheader("🚀 Central de Comando de Exportação")
         nome_base = f"AULA_{aula_num.replace(' ','')}_{ano_lab}ANO_{sem_lab.split(' ')[1]}"
         
+        # 1. Preparação dos Documentos
         doc_alu = exporter.gerar_docx_aluno_v24(nome_base, ed_alu, {"ano": f"{ano_lab}º", "trimestre": "I"})
-        doc_prof = exporter.gerar_docx_professor_v24(nome_base, ed_prof, {"ano": f"{ano_lab}º", "semana": sem_lab})
         
+        # Lógica de decisão de formato para o Professor
+        if formato == "Slides (Apresentação)":
+            doc_prof_final = exporter.gerar_pptx_v24(f"{nome_base}_PROF", ed_prof)
+            ext_prof = ".pptx"
+            with st.container(border=True):
+                st.markdown("### 🤖 Super Prompt para Gemini Slides")
+                super_prompt = f"Crie uma apresentação de slides profissional sobre {sel_cont}. Use a Metodologia Nova Escola com esta estrutura: {ed_prof}. Estilo: Moderno e focado em Matemática."
+                st.text_area("Comando Master:", super_prompt, height=150)
+        else:
+            doc_prof_final = exporter.gerar_docx_professor_v24(nome_base, ed_prof, {"ano": f"{ano_lab}º", "semana": sem_lab})
+            ext_prof = ".docx"
+
         c_master1, c_master2 = st.columns(2)
 
         with c_master1:
             st.markdown("### ☁️ Nuvem")
             if st.button("🚀 SALVAR TUDO NO DRIVE E BANCO", use_container_width=True, type="primary"):
-                with st.spinner("Sincronizando pacote completo..."):
-                    # 1. Upload Drive
-                    link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{nome_base}_ALUNO", semana=sem_lab, aula=aula_num)
-                    link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_base}_PROF", semana=sem_lab, aula=aula_num)
+                with st.spinner("Sincronizando pacote multimídia..."):
+                    # Upload Aluno (Sempre Docx)
+                    link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{nome_base}_ALUNO.docx", semana=sem_lab, aula=aula_num)
+                    # Upload Professor (Docx ou Pptx)
+                    link_prof = db.subir_e_converter_para_google_docs(doc_prof_final, f"{nome_base}_PROF{ext_prof}", semana=sem_lab, aula=aula_num)
                     
                     link_pei = "N/A"
                     if "lab_pei" in st.session_state:
                         doc_pei = exporter.gerar_docx_aluno_v24(nome_base + "_PEI", ed_pei, {"ano": f"{ano_lab}º", "trimestre": "I"})
-                        link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_base}_PEI", semana=sem_lab, aula=aula_num)
+                        link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_base}_PEI.docx", semana=sem_lab, aula=aula_num)
                     
-                    # 2. Registro no Banco (6 Colunas)
-                    data_hoje = datetime.now().strftime("%d/%m/%Y")
-                    resumo_links = f"Links: Aluno({link_alu}) | Prof({link_prof}) | PEI({link_pei})"
-                    
-                    sucesso = db.salvar_no_banco("DB_AULAS_PRONTAS", [
-                        data_hoje, sem_lab, f"{aula_num} (Completo)", resumo_links, f"{ano_lab}º", link_alu
+                    # Registro no Banco
+                    db.salvar_no_banco("DB_AULAS_PRONTAS", [
+                        datetime.now().strftime("%d/%m/%Y"), 
+                        sem_lab, 
+                        f"{aula_num} ({formato})", 
+                        f"Links: Aluno({link_alu}) | Prof({link_prof}) | PEI({link_pei})", 
+                        f"{ano_lab}º",
+                        link_prof if formato == "Slides (Apresentação)" else link_alu
                     ])
-                    
-                    if sucesso:
-                        st.success("✅ Sincronizado! Verifique a aba Gavetas.")
-                        time.sleep(1)
-                        st.rerun()
+                    st.success("✅ Sincronizado com Sucesso!")
+                    time.sleep(1); st.rerun()
 
         with c_master2:
             st.markdown("### 📦 Local")
@@ -245,13 +257,11 @@ def exibir_material_estruturado(texto_raw, key_prefix, dados_plano=None, info_au
             zip_buffer = io.BytesIO()
             with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
                 zip_file.writestr(f"{nome_base}_ALUNO.docx", doc_alu.getvalue())
-                zip_file.writestr(f"{nome_base}_PROF.docx", doc_prof.getvalue())
+                zip_file.writestr(f"{nome_base}_PROF{ext_prof}", doc_prof_final.getvalue())
                 if "lab_pei" in st.session_state:
                     doc_pei = exporter.gerar_docx_aluno_v24(nome_base + "_PEI", ed_pei, {"ano": f"{ano_lab}º", "trimestre": "I"})
                     zip_file.writestr(f"{nome_base}_PEI.docx", doc_pei.getvalue())
-
-            st.download_button("📥 BAIXAR PACOTE COMPLETO (ZIP)", zip_buffer.getvalue(), f"PACOTE_{nome_base}.zip", "application/zip", use_container_width=True)
-
+            st.download_button(label="📥 BAIXAR PACOTE COMPLETO (ZIP)", data=zip_buffer.getvalue(), file_name=f"PACOTE_{nome_base}.zip", mime="application/zip", use_container_width=True)
 # ==============================================================================
 # MÓDULO: DASHBOARD INTELIGENTE (V6 - FULL CONTEXT: NOTAS + PDF + AULAS CRIADAS)
 # ==============================================================================
