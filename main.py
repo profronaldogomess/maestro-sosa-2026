@@ -612,11 +612,28 @@ elif menu == "📅 Planejamento (Ponto ID)":
             if modo_p == "🎛️ Manual (Banco de Dados)":
                 df_f = df_curriculo[df_curriculo['ANO'] == ano_p] if not df_curriculo.empty else pd.DataFrame()
                 if not df_f.empty:
+                    st.markdown("### 🎯 Curadoria Curricular (Filtro de Precisão)")
+                    st.caption("Selecione abaixo os itens exatos do banco para garantir o Mapa de Cobertura.")
+                    
                     c1, c2 = st.columns(2)
-                    eixo = c1.selectbox("Eixo Temático:", df_f['EIXO'].unique())
-                    cont_esp = c2.multiselect("Conteúdo (Fiel ao Banco):", df_f[df_f['EIXO'] == eixo]['CONTEUDO_ESPECIFICO'].unique())
-                    objs = st.multiselect("Objetivos (Fiel ao Banco):", df_f[df_f['CONTEUDO_ESPECIFICO'].isin(cont_esp)]['OBJETIVOS'].unique())
-                    ctx_fiel = f"EIXO: {eixo}\nCONTEÚDO: {', '.join(cont_esp)}\nOBJETIVOS: {', '.join(objs)}"
+                    # O seletor agora fica disponível para os dois métodos (Livro ou Manual)
+                    eixo_manual = c1.selectbox("Filtrar Eixo:", df_f['EIXO'].unique(), key="filtro_eixo_v25")
+                    
+                    # Busca automática: Se for método livro, a IA sugere, mas o senhor valida aqui
+                    cont_esp_validado = st.multiselect(
+                        "Conteúdos (Fiel ao Banco):", 
+                        options=df_f[df_f['EIXO'] == eixo_manual]['CONTEUDO_ESPECIFICO'].unique(),
+                        key="v25_cont_validado"
+                    )
+                    
+                    objs_validados = st.multiselect(
+                        "Objetivos (Fiel ao Banco):", 
+                        options=df_f[df_f['CONTEUDO_ESPECIFICO'].isin(cont_esp_validado)]['OBJETIVOS'].unique(),
+                        key="v25_obj_validado"
+                    )
+
+                    # O prompt agora envia o que o senhor FILTROU manualmente
+                    ctx_fiel = f"EIXO: {eixo_manual}\nCONTEÚDO SELECIONADO: {', '.join(cont_esp_validado)}\nOBJETIVOS SELECIONADOS: {', '.join(objs_validados)}"
                 else: st.error("Base curricular não encontrada.")
             else:
                 sel_mat = st.multiselect("Selecione o Livro:", df_materiais['NOME_ARQUIVO'].tolist())
