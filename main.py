@@ -205,23 +205,52 @@ def exibir_material_estruturado(texto_raw, key_prefix, dados_plano=None, info_au
 
     # Aba de Exportação Comum (Usa os dados passados)
     with t_exp:
-        if dados_plano and info_aula:
-            st.subheader("🚀 Exportar Plano de Aula Oficial")
-            ano_ref = info_aula.get('ano', '6')
-            semana_ref = info_aula.get('semana', '01')
-            nome_doc = st.text_input("Título do Arquivo:", value=f"PLANO_{ano_ref}ANO_SEM_{semana_ref}", key=f"name_input_{key_prefix}")
-            
-            doc_file = exporter.gerar_docx_plano_pedagogico_v18(nome_doc.upper(), dados_plano, {"ano": f"{ano_ref}º Ano", "semana": f"Semana {semana_ref}"})
-            st.download_button("📥 BAIXAR WORD", doc_file, f"{nome_doc}.docx", use_container_width=True, key=f"dl_btn_{key_prefix}")
+        st.subheader("🚀 Central de Comando de Exportação")
+        nome_base = f"AULA_{aula_num.replace(' ','')}_{ano_lab}ANO_{sem_lab.split(' ')[1]}"
+        
+        doc_alu = exporter.gerar_docx_aluno_v24(nome_base, ed_alu, {"ano": f"{ano_lab}º", "trimestre": "I"})
+        doc_prof = exporter.gerar_docx_professor_v24(nome_base, ed_prof, {"ano": f"{ano_lab}º", "semana": sem_lab})
+        
+        c_master1, c_master2 = st.columns(2)
 
-            if st.button("☁️ Enviar para o Google Drive", key=f"btn_drive_{key_prefix}"):
-                with st.spinner("Sincronizando..."):
-                    link = db.subir_e_converter_para_google_docs(doc_file, nome_doc, categoria="Planos de Aula")
-                    if "https://" in str(link):
-                        st.success("✅ Arquivo salvo!"); st.link_button("Abrir no Docs", str(link))
-                        db.salvar_link_na_planilha("DB_PLANOS", "SEMANA", f"Semana {semana_ref}", str(link))
-        else:
-            st.info("ℹ️ Utilize os botões de exportação do Laboratório para materiais de sala.")
+        with c_master1:
+            st.markdown("### ☁️ Nuvem")
+            if st.button("🚀 SALVAR TUDO NO DRIVE E BANCO", use_container_width=True, type="primary"):
+                with st.spinner("Sincronizando pacote completo..."):
+                    # 1. Upload Drive
+                    link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{nome_base}_ALUNO", semana=sem_lab, aula=aula_num)
+                    link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_base}_PROF", semana=sem_lab, aula=aula_num)
+                    
+                    link_pei = "N/A"
+                    if "lab_pei" in st.session_state:
+                        doc_pei = exporter.gerar_docx_aluno_v24(nome_base + "_PEI", ed_pei, {"ano": f"{ano_lab}º", "trimestre": "I"})
+                        link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_base}_PEI", semana=sem_lab, aula=aula_num)
+                    
+                    # 2. Registro no Banco (6 Colunas)
+                    data_hoje = datetime.now().strftime("%d/%m/%Y")
+                    resumo_links = f"Links: Aluno({link_alu}) | Prof({link_prof}) | PEI({link_pei})"
+                    
+                    sucesso = db.salvar_no_banco("DB_AULAS_PRONTAS", [
+                        data_hoje, sem_lab, f"{aula_num} (Completo)", resumo_links, f"{ano_lab}º", link_alu
+                    ])
+                    
+                    if sucesso:
+                        st.success("✅ Sincronizado! Verifique a aba Gavetas.")
+                        time.sleep(1)
+                        st.rerun()
+
+        with c_master2:
+            st.markdown("### 📦 Local")
+            import io, zipfile
+            zip_buffer = io.BytesIO()
+            with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
+                zip_file.writestr(f"{nome_base}_ALUNO.docx", doc_alu.getvalue())
+                zip_file.writestr(f"{nome_base}_PROF.docx", doc_prof.getvalue())
+                if "lab_pei" in st.session_state:
+                    doc_pei = exporter.gerar_docx_aluno_v24(nome_base + "_PEI", ed_pei, {"ano": f"{ano_lab}º", "trimestre": "I"})
+                    zip_file.writestr(f"{nome_base}_PEI.docx", doc_pei.getvalue())
+
+            st.download_button("📥 BAIXAR PACOTE COMPLETO (ZIP)", zip_buffer.getvalue(), f"PACOTE_{nome_base}.zip", "application/zip", use_container_width=True)
 
 # ==============================================================================
 # MÓDULO: DASHBOARD INTELIGENTE (V6 - FULL CONTEXT: NOTAS + PDF + AULAS CRIADAS)
