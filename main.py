@@ -583,7 +583,7 @@ elif menu == "🧪 Criador de Aulas":
                             st.rerun()
                             
 # ==============================================================================
-# MÓDULO: PLANEJAMENTO (PONTO ID) - ARQUITETURA DE ELITE V25.7 (AUDITORIA TOTAL)
+# MÓDULO: PLANEJAMENTO (PONTO ID) - ARQUITETURA DE ELITE V25.8 (GESTÃO TOTAL)
 # ==============================================================================
 elif menu == "📅 Planejamento (Ponto ID)":
     st.header("📅 Planejador Estratégico (Ponto ID)")
@@ -701,17 +701,57 @@ elif menu == "📅 Planejamento (Ponto ID)":
             if c_btn2.button("🗑️ DESCARTAR", use_container_width=True, key=f"drop_{v}"):
                 reset_total_v25(); st.rerun()
 
-    # --- ABA 2: HISTÓRICO DETALHADO ---
+    # --- ABA 2: HISTÓRICO DETALHADO (RESTAURADA E FUNCIONAL) ---
     with tab_hist:
         if not df_planos.empty:
             f_ano_h = st.selectbox("Filtrar por Ano:", ["Todos", "6º", "7º", "8º", "9º"], key="v25_hist_ano")
             df_h = df_planos.copy()
             if f_ano_h != "Todos": df_h = df_h[df_h['ANO'] == f_ano_h]
+            
             if not df_h.empty:
-                sel_h = st.selectbox("Selecione o Plano:", df_h['SEMANA'].tolist(), key="v25_hist_sem")
+                sel_h = st.selectbox("Selecione o Plano para Gestão:", df_h['SEMANA'].tolist(), key="v25_hist_sem")
                 dados_h = df_h[df_h['SEMANA'] == sel_h].iloc[0]
-                st.info(f"Editando: {sel_h} ({dados_h['ANO']})")
-                st.write("Use o botão de sincronizar dados para atualizar a lista.")
+                raw_h = dados_h['PLANO_TEXTO']
+                ano_h = dados_h['ANO']
+
+                st.markdown(f"### 📝 Editando: {sel_h} ({ano_h})")
+                
+                h_tabs = st.tabs(["📚 Conteúdos", "🎯 Objetivos", "🏫 Metodologia", "📝 Avaliação", "♿ PEI", "📥 EXPORTAR & DRIVE"])
+                
+                with h_tabs[0]:
+                    h_geral = st.text_input("Eixo:", limpar_v23(ai.extrair_tag(raw_h, "CONTEUDO_GERAL"), "CONTEÚDO GERAL EIXO"), key=f"h_g_{sel_h}")
+                    h_espec = st.text_area("Conteúdos:", limpar_v23(ai.extrair_tag(raw_h, "CONTEUDOS_ESPECIFICOS"), "CONTEÚDOS ESPECÍFICOS"), key=f"h_e_{sel_h}")
+                with h_tabs[1]:
+                    h_objs = st.text_area("Objetivos:", limpar_v23(ai.extrair_tag(raw_h, "OBJETIVOS_ENSINO"), "OBJETIVOS DE ENSINO"), key=f"h_o_{sel_h}")
+                with h_tabs[2]:
+                    h_met = st.text_area("Metodologia:", limpar_v23(ai.extrair_tag(raw_h, "METODOLOGIA"), "METODOLOGIA"), height=300, key=f"h_m_{sel_h}")
+                with h_tabs[3]:
+                    h_ava = st.text_area("Avaliação:", limpar_v23(ai.extrair_tag(raw_h, "AVALIACAO"), "AVALIAÇÃO"), key=f"h_a_{sel_h}")
+                with h_tabs[4]:
+                    h_pei = st.text_area("Adaptação PEI:", limpar_v23(ai.extrair_tag(raw_h, "ADAPTACAO_PEI"), "ADAPTAÇÃO PEI"), key=f"h_p_{sel_h}")
+                
+                with h_tabs[5]:
+                    st.subheader("🚀 Exportação e Nuvem")
+                    nome_h = st.text_input("Título do Arquivo:", value=f"PLANO_{ano_h.replace('º','')}_{sel_h.replace(' ', '')}", key=f"h_title_{sel_h}")
+                    dados_h_docx = {"geral": h_geral, "especificos": h_espec, "objetivos": h_objs, "metodologia": h_met, "avaliacao": h_ava, "pei": h_pei}
+                    doc_h = exporter.gerar_docx_plano_pedagogico_v18(nome_h.upper(), dados_h_docx, {"ano": ano_h, "semana": sel_h})
+                    st.download_button("📥 BAIXAR WORD ATUALIZADO", doc_h, f"{nome_h}.docx", use_container_width=True, key=f"h_dl_{sel_h}")
+                    
+                    if st.button("☁️ SINCRONIZAR COM DRIVE", key=f"h_drive_{sel_h}"):
+                        link = db.subir_e_converter_para_google_docs(doc_h, nome_h, categoria="Planos de Aula")
+                        if "https://" in str(link):
+                            db.salvar_link_na_planilha("DB_PLANOS", "SEMANA", sel_h, link)
+                            st.success("✅ Sincronizado!"); st.rerun()
+
+                st.markdown("---")
+                col_g1, col_g2 = st.columns(2)
+                if col_g1.button("🆙 ATUALIZAR NO BANCO", use_container_width=True, type="primary", key=f"h_up_{sel_h}"):
+                    novo_raw = f"MARKER_CONTEUDO_GERAL {h_geral} MARKER_CONTEUDOS_ESPECIFICOS {h_espec} MARKER_OBJETIVOS_ENSINO {h_objs} MARKER_METODOLOGIA {h_met} MARKER_AVALIACAO {h_ava} MARKER_ADAPTACAO_PEI {h_pei}"
+                    if db.atualizar_plano_existente(sel_h, ano_h, novo_raw):
+                        st.success("✅ Planilha Atualizada!"); time.sleep(1); st.rerun()
+                if col_g2.button("🗑️ EXCLUIR PLANO", use_container_width=True, key=f"h_del_{sel_h}"):
+                    if db.excluir_plano_total(sel_h, ano_h):
+                        st.warning("🚨 Removido."); time.sleep(1); st.rerun()
             else: st.info("Nenhum plano encontrado.")
         else: st.info("📭 Banco de dados vazio.")
 
@@ -727,7 +767,7 @@ elif menu == "📅 Planejamento (Ponto ID)":
             df_c['STATUS'] = df_c['CONTEUDO_ESPECIFICO'].apply(lambda x: "✅ CONCLUÍDO" if str(x).upper() in concluidos else "⏳ PENDENTE")
             st.dataframe(df_c[['TRIMESTRE', 'EIXO', 'CONTEUDO_ESPECIFICO', 'STATUS']], use_container_width=True, hide_index=True)
 
-    # --- ABA 4: MAPA DE COBERTURA (RESTAURADA COM ALERTAS) ---
+    # --- ABA 4: MAPA DE COBERTURA ---
     with tab_mapa:
         st.subheader("📊 Auditoria de Cobertura Curricular")
         if not df_curriculo.empty:
@@ -744,7 +784,6 @@ elif menu == "📅 Planejamento (Ponto ID)":
             
             df_m['STATUS_NUM'] = df_m['CONTEUDO_ESPECIFICO'].apply(lambda x: 1 if str(x).upper() in planejados else 0)
             
-            # Gráfico de Progresso
             progresso = df_m.groupby('EIXO')['STATUS_NUM'].agg(['sum', 'count']).reset_index()
             progresso['Percentual'] = (progresso['sum'] / progresso['count'] * 100).round(1)
             
@@ -758,12 +797,9 @@ elif menu == "📅 Planejamento (Ponto ID)":
                 for _, r in progresso.iterrows():
                     if r['Percentual'] < 30: st.error(f"**{r['EIXO']}**: Crítico ({r['Percentual']}%)")
                     elif r['Percentual'] >= 100: st.success(f"**{r['EIXO']}**: Concluído!")
-                    elif r['Percentual'] > 70: st.info(f"**{r['EIXO']}**: Avançado ({r['Percentual']}%)")
 
             st.markdown("---")
             st.subheader("⏳ O que falta ministrar?")
-            
-            # CAIXAS DE ALERTA POR TRIMESTRE (O QUE O SENHOR PEDIU)
             trimesters = ["I", "II", "III"] if trim_m == "Todos" else [trim_m]
             for t in trimesters:
                 pendentes_trim = df_m[(df_m['TRIMESTRE'] == t) & (df_m['STATUS_NUM'] == 0)]
@@ -776,7 +812,7 @@ elif menu == "📅 Planejamento (Ponto ID)":
 
             st.markdown("---")
             st.dataframe(df_m[['TRIMESTRE', 'EIXO', 'CONTEUDO_ESPECIFICO', 'STATUS_NUM']].replace({1: "✅ DADO", 0: "⏳ PENDENTE"}), use_container_width=True, hide_index=True)
-            
+
 # ==============================================================================
 # MÓDULO: DIÁRIO DE BORDO
 # ==============================================================================
