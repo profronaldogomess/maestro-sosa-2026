@@ -578,6 +578,9 @@ elif menu == "🧪 Criador de Aulas":
 # ==============================================================================
 # MÓDULO: PLANEJAMENTO (PONTO ID) - ARQUITETURA DE ELITE V25.9 (GESTÃO E NUVEM)
 # ==============================================================================
+# ==============================================================================
+# MÓDULO: PLANEJAMENTO (PONTO ID) - ARQUITETURA DE ELITE V25.10 (COM STATUS)
+# ==============================================================================
 elif menu == "📅 Planejamento (Ponto ID)":
     st.header("📅 Planejador Estratégico (Ponto ID)")
 
@@ -611,6 +614,7 @@ elif menu == "📅 Planejamento (Ponto ID)":
         modo_p = st.radio("Método de Elaboração:", ["📖 Livro Didático", "🎛️ Manual (Banco de Dados)"], horizontal=True, key=f"modo_{v}")
         
         cont_pre, obj_pre, eixo_pre = [], [], ""
+        sel_mat, pags = [], "" # Inicialização para evitar erro de referência
         df_f = df_curriculo[df_curriculo['ANO'] == ano_p]
 
         if modo_p == "🎛️ Manual (Banco de Dados)":
@@ -626,9 +630,40 @@ elif menu == "📅 Planejamento (Ponto ID)":
             pags = c2.text_input("Páginas de Referência:", placeholder="Ex: 14 a 25", key=f"pags_{v}")
             ctx_ia = f"MÉTODO LIVRO: {sel_mat} PÁGINAS: {pags}."
 
+        # --- NOVO: PAINEL DE STATUS DE PRONTIDÃO (FEEDBACK VISUAL) ---
+        st.markdown("### 🚦 Status de Prontidão do Maestro")
+        pronto_para_gerar = False
+        
+        # 1. Verificação de Preenchimento
+        if modo_p == "🎛️ Manual (Banco de Dados)":
+            if cont_pre and obj_pre:
+                st.success(f"✅ PRONTO: O Maestro usará {len(cont_pre)} conteúdos do seu Banco de Dados Oficial.")
+                pronto_para_gerar = True
+            else:
+                st.warning("⚠️ AGUARDANDO: Selecione ao menos um Conteúdo e um Objetivo no filtro acima.")
+        else:
+            if sel_mat and pags:
+                st.info(f"📖 PRONTO: O Maestro analisará o livro {sel_mat} (Págs: {pags}) para compor a aula.")
+                pronto_para_gerar = True
+            else:
+                st.error("❌ PENDENTE: Selecione o Livro e informe as Páginas de Referência.")
+
+        # 2. Verificação de Duplicidade
+        if not df_planos.empty:
+            sem_limpa = sem_p.split(" (")[0]
+            existe = df_planos[(df_planos['ANO'] == f"{ano_p}º") & (df_planos['SEMANA'] == sem_limpa)]
+            if not existe.empty:
+                st.error(f"🚨 ALERTA: Já existe um planejamento salvo para a {sem_p}. Gerar um novo irá substituir o rascunho atual.")
+
+        st.markdown("---")
         strat = st.text_area("Sua Estratégia/Observação Inicial:", placeholder="Ex: Aula expositiva...", key=f"strat_{v}")
 
-        if st.button("🚀 Compor Planejamento com Maestro", use_container_width=True, type="primary", key=f"btn_gen_{v}"):
+        # Botão Inteligente (Habilitado apenas se pronto_para_gerar for True)
+        if st.button("🚀 Compor Planejamento com Maestro", 
+                     use_container_width=True, 
+                     type="primary", 
+                     key=f"btn_gen_{v}",
+                     disabled=not pronto_para_gerar):
             with st.spinner("Maestro redigindo rascunho de elite..."):
                 prompt = f"ANO: {ano_p}º, SEMANA: {sem_p}. {ctx_ia}. ESTRATÉGIA: {strat}."
                 st.session_state.p_temp = ai.gerar_ia("PLANE_PEDAGOGICO", prompt)
@@ -674,7 +709,7 @@ elif menu == "📅 Planejamento (Ponto ID)":
                 final_txt = f"MARKER_CONTEUDO_GERAL {ed_geral} MARKER_CONTEUDOS_ESPECIFICOS {c_final} MARKER_OBJETIVOS_ENSINO {o_final} MARKER_METODOLOGIA {ed_met} MARKER_AVALIACAO {ed_ava} MARKER_ADAPTACAO_PEI {ed_pei}"
                 if db.salvar_no_banco("DB_PLANOS", [datetime.now().strftime("%d/%m/%Y"), sem_p.split(" (")[0], f"{ano_p}º", "I Trimestre", "PADRÃO", final_txt]):
                     st.success("✅ Salvo!"); reset_total_v25(); time.sleep(1); st.rerun()
-
+                    
     # --- ABA 2: HISTÓRICO DETALHADO (COM BOTÃO DRIVE RESTAURADO) ---
     with tab_hist:
         if not df_planos.empty:
