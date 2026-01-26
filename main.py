@@ -422,25 +422,45 @@ elif menu == "🧪 Criador de Aulas":
             plano_raw = planos_ano[planos_ano['SEMANA'] == sem_lab].iloc[0]['PLANO_TEXTO']
             diag = ai.realizar_diagnostico_v25(plano_raw, df_curriculo, ano_lab)
 
-            # --- PAINEL DE INTELIGÊNCIA (PRÉ-GERAÇÃO) ---
+            # --- PAINEL DE INTELIGÊNCIA (DESIGN COMPACTO) ---
             with st.container(border=True):
-                st.markdown("### 🔍 Diagnóstico de Vínculo Pedagógico")
+                st.markdown("### 🔍 Diagnóstico de Vínculo")
                 cd1, cd2 = st.columns(2)
-                cd1.metric("Modalidade Detectada", diag['modalidade'])
-                cd2.metric("Sincronia Curricular", diag['status'])
+                cd1.info(f"📂 Modalidade: {diag['modalidade']}")
+                cd2.info(f"🎯 Status: {diag['status']}")
                 
-                with st.expander("📋 Verificação de Cópia Literal (Banco de Dados)"):
-                    st.write("🎯 **Conteúdo:**", diag['conteudo_literal'])
-                    st.write("🎯 **Objetivo:**", diag['objetivo_literal'])
+                with st.expander("📋 Verificação de Cópia Literal"):
+                    st.caption(f"Conteúdo: {diag['conteudo_literal']}")
+                    st.caption(f"Objetivo: {diag['objetivo_literal']}")
 
-            # FILTROS DE CONTEÚDO (Baseados no Diagnóstico)
-            df_base_ano = df_curriculo[df_curriculo['ANO'] == ano_lab]
-            cont_no_plano = diag['conteudo_literal'].upper()
-            opcoes_conteudo = [c for c in df_base_ano['CONTEUDO_ESPECIFICO'].unique() if str(c).upper() in cont_no_plano]
+            # --- LÓGICA DE FILTRAGEM DE CONTEÚDOS E OBJETIVOS ---
+            df_base_ano = df_curriculo[df_curriculo['ANO'] == int(ano_lab)]
+            
+            # 1. Filtro de Conteúdos: Busca o que está no plano dentro do currículo
+            cont_no_plano = diag['conteudo_literal'].upper().strip()
+            opcoes_conteudo = [
+                c for c in df_base_ano['CONTEUDO_ESPECIFICO'].unique() 
+                if str(c).upper().strip() in cont_no_plano or cont_no_plano in str(c).upper().strip()
+            ]
 
             col_p1, col_p2 = st.columns(2)
-            sel_cont = col_p1.multiselect("Confirmar Conteúdos:", options=opcoes_conteudo, default=opcoes_conteudo, key=f"v24_c_{sem_lab}")
-            sel_obj = col_p2.multiselect("Confirmar Objetivos:", options=df_base_ano[df_base_ano['CONTEUDO_ESPECIFICO'].isin(sel_cont)]['OBJETIVOS'].unique() if sel_cont else [], key=f"v24_o_{sem_lab}")
+            sel_cont = col_p1.multiselect("Confirmar Conteúdos:", 
+                                          options=df_base_ano['CONTEUDO_ESPECIFICO'].unique(), 
+                                          default=opcoes_conteudo, 
+                                          key=f"v24_c_{sem_lab}")
+            
+            # 2. Filtro de Objetivos: Dinâmico baseado no conteúdo selecionado
+            if sel_cont:
+                opcoes_objetivos = df_base_ano[df_base_ano['CONTEUDO_ESPECIFICO'].isin(sel_cont)]['OBJETIVOS'].unique().tolist()
+                obj_no_plano = diag['objetivo_literal'].upper().strip()
+                default_obj = [o for o in opcoes_objetivos if str(o).upper().strip() in obj_no_plano]
+                
+                sel_obj = col_p2.multiselect("Confirmar Objetivos:", 
+                                              options=opcoes_objetivos, 
+                                              default=default_obj, 
+                                              key=f"v24_o_{sem_lab}")
+            else:
+                sel_obj = col_p2.multiselect("Confirmar Objetivos:", options=[], help="Selecione um conteúdo primeiro", key=f"v24_o_{sem_lab}")
 
             # --- PASSO 2: PARÂMETROS DE PRECISÃO ---
             st.markdown("---")
@@ -453,7 +473,6 @@ elif menu == "🧪 Criador de Aulas":
 
             if st.button("🚀 COMPILAR MATERIAL DA " + aula_num.upper(), use_container_width=True, type="primary"):
                 with st.spinner("IA executando Protocolo de Choque..."):
-                    # O Prompt agora envia a MODALIDADE detectada para a IA ser mais inteligente
                     prompt_v24 = (f"ORDEM: GERAR EXATAMENTE {qtd_q} QUESTÕES DE EXERCÍCIO.\n"
                                  f"MODALIDADE DETECTADA NO PLANO: {diag['modalidade']}\n"
                                  f"FOCO: {ano_lab}º ANO, {sem_lab}, {aula_num}.\n"
@@ -470,7 +489,6 @@ elif menu == "🧪 Criador de Aulas":
             v = st.session_state.v_lab
             txt_bruto = st.session_state.lab_temp
 
-            # Extração antecipada para as abas
             ed_prof = ai.extrair_tag(txt_bruto, "PROFESSOR")
             ed_alu = ai.extrair_tag(txt_bruto, "ALUNO")
 
@@ -489,35 +507,28 @@ elif menu == "🧪 Criador de Aulas":
             with t_alu:
                 st.text_area("Folha Aluno:", ed_alu, height=400, key=f"area_alu_{v}")
             with t_pei:
-                            st.info("♿ A Engenharia PEI reduz a carga pela metade (Máx 5 questões).")
-                            if st.button("♿ Gerar Engenharia PEI V24", key=f"btn_gen_pei_{v}"):
-                                with st.spinner("O Maestro está realizando a reengenharia inclusiva..."):
-                                    import re
-                                    # Conta questões reais no material do aluno
-                                    questoes = re.findall(r'\d+\.', ed_alu)
-                                    meta = min(5, max(1, len(questoes) // 2))
-                                    
-                                    prompt_pei = (
-                                        f"ORDEM: Gere uma folha PEI independente com EXATAMENTE {meta} QUESTÕES.\n\n"
-                                        f"MATERIAL BASE DO ALUNO:\n{ed_alu}\n\n"
-                                        f"REGRA: Use a tag [PEI] no início. Sem tabelas de Markdown."
-                                    )
-                                    st.session_state.lab_pei = ai.gerar_ia("ARQUITETO_PEI_V24", prompt_pei)
-                                    st.rerun()
-                            
-                            # Captura o texto gerado
-                            txt_pei_raw = st.session_state.get('lab_pei', '')
-                            if txt_pei_raw:
-                                # Usa o extrator universal
-                                ed_pei = ai.extrair_tag(txt_pei_raw, "PEI")
-                                st.text_area("Versão Adaptada (Reduzida):", ed_pei, height=400, key=f"area_pei_v24_{v}")
-                            else:
-                                st.write("Clique no botão acima para gerar a versão adaptada.")
+                st.info("♿ A Engenharia PEI reduz a carga pela metade (Máx 5 questões).")
+                if st.button("♿ Gerar Engenharia PEI V24", key=f"btn_gen_pei_{v}"):
+                    with st.spinner("O Maestro está realizando a reengenharia inclusiva..."):
+                        import re
+                        questoes = re.findall(r'\d+\.', ed_alu)
+                        meta = min(5, max(1, len(questoes) // 2))
+                        prompt_pei = (f"ORDEM: Gere uma folha PEI independente com EXATAMENTE {meta} QUESTÕES.\n\n"
+                                      f"MATERIAL BASE DO ALUNO:\n{ed_alu}\n\n"
+                                      f"REGRA: Use a tag [PEI] no início. Sem tabelas de Markdown.")
+                        st.session_state.lab_pei = ai.gerar_ia("ARQUITETO_PEI_V24", prompt_pei)
+                        st.rerun()
+                
+                txt_pei_raw = st.session_state.get('lab_pei', '')
+                if txt_pei_raw:
+                    ed_pei = ai.extrair_tag(txt_pei_raw, "PEI")
+                    st.text_area("Versão Adaptada (Reduzida):", ed_pei, height=400, key=f"area_pei_v24_{v}")
+                else:
+                    st.write("Clique no botão acima para gerar a versão adaptada.")
 
             with t_exp:
                 st.subheader("📥 Downloads e Nuvem")
                 nome_base = f"AULA_{aula_num.replace(' ','')}_{ano_lab}ANO_{sem_lab.split(' ')[1]}"
-                
                 c_exp1, c_exp2, c_exp3 = st.columns(3)
                 
                 with c_exp1:
@@ -554,7 +565,6 @@ elif menu == "🧪 Criador de Aulas":
                 if "lab_pei" in st.session_state: del st.session_state.lab_pei
                 st.rerun()
 
-    # --- ABA 2: GAVETAS DE MATERIAIS ---
     with tab_gavetas:
         st.subheader("🗂️ Gavetas de Materiais Produzidos")
         if df_aulas.empty:
@@ -563,10 +573,8 @@ elif menu == "🧪 Criador de Aulas":
             c_gav1, c_gav2 = st.columns(2)
             gaveta_sel = c_gav1.selectbox("Gaveta:", ["Folha Aluno", "Guia Professor", "Lousa e Slides"])
             ano_gav = c_gav2.selectbox("Ano:", ["Todos", "6º", "7º", "8º", "9º"], key="gav_ano_v24")
-            
             df_g = df_aulas.copy()
             if ano_gav != "Todos": df_g = df_g[df_g['ANO'].str.contains(ano_gav, na=False)]
-            
             if not df_g.empty:
                 for _, row in df_g.iloc[::-1].iterrows():
                     with st.expander(f"📅 {row['DATA']} | {row['SEMANA_REF']}"):
