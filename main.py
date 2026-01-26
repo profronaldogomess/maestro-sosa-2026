@@ -566,7 +566,7 @@ elif menu == "🧪 Criador de Aulas":
                             st.rerun()
                             
 # ==============================================================================
-# MÓDULO: PLANEJAMENTO (PONTO ID) - ARQUITETURA DE ELITE V25.13 (RESTAURAÇÃO TOTAL)
+# MÓDULO: PLANEJAMENTO (PONTO ID) - ARQUITETURA DE ELITE V25.9 (GESTÃO E NUVEM)
 # ==============================================================================
 elif menu == "📅 Planejamento (Ponto ID)":
     st.header("📅 Planejador Estratégico (Ponto ID)")
@@ -665,7 +665,7 @@ elif menu == "📅 Planejamento (Ponto ID)":
                 if db.salvar_no_banco("DB_PLANOS", [datetime.now().strftime("%d/%m/%Y"), sem_p.split(" (")[0], f"{ano_p}º", "I Trimestre", "PADRÃO", final_txt]):
                     st.success("✅ Salvo!"); reset_total_v25(); time.sleep(1); st.rerun()
 
-    # --- ABA 2: HISTÓRICO DETALHADO (RESTAURADA) ---
+    # --- ABA 2: HISTÓRICO DETALHADO (COM BOTÃO DRIVE RESTAURADO) ---
     with tab_hist:
         if not df_planos.empty:
             f_ano_h = st.selectbox("Filtrar por Ano:", ["Todos", "6º", "7º", "8º", "9º"], key="v25_hist_ano")
@@ -677,6 +677,7 @@ elif menu == "📅 Planejamento (Ponto ID)":
                 dados_h = df_h[df_h['SEMANA'] == sel_h].iloc[0]
                 raw_h = dados_h['PLANO_TEXTO']
                 ano_h = dados_h['ANO']
+                link_h = dados_h.get('LINK_DRIVE', "") # Busca o link no banco
 
                 st.markdown(f"### 📝 Editando: {sel_h} ({ano_h})")
                 h_tabs = st.tabs(["📚 Conteúdos", "🎯 Objetivos", "🏫 Metodologia", "📝 Avaliação", "♿ PEI", "📥 EXPORTAR & DRIVE"])
@@ -692,13 +693,21 @@ elif menu == "📅 Planejamento (Ponto ID)":
                     h_ava = st.text_area("Avaliação:", limpar_v23(ai.extrair_tag(raw_h, "AVALIACAO"), "AVALIAÇÃO"), key=f"h_a_{sel_h}")
                 with h_tabs[4]:
                     h_pei = st.text_area("Adaptação PEI:", limpar_v23(ai.extrair_tag(raw_h, "ADAPTACAO_PEI"), "ADAPTAÇÃO PEI"), key=f"h_p_{sel_h}")
+                
                 with h_tabs[5]:
-                    st.subheader("🚀 Exportação")
-                    nome_h = st.text_input("Título:", value=f"PLANO_{ano_h.replace('º','')}_{sel_h.replace(' ', '')}", key=f"h_title_{sel_h}")
+                    st.subheader("🚀 Exportação e Nuvem")
+                    
+                    # BOTÃO DRIVE (O QUE FALTAVA)
+                    if link_h and "https" in str(link_h):
+                        st.link_button("🚀 ABRIR NO GOOGLE DOCS", str(link_h), use_container_width=True)
+                        st.markdown("---")
+
+                    nome_h = st.text_input("Título do Arquivo:", value=f"PLANO_{ano_h.replace('º','')}_{sel_h.replace(' ', '')}", key=f"h_title_{sel_h}")
                     dados_h_docx = {"geral": h_geral, "especificos": h_espec, "objetivos": h_objs, "metodologia": h_met, "avaliacao": h_ava, "pei": h_pei}
                     doc_h = exporter.gerar_docx_plano_pedagogico_v18(nome_h.upper(), dados_h_docx, {"ano": ano_h, "semana": sel_h})
-                    st.download_button("📥 BAIXAR WORD", doc_h, f"{nome_h}.docx", use_container_width=True, key=f"h_dl_{sel_h}")
-                    if st.button("☁️ SINCRONIZAR DRIVE", key=f"h_drive_{sel_h}"):
+                    st.download_button("📥 BAIXAR WORD ATUALIZADO", doc_h, f"{nome_h}.docx", use_container_width=True, key=f"h_dl_{sel_h}")
+                    
+                    if st.button("☁️ SINCRONIZAR COM DRIVE", key=f"h_drive_{sel_h}"):
                         link = db.subir_e_converter_para_google_docs(doc_h, nome_h, categoria="Planos de Aula")
                         if "https://" in str(link):
                             db.salvar_link_na_planilha("DB_PLANOS", "SEMANA", sel_h, link)
@@ -728,7 +737,7 @@ elif menu == "📅 Planejamento (Ponto ID)":
             df_c['STATUS'] = df_c['CONTEUDO_ESPECIFICO'].apply(lambda x: "✅ CONCLUÍDO" if str(x).upper() in concluidos else "⏳ PENDENTE")
             st.dataframe(df_c[['TRIMESTRE', 'EIXO', 'CONTEUDO_ESPECIFICO', 'STATUS']], use_container_width=True, hide_index=True)
 
-    # --- ABA 4: MAPA DE COBERTURA (ALERTAS RESTAURADOS) ---
+    # --- ABA 4: MAPA DE COBERTURA ---
     with tab_mapa:
         st.subheader("📊 Auditoria de Cobertura Curricular")
         if not df_curriculo.empty:
@@ -772,7 +781,6 @@ elif menu == "📅 Planejamento (Ponto ID)":
 
             st.markdown("---")
             st.dataframe(df_m[['TRIMESTRE', 'EIXO', 'CONTEUDO_ESPECIFICO', 'STATUS_NUM']].replace({1: "✅ DADO", 0: "⏳ PENDENTE"}), use_container_width=True, hide_index=True)
-
         
 # ==============================================================================
 # MÓDULO: DIÁRIO DE BORDO
