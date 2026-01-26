@@ -399,7 +399,7 @@ if menu == "🤖 Maestro Dashboard":
         st.session_state.messages.append({"role": "assistant", "content": resposta})
 
 # ==============================================================================
-# MÓDULO: LABORATÓRIO DE MATERIAIS V24.4 (ESTABILIDADE TOTAL)
+# MÓDULO: LABORATÓRIO DE MATERIAIS V24.4 (ESTABILIDADE E QUALIDADE)
 # ==============================================================================
 elif menu == "🧪 Criador de Aulas":
     st.header("🧪 Laboratório de Materiais (V24)")
@@ -438,8 +438,8 @@ elif menu == "🧪 Criador de Aulas":
             instr = st.text_area("Instruções Adicionais:", placeholder="Ex: Use contexto de Itabuna...")
 
             if st.button("🚀 COMPILAR MATERIAL DA " + aula_num.upper(), use_container_width=True, type="primary"):
-                with st.spinner("IA executando Protocolo de Choque..."):
-                    prompt_v24 = (f"ORDEM: GERAR EXATAMENTE {qtd_q} QUESTÕES DE EXERCÍCIO.\n"
+                with st.spinner("Maestro redigindo com rigor acadêmico..."):
+                    prompt_v24 = (f"ORDEM: GERAR EXATAMENTE {qtd_q} QUESTÕES. SEM TABELAS ASCII.\n"
                                  f"FOCO: {ano_lab}º ANO, {sem_lab}, {aula_num}.\n"
                                  f"CONTEÚDOS: {sel_cont}\nOBJETIVOS: {sel_obj}\n"
                                  f"FORMATO: {formato}\nNÍVEL: {nivel}\nCONTEXTO: {instr}")
@@ -448,16 +448,14 @@ elif menu == "🧪 Criador de Aulas":
                     if "lab_pei" in st.session_state: del st.session_state.lab_pei
                     st.rerun()
 
-        # --- AMBIENTE DE EDIÇÃO (SÓ APARECE SE HOUVER TEXTO) ---
         if "lab_temp" in st.session_state:
             st.markdown("---")
             v = st.session_state.v_lab
             txt_bruto = st.session_state.lab_temp
 
-            # EXTRAÇÃO ANTES DAS ABAS (Garante que os dados não sumam)
+            # EXTRAÇÃO ROBUSTA
             ed_prof = ai.extrair_tag(txt_bruto, "PROFESSOR")
             ed_alu = ai.extrair_tag(txt_bruto, "ALUNO")
-            ed_gab = ai.extrair_tag(txt_bruto, "GABARITO")
 
             st.subheader("🤖 Refinador Cirúrgico")
             cmd_refine = st.chat_input("Comando (Ex: 'Remova a questão 3')...", key=f"chat_lab_{v}")
@@ -479,7 +477,7 @@ elif menu == "🧪 Criador de Aulas":
                         import re
                         questoes = re.findall(r'\d+\.', ed_alu)
                         meta = min(5, max(1, len(questoes) // 2))
-                        prompt_pei = f"MATERIAL ORIGINAL:\n{ed_alu}\n\nORDEM: Gere folha independente com EXATAMENTE {meta} QUESTÕES ADAPTADAS."
+                        prompt_pei = f"MATERIAL ORIGINAL:\n{ed_alu}\n\nORDEM: Gere folha independente com EXATAMENTE {meta} QUESTÕES ADAPTADAS. Use a tag [PEI]."
                         st.session_state.lab_pei = ai.gerar_ia("ARQUITETO_PEI_V24", prompt_pei)
                         st.rerun()
                 
@@ -487,23 +485,15 @@ elif menu == "🧪 Criador de Aulas":
                 st.text_area("Versão Adaptada:", ai.extrair_tag(txt_pei_raw, "PEI"), height=400, key=f"area_pei_{v}")
 
             with t_exp:
-                st.subheader("📥 Downloads e Nuvem")
+                st.subheader("📥 Downloads")
                 nome_base = f"AULA_{aula_num.replace(' ','')}_{ano_lab}ANO_{sem_lab.split(' ')[1]}"
                 c_exp1, c_exp2 = st.columns(2)
                 with c_exp1:
                     doc_alu = exporter.gerar_docx_aluno_v24(nome_base, ed_alu, {"ano": f"{ano_lab}º", "trimestre": "I"})
                     st.download_button("📥 Baixar Folha Aluno", doc_alu, f"{nome_base}_ALUNO.docx", use_container_width=True, key=f"dl_alu_{v}")
-                    if st.button("☁️ Salvar Aluno no Drive", key=f"drv_alu_{v}"):
-                        link = db.subir_e_converter_para_google_docs(doc_alu, f"{nome_base}_ALUNO", categoria="Material de Sala", sub_categoria="Folha Aluno")
-                        if "https" in str(link):
-                            db.salvar_link_na_planilha("DB_AULAS_PRONTAS", "SEMANA_REF", sem_lab, link)
-                            st.success("✅ Salvo!"); st.link_button("Abrir", str(link))
                 with c_exp2:
                     doc_prof = exporter.gerar_docx_professor_v24(nome_base, ed_prof, {"ano": f"{ano_lab}º", "semana": sem_lab})
                     st.download_button("📥 Baixar Guia Prof", doc_prof, f"{nome_base}_PROF.docx", use_container_width=True, key=f"dl_prof_{v}")
-                    if st.button("☁️ Salvar Guia no Drive", key=f"drv_prof_{v}"):
-                        link = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_base}_PROF", categoria="Material de Sala", sub_categoria="Guia Professor")
-                        st.success("✅ Salvo!"); st.link_button("Abrir", str(link))
 
             if st.button("🗑️ DESCARTAR E RECOMEÇAR", use_container_width=True):
                 if "lab_temp" in st.session_state: del st.session_state.lab_temp
