@@ -634,28 +634,54 @@ elif menu == "🧪 Criador de Aulas":
                 if "lab_pei" in st.session_state: del st.session_state.lab_pei
                 st.rerun()
 
-# --- ABA 2: GAVETAS DE MATERIAIS (AGRUPAMENTO POR REFERÊNCIA V25.11) ---
+# --- ABA 2: GAVETAS DE MATERIAIS (INTELIGÊNCIA DE AGRUPAMENTO V25.12) ---
     with tab_gavetas:
         st.subheader("🗂️ Gestão de Materiais Produzidos")
         
         if df_aulas.empty:
             st.info("📭 Nenhuma aula produzida no banco de dados.")
         else:
-            ano_gav = st.selectbox("Filtrar por Ano:", ["Todos", "6º", "7º", "8º", "9º"], key="gav_v11_ano")
+            ano_gav = st.selectbox("Filtrar por Ano:", ["Todos", "6º", "7º", "8º", "9º"], key="gav_v12_ano")
             df_g = df_aulas.copy()
             if ano_gav != "Todos": 
                 df_g = df_g[df_g['ANO'].str.contains(ano_gav, na=False)]
             
-            # Agrupamento Inteligente: Busca o Trimestre dentro do texto da SEMANA_REF
-            categorias = ["I Trimestre", "II Trimestre", "III Trimestre", "Jornada"]
+            # FUNÇÃO INTERNA DE CLASSIFICAÇÃO ROBUSTA
+            def definir_categoria_gaveta(linha):
+                ref = str(linha['SEMANA_REF']).upper()
+                # 1. Tenta pelo texto direto
+                if "I TRIMESTRE" in ref: return "I Trimestre"
+                if "II TRIMESTRE" in ref: return "II Trimestre"
+                if "III TRIMESTRE" in ref: return "III Trimestre"
+                if "JORNADA" in ref: return "Jornada"
+                
+                # 2. Tenta pelo número da semana (Padrão SOSA)
+                import re
+                num_sem = re.search(r"(\d+)", ref)
+                if num_sem:
+                    n = int(num_sem.group(1))
+                    if 1 <= n <= 13: return "I Trimestre"
+                    if 14 <= n <= 26: return "II Trimestre"
+                    if n >= 27: return "III Trimestre"
+                
+                # 3. Fallback pela data
+                try:
+                    dt = pd.to_datetime(linha['DATA'], format="%d/%m/%Y").date()
+                    return util.obter_info_trimestre(dt)[0]
+                except:
+                    return "Recesso/Jornada"
+
+            # Aplica a categorização no DataFrame de exibição
+            df_g['CATEGORIA_GAVETA'] = df_g.apply(definir_categoria_gaveta, axis=1)
             
-            for cat in categorias:
-                # Filtra materiais onde o nome da semana contém o trimestre (Ex: "Semana 01... - I Trimestre")
-                df_cat = df_g[df_g['SEMANA_REF'].str.contains(cat, na=False)]
+            categorias_ordem = ["I Trimestre", "II Trimestre", "III Trimestre", "Jornada", "Recesso/Jornada"]
+            
+            for cat in categorias_ordem:
+                df_cat = df_g[df_g['CATEGORIA_GAVETA'] == cat]
                 
                 if not df_cat.empty:
-                    icon = "🏫" if cat == "Jornada" else "⏳"
-                    with st.expander(f"{icon} Materiais do {cat}", expanded=(cat == "I Trimestre")):
+                    icon = "⏳" if "Trimestre" in cat else "🏫"
+                    with st.expander(f"{icon} Materiais do {cat}", expanded=(cat == "I Trimestre" or cat == "Jornada")):
                         for _, row in df_cat.iloc[::-1].iterrows():
                             tipo = str(row['TIPO_MATERIAL']).upper()
                             cor_borda = "#2962FF" if "AULA 1" in tipo else "#00C853"
@@ -666,10 +692,14 @@ elif menu == "🧪 Criador de Aulas":
                                 
                                 import re
                                 texto_full = str(row['CONTEUDO'])
-                                # Separa o Roteiro dos Links
-                                partes = texto_full.split("--- LINKS DE ACESSO ---")
-                                roteiro_txt = partes[0]
-                                links_txt = partes[1] if len(partes) > 1 else texto_full
+                                # Separa Roteiro de Links (Tratamento para materiais antigos e novos)
+                                if "--- LINKS DE ACESSO ---" in texto_full:
+                                    partes = texto_full.split("--- LINKS DE ACESSO ---")
+                                    roteiro_txt = partes[0]
+                                    links_txt = partes[1]
+                                else:
+                                    roteiro_txt = "Roteiro não preservado (Material antigo). Use os links abaixo."
+                                    links_txt = texto_full
 
                                 link_alu = re.search(r"Aluno\((.*?)\)", links_txt)
                                 link_prof = re.search(r"Prof\((.*?)\)", links_txt)
@@ -684,19 +714,21 @@ elif menu == "🧪 Criador de Aulas":
                                 
                                 if link_pei and "https" in link_pei.group(1): c3.link_button("♿ PEI", link_pei.group(1), use_container_width=True)
                                 
-                                if c4.button("🗑️ APAGAR", key=f"del_v11_{row.name}", use_container_width=True):
+                                if c4.button("🗑️ APAGAR", key=f"del_v12_{row.name}", use_container_width=True):
                                     with st.spinner("Limpando..."):
                                         if db.excluir_registro_com_drive("DB_AULAS_PRONTAS", row['CONTEUDO']):
                                             st.success("Removido!"); time.sleep(0.5); st.rerun()
 
                                 # --- VISUALIZAÇÃO DO PROMPT/ROTEIRO ---
                                 with st.expander("📄 Ver Roteiro Técnico / Super Prompt"):
-                                    st.text_area("Roteiro Salvo:", roteiro_txt, height=250, key=f"txt_v11_{row.name}")
-                                    if "SLIDES" in row['TIPO_MATERIAL'].upper():
+                                    st.text_area("Conteúdo Salvo:", roteiro_txt, height=250, key=f"txt_v12_{row.name}")
+                                    if "SLIDES" in row['TIPO_MATERIAL'].upper() and "Roteiro não preservado" not in roteiro_txt:
                                         st.markdown("### 🤖 Comando para Gemini Slides")
                                         st.code(f"Atue como Designer Instrucional. REFORMATE esta apresentação: {roteiro_txt}", language="text")
+                                    elif "Roteiro não preservado" in roteiro_txt:
+                                        st.warning("Este material foi criado antes da atualização de histórico. O roteiro de texto não está disponível, apenas os arquivos nos links acima.")
 
-            if df_g.empty: st.warning("Nenhum material encontrado.")
+            if df_g.empty: st.warning("Nenhum material encontrado para os filtros selecionados.")
                             
 
 # ==============================================================================
