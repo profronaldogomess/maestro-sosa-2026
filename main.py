@@ -398,174 +398,306 @@ if menu == "🤖 Maestro Dashboard":
         st.session_state.messages.append({"role": "assistant", "content": resposta})
 
 # ==============================================================================
-# MÓDULO: 🧪 LABORATÓRIO DE MATERIAIS (V23 - ARQUITETURA DE ELITE)
+# MÓDULO: MATERIAL DE SALA (🧪 CRIADOR DE AULAS)
 # ==============================================================================
 elif menu == "🧪 Criador de Aulas":
-    st.title("🧪 Laboratório de Materiais de Elite")
+    st.header("🧪 Laboratório de Materiais Didáticos")
     
-    if "lab_status" not in st.session_state:
-        st.session_state.lab_status = "IDLE"
-
-    tab_aula, tab_avalia, tab_estoque = st.tabs([
-        "🏫 Aula da Semana", 
-        "📝 Engenharia de Avaliações", 
-        "📊 Dashboard de Produção"
+    t_lousa, t_avulsa, t_prova, t_prova_pei, t_adaptada, t_hist = st.tabs([
+        "🏫 Lousa/Slides", 
+        "🏠 Atividades Avulsas", 
+        "📝 Avaliações (Regular)", 
+        "♿ Avaliação Adaptada (PEI)", 
+        "🧩 Atividade Global (PEI)", 
+        "🗂️ Histórico"
     ])
 
-    with tab_aula:
-        st.subheader("1. Configuração e Vínculo Pedagógico")
-        
-        c1, c2, c3 = st.columns([1, 2, 1])
-        ano_lab = c1.selectbox("Série:", ["6º", "7º", "8º", "9º"], key="lab_ano_v23")
-        
-        semanas_plan = df_planos[df_planos['ANO'] == ano_lab]['SEMANA'].unique().tolist() if not df_planos.empty else []
-        
-        if not semanas_plan:
-            st.warning("⚠️ Crie o plano primeiro na aba 'Planejamento'.")
-        else:
-            sem_lab = c2.selectbox("Semana do Plano:", semanas_plan, key="lab_sem_v23")
-            aula_num = c3.selectbox("Identificador:", ["Aula 1", "Aula 2"], key="lab_aula_v23")
-            
-            # --- AUDITORIA E LÓGICA HIERÁRQUICA ---
-            plano_ref = df_planos[(df_planos['ANO'] == ano_lab) & (df_planos['SEMANA'] == sem_lab)].iloc[0]
-            texto_plano = plano_ref['PLANO_TEXTO']
-            
-            cont_bruto = ai.extrair_tag(texto_plano, 'CONTEUDOS_ESPECIFICOS')
-            lista_cont_plano = [c.strip() for c in cont_bruto.replace('\n', ';').split(';') if len(c.strip()) > 5]
-
-            with st.container(border=True):
-                st.markdown("🎯 **Passo 1: Selecione o Conteúdo desta Aula**")
-                foco_cont = st.multiselect("Conteúdos do Plano Semanal:", lista_cont_plano, default=lista_cont_plano)
+    # --- ABA 1: LOUSA / SLIDES ---
+    with t_lousa:
+        st.subheader("📋 Material de Sala (Baseado no Plano)")
+        try:
+            if df_planos.empty:
+                st.warning("⚠️ Nenhum Planejamento encontrado. Vá na aba '📅 Planejamento (Ponto ID)' e crie seu primeiro plano para liberar este módulo.")
+            else:
+                c1, c2 = st.columns([1, 2])
+                ano_l = c1.selectbox("Ano:", [6, 7, 8, 9], key="l_ano")
                 
-                objetivos_sugeridos = []
-                if foco_cont and not df_curriculo.empty:
-                    filtro_curr = df_curriculo[df_curriculo['CONTEUDO_ESPECIFICO'].isin(foco_cont)]
-                    objetivos_sugeridos = filtro_curr['OBJETIVOS'].unique().tolist()
+                if 'ANO' in df_planos.columns:
+                    df_f = df_planos[df_planos['ANO'] == f"{ano_l}º"]
+                    if not df_f.empty:
+                        sel_p = c2.selectbox("Semana do Plano:", df_f['SEMANA'].tolist(), key="l_sem")
+                        plano_txt = df_f[df_f['SEMANA'] == sel_p].iloc[0]['PLANO_TEXTO']
+                        
+                        col1, col2, col3 = st.columns(3)
+                        foco_aula = col1.selectbox("Zelo:", ["Aula 1", "Aula 2", "Ambas"], key="foco_aula")
+                        formato_aula = col2.radio("Formato:", ["Quadro (Lousa)", "Slides (Roteiro)"])
+                        num_q = col3.slider("Questões:", 1, 15, 5, key="num_q_lousa")
+                        
+                        orient = st.text_area("Instruções Adicionais:", placeholder="Ex: Use o contexto de Itabuna...", key="orient_lousa")
+                        
+                        b1, b2 = st.columns(2)
+                        if b1.button("🚀 Gerar Material Completo", key="btn_lousa"):
+                            with st.spinner("Compondo pacote com busca ativa e roteiro Gamma..."):
+                                prompt = (f"BASE PEDAGÓGICA (PLANO): {plano_txt}. FORMATO: {formato_aula}. FOCO: {foco_aula}. "
+                                         f"Se formato for 'Slides (Roteiro)', gere um script técnico pronto para o Gamma AI. "
+                                         f"Use a didática de Situações-Problema (PDF Curitiba): Material Dourado, Decomposição e Contexto de Compras. "
+                                         f"Pesquise no Google por tendências da Geração Alpha para o tema. "
+                                         f"Inclua {num_q} questões. PACOTE COMPLETO: LOUSA, FOLHA, GABARITO, IMAGENS. Orientações: {orient}.")
+                                st.session_state.out_lousa = ai.gerar_ia("AVALIADOR", prompt)
+                        if b2.button("🗑️ Limpar/Novo", key="clear_lousa"):
+                            if "out_lousa" in st.session_state: del st.session_state.out_lousa
+                            st.rerun()
+                        
+                        if "out_lousa" in st.session_state:
+                            st.info("🤖 **Refinamento:** Peça ajustes no material gerado abaixo.")
+                            ajuste_l = st.chat_input("Ex: 'Adicione um slide sobre Material Dourado'", key="chat_lousa")
+                            if ajuste_l:
+                                st.session_state.out_lousa = ai.gerar_ia("AVALIADOR", f"Material atual: {st.session_state.out_lousa}. Ajuste: {ajuste_l}. Mantenha os MARKERS.")
+                                st.rerun()
+                            
+                            # CHAMADA DA FUNÇÃO COM ABA DE EXPORTAÇÃO
+                            exibir_material_estruturado(st.session_state.out_lousa, "view_lousa")
+                            
+                            if st.button("💾 Salvar Material na Semana", key="save_lousa"):
+                                db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m"), f"{sel_p} ({foco_aula})", formato_aula, st.session_state.out_lousa, f"{ano_l}º"])
+                                st.success("Salvo!"); del st.session_state.out_lousa; time.sleep(1); st.rerun()
+                                info_doc = {
+                                "turma": st.session_state.get('diario_turma', '______'),
+                                "trimestre": st.session_state.get('notas_trim', 'III').split(' ')[0]
+                                }
+                    else: st.warning(f"Nenhum plano encontrado para o {ano_l}º ano. Crie um plano primeiro.")
+                else: st.error("⚠️ Coluna 'ANO' não encontrada na planilha DB_PLANOS.")
+        except Exception as e:
+            st.error(f"Erro ao carregar painel: {e}")
+
+    # --- ABA 2: ATIVIDADES AVULSAS ---
+    with t_avulsa:
+        st.subheader("🏠 Atividades Avulsas / Reforço")
+        try:
+            if df_planos.empty:
+                st.warning("⚠️ Crie um Plano primeiro na aba 'Planejamento' para vincular atividades.")
+            else:
+                c1, c2 = st.columns([1, 2])
+                ano_av = c1.selectbox("Ano:", [6, 7, 8, 9], key="av_ano")
                 
-                if not objetivos_sugeridos:
-                    obj_bruto = ai.extrair_tag(texto_plano, 'OBJETIVOS_ENSINO')
-                    objetivos_sugeridos = [o.strip() for o in obj_bruto.replace('\n', ';').split(';') if len(o.strip()) > 5]
+                if 'ANO' in df_planos.columns:
+                    df_f_av = df_planos[df_planos['ANO'] == f"{ano_av}º"]
+                    if not df_f_av.empty:
+                        sel_p_av = c2.selectbox("Vincular à Semana:", df_f_av['SEMANA'].tolist(), key="av_sem")
+                        plano_txt_av = df_f_av[df_f_av['SEMANA'] == sel_p_av].iloc[0]['PLANO_TEXTO']
+                        tema_av = st.text_input("Título da Atividade:")
+                        orient_av = st.text_area("Orientações:", key="orient_av")
+                        
+                        b1, b2 = st.columns(2)
+                        if b1.button("🚀 Gerar Atividade Avulsa", key="btn_av"):
+                            with st.spinner("Gerando..."):
+                                prompt = (f"BASE PEDAGÓGICA (PLANO): {plano_txt_av}. TEMA: {tema_av}. ORIENTAÇÕES: {orient_av}. "
+                                         f"Gere PACOTE COMPLETO (LOUSA, FOLHA, GABARITO, IMAGENS).")
+                                st.session_state.out_avulsa = ai.gerar_ia("AVALIADOR", prompt)
+                        if b2.button("🗑️ Limpar/Novo", key="clear_av"):
+                            if "out_avulsa" in st.session_state: del st.session_state.out_avulsa
+                            st.rerun()
 
-                st.markdown("🎯 **Passo 2: Selecione os Objetivos Vinculados**")
-                foco_obj = st.multiselect("Objetivos de Ensino (Filtrados):", objetivos_sugeridos, default=objetivos_sugeridos)
+                        if "out_avulsa" in st.session_state:
+                            st.info("🤖 **Refinamento:** Peça alterações aqui.")
+                            aj_av = st.chat_input("Sugerir mudança...", key="chat_avulsa_input")
+                            if aj_av:
+                                st.session_state.out_avulsa = ai.gerar_ia("AVALIADOR", f"Atual: {st.session_state.out_avulsa}. Ajuste: {aj_av}. Mantenha os MARKERS.")
+                                st.rerun()
+                            
+                            # CHAMADA DA FUNÇÃO COM ABA DE EXPORTAÇÃO
+                            exibir_material_estruturado(st.session_state.out_avulsa, "view_av")
+                            
+                            if st.button("💾 Salvar Atividade na Semana", key="save_av"):
+                                db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m"), f"{sel_p_av} (AVULSA)", "AVULSA", st.session_state.out_avulsa, f"{ano_av}º"])
+                                st.success("Salvo!"); del st.session_state.out_avulsa; time.sleep(1); st.rerun()
+                    else: st.warning(f"Nenhum plano encontrado para o {ano_av}º ano.")
+                else: st.error("⚠️ Coluna 'ANO' não encontrada.")
+        except Exception as e:
+            st.error(f"Erro ao carregar painel: {e}")
 
-            st.markdown("---")
-            col_v1, col_v2 = st.columns(2)
-            formato_prof = col_v1.radio("Formato Professor:", ["✍️ Quadro/Lousa", "📊 Slides"], key="lab_formato")
-            tipo_ativ = col_v2.radio("Atividade Aluno:", ["📓 Caderno", "📖 Livro Didático", "🚫 Nenhuma"], key="lab_tipo_ativ")
+    # --- ABA 3: AVALIAÇÕES REGULARES ---
+    with t_prova:
+        st.subheader("📝 Gerador de Avaliações (Regular)")
+        try:
+            if df_planos.empty:
+                st.warning("⚠️ Crie Planos primeiro para gerar avaliações baseadas neles.")
+            else:
+                c1, c2, c3 = st.columns(3)
+                ano_p = c1.selectbox("Ano:", [6, 7, 8, 9], key="p_ano")
+                
+                if 'ANO' in df_planos.columns:
+                    df_p = df_planos[df_planos['ANO'] == f"{ano_p}º"].sort_values(by="SEMANA")
+                    if not df_p.empty:
+                        s_ini = c2.selectbox("De:", df_p['SEMANA'].tolist())
+                        s_fim = c3.selectbox("Até:", df_p['SEMANA'].tolist(), index=len(df_p)-1)
+                        df_per = df_p[(df_p['SEMANA'] >= s_ini) & (df_p['SEMANA'] <= s_fim)]
+                        ctx = "\n".join([f"SEM {r['SEMANA']}: {ai.extrair_tag(r['PLANO_TEXTO'], 'CONTEUDOS_ESPECIFICOS')}" for _, r in df_per.iterrows()])
+                        tipo = st.selectbox("Tipo:", ["Teste", "Prova", "Rec. Paralela", "Rec. Final", "2ª Chamada"])
+                        num_ev = st.number_input("Questões:", 5, 20, 10)
+                        orient_p = st.text_area("Orientações para a Prova:")
+                        
+                        b1, b2 = st.columns(2)
+                        if b1.button("🔥 Gerar Avaliação Regular", key="btn_prova"):
+                            with st.spinner("Compondo prova..."):
+                                prompt = f"Crie uma {tipo} (PACOTE COMPLETO) para o {ano_p}º ano. Período: {s_ini} a {s_fim}. Base: {ctx}. Qtd: {num_ev}. Orientações: {orient_p}."
+                                st.session_state.out_prova = ai.gerar_ia("AVALIADOR", prompt)
+                        if b2.button("🗑️ Limpar/Novo", key="clear_prova"):
+                            if "out_prova" in st.session_state: del st.session_state.out_prova
+                            st.rerun()
+
+                        if "out_prova" in st.session_state:
+                            st.info("🤖 **Refinamento:** Peça alterações na prova.")
+                            aj_p = st.chat_input("Sugerir mudança...", key="chat_prova_input")
+                            if aj_p:
+                                st.session_state.out_prova = ai.gerar_ia("AVALIADOR", f"Atual: {st.session_state.out_prova}. Ajuste: {aj_p}. Mantenha os MARKERS.")
+                                st.rerun()
+                            
+                            # CHAMADA DA FUNÇÃO COM ABA DE EXPORTAÇÃO
+                            exibir_material_estruturado(st.session_state.out_prova, "view_prova")
+                            
+                            if st.button("💾 Salvar Avaliação Oficial (Regular)"):
+                                db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m"), f"{s_ini}-{s_fim}", tipo, st.session_state.out_prova, f"{ano_p}º"])
+                                st.success("Salvo!"); del st.session_state.out_prova; time.sleep(1); st.rerun()
+                    else: st.warning(f"Nenhum plano encontrado para o {ano_p}º ano.")
+                else: st.error("⚠️ Coluna 'ANO' não encontrada.")
+        except Exception as e:
+            st.error(f"Erro ao carregar painel: {e}")
+
+    # --- ABA 4: AVALIAÇÃO ADAPTADA (PEI) ---
+    with t_prova_pei:
+        st.subheader("♿ Gerador de Avaliação Adaptada (PEI)")
+        st.info("Selecione uma prova regular já salva para criar a versão adaptada (reduzida e visual).")
+        
+        if not df_aulas.empty:
+            df_provas = df_aulas[
+                (df_aulas['TIPO_MATERIAL'].isin(["Teste", "Prova", "Rec. Paralela", "Rec. Final"])) & 
+                (~df_aulas['TIPO_MATERIAL'].str.contains("ADAPTADA", na=False))
+            ].copy()
             
-            # Inicialização de segurança
-            pags_livro = ""; livro_sel = ""; num_q = 5; dif_q = "Básica"; params_ativ_texto = "Nenhuma."
-
-            if tipo_ativ == "📓 Caderno":
-                c_cad1, c_cad2 = st.columns(2)
-                num_q = c_cad1.slider("Quantidade de Questões:", 1, 15, 5, key="lab_num_q")
-                dif_q = c_cad2.select_slider("Nível de Dificuldade:", ["Básica", "Intermediária", "Desafio"], key="lab_dif_q")
-                params_ativ_texto = f"Gerar EXATAMENTE {num_q} questões de nível {dif_q}."
-            elif tipo_ativ == "📖 Livro Didático":
-                c_liv1, c_liv2 = st.columns(2)
-                lista_livros = df_materiais['NOME_ARQUIVO'].tolist() if not df_materiais.empty else ["Nenhum"]
-                livro_sel = c_liv1.selectbox("Livro:", lista_livros)
-                pags_livro = c_liv2.text_input("Páginas:", key="input_pags_v23")
-                params_ativ_texto = f"Baseado no livro {livro_sel}, páginas {pags_livro}."
-
-            # --- BOTÃO DE INÍCIO (DENTRO DO ELSE) ---
-            if st.button("🚀 Iniciar Composição do Laboratório", use_container_width=True):
-                with st.spinner(f"Maestro SOSA em Protocolo de Choque: Gerando {num_q} questões..."):
-                    # Este prompt conversa diretamente com a sua persona AVALIADOR_V23
-                    prompt_reg = (
-                        f"### ORDEM DE EXECUÇÃO PARA ALGORITMO ###\n"
-                        f"TEMA: {', '.join(foco_cont)}\n"
-                        f"OBJETIVOS: {', '.join(foco_obj)}\n"
-                        f"QUANTIDADE OBRIGATÓRIA: {num_q} QUESTÕES.\n"
-                        f"NÍVEL: {dif_q}\n\n"
-                        f"INSTRUÇÃO DE MONTAGEM:\n"
-                        f"- Use MARKER_TITULO para o nome da aula.\n"
-                        f"- No MARKER_PROFESSOR, faça o quadro rico com exemplos.\n"
-                        f"- No MARKER_ALUNO, liste de 1 até {num_q}. PARE NA QUESTÃO {num_q}.\n"
-                        f"- Termine com a tag [FIM_DO_MATERIAL]."
-                    )
+            if not df_provas.empty:
+                df_provas = df_provas.iloc[::-1].reset_index(drop=True)
+                
+                sel_prova_base = st.selectbox(
+                    "Selecione a Prova Regular:",
+                    df_provas.index,
+                    format_func=lambda x: f"{df_provas.loc[x, 'DATA']} - {df_provas.loc[x, 'SEMANA_REF']} ({df_provas.loc[x, 'TIPO_MATERIAL']}) - {df_provas.loc[x, 'ANO']}"
+                )
+                
+                conteudo_prova_base = df_provas.loc[sel_prova_base, 'CONTEUDO']
+                tipo_prova_base = df_provas.loc[sel_prova_base, 'TIPO_MATERIAL']
+                ano_prova_base = df_provas.loc[sel_prova_base, 'ANO']
+                ref_prova_base = df_provas.loc[sel_prova_base, 'SEMANA_REF']
+                
+                with st.expander("Ver Conteúdo da Prova Original"):
+                    st.text(ai.extrair_tag(conteudo_prova_base, "FOLHA"))
+                
+                if st.button("♿ Gerar Versão Adaptada Agora"):
+                    with st.spinner("O Especialista em Inclusão está adaptando a prova..."):
+                        prompt_adapt = f"PROVA ORIGINAL: {conteudo_prova_base}. TIPO: {tipo_prova_base}. Crie uma versão ADAPTADA (reduzida, visual, simplificada) para alunos com DI/TDAH."
+                        st.session_state.out_prova_adaptada = ai.gerar_ia("AVALIADOR_ADAPTADO", prompt_adapt)
+                
+                if "out_prova_adaptada" in st.session_state:
+                    st.success("Versão Adaptada Gerada com Sucesso!")
                     
-                    raw = ai.gerar_ia("AVALIADOR_V23", prompt_reg)
+                    # CHAMADA DA FUNÇÃO COM ABA DE EXPORTAÇÃO
+                    exibir_material_estruturado(st.session_state.out_prova_adaptada, "view_prova_adapt_tab")
                     
-                    # O seu extrair_tag vai brilhar aqui, pegando tudo sem erro
-                    st.session_state.lab_titulo = ai.extrair_tag(raw, "TITULO")
-                    st.session_state.lab_prof = ai.extrair_tag(raw, "PROFESSOR")
-                    st.session_state.lab_aluno = ai.extrair_tag(raw, "ALUNO")
-                    st.session_state.lab_img = ai.extrair_tag(raw, "IMAGENS")
-                    st.session_state.lab_gab = ai.extrair_tag(raw, "GABARITO")
-                    st.session_state.lab_status = "GERADO"
-                    st.rerun()
-
-            # --- EXIBIÇÃO E REFINAMENTO (DENTRO DO ELSE) ---
-            if st.session_state.get("lab_status") == "GERADO":
-                st.markdown(f"## 🏫 {st.session_state.get('lab_titulo', 'Nova Aula')}")
-                
-                comando_refino = st.chat_input("Sugerir mudanças cirúrgicas...")
-                if comando_refino:
-                    with st.spinner("Realizando cirurgia no material..."):
-                        contexto_edicao = f"PROFESSOR: {st.session_state.lab_prof}\nALUNO: {st.session_state.lab_aluno}\nORDEM: {comando_refino}"
-                        raw_novo = ai.gerar_ia("REFINADOR_CIRURGICO", contexto_edicao)
-                        
-                        novo_prof = ai.extrair_tag(raw_novo, "PROFESSOR")
-                        novo_aluno = ai.extrair_tag(raw_novo, "ALUNO")
-                        if novo_prof: st.session_state.lab_prof = novo_prof
-                        if novo_aluno: st.session_state.lab_aluno = novo_aluno
-                        st.rerun()
-
-                t_prof, t_aluno, t_img, t_gab, t_pei = st.tabs(["👨‍🏫 Professor", "📝 Aluno", "🎨 Imagens", "✅ Gabarito", "♿ PEI"])
-                
-                with t_prof:
-                    st.session_state.lab_prof = st.text_area("Quadro:", st.session_state.lab_prof, height=400, key="ta_prof_v23")
-                with t_aluno:
-                    st.session_state.lab_aluno = st.text_area("Folha:", st.session_state.lab_aluno, height=400, key="ta_aluno_v23")
-                with t_img:
-                    st.code(st.session_state.lab_img)
-                with t_gab:
-                    st.session_state.lab_gab = st.text_area("Gabarito:", st.session_state.lab_gab, height=200, key="ta_gab_v23")
-                with t_pei:
-                    if st.button("♿ Gerar PEI"):
-                        st.session_state.lab_pei = ai.gerar_ia("PEI_ELITE", st.session_state.lab_aluno)
-                        st.rerun()
-                    if "lab_pei" in st.session_state:
-                        st.session_state.lab_pei = st.text_area("PEI:", st.session_state.lab_pei, height=400, key="ta_pei_v23")
-
-                st.markdown("---")
-                incluir_quadro = st.checkbox("📄 Incluir conteúdo do quadro na folha do aluno?")
-
-                if st.button("💾 FINALIZAR E SALVAR MASTER DOC", type="primary", use_container_width=True):
-                    with st.spinner("Sincronizando..."):
-                        folha_final = st.session_state.lab_aluno
-                        if incluir_quadro:
-                            folha_final = f"RESUMO:\n{st.session_state.lab_prof}\n\n{folha_final}"
-                        
-                        doc_file = exporter.gerar_docx_laboratorio_v23(
-                            st.session_state.lab_titulo, st.session_state.lab_prof,
-                            folha_final, st.session_state.get('lab_pei', ''), st.session_state.lab_gab,
-                            {"turma": ano_lab, "semana": sem_lab}
-                        )
-                        
-                        link = db.subir_e_converter_para_google_docs(doc_file, st.session_state.lab_titulo, sub_categoria=sem_lab)
-                        
+                    if st.button("💾 Salvar Prova Adaptada no Histórico"):
                         db.salvar_no_banco("DB_AULAS_PRONTAS", [
-                            datetime.now().strftime("%d/%m/%Y"), sem_lab, aula_num, "Normal",
-                            formato_prof, f"TITULO: {st.session_state.lab_titulo}\n{folha_final}", 
-                            ano_lab, link, pags_livro, "", "", "TODAS"
+                            datetime.now().strftime("%d/%m"), 
+                            ref_prova_base, 
+                            f"{tipo_prova_base} (ADAPTADA)", 
+                            st.session_state.out_prova_adaptada, 
+                            ano_prova_base
                         ])
-                        
-                        st.success("✅ Salvo!"); st.session_state.lab_status = "IDLE"
-                        for key in ["lab_prof", "lab_aluno", "lab_titulo", "lab_img", "lab_gab", "lab_pei"]:
-                            if key in st.session_state: del st.session_state[key]
-                        time.sleep(2); st.rerun()
+                        st.success("Salvo!"); del st.session_state.out_prova_adaptada; time.sleep(1); st.rerun()
+            else:
+                st.warning("Nenhuma prova regular encontrada no histórico. Crie uma na aba 'Avaliações (Regular)' primeiro.")
+        else:
+            st.warning("Histórico vazio.")
 
-    # --- ABA B E C (MANTIDAS) ---
-    with tab_avalia:
-        st.subheader("📝 Varredura para Avaliação Fiel")
-        # ... (seu código de avaliação aqui)
-    
-    with tab_estoque:
-        st.subheader("📊 Estoque Pedagógico")
-        # ... (seu código de estoque aqui)
+    # --- ABA 5: ATIVIDADE GLOBAL (PEI) ---
+    with t_adaptada:
+        st.subheader("🧩 Atividade Adaptada (Global - DUA)")
+        st.info("Esta ferramenta cria uma atividade única, visual e simplificada, acessível para alunos com DI, TEA e TDAH.")
+        
+        try:
+            if df_planos.empty:
+                st.warning("⚠️ Crie um Plano primeiro na aba 'Planejamento'.")
+            else:
+                c1, c2 = st.columns([1, 2])
+                ano_ad = c1.selectbox("Ano:", [6, 7, 8, 9], key="ad_ano")
+                
+                if 'ANO' in df_planos.columns:
+                    df_f_ad = df_planos[df_planos['ANO'] == f"{ano_ad}º"]
+                    if not df_f_ad.empty:
+                        sel_p_ad = c2.selectbox("Semana do Plano:", df_f_ad['SEMANA'].tolist(), key="ad_sem")
+                        plano_txt_ad = df_f_ad[df_f_ad['SEMANA'] == sel_p_ad].iloc[0]['PLANO_TEXTO']
+                        
+                        foco_ad = st.radio("Foco da Atividade:", ["Aula 1", "Aula 2", "Ambas"], horizontal=True, key="foco_ad")
+                        
+                        if st.button("🚀 Gerar Atividade Global (PEI)"):
+                            with st.spinner("Criando atividade com Desenho Universal para Aprendizagem..."):
+                                prompt = (f"BASE PEDAGÓGICA: {plano_txt_ad}. FOCO: {foco_ad}. "
+                                         f"Crie uma ATIVIDADE ADAPTADA GLOBAL (para DI, TEA, TDAH). "
+                                         f"Use a estrutura: TÍTULO, PARA LEMBRAR (com prompt de imagem), QUESTÕES 1, 2 e 3 (Ligar, Pintar, Completar). "
+                                         f"Gere MARKERS: LOUSA, FOLHA, GABARITO, IMAGENS.")
+                                st.session_state.out_adaptada = ai.gerar_ia("CRIADOR_ADAPTADO", prompt)
+                        
+                        if "out_adaptada" in st.session_state:
+                            # CHAMADA DA FUNÇÃO COM ABA DE EXPORTAÇÃO
+                            exibir_material_estruturado(st.session_state.out_adaptada, "view_adaptada")
+                            
+                            if st.button("💾 Salvar Atividade Adaptada"):
+                                db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m"), f"{sel_p_ad} ({foco_ad})", "ADAPTADA", st.session_state.out_adaptada, f"{ano_ad}º"])
+                                st.success("Salvo!"); del st.session_state.out_adaptada; time.sleep(1); st.rerun()
+                    else: st.warning("Sem planos para este ano.")
+        except Exception as e:
+            st.error(f"Erro: {e}")
+
+    # --- ABA 6: HISTÓRICO DE PRODUÇÃO ---
+    with t_hist:
+        st.subheader("🗂️ Consulta de Materiais Salvos")
+        _, (_, _, _, _, df_h_raw, _, _, _, _, _, _) = db.carregar_tudo()
+        
+        if not df_h_raw.empty and 'DATA' in df_h_raw.columns:
+            c1, c2 = st.columns(2)
+            f_ano = c1.selectbox("Filtrar Ano:", ["Todos", "6º", "7º", "8º", "9º", "GERAL"], key="h_f_ano")
+            f_tipo = c2.selectbox("Filtrar Tipo:", ["Todos", "Quadro (Lousa)", "Slides (Roteiro)", "AVULSA", "ADAPTADA", "Teste", "Prova", "Teste (ADAPTADA)", "Prova (ADAPTADA)", "Rec. Paralela", "Rec. Final"])
+            
+            df_h = df_h_raw.copy()
+            if f_ano != "Todos": df_h = df_h[df_h['ANO'] == f_ano]
+            if f_tipo != "Todos": df_h = df_h[df_h['TIPO_MATERIAL'] == f_tipo]
+            
+            if not df_h.empty:
+                df_h = df_h.iloc[::-1].reset_index(drop=True)
+                
+                def criar_rotulo(idx):
+                    row = df_h.loc[idx]
+                    resumo = str(row['CONTEUDO']).replace('\n', ' ').replace('MARKER_', '')[:60] + "..."
+                    return f"{row['SEMANA_REF']} | {row['TIPO_MATERIAL']} | {resumo}"
+
+                sel_h = st.selectbox(
+                    "Selecione o Material (Mais recente primeiro):", 
+                    df_h.index, 
+                    format_func=criar_rotulo,
+                    key="selectbox_historico_final"
+                )
+                
+                prefixo_unico = f"hist_{sel_h}_{df_h.loc[sel_h, 'DATA'].replace('/', '')}"
+                raw_h = df_h.loc[sel_h, 'CONTEUDO']
+                
+                st.info(f"📅 Data: {df_h.loc[sel_h, 'DATA']} | 🏷️ Tipo: {df_h.loc[sel_h, 'TIPO_MATERIAL']}")
+                
+                # CHAMADA DA FUNÇÃO COM ABA DE EXPORTAÇÃO (Permite baixar materiais antigos também!)
+                exibir_material_estruturado(raw_h, prefixo_unico)
+                
+                if st.button("🗑️ Excluir este Material"):
+                    if db.excluir_registro("DB_AULAS_PRONTAS", raw_h):
+                        st.success("Excluído!"); st.rerun()
+            else: st.info("Nenhum material encontrado.")
+        else: st.info("Histórico vazio.")
 
 # ==============================================================================
 # MÓDULO: PLANEJAMENTO (PONTO ID) - ARQUITETURA SUPREMA V21.1 (FIX)
