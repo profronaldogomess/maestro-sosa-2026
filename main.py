@@ -583,7 +583,7 @@ elif menu == "🧪 Criador de Aulas":
                             st.rerun()
                             
 # ==============================================================================
-# MÓDULO: PLANEJAMENTO (PONTO ID) - ARQUITETURA DE ELITE V25.6 (COMPLETO)
+# MÓDULO: PLANEJAMENTO (PONTO ID) - ARQUITETURA DE ELITE V25.7 (AUDITORIA TOTAL)
 # ==============================================================================
 elif menu == "📅 Planejamento (Ponto ID)":
     st.header("📅 Planejador Estratégico (Ponto ID)")
@@ -594,7 +594,6 @@ elif menu == "📅 Planejamento (Ponto ID)":
         if t.startswith(":") or t.startswith(" :"): t = t[1:].strip()
         return t
 
-    # --- RESTAURAÇÃO DAS 4 ABAS ORIGINAIS ---
     tab_gerar, tab_hist, tab_curso, tab_mapa = st.tabs([
         "✨ Gerar Novo Plano", "🗂️ Histórico Detalhado", "📚 Plano de Curso Vivo", "📊 Mapa de Cobertura"
     ])
@@ -626,10 +625,8 @@ elif menu == "📅 Planejamento (Ponto ID)":
         if "✅" not in sem_p:
             modo_p = st.radio("Método de Elaboração:", ["📖 Livro Didático", "🎛️ Manual (Banco de Dados)"], horizontal=True, key=f"modo_{v}")
             
-            # Variáveis de controle para o prompt
             cont_pre, obj_pre, eixo_pre = [], [], ""
 
-            # SE FOR MANUAL: O FILTRO APARECE ANTES
             if modo_p == "🎛️ Manual (Banco de Dados)":
                 st.markdown("#### 🎯 Seleção de Conteúdo do Banco")
                 df_f = df_curriculo[df_curriculo['ANO'] == ano_p]
@@ -639,7 +636,6 @@ elif menu == "📅 Planejamento (Ponto ID)":
                 obj_pre = st.multiselect("Objetivos (Fiel ao Banco):", options=df_f[df_f['CONTEUDO_ESPECIFICO'].isin(cont_pre)]['OBJETIVOS'].unique(), key=f"obj_pre_{v}")
                 ctx_ia = f"MÉTODO MANUAL. EIXO: {eixo_pre}. CONTEÚDOS: {cont_pre}. OBJETIVOS: {obj_pre}."
             else:
-                # SE FOR LIVRO: APENAS SELEÇÃO DO LIVRO
                 c1, c2 = st.columns([2, 1])
                 sel_mat = c1.multiselect("Selecione o Livro:", df_materiais['NOME_ARQUIVO'].tolist(), key=f"livro_{v}")
                 pags = c2.text_input("Páginas de Referência:", placeholder="Ex: 14 a 25", key=f"pags_{v}")
@@ -649,31 +645,34 @@ elif menu == "📅 Planejamento (Ponto ID)":
 
             if st.button("🚀 Compor Planejamento com Maestro", use_container_width=True, type="primary", key=f"btn_gen_{v}"):
                 with st.spinner("Maestro redigindo rascunho de elite..."):
-                    prompt = f"ANO: {ano_p}º, SEMANA: {sem_p}. {ctx_ia}. ESTRATÉGIA: {strat}."
+                    contexto_anterior = "Início do período letivo."
+                    try:
+                        num_sem_atual = int(re.search(r'Semana (\d+)', sem_p).group(1))
+                        if num_sem_atual > 1:
+                            sem_ant = f"Semana {num_sem_atual-1:02d}"
+                            p_ant = df_planos[(df_planos['ANO'] == f"{ano_p}º") & (df_planos['SEMANA'].str.contains(sem_ant))]
+                            if not p_ant.empty: contexto_anterior = p_ant.iloc[0]['PLANO_TEXTO']
+                    except: pass
+
+                    prompt = f"ANO: {ano_p}º, SEMANA: {sem_p}. {ctx_ia}. CONTINUIDADE: {contexto_anterior}. ESTRATÉGIA: {strat}."
                     st.session_state.p_temp = ai.gerar_ia("PLANE_PEDAGOGICO", prompt)
                     st.rerun()
 
-        # --- AMBIENTE DE EDIÇÃO (APÓS GERAR) ---
         if "p_temp" in st.session_state:
             st.markdown("---")
             txt_bruto = st.session_state.p_temp
             
-            # FILTRO DE PRECISÃO (Sempre disponível para validar o Mapa de Cobertura)
             with st.expander("🎯 FILTRO DE PRECISÃO CURRICULAR (Mapa de Cobertura)", expanded=True):
                 df_f = df_curriculo[df_curriculo['ANO'] == ano_p]
                 cf1, cf2 = st.columns(2)
-                
-                # Lógica para manter o eixo se já foi selecionado no manual
                 idx_eixo = 0
                 if modo_p == "🎛️ Manual (Banco de Dados)":
                     lista_eixos = list(df_f['EIXO'].unique())
                     if eixo_pre in lista_eixos: idx_eixo = lista_eixos.index(eixo_pre)
-
                 eixo_val = cf1.selectbox("Eixo Temático:", df_f['EIXO'].unique(), index=idx_eixo, key=f"eixo_val_{v}")
                 cont_val = st.multiselect("Conteúdos (Fiel ao Banco):", options=df_f[df_f['EIXO'] == eixo_val]['CONTEUDO_ESPECIFICO'].unique(), default=cont_pre if modo_p == "🎛️ Manual (Banco de Dados)" else [], key=f"cont_val_{v}")
                 obj_val = st.multiselect("Objetivos (Fiel ao Banco):", options=df_f[df_f['CONTEUDO_ESPECIFICO'].isin(cont_val)]['OBJETIVOS'].unique(), default=obj_pre if modo_p == "🎛️ Manual (Banco de Dados)" else [], key=f"obj_val_{v}")
 
-            # ÁREA DE EDIÇÃO TÉCNICA
             st.markdown("#### ✏️ Edição Final")
             col_ed1, col_ed2 = st.columns(2)
             ed_geral = col_ed1.text_input("Eixo:", eixo_val, key=f"ed_g_{v}")
@@ -685,13 +684,12 @@ elif menu == "📅 Planejamento (Ponto ID)":
             ed_ava = col_ed3.text_area("Avaliação:", limpar_v23(ai.extrair_tag(txt_bruto, "AVALIACAO"), "AVALIAÇÃO"), key=f"ed_a_{v}")
             ed_pei = col_ed4.text_area("Adaptação PEI:", limpar_v23(ai.extrair_tag(txt_bruto, "ADAPTACAO_PEI"), "ADAPTAÇÃO PEI"), key=f"ed_p_{v}")
 
-            # EXPORTAÇÃO (CHAMADA DA FUNÇÃO V25.4)
             st.markdown("---")
+            st.subheader("📥 Exportação e Nuvem")
             dados_para_enviar = {"geral": ed_geral, "especificos": ed_espec, "objetivos": ed_objs, "metodologia": ed_met, "avaliacao": ed_ava, "pei": ed_pei}
             info_da_aula = {"ano": str(ano_p), "semana": sem_p.split(' ')[1], "trimestre": "I Trimestre"}
             exibir_material_estruturado(txt_bruto, f"plan_v{v}", dados_plano=dados_para_enviar, info_aula=info_da_aula)
 
-            # BOTÕES DE SALVAMENTO
             st.markdown("---")
             c_btn1, c_btn2 = st.columns(2)
             if c_btn1.button("💾 FINALIZAR E SALVAR NO BANCO", use_container_width=True, type="primary", key=f"save_{v}"):
@@ -703,7 +701,7 @@ elif menu == "📅 Planejamento (Ponto ID)":
             if c_btn2.button("🗑️ DESCARTAR", use_container_width=True, key=f"drop_{v}"):
                 reset_total_v25(); st.rerun()
 
-    # --- ABA 2: HISTÓRICO DETALHADO (RESTAURADA) ---
+    # --- ABA 2: HISTÓRICO DETALHADO ---
     with tab_hist:
         if not df_planos.empty:
             f_ano_h = st.selectbox("Filtrar por Ano:", ["Todos", "6º", "7º", "8º", "9º"], key="v25_hist_ano")
@@ -713,12 +711,11 @@ elif menu == "📅 Planejamento (Ponto ID)":
                 sel_h = st.selectbox("Selecione o Plano:", df_h['SEMANA'].tolist(), key="v25_hist_sem")
                 dados_h = df_h[df_h['SEMANA'] == sel_h].iloc[0]
                 st.info(f"Editando: {sel_h} ({dados_h['ANO']})")
-                # (Aqui o senhor pode manter a lógica de edição do histórico que já tinha)
                 st.write("Use o botão de sincronizar dados para atualizar a lista.")
             else: st.info("Nenhum plano encontrado.")
         else: st.info("📭 Banco de dados vazio.")
 
-    # --- ABA 3: PLANO DE CURSO VIVO (RESTAURADA) ---
+    # --- ABA 3: PLANO DE CURSO VIVO ---
     with tab_curso:
         st.markdown("### 📚 Plano de Curso Anual (Status em Tempo Real)")
         if not df_curriculo.empty:
@@ -730,22 +727,56 @@ elif menu == "📅 Planejamento (Ponto ID)":
             df_c['STATUS'] = df_c['CONTEUDO_ESPECIFICO'].apply(lambda x: "✅ CONCLUÍDO" if str(x).upper() in concluidos else "⏳ PENDENTE")
             st.dataframe(df_c[['TRIMESTRE', 'EIXO', 'CONTEUDO_ESPECIFICO', 'STATUS']], use_container_width=True, hide_index=True)
 
-    # --- ABA 4: MAPA DE COBERTURA (RESTAURADA) ---
+    # --- ABA 4: MAPA DE COBERTURA (RESTAURADA COM ALERTAS) ---
     with tab_mapa:
         st.subheader("📊 Auditoria de Cobertura Curricular")
         if not df_curriculo.empty:
-            ano_m = st.selectbox("Analisar Ano:", [6, 7, 8, 9], key="v25_mapa_ano")
+            c_m1, c_m2 = st.columns(2)
+            ano_m = c_m1.selectbox("Analisar Ano:", [6, 7, 8, 9], key="v25_mapa_ano")
+            trim_m = c_m2.selectbox("Filtrar Trimestre:", ["Todos", "I", "II", "III"], key="v25_mapa_trim")
+            
             df_m = df_curriculo[df_curriculo['ANO'] == ano_m].copy()
+            if trim_m != "Todos": df_m = df_m[df_m['TRIMESTRE'] == trim_m]
+            
             planejados = ""
             if not df_planos.empty:
                 planejados = " ".join(df_planos[df_planos['ANO'] == f"{ano_m}º"]['PLANO_TEXTO'].astype(str).tolist()).upper()
+            
             df_m['STATUS_NUM'] = df_m['CONTEUDO_ESPECIFICO'].apply(lambda x: 1 if str(x).upper() in planejados else 0)
+            
+            # Gráfico de Progresso
             progresso = df_m.groupby('EIXO')['STATUS_NUM'].agg(['sum', 'count']).reset_index()
             progresso['Percentual'] = (progresso['sum'] / progresso['count'] * 100).round(1)
-            fig = px.bar(progresso, x='EIXO', y='Percentual', text='Percentual', title=f"Progresso: {ano_m}º Ano", color='Percentual', color_continuous_scale='RdYlGn', range_y=[0, 105])
-            st.plotly_chart(fig, use_container_width=True)
+            
+            col_chart, col_alerts = st.columns([2, 1])
+            with col_chart:
+                fig = px.bar(progresso, x='EIXO', y='Percentual', text='Percentual', title=f"Progresso: {ano_m}º Ano", color='Percentual', color_continuous_scale='RdYlGn', range_y=[0, 105])
+                st.plotly_chart(fig, use_container_width=True)
+            
+            with col_alerts:
+                st.markdown("### 🚩 Alertas de Cobertura")
+                for _, r in progresso.iterrows():
+                    if r['Percentual'] < 30: st.error(f"**{r['EIXO']}**: Crítico ({r['Percentual']}%)")
+                    elif r['Percentual'] >= 100: st.success(f"**{r['EIXO']}**: Concluído!")
+                    elif r['Percentual'] > 70: st.info(f"**{r['EIXO']}**: Avançado ({r['Percentual']}%)")
+
+            st.markdown("---")
+            st.subheader("⏳ O que falta ministrar?")
+            
+            # CAIXAS DE ALERTA POR TRIMESTRE (O QUE O SENHOR PEDIU)
+            trimesters = ["I", "II", "III"] if trim_m == "Todos" else [trim_m]
+            for t in trimesters:
+                pendentes_trim = df_m[(df_m['TRIMESTRE'] == t) & (df_m['STATUS_NUM'] == 0)]
+                if not pendentes_trim.empty:
+                    with st.expander(f"🚨 Pendências do {t}º Trimestre", expanded=(t == "I")):
+                        for _, row in pendentes_trim.iterrows():
+                            st.write(f"❌ **{row['EIXO']}**: {row['CONTEUDO_ESPECIFICO']}")
+                else:
+                    st.success(f"✅ {t}º Trimestre totalmente concluído!")
+
+            st.markdown("---")
             st.dataframe(df_m[['TRIMESTRE', 'EIXO', 'CONTEUDO_ESPECIFICO', 'STATUS_NUM']].replace({1: "✅ DADO", 0: "⏳ PENDENTE"}), use_container_width=True, hide_index=True)
-                
+            
 # ==============================================================================
 # MÓDULO: DIÁRIO DE BORDO
 # ==============================================================================
