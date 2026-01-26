@@ -155,10 +155,25 @@ menu = st.sidebar.radio("Navegação:", [
     "♿ Relatórios PEI / Perfil IA"
 ])
 
-# Função Auxiliar de Visualização com Aba de Exportação Profissional
-def exibir_material_estruturado(texto_raw, key_prefix):
-    # Criamos as 5 abas. A variável t_exp nasce aqui.
-    t1, t2, t3, t4, t_exp = st.tabs(["✍️ Lousa/Slides", "📄 Folha", "✅ Gabarito", "🎨 Imagens", "📥 EXPORTAR"])
+
+# ==============================================================================
+# FUNÇÃO AUXILIAR DE VISUALIZAÇÃO E EXPORTAÇÃO (VERSÃO V25.4 - ELITE)
+# ==============================================================================
+def exibir_material_estruturado(texto_raw, key_prefix, dados_plano=None, info_aula=None):
+    """
+    texto_raw: O texto bruto gerado pela IA.
+    key_prefix: Prefixo único para evitar conflito de widgets no Streamlit.
+    dados_plano: Dicionário contendo (geral, especificos, objetivos, metodologia, avaliacao, pei).
+    info_aula: Dicionário contendo (ano, semana, trimestre).
+    """
+    # CORREÇÃO CRÍTICA: t_exp agora está definido na lista de abas
+    t1, t2, t3, t4, t_exp = st.tabs([
+        "✍️ Lousa/Slides", 
+        "📄 Folha", 
+        "✅ Gabarito", 
+        "🎨 Imagens", 
+        "📥 EXPORTAR PLANO"
+    ])
     
     with t1:
         st.text_area("Conteúdo Principal:", ai.extrair_tag(texto_raw, "LOUSA"), height=400, key=f"{key_prefix}_lousa_txt")
@@ -167,64 +182,63 @@ def exibir_material_estruturado(texto_raw, key_prefix):
     with t3:
         st.text_area("Gabarito:", ai.extrair_tag(texto_raw, "GABARITO"), height=200, key=f"{key_prefix}_gab_txt")
     with t4:
-        st.text_area("Prompts:", ai.extrair_tag(texto_raw, "IMAGENS"), height=150, key=f"{key_prefix}_img_txt")
+        st.text_area("Prompts de Imagem:", ai.extrair_tag(texto_raw, "IMAGENS"), height=150, key=f"{key_prefix}_img_txt")
     
-    # ABA DE EXPORTAÇÃO (Onde estavam os erros)
+    # ABA DE EXPORTAÇÃO (Blindada contra erros de variável indefinida)
     with t_exp:
-        st.subheader("🚀 Exportar Plano Oficial")
-        
-        # Organizamos os dados limpos para o exportador
-        dados_para_word = {
-            "geral": c_geral,
-            "especificos": c_espec,
-            "objetivos": objs_edit,
-            "metodologia": met_edit,
-            "avaliacao": ava_edit,
-            "observacao": obs_edit,
-            "pei": pei_edit
-        }
-        
-        nome_doc = st.text_input("Título do Arquivo:", value=f"PLANO_{ano_p}ANO_{sem_p.split(' ')[1]}", key="v18_name_plan_final")
-        
-        # Chamamos a nova função de design de PLANO
-        doc_file = exporter.gerar_docx_plano_oficial(
-            nome_doc.upper(), 
-            dados_para_word, 
-            {"turma": f"{ano_p}º Ano", "trimestre": "I"}
-        )
-        
-        st.download_button("📥 BAIXAR PLANO (WORD)", doc_file, f"{nome_doc}.docx", use_container_width=True)
+        if dados_plano and info_aula:
+            st.subheader("🚀 Exportar Plano de Aula Oficial")
+            
+            # Pega os dados do dicionário info_aula
+            ano_ref = info_aula.get('ano', '6')
+            semana_ref = info_aula.get('semana', '01')
+            trimestre_ref = info_aula.get('trimestre', 'I Trimestre')
 
-        st.markdown("---")
-        st.write("🛰️ **Opção Nuvem (Google Drive)**")
-        
-        if st.button("☁️ Enviar e Gerar Link no Drive", key=f"btn_drive_{key_prefix}"):
-            with st.spinner("Sincronizando com as pastas do Drive..."):
-                # Identifica o tipo para a subpasta
-                tipo_mat = "Outros"
-                if "lousa" in key_prefix.lower(): tipo_mat = "Lousa e Slides"
-                elif "av" in key_prefix.lower(): tipo_mat = "Atividades Avulsas"
-                elif "prova" in key_prefix.lower(): tipo_mat = "Avaliações (Regular)"
-                elif "adapt" in key_prefix.lower(): tipo_mat = "Avaliação Adaptada (PEI)"
+            nome_doc = st.text_input(
+                "Título do Arquivo:", 
+                value=f"PLANO_{ano_ref}ANO_SEM_{semana_ref}", 
+                key=f"name_input_{key_prefix}"
+            )
+            
+            # Chamada do exportador usando os dados passados via dicionário
+            # Isso evita o erro de "c_geral não definido"
+            doc_file = exporter.gerar_docx_plano_pedagogico_v18(
+                nome_doc.upper(), 
+                dados_plano, 
+                {"ano": f"{ano_ref}º Ano", "semana": f"Semana {semana_ref}"}
+            )
+            
+            st.download_button(
+                label="📥 BAIXAR PLANO (WORD)", 
+                data=doc_file, 
+                file_name=f"{nome_doc}.docx", 
+                use_container_width=True,
+                key=f"dl_btn_{key_prefix}"
+            )
 
-                trim_atual, _ = util.obter_info_trimestre(date.today())
-                
-                link = db.subir_e_converter_para_google_docs(
-                    doc_file, 
-                    nome_doc, 
-                    trimestre=trim_atual,
-                    categoria="Material de Sala",
-                    sub_categoria=tipo_mat
-                )
-                
-                if "https://" in str(link):
-                    st.success("✅ Arquivo salvo e convertido!")
-                    # Exibe o link de duas formas para garantir
-                    st.link_button("🚀 ABRIR NO GOOGLE DOCS", str(link), use_container_width=True)
-                    st.markdown(f"🔗 [Clique aqui se o botão não abrir]({link})")
-                else:
-                    st.error(f"Erro na Ponte: {link}")
-
+            st.markdown("---")
+            st.write("🛰️ **Opção Nuvem (Google Drive)**")
+            
+            if st.button("☁️ Enviar e Gerar Link no Drive", key=f"btn_drive_{key_prefix}"):
+                with st.spinner("Sincronizando com as pastas do Drive..."):
+                    link = db.subir_e_converter_para_google_docs(
+                        doc_file, 
+                        nome_doc, 
+                        trimestre=trimestre_ref,
+                        categoria="Planos de Aula"
+                    )
+                    
+                    if "https://" in str(link):
+                        st.success("✅ Arquivo salvo e convertido!")
+                        st.link_button("🚀 ABRIR NO GOOGLE DOCS", str(link), use_container_width=True)
+                        # Salva o link no banco de dados automaticamente
+                        db.salvar_link_na_planilha("DB_PLANOS", "SEMANA", f"Semana {semana_ref}", str(link))
+                    else:
+                        st.error(f"Erro na Ponte: {link}")
+        else:
+            # Caso a função seja chamada pelo Criador de Aulas (que não envia dados_plano)
+            st.info("ℹ️ Esta aba de exportação de PLANO está vinculada ao módulo de Planejamento.")
+            st.warning("Para exportar materiais de aula (Folha/Guia), utilize os botões de download do Laboratório.")
 
 # ==============================================================================
 # MÓDULO: DASHBOARD INTELIGENTE (V6 - FULL CONTEXT: NOTAS + PDF + AULAS CRIADAS)
@@ -569,7 +583,7 @@ elif menu == "🧪 Criador de Aulas":
                             st.rerun()
                             
 # ==============================================================================
-# MÓDULO: PLANEJAMENTO (PONTO ID) - ARQUITETURA DE ELITE V25 (CORRIGIDO)
+# MÓDULO: PLANEJAMENTO (PONTO ID) - ARQUITETURA DE ELITE V25.4 (INTEGRAÇÃO TOTAL)
 # ==============================================================================
 elif menu == "📅 Planejamento (Ponto ID)":
     st.header("📅 Planejador Estratégico (Ponto ID)")
@@ -588,17 +602,17 @@ elif menu == "📅 Planejamento (Ponto ID)":
         st.subheader("1. Configuração da Aula")
         col_cfg1, col_cfg2 = st.columns([1, 2])
         
-        # --- CORREÇÃO DO RESET (USANDO TIMESTAMP PARA LIMPAR CAIXAS) ---
-        def reset_plano_v25():
-            if "p_temp" in st.session_state: 
-                del st.session_state.p_temp
-            # Gera um ID único baseado no tempo para forçar o refresh dos widgets
+        # Função de reset que força a mudança de chaves (keys) para limpar o painel
+        def reset_total_v25():
+            if "p_temp" in st.session_state: del st.session_state.p_temp
             st.session_state.v_plano = int(time.time())
 
         if "v_plano" not in st.session_state:
             st.session_state.v_plano = int(time.time())
 
-        ano_p = col_cfg1.selectbox("Ano/Série:", [6, 7, 8, 9], key="v23_ano_sel", on_change=reset_plano_v25)
+        v = st.session_state.v_plano
+
+        ano_p = col_cfg1.selectbox("Ano/Série:", [6, 7, 8, 9], key=f"ano_sel_{v}", on_change=reset_total_v25)
         
         semanas_ocupadas = []
         if not df_planos.empty and 'ANO' in df_planos.columns:
@@ -607,44 +621,24 @@ elif menu == "📅 Planejamento (Ponto ID)":
         todas_semanas = util.gerar_semanas()
         semanas_disponiveis = [s for s in todas_semanas if s.split(" (")[0] not in semanas_ocupadas]
         opcoes_semana = semanas_disponiveis if semanas_disponiveis else ["✅ Todas planejadas!"]
-        sem_p = col_cfg2.selectbox("Selecione a Semana Livre:", opcoes_semana, key="v23_sem_sel", on_change=reset_plano_v25)
+        sem_p = col_cfg2.selectbox("Selecione a Semana Livre:", opcoes_semana, key=f"sem_sel_{v}", on_change=reset_total_v25)
         
         if "✅" not in sem_p:
-            st.markdown("---")
-            st.subheader("🎯 Filtro de Precisão Curricular")
-            st.caption("O que for selecionado aqui será o que aparecerá no Mapa de Cobertura.")
-            
-            df_f = df_curriculo[df_curriculo['ANO'] == ano_p]
-            
-            c_f1, c_f2 = st.columns(2)
-            eixo_sel = c_f1.selectbox("Eixo Temático:", df_f['EIXO'].unique(), key=f"eixo_{st.session_state.v_plano}")
-            
-            # SELEÇÃO MANUAL QUE MANDA NO SISTEMA
-            cont_esp_manual = st.multiselect(
-                "Conteúdos (Fiel ao Banco):", 
-                options=df_f[df_f['EIXO'] == eixo_sel]['CONTEUDO_ESPECIFICO'].unique(),
-                key=f"cont_man_{st.session_state.v_plano}"
-            )
-            
-            objs_manual = st.multiselect(
-                "Objetivos (Fiel ao Banco):", 
-                options=df_f[df_f['CONTEUDO_ESPECIFICO'].isin(cont_esp_manual)]['OBJETIVOS'].unique(),
-                key=f"obj_man_{st.session_state.v_plano}"
-            )
-
-            modo_p = st.radio("Método de Elaboração:", ["🎛️ Manual (Banco de Dados)", "📖 Livro Didático"], horizontal=True)
+            modo_p = st.radio("Método de Elaboração:", ["📖 Livro Didático", "🎛️ Manual (Banco de Dados)"], horizontal=True, key=f"modo_{v}")
             
             if modo_p == "📖 Livro Didático":
-                sel_mat = st.multiselect("Selecione o Livro:", df_materiais['NOME_ARQUIVO'].tolist())
-                pags = st.text_input("Páginas de Referência:")
-                ctx_fiel = f"LIVRO: {sel_mat} | PÁGINAS: {pags} | CONTEÚDOS OBRIGATÓRIOS: {cont_esp_manual} | OBJETIVOS OBRIGATÓRIOS: {objs_manual}"
+                c1, c2 = st.columns([2, 1])
+                sel_mat = c1.multiselect("Selecione o Livro:", df_materiais['NOME_ARQUIVO'].tolist(), key=f"livro_{v}")
+                pags = c2.text_input("Páginas de Referência:", placeholder="Ex: 14 a 25", key=f"pags_{v}")
+                ctx_ia = f"MÉTODO: LIVRO {sel_mat} PÁGINAS {pags}."
             else:
-                ctx_fiel = f"EIXO: {eixo_sel} | CONTEÚDOS OBRIGATÓRIOS: {cont_esp_manual} | OBJETIVOS OBRIGATÓRIOS: {objs_manual}"
+                ctx_ia = "MÉTODO: MANUAL BASEADO NO CURRÍCULO."
 
-            strat = st.text_area("Sua Estratégia/Observação Inicial:", placeholder="Ex: Aula expositiva...")
+            strat = st.text_area("Sua Estratégia/Observação Inicial:", placeholder="Ex: Aula expositiva com foco em Itabuna...", key=f"strat_{v}")
 
-            if st.button("🚀 Compor Planejamento com Memória", use_container_width=True):
-                with st.spinner("Maestro redigindo plano..."):
+            if st.button("🚀 Compor Planejamento com Maestro", use_container_width=True, type="primary", key=f"btn_gen_{v}"):
+                with st.spinner("Maestro redigindo rascunho de elite..."):
+                    # Busca plano anterior para continuidade
                     contexto_anterior = "Início do período letivo."
                     try:
                         num_sem_atual = int(re.search(r'Semana (\d+)', sem_p).group(1))
@@ -654,70 +648,98 @@ elif menu == "📅 Planejamento (Ponto ID)":
                             if not p_ant.empty: contexto_anterior = p_ant.iloc[0]['PLANO_TEXTO']
                     except: pass
 
-                    prompt = f"ANO: {ano_p}º, SEMANA: {sem_p}. DADOS FIÉIS: {ctx_fiel}. CONTINUIDADE: {contexto_anterior}. ESTRATÉGIA: {strat}."
+                    prompt = f"ANO: {ano_p}º, SEMANA: {sem_p}. {ctx_ia}. CONTINUIDADE: {contexto_anterior}. ESTRATÉGIA: {strat}."
                     st.session_state.p_temp = ai.gerar_ia("PLANE_PEDAGOGICO", prompt)
                     st.rerun()
 
-        # --- 3. AMBIENTE DINÂMICO DE REFINAMENTO E EDIÇÃO ---
+        # --- 2. AMBIENTE DE CURADORIA E REFINAMENTO (APÓS GERAR) ---
         if "p_temp" in st.session_state:
             st.markdown("---")
-            v = st.session_state.v_plano
-            txt_exibicao = st.session_state.p_temp
-
-            st.subheader("🤖 Refinar Plano com o Maestro")
-            comando_refino = st.chat_input("Diga o que deseja mudar...", key=f"chat_v25_{v}")
+            txt_bruto = st.session_state.p_temp
             
-            if comando_refino:
-                with st.spinner("Refinando..."):
-                    prompt_ajuste = (f"REESCREVA O PLANO.\nATUAL:\n{txt_exibicao}\nORDEM: {comando_refino}\n"
-                                    f"MANTENHA OS CONTEÚDOS: {cont_esp_manual}")
-                    st.session_state.p_temp = ai.gerar_ia("PLANE_PEDAGOGICO", prompt_ajuste)
+            st.subheader("🤖 Refinar e Validar Plano")
+            
+            # --- FILTRO DE PRECISÃO CURRICULAR ---
+            with st.expander("🎯 FILTRO DE PRECISÃO (Mapa de Cobertura)", expanded=True):
+                st.caption("Selecione os itens exatos do banco para garantir a atualização dos gráficos.")
+                df_f = df_curriculo[df_curriculo['ANO'] == ano_p]
+                
+                cf1, cf2 = st.columns(2)
+                eixo_val = cf1.selectbox("Eixo Temático:", df_f['EIXO'].unique(), key=f"eixo_val_{v}")
+                
+                cont_val = st.multiselect(
+                    "Conteúdos (Fiel ao Banco):", 
+                    options=df_f[df_f['EIXO'] == eixo_val]['CONTEUDO_ESPECIFICO'].unique(),
+                    key=f"cont_val_{v}"
+                )
+                
+                obj_val = st.multiselect(
+                    "Objetivos (Fiel ao Banco):", 
+                    options=df_f[df_f['CONTEUDO_ESPECIFICO'].isin(cont_val)]['OBJETIVOS'].unique(),
+                    key=f"obj_val_{v}"
+                )
+
+            # CHAT DE REFINO
+            cmd_refine = st.chat_input("Deseja mudar algo no texto? (Ex: 'Aprofunde a aula 2')")
+            if cmd_refine:
+                with st.spinner("Ajustando partitura..."):
+                    st.session_state.p_temp = ai.gerar_ia("PLANE_PEDAGOGICO", f"ATUAL:\n{txt_bruto}\nORDEM: {cmd_refine}")
                     st.rerun()
 
-            abas_ed = st.tabs(["📚 Conteúdos", "🎯 Objetivos", "🏫 Metodologia", "📝 Avaliação", "💡 Obs", "♿ PEI", "📥 EXPORTAR"])
+            # --- ÁREA DE EDIÇÃO TÉCNICA ---
+            st.markdown("#### ✏️ Edição Final")
+            col_ed1, col_ed2 = st.columns(2)
+            ed_geral = col_ed1.text_input("Eixo:", eixo_val, key=f"ed_g_{v}")
+            ed_espec = col_ed2.text_area("Conteúdos (Texto):", limpar_v23(ai.extrair_tag(txt_bruto, "CONTEUDOS_ESPECIFICOS"), "CONTEÚDOS ESPECÍFICOS"), key=f"ed_e_{v}")
             
-            with abas_ed[0]:
-                c_geral = st.text_input("Eixo:", eixo_sel, key=f"ed_geral_{v}")
-                # Aqui o senhor pode editar, mas o multiselect inicial garante o banco
-                c_espec = st.text_area("Conteúdos:", limpar_v23(ai.extrair_tag(txt_exibicao, "CONTEUDOS_ESPECIFICOS"), "CONTEÚDOS ESPECÍFICOS"), key=f"ed_espec_{v}")
-            with abas_ed[1]:
-                objs_edit = st.text_area("Objetivos:", limpar_v23(ai.extrair_tag(txt_exibicao, "OBJETIVOS_ENSINO"), "OBJETIVOS DE ENSINO"), key=f"ed_objs_{v}")
-            with abas_ed[2]:
-                met_edit = st.text_area("Metodologia:", limpar_v23(ai.extrair_tag(txt_exibicao, "METODOLOGIA"), "METODOLOGIA"), height=350, key=f"ed_met_{v}")
-            with abas_ed[3]:
-                ava_edit = st.text_area("Avaliação:", limpar_v23(ai.extrair_tag(txt_exibicao, "AVALIACAO"), "AVALIAÇÃO"), key=f"ed_ava_{v}")
-            with abas_ed[4]:
-                obs_edit = st.text_area("Observação:", limpar_v23(ai.extrair_tag(txt_exibicao, "OBSERVACAO"), "OBSERVAÇÃO"), key=f"ed_obs_{v}")
-            with abas_ed[5]:
-                pei_edit = st.text_area("Adaptação PEI:", limpar_v23(ai.extrair_tag(txt_exibicao, "ADAPTACAO_PEI"), "ADAPTAÇÃO PEI"), key=f"ed_pei_{v}")
+            ed_objs = st.text_area("Objetivos (Texto):", limpar_v23(ai.extrair_tag(txt_bruto, "OBJETIVOS_ENSINO"), "OBJETIVOS DE ENSINO"), key=f"ed_o_{v}")
+            ed_met = st.text_area("Metodologia Detalhada:", limpar_v23(ai.extrair_tag(txt_bruto, "METODOLOGIA"), "METODOLOGIA"), height=300, key=f"ed_m_{v}")
             
-            with abas_ed[6]:
-                st.subheader("🚀 Exportação Profissional")
-                nome_doc = st.text_input("Título:", value=f"PLANO_{ano_p}ANO_{sem_p.split(' ')[1]}", key=f"v25_title_{v}")
-                # Na exportação, usamos o que está nas caixas de texto
-                dados_docx = {"geral": c_geral, "especificos": c_espec, "objetivos": objs_edit, "metodologia": met_edit, "avaliacao": ava_edit, "observacao": obs_edit, "pei": pei_edit}
-                doc_file = exporter.gerar_docx_plano_pedagogico_v18(nome_doc.upper(), dados_docx, {"ano": f"{ano_p}º Ano", "semana": sem_p.split(" (")[0]})
-                st.download_button("📥 BAIXAR WORD", doc_file, f"{nome_doc}.docx", use_container_width=True, key=f"btn_dl_{v}")
+            col_ed3, col_ed4 = st.columns(2)
+            ed_ava = col_ed3.text_area("Avaliação:", limpar_v23(ai.extrair_tag(txt_bruto, "AVALIACAO"), "AVALIAÇÃO"), key=f"ed_a_{v}")
+            ed_pei = col_ed4.text_area("Adaptação PEI:", limpar_v23(ai.extrair_tag(txt_bruto, "ADAPTACAO_PEI"), "ADAPTAÇÃO PEI"), key=f"ed_p_{v}")
 
+            # --- CHAMADA DA FUNÇÃO ESTRUTURADA (WORD/DRIVE) ---
             st.markdown("---")
-            col_btn1, col_btn2 = st.columns(2)
-            if col_btn1.button("💾 FINALIZAR E SALVAR NO BANCO", use_container_width=True, type="primary", key=f"btn_save_{v}"):
-                # --- LOGICA DE BLINDAGEM DO MAPA DE COBERTURA ---
-                # Forçamos os nomes exatos do multiselect no texto final do banco
-                conteudos_finais = "; ".join(cont_esp_manual) if cont_esp_manual else c_espec
-                objetivos_finais = "; ".join(objs_manual) if objs_manual else objs_edit
+            st.subheader("📥 Exportação e Nuvem")
+            
+            # Preparamos os dicionários para a função V25.4
+            dados_para_enviar = {
+                "geral": ed_geral,
+                "especificos": ed_espec,
+                "objetivos": ed_objs,
+                "metodologia": ed_met,
+                "avaliacao": ed_ava,
+                "pei": ed_pei
+            }
+
+            info_da_aula = {
+                "ano": str(ano_p),
+                "semana": sem_p.split(' ')[1],
+                "trimestre": "I Trimestre"
+            }
+
+            # Chama a função que você acabou de atualizar
+            exibir_material_estruturado(txt_bruto, f"plan_v{v}", dados_plano=dados_para_enviar, info_aula=info_da_aula)
+
+            # --- BOTÕES DE SALVAMENTO NO BANCO ---
+            st.markdown("---")
+            c_btn1, c_btn2 = st.columns(2)
+            
+            if c_btn1.button("💾 FINALIZAR E SALVAR NO BANCO", use_container_width=True, type="primary", key=f"save_{v}"):
+                # BLINDAGEM: Se o professor usou o filtro, usamos os nomes exatos do banco para o gráfico.
+                cont_final = "; ".join(cont_val) if cont_val else ed_espec
+                obj_final = "; ".join(obj_val) if obj_val else ed_objs
                 
-                final_txt = f"MARKER_CONTEUDO_GERAL {c_geral} MARKER_CONTEUDOS_ESPECIFICOS {conteudos_finais} MARKER_OBJETIVOS_ENSINO {objetivos_finais} MARKER_METODOLOGIA {met_edit} MARKER_AVALIACAO {ava_edit} MARKER_OBSERVACAO {obs_edit} MARKER_ADAPTACAO_PEI {pei_edit}"
+                final_txt = f"MARKER_CONTEUDO_GERAL {ed_geral} MARKER_CONTEUDOS_ESPECIFICOS {cont_final} MARKER_OBJETIVOS_ENSINO {obj_final} MARKER_METODOLOGIA {ed_met} MARKER_AVALIACAO {ed_ava} MARKER_ADAPTACAO_PEI {ed_pei}"
                 
                 if db.salvar_no_banco("DB_PLANOS", [datetime.now().strftime("%d/%m/%Y"), sem_p.split(" (")[0], f"{ano_p}º", "I Trimestre", "PADRÃO", final_txt]):
-                    st.success("✅ Salvo e Mapa de Cobertura Atualizado!"); 
-                    del st.session_state.p_temp; 
-                    st.session_state.v_plano = int(time.time())
+                    st.success("✅ Plano salvo! Mapa de Cobertura atualizado."); 
+                    reset_total_v25()
                     time.sleep(1); st.rerun()
             
-            if col_btn2.button("🗑️ DESCARTAR", use_container_width=True, key=f"btn_drop_{v}"):
-                del st.session_state.p_temp; 
-                st.session_state.v_plano = int(time.time())
+            if c_btn2.button("🗑️ DESCARTAR", use_container_width=True, key=f"drop_{v}"):
+                reset_total_v25()
                 st.rerun()
                 
 # ==============================================================================
