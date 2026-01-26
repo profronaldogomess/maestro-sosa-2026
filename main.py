@@ -626,27 +626,67 @@ elif menu == "🧪 Criador de Aulas":
                 if "lab_pei" in st.session_state: del st.session_state.lab_pei
                 st.rerun()
 
+# --- ABA 2: GAVETAS DE MATERIAIS (REESTRUTURADA V25) ---
     with tab_gavetas:
-        st.subheader("🗂️ Gavetas de Materiais Produzidos")
+        st.subheader("🗂️ Gestão de Materiais Produzidos")
+        
         if df_aulas.empty:
-            st.info("📭 Vazio.")
+            st.info("📭 Nenhuma aula produzida no banco de dados.")
         else:
+            # Filtros de Organização
             c_gav1, c_gav2 = st.columns(2)
-            gaveta_sel = c_gav1.selectbox("Gaveta:", ["Folha Aluno", "Guia Professor", "Lousa e Slides"])
-            ano_gav = c_gav2.selectbox("Ano:", ["Todos", "6º", "7º", "8º", "9º"], key="gav_ano_v24")
+            ano_gav = c_gav2.selectbox("Filtrar por Ano:", ["Todos", "6º", "7º", "8º", "9º"], key="gav_ano_v25")
+            
             df_g = df_aulas.copy()
-            if ano_gav != "Todos": df_g = df_g[df_g['ANO'].str.contains(ano_gav, na=False)]
+            if ano_gav != "Todos": 
+                df_g = df_g[df_g['ANO'].str.contains(ano_gav, na=False)]
+            
             if not df_g.empty:
+                # Inverte para mostrar os mais recentes primeiro
                 for _, row in df_g.iloc[::-1].iterrows():
-                    with st.expander(f"📅 {row['DATA']} | {row['SEMANA_REF']}"):
-                        if row['LINK_DRIVE']: st.link_button("🚀 ABRIR", str(row['LINK_DRIVE']), use_container_width=True)
-                        if st.button("🗑️ Excluir", key=f"del_{row.name}"):
-                            db.excluir_registro("DB_AULAS_PRONTAS", row['CONTEUDO'])
-                            st.rerun()
+                    with st.container(border=True):
+                        # Cabeçalho da Aula
+                        col_h1, col_h2 = st.columns([3, 1])
+                        col_h1.markdown(f"📅 {row['DATA']} ÷ {row['SEMANA_REF']} ÷ {row['ANO']}")
+                        
+                        # Extração de Links via Regex para garantir precisão
+                        import re
+                        texto_cont = str(row['CONTEUDO'])
+                        link_alu = re.search(r"Aluno\((.*?)\)", texto_cont)
+                        link_prof = re.search(r"Prof\((.*?)\)", texto_cont)
+                        link_pei = re.search(r"PEI\((.*?)\)", texto_cont)
+
+                        # Grade de Ações
+                        c1, c2, c3, c4 = st.columns(4)
+                        
+                        # Botão Aluno
+                        if link_alu and "https" in link_alu.group(1):
+                            c1.link_button("📝 ABRIR ALUNO", link_alu.group(1), use_container_width=True)
+                        else:
+                            c1.button("📝 ALUNO N/A", disabled=True, use_container_width=True)
                             
-# ==============================================================================
-# MÓDULO: PLANEJAMENTO (PONTO ID) - ARQUITETURA DE ELITE V25.9 (GESTÃO E NUVEM)
-# ==============================================================================
+                        # Botão Professor
+                        if link_prof and "https" in link_prof.group(1):
+                            c2.link_button("👨‍🏫 ABRIR GUIA", link_prof.group(1), use_container_width=True)
+                        else:
+                            c2.button("👨‍🏫 GUIA N/A", disabled=True, use_container_width=True)
+                            
+                        # Botão PEI
+                        if link_pei and "https" in link_pei.group(1):
+                            c3.link_button("♿ ABRIR PEI", link_pei.group(1), use_container_width=True)
+                        else:
+                            c3.button("♿ PEI N/A", disabled=True, use_container_width=True)
+                            
+                        # Botão Excluir (Rigor de Segurança)
+                        if c4.button("🗑️ APAGAR", key=f"del_v25_{row.name}", use_container_width=True):
+                            if db.excluir_registro("DB_AULAS_PRONTAS", row['CONTEUDO']):
+                                st.success("Registro removido.")
+                                time.sleep(0.5)
+                                st.rerun()
+            else:
+                st.warning("Nenhum material encontrado para os filtros selecionados.")
+                            
+
 # ==============================================================================
 # MÓDULO: PLANEJAMENTO (PONTO ID) - ARQUITETURA DE ELITE V25.10 (COM STATUS)
 # ==============================================================================
