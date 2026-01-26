@@ -157,27 +157,53 @@ menu = st.sidebar.radio("Navegação:", [
 
 
 # ==============================================================================
-# FUNÇÃO AUXILIAR DE VISUALIZAÇÃO E EXPORTAÇÃO (VERSÃO V25.10 - CORRIGIDA)
+# FUNÇÃO AUXILIAR DE VISUALIZAÇÃO HÍBRIDA (VERSÃO V25.11 - CONTEXTUAL)
 # ==============================================================================
 def exibir_material_estruturado(texto_raw, key_prefix, dados_plano=None, info_aula=None):
-    # CORREÇÃO: Agora a lista tem 5 nomes para as 5 variáveis
-    t1, t2, t3, t4, t_exp = st.tabs([
-        "✍️ Lousa/Slides", 
-        "📄 Folha", 
-        "✅ Gabarito", 
-        "🎨 Imagens",
-        "📥 EXPORTAR PLANO"
-    ])
-    
-    with t1:
-        st.text_area("Conteúdo Principal:", ai.extrair_tag(texto_raw, "LOUSA"), height=400, key=f"{key_prefix}_lousa_txt")
-    with t2:
-        st.text_area("Atividade:", ai.extrair_tag(texto_raw, "FOLHA"), height=400, key=f"{key_prefix}_folha_txt")
-    with t3:
-        st.text_area("Gabarito:", ai.extrair_tag(texto_raw, "GABARITO"), height=200, key=f"{key_prefix}_gab_txt")
-    with t4:
-        st.text_area("Prompts de Imagem:", ai.extrair_tag(texto_raw, "IMAGENS"), height=150, key=f"{key_prefix}_img_txt")
-    
+    """
+    Detecta automaticamente se o conteúdo é um PLANO ou um MATERIAL 
+    e ajusta as abas e tags de acordo.
+    """
+    # Se houver 'dados_plano', estamos no módulo de PLANEJAMENTO
+    if dados_plano:
+        t1, t2, t3, t4, t_exp = st.tabs([
+            "🏫 Metodologia (Aulas)", 
+            "🎯 Objetivos/Conteúdos", 
+            "📝 Avaliação", 
+            "♿ Adaptação PEI",
+            "📥 EXPORTAR PLANO"
+        ])
+        
+        with t1:
+            st.text_area("Roteiro das Aulas (1 e 2):", ai.extrair_tag(texto_raw, "METODOLOGIA"), height=400, key=f"{key_prefix}_met_txt")
+        with t2:
+            conteudo_full = f"CONTEÚDOS:\n{ai.extrair_tag(texto_raw, 'CONTEUDOS_ESPECIFICOS')}\n\nOBJETIVOS:\n{ai.extrair_tag(texto_raw, 'OBJETIVOS_ENSINO')}"
+            st.text_area("Fidelidade Curricular:", conteudo_full, height=400, key=f"{key_prefix}_obj_txt")
+        with t3:
+            st.text_area("Critérios de Verificação:", ai.extrair_tag(texto_raw, "AVALIACAO"), height=200, key=f"{key_prefix}_ava_txt")
+        with t4:
+            st.text_area("Engenharia de Folha PEI:", ai.extrair_tag(texto_raw, "ADAPTACAO_PEI"), height=300, key=f"{key_prefix}_pei_txt")
+            
+    # Caso contrário, estamos no CRIADOR DE AULAS (Laboratório)
+    else:
+        t1, t2, t3, t4, t_exp = st.tabs([
+            "✍️ Lousa/Slides", 
+            "📄 Folha", 
+            "✅ Gabarito", 
+            "🎨 Imagens",
+            "📥 EXPORTAR"
+        ])
+        
+        with t1:
+            st.text_area("Conteúdo Principal:", ai.extrair_tag(texto_raw, "LOUSA"), height=400, key=f"{key_prefix}_lousa_txt")
+        with t2:
+            st.text_area("Atividade:", ai.extrair_tag(texto_raw, "FOLHA"), height=400, key=f"{key_prefix}_folha_txt")
+        with t3:
+            st.text_area("Gabarito:", ai.extrair_tag(texto_raw, "GABARITO"), height=200, key=f"{key_prefix}_gab_txt")
+        with t4:
+            st.text_area("Prompts de Imagem:", ai.extrair_tag(texto_raw, "IMAGENS"), height=150, key=f"{key_prefix}_img_txt")
+
+    # Aba de Exportação Comum (Usa os dados passados)
     with t_exp:
         if dados_plano and info_aula:
             st.subheader("🚀 Exportar Plano de Aula Oficial")
@@ -195,7 +221,7 @@ def exibir_material_estruturado(texto_raw, key_prefix, dados_plano=None, info_au
                         st.success("✅ Arquivo salvo!"); st.link_button("Abrir no Docs", str(link))
                         db.salvar_link_na_planilha("DB_PLANOS", "SEMANA", f"Semana {semana_ref}", str(link))
         else:
-            st.info("ℹ️ Aba de exportação de PLANO vinculada ao módulo de Planejamento.")
+            st.info("ℹ️ Utilize os botões de exportação do Laboratório para materiais de sala.")
 
 # ==============================================================================
 # MÓDULO: DASHBOARD INTELIGENTE (V6 - FULL CONTEXT: NOTAS + PDF + AULAS CRIADAS)
