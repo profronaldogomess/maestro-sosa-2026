@@ -403,13 +403,6 @@ elif menu == "🧪 Criador de Aulas":
     
     tab_criar, tab_gavetas = st.tabs(["🚀 Criar Novo Material", "🗂️ Gavetas de Materiais"])
 
-    # Função de Limpeza V24
-    def limpar_v24(texto, label):
-        if not texto: return ""
-        t = texto.replace(label, "").replace(label.upper(), "").replace(label.lower(), "").strip()
-        if t.startswith(":") or t.startswith(" :"): t = t[1:].strip()
-        return t
-
     if "v_lab" not in st.session_state: st.session_state.v_lab = 1
 
     with tab_criar:
@@ -424,15 +417,30 @@ elif menu == "🧪 Criador de Aulas":
         else:
             sem_lab = c2.selectbox("Semana:", planos_ano['SEMANA'].tolist(), key="lab_sem_v24")
             aula_num = c3.radio("Foco:", ["Aula 1", "Aula 2"], horizontal=True)
-            plano_raw = planos_ano[planos_ano['SEMANA'] == sem_lab].iloc[0]['PLANO_TEXTO']
             
+            # RECUPERAÇÃO E DIAGNÓSTICO DO PLANO
+            plano_raw = planos_ano[planos_ano['SEMANA'] == sem_lab].iloc[0]['PLANO_TEXTO']
+            diag = ai.realizar_diagnostico_v25(plano_raw, df_curriculo, ano_lab)
+
+            # --- PAINEL DE INTELIGÊNCIA (PRÉ-GERAÇÃO) ---
+            with st.container(border=True):
+                st.markdown("### 🔍 Diagnóstico de Vínculo Pedagógico")
+                cd1, cd2 = st.columns(2)
+                cd1.metric("Modalidade Detectada", diag['modalidade'])
+                cd2.metric("Sincronia Curricular", diag['status'])
+                
+                with st.expander("📋 Verificação de Cópia Literal (Banco de Dados)"):
+                    st.write("🎯 **Conteúdo:**", diag['conteudo_literal'])
+                    st.write("🎯 **Objetivo:**", diag['objetivo_literal'])
+
+            # FILTROS DE CONTEÚDO (Baseados no Diagnóstico)
             df_base_ano = df_curriculo[df_curriculo['ANO'] == ano_lab]
-            cont_no_plano = ai.extrair_tag(plano_raw, "CONTEUDOS_ESPECIFICOS").upper()
+            cont_no_plano = diag['conteudo_literal'].upper()
             opcoes_conteudo = [c for c in df_base_ano['CONTEUDO_ESPECIFICO'].unique() if str(c).upper() in cont_no_plano]
 
             col_p1, col_p2 = st.columns(2)
-            sel_cont = col_p1.multiselect("Conteúdos:", options=opcoes_conteudo, key=f"v24_c_{sem_lab}")
-            sel_obj = col_p2.multiselect("Objetivos:", options=df_base_ano[df_base_ano['CONTEUDO_ESPECIFICO'].isin(sel_cont)]['OBJETIVOS'].unique() if sel_cont else [], key=f"v24_o_{sem_lab}")
+            sel_cont = col_p1.multiselect("Confirmar Conteúdos:", options=opcoes_conteudo, default=opcoes_conteudo, key=f"v24_c_{sem_lab}")
+            sel_obj = col_p2.multiselect("Confirmar Objetivos:", options=df_base_ano[df_base_ano['CONTEUDO_ESPECIFICO'].isin(sel_cont)]['OBJETIVOS'].unique() if sel_cont else [], key=f"v24_o_{sem_lab}")
 
             # --- PASSO 2: PARÂMETROS DE PRECISÃO ---
             st.markdown("---")
@@ -445,7 +453,9 @@ elif menu == "🧪 Criador de Aulas":
 
             if st.button("🚀 COMPILAR MATERIAL DA " + aula_num.upper(), use_container_width=True, type="primary"):
                 with st.spinner("IA executando Protocolo de Choque..."):
+                    # O Prompt agora envia a MODALIDADE detectada para a IA ser mais inteligente
                     prompt_v24 = (f"ORDEM: GERAR EXATAMENTE {qtd_q} QUESTÕES DE EXERCÍCIO.\n"
+                                 f"MODALIDADE DETECTADA NO PLANO: {diag['modalidade']}\n"
                                  f"FOCO: {ano_lab}º ANO, {sem_lab}, {aula_num}.\n"
                                  f"CONTEÚDOS: {sel_cont}\nOBJETIVOS: {sel_obj}\n"
                                  f"FORMATO: {formato}\nNÍVEL: {nivel}\nCONTEXTO: {instr}")
