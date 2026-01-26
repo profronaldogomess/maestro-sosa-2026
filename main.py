@@ -237,10 +237,9 @@ def exibir_material_estruturado(texto_raw, key_prefix, dados_plano=None, info_au
         with c_master1:
             st.markdown("### ☁️ Nuvem")
             if st.button("🚀 SALVAR TUDO NO DRIVE E BANCO", use_container_width=True, type="primary"):
-                with st.spinner("Sincronizando pacote multimídia..."):
-                    # Upload Aluno (Sempre Docx)
+                with st.spinner("Sincronizando pacote completo e preservando roteiros..."):
+                    # 1. Upload para o Drive
                     link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{nome_base}_ALUNO.docx", semana=sem_lab, aula=aula_num)
-                    # Upload Professor (Docx ou Pptx)
                     link_prof = db.subir_e_converter_para_google_docs(doc_prof_final, f"{nome_base}_PROF{ext_prof}", semana=sem_lab, aula=aula_num)
                     
                     link_pei = "N/A"
@@ -248,17 +247,23 @@ def exibir_material_estruturado(texto_raw, key_prefix, dados_plano=None, info_au
                         doc_pei = exporter.gerar_docx_aluno_v24(nome_base + "_PEI", ed_pei, {"ano": f"{ano_lab}º", "trimestre": "I"})
                         link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_base}_PEI.docx", semana=sem_lab, aula=aula_num)
                     
-                    # Registro no Banco
-                    db.salvar_no_banco("DB_AULAS_PRONTAS", [
-                        datetime.now().strftime("%d/%m/%Y"), 
+                    # 2. PRESERVAÇÃO DO ROTEIRO: Salvamos o texto da IA + os links no final
+                    roteiro_preservado = f"{ed_prof}\n\n--- LINKS DE ACESSO ---\nAluno({link_alu}) | Prof({link_prof}) | PEI({link_pei})"
+                    
+                    # 3. Registro no Banco (6 Colunas)
+                    data_hoje = datetime.now().strftime("%d/%m/%Y")
+                    sucesso = db.salvar_no_banco("DB_AULAS_PRONTAS", [
+                        data_hoje, 
                         sem_lab, 
                         f"{aula_num} ({formato})", 
-                        f"Links: Aluno({link_alu}) | Prof({link_prof}) | PEI({link_pei})", 
-                        f"{ano_lab}º",
+                        roteiro_preservado, # Agora o roteiro está aqui dentro!
+                        f"{ano_lab}º", 
                         link_prof if formato == "Slides (Apresentação)" else link_alu
                     ])
-                    st.success("✅ Sincronizado com Sucesso!")
-                    time.sleep(1); st.rerun()
+                    
+                    if sucesso:
+                        st.success("✅ Sincronizado! Roteiro e Links preservados.")
+                        time.sleep(1); st.rerun()
 
         with c_master2:
             st.markdown("### 📦 Local")
@@ -629,84 +634,69 @@ elif menu == "🧪 Criador de Aulas":
                 if "lab_pei" in st.session_state: del st.session_state.lab_pei
                 st.rerun()
 
-# --- ABA 2: GAVETAS DE MATERIAIS (AGRUPAMENTO COMPLETO V25.10) ---
+# --- ABA 2: GAVETAS DE MATERIAIS (AGRUPAMENTO POR REFERÊNCIA V25.11) ---
     with tab_gavetas:
         st.subheader("🗂️ Gestão de Materiais Produzidos")
         
         if df_aulas.empty:
             st.info("📭 Nenhuma aula produzida no banco de dados.")
         else:
-            # Filtro de Ano (Série)
-            ano_gav = st.selectbox("Filtrar por Ano:", ["Todos", "6º", "7º", "8º", "9º"], key="gav_ano_v25_10")
-            
+            ano_gav = st.selectbox("Filtrar por Ano:", ["Todos", "6º", "7º", "8º", "9º"], key="gav_v11_ano")
             df_g = df_aulas.copy()
             if ano_gav != "Todos": 
                 df_g = df_g[df_g['ANO'].str.contains(ano_gav, na=False)]
             
-            # Conversão segura de data
-            df_g['DT_OBJ'] = pd.to_datetime(df_g['DATA'], format="%d/%m/%Y", errors='coerce').dt.date
+            # Agrupamento Inteligente: Busca o Trimestre dentro do texto da SEMANA_REF
+            categorias = ["I Trimestre", "II Trimestre", "III Trimestre", "Jornada"]
             
-            # Lista expandida para incluir o período de Janeiro/Início de Fevereiro
-            trimesteres_labels = ["I Trimestre", "II Trimestre", "III Trimestre", "Recesso/Jornada"]
-            
-            for trim in trimesteres_labels:
-                # Filtra os materiais que pertencem a este período
-                df_trim = df_g[df_g['DT_OBJ'].apply(lambda x: util.obter_info_trimestre(x)[0] if pd.notnull(x) else "Sem Data") == trim]
+            for cat in categorias:
+                # Filtra materiais onde o nome da semana contém o trimestre (Ex: "Semana 01... - I Trimestre")
+                df_cat = df_g[df_g['SEMANA_REF'].str.contains(cat, na=False)]
                 
-                if not df_trim.empty:
-                    # Define o ícone: 📅 para trimestres, 🏫 para Jornada
-                    icon = "🏫" if trim == "Recesso/Jornada" else "⏳"
-                    with st.expander(f"{icon} Materiais de: {trim}", expanded=(trim == "Recesso/Jornada" or trim == "I Trimestre")):
-                        
-                        for _, row in df_trim.iloc[::-1].iterrows():
+                if not df_cat.empty:
+                    icon = "🏫" if cat == "Jornada" else "⏳"
+                    with st.expander(f"{icon} Materiais do {cat}", expanded=(cat == "I Trimestre")):
+                        for _, row in df_cat.iloc[::-1].iterrows():
                             tipo = str(row['TIPO_MATERIAL']).upper()
                             cor_borda = "#2962FF" if "AULA 1" in tipo else "#00C853"
                             
                             with st.container(border=True):
-                                # Cabeçalho Identificador
                                 st.markdown(f"<div style='border-left: 5px solid {cor_borda}; padding-left: 10px;'>"
-                                            f"<b>{row['SEMANA_REF']} ÷ {row['TIPO_MATERIAL']}</b><br>"
-                                            f"<small>📅 Criado em: {row['DATA']} | 🎓 Série: {row['ANO']}</small></div>", unsafe_allow_html=True)
+                                            f"<b>{row['SEMANA_REF']} ÷ {row['TIPO_MATERIAL']}</b></div>", unsafe_allow_html=True)
                                 
                                 import re
-                                texto_cont = str(row['CONTEUDO'])
-                                link_alu = re.search(r"Aluno\((.*?)\)", texto_cont)
-                                link_prof = re.search(r"Prof\((.*?)\)", texto_cont)
-                                link_pei = re.search(r"PEI\((.*?)\)", texto_cont)
+                                texto_full = str(row['CONTEUDO'])
+                                # Separa o Roteiro dos Links
+                                partes = texto_full.split("--- LINKS DE ACESSO ---")
+                                roteiro_txt = partes[0]
+                                links_txt = partes[1] if len(partes) > 1 else texto_full
+
+                                link_alu = re.search(r"Aluno\((.*?)\)", links_txt)
+                                link_prof = re.search(r"Prof\((.*?)\)", links_txt)
+                                link_pei = re.search(r"PEI\((.*?)\)", links_txt)
 
                                 st.write("")
                                 c1, c2, c3, c4 = st.columns(4)
+                                if link_alu and "https" in link_alu.group(1): c1.link_button("📝 ALUNO", link_alu.group(1), use_container_width=True)
                                 
-                                if link_alu and "https" in link_alu.group(1):
-                                    c1.link_button("📝 ABRIR ALUNO", link_alu.group(1), use_container_width=True)
+                                label_prof = "📜 SLIDES" if "SLIDES" in row['TIPO_MATERIAL'].upper() else "👨‍🏫 GUIA"
+                                if link_prof and "https" in link_prof.group(1): c2.link_button(label_prof, link_prof.group(1), use_container_width=True)
                                 
-                                label_prof = "📜 SLIDES/GUIA" if "SLIDES" in texto_cont.upper() else "👨‍🏫 ABRIR GUIA"
-                                if link_prof and "https" in link_prof.group(1):
-                                    c2.link_button(label_prof, link_prof.group(1), use_container_width=True)
+                                if link_pei and "https" in link_pei.group(1): c3.link_button("♿ PEI", link_pei.group(1), use_container_width=True)
                                 
-                                if link_pei and "https" in link_pei.group(1):
-                                    c3.link_button("♿ ABRIR PEI", link_pei.group(1), use_container_width=True)
-                                
-                                if c4.button("🗑️ APAGAR", key=f"del_v25_10_{row.name}", use_container_width=True):
-                                    with st.spinner("Limpando Drive e Banco..."):
+                                if c4.button("🗑️ APAGAR", key=f"del_v11_{row.name}", use_container_width=True):
+                                    with st.spinner("Limpando..."):
                                         if db.excluir_registro_com_drive("DB_AULAS_PRONTAS", row['CONTEUDO']):
-                                            st.success("Removido!")
-                                            time.sleep(0.5)
-                                            st.rerun()
+                                            st.success("Removido!"); time.sleep(0.5); st.rerun()
 
+                                # --- VISUALIZAÇÃO DO PROMPT/ROTEIRO ---
                                 with st.expander("📄 Ver Roteiro Técnico / Super Prompt"):
-                                    st.text_area("Conteúdo Bruto:", texto_cont, height=150, key=f"raw_v10_{row.name}")
-                                    if "SLIDES" in texto_cont.upper():
-                                        st.code(f"Atue como Designer Instrucional. REFORMATE esta apresentação: {texto_cont}", language="text")
+                                    st.text_area("Roteiro Salvo:", roteiro_txt, height=250, key=f"txt_v11_{row.name}")
+                                    if "SLIDES" in row['TIPO_MATERIAL'].upper():
+                                        st.markdown("### 🤖 Comando para Gemini Slides")
+                                        st.code(f"Atue como Designer Instrucional. REFORMATE esta apresentação: {roteiro_txt}", language="text")
 
-            # Fallback para datas que não converteram ou não mapearam
-            df_resto = df_g[df_g['DT_OBJ'].apply(lambda x: util.obter_info_trimestre(x)[0] if pd.notnull(x) else "Sem Data") == "Sem Data"]
-            if not df_resto.empty:
-                with st.expander("❓ Materiais sem Classificação", expanded=False):
-                    st.dataframe(df_resto[['DATA', 'SEMANA_REF', 'TIPO_MATERIAL']], use_container_width=True)
-
-            if df_g.empty:
-                st.warning("Nenhum material encontrado para os filtros selecionados.")
+            if df_g.empty: st.warning("Nenhum material encontrado.")
                             
 
 # ==============================================================================
