@@ -131,33 +131,37 @@ def gerar_docx_plano_pedagogico_v18(titulo_arquivo, dados, info):
     return file_stream
 
 def gerar_pptx_v24(titulo_doc, conteudo_ia):
+    from pptx import Presentation
+    import re
+    import io
+    
     prs = Presentation()
-    # Procura pelos blocos [SLIDE X] gerados pela IA
+    # Divide o conteúdo pelos blocos de SLIDE
     slides_raw = re.findall(r"\[SLIDE.*?\](.*?)(?=\[SLIDE|$)", conteudo_ia, re.DOTALL)
     
-    if not slides_raw:
-        # Fallback caso a IA mude o padrão de colchetes
-        slides_raw = [conteudo_ia]
-
     for i, bloco in enumerate(slides_raw):
-        layout = prs.slide_layouts[1] if i > 0 else prs.slide_layouts[0]
-        slide = prs.slides.add_slide(layout)
+        # Layout 0 para o primeiro (Título), Layout 1 para os demais (Título e Conteúdo)
+        layout_idx = 0 if i == 0 else 1
+        slide = prs.slides.add_slide(prs.slide_layouts[layout_idx])
         
-        # Extração cirúrgica dos campos
-        titulo_match = re.search(r"TITULO.*?:(.*?)\n", bloco, re.IGNORECASE)
-        visual_match = re.search(r"CONTEÚDO VISUAL.*?:(.*?)(?=PROMPT|SCRIPT|NOTA|$)", bloco, re.DOTALL | re.IGNORECASE)
-        script_match = re.search(r"SCRIPT DO PROFESSOR.*?:(.*?)(?=NOTA|$)", bloco, re.DOTALL | re.IGNORECASE)
+        # Extração robusta ignorando variações de caixa e espaços
+        titulo = re.search(r"(?:TITULO|TÍTULO).*?:(.*?)\n", bloco, re.IGNORECASE)
+        visual = re.search(r"(?:CONTEÚDO VISUAL|CONTEUDO VISUAL).*?:(.*?)(?=PROMPT|SCRIPT|NOTA|$)", bloco, re.DOTALL | re.IGNORECASE)
+        script = re.search(r"(?:SCRIPT DO PROFESSOR).*?:(.*?)(?=NOTA|$)", bloco, re.DOTALL | re.IGNORECASE)
         
-        if titulo_match:
-            slide.shapes.title.text = titulo_match.group(1).strip().replace("**", "")
+        # Inserção no Título
+        if titulo:
+            slide.shapes.title.text = titulo.group(1).strip().replace("**", "")
         
-        if visual_match and i > 0:
-            try:
-                slide.placeholders[1].text = visual_match.group(1).strip().replace("**", "")
-            except: pass
+        # Inserção no Corpo do Slide (Apenas se houver a caixa de conteúdo)
+        if visual and len(slide.placeholders) > 1:
+            body_shape = slide.placeholders[1]
+            body_shape.text = visual.group(1).strip().replace("**", "")
             
-        if script_match:
-            slide.notes_slide.notes_text_frame.text = script_match.group(1).strip().replace("**", "")
+        # Inserção nas Notas do Orador (Aparece embaixo no Google Slides)
+        if script:
+            notas = slide.notes_slide.notes_text_frame
+            notas.text = script.group(1).strip().replace("**", "")
 
     file_stream = io.BytesIO()
     prs.save(file_stream)
