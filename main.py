@@ -399,21 +399,12 @@ if menu == "🤖 Maestro Dashboard":
         st.session_state.messages.append({"role": "assistant", "content": resposta})
 
 # ==============================================================================
-# MÓDULO: LABORATÓRIO DE MATERIAIS V24.4 (BLINDAGEM DE CAPTURA)
+# MÓDULO: LABORATÓRIO DE MATERIAIS V24.4 (ESTABILIDADE TOTAL)
 # ==============================================================================
 elif menu == "🧪 Criador de Aulas":
     st.header("🧪 Laboratório de Materiais (V24)")
     
     tab_criar, tab_gavetas = st.tabs(["🚀 Criar Novo Material", "🗂️ Gavetas de Materiais"])
-
-    # Função de Extração Robusta V24.4
-    def extrair_v24(texto, tag):
-        import re
-        padrao = f"\\[{tag}\\](.*?)(?=\\[|$)"
-        match = re.search(padrao, texto, re.DOTALL | re.IGNORECASE)
-        if match:
-            return match.group(1).strip()
-        return ""
 
     if "v_lab" not in st.session_state: st.session_state.v_lab = 1
 
@@ -430,9 +421,8 @@ elif menu == "🧪 Criador de Aulas":
             aula_num = c3.radio("Foco:", ["Aula 1", "Aula 2"], horizontal=True)
             plano_raw = planos_ano[planos_ano['SEMANA'] == sem_lab].iloc[0]['PLANO_TEXTO']
             
-            # Filtro de Conteúdos/Objetivos
-            cont_no_plano = ai.extrair_tag(plano_raw, "CONTEUDOS_ESPECIFICOS").upper()
             df_base_ano = df_curriculo[df_curriculo['ANO'] == ano_lab]
+            cont_no_plano = ai.extrair_tag(plano_raw, "CONTEUDOS_ESPECIFICOS").upper()
             opcoes_conteudo = [c for c in df_base_ano['CONTEUDO_ESPECIFICO'].unique() if str(c).upper() in cont_no_plano]
 
             col_p1, col_p2 = st.columns(2)
@@ -445,12 +435,11 @@ elif menu == "🧪 Criador de Aulas":
             formato = cp1.radio("Formato:", ["Quadro (Lousa)", "Slides (Apresentação)"])
             qtd_q = cp2.slider("Quantidade de Questões:", 1, 15, 4)
             nivel = cp3.select_slider("Nível:", options=["Básico", "Intermediário", "Desafio"])
-            
-            instr = st.text_area("Instruções Adicionais:", placeholder="Ex: Use o contexto de Itabuna...")
+            instr = st.text_area("Instruções Adicionais:", placeholder="Ex: Use contexto de Itabuna...")
 
             if st.button("🚀 COMPILAR MATERIAL DA " + aula_num.upper(), use_container_width=True, type="primary"):
                 with st.spinner("IA executando Protocolo de Choque..."):
-                    prompt_v24 = (f"ORDEM: GERAR EXATAMENTE {qtd_q} QUESTÕES DE EXERCÍCIO. NÃO NUMERE EXEMPLOS.\n"
+                    prompt_v24 = (f"ORDEM: GERAR EXATAMENTE {qtd_q} QUESTÕES DE EXERCÍCIO.\n"
                                  f"FOCO: {ano_lab}º ANO, {sem_lab}, {aula_num}.\n"
                                  f"CONTEÚDOS: {sel_cont}\nOBJETIVOS: {sel_obj}\n"
                                  f"FORMATO: {formato}\nNÍVEL: {nivel}\nCONTEXTO: {instr}")
@@ -466,13 +455,12 @@ elif menu == "🧪 Criador de Aulas":
             txt_bruto = st.session_state.lab_temp
 
             # EXTRAÇÃO ANTES DAS ABAS (Garante que os dados não sumam)
-            ed_prof = extrair_v24(txt_bruto, "PROFESSOR")
-            ed_alu = extrair_v24(txt_bruto, "ALUNO")
-            ed_gab = extrair_v24(txt_bruto, "GABARITO")
-            ed_img = extrair_v24(txt_bruto, "IMAGENS")
+            ed_prof = ai.extrair_tag(txt_bruto, "PROFESSOR")
+            ed_alu = ai.extrair_tag(txt_bruto, "ALUNO")
+            ed_gab = ai.extrair_tag(txt_bruto, "GABARITO")
 
             st.subheader("🤖 Refinador Cirúrgico")
-            cmd_refine = st.chat_input("Comando (Ex: 'Remova a questão 3', 'Melhore o exemplo')...", key=f"chat_lab_{v}")
+            cmd_refine = st.chat_input("Comando (Ex: 'Remova a questão 3')...", key=f"chat_lab_{v}")
             if cmd_refine:
                 with st.spinner("Refinando..."):
                     st.session_state.lab_temp = ai.gerar_ia("MESTRE_V24", f"ATUAL:\n{txt_bruto}\nORDEM: {cmd_refine}")
@@ -486,24 +474,22 @@ elif menu == "🧪 Criador de Aulas":
             with t_alu:
                 st.text_area("Folha Aluno:", ed_alu, height=400, key=f"area_alu_{v}")
             with t_pei:
-                st.info("♿ A Engenharia PEI reduz a carga pela metade (Máx 5 questões).")
                 if st.button("♿ Gerar Engenharia PEI V24"):
                     with st.spinner("Calculando redução..."):
                         import re
-                        questoes = re.findall(r'\d+\.', ed_alu) # Busca números seguidos de ponto
+                        questoes = re.findall(r'\d+\.', ed_alu)
                         meta = min(5, max(1, len(questoes) // 2))
                         prompt_pei = f"MATERIAL ORIGINAL:\n{ed_alu}\n\nORDEM: Gere folha independente com EXATAMENTE {meta} QUESTÕES ADAPTADAS."
                         st.session_state.lab_pei = ai.gerar_ia("ARQUITETO_PEI_V24", prompt_pei)
                         st.rerun()
                 
                 txt_pei_raw = st.session_state.get('lab_pei', '')
-                st.text_area("Versão Adaptada:", extrair_v24(txt_pei_raw, "PEI"), height=400, key=f"area_pei_{v}")
+                st.text_area("Versão Adaptada:", ai.extrair_tag(txt_pei_raw, "PEI"), height=400, key=f"area_pei_{v}")
 
             with t_exp:
                 st.subheader("📥 Downloads e Nuvem")
                 nome_base = f"AULA_{aula_num.replace(' ','')}_{ano_lab}ANO_{sem_lab.split(' ')[1]}"
                 c_exp1, c_exp2 = st.columns(2)
-                
                 with c_exp1:
                     doc_alu = exporter.gerar_docx_aluno_v24(nome_base, ed_alu, {"ano": f"{ano_lab}º", "trimestre": "I"})
                     st.download_button("📥 Baixar Folha Aluno", doc_alu, f"{nome_base}_ALUNO.docx", use_container_width=True, key=f"dl_alu_{v}")
@@ -512,7 +498,6 @@ elif menu == "🧪 Criador de Aulas":
                         if "https" in str(link):
                             db.salvar_link_na_planilha("DB_AULAS_PRONTAS", "SEMANA_REF", sem_lab, link)
                             st.success("✅ Salvo!"); st.link_button("Abrir", str(link))
-
                 with c_exp2:
                     doc_prof = exporter.gerar_docx_professor_v24(nome_base, ed_prof, {"ano": f"{ano_lab}º", "semana": sem_lab})
                     st.download_button("📥 Baixar Guia Prof", doc_prof, f"{nome_base}_PROF.docx", use_container_width=True, key=f"dl_prof_{v}")
@@ -522,7 +507,6 @@ elif menu == "🧪 Criador de Aulas":
 
             if st.button("🗑️ DESCARTAR E RECOMEÇAR", use_container_width=True):
                 if "lab_temp" in st.session_state: del st.session_state.lab_temp
-                if "lab_pei" in st.session_state: del st.session_state.lab_pei
                 st.rerun()
 
     # --- ABA 2: GAVETAS DE MATERIAIS ---
