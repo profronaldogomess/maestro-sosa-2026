@@ -101,10 +101,16 @@ def gerar_ia(persona_key, comando, partes_arquivos=[], usar_busca=True):
         return f"Erro na IA: {e}"
 
 def extrair_tag(texto, tag):
-    padrao = f"MARKER_{tag}(.*?)(?=MARKER_|$)"
+    import re
+    # Esta regex ignora se tem :, **, espaços ou se está em maiúsculo/minúsculo
+    # Ela busca o marcador e pega tudo até o próximo marcador ou fim do texto
+    padrao = f"MARKER_{tag}.*?[:\s\*]*(.*?)(?=MARKER_|$)"
     match = re.search(padrao, texto, re.DOTALL | re.IGNORECASE)
     if match:
-        return match.group(1).replace("**", "").replace("###", "").replace("##", "").replace("#", "").replace("*", "").strip()
+        res = match.group(1).strip()
+        # Limpeza profunda de resíduos de Markdown
+        res = res.replace("**", "").replace("###", "").replace("##", "").replace("#", "")
+        return res
     return ""
 
 def prensa_hidraulica_v23(texto):
