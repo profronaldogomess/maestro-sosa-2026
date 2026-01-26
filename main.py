@@ -519,7 +519,6 @@ elif menu == "🧪 Criador de Aulas":
                 if formato == "Slides (Apresentação)":
                     st.subheader("📺 Estrutura da Apresentação")
                     import re
-                    # Divide o texto em blocos de slides para facilitar a leitura
                     slides = re.findall(r"\[SLIDE.*?\](.*?)(?=\[SLIDE|$)", ed_prof, re.DOTALL)
                     if slides:
                         for i, s_cont in enumerate(slides):
@@ -557,32 +556,38 @@ elif menu == "🧪 Criador de Aulas":
                 st.subheader("🚀 Central de Comando de Exportação")
                 nome_base = f"AULA_{aula_num.replace(' ','')}_{ano_lab}ANO_{sem_lab.split(' ')[1]}"
                 
-                # Se for Slides, mostra o Super Prompt para o Gemini
+                # --- LÓGICA HÍBRIDA DE GERAÇÃO DE ARQUIVOS ---
+                doc_alu = exporter.gerar_docx_aluno_v24(nome_base, ed_alu, {"ano": f"{ano_lab}º", "trimestre": "I"})
+                
                 if formato == "Slides (Apresentação)":
+                    # Gera PPTX para o Professor
+                    doc_prof_final = exporter.gerar_pptx_v24(f"{nome_base}_SLIDES", ed_prof)
+                    ext_prof = ".pptx"
+                    # Super Prompt para o Gemini
                     with st.container(border=True):
                         st.markdown("### 🤖 Super Prompt para Gemini Slides")
-                        st.caption("Copie o texto abaixo e cole no Gemini do Google Slides (Help me organize).")
                         super_prompt = f"Crie uma apresentação de slides profissional sobre {sel_cont}. Use a Metodologia Nova Escola com esta estrutura: {ed_prof}. Estilo: Moderno e focado em Matemática."
                         st.text_area("Comando Master:", super_prompt, height=150)
-                
-                doc_alu = exporter.gerar_docx_aluno_v24(nome_base, ed_alu, {"ano": f"{ano_lab}º", "trimestre": "I"})
-                doc_prof = exporter.gerar_docx_professor_v24(nome_base, ed_prof, {"ano": f"{ano_lab}º", "semana": sem_lab})
+                else:
+                    # Gera DOCX para o Professor
+                    doc_prof_final = exporter.gerar_docx_professor_v24(nome_base, ed_prof, {"ano": f"{ano_lab}º", "semana": sem_lab})
+                    ext_prof = ".docx"
                 
                 c_master1, c_master2 = st.columns(2)
                 with c_master1:
                     st.markdown("### ☁️ Nuvem")
                     if st.button("🚀 SALVAR TUDO NO DRIVE E BANCO", use_container_width=True, type="primary"):
-                        with st.spinner("Sincronizando pacote completo..."):
-                            link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{nome_base}_ALUNO", semana=sem_lab, aula=aula_num)
-                            link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_base}_PROF", semana=sem_lab, aula=aula_num)
+                        with st.spinner("Sincronizando pacote multimídia..."):
+                            link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{nome_base}_ALUNO.docx", semana=sem_lab, aula=aula_num)
+                            link_prof = db.subir_e_converter_para_google_docs(doc_prof_final, f"{nome_base}_PROF{ext_prof}", semana=sem_lab, aula=aula_num)
                             link_pei = "N/A"
                             if "lab_pei" in st.session_state:
                                 doc_pei = exporter.gerar_docx_aluno_v24(nome_base + "_PEI", ed_pei, {"ano": f"{ano_lab}º", "trimestre": "I"})
-                                link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_base}_PEI", semana=sem_lab, aula=aula_num)
+                                link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_base}_PEI.docx", semana=sem_lab, aula=aula_num)
                             
-                            sucesso = db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), sem_lab, f"{aula_num} (Completo)", f"Links: Aluno({link_alu}) | Prof({link_prof}) | PEI({link_pei})", f"{ano_lab}º", link_alu])
+                            sucesso = db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), sem_lab, f"{aula_num} ({formato})", f"Links: Aluno({link_alu}) | Prof({link_prof}) | PEI({link_pei})", f"{ano_lab}º", link_prof if formato == "Slides (Apresentação)" else link_alu])
                             if sucesso:
-                                st.success("✅ Tudo salvo e organizado por pastas!")
+                                st.success("✅ Sincronizado com Sucesso!")
                                 time.sleep(1); st.rerun()
 
                 with c_master2:
@@ -591,7 +596,10 @@ elif menu == "🧪 Criador de Aulas":
                     zip_buffer = io.BytesIO()
                     with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
                         zip_file.writestr(f"{nome_base}_ALUNO.docx", doc_alu.getvalue())
-                        zip_file.writestr(f"{nome_base}_PROF.docx", doc_prof.getvalue())
+                        if formato == "Slides (Apresentação)":
+                            zip_file.writestr(f"{nome_base}_PROF.pptx", doc_prof_final.getvalue())
+                        else:
+                            zip_file.writestr(f"{nome_base}_PROF.docx", doc_prof_final.getvalue())
                         if "lab_pei" in st.session_state:
                             doc_pei = exporter.gerar_docx_aluno_v24(nome_base + "_PEI", ed_pei, {"ano": f"{ano_lab}º", "trimestre": "I"})
                             zip_file.writestr(f"{nome_base}_PEI.docx", doc_pei.getvalue())
