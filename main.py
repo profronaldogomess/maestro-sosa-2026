@@ -471,25 +471,24 @@ elif menu == "🧪 Criador de Aulas":
 
             # --- BOTÃO DE INÍCIO (DENTRO DO ELSE) ---
             if st.button("🚀 Iniciar Composição do Laboratório", use_container_width=True):
-                with st.spinner(f"Protocolo de Choque: Gerando exatamente {num_q} questões..."):
-                    plano_ref = df_planos[(df_planos['ANO'] == ano_lab) & (df_planos['SEMANA'] == sem_lab)].iloc[0]
-                    
+                with st.spinner(f"Maestro SOSA em Protocolo de Choque: Gerando {num_q} questões..."):
+                    # Este prompt conversa diretamente com a sua persona AVALIADOR_V23
                     prompt_reg = (
-                        f"### TAREFA DE EXECUÇÃO FORÇADA ###\n"
-                        f"1. LEIA O PLANO: {texto_plano}\n"
-                        f"2. TEMA: {', '.join(foco_cont)}\n"
-                        f"3. OBJETIVO: {', '.join(foco_obj)}\n"
-                        f"4. QUANTIDADE OBRIGATÓRIA: {num_q} QUESTÕES.\n"
-                        f"5. NÍVEL: {dif_q}\n\n"
+                        f"### ORDEM DE EXECUÇÃO PARA ALGORITMO ###\n"
+                        f"TEMA: {', '.join(foco_cont)}\n"
+                        f"OBJETIVOS: {', '.join(foco_obj)}\n"
+                        f"QUANTIDADE OBRIGATÓRIA: {num_q} QUESTÕES.\n"
+                        f"NÍVEL: {dif_q}\n\n"
                         f"INSTRUÇÃO DE MONTAGEM:\n"
-                        f"- Comece com MARKER_TITULO.\n"
-                        f"- No MARKER_PROFESSOR, faça o quadro rico.\n"
-                        f"- No MARKER_ALUNO, você DEVE listar de 1 até {num_q}. Não pare na 5. Não pare na 7. Pare na {num_q}.\n"
-                        f"- Verifique sua contagem: 'Eu escrevi {num_q} questões?'\n"
-                        f"- Termine com [FIM_DO_MATERIAL]."
+                        f"- Use MARKER_TITULO para o nome da aula.\n"
+                        f"- No MARKER_PROFESSOR, faça o quadro rico com exemplos.\n"
+                        f"- No MARKER_ALUNO, liste de 1 até {num_q}. PARE NA QUESTÃO {num_q}.\n"
+                        f"- Termine com a tag [FIM_DO_MATERIAL]."
                     )
                     
                     raw = ai.gerar_ia("AVALIADOR_V23", prompt_reg)
+                    
+                    # O seu extrair_tag vai brilhar aqui, pegando tudo sem erro
                     st.session_state.lab_titulo = ai.extrair_tag(raw, "TITULO")
                     st.session_state.lab_prof = ai.extrair_tag(raw, "PROFESSOR")
                     st.session_state.lab_aluno = ai.extrair_tag(raw, "ALUNO")
