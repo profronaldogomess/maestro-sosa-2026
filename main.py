@@ -472,17 +472,29 @@ elif menu == "🧪 Criador de Aulas":
             with t_alu:
                 st.text_area("Folha Aluno:", ed_alu, height=400, key=f"area_alu_{v}")
             with t_pei:
-                if st.button("♿ Gerar Engenharia PEI V24"):
-                    with st.spinner("Calculando redução..."):
+                st.info("♿ A Engenharia PEI reduz a carga pela metade (Máx 5 questões).")
+                if st.button("♿ Gerar Engenharia PEI V24", key=f"gen_pei_btn_{v}"):
+                    with st.spinner("O Especialista está realizando a reengenharia inclusiva..."):
                         import re
+                        # Conta questões reais (número seguido de ponto)
                         questoes = re.findall(r'\d+\.', ed_alu)
                         meta = min(5, max(1, len(questoes) // 2))
-                        prompt_pei = f"MATERIAL ORIGINAL:\n{ed_alu}\n\nORDEM: Gere folha independente com EXATAMENTE {meta} QUESTÕES ADAPTADAS. Use a tag [PEI]."
+                        
+                        prompt_pei = (
+                            f"ORDEM: Gere uma folha PEI independente com EXATAMENTE {meta} QUESTÕES.\n\n"
+                            f"MATERIAL BASE:\n{ed_alu}\n\n"
+                            f"IMPORTANTE: Inicie sua resposta com a tag [PEI]."
+                        )
                         st.session_state.lab_pei = ai.gerar_ia("ARQUITETO_PEI_V24", prompt_pei)
                         st.rerun()
                 
-                txt_pei_raw = st.session_state.get('lab_pei', '')
-                st.text_area("Versão Adaptada:", ai.extrair_tag(txt_pei_raw, "PEI"), height=400, key=f"area_pei_{v}")
+                if "lab_pei" in st.session_state:
+                    txt_pei_raw = st.session_state.lab_pei
+                    # Tenta extrair a tag, se falhar mostra o texto todo para não ficar vazio
+                    conteudo_pei = ai.extrair_tag(txt_pei_raw, "PEI")
+                    if not conteudo_pei: conteudo_pei = txt_pei_raw # Fallback de segurança
+                    
+                    st.text_area("Versão Adaptada:", conteudo_pei, height=400, key=f"area_pei_{v}")
 
             with t_exp:
                 st.subheader("📥 Downloads")
