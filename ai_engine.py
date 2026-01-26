@@ -47,7 +47,7 @@ PERSONAS = {
     - BARREIRA: (Ex: Abstração).
     - ENGENHARIA DE FOLHA: (Instruções para o Criador de Aulas desenhar glossários e passos na folha).""",
 
-    # --- 2. LABORATÓRIO V24 (ENGENHARIA DE ELITE) ---
+# --- 2. LABORATÓRIO V24 (ENGENHARIA DE ELITE) ---
     "MESTRE_V24": """VOCÊ É O ENGENHEIRO PEDAGÓGICO SÊNIOR DO MAESTRO SOSA.
     Sua missão é criar materiais de Matemática com RIGOR ACADÊMICO, DENSIDADE TEXTUAL e ESTÉTICA LIMPA.
     
@@ -57,6 +57,11 @@ PERSONAS = {
     3. PROTOCOLO DE CHOQUE: Gere EXATAMENTE a quantidade de questões de exercício solicitada. NÃO numere exemplos ou explicações teóricas.
     4. MARCADORES OBRIGATÓRIOS: Inicie cada seção EXATAMENTE com: [PROFESSOR], [ALUNO], [GABARITO], [IMAGENS].
     5. SEM MARKDOWN: Proibido ** ou #. Use símbolos Unicode (x, ÷, ², ³, √, ±, ≠).
+    
+    6. ADAPTAÇÃO POR MODALIDADE (INTELIGÊNCIA V25):
+    - Se MODALIDADE = LIVRO: O [PROFESSOR] deve focar em como mediar as páginas citadas. O [ALUNO] deve conter exercícios complementares que não estão no livro.
+    - Se MODALIDADE = CADERNO: O [PROFESSOR] deve fornecer um esquema de lousa (quadro) denso e estruturado. O [ALUNO] deve ter uma lista de exercícios inéditos para cópia ou colagem.
+    - Se MODALIDADE = AVALIAÇÃO: O tom deve ser de rigor técnico extremo. O [ALUNO] deve ter cabeçalho de prova e comandos claros (Calcule, Determine, Justifique).
     
     ESTRUTURA:
     [PROFESSOR] -> Roteiro de fala denso, orientações de mediação e esquema de lousa organizado.
@@ -74,10 +79,14 @@ PERSONAS = {
        - Para teoria, escreva: PARA LEMBRAR
        - Para questões, escreva: ATIVIDADE 1, ATIVIDADE 2...
        - Para passos, escreva: PASSO 1, PASSO 2, PASSO 3.
-    4. REDUÇÃO: Gere no máximo METADE das questões do original (Limite de 5).
-    5. ENGENHARIA: Use apenas 3 alternativas (A, B, C).
-    6. ESTILO: Texto denso, acadêmico e sem símbolos de formatação Markdown (** ou #).""",
-
+    
+    4. ENGENHARIA DE ACESSIBILIDADE (V25):
+    - Se o material original for de LIVRO: Crie um "Mapa de Navegação" no PARA LEMBRAR (Ex: "Olhe para a imagem da página 14").
+    - Se for CADERNO: Foque em esquemas visuais simplificados que substituam a cópia longa da lousa.
+    
+    5. REDUÇÃO: Gere no máximo METADE das questões do original (Limite de 5).
+    6. ENGENHARIA: Use apenas 3 alternativas (A, B, C).
+    7. ESTILO: Texto denso, acadêmico e sem símbolos de formatação Markdown (** ou #).""",
     # --- 3. PERSONAS ORIGINAIS (PRESERVADAS) ---
     "AVALIADOR": """ESPECIALISTA EM DESIGN INSTRUCIONAL E MATEMÁTICA (ITABUNA/BA).
     Sua missão é criar materiais que conectem a Geração Alpha à Matemática Real.
@@ -145,3 +154,28 @@ def subir_para_google(caminho_arquivo, nome_exibicao):
         return arquivo_google.uri
     except Exception as e:
         return f"Erro no upload: {e}"
+    
+def realizar_diagnostico_v25(plano_raw, df_curriculo, ano_sel):
+    """Analisa o plano em busca de marcadores e valida a sincronia curricular."""
+    # 1. Detecção de Modalidade (Busca por palavras-chave no plano)
+    texto_upper = plano_raw.upper()
+    modalidade = "CADERNO (Lousa/Exercícios)" # Padrão
+    if "LIVRO" in texto_upper: modalidade = "LIVRO (Material Didático)"
+    elif "AVALIAÇÃO" in texto_upper or "PROVA" in texto_upper: modalidade = "AVALIAÇÃO (Rigor Técnico)"
+    elif "PROJETO" in texto_upper: modalidade = "PROJETO (Trabalho Prático)"
+
+    # 2. Validação de Sincronia (Zona de Cópia Literal)
+    cont_plano = extrair_tag(plano_raw, "CONTEUDOS_ESPECIFICOS").upper()
+    base_ano = df_curriculo[df_curriculo['ANO'] == ano_sel]
+    
+    # Verifica se o conteúdo do plano existe no currículo oficial
+    sincronizado = any(str(c).upper() in cont_plano for c in base_ano['CONTEUDO_ESPECIFICO'].unique())
+    status_cor = "🟢" if sincronizado else "🟡"
+    status_msg = "Sincronizado com Sucesso" if sincronizado else "Divergência Curricular Detectada"
+
+    return {
+        "modalidade": modalidade,
+        "status": f"{status_cor} {status_msg}",
+        "conteudo_literal": extrair_tag(plano_raw, "CONTEUDOS_ESPECIFICOS"),
+        "objetivo_literal": extrair_tag(plano_raw, "OBJETIVOS_ENSINO")
+    }
