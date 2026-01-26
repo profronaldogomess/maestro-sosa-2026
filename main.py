@@ -527,38 +527,65 @@ elif menu == "🧪 Criador de Aulas":
                     st.write("Clique no botão acima para gerar a versão adaptada.")
 
             with t_exp:
-                st.subheader("📥 Downloads e Nuvem")
+                st.subheader("🚀 Central de Comando de Exportação")
                 nome_base = f"AULA_{aula_num.replace(' ','')}_{ano_lab}ANO_{sem_lab.split(' ')[1]}"
-                c_exp1, c_exp2, c_exp3 = st.columns(3)
                 
-                with c_exp1:
-                    st.markdown("#### 📝 Aluno")
-                    doc_alu = exporter.gerar_docx_aluno_v24(nome_base, ed_alu, {"ano": f"{ano_lab}º", "trimestre": "I"})
-                    st.download_button("📥 Baixar Folha", doc_alu, f"{nome_base}_ALUNO.docx", use_container_width=True, key=f"dl_alu_{v}")
-                    if st.button("☁️ Salvar no Drive", key=f"drv_alu_{v}"):
-                        link = db.subir_e_converter_para_google_docs(doc_alu, f"{nome_base}_ALUNO", categoria="Material de Sala", sub_categoria="Folha Aluno")
-                        if "https" in str(link):
-                            db.salvar_link_na_planilha("DB_AULAS_PRONTAS", "SEMANA_REF", sem_lab, link)
-                            st.success("✅ Salvo!"); st.link_button("Abrir", str(link))
+                # Preparação dos Documentos em Memória
+                doc_alu = exporter.gerar_docx_aluno_v24(nome_base, ed_alu, {"ano": f"{ano_lab}º", "trimestre": "I"})
+                doc_prof = exporter.gerar_docx_professor_v24(nome_base, ed_prof, {"ano": f"{ano_lab}º", "semana": sem_lab})
+                
+                # Colunas de Ação Master
+                c_master1, c_master2 = st.columns(2)
 
-                with c_exp2:
-                    st.markdown("#### 👨‍🏫 Professor")
-                    doc_prof = exporter.gerar_docx_professor_v24(nome_base, ed_prof, {"ano": f"{ano_lab}º", "semana": sem_lab})
-                    st.download_button("📥 Baixar Guia", doc_prof, f"{nome_base}_PROF.docx", use_container_width=True, key=f"dl_prof_{v}")
-                    if st.button("☁️ Salvar no Drive", key=f"drv_prof_{v}"):
-                        link = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_base}_PROF", categoria="Material de Sala", sub_categoria="Guia Professor")
-                        st.success("✅ Salvo!"); st.link_button("Abrir", str(link))
+                with c_master1:
+                    st.markdown("### ☁️ Nuvem")
+                    if st.button("🚀 SALVAR TUDO NO DRIVE E BANCO", use_container_width=True, type="primary"):
+                        with st.spinner("Sincronizando pacote completo..."):
+                            # 1. Salva Aluno
+                            link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{nome_base}_ALUNO", semana=sem_lab, aula=aula_num)
+                            # 2. Salva Professor
+                            link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_base}_PROF", semana=sem_lab, aula=aula_num)
+                            # 3. Salva PEI (se existir)
+                            link_pei = ""
+                            if "lab_pei" in st.session_state:
+                                doc_pei = exporter.gerar_docx_aluno_v24(nome_base + "_PEI", ed_pei, {"ano": f"{ano_lab}º", "trimestre": "I"})
+                                link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_base}_PEI", semana=sem_lab, aula=aula_num)
+                            
+                            # 4. Registro Único no Banco de Dados
+                            db.salvar_no_banco("DB_AULAS_PRONTAS", [
+                                datetime.now().strftime("%d/%m/%Y"), 
+                                sem_lab, 
+                                f"{aula_num} (Completo)", 
+                                f"Links: Aluno({link_alu}) | Prof({link_prof}) | PEI({link_pei})", 
+                                f"{ano_lab}º",
+                                link_alu # Link principal para a gaveta
+                            ])
+                            st.success("✅ Tudo salvo e organizado por pastas!")
 
-                with c_exp3:
-                    st.markdown("#### ♿ PEI")
-                    if "lab_pei" in st.session_state:
-                        doc_pei = exporter.gerar_docx_aluno_v24(nome_base + "_PEI", ed_pei, {"ano": f"{ano_lab}º", "trimestre": "I"})
-                        st.download_button("📥 Baixar PEI", doc_pei, f"{nome_base}_PEI.docx", use_container_width=True, key=f"dl_pei_{v}")
-                        if st.button("☁️ Salvar no Drive", key=f"drv_pei_{v}"):
-                            link = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_base}_PEI", categoria="Material de Sala", sub_categoria="Folha PEI")
-                            st.success("✅ Salvo!"); st.link_button("Abrir", str(link))
-                    else:
-                        st.warning("Gere a versão PEI na aba ao lado primeiro.")
+                with c_master2:
+                    st.markdown("### 📦 Local")
+                    import io
+                    import zipfile
+
+                    # Criar ZIP em memória
+                    zip_buffer = io.BytesIO()
+                    with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
+                        zip_file.writestr(f"{nome_base}_ALUNO.docx", doc_alu.getvalue())
+                        zip_file.writestr(f"{nome_base}_PROF.docx", doc_prof.getvalue())
+                        if "lab_pei" in st.session_state:
+                            doc_pei = exporter.gerar_docx_aluno_v24(nome_base + "_PEI", ed_pei, {"ano": f"{ano_lab}º", "trimestre": "I"})
+                            zip_file.writestr(f"{nome_base}_PEI.docx", doc_pei.getvalue())
+
+                    st.download_button(
+                        label="📥 BAIXAR PACOTE COMPLETO (ZIP)",
+                        data=zip_buffer.getvalue(),
+                        file_name=f"PACOTE_{nome_base}.zip",
+                        mime="application/zip",
+                        use_container_width=True
+                    )
+
+                st.markdown("---")
+                st.info("💡 O salvamento automático cria a pasta da semana e as subpastas de aula no seu Drive.")
 
             if st.button("🗑️ DESCARTAR E RECOMEÇAR", use_container_width=True):
                 if "lab_temp" in st.session_state: del st.session_state.lab_temp
