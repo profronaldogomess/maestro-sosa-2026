@@ -56,7 +56,7 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
         if not linha.strip(): continue
         p = doc.add_paragraph()
         p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-        if any(x in linha.upper() for x in ["QUESTÃO", "ATIVIDADE", "PASSO", "LEMBRE-SE"]):
+        if any(x in linha.upper() for x in ["QUESTÃO", "ATIVIDADE", "PASSO", "PARA LEMBRAR", "RESPOSTA:"]):
             p.add_run(linha.strip()).font.bold = True
         else:
             p.add_run(linha.strip())
