@@ -4,149 +4,93 @@ from docx import Document
 from docx.shared import Inches, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_ALIGN_VERTICAL
-from docx.oxml import parse_xml
-from docx.oxml.ns import nsdecls
-from docx.enum.section import WD_SECTION
-from docx.enum.text import WD_BREAK
 
-def gerar_docx_profissional(titulo, conteudo_raw, info_extra={}, logo_escola="logo_escola.png"):
+def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     doc = Document()
     section = doc.sections[0]
     section.top_margin, section.bottom_margin = Inches(0.4), Inches(0.4)
     section.left_margin, section.right_margin = Inches(0.5), Inches(0.5)
 
-    diretorio_atual = os.path.dirname(os.path.abspath(__file__))
-    caminho_logo = os.path.join(diretorio_atual, logo_escola)
-
+    # --- CABEÇALHO IDENTICO AO PRINT (Tabela 3x5) ---
     table = doc.add_table(rows=3, cols=5)
     table.style = 'Table Grid'
     table.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    
+    # Ajuste de larguras para o design do print
+    table.columns[0].width = Inches(1.0) # Logo
+    table.columns[1].width = Inches(2.6) # Nome/Prof
+    table.columns[2].width = Inches(1.0) # Turma
+    table.columns[3].width = Inches(1.0) # Data
+    table.columns[4].width = Inches(1.2) # Trimestre
 
-    # Ajuste de Larguras
-    table.columns[0].width = Inches(1.1)
-    table.columns[1].width = Inches(1.8)
-    table.columns[2].width = Inches(1.2)
-    table.columns[3].width = Inches(1.6)
-    table.columns[4].width = Inches(1.4)
-
-    c_logo = table.cell(0, 0).merge(table.cell(2, 0))
-    c_escola = table.cell(0, 1).merge(table.cell(0, 3))
-    c_aluno = table.cell(1, 1).merge(table.cell(1, 3))
-    c_trim = table.cell(0, 4).merge(table.cell(1, 4))
+    # Mesclagens para o Design do Print
+    c_logo = table.cell(0, 0).merge(table.cell(2, 0)) 
+    c_escola = table.cell(0, 1).merge(table.cell(0, 4)) 
+    c_aluno = table.cell(1, 1).merge(table.cell(1, 4)) 
 
     # 1. Logo
-    c_logo.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-    p_logo = c_logo.paragraphs[0]
-    p_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    if os.path.exists(caminho_logo):
-        p_logo.add_run().add_picture(caminho_logo, width=Inches(0.9))
+    if os.path.exists("logo_escola.png"):
+        p_logo = c_logo.paragraphs[0]
+        p_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p_logo.add_run().add_picture("logo_escola.png", width=Inches(0.8))
 
     # 2. Nome da Escola
     p_esc = c_escola.paragraphs[0]
     p_esc.alignment = WD_ALIGN_PARAGRAPH.CENTER
     run_esc = p_esc.add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA")
-    run_esc.font.bold, run_esc.font.size = True, Pt(12)
+    run_esc.font.bold, run_esc.font.size = True, Pt(11)
 
-    # 3. Campo Aluno (LIMPO)
-    p_alu = c_aluno.paragraphs[0]
-    p_alu.add_run("ALUNO(A): ").font.size = Pt(10)
+    # 3. Campo Aluno
+    c_aluno.paragraphs[0].add_run("ALUNO(A):").font.size = Pt(10)
+
+    # 4. Linha de Baixo
+    table.cell(2, 1).paragraphs[0].add_run(f"PROF.: Ronaldo Gomes").font.size = Pt(9)
+    table.cell(2, 2).paragraphs[0].add_run(f"TURMA:").font.size = Pt(9)
+    table.cell(2, 3).paragraphs[0].add_run(f"DATA:").font.size = Pt(9)
+    table.cell(2, 4).paragraphs[0].add_run(f"{info.get('trimestre', 'I')} TRIMESTRE").font.size = Pt(8)
+
+    doc.add_paragraph() 
+
+    # Conteúdo Justificado
+    for linha in conteudo.split('\n'):
+        if not linha.strip(): continue
+        p = doc.add_paragraph()
+        p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+        if any(x in linha.upper() for x in ["QUESTÃO", "ATIVIDADE", "PASSO", "LEMBRE-SE"]):
+            p.add_run(linha.strip()).font.bold = True
+        else:
+            p.add_run(linha.strip())
     
-    # 4. Linha de Baixo (LIMPO)
-    table.cell(2, 1).paragraphs[0].add_run("PROF. Ronaldo Gomes").font.italic = True
-    table.cell(2, 2).paragraphs[0].add_run(f"TURMA: {info_extra.get('turma', '')}")
-    
-    p_data = table.cell(2, 3).paragraphs[0]
-    p_data.add_run("DATA:    /    /    ")
-
-    # 5. Lado Direito
-    c_trim.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-    p_trim = c_trim.paragraphs[0]
-    p_trim.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run_t1 = p_trim.add_run(f"{info_extra.get('trimestre', 'III')} TRIMESTRE\n")
-    run_t1.font.bold = True
-    run_t1.font.size = Pt(11)
-    p_trim.add_run(f"{titulo}").font.size = Pt(9)
-
-    # 6. Campo Nota (LIMPO)
-    table.cell(2, 4).paragraphs[0].add_run(" NOTA: ")
-
-    # Corpo do Texto
-    doc.add_paragraph()
-    texto_limpo = conteudo_raw.replace("MARKER_LOUSA", "").replace("MARKER_FOLHA", "").replace("MARKER_GABARITO", "\n--- GABARITO ---\n").replace("MARKER_IMAGENS", "")
-    for linha in texto_limpo.split('\n'):
-        if linha.strip():
-            p = doc.add_paragraph(linha.strip())
-            if "QUESTÃO" in linha.upper() or "ATIVIDADE" in linha.upper():
-                p.style.font.bold, p.paragraph_format.space_before = True, Pt(12)
-
     file_stream = io.BytesIO()
     doc.save(file_stream)
     file_stream.seek(0)
     return file_stream
 
-def gerar_docx_plano_oficial(titulo_plano, dados_plano, info_extra={}):
+def gerar_docx_professor_v24(titulo_doc, conteudo, info):
     doc = Document()
     section = doc.sections[0]
-    section.top_margin = Inches(0.4)
+    section.top_margin, section.bottom_margin = Inches(0.5), Inches(0.5)
     
-    # Cabeçalho em Tabela (Estilo PDF enviado)
-    table = doc.add_table(rows=3, cols=4)
+    table = doc.add_table(rows=3, cols=3)
     table.style = 'Table Grid'
     
-    # Linha 1: Logo | Nome Escola | Trimestre/Identificação
-    c_logo = table.cell(0, 0).merge(table.cell(1, 0))
-    c_escola = table.cell(0, 1).merge(table.cell(0, 2))
-    c_id = table.cell(0, 3).merge(table.cell(1, 3))
-    
-    # Inserir Logo
-    p_logo = c_logo.paragraphs[0]
-    p_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER
     if os.path.exists("logo_escola.png"):
-        p_logo.add_run().add_picture("logo_escola.png", width=Inches(0.8))
-        
-    # Nome da Escola
-    p_esc = c_escola.paragraphs[0]
-    p_esc.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run_esc = p_esc.add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA")
-    run_esc.font.bold = True
-    run_esc.font.size = Pt(12)
+        table.cell(0, 0).paragraphs[0].add_run().add_picture("logo_escola.png", width=Inches(0.7))
+    table.cell(0, 1).paragraphs[0].add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA").font.bold = True
+    table.cell(0, 2).paragraphs[0].add_run("GUIA DO PROFESSOR").font.bold = True
     
-    # Identificação do Plano
-    p_id = c_id.paragraphs[0]
-    p_id.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    p_id.add_run(f"{info_extra.get('trimestre', 'I')} TRIMESTRE\n").font.bold = True
-    p_id.add_run(titulo_plano).font.size = Pt(9)
+    table.cell(1, 0).merge(table.cell(1, 1))
+    table.cell(1, 0).paragraphs[0].add_run(f"Professor: Ronaldo Gomes")
+    table.cell(1, 2).paragraphs[0].add_run(f"Ano: {info.get('ano', '')}")
+    
+    table.cell(2, 0).merge(table.cell(2, 1))
+    table.cell(2, 0).paragraphs[0].add_run(f"Semana: {info.get('semana', '')}")
+    table.cell(2, 2).paragraphs[0].add_run("Data: [ / / 2026 ]")
 
-    # Linha 2: Professor e Turma
-    table.cell(1, 1).paragraphs[0].add_run(f"PROF: Ronaldo Gomes").font.size = Pt(10)
-    table.cell(1, 2).paragraphs[0].add_run(f"TURMA: {info_extra.get('turma', '')}").font.size = Pt(10)
-
-    # Linha 3: Data e Espaço em branco
-    table.cell(2, 1).merge(table.cell(2, 3))
-    table.cell(2, 1).paragraphs[0].add_run("DATA: ____/____/2026").font.size = Pt(10)
-
-    doc.add_paragraph() # Espaço
-
-    # CORPO DO PLANO (Tags em Negrito + Texto Normal)
-    ordem_campos = [
-        ("CONTEÚDO GERAL EIXO:", dados_plano.get('geral', '')),
-        ("CONTEÚDOS ESPECÍFICOS:", dados_plano.get('especificos', '')),
-        ("OBJETIVOS DE ENSINO:", dados_plano.get('objetivos', '')),
-        ("METODOLOGIA:", dados_plano.get('metodologia', '')),
-        ("AVALIAÇÃO:", dados_plano.get('avaliacao', '')),
-        ("OBSERVAÇÃO:", dados_plano.get('observacao', '')),
-        ("ADAPTAÇÃO PEI:", dados_plano.get('pei', ''))
-    ]
-
-    for label, texto in ordem_campos:
-        p = doc.add_paragraph()
-        run_label = p.add_run(label)
-        run_label.font.bold = True
-        run_label.font.size = Pt(11)
-        
-        p.add_run(f" {texto}").font.size = Pt(11)
+    doc.add_paragraph()
+    for linha in conteudo.split('\n'):
+        p = doc.add_paragraph(linha.strip())
         p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-        p.paragraph_format.space_after = Pt(12)
 
     file_stream = io.BytesIO()
     doc.save(file_stream)
@@ -157,156 +101,27 @@ def gerar_docx_plano_pedagogico_v18(titulo_arquivo, dados, info):
     doc = Document()
     section = doc.sections[0]
     section.top_margin, section.bottom_margin = Inches(0.5), Inches(0.5)
-    section.left_margin, section.right_margin = Inches(0.6), Inches(0.6)
-
-    # CABEÇALHO MODERNO 3 LINHAS
     table = doc.add_table(rows=3, cols=3)
     table.style = 'Table Grid'
-    
-    # Linha 1
-    table.cell(0, 0).paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
     if os.path.exists("logo_escola.png"):
         table.cell(0, 0).paragraphs[0].add_run().add_picture("logo_escola.png", width=Inches(0.7))
-    
-    p_esc = table.cell(0, 1).paragraphs[0]
-    p_esc.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    p_esc.add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA").font.bold = True
-    
-    p_tipo = table.cell(0, 2).paragraphs[0]
-    p_tipo.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    p_tipo.add_run("PLANO DE ENSINO SEMANAL").font.bold = True
-
-    # Linha 2
+    table.cell(0, 1).paragraphs[0].add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA").font.bold = True
+    table.cell(0, 2).paragraphs[0].add_run("PLANO DE ENSINO SEMANAL").font.bold = True
     table.cell(1, 0).merge(table.cell(1, 1))
     table.cell(1, 0).paragraphs[0].add_run(f"Professor: Ronaldo Gomes")
     table.cell(1, 2).paragraphs[0].add_run(f"Ano: {info.get('ano', '')}")
-
-    # Linha 3
     table.cell(2, 0).merge(table.cell(2, 1))
     table.cell(2, 0).paragraphs[0].add_run(f"Semana: {info.get('semana', '')}")
-    table.cell(2, 2).paragraphs[0].add_run("Data: [    /    / 2026 ]")
-
+    table.cell(2, 2).paragraphs[0].add_run("Data: [ / / 2026 ]")
     doc.add_paragraph()
-
-    # CORPO COM RÓTULOS EM NEGRITO
-    campos = [
-        ("CONTEÚDO GERAL EIXO:", "geral"),
-        ("CONTEÚDOS ESPECÍFICOS:", "especificos"),
-        ("OBJETIVOS DE ENSINO:", "objetivos"),
-        ("METODOLOGIA:", "metodologia"),
-        ("AVALIAÇÃO:", "avaliacao"),
-        ("OBSERVAÇÃO:", "observacao"),
-        ("ADAPTAÇÃO PEI:", "pei")
-    ]
-
+    campos = [("CONTEÚDO GERAL EIXO:", "geral"), ("CONTEÚDOS ESPECÍFICOS:", "especificos"), ("OBJETIVOS DE ENSINO:", "objetivos"), ("METODOLOGIA:", "metodologia"), ("AVALIAÇÃO:", "avaliacao"), ("OBSERVAÇÃO:", "observacao"), ("ADAPTAÇÃO PEI:", "pei")]
     for label, chave in campos:
         p = doc.add_paragraph()
         p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
         p.add_run(label).font.bold = True
-        
-        # Limpeza de segurança para evitar gagueira
         texto = str(dados.get(chave, "")).replace(label, "").strip()
         if texto.startswith(":"): texto = texto[1:].strip()
-        
         p.add_run(f" {texto}")
-        p.paragraph_format.space_after = Pt(10)
-
-    file_stream = io.BytesIO()
-    doc.save(file_stream)
-    file_stream.seek(0)
-    return file_stream
-
-def gerar_documento_mestre_v24(titulo_doc, dados, info):
-    doc = Document()
-    
-    # Configuração de Margens Estreitas para melhor aproveitamento
-    section = doc.sections[0]
-    section.top_margin = Inches(0.5)
-    section.bottom_margin = Inches(0.5)
-    section.left_margin = Inches(0.7)
-    section.right_margin = Inches(0.7)
-
-    def criar_cabecalho_v24(subtitulo):
-        table = doc.add_table(rows=3, cols=3)
-        table.style = 'Table Grid'
-        table.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        
-        # Linha 1: Logo | Escola | Tipo
-        c_logo = table.cell(0, 0)
-        if os.path.exists("logo_escola.png"):
-            p_logo = c_logo.paragraphs[0]
-            p_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            p_logo.add_run().add_picture("logo_escola.png", width=Inches(0.7))
-        
-        c_esc = table.cell(0, 1)
-        p_esc = c_esc.paragraphs[0]
-        p_esc.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        run_esc = p_esc.add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA")
-        run_esc.font.bold, run_esc.font.size = True, Pt(11)
-        
-        c_tipo = table.cell(0, 2)
-        p_tipo = c_tipo.paragraphs[0]
-        p_tipo.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        run_tipo = p_tipo.add_run(subtitulo)
-        run_tipo.font.bold, run_tipo.font.size = True, Pt(11)
-
-        # Linha 2: Professor | Ano
-        table.cell(1, 0).merge(table.cell(1, 1))
-        table.cell(1, 0).paragraphs[0].add_run(f"Professor: Ronaldo Gomes").font.size = Pt(10)
-        table.cell(1, 2).paragraphs[0].add_run(f"Ano: {info.get('ano', '')}").font.size = Pt(10)
-
-        # Linha 3: Semana | Data
-        table.cell(2, 0).merge(table.cell(2, 1))
-        table.cell(2, 0).paragraphs[0].add_run(f"Semana: {info.get('semana', '')}").font.size = Pt(10)
-        table.cell(2, 2).paragraphs[0].add_run("Data: [    /    / 2026 ]").font.size = Pt(10)
-        
-        doc.add_paragraph() # Espaço após cabeçalho
-
-    def formatar_bloco_texto(texto_raw):
-        for linha in texto_raw.split('\n'):
-            if not linha.strip(): continue
-            
-            p = doc.add_paragraph()
-            p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-            
-            # Lógica de Negrito Automático para Títulos e Questões
-            if any(x in linha.upper() for x in ["QUESTÃO", "ATIVIDADE", "EXEMPLO", "PASSO", "TÍTULO:", "PONTO"]):
-                run = p.add_run(linha.strip())
-                run.font.bold = True
-                run.font.size = Pt(11)
-                p.paragraph_format.space_before = Pt(12)
-            elif "[BOX DE IMAGEM:" in linha.upper():
-                run = p.add_run(f"\n🖼️ {linha.strip()}\n")
-                run.font.italic = True
-                run.font.color.rgb = RGBColor(128, 128, 128)
-                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                p.paragraph_format.space_after = Pt(20) # Espaço para colar a imagem
-            else:
-                p.add_run(linha.strip()).font.size = Pt(11)
-            
-            p.paragraph_format.space_after = Pt(6)
-
-    # --- MONTAGEM DO DOCUMENTO ---
-    # Pág 1: Professor
-    criar_cabecalho_v24("GUIA DO PROFESSOR")
-    formatar_bloco_texto(dados['professor'])
-    doc.add_page_break()
-
-    # Pág 2: Aluno
-    criar_cabecalho_v24("ATIVIDADE DE MATEMÁTICA")
-    formatar_bloco_texto(dados['aluno'])
-    doc.add_page_break()
-
-    # Pág 3: PEI (Se houver)
-    if dados.get('pei') and len(dados['pei']) > 10:
-        criar_cabecalho_v24("ATIVIDADE ADAPTADA (PEI)")
-        formatar_bloco_texto(dados['pei'])
-        doc.add_page_break()
-
-    # Pág 4: Gabarito
-    doc.add_heading("GABARITO E ORIENTAÇÕES", level=1)
-    formatar_bloco_texto(dados['gabarito'])
-
     file_stream = io.BytesIO()
     doc.save(file_stream)
     file_stream.seek(0)
