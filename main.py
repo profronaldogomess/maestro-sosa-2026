@@ -447,11 +447,9 @@ elif menu == "🧪 Criador de Aulas":
             sem_lab = c2.selectbox("Semana:", planos_ano['SEMANA'].tolist(), key="lab_sem_v24")
             aula_num = c3.radio("Foco:", ["Aula 1", "Aula 2"], horizontal=True)
             
-            # RECUPERAÇÃO E DIAGNÓSTICO DO PLANO
             plano_raw = planos_ano[planos_ano['SEMANA'] == sem_lab].iloc[0]['PLANO_TEXTO']
             diag = ai.realizar_diagnostico_v25(plano_raw, df_curriculo, ano_lab)
 
-            # --- PAINEL DE INTELIGÊNCIA (DESIGN COMPACTO) ---
             with st.container(border=True):
                 st.markdown("### 🔍 Diagnóstico de Vínculo")
                 cd1, cd2 = st.columns(2)
@@ -462,32 +460,18 @@ elif menu == "🧪 Criador de Aulas":
                     st.caption(f"Conteúdo: {diag['conteudo_literal']}")
                     st.caption(f"Objetivo: {diag['objetivo_literal']}")
 
-            # --- LÓGICA DE FILTRAGEM DE CONTEÚDOS E OBJETIVOS ---
             df_base_ano = df_curriculo[df_curriculo['ANO'] == int(ano_lab)]
-            
-            # 1. Filtro de Conteúdos: Busca o que está no plano dentro do currículo
             cont_no_plano = diag['conteudo_literal'].upper().strip()
-            opcoes_conteudo = [
-                c for c in df_base_ano['CONTEUDO_ESPECIFICO'].unique() 
-                if str(c).upper().strip() in cont_no_plano or cont_no_plano in str(c).upper().strip()
-            ]
+            opcoes_conteudo = [c for c in df_base_ano['CONTEUDO_ESPECIFICO'].unique() if str(c).upper().strip() in cont_no_plano or cont_no_plano in str(c).upper().strip()]
 
             col_p1, col_p2 = st.columns(2)
-            sel_cont = col_p1.multiselect("Confirmar Conteúdos:", 
-                                          options=df_base_ano['CONTEUDO_ESPECIFICO'].unique(), 
-                                          default=opcoes_conteudo, 
-                                          key=f"v24_c_{sem_lab}")
+            sel_cont = col_p1.multiselect("Confirmar Conteúdos:", options=df_base_ano['CONTEUDO_ESPECIFICO'].unique(), default=opcoes_conteudo, key=f"v24_c_{sem_lab}")
             
-            # 2. Filtro de Objetivos: Dinâmico baseado no conteúdo selecionado
             if sel_cont:
                 opcoes_objetivos = df_base_ano[df_base_ano['CONTEUDO_ESPECIFICO'].isin(sel_cont)]['OBJETIVOS'].unique().tolist()
                 obj_no_plano = diag['objetivo_literal'].upper().strip()
                 default_obj = [o for o in opcoes_objetivos if str(o).upper().strip() in obj_no_plano]
-                
-                sel_obj = col_p2.multiselect("Confirmar Objetivos:", 
-                                              options=opcoes_objetivos, 
-                                              default=default_obj, 
-                                              key=f"v24_o_{sem_lab}")
+                sel_obj = col_p2.multiselect("Confirmar Objetivos:", options=opcoes_objetivos, default=default_obj, key=f"v24_o_{sem_lab}")
             else:
                 sel_obj = col_p2.multiselect("Confirmar Objetivos:", options=[], help="Selecione um conteúdo primeiro", key=f"v24_o_{sem_lab}")
 
@@ -503,10 +487,11 @@ elif menu == "🧪 Criador de Aulas":
             if st.button("🚀 COMPILAR MATERIAL DA " + aula_num.upper(), use_container_width=True, type="primary"):
                 with st.spinner("IA executando Protocolo de Choque..."):
                     prompt_v24 = (f"ORDEM: GERAR EXATAMENTE {qtd_q} QUESTÕES DE EXERCÍCIO.\n"
+                                 f"FORMATO SELECIONADO: {formato}\n"
                                  f"MODALIDADE DETECTADA NO PLANO: {diag['modalidade']}\n"
                                  f"FOCO: {ano_lab}º ANO, {sem_lab}, {aula_num}.\n"
                                  f"CONTEÚDOS: {sel_cont}\nOBJETIVOS: {sel_obj}\n"
-                                 f"FORMATO: {formato}\nNÍVEL: {nivel}\nCONTEXTO: {instr}")
+                                 f"NÍVEL: {nivel}\nCONTEXTO: {instr}")
                     st.session_state.lab_temp = ai.gerar_ia("MESTRE_V24", prompt_v24)
                     st.session_state.v_lab += 1
                     if "lab_pei" in st.session_state: del st.session_state.lab_pei
@@ -517,7 +502,6 @@ elif menu == "🧪 Criador de Aulas":
             st.markdown("---")
             v = st.session_state.v_lab
             txt_bruto = st.session_state.lab_temp
-
             ed_prof = ai.extrair_tag(txt_bruto, "PROFESSOR")
             ed_alu = ai.extrair_tag(txt_bruto, "ALUNO")
 
@@ -532,9 +516,23 @@ elif menu == "🧪 Criador de Aulas":
             t_prof, t_alu, t_pei, t_exp = st.tabs(["👨‍🏫 Professor", "📝 Aluno", "♿ PEI (Adaptada)", "📥 EXPORTAR"])
             
             with t_prof:
-                st.text_area("Roteiro Professor:", ed_prof, height=400, key=f"area_prof_{v}")
+                if formato == "Slides (Apresentação)":
+                    st.subheader("📺 Estrutura da Apresentação")
+                    import re
+                    # Divide o texto em blocos de slides para facilitar a leitura
+                    slides = re.findall(r"\[SLIDE.*?\](.*?)(?=\[SLIDE|$)", ed_prof, re.DOTALL)
+                    if slides:
+                        for i, s_cont in enumerate(slides):
+                            with st.expander(f"Slide {i+1}"):
+                                st.text(s_cont.strip())
+                    else:
+                        st.text_area("Roteiro de Slides:", ed_prof, height=400)
+                else:
+                    st.text_area("Esquema de Lousa:", ed_prof, height=400, key=f"area_prof_{v}")
+            
             with t_alu:
                 st.text_area("Folha Aluno:", ed_alu, height=400, key=f"area_alu_{v}")
+            
             with t_pei:
                 st.info("♿ A Engenharia PEI reduz a carga pela metade (Máx 5 questões).")
                 if st.button("♿ Gerar Engenharia PEI V24", key=f"btn_gen_pei_{v}"):
@@ -559,49 +557,37 @@ elif menu == "🧪 Criador de Aulas":
                 st.subheader("🚀 Central de Comando de Exportação")
                 nome_base = f"AULA_{aula_num.replace(' ','')}_{ano_lab}ANO_{sem_lab.split(' ')[1]}"
                 
-                # Preparação dos Documentos em Memória
+                # Se for Slides, mostra o Super Prompt para o Gemini
+                if formato == "Slides (Apresentação)":
+                    with st.container(border=True):
+                        st.markdown("### 🤖 Super Prompt para Gemini Slides")
+                        st.caption("Copie o texto abaixo e cole no Gemini do Google Slides (Help me organize).")
+                        super_prompt = f"Crie uma apresentação de slides profissional sobre {sel_cont}. Use a Metodologia Nova Escola com esta estrutura: {ed_prof}. Estilo: Moderno e focado em Matemática."
+                        st.text_area("Comando Master:", super_prompt, height=150)
+                
                 doc_alu = exporter.gerar_docx_aluno_v24(nome_base, ed_alu, {"ano": f"{ano_lab}º", "trimestre": "I"})
                 doc_prof = exporter.gerar_docx_professor_v24(nome_base, ed_prof, {"ano": f"{ano_lab}º", "semana": sem_lab})
                 
-                # Colunas de Ação Master
                 c_master1, c_master2 = st.columns(2)
-
                 with c_master1:
                     st.markdown("### ☁️ Nuvem")
                     if st.button("🚀 SALVAR TUDO NO DRIVE E BANCO", use_container_width=True, type="primary"):
                         with st.spinner("Sincronizando pacote completo..."):
-                            # 1. Salva Aluno
                             link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{nome_base}_ALUNO", semana=sem_lab, aula=aula_num)
-                            # 2. Salva Professor
                             link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_base}_PROF", semana=sem_lab, aula=aula_num)
-                            
-                            # 3. Salva PEI (se existir) - CORREÇÃO DE INDENTAÇÃO AQUI
                             link_pei = "N/A"
                             if "lab_pei" in st.session_state:
                                 doc_pei = exporter.gerar_docx_aluno_v24(nome_base + "_PEI", ed_pei, {"ano": f"{ano_lab}º", "trimestre": "I"})
                                 link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_base}_PEI", semana=sem_lab, aula=aula_num)
                             
-                            # 4. Registro Único no Banco de Dados (6 Colunas conforme Schema V25)
-                            sucesso = db.salvar_no_banco("DB_AULAS_PRONTAS", [
-                                datetime.now().strftime("%d/%m/%Y"), # DATA
-                                sem_lab,                             # SEMANA_REF
-                                f"{aula_num} (Completo)",            # TIPO_MATERIAL
-                                f"Links: Aluno({link_alu}) | Prof({link_prof}) | PEI({link_pei})", # CONTEUDO
-                                f"{ano_lab}º",                       # ANO
-                                link_alu                             # LINK_DRIVE
-                            ])
-                            
+                            sucesso = db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), sem_lab, f"{aula_num} (Completo)", f"Links: Aluno({link_alu}) | Prof({link_prof}) | PEI({link_pei})", f"{ano_lab}º", link_alu])
                             if sucesso:
                                 st.success("✅ Tudo salvo e organizado por pastas!")
-                                time.sleep(1)
-                                st.rerun() # Atualiza o sistema para mostrar na Gaveta
+                                time.sleep(1); st.rerun()
 
                 with c_master2:
                     st.markdown("### 📦 Local")
-                    import io
-                    import zipfile
-
-                    # Criar ZIP em memória
+                    import io, zipfile
                     zip_buffer = io.BytesIO()
                     with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
                         zip_file.writestr(f"{nome_base}_ALUNO.docx", doc_alu.getvalue())
@@ -609,17 +595,7 @@ elif menu == "🧪 Criador de Aulas":
                         if "lab_pei" in st.session_state:
                             doc_pei = exporter.gerar_docx_aluno_v24(nome_base + "_PEI", ed_pei, {"ano": f"{ano_lab}º", "trimestre": "I"})
                             zip_file.writestr(f"{nome_base}_PEI.docx", doc_pei.getvalue())
-
-                    st.download_button(
-                        label="📥 BAIXAR PACOTE COMPLETO (ZIP)",
-                        data=zip_buffer.getvalue(),
-                        file_name=f"PACOTE_{nome_base}.zip",
-                        mime="application/zip",
-                        use_container_width=True
-                    )
-
-                st.markdown("---")
-                st.info("💡 O salvamento automático cria a pasta da semana e as subpastas de aula no seu Drive.")
+                    st.download_button(label="📥 BAIXAR PACOTE COMPLETO (ZIP)", data=zip_buffer.getvalue(), file_name=f"PACOTE_{nome_base}.zip", mime="application/zip", use_container_width=True)
 
             if st.button("🗑️ DESCARTAR E RECOMEÇAR", use_container_width=True):
                 if "lab_temp" in st.session_state: del st.session_state.lab_temp
