@@ -482,20 +482,30 @@ elif menu == "🧪 Criador de Aulas":
             with t_alu:
                 st.text_area("Folha Aluno:", ed_alu, height=400, key=f"area_alu_{v}")
             with t_pei:
-                st.info("♿ A Engenharia PEI reduz a carga pela metade (Máx 5 questões).")
-                if st.button("♿ Gerar Engenharia PEI V24", key=f"btn_gen_pei_{v}"):
-                    with st.spinner("Calculando redução e adaptando..."):
-                        import re
-                        questoes = re.findall(r'\d+\.', ed_alu)
-                        meta = min(5, max(1, len(questoes) // 2))
-                        prompt_pei = f"MATERIAL ORIGINAL:\n{ed_alu}\n\nORDEM: Gere folha independente com EXATAMENTE {meta} QUESTÕES ADAPTADAS. Use a tag [PEI]."
-                        st.session_state.lab_pei = ai.gerar_ia("ARQUITETO_PEI_V24", prompt_pei)
-                        st.rerun()
-                
-                txt_pei_raw = st.session_state.get('lab_pei', '')
-                ed_pei = ai.extrair_tag(txt_pei_raw, "PEI")
-                if not ed_pei and txt_pei_raw: ed_pei = txt_pei_raw # Fallback
-                st.text_area("Versão Adaptada:", ed_pei, height=400, key=f"area_pei_{v}")
+                            st.info("♿ A Engenharia PEI reduz a carga pela metade (Máx 5 questões).")
+                            if st.button("♿ Gerar Engenharia PEI V24", key=f"btn_gen_pei_{v}"):
+                                with st.spinner("O Maestro está realizando a reengenharia inclusiva..."):
+                                    import re
+                                    # Conta questões reais no material do aluno
+                                    questoes = re.findall(r'\d+\.', ed_alu)
+                                    meta = min(5, max(1, len(questoes) // 2))
+                                    
+                                    prompt_pei = (
+                                        f"ORDEM: Gere uma folha PEI independente com EXATAMENTE {meta} QUESTÕES.\n\n"
+                                        f"MATERIAL BASE DO ALUNO:\n{ed_alu}\n\n"
+                                        f"REGRA: Use a tag [PEI] no início. Sem tabelas de Markdown."
+                                    )
+                                    st.session_state.lab_pei = ai.gerar_ia("ARQUITETO_PEI_V24", prompt_pei)
+                                    st.rerun()
+                            
+                            # Captura o texto gerado
+                            txt_pei_raw = st.session_state.get('lab_pei', '')
+                            if txt_pei_raw:
+                                # Usa o extrator universal
+                                ed_pei = ai.extrair_tag(txt_pei_raw, "PEI")
+                                st.text_area("Versão Adaptada (Reduzida):", ed_pei, height=400, key=f"area_pei_v24_{v}")
+                            else:
+                                st.write("Clique no botão acima para gerar a versão adaptada.")
 
             with t_exp:
                 st.subheader("📥 Downloads e Nuvem")
