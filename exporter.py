@@ -213,34 +213,3 @@ def gerar_docx_plano_pedagogico_v18(titulo_arquivo, dados, info):
     doc.save(file_stream)
     file_stream.seek(0)
     return file_stream
-
-def gerar_docx_laboratorio_v23(titulo, prof_txt, aluno_txt, pei_txt, gab_txt, info):
-    doc = Document()
-    
-    # Função interna para criar seções
-    def adicionar_secao(nome_secao, conteudo):
-        if not conteudo or len(conteudo.strip()) < 5: return
-        
-        # Cabeçalho da Seção
-        p = doc.add_paragraph()
-        run = p.add_run(f"--- {nome_secao.upper()} ---")
-        run.font.bold = True
-        run.font.size = Pt(14)
-        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        
-        # Conteúdo
-        doc.add_paragraph(conteudo)
-        
-        # Quebra de Página para a próxima seção não misturar
-        doc.add_page_break()
-
-    # Montagem do Documento
-    adicionar_secao("Guia do Professor", prof_txt)
-    adicionar_secao("Atividade do Aluno", aluno_txt)
-    adicionar_secao("Atividade Adaptada (PEI)", pei_txt)
-    adicionar_secao("Gabarito", gab_txt)
-
-    file_stream = io.BytesIO()
-    doc.save(file_stream)
-    file_stream.seek(0)
-    return file_stream
