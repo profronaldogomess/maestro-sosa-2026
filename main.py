@@ -449,7 +449,7 @@ if menu == "🤖 Maestro Dashboard":
         st.session_state.messages.append({"role": "assistant", "content": resposta})
 
 # ==============================================================================
-# MÓDULO: LABORATÓRIO DE MATERIAIS V25.15 (INTEGRAÇÃO TOTAL MULTIMODAL)
+# MÓDULO: LABORATÓRIO DE MATERIAIS V25.17 (CONSOLIDAÇÃO MULTIMODAL COMPLETA)
 # ==============================================================================
 elif menu == "🧪 Criador de Aulas":
     st.header("🧪 Laboratório de Materiais (V24)")
@@ -471,6 +471,7 @@ elif menu == "🧪 Criador de Aulas":
             sem_lab = c2.selectbox("Semana:", planos_ano['SEMANA'].tolist(), key="lab_sem_v24")
             aula_num = c3.radio("Foco:", ["Aula 1", "Aula 2"], horizontal=True)
             
+            # RECUPERAÇÃO E DIAGNÓSTICO DO PLANO
             plano_raw = planos_ano[planos_ano['SEMANA'] == sem_lab].iloc[0]['PLANO_TEXTO']
             diag = ai.realizar_diagnostico_v25(plano_raw, df_curriculo, ano_lab)
 
@@ -484,6 +485,7 @@ elif menu == "🧪 Criador de Aulas":
                     st.caption(f"Conteúdo: {diag['conteudo_literal']}")
                     st.caption(f"Objetivo: {diag['objetivo_literal']}")
 
+            # FILTRAGEM DE CONTEÚDOS E OBJETIVOS
             df_base_ano = df_curriculo[df_curriculo['ANO'] == int(ano_lab)]
             cont_no_plano = diag['conteudo_literal'].upper().strip()
             opcoes_conteudo = [c for c in df_base_ano['CONTEUDO_ESPECIFICO'].unique() if str(c).upper().strip() in cont_no_plano or cont_no_plano in str(c).upper().strip()]
@@ -609,16 +611,24 @@ elif menu == "🧪 Criador de Aulas":
                 with c_master1:
                     st.markdown("### ☁️ Nuvem")
                     if st.button("🚀 SALVAR TUDO NO DRIVE E BANCO", use_container_width=True, type="primary"):
-                        with st.spinner("Sincronizando pacote completo..."):
+                        with st.spinner("Sincronizando pacote completo e preservando inteligência visual..."):
                             link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{nome_base}_ALUNO.docx", semana=sem_lab, aula=aula_num)
                             link_prof = db.subir_e_converter_para_google_docs(doc_prof_final, f"{nome_base}_PROF{ext_prof}", semana=sem_lab, aula=aula_num)
+                            
                             link_pei = "N/A"
+                            ed_img_pei = ""
                             if "lab_pei" in st.session_state:
                                 doc_pei = exporter.gerar_docx_aluno_v24(nome_base + "_PEI", ed_pei, {"ano": f"{ano_lab}º", "trimestre": "I"})
                                 link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_base}_PEI.docx", semana=sem_lab, aula=aula_num)
+                                ed_img_pei = ai.extrair_tag(st.session_state.lab_pei, "IMAGENS_PEI")
                             
-                            # Preservação do Roteiro no Banco
-                            roteiro_preservado = f"{ed_prof}\n\n--- LINKS DE ACESSO ---\nAluno({link_alu}) | Prof({link_prof}) | PEI({link_pei})"
+                            # PRESERVAÇÃO TOTAL NO BANCO
+                            roteiro_preservado = (
+                                f"MARKER_ROTEIRO_PROF\n{ed_prof}\n\n"
+                                f"MARKER_PROMPTS_REGULAR\n{ed_img_reg}\n\n"
+                                f"MARKER_PROMPTS_PEI\n{ed_img_pei}\n\n"
+                                f"--- LINKS DE ACESSO ---\nAluno({link_alu}) | Prof({link_prof}) | PEI({link_pei})"
+                            )
                             
                             sucesso = db.salvar_no_banco("DB_AULAS_PRONTAS", [
                                 datetime.now().strftime("%d/%m/%Y"), sem_lab, f"{aula_num} ({formato})", roteiro_preservado, f"{ano_lab}º", link_prof if formato == "Slides (Apresentação)" else link_alu
@@ -643,13 +653,13 @@ elif menu == "🧪 Criador de Aulas":
                 if "lab_pei" in st.session_state: del st.session_state.lab_pei
                 st.rerun()
 
-    # --- ABA 2: GAVETAS DE MATERIAIS (AGRUPAMENTO INTELIGENTE V25.15) ---
+    # --- ABA 2: GAVETAS DE MATERIAIS (HISTÓRICO MULTIMODAL V25.17) ---
     with tab_gavetas:
         st.subheader("🗂️ Gestão de Materiais Produzidos")
         if df_aulas.empty:
             st.info("📭 Nenhuma aula produzida.")
         else:
-            ano_gav = st.selectbox("Filtrar por Ano:", ["Todos", "6º", "7º", "8º", "9º"], key="gav_v15_ano")
+            ano_gav = st.selectbox("Filtrar por Ano:", ["Todos", "6º", "7º", "8º", "9º"], key="gav_v17_ano")
             df_g = df_aulas.copy()
             if ano_gav != "Todos": df_g = df_g[df_g['ANO'].str.contains(ano_gav, na=False)]
             
@@ -679,31 +689,45 @@ elif menu == "🧪 Criador de Aulas":
                             cor_borda = "#2962FF" if "AULA 1" in tipo else "#00C853"
                             with st.container(border=True):
                                 st.markdown(f"<div style='border-left: 5px solid {cor_borda}; padding-left: 10px;'><b>{row['SEMANA_REF']} ÷ {row['TIPO_MATERIAL']}</b></div>", unsafe_allow_html=True)
-                                texto_full = str(row['CONTEUDO'])
-                                partes = texto_full.split("--- LINKS DE ACESSO ---")
-                                roteiro_txt = partes[0]
-                                links_txt = partes[1] if len(partes) > 1 else texto_full
                                 
-                                import re
-                                link_alu = re.search(r"Aluno\((.*?)\)", links_txt)
-                                link_prof = re.search(r"Prof\((.*?)\)", links_txt)
-                                link_pei = re.search(r"PEI\((.*?)\)", links_txt)
+                                texto_full = str(row['CONTEUDO'])
+                                roteiro_txt = ai.extrair_tag(texto_full, "ROTEIRO_PROF")
+                                img_reg_txt = ai.extrair_tag(texto_full, "PROMPTS_REGULAR")
+                                img_pei_txt = ai.extrair_tag(texto_full, "PROMPTS_PEI")
+                                
+                                if not roteiro_txt:
+                                    partes = texto_full.split("--- LINKS DE ACESSO ---")
+                                    roteiro_txt = partes[0] if len(partes) > 0 else "Roteiro antigo."
 
+                                import re
+                                link_alu = re.search(r"Aluno\((.*?)\)", texto_full)
+                                link_prof = re.search(r"Prof\((.*?)\)", texto_full)
+                                link_pei = re.search(r"PEI\((.*?)\)", texto_full)
+
+                                st.write("")
                                 c1, c2, c3, c4 = st.columns(4)
                                 if link_alu and "https" in link_alu.group(1): c1.link_button("📝 ALUNO", link_alu.group(1), use_container_width=True)
-                                label_prof = "📜 SLIDES" if "SLIDES" in row['TIPO_MATERIAL'].upper() else "👨‍🏫 GUIA"
+                                label_prof = "📜 SLIDES" if "SLIDES" in tipo else "👨‍🏫 GUIA"
                                 if link_prof and "https" in link_prof.group(1): c2.link_button(label_prof, link_prof.group(1), use_container_width=True)
                                 if link_pei and "https" in link_pei.group(1): c3.link_button("♿ PEI", link_pei.group(1), use_container_width=True)
-                                if c4.button("🗑️ APAGAR", key=f"del_v15_{row.name}", use_container_width=True):
+                                if c4.button("🗑️ APAGAR", key=f"del_v17_{row.name}", use_container_width=True):
                                     if db.excluir_registro_com_drive("DB_AULAS_PRONTAS", row['CONTEUDO']):
                                         st.success("Removido!"); time.sleep(0.5); st.rerun()
 
-                                with st.expander("📄 Ver Roteiro Técnico / Super Prompt"):
-                                    st.text_area("Conteúdo Salvo:", roteiro_txt, height=200, key=f"txt_v15_{row.name}")
-                                    if "SLIDES" in row['TIPO_MATERIAL'].upper() and "Roteiro não preservado" not in roteiro_txt:
-                                        st.code(f"Atue como Designer Instrucional. REFORMATE esta apresentação: {roteiro_txt}", language="text")
+                                with st.expander("📄 Ver Roteiro e Prompts de Imagem"):
+                                    t_hist1, t_hist2 = st.tabs(["📜 Roteiro Técnico", "🎨 Prompts de Imagem"])
+                                    with t_hist1:
+                                        st.text_area("Texto da Aula:", roteiro_txt, height=200, key=f"hist_rot_{row.name}")
+                                    with t_hist2:
+                                        if img_reg_txt:
+                                            st.markdown("#### 👨‍🏫 Material Regular")
+                                            st.code(img_reg_txt, language="text")
+                                        if img_pei_txt:
+                                            st.markdown("#### ♿ Âncoras Visuais PEI")
+                                            st.code(img_pei_txt, language="text")
+                                        if not img_reg_txt and not img_pei_txt:
+                                            st.warning("Prompts não disponíveis para este material antigo.")
                             
-
 # ==============================================================================
 # MÓDULO: PLANEJAMENTO (PONTO ID) - ARQUITETURA DE ELITE V25.10 (COM STATUS)
 # ==============================================================================
