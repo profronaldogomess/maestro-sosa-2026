@@ -6,6 +6,8 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_ALIGN_VERTICAL
 from docx.oxml import parse_xml
 from docx.oxml.ns import nsdecls
+from docx.enum.section import WD_SECTION
+from docx.enum.text import WD_BREAK
 
 def gerar_docx_profissional(titulo, conteudo_raw, info_extra={}, logo_escola="logo_escola.png"):
     doc = Document()
@@ -208,6 +210,44 @@ def gerar_docx_plano_pedagogico_v18(titulo_arquivo, dados, info):
         
         p.add_run(f" {texto}")
         p.paragraph_format.space_after = Pt(10)
+
+    file_stream = io.BytesIO()
+    doc.save(file_stream)
+    file_stream.seek(0)
+    return file_stream
+
+def gerar_documento_mestre_v24(titulo, dados, info):
+    doc = Document()
+    
+    def adicionar_cabecalho_cpm(documento, subtitulo):
+        table = documento.add_table(rows=3, cols=3)
+        table.style = 'Table Grid'
+        # ... (Lógica do cabeçalho de 3 linhas que já consolidamos) ...
+        # Adiciona o subtitulo (ex: GUIA DO PROFESSOR ou ATIVIDADE ADAPTADA)
+        return table
+
+    # PÁGINA 1: GUIA DO PROFESSOR
+    adicionar_cabecalho_cpm(doc, "GUIA DO PROFESSOR")
+    doc.add_paragraph(f"\nREFERÊNCIA: {info['semana']}\n")
+    doc.add_paragraph(dados['professor'])
+    doc.add_page_break()
+
+    # PÁGINA 2: ATIVIDADE DO ALUNO
+    adicionar_cabecalho_cpm(doc, "ATIVIDADE DE MATEMÁTICA")
+    doc.add_paragraph(dados['aluno'])
+    doc.add_page_break()
+
+    # PÁGINA 3: VERSÃO PEI (Se existir)
+    if dados.get('pei'):
+        adicionar_cabecalho_cpm(doc, "ATIVIDADE ADAPTADA (PEI)")
+        doc.add_paragraph(dados['pei'])
+        doc.add_page_break()
+
+    # PÁGINA 4: GABARITO E IMAGENS
+    doc.add_heading("GABARITO E PROMPTS DE IMAGEM", level=1)
+    doc.add_paragraph(dados['gabarito'])
+    doc.add_paragraph("\n--- PROMPTS PARA GERADOR DE IMAGENS ---\n")
+    doc.add_paragraph(dados['imagens'])
 
     file_stream = io.BytesIO()
     doc.save(file_stream)
