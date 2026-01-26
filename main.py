@@ -545,22 +545,27 @@ elif menu == "🧪 Criador de Aulas":
                             link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{nome_base}_ALUNO", semana=sem_lab, aula=aula_num)
                             # 2. Salva Professor
                             link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_base}_PROF", semana=sem_lab, aula=aula_num)
-                            # 3. Salva PEI (se existir)
-                            link_pei = ""
+                            
+                            # 3. Salva PEI (se existir) - CORREÇÃO DE INDENTAÇÃO AQUI
+                            link_pei = "N/A"
                             if "lab_pei" in st.session_state:
                                 doc_pei = exporter.gerar_docx_aluno_v24(nome_base + "_PEI", ed_pei, {"ano": f"{ano_lab}º", "trimestre": "I"})
                                 link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_base}_PEI", semana=sem_lab, aula=aula_num)
                             
-                            # 4. Registro Único no Banco de Dados
-                            db.salvar_no_banco("DB_AULAS_PRONTAS", [
-                                datetime.now().strftime("%d/%m/%Y"), 
-                                sem_lab, 
-                                f"{aula_num} (Completo)", 
-                                f"Links: Aluno({link_alu}) | Prof({link_prof}) | PEI({link_pei})", 
-                                f"{ano_lab}º",
-                                link_alu # Link principal para a gaveta
+                            # 4. Registro Único no Banco de Dados (6 Colunas conforme Schema V25)
+                            sucesso = db.salvar_no_banco("DB_AULAS_PRONTAS", [
+                                datetime.now().strftime("%d/%m/%Y"), # DATA
+                                sem_lab,                             # SEMANA_REF
+                                f"{aula_num} (Completo)",            # TIPO_MATERIAL
+                                f"Links: Aluno({link_alu}) | Prof({link_prof}) | PEI({link_pei})", # CONTEUDO
+                                f"{ano_lab}º",                       # ANO
+                                link_alu                             # LINK_DRIVE
                             ])
-                            st.success("✅ Tudo salvo e organizado por pastas!")
+                            
+                            if sucesso:
+                                st.success("✅ Tudo salvo e organizado por pastas!")
+                                time.sleep(1)
+                                st.rerun() # Atualiza o sistema para mostrar na Gaveta
 
                 with c_master2:
                     st.markdown("### 📦 Local")
