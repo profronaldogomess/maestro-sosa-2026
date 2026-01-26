@@ -399,26 +399,22 @@ if menu == "🤖 Maestro Dashboard":
         st.session_state.messages.append({"role": "assistant", "content": resposta})
 
 # ==============================================================================
-# MÓDULO: LABORATÓRIO DE MATERIAIS V24 (ENGENHARIA DE ELITE - CORRIGIDO)
+# MÓDULO: LABORATÓRIO DE MATERIAIS V24.1 (HIERARQUIA E PRECISÃO)
 # ==============================================================================
 elif menu == "🧪 Criador de Aulas":
     st.header("🧪 Laboratório de Materiais (V24)")
     
     tab_criar, tab_gavetas = st.tabs(["🚀 Criar Novo Material", "🗂️ Gavetas de Materiais"])
 
-    # --- FUNÇÃO DE LIMPEZA CIRÚRGICA V24 ---
+    # --- FUNÇÃO DE LIMPEZA V24 ---
     def limpar_v24(texto, label):
         if not texto: return ""
-        # Lista de possíveis gagueiras da IA para remover
-        remover = [label, label.upper(), label.lower(), "CONTEÚDO:", "CONTEUDO:", "METODOLOGIA:", "OBJETIVOS:", "AVALIAÇÃO:", "AVALIACAO:"]
-        t = texto
-        for r in remover: t = t.replace(r, "")
-        t = t.strip()
+        t = texto.replace(label, "").replace(label.upper(), "").replace(label.lower(), "").strip()
         if t.startswith(":") or t.startswith(" :"): t = t[1:].strip()
         return t
 
     with tab_criar:
-        # --- PASSO 1: VÍNCULO HIERÁRQUICO (FIDELIDADE AO BANCO) ---
+        # --- PASSO 1: VÍNCULO HIERÁRQUICO (CASCATA INTELIGENTE) ---
         st.subheader("1. Vínculo com Planejamento (Ponto ID)")
         c1, c2 = st.columns(2)
         ano_lab = c1.selectbox("Série:", [6, 7, 8, 9], key="lab_ano_v24")
@@ -431,20 +427,33 @@ elif menu == "🧪 Criador de Aulas":
             sem_lab = c2.selectbox("Semana de Referência:", planos_ano['SEMANA'].tolist(), key="lab_sem_v24")
             plano_raw = planos_ano[planos_ano['SEMANA'] == sem_lab].iloc[0]['PLANO_TEXTO']
             
-            # --- LÓGICA DE FILTRAGEM POR CRUZAMENTO (SEM ERRO DE SPLIT) ---
-            texto_cont_plano = ai.extrair_tag(plano_raw, "CONTEUDOS_ESPECIFICOS").upper()
-            texto_obj_plano = ai.extrair_tag(plano_raw, "OBJETIVOS_ENSINO").upper()
-
-            # Buscamos no banco de dados o que pertence a este ano
-            df_curriculo_ano = df_curriculo[df_curriculo['ANO'] == ano_lab]
+            # --- LÓGICA DE FILTRO POR BANCO DE DADOS (DB_CURRICULO) ---
+            cont_no_plano = ai.extrair_tag(plano_raw, "CONTEUDOS_ESPECIFICOS").upper()
+            df_base_ano = df_curriculo[df_curriculo['ANO'] == ano_lab]
             
-            # Só aparecem no multiselect os itens que estão no plano E no banco de dados
-            opcoes_cont = [c for c in df_curriculo_ano['CONTEUDO_ESPECIFICO'].unique() if str(c).upper() in texto_cont_plano]
-            opcoes_obj = [o for o in df_curriculo_ano['OBJETIVOS'].unique() if str(o).upper() in texto_obj_plano]
+            # Filtra conteúdos do banco que estão presentes no texto do plano
+            opcoes_conteudo = [c for c in df_base_ano['CONTEUDO_ESPECIFICO'].unique() if str(c).upper() in cont_no_plano]
 
             col_p1, col_p2 = st.columns(2)
-            sel_cont = col_p1.multiselect("Passo 1: Selecione os Conteúdos:", opcoes_cont, default=opcoes_cont)
-            sel_obj = col_p2.multiselect("Passo 2: Selecione os Objetivos:", opcoes_obj, default=opcoes_obj)
+            
+            # PASSO 1: Conteúdos (Frases inteiras do Banco)
+            sel_cont = col_p1.multiselect(
+                "Passo 1: Selecione os Conteúdos:", 
+                options=opcoes_conteudo,
+                key=f"v24_cont_fiel_{sem_lab}"
+            )
+
+            # PASSO 2: Objetivos (Hierarquia: Só mostra o que é do conteúdo selecionado)
+            if sel_cont:
+                opcoes_objetivos = df_base_ano[df_base_ano['CONTEUDO_ESPECIFICO'].isin(sel_cont)]['OBJETIVOS'].unique()
+                sel_obj = col_p2.multiselect(
+                    "Passo 2: Selecione os Objetivos:", 
+                    options=opcoes_objetivos,
+                    key=f"v24_obj_fiel_{sem_lab}"
+                )
+            else:
+                col_p2.info("👈 Selecione o conteúdo para liberar os objetivos.")
+                sel_obj = []
 
             # --- PASSO 2: PARÂMETROS DE PRECISÃO ---
             st.markdown("---")
@@ -466,14 +475,17 @@ elif menu == "🧪 Criador de Aulas":
                 ctx_extra = c_font2.text_area("Instruções Adicionais:", placeholder="Ex: Use exemplos com cacau...")
 
             if st.button("🚀 COMPILAR MATERIAL DE ELITE", use_container_width=True, type="primary"):
-                with st.spinner("IA executando Protocolo de Choque..."):
-                    prompt_v24 = (f"GERAR MATERIAL PARA {ano_lab}º ANO, {sem_lab}.\n"
-                                 f"CONTEÚDOS (BANCO): {sel_cont}\nOBJETIVOS (BANCO): {sel_obj}\n"
-                                 f"FORMATO: {formato}\nQUANTIDADE: {qtd_q} questões numeradas.\n"
-                                 f"NÍVEL: {nivel}\nCONTEXTO: {ctx_extra}")
-                    st.session_state.lab_temp = ai.gerar_ia("MESTRE_V24", prompt_v24)
-                    st.session_state.v_lab = 1
-                    st.rerun()
+                if not sel_cont:
+                    st.error("Selecione ao menos um conteúdo.")
+                else:
+                    with st.spinner("IA executando Protocolo de Choque..."):
+                        prompt_v24 = (f"GERAR MATERIAL PARA {ano_lab}º ANO, {sem_lab}.\n"
+                                     f"CONTEÚDOS: {sel_cont}\nOBJETIVOS: {sel_obj}\n"
+                                     f"FORMATO: {formato}\nQUANTIDADE: {qtd_q} questões numeradas.\n"
+                                     f"NÍVEL: {nivel}\nCONTEXTO: {ctx_extra}")
+                        st.session_state.lab_temp = ai.gerar_ia("MESTRE_V24", prompt_v24)
+                        st.session_state.v_lab = 1
+                        st.rerun()
 
         # --- PASSO 3: LABORATÓRIO DE EDIÇÃO DINÂMICO ---
         if "lab_temp" in st.session_state:
@@ -485,9 +497,10 @@ elif menu == "🧪 Criador de Aulas":
             # REFINADOR CIRÚRGICO (CHAT DESTRUTIVO)
             st.subheader("🤖 Refinador Cirúrgico")
             cmd_refine = st.chat_input("Comando Destrutivo (Ex: 'Remova a questão 3 e renumere')")
+            
             if cmd_refine:
                 with st.spinner("Executando ordem..."):
-                    prompt_destr = f"PLANO ATUAL:\n{txt_lab}\n\nORDEM DO PROFESSOR: {cmd_refine}\n\nREGRA: Mantenha Conteúdo/Objetivos. Sem Markdown."
+                    prompt_destr = f"PLANO ATUAL:\n{txt_lab}\n\nORDEM: {cmd_refine}\n\nREGRA: Execute e renumere. Seja direto."
                     st.session_state.lab_temp = ai.gerar_ia("MESTRE_V24", prompt_destr)
                     st.session_state.v_lab += 1
                     st.rerun()
@@ -502,7 +515,8 @@ elif menu == "🧪 Criador de Aulas":
             with t_img:
                 ed_img = st.text_area("Prompts de Imagem:", limpar_v24(ai.extrair_tag(txt_lab, "IMAGENS"), "IMAGENS"), height=200, key=f"ed_img_{v}")
             with t_gab:
-                ed_gab = st.text_area("Gabarito Comentado:", limpar_v24(ai.extrair_tag(txt_lab, "GABARITO"), "GABARITO"), height=200, key=f"ed_gab_{v}")
+                ed_gab = st.text_area("Gabarito:", limpar_v24(ai.extrair_tag(txt_lab, "GABARITO"), "GABARITO"), height=200, key=f"ed_gab_{v}")
+            
             with t_pei:
                 if st.button("♿ Gerar Engenharia PEI V24"):
                     with st.spinner("Fracionando problemas..."):
@@ -523,41 +537,34 @@ elif menu == "🧪 Criador de Aulas":
                         doc_mestre = exporter.gerar_documento_mestre_v24(nome_doc.upper(), dados_mestre, {"ano": f"{ano_lab}º Ano", "semana": sem_lab})
                         link = db.subir_e_converter_para_google_docs(doc_mestre, nome_doc, categoria="Material de Sala", sub_categoria=sem_lab)
                         if "https://" in str(link):
-                            # SALVA NO BANCO E MOSTRA O BOTÃO
                             db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), sem_lab, "1", "COMPLETO", formato, ed_alu[:100], f"{ano_lab}º", link, "", "", "", ""])
-                            st.success("✅ Documento Mestre Criado!"); st.link_button("🚀 ABRIR NO DRIVE", str(link))
+                            st.success("✅ Documento Mestre Criado!"); st.link_button("🚀 ABRIR", str(link))
 
             if st.button("🗑️ DESCARTAR E RECOMEÇAR", use_container_width=True):
                 if "lab_temp" in st.session_state: del st.session_state.lab_temp
                 st.rerun()
 
-    # --- ABA 2: GAVETAS DE MATERIAIS (HISTÓRICO V24) ---
+    # --- ABA 2: GAVETAS DE MATERIAIS ---
     with tab_gavetas:
         st.subheader("🗂️ Gavetas de Materiais Produzidos")
         if df_aulas.empty:
-            st.info("📭 Nenhuma aula pronta no banco de dados.")
+            st.info("📭 Vazio.")
         else:
             c_gav1, c_gav2 = st.columns(2)
-            gaveta_sel = c_gav1.selectbox("Escolha a Gaveta:", ["Materiais Completos (V24)", "Lousa e Slides", "Atividades Avulsas", "Avaliações"])
-            ano_gav = c_gav2.selectbox("Filtrar Ano:", ["Todos", "6º", "7º", "8º", "9º"], key="gav_ano_sel_v24")
+            gaveta_sel = c_gav1.selectbox("Gaveta:", ["Materiais Completos (V24)", "Lousa e Slides", "Atividades Avulsas"])
+            ano_gav = c_gav2.selectbox("Ano:", ["Todos", "6º", "7º", "8º", "9º"], key="gav_ano_v24")
             
             df_g = df_aulas.copy()
             if ano_gav != "Todos": df_g = df_g[df_g['ANO'].str.contains(ano_gav, na=False)]
-            
-            # Filtro por Gaveta
             if gaveta_sel == "Materiais Completos (V24)": df_g = df_g[df_g['TIPO_MATERIAL'] == "COMPLETO"]
-            elif gaveta_sel == "Lousa e Slides": df_g = df_g[df_g['FORMATO'].str.contains("Slides|Quadro", na=False)]
             
             if not df_g.empty:
                 for _, row in df_g.iloc[::-1].iterrows():
-                    with st.expander(f"📅 {row['DATA']} | {row['SEMANA_REF']} | {row['FORMATO']}"):
-                        if row['LINK_DRIVE']:
-                            st.link_button("🚀 ABRIR NO DRIVE", str(row['LINK_DRIVE']), use_container_width=True)
-                        if st.button("🗑️ Excluir", key=f"del_v24_{row.name}"):
-                            if db.excluir_registro("DB_AULAS_PRONTAS", row['CONTEUDO']):
-                                st.success("Removido!"); st.rerun()
-            else:
-                st.info(f"A gaveta '{gaveta_sel}' está vazia.")
+                    with st.expander(f"📅 {row['DATA']} | {row['SEMANA_REF']}"):
+                        if row['LINK_DRIVE']: st.link_button("🚀 ABRIR", str(row['LINK_DRIVE']), use_container_width=True)
+                        if st.button("🗑️ Excluir", key=f"del_{row.name}"):
+                            db.excluir_registro("DB_AULAS_PRONTAS", row['CONTEUDO'])
+                            st.rerun()
 
 # ==============================================================================
 # MÓDULO: PLANEJAMENTO (PONTO ID) - ARQUITETURA DE ELITE V23
