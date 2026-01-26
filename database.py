@@ -101,7 +101,7 @@ def carregar_tudo():
         except: return pd.DataFrame(columns=colunas_padrao)
 
     cols_planos = ["DATA", "SEMANA", "ANO", "TRIMESTRE", "TURMA", "PLANO_TEXTO"]
-    cols_aulas = ["DATA", "SEMANA_REF", "TIPO_MATERIAL", "CONTEUDO", "ANO"]
+    cols_aulas = ["DATA", "SEMANA_REF", "TIPO_MATERIAL", "CONTEUDO", "ANO", "LINK_DRIVE"]
     cols_alunos = ["ID", "NOME_ALUNO", "TURMA", "STATUS", "NECESSIDADES", "ORIGEM"]
     cols_relatorios = ["DATA", "ID_ALUNO", "NOME_ALUNO", "TIPO", "CONTEUDO"]
     cols_diario = ["DATA", "ID_ALUNO", "NOME_ALUNO", "TURMA", "VISTO_ATIVIDADE", "TAGS", "OBSERVACOES"]
@@ -131,7 +131,7 @@ def salvar_no_banco(aba_nome, linha):
         # Se a aba estiver vazia, cria o cabeçalho correto
         if not ws.get_all_values():
             if aba_nome == "DB_AULAS_PRONTAS":
-                ws.append_row(["DATA", "SEMANA_REF", "TIPO_MATERIAL", "CONTEUDO", "ANO"])
+                ws.append_row(["DATA", "SEMANA_REF", "TIPO_MATERIAL", "CONTEUDO", "ANO", "LINK_DRIVE"])
             elif aba_nome == "DB_PLANOS":
                 ws.append_row(["DATA", "SEMANA", "ANO", "TRIMESTRE", "TURMA", "PLANO_TEXTO"])
             elif aba_nome == "DB_RELATORIOS":
