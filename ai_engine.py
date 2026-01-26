@@ -97,26 +97,24 @@ def gerar_ia(persona_key, comando, partes_arquivos=[], usar_busca=True):
         return f"Erro na IA: {e}"
 
 def extrair_tag(texto, tag):
-    """
-    EXTRATOR UNIVERSAL SOSA V24:
-    Busca por [TAG] (Novo V24) ou MARKER_TAG (Antigo).
-    """
     if not texto: return ""
     
-    # 1. Tenta o formato de colchetes [TAG]
-    padrao_novo = rf"\[{tag}\](.*?)(?=\[|$)"
-    match = re.search(padrao_novo, texto, re.DOTALL | re.IGNORECASE)
+    # EXTRATOR UNIVERSAL: Procura por [TAG] ou MARKER_TAG
+    # O padrão aceita espaços e dois pontos extras: [PEI], [PEI]:, MARKER_PEI...
+    padrao = rf"(?:\[{tag}\]|MARKER_{tag})[:\s]*(.*?)(?=\[|MARKER_|$)"
+    
+    import re
+    match = re.search(padrao, texto, re.DOTALL | re.IGNORECASE)
     
     if match:
-        resultado = match.group(1)
-    else:
-        # 2. Tenta o formato antigo MARKER_TAG
-        padrao_antigo = rf"MARKER_{tag}(.*?)(?=MARKER_|$)"
-        match = re.search(padrao_antigo, texto, re.DOTALL | re.IGNORECASE)
-        resultado = match.group(1) if match else ""
+        # Limpeza de Markdown (negritos e hashtags) para o Word sair limpo
+        return match.group(1).replace("**", "").replace("###", "").replace("##", "").replace("#", "").strip()
     
-    # Limpeza de lixo visual
-    return resultado.replace("**", "").replace("###", "").replace("##", "").replace("#", "").strip()
+    # Se não achou a tag mas o texto é curto (IA mandou sem tag), retorna o texto todo
+    if len(texto) > 0 and len(texto) < 5000:
+        return texto.strip()
+        
+    return ""
 
 def subir_para_google(caminho_arquivo, nome_exibicao):
     try:
