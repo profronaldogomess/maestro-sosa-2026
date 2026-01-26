@@ -679,10 +679,12 @@ elif menu == "🧪 Criador de Aulas":
                             
                         # Botão Excluir (Rigor de Segurança)
                         if c4.button("🗑️ APAGAR", key=f"del_v25_{row.name}", use_container_width=True):
-                            if db.excluir_registro("DB_AULAS_PRONTAS", row['CONTEUDO']):
-                                st.success("Registro removido.")
-                                time.sleep(0.5)
-                                st.rerun()
+                            with st.spinner("Limpando Drive e Banco..."):
+                                # Chamada da nova função que apaga TUDO
+                                if db.excluir_registro_com_drive("DB_AULAS_PRONTAS", row['CONTEUDO']):
+                                    st.success("Removido com sucesso!")
+                                    time.sleep(0.5)
+                                    st.rerun()
             else:
                 st.warning("Nenhum material encontrado para os filtros selecionados.")
                             
