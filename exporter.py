@@ -4,6 +4,9 @@ from docx import Document
 from docx.shared import Inches, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_ALIGN_VERTICAL
+from pptx import Presentation
+from pptx.util import Inches, Pt
+import re
 
 def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     doc = Document()
@@ -124,5 +127,40 @@ def gerar_docx_plano_pedagogico_v18(titulo_arquivo, dados, info):
         p.add_run(f" {texto}")
     file_stream = io.BytesIO()
     doc.save(file_stream)
+    file_stream.seek(0)
+    return file_stream
+
+def gerar_pptx_v24(titulo_doc, conteudo_ia):
+    prs = Presentation()
+    
+    # Regex para capturar cada bloco de slide
+    slides_raw = re.findall(r"\[SLIDE.*?\](.*?)(?=\[SLIDE|$)", conteudo_ia, re.DOTALL)
+    
+    for i, bloco in enumerate(slides_raw):
+        # Escolhe um layout (0 = Título, 1 = Título e Conteúdo)
+        layout = prs.slide_layouts[1] if i > 0 else prs.slide_layouts[0]
+        slide = prs.slides.add_slide(layout)
+        
+        # Extração de sub-campos dentro do bloco do slide
+        titulo = re.search(r"TITULO.*?:(.*?)\n", bloco)
+        visual = re.search(r"CONTEÚDO VISUAL.*?:(.*?)(?=PROMPT|SCRIPT|NOTA|$)", bloco, re.DOTALL)
+        script = re.search(r"SCRIPT DO PROFESSOR.*?:(.*?)(?=NOTA|$)", bloco, re.DOTALL)
+        
+        # Preenche o Título
+        if titulo:
+            slide.shapes.title.text = titulo.group(1).strip().replace("**", "")
+        
+        # Preenche o Conteúdo Visual (Corpo do Slide)
+        if visual and i > 0:
+            tf = slide.placeholders[1].text_frame
+            tf.text = visual.group(1).strip().replace("**", "")
+            
+        # Preenche o Script do Professor (Notas do Orador)
+        if script:
+            notas = slide.notes_slide.notes_text_frame
+            notas.text = script.group(1).strip().replace("**", "")
+
+    file_stream = io.BytesIO()
+    prs.save(file_stream)
     file_stream.seek(0)
     return file_stream
