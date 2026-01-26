@@ -216,38 +216,96 @@ def gerar_docx_plano_pedagogico_v18(titulo_arquivo, dados, info):
     file_stream.seek(0)
     return file_stream
 
-def gerar_documento_mestre_v24(titulo, dados, info):
+def gerar_documento_mestre_v24(titulo_doc, dados, info):
     doc = Document()
     
-    def adicionar_cabecalho_cpm(documento, subtitulo):
-        table = documento.add_table(rows=3, cols=3)
+    # Configuração de Margens Estreitas para melhor aproveitamento
+    section = doc.sections[0]
+    section.top_margin = Inches(0.5)
+    section.bottom_margin = Inches(0.5)
+    section.left_margin = Inches(0.7)
+    section.right_margin = Inches(0.7)
+
+    def criar_cabecalho_v24(subtitulo):
+        table = doc.add_table(rows=3, cols=3)
         table.style = 'Table Grid'
-        # ... (Lógica do cabeçalho de 3 linhas que já consolidamos) ...
-        # Adiciona o subtitulo (ex: GUIA DO PROFESSOR ou ATIVIDADE ADAPTADA)
-        return table
+        table.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        
+        # Linha 1: Logo | Escola | Tipo
+        c_logo = table.cell(0, 0)
+        if os.path.exists("logo_escola.png"):
+            p_logo = c_logo.paragraphs[0]
+            p_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            p_logo.add_run().add_picture("logo_escola.png", width=Inches(0.7))
+        
+        c_esc = table.cell(0, 1)
+        p_esc = c_esc.paragraphs[0]
+        p_esc.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run_esc = p_esc.add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA")
+        run_esc.font.bold, run_esc.font.size = True, Pt(11)
+        
+        c_tipo = table.cell(0, 2)
+        p_tipo = c_tipo.paragraphs[0]
+        p_tipo.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run_tipo = p_tipo.add_run(subtitulo)
+        run_tipo.font.bold, run_tipo.font.size = True, Pt(11)
 
-    # PÁGINA 1: GUIA DO PROFESSOR
-    adicionar_cabecalho_cpm(doc, "GUIA DO PROFESSOR")
-    doc.add_paragraph(f"\nREFERÊNCIA: {info['semana']}\n")
-    doc.add_paragraph(dados['professor'])
+        # Linha 2: Professor | Ano
+        table.cell(1, 0).merge(table.cell(1, 1))
+        table.cell(1, 0).paragraphs[0].add_run(f"Professor: Ronaldo Gomes").font.size = Pt(10)
+        table.cell(1, 2).paragraphs[0].add_run(f"Ano: {info.get('ano', '')}").font.size = Pt(10)
+
+        # Linha 3: Semana | Data
+        table.cell(2, 0).merge(table.cell(2, 1))
+        table.cell(2, 0).paragraphs[0].add_run(f"Semana: {info.get('semana', '')}").font.size = Pt(10)
+        table.cell(2, 2).paragraphs[0].add_run("Data: [    /    / 2026 ]").font.size = Pt(10)
+        
+        doc.add_paragraph() # Espaço após cabeçalho
+
+    def formatar_bloco_texto(texto_raw):
+        for linha in texto_raw.split('\n'):
+            if not linha.strip(): continue
+            
+            p = doc.add_paragraph()
+            p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+            
+            # Lógica de Negrito Automático para Títulos e Questões
+            if any(x in linha.upper() for x in ["QUESTÃO", "ATIVIDADE", "EXEMPLO", "PASSO", "TÍTULO:", "PONTO"]):
+                run = p.add_run(linha.strip())
+                run.font.bold = True
+                run.font.size = Pt(11)
+                p.paragraph_format.space_before = Pt(12)
+            elif "[BOX DE IMAGEM:" in linha.upper():
+                run = p.add_run(f"\n🖼️ {linha.strip()}\n")
+                run.font.italic = True
+                run.font.color.rgb = RGBColor(128, 128, 128)
+                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                p.paragraph_format.space_after = Pt(20) # Espaço para colar a imagem
+            else:
+                p.add_run(linha.strip()).font.size = Pt(11)
+            
+            p.paragraph_format.space_after = Pt(6)
+
+    # --- MONTAGEM DO DOCUMENTO ---
+    # Pág 1: Professor
+    criar_cabecalho_v24("GUIA DO PROFESSOR")
+    formatar_bloco_texto(dados['professor'])
     doc.add_page_break()
 
-    # PÁGINA 2: ATIVIDADE DO ALUNO
-    adicionar_cabecalho_cpm(doc, "ATIVIDADE DE MATEMÁTICA")
-    doc.add_paragraph(dados['aluno'])
+    # Pág 2: Aluno
+    criar_cabecalho_v24("ATIVIDADE DE MATEMÁTICA")
+    formatar_bloco_texto(dados['aluno'])
     doc.add_page_break()
 
-    # PÁGINA 3: VERSÃO PEI (Se existir)
-    if dados.get('pei'):
-        adicionar_cabecalho_cpm(doc, "ATIVIDADE ADAPTADA (PEI)")
-        doc.add_paragraph(dados['pei'])
+    # Pág 3: PEI (Se houver)
+    if dados.get('pei') and len(dados['pei']) > 10:
+        criar_cabecalho_v24("ATIVIDADE ADAPTADA (PEI)")
+        formatar_bloco_texto(dados['pei'])
         doc.add_page_break()
 
-    # PÁGINA 4: GABARITO E IMAGENS
-    doc.add_heading("GABARITO E PROMPTS DE IMAGEM", level=1)
-    doc.add_paragraph(dados['gabarito'])
-    doc.add_paragraph("\n--- PROMPTS PARA GERADOR DE IMAGENS ---\n")
-    doc.add_paragraph(dados['imagens'])
+    # Pág 4: Gabarito
+    doc.add_heading("GABARITO E ORIENTAÇÕES", level=1)
+    formatar_bloco_texto(dados['gabarito'])
 
     file_stream = io.BytesIO()
     doc.save(file_stream)
