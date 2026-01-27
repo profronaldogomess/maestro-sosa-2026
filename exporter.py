@@ -100,24 +100,94 @@ def gerar_docx_professor_v24(titulo_doc, conteudo, info):
     file_stream.seek(0)
     return file_stream
 
-def gerar_docx_plano_pedagogico_v18(titulo_arquivo, dados, info):
+def gerar_docx_plano_pedagogico_v25(titulo_arquivo, dados, info):
     doc = Document()
     section = doc.sections[0]
-    section.top_margin, section.bottom_margin = Inches(0.5), Inches(0.5)
+    section.top_margin, section.bottom_margin = Inches(0.4), Inches(0.4)
+    section.left_margin, section.right_margin = Inches(0.5), Inches(0.5)
+
+    # Criacao da Tabela de Cabecalho 3x3
     table = doc.add_table(rows=3, cols=3)
     table.style = 'Table Grid'
+    table.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    # Ajuste de Altura das Linhas para garantir o efeito de centralizacao vertical
+    for row in table.rows:
+        row.height = Inches(0.5)
+
+    # --- LINHA 1: IDENTIFICACAO INSTITUCIONAL ---
+    # Celula 1,1: Logo
+    c_logo = table.cell(0, 0)
+    c_logo.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+    p_logo = c_logo.paragraphs[0]
+    p_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER
     if os.path.exists("logo_escola.png"):
-        table.cell(0, 0).paragraphs[0].add_run().add_picture("logo_escola.png", width=Inches(0.7))
-    table.cell(0, 1).paragraphs[0].add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA").font.bold = True
-    table.cell(0, 2).paragraphs[0].add_run("PLANO DE ENSINO SEMANAL").font.bold = True
-    table.cell(1, 0).merge(table.cell(1, 1))
-    table.cell(1, 0).paragraphs[0].add_run(f"Professor: Ronaldo Gomes")
-    table.cell(1, 2).paragraphs[0].add_run(f"Ano: {info.get('ano', '')}")
-    table.cell(2, 0).merge(table.cell(2, 1))
-    table.cell(2, 0).paragraphs[0].add_run(f"Semana: {info.get('semana', '')}")
-    table.cell(2, 2).paragraphs[0].add_run("Data: [ / / 2026 ]")
-    doc.add_paragraph()
-    campos = [("CONTEÚDO GERAL EIXO:", "geral"), ("CONTEÚDOS ESPECÍFICOS:", "especificos"), ("OBJETIVOS DE ENSINO:", "objetivos"), ("METODOLOGIA:", "metodologia"), ("AVALIAÇÃO:", "avaliacao"), ("OBSERVAÇÃO:", "observacao"), ("ADAPTAÇÃO PEI:", "pei")]
+        run_logo = p_logo.add_run()
+        run_logo.add_picture("logo_escola.png", width=Inches(1.2)) # Formato retangular circunscrito
+
+    # Celula 1,2: Nome da Escola (Centralizado no Meio)
+    c_escola = table.cell(0, 1)
+    c_escola.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+    p_esc = c_escola.paragraphs[0]
+    p_esc.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run_esc = p_esc.add_run("ESCOLA MUNICIPAL\nFLAVIO JOSE SIMOES COSTA")
+    run_esc.font.bold = True
+    run_esc.font.size = Pt(10)
+
+    # Celula 1,3: Titulo do Plano (Centralizado no Meio)
+    c_titulo = table.cell(0, 2)
+    c_titulo.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+    p_tit = c_titulo.paragraphs[0]
+    p_tit.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run_tit = p_tit.add_run("PLANO DE ENSINO\nSEMANAL")
+    run_tit.font.bold = True
+    run_tit.font.size = Pt(10)
+
+    # --- LINHA 2: DADOS DO DOCENTE E COMPONENTE ---
+    # Celula 2,1: Professor
+    c_prof = table.cell(1, 0)
+    c_prof.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+    c_prof.paragraphs[0].add_run(f"PROFESSOR: Ronaldo Gomes dos Santos Filho").font.size = Pt(9)
+
+    # Celula 2,2: Componente
+    c_comp = table.cell(1, 1)
+    c_comp.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+    c_comp.paragraphs[0].add_run(f"COMPONENTE: Matematica").font.size = Pt(9)
+
+    # Celula 2,3: Ano
+    c_ano = table.cell(1, 2)
+    c_ano.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+    c_ano.paragraphs[0].add_run(f"ANO: {info.get('ano', '')}").font.size = Pt(9)
+
+    # --- LINHA 3: TEMPORALIDADE E REFERENCIA ---
+    # Celula 3,1: Semana
+    c_sem = table.cell(2, 0)
+    c_sem.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+    c_sem.paragraphs[0].add_run(f"SEMANA: {info.get('semana', '')}").font.size = Pt(9)
+
+    # Celula 3,2: Trimestre
+    c_tri = table.cell(2, 1)
+    c_tri.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+    c_tri.paragraphs[0].add_run(f"TRIMESTRE: {info.get('trimestre', 'I')}").font.size = Pt(9)
+
+    # Celula 3,3: Data
+    c_data = table.cell(2, 2)
+    c_data.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+    c_data.paragraphs[0].add_run("DATA: [ / / 2026 ]").font.size = Pt(9)
+
+    doc.add_paragraph() # Espacamento
+
+    # --- CORPO DO PLANO (FIDELIDADE CURRICULAR) ---
+    campos = [
+        ("CONTEUDO GERAL EIXO:", "geral"), 
+        ("CONTEUDOS ESPECIFICOS:", "especificos"), 
+        ("OBJETIVOS DE ENSINO:", "objetivos"), 
+        ("METODOLOGIA:", "metodologia"), 
+        ("AVALIACAO:", "avaliacao"), 
+        ("OBSERVACAO:", "observacao"), 
+        ("ADAPTACAO PEI:", "pei")
+    ]
+
     for label, chave in campos:
         p = doc.add_paragraph()
         p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
@@ -125,6 +195,7 @@ def gerar_docx_plano_pedagogico_v18(titulo_arquivo, dados, info):
         texto = str(dados.get(chave, "")).replace(label, "").strip()
         if texto.startswith(":"): texto = texto[1:].strip()
         p.add_run(f" {texto}")
+
     file_stream = io.BytesIO()
     doc.save(file_stream)
     file_stream.seek(0)
