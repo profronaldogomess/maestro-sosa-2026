@@ -160,31 +160,11 @@ menu = st.sidebar.radio("Navegação:", [
 # FUNÇÃO AUXILIAR DE VISUALIZAÇÃO HÍBRIDA (VERSÃO V25.11 - CONTEXTUAL)
 # ==============================================================================
 def exibir_material_estruturado(texto_raw, key_prefix, dados_plano=None, info_aula=None):
-    import streamlit as st
-    import database as db
-    import ai_engine as ai
-    import exporter
-    from datetime import datetime
-    import time
-
-    # 1. RECUPERAÇÃO SEGURA DE DADOS (EVITA O ERRO NAMEERROR)
-    info = info_aula if info_aula else {}
-    
-    # Se os dados não existirem, ele usa um valor padrão em vez de travar o sistema
-    v_aula = str(info.get("aula", "Aula Geral")).replace(" ", "")
-    v_ano = str(info.get("ano", "6")).replace("º", "")
-    v_sem = str(info.get("semana", "Semana Geral"))
-    v_sem_curta = v_sem.split(" ")[1] if " " in v_sem else v_sem
-    v_formato = info.get("formato", "Quadro (Lousa)")
-    v_cont = info.get("conteudo", "Matemática")
-    v_trim = info.get("trimestre", "I Trimestre")
-    
-    # Dados de edição (pegando das chaves do dicionário ou do texto da IA)
-    ed_prof = info.get("texto_prof", ai.extrair_tag(texto_raw, "PROFESSOR"))
-    ed_alu = info.get("texto_alu", ai.extrair_tag(texto_raw, "ALUNO"))
-    ed_pei = info.get("texto_pei", "")
-
-    # 2. SE HOUVER DADOS_PLANO, ESTAMOS NO MÓDULO DE PLANEJAMENTO
+    """
+    Detecta automaticamente se o conteúdo é um PLANO ou um MATERIAL 
+    e ajusta as abas e tags de acordo.
+    """
+    # Se houver 'dados_plano', estamos no módulo de PLANEJAMENTO
     if dados_plano:
         t1, t2, t3, t4, t_exp = st.tabs([
             "🏫 Metodologia (Aulas)", 
@@ -197,76 +177,105 @@ def exibir_material_estruturado(texto_raw, key_prefix, dados_plano=None, info_au
         with t1:
             st.text_area("Roteiro das Aulas (1 e 2):", ai.extrair_tag(texto_raw, "METODOLOGIA"), height=400, key=f"{key_prefix}_met_txt")
         with t2:
-            conteudo_full = f"CONTEÚDOS: {ai.extrair_tag(texto_raw, 'CONTEUDOS_ESPECIFICOS')} ➔ OBJETIVOS: {ai.extrair_tag(texto_raw, 'OBJETIVOS_ENSINO')}"
+            conteudo_full = f"CONTEÚDOS:\n{ai.extrair_tag(texto_raw, 'CONTEUDOS_ESPECIFICOS')}\n\nOBJETIVOS:\n{ai.extrair_tag(texto_raw, 'OBJETIVOS_ENSINO')}"
             st.text_area("Fidelidade Curricular:", conteudo_full, height=400, key=f"{key_prefix}_obj_txt")
         with t3:
             st.text_area("Critérios de Verificação:", ai.extrair_tag(texto_raw, "AVALIACAO"), height=200, key=f"{key_prefix}_ava_txt")
         with t4:
             st.text_area("Engenharia de Folha PEI:", ai.extrair_tag(texto_raw, "ADAPTACAO_PEI"), height=300, key=f"{key_prefix}_pei_txt")
             
-        with t_exp:
-            st.subheader("🚀 Exportação do Plano Pedagógico")
-            nome_plano = f"PLANO_{v_ano}ANO_{v_sem_curta}"
-            doc_plano = exporter.gerar_docx_plano_pedagogico_v18(nome_plano, dados_plano, info)
-            
-            c_p1, c_p2 = st.columns(2)
-            c_p1.download_button("📥 BAIXAR PLANO (WORD)", doc_plano, f"{nome_plano}.docx", use_container_width=True)
-            if c_p2.button("☁️ SALVAR PLANO NO DRIVE", key=f"btn_drive_plano_{key_prefix}"):
-                with st.spinner("Sincronizando..."):
-                    link = db.subir_e_converter_para_google_docs(doc_plano, nome_plano, categoria="Planos de Aula")
-                    db.salvar_link_na_planilha("DB_PLANOS", "SEMANA", v_sem, link)
-                    st.success("Plano salvo no Drive!")
-
-    # 3. CASO CONTRÁRIO, ESTAMOS NO CRIADOR DE AULAS (LABORATÓRIO)
+    # Caso contrário, estamos no CRIADOR DE AULAS (Laboratório)
     else:
         t1, t2, t3, t4, t_exp = st.tabs([
-            "✍️ Lousa/Slides", "📄 Folha", "✅ Gabarito", "🎨 Imagens", "📥 EXPORTAR"
+            "✍️ Lousa/Slides", 
+            "📄 Folha", 
+            "✅ Gabarito", 
+            "🎨 Imagens",
+            "📥 EXPORTAR"
         ])
         
         with t1:
-            st.text_area("Conteúdo Principal:", ed_prof, height=400, key=f"{key_prefix}_lousa_txt")
+            st.text_area("Conteúdo Principal:", ai.extrair_tag(texto_raw, "LOUSA"), height=400, key=f"{key_prefix}_lousa_txt")
         with t2:
-            st.text_area("Atividade:", ed_alu, height=400, key=f"{key_prefix}_folha_txt")
+            st.text_area("Atividade:", ai.extrair_tag(texto_raw, "FOLHA"), height=400, key=f"{key_prefix}_folha_txt")
         with t3:
             st.text_area("Gabarito:", ai.extrair_tag(texto_raw, "GABARITO"), height=200, key=f"{key_prefix}_gab_txt")
         with t4:
             st.text_area("Prompts de Imagem:", ai.extrair_tag(texto_raw, "IMAGENS"), height=150, key=f"{key_prefix}_img_txt")
 
-        with t_exp:
-            st.subheader("🚀 Central de Comando de Exportação")
-            nome_base = f"AULA_{v_aula}_{v_ano}ANO_{v_sem_curta}"
-            
-            doc_alu = exporter.gerar_docx_aluno_v24(nome_base, ed_alu, {"ano": f"{v_ano}º", "trimestre": v_trim})
-            
-            if v_formato == "Slides (Apresentação)":
-                with st.container(border=True):
-                    st.markdown("### 🤖 Super Comando de Design (Gemini Workspace)")
-                    super_prompt = f"Atue como um Designer Instrucional Senior. REFORMATE esta apresentação sobre {v_cont} utilizando um tema moderno. Gere imagens para cada slide e mantenha o SCRIPT DO PROFESSOR nas notas."
-                    st.text_area("Comando Master:", super_prompt, height=150)
-                doc_prof_final = exporter.gerar_pptx_v24(f"{nome_base}_PROF", ed_prof)
-                ext_prof = ".pptx"
-            else:
-                doc_prof_final = exporter.gerar_docx_professor_v24(nome_base, ed_prof, {"ano": f"{v_ano}º", "semana": v_sem})
-                ext_prof = ".docx"
+    # Aba de Exportação Comum (Usa os dados passados)
+    with t_exp:
+        st.subheader("🚀 Central de Comando de Exportação")
+        nome_base = f"AULA_{aula_num.replace(' ','')}_{ano_lab}ANO_{sem_lab.split(' ')[1]}"
+        
+        # 1. Preparação dos Documentos
+        doc_alu = exporter.gerar_docx_aluno_v24(nome_base, ed_alu, {"ano": f"{ano_lab}º", "trimestre": "I"})
+        
+        # Lógica de decisão de formato para o Professor
+        if formato == "Slides (Apresentação)":
+            with st.container(border=True):
+                st.markdown("### 🤖 Super Comando de Design (Gemini Workspace)")
+                st.caption("Abra o arquivo gerado no Google Slides, clique no Gemini e cole este comando:")
+                
+                # Este comando foca em transformar a estrutura existente em design
+                super_prompt = (
+                    f"Atue como um Designer Instrucional Senior. "
+                    f"REFORMATE esta apresentação sobre {sel_cont} utilizando um tema moderno, acadêmico e tecnológico. "
+                    f"Para cada slide: 1. Aplique um layout visual impactante; "
+                    f"2. Gere uma imagem fotorealista ou infográfico técnico baseado no campo PROMPT IMAGEN 4 de cada slide; "
+                    f"3. Mantenha os textos curtos e organize os tópicos; "
+                    f"4. Certifique-se de que o SCRIPT DO PROFESSOR permaneça nas notas do orador. "
+                    f"O objetivo é uma aula de alta performance para o {ano_lab}º ano."
+                )
+                st.text_area("Comando Master:", super_prompt, height=180)
+        else:
+            doc_prof_final = exporter.gerar_docx_professor_v24(nome_base, ed_prof, {"ano": f"{ano_lab}º", "semana": sem_lab})
+            ext_prof = ".docx"
 
-            c_master1, c_master2 = st.columns(2)
-            with c_master1:
-                if st.button("🚀 SALVAR TUDO NO DRIVE E BANCO", use_container_width=True, type="primary", key=f"btn_cloud_{key_prefix}"):
-                    with st.spinner("Sincronizando..."):
-                        link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{nome_base}_ALUNO.docx", semana=v_sem, aula=v_aula)
-                        link_prof = db.subir_e_converter_para_google_docs(doc_prof_final, f"{nome_base}_PROF{ext_prof}", semana=v_sem, aula=v_aula)
-                        roteiro_preservado = f"{ed_prof} ➔ LINKS: Aluno({link_alu}) | Prof({link_prof})"
-                        db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), v_sem, f"{v_aula} ({v_formato})", roteiro_preservado, f"{v_ano}º", link_prof if v_formato == "Slides (Apresentação)" else link_alu])
-                        st.success("✅ Sincronizado!")
+        c_master1, c_master2 = st.columns(2)
 
-            with c_master2:
-                import io, zipfile
-                zip_buffer = io.BytesIO()
-                with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
-                    zip_file.writestr(f"{nome_base}_ALUNO.docx", doc_alu.getvalue())
-                    zip_file.writestr(f"{nome_base}_PROF{ext_prof}", doc_prof_final.getvalue())
-                st.download_button(label="📥 BAIXAR PACOTE (ZIP)", data=zip_buffer.getvalue(), file_name=f"PACOTE_{nome_base}.zip", mime="application/zip", use_container_width=True)
+        with c_master1:
+            st.markdown("### ☁️ Nuvem")
+            if st.button("🚀 SALVAR TUDO NO DRIVE E BANCO", use_container_width=True, type="primary"):
+                with st.spinner("Sincronizando pacote completo e preservando roteiros..."):
+                    # 1. Upload para o Drive
+                    link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{nome_base}_ALUNO.docx", semana=sem_lab, aula=aula_num)
+                    link_prof = db.subir_e_converter_para_google_docs(doc_prof_final, f"{nome_base}_PROF{ext_prof}", semana=sem_lab, aula=aula_num)
+                    
+                    link_pei = "N/A"
+                    if "lab_pei" in st.session_state:
+                        doc_pei = exporter.gerar_docx_aluno_v24(nome_base + "_PEI", ed_pei, {"ano": f"{ano_lab}º", "trimestre": "I"})
+                        link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_base}_PEI.docx", semana=sem_lab, aula=aula_num)
+                    
+                    # 2. PRESERVAÇÃO DO ROTEIRO: Salvamos o texto da IA + os links no final
+                    roteiro_preservado = f"{ed_prof}\n\n--- LINKS DE ACESSO ---\nAluno({link_alu}) | Prof({link_prof}) | PEI({link_pei})"
+                    
+                    # 3. Registro no Banco (6 Colunas)
+                    data_hoje = datetime.now().strftime("%d/%m/%Y")
+                    sucesso = db.salvar_no_banco("DB_AULAS_PRONTAS", [
+                        data_hoje, 
+                        sem_lab, 
+                        f"{aula_num} ({formato})", 
+                        roteiro_preservado, # Agora o roteiro está aqui dentro!
+                        f"{ano_lab}º", 
+                        link_prof if formato == "Slides (Apresentação)" else link_alu
+                    ])
+                    
+                    if sucesso:
+                        st.success("✅ Sincronizado! Roteiro e Links preservados.")
+                        time.sleep(1); st.rerun()
 
+        with c_master2:
+            st.markdown("### 📦 Local")
+            import io, zipfile
+            zip_buffer = io.BytesIO()
+            with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
+                zip_file.writestr(f"{nome_base}_ALUNO.docx", doc_alu.getvalue())
+                zip_file.writestr(f"{nome_base}_PROF{ext_prof}", doc_prof_final.getvalue())
+                if "lab_pei" in st.session_state:
+                    doc_pei = exporter.gerar_docx_aluno_v24(nome_base + "_PEI", ed_pei, {"ano": f"{ano_lab}º", "trimestre": "I"})
+                    zip_file.writestr(f"{nome_base}_PEI.docx", doc_pei.getvalue())
+            st.download_button(label="📥 BAIXAR PACOTE COMPLETO (ZIP)", data=zip_buffer.getvalue(), file_name=f"PACOTE_{nome_base}.zip", mime="application/zip", use_container_width=True)
 # ==============================================================================
 # MÓDULO: DASHBOARD INTELIGENTE (V6 - FULL CONTEXT: NOTAS + PDF + AULAS CRIADAS)
 # ==============================================================================
@@ -855,7 +864,7 @@ elif menu == "📅 Planejamento (Ponto ID)":
 
             with t_vis:
                 dados_envio = {"geral": ed_geral, "especificos": ed_espec, "objetivos": ed_objs, "metodologia": ed_met, "avaliacao": ed_ava, "pei": ed_pei}
-                info_envio = {"ano": str(ano_p), "semana": sem_p.split(' ')[1], "aula": "Planejamento","trimestre": "I Trimestre"}
+                info_envio = {"ano": str(ano_p), "semana": sem_p.split(' ')[1]}
                 exibir_material_estruturado(txt_bruto, f"vis_v{v}", dados_plano=dados_envio, info_aula=info_envio)
 
             st.markdown("---")
