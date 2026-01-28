@@ -614,16 +614,10 @@ elif menu == "🧪 Criador de Aulas":
                 st.subheader("🚀 Central de Comando de Exportação")
                 nome_base = f"AULA_{aula_num.replace(' ','')}_{ano_lab}ANO_{sem_lab.split(' ')[1]}"
                 
-                doc_alu = exporter.gerar_docx_aluno_v24(
-                f"ATIVIDADE DE MATEMÁTICA - {aula_num.upper()}", 
-                ed_alu, 
-                {
-                    "ano": f"{ano_lab}º", 
-                    "trimestre": "I", 
-                    "turma": "______" # O professor preenche a caneta ou você pode puxar do selectbox
-                }
-                )
+                # 1. GERAÇÃO DO MATERIAL REGULAR (ALUNO TÍPICO)
+                doc_alu = exporter.gerar_docx_aluno_v24(nome_base, ed_alu, {"ano": f"{ano_lab}º", "trimestre": "I"})
                 
+                # 2. GERAÇÃO DO MATERIAL DO PROFESSOR (SLIDES OU DOCX)
                 if formato == "Slides (Apresentação)":
                     doc_prof_final = exporter.gerar_pptx_v24(f"{nome_base}_PROF", ed_prof)
                     ext_prof = ".pptx"
@@ -635,17 +629,31 @@ elif menu == "🧪 Criador de Aulas":
                 with c_master1:
                     st.markdown("### ☁️ Nuvem")
                     if st.button("🚀 SALVAR TUDO NO DRIVE E BANCO", use_container_width=True, type="primary"):
-                        with st.spinner("Sincronizando pacote completo..."):
+                        with st.spinner("Limpando versões anteriores e sincronizando pacote novo..."):
+                            
+                            # --- LÓGICA ANTI-DUPLICIDADE (LIMPEZA PREVENTIVA) ---
+                            if not df_aulas.empty:
+                                filtro_antigo = df_aulas[(df_aulas['SEMANA_REF'] == sem_lab) & (df_aulas['TIPO_MATERIAL'].str.contains(aula_num))]
+                                for _, row_antiga in filtro_antigo.iterrows():
+                                    db.excluir_registro_com_drive("DB_AULAS_PRONTAS", row_antiga['CONTEUDO'])
+
+                            # --- UPLOAD PARA O DRIVE ---
                             link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{nome_base}_ALUNO.docx", semana=sem_lab, aula=aula_num)
                             link_prof = db.subir_e_converter_para_google_docs(doc_prof_final, f"{nome_base}_PROF{ext_prof}", semana=sem_lab, aula=aula_num)
                             
                             link_pei = "N/A"
                             ed_img_pei = ""
                             if "lab_pei" in st.session_state:
-                                doc_pei = exporter.gerar_docx_aluno_v24(nome_base + "_PEI", ed_pei, {"ano": f"{ano_lab}º", "trimestre": "I"})
+                                # 🔥 AQUI ESTAVA O ERRO: Chamando a função v25 correta e passando o texto bruto
+                                doc_pei = exporter.gerar_docx_pei_v25(
+                                    nome_base + "_PEI", 
+                                    st.session_state.lab_pei, 
+                                    {"tema": sel_cont[0] if sel_cont else "Matemática", "trimestre": "I"}
+                                )
                                 link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_base}_PEI.docx", semana=sem_lab, aula=aula_num)
                                 ed_img_pei = ai.extrair_tag(st.session_state.lab_pei, "IMAGENS_PEI")
                             
+                            # --- REGISTRO NO BANCO ---
                             roteiro_preservado = (
                                 f"MARKER_ROTEIRO_PROF\n{ed_prof}\n\n"
                                 f"MARKER_PROMPTS_REGULAR\n{ed_img_reg}\n\n"
@@ -654,10 +662,29 @@ elif menu == "🧪 Criador de Aulas":
                             )
                             
                             sucesso = db.salvar_no_banco("DB_AULAS_PRONTAS", [
-                                datetime.now().strftime("%d/%m/%Y"), sem_lab, f"{aula_num} ({formato})", roteiro_preservado, f"{ano_lab}º", link_prof if formato == "Slides (Apresentação)" else link_alu
+                                datetime.now().strftime("%d/%m/%Y"), 
+                                sem_lab, 
+                                f"{aula_num} ({formato})", 
+                                roteiro_preservado, 
+                                f"{ano_lab}º", 
+                                link_prof if formato == "Slides (Apresentação)" else link_alu
                             ])
+                            
                             if sucesso:
-                                st.success("✅ Sincronizado!"); time.sleep(1); st.rerun()
+                                st.success("✅ Sincronizado e Versão Anterior Removida!"); time.sleep(1); st.rerun()
+
+                with c_master2:
+                    st.markdown("### 📦 Local")
+                    import io, zipfile
+                    zip_buffer = io.BytesIO()
+                    with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
+                        zip_file.writestr(f"{nome_base}_ALUNO.docx", doc_alu.getvalue())
+                        zip_file.writestr(f"{nome_base}_PROF{ext_prof}", doc_prof_final.getvalue())
+                        if "lab_pei" in st.session_state:
+                            # 🔥 AQUI TAMBÉM: Garantindo que o ZIP baixe a versão bonita v25
+                            doc_pei_zip = exporter.gerar_docx_pei_v25(nome_base + "_PEI", st.session_state.lab_pei, {"tema": sel_cont[0] if sel_cont else "Matemática"})
+                            zip_file.writestr(f"{nome_base}_PEI.docx", doc_pei_zip.getvalue())
+                    st.download_button(label="📥 BAIXAR PACOTE COMPLETO (ZIP)", data=zip_buffer.getvalue(), file_name=f"PACOTE_{nome_base}.zip", mime="application/zip", use_container_width=True)
 
                 with c_master2:
                     st.markdown("### 📦 Local")
