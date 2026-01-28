@@ -607,6 +607,7 @@ elif menu == "🧪 Criador de Aulas":
                     doc_prof_final = exporter.gerar_pptx_v24(f"{nome_base}_PROF", ed_prof)
                     ext_prof = ".pptx"
                 else:
+                    # ESTA É A LINHA QUE ESTAVA DANDO ERRO:
                     doc_prof_final = exporter.gerar_docx_professor_v24(nome_base, ed_prof, {"ano": f"{ano_lab}º", "semana": sem_lab})
                     ext_prof = ".docx"
 
