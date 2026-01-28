@@ -543,13 +543,11 @@ elif menu == "🧪 Criador de Aulas":
             with t_prof:
                 if formato == "Slides (Apresentação)":
                     st.subheader("📺 Estrutura da Apresentação (Nova Escola)")
-                    # GUIA DE ORIENTAÇÃO PARA O PROFESSOR
                     with st.container(border=True):
                         st.markdown("### 📖 Guia de Execução dos Slides")
                         st.write("1. Vá na aba 🎨 **Imagens** e copie o **Comando Master**.")
                         st.write("2. Abra o arquivo gerado no Google Slides.")
                         st.write("3. Use o Gemini (Help me organize) para aplicar o design.")
-                        st.write("4. Os textos abaixo são para sua conferência pedagógica.")
                     
                     import re
                     slides = re.findall(r"\[SLIDE.*?\](.*?)(?=\[SLIDE|$)", ed_prof, re.DOTALL)
@@ -566,38 +564,28 @@ elif menu == "🧪 Criador de Aulas":
                 st.text_area("Folha Aluno:", ed_alu, height=400, key=f"area_alu_{v}")
             
             with t_pei:
-                st.info("♿ A Engenharia PEI reduz a carga pela metade (Máx 5 questões).")
+                st.info("♿ A Engenharia PEI gera o layout Lado a Lado (Teoria e Exercício).")
                 if st.button("♿ Gerar Engenharia PEI V24", key=f"btn_gen_pei_{v}"):
                     with st.spinner("O Maestro está realizando a reengenharia inclusiva..."):
-                        import re
-                        questoes = re.findall(r'\d+\.', ed_alu)
-                        meta = min(5, max(1, len(questoes) // 2))
-                        prompt_pei = (f"ORDEM: Gere uma folha PEI independente com EXATAMENTE {meta} QUESTÕES.\n\n"
-                                      f"MATERIAL BASE DO ALUNO:\n{ed_alu}\n\n"
-                                      f"REGRA: Use a tag [PEI] no início. Sem tabelas de Markdown.")
+                        tema_aula = sel_cont[0] if sel_cont else "Matemática"
+                        prompt_pei = (f"ORDEM: Gere uma folha PEI baseada no material típico.\n"
+                                      f"TEMA: {tema_aula}\n"
+                                      f"MATERIAL BASE DO ALUNO:\n{ed_alu}\n")
                         st.session_state.lab_pei = ai.gerar_ia("ARQUITETO_PEI_V24", prompt_pei)
                         st.rerun()
                 
-                txt_pei_raw = st.session_state.get('lab_pei', '')
-                if txt_pei_raw:
-                    ed_pei = ai.extrair_tag(txt_pei_raw, "PEI")
-                    st.text_area("Versão Adaptada (Reduzida):", ed_pei, height=400, key=f"area_pei_v24_{v}")
+                if "lab_pei" in st.session_state:
+                    st.text_area("Versão Adaptada (Texto Bruto):", st.session_state.lab_pei, height=400, key=f"area_pei_v24_{v}")
                 else:
                     st.write("Clique no botão acima para gerar a versão adaptada.")
 
             with t_img:
                 st.subheader("🎨 Hub de Engenharia Visual")
-                
-                # COMANDO MASTER PARA SLIDES (MOVIDO PARA CÁ)
                 if formato == "Slides (Apresentação)":
                     with st.container(border=True):
                         st.markdown("### 🤖 Comando Master para Gemini Slides")
-                        st.caption("Copie e cole no Gemini do Google Workspace para criar o design automaticamente.")
-                        super_prompt = (
-                            f"Atue como Designer Instrucional Senior. REFORMATE esta apresentação sobre {sel_cont} "
-                            f"usando um tema moderno e tecnológico. Estrutura: {ed_prof}. "
-                            f"Gere imagens educativas para cada slide e mantenha o SCRIPT DO PROFESSOR nas notas."
-                        )
+                        super_prompt = (f"Atue como Designer Instrucional Senior. REFORMATE esta apresentação sobre {sel_cont} "
+                                        f"usando um tema moderno. Estrutura: {ed_prof}.")
                         st.code(super_prompt, language="text")
                 
                 if ed_img_reg:
@@ -614,6 +602,7 @@ elif menu == "🧪 Criador de Aulas":
                 st.subheader("🚀 Central de Comando de Exportação")
                 nome_base = f"AULA_{aula_num.replace(' ','')}_{ano_lab}ANO_{sem_lab.split(' ')[1]}"
                 
+                # 1. GERAÇÃO DOS DOCUMENTOS
                 doc_alu = exporter.gerar_docx_aluno_v24(nome_base, ed_alu, {"ano": f"{ano_lab}º", "trimestre": "I"})
                 
                 if formato == "Slides (Apresentação)":
@@ -627,29 +616,32 @@ elif menu == "🧪 Criador de Aulas":
                 with c_master1:
                     st.markdown("### ☁️ Nuvem")
                     if st.button("🚀 SALVAR TUDO NO DRIVE E BANCO", use_container_width=True, type="primary"):
-                        with st.spinner("Sincronizando pacote completo..."):
+                        with st.spinner("Limpando versões anteriores e sincronizando..."):
+                            
+                            # --- LÓGICA ANTI-LIXO ---
+                            if not df_aulas.empty:
+                                filtro_antigo = df_aulas[(df_aulas['SEMANA_REF'] == sem_lab) & (df_aulas['TIPO_MATERIAL'].str.contains(aula_num))]
+                                for _, row_antiga in filtro_antigo.iterrows():
+                                    db.excluir_registro_com_drive("DB_AULAS_PRONTAS", row_antiga['CONTEUDO'])
+
+                            # --- UPLOAD ---
                             link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{nome_base}_ALUNO.docx", semana=sem_lab, aula=aula_num)
                             link_prof = db.subir_e_converter_para_google_docs(doc_prof_final, f"{nome_base}_PROF{ext_prof}", semana=sem_lab, aula=aula_num)
                             
                             link_pei = "N/A"
                             ed_img_pei = ""
                             if "lab_pei" in st.session_state:
-                                doc_pei = exporter.gerar_docx_aluno_v24(nome_base + "_PEI", ed_pei, {"ano": f"{ano_lab}º", "trimestre": "I"})
+                                # 🔥 USANDO A FUNÇÃO PEI V25 CORRETA
+                                doc_pei = exporter.gerar_docx_pei_v25(nome_base + "_PEI", st.session_state.lab_pei, {"tema": sel_cont[0] if sel_cont else "Matemática", "trimestre": "I"})
                                 link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_base}_PEI.docx", semana=sem_lab, aula=aula_num)
                                 ed_img_pei = ai.extrair_tag(st.session_state.lab_pei, "IMAGENS_PEI")
                             
-                            roteiro_preservado = (
-                                f"MARKER_ROTEIRO_PROF\n{ed_prof}\n\n"
-                                f"MARKER_PROMPTS_REGULAR\n{ed_img_reg}\n\n"
-                                f"MARKER_PROMPTS_PEI\n{ed_img_pei}\n\n"
-                                f"--- LINKS DE ACESSO ---\nAluno({link_alu}) | Prof({link_prof}) | PEI({link_pei})"
-                            )
+                            roteiro_preservado = (f"MARKER_ROTEIRO_PROF\n{ed_prof}\n\nMARKER_PROMPTS_REGULAR\n{ed_img_reg}\n\n"
+                                                 f"MARKER_PROMPTS_PEI\n{ed_img_pei}\n\n--- LINKS ---\nAluno({link_alu}) | Prof({link_prof}) | PEI({link_pei})")
                             
-                            sucesso = db.salvar_no_banco("DB_AULAS_PRONTAS", [
-                                datetime.now().strftime("%d/%m/%Y"), sem_lab, f"{aula_num} ({formato})", roteiro_preservado, f"{ano_lab}º", link_prof if formato == "Slides (Apresentação)" else link_alu
-                            ])
+                            sucesso = db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), sem_lab, f"{aula_num} ({formato})", roteiro_preservado, f"{ano_lab}º", link_prof if formato == "Slides (Apresentação)" else link_alu])
                             if sucesso:
-                                st.success("✅ Sincronizado!"); time.sleep(1); st.rerun()
+                                st.success("✅ Sincronizado e Versão Anterior Removida!"); time.sleep(1); st.rerun()
 
                 with c_master2:
                     st.markdown("### 📦 Local")
@@ -659,9 +651,12 @@ elif menu == "🧪 Criador de Aulas":
                         zip_file.writestr(f"{nome_base}_ALUNO.docx", doc_alu.getvalue())
                         zip_file.writestr(f"{nome_base}_PROF{ext_prof}", doc_prof_final.getvalue())
                         if "lab_pei" in st.session_state:
-                            doc_pei = exporter.gerar_docx_aluno_v24(nome_base + "_PEI", ed_pei, {"ano": f"{ano_lab}º", "trimestre": "I"})
-                            zip_file.writestr(f"{nome_base}_PEI.docx", doc_pei.getvalue())
-                    st.download_button(label="📥 BAIXAR PACOTE COMPLETO (ZIP)", data=zip_buffer.getvalue(), file_name=f"PACOTE_{nome_base}.zip", mime="application/zip", use_container_width=True)
+                            # 🔥 ZIP COM A VERSÃO PEI V25
+                            doc_pei_zip = exporter.gerar_docx_pei_v25(nome_base + "_PEI", st.session_state.lab_pei, {"tema": sel_cont[0] if sel_cont else "Matemática"})
+                            zip_file.writestr(f"{nome_base}_PEI.docx", doc_pei_zip.getvalue())
+                    
+                    # 🔥 CHAVE ÚNICA PARA EVITAR ERRO DE ID DUPLICADO
+                    st.download_button(label="📥 BAIXAR PACOTE COMPLETO (ZIP)", data=zip_buffer.getvalue(), file_name=f"PACOTE_{nome_base}.zip", mime="application/zip", use_container_width=True, key=f"btn_zip_{nome_base}_{v}")
 
             if st.button("🗑️ DESCARTAR E RECOMEÇAR", use_container_width=True):
                 if "lab_temp" in st.session_state: del st.session_state.lab_temp
