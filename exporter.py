@@ -113,46 +113,70 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     else:
         lista_final = [conteudo]
 
-    # Criar tabela de 2 colunas (sem bordas para parecer layout de página)
-    main_table = doc.add_table(rows=(len(lista_final) + 1) // 2, cols=2)
+    # --- LÓGICA DE DUAS COLUNAS (TABELA INVISÍVEL) ---
+    # 1. Primeiro, dividimos o texto completo em questões individuais
+    import re
+    partes_questoes = re.split(r'(QUESTÃO\s+\d+\.)', conteudo, flags=re.IGNORECASE)
+    
+    lista_de_questoes = []
+    if len(partes_questoes) > 1:
+        for i in range(1, len(partes_questoes), 2):
+            # Une o marcador "QUESTÃO X." com o texto que vem depois dele
+            lista_de_questoes.append(partes_questoes[i] + partes_questoes[i+1])
+    else:
+        lista_de_questoes = [conteudo]
+
+    # 2. Criamos a tabela de 2 colunas para organizar o layout
+    num_linhas_tabela = (len(lista_de_questoes) + 1) // 2
+    main_table = doc.add_table(rows=num_linhas_tabela, cols=2)
     main_table.alignment = WD_ALIGN_PARAGRAPH.CENTER
     
-    for idx, q_text in enumerate(lista_final):
-        cell = main_table.cell(idx // 2, idx % 2)
+    for idx, texto_da_questao in enumerate(lista_de_questoes):
+        # Define em qual célula a questão vai entrar (Esquerda ou Direita)
+        linha_celula = idx // 2
+        coluna_celula = idx % 2
+        cell = main_table.cell(linha_celula, coluna_celula)
         cell.vertical_alignment = WD_ALIGN_VERTICAL.TOP
         
-        linhas = q_text.strip().split('\n')
-        for linha in linhas:
+        linhas_da_questao = texto_da_questao.strip().split('\n')
+        
+        # 3. Processamos cada linha da questão para aplicar o design
+        for linha in linhas_da_questao:
             if not linha.strip(): continue
             p = cell.add_paragraph()
             p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
             
-            # 1. Negrito apenas no QUESTÃO X.
+            # REGRA A: Negrito apenas no marcador "QUESTÃO X."
             if "QUESTÃO" in linha.upper() and "." in linha:
-                partes = linha.split(".", 1)
-                p.add_run(partes[0] + ".").font.bold = True
-                if len(partes) > 1:
-                    p.add_run(partes[1])
+                # Divide a linha no primeiro ponto para separar o marcador do enunciado
+                partes_da_linha = linha.split(".", 1)
+                p.add_run(partes_da_linha[0] + ".").font.bold = True
+                if len(partes_da_linha) > 1:
+                    p.add_run(partes_da_linha[1])
             
-            # 2. Prompt de Imagem entre colchetes
+            # REGRA B: Formatação especial para Prompts de Imagem
             elif "PROMPT" in linha.upper() or "IMAGEM" in linha.upper():
                 run_img = p.add_run(f"[{linha.strip()}]")
-                run_img.font.italic, run_img.font.size = True, Pt(8)
-                run_img.font.color.rgb = RGBColor(100, 100, 100)
+                run_img.font.italic = True
+                run_img.font.size = Pt(8)
+                run_img.font.color.rgb = RGBColor(100, 100, 100) # Cor cinza
             
-            # 3. Alternativas em linhas separadas
+            # REGRA C: Alternativas (A, B, C, D)
             elif re.match(r'^[A-E][\)\-]', linha.strip().upper()):
                 p.add_run(linha.strip())
             
-            # 4. Texto normal
+            # REGRA D: Texto normal do enunciado
             else:
                 p.add_run(linha.strip())
 
-        # 5. Espaço para questões abertas (4 linhas de escrita)
-        if not any(re.search(r'[A-E][\)\-]', l) for l in linhas):
+        # 4. REGRA DE OURO: Se a questão for aberta, desenha as 4 linhas de resposta
+        # Verificamos se NÃO existem alternativas (A, B, C...) na questão
+        tem_alternativas = any(re.search(r'^[A-E][\)\-]', l.strip().upper()) for l in linhas_da_questao)
+        
+        if not tem_alternativas:
             for _ in range(4):
-                p_line = cell.add_paragraph()
-                p_line.add_run("_____________________________________________")
+                p_linha = cell.add_paragraph()
+                p_linha.add_run("_____________________________________________")
 
     # --- RODAPÉ PROFISSIONAL FIXO ---
     footer = section.footer
