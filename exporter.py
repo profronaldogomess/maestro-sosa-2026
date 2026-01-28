@@ -256,7 +256,7 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
     return file_stream
 
 # ==============================================================================
-# 3. GUIA DO PROFESSOR (A FUNÇÃO QUE ESTAVA FALTANDO!)
+# 3. GUIA DO PROFESSOR (PRESERVADO)
 # ==============================================================================
 def gerar_docx_professor_v24(titulo_doc, conteudo, info):
     doc = Document()
@@ -284,7 +284,7 @@ def gerar_docx_professor_v24(titulo_doc, conteudo, info):
     return file_stream
 
 # ==============================================================================
-# 4. PLANO PEDAGÓGICO
+# 4. PLANO PEDAGÓGICO (PRESERVADO)
 # ==============================================================================
 def gerar_docx_plano_pedagogico_v18(titulo_arquivo, dados, info):
     doc = Document()
@@ -317,7 +317,7 @@ def gerar_docx_plano_pedagogico_v18(titulo_arquivo, dados, info):
     return file_stream
 
 # ==============================================================================
-# 5. APRESENTAÇÃO PPTX
+# 5. APRESENTAÇÃO PPTX (PRESERVADO)
 # ==============================================================================
 def gerar_pptx_v24(titulo_doc, conteudo_ia):
     prs = Presentation()
