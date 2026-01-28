@@ -36,6 +36,7 @@ PERSONAS = {
     🚨 DIRETRIZ ANTI-DEFORMAÇÃO (CRÍTICO):
     - PROIBIÇÃO TOTAL DE ASCII ART: É terminantemente PROIBIDO desenhar tabelas ou grades usando caracteres como '-', '|', '+'. Isso quebra o DOCX.
     - Como representar o QVL/Ordens: Use apenas listas em tópicos ou descrições textuais. 
+      Exemplo: 6ª Ordem: Centena de Milhar (CM)...
 
     🚨 PROTOCOLO DE COMPOSIÇÃO E LAYOUT (V25):
     1. MIX DE QUESTÕES: Gere equilíbrio entre múltipla escolha e discursivas.
@@ -110,30 +111,42 @@ def gerar_ia(persona_key, comando, partes_arquivos=[], usar_busca=True):
     except Exception as e:
         return f"Erro na IA: {e}"
 
-# --- EXTRATOR REVISADO (BLINDADO CONTRA TAGS INTERNAS) ---
+# --- EXTRATOR BLINDADO (RESOLVE O ERRO DO TEXTO VAZIO) ---
 def extrair_tag(texto, tag):
     if not texto: return ""
+    import re
     
-    # Lista de Tags Mestras que encerram um bloco principal
+    tag_upper = tag.upper()
+    # Tags Mestras que definem o fim de um bloco principal
     tags_mestras = ["PROFESSOR", "ALUNO", "GABARITO", "IMAGENS", "PEI", "PARA LEMBRAR", "PASSO A PASSO", "ATIVIDADES"]
     
-    # Se estamos buscando uma Tag Mestra, só paramos quando encontrarmos OUTRA Tag Mestra
-    if tag.upper() in tags_mestras:
-        outras = [t for t in tags_mestras if t != tag.upper()]
-        # Regex que olha para frente e para apenas se encontrar [OUTRA_TAG_MESTRA] ou MARKER_OUTRA_TAG
-        pattern_stop = "|".join([rf"\[{t}\]" for t in outras] + [rf"MARKER_{t}" for t in outras])
-        padrao = rf"(?:\[{tag}\]|MARKER_{tag})[:\s\->]*(.*?)(?={pattern_stop}|$)"
+    # 1. Localizar o início da tag (aceita [TAG], MARKER_TAG, **TAG**, # TAG)
+    pattern_inicio = rf"(?:\[|\*\*|#|MARKER_)\s*{tag_upper}\s*(?:\]|\*\*|:|-|>|\s)*"
+    match_inicio = re.search(pattern_inicio, texto, re.IGNORECASE)
+    
+    if not match_inicio:
+        return ""
+            
+    inicio_pos = match_inicio.end()
+    
+    # 2. Localizar o fim (onde começa a próxima tag mestre)
+    if tag_upper in tags_mestras:
+        outras_tags = [t for t in tags_mestras if t != tag_upper]
+        # Busca a próxima tag mestre, ignorando as tags internas como [COLUNA_1]
+        pattern_fim = "|".join([rf"\[\s*{t}\s*\]" for t in outras_tags] + 
+                               [rf"MARKER_{t}" for t in outras_tags] + 
+                               [rf"\*\*\s*{t}\s*\*\*" for t in outras_tags])
+        match_fim = re.search(pattern_fim, texto[inicio_pos:], re.IGNORECASE | re.DOTALL)
     else:
-        # Para tags internas (como COLUNA_1), mantemos o comportamento padrão
-        padrao = rf"(?:\[{tag}\]|MARKER_{tag})[:\s\->]*(.*?)(?=\[|MARKER_|$)"
-    
-    import re
-    match = re.search(padrao, texto, re.DOTALL | re.IGNORECASE)
-    
-    if match:
-        return match.group(1).replace("**", "").replace("###", "").replace("##", "").replace("#", "").strip()
-    
-    return ""
+        # Para tags internas (COLUNA_1, etc), para em qualquer colchete ou marcador
+        match_fim = re.search(r"\[|MARKER_|\*\*", texto[inicio_pos:], re.IGNORECASE | re.DOTALL)
+            
+    if match_fim:
+        conteudo = texto[inicio_pos : inicio_pos + match_fim.start()]
+    else:
+        conteudo = texto[inicio_pos:]
+            
+    return conteudo.replace("**", "").replace("###", "").replace("##", "").replace("#", "").strip()
 
 def realizar_diagnostico_v25(plano_raw, df_curriculo, ano_sel):
     texto_upper = plano_raw.upper()
