@@ -508,17 +508,15 @@ elif menu == "🧪 Criador de Aulas":
             nivel = cp3.select_slider("Nível:", options=["Básico", "Intermediário", "Desafio"])
             instr = st.text_area("Instruções Adicionais:", placeholder="Ex: Use contexto de Itabuna...")
 
-            if st.button("🚀 COMPILAR MATERIAL DA " + aula_num.upper(), use_container_width=True, type="primary"):
-                with st.spinner("IA executando Protocolo de Choque..."):
-                    prompt_v24 = (f"ORDEM: GERAR EXATAMENTE {qtd_q} QUESTÕES DE EXERCÍCIO.\n"
-                                 f"FORMATO SELECIONADO: {formato}\n"
-                                 f"MODALIDADE DETECTADA NO PLANO: {diag['modalidade']}\n"
-                                 f"FOCO: {ano_lab}º ANO, {sem_lab}, {aula_num}.\n"
-                                 f"CONTEÚDOS: {sel_cont}\nOBJETIVOS: {sel_obj}\n"
-                                 f"NÍVEL: {nivel}\nCONTEXTO: {instr}")
-                    st.session_state.lab_temp = ai.gerar_ia("MESTRE_V24", prompt_v24)
-                    st.session_state.v_lab += 1
-                    if "lab_pei" in st.session_state: del st.session_state.lab_pei
+            if st.button("🚀 COMPILAR MATERIAL V25", use_container_width=True, type="primary"):
+                with st.spinner("IA executando Protocolo de Choque V25..."):
+                    prompt_v25 = (f"ORDEM: GERAR MATERIAL COMPLETO.\n"
+                                f"FOCO: {ano_lab}º ANO, {sem_lab}, {aula_num}.\n"
+                                f"CONTEÚDOS: {sel_cont}\nOBJETIVOS: {sel_obj}\n"
+                                f"NÍVEL: {nivel}\nCONTEXTO: {instr}")
+                    
+                    # Chama a nova persona V25
+                    st.session_state.lab_temp = ai.gerar_ia("MESTRE_V25", prompt_v25)
                     st.rerun()
 
         # --- PASSO 3: LABORATÓRIO DE EDIÇÃO ---
