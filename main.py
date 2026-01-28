@@ -229,7 +229,7 @@ def exibir_material_estruturado(texto_raw, key_prefix, dados_plano=None, info_au
                 )
                 st.text_area("Comando Master:", super_prompt, height=180)
         else:
-            doc_prof_final = exporter.gerar_docx_professor_v25(nome_base, ed_prof, {"ano": f"{ano_lab}º", "semana": sem_lab})
+            doc_prof_final = exporter.gerar_docx_professor_v24(nome_base, ed_prof, {"ano": f"{ano_lab}º", "semana": sem_lab})
             ext_prof = ".docx"
 
         c_master1, c_master2 = st.columns(2)
@@ -508,15 +508,17 @@ elif menu == "🧪 Criador de Aulas":
             nivel = cp3.select_slider("Nível:", options=["Básico", "Intermediário", "Desafio"])
             instr = st.text_area("Instruções Adicionais:", placeholder="Ex: Use contexto de Itabuna...")
 
-            if st.button("🚀 COMPILAR MATERIAL V25", use_container_width=True, type="primary"):
-                with st.spinner("IA executando Protocolo de Choque V25..."):
-                    prompt_v25 = (f"ORDEM: GERAR MATERIAL COMPLETO.\n"
-                                f"FOCO: {ano_lab}º ANO, {sem_lab}, {aula_num}.\n"
-                                f"CONTEÚDOS: {sel_cont}\nOBJETIVOS: {sel_obj}\n"
-                                f"NÍVEL: {nivel}\nCONTEXTO: {instr}")
-                    
-                    # Chama a nova persona V25
-                    st.session_state.lab_temp = ai.gerar_ia("MESTRE_V25", prompt_v25)
+            if st.button("🚀 COMPILAR MATERIAL DA " + aula_num.upper(), use_container_width=True, type="primary"):
+                with st.spinner("IA executando Protocolo de Choque..."):
+                    prompt_v24 = (f"ORDEM: GERAR EXATAMENTE {qtd_q} QUESTÕES DE EXERCÍCIO.\n"
+                                 f"FORMATO SELECIONADO: {formato}\n"
+                                 f"MODALIDADE DETECTADA NO PLANO: {diag['modalidade']}\n"
+                                 f"FOCO: {ano_lab}º ANO, {sem_lab}, {aula_num}.\n"
+                                 f"CONTEÚDOS: {sel_cont}\nOBJETIVOS: {sel_obj}\n"
+                                 f"NÍVEL: {nivel}\nCONTEXTO: {instr}")
+                    st.session_state.lab_temp = ai.gerar_ia("MESTRE_V24", prompt_v24)
+                    st.session_state.v_lab += 1
+                    if "lab_pei" in st.session_state: del st.session_state.lab_pei
                     st.rerun()
 
         # --- PASSO 3: LABORATÓRIO DE EDIÇÃO ---
@@ -607,7 +609,6 @@ elif menu == "🧪 Criador de Aulas":
                     doc_prof_final = exporter.gerar_pptx_v24(f"{nome_base}_PROF", ed_prof)
                     ext_prof = ".pptx"
                 else:
-                    # ESTA É A LINHA QUE ESTAVA DANDO ERRO:
                     doc_prof_final = exporter.gerar_docx_professor_v24(nome_base, ed_prof, {"ano": f"{ano_lab}º", "semana": sem_lab})
                     ext_prof = ".docx"
 
