@@ -459,43 +459,55 @@ elif menu == "🧪 Criador de Aulas":
     if "v_lab" not in st.session_state: st.session_state.v_lab = 1
 
     with tab_criar:
-        # --- PASSO 1: VÍNCULO HIERÁRQUICO ---
+        # --- PASSO 1: VÍNCULO HIERÁRQUICO (PROTOCOLO PIP ATIVADO) ---
         st.subheader("1. Vínculo com Planejamento")
         c1, c2, c3 = st.columns([1, 2, 1])
         ano_lab = c1.selectbox("Série:", [6, 7, 8, 9], key="lab_ano_v24")
+        
+        # Busca planos filtrando pelo ano selecionado
         planos_ano = df_planos[df_planos['ANO'] == f"{ano_lab}º"]
         
         if planos_ano.empty:
-            st.warning("⚠️ Crie um plano primeiro no módulo de Planejamento.")
+            st.warning(f"⚠️ Nenhum plano encontrado para o {ano_lab}º Ano. Crie um plano primeiro no módulo de Planejamento.")
         else:
             sem_lab = c2.selectbox("Semana:", planos_ano['SEMANA'].tolist(), key="lab_sem_v24")
             aula_num = c3.radio("Foco:", ["Aula 1", "Aula 2"], horizontal=True)
             
-            plano_raw = planos_ano[planos_ano['SEMANA'] == sem_lab].iloc[0]['PLANO_TEXTO']
+            # CAPTURA DO PLANO REAL NO BANCO (A FONTE DA VERDADE)
+            plano_row = planos_ano[planos_ano['SEMANA'] == sem_lab].iloc[0]
+            plano_raw = plano_row['PLANO_TEXTO']
+            
+            # Extração de Metadados para o Diagnóstico
+            cont_fiel = ai.extrair_tag(plano_raw, "CONTEUDOS_ESPECIFICOS")
+            obj_fiel = ai.extrair_tag(plano_raw, "OBJETIVOS_ENSINO")
+            metodologia_fiel = ai.extrair_tag(plano_raw, "METODOLOGIA")
             diag = ai.realizar_diagnostico_v25(plano_raw, df_curriculo, ano_lab)
 
             with st.container(border=True):
-                st.markdown("### 🔍 Diagnóstico de Vínculo")
+                st.markdown(f"### 🔍 Diagnóstico de Vínculo: {aula_num}")
                 cd1, cd2 = st.columns(2)
                 cd1.info(f"📂 Modalidade: {diag['modalidade']}")
                 cd2.info(f"🎯 Status: {diag['status']}")
                 
-                with st.expander("📋 Verificação de Cópia Literal"):
-                    st.caption(f"Conteúdo: {diag['conteudo_literal']}")
-                    st.caption(f"Objetivo: {diag['objetivo_literal']}")
+                with st.expander("📋 Verificação de Sincronia com o Plano de Ensino", expanded=True):
+                    st.markdown(f"**📍 Conteúdo Planejado:** {cont_fiel}")
+                    st.markdown(f"**🎯 Objetivo Planejado:** {obj_fiel}")
+                    st.markdown("**🏫 Roteiro Metodológico (PHC):**")
+                    st.caption(metodologia_fiel)
 
+            # Sugestão de Conteúdos baseada no Plano
             df_base_ano = df_curriculo[df_curriculo['ANO'] == int(ano_lab)]
-            cont_no_plano = diag['conteudo_literal'].upper().strip()
+            cont_no_plano = cont_fiel.upper().strip()
             opcoes_conteudo = [c for c in df_base_ano['CONTEUDO_ESPECIFICO'].unique() if str(c).upper().strip() in cont_no_plano or cont_no_plano in str(c).upper().strip()]
 
             col_p1, col_p2 = st.columns(2)
-            sel_cont = col_p1.multiselect("Confirmar Conteúdos:", options=df_base_ano['CONTEUDO_ESPECIFICO'].unique(), default=opcoes_conteudo, key=f"v24_c_{sem_lab}")
+            sel_cont = col_p1.multiselect("Confirmar Conteúdos para a Folha:", options=df_base_ano['CONTEUDO_ESPECIFICO'].unique(), default=opcoes_conteudo, key=f"v24_c_{sem_lab}")
             
             if sel_cont:
                 opcoes_objetivos = df_base_ano[df_base_ano['CONTEUDO_ESPECIFICO'].isin(sel_cont)]['OBJETIVOS'].unique().tolist()
-                obj_no_plano = diag['objetivo_literal'].upper().strip()
+                obj_no_plano = obj_fiel.upper().strip()
                 default_obj = [o for o in opcoes_objetivos if str(o).upper().strip() in obj_no_plano]
-                sel_obj = col_p2.multiselect("Confirmar Objetivos:", options=opcoes_objetivos, default=default_obj, key=f"v24_o_{sem_lab}")
+                sel_obj = col_p2.multiselect("Confirmar Objetivos para a Folha:", options=opcoes_objetivos, default=default_obj, key=f"v24_o_{sem_lab}")
             else:
                 sel_obj = col_p2.multiselect("Confirmar Objetivos:", options=[], help="Selecione um conteúdo primeiro", key=f"v24_o_{sem_lab}")
 
@@ -509,13 +521,22 @@ elif menu == "🧪 Criador de Aulas":
             instr = st.text_area("Instruções Adicionais:", placeholder="Ex: Use contexto de Itabuna...")
 
             if st.button("🚀 COMPILAR MATERIAL DA " + aula_num.upper(), use_container_width=True, type="primary"):
-                with st.spinner("IA executando Protocolo de Choque..."):
-                    prompt_v24 = (f"ORDEM: GERAR EXATAMENTE {qtd_q} QUESTÕES DE EXERCÍCIO.\n"
-                                 f"FORMATO SELECIONADO: {formato}\n"
-                                 f"MODALIDADE DETECTADA NO PLANO: {diag['modalidade']}\n"
-                                 f"FOCO: {ano_lab}º ANO, {sem_lab}, {aula_num}.\n"
-                                 f"CONTEÚDOS: {sel_cont}\nOBJETIVOS: {sel_obj}\n"
-                                 f"NÍVEL: {nivel}\nCONTEXTO: {instr}")
+                with st.spinner(f"Maestro realizando Injeção de Plano para {aula_num}..."):
+                    # PROMPT COM PROTOCOLO PIP (INJEÇÃO DE PLANO)
+                    prompt_v24 = (
+                        f"🚨 ORDEM DE FIDELIDADE ABSOLUTA AO PLANO DE ENSINO 🚨\n"
+                        f"Você deve gerar o material baseado EXATAMENTE neste planejamento:\n\n"
+                        f"--- PLANO DE ENSINO INTEGRAL ---\n{plano_raw}\n\n"
+                        f"--- ESPECIFICAÇÕES DA GERAÇÃO ---\n"
+                        f"FOCO EXCLUSIVO: {aula_num} (Extraia os gatilhos de Prática Social e a profundidade técnica desta aula específica).\n"
+                        f"SÉRIE: {ano_lab}º ANO.\n"
+                        f"QUANTIDADE DE QUESTÕES: {qtd_q}.\n"
+                        f"FORMATO SELECIONADO: {formato}.\n"
+                        f"NÍVEL: {nivel}.\n"
+                        f"CONTEXTO ADICIONAL: {instr}\n\n"
+                        f"REGRAS: Use os marcadores [PROFESSOR], [ALUNO], [GABARITO] e [IMAGENS]. "
+                        f"No [PROFESSOR], use as tags [COLUNA_1] e [COLUNA_2] para o novo design de regência."
+                    )
                     st.session_state.lab_temp = ai.gerar_ia("MESTRE_V24", prompt_v24)
                     st.session_state.v_lab += 1
                     if "lab_pei" in st.session_state: del st.session_state.lab_pei
@@ -543,12 +564,6 @@ elif menu == "🧪 Criador de Aulas":
             with t_prof:
                 if formato == "Slides (Apresentação)":
                     st.subheader("📺 Estrutura da Apresentação (Nova Escola)")
-                    with st.container(border=True):
-                        st.markdown("### 📖 Guia de Execução dos Slides")
-                        st.write("1. Vá na aba 🎨 **Imagens** e copie o **Comando Master**.")
-                        st.write("2. Abra o arquivo gerado no Google Slides.")
-                        st.write("3. Use o Gemini (Help me organize) para aplicar o design.")
-                    
                     import re
                     slides = re.findall(r"\[SLIDE.*?\](.*?)(?=\[SLIDE|$)", ed_prof, re.DOTALL)
                     if slides:
@@ -558,10 +573,10 @@ elif menu == "🧪 Criador de Aulas":
                     else:
                         st.text_area("Roteiro de Slides:", ed_prof, height=400)
                 else:
-                    st.text_area("Esquema de Lousa:", ed_prof, height=400, key=f"area_prof_{v}")
+                    st.text_area("Esquema de Lousa (Editável):", ed_prof, height=400, key=f"area_prof_{v}")
             
             with t_alu:
-                st.text_area("Folha Aluno:", ed_alu, height=400, key=f"area_alu_{v}")
+                st.text_area("Folha Aluno (Editável):", ed_alu, height=400, key=f"area_alu_{v}")
             
             with t_pei:
                 st.info("♿ A Engenharia PEI gera o layout Lado a Lado (Teoria e Exercício).")
@@ -581,13 +596,6 @@ elif menu == "🧪 Criador de Aulas":
 
             with t_img:
                 st.subheader("🎨 Hub de Engenharia Visual")
-                if formato == "Slides (Apresentação)":
-                    with st.container(border=True):
-                        st.markdown("### 🤖 Comando Master para Gemini Slides")
-                        super_prompt = (f"Atue como Designer Instrucional Senior. REFORMATE esta apresentação sobre {sel_cont} "
-                                        f"usando um tema moderno. Estrutura: {ed_prof}.")
-                        st.code(super_prompt, language="text")
-                
                 if ed_img_reg:
                     st.markdown("#### 👨‍🏫 Prompts para Imagen 4 (Material Regular)")
                     st.code(ed_img_reg, language="text")
@@ -602,11 +610,11 @@ elif menu == "🧪 Criador de Aulas":
                 st.subheader("🚀 Central de Comando de Exportação")
                 nome_base = f"AULA_{aula_num.replace(' ','')}_{ano_lab}ANO_{sem_lab.split(' ')[1]}"
                 
-                # 1. GERAÇÃO DOS DOCUMENTOS
+                # 1. GERAÇÃO DOS DOCUMENTOS (USANDO O NOVO EXPORTADOR V25 PARA O PROFESSOR)
                 doc_alu = exporter.gerar_docx_aluno_v24(nome_base, ed_alu, {"ano": f"{ano_lab}º", "trimestre": "I"})
                 
                 if formato == "Slides (Apresentação)":
-                    doc_prof_final = exporter.gerar_docx_professor_v25(nome_base, ed_prof, {"ano": f"{ano_lab}º", "semana": sem_lab})
+                    doc_prof_final = exporter.gerar_pptx_v24(f"{nome_base}_PROF", ed_prof)
                     ext_prof = ".pptx"
                 else:
                     doc_prof_final = exporter.gerar_docx_professor_v25(nome_base, ed_prof, {"ano": f"{ano_lab}º", "semana": sem_lab})
@@ -616,7 +624,7 @@ elif menu == "🧪 Criador de Aulas":
                 with c_master1:
                     st.markdown("### ☁️ Nuvem")
                     if st.button("🚀 SALVAR TUDO NO DRIVE E BANCO", use_container_width=True, type="primary"):
-                        with st.spinner("Limpando versões anteriores e sincronizando..."):
+                        with st.spinner("Sincronizando pacote completo..."):
                             
                             # --- LÓGICA ANTI-LIXO ---
                             if not df_aulas.empty:
@@ -631,7 +639,6 @@ elif menu == "🧪 Criador de Aulas":
                             link_pei = "N/A"
                             ed_img_pei = ""
                             if "lab_pei" in st.session_state:
-                                # 🔥 USANDO A FUNÇÃO PEI V25 CORRETA
                                 doc_pei = exporter.gerar_docx_pei_v25(nome_base + "_PEI", st.session_state.lab_pei, {"tema": sel_cont[0] if sel_cont else "Matemática", "trimestre": "I"})
                                 link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_base}_PEI.docx", semana=sem_lab, aula=aula_num)
                                 ed_img_pei = ai.extrair_tag(st.session_state.lab_pei, "IMAGENS_PEI")
@@ -641,7 +648,7 @@ elif menu == "🧪 Criador de Aulas":
                             
                             sucesso = db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), sem_lab, f"{aula_num} ({formato})", roteiro_preservado, f"{ano_lab}º", link_prof if formato == "Slides (Apresentação)" else link_alu])
                             if sucesso:
-                                st.success("✅ Sincronizado e Versão Anterior Removida!"); time.sleep(1); st.rerun()
+                                st.success("✅ Sincronizado!"); time.sleep(1); st.rerun()
 
                 with c_master2:
                     st.markdown("### 📦 Local")
@@ -649,13 +656,14 @@ elif menu == "🧪 Criador de Aulas":
                     zip_buffer = io.BytesIO()
                     with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
                         zip_file.writestr(f"{nome_base}_ALUNO.docx", doc_alu.getvalue())
-                        zip_file.writestr(f"{nome_base}_PROF{ext_prof}", doc_prof_final.getvalue())
+                        if ext_prof == ".docx":
+                            zip_file.writestr(f"{nome_base}_PROF.docx", doc_prof_final.getvalue())
+                        else:
+                            zip_file.writestr(f"{nome_base}_PROF.pptx", doc_prof_final.getvalue())
                         if "lab_pei" in st.session_state:
-                            # 🔥 ZIP COM A VERSÃO PEI V25
                             doc_pei_zip = exporter.gerar_docx_pei_v25(nome_base + "_PEI", st.session_state.lab_pei, {"tema": sel_cont[0] if sel_cont else "Matemática"})
                             zip_file.writestr(f"{nome_base}_PEI.docx", doc_pei_zip.getvalue())
                     
-                    # 🔥 CHAVE ÚNICA PARA EVITAR ERRO DE ID DUPLICADO
                     st.download_button(label="📥 BAIXAR PACOTE COMPLETO (ZIP)", data=zip_buffer.getvalue(), file_name=f"PACOTE_{nome_base}.zip", mime="application/zip", use_container_width=True, key=f"btn_zip_{nome_base}_{v}")
 
             if st.button("🗑️ DESCARTAR E RECOMEÇAR", use_container_width=True):
