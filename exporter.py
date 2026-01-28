@@ -23,20 +23,16 @@ def set_row_height(row, height_cm):
     trPr.append(trHeight)
 
 # ==============================================================================
-# 1. MATERIAL DO ALUNO (DESIGN DE ELITE V25 - DUAS COLUNAS)
+# 1. MATERIAL DO ALUNO TÍPICO (DESIGN DE ELITE V25 - DUAS COLUNAS)
 # ==============================================================================
 def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     doc = Document()
     section = doc.sections[0]
-    # Margens otimizadas
     section.top_margin, section.bottom_margin = Inches(0.4), Inches(0.7)
     section.left_margin, section.right_margin = Inches(0.4), Inches(0.4)
 
-    # --- CABEÇALHO (Ajuste de larguras para DATA em linha única) ---
     header_table = doc.add_table(rows=3, cols=5)
     header_table.style = 'Table Grid'
-    
-    # Larguras calculadas para evitar quebra da DATA e do TRIMESTRE
     widths = [Inches(0.9), Inches(2.8), Inches(0.8), Inches(1.7), Inches(1.2)]
     for i, width in enumerate(widths):
         header_table.columns[i].width = width
@@ -46,36 +42,26 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     c_aluno = header_table.cell(1, 1).merge(header_table.cell(1, 4)) 
 
     set_row_height(header_table.rows[0], 0.6) 
-    set_row_height(header_table.rows[1], 1.2) # Espaço ALUNO
-    set_row_height(header_table.rows[2], 0.6) # Strip
+    set_row_height(header_table.rows[1], 1.2) 
+    set_row_height(header_table.rows[2], 0.6) 
 
-    # 1. Logo Centralizada Absoluta
     if os.path.exists("logo_escola.png"):
         c_logo.vertical_alignment = WD_ALIGN_VERTICAL.CENTER 
         p_logo = c_logo.paragraphs[0]
         p_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER 
         p_logo.add_run().add_picture("logo_escola.png", width=Inches(0.75))
 
-    # 2. Nome da Escola
     p_esc = c_escola.paragraphs[0]
     p_esc.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run_esc = p_esc.add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA")
-    run_esc.font.bold, run_esc.font.size = True, Pt(11)
+    p_esc.add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA").font.bold = True
 
-    # 3. Campo Aluno (Limpo)
     c_aluno.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-    p_alu = c_aluno.paragraphs[0]
-    p_alu.add_run("ALUNO(A):").font.size = Pt(10)
+    c_aluno.paragraphs[0].add_run("ALUNO(A):").font.size = Pt(10)
 
-    # 4. Linha Strip (Prof, Turma, Data, Trimestre)
     header_table.cell(2, 1).paragraphs[0].add_run("PROF.: Ronaldo Gomes").font.size = Pt(9)
     header_table.cell(2, 2).paragraphs[0].add_run("TURMA:").font.size = Pt(9)
+    header_table.cell(2, 3).paragraphs[0].add_run("DATA: ____/____/2026").font.size = Pt(9)
     
-    # DATA EM LINHA ÚNICA
-    p_data = header_table.cell(2, 3).paragraphs[0]
-    p_data.add_run("DATA: ____/____/2026").font.size = Pt(9)
-    
-    # TRIMESTRE CENTRALIZADO E NEGRITO
     c_tri = header_table.cell(2, 4)
     p_tri = c_tri.paragraphs[0]
     p_tri.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -83,13 +69,11 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     run_tri.font.bold, run_tri.font.size = True, Pt(9)
 
     doc.add_paragraph() 
-
     p_tit = doc.add_paragraph()
     p_tit.alignment = WD_ALIGN_PARAGRAPH.CENTER
     run_tit = p_tit.add_run(titulo_doc.upper())
     run_tit.font.bold, run_tit.font.size = True, Pt(12)
 
-    # --- LÓGICA DE DUAS COLUNAS (TEXTO CONTÍNUO E JUSTIFICADO) ---
     partes_da_ia = re.split(r'(QUESTÃO\s+\d+\.)', conteudo, flags=re.IGNORECASE)
     lista_final = []
     if len(partes_da_ia) > 1:
@@ -104,66 +88,49 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     for idx, q_text in enumerate(lista_final):
         cell = main_table.cell(idx // 2, idx % 2)
         cell.vertical_alignment = WD_ALIGN_VERTICAL.TOP
-        
-        # Identifica o marcador (QUESTÃO X.)
-        match_marcador = re.search(r'QUESTÃO\s+\d+\.', q_text, re.IGNORECASE)
-        marcador = match_marcador.group() if match_marcador else ""
-        
-        # Isola o corpo do texto e remove quebras de linha iniciais
-        corpo_bruto = q_text.replace(marcador, "", 1).lstrip()
-        linhas_brutas = corpo_bruto.split('\n')
-        
-        # Parágrafo do Enunciado (Marcador + Texto na mesma linha)
+        linhas_brutas = q_text.strip().split('\n')
         p = cell.add_paragraph()
         p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+        
+        match_marcador = re.search(r'QUESTÃO\s+\d+\.', q_text, re.IGNORECASE)
+        marcador = match_marcador.group() if match_marcador else ""
         p.add_run(marcador + " ").font.bold = True
         
-        enunciado_em_andamento = True
+        corpo_limpo = q_text.replace(marcador, "", 1).lstrip()
+        linhas_corpo = corpo_limpo.split('\n')
+        enunciado_andamento = True
         
-        for linha in linhas_brutas:
+        for linha in linhas_corpo:
             l_s = linha.strip()
             if not l_s: continue
-            
-            # Verifica se é Alternativa ou Prompt
-            is_alt = re.match(r'^[A-E][\)\s\-]', l_s.upper())
-            is_prompt = "PROMPT" in l_s.upper() or "IMAGEM" in l_s.upper()
-            
-            if is_alt or is_prompt:
-                enunciado_em_andamento = False
+            if re.match(r'^[A-E][\)\s\-]', l_s.upper()) or "PROMPT" in l_s.upper() or "IMAGEM" in l_s.upper():
+                enunciado_andamento = False
                 p = cell.add_paragraph()
                 p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-                
-                if is_prompt:
+                if "PROMPT" in l_s.upper() or "IMAGEM" in l_s.upper():
                     run_img = p.add_run(f"[{l_s}]")
                     run_img.font.italic, run_img.font.size = True, Pt(8)
                     run_img.font.color.rgb = RGBColor(100, 100, 100)
                 else:
-                    # Formata alternativa para A)
                     texto_alt = re.sub(r'^([A-E])[\s\-\.]*', r'\1) ', l_s.upper())
                     p.add_run(texto_alt)
             else:
-                # Se for continuação do enunciado, cola no parágrafo atual
-                if enunciado_em_andamento:
+                if enunciado_andamento:
                     p.add_run(l_s + " ")
                 else:
                     p = cell.add_paragraph()
                     p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
                     p.add_run(l_s)
 
-        # --- LINHAS DE RESPOSTA (Só se não tiver alternativas) ---
-        tem_alternativas = any(re.search(r'^[A-E][\)\s\-]', l.strip().upper()) for l in linhas_brutas)
+        tem_alternativas = any(re.search(r'^[A-E][\)\s\-]', l.strip().upper()) for l in linhas_corpo)
         if not tem_alternativas:
             for _ in range(4):
-                p_linha = cell.add_paragraph()
-                p_linha.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-                p_linha.add_run("_" * 62)
+                cell.add_paragraph("_________________________________________________")
 
-    # --- RODAPÉ ---
-    footer = section.footer
-    p_foot = footer.paragraphs[0]
-    p_foot.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    p_foot.add_run("_" * 85 + "\n").font.color.rgb = RGBColor(200, 200, 200)
-    run_fin = p_foot.add_run("Material produzido pelo Professor Ronaldo Gomes dos Santos Filho • Itabuna/BA • 2026")
+    footer = section.footer.paragraphs[0]
+    footer.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    footer.add_run("_" * 85 + "\n").font.color.rgb = RGBColor(200, 200, 200)
+    run_fin = footer.add_run("Material produzido pelo Professor Ronaldo Gomes dos Santos Filho • Itabuna/BA • 2026")
     run_fin.font.size, run_fin.font.italic = Pt(8), True
 
     file_stream = io.BytesIO()
@@ -171,13 +138,15 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     file_stream.seek(0)
     return file_stream
 
+# ==============================================================================
+# 2. MATERIAL PEI (DESIGN LADO A LADO V25 - FONTE 14)
+# ==============================================================================
 def gerar_docx_pei_v25(titulo_doc, conteudo, info):
     doc = Document()
     section = doc.sections[0]
     section.top_margin, section.bottom_margin = Inches(0.4), Inches(0.5)
     section.left_margin, section.right_margin = Inches(0.4), Inches(0.4)
 
-    # --- 1. CABEÇALHO OFICIAL (3x5) ---
     header_table = doc.add_table(rows=3, cols=5)
     header_table.style = 'Table Grid'
     widths = [Inches(0.9), Inches(2.8), Inches(0.8), Inches(1.7), Inches(1.2)]
@@ -217,59 +186,51 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
 
     doc.add_paragraph()
 
-    # --- 2. LAYOUT LADO A LADO (TABELA INVISÍVEL) ---
     main_table = doc.add_table(rows=1, cols=2)
     main_table.alignment = WD_ALIGN_PARAGRAPH.CENTER
     col_teoria = main_table.cell(0, 0)
     col_exercicio = main_table.cell(0, 1)
     
-    # Ajuste de largura das colunas (45% teoria, 55% exercício)
     col_teoria.width = Inches(3.2)
     col_exercicio.width = Inches(4.0)
 
-    # Extração Robusta de Conteúdo
-    def extrair(texto, tag_inicio, tags_fim):
-        pattern = rf"\[{tag_inicio}\](.*?)(?={'|'.join([rf'\[{t}\]' for t in tags_fim])}|$)"
+    def extrair_pei(texto, tag_inicio):
+        pattern = rf"\[{tag_inicio}\](.*?)(?=\[|$)"
         match = re.search(pattern, texto, re.DOTALL | re.IGNORECASE)
         return match.group(1).strip() if match else ""
 
-    txt_lembrar = extrair(conteudo, "PARA LEMBRAR", ["PASSO A PASSO", "ATIVIDADES", "IMAGENS_PEI"])
-    txt_passo = extrair(conteudo, "PASSO A PASSO", ["ATIVIDADES", "IMAGENS_PEI"])
-    txt_atividades = extrair(conteudo, "ATIVIDADES", ["IMAGENS_PEI"])
+    txt_lembrar = extrair_pei(conteudo, "PARA LEMBRAR")
+    txt_passo = extrair_pei(conteudo, "PASSO A PASSO")
+    txt_atividades = extrair_pei(conteudo, "ATIVIDADES")
 
-    # --- PREENCHIMENTO COLUNA ESQUERDA (TEORIA) ---
     if txt_lembrar:
         p1 = col_teoria.add_paragraph()
         p1.add_run("💡 PARA LEMBRAR").font.bold = True
         p1.runs[0].font.size = Pt(14)
-        p1_cont = col_teoria.add_paragraph()
-        p1_cont.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-        p1_cont.add_run(txt_lembrar).font.size = Pt(13)
-        col_teoria.add_paragraph() # Respiro
+        p1_cont = col_teoria.add_paragraph(txt_lembrar)
+        p1_cont.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+        p1_cont.runs[0].font.size = Pt(13)
+        col_teoria.add_paragraph()
 
     if txt_passo:
         p2 = col_teoria.add_paragraph()
         p2.add_run("📑 PASSO A PASSO").font.bold = True
         p2.runs[0].font.size = Pt(14)
-        p2_cont = col_teoria.add_paragraph()
-        p2_cont.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-        p2_cont.add_run(txt_passo).font.size = Pt(13)
+        p2_cont = col_teoria.add_paragraph(txt_passo)
+        p2_cont.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+        p2_cont.runs[0].font.size = Pt(13)
 
-    # --- PREENCHIMENTO COLUNA DIREITA (EXERCÍCIOS) ---
     if txt_atividades:
         linhas = txt_atividades.split('\n')
         for linha in linhas:
             l_s = linha.strip()
             if not l_s: continue
-            
             p = col_exercicio.add_paragraph()
             p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-            
             if "QUESTÃO" in l_s.upper():
                 run = p.add_run(l_s)
                 run.font.bold, run.font.size = True, Pt(14)
             elif re.match(r'^[A-E][\)\s\-]', l_s.upper()):
-                # Limpa parênteses duplos e formata A)
                 letra = l_s[0:1]
                 resto = re.sub(r'^[A-E][\)\s\-]+', '', l_s).strip()
                 p.add_run(f"{letra}) {resto}").font.size = Pt(14)
@@ -280,12 +241,10 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
             else:
                 p.add_run(l_s).font.size = Pt(14)
 
-        # Linhas de resposta automáticas
         if not any(re.search(r'^[A-E][\)\s\-]', l) for l in linhas):
             for _ in range(3):
                 col_exercicio.add_paragraph("_________________________________")
 
-    # Rodapé
     footer = section.footer.paragraphs[0]
     footer.alignment = WD_ALIGN_PARAGRAPH.CENTER
     run_f = footer.add_run(f"Material Adaptado PEI • Prof. Ronaldo Gomes • 2026")
@@ -297,7 +256,7 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
     return file_stream
 
 # ==============================================================================
-# 2. GUIA DO PROFESSOR (PRESERVADO)
+# 3. GUIA DO PROFESSOR (PRESERVADO)
 # ==============================================================================
 def gerar_docx_professor_v24(titulo_doc, conteudo, info):
     doc = Document()
@@ -325,7 +284,7 @@ def gerar_docx_professor_v24(titulo_doc, conteudo, info):
     return file_stream
 
 # ==============================================================================
-# 3. PLANO PEDAGÓGICO (PRESERVADO)
+# 4. PLANO PEDAGÓGICO (PRESERVADO)
 # ==============================================================================
 def gerar_docx_plano_pedagogico_v18(titulo_arquivo, dados, info):
     doc = Document()
@@ -358,7 +317,7 @@ def gerar_docx_plano_pedagogico_v18(titulo_arquivo, dados, info):
     return file_stream
 
 # ==============================================================================
-# 4. APRESENTAÇÃO PPTX (PRESERVADO)
+# 5. APRESENTAÇÃO PPTX (PRESERVADO)
 # ==============================================================================
 def gerar_pptx_v24(titulo_doc, conteudo_ia):
     prs = Presentation()
