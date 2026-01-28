@@ -49,7 +49,7 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     for i, width in enumerate(widths):
         header_table.columns[i].width = width
 
-    # Mesclagens para o Design solicitado
+    # Mesclagens
     c_logo = header_table.cell(0, 0).merge(header_table.cell(2, 0)) 
     c_escola = header_table.cell(0, 1).merge(header_table.cell(0, 4)) 
     c_aluno = header_table.cell(1, 1).merge(header_table.cell(1, 4)) 
@@ -79,15 +79,13 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     p_alu.add_run("_________________________________________________________________")
 
     # 4. Linha Strip (Prof, Turma, Data, Trimestre)
-    # Prof
     p_p = header_table.cell(2, 1).paragraphs[0]
     p_p.add_run("PROF.: Ronaldo Gomes").font.size = Pt(9)
-    # Turma
     p_t = header_table.cell(2, 2).paragraphs[0]
     p_t.add_run(f"TURMA: {info.get('turma', '6º __')}").font.size = Pt(9)
-    # Data
     p_d = header_table.cell(2, 3).paragraphs[0]
     p_d.add_run("DATA: ___/___/___").font.size = Pt(9)
+    
     # Trimestre (NEGRITO E CENTRALIZADO)
     c_tri = header_table.cell(2, 4)
     p_tri = c_tri.paragraphs[0]
@@ -95,7 +93,7 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     run_tri = p_tri.add_run(f"{info.get('trimestre', 'I')} TRIMESTRE")
     run_tri.font.bold, run_tri.font.size = True, Pt(9)
 
-    doc.add_paragraph() # Espaço
+    doc.add_paragraph() 
 
     # --- TÍTULO CENTRALIZADO E NEGRITO ---
     p_tit = doc.add_paragraph()
@@ -104,91 +102,63 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     run_tit.font.bold, run_tit.font.size = True, Pt(12)
 
     # --- LÓGICA DE DUAS COLUNAS (TABELA INVISÍVEL) ---
-    # Separar o conteúdo por questões
-    questoes_raw = re.split(r'(QUESTÃO \d+\.)', conteudo)
+    # Fatiamos o conteúdo usando o marcador QUESTÃO
+    partes_questoes = re.split(r'(QUESTÃO\s+\d+\.)', conteudo, flags=re.IGNORECASE)
+    
     lista_final = []
-    if len(questoes_raw) > 1:
-        for i in range(1, len(questoes_raw), 2):
-            lista_final.append(questoes_raw[i] + questoes_raw[i+1])
+    if len(partes_questoes) > 1:
+        for i in range(1, len(partes_questoes), 2):
+            lista_final.append(partes_questoes[i] + partes_questoes[i+1])
     else:
         lista_final = [conteudo]
 
-    # --- LÓGICA DE DUAS COLUNAS (TABELA INVISÍVEL) ---
-    # 1. Primeiro, dividimos o texto completo em questões individuais
-    import re
-    partes_questoes = re.split(r'(QUESTÃO\s+\d+\.)', conteudo, flags=re.IGNORECASE)
-    
-    lista_de_questoes = []
-    if len(partes_questoes) > 1:
-        for i in range(1, len(partes_questoes), 2):
-            # Une o marcador "QUESTÃO X." com o texto que vem depois dele
-            lista_de_questoes.append(partes_questoes[i] + partes_questoes[i+1])
-    else:
-        lista_de_questoes = [conteudo]
-
-    # 2. Criamos a tabela de 2 colunas para organizar o layout
-    num_linhas_tabela = (len(lista_de_questoes) + 1) // 2
-    main_table = doc.add_table(rows=num_linhas_tabela, cols=2)
+    # Criar tabela de 2 colunas
+    main_table = doc.add_table(rows=(len(lista_final) + 1) // 2, cols=2)
     main_table.alignment = WD_ALIGN_PARAGRAPH.CENTER
     
-    for idx, texto_da_questao in enumerate(lista_de_questoes):
-        # Define em qual célula a questão vai entrar (Esquerda ou Direita)
-        linha_celula = idx // 2
-        coluna_celula = idx % 2
-        cell = main_table.cell(linha_celula, coluna_celula)
+    for idx, q_text in enumerate(lista_final):
+        cell = main_table.cell(idx // 2, idx % 2)
         cell.vertical_alignment = WD_ALIGN_VERTICAL.TOP
         
-        linhas_da_questao = texto_da_questao.strip().split('\n')
-        
-        # 3. Processamos cada linha da questão para aplicar o design
-        for linha in linhas_da_questao:
+        linhas = q_text.strip().split('\n')
+        for linha in linhas:
             if not linha.strip(): continue
             p = cell.add_paragraph()
             p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
             
-            # REGRA A: Negrito apenas no marcador "QUESTÃO X."
+            # Negrito apenas no QUESTÃO X.
             if "QUESTÃO" in linha.upper() and "." in linha:
-                # Divide a linha no primeiro ponto para separar o marcador do enunciado
-                partes_da_linha = linha.split(".", 1)
-                p.add_run(partes_da_linha[0] + ".").font.bold = True
-                if len(partes_da_linha) > 1:
-                    p.add_run(partes_da_linha[1])
+                partes_linha = linha.split(".", 1)
+                p.add_run(partes_linha[0] + ".").font.bold = True
+                if len(partes_linha) > 1:
+                    p.add_run(partes_linha[1])
             
-            # REGRA B: Formatação especial para Prompts de Imagem
+            # Prompt de Imagem entre colchetes
             elif "PROMPT" in linha.upper() or "IMAGEM" in linha.upper():
                 run_img = p.add_run(f"[{linha.strip()}]")
-                run_img.font.italic = True
-                run_img.font.size = Pt(8)
-                run_img.font.color.rgb = RGBColor(100, 100, 100) # Cor cinza
+                run_img.font.italic, run_img.font.size = True, Pt(8)
+                run_img.font.color.rgb = RGBColor(100, 100, 100)
             
-            # REGRA C: Alternativas (A, B, C, D)
+            # Alternativas
             elif re.match(r'^[A-E][\)\-]', linha.strip().upper()):
                 p.add_run(linha.strip())
             
-            # REGRA D: Texto normal do enunciado
             else:
                 p.add_run(linha.strip())
 
-        # 4. REGRA DE OURO: Se a questão for aberta, desenha as 4 linhas de resposta
-        # Verificamos se NÃO existem alternativas (A, B, C...) na questão
-        tem_alternativas = any(re.search(r'^[A-E][\)\-]', l.strip().upper()) for l in linhas_da_questao)
-        
+        # Se for questão aberta, desenha as 4 linhas
+        tem_alternativas = any(re.search(r'^[A-E][\)\-]', l.strip().upper()) for l in linhas)
         if not tem_alternativas:
             for _ in range(4):
-                p_linha = cell.add_paragraph()
-                p_linha.add_run("_____________________________________________")
+                cell.add_paragraph("_____________________________________________")
 
-    # --- RODAPÉ PROFISSIONAL FIXO ---
+    # --- RODAPÉ PROFISSIONAL ---
     footer = section.footer
     p_foot = footer.paragraphs[0]
     p_foot.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    # Linha divisória sutil
     p_foot.add_run("__________________________________________________________________________\n").font.color.rgb = RGBColor(200, 200, 200)
-    # Assinatura
-    footer_text = f"Material produzido pelo Professor Ronaldo Gomes dos Santos Filho • Itabuna/BA • 2026"
-    run_foot = p_foot.add_run(footer_text)
-    run_foot.font.size, run_foot.font.italic = Pt(8), True
-    run_foot.font.color.rgb = RGBColor(100, 100, 100)
+    run_fin = p_foot.add_run("Material produzido pelo Professor Ronaldo Gomes dos Santos Filho • Itabuna/BA • 2026")
+    run_fin.font.size, run_fin.font.italic = Pt(8), True
 
     file_stream = io.BytesIO()
     doc.save(file_stream)
