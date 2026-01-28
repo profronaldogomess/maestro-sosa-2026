@@ -9,7 +9,6 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from pptx import Presentation
 from pptx.util import Inches, Pt
-import ai_engine as ai  # <--- ADICIONE ESTA LINHA AQUI
 
 # ==============================================================================
 # FUNÇÃO AUXILIAR: AJUSTE DE ALTURA DE LINHA (PRENSA)
@@ -257,91 +256,35 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
     return file_stream
 
 # ==============================================================================
-# 3. GUIA DO PROFESSOR (PRESERVADO)
+# 3. GUIA DO PROFESSOR (A FUNÇÃO QUE ESTAVA FALTANDO!)
 # ==============================================================================
-def gerar_docx_professor_v25(titulo_doc, conteudo, info):
-    """Gera o Guia do Professor V25 com Design de Manual Técnico e PHC"""
+def gerar_docx_professor_v24(titulo_doc, conteudo, info):
     doc = Document()
     section = doc.sections[0]
-    section.top_margin, section.bottom_margin = Inches(0.4), Inches(0.5)
-    section.left_margin, section.right_margin = Inches(0.4), Inches(0.4)
-
-    # 1. CABEÇALHO DE ELITE (Prensa 3x5)
-    header_table = doc.add_table(rows=3, cols=5)
-    header_table.style = 'Table Grid'
-    widths = [Inches(0.9), Inches(2.8), Inches(0.8), Inches(1.7), Inches(1.2)]
-    for i, width in enumerate(widths):
-        header_table.columns[i].width = width
-
-    # Mesclagem e Alturas Fixas
-    c_logo = header_table.cell(0, 0).merge(header_table.cell(2, 0))
-    c_escola = header_table.cell(0, 1).merge(header_table.cell(0, 4))
-    c_titulo = header_table.cell(1, 1).merge(header_table.cell(1, 4))
-    
-    set_row_height(header_table.rows[0], 0.6)
-    set_row_height(header_table.rows[1], 1.2)
-    set_row_height(header_table.rows[2], 0.6)
-
-    # Conteúdo do Cabeçalho
+    section.top_margin, section.bottom_margin = Inches(0.5), Inches(0.5)
+    table = doc.add_table(rows=3, cols=3)
+    table.style = 'Table Grid'
     if os.path.exists("logo_escola.png"):
-        c_logo.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-        p_logo = c_logo.paragraphs[0]
-        p_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        p_logo.add_run().add_picture("logo_escola.png", width=Inches(0.75))
-
-    header_table.cell(0, 1).paragraphs[0].add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA").font.bold = True
-    c_titulo.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-    run_t = c_titulo.paragraphs[0].add_run(f"GUIA TÉCNICO DO PROFESSOR: {titulo_doc.upper()}")
-    run_t.font.bold, run_t.font.size = True, Pt(12)
-
-    header_table.cell(2, 1).paragraphs[0].add_run("PROF.: Ronaldo Gomes").font.size = Pt(9)
-    header_table.cell(2, 2).paragraphs[0].add_run(f"ANO: {info.get('ano', '')}").font.size = Pt(9)
-    header_table.cell(2, 3).paragraphs[0].add_run(f"SEMANA: {info.get('semana', '')}").font.size = Pt(9)
-    header_table.cell(2, 4).paragraphs[0].add_run("DATA: __/__/2026").font.size = Pt(9)
-
+        table.cell(0, 0).paragraphs[0].add_run().add_picture("logo_escola.png", width=Inches(0.7))
+    table.cell(0, 1).paragraphs[0].add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA").font.bold = True
+    table.cell(0, 2).paragraphs[0].add_run("GUIA DO PROFESSOR").font.bold = True
+    table.cell(1, 0).merge(table.cell(1, 1))
+    table.cell(1, 0).paragraphs[0].add_run(f"Professor: Ronaldo Gomes")
+    table.cell(1, 2).paragraphs[0].add_run(f"Ano: {info.get('ano', '')}")
+    table.cell(2, 0).merge(table.cell(2, 1))
+    table.cell(2, 0).paragraphs[0].add_run(f"Semana: {info.get('semana', '')}")
+    table.cell(2, 2).paragraphs[0].add_run("Data: [ / / 2026 ]")
     doc.add_paragraph()
-
-    # 2. PROCESSAMENTO DE SEÇÕES (Fatiamento V25)
-    # Mapeamento de Marcadores para Títulos Visuais
-    secoes_maestro = [
-        ("ROTEIRO PEDAGÓGICO (PHC)", "ROTEIRO_PEDAGOGICO_PHC"),
-        ("ESQUEMA DE LOUSA (SISTEMATIZAÇÃO)", "ESQUEMA_DE_LOUSA_V25"),
-        ("PONTE INCLUSIVA (GESTÃO PEI)", "PONTE_INCLUSIVA_PEI"),
-        ("GABARITO TÉCNICO", "GABARITO_TECNICO")
-    ]
-
-    for titulo_label, marker in secoes_maestro:
-        # Usa a lógica de extração universal
-        texto_puro = ai.extrair_tag(conteudo, marker)
-        
-        if texto_puro and len(texto_puro) > 5:
-            # Cria uma tabela de uma célula para fazer o efeito de "Box"
-            box = doc.add_table(rows=1, cols=1)
-            box.width = Inches(7.5)
-            cell_box = box.rows[0].cells[0]
-            cell_box.paragraphs[0].add_run(f"■ {titulo_label}").font.bold = True
-            cell_box.paragraphs[0].runs[0].font.color.rgb = RGBColor(41, 98, 255) # Azul Maestro
-            
-            # Insere o conteúdo sanitizado (Prensa Anti-Markdown)
-            p_cont = doc.add_paragraph(texto_puro)
-            p_cont.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-            p_cont.paragraph_format.space_after = Pt(12)
-            
-            doc.add_paragraph() # Espaçador
-
-    # Rodapé Profissional
-    footer = section.footer.paragraphs[0]
-    footer.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run_f = footer.add_run("Documento de Uso Exclusivo do Professor • Maestro Sosa V25 • Itabuna/BA")
-    run_f.font.size, run_f.font.italic = Pt(8), True
-
+    for linha in conteudo.split('\n'):
+        p = doc.add_paragraph(linha.strip())
+        p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
     file_stream = io.BytesIO()
     doc.save(file_stream)
     file_stream.seek(0)
     return file_stream
 
 # ==============================================================================
-# 4. PLANO PEDAGÓGICO (PRESERVADO)
+# 4. PLANO PEDAGÓGICO
 # ==============================================================================
 def gerar_docx_plano_pedagogico_v18(titulo_arquivo, dados, info):
     doc = Document()
@@ -374,7 +317,7 @@ def gerar_docx_plano_pedagogico_v18(titulo_arquivo, dados, info):
     return file_stream
 
 # ==============================================================================
-# 5. APRESENTAÇÃO PPTX (PRESERVADO)
+# 5. APRESENTAÇÃO PPTX
 # ==============================================================================
 def gerar_pptx_v24(titulo_doc, conteudo_ia):
     prs = Presentation()
