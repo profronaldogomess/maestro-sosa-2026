@@ -673,26 +673,26 @@ elif menu == "🧪 Criador de Aulas":
                             if sucesso:
                                 st.success("✅ Sincronizado e Versão Anterior Removida!"); time.sleep(1); st.rerun()
 
-                with c_master2:
-                    st.markdown("### 📦 Local")
-                    import io, zipfile
-                    zip_buffer = io.BytesIO()
-                    with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
-                        zip_file.writestr(f"{nome_base}_ALUNO.docx", doc_alu.getvalue())
-                        zip_file.writestr(f"{nome_base}_PROF{ext_prof}", doc_prof_final.getvalue())
-                        if "lab_pei" in st.session_state:
-                            doc_pei_zip = exporter.gerar_docx_pei_v25(nome_base + "_PEI", st.session_state.lab_pei, {"tema": sel_cont[0] if sel_cont else "Matemática"})
-                            zip_file.writestr(f"{nome_base}_PEI.docx", doc_pei_zip.getvalue())
-                    
-                    # ADICIONADO O 'key' PARA EVITAR O ERRO DE ID DUPLICADO
-                    st.download_button(
-                        label="📥 BAIXAR PACOTE COMPLETO (ZIP)", 
-                        data=zip_buffer.getvalue(), 
-                        file_name=f"PACOTE_{nome_base}.zip", 
-                        mime="application/zip", 
-                        use_container_width=True,
-                        key=f"btn_zip_{nome_base}_{st.session_state.v_lab}" # Chave única baseada na versão da aula
-                    )
+                    with c_master2:
+                        st.markdown("### 📦 Local")
+                        import io, zipfile
+                        zip_buffer = io.BytesIO()
+                        with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
+                            zip_file.writestr(f"{nome_base}_ALUNO.docx", doc_alu.getvalue())
+                            zip_file.writestr(f"{nome_base}_PROF{ext_prof}", doc_prof_final.getvalue())
+                            if "lab_pei" in st.session_state:
+                                doc_pei_zip = exporter.gerar_docx_pei_v25(nome_base + "_PEI", st.session_state.lab_pei, {"tema": sel_cont[0] if sel_cont else "Matemática"})
+                                zip_file.writestr(f"{nome_base}_PEI.docx", doc_pei_zip.getvalue())
+                        
+                        # ADICIONADO O 'key' PARA EVITAR O ERRO DE ID DUPLICADO
+                        st.download_button(
+                            label="📥 BAIXAR PACOTE COMPLETO (ZIP)", 
+                            data=zip_buffer.getvalue(), 
+                            file_name=f"PACOTE_{nome_base}.zip", 
+                            mime="application/zip", 
+                            use_container_width=True,
+                            key=f"btn_zip_{nome_base}_{st.session_state.v_lab}" # Chave única baseada na versão da aula
+                        )
 
             if st.button("🗑️ DESCARTAR E RECOMEÇAR", use_container_width=True):
                 if "lab_temp" in st.session_state: del st.session_state.lab_temp
