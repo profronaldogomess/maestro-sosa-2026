@@ -174,10 +174,11 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
 def gerar_docx_pei_v25(titulo_doc, conteudo, info):
     doc = Document()
     section = doc.sections[0]
-    section.top_margin, section.bottom_margin = Inches(0.4), Inches(0.5)
+    # Margens para aproveitar o papel e facilitar colagem
+    section.top_margin, section.bottom_margin = Inches(0.4), Inches(0.6)
     section.left_margin, section.right_margin = Inches(0.4), Inches(0.4)
 
-    # --- 1. CABEÇALHO OFICIAL (3x5) ---
+    # --- 1. CABEÇALHO OFICIAL (IGUAL AO ALUNO TÍPICO) ---
     header_table = doc.add_table(rows=3, cols=5)
     header_table.style = 'Table Grid'
     widths = [Inches(0.9), Inches(2.8), Inches(0.8), Inches(1.7), Inches(1.2)]
@@ -217,47 +218,33 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
 
     doc.add_paragraph()
 
-    # --- 2. LAYOUT LADO A LADO (TABELA INVISÍVEL) ---
+    # --- 2. LAYOUT LADO A LADO (TEORIA NA ESQUERDA | EXERCÍCIO NA DIREITA) ---
     main_table = doc.add_table(rows=1, cols=2)
     main_table.alignment = WD_ALIGN_PARAGRAPH.CENTER
     col_teoria = main_table.cell(0, 0)
     col_exercicio = main_table.cell(0, 1)
-    
-    # Ajuste de largura das colunas (45% teoria, 55% exercício)
-    col_teoria.width = Inches(3.2)
-    col_exercicio.width = Inches(4.0)
 
-    # Extração Robusta de Conteúdo
-    def extrair(texto, tag_inicio, tags_fim):
-        pattern = rf"\[{tag_inicio}\](.*?)(?={'|'.join([rf'\[{t}\]' for t in tags_fim])}|$)"
-        match = re.search(pattern, texto, re.DOTALL | re.IGNORECASE)
-        return match.group(1).strip() if match else ""
+    # Extração de blocos
+    import re
+    txt_lembrar = re.search(r'\[PARA LEMBRAR\](.*?)(?=\[PASSO|\[ATIVIDADES|\[IMAGENS|$)', conteudo, re.DOTALL | re.IGNORECASE)
+    txt_passo = re.search(r'\[PASSO A PASSO\](.*?)(?=\[ATIVIDADES|\[IMAGENS|$)', conteudo, re.DOTALL | re.IGNORECASE)
+    txt_atividades = re.search(r'\[ATIVIDADES\](.*?)(?=\[IMAGENS|$)', conteudo, re.DOTALL | re.IGNORECASE)
 
-    txt_lembrar = extrair(conteudo, "PARA LEMBRAR", ["PASSO A PASSO", "ATIVIDADES", "IMAGENS_PEI"])
-    txt_passo = extrair(conteudo, "PASSO A PASSO", ["ATIVIDADES", "IMAGENS_PEI"])
-    txt_atividades = extrair(conteudo, "ATIVIDADES", ["IMAGENS_PEI"])
-
-    # --- PREENCHIMENTO COLUNA ESQUERDA (TEORIA) ---
+    # --- COLUNA DA ESQUERDA (TEORIA) ---
     if txt_lembrar:
-        p1 = col_teoria.add_paragraph()
-        p1.add_run("💡 PARA LEMBRAR").font.bold = True
-        p1.runs[0].font.size = Pt(14)
-        p1_cont = col_teoria.add_paragraph()
-        p1_cont.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-        p1_cont.add_run(txt_lembrar).font.size = Pt(13)
-        col_teoria.add_paragraph() # Respiro
+        p = col_teoria.add_paragraph()
+        p.add_run("PARA LEMBRAR").font.bold = True
+        p.add_run(f"\n{txt_lembrar.group(1).strip()}").font.size = Pt(14)
+        col_teoria.add_paragraph()
 
     if txt_passo:
-        p2 = col_teoria.add_paragraph()
-        p2.add_run("📑 PASSO A PASSO").font.bold = True
-        p2.runs[0].font.size = Pt(14)
-        p2_cont = col_teoria.add_paragraph()
-        p2_cont.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-        p2_cont.add_run(txt_passo).font.size = Pt(13)
+        p = col_teoria.add_paragraph()
+        p.add_run("PASSO A PASSO").font.bold = True
+        p.add_run(f"\n{txt_passo.group(1).strip()}").font.size = Pt(14)
 
-    # --- PREENCHIMENTO COLUNA DIREITA (EXERCÍCIOS) ---
+    # --- COLUNA DA DIREITA (EXERCÍCIOS) ---
     if txt_atividades:
-        linhas = txt_atividades.split('\n')
+        linhas = txt_atividades.group(1).strip().split('\n')
         for linha in linhas:
             l_s = linha.strip()
             if not l_s: continue
@@ -266,13 +253,12 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
             p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
             
             if "QUESTÃO" in l_s.upper():
-                run = p.add_run(l_s)
-                run.font.bold, run.font.size = True, Pt(14)
+                p.add_run(l_s).font.bold = True
+                p.runs[0].font.size = Pt(14)
             elif re.match(r'^[A-E][\)\s\-]', l_s.upper()):
-                # Limpa parênteses duplos e formata A)
-                letra = l_s[0:1]
-                resto = re.sub(r'^[A-E][\)\s\-]+', '', l_s).strip()
-                p.add_run(f"{letra}) {resto}").font.size = Pt(14)
+                # Limpa parênteses duplos e formata
+                l_limpa = re.sub(r'^[A-E][\)\s\-]+', '', l_s).strip()
+                p.add_run(f"{l_s[0:1]}) {l_limpa}").font.size = Pt(14)
             elif "PROMPT" in l_s.upper():
                 run_img = p.add_run(f"[{l_s}]")
                 run_img.font.italic, run_img.font.size = True, Pt(9)
@@ -280,16 +266,17 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
             else:
                 p.add_run(l_s).font.size = Pt(14)
 
-        # Linhas de resposta automáticas
+        # Linhas de resposta se não houver alternativas
         if not any(re.search(r'^[A-E][\)\s\-]', l) for l in linhas):
             for _ in range(3):
                 col_exercicio.add_paragraph("_________________________________")
 
-    # Rodapé
-    footer = section.footer.paragraphs[0]
-    footer.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run_f = footer.add_run(f"Material Adaptado PEI • Prof. Ronaldo Gomes • 2026")
-    run_f.font.size, run_f.font.italic = Pt(8), True
+    # --- 3. RODAPÉ ---
+    footer = section.footer
+    p_foot = footer.paragraphs[0]
+    p_foot.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run_fin = p_foot.add_run(f"Material Adaptado PEI • Prof. Ronaldo Gomes • Itabuna/BA • 2026")
+    run_fin.font.size, run_fin.font.italic = Pt(8), True
 
     file_stream = io.BytesIO()
     doc.save(file_stream)
