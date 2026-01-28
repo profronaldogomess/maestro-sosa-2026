@@ -28,6 +28,7 @@ def set_row_height(row, height_cm):
 def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     doc = Document()
     section = doc.sections[0]
+    # Margens otimizadas
     section.top_margin, section.bottom_margin = Inches(0.4), Inches(0.7)
     section.left_margin, section.right_margin = Inches(0.4), Inches(0.4)
 
@@ -47,11 +48,11 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     set_row_height(header_table.rows[1], 1.2) # Espaço para o aluno escrever
     set_row_height(header_table.rows[2], 0.6) 
 
-    # 1. Logo Centralizada
+    # 1. Logo Centralizada (Vertical e Horizontal)
     if os.path.exists("logo_escola.png"):
-        c_logo.vertical_alignment = WD_ALIGN_VERTICAL.CENTER # Centraliza Vertical
+        c_logo.vertical_alignment = WD_ALIGN_VERTICAL.CENTER 
         p_logo = c_logo.paragraphs[0]
-        p_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER # Centraliza Horizontal
+        p_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER 
         p_logo.add_run().add_picture("logo_escola.png", width=Inches(0.75))
 
     # 2. Nome da Escola
@@ -60,7 +61,7 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     run_esc = p_esc.add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA")
     run_esc.font.bold, run_esc.font.size = True, Pt(11)
 
-    # 3. Campo Aluno (Sem linha, apenas o rótulo)
+    # 3. Campo Aluno (Limpo, sem linha)
     c_aluno.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
     p_alu = c_aluno.paragraphs[0]
     run_alu = p_alu.add_run("ALUNO(A):")
@@ -68,9 +69,12 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
 
     # 4. Linha Strip (Prof, Turma, Data, Trimestre)
     header_table.cell(2, 1).paragraphs[0].add_run("PROF.: Ronaldo Gomes").font.size = Pt(9)
-    header_table.cell(2, 2).paragraphs[0].add_run(f"TURMA: {info.get('turma', '6º __')}").font.size = Pt(9)
-    # Data com mais espaço
-    header_table.cell(2, 3).paragraphs[0].add_run("DATA: ____/____/2026").font.size = Pt(9)
+    
+    # Turma Limpa
+    header_table.cell(2, 2).paragraphs[0].add_run("TURMA: ").font.size = Pt(9)
+    
+    # Data com mais espaço (Underlines maiores)
+    header_table.cell(2, 3).paragraphs[0].add_run("DATA: ______/_______/2026").font.size = Pt(9)
     
     c_tri = header_table.cell(2, 4)
     p_tri = c_tri.paragraphs[0]
@@ -80,12 +84,13 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
 
     doc.add_paragraph() 
 
+    # Título Centralizado
     p_tit = doc.add_paragraph()
     p_tit.alignment = WD_ALIGN_PARAGRAPH.CENTER
     run_tit = p_tit.add_run(titulo_doc.upper())
     run_tit.font.bold, run_tit.font.size = True, Pt(12)
 
-    # --- DUAS COLUNAS ---
+    # --- DUAS COLUNAS COM TEXTO CONTÍNUO ---
     partes_da_ia = re.split(r'(QUESTÃO\s+\d+\.)', conteudo, flags=re.IGNORECASE)
     lista_de_questoes = []
     if len(partes_da_ia) > 1:
@@ -102,30 +107,58 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
         cell.vertical_alignment = WD_ALIGN_VERTICAL.TOP
         
         linhas_questao = q_text.strip().split('\n')
+        
+        # Criamos o primeiro parágrafo da questão
+        p = cell.add_paragraph()
+        p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+        
+        primeira_linha_texto = True
+        
         for linha in linhas_questao:
-            if not linha.strip(): continue
-            p = cell.add_paragraph()
-            p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+            l_strip = linha.strip()
+            if not l_strip: continue
             
-            if "QUESTÃO" in linha.upper() and "." in linha:
-                partes_linha = linha.split(".", 1)
-                p.add_run(partes_linha[0] + ".").font.bold = True
-                if len(partes_linha) > 1: p.add_run(partes_linha[1])
-            elif "PROMPT" in linha.upper() or "IMAGEM" in linha.upper():
-                run_img = p.add_run(f"[{linha.strip()}]")
+            # Lógica para manter o texto na mesma linha do QUESTÃO X.
+            if "QUESTÃO" in l_strip.upper() and "." in l_strip and primeira_linha_texto:
+                partes_linha = l_strip.split(".", 1)
+                p.add_run(partes_linha[0] + ". ").font.bold = True
+                if len(partes_linha) > 1 and partes_linha[1].strip():
+                    p.add_run(partes_linha[1].strip())
+                primeira_linha_texto = False
+            
+            # Se for Prompt de Imagem (Novo parágrafo)
+            elif "PROMPT" in l_strip.upper() or "IMAGEM" in l_strip.upper():
+                p = cell.add_paragraph()
+                p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+                run_img = p.add_run(f"[{l_strip}]")
                 run_img.font.italic, run_img.font.size = True, Pt(8)
                 run_img.font.color.rgb = RGBColor(100, 100, 100)
-            elif re.match(r'^[A-E][\)\-]', linha.strip().upper()):
-                p.add_run(linha.strip())
+            
+            # Se for Alternativa (Novo parágrafo)
+            elif re.match(r'^[A-E][\)\-]', l_strip.upper()):
+                p = cell.add_paragraph()
+                p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+                p.add_run(l_strip)
+            
+            # Continuação do texto ou parágrafos extras
             else:
-                p.add_run(linha.strip())
+                # Se ainda estivermos no primeiro parágrafo da questão, continua nele
+                # Caso contrário, cria um novo parágrafo para manter a organização
+                if primeira_linha_texto:
+                    p.add_run(l_strip)
+                    primeira_linha_texto = False
+                else:
+                    # Verifica se a linha anterior era o cabeçalho da questão
+                    # Se for apenas continuação do texto, podemos decidir se criamos novo parágrafo
+                    p = cell.add_paragraph()
+                    p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+                    p.add_run(l_strip)
 
-        # --- LINHAS DE RESPOSTA QUE VÃO ATÉ O FINAL ---
+        # Linhas de resposta
         tem_alternativas = any(re.search(r'^[A-E][\)\-]', l.strip().upper()) for l in linhas_questao)
         if not tem_alternativas:
             for _ in range(4):
                 p_linha = cell.add_paragraph()
-                # Aumentei a quantidade de underlines para preencher a coluna
                 p_linha.add_run("_________________________________________________")
 
     # --- RODAPÉ ---
