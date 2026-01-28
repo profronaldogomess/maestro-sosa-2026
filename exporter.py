@@ -10,9 +10,11 @@ from docx.oxml.ns import qn
 from pptx import Presentation
 from pptx.util import Inches, Pt
 
-# --- FUNÇÃO AUXILIAR PARA ALTURA DE LINHA ---
+# ==============================================================================
+# FUNÇÕES DE UTILIDADE TÉCNICA (NÃO ALTERAR)
+# ==============================================================================
 def set_row_height(row, height_cm):
-    """Define a altura exata de uma linha em centímetros"""
+    """Força a altura da linha da tabela no Word (Prensa de Altura)"""
     tr = row._tr
     trPr = tr.get_or_add_trPr()
     trHeight = OxmlElement('w:trHeight')
@@ -20,39 +22,48 @@ def set_row_height(row, height_cm):
     trHeight.set(qn('w:hRule'), "atLeast")
     trPr.append(trHeight)
 
-# --- FUNÇÃO DO ALUNO REFORMULADA (V25) ---
+def prevent_row_break(table):
+    """Impede que as questões sejam cortadas entre uma página e outra"""
+    for row in table.rows:
+        tr = row._tr
+        trPr = tr.get_or_add_trPr()
+        keepNext = OxmlElement('w:cantSplit')
+        trPr.append(keepNext)
+
+# ==============================================================================
+# 1. MATERIAL DO ALUNO V25 (LAYOUT DE ELITE - DUAS COLUNAS)
+# ==============================================================================
 def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     doc = Document()
     section = doc.sections[0]
-    section.top_margin, section.bottom_margin = Inches(0.4), Inches(0.6)
-    section.left_margin, section.right_margin = Inches(0.5), Inches(0.5)
+    # Margens otimizadas para 2 colunas
+    section.top_margin, section.bottom_margin = Inches(0.4), Inches(0.7)
+    section.left_margin, section.right_margin = Inches(0.4), Inches(0.4)
 
-    # --- CABEÇALHO IDENTICO AO PRINT (Tabela 3x5) ---
-    table = doc.add_table(rows=3, cols=5)
-    table.style = 'Table Grid'
-    table.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    # --- CABEÇALHO REENGENHARIZADO (3x5) ---
+    header_table = doc.add_table(rows=3, cols=5)
+    header_table.style = 'Table Grid'
     
-    # Ajuste de larguras
-    table.columns[0].width = Inches(0.8) # Logo
-    table.columns[1].width = Inches(2.8) # Nome/Prof
-    table.columns[2].width = Inches(1.0) # Turma
-    table.columns[3].width = Inches(1.0) # Data
-    table.columns[4].width = Inches(1.2) # Trimestre
+    # Ajuste de Larguras das Colunas
+    widths = [Inches(0.9), Inches(3.0), Inches(1.0), Inches(1.0), Inches(1.2)]
+    for i, width in enumerate(widths):
+        header_table.columns[i].width = width
 
-    # Mesclagens
-    c_logo = table.cell(0, 0).merge(table.cell(2, 0)) 
-    c_escola = table.cell(0, 1).merge(table.cell(0, 4)) 
-    c_aluno = table.cell(1, 1).merge(table.cell(1, 4)) 
+    # Mesclagens para o Design solicitado
+    c_logo = header_table.cell(0, 0).merge(header_table.cell(2, 0)) 
+    c_escola = header_table.cell(0, 1).merge(header_table.cell(0, 4)) 
+    c_aluno = header_table.cell(1, 1).merge(header_table.cell(1, 4)) 
 
-    # Alturas das Linhas (Sua solicitação de espaço)
-    set_row_height(table.rows[1], 1.2) # Linha do Aluno mais alta
-    set_row_height(table.rows[2], 0.6) # Linha de baixo mais estreita (strip)
+    # APLICAÇÃO DAS ALTURAS (Sua solicitação específica)
+    set_row_height(header_table.rows[0], 0.6) # Escola
+    set_row_height(header_table.rows[1], 1.2) # ALUNO (ESPAÇO MAIOR)
+    set_row_height(header_table.rows[2], 0.6) # STRIP (MAIS ESTREITO)
 
     # 1. Logo
     if os.path.exists("logo_escola.png"):
         p_logo = c_logo.paragraphs[0]
         p_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        p_logo.add_run().add_picture("logo_escola.png", width=Inches(0.7))
+        p_logo.add_run().add_picture("logo_escola.png", width=Inches(0.75))
 
     # 2. Nome da Escola
     p_esc = c_escola.paragraphs[0]
@@ -60,24 +71,31 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     run_esc = p_esc.add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA")
     run_esc.font.bold, run_esc.font.size = True, Pt(11)
 
-    # 3. Campo Aluno (Espaçoso)
+    # 3. Campo Aluno (Com espaço maior)
     p_alu = c_aluno.paragraphs[0]
     p_alu.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-    p_alu.add_run("ALUNO(A): _______________________________________________________").font.size = Pt(10)
+    run_alu_label = p_alu.add_run("ALUNO(A): ")
+    run_alu_label.font.size = Pt(10)
+    p_alu.add_run("_________________________________________________________________")
 
-    # 4. Linha de Baixo (Strip)
-    table.cell(2, 1).paragraphs[0].add_run(f"PROF.: Ronaldo Gomes").font.size = Pt(9)
-    table.cell(2, 2).paragraphs[0].add_run(f"TURMA: {info.get('turma', '')}").font.size = Pt(9)
-    table.cell(2, 3).paragraphs[0].add_run(f"DATA: __/__/2026").font.size = Pt(9)
-    
-    # Trimestre: Negrito e Centralizado
-    c_trim = table.cell(2, 4)
-    p_trim = c_trim.paragraphs[0]
-    p_trim.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run_trim = p_trim.add_run(f"{info.get('trimestre', 'I')} TRIMESTRE")
-    run_trim.font.bold, run_trim.font.size = True, Pt(8)
+    # 4. Linha Strip (Prof, Turma, Data, Trimestre)
+    # Prof
+    p_p = header_table.cell(2, 1).paragraphs[0]
+    p_p.add_run("PROF.: Ronaldo Gomes").font.size = Pt(9)
+    # Turma
+    p_t = header_table.cell(2, 2).paragraphs[0]
+    p_t.add_run(f"TURMA: {info.get('turma', '6º __')}").font.size = Pt(9)
+    # Data
+    p_d = header_table.cell(2, 3).paragraphs[0]
+    p_d.add_run("DATA: ___/___/___").font.size = Pt(9)
+    # Trimestre (NEGRITO E CENTRALIZADO)
+    c_tri = header_table.cell(2, 4)
+    p_tri = c_tri.paragraphs[0]
+    p_tri.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run_tri = p_tri.add_run(f"{info.get('trimestre', 'I')} TRIMESTRE")
+    run_tri.font.bold, run_tri.font.size = True, Pt(9)
 
-    doc.add_paragraph() 
+    doc.add_paragraph() # Espaço
 
     # --- TÍTULO CENTRALIZADO E NEGRITO ---
     p_tit = doc.add_paragraph()
@@ -85,93 +103,105 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     run_tit = p_tit.add_run(titulo_doc.upper())
     run_tit.font.bold, run_tit.font.size = True, Pt(12)
 
-    # --- LAYOUT EM DUAS COLUNAS (Tabela Invisível) ---
-    partes = re.split(r'(QUESTÃO \d+\.)', conteudo)
-    questoes_lista = []
-    if len(partes) > 1:
-        for i in range(1, len(partes), 2):
-            questoes_lista.append(partes[i] + partes[i+1])
+    # --- LÓGICA DE DUAS COLUNAS (TABELA INVISÍVEL) ---
+    # Separar o conteúdo por questões
+    questoes_raw = re.split(r'(QUESTÃO \d+\.)', conteudo)
+    lista_final = []
+    if len(questoes_raw) > 1:
+        for i in range(1, len(questoes_raw), 2):
+            lista_final.append(questoes_raw[i] + questoes_raw[i+1])
     else:
-        questoes_lista = [conteudo]
+        lista_final = [conteudo]
 
-    col_table = doc.add_table(rows=(len(questoes_lista) + 1) // 2, cols=2)
-    col_table.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    # Criar tabela de 2 colunas (sem bordas para parecer layout de página)
+    main_table = doc.add_table(rows=(len(lista_final) + 1) // 2, cols=2)
+    main_table.alignment = WD_ALIGN_PARAGRAPH.CENTER
     
-    for idx, q_text in enumerate(questoes_lista):
-        cell = col_table.cell(idx // 2, idx % 2)
-        linhas = q_text.strip().split('\n')
+    for idx, q_text in enumerate(lista_final):
+        cell = main_table.cell(idx // 2, idx % 2)
+        cell.vertical_alignment = WD_ALIGN_VERTICAL.TOP
         
+        linhas = q_text.strip().split('\n')
         for linha in linhas:
             if not linha.strip(): continue
             p = cell.add_paragraph()
             p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
             
-            # Formatação: QUESTÃO X. em negrito, restante normal
+            # 1. Negrito apenas no QUESTÃO X.
             if "QUESTÃO" in linha.upper() and "." in linha:
-                prefixo, resto = linha.split(".", 1)
-                p.add_run(prefixo + ".").font.bold = True
-                p.add_run(resto)
-            # Prompt de imagem entre colchetes
+                partes = linha.split(".", 1)
+                p.add_run(partes[0] + ".").font.bold = True
+                if len(partes) > 1:
+                    p.add_run(partes[1])
+            
+            # 2. Prompt de Imagem entre colchetes
             elif "PROMPT" in linha.upper() or "IMAGEM" in linha.upper():
                 run_img = p.add_run(f"[{linha.strip()}]")
                 run_img.font.italic, run_img.font.size = True, Pt(8)
-            # Alternativas em linhas separadas
+                run_img.font.color.rgb = RGBColor(100, 100, 100)
+            
+            # 3. Alternativas em linhas separadas
             elif re.match(r'^[A-E][\)\-]', linha.strip().upper()):
                 p.add_run(linha.strip())
+            
+            # 4. Texto normal
             else:
                 p.add_run(linha.strip())
 
-        # Espaço para questões abertas (4 linhas)
+        # 5. Espaço para questões abertas (4 linhas de escrita)
         if not any(re.search(r'[A-E][\)\-]', l) for l in linhas):
             for _ in range(4):
-                cell.add_paragraph("_____________________________________________")
+                p_line = cell.add_paragraph()
+                p_line.add_run("_____________________________________________")
 
-    # --- RODAPÉ PROFISSIONAL ---
+    # --- RODAPÉ PROFISSIONAL FIXO ---
     footer = section.footer
     p_foot = footer.paragraphs[0]
     p_foot.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    # Linha divisória sutil
     p_foot.add_run("__________________________________________________________________________\n").font.color.rgb = RGBColor(200, 200, 200)
-    run_fin = p_foot.add_run("Material produzido pelo Professor Ronaldo Gomes dos Santos Filho • Itabuna/BA • 2026")
-    run_fin.font.size, run_fin.font.italic = Pt(8), True
+    # Assinatura
+    footer_text = f"Material produzido pelo Professor Ronaldo Gomes dos Santos Filho • Itabuna/BA • 2026"
+    run_foot = p_foot.add_run(footer_text)
+    run_foot.font.size, run_foot.font.italic = Pt(8), True
+    run_foot.font.color.rgb = RGBColor(100, 100, 100)
 
     file_stream = io.BytesIO()
     doc.save(file_stream)
     file_stream.seek(0)
     return file_stream
 
-# --- AS DEMAIS FUNÇÕES PERMANECEM INALTERADAS ---
-
+# ==============================================================================
+# 2. GUIA DO PROFESSOR (PRESERVADO)
+# ==============================================================================
 def gerar_docx_professor_v24(titulo_doc, conteudo, info):
     doc = Document()
     section = doc.sections[0]
     section.top_margin, section.bottom_margin = Inches(0.5), Inches(0.5)
-    
     table = doc.add_table(rows=3, cols=3)
     table.style = 'Table Grid'
-    
     if os.path.exists("logo_escola.png"):
         table.cell(0, 0).paragraphs[0].add_run().add_picture("logo_escola.png", width=Inches(0.7))
     table.cell(0, 1).paragraphs[0].add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA").font.bold = True
     table.cell(0, 2).paragraphs[0].add_run("GUIA DO PROFESSOR").font.bold = True
-    
     table.cell(1, 0).merge(table.cell(1, 1))
     table.cell(1, 0).paragraphs[0].add_run(f"Professor: Ronaldo Gomes")
     table.cell(1, 2).paragraphs[0].add_run(f"Ano: {info.get('ano', '')}")
-    
     table.cell(2, 0).merge(table.cell(2, 1))
     table.cell(2, 0).paragraphs[0].add_run(f"Semana: {info.get('semana', '')}")
     table.cell(2, 2).paragraphs[0].add_run("Data: [ / / 2026 ]")
-
     doc.add_paragraph()
     for linha in conteudo.split('\n'):
         p = doc.add_paragraph(linha.strip())
         p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-
     file_stream = io.BytesIO()
     doc.save(file_stream)
     file_stream.seek(0)
     return file_stream
 
+# ==============================================================================
+# 3. PLANO PEDAGÓGICO (PRESERVADO)
+# ==============================================================================
 def gerar_docx_plano_pedagogico_v18(titulo_arquivo, dados, info):
     doc = Document()
     section = doc.sections[0]
@@ -202,27 +232,25 @@ def gerar_docx_plano_pedagogico_v18(titulo_arquivo, dados, info):
     file_stream.seek(0)
     return file_stream
 
+# ==============================================================================
+# 4. APRESENTAÇÃO PPTX (PRESERVADO)
+# ==============================================================================
 def gerar_pptx_v24(titulo_doc, conteudo_ia):
     prs = Presentation()
     slides_raw = re.findall(r"\[SLIDE.*?\](.*?)(?=\[SLIDE|$)", conteudo_ia, re.DOTALL)
-    
     for i, bloco in enumerate(slides_raw):
         layout_idx = 0 if i == 0 else 1
         slide = prs.slides.add_slide(prs.slide_layouts[layout_idx])
-        
         titulo = re.search(r"(?:TITULO|TÍTULO).*?:(.*?)\n", bloco, re.IGNORECASE)
         visual = re.search(r"(?:CONTEÚDO VISUAL|CONTEUDO VISUAL).*?:(.*?)(?=PROMPT|SCRIPT|NOTA|$)", bloco, re.DOTALL | re.IGNORECASE)
         script = re.search(r"(?:SCRIPT DO PROFESSOR).*?:(.*?)(?=NOTA|$)", bloco, re.DOTALL | re.IGNORECASE)
-        
-        if titulo:
-            slide.shapes.title.text = titulo.group(1).strip().replace("**", "")
+        if titulo: slide.shapes.title.text = titulo.group(1).strip().replace("**", "")
         if visual and len(slide.placeholders) > 1:
             body_shape = slide.placeholders[1]
             body_shape.text = visual.group(1).strip().replace("**", "")
         if script:
             notas = slide.notes_slide.notes_text_frame
             notas.text = script.group(1).strip().replace("**", "")
-
     file_stream = io.BytesIO()
     prs.save(file_stream)
     file_stream.seek(0)
