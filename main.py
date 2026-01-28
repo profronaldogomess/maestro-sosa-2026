@@ -229,7 +229,7 @@ def exibir_material_estruturado(texto_raw, key_prefix, dados_plano=None, info_au
                 )
                 st.text_area("Comando Master:", super_prompt, height=180)
         else:
-            doc_prof_final = exporter.gerar_docx_professor_v24(nome_base, ed_prof, {"ano": f"{ano_lab}º", "semana": sem_lab})
+            doc_prof_final = exporter.gerar_docx_professor_v25(nome_base, ed_prof, {"ano": f"{ano_lab}º", "semana": sem_lab})
             ext_prof = ".docx"
 
         c_master1, c_master2 = st.columns(2)
@@ -606,10 +606,10 @@ elif menu == "🧪 Criador de Aulas":
                 doc_alu = exporter.gerar_docx_aluno_v24(nome_base, ed_alu, {"ano": f"{ano_lab}º", "trimestre": "I"})
                 
                 if formato == "Slides (Apresentação)":
-                    doc_prof_final = exporter.gerar_pptx_v24(f"{nome_base}_PROF", ed_prof)
+                    doc_prof_final = exporter.gerar_docx_professor_v25(nome_base, ed_prof, {"ano": f"{ano_lab}º", "semana": sem_lab})
                     ext_prof = ".pptx"
                 else:
-                    doc_prof_final = exporter.gerar_docx_professor_v24(nome_base, ed_prof, {"ano": f"{ano_lab}º", "semana": sem_lab})
+                    doc_prof_final = exporter.gerar_docx_professor_v25(nome_base, ed_prof, {"ano": f"{ano_lab}º", "semana": sem_lab})
                     ext_prof = ".docx"
 
                 c_master1, c_master2 = st.columns(2)
