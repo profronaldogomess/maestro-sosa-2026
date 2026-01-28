@@ -215,7 +215,7 @@ def gerar_docx_professor_v25(titulo_doc, conteudo, info):
 
 
 # ==============================================================================
-# 2. MATERIAL PEI (DESIGN LADO A LADO V25 - FONTE 14)
+# 2. MATERIAL PEI (DESIGN LADO A LADO V25 - FONTE 12)
 # ==============================================================================
 def gerar_docx_pei_v25(titulo_doc, conteudo, info):
     doc = Document()
@@ -282,7 +282,7 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
     if txt_lembrar:
         p1 = col_teoria.add_paragraph()
         p1.add_run("💡 PARA LEMBRAR").font.bold = True
-        p1.runs[0].font.size = Pt(14)
+        p1.runs[0].font.size = Pt(12)
         p1_cont = col_teoria.add_paragraph(txt_lembrar)
         p1_cont.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
         p1_cont.runs[0].font.size = Pt(13)
@@ -291,7 +291,7 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
     if txt_passo:
         p2 = col_teoria.add_paragraph()
         p2.add_run("📑 PASSO A PASSO").font.bold = True
-        p2.runs[0].font.size = Pt(14)
+        p2.runs[0].font.size = Pt(12)
         p2_cont = col_teoria.add_paragraph(txt_passo)
         p2_cont.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
         p2_cont.runs[0].font.size = Pt(13)
@@ -305,17 +305,17 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
             p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
             if "QUESTÃO" in l_s.upper():
                 run = p.add_run(l_s)
-                run.font.bold, run.font.size = True, Pt(14)
+                run.font.bold, run.font.size = True, Pt(12)
             elif re.match(r'^[A-E][\)\s\-]', l_s.upper()):
                 letra = l_s[0:1]
                 resto = re.sub(r'^[A-E][\)\s\-]+', '', l_s).strip()
-                p.add_run(f"{letra}) {resto}").font.size = Pt(14)
+                p.add_run(f"{letra}) {resto}").font.size = Pt(12)
             elif "PROMPT" in l_s.upper():
                 run_img = p.add_run(f"[{l_s}]")
                 run_img.font.italic, run_img.font.size = True, Pt(9)
                 run_img.font.color.rgb = RGBColor(120, 120, 120)
             else:
-                p.add_run(l_s).font.size = Pt(14)
+                p.add_run(l_s).font.size = Pt(12)
 
         if not any(re.search(r'^[A-E][\)\s\-]', l) for l in linhas):
             for _ in range(3):
