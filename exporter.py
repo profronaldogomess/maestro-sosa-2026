@@ -9,6 +9,7 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from pptx import Presentation
 from pptx.util import Inches, Pt
+from datetime import datetime
 
 # ==============================================================================
 # FUNÇÃO AUXILIAR: AJUSTE DE ALTURA DE LINHA (PRENSA)
@@ -137,6 +138,77 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     doc.save(file_stream)
     file_stream.seek(0)
     return file_stream
+
+def gerar_docx_professor_v25(titulo_doc, conteudo, info):
+    doc = Document()
+    section = doc.sections[0]
+    section.top_margin, section.bottom_margin = Inches(0.4), Inches(0.4)
+    section.left_margin, section.right_margin = Inches(0.5), Inches(0.5)
+
+    # --- CABEÇALHO OFICIAL (IGUAL AO DO ALUNO) ---
+    header_table = doc.add_table(rows=3, cols=5)
+    header_table.style = 'Table Grid'
+    widths = [Inches(0.9), Inches(2.8), Inches(0.8), Inches(1.7), Inches(1.2)]
+    for i, width in enumerate(widths):
+        header_table.columns[i].width = width
+
+    c_logo = header_table.cell(0, 0).merge(header_table.cell(2, 0)) 
+    c_escola = header_table.cell(0, 1).merge(header_table.cell(0, 4)) 
+    c_aluno = header_table.cell(1, 1).merge(header_table.cell(1, 4)) 
+
+    if os.path.exists("logo_escola.png"):
+        c_logo.vertical_alignment = WD_ALIGN_VERTICAL.CENTER 
+        p_logo = c_logo.paragraphs[0]
+        p_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER 
+        p_logo.add_run().add_picture("logo_escola.png", width=Inches(0.75))
+
+    p_esc = c_escola.paragraphs[0]
+    p_esc.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_esc.add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA").font.bold = True
+
+    c_aluno.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+    c_aluno.paragraphs[0].add_run("GUIA DE REGÊNCIA E APOIO VISUAL").font.size = Pt(11)
+
+    header_table.cell(2, 1).paragraphs[0].add_run("PROF.: Ronaldo Gomes").font.size = Pt(9)
+    header_table.cell(2, 2).paragraphs[0].add_run(f"ANO: {info.get('ano', '')}").font.size = Pt(9)
+    header_table.cell(2, 3).paragraphs[0].add_run(f"DATA: {datetime.now().strftime('%d/%m/%Y')}").font.size = Pt(9)
+    header_table.cell(2, 4).paragraphs[0].add_run(f"{info.get('trimestre', 'I')} TRIM").font.size = Pt(9)
+
+    doc.add_paragraph() 
+
+    # --- PROCESSAMENTO INTELIGENTE DO CONTEÚDO ---
+    linhas = conteudo.split('\n')
+    for linha in linhas:
+        l_s = linha.strip()
+        if not l_s: continue
+        
+        p = doc.add_paragraph()
+        p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+        
+        # Identifica os novos cabeçalhos da Persona e aplica Negrito
+        if any(k in l_s.upper() for k in ["MOMENTO PHC", "ESQUEMA DE LOUSA", "DICA DE REGÊNCIA", "GABARITO"]):
+            run = p.add_run(l_s.upper())
+            run.font.bold = True
+            run.font.size = Pt(12)
+            p.space_before = Pt(12)
+        
+        # Identifica os Prompts de Desenho e aplica o Azul Royal e Itálico
+        elif "PROMPT" in l_s.upper() or "IMAGEM PARA O QUADRO" in l_s.upper():
+            p.paragraph_format.left_indent = Inches(0.3)
+            run = p.add_run(f"🎨 {l_s}")
+            run.font.italic = True
+            run.font.size = Pt(10)
+            run.font.color.rgb = RGBColor(0, 102, 204) # Azul para o Professor identificar rápido
+            
+        else:
+            run = p.add_run(l_s)
+            run.font.size = Pt(10)
+
+    file_stream = io.BytesIO()
+    doc.save(file_stream)
+    file_stream.seek(0)
+    return file_stream
+
 
 # ==============================================================================
 # 2. MATERIAL PEI (DESIGN LADO A LADO V25 - FONTE 14)
