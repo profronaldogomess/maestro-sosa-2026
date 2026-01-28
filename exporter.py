@@ -142,10 +142,11 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
 def gerar_docx_professor_v25(titulo_doc, conteudo, info):
     doc = Document()
     section = doc.sections[0]
+    # Margens estreitas para caber mais conteúdo
     section.top_margin, section.bottom_margin = Inches(0.4), Inches(0.4)
     section.left_margin, section.right_margin = Inches(0.4), Inches(0.4)
 
-    # --- CABEÇALHO OFICIAL (IGUAL AO DO ALUNO) ---
+    # --- CABEÇALHO DE ELITE (IDENTIDADE VISUAL IGUAL AO DO ALUNO) ---
     header_table = doc.add_table(rows=3, cols=5)
     header_table.style = 'Table Grid'
     widths = [Inches(0.9), Inches(2.8), Inches(0.8), Inches(1.7), Inches(1.2)]
@@ -174,45 +175,57 @@ def gerar_docx_professor_v25(titulo_doc, conteudo, info):
     header_table.cell(2, 3).paragraphs[0].add_run(f"DATA: {datetime.now().strftime('%d/%m/%Y')}").font.size = Pt(9)
     header_table.cell(2, 4).paragraphs[0].add_run(f"{info.get('trimestre', 'I')} TRIM").font.size = Pt(9)
 
-    doc.add_paragraph() 
+    doc.add_paragraph() # Espaço
 
-    # --- CORPO EM DUAS COLUNAS ---
+    # --- CORPO EM DUAS COLUNAS (TABELA INVISÍVEL) ---
     main_table = doc.add_table(rows=1, cols=2)
     main_table.allow_autofit = False
-    
-    # Divide o texto em dois blocos (metade para cada coluna)
-    linhas = [l.strip() for l in conteudo.split('\n') if l.strip()]
-    meio = len(linhas) // 2
-    colunas = [main_table.cell(0, 0), main_table.cell(0, 1)]
-    blocos = [linhas[:meio], linhas[meio:]]
+    col_esq = main_table.cell(0, 0)
+    col_dir = main_table.cell(0, 1)
 
-    for i, bloco in enumerate(blocos):
-        for linha in bloco:
-            p = colunas[i].add_paragraph()
+    # Lógica de Divisão: Se você escrever [COLUNA_2] no texto, ele quebra ali.
+    # Se não escrever, ele divide o texto ao meio automaticamente.
+    if "[COLUNA_2]" in conteudo:
+        partes = conteudo.split("[COLUNA_2]")
+        texto_esq = partes[0].split('\n')
+        texto_dir = partes[1].split('\n')
+    else:
+        linhas = [l.strip() for l in conteudo.split('\n') if l.strip()]
+        meio = len(linhas) // 2
+        texto_esq = linhas[:meio]
+        texto_dir = linhas[meio:]
+
+    def processar_celula(celula, linhas_texto):
+        for linha in linhas_texto:
+            if not linha.strip(): continue
+            p = celula.add_paragraph()
             p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
             
-            # LÓGICA DE NEGRITO (Títulos em MAIÚSCULAS ou que começam com números)
+            # Identifica Títulos (Maiúsculas ou Início com Número)
             is_titulo = linha.isupper() or (len(linha) > 0 and linha[0].isdigit() and "." in linha[:3])
             
-            run = p.add_run(linha)
-            
-            if is_titulo:
+            # Identifica Prompts (Texto entre colchetes)
+            if "[" in linha and "]" in linha:
+                run = p.add_run(linha)
+                run.font.italic = True
+                run.font.size = Pt(9)
+                run.font.color.rgb = RGBColor(0, 102, 204) # AZUL ROYAL
+            elif is_titulo:
+                run = p.add_run(linha)
                 run.font.bold = True
                 run.font.size = Pt(11)
                 p.space_before = Pt(6)
             else:
+                run = p.add_run(linha)
                 run.font.size = Pt(10)
-            
-            # LÓGICA DE COR (Prompts entre colchetes ficam em Azul)
-            if "[" in linha and "]" in linha:
-                run.font.italic = True
-                run.font.color.rgb = RGBColor(0, 102, 204) # Azul Royal
+
+    processar_celula(col_esq, texto_esq)
+    processar_celula(col_dir, texto_dir)
 
     file_stream = io.BytesIO()
     doc.save(file_stream)
     file_stream.seek(0)
     return file_stream
-
 
 # ==============================================================================
 # 2. MATERIAL PEI (DESIGN LADO A LADO V25 - FONTE 12)
