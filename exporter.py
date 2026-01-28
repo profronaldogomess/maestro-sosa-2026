@@ -174,88 +174,109 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
 def gerar_docx_pei_v25(titulo_doc, conteudo, info):
     doc = Document()
     section = doc.sections[0]
-    section.top_margin, section.bottom_margin = Inches(0.3), Inches(0.5)
-    section.left_margin, section.right_margin = Inches(0.5), Inches(0.5)
+    # Margens para aproveitar o papel e facilitar colagem
+    section.top_margin, section.bottom_margin = Inches(0.4), Inches(0.6)
+    section.left_margin, section.right_margin = Inches(0.4), Inches(0.4)
 
-    # --- CABEÇALHO COMPACTO PEI ---
-    header_table = doc.add_table(rows=2, cols=2)
+    # --- 1. CABEÇALHO OFICIAL (IGUAL AO ALUNO TÍPICO) ---
+    header_table = doc.add_table(rows=3, cols=5)
     header_table.style = 'Table Grid'
-    header_table.cell(0, 0).merge(header_table.cell(0, 1))
-    
-    # Escola e Aluno
-    p_esc = header_table.cell(0, 0).paragraphs[0]
+    widths = [Inches(0.9), Inches(2.8), Inches(0.8), Inches(1.7), Inches(1.2)]
+    for i, width in enumerate(widths):
+        header_table.columns[i].width = width
+
+    c_logo = header_table.cell(0, 0).merge(header_table.cell(2, 0)) 
+    c_escola = header_table.cell(0, 1).merge(header_table.cell(0, 4)) 
+    c_aluno = header_table.cell(1, 1).merge(header_table.cell(1, 4)) 
+
+    set_row_height(header_table.rows[0], 0.6) 
+    set_row_height(header_table.rows[1], 1.2) 
+    set_row_height(header_table.rows[2], 0.6) 
+
+    if os.path.exists("logo_escola.png"):
+        c_logo.vertical_alignment = WD_ALIGN_VERTICAL.CENTER 
+        p_logo = c_logo.paragraphs[0]
+        p_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER 
+        p_logo.add_run().add_picture("logo_escola.png", width=Inches(0.75))
+
+    p_esc = c_escola.paragraphs[0]
+    p_esc.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p_esc.add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA").font.bold = True
-    p_esc.add_run(f"\nALUNO(A): _________________________________").font.size = Pt(12)
+
+    c_aluno.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+    c_aluno.paragraphs[0].add_run("ALUNO(A):").font.size = Pt(10)
+
+    header_table.cell(2, 1).paragraphs[0].add_run("PROF.: Ronaldo Gomes").font.size = Pt(9)
+    header_table.cell(2, 2).paragraphs[0].add_run("TURMA:").font.size = Pt(9)
+    header_table.cell(2, 3).paragraphs[0].add_run("DATA: ____/____/2026").font.size = Pt(9)
     
-    # Prof e Data
-    header_table.cell(1, 0).paragraphs[0].add_run(f"PROF: Ronaldo Gomes").font.size = Pt(11)
-    header_table.cell(1, 1).paragraphs[0].add_run(f"DATA: __/__/2026").font.size = Pt(11)
+    c_tri = header_table.cell(2, 4)
+    p_tri = c_tri.paragraphs[0]
+    p_tri.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run_tri = p_tri.add_run(f"{info.get('trimestre', 'I')} TRIMESTRE")
+    run_tri.font.bold, run_tri.font.size = True, Pt(9)
 
     doc.add_paragraph()
 
-    # --- TÍTULO ---
-    p_tit = doc.add_paragraph()
-    p_tit.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run_tit = p_tit.add_run(f"ATIVIDADE ADAPTADA: {info.get('tema', 'MATEMÁTICA')}")
-    run_tit.font.bold, run_tit.font.size = True, Pt(14)
+    # --- 2. LAYOUT LADO A LADO (TEORIA NA ESQUERDA | EXERCÍCIO NA DIREITA) ---
+    main_table = doc.add_table(rows=1, cols=2)
+    main_table.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    col_teoria = main_table.cell(0, 0)
+    col_exercicio = main_table.cell(0, 1)
 
-    # --- FUNÇÃO PARA CRIAR BOXES COLORIDOS/BORDADOS ---
-    def criar_box(titulo_box, texto_box, cor_rgb):
-        table = doc.add_table(rows=1, cols=1)
-        table.style = 'Table Grid'
-        cell = table.rows[0].cells[0]
-        # Definir cor de fundo sutil (opcional, aqui usaremos borda negritada)
-        p = cell.paragraphs[0]
-        p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-        run_t = p.add_run(f"{titulo_box}\n")
-        run_t.font.bold, run_t.font.size = True, Pt(13)
-        run_c = p.add_run(texto_box.strip())
-        run_c.font.size = Pt(13)
-        doc.add_paragraph()
+    # Extração de blocos
+    import re
+    txt_lembrar = re.search(r'\[PARA LEMBRAR\](.*?)(?=\[PASSO|\[ATIVIDADES|\[IMAGENS|$)', conteudo, re.DOTALL | re.IGNORECASE)
+    txt_passo = re.search(r'\[PASSO A PASSO\](.*?)(?=\[ATIVIDADES|\[IMAGENS|$)', conteudo, re.DOTALL | re.IGNORECASE)
+    txt_atividades = re.search(r'\[ATIVIDADES\](.*?)(?=\[IMAGENS|$)', conteudo, re.DOTALL | re.IGNORECASE)
 
-    # --- PROCESSAMENTO POR BLOCOS ---
-    # Extrair seções usando as novas Tags
-    lembrar = re.search(r'\[BOX_LEMBRAR\](.*?)\[', conteudo, re.DOTALL | re.IGNORECASE)
-    passo = re.search(r'\[BOX_PASSO\](.*?)\[', conteudo, re.DOTALL | re.IGNORECASE)
-    atividades = re.search(r'\[BOX_ATIVIDADE\](.*?)(?=\[IMAGENS_PEI|$)', conteudo, re.DOTALL | re.IGNORECASE)
+    # --- COLUNA DA ESQUERDA (TEORIA) ---
+    if txt_lembrar:
+        p = col_teoria.add_paragraph()
+        p.add_run("PARA LEMBRAR").font.bold = True
+        p.add_run(f"\n{txt_lembrar.group(1).strip()}").font.size = Pt(14)
+        col_teoria.add_paragraph()
 
-    if lembrar:
-        criar_box("💡 PARA LEMBRAR", lembrar.group(1), (240, 240, 240))
-    
-    if passo:
-        criar_box("📑 PASSO A PASSO", passo.group(1), (255, 255, 255))
+    if txt_passo:
+        p = col_teoria.add_paragraph()
+        p.add_run("PASSO A PASSO").font.bold = True
+        p.add_run(f"\n{txt_passo.group(1).strip()}").font.size = Pt(14)
 
-    if atividades:
-        p_at = doc.add_paragraph()
-        run_at = p_at.add_run("📝 ATIVIDADES")
-        run_at.font.bold, run_at.font.size = True, Pt(14)
-        
-        # Processar questões das atividades
-        linhas = atividades.group(1).strip().split('\n')
+    # --- COLUNA DA DIREITA (EXERCÍCIOS) ---
+    if txt_atividades:
+        linhas = txt_atividades.group(1).strip().split('\n')
         for linha in linhas:
             l_s = linha.strip()
             if not l_s: continue
             
-            p = doc.add_paragraph()
+            p = col_exercicio.add_paragraph()
             p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
             
             if "QUESTÃO" in l_s.upper():
-                run = p.add_run(l_s)
-                run.font.bold, run.font.size = True, Pt(14)
+                p.add_run(l_s).font.bold = True
+                p.runs[0].font.size = Pt(14)
             elif re.match(r'^[A-E][\)\s\-]', l_s.upper()):
-                # Limpeza de parênteses duplos
-                l_limpa = re.sub(r'[\)\s\-]+', ') ', l_s)
-                p.add_run(f"    {l_limpa}").font.size = Pt(14)
+                # Limpa parênteses duplos e formata
+                l_limpa = re.sub(r'^[A-E][\)\s\-]+', '', l_s).strip()
+                p.add_run(f"{l_s[0:1]}) {l_limpa}").font.size = Pt(14)
             elif "PROMPT" in l_s.upper():
                 run_img = p.add_run(f"[{l_s}]")
-                run_img.font.italic, run_img.font.size = Pt(10)
-                run_img.font.color.rgb = RGBColor(128, 128, 128)
+                run_img.font.italic, run_img.font.size = True, Pt(9)
+                run_img.font.color.rgb = RGBColor(120, 120, 120)
             else:
                 p.add_run(l_s).font.size = Pt(14)
 
-    # Rodapé
-    section.footer.paragraphs[0].text = f"Material Adaptado PEI • Prof. Ronaldo Gomes • 2026"
-    section.footer.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+        # Linhas de resposta se não houver alternativas
+        if not any(re.search(r'^[A-E][\)\s\-]', l) for l in linhas):
+            for _ in range(3):
+                col_exercicio.add_paragraph("_________________________________")
+
+    # --- 3. RODAPÉ ---
+    footer = section.footer
+    p_foot = footer.paragraphs[0]
+    p_foot.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run_fin = p_foot.add_run(f"Material Adaptado PEI • Prof. Ronaldo Gomes • Itabuna/BA • 2026")
+    run_fin.font.size, run_fin.font.italic = Pt(8), True
 
     file_stream = io.BytesIO()
     doc.save(file_stream)
