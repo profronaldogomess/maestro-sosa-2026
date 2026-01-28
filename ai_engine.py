@@ -13,7 +13,7 @@ PERSONAS = {
     Sua missão é redigir planos de ensino baseados na PEDAGOGIA HISTÓRICO-CRÍTICA (PHC) mesclada ao RIGOR TRADICIONAL.
 
     🚨 PROTOCOLO DE SINCRONIA (LEI DE OURO):
-    1. ZONA DE CÓPIA LITERAL: Nos campos CONTEÚDOS ESPECÍFICOS e OBJETIVOS DE ENSINO, você está PROIBIDO de resumir, parafrasear ou 'melhorar' o texto. TRANSCREVA EXATAMENTE como consta no banco de dados (CSV) fornecido no prompt. Se o banco diz 'Sistema de numeração Egípcio e Romano', você escreverá exatamente isso. Qualquer mudança impedirá o funcionamento do Mapa de Cobertura.
+    1. ZONA DE CÓPIA LITERAL: Nos campos CONTEÚDOS ESPECÍFICOS e OBJETIVOS DE ENSINO, você está PROIBIDO de resumir, parafrasear ou 'melhorar' o texto. TRANSCREVA EXATAMENTE como consta no banco de dados (CSV) fornecido no prompt.
     2. ESTRUTURA BI-PARTIDA: Divida a metodologia obrigatoriamente em AULA 1 (2 H/A) e AULA 2 (2 H/A).
     3. FLUXO PHC: Cada aula deve ter: Prática Social (Notícia/Jogo/Tecnologia) -> Exposição Tradicional (Lousa/Livro) -> Instrumentalização (Ferramentas) -> Catarse (Síntese).
     4. ENGENHARIA PEI: Projete a adaptação para FOLHA IMPRESSA. Use Glossários Visuais e Fracionamento em Passos.
@@ -36,7 +36,6 @@ PERSONAS = {
     🚨 DIRETRIZ ANTI-DEFORMAÇÃO (CRÍTICO):
     - PROIBIÇÃO TOTAL DE ASCII ART: É terminantemente PROIBIDO desenhar tabelas ou grades usando caracteres como '-', '|', '+'. Isso quebra o DOCX.
     - Como representar o QVL/Ordens: Use apenas listas em tópicos ou descrições textuais. 
-      Exemplo: 6ª Ordem: Centena de Milhar (CM)...
 
     🚨 PROTOCOLO DE COMPOSIÇÃO E LAYOUT (V25):
     1. MIX DE QUESTÕES: Gere equilíbrio entre múltipla escolha e discursivas.
@@ -90,7 +89,6 @@ PERSONAS = {
     🚨 FECHAMENTO: Encerre com [IMAGENS_PEI] e os prompts para Imagen 4 Ultra.
     ESTILO: 'Educational line art, clean design, high contrast, black and white'.""",
 
-    # --- 3. PERSONAS ORIGINAIS PRESERVADAS ---
     "MAESTRO": "Você é o Maestro SOSA, assistente do Prof. Ronaldo Gomes.",
     "ESPECIALISTA_INCLUSAO": "Especialista em Educação Inclusiva. Gera relatórios técnicos e comunicados. Sem Markdown.",
     "ESPECIALISTA_PEI": "Consultor Técnico. Redige a Seção 1 (Plano de Acessibilidade) do PEI.",
@@ -112,13 +110,29 @@ def gerar_ia(persona_key, comando, partes_arquivos=[], usar_busca=True):
     except Exception as e:
         return f"Erro na IA: {e}"
 
+# --- EXTRATOR REVISADO (BLINDADO CONTRA TAGS INTERNAS) ---
 def extrair_tag(texto, tag):
     if not texto: return ""
-    padrao = rf"(?:\[{tag}\]|MARKER_{tag})[:\s]*(.*?)(?=\[|MARKER_|$)"
+    
+    # Lista de Tags Mestras que encerram um bloco principal
+    tags_mestras = ["PROFESSOR", "ALUNO", "GABARITO", "IMAGENS", "PEI", "PARA LEMBRAR", "PASSO A PASSO", "ATIVIDADES"]
+    
+    # Se estamos buscando uma Tag Mestra, só paramos quando encontrarmos OUTRA Tag Mestra
+    if tag.upper() in tags_mestras:
+        outras = [t for t in tags_mestras if t != tag.upper()]
+        # Regex que olha para frente e para apenas se encontrar [OUTRA_TAG_MESTRA] ou MARKER_OUTRA_TAG
+        pattern_stop = "|".join([rf"\[{t}\]" for t in outras] + [rf"MARKER_{t}" for t in outras])
+        padrao = rf"(?:\[{tag}\]|MARKER_{tag})[:\s\->]*(.*?)(?={pattern_stop}|$)"
+    else:
+        # Para tags internas (como COLUNA_1), mantemos o comportamento padrão
+        padrao = rf"(?:\[{tag}\]|MARKER_{tag})[:\s\->]*(.*?)(?=\[|MARKER_|$)"
+    
     import re
     match = re.search(padrao, texto, re.DOTALL | re.IGNORECASE)
+    
     if match:
         return match.group(1).replace("**", "").replace("###", "").replace("##", "").replace("#", "").strip()
+    
     return ""
 
 def realizar_diagnostico_v25(plano_raw, df_curriculo, ano_sel):
