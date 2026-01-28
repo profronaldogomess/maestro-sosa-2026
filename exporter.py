@@ -28,16 +28,15 @@ def set_row_height(row, height_cm):
 def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     doc = Document()
     section = doc.sections[0]
-    # Margens
     section.top_margin, section.bottom_margin = Inches(0.4), Inches(0.7)
     section.left_margin, section.right_margin = Inches(0.4), Inches(0.4)
 
-    # --- CABEÇALHO (Ajuste de larguras para DATA em linha única) ---
+    # --- CABEÇALHO (Larguras recalculadas para não quebrar nada) ---
     header_table = doc.add_table(rows=3, cols=5)
     header_table.style = 'Table Grid'
     
-    # Larguras calculadas para evitar quebra da DATA
-    widths = [Inches(0.9), Inches(2.8), Inches(0.8), Inches(1.7), Inches(0.9)]
+    # Col 0: Logo | Col 1: Escola/Aluno | Col 2: Turma | Col 3: Data | Col 4: Trimestre
+    widths = [Inches(0.9), Inches(2.8), Inches(0.8), Inches(1.8), Inches(1.4)]
     for i, width in enumerate(widths):
         header_table.columns[i].width = width
 
@@ -67,10 +66,11 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     header_table.cell(2, 1).paragraphs[0].add_run("PROF.: Ronaldo Gomes").font.size = Pt(9)
     header_table.cell(2, 2).paragraphs[0].add_run("TURMA:").font.size = Pt(9)
     
-    # DATA EM LINHA ÚNICA (Underlines ajustados)
+    # DATA EM LINHA ÚNICA
     p_data = header_table.cell(2, 3).paragraphs[0]
     p_data.add_run("DATA: ____/____/2026").font.size = Pt(9)
     
+    # TRIMESTRE EM LINHA ÚNICA
     c_tri = header_table.cell(2, 4)
     p_tri = c_tri.paragraphs[0]
     p_tri.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -84,7 +84,7 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     run_tit = p_tit.add_run(titulo_doc.upper())
     run_tit.font.bold, run_tit.font.size = True, Pt(12)
 
-    # --- LÓGICA DE DUAS COLUNAS (TEXTO CONTÍNUO E JUSTIFICADO) ---
+    # --- DUAS COLUNAS ---
     import re
     partes_da_ia = re.split(r'(QUESTÃO\s+\d+\.)', conteudo, flags=re.IGNORECASE)
     lista_final = []
@@ -101,53 +101,54 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
         cell = main_table.cell(idx // 2, idx % 2)
         cell.vertical_alignment = WD_ALIGN_VERTICAL.TOP
         
-        # 1. Identifica o marcador (QUESTÃO X.)
-        match_marcador = re.search(r'QUESTÃO\s+\d+\.', q_text, re.IGNORECASE)
-        marcador = match_marcador.group() if match_marcador else ""
+        linhas_brutas = q_text.strip().split('\n')
+        p = cell.add_paragraph()
+        p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
         
-        # 2. Isola o corpo do texto e remove quebras de linha iniciais "teimosas"
-        corpo_bruto = q_text.replace(marcador, "", 1).lstrip()
-        
-        # 3. Divide o corpo em linhas para processar Alternativas e Prompts
-        linhas_brutas = corpo_bruto.split('\n')
-        
-        # Criamos o parágrafo do Enunciado (Onde o marcador e o início do texto ficam juntos)
-        p_enunciado = cell.add_paragraph()
-        p_enunciado.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-        p_enunciado.add_run(marcador + " ").font.bold = True
-        
-        enunciado_concluido = False
+        primeira_linha_do_bloco = True
         
         for linha in linhas_brutas:
             l_s = linha.strip()
             if not l_s: continue
             
-            # Se for Alternativa ou Prompt, encerra o enunciado e cria novo parágrafo
-            is_alt = re.match(r'^[A-E][\)\s\-]', l_s.upper())
-            is_prompt = "PROMPT" in l_s.upper() or "IMAGEM" in l_s.upper()
+            # 1. TRATAMENTO DO MARCADOR (QUESTÃO X.)
+            if "QUESTÃO" in l_s.upper() and "." in l_s and primeira_linha_do_bloco:
+                partes = l_s.split(".", 1)
+                p.add_run(partes[0] + ". ").font.bold = True
+                if len(partes) > 1:
+                    texto_corpo = partes[1].strip()
+                    # Se a IA teimosa colocou "A)" no início do texto, nós removemos
+                    texto_corpo = re.sub(r'^[A-E][\)\s\-]\s*', '', texto_corpo)
+                    p.add_run(texto_corpo)
+                primeira_linha_do_bloco = False
             
-            if is_alt or is_prompt:
-                enunciado_concluido = True
-                p_novo = cell.add_paragraph()
-                p_novo.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-                
-                if is_prompt:
-                    run_img = p_novo.add_run(f"[{l_s}]")
-                    run_img.font.italic, run_img.font.size = True, Pt(8)
-                    run_img.font.color.rgb = RGBColor(100, 100, 100)
-                else:
-                    # Garante que a alternativa tenha o formato A) 
-                    texto_alt = re.sub(r'^([A-E])\s+', r'\1) ', l_s.upper())
-                    p_novo.add_run(texto_alt)
+            # 2. TRATAMENTO DE PROMPTS
+            elif "PROMPT" in l_s.upper() or "IMAGEM" in l_s.upper():
+                p = cell.add_paragraph()
+                p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+                run_img = p.add_run(f"[{l_s}]")
+                run_img.font.italic, run_img.font.size = True, Pt(8)
+                run_img.font.color.rgb = RGBColor(100, 100, 100)
+            
+            # 3. TRATAMENTO DE ALTERNATIVAS (A, B, C, D)
+            elif re.match(r'^[A-E][\)\s\-]', l_s.upper()):
+                p = cell.add_paragraph()
+                p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+                # Se a alternativa estiver em CAIXA ALTA, convertemos para normal
+                texto_formatado = l_s
+                if texto_formatado.isupper():
+                    texto_formatado = texto_formatado[0:3] + texto_formatado[3:].lower()
+                p.add_run(texto_formatado)
+            
+            # 4. TEXTO NORMAL
             else:
-                # Se ainda estivermos no enunciado, colamos o texto no parágrafo do marcador
-                if not enunciado_concluido:
-                    p_enunciado.add_run(l_s + " ")
+                if primeira_linha_do_bloco:
+                    p.add_run(l_s)
+                    primeira_linha_do_bloco = False
                 else:
-                    # Se o enunciado já acabou (ex: texto após alternativas), cria novo parágrafo
-                    p_extra = cell.add_paragraph()
-                    p_extra.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-                    p_extra.add_run(l_s)
+                    p = cell.add_paragraph()
+                    p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+                    p.add_run(l_s)
 
         # --- LINHAS DE RESPOSTA (Até o final da margem) ---
         tem_alternativas = any(re.search(r'^[A-E][\)\s\-]', l.strip().upper()) for l in linhas_brutas)
@@ -155,7 +156,7 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
             for _ in range(4):
                 p_linha = cell.add_paragraph()
                 p_linha.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-                p_linha.add_run("_" * 62) # Aumentado para encostar na margem
+                p_linha.add_run("_" * 65)
 
     # --- RODAPÉ ---
     footer = section.footer
