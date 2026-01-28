@@ -614,7 +614,15 @@ elif menu == "🧪 Criador de Aulas":
                 st.subheader("🚀 Central de Comando de Exportação")
                 nome_base = f"AULA_{aula_num.replace(' ','')}_{ano_lab}ANO_{sem_lab.split(' ')[1]}"
                 
-                doc_alu = exporter.gerar_docx_aluno_v24(nome_base, ed_alu, {"ano": f"{ano_lab}º", "trimestre": "I"})
+                doc_alu = exporter.gerar_docx_aluno_v24(
+                f"ATIVIDADE DE MATEMÁTICA - {aula_num.upper()}", 
+                ed_alu, 
+                {
+                    "ano": f"{ano_lab}º", 
+                    "trimestre": "I", 
+                    "turma": "______" # O professor preenche a caneta ou você pode puxar do selectbox
+                }
+                )
                 
                 if formato == "Slides (Apresentação)":
                     doc_prof_final = exporter.gerar_pptx_v24(f"{nome_base}_PROF", ed_prof)
