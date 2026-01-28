@@ -28,33 +28,30 @@ def set_row_height(row, height_cm):
 def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     doc = Document()
     section = doc.sections[0]
-    # Margens otimizadas para layout de duas colunas
     section.top_margin, section.bottom_margin = Inches(0.4), Inches(0.7)
     section.left_margin, section.right_margin = Inches(0.4), Inches(0.4)
 
-    # --- CABEÇALHO REENGENHARIZADO (3x5) ---
+    # --- CABEÇALHO (3x5) ---
     header_table = doc.add_table(rows=3, cols=5)
     header_table.style = 'Table Grid'
     
-    # Ajuste de Larguras das Colunas
     widths = [Inches(0.9), Inches(3.0), Inches(1.0), Inches(1.0), Inches(1.2)]
     for i, width in enumerate(widths):
         header_table.columns[i].width = width
 
-    # Mesclagens para o Design solicitado
     c_logo = header_table.cell(0, 0).merge(header_table.cell(2, 0)) 
     c_escola = header_table.cell(0, 1).merge(header_table.cell(0, 4)) 
     c_aluno = header_table.cell(1, 1).merge(header_table.cell(1, 4)) 
 
-    # APLICAÇÃO DAS ALTURAS (Sua solicitação específica)
-    set_row_height(header_table.rows[0], 0.6) # Escola
-    set_row_height(header_table.rows[1], 1.2) # ALUNO (ESPAÇO MAIOR PARA ESCREVER)
-    set_row_height(header_table.rows[2], 0.6) # STRIP (MAIS ESTREITO)
+    set_row_height(header_table.rows[0], 0.6) 
+    set_row_height(header_table.rows[1], 1.2) # Espaço para o aluno escrever
+    set_row_height(header_table.rows[2], 0.6) 
 
-    # 1. Logo
+    # 1. Logo Centralizada
     if os.path.exists("logo_escola.png"):
+        c_logo.vertical_alignment = WD_ALIGN_VERTICAL.CENTER # Centraliza Vertical
         p_logo = c_logo.paragraphs[0]
-        p_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER # Centraliza Horizontal
         p_logo.add_run().add_picture("logo_escola.png", width=Inches(0.75))
 
     # 2. Nome da Escola
@@ -63,42 +60,33 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     run_esc = p_esc.add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA")
     run_esc.font.bold, run_esc.font.size = True, Pt(11)
 
-    # 3. Campo Aluno (Com espaço maior)
+    # 3. Campo Aluno (Sem linha, apenas o rótulo)
+    c_aluno.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
     p_alu = c_aluno.paragraphs[0]
-    p_alu.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-    run_alu_label = p_alu.add_run("ALUNO(A): ")
-    run_alu_label.font.size = Pt(10)
-    p_alu.add_run("_________________________________________________________________")
+    run_alu = p_alu.add_run("ALUNO(A):")
+    run_alu.font.size = Pt(10)
 
     # 4. Linha Strip (Prof, Turma, Data, Trimestre)
-    # Prof
-    p_p = header_table.cell(2, 1).paragraphs[0]
-    p_p.add_run("PROF.: Ronaldo Gomes").font.size = Pt(9)
-    # Turma
-    p_t = header_table.cell(2, 2).paragraphs[0]
-    p_t.add_run(f"TURMA: {info.get('turma', '6º __')}").font.size = Pt(9)
-    # Data
-    p_d = header_table.cell(2, 3).paragraphs[0]
-    p_d.add_run("DATA: ___/___/2026").font.size = Pt(9)
-    # Trimestre (NEGRITO E CENTRALIZADO)
+    header_table.cell(2, 1).paragraphs[0].add_run("PROF.: Ronaldo Gomes").font.size = Pt(9)
+    header_table.cell(2, 2).paragraphs[0].add_run(f"TURMA: {info.get('turma', '6º __')}").font.size = Pt(9)
+    # Data com mais espaço
+    header_table.cell(2, 3).paragraphs[0].add_run("DATA: ____/____/2026").font.size = Pt(9)
+    
     c_tri = header_table.cell(2, 4)
     p_tri = c_tri.paragraphs[0]
     p_tri.alignment = WD_ALIGN_PARAGRAPH.CENTER
     run_tri = p_tri.add_run(f"{info.get('trimestre', 'I')} TRIMESTRE")
     run_tri.font.bold, run_tri.font.size = True, Pt(9)
 
-    doc.add_paragraph() # Espaço entre cabeçalho e título
+    doc.add_paragraph() 
 
-    # --- TÍTULO CENTRALIZADO E NEGRITO ---
     p_tit = doc.add_paragraph()
     p_tit.alignment = WD_ALIGN_PARAGRAPH.CENTER
     run_tit = p_tit.add_run(titulo_doc.upper())
     run_tit.font.bold, run_tit.font.size = True, Pt(12)
 
-    # --- LÓGICA DE DUAS COLUNAS (TABELA INVISÍVEL) ---
-    # Fatiamos o conteúdo usando o marcador QUESTÃO
+    # --- DUAS COLUNAS ---
     partes_da_ia = re.split(r'(QUESTÃO\s+\d+\.)', conteudo, flags=re.IGNORECASE)
-    
     lista_de_questoes = []
     if len(partes_da_ia) > 1:
         for i in range(1, len(partes_da_ia), 2):
@@ -106,9 +94,7 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     else:
         lista_de_questoes = [conteudo]
 
-    # Criar tabela de 2 colunas para organizar as questões lado a lado
-    num_linhas = (len(lista_de_questoes) + 1) // 2
-    main_table = doc.add_table(rows=num_linhas, cols=2)
+    main_table = doc.add_table(rows=(len(lista_de_questoes) + 1) // 2, cols=2)
     main_table.alignment = WD_ALIGN_PARAGRAPH.CENTER
     
     for idx, q_text in enumerate(lista_de_questoes):
@@ -121,45 +107,34 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
             p = cell.add_paragraph()
             p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
             
-            # 1. Negrito apenas no QUESTÃO X.
             if "QUESTÃO" in linha.upper() and "." in linha:
                 partes_linha = linha.split(".", 1)
                 p.add_run(partes_linha[0] + ".").font.bold = True
-                if len(partes_linha) > 1:
-                    p.add_run(partes_linha[1])
-            
-            # 2. Prompt de Imagem entre colchetes (Cinza e Itálico)
+                if len(partes_linha) > 1: p.add_run(partes_linha[1])
             elif "PROMPT" in linha.upper() or "IMAGEM" in linha.upper():
                 run_img = p.add_run(f"[{linha.strip()}]")
                 run_img.font.italic, run_img.font.size = True, Pt(8)
                 run_img.font.color.rgb = RGBColor(100, 100, 100)
-            
-            # 3. Alternativas (A, B, C, D)
             elif re.match(r'^[A-E][\)\-]', linha.strip().upper()):
                 p.add_run(linha.strip())
-            
-            # 4. Texto normal
             else:
                 p.add_run(linha.strip())
 
-        # 5. REGRA DE OURO: Se for questão aberta, desenha as 4 linhas de resposta
+        # --- LINHAS DE RESPOSTA QUE VÃO ATÉ O FINAL ---
         tem_alternativas = any(re.search(r'^[A-E][\)\-]', l.strip().upper()) for l in linhas_questao)
         if not tem_alternativas:
             for _ in range(4):
                 p_linha = cell.add_paragraph()
-                p_linha.add_run("_____________________________________________")
+                # Aumentei a quantidade de underlines para preencher a coluna
+                p_linha.add_run("_________________________________________________")
 
-    # --- RODAPÉ PROFISSIONAL FIXO ---
+    # --- RODAPÉ ---
     footer = section.footer
     p_foot = footer.paragraphs[0]
     p_foot.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    # Linha divisória sutil
     p_foot.add_run("__________________________________________________________________________\n").font.color.rgb = RGBColor(200, 200, 200)
-    # Assinatura do Professor
-    footer_text = "Material produzido pelo Professor Ronaldo Gomes dos Santos Filho • Itabuna/BA • 2026"
-    run_fin = p_foot.add_run(footer_text)
+    run_fin = p_foot.add_run("Material produzido pelo Professor Ronaldo Gomes dos Santos Filho • Itabuna/BA • 2026")
     run_fin.font.size, run_fin.font.italic = Pt(8), True
-    run_fin.font.color.rgb = RGBColor(120, 120, 120)
 
     file_stream = io.BytesIO()
     doc.save(file_stream)
