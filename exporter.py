@@ -171,6 +171,76 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     file_stream.seek(0)
     return file_stream
 
+def gerar_docx_pei_v25(titulo_doc, conteudo, info):
+    doc = Document()
+    section = doc.sections[0]
+    # Margens para material de colar no caderno
+    section.top_margin, section.bottom_margin = Inches(0.3), Inches(0.3)
+    section.left_margin, section.right_margin = Inches(0.5), Inches(0.5)
+
+    # --- CABEÇALHO COMPACTO (BOX PEI) ---
+    table = doc.add_table(rows=2, cols=2)
+    table.style = 'Table Grid'
+    # Linha 1: Escola e Aluno
+    table.cell(0, 0).merge(table.cell(0, 1))
+    p_esc = table.cell(0, 0).paragraphs[0]
+    p_esc.add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA\n").font.bold = True
+    p_esc.add_run(f"ALUNO(A): _________________________________").font.size = Pt(12)
+    
+    # Linha 2: Prof e Data
+    table.cell(1, 0).paragraphs[0].add_run(f"PROF: Ronaldo Gomes").font.size = Pt(11)
+    table.cell(1, 1).paragraphs[0].add_run(f"DATA: __/__/2026").font.size = Pt(11)
+
+    doc.add_paragraph()
+
+    # --- TÍTULO DA ATIVIDADE ---
+    p_tit = doc.add_paragraph()
+    p_tit.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run_tit = p_tit.add_run(f"ATIVIDADE ADAPTADA: {titulo_doc.upper()}")
+    run_tit.font.bold, run_tit.font.size = True, Pt(14)
+
+    # --- PROCESSAMENTO DO CONTEÚDO PEI ---
+    # Dividimos por seções: PARA LEMBRAR, PASSO A PASSO, ATIVIDADES
+    secoes = re.split(r'(\[PARA LEMBRAR\]|\[PASSO A PASSO\]|\[ATIVIDADES\]|QUESTÃO \d+)', conteudo, flags=re.IGNORECASE)
+    
+    for parte in secoes:
+        if not parte or not parte.strip(): continue
+        
+        p = doc.add_paragraph()
+        p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+        
+        # Destaque para Títulos de Seção (Fonte 14 Negrito)
+        if any(x in parte.upper() for x in ["PARA LEMBRAR", "PASSO A PASSO", "ATIVIDADES", "QUESTÃO"]):
+            run = p.add_run(parte.strip().replace("[", "").replace("]", ""))
+            run.font.bold, run.font.size = True, Pt(14)
+            run.font.color.rgb = RGBColor(0, 51, 102) # Azul Escuro Pedagógico
+        
+        # Prompts de Imagem (Fonte 10, Itálico, Cinza)
+        elif "PROMPT" in parte.upper() or "IMAGEM" in parte.upper():
+            run_img = p.add_run(f"\n[{parte.strip()}]\n")
+            run_img.font.italic, run_img.font.size = True, Pt(10)
+            run_img.font.color.rgb = RGBColor(128, 128, 128)
+            
+        # Texto de Instrução (Fonte 14)
+        else:
+            run_txt = p.add_run(parte.strip())
+            run_txt.font.size = Pt(14)
+            # Adiciona linhas de resposta se for questão
+            if "RESPOSTA" in parte.upper() or "___" in parte:
+                pass # Já vem no texto
+    
+    # --- RODAPÉ DE AUTORIA ---
+    footer = section.footer
+    p_foot = footer.paragraphs[0]
+    p_foot.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run_fin = p_foot.add_run("Material Adaptado (PEI) - Prof. Ronaldo Gomes")
+    run_fin.font.size, run_fin.font.italic = Pt(9), True
+
+    file_stream = io.BytesIO()
+    doc.save(file_stream)
+    file_stream.seek(0)
+    return file_stream
+
 # ==============================================================================
 # 2. GUIA DO PROFESSOR (PRESERVADO)
 # ==============================================================================
