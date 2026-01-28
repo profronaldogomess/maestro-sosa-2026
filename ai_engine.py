@@ -36,7 +36,6 @@ PERSONAS = {
     🚨 DIRETRIZ ANTI-DEFORMAÇÃO (CRÍTICO):
     - PROIBIÇÃO TOTAL DE ASCII ART: É terminantemente PROIBIDO desenhar tabelas ou grades usando caracteres como '-', '|', '+'. Isso quebra o DOCX.
     - Como representar o QVL/Ordens: Use apenas listas em tópicos ou descrições textuais. 
-      Exemplo: 6ª Ordem: Centena de Milhar (CM)...
 
     🚨 PROTOCOLO DE COMPOSIÇÃO E LAYOUT (V25):
     1. MIX DE QUESTÕES: Gere equilíbrio entre múltipla escolha e discursivas.
@@ -102,29 +101,40 @@ def gerar_ia(persona_key, comando, partes_arquivos=[], usar_busca=True):
     if partes_arquivos:
         conteudo_prompt.extend(partes_arquivos)
     try:
+        # Tenta usar o modelo estável. Se falhar, retorna o erro para o usuário ver.
         res = client.models.generate_content(
             model="gemini-1.5-flash", 
             contents=[types.Content(role="user", parts=conteudo_prompt)],
             config=config
         )
+        if not res.text:
+            return "⚠️ A IA retornou um texto vazio. Verifique sua conexão ou cota da API."
         return res.text
     except Exception as e:
-        return f"Erro na IA: {e}"
+        return f"🚨 Erro na IA: {str(e)}"
 
-# --- EXTRATOR BLINDADO (RESOLVE O ERRO DO TEXTO VAZIO) ---
+# --- EXTRATOR ULTRA-ROBUSTO (V25.21) ---
 def extrair_tag(texto, tag):
     if not texto: return ""
-    import re
     
+    # Se for uma mensagem de erro, retorna ela inteira
+    if "🚨 Erro na IA:" in texto or "⚠️" in texto:
+        return texto
+
+    import re
     tag_upper = tag.upper()
+    
     # Tags Mestras que definem o fim de um bloco principal
     tags_mestras = ["PROFESSOR", "ALUNO", "GABARITO", "IMAGENS", "PEI", "PARA LEMBRAR", "PASSO A PASSO", "ATIVIDADES"]
     
-    # 1. Localizar o início da tag (aceita [TAG], MARKER_TAG, **TAG**, # TAG)
-    pattern_inicio = rf"(?:\[|\*\*|#|MARKER_)\s*{tag_upper}\s*(?:\]|\*\*|:|-|>|\s)*"
+    # 1. Localizar o início da tag (aceita [TAG], MARKER_TAG, **TAG**, # TAG, TAG:)
+    pattern_inicio = rf"(?:\[|\*\*|#|MARKER_|\s)*{tag_upper}\s*(?:\]|\*\*|:|-|>|\s)*"
     match_inicio = re.search(pattern_inicio, texto, re.IGNORECASE)
     
     if not match_inicio:
+        # FALLBACK: Se não achou a tag mas o texto existe, retorna o texto bruto para o professor não ficar sem nada
+        if tag_upper == "PROFESSOR" and "[ALUNO]" in texto:
+            return texto.split("[ALUNO]")[0].strip()
         return ""
             
     inicio_pos = match_inicio.end()
@@ -132,10 +142,10 @@ def extrair_tag(texto, tag):
     # 2. Localizar o fim (onde começa a próxima tag mestre)
     if tag_upper in tags_mestras:
         outras_tags = [t for t in tags_mestras if t != tag_upper]
-        # Busca a próxima tag mestre, ignorando as tags internas como [COLUNA_1]
         pattern_fim = "|".join([rf"\[\s*{t}\s*\]" for t in outras_tags] + 
                                [rf"MARKER_{t}" for t in outras_tags] + 
-                               [rf"\*\*\s*{t}\s*\*\*" for t in outras_tags])
+                               [rf"\*\*\s*{t}\s*\*\*" for t in outras_tags] +
+                               [rf"\n{t}:" for t in outras_tags])
         match_fim = re.search(pattern_fim, texto[inicio_pos:], re.IGNORECASE | re.DOTALL)
     else:
         # Para tags internas (COLUNA_1, etc), para em qualquer colchete ou marcador
