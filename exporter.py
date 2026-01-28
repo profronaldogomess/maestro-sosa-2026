@@ -143,7 +143,7 @@ def gerar_docx_professor_v25(titulo_doc, conteudo, info):
     doc = Document()
     section = doc.sections[0]
     section.top_margin, section.bottom_margin = Inches(0.4), Inches(0.4)
-    section.left_margin, section.right_margin = Inches(0.5), Inches(0.5)
+    section.left_margin, section.right_margin = Inches(0.4), Inches(0.4)
 
     # --- CABEÇALHO OFICIAL (IGUAL AO DO ALUNO) ---
     header_table = doc.add_table(rows=3, cols=5)
@@ -167,7 +167,7 @@ def gerar_docx_professor_v25(titulo_doc, conteudo, info):
     p_esc.add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA").font.bold = True
 
     c_aluno.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-    c_aluno.paragraphs[0].add_run("GUIA DE REGÊNCIA E APOIO VISUAL").font.size = Pt(11)
+    c_aluno.paragraphs[0].add_run("GUIA DE REGÊNCIA E ESQUEMA DE LOUSA").font.size = Pt(11)
 
     header_table.cell(2, 1).paragraphs[0].add_run("PROF.: Ronaldo Gomes").font.size = Pt(9)
     header_table.cell(2, 2).paragraphs[0].add_run(f"ANO: {info.get('ano', '')}").font.size = Pt(9)
@@ -176,33 +176,37 @@ def gerar_docx_professor_v25(titulo_doc, conteudo, info):
 
     doc.add_paragraph() 
 
-    # --- PROCESSAMENTO INTELIGENTE DO CONTEÚDO ---
-    linhas = conteudo.split('\n')
-    for linha in linhas:
-        l_s = linha.strip()
-        if not l_s: continue
-        
-        p = doc.add_paragraph()
-        p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-        
-        # Identifica os novos cabeçalhos da Persona e aplica Negrito
-        if any(k in l_s.upper() for k in ["MOMENTO PHC", "ESQUEMA DE LOUSA", "DICA DE REGÊNCIA", "GABARITO"]):
-            run = p.add_run(l_s.upper())
-            run.font.bold = True
-            run.font.size = Pt(12)
-            p.space_before = Pt(12)
-        
-        # Identifica os Prompts de Desenho e aplica o Azul Royal e Itálico
-        elif "PROMPT" in l_s.upper() or "IMAGEM PARA O QUADRO" in l_s.upper():
-            p.paragraph_format.left_indent = Inches(0.3)
-            run = p.add_run(f"🎨 {l_s}")
-            run.font.italic = True
-            run.font.size = Pt(10)
-            run.font.color.rgb = RGBColor(0, 102, 204) # Azul para o Professor identificar rápido
+    # --- CORPO EM DUAS COLUNAS ---
+    main_table = doc.add_table(rows=1, cols=2)
+    main_table.allow_autofit = False
+    
+    # Divide o texto em dois blocos (metade para cada coluna)
+    linhas = [l.strip() for l in conteudo.split('\n') if l.strip()]
+    meio = len(linhas) // 2
+    colunas = [main_table.cell(0, 0), main_table.cell(0, 1)]
+    blocos = [linhas[:meio], linhas[meio:]]
+
+    for i, bloco in enumerate(blocos):
+        for linha in bloco:
+            p = colunas[i].add_paragraph()
+            p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
             
-        else:
-            run = p.add_run(l_s)
-            run.font.size = Pt(10)
+            # LÓGICA DE NEGRITO (Títulos em MAIÚSCULAS ou que começam com números)
+            is_titulo = linha.isupper() or (len(linha) > 0 and linha[0].isdigit() and "." in linha[:3])
+            
+            run = p.add_run(linha)
+            
+            if is_titulo:
+                run.font.bold = True
+                run.font.size = Pt(11)
+                p.space_before = Pt(6)
+            else:
+                run.font.size = Pt(10)
+            
+            # LÓGICA DE COR (Prompts entre colchetes ficam em Azul)
+            if "[" in linha and "]" in linha:
+                run.font.italic = True
+                run.font.color.rgb = RGBColor(0, 102, 204) # Azul Royal
 
     file_stream = io.BytesIO()
     doc.save(file_stream)
