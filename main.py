@@ -1642,7 +1642,7 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
 # MÓDULO: CENTRAL DE AVALIAÇÕES DE ELITE (V25.39 - HIERARQUIA FINAL & REFINADOR)
 # ==============================================================================
 elif menu == "📝 Central de Avaliações":
-    st.markdown(f"<h1 style='text-align: center;'>📝 Central de Avaliações de Elite <span style='font-size:15px;'>V25.41</span></h1>", unsafe_allow_html=True)
+    st.markdown(f"<h1 style='text-align: center;'>📝 Central de Avaliações de Elite <span style='font-size:15px;'>V25.42</span></h1>", unsafe_allow_html=True)
     st.markdown("---")
 
     # --- 1. CONFIGURAÇÃO TÉCNICA ---
@@ -1685,33 +1685,32 @@ elif menu == "📝 Central de Avaliações":
                 f"Gere a prova com gabarito blindado (A-E) e marcadores [CÁLCULO]."
             )
             res = ai.gerar_ia("ARQUITETO_EXAMES_V25", prompt_av)
+            # Sincronização limpa de estado
             st.session_state.temp_prova = res
-            # Sincroniza o campo de edição imediatamente
             st.session_state["area_edicao_v25"] = res
             st.rerun()
 
-    # --- 4. LABORATÓRIO DE REFINAMENTO (V25.41 - FIX) ---
+    # --- 4. LABORATÓRIO DE REFINAMENTO (V25.42) ---
     if "temp_prova" in st.session_state:
         st.markdown("---")
         st.markdown("### 🧪 Refinador Maestro")
         
-        comando_refine = st.chat_input("O que deseja alterar? (Ex: 'Troque a Q1', 'Reordene o gabarito para evitar repetição')")
+        comando_refine = st.chat_input("O que deseja alterar? (Ex: 'Troque a Q1', 'Reordene o gabarito')")
         
         if comando_refine:
             with st.spinner("Aplicando refinamento de elite..."):
-                # Pega o texto que está ATUALMENTE no campo de edição (incluindo suas mudanças manuais)
+                # Captura o texto que está no widget de edição
                 texto_atual = st.session_state.get("area_edicao_v25", st.session_state.temp_prova)
                 
                 prompt_refine = (
                     f"VOCÊ É O ARQUITETO DE EXAMES. EXECUTE O COMANDO DO PROFESSOR NO TEXTO ABAIXO.\n"
+                    f"MANTENHA RIGOROSAMENTE AS TAGS [ORIENTACOES], [QUESTOES], [GABARITO_TEXTO] e [RESPOSTAS_IA].\n\n"
                     f"COMANDO: {comando_refine}\n\n"
                     f"TEXTO ATUAL:\n{texto_atual}\n\n"
                     f"RETORNE O DOCUMENTO COMPLETO ATUALIZADO."
                 )
                 
                 novo_texto = ai.gerar_ia("ARQUITETO_EXAMES_V25", prompt_refine)
-                
-                # ATUALIZAÇÃO FORÇADA DOS ESTADOS
                 st.session_state.temp_prova = novo_texto
                 st.session_state["area_edicao_v25"] = novo_texto
                 st.rerun()
@@ -1719,13 +1718,14 @@ elif menu == "📝 Central de Avaliações":
         t_rev, t_gab, t_drive = st.tabs(["📝 Edição", "✅ Gabarito", "☁️ Drive"])
         
         with t_rev:
-            # O segredo está em usar o session_state como valor e como chave
-            st.session_state.temp_prova = st.text_area(
-                "Texto da Avaliação:", 
-                value=st.session_state.temp_prova, 
+            # CORREÇÃO DO AVISO: Não usamos 'value' quando usamos 'key' para atualização via Session State
+            st.text_area(
+                "Texto da Avaliação (Edite e o Refinador lerá suas mudanças):", 
                 height=500, 
                 key="area_edicao_v25"
             )
+            # Sincroniza a variável global com o que foi digitado
+            st.session_state.temp_prova = st.session_state["area_edicao_v25"]
         
         with t_gab:
             st.code(ai.extrair_tag(st.session_state.temp_prova, "GABARITO_TEXTO"))
