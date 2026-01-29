@@ -164,70 +164,81 @@ menu = st.sidebar.radio("Navegação:", [
 # ==============================================================================
 def exibir_material_estruturado(texto_raw, key_prefix, dados_plano=None, info_aula=None):
     """
-    Versão V25.22: Totalmente isolada. 
-    Não depende de variáveis globais, evitando NameError.
+    Versão V25.55: CORREÇÃO DE VISIBILIDADE PEI NO LABORATÓRIO.
     """
-    # 1. Garantir que info_aula exista e extrair dados com segurança
     if info_aula is None: info_aula = {}
     
-    # Extração segura (se não existir, usa um padrão para não quebrar)
     f_aula = info_aula.get("aula", "Aula Geral")
     f_ano = info_aula.get("ano", "6")
     f_semana = info_aula.get("semana", "Semana Geral")
     f_formato = info_aula.get("formato", "Quadro (Lousa)")
-    f_cont = info_aula.get("conteudos", ["Matemática"])
     
-    # Conteúdos editados (se vierem do Planejamento, usamos o texto_raw)
     ed_prof = info_aula.get("ed_prof", ai.extrair_tag(texto_raw, "PROFESSOR"))
     ed_alu = info_aula.get("ed_alu", ai.extrair_tag(texto_raw, "ALUNO"))
-    ed_pei = info_aula.get("ed_pei", ai.extrair_tag(texto_raw, "ADAPTACAO_PEI"))
 
-    # --- LÓGICA DE ABAS ---
     if dados_plano:
-        # MODO PLANEJAMENTO
-        t1, t2, t3, t4, t_exp = st.tabs([
-            "🏫 Metodologia", "🎯 Objetivos", "📝 Avaliação", "♿ PEI", "📥 EXPORTAR PLANO"
-        ])
+        # --- MODO PLANEJAMENTO (MANTIDO) ---
+        t1, t2, t3, t4, t_exp = st.tabs(["🏫 Metodologia", "🎯 Objetivos", "📝 Avaliação", "♿ PEI", "📥 EXPORTAR PLANO"])
         with t1: st.text_area("Roteiro:", ai.extrair_tag(texto_raw, "METODOLOGIA"), height=400, key=f"{key_prefix}_met")
         with t2: st.text_area("Objetivos:", ai.extrair_tag(texto_raw, "OBJETIVOS_ENSINO"), height=400, key=f"{key_prefix}_obj")
         with t3: st.text_area("Avaliação:", ai.extrair_tag(texto_raw, "AVALIACAO"), height=200, key=f"{key_prefix}_ava")
         with t4: st.text_area("PEI:", ai.extrair_tag(texto_raw, "ADAPTACAO_PEI"), height=300, key=f"{key_prefix}_pei")
-        
         with t_exp:
-            st.subheader("🚀 Exportar Plano de Ensino")
             nome_plano = f"PLANO_{f_ano}ANO_{f_semana.replace(' ', '')}"
             doc_plano = exporter.gerar_docx_plano_pedagogico_v18(nome_plano, dados_plano, {"ano": f"{f_ano}º", "semana": f_semana})
             st.download_button("📥 BAIXAR PLANO (WORD)", doc_plano, f"{nome_plano}.docx", use_container_width=True, key=f"dl_{key_prefix}")
 
     else:
-        # MODO CRIADOR DE AULAS
-        t1, t2, t3, t4, t_exp = st.tabs([
-            "✍️ Lousa/Slides", "📄 Folha", "✅ Gabarito", "🎨 Imagens", "📥 EXPORTAR AULA"
+        # --- MODO CRIADOR DE AULAS (CORRIGIDO: ADICIONADA ABA T5 PARA PEI) ---
+        t1, t2, t3, t4, t5, t_exp = st.tabs([
+            "✍️ Lousa/Slides", "📄 Folha", "✅ Gabarito", "🎨 Imagens", "♿ PEI", "📥 EXPORTAR AULA"
         ])
+        
         with t1: st.text_area("Lousa:", ed_prof, height=400, key=f"{key_prefix}_lousa")
         with t2: st.text_area("Folha:", ed_alu, height=400, key=f"{key_prefix}_folha")
         with t3: st.text_area("Gabarito:", ai.extrair_tag(texto_raw, "GABARITO"), height=200, key=f"{key_prefix}_gab")
         with t4: st.text_area("Imagens:", ai.extrair_tag(texto_raw, "IMAGENS"), height=150, key=f"{key_prefix}_img")
+        
+        # --- LÓGICA DA ABA PEI (RESTAURADA) ---
+        with t5:
+            st.subheader("♿ Adaptação Curricular (AEE/PEI)")
+            # Verifica se já existe adaptação no session_state
+            if "lab_pei" not in st.session_state:
+                st.info("Clique no botão abaixo para gerar a versão adaptada para alunos com laudo.")
+                if st.button("♿ GERAR ADAPTAÇÃO PEI (MÉTODO DUA)", use_container_width=True, type="primary", key=f"{key_prefix}_btn_pei"):
+                    with st.spinner("Arquiteto PEI realizando reengenharia visual..."):
+                        # Envia o material do aluno regular para a persona PEI
+                        prompt_pei = f"ADAPTE PARA PEI O SEGUINTE MATERIAL REGULAR:\n\n{ed_alu}"
+                        st.session_state.lab_pei = ai.gerar_ia("ARQUITETO_PEI_V24", prompt_pei)
+                        st.rerun()
+            else:
+                # Se já existe, permite editar
+                st.session_state.lab_pei = st.text_area("Material Adaptado:", st.session_state.lab_pei, height=400, key=f"{key_prefix}_pei_edit")
+                if st.button("🗑️ Descartar PEI", key=f"{key_prefix}_del_pei"):
+                    del st.session_state.lab_pei
+                    st.rerun()
 
         with t_exp:
             st.subheader("🚀 Central de Exportação de Aula")
             nome_base = f"AULA_{f_aula.replace(' ','')}_{f_ano}ANO_{f_semana.split(' ')[1] if ' ' in f_semana else 'Geral'}"
             
-            # Gerar documentos usando as variáveis locais (f_...)
+            c1, c2 = st.columns(2)
             doc_alu = exporter.gerar_docx_aluno_v24(nome_base, ed_alu, {"ano": f"{f_ano}º", "trimestre": "I"})
+            c1.download_button("📥 FOLHA ALUNO", doc_alu, f"{nome_base}_ALUNO.docx", use_container_width=True)
             
             if f_formato == "Slides (Apresentação)":
-                st.info("🤖 Use o Comando Master no Google Slides para o design.")
                 doc_prof_final = exporter.gerar_pptx_v24(f"{nome_base}_PROF", ed_prof)
                 ext_prof = ".pptx"
             else:
                 doc_prof_final = exporter.gerar_docx_professor_v25(nome_base, ed_prof, {"ano": f"{f_ano}º", "semana": f_semana})
                 ext_prof = ".docx"
-
-            # Botões de Download Local
-            c1, c2 = st.columns(2)
-            c1.download_button("📥 FOLHA ALUNO", doc_alu, f"{nome_base}_ALUNO.docx", use_container_width=True)
             c2.download_button(f"📥 GUIA PROF ({ext_prof.upper()})", doc_prof_final, f"{nome_base}_PROF{ext_prof}", use_container_width=True)
+
+            # BOTÃO DE DOWNLOAD PEI (Aparece apenas se o material foi gerado)
+            if "lab_pei" in st.session_state:
+                st.markdown("---")
+                doc_pei = exporter.gerar_docx_pei_v25(f"{nome_base}_PEI", st.session_state.lab_pei, {"trimestre": "I"})
+                st.download_button("📥 BAIXAR MATERIAL PEI (FONTE 14)", doc_pei, f"{nome_base}_PEI.docx", use_container_width=True, type="primary")
 
 # ==============================================================================
 # MÓDULO: DASHBOARD INTELIGENTE (V6 - FULL CONTEXT: NOTAS + PDF + AULAS CRIADAS)
