@@ -1639,104 +1639,106 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                     st.info("Banco de relatórios vazio.")
 
 # ==============================================================================
-# MÓDULO: CENTRAL DE AVALIAÇÕES DE ELITE (V25.31 - COM REFINADOR E RESET)
+# MÓDULO: CENTRAL DE AVALIAÇÕES DE ELITE (V25.35 - REFINAMENTO & GESTÃO)
 # ==============================================================================
 elif menu == "📝 Central de Avaliações":
-    st.title("📝 Central de Avaliações de Elite (V25.31)")
+    st.markdown(f"<h1 style='text-align: center;'>📝 Central de Avaliações de Elite <span style='font-size:15px;'>V25.35</span></h1>", unsafe_allow_html=True)
     st.markdown("---")
 
-    # --- 1. CONFIGURAÇÃO BÁSICA ---
-    if "temp_prova" not in st.session_state:
-        with st.container(border=True):
-            c1, c2, c3, c4 = st.columns([1.5, 1, 1, 1.5])
-            tipo_av = c1.selectbox("Tipo:", ["Teste (3.0)", "Prova (4.0)", "Recuperação (10.0)"], key="av_tipo")
-            ano_av = c2.selectbox("Série:", [6, 7, 8, 9], key="av_ano")
-            qtd_q = c3.number_input("Questões:", 5, 20, 10)
-            nivel_desafio = c4.select_slider("Nível de Desafio:", options=["Fácil (Recomposição)", "Médio (Padrão)", "Difícil (Elite)"], value="Médio (Padrão)")
+    # --- 1. CONFIGURAÇÃO TÉCNICA (DESIGN SUAVE) ---
+    with st.container(border=True):
+        c1, c2, c3, c4 = st.columns([1.5, 1, 1, 1.5])
+        tipo_av = c1.selectbox("Tipo de Exame:", ["Teste (3.0)", "Prova (4.0)", "Recuperação (10.0)"], key="av_tipo")
+        ano_av = c2.selectbox("Série/Ano:", [6, 7, 8, 9], key="av_ano")
+        qtd_q = c3.number_input("Nº de Questões:", 5, 20, 10)
+        nivel_desafio = c4.select_slider("Rigor Pedagógico:", options=["Fácil", "Médio", "Difícil"], value="Médio")
 
-        # --- 2. FILTRO DE PRECISÃO ---
-        st.markdown(" ")
-        with st.container(border=True):
-            st.markdown("### 🎯 Matriz de Referência")
-            df_p_ano = df_planos[df_planos['ANO'] == f"{ano_av}º"]
-            
-            if not df_p_ano.empty:
-                semanas_sel = st.multiselect("1. Selecione as Semanas Base:", df_p_ano['SEMANA'].tolist())
-                
-                if semanas_sel:
-                    planos_filtrados = df_p_ano[df_p_ano['SEMANA'].isin(semanas_sel)]
-                    lista_cont, lista_obj = [], []
-                    for _, row in planos_filtrados.iterrows():
-                        c_raw = ai.extrair_tag(row['PLANO_TEXTO'], "CONTEUDOS_ESPECIFICOS")
-                        o_raw = ai.extrair_tag(row['PLANO_TEXTO'], "OBJETIVOS_ENSINO")
-                        lista_cont.extend([x.strip() for x in c_raw.split(';') if x.strip()])
-                        lista_obj.extend([x.strip() for x in o_raw.split(';') if x.strip()])
-                    
-                    col_f1, col_f2 = st.columns(2)
-                    itens_cont = col_f1.multiselect("2. O que cobrar? (Conteúdos):", list(set(lista_cont)), default=list(set(lista_cont)))
-                    itens_obj = col_f2.multiselect("3. Quais objetivos avaliar?:", list(set(lista_obj)), default=list(set(lista_obj)))
-            else:
-                st.warning("Nenhum plano encontrado para este ano.")
-
-        if st.button("🚀 COMPILAR AVALIAÇÃO DE PRECISÃO", use_container_width=True, type="primary"):
-            with st.spinner("Maestro Arquiteto aplicando Matriz de Dificuldade..."):
-                prompt_av = (
-                    f"TIPO: {tipo_av}. SÉRIE: {ano_av}º ANO. QTD: {qtd_q} QUESTÕES.\n"
-                    f"NÍVEL DE DESAFIO: {nivel_desafio}\n"
-                    f"CONTEÚDOS SELECIONADOS: {itens_cont}\n"
-                    f"OBJETIVOS SELECIONADOS: {itens_obj}\n"
-                    f"Gere a prova com gabarito blindado (A-E) e marcadores [CÁLCULO]."
-                )
-                st.session_state.temp_prova = ai.gerar_ia("ARQUITETO_EXAMES_V25", prompt_av)
-                st.session_state.av_info = {"ano": f"{ano_av}º", "tipo": tipo_av, "qtd": qtd_q} # Salva info para o exportador
-                st.rerun()
-
-    # --- 3. ÁREA DE REVISÃO, REFINAMENTO E EXPORTAÇÃO ---
-    else:
-        st.info("💡 Use o campo de chat abaixo para pedir alterações na prova (ex: 'Troque a questão 3').")
+    # --- 2. MATRIZ DE REFERÊNCIA ---
+    st.markdown(" ")
+    with st.container(border=True):
+        st.markdown("### 🎯 Matriz de Referência")
+        df_p_ano = df_planos[df_planos['ANO'] == f"{ano_av}º"]
         
-        t_rev, t_gab, t_drive = st.tabs(["✏️ Revisar e Refinar", "✅ Gabarito Técnico", "☁️ Sincronizar Drive"])
+        if not df_p_ano.empty:
+            semanas_sel = st.multiselect("Selecione as Semanas Base do Planejamento:", df_p_ano['SEMANA'].tolist())
+            
+            if semanas_sel:
+                planos_filtrados = df_p_ano[df_p_ano['SEMANA'].isin(semanas_sel)]
+                lista_cont, lista_obj = [], []
+                for _, row in planos_filtrados.iterrows():
+                    c_raw = ai.extrair_tag(row['PLANO_TEXTO'], "CONTEUDOS_ESPECIFICOS")
+                    o_raw = ai.extrair_tag(row['PLANO_TEXTO'], "OBJETIVOS_ENSINO")
+                    lista_cont.extend([x.strip() for x in c_raw.split(';') if x.strip()])
+                    lista_obj.extend([x.strip() for x in o_raw.split(';') if x.strip()])
+                
+                col_f1, col_f2 = st.columns(2)
+                itens_cont = col_f1.multiselect("Conteúdos Selecionados:", list(set(lista_cont)), default=list(set(lista_cont)))
+                itens_obj = col_f2.multiselect("Objetivos de Aprendizagem:", list(set(lista_obj)), default=list(set(lista_obj)))
+        else:
+            st.warning("⚠️ Nenhum plano de aula encontrado para esta série.")
+
+    # --- 3. BOTÃO DE GERAÇÃO PRINCIPAL ---
+    st.markdown(" ")
+    if st.button("🚀 COMPILAR AVALIAÇÃO DE PRECISÃO", use_container_width=True, type="primary"):
+        with st.status("Maestro Arquiteto em ação...", expanded=True) as status:
+            status.write("📊 Analisando Matriz de Dificuldade...")
+            status.write("✍️ Redigindo questões com contexto local...")
+            prompt_av = (
+                f"TIPO: {tipo_av}. SÉRIE: {ano_av}º ANO. QTD: {qtd_q} QUESTÕES.\n"
+                f"NÍVEL DE DESAFIO: {nivel_desafio}\n"
+                f"CONTEÚDOS: {itens_cont}\n"
+                f"OBJETIVOS: {itens_obj}\n"
+                f"Gere a prova com gabarito blindado (A-E) e marcadores [CÁLCULO]."
+            )
+            st.session_state.temp_prova = ai.gerar_ia("ARQUITETO_EXAMES_V25", prompt_av)
+            status.update(label="Avaliação Compilada!", state="complete")
+            st.rerun()
+
+    # --- 4. LABORATÓRIO DE REFINAMENTO (O CORAÇÃO DO NOVO PAINEL) ---
+    if "temp_prova" in st.session_state:
+        st.markdown("---")
+        st.markdown("### 🧪 Laboratório de Refinamento")
+        
+        # Abas Elegantes
+        t_rev, t_gab, t_drive = st.tabs(["📝 Edição das Questões", "✅ Gabarito & Justificativas", "☁️ Sincronizar & Exportar"])
         
         with t_rev:
-            # Editor Manual
-            ed_q = st.text_area("Conteúdo da Prova (Editável):", st.session_state.temp_prova, height=500)
-            st.session_state.temp_prova = ed_q # Atualiza o estado com o que o professor editou manualmente
+            # Área de texto editável que preserva mudanças manuais
+            conteudo_atual = st.text_area("Edite o texto diretamente ou use o Refinador abaixo:", 
+                                          st.session_state.temp_prova, height=500, key="area_edicao_prova")
             
-            # REFINADOR MAESTRO (O CHAT DE AJUSTE)
-            cmd_refine = st.chat_input("Comando de Refinamento (Ex: 'Mude o gabarito da 5 para D', 'Troque a questão 2 por uma de área')")
-            if cmd_refine:
-                with st.spinner("Refinando avaliação conforme sua ordem..."):
-                    prompt_refine = (
-                        f"VOCÊ É O ARQUITETO DE EXAMES. O PROFESSOR SOLICITOU UMA ALTERAÇÃO.\n"
-                        f"PROVA ATUAL:\n{st.session_state.temp_prova}\n\n"
-                        f"ORDEM DO PROFESSOR: {cmd_refine}\n\n"
-                        f"Mantenha o rigor, a blindagem do gabarito e o formato original."
-                    )
-                    st.session_state.temp_prova = ai.gerar_ia("ARQUITETO_EXAMES_V25", prompt_refine)
+            # REFINADOR MAESTRO (Chat Input)
+            comando_refine = st.chat_input("Comando Maestro (Ex: 'Troque a Q4 por uma de Geometria', 'Mude o gabarito da Q1 para D')")
+            if comando_refine:
+                with st.spinner("Refinando avaliação..."):
+                    novo_prompt = f"TEXTO ATUAL DA PROVA:\n{conteudo_atual}\n\nCOMANDO DE ALTERAÇÃO: {comando_refine}\nResponda apenas com o texto da prova completo e atualizado."
+                    st.session_state.temp_prova = ai.gerar_ia("ARQUITETO_EXAMES_V25", novo_prompt)
                     st.rerun()
-        
-        with t_gab:
-            st.code(ai.extrair_tag(st.session_state.temp_prova, "GABARITO_TEXTO"), language="text")
-            st.markdown("### 🧠 Explicação da IA (Respostas)")
-            st.write(ai.extrair_tag(st.session_state.temp_prova, "RESPOSTAS_IA"))
 
+        with t_gab:
+            st.markdown("#### Conferência Técnica")
+            st.code(ai.extrair_tag(conteudo_atual, "GABARITO_TEXTO"), language="text")
+            with st.expander("Ver Justificativas da IA"):
+                st.write(ai.extrair_tag(conteudo_atual, "RESPOSTAS_IA"))
+        
         with t_drive:
             st.subheader("🚀 Arquivamento Estruturado")
-            trimestre_av = st.selectbox("Trimestre para Pasta:", ["I Trimestre", "II Trimestre", "III Trimestre"])
-            nome_arq = f"PROVA_{st.session_state.av_info['ano']}_{st.session_state.av_info['tipo'].split(' ')[0]}_{datetime.now().strftime('%d%m')}"
+            c_d1, c_d2 = st.columns(2)
+            trimestre_av = c_d1.selectbox("Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"])
+            nome_arq = c_d2.text_input("Nome do Arquivo:", f"PROVA_{ano_av}ANO_{tipo_av.split(' ')[0]}_{datetime.now().strftime('%d%m')}")
             
-            c_exp1, c_exp2 = st.columns(2)
-            
-            if c_exp1.button("☁️ ENVIAR PARA O DRIVE", use_container_width=True):
-                with st.spinner("Sincronizando..."):
-                    info_doc = {"ano": st.session_state.av_info['ano'], "tipo_prova": st.session_state.av_info['tipo'].upper(), "valor": "10", "qtd_questoes": st.session_state.av_info['qtd']}
-                    doc_io = exporter.gerar_docx_prova_v25(nome_arq, st.session_state.temp_prova, info_doc)
-                    link = db.subir_e_converter_para_google_docs(doc_io, nome_arq, trimestre=trimestre_av, categoria=f"Avaliacoes/{st.session_state.av_info['ano']}")
-                    if "https" in str(link):
-                        st.success("✅ Arquivado com sucesso!")
-                        st.link_button("📂 ABRIR NO GOOGLE DOCS", str(link))
-            
-            if c_exp2.button("🗑️ DESCARTAR E RECOMEÇAR", use_container_width=True):
-                del st.session_state.temp_prova
-                if "av_info" in st.session_state: del st.session_state.av_info
-                st.rerun()
+            if st.button("☁️ SINCRONIZAR COM GOOGLE DRIVE", use_container_width=True):
+                with st.status("Sincronizando...", expanded=False):
+                    info_doc = {"ano": f"{ano_av}º", "tipo_prova": tipo_av.upper(), "valor": "10", "qtd_questoes": qtd_q}
+                    doc_io = exporter.gerar_docx_prova_v25(nome_arq, conteudo_atual, info_doc)
+                    link = db.subir_e_converter_para_google_docs(doc_io, nome_arq, trimestre=trimestre_av, categoria=f"Avaliacoes/{ano_av}Ano")
+                
+                if "https" in str(link):
+                    st.success("✅ Arquivado com sucesso!")
+                    st.link_button("📂 ABRIR NO GOOGLE DOCS", str(link), use_container_width=True)
+
+        # BOTÃO DE DESCARTE (Elegante e Perigoso)
+        st.markdown(" ")
+        if st.button("🗑️ DESCARTAR TUDO E RECOMEÇAR", use_container_width=True):
+            del st.session_state.temp_prova
+            st.rerun()
