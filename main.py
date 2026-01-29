@@ -1642,7 +1642,7 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
 # MÓDULO: CENTRAL DE AVALIAÇÕES DE ELITE (V25.39 - HIERARQUIA FINAL & REFINADOR)
 # ==============================================================================
 elif menu == "📝 Central de Avaliações":
-    st.markdown(f"<h1 style='text-align: center;'>📝 Central de Avaliações de Elite <span style='font-size:15px;'>V25.40</span></h1>", unsafe_allow_html=True)
+    st.markdown(f"<h1 style='text-align: center;'>📝 Central de Avaliações de Elite <span style='font-size:15px;'>V25.41</span></h1>", unsafe_allow_html=True)
     st.markdown("---")
 
     # --- 1. CONFIGURAÇÃO TÉCNICA ---
@@ -1658,7 +1658,6 @@ elif menu == "📝 Central de Avaliações":
     with st.container(border=True):
         st.markdown("### 🎯 Matriz de Referência")
         df_p_ano = df_planos[df_planos['ANO'] == f"{ano_av}º"]
-        
         if not df_p_ano.empty:
             semanas_sel = st.multiselect("Selecione as Semanas Base:", df_p_ano['SEMANA'].tolist())
             if semanas_sel:
@@ -1669,14 +1668,13 @@ elif menu == "📝 Central de Avaliações":
                     o_raw = ai.extrair_tag(row['PLANO_TEXTO'], "OBJETIVOS_ENSINO")
                     lista_cont.extend([x.strip() for x in c_raw.split(';') if x.strip()])
                     lista_obj.extend([x.strip() for x in o_raw.split(';') if x.strip()])
-                
                 col_f1, col_f2 = st.columns(2)
                 itens_cont = col_f1.multiselect("Conteúdos:", list(set(lista_cont)), default=list(set(lista_cont)))
                 itens_obj = col_f2.multiselect("Objetivos:", list(set(lista_obj)), default=list(set(lista_obj)))
         else:
             st.warning("⚠️ Nenhum plano encontrado.")
 
-    # --- 3. GERAÇÃO ---
+    # --- 3. GERAÇÃO PRINCIPAL ---
     if st.button("🚀 COMPILAR AVALIAÇÃO", use_container_width=True, type="primary"):
         with st.status("Maestro Arquiteto em ação...", expanded=True):
             prompt_av = (
@@ -1686,32 +1684,53 @@ elif menu == "📝 Central de Avaliações":
                 f"OBJETIVOS: {itens_obj}\n"
                 f"Gere a prova com gabarito blindado (A-E) e marcadores [CÁLCULO]."
             )
-            st.session_state.temp_prova = ai.gerar_ia("ARQUITETO_EXAMES_V25", prompt_av)
+            res = ai.gerar_ia("ARQUITETO_EXAMES_V25", prompt_av)
+            st.session_state.temp_prova = res
+            # Sincroniza o campo de edição imediatamente
+            st.session_state["area_edicao_v25"] = res
             st.rerun()
 
-    # --- 4. LABORATÓRIO DE REFINAMENTO ---
+    # --- 4. LABORATÓRIO DE REFINAMENTO (V25.41 - FIX) ---
     if "temp_prova" in st.session_state:
         st.markdown("---")
         st.markdown("### 🧪 Refinador Maestro")
         
-        # O Refinador agora captura o comando e limpa o estado para forçar a atualização
-        comando_refine = st.chat_input("O que deseja alterar?")
+        comando_refine = st.chat_input("O que deseja alterar? (Ex: 'Troque a Q1', 'Reordene o gabarito para evitar repetição')")
+        
         if comando_refine:
-            with st.spinner("Aplicando refinamento..."):
-                # IMPORTANTE: Ele lê o que está no text_area (edição manual) antes de enviar para a IA
-                texto_base = st.session_state.get("area_edicao_v25", st.session_state.temp_prova)
-                novo_prompt = f"ALTERE O TEXTO ABAIXO CONFORME O COMANDO.\n\nTEXTO:\n{texto_base}\n\nCOMANDO: {comando_refine}\n\nRETORNE O TEXTO COMPLETO."
-                st.session_state.temp_prova = ai.gerar_ia("ARQUITETO_EXAMES_V25", novo_prompt)
+            with st.spinner("Aplicando refinamento de elite..."):
+                # Pega o texto que está ATUALMENTE no campo de edição (incluindo suas mudanças manuais)
+                texto_atual = st.session_state.get("area_edicao_v25", st.session_state.temp_prova)
+                
+                prompt_refine = (
+                    f"VOCÊ É O ARQUITETO DE EXAMES. EXECUTE O COMANDO DO PROFESSOR NO TEXTO ABAIXO.\n"
+                    f"COMANDO: {comando_refine}\n\n"
+                    f"TEXTO ATUAL:\n{texto_atual}\n\n"
+                    f"RETORNE O DOCUMENTO COMPLETO ATUALIZADO."
+                )
+                
+                novo_texto = ai.gerar_ia("ARQUITETO_EXAMES_V25", prompt_refine)
+                
+                # ATUALIZAÇÃO FORÇADA DOS ESTADOS
+                st.session_state.temp_prova = novo_texto
+                st.session_state["area_edicao_v25"] = novo_texto
                 st.rerun()
 
         t_rev, t_gab, t_drive = st.tabs(["📝 Edição", "✅ Gabarito", "☁️ Drive"])
         
         with t_rev:
-            # Sincronização direta com o session_state
-            st.session_state.temp_prova = st.text_area("Texto:", value=st.session_state.temp_prova, height=500, key="area_edicao_v25")
+            # O segredo está em usar o session_state como valor e como chave
+            st.session_state.temp_prova = st.text_area(
+                "Texto da Avaliação:", 
+                value=st.session_state.temp_prova, 
+                height=500, 
+                key="area_edicao_v25"
+            )
         
         with t_gab:
             st.code(ai.extrair_tag(st.session_state.temp_prova, "GABARITO_TEXTO"))
+            with st.expander("Ver Justificativas"):
+                st.write(ai.extrair_tag(st.session_state.temp_prova, "RESPOSTAS_IA"))
         
         with t_drive:
             st.subheader("🚀 Sincronização SOSA_DOCUMENTOS")
@@ -1724,13 +1743,12 @@ elif menu == "📝 Central de Avaliações":
                     info_doc = {"ano": f"{ano_av}º", "tipo_prova": tipo_av.upper(), "valor": "10", "qtd_questoes": qtd_q}
                     doc_io = exporter.gerar_docx_prova_v25(nome_arq, st.session_state.temp_prova, info_doc)
                     
-                    # HIERARQUIA: SOSA_DOCUMENTOS > Avaliacoes > [Ano]ano > [Trimestre]
                     link = db.subir_e_converter_para_google_docs(
                         doc_io, 
                         nome_arq, 
                         trimestre=trimestre_av, 
                         categoria=f"{ano_av}ano",
-                        modo="AVALIACAO" # Ativa a lógica limpa no Script
+                        modo="AVALIACAO" 
                     )
                 
                 if "https" in str(link):
@@ -1739,4 +1757,6 @@ elif menu == "📝 Central de Avaliações":
 
         if st.button("🗑️ DESCARTAR TUDO"):
             del st.session_state.temp_prova
+            if "area_edicao_v25" in st.session_state:
+                del st.session_state["area_edicao_v25"]
             st.rerun()
