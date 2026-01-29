@@ -160,14 +160,17 @@ def gerar_ia(persona_key, comando, partes_arquivos=[], usar_busca=True):
 def extrair_tag(texto, tag):
     if not texto: return ""
     
-    # Lista de tags mestras que realmente encerram uma seção principal
-    tags_mestras = ["PROFESSOR", "ALUNO", "GABARITO", "IMAGENS", "PEI", "IMAGENS_PEI"]
+    # LISTA COMPLETA DE SINAIS DE PARADA (Materiais + Planejamento)
+    tags_parada = [
+        "PROFESSOR", "ALUNO", "GABARITO", "IMAGENS", "PEI", "IMAGENS_PEI",
+        "CONTEUDO_GERAL", "CONTEUDOS_ESPECIFICOS", "OBJETIVOS_ENSINO", 
+        "METODOLOGIA", "AVALIACAO", "OBSERVACAO", "ADAPTACAO_PEI", "MODALIDADE"
+    ]
     
-    # Criamos uma lista de paragem com todas as tags, exceto a que estamos extraindo agora
-    parada = [t for t in tags_mestras if t.upper() != tag.upper()]
+    # Remove a tag atual da lista de parada para não travar a busca
+    parada = [t for t in tags_parada if t.upper() != tag.upper()]
     
-    # Construímos o padrão de busca: 
-    # Ele busca a tag alvo e captura tudo até encontrar uma das OUTRAS tags mestras ou o fim do texto
+    # Regex que aceita [TAG] ou MARKER_TAG e para em qualquer outra tag da lista ou no fim do texto
     padrao_parada = "|".join([rf"\[{t}\]|MARKER_{t}" for t in parada])
     padrao = rf"(?:\[{tag}\]|MARKER_{tag})[:\s]*(.*?)(?={padrao_parada}|$)"
     
@@ -175,11 +178,12 @@ def extrair_tag(texto, tag):
     match = re.search(padrao, texto, re.DOTALL | re.IGNORECASE)
     
     if match:
-        # Limpeza de Markdown para garantir compatibilidade com o Word
-        return match.group(1).replace("**", "").replace("###", "").replace("##", "").replace("#", "").strip()
+        res = match.group(1).strip()
+        # Limpeza final de resíduos de Markdown
+        return res.replace("**", "").replace("###", "").replace("##", "").replace("#", "").strip()
     
-    # Caso a IA não tenha usado tags (fallback de segurança)
-    if len(texto) > 0 and len(texto) < 5000 and tag == "PROFESSOR":
+    # Fallback: se for um texto curto e não houver outras tags, retorna tudo
+    if len(texto) > 0 and len(texto) < 1000:
         return texto.strip()
         
     return ""
