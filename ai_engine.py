@@ -112,20 +112,32 @@ PERSONAS = {
 
     RETORNE SEMPRE O DOCUMENTO COMPLETO COM TODAS AS TAGS.""",
 
-    "ARQUITETO_EXAMES_V25": """VOCÊ É O ARQUITETO-CHEFE DE EXAMES DO SISTEMA SOSA.
-    Sua missão é a perfeição técnica e pedagógica.
+    "ARQUITETO_EXAMES_V25": """VOCÊ É UM MOTOR DE GERAÇÃO DE DADOS ESTRUTURADOS.
+    Sua saída será processada por um código Python. Qualquer caractere fora das tags quebrará o sistema.
 
-    🚨 PODERES DE REFINAMENTO:
-    1. Se o professor pedir para mudar uma questão, mude-a mantendo o rigor.
-    2. Se o professor pedir para reordenar o gabarito, você deve trocar as alternativas de lugar (A, B, C, D, E) para garantir que não haja repetições viciadas (ex: três letras 'A' seguidas).
-    3. Você tem autoridade para reescrever o documento inteiro se o comando exigir.
+    🚨 REGRAS DE OURO (PROIBIÇÕES):
+    1. PROIBIDO gerar cabeçalhos (Escola, Aluno, etc).
+    2. PROIBIDO usar linhas decorativas (---) ou avisos (Reservado, Blindado).
+    3. PROIBIDO usar Markdown (** ou #). Use símbolos Unicode (x, ÷, ², ³, √).
 
-    🚨 REGRAS RÍGIDAS:
-    - GABARITO BLINDADO: Distribuição equilibrada.
-    - SEM MARKDOWN: Use símbolos Unicode.
-    - CONTEXTO: Itabuna/BA e Realidade Digital.
+    🚨 ESTRUTURA OBRIGATÓRIA (SIGA RIGOROSAMENTE):
+    [ORIENTACOES]
+    (Escreva aqui apenas as instruções da prova)
 
-    RETORNE SEMPRE O TEXTO COMPLETO DA AVALIAÇÃO ATUALIZADO.""",
+    [QUESTOES]
+    (Escreva aqui apenas as questões 01 a X com alternativas A a E. Use o marcador [CÁLCULO] após cada enunciado)
+
+    [GABARITO_TEXTO]
+    (Escreva aqui apenas a lista simples: 01: A, 02: B...)
+
+    [RESPOSTAS_IA]
+    (Escreva aqui a explicação pedagógica: 'Questão 01: A resposta é A porque [explicação técnica]...')
+
+    🚨 CONTEXTO: Itabuna/BA, Shopping Jequitibá, Rio Cachoeira e Realidade Digital.
+    🚨 GABARITO: Distribuição equilibrada (A-E). Sem repetições viciadas.
+
+    NÃO ESCREVA NADA FORA DESSAS TAGS.""",
+
     # --- 3. PERSONAS ORIGINAIS (PRESERVADAS) ---
     "AVALIADOR": """ESPECIALISTA EM DESIGN INSTRUCIONAL E MATEMÁTICA (ITABUNA/BA).
     Sua missão é criar materiais que conectem a Geração Alpha à Matemática Real.
@@ -167,15 +179,16 @@ def gerar_ia(persona_key, comando, partes_arquivos=[], usar_busca=True):
 def extrair_tag(texto, tag):
     if not texto: return ""
     
-    # Lista de Tags Mestras que delimitam as grandes seções do sistema
-    tags_mestras = ["PROFESSOR", "ALUNO", "GABARITO", "IMAGENS", "PEI", "IMAGENS_PEI", 
-                    "CONTEUDOS_ESPECIFICOS", "OBJETIVOS_ENSINO", "METODOLOGIA", "AVALIACAO"]
+    # LISTA EXPANDIDA: Adicionamos as tags de Avaliação à elite do sistema
+    tags_mestras = [
+        "PROFESSOR", "ALUNO", "GABARITO", "IMAGENS", "PEI", "IMAGENS_PEI", 
+        "CONTEUDOS_ESPECIFICOS", "OBJETIVOS_ENSINO", "METODOLOGIA", "AVALIACAO",
+        "ORIENTACOES", "QUESTOES", "GABARITO_TEXTO", "RESPOSTAS_IA" # <--- NOVAS TAGS
+    ]
     
-    # Filtra as tags de parada (todas exceto a que estamos extraindo)
+    # O restante da lógica permanece INTOCADO para garantir a estabilidade
     parada = [t for t in tags_mestras if t.upper() != tag.upper()]
     
-    # Regex robusta: busca a tag alvo e captura tudo até encontrar uma TAG MESTRA ou o fim do texto
-    # Isso impede que o extrator pare em sub-tags como [COLUNA_1] ou [PROMPT]
     padrao_parada = "|".join([rf"\[{t}\]|MARKER_{t}" for t in parada])
     padrao = rf"(?:\[{tag}\]|MARKER_{tag})[:\s]*(.*?)(?={padrao_parada}|$)"
     
@@ -184,10 +197,8 @@ def extrair_tag(texto, tag):
     
     if match:
         res = match.group(1).strip()
-        # Remove resíduos de Markdown para limpeza do Word
         return res.replace("**", "").replace("###", "").replace("##", "").replace("#", "").strip()
     
-    # Fallback para textos sem tags
     if len(texto) > 0 and len(texto) < 5000 and tag == "PROFESSOR":
         return texto.strip()
         
