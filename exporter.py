@@ -10,6 +10,7 @@ from docx.oxml.ns import qn
 from pptx import Presentation
 from pptx.util import Inches, Pt
 from datetime import datetime
+import ai_engine as ai  # <--- ADICIONE ESTA LINHA AQUI
 
 # ==============================================================================
 # FUNÇÃO AUXILIAR: AJUSTE DE ALTURA DE LINHA (PRENSA)
@@ -382,5 +383,97 @@ def gerar_pptx_v24(titulo_doc, conteudo_ia):
             notas.text = script.group(1).strip().replace("**", "")
     file_stream = io.BytesIO()
     prs.save(file_stream)
+    file_stream.seek(0)
+    return file_stream
+
+# ==============================================================================
+# 6. Prova OFICIAL
+# ==============================================================================
+def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
+    doc = Document()
+    section = doc.sections[0]
+    section.top_margin, section.bottom_margin = Inches(0.4), Inches(0.4)
+    section.left_margin, section.right_margin = Inches(0.4), Inches(0.4)
+
+    # --- CABEÇALHO OFICIAL ---
+    header_table = doc.add_table(rows=3, cols=5)
+    header_table.style = 'Table Grid'
+    widths = [Inches(0.9), Inches(2.8), Inches(0.8), Inches(1.7), Inches(1.2)]
+    for i, width in enumerate(widths): header_table.columns[i].width = width
+    
+    c_logo = header_table.cell(0, 0).merge(header_table.cell(2, 0))
+    c_escola = header_table.cell(0, 1).merge(header_table.cell(0, 4))
+    c_aluno = header_table.cell(1, 1).merge(header_table.cell(1, 4))
+    
+    if os.path.exists("logo_escola.png"):
+        p_logo = c_logo.paragraphs[0]
+        p_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p_logo.add_run().add_picture("logo_escola.png", width=Inches(0.75))
+    
+    c_escola.paragraphs[0].add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA").font.bold = True
+    c_aluno.paragraphs[0].add_run(f"ALUNO(A): _________________________________  NOTA: ______").font.size = Pt(10)
+    
+    header_table.cell(2, 1).paragraphs[0].add_run(f"PROF: Ronaldo Gomes").font.size = Pt(9)
+    header_table.cell(2, 2).paragraphs[0].add_run(f"TURMA: {info.get('ano')}").font.size = Pt(9)
+    header_table.cell(2, 3).paragraphs[0].add_run(f"DATA: __/__/2026").font.size = Pt(9)
+    header_table.cell(2, 4).paragraphs[0].add_run(f"{info.get('tipo_prova')}").font.size = Pt(9)
+
+    doc.add_paragraph()
+
+    # --- QUADRO DE ORIENTAÇÕES E GABARITO (LADO A LADO) ---
+    top_table = doc.add_table(rows=1, cols=2)
+    top_table.columns[0].width = Inches(3.5)
+    top_table.columns[1].width = Inches(3.5)
+
+    # Coluna 1: Orientações
+    orient = top_table.cell(0, 0)
+    orient.paragraphs[0].add_run("ORIENTAÇÕES:").font.bold = True
+    txt_orient = "1. Use caneta azul ou preta.\n2. Interpretação faz parte da prova.\n3. Cálculos a lápis são permitidos.\n4. Valor: " + info.get('valor', '10') + " pontos."
+    orient.add_paragraph(txt_orient).runs[0].font.size = Pt(8)
+
+    # Coluna 2: Gabarito de Bolinhas (A a E)
+    gab_cell = top_table.cell(0, 1)
+    num_q = int(info.get('qtd_questoes', 10))
+    gab_table = gab_cell.add_table(rows=num_q + 1, cols=6)
+    gab_table.style = 'Table Grid'
+    
+    # Cabeçalho do Gabarito
+    cols_gab = ["Q", "A", "B", "C", "D", "E"]
+    for i, text in enumerate(cols_gab):
+        p = gab_table.cell(0, i).paragraphs[0]
+        p.add_run(text).font.bold = True
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    # Linhas do Gabarito
+    for i in range(1, num_q + 1):
+        gab_table.cell(i, 0).paragraphs[0].add_run(f"{i:02d}").font.size = Pt(8)
+        for j in range(1, 6):
+            p_bol = gab_table.cell(i, j).paragraphs[0]
+            p_bol.add_run("○").font.size = Pt(10) # Círculo para marcar
+            p_bol.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    doc.add_paragraph()
+
+    # --- QUESTÕES ---
+    questoes_raw = ai.extrair_tag(conteudo_ia, "QUESTOES")
+    for linha in questoes_raw.split('\n'):
+        if not linha.strip(): continue
+        p = doc.add_paragraph()
+        if "QUESTÃO" in linha.upper():
+            run = p.add_run(linha)
+            run.font.bold = True
+            run.font.size = Pt(11)
+        else:
+            p.add_run(linha).font.size = Pt(10)
+        
+        if "[CÁLCULO]" in linha:
+            # Adiciona um espaço para cálculo (tabela vazia)
+            calc_table = doc.add_table(rows=1, cols=1)
+            calc_table.style = 'Table Grid'
+            calc_table.rows[0].height = Inches(1.2)
+            doc.add_paragraph()
+
+    file_stream = io.BytesIO()
+    doc.save(file_stream)
     file_stream.seek(0)
     return file_stream
