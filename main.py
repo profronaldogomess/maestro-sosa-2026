@@ -1639,13 +1639,13 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                     st.info("Banco de relatórios vazio.")
 
 # ==============================================================================
-# MÓDULO: CENTRAL DE AVALIAÇÕES DE ELITE (V25.35 - REFINAMENTO & GESTÃO)
+# MÓDULO: CENTRAL DE AVALIAÇÕES DE ELITE (V25.36 - REFINADOR & DRIVE FIX)
 # ==============================================================================
 elif menu == "📝 Central de Avaliações":
-    st.markdown(f"<h1 style='text-align: center;'>📝 Central de Avaliações de Elite <span style='font-size:15px;'>V25.35</span></h1>", unsafe_allow_html=True)
+    st.markdown(f"<h1 style='text-align: center;'>📝 Central de Avaliações de Elite <span style='font-size:15px;'>V25.36</span></h1>", unsafe_allow_html=True)
     st.markdown("---")
 
-    # --- 1. CONFIGURAÇÃO TÉCNICA (DESIGN SUAVE) ---
+    # --- 1. CONFIGURAÇÃO TÉCNICA ---
     with st.container(border=True):
         c1, c2, c3, c4 = st.columns([1.5, 1, 1, 1.5])
         tipo_av = c1.selectbox("Tipo de Exame:", ["Teste (3.0)", "Prova (4.0)", "Recuperação (10.0)"], key="av_tipo")
@@ -1677,12 +1677,10 @@ elif menu == "📝 Central de Avaliações":
         else:
             st.warning("⚠️ Nenhum plano de aula encontrado para esta série.")
 
-    # --- 3. BOTÃO DE GERAÇÃO PRINCIPAL ---
+    # --- 3. GERAÇÃO PRINCIPAL ---
     st.markdown(" ")
     if st.button("🚀 COMPILAR AVALIAÇÃO DE PRECISÃO", use_container_width=True, type="primary"):
         with st.status("Maestro Arquiteto em ação...", expanded=True) as status:
-            status.write("📊 Analisando Matriz de Dificuldade...")
-            status.write("✍️ Redigindo questões com contexto local...")
             prompt_av = (
                 f"TIPO: {tipo_av}. SÉRIE: {ano_av}º ANO. QTD: {qtd_q} QUESTÕES.\n"
                 f"NÍVEL DE DESAFIO: {nivel_desafio}\n"
@@ -1694,32 +1692,42 @@ elif menu == "📝 Central de Avaliações":
             status.update(label="Avaliação Compilada!", state="complete")
             st.rerun()
 
-    # --- 4. LABORATÓRIO DE REFINAMENTO (O CORAÇÃO DO NOVO PAINEL) ---
+    # --- 4. LABORATÓRIO DE REFINAMENTO ---
     if "temp_prova" in st.session_state:
         st.markdown("---")
-        st.markdown("### 🧪 Laboratório de Refinamento")
         
-        # Abas Elegantes
-        t_rev, t_gab, t_drive = st.tabs(["📝 Edição das Questões", "✅ Gabarito & Justificativas", "☁️ Sincronizar & Exportar"])
+        # REFINADOR MAESTRO (Posicionado antes das abas para maior visibilidade)
+        st.markdown("### 🧪 Refinador Maestro")
+        comando_refine = st.chat_input("Digite aqui o que deseja mudar (Ex: 'Troque a Q2 por uma de frações', 'Mude o gabarito da Q1 para E')")
+        
+        if comando_refine:
+            with st.spinner("Refinando avaliação..."):
+                # Usa o texto que está na memória como base para a alteração
+                novo_prompt = (
+                    f"VOCÊ É O ARQUITETO DE EXAMES. ALTERE O TEXTO ABAIXO CONFORME O COMANDO.\n\n"
+                    f"TEXTO ATUAL:\n{st.session_state.temp_prova}\n\n"
+                    f"COMANDO DO PROFESSOR: {comando_refine}\n\n"
+                    f"RETORNE O TEXTO COMPLETO DA PROVA ATUALIZADO."
+                )
+                st.session_state.temp_prova = ai.gerar_ia("ARQUITETO_EXAMES_V25", novo_prompt)
+                st.rerun()
+
+        # Abas de Gestão
+        t_rev, t_gab, t_drive = st.tabs(["📝 Edição Manual", "✅ Gabarito Técnico", "☁️ Sincronizar Drive"])
         
         with t_rev:
-            # Área de texto editável que preserva mudanças manuais
-            conteudo_atual = st.text_area("Edite o texto diretamente ou use o Refinador abaixo:", 
-                                          st.session_state.temp_prova, height=500, key="area_edicao_prova")
-            
-            # REFINADOR MAESTRO (Chat Input)
-            comando_refine = st.chat_input("Comando Maestro (Ex: 'Troque a Q4 por uma de Geometria', 'Mude o gabarito da Q1 para D')")
-            if comando_refine:
-                with st.spinner("Refinando avaliação..."):
-                    novo_prompt = f"TEXTO ATUAL DA PROVA:\n{conteudo_atual}\n\nCOMANDO DE ALTERAÇÃO: {comando_refine}\nResponda apenas com o texto da prova completo e atualizado."
-                    st.session_state.temp_prova = ai.gerar_ia("ARQUITETO_EXAMES_V25", novo_prompt)
-                    st.rerun()
-
+            # O valor do text_area é sempre o que está no session_state
+            st.session_state.temp_prova = st.text_area(
+                "Texto da Avaliação:", 
+                value=st.session_state.temp_prova, 
+                height=500, 
+                key="area_edicao_v25"
+            )
+        
         with t_gab:
-            st.markdown("#### Conferência Técnica")
-            st.code(ai.extrair_tag(conteudo_atual, "GABARITO_TEXTO"), language="text")
-            with st.expander("Ver Justificativas da IA"):
-                st.write(ai.extrair_tag(conteudo_atual, "RESPOSTAS_IA"))
+            st.code(ai.extrair_tag(st.session_state.temp_prova, "GABARITO_TEXTO"), language="text")
+            with st.expander("Ver Justificativas"):
+                st.write(ai.extrair_tag(st.session_state.temp_prova, "RESPOSTAS_IA"))
         
         with t_drive:
             st.subheader("🚀 Arquivamento Estruturado")
@@ -1727,18 +1735,23 @@ elif menu == "📝 Central de Avaliações":
             trimestre_av = c_d1.selectbox("Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"])
             nome_arq = c_d2.text_input("Nome do Arquivo:", f"PROVA_{ano_av}ANO_{tipo_av.split(' ')[0]}_{datetime.now().strftime('%d%m')}")
             
-            if st.button("☁️ SINCRONIZAR COM GOOGLE DRIVE", use_container_width=True):
+            if st.button("☁️ ENVIAR PARA O DRIVE", use_container_width=True):
                 with st.status("Sincronizando...", expanded=False):
                     info_doc = {"ano": f"{ano_av}º", "tipo_prova": tipo_av.upper(), "valor": "10", "qtd_questoes": qtd_q}
-                    doc_io = exporter.gerar_docx_prova_v25(nome_arq, conteudo_atual, info_doc)
-                    link = db.subir_e_converter_para_google_docs(doc_io, nome_arq, trimestre=trimestre_av, categoria=f"Avaliacoes/{ano_av}Ano")
+                    doc_io = exporter.gerar_docx_prova_v25(nome_arq, st.session_state.temp_prova, info_doc)
+                    
+                    # CORREÇÃO DA HIERARQUIA: Trimestre > Avaliacoes > Ano
+                    link = db.subir_e_converter_para_google_docs(
+                        doc_io, 
+                        nome_arq, 
+                        trimestre=trimestre_av, 
+                        categoria=f"Avaliacoes/{ano_av}Ano"
+                    )
                 
                 if "https" in str(link):
-                    st.success("✅ Arquivado com sucesso!")
+                    st.success(f"✅ Arquivado em: {trimestre_av} / Avaliacoes / {ano_av}Ano")
                     st.link_button("📂 ABRIR NO GOOGLE DOCS", str(link), use_container_width=True)
 
-        # BOTÃO DE DESCARTE (Elegante e Perigoso)
-        st.markdown(" ")
-        if st.button("🗑️ DESCARTAR TUDO E RECOMEÇAR", use_container_width=True):
+        if st.button("🗑️ DESCARTAR E RECOMEÇAR", use_container_width=True):
             del st.session_state.temp_prova
             st.rerun()
