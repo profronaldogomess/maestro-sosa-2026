@@ -159,13 +159,29 @@ def gerar_ia(persona_key, comando, partes_arquivos=[], usar_busca=True):
 
 def extrair_tag(texto, tag):
     if not texto: return ""
-    padrao = rf"(?:\[{tag}\]|MARKER_{tag})[:\s]*(.*?)(?=\[|MARKER_|$)"
+    
+    # Lista de tags mestras que realmente encerram uma seção principal
+    tags_mestras = ["PROFESSOR", "ALUNO", "GABARITO", "IMAGENS", "PEI", "IMAGENS_PEI"]
+    
+    # Criamos uma lista de paragem com todas as tags, exceto a que estamos extraindo agora
+    parada = [t for t in tags_mestras if t.upper() != tag.upper()]
+    
+    # Construímos o padrão de busca: 
+    # Ele busca a tag alvo e captura tudo até encontrar uma das OUTRAS tags mestras ou o fim do texto
+    padrao_parada = "|".join([rf"\[{t}\]|MARKER_{t}" for t in parada])
+    padrao = rf"(?:\[{tag}\]|MARKER_{tag})[:\s]*(.*?)(?={padrao_parada}|$)"
+    
     import re
     match = re.search(padrao, texto, re.DOTALL | re.IGNORECASE)
+    
     if match:
+        # Limpeza de Markdown para garantir compatibilidade com o Word
         return match.group(1).replace("**", "").replace("###", "").replace("##", "").replace("#", "").strip()
-    if len(texto) > 0 and len(texto) < 5000:
+    
+    # Caso a IA não tenha usado tags (fallback de segurança)
+    if len(texto) > 0 and len(texto) < 5000 and tag == "PROFESSOR":
         return texto.strip()
+        
     return ""
 
 def subir_para_google(caminho_arquivo, nome_exibicao):
