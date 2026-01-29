@@ -1699,12 +1699,14 @@ elif menu == "📝 Central de Avaliações":
         
         if comando_refine:
             with st.spinner("Aplicando refinamento de elite..."):
-                # Captura o texto que está no widget de edição
                 texto_atual = st.session_state.get("area_edicao_v25", st.session_state.temp_prova)
                 
                 prompt_refine = (
-                    f"VOCÊ É O ARQUITETO DE EXAMES. EXECUTE O COMANDO DO PROFESSOR NO TEXTO ABAIXO.\n"
-                    f"MANTENHA RIGOROSAMENTE AS TAGS [ORIENTACOES], [QUESTOES], [GABARITO_TEXTO] e [RESPOSTAS_IA].\n\n"
+                    f"VOCÊ É O ARQUITETO DE EXAMES. EXECUTE O COMANDO ABAIXO.\n"
+                    f"REGRAS DE OURO:\n"
+                    f"1. NÃO CRIE CABEÇALHOS (Escola, Aluno, etc).\n"
+                    f"2. MANTENHA AS TAGS: [ORIENTACOES], [QUESTOES], [GABARITO_TEXTO] e [RESPOSTAS_IA].\n"
+                    f"3. O GABARITO DEVE SER COMENTADO NA TAG [RESPOSTAS_IA].\n\n"
                     f"COMANDO: {comando_refine}\n\n"
                     f"TEXTO ATUAL:\n{texto_atual}\n\n"
                     f"RETORNE O DOCUMENTO COMPLETO ATUALIZADO."
