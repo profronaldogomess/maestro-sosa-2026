@@ -399,7 +399,7 @@ if menu == "🤖 Maestro Dashboard":
         st.session_state.messages.append({"role": "assistant", "content": resposta})
 
 # ==============================================================================
-# MÓDULO: LABORATÓRIO DE MATERIAIS V25.23 (DESIGN INTEGRADO E SEM ERROS)
+# MÓDULO: LABORATÓRIO DE MATERIAIS V25.25 (INTELIGÊNCIA DUAL & MATCH SEGURO)
 # ==============================================================================
 elif menu == "🧪 Criador de Aulas":
     st.title("🧪 Laboratório de Materiais (V25)")
@@ -410,6 +410,7 @@ elif menu == "🧪 Criador de Aulas":
     if "v_lab" not in st.session_state: st.session_state.v_lab = 1
 
     with tab_criar:
+        # --- FASE 1: INTELIGÊNCIA DE VÍNCULO (PIP & DUAL ENGINE) ---
         with st.container(border=True):
             st.markdown("### 🔗 1. Sincronia com Planejamento (Ponto ID)")
             c1, c2, c3 = st.columns([1, 2, 1])
@@ -423,106 +424,104 @@ elif menu == "🧪 Criador de Aulas":
                 sem_lab = c2.selectbox("Semana de Referência:", planos_ano['SEMANA'].tolist(), key="lab_sem_v25")
                 aula_num = c3.radio("Foco da Aula:", ["Aula 1", "Aula 2"], horizontal=True)
                 
+                # Captura do Plano e Diagnóstico
                 plano_row = planos_ano[planos_ano['SEMANA'] == sem_lab].iloc[0]
                 plano_raw = plano_row['PLANO_TEXTO']
                 
-                # DETECÇÃO DE MÉTODO MELHORADA (Busca por 'LIVRO' em qualquer lugar do marcador modalidade)
+                # --- LÓGICA DE RECONHECIMENTO DE MÉTODO ---
                 modalidade_planejada = ai.extrair_tag(plano_raw, "MODALIDADE").upper()
                 is_livro = "LIVRO" in modalidade_planejada or "MÉTODO LIVRO" in plano_raw.upper()
                 
                 metodo_fiel = "📖 LIVRO DIDÁTICO" if is_livro else "🎛️ MANUAL / BANCO"
                 cor_metodo = "#2962FF" if is_livro else "#00C853"
                 
+                # Extração Limpa de Metadados
                 cont_fiel = ai.extrair_tag(plano_raw, "CONTEUDOS_ESPECIFICOS")
                 obj_fiel = ai.extrair_tag(plano_raw, "OBJETIVOS_ENSINO")
                 metod_fiel = ai.extrair_tag(plano_raw, "METODOLOGIA")
 
+                # Painel de Status Visual
                 st.markdown(f"""
-                    <div style='background-color: rgba(41, 98, 255, 0.1); padding: 15px; border-radius: 10px; border-left: 5px solid {cor_metodo};'>
-                        <b style='color: {cor_metodo};'>{metodo_fiel}</b> | 
-                        <b>Conteúdo:</b> {cont_fiel[:100]}... | 
-                        <b>Objetivo:</b> {obj_fiel[:100]}...
+                    <div style='background-color: rgba(41, 98, 255, 0.05); padding: 15px; border-radius: 10px; border-left: 5px solid {cor_metodo}; border-right: 1px solid rgba(255,255,255,0.1); border-top: 1px solid rgba(255,255,255,0.1); border-bottom: 1px solid rgba(255,255,255,0.1);'>
+                        <b style='color: {cor_metodo}; font-size: 16px;'>{metodo_fiel}</b><br>
+                        <span style='font-size: 13px; opacity: 0.8;'><b>Conteúdo Planejado:</b> {cont_fiel[:150]}...</span><br>
+                        <span style='font-size: 13px; opacity: 0.8;'><b>Objetivo Planejado:</b> {obj_fiel[:150]}...</span>
                     </div>
                 """, unsafe_allow_html=True)
 
+        # --- FASE 2: PARÂMETROS DE PRECISÃO (COM MATCH INTELIGENTE) ---
         st.markdown(" ")
         with st.container(border=True):
             st.markdown("### 🎯 2. Parâmetros de Precisão")
             df_base_ano = df_curriculo[df_curriculo['ANO'] == int(ano_lab)]
             col_p1, col_p2 = st.columns(2)
             
-            # LÓGICA DE MATCH INTELIGENTE:
-            # Se o conteúdo do CSV estiver contido no texto do plano, ele seleciona automaticamente.
-            def check_match(item_csv, texto_plano):
-                item_limpo = str(item_csv).upper().strip()
-                plano_limpo = str(texto_plano).upper().strip()
-                # Verifica se o item do banco está no plano ou se partes importantes dele estão
-                return item_limpo in plano_limpo or plano_limpo in item_limpo
+            # FUNÇÃO DE MATCH INTELIGENTE (Resolve o problema do Modo Livro)
+            def check_match_inteligente(item_csv, texto_plano):
+                item = str(item_csv).upper().strip()
+                plano = str(texto_plano).upper().strip()
+                # Verifica se o item do banco está no plano ou vice-versa (match parcial)
+                return item in plano or plano in item or any(word in plano for word in item.split() if len(word) > 4)
 
-            lista_cont_default = [c for c in df_base_ano['CONTEUDO_ESPECIFICO'].unique() if check_match(c, cont_fiel)]
-            
+            # Seleção Automática de Conteúdos
+            lista_cont_default = [c for c in df_base_ano['CONTEUDO_ESPECIFICO'].unique() if check_match_inteligente(c, cont_fiel)]
             sel_cont = col_p1.multiselect("Confirmar Conteúdos (CSV):", 
                                          options=df_base_ano['CONTEUDO_ESPECIFICO'].unique(), 
                                          default=lista_cont_default)
             
-            lista_obj_default = [o for o in df_base_ano['OBJETIVOS'].unique() if check_match(o, obj_fiel)]
+            # Seleção Automática de Objetivos
+            opcoes_obj = df_base_ano[df_base_ano['CONTEUDO_ESPECIFICO'].isin(sel_cont)]['OBJETIVOS'].unique().tolist() if sel_cont else []
+            lista_obj_default = [o for o in opcoes_obj if check_match_inteligente(o, obj_fiel)]
             
             sel_obj = col_p2.multiselect("Confirmar Objetivos (CSV):", 
-                                        options=df_base_ano[df_base_ano['CONTEUDO_ESPECIFICO'].isin(sel_cont)]['OBJETIVOS'].unique().tolist() if sel_cont else [],
-                                        default=[o for o in lista_obj_default if o in (df_base_ano[df_base_ano['CONTEUDO_ESPECIFICO'].isin(sel_cont)]['OBJETIVOS'].unique().tolist() if sel_cont else [])])
-
-        # --- FASE 2: PARÂMETROS DE PRECISÃO ---
-        st.markdown(" ")
-        with st.container(border=True):
-            st.markdown("### 🎯 2. Parâmetros de Precisão")
-            df_base_ano = df_curriculo[df_curriculo['ANO'] == int(ano_lab)]
-            col_p1, col_p2 = st.columns(2)
-            
-            sel_cont = col_p1.multiselect("Confirmar Conteúdos (CSV):", 
-                                         options=df_base_ano['CONTEUDO_ESPECIFICO'].unique(), 
-                                         default=[c for c in df_base_ano['CONTEUDO_ESPECIFICO'].unique() if str(c).upper() in cont_fiel.upper()])
-            
-            sel_obj = col_p2.multiselect("Confirmar Objetivos (CSV):", 
-                                        options=df_base_ano[df_base_ano['CONTEUDO_ESPECIFICO'].isin(sel_cont)]['OBJETIVOS'].unique().tolist() if sel_cont else [],
-                                        default=[o for o in df_base_ano['OBJETIVOS'].unique() if str(o).upper() in obj_fiel.upper()])
+                                        options=opcoes_obj,
+                                        default=lista_obj_default)
 
             st.markdown("---")
             cp1, cp2, cp3 = st.columns([1, 1, 1])
             formato = cp1.radio("Formato de Saída:", ["Quadro (Lousa)", "Slides (Apresentação)"], horizontal=True)
-            qtd_q = cp2.slider("Questões:", 1, 15, 4)
+            qtd_q = cp2.slider("Quantidade de Questões:", 1, 15, 4)
             nivel = cp3.select_slider("Nível de Desafio:", options=["Básico", "Intermediário", "Desafio"])
-            instr = st.text_area("Instruções Adicionais:", placeholder="Ex: Use contexto de Itabuna...")
+            instr = st.text_area("Instruções Adicionais:", placeholder="Ex: Use exemplos de astronomia...")
 
             if st.button("🚀 COMPILAR MATERIAL DE ELITE", use_container_width=True, type="primary"):
-                with st.spinner("Maestro processando Injeção de Plano..."):
+                with st.spinner("Maestro processando Injeção de Plano e Rigor Curricular..."):
+                    # Lógica de Anexo de PDF (Dual Engine)
                     arquivos_contexto = []
-                    if "LIVRO" in metodo_fiel:
+                    if is_livro:
                         import re
+                        # Tenta extrair o nome do livro do plano
                         match_livro = re.search(r"MÉTODO LIVRO: \['(.*?)'\]", plano_raw)
-                        if match_livro:
-                            nome_livro = match_livro.group(1)
+                        nome_livro = match_livro.group(1) if match_livro else None
+                        if nome_livro:
                             livro_data = df_materiais[df_materiais['NOME_ARQUIVO'] == nome_livro]
                             if not livro_data.empty:
                                 arquivos_contexto.append(types.Part.from_uri(file_uri=livro_data.iloc[0]['URI_ARQUIVO'], mime_type="application/pdf"))
 
-                    prompt_v25 = (f"🚨 PROTOCOLO PIP ATIVADO 🚨\nPLANO: {plano_raw}\nOBJETIVO: {sel_obj}\n"
-                                  f"FOCO: {aula_num} | SÉRIE: {ano_lab}º ANO | QUESTÕES: {qtd_q}\n"
-                                  f"FORMATO: {formato} | NÍVEL: {nivel}\nINSTRUÇÃO: {instr}")
-                    
+                    # Prompt de Alta Fidelidade (PIP)
+                    prompt_v25 = (
+                        f"🚨 PROTOCOLO PIP ATIVADO (FIDELIDADE TOTAL) 🚨\n"
+                        f"MÉTODO: {metodo_fiel}\n"
+                        f"PLANO DE ENSINO: {plano_raw}\n"
+                        f"OBJETIVO CURRICULAR: {sel_obj}\n"
+                        f"FOCO: {aula_num} | SÉRIE: {ano_lab}º ANO | QUESTÕES: {qtd_q}\n"
+                        f"FORMATO: {formato} | NÍVEL: {nivel}\n"
+                        f"INSTRUÇÃO EXTRA: {instr}\n\n"
+                        f"AÇÃO: Gere o material respeitando o design de regência em duas colunas e o rigor do plano."
+                    )
                     st.session_state.lab_temp = ai.gerar_ia("MESTRE_V24", prompt_v25, partes_arquivos=arquivos_contexto)
                     st.session_state.v_lab += 1
                     if "lab_pei" in st.session_state: del st.session_state.lab_pei
                     st.rerun()
 
-        # --- FASE 3: LABORATÓRIO DE EDIÇÃO (AQUI ENTRA A INTEGRAÇÃO) ---
+        # --- FASE 3: LABORATÓRIO DE EDIÇÃO E EXPORTAÇÃO ---
         if "lab_temp" in st.session_state:
-            st.markdown("---")
+            st.markdown(" ")
             st.markdown("### 🤖 3. Refinamento e Acabamento")
             
             txt_bruto = st.session_state.lab_temp
             
-            # 1. CRIAMOS O DICIONÁRIO DE INFORMAÇÕES (A PONTE)
-            # Isso evita o erro de 'aula_num' não definido
+            # Preparação do Dicionário de Informações para a Função de Visualização
             info_para_ia = {
                 "aula": aula_num,
                 "ano": str(ano_lab),
@@ -533,7 +532,7 @@ elif menu == "🧪 Criador de Aulas":
                 "ed_alu": ai.extrair_tag(txt_bruto, "ALUNO")
             }
 
-            # 2. CHAMAMOS A FUNÇÃO DE VISUALIZAÇÃO PASSANDO O DICIONÁRIO
+            # Chamada da Função Centralizada de Visualização (V25.22)
             exibir_material_estruturado(txt_bruto, f"lab_v{st.session_state.v_lab}", info_aula=info_para_ia)
 
             if st.button("🗑️ DESCARTAR E RECOMEÇAR", use_container_width=True):
