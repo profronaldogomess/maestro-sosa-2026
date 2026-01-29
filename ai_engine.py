@@ -112,31 +112,30 @@ PERSONAS = {
 
     RETORNE SEMPRE O DOCUMENTO COMPLETO COM TODAS AS TAGS.""",
 
-    "ARQUITETO_EXAMES_V25": """VOCÊ É UM MOTOR DE GERAÇÃO DE DADOS ESTRUTURADOS.
-    Sua saída será processada por um código Python. Qualquer caractere fora das tags quebrará o sistema.
-
-    🚨 REGRAS DE OURO (PROIBIÇÕES):
-    1. PROIBIDO gerar cabeçalhos (Escola, Aluno, etc).
-    2. PROIBIDO usar linhas decorativas (---) ou avisos (Reservado, Blindado).
-    3. PROIBIDO usar Markdown (** ou #). Use símbolos Unicode (x, ÷, ², ³, √).
-
-    🚨 ESTRUTURA OBRIGATÓRIA (SIGA RIGOROSAMENTE):
+"ARQUITETO_EXAMES_V25": """VOCÊ É O MOTOR DE DADOS ESTRUTURADOS DO SISTEMA SOSA.
+    Sua missão é gerar avaliações de Matemática de elite. 
+    
+    🚨 LEI DE OURO DAS TAGS (NÃO NEGOCIÁVEL):
+    Você deve obrigatoriamente envolver o conteúdo nas tags abaixo. O sistema Python depende delas para funcionar.
+    
     [ORIENTACOES]
-    (Escreva aqui apenas as instruções da prova)
-
+    (Escreva aqui as instruções da prova: caneta, cálculos, valor, etc.)
+    
     [QUESTOES]
-    (Escreva aqui apenas as questões 01 a X com alternativas A a E. Use o marcador [CÁLCULO] após cada enunciado)
-
+    (Escreva aqui as questões de 1 a X. Use CAIXA ALTA. 
+    Cada questão deve ter 5 alternativas de A a E. 
+    Insira o marcador [CÁLCULO] logo após o enunciado de cada questão.)
+    
     [GABARITO_TEXTO]
-    (Escreva aqui apenas a lista simples: 01: A, 02: B...)
-
+    (Escreva aqui apenas a lista de respostas. Ex: 1-A, 2-C, 3-E...)
+    
     [RESPOSTAS_IA]
-    (Escreva aqui a explicação pedagógica: 'Questão 01: A resposta é A porque [explicação técnica]...')
+    (Escreva aqui a explicação pedagógica de cada questão: 'A resposta é B porque...')
 
-    🚨 CONTEXTO: Itabuna/BA, Shopping Jequitibá, Rio Cachoeira e Realidade Digital.
-    🚨 GABARITO: Distribuição equilibrada (A-E). Sem repetições viciadas.
-
-    NÃO ESCREVA NADA FORA DESSAS TAGS.""",
+    🚨 REGRAS DE TEXTO:
+    - Use contextos de Itabuna (Shopping Jequitibá, Rio Cachoeira) e Games (Minecraft, Free Fire).
+    - GABARITO BLINDADO: Distribua as letras A, B, C, D, E de forma equilibrada.
+    - SEM MARKDOWN: Proibido usar ** ou #. Use símbolos Unicode (x, ÷, ², ³, √).""",
 
     # --- 3. PERSONAS ORIGINAIS (PRESERVADAS) ---
     "AVALIADOR": """ESPECIALISTA EM DESIGN INSTRUCIONAL E MATEMÁTICA (ITABUNA/BA).
@@ -178,28 +177,17 @@ def gerar_ia(persona_key, comando, partes_arquivos=[], usar_busca=True):
 
 def extrair_tag(texto, tag):
     if not texto: return ""
-    
-    # LISTA EXPANDIDA: Adicionamos as tags de Avaliação à elite do sistema
-    tags_mestras = [
-        "PROFESSOR", "ALUNO", "GABARITO", "IMAGENS", "PEI", "IMAGENS_PEI", 
-        "CONTEUDOS_ESPECIFICOS", "OBJETIVOS_ENSINO", "METODOLOGIA", "AVALIACAO",
-        "ORIENTACOES", "QUESTOES", "GABARITO_TEXTO", "RESPOSTAS_IA" # <--- NOVAS TAGS
-    ]
-    
-    # O restante da lógica permanece INTOCADO para garantir a estabilidade
-    parada = [t for t in tags_mestras if t.upper() != tag.upper()]
-    
-    padrao_parada = "|".join([rf"\[{t}\]|MARKER_{t}" for t in parada])
-    padrao = rf"(?:\[{tag}\]|MARKER_{tag})[:\s]*(.*?)(?={padrao_parada}|$)"
-    
     import re
+    # Busca a tag ignorando se tem colchetes ou MARKER_
+    padrao = rf"(?:\[{tag}\]|MARKER_{tag})[:\s]*(.*?)(?=\[(?:ORIENTACOES|QUESTOES|GABARITO_TEXTO|RESPOSTAS_IA|PROFESSOR|ALUNO|GABARITO|PEI|IMAGENS)\]|MARKER_|$)"
     match = re.search(padrao, texto, re.DOTALL | re.IGNORECASE)
     
     if match:
         res = match.group(1).strip()
         return res.replace("**", "").replace("###", "").replace("##", "").replace("#", "").strip()
     
-    if len(texto) > 0 and len(texto) < 5000 and tag == "PROFESSOR":
+    # Fallback: Se for a aba de questões e não achou a tag, mostra o texto todo para não ficar vazio
+    if tag == "QUESTOES" and len(texto) > 0:
         return texto.strip()
         
     return ""
