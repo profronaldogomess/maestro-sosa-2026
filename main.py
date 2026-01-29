@@ -1741,19 +1741,20 @@ elif menu == "📝 Central de Avaliações":
                     info_doc = {"ano": f"{ano_av}º", "tipo_prova": tipo_av.upper(), "valor": "10", "qtd_questoes": qtd_q}
                     doc_io = exporter.gerar_docx_prova_v25(nome_arq, st.session_state.temp_prova, info_doc)
                     
-                    # HIERARQUIA CORRIGIDA: Avaliacoes > 6ano > I Trimestre
-                    # Passamos "" para semana e aula para evitar a criação de pastas inúteis
+                    # CHAMADA CORRIGIDA:
+                    # categoria = "6ano"
+                    # trimestre = "I Trimestre"
+                    # modo = "AVALIACAO" (Isso ativa a lógica limpa no Script)
                     link = db.subir_e_converter_para_google_docs(
                         doc_io, 
                         nome_arq, 
-                        trimestre="Avaliacoes", 
+                        trimestre=trimestre_av, 
                         categoria=f"{ano_av}ano",
-                        semana=trimestre_av,
-                        aula="" # <--- ISSO BLOQUEIA A PASTA 'AULA GERAL'
+                        modo="AVALIACAO" 
                     )
                 
                 if "https" in str(link):
-                    st.success(f"✅ Arquivado em: Avaliacoes > {ano_av}ano > {trimestre_av}")
+                    st.success(f"✅ Arquivado em: SOSA_DOCUMENTOS > Avaliacoes > {ano_av}ano > {trimestre_av}")
                     st.link_button("📂 ABRIR NO GOOGLE DOCS", str(link), use_container_width=True)
 
         if st.button("🗑️ DESCARTAR E RECOMEÇAR", use_container_width=True):
