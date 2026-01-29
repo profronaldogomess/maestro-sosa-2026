@@ -410,7 +410,6 @@ elif menu == "🧪 Criador de Aulas":
     if "v_lab" not in st.session_state: st.session_state.v_lab = 1
 
     with tab_criar:
-        # --- FASE 1: INTELIGÊNCIA DE VÍNCULO (PIP & DUAL ENGINE) ---
         with st.container(border=True):
             st.markdown("### 🔗 1. Sincronia com Planejamento (Ponto ID)")
             c1, c2, c3 = st.columns([1, 2, 1])
@@ -424,19 +423,53 @@ elif menu == "🧪 Criador de Aulas":
                 sem_lab = c2.selectbox("Semana de Referência:", planos_ano['SEMANA'].tolist(), key="lab_sem_v25")
                 aula_num = c3.radio("Foco da Aula:", ["Aula 1", "Aula 2"], horizontal=True)
                 
-                # Captura do Plano e Diagnóstico
                 plano_row = planos_ano[planos_ano['SEMANA'] == sem_lab].iloc[0]
                 plano_raw = plano_row['PLANO_TEXTO']
                 
-                # Detecção Automática de Método
-                metodo_fiel = "📖 LIVRO DIDÁTICO" if "MÉTODO LIVRO" in plano_raw else "🎛️ MANUAL / BANCO"
+                # DETECÇÃO DE MÉTODO MELHORADA (Busca por 'LIVRO' em qualquer lugar do marcador modalidade)
+                modalidade_planejada = ai.extrair_tag(plano_raw, "MODALIDADE").upper()
+                is_livro = "LIVRO" in modalidade_planejada or "MÉTODO LIVRO" in plano_raw.upper()
                 
-                # Extração de Metadados para o Painel
+                metodo_fiel = "📖 LIVRO DIDÁTICO" if is_livro else "🎛️ MANUAL / BANCO"
+                cor_metodo = "#2962FF" if is_livro else "#00C853"
+                
                 cont_fiel = ai.extrair_tag(plano_raw, "CONTEUDOS_ESPECIFICOS")
                 obj_fiel = ai.extrair_tag(plano_raw, "OBJETIVOS_ENSINO")
                 metod_fiel = ai.extrair_tag(plano_raw, "METODOLOGIA")
 
-                st.info(f"**{metodo_fiel}** | **Conteúdo:** {cont_fiel} | **Objetivo:** {obj_fiel}")
+                st.markdown(f"""
+                    <div style='background-color: rgba(41, 98, 255, 0.1); padding: 15px; border-radius: 10px; border-left: 5px solid {cor_metodo};'>
+                        <b style='color: {cor_metodo};'>{metodo_fiel}</b> | 
+                        <b>Conteúdo:</b> {cont_fiel[:100]}... | 
+                        <b>Objetivo:</b> {obj_fiel[:100]}...
+                    </div>
+                """, unsafe_allow_html=True)
+
+        st.markdown(" ")
+        with st.container(border=True):
+            st.markdown("### 🎯 2. Parâmetros de Precisão")
+            df_base_ano = df_curriculo[df_curriculo['ANO'] == int(ano_lab)]
+            col_p1, col_p2 = st.columns(2)
+            
+            # LÓGICA DE MATCH INTELIGENTE:
+            # Se o conteúdo do CSV estiver contido no texto do plano, ele seleciona automaticamente.
+            def check_match(item_csv, texto_plano):
+                item_limpo = str(item_csv).upper().strip()
+                plano_limpo = str(texto_plano).upper().strip()
+                # Verifica se o item do banco está no plano ou se partes importantes dele estão
+                return item_limpo in plano_limpo or plano_limpo in item_limpo
+
+            lista_cont_default = [c for c in df_base_ano['CONTEUDO_ESPECIFICO'].unique() if check_match(c, cont_fiel)]
+            
+            sel_cont = col_p1.multiselect("Confirmar Conteúdos (CSV):", 
+                                         options=df_base_ano['CONTEUDO_ESPECIFICO'].unique(), 
+                                         default=lista_cont_default)
+            
+            lista_obj_default = [o for o in df_base_ano['OBJETIVOS'].unique() if check_match(o, obj_fiel)]
+            
+            sel_obj = col_p2.multiselect("Confirmar Objetivos (CSV):", 
+                                        options=df_base_ano[df_base_ano['CONTEUDO_ESPECIFICO'].isin(sel_cont)]['OBJETIVOS'].unique().tolist() if sel_cont else [],
+                                        default=[o for o in lista_obj_default if o in (df_base_ano[df_base_ano['CONTEUDO_ESPECIFICO'].isin(sel_cont)]['OBJETIVOS'].unique().tolist() if sel_cont else [])])
 
         # --- FASE 2: PARÂMETROS DE PRECISÃO ---
         st.markdown(" ")
