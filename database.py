@@ -184,7 +184,8 @@ def salvar_ata_conselho(data, turma, tipo, conteudo):
 
 def subir_e_converter_para_google_docs(file_stream, nome_arquivo, trimestre="I Trimestre", categoria="Material de Sala", semana="Semana Geral", aula="Aula Geral", modo="AULA"):
     try:
-        URL_DA_PONTE = "https://script.google.com/macros/s/AKfycby6JpIPHk6vlCfQSms-wxLcRmUNNw6yVOf6qkBnEuTrco2bVFw8Apl9m0wqTIlOcw01_w/exec"
+        # Certifique-se de que a URL_DA_PONTE está correta nos seus segredos ou arquivo
+        URL_DA_PONTE = "https://script.google.com/macros/s/AKfycby6JpIPHk6vlCfQSms-wxLcRmUNNw6yVOf6qkBnEuTrco2bVFw8Apl9m0wqTIlOcw01_w/exec" 
         file_stream.seek(0)
         file_b64 = base64.b64encode(file_stream.read()).decode('utf-8')
         
@@ -194,7 +195,7 @@ def subir_e_converter_para_google_docs(file_stream, nome_arquivo, trimestre="I T
             "categoria": categoria, 
             "semanaRef": semana, 
             "aulaRef": aula, 
-            "modo": modo, # NOVO PARÂMETRO
+            "modo": modo, # Define se é AVALIACAO ou AULA
             "fileB64": file_b64
         }
         
