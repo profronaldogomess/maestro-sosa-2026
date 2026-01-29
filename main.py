@@ -8,8 +8,10 @@ from google.genai import types
 import time
 import os
 import plotly.express as px
-import exporter  # Novo módulo de design DOCX
-import re  
+import exporter
+import re
+import ai_engine as ai  # <--- ADICIONE ESTA LINHA AQUI
+
 
 st.set_page_config(page_title="SOSA 2026 | Master Intelligence", layout="wide", page_icon="🏫")
 
@@ -1634,3 +1636,129 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                         st.info("Nenhum histórico para este aluno.")
                 else:
                     st.info("Banco de relatórios vazio.")
+
+# ==============================================================================
+# MÓDULO: CENTRAL DE AVALIAÇÕES DE ELITE (V25.26 - GABARITO BLINDADO A-E)
+# ==============================================================================
+elif menu == "📝 Central de Avaliações":
+    st.title("📝 Central de Avaliações de Elite")
+    st.markdown("---")
+
+    # --- 1. PARÂMETROS TÉCNICOS ---
+    with st.container(border=True):
+        st.markdown("### ⚙️ Configuração do Exame")
+        c1, c2, c3 = st.columns([1.5, 1, 1.5])
+        
+        tipo_av = c1.selectbox(
+            "Tipo de Avaliação:", 
+            ["Teste (3.0 pontos)", "Prova (4.0 pontos)", "Recuperação Paralela (10.0 pontos)", "Recuperação Final (10.0 pontos)"],
+            key="av_tipo"
+        )
+        
+        ano_av = c2.selectbox("Série/Ano:", [6, 7, 8, 9], key="av_ano")
+        
+        qtd_q = c3.slider("Quantidade de Questões:", 5, 15, 10, key="av_qtd")
+
+    # --- 2. SINCRONIA COM O PLANEJAMENTO (PONTO ID) ---
+    st.markdown(" ")
+    with st.container(border=True):
+        st.markdown("### 🔗 Vínculo com Conteúdo Ministrado")
+        
+        # Filtra os planos já salvos para este ano
+        df_planos_ano = df_planos[df_planos['ANO'] == f"{ano_av}º"]
+        
+        if df_planos_ano.empty:
+            st.warning(f"⚠️ Nenhum plano de aula encontrado para o {ano_av}º Ano no banco de dados. O Maestro usará a BNCC geral.")
+            assuntos_selecionados = []
+            contexto_planos = "Usar base curricular padrão para o ano selecionado."
+        else:
+            assuntos_selecionados = st.multiselect(
+                "Selecione as Semanas/Assuntos que cairão na prova:",
+                options=df_planos_ano['SEMANA'].tolist(),
+                help="O Maestro lerá o que você ensinou nestas semanas para criar as questões."
+            )
+            
+            # Consolida o texto dos planos selecionados para enviar à IA
+            contexto_planos = "\n".join(
+                df_planos_ano[df_planos_ano['SEMANA'].isin(assuntos_selecionados)]['PLANO_TEXTO'].tolist()
+            )
+
+    # --- 3. COMANDO DE GERAÇÃO ---
+    st.markdown(" ")
+    col_btn1, col_btn2 = st.columns([2, 1])
+    
+    instrucao_extra = col_btn1.text_input("Instrução Adicional (Opcional):", placeholder="Ex: Foco em problemas do Shopping Jequitibá...")
+    
+    if col_btn2.button("🚀 GERAR EXAME DE ELITE", use_container_width=True, type="primary"):
+        if not assuntos_selecionados and not df_planos_ano.empty:
+            st.error("Selecione pelo menos um assunto do planejamento.")
+        else:
+            with st.spinner("Maestro Arquiteto calculando distribuição de gabarito e redigindo questões..."):
+                # Prompt de Engenharia de Avaliação
+                prompt_av = (
+                    f"🚨 PROTOCOLO DE AVALIAÇÃO SOSA V25 🚨\n"
+                    f"TIPO: {tipo_av}\n"
+                    f"SÉRIE: {ano_av}º ANO\n"
+                    f"QUANTIDADE: {qtd_q} QUESTÕES\n"
+                    f"BASE PEDAGÓGICA (PLANOS): {contexto_planos}\n"
+                    f"INSTRUÇÃO MESTRE: {instrucao_extra}\n\n"
+                    f"REGRAS RÍGIDAS:\n"
+                    f"1. GABARITO BLINDADO: Distribua as respostas entre A, B, C, D e E. Não repita a mesma letra mais de 2 vezes seguidas.\n"
+                    f"2. ESTÉTICA: Enunciados em CAIXA ALTA. Sem Markdown (** ou #).\n"
+                    f"3. CONTEXTO: Use Itabuna, games e situações reais.\n"
+                    f"4. MARCADOR DE CÁLCULO: Insira [CÁLCULO] após questões que exijam desenvolvimento matemático."
+                )
+                
+                st.session_state.temp_prova = ai.gerar_ia("ARQUITETO_EXAMES_V25", prompt_av)
+                st.rerun()
+
+    # --- 4. REFINAMENTO E EXPORTAÇÃO ---
+    if "temp_prova" in st.session_state:
+        st.markdown("---")
+        st.subheader("🤖 Avaliação Gerada")
+        
+        txt_prova = st.session_state.temp_prova
+        
+        t_ed, t_gab, t_exp = st.tabs(["✏️ Revisar Questões", "✅ Gabarito Técnico", "📥 Exportar para Word"])
+        
+        with t_ed:
+            # Extrai apenas as questões para edição
+            questoes_editave = ai.extrair_tag(txt_prova, "QUESTOES")
+            ed_q = st.text_area("Edite as questões se necessário:", questoes_editave, height=400)
+        
+        with t_gab:
+            # Extrai o gabarito para conferência
+            gabarito_txt = ai.extrair_tag(txt_prova, "GABARITO_TEXTO")
+            st.code(gabarito_txt, language="text")
+            st.info("A distribuição das letras foi validada pelo Protocolo de Blindagem.")
+
+        with t_exp:
+            st.subheader("🚀 Finalizar Documento")
+            
+            # Prepara o dicionário de informações para o exportador
+            info_doc = {
+                "ano": f"{ano_av}º",
+                "tipo_prova": tipo_av.upper(),
+                "valor": tipo_av.split('(')[1].replace(')', '') if '(' in tipo_av else "10,0",
+                "qtd_questoes": qtd_q
+            }
+            
+            # Gera o arquivo usando a nova função do exporter.py
+            try:
+                doc_final = exporter.gerar_docx_prova_v25("AVALIACAO_SOSA", txt_prova, info_doc)
+                
+                st.download_button(
+                    label="📥 BAIXAR PROVA COMPLETA (.DOCX)",
+                    data=doc_final,
+                    file_name=f"AVALIACAO_{ano_av}ANO_{tipo_av.split(' ')[0].upper()}.docx",
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    use_container_width=True
+                )
+                
+                st.success("O documento inclui: Cabeçalho Oficial, Quadro de Orientações, Gabarito de Bolinhas (A-E) e Espaços para Cálculo.")
+            except Exception as e:
+                st.error(f"Erro ao gerar Word: {e}. Verifique se a função 'gerar_docx_prova_v25' foi adicionada ao exporter.py")
+
+        if st.button("🗑️ Descartar e Criar Outra"):
+            del st.session_state.temp_prova
+            st.rerun()
