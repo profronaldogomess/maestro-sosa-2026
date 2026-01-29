@@ -1639,13 +1639,13 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                     st.info("Banco de relatórios vazio.")
 
 # ==============================================================================
-# MÓDULO: CENTRAL DE AVALIAÇÕES DE ELITE (V25.37 - HIERARQUIA & REFINADOR)
+# MÓDULO: CENTRAL DE AVALIAÇÕES DE ELITE (V25.38 - HIERARQUIA & REFINADOR FIX)
 # ==============================================================================
 elif menu == "📝 Central de Avaliações":
-    st.markdown(f"<h1 style='text-align: center;'>📝 Central de Avaliações de Elite <span style='font-size:15px;'>V25.37</span></h1>", unsafe_allow_html=True)
+    st.markdown(f"<h1 style='text-align: center;'>📝 Central de Avaliações de Elite <span style='font-size:15px;'>V25.38</span></h1>", unsafe_allow_html=True)
     st.markdown("---")
 
-    # --- 1. CONFIGURAÇÃO TÉCNICA ---
+    # --- 1. CONFIGURAÇÃO TÉCNICA (DESIGN SUAVE) ---
     with st.container(border=True):
         c1, c2, c3, c4 = st.columns([1.5, 1, 1, 1.5])
         tipo_av = c1.selectbox("Tipo de Exame:", ["Teste (3.0)", "Prova (4.0)", "Recuperação (10.0)"], key="av_tipo")
@@ -1692,23 +1692,26 @@ elif menu == "📝 Central de Avaliações":
             status.update(label="Avaliação Compilada!", state="complete")
             st.rerun()
 
-    # --- 4. LABORATÓRIO DE REFINAMENTO ---
+    # --- 4. LABORATÓRIO DE REFINAMENTO (V25.38) ---
     if "temp_prova" in st.session_state:
         st.markdown("---")
         
-        # REFINADOR MAESTRO
+        # REFINADOR MAESTRO (Sincronizado)
         st.markdown("### 🧪 Refinador Maestro")
         comando_refine = st.chat_input("Comando de alteração (Ex: 'Troque a Q2 por uma de frações')")
         
         if comando_refine:
             with st.spinner("Refinando avaliação..."):
-                # O Refinador usa o texto que está na tela (incluindo suas edições manuais)
+                # Captura o texto atual da área de edição para a IA trabalhar em cima dele
+                texto_para_refinar = st.session_state.get("area_edicao_v25", st.session_state.temp_prova)
+                
                 novo_prompt = (
                     f"VOCÊ É O ARQUITETO DE EXAMES. ALTERE O TEXTO ABAIXO CONFORME O COMANDO.\n\n"
-                    f"TEXTO ATUAL:\n{st.session_state.temp_prova}\n\n"
+                    f"TEXTO ATUAL:\n{texto_para_refinar}\n\n"
                     f"COMANDO DO PROFESSOR: {comando_refine}\n\n"
                     f"RETORNE O TEXTO COMPLETO DA PROVA ATUALIZADO."
                 )
+                # Atualiza a memória e força o rerun
                 st.session_state.temp_prova = ai.gerar_ia("ARQUITETO_EXAMES_V25", novo_prompt)
                 st.rerun()
 
@@ -1716,11 +1719,12 @@ elif menu == "📝 Central de Avaliações":
         t_rev, t_gab, t_drive = st.tabs(["📝 Edição Manual", "✅ Gabarito Técnico", "☁️ Sincronizar Drive"])
         
         with t_rev:
-            # Sincronização em tempo real: o que você digita aqui vai para o session_state
+            # O text_area agora atualiza o session_state em tempo real
             st.session_state.temp_prova = st.text_area(
                 "Texto da Avaliação (Edite livremente):", 
                 value=st.session_state.temp_prova, 
-                height=500
+                height=500,
+                key="area_edicao_v25"
             )
         
         with t_gab:
@@ -1739,8 +1743,8 @@ elif menu == "📝 Central de Avaliações":
                     info_doc = {"ano": f"{ano_av}º", "tipo_prova": tipo_av.upper(), "valor": "10", "qtd_questoes": qtd_q}
                     doc_io = exporter.gerar_docx_prova_v25(nome_arq, st.session_state.temp_prova, info_doc)
                     
-                    # HIERARQUIA SOLICITADA: Ano / Avaliacoes / Trimestre
-                    # Passamos o caminho no parâmetro 'trimestre' para o Script da Ponte criar a árvore
+                    # HIERARQUIA FINAL: [Ano]Ano > Avaliacoes > [Trimestre]
+                    # O Script da Ponte criará: SOSA_2026 / 6Ano / Avaliacoes / I Trimestre
                     link = db.subir_e_converter_para_google_docs(
                         doc_io, 
                         nome_arq, 
