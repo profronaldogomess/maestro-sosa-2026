@@ -164,7 +164,7 @@ menu = st.sidebar.radio("Navegação:", [
 # ==============================================================================
 def exibir_material_estruturado(texto_raw, key_prefix, dados_plano=None, info_aula=None):
     """
-    Versão V25.55: CORREÇÃO DE VISIBILIDADE PEI NO LABORATÓRIO.
+    Versão V25.60: PROTOCOLO DE SINCRONIA TRIPLA (ALUNO + PROF + PEI)
     """
     if info_aula is None: info_aula = {}
     
@@ -186,10 +186,10 @@ def exibir_material_estruturado(texto_raw, key_prefix, dados_plano=None, info_au
         with t_exp:
             nome_plano = f"PLANO_{f_ano}ANO_{f_semana.replace(' ', '')}"
             doc_plano = exporter.gerar_docx_plano_pedagogico_v18(nome_plano, dados_plano, {"ano": f"{f_ano}º", "semana": f_semana})
-            st.download_button("📥 BAIXAR PLANO (WORD)", doc_plano, f"{nome_plano}.docx", use_container_width=True, key=f"dl_{key_prefix}")
+            st.download_button("📥 BAIXAR PLANO (WORD)", doc_plano, f"{nome_plano}.docx", use_container_width=True)
 
     else:
-        # --- MODO CRIADOR DE AULAS (CORRIGIDO: ADICIONADA ABA T5 PARA PEI) ---
+        # --- MODO CRIADOR DE AULAS ---
         t1, t2, t3, t4, t5, t_exp = st.tabs([
             "✍️ Lousa/Slides", "📄 Folha", "✅ Gabarito", "🎨 Imagens", "♿ PEI", "📥 EXPORTAR AULA"
         ])
@@ -199,20 +199,15 @@ def exibir_material_estruturado(texto_raw, key_prefix, dados_plano=None, info_au
         with t3: st.text_area("Gabarito:", ai.extrair_tag(texto_raw, "GABARITO"), height=200, key=f"{key_prefix}_gab")
         with t4: st.text_area("Imagens:", ai.extrair_tag(texto_raw, "IMAGENS"), height=150, key=f"{key_prefix}_img")
         
-        # --- LÓGICA DA ABA PEI (RESTAURADA) ---
         with t5:
             st.subheader("♿ Adaptação Curricular (AEE/PEI)")
-            # Verifica se já existe adaptação no session_state
             if "lab_pei" not in st.session_state:
-                st.info("Clique no botão abaixo para gerar a versão adaptada para alunos com laudo.")
                 if st.button("♿ GERAR ADAPTAÇÃO PEI (MÉTODO DUA)", use_container_width=True, type="primary", key=f"{key_prefix}_btn_pei"):
                     with st.spinner("Arquiteto PEI realizando reengenharia visual..."):
-                        # Envia o material do aluno regular para a persona PEI
                         prompt_pei = f"ADAPTE PARA PEI O SEGUINTE MATERIAL REGULAR:\n\n{ed_alu}"
                         st.session_state.lab_pei = ai.gerar_ia("ARQUITETO_PEI_V24", prompt_pei)
                         st.rerun()
             else:
-                # Se já existe, permite editar
                 st.session_state.lab_pei = st.text_area("Material Adaptado:", st.session_state.lab_pei, height=400, key=f"{key_prefix}_pei_edit")
                 if st.button("🗑️ Descartar PEI", key=f"{key_prefix}_del_pei"):
                     del st.session_state.lab_pei
@@ -222,24 +217,66 @@ def exibir_material_estruturado(texto_raw, key_prefix, dados_plano=None, info_au
             st.subheader("🚀 Central de Exportação de Aula")
             nome_base = f"AULA_{f_aula.replace(' ','')}_{f_ano}ANO_{f_semana.split(' ')[1] if ' ' in f_semana else 'Geral'}"
             
-            c1, c2 = st.columns(2)
+            # Geração dos arquivos em memória para download e upload
             doc_alu = exporter.gerar_docx_aluno_v24(nome_base, ed_alu, {"ano": f"{f_ano}º", "trimestre": "I"})
-            c1.download_button("📥 FOLHA ALUNO", doc_alu, f"{nome_base}_ALUNO.docx", use_container_width=True)
             
             if f_formato == "Slides (Apresentação)":
-                doc_prof_final = exporter.gerar_pptx_v24(f"{nome_base}_PROF", ed_prof)
-                ext_prof = ".pptx"
+                doc_prof = exporter.gerar_pptx_v24(f"{nome_base}_PROF", ed_prof)
+                ext = ".pptx"
             else:
-                doc_prof_final = exporter.gerar_docx_professor_v25(nome_base, ed_prof, {"ano": f"{f_ano}º", "semana": f_semana})
-                ext_prof = ".docx"
-            c2.download_button(f"📥 GUIA PROF ({ext_prof.upper()})", doc_prof_final, f"{nome_base}_PROF{ext_prof}", use_container_width=True)
+                doc_prof = exporter.gerar_docx_professor_v25(nome_base, ed_prof, {"ano": f"{f_ano}º", "semana": f_semana})
+                ext = ".docx"
 
-            # BOTÃO DE DOWNLOAD PEI (Aparece apenas se o material foi gerado)
+            # --- BOTÕES DE DOWNLOAD LOCAL ---
+            c1, c2 = st.columns(2)
+            c1.download_button("📥 FOLHA ALUNO", doc_alu, f"{nome_base}_ALUNO.docx", use_container_width=True)
+            c2.download_button(f"📥 GUIA PROF ({ext.upper()})", doc_prof, f"{nome_base}_PROF{ext}", use_container_width=True)
+
             if "lab_pei" in st.session_state:
-                st.markdown("---")
                 doc_pei = exporter.gerar_docx_pei_v25(f"{nome_base}_PEI", st.session_state.lab_pei, {"trimestre": "I"})
-                st.download_button("📥 BAIXAR MATERIAL PEI (FONTE 14)", doc_pei, f"{nome_base}_PEI.docx", use_container_width=True, type="primary")
+                st.download_button("📥 BAIXAR MATERIAL PEI (FONTE 14)", doc_pei, f"{nome_base}_PEI.docx", use_container_width=True)
 
+            st.markdown("---")
+            
+            # --- BOTÃO DE SINCRONIA TOTAL (DRIVE + BANCO) ---
+            if st.button("☁️ SINCRONIZAR TUDO COM GOOGLE DRIVE", use_container_width=True, type="primary"):
+                with st.status("Iniciando Sincronia de Elite...", expanded=True) as status:
+                    status.write("📤 Enviando Folha do Aluno...")
+                    link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{nome_base}_ALUNO", trimestre="I Trimestre", categoria="Material de Sala", modo="AULA")
+                    
+                    status.write("📤 Enviando Guia do Professor...")
+                    link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_base}_PROF", trimestre="I Trimestre", categoria="Material de Sala", modo="AULA")
+                    
+                    link_pei = "N/A"
+                    if "lab_pei" in st.session_state:
+                        status.write("📤 Enviando Material Adaptado PEI...")
+                        link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_base}_PEI", trimestre="I Trimestre", categoria="Material de Sala", modo="AULA")
+                    
+                    status.write("💾 Salvando links no Banco de Dados...")
+                    # Prepara o conteúdo final com os marcadores para a Gaveta ler
+                    conteudo_final = (
+                        f"[ROTEIRO_PROF]\n{ed_prof}\n\n"
+                        f"--- LINKS DE ACESSO ---\n"
+                        f"Aluno({link_alu})\n"
+                        f"Prof({link_prof})\n"
+                        f"PEI({link_pei})"
+                    )
+                    
+                    sucesso = db.salvar_no_banco("DB_AULAS_PRONTAS", [
+                        datetime.now().strftime("%d/%m/%Y"),
+                        f_semana,
+                        f"{f_aula} ({f_formato})",
+                        conteudo_final,
+                        f"{f_ano}º",
+                        "" # Link Drive Geral (opcional)
+                    ])
+                    
+                    if sucesso:
+                        status.update(label="✅ TUDO SINCRONIZADO! Materiais disponíveis nas Gavetas.", state="complete", expanded=False)
+                        st.balloons()
+                        time.sleep(2)
+                        st.rerun()
+                        
 # ==============================================================================
 # MÓDULO: DASHBOARD INTELIGENTE (V6 - FULL CONTEXT: NOTAS + PDF + AULAS CRIADAS)
 # ==============================================================================
