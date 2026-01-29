@@ -1639,13 +1639,13 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                     st.info("Banco de relatórios vazio.")
 
 # ==============================================================================
-# MÓDULO: CENTRAL DE AVALIAÇÕES DE ELITE (V25.38 - HIERARQUIA & REFINADOR FIX)
+# MÓDULO: CENTRAL DE AVALIAÇÕES DE ELITE (V25.39 - HIERARQUIA FINAL & REFINADOR)
 # ==============================================================================
 elif menu == "📝 Central de Avaliações":
-    st.markdown(f"<h1 style='text-align: center;'>📝 Central de Avaliações de Elite <span style='font-size:15px;'>V25.38</span></h1>", unsafe_allow_html=True)
+    st.markdown(f"<h1 style='text-align: center;'>📝 Central de Avaliações de Elite <span style='font-size:15px;'>V25.39</span></h1>", unsafe_allow_html=True)
     st.markdown("---")
 
-    # --- 1. CONFIGURAÇÃO TÉCNICA (DESIGN SUAVE) ---
+    # --- 1. CONFIGURAÇÃO TÉCNICA ---
     with st.container(border=True):
         c1, c2, c3, c4 = st.columns([1.5, 1, 1, 1.5])
         tipo_av = c1.selectbox("Tipo de Exame:", ["Teste (3.0)", "Prova (4.0)", "Recuperação (10.0)"], key="av_tipo")
@@ -1692,45 +1692,43 @@ elif menu == "📝 Central de Avaliações":
             status.update(label="Avaliação Compilada!", state="complete")
             st.rerun()
 
-    # --- 4. LABORATÓRIO DE REFINAMENTO (V25.38) ---
+    # --- 4. LABORATÓRIO DE REFINAMENTO ---
     if "temp_prova" in st.session_state:
         st.markdown("---")
         
-        # REFINADOR MAESTRO (Sincronizado)
+        # REFINADOR MAESTRO (CORRIGIDO: Agora ele lê o que está na tela e atualiza)
         st.markdown("### 🧪 Refinador Maestro")
-        comando_refine = st.chat_input("Comando de alteração (Ex: 'Troque a Q2 por uma de frações')")
+        comando_refine = st.chat_input("Digite a mudança desejada...")
         
         if comando_refine:
             with st.spinner("Refinando avaliação..."):
-                # Captura o texto atual da área de edição para a IA trabalhar em cima dele
-                texto_para_refinar = st.session_state.get("area_edicao_v25", st.session_state.temp_prova)
+                # Pega o texto que está na memória (temp_prova)
+                texto_base = st.session_state.temp_prova
                 
                 novo_prompt = (
                     f"VOCÊ É O ARQUITETO DE EXAMES. ALTERE O TEXTO ABAIXO CONFORME O COMANDO.\n\n"
-                    f"TEXTO ATUAL:\n{texto_para_refinar}\n\n"
+                    f"TEXTO ATUAL:\n{texto_base}\n\n"
                     f"COMANDO DO PROFESSOR: {comando_refine}\n\n"
                     f"RETORNE O TEXTO COMPLETO DA PROVA ATUALIZADO."
                 )
-                # Atualiza a memória e força o rerun
+                # Atualiza a variável global de estado
                 st.session_state.temp_prova = ai.gerar_ia("ARQUITETO_EXAMES_V25", novo_prompt)
-                st.rerun()
+                st.rerun() # Força o Streamlit a recarregar a tela com o novo texto
 
         # Abas de Gestão
         t_rev, t_gab, t_drive = st.tabs(["📝 Edição Manual", "✅ Gabarito Técnico", "☁️ Sincronizar Drive"])
         
         with t_rev:
-            # O text_area agora atualiza o session_state em tempo real
+            # O text_area reflete sempre o que está no session_state
             st.session_state.temp_prova = st.text_area(
                 "Texto da Avaliação (Edite livremente):", 
                 value=st.session_state.temp_prova, 
                 height=500,
-                key="area_edicao_v25"
+                key="area_edicao_v25_final"
             )
         
         with t_gab:
             st.code(ai.extrair_tag(st.session_state.temp_prova, "GABARITO_TEXTO"), language="text")
-            with st.expander("Ver Justificativas"):
-                st.write(ai.extrair_tag(st.session_state.temp_prova, "RESPOSTAS_IA"))
         
         with t_drive:
             st.subheader("🚀 Arquivamento Estruturado")
@@ -1743,17 +1741,19 @@ elif menu == "📝 Central de Avaliações":
                     info_doc = {"ano": f"{ano_av}º", "tipo_prova": tipo_av.upper(), "valor": "10", "qtd_questoes": qtd_q}
                     doc_io = exporter.gerar_docx_prova_v25(nome_arq, st.session_state.temp_prova, info_doc)
                     
-                    # HIERARQUIA FINAL: [Ano]Ano > Avaliacoes > [Trimestre]
-                    # O Script da Ponte criará: SOSA_2026 / 6Ano / Avaliacoes / I Trimestre
+                    # HIERARQUIA CORRIGIDA: Avaliacoes > 6ano > I Trimestre
+                    # Passamos "" para semana e aula para evitar a criação de pastas inúteis
                     link = db.subir_e_converter_para_google_docs(
                         doc_io, 
                         nome_arq, 
-                        trimestre=f"{ano_av}Ano/Avaliacoes", 
-                        categoria=trimestre_av
+                        trimestre="Avaliacoes", 
+                        categoria=f"{ano_av}ano",
+                        semana=trimestre_av,
+                        aula="" # <--- ISSO BLOQUEIA A PASTA 'AULA GERAL'
                     )
                 
                 if "https" in str(link):
-                    st.success(f"✅ Arquivado em: {ano_av}Ano > Avaliacoes > {trimestre_av}")
+                    st.success(f"✅ Arquivado em: Avaliacoes > {ano_av}ano > {trimestre_av}")
                     st.link_button("📂 ABRIR NO GOOGLE DOCS", str(link), use_container_width=True)
 
         if st.button("🗑️ DESCARTAR E RECOMEÇAR", use_container_width=True):
