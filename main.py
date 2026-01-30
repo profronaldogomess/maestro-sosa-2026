@@ -687,8 +687,27 @@ elif menu == "📅 Planejamento (Ponto ID)":
             with st.expander("🎯 VALIDAÇÃO CURRICULAR", expanded=(modo_p == "📖 Livro Didático")):
                 cf1, cf2 = st.columns(2)
                 eixo_val = cf1.selectbox("Eixo:", df_f['EIXO'].unique(), key=f"eixo_val_{v}")
-                cont_val = st.multiselect("Conteúdos:", options=df_f[df_f['EIXO'] == eixo_val]['CONTEUDO_ESPECIFICO'].unique(), default=cont_pre if modo_p == "🎛️ Manual (Banco de Dados)" else [], key=f"cont_val_{v}")
-                obj_val = st.multiselect("Objetivos:", options=df_f[df_f['CONTEUDO_ESPECIFICO'].isin(cont_val)]['OBJETIVOS'].unique(), default=obj_pre if modo_p == "🎛️ Manual (Banco de Dados)" else [], key=f"obj_val_{v}")
+                
+                # --- PROTEÇÃO CONTRA CRASH (FILTRAGEM DE SEGURANÇA) ---
+                opcoes_cont = df_f[df_f['EIXO'] == eixo_val]['CONTEUDO_ESPECIFICO'].unique().tolist()
+                
+                # Só permite no 'default' o que realmente pertence ao Eixo selecionado
+                if modo_p == "🎛️ Manual (Banco de Dados)":
+                    default_cont_seguro = [c for c in cont_pre if c in opcoes_cont]
+                else:
+                    default_cont_seguro = []
+
+                cont_val = st.multiselect("Conteúdos:", options=opcoes_cont, default=default_cont_seguro, key=f"cont_val_{v}")
+                
+                # Filtragem de Objetivos baseada nos conteúdos selecionados
+                opcoes_obj = df_f[df_f['CONTEUDO_ESPECIFICO'].isin(cont_val)]['OBJETIVOS'].unique().tolist()
+                
+                if modo_p == "🎛️ Manual (Banco de Dados)":
+                    default_obj_seguro = [o for o in obj_pre if o in opcoes_obj]
+                else:
+                    default_obj_seguro = []
+
+                obj_val = st.multiselect("Objetivos:", options=opcoes_obj, default=default_obj_seguro, key=f"obj_val_{v}")
 
             st.subheader("🤖 Refinar com o Maestro")
             cmd_refine = st.chat_input("Deseja mudar algo no texto?")
@@ -715,11 +734,23 @@ elif menu == "📅 Planejamento (Ponto ID)":
 
             st.markdown("---")
             if st.button("💾 FINALIZAR E SALVAR NO BANCO", use_container_width=True, type="primary", key=f"save_{v}"):
+                # Mantemos a estrutura de ponto-e-vírgula para o Mapa de Cobertura não quebrar
                 c_final = "; ".join(cont_val) if cont_val else ed_espec
                 o_final = "; ".join(obj_val) if obj_val else ed_objs
-                final_txt = f"MARKER_CONTEUDO_GERAL {ed_geral} MARKER_CONTEUDOS_ESPECIFICOS {c_final} MARKER_OBJETIVOS_ENSINO {o_final} MARKER_METODOLOGIA {ed_met} MARKER_AVALIACAO {ed_ava} MARKER_ADAPTACAO_PEI {ed_pei}"
+                
+                # --- SALVAMENTO COM RIGOR DE TAGS (Para o Criador de Aulas ler depois) ---
+                final_txt = (
+                    f"MARKER_CONTEUDO_GERAL {ed_geral} \n"
+                    f"MARKER_CONTEUDOS_ESPECIFICOS {c_final} \n"
+                    f"MARKER_OBJETIVOS_ENSINO {o_final} \n"
+                    f"MARKER_METODOLOGIA {ed_met} \n"
+                    f"MARKER_AVALIACAO {ed_ava} \n"
+                    f"MARKER_ADAPTACAO_PEI {ed_pei} \n"
+                    f"MARKER_MODALIDADE {modo_p.upper()}"
+                )
+                
                 if db.salvar_no_banco("DB_PLANOS", [datetime.now().strftime("%d/%m/%Y"), sem_p.split(" (")[0], f"{ano_p}º", "I Trimestre", "PADRÃO", final_txt]):
-                    st.success("✅ Salvo!"); reset_total_v25(); time.sleep(1); st.rerun()
+                    st.success("✅ Plano Salvo com Sucesso!"); reset_total_v25(); time.sleep(1); st.rerun()
                     
     # --- ABA 2: HISTÓRICO DETALHADO (Usa 'v' e 'limpar_v23') ---
     with tab_hist:
