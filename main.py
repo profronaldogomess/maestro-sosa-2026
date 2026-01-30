@@ -690,12 +690,12 @@ elif menu == "🧪 Criador de Aulas":
                                         if not p_reg and not p_pei: st.info("Sem prompts salvos.")
                             
 # ==============================================================================
-# MÓDULO: PLANEJAMENTO (PONTO ID) - ARQUITETURA V25 CORRIGIDA E ESTÁVEL
+# MÓDULO: PLANEJAMENTO (PONTO ID) - ARQUITETURA V25.98 (ESTÁVEL + DESCARTAR)
 # ==============================================================================
 elif menu == "📅 Planejamento (Ponto ID)":
     st.header("📅 Planejador Estratégico (Ponto ID)")
 
-    # 1. RESTAURAÇÃO DAS FUNÇÕES AUXILIARES (Essenciais para o funcionamento)
+    # 1. FUNÇÕES AUXILIARES (Preservadas e Protegidas)
     def limpar_v23(texto, label):
         if not texto: return ""
         t = texto.replace(label, "").replace(label.upper(), "").replace(label.lower(), "").strip()
@@ -703,15 +703,16 @@ elif menu == "📅 Planejamento (Ponto ID)":
         return t
 
     def reset_total_v25():
-        """Limpa o rascunho e atualiza a versão para forçar atualização de UI quando necessário"""
+        """Limpa o rascunho e força atualização da interface"""
         if "p_temp" in st.session_state: del st.session_state.p_temp
         st.session_state.v_plano = int(time.time())
+        st.rerun()
 
     # 2. INICIALIZAÇÃO DO ESTADO DE VERSÃO
     if "v_plano" not in st.session_state:
         st.session_state.v_plano = int(time.time())
     
-    v = st.session_state.v_plano # Define 'v' para evitar erro de variável indefinida
+    v = st.session_state.v_plano 
 
     tab_gerar, tab_hist, tab_curso, tab_mapa = st.tabs([
         "✨ Gerar Novo Plano", "🗂️ Histórico Detalhado", "📚 Plano de Curso Vivo", "📊 Mapa de Cobertura"
@@ -722,9 +723,8 @@ elif menu == "📅 Planejamento (Ponto ID)":
         st.subheader("1. Configuração da Aula")
         col_cfg1, col_cfg2 = st.columns([1, 2])
         
-        # CORREÇÃO DO SELETOR: Usamos chaves fixas para evitar o reset ao trocar de semana
+        # Seletores com chaves fixas para evitar reset automático ao clicar
         ano_p = col_cfg1.selectbox("Ano/Série:", [6, 7, 8, 9], key="ano_sel_fixo")
-        
         todas_semanas = util.gerar_semanas()
         sem_p = col_cfg2.selectbox("Selecione a Semana Livre:", todas_semanas, key="sem_sel_fixo")
         
@@ -773,12 +773,21 @@ elif menu == "📅 Planejamento (Ponto ID)":
         st.markdown("---")
         strat = st.text_area("Sua Estratégia/Observação Inicial:", placeholder="Ex: Aula expositiva...", key=f"strat_{v}")
 
-        if st.button("🚀 Compor Planejamento com Maestro", use_container_width=True, type="primary", key=f"btn_gen_{v}", disabled=not pronto_para_gerar):
-            with st.spinner("Maestro redigindo rascunho de elite..."):
-                prompt = f"ANO: {ano_p}º, SEMANA: {sem_p}. {ctx_ia}. ESTRATÉGIA: {strat}."
-                st.session_state.p_temp = ai.gerar_ia("PLANE_PEDAGOGICO", prompt)
-                st.rerun()
+        col_btn1, col_btn2 = st.columns([2, 1])
+        with col_btn1:
+            if st.button("🚀 Compor Planejamento com Maestro", use_container_width=True, type="primary", key=f"btn_gen_{v}", disabled=not pronto_para_gerar):
+                with st.spinner("Maestro redigindo rascunho de elite..."):
+                    prompt = f"ANO: {ano_p}º, SEMANA: {sem_p}. {ctx_ia}. ESTRATÉGIA: {strat}."
+                    st.session_state.p_temp = ai.gerar_ia("PLANE_PEDAGOGICO", prompt)
+                    st.rerun()
+        
+        with col_btn2:
+            # BOTÃO DESCARTAR: Limpa o texto fantasma da memória
+            if "p_temp" in st.session_state:
+                if st.button("🗑️ DESCARTAR", use_container_width=True, key=f"btn_disc_{v}"):
+                    reset_total_v25()
 
+        # --- ÁREA DE RESULTADO E EDIÇÃO ---
         if "p_temp" in st.session_state:
             st.markdown("---")
             txt_bruto = st.session_state.p_temp
@@ -787,25 +796,13 @@ elif menu == "📅 Planejamento (Ponto ID)":
                 cf1, cf2 = st.columns(2)
                 eixo_val = cf1.selectbox("Eixo:", df_f['EIXO'].unique(), key=f"eixo_val_{v}")
                 
-                # --- PROTEÇÃO CONTRA CRASH (FILTRAGEM DE SEGURANÇA) ---
+                # Proteção contra crash de multiselect
                 opcoes_cont = df_f[df_f['EIXO'] == eixo_val]['CONTEUDO_ESPECIFICO'].unique().tolist()
-                
-                # Só permite no 'default' o que realmente pertence ao Eixo selecionado
-                if modo_p == "🎛️ Manual (Banco de Dados)":
-                    default_cont_seguro = [c for c in cont_pre if c in opcoes_cont]
-                else:
-                    default_cont_seguro = []
-
+                default_cont_seguro = [c for c in cont_pre if c in opcoes_cont]
                 cont_val = st.multiselect("Conteúdos:", options=opcoes_cont, default=default_cont_seguro, key=f"cont_val_{v}")
                 
-                # Filtragem de Objetivos baseada nos conteúdos selecionados
                 opcoes_obj = df_f[df_f['CONTEUDO_ESPECIFICO'].isin(cont_val)]['OBJETIVOS'].unique().tolist()
-                
-                if modo_p == "🎛️ Manual (Banco de Dados)":
-                    default_obj_seguro = [o for o in obj_pre if o in opcoes_obj]
-                else:
-                    default_obj_seguro = []
-
+                default_obj_seguro = [o for o in obj_pre if o in opcoes_obj]
                 obj_val = st.multiselect("Objetivos:", options=opcoes_obj, default=default_obj_seguro, key=f"obj_val_{v}")
 
             st.subheader("🤖 Refinar com o Maestro")
@@ -827,29 +824,19 @@ elif menu == "📅 Planejamento (Ponto ID)":
                 ed_pei = st.text_area("Adaptação PEI:", limpar_v23(ai.extrair_tag(txt_bruto, "ADAPTACAO_PEI"), "ADAPTAÇÃO PEI"), key=f"ed_p_{v}")
 
             with t_vis:
-                dados_envio = {
-                    "geral": ed_geral, 
-                    "especificos": ed_espec, 
-                    "objetivos": ed_objs, 
-                    "metodologia": ed_met, 
-                    "avaliacao": ed_ava, 
-                    "pei": ed_pei
-                }
-                info_envio = {
-                    "ano": str(ano_p), 
-                    "semana": sem_p, 
-                    "trimestre": "I Trimestre" # Ajuste conforme a lógica de datas
-                }
-                # CHAMADA HÍBRIDA: Passamos dados_plano para ativar o modo Planejamento
-                exibir_material_estruturado(txt_bruto, "plan_vis", dados_plano=dados_envio, info_aula=info_envio)
+                # Preparação de dados para a função híbrida
+                dados_envio = {"geral": ed_geral, "especificos": ed_espec, "objetivos": ed_objs, "metodologia": ed_met, "avaliacao": ed_ava, "pei": ed_pei}
+                info_envio = {"ano": str(ano_p), "semana": sem_p, "trimestre": "I Trimestre", "modalidade": modo_p.upper()}
+                
+                # CHAMADA HÍBRIDA CORRIGIDA: Agora o 'Visualizar Estrutura' não ficará vazio
+                exibir_material_estruturado(txt_bruto, f"vis_v{v}", dados_plano=dados_envio, info_aula=info_envio)
 
             st.markdown("---")
             if st.button("💾 FINALIZAR E SALVAR NO BANCO", use_container_width=True, type="primary", key=f"save_{v}"):
-                # Mantemos a estrutura de ponto-e-vírgula para o Mapa de Cobertura não quebrar
                 c_final = "; ".join(cont_val) if cont_val else ed_espec
                 o_final = "; ".join(obj_val) if obj_val else ed_objs
                 
-                # --- SALVAMENTO COM RIGOR DE TAGS (Para o Criador de Aulas ler depois) ---
+                # Salvamento com MARKERS para o Criador de Aulas ler depois
                 final_txt = (
                     f"MARKER_CONTEUDO_GERAL {ed_geral} \n"
                     f"MARKER_CONTEUDOS_ESPECIFICOS {c_final} \n"
@@ -861,7 +848,7 @@ elif menu == "📅 Planejamento (Ponto ID)":
                 )
                 
                 if db.salvar_no_banco("DB_PLANOS", [datetime.now().strftime("%d/%m/%Y"), sem_p.split(" (")[0], f"{ano_p}º", "I Trimestre", "PADRÃO", final_txt]):
-                    st.success("✅ Plano Salvo com Sucesso!"); reset_total_v25(); time.sleep(1); st.rerun()
+                    st.success("✅ Plano Salvo com Sucesso!"); reset_total_v25()
                     
     # --- ABA 2: HISTÓRICO DETALHADO (Usa 'v' e 'limpar_v23') ---
     with tab_hist:
