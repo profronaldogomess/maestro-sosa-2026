@@ -1695,126 +1695,161 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                     st.info("Banco de relatórios vazio.")
 
 # ==============================================================================
-# MÓDULO: CENTRAL DE AVALIAÇÕES DE ELITE (V25.39 - HIERARQUIA FINAL & REFINADOR)
+# MÓDULO: CENTRAL DE AVALIAÇÕES DE ELITE V25.60 (DESIGN DE ALTA PERFORMANCE)
 # ==============================================================================
 elif menu == "📝 Central de Avaliações":
-    st.markdown(f"<h1 style='text-align: center;'>📝 Central de Avaliações de Elite <span style='font-size:15px;'>V25.42</span></h1>", unsafe_allow_html=True)
+    st.title("📝 Central de Avaliações de Elite (V25)")
     st.markdown("---")
 
-    # --- 1. CONFIGURAÇÃO TÉCNICA ---
-    with st.container(border=True):
-        c1, c2, c3, c4 = st.columns([1.5, 1, 1, 1.5])
-        tipo_av = c1.selectbox("Tipo de Exame:", ["Teste (3.0)", "Prova (4.0)", "Recuperação (10.0)"], key="av_tipo")
-        ano_av = c2.selectbox("Série/Ano:", [6, 7, 8, 9], key="av_ano")
-        qtd_q = c3.number_input("Nº de Questões:", 5, 20, 10)
-        nivel_desafio = c4.select_slider("Rigor Pedagógico:", options=["Fácil", "Médio", "Difícil"], value="Médio")
+    tab_criar, tab_gaveta = st.tabs(["🚀 CRIAR AVALIAÇÃO", "🗂️ GAVETA DE EXAMES"])
 
-    # --- 2. MATRIZ DE REFERÊNCIA ---
-    st.markdown(" ")
-    with st.container(border=True):
-        st.markdown("### 🎯 Matriz de Referência")
-        df_p_ano = df_planos[df_planos['ANO'] == f"{ano_av}º"]
-        if not df_p_ano.empty:
-            semanas_sel = st.multiselect("Selecione as Semanas Base:", df_p_ano['SEMANA'].tolist())
-            if semanas_sel:
-                planos_filtrados = df_p_ano[df_p_ano['SEMANA'].isin(semanas_sel)]
-                lista_cont, lista_obj = [], []
-                for _, row in planos_filtrados.iterrows():
-                    c_raw = ai.extrair_tag(row['PLANO_TEXTO'], "CONTEUDOS_ESPECIFICOS")
-                    o_raw = ai.extrair_tag(row['PLANO_TEXTO'], "OBJETIVOS_ENSINO")
-                    lista_cont.extend([x.strip() for x in c_raw.split(';') if x.strip()])
-                    lista_obj.extend([x.strip() for x in o_raw.split(';') if x.strip()])
-                col_f1, col_f2 = st.columns(2)
-                itens_cont = col_f1.multiselect("Conteúdos:", list(set(lista_cont)), default=list(set(lista_cont)))
-                itens_obj = col_f2.multiselect("Objetivos:", list(set(lista_obj)), default=list(set(lista_obj)))
-        else:
-            st.warning("⚠️ Nenhum plano encontrado.")
+    with tab_criar:
+        # --- FASE 1: CONFIGURAÇÃO TÉCNICA ---
+        with st.container(border=True):
+            st.markdown("### ⚙️ 1. Configuração do Exame")
+            c1, c2, c3, c4 = st.columns([1.5, 1, 1, 1.5])
+            tipo_av = c1.selectbox("Tipo de Exame:", ["Teste (3.0)", "Prova (4.0)", "Recuperação (10.0)"], key="av_tipo_v25")
+            ano_av = c2.selectbox("Série/Ano:", [6, 7, 8, 9], key="av_ano_v25")
+            qtd_q = c3.number_input("Nº de Questões:", 5, 20, 10, key="av_qtd_v25")
+            nivel_desafio = c4.select_slider("Rigor Pedagógico:", options=["Fácil", "Médio", "Difícil"], value="Médio", key="av_rigor_v25")
 
-    # --- 3. GERAÇÃO PRINCIPAL ---
-    if st.button("🚀 COMPILAR AVALIAÇÃO", use_container_width=True, type="primary"):
-        with st.status("Maestro Arquiteto em ação...", expanded=True):
-            prompt_av = (
-                f"TIPO: {tipo_av}. SÉRIE: {ano_av}º ANO. QTD: {qtd_q} QUESTÕES.\n"
-                f"NÍVEL DE DESAFIO: {nivel_desafio}\n"
-                f"CONTEÚDOS: {itens_cont}\n"
-                f"OBJETIVOS: {itens_obj}\n"
-                f"Gere a prova com gabarito blindado (A-E) e marcadores [CÁLCULO]."
-            )
-            res = ai.gerar_ia("ARQUITETO_EXAMES_V25", prompt_av)
-            # Sincronização limpa de estado
-            st.session_state.temp_prova = res
-            st.session_state["area_edicao_v25"] = res
-            st.rerun()
+        # --- FASE 2: MATRIZ DE REFERÊNCIA (PIP) ---
+        st.markdown(" ")
+        with st.container(border=True):
+            st.markdown("### 🎯 2. Matriz de Referência (Sincronia com Planos)")
+            df_p_ano = df_planos[df_planos['ANO'] == f"{ano_av}º"]
+            
+            if not df_p_ano.empty:
+                semanas_sel = st.multiselect("Selecione as Semanas Base para a Prova:", df_p_ano['SEMANA'].tolist(), key="av_sem_sel")
+                if semanas_sel:
+                    planos_filtrados = df_p_ano[df_p_ano['SEMANA'].isin(semanas_sel)]
+                    lista_cont, lista_obj = [], []
+                    for _, row in planos_filtrados.iterrows():
+                        c_raw = ai.extrair_tag(row['PLANO_TEXTO'], "CONTEUDOS_ESPECIFICOS")
+                        o_raw = ai.extrair_tag(row['PLANO_TEXTO'], "OBJETIVOS_ENSINO")
+                        lista_cont.extend([x.strip() for x in c_raw.split(';') if x.strip()])
+                        lista_obj.extend([x.strip() for x in o_raw.split(';') if x.strip()])
+                    
+                    col_f1, col_f2 = st.columns(2)
+                    itens_cont = col_f1.multiselect("Conteúdos Detectados:", list(set(lista_cont)), default=list(set(lista_cont)), key="av_cont_final")
+                    itens_obj = col_f2.multiselect("Objetivos Detectados:", list(set(lista_obj)), default=list(set(lista_obj)), key="av_obj_final")
+            else:
+                st.warning("⚠️ Nenhum plano de aula encontrado para esta série. Crie um plano primeiro.")
 
-    # --- 4. LABORATÓRIO DE REFINAMENTO (V25.42) ---
-    if "temp_prova" in st.session_state:
-        st.markdown("---")
-        st.markdown("### 🧪 Refinador Maestro")
-        
-        comando_refine = st.chat_input("O que deseja alterar? (Ex: 'Troque a Q1', 'Reordene o gabarito')")
-        
-        if comando_refine:
-            with st.spinner("Aplicando refinamento de elite..."):
-                texto_atual = st.session_state.get("area_edicao_v25", st.session_state.temp_prova)
-                
-                prompt_refine = (
-                    f"VOCÊ É O ARQUITETO DE EXAMES. EXECUTE O COMANDO ABAIXO.\n"
-                    f"REGRAS DE OURO:\n"
-                    f"1. NÃO CRIE CABEÇALHOS (Escola, Aluno, etc).\n"
-                    f"2. MANTENHA AS TAGS: [ORIENTACOES], [QUESTOES], [GABARITO_TEXTO] e [RESPOSTAS_IA].\n"
-                    f"3. O GABARITO DEVE SER COMENTADO NA TAG [RESPOSTAS_IA].\n\n"
-                    f"COMANDO: {comando_refine}\n\n"
-                    f"TEXTO ATUAL:\n{texto_atual}\n\n"
-                    f"RETORNE O DOCUMENTO COMPLETO ATUALIZADO."
+        # --- BOTÃO DE GERAÇÃO ---
+        st.markdown(" ")
+        if st.button("🚀 COMPILAR AVALIAÇÃO DE ELITE", use_container_width=True, type="primary"):
+            with st.status("Arquiteto de Exames processando Matriz de Referência...", expanded=True) as status:
+                prompt_av = (
+                    f"TIPO: {tipo_av}. SÉRIE: {ano_av}º ANO. QTD: {qtd_q} QUESTÕES.\n"
+                    f"NÍVEL DE DESAFIO: {nivel_desafio}\n"
+                    f"CONTEÚDOS: {itens_cont}\n"
+                    f"OBJETIVOS: {itens_obj}\n"
+                    f"Gere a prova com gabarito blindado (A-E) e marcadores [CÁLCULO] após cada enunciado."
                 )
-                
-                novo_texto = ai.gerar_ia("ARQUITETO_EXAMES_V25", prompt_refine)
-                st.session_state.temp_prova = novo_texto
-                st.session_state["area_edicao_v25"] = novo_texto
+                res = ai.gerar_ia("ARQUITETO_EXAMES_V25", prompt_av)
+                st.session_state.temp_prova = res
+                st.session_state["area_edicao_v25"] = res
                 st.rerun()
 
-        t_rev, t_gab, t_drive = st.tabs(["📝 Edição", "✅ Gabarito", "☁️ Drive"])
-        
-        with t_rev:
-            # CORREÇÃO DO AVISO: Não usamos 'value' quando usamos 'key' para atualização via Session State
-            st.text_area(
-                "Texto da Avaliação (Edite e o Refinador lerá suas mudanças):", 
-                height=500, 
-                key="area_edicao_v25"
-            )
-            # Sincroniza a variável global com o que foi digitado
-            st.session_state.temp_prova = st.session_state["area_edicao_v25"]
-        
-        with t_gab:
-            st.code(ai.extrair_tag(st.session_state.temp_prova, "GABARITO_TEXTO"))
-            with st.expander("Ver Justificativas"):
-                st.write(ai.extrair_tag(st.session_state.temp_prova, "RESPOSTAS_IA"))
-        
-        with t_drive:
-            st.subheader("🚀 Sincronização SOSA_DOCUMENTOS")
-            c_d1, c_d2 = st.columns(2)
-            trimestre_av = c_d1.selectbox("Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"])
-            nome_arq = c_d2.text_input("Nome do Arquivo:", f"PROVA_{ano_av}ANO_{tipo_av.split(' ')[0]}")
+        # --- FASE 3: LABORATÓRIO DE REFINAMENTO E EXPORTAÇÃO ---
+        if "temp_prova" in st.session_state:
+            st.markdown("---")
+            st.markdown("### 🤖 3. Refinamento e Acabamento")
             
-            if st.button("☁️ ENVIAR PARA O DRIVE", use_container_width=True):
-                with st.status("Arquivando...", expanded=False):
-                    info_doc = {"ano": f"{ano_av}º", "tipo_prova": tipo_av.upper(), "valor": "10", "qtd_questoes": qtd_q}
-                    doc_io = exporter.gerar_docx_prova_v25(nome_arq, st.session_state.temp_prova, info_doc)
-                    
-                    link = db.subir_e_converter_para_google_docs(
-                        doc_io, 
-                        nome_arq, 
-                        trimestre=trimestre_av, 
-                        categoria=f"{ano_av}ano",
-                        modo="AVALIACAO" 
+            # Chat de Refino
+            comando_refine = st.chat_input("Deseja alterar algo na prova? (Ex: 'Troque a Q3 por uma de lógica')")
+            if comando_refine:
+                with st.spinner("Aplicando refinamento cirúrgico..."):
+                    texto_atual = st.session_state.get("area_edicao_v25", st.session_state.temp_prova)
+                    prompt_refine = (
+                        f"VOCÊ É O ARQUITETO DE EXAMES. COMANDO: {comando_refine}\n\n"
+                        f"TEXTO ATUAL:\n{texto_atual}\n\n"
+                        f"RETORNE O DOCUMENTO COMPLETO ATUALIZADO COM AS TAGS [ORIENTACOES], [QUESTOES], [GABARITO_TEXTO]."
                     )
-                
-                if "https" in str(link):
-                    st.success(f"✅ Arquivado com sucesso!")
-                    st.link_button("📂 ABRIR NO GOOGLE DOCS", str(link), use_container_width=True)
+                    novo_texto = ai.gerar_ia("ARQUITETO_EXAMES_V25", prompt_refine)
+                    st.session_state.temp_prova = novo_texto
+                    st.session_state["area_edicao_v25"] = novo_texto
+                    st.rerun()
 
-        if st.button("🗑️ DESCARTAR TUDO"):
-            del st.session_state.temp_prova
-            if "area_edicao_v25" in st.session_state:
-                del st.session_state["area_edicao_v25"]
-            st.rerun()
+            t_rev, t_gab, t_drive = st.tabs(["📝 EDIÇÃO DA PROVA", "✅ GABARITO TÉCNICO", "☁️ EXPORTAR & SYNC"])
+            
+            with t_rev:
+                st.text_area("Texto da Avaliação (Editável):", height=500, key="area_edicao_v25")
+                st.session_state.temp_prova = st.session_state["area_edicao_v25"]
+            
+            with t_gab:
+                st.markdown("#### 🎯 Gabarito para Conferência Rápida")
+                st.code(ai.extrair_tag(st.session_state.temp_prova, "GABARITO_TEXTO"))
+                with st.expander("Ver Justificativas da IA"):
+                    st.write(ai.extrair_tag(st.session_state.temp_prova, "RESPOSTAS_IA"))
+            
+            with t_drive:
+                st.subheader("🚀 Sincronização SOSA_DOCUMENTOS")
+                c_d1, c_d2 = st.columns(2)
+                trimestre_av = c_d1.selectbox("Trimestre de Destino:", ["I Trimestre", "II Trimestre", "III Trimestre"], key="av_trim_dest")
+                nome_arq = c_d2.text_input("Nome do Arquivo:", f"PROVA_{ano_av}ANO_{tipo_av.split(' ')[0]}", key="av_nome_arq")
+                
+                if st.button("☁️ SINCRONIZAR COM DRIVE E GAVETA", use_container_width=True, type="primary"):
+                    with st.status("Iniciando Protocolo de Arquivamento...", expanded=True) as status:
+                        info_doc = {"ano": f"{ano_av}º", "tipo_prova": tipo_av.upper(), "valor": "10", "qtd_questoes": qtd_q}
+                        doc_io = exporter.gerar_docx_prova_v25(nome_arq, st.session_state.temp_prova, info_doc)
+                        
+                        # 1. Upload para o Drive
+                        link = db.subir_e_converter_para_google_docs(
+                            doc_io, nome_arq, trimestre=trimestre_av, categoria=f"{ano_av}ano", modo="AVALIACAO" 
+                        )
+                        
+                        if "https" in str(link):
+                            # 2. Salva no Banco de Dados para aparecer na Gaveta
+                            conteudo_banco = f"[GABARITO]\n{ai.extrair_tag(st.session_state.temp_prova, 'GABARITO_TEXTO')}\n\n--- LINK DRIVE ---\n{link}"
+                            db.salvar_no_banco("DB_AULAS_PRONTAS", [
+                                datetime.now().strftime("%d/%m/%Y"),
+                                "AVALIAÇÃO",
+                                f"{tipo_av} - {ano_av}º Ano",
+                                conteudo_banco,
+                                f"{ano_av}º",
+                                link
+                            ])
+                            status.update(label="✅ Avaliação Arquivada com Sucesso!", state="complete")
+                            st.balloons()
+                        else:
+                            status.update(label="❌ Erro na Ponte Google.", state="error")
+
+            if st.button("🗑️ DESCARTAR E RECOMEÇAR", use_container_width=True):
+                del st.session_state.temp_prova
+                if "area_edicao_v25" in st.session_state: del st.session_state["area_edicao_v25"]
+                st.rerun()
+
+    # --- ABA 2: GAVETA DE EXAMES (HISTÓRICO) ---
+    with tab_gaveta:
+        st.subheader("🗂️ Histórico de Avaliações Geradas")
+        if df_aulas.empty:
+            st.info("📭 Nenhuma avaliação arquivada ainda.")
+        else:
+            # Filtramos apenas o que é avaliação
+            df_exames = df_aulas[df_aulas['SEMANA_REF'] == "AVALIAÇÃO"].iloc[::-1]
+            
+            if df_exames.empty:
+                st.info("📭 Nenhuma avaliação encontrada no banco.")
+            else:
+                for _, row in df_exames.iterrows():
+                    with st.container(border=True):
+                        c_h1, c_h2, c_h3 = st.columns([2, 1, 1])
+                        c_h1.markdown(f"**{row['TIPO_MATERIAL']}**")
+                        c_h2.caption(f"📅 {row['DATA']}")
+                        
+                        # Extração do link salvo no conteúdo
+                        import re
+                        link_match = re.search(r"--- LINK DRIVE ---\n(https://.*)", str(row['CONTEUDO']))
+                        link_final = link_match.group(1) if link_match else row.get('LINK_DRIVE', "")
+
+                        if link_final:
+                            c_h3.link_button("📂 ABRIR PROVA", str(link_final), use_container_width=True)
+                        
+                        with st.expander("👁️ Ver Gabarito Salvo"):
+                            st.write(ai.extrair_tag(row['CONTEUDO'], "GABARITO"))
+                        
+                        if st.button("🗑️ Excluir do Histórico", key=f"del_av_{row.name}"):
+                            if db.excluir_registro_com_drive("DB_AULAS_PRONTAS", row['CONTEUDO']):
+                                st.success("Removido!"); time.sleep(0.5); st.rerun()
