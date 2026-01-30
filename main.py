@@ -570,26 +570,50 @@ elif menu == "🧪 Criador de Aulas":
                             st.rerun()
 
                 # --- FASE 3: REFINADOR E ACABAMENTO (TAMBÉM DENTRO DO ELSE) ---
-                if "lab_temp" in st.session_state:
-                    st.markdown("---")
-                    st.markdown("### 🤖 3. Refinamento e Acabamento")
+        if "lab_temp" in st.session_state:
+            st.markdown(" ")
+            st.markdown("### 🤖 3. Refinamento e Acabamento")
+            
+            # Captura a versão atual para as chaves (keys)
+            v = st.session_state.v_lab
+            txt_bruto = st.session_state.lab_temp
+
+            # --- REFINADOR MAESTRO COM "TROCA DE PELE" ---
+            comando_refine = st.chat_input("Deseja ajustar algo na aula? (Ex: 'Troque a Q2 por um desafio', 'Mude o tema para Astronomia')")
+            
+            if comando_refine:
+                with st.spinner("Maestro executando reengenharia do material..."):
+                    # 1. Prompt de Soberania
+                    prompt_refine = (
+                        f"ORDEM DE ALTERAÇÃO: {comando_refine}\n\n"
+                        f"CONTEÚDO ATUAL:\n{txt_bruto}\n\n"
+                        f"INSTRUÇÃO: Aplique a alteração em todas as seções (Professor, Aluno e Imagens) para manter a unidade lógica."
+                    )
                     
-                    comando_refine = st.chat_input("Deseja mudar algo na aula? (Ex: 'Troque a questão 2')")
-                    if comando_refine:
-                        with st.spinner("Refinando aula..."):
-                            prompt_refine = f"TEXTO ATUAL DA AULA:\n{st.session_state.lab_temp}\n\nCOMANDO: {comando_refine}\nRetorne o material completo com as tags [PROFESSOR] e [ALUNO]."
-                            st.session_state.lab_temp = ai.gerar_ia("MESTRE_V24", prompt_refine)
-                            st.rerun()
+                    # 2. Gera a nova versão
+                    nova_aula = ai.gerar_ia("REFINADOR_MATERIAIS", prompt_refine)
+                    
+                    # 3. O SEGREDO: Atualiza o conteúdo E incrementa a versão
+                    st.session_state.lab_temp = nova_aula
+                    st.session_state.v_lab += 1 # Isso força o Streamlit a renovar os campos
+                    
+                    st.success("Refino aplicado! Atualizando painéis...")
+                    time.sleep(1)
+                    st.rerun()
 
-                    info_para_ia = {
-                        "aula": aula_num, "ano": str(ano_lab), "semana": sem_lab, "formato": formato, "conteudos": sel_cont
-                    }
-                    exibir_material_estruturado(st.session_state.lab_temp, f"lab_v{st.session_state.v_lab}", info_aula=info_para_ia)
+            # Preparação do Dicionário para a Visualização (usando o 'v' atualizado)
+            info_para_ia = {
+                "aula": aula_num,
+                "ano": str(ano_lab),
+                "semana": sem_lab,
+                "formato": formato,
+                "conteudos": sel_cont,
+                "ed_prof": ai.extrair_tag(st.session_state.lab_temp, "PROFESSOR"),
+                "ed_alu": ai.extrair_tag(st.session_state.lab_temp, "ALUNO")
+            }
 
-                    if st.button("🗑️ DESCARTAR E RECOMEÇAR", use_container_width=True):
-                        del st.session_state.lab_temp
-                        if "lab_pei" in st.session_state: del st.session_state.lab_pei
-                        st.rerun()
+            # Chamada da Função de Visualização
+            exibir_material_estruturado(st.session_state.lab_temp, f"lab_v{v}", info_aula=info_para_ia)
 
 # --- ABA 2: GAVETAS DE MATERIAIS (HISTÓRICO MULTIMODAL V25.85 - CORRIGIDO) ---
     with tab_gavetas:
