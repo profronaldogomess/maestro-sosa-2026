@@ -546,7 +546,7 @@ elif menu == "🧪 Criador de Aulas":
                 if "lab_pei" in st.session_state: del st.session_state.lab_pei
                 st.rerun()
 
-# --- ABA 2: GAVETAS DE MATERIAIS (HISTÓRICO MULTIMODAL V25.75) ---
+# --- ABA 2: GAVETAS DE MATERIAIS (HISTÓRICO MULTIMODAL V25.85 - CORRIGIDO) ---
     with tab_gavetas:
         st.subheader("🗂️ Gestão de Materiais Produzidos")
         if df_aulas.empty:
@@ -601,20 +601,33 @@ elif menu == "🧪 Criador de Aulas":
                                 st.write("")
                                 c1, c2, c3, c4 = st.columns(4)
                                 
-                                # Botões Dinâmicos (Só aparecem se o link for real)
-                                if l_alu: c1.link_button("📝 ALUNO", l_alu, use_container_width=True)
-                                else: c1.button("❌ ALUNO", disabled=True, use_container_width=True)
+                                # --- BOTÕES COM CHAVES ÚNICAS (RESOLVE O ERRO DE ID DUPLICADO) ---
                                 
+                                # Coluna 1: Aluno
+                                if l_alu: 
+                                    c1.link_button("📝 ALUNO", l_alu, use_container_width=True)
+                                else: 
+                                    c1.button("❌ ALUNO", disabled=True, use_container_width=True, key=f"no_alu_{row.name}")
+                                
+                                # Coluna 2: Professor/Slides
                                 label_prof = "📜 SLIDES" if "SLIDES" in tipo else "👨‍🏫 GUIA"
-                                if l_prof: c2.link_button(label_prof, l_prof, use_container_width=True)
-                                else: c2.button(f"❌ {label_prof}", disabled=True, use_container_width=True)
+                                if l_prof: 
+                                    c2.link_button(label_prof, l_prof, use_container_width=True)
+                                else: 
+                                    c2.button(f"❌ {label_prof}", disabled=True, use_container_width=True, key=f"no_prof_{row.name}")
                                 
-                                if l_pei: c3.link_button("♿ PEI", l_pei, use_container_width=True)
-                                else: c3.button("⚪ SEM PEI", disabled=True, use_container_width=True)
+                                # Coluna 3: PEI
+                                if l_pei: 
+                                    c3.link_button("♿ PEI", l_pei, use_container_width=True)
+                                else: 
+                                    c3.button("⚪ SEM PEI", disabled=True, use_container_width=True, key=f"no_pei_{row.name}")
                                 
+                                # Coluna 4: Apagar
                                 if c4.button("🗑️ APAGAR", key=f"del_v17_{row.name}", use_container_width=True):
                                     if db.excluir_registro_com_drive("DB_AULAS_PRONTAS", row['CONTEUDO']):
-                                        st.success("Removido!"); time.sleep(0.5); st.rerun()
+                                        st.success("Removido!")
+                                        time.sleep(0.5)
+                                        st.rerun()
 
                                 with st.expander("📄 Ver Detalhes Técnicos"):
                                     t_hist1, t_hist2 = st.tabs(["📜 Roteiro", "🎨 Prompts"])
