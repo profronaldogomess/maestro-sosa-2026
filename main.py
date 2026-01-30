@@ -591,7 +591,7 @@ elif menu == "🧪 Criador de Aulas":
                 if "lab_pei" in st.session_state: del st.session_state.lab_pei
                 st.rerun()
 
-    # --- ABA 2: GAVETAS DE MATERIAIS (HISTÓRICO MULTIMODAL V25.17) ---
+# --- ABA 2: GAVETAS DE MATERIAIS (HISTÓRICO MULTIMODAL V25.75) ---
     with tab_gavetas:
         st.subheader("🗂️ Gestão de Materiais Produzidos")
         if df_aulas.empty:
@@ -599,7 +599,8 @@ elif menu == "🧪 Criador de Aulas":
         else:
             ano_gav = st.selectbox("Filtrar por Ano:", ["Todos", "6º", "7º", "8º", "9º"], key="gav_v17_ano")
             df_g = df_aulas.copy()
-            if ano_gav != "Todos": df_g = df_g[df_g['ANO'].str.contains(ano_gav, na=False)]
+            if ano_gav != "Todos": 
+                df_g = df_g[df_g['ANO'].str.contains(ano_gav, na=False)]
             
             def definir_categoria_gaveta(linha):
                 ref = str(linha['SEMANA_REF']).upper()
@@ -625,46 +626,55 @@ elif menu == "🧪 Criador de Aulas":
                         for _, row in df_cat.iloc[::-1].iterrows():
                             tipo = str(row['TIPO_MATERIAL']).upper()
                             cor_borda = "#2962FF" if "AULA 1" in tipo else "#00C853"
+                            
                             with st.container(border=True):
                                 st.markdown(f"<div style='border-left: 5px solid {cor_borda}; padding-left: 10px;'><b>{row['SEMANA_REF']} ÷ {row['TIPO_MATERIAL']}</b></div>", unsafe_allow_html=True)
                                 
                                 texto_full = str(row['CONTEUDO'])
-                                roteiro_txt = ai.extrair_tag(texto_full, "ROTEIRO_PROF")
-                                img_reg_txt = ai.extrair_tag(texto_full, "PROMPTS_REGULAR")
-                                img_pei_txt = ai.extrair_tag(texto_full, "PROMPTS_PEI")
                                 
-                                if not roteiro_txt:
-                                    partes = texto_full.split("--- LINKS DE ACESSO ---")
-                                    roteiro_txt = partes[0] if len(partes) > 0 else "Roteiro antigo."
-
+                                # Extração de Links com Regex Blindada
                                 import re
-                                link_alu = re.search(r"Aluno\((.*?)\)", texto_full)
-                                link_prof = re.search(r"Prof\((.*?)\)", texto_full)
-                                link_pei = re.search(r"PEI\((.*?)\)", texto_full)
+                                def extrair_link_seguro(padrao, texto):
+                                    match = re.search(padrao, texto)
+                                    link = match.group(1) if match else None
+                                    return link if link and link.startswith("https") else None
+
+                                l_alu = extrair_link_seguro(r"Aluno\((.*?)\)", texto_full)
+                                l_prof = extrair_link_seguro(r"Prof\((.*?)\)", texto_full)
+                                l_pei = extrair_link_seguro(r"PEI\((.*?)\)", texto_full)
 
                                 st.write("")
                                 c1, c2, c3, c4 = st.columns(4)
-                                if link_alu and "https" in link_alu.group(1): c1.link_button("📝 ALUNO", link_alu.group(1), use_container_width=True)
+                                
+                                # Botões Dinâmicos (Só aparecem se o link for real)
+                                if l_alu: c1.link_button("📝 ALUNO", l_alu, use_container_width=True)
+                                else: c1.button("❌ ALUNO", disabled=True, use_container_width=True)
+                                
                                 label_prof = "📜 SLIDES" if "SLIDES" in tipo else "👨‍🏫 GUIA"
-                                if link_prof and "https" in link_prof.group(1): c2.link_button(label_prof, link_prof.group(1), use_container_width=True)
-                                if link_pei and "https" in link_pei.group(1): c3.link_button("♿ PEI", link_pei.group(1), use_container_width=True)
+                                if l_prof: c2.link_button(label_prof, l_prof, use_container_width=True)
+                                else: c2.button(f"❌ {label_prof}", disabled=True, use_container_width=True)
+                                
+                                if l_pei: c3.link_button("♿ PEI", l_pei, use_container_width=True)
+                                else: c3.button("⚪ SEM PEI", disabled=True, use_container_width=True)
+                                
                                 if c4.button("🗑️ APAGAR", key=f"del_v17_{row.name}", use_container_width=True):
                                     if db.excluir_registro_com_drive("DB_AULAS_PRONTAS", row['CONTEUDO']):
                                         st.success("Removido!"); time.sleep(0.5); st.rerun()
 
-                                with st.expander("📄 Ver Roteiro e Prompts de Imagem"):
-                                    t_hist1, t_hist2 = st.tabs(["📜 Roteiro Técnico", "🎨 Prompts de Imagem"])
+                                with st.expander("📄 Ver Detalhes Técnicos"):
+                                    t_hist1, t_hist2 = st.tabs(["📜 Roteiro", "🎨 Prompts"])
                                     with t_hist1:
-                                        st.text_area("Texto da Aula:", roteiro_txt, height=200, key=f"hist_rot_{row.name}")
+                                        # Pega o roteiro antes da linha de links
+                                        roteiro_limpo = ai.extrair_tag(texto_full, "ROTEIRO_PROF")
+                                        if not roteiro_limpo:
+                                            roteiro_limpo = texto_full.split("--- LINKS")[0]
+                                        st.text_area("Texto:", roteiro_limpo, height=200, key=f"h_rot_{row.name}")
                                     with t_hist2:
-                                        if img_reg_txt:
-                                            st.markdown("#### 👨‍🏫 Material Regular")
-                                            st.code(img_reg_txt, language="text")
-                                        if img_pei_txt:
-                                            st.markdown("#### ♿ Âncoras Visuais PEI")
-                                            st.code(img_pei_txt, language="text")
-                                        if not img_reg_txt and not img_pei_txt:
-                                            st.warning("Prompts não disponíveis para este material antigo.")
+                                        p_reg = ai.extrair_tag(texto_full, "PROMPTS_REGULAR")
+                                        p_pei = ai.extrair_tag(texto_full, "PROMPTS_PEI")
+                                        if p_reg: st.code(f"REGULAR: {p_reg}")
+                                        if p_pei: st.code(f"PEI: {p_pei}")
+                                        if not p_reg and not p_pei: st.info("Sem prompts salvos.")
                             
 # ==============================================================================
 # MÓDULO: PLANEJAMENTO (PONTO ID) - ARQUITETURA V25 CORRIGIDA E ESTÁVEL
