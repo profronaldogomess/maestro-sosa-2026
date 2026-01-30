@@ -162,20 +162,21 @@ menu = st.sidebar.radio("Navegação:", [
 # ==============================================================================
 # FUNÇÃO AUXILIAR DE VISUALIZAÇÃO HÍBRIDA (VERSÃO V25.11 - CONTEXTUAL)
 # ==============================================================================
+# --- FUNÇÃO DE VISUALIZAÇÃO V25.85 ---
 def exibir_material_estruturado(texto_raw, key_prefix, dados_plano=None, info_aula=None):
     if info_aula is None: info_aula = {}
     
     f_aula = info_aula.get("aula", "Aula Geral")
     f_ano = info_aula.get("ano", "6")
     f_semana = info_aula.get("semana", "Semana Geral")
-    f_formato = info_aula.get("formato", "Quadro (Lousa)")
     
+    # Extração das Tags Mestras
     ed_prof = ai.extrair_tag(texto_raw, "PROFESSOR")
     ed_alu = ai.extrair_tag(texto_raw, "ALUNO")
 
     if dados_plano:
-        # MODO PLANEJAMENTO (MANTIDO)
-        t1, t2, t3, t4, t_exp = st.tabs(["🏫 Metodologia", "🎯 Objetivos", "📝 Avaliação", "♿ PEI", "📥 EXPORTAR PLANO"])
+        # MODO PLANEJAMENTO
+        t1, t2, t3, t4, t_exp = st.tabs(["🏫 Metodologia", "🎯 Objetivos", "📝 Avaliação", "♿ PEI", "📥 EXPORTAR"])
         with t1: st.text_area("Roteiro:", ai.extrair_tag(texto_raw, "METODOLOGIA"), height=400, key=f"{key_prefix}_met")
         with t2: st.text_area("Objetivos:", ai.extrair_tag(texto_raw, "OBJETIVOS_ENSINO"), height=400, key=f"{key_prefix}_obj")
         with t3: st.text_area("Avaliação:", ai.extrair_tag(texto_raw, "AVALIACAO"), height=200, key=f"{key_prefix}_ava")
@@ -184,64 +185,56 @@ def exibir_material_estruturado(texto_raw, key_prefix, dados_plano=None, info_au
             nome_plano = f"PLANO_{f_ano}ANO_{f_semana.replace(' ', '')}"
             doc_plano = exporter.gerar_docx_plano_pedagogico_v18(nome_plano, dados_plano, {"ano": f"{f_ano}º", "semana": f_semana})
             st.download_button("📥 BAIXAR PLANO", doc_plano, f"{nome_plano}.docx", use_container_width=True)
-
     else:
         # MODO CRIADOR DE AULAS
         t1, t2, t3, t4, t5, t_exp = st.tabs(["✍️ Lousa", "📄 Folha", "✅ Gabarito", "🎨 Imagens", "♿ PEI", "📥 EXPORTAR/SYNC"])
         
-        with t1: ed_prof = st.text_area("Lousa:", ed_prof, height=400, key=f"{key_prefix}_lousa")
-        with t2: ed_alu = st.text_area("Folha:", ed_alu, height=400, key=f"{key_prefix}_folha")
-        with t3: st.text_area("Gabarito:", ai.extrair_tag(texto_raw, "GABARITO"), height=200, key=f"{key_prefix}_gab")
-        with t4: st.text_area("Imagens:", ai.extrair_tag(texto_raw, "IMAGENS"), height=150, key=f"{key_prefix}_img")
+        with t1: st.text_area("Lousa:", ed_prof, height=400, key=f"{key_prefix}_lousa_v85")
+        with t2: st.text_area("Folha:", ed_alu, height=400, key=f"{key_prefix}_folha_v85")
+        with t3: st.text_area("Gabarito:", ai.extrair_tag(texto_raw, "GABARITO"), height=200, key=f"{key_prefix}_gab_v85")
+        with t4: st.text_area("Imagens:", ai.extrair_tag(texto_raw, "IMAGENS"), height=150, key=f"{key_prefix}_img_v85")
         
         with t5:
-            st.subheader("♿ Adaptação PEI")
+            st.subheader("♿ Adaptação PEI (MÉTODO DUA)")
             if "lab_pei" not in st.session_state:
-                if st.button("♿ GERAR ADAPTAÇÃO PEI", use_container_width=True, type="primary"):
-                    with st.spinner("Adaptando..."):
-                        st.session_state.lab_pei = ai.gerar_ia("ARQUITETO_PEI_V24", f"ADAPTE: {ed_alu}")
+                if st.button("♿ GERAR ADAPTAÇÃO PEI AGORA", use_container_width=True, type="primary"):
+                    with st.spinner("Arquiteto PEI em ação..."):
+                        st.session_state.lab_pei = ai.gerar_ia("ARQUITETO_PEI_V24", f"ADAPTE PARA PEI: {ed_alu}")
                         st.rerun()
             else:
-                st.session_state.lab_pei = st.text_area("PEI:", st.session_state.lab_pei, height=400, key=f"{key_prefix}_pei_ed")
+                st.session_state.lab_pei = st.text_area("Material PEI:", st.session_state.lab_pei, height=400)
+                if st.button("🗑️ Descartar PEI"):
+                    del st.session_state.lab_pei
+                    st.rerun()
 
         with t_exp:
-            st.subheader("🚀 Exportação e Sincronia")
+            st.subheader("🚀 Sincronia com Google Drive")
             nome_base = f"AULA_{f_aula.replace(' ','')}_{f_ano}ANO_{datetime.now().strftime('%d%m')}"
             
-            # Gerar arquivos em memória
-            doc_alu = exporter.gerar_docx_aluno_v24(nome_base, ed_alu, {"ano": f"{f_ano}º", "trimestre": "I"})
-            doc_prof = exporter.gerar_docx_professor_v25(nome_base, ed_prof, {"ano": f"{f_ano}º", "semana": f_semana})
-            
-            c1, c2 = st.columns(2)
-            c1.download_button("📥 BAIXAR ALUNO", doc_alu, f"{nome_base}_ALUNO.docx", use_container_width=True)
-            c2.download_button("📥 BAIXAR PROF", doc_prof, f"{nome_base}_PROF.docx", use_container_width=True)
-
-            st.markdown("---")
+            # Botão de Sincronia Total
             if st.button("☁️ SINCRONIZAR TUDO NO DRIVE E GAVETA", use_container_width=True, type="primary"):
-                with st.status("Sincronizando...", expanded=True) as status:
-                    # Uploads
+                with st.status("Enviando arquivos...", expanded=True) as status:
+                    # Gerar docs em tempo real
+                    doc_alu = exporter.gerar_docx_aluno_v24(nome_base, ed_alu, {"ano": f"{f_ano}º", "trimestre": "I"})
+                    doc_prof = exporter.gerar_docx_professor_v25(nome_base, ed_prof, {"ano": f"{f_ano}º", "semana": f_semana})
+                    
                     link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{nome_base}_ALUNO", modo="AULA")
                     link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_base}_PROF", modo="AULA")
+                    
                     link_pei = "N/A"
                     if "lab_pei" in st.session_state:
                         doc_pei = exporter.gerar_docx_pei_v25(f"{nome_base}_PEI", st.session_state.lab_pei, {"trimestre": "I"})
                         link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_base}_PEI", modo="AULA")
                     
-                    # 🚨 O SEGREDO DA GAVETA: Formatação do Conteúdo
-                    conteudo_banco = (
-                        f"[ROTEIRO_PROF]\n{ed_prof}\n\n"
-                        f"--- LINKS DE ACESSO ---\n"
-                        f"Aluno({link_alu})\nProf({link_prof})\nPEI({link_pei})"
-                    )
+                    # Formatação para a Gaveta reconhecer
+                    conteudo_banco = f"[ROTEIRO_PROF]\n{ed_prof}\n\n--- LINKS DE ACESSO ---\nAluno({link_alu})\nProf({link_prof})\nPEI({link_pei})"
                     
-                    # Salva no Banco
                     db.salvar_no_banco("DB_AULAS_PRONTAS", [
-                        datetime.now().strftime("%d/%m/%Y"), f_semana, f"{f_aula} ({f_formato})", 
-                        conteudo_banco, f"{f_ano}º", ""
+                        datetime.now().strftime("%d/%m/%Y"), f_semana, f"{f_aula}", conteudo_banco, f"{f_ano}º", ""
                     ])
-                    status.update(label="✅ Sincronizado!", state="complete")
+                    status.update(label="✅ Sincronizado com Sucesso!", state="complete")
                     st.balloons()
-                        
+                       
 # ==============================================================================
 # MÓDULO: DASHBOARD INTELIGENTE (V6 - FULL CONTEXT: NOTAS + PDF + AULAS CRIADAS)
 # ==============================================================================
