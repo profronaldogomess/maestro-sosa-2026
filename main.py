@@ -487,7 +487,7 @@ if menu == "🤖 Maestro Dashboard":
         st.session_state.messages.append({"role": "assistant", "content": resposta})
 
 # ==============================================================================
-# MÓDULO: LABORATÓRIO DE MATERIAIS V25.80 (REFINADOR + SINCRONIA TOTAL)
+# MÓDULO: LABORATÓRIO DE MATERIAIS V25.80 (REFINADO E BLINDADO)
 # ==============================================================================
 elif menu == "🧪 Criador de Aulas":
     st.title("🧪 Laboratório de Materiais (V25.80)")
@@ -506,8 +506,9 @@ elif menu == "🧪 Criador de Aulas":
             planos_ano = df_planos[df_planos['ANO'] == f"{ano_lab}º"]
             
             if planos_ano.empty:
-                st.warning(f"⚠️ Nenhum plano encontrado para o {ano_lab}º Ano.")
+                st.warning(f"⚠️ Nenhum plano encontrado para o {ano_lab}º Ano. Crie um plano no módulo de Planejamento primeiro.")
             else:
+                # TUDO O QUE DEPENDE DO PLANO DEVE FICAR DENTRO DESTE 'ELSE'
                 sem_lab = c2.selectbox("Semana de Referência:", planos_ano['SEMANA'].tolist(), key="lab_sem_v25")
                 aula_num = c3.radio("Foco da Aula:", ["Aula 1", "Aula 2"], horizontal=True)
                 plano_row = planos_ano[planos_ano['SEMANA'] == sem_lab].iloc[0]
@@ -527,70 +528,68 @@ elif menu == "🧪 Criador de Aulas":
                     </div>
                 """, unsafe_allow_html=True)
 
-        # --- FASE 2: PARÂMETROS ---
-        st.markdown(" ")
-        with st.container(border=True):
-            st.markdown("### 🎯 2. Parâmetros de Precisão")
-            df_base_ano = df_curriculo[df_curriculo['ANO'] == int(ano_lab)]
-            col_p1, col_p2 = st.columns(2)
-            
-            def check_match_inteligente(item_csv, texto_plano):
-                item = str(item_csv).upper().strip()
-                plano = str(texto_plano).upper().strip()
-                return item in plano or plano in item or any(word in plano for word in item.split() if len(word) > 4)
+                # --- FASE 2: PARÂMETROS (AGORA PROTEGIDA DENTRO DO ELSE) ---
+                st.markdown(" ")
+                with st.container(border=True):
+                    st.markdown("### 🎯 2. Parâmetros de Precisão")
+                    df_base_ano = df_curriculo[df_curriculo['ANO'] == int(ano_lab)]
+                    col_p1, col_p2 = st.columns(2)
+                    
+                    def check_match_inteligente(item_csv, texto_plano):
+                        item = str(item_csv).upper().strip()
+                        plano = str(texto_plano).upper().strip()
+                        return item in plano or plano in item or any(word in plano for word in item.split() if len(word) > 4)
 
-            sel_cont = col_p1.multiselect("Confirmar Conteúdos:", options=df_base_ano['CONTEUDO_ESPECIFICO'].unique(), 
-                                         default=[c for c in df_base_ano['CONTEUDO_ESPECIFICO'].unique() if check_match_inteligente(c, cont_fiel)])
-            
-            opcoes_obj = df_base_ano[df_base_ano['CONTEUDO_ESPECIFICO'].isin(sel_cont)]['OBJETIVOS'].unique().tolist() if sel_cont else []
-            sel_obj = col_p2.multiselect("Confirmar Objetivos:", options=opcoes_obj,
-                                        default=[o for o in opcoes_obj if check_match_inteligente(o, obj_fiel)])
+                    sel_cont = col_p1.multiselect("Confirmar Conteúdos:", options=df_base_ano['CONTEUDO_ESPECIFICO'].unique(), 
+                                                 default=[c for c in df_base_ano['CONTEUDO_ESPECIFICO'].unique() if check_match_inteligente(c, cont_fiel)])
+                    
+                    opcoes_obj = df_base_ano[df_base_ano['CONTEUDO_ESPECIFICO'].isin(sel_cont)]['OBJETIVOS'].unique().tolist() if sel_cont else []
+                    sel_obj = col_p2.multiselect("Confirmar Objetivos:", options=opcoes_obj,
+                                                default=[o for o in opcoes_obj if check_match_inteligente(o, obj_fiel)])
 
-            cp1, cp2, cp3 = st.columns([1, 1, 1])
-            formato = cp1.radio("Formato:", ["Quadro (Lousa)", "Slides (Apresentação)"], horizontal=True)
-            qtd_q = cp2.slider("Questões:", 1, 15, 4)
-            nivel = cp3.select_slider("Desafio:", options=["Básico", "Intermediário", "Desafio"])
-            instr = st.text_area("Instruções Adicionais:", placeholder="Ex: Use exemplos de astronomia...")
+                    cp1, cp2, cp3 = st.columns([1, 1, 1])
+                    formato = cp1.radio("Formato:", ["Quadro (Lousa)", "Slides (Apresentação)"], horizontal=True)
+                    qtd_q = cp2.slider("Questões:", 1, 15, 4)
+                    nivel = cp3.select_slider("Desafio:", options=["Básico", "Intermediário", "Desafio"])
+                    instr = st.text_area("Instruções Adicionais:", placeholder="Ex: Use exemplos de astronomia...")
 
-            if st.button("🚀 COMPILAR MATERIAL DE ELITE", use_container_width=True, type="primary"):
-                with st.spinner("Maestro processando Injeção de Plano..."):
-                    arquivos_contexto = []
-                    if is_livro:
-                        import re
-                        match_livro = re.search(r"MÉTODO LIVRO: \['(.*?)'\]", plano_raw)
-                        nome_livro = match_livro.group(1) if match_livro else None
-                        if nome_livro:
-                            livro_data = df_materiais[df_materiais['NOME_ARQUIVO'] == nome_livro]
-                            if not livro_data.empty:
-                                arquivos_contexto.append(types.Part.from_uri(file_uri=livro_data.iloc[0]['URI_ARQUIVO'], mime_type="application/pdf"))
+                    if st.button("🚀 COMPILAR MATERIAL DE ELITE", use_container_width=True, type="primary"):
+                        with st.spinner("Maestro processando Injeção de Plano..."):
+                            arquivos_contexto = []
+                            if is_livro:
+                                import re
+                                match_livro = re.search(r"MÉTODO LIVRO: \['(.*?)'\]", plano_raw)
+                                nome_livro = match_livro.group(1) if match_livro else None
+                                if nome_livro:
+                                    livro_data = df_materiais[df_materiais['NOME_ARQUIVO'] == nome_livro]
+                                    if not livro_data.empty:
+                                        arquivos_contexto.append(types.Part.from_uri(file_uri=livro_data.iloc[0]['URI_ARQUIVO'], mime_type="application/pdf"))
 
-                    prompt_v25 = f"🚨 PROTOCOLO PIP 🚨\nMÉTODO: {metodo_fiel}\nPLANO: {plano_raw}\nOBJETIVO: {sel_obj}\nFOCO: {aula_num} | SÉRIE: {ano_lab}º | QUESTÕES: {qtd_q}\nFORMATO: {formato} | NÍVEL: {nivel}\nEXTRA: {instr}"
-                    st.session_state.lab_temp = ai.gerar_ia("MESTRE_V24", prompt_v25, partes_arquivos=arquivos_contexto)
-                    st.rerun()
+                            prompt_v25 = f"🚨 PROTOCOLO PIP 🚨\nMÉTODO: {metodo_fiel}\nPLANO: {plano_raw}\nOBJETIVO: {sel_obj}\nFOCO: {aula_num} | SÉRIE: {ano_lab}º | QUESTÕES: {qtd_q}\nFORMATO: {formato} | NÍVEL: {nivel}\nEXTRA: {instr}"
+                            st.session_state.lab_temp = ai.gerar_ia("MESTRE_V24", prompt_v25, partes_arquivos=arquivos_contexto)
+                            st.rerun()
 
-        # --- FASE 3: REFINADOR E ACABAMENTO ---
-        if "lab_temp" in st.session_state:
-            st.markdown("---")
-            st.markdown("### 🤖 3. Refinamento e Acabamento")
-            
-            # REFINADOR MAESTRO (ADICIONADO)
-            comando_refine = st.chat_input("Deseja mudar algo na aula? (Ex: 'Troque a questão 2', 'Aumente o texto da lousa')")
-            if comando_refine:
-                with st.spinner("Refinando aula..."):
-                    prompt_refine = f"TEXTO ATUAL DA AULA:\n{st.session_state.lab_temp}\n\nCOMANDO: {comando_refine}\nRetorne o material completo com as tags [PROFESSOR] e [ALUNO]."
-                    st.session_state.lab_temp = ai.gerar_ia("MESTRE_V24", prompt_refine)
-                    st.rerun()
+                # --- FASE 3: REFINADOR E ACABAMENTO (TAMBÉM DENTRO DO ELSE) ---
+                if "lab_temp" in st.session_state:
+                    st.markdown("---")
+                    st.markdown("### 🤖 3. Refinamento e Acabamento")
+                    
+                    comando_refine = st.chat_input("Deseja mudar algo na aula? (Ex: 'Troque a questão 2')")
+                    if comando_refine:
+                        with st.spinner("Refinando aula..."):
+                            prompt_refine = f"TEXTO ATUAL DA AULA:\n{st.session_state.lab_temp}\n\nCOMANDO: {comando_refine}\nRetorne o material completo com as tags [PROFESSOR] e [ALUNO]."
+                            st.session_state.lab_temp = ai.gerar_ia("MESTRE_V24", prompt_refine)
+                            st.rerun()
 
-            info_para_ia = {
-                "aula": aula_num, "ano": str(ano_lab), "semana": sem_lab, "formato": formato, "conteudos": sel_cont
-            }
-            # Chama a função que agora tem o botão de Sincronia Total
-            exibir_material_estruturado(st.session_state.lab_temp, f"lab_v{st.session_state.v_lab}", info_aula=info_para_ia)
+                    info_para_ia = {
+                        "aula": aula_num, "ano": str(ano_lab), "semana": sem_lab, "formato": formato, "conteudos": sel_cont
+                    }
+                    exibir_material_estruturado(st.session_state.lab_temp, f"lab_v{st.session_state.v_lab}", info_aula=info_para_ia)
 
-            if st.button("🗑️ DESCARTAR E RECOMEÇAR", use_container_width=True):
-                del st.session_state.lab_temp
-                if "lab_pei" in st.session_state: del st.session_state.lab_pei
-                st.rerun()
+                    if st.button("🗑️ DESCARTAR E RECOMEÇAR", use_container_width=True):
+                        del st.session_state.lab_temp
+                        if "lab_pei" in st.session_state: del st.session_state.lab_pei
+                        st.rerun()
 
 # --- ABA 2: GAVETAS DE MATERIAIS (HISTÓRICO MULTIMODAL V25.85 - CORRIGIDO) ---
     with tab_gavetas:
