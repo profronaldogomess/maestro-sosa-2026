@@ -164,68 +164,109 @@ menu = st.sidebar.radio("Navegação:", [
 # ==============================================================================
 # --- FUNÇÃO DE VISUALIZAÇÃO V25.85 ---
 def exibir_material_estruturado(texto_raw, key_prefix, dados_plano=None, info_aula=None):
+    """
+    Versão V25.90: Híbrida e Blindada. 
+    Detecta automaticamente se é PLANEJAMENTO ou AULA.
+    """
     if info_aula is None: info_aula = {}
     
+    # Extração de Metadados
     f_aula = info_aula.get("aula", "Aula Geral")
     f_ano = info_aula.get("ano", "6")
     f_semana = info_aula.get("semana", "Semana Geral")
-    f_trimestre = "I Trimestre" # Pode ser dinâmico conforme sua lógica
-    
-    ed_prof = ai.extrair_tag(texto_raw, "PROFESSOR")
-    ed_alu = ai.extrair_tag(texto_raw, "ALUNO")
+    f_trimestre = info_aula.get("trimestre", "I Trimestre")
+    f_categoria = f"{f_ano}ano" # Formato esperado pelo Apps Script
 
-    # --- ABAS DO PAINEL ---
-    t1, t2, t3, t4, t5, t_exp = st.tabs(["✍️ Lousa", "📄 Folha", "✅ Gabarito", "🎨 Imagens", "♿ PEI", "📥 EXPORTAR/SYNC"])
-
-    with t1: st.text_area("Lousa:", ed_prof, height=400, key=f"{key_prefix}_lousa")
-    with t2: st.text_area("Folha:", ed_alu, height=400, key=f"{key_prefix}_folha")
-    with t3: st.text_area("Gabarito:", ai.extrair_tag(texto_raw, "GABARITO"), height=200, key=f"{key_prefix}_gab")
-    with t4: st.text_area("Imagens:", ai.extrair_tag(texto_raw, "IMAGENS"), height=150, key=f"{key_prefix}_img")
-    
-    with t5:
-        st.subheader("♿ Adaptação PEI")
-        if "lab_pei" not in st.session_state:
-            if st.button("♿ GERAR ADAPTAÇÃO PEI", use_container_width=True):
-                st.session_state.lab_pei = ai.gerar_ia("ARQUITETO_PEI_V24", f"ADAPTE: {ed_alu}")
-                st.rerun()
-        else:
-            st.session_state.lab_pei = st.text_area("PEI:", st.session_state.lab_pei, height=400)
-
-    with t_exp:
-        st.subheader("🚀 Sincronia de Elite")
-        nome_base = f"AULA_{f_aula.replace(' ','')}_{f_ano}ANO_{datetime.now().strftime('%d%m')}"
+    # --- LÓGICA DE DETECÇÃO DE CONTEÚDO ---
+    if dados_plano:
+        # MODO PLANEJAMENTO: Usa as tags MARKER_
+        ed_met = ai.extrair_tag(texto_raw, "METODOLOGIA")
+        ed_obj = ai.extrair_tag(texto_raw, "OBJETIVOS_ENSINO")
+        ed_ava = ai.extrair_tag(texto_raw, "AVALIACAO")
+        ed_pei_plan = ai.extrair_tag(texto_raw, "ADAPTACAO_PEI")
         
-        if st.button("☁️ SINCRONIZAR TUDO NO DRIVE E GAVETA", use_container_width=True, type="primary"):
-            with st.status("Processando Sincronia...", expanded=True) as status:
-                # 1. Gerar Arquivos
-                doc_alu = exporter.gerar_docx_aluno_v24(nome_base, ed_alu, {"ano": f"{f_ano}º", "trimestre": f_trimestre})
-                doc_prof = exporter.gerar_docx_professor_v25(nome_base, ed_prof, {"ano": f"{f_ano}º", "semana": f_semana})
-                
-                # 2. Upload para o Drive (Usando a Hierarquia Correta)
-                status.write("📤 Enviando Aluno...")
-                link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{nome_base}_ALUNO", trimestre=f_trimestre, semana=f_semana, modo="AULA")
-                
-                status.write("📤 Enviando Professor...")
-                link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_base}_PROF", trimestre=f_trimestre, semana=f_semana, modo="AULA")
-                
-                link_pei = "N/A"
-                if "lab_pei" in st.session_state:
-                    status.write("📤 Enviando PEI...")
-                    doc_pei = exporter.gerar_docx_pei_v25(f"{nome_base}_PEI", st.session_state.lab_pei, {"trimestre": f_trimestre})
-                    link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_base}_PEI", trimestre=f_trimestre, semana=f_semana, modo="AULA")
+        t1, t2, t3, t4, t_exp = st.tabs(["🏫 Metodologia", "🎯 Objetivos", "📝 Avaliação", "♿ PEI", "📥 EXPORTAR/SYNC"])
+        
+        with t1: st.text_area("Roteiro das Aulas:", ed_met, height=400, key=f"{key_prefix}_met")
+        with t2: st.text_area("Objetivos Curriculares:", ed_obj, height=400, key=f"{key_prefix}_obj")
+        with t3: st.text_area("Critérios de Avaliação:", ed_ava, height=200, key=f"{key_prefix}_ava")
+        with t4: st.text_area("Adaptação PEI (Plano):", ed_pei_plan, height=300, key=f"{key_prefix}_pei_plan")
+        
+        modo_sync = "PLANEJAMENTO"
+        nome_base = f"PLANO_{f_ano}ANO_{f_semana.replace(' ', '')}"
+        # No planejamento, o 'ed_prof' para o banco será o próprio texto do plano
+        ed_prof_para_banco = texto_raw 
 
-                # 3. Validação e Salvamento no Banco
-                if "https" in str(link_alu) and "https" in str(link_prof):
-                    conteudo_banco = f"[ROTEIRO_PROF]\n{ed_prof}\n\n--- LINKS DE ACESSO ---\nAluno({link_alu})\nProf({link_prof})\nPEI({link_pei})"
+    else:
+        # MODO CRIADOR DE AULAS: Usa as tags [PROFESSOR] e [ALUNO]
+        ed_prof = ai.extrair_tag(texto_raw, "PROFESSOR")
+        ed_alu = ai.extrair_tag(texto_raw, "ALUNO")
+        
+        t1, t2, t3, t4, t5, t_exp = st.tabs(["✍️ Lousa", "📄 Folha", "✅ Gabarito", "🎨 Imagens", "♿ PEI", "📥 EXPORTAR/SYNC"])
+        
+        with t1: st.text_area("Esquema de Lousa:", ed_prof, height=400, key=f"{key_prefix}_lousa")
+        with t2: st.text_area("Folha do Aluno:", ed_alu, height=400, key=f"{key_prefix}_folha")
+        with t3: st.text_area("Gabarito:", ai.extrair_tag(texto_raw, "GABARITO"), height=200, key=f"{key_prefix}_gab")
+        with t4: st.text_area("Prompts de Imagem:", ai.extrair_tag(texto_raw, "IMAGENS"), height=150, key=f"{key_prefix}_img")
+        
+        with t5:
+            st.subheader("♿ Adaptação PEI (Material)")
+            if "lab_pei" not in st.session_state:
+                if st.button("♿ GERAR ADAPTAÇÃO PEI", use_container_width=True, key=f"{key_prefix}_gen_pei"):
+                    st.session_state.lab_pei = ai.gerar_ia("ARQUITETO_PEI_V24", f"ADAPTE: {ed_alu}")
+                    st.rerun()
+            else:
+                st.session_state.lab_pei = st.text_area("PEI:", st.session_state.lab_pei, height=400, key=f"{key_prefix}_pei_area")
+        
+        modo_sync = "AULA"
+        nome_base = f"AULA_{f_aula.replace(' ','')}_{f_ano}ANO_{datetime.now().strftime('%d%m')}"
+        ed_prof_para_banco = ed_prof
+
+    # --- ABA DE EXPORTAÇÃO E SINCRONIA (UNIFICADA) ---
+    with t_exp:
+        st.subheader("🚀 Sincronia de Elite SOSA")
+        
+        if st.button("☁️ SINCRONIZAR TUDO NO DRIVE E BANCO", use_container_width=True, type="primary", key=f"{key_prefix}_btn_sync"):
+            with st.status("Iniciando Protocolo de Sincronia...", expanded=True) as status:
+                
+                if modo_sync == "PLANEJAMENTO":
+                    # Lógica para salvar PLANO
+                    doc_plano = exporter.gerar_docx_plano_pedagogico_v18(nome_base, dados_plano, {"ano": f"{f_ano}º", "semana": f_semana})
+                    status.write("📤 Enviando Plano de Ensino...")
+                    link = db.subir_e_converter_para_google_docs(doc_plano, nome_base, trimestre=f_trimestre, categoria=f_categoria, modo="PLANEJAMENTO")
                     
-                    db.salvar_no_banco("DB_AULAS_PRONTAS", [
-                        datetime.now().strftime("%d/%m/%Y"), f_semana, f"{f_aula}", conteudo_banco, f"{f_ano}º", ""
-                    ])
-                    status.update(label="✅ Sincronizado com Sucesso!", state="complete")
-                    st.balloons()
+                    if "https" in str(link):
+                        db.salvar_link_na_planilha("DB_PLANOS", "SEMANA", f_semana, link)
+                        status.update(label="✅ Plano Sincronizado!", state="complete")
+                        st.success(f"Link: {link}")
+                    else:
+                        status.update(label="❌ Erro na Ponte.", state="error")
+
                 else:
-                    status.update(label="❌ Erro na Ponte Google. Verifique a Drive API.", state="error")
-                    st.error(f"Retorno Aluno: {link_alu}")
+                    # Lógica para salvar AULA (Aluno + Prof + PEI)
+                    doc_alu = exporter.gerar_docx_aluno_v24(nome_base, ed_alu, {"ano": f"{f_ano}º", "trimestre": f_trimestre})
+                    doc_prof = exporter.gerar_docx_professor_v25(nome_base, ed_prof, {"ano": f"{f_ano}º", "semana": f_semana})
+                    
+                    status.write("📤 Enviando Material do Aluno...")
+                    link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{nome_base}_ALUNO", trimestre=f_trimestre, categoria=f_categoria, semana=f_semana, modo="AULA")
+                    
+                    status.write("📤 Enviando Guia do Professor...")
+                    link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_base}_PROF", trimestre=f_trimestre, categoria=f_categoria, semana=f_semana, modo="AULA")
+                    
+                    link_pei = "N/A"
+                    if "lab_pei" in st.session_state:
+                        status.write("📤 Enviando Material PEI...")
+                        doc_pei = exporter.gerar_docx_pei_v25(f"{nome_base}_PEI", st.session_state.lab_pei, {"trimestre": f_trimestre})
+                        link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_base}_PEI", trimestre=f_trimestre, categoria=f_categoria, semana=f_semana, modo="AULA")
+
+                    if "https" in str(link_alu) and "https" in str(link_prof):
+                        conteudo_banco = f"[ROTEIRO_PROF]\n{ed_prof_para_banco}\n\n--- LINKS ---\nAluno({link_alu})\nProf({link_prof})\nPEI({link_pei})"
+                        db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), f_semana, f"{f_aula}", conteudo_banco, f"{f_ano}º", link_alu])
+                        status.update(label="✅ Aula Sincronizada!", state="complete")
+                        st.balloons()
+                    else:
+                        status.update(label="❌ Erro na Ponte Google.", state="error")
+                        st.error(f"Retorno: {link_alu}")
                        
 # ==============================================================================
 # MÓDULO: DASHBOARD INTELIGENTE (V6 - FULL CONTEXT: NOTAS + PDF + AULAS CRIADAS)
@@ -728,8 +769,20 @@ elif menu == "📅 Planejamento (Ponto ID)":
                 ed_pei = st.text_area("Adaptação PEI:", limpar_v23(ai.extrair_tag(txt_bruto, "ADAPTACAO_PEI"), "ADAPTAÇÃO PEI"), key=f"ed_p_{v}")
 
             with t_vis:
-                dados_envio = {"geral": ed_geral, "especificos": ed_espec, "objetivos": ed_objs, "metodologia": ed_met, "avaliacao": ed_ava, "pei": ed_pei}
-                info_envio = {"ano": str(ano_p), "semana": sem_p, "aula": "PLANO"}
+                dados_envio = {
+                    "geral": ed_geral, 
+                    "especificos": ed_espec, 
+                    "objetivos": ed_objs, 
+                    "metodologia": ed_met, 
+                    "avaliacao": ed_ava, 
+                    "pei": ed_pei
+                }
+                info_envio = {
+                    "ano": str(ano_p), 
+                    "semana": sem_p, 
+                    "trimestre": "I Trimestre" # Ajuste conforme a lógica de datas
+                }
+                # CHAMADA HÍBRIDA: Passamos dados_plano para ativar o modo Planejamento
                 exibir_material_estruturado(txt_bruto, "plan_vis", dados_plano=dados_envio, info_aula=info_envio)
 
             st.markdown("---")
