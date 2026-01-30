@@ -275,23 +275,30 @@ def extrair_id_da_url(url):
     return match.group(1) if match else None
 
 def excluir_registro_com_drive(aba_nome, valor_conteudo):
+    """Localiza o registro, deleta os arquivos no Drive e remove a linha da planilha."""
     try:
         wb = conectar()
         ws = wb.worksheet(aba_nome)
         dados = ws.get_all_values()
         creds = obter_creds_drive()
         service = build('drive', 'v3', credentials=creds)
+        
         for i, row in enumerate(dados):
-            if len(row) > 3 and row[3] == valor_conteudo:
+            # Procura o conteúdo na coluna 3 (índice 3)
+            if len(row) > 3 and valor_conteudo in row[3]:
                 import re
+                # Extrai todos os IDs de arquivos Google Docs do texto
                 links = re.findall(r"https://docs\.google\.com/document/d/([a-zA-Z0-9-_]+)", row[3])
                 for file_id in links:
-                    try: service.files().delete(fileId=file_id).execute()
-                    except: pass
+                    try: 
+                        service.files().delete(fileId=file_id).execute()
+                    except: 
+                        pass # Arquivo pode já ter sido deletado manualmente
+                
                 ws.delete_rows(i + 1)
                 st.cache_data.clear()
                 return True
         return False
     except Exception as e:
-        st.error(f"Erro na exclusão total: {e}")
+        st.error(f"Erro na limpeza: {e}")
         return False
