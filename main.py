@@ -498,35 +498,59 @@ elif menu == "🧪 Criador de Aulas":
     if "v_lab" not in st.session_state: st.session_state.v_lab = 1
 
     with tab_criar:
-        # --- FASE 1: SINCRONIA PONTO ID ---
+        
+        # --- FASE 1: SINCRONIA PONTO ID (COM FILTRO INTELIGENTE DE CONCLUSÃO) ---
         with st.container(border=True):
             st.markdown("### 🔗 1. Sincronia com Planejamento (Ponto ID)")
-            c1, c2, c3 = st.columns([1, 2, 1])
+            c1, c2, c3 = st.columns([1, 2, 1.5])
+            
             ano_lab = c1.selectbox("Série:", [6, 7, 8, 9], key="lab_ano_v25")
             planos_ano = df_planos[df_planos['ANO'] == f"{ano_lab}º"]
             
             if planos_ano.empty:
-                st.warning(f"⚠️ Nenhum plano encontrado para o {ano_lab}º Ano. Crie um plano no módulo de Planejamento primeiro.")
+                st.warning(f"⚠️ Nenhum plano encontrado para o {ano_lab}º Ano.")
             else:
-                # TUDO O QUE DEPENDE DO PLANO DEVE FICAR DENTRO DESTE 'ELSE'
                 sem_lab = c2.selectbox("Semana de Referência:", planos_ano['SEMANA'].tolist(), key="lab_sem_v25")
-                aula_num = c3.radio("Foco da Aula:", ["Aula 1", "Aula 2"], horizontal=True)
-                plano_row = planos_ano[planos_ano['SEMANA'] == sem_lab].iloc[0]
-                plano_raw = plano_row['PLANO_TEXTO']
                 
-                modalidade_planejada = ai.extrair_tag(plano_raw, "MODALIDADE").upper()
-                is_livro = "LIVRO" in modalidade_planejada or "MÉTODO LIVRO" in plano_raw.upper()
-                metodo_fiel = "📖 LIVRO DIDÁTICO" if is_livro else "🎛️ MANUAL / BANCO"
-                cor_metodo = "#2962FF" if is_livro else "#00C853"
+                # --- LÓGICA DE FILTRO DE AULAS JÁ PRODUZIDAS ---
+                # Buscamos no banco o que já foi feito para este ano e semana
+                aulas_feitas = df_aulas[
+                    (df_aulas['ANO'] == f"{ano_lab}º") & 
+                    (df_aulas['SEMANA_REF'] == sem_lab)
+                ]['TIPO_MATERIAL'].astype(str).tolist()
                 
-                cont_fiel = ai.extrair_tag(plano_raw, "CONTEUDOS_ESPECIFICOS")
-                obj_fiel = ai.extrair_tag(plano_raw, "OBJETIVOS_ENSINO")
+                ja_tem_aula1 = any("AULA 1" in a.upper() for a in aulas_feitas)
+                ja_tem_aula2 = any("AULA 2" in a.upper() for a in aulas_feitas)
+                
+                opcoes_foco = []
+                if not ja_tem_aula1: opcoes_foco.append("Aula 1")
+                if not ja_tem_aula2: opcoes_foco.append("Aula 2")
+                
+                # Decisão visual do seletor
+                if not opcoes_foco:
+                    st.success(f"✅ {sem_lab} concluída com sucesso!")
+                    aula_num = None # Trava a geração
+                else:
+                    aula_num = c3.radio("Foco da Aula:", opcoes_foco, horizontal=True)
+                
+                # Só prossegue se houver aula para criar
+                if aula_num:
+                    plano_row = planos_ano[planos_ano['SEMANA'] == sem_lab].iloc[0]
+                    plano_raw = plano_row['PLANO_TEXTO']
+                    
+                    modalidade_planejada = ai.extrair_tag(plano_raw, "MODALIDADE").upper()
+                    is_livro = "LIVRO" in modalidade_planejada or "MÉTODO LIVRO" in plano_raw.upper()
+                    metodo_fiel = "📖 LIVRO DIDÁTICO" if is_livro else "🎛️ MANUAL / BANCO"
+                    cor_metodo = "#2962FF" if is_livro else "#00C853"
+                    
+                    cont_fiel = ai.extrair_tag(plano_raw, "CONTEUDOS_ESPECIFICOS")
+                    obj_fiel = ai.extrair_tag(plano_raw, "OBJETIVOS_ENSINO")
 
-                st.markdown(f"""
-                    <div style='background-color: rgba(41, 98, 255, 0.05); padding: 15px; border-radius: 10px; border-left: 5px solid {cor_metodo};'>
-                        <b style='color: {cor_metodo};'>{metodo_fiel}</b> | <b>Conteúdo:</b> {cont_fiel[:100]}...
-                    </div>
-                """, unsafe_allow_html=True)
+                    st.markdown(f"""
+                        <div style='background-color: rgba(41, 98, 255, 0.05); padding: 15px; border-radius: 10px; border-left: 5px solid {cor_metodo};'>
+                            <b style='color: {cor_metodo};'>{metodo_fiel}</b> | <b>Conteúdo:</b> {cont_fiel[:100]}...
+                        </div>
+                    """, unsafe_allow_html=True)
 
                 # --- FASE 2: PARÂMETROS (AGORA PROTEGIDA DENTRO DO ELSE) ---
                 st.markdown(" ")
