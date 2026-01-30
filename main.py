@@ -806,11 +806,25 @@ elif menu == "📅 Planejamento (Ponto ID)":
                 obj_val = st.multiselect("Objetivos:", options=opcoes_obj, default=default_obj_seguro, key=f"obj_val_{v}")
 
             st.subheader("🤖 Refinar com o Maestro")
-            cmd_refine = st.chat_input("Deseja mudar algo no texto?")
+            cmd_refine = st.chat_input("Deseja mudar algo no texto? (Ex: 'Troque o contexto de futebol por jogos de tabuleiro')")
             if cmd_refine:
-                with st.spinner("Ajustando..."):
-                    st.session_state.p_temp = ai.gerar_ia("PLANE_PEDAGOGICO", f"ATUAL:\n{txt_bruto}\nORDEM: {cmd_refine}")
-                    st.rerun()
+                with st.spinner("Maestro reescrevendo e garantindo coerência..."):
+                    # PROMPT ESTRUTURADO PARA REGENERAÇÃO
+                    prompt_refino = (
+                        f"ORDEM DE ALTERAÇÃO: {cmd_refine}\n\n"
+                        f"TEXTO ATUAL DO PLANO:\n{st.session_state.p_temp}\n\n"
+                        f"INSTRUÇÃO: Aplique a ordem acima. Se a ordem mudar o contexto, reescreva todas as seções "
+                        f"necessárias para que o plano continue coerente. Não simplifique o rigor técnico."
+                    )
+                    
+                    nova_resposta = ai.gerar_ia("REFINADOR_PEDAGOGICO", prompt_refino)
+                    
+                    # Verificação de ambiguidade
+                    if "Poderia detalhar o que deseja alterar?" in nova_resposta:
+                        st.warning(nova_resposta)
+                    else:
+                        st.session_state.p_temp = nova_resposta
+                        st.rerun()
 
             t_ed, t_vis = st.tabs(["✏️ Editar Texto", "👁️ Visualizar Estrutura"])
             
