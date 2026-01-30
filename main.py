@@ -806,25 +806,30 @@ elif menu == "📅 Planejamento (Ponto ID)":
                 obj_val = st.multiselect("Objetivos:", options=opcoes_obj, default=default_obj_seguro, key=f"obj_val_{v}")
 
             st.subheader("🤖 Refinar com o Maestro")
-            cmd_refine = st.chat_input("Deseja mudar algo no texto? (Ex: 'Troque o contexto de futebol por jogos de tabuleiro')")
+            # Usamos um formulário simples para garantir que o comando seja enviado e a tela limpa
+            cmd_refine = st.chat_input("Deseja mudar algo no texto? (Ex: 'Troque futebol por astronomia')")
+            
             if cmd_refine:
-                with st.spinner("Maestro reescrevendo e garantindo coerência..."):
-                    # PROMPT ESTRUTURADO PARA REGENERAÇÃO
+                with st.spinner("Maestro reescrevendo e sincronizando lógica..."):
+                    # 1. Chamada da Persona de Refino (Garante a troca de lógica)
                     prompt_refino = (
-                        f"ORDEM DE ALTERAÇÃO: {cmd_refine}\n\n"
+                        f"ORDEM DO PROFESSOR: {cmd_refine}\n\n"
                         f"TEXTO ATUAL DO PLANO:\n{st.session_state.p_temp}\n\n"
-                        f"INSTRUÇÃO: Aplique a ordem acima. Se a ordem mudar o contexto, reescreva todas as seções "
-                        f"necessárias para que o plano continue coerente. Não simplifique o rigor técnico."
+                        f"INSTRUÇÃO: Aplique a ordem. Se mudar o tema, ajuste Metodologia, Avaliação e PEI para manter a coerência. "
+                        f"Mantenha rigorosamente os marcadores MARKER_."
                     )
                     
+                    # Usamos a persona de refino para garantir que ela não tenha "preguiça" de mudar
                     nova_resposta = ai.gerar_ia("REFINADOR_PEDAGOGICO", prompt_refino)
                     
-                    # Verificação de ambiguidade
-                    if "Poderia detalhar o que deseja alterar?" in nova_resposta:
-                        st.warning(nova_resposta)
-                    else:
-                        st.session_state.p_temp = nova_resposta
-                        st.rerun()
+                    # 2. O PULO DO GATO: Atualizamos o texto E a versão (v)
+                    st.session_state.p_temp = nova_resposta
+                    # Mudamos o timestamp para forçar o Streamlit a atualizar os campos de texto
+                    st.session_state.v_plano = int(time.time()) 
+                    
+                    st.success("Refino aplicado com sucesso!")
+                    time.sleep(1)
+                    st.rerun()
 
             t_ed, t_vis = st.tabs(["✏️ Editar Texto", "👁️ Visualizar Estrutura"])
             
