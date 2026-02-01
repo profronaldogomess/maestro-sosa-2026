@@ -302,3 +302,25 @@ def excluir_registro_com_drive(aba_nome, valor_conteudo):
     except Exception as e:
         st.error(f"Erro na limpeza: {e}")
         return False
+
+def salvar_cronograma_av(lista_dados):
+    """
+    Salva ou atualiza o cronograma de provas.
+    Estrutura: [DATA, TURMA, TIPO, ASSUNTO, LINK]
+    """
+    try:
+        wb = conectar()
+        # Usaremos a aba DB_REGISTRO_AULAS ou criaremos uma nova DB_CRONOGRAMA
+        ws = wb.worksheet("DB_REGISTRO_AULAS") 
+        # Lógica: Se já existe a mesma TURMA e TIPO, removemos a antiga (Upsert)
+        dados_atuais = ws.get_all_values()
+        for i, row in enumerate(dados_atuais):
+            if len(row) > 3 and row[2] == lista_dados[1] and row[3] == lista_dados[2]:
+                ws.delete_rows(i + 1)
+                break
+        
+        ws.append_row(lista_dados, value_input_option="USER_ENTERED")
+        st.cache_data.clear()
+        return True
+    except:
+        return False
