@@ -184,7 +184,11 @@ def salvar_ata_conselho(data, turma, tipo, conteudo):
 
 def subir_e_converter_para_google_docs(file_stream, nome_arquivo, trimestre="I Trimestre", categoria="Material de Sala", semana="Semana Geral", aula="Aula Geral", modo="AULA"):
     try:
-        # 1. Certifique-se de usar a URL da ÚLTIMA IMPLANTAÇÃO do seu Script
+        # 🛡️ PROTEÇÃO SOSA: Verifica se o arquivo existe antes de tentar o seek
+        if file_stream is None:
+            return "ERRO: O exportador falhou ao gerar o arquivo (Retorno None)."
+        
+        # Certifique-se de usar a URL da ÚLTIMA IMPLANTAÇÃO do seu Script
         URL_DA_PONTE = "https://script.google.com/macros/s/AKfycby6JpIPHk6vlCfQSms-wxLcRmUNNw6yVOf6qkBnEuTrco2bVFw8Apl9m0wqTIlOcw01_w/exec" 
         
         file_stream.seek(0)
@@ -200,20 +204,17 @@ def subir_e_converter_para_google_docs(file_stream, nome_arquivo, trimestre="I T
             "fileB64": file_b64
         }
         
-        # 2. Timeout de 60s para conversões pesadas
         response = requests.post(URL_DA_PONTE, json=payload, timeout=60)
         resposta_texto = response.text.strip()
         
-        # 🚨 BLINDAGEM SOSA: Verifica se o retorno é um link válido do Google
         if "https://docs.google.com" in resposta_texto:
             return resposta_texto
         else:
-            # Se o Google retornar um erro (HTML ou texto de erro), o Python avisa aqui
-            st.error(f"⚠️ Falha na Ponte Google: {resposta_texto[:100]}...")
-            return f"ERRO_NO_UPLOAD: {resposta_texto[:50]}"
+            return f"ERRO_NO_UPLOAD: {resposta_texto[:100]}"
 
     except Exception as e: 
-        return f"Erro de Conexão: {e}"
+        # Se o erro for o 'seek', agora saberemos que o problema é o arquivo vindo vazio
+        return f"Erro na Transmissão: {str(e)}"
 
 def limpar_todo_drive_da_conta_servico():
     try:
