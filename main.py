@@ -1884,31 +1884,28 @@ elif menu == "📝 Central de Avaliações":
                     with st.status("Iniciando Sincronia...", expanded=True) as status:
                         # 1. Geração do Documento
                         info_doc = {"ano": f"{ano_av}º", "tipo_prova": tipo_av.upper(), "valor": "10", "qtd_questoes": qtd_q, "trimestre": trimestre_av}
+                        
+                        # Chamada do exportador blindado
                         doc_io = exporter.gerar_docx_prova_v25(nome_arq, st.session_state.temp_prova, info_doc)
                         
-                        # Verificação de segurança
-                        if doc_io is None:
-                            status.update(label="❌ Falha Crítica na Geração do Arquivo.", state="error")
-                            st.error("O exportador não conseguiu criar o arquivo. Verifique o texto da prova.")
+                        # 2. Limpeza de duplicatas
+                        identificador = f"{tipo_av} - {ano_av}º Ano"
+                        filtro_antigo = df_aulas[(df_aulas['SEMANA_REF'] == "AVALIAÇÃO") & (df_aulas['TIPO_MATERIAL'] == identificador)]
+                        for _, row_antiga in filtro_antigo.iterrows():
+                            db.excluir_registro_com_drive("DB_AULAS_PRONTAS", row_antiga['CONTEUDO'])
+                        
+                        # 3. Upload para o Drive
+                        link = db.subir_e_converter_para_google_docs(doc_io, nome_arq, trimestre=trimestre_av, categoria=f"{ano_av}ano", semana="AVALIAÇÃO", modo="AVALIACAO")
+                        
+                        if "https" in str(link):
+                            # 4. Salva no Banco
+                            conteudo_banco = f"[GABARITO]\n{ai.extrair_tag(st.session_state.temp_prova, 'GABARITO_TEXTO')}\n\n--- LINK DRIVE ---\n{link}"
+                            db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), "AVALIAÇÃO", identificador, conteudo_banco, f"{ano_av}º", link])
+                            status.update(label="✅ Sincronizado com Sucesso!", state="complete")
+                            st.balloons()
                         else:
-                            # 2. Limpeza de duplicatas
-                            identificador = f"{tipo_av} - {ano_av}º Ano"
-                            filtro_antigo = df_aulas[(df_aulas['SEMANA_REF'] == "AVALIAÇÃO") & (df_aulas['TIPO_MATERIAL'] == identificador)]
-                            for _, row_antiga in filtro_antigo.iterrows():
-                                db.excluir_registro_com_drive("DB_AULAS_PRONTAS", row_antiga['CONTEUDO'])
-                            
-                            # 3. Upload para o Drive
-                            link = db.subir_e_converter_para_google_docs(doc_io, nome_arq, trimestre=trimestre_av, categoria=f"{ano_av}ano", semana="AVALIAÇÃO", modo="AVALIACAO")
-                            
-                            if "https" in str(link):
-                                # 4. Salva no Banco
-                                conteudo_banco = f"[GABARITO]\n{ai.extrair_tag(st.session_state.temp_prova, 'GABARITO_TEXTO')}\n\n--- LINK DRIVE ---\n{link}"
-                                db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), "AVALIAÇÃO", identificador, conteudo_banco, f"{ano_av}º", link])
-                                status.update(label="✅ Sincronizado com Sucesso!", state="complete")
-                                st.balloons()
-                            else:
-                                status.update(label="❌ Erro na Ponte Google.", state="error")
-                                st.error(link)
+                            status.update(label="❌ Erro na Ponte Google.", state="error")
+                            st.error(link)
 
     # --- ABA 2: GAVETA (MANTIDA) ---
     with tab_gaveta:
