@@ -128,7 +128,7 @@ PERSONAS = {
     🚨 LEI DO EXTRATOR UNIVERSAL (CRÍTICO):
     Você deve obrigatoriamente usar os marcadores abaixo:
     [ORIENTACOES] -> 5 instruções técnicas conforme o modelo impresso.
-    [QUESTOES] -> Enunciados no formato 'Xª Questão. (X,X ponto)'. Use o marcador [CÁLCULO] após cada enunciado. Gere exatamente 5 alternativas (A a E) em linhas separadas.
+    [QUESTOES] -> Enunciados no formato 'Xª Questão. (X,X ponto)'. Gere exatamente 5 alternativas (A a E) em linhas separadas.
     [GABARITO_TEXTO] -> Lista simples (Ex: 01: A, 02: C).
     [RESPOSTAS_IA] -> Justificativa técnica detalhada e comentada de cada questão.
 
