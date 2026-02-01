@@ -391,39 +391,27 @@ def gerar_pptx_v24(titulo_doc, conteudo_ia):
 # ==============================================================================
 def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
     """
-    EXPORTADOR DE EXAMES V25 - MAESTRO SOSA
-    BLINDAGEM TOTAL ANTI-SEEK E NUMERAÇÃO MANUAL.
+    EXPORTADOR DE PROVAS V25 - ESTRATÉGIA DE ALTA ESTABILIDADE
     """
-    import io
-    import os
-    import re
-    from docx import Document
-    from docx.shared import Inches, Pt
-    from docx.enum.text import WD_ALIGN_PARAGRAPH
-    from docx.enum.table import WD_ALIGN_VERTICAL
-    
-    # Inicialização do stream fora do try para garantir existência no except
+    # 1. Garantia de Stream
     file_stream = io.BytesIO()
     
     try:
         doc = Document()
         section = doc.sections[0]
-        # Margens de precisão para exames
         section.top_margin, section.bottom_margin = Inches(0.3), Inches(0.3)
         section.left_margin, section.right_margin = Inches(0.4), Inches(0.4)
 
-        # --- 1. CABEÇALHO OFICIAL SOSA ---
+        # --- CABEÇALHO (IGUAL AO QUE JÁ FUNCIONA NAS AULAS) ---
         header_table = doc.add_table(rows=3, cols=6)
         header_table.style = 'Table Grid'
         widths = [Inches(0.8), Inches(3.2), Inches(0.8), Inches(0.8), Inches(1.0), Inches(0.9)]
-        for i, w in enumerate(widths): 
-            header_table.columns[i].width = w
+        for i, w in enumerate(widths): header_table.columns[i].width = w
 
         c_logo = header_table.cell(0, 0).merge(header_table.cell(2, 0))
         c_escola = header_table.cell(0, 1).merge(header_table.cell(0, 4))
         c_trim = header_table.cell(0, 5)
         c_aluno = header_table.cell(1, 1).merge(header_table.cell(1, 4))
-        c_nota_box = header_table.cell(1, 5)
         
         if os.path.exists("logo_escola.png"):
             c_logo.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -432,96 +420,73 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         c_escola.paragraphs[0].add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA").font.bold = True
         c_trim.paragraphs[0].add_run(info.get('trimestre', 'I TRIMESTRE')).font.bold = True
         c_aluno.paragraphs[0].add_run("ALUNO(A): ")
-        c_nota_box.paragraphs[0].add_run("NOTA: ").font.size = Pt(8)
 
         header_table.cell(2, 1).paragraphs[0].add_run("PROF. Ronaldo Gomes").font.size = Pt(9)
         header_table.cell(2, 2).paragraphs[0].add_run(f"TURMA: {info.get('ano')}").font.size = Pt(9)
-        header_table.cell(2, 3).paragraphs[0].add_run("DATA:").font.size = Pt(9)
         header_table.cell(2, 5).paragraphs[0].add_run(info.get('tipo_prova', 'TESTE')).font.size = Pt(8)
 
         doc.add_paragraph()
 
-        # --- 2. ORIENTAÇÕES E GABARITO (LADO A LADO) ---
+        # --- ORIENTAÇÕES E GABARITO ---
         top_table = doc.add_table(rows=1, cols=2)
         top_table.columns[0].width = Inches(3.8)
         top_table.columns[1].width = Inches(3.2)
 
-        # Orientações (Numeração Manual Estrita)
+        # Orientações
         c_orient = top_table.cell(0, 0)
-        p_title = c_orient.paragraphs[0]
-        p_title.add_run("ORIENTAÇÕES PARA AVALIAÇÃO:").font.bold = True
-        
-        orient_text = ai.extrair_tag(conteudo_ia, "ORIENTACOES")
-        if not orient_text:
-            orient_text = "1. Leia com atenção.\n2. Use caneta azul ou preta.\n3. Demonstre os cálculos.\n4. Apenas uma correta."
-        
-        for linha in orient_text.split('\n'):
-            if linha.strip():
-                p = c_orient.add_paragraph()
-                p.add_run(linha.strip()).font.size = Pt(9)
+        c_orient.paragraphs[0].add_run("ORIENTAÇÕES:").font.bold = True
+        txt_ori = ai.extrair_tag(conteudo_ia, "ORIENTACOES") or "Leia com atenção."
+        for lin in txt_ori.split('\n'):
+            if lin.strip(): c_orient.add_paragraph(lin.strip()).runs[0].font.size = Pt(9)
 
         # Gabarito (Bolinhas Pt 12)
         c_gab = top_table.cell(0, 1)
         gab_grid = c_gab.add_table(rows=11, cols=6)
         gab_grid.style = 'Table Grid'
         for i, lab in enumerate(["Q", "A", "B", "C", "D", "E"]):
-            p = gab_grid.cell(0, i).paragraphs[0]
-            p.add_run(lab).font.bold = True
-            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            gab_grid.cell(0, i).paragraphs[0].add_run(lab).font.bold = True
         for r in range(1, 11):
             gab_grid.cell(r, 0).paragraphs[0].add_run(f"{r:02d}").font.size = Pt(8)
             for col in range(1, 6):
-                p_bol = gab_grid.cell(r, col).paragraphs[0]
-                p_bol.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                run_b = p_bol.add_run("○")
+                run_b = gab_grid.cell(r, col).paragraphs[0].add_run("○")
                 run_b.font.size = Pt(12)
+                gab_grid.cell(r, col).paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
 
         doc.add_paragraph()
 
-        # --- 3. CORPO DA PROVA (DUAS COLUNAS - NUMERAÇÃO MANUAL) ---
+        # --- CORPO DA PROVA (DUAS COLUNAS) ---
         questoes_raw = ai.extrair_tag(conteudo_ia, "QUESTOES")
-        # Split inteligente que captura "1ª Questão", "01. Questão", etc.
-        partes = re.split(r'(\d+[\s\.]*[ªº]?\s*Questão)', questoes_raw, flags=re.IGNORECASE)
+        if not questoes_raw: questoes_raw = conteudo_ia # Fallback total
+
+        # Split simplificado para evitar erros de Regex
+        final_q = re.split(r'(\d+[\s\.]*[ªº]?\s*Questão)', questoes_raw, flags=re.IGNORECASE)
         
-        final_q = []
-        for i in range(1, len(partes), 2):
-            marcador = partes[i].strip()
-            corpo = partes[i+1].strip() if i+1 < len(partes) else ""
-            final_q.append(f"{marcador}\n{corpo}")
+        # Reorganiza as questões
+        lista_limpa = []
+        if len(final_q) > 1:
+            for i in range(1, len(final_q), 2):
+                lista_limpa.append(final_q[i] + final_q[i+1])
+        else:
+            lista_limpa = [questoes_raw]
 
-        if not final_q: 
-            final_q = [questoes_raw] if questoes_raw else ["Erro: Conteúdo de questões não identificado."]
-
-        body_table = doc.add_table(rows=(len(final_q) + 1) // 2, cols=2)
-        for idx, q_text in enumerate(final_q):
+        body_table = doc.add_table(rows=(len(lista_limpa) + 1) // 2, cols=2)
+        for idx, q_text in enumerate(lista_limpa):
             cell = body_table.cell(idx // 2, idx % 2)
-            cell.vertical_alignment = WD_ALIGN_VERTICAL.TOP
-            linhas = q_text.split('\n')
-            for j, linha in enumerate(linhas):
-                l_s = linha.strip()
-                if not l_s or "[CÁLCULO]" in l_s.upper(): continue
-                p = cell.add_paragraph()
-                p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-                run = p.add_run(l_s)
-                if j == 0: # Título da Questão (Negrito)
-                    run.font.bold, run.font.size = True, Pt(11)
-                else:
-                    run.font.size = Pt(10)
+            for linha in q_text.split('\n'):
+                if linha.strip():
+                    p = cell.add_paragraph(linha.strip())
+                    p.runs[0].font.size = Pt(10)
 
-        # Finalização do Documento
+        # SALVAMENTO FINAL
         doc.save(file_stream)
         file_stream.seek(0)
         return file_stream
 
     except Exception as e:
-        # BLINDAGEM DE EMERGÊNCIA: Se a lógica acima falhar, gera um documento de erro
-        # Isso garante que o database.py receba um arquivo e não um NoneType
+        # Se der qualquer erro, gera um documento com o erro para não retornar None
         doc_err = Document()
-        doc_err.add_heading('ERRO TÉCNICO NO EXPORTADOR SOSA', 0)
-        doc_err.add_paragraph(f"Detalhes do Erro: {str(e)}")
-        doc_err.add_paragraph("O sistema impediu um crash, mas o documento não pôde ser formatado.")
-        
-        err_stream = io.BytesIO()
-        doc_err.save(err_stream)
-        err_stream.seek(0)
-        return err_stream
+        doc_err.add_paragraph(f"Erro no Exportador: {str(e)}")
+        err_io = io.BytesIO()
+        doc_err.save(err_io)
+        err_io.seek(0)
+        return err_io
