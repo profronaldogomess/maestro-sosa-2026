@@ -1857,31 +1857,32 @@ elif menu == "📝 Central de Avaliações":
                 if st.button("☁️ SALVAR NO DRIVE E GAVETA", use_container_width=True, type="primary", key=f"sync_btn_{v}"):
                     with st.status("Iniciando Sincronia de Elite...", expanded=True) as status:
                         
-                        # 1. Geração do Documento (Chamada Protegida)
-                        info_doc = {"ano": f"{ano_av}º", "tipo_prova": tipo_av.upper(), "trimestre": trimestre_av}
-                        doc_io = exporter.gerar_docx_prova_v25(nome_arq, st.session_state.temp_prova, info_doc)
+                        # 1. EXTRAÇÃO PRÉVIA (IGUAL AO MÓDULO DE AULAS)
+                        texto_ia = st.session_state.temp_prova
+                        orient_limpas = ai.extrair_tag(texto_ia, "ORIENTACOES")
+                        questoes_limpas = ai.extrair_tag(texto_ia, "QUESTOES")
                         
-                        # 2. Verificação de Segurança (O segredo para evitar o erro de seek)
-                        if doc_io is None or doc_io.getbuffer().nbytes == 0:
-                            status.update(label="❌ Falha crítica na geração do arquivo.", state="error")
-                            st.error("O exportador não conseguiu criar o documento. Verifique o conteúdo da IA.")
-                        else:
-                            status.write("📤 Enviando para o Google Drive...")
-                            link = db.subir_e_converter_para_google_docs(
-                                doc_io, nome_arq, trimestre=trimestre_av, categoria=f"{ano_av}º Ano", semana="AVALIAÇÃO", modo="AVALIACAO"
-                            )
+                        # 2. Geração do Documento (Passando os textos já limpos)
+                        info_doc = {"ano": f"{ano_av}º", "tipo_prova": tipo_av.upper(), "trimestre": trimestre_av}
+                        doc_io = exporter.gerar_docx_prova_v25(nome_arq, orient_limpas, questoes_limpas, info_doc)
+                        
+                        # 3. Envio para a Ponte
+                        status.write("📤 Enviando para o Google Drive...")
+                        link = db.subir_e_converter_para_google_docs(
+                            doc_io, nome_arq, trimestre=trimestre_av, categoria=f"{ano_av}º Ano", semana="AVALIAÇÃO", modo="AVALIACAO"
+                        )
+                        
+                        if "https" in str(link):
+                            status.write("💾 Registrando no Banco...")
+                            identificador = f"{tipo_av} - {ano_av}º Ano"
+                            conteudo_banco = f"[GABARITO]\n{ai.extrair_tag(texto_ia, 'GABARITO_TEXTO')}\n\n--- LINK DRIVE ---\n{link}"
+                            db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), "AVALIAÇÃO", identificador, conteudo_banco, f"{ano_av}º", link])
                             
-                            if "https" in str(link):
-                                status.write("💾 Registrando no Banco de Dados...")
-                                identificador = f"{tipo_av} - {ano_av}º Ano"
-                                conteudo_banco = f"[GABARITO]\n{ai.extrair_tag(st.session_state.temp_prova, 'GABARITO_TEXTO')}\n\n--- LINK DRIVE ---\n{link}"
-                                db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), "AVALIAÇÃO", identificador, conteudo_banco, f"{ano_av}º", link])
-                                
-                                status.update(label="✅ Sincronizado com Sucesso!", state="complete")
-                                st.balloons()
-                            else:
-                                status.update(label="❌ Erro na Ponte Google.", state="error")
-                                st.error(link)
+                            status.update(label="✅ Sincronizado com Sucesso!", state="complete")
+                            st.balloons()
+                        else:
+                            status.update(label="❌ Erro na Ponte Google.", state="error")
+                            st.error(link)
 
     # --- ABA 2: GAVETA (MANTIDA) ---
     with tab_gaveta:
