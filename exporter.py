@@ -466,33 +466,36 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
 
     doc.add_paragraph()
 
-    # --- 3. CORPO DA PROVA (DUAS COLUNAS - SEM QUADRADOS) ---
+# --- 3. CORPO DA PROVA (DUAS COLUNAS - REGEX ROBUSTA) ---
     questoes_raw = ai.extrair_tag(conteudo_ia, "QUESTOES")
-    lista_q = re.split(r'(\d+ª\s+Questão\.)', questoes_raw, flags=re.IGNORECASE)
+    
+    # Captura variações como "1ª Questão", "Questão 1" ou "01."
+    padrao_split = r'(\d+[ªº]?\s*Questão[\s\.]*|\d{2}\.[\s]*)'
+    lista_q = re.split(padrao_split, questoes_raw, flags=re.IGNORECASE)
     
     final_q = []
-    for i in range(1, len(lista_q), 2):
-        final_q.append(lista_q[i] + lista_q[i+1])
+    i = 1
+    while i < len(lista_q):
+        marcador = lista_q[i]
+        texto = lista_q[i+1] if i+1 < len(lista_q) else ""
+        final_q.append(marcador + texto)
+        i += 2
+
+    if not final_q: final_q = [questoes_raw]
 
     body_table = doc.add_table(rows=(len(final_q) + 1) // 2, cols=2)
     
     for idx, q_text in enumerate(final_q):
         cell = body_table.cell(idx // 2, idx % 2)
         linhas = q_text.strip().split('\n')
-        for linha in linhas:
+        for i, linha in enumerate(linhas):
             l_s = linha.strip()
-            if not l_s or "[CÁLCULO]" in l_s.upper(): continue # Ignora o marcador de cálculo
-            
+            if not l_s: continue
             p = cell.add_paragraph()
             p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
             run = p.add_run(l_s)
-            if "QUESTÃO" in l_s.upper():
+            if i == 0: # Primeira linha da questão sempre em negrito
                 run.font.bold = True
                 run.font.size = Pt(11)
             else:
                 run.font.size = Pt(10)
-
-    file_stream = io.BytesIO()
-    doc.save(file_stream)
-    file_stream.seek(0)
-    return file_stream
