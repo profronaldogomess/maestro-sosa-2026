@@ -399,6 +399,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
     header_table = doc.add_table(rows=3, cols=6)
     header_table.style = 'Table Grid'
     
+    # Ajuste de larguras para garantir que tudo caiba
     widths = [Inches(0.8), Inches(3.2), Inches(0.8), Inches(0.8), Inches(1.0), Inches(0.9)]
     for i, w in enumerate(widths): header_table.columns[i].width = w
 
@@ -424,7 +425,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
     header_table.cell(2, 1).paragraphs[0].add_run(f"PROF. Ronaldo Gomes").font.size = Pt(9)
     header_table.cell(2, 2).paragraphs[0].add_run(f"TURMA: {info.get('ano')}").font.size = Pt(9)
     header_table.cell(2, 3).paragraphs[0].add_run(f"DATA:").font.size = Pt(9)
-    header_table.cell(2, 4).paragraphs[0].add_run("").font.size = Pt(9) # Removido ___/___/2026
+    header_table.cell(2, 4).paragraphs[0].add_run("").font.size = Pt(9) # Data limpa
     header_table.cell(2, 5).paragraphs[0].add_run(info.get('tipo_prova', 'TESTE')).font.size = Pt(8)
 
     doc.add_paragraph()
@@ -449,7 +450,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
     gab_grid = c_gab.add_table(rows=num_q + 1, cols=6)
     gab_grid.style = 'Table Grid'
     
-    # Ajuste manual de largura das colunas do gabarito para caber o E
+    # Ajuste de largura das colunas do gabarito para caber a coluna E
     col_widths = [Inches(0.4), Inches(0.4), Inches(0.4), Inches(0.4), Inches(0.4), Inches(0.4)]
     for i, w in enumerate(col_widths): gab_grid.columns[i].width = w
 
@@ -483,8 +484,9 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         linhas = q_text.strip().split('\n')
         for linha in linhas:
             l_s = linha.strip()
-            if not l_s or "[CÁLCULO]" in l_s.upper(): continue # Pula o marcador de cálculo
+            if not l_s: continue
             
+            # REMOVIDA A LÓGICA DE DESENHAR O QUADRADO DE CÁLCULO
             p = cell.add_paragraph()
             p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
             run = p.add_run(l_s)
