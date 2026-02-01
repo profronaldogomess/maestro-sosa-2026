@@ -395,11 +395,9 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
     section.top_margin, section.bottom_margin = Inches(0.3), Inches(0.3)
     section.left_margin, section.right_margin = Inches(0.4), Inches(0.4)
 
-    # --- 1. CABEÇALHO DE ALTA PRECISÃO ---
+    # --- 1. CABEÇALHO (MANTIDO CONFORME SEU MODELO) ---
     header_table = doc.add_table(rows=3, cols=6)
     header_table.style = 'Table Grid'
-    
-    # Ajuste de larguras para garantir que tudo caiba
     widths = [Inches(0.8), Inches(3.2), Inches(0.8), Inches(0.8), Inches(1.0), Inches(0.9)]
     for i, w in enumerate(widths): header_table.columns[i].width = w
 
@@ -416,10 +414,8 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
 
     c_escola.paragraphs[0].add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA").font.bold = True
     c_trim.paragraphs[0].add_run(info.get('trimestre', 'I TRIMESTRE')).font.bold = True
-    
     c_aluno.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
     c_aluno.paragraphs[0].add_run("ALUNO(A): ")
-    
     c_nota_box.paragraphs[0].add_run("NOTA: ").font.size = Pt(8)
 
     header_table.cell(2, 1).paragraphs[0].add_run(f"PROF. Ronaldo Gomes").font.size = Pt(9)
@@ -432,26 +428,26 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
 
     # --- 2. ORIENTAÇÕES E GABARITO (LADO A LADO) ---
     top_info_table = doc.add_table(rows=1, cols=2)
-    top_info_table.columns[0].width = Inches(3.5)
-    top_info_table.columns[1].width = Inches(3.5)
+    top_info_table.columns[0].width = Inches(3.8)
+    top_info_table.columns[1].width = Inches(3.2)
 
-    # Lado Esquerdo: Orientações
+    # Lado Esquerdo: Orientações (Sem números duplicados)
     c_orient = top_info_table.cell(0, 0)
     c_orient.paragraphs[0].add_run("ORIENTAÇÕES PARA AVALIAÇÃO:").font.bold = True
     txt_orient = ai.extrair_tag(conteudo_ia, "ORIENTACOES")
     for linha in txt_orient.split('\n'):
-        if linha.strip():
+        l_s = linha.strip()
+        if l_s:
+            texto_limpo = re.sub(r'^\d+[\.\s\-]*', '', l_s)
             p_o = c_orient.add_paragraph(style='List Number')
-            p_o.add_run(linha.strip()).font.size = Pt(9)
+            p_o.add_run(texto_limpo).font.size = Pt(9)
 
-    # Lado Direito: Gabarito de 6 Colunas (Q + A-E)
+    # Lado Direito: Gabarito (Bolinhas Maiores e Coluna E)
     c_gab = top_info_table.cell(0, 1)
     num_q = 10 
     gab_grid = c_gab.add_table(rows=num_q + 1, cols=6)
     gab_grid.style = 'Table Grid'
-    
-    # Ajuste de largura das colunas do gabarito para caber a coluna E
-    col_widths = [Inches(0.4), Inches(0.4), Inches(0.4), Inches(0.4), Inches(0.4), Inches(0.4)]
+    col_widths = [Inches(0.4), Inches(0.45), Inches(0.45), Inches(0.45), Inches(0.45), Inches(0.45)]
     for i, w in enumerate(col_widths): gab_grid.columns[i].width = w
 
     cols_labels = ["Q", "A", "B", "C", "D", "E"]
@@ -464,12 +460,13 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         gab_grid.cell(r, 0).paragraphs[0].add_run(f"{r:02d}").font.size = Pt(8)
         for col in range(1, 6):
             p_b = gab_grid.cell(r, col).paragraphs[0]
-            p_b.add_run("○").font.size = Pt(10)
+            run_b = p_b.add_run("○")
+            run_b.font.size = Pt(12) # Bolinha maior
             p_b.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
     doc.add_paragraph()
 
-    # --- 3. CORPO DA PROVA (DUAS COLUNAS) ---
+    # --- 3. CORPO DA PROVA (DUAS COLUNAS - SEM QUADRADOS) ---
     questoes_raw = ai.extrair_tag(conteudo_ia, "QUESTOES")
     lista_q = re.split(r'(\d+ª\s+Questão\.)', questoes_raw, flags=re.IGNORECASE)
     
@@ -484,9 +481,8 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         linhas = q_text.strip().split('\n')
         for linha in linhas:
             l_s = linha.strip()
-            if not l_s: continue
+            if not l_s or "[CÁLCULO]" in l_s.upper(): continue # Ignora o marcador de cálculo
             
-            # REMOVIDA A LÓGICA DE DESENHAR O QUADRADO DE CÁLCULO
             p = cell.add_paragraph()
             p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
             run = p.add_run(l_s)
