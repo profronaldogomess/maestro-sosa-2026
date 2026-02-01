@@ -391,22 +391,33 @@ def gerar_pptx_v24(titulo_doc, conteudo_ia):
 # ==============================================================================
 def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
     """
-    EXPORTADOR DE EXAMES V25 - ELIMINAÇÃO DE ERRO 'SEEK'
-    Garante numeração manual e bolinhas Pt 12.
+    EXPORTADOR DE EXAMES V25 - MAESTRO SOSA
+    BLINDAGEM TOTAL ANTI-SEEK E NUMERAÇÃO MANUAL.
     """
+    import io
+    import os
+    import re
+    from docx import Document
+    from docx.shared import Inches, Pt
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.enum.table import WD_ALIGN_VERTICAL
+    
+    # Inicialização do stream fora do try para garantir existência no except
     file_stream = io.BytesIO()
     
     try:
         doc = Document()
         section = doc.sections[0]
+        # Margens de precisão para exames
         section.top_margin, section.bottom_margin = Inches(0.3), Inches(0.3)
         section.left_margin, section.right_margin = Inches(0.4), Inches(0.4)
 
-        # --- 1. CABEÇALHO OFICIAL ---
+        # --- 1. CABEÇALHO OFICIAL SOSA ---
         header_table = doc.add_table(rows=3, cols=6)
         header_table.style = 'Table Grid'
         widths = [Inches(0.8), Inches(3.2), Inches(0.8), Inches(0.8), Inches(1.0), Inches(0.9)]
-        for i, w in enumerate(widths): header_table.columns[i].width = w
+        for i, w in enumerate(widths): 
+            header_table.columns[i].width = w
 
         c_logo = header_table.cell(0, 0).merge(header_table.cell(2, 0))
         c_escola = header_table.cell(0, 1).merge(header_table.cell(0, 4))
@@ -478,7 +489,8 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
             corpo = partes[i+1].strip() if i+1 < len(partes) else ""
             final_q.append(f"{marcador}\n{corpo}")
 
-        if not final_q: final_q = [questoes_raw] # Fallback
+        if not final_q: 
+            final_q = [questoes_raw] if questoes_raw else ["Erro: Conteúdo de questões não identificado."]
 
         body_table = doc.add_table(rows=(len(final_q) + 1) // 2, cols=2)
         for idx, q_text in enumerate(final_q):
@@ -491,20 +503,25 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
                 p = cell.add_paragraph()
                 p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
                 run = p.add_run(l_s)
-                if j == 0: # Título da Questão
+                if j == 0: # Título da Questão (Negrito)
                     run.font.bold, run.font.size = True, Pt(11)
                 else:
                     run.font.size = Pt(10)
 
+        # Finalização do Documento
         doc.save(file_stream)
         file_stream.seek(0)
         return file_stream
 
     except Exception as e:
-        # BLINDAGEM: Se tudo falhar, retorna um documento com o erro para não quebrar o Streamlit
+        # BLINDAGEM DE EMERGÊNCIA: Se a lógica acima falhar, gera um documento de erro
+        # Isso garante que o database.py receba um arquivo e não um NoneType
         doc_err = Document()
-        doc_err.add_paragraph(f"ERRO CRÍTICO NO EXPORTADOR: {str(e)}")
-        file_stream = io.BytesIO()
-        doc_err.save(file_stream)
-        file_stream.seek(0)
-        return file_stream
+        doc_err.add_heading('ERRO TÉCNICO NO EXPORTADOR SOSA', 0)
+        doc_err.add_paragraph(f"Detalhes do Erro: {str(e)}")
+        doc_err.add_paragraph("O sistema impediu um crash, mas o documento não pôde ser formatado.")
+        
+        err_stream = io.BytesIO()
+        doc_err.save(err_stream)
+        err_stream.seek(0)
+        return err_stream
