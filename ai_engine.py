@@ -226,16 +226,35 @@ def gerar_ia(persona_key, comando, partes_arquivos=[], usar_busca=True):
 def extrair_tag(texto, tag):
     if not texto: return ""
     import re
-    # Busca a tag ignorando se tem colchetes ou MARKER_
-    padrao = rf"(?:\[{tag}\]|MARKER_{tag})[:\s]*(.*?)(?=\[(?:ORIENTACOES|QUESTOES|GABARITO_TEXTO|RESPOSTAS_IA|PROFESSOR|ALUNO|GABARITO|PEI|IMAGENS)\]|MARKER_|$)"
+    
+    # 1. LISTA MESTRA DE TODAS AS TAGS DO ECOSSISTEMA SOSA V25
+    # (Inclui Provas, Aulas, PEI e Planejamento)
+    tags_sosa = [
+        "ORIENTACOES", "QUESTOES", "GABARITO_TEXTO", "RESPOSTAS_IA", 
+        "PROFESSOR", "ALUNO", "GABARITO", "IMAGENS", "PEI", "IMAGENS_PEI",
+        "CONTEUDO_GERAL", "CONTEUDOS_ESPECIFICOS", "OBJETIVOS_ENSINO", 
+        "METODOLOGIA", "AVALIACAO", "OBSERVACAO", "ADAPTACAO_PEI", "MODALIDADE"
+    ]
+    
+    # 2. CONSTRUÇÃO DINÂMICA DA PARADA (Exclui a tag atual para evitar o Self-Stop)
+    parada = [t for t in tags_sosa if t.upper() != tag.upper()]
+    lista_parada_regex = "|".join(parada)
+    
+    # 3. REGEX DE ALTA PRECISÃO
+    # Busca [TAG] ou MARKER_TAG e para na próxima tag da lista ou em outro MARKER_ ou no fim ($)
+    padrao = rf"(?:\[{tag}\]|MARKER_{tag})[:\s]*(.*?)(?=\[(?:{lista_parada_regex})\]|MARKER_|$)"
+    
     match = re.search(padrao, texto, re.DOTALL | re.IGNORECASE)
     
     if match:
         res = match.group(1).strip()
+        # Limpeza de Markdown para garantir compatibilidade com Word/Docs
         return res.replace("**", "").replace("###", "").replace("##", "").replace("#", "").strip()
     
-    # Fallback: Se for a aba de questões e não achou a tag, mostra o texto todo para não ficar vazio
-    if tag == "QUESTOES" and len(texto) > 0:
+    # 4. FALLBACK SEGURO
+    # Se não achou a tag e o texto é pequeno (IA mandou sem tags), retorna o texto.
+    # Se o texto for grande, não retorna nada para não "sujar" com o documento inteiro.
+    if len(texto) > 0 and len(texto) < 2000:
         return texto.strip()
         
     return ""
