@@ -391,14 +391,16 @@ def gerar_pptx_v24(titulo_doc, conteudo_ia):
 # ==============================================================================
 def gerar_docx_prova_v25(titulo_doc, orientacoes_limpas, questoes_limpas, info):
     """
-    EXPORTADOR DE PROVAS V25 - ESTRATÉGIA DE ESPELHAMENTO
-    Recebe o texto já extraído para evitar erro de 'NoneType'.
+    EXPORTADOR DE PROVAS V25 - PADRÃO DE ALTA ESTABILIDADE
+    Recebe textos já processados para garantir que o stream nunca seja nulo.
     """
     import io
     import os
+    import re
     from docx import Document
     from docx.shared import Inches, Pt
     from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.enum.table import WD_ALIGN_VERTICAL
     
     file_stream = io.BytesIO()
     
@@ -408,7 +410,7 @@ def gerar_docx_prova_v25(titulo_doc, orientacoes_limpas, questoes_limpas, info):
         section.top_margin, section.bottom_margin = Inches(0.3), Inches(0.3)
         section.left_margin, section.right_margin = Inches(0.4), Inches(0.4)
 
-        # --- 1. CABEÇALHO PADRÃO SOSA ---
+        # --- 1. CABEÇALHO OFICIAL ---
         header_table = doc.add_table(rows=3, cols=6)
         header_table.style = 'Table Grid'
         widths = [Inches(0.8), Inches(3.2), Inches(0.8), Inches(0.8), Inches(1.0), Inches(0.9)]
@@ -441,7 +443,7 @@ def gerar_docx_prova_v25(titulo_doc, orientacoes_limpas, questoes_limpas, info):
         # Orientações
         c_orient = top_table.cell(0, 0)
         c_orient.paragraphs[0].add_run("ORIENTAÇÕES:").font.bold = True
-        for lin in orientacoes_limpas.split('\n'):
+        for lin in str(orientacoes_limpas).split('\n'):
             if lin.strip():
                 p = c_orient.add_paragraph(lin.strip())
                 p.runs[0].font.size = Pt(9)
@@ -463,8 +465,8 @@ def gerar_docx_prova_v25(titulo_doc, orientacoes_limpas, questoes_limpas, info):
         doc.add_paragraph()
 
         # --- 3. CORPO DA PROVA (DUAS COLUNAS) ---
-        import re
-        partes = re.split(r'(\d+[\s\.]*[ªº]?\s*Questão)', questoes_limpas, flags=re.IGNORECASE)
+        # Split robusto para numeração manual
+        partes = re.split(r'(\d+[\s\.]*[ªº]?\s*Questão)', str(questoes_limpas), flags=re.IGNORECASE)
         final_q = []
         if len(partes) > 1:
             for i in range(1, len(partes), 2):
@@ -475,6 +477,7 @@ def gerar_docx_prova_v25(titulo_doc, orientacoes_limpas, questoes_limpas, info):
         body_table = doc.add_table(rows=(len(final_q) + 1) // 2, cols=2)
         for idx, q_text in enumerate(final_q):
             cell = body_table.cell(idx // 2, idx % 2)
+            cell.vertical_alignment = WD_ALIGN_VERTICAL.TOP
             for linha in q_text.split('\n'):
                 if linha.strip():
                     p = cell.add_paragraph(linha.strip())
@@ -485,7 +488,7 @@ def gerar_docx_prova_v25(titulo_doc, orientacoes_limpas, questoes_limpas, info):
         return file_stream
 
     except Exception as e:
-        # Se falhar, retorna o erro em formato de documento para não dar NoneType
+        # Fallback total: Nunca retorna None
         doc_err = Document()
         doc_err.add_paragraph(f"Erro no Exportador: {str(e)}")
         err_io = io.BytesIO()
