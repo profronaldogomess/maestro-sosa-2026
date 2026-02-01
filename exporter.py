@@ -399,18 +399,15 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
     header_table = doc.add_table(rows=3, cols=6)
     header_table.style = 'Table Grid'
     
-    # Ajuste de larguras (Total ~7.5 inches)
     widths = [Inches(0.8), Inches(3.2), Inches(0.8), Inches(0.8), Inches(1.0), Inches(0.9)]
     for i, w in enumerate(widths): header_table.columns[i].width = w
 
-    # Mesclagens
     c_logo = header_table.cell(0, 0).merge(header_table.cell(2, 0))
     c_escola = header_table.cell(0, 1).merge(header_table.cell(0, 4))
     c_trim = header_table.cell(0, 5)
     c_aluno = header_table.cell(1, 1).merge(header_table.cell(1, 4))
     c_nota_box = header_table.cell(1, 5)
     
-    # Conteúdo Células
     if os.path.exists("logo_escola.png"):
         p_logo = c_logo.paragraphs[0]
         p_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -424,19 +421,18 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
     
     c_nota_box.paragraphs[0].add_run("NOTA: ").font.size = Pt(8)
 
-    # Linha 3 do cabeçalho
     header_table.cell(2, 1).paragraphs[0].add_run(f"PROF. Ronaldo Gomes").font.size = Pt(9)
     header_table.cell(2, 2).paragraphs[0].add_run(f"TURMA: {info.get('ano')}").font.size = Pt(9)
     header_table.cell(2, 3).paragraphs[0].add_run(f"DATA:").font.size = Pt(9)
-    header_table.cell(2, 4).paragraphs[0].add_run("___/___/2026").font.size = Pt(9)
+    header_table.cell(2, 4).paragraphs[0].add_run("").font.size = Pt(9) # Removido ___/___/2026
     header_table.cell(2, 5).paragraphs[0].add_run(info.get('tipo_prova', 'TESTE')).font.size = Pt(8)
 
     doc.add_paragraph()
 
     # --- 2. ORIENTAÇÕES E GABARITO (LADO A LADO) ---
     top_info_table = doc.add_table(rows=1, cols=2)
-    top_info_table.columns[0].width = Inches(3.8)
-    top_info_table.columns[1].width = Inches(3.2)
+    top_info_table.columns[0].width = Inches(3.5)
+    top_info_table.columns[1].width = Inches(3.5)
 
     # Lado Esquerdo: Orientações
     c_orient = top_info_table.cell(0, 0)
@@ -447,11 +443,16 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
             p_o = c_orient.add_paragraph(style='List Number')
             p_o.add_run(linha.strip()).font.size = Pt(9)
 
-    # Lado Direito: Gabarito de 5 Colunas (A-E)
+    # Lado Direito: Gabarito de 6 Colunas (Q + A-E)
     c_gab = top_info_table.cell(0, 1)
-    num_q = 10 # Padrão
+    num_q = 10 
     gab_grid = c_gab.add_table(rows=num_q + 1, cols=6)
     gab_grid.style = 'Table Grid'
+    
+    # Ajuste manual de largura das colunas do gabarito para caber o E
+    col_widths = [Inches(0.4), Inches(0.4), Inches(0.4), Inches(0.4), Inches(0.4), Inches(0.4)]
+    for i, w in enumerate(col_widths): gab_grid.columns[i].width = w
+
     cols_labels = ["Q", "A", "B", "C", "D", "E"]
     for i, lab in enumerate(cols_labels):
         p = gab_grid.cell(0, i).paragraphs[0]
@@ -469,7 +470,6 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
 
     # --- 3. CORPO DA PROVA (DUAS COLUNAS) ---
     questoes_raw = ai.extrair_tag(conteudo_ia, "QUESTOES")
-    # Split por "Xª Questão"
     lista_q = re.split(r'(\d+ª\s+Questão\.)', questoes_raw, flags=re.IGNORECASE)
     
     final_q = []
@@ -483,23 +483,16 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         linhas = q_text.strip().split('\n')
         for linha in linhas:
             l_s = linha.strip()
-            if not l_s: continue
+            if not l_s or "[CÁLCULO]" in l_s.upper(): continue # Pula o marcador de cálculo
             
-            if "[CÁLCULO]" in l_s.upper():
-                # Desenha o box de cálculo
-                box = cell.add_table(rows=1, cols=1)
-                box.style = 'Table Grid'
-                set_row_height(box.rows[0], 2.5) # 2.5 cm de altura
-                cell.add_paragraph()
+            p = cell.add_paragraph()
+            p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+            run = p.add_run(l_s)
+            if "QUESTÃO" in l_s.upper():
+                run.font.bold = True
+                run.font.size = Pt(11)
             else:
-                p = cell.add_paragraph()
-                p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-                run = p.add_run(l_s)
-                if "QUESTÃO" in l_s.upper():
-                    run.font.bold = True
-                    run.font.size = Pt(11)
-                else:
-                    run.font.size = Pt(10)
+                run.font.size = Pt(10)
 
     file_stream = io.BytesIO()
     doc.save(file_stream)
