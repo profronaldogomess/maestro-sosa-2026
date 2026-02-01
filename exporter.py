@@ -389,21 +389,17 @@ def gerar_pptx_v24(titulo_doc, conteudo_ia):
 # ==============================================================================
 # 6. Prova OFICIAL
 # ==============================================================================
-def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
+def gerar_docx_prova_v25(titulo_doc, orientacoes_limpas, questoes_limpas, info):
     """
-    VERSÃO ULTRA-ESTÁVEL V25.99 - MAESTRO SOSA
-    ESTRATÉGIA: ESPELHAMENTO DE SUCESSO (IGUAL AO CRIADOR DE AULAS)
+    EXPORTADOR DE PROVAS V25 - ESTRATÉGIA DE ESPELHAMENTO
+    Recebe o texto já extraído para evitar erro de 'NoneType'.
     """
     import io
     import os
-    import re
     from docx import Document
     from docx.shared import Inches, Pt
     from docx.enum.text import WD_ALIGN_PARAGRAPH
-    from docx.enum.table import WD_ALIGN_VERTICAL
-    import ai_engine as ai 
-
-    # 1. Criação do Stream (Garantia de Objeto)
+    
     file_stream = io.BytesIO()
     
     try:
@@ -412,7 +408,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         section.top_margin, section.bottom_margin = Inches(0.3), Inches(0.3)
         section.left_margin, section.right_margin = Inches(0.4), Inches(0.4)
 
-        # --- 1. CABEÇALHO (ESTRUTURA BLINDADA) ---
+        # --- 1. CABEÇALHO PADRÃO SOSA ---
         header_table = doc.add_table(rows=3, cols=6)
         header_table.style = 'Table Grid'
         widths = [Inches(0.8), Inches(3.2), Inches(0.8), Inches(0.8), Inches(1.0), Inches(0.9)]
@@ -445,10 +441,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         # Orientações
         c_orient = top_table.cell(0, 0)
         c_orient.paragraphs[0].add_run("ORIENTAÇÕES:").font.bold = True
-        txt_ori = ai.extrair_tag(conteudo_ia, "ORIENTACOES")
-        if not txt_ori: txt_ori = "Leia com atenção as questões."
-        
-        for lin in txt_ori.split('\n'):
+        for lin in orientacoes_limpas.split('\n'):
             if lin.strip():
                 p = c_orient.add_paragraph(lin.strip())
                 p.runs[0].font.size = Pt(9)
@@ -470,37 +463,32 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         doc.add_paragraph()
 
         # --- 3. CORPO DA PROVA (DUAS COLUNAS) ---
-        questoes_raw = ai.extrair_tag(conteudo_ia, "QUESTOES")
-        if not questoes_raw: questoes_raw = conteudo_ia
-
-        # Split robusto
-        partes = re.split(r'(\d+[\s\.]*[ªº]?\s*Questão)', questoes_raw, flags=re.IGNORECASE)
+        import re
+        partes = re.split(r'(\d+[\s\.]*[ªº]?\s*Questão)', questoes_limpas, flags=re.IGNORECASE)
         final_q = []
         if len(partes) > 1:
             for i in range(1, len(partes), 2):
                 final_q.append(partes[i] + partes[i+1])
         else:
-            final_q = [questoes_raw]
+            final_q = [questoes_limpas]
 
         body_table = doc.add_table(rows=(len(final_q) + 1) // 2, cols=2)
         for idx, q_text in enumerate(final_q):
             cell = body_table.cell(idx // 2, idx % 2)
-            cell.vertical_alignment = WD_ALIGN_VERTICAL.TOP
             for linha in q_text.split('\n'):
                 if linha.strip():
                     p = cell.add_paragraph(linha.strip())
                     p.runs[0].font.size = Pt(10)
 
-        # --- FINALIZAÇÃO ---
         doc.save(file_stream)
         file_stream.seek(0)
         return file_stream
 
     except Exception as e:
-        # 🛡️ SE TUDO FALHAR, RETORNA UM DOCX COM O ERRO (IMPEDE O NONETYPE)
+        # Se falhar, retorna o erro em formato de documento para não dar NoneType
         doc_err = Document()
-        doc_err.add_paragraph(f"ERRO NO EXPORTADOR: {str(e)}")
-        err_stream = io.BytesIO()
-        doc_err.save(err_stream)
-        err_stream.seek(0)
-        return err_stream
+        doc_err.add_paragraph(f"Erro no Exportador: {str(e)}")
+        err_io = io.BytesIO()
+        doc_err.save(err_io)
+        err_io.seek(0)
+        return err_io
