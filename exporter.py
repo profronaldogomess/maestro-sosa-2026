@@ -390,12 +390,19 @@ def gerar_pptx_v24(titulo_doc, conteudo_ia):
 # 6. Prova OFICIAL
 # ==============================================================================
 def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
+    import re
+    import io
+    from docx import Document
+    from docx.shared import Inches, Pt, RGBColor
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.enum.table import WD_ALIGN_VERTICAL
+    
     doc = Document()
     section = doc.sections[0]
     section.top_margin, section.bottom_margin = Inches(0.3), Inches(0.3)
     section.left_margin, section.right_margin = Inches(0.4), Inches(0.4)
 
-    # --- 1. CABEÇALHO (MANTIDO CONFORME SEU MODELO) ---
+    # --- 1. CABEÇALHO DE ELITE ---
     header_table = doc.add_table(rows=3, cols=6)
     header_table.style = 'Table Grid'
     widths = [Inches(0.8), Inches(3.2), Inches(0.8), Inches(0.8), Inches(1.0), Inches(0.9)]
@@ -421,81 +428,77 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
     header_table.cell(2, 1).paragraphs[0].add_run(f"PROF. Ronaldo Gomes").font.size = Pt(9)
     header_table.cell(2, 2).paragraphs[0].add_run(f"TURMA: {info.get('ano')}").font.size = Pt(9)
     header_table.cell(2, 3).paragraphs[0].add_run(f"DATA:").font.size = Pt(9)
-    header_table.cell(2, 4).paragraphs[0].add_run("").font.size = Pt(9) # Data limpa
+    header_table.cell(2, 4).paragraphs[0].add_run("").font.size = Pt(9)
     header_table.cell(2, 5).paragraphs[0].add_run(info.get('tipo_prova', 'TESTE')).font.size = Pt(8)
 
     doc.add_paragraph()
 
-    # --- 2. ORIENTAÇÕES E GABARITO (LADO A LADO) ---
+    # --- 2. ORIENTAÇÕES E GABARITO ---
     top_info_table = doc.add_table(rows=1, cols=2)
     top_info_table.columns[0].width = Inches(3.8)
     top_info_table.columns[1].width = Inches(3.2)
 
-    # Lado Esquerdo: Orientações (Sem números duplicados)
     c_orient = top_info_table.cell(0, 0)
     c_orient.paragraphs[0].add_run("ORIENTAÇÕES PARA AVALIAÇÃO:").font.bold = True
     txt_orient = ai.extrair_tag(conteudo_ia, "ORIENTACOES")
     for linha in txt_orient.split('\n'):
-        l_s = linha.strip()
-        if l_s:
-            texto_limpo = re.sub(r'^\d+[\.\s\-]*', '', l_s)
+        if linha.strip():
+            texto_limpo = re.sub(r'^\d+[\.\s\-]*', '', linha.strip())
             p_o = c_orient.add_paragraph(style='List Number')
             p_o.add_run(texto_limpo).font.size = Pt(9)
 
-    # Lado Direito: Gabarito (Bolinhas Maiores e Coluna E)
     c_gab = top_info_table.cell(0, 1)
-    num_q = 10 
-    gab_grid = c_gab.add_table(rows=num_q + 1, cols=6)
+    gab_grid = c_gab.add_table(rows=11, cols=6)
     gab_grid.style = 'Table Grid'
-    col_widths = [Inches(0.4), Inches(0.45), Inches(0.45), Inches(0.45), Inches(0.45), Inches(0.45)]
-    for i, w in enumerate(col_widths): gab_grid.columns[i].width = w
-
-    cols_labels = ["Q", "A", "B", "C", "D", "E"]
-    for i, lab in enumerate(cols_labels):
+    for i, lab in enumerate(["Q", "A", "B", "C", "D", "E"]):
         p = gab_grid.cell(0, i).paragraphs[0]
         p.add_run(lab).font.bold = True
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-    for r in range(1, num_q + 1):
+    for r in range(1, 11):
         gab_grid.cell(r, 0).paragraphs[0].add_run(f"{r:02d}").font.size = Pt(8)
         for col in range(1, 6):
             p_b = gab_grid.cell(r, col).paragraphs[0]
             run_b = p_b.add_run("○")
-            run_b.font.size = Pt(12) # Bolinha maior
+            run_b.font.size = Pt(12)
             p_b.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
     doc.add_paragraph()
 
-# --- 3. CORPO DA PROVA (DUAS COLUNAS - REGEX ROBUSTA) ---
+    # --- 3. CORPO DA PROVA (DUAS COLUNAS - REGEX ROBUSTA) ---
     questoes_raw = ai.extrair_tag(conteudo_ia, "QUESTOES")
     
-    # Captura variações como "1ª Questão", "Questão 1" ou "01."
+    # Regex que aceita "1ª Questão", "Questão 1", "01." ou "1."
     padrao_split = r'(\d+[ªº]?\s*Questão[\s\.]*|\d{2}\.[\s]*)'
-    lista_q = re.split(padrao_split, questoes_raw, flags=re.IGNORECASE)
+    partes = re.split(padrao_split, questoes_raw)
     
     final_q = []
     i = 1
-    while i < len(lista_q):
-        marcador = lista_q[i]
-        texto = lista_q[i+1] if i+1 < len(lista_q) else ""
-        final_q.append(marcador + texto)
+    while i < len(partes):
+        marcador = partes[i].strip()
+        texto = partes[i+1].strip() if i+1 < len(partes) else ""
+        if marcador:
+            final_q.append(f"{marcador} {texto}")
         i += 2
 
     if not final_q: final_q = [questoes_raw]
 
     body_table = doc.add_table(rows=(len(final_q) + 1) // 2, cols=2)
-    
     for idx, q_text in enumerate(final_q):
         cell = body_table.cell(idx // 2, idx % 2)
-        linhas = q_text.strip().split('\n')
-        for i, linha in enumerate(linhas):
-            l_s = linha.strip()
-            if not l_s: continue
+        linhas = q_text.split('\n')
+        for j, linha in enumerate(linhas):
+            if not linha.strip() or "[CÁLCULO]" in linha.upper(): continue
             p = cell.add_paragraph()
             p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-            run = p.add_run(l_s)
-            if i == 0: # Primeira linha da questão sempre em negrito
+            run = p.add_run(linha.strip())
+            if j == 0:
                 run.font.bold = True
                 run.font.size = Pt(11)
             else:
                 run.font.size = Pt(10)
+
+    file_stream = io.BytesIO()
+    doc.save(file_stream)
+    file_stream.seek(0)
+    return file_stream
