@@ -1842,38 +1842,32 @@ elif menu == "📝 Central de Avaliações":
                 trimestre_av = c_d1.selectbox("Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"trim_av_{v}")
                 nome_arq = c_d2.text_input("Nome do Arquivo:", f"PROVA_{ano_av}ANO_{tipo_av.split(' ')[0]}", key=f"nome_av_{v}")
                 
-                if st.button("☁️ SALVAR NO DRIVE E BANCO", use_container_width=True, type="primary", key=f"sync_av_{v}"):
-                    with st.status("Iniciando Protocolo de Sincronia...", expanded=True) as status:
+                if st.button("☁️ SALVAR NO DRIVE E GAVETA", use_container_width=True, type="primary", key=f"sync_av_{v}"):
+                    with st.status("Iniciando Sincronia...", expanded=True) as status:
                         
-                        # 1. Preparação de Dados (O que o exportador antigo pede)
-                        valor_prova = "3.0" if "Teste" in tipo_av else "4.0" if "Prova" in tipo_av else "10.0"
-                        info_doc = {
-                            "ano": f"{ano_av}º", 
-                            "tipo_prova": tipo_av.upper(), 
-                            "valor": valor_prova, 
-                            "qtd_questoes": str(qtd_q)
-                        }
+                        # 1. Preparação de Dados
+                        valor_p = "3.0" if "Teste" in tipo_av else "4.0" if "Prova" in tipo_av else "10.0"
+                        info_doc = {"ano": f"{ano_av}º", "tipo_prova": tipo_av.upper(), "valor": valor_p, "qtd_questoes": str(qtd_q)}
                         
-                        # 2. Geração do Arquivo
+                        # 2. Geração
                         status.write("📄 Gerando arquivo Word...")
                         doc_io = exporter.gerar_docx_prova_v25(nome_arq, st.session_state.temp_prova, info_doc)
                         
-                        # 3. Envio para a Ponte (Igual aos outros botões)
+                        # 3. Envio
                         status.write("📤 Enviando para o Google Drive...")
                         link = db.subir_e_converter_para_google_docs(
                             doc_io, nome_arq, trimestre=trimestre_av, categoria=f"{ano_av}º Ano", semana="AVALIAÇÃO", modo="AVALIACAO"
                         )
                         
                         if "https" in str(link):
-                            status.write("💾 Registrando no Banco de Dados...")
+                            status.write("💾 Registrando no Banco...")
                             identificador = f"{tipo_av} - {ano_av}º Ano"
                             conteudo_banco = f"[GABARITO]\n{ai.extrair_tag(st.session_state.temp_prova, 'GABARITO_TEXTO')}\n\n--- LINK DRIVE ---\n{link}"
                             db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), "AVALIAÇÃO", identificador, conteudo_banco, f"{ano_av}º", link])
-                            
                             status.update(label="✅ Sincronizado com Sucesso!", state="complete")
                             st.balloons()
                         else:
-                            status.update(label="❌ Erro na Ponte Google.", state="error")
+                            status.update(label="❌ Erro na Ponte.", state="error")
                             st.error(link)
 
     # --- ABAS DE GESTÃO (MANTIDAS) ---
