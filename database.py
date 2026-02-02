@@ -275,7 +275,10 @@ def extrair_id_da_url(url):
     return match.group(1) if match else None
 
 def excluir_registro_com_drive(aba_nome, valor_conteudo):
-    """Localiza o registro, deleta os arquivos no Drive e remove a linha da planilha."""
+    """
+    VERSÃO UNIVERSAL V26 - MAESTRO SOSA
+    Localiza o registro em QUALQUER coluna, deleta arquivos no Drive e remove a linha.
+    """
     try:
         wb = conectar()
         ws = wb.worksheet(aba_nome)
@@ -283,24 +286,38 @@ def excluir_registro_com_drive(aba_nome, valor_conteudo):
         creds = obter_creds_drive()
         service = build('drive', 'v3', credentials=creds)
         
+        import re
+        # Padrao para pegar IDs de documentos ou arquivos (id= ou /d/)
+        padrao_id = r"(?:/d/|id=)([a-zA-Z0-9-_]+)"
+
         for i, row in enumerate(dados):
-            # Procura o conteúdo na coluna 3 (índice 3)
-            if len(row) > 3 and valor_conteudo in row[3]:
-                import re
-                # Extrai todos os IDs de arquivos Google Docs do texto
-                links = re.findall(r"https://docs\.google\.com/document/d/([a-zA-Z0-9-_]+)", row[3])
-                for file_id in links:
-                    try: 
-                        service.files().delete(fileId=file_id).execute()
-                    except: 
-                        pass # Arquivo pode já ter sido deletado manualmente
+            if i == 0: continue # Pula cabeçalho
+            
+            # Transforma a linha inteira em um texto único para busca
+            linha_completa_txt = " ".join(map(str, row))
+            
+            # Se o conteúdo que queremos apagar está em algum lugar dessa linha
+            if valor_conteudo in linha_completa_txt:
+                # 1. Busca todos os IDs do Google Drive presentes na linha inteira
+                ids_encontrados = re.findall(padrao_id, linha_completa_txt)
                 
+                # 2. Deleta cada arquivo encontrado no Drive
+                for file_id in ids_encontrados:
+                    try:
+                        # Verifica se o ID tem tamanho de um ID real do Google (geralmente > 20 caracteres)
+                        if len(file_id) > 20:
+                            service.files().delete(fileId=file_id).execute()
+                    except:
+                        pass # Arquivo já deletado ou sem permissão
+                
+                # 3. Remove a linha da planilha
                 ws.delete_rows(i + 1)
                 st.cache_data.clear()
                 return True
+                
         return False
     except Exception as e:
-        st.error(f"Erro na limpeza: {e}")
+        st.error(f"Erro na limpeza universal: {e}")
         return False
 
 def salvar_cronograma_av(lista_dados):
