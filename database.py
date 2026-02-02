@@ -184,13 +184,13 @@ def salvar_ata_conselho(data, turma, tipo, conteudo):
 
 def subir_e_converter_para_google_docs(file_stream, nome_arquivo, trimestre="I Trimestre", categoria="Material de Sala", semana="Semana Geral", aula="Aula Geral", modo="AULA"):
     try:
-        # 🛡️ PROTEÇÃO SOSA: Verifica se o arquivo existe antes de tentar o seek
+        # 🛡️ TRAVA DE SEGURANÇA SOSA: Se o arquivo for nulo, avisa antes de dar erro de seek
         if file_stream is None:
-            return "ERRO: O exportador falhou ao gerar o arquivo (Retorno None)."
+            return "ERRO_TECNICO: O exportador retornou um arquivo vazio. Verifique o exporter.py"
         
-        # Certifique-se de usar a URL da ÚLTIMA IMPLANTAÇÃO do seu Script
         URL_DA_PONTE = "https://script.google.com/macros/s/AKfycby6JpIPHk6vlCfQSms-wxLcRmUNNw6yVOf6qkBnEuTrco2bVFw8Apl9m0wqTIlOcw01_w/exec" 
         
+        # Garante que o ponteiro está no início
         file_stream.seek(0)
         file_b64 = base64.b64encode(file_stream.read()).decode('utf-8')
         
@@ -203,6 +203,17 @@ def subir_e_converter_para_google_docs(file_stream, nome_arquivo, trimestre="I T
             "modo": modo, 
             "fileB64": file_b64
         }
+        
+        response = requests.post(URL_DA_PONTE, json=payload, timeout=60)
+        resposta_texto = response.text.strip()
+        
+        if "https://docs.google.com" in resposta_texto:
+            return resposta_texto
+        else:
+            return f"ERRO_NA_PONTE: {resposta_texto[:100]}"
+
+    except Exception as e: 
+        return f"Erro de Conexão: {str(e)}"
         
         response = requests.post(URL_DA_PONTE, json=payload, timeout=60)
         resposta_texto = response.text.strip()
