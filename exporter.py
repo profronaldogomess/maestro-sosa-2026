@@ -415,23 +415,28 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         section.top_margin, section.bottom_margin = Inches(0.3), Inches(0.3)
         section.left_margin, section.right_margin = Inches(0.4), Inches(0.4)
 
-        # --- 1. CABEÇALHO DE ELITE (AJUSTADO) ---
-        # Tabela de 3 linhas e 5 colunas
+        # --- 1. LÓGICA DE VALOR AUTOMÁTICO (SINCRONIA COM O PAINEL) ---
+        tipo_raw = info.get('tipo_prova', '').upper()
+        if "TESTE" in tipo_raw: v_total_num = 3.0
+        elif "PROVA" in tipo_raw: v_total_num = 4.0
+        else: v_total_num = 10.0 # Recuperação
+        
+        v_total_str = f"{v_total_num:.1f}".replace('.', ',')
+        qtd_q = int(info.get('qtd_questoes', 10))
+        v_quest = v_total_num / qtd_q
+
+        # --- 2. CABEÇALHO DE ELITE ---
         header_table = doc.add_table(rows=3, cols=5)
         header_table.style = 'Table Grid'
-        
-        # Definição de larguras para evitar células vazias
         widths = [Inches(0.8), Inches(2.8), Inches(1.0), Inches(1.4), Inches(1.5)]
         for i, w in enumerate(widths): header_table.columns[i].width = w
 
-        # Mesclagens
         c_logo = header_table.cell(0, 0).merge(header_table.cell(2, 0))
         c_escola = header_table.cell(0, 1).merge(header_table.cell(0, 3))
         c_trim = header_table.cell(0, 4)
         c_aluno = header_table.cell(1, 1).merge(header_table.cell(1, 3))
         c_nota = header_table.cell(1, 4)
         
-        # Altura das linhas (Igualando Aluno e Professor)
         for row in header_table.rows: set_row_height(row, 25)
 
         if os.path.exists("logo_escola.png"):
@@ -442,53 +447,42 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         header_table.cell(0, 1).paragraphs[0].add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA").font.bold = True
         c_trim.paragraphs[0].add_run(info.get('trimestre', 'III TRIMESTRE')).font.bold = True
         
-        # Aluno e Nota (Sem linhas de underline)
         c_aluno.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-        c_aluno.paragraphs[0].add_run("ALUNO(A):").font.size = Pt(10)
+        c_aluno.paragraphs[0].add_run("ALUNO(A):").font.size = Pt(11)
         
         c_nota.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-        c_nota.paragraphs[0].add_run("NOTA:").font.size = Pt(10)
+        c_nota.paragraphs[0].add_run("NOTA:").font.size = Pt(11)
 
-        # Linha 3: Prof | Turma | Data | Valor
-        header_table.cell(2, 1).paragraphs[0].add_run(f"PROF: Ronaldo Gomes").font.size = Pt(9)
-        header_table.cell(2, 2).paragraphs[0].add_run(f"TURMA: {info.get('ano')}").font.size = Pt(9)
-        header_table.cell(2, 3).paragraphs[0].add_run(f"DATA:").font.size = Pt(9)
-        
-        # Valor Total da Prova no Cabeçalho
-        v_total = info.get('valor', '10,0')
-        header_table.cell(2, 4).paragraphs[0].add_run(f"VALOR: {v_total} PONTOS").font.bold = True
+        header_table.cell(2, 1).paragraphs[0].add_run(f"PROF: Ronaldo Gomes").font.size = Pt(10)
+        header_table.cell(2, 2).paragraphs[0].add_run(f"TURMA: {info.get('ano')}").font.size = Pt(10)
+        header_table.cell(2, 3).paragraphs[0].add_run(f"DATA:").font.size = Pt(10)
+        header_table.cell(2, 4).paragraphs[0].add_run(f"VALOR: {v_total_str} PONTOS").font.bold = True
 
         doc.add_paragraph()
 
-        # --- 2. ORIENTAÇÕES E GABARITO ENEM (LADO A LADO) ---
+        # --- 3. ORIENTAÇÕES E GABARITO ENEM ---
         top_table = doc.add_table(rows=1, cols=2)
         top_table.columns[0].width = Inches(3.5)
-        top_table.columns[1].width = Inches(4.0) # Aumentado para não cortar
+        top_table.columns[1].width = Inches(4.0)
 
         c_orient = top_table.cell(0, 0)
         p_tit = c_orient.add_paragraph()
         p_tit.add_run("ORIENTAÇÕES PARA AVALIAÇÃO:").font.bold = True
-        
-        # Cálculo do valor por questão
-        qtd_q = int(info.get('qtd_questoes', 10))
-        v_quest = float(v_total.replace(',', '.')) / qtd_q
         
         orientacoes = [
             "A interpretação faz parte da prova.",
             "Use apenas CANETA AZUL ou PRETA.",
             "Cálculos são obrigatórios para validar a questão.",
             "Pinte completamente o círculo no gabarito.",
-            f"Valor: {v_total} pontos | Cada questão: {v_quest:.1f}"
+            f"Valor Total: {v_total_str} | Cada questão vale: {v_quest:.2f}".replace('.', ',')
         ]
         for idx, text in enumerate(orientacoes, 1):
             p = c_orient.add_paragraph()
-            p.add_run(f"{idx}. {text}").font.size = Pt(8.5)
+            p.add_run(f"{idx}. {text}").font.size = Pt(9)
 
-        # Gabarito ENEM (Bolinhas Pt 14)
         c_gab = top_table.cell(0, 1)
         gab_grid = c_gab.add_table(rows=11, cols=6)
         gab_grid.style = 'Table Grid'
-        # Ajuste de largura das colunas do gabarito para não cortar
         col_widths = [Inches(0.4), Inches(0.5), Inches(0.5), Inches(0.5), Inches(0.5), Inches(0.5)]
         for i, w in enumerate(col_widths): gab_grid.columns[i].width = w
 
@@ -498,7 +492,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
             p_lab.alignment = WD_ALIGN_PARAGRAPH.CENTER
             
         for r in range(1, 11):
-            gab_grid.cell(r, 0).paragraphs[0].add_run(f"{r:02d}").font.size = Pt(8)
+            gab_grid.cell(r, 0).paragraphs[0].add_run(f"{r:02d}").font.size = Pt(9)
             for col in range(1, 6):
                 p_bol = gab_grid.cell(r, col).paragraphs[0]
                 p_bol.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -507,9 +501,8 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
 
         doc.add_paragraph()
 
-        # --- 3. CORPO DA PROVA (DUAS COLUNAS - SEM REPETIÇÃO) ---
+        # --- 4. CORPO DA PROVA (FONTE 12 - DUAS COLUNAS) ---
         questoes_raw = ai.extrair_tag(conteudo_ia, "QUESTOES")
-        # Regex para limpar pontuações duplicadas que a IA possa ter gerado
         questoes_raw = re.sub(r'\(\d+,\d+\s*ponto[s]?\)', '', questoes_raw)
         
         padrao_split = r'(\d+[\s\.\ª\º]*Questão[\s\.\:]*)'
@@ -520,8 +513,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         while i < len(partes):
             marcador = partes[i].strip()
             corpo = partes[i+1].strip() if i+1 < len(partes) else ""
-            # Montagem limpa: "1ª Questão. (0,4 ponto) - Enunciado..."
-            final_q.append(f"{marcador} ({v_quest:.1f} ponto) - {corpo.replace('**', '').strip()}")
+            final_q.append(f"{marcador} ({v_quest:.2f} ponto) - {corpo.replace('**', '').strip()}".replace('.', ','))
             i += 2
 
         body_table = doc.add_table(rows=(len(final_q) + 1) // 2, cols=2)
@@ -533,12 +525,12 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
                 l_s = linha.strip()
                 if not l_s: continue
                 p = cell.add_paragraph()
-                p.paragraph_format.space_after = Pt(1)
-                if j == 0:
-                    run = p.add_run(l_s)
-                    run.font.bold, run.font.size = True, Pt(10.5)
-                else:
-                    p.add_run(l_s).font.size = Pt(10)
+                p.paragraph_format.space_after = Pt(2)
+                p.paragraph_format.line_spacing = 1.05
+                
+                run = p.add_run(l_s)
+                run.font.size = Pt(12) # FONTE 12 SOLICITADA
+                if j == 0: run.font.bold = True
 
         doc.save(file_stream)
         file_stream.seek(0)
