@@ -393,115 +393,103 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
     import re
     import io
     from docx import Document
-    from docx.shared import Inches, Pt
+    from docx.shared import Inches, Pt, RGBColor
     from docx.enum.text import WD_ALIGN_PARAGRAPH
     from docx.enum.table import WD_ALIGN_VERTICAL
 
-    # Inicialização forçada do Stream para evitar NoneType
     file_stream = io.BytesIO()
     
     try:
         doc = Document()
-        # Configuração de Margens Estreitas (Padrão SOSA Elite)
+        # --- PRENSA HIDRÁULICA: CONFIGURAÇÃO DE MARGENS E ESPAÇAMENTO ---
         section = doc.sections[0]
-        section.top_margin = Inches(0.3)
-        section.bottom_margin = Inches(0.3)
-        section.left_margin = Inches(0.4)
-        section.right_margin = Inches(0.4)
+        section.top_margin, section.bottom_margin = Inches(0.3), Inches(0.3)
+        section.left_margin, section.right_margin = Inches(0.4), Inches(0.4)
 
-        # --- 1. CABEÇALHO DE ALTA PRECISÃO ---
+        # Estilo padrão para economia de espaço
+        style = doc.styles['Normal']
+        style.font.name = 'Arial'
+        style.font.size = Pt(10)
+        style.paragraph_format.space_after = Pt(2)
+        style.paragraph_format.line_spacing = 1.0
+
+        # --- 1. CABEÇALHO COMPACTO ---
         header_table = doc.add_table(rows=3, cols=6)
         header_table.style = 'Table Grid'
-        # Definição milimétrica de larguras
         widths = [Inches(0.8), Inches(3.2), Inches(0.8), Inches(0.8), Inches(1.0), Inches(0.9)]
-        for i, w in enumerate(widths):
-            header_table.columns[i].width = w
+        for i, w in enumerate(widths): header_table.columns[i].width = w
 
-        # Mesclagem de células para Design Limpo
         c_logo = header_table.cell(0, 0).merge(header_table.cell(2, 0))
         c_escola = header_table.cell(0, 1).merge(header_table.cell(0, 4))
         c_trim = header_table.cell(0, 5)
         c_aluno = header_table.cell(1, 1).merge(header_table.cell(1, 4))
         c_nota_box = header_table.cell(1, 5)
         
-        # Inserção de Logo (se existir)
         if os.path.exists("logo_escola.png"):
             p_logo = c_logo.paragraphs[0]
             p_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER
             p_logo.add_run().add_picture("logo_escola.png", width=Inches(0.7))
 
-        # Textos do Cabeçalho
-        p_esc = c_escola.paragraphs[0]
-        p_esc.add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA").font.bold = True
-        
-        c_trim.paragraphs[0].add_run(info.get('trimestre', 'I TRIMESTRE')).font.bold = True
+        header_table.cell(0, 1).paragraphs[0].add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA").font.bold = True
+        c_trim.paragraphs[0].add_run(info.get('trimestre', 'III TRIMESTRE')).font.bold = True
         
         p_alu = c_aluno.paragraphs[0]
-        p_alu.add_run("ALUNO(A): ______________________________________________________")
-        p_alu.runs[0].font.size = Pt(10)
+        p_alu.add_run("ALUNO(A): ______________________________________________________").font.size = Pt(10)
         
         c_nota_box.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-        p_nota = c_nota_box.paragraphs[0]
-        p_nota.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        p_nota.add_run("NOTA").font.size = Pt(8)
+        c_nota_box.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+        c_nota_box.paragraphs[0].add_run("NOTA").font.size = Pt(8)
 
-        # Linha Inferior do Cabeçalho
         header_table.cell(2, 1).paragraphs[0].add_run(f"PROF. Ronaldo Gomes").font.size = Pt(9)
         header_table.cell(2, 2).paragraphs[0].add_run(f"TURMA: {info.get('ano')}").font.size = Pt(9)
         header_table.cell(2, 3).paragraphs[0].add_run(f"DATA: __/__/2026").font.size = Pt(9)
         header_table.cell(2, 5).paragraphs[0].add_run(info.get('tipo_prova', 'AVALIAÇÃO')).font.size = Pt(8)
 
-        doc.add_paragraph() # Espaçador
+        doc.add_paragraph()
 
-        # --- 2. ORIENTAÇÕES E GABARITO (LADO A LADO) ---
+        # --- 2. ORIENTAÇÕES E GABARITO ENEM (LADO A LADO) ---
         top_table = doc.add_table(rows=1, cols=2)
-        top_table.columns[0].width = Inches(4.0)
-        top_table.columns[1].width = Inches(3.0)
+        top_table.columns[0].width = Inches(3.8)
+        top_table.columns[1].width = Inches(3.2)
 
-        # Orientações com Numeração Manual (Blindagem contra erro de 'seek')
+        # Orientações Blindadas
         c_orient = top_table.cell(0, 0)
-        p_tit_or = c_orient.add_paragraph()
-        p_tit_or.add_run("ORIENTAÇÕES PARA AVALIAÇÃO:").font.bold = True
+        p_tit = c_orient.add_paragraph()
+        p_tit.add_run("ORIENTAÇÕES PARA AVALIAÇÃO:").font.bold = True
         
         orientacoes = [
-            "Leia cada questão atentamente. A interpretação faz parte da avaliação.",
-            "Marque sua resposta com CANETA AZUL ou PRETA.",
-            "Questões com cálculo devem ser resolvidas no verso ou espaço da questão.",
-            "Verifique se há apenas uma alternativa marcada por questão."
+            "A interpretação faz parte da prova. O professor não responderá perguntas.",
+            "Use apenas CANETA AZUL ou PRETA. Respostas a lápis não serão revisadas.",
+            "Cálculos são obrigatórios. Questão sem raciocínio será zerada.",
+            "No gabarito, pinte completamente o círculo. Rasuras anulam a questão.",
+            "Celulares e conversas são proibidos. Sujeito a recolhimento da prova."
         ]
         for idx, text in enumerate(orientacoes, 1):
             p = c_orient.add_paragraph()
             p.paragraph_format.left_indent = Inches(0.1)
-            # Numeração Manual Pura (String)
             p.add_run(f"{idx}. {text}").font.size = Pt(8.5)
 
-        # Gabarito de Bolinhas (Pt 12)
+        # Gabarito Estilo ENEM (Bolinhas Pt 14)
         c_gab = top_table.cell(0, 1)
         gab_grid = c_gab.add_table(rows=11, cols=6)
         gab_grid.style = 'Table Grid'
-        
-        # Cabeçalho do Gabarito
         for i, lab in enumerate(["Q", "A", "B", "C", "D", "E"]):
-            cell_g = gab_grid.cell(0, i)
-            cell_g.paragraphs[0].add_run(lab).font.bold = True
-            cell_g.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+            p_lab = gab_grid.cell(0, i).paragraphs[0]
+            p_lab.add_run(lab).font.bold = True
+            p_lab.alignment = WD_ALIGN_PARAGRAPH.CENTER
             
-        # Linhas do Gabarito (1 a 10)
         for r in range(1, 11):
             gab_grid.cell(r, 0).paragraphs[0].add_run(f"{r:02d}").font.size = Pt(8)
             for col in range(1, 6):
                 p_bol = gab_grid.cell(r, col).paragraphs[0]
                 p_bol.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                run_b = p_bol.add_run("○") # Unicode Large Circle
-                run_b.font.size = Pt(12)
+                run_b = p_bol.add_run("○")
+                run_b.font.size = Pt(14) # Bolinha Grande ENEM
 
         doc.add_paragraph()
 
-        # --- 3. CORPO DA PROVA (DUAS COLUNAS - NUMERAÇÃO MANUAL) ---
+        # --- 3. CORPO DA PROVA (DUAS COLUNAS - LINHA ÚNICA) ---
         questoes_raw = ai.extrair_tag(conteudo_ia, "QUESTOES")
-        
-        # Regex para fatiar questões mantendo o número
-        # Captura: "1ª Questão", "01. Questão", "1 Questão"
         padrao_split = r'(\d+[\s\.\ª\º]*Questão[\s\.\:]*)'
         partes = re.split(padrao_split, questoes_raw, flags=re.IGNORECASE)
         
@@ -510,15 +498,11 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         while i < len(partes):
             marcador = partes[i].strip()
             corpo = partes[i+1].strip() if i+1 < len(partes) else ""
-            # Limpeza de Markdown residual
-            corpo_limpo = corpo.replace("**", "").replace("#", "")
-            final_q.append(f"{marcador}\n{corpo_limpo}")
+            # Limpeza de Markdown e unificação de cabeçalho
+            corpo_limpo = corpo.replace("**", "").replace("#", "").strip()
+            final_q.append(f"{marcador} (1,0 ponto) - {corpo_limpo}")
             i += 2
 
-        if not final_q: 
-            final_q = [questoes_raw.replace("**", "")]
-
-        # Tabela de Questões (2 Colunas)
         body_table = doc.add_table(rows=(len(final_q) + 1) // 2, cols=2)
         body_table.alignment = WD_ALIGN_PARAGRAPH.CENTER
         
@@ -526,6 +510,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
             cell = body_table.cell(idx // 2, idx % 2)
             cell.vertical_alignment = WD_ALIGN_VERTICAL.TOP
             
+            # Divide o texto para formatar o cabeçalho da questão
             linhas = q_text.split('\n')
             for j, linha in enumerate(linhas):
                 l_s = linha.strip()
@@ -534,24 +519,21 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
                 p = cell.add_paragraph()
                 p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
                 
-                run = p.add_run(l_s)
-                # Primeira linha (Título da Questão) em Negrito
-                if j == 0:
+                if j == 0: # Cabeçalho da Questão (Linha Única)
+                    run = p.add_run(l_s)
                     run.font.bold = True
                     run.font.size = Pt(10.5)
-                else:
-                    run.font.size = Pt(10)
+                else: # Alternativas e Enunciado
+                    p.add_run(l_s).font.size = Pt(10)
 
-        # Finalização do Buffer
         doc.save(file_stream)
         file_stream.seek(0)
         return file_stream
 
     except Exception as e:
-        # Fallback de Segurança: Gera um documento com o erro para não travar o main.py
         file_stream = io.BytesIO()
         err_doc = Document()
-        err_doc.add_paragraph(f"ERRO CRÍTICO NO EXPORTADOR: {str(e)}")
+        err_doc.add_paragraph(f"ERRO CRÍTICO: {str(e)}")
         err_doc.save(file_stream)
         file_stream.seek(0)
         return file_stream
