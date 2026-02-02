@@ -341,3 +341,51 @@ def salvar_cronograma_av(lista_dados):
         return True
     except:
         return False
+
+def excluir_plano_completo(semana, ano):
+    """
+    LIMPEZA CIRÚRGICA V26 - MAESTRO SOSA
+    Localiza o plano por Semana e Ano, deleta no Drive e remove a linha.
+    """
+    try:
+        wb = conectar()
+        ws = wb.worksheet("DB_PLANOS")
+        dados = ws.get_all_values()
+        
+        creds = obter_creds_drive()
+        service = build('drive', 'v3', credentials=creds)
+        
+        import re
+        # Padrao para pegar IDs de documentos
+        padrao_id = r"(?:/d/|id=)([a-zA-Z0-9-_]+)"
+
+        linha_para_deletar = -1
+        
+        for i, row in enumerate(dados):
+            if i == 0: continue # Pula cabeçalho
+            
+            # row[1] é SEMANA, row[2] é ANO
+            if len(row) > 2 and row[1].strip() == semana.strip() and row[2].strip() == ano.strip():
+                # 1. Tenta achar link do Drive na linha inteira para deletar o arquivo
+                linha_txt = " ".join(map(str, row))
+                ids_encontrados = re.findall(padrao_id, linha_txt)
+                
+                for file_id in ids_encontrados:
+                    try:
+                        if len(file_id) > 20:
+                            service.files().delete(fileId=file_id).execute()
+                    except:
+                        pass # Arquivo já deletado
+                
+                linha_para_deletar = i + 1
+                break # Achou o alvo, pode parar o loop
+        
+        if linha_para_deletar != -1:
+            ws.delete_rows(linha_para_deletar)
+            st.cache_data.clear()
+            return True
+            
+        return False
+    except Exception as e:
+        st.error(f"Erro na exclusão cirúrgica: {e}")
+        return False
