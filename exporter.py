@@ -389,109 +389,140 @@ def gerar_pptx_v24(titulo_doc, conteudo_ia):
 # ==============================================================================
 # 6. Prova OFICIAL
 # ==============================================================================
-def gerar_docx_prova_v25(titulo_doc, orientacoes_limpas, questoes_limpas, info):
+def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
     """
-    EXPORTADOR DE PROVAS V25 - PADRÃO DE ALTA ESTABILIDADE
-    Recebe textos já processados para garantir que o stream nunca seja nulo.
+    EXPORTADOR DE PROVAS V25 - VERSÃO ULTRA-ROBUSTA (ANTI-SEEK)
+    Garante que o retorno seja sempre um objeto BytesIO válido.
     """
     import io
     import os
-    import re
     from docx import Document
     from docx.shared import Inches, Pt
     from docx.enum.text import WD_ALIGN_PARAGRAPH
-    from docx.enum.table import WD_ALIGN_VERTICAL
-    
+    import ai_engine as ai
+
+    # 1. Inicialização do Stream (Garantia de existência)
     file_stream = io.BytesIO()
     
     try:
+        # 2. Configuração do Documento
         doc = Document()
         section = doc.sections[0]
-        section.top_margin, section.bottom_margin = Inches(0.3), Inches(0.3)
+        section.top_margin, section.bottom_margin = Inches(0.4), Inches(0.4)
         section.left_margin, section.right_margin = Inches(0.4), Inches(0.4)
 
-        # --- 1. CABEÇALHO OFICIAL ---
-        header_table = doc.add_table(rows=3, cols=6)
+        # --- 3. CABEÇALHO OFICIAL ---
+        header_table = doc.add_table(rows=3, cols=5)
         header_table.style = 'Table Grid'
-        widths = [Inches(0.8), Inches(3.2), Inches(0.8), Inches(0.8), Inches(1.0), Inches(0.9)]
-        for i, w in enumerate(widths): header_table.columns[i].width = w
-
+        # Ajuste de larguras para precisão
+        widths = [Inches(0.9), Inches(2.8), Inches(0.8), Inches(1.7), Inches(1.2)]
+        for i, width in enumerate(widths): 
+            header_table.columns[i].width = width
+        
         c_logo = header_table.cell(0, 0).merge(header_table.cell(2, 0))
         c_escola = header_table.cell(0, 1).merge(header_table.cell(0, 4))
-        c_trim = header_table.cell(0, 5)
         c_aluno = header_table.cell(1, 1).merge(header_table.cell(1, 4))
         
+        # Inserção de Logo
         if os.path.exists("logo_escola.png"):
-            c_logo.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
-            c_logo.paragraphs[0].add_run().add_picture("logo_escola.png", width=Inches(0.7))
-
+            p_logo = c_logo.paragraphs[0]
+            p_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            p_logo.add_run().add_picture("logo_escola.png", width=Inches(0.75))
+        
         c_escola.paragraphs[0].add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA").font.bold = True
-        c_trim.paragraphs[0].add_run(info.get('trimestre', 'I TRIMESTRE')).font.bold = True
-        c_aluno.paragraphs[0].add_run("ALUNO(A): ")
-
-        header_table.cell(2, 1).paragraphs[0].add_run("PROF. Ronaldo Gomes").font.size = Pt(9)
-        header_table.cell(2, 2).paragraphs[0].add_run(f"TURMA: {info.get('ano')}").font.size = Pt(9)
-        header_table.cell(2, 5).paragraphs[0].add_run(info.get('tipo_prova', 'TESTE')).font.size = Pt(8)
+        c_aluno.paragraphs[0].add_run(f"ALUNO(A): _________________________________  NOTA: ______").font.size = Pt(10)
+        
+        # Linha de metadados (Segurança com .get)
+        header_table.cell(2, 1).paragraphs[0].add_run(f"PROF: Ronaldo Gomes").font.size = Pt(9)
+        header_table.cell(2, 2).paragraphs[0].add_run(f"TURMA: {info.get('ano', '____')}").font.size = Pt(9)
+        header_table.cell(2, 3).paragraphs[0].add_run(f"DATA: __/__/2026").font.size = Pt(9)
+        header_table.cell(2, 4).paragraphs[0].add_run(f"{info.get('tipo_prova', 'AVALIAÇÃO')}").font.size = Pt(9)
 
         doc.add_paragraph()
 
-        # --- 2. ORIENTAÇÕES E GABARITO ---
+        # --- 4. QUADRO DE ORIENTAÇÕES E GABARITO (LADO A LADO) ---
         top_table = doc.add_table(rows=1, cols=2)
-        top_table.columns[0].width = Inches(3.8)
-        top_table.columns[1].width = Inches(3.2)
+        top_table.columns[0].width = Inches(3.5)
+        top_table.columns[1].width = Inches(3.5)
 
-        # Orientações
-        c_orient = top_table.cell(0, 0)
-        c_orient.paragraphs[0].add_run("ORIENTAÇÕES:").font.bold = True
-        for lin in str(orientacoes_limpas).split('\n'):
-            if lin.strip():
-                p = c_orient.add_paragraph(lin.strip())
-                p.runs[0].font.size = Pt(9)
+        # Coluna 1: Orientações
+        orient = top_table.cell(0, 0)
+        orient.paragraphs[0].add_run("ORIENTAÇÕES:").font.bold = True
+        txt_orient = (
+            "1. Use caneta azul ou preta.\n"
+            "2. Interpretação faz parte da prova.\n"
+            "3. Cálculos a lápis são permitidos.\n"
+            f"4. Valor: {info.get('valor', '10,0')} pontos."
+        )
+        orient.add_paragraph(txt_orient).runs[0].font.size = Pt(8)
 
-        # Gabarito (Bolinhas Pt 12)
-        c_gab = top_table.cell(0, 1)
-        gab_grid = c_gab.add_table(rows=11, cols=6)
-        gab_grid.style = 'Table Grid'
-        for i, lab in enumerate(["Q", "A", "B", "C", "D", "E"]):
-            gab_grid.cell(0, i).paragraphs[0].add_run(lab).font.bold = True
-        for r in range(1, 11):
-            gab_grid.cell(r, 0).paragraphs[0].add_run(f"{r:02d}").font.size = Pt(8)
-            for col in range(1, 6):
-                p_bol = gab_grid.cell(r, col).paragraphs[0]
+        # Coluna 2: Gabarito de Bolinhas
+        gab_cell = top_table.cell(0, 1)
+        # Garante que num_q seja um inteiro válido
+        try:
+            num_q = int(info.get('qtd_questoes', 10))
+        except:
+            num_q = 10
+            
+        gab_table = gab_cell.add_table(rows=num_q + 1, cols=6)
+        gab_table.style = 'Table Grid'
+        
+        # Cabeçalho do Gabarito
+        cols_gab = ["Q", "A", "B", "C", "D", "E"]
+        for i, text in enumerate(cols_gab):
+            p = gab_table.cell(0, i).paragraphs[0]
+            p.add_run(text).font.bold = True
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+        # Linhas do Gabarito (Bolinhas)
+        for i in range(1, num_q + 1):
+            gab_table.cell(i, 0).paragraphs[0].add_run(f"{i:02d}").font.size = Pt(8)
+            for j in range(1, 6):
+                p_bol = gab_table.cell(i, j).paragraphs[0]
+                p_bol.add_run("○").font.size = Pt(10)
                 p_bol.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                run_b = p_bol.add_run("○")
-                run_b.font.size = Pt(12)
 
         doc.add_paragraph()
 
-        # --- 3. CORPO DA PROVA (DUAS COLUNAS) ---
-        # Split robusto para numeração manual
-        partes = re.split(r'(\d+[\s\.]*[ªº]?\s*Questão)', str(questoes_limpas), flags=re.IGNORECASE)
-        final_q = []
-        if len(partes) > 1:
-            for i in range(1, len(partes), 2):
-                final_q.append(partes[i] + partes[i+1])
-        else:
-            final_q = [questoes_limpas]
+        # --- 5. PROCESSAMENTO DE QUESTÕES ---
+        questoes_raw = ai.extrair_tag(conteudo_ia, "QUESTOES")
+        if not questoes_raw:
+            questoes_raw = "Erro: O bloco [QUESTOES] não foi identificado no texto da IA."
 
-        body_table = doc.add_table(rows=(len(final_q) + 1) // 2, cols=2)
-        for idx, q_text in enumerate(final_q):
-            cell = body_table.cell(idx // 2, idx % 2)
-            cell.vertical_alignment = WD_ALIGN_VERTICAL.TOP
-            for linha in q_text.split('\n'):
-                if linha.strip():
-                    p = cell.add_paragraph(linha.strip())
-                    p.runs[0].font.size = Pt(10)
+        for linha in questoes_raw.split('\n'):
+            if not linha.strip(): continue
+            p = doc.add_paragraph()
+            
+            # Formatação de Título de Questão
+            if "QUESTÃO" in linha.upper():
+                run = p.add_run(linha)
+                run.font.bold = True
+                run.font.size = Pt(11)
+            else:
+                p.add_run(linha).font.size = Pt(10)
+            
+            # Espaço para Cálculo
+            if "[CÁLCULO]" in linha.upper():
+                calc_table = doc.add_table(rows=1, cols=1)
+                calc_table.style = 'Table Grid'
+                # Define altura mínima para o quadro de cálculo
+                calc_table.rows[0].height = Inches(1.2)
+                doc.add_paragraph()
 
+        # 6. Salvamento e Retorno de Sucesso
         doc.save(file_stream)
         file_stream.seek(0)
         return file_stream
 
     except Exception as e:
-        # Fallback total: Nunca retorna None
+        # 🛡️ BLINDAGEM FINAL: Se qualquer coisa acima falhar, gera um documento de erro
+        # Isso impede o erro de 'NoneType' no database.py
         doc_err = Document()
-        doc_err.add_paragraph(f"Erro no Exportador: {str(e)}")
-        err_io = io.BytesIO()
-        doc_err.save(err_io)
-        err_io.seek(0)
-        return err_io
+        doc_err.add_heading('ERRO DE GERAÇÃO SOSA', 0)
+        doc_err.add_paragraph(f"Ocorreu um erro técnico ao formatar a prova: {str(e)}")
+        doc_err.add_paragraph("Verifique se os parâmetros de 'Valor' e 'Qtd Questões' estão corretos.")
+        
+        err_stream = io.BytesIO()
+        doc_err.save(err_stream)
+        err_stream.seek(0)
+        return err_stream
