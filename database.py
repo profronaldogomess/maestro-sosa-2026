@@ -184,13 +184,9 @@ def salvar_ata_conselho(data, turma, tipo, conteudo):
 
 def subir_e_converter_para_google_docs(file_stream, nome_arquivo, trimestre="I Trimestre", categoria="Material de Sala", semana="Semana Geral", aula="Aula Geral", modo="AULA"):
     try:
-        # 🛡️ TRAVA DE SEGURANÇA SOSA: Se o arquivo for nulo, avisa antes de dar erro de seek
-        if file_stream is None:
-            return "ERRO_TECNICO: O exportador retornou um arquivo vazio. Verifique o exporter.py"
-        
+        # 1. Certifique-se de usar a URL da ÚLTIMA IMPLANTAÇÃO do seu Script
         URL_DA_PONTE = "https://script.google.com/macros/s/AKfycby6JpIPHk6vlCfQSms-wxLcRmUNNw6yVOf6qkBnEuTrco2bVFw8Apl9m0wqTIlOcw01_w/exec" 
         
-        # Garante que o ponteiro está no início
         file_stream.seek(0)
         file_b64 = base64.b64encode(file_stream.read()).decode('utf-8')
         
@@ -204,28 +200,20 @@ def subir_e_converter_para_google_docs(file_stream, nome_arquivo, trimestre="I T
             "fileB64": file_b64
         }
         
+        # 2. Timeout de 60s para conversões pesadas
         response = requests.post(URL_DA_PONTE, json=payload, timeout=60)
         resposta_texto = response.text.strip()
         
+        # 🚨 BLINDAGEM SOSA: Verifica se o retorno é um link válido do Google
         if "https://docs.google.com" in resposta_texto:
             return resposta_texto
         else:
-            return f"ERRO_NA_PONTE: {resposta_texto[:100]}"
+            # Se o Google retornar um erro (HTML ou texto de erro), o Python avisa aqui
+            st.error(f"⚠️ Falha na Ponte Google: {resposta_texto[:100]}...")
+            return f"ERRO_NO_UPLOAD: {resposta_texto[:50]}"
 
     except Exception as e: 
-        return f"Erro de Conexão: {str(e)}"
-        
-        response = requests.post(URL_DA_PONTE, json=payload, timeout=60)
-        resposta_texto = response.text.strip()
-        
-        if "https://docs.google.com" in resposta_texto:
-            return resposta_texto
-        else:
-            return f"ERRO_NO_UPLOAD: {resposta_texto[:100]}"
-
-    except Exception as e: 
-        # Se o erro for o 'seek', agora saberemos que o problema é o arquivo vindo vazio
-        return f"Erro na Transmissão: {str(e)}"
+        return f"Erro de Conexão: {e}"
 
 def limpar_todo_drive_da_conta_servico():
     try:
