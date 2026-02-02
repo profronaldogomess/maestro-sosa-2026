@@ -1782,7 +1782,7 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
 
 
 # ==============================================================================
-# MÓDULO: CENTRAL DE AVALIAÇÕES DE ELITE V25.100 (SINCRONIA DESACOPLADA)
+# MÓDULO: CENTRAL DE AVALIAÇÕES DE ELITE V25.100 (SINCRO-BLINDADA)
 # ==============================================================================
 elif menu == "📝 Central de Avaliações":
     st.title("📝 Central de Avaliações de Elite (V25)")
@@ -1794,7 +1794,7 @@ elif menu == "📝 Central de Avaliações":
     tab_criar, tab_gaveta, tab_cronograma = st.tabs(["🚀 CRIAR AVALIAÇÃO", "🗂️ GAVETA DE EXAMES", "📅 CRONOGRAMA"])
 
     with tab_criar:
-        # --- CONFIGURAÇÃO ---
+        # --- 1. CONFIGURAÇÃO ---
         with st.container(border=True):
             c1, c2, c3, c4 = st.columns([1.5, 1, 1, 1.5])
             tipo_av = c1.selectbox("Tipo de Exame:", ["Teste (3.0)", "Prova (4.0)", "Recuperação (10.0)"], key=f"av_tipo_{v}")
@@ -1802,78 +1802,86 @@ elif menu == "📝 Central de Avaliações":
             qtd_q = c3.number_input("Nº de Questões:", 5, 20, 10, key=f"av_qtd_{v}")
             nivel_desafio = c4.select_slider("Rigor:", options=["Fácil", "Médio", "Difícil"], value="Médio", key=f"av_rigor_{v}")
 
-        # --- MATRIZ PIP ---
+        # --- 2. MATRIZ PIP ---
         df_p_ano = df_planos[df_planos['ANO'] == f"{ano_av}º"]
         if not df_p_ano.empty:
             semanas_sel = st.multiselect("Semanas Base:", df_p_ano['SEMANA'].tolist(), key=f"av_sem_{v}")
             if semanas_sel:
-                if st.button("🚀 COMPILAR AVALIAÇÃO", use_container_width=True, type="primary"):
-                    with st.spinner("Gerando matriz..."):
+                if st.button("🚀 COMPILAR MATRIZ DE EXAME", use_container_width=True, type="primary"):
+                    with st.spinner("Maestro Arquiteto gerando questões..."):
                         planos_filtrados = df_p_ano[df_p_ano['SEMANA'].isin(semanas_sel)]
                         contexto = "\n".join(planos_filtrados['PLANO_TEXTO'].tolist())
                         prompt = f"CONTEXTO: {contexto}\nTIPO: {tipo_av}\nORDEM: Gere com [ORIENTACOES], [QUESTOES], [GABARITO_TEXTO] e [RESPOSTAS_IA]."
                         st.session_state.temp_prova = ai.gerar_ia("ARQUITETO_EXAMES_V25", prompt)
                         st.rerun()
 
+        # --- 3. ÁREA DE EDIÇÃO E SALVAMENTO ---
         if "temp_prova" in st.session_state:
             st.markdown("---")
-            st.text_area("Edição da Prova:", value=st.session_state.temp_prova, height=400, key=f"area_av_{v}")
+            # Campo de edição para o Professor revisar
+            st.session_state.temp_prova = st.text_area("Edição Final da Prova:", value=st.session_state.temp_prova, height=400, key=f"area_av_{v}")
             
-            # --- BOTÃO 1: SALVAR APENAS NA GAVETA ---
-            if st.button("💾 SALVAR RASCUNHO NA GAVETA", use_container_width=True, type="primary"):
+            # BOTÃO DE SALVAMENTO SEGURO (SÓ BANCO)
+            if st.button("💾 SALVAR TEXTO NA GAVETA (SEGURO)", use_container_width=True, type="primary"):
                 identificador = f"{tipo_av} - {ano_av}º Ano"
-                # Salvamos os metadados no texto para o exportador ler depois
-                conteudo_banco = (
+                # Guardamos os metadados dentro do texto para o exportador usar depois
+                conteudo_para_banco = (
                     f"METADADOS: VALOR={tipo_av}|QTD={qtd_q}|ANO={ano_av}\n"
                     f"[GABARITO]\n{ai.extrair_tag(st.session_state.temp_prova, 'GABARITO_TEXTO')}\n\n"
                     f"[CONTEUDO_PROVA]\n{st.session_state.temp_prova}"
                 )
-                if db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), "AVALIAÇÃO", identificador, conteudo_banco, f"{ano_av}º", "PENDENTE"]):
-                    st.success("✅ Salvo na Gaveta! Vá na aba 'GAVETA DE EXAMES' para sincronizar com o Drive.")
+                
+                if db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), "AVALIAÇÃO", identificador, conteudo_para_banco, f"{ano_av}º", "PENDENTE"]):
+                    st.success("✅ Texto salvo com sucesso na Gaveta! Agora vá na aba 'GAVETA DE EXAMES' para gerar o arquivo no Drive.")
                     del st.session_state.temp_prova
                     st.rerun()
 
     with tab_gaveta:
-        st.subheader("🗂️ Avaliações Salvas")
+        st.subheader("🗂️ Avaliações em Rascunho / Prontas")
         df_exames = df_aulas[df_aulas['SEMANA_REF'] == "AVALIAÇÃO"].iloc[::-1]
         
-        for _, row in df_exames.iterrows():
-            with st.container(border=True):
-                c_h1, c_h2, c_h3 = st.columns([2, 1, 1])
-                c_h1.markdown(f"**{row['TIPO_MATERIAL']}**")
-                
-                link_f = row.get('LINK_DRIVE', "")
-                
-                if "https" in str(link_f):
-                    c_h2.link_button("📂 ABRIR NO DRIVE", str(link_f), use_container_width=True)
-                else:
-                    # --- BOTÃO 2: SINCRONIZAR COM DRIVE (DESACOPLADO) ---
-                    if c_h2.button("☁️ SUBIR PARA DRIVE", key=f"sync_drive_{row.name}", use_container_width=True):
-                        with st.status("Sincronizando...", expanded=False) as status:
-                            # 1. Recupera os dados do texto salvo
-                            texto_salvo = row['CONTEUDO']
-                            # Extração simples de metadados que salvamos no Botão 1
-                            try:
-                                meta_raw = texto_salvo.split("\n")[0]
-                                valor_p = meta_raw.split("VALOR=")[1].split("|")[0]
-                                qtd_p = meta_raw.split("QTD=")[1].split("|")[0]
-                                ano_p = meta_raw.split("ANO=")[1]
-                                prova_txt = texto_salvo.split("[CONTEUDO_PROVA]\n")[1]
-                                
-                                info_doc = {"ano": f"{ano_p}º", "tipo_prova": "AVALIAÇÃO", "valor": valor_p, "qtd_questoes": qtd_p}
-                                doc_io = exporter.gerar_docx_prova_v25(row['TIPO_MATERIAL'], prova_txt, info_doc)
-                                
-                                link = db.subir_e_converter_para_google_docs(doc_io, row['TIPO_MATERIAL'], modo="AVALIACAO")
-                                
-                                if "https" in str(link):
-                                    db.salvar_link_na_planilha("DB_AULAS_PRONTAS", "CONTEUDO", texto_salvo, link)
-                                    status.update(label="✅ Sincronizado!", state="complete")
-                                    st.rerun()
-                                else:
-                                    st.error(f"Erro na Ponte: {link}")
-                            except Exception as e:
-                                st.error(f"Erro ao processar rascunho: {e}")
+        if df_exames.empty:
+            st.info("Nenhuma avaliação encontrada.")
+        else:
+            for _, row in df_exames.iterrows():
+                with st.container(border=True):
+                    c_h1, c_h2, c_h3 = st.columns([2.5, 1, 1])
+                    c_h1.markdown(f"**{row['TIPO_MATERIAL']}**")
+                    
+                    link_drive = row.get('LINK_DRIVE', "")
+                    
+                    if "https" in str(link_drive):
+                        c_h2.link_button("📂 ABRIR NO DRIVE", str(link_drive), use_container_width=True)
+                    else:
+                        # BOTÃO DE SINCRONIA SOB DEMANDA
+                        if c_h2.button("☁️ GERAR DOCX NO DRIVE", key=f"sync_drive_{row.name}", use_container_width=True):
+                            with st.status("Gerando arquivo e subindo...", expanded=False) as status:
+                                try:
+                                    texto_full = row['CONTEUDO']
+                                    # Recupera metadados salvos
+                                    meta_linha = texto_full.split("\n")[0]
+                                    valor_p = meta_linha.split("VALOR=")[1].split("|")[0]
+                                    qtd_p = meta_linha.split("QTD=")[1].split("|")[0]
+                                    ano_p = meta_linha.split("ANO=")[1]
+                                    prova_txt = texto_full.split("[CONTEUDO_PROVA]\n")[1]
+                                    
+                                    info_doc = {"ano": f"{ano_p}º", "tipo_prova": "AVALIAÇÃO", "valor": valor_p, "qtd_questoes": qtd_p}
+                                    
+                                    # Chama o exportador (que agora está blindado no exporter.py)
+                                    doc_io = exporter.gerar_docx_prova_v25(row['TIPO_MATERIAL'], prova_txt, info_doc)
+                                    
+                                    # Sobe para o Drive
+                                    link = db.subir_e_converter_para_google_docs(doc_io, row['TIPO_MATERIAL'], modo="AVALIACAO")
+                                    
+                                    if "https" in str(link):
+                                        db.salvar_link_na_planilha("DB_AULAS_PRONTAS", "CONTEUDO", texto_full, link)
+                                        status.update(label="✅ Sincronizado!", state="complete")
+                                        st.rerun()
+                                    else:
+                                        st.error(f"Falha na Ponte: {link}")
+                                except Exception as e:
+                                    st.error(f"Erro no processamento: {e}")
 
-                if c_h3.button("🗑️ Excluir", key=f"del_av_{row.name}", use_container_width=True):
-                    db.excluir_registro_com_drive("DB_AULAS_PRONTAS", row['CONTEUDO'])
-                    st.rerun()
+                    if c_h3.button("🗑️ Excluir", key=f"del_av_{row.name}", use_container_width=True):
+                        db.excluir_registro_com_drive("DB_AULAS_PRONTAS", row['CONTEUDO'])
+                        st.rerun()
