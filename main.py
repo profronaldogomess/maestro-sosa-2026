@@ -875,20 +875,16 @@ elif menu == "📅 Planejamento (Ponto ID)":
                 st.markdown("---")
                 st.markdown(f"**METODOLOGIA:**\n{ed_met}")
 
-            # BOTÃO DE SALVAMENTO BLINDADO
+            # BOTÃO DE SALVAMENTO BLINDADO (DENTRO DA ABA 1)
             if st.button("💾 FINALIZAR E SINCRONIZAR (DRIVE + BANCO)", use_container_width=True, type="primary"):
                 with st.status("Iniciando Protocolo de Sincronia...", expanded=True) as status:
                     
-                    # USA OS METADADOS DO REFINO SE ESTIVER ATIVO, SENÃO USA OS DO SELETOR
                     final_ano = st.session_state.refino_ativo['ano'] if is_refinando else f"{ano_p}º"
                     final_semana = st.session_state.refino_ativo['semana'] if is_refinando else sem_limpa
                     
-                    # 1. LÓGICA UPSERT (LIMPEZA)
-                    status.write(f"🧹 Limpando versão anterior de {final_semana} ({final_ano})...")
-                    # Busca o registro exato para deletar antes de salvar o novo
-                    filtro_limpeza = df_planos[(df_planos['ANO'] == final_ano) & (df_planos['SEMANA'] == final_semana)]
-                    if not filtro_limpeza.empty:
-                        db.excluir_registro_com_drive("DB_PLANOS", filtro_limpeza.iloc[0]['PLANO_TEXTO'])
+                    # 1. LÓGICA UPSERT REAL (LIMPEZA POR COORDENADAS)
+                    status.write(f"🧹 Removendo versões obsoletas de {final_semana} ({final_ano})...")
+                    db.excluir_plano_completo(final_semana, final_ano) # Limpa Drive e Planilha antes de salvar o novo
                     
                     # 2. GERAÇÃO DO DOCX
                     status.write("📄 Gerando Documento Word...")
@@ -908,17 +904,13 @@ elif menu == "📅 Planejamento (Ponto ID)":
                         final_txt = f"MARKER_CONTEUDO_GERAL {ed_geral} \nMARKER_CONTEUDOS_ESPECIFICOS {ed_espec} \nMARKER_OBJETIVOS_ENSINO {ed_objs} \nMARKER_METODOLOGIA {ed_met} \nMARKER_AVALIACAO {ed_ava} \nMARKER_ADAPTACAO_PEI {ed_pei} \nMARKER_MODALIDADE {modo_p.upper()} \n--- LINK DRIVE --- {link_drive}"
                         
                         sucesso = db.salvar_no_banco("DB_PLANOS", [
-                            datetime.now().strftime("%d/%m/%Y"), final_semana, final_ano, "I Trimestre", "PADRÃO", final_txt
+                            datetime.now().strftime("%d/%m/%Y"), final_semana, final_ano, "I Trimestre", "PADRÃO", final_txt, link_drive
                         ])
                         
                         if sucesso:
                             status.update(label="✅ Sincronia Concluída!", state="complete")
-                            st.success(f"Plano atualizado no Drive: {link_drive}")
                             st.balloons()
                             reset_planejamento()
-                    else:
-                        status.update(label="❌ Erro no Upload.", state="error")
-                        st.error(link_drive)
 
     # --- ABA 2: GESTÃO DE ACERVO (EDIÇÃO VIVA) ---
     with tab_hist:
@@ -955,8 +947,13 @@ elif menu == "📅 Planejamento (Ponto ID)":
 
                 st.markdown("---")
                 if st.button("🗑️ EXCLUIR PLANO DEFINITIVAMENTE", use_container_width=True):
-                    if db.excluir_registro_com_drive("DB_PLANOS", raw_h):
-                        st.success("Removido!"); time.sleep(1); st.rerun()
+                    # sel_h é a semana selecionada, dados_h['ANO'] é o ano
+                    if db.excluir_plano_completo(sel_h, dados_h['ANO']):
+                        st.success(f"Plano da {sel_h} ({dados_h['ANO']}) removido com sucesso!")
+                        time.sleep(1)
+                        st.rerun()
+                    else:
+                        st.error("Erro ao tentar excluir o plano.")
             else: st.info("Nenhum plano encontrado.")
         else: st.info("📭 Acervo vazio.")
 
