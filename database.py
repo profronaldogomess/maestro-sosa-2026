@@ -344,8 +344,8 @@ def salvar_cronograma_av(lista_dados):
 
 def excluir_plano_completo(semana, ano):
     """
-    LIMPEZA CIRÚRGICA V26 - MAESTRO SOSA
-    Localiza o plano por Semana e Ano, deleta no Drive e remove a linha.
+    ENGENHARIA DE LIMPEZA V26 - MAESTRO SOSA
+    Localiza o plano por Semana e Ano, deleta no Drive e remove a linha da planilha.
     """
     try:
         wb = conectar()
@@ -356,33 +356,34 @@ def excluir_plano_completo(semana, ano):
         service = build('drive', 'v3', credentials=creds)
         
         import re
-        # Padrao para pegar IDs de documentos
-        padrao_id = r"(?:/d/|id=)([a-zA-Z0-9-_]+)"
+        # Regex para capturar IDs de documentos Google (/d/ID/ ou id=ID)
+        padrao_id = r"(?:/d/|id=)([a-zA-Z0-9-_]{25,})"
 
         linha_para_deletar = -1
         
         for i, row in enumerate(dados):
-            if i == 0: continue # Pula cabeçalho
+            if i == 0: continue # Pula o cabeçalho
             
-            # row[1] é SEMANA, row[2] é ANO
+            # row[1] é SEMANA, row[2] é ANO (Ex: "6º")
             if len(row) > 2 and row[1].strip() == semana.strip() and row[2].strip() == ano.strip():
-                # 1. Tenta achar link do Drive na linha inteira para deletar o arquivo
+                # 1. Varredura de IDs do Drive na linha inteira
                 linha_txt = " ".join(map(str, row))
                 ids_encontrados = re.findall(padrao_id, linha_txt)
                 
+                # 2. Execução do Delete na Nuvem
                 for file_id in ids_encontrados:
                     try:
-                        if len(file_id) > 20:
-                            service.files().delete(fileId=file_id).execute()
+                        service.files().delete(fileId=file_id).execute()
                     except:
-                        pass # Arquivo já deletado
+                        pass # Arquivo pode já ter sido removido
                 
                 linha_para_deletar = i + 1
-                break # Achou o alvo, pode parar o loop
+                break # Alvo encontrado e processado
         
+        # 3. Remoção da linha na Planilha
         if linha_para_deletar != -1:
             ws.delete_rows(linha_para_deletar)
-            st.cache_data.clear()
+            st.cache_data.clear() # Limpa o cache para refletir a mudança
             return True
             
         return False
