@@ -395,7 +395,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
     from docx import Document
     from docx.shared import Inches, Pt
     from docx.enum.text import WD_ALIGN_PARAGRAPH
-    from docx.enum.table import WD_ALIGN_VERTICAL
+    from docx.enum.section import WD_SECTION, WD_ORIENT
     from docx.oxml import OxmlElement
     from docx.oxml.ns import qn
 
@@ -411,21 +411,20 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
     
     try:
         doc = Document()
+        
+        # --- CONFIGURAÇÃO DA SEÇÃO 1 (CABEÇALHO - COLUNA ÚNICA) ---
         section = doc.sections[0]
         section.top_margin, section.bottom_margin = Inches(0.3), Inches(0.3)
         section.left_margin, section.right_margin = Inches(0.4), Inches(0.4)
-
-        # --- 1. LÓGICA DE VALOR AUTOMÁTICO (SINCRONIA COM O PAINEL) ---
-        tipo_raw = info.get('tipo_prova', '').upper()
-        if "TESTE" in tipo_raw: v_total_num = 3.0
-        elif "PROVA" in tipo_raw: v_total_num = 4.0
-        else: v_total_num = 10.0 # Recuperação
         
+        # Lógica de Valor
+        tipo_raw = info.get('tipo_prova', '').upper()
+        v_total_num = 3.0 if "TESTE" in tipo_raw else 4.0 if "PROVA" in tipo_raw else 10.0
         v_total_str = f"{v_total_num:.1f}".replace('.', ',')
         qtd_q = int(info.get('qtd_questoes', 10))
         v_quest = v_total_num / qtd_q
 
-        # --- 2. CABEÇALHO DE ELITE ---
+        # --- 1. CABEÇALHO (TABELA APENAS PARA IDENTIFICAÇÃO) ---
         header_table = doc.add_table(rows=3, cols=5)
         header_table.style = 'Table Grid'
         widths = [Inches(0.8), Inches(2.8), Inches(1.0), Inches(1.4), Inches(1.5)]
@@ -440,19 +439,13 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         for row in header_table.rows: set_row_height(row, 25)
 
         if os.path.exists("logo_escola.png"):
-            p_logo = c_logo.paragraphs[0]
-            p_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            p_logo.add_run().add_picture("logo_escola.png", width=Inches(0.7))
+            c_logo.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+            c_logo.paragraphs[0].add_run().add_picture("logo_escola.png", width=Inches(0.7))
 
         header_table.cell(0, 1).paragraphs[0].add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA").font.bold = True
         c_trim.paragraphs[0].add_run(info.get('trimestre', 'III TRIMESTRE')).font.bold = True
-        
-        c_aluno.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-        c_aluno.paragraphs[0].add_run("ALUNO(A):").font.size = Pt(11)
-        
-        c_nota.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-        c_nota.paragraphs[0].add_run("NOTA:").font.size = Pt(11)
-
+        header_table.cell(1, 1).paragraphs[0].add_run("ALUNO(A):").font.size = Pt(11)
+        header_table.cell(1, 4).paragraphs[0].add_run("NOTA:").font.size = Pt(11)
         header_table.cell(2, 1).paragraphs[0].add_run(f"PROF: Ronaldo Gomes").font.size = Pt(10)
         header_table.cell(2, 2).paragraphs[0].add_run(f"TURMA: {info.get('ano')}").font.size = Pt(10)
         header_table.cell(2, 3).paragraphs[0].add_run(f"DATA:").font.size = Pt(10)
@@ -460,7 +453,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
 
         doc.add_paragraph()
 
-        # --- 3. ORIENTAÇÕES E GABARITO ENEM ---
+        # --- 2. ORIENTAÇÕES E GABARITO (LADO A LADO - LARGURA TOTAL) ---
         top_table = doc.add_table(rows=1, cols=2)
         top_table.columns[0].width = Inches(3.5)
         top_table.columns[1].width = Inches(4.0)
@@ -474,7 +467,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
             "Use apenas CANETA AZUL ou PRETA.",
             "Cálculos são obrigatórios para validar a questão.",
             "Pinte completamente o círculo no gabarito.",
-            f"Valor Total: {v_total_str} | Cada questão vale: {v_quest:.2f}".replace('.', ',')
+            f"Valor Total: {v_total_str} | Cada questão: {v_quest:.2f}".replace('.', ',')
         ]
         for idx, text in enumerate(orientacoes, 1):
             p = c_orient.add_paragraph()
@@ -483,54 +476,63 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         c_gab = top_table.cell(0, 1)
         gab_grid = c_gab.add_table(rows=11, cols=6)
         gab_grid.style = 'Table Grid'
-        col_widths = [Inches(0.4), Inches(0.5), Inches(0.5), Inches(0.5), Inches(0.5), Inches(0.5)]
-        for i, w in enumerate(col_widths): gab_grid.columns[i].width = w
-
+        for r in range(11):
+            for c in range(6): gab_grid.cell(r, c).paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+            
         for i, lab in enumerate(["Q", "A", "B", "C", "D", "E"]):
-            p_lab = gab_grid.cell(0, i).paragraphs[0]
-            p_lab.add_run(lab).font.bold = True
-            p_lab.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            gab_grid.cell(0, i).paragraphs[0].add_run(lab).font.bold = True
             
         for r in range(1, 11):
             gab_grid.cell(r, 0).paragraphs[0].add_run(f"{r:02d}").font.size = Pt(9)
             for col in range(1, 6):
-                p_bol = gab_grid.cell(r, col).paragraphs[0]
-                p_bol.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                run_b = p_bol.add_run("○")
+                run_b = gab_grid.cell(r, col).paragraphs[0].add_run("○")
                 run_b.font.size = Pt(14)
 
-        doc.add_paragraph()
+        # --- 3. CRIAÇÃO DAS COLUNAS NATIVAS (QUEBRA DE SEÇÃO CONTÍNUA) ---
+        # Adiciona uma nova seção para as questões
+        new_section = doc.add_section(WD_SECTION.CONTINUOUS)
+        new_section.start_type = WD_SECTION.CONTINUOUS
+        
+        # Configura 2 colunas nativas do Word
+        sectPr = new_section._sectPr
+        cols = sectPr.xpath('./w:cols')[0]
+        cols.set(qn('w:num'), '2')
+        cols.set(qn('w:space'), '720') # Espaço de 0,5 polegada entre colunas
 
-        # --- 4. CORPO DA PROVA (FONTE 12 - DUAS COLUNAS) ---
+        # --- 4. PROCESSAMENTO DAS QUESTÕES (TEXTO FLUIDO) ---
         questoes_raw = ai.extrair_tag(conteudo_ia, "QUESTOES")
         questoes_raw = re.sub(r'\(\d+,\d+\s*ponto[s]?\)', '', questoes_raw)
         
         padrao_split = r'(\d+[\s\.\ª\º]*Questão[\s\.\:]*)'
         partes = re.split(padrao_split, questoes_raw, flags=re.IGNORECASE)
         
-        final_q = []
         i = 1
         while i < len(partes):
             marcador = partes[i].strip()
             corpo = partes[i+1].strip() if i+1 < len(partes) else ""
-            final_q.append(f"{marcador} ({v_quest:.2f} ponto) - {corpo.replace('**', '').strip()}".replace('.', ','))
-            i += 2
-
-        body_table = doc.add_table(rows=(len(final_q) + 1) // 2, cols=2)
-        for idx, q_text in enumerate(final_q):
-            cell = body_table.cell(idx // 2, idx % 2)
-            cell.vertical_alignment = WD_ALIGN_VERTICAL.TOP
-            linhas = q_text.split('\n')
-            for j, linha in enumerate(linhas):
+            
+            # Título da Questão
+            p_q = doc.add_paragraph()
+            p_q.paragraph_format.space_before = Pt(6)
+            run_q = p_q.add_run(f"{marcador} ({v_quest:.2f} ponto) - ".replace('.', ','))
+            run_q.font.bold = True
+            run_q.font.size = Pt(12)
+            
+            # Enunciado e Alternativas
+            linhas = corpo.split('\n')
+            for linha in linhas:
                 l_s = linha.strip()
                 if not l_s: continue
-                p = cell.add_paragraph()
-                p.paragraph_format.space_after = Pt(2)
-                p.paragraph_format.line_spacing = 1.05
-                
-                run = p.add_run(l_s)
-                run.font.size = Pt(12) # FONTE 12 SOLICITADA
-                if j == 0: run.font.bold = True
+                p = doc.add_paragraph()
+                p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+                p.paragraph_format.line_spacing = 1.0
+                run = p.add_run(l_s.replace('**', ''))
+                run.font.size = Pt(12)
+                # Se for alternativa (A, B, C...), pode aplicar um recuo se desejar
+                if re.match(r'^[A-E][\)\.]', l_s):
+                    p.paragraph_format.left_indent = Inches(0.2)
+            
+            i += 2
 
         doc.save(file_stream)
         file_stream.seek(0)
