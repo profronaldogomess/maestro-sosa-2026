@@ -498,7 +498,8 @@ elif menu == "🧪 Criador de Aulas":
     if "v_lab" not in st.session_state: st.session_state.v_lab = 1
 
     with tab_criar:
-        # --- FASE 1: SINCRONIA PONTO ID ---
+        
+        # --- FASE 1: SINCRONIA PONTO ID (COM FILTRO INTELIGENTE DE CONCLUSÃO) ---
         with st.container(border=True):
             st.markdown("### 🔗 1. Sincronia com Planejamento (Ponto ID)")
             c1, c2, c3 = st.columns([1, 2, 1.5])
@@ -508,109 +509,134 @@ elif menu == "🧪 Criador de Aulas":
             
             if planos_ano.empty:
                 st.warning(f"⚠️ Nenhum plano encontrado para o {ano_lab}º Ano.")
-                st.stop() # Para a execução aqui se não houver plano
-            
-            sem_lab = c2.selectbox("Semana de Referência:", planos_ano['SEMANA'].tolist(), key="lab_sem_v25")
-            
-            # Verificação de aulas já produzidas
-            aulas_feitas = df_aulas[
-                (df_aulas['ANO'] == f"{ano_lab}º") & 
-                (df_aulas['SEMANA_REF'] == sem_lab)
-            ]['TIPO_MATERIAL'].astype(str).tolist()
-            
-            ja_tem_aula1 = any("AULA 1" in a.upper() for a in aulas_feitas)
-            ja_tem_aula2 = any("AULA 2" in a.upper() for a in aulas_feitas)
-            
-            opcoes_foco = []
-            if not ja_tem_aula1: opcoes_foco.append("Aula 1")
-            if not ja_tem_aula2: opcoes_foco.append("Aula 2")
-            
-            if not opcoes_foco:
-                st.success(f"✅ {sem_lab} concluída com sucesso! Todas as aulas já foram geradas.")
-                st.stop() # 🛡️ TRAVA DE SEGURANÇA: O código para aqui e não gera o erro de NameError
-            
-            aula_num = c3.radio("Foco da Aula:", opcoes_foco, horizontal=True)
+            else:
+                sem_lab = c2.selectbox("Semana de Referência:", planos_ano['SEMANA'].tolist(), key="lab_sem_v25")
+                
+                # --- LÓGICA DE FILTRO DE AULAS JÁ PRODUZIDAS ---
+                # Buscamos no banco o que já foi feito para este ano e semana
+                aulas_feitas = df_aulas[
+                    (df_aulas['ANO'] == f"{ano_lab}º") & 
+                    (df_aulas['SEMANA_REF'] == sem_lab)
+                ]['TIPO_MATERIAL'].astype(str).tolist()
+                
+                ja_tem_aula1 = any("AULA 1" in a.upper() for a in aulas_feitas)
+                ja_tem_aula2 = any("AULA 2" in a.upper() for a in aulas_feitas)
+                
+                opcoes_foco = []
+                if not ja_tem_aula1: opcoes_foco.append("Aula 1")
+                if not ja_tem_aula2: opcoes_foco.append("Aula 2")
+                
+                # Decisão visual do seletor
+                if not opcoes_foco:
+                    st.success(f"✅ {sem_lab} concluída com sucesso!")
+                    aula_num = None # Trava a geração
+                else:
+                    aula_num = c3.radio("Foco da Aula:", opcoes_foco, horizontal=True)
+                
+                # Só prossegue se houver aula para criar
+                if aula_num:
+                    plano_row = planos_ano[planos_ano['SEMANA'] == sem_lab].iloc[0]
+                    plano_raw = plano_row['PLANO_TEXTO']
+                    
+                    modalidade_planejada = ai.extrair_tag(plano_raw, "MODALIDADE").upper()
+                    is_livro = "LIVRO" in modalidade_planejada or "MÉTODO LIVRO" in plano_raw.upper()
+                    metodo_fiel = "📖 LIVRO DIDÁTICO" if is_livro else "🎛️ MANUAL / BANCO"
+                    cor_metodo = "#2962FF" if is_livro else "#00C853"
+                    
+                    cont_fiel = ai.extrair_tag(plano_raw, "CONTEUDOS_ESPECIFICOS")
+                    obj_fiel = ai.extrair_tag(plano_raw, "OBJETIVOS_ENSINO")
 
-        # --- SE CHEGOU AQUI, EXISTE UMA AULA PARA CRIAR ---
-        plano_row = planos_ano[planos_ano['SEMANA'] == sem_lab].iloc[0]
-        plano_raw = plano_row['PLANO_TEXTO']
-        
-        modalidade_planejada = ai.extrair_tag(plano_raw, "MODALIDADE").upper()
-        is_livro = "LIVRO" in modalidade_planejada or "MÉTODO LIVRO" in plano_raw.upper()
-        metodo_fiel = "📖 LIVRO DIDÁTICO" if is_livro else "🎛️ MANUAL / BANCO"
-        cor_metodo = "#2962FF" if is_livro else "#00C853"
-        
-        cont_fiel = ai.extrair_tag(plano_raw, "CONTEUDOS_ESPECIFICOS")
-        obj_fiel = ai.extrair_tag(plano_raw, "OBJETIVOS_ENSINO")
+                    st.markdown(f"""
+                        <div style='background-color: rgba(41, 98, 255, 0.05); padding: 15px; border-radius: 10px; border-left: 5px solid {cor_metodo};'>
+                            <b style='color: {cor_metodo};'>{metodo_fiel}</b> | <b>Conteúdo:</b> {cont_fiel[:100]}...
+                        </div>
+                    """, unsafe_allow_html=True)
 
-        st.markdown(f"""
-            <div style='background-color: rgba(41, 98, 255, 0.05); padding: 15px; border-radius: 10px; border-left: 5px solid {cor_metodo};'>
-                <b style='color: {cor_metodo};'>{metodo_fiel}</b> | <b>Conteúdo:</b> {cont_fiel[:100]}...
-            </div>
-        """, unsafe_allow_html=True)
+                # --- FASE 2: PARÂMETROS (AGORA PROTEGIDA DENTRO DO ELSE) ---
+                st.markdown(" ")
+                with st.container(border=True):
+                    st.markdown("### 🎯 2. Parâmetros de Precisão")
+                    df_base_ano = df_curriculo[df_curriculo['ANO'] == int(ano_lab)]
+                    col_p1, col_p2 = st.columns(2)
+                    
+                    def check_match_inteligente(item_csv, texto_plano):
+                        item = str(item_csv).upper().strip()
+                        plano = str(texto_plano).upper().strip()
+                        return item in plano or plano in item or any(word in plano for word in item.split() if len(word) > 4)
 
-        # --- FASE 2: PARÂMETROS DE PRECISÃO ---
-        st.markdown(" ")
-        with st.container(border=True):
-            st.markdown("### 🎯 2. Parâmetros de Precisão")
-            df_base_ano = df_curriculo[df_curriculo['ANO'] == int(ano_lab)]
-            col_p1, col_p2 = st.columns(2)
-            
-            def check_match_inteligente(item_csv, texto_plano):
-                item = str(item_csv).upper().strip()
-                plano = str(texto_plano).upper().strip()
-                return item in plano or plano in item or any(word in plano for word in item.split() if len(word) > 4)
+                    sel_cont = col_p1.multiselect("Confirmar Conteúdos:", options=df_base_ano['CONTEUDO_ESPECIFICO'].unique(), 
+                                                 default=[c for c in df_base_ano['CONTEUDO_ESPECIFICO'].unique() if check_match_inteligente(c, cont_fiel)])
+                    
+                    opcoes_obj = df_base_ano[df_base_ano['CONTEUDO_ESPECIFICO'].isin(sel_cont)]['OBJETIVOS'].unique().tolist() if sel_cont else []
+                    sel_obj = col_p2.multiselect("Confirmar Objetivos:", options=opcoes_obj,
+                                                default=[o for o in opcoes_obj if check_match_inteligente(o, obj_fiel)])
 
-            sel_cont = col_p1.multiselect("Confirmar Conteúdos:", options=df_base_ano['CONTEUDO_ESPECIFICO'].unique(), 
-                                         default=[c for c in df_base_ano['CONTEUDO_ESPECIFICO'].unique() if check_match_inteligente(c, cont_fiel)])
-            
-            opcoes_obj = df_base_ano[df_base_ano['CONTEUDO_ESPECIFICO'].isin(sel_cont)]['OBJETIVOS'].unique().tolist() if sel_cont else []
-            sel_obj = col_p2.multiselect("Confirmar Objetivos:", options=opcoes_obj,
-                                        default=[o for o in opcoes_obj if check_match_inteligente(o, obj_fiel)])
+                    cp1, cp2, cp3 = st.columns([1, 1, 1])
+                    formato = cp1.radio("Formato:", ["Quadro (Lousa)", "Slides (Apresentação)"], horizontal=True)
+                    qtd_q = cp2.slider("Questões:", 1, 15, 4)
+                    nivel = cp3.select_slider("Desafio:", options=["Básico", "Intermediário", "Desafio"])
+                    instr = st.text_area("Instruções Adicionais:", placeholder="Ex: Use exemplos de astronomia...")
 
-            cp1, cp2, cp3 = st.columns([1, 1, 1])
-            formato = cp1.radio("Formato:", ["Quadro (Lousa)", "Slides (Apresentação)"], horizontal=True)
-            qtd_q = cp2.slider("Questões:", 1, 15, 4)
-            nivel = cp3.select_slider("Desafio:", options=["Básico", "Intermediário", "Desafio"])
-            instr = st.text_area("Instruções Adicionais:", placeholder="Ex: Use exemplos de astronomia...")
+                    if st.button("🚀 COMPILAR MATERIAL DE ELITE", use_container_width=True, type="primary"):
+                        with st.spinner("Maestro processando Injeção de Plano..."):
+                            arquivos_contexto = []
+                            if is_livro:
+                                import re
+                                match_livro = re.search(r"MÉTODO LIVRO: \['(.*?)'\]", plano_raw)
+                                nome_livro = match_livro.group(1) if match_livro else None
+                                if nome_livro:
+                                    livro_data = df_materiais[df_materiais['NOME_ARQUIVO'] == nome_livro]
+                                    if not livro_data.empty:
+                                        arquivos_contexto.append(types.Part.from_uri(file_uri=livro_data.iloc[0]['URI_ARQUIVO'], mime_type="application/pdf"))
 
-            if st.button("🚀 COMPILAR MATERIAL DE ELITE", use_container_width=True, type="primary"):
-                with st.spinner("Maestro processando Injeção de Plano..."):
-                    arquivos_contexto = []
-                    if is_livro:
-                        import re
-                        match_livro = re.search(r"MÉTODO LIVRO: \['(.*?)'\]", plano_raw)
-                        nome_livro = match_livro.group(1) if match_livro else None
-                        if nome_livro:
-                            livro_data = df_materiais[df_materiais['NOME_ARQUIVO'] == nome_livro]
-                            if not livro_data.empty:
-                                arquivos_contexto.append(types.Part.from_uri(file_uri=livro_data.iloc[0]['URI_ARQUIVO'], mime_type="application/pdf"))
+                            prompt_v25 = f"🚨 PROTOCOLO PIP 🚨\nMÉTODO: {metodo_fiel}\nPLANO: {plano_raw}\nOBJETIVO: {sel_obj}\nFOCO: {aula_num} | SÉRIE: {ano_lab}º | QUESTÕES: {qtd_q}\nFORMATO: {formato} | NÍVEL: {nivel}\nEXTRA: {instr}"
+                            st.session_state.lab_temp = ai.gerar_ia("MESTRE_V24", prompt_v25, partes_arquivos=arquivos_contexto)
+                            st.rerun()
 
-                    prompt_v25 = f"🚨 PROTOCOLO PIP 🚨\nMÉTODO: {metodo_fiel}\nPLANO: {plano_raw}\nOBJETIVO: {sel_obj}\nFOCO: {aula_num} | SÉRIE: {ano_lab}º | QUESTÕES: {qtd_q}\nFORMATO: {formato} | NÍVEL: {nivel}\nEXTRA: {instr}"
-                    st.session_state.lab_temp = ai.gerar_ia("MESTRE_V24", prompt_v25, partes_arquivos=arquivos_contexto)
-                    st.rerun()
-
-        # --- FASE 3: REFINADOR E ACABAMENTO ---
+                # --- FASE 3: REFINADOR E ACABAMENTO (TAMBÉM DENTRO DO ELSE) ---
         if "lab_temp" in st.session_state:
             st.markdown(" ")
             st.markdown("### 🤖 3. Refinamento e Acabamento")
+            
+            # Captura a versão atual para as chaves (keys)
             v = st.session_state.v_lab
             txt_bruto = st.session_state.lab_temp
 
-            comando_refine = st.chat_input("Deseja ajustar algo na aula?")
+            # --- REFINADOR MAESTRO COM "TROCA DE PELE" ---
+            comando_refine = st.chat_input("Deseja ajustar algo na aula? (Ex: 'Troque a Q2 por um desafio', 'Mude o tema para Astronomia')")
+            
             if comando_refine:
-                with st.spinner("Maestro executando reengenharia..."):
-                    prompt_refine = f"ORDEM: {comando_refine}\n\nCONTEÚDO ATUAL:\n{txt_bruto}"
-                    st.session_state.lab_temp = ai.gerar_ia("REFINADOR_MATERIAIS", prompt_refine)
-                    st.session_state.v_lab += 1
+                with st.spinner("Maestro executando reengenharia do material..."):
+                    # 1. Prompt de Soberania
+                    prompt_refine = (
+                        f"ORDEM DE ALTERAÇÃO: {comando_refine}\n\n"
+                        f"CONTEÚDO ATUAL:\n{txt_bruto}\n\n"
+                        f"INSTRUÇÃO: Aplique a alteração em todas as seções (Professor, Aluno e Imagens) para manter a unidade lógica."
+                    )
+                    
+                    # 2. Gera a nova versão
+                    nova_aula = ai.gerar_ia("REFINADOR_MATERIAIS", prompt_refine)
+                    
+                    # 3. O SEGREDO: Atualiza o conteúdo E incrementa a versão
+                    st.session_state.lab_temp = nova_aula
+                    st.session_state.v_lab += 1 # Isso força o Streamlit a renovar os campos
+                    
+                    st.success("Refino aplicado! Atualizando painéis...")
+                    time.sleep(1)
                     st.rerun()
 
+            # Preparação do Dicionário para a Visualização (usando o 'v' atualizado)
             info_para_ia = {
-                "aula": aula_num, "ano": str(ano_lab), "semana": sem_lab,
-                "formato": formato, "conteudos": sel_cont,
+                "aula": aula_num,
+                "ano": str(ano_lab),
+                "semana": sem_lab,
+                "formato": formato,
+                "conteudos": sel_cont,
                 "ed_prof": ai.extrair_tag(st.session_state.lab_temp, "PROFESSOR"),
                 "ed_alu": ai.extrair_tag(st.session_state.lab_temp, "ALUNO")
             }
+
+            # Chamada da Função de Visualização
             exibir_material_estruturado(st.session_state.lab_temp, f"lab_v{v}", info_aula=info_para_ia)
 
 # --- ABA 2: GAVETAS DE MATERIAIS (HISTÓRICO MULTIMODAL V25.85 - CORRIGIDO) ---
@@ -1780,9 +1806,8 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                 else:
                     st.info("Banco de relatórios vazio.")
 
-
 # ==============================================================================
-# MÓDULO: CENTRAL DE AVALIAÇÕES DE ELITE V25.100 (SINCRO-BLINDADA)
+# MÓDULO: CENTRAL DE AVALIAÇÕES DE ELITE V25.98 (CORREÇÃO DE SYNC E TAGS)
 # ==============================================================================
 elif menu == "📝 Central de Avaliações":
     st.title("📝 Central de Avaliações de Elite (V25)")
@@ -1791,97 +1816,137 @@ elif menu == "📝 Central de Avaliações":
     if "v_av" not in st.session_state: st.session_state.v_av = 1
     v = st.session_state.v_av
 
-    tab_criar, tab_gaveta, tab_cronograma = st.tabs(["🚀 CRIAR AVALIAÇÃO", "🗂️ GAVETA DE EXAMES", "📅 CRONOGRAMA"])
+    tab_criar, tab_gaveta, tab_cronograma = st.tabs(["🚀 CRIAR AVALIAÇÃO", "🗂️ GAVETA DE EXAMES", "📅 CRONOGRAMA POR TURMA"])
 
     with tab_criar:
-        # --- 1. CONFIGURAÇÃO ---
+        itens_cont, itens_obj = [], []
+        semanas_sel = []
+
         with st.container(border=True):
+            st.markdown("### ⚙️ 1. Configuração do Exame")
             c1, c2, c3, c4 = st.columns([1.5, 1, 1, 1.5])
             tipo_av = c1.selectbox("Tipo de Exame:", ["Teste (3.0)", "Prova (4.0)", "Recuperação (10.0)"], key=f"av_tipo_{v}")
             ano_av = c2.selectbox("Série/Ano:", [6, 7, 8, 9], key=f"av_ano_{v}")
             qtd_q = c3.number_input("Nº de Questões:", 5, 20, 10, key=f"av_qtd_{v}")
-            nivel_desafio = c4.select_slider("Rigor:", options=["Fácil", "Médio", "Difícil"], value="Médio", key=f"av_rigor_{v}")
+            nivel_desafio = c4.select_slider("Rigor Pedagógico:", options=["Fácil", "Médio", "Difícil"], value="Médio", key=f"av_rigor_{v}")
 
-        # --- 2. MATRIZ PIP ---
-        df_p_ano = df_planos[df_planos['ANO'] == f"{ano_av}º"]
-        if not df_p_ano.empty:
-            semanas_sel = st.multiselect("Semanas Base:", df_p_ano['SEMANA'].tolist(), key=f"av_sem_{v}")
-            if semanas_sel:
-                if st.button("🚀 COMPILAR MATRIZ DE EXAME", use_container_width=True, type="primary"):
-                    with st.spinner("Maestro Arquiteto gerando questões..."):
-                        planos_filtrados = df_p_ano[df_p_ano['SEMANA'].isin(semanas_sel)]
-                        contexto = "\n".join(planos_filtrados['PLANO_TEXTO'].tolist())
-                        prompt = f"CONTEXTO: {contexto}\nTIPO: {tipo_av}\nORDEM: Gere com [ORIENTACOES], [QUESTOES], [GABARITO_TEXTO] e [RESPOSTAS_IA]."
-                        st.session_state.temp_prova = ai.gerar_ia("ARQUITETO_EXAMES_V25", prompt)
-                        st.rerun()
+        st.markdown(" ")
+        with st.container(border=True):
+            st.markdown("### 🎯 2. Matriz de Referência (PIP)")
+            df_p_ano = df_planos[df_planos['ANO'] == f"{ano_av}º"]
+            if not df_p_ano.empty:
+                semanas_sel = st.multiselect("Selecione as Semanas Base:", df_p_ano['SEMANA'].tolist(), key=f"av_sem_{v}")
+                if semanas_sel:
+                    planos_filtrados = df_p_ano[df_p_ano['SEMANA'].isin(semanas_sel)]
+                    lista_cont, lista_obj = [], []
+                    for _, row in planos_filtrados.iterrows():
+                        c_raw = ai.extrair_tag(row['PLANO_TEXTO'], "CONTEUDOS_ESPECIFICOS")
+                        o_raw = ai.extrair_tag(row['PLANO_TEXTO'], "OBJETIVOS_ENSINO")
+                        lista_cont.extend([x.strip() for x in c_raw.split(';') if x.strip()])
+                        lista_obj.extend([x.strip() for x in o_raw.split(';') if x.strip()])
+                    col_f1, col_f2 = st.columns(2)
+                    itens_cont = col_f1.multiselect("Conteúdos:", list(set(lista_cont)), default=list(set(lista_cont)), key=f"av_c_final_{v}")
+                    itens_obj = col_f2.multiselect("Objetivos:", list(set(lista_obj)), default=list(set(lista_obj)), key=f"av_o_final_{v}")
 
-        # --- 3. ÁREA DE EDIÇÃO E SALVAMENTO ---
+        if st.button("🚀 COMPILAR AVALIAÇÃO", use_container_width=True, type="primary", key=f"btn_comp_{v}"):
+            with st.status("Maestro Arquiteto processando Matriz...", expanded=True):
+                planos_filtrados = df_p_ano[df_p_ano['SEMANA'].isin(semanas_sel)]
+                contexto_planos = "\n".join(planos_filtrados['PLANO_TEXTO'].tolist())
+                prompt_av = (f"🚨 CONTEXTO: {contexto_planos}\nTIPO: {tipo_av}. SÉRIE: {ano_av}º ANO. QTD: {qtd_q}.\n"
+                             f"CONTEÚDOS: {itens_cont}\nOBJETIVOS: {itens_obj}\n"
+                             f"ORDEM: Gere com [ORIENTACOES], [QUESTOES], [GABARITO_TEXTO] e [RESPOSTAS_IA].")
+                st.session_state.temp_prova = ai.gerar_ia("ARQUITETO_EXAMES_V25", prompt_av)
+                st.rerun()
+
         if "temp_prova" in st.session_state:
             st.markdown("---")
-            # Campo de edição para o Professor revisar
-            st.session_state.temp_prova = st.text_area("Edição Final da Prova:", value=st.session_state.temp_prova, height=400, key=f"area_av_{v}")
-            
-            # BOTÃO DE SALVAMENTO SEGURO (SÓ BANCO)
-            if st.button("💾 SALVAR TEXTO NA GAVETA (SEGURO)", use_container_width=True, type="primary"):
-                identificador = f"{tipo_av} - {ano_av}º Ano"
-                # Guardamos os metadados dentro do texto para o exportador usar depois
-                conteudo_para_banco = (
-                    f"METADADOS: VALOR={tipo_av}|QTD={qtd_q}|ANO={ano_av}\n"
-                    f"[GABARITO]\n{ai.extrair_tag(st.session_state.temp_prova, 'GABARITO_TEXTO')}\n\n"
-                    f"[CONTEUDO_PROVA]\n{st.session_state.temp_prova}"
-                )
-                
-                if db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), "AVALIAÇÃO", identificador, conteudo_para_banco, f"{ano_av}º", "PENDENTE"]):
-                    st.success("✅ Texto salvo com sucesso na Gaveta! Agora vá na aba 'GAVETA DE EXAMES' para gerar o arquivo no Drive.")
-                    del st.session_state.temp_prova
+            comando_refine = st.chat_input("Refinar prova...")
+            if comando_refine:
+                with st.spinner("Reescrevendo..."):
+                    st.session_state.temp_prova = ai.gerar_ia("REFINADOR_EXAMES", f"ORDEM: {comando_refine}\n\nATUAL:\n{st.session_state.temp_prova}")
+                    st.session_state.v_av += 1
                     st.rerun()
+            
+            t_ed, t_gab, t_sync = st.tabs(["📝 EDIÇÃO", "✅ GABARITO", "☁️ SYNC DRIVE"])
+            with t_ed: st.text_area("Texto:", value=st.session_state.temp_prova, height=450, key=f"area_av_{v}")
+            with t_gab:
+                st.markdown("#### 🎯 Respostas")
+                st.code(ai.extrair_tag(st.session_state.temp_prova, "GABARITO_TEXTO"))
+                with st.expander("Ver Justificativas Técnicas", expanded=True):
+                    st.write(ai.extrair_tag(st.session_state.temp_prova, "RESPOSTAS_IA"))
+            
+            with t_sync:
+                c_s1, c_s2 = st.columns(2)
+                trimestre_av = c_s1.selectbox("Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"trim_av_{v}")
+                nome_arq = c_s2.text_input("Nome do Arquivo:", f"PROVA_{ano_av}ANO_{tipo_av.split(' ')[0]}", key=f"name_av_{v}")
+                
+                if st.button("☁️ SALVAR NO DRIVE E GAVETA", use_container_width=True, type="primary", key=f"sync_btn_{v}"):
+                    with st.status("Iniciando Sincronia de Elite...", expanded=True) as status:
+                        # 1. Geração do Documento
+                        info_doc = {"ano": f"{ano_av}º", "tipo_prova": tipo_av.upper(), "valor": "10", "qtd_questoes": qtd_q, "trimestre": trimestre_av}
+                        doc_io = exporter.gerar_docx_prova_v25(nome_arq, st.session_state.temp_prova, info_doc)
+                        
+                        # 2. LÓGICA DE LIMPEZA (UPSERT)
+                        status.write("🧹 Removendo versões obsoletas do Drive...")
+                        identificador = f"{tipo_av} - {ano_av}º Ano"
+                        filtro_antigo = df_aulas[(df_aulas['SEMANA_REF'] == "AVALIAÇÃO") & (df_aulas['TIPO_MATERIAL'] == identificador)]
+                        for _, row_antiga in filtro_antigo.iterrows():
+                            db.excluir_registro_com_drive("DB_AULAS_PRONTAS", row_antiga['CONTEUDO'])
+                        
+                        # 3. Upload para o Drive (Hierarquia: Avaliacoes > Ano > Trimestre)
+                        status.write("📤 Enviando para o Google Drive...")
+                        link = db.subir_e_converter_para_google_docs(
+                            doc_io, nome_arq, trimestre=trimestre_av, categoria=f"{ano_av}º Ano", semana="AVALIAÇÃO", modo="AVALIACAO"
+                        )
+                        
+                        if "https" in str(link):
+                            # 4. Salva no Banco
+                            conteudo_banco = f"[GABARITO]\n{ai.extrair_tag(st.session_state.temp_prova, 'GABARITO_TEXTO')}\n\n--- LINK DRIVE ---\n{link}"
+                            db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), "AVALIAÇÃO", identificador, conteudo_banco, f"{ano_av}º", link])
+                            status.update(label="✅ Sincronizado com Sucesso!", state="complete")
+                            st.balloons()
+                        else:
+                            status.update(label="❌ Erro na Ponte Google.", state="error")
+                            st.error(link)
 
+    # --- ABA 2: GAVETA (MANTIDA) ---
     with tab_gaveta:
-        st.subheader("🗂️ Avaliações em Rascunho / Prontas")
+        st.subheader("🗂️ Avaliações Prontas")
         df_exames = df_aulas[df_aulas['SEMANA_REF'] == "AVALIAÇÃO"].iloc[::-1]
-        
-        if df_exames.empty:
-            st.info("Nenhuma avaliação encontrada.")
+        if df_exames.empty: st.info("Nenhuma prova gerada.")
         else:
             for _, row in df_exames.iterrows():
                 with st.container(border=True):
                     c_h1, c_h2, c_h3 = st.columns([2.5, 1, 1])
                     c_h1.markdown(f"**{row['TIPO_MATERIAL']}**")
+                    c_h1.caption(f"📅 {row['DATA']}")
                     
-                    link_drive = row.get('LINK_DRIVE', "")
-                    
-                    if "https" in str(link_drive):
-                        c_h2.link_button("📂 ABRIR NO DRIVE", str(link_drive), use_container_width=True)
-                    else:
-                        # BOTÃO DE SINCRONIA SOB DEMANDA
-                        if c_h2.button("☁️ GERAR DOCX NO DRIVE", key=f"sync_drive_{row.name}", use_container_width=True):
-                            with st.status("Gerando arquivo e subindo...", expanded=False) as status:
-                                try:
-                                    texto_full = row['CONTEUDO']
-                                    # Recupera metadados salvos
-                                    meta_linha = texto_full.split("\n")[0]
-                                    valor_p = meta_linha.split("VALOR=")[1].split("|")[0]
-                                    qtd_p = meta_linha.split("QTD=")[1].split("|")[0]
-                                    ano_p = meta_linha.split("ANO=")[1]
-                                    prova_txt = texto_full.split("[CONTEUDO_PROVA]\n")[1]
-                                    
-                                    info_doc = {"ano": f"{ano_p}º", "tipo_prova": "AVALIAÇÃO", "valor": valor_p, "qtd_questoes": qtd_p}
-                                    
-                                    # Chama o exportador (que agora está blindado no exporter.py)
-                                    doc_io = exporter.gerar_docx_prova_v25(row['TIPO_MATERIAL'], prova_txt, info_doc)
-                                    
-                                    # Sobe para o Drive
-                                    link = db.subir_e_converter_para_google_docs(doc_io, row['TIPO_MATERIAL'], modo="AVALIACAO")
-                                    
-                                    if "https" in str(link):
-                                        db.salvar_link_na_planilha("DB_AULAS_PRONTAS", "CONTEUDO", texto_full, link)
-                                        status.update(label="✅ Sincronizado!", state="complete")
-                                        st.rerun()
-                                    else:
-                                        st.error(f"Falha na Ponte: {link}")
-                                except Exception as e:
-                                    st.error(f"Erro no processamento: {e}")
+                    # Busca link no conteúdo se a coluna estiver vazia
+                    link_f = row.get('LINK_DRIVE', "")
+                    if not link_f:
+                        import re
+                        match = re.search(r"--- LINK DRIVE ---\n(https://.*)", str(row['CONTEUDO']))
+                        link_f = match.group(1) if match else ""
 
-                    if c_h3.button("🗑️ Excluir", key=f"del_av_{row.name}", use_container_width=True):
+                    if link_f: c_h2.link_button("📂 ABRIR", str(link_f), use_container_width=True)
+                    if c_h3.button("🗑️ Excluir", key=f"del_gav_{row.name}", use_container_width=True):
                         db.excluir_registro_com_drive("DB_AULAS_PRONTAS", row['CONTEUDO'])
                         st.rerun()
+
+    # --- ABA 3: CRONOGRAMA (MANTIDA) ---
+    with tab_cronograma:
+        st.subheader("📅 Agendamento de Provas por Turma")
+        if df_exames.empty: st.warning("Gere uma prova antes.")
+        else:
+            with st.container(border=True):
+                col_ag1, col_ag2, col_ag3 = st.columns([2, 1, 1])
+                prova_sel = col_ag1.selectbox("Selecione a Prova:", df_exames['TIPO_MATERIAL'].tolist(), key="sel_cron_av")
+                dados_p = df_exames[df_exames['TIPO_MATERIAL'] == prova_sel].iloc[0]
+                serie_alvo = "".join(filter(str.isdigit, str(dados_p['ANO'])))
+                turmas_comp = sorted([t for t in df_alunos['TURMA'].unique() if serie_alvo in str(t)])
+                turmas_sel = col_ag2.multiselect("Turmas:", turmas_comp, key="sel_cron_turmas")
+                data_p = col_ag3.date_input("Data:", key="sel_cron_data")
+                if st.button("🗓️ AGENDAR", use_container_width=True, type="primary"):
+                    for t in turmas_sel:
+                        db.salvar_no_banco("DB_REGISTRO_AULAS", [data_p.strftime("%d/%m/%Y"), "AVALIAÇÃO", t, f"Aplicação: {prova_sel}", "SIM", "AGENDADA"])
+                    st.success("✅ Agendado!"); st.rerun()
