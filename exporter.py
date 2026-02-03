@@ -262,6 +262,9 @@ def gerar_docx_professor_v25(titulo_doc, conteudo, info):
 # ==============================================================================
 # 3. MATERIAL PEI ADAPTADO (FLUXO NATIVO V27.0 - VERSÃO ATIVIDADE)
 # ==============================================================================
+# ==============================================================================
+# 3. MATERIAL PEI ADAPTADO (FLUXO NATIVO V32 - VERSÃO ELITE)
+# ==============================================================================
 def gerar_docx_pei_v25(titulo_doc, conteudo, info):
     import re, io, os
     from docx import Document
@@ -270,6 +273,7 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
     from docx.enum.section import WD_SECTION
     from docx.enum.table import WD_ALIGN_VERTICAL
     from docx.oxml.ns import qn
+    from docx.oxml import OxmlElement
 
     def set_row_height(row, height_pt):
         tr = row._tr
@@ -280,37 +284,46 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
         trPr.append(trHeight)
 
     def limpar_emojis(texto):
-        # Remove emojis e caracteres especiais de desenho
+        # Remove emojis e caracteres especiais, preservando matemática básica e acentuação
         return re.sub(r'[^\x00-\x7FÀ-ÿ\s\.\,\?\!\:\(\)\-\>\<]+', '', texto)
 
     file_stream = io.BytesIO()
     doc = Document()
     
-    # Estilo Global
+    # --- CONFIGURAÇÃO DE ESTILO GLOBAL ---
     style = doc.styles['Normal']
     style.font.name = 'Arial'
     style.font.size = Pt(12)
+    style.paragraph_format.space_after = Pt(2)
+    style.paragraph_format.line_spacing = 1.0
 
     section = doc.sections[0]
     section.top_margin, section.bottom_margin = Inches(0.3), Inches(0.3)
     section.left_margin, section.right_margin = Inches(0.4), Inches(0.4)
 
-    # --- 1. CABEÇALHO LIMPO (SEM NOTA / COM LOGO) ---
+    # --- 1. CABEÇALHO DE ELITE (COM LOGO E CAMPO DE NOTA) ---
     header_table = doc.add_table(rows=3, cols=5)
     header_table.style = 'Table Grid'
     widths = [Inches(0.9), Inches(2.8), Inches(1.0), Inches(1.4), Inches(1.5)]
     for i, w in enumerate(widths): header_table.columns[i].width = w
     
+    # Mesclagens para Identidade Visual SOSA
     c_logo = header_table.cell(0, 0).merge(header_table.cell(2, 0))
     header_table.cell(0, 1).merge(header_table.cell(0, 3)).paragraphs[0].add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA").font.bold = True
     header_table.cell(0, 4).paragraphs[0].add_run(info.get('trimestre', 'III TRIMESTRE')).font.bold = True
-    header_table.cell(1, 1).merge(header_table.cell(1, 4)).paragraphs[0].add_run("ALUNO(A):").font.size = Pt(11)
+    
+    header_table.cell(1, 1).merge(header_table.cell(1, 3)).paragraphs[0].add_run("ALUNO(A):").font.size = Pt(11)
+    header_table.cell(1, 4).paragraphs[0].add_run("NOTA:").font.size = Pt(11) # Campo de Nota para Avaliações
     
     header_table.cell(2, 1).paragraphs[0].add_run("PROF: Ronaldo Gomes").font.size = Pt(10)
-    header_table.cell(2, 2).paragraphs[0].add_run(f"TURMA: {info.get('ano')}").font.size = Pt(10)
+    header_table.cell(2, 2).paragraphs[0].add_run(f"TURMA: {info.get('ano', '')}").font.size = Pt(10)
     header_table.cell(2, 3).paragraphs[0].add_run("DATA:").font.size = Pt(10)
-    header_table.cell(2, 4).paragraphs[0].add_run("ATIVIDADE ADAPTADA").font.bold = True
+    
+    # Título Dinâmico (Avaliação ou Atividade)
+    tipo_doc = "AVALIAÇÃO ADAPTADA" if "AVALIAÇÃO" in titulo_doc.upper() or "PROVA" in titulo_doc.upper() else "ATIVIDADE ADAPTADA"
+    header_table.cell(2, 4).paragraphs[0].add_run(tipo_doc).font.bold = True
 
+    # Inserção da Logo
     logo_path = "logo_escola.png" if os.path.exists("logo_escola.png") else "logo.png"
     if os.path.exists(logo_path):
         c_logo.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
@@ -321,17 +334,17 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
     for row in header_table.rows: set_row_height(row, 25)
     doc.add_paragraph()
 
-    # --- 2. ATIVAÇÃO DE COLUNAS NATIVAS ---
+    # --- 2. ATIVAÇÃO DE COLUNAS NATIVAS (FLUXO CONTÍNUO) ---
     new_section = doc.add_section(WD_SECTION.CONTINUOUS)
     sectPr = new_section._sectPr
     cols = sectPr.xpath('./w:cols')[0]
     cols.set(qn('w:num'), '2')
-    cols.set(qn('w:space'), '720')
+    cols.set(qn('w:space'), '720') # 0,5 polegada de espaço entre colunas
 
-    # --- 3. PROCESSAMENTO DE CONTEÚDO ---
+    # --- 3. PROCESSAMENTO DE CONTEÚDO JUSTIFICADO ---
     conteudo_limpo = limpar_emojis(conteudo)
-    # Remove tags estruturais da IA para não sujar o papel
-    conteudo_limpo = re.sub(r'\[PEI\]|\[IMAGENS_PEI\]', '', conteudo_limpo, flags=re.IGNORECASE)
+    # Remove tags de marcação interna para o documento final
+    conteudo_limpo = re.sub(r'\[PEI\]|\[IMAGENS_PEI\]|\[GABARITO_PEI\]', '', conteudo_limpo, flags=re.IGNORECASE)
     
     linhas = conteudo_limpo.split('\n')
     for linha in linhas:
@@ -343,7 +356,7 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
         p.paragraph_format.line_spacing = 1.1
         p.paragraph_format.space_after = Pt(3)
 
-        # Títulos de Seção (PARA LEMBRAR, PASSO A PASSO, ATIVIDADES)
+        # Títulos de Seção DUA (PARA LEMBRAR, PASSO A PASSO, ATIVIDADES)
         if any(tag in l_s.upper() for tag in ["PARA LEMBRAR", "PASSO A PASSO", "ATIVIDADES"]):
             run = p.add_run(l_s.replace("[", "").replace("]", "").upper())
             run.font.bold, run.font.size = True, Pt(12)
@@ -352,17 +365,15 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
         # Questões (Detecta "1." ou "Questão 1")
         elif re.match(r'^\d+[\.\)]', l_s) or "QUESTÃO" in l_s.upper():
             p.paragraph_format.space_before = Pt(6)
-            run = p.add_run(l_s)
+            run = p.add_run(l_s.replace('**', ''))
             run.font.bold = True
             
-        # Prompts de Imagem (Formatação de Nota Técnica)
-        elif "PROMPT IMAGEM" in l_s.upper() or (len(l_s) > 20 and "LINE ART" in l_s.upper()):
+        # Prompts de Imagem (Formatação de Nota Técnica Cinza)
+        elif "PROMPT IMAGEM" in l_s.upper() or "SUGESTÃO DE IMAGEM" in l_s.upper() or "LINE ART" in l_s.upper():
             p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT
             p.paragraph_format.left_indent = Inches(0.1)
             
-            # Limpa o texto do prompt
-            texto_prompt = l_s.replace("PROMPT IMAGEM:", "").replace("ESTILO:", "").strip()
-            if texto_prompt.startswith("-"): texto_prompt = texto_prompt[1:].strip()
+            texto_prompt = l_s.replace("PROMPT IMAGEM:", "").replace("ESTILO:", "").replace("- ", "").strip()
             
             run_tag = p.add_run("💡 Sugestão de Imagem: ")
             run_tag.font.bold, run_tag.font.size = True, Pt(8)
@@ -373,10 +384,11 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
             run_desc.font.color.rgb = RGBColor(120, 120, 120)
             
         else:
-            # Texto normal
-            run = p.add_run(l_s)
+            # Texto normal justificado
+            run = p.add_run(l_s.replace('**', ''))
             run.font.size = Pt(12)
 
+    # --- FINALIZAÇÃO DO BUFFER ---
     doc.save(file_stream)
     file_stream.seek(0)
     return file_stream
