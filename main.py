@@ -1959,7 +1959,7 @@ elif menu == "📝 Central de Avaliações":
 # MÓDULO: SCANNER DE GABARITOS - ARQUITETURA V3.7 (FIX UNDEFINED & AUTO-FILTER)
 # ==============================================================================
 elif menu == "📸 Scanner de Gabaritos":
-    st.title("📸 Scanner de Gabaritos Inteligente V5.1")
+    st.title("📸 Scanner de Gabaritos Inteligente V5.5")
     st.markdown("---")
 
     if "v_scan" not in st.session_state: st.session_state.v_scan = 1
@@ -1989,7 +1989,6 @@ elif menu == "📸 Scanner de Gabaritos":
             if img_file:
                 col_b1, col_b2 = st.columns(2)
                 if col_b1.button("🧠 Analisar Marcações", type="primary", use_container_width=True):
-                    # CHAMADA CORRETA VIA AI_ENGINE
                     st.session_state.scan_res = ai.analisar_gabarito_vision(img_file.getvalue())
                     st.session_state.scan_img = img_file.getvalue()
                 if col_b2.button("🗑️ Descartar Foto", use_container_width=True):
@@ -2011,26 +2010,38 @@ elif menu == "📸 Scanner de Gabaritos":
                     
                     qtd_questoes = len(gab_oficial)
                     dados_conf = []
-                    acertos = 0
                     for i in range(1, qtd_questoes + 1):
                         q_key = f"{i:02d}"
                         resp_aluno = st.session_state.scan_res.get(q_key, "?")
                         resp_certa = gab_oficial[i-1]
-                        if resp_aluno == "X": status_q = "🚫 ANULADA"
-                        elif resp_aluno == "?": status_q = "⚪ VAZIA"
-                        elif resp_aluno == resp_certa: 
-                            status_q = "✅ CORRETA"
-                            acertos += 1
-                        else: status_q = "❌ ERRADA"
-                        dados_conf.append({"Q": q_key, "Aluno": resp_aluno, "Gabarito": resp_certa, "Status": status_q})
+                        dados_conf.append({"Q": q_key, "Aluno": resp_aluno, "Gabarito": resp_certa})
                     
+                    # --- EDITOR COM MENU DE SELEÇÃO (DROPDOWN) ---
+                    df_editor = pd.DataFrame(dados_conf)
+                    df_final = st.data_editor(
+                        df_editor,
+                        column_config={
+                            "Q": st.column_config.TextColumn("Q", disabled=True),
+                            "Aluno": st.column_config.SelectboxColumn(
+                                "Marcação do Aluno",
+                                options=["A", "B", "C", "D", "E", "X", "?"],
+                                help="A-E: Alternativas | X: Dupla/Rasurada | ?: Vazia"
+                            ),
+                            "Gabarito": st.column_config.TextColumn("Gabarito", disabled=True)
+                        },
+                        use_container_width=True,
+                        hide_index=True,
+                        key=f"ed_scan_{v}"
+                    )
+                    
+                    # --- CÁLCULO DE NOTA EM TEMPO REAL ---
+                    acertos = len(df_final[df_final['Aluno'] == df_final['Gabarito']])
                     valor_total = 10.0
                     match_val = re.search(r"VALOR:?\s*(\d+[\.,]\d+|\d+)", txt_conteudo.upper())
                     if match_val: valor_total = float(match_val.group(1).replace(',', '.'))
                     
                     nota_final = (acertos / qtd_questoes) * valor_total
                     st.metric("Nota Calculada", f"{nota_final:.2f}", delta=f"{acertos}/{qtd_questoes} acertos")
-                    df_final = st.data_editor(pd.DataFrame(dados_conf), use_container_width=True, key=f"ed_{v}")
                     
                     if st.button("💾 Confirmar e Salvar", type="primary", use_container_width=True):
                         with st.status("Sincronizando...", expanded=True) as status:
@@ -2038,11 +2049,13 @@ elif menu == "📸 Scanner de Gabaritos":
                             img_io = io.BytesIO(st.session_state.scan_img)
                             link_foto = db.subir_e_converter_para_google_docs(img_io, f"SCAN_{aluno_scan}", trimestre="I Trimestre", categoria=turma_scan, modo="SCANNER")
                             
+                            link_limpo = link_foto.replace("ERRO_NO_UPLOAD: ", "") if "https" in link_foto else link_foto
                             aluno_info = df_alunos[df_alunos['NOME_ALUNO'] == aluno_scan].iloc[0]
+                            
                             db.salvar_no_banco("DB_GABARITOS_ALUNOS", [
                                 datetime.now().strftime("%d/%m/%Y"), aluno_info['ID'], aluno_scan, turma_scan, prova_sel,
-                                ";".join(df_final['Aluno'].tolist()), f"{nota_final:.2f}".replace('.', ','), link_foto
+                                ";".join(df_final['Aluno'].tolist()), f"{nota_final:.2f}".replace('.', ','), link_limpo
                             ])
-                            status.update(label="✅ Salvo!", state="complete")
+                            status.update(label="✅ Salvo com Sucesso!", state="complete")
                             st.balloons(); del st.session_state.scan_res; st.session_state.v_scan += 1; st.rerun()
         else: st.success("✅ Turma concluída!")
