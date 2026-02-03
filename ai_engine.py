@@ -292,33 +292,33 @@ def realizar_diagnostico_v25(plano_raw, df_curriculo, ano_sel):
 
 def analisar_gabarito_vision(imagem_bytes):
     """
-    MAESTRO VISION V2.5 - Especialista em Gabaritos SOSA.
-    Usa Gemini 1.5 Flash para leitura multimodal de marcações.
+    MAESTRO VISION V3.0 - Engenharia de Elite.
+    Usa Gemini 2.0 Flash para reconhecimento de marcações em gabaritos.
     """
     try:
-        # Prompt de Engenharia Reversa para Gabaritos
+        # Prompt otimizado para o raciocínio espacial do Gemini 2.0
         prompt = (
-            "Analise a imagem deste gabarito escolar. "
-            "Existem 10 questões (01 a 10) com alternativas A, B, C, D, E. "
-            "Sua tarefa é identificar qual letra foi pintada/preenchida em cada questão. "
-            "Retorne APENAS um JSON puro, sem markdown, no formato: "
+            "Analise a imagem deste gabarito escolar com rigor matemático. "
+            "Existem 10 questões (01 a 10) e cada uma tem 5 alternativas (A, B, C, D, E). "
+            "Sua missão é identificar qual círculo foi preenchido/pintado em cada linha. "
+            "Retorne APENAS um JSON puro, sem blocos de código markdown, no formato: "
             '{"01": "A", "02": "B", "03": "C", "04": "D", "05": "E", "06": "A", "07": "B", "08": "C", "09": "D", "10": "E"}'
-            "\nSe não houver marcação em uma questão, use '?'."
+            "\nSe houver rasura ou dúvida em uma questão, use '?'."
         )
         
-        # Preparação do conteúdo para o novo SDK google-genai
+        # Preparação do conteúdo multimodal para o SDK google-genai
         conteudo_prompt = [
             types.Part.from_bytes(data=imagem_bytes, mime_type="image/jpeg"),
             types.Part.from_text(text=prompt)
         ]
         
-        # Chamada usando o nome estável do modelo
+        # Chamada ao modelo Gemini 2.0 Flash
         res = client.models.generate_content(
-            model="gemini-1.5-flash", # Nome exato para o SDK google-genai
+            model="gemini-2.0-flash", # O modelo mais rápido e moderno da Google
             contents=[types.Content(role="user", parts=conteudo_prompt)]
         )
         
-        # Limpeza de Markdown (caso a IA insista em colocar ```json)
+        # Limpeza de qualquer resíduo de texto ou markdown
         txt_limpo = res.text.replace("```json", "").replace("```", "").strip()
         
         import json
