@@ -890,7 +890,7 @@ elif menu == "📅 Planejamento (Ponto ID)":
                     status.write("📄 Gerando Documento Word...")
                     dados_docx = {"geral": ed_geral, "especificos": ed_espec, "objetivos": ed_objs, "metodologia": ed_met, "avaliacao": ed_ava, "pei": ed_pei}
                     nome_arquivo = f"PLANO_{final_ano.replace('º','')}ANO_{final_semana.replace(' ', '')}"
-                    doc_io = exporter.gerar_docx_plano_pedagogico_v18(nome_arquivo, dados_docx, {"ano": final_ano, "semana": final_semana})
+                    doc_io = exporter.gerar_docx_plano_pedagogico_v18(nome_arquivo, dados_docx, {"ano": final_ano, "semana": final_semana, "trimestre": "I Trimestre"})
                     
                     # 3. UPLOAD PARA O DRIVE
                     status.write("📤 Enviando para o Google Drive...")
