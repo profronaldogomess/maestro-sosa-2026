@@ -1955,46 +1955,40 @@ elif menu == "📝 Central de Avaliações":
                 df_cron = df_registro_aulas[df_registro_aulas['SEMANA'] == "AVALIAÇÃO"].copy()
                 st.dataframe(df_cron[['DATA', 'TURMA', 'CONTEUDO_MINISTRADO', 'STATUS_CURRICULO']], use_container_width=True, hide_index=True)
 
-# ==============================================================================
-# MÓDULO: SCANNER DE GABARITOS - ARQUITETURA V2.6 (CORRETOR AUTOMÁTICO)
-# ==============================================================================
 elif menu == "📸 Scanner de Gabaritos":
-    st.title("📸 Scanner de Gabaritos Inteligente")
+    st.title("📸 Scanner de Gabaritos Inteligente (Gemini 2.0)")
     st.markdown("---")
 
-    # 1. SELEÇÃO DE CONTEXTO (VARIÁVEIS UNIFICADAS)
+    # 1. Seleção de Contexto
     c1, c2, c3 = st.columns(3)
     turma_scan = c1.selectbox("Turma:", sorted(df_alunos['TURMA'].unique()))
     aluno_scan = c2.selectbox("Aluno:", df_alunos[df_alunos['TURMA']==turma_scan]['NOME_ALUNO'].tolist())
     
-    # Busca avaliações criadas para essa série
     serie_alvo = "".join(filter(str.isdigit, turma_scan))
     provas_disponiveis = df_aulas[(df_aulas['SEMANA_REF'] == "AVALIAÇÃO") & (df_aulas['ANO'].str.contains(serie_alvo))]
     
     if provas_disponiveis.empty:
-        st.warning(f"⚠️ Nenhuma avaliação encontrada para o {serie_alvo}º Ano no banco de dados.")
+        st.warning(f"⚠️ Nenhuma avaliação encontrada para o {serie_alvo}º Ano.")
         prova_sel = None
     else:
-        # Unificando para 'prova_sel' para evitar o erro de UndefinedVariable
         prova_sel = c3.selectbox("Avaliação Base:", provas_disponiveis['TIPO_MATERIAL'].tolist())
 
-    # 2. CAPTURA DA IMAGEM
+    # 2. Captura
     img_file = st.camera_input("Centralize o gabarito na tela")
     
     if img_file and prova_sel:
-        if st.button("🧠 Analisar Marcações com Maestro Vision", type="primary", use_container_width=True):
-            with st.spinner("O Maestro está processando a imagem..."):
+        if st.button("🧠 Analisar Marcações com Gemini 2.0 Flash", type="primary", use_container_width=True):
+            with st.spinner("O Maestro está processando a imagem com IA de última geração..."):
                 bytes_data = img_file.getvalue()
-                # Chamada para a função no ai_engine.py
                 sugestao_ia = ai.analisar_gabarito_vision(bytes_data)
                 
                 if "erro" not in sugestao_ia:
                     st.session_state.scan_res = sugestao_ia
                     st.session_state.scan_img = bytes_data
                 else:
-                    st.error(f"Erro técnico na IA: {sugestao_ia['erro']}")
+                    st.error(f"Erro técnico: {sugestao_ia['erro']}")
 
-    # 3. CONFERÊNCIA E CORREÇÃO AUTOMÁTICA
+    # 3. Conferência e Correção
     if "scan_res" in st.session_state and prova_sel:
         st.markdown("### 📝 Conferência e Resultado")
         col_img, col_edit = st.columns([1.2, 1])
@@ -2003,77 +1997,50 @@ elif menu == "📸 Scanner de Gabaritos":
             st.image(st.session_state.scan_img, caption="Gabarito Escaneado", use_container_width=True)
         
         with col_edit:
-            # A. Busca Gabarito Oficial na DB_AULAS_PRONTAS
             prova_data = provas_disponiveis[provas_disponiveis['TIPO_MATERIAL'] == prova_sel].iloc[0]
             txt_conteudo = str(prova_data['CONTEUDO'])
             
-            # Extrai o gabarito usando o extrator universal
+            # Extração do Gabarito Oficial
             gab_oficial_raw = ai.extrair_tag(txt_conteudo, "GABARITO_REGULAR")
-            # Regex para extrair apenas as letras (A-E) na ordem
             gab_oficial_lista = re.findall(r":\s*([A-E])", gab_oficial_raw)
 
-            if not gab_oficial_lista:
-                st.error("❌ Gabarito oficial não encontrado no conteúdo da prova.")
-                gab_oficial_lista = ["?"] * 10
-
-            # B. Monta Tabela de Conferência e Calcula Acertos
+            # Montagem da Tabela
             dados_conferencia = []
             acertos = 0
-            
-            # Itera sobre as 10 questões sugeridas pela IA
             for i in range(1, 11):
                 q_key = f"{i:02d}"
                 resp_aluno = st.session_state.scan_res.get(q_key, "?")
                 resp_certa = gab_oficial_lista[i-1] if i <= len(gab_oficial_lista) else "?"
-                
                 status_q = "✅" if resp_aluno == resp_certa else "❌"
                 if resp_aluno == resp_certa: acertos += 1
-                
-                dados_conferencia.append({
-                    "Questão": q_key, 
-                    "IA Sugeriu": resp_aluno, 
-                    "Gabarito": resp_certa,
-                    "Status": status_q
-                })
+                dados_conferencia.append({"Questão": q_key, "Aluno": resp_aluno, "Gabarito": resp_certa, "Status": status_q})
             
-            # C. Cálculo da Nota Baseado no Valor da Prova
+            # Cálculo da Nota (Busca o valor no conteúdo da prova)
             valor_total = 10.0
-            match_val = re.search(r"Valor:\s*(\d+[\.,]\d+)", txt_conteudo)
+            match_val = re.search(r"VALOR:\s*(\d+[\.,]\d+)", txt_conteudo.upper())
             if match_val:
                 valor_total = float(match_val.group(1).replace(',', '.'))
             
             nota_final = (acertos / 10) * valor_total
-
             st.metric("Nota Calculada", f"{nota_final:.2f}", delta=f"{acertos} acertos")
             
-            # Editor para o professor corrigir a IA se necessário
-            df_final = st.data_editor(pd.DataFrame(dados_conferencia), use_container_width=True, key="editor_scanner_v2")
+            df_final = st.data_editor(pd.DataFrame(dados_conferencia), use_container_width=True)
             
-            if st.button("💾 Confirmar e Sincronizar Diagnóstico", type="primary", use_container_width=True):
+            if st.button("💾 Confirmar e Salvar Diagnóstico", type="primary", use_container_width=True):
                 with st.status("Sincronizando...", expanded=True) as status:
-                    # Upload da Foto para o Drive
                     import io
                     img_io = io.BytesIO(st.session_state.scan_img)
-                    link_foto = db.subir_e_converter_para_google_docs(
-                        img_io, f"SCAN_{aluno_scan}", trimestre="I Trimestre", categoria=turma_scan, modo="SCANNER"
-                    )
+                    link_foto = db.subir_e_converter_para_google_docs(img_io, f"SCAN_{aluno_scan}", trimestre="I Trimestre", categoria=turma_scan, modo="SCANNER")
                     
-                    # Salva no Banco (Aba DB_GABARITOS_ALUNOS)
-                    respostas_txt = ";".join(df_final['IA Sugeriu'].tolist())
+                    respostas_txt = ";".join(df_final['Aluno'].tolist())
                     aluno_info = df_alunos[df_alunos['NOME_ALUNO'] == aluno_scan].iloc[0]
                     
                     db.salvar_no_banco("DB_GABARITOS_ALUNOS", [
-                        datetime.now().strftime("%d/%m/%Y"),
-                        aluno_info['ID'],
-                        aluno_scan,
-                        turma_scan,
-                        prova_sel,
-                        respostas_txt,
-                        f"{nota_final:.2f}".replace('.', ','),
-                        link_foto
+                        datetime.now().strftime("%d/%m/%Y"), aluno_info['ID'], aluno_scan, turma_scan, prova_sel,
+                        respostas_txt, f"{nota_final:.2f}".replace('.', ','), link_foto
                     ])
                     
-                    status.update(label="✅ Diagnóstico e Nota Salvos!", state="complete")
+                    status.update(label="✅ Diagnóstico Salvo!", state="complete")
                     st.balloons()
                     del st.session_state.scan_res
                     st.rerun()
