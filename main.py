@@ -888,7 +888,7 @@ elif menu == "📅 Planejamento (Ponto ID)":
                     
                     # 4. UPLOAD PARA O DRIVE
                     status.write("📤 Enviando para o Google Drive...")
-                    link_drive = db.subir_e_converter_para_google_docs(doc_io, nome_arquivo, trimestre="I Trimestre", categoria=final_ano, semana=final_semana, modo="PLANE_PEDAGOGICO")
+                    link_drive = db.subir_e_converter_para_google_docs(doc_io, nome_arquivo, trimestre="I Trimestre", categoria=final_ano, semana=final_semana, modo="PLANEJAMENTO")
                     
                     if "https" in str(link_drive):
                         # 5. SALVAMENTO NO BANCO
