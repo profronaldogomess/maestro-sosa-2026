@@ -157,59 +157,107 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     return file_stream
 
 # ==============================================================================
-# 2. GUIA DO PROFESSOR (FLUXO NATIVO - REGÊNCIA E LOUSA)
+# 2. GUIA DO PROFESSOR (FLUXO NATIVO V27.5 - ELITE)
 # ==============================================================================
 def gerar_docx_professor_v25(titulo_doc, conteudo, info):
+    import re, io, os
+    from docx import Document
+    from docx.shared import Inches, Pt, RGBColor
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.enum.section import WD_SECTION
+    from docx.enum.table import WD_ALIGN_VERTICAL
+    from docx.oxml.ns import qn
+
+    def set_row_height(row, height_pt):
+        tr = row._tr
+        trPr = tr.get_or_add_trPr()
+        trHeight = OxmlElement('w:trHeight')
+        trHeight.set(qn('w:val'), str(int(height_pt * 20))) 
+        trHeight.set(qn('w:hRule'), "atLeast")
+        trPr.append(trHeight)
+
     file_stream = io.BytesIO()
-    try:
-        doc = Document()
-        section = doc.sections[0]
-        section.top_margin, section.bottom_margin = Inches(0.3), Inches(0.3)
-        section.left_margin, section.right_margin = Inches(0.4), Inches(0.4)
+    doc = Document()
+    
+    # Estilo Global
+    style = doc.styles['Normal']
+    style.font.name = 'Arial'
+    style.font.size = Pt(11)
 
-        # --- CABEÇALHO (COLUNA ÚNICA) ---
-        header_table = doc.add_table(rows=2, cols=3)
-        header_table.style = 'Table Grid'
-        header_table.cell(0, 0).merge(header_table.cell(0, 2)).paragraphs[0].add_run("GUIA DE REGÊNCIA E ESQUEMA DE LOUSA - PROF. RONALDO GOMES").font.bold = True
-        header_table.cell(1, 0).paragraphs[0].add_run(f"ANO: {info.get('ano')}").font.size = Pt(10)
-        header_table.cell(1, 1).paragraphs[0].add_run(f"SEMANA: {info.get('semana')}").font.size = Pt(10)
-        header_table.cell(1, 2).paragraphs[0].add_run(f"TRIMESTRE: {info.get('trimestre')}").font.size = Pt(10)
-        for row in header_table.rows: set_row_height(row, 22)
+    section = doc.sections[0]
+    section.top_margin, section.bottom_margin = Inches(0.3), Inches(0.3)
+    section.left_margin, section.right_margin = Inches(0.4), Inches(0.4)
 
-        doc.add_paragraph()
+    # --- 1. CABEÇALHO TÉCNICO (SEM LOGO - LIMPO) ---
+    header_table = doc.add_table(rows=2, cols=3)
+    header_table.style = 'Table Grid'
+    
+    # Título Principal
+    c_tit = header_table.cell(0, 0).merge(header_table.cell(0, 2))
+    p_tit = c_tit.paragraphs[0]
+    p_tit.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run_tit = p_tit.add_run("GUIA DE REGÊNCIA E ESQUEMA DE LOUSA - PROF. RONALDO GOMES")
+    run_tit.font.bold = True
+    run_tit.font.size = Pt(12)
 
-        # --- ATIVAÇÃO DE COLUNAS NATIVAS ---
-        ativar_colunas_nativas(doc, num_cols=2, espacamento=400)
+    # Metadados
+    header_table.cell(1, 0).paragraphs[0].add_run(f"ANO: {info.get('ano', '')}").font.size = Pt(10)
+    header_table.cell(1, 1).paragraphs[0].add_run(f"SEMANA: {info.get('semana', '')}").font.size = Pt(10)
+    header_table.cell(1, 2).paragraphs[0].add_run(f"TRIMESTRE: {info.get('trimestre', 'I')}")
 
-        # --- CONTEÚDO FLUIDO ---
-        conteudo_limpo = conteudo.replace("[COLUNA_1]", "").replace("[COLUNA_2]", "")
-        linhas = conteudo_limpo.split('\n')
-        for linha in linhas:
-            l_s = linha.strip()
-            if not l_s: continue
-            p = doc.add_paragraph()
-            p.paragraph_format.space_after = Pt(2)
+    for row in header_table.rows: set_row_height(row, 22)
+    doc.add_paragraph()
+
+    # --- 2. ATIVAÇÃO DE COLUNAS NATIVAS ---
+    new_section = doc.add_section(WD_SECTION.CONTINUOUS)
+    sectPr = new_section._sectPr
+    cols = sectPr.xpath('./w:cols')[0]
+    cols.set(qn('w:num'), '2')
+    cols.set(qn('w:space'), '400') # Espaçamento mais estreito para o professor
+
+    # --- 3. CONTEÚDO FLUIDO E JUSTIFICADO ---
+    # Limpeza de tags de controle da IA
+    conteudo_limpo = conteudo.replace("[PROFESSOR]", "").replace("[COLUNA_1]", "").replace("[COLUNA_2]", "")
+    
+    linhas = conteudo_limpo.split('\n')
+    for linha in linhas:
+        l_s = linha.strip()
+        if not l_s: continue
+        
+        p = doc.add_paragraph()
+        p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+        p.paragraph_format.line_spacing = 1.0
+        p.paragraph_format.space_after = Pt(2)
+
+        # Identificação de Títulos de Seção (MOMENTO PHC, EXPLICAÇÃO, etc)
+        if l_s.isupper() and (":" in l_s or len(l_s) < 30):
+            run = p.add_run(l_s.replace('**', ''))
+            run.font.bold = True
+            run.font.size = Pt(11)
+            p.paragraph_format.space_before = Pt(8)
             
-            if "[" in l_s and "]" in l_s: # Prompts Visuais
-                run = p.add_run(l_s.replace('**', ''))
-                run.font.italic, run.font.size = True, Pt(10)
-                run.font.color.rgb = RGBColor(0, 102, 204)
-            elif l_s.isupper(): # Títulos de Seção
-                run = p.add_run(l_s.replace('**', ''))
-                run.font.bold, run.font.size = True, Pt(11)
-                p.paragraph_format.space_before = Pt(8)
-            else:
-                run = p.add_run(l_s.replace('**', ''))
-                run.font.size = Pt(11)
+        # Identificação de Prompts Visuais [PROMPT: ...]
+        elif "[" in l_s and "]" in l_s:
+            p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            run = p.add_run(l_s.replace('**', ''))
+            run.font.italic = True
+            run.font.size = Pt(10)
+            run.font.color.rgb = RGBColor(0, 102, 204) # Azul Royal para destaque visual
+            
+        # Identificação de Dicas de Regência
+        elif "DICA DE REGÊNCIA" in l_s.upper():
+            run = p.add_run(l_s.replace('**', ''))
+            run.font.bold = True
+            run.font.color.rgb = RGBColor(200, 0, 0) # Vermelho para atenção
+            
+        else:
+            # Texto normal justificado
+            run = p.add_run(l_s.replace('**', ''))
+            run.font.size = Pt(10.5)
 
-        doc.save(file_stream)
-        file_stream.seek(0)
-        return file_stream
-    except Exception as e:
-        file_stream = io.BytesIO()
-        err_doc = Document(); err_doc.add_paragraph(f"ERRO PROF: {str(e)}"); err_doc.save(file_stream)
-        file_stream.seek(0)
-        return file_stream
+    doc.save(file_stream)
+    file_stream.seek(0)
+    return file_stream
 
 # ==============================================================================
 # 3. MATERIAL PEI ADAPTADO (FLUXO NATIVO V27.0 - VERSÃO ATIVIDADE)
