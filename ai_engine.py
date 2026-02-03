@@ -321,3 +321,30 @@ def analisar_gabarito_vision(imagem_bytes):
         return json.loads(txt_limpo)
     except Exception as e:
         return {"erro": str(e)}
+    
+def gerar_prognostico_turma(dados_stats, questoes_texto):
+    """
+    Persona: ANALISTA PEDAGÓGICO SENIOR.
+    Gera uma análise técnica sobre os erros da turma e sugere intervenções PHC.
+    """
+    try:
+        prompt = (
+            f"VOCÊ É O MAESTRO SOSA, ANALISTA PEDAGÓGICO.\n"
+            f"DADOS ESTATÍSTICOS DA TURMA: {dados_stats}\n"
+            f"TEXTO DAS QUESTÕES: {questoes_texto}\n\n"
+            f"AÇÃO: Escreva um PROGNÓSTICO ANALÍTICO para o Professor Ronaldo.\n"
+            f"ESTRUTURA:\n"
+            f"1. RESUMO DE DOMÍNIO: Quais conteúdos foram consolidados?\n"
+            f"2. DIAGNÓSTICO DE LACUNAS: Analise as questões com menos de 50% de acerto. "
+            f"Identifique se o erro é interpretativo (Prática Social) ou procedimental (Instrumentalização/Algoritmo).\n"
+            f"3. PLANO DE RECOMPOSIÇÃO: Sugira uma atividade de Catarse para sanar os erros detectados.\n\n"
+            f"REGRAS: Linguagem técnica, sem markdown (**), foco em resultados reais."
+        )
+        
+        res = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=[types.Content(role="user", parts=[types.Part.from_text(text=prompt)])]
+        )
+        return res.text
+    except Exception as e:
+        return f"Erro no Prognóstico: {e}"
