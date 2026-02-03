@@ -1812,11 +1812,16 @@ elif menu == "📝 Central de Avaliações":
         if "temp_prova" in st.session_state:
             t_v_alu, t_v_gab, t_v_pei = st.tabs(["📝 Aluno", "✅ Gabarito Regular", "♿ PEI + Gabarito"])
             with t_v_alu: st.text(ai.extrair_tag(st.session_state.temp_prova, "QUESTOES"))
-            with t_v_gab: st.code(ai.extrair_tag(st.session_state.temp_prova, "GABARITO_TEXTO"))
+            with t_v_gab: 
+                st.markdown("#### 🎯 Respostas das Questões")
+                st.code(ai.extrair_tag(st.session_state.temp_prova, "GABARITO_TEXTO"))
+                st.markdown("---")
+                st.markdown("#### 🧠 Justificativas Técnicas (IA)")
+                st.write(ai.extrair_tag(st.session_state.temp_prova, "RESPOSTAS_IA"))
             with t_v_pei:
                 if st.button("✨ GERAR VERSÃO PEI ADAPTADA"):
                     with st.spinner("Adaptando para PEI..."):
-                        prompt_pei = f"ADAPTE PARA PEI: {ai.extrair_tag(st.session_state.temp_prova, 'QUESTOES')}. FORNEÇA O GABARITO PEI AO FINAL COM A TAG [GABARITO_PEI]."
+                        prompt_pei = f"AÇÃO: Adapte as questões abaixo para o padrão PEI/DUA. \nCONTEÚDO: {ai.extrair_tag(st.session_state.temp_prova, 'QUESTOES')}. \n\nREGRAS: \n1. Inicie o conteúdo com a tag [PEI]. \n2. Ao final, crie o gabarito da versão adaptada com a tag [GABARITO_PEI]."
                         st.session_state.av_pei = ai.gerar_ia("ARQUITETO_PEI_V24", prompt_pei)
                         st.session_state.av_gab_pei = ai.extrair_tag(st.session_state.av_pei, "GABARITO_PEI")
                         st.rerun()
