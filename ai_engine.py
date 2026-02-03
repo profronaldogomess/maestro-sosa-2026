@@ -292,35 +292,37 @@ def realizar_diagnostico_v25(plano_raw, df_curriculo, ano_sel):
 
 def analisar_gabarito_vision(imagem_bytes):
     """
-    MAESTRO VISION V2 - Especialista em Gabaritos SOSA.
-    Analisa a grade de 10 questões (A-E) e retorna as marcações.
+    MAESTRO VISION V2.5 - Especialista em Gabaritos SOSA.
+    Usa Gemini 1.5 Flash para leitura multimodal de marcações.
     """
     try:
-        # Prompt de Alta Precisão baseado na sua foto
+        # Prompt de Engenharia Reversa para Gabaritos
         prompt = (
-            "Você é um inspetor de provas rigoroso. Analise a imagem do gabarito. "
-            "Existem 10 questões numeradas de 01 a 10. "
-            "Cada questão tem 5 alternativas: A, B, C, D e E representadas por círculos. "
-            "Identifique qual alternativa foi preenchida (pintada de preto/escuro). "
+            "Analise a imagem deste gabarito escolar. "
+            "Existem 10 questões (01 a 10) com alternativas A, B, C, D, E. "
+            "Sua tarefa é identificar qual letra foi pintada/preenchida em cada questão. "
             "Retorne APENAS um JSON puro, sem markdown, no formato: "
             '{"01": "A", "02": "B", "03": "C", "04": "D", "05": "E", "06": "A", "07": "B", "08": "C", "09": "D", "10": "E"}'
-            "\nSe uma questão estiver em branco ou ilegível, use '?'."
+            "\nSe não houver marcação em uma questão, use '?'."
         )
         
+        # Preparação do conteúdo para o novo SDK google-genai
         conteudo_prompt = [
             types.Part.from_bytes(data=imagem_bytes, mime_type="image/jpeg"),
             types.Part.from_text(text=prompt)
         ]
         
-        # Chamada ao modelo multimodal
+        # Chamada usando o nome estável do modelo
         res = client.models.generate_content(
-            model="gemini-1.5-flash",
+            model="gemini-1.5-flash", # Nome exato para o SDK google-genai
             contents=[types.Content(role="user", parts=conteudo_prompt)]
         )
         
-        # Limpeza de ruídos de texto
+        # Limpeza de Markdown (caso a IA insista em colocar ```json)
         txt_limpo = res.text.replace("```json", "").replace("```", "").strip()
+        
         import json
         return json.loads(txt_limpo)
+        
     except Exception as e:
         return {"erro": str(e)}
