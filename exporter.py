@@ -212,7 +212,7 @@ def gerar_docx_professor_v25(titulo_doc, conteudo, info):
         return file_stream
 
 # ==============================================================================
-# 3. MATERIAL PEI ADAPTADO (FLUXO NATIVO V26.9 - ELITE)
+# 3. MATERIAL PEI ADAPTADO (FLUXO NATIVO V27.0 - VERSÃO ATIVIDADE)
 # ==============================================================================
 def gerar_docx_pei_v25(titulo_doc, conteudo, info):
     import re, io, os
@@ -232,8 +232,8 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
         trPr.append(trHeight)
 
     def limpar_emojis(texto):
-        # Remove emojis e caracteres especiais de desenho, mantendo acentuação
-        return re.sub(r'[^\x00-\x7FÀ-ÿ]+', '', texto)
+        # Remove emojis e caracteres especiais de desenho
+        return re.sub(r'[^\x00-\x7FÀ-ÿ\s\.\,\?\!\:\(\)\-\>\<]+', '', texto)
 
     file_stream = io.BytesIO()
     doc = Document()
@@ -241,13 +241,13 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
     # Estilo Global
     style = doc.styles['Normal']
     style.font.name = 'Arial'
-    style.font.size = Pt(12) # FONTE 12 SOLICITADA
+    style.font.size = Pt(12)
 
     section = doc.sections[0]
     section.top_margin, section.bottom_margin = Inches(0.3), Inches(0.3)
     section.left_margin, section.right_margin = Inches(0.4), Inches(0.4)
 
-    # --- 1. CABEÇALHO (IGUAL AO REGULAR) ---
+    # --- 1. CABEÇALHO LIMPO (SEM NOTA / COM LOGO) ---
     header_table = doc.add_table(rows=3, cols=5)
     header_table.style = 'Table Grid'
     widths = [Inches(0.9), Inches(2.8), Inches(1.0), Inches(1.4), Inches(1.5)]
@@ -261,54 +261,29 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
     header_table.cell(2, 1).paragraphs[0].add_run("PROF: Ronaldo Gomes").font.size = Pt(10)
     header_table.cell(2, 2).paragraphs[0].add_run(f"TURMA: {info.get('ano')}").font.size = Pt(10)
     header_table.cell(2, 3).paragraphs[0].add_run("DATA:").font.size = Pt(10)
-    header_table.cell(2, 4).paragraphs[0].add_run("ATIVIDADE ADAPTADA (PEI)").font.bold = True
+    header_table.cell(2, 4).paragraphs[0].add_run("ATIVIDADE ADAPTADA").font.bold = True
 
     logo_path = "logo_escola.png" if os.path.exists("logo_escola.png") else "logo.png"
     if os.path.exists(logo_path):
         c_logo.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-        c_logo.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
-        c_logo.paragraphs[0].add_run().add_picture(logo_path, width=Inches(0.75))
+        p_logo = c_logo.paragraphs[0]
+        p_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p_logo.add_run().add_picture(logo_path, width=Inches(0.75))
 
     for row in header_table.rows: set_row_height(row, 25)
     doc.add_paragraph()
 
-    # --- 2. GABARITO PADRÃO ENEM (SOLICITADO) ---
-    # Criamos uma tabela pequena para o gabarito antes das colunas
-    gab_container = doc.add_table(rows=1, cols=2)
-    gab_container.columns[0].width = Inches(4.5)
-    gab_container.columns[1].width = Inches(2.5)
-    
-    p_inst = gab_container.cell(0, 0).paragraphs[0]
-    p_inst.add_run("GABARITO DE RESPOSTAS:").font.bold = True
-    p_inst.add_run("\nPinte o círculo da alternativa correta.").font.size = Pt(9)
-
-    gab_grid = gab_container.cell(0, 1).add_table(rows=6, cols=4) # PEI geralmente tem menos questões
-    gab_grid.style = 'Table Grid'
-    for i, lab in enumerate(["Q", "A", "B", "C"]):
-        p = gab_grid.cell(0, i).paragraphs[0]
-        p.add_run(lab).font.bold = True
-        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    for r in range(1, 6):
-        gab_grid.cell(r, 0).paragraphs[0].add_run(f"{r:02d}").font.size = Pt(8)
-        for col in range(1, 4):
-            p_bol = gab_grid.cell(r, col).paragraphs[0]
-            p_bol.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            run_b = p_bol.add_run("○")
-            run_b.font.size = Pt(14)
-
-    doc.add_paragraph()
-
-    # --- 3. ATIVAÇÃO DE COLUNAS NATIVAS ---
+    # --- 2. ATIVAÇÃO DE COLUNAS NATIVAS ---
     new_section = doc.add_section(WD_SECTION.CONTINUOUS)
     sectPr = new_section._sectPr
     cols = sectPr.xpath('./w:cols')[0]
     cols.set(qn('w:num'), '2')
     cols.set(qn('w:space'), '720')
 
-    # --- 4. CONTEÚDO FLUIDO, JUSTIFICADO E SEM EMOJIS ---
+    # --- 3. PROCESSAMENTO DE CONTEÚDO ---
     conteudo_limpo = limpar_emojis(conteudo)
-    # Remove tags de marcação da IA para o documento ficar limpo
-    conteudo_limpo = conteudo_limpo.replace("[PEI]", "").replace("[IMAGENS_PEI]", "")
+    # Remove tags estruturais da IA para não sujar o papel
+    conteudo_limpo = re.sub(r'\[PEI\]|\[IMAGENS_PEI\]', '', conteudo_limpo, flags=re.IGNORECASE)
     
     linhas = conteudo_limpo.split('\n')
     for linha in linhas:
@@ -317,35 +292,41 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
         
         p = doc.add_paragraph()
         p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-        p.paragraph_format.line_spacing = 1.0
-        p.paragraph_format.space_after = Pt(2)
+        p.paragraph_format.line_spacing = 1.1
+        p.paragraph_format.space_after = Pt(3)
 
-        # Títulos de Seção PEI
+        # Títulos de Seção (PARA LEMBRAR, PASSO A PASSO, ATIVIDADES)
         if any(tag in l_s.upper() for tag in ["PARA LEMBRAR", "PASSO A PASSO", "ATIVIDADES"]):
             run = p.add_run(l_s.replace("[", "").replace("]", "").upper())
             run.font.bold, run.font.size = True, Pt(12)
-            p.paragraph_format.space_before = Pt(8)
+            p.paragraph_format.space_before = Pt(10)
             
-        # Questões (Mesma linha)
+        # Questões (Detecta "1." ou "Questão 1")
         elif re.match(r'^\d+[\.\)]', l_s) or "QUESTÃO" in l_s.upper():
             p.paragraph_format.space_before = Pt(6)
-            run = p.add_run(l_s.replace('**', ''))
+            run = p.add_run(l_s)
             run.font.bold = True
             
-        # Prompts de Imagem (Igual ao Aluno Regular)
-        elif "PROMPT IMAGEM:" in l_s.upper() or "EDUCATIONAL LINE ART" in l_s.upper():
+        # Prompts de Imagem (Formatação de Nota Técnica)
+        elif "PROMPT IMAGEM" in l_s.upper() or (len(l_s) > 20 and "LINE ART" in l_s.upper()):
             p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT
-            run_tag = p.add_run("PROMPT IMAGEM: ")
-            run_tag.font.bold, run_tag.font.size = True, Pt(8)
-            run_tag.font.color.rgb = RGBColor(100, 100, 100)
+            p.paragraph_format.left_indent = Inches(0.1)
             
-            desc = l_s.replace("PROMPT IMAGEM:", "").replace("- ", "").strip()
-            run_desc = p.add_run(desc)
+            # Limpa o texto do prompt
+            texto_prompt = l_s.replace("PROMPT IMAGEM:", "").replace("ESTILO:", "").strip()
+            if texto_prompt.startswith("-"): texto_prompt = texto_prompt[1:].strip()
+            
+            run_tag = p.add_run("💡 Sugestão de Imagem: ")
+            run_tag.font.bold, run_tag.font.size = True, Pt(8)
+            run_tag.font.color.rgb = RGBColor(120, 120, 120)
+            
+            run_desc = p.add_run(texto_prompt)
             run_desc.font.size, run_desc.font.italic = Pt(8), True
-            run_desc.font.color.rgb = RGBColor(100, 100, 100)
+            run_desc.font.color.rgb = RGBColor(120, 120, 120)
             
         else:
-            run = p.add_run(l_s.replace('**', ''))
+            # Texto normal
+            run = p.add_run(l_s)
             run.font.size = Pt(12)
 
     doc.save(file_stream)
