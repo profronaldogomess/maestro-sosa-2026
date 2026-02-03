@@ -1959,7 +1959,7 @@ elif menu == "📝 Central de Avaliações":
 # MÓDULO: SCANNER DE GABARITOS - ARQUITETURA V3.7 (FIX UNDEFINED & AUTO-FILTER)
 # ==============================================================================
 elif menu == "📸 Scanner de Gabaritos":
-    st.title("📸 Scanner de Gabaritos Inteligente V4")
+    st.title("📸 Scanner de Gabaritos Inteligente V4.5")
     st.markdown("---")
 
     if "v_scan" not in st.session_state: st.session_state.v_scan = 1
@@ -1985,7 +1985,7 @@ elif menu == "📸 Scanner de Gabaritos":
         
         if not alunos_restantes.empty:
             aluno_scan = c2.selectbox("Aluno (Pendente):", alunos_restantes['NOME_ALUNO'].tolist(), key=f"a_{v}")
-            img_file = st.camera_input("Capture o gabarito", key=f"cam_{v}")
+            img_file = st.camera_input("Capture o gabarito com boa iluminação", key=f"cam_{v}")
             
             if img_file:
                 col_b1, col_b2 = st.columns(2)
@@ -2019,25 +2019,30 @@ elif menu == "📸 Scanner de Gabaritos":
                         q_key = f"{i:02d}"
                         resp_aluno = st.session_state.scan_res.get(q_key, "?")
                         resp_certa = gab_oficial[i-1]
+                        
                         # Regra: 'X' (dupla) ou '?' (vazia) nunca acertam
                         status_q = "✅" if resp_aluno == resp_certa and resp_aluno not in ["X", "?"] else "❌"
                         if status_q == "✅": acertos += 1
                         dados_conf.append({"Q": q_key, "Aluno": resp_aluno, "Gabarito": resp_certa, "Status": status_q})
                     
-                    # 3. CÁLCULO DA NOTA REAL (BUSCA VALOR NO BANCO)
+                    # 3. CÁLCULO DA NOTA REAL (BUSCA VALOR NO CONTEÚDO)
                     valor_total = 10.0
+                    # Busca o valor real que foi injetado no cabeçalho da prova
                     match_val = re.search(r"VALOR:?\s*(\d+[\.,]\d+|\d+)", txt_conteudo.upper())
-                    if match_val: valor_total = float(match_val.group(1).replace(',', '.'))
+                    if match_val: 
+                        valor_total = float(match_val.group(1).replace(',', '.'))
                     
                     nota_final = (acertos / qtd_questoes) * valor_total
                     st.metric("Nota Calculada", f"{nota_final:.2f}", delta=f"{acertos}/{qtd_questoes} acertos")
                     
+                    # Editor para o professor ajustar erros da IA
                     df_final = st.data_editor(pd.DataFrame(dados_conf), use_container_width=True, key=f"ed_{v}")
                     
                     if st.button("💾 Confirmar e Salvar", type="primary", use_container_width=True):
                         with st.status("Sincronizando...", expanded=True) as status:
                             import io
                             img_io = io.BytesIO(st.session_state.scan_img)
+                            # O Script da Ponte V26.5 já está configurado para salvar como imagem pura
                             link_foto = db.subir_e_converter_para_google_docs(img_io, f"SCAN_{aluno_scan}", trimestre="I Trimestre", categoria=turma_scan, modo="SCANNER")
                             
                             aluno_info = df_alunos[df_alunos['NOME_ALUNO'] == aluno_scan].iloc[0]
@@ -2045,6 +2050,6 @@ elif menu == "📸 Scanner de Gabaritos":
                                 datetime.now().strftime("%d/%m/%Y"), aluno_info['ID'], aluno_scan, turma_scan, prova_sel,
                                 ";".join(df_final['Aluno'].tolist()), f"{nota_final:.2f}".replace('.', ','), link_foto
                             ])
-                            status.update(label="✅ Salvo!", state="complete")
+                            status.update(label="✅ Salvo com Sucesso!", state="complete")
                             st.balloons(); del st.session_state.scan_res; st.session_state.v_scan += 1; st.rerun()
         else: st.success("✅ Turma concluída!")
