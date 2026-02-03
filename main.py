@@ -1956,112 +1956,173 @@ elif menu == "📝 Central de Avaliações":
                 st.dataframe(df_cron[['DATA', 'TURMA', 'CONTEUDO_MINISTRADO', 'STATUS_CURRICULO']], use_container_width=True, hide_index=True)
 
 # ==============================================================================
-# MÓDULO: SCANNER DE GABARITOS - ARQUITETURA V3.7 (FIX UNDEFINED & AUTO-FILTER)
+# MÓDULO: SCANNER & DASHBOARD DIAGNÓSTICO - ARQUITETURA V7.0 (ELITE)
 # ==============================================================================
 elif menu == "📸 Scanner de Gabaritos":
-    st.title("📸 Scanner de Gabaritos Inteligente V6.0")
+    st.title("📸 Inteligência Diagnóstica e Scanner")
     st.markdown("---")
 
     if "v_scan" not in st.session_state: st.session_state.v_scan = 1
     v = st.session_state.v_scan
 
-    c1, c2, c3 = st.columns(3)
-    turma_scan = c1.selectbox("Turma:", sorted(df_alunos['TURMA'].unique()), key=f"t_{v}")
-    serie_alvo = "".join(filter(str.isdigit, turma_scan))
-    provas_disponiveis = df_aulas[(df_aulas['SEMANA_REF'] == "AVALIAÇÃO") & (df_aulas['ANO'].str.contains(serie_alvo))]
-    
-    if not provas_disponiveis.empty:
-        prova_sel = c3.selectbox("Avaliação Base:", provas_disponiveis['TIPO_MATERIAL'].tolist(), key=f"p_{v}")
-        
-        # Filtro de Alunos Pendentes
-        try:
-            ws_g = wb.worksheet("DB_GABARITOS_ALUNOS")
-            df_gabaritos_check = pd.DataFrame(ws_g.get_all_records())
-            ids_ja_corrigidos = df_gabaritos_check[df_gabaritos_check['ID_AVALIACAO'] == prova_sel]['ID_ALUNO'].astype(str).tolist()
-        except: ids_ja_corrigidos = []
+    # --- CARREGAMENTO DE DADOS DIAGNÓSTICOS ---
+    try:
+        ws_g = wb.worksheet("DB_GABARITOS_ALUNOS")
+        df_diagnosticos = pd.DataFrame(ws_g.get_all_records())
+    except:
+        df_diagnosticos = pd.DataFrame(columns=["DATA", "ID_ALUNO", "NOME_ALUNO", "TURMA", "ID_AVALIACAO", "RESPOSTAS_ALUNO", "NOTA_CALCULADA", "LINK_FOTO_DRIVE"])
 
-        alunos_restantes = df_alunos[(df_alunos['TURMA'] == turma_scan) & (~df_alunos['ID'].astype(str).isin(ids_ja_corrigidos))]
+    tab_scan, tab_acervo, tab_dash = st.tabs([
+        "📸 Capturar Gabarito", 
+        "📂 Acervo de Evidências", 
+        "📊 Dashboard Diagnóstico"
+    ])
+
+    # --- ABA 1: CAPTURAR GABARITO (LÓGICA V6.0 REFINADA) ---
+    with tab_scan:
+        c1, c2, c3 = st.columns(3)
+        turma_scan = c1.selectbox("Selecionar Turma:", sorted(df_alunos['TURMA'].unique()), key=f"t_scan_{v}")
         
-        if not alunos_restantes.empty:
-            aluno_scan = c2.selectbox("Aluno (Pendente):", alunos_restantes['NOME_ALUNO'].tolist(), key=f"a_{v}")
-            img_file = st.camera_input("Capture o gabarito", key=f"cam_{v}")
+        serie_alvo = "".join(filter(str.isdigit, turma_scan))
+        provas_disponiveis = df_aulas[(df_aulas['SEMANA_REF'] == "AVALIAÇÃO") & (df_aulas['ANO'].str.contains(serie_alvo))]
+        
+        if not provas_disponiveis.empty:
+            prova_sel = c3.selectbox("Avaliação Base:", provas_disponiveis['TIPO_MATERIAL'].tolist(), key=f"p_scan_{v}")
             
-            if img_file:
-                col_b1, col_b2 = st.columns(2)
-                if col_b1.button("🧠 Analisar Marcações", type="primary", use_container_width=True):
-                    st.session_state.scan_res = ai.analisar_gabarito_vision(img_file.getvalue())
-                    st.session_state.scan_img = img_file.getvalue()
-                if col_b2.button("🗑️ Descartar Foto", use_container_width=True):
-                    if "scan_res" in st.session_state: del st.session_state.scan_res
-                    st.session_state.v_scan += 1
-                    st.rerun()
-
-            if "scan_res" in st.session_state:
-                st.markdown("### 📝 Conferência e Resultado")
-                col_img, col_edit = st.columns([1.2, 1])
-                with col_img: st.image(st.session_state.scan_img)
+            # Filtro de Alunos Pendentes (Sumir quem já foi corrigido)
+            ids_corrigidos = df_diagnosticos[df_diagnosticos['ID_AVALIACAO'] == prova_sel]['ID_ALUNO'].astype(str).tolist()
+            alunos_restantes = df_alunos[(df_alunos['TURMA'] == turma_scan) & (~df_alunos['ID'].astype(str).isin(ids_corrigidos))]
+            
+            if not alunos_restantes.empty:
+                aluno_scan = c2.selectbox("Aluno (Pendente):", alunos_restantes['NOME_ALUNO'].tolist(), key=f"a_scan_{v}")
+                img_file = st.camera_input("Capture o gabarito", key=f"cam_{v}")
                 
-                with col_edit:
-                    prova_data = provas_disponiveis[provas_disponiveis['TIPO_MATERIAL'] == prova_sel].iloc[0]
-                    txt_conteudo = str(prova_data['CONTEUDO'])
-                    
-                    is_pei = st.toggle("Usar Gabarito PEI?", value="PEI" in prova_sel.upper())
-                    tag_alvo = "GABARITO_PEI" if is_pei else "GABARITO_REGULAR"
-                    gab_raw = ai.extrair_tag(txt_conteudo, tag_alvo) or ai.extrair_tag(txt_conteudo, "GABARITO_TEXTO")
-                    gab_oficial = re.findall(r"\d+[\s\.\:\-]*([A-E])", gab_raw.upper())
-                    
-                    qtd_questoes = len(gab_oficial)
-                    dados_conf = []
-                    for i in range(1, qtd_questoes + 1):
-                        q_key = f"{i:02d}"
-                        resp_aluno = st.session_state.scan_res.get(q_key, "?")
-                        resp_certa = gab_oficial[i-1] if i <= len(gab_oficial) else "?"
-                        dados_conf.append({"Q": q_key, "Marcação do Aluno": resp_aluno, "Gabarito": resp_certa})
-                    
-                    # --- EDITOR REATIVO COM STATUS ---
-                    df_editor = pd.DataFrame(dados_conf)
-                    # Adiciona coluna de Status calculada na hora
-                    df_editor['Status'] = df_editor.apply(lambda x: "✅" if x['Marcação do Aluno'] == x['Gabarito'] and x['Gabarito'] != "?" else "❌", axis=1)
-                    
-                    df_final = st.data_editor(
-                        df_editor,
-                        column_config={
-                            "Q": st.column_config.TextColumn("Q", disabled=True, width="small"),
-                            "Marcação do Aluno": st.column_config.SelectboxColumn(
-                                "Marcação do Aluno",
-                                options=["A", "B", "C", "D", "E", "X", "?"],
-                                width="medium"
-                            ),
-                            "Gabarito": st.column_config.TextColumn("Gabarito", disabled=True, width="small"),
-                            "Status": st.column_config.TextColumn("Status", disabled=True, width="small")
-                        },
-                        use_container_width=True,
-                        hide_index=True,
-                        key=f"ed_scan_{v}"
-                    )
-                    
-                    # --- RECALCULO DE NOTA BASEADO NO EDITOR ---
-                    acertos = len(df_final[df_final['Marcação do Aluno'] == df_final['Gabarito']])
-                    valor_total = 10.0
-                    match_val = re.search(r"VALOR:?\s*(\d+[\.,]\d+|\d+)", txt_conteudo.upper())
-                    if match_val: valor_total = float(match_val.group(1).replace(',', '.'))
-                    
-                    nota_final = (acertos / qtd_questoes) * valor_total
-                    st.metric("Nota Calculada", f"{nota_final:.2f}", delta=f"{acertos}/{qtd_questoes} acertos")
-                    
-                    if st.button("💾 Confirmar e Salvar", type="primary", use_container_width=True):
-                        with st.status("Sincronizando...", expanded=True) as status:
-                            import io
-                            img_io = io.BytesIO(st.session_state.scan_img)
-                            link_foto = db.subir_e_converter_para_google_docs(img_io, f"SCAN_{aluno_scan}", trimestre="I Trimestre", categoria=turma_scan, modo="SCANNER")
-                            
-                            link_limpo = link_foto.replace("ERRO_NO_UPLOAD: ", "") if "https" in link_foto else link_foto
-                            aluno_info = df_alunos[df_alunos['NOME_ALUNO'] == aluno_scan].iloc[0]
-                            
-                            db.salvar_no_banco("DB_GABARITOS_ALUNOS", [
-                                datetime.now().strftime("%d/%m/%Y"), aluno_info['ID'], aluno_scan, turma_scan, prova_sel,
-                                ";".join(df_final['Marcação do Aluno'].tolist()), f"{nota_final:.2f}".replace('.', ','), link_limpo
-                            ])
-                            status.update(label="✅ Salvo com Sucesso!", state="complete")
-                            st.balloons(); del st.session_state.scan_res; st.session_state.v_scan += 1; st.rerun()
-        else: st.success("✅ Turma concluída!")
+                if img_file:
+                    col_b1, col_b2 = st.columns(2)
+                    if col_b1.button("🧠 Analisar Marcações", type="primary", use_container_width=True):
+                        st.session_state.scan_res = ai.analisar_gabarito_vision(img_file.getvalue())
+                        st.session_state.scan_img = img_file.getvalue()
+                    if col_b2.button("🗑️ Descartar Foto", use_container_width=True):
+                        if "scan_res" in st.session_state: del st.session_state.scan_res
+                        st.rerun()
+
+                if "scan_res" in st.session_state:
+                    st.markdown("### 📝 Conferência e Resultado")
+                    col_img, col_edit = st.columns([1.2, 1])
+                    with col_img: st.image(st.session_state.scan_img)
+                    with col_edit:
+                        prova_data = provas_disponiveis[provas_disponiveis['TIPO_MATERIAL'] == prova_sel].iloc[0]
+                        txt_conteudo = str(prova_data['CONTEUDO'])
+                        is_pei = st.toggle("Usar Gabarito PEI?", value="PEI" in prova_sel.upper())
+                        tag_alvo = "GABARITO_PEI" if is_pei else "GABARITO_REGULAR"
+                        gab_raw = ai.extrair_tag(txt_conteudo, tag_alvo) or ai.extrair_tag(txt_conteudo, "GABARITO_TEXTO")
+                        gab_oficial = re.findall(r"\d+[\s\.\:\-]*([A-E])", gab_raw.upper())
+                        
+                        qtd_questoes = len(gab_oficial)
+                        dados_conf = []
+                        for i in range(1, qtd_questoes + 1):
+                            q_key = f"{i:02d}"
+                            resp_aluno = st.session_state.scan_res.get(q_key, "?")
+                            resp_certa = gab_oficial[i-1]
+                            dados_conf.append({"Q": q_key, "Marcação do Aluno": resp_aluno, "Gabarito": resp_certa})
+                        
+                        df_editor = pd.DataFrame(dados_conf)
+                        df_editor['Status'] = df_editor.apply(lambda x: "✅" if x['Marcação do Aluno'] == x['Gabarito'] and x['Gabarito'] != "?" else "❌", axis=1)
+                        
+                        df_final = st.data_editor(df_editor, use_container_width=True, hide_index=True, key=f"ed_scan_{v}")
+                        
+                        acertos = len(df_final[df_final['Marcação do Aluno'] == df_final['Gabarito']])
+                        valor_total = 10.0
+                        match_val = re.search(r"VALOR:?\s*(\d+[\.,]\d+|\d+)", txt_conteudo.upper())
+                        if match_val: valor_total = float(match_val.group(1).replace(',', '.'))
+                        
+                        nota_final = (acertos / qtd_questoes) * valor_total
+                        st.metric("Nota Calculada", f"{nota_final:.2f}", delta=f"{acertos}/{qtd_questoes} acertos")
+                        
+                        if st.button("💾 Confirmar e Salvar Diagnóstico", type="primary", use_container_width=True):
+                            with st.status("Sincronizando...", expanded=True) as status:
+                                import io
+                                img_io = io.BytesIO(st.session_state.scan_img)
+                                link_foto = db.subir_e_converter_para_google_docs(img_io, f"SCAN_{aluno_scan}", trimestre="I Trimestre", categoria=turma_scan, modo="SCANNER")
+                                link_limpo = link_foto.replace("ERRO_NO_UPLOAD: ", "") if "https" in link_foto else link_foto
+                                aluno_info = df_alunos[df_alunos['NOME_ALUNO'] == aluno_scan].iloc[0]
+                                
+                                db.salvar_no_banco("DB_GABARITOS_ALUNOS", [
+                                    datetime.now().strftime("%d/%m/%Y"), aluno_info['ID'], aluno_scan, turma_scan, prova_sel,
+                                    ";".join(df_final['Marcação do Aluno'].tolist()), f"{nota_final:.2f}".replace('.', ','), link_limpo
+                                ])
+                                status.update(label="✅ Salvo!", state="complete")
+                                st.balloons(); del st.session_state.scan_res; st.session_state.v_scan += 1; st.rerun()
+            else: st.success("✅ Todos os alunos desta turma foram corrigidos!")
+        else: st.warning("⚠️ Nenhuma avaliação encontrada para esta série.")
+
+    # --- ABA 2: ACERVO DE EVIDÊNCIAS (CONFERÊNCIA) ---
+    with tab_acervo:
+        st.subheader("📂 Histórico de Correções e Evidências")
+        if not df_diagnosticos.empty:
+            c_f1, c_f2 = st.columns(2)
+            t_filtro = c_f1.selectbox("Filtrar Turma:", ["Todas"] + sorted(df_diagnosticos['TURMA'].unique().tolist()))
+            p_filtro = c_f2.selectbox("Filtrar Prova:", ["Todas"] + sorted(df_diagnosticos['ID_AVALIACAO'].unique().tolist()))
+            
+            df_view = df_diagnosticos.copy()
+            if t_filtro != "Todas": df_view = df_view[df_view['TURMA'] == t_filtro]
+            if p_filtro != "Todas": df_view = df_view[df_view['ID_AVALIACAO'] == p_filtro]
+            
+            st.dataframe(
+                df_view,
+                column_config={
+                    "LINK_FOTO_DRIVE": st.column_config.LinkColumn("📸 Ver Gabarito"),
+                    "NOTA_CALCULADA": st.column_config.NumberColumn("Nota", format="%.2f")
+                },
+                use_container_width=True,
+                hide_index=True
+            )
+            
+            if st.button("🗑️ Limpar Diagnóstico Selecionado"):
+                st.info("Para excluir, use a função de limpeza universal no banco de dados.")
+        else:
+            st.info("📭 Nenhum gabarito escaneado ainda.")
+
+    # --- ABA 3: DASHBOARD DIAGNÓSTICO (INTELIGÊNCIA) ---
+    with tab_dash:
+        st.subheader("📊 Mapa de Calor Pedagógico")
+        if not df_diagnosticos.empty:
+            prova_dash = st.selectbox("Analisar Desempenho da Prova:", df_diagnosticos['ID_AVALIACAO'].unique())
+            df_p = df_diagnosticos[df_diagnosticos['ID_AVALIACAO'] == prova_dash]
+            
+            # 1. Busca Gabarito Oficial para comparar
+            prova_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == prova_dash].iloc[0]
+            gab_raw = ai.extrair_tag(prova_ref['CONTEUDO'], "GABARITO_REGULAR") or ai.extrair_tag(prova_ref['CONTEUDO'], "GABARITO_TEXTO")
+            gab_oficial = re.findall(r"\d+[\s\.\:\-]*([A-E])", gab_raw.upper())
+            
+            # 2. Cálculo de Acertos por Questão
+            stats_questoes = []
+            for i, certa in enumerate(gab_oficial):
+                q_num = f"{i+1:02d}"
+                respostas_turma = [r.split(";")[i] if len(r.split(";")) > i else "?" for r in df_p['RESPOSTAS_ALUNO']]
+                acertos = respostas_turma.count(certa)
+                percentual = (acertos / len(df_p)) * 100
+                stats_questoes.append({"Questão": q_num, "Acerto %": percentual, "Acertos": acertos})
+            
+            df_stats = pd.DataFrame(stats_questoes)
+            
+            # 3. Visualização
+            c_m1, c_m2 = st.columns([2, 1])
+            with c_m1:
+                fig_heat = px.bar(df_stats, x="Questão", y="Acerto %", text="Acerto %", 
+                                 title=f"Índice de Acerto por Questão - {prova_dash}",
+                                 color="Acerto %", color_continuous_scale="RdYlGn", range_y=[0, 110])
+                st.plotly_chart(fig_heat, use_container_width=True)
+            
+            with c_m2:
+                st.metric("Média da Turma", f"{df_p['NOTA_CALCULADA'].apply(lambda x: float(str(x).replace(',','.'))).mean():.2f}")
+                st.metric("Total Corrigido", len(df_p))
+                
+                # Alerta de Recomposição
+                criticas = df_stats[df_stats['Acerto %'] < 50]['Questão'].tolist()
+                if criticas:
+                    st.error(f"🚩 **Alerta de Recomposição:** As questões {', '.join(criticas)} tiveram menos de 50% de acerto. Sugerimos revisar estes descritores.")
+                else:
+                    st.success("🌟 **Excelente desempenho!** Todos os descritores acima de 50%.")
+        else:
+            st.info("Aguardando dados para gerar o diagnóstico.")
