@@ -292,25 +292,21 @@ def realizar_diagnostico_v25(plano_raw, df_curriculo, ano_sel):
 
 def analisar_gabarito_vision(imagem_bytes):
     """
-    MAESTRO VISION V4.5 - Engenharia de Alta Precisão.
-    Usa Gemini 2.0 Flash com análise comparativa de contraste por linha.
+    MAESTRO VISION V5.5 - Sensor de Tinta Estrito.
+    Detecta marcações duplas com sensibilidade ultra-alta.
     """
     try:
         prompt = (
-            "Aja como um scanner óptico de alta precisão. Analise a grade de respostas na imagem.\n"
-            "ESTRUTURA DA TABELA:\n"
-            "- Colunas: 'Q' (número), 'A', 'B', 'C', 'D', 'E' (alternativas).\n"
-            "- Linhas: 01 a 10 (ou mais).\n\n"
-            "INSTRUÇÕES DE INSPEÇÃO:\n"
-            "1. Para cada linha, compare o preenchimento dos 5 círculos (A, B, C, D, E).\n"
-            "2. Identifique o círculo que possui o maior contraste (mais escuro/preenchido) em relação aos outros da mesma linha.\n"
-            "3. Ignore sombras, reflexos de luz ou marcas de lápis apagadas. Foque na marcação definitiva em caneta.\n"
-            "4. REGRAS DE SAÍDA:\n"
-            "   - Se houver um círculo claramente mais escuro: retorne a letra correspondente.\n"
-            "   - Se houver DOIS ou mais círculos com preenchimento forte similar: retorne 'X' (anulada).\n"
-            "   - Se todos os círculos estiverem vazios ou com preenchimento muito fraco: retorne '?'.\n\n"
-            "Retorne APENAS um JSON puro (sem markdown) no formato: "
-            '{"01": "A", "02": "B", ...}'
+            "Você é um scanner óptico industrial de alta sensibilidade.\n"
+            "Sua tarefa é detectar a presença de tinta de caneta nos círculos do gabarito.\n\n"
+            "REGRAS DE DETECÇÃO POR LINHA:\n"
+            "1. Analise cada um dos 5 círculos (A, B, C, D, E) separadamente.\n"
+            "2. Se houver QUALQUER marcação, ponto, risco ou preenchimento em MAIS DE UM círculo, retorne 'X' (Marcação Dupla/Anulada).\n"
+            "3. Se houver marcação em apenas UM círculo, retorne a letra correspondente.\n"
+            "4. Se não houver marcação em nenhum, retorne '?'.\n\n"
+            "CASO CRÍTICO (Questão 01 da imagem): Observe que há marcação no 'A' e também marcas no 'C'. "
+            "Pela regra de segurança, isso deve ser retornado como 'X'.\n\n"
+            "Retorne APENAS o JSON puro: {'01': 'X', '02': 'B', ...}"
         )
         
         conteudo_prompt = [
