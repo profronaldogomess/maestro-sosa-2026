@@ -291,23 +291,38 @@ def realizar_diagnostico_v25(plano_raw, df_curriculo, ano_sel):
     }
 
 def analisar_gabarito_vision(imagem_bytes):
+    """
+    MAESTRO VISION V4.5 - Engenharia de Alta Precisão.
+    Usa Gemini 2.0 Flash com análise comparativa de contraste por linha.
+    """
     try:
         prompt = (
-            "Analise a imagem deste gabarito escolar. "
-            "Identifique a alternativa preenchida para cada questão. "
-            "REGRAS CRÍTICAS:\n"
-            "1. Se houver DUAS ou mais alternativas marcadas na mesma linha, retorne 'X' (anulada).\n"
-            "2. Se não houver NENHUMA marcação na linha, retorne '?'.\n"
-            "3. Retorne APENAS um JSON puro com as chaves '01', '02', etc."
+            "Aja como um scanner óptico de alta precisão. Analise a grade de respostas na imagem.\n"
+            "ESTRUTURA DA TABELA:\n"
+            "- Colunas: 'Q' (número), 'A', 'B', 'C', 'D', 'E' (alternativas).\n"
+            "- Linhas: 01 a 10 (ou mais).\n\n"
+            "INSTRUÇÕES DE INSPEÇÃO:\n"
+            "1. Para cada linha, compare o preenchimento dos 5 círculos (A, B, C, D, E).\n"
+            "2. Identifique o círculo que possui o maior contraste (mais escuro/preenchido) em relação aos outros da mesma linha.\n"
+            "3. Ignore sombras, reflexos de luz ou marcas de lápis apagadas. Foque na marcação definitiva em caneta.\n"
+            "4. REGRAS DE SAÍDA:\n"
+            "   - Se houver um círculo claramente mais escuro: retorne a letra correspondente.\n"
+            "   - Se houver DOIS ou mais círculos com preenchimento forte similar: retorne 'X' (anulada).\n"
+            "   - Se todos os círculos estiverem vazios ou com preenchimento muito fraco: retorne '?'.\n\n"
+            "Retorne APENAS um JSON puro (sem markdown) no formato: "
+            '{"01": "A", "02": "B", ...}'
         )
+        
         conteudo_prompt = [
             types.Part.from_bytes(data=imagem_bytes, mime_type="image/jpeg"),
             types.Part.from_text(text=prompt)
         ]
+        
         res = client.models.generate_content(
             model="gemini-2.0-flash",
             contents=[types.Content(role="user", parts=conteudo_prompt)]
         )
+        
         txt_limpo = res.text.replace("```json", "").replace("```", "").strip()
         import json
         return json.loads(txt_limpo)
