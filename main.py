@@ -150,6 +150,7 @@ menu = st.sidebar.radio("Navegação:", [
     "📅 Planejamento (Ponto ID)",
     "🧪 Criador de Aulas",
     "📝 Central de Avaliações",
+    "📸 Scanner de Gabaritos",
     "📝 Diário de Bordo Rápido",
     "📊 Painel de Notas & Vistos",
     "📈 Boletim Anual & Conselho",
