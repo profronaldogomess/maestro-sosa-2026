@@ -36,64 +36,125 @@ def ativar_colunas_nativas(doc, num_cols=2, espacamento=720):
     return new_section
 
 # ==============================================================================
-# 1. MATERIAL DO ALUNO TÍPICO (FLUXO NATIVO - FONTE 12)
+# 1. MATERIAL DO ALUNO TÍPICO (FLUXO NATIVO V26.8 - ELITE)
 # ==============================================================================
 def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
+    import re, io, os
+    from docx import Document
+    from docx.shared import Inches, Pt, RGBColor
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.enum.section import WD_SECTION
+    from docx.enum.table import WD_ALIGN_VERTICAL
+    from docx.oxml.ns import qn
+
+    def set_row_height(row, height_pt):
+        tr = row._tr
+        trPr = tr.get_or_add_trPr()
+        trHeight = OxmlElement('w:trHeight')
+        trHeight.set(qn('w:val'), str(int(height_pt * 20))) 
+        trHeight.set(qn('w:hRule'), "atLeast")
+        trPr.append(trHeight)
+
     file_stream = io.BytesIO()
-    try:
-        doc = Document()
-        section = doc.sections[0]
-        section.top_margin, section.bottom_margin = Inches(0.3), Inches(0.3)
-        section.left_margin, section.right_margin = Inches(0.4), Inches(0.4)
+    doc = Document()
+    
+    # Configurações de Estilo Global
+    style = doc.styles['Normal']
+    style.font.name = 'Arial'
+    style.font.size = Pt(11)
 
-        # --- CABEÇALHO (COLUNA ÚNICA) ---
-        header_table = doc.add_table(rows=3, cols=5)
-        header_table.style = 'Table Grid'
-        widths = [Inches(0.8), Inches(2.8), Inches(1.0), Inches(1.4), Inches(1.5)]
-        for i, w in enumerate(widths): header_table.columns[i].width = w
+    section = doc.sections[0]
+    section.top_margin, section.bottom_margin = Inches(0.3), Inches(0.3)
+    section.left_margin, section.right_margin = Inches(0.4), Inches(0.4)
+
+    # --- 1. CABEÇALHO (COLUNA ÚNICA COM LOGO E SEM NOTA) ---
+    header_table = doc.add_table(rows=3, cols=5)
+    header_table.style = 'Table Grid'
+    widths = [Inches(0.9), Inches(2.8), Inches(1.0), Inches(1.4), Inches(1.5)]
+    for i, w in enumerate(widths): header_table.columns[i].width = w
+    
+    # Mesclagens para Logo e Escola
+    c_logo = header_table.cell(0, 0).merge(header_table.cell(2, 0))
+    c_escola = header_table.cell(0, 1).merge(header_table.cell(0, 3))
+    c_trim = header_table.cell(0, 4)
+    c_aluno = header_table.cell(1, 1).merge(header_table.cell(1, 4))
+    
+    # Inserção da Logo
+    logo_path = "logo_escola.png" if os.path.exists("logo_escola.png") else "logo.png"
+    if os.path.exists(logo_path):
+        c_logo.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+        p_logo = c_logo.paragraphs[0]
+        p_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p_logo.add_run().add_picture(logo_path, width=Inches(0.75))
+
+    # Textos do Cabeçalho
+    header_table.cell(0, 1).paragraphs[0].add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA").font.bold = True
+    header_table.cell(0, 4).paragraphs[0].add_run(info.get('trimestre', 'III TRIMESTRE')).font.bold = True
+    
+    p_alu = header_table.cell(1, 1).paragraphs[0]
+    p_alu.add_run("ALUNO(A):").font.size = Pt(11)
+    
+    header_table.cell(2, 1).paragraphs[0].add_run("PROF: Ronaldo Gomes").font.size = Pt(10)
+    header_table.cell(2, 2).paragraphs[0].add_run(f"TURMA: {info.get('ano')}").font.size = Pt(10)
+    header_table.cell(2, 3).paragraphs[0].add_run("DATA:").font.size = Pt(10)
+    header_table.cell(2, 4).paragraphs[0].add_run("ATIVIDADE DE SALA").font.bold = True
+
+    for row in header_table.rows: set_row_height(row, 25)
+
+    doc.add_paragraph()
+
+    # --- 2. ATIVAÇÃO DE COLUNAS NATIVAS ---
+    new_section = doc.add_section(WD_SECTION.CONTINUOUS)
+    sectPr = new_section._sectPr
+    cols = sectPr.xpath('./w:cols')[0]
+    cols.set(qn('w:num'), '2')
+    cols.set(qn('w:space'), '720')
+
+    # --- 3. CONTEÚDO FLUIDO E JUSTIFICADO ---
+    linhas = conteudo.split('\n')
+    for linha in linhas:
+        l_s = linha.strip()
+        if not l_s: continue
         
-        c_logo = header_table.cell(0, 0).merge(header_table.cell(2, 0))
-        header_table.cell(0, 1).merge(header_table.cell(0, 3)).paragraphs[0].add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA").font.bold = True
-        header_table.cell(0, 4).paragraphs[0].add_run(info.get('trimestre', 'III TRIMESTRE')).font.bold = True
-        header_table.cell(1, 1).merge(header_table.cell(1, 3)).paragraphs[0].add_run("ALUNO(A):").font.size = Pt(11)
-        header_table.cell(1, 4).paragraphs[0].add_run("NOTA:").font.size = Pt(11)
+        p = doc.add_paragraph()
+        p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+        p.paragraph_format.line_spacing = 1.0
+        p.paragraph_format.space_after = Pt(2)
+
+        # Lógica para Questão na mesma linha
+        match_q = re.match(r'^(QUESTÃO\s+\d+)(.*)', l_s, re.IGNORECASE)
         
-        header_table.cell(2, 1).paragraphs[0].add_run("PROF: Ronaldo Gomes").font.size = Pt(10)
-        header_table.cell(2, 2).paragraphs[0].add_run(f"TURMA: {info.get('ano')}").font.size = Pt(10)
-        header_table.cell(2, 3).paragraphs[0].add_run("DATA:").font.size = Pt(10)
-        header_table.cell(2, 4).paragraphs[0].add_run("ATIVIDADE DE SALA").font.bold = True
-        for row in header_table.rows: set_row_height(row, 25)
-
-        doc.add_paragraph()
-
-        # --- ATIVAÇÃO DE COLUNAS NATIVAS ---
-        ativar_colunas_nativas(doc, num_cols=2, espacamento=720)
-
-        # --- CONTEÚDO FLUIDO ---
-        linhas = conteudo.split('\n')
-        for linha in linhas:
-            l_s = linha.strip()
-            if not l_s: continue
-            p = doc.add_paragraph()
-            p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-            p.paragraph_format.line_spacing = 1.0
-            p.paragraph_format.space_after = Pt(2)
+        if match_q:
+            label = match_q.group(1)
+            resto = match_q.group(2)
+            run_l = p.add_run(label.upper())
+            run_l.font.bold = True
+            run_l.font.size = Pt(11)
+            p.add_run(resto.replace('**', ''))
+            p.paragraph_format.space_before = Pt(6)
             
+        elif "PROMPT IMAGEM:" in l_s.upper():
+            # Formatação especial para Prompts de Imagem
+            p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            run_tag = p.add_run("PROMPT IMAGEM: ")
+            run_tag.font.bold = True
+            run_tag.font.size = Pt(8)
+            run_tag.font.color.rgb = RGBColor(100, 100, 100)
+            
+            desc_img = l_s.upper().replace("PROMPT IMAGEM:", "").strip()
+            run_desc = p.add_run(desc_img)
+            run_desc.font.size = Pt(8)
+            run_desc.font.italic = True
+            run_desc.font.color.rgb = RGBColor(100, 100, 100)
+            
+        else:
+            # Texto normal justificado
             run = p.add_run(l_s.replace('**', ''))
-            if "QUESTÃO" in l_s.upper():
-                run.font.bold, run.font.size = True, Pt(12)
-                p.paragraph_format.space_before = Pt(6)
-            else:
-                run.font.size = Pt(12)
+            run.font.size = Pt(11)
 
-        doc.save(file_stream)
-        file_stream.seek(0)
-        return file_stream
-    except Exception as e:
-        file_stream = io.BytesIO()
-        err_doc = Document(); err_doc.add_paragraph(f"ERRO ALUNO: {str(e)}"); err_doc.save(file_stream)
-        file_stream.seek(0)
-        return file_stream
+    doc.save(file_stream)
+    file_stream.seek(0)
+    return file_stream
 
 # ==============================================================================
 # 2. GUIA DO PROFESSOR (FLUXO NATIVO - REGÊNCIA E LOUSA)
