@@ -1819,16 +1819,30 @@ elif menu == "📝 Central de Avaliações":
                 st.markdown("#### 🧠 Justificativas Técnicas (IA)")
                 st.write(ai.extrair_tag(st.session_state.temp_prova, "RESPOSTAS_IA"))
             with t_v_pei:
-                if st.button("✨ GERAR VERSÃO PEI ADAPTADA"):
-                    with st.spinner("Adaptando para PEI..."):
-                        prompt_pei = f"AÇÃO: Adapte as questões abaixo para o padrão PEI/DUA. \nCONTEÚDO: {ai.extrair_tag(st.session_state.temp_prova, 'QUESTOES')}. \n\nREGRAS: \n1. Inicie o conteúdo com a tag [PEI]. \n2. Ao final, crie o gabarito da versão adaptada com a tag [GABARITO_PEI]."
-                        st.session_state.av_pei = ai.gerar_ia("ARQUITETO_PEI_V24", prompt_pei)
-                        st.session_state.av_gab_pei = ai.extrair_tag(st.session_state.av_pei, "GABARITO_PEI")
+                st.markdown("### ♿ Reengenharia para Alunos PEI")
+                if st.button("✨ GERAR PROVA ADAPTADA (5 QUESTÕES)"):
+                    with st.spinner("Maestro Arquiteto realizando adaptação DUA..."):
+                        # PROMPT DE ELITE PARA PEI
+                        prompt_pei_av = (
+                            f"VOCÊ É O ESPECIALISTA EM INCLUSÃO SOSA.\n"
+                            f"OBJETIVO: Adaptar a prova abaixo para o padrão PEI/DUA.\n"
+                            f"CONTEÚDO ORIGINAL: {ai.extrair_tag(st.session_state.temp_prova, 'QUESTOES')}\n\n"
+                            f"REGRAS OBRIGATÓRIAS:\n"
+                            f"1. Reduza para exatamente 5 QUESTÕES de múltipla escolha (A, B, C).\n"
+                            f"2. Use a estrutura: [PARA LEMBRAR], [PASSO A PASSO] e [ATIVIDADES].\n"
+                            f"3. PROIBIDO usar emojis ou Markdown (**).\n"
+                            f"4. Inicie com a tag [PEI] e termine com o gabarito na tag [GABARITO_PEI].\n"
+                            f"5. Texto 100% justificado e denso pedagogicamente."
+                        )
+                        res_pei = ai.gerar_ia("ARQUITETO_PEI_V24", prompt_pei_av)
+                        st.session_state.av_pei = ai.extrair_tag(res_pei, "PEI")
+                        st.session_state.av_gab_pei = ai.extrair_tag(res_pei, "GABARITO_PEI")
                         st.rerun()
+                
                 if "av_pei" in st.session_state:
-                    st.text(st.session_state.av_pei)
-                    st.markdown("#### ✅ Gabarito PEI")
-                    st.code(st.session_state.get("av_gab_pei", "N/A"))
+                    st.text_area("Conteúdo PEI Gerado:", st.session_state.av_pei, height=400, key=f"area_pei_av_{v}")
+                    st.markdown("#### ✅ Gabarito PEI (Sincronizado)")
+                    st.code(st.session_state.get("av_gab_pei", "Gabarito não detectado."))
 
     # --- ABA 4: SINCRONIA & AGENDA (GERAÇÃO DUAL) ---
     with tab_agenda:
