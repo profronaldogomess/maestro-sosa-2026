@@ -1744,14 +1744,14 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                     st.info("Banco de relatórios vazio.")
 
 # ==============================================================================
-# MÓDULO: ARQUITETO DE EXAMES - ARQUITETURA V32.5 (SIMETRIA PEI + CRONOGRAMA)
+# MÓDULO: ARQUITETO DE EXAMES - ARQUITETURA V32.8 (JUSTIFICATIVAS PEI)
 # ==============================================================================
 elif menu == "📝 Central de Avaliações":
     st.title("📝 Arquiteto de Exames e Gestão de Cronograma")
     st.markdown("---")
     
     def reset_avaliacoes():
-        keys_to_del = ["temp_prova", "av_pei", "refino_av_ativo", "av_valor_total", "av_gab_pei", "av_nome_fixo"]
+        keys_to_del = ["temp_prova", "av_pei", "refino_av_ativo", "av_valor_total", "av_gab_pei", "av_res_pei_ia", "av_nome_fixo"]
         for k in keys_to_del:
             if k in st.session_state: del st.session_state[k]
         st.session_state.v_av = int(time.time())
@@ -1764,7 +1764,7 @@ elif menu == "📝 Central de Avaliações":
         "🚀 Arquiteto de Exames", "🤖 Refinador Maestro", "👁️ Visualização", "📅 Sincronia & Agenda", "🗂️ Acervo & Cronograma"
     ])
 
-    # --- ABA 1: ARQUITETO (GERAÇÃO) ---
+    # --- ABA 1: ARQUITETO ---
     with tab_arquiteto:
         is_refinando_av = "refino_av_ativo" in st.session_state
         if is_refinando_av:
@@ -1776,22 +1776,10 @@ elif menu == "📝 Central de Avaliações":
             st.markdown("### ⚙️ 1. Configuração do Exame")
             c1, c2, c3, c4 = st.columns([1.5, 1, 1, 1])
             opcoes_tipo = ["Teste", "Prova", "Recuperação Paralela", "Recuperação Final", "2ª Chamada"]
-            
-            idx_t = 0
-            if is_refinando_av:
-                tipo_orig = meta.get('tipo', '').split(" - ")[0]
-                if tipo_orig in opcoes_tipo: idx_t = opcoes_tipo.index(tipo_orig)
-            
-            tipo_av = c1.selectbox("Tipo:", opcoes_tipo, index=idx_t, disabled=is_refinando_av, key=f"av_t_{v}")
+            idx_t = opcoes_tipo.index(st.session_state.refino_av_ativo.get('tipo', '').split(" - ")[0]) if is_refinando_av else 0
+            tipo_av = c1.selectbox("Tipo:", opcoes_tipo, index=idx_t, key=f"av_t_{v}")
             v_total = c2.number_input("Valor Total:", 0.0, 10.0, 3.0 if "Teste" in tipo_av else 4.0, step=0.5, key=f"av_v_{v}")
-            
-            lista_anos = [6, 7, 8, 9]
-            idx_a = 0
-            if is_refinando_av:
-                ano_orig = str(meta.get('ano', '6')).replace('º','')
-                if ano_orig.isdigit() and int(ano_orig) in lista_anos: idx_a = lista_anos.index(int(ano_orig))
-            
-            ano_av = c3.selectbox("Série:", lista_anos, index=idx_a, disabled=is_refinando_av, key=f"av_a_{v}")
+            ano_av = c3.selectbox("Série:", [6, 7, 8, 9], key=f"av_a_{v}")
             qtd_q = c4.number_input("Nº Questões:", 5, 20, 10, key=f"av_q_{v}")
 
         if not is_refinando_av:
@@ -1810,36 +1798,27 @@ elif menu == "📝 Central de Avaliações":
                             st.session_state.av_nome_fixo = f"{tipo_av.upper()}_{ano_av}ANO_{datetime.now().strftime('%d%m_%H%M')}"
                             st.rerun()
 
-    # --- ABA 2: REFINADOR MAESTRO ---
+    # --- ABA 2: REFINADOR ---
     with tab_refino:
         if "temp_prova" in st.session_state:
             st.subheader("🤖 Refinamento de Precisão")
             cmd = st.chat_input("Solicitar ajuste no exame...")
             if cmd:
-                with st.spinner("Reescrevendo exame..."):
-                    st.session_state.temp_prova = ai.gerar_ia("REFINADOR_EXAMES", f"ORDEM: {cmd}\n\nATUAL:\n{st.session_state.temp_prova}")
-                    st.session_state.v_av += 1
-                    st.rerun()
-            
-            texto_para_editar = st.session_state.temp_prova.split("--- LINK DRIVE ---")[0].strip()
-            st.session_state.temp_prova = st.text_area("Editor de Exame:", texto_para_editar, height=500, key=f"ed_av_raw_{v}")
-        else: st.info("Gere ou selecione uma prova para refinar.")
+                st.session_state.temp_prova = ai.gerar_ia("REFINADOR_EXAMES", f"ORDEM: {cmd}\n\nATUAL:\n{st.session_state.temp_prova}")
+                st.session_state.v_av += 1
+                st.rerun()
+            st.text_area("Editor:", st.session_state.temp_prova, height=500, key=f"ed_av_raw_{v}")
 
-    # --- ABA 3: VISUALIZAÇÃO (SIMETRIA DE ABAS) ---
+    # --- ABA 3: VISUALIZAÇÃO (COM JUSTIFICATIVAS PEI) ---
     with tab_vis:
         if "temp_prova" in st.session_state:
-            # ORGANIZAÇÃO EM 4 ABAS PARA CONFERÊNCIA TOTAL
             t_v_alu, t_v_gab, t_v_pei_prova, t_v_pei_gab = st.tabs([
-                "📝 Aluno (Regular)", 
-                "✅ Gabarito (Regular)", 
-                "♿ Prova PEI", 
-                "📊 Gabarito PEI"
+                "📝 Aluno (Regular)", "✅ Gabarito (Regular)", "♿ Prova PEI", "📊 Gabarito PEI"
             ])
             
             with t_v_alu: 
                 st.markdown("### 📄 Prova Regular")
-                q_txt = ai.extrair_tag(st.session_state.temp_prova, "QUESTOES")
-                st.text(q_txt if q_txt else st.session_state.temp_prova)
+                st.text(ai.extrair_tag(st.session_state.temp_prova, "QUESTOES"))
             
             with t_v_gab: 
                 st.markdown("#### 🎯 Respostas e Justificativas")
@@ -1853,51 +1832,48 @@ elif menu == "📝 Central de Avaliações":
                     with st.spinner("Realizando Reengenharia PEI..."):
                         prompt_pei = (
                             f"ADAPTE PARA PEI: {ai.extrair_tag(st.session_state.temp_prova, 'QUESTOES')}. \n"
-                            f"REGRAS: Use [PEI] para o conteúdo (Para Lembrar, Passo a Passo, Atividades) "
-                            f"e [GABARITO_PEI] para as respostas. Reduza para 5 questões A, B, C."
+                            f"REGRAS: \n"
+                            f"1. Use [PEI] para o conteúdo adaptado.\n"
+                            f"2. Use [GABARITO_PEI] para a lista de respostas (Ex: 1-A, 2-B).\n"
+                            f"3. Use [RESPOSTAS_PEI_IA] para as justificativas pedagógicas simplificadas de cada questão.\n"
+                            f"4. Reduza para 5 questões A, B, C."
                         )
                         res_pei = ai.gerar_ia("ARQUITETO_PEI_V24", prompt_pei)
                         st.session_state.av_pei = ai.extrair_tag(res_pei, "PEI")
                         st.session_state.av_gab_pei = ai.extrair_tag(res_pei, "GABARITO_PEI")
+                        st.session_state.av_res_pei_ia = ai.extrair_tag(res_pei, "RESPOSTAS_PEI_IA")
                         st.rerun()
                 
                 if "av_pei" in st.session_state:
                     st.text_area("Conteúdo da Prova PEI:", st.session_state.av_pei, height=400, key=f"area_pei_vis_{v}")
-                else:
-                    st.info("Clique no botão acima para gerar a versão adaptada.")
 
             with t_v_pei_gab:
-                st.markdown("### 📊 Gabarito da Prova PEI")
+                st.markdown("### 📊 Gabarito e Justificativas PEI")
                 if "av_gab_pei" in st.session_state:
+                    st.markdown("**Respostas:**")
                     st.code(st.session_state.av_gab_pei)
+                    st.markdown("---")
+                    st.markdown("**Justificativas Pedagógicas (PEI):**")
+                    st.write(st.session_state.get("av_res_pei_ia", "Justificativas não geradas."))
                 else:
-                    st.info("Gere a Prova PEI para visualizar o gabarito correspondente.")
-        else: st.info("Aguardando geração do exame...")
+                    st.info("Gere a Prova PEI para visualizar o gabarito.")
 
     # --- ABA 4: SINCRONIA & AGENDA ---
     with tab_agenda:
         if "temp_prova" in st.session_state:
             st.subheader("📅 Finalização e Agendamento")
             c_s1, c_s2 = st.columns(2)
-            trim_av = c_s1.selectbox("Trimestre de Destino:", ["I Trimestre", "II Trimestre", "III Trimestre"])
-            
+            trim_av = c_s1.selectbox("Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"])
             nome_sugerido = st.session_state.refino_av_ativo.get('nome_arquivo') if is_refinando_av else st.session_state.get('av_nome_fixo', 'AVALIACAO')
-            nome_arq = c_s2.text_input("Nome do Arquivo (Drive):", nome_sugerido, key=f"name_av_input_{v}")
-            
-            sel_turmas = st.multiselect("Turmas para Aplicação:", sorted([t for t in df_alunos['TURMA'].unique() if str(ano_av) in str(t)]))
-            data_app = st.date_input("Data da Avaliação:", date.today())
+            nome_arq = c_s2.text_input("Nome do Arquivo:", nome_sugerido, key=f"name_av_input_{v}")
+            sel_turmas = st.multiselect("Turmas:", sorted([t for t in df_alunos['TURMA'].unique() if str(ano_av) in str(t)]))
+            data_app = st.date_input("Data:", date.today())
 
             if st.button("💾 FINALIZAR, SALVAR E AGENDAR", use_container_width=True, type="primary"):
                 with st.status("🚀 Sincronizando...", expanded=True) as status:
                     v_t_str = f"{st.session_state.get('av_valor_total', 10.0)}".replace('.', ',')
                     info_doc = {"ano": f"{ano_av}º", "tipo_prova": tipo_av, "valor": v_t_str, "qtd_questoes": qtd_q, "trimestre": trim_av}
                     
-                    # 1. LIMPEZA EM CASCATA (UPSERT)
-                    identificador = f"{tipo_av} - {ano_av}º Ano"
-                    status.write(f"🧹 Removendo versões antigas e limpando cronograma...")
-                    db.excluir_avaliacao_completa(identificador, tipo_av)
-
-                    # 2. UPLOAD DUAL
                     status.write("📄 Enviando Prova Regular...")
                     doc_reg = exporter.gerar_docx_prova_v25(nome_arq, st.session_state.temp_prova, info_doc)
                     link_reg = db.subir_e_converter_para_google_docs(doc_reg, nome_arq, trimestre=trim_av, categoria=f"{ano_av}º Ano", semana="AVALIAÇÃO", modo="AVALIACAO")
@@ -1909,20 +1885,26 @@ elif menu == "📝 Central de Avaliações":
                         link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_arq}_PEI", trimestre=trim_av, categoria=f"{ano_av}º Ano", semana="AVALIAÇÃO", modo="AVALIACAO")
                     
                     if "https" in str(link_reg):
-                        # 3. SALVAMENTO NO BANCO
-                        status.write("💾 Registrando no Acervo...")
-                        gab_pei = st.session_state.get("av_gab_pei", "N/A")
-                        conteudo_banco = f"{st.session_state.temp_prova}\n\n[PEI]\n{st.session_state.get('av_pei','')}\n\n[GABARITO_PEI]\n{gab_pei}\n\n--- LINKS ---\nRegular({link_reg}) PEI({link_pei})"
-                        db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), "AVALIAÇÃO", identificador, conteudo_banco, f"{ano_av}º", link_reg])
+                        identificador = f"{tipo_av} - {ano_av}º Ano"
+                        db.excluir_avaliacao_completa(identificador, tipo_av)
                         
-                        # 4. REGISTRO NO CRONOGRAMA
+                        # PERSISTÊNCIA DE TODOS OS GABARITOS E JUSTIFICATIVAS
+                        conteudo_banco = (
+                            f"{st.session_state.temp_prova}\n\n"
+                            f"[PEI]\n{st.session_state.get('av_pei','')}\n\n"
+                            f"[GABARITO_PEI]\n{st.session_state.get('av_gab_pei','')}\n\n"
+                            f"[RESPOSTAS_PEI_IA]\n{st.session_state.get('av_res_pei_ia','')}\n\n"
+                            f"--- LINKS ---\nRegular({link_reg}) PEI({link_pei})"
+                        )
+                        
+                        db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), "AVALIAÇÃO", identificador, conteudo_banco, f"{ano_av}º", link_reg])
                         for t in sel_turmas:
                             db.salvar_no_banco("DB_REGISTRO_AULAS", [data_app.strftime("%d/%m/%Y"), "AVALIAÇÃO", t, f"Aplicação: {tipo_av} (Valor: {v_t_str})", "SIM", "AGENDADA"])
                         
-                        status.update(label="✅ Sincronia e Agenda Concluídas!", state="complete")
+                        status.update(label="✅ Sincronia Concluída!", state="complete")
                         st.balloons(); time.sleep(1.5); reset_avaliacoes()
 
-    # --- ABA 5: ACERVO & CRONOGRAMA (BOTÕES DUAIS) ---
+    # --- ABA 5: ACERVO & CRONOGRAMA ---
     with tab_acervo:
         c_h1, c_h2 = st.columns([1.6, 1])
         with c_h1:
@@ -1932,7 +1914,6 @@ elif menu == "📝 Central de Avaliações":
                 with st.container(border=True):
                     st.markdown(f"**{row['TIPO_MATERIAL']}**")
                     txt_f = str(row['CONTEUDO'])
-                    
                     l_reg = re.search(r"Regular\((.*?)\)", txt_f).group(1) if "Regular(" in txt_f else row.get('LINK_DRIVE')
                     l_pei = re.search(r"PEI\((.*?)\)", txt_f).group(1) if "PEI(" in txt_f and "PEI(N/A)" not in txt_f else None
 
@@ -1945,12 +1926,12 @@ elif menu == "📝 Central de Avaliações":
                         st.session_state.temp_prova = ai.extrair_tag(txt_f, "QUESTOES") or txt_f.split("[PEI]")[0]
                         st.session_state.av_pei = ai.extrair_tag(txt_f, "PEI")
                         st.session_state.av_gab_pei = ai.extrair_tag(txt_f, "GABARITO_PEI")
+                        st.session_state.av_res_pei_ia = ai.extrair_tag(txt_f, "RESPOSTAS_PEI_IA")
                         st.session_state.refino_av_ativo = {"tipo": str(row['TIPO_MATERIAL']), "ano": str(row['ANO']), "nome_arquivo": str(row['TIPO_MATERIAL']).replace(" - ", "_")}
                         st.rerun()
                         
                     if c_b4.button("🗑️ Apagar", key=f"del_av_{row.name}", use_container_width=True):
-                        nome_limpo = str(row['TIPO_MATERIAL']).split(" - ")[0]
-                        db.excluir_avaliacao_completa(row['TIPO_MATERIAL'], nome_limpo)
+                        db.excluir_avaliacao_completa(row['TIPO_MATERIAL'], str(row['TIPO_MATERIAL']).split(" - ")[0])
                         st.rerun()
 
         with c_h2:
