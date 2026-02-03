@@ -390,3 +390,45 @@ def excluir_plano_completo(semana, ano):
     except Exception as e:
         st.error(f"Erro na exclusão cirúrgica: {e}")
         return False
+
+def excluir_avaliacao_completa(identificador, tipo_prova_nome):
+    """
+    LIMPEZA EM CASCATA V31.8
+    1. Deleta arquivos no Drive.
+    2. Remove da gaveta (DB_AULAS_PRONTAS).
+    3. Remove todos os agendamentos no cronograma (DB_REGISTRO_AULAS).
+    """
+    try:
+        wb = conectar()
+        creds = obter_creds_drive()
+        service = build('drive', 'v3', credentials=creds)
+        import re
+        
+        # 1. LIMPEZA NA GAVETA E DRIVE
+        ws_gaveta = wb.worksheet("DB_AULAS_PRONTAS")
+        dados_gaveta = ws_gaveta.get_all_values()
+        for i, row in enumerate(dados_gaveta):
+            if i > 0 and row[2] == identificador:
+                # Busca IDs do Drive para deletar
+                ids = re.findall(r"(?:/d/|id=)([a-zA-Z0-9-_]{25,})", " ".join(row))
+                for f_id in ids:
+                    try: service.files().delete(fileId=f_id).execute()
+                    except: pass
+                ws_gaveta.delete_rows(i + 1)
+                break
+        
+        # 2. LIMPEZA NO CRONOGRAMA (DB_REGISTRO_AULAS)
+        ws_cron = wb.worksheet("DB_REGISTRO_AULAS")
+        dados_cron = ws_cron.get_all_values()
+        # Filtra linhas onde o conteúdo contém o nome da prova (ex: "Aplicação: Teste")
+        indices_para_deletar = [i + 1 for i, row in enumerate(dados_cron) if i > 0 and tipo_prova_nome in row[3]]
+        
+        # Deleta de baixo para cima para não errar o índice
+        for idx in reversed(indices_para_deletar):
+            ws_cron.delete_rows(idx)
+            
+        st.cache_data.clear()
+        return True
+    except Exception as e:
+        st.error(f"Erro na exclusão em cascata: {e}")
+        return False
