@@ -212,54 +212,145 @@ def gerar_docx_professor_v25(titulo_doc, conteudo, info):
         return file_stream
 
 # ==============================================================================
-# 3. MATERIAL PEI (FLUXO NATIVO - FONTE 14 DUA)
+# 3. MATERIAL PEI ADAPTADO (FLUXO NATIVO V26.9 - ELITE)
 # ==============================================================================
 def gerar_docx_pei_v25(titulo_doc, conteudo, info):
+    import re, io, os
+    from docx import Document
+    from docx.shared import Inches, Pt, RGBColor
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.enum.section import WD_SECTION
+    from docx.enum.table import WD_ALIGN_VERTICAL
+    from docx.oxml.ns import qn
+
+    def set_row_height(row, height_pt):
+        tr = row._tr
+        trPr = tr.get_or_add_trPr()
+        trHeight = OxmlElement('w:trHeight')
+        trHeight.set(qn('w:val'), str(int(height_pt * 20))) 
+        trHeight.set(qn('w:hRule'), "atLeast")
+        trPr.append(trHeight)
+
+    def limpar_emojis(texto):
+        # Remove emojis e caracteres especiais de desenho, mantendo acentuação
+        return re.sub(r'[^\x00-\x7FÀ-ÿ]+', '', texto)
+
     file_stream = io.BytesIO()
-    try:
-        doc = Document()
-        section = doc.sections[0]
-        section.top_margin, section.bottom_margin = Inches(0.3), Inches(0.3)
-        section.left_margin, section.right_margin = Inches(0.4), Inches(0.4)
+    doc = Document()
+    
+    # Estilo Global
+    style = doc.styles['Normal']
+    style.font.name = 'Arial'
+    style.font.size = Pt(12) # FONTE 12 SOLICITADA
 
-        # --- CABEÇALHO PEI ---
-        header_table = doc.add_table(rows=2, cols=2)
-        header_table.style = 'Table Grid'
-        header_table.cell(0, 0).merge(header_table.cell(0, 1)).paragraphs[0].add_run("ATIVIDADE ADAPTADA - DESENHO UNIVERSAL (PEI)").font.bold = True
-        header_table.cell(1, 0).paragraphs[0].add_run("ALUNO(A):").font.size = Pt(12)
-        header_table.cell(1, 1).paragraphs[0].add_run(f"TRIMESTRE: {info.get('trimestre')}").font.size = Pt(12)
-        for row in header_table.rows: set_row_height(row, 30)
+    section = doc.sections[0]
+    section.top_margin, section.bottom_margin = Inches(0.3), Inches(0.3)
+    section.left_margin, section.right_margin = Inches(0.4), Inches(0.4)
 
-        doc.add_paragraph()
+    # --- 1. CABEÇALHO (IGUAL AO REGULAR) ---
+    header_table = doc.add_table(rows=3, cols=5)
+    header_table.style = 'Table Grid'
+    widths = [Inches(0.9), Inches(2.8), Inches(1.0), Inches(1.4), Inches(1.5)]
+    for i, w in enumerate(widths): header_table.columns[i].width = w
+    
+    c_logo = header_table.cell(0, 0).merge(header_table.cell(2, 0))
+    header_table.cell(0, 1).merge(header_table.cell(0, 3)).paragraphs[0].add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA").font.bold = True
+    header_table.cell(0, 4).paragraphs[0].add_run(info.get('trimestre', 'III TRIMESTRE')).font.bold = True
+    header_table.cell(1, 1).merge(header_table.cell(1, 4)).paragraphs[0].add_run("ALUNO(A):").font.size = Pt(11)
+    
+    header_table.cell(2, 1).paragraphs[0].add_run("PROF: Ronaldo Gomes").font.size = Pt(10)
+    header_table.cell(2, 2).paragraphs[0].add_run(f"TURMA: {info.get('ano')}").font.size = Pt(10)
+    header_table.cell(2, 3).paragraphs[0].add_run("DATA:").font.size = Pt(10)
+    header_table.cell(2, 4).paragraphs[0].add_run("ATIVIDADE ADAPTADA (PEI)").font.bold = True
 
-        # --- ATIVAÇÃO DE COLUNAS NATIVAS ---
-        ativar_colunas_nativas(doc, num_cols=2, espacamento=720)
+    logo_path = "logo_escola.png" if os.path.exists("logo_escola.png") else "logo.png"
+    if os.path.exists(logo_path):
+        c_logo.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+        c_logo.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+        c_logo.paragraphs[0].add_run().add_picture(logo_path, width=Inches(0.75))
 
-        # --- CONTEÚDO FLUIDO PEI ---
-        linhas = conteudo.split('\n')
-        for linha in linhas:
-            l_s = linha.strip()
-            if not l_s: continue
-            p = doc.add_paragraph()
-            p.paragraph_format.line_spacing = 1.15
-            p.paragraph_format.space_after = Pt(3)
+    for row in header_table.rows: set_row_height(row, 25)
+    doc.add_paragraph()
+
+    # --- 2. GABARITO PADRÃO ENEM (SOLICITADO) ---
+    # Criamos uma tabela pequena para o gabarito antes das colunas
+    gab_container = doc.add_table(rows=1, cols=2)
+    gab_container.columns[0].width = Inches(4.5)
+    gab_container.columns[1].width = Inches(2.5)
+    
+    p_inst = gab_container.cell(0, 0).paragraphs[0]
+    p_inst.add_run("GABARITO DE RESPOSTAS:").font.bold = True
+    p_inst.add_run("\nPinte o círculo da alternativa correta.").font.size = Pt(9)
+
+    gab_grid = gab_container.cell(0, 1).add_table(rows=6, cols=4) # PEI geralmente tem menos questões
+    gab_grid.style = 'Table Grid'
+    for i, lab in enumerate(["Q", "A", "B", "C"]):
+        p = gab_grid.cell(0, i).paragraphs[0]
+        p.add_run(lab).font.bold = True
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    for r in range(1, 6):
+        gab_grid.cell(r, 0).paragraphs[0].add_run(f"{r:02d}").font.size = Pt(8)
+        for col in range(1, 4):
+            p_bol = gab_grid.cell(r, col).paragraphs[0]
+            p_bol.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            run_b = p_bol.add_run("○")
+            run_b.font.size = Pt(14)
+
+    doc.add_paragraph()
+
+    # --- 3. ATIVAÇÃO DE COLUNAS NATIVAS ---
+    new_section = doc.add_section(WD_SECTION.CONTINUOUS)
+    sectPr = new_section._sectPr
+    cols = sectPr.xpath('./w:cols')[0]
+    cols.set(qn('w:num'), '2')
+    cols.set(qn('w:space'), '720')
+
+    # --- 4. CONTEÚDO FLUIDO, JUSTIFICADO E SEM EMOJIS ---
+    conteudo_limpo = limpar_emojis(conteudo)
+    # Remove tags de marcação da IA para o documento ficar limpo
+    conteudo_limpo = conteudo_limpo.replace("[PEI]", "").replace("[IMAGENS_PEI]", "")
+    
+    linhas = conteudo_limpo.split('\n')
+    for linha in linhas:
+        l_s = linha.strip()
+        if not l_s: continue
+        
+        p = doc.add_paragraph()
+        p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+        p.paragraph_format.line_spacing = 1.0
+        p.paragraph_format.space_after = Pt(2)
+
+        # Títulos de Seção PEI
+        if any(tag in l_s.upper() for tag in ["PARA LEMBRAR", "PASSO A PASSO", "ATIVIDADES"]):
+            run = p.add_run(l_s.replace("[", "").replace("]", "").upper())
+            run.font.bold, run.font.size = True, Pt(12)
+            p.paragraph_format.space_before = Pt(8)
             
-            if any(tag in l_s.upper() for tag in ["PARA LEMBRAR", "PASSO A PASSO", "ATIVIDADES"]):
-                run = p.add_run(f" {l_s.replace('**', '')}")
-                run.font.bold, run.font.size = True, Pt(15)
-                p.paragraph_format.space_before = Pt(10)
-            else:
-                run = p.add_run(l_s.replace('**', ''))
-                run.font.size = Pt(14) # FONTE 14 OBRIGATÓRIA PEI
+        # Questões (Mesma linha)
+        elif re.match(r'^\d+[\.\)]', l_s) or "QUESTÃO" in l_s.upper():
+            p.paragraph_format.space_before = Pt(6)
+            run = p.add_run(l_s.replace('**', ''))
+            run.font.bold = True
+            
+        # Prompts de Imagem (Igual ao Aluno Regular)
+        elif "PROMPT IMAGEM:" in l_s.upper() or "EDUCATIONAL LINE ART" in l_s.upper():
+            p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            run_tag = p.add_run("PROMPT IMAGEM: ")
+            run_tag.font.bold, run_tag.font.size = True, Pt(8)
+            run_tag.font.color.rgb = RGBColor(100, 100, 100)
+            
+            desc = l_s.replace("PROMPT IMAGEM:", "").replace("- ", "").strip()
+            run_desc = p.add_run(desc)
+            run_desc.font.size, run_desc.font.italic = Pt(8), True
+            run_desc.font.color.rgb = RGBColor(100, 100, 100)
+            
+        else:
+            run = p.add_run(l_s.replace('**', ''))
+            run.font.size = Pt(12)
 
-        doc.save(file_stream)
-        file_stream.seek(0)
-        return file_stream
-    except Exception as e:
-        file_stream = io.BytesIO()
-        err_doc = Document(); err_doc.add_paragraph(f"ERRO PEI: {str(e)}"); err_doc.save(file_stream)
-        file_stream.seek(0)
-        return file_stream
+    doc.save(file_stream)
+    file_stream.seek(0)
+    return file_stream
 
 # ==============================================================================
 # 4. PROVA OFICIAL (FLUXO NATIVO - GABARITO ENEM)
