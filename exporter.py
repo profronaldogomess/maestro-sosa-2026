@@ -309,35 +309,96 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         return file_stream
 
 # ==============================================================================
-# 5. PLANO PEDAGÓGICO (COLUNA ÚNICA - RIGOR PHC)
+# 5. PLANO PEDAGÓGICO (COLUNA ÚNICA - RIGOR PHC V26)
 # ==============================================================================
 def gerar_docx_plano_pedagogico_v18(titulo_arquivo, dados, info):
+    import os
+    import io
+    from docx import Document
+    from docx.shared import Inches, Pt
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.enum.table import WD_ALIGN_VERTICAL
+
     file_stream = io.BytesIO()
     try:
         doc = Document()
         section = doc.sections[0]
         section.top_margin, section.bottom_margin = Inches(0.5), Inches(0.5)
+        section.left_margin, section.right_margin = Inches(0.6), Inches(0.6)
+
+        # --- 1. CABEÇALHO OFICIAL COM LOGO E TRIMESTRE ---
         table = doc.add_table(rows=3, cols=3)
         table.style = 'Table Grid'
+        
+        # Ajuste de larguras das colunas do cabeçalho
+        widths = [Inches(1.2), Inches(3.5), Inches(2.0)]
+        for i, w in enumerate(widths):
+            table.columns[i].width = w
+
+        # Inserção da Logo
+        if os.path.exists("logo_escola.png"):
+            cell_logo = table.cell(0, 0)
+            cell_logo.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+            p_logo = cell_logo.paragraphs[0]
+            p_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            p_logo.add_run().add_picture("logo_escola.png", width=Inches(0.8))
+        
+        # Textos do Cabeçalho
         table.cell(0, 1).paragraphs[0].add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA").font.bold = True
         table.cell(0, 2).paragraphs[0].add_run("PLANO DE ENSINO SEMANAL").font.bold = True
-        table.cell(1, 0).merge(table.cell(1, 1)).paragraphs[0].add_run(f"Professor: Ronaldo Gomes")
-        table.cell(1, 2).paragraphs[0].add_run(f"Ano: {info.get('ano', '')}")
-        table.cell(2, 0).merge(table.cell(2, 1)).paragraphs[0].add_run(f"Semana: {info.get('semana', '')}")
-        table.cell(2, 2).paragraphs[0].add_run("Data: [ / / 2026 ]")
-        doc.add_paragraph()
-        campos = [("CONTEÚDO GERAL EIXO:", "geral"), ("CONTEÚDOS ESPECÍFICOS:", "especificos"), ("OBJETIVOS DE ENSINO:", "objetivos"), ("METODOLOGIA:", "metodologia"), ("AVALIAÇÃO:", "avaliacao"), ("OBSERVAÇÃO:", "observacao"), ("ADAPTAÇÃO PEI:", "pei")]
+        
+        # Linha do Professor e Ano
+        p_prof = table.cell(1, 0).merge(table.cell(1, 1)).paragraphs[0]
+        p_prof.add_run(f"Professor: Ronaldo Gomes")
+        
+        p_ano = table.cell(1, 2).paragraphs[0]
+        p_ano.add_run(f"Ano: {info.get('ano', '')}")
+        
+        # Linha da Semana e Trimestre (Substituindo a Data)
+        p_sem = table.cell(2, 0).merge(table.cell(2, 1)).paragraphs[0]
+        p_sem.add_run(f"Semana: {info.get('semana', '')}")
+        
+        p_trim = table.cell(2, 2).paragraphs[0]
+        p_trim.add_run(f"Trimestre: {info.get('trimestre', 'I Trimestre')}")
+
+        doc.add_paragraph() # Espaçador
+
+        # --- 2. CORPO DO PLANO (TEXTO JUSTIFICADO) ---
+        campos = [
+            ("CONTEÚDO GERAL EIXO:", "geral"), 
+            ("CONTEÚDOS ESPECÍFICOS:", "especificos"), 
+            ("OBJETIVOS DE ENSINO:", "objetivos"), 
+            ("METODOLOGIA:", "metodologia"), 
+            ("AVALIAÇÃO:", "avaliacao"), 
+            ("OBSERVAÇÃO:", "observacao"), 
+            ("ADAPTAÇÃO PEI:", "pei")
+        ]
+
         for label, chave in campos:
             p = doc.add_paragraph()
-            p.add_run(label).font.bold = True
-            texto = str(dados.get(chave, "")).replace(label, "").strip()
-            p.add_run(f" {texto.replace('**', '')}")
+            p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY # JUSTIFICAÇÃO OBRIGATÓRIA
+            p.paragraph_format.space_after = Pt(6)
+            
+            # Rótulo em Negrito
+            run_label = p.add_run(label)
+            run_label.font.bold = True
+            run_label.font.size = Pt(11)
+            
+            # Conteúdo
+            texto_limpo = str(dados.get(chave, "")).replace(label, "").replace("**", "").strip()
+            if texto_limpo.startswith(":"): texto_limpo = texto_limpo[1:].strip()
+            
+            run_txt = p.add_run(f" {texto_limpo}")
+            run_txt.font.size = Pt(11)
+
         doc.save(file_stream)
         file_stream.seek(0)
         return file_stream
     except Exception as e:
         file_stream = io.BytesIO()
-        err_doc = Document(); err_doc.add_paragraph(f"ERRO PLANO: {str(e)}"); err_doc.save(file_stream)
+        err_doc = Document()
+        err_doc.add_paragraph(f"ERRO CRÍTICO NO PLANO: {str(e)}")
+        err_doc.save(file_stream)
         file_stream.seek(0)
         return file_stream
 
