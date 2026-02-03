@@ -432,3 +432,10 @@ def excluir_avaliacao_completa(identificador, tipo_prova_nome):
     except Exception as e:
         st.error(f"Erro na exclusão em cascata: {e}")
         return False
+    
+def salvar_gabarito_escaneado(dados_lista):
+    """
+    Salva na aba DB_GABARITOS_ALUNOS.
+    Estrutura: [DATA, ID_ALUNO, NOME_ALUNO, TURMA, ID_AVALIACAO, RESPOSTAS, NOTA, LINK_FOTO]
+    """
+    return salvar_no_banco("DB_GABARITOS_ALUNOS", dados_lista)
