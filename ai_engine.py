@@ -292,21 +292,18 @@ def realizar_diagnostico_v25(plano_raw, df_curriculo, ano_sel):
 
 def analisar_gabarito_vision(imagem_bytes):
     """
-    MAESTRO VISION V5.5 - Sensor de Tinta Estrito.
-    Detecta marcações duplas com sensibilidade ultra-alta.
+    MAESTRO VISION V6.0 - Análise de Densidade e Contraste.
+    Focado em distinguir marcações reais de sombras e reflexos.
     """
     try:
         prompt = (
-            "Você é um scanner óptico industrial de alta sensibilidade.\n"
-            "Sua tarefa é detectar a presença de tinta de caneta nos círculos do gabarito.\n\n"
-            "REGRAS DE DETECÇÃO POR LINHA:\n"
-            "1. Analise cada um dos 5 círculos (A, B, C, D, E) separadamente.\n"
-            "2. Se houver QUALQUER marcação, ponto, risco ou preenchimento em MAIS DE UM círculo, retorne 'X' (Marcação Dupla/Anulada).\n"
-            "3. Se houver marcação em apenas UM círculo, retorne a letra correspondente.\n"
-            "4. Se não houver marcação em nenhum, retorne '?'.\n\n"
-            "CASO CRÍTICO (Questão 01 da imagem): Observe que há marcação no 'A' e também marcas no 'C'. "
-            "Pela regra de segurança, isso deve ser retornado como 'X'.\n\n"
-            "Retorne APENAS o JSON puro: {'01': 'X', '02': 'B', ...}"
+            "Você é um scanner óptico de alta precisão. Analise a grade de 10 questões.\n"
+            "Para cada linha (01 a 10), compare os 5 círculos (A, B, C, D, E):\n"
+            "1. Identifique o círculo que possui a maior densidade de preenchimento (mais escuro).\n"
+            "2. Se um círculo estiver claramente mais preenchido que os outros, retorne a letra.\n"
+            "3. Se houver marcações fortes em DOIS ou mais círculos, retorne 'X' (Anulada).\n"
+            "4. Se todos os círculos estiverem vazios ou apenas com sombras leves, retorne '?'.\n"
+            "Retorne APENAS o JSON puro: {'01': 'A', '02': 'B', ...}"
         )
         
         conteudo_prompt = [
