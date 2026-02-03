@@ -290,82 +290,37 @@ def realizar_diagnostico_v25(plano_raw, df_curriculo, ano_sel):
         "objetivo_literal": extrair_tag(plano_raw, "OBJETIVOS_ENSINO")
     }
 
-elif menu == "📸 Scanner de Gabaritos":
-    st.title("📸 Scanner de Gabaritos Inteligente")
-    st.markdown("---")
-
-    # 1. Seleção de Contexto
-    c1, c2, c3 = st.columns(3)
-    turma_scan = c1.selectbox("Turma:", sorted(df_alunos['TURMA'].unique()))
-    aluno_scan = c2.selectbox("Aluno:", df_alunos[df_alunos['TURMA']==turma_scan]['NOME_ALUNO'].tolist())
-    
-    serie_alvo = "".join(filter(str.isdigit, turma_scan))
-    provas_disponiveis = df_aulas[(df_aulas['SEMANA_REF'] == "AVALIAÇÃO") & (df_aulas['ANO'].str.contains(serie_alvo))]
-    prova_sel = c3.selectbox("Avaliação Base:", provas_disponiveis['TIPO_MATERIAL'].tolist())
-
-    # 2. Captura
-    img_file = st.camera_input("Centralize o gabarito na tela")
-    
-    if img_file:
-        if st.button("🧠 Analisar Marcações com Maestro Vision", type="primary", use_container_width=True):
-            with st.spinner("O Maestro está processando a imagem..."):
-                bytes_data = img_file.getvalue()
-                # CHAMADA DA FUNÇÃO QUE CORRIGIMOS
-                sugestao_ia = ai.analisar_gabarito_vision(bytes_data)
-                
-                if "erro" not in sugestao_ia:
-                    st.session_state.scan_res = sugestao_ia
-                    st.session_state.scan_img = bytes_data
-                else:
-                    st.error(f"Erro técnico na IA: {sugestao_ia['erro']}")
-
-    # 3. Conferência e Correção Automática
-    if "scan_res" in st.session_state:
-        st.markdown("### 📝 Conferência e Resultado")
-        col_img, col_edit = st.columns([1.2, 1])
+def analisar_gabarito_vision(imagem_bytes):
+    """
+    MAESTRO VISION V2 - Especialista em Gabaritos SOSA.
+    Analisa a grade de 10 questões (A-E) e retorna as marcações.
+    """
+    try:
+        # Prompt de Alta Precisão baseado na sua foto
+        prompt = (
+            "Você é um inspetor de provas rigoroso. Analise a imagem do gabarito. "
+            "Existem 10 questões numeradas de 01 a 10. "
+            "Cada questão tem 5 alternativas: A, B, C, D e E representadas por círculos. "
+            "Identifique qual alternativa foi preenchida (pintada de preto/escuro). "
+            "Retorne APENAS um JSON puro, sem markdown, no formato: "
+            '{"01": "A", "02": "B", "03": "C", "04": "D", "05": "E", "06": "A", "07": "B", "08": "C", "09": "D", "10": "E"}'
+            "\nSe uma questão estiver em branco ou ilegível, use '?'."
+        )
         
-        with col_img:
-            st.image(st.session_state.scan_img, caption="Gabarito Escaneado", use_container_width=True)
+        conteudo_prompt = [
+            types.Part.from_bytes(data=imagem_bytes, mime_type="image/jpeg"),
+            types.Part.from_text(text=prompt)
+        ]
         
-        with col_edit:
-            # Busca Gabarito Oficial para comparação
-            prova_data = provas_disponiveis[provas_disponiveis['TIPO_MATERIAL'] == prova_sel].iloc[0]
-            txt_gab_oficial = ai.extrair_tag(prova_data['CONTEUDO'], "GABARITO_REGULAR")
-            
-            st.info(f"🎯 **Gabarito Oficial Detectado:** {txt_gab_oficial[:50]}...")
-
-            # Monta tabela de conferência
-            dados_conferencia = []
-            for q, resp in st.session_state.scan_res.items():
-                dados_conferencia.append({"Questão": q, "Resposta Aluno": resp})
-            
-            df_conf = pd.DataFrame(dados_conferencia)
-            df_final = st.data_editor(df_conf, num_rows="fixed", use_container_width=True, key="editor_scanner")
-            
-            if st.button("💾 Confirmar e Salvar Nota", use_container_width=True, type="primary"):
-                with st.status("Sincronizando Diagnóstico...", expanded=True) as status:
-                    # A. Upload da Foto
-                    import io
-                    img_io = io.BytesIO(st.session_state.scan_img)
-                    nome_foto = f"SCAN_{aluno_scan.replace(' ', '_')}"
-                    link_foto = db.subir_e_converter_para_google_docs(img_io, nome_foto, trimestre="I Trimestre", categoria=turma_scan, modo="SCANNER")
-                    
-                    # B. Registro no Banco
-                    respostas_txt = ";".join(df_final['Resposta Aluno'].tolist())
-                    aluno_info = df_alunos[df_alunos['NOME_ALUNO'] == aluno_scan].iloc[0]
-                    
-                    db.salvar_no_banco("DB_GABARITOS_ALUNOS", [
-                        datetime.now().strftime("%d/%m/%Y"),
-                        aluno_info['ID'],
-                        aluno_scan,
-                        turma_scan,
-                        prova_sel,
-                        respostas_txt,
-                        "AGUARDANDO_CORRETOR",
-                        link_foto
-                    ])
-                    
-                    status.update(label="✅ Diagnóstico Salvo!", state="complete")
-                    st.balloons()
-                    del st.session_state.scan_res
-                    st.rerun()
+        # Chamada ao modelo multimodal
+        res = client.models.generate_content(
+            model="gemini-1.5-flash",
+            contents=[types.Content(role="user", parts=conteudo_prompt)]
+        )
+        
+        # Limpeza de ruídos de texto
+        txt_limpo = res.text.replace("```json", "").replace("```", "").strip()
+        import json
+        return json.loads(txt_limpo)
+    except Exception as e:
+        return {"erro": str(e)}
