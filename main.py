@@ -738,7 +738,7 @@ elif menu == "🧪 Criador de Aulas":
                                         if not p_reg and not p_pei: st.info("Sem prompts salvos.")
                             
 # ==============================================================================
-# MÓDULO: PLANEJAMENTO ESTRATÉGICO (PONTO ID) - ARQUITETURA V26.3 (BLINDADA)
+# MÓDULO: PLANEJAMENTO ESTRATÉGICO (PONTO ID) - ARQUITETURA V26.5 (SINCRO TOTAL)
 # ==============================================================================
 elif menu == "📅 Planejamento (Ponto ID)":
     st.title("📅 Engenharia de Planejamento (Ponto ID)")
@@ -771,12 +771,11 @@ elif menu == "📅 Planejamento (Ponto ID)":
     
     # --- ABA 1: ENGENHARIA DE PLANEJAMENTO ---
     with tab_gerar:
-        # VERIFICAÇÃO DE MODO REFINO
         is_refinando = "refino_ativo" in st.session_state
         
         if is_refinando:
             meta = st.session_state.refino_ativo
-            st.warning(f"🛠️ **MODO REFINO ATIVO:** Você está editando o plano do **{meta['ano']}** para a **{meta['semana']}**.")
+            st.warning(f"🛠️ **MODO REFINO ATIVO:** Editando **{meta['ano']}** | **{meta['semana']}**.")
             if st.button("❌ CANCELAR REFINO E VOLTAR AO NOVO", use_container_width=True):
                 reset_planejamento()
         
@@ -784,13 +783,11 @@ elif menu == "📅 Planejamento (Ponto ID)":
             st.markdown("### ⚙️ 1. Parâmetros de Regência")
             c1, c2, c3 = st.columns([1, 2, 1.5])
             
-            # Se estiver refinando, os seletores ficam desabilitados para evitar erro de alvo
             lista_anos = [6, 7, 8, 9]
             idx_ano = lista_anos.index(int(st.session_state.refino_ativo['ano'].replace('º',''))) if is_refinando else 0
             ano_p = c1.selectbox("Série/Ano:", lista_anos, index=idx_ano, disabled=is_refinando, key="ano_sel_v26")
             
             todas_semanas = util.gerar_semanas()
-            # Tenta achar o índice da semana original para o seletor
             idx_sem = 0
             if is_refinando:
                 try: idx_sem = [s.split(" (")[0] for s in todas_semanas].index(st.session_state.refino_ativo['semana'])
@@ -798,10 +795,8 @@ elif menu == "📅 Planejamento (Ponto ID)":
 
             sem_p = c2.selectbox("Semana de Referência:", todas_semanas, index=idx_sem, disabled=is_refinando, key="sem_sel_v26")
             sem_limpa = sem_p.split(" (")[0]
-            
             modo_p = c3.radio("Método de Elaboração:", ["📖 Livro Didático", "🎛️ Manual (Banco)"], horizontal=True, disabled=is_refinando)
 
-            # RADAR DE STATUS (Apenas se não estiver refinando)
             if not is_refinando:
                 plano_existente = df_planos[(df_planos['ANO'] == f"{ano_p}º") & (df_planos['SEMANA'] == sem_limpa)]
                 if not plano_existente.empty:
@@ -809,7 +804,6 @@ elif menu == "📅 Planejamento (Ponto ID)":
                 else:
                     st.success(f"✅ **STATUS: DISPONÍVEL.** {ano_p}º Ano livre para planejamento na {sem_limpa}.")
 
-        # --- CONFIGURAÇÃO DE CONTEÚDO ---
         df_f = df_curriculo[df_curriculo['ANO'] == ano_p]
         cont_pre, obj_pre, eixo_pre = [], [], ""
         sel_mat, pags = [], "" 
@@ -835,7 +829,6 @@ elif menu == "📅 Planejamento (Ponto ID)":
         pronto = (cont_pre and obj_pre) if modo_p == "🎛️ Manual (Banco)" else (sel_mat and pags)
         
         with cb1:
-            # Se for refino, o botão muda de nome para clareza
             label_btn = "🚀 RECOMPOR PLANEJAMENTO (REFINO)" if is_refinando else "🚀 COMPILAR PLANEJAMENTO DE ELITE"
             if st.button(label_btn, use_container_width=True, type="primary", disabled=not pronto and not is_refinando):
                 with st.spinner("Maestro SOSA processando PHC..."):
@@ -875,42 +868,42 @@ elif menu == "📅 Planejamento (Ponto ID)":
                 st.markdown("---")
                 st.markdown(f"**METODOLOGIA:**\n{ed_met}")
 
-            # BOTÃO DE SALVAMENTO BLINDADO (DENTRO DA ABA 1)
+            # --- BOTÃO DE SALVAMENTO BLINDADO (CORREÇÃO DE VARIÁVEIS) ---
             if st.button("💾 FINALIZAR E SINCRONIZAR (DRIVE + BANCO)", use_container_width=True, type="primary"):
                 with st.status("Iniciando Protocolo de Sincronia...", expanded=True) as status:
                     
+                    # 1. DEFINIÇÃO DE METADADOS (RESOLVE O ERRO DE NOME_ARQUIVO)
                     final_ano = st.session_state.refino_ativo['ano'] if is_refinando else f"{ano_p}º"
                     final_semana = st.session_state.refino_ativo['semana'] if is_refinando else sem_limpa
-                    
-                    # 1. LÓGICA UPSERT REAL (LIMPEZA POR COORDENADAS)
-                    status.write(f"🧹 Removendo versões obsoletas de {final_semana} ({final_ano})...")
-                    db.excluir_plano_completo(final_semana, final_ano) # Limpa Drive e Planilha antes de salvar o novo
-                    
-                    # 2. GERAÇÃO DO DOCX
-                    status.write("📄 Gerando Documento Word...")
-                    dados_docx = {"geral": ed_geral, "especificos": ed_espec, "objetivos": ed_objs, "metodologia": ed_met, "avaliacao": ed_ava, "pei": ed_pei}
                     nome_arquivo = f"PLANO_{final_ano.replace('º','')}ANO_{final_semana.replace(' ', '')}"
-                    doc_io = exporter.gerar_docx_plano_pedagogico_v18(nome_arquivo, dados_docx, {"ano": final_ano, "semana": final_semana, "trimestre": "I Trimestre"})
                     
-                    # 3. UPLOAD PARA O DRIVE
+                    # 2. LÓGICA UPSERT (LIMPEZA POR COORDENADAS)
+                    status.write(f"🧹 Removendo versões obsoletas de {final_semana} ({final_ano})...")
+                    db.excluir_plano_completo(final_semana, final_ano) 
+                    
+                    # 3. GERAÇÃO DO DOCX ELITE
+                    status.write("📄 Gerando Documento Word de Elite...")
+                    dados_docx = {"geral": ed_geral, "especificos": ed_espec, "objetivos": ed_objs, "metodologia": ed_met, "avaliacao": ed_ava, "pei": ed_pei}
+                    doc_io = exporter.gerar_docx_plano_pedagogico_ELITE(nome_arquivo, dados_docx, {"ano": final_ano, "semana": final_semana, "trimestre": "I Trimestre"})
+                    
+                    # 4. UPLOAD PARA O DRIVE
                     status.write("📤 Enviando para o Google Drive...")
-                    link_drive = db.subir_e_converter_para_google_docs(
-                        doc_io, nome_arquivo, trimestre="I Trimestre", categoria=final_ano, semana=final_semana, modo="PLANEJAMENTO"
-                    )
+                    link_drive = db.subir_e_converter_para_google_docs(doc_io, nome_arquivo, trimestre="I Trimestre", categoria=final_ano, semana=final_semana, modo="PLANE_PEDAGOGICO")
                     
                     if "https" in str(link_drive):
-                        # 4. SALVAMENTO NO BANCO
+                        # 5. SALVAMENTO NO BANCO
                         status.write("💾 Registrando no Banco de Dados...")
                         final_txt = f"MARKER_CONTEUDO_GERAL {ed_geral} \nMARKER_CONTEUDOS_ESPECIFICOS {ed_espec} \nMARKER_OBJETIVOS_ENSINO {ed_objs} \nMARKER_METODOLOGIA {ed_met} \nMARKER_AVALIACAO {ed_ava} \nMARKER_ADAPTACAO_PEI {ed_pei} \nMARKER_MODALIDADE {modo_p.upper()} \n--- LINK DRIVE --- {link_drive}"
                         
-                        sucesso = db.salvar_no_banco("DB_PLANOS", [
-                            datetime.now().strftime("%d/%m/%Y"), final_semana, final_ano, "I Trimestre", "PADRÃO", final_txt, link_drive
-                        ])
+                        sucesso = db.salvar_no_banco("DB_PLANOS", [datetime.now().strftime("%d/%m/%Y"), final_semana, final_ano, "I Trimestre", "PADRÃO", final_txt, link_drive])
                         
                         if sucesso:
                             status.update(label="✅ Sincronia Concluída!", state="complete")
                             st.balloons()
                             reset_planejamento()
+                    else:
+                        status.update(label="❌ Erro no Upload.", state="error")
+                        st.error(link_drive)
 
     # --- ABA 2: GESTÃO DE ACERVO (EDIÇÃO VIVA) ---
     with tab_hist:
@@ -934,7 +927,6 @@ elif menu == "📅 Planejamento (Ponto ID)":
                 c_h1, c_h2 = st.columns(2)
                 with c_h1:
                     if st.button("🔄 REABRIR PARA REFINO IA", use_container_width=True):
-                        # O SEGREDO: Salva os metadados para blindar o salvamento depois
                         st.session_state.refino_ativo = {"ano": dados_h['ANO'], "semana": sel_h}
                         st.session_state.p_temp = raw_h
                         st.info("Modo Refino Ativado. Vá para a aba 'Engenharia de Planejamento'.")
@@ -947,9 +939,8 @@ elif menu == "📅 Planejamento (Ponto ID)":
 
                 st.markdown("---")
                 if st.button("🗑️ EXCLUIR PLANO DEFINITIVAMENTE", use_container_width=True):
-                    # sel_h é a semana selecionada, dados_h['ANO'] é o ano
                     if db.excluir_plano_completo(sel_h, dados_h['ANO']):
-                        st.success(f"Plano da {sel_h} ({dados_h['ANO']}) removido com sucesso!")
+                        st.success(f"Plano removido com sucesso!")
                         time.sleep(1)
                         st.rerun()
                     else:
@@ -976,7 +967,7 @@ elif menu == "📅 Planejamento (Ponto ID)":
             df_m['STATUS_NUM'] = df_m['CONTEUDO_ESPECIFICO'].apply(lambda x: 1 if str(x).upper() in planejados else 0)
             progresso = df_m.groupby('EIXO')['STATUS_NUM'].agg(['sum', 'count']).reset_index()
             progresso['%'] = (progresso['sum'] / progresso['count'] * 100).round(1)
-            st.plotly_chart(px.bar(progresso, x='EIXO', y='%', text='%', color='%', color_continuous_scale='RdYlGn', range_y=[0, 105]), use_container_width=True)   
+            st.plotly_chart(px.bar(progresso, x='EIXO', y='%', text='%', color='%', color_continuous_scale='RdYlGn', range_y=[0, 105]), use_container_width=True)
 
 # ==============================================================================
 # MÓDULO: DIÁRIO DE BORDO
