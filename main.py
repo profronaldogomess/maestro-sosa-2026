@@ -1959,7 +1959,7 @@ elif menu == "📝 Central de Avaliações":
 # MÓDULO: SCANNER DE GABARITOS - ARQUITETURA V3.7 (FIX UNDEFINED & AUTO-FILTER)
 # ==============================================================================
 elif menu == "📸 Scanner de Gabaritos":
-    st.title("📸 Scanner de Gabaritos Inteligente V5.5")
+    st.title("📸 Scanner de Gabaritos Inteligente V6.0")
     st.markdown("---")
 
     if "v_scan" not in st.session_state: st.session_state.v_scan = 1
@@ -1973,7 +1973,7 @@ elif menu == "📸 Scanner de Gabaritos":
     if not provas_disponiveis.empty:
         prova_sel = c3.selectbox("Avaliação Base:", provas_disponiveis['TIPO_MATERIAL'].tolist(), key=f"p_{v}")
         
-        # Filtro de Alunos
+        # Filtro de Alunos Pendentes
         try:
             ws_g = wb.worksheet("DB_GABARITOS_ALUNOS")
             df_gabaritos_check = pd.DataFrame(ws_g.get_all_records())
@@ -1993,6 +1993,7 @@ elif menu == "📸 Scanner de Gabaritos":
                     st.session_state.scan_img = img_file.getvalue()
                 if col_b2.button("🗑️ Descartar Foto", use_container_width=True):
                     if "scan_res" in st.session_state: del st.session_state.scan_res
+                    st.session_state.v_scan += 1
                     st.rerun()
 
             if "scan_res" in st.session_state:
@@ -2003,6 +2004,7 @@ elif menu == "📸 Scanner de Gabaritos":
                 with col_edit:
                     prova_data = provas_disponiveis[provas_disponiveis['TIPO_MATERIAL'] == prova_sel].iloc[0]
                     txt_conteudo = str(prova_data['CONTEUDO'])
+                    
                     is_pei = st.toggle("Usar Gabarito PEI?", value="PEI" in prova_sel.upper())
                     tag_alvo = "GABARITO_PEI" if is_pei else "GABARITO_REGULAR"
                     gab_raw = ai.extrair_tag(txt_conteudo, tag_alvo) or ai.extrair_tag(txt_conteudo, "GABARITO_TEXTO")
@@ -2013,29 +2015,33 @@ elif menu == "📸 Scanner de Gabaritos":
                     for i in range(1, qtd_questoes + 1):
                         q_key = f"{i:02d}"
                         resp_aluno = st.session_state.scan_res.get(q_key, "?")
-                        resp_certa = gab_oficial[i-1]
-                        dados_conf.append({"Q": q_key, "Aluno": resp_aluno, "Gabarito": resp_certa})
+                        resp_certa = gab_oficial[i-1] if i <= len(gab_oficial) else "?"
+                        dados_conf.append({"Q": q_key, "Marcação do Aluno": resp_aluno, "Gabarito": resp_certa})
                     
-                    # --- EDITOR COM MENU DE SELEÇÃO (DROPDOWN) ---
+                    # --- EDITOR REATIVO COM STATUS ---
                     df_editor = pd.DataFrame(dados_conf)
+                    # Adiciona coluna de Status calculada na hora
+                    df_editor['Status'] = df_editor.apply(lambda x: "✅" if x['Marcação do Aluno'] == x['Gabarito'] and x['Gabarito'] != "?" else "❌", axis=1)
+                    
                     df_final = st.data_editor(
                         df_editor,
                         column_config={
-                            "Q": st.column_config.TextColumn("Q", disabled=True),
-                            "Aluno": st.column_config.SelectboxColumn(
+                            "Q": st.column_config.TextColumn("Q", disabled=True, width="small"),
+                            "Marcação do Aluno": st.column_config.SelectboxColumn(
                                 "Marcação do Aluno",
                                 options=["A", "B", "C", "D", "E", "X", "?"],
-                                help="A-E: Alternativas | X: Dupla/Rasurada | ?: Vazia"
+                                width="medium"
                             ),
-                            "Gabarito": st.column_config.TextColumn("Gabarito", disabled=True)
+                            "Gabarito": st.column_config.TextColumn("Gabarito", disabled=True, width="small"),
+                            "Status": st.column_config.TextColumn("Status", disabled=True, width="small")
                         },
                         use_container_width=True,
                         hide_index=True,
                         key=f"ed_scan_{v}"
                     )
                     
-                    # --- CÁLCULO DE NOTA EM TEMPO REAL ---
-                    acertos = len(df_final[df_final['Aluno'] == df_final['Gabarito']])
+                    # --- RECALCULO DE NOTA BASEADO NO EDITOR ---
+                    acertos = len(df_final[df_final['Marcação do Aluno'] == df_final['Gabarito']])
                     valor_total = 10.0
                     match_val = re.search(r"VALOR:?\s*(\d+[\.,]\d+|\d+)", txt_conteudo.upper())
                     if match_val: valor_total = float(match_val.group(1).replace(',', '.'))
@@ -2054,7 +2060,7 @@ elif menu == "📸 Scanner de Gabaritos":
                             
                             db.salvar_no_banco("DB_GABARITOS_ALUNOS", [
                                 datetime.now().strftime("%d/%m/%Y"), aluno_info['ID'], aluno_scan, turma_scan, prova_sel,
-                                ";".join(df_final['Aluno'].tolist()), f"{nota_final:.2f}".replace('.', ','), link_limpo
+                                ";".join(df_final['Marcação do Aluno'].tolist()), f"{nota_final:.2f}".replace('.', ','), link_limpo
                             ])
                             status.update(label="✅ Salvo com Sucesso!", state="complete")
                             st.balloons(); del st.session_state.scan_res; st.session_state.v_scan += 1; st.rerun()
