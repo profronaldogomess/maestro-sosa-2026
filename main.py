@@ -150,6 +150,7 @@ menu = st.sidebar.radio("Navegação:", [
     "📅 Planejamento (Ponto ID)",
     "🧪 Criador de Aulas",
     "📝 Central de Avaliações",
+    "📸 Scanner de Gabaritos",
     "📝 Diário de Bordo Rápido",
     "📊 Painel de Notas & Vistos",
     "📈 Boletim Anual & Conselho",
@@ -1953,3 +1954,80 @@ elif menu == "📝 Central de Avaliações":
             if not df_registro_aulas.empty:
                 df_cron = df_registro_aulas[df_registro_aulas['SEMANA'] == "AVALIAÇÃO"].copy()
                 st.dataframe(df_cron[['DATA', 'TURMA', 'CONTEUDO_MINISTRADO', 'STATUS_CURRICULO']], use_container_width=True, hide_index=True)
+
+# ==============================================================================
+# MÓDULO: Corretor de Gabaritos com IA Vision
+# ==============================================================================
+elif menu == "📸 Scanner de Gabaritos":
+    st.title("📸 Scanner de Gabaritos Inteligente")
+    st.markdown("---")
+
+    # 1. Seleção de Contexto
+    c1, c2, c3 = st.columns(3)
+    turma_scan = c1.selectbox("Turma:", sorted(df_alunos['TURMA'].unique()))
+    aluno_scan = c2.selectbox("Aluno:", df_alunos[df_alunos['TURMA']==turma_scan]['NOME_ALUNO'].tolist())
+    
+    # Busca avaliações criadas para essa série
+    serie_alvo = "".join(filter(str.isdigit, turma_scan))
+    provas_disponiveis = df_aulas[(df_aulas['SEMANA_REF'] == "AVALIAÇÃO") & (df_aulas['ANO'].str.contains(serie_alvo))]
+    prova_scan = c3.selectbox("Avaliação Base:", provas_disponiveis['TIPO_MATERIAL'].tolist())
+
+    # 2. Captura da Imagem
+    img_file = st.camera_input("Posicione o gabarito em frente à câmera")
+    
+    if img_file:
+        if st.button("🧠 Analisar Marcações com Maestro Vision"):
+            with st.spinner("O Maestro está lendo as bolinhas..."):
+                bytes_data = img_file.getvalue()
+                sugestao_ia = ai.analisar_gabarito_vision(bytes_data)
+                
+                if "erro" not in sugestao_ia:
+                    st.session_state.scan_res = sugestao_ia
+                    st.session_state.scan_img = bytes_data
+                else:
+                    st.error(f"Erro na leitura: {sugestao_ia['erro']}")
+
+    # 3. Conferência e Edição
+    if "scan_res" in st.session_state:
+        st.markdown("### 📝 Conferência do Professor")
+        col_img, col_edit = st.columns([1, 1])
+        
+        with col_img:
+            st.image(st.session_state.scan_img, caption="Foto Capturada", use_container_width=True)
+        
+        with col_edit:
+            # Transforma o JSON da IA em um DataFrame para o editor
+            df_ed = pd.DataFrame(list(st.session_state.scan_res.items()), columns=["Questão", "Resposta"])
+            df_final = st.data_editor(df_ed, num_rows="fixed", use_container_width=True)
+            
+            if st.button("💾 Confirmar e Sincronizar Diagnóstico", type="primary"):
+                with st.status("Salvando dados e imagem...", expanded=True) as status:
+                    # A. Upload da Foto para o Drive
+                    import io
+                    img_io = io.BytesIO(st.session_state.scan_img)
+                    nome_foto = f"SCAN_{aluno_scan.replace(' ', '_')}_{prova_scan.replace(' ', '_')}"
+                    
+                    link_foto = db.subir_e_converter_para_google_docs(
+                        img_io, nome_foto, trimestre="I Trimestre", categoria=turma_scan, modo="SCANNER"
+                    )
+                    
+                    # B. Cálculo de Nota (Simples por enquanto)
+                    respostas_txt = ";".join(df_final['Resposta'].tolist())
+                    
+                    # C. Salvar no Banco
+                    aluno_data = df_alunos[df_alunos['NOME_ALUNO'] == aluno_scan].iloc[0]
+                    db.salvar_gabarito_escaneado([
+                        datetime.now().strftime("%d/%m/%Y"),
+                        aluno_data['ID'],
+                        aluno_scan,
+                        turma_scan,
+                        prova_scan,
+                        respostas_txt,
+                        "A CALCULAR", # Futura integração com gabarito oficial
+                        link_foto
+                    ])
+                    
+                    status.update(label="✅ Diagnóstico Salvo com Sucesso!", state="complete")
+                    st.balloons()
+                    del st.session_state.scan_res
+                    st.rerun()
