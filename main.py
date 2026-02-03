@@ -1744,7 +1744,7 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                     st.info("Banco de relatórios vazio.")
 
 # ==============================================================================
-# MÓDULO: ARQUITETO DE EXAMES - ARQUITETURA V31.5 (REFINO + GABARITO PEI)
+# MÓDULO: ARQUITETO DE EXAMES - ARQUITETURA V31.6 (REFINO DE TEXTO REAL + GABARITOS)
 # ==============================================================================
 elif menu == "📝 Central de Avaliações":
     st.title("📝 Arquiteto de Exames e Gestão de Cronograma")
@@ -1771,59 +1771,77 @@ elif menu == "📝 Central de Avaliações":
     # --- ABA 1: ARQUITETO DE EXAMES ---
     with tab_arquiteto:
         is_refinando_av = "refino_av_ativo" in st.session_state
+        
         if is_refinando_av:
-            st.warning(f"🛠️ **MODO REFINO:** Editando {st.session_state.refino_av_ativo['tipo']}")
-            if st.button("❌ CANCELAR REFINO"): reset_avaliacoes()
+            meta = st.session_state.refino_av_ativo
+            st.warning(f"🛠️ **MODO REFINO ATIVO:** Editando {meta['tipo']} ({meta['ano']})")
+            if st.button("❌ CANCELAR REFINO E VOLTAR AO NOVO"): reset_avaliacoes()
 
         with st.container(border=True):
             st.markdown("### ⚙️ 1. Configuração do Exame")
             c1, c2, c3, c4 = st.columns([1.5, 1, 1, 1])
-            tipo_av = c1.selectbox("Tipo:", ["Teste", "Prova", "Recuperação Paralela", "Recuperação Final", "2ª Chamada"], key=f"av_t_{v}")
+            
+            # Preenchimento automático se estiver refinando
+            opcoes_tipo = ["Teste", "Prova", "Recuperação Paralela", "Recuperação Final", "2ª Chamada"]
+            idx_t = opcoes_tipo.index(meta['tipo'].split(" - ")[0]) if is_refinando_av and meta['tipo'].split(" - ")[0] in opcoes_tipo else 0
+            
+            tipo_av = c1.selectbox("Tipo:", opcoes_tipo, index=idx_t, disabled=is_refinando_av, key=f"av_t_{v}")
             v_total = c2.number_input("Valor Total:", 0.0, 10.0, 3.0 if "Teste" in tipo_av else 4.0, step=0.5, key=f"av_v_{v}")
-            ano_av = c3.selectbox("Série:", [6, 7, 8, 9], key=f"av_a_{v}")
+            
+            lista_anos = [6, 7, 8, 9]
+            idx_a = lista_anos.index(int(meta['ano'].replace('º',''))) if is_refinando_av else 0
+            ano_av = c3.selectbox("Série:", lista_anos, index=idx_a, disabled=is_refinando_av, key=f"av_a_{v}")
             qtd_q = c4.number_input("Nº Questões:", 5, 20, 10, key=f"av_q_{v}")
 
-        with st.container(border=True):
-            st.markdown("### 🎯 2. Matriz PIP e Contexto")
-            df_p_ano = df_planos[df_planos['ANO'] == f"{ano_av}º"]
-            if not df_p_ano.empty:
-                semanas_av = st.multiselect("Semanas Base:", df_p_ano['SEMANA'].tolist(), key=f"av_s_{v}")
-                usar_ctx = st.toggle("Injetar contexto das aulas ministradas", value=True)
-                
-                if st.button("💎 COMPILAR EXAME DE ELITE", use_container_width=True, type="primary"):
-                    with st.spinner("Maestro Arquiteto processando..."):
-                        planos_filtrados = df_p_ano[df_p_ano['SEMANA'].isin(semanas_av)]
-                        ctx_p = "\n".join(planos_filtrados['PLANO_TEXTO'].tolist())
-                        ctx_a = ""
-                        if usar_ctx:
-                            aulas_ref = df_aulas[(df_aulas['ANO'] == f"{ano_av}º") & (df_aulas['SEMANA_REF'].isin(semanas_av))]
-                            ctx_a = "\n".join(aulas_ref['CONTEUDO'].tolist())
+        if not is_refinando_av:
+            with st.container(border=True):
+                st.markdown("### 🎯 2. Matriz PIP e Contexto")
+                df_p_ano = df_planos[df_planos['ANO'] == f"{ano_av}º"]
+                if not df_p_ano.empty:
+                    semanas_av = st.multiselect("Semanas Base:", df_p_ano['SEMANA'].tolist(), key=f"av_s_{v}")
+                    usar_ctx = st.toggle("Injetar contexto das aulas ministradas", value=True)
+                    
+                    if st.button("💎 COMPILAR EXAME DE ELITE", use_container_width=True, type="primary"):
+                        with st.spinner("Maestro Arquiteto processando..."):
+                            planos_filtrados = df_p_ano[df_p_ano['SEMANA'].isin(semanas_av)]
+                            ctx_p = "\n".join(planos_filtrados['PLANO_TEXTO'].tolist())
+                            ctx_a = ""
+                            if usar_ctx:
+                                aulas_ref = df_aulas[(df_aulas['ANO'] == f"{ano_av}º") & (df_aulas['SEMANA_REF'].isin(semanas_av))]
+                                ctx_a = "\n".join(aulas_ref['CONTEUDO'].tolist())
 
-                        prompt = f"TIPO: {tipo_av} | VALOR: {v_total} | QTD: {qtd_q}\nPLANOS: {ctx_p}\nAULAS: {ctx_a}\nORDEM: Gere com [ORIENTACOES], [QUESTOES], [GABARITO_TEXTO] e [RESPOSTAS_IA]."
-                        st.session_state.temp_prova = ai.gerar_ia("ARQUITETO_EXAMES_V25", prompt)
-                        st.session_state.av_valor_total = v_total
-                        st.rerun()
+                            prompt = f"TIPO: {tipo_av} | VALOR: {v_total} | QTD: {qtd_q}\nPLANOS: {ctx_p}\nAULAS: {ctx_a}\nORDEM: Gere com [ORIENTACOES], [QUESTOES], [GABARITO_TEXTO] e [RESPOSTAS_IA]."
+                            st.session_state.temp_prova = ai.gerar_ia("ARQUITETO_EXAMES_V25", prompt)
+                            st.session_state.av_valor_total = v_total
+                            st.rerun()
 
-    # --- ABA 2: REFINADOR ---
+    # --- ABA 2: REFINADOR MAESTRO (AGORA COM TEXTO REAL) ---
     with tab_refino:
         if "temp_prova" in st.session_state:
+            st.subheader("🤖 Refinamento de Precisão")
             cmd = st.chat_input("Solicitar ajuste no exame...")
             if cmd:
-                st.session_state.temp_prova = ai.gerar_ia("REFINADOR_EXAMES", f"ORDEM: {cmd}\n\nATUAL:\n{st.session_state.temp_prova}")
-                st.session_state.v_av += 1
-                st.rerun()
-            st.text_area("Editor:", st.session_state.temp_prova, height=500, key=f"ed_av_{v}")
+                with st.spinner("Reescrevendo exame..."):
+                    st.session_state.temp_prova = ai.gerar_ia("REFINADOR_EXAMES", f"ORDEM: {cmd}\n\nATUAL:\n{st.session_state.temp_prova}")
+                    st.session_state.v_av += 1
+                    st.rerun()
+            
+            # O Editor agora mostra o texto completo (Questões + Gabaritos)
+            st.session_state.temp_prova = st.text_area("Editor de Exame (Questões e Gabaritos):", st.session_state.temp_prova, height=500, key=f"ed_av_raw_{v}")
+        else: st.info("Gere ou selecione uma prova para refinar.")
 
-    # --- ABA 3: VISUALIZAÇÃO (COM GABARITO PEI) ---
+    # --- ABA 3: VISUALIZAÇÃO ---
     with tab_vis:
         if "temp_prova" in st.session_state:
             t_v_alu, t_v_gab, t_v_pei = st.tabs(["📝 Aluno", "✅ Gabarito Regular", "♿ PEI + Gabarito"])
-            with t_v_alu: st.text(ai.extrair_tag(st.session_state.temp_prova, "QUESTOES"))
-            with t_v_gab: st.code(ai.extrair_tag(st.session_state.temp_prova, "GABARITO_TEXTO"))
+            with t_v_alu: 
+                q_txt = ai.extrair_tag(st.session_state.temp_prova, "QUESTOES")
+                st.text(q_txt if q_txt else st.session_state.temp_prova) # Fallback para registros antigos
+            with t_v_gab: 
+                st.code(ai.extrair_tag(st.session_state.temp_prova, "GABARITO_TEXTO"))
             with t_v_pei:
                 if st.button("✨ GERAR VERSÃO PEI ADAPTADA"):
                     with st.spinner("Adaptando para PEI..."):
-                        # Ordem para gerar Prova + Gabarito PEI
                         prompt_pei = f"ADAPTE PARA PEI: {ai.extrair_tag(st.session_state.temp_prova, 'QUESTOES')}. FORNEÇA O GABARITO PEI AO FINAL COM A TAG [GABARITO_PEI]."
                         res_pei = ai.gerar_ia("ARQUITETO_PEI_V24", prompt_pei)
                         st.session_state.av_pei = res_pei
@@ -1832,23 +1850,26 @@ elif menu == "📝 Central de Avaliações":
                 if "av_pei" in st.session_state:
                     st.markdown("#### 📝 Prova Adaptada")
                     st.text(st.session_state.av_pei)
-                    st.markdown("#### ✅ Gabarito PEI (Para Correção Futura)")
-                    st.code(st.session_state.get("av_gab_pei", "Gabarito não gerado."))
+                    st.markdown("#### ✅ Gabarito PEI")
+                    st.code(st.session_state.get("av_gab_pei", "N/A"))
+        else: st.info("Aguardando geração...")
 
-    # --- ABA 4: SINCRONIA & AGENDA ---
+    # --- ABA 4: SINCRONIA & AGENDA (SALVAMENTO COMPLETO) ---
     with tab_agenda:
         if "temp_prova" in st.session_state:
+            st.subheader("📅 Finalização e Agendamento")
             c_s1, c_s2 = st.columns(2)
-            trim_av = c_s1.selectbox("Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"])
+            trim_av = c_s1.selectbox("Trimestre de Destino:", ["I Trimestre", "II Trimestre", "III Trimestre"])
             nome_arq = c_s2.text_input("Nome do Arquivo:", f"{tipo_av.upper()}_{ano_av}ANO_{int(time.time())}")
             sel_turmas = st.multiselect("Turmas:", sorted([t for t in df_alunos['TURMA'].unique() if str(ano_av) in str(t)]))
-            data_app = st.date_input("Data:", date.today())
+            data_app = st.date_input("Data da Avaliação:", date.today())
 
             if st.button("💾 FINALIZAR, SALVAR E AGENDAR", use_container_width=True, type="primary"):
                 with st.status("🚀 Sincronizando...", expanded=True) as status:
-                    v_t_str = f"{st.session_state.av_valor_total}".replace('.', ',')
+                    v_t_str = f"{st.session_state.get('av_valor_total', 10.0)}".replace('.', ',')
                     info_doc = {"ano": f"{ano_av}º", "tipo_prova": tipo_av, "valor": v_t_str, "qtd_questoes": qtd_q, "trimestre": trim_av}
                     
+                    # 1. Geração do DOCX
                     doc_io = exporter.gerar_docx_prova_v25(nome_arq, st.session_state.temp_prova, info_doc)
                     link_av = db.subir_e_converter_para_google_docs(doc_io, nome_arq, trimestre=trim_av, categoria=f"{ano_av}º Ano", semana="AVALIAÇÃO", modo="AVALIACAO")
                     
@@ -1856,19 +1877,21 @@ elif menu == "📝 Central de Avaliações":
                         identificador = f"{tipo_av} - {ano_av}º Ano"
                         db.excluir_registro_com_drive("DB_AULAS_PRONTAS", identificador)
                         
-                        # ARMAZENAMENTO ESTRUTURADO DE GABARITOS
-                        gab_reg = ai.extrair_tag(st.session_state.temp_prova, "GABARITO_TEXTO")
+                        # --- ENGENHARIA DE PERSISTÊNCIA TOTAL (SALVA TUDO) ---
                         gab_pei = st.session_state.get("av_gab_pei", "N/A")
-                        conteudo_banco = f"[GABARITO_REGULAR]\n{gab_reg}\n\n[GABARITO_PEI]\n{gab_pei}\n\n--- LINK DRIVE ---\n{link_av}"
+                        # Salvamos o texto completo da prova + gabaritos + link
+                        conteudo_banco = f"{st.session_state.temp_prova}\n\n[GABARITO_PEI]\n{gab_pei}\n\n--- LINK DRIVE ---\n{link_av}"
                         
                         db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), "AVALIAÇÃO", identificador, conteudo_banco, f"{ano_av}º", link_av])
+                        
                         for t in sel_turmas:
                             db.salvar_no_banco("DB_REGISTRO_AULAS", [data_app.strftime("%d/%m/%Y"), "AVALIAÇÃO", t, f"Aplicação: {tipo_av} (Valor: {v_t_str})", "SIM", "AGENDADA"])
                         
-                        status.update(label="✅ Sincronizado!", state="complete")
+                        status.update(label="✅ Sincronizado com Sucesso!", state="complete")
                         st.balloons(); time.sleep(1.5); reset_avaliacoes()
+        else: st.info("Gere a prova primeiro.")
 
-    # --- ABA 5: ACERVO & CRONOGRAMA (BOTÕES COMPLETOS) ---
+    # --- ABA 5: ACERVO & CRONOGRAMA ---
     with tab_acervo:
         c_h1, c_h2 = st.columns(2)
         with c_h1:
@@ -1877,9 +1900,8 @@ elif menu == "📝 Central de Avaliações":
             for _, row in df_exames.iterrows():
                 with st.container(border=True):
                     st.markdown(f"**{row['TIPO_MATERIAL']}**")
-                    st.caption(f"📅 {row['DATA']}")
+                    st.caption(f"📅 Criado em: {row['DATA']}")
                     
-                    # Extração do Link do Drive
                     txt_f = str(row['CONTEUDO'])
                     link_d = re.search(r"--- LINK DRIVE ---\n(https://.*)", txt_f)
                     link_final = link_d.group(1) if link_d else row.get('LINK_DRIVE')
@@ -1887,10 +1909,9 @@ elif menu == "📝 Central de Avaliações":
                     c_b1, c_b2, c_b3 = st.columns(3)
                     if link_final: c_b1.link_button("📂 ABRIR", str(link_final), use_container_width=True)
                     
-                    # BOTÃO REFINAR (REABRE A PROVA)
                     if c_b2.button("🔄 REFINAR", key=f"ref_av_{row.name}", use_container_width=True):
                         st.session_state.temp_prova = row['CONTEUDO']
-                        st.session_state.refino_av_ativo = {"tipo": row['TIPO_MATERIAL']}
+                        st.session_state.refino_av_ativo = {"tipo": row['TIPO_MATERIAL'], "ano": row['ANO']}
                         st.rerun()
                         
                     if c_b3.button("🗑️ Apagar", key=f"del_av_{row.name}", use_container_width=True):
