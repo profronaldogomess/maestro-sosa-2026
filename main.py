@@ -1814,10 +1814,17 @@ elif menu == "📝 Central de Avaliações":
             with t_v_alu: st.text(ai.extrair_tag(st.session_state.temp_prova, "QUESTOES"))
             with t_v_gab: 
                 st.markdown("#### 🎯 Respostas das Questões")
+                # Mostra o gabarito simples
                 st.code(ai.extrair_tag(st.session_state.temp_prova, "GABARITO_TEXTO"))
+                
                 st.markdown("---")
-                st.markdown("#### 🧠 Justificativas Técnicas (IA)")
-                st.write(ai.extrair_tag(st.session_state.temp_prova, "RESPOSTAS_IA"))
+                st.markdown("#### 🧠 Justificativas e Respostas Detalhadas (IA)")
+                # Mostra a justificativa técnica que a IA gerou
+                justificativa = ai.extrair_tag(st.session_state.temp_prova, "RESPOSTAS_IA")
+                if justificativa:
+                    st.write(justificativa)
+                else:
+                    st.info("Justificativa detalhada não encontrada no texto gerado.")
             with t_v_pei:
                 st.markdown("### ♿ Reengenharia para Alunos PEI")
                 if st.button("✨ GERAR PROVA ADAPTADA (5 QUESTÕES)"):
