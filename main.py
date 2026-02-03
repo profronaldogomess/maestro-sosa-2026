@@ -2069,102 +2069,89 @@ elif menu == "📸 Scanner de Gabaritos":
 
     # --- ABA 3: DASHBOARD DIAGNÓSTICO (INTELIGÊNCIA V8.0) ---
     with tab_dash:
-        st.subheader("📊 Inteligência Diagnóstica por Turma")
+        st.subheader("📊 Raio-X de Desempenho e Prognóstico")
         
         if not df_diagnosticos.empty:
-            # 1. FILTROS DE ORGANIZAÇÃO (O QUE VOCÊ PEDIU)
+            # 1. FILTROS ESTRATÉGICOS
             c_f1, c_f2, c_f3 = st.columns(3)
-            
-            # Filtro de Trimestre (Baseado no nome da prova ou data)
             trim_dash = c_f1.selectbox("Filtrar Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key="dash_trim")
             
-            # Filtro de Turma
-            turmas_com_dados = sorted(df_diagnosticos['TURMA'].unique().tolist())
-            turma_dash = c_f2.selectbox("Filtrar Turma:", turmas_com_dados, key="dash_turma")
+            # Filtra turmas que possuem dados no trimestre selecionado
+            df_trim = df_diagnosticos[df_diagnosticos['DATA'].str.contains(trim_dash.split()[0], na=False) | (df_diagnosticos['TURMA'].is_in(df_alunos['TURMA']))] # Fallback simples
             
-            # Filtro de Prova (Filtrado pelos anteriores)
-            df_filtrado = df_diagnosticos[(df_diagnosticos['TURMA'] == turma_dash)]
-            provas_na_turma = df_filtrado['ID_AVALIACAO'].unique().tolist()
+            turmas_com_dados = sorted(df_diagnosticos['TURMA'].unique())
+            turma_dash = c_f2.selectbox("Selecionar Turma:", turmas_com_dados, key="dash_turma")
             
-            if not provas_na_turma:
-                st.info(f"Nenhum dado encontrado para a Turma {turma_dash} neste período.")
-            else:
-                prova_dash = c_f3.selectbox("Selecionar Avaliação:", provas_na_turma, key="dash_prova")
-                df_p = df_filtrado[df_filtrado['ID_AVALIACAO'] == prova_dash]
+            provas_turma = df_diagnosticos[df_diagnosticos['TURMA'] == turma_dash]['ID_AVALIACAO'].unique()
+            prova_dash = c_f3.selectbox("Selecionar Avaliação:", provas_turma, key="dash_prova")
 
-                # 2. PROCESSAMENTO DE DADOS
-                prova_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == prova_dash].iloc[0]
-                conteudo_full = str(prova_ref['CONTEUDO'])
-                gab_raw = ai.extrair_tag(conteudo_full, "GABARITO_REGULAR") or ai.extrair_tag(conteudo_full, "GABARITO_TEXTO")
-                gab_oficial = re.findall(r"\d+[\s\.\:\-]*([A-E])", gab_raw.upper())
-                
-                # Extração dos enunciados para o Raio-X
-                questoes_brutas = ai.extrair_tag(conteudo_full, "QUESTOES")
-                lista_enunciados = re.split(r'\d+[\s\.\ª\º]*Questão[\s\.\:]*', questoes_brutas)
-                lista_enunciados = [q.strip() for q in lista_enunciados if q.strip()]
+            # 2. PROCESSAMENTO DE DADOS
+            df_p = df_diagnosticos[(df_diagnosticos['TURMA'] == turma_dash) & (df_diagnosticos['ID_AVALIACAO'] == prova_dash)]
+            
+            # Busca Gabarito e Texto das Questões na DB_AULAS_PRONTAS
+            prova_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == prova_dash].iloc[0]
+            txt_full = str(prova_ref['CONTEUDO'])
+            
+            gab_raw = ai.extrair_tag(txt_full, "GABARITO_REGULAR") or ai.extrair_tag(txt_full, "GABARITO_TEXTO")
+            gab_oficial = re.findall(r"\d+[\s\.\:\-]*([A-E])", gab_raw.upper())
+            
+            # Extração do texto das questões para o Raio-X
+            questoes_brutas = ai.extrair_tag(txt_full, "QUESTOES")
+            lista_enunciados = re.split(r'\d+[\s\.\ª\º]*Questão[\s\.\:]*', questoes_brutas)
+            lista_enunciados = [q.strip() for q in lista_enunciados if q.strip()]
 
-                stats_questoes = []
-                for i, certa in enumerate(gab_oficial):
-                    q_num = f"{i+1:02d}"
-                    respostas_turma = [r.split(";")[i] if len(r.split(";")) > i else "?" for r in df_p['RESPOSTAS_ALUNO']]
-                    acertos = respostas_turma.count(certa)
-                    percentual = (acertos / len(df_p)) * 100
-                    
-                    # Identifica o erro mais comum (Distrator)
-                    erros = [r for r in respostas_turma if r != certa and r != "?"]
-                    distrator = max(set(erros), key=erros.count) if erros else "N/A"
-                    
-                    stats_questoes.append({
-                        "Questão": q_num, 
-                        "Acerto %": percentual, 
-                        "Acertos": acertos,
-                        "Distrator": distrator,
-                        "Texto": lista_enunciados[i] if i < len(lista_enunciados) else "Texto não encontrado"
-                    })
+            # 3. CÁLCULO DE ACERTOS E PROPORCIONALIDADE
+            stats_questoes = []
+            for i, certa in enumerate(gab_oficial):
+                q_num = f"{i+1:02d}"
+                respostas_turma = [r.split(";")[i] if len(r.split(";")) > i else "?" for r in df_p['RESPOSTAS_ALUNO']]
+                acertos = respostas_turma.count(certa)
+                percentual = (acertos / len(df_p)) * 100
                 
-                df_stats = pd.DataFrame(stats_questoes)
+                # Busca enunciado correspondente
+                enunciado = lista_enunciados[i] if i < len(lista_enunciados) else "Texto não localizado."
+                
+                stats_questoes.append({
+                    "Questão": q_num, 
+                    "Acerto %": percentual, 
+                    "Acertos": acertos,
+                    "Texto": enunciado,
+                    "Gabarito": certa
+                })
+            
+            df_stats = pd.DataFrame(stats_questoes)
 
-                # 3. VISUALIZAÇÃO GRÁFICA
-                col_g1, col_g2 = st.columns([2, 1])
-                with col_g1:
-                    fig_heat = px.bar(df_stats, x="Questão", y="Acerto %", text="Acerto %", 
-                                     color="Acerto %", color_continuous_scale="RdYlGn", range_y=[0, 110],
-                                     title=f"Mapa de Calor: {prova_dash} - Turma {turma_dash}")
-                    st.plotly_chart(fig_heat, use_container_width=True)
-                
-                with col_g2:
-                    media_notas = df_p['NOTA_CALCULADA'].apply(lambda x: float(str(x).replace(',','.'))).mean()
-                    st.metric("Média da Turma", f"{media_notas:.2f}")
-                    st.metric("Amostra", f"{len(df_p)} alunos")
-                    
-                    if st.button("🧠 GERAR PROGNÓSTICO MAESTRO", use_container_width=True):
-                        with st.spinner("Analisando padrões cognitivos..."):
-                            resumo_stats = df_stats[['Questão', 'Acerto %', 'Distrator']].to_string()
-                            prognostico = ai.gerar_prognostico_turma(resumo_stats, questoes_brutas[:2000])
-                            st.session_state.prognostico_txt = prognostico
-                    
-                    if "prognostico_txt" in st.session_state:
-                        with st.expander("📄 Ver Prognóstico Analítico", expanded=True):
-                            st.write(st.session_state.prognostico_txt)
+            # 4. VISUALIZAÇÃO DE KPIs
+            media_turma = df_p['NOTA_CALCULADA'].apply(lambda x: float(str(x).replace(',','.'))).mean()
+            
+            col_k1, col_k2, col_k3 = st.columns(3)
+            col_k1.metric("Média da Turma", f"{media_turma:.2f}")
+            col_k2.metric("Aproveitamento", f"{(media_turma/10*100):.1f}%")
+            col_k3.metric("Total Corrigido", f"{len(df_p)} Alunos")
 
-                # 4. RAIO-X DETALHADO (O QUE VOCÊ PEDIU)
-                st.markdown("---")
-                st.markdown("### 🔍 Raio-X por Descritor")
-                
-                for _, row in df_stats.iterrows():
-                    cor_status = "🔴" if row['Acerto %'] < 50 else "🟡" if row['Acerto %'] < 75 else "🟢"
-                    with st.expander(f"{cor_status} Questão {row['Questão']} - Índice de Acerto: {row['Acerto %']:.0f}%"):
-                        c_q1, c_q2 = st.columns([2, 1])
-                        with c_q1:
-                            st.markdown("**Enunciado:**")
-                            st.caption(row['Texto'])
-                        with c_q2:
-                            st.markdown("**Análise Técnica:**")
-                            st.write(f"- **Gabarito:** {gab_oficial[int(row['Questão'])-1]}")
-                            st.write(f"- **Erro mais comum:** {row['Distrator']}")
-                            if row['Acerto %'] < 50:
-                                st.error("Necessita Recomposição")
-                            else:
-                                st.success("Domínio Identificado")
+            # 5. GRÁFICO DE CALOR
+            fig_heat = px.bar(df_stats, x="Questão", y="Acerto %", text="Acerto %", 
+                             color="Acerto %", color_continuous_scale="RdYlGn", range_y=[0, 110],
+                             title=f"Mapa de Calor: {prova_dash} - {turma_dash}")
+            st.plotly_chart(fig_heat, use_container_width=True)
+
+            # 6. RAIO-X DETALHADO (O QUE VOCÊ PEDIU)
+            st.markdown("### 🔍 Raio-X por Descritor")
+            for _, row in df_stats.iterrows():
+                cor_status = "🔴" if row['Acerto %'] < 50 else "🟡" if row['Acerto %'] < 75 else "🟢"
+                with st.expander(f"{cor_status} Questão {row['Questão']} - Índice de Acerto: {row['Acerto %']:.1f}%"):
+                    st.write(f"**Enunciado:** {row['Texto']}")
+                    st.write(f"**Gabarito Oficial:** {row['Gabarito']}")
+                    if row['Acerto %'] < 50:
+                        st.error("⚠️ Alerta Crítico: Mais da metade da turma errou este conceito.")
+
+            # 7. PROGNOSTICO MAESTRO (IA)
+            st.markdown("---")
+            st.markdown("### 🧠 Prognóstico Analítico do Maestro")
+            if st.button("Gerar Análise Pedagógica da Turma"):
+                with st.spinner("Analisando padrões de erro..."):
+                    resumo_erros = df_stats[df_stats['Acerto %'] < 60][['Questão', 'Acerto %']].to_string()
+                    prognostico = ai.gerar_prognostico_pedagogico(resumo_erros, txt_full[:1000])
+                    st.info(prognostico)
         else:
-            st.info("Aguardando dados diagnósticos para gerar o Dashboard.")
+            st.info("📭 Sem dados diagnósticos para este período.")
