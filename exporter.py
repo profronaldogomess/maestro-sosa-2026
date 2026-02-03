@@ -309,9 +309,9 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         return file_stream
 
 # ==============================================================================
-# 5. PLANO PEDAGÓGICO (COLUNA ÚNICA - RIGOR PHC V26)
+# 5. PLANO PEDAGÓGICO (VERSÃO ELITE V26 - JUSTIFICADO + LOGO + TRIMESTRE)
 # ==============================================================================
-def gerar_docx_plano_pedagogico_v18(titulo_arquivo, dados, info):
+def gerar_docx_plano_pedagogico_ELITE(titulo_arquivo, dados, info):
     import os
     import io
     from docx import Document
@@ -323,47 +323,56 @@ def gerar_docx_plano_pedagogico_v18(titulo_arquivo, dados, info):
     try:
         doc = Document()
         section = doc.sections[0]
-        section.top_margin, section.bottom_margin = Inches(0.5), Inches(0.5)
-        section.left_margin, section.right_margin = Inches(0.6), Inches(0.6)
+        # Margens de documento oficial
+        section.top_margin, section.bottom_margin = Inches(0.4), Inches(0.4)
+        section.left_margin, section.right_margin = Inches(0.5), Inches(0.5)
 
-        # --- 1. CABEÇALHO OFICIAL COM LOGO E TRIMESTRE ---
+        # --- 1. CABEÇALHO REESTRUTURADO (SEM CAMPO DE DATA) ---
         table = doc.add_table(rows=3, cols=3)
         table.style = 'Table Grid'
         
-        # Ajuste de larguras das colunas do cabeçalho
-        widths = [Inches(1.2), Inches(3.5), Inches(2.0)]
+        # Larguras fixas para evitar deformação
+        widths = [Inches(1.1), Inches(3.6), Inches(2.0)]
         for i, w in enumerate(widths):
             table.columns[i].width = w
 
-        # Inserção da Logo
-        if os.path.exists("logo_escola.png"):
-            cell_logo = table.cell(0, 0)
+        # Busca exaustiva pela Logo (Tenta os dois nomes comuns no seu sistema)
+        logo_path = None
+        for nome in ["logo_escola.png", "logo.png"]:
+            if os.path.exists(nome):
+                logo_path = nome
+                break
+
+        if logo_path:
+            cell_logo = table.cell(0, 0).merge(table.cell(2, 0)) # Logo ocupa as 3 linhas da esquerda
             cell_logo.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
             p_logo = cell_logo.paragraphs[0]
             p_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            p_logo.add_run().add_picture("logo_escola.png", width=Inches(0.8))
+            p_logo.add_run().add_picture(logo_path, width=Inches(0.85))
         
-        # Textos do Cabeçalho
-        table.cell(0, 1).paragraphs[0].add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA").font.bold = True
-        table.cell(0, 2).paragraphs[0].add_run("PLANO DE ENSINO SEMANAL").font.bold = True
+        # Escola e Título
+        p_esc = table.cell(0, 1).paragraphs[0]
+        p_esc.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p_esc.add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA").font.bold = True
         
-        # Linha do Professor e Ano
-        p_prof = table.cell(1, 0).merge(table.cell(1, 1)).paragraphs[0]
-        p_prof.add_run(f"Professor: Ronaldo Gomes")
+        p_tit = table.cell(0, 2).paragraphs[0]
+        p_tit.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p_tit.add_run("PLANO DE ENSINO SEMANAL").font.bold = True
         
-        p_ano = table.cell(1, 2).paragraphs[0]
-        p_ano.add_run(f"Ano: {info.get('ano', '')}")
+        # Professor e Ano
+        table.cell(1, 1).paragraphs[0].add_run(f"Professor: Ronaldo Gomes").font.size = Pt(10)
+        table.cell(1, 2).paragraphs[0].add_run(f"Ano: {info.get('ano', '')}").font.size = Pt(10)
         
-        # Linha da Semana e Trimestre (Substituindo a Data)
-        p_sem = table.cell(2, 0).merge(table.cell(2, 1)).paragraphs[0]
-        p_sem.add_run(f"Semana: {info.get('semana', '')}")
+        # Semana e Trimestre (AQUI SUBSTITUÍMOS A DATA DEFINITIVAMENTE)
+        table.cell(2, 1).paragraphs[0].add_run(f"Semana: {info.get('semana', '')}").font.size = Pt(10)
         
-        p_trim = table.cell(2, 2).paragraphs[0]
-        p_trim.add_run(f"Trimestre: {info.get('trimestre', 'I Trimestre')}")
+        # Pega o trimestre do info ou tenta extrair da semana
+        trim_val = info.get('trimestre', 'I Trimestre')
+        table.cell(2, 2).paragraphs[0].add_run(f"Trimestre: {trim_val}").font.bold = True
 
-        doc.add_paragraph() # Espaçador
+        doc.add_paragraph() # Espaço
 
-        # --- 2. CORPO DO PLANO (TEXTO JUSTIFICADO) ---
+        # --- 2. CORPO DO PLANO (PRENSA DE JUSTIFICAÇÃO TOTAL) ---
         campos = [
             ("CONTEÚDO GERAL EIXO:", "geral"), 
             ("CONTEÚDOS ESPECÍFICOS:", "especificos"), 
@@ -376,16 +385,17 @@ def gerar_docx_plano_pedagogico_v18(titulo_arquivo, dados, info):
 
         for label, chave in campos:
             p = doc.add_paragraph()
-            p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY # JUSTIFICAÇÃO OBRIGATÓRIA
-            p.paragraph_format.space_after = Pt(6)
+            p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY # JUSTIFICAÇÃO NATIVA
+            p.paragraph_format.space_after = Pt(8)
             
-            # Rótulo em Negrito
+            # Rótulo em Negrito e Caixa Alta
             run_label = p.add_run(label)
             run_label.font.bold = True
             run_label.font.size = Pt(11)
             
-            # Conteúdo
-            texto_limpo = str(dados.get(chave, "")).replace(label, "").replace("**", "").strip()
+            # Conteúdo limpo de Markdown
+            texto_raw = str(dados.get(chave, ""))
+            texto_limpo = texto_raw.replace(label, "").replace("**", "").replace("#", "").strip()
             if texto_limpo.startswith(":"): texto_limpo = texto_limpo[1:].strip()
             
             run_txt = p.add_run(f" {texto_limpo}")
@@ -397,7 +407,7 @@ def gerar_docx_plano_pedagogico_v18(titulo_arquivo, dados, info):
     except Exception as e:
         file_stream = io.BytesIO()
         err_doc = Document()
-        err_doc.add_paragraph(f"ERRO CRÍTICO NO PLANO: {str(e)}")
+        err_doc.add_paragraph(f"ERRO CRÍTICO: {str(e)}")
         err_doc.save(file_stream)
         file_stream.seek(0)
         return file_stream
