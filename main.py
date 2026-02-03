@@ -487,255 +487,171 @@ if menu == "🤖 Maestro Dashboard":
         st.session_state.messages.append({"role": "assistant", "content": resposta})
 
 # ==============================================================================
-# MÓDULO: LABORATÓRIO DE MATERIAIS V25.80 (REFINADO E BLINDADO)
+# MÓDULO: LABORATÓRIO DE PRODUÇÃO (CRIADOR) - ARQUITETURA V26 (ELITE)
 # ==============================================================================
 elif menu == "🧪 Criador de Aulas":
-    st.title("🧪 Laboratório de Materiais (V25.80)")
+    st.title("🧪 Laboratório de Produção Semiótica")
     st.markdown("---")
     
-    tab_criar, tab_gavetas = st.tabs(["🚀 CENTRAL DE CRIAÇÃO", "🗂️ GAVETAS DE MATERIAIS"])
-
     if "v_lab" not in st.session_state: st.session_state.v_lab = 1
+    v = st.session_state.v_lab
 
-    with tab_criar:
-        
-        # --- FASE 1: SINCRONIA PONTO ID (COM FILTRO INTELIGENTE DE CONCLUSÃO) ---
+    tab_producao, tab_acervo = st.tabs(["🚀 Laboratório de Produção", "📂 Acervo de Materiais"])
+
+    with tab_producao:
+        # --- 1. PARÂMETROS DE REGÊNCIA E RADAR DE STATUS ---
         with st.container(border=True):
-            st.markdown("### 🔗 1. Sincronia com Planejamento (Ponto ID)")
+            st.markdown("### ⚙️ 1. Parâmetros de Regência")
             c1, c2, c3 = st.columns([1, 2, 1.5])
             
-            ano_lab = c1.selectbox("Série:", [6, 7, 8, 9], key="lab_ano_v25")
+            ano_lab = c1.selectbox("Série/Ano:", [6, 7, 8, 9], key=f"lab_ano_{v}")
             planos_ano = df_planos[df_planos['ANO'] == f"{ano_lab}º"]
             
             if planos_ano.empty:
-                st.warning(f"⚠️ Nenhum plano encontrado para o {ano_lab}º Ano.")
+                st.error(f"❌ **ERRO:** Nenhum plano encontrado para o {ano_lab}º Ano. Planeje primeiro.")
+                aula_alvo = None
             else:
-                sem_lab = c2.selectbox("Semana de Referência:", planos_ano['SEMANA'].tolist(), key="lab_sem_v25")
+                sem_lab = c2.selectbox("Semana de Referência (PIP):", planos_ano['SEMANA'].tolist(), key=f"lab_sem_{v}")
                 
-                # --- LÓGICA DE FILTRO DE AULAS JÁ PRODUZIDAS ---
-                # Buscamos no banco o que já foi feito para este ano e semana
-                aulas_feitas = df_aulas[
-                    (df_aulas['ANO'] == f"{ano_lab}º") & 
-                    (df_aulas['SEMANA_REF'] == sem_lab)
-                ]['TIPO_MATERIAL'].astype(str).tolist()
+                # --- RADAR DE PRODUÇÃO (VERIFICAÇÃO DE AULA 1 E 2) ---
+                aulas_feitas = df_aulas[(df_aulas['ANO'] == f"{ano_lab}º") & (df_aulas['SEMANA_REF'] == sem_lab)]
                 
-                ja_tem_aula1 = any("AULA 1" in a.upper() for a in aulas_feitas)
-                ja_tem_aula2 = any("AULA 2" in a.upper() for a in aulas_feitas)
+                ja_tem_aula1 = any("AULA 1" in str(t).upper() for t in aulas_feitas['TIPO_MATERIAL'])
+                ja_tem_aula2 = any("AULA 2" in str(t).upper() for t in aulas_feitas['TIPO_MATERIAL'])
                 
-                opcoes_foco = []
-                if not ja_tem_aula1: opcoes_foco.append("Aula 1")
-                if not ja_tem_aula2: opcoes_foco.append("Aula 2")
+                col_r1, col_r2 = st.columns(2)
+                status_a1 = "✅ Aula 1: Produzida" if ja_tem_aula1 else "⏳ Aula 1: Pendente"
+                status_a2 = "✅ Aula 2: Produzida" if ja_tem_aula2 else "⏳ Aula 2: Pendente"
                 
-                # Decisão visual do seletor
-                if not opcoes_foco:
-                    st.success(f"✅ {sem_lab} concluída com sucesso!")
-                    aula_num = None # Trava a geração
-                else:
-                    aula_num = c3.radio("Foco da Aula:", opcoes_foco, horizontal=True)
+                col_r1.caption(status_a1)
+                col_r2.caption(status_a2)
+
+                aula_alvo = c3.radio("🎯 Alvo da Produção:", ["Aula 1", "Aula 2"], horizontal=True)
+
+        # --- 2. INJEÇÃO DE PLANO (PIP) E CONFIGURAÇÃO ---
+        if aula_alvo:
+            plano_row = planos_ano[planos_ano['SEMANA'] == sem_lab].iloc[0]
+            plano_raw = plano_row['PLANO_TEXTO']
+            
+            # Extração cirúrgica da metodologia específica (Aula 1 ou Aula 2)
+            metodologia_full = ai.extrair_tag(plano_raw, "METODOLOGIA")
+            if "AULA 2" in metodologia_full.upper():
+                partes_met = re.split(r"AULA 2", metodologia_full, flags=re.IGNORECASE)
+                met_aula1 = partes_met[0]
+                met_aula2 = partes_met[1] if len(partes_met) > 1 else ""
+                met_foco = met_aula1 if aula_alvo == "Aula 1" else met_aula2
+            else:
+                met_foco = metodologia_full
+
+            with st.container(border=True):
+                st.markdown(f"### 🔗 Sincronia PIP: {aula_alvo}")
+                st.info(f"**Conteúdo Base:** {ai.extrair_tag(plano_raw, 'CONTEUDOS_ESPECIFICOS')}")
                 
-                # Só prossegue se houver aula para criar
-                if aula_num:
-                    plano_row = planos_ano[planos_ano['SEMANA'] == sem_lab].iloc[0]
-                    plano_raw = plano_row['PLANO_TEXTO']
-                    
-                    modalidade_planejada = ai.extrair_tag(plano_raw, "MODALIDADE").upper()
-                    is_livro = "LIVRO" in modalidade_planejada or "MÉTODO LIVRO" in plano_raw.upper()
-                    metodo_fiel = "📖 LIVRO DIDÁTICO" if is_livro else "🎛️ MANUAL / BANCO"
-                    cor_metodo = "#2962FF" if is_livro else "#00C853"
-                    
-                    cont_fiel = ai.extrair_tag(plano_raw, "CONTEUDOS_ESPECIFICOS")
-                    obj_fiel = ai.extrair_tag(plano_raw, "OBJETIVOS_ENSINO")
+                col_p1, col_p2, col_p3 = st.columns([1, 1, 1.5])
+                qtd_q = col_p1.slider("Nº de Questões:", 1, 15, 5)
+                nivel = col_p2.select_slider("Rigor Técnico:", options=["Básico", "Médio", "Desafio"])
+                instr_extra = col_p3.text_input("Instruções Adicionais:", placeholder="Ex: Use exemplos de Itabuna...")
 
-                    st.markdown(f"""
-                        <div style='background-color: rgba(41, 98, 255, 0.05); padding: 15px; border-radius: 10px; border-left: 5px solid {cor_metodo};'>
-                            <b style='color: {cor_metodo};'>{metodo_fiel}</b> | <b>Conteúdo:</b> {cont_fiel[:100]}...
-                        </div>
-                    """, unsafe_allow_html=True)
+                if st.button("💎 COMPILAR MATERIAL DE ELITE", use_container_width=True, type="primary"):
+                    with st.spinner("Maestro SOSA realizando Transposição Semiótica..."):
+                        prompt_lab = (
+                            f"🚨 PROTOCOLO PIP 🚨\n"
+                            f"PLANO DE REFERÊNCIA: {plano_raw}\n"
+                            f"FOCO DA PRODUÇÃO: {aula_alvo} (Metodologia: {met_foco})\n"
+                            f"SÉRIE: {ano_lab}º Ano | QUESTÕES: {qtd_q} | NÍVEL: {nivel}\n"
+                            f"EXTRA: {instr_extra}\n"
+                            f"ORDEM: Gere [PROFESSOR] (Lousa), [ALUNO] (Atividade) e [GABARITO]."
+                        )
+                        st.session_state.lab_temp = ai.gerar_ia("MESTRE_V24", prompt_lab)
+                        st.rerun()
 
-                # --- FASE 2: PARÂMETROS (AGORA PROTEGIDA DENTRO DO ELSE) ---
-                st.markdown(" ")
-                with st.container(border=True):
-                    st.markdown("### 🎯 2. Parâmetros de Precisão")
-                    df_base_ano = df_curriculo[df_curriculo['ANO'] == int(ano_lab)]
-                    col_p1, col_p2 = st.columns(2)
-                    
-                    def check_match_inteligente(item_csv, texto_plano):
-                        item = str(item_csv).upper().strip()
-                        plano = str(texto_plano).upper().strip()
-                        return item in plano or plano in item or any(word in plano for word in item.split() if len(word) > 4)
-
-                    sel_cont = col_p1.multiselect("Confirmar Conteúdos:", options=df_base_ano['CONTEUDO_ESPECIFICO'].unique(), 
-                                                 default=[c for c in df_base_ano['CONTEUDO_ESPECIFICO'].unique() if check_match_inteligente(c, cont_fiel)])
-                    
-                    opcoes_obj = df_base_ano[df_base_ano['CONTEUDO_ESPECIFICO'].isin(sel_cont)]['OBJETIVOS'].unique().tolist() if sel_cont else []
-                    sel_obj = col_p2.multiselect("Confirmar Objetivos:", options=opcoes_obj,
-                                                default=[o for o in opcoes_obj if check_match_inteligente(o, obj_fiel)])
-
-                    cp1, cp2, cp3 = st.columns([1, 1, 1])
-                    formato = cp1.radio("Formato:", ["Quadro (Lousa)", "Slides (Apresentação)"], horizontal=True)
-                    qtd_q = cp2.slider("Questões:", 1, 15, 4)
-                    nivel = cp3.select_slider("Desafio:", options=["Básico", "Intermediário", "Desafio"])
-                    instr = st.text_area("Instruções Adicionais:", placeholder="Ex: Use exemplos de astronomia...")
-
-                    if st.button("🚀 COMPILAR MATERIAL DE ELITE", use_container_width=True, type="primary"):
-                        with st.spinner("Maestro processando Injeção de Plano..."):
-                            arquivos_contexto = []
-                            if is_livro:
-                                import re
-                                match_livro = re.search(r"MÉTODO LIVRO: \['(.*?)'\]", plano_raw)
-                                nome_livro = match_livro.group(1) if match_livro else None
-                                if nome_livro:
-                                    livro_data = df_materiais[df_materiais['NOME_ARQUIVO'] == nome_livro]
-                                    if not livro_data.empty:
-                                        arquivos_contexto.append(types.Part.from_uri(file_uri=livro_data.iloc[0]['URI_ARQUIVO'], mime_type="application/pdf"))
-
-                            prompt_v25 = f"🚨 PROTOCOLO PIP 🚨\nMÉTODO: {metodo_fiel}\nPLANO: {plano_raw}\nOBJETIVO: {sel_obj}\nFOCO: {aula_num} | SÉRIE: {ano_lab}º | QUESTÕES: {qtd_q}\nFORMATO: {formato} | NÍVEL: {nivel}\nEXTRA: {instr}"
-                            st.session_state.lab_temp = ai.gerar_ia("MESTRE_V24", prompt_v25, partes_arquivos=arquivos_contexto)
-                            st.rerun()
-
-                # --- FASE 3: REFINADOR E ACABAMENTO (TAMBÉM DENTRO DO ELSE) ---
+        # --- 3. REFINO E VISUALIZAÇÃO ---
         if "lab_temp" in st.session_state:
-            st.markdown(" ")
-            st.markdown("### 🤖 3. Refinamento e Acabamento")
-            
-            # Captura a versão atual para as chaves (keys)
-            v = st.session_state.v_lab
-            txt_bruto = st.session_state.lab_temp
-
-            # --- REFINADOR MAESTRO COM "TROCA DE PELE" ---
-            comando_refine = st.chat_input("Deseja ajustar algo na aula? (Ex: 'Troque a Q2 por um desafio', 'Mude o tema para Astronomia')")
-            
-            if comando_refine:
-                with st.spinner("Maestro executando reengenharia do material..."):
-                    # 1. Prompt de Soberania
-                    prompt_refine = (
-                        f"ORDEM DE ALTERAÇÃO: {comando_refine}\n\n"
-                        f"CONTEÚDO ATUAL:\n{txt_bruto}\n\n"
-                        f"INSTRUÇÃO: Aplique a alteração em todas as seções (Professor, Aluno e Imagens) para manter a unidade lógica."
-                    )
-                    
-                    # 2. Gera a nova versão
-                    nova_aula = ai.gerar_ia("REFINADOR_MATERIAIS", prompt_refine)
-                    
-                    # 3. O SEGREDO: Atualiza o conteúdo E incrementa a versão
-                    st.session_state.lab_temp = nova_aula
-                    st.session_state.v_lab += 1 # Isso força o Streamlit a renovar os campos
-                    
-                    st.success("Refino aplicado! Atualizando painéis...")
-                    time.sleep(1)
+            st.markdown("---")
+            cmd_refine = st.chat_input("Solicitar ajuste fino no material...")
+            if cmd_refine:
+                with st.spinner("Ajustando material..."):
+                    st.session_state.lab_temp = ai.gerar_ia("REFINADOR_MATERIAIS", f"ORDEM: {cmd_refine}\n\nATUAL:\n{st.session_state.lab_temp}")
+                    st.session_state.v_lab += 1
                     st.rerun()
 
-            # Preparação do Dicionário para a Visualização (usando o 'v' atualizado)
-            info_para_ia = {
-                "aula": aula_num,
-                "ano": str(ano_lab),
-                "semana": sem_lab,
-                "formato": formato,
-                "conteudos": sel_cont,
-                "ed_prof": ai.extrair_tag(st.session_state.lab_temp, "PROFESSOR"),
-                "ed_alu": ai.extrair_tag(st.session_state.lab_temp, "ALUNO")
-            }
-
-            # Chamada da Função de Visualização
-            exibir_material_estruturado(st.session_state.lab_temp, f"lab_v{v}", info_aula=info_para_ia)
-
-# --- ABA 2: GAVETAS DE MATERIAIS (HISTÓRICO MULTIMODAL V25.85 - CORRIGIDO) ---
-    with tab_gavetas:
-        st.subheader("🗂️ Gestão de Materiais Produzidos")
-        if df_aulas.empty:
-            st.info("📭 Nenhuma aula produzida.")
-        else:
-            ano_gav = st.selectbox("Filtrar por Ano:", ["Todos", "6º", "7º", "8º", "9º"], key="gav_v17_ano")
-            df_g = df_aulas.copy()
-            if ano_gav != "Todos": 
-                df_g = df_g[df_g['ANO'].str.contains(ano_gav, na=False)]
+            t_lousa, t_folha, t_gab, t_pei, t_sync = st.tabs(["✍️ Lousa", "📄 Folha", "✅ Gabarito", "♿ PEI", "☁️ SINCRONIA"])
             
-            def definir_categoria_gaveta(linha):
-                ref = str(linha['SEMANA_REF']).upper()
-                if "I TRIMESTRE" in ref: return "I Trimestre"
-                if "II TRIMESTRE" in ref: return "II Trimestre"
-                if "III TRIMESTRE" in ref: return "III Trimestre"
-                import re
-                num_sem = re.search(r"(\d+)", ref)
-                if num_sem:
-                    n = int(num_sem.group(1))
-                    if 1 <= n <= 13: return "I Trimestre"
-                    if 14 <= n <= 26: return "II Trimestre"
-                    if n >= 27: return "III Trimestre"
-                return "Recesso/Jornada"
-
-            df_g['CATEGORIA_GAVETA'] = df_g.apply(definir_categoria_gaveta, axis=1)
-            categorias_ordem = ["I Trimestre", "II Trimestre", "III Trimestre", "Recesso/Jornada"]
+            with t_lousa: st.text_area("Esquema de Lousa:", ai.extrair_tag(st.session_state.lab_temp, "PROFESSOR"), height=400, key=f"lousa_{v}")
+            with t_folha: st.text_area("Folha do Aluno:", ai.extrair_tag(st.session_state.lab_temp, "ALUNO"), height=400, key=f"folha_{v}")
+            with t_gab: st.text_area("Gabarito:", ai.extrair_tag(st.session_state.lab_temp, "GABARITO"), height=200, key=f"gab_{v}")
             
-            for cat in categorias_ordem:
-                df_cat = df_g[df_g['CATEGORIA_GAVETA'] == cat]
-                if not df_cat.empty:
-                    with st.expander(f"⏳ Materiais do {cat}", expanded=(cat == "I Trimestre")):
-                        for _, row in df_cat.iloc[::-1].iterrows():
-                            tipo = str(row['TIPO_MATERIAL']).upper()
-                            cor_borda = "#2962FF" if "AULA 1" in tipo else "#00C853"
+            with t_pei:
+                if st.button("♿ GERAR ADAPTAÇÃO PEI (DUA)", use_container_width=True):
+                    with st.spinner("Especialista PEI adaptando material..."):
+                        st.session_state.lab_pei = ai.gerar_ia("ARQUITETO_PEI_V24", f"ADAPTE PARA PEI: {ai.extrair_tag(st.session_state.lab_temp, 'ALUNO')}")
+                if "lab_pei" in st.session_state:
+                    st.text_area("Material PEI:", st.session_state.lab_pei, height=400, key=f"pei_area_{v}")
+
+            with t_sync:
+                st.subheader("🚀 Sincronia de Elite SOSA")
+                if st.button("💾 FINALIZAR E SINCRONIZAR (TRIPLE SYNC)", use_container_width=True, type="primary"):
+                    with st.status("Iniciando Protocolo de Sincronia Tripla...", expanded=True) as status:
+                        
+                        nome_base = f"AULA_{aula_alvo.replace(' ','')}_{ano_lab}ANO_{sem_lab.replace(' ','')}"
+                        info_doc = {"ano": f"{ano_lab}º", "semana": sem_lab, "trimestre": "I Trimestre"}
+                        
+                        # 1. LÓGICA UPSERT (LIMPEZA)
+                        status.write("🧹 Removendo versões obsoletas...")
+                        identificador = f"{aula_alvo} - {sem_lab}"
+                        db.excluir_registro_com_drive("DB_AULAS_PRONTAS", identificador)
+
+                        # 2. GERAÇÃO E UPLOAD - ALUNO
+                        status.write("📤 Enviando Material do Aluno...")
+                        doc_alu = exporter.gerar_docx_aluno_v24(nome_base, ai.extrair_tag(st.session_state.lab_temp, "ALUNO"), info_doc)
+                        link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{nome_base}_ALUNO", trimestre="I Trimestre", categoria=f"{ano_lab}º Ano", semana=sem_lab, modo="AULA")
+                        
+                        # 3. GERAÇÃO E UPLOAD - PROFESSOR
+                        status.write("📤 Enviando Guia do Professor...")
+                        doc_prof = exporter.gerar_docx_professor_v25(nome_base, ai.extrair_tag(st.session_state.lab_temp, "PROFESSOR"), info_doc)
+                        link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_base}_PROF", trimestre="I Trimestre", categoria=f"{ano_lab}º Ano", semana=sem_lab, modo="AULA")
+                        
+                        # 4. GERAÇÃO E UPLOAD - PEI (SE EXISTIR)
+                        link_pei = "N/A"
+                        if "lab_pei" in st.session_state:
+                            status.write("📤 Enviando Material PEI...")
+                            doc_pei = exporter.gerar_docx_pei_v25(nome_base, st.session_state.lab_pei, info_doc)
+                            link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_base}_PEI", trimestre="I Trimestre", categoria=f"{ano_lab}º Ano", semana=sem_lab, modo="AULA")
+
+                        if "https" in str(link_alu):
+                            # 5. SALVAMENTO NO BANCO (LINHA ÚNICA COM TODOS OS LINKS)
+                            status.write("💾 Registrando no Acervo...")
+                            conteudo_banco = f"ID: {identificador} | LINKS: Aluno({link_alu}) Prof({link_prof}) PEI({link_pei})"
+                            db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), sem_lab, identificador, conteudo_banco, f"{ano_lab}º", link_alu])
                             
-                            with st.container(border=True):
-                                st.markdown(f"<div style='border-left: 5px solid {cor_borda}; padding-left: 10px;'><b>{row['SEMANA_REF']} ÷ {row['TIPO_MATERIAL']}</b></div>", unsafe_allow_html=True)
-                                
-                                texto_full = str(row['CONTEUDO'])
-                                
-                                # Extração de Links com Regex Blindada
-                                import re
-                                def extrair_link_seguro(padrao, texto):
-                                    match = re.search(padrao, texto)
-                                    link = match.group(1) if match else None
-                                    return link if link and link.startswith("https") else None
+                            status.update(label="✅ Sincronia Tripla Concluída!", state="complete")
+                            st.balloons()
+                            if "lab_temp" in st.session_state: del st.session_state.lab_temp
+                            if "lab_pei" in st.session_state: del st.session_state.lab_pei
+                            st.rerun()
 
-                                l_alu = extrair_link_seguro(r"Aluno\((.*?)\)", texto_full)
-                                l_prof = extrair_link_seguro(r"Prof\((.*?)\)", texto_full)
-                                l_pei = extrair_link_seguro(r"PEI\((.*?)\)", texto_full)
-
-                                st.write("")
-                                c1, c2, c3, c4 = st.columns(4)
-                                
-                                # --- BOTÕES COM CHAVES ÚNICAS (RESOLVE O ERRO DE ID DUPLICADO) ---
-                                
-                                # Coluna 1: Aluno
-                                if l_alu: 
-                                    c1.link_button("📝 ALUNO", l_alu, use_container_width=True)
-                                else: 
-                                    c1.button("❌ ALUNO", disabled=True, use_container_width=True, key=f"no_alu_{row.name}")
-                                
-                                # Coluna 2: Professor/Slides
-                                label_prof = "📜 SLIDES" if "SLIDES" in tipo else "👨‍🏫 GUIA"
-                                if l_prof: 
-                                    c2.link_button(label_prof, l_prof, use_container_width=True)
-                                else: 
-                                    c2.button(f"❌ {label_prof}", disabled=True, use_container_width=True, key=f"no_prof_{row.name}")
-                                
-                                # Coluna 3: PEI
-                                if l_pei: 
-                                    c3.link_button("♿ PEI", l_pei, use_container_width=True)
-                                else: 
-                                    c3.button("⚪ SEM PEI", disabled=True, use_container_width=True, key=f"no_pei_{row.name}")
-                                
-                                # Coluna 4: Apagar
-                                if c4.button("🗑️ APAGAR", key=f"del_v17_{row.name}", use_container_width=True):
-                                    if db.excluir_registro_com_drive("DB_AULAS_PRONTAS", row['CONTEUDO']):
-                                        st.success("Removido!")
-                                        time.sleep(0.5)
-                                        st.rerun()
-
-                                with st.expander("📄 Ver Detalhes Técnicos"):
-                                    t_hist1, t_hist2 = st.tabs(["📜 Roteiro", "🎨 Prompts"])
-                                    with t_hist1:
-                                        # Pega o roteiro antes da linha de links
-                                        roteiro_limpo = ai.extrair_tag(texto_full, "ROTEIRO_PROF")
-                                        if not roteiro_limpo:
-                                            roteiro_limpo = texto_full.split("--- LINKS")[0]
-                                        st.text_area("Texto:", roteiro_limpo, height=200, key=f"h_rot_{row.name}")
-                                    with t_hist2:
-                                        p_reg = ai.extrair_tag(texto_full, "PROMPTS_REGULAR")
-                                        p_pei = ai.extrair_tag(texto_full, "PROMPTS_PEI")
-                                        if p_reg: st.code(f"REGULAR: {p_reg}")
-                                        if p_pei: st.code(f"PEI: {p_pei}")
-                                        if not p_reg and not p_pei: st.info("Sem prompts salvos.")
+    # --- ABA 2: ACERVO DE MATERIAIS (GAVETAS) ---
+    with tab_acervo:
+        st.subheader("📂 Acervo de Materiais Produzidos")
+        if not df_aulas.empty:
+            f_ano_g = st.selectbox("Filtrar por Série:", ["Todos", "6º", "7º", "8º", "9º"], key="gav_ano_v26")
+            df_g = df_aulas.copy()
+            if f_ano_g != "Todos": df_g = df_g[df_g['ANO'] == f_ano_g]
+            
+            for _, row in df_g.iloc[::-1].iterrows():
+                with st.container(border=True):
+                    c_t1, c_t2, c_t3 = st.columns([2.5, 1, 1])
+                    c_t1.markdown(f"**{row['TIPO_MATERIAL']}** ({row['SEMANA_REF']})")
+                    
+                    # Extração de links para botões diretos
+                    txt = str(row['CONTEUDO'])
+                    l_alu = re.search(r"Aluno\((.*?)\)", txt).group(1) if "Aluno(" in txt else None
+                    
+                    if l_alu: c_t2.link_button("📂 ABRIR NO DRIVE", l_alu, use_container_width=True)
+                    if c_t3.button("🗑️ APAGAR", key=f"del_lab_{row.name}", use_container_width=True):
+                        if db.excluir_registro_com_drive("DB_AULAS_PRONTAS", row['TIPO_MATERIAL']):
+                            st.rerun()
+        else: st.info("📭 Acervo vazio.")
                             
 # ==============================================================================
 # MÓDULO: PLANEJAMENTO ESTRATÉGICO (PONTO ID) - ARQUITETURA V26.5 (SINCRO TOTAL)
