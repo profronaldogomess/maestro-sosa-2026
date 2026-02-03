@@ -227,36 +227,36 @@ def extrair_tag(texto, tag):
     if not texto: return ""
     import re
     
-    # 1. LISTA MESTRA DE TODAS AS TAGS DO ECOSSISTEMA SOSA V25
-    # (Inclui Provas, Aulas, PEI e Planejamento)
+    # 1. LISTA MESTRA ATUALIZADA (Incluindo variações de Gabarito e Provas)
     tags_sosa = [
         "ORIENTACOES", "QUESTOES", "GABARITO_TEXTO", "RESPOSTAS_IA", 
-        "PROFESSOR", "ALUNO", "GABARITO", "IMAGENS", "PEI", "IMAGENS_PEI",
+        "GABARITO_REGULAR", "GABARITO_PEI", "PROFESSOR", "ALUNO", 
+        "GABARITO", "IMAGENS", "PEI", "IMAGENS_PEI",
         "CONTEUDO_GERAL", "CONTEUDOS_ESPECIFICOS", "OBJETIVOS_ENSINO", 
         "METODOLOGIA", "AVALIACAO", "OBSERVACAO", "ADAPTACAO_PEI", "MODALIDADE"
     ]
     
-    # 2. CONSTRUÇÃO DINÂMICA DA PARADA (Exclui a tag atual para evitar o Self-Stop)
+    # 2. CONSTRUÇÃO DA PARADA
     parada = [t for t in tags_sosa if t.upper() != tag.upper()]
     lista_parada_regex = "|".join(parada)
     
-    # 3. REGEX DE ALTA PRECISÃO
-    # Busca [TAG] ou MARKER_TAG e para na próxima tag da lista ou em outro MARKER_ ou no fim ($)
+    # 3. REGEX DE ALTA PRECISÃO (Busca [TAG] ou MARKER_TAG)
     padrao = rf"(?:\[{tag}\]|MARKER_{tag})[:\s]*(.*?)(?=\[(?:{lista_parada_regex})\]|MARKER_|$)"
     
     match = re.search(padrao, texto, re.DOTALL | re.IGNORECASE)
     
     if match:
         res = match.group(1).strip()
-        # Limpeza de Markdown para garantir compatibilidade com Word/Docs
+        # Limpeza de Markdown residual
         return res.replace("**", "").replace("###", "").replace("##", "").replace("#", "").strip()
     
-    # 4. FALLBACK SEGURO
-    # Se não achou a tag e o texto é pequeno (IA mandou sem tags), retorna o texto.
-    # Se o texto for grande, não retorna nada para não "sujar" com o documento inteiro.
-    if len(texto) > 0 and len(texto) < 2000:
-        return texto.strip()
-        
+    # 4. FALLBACK INTELIGENTE
+    # Se a tag for PEI e não houver o marcador, mas o texto for o resultado da adaptação, retorna o texto todo.
+    if tag.upper() == "PEI" and len(texto) > 0:
+        # Se o texto não contém outras tags mestras, ele é o próprio conteúdo
+        if not any(f"[{t}]" in texto.upper() for t in ["QUESTOES", "ORIENTACOES"]):
+            return texto.strip()
+            
     return ""
 
 def subir_para_google(caminho_arquivo, nome_exibicao):
