@@ -2065,3 +2065,56 @@ elif menu == "📸 Scanner de Gabaritos":
                                 status.update(label="✅ Diagnóstico Salvo!", state="complete")
                                 st.balloons(); del st.session_state.scan_res; st.session_state.v_scan += 1; st.rerun()
             else: st.success("✅ Turma concluída!")
+
+    # --- ABA 2: ACERVO DE EVIDÊNCIAS ---
+    with tab_acervo:
+        st.subheader("📂 Histórico de Correções")
+        if not df_diagnosticos.empty:
+            df_view = df_diagnosticos.copy()
+            st.dataframe(
+                df_view,
+                column_config={"LINK_FOTO_DRIVE": st.column_config.LinkColumn("📸 Ver Gabarito")},
+                use_container_width=True, hide_index=True
+            )
+        else: st.info("📭 Nenhum gabarito escaneado.")
+
+    # --- ABA 3: DASHBOARD DE PERÍCIA (FILTROS POR TRIMESTRE) ---
+    with tab_dash:
+        st.subheader("📊 Raio-X de Desempenho")
+        if not df_diagnosticos.empty:
+            c_f1, c_f2 = st.columns(2)
+            trim_dash = c_f1.selectbox("Filtrar Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"])
+            turma_dash = c_f2.selectbox("Selecionar Turma:", sorted(df_diagnosticos['TURMA'].unique()))
+            
+            df_p = df_diagnosticos[(df_diagnosticos['TURMA'] == turma_dash)]
+            if not df_p.empty:
+                prova_dash = st.selectbox("Analisar Prova:", df_p['ID_AVALIACAO'].unique())
+                df_final_dash = df_p[df_p['ID_AVALIACAO'] == prova_dash]
+                
+                # Busca Gabarito e Enunciados
+                prova_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == prova_dash].iloc[0]
+                txt_full = str(prova_ref['CONTEUDO'])
+                gab_raw = ai.extrair_tag(txt_full, "GABARITO_REGULAR") or ai.extrair_tag(txt_full, "GABARITO_TEXTO")
+                gab_oficial = re.findall(r"\d+[\s\.\:\-]*([A-E])", gab_raw.upper())
+                
+                questoes_brutas = ai.extrair_tag(txt_full, "QUESTOES")
+                lista_enunciados = re.split(r'\d+[\s\.\ª\º]*Questão[\s\.\:]*', questoes_brutas)
+                lista_enunciados = [q.strip() for q in lista_enunciados if q.strip()]
+
+                stats_questoes = []
+                for i, certa in enumerate(gab_oficial):
+                    q_num = f"{i+1:02d}"
+                    respostas_turma = [r.split(";")[i] if len(r.split(";")) > i else "?" for r in df_final_dash['RESPOSTAS_ALUNO']]
+                    acertos = respostas_turma.count(certa)
+                    percentual = (acertos / len(df_final_dash)) * 100
+                    stats_questoes.append({"Questão": q_num, "Acerto %": percentual, "Texto": lista_enunciados[i] if i < len(lista_enunciados) else ""})
+                
+                df_stats = pd.DataFrame(stats_questoes)
+                st.plotly_chart(px.bar(df_stats, x="Questão", y="Acerto %", text="Acerto %", color="Acerto %", color_continuous_scale="RdYlGn", range_y=[0, 110]), use_container_width=True)
+                
+                st.markdown("### 🔍 Detalhamento por Questão")
+                for _, row in df_stats.iterrows():
+                    with st.expander(f"Questão {row['Questão']} - Acerto: {row['Acerto %']:.1f}%"):
+                        st.write(f"**Enunciado:** {row['Texto']}")
+                        if row['Acerto %'] < 50: st.error("🚨 Necessita Recomposição (PHC)")
+            else: st.info("Sem dados para esta turma.")
