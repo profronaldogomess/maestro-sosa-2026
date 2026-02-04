@@ -948,7 +948,7 @@ if menu == "📝 Diário de Bordo Rápido":
                     st.rerun()
 
 # ==============================================================================
-# MÓDULO: PAINEL DE NOTAS & VISTOS V26.2 - SINCRONIA ATIVA E CONTRASTE
+# MÓDULO: PAINEL DE NOTAS & VISTOS V26.3 - PRESERVAÇÃO E ALTO CONTRASTE
 # ==============================================================================
 elif menu == "📊 Painel de Notas & Vistos":
     st.title("📊 Painel de Notas: Sincronia e Pesos Dinâmicos")
@@ -970,7 +970,7 @@ elif menu == "📊 Painel de Notas & Vistos":
             p_teste = c_f4.number_input("Peso Teste:", 0.0, 10.0, 3.0, step=0.5)
             p_prova = c_f5.number_input("Peso Prova:", 0.0, 10.0, 4.0, step=0.5)
 
-        # --- 2. SINCRONIZADOR COM SCANNER (COM BOTÃO ATIVO) ---
+        # --- 2. SINCRONIZADOR COM SCANNER ---
         with st.expander("📸 Sincronizar com Scanner de Gabaritos", expanded=True):
             c_s1, c_s2 = st.columns(2)
             provas_escaneadas = []
@@ -980,7 +980,9 @@ elif menu == "📊 Painel de Notas & Vistos":
             av_teste_id = c_s1.selectbox("Vincular Teste:", ["Nenhum"] + provas_escaneadas)
             av_prova_id = c_s2.selectbox("Vincular Prova:", ["Nenhum"] + provas_escaneadas)
             
-            # BOTÃO DE COMANDO PARA SINCRONIA
+            if av_teste_id != "Nenhum" and av_teste_id == av_prova_id:
+                st.warning("⚠️ Você selecionou a mesma avaliação para Teste e Prova.")
+
             if st.button("🔄 CARREGAR NOTAS DO SCANNER PARA A TABELA", type="primary", use_container_width=True):
                 st.toast("Notas importadas do Scanner!", icon="📸")
                 st.rerun()
@@ -1000,34 +1002,40 @@ elif menu == "📊 Painel de Notas & Vistos":
                     vistos_calculados[id_limpo] = round(nota_visto, 2)
                 else: vistos_calculados[id_limpo] = p_visto
 
-        # --- 4. MONTAGEM DA GRADE ---
+        # --- 4. MONTAGEM DA GRADE (LÓGICA DE PRESERVAÇÃO) ---
         alunos_turma = df_alunos[df_alunos['TURMA'] == turma_sel].sort_values(by="NOME_ALUNO")
-        notas_atuais = df_notas[(df_notas['TURMA'] == turma_sel) & (df_notas['TRIMESTRE'] == trimestre_sel)]
+        notas_no_banco = df_notas[(df_notas['TURMA'] == turma_sel) & (df_notas['TRIMESTRE'] == trimestre_sel)]
         
         dados_grade = []
         for _, aluno in alunos_turma.iterrows():
             id_a = db.limpar_id(aluno['ID'])
+            reg_banco = notas_no_banco[notas_no_banco['ID_ALUNO'].apply(db.limpar_id) == id_a]
             
-            # Busca nota do Scanner (Teste)
-            n_teste_scan = 0.0
+            # Valores base vindos do banco (se existirem)
+            if not reg_banco.empty:
+                n_visto_final = util.sosa_to_float(reg_banco.iloc[0].get('NOTA_VISTOS', 0))
+                n_teste_final = util.sosa_to_float(reg_banco.iloc[0].get('NOTA_TESTE', 0))
+                n_prova_final = util.sosa_to_float(reg_banco.iloc[0].get('NOTA_PROVA', 0))
+                n_bonus_final = util.sosa_to_float(reg_banco.iloc[0].get('NOTA_REC', 0))
+            else:
+                n_visto_final = vistos_calculados.get(id_a, p_visto)
+                n_teste_final = 0.0
+                n_prova_final = 0.0
+                n_bonus_final = 0.0
+
+            # SOBREPOSIÇÃO ATIVA: Só muda se o professor selecionou algo no Scanner
             if av_teste_id != "Nenhum":
                 reg_s = df_diagnosticos[(df_diagnosticos['ID_ALUNO'].apply(db.limpar_id) == id_a) & (df_diagnosticos['ID_AVALIACAO'] == av_teste_id)]
-                if not reg_s.empty: n_teste_scan = util.sosa_to_float(reg_s.iloc[0]['NOTA_CALCULADA'])
+                if not reg_s.empty: n_teste_final = util.sosa_to_float(reg_s.iloc[0]['NOTA_CALCULADA'])
 
-            # Busca nota do Scanner (Prova)
-            n_prova_scan = 0.0
             if av_prova_id != "Nenhum":
                 reg_p = df_diagnosticos[(df_diagnosticos['ID_ALUNO'].apply(db.limpar_id) == id_a) & (df_diagnosticos['ID_AVALIACAO'] == av_prova_id)]
-                if not reg_p.empty: n_prova_scan = util.sosa_to_float(reg_p.iloc[0]['NOTA_CALCULADA'])
-
-            n_manual = notas_atuais[notas_atuais['ID_ALUNO'].apply(db.limpar_id) == id_a]
-            n_bonus = util.sosa_to_float(n_manual.iloc[0].get('NOTA_REC', 0)) if not n_manual.empty else 0.0
+                if not reg_p.empty: n_prova_final = util.sosa_to_float(reg_p.iloc[0]['NOTA_CALCULADA'])
 
             dados_grade.append({
                 "ID": id_a, "NOME": aluno['NOME_ALUNO'],
-                "VISTOS": vistos_calculados.get(id_a, p_visto),
-                "TESTE": n_teste_scan, "PROVA": n_prova_scan,
-                "BÔNUS": n_bonus, "RECUPERAÇÃO": 0.0
+                "VISTOS": n_visto_final, "TESTE": n_teste_final, 
+                "PROVA": n_prova_final, "BÔNUS": n_bonus_final, "RECUPERAÇÃO": 0.0
             })
 
         st.markdown("### 📝 Consolidação de Notas")
@@ -1044,18 +1052,18 @@ elif menu == "📊 Painel de Notas & Vistos":
             hide_index=True, use_container_width=True, key=f"editor_notas_v26_{v}"
         )
 
-        # --- 5. CÁLCULOS E EXIBIÇÃO (CORREÇÃO DE CONTRASTE) ---
+        # --- 5. CÁLCULOS E EXIBIÇÃO (ALTO CONTRASTE) ---
         df_edit['SOMA'] = df_edit["VISTOS"] + df_edit["TESTE"] + df_edit["PROVA"] + df_edit["BÔNUS"]
         df_edit['MÉDIA FINAL'] = df_edit.apply(lambda r: min(10.0, max(r['SOMA'], r['RECUPERAÇÃO'])), axis=1)
 
         st.markdown("### 📊 Pré-visualização do Desempenho")
         df_view = df_edit[['NOME', 'SOMA', 'MÉDIA FINAL']].copy()
         
-        # FUNÇÃO DE ESTILO PARA ALTO CONTRASTE
+        # ESTILO DE ALTA VISIBILIDADE: Fundo vibrante com texto preto para contraste total
         def style_performance(v):
             if v < 6.0:
-                return 'background-color: #8B0000; color: white; font-weight: bold;' # Vermelho Escuro (Vinho)
-            return 'background-color: #004d00; color: white;' # Verde Escuro
+                return 'background-color: #FF3333; color: #000000; font-weight: 900;' # Vermelho Vivo, Texto Preto
+            return 'background-color: #00FF00; color: #000000; font-weight: 700;' # Verde Vivo, Texto Preto
 
         st.dataframe(
             df_view.style.applymap(style_performance, subset=['SOMA', 'MÉDIA FINAL'])
@@ -1075,9 +1083,9 @@ elif menu == "📊 Painel de Notas & Vistos":
                         util.sosa_to_str(r['MÉDIA FINAL'])
                     ])
                 db.salvar_lote("DB_NOTAS", linhas)
-                status.update(label="✅ Notas Sincronizadas!", state="complete")
+                status.update(label="✅ Notas Salvas!", state="complete")
                 st.balloons()
-
+                
 # ==============================================================================
 # MÓDULO: BOLETIM ANUAL & CONSELHO V26 - ANÁLISE DE TENDÊNCIA
 # ==============================================================================
