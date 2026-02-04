@@ -1371,216 +1371,131 @@ elif menu == "📚 Base de Conhecimento":
         st.dataframe(df_materiais, use_container_width=True, hide_index=True)
 
 # ==============================================================================
-# MÓDULO: RELATÓRIOS PEI
+# MÓDULO: RELATÓRIOS PEI V26 - DOSSIÊ DE EVIDÊNCIAS INTEGRADO
 # ==============================================================================
 elif menu == "♿ Relatórios PEI / Perfil IA":
-    st.header("♿ Analista Clínico-Pedagógico (PEI)")
-    
+    st.title("♿ Analista de Inclusão: Dossiê de Evidências")
+    st.markdown("---")
+
     if df_alunos.empty:
-        st.warning("Cadastre alunos primeiro.")
+        st.warning("⚠️ Base de alunos vazia.")
     else:
-        filtro_nome = st.text_input("🔍 Buscar Aluno por Nome:", placeholder="Digite para filtrar...")
+        # --- 1. FILTRAGEM INTELIGENTE (APENAS ALUNOS PEI) ---
+        df_somente_pei = df_alunos[df_alunos['NECESSIDADES'].str.upper().strip().apply(lambda x: x not in ["NENHUMA", "PENDENTE", ""])]
         
-        c_t, c_a = st.columns(2)
-        turma_pei = c_t.selectbox("Selecione a Turma:", sorted(df_alunos['TURMA'].unique()), key="pei_turma")
+        if df_somente_pei.empty:
+            st.info("💡 Nenhum aluno com CID/Necessidades cadastrado. Use 'Gestão da Turma' para atualizar o perfil.")
+            # Fallback para permitir testes
+            df_somente_pei = df_alunos
+
+        c_t, c_a = st.columns([1, 2])
+        turma_pei = c_t.selectbox("Filtrar Turma:", sorted(df_somente_pei['TURMA'].unique()), key="pei_t")
+        aluno_pei_nome = c_a.selectbox("Selecionar Estudante PEI:", df_somente_pei[df_somente_pei['TURMA'] == turma_pei]['NOME_ALUNO'].tolist(), key="pei_a")
         
-        df_a_pei = df_alunos[df_alunos['TURMA'] == turma_pei]
-        if filtro_nome:
-            df_a_pei = df_a_pei[df_a_pei['NOME_ALUNO'].str.contains(filtro_nome, case=False)]
-        
-        if not df_a_pei.empty:
-            aluno_id_nome = c_a.selectbox("Selecione o Aluno:", df_a_pei['NOME_ALUNO'].tolist(), key="pei_aluno")
-            dados_aluno = df_a_pei[df_a_pei['NOME_ALUNO'] == aluno_id_nome].iloc[0]
-            id_aluno = db.limpar_id(dados_aluno['ID']) 
-            cid_aluno = dados_aluno.get('NECESSIDADES', 'NENHUMA')
+        # Dados do Aluno
+        dados_a = df_somente_pei[df_somente_pei['NOME_ALUNO'] == aluno_pei_nome].iloc[0]
+        id_a = db.limpar_id(dados_a['ID'])
+        cid = dados_a['NECESSIDADES']
+
+        # --- 2. MOTOR DE BUSCA DE EVIDÊNCIAS (DATA FUSION) ---
+        with st.status("🔍 Maestro Sosa compilando evidências de todos os painéis...", expanded=False) as status:
+            # A. Evidências do Diário (Engajamento e Bônus)
+            d_aluno = df_diario[df_diario['ID_ALUNO'].apply(db.limpar_id) == id_a] if not df_diario.empty else pd.DataFrame()
+            vistos_concluidos = len(d_aluno[d_aluno['TAGS'].str.contains("PEI Concluído", na=False)])
+            bonus_total = d_aluno['BONUS'].apply(util.sosa_to_float).sum() if 'BONUS' in d_aluno.columns else 0.0
             
-            st.info(f"👤 **Aluno:** {aluno_id_nome} | 🆔 **ID:** {id_aluno} | 🏥 **Necessidades/CID:** {cid_aluno}")
+            # B. Evidências do Scanner (Desempenho em Provas Adaptadas)
+            s_aluno = df_diagnosticos[df_diagnosticos['ID_ALUNO'].apply(db.limpar_id) == id_a] if not df_diagnosticos.empty else pd.DataFrame()
+            media_scanner = s_aluno['NOTA_CALCULADA'].mean() if not s_aluno.empty else 0.0
             
-            tab_tec, tab_zap, tab_doc_oficial, tab_plano_trimestral, tab_hist_pei = st.tabs(["📈 Evolução Técnica", "📱 WhatsApp/Pais", "📄 Documento Oficial (Capa)", "📅 Plano Trimestral (Currículo Adaptado)", "🗂️ Histórico Salvo"])
+            # C. Evidências do Planejamento (Estratégias Ponto ID)
+            # Busca as adaptações PEI planejadas para o ano deste aluno
+            p_ano = df_planos[df_planos['ANO'].str.contains(turma_pei[0])] if not df_planos.empty else pd.DataFrame()
+            estrategias = []
+            if not p_ano.empty:
+                for p_txt in p_ano['PLANO_TEXTO']:
+                    est = ai.extrair_tag(p_txt, "ADAPTACAO_PEI")
+                    if est: estrategias.append(est)
+            estrategias_unicas = list(set(estrategias))[-3:] # Pega as 3 últimas estratégias
+
+            status.update(label="✅ Dossiê Compilado!", state="complete")
+
+        # --- 3. DASHBOARD DE MONITORAMENTO PEI ---
+        c_m1, c_m2, c_m3, c_m4 = st.columns(4)
+        c_m1.metric("Engajamento PEI", f"{vistos_concluidos} Vistos")
+        c_m2.metric("Bônus ⭐", f"{bonus_total:.1f} pts")
+        c_m3.metric("Média Scanner", f"{media_scanner:.2f}")
+        c_m4.metric("Status", "Em Evolução" if media_scanner > 0 else "Diagnóstico")
+
+        tab_rel, tab_doc, tab_zap, tab_hist = st.tabs([
+            "🧠 Relatório de Evidências (IA)", 
+            "📄 Capa do PEI Oficial", 
+            "📱 Comunicado Pais", 
+            "🗂️ Histórico"
+        ])
+
+        # --- ABA 1: RELATÓRIO DE EVIDÊNCIAS (A GRANDE INTEGRAÇÃO) ---
+        with tab_rel:
+            st.subheader("📝 Relatório Técnico de Acompanhamento")
+            percepcao = st.text_area("Sua percepção adicional (Opcional):", placeholder="Ex: Demonstrou mais calma hoje...")
             
-            evidencias_txt = "Sem registros recentes no diário."
-            if not df_diario.empty and 'ID_ALUNO' in df_diario.columns:
-                d_aluno = df_diario[df_diario['NOME_ALUNO'] == aluno_id_nome]
-                if not d_aluno.empty:
-                    ultimos = d_aluno.tail(5)
-                    evidencias_txt = "\n".join([f"- {row['DATA']}: {row.get('TAGS', '')} ({row.get('OBSERVACOES', '')})" for _, row in ultimos.iterrows()])
-
-            ultimo_relatorio = "Primeiro relatório do ano."
-            historico_existente = False
-            if not df_relatorios.empty:
-                r_aluno = df_relatorios[df_relatorios['ID_ALUNO'].apply(db.limpar_id) == str(id_aluno)]
-                if not r_aluno.empty:
-                    ultimo_relatorio = r_aluno.iloc[-1]['CONTEUDO']
-                    historico_existente = True
-
-            with tab_tec:
-                st.markdown("### 🧠 Gerador de Relatório Técnico (Ponto ID)")
-                percepcao = st.text_area("Sua percepção atual (O que você viu essa semana?):", placeholder="Ex: Melhorou na cópia, mas agrediu o colega...")
-                
-                hoje_str = datetime.now().strftime("%d/%m/%Y")
-                ja_salvou_hoje = False
-                if not df_relatorios.empty:
-                    check_hoje = df_relatorios[(df_relatorios['ID_ALUNO'].apply(db.limpar_id) == str(id_aluno)) & (df_relatorios['DATA'] == hoje_str)]
-                    if not check_hoje.empty:
-                        st.warning(f"⚠️ Já existe um relatório salvo hoje ({hoje_str}). Se salvar novamente, será criado um novo registro.")
-                        ja_salvou_hoje = True
-
-                if st.button("🧠 Gerar Análise Evolutiva"):
-                    with st.spinner("O Especialista está analisando a evolução..."):
-                        instrucao_extra = ""
-                        if historico_existente:
-                            instrucao_extra = "IMPORTANTE: Este é um relatório de ACOMPANHAMENTO. Compare com o 'Histórico Anterior'. O aluno evoluiu? Regrediu? Manteve-se estável? Cite as mudanças."
-                        
-                        prompt_pei = (
-                            f"ALUNO: {aluno_id_nome}. CID/NECESSIDADES: {cid_aluno}.\n"
-                            f"HISTÓRICO ANTERIOR: {ultimo_relatorio}\n"
-                            f"EVIDÊNCIAS DO DIÁRIO (Últimos dias): {evidencias_txt}\n"
-                            f"PERCEPÇÃO ATUAL DO PROFESSOR: {percepcao}\n\n"
-                            f"AÇÃO: Escreva um RELATÓRIO DE EVOLUÇÃO para o sistema escolar.\n"
-                            f"{instrucao_extra}\n"
-                            f"REGRAS: Texto corrido, SEM MARKDOWN, SEM NEGRITO. Linguagem técnica mas acessível. "
-                            f"Se tiver CID, correlacione. Se não, aponte barreiras. Cite evidências."
-                        )
-                        st.session_state.res_pei_tec = ai.gerar_ia("ESPECIALISTA_INCLUSAO", prompt_pei)
-                
-                if "res_pei_tec" in st.session_state:
-                    st.info("🤖 **Refinamento:** O Especialista está ouvindo. Peça ajustes abaixo se necessário.")
-                    ajuste_pei = st.chat_input("Ex: 'Seja mais breve', 'Cite que ele melhorou na leitura'...")
-                    
-                    if ajuste_pei:
-                        with st.spinner("Reescrevendo..."):
-                            prompt_refino = f"TEXTO ATUAL: {st.session_state.res_pei_tec}. AJUSTE SOLICITADO: {ajuste_pei}. Mantenha o tom técnico."
-                            st.session_state.res_pei_tec = ai.gerar_ia("ESPECIALISTA_INCLUSAO", prompt_refino)
-                            st.rerun()
-
-                    txt_editavel = st.text_area("Texto Gerado (Editável):", st.session_state.res_pei_tec, height=300)
-                    if st.button("💾 Salvar Evolução no Banco"):
-                        db.salvar_no_banco("DB_RELATORIOS", [
-                            hoje_str, 
-                            id_aluno, 
-                            aluno_id_nome, 
-                            "EVOLUCAO_TECNICA", 
-                            txt_editavel
-                        ])
-                        st.success("Relatório salvo com sucesso!"); del st.session_state.res_pei_tec; time.sleep(1); st.rerun()
-
-            with tab_zap:
-                st.markdown("### 📱 Comunicado para Família/Coordenação")
-                solicitacao = st.text_input("Motivo do contato:", placeholder="Ex: Reunião de pais, Elogio, Alerta de comportamento")
-                
-                if st.button("🚀 Gerar Mensagem Curta"):
-                    base_texto = st.session_state.get("res_pei_tec", ultimo_relatorio)
-                    prompt_zap = (
-                        f"Baseado neste relatório técnico: '{base_texto}'.\n"
-                        f"Crie uma mensagem de WhatsApp para os pais. MOTIVO: {solicitacao}.\n"
-                        f"Tom: Empático, parceiro, direto. Use emojis moderados. Resuma os pontos chaves."
+            if st.button("🚀 COMPILAR RELATÓRIO BASEADO EM FATOS", type="primary", use_container_width=True):
+                with st.spinner("Maestro Sosa redigindo relatório técnico..."):
+                    # O PROMPT AGORA É ALIMENTADO POR DADOS REAIS
+                    prompt_pei = (
+                        f"VOCÊ É UM ESPECIALISTA EM EDUCAÇÃO INCLUSIVA.\n"
+                        f"ESTUDANTE: {aluno_pei_nome}. CID: {cid}.\n\n"
+                        f"EVIDÊNCIAS COLETADAS NO SISTEMA SOSA:\n"
+                        f"- ENGAJAMENTO: Concluiu {vistos_concluidos} atividades adaptadas no Diário de Bordo.\n"
+                        f"- MÉRITO: Acumulou {bonus_total} pontos de bônus por desafios superados.\n"
+                        f"- DESEMPENHO: Média de {media_scanner:.2f} nas avaliações adaptadas (Scanner).\n"
+                        f"- ESTRATÉGIAS UTILIZADAS (PONTO ID): {'; '.join(estrategias_unicas)}.\n"
+                        f"- OBSERVAÇÃO DO PROFESSOR: {percepcao}\n\n"
+                        f"MISSÃO: Escreva um relatório técnico de acompanhamento trimestral.\n"
+                        f"REGRAS: Seja formal, cite os dados acima para provar o progresso. SEM MARKDOWN."
                     )
-                    st.session_state.res_pei_zap = ai.gerar_ia("ESPECIALISTA_INCLUSAO", prompt_zap)
-                
-                if "res_pei_zap" in st.session_state:
-                    st.text_area("Copie para o WhatsApp:", st.session_state.res_pei_zap, height=200)
+                    st.session_state.res_pei_v26 = ai.gerar_ia("ESPECIALISTA_INCLUSAO", prompt_pei)
+            
+            if "res_pei_v26" in st.session_state:
+                txt_final = st.text_area("Relatório Gerado (Editável):", st.session_state.res_pei_v26, height=400)
+                if st.button("💾 SALVAR NO BANCO DE RELATÓRIOS"):
+                    db.salvar_no_banco("DB_RELATORIOS", [datetime.now().strftime("%d/%m/%Y"), id_a, aluno_pei_nome, "ACOMPANHAMENTO_PEI", txt_final])
+                    st.success("Relatório arquivado com sucesso!")
 
-            with tab_doc_oficial:
-                st.markdown("### 📄 Capa do PEI (Plano de Acessibilidade Curricular)")
-                st.info("Preencha os dados complementares para gerar o documento oficial.")
-                
-                c1, c2 = st.columns(2)
-                data_nasc = c1.date_input("Data de Nascimento:", value=date(2013, 1, 1))
-                nome_mae = c2.text_input("Nome da Mãe/Responsável:")
-                
-                if st.button("📄 Gerar Plano de Acessibilidade (Capa)"):
-                    with st.spinner("Consultando Diário de Bordo e gerando perfil técnico..."):
-                        prompt_capa = (
-                            f"ALUNO: {aluno_id_nome}. IDADE: {date.today().year - data_nasc.year} anos.\n"
-                            f"DIAGNÓSTICO/CID: {cid_aluno}.\n"
-                            f"EVIDÊNCIAS COMPORTAMENTAIS (DIÁRIO): {evidencias_txt}\n"
-                            f"OBJETIVO: Redigir a 'Seção 1 - Plano de Acessibilidade Curricular' do PEI.\n"
-                            f"Gere o texto técnico dividido EXATAMENTE nos 4 tópicos: Habilidades Sociais, Comunicativas, Emocionais e Funcionais."
-                        )
-                        st.session_state.res_capa_pei = ai.gerar_ia("ESPECIALISTA_PEI", prompt_capa)
-                
-                if "res_capa_pei" in st.session_state:
-                    st.text_area("Texto do Documento Oficial:", st.session_state.res_capa_pei, height=400)
-                    if st.button("💾 Salvar Capa do PEI"):
-                        db.salvar_no_banco("DB_RELATORIOS", [
-                            datetime.now().strftime("%d/%m/%Y"), 
-                            id_aluno, 
-                            aluno_id_nome, 
-                            "PEI_CAPA_OFICIAL", 
-                            st.session_state.res_capa_pei
-                        ])
-                        st.success("Documento salvo!"); del st.session_state.res_capa_pei; time.sleep(1); st.rerun()
+        # --- ABA 2: CAPA DO PEI (INTEGRADO AO PONTO ID) ---
+        with tab_doc:
+            st.subheader("📄 Seção 1: Plano de Acessibilidade")
+            if st.button("📄 Gerar Capa Baseada no Perfil e Planejamento"):
+                with st.spinner("Analisando barreiras e estratégias..."):
+                    prompt_capa = (
+                        f"ALUNO: {aluno_pei_nome}. CID: {cid}.\n"
+                        f"ESTRATÉGIAS DO PONTO ID: {estrategias_unicas}.\n"
+                        f"Gere a Seção 1 do PEI (Habilidades Sociais, Comunicativas, Emocionais e Funcionais) "
+                        f"correlacionando o CID com as estratégias que o professor já usa no planejamento."
+                    )
+                    st.session_state.res_capa_v26 = ai.gerar_ia("ESPECIALISTA_PEI", prompt_capa)
+            
+            if "res_capa_v26" in st.session_state:
+                st.text_area("Texto Oficial:", st.session_state.res_capa_v26, height=400)
 
-            with tab_plano_trimestral:
-                st.markdown("### 📅 Plano Trimestral (Currículo Adaptado)")
-                
-                trimestre_sel = st.selectbox("Selecione o Trimestre:", ["I", "II", "III"], key="pei_trimestre")
-                
-                perfil_aluno = "Perfil não encontrado. Usando apenas CID."
-                if not df_relatorios.empty:
-                    r_capa = df_relatorios[
-                        (df_relatorios['ID_ALUNO'].apply(db.limpar_id) == str(id_aluno)) & 
-                        (df_relatorios['TIPO'] == "PEI_CAPA_OFICIAL")
-                    ]
-                    if not r_capa.empty:
-                        perfil_aluno = r_capa.iloc[-1]['CONTEUDO']
-                        st.success("✅ Perfil do Aluno (Capa) carregado com sucesso.")
-                    else:
-                        st.warning("⚠️ Capa do PEI não encontrada. Gere-a na aba anterior para um resultado melhor.")
+        # --- ABA 3: COMUNICADO PAIS (ZAP) ---
+        with tab_zap:
+            st.subheader("📱 Mensagem para Família")
+            motivo = st.text_input("Motivo do contato:", "Informar sobre o progresso nas atividades adaptadas")
+            if st.button("🚀 Gerar Mensagem"):
+                base = st.session_state.get("res_pei_v26", "O aluno está progredindo bem.")
+                prompt_zap = f"Com base neste relatório: '{base}', gere uma mensagem de WhatsApp para os pais. Motivo: {motivo}. Tom: Acolhedor e parceiro."
+                st.info(ai.gerar_ia("ESPECIALISTA_INCLUSAO", prompt_zap))
 
-                curriculo_texto = "Currículo não encontrado."
-                if not df_curriculo.empty:
-                    ano_aluno = "".join(filter(str.isdigit, turma_pei))
-                    if ano_aluno:
-                        df_curr_trim = df_curriculo[
-                            (df_curriculo['ANO'] == int(ano_aluno)) & 
-                            (df_curriculo['TRIMESTRE'] == trimestre_sel)
-                        ]
-                        if not df_curr_trim.empty:
-                            curriculo_texto = "\n".join(df_curr_trim['CONTEUDO_ESPECIFICO'].tolist())
-                            st.info(f"📚 Currículo do {ano_aluno}º Ano ({trimestre_sel} Trimestre) carregado.")
-                        else:
-                            st.error("Currículo vazio para este ano/trimestre.")
-                    else:
-                        st.error("Não foi possível identificar o ano da turma.")
-
-                if st.button("🚀 Gerar Plano Adaptado"):
-                    with st.spinner("O Especialista está adaptando o currículo..."):
-                        prompt_adaptacao = (
-                            f"ALUNO: {aluno_id_nome}. CID: {cid_aluno}.\n"
-                            f"PERFIL DE APRENDIZAGEM (CAPA): {perfil_aluno}\n"
-                            f"CURRÍCULO REGULAR DO TRIMESTRE: {curriculo_texto}\n"
-                            f"OBJETIVO: Criar a tabela de 'Currículo Adaptado' para o PEI.\n"
-                            f"Gere o texto estruturado com: CONTEÚDO, OBJETIVO ADAPTADO, FUNÇÕES PSÍQUICAS e MATERIAIS."
-                        )
-                        st.session_state.res_plano_trim = ai.gerar_ia("ESPECIALISTA_ADAPTACAO", prompt_adaptacao)
-
-                if "res_plano_trim" in st.session_state:
-                    st.text_area("Plano Trimestral Adaptado:", st.session_state.res_plano_trim, height=500)
-                    if st.button("💾 Salvar Plano Trimestral"):
-                        db.salvar_no_banco("DB_RELATORIOS", [
-                            datetime.now().strftime("%d/%m/%Y"), 
-                            id_aluno, 
-                            aluno_id_nome, 
-                            f"PEI_PLANO_TRIMESTRAL_{trimestre_sel}", 
-                            st.session_state.res_plano_trim
-                        ])
-                        st.success("Plano Trimestral salvo!"); del st.session_state.res_plano_trim; time.sleep(1); st.rerun()
-
-            with tab_hist_pei:
-                st.markdown("### 🗂️ Arquivo Morto (Mais recente primeiro)")
-                if not df_relatorios.empty:
-                    hist_aluno = df_relatorios[df_relatorios['ID_ALUNO'].apply(db.limpar_id) == str(id_aluno)]
-                    if not hist_aluno.empty:
-                        hist_aluno = hist_aluno.iloc[::-1]
-                        for _, row in hist_aluno.iterrows():
-                            tipo_exibicao = row.get('TIPO', row.get('TURMA', 'REGISTRO'))
-                            with st.expander(f"{row['DATA']} - {tipo_exibicao}"):
-                                st.write(row['CONTEUDO'])
-                    else:
-                        st.info("Nenhum histórico para este aluno.")
-                else:
-                    st.info("Banco de relatórios vazio.")
+        # --- ABA 4: HISTÓRICO ---
+        with tab_hist:
+            st.subheader("🗂️ Histórico de Documentos")
+            if not df_relatorios.empty:
+                hist = df_relatorios[df_relatorios['ID_ALUNO'].apply(db.limpar_id) == id_a].iloc[::-1]
+                for _, row in hist.iterrows():
+                    with st.expander(f"{row['DATA']} - {row['TIPO']}"):
+                        st.write(row['CONTEUDO'])
+            else: st.info("Nenhum documento salvo.")
 
 # ==============================================================================
 # MÓDULO: ARQUITETO DE EXAMES - ARQUITETURA V33.0 (SESSÃO TRAVADA + DUAL SYNC)
