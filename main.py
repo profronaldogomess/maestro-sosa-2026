@@ -1883,14 +1883,23 @@ elif menu == "📸 Scanner de Gabaritos":
             else: st.success("✅ Turma concluída!")
         else: st.warning("⚠️ Nenhuma avaliação encontrada.")
 
-    # --- ABA 2: ACERVO DE EVIDÊNCIAS ---
+# --- ABA 2: ACERVO DE EVIDÊNCIAS (CORRIGIDA) ---
     with tab_acervo:
         st.subheader("📂 Histórico de Correções")
         if not df_diagnosticos.empty:
             df_view = df_diagnosticos.copy()
-            # Exibição formatada (O dado já é float graças ao database.py atualizado)
-            df_view['NOTA_CALCULADA'] = df_view['NOTA_CALCULADA'].apply(lambda x: f"{x:.2f}")
-            st.dataframe(df_view, column_config={"LINK_FOTO_DRIVE": st.column_config.LinkColumn("📸 Ver Gabarito")}, use_container_width=True, hide_index=True)
+            
+            # A mágica acontece aqui: formatamos para exibição, 
+            # mas o dado interno já foi limpo pelo database.py
+            st.dataframe(
+                df_view, 
+                column_config={
+                    "NOTA_CALCULADA": st.column_config.NumberColumn("Nota", format="%.2f"),
+                    "LINK_FOTO_DRIVE": st.column_config.LinkColumn("📸 Ver Gabarito")
+                }, 
+                use_container_width=True, 
+                hide_index=True
+            )
         else: st.info("📭 Nenhum gabarito escaneado.")
 
     # --- ABA 3: DASHBOARD DE PERÍCIA ---
