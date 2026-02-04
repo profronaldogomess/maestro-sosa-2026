@@ -5,16 +5,34 @@ def limpar_texto(texto):
     if not texto: return ""
     return texto.replace("**", "").replace("###", "").replace("##", "").replace("#", "").replace("__", "").replace("`", "").strip()
 
+# --- utils.py (ATUALIZADO V27) ---
+from datetime import date, timedelta
+
 def obter_info_trimestre(dt):
+    # Datas exatas do PDF da Prefeitura de Itabuna 2026
     t1 = (date(2026, 2, 9), date(2026, 5, 22))
     t2 = (date(2026, 5, 25), date(2026, 9, 4))
-    t3 = (date(2026, 9, 8), date(2026, 12, 17))
+    t3 = (date(2026, 8, 9), date(2026, 12, 17)) # Início do III em 08/09 conforme PDF
     
     if t1[0] <= dt <= t1[1]: return "I Trimestre", t1
     if t2[0] <= dt <= t2[1]: return "II Trimestre", t2
     if t3[0] <= dt <= t3[1]: return "III Trimestre", t3
     return "Recesso/Jornada", (dt, dt)
 
+def verificar_feriado_itabuna(dt):
+    feriados = {
+        date(2026, 3, 19): "São José (Padroeiro)",
+        date(2026, 4, 2): "Paixão de Cristo",
+        date(2026, 4, 21): "Tiradentes",
+        date(2026, 5, 1): "Dia do Trabalhador",
+        date(2026, 6, 4): "Corpus Christi",
+        date(2026, 7, 2): "Independência da Bahia",
+        date(2026, 7, 28): "Aniversário de Itabuna",
+        date(2026, 9, 7): "Independência do Brasil",
+        date(2026, 10, 12): "Nsa. Sra. Aparecida",
+        date(2026, 12, 25): "Natal"
+    }
+    return feriados.get(dt, None)
 def gerar_semanas():
     semanas = []
     data_atual = date(2026, 2, 2)
