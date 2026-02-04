@@ -114,7 +114,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # --- CARREGAMENTO ---
-wb, (df_alunos, df_curriculo, df_materiais, df_planos, df_aulas, df_notas, df_diario, df_turmas, df_relatorios, df_horarios, df_registro_aulas) = db.carregar_tudo()
+wb, (df_alunos, df_curriculo, df_materiais, df_planos, df_aulas, df_notas, df_diario, df_turmas, df_relatorios, df_horarios, df_registro_aulas, df_diagnosticos) = db.carregar_tudo()
 
 # --- SIDEBAR COM LOGOTIPO ---
 with st.sidebar:
@@ -314,25 +314,7 @@ if menu == "🤖 Maestro Dashboard":
     st.markdown("---")
 
     # --- 1. FUNÇÃO DE LIMPEZA DE NOTAS (NORMALIZAÇÃO RECURSIVA) ---
-    def normalizar_nota_agressiva(valor):
-        """
-        Garante matematicamente que a nota fique entre 0 e 10.
-        Usa loop while para corrigir erros como 718 -> 71.8 -> 7.18
-        """
-        try:
-            # Limpeza básica de string
-            s_val = str(valor).replace(',', '.').strip()
-            if not s_val or s_val.lower() == 'nan': return 0.0
-            
-            f_val = float(s_val)
-            
-            # Loop de correção: Enquanto for maior que 10, divide por 10
-            while f_val > 10.0:
-                f_val = f_val / 10.0
-                
-            return f_val
-        except:
-            return 0.0
+    
 
     # --- 2. PREPARAÇÃO DOS DADOS (CONTEXTO GLOBAL) ---
     def montar_contexto_global():
@@ -356,17 +338,7 @@ if menu == "🤖 Maestro Dashboard":
             ctx += f"TURMA: {total} alunos. PEI: {lista_peis}.\n"
         
         # C. Notas (NORMALIZAÇÃO AGRESSIVA)
-        if not df_notas.empty:
-            ctx += "BOLETIM (Notas Normalizadas 0-10):\n"
-            for _, row in df_notas.iterrows():
-                nome = row['NOME_ALUNO']
-                n_visto = normalizar_nota_agressiva(row.get('NOTA_VISTOS', 0))
-                n_teste = normalizar_nota_agressiva(row.get('NOTA_TESTE', 0))
-                n_prova = normalizar_nota_agressiva(row.get('NOTA_PROVA', 0))
-                n_media = normalizar_nota_agressiva(row.get('MEDIA_FINAL', 0))
-                
-                ctx += f"- {nome}: Média {n_media:.1f} (Vistos: {n_visto}, Teste: {n_teste}, Prova: {n_prova})\n"
-            ctx += "\n"
+     
 
         # D. Planejamento
         if not df_planos.empty:
@@ -412,17 +384,13 @@ if menu == "🤖 Maestro Dashboard":
     # KPI 3: Média Geral
     media_turma = 0.0
     delta_media = "Sem dados"
-    if not df_notas.empty:
-        notas_corrigidas = df_notas['MEDIA_FINAL'].apply(normalizar_nota_agressiva)
-        media_turma = notas_corrigidas.mean()
-        delta_media = "Na média" if media_turma >= 6.0 else "Abaixo da meta"
+
     
     col_kpi4.metric("📊 Média Geral (Rede)", f"{media_turma:.1f}", delta=delta_media)
 
     # KPI 4: Risco
     risco = 0
-    if not df_notas.empty:
-        risco = len(df_notas[df_notas['MEDIA_FINAL'].apply(normalizar_nota_agressiva) < 6.0])
+
     col_kpi4.metric("🚨 Risco (Notas < 6.0)", risco, delta_color="inverse")
 
 
@@ -1947,7 +1915,7 @@ elif menu == "📝 Central de Avaliações":
                 st.dataframe(df_cron[['DATA', 'TURMA', 'CONTEUDO_MINISTRADO', 'STATUS_CURRICULO']], use_container_width=True, hide_index=True)
 
 # ==============================================================================
-# MÓDULO: SCANNER & PERÍCIA - ARQUITETURA V11.5 (PRECISÃO DECIMAL & DASHBOARD)
+# MÓDULO: SCANNER & PERÍCIA - ARQUITETURA V26 (PRECISÃO DECIMAL CONSOLIDADA)
 # ==============================================================================
 elif menu == "📸 Scanner de Gabaritos":
     st.title("📸 Inteligência Diagnóstica e Perícia")
@@ -1955,29 +1923,21 @@ elif menu == "📸 Scanner de Gabaritos":
 
     def reset_scanner():
         if "scan_res" in st.session_state: del st.session_state.scan_res
-        if "scan_img" in st.session_state: del st.session_state.scan_img
+        if "scan_res_img" in st.session_state: del st.session_state.scan_res_img # Corrigido nome da key
         st.session_state.v_scan = int(time.time())
         st.rerun()
 
     if "v_scan" not in st.session_state: st.session_state.v_scan = 1
     v = st.session_state.v_scan
 
-    # --- 1. FUNÇÃO AUXILIAR DE CONVERSÃO DE NOTA (BLINDADA) ---
-    def converter_nota_para_float(valor):
-        try:
-            if not valor or valor == "": return 0.0
-            # Remove espaços e troca vírgula por ponto para o Python entender
-            s_val = str(valor).replace(' ', '').replace(',', '.')
-            return float(s_val)
-        except:
-            return 0.0
-
-    # --- 2. CARREGAMENTO DE DADOS ---
+    # Carregamento de dados com sanitização Sosa
     try:
         ws_g = wb.worksheet("DB_GABARITOS_ALUNOS")
         df_diagnosticos = pd.DataFrame(ws_g.get_all_records())
         if not df_diagnosticos.empty:
             df_diagnosticos.columns = [str(c).strip().upper() for c in df_diagnosticos.columns]
+            # Sanitização imediata das notas para float puro
+            df_diagnosticos['NOTA_CALCULADA'] = df_diagnosticos['NOTA_CALCULADA'].apply(util.sosa_to_float)
     except:
         df_diagnosticos = pd.DataFrame(columns=["DATA", "ID_ALUNO", "NOME_ALUNO", "TURMA", "ID_AVALIACAO", "RESPOSTAS_ALUNO", "NOTA_CALCULADA", "LINK_FOTO_DRIVE"])
 
@@ -1991,14 +1951,14 @@ elif menu == "📸 Scanner de Gabaritos":
         provas_disponiveis = df_aulas[(df_aulas['SEMANA_REF'] == "AVALIAÇÃO") & (df_aulas['ANO'].str.contains(serie_alvo))]
         
         if not provas_disponiveis.empty:
-            prova_sel = c2.selectbox("Avaliação Base (Detecção Autônoma):", provas_disponiveis['TIPO_MATERIAL'].tolist(), key=f"p_scan_{v}")
+            prova_sel = c2.selectbox("Avaliação Base:", provas_disponiveis['TIPO_MATERIAL'].tolist(), key=f"p_scan_{v}")
             prova_data = provas_disponiveis[provas_disponiveis['TIPO_MATERIAL'] == prova_sel].iloc[0]
             txt_conteudo = str(prova_data['CONTEUDO'])
             
-            # Detecção de Valor Real da Prova
+            # Detecção de Valor Real
             v_prova_base = 10.0
             match_v = re.search(r"VALOR:?\s*(\d+[\.,]\d+|\d+)", txt_conteudo.upper())
-            if match_v: v_prova_base = float(match_v.group(1).replace(',', '.'))
+            if match_v: v_prova_base = util.sosa_to_float(match_v.group(1))
             elif "TESTE" in str(prova_sel).upper(): v_prova_base = 3.0
             elif "PROVA" in str(prova_sel).upper(): v_prova_base = 4.0
             
@@ -2008,7 +1968,7 @@ elif menu == "📸 Scanner de Gabaritos":
 
             st.info(f"🧠 **SOSA ID:** {qtd_q} questões | Valor Total: {v_prova_base:.1f} pts.")
 
-            ids_corrigidos = df_diagnosticos[df_diagnosticos['ID_AVALIACAO'] == prova_sel]['ID_ALUNO'].astype(str).tolist() if "ID_AVALIACAO" in df_diagnosticos.columns else []
+            ids_corrigidos = df_diagnosticos[df_diagnosticos['ID_AVALIACAO'] == prova_sel]['ID_ALUNO'].astype(str).tolist() if not df_diagnosticos.empty else []
             alunos_restantes = df_alunos[(df_alunos['TURMA'] == turma_scan) & (~df_alunos['ID'].astype(str).isin(ids_corrigidos))]
             
             if not alunos_restantes.empty:
@@ -2016,11 +1976,10 @@ elif menu == "📸 Scanner de Gabaritos":
                 img_file = st.camera_input("Capture o gabarito", key=f"cam_{v}")
                 
                 if img_file:
-                    col_b1, col_b2 = st.columns(2)
-                    if col_b1.button("🧠 Analisar Marcações", type="primary", use_container_width=True):
+                    if st.button("🧠 Analisar Marcações", type="primary", use_container_width=True):
                         st.session_state.scan_res = ai.analisar_gabarito_vision(img_file.getvalue())
                         st.session_state.scan_img = img_file.getvalue()
-                    if col_b2.button("🗑️ Descartar Foto", use_container_width=True): reset_scanner()
+                        st.rerun()
 
                 if "scan_res" in st.session_state:
                     st.markdown("### 📝 Conferência e Resultado")
@@ -2032,33 +1991,36 @@ elif menu == "📸 Scanner de Gabaritos":
                             q_key = f"{i:02d}"
                             resp_aluno = st.session_state.scan_res.get(q_key) or st.session_state.scan_res.get(str(i)) or "?"
                             resp_certa = gab_oficial[i-1] if i <= len(gab_oficial) else "?"
-                            status_txt = "✅ CORRETA" if resp_aluno == resp_certa and resp_certa != "?" else "❌ ERRADA"
+                            
                             if resp_aluno == "X": status_txt = "🚫 ANULADA"
                             elif resp_aluno == "?": status_txt = "⚪ VAZIA"
-                            dados_conf.append({"Q": q_key, "Marcação do Aluno": resp_aluno, "Gabarito": resp_certa, "Status": status_txt})
+                            elif resp_aluno == resp_certa: status_txt = "✅ CORRETA"
+                            else: status_txt = "❌ INCORRETA"
+                            
+                            dados_conf.append({"Q": q_key, "Marcação": resp_aluno, "Gabarito": resp_certa, "Status": status_txt})
                         
                         df_final = st.data_editor(pd.DataFrame(dados_conf), use_container_width=True, hide_index=True, key=f"ed_scan_{v}")
                         
-                        acertos = len(df_final[df_final['Marcação do Aluno'] == df_final['Gabarito']])
+                        acertos = len(df_final[df_final['Status'] == "✅ CORRETA"])
                         nota_calc = (acertos / qtd_q) * v_prova_base
-                        st.metric("Nota Proporcional Final", f"{nota_calc:.2f}", delta=f"{acertos}/{qtd_q} acertos")
+                        
+                        st.metric("Nota Final (Precisão SOSA)", f"{nota_calc:.2f}", delta=f"{acertos}/{qtd_q} acertos")
                         
                         if st.button("💾 Confirmar e Salvar Diagnóstico", type="primary", use_container_width=True):
                             with st.status("Sincronizando...", expanded=True) as status:
                                 import io
                                 img_io = io.BytesIO(st.session_state.scan_img)
                                 link_foto = db.subir_e_converter_para_google_docs(img_io, f"SCAN_{aluno_scan}", trimestre="I Trimestre", categoria=turma_scan, modo="SCANNER")
-                                link_limpo = link_foto.replace("ERRO_NO_UPLOAD: ", "") if "https" in link_foto else link_foto
-                                aluno_info = df_alunos[df_alunos['NOME_ALUNO'] == aluno_scan].iloc[0]
                                 
-                                # SALVAMENTO COM VÍRGULA PARA A PLANILHA
-                                nota_str = f"{nota_calc:.2f}".replace('.', ',')
+                                aluno_info = df_alunos[df_alunos['NOME_ALUNO'] == aluno_scan].iloc[0]
+                                nota_para_planilha = util.sosa_to_str(nota_calc)
+                                
                                 db.salvar_no_banco("DB_GABARITOS_ALUNOS", [
                                     datetime.now().strftime("%d/%m/%Y"), aluno_info['ID'], aluno_scan, turma_scan, prova_sel,
-                                    ";".join(df_final['Marcação do Aluno'].tolist()), nota_str, link_limpo
+                                    ";".join(df_final['Marcação'].tolist()), nota_para_planilha, link_foto
                                 ])
-                                status.update(label="✅ Salvo com Sucesso!", state="complete")
-                                st.balloons(); reset_scanner()
+                                status.update(label="✅ Diagnóstico Sincronizado!", state="complete")
+                                st.balloons(); time.sleep(1); reset_scanner()
             else: st.success("✅ Turma concluída!")
         else: st.warning("⚠️ Nenhuma avaliação encontrada.")
 
@@ -2067,12 +2029,12 @@ elif menu == "📸 Scanner de Gabaritos":
         st.subheader("📂 Histórico de Correções")
         if not df_diagnosticos.empty:
             df_view = df_diagnosticos.copy()
-            # Garante que a nota seja exibida corretamente na tabela
-            df_view['NOTA_CALCULADA'] = df_view['NOTA_CALCULADA'].apply(lambda x: f"{converter_nota_para_float(x):.2f}")
+            # Exibição formatada (O dado já é float graças ao database.py atualizado)
+            df_view['NOTA_CALCULADA'] = df_view['NOTA_CALCULADA'].apply(lambda x: f"{x:.2f}")
             st.dataframe(df_view, column_config={"LINK_FOTO_DRIVE": st.column_config.LinkColumn("📸 Ver Gabarito")}, use_container_width=True, hide_index=True)
         else: st.info("📭 Nenhum gabarito escaneado.")
 
-    # --- ABA 3: DASHBOARD DE PERÍCIA (RESTAURADO E CORRIGIDO) ---
+    # --- ABA 3: DASHBOARD DE PERÍCIA ---
     with tab_dash:
         st.subheader("📊 Raio-X de Desempenho e Prognóstico")
         if not df_diagnosticos.empty:
@@ -2084,17 +2046,16 @@ elif menu == "📸 Scanner de Gabaritos":
                 prova_dash = c_f2.selectbox("Analisar Prova:", df_p['ID_AVALIACAO'].unique(), key="d_p")
                 df_final_dash = df_p[df_p['ID_AVALIACAO'] == prova_dash]
                 
-                # --- RE-DETECÇÃO DO VALOR DA PROVA PARA O DASHBOARD ---
                 prova_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == prova_dash].iloc[0]
                 txt_full = str(prova_ref['CONTEUDO'])
                 
+                # Re-detecção do valor para o Dashboard
                 v_total_dash = 10.0
                 match_v_d = re.search(r"VALOR:?\s*(\d+[\.,]\d+|\d+)", txt_full.upper())
-                if match_v_d: v_total_dash = float(match_v_d.group(1).replace(',', '.'))
+                if match_v_d: v_total_dash = util.sosa_to_float(match_v_d.group(1))
                 elif "TESTE" in str(prova_dash).upper(): v_total_dash = 3.0
                 elif "PROVA" in str(prova_dash).upper(): v_total_dash = 4.0
 
-                # Busca Gabarito e Enunciados
                 gab_raw = ai.extrair_tag(txt_full, "GABARITO_PEI" if "PEI" in prova_dash.upper() else "GABARITO_REGULAR") or ai.extrair_tag(txt_full, "GABARITO_TEXTO")
                 gab_oficial = re.findall(r"\d+[\s\.\:\-]*([A-E])", gab_raw.upper())
                 
@@ -2112,9 +2073,8 @@ elif menu == "📸 Scanner de Gabaritos":
                 
                 df_stats = pd.DataFrame(stats_questoes)
                 
-                # KPIs COM CÁLCULO CORRIGIDO
-                notas_float = df_final_dash['NOTA_CALCULADA'].apply(converter_nota_para_float)
-                media_val = notas_float.mean()
+                # KPIs (O dado já vem como float do database)
+                media_val = df_final_dash['NOTA_CALCULADA'].mean()
                 aproveitamento = (media_val / v_total_dash * 100) if v_total_dash > 0 else 0
                 
                 ck1, ck2, ck3 = st.columns(3)
@@ -2124,13 +2084,6 @@ elif menu == "📸 Scanner de Gabaritos":
 
                 st.plotly_chart(px.bar(df_stats, x="Questão", y="Acerto %", text="Acerto %", color="Acerto %", color_continuous_scale="RdYlGn", range_y=[0, 110]), use_container_width=True)
                 
-                st.markdown("### 🔍 Detalhamento por Descritor")
-                for _, row in df_stats.iterrows():
-                    cor = "🔴" if row['Acerto %'] < 50 else "🟡" if row['Acerto %'] < 75 else "🟢"
-                    with st.expander(f"{cor} Questão {row['Questão']} - Acerto: {row['Acerto %']:.1f}%"):
-                        st.write(f"**Enunciado:** {row['Texto']}")
-                        if row['Acerto %'] < 50: st.error("🚨 Alerta: Baixo domínio detectado. Recomenda-se Recomposição.")
-
                 if st.button("🧠 Gerar Percepção Analítica da Turma"):
                     with st.spinner("Maestro analisando padrões de erro..."):
                         resumo = df_stats[df_stats['Acerto %'] < 60][['Questão', 'Acerto %']].to_string()
