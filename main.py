@@ -2022,47 +2022,60 @@ elif menu == "📸 Scanner de Gabaritos":
 
                 if "scan_res" in st.session_state:
                     st.markdown("### 📝 Conferência e Resultado")
-                    col_img, col_edit = st.columns([1.2, 1])
-                    with col_img: st.image(st.session_state.scan_img)
                     
-                    with col_edit:
-                        dados_conf = []
-                        for i in range(1, qtd_questoes + 1):
-                            q_key = f"{i:02d}"
-                            resp_aluno = st.session_state.scan_res.get(q_key, "?")
-                            resp_certa = gab_oficial[i-1] if i <= len(gab_oficial) else "?"
-                            dados_conf.append({"Q": q_key, "Marcação do Aluno": resp_aluno, "Gabarito": resp_certa})
+                    # Verifica se a IA retornou erro
+                    if "erro" in st.session_state.scan_res:
+                        st.error(f"❌ Falha na Visão: {st.session_state.scan_res['erro']}")
+                        if st.button("Tentar Novamente"):
+                            del st.session_state.scan_res
+                            st.rerun()
+                    else:
+                        col_img, col_edit = st.columns([1.2, 1])
+                        with col_img: st.image(st.session_state.scan_img)
                         
-                        df_final = st.data_editor(
-                            pd.DataFrame(dados_conf),
-                            column_config={
-                                "Q": st.column_config.TextColumn("Q", disabled=True),
-                                "Marcação do Aluno": st.column_config.SelectboxColumn("Marcação do Aluno", options=["A", "B", "C", "D", "E", "X", "?"], width="medium"),
-                                "Gabarito": st.column_config.TextColumn("Gabarito", disabled=True)
-                            },
-                            use_container_width=True, hide_index=True, key=f"ed_scan_{v}"
-                        )
-                        
-                        # --- CÁLCULO MATEMÁTICO AUTÔNOMO ---
-                        acertos = len(df_final[df_final['Marcação do Aluno'] == df_final['Gabarito']])
-                        nota_calculada = (acertos / qtd_questoes) * valor_detectado
-                        
-                        st.metric("Nota Proporcional (Auto)", f"{nota_calculada:.2f}", delta=f"{acertos}/{qtd_questoes} acertos")
-                        
-                        if st.button("💾 Confirmar e Salvar Diagnóstico", type="primary", use_container_width=True):
-                            with st.status("Sincronizando...", expanded=True) as status:
-                                import io
-                                img_io = io.BytesIO(st.session_state.scan_img)
-                                link_foto = db.subir_e_converter_para_google_docs(img_io, f"SCAN_{aluno_scan}", trimestre="I Trimestre", categoria=turma_scan, modo="SCANNER")
-                                link_limpo = link_foto.replace("ERRO_NO_UPLOAD: ", "") if "https" in link_foto else link_foto
+                        with col_edit:
+                            # Montagem da Tabela de Conferência Blindada
+                            dados_conf = []
+                            for i in range(1, qtd_questoes + 1):
+                                q_key_full = f"{i:02d}"
+                                q_key_short = str(i)
                                 
-                                aluno_info = df_alunos[df_alunos['NOME_ALUNO'] == aluno_scan].iloc[0]
-                                db.salvar_no_banco("DB_GABARITOS_ALUNOS", [
-                                    datetime.now().strftime("%d/%m/%Y"), aluno_info['ID'], aluno_scan, turma_scan, prova_sel,
-                                    ";".join(df_final['Marcação do Aluno'].tolist()), f"{nota_calculada:.2f}".replace('.', ','), link_limpo
-                                ])
-                                status.update(label="✅ Salvo com Sucesso!", state="complete")
-                                st.balloons(); del st.session_state.scan_res; st.session_state.v_scan += 1; st.rerun()
+                                # Tenta pegar a resposta com "01" ou "1"
+                                resp_aluno = st.session_state.scan_res.get(q_key_full) or st.session_state.scan_res.get(q_key_short) or "?"
+                                
+                                resp_certa = gab_oficial[i-1] if i <= len(gab_oficial) else "?"
+                                dados_conf.append({"Q": q_key_full, "Marcação do Aluno": resp_aluno, "Gabarito": resp_certa})
+                            
+                            df_final = st.data_editor(
+                                pd.DataFrame(dados_conf),
+                                column_config={
+                                    "Q": st.column_config.TextColumn("Q", disabled=True),
+                                    "Marcação do Aluno": st.column_config.SelectboxColumn("Marcação do Aluno", options=["A", "B", "C", "D", "E", "X", "?"], width="medium"),
+                                    "Gabarito": st.column_config.TextColumn("Gabarito", disabled=True)
+                                },
+                                use_container_width=True, hide_index=True, key=f"ed_scan_{v}"
+                            )
+                            
+                            # Cálculo Matemático
+                            acertos = len(df_final[df_final['Marcação do Aluno'] == df_final['Gabarito']])
+                            nota_calculada = (acertos / qtd_questoes) * valor_detectado
+                            
+                            st.metric("Nota Proporcional (Auto)", f"{nota_calculada:.2f}", delta=f"{acertos}/{qtd_questoes} acertos")
+                            
+                            if st.button("💾 Confirmar e Salvar Diagnóstico", type="primary", use_container_width=True):
+                                with st.status("Sincronizando...", expanded=True) as status:
+                                    import io
+                                    img_io = io.BytesIO(st.session_state.scan_img)
+                                    link_foto = db.subir_e_converter_para_google_docs(img_io, f"SCAN_{aluno_scan}", trimestre="I Trimestre", categoria=turma_scan, modo="SCANNER")
+                                    link_limpo = link_foto.replace("ERRO_NO_UPLOAD: ", "") if "https" in link_foto else link_foto
+                                    
+                                    aluno_info = df_alunos[df_alunos['NOME_ALUNO'] == aluno_scan].iloc[0]
+                                    db.salvar_no_banco("DB_GABARITOS_ALUNOS", [
+                                        datetime.now().strftime("%d/%m/%Y"), aluno_info['ID'], aluno_scan, turma_scan, prova_sel,
+                                        ";".join(df_final['Marcação do Aluno'].tolist()), f"{nota_calculada:.2f}".replace('.', ','), link_limpo
+                                    ])
+                                    status.update(label="✅ Salvo com Sucesso!", state="complete")
+                                    st.balloons(); del st.session_state.scan_res; st.session_state.v_scan += 1; st.rerun()
             else: st.success("✅ Todos os alunos desta turma foram corrigidos!")
         else: st.warning("⚠️ Nenhuma avaliação encontrada.")
 
