@@ -610,18 +610,39 @@ if menu == "📅 Planejamento (Ponto ID)":
             if modo_p == "🎛️ Manual (Banco)":
                 st.markdown("#### 🎯 Matriz Curricular (Fiel ao Banco)")
                 cx1, cx2 = st.columns(2)
-                eixo_pre = cx1.selectbox("Eixo Temático:", df_f['EIXO'].unique(), key=f"eixo_v26_{v}")
-                cont_pre = st.multiselect("Conteúdos Específicos:", options=df_f[df_f['EIXO'] == eixo_pre]['CONTEUDO_ESPECIFICO'].unique(), key=f"cont_v26_{v}")
-                obj_pre = st.multiselect("Objetivos de Ensino:", options=df_f[df_f['CONTEUDO_ESPECIFICO'].isin(cont_pre)]['OBJETIVOS'].unique(), key=f"obj_v26_{v}")
+                
+                # 1. Seleção de Eixo (Uso estrito de strings para evitar erro Pylance)
+                # Garantimos que 'EIXO' seja lido como texto
+                col_eixo = 'EIXO'
+                lista_eixos = df_f[col_eixo].unique() if not df_f.empty else []
+                eixo_pre = cx1.selectbox("Eixo Temático:", lista_eixos, key=f"eixo_v26_{v}")
+                
+                # 2. Seleção de Conteúdos (Filtro por string literal)
+                col_cont = 'CONTEUDO_ESPECIFICO'
+                df_filtrado_cont = df_f[df_f[col_eixo] == eixo_pre] if not df_f.empty else pd.DataFrame()
+                opcoes_cont = df_filtrado_cont[col_cont].unique() if not df_filtrado_cont.empty else []
+                cont_pre = st.multiselect("Conteúdos Específicos:", options=opcoes_cont, key=f"cont_v26_{v}")
+                
+                # 3. Seleção de Objetivos
+                col_obj = 'OBJETIVOS'
+                df_filtrado_obj = df_f[df_f[col_cont].isin(cont_pre)] if not df_f.empty else pd.DataFrame()
+                opcoes_obj = df_filtrado_obj[col_obj].unique() if not df_filtrado_obj.empty else []
+                obj_pre = st.multiselect("Objetivos de Ensino:", options=opcoes_obj, key=f"obj_v26_{v}")
+                
                 ctx_ia = f"MÉTODO MANUAL. EIXO: {eixo_pre}. CONTEÚDOS: {cont_pre}. OBJETIVOS: {obj_pre}."
+            
             else:
                 st.markdown("#### 📖 Referência Bibliográfica")
                 cx1, cx2 = st.columns([2, 1])
-                sel_mat = cx1.multiselect("Livro Didático:", df_materiais['NOME_ARQUIVO'].tolist(), key=f"livro_v26_{v}")
+                
+                # Lista de materiais da base de conhecimento
+                lista_materiais = df_materiais['NOME_ARQUIVO'].tolist() if not df_materiais.empty else []
+                sel_mat = cx1.multiselect("Livro Didático:", lista_materiais, key=f"livro_v26_{v}")
                 pags = cx2.text_input("Páginas:", placeholder="Ex: 10-15", key=f"pags_v26_{v}")
                 ctx_ia = f"MÉTODO LIVRO: {sel_mat} PÁGINAS: {pags}."
 
-            strat = st.text_area("Estratégia Pedagógica / Observações:", placeholder="Ex: Focar na Catarse...", key=f"strat_v26_{v}")
+            # Campo de Estratégia (Comum a ambos os métodos)
+            strat = st.text_area("Estratégia Pedagógica / Observações:", placeholder="Ex: Focar na Catarse e Instrumentalização...", key=f"strat_v26_{v}")
 
         cb1, cb2 = st.columns([2, 1])
         pronto = (cont_pre and obj_pre) if modo_p == "🎛️ Manual (Banco)" else (sel_mat and pags)
@@ -906,374 +927,187 @@ if menu == "📝 Diário de Bordo Rápido":
                     st.rerun()
 
 # ==============================================================================
-# MÓDULO: PAINEL DE NOTAS
+# MÓDULO: PAINEL DE NOTAS & VISTOS V26 - INTELIGÊNCIA INTEGRADA
 # ==============================================================================
 elif menu == "📊 Painel de Notas & Vistos":
-    st.header("📊 Painel de Notas & Vistos (Fórmula de Itabuna)")
-    
+    st.title("📊 Painel de Notas: Sincronia e Pesos Dinâmicos")
+    st.markdown("---")
+
     if df_alunos.empty:
-        st.warning("Cadastre alunos primeiro.")
+        st.warning("⚠️ Cadastre alunos primeiro.")
     else:
-        # --- FILTROS ---
-        c1, c2 = st.columns(2)
-        turma_sel = c1.selectbox("Turma:", sorted(df_alunos['TURMA'].unique()), key="notas_turma")
-        trimestre_sel = c2.selectbox("Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key="notas_trim")
-        
-        # --- CÁLCULO DE VISTOS ---
-        ano_atual = date.today().year
-        if trimestre_sel == "I Trimestre":
-            data_ini, data_fim = date(ano_atual, 2, 9), date(ano_atual, 5, 22)
-        elif trimestre_sel == "II Trimestre":
-            data_ini, data_fim = date(ano_atual, 5, 25), date(ano_atual, 9, 4)
-        else:
-            data_ini, data_fim = date(ano_atual, 9, 8), date(ano_atual, 12, 17)
+        # --- 1. CONFIGURADOR DE PESOS E FILTROS (DINÂMICO) ---
+        with st.container(border=True):
+            st.markdown("### ⚙️ Configuração do Trimestre")
+            c_f1, c_f2, c_f3, c_f4 = st.columns([1.5, 1, 1, 1])
+            turma_sel = c_f1.selectbox("👥 Turma:", sorted(df_alunos['TURMA'].unique()), key="n_turma")
+            trimestre_sel = c_f2.selectbox("📅 Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key="n_trim")
             
-        total_aulas = 0
-        vistos_por_aluno = {}
-        
+            # PESOS DINÂMICOS (O que você pediu: Mudar o valor do visto conforme o trimestre)
+            p_visto = c_f3.number_input("Peso Vistos:", 0.0, 10.0, 3.0, step=0.5)
+            p_teste = c_f4.number_input("Peso Teste:", 0.0, 10.0, 3.0, step=0.5)
+            p_prova = st.sidebar.number_input("Peso Prova:", 0.0, 10.0, 4.0, step=0.5) # Sidebar para não poluir
+
+        # --- 2. SINCRONIZADOR COM SCANNER (CENTRAL DE AVALIAÇÕES) ---
+        with st.expander("📸 Sincronizar com Scanner de Gabaritos"):
+            st.caption("Selecione quais avaliações do Scanner devem preencher as notas automaticamente.")
+            c_s1, c_s2 = st.columns(2)
+            
+            # Busca IDs de avaliações que já foram escaneadas para esta turma
+            provas_escaneadas = []
+            if not df_diagnosticos.empty:
+                provas_escaneadas = df_diagnosticos[df_diagnosticos['TURMA'] == turma_sel]['ID_AVALIACAO'].unique().tolist()
+            
+            av_teste_id = c_s1.selectbox("Vincular Teste:", ["Nenhum"] + provas_escaneadas)
+            av_prova_id = c_s2.selectbox("Vincular Prova:", ["Nenhum"] + provas_escaneadas)
+
+        # --- 3. CÁLCULO AUTOMÁTICO DE VISTOS (DIÁRIO PONTO ID) ---
+        # Lógica: (Vistos / Aulas Dadas) * Peso, ignorando faltas justificadas
+        vistos_calculados = {}
         if not df_diario.empty:
-            df_diario['DATA_DT'] = pd.to_datetime(df_diario['DATA'], format="%d/%m/%Y", errors='coerce').dt.date
-            df_d_trim = df_diario[
-                (df_diario['TURMA'] == turma_sel) & 
-                (df_diario['DATA_DT'] >= data_ini) & 
-                (df_diario['DATA_DT'] <= data_fim)
-            ]
-            total_aulas = df_d_trim['DATA'].nunique()
-            if total_aulas > 0:
-                vistos = df_d_trim[df_d_trim['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"]
-                vistos_por_aluno = vistos['ID_ALUNO'].apply(db.limpar_id).value_counts().to_dict()
+            df_d_t = df_diario[df_diario['TURMA'] == turma_sel]
+            for id_aluno in df_alunos[df_alunos['TURMA'] == turma_sel]['ID']:
+                id_limpo = db.limpar_id(id_aluno)
+                d_aluno = df_d_t[df_d_t['ID_ALUNO'].apply(db.limpar_id) == id_limpo]
+                
+                # Aulas que o aluno estava presente ou não teve falta justificada
+                aulas_validas = d_aluno[~d_aluno['TAGS'].str.contains("AUSÊNCIA JUSTIFICADA", na=False)]
+                total_aulas = len(aulas_validas)
+                
+                vistos_recebidos = len(aulas_validas[aulas_validas['VISTO_ATIVIDADE'].astype(str).upper() == "TRUE"])
+                
+                nota_visto = (vistos_recebidos / total_aulas * p_visto) if total_aulas > 0 else p_visto
+                vistos_calculados[id_limpo] = round(nota_visto, 2)
 
-        st.info(f"📅 Período: {data_ini.strftime('%d/%m')} a {data_fim.strftime('%d/%m')} | 🏫 Aulas Dadas: {total_aulas}")
-
-        # --- MONTAGEM DA GRADE ---
+        # --- 4. MONTAGEM DA GRADE INTEGRADA ---
         alunos_turma = df_alunos[df_alunos['TURMA'] == turma_sel].sort_values(by="NOME_ALUNO")
-        
-        notas_salvas = pd.DataFrame()
-        if not df_notas.empty:
-            notas_salvas = df_notas[
-                (df_notas['TURMA'] == turma_sel) & 
-                (df_notas['TRIMESTRE'] == trimestre_sel)
-            ]
+        notas_atuais = df_notas[(df_notas['TURMA'] == turma_sel) & (df_notas['TRIMESTRE'] == trimestre_sel)]
         
         dados_grade = []
-        
-        def safe_float(val):
-            try: return float(str(val).replace(',', '.'))
-            except: return 0.0
-
         for _, aluno in alunos_turma.iterrows():
-            id_limpo = db.limpar_id(aluno['ID'])
+            id_a = db.limpar_id(aluno['ID'])
             
-            qtd_vistos = vistos_por_aluno.get(id_limpo, 0)
-            nota_vistos = (qtd_vistos / total_aulas * 3.0) if total_aulas > 0 else 3.0 
-            if total_aulas > 0: nota_vistos = round(nota_vistos, 1)
-            
-            n_teste = 0.0; n_prova = 0.0; n_rec = 0.0
-            
-            if not notas_salvas.empty:
-                reg = notas_salvas[notas_salvas['ID_ALUNO'].apply(db.limpar_id) == id_limpo]
-                if not reg.empty:
-                    n_teste = safe_float(reg.iloc[0].get('NOTA_TESTE', 0))
-                    n_prova = safe_float(reg.iloc[0].get('NOTA_PROVA', 0))
-                    n_rec = safe_float(reg.iloc[0].get('NOTA_REC', 0))
-            
-            if n_teste > 3.0: n_teste = n_teste / 10
-            if n_prova > 4.0: n_prova = n_prova / 10
-            if n_rec > 10.0: n_rec = n_rec / 10
+            # Busca nota do Scanner (Teste)
+            n_teste_scan = 0.0
+            if av_teste_id != "Nenhum":
+                reg_s = df_diagnosticos[(df_diagnosticos['ID_ALUNO'].apply(db.limpar_id) == id_a) & (df_diagnosticos['ID_AVALIACAO'] == av_teste_id)]
+                if not reg_s.empty: n_teste_scan = util.sosa_to_float(reg_s.iloc[0]['NOTA_CALCULADA'])
+
+            # Busca nota do Scanner (Prova)
+            n_prova_scan = 0.0
+            if av_prova_id != "Nenhum":
+                reg_p = df_diagnosticos[(df_diagnosticos['ID_ALUNO'].apply(db.limpar_id) == id_a) & (df_diagnosticos['ID_AVALIACAO'] == av_prova_id)]
+                if not reg_p.empty: n_prova_scan = util.sosa_to_float(reg_p.iloc[0]['NOTA_CALCULADA'])
+
+            # Busca Notas Manuais (Override) ou Bônus já salvos
+            n_manual = notas_atuais[notas_atuais['ID_ALUNO'].apply(db.limpar_id) == id_a]
+            n_bonus = util.sosa_to_float(n_manual.iloc[0].get('NOTA_REC', 0)) if not n_manual.empty else 0.0 # Usando coluna REC para Bônus temporariamente ou criar nova
 
             dados_grade.append({
-                "ID": id_limpo,
+                "ID": id_a,
                 "NOME": aluno['NOME_ALUNO'],
-                "VISTOS (3.0)": nota_vistos,
-                "TESTE (3.0)": n_teste,
-                "PROVA (4.0)": n_prova,
-                "RECUPERAÇÃO (10.0)": n_rec
+                "VISTOS (AUTO)": vistos_calculados.get(id_a, p_visto),
+                "TESTE (SCAN)": n_teste_scan,
+                "PROVA (SCAN)": n_prova_scan,
+                "BÔNUS (EXTRA)": n_bonus,
+                "RECUPERAÇÃO": util.sosa_to_float(n_manual.iloc[0].get('NOTA_REC', 0)) if not n_manual.empty else 0.0
             })
-            
-        df_grade = pd.DataFrame(dados_grade)
-        
-        # --- EDITOR DE NOTAS ---
-        df_editado = st.data_editor(
-            df_grade,
+
+        # --- 5. EDITOR DE NOTAS DE ELITE ---
+        st.markdown("### 📝 Consolidação de Notas")
+        df_edit = st.data_editor(
+            pd.DataFrame(dados_grade),
             column_config={
-                "ID": st.column_config.TextColumn("ID", disabled=True),
-                "NOME": st.column_config.TextColumn("Nome", disabled=True, width="medium"),
-                "VISTOS (3.0)": st.column_config.NumberColumn("Vistos (Auto)", disabled=True, format="%.1f", help="Calculado pelo Diário"),
-                "TESTE (3.0)": st.column_config.NumberColumn("Teste", min_value=0.0, max_value=3.0, step=0.1, format="%.1f"),
-                "PROVA (4.0)": st.column_config.NumberColumn("Prova", min_value=0.0, max_value=4.0, step=0.1, format="%.1f"),
-                "RECUPERAÇÃO (10.0)": st.column_config.NumberColumn("Recuperação", min_value=0.0, max_value=10.0, step=0.1, format="%.1f")
+                "ID": None,
+                "NOME": st.column_config.TextColumn("Estudante", width="medium", disabled=True),
+                "VISTOS (AUTO)": st.column_config.NumberColumn(f"Vistos ({p_visto})", format="%.2f"),
+                "TESTE (SCAN)": st.column_config.NumberColumn(f"Teste ({p_teste})", format="%.2f"),
+                "PROVA (SCAN)": st.column_config.NumberColumn(f"Prova ({p_prova})", format="%.2f"),
+                "BÔNUS (EXTRA)": st.column_config.NumberColumn("Bônus", format="%.2f", help="Pontos de atividades complementares"),
+                "RECUPERAÇÃO": st.column_config.NumberColumn("Recuperação", format="%.2f")
             },
-            hide_index=True,
-            use_container_width=True,
-            key="editor_notas"
+            hide_index=True, use_container_width=True
         )
-        
-        # --- CÁLCULO FINAL ---
-        if not df_editado.empty:
-            df_editado['SOMA_PARCIAL'] = df_editado['VISTOS (3.0)'] + df_editado['TESTE (3.0)'] + df_editado['PROVA (4.0)']
-            
-            def calcular_final(row):
-                if row['RECUPERAÇÃO (10.0)'] > row['SOMA_PARCIAL']:
-                    return row['RECUPERAÇÃO (10.0)']
-                return row['SOMA_PARCIAL']
-            
-            df_editado['MÉDIA FINAL'] = df_editado.apply(calcular_final, axis=1)
-            
-            def highlight_fail(val):
-                color = '#ffcccc' if val < 6.0 else '#ccffcc'
-                return f'background-color: {color}'
 
-            st.markdown("### 📊 Pré-visualização do Boletim")
-            st.dataframe(
-                df_editado.style.applymap(highlight_fail, subset=['MÉDIA FINAL']).format("{:.1f}", subset=['VISTOS (3.0)', 'TESTE (3.0)', 'PROVA (4.0)', 'RECUPERAÇÃO (10.0)', 'SOMA_PARCIAL', 'MÉDIA FINAL']),
-                use_container_width=True,
-                hide_index=True
-            )
-            
-            # --- DASHBOARD VISUAL ---
-            aprovados = len(df_editado[df_editado['MÉDIA FINAL'] >= 6.0])
-            reprovados = len(df_editado) - aprovados
-            media_geral = df_editado['MÉDIA FINAL'].mean()
-            
-            c_chart, c_metrics = st.columns([2, 1])
-            
-            with c_chart:
-                if len(df_editado) > 0:
-                    fig = px.pie(
-                        names=['Aprovados', 'Reprovados'], 
-                        values=[aprovados, reprovados],
-                        color=['Aprovados', 'Reprovados'],
-                        color_discrete_map={'Aprovados':'#28a745', 'Reprovados':'#dc3545'},
-                        hole=0.4,
-                        title="Desempenho da Turma"
-                    )
-                    st.plotly_chart(fig, use_container_width=True)
-            
-            with c_metrics:
-                st.metric("Média da Turma", f"{media_geral:.1f}")
-                st.metric("Total de Alunos", len(df_editado))
-                st.metric("Taxa de Aprovação", f"{(aprovados/len(df_editado)*100):.0f}%")
+        # Cálculo da Média Final com Trava de 10.0
+        df_edit['SOMA'] = df_edit[f"VISTOS (AUTO)"] + df_edit[f"TESTE (SCAN)"] + df_edit[f"PROVA (SCAN)"] + df_edit["BÔNUS (EXTRA)"]
+        df_edit['MÉDIA FINAL'] = df_edit.apply(lambda r: min(10.0, max(r['SOMA'], r['RECUPERAÇÃO'])), axis=1)
 
-            # --- SALVAR ---
-            if st.button("💾 Sincronizar Notas"):
-                with st.status("Salvando notas...", expanded=True) as status:
-                    db.limpar_notas_turma_trimestre(turma_sel, trimestre_sel)
-                    
-                    linhas_salvar = []
-                    for _, row in df_editado.iterrows():
-                        linhas_salvar.append([
-                            row['ID'],
-                            row['NOME'],
-                            turma_sel,
-                            trimestre_sel,
-                            str(row['VISTOS (3.0)']).replace('.', ','),
-                            str(row['TESTE (3.0)']).replace('.', ','),
-                            str(row['PROVA (4.0)']).replace('.', ','),
-                            str(row['RECUPERAÇÃO (10.0)']).replace('.', ','),
-                            str(row['MÉDIA FINAL']).replace('.', ',')
-                        ])
-                    
-                    if db.salvar_lote("DB_NOTAS", linhas_salvar):
-                        status.update(label="Notas Salvas!", state="complete", expanded=False)
-                        time.sleep(1)
-                        st.rerun()
-                    else:
-                        status.update(label="Erro ao salvar.", state="error")
+        st.dataframe(df_edit[['NOME', 'SOMA', 'MÉDIA FINAL']].style.highlight_between(left=0, right=5.9, color="#ffcccc"), use_container_width=True)
+
+        if st.button("💾 SALVAR E SINCRONIZAR BOLETIM", type="primary", use_container_width=True):
+            with st.status("Sincronizando Notas...", expanded=False) as status:
+                db.limpar_notas_turma_trimestre(turma_sel, trimestre_sel)
+                linhas = []
+                for _, r in df_edit.iterrows():
+                    linhas.append([
+                        r['ID'], r['NOME'], turma_sel, trimestre_sel,
+                        util.sosa_to_str(r[f"VISTOS (AUTO)"]),
+                        util.sosa_to_str(r[f"TESTE (SCAN)"]),
+                        util.sosa_to_str(r[f"PROVA (SCAN)"]),
+                        util.sosa_to_str(r["BÔNUS (EXTRA)"]), # Usando coluna REC para bônus
+                        util.sosa_to_str(r['MÉDIA FINAL'])
+                    ])
+                db.salvar_lote("DB_NOTAS", linhas)
+                status.update(label="✅ Notas Sincronizadas!", state="complete")
+                st.balloons()
 
 # ==============================================================================
-# MÓDULO: BOLETIM ANUAL & CONSELHO (V7 - LIMPEZA AUTOMÁTICA APÓS SALVAR)
+# MÓDULO: BOLETIM ANUAL & CONSELHO V26 - ANÁLISE DE TENDÊNCIA
 # ==============================================================================
 elif menu == "📈 Boletim Anual & Conselho":
-    st.header("📈 Boletim Anual & Conselho de Classe")
-    
-    if df_alunos.empty or df_notas.empty:
-        st.warning("É necessário ter Alunos e Notas lançadas para gerar o Boletim.")
+    st.title("📈 Boletim Estratégico e Tendência Acadêmica")
+    st.markdown("---")
+
+    if df_notas.empty:
+        st.warning("⚠️ Sem notas lançadas.")
     else:
-        # --- SELEÇÃO DE TURMA ---
-        turmas_disponiveis = sorted(df_alunos['TURMA'].unique())
-        turma_sel = st.selectbox("Selecione a Turma:", turmas_disponiveis, key="bol_turma")
+        turma_sel = st.selectbox("Selecione a Turma:", sorted(df_alunos['TURMA'].unique()))
         
-        # --- ABAS ---
-        tab_boletim, tab_conselho, tab_hist_atas = st.tabs(["📊 Visão Anual (Aprovação)", "🗣️ Relatório de Conselho (IA)", "🗂️ Histórico de Atas"])
+        # Pivotagem para visão anual
+        df_t = df_notas[df_notas['TURMA'] == turma_sel]
+        pivot = df_t.pivot_table(index=["ID_ALUNO", "NOME_ALUNO"], columns="TRIMESTRE", values="MEDIA_FINAL", aggfunc='first').reset_index()
         
-        # --- ABA 1: BOLETIM ANUAL ---
-        with tab_boletim:
-            st.markdown("### 🧮 Fechamento do Ano Letivo")
-            st.caption("Regra de Itabuna: Soma dos 3 Trimestres >= 18.0 pontos para aprovação direta.")
-            
-            # 1. PREPARAÇÃO DOS DADOS
-            df_n_turma = df_notas[df_notas['TURMA'] == turma_sel].copy()
-            
-            # CORREÇÃO DE NOTAS (PRENSA HIDRÁULICA)
-            def limpar_float_normalizado(x):
-                try: 
-                    val = float(str(x).replace(',', '.'))
-                    if val > 10.0: return val / 10.0
-                    return val
-                except: return 0.0
-            
-            df_n_turma['MEDIA_FINAL'] = df_n_turma['MEDIA_FINAL'].apply(limpar_float_normalizado)
-            
-            if not df_n_turma.empty:
-                pivot = df_n_turma.pivot_table(
-                    index=["ID_ALUNO", "NOME_ALUNO"], 
-                    columns="TRIMESTRE", 
-                    values="MEDIA_FINAL", 
-                    aggfunc='first'
-                ).reset_index()
-                
-                for col in ["I Trimestre", "II Trimestre", "III Trimestre"]:
-                    if col not in pivot.columns: pivot[col] = 0.0
-                    pivot[col] = pivot[col].fillna(0.0)
+        # Garantir colunas
+        for c in ["I Trimestre", "II Trimestre", "III Trimestre"]:
+            if c not in pivot.columns: pivot[c] = 0.0
 
-                if "REC_FINAL" not in pivot.columns: 
-                    pivot["REC_FINAL"] = -1.0
-                else:
-                    pivot["REC_FINAL"] = pivot["REC_FINAL"].fillna(-1.0)
-                
-                # 2. CÁLCULOS
-                pivot['SOMA_ANUAL'] = pivot['I Trimestre'] + pivot['II Trimestre'] + pivot['III Trimestre']
-                
-                def definir_situacao(row):
-                    if row['SOMA_ANUAL'] >= 18.0:
-                        return "✅ APROVADO"
-                    elif row['REC_FINAL'] != -1.0:
-                        if row['REC_FINAL'] >= 5.0: return "✅ APROVADO (REC)"
-                        else: return "❌ REPROVADO"
-                    else:
-                        return "⚠️ RECUPERAÇÃO FINAL"
-
-                pivot['SITUAÇÃO'] = pivot.apply(definir_situacao, axis=1)
-                
-                # 3. VISUALIZAÇÃO
-                df_view = pivot.copy()
-                df_view['REC_FINAL'] = df_view['REC_FINAL'].replace(-1.0, None)
-                
-                st.dataframe(
-                    df_view[['NOME_ALUNO', 'I Trimestre', 'II Trimestre', 'III Trimestre', 'SOMA_ANUAL', 'REC_FINAL', 'SITUAÇÃO']],
-                    use_container_width=True,
-                    hide_index=True,
-                    column_config={
-                        "I Trimestre": st.column_config.NumberColumn("I Trim", format="%.1f"),
-                        "II Trimestre": st.column_config.NumberColumn("II Trim", format="%.1f"),
-                        "III Trimestre": st.column_config.NumberColumn("III Trim", format="%.1f"),
-                        "SOMA_ANUAL": st.column_config.NumberColumn("Soma (Meta 18.0)", format="%.1f"),
-                        "REC_FINAL": st.column_config.NumberColumn("Nota Rec. Final", format="%.1f"),
-                        "SITUAÇÃO": st.column_config.TextColumn("Status", width="medium")
-                    }
-                )
-                
-                # 4. LANÇAMENTO DE RECUPERAÇÃO FINAL
-                st.markdown("---")
-                st.subheader("📝 Lançar ou Editar Recuperação Final")
-                
-                c_rec1, c_rec2 = st.columns([2, 1])
-                lista_alunos = pivot['NOME_ALUNO'].tolist()
-                aluno_rec_sel = c_rec1.selectbox("Selecione o Aluno:", lista_alunos)
-                
-                nota_atual_raw = pivot.loc[pivot['NOME_ALUNO'] == aluno_rec_sel, 'REC_FINAL'].values[0]
-                valor_input = 0.0 if nota_atual_raw == -1.0 else float(nota_atual_raw)
-                
-                nota_rec = c_rec2.number_input("Nota da Prova Final:", 0.0, 10.0, valor_input, step=0.1)
-                
-                if st.button("💾 Salvar/Atualizar Nota Final"):
-                    id_rec = pivot[pivot['NOME_ALUNO'] == aluno_rec_sel].iloc[0]['ID_ALUNO']
-                    if db.salvar_rec_final(id_rec, aluno_rec_sel, turma_sel, nota_rec):
-                        st.success(f"Nota de {aluno_rec_sel} atualizada para {nota_rec}!")
-                        time.sleep(1)
-                        st.rerun()
-            else:
-                st.info("Nenhuma nota lançada para esta turma ainda.")
-
-        # --- ABA 2: RELATÓRIO DE CONSELHO ---
-        with tab_conselho:
-            st.markdown("### 🗣️ Gerador de Ata de Conselho")
-            st.info("A IA analisará o Diário (comportamento) e as Notas para gerar um relatório completo da turma.")
+        # --- LÓGICA DE TENDÊNCIA E ALERTAS ---
+        def analisar_aluno(row):
+            t1, t2, t3 = row.get("I Trimestre", 0), row.get("II Trimestre", 0), row.get("III Trimestre", 0)
             
-            trimestre_cons = st.selectbox("Referência:", ["I Trimestre", "II Trimestre", "III Trimestre", "ANUAL (Final)"], key="cons_trim")
+            # Seta de Evolução
+            seta = "➖"
+            if t2 > t1 and t2 > 0: seta = "⬆️"
+            elif t2 < t1 and t2 > 0: seta = "⬇️"
             
-            if st.button("🚀 Gerar Relatório da Turma"):
-                with st.spinner(f"Analisando dados do {trimestre_cons} para a turma {turma_sel}..."):
-                    
-                    # 1. COLETAR DADOS
-                    notas_texto = ""
-                    if not df_notas.empty:
-                        df_n_t = df_notas[(df_notas['TURMA'] == turma_sel) & (df_notas['TRIMESTRE'] == trimestre_cons)]
-                        if not df_n_t.empty:
-                            df_n_t['MEDIA_FINAL'] = df_n_t['MEDIA_FINAL'].apply(limpar_float_normalizado)
-                            reprovados = df_n_t[df_n_t['MEDIA_FINAL'] < 6.0]['NOME_ALUNO'].tolist()
-                            media_turma = df_n_t['MEDIA_FINAL'].mean()
-                            notas_texto = f"MÉDIA DA TURMA: {media_turma:.1f}. ALUNOS COM NOTA VERMELHA (<6.0): {', '.join(reprovados)}."
-                        else:
-                            notas_texto = "Sem notas fechadas para este trimestre."
-                    
-                    diario_texto = ""
-                    if not df_diario.empty:
-                        df_d_t = df_diario[df_diario['TURMA'] == turma_sel]
-                        sem_tarefa = df_d_t[df_d_t['TAGS'].str.contains("Sem material|Não fez", case=False, na=False)]['NOME_ALUNO'].value_counts().to_dict()
-                        indisciplina = df_d_t[df_d_t['TAGS'].str.contains("Conversa|Agitado|Vetor", case=False, na=False)]['NOME_ALUNO'].value_counts().to_dict()
-                        diario_texto = f"ALUNOS QUE NÃO FAZEM TAREFA (Qtd): {sem_tarefa}. ALUNOS COM INDISCIPLINA (Qtd): {indisciplina}."
+            # Alerta PEI
+            aluno_info = df_alunos[df_alunos['ID'].apply(db.limpar_id) == db.limpar_id(row['ID_ALUNO'])].iloc[0]
+            is_pei = str(aluno_info['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", ""]
+            tag_pei = "♿" if is_pei else ""
+            
+            soma = t1 + t2 + t3
+            status = "✅ APROVADO" if soma >= 18 else "⚠️ RECUPERAÇÃO" if soma > 0 else "⏳ EM CURSO"
+            
+            return pd.Series([tag_pei, seta, soma, status])
 
-                    # 2. PROMPT
-                    prompt_conselho = (
-                        f"VOCÊ É UM COORDENADOR PEDAGÓGICO EXPERIENTE.\n"
-                        f"OBJETIVO: Escrever a ATA DE CONSELHO DE CLASSE para a Turma {turma_sel}, {trimestre_cons}.\n\n"
-                        f"DADOS BRUTOS:\n"
-                        f"{notas_texto}\n"
-                        f"{diario_texto}\n\n"
-                        f"ESTRUTURA DO RELATÓRIO:\n"
-                        f"1. VISÃO GERAL: Como está o rendimento e comportamento da turma?\n"
-                        f"2. PONTOS DE ATENÇÃO ACADÊMICA: Cite os alunos com dificuldade (notas baixas) e sugira intervenções.\n"
-                        f"3. PONTOS DE ATENÇÃO COMPORTAMENTAL: Cite os alunos que não fazem tarefa ou conversam muito.\n"
-                        f"4. DESTAQUES POSITIVOS: Elogie a turma se a média for boa.\n"
-                        f"5. PROGNÓSTICO: Qual a probabilidade de recuperação final se continuar assim?\n\n"
-                        f"Tom: Profissional, analítico e propositivo."
-                    )
-                    
-                    relatorio_gerado = ai.gerar_ia("PLANE_PEDAGOGICO", prompt_conselho)
-                    st.session_state.relatorio_conselho = relatorio_gerado
-            
-            if "relatorio_conselho" in st.session_state:
-                st.text_area("📄 Relatório Gerado:", st.session_state.relatorio_conselho, height=500)
-                
-                # BOTÃO COM LIMPEZA AUTOMÁTICA
-                if st.button("💾 Arquivar Relatório (Substituir Anterior)"):
-                    sucesso = db.salvar_ata_conselho(
-                        datetime.now().strftime("%d/%m/%Y"), 
-                        turma_sel, 
-                        f"CONSELHO_{trimestre_cons}", 
-                        st.session_state.relatorio_conselho
-                    )
-                    if sucesso:
-                        st.success("Relatório arquivado com sucesso! (Limpando tela...)")
-                        # Limpa a variável da memória
-                        del st.session_state.relatorio_conselho
-                        # Espera 1.5s para você ler a mensagem
-                        time.sleep(1.5)
-                        # Recarrega a página
-                        st.rerun()
+        pivot[['PEI', 'EVOLUÇÃO', 'SOMA', 'STATUS']] = pivot.apply(analisar_aluno, axis=1)
 
-        # --- ABA 3: HISTÓRICO DE ATAS ---
-        with tab_hist_atas:
-            st.markdown(f"### 🗂️ Arquivo de Atas - {turma_sel}")
-            
-            if not df_relatorios.empty:
-                df_atas = df_relatorios[
-                    (df_relatorios['ID_ALUNO'] == "TURMA") & 
-                    (df_relatorios['NOME_ALUNO'] == turma_sel) &
-                    (df_relatorios['TIPO'].str.contains("CONSELHO", na=False))
-                ]
-                
-                if not df_atas.empty:
-                    df_atas = df_atas.iloc[::-1]
-                    for _, row in df_atas.iterrows():
-                        titulo = f"{row['DATA']} - {row['TIPO']}"
-                        with st.expander(titulo):
-                            st.markdown(row['CONTEUDO'])
-                else:
-                    st.info(f"Nenhuma ata encontrada para a turma {turma_sel}.")
-            else:
-                st.info("Banco de relatórios vazio.")
+        st.dataframe(
+            pivot[['PEI', 'NOME_ALUNO', 'I Trimestre', 'EVOLUÇÃO', 'II Trimestre', 'III Trimestre', 'SOMA', 'STATUS']],
+            column_config={
+                "SOMA": st.column_config.NumberColumn("Total (Meta 18)", format="%.1f"),
+                "STATUS": st.column_config.TextColumn("Situação Final")
+            },
+            use_container_width=True, hide_index=True
+        )
+
+        # --- CONSELHO DE CLASSE IA (INTEGRADO) ---
+        if st.button("🧠 GERAR PAUTA DE CONSELHO 360°", type="primary", use_container_width=True):
+            with st.spinner("Analisando tendências de aprendizado..."):
+                contexto = pivot[['NOME_ALUNO', 'SOMA', 'STATUS', 'EVOLUÇÃO']].to_string()
+                prompt = f"Analise o desempenho da turma {turma_sel}. Dados:\n{contexto}\nIdentifique quem está em queda (⬇️) e sugira intervenções PHC."
+                st.info(ai.gerar_ia("PLANE_PEDAGOGICO", prompt))
 
 # ==============================================================================
 # MÓDULO: GESTÃO DA TURMA - CENTRO DE COMANDO ESTRATÉGICO V26
