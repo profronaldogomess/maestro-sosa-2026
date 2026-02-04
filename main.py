@@ -1780,11 +1780,6 @@ elif menu == "📸 Scanner de Gabaritos":
     st.title("📸 Inteligência Diagnóstica e Perícia")
     st.markdown("---")
 
-    # --- CARREGAMENTO UNIFICADO (AQUI ESTAVA O ERRO) ---
-    # Em vez de ws_g.get_all_records, usamos nossa função blindada
-    df_diagnosticos = db.safe_get("DB_GABARITOS_ALUNOS", 
-        ["DATA", "ID_ALUNO", "NOME_ALUNO", "TURMA", "ID_AVALIACAO", "RESPOSTAS_ALUNO", "NOTA_CALCULADA", "LINK_FOTO_DRIVE"])
-
     def reset_scanner():
         if "scan_res" in st.session_state: del st.session_state.scan_res
         if "scan_img" in st.session_state: del st.session_state.scan_img
