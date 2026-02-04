@@ -1626,19 +1626,23 @@ elif menu == "📝 Central de Avaliações":
 
             if st.button("💾 FINALIZAR, SALVAR E AGENDAR", use_container_width=True, type="primary"):
                 with st.status("🚀 Sincronizando...", expanded=True) as status:
-                    v_t_str = f"{st.session_state.get('av_valor_total', 10.0)}".replace('.', ',')
+                    # 1. DEFINIÇÃO DE VALORES E IDENTIFICADORES
+                    v_total_num = st.session_state.get('av_valor_total', 10.0)
+                    v_t_str = f"{v_total_num}".replace('.', ',')
+                    
+                    # Criamos um identificador único que inclui o Trimestre para facilitar a busca
+                    identificador = f"{tipo_av} - {ano_av}º Ano ({trim_av})"
+                    
                     info_doc = {"ano": f"{ano_av}º", "tipo_prova": tipo_av, "valor": v_t_str, "qtd_questoes": qtd_q, "trimestre": trim_av}
                     
-                    # 1. LIMPEZA (UPSERT)
-                    identificador = f"{tipo_av} - {ano_av}º Ano"
+                    # 2. LIMPEZA (UPSERT) - Remove versões antigas da mesma prova/ano/trimestre
                     db.excluir_avaliacao_completa(identificador, tipo_av)
 
-                    # 2. UPLOAD REGULAR
+                    # 3. UPLOAD DOS DOCUMENTOS
                     status.write("📄 Enviando Prova Regular...")
                     doc_reg = exporter.gerar_docx_prova_v25(nome_arq, st.session_state.temp_prova, info_doc)
                     link_reg = db.subir_e_converter_para_google_docs(doc_reg, nome_arq, trimestre=trim_av, categoria=f"{ano_av}º Ano", semana="AVALIAÇÃO", modo="AVALIACAO")
                     
-                    # 3. UPLOAD PEI (SE EXISTIR)
                     link_pei = "N/A"
                     if "av_pei" in st.session_state:
                         status.write("♿ Enviando Prova PEI...")
@@ -1646,19 +1650,39 @@ elif menu == "📝 Central de Avaliações":
                         link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_arq}_PEI", trimestre=trim_av, categoria=f"{ano_av}º Ano", semana="AVALIAÇÃO", modo="AVALIACAO")
                     
                     if "https" in str(link_reg):
-                        # 4. SALVAMENTO NO BANCO
-                        status.write("💾 Registrando no Acervo...")
+                        # 4. INJEÇÃO DE DNA (METADADOS PARA O SCANNER E NOTAS)
+                        # Aqui inserimos as tags que o Scanner vai ler para saber o valor real
+                        dna_sosa = f"\n\n[METADADOS_AVALIAÇÃO]\n[VALOR: {v_total_num}]\n[TRIMESTRE: {trim_av}]\n"
+                        
                         conteudo_banco = (
+                            f"{dna_sosa}" # DNA no topo para leitura rápida
                             f"{st.session_state.temp_prova}\n\n"
                             f"[PEI]\n{st.session_state.get('av_pei','')}\n\n"
                             f"[GABARITO_PEI]\n{st.session_state.get('av_gab_pei','')}\n\n"
                             f"[RESPOSTAS_PEI_IA]\n{st.session_state.get('av_res_pei_ia','')}\n\n"
                             f"--- LINKS ---\nRegular({link_reg}) PEI({link_pei})"
                         )
-                        db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), "AVALIAÇÃO", identificador, conteudo_banco, f"{ano_av}º", link_reg])
                         
+                        # 5. SALVAMENTO NO ACERVO (DB_AULAS_PRONTAS)
+                        db.salvar_no_banco("DB_AULAS_PRONTAS", [
+                            datetime.now().strftime("%d/%m/%Y"), 
+                            "AVALIAÇÃO", 
+                            identificador, 
+                            conteudo_banco, 
+                            f"{ano_av}º", 
+                            link_reg
+                        ])
+                        
+                        # 6. REGISTRO NO CRONOGRAMA (DB_REGISTRO_AULAS)
                         for t in sel_turmas:
-                            db.salvar_no_banco("DB_REGISTRO_AULAS", [data_app.strftime("%d/%m/%Y"), "AVALIAÇÃO", t, f"Aplicação: {tipo_av} (Valor: {v_t_str})", "SIM", "AGENDADA"])
+                            db.salvar_no_banco("DB_REGISTRO_AULAS", [
+                                data_app.strftime("%d/%m/%Y"), 
+                                "AVALIAÇÃO", 
+                                t, 
+                                f"Aplicação: {tipo_av} (Valor: {v_t_str})", 
+                                "SIM", 
+                                "AGENDADA"
+                            ])
                         
                         status.update(label="✅ Sincronia Concluída!", state="complete")
                         st.balloons(); time.sleep(1.5); reset_avaliacoes()
@@ -1775,10 +1799,13 @@ elif menu == "📸 Scanner de Gabaritos":
                 txt_conteudo = str(prova_data['CONTEUDO'])
                 
                 v_prova_base = 10.0
-                match_v = re.search(r"VALOR:?\s*(\d+[\.,]\d+|\d+)", txt_conteudo.upper())
-                if match_v: v_prova_base = util.sosa_to_float(match_v.group(1))
-                elif "TESTE" in prova_sel.upper(): v_prova_base = 3.0
-                elif "PROVA" in prova_sel.upper(): v_prova_base = 4.0
+                match_v = re.search(r"\[VALOR:\s*(\d+[\.,]\d+|\d+)\]", txt_conteudo.upper())
+                if match_v: 
+                    v_prova_base = util.sosa_to_float(match_v.group(1))
+                else:
+                    # Fallback caso seja uma prova antiga sem a tag DNA
+                    if "TESTE" in prova_sel.upper(): v_prova_base = 3.0
+                    else: v_prova_base = 4.0
 
                 ids_corrigidos = df_p[df_p['ID_AVALIACAO'] == prova_sel]['ID_ALUNO'].astype(str).tolist() if not df_p.empty else []
                 alunos_pendentes = df_alunos[(df_alunos['TURMA'] == f_turma) & (~df_alunos['ID'].astype(str).isin(ids_corrigidos))]
