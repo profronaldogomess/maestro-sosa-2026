@@ -927,7 +927,7 @@ if menu == "📝 Diário de Bordo Rápido":
                     st.rerun()
 
 # ==============================================================================
-# MÓDULO: PAINEL DE NOTAS & VISTOS V26 - INTELIGÊNCIA INTEGRADA
+# MÓDULO: PAINEL DE NOTAS & VISTOS V26.1 - CORREÇÃO DE LAYOUT E CÁLCULO
 # ==============================================================================
 elif menu == "📊 Painel de Notas & Vistos":
     st.title("📊 Painel de Notas: Sincronia e Pesos Dinâmicos")
@@ -936,24 +936,23 @@ elif menu == "📊 Painel de Notas & Vistos":
     if df_alunos.empty:
         st.warning("⚠️ Cadastre alunos primeiro.")
     else:
-        # --- 1. CONFIGURADOR DE PESOS E FILTROS (DINÂMICO) ---
+        # --- 1. CONFIGURADOR DE PESOS (AGORA TODOS NO CENTRO) ---
         with st.container(border=True):
             st.markdown("### ⚙️ Configuração do Trimestre")
-            c_f1, c_f2, c_f3, c_f4 = st.columns([1.5, 1, 1, 1])
+            # Criamos 5 colunas para caber tudo em uma linha só
+            c_f1, c_f2, c_f3, c_f4, c_f5 = st.columns([1.5, 1, 0.8, 0.8, 0.8])
+            
             turma_sel = c_f1.selectbox("👥 Turma:", sorted(df_alunos['TURMA'].unique()), key="n_turma")
             trimestre_sel = c_f2.selectbox("📅 Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key="n_trim")
             
-            # PESOS DINÂMICOS (O que você pediu: Mudar o valor do visto conforme o trimestre)
+            # PESOS DINÂMICOS NO PAINEL CENTRAL
             p_visto = c_f3.number_input("Peso Vistos:", 0.0, 10.0, 3.0, step=0.5)
             p_teste = c_f4.number_input("Peso Teste:", 0.0, 10.0, 3.0, step=0.5)
-            p_prova = st.sidebar.number_input("Peso Prova:", 0.0, 10.0, 4.0, step=0.5) # Sidebar para não poluir
+            p_prova = c_f5.number_input("Peso Prova:", 0.0, 10.0, 4.0, step=0.5)
 
-        # --- 2. SINCRONIZADOR COM SCANNER (CENTRAL DE AVALIAÇÕES) ---
+        # --- 2. SINCRONIZADOR COM SCANNER ---
         with st.expander("📸 Sincronizar com Scanner de Gabaritos"):
-            st.caption("Selecione quais avaliações do Scanner devem preencher as notas automaticamente.")
             c_s1, c_s2 = st.columns(2)
-            
-            # Busca IDs de avaliações que já foram escaneadas para esta turma
             provas_escaneadas = []
             if not df_diagnosticos.empty:
                 provas_escaneadas = df_diagnosticos[df_diagnosticos['TURMA'] == turma_sel]['ID_AVALIACAO'].unique().tolist()
@@ -961,7 +960,7 @@ elif menu == "📊 Painel de Notas & Vistos":
             av_teste_id = c_s1.selectbox("Vincular Teste:", ["Nenhum"] + provas_escaneadas)
             av_prova_id = c_s2.selectbox("Vincular Prova:", ["Nenhum"] + provas_escaneadas)
 
-        # --- 3. CÁLCULO AUTOMÁTICO DE VISTOS (DIÁRIO PONTO ID) - VERSÃO BLINDADA ---
+        # --- 3. CÁLCULO AUTOMÁTICO DE VISTOS ---
         vistos_calculados = {}
         if not df_diario.empty:
             df_d_t = df_diario[df_diario['TURMA'] == turma_sel]
@@ -969,23 +968,17 @@ elif menu == "📊 Painel de Notas & Vistos":
                 id_limpo = db.limpar_id(id_aluno)
                 d_aluno = df_d_t[df_d_t['ID_ALUNO'].apply(db.limpar_id) == id_limpo]
                 
-                # Verificação de segurança: a coluna existe e há dados?
                 if not d_aluno.empty and 'VISTO_ATIVIDADE' in d_aluno.columns:
-                    # Filtra aulas válidas (ignorando ausências justificadas)
-                    # Correção: Adicionado .str antes do .upper() e .contains
                     aulas_validas = d_aluno[~d_aluno['TAGS'].astype(str).str.upper().str.contains("AUSÊNCIA JUSTIFICADA", na=False)]
                     total_aulas = len(aulas_validas)
-                    
-                    # CORREÇÃO CRÍTICA: Adicionado .str antes do .upper() para validar o Visto
                     vistos_recebidos = len(aulas_validas[aulas_validas['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"])
                     
                     nota_visto = (vistos_recebidos / total_aulas * p_visto) if total_aulas > 0 else p_visto
                     vistos_calculados[id_limpo] = round(nota_visto, 2)
                 else:
-                    # Se não houver registros no diário para o aluno, assume o peso cheio (ou 0, conforme sua preferência)
                     vistos_calculados[id_limpo] = p_visto
 
-        # --- 4. MONTAGEM DA GRADE INTEGRADA ---
+        # --- 4. MONTAGEM DA GRADE ---
         alunos_turma = df_alunos[df_alunos['TURMA'] == turma_sel].sort_values(by="NOME_ALUNO")
         notas_atuais = df_notas[(df_notas['TURMA'] == turma_sel) & (df_notas['TRIMESTRE'] == trimestre_sel)]
         
@@ -993,81 +986,80 @@ elif menu == "📊 Painel de Notas & Vistos":
         for _, aluno in alunos_turma.iterrows():
             id_a = db.limpar_id(aluno['ID'])
             
-            # Busca nota do Scanner (Teste)
             n_teste_scan = 0.0
             if av_teste_id != "Nenhum":
                 reg_s = df_diagnosticos[(df_diagnosticos['ID_ALUNO'].apply(db.limpar_id) == id_a) & (df_diagnosticos['ID_AVALIACAO'] == av_teste_id)]
                 if not reg_s.empty: n_teste_scan = util.sosa_to_float(reg_s.iloc[0]['NOTA_CALCULADA'])
 
-            # Busca nota do Scanner (Prova)
             n_prova_scan = 0.0
             if av_prova_id != "Nenhum":
                 reg_p = df_diagnosticos[(df_diagnosticos['ID_ALUNO'].apply(db.limpar_id) == id_a) & (df_diagnosticos['ID_AVALIACAO'] == av_prova_id)]
                 if not reg_p.empty: n_prova_scan = util.sosa_to_float(reg_p.iloc[0]['NOTA_CALCULADA'])
 
-            # Busca Notas Manuais (Override) ou Bônus já salvos
             n_manual = notas_atuais[notas_atuais['ID_ALUNO'].apply(db.limpar_id) == id_a]
-            n_bonus = util.sosa_to_float(n_manual.iloc[0].get('NOTA_REC', 0)) if not n_manual.empty else 0.0 # Usando coluna REC para Bônus temporariamente ou criar nova
+            # Puxa bônus da coluna NOTA_REC (Recuperação) se já existir
+            n_bonus = util.sosa_to_float(n_manual.iloc[0].get('NOTA_REC', 0)) if not n_manual.empty else 0.0
 
             dados_grade.append({
                 "ID": id_a,
                 "NOME": aluno['NOME_ALUNO'],
-                "VISTOS (AUTO)": vistos_calculados.get(id_a, p_visto),
-                "TESTE (SCAN)": n_teste_scan,
-                "PROVA (SCAN)": n_prova_scan,
-                "BÔNUS (EXTRA)": n_bonus,
-                "RECUPERAÇÃO": util.sosa_to_float(n_manual.iloc[0].get('NOTA_REC', 0)) if not n_manual.empty else 0.0
+                "VISTOS": vistos_calculados.get(id_a, p_visto),
+                "TESTE": n_teste_scan,
+                "PROVA": n_prova_scan,
+                "BÔNUS": n_bonus,
+                "RECUPERAÇÃO": 0.0
             })
 
-        # --- 5. EDITOR DE NOTAS DE ELITE ---
         st.markdown("### 📝 Consolidação de Notas")
         df_edit = st.data_editor(
             pd.DataFrame(dados_grade),
             column_config={
                 "ID": None,
                 "NOME": st.column_config.TextColumn("Estudante", width="medium", disabled=True),
-                "VISTOS (AUTO)": st.column_config.NumberColumn(f"Vistos ({p_visto})", format="%.2f"),
-                "TESTE (SCAN)": st.column_config.NumberColumn(f"Teste ({p_teste})", format="%.2f"),
-                "PROVA (SCAN)": st.column_config.NumberColumn(f"Prova ({p_prova})", format="%.2f"),
-                "BÔNUS (EXTRA)": st.column_config.NumberColumn("Bônus", format="%.2f", help="Pontos de atividades complementares"),
+                "VISTOS": st.column_config.NumberColumn(f"Vistos ({p_visto})", format="%.2f"),
+                "TESTE": st.column_config.NumberColumn(f"Teste ({p_teste})", format="%.2f"),
+                "PROVA": st.column_config.NumberColumn(f"Prova ({p_prova})", format="%.2f"),
+                "BÔNUS": st.column_config.NumberColumn("Bônus", format="%.2f"),
                 "RECUPERAÇÃO": st.column_config.NumberColumn("Recuperação", format="%.2f")
             },
-            hide_index=True, use_container_width=True
+            hide_index=True, use_container_width=True, key=f"editor_notas_v26_{v}"
         )
 
-        # --- EXIBIÇÃO FINAL COM DESTAQUE (CORREÇÃO DE SUBSET) ---
+        # --- 5. CÁLCULOS E EXIBIÇÃO (ORDEM CORRIGIDA) ---
+        # Primeiro calculamos as colunas novas no DataFrame resultante do editor
+        df_edit['SOMA'] = df_edit["VISTOS"] + df_edit["TESTE"] + df_edit["PROVA"] + df_edit["BÔNUS"]
+        df_edit['MÉDIA FINAL'] = df_edit.apply(lambda r: min(10.0, max(r['SOMA'], r['RECUPERAÇÃO'])), axis=1)
+
         st.markdown("### 📊 Pré-visualização do Desempenho")
         
-        # Garantimos que as colunas de cálculo sejam numéricas antes de estilizar
-        df_edit['SOMA'] = pd.to_numeric(df_edit['SOMA'], errors='coerce').fillna(0)
-        df_edit['MÉDIA FINAL'] = pd.to_numeric(df_edit['MÉDIA FINAL'], errors='coerce').fillna(0)
+        # Criamos uma cópia para exibição para não dar conflito de tipos
+        df_view = df_edit[['NOME', 'SOMA', 'MÉDIA FINAL']].copy()
+        df_view['SOMA'] = pd.to_numeric(df_view['SOMA'], errors='coerce').fillna(0)
+        df_view['MÉDIA FINAL'] = pd.to_numeric(df_view['MÉDIA FINAL'], errors='coerce').fillna(0)
 
         st.dataframe(
-            df_edit[['NOME', 'SOMA', 'MÉDIA FINAL']].style.highlight_between(
-                subset=['SOMA', 'MÉDIA FINAL'], # <--- CORREÇÃO CRÍTICA: Aplica apenas nos números
-                left=0, 
-                right=5.9, 
-                color="#ffcccc"
-            ).format("{:.2f}", subset=['SOMA', 'MÉDIA FINAL']), # Formata para 2 casas decimais
-            use_container_width=True,
-            hide_index=True
+            df_view.style.highlight_between(
+                subset=['SOMA', 'MÉDIA FINAL'],
+                left=0, right=5.9, color="#ffcccc"
+            ).format("{:.2f}", subset=['SOMA', 'MÉDIA FINAL']),
+            use_container_width=True, hide_index=True
         )
 
         if st.button("💾 SALVAR E SINCRONIZAR BOLETIM", type="primary", use_container_width=True):
-            with st.status("Sincronizando Notas...", expanded=False) as status:
+            with st.status("Sincronizando...", expanded=False) as status:
                 db.limpar_notas_turma_trimestre(turma_sel, trimestre_sel)
                 linhas = []
                 for _, r in df_edit.iterrows():
                     linhas.append([
                         r['ID'], r['NOME'], turma_sel, trimestre_sel,
-                        util.sosa_to_str(r[f"VISTOS (AUTO)"]),
-                        util.sosa_to_str(r[f"TESTE (SCAN)"]),
-                        util.sosa_to_str(r[f"PROVA (SCAN)"]),
-                        util.sosa_to_str(r["BÔNUS (EXTRA)"]), # Usando coluna REC para bônus
+                        util.sosa_to_str(r["VISTOS"]),
+                        util.sosa_to_str(r["TESTE"]),
+                        util.sosa_to_str(r["PROVA"]),
+                        util.sosa_to_str(r["BÔNUS"]),
                         util.sosa_to_str(r['MÉDIA FINAL'])
                     ])
                 db.salvar_lote("DB_NOTAS", linhas)
-                status.update(label="✅ Notas Sincronizadas!", state="complete")
+                status.update(label="✅ Notas Salvas!", state="complete")
                 st.balloons()
 
 # ==============================================================================
