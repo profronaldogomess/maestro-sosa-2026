@@ -536,7 +536,7 @@ if menu == "🧪 Criador de Aulas":
         else: st.info("📭 Acervo vazio.")
                             
 # ==============================================================================
-# MÓDULO: ENGENHARIA DE PLANEJAMENTO (PONTO ID) - ARQUITETURA BNCC V27
+# MÓDULO: ARQUITETURA DE PLANEJAMENTO (PONTO ID) - BNCC V27 COMPLETO
 # ==============================================================================
 if menu == "📅 Planejamento (Ponto ID)":
     st.title("📅 Engenharia de Planejamento Estratégico")
@@ -558,57 +558,44 @@ if menu == "📅 Planejamento (Ponto ID)":
         "📈 Analytics de Cobertura"
     ])
     
+    # --- ABA 1: DESIGNER DE REGÊNCIA ---
     with tab_designer:
         is_refinando = "refino_ativo" in st.session_state
+        if is_refinando:
+            st.warning(f"🛠️ **MODO REFINO ATIVO:** Editando {st.session_state.refino_ativo['ano']}")
+            if st.button("❌ CANCELAR REFINO"): reset_planejamento()
         
-        # --- 1. GATEKEEPER: STATUS DA JORNADA ---
         with st.container(border=True):
             st.markdown("#### 🛡️ 1. Status da Jornada e Calendário")
             cg1, cg2, cg3 = st.columns([1.5, 1, 1])
-            tipo_semana = cg1.selectbox("Natureza da Semana:", 
-                ["Aula Regular", "Avaliação Diagnóstica", "Avaliação Trimestral", "Recuperação Paralela", "Evento Escolar/Feriado"])
-            tem_sabado = cg2.toggle("Incluir Sábado Letivo?")
+            tipo_semana = cg1.selectbox("Natureza da Semana:", ["Aula Regular", "Avaliação Diagnóstica", "Avaliação Trimestral", "Recuperação Paralela", "Evento Escolar/Feriado"])
+            tem_sabado = cg2.toggle("Sábado Letivo?")
             carga_horaria = cg3.select_slider("Carga Horária Útil:", options=["1 Aula", "2 Aulas", "4 Aulas"], value="4 Aulas")
 
-        # --- 2. PARÂMETROS TÉCNICOS ---
         with st.container(border=True):
             st.markdown("#### ⚙️ 2. Parâmetros de Regência")
             c1, c2, c3 = st.columns([1, 2, 1.5])
-            
-            # O selectbox retorna INT (6, 7, 8, 9), que agora bate com o DB_CURRICULO vacinado
             ano_p = c1.selectbox("Série/Ano:", [6, 7, 8, 9], index=0)
-            
             todas_semanas = util.gerar_semanas()
             sem_p = c2.selectbox("Semana de Referência:", todas_semanas)
             sem_limpa = sem_p.split(" (")[0]
-            
-            # Verificação de Feriado (Calendário Itabuna)
-            try:
-                data_ref = datetime.strptime(sem_p.split("(")[1].split(" ")[0], "%d/%m").replace(year=2026).date()
-                feriado = util.verificar_feriado_itabuna(data_ref)
-                if feriado: st.warning(f"📅 Feriado Detectado: {feriado}")
-            except: pass
-
             modo_p = c3.radio("Método de Elaboração:", ["📖 Livro Didático", "🎛️ Manual (Banco)"], horizontal=True)
 
-        # --- 3. MATRIZ CURRICULAR (FIDELIDADE LITERAL) ---
+        # FILTRAGEM DO BANCO (Agora destravada pelo database.py)
         df_f = df_curriculo[df_curriculo['ANO'] == ano_p]
         
         with st.container(border=True):
             if modo_p == "🎛️ Manual (Banco)":
                 st.markdown("#### 🎯 Matriz Curricular (Fiel ao Banco)")
                 if df_f.empty:
-                    st.error(f"❌ Erro: Dados do {ano_p}º ano não localizados no Currículo.")
+                    st.error(f"❌ Dados do {ano_p}º ano não localizados no Currículo.")
                 else:
                     cx1, cx2 = st.columns(2)
                     eixo_pre = cx1.selectbox("Eixo Temático:", df_f['EIXO'].unique())
-                    
                     df_filtrado_cont = df_f[df_f['EIXO'] == eixo_pre]
                     cont_pre = st.multiselect("Conteúdos Específicos (Literais):", df_filtrado_cont['CONTEUDO_ESPECIFICO'].unique())
-                    
                     df_filtrado_obj = df_f[df_f['CONTEUDO_ESPECIFICO'].isin(cont_pre)]
                     obj_pre = st.multiselect("Objetivos de Ensino (Literais):", df_filtrado_obj['OBJETIVOS'].unique())
-                    
                     ctx_ia = f"MÉTODO MANUAL. EIXO: {eixo_pre}. CONTEÚDOS: {cont_pre}. OBJETIVOS: {obj_pre}."
             else:
                 st.markdown("#### 📖 Referência Bibliográfica")
@@ -620,7 +607,6 @@ if menu == "📅 Planejamento (Ponto ID)":
 
             strat = st.text_area("Estratégia Pedagógica / Observações:", placeholder="Ex: Focar na resolução de problemas...")
 
-        # --- 4. COMPILAÇÃO BNCC ---
         if st.button("🚀 COMPILAR PLANEJAMENTO BNCC", use_container_width=True, type="primary"):
             with st.spinner("Maestro SOSA processando Didática BNCC..."):
                 info_gate = f"TIPO_SEMANA: {tipo_semana}. CARGA: {carga_horaria}. SABADO: {tem_sabado}."
@@ -628,32 +614,73 @@ if menu == "📅 Planejamento (Ponto ID)":
                 st.session_state.p_temp = ai.gerar_ia("PLANE_PEDAGOGICO", prompt)
                 st.rerun()
 
-        # --- 5. EDITOR DE ENGENHARIA ---
         if "p_temp" in st.session_state:
             st.markdown("---")
             txt = st.session_state.p_temp
-            
             t_ed, t_vis = st.tabs(["✏️ Editor Técnico", "👁️ Estrutura de Regência"])
             with t_ed:
                 c_ed1, c_ed2 = st.columns([1, 2])
                 ed_bncc = c_ed1.text_input("Código BNCC:", ai.extrair_tag(txt, "BNCC_CODE"))
                 ed_geral = c_ed2.text_input("Eixo:", ai.extrair_tag(txt, "CONTEUDO_GERAL"))
-                
                 ed_espec = st.text_area("Conteúdos (Literais):", ai.extrair_tag(txt, "CONTEUDOS_ESPECIFICOS"))
                 ed_objs = st.text_area("Objetivos (Literais):", ai.extrair_tag(txt, "OBJETIVOS_ENSINO"))
-                
                 col_a1, col_a2 = st.columns(2)
                 ed_a1 = col_a1.text_area("AULA 1 (BNCC):", ai.extrair_tag(txt, "AULA_1"), height=300)
                 ed_a2 = col_a2.text_area("AULA 2 (BNCC):", ai.extrair_tag(txt, "AULA_2"), height=300)
-                
                 ed_ava = st.text_area("Avaliação:", ai.extrair_tag(txt, "AVALIACAO"))
                 ed_pei = st.text_area("Estratégia PEI:", ai.extrair_tag(txt, "ADAPTACAO_PEI"))
 
-            if st.button("💾 FINALIZAR E SINCRONIZAR (DRIVE + BANCO)", use_container_width=True, type="primary"):
-                # Lógica de salvamento preservando o "º" para o banco de planos
-                final_ano = f"{ano_p}º"
-                # ... (Restante do código de salvamento)
-                st.success("Sincronizado!")
+            if st.button("💾 FINALIZAR E SINCRONIZAR", use_container_width=True, type="primary"):
+                with st.status("Sincronizando...") as status:
+                    final_ano = f"{ano_p}º"
+                    nome_arquivo = f"PLANO_{final_ano.replace('º','')}ANO_{sem_limpa.replace(' ', '')}"
+                    db.excluir_plano_completo(sem_limpa, final_ano) 
+                    metodologia_unificada = f"AULA 1:\n{ed_a1}\n\nAULA 2:\n{ed_a2}"
+                    dados_docx = {"geral": f"[{ed_bncc}] {ed_geral}", "especificos": ed_espec, "objetivos": ed_objs, "metodologia": metodologia_unificada, "avaliacao": ed_ava, "pei": ed_pei}
+                    doc_io = exporter.gerar_docx_plano_pedagogico_ELITE(nome_arquivo, dados_docx, {"ano": final_ano, "semana": sem_limpa, "trimestre": "I Trimestre"})
+                    link_drive = db.subir_e_converter_para_google_docs(doc_io, nome_arquivo, trimestre="I Trimestre", categoria=final_ano, semana=sem_limpa, modo="PLANEJAMENTO")
+                    if "https" in str(link_drive):
+                        final_txt = f"MARKER_BNCC_CODE {ed_bncc} \nMARKER_CONTEUDO_GERAL {ed_geral} \nMARKER_CONTEUDOS_ESPECIFICOS {ed_espec} \nMARKER_OBJETIVOS_ENSINO {ed_objs} \nMARKER_AULA_1 {ed_a1} \nMARKER_AULA_2 {ed_a2} \nMARKER_AVALIACAO {ed_ava} \nMARKER_ADAPTACAO_PEI {ed_pei} \n--- LINK DRIVE --- {link_drive}"
+                        db.salvar_no_banco("DB_PLANOS", [datetime.now().strftime("%d/%m/%Y"), sem_limpa, final_ano, "I Trimestre", "PADRÃO", final_txt, link_drive])
+                        status.update(label="✅ Sincronizado!", state="complete")
+                        st.balloons(); reset_planejamento()
+
+    # --- ABA 2: GESTÃO DE ACERVO (PIP) ---
+    with tab_acervo:
+        st.subheader("📂 Repositório de Planos Estratégicos")
+        if not df_planos.empty:
+            f_ano_h = st.selectbox("Filtrar Série:", ["Todos", "6º", "7º", "8º", "9º"], key="hist_ano")
+            df_h = df_planos.copy()
+            if f_ano_h != "Todos": df_h = df_h[df_h['ANO'] == f_ano_h]
+            for _, row in df_h.iloc[::-1].iterrows():
+                with st.container(border=True):
+                    c_h1, c_h2, c_h3 = st.columns([2, 1, 1])
+                    c_h1.markdown(f"**{row['SEMANA']}** ({row['ANO']})")
+                    if "https" in str(row['LINK_DRIVE']): c_h2.link_button("👁️ ABRIR DRIVE", row['LINK_DRIVE'], use_container_width=True)
+                    if c_h3.button("🗑️ APAGAR", key=f"del_{row.name}", use_container_width=True):
+                        if db.excluir_plano_completo(row['SEMANA'], row['ANO']): st.rerun()
+
+    # --- ABA 3: MATRIZ DE COMPETÊNCIAS ---
+    with tab_matriz:
+        st.subheader("📖 Matriz de Competências Ativa (BNCC)")
+        ano_c = st.selectbox("Série para Consulta:", [6, 7, 8, 9], key="matriz_ano")
+        df_c = df_curriculo[df_curriculo['ANO'] == ano_c].copy()
+        if not df_c.empty:
+            st.dataframe(df_c[['TRIMESTRE', 'EIXO', 'CONTEUDO_ESPECIFICO', 'OBJETIVOS']], use_container_width=True, hide_index=True)
+        else: st.info("Selecione uma série para visualizar a matriz.")
+
+    # --- ABA 4: ANALYTICS DE COBERTURA ---
+    with tab_analytics:
+        st.subheader("📈 Analytics de Cobertura Curricular")
+        ano_m = st.selectbox("Analisar Série:", [6, 7, 8, 9], key="auditoria_ano")
+        df_m = df_curriculo[df_curriculo['ANO'] == ano_m].copy()
+        if not df_m.empty and not df_planos.empty:
+            planejados = " ".join(df_planos[df_planos['ANO'].str.contains(str(ano_m))]['PLANO_TEXTO'].astype(str).tolist()).upper()
+            df_m['STATUS_NUM'] = df_m['CONTEUDO_ESPECIFICO'].apply(lambda x: 1 if str(x).upper() in planejados else 0)
+            progresso = df_m.groupby('EIXO')['STATUS_NUM'].agg(['sum', 'count']).reset_index()
+            progresso['%'] = (progresso['sum'] / progresso['count'] * 100).round(1)
+            st.plotly_chart(px.bar(progresso, x='EIXO', y='%', text='%', color='%', color_continuous_scale='RdYlGn', title=f"Cobertura Curricular - {ano_m}º Ano"), use_container_width=True)
+        else: st.info("Aguardando dados de planejamento para gerar o gráfico.")
 
 # ==============================================================================
 # MÓDULO: DIÁRIO DE BORDO RÁPIDO V26.6 - COM REGISTRO DE BÔNUS ⭐
