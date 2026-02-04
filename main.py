@@ -1035,11 +1035,23 @@ elif menu == "📊 Painel de Notas & Vistos":
             hide_index=True, use_container_width=True
         )
 
-        # Cálculo da Média Final com Trava de 10.0
-        df_edit['SOMA'] = df_edit[f"VISTOS (AUTO)"] + df_edit[f"TESTE (SCAN)"] + df_edit[f"PROVA (SCAN)"] + df_edit["BÔNUS (EXTRA)"]
-        df_edit['MÉDIA FINAL'] = df_edit.apply(lambda r: min(10.0, max(r['SOMA'], r['RECUPERAÇÃO'])), axis=1)
+        # --- EXIBIÇÃO FINAL COM DESTAQUE (CORREÇÃO DE SUBSET) ---
+        st.markdown("### 📊 Pré-visualização do Desempenho")
+        
+        # Garantimos que as colunas de cálculo sejam numéricas antes de estilizar
+        df_edit['SOMA'] = pd.to_numeric(df_edit['SOMA'], errors='coerce').fillna(0)
+        df_edit['MÉDIA FINAL'] = pd.to_numeric(df_edit['MÉDIA FINAL'], errors='coerce').fillna(0)
 
-        st.dataframe(df_edit[['NOME', 'SOMA', 'MÉDIA FINAL']].style.highlight_between(left=0, right=5.9, color="#ffcccc"), use_container_width=True)
+        st.dataframe(
+            df_edit[['NOME', 'SOMA', 'MÉDIA FINAL']].style.highlight_between(
+                subset=['SOMA', 'MÉDIA FINAL'], # <--- CORREÇÃO CRÍTICA: Aplica apenas nos números
+                left=0, 
+                right=5.9, 
+                color="#ffcccc"
+            ).format("{:.2f}", subset=['SOMA', 'MÉDIA FINAL']), # Formata para 2 casas decimais
+            use_container_width=True,
+            hide_index=True
+        )
 
         if st.button("💾 SALVAR E SINCRONIZAR BOLETIM", type="primary", use_container_width=True):
             with st.status("Sincronizando Notas...", expanded=False) as status:
