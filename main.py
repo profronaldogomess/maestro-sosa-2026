@@ -777,28 +777,95 @@ if menu == "📅 Planejamento (Ponto ID)":
             else: st.info("Nenhum plano encontrado.")
         else: st.info("📭 Acervo vazio.")
 
-    # --- ABA 3: MATRIZ CURRICULAR ---
+    # --- ABA 3: MATRIZ CURRICULAR ATIVA (V27 - INTELIGENTE) ---
     with tab_matriz:
-        st.subheader("📖 Matriz Curricular Ativa")
+        st.subheader("📖 Matriz de Competências e Status de Execução")
         if not df_curriculo.empty:
-            ano_c = st.selectbox("Série:", [6, 7, 8, 9], key="matriz_ano_v26")
+            ano_c = st.selectbox("Série para Consulta:", [6, 7, 8, 9], key="matriz_ano_v27")
+            
+            # 1. Filtrar currículo do ano
             df_c = df_curriculo[df_curriculo['ANO'] == ano_c].copy()
-            st.dataframe(df_c[['TRIMESTRE', 'EIXO', 'CONTEUDO_ESPECIFICO', 'OBJETIVOS']], use_container_width=True, hide_index=True)
+            
+            # 2. Capturar todos os planos já feitos para este ano (Normalizando para busca)
+            # Nota: df_planos usa "6º", ano_c usa 6.
+            planos_feitos = df_planos[df_planos['ANO'].astype(str).str.contains(str(ano_c))]
+            texto_todos_planos = " ".join(planos_feitos['PLANO_TEXTO'].astype(str)).upper()
 
-    # --- ABA 4: ANALYTICS ---
+            # 3. Lógica de Verificação de Cobertura
+            def checar_conclusao(conteudo):
+                if not texto_todos_planos: return "⏳ PENDENTE"
+                # Se o conteúdo do banco (em maiúsculo) estiver dentro do blocão de planos
+                if str(conteudo).upper() in texto_todos_planos:
+                    return "✅ CONCLUÍDO"
+                return "⏳ PENDENTE"
+
+            df_c['STATUS'] = df_c['CONTEUDO_ESPECIFICO'].apply(checar_conclusao)
+
+            # 4. Exibição com Estilo
+            st.dataframe(
+                df_c[['TRIMESTRE', 'EIXO', 'CONTEUDO_ESPECIFICO', 'STATUS']],
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "STATUS": st.column_config.TextColumn("Status", width="small"),
+                    "CONTEUDO_ESPECIFICO": st.column_config.TextColumn("Conteúdo Programático", width="large")
+                }
+            )
+        else:
+            st.info("📭 Base de currículo não carregada.")
+
+    # --- ABA 4: ANALYTICS DE COBERTURA (V27 - VISÃO TRIMESTRAL) ---
     with tab_auditoria:
-        st.subheader("📈 Auditoria de Cobertura Curricular")
+        st.subheader("📈 Analytics de Cobertura Curricular")
         if not df_curriculo.empty:
-            ano_m = st.selectbox("Analisar Série:", [6, 7, 8, 9], key="auditoria_ano_v26")
+            ano_m = st.selectbox("Analisar Série:", [6, 7, 8, 9], key="auditoria_ano_v27")
+            
+            # Processamento de Dados para o Gráfico
             df_m = df_curriculo[df_curriculo['ANO'] == ano_m].copy()
-            if not df_m.empty:
-                planejados = " ".join(df_planos[df_planos['ANO'] == f"{ano_m}º"]['PLANO_TEXTO'].astype(str).tolist()).upper() if not df_planos.empty else ""
-                df_m['STATUS_NUM'] = df_m['CONTEUDO_ESPECIFICO'].apply(lambda x: 1 if str(x).upper() in planejados else 0)
-                progresso = df_m.groupby('EIXO')['STATUS_NUM'].agg(['sum', 'count']).reset_index()
-                progresso['sum'] = pd.to_numeric(progresso['sum'], errors='coerce').fillna(0)
-                progresso['count'] = pd.to_numeric(progresso['count'], errors='coerce').fillna(1)
-                progresso['%'] = (progresso['sum'] / progresso['count'] * 100).astype(float).round(1)
-                st.plotly_chart(px.bar(progresso, x='EIXO', y='%', text='%', color='%', color_continuous_scale='RdYlGn', range_y=[0, 105], title=f"Cobertura Curricular - {ano_m}º Ano"), use_container_width=True)
+            planos_m = df_planos[df_planos['ANO'].astype(str).str.contains(str(ano_m))]
+            texto_m = " ".join(planos_m['PLANO_TEXTO'].astype(str)).upper()
+            
+            df_m['CONCLUIDO'] = df_m['CONTEUDO_ESPECIFICO'].apply(lambda x: 1 if str(x).upper() in texto_m else 0)
+            
+            # Agrupamento por Trimestre para análise detalhada
+            progresso_trim = df_m.groupby('TRIMESTRE')['CONCLUIDO'].agg(['sum', 'count']).reset_index()
+            progresso_trim['%'] = (progresso_trim['sum'] / progresso_trim['count'] * 100).round(1)
+            
+            # KPIs de Topo
+            c1, c2, c3 = st.columns(3)
+            total_geral = (df_m['CONCLUIDO'].sum() / len(df_m) * 100)
+            c1.metric("Cobertura Anual Total", f"{total_geral:.1f}%")
+            
+            # Busca o progresso do trimestre atual (exemplo: I)
+            prog_i = progresso_trim[progresso_trim['TRIMESTRE'] == 'I']['%'].values[0] if 'I' in progresso_trim['TRIMESTRE'].values else 0
+            c2.metric("Progresso I Trimestre", f"{prog_i}%")
+            
+            prog_ii = progresso_trim[progresso_trim['TRIMESTRE'] == 'II']['%'].values[0] if 'II' in progresso_trim['TRIMESTRE'].values else 0
+            c3.metric("Progresso II Trimestre", f"{prog_ii}%")
+
+            # Gráfico Moderno
+            fig_cob = px.bar(
+                progresso_trim, 
+                x='TRIMESTRE', 
+                y='%', 
+                text='%',
+                title=f"Evolução da Cobertura Curricular - {ano_m}º Ano",
+                labels={'%': 'Porcentagem Concluída', 'TRIMESTRE': 'Trimestre'},
+                color='%',
+                color_continuous_scale='RdYlGn',
+                range_y=[0, 110]
+            )
+            st.plotly_chart(fig_cob, use_container_width=True)
+
+            # Lista de "O que falta planejar"
+            with st.expander("🔍 Ver Conteúdos Pendentes (Próximos Passos)"):
+                pendentes = df_m[df_m['CONCLUIDO'] == 0][['TRIMESTRE', 'EIXO', 'CONTEUDO_ESPECIFICO']]
+                if not pendentes.empty:
+                    st.table(pendentes)
+                else:
+                    st.success("🎉 Parabéns! Todo o currículo deste ano foi planejado.")
+        else:
+            st.info("Aguardando dados para gerar analytics.")
 
 
 # ==============================================================================
