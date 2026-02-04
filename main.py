@@ -1824,12 +1824,26 @@ elif menu == "📝 Central de Avaliações":
                     if c_b4.button("🗑️ Apagar", key=f"del_av_{row.name}", use_container_width=True):
                         db.excluir_avaliacao_completa(row['TIPO_MATERIAL'], str(row['TIPO_MATERIAL']).split(" - ")[0])
                         st.rerun()
-
         with c_h2:
             st.markdown("#### 🗓️ Próximas Aplicações")
             if not df_registro_aulas.empty:
-                df_cron = df_registro_aulas[df_registro_aulas['SEMANA'] == "AVALIAÇÃO"].copy()
-                st.dataframe(df_cron[['DATA', 'TURMA', 'CONTEUDO_MINISTRADO', 'STATUS_CURRICULO']], use_container_width=True, hide_index=True)
+                # --- FILTRO ROBUSTO SOSA V26 ---
+                # Remove espaços e garante que compare sempre em maiúsculas
+                df_cron = df_registro_aulas[
+                    df_registro_aulas['SEMANA'].astype(str).str.strip().str.upper() == "AVALIAÇÃO"
+                ].copy()
+                
+                if not df_cron.empty:
+                    # Ordena pela data mais próxima
+                    st.dataframe(
+                        df_cron[['DATA', 'TURMA', 'CONTEUDO_MINISTRADO', 'STATUS_CURRICULO']], 
+                        use_container_width=True, 
+                        hide_index=True
+                    )
+                else:
+                    st.info("📅 Nenhuma prova agendada no cronograma para exibir.")
+            else:
+                st.info("📭 O Diário de Classe (Registro) está vazio.")
 
 # ==============================================================================
 # MÓDULO: SCANNER & PERÍCIA - ARQUITETURA V26 (INTEGRAL)
