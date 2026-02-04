@@ -223,7 +223,7 @@ def exibir_material_estruturado(texto_raw, key_prefix, dados_plano=None, info_au
         nome_base = f"AULA_{f_aula.replace(' ','')}_{f_ano}ANO_{datetime.now().strftime('%d%m')}"
         ed_prof_para_banco = ed_prof
 
-# --- ABA DE EXPORTAÇÃO E SINCRONIA (UNIFICADA V25.95) ---
+# --- ABA DE EXPORTAÇÃO E SINCRONIA (UNIFICADA V25.96) ---
     with t_exp:
         st.subheader("🚀 Sincronia de Elite SOSA")
         
@@ -239,12 +239,10 @@ def exibir_material_estruturado(texto_raw, key_prefix, dados_plano=None, info_au
                 # 1. LÓGICA ANTI-DUPLICIDADE (UPSERT)
                 status.write("🧹 Verificando e removendo versões obsoletas...")
                 if modo_sync == "PLANEJAMENTO":
-                    # Busca se já existe plano para essa semana e ano
                     filtro = df_planos[(df_planos['SEMANA'] == f_semana) & (df_planos['ANO'] == f"{f_ano}º")]
                     for _, row_antiga in filtro.iterrows():
                         db.excluir_registro_com_drive("DB_PLANOS", row_antiga['PLANO_TEXTO'])
                 else:
-                    # Busca se já existe aula para essa semana e foco (Aula 1 ou Aula 2)
                     filtro = df_aulas[(df_aulas['SEMANA_REF'] == f_semana) & (df_aulas['TIPO_MATERIAL'].str.contains(f_aula))]
                     for _, row_antiga in filtro.iterrows():
                         db.excluir_registro_com_drive("DB_AULAS_PRONTAS", row_antiga['CONTEUDO'])
@@ -252,16 +250,12 @@ def exibir_material_estruturado(texto_raw, key_prefix, dados_plano=None, info_au
                 # 2. PROCESSAMENTO POR MODO
                 if modo_sync == "PLANEJAMENTO":
                     # Geração do DOCX do Plano
-                    doc_plano = exporter.gerar_docx_plano_pedagogico_v18(nome_base, dados_plano, {"ano": f"{f_ano}º", "semana": f_semana})
+                    doc_plano = exporter.gerar_docx_plano_pedagogico_ELITE(nome_base, dados_plano, {"ano": f"{f_ano}º", "semana": f_semana, "trimestre": f_trimestre})
                     
                     status.write("📤 Enviando Novo Plano para a Hierarquia Oficial...")
-                    # Envia para a Ponte (Apps Script cuidará das pastas: Planos de Aula > Trimestre > Ano > Semana)
-                    link = db.subir_e_converter_para_google_docs(
-                        doc_plano, nome_base, trimestre=f_trimestre, categoria=f"{f_ano}º Ano", semana=f_semana, modo="PLANEJAMENTO"
-                    )
+                    link = db.subir_e_converter_para_google_docs(doc_plano, nome_base, trimestre=f_trimestre, categoria=f"{f_ano}º Ano", semana=f_semana, modo="PLANEJAMENTO")
                     
                     if "https" in str(link):
-                        # Montagem do texto com MARKERS para o banco (Preservando a estrutura para o Criador de Aulas ler)
                         final_txt = (
                             f"MARKER_CONTEUDO_GERAL {dados_plano['geral']} \n"
                             f"MARKER_CONTEUDOS_ESPECIFICOS {dados_plano['especificos']} \n"
@@ -273,22 +267,19 @@ def exibir_material_estruturado(texto_raw, key_prefix, dados_plano=None, info_au
                             f"--- LINK DRIVE --- {link}"
                         )
                         
-                        sucesso = db.salvar_no_banco("DB_PLANOS", [
-                            datetime.now().strftime("%d/%m/%Y"), f_semana, f"{f_ano}º", f_trimestre, "PADRÃO", final_txt
-                        ])
-                        
+                        sucesso = db.salvar_no_banco("DB_PLANOS", [datetime.now().strftime("%d/%m/%Y"), f_semana, f"{f_ano}º", f_trimestre, "PADRÃO", final_txt, link])
                         if sucesso:
-                            status.update(label="✅ Plano Atualizado e Sincronizado!", state="complete")
-                            st.success(f"Acesse aqui: {link}")
+                            status.update(label="✅ Plano Sincronizado!", state="complete")
                             st.balloons()
                     else:
                         status.update(label="❌ Falha na Ponte Google.", state="error")
                         st.error(link)
 
                 else:
-                    # Geração dos DOCX da Aula
+                    # MODO AULA (CRIADOR DE AULAS)
+                    status.write("📄 Gerando Materiais (Fluxo Nativo)...")
                     doc_alu = exporter.gerar_docx_aluno_v24(nome_base, ed_alu, {"ano": f"{f_ano}º", "trimestre": f_trimestre})
-                    doc_prof = exporter.gerar_docx_professor_v25(nome_base, ed_prof, {"ano": f"{f_ano}º", "semana": f_semana})
+                    doc_prof = exporter.gerar_docx_professor_v25(nome_base, ed_prof, {"ano": f"{f_ano}º", "semana": f_semana, "trimestre": f_trimestre})
                     
                     status.write("📤 Enviando Material do Aluno...")
                     link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{nome_base}_ALUNO", trimestre=f_trimestre, categoria=f_categoria, semana=f_semana, modo="AULA")
@@ -298,22 +289,22 @@ def exibir_material_estruturado(texto_raw, key_prefix, dados_plano=None, info_au
                     
                     link_pei = "N/A"
                     if "lab_pei" in st.session_state:
-                        status.write("📤 Enviando Material PEI Adaptado...")
-                        doc_pei = exporter.gerar_docx_pei_v25(f"{nome_base}_PEI", st.session_state.lab_pei, {"trimestre": f_trimestre})
+                        status.write("♿ Enviando Material PEI Adaptado...")
+                        doc_pei = exporter.gerar_docx_pei_v25(f"{nome_base}_PEI", st.session_state.lab_pei, {"ano": f"{f_ano}º", "trimestre": f_trimestre})
                         link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_base}_PEI", trimestre=f_trimestre, categoria=f_categoria, semana=f_semana, modo="AULA")
 
                     if "https" in str(link_alu) and "https" in str(link_prof):
-                        # Salva na Gaveta de Materiais (DB_AULAS_PRONTAS)
-                        conteudo_banco = f"[ROTEIRO_PROF]\n{ed_prof_para_banco}\n\n--- LINKS DE ACESSO ---\nAluno({link_alu})\nProf({link_prof})\nPEI({link_pei})"
+                        # CONTEÚDO ESTRUTURADO PARA AULAS (Sem variáveis de prova)
+                        conteudo_banco = f"[PROFESSOR]\n{ed_prof}\n\n[ALUNO]\n{ed_alu}\n\n--- LINKS ---\nAluno({link_alu}) Prof({link_prof}) PEI({link_pei})"
                         
                         db.salvar_no_banco("DB_AULAS_PRONTAS", [
                             datetime.now().strftime("%d/%m/%Y"), f_semana, f"{f_aula}", conteudo_banco, f"{f_ano}º", link_alu
                         ])
-                        status.update(label="✅ Aula Atualizada e Sincronizada!", state="complete")
+                        status.update(label="✅ Aula Sincronizada!", state="complete")
                         st.balloons()
                     else:
                         status.update(label="❌ Erro no Upload da Aula.", state="error")
-                        st.error(f"Link Aluno: {link_alu}")
+                        st.error(f"Falha no envio dos arquivos.")
                        
 # ==============================================================================
 # MÓDULO: DASHBOARD INTELIGENTE (V6 - FULL CONTEXT: NOTAS + PDF + AULAS CRIADAS)
@@ -1956,7 +1947,7 @@ elif menu == "📝 Central de Avaliações":
                 st.dataframe(df_cron[['DATA', 'TURMA', 'CONTEUDO_MINISTRADO', 'STATUS_CURRICULO']], use_container_width=True, hide_index=True)
 
 # ==============================================================================
-# MÓDULO: SCANNER & PERÍCIA - ARQUITETURA V9.5 (AUTONOMIA TOTAL)
+# MÓDULO: SCANNER & PERÍCIA - ARQUITETURA V9.6 (AUTONOMIA TOTAL REVISADA)
 # ==============================================================================
 elif menu == "📸 Scanner de Gabaritos":
     st.title("📸 Inteligência Diagnóstica Autônoma")
@@ -1984,17 +1975,24 @@ elif menu == "📸 Scanner de Gabaritos":
         if not provas_disponiveis.empty:
             prova_sel = c2.selectbox("Avaliação Base (Detecção Autônoma):", provas_disponiveis['TIPO_MATERIAL'].tolist(), key=f"p_scan_{v}")
             
-            # --- MOTOR DE AUTONOMIA: BUSCA DE METADADOS NO BANCO ---
+            # --- MOTOR DE AUTONOMIA V9.6: BUSCA DE METADADOS EM 3 CAMADAS ---
             prova_data = provas_disponiveis[provas_disponiveis['TIPO_MATERIAL'] == prova_sel].iloc[0]
             txt_conteudo = str(prova_data['CONTEUDO'])
+            nome_prova_upper = str(prova_data['TIPO_MATERIAL']).upper()
             
-            # A. Detecta Valor Total automaticamente
-            valor_detectado = 10.0 # Fallback
+            # Camada 1: Busca por Regex no texto (VALOR: 3,0)
+            valor_detectado = 10.0 # Fallback inicial
             match_val = re.search(r"VALOR:?\s*(\d+[\.,]\d+|\d+)", txt_conteudo.upper())
+            
             if match_val:
                 valor_detectado = float(match_val.group(1).replace(',', '.'))
+            # Camada 2: Busca por Palavra-Chave no Nome (Teste=3, Prova=4)
+            elif "TESTE" in nome_prova_upper:
+                valor_detectado = 3.0
+            elif "PROVA" in nome_prova_upper:
+                valor_detectado = 4.0
             
-            # B. Detecta Gabarito e Quantidade de Questões
+            # Detecta Gabarito e Quantidade de Questões
             is_pei = "PEI" in prova_sel.upper()
             tag_alvo = "GABARITO_PEI" if is_pei else "GABARITO_REGULAR"
             gab_raw = ai.extrair_tag(txt_conteudo, tag_alvo) or ai.extrair_tag(txt_conteudo, "GABARITO_TEXTO")
@@ -2002,7 +2000,7 @@ elif menu == "📸 Scanner de Gabaritos":
             qtd_questoes = len(gab_oficial) if gab_oficial else 10
 
             # Painel de Status da Autonomia
-            st.info(f"🤖 **Maestro Identificou:** Prova de {qtd_questoes} questões | Valor Total: {valor_detectado:.1f} pontos.")
+            st.info(f"🧠 **Inteligência SOSA:** Prova de **{qtd_questoes} questões** | Valor Total: **{valor_detectado:.1f} pontos**.")
 
             # Filtro de Alunos Pendentes
             ids_corrigidos = df_diagnosticos[df_diagnosticos['ID_AVALIACAO'] == prova_sel]['ID_ALUNO'].astype(str).tolist()
@@ -2028,7 +2026,6 @@ elif menu == "📸 Scanner de Gabaritos":
                     with col_img: st.image(st.session_state.scan_img)
                     
                     with col_edit:
-                        # Montagem da Tabela de Conferência
                         dados_conf = []
                         for i in range(1, qtd_questoes + 1):
                             q_key = f"{i:02d}"
