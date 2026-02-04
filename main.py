@@ -1242,92 +1242,176 @@ elif menu == "📈 Boletim Anual & Conselho":
                 st.info("Banco de relatórios vazio.")
 
 # ==============================================================================
-# MÓDULO: GESTÃO DA TURMA (COM EDIÇÃO)
+# MÓDULO: GESTÃO ESTRATÉGICA DA TURMA - ARQUITETURA V26 (INTEGRAÇÃO 360°)
 # ==============================================================================
 elif menu == "👥 Gestão da Turma":
-    st.header("👥 Gestão de Turmas e Alunos")
-    
-    t1, t2, t3, t4 = st.tabs(["🏗️ Criar Turma", "➕ Povoar Alunos", "👁️ Ver Lista", "✏️ Editar Dados"])
-    
-    with t1:
-        with st.form("f_t_new"):
-            c1, c2, c3 = st.columns(3)
-            a = c1.selectbox("Ano:", [6,7,8,9]); l = c2.selectbox("Letra:", ["A","B","C","D","E","F"]); u = c3.selectbox("Turno:", ["Matutino", "Vespertino"])
-            sigla = f"{a}ª {'M' if u=='Matutino' else 'V'}{l}"
-            if st.form_submit_button("Criar Turma"):
-                db.salvar_no_banco("DB_TURMAS", [sigla, f"{a}º Ano {l}", "Seg/Qui"])
-                st.success(f"Turma {sigla} criada!")
-    
-    with t2:
-        if not df_turmas.empty:
-            t_dest = st.selectbox("Para qual turma?", df_turmas['ID_TURMA'].tolist())
-            metodo = st.radio("Método:", ["Individual", "CSV (Upload)", "IA (PDF)"], horizontal=True)
-            if metodo == "Individual":
-                with st.form("f_ind_aluno", clear_on_submit=True):
-                    nome_a = st.text_input("Nome Completo:").upper()
-                    nec_a = st.text_input("Necessidades:", value="NENHUMA").upper()
-                    if st.form_submit_button("💾 Salvar"):
-                        if nome_a:
-                            id_a = db.gerar_proximo_id(df_alunos)
-                            db.salvar_no_banco("DB_ALUNOS", [id_a, nome_a, t_dest, "ATIVO", nec_a, "MANUAL"])
-                            st.success("Cadastrado!"); st.rerun()
-            elif metodo == "CSV (Upload)":
-                f_csv = st.file_uploader("CSV", type=["csv"])
-                if f_csv and st.button("Processar"):
-                    df_up = pd.read_csv(f_csv)
-                    id_base = db.gerar_proximo_id(df_alunos)
-                    for idx, r in df_up.iterrows():
-                        db.salvar_no_banco("DB_ALUNOS", [id_base+idx, str(r['NOME']).upper(), t_dest, "ATIVO", "NENHUMA", "CSV"])
-                    st.success("Importado!"); st.rerun()
-            elif metodo == "IA (PDF)":
-                txt_pdf = st.text_area("Cole o texto do PDF aqui:")
-                if st.button("🤖 Maestro, Extrair Nomes"):
-                    res = ai.gerar_ia("MAESTRO", f"Extraia apenas os nomes em caixa alta deste texto: {txt_pdf}")
-                    st.session_state.ia_res = res.upper()
-                if "ia_res" in st.session_state:
-                    st.code(st.session_state.ia_res)
-                    if st.button("💾 Confirmar e Salvar"):
-                        id_base = db.gerar_proximo_id(df_alunos)
-                        for idx, nome in enumerate(st.session_state.ia_res.split('\n')):
-                            if nome.strip(): db.salvar_no_banco("DB_ALUNOS", [id_base+idx, nome.strip(), t_dest, "ATIVO", "PENDENTE", "IA"])
-                        st.success("Salvos!"); del st.session_state.ia_res; st.rerun()
-    
-    with t3:
-        if not df_alunos.empty:
-            t_f = st.selectbox("Filtrar Turma:", sorted(df_alunos['TURMA'].unique()))
-            st.dataframe(df_alunos[df_alunos['TURMA']==t_f].sort_values(by="NOME_ALUNO"), use_container_width=True, hide_index=True)
+    st.title("👥 Centro de Comando e Gestão Estratégica")
+    st.markdown("---")
 
-    # --- ABA 4: EDITAR DADOS ---
-    with t4:
-        st.subheader("✏️ Atualizar Cadastro (CID/Necessidades)")
-        if df_alunos.empty:
-            st.warning("Sem alunos cadastrados.")
-        else:
-            c_sel1, c_sel2 = st.columns(2)
-            turma_edit = c_sel1.selectbox("Turma:", sorted(df_alunos['TURMA'].unique()), key="edit_turma")
+    # --- 1. FILTROS DE CONTEXTO ---
+    with st.container(border=True):
+        c1, c2, c3 = st.columns([1, 1, 2])
+        turma_alvo = c1.selectbox("Selecionar Turma:", sorted(df_alunos['TURMA'].unique()), key="gt_turma")
+        trimestre_ref = c2.selectbox("Trimestre de Análise:", ["I Trimestre", "II Trimestre", "III Trimestre"], key="gt_trim")
+        busca_aluno = c3.text_input("🔍 Localizar Aluno:", placeholder="Digite o nome para análise rápida...")
+
+    # --- 2. ENGENHARIA DE DADOS INTEGRADA (DATA FUSION) ---
+    # Filtramos os alunos da turma
+    df_t = df_alunos[df_alunos['TURMA'] == turma_alvo].copy()
+    
+    # Integramos Notas (Limpando decimais com Precisão SOSA)
+    df_n_t = df_notas[(df_notas['TURMA'] == turma_alvo) & (df_notas['TRIMESTRE'] == trimestre_ref)]
+    df_t = pd.merge(df_t, df_n_t[['ID_ALUNO', 'MEDIA_FINAL']], left_on='ID', right_on='ID_ALUNO', how='left')
+    df_t['MEDIA_FINAL'] = df_t['MEDIA_FINAL'].apply(util.sosa_to_float)
+    
+    # Integramos Engajamento (Vistos do Diário de Bordo)
+    if not df_diario.empty:
+        vistos_t = df_diario[(df_diario['TURMA'] == turma_alvo) & (df_diario['VISTO_ATIVIDADE'].astype(str).upper() == "TRUE")]
+        vistos_count = vistos_t['ID_ALUNO'].apply(db.limpar_id).value_counts().to_dict()
+        df_t['ESFORCO'] = df_t['ID'].apply(lambda x: vistos_count.get(db.limpar_id(x), 0))
+    else:
+        df_t['ESFORCO'] = 0
+
+    # --- 3. INTERFACE DE COMANDO (TABS MODERNAS) ---
+    t_mapa, t_individual, t_conselho, t_cadastro = st.tabs([
+        "📊 Mapa de Calor (Turma)", 
+        "👤 Prontuário 360° (Individual)", 
+        "🗣️ Simulador de Conselho", 
+        "⚙️ Gestão de Cadastro"
+    ])
+
+    # --- ABA 1: MAPA DE CALOR (VISÃO ESTRATÉGICA) ---
+    with t_mapa:
+        st.subheader(f"📈 Saúde Pedagógica: {turma_alvo}")
+        
+        m1, m2, m3, m4 = st.columns(4)
+        media_turma = df_t['MEDIA_FINAL'].mean()
+        m1.metric("Média Geral", f"{media_turma:.1f}", delta=f"{media_turma-6.0:.1f}", delta_color="normal")
+        
+        risco = len(df_t[df_t['MEDIA_FINAL'] < 6.0])
+        m2.metric("Alunos em Risco", risco, delta="Abaixo de 6.0", delta_color="inverse")
+        
+        pei_count = len(df_t[df_t['NECESSIDADES'] != "NENHUMA"])
+        m3.metric("Público PEI", pei_count, delta="Inclusão Ativa")
+        
+        esforco_medio = df_t['ESFORCO'].mean()
+        m4.metric("Média de Vistos", f"{esforco_medio:.1f}", delta="Engajamento")
+
+        # Gráfico de Dispersão: Esforço vs Resultado
+        fig_heat = px.scatter(
+            df_t, x="ESFORCO", y="MEDIA_FINAL",
+            color="MEDIA_FINAL", size="ESFORCO",
+            hover_name="NOME_ALUNO", text="NOME_ALUNO",
+            title="Matriz de Desempenho: Esforço (Vistos) vs. Resultado (Notas)",
+            labels={"ESFORCO": "Quantidade de Vistos", "MEDIA_FINAL": "Média no Trimestre"},
+            color_continuous_scale="RdYlGn", range_y=[0, 10.5]
+        )
+        fig_heat.add_hline(y=6.0, line_dash="dot", line_color="red", annotation_text="Linha de Corte")
+        st.plotly_chart(fig_heat, use_container_width=True)
+
+    # --- ABA 2: PRONTUÁRIO 360° (INDIVIDUAL) ---
+    with t_individual:
+        aluno_lista = df_t['NOME_ALUNO'].tolist()
+        if busca_aluno:
+            aluno_lista = [a for a in aluno_lista if busca_aluno.upper() in a.upper()]
+        
+        aluno_sel = st.selectbox("🔍 Selecionar Aluno para Perícia Individual:", aluno_lista)
+        
+        if aluno_sel:
+            dados_a = df_t[df_t['NOME_ALUNO'] == aluno_sel].iloc[0]
+            id_limpo = db.limpar_id(dados_a['ID'])
             
-            alunos_da_turma = df_alunos[df_alunos['TURMA'] == turma_edit].sort_values(by="NOME_ALUNO")
-            aluno_edit_nome = c_sel2.selectbox("Aluno:", alunos_da_turma['NOME_ALUNO'].tolist(), key="edit_aluno")
+            c_p1, c_p2 = st.columns([1, 2])
             
-            dados_atuais = alunos_da_turma[alunos_da_turma['NOME_ALUNO'] == aluno_edit_nome].iloc[0]
-            id_atual = dados_atuais['ID']
-            nec_atual = dados_atuais['NECESSIDADES']
-            
-            st.info(f"🆔 ID: {id_atual} | 🏥 Cadastro Atual: {nec_atual}")
-            
-            nova_nec = st.text_input("Nova Necessidade / CID (Digite para atualizar):", value=nec_atual)
-            
-            if st.button("💾 Atualizar Cadastro"):
-                if nova_nec != nec_atual:
-                    with st.spinner("Atualizando banco de dados..."):
-                        if db.atualizar_necessidade_aluno(id_atual, nova_nec):
-                            st.success(f"Sucesso! {aluno_edit_nome} agora consta como: {nova_nec}")
-                            time.sleep(1)
-                            st.rerun()
-                        else:
-                            st.error("Erro ao atualizar.")
-                else:
-                    st.warning("Nenhuma alteração feita.")
+            with c_p1:
+                # Card de Identidade Visual
+                cor_status = "royalblue" if "PEI" in str(dados_a['NECESSIDADES']) else BRAND_BLUE
+                st.markdown(f"""
+                    <div style="background-color: {cor_card_bg}; padding: 20px; border-radius: 15px; border: 2px solid {cor_status};">
+                        <h3 style="margin:0; color:{cor_status};">{aluno_sel}</h3>
+                        <p style="margin:5px 0;"><b>ID:</b> {id_limpo}</p>
+                        <p style="margin:5px 0;"><b>Perfil:</b> {dados_a['NECESSIDADES']}</p>
+                        <hr>
+                        <h2 style="text-align:center; color:{BRAND_BLUE};">{dados_a['MEDIA_FINAL']:.1f}</h2>
+                        <p style="text-align:center; margin:0;">Média Atual</p>
+                    </div>
+                """, unsafe_allow_html=True)
+                
+                if st.button("♿ Gerar Relatório PEI Rápido", use_container_width=True):
+                    st.info("Redirecionando para o Módulo PEI...")
+                    # Lógica de navegação pode ser inserida aqui
+
+            with c_p2:
+                # Histórico Cruzado
+                st.markdown("#### 📝 Últimas Evidências (Diário + Scanner)")
+                t_ev1, t_ev2 = st.tabs(["📓 Diário de Bordo", "📸 Scanner (Habilidades)"])
+                
+                with t_ev1:
+                    if not df_diario.empty:
+                        hist_d = df_diario[df_diario['ID_ALUNO'].apply(db.limpar_id) == id_limpo].tail(5)
+                        if not hist_d.empty:
+                            for _, r in hist_d.iterrows():
+                                st.write(f"📅 {r['DATA']} - **{r['TAGS']}**: {r['OBSERVACOES']}")
+                        else: st.info("Sem registros recentes.")
+                
+                with t_ev2:
+                    if not df_diagnosticos.empty:
+                        hist_s = df_diagnosticos[df_diagnosticos['ID_ALUNO'].apply(db.limpar_id) == id_limpo].tail(5)
+                        if not hist_s.empty:
+                            st.dataframe(hist_s[['DATA', 'ID_AVALIACAO', 'NOTA_CALCULADA']], use_container_width=True, hide_index=True)
+                        else: st.info("Nenhuma prova escaneada.")
+
+    # --- ABA 3: SIMULADOR DE CONSELHO (IA INTEGRADA) ---
+    with t_conselho:
+        st.subheader("🗣️ Inteligência de Conselho de Classe")
+        st.markdown("A IA analisará o **Planejamento** (o que foi ensinado) vs. **Scanner/Notas** (o que foi aprendido).")
+        
+        if st.button("🚀 Gerar Diagnóstico de Conselho", type="primary", use_container_width=True):
+            with st.spinner("Maestro SOSA realizando cruzamento de dados..."):
+                # Busca os últimos planos para o ano da turma
+                ensinado = df_planos[df_planos['ANO'].str.contains(turma_alvo[0])]['PLANO_TEXTO'].tail(3).to_string()
+                # Resumo de desempenho
+                resumo_turma = df_t[['NOME_ALUNO', 'MEDIA_FINAL', 'ESFORCO', 'NECESSIDADES']].to_string()
+                
+                prompt_cons = (
+                    f"VOCÊ É O COORDENADOR PEDAGÓGICO SOSA.\n"
+                    f"TURMA: {turma_alvo}. TRIMESTRE: {trimestre_ref}.\n"
+                    f"CONTEÚDOS MINISTRADOS: {ensinado}\n"
+                    f"DADOS DE DESEMPENHO: {resumo_turma}\n\n"
+                    f"AÇÃO: Gere uma pauta técnica para o Conselho de Classe.\n"
+                    f"1. Identifique alunos com 'Gap de Aprendizagem' (Alto esforço/vistos, mas nota baixa).\n"
+                    f"2. Identifique alunos com 'Desengajamento' (Baixo esforço/vistos).\n"
+                    f"3. Avalie se o Planejamento PHC atingiu os objetivos baseados nas notas.\n"
+                    f"4. Sugira uma estratégia de Recomposição para o próximo trimestre.\n"
+                    f"REGRAS: Sem markdown, linguagem de elite, foco em PHC."
+                )
+                diagnostico_ia = ai.gerar_ia("PLANE_PEDAGOGICO", prompt_cons)
+                st.markdown(f"<div style='background-color:{cor_card_bg}; padding:20px; border-radius:10px;'>{diagnostico_ia}</div>", unsafe_allow_html=True)
+
+    # --- ABA 4: GESTÃO DE CADASTRO (MANTIDA E REESTILIZADA) ---
+    with t_cadastro:
+        st.subheader("⚙️ Manutenção de Cadastro")
+        c_cad1, c_cad2 = st.columns(2)
+        
+        with c_cad1:
+            with st.expander("➕ Adicionar Novo Aluno"):
+                with st.form("f_novo_gt", clear_on_submit=True):
+                    n_nome = st.text_input("Nome Completo:").upper()
+                    n_nec = st.text_input("Necessidades/CID:", value="NENHUMA").upper()
+                    if st.form_submit_button("💾 Salvar no Banco"):
+                        if n_nome:
+                            n_id = db.gerar_proximo_id(df_alunos)
+                            db.salvar_no_banco("DB_ALUNOS", [n_id, n_nome, turma_alvo, "ATIVO", n_nec, "MANUAL"])
+                            st.success("Aluno cadastrado!"); time.sleep(1); st.rerun()
+        
+        with c_cad2:
+            with st.expander("✏️ Editar Perfil / CID"):
+                aluno_ed = st.selectbox("Selecionar Aluno para Editar:", df_t['NOME_ALUNO'].tolist(), key="ed_gt_sel")
+                dados_ed = df_t[df_t['NOME_ALUNO'] == aluno_ed].iloc[0]
+                nova_nec = st.text_input("Atualizar CID/Necessidade:", value=dados_ed['NECESSIDADES'])
+                if st.button("💾 Atualizar Perfil"):
+                    if db.atualizar_necessidade_aluno(dados_ed['ID'], nova_nec):
+                        st.success("Perfil atualizado!"); time.sleep(1); st.rerun()
 
 # ==============================================================================
 # MÓDULO: BASE DE CONHECIMENTO
