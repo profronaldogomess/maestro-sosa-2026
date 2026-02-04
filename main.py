@@ -777,93 +777,113 @@ if menu == "📅 Planejamento (Ponto ID)":
             else: st.info("Nenhum plano encontrado.")
         else: st.info("📭 Acervo vazio.")
 
-    # --- ABA 3: MATRIZ CURRICULAR ATIVA (V27 - INTELIGENTE) ---
+    # --- ABA 3: MATRIZ CURRICULAR ATIVA (V27.2 - BUSCA ROBUSTA) ---
     with tab_matriz:
         st.subheader("📖 Matriz de Competências e Status de Execução")
         if not df_curriculo.empty:
             ano_c = st.selectbox("Série para Consulta:", [6, 7, 8, 9], key="matriz_ano_v27")
             
-            # 1. Filtrar currículo do ano
+            # 1. Filtrar currículo do ano selecionado
             df_c = df_curriculo[df_curriculo['ANO'] == ano_c].copy()
             
-            # 2. Capturar todos os planos já feitos para este ano (Normalizando para busca)
-            # Nota: df_planos usa "6º", ano_c usa 6.
+            # 2. Capturar planos e normalizar texto para busca
+            # Filtra planos que contenham o número do ano (ex: "6" em "6º")
             planos_feitos = df_planos[df_planos['ANO'].astype(str).str.contains(str(ano_c))]
             texto_todos_planos = " ".join(planos_feitos['PLANO_TEXTO'].astype(str)).upper()
 
-            # 3. Lógica de Verificação de Cobertura
-            def checar_conclusao(conteudo):
+            # 3. Função de Verificação Inteligente (Busca por palavras-chave)
+            def checar_conclusao_robusta(conteudo_db):
                 if not texto_todos_planos: return "⏳ PENDENTE"
-                # Se o conteúdo do banco (em maiúsculo) estiver dentro do blocão de planos
-                if str(conteudo).upper() in texto_todos_planos:
+                
+                conteudo_limpo = str(conteudo_db).upper()
+                # Teste 1: Busca exata (Literal)
+                if conteudo_limpo in texto_todos_planos:
                     return "✅ CONCLUÍDO"
+                
+                # Teste 2: Busca por palavras-chave (Garante que termos técnicos batam)
+                # Removemos palavras curtas (e, de, o, os) e focamos nos termos principais
+                palavras = [p for p in conteudo_limpo.replace(";", "").replace(",", "").split() if len(p) > 3]
+                if not palavras: return "⏳ PENDENTE"
+                
+                # Se pelo menos 2 palavras-chave importantes existirem no plano, consideramos concluído
+                matches = sum(1 for p in palavras if p in texto_todos_planos)
+                if matches >= 2:
+                    return "✅ CONCLUÍDO"
+                
                 return "⏳ PENDENTE"
 
-            df_c['STATUS'] = df_c['CONTEUDO_ESPECIFICO'].apply(checar_conclusao)
+            df_c['STATUS'] = df_c['CONTEUDO_ESPECIFICO'].apply(checar_conclusao_robusta)
 
-            # 4. Exibição com Estilo
+            # 4. Exibição da Tabela
             st.dataframe(
                 df_c[['TRIMESTRE', 'EIXO', 'CONTEUDO_ESPECIFICO', 'STATUS']],
                 use_container_width=True,
                 hide_index=True,
                 column_config={
-                    "STATUS": st.column_config.TextColumn("Status", width="small"),
-                    "CONTEUDO_ESPECIFICO": st.column_config.TextColumn("Conteúdo Programático", width="large")
+                    "STATUS": st.column_config.TextColumn("Situação", width="small"),
+                    "CONTEUDO_ESPECIFICO": st.column_config.TextColumn("Conteúdo do Currículo", width="large")
                 }
             )
         else:
-            st.info("📭 Base de currículo não carregada.")
+            st.info("📭 Base de currículo não localizada.")
 
-    # --- ABA 4: ANALYTICS DE COBERTURA (V27 - VISÃO TRIMESTRAL) ---
+    # --- ABA 4: ANALYTICS DE COBERTURA (V27.2 - KPI TRIMESTRAL) ---
     with tab_auditoria:
         st.subheader("📈 Analytics de Cobertura Curricular")
         if not df_curriculo.empty:
             ano_m = st.selectbox("Analisar Série:", [6, 7, 8, 9], key="auditoria_ano_v27")
             
-            # Processamento de Dados para o Gráfico
+            # Processamento para o Gráfico
             df_m = df_curriculo[df_curriculo['ANO'] == ano_m].copy()
             planos_m = df_planos[df_planos['ANO'].astype(str).str.contains(str(ano_m))]
             texto_m = " ".join(planos_m['PLANO_TEXTO'].astype(str)).upper()
             
-            df_m['CONCLUIDO'] = df_m['CONTEUDO_ESPECIFICO'].apply(lambda x: 1 if str(x).upper() in texto_m else 0)
+            # Aplicando a mesma lógica robusta para o gráfico
+            def concluido_num(x):
+                txt = str(x).upper()
+                if txt in texto_m: return 1
+                palavras = [p for p in txt.replace(";", "").replace(",", "").split() if len(p) > 3]
+                if palavras and sum(1 for p in palavras if p in texto_m) >= 2: return 1
+                return 0
+
+            df_m['CONCLUIDO'] = df_m['CONTEUDO_ESPECIFICO'].apply(concluido_num)
             
-            # Agrupamento por Trimestre para análise detalhada
+            # Agrupamento por Trimestre
             progresso_trim = df_m.groupby('TRIMESTRE')['CONCLUIDO'].agg(['sum', 'count']).reset_index()
             progresso_trim['%'] = (progresso_trim['sum'] / progresso_trim['count'] * 100).round(1)
             
-            # KPIs de Topo
+            # KPIs de Topo (Cartões Modernos)
             c1, c2, c3 = st.columns(3)
             total_geral = (df_m['CONCLUIDO'].sum() / len(df_m) * 100)
-            c1.metric("Cobertura Anual Total", f"{total_geral:.1f}%")
+            c1.metric("Cobertura Anual", f"{total_geral:.1f}%")
             
-            # Busca o progresso do trimestre atual (exemplo: I)
-            prog_i = progresso_trim[progresso_trim['TRIMESTRE'] == 'I']['%'].values[0] if 'I' in progresso_trim['TRIMESTRE'].values else 0
-            c2.metric("Progresso I Trimestre", f"{prog_i}%")
+            # Progresso por Trimestre (I e II)
+            p_i = progresso_trim[progresso_trim['TRIMESTRE'] == 'I']['%'].values[0] if 'I' in progresso_trim['TRIMESTRE'].values else 0
+            c2.metric("Progresso I Trimestre", f"{p_i}%")
             
-            prog_ii = progresso_trim[progresso_trim['TRIMESTRE'] == 'II']['%'].values[0] if 'II' in progresso_trim['TRIMESTRE'].values else 0
-            c3.metric("Progresso II Trimestre", f"{prog_ii}%")
+            p_ii = progresso_trim[progresso_trim['TRIMESTRE'] == 'II']['%'].values[0] if 'II' in progresso_trim['TRIMESTRE'].values else 0
+            c3.metric("Progresso II Trimestre", f"{p_ii}%")
 
-            # Gráfico Moderno
+            # Gráfico de Barras
             fig_cob = px.bar(
                 progresso_trim, 
                 x='TRIMESTRE', 
                 y='%', 
                 text='%',
-                title=f"Evolução da Cobertura Curricular - {ano_m}º Ano",
-                labels={'%': 'Porcentagem Concluída', 'TRIMESTRE': 'Trimestre'},
+                title=f"Evolução da Cobertura - {ano_m}º Ano",
                 color='%',
                 color_continuous_scale='RdYlGn',
                 range_y=[0, 110]
             )
             st.plotly_chart(fig_cob, use_container_width=True)
 
-            # Lista de "O que falta planejar"
+            # Lista de Pendências
             with st.expander("🔍 Ver Conteúdos Pendentes (Próximos Passos)"):
                 pendentes = df_m[df_m['CONCLUIDO'] == 0][['TRIMESTRE', 'EIXO', 'CONTEUDO_ESPECIFICO']]
                 if not pendentes.empty:
                     st.table(pendentes)
                 else:
-                    st.success("🎉 Parabéns! Todo o currículo deste ano foi planejado.")
+                    st.success("🎉 Excelente! Todo o currículo planejado.")
         else:
             st.info("Aguardando dados para gerar analytics.")
 
