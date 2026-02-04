@@ -7,6 +7,8 @@ import requests
 import base64
 from datetime import datetime
 from googleapiclient.discovery import build
+import utils as util  # <--- ADICIONE ESTA LINHA AQUI
+
 
 def conectar():
     try:
@@ -52,6 +54,12 @@ def carregar_tudo():
             
             df.columns = [str(c).strip().upper() for c in df.columns]
             
+            # --- INJEÇÃO DE PRECISÃO DECIMAL SOSA ---
+            # Identifica colunas de notas e aplica a conversão float imediatamente
+            colunas_nota = [c for c in df.columns if "NOTA" in c or "MEDIA" in c or "VALOR" in c or "SOMA" in c]
+            for col in colunas_nota:
+                df[col] = df[col].apply(util.sosa_to_float) # Usa a nova função do utils
+
             if nome == "DB_AULAS_PRONTAS":
                 df = df.dropna(subset=["DATA", "SEMANA_REF"], how="all")
                 if "LINK_DRIVE" not in df.columns: df["LINK_DRIVE"] = ""
