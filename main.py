@@ -114,7 +114,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # --- CARREGAMENTO ---
-wb, (df_alunos, df_curriculo, df_materiais, df_planos, df_aulas, df_notas, df_diario, df_turmas, df_relatorios, df_horarios, df_registro_aulas) = db.carregar_tudo()
+wb, (df_alunos, df_curriculo, df_materiais, df_planos, df_aulas, df_notas, df_diario, df_turmas, df_relatorios, df_horarios, df_registro_aulas, df_diagnosticos) = db.carregar_tudo()
 
 # --- SIDEBAR COM LOGOTIPO ---
 with st.sidebar:
@@ -1983,7 +1983,7 @@ elif menu == "📸 Scanner de Gabaritos":
 
     tab_scan, tab_acervo, tab_dash = st.tabs(["📸 Capturar Gabarito", "📂 Acervo de Evidências", "📊 Dashboard de Perícia"])
 
-    # --- ABA 1: CAPTURAR GABARITO ---
+    # --- ABA 1: CAPTURAR GABARITO (VERSÃO CORRIGIDA V26) ---
     with tab_scan:
         c1, c2 = st.columns([1, 2])
         turma_scan = c1.selectbox("Selecionar Turma:", sorted(df_alunos['TURMA'].unique()), key=f"t_scan_{v}")
@@ -2008,8 +2008,18 @@ elif menu == "📸 Scanner de Gabaritos":
 
             st.info(f"🧠 **SOSA ID:** {qtd_q} questões | Valor Total: {v_prova_base:.1f} pts.")
 
-            ids_corrigidos = df_diagnosticos[df_diagnosticos['ID_AVALIACAO'] == prova_sel]['ID_ALUNO'].astype(str).tolist() if "ID_AVALIACAO" in df_diagnosticos.columns else []
-            alunos_restantes = df_alunos[(df_alunos['TURMA'] == turma_scan) & (~df_alunos['ID'].astype(str).isin(ids_corrigidos))]
+            # --- CORREÇÃO CRÍTICA: FILTRAGEM DE ALUNOS PENDENTES ---
+            if not df_diagnosticos.empty:
+                # Usamos db.limpar_id para garantir que 2601005 seja igual a 2601005.0
+                ids_corrigidos = df_diagnosticos[df_diagnosticos['ID_AVALIACAO'] == prova_sel]['ID_ALUNO'].apply(db.limpar_id).tolist()
+            else:
+                ids_corrigidos = []
+
+            # Filtra alunos que NÃO estão na lista de IDs corrigidos (usando limpeza de ID)
+            alunos_restantes = df_alunos[
+                (df_alunos['TURMA'] == turma_scan) & 
+                (~df_alunos['ID'].apply(db.limpar_id).isin(ids_corrigidos))
+            ]
             
             if not alunos_restantes.empty:
                 aluno_scan = st.selectbox("Aluno (Pendente):", alunos_restantes['NOME_ALUNO'].tolist(), key=f"a_scan_{v}")
@@ -2051,27 +2061,31 @@ elif menu == "📸 Scanner de Gabaritos":
                                 link_limpo = link_foto.replace("ERRO_NO_UPLOAD: ", "") if "https" in link_foto else link_foto
                                 aluno_info = df_alunos[df_alunos['NOME_ALUNO'] == aluno_scan].iloc[0]
                                 
-                                # SALVAMENTO COM VÍRGULA PARA A PLANILHA
+                                # SALVAMENTO
                                 nota_str = f"{nota_calc:.2f}".replace('.', ',')
                                 db.salvar_no_banco("DB_GABARITOS_ALUNOS", [
                                     datetime.now().strftime("%d/%m/%Y"), aluno_info['ID'], aluno_scan, turma_scan, prova_sel,
                                     ";".join(df_final['Marcação do Aluno'].tolist()), nota_str, link_limpo
                                 ])
+                                # Limpa o cache para que as outras abas vejam o dado novo
+                                st.cache_data.clear() 
                                 status.update(label="✅ Salvo com Sucesso!", state="complete")
-                                st.balloons(); reset_scanner()
+                                st.balloons()
+                                time.sleep(1)
+                                reset_scanner()
             else: st.success("✅ Turma concluída!")
         else: st.warning("⚠️ Nenhuma avaliação encontrada.")
 
-    # --- ABA 2: ACERVO DE EVIDÊNCIAS ---
+    # --- ABA 2: ACERVO DE EVIDÊNCIAS (CORRIGIDA) ---
     with tab_acervo:
         st.subheader("📂 Histórico de Correções")
         if not df_diagnosticos.empty:
+            # Filtramos para mostrar apenas o que foi salvo
             df_view = df_diagnosticos.copy()
-            # Garante que a nota seja exibida corretamente na tabela
+            # Normaliza a exibição da nota
             df_view['NOTA_CALCULADA'] = df_view['NOTA_CALCULADA'].apply(lambda x: f"{converter_nota_para_float(x):.2f}")
             st.dataframe(df_view, column_config={"LINK_FOTO_DRIVE": st.column_config.LinkColumn("📸 Ver Gabarito")}, use_container_width=True, hide_index=True)
         else: st.info("📭 Nenhum gabarito escaneado.")
-
     # --- ABA 3: DASHBOARD DE PERÍCIA (RESTAURADO E CORRIGIDO) ---
     with tab_dash:
         st.subheader("📊 Raio-X de Desempenho e Prognóstico")
