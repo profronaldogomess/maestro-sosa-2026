@@ -961,8 +961,7 @@ elif menu == "📊 Painel de Notas & Vistos":
             av_teste_id = c_s1.selectbox("Vincular Teste:", ["Nenhum"] + provas_escaneadas)
             av_prova_id = c_s2.selectbox("Vincular Prova:", ["Nenhum"] + provas_escaneadas)
 
-        # --- 3. CÁLCULO AUTOMÁTICO DE VISTOS (DIÁRIO PONTO ID) ---
-        # Lógica: (Vistos / Aulas Dadas) * Peso, ignorando faltas justificadas
+        # --- 3. CÁLCULO AUTOMÁTICO DE VISTOS (DIÁRIO PONTO ID) - VERSÃO BLINDADA ---
         vistos_calculados = {}
         if not df_diario.empty:
             df_d_t = df_diario[df_diario['TURMA'] == turma_sel]
@@ -970,14 +969,21 @@ elif menu == "📊 Painel de Notas & Vistos":
                 id_limpo = db.limpar_id(id_aluno)
                 d_aluno = df_d_t[df_d_t['ID_ALUNO'].apply(db.limpar_id) == id_limpo]
                 
-                # Aulas que o aluno estava presente ou não teve falta justificada
-                aulas_validas = d_aluno[~d_aluno['TAGS'].str.contains("AUSÊNCIA JUSTIFICADA", na=False)]
-                total_aulas = len(aulas_validas)
-                
-                vistos_recebidos = len(aulas_validas[aulas_validas['VISTO_ATIVIDADE'].astype(str).upper() == "TRUE"])
-                
-                nota_visto = (vistos_recebidos / total_aulas * p_visto) if total_aulas > 0 else p_visto
-                vistos_calculados[id_limpo] = round(nota_visto, 2)
+                # Verificação de segurança: a coluna existe e há dados?
+                if not d_aluno.empty and 'VISTO_ATIVIDADE' in d_aluno.columns:
+                    # Filtra aulas válidas (ignorando ausências justificadas)
+                    # Correção: Adicionado .str antes do .upper() e .contains
+                    aulas_validas = d_aluno[~d_aluno['TAGS'].astype(str).str.upper().str.contains("AUSÊNCIA JUSTIFICADA", na=False)]
+                    total_aulas = len(aulas_validas)
+                    
+                    # CORREÇÃO CRÍTICA: Adicionado .str antes do .upper() para validar o Visto
+                    vistos_recebidos = len(aulas_validas[aulas_validas['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"])
+                    
+                    nota_visto = (vistos_recebidos / total_aulas * p_visto) if total_aulas > 0 else p_visto
+                    vistos_calculados[id_limpo] = round(nota_visto, 2)
+                else:
+                    # Se não houver registros no diário para o aluno, assume o peso cheio (ou 0, conforme sua preferência)
+                    vistos_calculados[id_limpo] = p_visto
 
         # --- 4. MONTAGEM DA GRADE INTEGRADA ---
         alunos_turma = df_alunos[df_alunos['TURMA'] == turma_sel].sort_values(by="NOME_ALUNO")
