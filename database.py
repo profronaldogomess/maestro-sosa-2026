@@ -41,12 +41,15 @@ def limpar_id(valor):
 
 @st.cache_data(ttl=300)
 def carregar_tudo():
-    wb = conectar()
-    if not wb: return None, [pd.DataFrame()]*12 # Agora são 12!
-    
-    def safe_get(nome, colunas_padrao=[]):
+    # 1. Conecta ao Workbook (wb)
+    wb_internal = conectar()
+    if not wb_internal: 
+        return None, [pd.DataFrame()] * 12
+
+    # 2. Função interna com o wb passado explicitamente para evitar erro de escopo
+    def safe_get(conn, nome, colunas_padrao=[]):
         try:
-            ws = wb.worksheet(nome)
+            ws = conn.worksheet(nome) # Agora usa 'conn' que foi passado
             dados = ws.get_all_values() 
             if not dados or len(dados) < 1:
                 return pd.DataFrame(columns=colunas_padrao)
@@ -59,18 +62,26 @@ def carregar_tudo():
                 if any(x in col for x in ["NOTA", "MEDIA", "VALOR", "SOMA"]):
                     df[col] = df[col].apply(util.sosa_to_float)
 
+            # --- LÓGICA ESPECÍFICA POR TABELA (PRESERVADA) ---
             if nome == "DB_AULAS_PRONTAS":
                 if "LINK_DRIVE" not in df.columns: df["LINK_DRIVE"] = ""
+            
             elif nome == "DB_PLANOS":
                 if "ANO" in df.columns:
                     df['ANO'] = df['ANO'].astype(str).apply(lambda x: f"{x}º" if x.isdigit() and "º" not in x else x)
                 if "LINK_DRIVE" not in df.columns: df["LINK_DRIVE"] = ""
 
+            elif nome == "DB_CURRICULO":
+                # VACINA SOSA: Garante que o ANO do currículo seja numérico para os filtros
+                if "ANO" in df.columns:
+                    df['ANO'] = pd.to_numeric(df['ANO'], errors='coerce')
+
             return df
-        except: 
+        except Exception as e: 
+            print(f"Erro ao carregar {nome}: {e}")
             return pd.DataFrame(columns=colunas_padrao)
 
-    # Definição das colunas
+    # Definição das colunas para as tabelas
     cols_planos = ["DATA", "SEMANA", "ANO", "TRIMESTRE", "TURMA", "PLANO_TEXTO", "LINK_DRIVE"]
     cols_aulas = ["DATA", "SEMANA_REF", "TIPO_MATERIAL", "CONTEUDO", "ANO", "LINK_DRIVE"]
     cols_alunos = ["ID", "NOME_ALUNO", "TURMA", "STATUS", "NECESSIDADES", "ORIGEM"]
@@ -78,22 +89,22 @@ def carregar_tudo():
     cols_diario = ["DATA", "ID_ALUNO", "NOME_ALUNO", "TURMA", "VISTO_ATIVIDADE", "TAGS", "OBSERVACOES"]
     cols_registro = ["DATA", "SEMANA", "TURMA", "CONTEUDO_MINISTRADO", "ADAPTACAO_PEI", "STATUS_CURRICULO"]
     cols_notas = ["ID_ALUNO", "NOME_ALUNO", "TURMA", "TRIMESTRE", "NOTA_VISTOS", "NOTA_TESTE", "NOTA_PROVA", "NOTA_REC", "MEDIA_FINAL"]
-    # Nova definição para o Scanner
     cols_diagnosticos = ["DATA", "ID_ALUNO", "NOME_ALUNO", "TURMA", "ID_AVALIACAO", "RESPOSTAS_ALUNO", "NOTA_CALCULADA", "LINK_FOTO_DRIVE"]
 
-    return wb, (
-        safe_get("DB_ALUNOS", cols_alunos), 
-        safe_get("DB_CURRICULO"), 
-        safe_get("DB_MATERIAIS"),
-        safe_get("DB_PLANOS", cols_planos), 
-        safe_get("DB_AULAS_PRONTAS", cols_aulas), 
-        safe_get("DB_NOTAS", cols_notas), 
-        safe_get("DB_DIARIO_BORDO", cols_diario), 
-        safe_get("DB_TURMAS"), 
-        safe_get("DB_RELATORIOS", cols_relatorios), 
-        safe_get("DB_HORARIOS"), 
-        safe_get("DB_REGISTRO_AULAS", cols_registro),
-        safe_get("DB_GABARITOS_ALUNOS", cols_diagnosticos) # A 12ª TABELA AQUI!
+    # 3. Retorno com a chamada passando o wb_internal
+    return wb_internal, (
+        safe_get(wb_internal, "DB_ALUNOS", cols_alunos), 
+        safe_get(wb_internal, "DB_CURRICULO"), 
+        safe_get(wb_internal, "DB_MATERIAIS"),
+        safe_get(wb_internal, "DB_PLANOS", cols_planos), 
+        safe_get(wb_internal, "DB_AULAS_PRONTAS", cols_aulas), 
+        safe_get(wb_internal, "DB_NOTAS", cols_notas), 
+        safe_get(wb_internal, "DB_DIARIO_BORDO", cols_diario), 
+        safe_get(wb_internal, "DB_TURMAS"), 
+        safe_get(wb_internal, "DB_RELATORIOS", cols_relatorios), 
+        safe_get(wb_internal, "DB_HORARIOS"), 
+        safe_get(wb_internal, "DB_REGISTRO_AULAS", cols_registro),
+        safe_get(wb_internal, "DB_GABARITOS_ALUNOS", cols_diagnosticos)
     )
 
 def salvar_no_banco(aba_nome, linha):
