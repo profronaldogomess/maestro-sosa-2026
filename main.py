@@ -2038,28 +2038,61 @@ elif menu == "📸 Scanner de Gabaritos":
                     with col_img: st.image(st.session_state.scan_img)
                     
                     with col_edit:
+                        # 1. MONTAGEM DOS DADOS COM STATUS
                         dados_conf = []
                         for i in range(1, qtd_questoes + 1):
                             q_key = f"{i:02d}"
-                            # Aceita chaves "01" ou "1" vindas da IA
                             resp_aluno = st.session_state.scan_res.get(q_key) or st.session_state.scan_res.get(str(i)) or "?"
                             resp_certa = gab_oficial[i-1] if i <= len(gab_oficial) else "?"
-                            dados_conf.append({"Q": q_key, "Marcação do Aluno": resp_aluno, "Gabarito": resp_certa})
+                            
+                            # Lógica de Status para a Tabela
+                            if resp_aluno == "X": status_txt = "🚫 ANULADA"
+                            elif resp_aluno == "?": status_txt = "⚪ VAZIA"
+                            elif resp_aluno == resp_certa: status_txt = "✅ CORRETA"
+                            else: status_txt = "❌ ERRADA"
+                            
+                            dados_conf.append({
+                                "Q": q_key, 
+                                "Marcação do Aluno": resp_aluno, 
+                                "Gabarito": resp_certa,
+                                "Status": status_txt
+                            })
                         
+                        # 2. EDITOR COM MENU DE SELEÇÃO E COLUNA DE STATUS
+                        df_editor = pd.DataFrame(dados_conf)
                         df_final = st.data_editor(
-                            pd.DataFrame(dados_conf),
+                            df_editor,
                             column_config={
-                                "Q": st.column_config.TextColumn("Q", disabled=True),
-                                "Marcação do Aluno": st.column_config.SelectboxColumn("Marcação do Aluno", options=["A", "B", "C", "D", "E", "X", "?"], width="medium"),
-                                "Gabarito": st.column_config.TextColumn("Gabarito", disabled=True)
+                                "Q": st.column_config.TextColumn("Q", disabled=True, width="small"),
+                                "Marcação do Aluno": st.column_config.SelectboxColumn(
+                                    "Marcação do Aluno",
+                                    options=["A", "B", "C", "D", "E", "X", "?"],
+                                    width="medium"
+                                ),
+                                "Gabarito": st.column_config.TextColumn("Gabarito", disabled=True, width="small"),
+                                "Status": st.column_config.TextColumn("Status", disabled=True, width="medium")
                             },
-                            use_container_width=True, hide_index=True, key=f"ed_scan_{v}"
+                            use_container_width=True,
+                            hide_index=True,
+                            key=f"ed_scan_final_{v}"
                         )
                         
+                        # 3. CÁLCULO DE NOTA PROPORCIONAL REAL
+                        # Recalcula com base no que está no editor (caso o professor mude algo)
                         acertos = len(df_final[df_final['Marcação do Aluno'] == df_final['Gabarito']])
                         nota_calculada = (acertos / qtd_questoes) * valor_detectado
-                        st.metric("Nota Proporcional", f"{nota_calculada:.2f}", delta=f"{acertos}/{qtd_questoes} acertos")
                         
+                        # Exibição da Nota com Design de Elite
+                        st.markdown(f"""
+                            <div style="background-color: rgba(41, 98, 255, 0.1); padding: 20px; border-radius: 10px; border-left: 5px solid #2962FF;">
+                                <p style="margin: 0; font-size: 14px; color: #A0AEC0;">Nota Proporcional Final</p>
+                                <h2 style="margin: 0; color: #2962FF;">{nota_calculada:.2f}</h2>
+                                <p style="margin: 0; font-size: 12px; color: #28a745;">↑ {acertos}/{qtd_questoes} acertos detectados</p>
+                            </div>
+                        """, unsafe_allow_html=True)
+                        
+                        st.write("") # Espaçador
+
                         if st.button("💾 Confirmar e Salvar Diagnóstico", type="primary", use_container_width=True):
                             with st.status("Sincronizando...", expanded=True) as status:
                                 import io
@@ -2072,7 +2105,7 @@ elif menu == "📸 Scanner de Gabaritos":
                                     datetime.now().strftime("%d/%m/%Y"), aluno_info['ID'], aluno_scan, turma_scan, prova_sel,
                                     ";".join(df_final['Marcação do Aluno'].tolist()), f"{nota_calculada:.2f}".replace('.', ','), link_limpo
                                 ])
-                                status.update(label="✅ Salvo com Sucesso!", state="complete")
+                                status.update(label="✅ Diagnóstico Salvo!", state="complete")
                                 st.balloons(); reset_scanner()
             else: st.success("✅ Todos os alunos desta turma foram corrigidos!")
         else: st.warning("⚠️ Nenhuma avaliação encontrada.")
