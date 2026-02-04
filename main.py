@@ -810,142 +810,106 @@ if menu == "📅 Planejamento (Ponto ID)":
                 st.info("📭 Nenhum conteúdo encontrado na matriz para este ano.")
 
 # ==============================================================================
-# MÓDULO: DIÁRIO DE BORDO RÁPIDO V26 - INTEGRAÇÃO PONTO ID & PEI
+# MÓDULO: DIÁRIO DE BORDO RÁPIDO V26.6 - COM REGISTRO DE BÔNUS ⭐
 # ==============================================================================
-if menu == "📝 Diário de Bordo Rápido":
-    st.title("📝 Diário de Bordo: Engajamento e Ponto ID")
+elif menu == "📝 Diário de Bordo Rápido":
+    st.title("📝 Diário de Bordo: Engajamento e Bônus")
     st.markdown("---")
 
     if "v_diario" not in st.session_state: st.session_state.v_diario = 1
     v = st.session_state.v_diario
-    # ---------------------------------------------------------
 
     if df_alunos.empty:
         st.warning("⚠️ Cadastre alunos primeiro.")
     else:
-        # --- 1. CONTEXTO DE EXECUÇÃO (MOBILE-FIRST) ---
         with st.container(border=True):
             c1, c2 = st.columns([1, 1])
             turma_sel = c1.selectbox("👥 Turma:", sorted(df_alunos['TURMA'].unique()), key="db_turma")
             data_sel = c2.date_input("📅 Data:", date.today(), key="db_data")
             data_str = data_sel.strftime("%d/%m/%Y")
 
-            # Integração Ponto ID (Busca o Planejamento)
-            planos_turma = df_planos[df_planos['ANO'] == f"{turma_sel[0]}º"] # Pega o ano pela sigla da turma
+            planos_turma = df_planos[df_planos['ANO'] == f"{turma_sel[0]}º"]
             
             if not planos_turma.empty:
                 c3, c4 = st.columns([2, 1])
                 semana_sel = c3.selectbox("🔗 Vincular à Semana:", planos_turma['SEMANA'].tolist(), key="db_sem")
                 aula_alvo = c4.radio("🎯 Aula:", ["Aula 1", "Aula 2"], horizontal=True)
-                
-                # Recupera o conteúdo planejado para exibir como lembrete
                 plano_ref = planos_turma[planos_turma['SEMANA'] == semana_sel].iloc[0]['PLANO_TEXTO']
-                conteudo_previsto = ai.extrair_tag(plano_ref, "CONTEUDOS_ESPECIFICOS")
-                st.caption(f"📖 **Conteúdo Previsto:** {conteudo_previsto}")
+                st.caption(f"📖 **Conteúdo Previsto:** {ai.extrair_tag(plano_ref, 'CONTEUDOS_ESPECIFICOS')}")
             else:
-                st.error("❌ Nenhum planejamento encontrado para este ano. Vincule no Ponto ID primeiro.")
+                st.error("❌ Planejamento não encontrado.")
                 semana_sel, aula_alvo = "N/A", "N/A"
 
-        # --- 2. PREPARAÇÃO DA GRADE DE ENGAJAMENTO ---
         alunos_turma = df_alunos[df_alunos['TURMA'] == turma_sel].sort_values(by="NOME_ALUNO")
         
-        # Busca registros existentes para evitar duplicidade (UPSERT)
         df_existente = pd.DataFrame()
         if not df_diario.empty:
-            # Filtramos por data, turma e agora também pela aula (1 ou 2) para permitir dois registros no mesmo dia se necessário
             df_existente = df_diario[
                 (df_diario['DATA'] == data_str) & 
                 (df_diario['TURMA'] == turma_sel) &
-                (df_diario['OBSERVACOES'].str.contains(aula_alvo))
+                (df_diario['OBSERVACOES'].str.contains(aula_alvo, na=False))
             ]
 
         dados_editor = []
         for _, aluno in alunos_turma.iterrows():
             id_a = db.limpar_id(aluno['ID'])
             is_pei = str(aluno['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", ""]
-            nome_display = f"♿ {aluno['NOME_ALUNO']}" if is_pei else aluno['NOME_ALUNO']
             
-            # Valores padrão
-            visto_val = True
-            faltou_val = False
-            tag_val = ""
-            obs_val = ""
+            visto_val, faltou_val, tag_val, obs_val, bonus_val = True, False, "", "", 0.0
 
-            # Se já existir registro, carrega os dados
             if not df_existente.empty:
                 reg = df_existente[df_existente['ID_ALUNO'].apply(db.limpar_id) == id_a]
                 if not reg.empty:
                     visto_val = str(reg.iloc[0]['VISTO_ATIVIDADE']).upper() == "TRUE"
                     tag_val = str(reg.iloc[0]['TAGS'])
                     obs_val = str(reg.iloc[0]['OBSERVACOES']).replace(f"[{aula_alvo}]", "").strip()
+                    # Puxa o bônus se a coluna existir no dataframe
+                    if 'BONUS' in reg.columns: bonus_val = util.sosa_to_float(reg.iloc[0]['BONUS'])
                     if "AUSÊNCIA" in tag_val: faltou_val = True
 
             dados_editor.append({
                 "ID": id_a,
-                "ALUNO": nome_display,
+                "ALUNO": f"♿ {aluno['NOME_ALUNO']}" if is_pei else aluno['NOME_ALUNO'],
                 "FALTOU": faltou_val,
                 "VISTO": visto_val,
-                "PEI": "✅" if is_pei else "---",
+                "⭐ BÔNUS": bonus_val, # NOVA COLUNA
                 "OCORRÊNCIA": tag_val if tag_val != "nan" else "",
                 "OBS": obs_val if obs_val != "nan" else ""
             })
 
-        # --- 3. GRADE INTERATIVA (OTIMIZADA PARA CELULAR) ---
         st.markdown(f"### 📝 Registro de Engajamento: {aula_alvo}")
-        
         df_editado = st.data_editor(
             pd.DataFrame(dados_editor),
             column_config={
-                "ID": None, # Esconde o ID para ganhar espaço no celular
+                "ID": None,
                 "ALUNO": st.column_config.TextColumn("Estudante", width="medium", disabled=True),
-                "FALTOU": st.column_config.CheckboxColumn("Faltou?", help="Marca ausência justificada"),
-                "VISTO": st.column_config.CheckboxColumn("Visto", help="Atividade concluída"),
-                "PEI": st.column_config.TextColumn("PEI", width="small", disabled=True),
-                "OCORRÊNCIA": st.column_config.SelectboxColumn(
-                    "Tags", 
-                    options=["", "Dormiu", "Conversa", "Se destacou", "Sem material", "Vetor Disciplinar", "PEI Concluído", "PEI Incompleto"],
-                    width="small"
-                ),
+                "FALTOU": st.column_config.CheckboxColumn("Faltou?", width="small"),
+                "VISTO": st.column_config.CheckboxColumn("Visto", width="small"),
+                "⭐ BÔNUS": st.column_config.NumberColumn("Bônus", min_value=0.0, max_value=2.0, step=0.1, format="%.1f"),
+                "OCORRÊNCIA": st.column_config.SelectboxColumn("Tags", options=["", "Dormiu", "Conversa", "Se destacou", "Sem material", "Vetor Disciplinar", "PEI Concluído"]),
                 "OBS": st.column_config.TextColumn("Obs", width="medium")
             },
-            hide_index=True,
-            use_container_width=True,
-            key=f"editor_diario_{v}"
+            hide_index=True, use_container_width=True, key=f"editor_diario_{v}"
         )
 
-        # --- 4. LÓGICA DE SALVAMENTO INTELIGENTE ---
-        if st.button("💾 SALVAR DIÁRIO DE ENGAJAMENTO", type="primary", use_container_width=True):
-            with st.status("Sincronizando registros...", expanded=True) as status:
-                # Limpeza de duplicatas para a mesma aula/dia/turma
-                db.limpar_diario_data_turma(data_str, turma_sel) # Nota: Ajustar db.py para considerar aula_alvo se desejar rigor total
-                
-                linhas_para_salvar = []
+        if st.button("💾 SALVAR DIÁRIO E BÔNUS", type="primary", use_container_width=True):
+            with st.status("Sincronizando...", expanded=False) as status:
+                db.limpar_diario_data_turma(data_str, turma_sel)
+                linhas = []
                 for _, row in df_editado.iterrows():
-                    # Lógica de Ausência: Se faltou, o visto é anulado e a tag é forçada
-                    tag_final = row['OCORRÊNCIA']
-                    visto_final = row['VISTO']
+                    tag_f, visto_f = row['OCORRÊNCIA'], row['VISTO']
                     if row['FALTOU']:
-                        tag_final = "AUSÊNCIA JUSTIFICADA"
-                        visto_final = False
+                        tag_f, visto_f = "AUSÊNCIA JUSTIFICADA", False
                     
-                    # Adiciona o marcador de Aula no início da observação para o Ponto ID
-                    obs_final = f"[{aula_alvo}] {row['OBS']}".strip()
-                    
-                    linhas_para_salvar.append([
-                        data_str,
-                        row['ID'],
-                        row['ALUNO'].replace("♿ ", ""),
-                        turma_sel,
-                        str(visto_final),
-                        tag_final,
-                        obs_final
+                    linhas.append([
+                        data_str, row['ID'], row['ALUNO'].replace("♿ ", ""), turma_sel,
+                        str(visto_f), tag_f, f"[{aula_alvo}] {row['OBS']}".strip(),
+                        util.sosa_to_str(row['⭐ BÔNUS']) # SALVA O BÔNUS NA COLUNA H
                     ])
                 
-                if db.salvar_lote("DB_DIARIO_BORDO", linhas_para_salvar):
-                    status.update(label="✅ Diário Sincronizado com Sucesso!", state="complete")
-                    st.balloons()
-                    time.sleep(1)
-                    st.rerun()
+                if db.salvar_lote("DB_DIARIO_BORDO", linhas):
+                    status.update(label="✅ Salvo com Sucesso!", state="complete")
+                    st.balloons(); time.sleep(1); st.rerun()
 
 # ==============================================================================
 # MÓDULO: PAINEL DE NOTAS & VISTOS V26.5 - INTEGRAÇÃO PREFEITURA (BÔNUS)
@@ -1006,7 +970,7 @@ elif menu == "📊 Painel de Notas & Vistos":
                     vistos_calculados[id_limpo] = round(nota_visto, 2)
                 else: vistos_calculados[id_limpo] = 0.0
 
-        # --- 4. EDITOR DE CONSOLIDAÇÃO (DADOS BRUTOS) ---
+# --- 4. EDITOR DE CONSOLIDAÇÃO (DADOS BRUTOS) ---
         st.subheader("📝 1. Consolidação de Dados (Professor)")
         alunos_turma = df_alunos[df_alunos['TURMA'] == turma_sel].sort_values(by="NOME_ALUNO")
         notas_no_banco = df_notas[(df_notas['TURMA'] == turma_sel) & (df_notas['TRIMESTRE'] == trimestre_sel)]
@@ -1016,19 +980,37 @@ elif menu == "📊 Painel de Notas & Vistos":
             id_a = db.limpar_id(aluno['ID'])
             reg_banco = notas_no_banco[notas_no_banco['ID_ALUNO'].apply(db.limpar_id) == id_a]
             
+            # 1. Notas Base
             n_visto_base = util.sosa_to_float(reg_banco.iloc[0].get('NOTA_VISTOS', 0)) if not reg_banco.empty else vistos_calculados.get(id_a, 0.0)
             n_teste_base = util.sosa_to_float(reg_banco.iloc[0].get('NOTA_TESTE', 0)) if not reg_banco.empty else 0.0
             n_prova_base = util.sosa_to_float(reg_banco.iloc[0].get('NOTA_PROVA', 0)) if not reg_banco.empty else 0.0
-            n_bonus_base = util.sosa_to_float(reg_banco.iloc[0].get('NOTA_REC', 0)) if not reg_banco.empty else 0.0
+            
+            # 2. LÓGICA DE SOMA DE BÔNUS DO DIÁRIO (Sincronizado com o Passo 3)
+            bonus_acumulado = 0.0
+            if not df_diario.empty and 'df_d_trim' in locals(): # Verifica se o filtro do trimestre existe
+                d_aluno_trim = df_d_trim[df_d_trim['ID_ALUNO'].apply(db.limpar_id) == id_a]
+                if 'BONUS' in d_aluno_trim.columns:
+                    bonus_acumulado = d_aluno_trim['BONUS'].apply(util.sosa_to_float).sum()
 
+            # 3. Sincronia com Scanner (Sobreposição)
             if av_teste_id != "Nenhum":
                 reg_s = df_diagnosticos[(df_diagnosticos['ID_ALUNO'].apply(db.limpar_id) == id_a) & (df_diagnosticos['ID_AVALIACAO'] == av_teste_id)]
                 if not reg_s.empty: n_teste_base = util.sosa_to_float(reg_s.iloc[0]['NOTA_CALCULADA'])
+            
             if av_prova_id != "Nenhum":
                 reg_p = df_diagnosticos[(df_diagnosticos['ID_ALUNO'].apply(db.limpar_id) == id_a) & (df_diagnosticos['ID_AVALIACAO'] == av_prova_id)]
                 if not reg_p.empty: n_prova_base = util.sosa_to_float(reg_p.iloc[0]['NOTA_CALCULADA'])
 
-            dados_grade.append({"ID": id_a, "NOME": aluno['NOME_ALUNO'], "VISTOS": n_visto_base, "TESTE": n_teste_base, "PROVA": n_prova_base, "BÔNUS": n_bonus_base, "REC_PARALELA": 0.0})
+            # 4. Montagem da Linha (CORRIGIDO: n_bonus_final)
+            dados_grade.append({
+                "ID": id_a, 
+                "NOME": aluno['NOME_ALUNO'], 
+                "VISTOS": n_visto_base, 
+                "TESTE": n_teste_base, 
+                "PROVA": n_prova_base, 
+                "BÔNUS": bonus_acumulado, # <--- Variável correta aqui
+                "REC_PARALELA": 0.0
+            })
 
         df_edit = st.data_editor(pd.DataFrame(dados_grade), hide_index=True, use_container_width=True, key=f"ed_notas_v26_{v}")
 
