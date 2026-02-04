@@ -64,7 +64,6 @@ def carregar_tudo():
             return df
         except: return pd.DataFrame(columns=colunas_padrao)
 
-    cols_gabaritos = ["DATA", "ID_ALUNO", "NOME_ALUNO", "TURMA", "ID_AVALIACAO", "RESPOSTAS_ALUNO", "NOTA_CALCULADA", "LINK_FOTO_DRIVE"]
     cols_planos = ["DATA", "SEMANA", "ANO", "TRIMESTRE", "TURMA", "PLANO_TEXTO", "LINK_DRIVE"]
     cols_aulas = ["DATA", "SEMANA_REF", "TIPO_MATERIAL", "CONTEUDO", "ANO", "LINK_DRIVE"]
     cols_alunos = ["ID", "NOME_ALUNO", "TURMA", "STATUS", "NECESSIDADES", "ORIGEM"]
@@ -78,8 +77,7 @@ def carregar_tudo():
         safe_get("DB_PLANOS", cols_planos), safe_get("DB_AULAS_PRONTAS", cols_aulas), 
         safe_get("DB_NOTAS", cols_notas), safe_get("DB_DIARIO_BORDO", cols_diario), 
         safe_get("DB_TURMAS"), safe_get("DB_RELATORIOS", cols_relatorios), 
-        safe_get("DB_HORARIOS"), safe_get("DB_REGISTRO_AULAS", cols_registro),
-        safe_get("DB_GABARITOS_ALUNOS", cols_gabaritos) # 12º BANCO INTEGRADO
+        safe_get("DB_HORARIOS"), safe_get("DB_REGISTRO_AULAS", cols_registro)
     )
 
 def salvar_no_banco(aba_nome, linha):
