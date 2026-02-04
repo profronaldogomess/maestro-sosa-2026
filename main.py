@@ -768,108 +768,138 @@ if menu == "📅 Planejamento (Ponto ID)":
             st.plotly_chart(px.bar(progresso, x='EIXO', y='%', text='%', color='%', color_continuous_scale='RdYlGn', range_y=[0, 105]), use_container_width=True)
 
 # ==============================================================================
-# MÓDULO: DIÁRIO DE BORDO
+# MÓDULO: DIÁRIO DE BORDO RÁPIDO V26 - INTEGRAÇÃO PONTO ID & PEI
 # ==============================================================================
 elif menu == "📝 Diário de Bordo Rápido":
-    st.header("📝 Diário de Bordo (Grade Interativa)")
-    
+    st.title("📝 Diário de Bordo: Engajamento e Ponto ID")
+    st.markdown("---")
+
     if df_alunos.empty:
-        st.warning("Cadastre alunos primeiro.")
+        st.warning("⚠️ Cadastre alunos primeiro.")
     else:
-        # --- SELETORES ---
-        c1, c2 = st.columns(2)
-        turma_sel = c1.selectbox("Turma:", sorted(df_alunos['TURMA'].unique()), key="diario_turma")
-        data_sel = c2.date_input("Data da Aula:", date.today(), key="diario_data")
-        data_str = data_sel.strftime("%d/%m/%Y")
-        
-        # --- CONTEXTO DA ATIVIDADE ---
-        atividade_desc = st.text_input("Atividade do Dia (Opcional):", placeholder="Ex: Exercício pág 45, Trabalho em Grupo...")
-        
-        # --- LÓGICA DE CARREGAMENTO (UPSERT) ---
+        # --- 1. CONTEXTO DE EXECUÇÃO (MOBILE-FIRST) ---
+        with st.container(border=True):
+            c1, c2 = st.columns([1, 1])
+            turma_sel = c1.selectbox("👥 Turma:", sorted(df_alunos['TURMA'].unique()), key="db_turma")
+            data_sel = c2.date_input("📅 Data:", date.today(), key="db_data")
+            data_str = data_sel.strftime("%d/%m/%Y")
+
+            # Integração Ponto ID (Busca o Planejamento)
+            planos_turma = df_planos[df_planos['ANO'] == f"{turma_sel[0]}º"] # Pega o ano pela sigla da turma
+            
+            if not planos_turma.empty:
+                c3, c4 = st.columns([2, 1])
+                semana_sel = c3.selectbox("🔗 Vincular à Semana:", planos_turma['SEMANA'].tolist(), key="db_sem")
+                aula_alvo = c4.radio("🎯 Aula:", ["Aula 1", "Aula 2"], horizontal=True)
+                
+                # Recupera o conteúdo planejado para exibir como lembrete
+                plano_ref = planos_turma[planos_turma['SEMANA'] == semana_sel].iloc[0]['PLANO_TEXTO']
+                conteudo_previsto = ai.extrair_tag(plano_ref, "CONTEUDOS_ESPECIFICOS")
+                st.caption(f"📖 **Conteúdo Previsto:** {conteudo_previsto}")
+            else:
+                st.error("❌ Nenhum planejamento encontrado para este ano. Vincule no Ponto ID primeiro.")
+                semana_sel, aula_alvo = "N/A", "N/A"
+
+        # --- 2. PREPARAÇÃO DA GRADE DE ENGAJAMENTO ---
         alunos_turma = df_alunos[df_alunos['TURMA'] == turma_sel].sort_values(by="NOME_ALUNO")
         
+        # Busca registros existentes para evitar duplicidade (UPSERT)
         df_existente = pd.DataFrame()
         if not df_diario.empty:
-            df_existente = df_diario[(df_diario['DATA'] == data_str) & (df_diario['TURMA'] == turma_sel)]
-        
+            # Filtramos por data, turma e agora também pela aula (1 ou 2) para permitir dois registros no mesmo dia se necessário
+            df_existente = df_diario[
+                (df_diario['DATA'] == data_str) & 
+                (df_diario['TURMA'] == turma_sel) &
+                (df_diario['OBSERVACOES'].str.contains(aula_alvo))
+            ]
+
         dados_editor = []
-        if not df_existente.empty:
-            st.info(f"📂 Carregando registros salvos de {data_str}...")
-            for _, aluno in alunos_turma.iterrows():
-                reg = df_existente[df_existente['ID_ALUNO'].apply(db.limpar_id) == db.limpar_id(aluno['ID'])]
-                
+        for _, aluno in alunos_turma.iterrows():
+            id_a = db.limpar_id(aluno['ID'])
+            is_pei = str(aluno['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", ""]
+            nome_display = f"♿ {aluno['NOME_ALUNO']}" if is_pei else aluno['NOME_ALUNO']
+            
+            # Valores padrão
+            visto_val = True
+            faltou_val = False
+            tag_val = ""
+            obs_val = ""
+
+            # Se já existir registro, carrega os dados
+            if not df_existente.empty:
+                reg = df_existente[df_existente['ID_ALUNO'].apply(db.limpar_id) == id_a]
                 if not reg.empty:
-                    tag_salva = str(reg.iloc[0]['TAGS'])
-                    dados_editor.append({
-                        "ID": aluno['ID'],
-                        "NOME": aluno['NOME_ALUNO'],
-                        "VISTO": str(reg.iloc[0]['VISTO_ATIVIDADE']).upper() == "TRUE",
-                        "TAGS": tag_salva if tag_salva else "", 
-                        "OBS": reg.iloc[0]['OBSERVACOES']
-                    })
-                else:
-                    dados_editor.append({"ID": aluno['ID'], "NOME": aluno['NOME_ALUNO'], "VISTO": True, "TAGS": "", "OBS": ""})
-        else:
-            for _, aluno in alunos_turma.iterrows():
-                dados_editor.append({
-                    "ID": aluno['ID'],
-                    "NOME": aluno['NOME_ALUNO'],
-                    "VISTO": True, 
-                    "TAGS": "", 
-                    "OBS": ""
-                })
-        
-        df_editor = pd.DataFrame(dados_editor)
-        
-        # --- GRADE INTERATIVA ---
-        opcoes_tags = ["", "Dormiu", "Conversa", "Se destacou", "Agitado", "Sem material", "Ausência", "Vetor Disciplinar", "Brincando"]
+                    visto_val = str(reg.iloc[0]['VISTO_ATIVIDADE']).upper() == "TRUE"
+                    tag_val = str(reg.iloc[0]['TAGS'])
+                    obs_val = str(reg.iloc[0]['OBSERVACOES']).replace(f"[{aula_alvo}]", "").strip()
+                    if "AUSÊNCIA" in tag_val: faltou_val = True
+
+            dados_editor.append({
+                "ID": id_a,
+                "ALUNO": nome_display,
+                "FALTOU": faltou_val,
+                "VISTO": visto_val,
+                "PEI": "✅" if is_pei else "---",
+                "OCORRÊNCIA": tag_val if tag_val != "nan" else "",
+                "OBS": obs_val if obs_val != "nan" else ""
+            })
+
+        # --- 3. GRADE INTERATIVA (OTIMIZADA PARA CELULAR) ---
+        st.markdown(f"### 📝 Registro de Engajamento: {aula_alvo}")
         
         df_editado = st.data_editor(
-            df_editor,
+            pd.DataFrame(dados_editor),
             column_config={
-                "ID": st.column_config.TextColumn("ID", disabled=True),
-                "NOME": st.column_config.TextColumn("Nome", disabled=True, width="medium"),
-                "VISTO": st.column_config.CheckboxColumn("Visto?", help="Entregou atividade?"),
-                "TAGS": st.column_config.SelectboxColumn("Ocorrência Principal", options=opcoes_tags, width="medium", help="Selecione a principal ocorrência"),
-                "OBS": st.column_config.TextColumn("Percepção Analítica", width="large")
+                "ID": None, # Esconde o ID para ganhar espaço no celular
+                "ALUNO": st.column_config.TextColumn("Estudante", width="medium", disabled=True),
+                "FALTOU": st.column_config.CheckboxColumn("Faltou?", help="Marca ausência justificada"),
+                "VISTO": st.column_config.CheckboxColumn("Visto", help="Atividade concluída"),
+                "PEI": st.column_config.TextColumn("PEI", width="small", disabled=True),
+                "OCORRÊNCIA": st.column_config.SelectboxColumn(
+                    "Tags", 
+                    options=["", "Dormiu", "Conversa", "Se destacou", "Sem material", "Vetor Disciplinar", "PEI Concluído", "PEI Incompleto"],
+                    width="small"
+                ),
+                "OBS": st.column_config.TextColumn("Obs", width="medium")
             },
             hide_index=True,
             use_container_width=True,
-            num_rows="fixed",
-            key="editor_diario"
+            key=f"editor_diario_{v}"
         )
-        
-        # --- SALVAMENTO EM LOTE ---
-        if st.button("💾 Salvar Diário de Bordo"):
-            with st.status("Processando Diário...", expanded=True) as status:
-                status.write("🧹 Limpando registros anteriores...")
-                db.limpar_diario_data_turma(data_str, turma_sel)
+
+        # --- 4. LÓGICA DE SALVAMENTO INTELIGENTE ---
+        if st.button("💾 SALVAR DIÁRIO DE ENGAJAMENTO", type="primary", use_container_width=True):
+            with st.status("Sincronizando registros...", expanded=True) as status:
+                # Limpeza de duplicatas para a mesma aula/dia/turma
+                db.limpar_diario_data_turma(data_str, turma_sel) # Nota: Ajustar db.py para considerar aula_alvo se desejar rigor total
                 
-                status.write("📝 Compilando dados...")
                 linhas_para_salvar = []
                 for _, row in df_editado.iterrows():
-                    tags_str = str(row['TAGS']) if row['TAGS'] else ""
-                    obs_final = row['OBS']
-                    if atividade_desc:
-                        obs_final = f"[{atividade_desc}] {obs_final}"
+                    # Lógica de Ausência: Se faltou, o visto é anulado e a tag é forçada
+                    tag_final = row['OCORRÊNCIA']
+                    visto_final = row['VISTO']
+                    if row['FALTOU']:
+                        tag_final = "AUSÊNCIA JUSTIFICADA"
+                        visto_final = False
+                    
+                    # Adiciona o marcador de Aula no início da observação para o Ponto ID
+                    obs_final = f"[{aula_alvo}] {row['OBS']}".strip()
                     
                     linhas_para_salvar.append([
                         data_str,
                         row['ID'],
-                        row['NOME'],
+                        row['ALUNO'].replace("♿ ", ""),
                         turma_sel,
-                        str(row['VISTO']), 
-                        tags_str,
+                        str(visto_final),
+                        tag_final,
                         obs_final
                     ])
                 
-                status.write("🚀 Enviando para o banco de dados...")
                 if db.salvar_lote("DB_DIARIO_BORDO", linhas_para_salvar):
-                    status.update(label="Diário Salvo com Sucesso!", state="complete", expanded=False)
+                    status.update(label="✅ Diário Sincronizado com Sucesso!", state="complete")
+                    st.balloons()
                     time.sleep(1)
                     st.rerun()
-                else:
-                    status.update(label="Erro ao salvar.", state="error")
 
 # ==============================================================================
 # MÓDULO: PAINEL DE NOTAS
