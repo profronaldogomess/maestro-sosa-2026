@@ -912,7 +912,7 @@ elif menu == "📝 Diário de Bordo Rápido":
                     st.balloons(); time.sleep(1); st.rerun()
 
 # ==============================================================================
-# MÓDULO: PAINEL DE NOTAS & VISTOS V26.5 - INTEGRAÇÃO PREFEITURA (BÔNUS)
+# MÓDULO: PAINEL DE NOTAS & VISTOS V26.6 - SINCRONIA TOTAL (SCANNER + BÔNUS)
 # ==============================================================================
 elif menu == "📊 Painel de Notas & Vistos":
     st.title("📊 Painel de Notas: Sincronia e Padrão Prefeitura")
@@ -934,8 +934,8 @@ elif menu == "📊 Painel de Notas & Vistos":
             p_teste = c_f4.number_input("Peso Teste:", 0.0, 10.0, 3.0, step=0.5)
             p_prova = c_f5.number_input("Peso Prova:", 0.0, 10.0, 4.0, step=0.5)
 
-        # --- 2. SINCRONIZADOR COM SCANNER ---
-        with st.expander("📸 Sincronizar com Scanner de Gabaritos"):
+        # --- 2. CENTRAL DE SINCRONIA (SCANNER E BÔNUS) ---
+        with st.expander("🔄 Central de Sincronização Ativa", expanded=True):
             c_s1, c_s2 = st.columns(2)
             provas_escaneadas = []
             if not df_diagnosticos.empty:
@@ -947,11 +947,18 @@ elif menu == "📊 Painel de Notas & Vistos":
             av_teste_id = c_s1.selectbox("Vincular Teste:", ["Nenhum"] + opcoes_teste)
             av_prova_id = c_s2.selectbox("Vincular Prova:", ["Nenhum"] + opcoes_prova)
             
-            if st.button("🔄 CARREGAR NOTAS DO SCANNER", type="primary", use_container_width=True):
+            col_btn1, col_btn2 = st.columns(2)
+            if col_btn1.button("📸 IMPORTAR NOTAS DO SCANNER", use_container_width=True):
+                st.rerun()
+            
+            if col_btn2.button("⭐ ATUALIZAR BÔNUS DO DIÁRIO", type="primary", use_container_width=True):
+                st.cache_data.clear() # Limpa o cache para ler o bônus novo do Diário
                 st.rerun()
 
-        # --- 3. CÁLCULO DE VISTOS (FILTRADO POR TRIMESTRE) ---
+        # --- 3. CÁLCULO DE VISTOS E BÔNUS (FILTRADO POR TRIMESTRE) ---
         vistos_calculados = {}
+        bonus_calculados = {}
+        
         calendario = {"I Trimestre": (date(2026, 2, 9), date(2026, 5, 22)), "II Trimestre": (date(2026, 5, 25), date(2026, 9, 4)), "III Trimestre": (date(2026, 9, 8), date(2026, 12, 17))}
         dt_ini, dt_fim = calendario.get(trimestre_sel)
 
@@ -963,14 +970,22 @@ elif menu == "📊 Painel de Notas & Vistos":
             for id_aluno in df_alunos[df_alunos['TURMA'] == turma_sel]['ID']:
                 id_limpo = db.limpar_id(id_aluno)
                 d_aluno = df_d_trim[df_d_trim['ID_ALUNO'].apply(db.limpar_id) == id_limpo]
+                
                 if not d_aluno.empty:
+                    # Cálculo de Vistos
                     aulas_validas = d_aluno[~d_aluno['TAGS'].astype(str).str.upper().str.contains("AUSÊNCIA JUSTIFICADA", na=False)]
                     vistos_recebidos = len(aulas_validas[aulas_validas['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"])
-                    nota_visto = (vistos_recebidos / len(aulas_validas) * p_visto) if len(aulas_validas) > 0 else 0.0
-                    vistos_calculados[id_limpo] = round(nota_visto, 2)
-                else: vistos_calculados[id_limpo] = 0.0
+                    vistos_calculados[id_limpo] = round((vistos_recebidos / len(aulas_validas) * p_visto), 2) if len(aulas_validas) > 0 else 0.0
+                    
+                    # Cálculo de Bônus Acumulado (Soma da coluna BONUS do Diário)
+                    if 'BONUS' in d_aluno.columns:
+                        bonus_calculados[id_limpo] = d_aluno['BONUS'].apply(util.sosa_to_float).sum()
+                    else: bonus_calculados[id_limpo] = 0.0
+                else:
+                    vistos_calculados[id_limpo] = 0.0
+                    bonus_calculados[id_limpo] = 0.0
 
-# --- 4. EDITOR DE CONSOLIDAÇÃO (DADOS BRUTOS) ---
+        # --- 4. EDITOR DE CONSOLIDAÇÃO ---
         st.subheader("📝 1. Consolidação de Dados (Professor)")
         alunos_turma = df_alunos[df_alunos['TURMA'] == turma_sel].sort_values(by="NOME_ALUNO")
         notas_no_banco = df_notas[(df_notas['TURMA'] == turma_sel) & (df_notas['TRIMESTRE'] == trimestre_sel)]
@@ -980,77 +995,46 @@ elif menu == "📊 Painel de Notas & Vistos":
             id_a = db.limpar_id(aluno['ID'])
             reg_banco = notas_no_banco[notas_no_banco['ID_ALUNO'].apply(db.limpar_id) == id_a]
             
-            # 1. Notas Base
-            n_visto_base = util.sosa_to_float(reg_banco.iloc[0].get('NOTA_VISTOS', 0)) if not reg_banco.empty else vistos_calculados.get(id_a, 0.0)
+            # Prioriza o que foi calculado agora do Diário
+            n_visto_base = vistos_calculados.get(id_a, 0.0)
+            n_bonus_base = bonus_calculados.get(id_a, 0.0)
+            
+            # Notas de Teste/Prova (Puxa do banco ou do Scanner)
             n_teste_base = util.sosa_to_float(reg_banco.iloc[0].get('NOTA_TESTE', 0)) if not reg_banco.empty else 0.0
             n_prova_base = util.sosa_to_float(reg_banco.iloc[0].get('NOTA_PROVA', 0)) if not reg_banco.empty else 0.0
-            
-            # 2. LÓGICA DE SOMA DE BÔNUS DO DIÁRIO (Sincronizado com o Passo 3)
-            bonus_acumulado = 0.0
-            if not df_diario.empty and 'df_d_trim' in locals(): # Verifica se o filtro do trimestre existe
-                d_aluno_trim = df_d_trim[df_d_trim['ID_ALUNO'].apply(db.limpar_id) == id_a]
-                if 'BONUS' in d_aluno_trim.columns:
-                    bonus_acumulado = d_aluno_trim['BONUS'].apply(util.sosa_to_float).sum()
 
-            # 3. Sincronia com Scanner (Sobreposição)
             if av_teste_id != "Nenhum":
                 reg_s = df_diagnosticos[(df_diagnosticos['ID_ALUNO'].apply(db.limpar_id) == id_a) & (df_diagnosticos['ID_AVALIACAO'] == av_teste_id)]
                 if not reg_s.empty: n_teste_base = util.sosa_to_float(reg_s.iloc[0]['NOTA_CALCULADA'])
-            
             if av_prova_id != "Nenhum":
                 reg_p = df_diagnosticos[(df_diagnosticos['ID_ALUNO'].apply(db.limpar_id) == id_a) & (df_diagnosticos['ID_AVALIACAO'] == av_prova_id)]
                 if not reg_p.empty: n_prova_base = util.sosa_to_float(reg_p.iloc[0]['NOTA_CALCULADA'])
 
-            # 4. Montagem da Linha (CORRIGIDO: n_bonus_final)
-            dados_grade.append({
-                "ID": id_a, 
-                "NOME": aluno['NOME_ALUNO'], 
-                "VISTOS": n_visto_base, 
-                "TESTE": n_teste_base, 
-                "PROVA": n_prova_base, 
-                "BÔNUS": bonus_acumulado, # <--- Variável correta aqui
-                "REC_PARALELA": 0.0
-            })
+            dados_grade.append({"ID": id_a, "NOME": aluno['NOME_ALUNO'], "VISTOS": n_visto_base, "TESTE": n_teste_base, "PROVA": n_prova_base, "BÔNUS": n_bonus_base, "REC_PARALELA": 0.0})
 
         df_edit = st.data_editor(pd.DataFrame(dados_grade), hide_index=True, use_container_width=True, key=f"ed_notas_v26_{v}")
 
-        # --- 5. LÓGICA DE DISTRIBUIÇÃO DE BÔNUS (PADRÃO PREFEITURA) ---
+        # --- 5. LÓGICA DE DISTRIBUIÇÃO DE BÔNUS ---
         def distribuir_bonus(row):
             bonus = row['BÔNUS']
             v, t, p = row['VISTOS'], row['TESTE'], row['PROVA']
-            
-            # 1. Completa Vistos
-            espaco_v = max(0, p_visto - v)
-            v_final = v + min(bonus, espaco_v)
-            bonus -= min(bonus, espaco_v)
-            
-            # 2. Completa Teste
-            espaco_t = max(0, p_teste - t)
-            t_final = t + min(bonus, espaco_t)
-            bonus -= min(bonus, espaco_t)
-            
-            # 3. Completa Prova
-            espaco_p = max(0, p_prova - p)
-            p_final = p + min(bonus, espaco_p)
-            
-            # Média Final (Soma das 3 ou Recuperação)
-            soma = v_final + t_final + p_final
-            media_final = min(10.0, max(soma, row['REC_PARALELA']))
-            
-            return pd.Series([v_final, t_final, p_final, media_final])
+            espaco_v = max(0, p_visto - v); v_f = v + min(bonus, espaco_v); bonus -= min(bonus, espaco_v)
+            espaco_t = max(0, p_teste - t); t_f = t + min(bonus, espaco_t); bonus -= min(bonus, espaco_t)
+            espaco_p = max(0, p_prova - p); p_f = p + min(bonus, espaco_p)
+            soma = v_f + t_f + p_f
+            return pd.Series([v_f, t_f, p_f, min(10.0, max(soma, row['REC_PARALELA']))])
 
         df_edit[['V_F', 'T_F', 'P_F', 'MEDIA']] = df_edit.apply(distribuir_bonus, axis=1)
 
-        # --- 6. TABELA FINAL (VISUALIZAÇÃO PREFEITURA) ---
+        # --- 6. TABELA FINAL (ALTO CONTRASTE) ---
         st.markdown("### 📊 2. Nota Final (Padrão Prefeitura - Com Bônus)")
-        df_prefeitura = df_edit[['NOME', 'V_F', 'T_F', 'P_F', 'REC_PARALELA', 'MEDIA']].copy()
         
         def style_pref(v):
-            if v < 6.0: return 'background-color: #FF0000; color: #000000; font-weight: 900;'
-            return 'background-color: #00FF00; color: #000000; font-weight: 700;'
+            if v < 6.0: return 'background-color: #FF0000; color: white; font-weight: 900;'
+            return 'background-color: #00FF00; color: black; font-weight: 700;'
 
         st.dataframe(
-            df_prefeitura.style.applymap(style_pref, subset=['MEDIA'])
+            df_edit[['NOME', 'V_F', 'T_F', 'P_F', 'REC_PARALELA', 'MEDIA']].style.applymap(style_pref, subset=['MEDIA'])
             .format("{:.2f}", subset=['V_F', 'T_F', 'P_F', 'REC_PARALELA', 'MEDIA']),
             use_container_width=True, hide_index=True
         )
@@ -1060,11 +1044,10 @@ elif menu == "📊 Painel de Notas & Vistos":
                 db.limpar_notas_turma_trimestre(turma_sel, trimestre_sel)
                 linhas = []
                 for _, r in df_edit.iterrows():
-                    # Salvamos as notas JÁ COM BÔNUS para o banco refletir a realidade da prefeitura
                     linhas.append([
                         r['ID'], r['NOME'], turma_sel, trimestre_sel,
                         util.sosa_to_str(r["V_F"]), util.sosa_to_str(r["T_F"]),
-                        util.sosa_to_str(r["P_F"]), util.sosa_to_str(r["BÔNUS"]), # Mantemos o bônus na coluna REC para histórico
+                        util.sosa_to_str(r["P_F"]), util.sosa_to_str(r["BÔNUS"]),
                         util.sosa_to_str(r['MEDIA'])
                     ])
                 db.salvar_lote("DB_NOTAS", linhas)
