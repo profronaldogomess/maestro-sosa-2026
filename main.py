@@ -762,36 +762,83 @@ if menu == "📅 Planejamento (Ponto ID)":
                         status.update(label="❌ Erro no Upload.", state="error")
                         st.error(link_drive)
 
-    # --- ABA 2: GESTÃO DE ACERVO (EDIÇÃO VIVA) ---
-    with tab_hist:
-        st.subheader("📂 Gestão de Acervo Pedagógico")
+# --- ABA 2: GESTÃO DE ACERVO (PIP) - VISUALIZAÇÃO ESTRUTURADA V27 ---
+    with tab_acervo:
+        st.subheader("📂 Repositório de Planos Estratégicos")
+        
         if not df_planos.empty:
-            f_ano_h = st.selectbox("Filtrar Série:", ["Todos", "6º", "7º", "8º", "9º"], key="hist_ano_v26")
+            # Filtros de busca no acervo
+            c_h1, c_h2 = st.columns(2)
+            f_ano_h = c_h1.selectbox("Filtrar por Série:", ["Todos", "6º", "7º", "8º", "9º"], key="hist_ano")
+            
             df_h = df_planos.copy()
-            if f_ano_h != "Todos": df_h = df_h[df_h['ANO'] == f_ano_h]
+            if f_ano_h != "Todos": 
+                df_h = df_h[df_h['ANO'] == f_ano_h]
             
             if not df_h.empty:
-                sel_h = st.selectbox("Selecionar Plano:", df_h['SEMANA'].tolist(), key="hist_sem_v26")
+                sel_h = st.selectbox("Selecionar Plano para Visualização:", df_h['SEMANA'].tolist(), key="hist_sem_v27")
                 dados_h = df_h[df_h['SEMANA'] == sel_h].iloc[0]
-                raw_h = dados_h['PLANO_TEXTO']
+                raw_h = str(dados_h['PLANO_TEXTO'])
                 
-                link_h = "Não encontrado"
-                if "--- LINK DRIVE ---" in str(raw_h):
-                    link_h = str(raw_h).split("--- LINK DRIVE ---")[-1].strip()
+                # --- EXTRAÇÃO DE DADOS PARA O DASHBOARD ---
+                bncc_h = ai.extrair_tag(raw_h, "BNCC_CODE")
+                eixo_h = ai.extrair_tag(raw_h, "CONTEUDO_GERAL")
+                espec_h = ai.extrair_tag(raw_h, "CONTEUDOS_ESPECIFICOS")
+                obj_h = ai.extrair_tag(raw_h, "OBJETIVOS_ENSINO")
+                a1_h = ai.extrair_tag(raw_h, "AULA_1")
+                a2_h = ai.extrair_tag(raw_h, "AULA_2")
+                ava_h = ai.extrair_tag(raw_h, "AVALIACAO")
+                pei_h = ai.extrair_tag(raw_h, "ADAPTACAO_PEI")
+                link_h = dados_h.get('LINK_DRIVE', "Não encontrado")
 
+                # --- CABEÇALHO DE AÇÕES ---
                 st.markdown(f"### 📝 Plano: {sel_h} ({dados_h['ANO']})")
-                
-                c_h1, c_h2 = st.columns(2)
-                with c_h1:
-                    if st.button("🔄 REABRIR PARA REFINO IA", use_container_width=True):
+                col_btn1, col_btn2 = st.columns(2)
+                with col_btn1:
+                    if st.button("🔄 REABRIR PARA REFINO IA", use_container_width=True, type="primary"):
                         st.session_state.refino_ativo = {"ano": dados_h['ANO'], "semana": sel_h}
                         st.session_state.p_temp = raw_h
-                        st.info("Modo Refino Ativado. Vá para a aba 'Engenharia de Planejamento'.")
-                with c_h2:
-                    if "https" in link_h:
-                        st.link_button("🚀 ABRIR NO GOOGLE DRIVE", link_h, use_container_width=True)
+                        st.info("Modo Refino Ativado. Vá para a aba 'Designer de Regência'.")
+                with col_btn2:
+                    if "https" in str(link_h):
+                        st.link_button("🚀 ABRIR NO GOOGLE DRIVE", str(link_h), use_container_width=True)
 
-                with st.expander("👁️ Pré-visualização Rápida"):
+                # --- O NOVO DASHBOARD VISUAL (SUBSTITUI O TEXTO BRUTO) ---
+                with st.container(border=True):
+                    st.markdown(f"#### 🎯 {eixo_h if eixo_h else 'Conteúdo Geral'}")
+                    st.caption(f"🆔 **BNCC:** {bncc_h}")
+                    
+                    col_info1, col_info2 = st.columns(2)
+                    with col_info1:
+                        st.info(f"**Conteúdos:**\n{espec_h}")
+                    with col_info2:
+                        st.success(f"**Objetivos:**\n{obj_h}")
+                    
+                    st.divider()
+                    
+                    # Visualização das Aulas em Colunas
+                    col_v1, col_v2 = st.columns(2)
+                    with col_v1:
+                        st.markdown("##### 📘 Aula 1")
+                        if a1_h: st.write(a1_h)
+                        else: st.write(ai.extrair_tag(raw_h, "METODOLOGIA")) # Fallback para planos antigos
+                    
+                    with col_v2:
+                        st.markdown("##### 📗 Aula 2")
+                        st.write(a2_h if a2_h else "Conteúdo não fatiado ou indisponível.")
+
+                    st.divider()
+                    
+                    col_v3, col_v4 = st.columns(2)
+                    with col_v3:
+                        st.markdown("##### 📝 Avaliação")
+                        st.write(ava_h)
+                    with col_v4:
+                        st.markdown("##### ♿ Estratégia PEI")
+                        st.write(pei_h)
+
+                # --- EXPANDER PARA CASO PRECISE DO TEXTO BRUTO ---
+                with st.expander("🛠️ Ver Código-Fonte do Plano (Raw Text)"):
                     st.text(raw_h)
 
                 st.markdown("---")
@@ -800,10 +847,10 @@ if menu == "📅 Planejamento (Ponto ID)":
                         st.success(f"Plano removido com sucesso!")
                         time.sleep(1)
                         st.rerun()
-                    else:
-                        st.error("Erro ao tentar excluir o plano.")
-            else: st.info("Nenhum plano encontrado.")
-        else: st.info("📭 Acervo vazio.")
+            else:
+                st.info("Nenhum plano encontrado para os filtros selecionados.")
+        else:
+            st.info("📭 O acervo de planos está vazio.")
 
     # --- ABA 3 E 4 (MANTIDAS) ---
     with tab_matriz:
