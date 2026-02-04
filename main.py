@@ -1273,22 +1273,28 @@ elif menu == "👥 Gestão da Turma":
         with tab_heatmap:
             st.subheader(f"📈 Mapa de Desempenho e Engajamento - {turma_sel}")
             
-            # Cálculo de métricas para o Heatmap
+# --- CÁLCULO DE MÉTRICAS PARA O HEATMAP (VERSÃO BLINDADA) ---
             heatmap_data = []
             for _, aluno in alunos_turma.iterrows():
                 id_a = db.limpar_id(aluno['ID'])
                 
-                # Desempenho (Notas)
-                n_aluno = notas_turma[notas_turma['ID_ALUNO'].apply(db.limpar_id) == id_a]
-                media = n_aluno['MEDIA_FINAL'].mean() if not n_aluno.empty else 0.0
+                # 1. Desempenho (Notas) - Proteção contra ausência de notas
+                n_aluno = notas_turma[notas_turma['ID_ALUNO'].apply(db.limpar_id) == id_a] if not notas_turma.empty else pd.DataFrame()
+                media = n_aluno['MEDIA_FINAL'].mean() if not n_aluno.empty and 'MEDIA_FINAL' in n_aluno.columns else 0.0
                 
-                # Engajamento (Vistos no Diário)
-                v_aluno = diario_turma[diario_turma['ID_ALUNO'].apply(db.limpar_id) == id_a]
-                vistos = len(v_aluno[v_aluno['VISTO_ATIVIDADE'].astype(str).upper() == "TRUE"])
+                # 2. Engajamento (Vistos) - Proteção contra Diário vazio
+                v_aluno = diario_turma[diario_turma['ID_ALUNO'].apply(db.limpar_id) == id_a] if not diario_turma.empty else pd.DataFrame()
                 
-                # Comportamento (Tags Negativas)
+                vistos = 0
+                if not v_aluno.empty and 'VISTO_ATIVIDADE' in v_aluno.columns:
+                    # Correção: Adicionado .str antes do .upper() para funcionar em colunas Pandas
+                    vistos = len(v_aluno[v_aluno['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"])
+                
+                # 3. Comportamento (Ocorrências)
                 tags_negativas = ["Dormiu", "Conversa", "Agitado", "Sem material", "Vetor Disciplinar"]
-                ocorrencias = len(v_aluno[v_aluno['TAGS'].isin(tags_negativas)])
+                ocorrencias = 0
+                if not v_aluno.empty and 'TAGS' in v_aluno.columns:
+                    ocorrencias = len(v_aluno[v_aluno['TAGS'].isin(tags_negativas)])
                 
                 heatmap_data.append({
                     "Nome": aluno['NOME_ALUNO'],
