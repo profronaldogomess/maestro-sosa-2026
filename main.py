@@ -1886,25 +1886,49 @@ with tab_scan:
                             st.session_state.scan_img = img_file.getvalue()
                             st.rerun()
 
-                if "scan_res" in st.session_state:
-                    st.subheader("📝 Conferência de Perícia")
-                    dados_pericia = []
-                    for i in range(1, qtd_q + 1):
-                        q_key = f"{i:02d}"
-                        resp_aluno = st.session_state.scan_res.get(q_key) or st.session_state.scan_res.get(str(i)) or "?"
-                        resp_certa = gab_oficial[i-1] if i <= len(gab_oficial) else "?"
+                    if "scan_res" in st.session_state:
+                        st.subheader("📝 Conferência de Perícia")
                         
-                        if resp_aluno == "X": status_txt = "🚫 ANULADA"
-                        elif resp_aluno == "?": status_txt = "⚪ VAZIA"
-                        elif resp_aluno == resp_certa: status_txt = "✅ CORRETA"
-                        else: status_txt = "❌ INCORRETA"
+                        dados_pericia = []
+                        for i in range(1, qtd_q + 1):
+                            q_key = f"{i:02d}"
+                            resp_aluno = st.session_state.scan_res.get(q_key) or st.session_state.scan_res.get(str(i)) or "?"
+                            resp_certa = gab_oficial[i-1] if i <= len(gab_oficial) else "?"
+                            
+                            if resp_aluno == "X": status_txt = "🚫 ANULADA"
+                            elif resp_aluno == "?": status_txt = "⚪ VAZIA"
+                            elif resp_aluno == resp_certa: status_txt = "✅ CORRETA"
+                            else: status_txt = "❌ INCORRETA"
+                            
+                            dados_pericia.append({
+                                "Q": q_key, 
+                                "Marcação": resp_aluno, 
+                                "Gabarito": resp_certa, 
+                                "Status": status_txt
+                            })
                         
-                        dados_pericia.append({"Q": q_key, "Marcação": resp_aluno, "Gabarito": resp_certa, "Status": status_txt})
-                    
-                    df_edit = st.data_editor(pd.DataFrame(dados_pericia), use_container_width=True, hide_index=True, key=f"ed_pericia_{v}")
+                        # --- EDITOR COM MENU DE SELEÇÃO (DROPDOWN) ---
+                        df_edit = st.data_editor(
+                            pd.DataFrame(dados_pericia), 
+                            use_container_width=True, 
+                            hide_index=True,
+                            column_config={
+                                "Q": st.column_config.TextColumn("Q", disabled=True),
+                                "Marcação": st.column_config.SelectboxColumn(
+                                    "Marcação",
+                                    help="Toque para corrigir a leitura da IA",
+                                    options=["A", "B", "C", "D", "E", "X", "?"],
+                                    required=True
+                                ),
+                                "Gabarito": st.column_config.TextColumn("Gabarito", disabled=True),
+                                "Status": st.column_config.TextColumn("Status", disabled=True)
+                            },
+                            key=f"editor_pericia_{v}"
+                        )
 
-                    acertos = len(df_edit[df_edit['Marcação'] == df_edit['Gabarito']])
-                    nota_final = (acertos / qtd_q) * v_prova_base
+                        # Recálculo dinâmico baseado na sua edição
+                        acertos = len(df_edit[df_edit['Marcação'] == df_edit['Gabarito']])
+                        nota_final = (acertos / qtd_q) * v_prova_base
                     st.metric("Nota Final (Precisão SOSA)", f"{nota_final:.2f}", delta=f"{acertos}/{qtd_q} acertos")
 
                     c_btn1, c_btn2 = st.columns(2)
