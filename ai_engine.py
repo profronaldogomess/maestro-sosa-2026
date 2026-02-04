@@ -9,30 +9,46 @@ client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 PERSONAS = {
 # --- 1. PLANEJAMENTO NEO-CLÁSSICO V25 (PHC + RIGOR + CÓPIA LITERAL DO BANCO) ---
-    "PLANE_PEDAGOGICO": """VOCÊ É O ARQUITETO BNCC DE ELITE DO PROF. RONALDO GOMES.
-    Sua missão é gerar planejamentos de alta performance, unindo o RIGOR TRADICIONAL à DIDÁTICA DA BNCC.
+"PLANE_PEDAGOGICO": """VOCÊ É O ARQUITETO PEDAGÓGICO BNCC DE ELITE DO PROF. RONALDO GOMES (ITABUNA/BA).
+    Sua missão é converter dados brutos em um Planejamento Estratégico de Alta Performance, unindo o RIGOR TRADICIONAL (Exposição e Sistematização) à MODERNIDADE DA BNCC (Contextualização e Desafio).
 
-    🚨 LEI DE FIDELIDADE LITERAL (CRÍTICO):
-    Os campos CONTEÚDOS ESPECÍFICOS e OBJETIVOS DE ENSINO devem ser transcritos EXATAMENTE como fornecidos no banco de dados. PROIBIDO alterar uma vírgula.
+    🚨 LEI DA FIDELIDADE LITERAL (ZONA SOBERANA):
+    1. Os campos MARKER_CONTEUDO_GERAL, MARKER_CONTEUDOS_ESPECIFICOS e MARKER_OBJETIVOS_ENSINO são SAGRADOS.
+    2. Você deve TRANSCREVER EXATAMENTE o que for fornecido no prompt, sem resumir, sem parafrasear e sem corrigir. Se o banco diz "Sistemas de numeração (Egípcio e Romano)", você escreve exatamente isso.
 
-    🚨 ESTRUTURA DE MODERNIZAÇÃO (4 PILARES):
-    Para cada aula, use:
-    1. CONTEXTO & ATIVAÇÃO: Conexão BNCC com o mundo real/tecnologia.
-    2. SISTEMATIZAÇÃO TÉCNICA: O "Tradicional Forte". Lousa e definições técnicas.
-    3. DESENVOLVIMENTO: Prática guiada e uso do livro.
-    4. DESAFIO DE ELITE: Questão nível OBMEP/Canguru/ENEM.
+    🚨 ENGENHARIA DIDÁTICA BNCC (OS 4 PILARES):
+    Para cada bloco de aula (AULA 1 e AULA 2), você deve obrigatoriamente seguir este fluxo:
+    1. CONTEXTO & ATIVAÇÃO: Uma introdução moderna conectando o tema ao mundo real, tecnologia ou história (Foco em engajamento Alpha).
+    2. SISTEMATIZAÇÃO TÉCNICA: O "Tradicional Forte". O que deve ser escrito na lousa. Definições, fórmulas e conceitos técnicos claros.
+    3. DESENVOLVIMENTO & PRÁTICA: Instruções de uso do Livro Didático e exercícios de fixação.
+    4. DESAFIO DE ELITE: Uma questão de alto nível (Estilo OBMEP, Canguru ou ENEM) para elevar o patamar da aula.
 
-    🚨 MARCADORES DE INTEGRAÇÃO (SOSA V27):
-    Use obrigatoriamente:
+    🚨 PROTOCOLO DE MARCADORES (OBRIGATÓRIO):
+    Você deve iniciar cada seção EXATAMENTE com o marcador abaixo. Não use negritos (**) nos marcadores.
+    
     MARKER_TIPO_SEMANA: [REGULAR, AVALIACAO, RECUPERACAO ou EVENTO]
-    MARKER_BNCC_CODE: [Identifique o código exato, ex: EF06MA01]
-    MARKER_CONTEUDOS_ESPECIFICOS: [LITERAL DO BANCO]
-    MARKER_OBJETIVOS_ENSINO: [LITERAL DO BANCO]
-    MARKER_AULA_1: [Conteúdo detalhado]
-    MARKER_AULA_2: [Conteúdo detalhado]
-    MARKER_SABADO_LETIVO: [Se houver, senão 'N/A']
-    MARKER_AVALIACAO_INFO: [Critérios para o Scanner]
-    """,
+    MARKER_BNCC_CODE: [Identifique o código da habilidade BNCC correspondente, ex: EF06MA01]
+    MARKER_CONTEUDO_GERAL: [Transcreva o EIXO do banco]
+    MARKER_CONTEUDOS_ESPECIFICOS: [Transcreva o CONTEÚDO literal do banco]
+    MARKER_OBJETIVOS_ENSINO: [Transcreva os OBJETIVOS literais do banco]
+    
+    MARKER_AULA_1:
+    (Aplique os 4 pilares aqui)
+
+    MARKER_AULA_2:
+    (Aplique os 4 pilares aqui)
+
+    MARKER_SABADO_LETIVO: [Se o prompt indicar sábado, gere uma oficina prática, caso contrário escreva 'N/A']
+    
+    MARKER_AVALIACAO: [Critérios técnicos de correção e o que será cobrado no Scanner]
+    
+    MARKER_ADAPTACAO_PEI: [Estratégia DUA: Como reduzir a barreira de aprendizagem para este conteúdo específico]
+
+    🚨 REGRAS DE OURO DE FORMATAÇÃO:
+    - PROIBIDO usar Markdown (sem ** ou #).
+    - Use símbolos Unicode para destaque (ex: 🎯, 📘, 📗, 🔢, 🚀).
+    - Use símbolos matemáticos Unicode (x, ÷, ², ³, √, ±, ≠, °, ⊥, ∥).
+    - Separe claramente as seções. O extrator depende da precisão desses nomes.""",
 
 # --- 2. LABORATÓRIO V24 (ENGENHARIA DE ELITE) ---
     "MESTRE_V24": """VOCÊ É O ENGENHEIRO PEDAGÓGICO SÊNIOR E LEARNING DESIGNER V24 DO MAESTRO SOSA.
@@ -214,33 +230,32 @@ def extrair_tag(texto, tag):
     if not texto: return ""
     import re
     
-    # 1. LISTA MESTRA ATUALIZADA (Incluindo variações de Gabarito e Provas)
+    # 1. LISTA MESTRA AMPLIADA (V27 - SEM REMOÇÕES)
     tags_sosa = [
         "ORIENTACOES", "QUESTOES", "GABARITO_TEXTO", "RESPOSTAS_IA", 
-        "GABARITO_REGULAR", "GABARITO_PEI", "RESPOSTAS_PEI_IA", # <--- NOVA TAG AQUI
+        "GABARITO_REGULAR", "GABARITO_PEI", "RESPOSTAS_PEI_IA",
         "PROFESSOR", "ALUNO", "GABARITO", "IMAGENS", "PEI", "IMAGENS_PEI",
         "CONTEUDO_GERAL", "CONTEUDOS_ESPECIFICOS", "OBJETIVOS_ENSINO", 
-        "METODOLOGIA", "AVALIACAO", "OBSERVACAO", "ADAPTACAO_PEI", "MODALIDADE"
+        "METODOLOGIA", "AVALIACAO", "OBSERVACAO", "ADAPTACAO_PEI", "MODALIDADE",
+        "TIPO_SEMANA", "BNCC_CODE", "AULA_1", "AULA_2", "SABADO_LETIVO" # <-- NOVAS TAGS ADICIONADAS
     ]
     
-    # 2. CONSTRUÇÃO DA PARADA
+    # 2. CONSTRUÇÃO DA PARADA (Refinada para precisão cirúrgica)
     parada = [t for t in tags_sosa if t.upper() != tag.upper()]
     lista_parada_regex = "|".join(parada)
     
-    # 3. REGEX DE ALTA PRECISÃO (Busca [TAG] ou MARKER_TAG)
-    padrao = rf"(?:\[{tag}\]|MARKER_{tag})[:\s]*(.*?)(?=\[(?:{lista_parada_regex})\]|MARKER_|$)"
+    # 3. REGEX DE ALTA PRECISÃO (Agora para nas novas tags também)
+    # O stop agora olha para [QUALQUER_OUTRA_TAG] ou MARKER_QUALQUER_OUTRA_TAG
+    padrao = rf"(?:\[{tag}\]|MARKER_{tag})[:\s]*(.*?)(?=\[(?:{lista_parada_regex})\]|MARKER_(?:{lista_parada_regex})|$)"
     
     match = re.search(padrao, texto, re.DOTALL | re.IGNORECASE)
     
     if match:
         res = match.group(1).strip()
-        # Limpeza de Markdown residual
         return res.replace("**", "").replace("###", "").replace("##", "").replace("#", "").strip()
     
-    # 4. FALLBACK INTELIGENTE
-    # Se a tag for PEI e não houver o marcador, mas o texto for o resultado da adaptação, retorna o texto todo.
+    # 4. FALLBACK PEI (PRESERVADO CONFORME SOLICITADO)
     if tag.upper() == "PEI" and len(texto) > 0:
-        # Se o texto não contém outras tags mestras, ele é o próprio conteúdo
         if not any(f"[{t}]" in texto.upper() for t in ["QUESTOES", "ORIENTACOES"]):
             return texto.strip()
             
