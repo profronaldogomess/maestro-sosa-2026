@@ -782,11 +782,32 @@ if menu == "📅 Planejamento (Ponto ID)":
         if not df_curriculo.empty:
             ano_m = st.selectbox("Analisar Série:", [6, 7, 8, 9], key="auditoria_ano_v26")
             df_m = df_curriculo[df_curriculo['ANO'] == ano_m].copy()
-            planejados = " ".join(df_planos[df_planos['ANO'] == f"{ano_m}º"]['PLANO_TEXTO'].astype(str).tolist()).upper() if not df_planos.empty else ""
-            df_m['STATUS_NUM'] = df_m['CONTEUDO_ESPECIFICO'].apply(lambda x: 1 if str(x).upper() in planejados else 0)
-            progresso = df_m.groupby('EIXO')['STATUS_NUM'].agg(['sum', 'count']).reset_index()
-            progresso['%'] = (progresso['sum'] / progresso['count'] * 100).round(1)
-            st.plotly_chart(px.bar(progresso, x='EIXO', y='%', text='%', color='%', color_continuous_scale='RdYlGn', range_y=[0, 105]), use_container_width=True)
+            
+            if not df_m.empty:
+                planejados = " ".join(df_planos[df_planos['ANO'] == f"{ano_m}º"]['PLANO_TEXTO'].astype(str).tolist()).upper() if not df_planos.empty else ""
+                
+                # Forçamos o STATUS_NUM a ser inteiro (0 ou 1)
+                df_m['STATUS_NUM'] = df_m['CONTEUDO_ESPECIFICO'].apply(lambda x: 1 if str(x).upper() in planejados else 0)
+                
+                # Realizamos o agrupamento
+                progresso = df_m.groupby('EIXO')['STATUS_NUM'].agg(['sum', 'count']).reset_index()
+                
+                # --- CORREÇÃO CIRÚRGICA SOSA V26 ---
+                # Forçamos a conversão para numérico (float) para garantir que o cálculo funcione
+                progresso['sum'] = pd.to_numeric(progresso['sum'], errors='coerce').fillna(0)
+                progresso['count'] = pd.to_numeric(progresso['count'], errors='coerce').fillna(1) # Evita divisão por zero
+                
+                # Cálculo da porcentagem com conversão explícita para float antes do round
+                progresso['%'] = (progresso['sum'] / progresso['count'] * 100).astype(float).round(1)
+                
+                # Gráfico de Cobertura
+                st.plotly_chart(px.bar(
+                    progresso, x='EIXO', y='%', text='%', color='%', 
+                    color_continuous_scale='RdYlGn', range_y=[0, 105],
+                    title=f"Cobertura Curricular - {ano_m}º Ano"
+                ), use_container_width=True)
+            else:
+                st.info("📭 Nenhum conteúdo encontrado na matriz para este ano.")
 
 # ==============================================================================
 # MÓDULO: DIÁRIO DE BORDO RÁPIDO V26 - INTEGRAÇÃO PONTO ID & PEI
