@@ -2050,13 +2050,51 @@ elif menu == "📸 Scanner de Gabaritos":
                                 reset_scanner()
             else: st.success("✅ Turma concluída!")
 
-    # --- ABA 2: ACERVO DE EVIDÊNCIAS ---
+# --- ABA 2: ACERVO DE EVIDÊNCIAS (VERSÃO DE ALTA PRECISÃO V26.6) ---
     with tab_acervo:
         st.subheader("📂 Histórico de Correções")
         if not df_diagnosticos.empty:
+            # Criamos uma cópia para não afetar o dado original
             df_view = df_diagnosticos.copy()
-            st.dataframe(df_view, use_container_width=True, hide_index=True)
-        else: st.info("📭 Nenhum gabarito escaneado.")
+            
+            # FUNÇÃO INTERNA DE LIMPEZA PARA A TABELA
+            def limpar_nota_tabela(valor):
+                try:
+                    if not valor or valor == "": return 0.0
+                    # Converte para float tratando vírgula e ponto
+                    return float(str(valor).replace(',', '.').strip())
+                except:
+                    return 0.0
+
+            # Aplicamos a limpeza na coluna de nota para exibição
+            df_view['NOTA_CALCULADA'] = df_view['NOTA_CALCULADA'].apply(limpar_nota_tabela)
+            
+            # Exibição com Grade Inteligente
+            st.dataframe(
+                df_view,
+                column_config={
+                    "DATA": st.column_config.TextColumn("Data"),
+                    "ID_ALUNO": st.column_config.TextColumn("ID"),
+                    "NOME_ALUNO": st.column_config.TextColumn("Estudante", width="medium"),
+                    "TURMA": st.column_config.TextColumn("Turma"),
+                    "ID_AVALIACAO": st.column_config.TextColumn("Avaliação", width="medium"),
+                    "RESPOSTAS_ALUNO": st.column_config.TextColumn("Marcações"),
+                    "NOTA_CALCULADA": st.column_config.NumberColumn("Nota Final", format="%.2f"),
+                    "LINK_FOTO_DRIVE": st.column_config.LinkColumn("📸 Ver Gabarito", display_text="Abrir Foto")
+                },
+                use_container_width=True,
+                hide_index=True
+            )
+            
+            # Botão de exportação rápida para conferência
+            st.download_button(
+                label="📥 Baixar Relatório CSV",
+                data=df_view.to_csv(index=False).encode('utf-8-sig'),
+                file_name=f"SOSA_GABARITOS_{datetime.now().strftime('%d_%m_%Y')}.csv",
+                mime="text/csv"
+            )
+        else:
+            st.info("📭 Nenhum gabarito escaneado no banco de dados.")
 
     # --- ABA 3: DASHBOARD DE PERÍCIA (RESTAURAÇÃO COMPLETA) ---
     with tab_dash:
