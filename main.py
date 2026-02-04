@@ -948,7 +948,7 @@ if menu == "📝 Diário de Bordo Rápido":
                     st.rerun()
 
 # ==============================================================================
-# MÓDULO: PAINEL DE NOTAS & VISTOS V26.3 - PRESERVAÇÃO E ALTO CONTRASTE
+# MÓDULO: PAINEL DE NOTAS & VISTOS V26.4 - FILTRO SELETIVO E ALTO CONTRASTE
 # ==============================================================================
 elif menu == "📊 Painel de Notas & Vistos":
     st.title("📊 Painel de Notas: Sincronia e Pesos Dinâmicos")
@@ -970,21 +970,24 @@ elif menu == "📊 Painel de Notas & Vistos":
             p_teste = c_f4.number_input("Peso Teste:", 0.0, 10.0, 3.0, step=0.5)
             p_prova = c_f5.number_input("Peso Prova:", 0.0, 10.0, 4.0, step=0.5)
 
-        # --- 2. SINCRONIZADOR COM SCANNER ---
+        # --- 2. SINCRONIZADOR COM SCANNER (FILTRO SELETIVO) ---
         with st.expander("📸 Sincronizar com Scanner de Gabaritos", expanded=True):
             c_s1, c_s2 = st.columns(2)
+            
             provas_escaneadas = []
             if not df_diagnosticos.empty:
                 provas_escaneadas = df_diagnosticos[df_diagnosticos['TURMA'] == turma_sel]['ID_AVALIACAO'].unique().tolist()
             
-            av_teste_id = c_s1.selectbox("Vincular Teste:", ["Nenhum"] + provas_escaneadas)
-            av_prova_id = c_s2.selectbox("Vincular Prova:", ["Nenhum"] + provas_escaneadas)
+            # --- LÓGICA DE FILTRO SELETIVO SOSA ---
+            # Só mostra "Teste" no campo de Teste e "Prova" no campo de Prova
+            opcoes_teste = [p for p in provas_escaneadas if "TESTE" in p.upper()]
+            opcoes_prova = [p for p in provas_escaneadas if "PROVA" in p.upper()]
             
-            if av_teste_id != "Nenhum" and av_teste_id == av_prova_id:
-                st.warning("⚠️ Você selecionou a mesma avaliação para Teste e Prova.")
-
-            if st.button("🔄 CARREGAR NOTAS DO SCANNER PARA A TABELA", type="primary", use_container_width=True):
-                st.toast("Notas importadas do Scanner!", icon="📸")
+            av_teste_id = c_s1.selectbox("Vincular Teste (3.0):", ["Nenhum"] + opcoes_teste)
+            av_prova_id = c_s2.selectbox("Vincular Prova (4.0):", ["Nenhum"] + opcoes_prova)
+            
+            if st.button("🔄 CARREGAR NOTAS DO SCANNER", type="primary", use_container_width=True):
+                st.toast("Notas filtradas e importadas!", icon="✅")
                 st.rerun()
 
         # --- 3. CÁLCULO AUTOMÁTICO DE VISTOS ---
@@ -1002,7 +1005,7 @@ elif menu == "📊 Painel de Notas & Vistos":
                     vistos_calculados[id_limpo] = round(nota_visto, 2)
                 else: vistos_calculados[id_limpo] = p_visto
 
-        # --- 4. MONTAGEM DA GRADE (LÓGICA DE PRESERVAÇÃO) ---
+        # --- 4. MONTAGEM DA GRADE (PRESERVAÇÃO DE DADOS) ---
         alunos_turma = df_alunos[df_alunos['TURMA'] == turma_sel].sort_values(by="NOME_ALUNO")
         notas_no_banco = df_notas[(df_notas['TURMA'] == turma_sel) & (df_notas['TRIMESTRE'] == trimestre_sel)]
         
@@ -1011,31 +1014,25 @@ elif menu == "📊 Painel de Notas & Vistos":
             id_a = db.limpar_id(aluno['ID'])
             reg_banco = notas_no_banco[notas_no_banco['ID_ALUNO'].apply(db.limpar_id) == id_a]
             
-            # Valores base vindos do banco (se existirem)
-            if not reg_banco.empty:
-                n_visto_final = util.sosa_to_float(reg_banco.iloc[0].get('NOTA_VISTOS', 0))
-                n_teste_final = util.sosa_to_float(reg_banco.iloc[0].get('NOTA_TESTE', 0))
-                n_prova_final = util.sosa_to_float(reg_banco.iloc[0].get('NOTA_PROVA', 0))
-                n_bonus_final = util.sosa_to_float(reg_banco.iloc[0].get('NOTA_REC', 0))
-            else:
-                n_visto_final = vistos_calculados.get(id_a, p_visto)
-                n_teste_final = 0.0
-                n_prova_final = 0.0
-                n_bonus_final = 0.0
+            # Valores que já estão na planilha
+            n_visto_base = util.sosa_to_float(reg_banco.iloc[0].get('NOTA_VISTOS', 0)) if not reg_banco.empty else vistos_calculados.get(id_a, p_visto)
+            n_teste_base = util.sosa_to_float(reg_banco.iloc[0].get('NOTA_TESTE', 0)) if not reg_banco.empty else 0.0
+            n_prova_base = util.sosa_to_float(reg_banco.iloc[0].get('NOTA_PROVA', 0)) if not reg_banco.empty else 0.0
+            n_bonus_base = util.sosa_to_float(reg_banco.iloc[0].get('NOTA_REC', 0)) if not reg_banco.empty else 0.0
 
-            # SOBREPOSIÇÃO ATIVA: Só muda se o professor selecionou algo no Scanner
+            # SOBREPOSIÇÃO: Só altera se o seletor NÃO for "Nenhum"
             if av_teste_id != "Nenhum":
                 reg_s = df_diagnosticos[(df_diagnosticos['ID_ALUNO'].apply(db.limpar_id) == id_a) & (df_diagnosticos['ID_AVALIACAO'] == av_teste_id)]
-                if not reg_s.empty: n_teste_final = util.sosa_to_float(reg_s.iloc[0]['NOTA_CALCULADA'])
+                if not reg_s.empty: n_teste_base = util.sosa_to_float(reg_s.iloc[0]['NOTA_CALCULADA'])
 
             if av_prova_id != "Nenhum":
                 reg_p = df_diagnosticos[(df_diagnosticos['ID_ALUNO'].apply(db.limpar_id) == id_a) & (df_diagnosticos['ID_AVALIACAO'] == av_prova_id)]
-                if not reg_p.empty: n_prova_final = util.sosa_to_float(reg_p.iloc[0]['NOTA_CALCULADA'])
+                if not reg_p.empty: n_prova_base = util.sosa_to_float(reg_p.iloc[0]['NOTA_CALCULADA'])
 
             dados_grade.append({
                 "ID": id_a, "NOME": aluno['NOME_ALUNO'],
-                "VISTOS": n_visto_final, "TESTE": n_teste_final, 
-                "PROVA": n_prova_final, "BÔNUS": n_bonus_final, "RECUPERAÇÃO": 0.0
+                "VISTOS": n_visto_base, "TESTE": n_teste_base, 
+                "PROVA": n_prova_base, "BÔNUS": n_bonus_base, "RECUPERAÇÃO": 0.0
             })
 
         st.markdown("### 📝 Consolidação de Notas")
@@ -1046,24 +1043,24 @@ elif menu == "📊 Painel de Notas & Vistos":
                 "VISTOS": st.column_config.NumberColumn(f"Vistos ({p_visto})", format="%.2f"),
                 "TESTE": st.column_config.NumberColumn(f"Teste ({p_teste})", format="%.2f"),
                 "PROVA": st.column_config.NumberColumn(f"Prova ({p_prova})", format="%.2f"),
-                "BÔNUS": st.column_config.NumberColumn("Bônus", format="%.2f"),
+                "BÔNUS": st.column_config.NumberColumn("Bônus", format="%.2f", help="Atividades Complementares"),
                 "RECUPERAÇÃO": st.column_config.NumberColumn("Recuperação", format="%.2f")
             },
             hide_index=True, use_container_width=True, key=f"editor_notas_v26_{v}"
         )
 
-        # --- 5. CÁLCULOS E EXIBIÇÃO (ALTO CONTRASTE) ---
+        # --- 5. CÁLCULOS E EXIBIÇÃO (ALTO CONTRASTE CORRIGIDO) ---
         df_edit['SOMA'] = df_edit["VISTOS"] + df_edit["TESTE"] + df_edit["PROVA"] + df_edit["BÔNUS"]
         df_edit['MÉDIA FINAL'] = df_edit.apply(lambda r: min(10.0, max(r['SOMA'], r['RECUPERAÇÃO'])), axis=1)
 
         st.markdown("### 📊 Pré-visualização do Desempenho")
         df_view = df_edit[['NOME', 'SOMA', 'MÉDIA FINAL']].copy()
         
-        # ESTILO DE ALTA VISIBILIDADE: Fundo vibrante com texto preto para contraste total
+        # ESTILO DE ALTA VISIBILIDADE (TEXTO PRETO EM FUNDO VIBRANTE)
         def style_performance(v):
             if v < 6.0:
-                return 'background-color: #FF3333; color: #000000; font-weight: 900;' # Vermelho Vivo, Texto Preto
-            return 'background-color: #00FF00; color: #000000; font-weight: 700;' # Verde Vivo, Texto Preto
+                return 'background-color: #FF0000; color: #000000; font-weight: 900; border: 1px solid black;'
+            return 'background-color: #00FF00; color: #000000; font-weight: 700;'
 
         st.dataframe(
             df_view.style.applymap(style_performance, subset=['SOMA', 'MÉDIA FINAL'])
@@ -1072,7 +1069,7 @@ elif menu == "📊 Painel de Notas & Vistos":
         )
 
         if st.button("💾 SALVAR E SINCRONIZAR BOLETIM", type="primary", use_container_width=True):
-            with st.status("Sincronizando Notas...", expanded=False) as status:
+            with st.status("Sincronizando...", expanded=False) as status:
                 db.limpar_notas_turma_trimestre(turma_sel, trimestre_sel)
                 linhas = []
                 for _, r in df_edit.iterrows():
@@ -1085,7 +1082,7 @@ elif menu == "📊 Painel de Notas & Vistos":
                 db.salvar_lote("DB_NOTAS", linhas)
                 status.update(label="✅ Notas Salvas!", state="complete")
                 st.balloons()
-
+                
 # ==============================================================================
 # MÓDULO: BOLETIM ANUAL & CONSELHO V26 - ANÁLISE DE TENDÊNCIA
 # ==============================================================================
