@@ -1851,7 +1851,6 @@ with tab_scan:
             ids_corrigidos = df_p[df_p['ID_AVALIACAO'] == prova_sel]['ID_ALUNO'].astype(str).tolist() if not df_p.empty else []
             alunos_pendentes = df_alunos[(df_alunos['TURMA'] == f_turma) & (~df_alunos['ID'].astype(str).isin(ids_corrigidos))]
 
-            # --- CORREÇÃO DE INDENTAÇÃO AQUI: O bloco abaixo deve estar dentro do 'else' ---
             if alunos_pendentes.empty:
                 st.success(f"✅ Todos os alunos da turma {f_turma} já foram escaneados!")
             else:
@@ -1882,53 +1881,55 @@ with tab_scan:
                 if img_file:
                     if st.button("🧠 ANALISAR MARCAÇÕES", type="primary", use_container_width=True):
                         with st.spinner("Analisando..."):
-                            st.session_state.scan_res = ai.analisar_gabarito_vision(img_file.getvalue())
+                            st.session_state.scan_res = ai.analisar_gabar_vision(img_file.getvalue())
                             st.session_state.scan_img = img_file.getvalue()
                             st.rerun()
 
-                    if "scan_res" in st.session_state:
-                        st.subheader("📝 Conferência de Perícia")
+                # --- TUDO ABAIXO DEVE ESTAR DENTRO DO IF SCAN_RES ---
+                if "scan_res" in st.session_state:
+                    st.subheader("📝 Conferência de Perícia")
+                    
+                    dados_pericia = []
+                    for i in range(1, qtd_q + 1):
+                        q_key = f"{i:02d}"
+                        resp_aluno = st.session_state.scan_res.get(q_key) or st.session_state.scan_res.get(str(i)) or "?"
+                        resp_certa = gab_oficial[i-1] if i <= len(gab_oficial) else "?"
                         
-                        dados_pericia = []
-                        for i in range(1, qtd_q + 1):
-                            q_key = f"{i:02d}"
-                            resp_aluno = st.session_state.scan_res.get(q_key) or st.session_state.scan_res.get(str(i)) or "?"
-                            resp_certa = gab_oficial[i-1] if i <= len(gab_oficial) else "?"
-                            
-                            if resp_aluno == "X": status_txt = "🚫 ANULADA"
-                            elif resp_aluno == "?": status_txt = "⚪ VAZIA"
-                            elif resp_aluno == resp_certa: status_txt = "✅ CORRETA"
-                            else: status_txt = "❌ INCORRETA"
-                            
-                            dados_pericia.append({
-                                "Q": q_key, 
-                                "Marcação": resp_aluno, 
-                                "Gabarito": resp_certa, 
-                                "Status": status_txt
-                            })
+                        if resp_aluno == "X": status_txt = "🚫 ANULADA"
+                        elif resp_aluno == "?": status_txt = "⚪ VAZIA"
+                        elif resp_aluno == resp_certa: status_txt = "✅ CORRETA"
+                        else: status_txt = "❌ INCORRETA"
                         
-                        # --- EDITOR COM MENU DE SELEÇÃO (DROPDOWN) ---
-                        df_edit = st.data_editor(
-                            pd.DataFrame(dados_pericia), 
-                            use_container_width=True, 
-                            hide_index=True,
-                            column_config={
-                                "Q": st.column_config.TextColumn("Q", disabled=True),
-                                "Marcação": st.column_config.SelectboxColumn(
-                                    "Marcação",
-                                    help="Toque para corrigir a leitura da IA",
-                                    options=["A", "B", "C", "D", "E", "X", "?"],
-                                    required=True
-                                ),
-                                "Gabarito": st.column_config.TextColumn("Gabarito", disabled=True),
-                                "Status": st.column_config.TextColumn("Status", disabled=True)
-                            },
-                            key=f"editor_pericia_{v}"
-                        )
+                        dados_pericia.append({
+                            "Q": q_key, 
+                            "Marcação": resp_aluno, 
+                            "Gabarito": resp_certa, 
+                            "Status": status_txt
+                        })
+                    
+                    # EDITOR COM DROPDOWN
+                    df_edit = st.data_editor(
+                        pd.DataFrame(dados_pericia), 
+                        use_container_width=True, 
+                        hide_index=True,
+                        column_config={
+                            "Q": st.column_config.TextColumn("Q", disabled=True),
+                            "Marcação": st.column_config.SelectboxColumn(
+                                "Marcação",
+                                options=["A", "B", "C", "D", "E", "X", "?"],
+                                required=True
+                            ),
+                            "Gabarito": st.column_config.TextColumn("Gabarito", disabled=True),
+                            "Status": st.column_config.TextColumn("Status", disabled=True)
+                        },
+                        key=f"editor_pericia_{v}"
+                    )
 
-                        # Recálculo dinâmico baseado na sua edição
-                        acertos = len(df_edit[df_edit['Marcação'] == df_edit['Gabarito']])
-                        nota_final = (acertos / qtd_q) * v_prova_base
+                    # Recálculo dinâmico
+                    acertos = len(df_edit[df_edit['Marcação'] == df_edit['Gabarito']])
+                    nota_final = (acertos / qtd_q) * v_prova_base
+                    
+                    # Métrica e Botões agora estão protegidos dentro do IF
                     st.metric("Nota Final (Precisão SOSA)", f"{nota_final:.2f}", delta=f"{acertos}/{qtd_q} acertos")
 
                     c_btn1, c_btn2 = st.columns(2)
