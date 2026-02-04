@@ -41,44 +41,53 @@ def limpar_id(valor):
 
 @st.cache_data(ttl=300)
 def carregar_tudo():
-    wb = conectar()
-    if not wb: return None, [pd.DataFrame()]*12 # Retorna 12 dfs vazios em caso de erro
+    wb = conectar() # Define o wb aqui primeiro!
+    if not wb: return None, [pd.DataFrame()]*11 
     
+    # A safe_get deve ficar aqui dentro para "enxergar" o wb
     def safe_get(nome, colunas_padrao=[]):
         try:
             ws = wb.worksheet(nome)
-            dados = ws.get_all_records()
-            df = pd.DataFrame(dados)
-            if df.empty: return pd.DataFrame(columns=colunas_padrao)
+            # FORMATTED_VALUE resolve o erro da data 46057
+            dados = ws.get_all_values() 
+            if not dados or len(dados) < 1:
+                return pd.DataFrame(columns=colunas_padrao)
+            
+            df = pd.DataFrame(dados[1:], columns=dados[0])
             df.columns = [str(c).strip().upper() for c in df.columns]
             
-            # Ajustes específicos de colunas
-            if nome == "DB_AULAS_PRONTAS" or nome == "DB_PLANOS":
+            # --- BLINDAGEM DECIMAL SOSA ---
+            for col in df.columns:
+                if any(x in col for x in ["NOTA", "MEDIA", "VALOR", "SOMA"]):
+                    df[col] = df[col].apply(util.sosa_to_float)
+
+            # Preservação de lógica para outros painéis
+            if nome == "DB_AULAS_PRONTAS":
                 if "LINK_DRIVE" not in df.columns: df["LINK_DRIVE"] = ""
+            elif nome == "DB_PLANOS":
+                if "ANO" in df.columns:
+                    df['ANO'] = df['ANO'].astype(str).apply(lambda x: f"{x}º" if x.isdigit() and "º" not in x else x)
+                if "LINK_DRIVE" not in df.columns: df["LINK_DRIVE"] = ""
+
             return df
         except: 
             return pd.DataFrame(columns=colunas_padrao)
 
-    # Definição de colunas para garantir integridade
+    # Definição das colunas para os outros painéis (Mantido original)
     cols_planos = ["DATA", "SEMANA", "ANO", "TRIMESTRE", "TURMA", "PLANO_TEXTO", "LINK_DRIVE"]
     cols_aulas = ["DATA", "SEMANA_REF", "TIPO_MATERIAL", "CONTEUDO", "ANO", "LINK_DRIVE"]
     cols_alunos = ["ID", "NOME_ALUNO", "TURMA", "STATUS", "NECESSIDADES", "ORIGEM"]
-    cols_diagnosticos = ["DATA", "ID_ALUNO", "NOME_ALUNO", "TURMA", "ID_AVALIACAO", "RESPOSTAS_ALUNO", "NOTA_CALCULADA", "LINK_FOTO_DRIVE"]
+    cols_relatorios = ["DATA", "ID_ALUNO", "NOME_ALUNO", "TIPO", "CONTEUDO"]
+    cols_diario = ["DATA", "ID_ALUNO", "NOME_ALUNO", "TURMA", "VISTO_ATIVIDADE", "TAGS", "OBSERVACOES"]
+    cols_registro = ["DATA", "SEMANA", "TURMA", "CONTEUDO_MINISTRADO", "ADAPTACAO_PEI", "STATUS_CURRICULO"]
+    cols_notas = ["ID_ALUNO", "NOME_ALUNO", "TURMA", "TRIMESTRE", "NOTA_VISTOS", "NOTA_TESTE", "NOTA_PROVA", "NOTA_REC", "MEDIA_FINAL"]
 
-    # Retorno de 12 DataFrames em ordem rigorosa
     return wb, (
-        safe_get("DB_ALUNOS", cols_alunos), 
-        safe_get("DB_CURRICULO"), 
-        safe_get("DB_MATERIAIS"),
-        safe_get("DB_PLANOS", cols_planos), 
-        safe_get("DB_AULAS_PRONTAS", cols_aulas), 
-        safe_get("DB_NOTAS"), 
-        safe_get("DB_DIARIO_BORDO"), 
-        safe_get("DB_TURMAS"), 
-        safe_get("DB_RELATORIOS"), 
-        safe_get("DB_HORARIOS"), 
-        safe_get("DB_REGISTRO_AULAS"),
-        safe_get("DB_GABARITOS_ALUNOS", cols_diagnosticos) # <--- A 12ª TABELA ADICIONADA
+        safe_get("DB_ALUNOS", cols_alunos), safe_get("DB_CURRICULO"), safe_get("DB_MATERIAIS"),
+        safe_get("DB_PLANOS", cols_planos), safe_get("DB_AULAS_PRONTAS", cols_aulas), 
+        safe_get("DB_NOTAS", cols_notas), safe_get("DB_DIARIO_BORDO", cols_diario), 
+        safe_get("DB_TURMAS"), safe_get("DB_RELATORIOS", cols_relatorios), 
+        safe_get("DB_HORARIOS"), safe_get("DB_REGISTRO_AULAS", cols_registro)
     )
 
 def salvar_no_banco(aba_nome, linha):
