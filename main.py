@@ -115,7 +115,6 @@ st.markdown(f"""
 
 # --- CARREGAMENTO ---
 wb, (df_alunos, df_curriculo, df_materiais, df_planos, df_aulas, df_notas, df_diario, df_turmas, df_relatorios, df_horarios, df_registro_aulas, df_diagnosticos) = db.carregar_tudo()
-
 # --- SIDEBAR COM LOGOTIPO ---
 with st.sidebar:
     try:
