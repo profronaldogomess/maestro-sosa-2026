@@ -1371,7 +1371,7 @@ elif menu == "📚 Base de Conhecimento":
         st.dataframe(df_materiais, use_container_width=True, hide_index=True)
 
 # ==============================================================================
-# MÓDULO: RELATÓRIOS PEI V26 - DOSSIÊ DE EVIDÊNCIAS INTEGRADO
+# MÓDULO: RELATÓRIOS PEI V26 - DOSSIÊ DE EVIDÊNCIAS INTEGRADO (CORRIGIDO)
 # ==============================================================================
 elif menu == "♿ Relatórios PEI / Perfil IA":
     st.title("♿ Analista de Inclusão: Dossiê de Evidências")
@@ -1380,19 +1380,22 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
     if df_alunos.empty:
         st.warning("⚠️ Base de alunos vazia.")
     else:
-        # --- 1. FILTRAGEM INTELIGENTE (APENAS ALUNOS PEI) ---
-        df_somente_pei = df_alunos[df_alunos['NECESSIDADES'].str.upper().strip().apply(lambda x: x not in ["NENHUMA", "PENDENTE", ""])]
+        # --- 1. FILTRAGEM INTELIGENTE (CORREÇÃO DO ERRO .STR.STRIP) ---
+        # Criamos uma máscara booleana blindada contra valores nulos (NaN)
+        mask_pei = ~df_alunos['NECESSIDADES'].astype(str).str.upper().str.strip().isin(["NENHUMA", "PENDENTE", "", "NAN"])
+        df_somente_pei = df_alunos[mask_pei]
         
         if df_somente_pei.empty:
-            st.info("💡 Nenhum aluno com CID/Necessidades cadastrado. Use 'Gestão da Turma' para atualizar o perfil.")
-            # Fallback para permitir testes
+            st.info("💡 Nenhum aluno com CID/Necessidades detectado. Mostrando lista geral para teste.")
             df_somente_pei = df_alunos
 
         c_t, c_a = st.columns([1, 2])
         turma_pei = c_t.selectbox("Filtrar Turma:", sorted(df_somente_pei['TURMA'].unique()), key="pei_t")
-        aluno_pei_nome = c_a.selectbox("Selecionar Estudante PEI:", df_somente_pei[df_somente_pei['TURMA'] == turma_pei]['NOME_ALUNO'].tolist(), key="pei_a")
         
-        # Dados do Aluno
+        lista_alunos_turma = df_somente_pei[df_somente_pei['TURMA'] == turma_pei]['NOME_ALUNO'].tolist()
+        aluno_pei_nome = c_a.selectbox("Selecionar Estudante PEI:", lista_alunos_turma, key="pei_a")
+        
+        # Dados do Aluno Selecionado
         dados_a = df_somente_pei[df_somente_pei['NOME_ALUNO'] == aluno_pei_nome].iloc[0]
         id_a = db.limpar_id(dados_a['ID'])
         cid = dados_a['NECESSIDADES']
@@ -1401,101 +1404,109 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
         with st.status("🔍 Maestro Sosa compilando evidências de todos os painéis...", expanded=False) as status:
             # A. Evidências do Diário (Engajamento e Bônus)
             d_aluno = df_diario[df_diario['ID_ALUNO'].apply(db.limpar_id) == id_a] if not df_diario.empty else pd.DataFrame()
-            vistos_concluidos = len(d_aluno[d_aluno['TAGS'].str.contains("PEI Concluído", na=False)])
-            bonus_total = d_aluno['BONUS'].apply(util.sosa_to_float).sum() if 'BONUS' in d_aluno.columns else 0.0
+            
+            vistos_concluidos = 0
+            bonus_total = 0.0
+            if not d_aluno.empty:
+                # Conta tags de conclusão PEI
+                vistos_concluidos = len(d_aluno[d_aluno['TAGS'].astype(str).str.upper().str.contains("PEI CONCLUÍDO", na=False)])
+                # Soma bônus ⭐
+                if 'BONUS' in d_aluno.columns:
+                    bonus_total = d_aluno['BONUS'].apply(util.sosa_to_float).sum()
             
             # B. Evidências do Scanner (Desempenho em Provas Adaptadas)
             s_aluno = df_diagnosticos[df_diagnosticos['ID_ALUNO'].apply(db.limpar_id) == id_a] if not df_diagnosticos.empty else pd.DataFrame()
             media_scanner = s_aluno['NOTA_CALCULADA'].mean() if not s_aluno.empty else 0.0
             
             # C. Evidências do Planejamento (Estratégias Ponto ID)
-            # Busca as adaptações PEI planejadas para o ano deste aluno
-            p_ano = df_planos[df_planos['ANO'].str.contains(turma_pei[0])] if not df_planos.empty else pd.DataFrame()
             estrategias = []
-            if not p_ano.empty:
+            if not df_planos.empty:
+                # Filtra planos do ano correspondente (ex: 6º ano)
+                p_ano = df_planos[df_planos['ANO'].str.contains(str(turma_pei[0]), na=False)]
                 for p_txt in p_ano['PLANO_TEXTO']:
                     est = ai.extrair_tag(p_txt, "ADAPTACAO_PEI")
-                    if est: estrategias.append(est)
-            estrategias_unicas = list(set(estrategias))[-3:] # Pega as 3 últimas estratégias
+                    if est and len(est) > 5: estrategias.append(est)
+            estrategias_unicas = list(set(estrategias))[-3:] # Pega as 3 últimas
 
-            status.update(label="✅ Dossiê Compilado!", state="complete")
+            status.update(label="✅ Dossiê de Evidências Compilado!", state="complete")
 
         # --- 3. DASHBOARD DE MONITORAMENTO PEI ---
         c_m1, c_m2, c_m3, c_m4 = st.columns(4)
         c_m1.metric("Engajamento PEI", f"{vistos_concluidos} Vistos")
-        c_m2.metric("Bônus ⭐", f"{bonus_total:.1f} pts")
+        c_m2.metric("Bônus Acumulado ⭐", f"{bonus_total:.1f}")
         c_m3.metric("Média Scanner", f"{media_scanner:.2f}")
-        c_m4.metric("Status", "Em Evolução" if media_scanner > 0 else "Diagnóstico")
+        c_m4.metric("Perfil", "Em Evolução" if bonus_total > 0 else "Monitoramento")
 
         tab_rel, tab_doc, tab_zap, tab_hist = st.tabs([
             "🧠 Relatório de Evidências (IA)", 
             "📄 Capa do PEI Oficial", 
             "📱 Comunicado Pais", 
-            "🗂️ Histórico"
+            "🗂️ Histórico Salvo"
         ])
 
-        # --- ABA 1: RELATÓRIO DE EVIDÊNCIAS (A GRANDE INTEGRAÇÃO) ---
+        # --- ABA 1: RELATÓRIO DE EVIDÊNCIAS (INTEGRAÇÃO TOTAL) ---
         with tab_rel:
             st.subheader("📝 Relatório Técnico de Acompanhamento")
-            percepcao = st.text_area("Sua percepção adicional (Opcional):", placeholder="Ex: Demonstrou mais calma hoje...")
+            percepcao = st.text_area("Sua percepção analítica (O que a IA não viu?):", placeholder="Ex: Demonstrou maior autonomia na resolução de problemas...")
             
-            if st.button("🚀 COMPILAR RELATÓRIO BASEADO EM FATOS", type="primary", use_container_width=True):
-                with st.spinner("Maestro Sosa redigindo relatório técnico..."):
-                    # O PROMPT AGORA É ALIMENTADO POR DADOS REAIS
+            if st.button("🚀 GERAR RELATÓRIO BASEADO EM EVIDÊNCIAS", type="primary", use_container_width=True):
+                with st.spinner("Maestro Sosa cruzando dados e redigindo..."):
                     prompt_pei = (
-                        f"VOCÊ É UM ESPECIALISTA EM EDUCAÇÃO INCLUSIVA.\n"
+                        f"VOCÊ É UM ESPECIALISTA EM EDUCAÇÃO INCLUSIVA (PADRÃO SOSA).\n"
                         f"ESTUDANTE: {aluno_pei_nome}. CID: {cid}.\n\n"
-                        f"EVIDÊNCIAS COLETADAS NO SISTEMA SOSA:\n"
-                        f"- ENGAJAMENTO: Concluiu {vistos_concluidos} atividades adaptadas no Diário de Bordo.\n"
-                        f"- MÉRITO: Acumulou {bonus_total} pontos de bônus por desafios superados.\n"
-                        f"- DESEMPENHO: Média de {media_scanner:.2f} nas avaliações adaptadas (Scanner).\n"
-                        f"- ESTRATÉGIAS UTILIZADAS (PONTO ID): {'; '.join(estrategias_unicas)}.\n"
-                        f"- OBSERVAÇÃO DO PROFESSOR: {percepcao}\n\n"
-                        f"MISSÃO: Escreva um relatório técnico de acompanhamento trimestral.\n"
-                        f"REGRAS: Seja formal, cite os dados acima para provar o progresso. SEM MARKDOWN."
+                        f"DADOS REAIS COLETADOS NO SISTEMA:\n"
+                        f"- ENGAJAMENTO: {vistos_concluidos} atividades adaptadas concluídas.\n"
+                        f"- MÉRITO: {bonus_total} pontos de bônus por desafios superados.\n"
+                        f"- DESEMPENHO: Média de {media_scanner:.2f} no Scanner de Gabaritos.\n"
+                        f"- ESTRATÉGIAS DO PONTO ID: {'; '.join(estrategias_unicas)}.\n"
+                        f"- PERCEPÇÃO DO PROFESSOR: {percepcao}\n\n"
+                        f"MISSÃO: Escreva um relatório técnico de evolução trimestral.\n"
+                        f"REGRAS: Use linguagem clínica-pedagógica. Cite os números acima para validar o progresso. SEM MARKDOWN."
                     )
                     st.session_state.res_pei_v26 = ai.gerar_ia("ESPECIALISTA_INCLUSAO", prompt_pei)
             
             if "res_pei_v26" in st.session_state:
                 txt_final = st.text_area("Relatório Gerado (Editável):", st.session_state.res_pei_v26, height=400)
-                if st.button("💾 SALVAR NO BANCO DE RELATÓRIOS"):
+                if st.button("💾 ARQUIVAR RELATÓRIO NO BANCO"):
                     db.salvar_no_banco("DB_RELATORIOS", [datetime.now().strftime("%d/%m/%Y"), id_a, aluno_pei_nome, "ACOMPANHAMENTO_PEI", txt_final])
                     st.success("Relatório arquivado com sucesso!")
 
         # --- ABA 2: CAPA DO PEI (INTEGRADO AO PONTO ID) ---
         with tab_doc:
             st.subheader("📄 Seção 1: Plano de Acessibilidade")
-            if st.button("📄 Gerar Capa Baseada no Perfil e Planejamento"):
-                with st.spinner("Analisando barreiras e estratégias..."):
+            if st.button("📄 Gerar Capa do PEI (Sincronizada com Planejamento)"):
+                with st.spinner("Correlacionando barreiras e estratégias..."):
                     prompt_capa = (
                         f"ALUNO: {aluno_pei_nome}. CID: {cid}.\n"
-                        f"ESTRATÉGIAS DO PONTO ID: {estrategias_unicas}.\n"
+                        f"ESTRATÉGIAS PLANEJADAS NO PONTO ID: {estrategias_unicas}.\n"
                         f"Gere a Seção 1 do PEI (Habilidades Sociais, Comunicativas, Emocionais e Funcionais) "
-                        f"correlacionando o CID com as estratégias que o professor já usa no planejamento."
+                        f"garantindo que as estratégias citadas coincidam com o que o professor já planejou."
                     )
                     st.session_state.res_capa_v26 = ai.gerar_ia("ESPECIALISTA_PEI", prompt_capa)
             
             if "res_capa_v26" in st.session_state:
-                st.text_area("Texto Oficial:", st.session_state.res_capa_v26, height=400)
+                st.text_area("Texto da Capa:", st.session_state.res_capa_v26, height=400)
 
         # --- ABA 3: COMUNICADO PAIS (ZAP) ---
         with tab_zap:
             st.subheader("📱 Mensagem para Família")
-            motivo = st.text_input("Motivo do contato:", "Informar sobre o progresso nas atividades adaptadas")
-            if st.button("🚀 Gerar Mensagem"):
-                base = st.session_state.get("res_pei_v26", "O aluno está progredindo bem.")
-                prompt_zap = f"Com base neste relatório: '{base}', gere uma mensagem de WhatsApp para os pais. Motivo: {motivo}. Tom: Acolhedor e parceiro."
+            motivo = st.text_input("Motivo do contato:", "Progresso nas atividades adaptadas")
+            if st.button("🚀 Gerar Mensagem Acolhedora"):
+                base = st.session_state.get("res_pei_v26", "O aluno está evoluindo conforme o plano.")
+                prompt_zap = f"Com base neste relatório: '{base}', gere uma mensagem de WhatsApp para os pais. Motivo: {motivo}. Tom: Empático e profissional."
                 st.info(ai.gerar_ia("ESPECIALISTA_INCLUSAO", prompt_zap))
 
         # --- ABA 4: HISTÓRICO ---
         with tab_hist:
-            st.subheader("🗂️ Histórico de Documentos")
+            st.subheader("🗂️ Histórico de Documentos Salvos")
             if not df_relatorios.empty:
                 hist = df_relatorios[df_relatorios['ID_ALUNO'].apply(db.limpar_id) == id_a].iloc[::-1]
-                for _, row in hist.iterrows():
-                    with st.expander(f"{row['DATA']} - {row['TIPO']}"):
-                        st.write(row['CONTEUDO'])
-            else: st.info("Nenhum documento salvo.")
+                if not hist.empty:
+                    for _, row in hist.iterrows():
+                        with st.expander(f"{row['DATA']} - {row['TIPO']}"):
+                            st.write(row['CONTEUDO'])
+                else: st.info("Nenhum documento encontrado para este aluno.")
+            else: st.info("Banco de relatórios vazio.")
 
 # ==============================================================================
 # MÓDULO: ARQUITETO DE EXAMES - ARQUITETURA V33.0 (SESSÃO TRAVADA + DUAL SYNC)
