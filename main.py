@@ -933,6 +933,9 @@ elif menu == "📊 Painel de Notas & Vistos":
     st.title("📊 Painel de Notas: Sincronia e Pesos Dinâmicos")
     st.markdown("---")
 
+    if "v_notas" not in st.session_state: st.session_state.v_notas = 1
+    v = st.session_state.v_notas
+
     if df_alunos.empty:
         st.warning("⚠️ Cadastre alunos primeiro.")
     else:
