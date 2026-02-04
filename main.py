@@ -1878,7 +1878,7 @@ elif menu == "📸 Scanner de Gabaritos":
                         # Tabela de conferência rápida
                         dados_pericia = []
                         for i in range(1, qtd_q + 1):
-                            q_key = f"{i:02d}"
+                            q_key = f"{i:02d}" # Esta é a variável correta
                             resp_aluno = st.session_state.scan_res.get(q_key) or st.session_state.scan_res.get(str(i)) or "?"
                             resp_certa = gab_oficial[i-1] if i <= len(gab_oficial) else "?"
                             
@@ -1888,7 +1888,7 @@ elif menu == "📸 Scanner de Gabaritos":
                             else: status_txt = "❌ INCORRETA"
                             
                             dados_pericia.append({
-                                "Q": q_num, 
+                                "Q": q_key, # <--- Aqui estava o erro (era q_num)
                                 "Marcação": resp_aluno, 
                                 "Gabarito": resp_certa, 
                                 "Status": status_txt
