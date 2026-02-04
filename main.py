@@ -770,9 +770,13 @@ if menu == "📅 Planejamento (Ponto ID)":
 # ==============================================================================
 # MÓDULO: DIÁRIO DE BORDO RÁPIDO V26 - INTEGRAÇÃO PONTO ID & PEI
 # ==============================================================================
-elif menu == "📝 Diário de Bordo Rápido":
+if menu == "📝 Diário de Bordo Rápido":
     st.title("📝 Diário de Bordo: Engajamento e Ponto ID")
     st.markdown("---")
+
+    if "v_diario" not in st.session_state: st.session_state.v_diario = 1
+    v = st.session_state.v_diario
+    # ---------------------------------------------------------
 
     if df_alunos.empty:
         st.warning("⚠️ Cadastre alunos primeiro.")
