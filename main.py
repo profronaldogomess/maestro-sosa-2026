@@ -990,20 +990,47 @@ elif menu == "📊 Painel de Notas & Vistos":
                 st.toast("Notas filtradas e importadas!", icon="✅")
                 st.rerun()
 
-        # --- 3. CÁLCULO AUTOMÁTICO DE VISTOS ---
+# --- 3. CÁLCULO AUTOMÁTICO DE VISTOS (FILTRADO POR TRIMESTRE) ---
         vistos_calculados = {}
+        
+        # Definição das datas oficiais de 2026 (Sincronizado com utils.py)
+        calendario = {
+            "I Trimestre": (date(2026, 2, 9), date(2026, 5, 22)),
+            "II Trimestre": (date(2026, 5, 25), date(2026, 9, 4)),
+            "III Trimestre": (date(2026, 9, 8), date(2026, 12, 17))
+        }
+        dt_ini, dt_fim = calendario.get(trimestre_sel)
+
         if not df_diario.empty:
-            df_d_t = df_diario[df_diario['TURMA'] == turma_sel]
+            # 1. Filtramos o diário pela turma
+            df_d_t = df_diario[df_diario['TURMA'] == turma_sel].copy()
+            
+            # 2. Convertemos a coluna DATA para formato de data real para comparação
+            df_d_t['DATA_DT'] = pd.to_datetime(df_d_t['DATA'], format="%d/%m/%Y", errors='coerce').dt.date
+            
+            # 3. FILTRO TEMPORAL: Só pegamos registros dentro do trimestre selecionado
+            df_d_trimestre = df_d_t[(df_d_t['DATA_DT'] >= dt_ini) & (df_d_t['DATA_DT'] <= dt_fim)]
+            
             for id_aluno in df_alunos[df_alunos['TURMA'] == turma_sel]['ID']:
                 id_limpo = db.limpar_id(id_aluno)
-                d_aluno = df_d_t[df_d_t['ID_ALUNO'].apply(db.limpar_id) == id_limpo]
-                if not d_aluno.empty and 'VISTO_ATIVIDADE' in d_aluno.columns:
+                d_aluno = df_d_trimestre[df_d_trimestre['ID_ALUNO'].apply(db.limpar_id) == id_limpo]
+                
+                if not d_aluno.empty:
+                    # Aulas válidas (presença ou falta justificada não penaliza)
                     aulas_validas = d_aluno[~d_aluno['TAGS'].astype(str).str.upper().str.contains("AUSÊNCIA JUSTIFICADA", na=False)]
                     total_aulas = len(aulas_validas)
+                    
+                    # Conta apenas vistos "TRUE" dentro deste trimestre
                     vistos_recebidos = len(aulas_validas[aulas_validas['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"])
-                    nota_visto = (vistos_recebidos / total_aulas * p_visto) if total_aulas > 0 else p_visto
+                    
+                    nota_visto = (vistos_recebidos / total_aulas * p_visto) if total_aulas > 0 else 0.0
                     vistos_calculados[id_limpo] = round(nota_visto, 2)
-                else: vistos_calculados[id_limpo] = p_visto
+                else:
+                    # Se não há nenhuma aula registrada para o aluno NESTE trimestre, a nota de visto começa em 0.0
+                    vistos_calculados[id_limpo] = 0.0
+        else:
+            # Se o diário está vazio, todos começam com 0.0
+            vistos_calculados = {db.limpar_id(id_a): 0.0 for id_a in df_alunos[df_alunos['TURMA'] == turma_sel]['ID']}
 
         # --- 4. MONTAGEM DA GRADE (PRESERVAÇÃO DE DADOS) ---
         alunos_turma = df_alunos[df_alunos['TURMA'] == turma_sel].sort_values(by="NOME_ALUNO")
@@ -1082,7 +1109,7 @@ elif menu == "📊 Painel de Notas & Vistos":
                 db.salvar_lote("DB_NOTAS", linhas)
                 status.update(label="✅ Notas Salvas!", state="complete")
                 st.balloons()
-                
+
 # ==============================================================================
 # MÓDULO: BOLETIM ANUAL & CONSELHO V26 - ANÁLISE DE TENDÊNCIA
 # ==============================================================================
