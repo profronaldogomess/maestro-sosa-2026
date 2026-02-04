@@ -1303,12 +1303,14 @@ elif menu == "👥 Gestão da Turma":
                     db.salvar_no_banco("DB_ALUNOS", [id_b+idx, str(r['NOME']).upper(), t_dest, "ATIVO", "NENHUMA", "CSV"])
                 st.success("Importado!"); st.rerun()
 
-    # --- ABA 4: EDIÇÃO & TRANSFERÊNCIA (A NOVA SALA DE CIRURGIA) ---
+# --- ABA 4: EDIÇÃO & TRANSFERÊNCIA (VERSÃO BLINDADA V26.9) ---
     with tab_editar:
         st.subheader("✏️ Alterar Cadastro ou Transferir Aluno")
         
         c_ed1, c_ed2 = st.columns(2)
-        t_origem = c_ed1.selectbox("Selecione a Turma Atual:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key="ed_t_orig")
+        # Lista de turmas que realmente possuem alunos cadastrados
+        turmas_com_alunos = sorted(df_alunos['TURMA'].unique().tolist())
+        t_origem = c_ed1.selectbox("Selecione a Turma Atual:", [""] + turmas_com_alunos, key="ed_t_orig")
         
         if t_origem:
             alunos_opcoes = df_alunos[df_alunos['TURMA'] == t_origem].sort_values(by="NOME_ALUNO")
@@ -1316,7 +1318,8 @@ elif menu == "👥 Gestão da Turma":
             
             dados_atuais = alunos_opcoes[alunos_opcoes['NOME_ALUNO'] == aluno_sel_nome].iloc[0]
             
-            with st.form("form_edicao_aluno"):
+            # INÍCIO DO FORMULÁRIO
+            with st.form("form_edicao_aluno_v26"):
                 st.markdown(f"### Editando: {aluno_sel_nome}")
                 col_e1, col_e2 = st.columns(2)
                 
@@ -1324,26 +1327,48 @@ elif menu == "👥 Gestão da Turma":
                 nova_nec = col_e2.text_input("Necessidades/CID:", value=dados_atuais['NECESSIDADES'])
                 
                 col_e3, col_e4 = st.columns(2)
-                novo_status = col_e3.selectbox("Status do Aluno:", ["ATIVO", "DESISTENTE", "TRANSFERIDO", "AFASTADO"], 
-                                              index=["ATIVO", "DESISTENTE", "TRANSFERIDO", "AFASTADO"].index(dados_atuais['STATUS']))
                 
-                nova_turma = col_e4.selectbox("Transferir para Turma:", df_turmas['ID_TURMA'].tolist(), 
-                                             index=df_turmas['ID_TURMA'].tolist().index(dados_atuais['TURMA']))
+                # Lógica de Index Seguro para Status
+                lista_status = ["ATIVO", "DESISTENTE", "TRANSFERIDO", "AFASTADO"]
+                status_atual = str(dados_atuais['STATUS']).upper()
+                idx_s = lista_status.index(status_atual) if status_atual in lista_status else 0
+                novo_status = col_e3.selectbox("Status do Aluno:", lista_status, index=idx_s)
                 
-                if st.form_submit_button("💾 CONFIRMAR ALTERAÇÕES E TRANSFERÊNCIA"):
-                    # Lógica UPSERT: Deleta o registro antigo e salva o novo com o mesmo ID
-                    db.excluir_registro("DB_ALUNOS", dados_atuais['NOME_ALUNO']) # Busca por nome para garantir
-                    db.salvar_no_banco("DB_ALUNOS", [
-                        dados_atuais['ID'], novo_nome.upper(), nova_turma, novo_status, nova_nec.upper(), "EDITADO"
-                    ])
-                    st.success(f"✅ Dados de {novo_nome} atualizados com sucesso!"); st.rerun()
+                # --- CORREÇÃO DO VALUEERROR (INDEX SEGURO PARA TURMA) ---
+                lista_id_turmas = df_turmas['ID_TURMA'].tolist() if not df_turmas.empty else [t_origem]
+                turma_atual_aluno = dados_atuais['TURMA']
+                
+                # Se a turma do aluno não estiver na lista de turmas, usamos o index 0 para não travar
+                if turma_atual_aluno in lista_id_turmas:
+                    idx_t = lista_id_turmas.index(turma_atual_aluno)
+                else:
+                    idx_t = 0
+                
+                nova_turma = col_e4.selectbox("Transferir para Turma:", lista_id_turmas, index=idx_t)
+                
+                # BOTÃO DE SUBMIT (OBRIGATÓRIO DENTRO DO FORM)
+                btn_confirmar = st.form_submit_button("💾 CONFIRMAR ALTERAÇÕES E TRANSFERÊNCIA", use_container_width=True)
+                
+                if btn_confirmar:
+                    # Lógica de salvamento (Upsert)
+                    with st.spinner("Atualizando registro..."):
+                        # Remove o antigo e salva o novo com o mesmo ID
+                        db.excluir_registro("DB_ALUNOS", dados_atuais['NOME_ALUNO'])
+                        sucesso = db.salvar_no_banco("DB_ALUNOS", [
+                            dados_atuais['ID'], novo_nome.upper(), nova_turma, novo_status, nova_nec.upper(), "EDITADO"
+                        ])
+                        if sucesso:
+                            st.success(f"✅ Dados de {novo_nome} atualizados!")
+                            st.cache_data.clear()
+                            time.sleep(1)
+                            st.rerun()
 
         st.markdown("---")
         st.subheader("🗑️ Gestão de Turmas")
         t_para_deletar = st.selectbox("Excluir Turma (Cuidado):", [""] + df_turmas['ID_TURMA'].tolist())
         if t_para_deletar and st.button("🚨 APAGAR TURMA DEFINITIVAMENTE"):
             if len(df_alunos[df_alunos['TURMA'] == t_para_deletar]) > 0:
-                st.error("❌ Não é possível apagar uma turma que ainda possui alunos. Transfira-os primeiro.")
+                st.error("❌ Não é possível apagar uma turma que ainda possui alunos.")
             else:
                 db.excluir_registro("DB_TURMAS", t_para_deletar)
                 st.success(f"Turma {t_para_deletar} removida."); st.rerun()
