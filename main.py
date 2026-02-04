@@ -1496,17 +1496,31 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                 prompt_zap = f"Com base neste relatório: '{base}', gere uma mensagem de WhatsApp para os pais. Motivo: {motivo}. Tom: Empático e profissional."
                 st.info(ai.gerar_ia("ESPECIALISTA_INCLUSAO", prompt_zap))
 
-        # --- ABA 4: HISTÓRICO ---
+# --- ABA 4: HISTÓRICO (VERSÃO BLINDADA CONTRA KEYERROR) ---
         with tab_hist:
             st.subheader("🗂️ Histórico de Documentos Salvos")
             if not df_relatorios.empty:
+                # Filtra os relatórios do aluno
                 hist = df_relatorios[df_relatorios['ID_ALUNO'].apply(db.limpar_id) == id_a].iloc[::-1]
+                
                 if not hist.empty:
                     for _, row in hist.iterrows():
-                        with st.expander(f"{row['DATA']} - {row['TIPO']}"):
-                            st.write(row['CONTEUDO'])
-                else: st.info("Nenhum documento encontrado para este aluno.")
-            else: st.info("Banco de relatórios vazio.")
+                        # --- LÓGICA DE ACESSO SEGURO SOSA ---
+                        # Tenta pegar a data, se não existir usa "Sem Data"
+                        data_rel = row.get('DATA', 'Sem Data')
+                        
+                        # Tenta pegar 'TIPO', se não existir tenta 'TURMA', se não 'Registro'
+                        # Isso evita o KeyError se a coluna mudar de nome na planilha
+                        tipo_rel = row.get('TIPO', row.get('TURMA', 'REGISTRO'))
+                        
+                        conteudo_rel = row.get('CONTEUDO', 'Conteúdo não localizado.')
+
+                        with st.expander(f"📅 {data_rel} - {tipo_rel}"):
+                            st.write(conteudo_rel)
+                else: 
+                    st.info("📭 Nenhum documento encontrado para este aluno.")
+            else: 
+                st.info("📭 Banco de relatórios vazio.")
 
 # ==============================================================================
 # MÓDULO: ARQUITETO DE EXAMES - ARQUITETURA V33.0 (SESSÃO TRAVADA + DUAL SYNC)
