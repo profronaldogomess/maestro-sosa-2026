@@ -29,3 +29,28 @@ def gerar_semanas():
         data_atual += timedelta(days=7)
         contador += 1
     return semanas
+
+# --- ADICIONE AO FINAL DO SEU utils.py ---
+
+def sosa_to_float(valor):
+    """
+    CONVERSOR UNIVERSAL SOSA (ANTI-ERRO 0.3)
+    Converte qualquer entrada (string com vírgula, ponto ou None) em float puro.
+    """
+    if valor is None or str(valor).strip() == "" or str(valor).lower() == "nan":
+        return 0.0
+    try:
+        # Remove espaços e troca vírgula por ponto
+        limpo = str(valor).replace(" ", "").replace(",", ".")
+        return float(limpo)
+    except ValueError:
+        return 0.0
+
+def sosa_to_str(valor, casas=2):
+    """
+    FORMATADOR DE PERSISTÊNCIA (GOOGLE SHEETS)
+    Converte float para string com vírgula para manter a localidade PT-BR no Sheets.
+    """
+    val_float = sosa_to_float(valor)
+    formato = "{:." + str(casas) + "f}"
+    return formato.format(val_float).replace(".", ",")
