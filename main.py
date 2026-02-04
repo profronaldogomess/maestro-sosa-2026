@@ -1204,129 +1204,149 @@ elif menu == "📈 Boletim Anual & Conselho":
                 st.text_area("Copia e cole na Ata Oficial:", ai.gerar_ia("PLANE_PEDAGOGICO", prompt_ata), height=300)
 
 # ==============================================================================
-# MÓDULO: GESTÃO DA TURMA V26 - ARQUITETURA DE HORÁRIOS E POVOAMENTO
+# MÓDULO: GESTÃO DA TURMA V26.8 - ARQUITETURA, EDIÇÃO E DASHBOARD
 # ==============================================================================
 elif menu == "👥 Gestão da Turma":
-    st.title("👥 Gestão de Turmas: Arquitetura de Regência")
+    st.title("👥 Centro de Comando: Gestão de Turmas e Alunos")
     st.markdown("---")
 
-    tab_criar, tab_povoar, tab_mapa = st.tabs([
-        "🏗️ Criar Nova Turma", 
-        "➕ Povoar Alunos (Manual/CSV)", 
-        "📋 Mapa de Regência"
+    tab_dash, tab_criar, tab_povoar, tab_editar = st.tabs([
+        "📊 Dashboard de Regência",
+        "🏗️ Arquitetura de Turmas", 
+        "➕ Povoar Alunos", 
+        "✏️ Edição & Transferência"
     ])
 
-    # --- ABA 1: CRIAR TURMA (DNA CRONOLÓGICO) ---
+    # --- ABA 1: DASHBOARD DE REGÊNCIA (VISÃO ANALÍTICA) ---
+    with tab_dash:
+        if not df_turmas.empty:
+            st.subheader("📊 Raio-X da Carga Horária")
+            
+            # KPIs Globais
+            c1, c2, c3, c4 = st.columns(4)
+            total_alunos = len(df_alunos)
+            ativos = len(df_alunos[df_alunos['STATUS'] == "ATIVO"])
+            peis = len(df_alunos[~df_alunos['NECESSIDADES'].astype(str).str.upper().isin(["NENHUMA", "PENDENTE", "", "NAN"])])
+            
+            c1.metric("Total de Alunos", total_alunos)
+            c2.metric("Alunos Ativos", ativos)
+            c3.metric("Estudantes PEI", peis)
+            c4.metric("Turmas", len(df_turmas))
+
+            # Gráfico de Distribuição por Turma
+            df_contagem = df_alunos.groupby(['TURMA', 'STATUS']).size().reset_index(name='Qtd')
+            fig_dist = px.bar(df_contagem, x='TURMA', y='Qtd', color='STATUS', 
+                             title="Distribuição de Alunos por Turma e Status",
+                             color_discrete_map={"ATIVO": "#00FF00", "DESISTENTE": "#FF3333", "TRANSFERIDO": "#FFA500"})
+            st.plotly_chart(fig_dist, use_container_width=True)
+
+            # Cards das Turmas
+            for _, row in df_turmas.iterrows():
+                with st.container(border=True):
+                    col_m1, col_m2, col_m3 = st.columns([1, 2, 1])
+                    col_m1.markdown(f"### {row['ID_TURMA']}")
+                    col_m1.caption(f"🕒 {row['HORARIO_TEMPO']}")
+                    col_m2.markdown(f"📅 **Dias:** {row['DIAS_SEMANA']}")
+                    
+                    q_t = len(df_alunos[df_alunos['TURMA'] == row['ID_TURMA']])
+                    q_p = len(df_alunos[(df_alunos['TURMA'] == row['ID_TURMA']) & 
+                                       (~df_alunos['NECESSIDADES'].astype(str).str.upper().isin(["NENHUMA", "PENDENTE", ""]))])
+                    
+                    col_m3.metric("Alunos", q_t)
+                    col_m3.button(f"Ver Lista: {row['ID_TURMA']}", key=f"ver_{row['ID_TURMA']}")
+        else:
+            st.info("📭 Nenhuma turma cadastrada.")
+
+    # --- ABA 2: CRIAR TURMA (DNA CRONOLÓGICO) ---
     with tab_criar:
-        st.subheader("🏗️ Configurar Identidade da Turma")
+        st.subheader("🏗️ Configurar Nova Turma")
         with st.form("form_nova_turma", clear_on_submit=True):
-            c1, c2, c3 = st.columns([1, 1, 1])
+            c1, c2, c3 = st.columns(3)
             ano_t = c1.selectbox("Série/Ano:", [6, 7, 8, 9])
             letra_t = c2.selectbox("Letra:", ["A", "B", "C", "D", "E", "F"])
             turno_t = c3.selectbox("Turno:", ["Matutino", "Vespertino"])
             
-            st.markdown("---")
-            c4, c5 = st.columns([2, 1])
+            dias_aula = st.multiselect("📅 Dias de Aula:", ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"], max_selections=2)
             
-            # Seleção de Dias (Regra: 2 dias por semana)
-            dias_aula = c4.multiselect(
-                "📅 Dias de Aula (Selecione os 2 dias):",
-                ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"],
-                max_selections=2
-            )
-            
-            # Lógica de Horários Específicos do Professor Ronaldo
             if turno_t == "Matutino":
-                opcoes_horario = {
-                    "1º Tempo": "07:10h – 09:10h",
-                    "2º Tempo": "09:30h – 11:30h"
-                }
+                opcoes_h = {"1º Tempo": "07:10h – 09:10h", "2º Tempo": "09:30h – 11:30h"}
             else:
-                opcoes_horario = {
-                    "1º Tempo": "13:10h – 15:10h",
-                    "2º Tempo": "15:30h – 17:30h"
-                }
+                opcoes_h = {"1º Tempo": "13:10h – 15:10h", "2º Tempo": "15:30h – 17:30h"}
             
-            tempo_sel = c5.radio("⏰ Tempo de Aula:", list(opcoes_horario.keys()))
-            horario_final = opcoes_horario[tempo_sel]
+            tempo_sel = st.radio("⏰ Tempo de Aula:", list(opcoes_h.keys()), horizontal=True)
             
-            st.info(f"💡 **Resumo:** Turma no {turno_t} ({tempo_sel}) das {horario_final}.")
+            if st.form_submit_button("🚀 CADASTRAR TURMA"):
+                sigla = f"{ano_t}ª {'M' if turno_t == 'Matutino' else 'V'}{letra_t}"
+                db.salvar_no_banco("DB_TURMAS", [sigla, f"{ano_t}º Ano {letra_t}", turno_t, " / ".join(dias_aula), f"{tempo_sel} ({opcoes_h[tempo_sel]})", "ATIVO"])
+                st.success(f"✅ Turma {sigla} criada!"); st.rerun()
 
-            if st.form_submit_button("🚀 CADASTRAR ARQUITETURA DA TURMA"):
-                if len(dias_aula) < 2:
-                    st.error("⚠️ Por favor, selecione os 2 dias de aula desta turma.")
-                else:
-                    sigla_turma = f"{ano_t}ª {'M' if turno_t == 'Matutino' else 'V'}{letra_t}"
-                    nome_extenso = f"{ano_t}º Ano {letra_t} - {turno_t}"
-                    dias_str = " / ".join(dias_aula)
-                    
-                    # Salva na aba DB_TURMAS
-                    sucesso = db.salvar_no_banco("DB_TURMAS", [
-                        sigla_turma, nome_extenso, turno_t, dias_str, f"{tempo_sel} ({horario_final})", "ATIVO"
-                    ])
-                    if sucesso:
-                        st.success(f"✅ Turma {sigla_turma} configurada com sucesso!"); st.rerun()
-
-    # --- ABA 2: POVOAMENTO DE ALUNOS (DUAL-INPUT) ---
+    # --- ABA 3: POVOAR ALUNOS ---
     with tab_povoar:
-        if df_turmas.empty:
-            st.warning("⚠️ Crie uma turma primeiro na aba ao lado.")
+        st.subheader("➕ Inclusão de Estudantes")
+        t_dest = st.selectbox("Turma de Destino:", df_turmas['ID_TURMA'].tolist() if not df_turmas.empty else [])
+        metodo = st.radio("Método:", ["Manual", "CSV"], horizontal=True)
+        
+        if metodo == "Manual":
+            with st.form("f_manual", clear_on_submit=True):
+                nome_a = st.text_input("Nome Completo:").upper()
+                nec_a = st.text_input("Necessidades/CID:", value="NENHUMA").upper()
+                if st.form_submit_button("💾 Salvar"):
+                    id_n = db.gerar_proximo_id(df_alunos)
+                    db.salvar_no_banco("DB_ALUNOS", [id_n, nome_a, t_dest, "ATIVO", nec_a, "MANUAL"])
+                    st.success("Cadastrado!"); st.rerun()
         else:
-            st.subheader("➕ Adicionar Estudantes")
-            t_dest = st.selectbox("Para qual turma?", df_turmas['ID_TURMA'].tolist(), key="sel_t_povoar")
-            
-            metodo = st.radio("Método de Cadastro:", ["Individual Manual", "Upload CSV (Lista da Escola)"], horizontal=True)
-            
-            if metodo == "Individual Manual":
-                with st.form("f_aluno_manual", clear_on_submit=True):
-                    c_a1, c_a2 = st.columns([2, 1])
-                    nome_a = c_a1.text_input("Nome Completo do Aluno:").upper()
-                    nec_a = c_a2.text_input("Necessidades/CID:", value="NENHUMA").upper()
-                    if st.form_submit_button("💾 Salvar Aluno"):
-                        if nome_a:
-                            id_novo = db.gerar_proximo_id(df_alunos)
-                            db.salvar_no_banco("DB_ALUNOS", [id_novo, nome_a, t_dest, "ATIVO", nec_a, "MANUAL"])
-                            st.success(f"✅ {nome_a} cadastrado!"); st.rerun()
+            f_csv = st.file_uploader("Arquivo CSV", type=["csv"])
+            if f_csv and st.button("🚀 Importar Lista"):
+                df_up = pd.read_csv(f_csv)
+                id_b = db.gerar_proximo_id(df_alunos)
+                for idx, r in df_up.iterrows():
+                    db.salvar_no_banco("DB_ALUNOS", [id_b+idx, str(r['NOME']).upper(), t_dest, "ATIVO", "NENHUMA", "CSV"])
+                st.success("Importado!"); st.rerun()
 
+    # --- ABA 4: EDIÇÃO & TRANSFERÊNCIA (A NOVA SALA DE CIRURGIA) ---
+    with tab_editar:
+        st.subheader("✏️ Alterar Cadastro ou Transferir Aluno")
+        
+        c_ed1, c_ed2 = st.columns(2)
+        t_origem = c_ed1.selectbox("Selecione a Turma Atual:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key="ed_t_orig")
+        
+        if t_origem:
+            alunos_opcoes = df_alunos[df_alunos['TURMA'] == t_origem].sort_values(by="NOME_ALUNO")
+            aluno_sel_nome = c_ed2.selectbox("Selecione o Aluno:", alunos_opcoes['NOME_ALUNO'].tolist())
+            
+            dados_atuais = alunos_opcoes[alunos_opcoes['NOME_ALUNO'] == aluno_sel_nome].iloc[0]
+            
+            with st.form("form_edicao_aluno"):
+                st.markdown(f"### Editando: {aluno_sel_nome}")
+                col_e1, col_e2 = st.columns(2)
+                
+                novo_nome = col_e1.text_input("Nome Completo:", value=dados_atuais['NOME_ALUNO'])
+                nova_nec = col_e2.text_input("Necessidades/CID:", value=dados_atuais['NECESSIDADES'])
+                
+                col_e3, col_e4 = st.columns(2)
+                novo_status = col_e3.selectbox("Status do Aluno:", ["ATIVO", "DESISTENTE", "TRANSFERIDO", "AFASTADO"], 
+                                              index=["ATIVO", "DESISTENTE", "TRANSFERIDO", "AFASTADO"].index(dados_atuais['STATUS']))
+                
+                nova_turma = col_e4.selectbox("Transferir para Turma:", df_turmas['ID_TURMA'].tolist(), 
+                                             index=df_turmas['ID_TURMA'].tolist().index(dados_atuais['TURMA']))
+                
+                if st.form_submit_button("💾 CONFIRMAR ALTERAÇÕES E TRANSFERÊNCIA"):
+                    # Lógica UPSERT: Deleta o registro antigo e salva o novo com o mesmo ID
+                    db.excluir_registro("DB_ALUNOS", dados_atuais['NOME_ALUNO']) # Busca por nome para garantir
+                    db.salvar_no_banco("DB_ALUNOS", [
+                        dados_atuais['ID'], novo_nome.upper(), nova_turma, novo_status, nova_nec.upper(), "EDITADO"
+                    ])
+                    st.success(f"✅ Dados de {novo_nome} atualizados com sucesso!"); st.rerun()
+
+        st.markdown("---")
+        st.subheader("🗑️ Gestão de Turmas")
+        t_para_deletar = st.selectbox("Excluir Turma (Cuidado):", [""] + df_turmas['ID_TURMA'].tolist())
+        if t_para_deletar and st.button("🚨 APAGAR TURMA DEFINITIVAMENTE"):
+            if len(df_alunos[df_alunos['TURMA'] == t_para_deletar]) > 0:
+                st.error("❌ Não é possível apagar uma turma que ainda possui alunos. Transfira-os primeiro.")
             else:
-                st.info("📂 O CSV deve conter as colunas: **NOME** e **NECESSIDADES**.")
-                f_csv = st.file_uploader("Selecione o arquivo CSV", type=["csv"])
-                if f_csv:
-                    df_up = pd.read_csv(f_csv)
-                    if st.button("🚀 PROCESSAR E SALVAR LISTA"):
-                        id_base = db.gerar_proximo_id(df_alunos)
-                        for idx, r in df_up.iterrows():
-                            nome_csv = str(r['NOME']).upper()
-                            nec_csv = str(r['NECESSIDADES']).upper() if 'NECESSIDADES' in r else "NENHUMA"
-                            db.salvar_no_banco("DB_ALUNOS", [id_base + idx, nome_csv, t_dest, "ATIVO", nec_csv, "CSV"])
-                        st.success(f"✅ {len(df_up)} alunos importados para a turma {t_dest}!"); st.rerun()
-
-    # --- ABA 3: MAPA DE REGÊNCIA (VISÃO GERAL) ---
-    with tab_mapa:
-        st.subheader("📋 Suas Turmas e Horários")
-        if not df_turmas.empty:
-            for _, row in df_turmas.iterrows():
-                with st.container(border=True):
-                    col_m1, col_m2, col_m3 = st.columns([1, 2, 1])
-                    
-                    col_m1.markdown(f"### {row['ID_TURMA']}")
-                    col_m1.caption(row['TURNO'])
-                    
-                    col_m2.markdown(f"📅 **Dias:** {row['DIAS_SEMANA']}")
-                    col_m2.markdown(f"⏰ **Horário:** {row['HORARIO_TEMPO']}")
-                    
-                    # Contador de alunos e PEI
-                    qtd_total = len(df_alunos[df_alunos['TURMA'] == row['ID_TURMA']])
-                    qtd_pei = len(df_alunos[(df_alunos['TURMA'] == row['ID_TURMA']) & 
-                                           (~df_alunos['NECESSIDADES'].astype(str).str.upper().isin(["NENHUMA", "PENDENTE", ""]))])
-                    
-                    col_m3.metric("Total Alunos", qtd_total)
-                    col_m3.metric("Alunos PEI", qtd_pei)
-                    
-                    if st.button(f"🔍 Ver Lista Completa: {row['ID_TURMA']}", key=f"btn_ver_{row['ID_TURMA']}"):
-                        st.dataframe(df_alunos[df_alunos['TURMA'] == row['ID_TURMA']].sort_values(by="NOME_ALUNO"), use_container_width=True)
-        else:
-            st.info("📭 Nenhuma turma cadastrada ainda.")
+                db.excluir_registro("DB_TURMAS", t_para_deletar)
+                st.success(f"Turma {t_para_deletar} removida."); st.rerun()
 
 # ==============================================================================
 # MÓDULO: BASE DE CONHECIMENTO
