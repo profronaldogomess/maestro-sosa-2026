@@ -309,7 +309,7 @@ def exibir_material_estruturado(texto_raw, key_prefix, dados_plano=None, info_au
 # ==============================================================================
 # MÓDULO: LABORATÓRIO DE PRODUÇÃO (CRIADOR) - ARQUITETURA V30.6 (FIX NAMEERROR)
 # ==============================================================================
-elif menu == "🧪 Criador de Aulas":
+if menu == "🧪 Criador de Aulas":
     st.title("🧪 Laboratório de Produção Semiótica")
     st.markdown("---")
     
@@ -539,7 +539,7 @@ elif menu == "🧪 Criador de Aulas":
 # ==============================================================================
 # MÓDULO: PLANEJAMENTO ESTRATÉGICO (PONTO ID) - ARQUITETURA V26.5 (SINCRO TOTAL)
 # ==============================================================================
-elif menu == "📅 Planejamento (Ponto ID)":
+if menu == "📅 Planejamento (Ponto ID)":
     st.title("📅 Engenharia de Planejamento (Ponto ID)")
     st.markdown("---")
 
