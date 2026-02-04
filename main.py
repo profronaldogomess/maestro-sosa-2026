@@ -536,22 +536,23 @@ if menu == "🧪 Criador de Aulas":
         else: st.info("📭 Acervo vazio.")
                             
 # ==============================================================================
-# MÓDULO: PLANEJAMENTO ESTRATÉGICO (PONTO ID) - ARQUITETURA V26.5 (SINCRO TOTAL)
+# MÓDULO: ARQUITETURA DE PLANEJAMENTO ESTRATÉGICO (PONTO ID) - BNCC V27
 # ==============================================================================
 if menu == "📅 Planejamento (Ponto ID)":
-    st.title("📅 Engenharia de Planejamento (Ponto ID)")
+    st.title("📅 Arquitetura de Planejamento Estratégico (BNCC V27)")
     st.markdown("---")
 
-    # 1. FUNÇÕES DE SUPORTE TÉCNICO
-    def limpar_v26(texto, label):
+    # 1. FUNÇÕES DE SUPORTE TÉCNICO E LIMPEZA
+    def limpar_v27(texto, label):
         if not texto: return ""
-        t = texto.replace(label, "").replace(label.upper(), "").replace(label.lower(), "").strip()
-        if t.startswith(":") or t.startswith(" :"): t = t[1:].strip()
+        # Remove rótulos e marcadores de forma insensível a maiúsculas/minúsculas
+        t = re.sub(rf"{label}[:\s]*|MARKER_{label}[:\s]*", "", texto, flags=re.IGNORECASE).strip()
         return t
 
     def reset_planejamento():
-        if "p_temp" in st.session_state: del st.session_state.p_temp
-        if "refino_ativo" in st.session_state: del st.session_state.refino_ativo
+        keys_to_del = ["p_temp", "refino_ativo", "gatekeeper_info"]
+        for k in keys_to_del:
+            if k in st.session_state: del st.session_state[k]
         st.session_state.v_plano = int(time.time())
         st.rerun()
 
@@ -560,15 +561,15 @@ if menu == "📅 Planejamento (Ponto ID)":
     
     v = st.session_state.v_plano 
 
-    tab_gerar, tab_hist, tab_matriz, tab_auditoria = st.tabs([
-        "🚀 Engenharia de Planejamento", 
-        "📂 Gestão de Acervo (PIP)", 
-        "📖 Matriz Curricular Ativa", 
-        "📈 Auditoria de Cobertura"
+    tab_designer, tab_repositorio, tab_competencias, tab_analytics = st.tabs([
+        "🚀 Designer de Regência (BNCC)", 
+        "📂 Repositório de Planos", 
+        "📖 Mapa de Competências", 
+        "📈 Analytics de Cobertura"
     ])
     
-    # --- ABA 1: ENGENHARIA DE PLANEJAMENTO ---
-    with tab_gerar:
+    # --- ABA 1: DESIGNER DE REGÊNCIA (O CORAÇÃO DO SISTEMA) ---
+    with tab_designer:
         is_refinando = "refino_ativo" in st.session_state
         
         if is_refinando:
@@ -577,13 +578,26 @@ if menu == "📅 Planejamento (Ponto ID)":
             if st.button("❌ CANCELAR REFINO E VOLTAR AO NOVO", use_container_width=True):
                 reset_planejamento()
         
+        # --- 1. GATEKEEPER: STATUS DA JORNADA PEDAGÓGICA ---
         with st.container(border=True):
-            st.markdown("### ⚙️ 1. Parâmetros de Regência")
+            st.markdown("### 🛡️ 1. Status da Jornada Pedagógica")
+            cg1, cg2, cg3 = st.columns([1.5, 1, 1])
+            
+            tipo_semana = cg1.selectbox("Natureza da Semana:", 
+                ["Aula Regular", "Avaliação Diagnóstica", "Avaliação Trimestral", "Recuperação Paralela", "Evento Escolar/Feriado"],
+                key=f"gate_tipo_{v}")
+            
+            tem_sabado = cg2.toggle("Incluir Sábado Letivo?", key=f"gate_sab_{v}")
+            carga_horaria = cg3.select_slider("Carga Horária Útil:", options=["1 Aula", "2 Aulas", "4 Aulas"], value="4 Aulas", key=f"gate_carga_{v}")
+
+        # --- 2. PARÂMETROS DE REGÊNCIA ---
+        with st.container(border=True):
+            st.markdown("### ⚙️ 2. Parâmetros de Regência")
             c1, c2, c3 = st.columns([1, 2, 1.5])
             
             lista_anos = [6, 7, 8, 9]
             idx_ano = lista_anos.index(int(st.session_state.refino_ativo['ano'].replace('º',''))) if is_refinando else 0
-            ano_p = c1.selectbox("Série/Ano:", lista_anos, index=idx_ano, disabled=is_refinando, key="ano_sel_v26")
+            ano_p = c1.selectbox("Série/Ano:", lista_anos, index=idx_ano, disabled=is_refinando, key=f"ano_sel_v27_{v}")
             
             todas_semanas = util.gerar_semanas()
             idx_sem = 0
@@ -591,223 +605,179 @@ if menu == "📅 Planejamento (Ponto ID)":
                 try: idx_sem = [s.split(" (")[0] for s in todas_semanas].index(st.session_state.refino_ativo['semana'])
                 except: idx_sem = 0
 
-            sem_p = c2.selectbox("Semana de Referência:", todas_semanas, index=idx_sem, disabled=is_refinando, key="sem_sel_v26")
+            sem_p = c2.selectbox("Semana de Referência:", todas_semanas, index=idx_sem, disabled=is_refinando, key=f"sem_sel_v27_{v}")
             sem_limpa = sem_p.split(" (")[0]
+            
+            # Verificação de Feriado via Calendário Itabuna
+            data_ref_semana = datetime.strptime(sem_p.split("(")[1].split(" ")[0], "%d/%m").replace(year=2026).date()
+            feriado_info = util.verificar_feriado_itabuna(data_ref_semana)
+            if feriado_info:
+                st.warning(f"📅 **Alerta de Calendário:** {feriado_info} detectado nesta semana.")
+
             modo_p = c3.radio("Método de Elaboração:", ["📖 Livro Didático", "🎛️ Manual (Banco)"], horizontal=True, disabled=is_refinando)
 
-            if not is_refinando:
-                plano_existente = df_planos[(df_planos['ANO'] == f"{ano_p}º") & (df_planos['SEMANA'] == sem_limpa)]
-                if not plano_existente.empty:
-                    st.warning(f"⚠️ **STATUS: PLANO DETECTADO.** Já existe planejamento para o {ano_p}º Ano na {sem_limpa}.")
-                else:
-                    st.success(f"✅ **STATUS: DISPONÍVEL.** {ano_p}º Ano livre para planejamento na {sem_limpa}.")
-
+        # --- 3. MATRIZ CURRICULAR (FIDELIDADE LITERAL) ---
         df_f = df_curriculo[df_curriculo['ANO'] == ano_p]
         cont_pre, obj_pre, eixo_pre = [], [], ""
         sel_mat, pags = [], "" 
 
         with st.container(border=True):
             if modo_p == "🎛️ Manual (Banco)":
-                st.markdown("#### 🎯 Matriz Curricular (Fiel ao Banco)")
+                st.markdown("#### 🎯 Matriz Curricular (Fiel ao Banco de Dados)")
                 cx1, cx2 = st.columns(2)
                 
-                # 1. Seleção de Eixo (Uso estrito de strings para evitar erro Pylance)
-                # Garantimos que 'EIXO' seja lido como texto
                 col_eixo = 'EIXO'
                 lista_eixos = df_f[col_eixo].unique() if not df_f.empty else []
-                eixo_pre = cx1.selectbox("Eixo Temático:", lista_eixos, key=f"eixo_v26_{v}")
+                eixo_pre = cx1.selectbox("Eixo Temático:", lista_eixos, key=f"eixo_v27_{v}")
                 
-                # 2. Seleção de Conteúdos (Filtro por string literal)
                 col_cont = 'CONTEUDO_ESPECIFICO'
                 df_filtrado_cont = df_f[df_f[col_eixo] == eixo_pre] if not df_f.empty else pd.DataFrame()
                 opcoes_cont = df_filtrado_cont[col_cont].unique() if not df_filtrado_cont.empty else []
-                cont_pre = st.multiselect("Conteúdos Específicos:", options=opcoes_cont, key=f"cont_v26_{v}")
+                cont_pre = st.multiselect("Conteúdos Específicos (Literais):", options=opcoes_cont, key=f"cont_v27_{v}")
                 
-                # 3. Seleção de Objetivos
                 col_obj = 'OBJETIVOS'
                 df_filtrado_obj = df_f[df_f[col_cont].isin(cont_pre)] if not df_f.empty else pd.DataFrame()
                 opcoes_obj = df_filtrado_obj[col_obj].unique() if not df_filtrado_obj.empty else []
-                obj_pre = st.multiselect("Objetivos de Ensino:", options=opcoes_obj, key=f"obj_v26_{v}")
+                obj_pre = st.multiselect("Objetivos de Ensino (Literais):", options=opcoes_obj, key=f"obj_v27_{v}")
                 
                 ctx_ia = f"MÉTODO MANUAL. EIXO: {eixo_pre}. CONTEÚDOS: {cont_pre}. OBJETIVOS: {obj_pre}."
             
             else:
                 st.markdown("#### 📖 Referência Bibliográfica")
                 cx1, cx2 = st.columns([2, 1])
-                
-                # Lista de materiais da base de conhecimento
                 lista_materiais = df_materiais['NOME_ARQUIVO'].tolist() if not df_materiais.empty else []
-                sel_mat = cx1.multiselect("Livro Didático:", lista_materiais, key=f"livro_v26_{v}")
-                pags = cx2.text_input("Páginas:", placeholder="Ex: 10-15", key=f"pags_v26_{v}")
+                sel_mat = cx1.multiselect("Livro Didático:", lista_materiais, key=f"livro_v27_{v}")
+                pags = cx2.text_input("Páginas:", placeholder="Ex: 10-15", key=f"pags_v27_{v}")
                 ctx_ia = f"MÉTODO LIVRO: {sel_mat} PÁGINAS: {pags}."
 
-            # Campo de Estratégia (Comum a ambos os métodos)
-            strat = st.text_area("Estratégia Pedagógica / Observações:", placeholder="Ex: Focar na Catarse e Instrumentalização...", key=f"strat_v26_{v}")
+            strat = st.text_area("Estratégia Pedagógica / Observações do Professor:", placeholder="Ex: Focar na resolução de problemas e uso de material dourado...", key=f"strat_v27_{v}")
 
+        # --- 4. COMPILAÇÃO DE ELITE ---
         cb1, cb2 = st.columns([2, 1])
         pronto = (cont_pre and obj_pre) if modo_p == "🎛️ Manual (Banco)" else (sel_mat and pags)
         
         with cb1:
-            label_btn = "🚀 RECOMPOR PLANEJAMENTO (REFINO)" if is_refinando else "🚀 COMPILAR PLANEJAMENTO DE ELITE"
+            label_btn = "🚀 RECOMPOR ARQUITETURA (REFINO)" if is_refinando else "🚀 COMPILAR PLANEJAMENTO BNCC"
             if st.button(label_btn, use_container_width=True, type="primary", disabled=not pronto and not is_refinando):
-                with st.spinner("Maestro SOSA processando PHC..."):
-                    prompt = f"ANO: {ano_p}º, SEMANA: {sem_p}. {ctx_ia}. ESTRATÉGIA: {strat}."
+                with st.spinner("Maestro SOSA processando Didática BNCC..."):
+                    # Injeção de dados do Gatekeeper no Prompt
+                    info_gate = f"TIPO_SEMANA: {tipo_semana}. CARGA: {carga_horaria}. SABADO: {tem_sabado}."
+                    prompt = f"ANO: {ano_p}º, SEMANA: {sem_p}. {info_gate}. {ctx_ia}. ESTRATÉGIA: {strat}."
                     st.session_state.p_temp = ai.gerar_ia("PLANE_PEDAGOGICO", prompt)
                     st.rerun()
         with cb2:
             if "p_temp" in st.session_state:
                 if st.button("🗑️ DESCARTAR RASCUNHO", use_container_width=True): reset_planejamento()
 
+        # --- 5. EDITOR E VISUALIZAÇÃO (HIERARQUIA MODERNA) ---
         if "p_temp" in st.session_state:
             st.markdown("---")
             txt_bruto = st.session_state.p_temp
             
-            cmd_refine = st.chat_input("Solicitar alteração técnica no plano...")
+            cmd_refine = st.chat_input("Solicitar ajuste técnico ou pedagógico...")
             if cmd_refine:
-                with st.spinner("Reescrevendo lógica pedagógica..."):
+                with st.spinner("Reescrevendo lógica BNCC..."):
                     prompt_refino = f"ORDEM: {cmd_refine}\n\nTEXTO ATUAL:\n{txt_bruto}"
                     st.session_state.p_temp = ai.gerar_ia("REFINADOR_PEDAGOGICO", prompt_refino)
                     st.session_state.v_plano = int(time.time())
                     st.rerun()
 
-            t_ed, t_vis = st.tabs(["✏️ Editor de Texto", "👁️ Estrutura PIP"])
+            t_ed, t_vis = st.tabs(["✏️ Editor de Engenharia", "👁️ Estrutura de Regência"])
+            
             with t_ed:
-                col_ed1, col_ed2 = st.columns(2)
-                ed_geral = col_ed1.text_input("Eixo:", limpar_v26(ai.extrair_tag(txt_bruto, "CONTEUDO_GERAL"), "CONTEÚDO GERAL"), key=f"ed_g_{v}")
-                ed_espec = col_ed2.text_area("Conteúdos:", limpar_v26(ai.extrair_tag(txt_bruto, "CONTEUDOS_ESPECIFICOS"), "CONTEÚDOS ESPECÍFICOS"), key=f"ed_e_{v}")
-                ed_objs = st.text_area("Objetivos:", limpar_v26(ai.extrair_tag(txt_bruto, "OBJETIVOS_ENSINO"), "OBJETIVOS DE ENSINO"), key=f"ed_o_{v}")
-                ed_met = st.text_area("Metodologia (PHC):", limpar_v26(ai.extrair_tag(txt_bruto, "METODOLOGIA"), "METODOLOGIA"), height=300, key=f"ed_m_{v}")
-                ed_ava = st.text_area("Avaliação:", limpar_v26(ai.extrair_tag(txt_bruto, "AVALIACAO"), "AVALIAÇÃO"), key=f"ed_a_{v}")
-                ed_pei = st.text_area("Adaptação PEI:", limpar_v26(ai.extrair_tag(txt_bruto, "ADAPTACAO_PEI"), "ADAPTAÇÃO PEI"), key=f"ed_p_{v}")
+                col_ed1, col_ed2 = st.columns([1, 2])
+                ed_tipo = col_ed1.text_input("Tipo de Semana:", limpar_v27(ai.extrair_tag(txt_bruto, "TIPO_SEMANA"), "TIPO_SEMANA"), key=f"ed_t_{v}")
+                ed_bncc = col_ed2.text_input("Mapeamento BNCC:", limpar_v27(ai.extrair_tag(txt_bruto, "BNCC_CODE"), "BNCC_CODE"), key=f"ed_b_{v}")
+                
+                col_ed3, col_ed4 = st.columns(2)
+                ed_geral = col_ed3.text_input("Eixo Temático:", limpar_v27(ai.extrair_tag(txt_bruto, "CONTEUDO_GERAL"), "CONTEUDO_GERAL"), key=f"ed_g_{v}")
+                ed_espec = col_ed4.text_area("Conteúdos (Literais):", limpar_v27(ai.extrair_tag(txt_bruto, "CONTEUDOS_ESPECIFICOS"), "CONTEUDOS_ESPECIFICOS"), key=f"ed_e_{v}")
+                
+                ed_objs = st.text_area("Objetivos de Ensino (Literais):", limpar_v27(ai.extrair_tag(txt_bruto, "OBJETIVOS_ENSINO"), "OBJETIVOS_ENSINO"), key=f"ed_o_{v}")
+                
+                st.markdown("#### 🏫 Roteiro de Aula (BNCC High Performance)")
+                ed_a1 = st.text_area("AULA 1:", limpar_v27(ai.extrair_tag(txt_bruto, "AULA_1"), "AULA_1"), height=250, key=f"ed_a1_{v}")
+                ed_a2 = st.text_area("AULA 2:", limpar_v27(ai.extrair_tag(txt_bruto, "AULA_2"), "AULA_2"), height=250, key=f"ed_a2_{v}")
+                
+                if tem_sabado:
+                    ed_sab = st.text_area("SÁBADO LETIVO:", limpar_v27(ai.extrair_tag(txt_bruto, "SABADO_LETIVO"), "SABADO_LETIVO"), key=f"ed_sab_{v}")
+                else: ed_sab = "N/A"
+
+                col_ed5, col_ed6 = st.columns(2)
+                ed_ava = col_ed5.text_area("Critérios de Avaliação:", limpar_v27(ai.extrair_tag(txt_bruto, "AVALIACAO"), "AVALIACAO"), key=f"ed_ava_{v}")
+                ed_pei = col_ed6.text_area("Adaptação PEI (Estratégia):", limpar_v27(ai.extrair_tag(txt_bruto, "ADAPTACAO_PEI"), "ADAPTACAO_PEI"), key=f"ed_pei_{v}")
 
             with t_vis:
-                st.markdown(f"**EIXO:** {ed_geral}")
-                st.markdown(f"**CONTEÚDOS:** {ed_espec}")
-                st.markdown(f"**OBJETIVOS:** {ed_objs}")
-                st.markdown("---")
-                st.markdown(f"**METODOLOGIA:**\n{ed_met}")
+                st.info(f"🎯 **Foco BNCC:** {ed_bncc}")
+                st.markdown(f"### {ed_geral}")
+                st.markdown(f"**Conteúdos:** {ed_espec}")
+                st.markdown(f"**Objetivos:** {ed_objs}")
+                st.divider()
+                c_v1, c_v2 = st.columns(2)
+                with c_v1:
+                    st.markdown("#### 📘 Aula 1")
+                    st.write(ed_a1)
+                with c_v2:
+                    st.markdown("#### 📗 Aula 2")
+                    st.write(ed_a2)
+                if tem_sabado:
+                    st.warning(f"🗓️ **Sábado Letivo:** {ed_sab}")
 
-            # --- BOTÃO DE SALVAMENTO BLINDADO (CORREÇÃO DE VARIÁVEIS) ---
-            if st.button("💾 FINALIZAR E SINCRONIZAR (DRIVE + BANCO)", use_container_width=True, type="primary"):
+            # --- 6. SINCRONIA FINAL (DRIVE + BANCO) ---
+            if st.button("💾 FINALIZAR E SINCRONIZAR (PROTOCOLO V27)", use_container_width=True, type="primary"):
                 with st.status("Iniciando Protocolo de Sincronia...", expanded=True) as status:
                     
-                    # 1. DEFINIÇÃO DE METADADOS (RESOLVE O ERRO DE NOME_ARQUIVO)
                     final_ano = st.session_state.refino_ativo['ano'] if is_refinando else f"{ano_p}º"
                     final_semana = st.session_state.refino_ativo['semana'] if is_refinando else sem_limpa
                     nome_arquivo = f"PLANO_{final_ano.replace('º','')}ANO_{final_semana.replace(' ', '')}"
                     
-                    # 2. LÓGICA UPSERT (LIMPEZA POR COORDENADAS)
-                    status.write(f"🧹 Removendo versões obsoletas de {final_semana} ({final_ano})...")
+                    status.write(f"🧹 Limpando versões obsoletas...")
                     db.excluir_plano_completo(final_semana, final_ano) 
                     
-                    # 3. GERAÇÃO DO DOCX ELITE
-                    status.write("📄 Gerando Documento Word de Elite...")
-                    dados_docx = {"geral": ed_geral, "especificos": ed_espec, "objetivos": ed_objs, "metodologia": ed_met, "avaliacao": ed_ava, "pei": ed_pei}
+                    status.write("📄 Gerando Documento Word BNCC...")
+                    # Preparação dos dados para o exportador (mantendo compatibilidade)
+                    metodologia_unificada = f"AULA 1:\n{ed_a1}\n\nAULA 2:\n{ed_a2}\n\nSÁBADO:\n{ed_sab}"
+                    dados_docx = {
+                        "geral": f"[{ed_bncc}] {ed_geral}", 
+                        "especificos": ed_espec, 
+                        "objetivos": ed_objs, 
+                        "metodologia": metodologia_unificada, 
+                        "avaliacao": ed_ava, 
+                        "pei": ed_pei
+                    }
+                    
                     doc_io = exporter.gerar_docx_plano_pedagogico_ELITE(nome_arquivo, dados_docx, {"ano": final_ano, "semana": final_semana, "trimestre": "I Trimestre"})
                     
-                    # 4. UPLOAD PARA O DRIVE
                     status.write("📤 Enviando para o Google Drive...")
                     link_drive = db.subir_e_converter_para_google_docs(doc_io, nome_arquivo, trimestre="I Trimestre", categoria=final_ano, semana=final_semana, modo="PLANEJAMENTO")
                     
                     if "https" in str(link_drive):
-                        # 5. SALVAMENTO NO BANCO
                         status.write("💾 Registrando no Banco de Dados...")
-                        final_txt = f"MARKER_CONTEUDO_GERAL {ed_geral} \nMARKER_CONTEUDOS_ESPECIFICOS {ed_espec} \nMARKER_OBJETIVOS_ENSINO {ed_objs} \nMARKER_METODOLOGIA {ed_met} \nMARKER_AVALIACAO {ed_ava} \nMARKER_ADAPTACAO_PEI {ed_pei} \nMARKER_MODALIDADE {modo_p.upper()} \n--- LINK DRIVE --- {link_drive}"
+                        # Construção do texto final com os novos marcadores para leitura de outros painéis
+                        final_txt = (
+                            f"MARKER_TIPO_SEMANA {ed_tipo} \n"
+                            f"MARKER_BNCC_CODE {ed_bncc} \n"
+                            f"MARKER_CONTEUDO_GERAL {ed_geral} \n"
+                            f"MARKER_CONTEUDOS_ESPECIFICOS {ed_espec} \n"
+                            f"MARKER_OBJETIVOS_ENSINO {ed_objs} \n"
+                            f"MARKER_AULA_1 {ed_a1} \n"
+                            f"MARKER_AULA_2 {ed_a2} \n"
+                            f"MARKER_SABADO_LETIVO {ed_sab} \n"
+                            f"MARKER_AVALIACAO {ed_ava} \n"
+                            f"MARKER_ADAPTACAO_PEI {ed_pei} \n"
+                            f"MARKER_MODALIDADE {modo_p.upper()} \n"
+                            f"--- LINK DRIVE --- {link_drive}"
+                        )
                         
                         sucesso = db.salvar_no_banco("DB_PLANOS", [datetime.now().strftime("%d/%m/%Y"), final_semana, final_ano, "I Trimestre", "PADRÃO", final_txt, link_drive])
                         
                         if sucesso:
-                            status.update(label="✅ Sincronia Concluída!", state="complete")
+                            status.update(label="✅ Arquitetura Sincronizada!", state="complete")
                             st.balloons()
                             reset_planejamento()
                     else:
                         status.update(label="❌ Erro no Upload.", state="error")
                         st.error(link_drive)
-
-    # --- ABA 2: GESTÃO DE ACERVO (EDIÇÃO VIVA) ---
-    with tab_hist:
-        st.subheader("📂 Gestão de Acervo Pedagógico")
-        if not df_planos.empty:
-            f_ano_h = st.selectbox("Filtrar Série:", ["Todos", "6º", "7º", "8º", "9º"], key="hist_ano_v26")
-            df_h = df_planos.copy()
-            if f_ano_h != "Todos": df_h = df_h[df_h['ANO'] == f_ano_h]
-            
-            if not df_h.empty:
-                sel_h = st.selectbox("Selecionar Plano:", df_h['SEMANA'].tolist(), key="hist_sem_v26")
-                dados_h = df_h[df_h['SEMANA'] == sel_h].iloc[0]
-                raw_h = dados_h['PLANO_TEXTO']
-                
-                link_h = "Não encontrado"
-                if "--- LINK DRIVE ---" in str(raw_h):
-                    link_h = str(raw_h).split("--- LINK DRIVE ---")[-1].strip()
-
-                st.markdown(f"### 📝 Plano: {sel_h} ({dados_h['ANO']})")
-                
-                c_h1, c_h2 = st.columns(2)
-                with c_h1:
-                    if st.button("🔄 REABRIR PARA REFINO IA", use_container_width=True):
-                        st.session_state.refino_ativo = {"ano": dados_h['ANO'], "semana": sel_h}
-                        st.session_state.p_temp = raw_h
-                        st.info("Modo Refino Ativado. Vá para a aba 'Engenharia de Planejamento'.")
-                with c_h2:
-                    if "https" in link_h:
-                        st.link_button("🚀 ABRIR NO GOOGLE DRIVE", link_h, use_container_width=True)
-
-                with st.expander("👁️ Pré-visualização Rápida"):
-                    st.text(raw_h)
-
-                st.markdown("---")
-                if st.button("🗑️ EXCLUIR PLANO DEFINITIVAMENTE", use_container_width=True):
-                    if db.excluir_plano_completo(sel_h, dados_h['ANO']):
-                        st.success(f"Plano removido com sucesso!")
-                        time.sleep(1)
-                        st.rerun()
-                    else:
-                        st.error("Erro ao tentar excluir o plano.")
-            else: st.info("Nenhum plano encontrado.")
-        else: st.info("📭 Acervo vazio.")
-
-    # --- ABA 3 E 4 (MANTIDAS) ---
-    with tab_matriz:
-        st.subheader("📖 Matriz Curricular Ativa")
-        if not df_curriculo.empty:
-            ano_c = st.selectbox("Série:", [6, 7, 8, 9], key="matriz_ano_v26")
-            df_c = df_curriculo[df_curriculo['ANO'] == ano_c].copy()
-            concluidos = " ".join(df_planos[df_planos['ANO'] == f"{ano_c}º"]['PLANO_TEXTO'].astype(str).tolist()).upper() if not df_planos.empty else ""
-            df_c['STATUS'] = df_c['CONTEUDO_ESPECIFICO'].apply(lambda x: "✅ CONCLUÍDO" if str(x).upper() in concluidos else "⏳ PENDENTE")
-            st.dataframe(df_c[['TRIMESTRE', 'EIXO', 'CONTEUDO_ESPECIFICO', 'STATUS']], use_container_width=True, hide_index=True)
-
-    with tab_auditoria:
-        st.subheader("📈 Auditoria de Cobertura Curricular")
-        if not df_curriculo.empty:
-            ano_m = st.selectbox("Analisar Série:", [6, 7, 8, 9], key="auditoria_ano_v26")
-            df_m = df_curriculo[df_curriculo['ANO'] == ano_m].copy()
-            
-            if not df_m.empty:
-                planejados = " ".join(df_planos[df_planos['ANO'] == f"{ano_m}º"]['PLANO_TEXTO'].astype(str).tolist()).upper() if not df_planos.empty else ""
-                
-                # Forçamos o STATUS_NUM a ser inteiro (0 ou 1)
-                df_m['STATUS_NUM'] = df_m['CONTEUDO_ESPECIFICO'].apply(lambda x: 1 if str(x).upper() in planejados else 0)
-                
-                # Realizamos o agrupamento
-                progresso = df_m.groupby('EIXO')['STATUS_NUM'].agg(['sum', 'count']).reset_index()
-                
-                # --- CORREÇÃO CIRÚRGICA SOSA V26 ---
-                # Forçamos a conversão para numérico (float) para garantir que o cálculo funcione
-                progresso['sum'] = pd.to_numeric(progresso['sum'], errors='coerce').fillna(0)
-                progresso['count'] = pd.to_numeric(progresso['count'], errors='coerce').fillna(1) # Evita divisão por zero
-                
-                # Cálculo da porcentagem com conversão explícita para float antes do round
-                progresso['%'] = (progresso['sum'] / progresso['count'] * 100).astype(float).round(1)
-                
-                # Gráfico de Cobertura
-                st.plotly_chart(px.bar(
-                    progresso, x='EIXO', y='%', text='%', color='%', 
-                    color_continuous_scale='RdYlGn', range_y=[0, 105],
-                    title=f"Cobertura Curricular - {ano_m}º Ano"
-                ), use_container_width=True)
-            else:
-                st.info("📭 Nenhum conteúdo encontrado na matriz para este ano.")
 
 # ==============================================================================
 # MÓDULO: DIÁRIO DE BORDO RÁPIDO V26.6 - COM REGISTRO DE BÔNUS ⭐
