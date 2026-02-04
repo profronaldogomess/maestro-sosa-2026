@@ -1204,150 +1204,129 @@ elif menu == "📈 Boletim Anual & Conselho":
                 st.text_area("Copia e cole na Ata Oficial:", ai.gerar_ia("PLANE_PEDAGOGICO", prompt_ata), height=300)
 
 # ==============================================================================
-# MÓDULO: GESTÃO DA TURMA - CENTRO DE COMANDO ESTRATÉGICO V26
+# MÓDULO: GESTÃO DA TURMA V26 - ARQUITETURA DE HORÁRIOS E POVOAMENTO
 # ==============================================================================
 elif menu == "👥 Gestão da Turma":
-    st.title("👥 Centro de Comando: Gestão 360° da Turma")
+    st.title("👥 Gestão de Turmas: Arquitetura de Regência")
     st.markdown("---")
 
-    # --- 1. SELETOR DE TURMA (O GATILHO DO SISTEMA) ---
-    if df_alunos.empty:
-        st.warning("⚠️ Base de alunos vazia. Povoar a turma primeiro.")
-    else:
-        turmas_disponiveis = sorted(df_alunos['TURMA'].unique())
-        c_top1, c_top2 = st.columns([1, 2])
-        turma_sel = c_top1.selectbox("🎯 Selecione a Turma para Comando:", turmas_disponiveis, key="cmd_turma")
-        
-        # Filtragem de dados da turma em todas as frentes
-        alunos_turma = df_alunos[df_alunos['TURMA'] == turma_sel].sort_values(by="NOME_ALUNO")
-        notas_turma = df_notas[df_notas['TURMA'] == turma_sel] if not df_notas.empty else pd.DataFrame()
-        diario_turma = df_diario[df_diario['TURMA'] == turma_sel] if not df_diario.empty else pd.DataFrame()
-        diagnosticos_turma = df_diagnosticos[df_diagnosticos['TURMA'] == turma_sel] if not df_diagnosticos.empty else pd.DataFrame()
+    tab_criar, tab_povoar, tab_mapa = st.tabs([
+        "🏗️ Criar Nova Turma", 
+        "➕ Povoar Alunos (Manual/CSV)", 
+        "📋 Mapa de Regência"
+    ])
 
-        tab_heatmap, tab_individual, tab_conselho, tab_cadastro = st.tabs([
-            "📊 Mapa de Calor (Heatmap)", 
-            "👤 Prontuário 360° (Individual)", 
-            "🗣️ Simulador de Conselho", 
-            "🏗️ Gestão de Cadastro"
-        ])
-
-        # --- ABA 1: MAPA DE CALOR (VISÃO ESTRATÉGICA) ---
-        with tab_heatmap:
-            st.subheader(f"📈 Mapa de Desempenho e Engajamento - {turma_sel}")
+    # --- ABA 1: CRIAR TURMA (DNA CRONOLÓGICO) ---
+    with tab_criar:
+        st.subheader("🏗️ Configurar Identidade da Turma")
+        with st.form("form_nova_turma", clear_on_submit=True):
+            c1, c2, c3 = st.columns([1, 1, 1])
+            ano_t = c1.selectbox("Série/Ano:", [6, 7, 8, 9])
+            letra_t = c2.selectbox("Letra:", ["A", "B", "C", "D", "E", "F"])
+            turno_t = c3.selectbox("Turno:", ["Matutino", "Vespertino"])
             
-# --- CÁLCULO DE MÉTRICAS PARA O HEATMAP (VERSÃO BLINDADA) ---
-            heatmap_data = []
-            for _, aluno in alunos_turma.iterrows():
-                id_a = db.limpar_id(aluno['ID'])
-                
-                # 1. Desempenho (Notas) - Proteção contra ausência de notas
-                n_aluno = notas_turma[notas_turma['ID_ALUNO'].apply(db.limpar_id) == id_a] if not notas_turma.empty else pd.DataFrame()
-                media = n_aluno['MEDIA_FINAL'].mean() if not n_aluno.empty and 'MEDIA_FINAL' in n_aluno.columns else 0.0
-                
-                # 2. Engajamento (Vistos) - Proteção contra Diário vazio
-                v_aluno = diario_turma[diario_turma['ID_ALUNO'].apply(db.limpar_id) == id_a] if not diario_turma.empty else pd.DataFrame()
-                
-                vistos = 0
-                if not v_aluno.empty and 'VISTO_ATIVIDADE' in v_aluno.columns:
-                    # Correção: Adicionado .str antes do .upper() para funcionar em colunas Pandas
-                    vistos = len(v_aluno[v_aluno['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"])
-                
-                # 3. Comportamento (Ocorrências)
-                tags_negativas = ["Dormiu", "Conversa", "Agitado", "Sem material", "Vetor Disciplinar"]
-                ocorrencias = 0
-                if not v_aluno.empty and 'TAGS' in v_aluno.columns:
-                    ocorrencias = len(v_aluno[v_aluno['TAGS'].isin(tags_negativas)])
-                
-                heatmap_data.append({
-                    "Nome": aluno['NOME_ALUNO'],
-                    "Média": round(media, 1),
-                    "Vistos": vistos,
-                    "Ocorrências": ocorrencias,
-                    "Perfil": "♿ PEI" if str(aluno['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", ""] else "📝 REGULAR"
-                })
+            st.markdown("---")
+            c4, c5 = st.columns([2, 1])
             
-            df_heat = pd.DataFrame(heatmap_data)
-            
-            # Visualização Gráfica
-            fig_heat = px.scatter(
-                df_heat, x="Vistos", y="Média", 
-                size="Média", color="Ocorrências",
-                hover_name="Nome", text="Nome",
-                color_continuous_scale="RdYlGn_r", # Vermelho para muitas ocorrências
-                title="Relação: Esforço (Vistos) vs Resultado (Média)",
-                labels={"Vistos": "Quantidade de Vistos", "Média": "Média Acadêmica"}
+            # Seleção de Dias (Regra: 2 dias por semana)
+            dias_aula = c4.multiselect(
+                "📅 Dias de Aula (Selecione os 2 dias):",
+                ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"],
+                max_selections=2
             )
-            fig_heat.update_traces(textposition='top center')
-            st.plotly_chart(fig_heat, use_container_width=True)
-
-            st.markdown("#### 📋 Lista de Prioridade Pedagógica")
-            st.dataframe(df_heat.sort_values(by="Média"), use_container_width=True, hide_index=True)
-
-        # --- ABA 2: PRONTUÁRIO 360° (INDIVIDUAL) ---
-        with tab_individual:
-            aluno_360 = st.selectbox("🔍 Selecione o Aluno para Raio-X:", alunos_turma['NOME_ALUNO'].tolist())
-            id_360 = db.limpar_id(alunos_turma[alunos_turma['NOME_ALUNO'] == aluno_360].iloc[0]['ID'])
-            info_a = alunos_turma[alunos_turma['NOME_ALUNO'] == aluno_360].iloc[0]
-
-            c_360_1, c_360_2 = st.columns([1, 2])
             
-            with c_360_1:
-                st.markdown(f"### {aluno_360}")
-                st.info(f"♿ **Necessidades:** {info_a['NECESSIDADES']}")
-                st.metric("Média Atual", f"{df_heat[df_heat['Nome']==aluno_360]['Média'].values[0]:.1f}")
-                st.metric("Total de Vistos", f"{df_heat[df_heat['Nome']==aluno_360]['Vistos'].values[0]}")
-
-            with c_360_2:
-                st.markdown("#### 📜 Histórico Recente")
-                t_hist1, t_hist2, t_hist3 = st.tabs(["📝 Diário", "📸 Scanner", "📊 Notas"])
-                
-                with t_hist1:
-                    st.dataframe(diario_turma[diario_turma['ID_ALUNO'].apply(db.limpar_id) == id_360][['DATA', 'TAGS', 'OBSERVACOES']], use_container_width=True)
-                
-                with t_hist2:
-                    if not diagnosticos_turma.empty:
-                        st.dataframe(diagnosticos_turma[diagnosticos_turma['ID_ALUNO'].apply(db.limpar_id) == id_360][['DATA', 'ID_AVALIACAO', 'NOTA_CALCULADA']], use_container_width=True)
-                    else: st.info("Sem diagnósticos de scanner.")
-                
-                with t_hist3:
-                    st.dataframe(notas_turma[notas_turma['ID_ALUNO'].apply(db.limpar_id) == id_360][['TRIMESTRE', 'MEDIA_FINAL']], use_container_width=True)
-
-        # --- ABA 3: SIMULADOR DE CONSELHO (IA) ---
-        with tab_conselho:
-            st.subheader("🗣️ Síntese para Conselho de Classe")
-            st.info("A IA vai cruzar Notas, Scanner e Diário para gerar a pauta da reunião.")
+            # Lógica de Horários Específicos do Professor Ronaldo
+            if turno_t == "Matutino":
+                opcoes_horario = {
+                    "1º Tempo": "07:10h – 09:10h",
+                    "2º Tempo": "09:30h – 11:30h"
+                }
+            else:
+                opcoes_horario = {
+                    "1º Tempo": "13:10h – 15:10h",
+                    "2º Tempo": "15:30h – 17:30h"
+                }
             
-            if st.button("🚀 GERAR PAUTA ESTRATÉGICA", type="primary", use_container_width=True):
-                with st.spinner("Maestro Sosa processando dados da turma..."):
-                    # Preparação do Contexto para a IA
-                    resumo_notas = df_heat[['Nome', 'Média', 'Perfil']].to_string()
-                    resumo_comportamento = diario_turma['TAGS'].value_counts().to_string()
+            tempo_sel = c5.radio("⏰ Tempo de Aula:", list(opcoes_horario.keys()))
+            horario_final = opcoes_horario[tempo_sel]
+            
+            st.info(f"💡 **Resumo:** Turma no {turno_t} ({tempo_sel}) das {horario_final}.")
+
+            if st.form_submit_button("🚀 CADASTRAR ARQUITETURA DA TURMA"):
+                if len(dias_aula) < 2:
+                    st.error("⚠️ Por favor, selecione os 2 dias de aula desta turma.")
+                else:
+                    sigla_turma = f"{ano_t}ª {'M' if turno_t == 'Matutino' else 'V'}{letra_t}"
+                    nome_extenso = f"{ano_t}º Ano {letra_t} - {turno_t}"
+                    dias_str = " / ".join(dias_aula)
                     
-                    prompt_conselho = (
-                        f"VOCÊ É O COORDENADOR PEDAGÓGICO DO SISTEMA SOSA.\n"
-                        f"TURMA: {turma_sel}. DADOS ACADÊMICOS:\n{resumo_notas}\n\n"
-                        f"DADOS COMPORTAMENTAIS (TAGS):\n{resumo_comportamento}\n\n"
-                        f"MISSÃO: Gere uma síntese para o Conselho de Classe baseada na Pedagogia Histórico-Crítica (PHC).\n"
-                        f"1. Identifique o 'Grupo de Risco' (Baixa nota + Baixo esforço).\n"
-                        f"2. Identifique o 'Grupo de Apoio' (Alunos PEI e progresso).\n"
-                        f"3. Sugira uma estratégia de Recomposição Curricular para a turma.\n"
-                        f"4. Use tom profissional e técnico. SEM MARKDOWN (** ou #)."
-                    )
-                    
-                    st.session_state.pauta_conselho = ai.gerar_ia("PLANE_PEDAGOGICO", prompt_conselho)
-            
-            if "pauta_conselho" in st.session_state:
-                st.text_area("📄 Pauta Gerada:", st.session_state.pauta_conselho, height=400)
-                if st.button("💾 Arquivar Pauta em DB_RELATORIOS"):
-                    db.salvar_ata_conselho(datetime.now().strftime("%d/%m/%Y"), turma_sel, "PAUTA_CONSELHO", st.session_state.pauta_conselho)
-                    st.success("Pauta arquivada!")
+                    # Salva na aba DB_TURMAS
+                    sucesso = db.salvar_no_banco("DB_TURMAS", [
+                        sigla_turma, nome_extenso, turno_t, dias_str, f"{tempo_sel} ({horario_final})", "ATIVO"
+                    ])
+                    if sucesso:
+                        st.success(f"✅ Turma {sigla_turma} configurada com sucesso!"); st.rerun()
 
-        # --- ABA 4: GESTÃO DE CADASTRO (MANTIDA E MELHORADA) ---
-        with tab_cadastro:
-            st.subheader("🏗️ Manutenção de Alunos e Turmas")
-            # (Aqui você mantém o seu código original de Povoar Alunos, CSV e Editar CID)
-            # ... (Código original de cadastro aqui) ...
-            st.info("Use esta aba para inclusão de novos alunos ou correção de CID.")
+    # --- ABA 2: POVOAMENTO DE ALUNOS (DUAL-INPUT) ---
+    with tab_povoar:
+        if df_turmas.empty:
+            st.warning("⚠️ Crie uma turma primeiro na aba ao lado.")
+        else:
+            st.subheader("➕ Adicionar Estudantes")
+            t_dest = st.selectbox("Para qual turma?", df_turmas['ID_TURMA'].tolist(), key="sel_t_povoar")
+            
+            metodo = st.radio("Método de Cadastro:", ["Individual Manual", "Upload CSV (Lista da Escola)"], horizontal=True)
+            
+            if metodo == "Individual Manual":
+                with st.form("f_aluno_manual", clear_on_submit=True):
+                    c_a1, c_a2 = st.columns([2, 1])
+                    nome_a = c_a1.text_input("Nome Completo do Aluno:").upper()
+                    nec_a = c_a2.text_input("Necessidades/CID:", value="NENHUMA").upper()
+                    if st.form_submit_button("💾 Salvar Aluno"):
+                        if nome_a:
+                            id_novo = db.gerar_proximo_id(df_alunos)
+                            db.salvar_no_banco("DB_ALUNOS", [id_novo, nome_a, t_dest, "ATIVO", nec_a, "MANUAL"])
+                            st.success(f"✅ {nome_a} cadastrado!"); st.rerun()
+
+            else:
+                st.info("📂 O CSV deve conter as colunas: **NOME** e **NECESSIDADES**.")
+                f_csv = st.file_uploader("Selecione o arquivo CSV", type=["csv"])
+                if f_csv:
+                    df_up = pd.read_csv(f_csv)
+                    if st.button("🚀 PROCESSAR E SALVAR LISTA"):
+                        id_base = db.gerar_proximo_id(df_alunos)
+                        for idx, r in df_up.iterrows():
+                            nome_csv = str(r['NOME']).upper()
+                            nec_csv = str(r['NECESSIDADES']).upper() if 'NECESSIDADES' in r else "NENHUMA"
+                            db.salvar_no_banco("DB_ALUNOS", [id_base + idx, nome_csv, t_dest, "ATIVO", nec_csv, "CSV"])
+                        st.success(f"✅ {len(df_up)} alunos importados para a turma {t_dest}!"); st.rerun()
+
+    # --- ABA 3: MAPA DE REGÊNCIA (VISÃO GERAL) ---
+    with tab_mapa:
+        st.subheader("📋 Suas Turmas e Horários")
+        if not df_turmas.empty:
+            for _, row in df_turmas.iterrows():
+                with st.container(border=True):
+                    col_m1, col_m2, col_m3 = st.columns([1, 2, 1])
+                    
+                    col_m1.markdown(f"### {row['ID_TURMA']}")
+                    col_m1.caption(row['TURNO'])
+                    
+                    col_m2.markdown(f"📅 **Dias:** {row['DIAS_SEMANA']}")
+                    col_m2.markdown(f"⏰ **Horário:** {row['HORARIO_TEMPO']}")
+                    
+                    # Contador de alunos e PEI
+                    qtd_total = len(df_alunos[df_alunos['TURMA'] == row['ID_TURMA']])
+                    qtd_pei = len(df_alunos[(df_alunos['TURMA'] == row['ID_TURMA']) & 
+                                           (~df_alunos['NECESSIDADES'].astype(str).str.upper().isin(["NENHUMA", "PENDENTE", ""]))])
+                    
+                    col_m3.metric("Total Alunos", qtd_total)
+                    col_m3.metric("Alunos PEI", qtd_pei)
+                    
+                    if st.button(f"🔍 Ver Lista Completa: {row['ID_TURMA']}", key=f"btn_ver_{row['ID_TURMA']}"):
+                        st.dataframe(df_alunos[df_alunos['TURMA'] == row['ID_TURMA']].sort_values(by="NOME_ALUNO"), use_container_width=True)
+        else:
+            st.info("📭 Nenhuma turma cadastrada ainda.")
 
 # ==============================================================================
 # MÓDULO: BASE DE CONHECIMENTO
