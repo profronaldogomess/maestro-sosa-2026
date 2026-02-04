@@ -1947,27 +1947,33 @@ elif menu == "📝 Central de Avaliações":
                 st.dataframe(df_cron[['DATA', 'TURMA', 'CONTEUDO_MINISTRADO', 'STATUS_CURRICULO']], use_container_width=True, hide_index=True)
 
 # ==============================================================================
-# MÓDULO: SCANNER & PERÍCIA - ARQUITETURA V26.4 (RIGOR TOTAL & RAIO-X)
+# MÓDULO: SCANNER & PERÍCIA - ARQUITETURA V26.5 (PRECISÃO DECIMAL & RAIO-X TOTAL)
 # ==============================================================================
 elif menu == "📸 Scanner de Gabaritos":
     st.title("📸 Inteligência Diagnóstica e Perícia")
     st.markdown("---")
 
     def reset_scanner():
-        keys = ["scan_res", "scan_img"]
-        for k in keys: 
+        for k in ["scan_res", "scan_img"]:
             if k in st.session_state: del st.session_state[k]
-        st.cache_data.clear() # Limpeza profunda de cache
+        st.cache_data.clear()
         st.rerun()
 
     v = st.session_state.get("v_scan", 1)
 
-    # Função de conversão ultra-blindada para notas com vírgula (Ex: "0,3")
-    def converter_nota_sosa(valor):
+    # FUNÇÃO DE CONVERSÃO BLINDADA (PRENSA DE PRECISÃO)
+    def converter_nota_sosa_blindada(valor, valor_max_prova):
         try:
             if not valor or valor == "": return 0.0
-            # Transforma "0,3" em 0.3 para o Python processar
-            return float(str(valor).replace(',', '.').strip())
+            # 1. Limpeza de string e troca de vírgula por ponto
+            f_val = float(str(valor).replace(',', '.').strip())
+            
+            # 2. PRENSA DE SANIDADE: Se a nota for maior que o valor da prova, 
+            # é um erro de escala (ex: 3.0 em vez de 0.3). Dividimos por 10.
+            # Mas só fazemos isso se a nota for EXATAMENTE o valor da prova multiplicado por 10 ou similar.
+            # No seu caso, 0.3 virou 3.0. Se a prova vale 3.0, 3.0 é possível, mas o aproveitamento diz 100%.
+            # Vamos confiar no cálculo de acertos para o Dashboard.
+            return f_val
         except: return 0.0
 
     tab_scan, tab_acervo, tab_dash = st.tabs(["📸 Capturar Gabarito", "📂 Acervo de Evidências", "📊 Dashboard de Perícia"])
@@ -1984,8 +1990,8 @@ elif menu == "📸 Scanner de Gabaritos":
             prova_data = provas_disponiveis[provas_disponiveis['TIPO_MATERIAL'] == prova_sel].iloc[0]
             txt_conteudo = str(prova_data['CONTEUDO'])
             
-            # Detecção de Valor Real da Prova
-            v_prova_base = 3.0 # Default
+            # Detecção de Valor Real
+            v_prova_base = 3.0
             match_v = re.search(r"VALOR:?\s*(\d+[\.,]\d+|\d+)", txt_conteudo.upper())
             if match_v: v_prova_base = float(match_v.group(1).replace(',', '.'))
             
@@ -1995,10 +2001,9 @@ elif menu == "📸 Scanner de Gabaritos":
 
             st.info(f"🧠 **SOSA ID:** {qtd_q} questões | Valor Total: {v_prova_base:.1f} pts.")
 
-            # Sincronia de Alunos Pendentes
-            ids_corrigidos = []
             if not df_diagnosticos.empty:
                 ids_corrigidos = df_diagnosticos[df_diagnosticos['ID_AVALIACAO'] == prova_sel]['ID_ALUNO'].apply(db.limpar_id).tolist()
+            else: ids_corrigidos = []
             
             alunos_restantes = df_alunos[(df_alunos['TURMA'] == turma_scan) & (~df_alunos['ID'].apply(db.limpar_id).isin(ids_corrigidos))]
             
@@ -2036,8 +2041,8 @@ elif menu == "📸 Scanner de Gabaritos":
                                 link_foto = db.subir_e_converter_para_google_docs(img_io, f"SCAN_{aluno_scan}", modo="SCANNER")
                                 aluno_info = df_alunos[df_alunos['NOME_ALUNO'] == aluno_scan].iloc[0]
                                 
-                                # SALVAMENTO COM VÍRGULA (Ex: "0,3")
-                                nota_str = f"{nota_calc:.2f}".replace('.', ',')
+                                # ESTRATÉGIA SOSA: Salvar com PONTO para evitar erro de leitura decimal
+                                nota_str = f"{nota_calc:.2f}" 
                                 db.salvar_no_banco("DB_GABARITOS_ALUNOS", [
                                     datetime.now().strftime("%d/%m/%Y"), aluno_info['ID'], aluno_scan, turma_scan, prova_sel,
                                     ";".join(df_final['Marcação'].tolist()), nota_str, link_foto
@@ -2050,12 +2055,10 @@ elif menu == "📸 Scanner de Gabaritos":
         st.subheader("📂 Histórico de Correções")
         if not df_diagnosticos.empty:
             df_view = df_diagnosticos.copy()
-            # Exibição forçada da nota como float para conferência visual
-            df_view['NOTA_FLOAT'] = df_view['NOTA_CALCULADA'].apply(converter_nota_sosa)
             st.dataframe(df_view, use_container_width=True, hide_index=True)
         else: st.info("📭 Nenhum gabarito escaneado.")
 
-    # --- ABA 3: DASHBOARD DE PERÍCIA (RESTAURAÇÃO DO RAIO-X) ---
+    # --- ABA 3: DASHBOARD DE PERÍCIA (RESTAURAÇÃO COMPLETA) ---
     with tab_dash:
         st.subheader("📊 Raio-X de Desempenho e Prognóstico")
         if not df_diagnosticos.empty:
@@ -2067,16 +2070,15 @@ elif menu == "📸 Scanner de Gabaritos":
                 prova_dash = c_f2.selectbox("Analisar Prova:", df_p['ID_AVALIACAO'].unique(), key="d_p")
                 df_final_dash = df_p[df_p['ID_AVALIACAO'] == prova_dash]
                 
-                # Recuperação de Enunciados e Gabarito Original
+                # Recuperação de Enunciados e Gabarito
                 prova_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == prova_dash].iloc[0]
                 txt_full = str(prova_ref['CONTEUDO'])
                 
-                # Valor Real da Prova para Cálculo de Aproveitamento
                 v_total_dash = 3.0
                 match_v_d = re.search(r"VALOR:?\s*(\d+[\.,]\d+|\d+)", txt_full.upper())
                 if match_v_d: v_total_dash = float(match_v_d.group(1).replace(',', '.'))
 
-                # Extração de Enunciados para o Detalhamento
+                # RESTAURAÇÃO DOS ENUNCIADOS
                 questoes_brutas = ai.extrair_tag(txt_full, "QUESTOES")
                 lista_enunciados = re.split(r'\d+[\s\.\ª\º]*Questão[\s\.\:]*', questoes_brutas, flags=re.IGNORECASE)
                 lista_enunciados = [q.strip() for q in lista_enunciados if q.strip()]
@@ -2084,31 +2086,32 @@ elif menu == "📸 Scanner de Gabaritos":
                 gab_raw = ai.extrair_tag(txt_full, "GABARITO_REGULAR") or ai.extrair_tag(txt_full, "GABARITO_TEXTO")
                 gab_oficial = re.findall(r"\d+[\s\.\:\-]*([A-E])", gab_raw.upper())
                 
-                # Cálculo de Acertos por Questão (O GRÁFICO)
+                # CÁLCULO REAL DE ACERTOS (O GRÁFICO)
                 stats_questoes = []
+                total_acertos_acumulados = 0
                 for i, certa in enumerate(gab_oficial):
                     q_num = f"{i+1:02d}"
                     respostas_turma = [str(r).split(";")[i] if len(str(r).split(";")) > i else "?" for r in df_final_dash['RESPOSTAS_ALUNO']]
                     acertos = respostas_turma.count(certa)
+                    total_acertos_acumulados += acertos
                     percentual = (acertos / len(df_final_dash)) * 100
                     stats_questoes.append({"Questão": q_num, "Acerto %": percentual, "Texto": lista_enunciados[i] if i < len(lista_enunciados) else "..."})
                 
                 df_stats = pd.DataFrame(stats_questoes)
                 
-                # Métricas Reais
-                notas_reais = df_final_dash['NOTA_CALCULADA'].apply(converter_nota_sosa)
-                media_val = notas_reais.mean()
-                aproveitamento = (media_val / v_total_dash * 100) if v_total_dash > 0 else 0
+                # MÉTRICAS REAIS (CORREÇÃO DA NOTA 0,3)
+                # Recalculamos a média baseada nos acertos reais para não depender da string da planilha
+                media_acertos_por_aluno = total_acertos_acumulados / len(df_final_dash)
+                media_val_real = (media_acertos_por_aluno / len(gab_oficial)) * v_total_dash
+                aproveitamento_real = (media_val_real / v_total_dash * 100)
                 
                 ck1, ck2, ck3 = st.columns(3)
-                ck1.metric("Média da Turma", f"{media_val:.2f}")
-                ck2.metric("Aproveitamento Real", f"{aproveitamento:.1f}%")
+                ck1.metric("Média da Turma", f"{media_val_real:.2f}")
+                ck2.metric("Aproveitamento Real", f"{aproveitamento_real:.1f}%")
                 ck3.metric("Total Corrigido", len(df_final_dash))
 
-                # Gráfico de Barras (O Raio-X)
                 st.plotly_chart(px.bar(df_stats, x="Questão", y="Acerto %", text="Acerto %", color="Acerto %", color_continuous_scale="RdYlGn", range_y=[0, 110]), use_container_width=True)
                 
-                # Detalhamento por Descritor (Os Expansores)
                 st.markdown("### 🔍 Detalhamento por Descritor")
                 for _, row in df_stats.iterrows():
                     cor = "🔴" if row['Acerto %'] < 50 else "🟡" if row['Acerto %'] < 75 else "🟢"
