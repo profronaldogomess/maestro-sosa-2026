@@ -1965,89 +1965,96 @@ with tab_scan:
             )
         else: st.info("📭 Nenhum registro encontrado para os filtros selecionados.")
 
-    # --- ABA 3: DASHBOARD DE PERÍCIA (O SALTO DE INTELIGÊNCIA) ---
+# --- ABA 3: DASHBOARD DE PERÍCIA (RAIO-X INTEGRADO) ---
     with tab_dash:
         if not df_p.empty:
-            # Seleção da Prova para análise detalhada
+            # 1. SELEÇÃO DA AVALIAÇÃO
             provas_no_filtro = df_p['ID_AVALIACAO'].unique()
-            prova_alvo = st.selectbox("🎯 Selecione a Avaliação para Raio-X Detalhado:", provas_no_filtro)
+            prova_alvo = st.selectbox("🎯 Selecione a Avaliação para Análise:", provas_no_filtro, key="sb_dash_av")
             
-            df_prova = df_p[df_p['ID_AVALIACAO'] == prova_alvo]
+            # 2. PREPARAÇÃO DOS DADOS (TRIAGEM)
+            # Cruzamos os diagnósticos com a tabela de alunos para saber quem é PEI
+            df_pericia = pd.merge(df_p[df_p['ID_AVALIACAO'] == prova_alvo], 
+                                 df_alunos[['ID', 'NECESSIDADES']], 
+                                 left_on='ID_ALUNO', right_on='ID', how='left')
             
-            # INTEGRAÇÃO COM CENTRAL DE AVALIAÇÕES: Busca o conteúdo original
+            # Criamos a tag de perfil
+            df_pericia['PERFIL'] = df_pericia['NECESSIDADES'].apply(
+                lambda x: "♿ PEI" if str(x).upper() not in ["NENHUMA", "PENDENTE", ""] else "📝 REGULAR"
+            )
+
+            # 3. BUSCA DE CONTEÚDO NA CENTRAL DE AVALIAÇÕES
             prova_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == prova_alvo]
             
             if not prova_ref.empty:
                 txt_full = str(prova_ref.iloc[0]['CONTEUDO'])
                 
-                # Extração do Gabarito e Questões
-                gab_raw = ai.extrair_tag(txt_full, "GABARITO_REGULAR") or ai.extrair_tag(txt_full, "GABARITO_TEXTO")
-                gab_oficial = re.findall(r"\d+[\s\.\:\-]*([A-E])", gab_raw.upper())
-                
-                questoes_brutas = ai.extrair_tag(txt_full, "QUESTOES")
-                # Fatiamento inteligente das questões para exibir no Raio-X
-                lista_enunciados = re.split(r'\d+[\s\.\ª\º]*Questão[\s\.\:]*', questoes_brutas)
-                lista_enunciados = [q.strip() for q in lista_enunciados if q.strip()]
+                # Tabs para separar a visão Regular da PEI
+                t_reg, t_pei = st.tabs(["📝 Visão Regular", "♿ Visão PEI (Adaptada)"])
 
-                # --- CÁLCULO DE DESEMPENHO POR QUESTÃO ---
-                stats_questoes = []
-                for i, certa in enumerate(gab_oficial):
-                    q_num = f"{i+1:02d}"
-                    # Pega a resposta de cada aluno para esta questão específica
-                    respostas_turma = [r.split(";")[i] if len(r.split(";")) > i else "?" for r in df_prova['RESPOSTAS_ALUNO']]
-                    acertos = respostas_turma.count(certa)
-                    percentual = (acertos / len(df_prova)) * 100
+                # --- FUNÇÃO INTERNA DE GERAÇÃO DE RAIO-X ---
+                def gerar_raio_x(perfil_tipo, tag_gabarito):
+                    df_f = df_pericia[df_pericia['PERFIL'] == perfil_tipo]
+                    if df_f.empty:
+                        st.info(f"Nenhum aluno do perfil {perfil_tipo} escaneado para esta prova.")
+                        return
+
+                    # Extração de Gabarito e Questões
+                    gab_raw = ai.extrair_tag(txt_full, tag_gabarito)
+                    if not gab_raw and perfil_tipo == "♿ PEI": # Fallback
+                        gab_raw = ai.extrair_tag(txt_full, "GABARITO_REGULAR") or ai.extrair_tag(txt_full, "GABARITO_TEXTO")
                     
-                    stats_questoes.append({
-                        "Questão": q_num, 
-                        "Acerto %": percentual, 
-                        "Gabarito": certa,
-                        "Texto": lista_enunciados[i] if i < len(lista_enunciados) else "Texto não localizado."
-                    })
-                
-                df_stats = pd.DataFrame(stats_questoes)
+                    gab_oficial = re.findall(r"\d+[\s\.\:\-]*([A-E])", gab_raw.upper())
+                    questoes_brutas = ai.extrair_tag(txt_full, "QUESTOES")
+                    lista_enunciados = re.split(r'\d+[\s\.\ª\º]*Questão[\s\.\:]*', questoes_brutas)
+                    lista_enunciados = [q.strip() for q in lista_enunciados if q.strip()]
 
-                # --- VISUALIZAÇÃO PREMIUM ---
-                ck1, ck2, ck3 = st.columns(3)
-                media_turma = df_prova['NOTA_CALCULADA'].mean()
-                ck1.metric("📊 Média da Turma", f"{media_turma:.2f}")
-                ck2.metric("🎯 Maior Acerto", f"{df_stats['Acerto %'].max():.1f}%", f"Questão {df_stats.loc[df_stats['Acerto %'].idxmax(), 'Questão']}")
-                ck3.metric("🚨 Menor Acerto", f"{df_stats['Acerto %'].min():.1f}%", f"Questão {df_stats.loc[df_stats['Acerto %'].idxmin(), 'Questão']}", delta_color="inverse")
-
-                # Gráfico Dinâmico
-                fig = px.bar(
-                    df_stats, x="Questão", y="Acerto %", 
-                    text="Acerto %", color="Acerto %",
-                    title=f"Distribuição de Acertos: {prova_alvo}",
-                    color_continuous_scale="RdYlGn", range_y=[0, 110]
-                )
-                fig.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
-                st.plotly_chart(fig, use_container_width=True)
-
-                # --- RAIO-X DETALHADO (QUESTÃO POR QUESTÃO) ---
-                st.markdown("### 🔍 Perícia por Habilidade (Descritores)")
-                for _, row in df_stats.iterrows():
-                    # Cor do indicador baseada no desempenho
-                    cor = "🔴" if row['Acerto %'] < 50 else "🟡" if row['Acerto %'] < 75 else "🟢"
+                    # Cálculo de Estatísticas
+                    stats = []
+                    for i, certa in enumerate(gab_oficial):
+                        q_num = f"{i+1:02d}"
+                        respostas = [r.split(";")[i] if len(r.split(";")) > i else "?" for r in df_f['RESPOSTAS_ALUNO']]
+                        acertos = respostas.count(certa)
+                        percentual = (acertos / len(df_f)) * 100
+                        stats.append({"Questão": q_num, "Acerto %": percentual, "Gabarito": certa, "Texto": lista_enunciados[i] if i < len(lista_enunciados) else "Texto não localizado."})
                     
-                    with st.expander(f"{cor} Questão {row['Questão']} - Índice de Domínio: {row['Acerto %']:.1f}%"):
-                        c_q1, c_q2 = st.columns([2, 1])
-                        with c_q1:
-                            st.markdown(f"**Enunciado:**\n{row['Texto']}")
-                        with c_q2:
-                            st.info(f"**Gabarito Oficial:** {row['Gabarito']}")
-                            if row['Acerto %'] < 50:
-                                st.error("⚠️ **ALERTA PEDAGÓGICO:** Baixo domínio. Recomenda-se retomar este conteúdo na Prática Social (PHC).")
-                            else:
-                                st.success("✅ **DOMÍNIO ATINGIDO:** Habilidade consolidada pela maioria.")
+                    df_stats = pd.DataFrame(stats)
 
-                # --- PROGNÓSTICO IA ---
-                if st.button("🧠 Gerar Prognóstico Pedagógico (IA)", type="primary", use_container_width=True):
-                    with st.spinner("Maestro analisando lacunas cognitivas..."):
-                        # Envia apenas as questões críticas para a IA economizar tokens e ser precisa
-                        criticas = df_stats[df_stats['Acerto %'] < 60].to_string()
-                        prognostico = ai.gerar_prognostico_pedagogico(criticas, txt_full[:1000])
-                        st.markdown(f"### 📋 Plano de Recomposição\n{prognostico}")
+                    # KPIs do Perfil
+                    c1, c2, c3 = st.columns(3)
+                    media_p = df_f['NOTA_CALCULADA'].mean()
+                    c1.metric(f"Média {perfil_tipo}", f"{media_p:.2f}")
+                    c2.metric("Aproveitamento", f"{(media_p/v_prova_base*100):.1f}%")
+                    c3.metric("Total Alunos", len(df_f))
 
-            else: st.error("❌ Erro: Não foi possível localizar o conteúdo original desta prova na Central de Avaliações.")
-        else: st.info("📭 Selecione os filtros acima para visualizar o Dashboard de Perícia.")
+                    # Gráfico
+                    fig = px.bar(df_stats, x="Questão", y="Acerto %", text="Acerto %", color="Acerto %",
+                                 color_continuous_scale="RdYlGn", range_y=[0, 110], title=f"Desempenho por Questão - {perfil_tipo}")
+                    fig.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
+                    st.plotly_chart(fig, use_container_width=True)
+
+                    # Detalhamento
+                    st.markdown(f"#### 🔍 Detalhamento de Habilidades - {perfil_tipo}")
+                    for _, row in df_stats.iterrows():
+                        cor = "🔴" if row['Acerto %'] < 50 else "🟡" if row['Acerto %'] < 75 else "🟢"
+                        with st.expander(f"{cor} Questão {row['Questão']} - Domínio: {row['Acerto %']:.1f}%"):
+                            st.write(f"**Enunciado:** {row['Texto']}")
+                            st.caption(f"Gabarito: {row['Gabarito']}")
+
+                # Execução das Tabs
+                with t_reg:
+                    gerar_raio_x("📝 REGULAR", "GABARITO_REGULAR")
+                
+                with t_pei:
+                    gerar_raio_x("♿ PEI", "GABARITO_PEI")
+
+                # Prognóstico Unificado
+                st.markdown("---")
+                if st.button("🧠 Gerar Prognóstico Pedagógico Integrado", type="primary", use_container_width=True):
+                    with st.spinner("Analisando lacunas cognitivas de ambos os perfis..."):
+                        resumo_geral = df_pericia.groupby('PERFIL')['NOTA_CALCULADA'].mean().to_string()
+                        prognostico = ai.gerar_prognostico_pedagogico(resumo_geral, txt_full[:1000])
+                        st.info(prognostico)
+
+            else: st.error("❌ Conteúdo da prova não localizado na Central de Avaliações.")
+        else: st.info("📭 Sem dados para os filtros selecionados.")
