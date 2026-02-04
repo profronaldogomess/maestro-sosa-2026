@@ -41,14 +41,12 @@ def limpar_id(valor):
 
 @st.cache_data(ttl=300)
 def carregar_tudo():
-    wb = conectar() # Define o wb aqui primeiro!
-    if not wb: return None, [pd.DataFrame()]*11 
+    wb = conectar()
+    if not wb: return None, [pd.DataFrame()]*12 # Agora são 12!
     
-    # A safe_get deve ficar aqui dentro para "enxergar" o wb
     def safe_get(nome, colunas_padrao=[]):
         try:
             ws = wb.worksheet(nome)
-            # FORMATTED_VALUE resolve o erro da data 46057
             dados = ws.get_all_values() 
             if not dados or len(dados) < 1:
                 return pd.DataFrame(columns=colunas_padrao)
@@ -61,7 +59,6 @@ def carregar_tudo():
                 if any(x in col for x in ["NOTA", "MEDIA", "VALOR", "SOMA"]):
                     df[col] = df[col].apply(util.sosa_to_float)
 
-            # Preservação de lógica para outros painéis
             if nome == "DB_AULAS_PRONTAS":
                 if "LINK_DRIVE" not in df.columns: df["LINK_DRIVE"] = ""
             elif nome == "DB_PLANOS":
@@ -73,7 +70,7 @@ def carregar_tudo():
         except: 
             return pd.DataFrame(columns=colunas_padrao)
 
-    # Definição das colunas para os outros painéis (Mantido original)
+    # Definição das colunas
     cols_planos = ["DATA", "SEMANA", "ANO", "TRIMESTRE", "TURMA", "PLANO_TEXTO", "LINK_DRIVE"]
     cols_aulas = ["DATA", "SEMANA_REF", "TIPO_MATERIAL", "CONTEUDO", "ANO", "LINK_DRIVE"]
     cols_alunos = ["ID", "NOME_ALUNO", "TURMA", "STATUS", "NECESSIDADES", "ORIGEM"]
@@ -81,13 +78,22 @@ def carregar_tudo():
     cols_diario = ["DATA", "ID_ALUNO", "NOME_ALUNO", "TURMA", "VISTO_ATIVIDADE", "TAGS", "OBSERVACOES"]
     cols_registro = ["DATA", "SEMANA", "TURMA", "CONTEUDO_MINISTRADO", "ADAPTACAO_PEI", "STATUS_CURRICULO"]
     cols_notas = ["ID_ALUNO", "NOME_ALUNO", "TURMA", "TRIMESTRE", "NOTA_VISTOS", "NOTA_TESTE", "NOTA_PROVA", "NOTA_REC", "MEDIA_FINAL"]
+    # Nova definição para o Scanner
+    cols_diagnosticos = ["DATA", "ID_ALUNO", "NOME_ALUNO", "TURMA", "ID_AVALIACAO", "RESPOSTAS_ALUNO", "NOTA_CALCULADA", "LINK_FOTO_DRIVE"]
 
     return wb, (
-        safe_get("DB_ALUNOS", cols_alunos), safe_get("DB_CURRICULO"), safe_get("DB_MATERIAIS"),
-        safe_get("DB_PLANOS", cols_planos), safe_get("DB_AULAS_PRONTAS", cols_aulas), 
-        safe_get("DB_NOTAS", cols_notas), safe_get("DB_DIARIO_BORDO", cols_diario), 
-        safe_get("DB_TURMAS"), safe_get("DB_RELATORIOS", cols_relatorios), 
-        safe_get("DB_HORARIOS"), safe_get("DB_REGISTRO_AULAS", cols_registro)
+        safe_get("DB_ALUNOS", cols_alunos), 
+        safe_get("DB_CURRICULO"), 
+        safe_get("DB_MATERIAIS"),
+        safe_get("DB_PLANOS", cols_planos), 
+        safe_get("DB_AULAS_PRONTAS", cols_aulas), 
+        safe_get("DB_NOTAS", cols_notas), 
+        safe_get("DB_DIARIO_BORDO", cols_diario), 
+        safe_get("DB_TURMAS"), 
+        safe_get("DB_RELATORIOS", cols_relatorios), 
+        safe_get("DB_HORARIOS"), 
+        safe_get("DB_REGISTRO_AULAS", cols_registro),
+        safe_get("DB_GABARITOS_ALUNOS", cols_diagnosticos) # A 12ª TABELA AQUI!
     )
 
 def salvar_no_banco(aba_nome, linha):
