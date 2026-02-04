@@ -1880,8 +1880,9 @@ with tab_scan:
 
                 if img_file:
                     if st.button("🧠 ANALISAR MARCAÇÕES", type="primary", use_container_width=True):
-                        with st.spinner("Analisando..."):
-                            st.session_state.scan_res = ai.analisar_gabar_vision(img_file.getvalue())
+                        with st.spinner("Maestro Vision analisando densidade de grafite..."):
+                            # CORREÇÃO: O nome correto da função é analisar_gabarito_vision
+                            st.session_state.scan_res = ai.analisar_gabarito_vision(img_file.getvalue())
                             st.session_state.scan_img = img_file.getvalue()
                             st.rerun()
 
