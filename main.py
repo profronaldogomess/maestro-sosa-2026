@@ -1774,31 +1774,25 @@ elif menu == "📝 Central de Avaliações":
                 st.dataframe(df_cron[['DATA', 'TURMA', 'CONTEUDO_MINISTRADO', 'STATUS_CURRICULO']], use_container_width=True, hide_index=True)
 
 # ==============================================================================
-# MÓDULO: SCANNER & PERÍCIA - ARQUITETURA V26 (PRECISÃO DECIMAL CONSOLIDADA)
+# MÓDULO: SCANNER & PERÍCIA - ARQUITETURA V26 (ESTABILIZADA)
 # ==============================================================================
 elif menu == "📸 Scanner de Gabaritos":
     st.title("📸 Inteligência Diagnóstica e Perícia")
     st.markdown("---")
 
+    # --- CARREGAMENTO UNIFICADO (AQUI ESTAVA O ERRO) ---
+    # Em vez de ws_g.get_all_records, usamos nossa função blindada
+    df_diagnosticos = db.safe_get("DB_GABARITOS_ALUNOS", 
+        ["DATA", "ID_ALUNO", "NOME_ALUNO", "TURMA", "ID_AVALIACAO", "RESPOSTAS_ALUNO", "NOTA_CALCULADA", "LINK_FOTO_DRIVE"])
+
     def reset_scanner():
         if "scan_res" in st.session_state: del st.session_state.scan_res
-        if "scan_res_img" in st.session_state: del st.session_state.scan_res_img # Corrigido nome da key
+        if "scan_img" in st.session_state: del st.session_state.scan_img
         st.session_state.v_scan = int(time.time())
         st.rerun()
 
     if "v_scan" not in st.session_state: st.session_state.v_scan = 1
     v = st.session_state.v_scan
-
-    # Carregamento de dados com sanitização Sosa
-    try:
-        ws_g = wb.worksheet("DB_GABARITOS_ALUNOS")
-        df_diagnosticos = pd.DataFrame(ws_g.get_all_records())
-        if not df_diagnosticos.empty:
-            df_diagnosticos.columns = [str(c).strip().upper() for c in df_diagnosticos.columns]
-            # Sanitização imediata das notas para float puro
-            df_diagnosticos['NOTA_CALCULADA'] = df_diagnosticos['NOTA_CALCULADA'].apply(util.sosa_to_float)
-    except:
-        df_diagnosticos = pd.DataFrame(columns=["DATA", "ID_ALUNO", "NOME_ALUNO", "TURMA", "ID_AVALIACAO", "RESPOSTAS_ALUNO", "NOTA_CALCULADA", "LINK_FOTO_DRIVE"])
 
     tab_scan, tab_acervo, tab_dash = st.tabs(["📸 Capturar Gabarito", "📂 Acervo de Evidências", "📊 Dashboard de Perícia"])
 
