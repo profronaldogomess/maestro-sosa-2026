@@ -1,5 +1,6 @@
 from datetime import date, timedelta
 import re
+import uuid
 
 def limpar_texto(texto):
     if not texto: return ""
@@ -72,3 +73,10 @@ def sosa_to_str(valor, casas=2):
     val_float = sosa_to_float(valor)
     formato = "{:." + str(casas) + "f}"
     return formato.format(val_float).replace(".", ",")
+
+def gerar_sosa_id(tipo, ano, trimestre):
+    """Gera um DNA único para o material: TIPO-ANO-TRIM-HASH"""
+    prefixo = tipo[:4].upper()
+    hash_curto = str(uuid.uuid4())[:4].upper()
+    data_slug = date.today().strftime("%d%m")
+    return f"{prefixo}-{ano}AN-{trimestre[0]}-{data_slug}-{hash_curto}"
