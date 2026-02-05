@@ -72,7 +72,12 @@ PERSONAS = {
     🚨 REGRAS DE OURO:
     - SOSA-ID obrigatório no topo.
     - PROIBIDO Markdown (** ou #). Use Unicode (🎯, 📘, 🔢).
-    - Fidelidade absoluta aos conteúdos literais do banco de dados.""",
+    - Fidelidade absoluta aos conteúdos literais do banco de dados.
+    
+    🚨 FORMATAÇÃO DE SAÍDA (CRÍTICO):
+    - Use EXATAMENTE os colchetes: [SOSA_ID], [PROFESSOR], [ALUNO], [GABARITO], [IMAGENS], [PEI].
+    - NÃO use hashtags (#) ou negritos (**) nos nomes das tags.
+    - Comece o conteúdo imediatamente após fechar o colchete.""",
 
     # --- PERSONA PEI V28: O ENGENHEIRO DE EQUIDADE ---
     "ARQUITETO_PEI_V28_SINFONIA": """VOCÊ É O ENGENHEIRO DE EQUIDADE E ACESSIBILIDADE V28.
@@ -278,6 +283,49 @@ def gerar_ia(persona_key, comando, partes_arquivos=[], usar_busca=True):
         return f"Erro na IA: {e}"
 
 def extrair_tag(texto, tag):
+    if not texto: return ""
+    import re
+    
+    # 1. PRÉ-PROCESSAMENTO (ESCUDO SOSA)
+    # Remove negritos e títulos Markdown que "colam" nas tags e quebram a Regex
+    texto_limpo = re.sub(r'\*+', '', texto) # Remove todos os asteriscos
+    texto_limpo = re.sub(r'#+', '', texto_limpo) # Remove todas as hashtags
+    
+    # 2. DEFINIÇÃO DE HIERARQUIA SOSA (PRESERVADA)
+    tags_bloco = ["PROFESSOR", "ALUNO", "GABARITO", "PEI", "IMAGENS", "RUBRICA", "SOSA_ID"]
+    tags_conteudo = ["COLUNA_1", "COLUNA_2", "MAPA_MENTAL", "ALGORITMO", "ATIVIDADES_SINTESE", "GABARITO_COMENTADO_PEI"]
+    
+    tag_busca = tag.upper()
+    
+    # 3. LÓGICA DE PARADA DINÂMICA (PRESERVADA)
+    if tag_busca in tags_bloco:
+        parada = [t for t in tags_bloco if t != tag_busca]
+    else:
+        parada = [t for t in (tags_bloco + tags_conteudo) if t != tag_busca]
+    
+    lista_parada = "|".join(parada)
+    
+    # 4. REGEX ULTRA-RESILIENTE
+    # \s*\[\s* -> Aceita espaços antes e dentro do colchete
+    # (?::.*?)? -> Aceita [TAG: valor] ou [TAG]
+    # \s*\]\s*[:\-]* -> Aceita fechar colchete com espaços, dois pontos ou hífen depois
+    padrao = rf"\[\s*{tag_busca}\s*(?::.*?)?\]\s*[:\-]*\s*(.*?)(?=\[\s*(?:{lista_parada})\s*(?::.*?)?\]|$)"
+    
+    match = re.search(padrao, texto_limpo, re.DOTALL | re.IGNORECASE)
+    
+    if match:
+        res = match.group(1).strip()
+        # Limpeza de resíduos de caracteres especiais no início do bloco
+        res = re.sub(r'^[:\-\s]+', '', res)
+        return res.strip()
+    
+    # 5. FALLBACK ESTRATÉGICO (PRESERVADO)
+    if tag_busca == "PEI" and "MAPA MENTAL" in texto_limpo.upper():
+        m = re.search(r"MAPA MENTAL.*", texto_limpo, re.DOTALL | re.IGNORECASE)
+        if m: return m.group(0).strip()
+
+    return ""
+
     if not texto: return ""
     import re
     
