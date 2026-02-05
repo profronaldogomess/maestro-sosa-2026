@@ -478,18 +478,16 @@ if menu == "🧪 Criador de Aulas":
                             st.session_state.sosa_id_atual = s_id
                             st.session_state.lab_meta = {"ano": ano_lab, "trimestre": "I Trimestre", "tipo": aula_alvo}
                             
-                            # PROMPT DE EXPANSÃO TÉCNICA (V29.5)
+                            # NOVO PROMPT DE COMPILAÇÃO (V30)
                             prompt_elite = (
                                 f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {s_id}.\n"
-                                f"SÉRIE: {ano_lab}º ANO. SEMANA: {sem_lab}. ALVO: {aula_alvo}.\n"
-                                f"CONTEÚDO BASE: {ai.extrair_tag(plano_ref, 'CONTEUDOS_ESPECIFICOS')}.\n"
-                                f"METODOLOGIA DO PLANEJAMENTO: {metodologia_especifica}.\n\n"
-                                f"🚨 MISSÃO CRÍTICA DE EXPANSÃO:\n"
-                                f"1. Utilize o Google Search para buscar definições técnicas e exemplos detalhados (Estilo Brasil Escola) sobre o conteúdo base.\n"
-                                f"2. No [PROFESSOR], desenvolva um texto técnico longo e detalhado para ser copiado na lousa. Não aceite o resumo do planejamento como limite; use-o apenas como semente.\n"
-                                f"3. No [ALUNO], gere um texto explicativo e, em seguida, EXATAMENTE {qtd_q} QUESTÕES de múltipla escolha (A-E) com enunciados contextualizados.\n"
-                                f"4. Insira 'PROMPT IMAGEM' em todas as questões que envolvam geometria ou representações visuais.\n\n"
-                                f"ENTREGA: [SOSA_ID], [PROFESSOR], [ALUNO], [GABARITO], [IMAGENS], [PEI], [GABARITO_PEI]."
+                                f"SÉRIE: {ano_lab}º ANO. ALVO: {aula_alvo}.\n"
+                                f"📍 METODOLOGIA SOBERANA (SIGA RIGOROSAMENTE): {metodologia_especifica}.\n\n"
+                                f"🚨 REGRAS DE FIDELIDADE:\n"
+                                f"1. O conteúdo deve ser EXCLUSIVO sobre o que consta na metodologia acima. Se for Aula 1, foque apenas em Egípcio. Se for Aula 2, apenas em Romano.\n"
+                                f"2. O 'DESAFIO DE ELITE' citado no planejamento DEVE ser a última questão do material do aluno.\n"
+                                f"3. No [PROFESSOR], expanda os conceitos técnicos da metodologia para um texto denso de lousa (Estilo Brasil Escola).\n"
+                                f"4. Gere {qtd_q} questões que sigam a progressão de dificuldade da metodologia."
                             )
                             # Ativamos usar_busca=True para garantir a densidade
                             st.session_state.lab_temp = ai.gerar_ia("MAESTRO_SOSA_V28_ELITE", prompt_elite, usar_busca=True)
