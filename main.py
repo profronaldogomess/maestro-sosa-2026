@@ -306,7 +306,7 @@ def exibir_material_estruturado(texto_raw, key_prefix, dados_plano=None, info_au
                        
 
 # ==============================================================================
-# MÓDULO: LABORATÓRIO DE PRODUÇÃO (CRIADOR V32.4) - ORGANIZAÇÃO TOTAL
+# MÓDULO: LABORATÓRIO DE PRODUÇÃO (CRIADOR V32.5) - BLINDAGEM DE ATRIBUTOS
 # ==============================================================================
 if menu == "🧪 Criador de Aulas":
     st.title("🧪 Laboratório de Produção Semiótica (V32)")
@@ -319,7 +319,8 @@ if menu == "🧪 Criador de Aulas":
         st.session_state.v_lab = int(time.time())
         st.rerun()
 
-    v = st.session_state.get("v_lab", 1)
+    if "v_lab" not in st.session_state: st.session_state.v_lab = 1
+    v = st.session_state.v_lab
 
     # DEFINIÇÃO DAS ABAS MESTRAS
     tab_producao, tab_diagnostico, tab_trabalhos, tab_complementar, tab_acervo = st.tabs([
@@ -330,13 +331,12 @@ if menu == "🧪 Criador de Aulas":
         "📂 Acervo de Materiais"
     ])
 
-    # --- FUNÇÃO INTERNA PARA EXIBIR O EDITOR (EVITA REPETIÇÃO E ERROS) ---
+    # --- FUNÇÃO INTERNA PARA EXIBIR O EDITOR (VERSÃO BLINDADA) ---
     def exibir_editor_material(txt_base, s_id, meta_dados):
         st.markdown("---")
         st.success(f"💎 Material Gerado: **{s_id}**")
         
-        # Botão para descartar e voltar ao formulário
-        if st.button("🆕 GERAR NOVO (LIMPAR ATUAL)", use_container_width=True):
+        if st.button("🆕 GERAR NOVO (LIMPAR ATUAL)", use_container_width=True, key=f"btn_reset_{v}"):
             reset_laboratorio()
 
         t_prof, t_alu, t_gab, t_pei, t_sync = st.tabs(["👨‍🏫 Professor", "📝 Aluno", "✅ Gabarito/Rubrica", "♿ PEI", "☁️ SINCRONIA"])
@@ -351,7 +351,7 @@ if menu == "🧪 Criador de Aulas":
         
         with t_pei:
             st.subheader("♿ Adaptação Curricular PEI (Elite)")
-            if st.button("✨ GERAR/ATUALIZAR MATERIAL PEI", use_container_width=True, key=f"btn_pei_{v}"):
+            if st.button("✨ GERAR/ATUALIZAR MATERIAL PEI", use_container_width=True, key=f"btn_pei_gen_{v}"):
                 with st.spinner("Realizando reengenharia de acessibilidade..."):
                     res_pei_ia = ai.gerar_ia("ARQUITETO_PEI_V24", f"ADAPTE PARA PEI: {ed_alu}")
                     st.session_state.lab_pei = ai.extrair_tag(res_pei_ia, "PEI")
@@ -364,12 +364,17 @@ if menu == "🧪 Criador de Aulas":
                 with c_p2: st.text_area("✅ Gabarito PEI:", st.session_state.get("lab_gab_pei", ""), height=400, key=f"ed_pei_gab_{v}")
 
         with t_sync:
-            if st.button("💾 FINALIZAR E SINCRONIZAR", use_container_width=True, type="primary", key=f"btn_sync_{v}"):
+            if st.button("💾 FINALIZAR E SINCRONIZAR", use_container_width=True, type="primary", key=f"btn_sync_final_{v}"):
                 with st.status("Sincronizando...") as status:
-                    nome_final = f"{s_id} - {meta_dados['tipo']}"
-                    ano_str = f"{meta_dados['ano']}º"
+                    # Blindagem contra meta_dados vazios
+                    f_tipo = meta_dados.get('tipo', 'MATERIAL')
+                    f_ano = meta_dados.get('ano', '6')
+                    f_trim = meta_dados.get('trimestre', 'I Trimestre')
                     
-                    doc_alu = exporter.gerar_docx_aluno_v24(nome_final, ed_alu, {"ano": ano_str, "trimestre": meta_dados['trimestre']})
+                    nome_final = f"{s_id} - {f_tipo}"
+                    ano_str = f"{f_ano}º"
+                    
+                    doc_alu = exporter.gerar_docx_aluno_v24(nome_final, ed_alu, {"ano": ano_str, "trimestre": f_trim})
                     link_alu = db.subir_e_converter_para_google_docs(doc_alu, nome_final, modo="AULA")
                     
                     if "https" in str(link_alu):
@@ -387,31 +392,34 @@ if menu == "🧪 Criador de Aulas":
 
     # --- ABA 1: PRODUÇÃO ---
     with tab_producao:
+        # Só exibe o formulário se não houver material em edição
         if "lab_temp" not in st.session_state:
             with st.container(border=True):
                 st.markdown("### ⚙️ 1. Parâmetros de Regência")
                 c1, c2, c3 = st.columns([1, 2, 1.5])
-                ano_lab = c1.selectbox("Série/Ano:", [6, 7, 8, 9], key=f"lab_ano_{v}")
+                ano_lab = c1.selectbox("Série/Ano:", [6, 7, 8, 9], key=f"sel_ano_{v}")
                 planos_ano = df_planos[df_planos['ANO'].astype(str).str.contains(str(ano_lab))]
                 
                 if planos_ano.empty: st.error("❌ Nenhum plano encontrado.")
                 else:
-                    sem_lab = c2.selectbox("Semana Base (PIP):", planos_ano['SEMANA'].tolist(), key=f"lab_sem_{v}")
-                    aula_alvo = c3.radio("🎯 Alvo:", ["Aula 1", "Aula 2", "Ambas"], horizontal=True)
+                    sem_lab = c2.selectbox("Semana Base (PIP):", planos_ano['SEMANA'].tolist(), key=f"sel_sem_{v}")
+                    aula_alvo = c3.radio("🎯 Alvo:", ["Aula 1", "Aula 2", "Ambas"], horizontal=True, key=f"sel_alvo_{v}")
                     plano_ref = planos_ano[planos_ano['SEMANA'] == sem_lab].iloc[0]['PLANO_TEXTO']
                     
                     col_p1, col_p2 = st.columns(2)
-                    qtd_q = col_p1.slider("Nº de Questões:", 1, 15, 5)
-                    instr_extra = col_p2.text_input("Instruções Adicionais:")
+                    qtd_q = col_p1.slider("Nº de Questões:", 1, 15, 5, key=f"sel_q_{v}")
+                    instr_extra = col_p2.text_input("Instruções Adicionais:", key=f"sel_extra_{v}")
                     
-                    if st.button("💎 COMPILAR MATERIAL", use_container_width=True, type="primary"):
+                    if st.button("💎 COMPILAR MATERIAL", use_container_width=True, type="primary", key=f"btn_gen_{v}"):
                         s_id = util.gerar_sosa_id("AULA", ano_lab, "I")
                         st.session_state.sosa_id_atual = s_id
                         st.session_state.lab_meta = {"ano": ano_lab, "trimestre": "I Trimestre", "tipo": "AULA"}
                         st.session_state.lab_temp = ai.gerar_ia("MESTRE_V24", f"GERAR AULA. ID: {s_id}. PLANO: {plano_ref}. FOCO: {aula_alvo}. QTD: {qtd_q}. EXTRA: {instr_extra}")
                         st.rerun()
         else:
-            exibir_editor_material(st.session_state.lab_temp, st.session_state.sosa_id_atual, st.session_state.lab_meta)
+            # Chama o editor garantindo que lab_meta exista
+            meta_segura = st.session_state.get("lab_meta", {"ano": "6", "trimestre": "I Trimestre", "tipo": "AULA"})
+            exibir_editor_material(st.session_state.lab_temp, st.session_state.sosa_id_atual, meta_segura)
 
     # --- ABA 2: DIAGNÓSTICO ---
     with tab_diagnostico:
@@ -420,7 +428,7 @@ if menu == "🧪 Criador de Aulas":
             with st.container(border=True):
                 cd1, cd2 = st.columns(2)
                 ano_diag = cd1.selectbox("Série Atual:", [6, 7, 8, 9], key=f"diag_ano_{v}")
-                trim_diag = cd2.selectbox("Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"])
+                trim_diag = cd2.selectbox("Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"diag_trim_{v}")
                 
                 if trim_diag == "I Trimestre":
                     ano_busca = ano_diag - 1
@@ -429,8 +437,8 @@ if menu == "🧪 Criador de Aulas":
                     df_retro = df_curriculo[(df_curriculo['ANO'] == ano_diag) & (df_curriculo['TRIMESTRE'] != trim_diag)]
 
                 if not df_retro.empty:
-                    sel_retro = st.multiselect("Pré-requisitos:", df_retro['CONTEUDO_ESPECIFICO'].tolist())
-                    if st.button("🧠 GERAR DIAGNÓSTICO"):
+                    sel_retro = st.multiselect("Pré-requisitos:", df_retro['CONTEUDO_ESPECIFICO'].tolist(), key=f"diag_sel_{v}")
+                    if st.button("🧠 GERAR DIAGNÓSTICO", key=f"btn_diag_{v}"):
                         s_id = util.gerar_sosa_id("DIAG", ano_diag, trim_diag)
                         st.session_state.sosa_id_atual = s_id
                         st.session_state.lab_meta = {"ano": ano_diag, "trimestre": trim_diag, "tipo": "DIAGNOSTICO"}
@@ -446,10 +454,10 @@ if menu == "🧪 Criador de Aulas":
             with st.container(border=True):
                 ct1, ct2, ct3 = st.columns([1, 1, 1])
                 ano_trab = ct1.selectbox("Série:", [6, 7, 8, 9], key=f"trab_ano_{v}")
-                tipo_trab = ct2.selectbox("Formato:", ["Pesquisa", "Projeto", "Seminário"])
-                valor_trab = ct3.number_input("Valor:", 0.0, 10.0, 2.0)
-                tema_trab = st.text_input("Tema:")
-                if st.button("🚀 CRIAR TRABALHO"):
+                tipo_trab = ct2.selectbox("Formato:", ["Pesquisa", "Projeto", "Seminário"], key=f"trab_tipo_{v}")
+                valor_trab = ct3.number_input("Valor:", 0.0, 10.0, 2.0, key=f"trab_val_{v}")
+                tema_trab = st.text_input("Tema:", key=f"trab_tema_{v}")
+                if st.button("🚀 CRIAR TRABALHO", key=f"btn_trab_{v}"):
                     s_id = util.gerar_sosa_id("TRAB", ano_trab, "I")
                     st.session_state.sosa_id_atual = s_id
                     st.session_state.lab_meta = {"ano": ano_trab, "trimestre": "I Trimestre", "tipo": "TRABALHO"}
@@ -461,7 +469,6 @@ if menu == "🧪 Criador de Aulas":
     # --- ABA 4: COMPLEMENTAR ---
     with tab_complementar:
         st.subheader("📚 Reforço e Aprofundamento")
-        # (Lógica simplificada para manter o foco na correção do erro principal)
         st.info("Use esta aba para gerar listas extras baseadas no PIP.")
 
     # --- ABA 5: ACERVO (DASHBOARD VISUAL V27) ---
