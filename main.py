@@ -473,20 +473,23 @@ if menu == "🧪 Criador de Aulas":
                     instr_extra = col_p2.text_input("Instruções Adicionais (Ex: Focar em frações):", key=f"prod_extra_{v}")
                     
                     if st.button("💎 COMPILAR MATERIAL DE ELITE", use_container_width=True, type="primary"):
-                        with st.spinner("Maestro Sosa processando Planejamento e Metodologia..."):
+                        with st.spinner("Maestro Sosa articulando Letramento Matemático..."):
                             s_id = util.gerar_sosa_id("AULA", ano_lab, "I")
                             st.session_state.sosa_id_atual = s_id
                             st.session_state.lab_meta = {"ano": ano_lab, "trimestre": "I Trimestre", "tipo": aula_alvo}
                             
-                            # PROMPT QUE ENVIA A METODOLOGIA REAL DO PLANEJAMENTO
+                            # PROMPT DE ALTA PERFORMANCE BNCC
                             prompt_elite = (
                                 f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {s_id}.\n"
                                 f"SÉRIE: {ano_lab}º ANO. SEMANA: {sem_lab}. ALVO: {aula_alvo}.\n"
-                                f"CONTEÚDO BASE: {ai.extrair_tag(plano_ref, 'CONTEUDOS_ESPECIFICOS')}.\n"
+                                f"CONTEÚDO: {ai.extrair_tag(plano_ref, 'CONTEUDOS_ESPECIFICOS')}.\n"
                                 f"OBJETIVOS: {ai.extrair_tag(plano_ref, 'OBJETIVOS_ENSINO')}.\n"
-                                f"METODOLOGIA DO PLANEJAMENTO (SIGA ISSO): {metodologia_especifica}.\n\n"
-                                f"QTD QUESTÕES: {qtd_q}. EXTRA: {instr_extra}.\n"
-                                f"🚨 REQUISITO: Não crie cabeçalhos. Use PROMPT IMAGEM para suporte visual."
+                                f"METODOLOGIA BASE (PONTO ID): {metodologia_especifica}.\n\n"
+                                f"🚨 MISSÃO: Expanda a metodologia base em um Roteiro de Investigação BNCC.\n"
+                                f"1. No [PROFESSOR], entregue o Mapa de Regência (Pergunta Norteadora, Mediação e Intervenção).\n"
+                                f"2. No [ALUNO], use PROMPT IMAGEM para cada representação visual.\n"
+                                f"3. No [PEI], use a persona ARQUITETO_PEI_V28_SINFONIA para gerar a versão focal.\n\n"
+                                f"ENTREGA: [SOSA_ID], [PROFESSOR], [ALUNO], [GABARITO], [IMAGENS], [PEI], [GABARITO_PEI]."
                             )
                             st.session_state.lab_temp = ai.gerar_ia("MAESTRO_SOSA_V28_ELITE", prompt_elite)
                             st.rerun()
