@@ -457,11 +457,20 @@ if menu == "🧪 Criador de Aulas":
                     qtd_q = col_p1.slider("Nº de Questões:", 1, 15, 5, key=f"prod_q_{v}")
                     instr_extra = col_p2.text_input("Instruções Adicionais:", key=f"prod_extra_{v}")
                     
-                    if st.button("💎 COMPILAR MATERIAL", use_container_width=True, type="primary", key=f"btn_gen_prod_{v}"):
+                    if st.button("💎 COMPILAR MATERIAL", use_container_width=True, type="primary"):
                         s_id = util.gerar_sosa_id("AULA", ano_lab, "I")
                         st.session_state.sosa_id_atual = s_id
-                        st.session_state.lab_meta = {"ano": ano_lab, "trimestre": "I Trimestre", "tipo": "AULA"}
-                        st.session_state.lab_temp = ai.gerar_ia("MESTRE_V24", f"GERAR AULA. ID: {s_id}. PLANO: {plano_ref}. FOCO: {aula_alvo}. QTD: {qtd_q}. EXTRA: {instr_extra}")
+                        st.session_state.lab_meta = {"ano": ano_lab, "trimestre": "I Trimestre", "tipo": "AULA_ELITE"}
+                        
+                        prompt_elite = (
+                            f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {s_id}.\n"
+                            f"SÉRIE: {ano_lab}º ANO. SEMANA: {sem_lab}. ALVO: {aula_alvo}.\n"
+                            f"PLANO DE REFERÊNCIA: {plano_ref}.\n"
+                            f"QTD QUESTÕES: {qtd_q}. EXTRA: {instr_extra}.\n\n"
+                            f"🚨 REQUISITO: Siga a Tríade da Práxis (Síncrese, Analítica, Síntese). "
+                            f"Insira 'PROMPT IMAGEM: [descrição]' para cada suporte visual necessário."
+                        )
+                        st.session_state.lab_temp = ai.gerar_ia("MAESTRO_SOSA_V28_ELITE", prompt_elite)
                         st.rerun()
 
 # --- ABA 2: SONDA DIAGNÓSTICA (V29.3 - INTERFACE LIMPA) ---
