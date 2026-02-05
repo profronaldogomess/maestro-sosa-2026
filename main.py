@@ -473,25 +473,26 @@ if menu == "🧪 Criador de Aulas":
                     instr_extra = col_p2.text_input("Instruções Adicionais (Ex: Focar em frações):", key=f"prod_extra_{v}")
                     
                     if st.button("💎 COMPILAR MATERIAL DE ELITE", use_container_width=True, type="primary"):
-                        with st.spinner("Maestro Sosa articulando Letramento Matemático..."):
+                        with st.spinner("Maestro Sosa realizando Pesquisa Técnica e Expansão de Conteúdo..."):
                             s_id = util.gerar_sosa_id("AULA", ano_lab, "I")
                             st.session_state.sosa_id_atual = s_id
                             st.session_state.lab_meta = {"ano": ano_lab, "trimestre": "I Trimestre", "tipo": aula_alvo}
                             
-                            # PROMPT DE ALTA PERFORMANCE BNCC
+                            # PROMPT DE EXPANSÃO TÉCNICA (V29.5)
                             prompt_elite = (
                                 f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {s_id}.\n"
                                 f"SÉRIE: {ano_lab}º ANO. SEMANA: {sem_lab}. ALVO: {aula_alvo}.\n"
-                                f"CONTEÚDO: {ai.extrair_tag(plano_ref, 'CONTEUDOS_ESPECIFICOS')}.\n"
-                                f"OBJETIVOS: {ai.extrair_tag(plano_ref, 'OBJETIVOS_ENSINO')}.\n"
-                                f"METODOLOGIA BASE (PONTO ID): {metodologia_especifica}.\n\n"
-                                f"🚨 MISSÃO: Expanda a metodologia base em um Roteiro de Investigação BNCC.\n"
-                                f"1. No [PROFESSOR], entregue o Mapa de Regência (Pergunta Norteadora, Mediação e Intervenção).\n"
-                                f"2. No [ALUNO], use PROMPT IMAGEM para cada representação visual.\n"
-                                f"3. No [PEI], use a persona ARQUITETO_PEI_V28_SINFONIA para gerar a versão focal.\n\n"
+                                f"CONTEÚDO BASE: {ai.extrair_tag(plano_ref, 'CONTEUDOS_ESPECIFICOS')}.\n"
+                                f"METODOLOGIA DO PLANEJAMENTO: {metodologia_especifica}.\n\n"
+                                f"🚨 MISSÃO CRÍTICA DE EXPANSÃO:\n"
+                                f"1. Utilize o Google Search para buscar definições técnicas e exemplos detalhados (Estilo Brasil Escola) sobre o conteúdo base.\n"
+                                f"2. No [PROFESSOR], desenvolva um texto técnico longo e detalhado para ser copiado na lousa. Não aceite o resumo do planejamento como limite; use-o apenas como semente.\n"
+                                f"3. No [ALUNO], gere um texto explicativo e, em seguida, EXATAMENTE {qtd_q} QUESTÕES de múltipla escolha (A-E) com enunciados contextualizados.\n"
+                                f"4. Insira 'PROMPT IMAGEM' em todas as questões que envolvam geometria ou representações visuais.\n\n"
                                 f"ENTREGA: [SOSA_ID], [PROFESSOR], [ALUNO], [GABARITO], [IMAGENS], [PEI], [GABARITO_PEI]."
                             )
-                            st.session_state.lab_temp = ai.gerar_ia("MAESTRO_SOSA_V28_ELITE", prompt_elite)
+                            # Ativamos usar_busca=True para garantir a densidade
+                            st.session_state.lab_temp = ai.gerar_ia("MAESTRO_SOSA_V28_ELITE", prompt_elite, usar_busca=True)
                             st.rerun()
 
 # --- ABA 2: SONDA DIAGNÓSTICA (V29.3 - INTERFACE LIMPA) ---
