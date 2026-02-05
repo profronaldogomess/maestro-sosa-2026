@@ -406,30 +406,56 @@ if menu == "🧪 Criador de Aulas":
                         st.balloons(); time.sleep(1); reset_laboratorio()
 
     # --- ABA 1: PRODUÇÃO (FORMULÁRIO) ---
-    with tab_producao:
+    with tab_diagnostico:
         if "lab_temp" not in st.session_state:
+            st.subheader("🔍 Inteligência de Nivelamento (Retro-Busca)")
+            st.markdown("---")
+            
             with st.container(border=True):
-                st.markdown("### ⚙️ 1. Parâmetros de Regência")
-                c1, c2, c3 = st.columns([1, 2, 1.5])
-                ano_lab = c1.selectbox("Série/Ano:", [6, 7, 8, 9], key=f"prod_ano_{v}")
-                planos_ano = df_planos[df_planos['ANO'].astype(str).str.contains(str(ano_lab))]
-                
-                if planos_ano.empty: st.error("❌ Nenhum plano encontrado.")
+                cd1, cd2, cd3 = st.columns([1, 1, 1])
+                ano_diag = cd1.selectbox("Série Atual do Aluno:", [6, 7, 8, 9], key=f"diag_ano_sel_{v}")
+                trim_diag = cd2.selectbox("Trimestre de Aplicação:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"diag_trim_sel_{v}")
+                qtd_q_diag = cd3.number_input("Qtd de Questões:", 5, 15, 10, key=f"diag_q_{v}")
+
+                # LÓGICA DE RETRO-BUSCA SOSA
+                if trim_diag == "I Trimestre":
+                    ano_busca = ano_diag - 1
+                    st.info(f"📅 **Modo Entrada:** Buscando conteúdos do {ano_busca}º Ano (Base Anterior).")
+                    df_retro = df_curriculo[df_curriculo['ANO'] == ano_busca]
                 else:
-                    sem_lab = c2.selectbox("Semana Base (PIP):", planos_ano['SEMANA'].tolist(), key=f"prod_sem_{v}")
-                    aula_alvo = c3.radio("🎯 Alvo:", ["Aula 1", "Aula 2", "Ambas"], horizontal=True, key=f"prod_alvo_{v}")
-                    plano_ref = planos_ano[planos_ano['SEMANA'] == sem_lab].iloc[0]['PLANO_TEXTO']
+                    st.info(f"📅 **Modo Ciclo:** Buscando conteúdos dos trimestres anteriores do {ano_diag}º Ano.")
+                    t_busca = ["I Trimestre"] if trim_diag == "II Trimestre" else ["I Trimestre", "II Trimestre"]
+                    df_retro = df_curriculo[(df_curriculo['ANO'] == ano_diag) & (df_curriculo['TRIMESTRE'].isin(t_busca))]
+
+                if not df_retro.empty:
+                    sel_retro = st.multiselect("Selecione as Lacunas para Testar:", 
+                                             options=df_retro['CONTEUDO_ESPECIFICO'].unique().tolist(), 
+                                             key=f"diag_mult_{v}")
                     
-                    col_p1, col_p2 = st.columns(2)
-                    qtd_q = col_p1.slider("Nº de Questões:", 1, 15, 5, key=f"prod_q_{v}")
-                    instr_extra = col_p2.text_input("Instruções Adicionais:", key=f"prod_extra_{v}")
-                    
-                    if st.button("💎 COMPILAR MATERIAL", use_container_width=True, type="primary", key=f"btn_gen_prod_{v}"):
-                        s_id = util.gerar_sosa_id("AULA", ano_lab, "I")
-                        st.session_state.sosa_id_atual = s_id
-                        st.session_state.lab_meta = {"ano": ano_lab, "trimestre": "I Trimestre", "tipo": "AULA"}
-                        st.session_state.lab_temp = ai.gerar_ia("MESTRE_V24", f"GERAR AULA. ID: {s_id}. PLANO: {plano_ref}. FOCO: {aula_alvo}. QTD: {qtd_q}. EXTRA: {instr_extra}")
-                        st.rerun()
+                    instr_diag = st.text_input("Instruções de Perícia:", key=f"diag_instr_{v}")
+
+                    if st.button("💎 GERAR EXAME DE DIAGNÓSTICO", use_container_width=True, type="primary", key=f"btn_gen_diag_{v}"):
+                        if not sel_retro:
+                            st.error("Selecione ao menos um conteúdo.")
+                        else:
+                            with st.spinner("Maestro Sosa realizando Arqueologia Pedagógica..."):
+                                s_id = util.gerar_sosa_id("DIAG", ano_diag, trim_diag)
+                                st.session_state.sosa_id_atual = s_id
+                                st.session_state.lab_meta = {"ano": ano_diag, "trimestre": trim_diag, "tipo": "DIAGNOSTICO"}
+                                
+                                # PROMPT CORRIGIDO: Mapeia as tags de Exame para as tags do Laboratório
+                                prompt_diag = (
+                                    f"VOCÊ É O ARQUITETO DE EXAMES. GERAR DIAGNÓSTICO RASTREÁVEL. ID: {s_id}.\n"
+                                    f"SÉRIE: {ano_diag}º Ano. CONTEÚDOS: {sel_retro}. QTD: {qtd_q_diag}.\n\n"
+                                    f"ESTRUTURA OBRIGATÓRIA PARA O LABORATÓRIO:\n"
+                                    f"[PROFESSOR]: Inclua aqui o Esquema de Lousa e a Fundamentação Técnica do Diagnóstico.\n"
+                                    f"[ALUNO]: Inclua aqui as [ORIENTACOES] e as [QUESTOES] (A-E) no padrão de prova scaneável.\n"
+                                    f"[GABARITO]: Inclua aqui o [GABARITO_TEXTO] e as justificativas das respostas.\n"
+                                    f"[IMAGENS]: Sugestões de imagens para o tema."
+                                )
+                                # Usamos a persona MESTRE_V24 que a interface já conhece, mas com a ordem de Exame
+                                st.session_state.lab_temp = ai.gerar_ia("MESTRE_V24", prompt_diag)
+                                st.rerun()
 
 # --- ABA 2: DIAGNÓSTICO REVERSO (ARQUITETURA DE NIVELAMENTO V28) ---
     with tab_diagnostico:
