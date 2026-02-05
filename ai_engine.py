@@ -281,40 +281,43 @@ def extrair_tag(texto, tag):
     if not texto: return ""
     import re
     
-    # 1. LISTA MESTRA INTEGRAL V28 (Inclui sub-tags e marcadores de elite)
-    tags_sosa = [
-        "SOSA_ID", "PROFESSOR", "ALUNO", "GABARITO", "IMAGENS", "PEI", "RUBRICA",
-        "COLUNA_1", "COLUNA_2", "MAPA_MENTAL", "ALGORITMO", "ATIVIDADES_SINTESE",
-        "GABARITO_COMENTADO_PEI", "GABARITO_PEI", "ORIENTACOES", "QUESTOES", 
-        "GABARITO_TEXTO", "RESPOSTAS_IA", "CONTEUDO_GERAL", "CONTEUDOS_ESPECIFICOS", 
-        "OBJETIVOS_ENSINO", "METODOLOGIA", "AVALIACAO", "ADAPTACAO_PEI", "BNCC_CODE"
-    ]
+    # Limpeza de Markdown que a IA insiste em colocar nas tags (ex: **[TAG]**)
+    texto = re.sub(r'\*\*\[(.*?)\]\*\*', r'[\1]', texto)
+    texto = re.sub(r'###\s*\[(.*?)\]', r'[\1]', texto)
+
+    # 1. DEFINIÇÃO DE HIERARQUIA SOSA
+    # Tags de Bloco: Definem as abas do seu sistema (Devem ignorar sub-tags)
+    tags_bloco = ["PROFESSOR", "ALUNO", "GABARITO", "PEI", "IMAGENS", "RUBRICA", "SOSA_ID"]
     
-    # 2. FILTRAGEM DE PARADA (Exclui a tag atual da lista de parada)
-    parada = [t for t in tags_sosa if t.upper() != tag.upper()]
-    lista_parada_regex = "|".join(parada)
+    # Tags de Conteúdo: Marcadores internos (Devem parar em qualquer outra tag)
+    tags_conteudo = ["COLUNA_1", "COLUNA_2", "MAPA_MENTAL", "ALGORITMO", "ATIVIDADES_SINTESE", "GABARITO_COMENTADO_PEI"]
     
-    # 3. REGEX BLINDADA (ANTI-MARKDOWN E ANTI-ESPAÇO)
-    # Explicação: 
-    # [*]* -> Ignora asteriscos de negrito
-    # \[{tag}(?::.*?)?\] -> Aceita [TAG] ou [TAG: valor]
-    # (.*?) -> Captura o conteúdo (Lazy)
-    # (?= ... |$) -> Para na próxima tag da lista ou no fim do texto
-    padrao = rf"[*]*\s*(?:\[{tag}(?::.*?)?\]|MARKER_{tag})\s*[*]*[:\s]*(.*?)(?=[*]*\s*\[(?:{lista_parada_regex})(?::.*?)?\]|MARKER_(?:{lista_parada_regex})|$)"
+    tag_busca = tag.upper()
+    
+    # 2. LÓGICA DE PARADA DINÂMICA
+    if tag_busca in tags_bloco:
+        # Se estou buscando uma aba, só paro quando encontrar OUTRA aba principal
+        parada = [t for t in tags_bloco if t != tag_busca]
+    else:
+        # Se estou buscando conteúdo interno, paro em qualquer tag (bloco ou conteúdo)
+        parada = [t for t in (tags_bloco + tags_conteudo) if t != tag_busca]
+    
+    lista_parada = "|".join(parada)
+    
+    # 3. REGEX DE CAPTURA (Aceita [TAG] ou [TAG: valor])
+    padrao = rf"\[{tag_busca}(?::.*?)?\]\s*(.*?)(?=\[(?:{lista_parada})(?::.*?)?\]|$)"
     
     match = re.search(padrao, texto, re.DOTALL | re.IGNORECASE)
     
     if match:
         res = match.group(1).strip()
-        # Limpeza final de resíduos de formatação
-        return res.replace("**", "").replace("###", "").replace("##", "").replace("#", "").strip()
+        return res.replace("**", "").strip()
     
-    # 4. FALLBACK ESTRATÉGICO PARA PEI
-    if tag.upper() == "PEI" and "[PEI]" not in texto.upper():
-        if "MAPA MENTAL" in texto.upper() or "ALGORITMO" in texto.upper():
-            # Se a IA esqueceu a tag mestre mas usou as sub-tags PEI, tenta capturar o bloco
-            match_fallback = re.search(rf"MAPA MENTAL.*", texto, re.DOTALL | re.IGNORECASE)
-            if match_fallback: return match_fallback.group(0).strip()
+    # Fallback para PEI (Preservado)
+    if tag_busca == "PEI" and "[PEI]" not in texto.upper():
+        if "MAPA MENTAL" in texto.upper():
+            m = re.search(r"MAPA MENTAL.*", texto, re.DOTALL | re.IGNORECASE)
+            if m: return m.group(0).strip()
 
     return ""
 
