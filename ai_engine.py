@@ -58,26 +58,23 @@ PERSONAS = {
     "MAESTRO_SOSA_V28_ELITE": """VOCÊ É O ARQUITETO COGNITIVO V29 DO MAESTRO SOSA.
     Sua missão é a TRANSPOSIÇÃO SEMIÓTICA DE ELITE, baseada puramente na BNCC e no Letramento Matemático.
 
-    🚨 FILOSOFIA DE PRODUÇÃO (BNCC RIGOROSA):
-    Abandone a PHC. Foque nos processos de Investigação, Representação, Comunicação e Argumentação.
-    O material deve transformar o aluno em um investigador matemático.
+    🚨 FILOSOFIA DE PRODUÇÃO:
+    Foque nos processos de Investigação, Representação e Argumentação. Transforme o aluno em um investigador.
 
-    🚨 PROTOCOLO DO PROFESSOR [PROFESSOR] (MAPA DE REGÊNCIA):
-    O guia deve ser denso e prático, contendo:
-    1. HABILIDADE BNCC DESDOBRADA: O que o aluno fará na prática.
-    2. PERGUNTA NORTEADORA: O gatilho cognitivo para iniciar a aula.
-    3. ROTEIRO DE MEDIAÇÃO ATIVA: Comandos de investigação (ex: 'Peça que comparem...', 'Desafie-os a encontrar...').
-    4. ANTECIPAÇÃO DE ERROS E INTERVENÇÃO: Liste 2 erros comuns e como 'vacinar' o aluno imediatamente.
-
-    🚨 PROTOCOLO DO ALUNO [ALUNO]:
-    - Contextualização real e moderna.
-    - DNA VISUAL: Insira 'PROMPT IMAGEM: [descrição]' para cada suporte visual necessário.
-    - DESAFIO DE ELITE: Questão nível OBMEP/Canguru/ENEM.
+    🚨 PROTOCOLO DE SAÍDA (OBRIGATÓRIO):
+    Use EXATAMENTE estas tags puras, sem texto adicional dentro dos colchetes:
+    [SOSA_ID] -> O ID fornecido.
+    [PROFESSOR] -> Mapa de Regência (Habilidade, Pergunta Norteadora, Mediação e Intervenção).
+    [ALUNO] -> Conteúdo e Questões (com PROMPT IMAGEM).
+    [GABARITO] -> Respostas e justificativas.
+    [IMAGENS] -> Lista de prompts.
+    [PEI] -> Versão focal reduzida.
+    [GABARITO_PEI] -> Respostas PEI.
 
     🚨 REGRAS DE OURO:
-    - SOSA-ID obrigatório no topo.
     - PROIBIDO Markdown (** ou #). Use Unicode.
-    - PROIBIDO cabeçalhos redundantes. Comece direto no conteúdo.""",
+    - PROIBIDO cabeçalhos redundantes. Comece direto no conteúdo.
+    - Insira 'PROMPT IMAGEM: [descrição]' para cada suporte visual no bloco [ALUNO].""",
 
     # --- PERSONA PEI V29: ENGENHEIRO DE ACESSIBILIDADE BNCC ---
     "ARQUITETO_PEI_V28_SINFONIA": """VOCÊ É O ENGENHEIRO DE EQUIDADE V29.
@@ -299,11 +296,11 @@ def extrair_tag(texto, tag):
     if not texto: return ""
     import re
     
-    # 1. LIMPEZA PRÉVIA: Remove negritos e hashtags que a IA insiste em colocar nas tags
-    texto_limpo = re.sub(r'\*+', '', texto)
-    texto_limpo = re.sub(r'#+', '', texto_limpo)
+    # 1. PRÉ-LIMPEZA: Remove Markdown que obstrui a visão da Regex
+    texto_limpo = re.sub(r'\*+', '', texto) # Remove negritos
+    texto_limpo = re.sub(r'#+', '', texto_limpo) # Remove hashtags de títulos
     
-    # 2. LISTA MESTRA DE TAGS (Hierarquia SOSA V28)
+    # 2. LISTA MESTRA DE TAGS (Âncoras de Parada)
     tags_sosa = [
         "SOSA_ID", "PROFESSOR", "ALUNO", "GABARITO", "IMAGENS", "PEI", "RUBRICA",
         "GABARITO_PEI", "ORIENTACOES", "QUESTOES", "GABARITO_TEXTO", "RESPOSTAS_IA",
@@ -312,22 +309,26 @@ def extrair_tag(texto, tag):
     ]
     
     tag_busca = tag.upper()
+    # Criamos a lista de parada excluindo a tag que estamos buscando
     parada = [t for t in tags_sosa if t != tag_busca]
     lista_parada = "|".join(parada)
     
-    # 3. REGEX DE ALTA RESILIÊNCIA
-    # Aceita [TAG], [ TAG ], [TAG: valor], MARKER_TAG
-    padrao = rf"(?:\[\s*{tag_busca}\s*(?::.*?)?\]|MARKER_{tag_busca})\s*[:\-]*\s*(.*?)(?=\[\s*(?:{lista_parada})\s*(?::.*?)?\]|MARKER_(?:{lista_parada})|$)"
+    # 3. REGEX DE ALTA TOLERÂNCIA (V29.1)
+    # \s*\[\s* -> Aceita espaços antes e dentro do colchete
+    # [^\]]* -> ACEITA QUALQUER COISA dentro do colchete (ex: [PROFESSOR (MAPA)])
+    # (.*?) -> Captura o conteúdo
+    # (?= ... |$) -> Para na próxima tag da lista ou no fim do arquivo
+    padrao = rf"\s*\[\s*{tag_busca}[^\]]*\]\s*[:\-]*\s*(.*?)(?=\s*\[\s*(?:{lista_parada})[^\]]*\]|$)"
     
     match = re.search(padrao, texto_limpo, re.DOTALL | re.IGNORECASE)
     
     if match:
         res = match.group(1).strip()
-        # Remove ":" ou "-" que sobram no início do texto
+        # Remove resíduos de pontuação que sobram no início do bloco capturado
         res = re.sub(r'^[:\-\s]+', '', res)
         return res.strip()
     
-    # Fallback para PEI
+    # 4. FALLBACK PARA PEI (Caso a IA use sub-tags sem a tag mestre)
     if tag_busca == "PEI" and "MAPA MENTAL" in texto_limpo.upper():
         m = re.search(r"MAPA MENTAL.*", texto_limpo, re.DOTALL | re.IGNORECASE)
         if m: return m.group(0).strip()
