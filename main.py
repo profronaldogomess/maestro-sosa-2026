@@ -520,23 +520,38 @@ if menu == "🧪 Criador de Aulas":
             if st.button("🗑️ DESCARTAR E CRIAR NOVA", use_container_width=True, key=f"v29_reset_{v}"):
                 reset_laboratorio()
 
-    # --- ABA 3: TRABALHOS ---
+# --- ABA 3: ENGENHARIA DE TRABALHOS BNCC (V30) ---
     with tab_trabalhos:
         if "lab_temp" not in st.session_state:
-            st.subheader("📋 Engenharia de Trabalhos")
+            st.subheader("📋 Engenharia de Projetos e Trabalhos (BNCC)")
             with st.container(border=True):
-                ct1, ct2, ct3 = st.columns([1, 1, 1])
-                ano_trab = ct1.selectbox("Série:", [6, 7, 8, 9], key=f"trab_ano_sel_{v}")
-                tipo_trab = ct2.selectbox("Formato:", ["Pesquisa", "Projeto", "Seminário"], key=f"trab_tipo_sel_{v}")
-                valor_trab = ct3.number_input("Valor:", 0.0, 10.0, 2.0, key=f"trab_val_sel_{v}")
-                tema_trab = st.text_input("Tema:", key=f"trab_tema_sel_{v}")
-                if st.button("🚀 CRIAR TRABALHO", key=f"btn_gen_trab_{v}"):
-                    s_id = util.gerar_sosa_id("TRAB", ano_trab, "I")
-                    st.session_state.sosa_id_atual = s_id
-                    st.session_state.lab_meta = {"ano": ano_trab, "trimestre": "I Trimestre", "tipo": "TRABALHO"}
-                    st.session_state.lab_temp = ai.gerar_ia("MESTRE_V24", f"GERAR TRABALHO. ID: {s_id}. TEMA: {tema_trab}. VALOR: {valor_trab}.")
-                    st.rerun()
-        else: st.info("Material em edição na aba 'Produção'.")
+                c1, c2, c3 = st.columns([1, 1, 1])
+                ano_t = c1.selectbox("Série:", [6, 7, 8, 9], key=f"v30_t_ano_{v}")
+                eixo_t = c2.selectbox("Eixo BNCC:", ["Números", "Álgebra", "Geometria", "Grandezas e Medidas", "Estatística"], key=f"v30_t_eixo_{v}")
+                lente_t = c3.selectbox("Lente de Integração:", ["Investigação Científica", "Processos Criativos", "Intervenção Social"], key=f"v30_t_lente_{v}")
+                
+                # Busca habilidades do banco baseadas no ano e eixo
+                df_h = df_curriculo[(df_curriculo['ANO'] == ano_t) & (df_curriculo['EIXO'].str.contains(eixo_t, na=False))]
+                hab_t = st.selectbox("Habilidade BNCC Alvo:", df_h['CONTEUDO_ESPECIFICO'].unique().tolist() if not df_h.empty else ["Geral"], key=f"v30_t_hab_{v}")
+                
+                tema_t = st.text_input("Tema do Trabalho (Ex: Economia do Cacau, Consumo de Energia):", key=f"v30_t_tema_{v}")
+                valor_t = st.number_input("Valor (Pontos):", 0.0, 10.0, 2.0, step=0.5, key=f"v30_t_val_{v}")
+
+                if st.button("🚀 CRIAR PROJETO BNCC", use_container_width=True, type="primary", key=f"v30_t_btn_{v}"):
+                    with st.spinner("Maestro Sosa articulando competências..."):
+                        s_id = util.gerar_sosa_id("TRAB", ano_t, "I")
+                        st.session_state.sosa_id_atual = s_id
+                        st.session_state.lab_meta = {"ano": ano_t, "trimestre": "I Trimestre", "tipo": "TRABALHO_BNCC"}
+                        
+                        prompt_t = (
+                            f"PERSONA: ARQUITETO_TRABALHOS_BNCC. ID: {s_id}.\n"
+                            f"TEMA: {tema_t}. VALOR: {valor_t}. SÉRIE: {ano_t}º ANO.\n"
+                            f"HABILIDADE BNCC: {hab_t}. LENTE: {lente_t}.\n"
+                            f"CONTEXTO: Regional Itabuna/BA.\n\n"
+                            f"ENTREGA: [PROFESSOR], [ALUNO], [GABARITO] (Rubrica), [IMAGENS], [PEI] (Versão simplificada)."
+                        )
+                        st.session_state.lab_temp = ai.gerar_ia("ARQUITETO_TRABALHOS_BNCC", prompt_t)
+                        st.rerun()
 
     # --- ABA 4: COMPLEMENTAR ---
     with tab_complementar:
