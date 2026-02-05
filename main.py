@@ -461,12 +461,13 @@ if menu == "🧪 Criador de Aulas":
                                 prompt_sonda = (
                                     f"PERSONA: ARQUITETO_SONDA_DIAGNOSTICA. ID: {s_id}.\n"
                                     f"SÉRIE: {ano_sonda}º ANO. HABILIDADES DO {ano_alvo}º ANO: {habilidades_sel}.\n"
-                                    f"EIXO: {eixo_sonda}. CONTEXTO: {contexto_local}. QTD: {qtd_q_sonda}.\n\n"
-                                    f"ENTREGA OBRIGATÓRIA (USE ESTAS TAGS EXATAS):\n"
-                                    f"[PROFESSOR]\n(Mapa de Sondagem e Análise de Distratores aqui)\n\n"
-                                    f"[ALUNO]\nSONDA DE MATEMÁTICA - {s_id}\nORIENTAÇÕES: (Instruções aqui)\n\nQUESTÕES:\n(Gere as {qtd_q_sonda} questões A-E aqui)\n\n"
-                                    f"[GABARITO]\nGABARITO_TEXTO: (Ex: 01:A, 02:B)\nJustificativas: (Explique cada questão aqui)\n\n"
-                                    f"[IMAGENS]\n(Prompts aqui)"
+                                    f"EIXO: {eixo_sonda}. CONTEXTO: {contexto_local}. QTD REGULAR: {qtd_q_sonda} questões.\n\n"
+                                    f"🚨 REQUISITOS TÉCNICOS:\n"
+                                    f"1. [ALUNO]: Gere {qtd_q_sonda} questões contextualizadas.\n"
+                                    f"2. [IMAGENS]: Gere prompts de 'Line Art' para as questões que necessitem de apoio visual.\n"
+                                    f"3. [PEI]: Gere uma versão com APENAS {max(3, qtd_q_sonda // 2)} questões (metade da regular), focando nos pré-requisitos mais básicos das habilidades selecionadas.\n"
+                                    f"4. [GABARITO_PEI]: Justificativa pedagógica para cada acerto do aluno PEI.\n\n"
+                                    f"ENTREGA: Use as tags [PROFESSOR], [ALUNO], [GABARITO], [IMAGENS], [PEI], [GABARITO_PEI]."
                                 )
                                 st.session_state.lab_temp = ai.gerar_ia("ARQUITETO_SONDA_DIAGNOSTICA", prompt_sonda)
                                 st.rerun()
