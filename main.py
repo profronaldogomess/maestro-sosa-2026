@@ -422,28 +422,21 @@ if menu == "🧪 Criador de Aulas":
         st.markdown("---")
         txt_base = st.session_state.lab_temp
         s_id = st.session_state.get("sosa_id_atual", "SEM-ID")
-        meta = st.session_state.get("lab_meta", {"ano": "6", "trimestre": "I Trimestre", "tipo": "MATERIAL"})
+        meta = st.session_state.get("lab_meta", {"ano": "6", "trimestre": "I Trimestre", "tipo": "AULA"})
         
-        # VACINA SOSA: Extraímos os conteúdos ANTES das abas para evitar NameError
+        # Extração prévia para segurança
         conteudo_prof_base = ai.extrair_tag(txt_base, "PROFESSOR")
         conteudo_alu_base = ai.extrair_tag(txt_base, "ALUNO")
         conteudo_gab_base = ai.extrair_tag(txt_base, "GABARITO") or ai.extrair_tag(txt_base, "RUBRICA")
 
         st.success(f"💎 Material Gerado: **{s_id}**")
         
-        cmd_refine = st.chat_input("Refinar este material...")
-        if cmd_refine:
-            st.session_state.lab_temp = ai.gerar_ia("REFINADOR_MATERIAIS", f"ORDEM: {cmd_refine}\n\nATUAL:\n{txt_base}")
-            st.rerun()
-        
         t_prof, t_alu, t_gab, t_pei, t_sync = st.tabs(["👨‍🏫 Professor", "📝 Aluno", "✅ Gabarito/Rubrica", "♿ PEI", "☁️ SINCRONIA"])
         
         with t_prof: 
             ed_prof = st.text_area("Lousa (2 Colunas):", conteudo_prof_base, height=400, key=f"ed_prof_{v}")
-        
         with t_alu: 
             ed_alu = st.text_area("Folha do Aluno:", conteudo_alu_base, height=400, key=f"ed_alu_{v}")
-        
         with t_gab: 
             ed_res = st.text_area("Respostas/Critérios:", conteudo_gab_base, height=300, key=f"ed_res_{v}")
         
@@ -451,33 +444,46 @@ if menu == "🧪 Criador de Aulas":
             st.subheader("♿ Adaptação Curricular PEI (Elite)")
             if st.button("✨ GERAR/ATUALIZAR MATERIAL PEI", use_container_width=True, key=f"btn_gen_pei_{v}"):
                 with st.spinner("Maestro Sosa realizando reengenharia de acessibilidade..."):
-                    # Usamos conteudo_alu_base aqui com segurança total
-                    prompt_adaptacao = f"ADAPTE PARA PEI O SEGUINTE CONTEÚDO: {conteudo_alu_base}"
-                    res_ia = ai.gerar_ia("ARQUITETO_PEI_V24", prompt_adaptacao)
-                    
+                    res_ia = ai.gerar_ia("ARQUITETO_PEI_V24", f"ADAPTE PARA PEI: {ed_alu}")
                     st.session_state.lab_pei = ai.extrair_tag(res_ia, "PEI")
                     st.session_state.lab_gab_pei = ai.extrair_tag(res_ia, "GABARITO_PEI")
                     st.rerun()
             
             if "lab_pei" in st.session_state:
-                col_pei_1, col_pei_2 = st.columns(2)
-                with col_pei_1:
-                    st.session_state.lab_pei = st.text_area("📄 Material do Estudante PEI:", 
-                                                           st.session_state.lab_pei, height=450, key=f"area_pei_mat_{v}")
-                with col_pei_2:
-                    st.session_state.lab_gab_pei = st.text_area("✅ Gabarito Pedagógico PEI:", 
-                                                               st.session_state.get("lab_gab_pei", ""), height=450, key=f"area_pei_gab_{v}")
+                c_p1, c_p2 = st.columns(2)
+                with c_p1: st.text_area("📄 Material PEI:", st.session_state.lab_pei, height=400, key=f"ed_pei_mat_{v}")
+                with c_p2: st.text_area("✅ Gabarito PEI:", st.session_state.get("lab_gab_pei", ""), height=400, key=f"ed_pei_gab_{v}")
 
         with t_sync:
-            if st.button("💾 FINALIZAR E SINCRONIZAR", use_container_width=True, type="primary", key=f"btn_sync_v28"):
-                with st.status("Sincronizando...") as status:
-                    nome_final = f"{s_id} - {meta['tipo']}"
+            st.warning("⚠️ O sistema apagará versões antigas deste ID no Drive antes de salvar as novas.")
+            if st.button("💾 EXECUTAR TRIPLE-SYNC (ALUNO + PROF + PEI)", use_container_width=True, type="primary", key=f"btn_triple_sync_{v}"):
+                with st.status("Iniciando Protocolo de Limpeza e Sincronia...") as status:
+                    nome_base = f"{s_id} - {meta['tipo']}"
                     ano_str = f"{meta['ano']}º"
                     
-                    doc_alu = exporter.gerar_docx_aluno_v24(nome_final, ed_alu, {"ano": ano_str, "trimestre": meta['trimestre']})
-                    link_alu = db.subir_e_converter_para_google_docs(doc_alu, nome_final, modo="AULA")
+                    # 1. LIMPEZA (UPSERT) - Apaga arquivos antigos com este nome no Drive e na Planilha
+                    status.write("🧹 Removendo duplicatas no Drive...")
+                    db.excluir_registro_com_drive("DB_AULAS_PRONTAS", s_id)
                     
-                    if "https" in str(link_alu):
+                    # 2. GERAÇÃO E UPLOAD - ALUNO
+                    status.write("📄 Enviando Material do Aluno...")
+                    doc_alu = exporter.gerar_docx_aluno_v24(nome_base, ed_alu, {"ano": ano_str, "trimestre": meta['trimestre']})
+                    link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{nome_base}_ALUNO", modo="AULA")
+                    
+                    # 3. GERAÇÃO E UPLOAD - PROFESSOR
+                    status.write("👨‍🏫 Enviando Guia do Professor...")
+                    doc_prof = exporter.gerar_docx_professor_v25(nome_base, ed_prof, {"ano": ano_str, "semana": "SOSA-ID", "trimestre": meta['trimestre']})
+                    link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_base}_PROF", modo="AULA")
+                    
+                    # 4. GERAÇÃO E UPLOAD - PEI (Se existir)
+                    link_pei = "N/A"
+                    if "lab_pei" in st.session_state:
+                        status.write("♿ Enviando Material PEI...")
+                        doc_pei = exporter.gerar_docx_pei_v25(f"{nome_base}_PEI", st.session_state.lab_pei, {"ano": ano_str, "trimestre": meta['trimestre']})
+                        link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_base}_PEI", modo="AULA")
+                    
+                    if "https" in str(link_alu) and "https" in str(link_prof):
+                        # 5. SALVAMENTO NO BANCO COM TODOS OS LINKS
                         conteudo_banco = (
                             f"[SOSA_ID: {s_id}]\n"
                             f"[PROFESSOR]\n{ed_prof}\n\n"
@@ -485,11 +491,67 @@ if menu == "🧪 Criador de Aulas":
                             f"[GABARITO]\n{ed_res}\n\n"
                             f"[PEI]\n{st.session_state.get('lab_pei', 'N/A')}\n\n"
                             f"[GABARITO_PEI]\n{st.session_state.get('lab_gab_pei', 'N/A')}\n\n"
-                            f"--- LINKS ---\nAluno({link_alu})"
+                            f"--- LINKS ---\nAluno({link_alu}) Prof({link_prof}) PEI({link_pei})"
                         )
-                        db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), "PRODUÇÃO", nome_final, conteudo_banco, ano_str, link_alu])
-                        status.update(label="✅ Sincronizado com Sucesso!", state="complete")
+                        db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), "PRODUÇÃO", nome_base, conteudo_banco, ano_str, link_alu])
+                        status.update(label="✅ Triple-Sync Concluído!", state="complete")
                         st.balloons(); time.sleep(1); reset_laboratorio()
+                    else:
+                        st.error("Falha no upload de um ou mais arquivos.")
+
+    # --- ABA 5: ACERVO DE MATERIAIS (RESTAURAÇÃO DOS BOTÕES) ---
+    with tab_acervo:
+        st.subheader("📂 Acervo de Materiais Rastreados")
+        if not df_aulas.empty:
+            f_ano_g = st.selectbox("Filtrar Série:", ["Todos", "6º", "7º", "8º", "9º"], key="gav_ano_v32")
+            df_g = df_aulas.copy()
+            if f_ano_g != "Todos": df_g = df_g[df_g['ANO'] == f_ano_g]
+            
+            for _, row in df_g.iloc[::-1].iterrows():
+                raw_c = str(row['CONTEUDO'])
+                s_id_h = ai.extrair_tag(raw_c, "SOSA_ID")
+                
+                with st.container(border=True):
+                    c_t1, c_t2, c_t3, c_t4, c_t5, c_t6 = st.columns([1.5, 1, 1, 1, 1, 1])
+                    c_t1.markdown(f"**{row['TIPO_MATERIAL']}**\n`ID: {s_id_h}`")
+                    
+                    # EXTRAÇÃO INTELIGENTE DE LINKS (ALUNO, PROF, PEI)
+                    l_alu = re.search(r"Aluno\((.*?)\)", raw_c)
+                    l_prof = re.search(r"Prof\((.*?)\)", raw_c)
+                    l_pei = re.search(r"PEI\((.*?)\)", raw_c)
+                    
+                    link_alu = l_alu.group(1) if l_alu else row.get('LINK_DRIVE')
+                    link_prof = l_prof.group(1) if l_prof else None
+                    link_pei = l_pei.group(1) if l_pei and "N/A" not in l_pei.group(1) else None
+                    
+                    # BOTÕES DO ACERVO
+                    if link_alu: c_t2.link_button("📝 ALUNO", str(link_alu), use_container_width=True)
+                    if link_prof: c_t3.link_button("👨‍🏫 PROF", str(link_prof), use_container_width=True)
+                    if link_pei: c_t4.link_button("♿ PEI", str(link_pei), use_container_width=True)
+                    else: c_t4.button("⚪ SEM PEI", disabled=True, use_container_width=True)
+                    
+                    if c_t5.button("🔄 REFINAR", key=f"ref_{row.name}", use_container_width=True):
+                        st.session_state.refino_lab_ativo = {"ano": row['ANO'], "aula": row['TIPO_MATERIAL']}
+                        st.session_state.lab_temp = raw_c
+                        st.session_state.sosa_id_atual = s_id_h
+                        st.rerun()
+
+                    if c_t6.button("🗑️ APAGAR", key=f"del_{row.name}", use_container_width=True):
+                        if db.excluir_registro_com_drive("DB_AULAS_PRONTAS", s_id_h): st.rerun()
+                    
+                    with st.expander(f"👁️ Visualizar Estrutura: {s_id_h}"):
+                        col_v1, col_v2 = st.columns(2)
+                        with col_v1:
+                            st.info("**👨‍🏫 Guia do Professor**"); st.write(ai.extrair_tag(raw_c, "PROFESSOR"))
+                        with col_v2:
+                            st.success("**📝 Folha do Aluno**"); st.write(ai.extrair_tag(raw_c, "ALUNO"))
+                        st.divider()
+                        col_v3, col_v4 = st.columns(2)
+                        with col_v3:
+                            st.warning("**✅ Gabarito / Rubrica**"); st.write(ai.extrair_tag(raw_c, "GABARITO") or ai.extrair_tag(raw_c, "RUBRICA"))
+                        with col_v4:
+                            st.error("**♿ Adaptação PEI**"); st.write(ai.extrair_tag(raw_c, "PEI"))
+        else: st.info("📭 Acervo vazio.")
 
     # --- ABA 5: ACERVO DE MATERIAIS (DASHBOARD VISUAL V27) ---
     with tab_acervo:
