@@ -431,68 +431,57 @@ if menu == "🧪 Criador de Aulas":
                         st.session_state.lab_temp = ai.gerar_ia("MESTRE_V24", f"GERAR AULA. ID: {s_id}. PLANO: {plano_ref}. FOCO: {aula_alvo}. QTD: {qtd_q}. EXTRA: {instr_extra}")
                         st.rerun()
 
-# --- ABA 2: DIAGNÓSTICO REVERSO (ARQUITETURA V28.7 - ANTI-DUPLICIDADE) ---
+# --- ABA 2: SONDA DIAGNÓSTICA DE PROFICIÊNCIA (V29 - PADRÃO SME-SP) ---
     with tab_diagnostico:
-        # Verificamos se já existe um material sendo editado
         if "lab_temp" not in st.session_state:
-            st.subheader("🔍 Inteligência de Nivelamento (Retro-Busca)")
+            st.subheader("🔍 Sonda de Proficiência (Padrão SME-SP / BNCC)")
             st.markdown("---")
             
             with st.container(border=True):
-                cd1, cd2, cd3 = st.columns([1, 1, 1])
-                # CHAVES ÚNICAS COM PREFIXO 'v28_diag'
-                ano_diag = cd1.selectbox("Série Atual do Aluno:", [6, 7, 8, 9], key=f"v28_diag_ano_{v}")
-                trim_diag = cd2.selectbox("Trimestre de Aplicação:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"v28_diag_trim_{v}")
-                qtd_q_diag = cd3.number_input("Qtd de Questões:", 5, 15, 10, key=f"v28_diag_q_{v}")
+                c1, c2, c3 = st.columns([1, 1, 1])
+                ano_sonda = c1.selectbox("Série Atual:", [6, 7, 8, 9], key=f"v29_sonda_ano_{v}")
+                eixo_sonda = c2.selectbox("Eixo Temático:", ["Números e Álgebra", "Geometria e Medidas", "Estatística e Probabilidade"], key=f"v29_sonda_eixo_{v}")
+                nivel_sonda = c3.select_slider("Profundidade da Sonda:", options=["Base (2 anos atrás)", "Transição (1 ano atrás)", "Ciclo (Trimestre anterior)"], value="Transição (1 ano atrás)", key=f"v29_sonda_nivel_{v}")
 
-                # LÓGICA DE RETRO-BUSCA
-                if trim_diag == "I Trimestre":
-                    ano_busca = ano_diag - 1
-                    st.info(f"📅 **Modo Entrada:** Buscando conteúdos do {ano_busca}º Ano.")
-                    df_retro = df_curriculo[df_curriculo['ANO'] == ano_busca]
-                else:
-                    st.info(f"📅 **Modo Ciclo:** Buscando conteúdos anteriores do {ano_diag}º Ano.")
-                    t_busca = ["I Trimestre"] if trim_diag == "II Trimestre" else ["I Trimestre", "II Trimestre"]
-                    df_retro = df_curriculo[(df_curriculo['ANO'] == ano_diag) & (df_curriculo['TRIMESTRE'].isin(t_busca))]
-
-                if not df_retro.empty:
-                    sel_retro = st.multiselect("Selecione as Lacunas para Testar:", 
-                                             options=df_retro['CONTEUDO_ESPECIFICO'].unique().tolist(), 
-                                             key=f"v28_diag_multi_{v}")
+                # Lógica de Busca de Habilidades
+                ano_alvo = ano_sonda - 1 if "Transição" in nivel_sonda else (ano_sonda - 2 if "Base" in nivel_sonda else ano_sonda)
+                df_habilidades = df_curriculo[df_curriculo['ANO'] == ano_alvo]
+                
+                if not df_habilidades.empty:
+                    habilidades_sel = st.multiselect("Selecione os Descritores/Habilidades para Sondar:", 
+                                                   options=df_habilidades['CONTEUDO_ESPECIFICO'].unique().tolist(),
+                                                   key=f"v29_sonda_multi_{v}")
                     
-                    instr_diag = st.text_input("Instruções de Perícia:", key=f"v28_diag_instr_{v}")
+                    contexto_local = st.text_input("Contexto Regional (Ex: Comércio de Itabuna, Cacau, etc):", key=f"v29_sonda_ctx_{v}")
 
-                    if st.button("💎 GERAR EXAME DE DIAGNÓSTICO", use_container_width=True, type="primary", key=f"v28_diag_btn_gen_{v}"):
-                        if not sel_retro:
-                            st.error("Selecione ao menos um conteúdo.")
+                    if st.button("🚀 GERAR SONDA DIAGNÓSTICA", use_container_width=True, type="primary", key=f"v29_sonda_btn_{v}"):
+                        if not habilidades_sel:
+                            st.error("Selecione as habilidades para a sonda.")
                         else:
-                            with st.spinner("Maestro Sosa realizando Arqueologia Pedagógica..."):
-                                s_id = util.gerar_sosa_id("DIAG", ano_diag, trim_diag)
+                            with st.spinner("Maestro Sosa estruturando Sonda de Proficiência..."):
+                                s_id = util.gerar_sosa_id("SONDA", ano_sonda, "I")
                                 st.session_state.sosa_id_atual = s_id
-                                st.session_state.lab_meta = {"ano": ano_diag, "trimestre": trim_diag, "tipo": "DIAGNOSTICO"}
+                                st.session_state.lab_meta = {"ano": ano_sonda, "trimestre": "I Trimestre", "tipo": "SONDA_DIAGNOSTICA"}
                                 
-                                prompt_diag = (
-                                    f"VOCÊ É O ARQUITETO DE EXAMES. GERAR DIAGNÓSTICO RASTREÁVEL. ID: {s_id}.\n"
-                                    f"SÉRIE: {ano_diag}º Ano. CONTEÚDOS: {sel_retro}. QTD: {qtd_q_diag}.\n\n"
-                                    f"ESTRUTURA OBRIGATÓRIA PARA O LABORATÓRIO:\n"
-                                    f"[PROFESSOR]: Inclua aqui o Esquema de Lousa e a Fundamentação Técnica do Diagnóstico.\n"
-                                    f"[ALUNO]: Inclua aqui as [ORIENTACOES] e as [QUESTOES] (A-E) no padrão de prova scaneável.\n"
-                                    f"[GABARITO]: Inclua aqui o [GABARITO_TEXTO] e as justificativas das respostas.\n"
-                                    f"[IMAGENS]: Sugestões de imagens para o tema."
+                                prompt_sonda = (
+                                    f"GERAR SONDA DIAGNÓSTICA. ID: {s_id}. SÉRIE ATUAL: {ano_sonda}º ANO.\n"
+                                    f"FOCO EM HABILIDADES DO {ano_alvo}º ANO: {habilidades_sel}.\n"
+                                    f"EIXO: {eixo_sonda}. CONTEXTO: {contexto_local}.\n\n"
+                                    f"ORDEM: Use a persona ARQUITETO_SONDA_DIAGNOSTICA. "
+                                    f"Gere o [PROFESSOR] com o Mapa de Sondagem (Descritores e Análise de Distratores). "
+                                    f"Gere o [ALUNO] com questões contextualizadas padrão SME-SP. "
+                                    f"Gere o [GABARITO] com justificativa pedagógica."
                                 )
-                                st.session_state.lab_temp = ai.gerar_ia("MESTRE_V24", prompt_diag)
+                                st.session_state.lab_temp = ai.gerar_ia("ARQUITETO_SONDA_DIAGNOSTICA", prompt_sonda)
                                 st.rerun()
                 else:
-                    st.error(f"❌ Base curricular não encontrada.")
+                    st.error("Base curricular não localizada para este nível de sonda.")
         else:
-            # ESTE BLOCO APARECE QUANDO O MATERIAL JÁ FOI GERADO
-            st.success("✅ Diagnóstico gerado com sucesso!")
-            st.info("Clique na aba **'🚀 Produção (Aula 1/2)'** para visualizar, editar e sincronizar seu material.")
-            
-            if st.button("🆕 CRIAR OUTRO DIAGNÓSTICO (LIMPAR ATUAL)", use_container_width=True, key=f"v28_diag_reset_{v}"):
-                # Chama a função de reset que já existe no seu código
+            st.success("✅ Sonda Diagnóstica gerada com sucesso!")
+            st.info("Visualize e refine o material na aba **'🚀 Produção (Aula 1/2)'**.")
+            if st.button("🆕 NOVA SONDA (LIMPAR)", use_container_width=True, key=f"v29_sonda_reset_{v}"):
                 reset_laboratorio()
-
+                
     # --- ABA 3: TRABALHOS ---
     with tab_trabalhos:
         if "lab_temp" not in st.session_state:
