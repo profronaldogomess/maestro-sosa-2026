@@ -306,20 +306,21 @@ def exibir_material_estruturado(texto_raw, key_prefix, dados_plano=None, info_au
                        
 
 # ==============================================================================
-# MÓDULO: LABORATÓRIO DE PRODUÇÃO (CRIADOR V32.2) - INTERFACE CLEAN & ACERVO VISUAL
+# MÓDULO: LABORATÓRIO DE PRODUÇÃO (CRIADOR V32.3) - FIX NOME_FINAL & PEI ELITE
 # ==============================================================================
 if menu == "🧪 Criador de Aulas":
     st.title("🧪 Laboratório de Produção Semiótica (V32)")
     st.markdown("---")
     
     def reset_laboratorio():
-        keys_to_del = ["lab_temp", "lab_pei", "refino_lab_ativo", "refino_lab_tipo", "comp_temp", "comp_pei", "sosa_id_atual"]
+        keys_to_del = ["lab_temp", "lab_pei", "lab_gab_pei", "refino_lab_ativo", "refino_lab_tipo", "comp_temp", "comp_pei", "sosa_id_atual", "lab_meta"]
         for k in keys_to_del:
             if k in st.session_state: del st.session_state[k]
         st.session_state.v_lab = int(time.time())
         st.rerun()
 
-    v = st.session_state.get("v_lab", 1)
+    if "v_lab" not in st.session_state: st.session_state.v_lab = 1
+    v = st.session_state.v_lab
 
     tab_producao, tab_diagnostico, tab_trabalhos, tab_complementar, tab_acervo = st.tabs([
         "🚀 Produção (Aula 1/2)", 
@@ -333,12 +334,7 @@ if menu == "🧪 Criador de Aulas":
     with tab_producao:
         is_refinando_aula = "refino_lab_ativo" in st.session_state and st.session_state.get("refino_lab_tipo") == "AULA"
         
-        # SÓ MOSTRA O FORMULÁRIO SE NÃO HOUVER MATERIAL GERADO OU SE ESTIVER REFINANDO
         if "lab_temp" not in st.session_state or is_refinando_aula:
-            if is_refinando_aula:
-                st.warning(f"🛠️ **MODO REFINO ATIVO:** Editando {st.session_state.refino_lab_ativo['aula']}")
-                if st.button("❌ CANCELAR REFINO"): reset_laboratorio()
-
             with st.container(border=True):
                 st.markdown("### ⚙️ 1. Parâmetros de Regência")
                 c1, c2, c3 = st.columns([1, 2, 1.5])
@@ -362,11 +358,12 @@ if menu == "🧪 Criador de Aulas":
                         if st.button("💎 COMPILAR MATERIAL DE ELITE", use_container_width=True, type="primary"):
                             s_id = util.gerar_sosa_id("AULA", ano_lab, "I")
                             st.session_state.sosa_id_atual = s_id
+                            # SALVA METADADOS PARA O BOTÃO DE SALVAR NÃO SE PERDER
+                            st.session_state.lab_meta = {"ano": ano_lab, "trimestre": "I Trimestre", "tipo": "AULA"}
                             st.session_state.lab_temp = ai.gerar_ia("MESTRE_V24", f"GERAR AULA. ID: {s_id}. PLANO: {plano_ref}. FOCO: {aula_alvo}. QTD: {qtd_q}. NÍVEL: {nivel}. EXTRA: {instr_extra}")
                             st.session_state.refino_lab_tipo = "AULA"
                             st.rerun()
         else:
-            # BOTÃO PARA VOLTAR AO FORMULÁRIO
             st.button("🆕 GERAR NOVO MATERIAL (LIMPAR ATUAL)", on_click=reset_laboratorio, use_container_width=True)
 
     # --- ABA 2: DIAGNÓSTICO REVERSO ---
@@ -380,7 +377,6 @@ if menu == "🧪 Criador de Aulas":
                 
                 if trim_diag == "I Trimestre":
                     ano_busca = ano_diag - 1
-                    st.info(f"🔄 **Rollback:** Buscando conteúdos do {ano_busca}º Ano.")
                     df_retro = df_curriculo[df_curriculo['ANO'] == ano_busca]
                 else:
                     df_retro = df_curriculo[(df_curriculo['ANO'] == ano_diag) & (df_curriculo['TRIMESTRE'] != trim_diag)]
@@ -390,6 +386,7 @@ if menu == "🧪 Criador de Aulas":
                     if st.button("🧠 GERAR DIAGNÓSTICO"):
                         s_id = util.gerar_sosa_id("DIAG", ano_diag, trim_diag)
                         st.session_state.sosa_id_atual = s_id
+                        st.session_state.lab_meta = {"ano": ano_diag, "trimestre": trim_diag, "tipo": "DIAGNOSTICO"}
                         st.session_state.lab_temp = ai.gerar_ia("MESTRE_V24", f"GERAR DIAGNÓSTICO. ID: {s_id}. CONTEÚDOS: {sel_retro}.")
                         st.session_state.refino_lab_tipo = "DIAG"
                         st.rerun()
@@ -409,6 +406,7 @@ if menu == "🧪 Criador de Aulas":
                 if st.button("🚀 CRIAR TRABALHO"):
                     s_id = util.gerar_sosa_id("TRAB", ano_trab, "I")
                     st.session_state.sosa_id_atual = s_id
+                    st.session_state.lab_meta = {"ano": ano_trab, "trimestre": "I Trimestre", "tipo": "TRABALHO"}
                     st.session_state.lab_temp = ai.gerar_ia("MESTRE_V24", f"GERAR TRABALHO. ID: {s_id}. TEMA: {tema_trab}. VALOR: {valor_trab}.")
                     st.session_state.refino_lab_tipo = "TRAB"
                     st.rerun()
@@ -420,35 +418,55 @@ if menu == "🧪 Criador de Aulas":
         st.markdown("---")
         txt_base = st.session_state.lab_temp
         s_id = st.session_state.get("sosa_id_atual", "SEM-ID")
+        meta = st.session_state.get("lab_meta", {"ano": "6", "trimestre": "I Trimestre", "tipo": "MATERIAL"})
+        
         st.success(f"💎 Material Gerado: **{s_id}**")
         
-        cmd_refine = st.chat_input("Refinar este material...")
-        if cmd_refine:
-            st.session_state.lab_temp = ai.gerar_ia("REFINADOR_MATERIAIS", f"ORDEM: {cmd_refine}\n\nATUAL:\n{txt_base}")
-            st.rerun()
-        
         t_prof, t_alu, t_gab, t_pei, t_sync = st.tabs(["👨‍🏫 Professor", "📝 Aluno", "✅ Gabarito/Rubrica", "♿ PEI", "☁️ SINCRONIA"])
+        
         with t_prof: st.text_area("Lousa:", ai.extrair_tag(txt_base, "PROFESSOR"), height=400, key=f"ed_prof_{v}")
         with t_alu: st.text_area("Folha:", ai.extrair_tag(txt_base, "ALUNO"), height=400, key=f"ed_alu_{v}")
         with t_gab: st.text_area("Respostas:", ai.extrair_tag(txt_base, "GABARITO") or ai.extrair_tag(txt_base, "RUBRICA"), height=300)
+        
         with t_pei:
-            if st.button("✨ GERAR PEI"):
-                st.session_state.lab_pei = ai.gerar_ia("ARQUITETO_PEI_V24", f"ADAPTE: {ai.extrair_tag(txt_base, 'ALUNO')}")
-                st.rerun()
-            if "lab_pei" in st.session_state: st.text_area("PEI:", st.session_state.lab_pei, height=400)
+            st.subheader("♿ Adaptação Curricular PEI (Elite)")
+            if st.button("✨ GERAR/ATUALIZAR MATERIAL PEI", use_container_width=True):
+                with st.spinner("Realizando reengenharia de acessibilidade..."):
+                    prompt_pei = f"ADAPTE PARA PEI: {ai.extrair_tag(txt_base, 'ALUNO')}"
+                    res_pei_ia = ai.gerar_ia("ARQUITETO_PEI_V24", prompt_pei)
+                    st.session_state.lab_pei = ai.extrair_tag(res_pei_ia, "PEI")
+                    st.session_state.lab_gab_pei = ai.extrair_tag(res_pei_ia, "GABARITO_PEI")
+                    st.rerun()
+            
+            if "lab_pei" in st.session_state:
+                c_p1, c_p2 = st.columns(2)
+                with c_p1: st.text_area("📄 Material PEI:", st.session_state.lab_pei, height=400, key=f"ed_pei_mat_{v}")
+                with c_p2: st.text_area("✅ Gabarito PEI:", st.session_state.get("lab_gab_pei", ""), height=400, key=f"ed_pei_gab_{v}")
 
         with t_sync:
-            if st.button("💾 SALVAR E VINCULAR", use_container_width=True, type="primary"):
+            if st.button("💾 FINALIZAR E SINCRONIZAR", use_container_width=True, type="primary"):
                 with st.status("Sincronizando...") as status:
-                    nome_f = f"{s_id} - {st.session_state.refino_lab_tipo}"
-                    doc_alu = exporter.gerar_docx_aluno_v24(nome_f, ai.extrair_tag(txt_base, "ALUNO"), {"ano": "6º", "trimestre": "I"})
-                    link_alu = db.subir_e_converter_para_google_docs(doc_alu, nome_f, modo="AULA")
+                    # CORREÇÃO DO ERRO: Definindo nome_final corretamente
+                    nome_final = f"{s_id} - {meta['tipo']}"
+                    ano_str = f"{meta['ano']}º"
+                    
+                    doc_alu = exporter.gerar_docx_aluno_v24(nome_final, ai.extrair_tag(txt_base, "ALUNO"), {"ano": ano_str, "trimestre": meta['trimestre']})
+                    link_alu = db.subir_e_converter_para_google_docs(doc_alu, nome_final, modo="AULA")
+                    
                     if "https" in str(link_alu):
-                        conteudo_banco = f"[SOSA_ID: {s_id}]\n{txt_base}\n\n[PEI]\n{st.session_state.get('lab_pei', 'N/A')}\n\n--- LINKS ---\nAluno({link_alu})"
-                        db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), "PRODUÇÃO", nome_f, conteudo_banco, "6º", link_alu])
-                        status.update(label="✅ Sincronizado!", state="complete"); st.balloons(); time.sleep(1); reset_laboratorio()
+                        conteudo_banco = (
+                            f"[SOSA_ID: {s_id}]\n"
+                            f"{txt_base}\n\n"
+                            f"[PEI]\n{st.session_state.get('lab_pei', 'N/A')}\n\n"
+                            f"[GABARITO_PEI]\n{st.session_state.get('lab_gab_pei', 'N/A')}\n\n"
+                            f"--- LINKS ---\nAluno({link_alu})"
+                        )
+                        # SALVAMENTO NO BANCO USANDO NOME_FINAL
+                        db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), "PRODUÇÃO", nome_final, conteudo_banco, ano_str, link_alu])
+                        status.update(label="✅ Sincronizado com Sucesso!", state="complete")
+                        st.balloons(); time.sleep(1); reset_laboratorio()
 
-    # --- ABA 5: ACERVO DE MATERIAIS (VISUALIZAÇÃO ESTRUTURADA V27) ---
+    # --- ABA 5: ACERVO DE MATERIAIS ---
     with tab_acervo:
         st.subheader("📂 Acervo de Materiais Produzidos")
         if not df_aulas.empty:
@@ -459,21 +477,13 @@ if menu == "🧪 Criador de Aulas":
             for _, row in df_g.iloc[::-1].iterrows():
                 raw_c = str(row['CONTEUDO'])
                 s_id_h = ai.extrair_tag(raw_c, "SOSA_ID")
-                
                 with st.container(border=True):
                     c_t1, c_t2, c_t3, c_t4, c_t5, c_t6 = st.columns([1.5, 1, 1, 1, 1, 1])
                     c_t1.markdown(f"**{row['TIPO_MATERIAL']}**\n`ID: {s_id_h}`")
                     
-                    # Extração de Links
                     l_reg = re.search(r"Aluno\((.*?)\)|LINK: (https://.*)", raw_c)
                     link_reg = l_reg.group(1) or l_reg.group(2) if l_reg else row.get('LINK_DRIVE')
-                    l_prof = re.search(r"Prof\((.*?)\)", raw_c).group(1) if "Prof(" in raw_c else None
-                    l_pei = re.search(r"PEI\((.*?)\)", raw_c).group(1) if "PEI(" in raw_c and "PEI(N/A)" not in raw_c else None
-                    
                     if link_reg: c_t2.link_button("📝 ALUNO", str(link_reg), use_container_width=True)
-                    if l_prof: c_t3.link_button("👨‍🏫 PROF", str(l_prof), use_container_width=True)
-                    if l_pei: c_t4.link_button("♿ PEI", str(l_pei), use_container_width=True)
-                    else: c_t4.button("⚪ SEM PEI", disabled=True, use_container_width=True)
                     
                     if c_t5.button("🔄 REFINAR", key=f"ref_{row.name}", use_container_width=True):
                         st.session_state.refino_lab_ativo = {"ano": row['ANO'], "aula": row['TIPO_MATERIAL']}
@@ -484,21 +494,19 @@ if menu == "🧪 Criador de Aulas":
                     if c_t6.button("🗑️ APAGAR", key=f"del_{row.name}", use_container_width=True):
                         if db.excluir_registro_com_drive("DB_AULAS_PRONTAS", row['TIPO_MATERIAL']): st.rerun()
                     
-                    # DASHBOARD VISUAL DENTRO DO ACERVO
                     with st.expander(f"👁️ Visualizar Estrutura: {s_id_h}"):
                         col_v1, col_v2 = st.columns(2)
                         with col_v1:
-                            st.info("**👨‍🏫 Guia do Professor (Lousa)**")
+                            st.info("**👨‍🏫 Guia do Professor**")
                             st.write(ai.extrair_tag(raw_c, "PROFESSOR"))
                         with col_v2:
                             st.success("**📝 Folha do Aluno**")
                             st.write(ai.extrair_tag(raw_c, "ALUNO"))
-                        
                         st.divider()
                         col_v3, col_v4 = st.columns(2)
                         with col_v3:
                             st.warning("**✅ Gabarito / Rubrica**")
-                            st.write(ai.extrair_tag(raw_c, "GABARITO") or ai.extrair_tag(raw_c, "RUBRICA") or ai.extrair_tag(raw_c, "RESPOSTAS"))
+                            st.write(ai.extrair_tag(raw_c, "GABARITO") or ai.extrair_tag(raw_c, "RUBRICA") or ai.extrair_tag(raw_c, "GABARITO_PEI"))
                         with col_v4:
                             st.error("**♿ Adaptação PEI**")
                             st.write(ai.extrair_tag(raw_c, "PEI"))
