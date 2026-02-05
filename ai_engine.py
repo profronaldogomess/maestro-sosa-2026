@@ -281,35 +281,41 @@ def extrair_tag(texto, tag):
     if not texto: return ""
     import re
     
-    # 1. LISTA MESTRA AMPLIADA (V27 - SEM REMOÇÕES)
+    # 1. LISTA MESTRA INTEGRAL V28 (Inclui sub-tags e marcadores de elite)
     tags_sosa = [
-        "ORIENTACOES", "QUESTOES", "GABARITO_TEXTO", "RESPOSTAS_IA", 
-        "GABARITO_REGULAR", "GABARITO_PEI", "RESPOSTAS_PEI_IA",
-        "PROFESSOR", "ALUNO", "GABARITO", "IMAGENS", "PEI", "IMAGENS_PEI",
-        "CONTEUDO_GERAL", "CONTEUDOS_ESPECIFICOS", "OBJETIVOS_ENSINO", 
-        "METODOLOGIA", "AVALIACAO", "OBSERVACAO", "ADAPTACAO_PEI", "MODALIDADE",
-        "TIPO_SEMANA", "BNCC_CODE", "AULA_1", "AULA_2", "SABADO_LETIVO" # <-- NOVAS TAGS ADICIONADAS
+        "SOSA_ID", "PROFESSOR", "ALUNO", "GABARITO", "IMAGENS", "PEI", "RUBRICA",
+        "COLUNA_1", "COLUNA_2", "MAPA_MENTAL", "ALGORITMO", "ATIVIDADES_SINTESE",
+        "GABARITO_COMENTADO_PEI", "GABARITO_PEI", "ORIENTACOES", "QUESTOES", 
+        "GABARITO_TEXTO", "RESPOSTAS_IA", "CONTEUDO_GERAL", "CONTEUDOS_ESPECIFICOS", 
+        "OBJETIVOS_ENSINO", "METODOLOGIA", "AVALIACAO", "ADAPTACAO_PEI", "BNCC_CODE"
     ]
     
-    # 2. CONSTRUÇÃO DA PARADA (Refinada para precisão cirúrgica)
+    # 2. FILTRAGEM DE PARADA (Exclui a tag atual da lista de parada)
     parada = [t for t in tags_sosa if t.upper() != tag.upper()]
     lista_parada_regex = "|".join(parada)
     
-    # 3. REGEX DE ALTA PRECISÃO (Agora para nas novas tags também)
-    # O stop agora olha para [QUALQUER_OUTRA_TAG] ou MARKER_QUALQUER_OUTRA_TAG
-    padrao = rf"(?:\[{tag}\]|MARKER_{tag})[:\s]*(.*?)(?=\[(?:{lista_parada_regex})\]|MARKER_(?:{lista_parada_regex})|$)"
+    # 3. REGEX BLINDADA (ANTI-MARKDOWN E ANTI-ESPAÇO)
+    # Explicação: 
+    # [*]* -> Ignora asteriscos de negrito
+    # \[{tag}(?::.*?)?\] -> Aceita [TAG] ou [TAG: valor]
+    # (.*?) -> Captura o conteúdo (Lazy)
+    # (?= ... |$) -> Para na próxima tag da lista ou no fim do texto
+    padrao = rf"[*]*\s*(?:\[{tag}(?::.*?)?\]|MARKER_{tag})\s*[*]*[:\s]*(.*?)(?=[*]*\s*\[(?:{lista_parada_regex})(?::.*?)?\]|MARKER_(?:{lista_parada_regex})|$)"
     
     match = re.search(padrao, texto, re.DOTALL | re.IGNORECASE)
     
     if match:
         res = match.group(1).strip()
+        # Limpeza final de resíduos de formatação
         return res.replace("**", "").replace("###", "").replace("##", "").replace("#", "").strip()
     
-    # 4. FALLBACK PEI (PRESERVADO CONFORME SOLICITADO)
-    if tag.upper() == "PEI" and len(texto) > 0:
-        if not any(f"[{t}]" in texto.upper() for t in ["QUESTOES", "ORIENTACOES"]):
-            return texto.strip()
-            
+    # 4. FALLBACK ESTRATÉGICO PARA PEI
+    if tag.upper() == "PEI" and "[PEI]" not in texto.upper():
+        if "MAPA MENTAL" in texto.upper() or "ALGORITMO" in texto.upper():
+            # Se a IA esqueceu a tag mestre mas usou as sub-tags PEI, tenta capturar o bloco
+            match_fallback = re.search(rf"MAPA MENTAL.*", texto, re.DOTALL | re.IGNORECASE)
+            if match_fallback: return match_fallback.group(0).strip()
+
     return ""
 
 def subir_para_google(caminho_arquivo, nome_exibicao):
