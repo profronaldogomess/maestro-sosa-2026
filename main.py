@@ -548,7 +548,7 @@ if menu == "🧪 Criador de Aulas":
                             f"TEMA: {tema_t}. VALOR: {valor_t}. SÉRIE: {ano_t}º ANO.\n"
                             f"HABILIDADE BNCC: {hab_t}. LENTE: {lente_t}.\n"
                             f"CONTEXTO: Regional Itabuna/BA.\n\n"
-                            f"ENTREGA: [PROFESSOR], [ALUNO], [GABARITO] (Rubrica), [IMAGENS], [PEI] (Versão simplificada)."
+                            f"ENTREGA OBRIGATÓRIA (USE APENAS ESTAS TAGS): [PROFESSOR], [ALUNO], [GABARITO], [IMAGENS], [PEI]."
                         )
                         st.session_state.lab_temp = ai.gerar_ia("ARQUITETO_TRABALHOS_BNCC", prompt_t)
                         st.rerun()
