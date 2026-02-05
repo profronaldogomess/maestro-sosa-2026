@@ -431,30 +431,32 @@ if menu == "🧪 Criador de Aulas":
                         st.session_state.lab_temp = ai.gerar_ia("MESTRE_V24", f"GERAR AULA. ID: {s_id}. PLANO: {plano_ref}. FOCO: {aula_alvo}. QTD: {qtd_q}. EXTRA: {instr_extra}")
                         st.rerun()
 
-# --- ABA 2: SONDA DIAGNÓSTICA DE PROFICIÊNCIA (V29 - PADRÃO SME-SP) ---
+# --- ABA 2: SONDA DIAGNÓSTICA DE PROFICIÊNCIA (V29.2 - RASTREABILIDADE TOTAL) ---
     with tab_diagnostico:
         if "lab_temp" not in st.session_state:
             st.subheader("🔍 Sonda de Proficiência (Padrão SME-SP / BNCC)")
             st.markdown("---")
             
             with st.container(border=True):
-                c1, c2, c3 = st.columns([1, 1, 1])
-                ano_sonda = c1.selectbox("Série Atual:", [6, 7, 8, 9], key=f"v29_sonda_ano_{v}")
-                eixo_sonda = c2.selectbox("Eixo Temático:", ["Números e Álgebra", "Geometria e Medidas", "Estatística e Probabilidade"], key=f"v29_sonda_eixo_{v}")
-                nivel_sonda = c3.select_slider("Profundidade da Sonda:", options=["Base (2 anos atrás)", "Transição (1 ano atrás)", "Ciclo (Trimestre anterior)"], value="Transição (1 ano atrás)", key=f"v29_sonda_nivel_{v}")
+                c1, c2, c3, c4 = st.columns([1, 1, 1.2, 0.8])
+                ano_sonda = c1.selectbox("Série Atual:", [6, 7, 8, 9], key=f"v29_s_ano_{v}")
+                eixo_sonda = c2.selectbox("Eixo Temático:", ["Números e Álgebra", "Geometria e Medidas", "Estatística e Probabilidade"], key=f"v29_s_eixo_{v}")
+                nivel_sonda = c3.select_slider("Profundidade:", options=["Base (-2 anos)", "Transição (-1 ano)", "Ciclo (Atual)"], value="Transição (-1 ano)", key=f"v29_s_niv_{v}")
+                # NOVO: Controle de Quantidade
+                qtd_q_sonda = c4.number_input("Nº Questões:", 5, 20, 10, key=f"v29_s_qtd_{v}")
 
                 # Lógica de Busca de Habilidades
                 ano_alvo = ano_sonda - 1 if "Transição" in nivel_sonda else (ano_sonda - 2 if "Base" in nivel_sonda else ano_sonda)
                 df_habilidades = df_curriculo[df_curriculo['ANO'] == ano_alvo]
                 
                 if not df_habilidades.empty:
-                    habilidades_sel = st.multiselect("Selecione os Descritores/Habilidades para Sondar:", 
+                    habilidades_sel = st.multiselect("Selecione os Descritores para Sondar:", 
                                                    options=df_habilidades['CONTEUDO_ESPECIFICO'].unique().tolist(),
-                                                   key=f"v29_sonda_multi_{v}")
+                                                   key=f"v29_s_multi_{v}")
                     
-                    contexto_local = st.text_input("Contexto Regional (Ex: Comércio de Itabuna, Cacau, etc):", key=f"v29_sonda_ctx_{v}")
+                    contexto_local = st.text_input("Contexto Regional (Ex: Comércio de Itabuna, Cacau, etc):", key=f"v29_s_ctx_{v}")
 
-                    if st.button("🚀 GERAR SONDA DIAGNÓSTICA", use_container_width=True, type="primary", key=f"v29_sonda_btn_{v}"):
+                    if st.button("🚀 GERAR SONDA DIAGNÓSTICA", use_container_width=True, type="primary", key=f"v29_s_btn_{v}"):
                         if not habilidades_sel:
                             st.error("Selecione as habilidades para a sonda.")
                         else:
@@ -463,25 +465,28 @@ if menu == "🧪 Criador de Aulas":
                                 st.session_state.sosa_id_atual = s_id
                                 st.session_state.lab_meta = {"ano": ano_sonda, "trimestre": "I Trimestre", "tipo": "SONDA_DIAGNOSTICA"}
                                 
+                                # PROMPT COM BLINDAGEM DE MARCADORES PARA SCANNER
                                 prompt_sonda = (
-                                    f"GERAR SONDA DIAGNÓSTICA. ID: {s_id}. SÉRIE ATUAL: {ano_sonda}º ANO.\n"
-                                    f"FOCO EM HABILIDADES DO {ano_alvo}º ANO: {habilidades_sel}.\n"
-                                    f"EIXO: {eixo_sonda}. CONTEXTO: {contexto_local}.\n\n"
-                                    f"ORDEM: Use a persona ARQUITETO_SONDA_DIAGNOSTICA. "
-                                    f"Gere o [PROFESSOR] com o Mapa de Sondagem (Descritores e Análise de Distratores). "
-                                    f"Gere o [ALUNO] com questões contextualizadas padrão SME-SP. "
-                                    f"Gere o [GABARITO] com justificativa pedagógica."
+                                    f"VOCÊ É O ARQUITETO_SONDA_DIAGNOSTICA. ID: {s_id}.\n"
+                                    f"SÉRIE ATUAL: {ano_sonda}º ANO. FOCO EM HABILIDADES DO {ano_alvo}º ANO: {habilidades_sel}.\n"
+                                    f"EIXO: {eixo_sonda}. CONTEXTO: {contexto_local}. QUANTIDADE: {qtd_q_sonda} questões.\n\n"
+                                    f"🚨 ESTRUTURA DE MARCADORES SOBERANOS (NÃO OMITIR):\n"
+                                    f"[SOSA_ID]: {s_id}\n"
+                                    f"[PROFESSOR]: Mapa de Sondagem com Descritores e Análise de Distratores.\n"
+                                    f"[ALUNO]: Deve conter obrigatoriamente as sub-tags [ORIENTACOES] e [QUESTOES] (A-E) para que o Scanner funcione.\n"
+                                    f"[GABARITO]: Deve conter obrigatoriamente a sub-tag [GABARITO_TEXTO] (Ex: 01:A, 02:B) e a justificativa pedagógica.\n"
+                                    f"[IMAGENS]: Prompts visuais para as questões."
                                 )
                                 st.session_state.lab_temp = ai.gerar_ia("ARQUITETO_SONDA_DIAGNOSTICA", prompt_sonda)
                                 st.rerun()
                 else:
-                    st.error("Base curricular não localizada para este nível de sonda.")
+                    st.error("Base curricular não localizada.")
         else:
-            st.success("✅ Sonda Diagnóstica gerada com sucesso!")
+            st.success(f"✅ Sonda Diagnóstica {st.session_state.sosa_id_atual} gerada!")
             st.info("Visualize e refine o material na aba **'🚀 Produção (Aula 1/2)'**.")
-            if st.button("🆕 NOVA SONDA (LIMPAR)", use_container_width=True, key=f"v29_sonda_reset_{v}"):
+            if st.button("🆕 NOVA SONDA (LIMPAR)", use_container_width=True, key=f"v29_s_reset_{v}"):
                 reset_laboratorio()
-                
+
     # --- ABA 3: TRABALHOS ---
     with tab_trabalhos:
         if "lab_temp" not in st.session_state:
