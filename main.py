@@ -417,12 +417,18 @@ if menu == "🧪 Criador de Aulas":
         else:
             st.button("🆕 NOVO TRABALHO", on_click=reset_laboratorio, use_container_width=True)
 
-    # --- ÁREA DE EXIBIÇÃO E REFINO (COMUM) ---
+# --- ÁREA DE EXIBIÇÃO E REFINO (COMUM) ---
     if "lab_temp" in st.session_state:
         st.markdown("---")
         txt_base = st.session_state.lab_temp
         s_id = st.session_state.get("sosa_id_atual", "SEM-ID")
         meta = st.session_state.get("lab_meta", {"ano": "6", "trimestre": "I Trimestre", "tipo": "MATERIAL"})
+        
+        # VACINA SOSA: Extraímos os conteúdos ANTES das abas para evitar NameError
+        conteudo_prof_base = ai.extrair_tag(txt_base, "PROFESSOR")
+        conteudo_alu_base = ai.extrair_tag(txt_base, "ALUNO")
+        conteudo_gab_base = ai.extrair_tag(txt_base, "GABARITO") or ai.extrair_tag(txt_base, "RUBRICA")
+
         st.success(f"💎 Material Gerado: **{s_id}**")
         
         cmd_refine = st.chat_input("Refinar este material...")
@@ -431,37 +437,54 @@ if menu == "🧪 Criador de Aulas":
             st.rerun()
         
         t_prof, t_alu, t_gab, t_pei, t_sync = st.tabs(["👨‍🏫 Professor", "📝 Aluno", "✅ Gabarito/Rubrica", "♿ PEI", "☁️ SINCRONIA"])
-        with t_prof: st.text_area("Lousa:", ai.extrair_tag(txt_base, "PROFESSOR"), height=400, key=f"ed_prof_{v}")
-        with t_alu: st.text_area("Folha:", ai.extrair_tag(txt_base, "ALUNO"), height=400, key=f"ed_alu_{v}")
-        with t_gab: st.text_area("Respostas:", ai.extrair_tag(txt_base, "GABARITO") or ai.extrair_tag(txt_base, "RUBRICA"), height=300, key=f"ed_res_{v}")
+        
+        with t_prof: 
+            ed_prof = st.text_area("Lousa (2 Colunas):", conteudo_prof_base, height=400, key=f"ed_prof_{v}")
+        
+        with t_alu: 
+            # Agora usamos a variável conteudo_alu_base que já foi definida acima
+            ed_alu = st.text_area("Folha do Aluno:", conteudo_alu_base, height=400, key=f"ed_alu_{v}")
+        
+        with t_gab: 
+            ed_res = st.text_area("Respostas/Critérios:", conteudo_gab_base, height=300, key=f"ed_res_{v}")
+        
         with t_pei:
-            st.subheader("♿ Adaptação Curricular PEI")
-            if st.button("✨ GERAR/ATUALIZAR MATERIAL PEI", use_container_width=True):
-                with st.spinner("Realizando reengenharia de acessibilidade..."):
-                    res_pei_ia = ai.gerar_ia("ARQUITETO_PEI_V24", f"ADAPTE PARA PEI: {ai.extrair_tag(txt_base, 'ALUNO')}")
-                    st.session_state.lab_pei = ai.extrair_tag(res_pei_ia, "PEI")
-                    st.session_state.lab_gab_pei = ai.extrair_tag(res_pei_ia, "GABARITO_PEI")
+            st.subheader("♿ Adaptação Curricular PEI (Elite)")
+            if st.button("✨ GERAR/ATUALIZAR MATERIAL PEI", use_container_width=True, key=f"btn_gen_pei_{v}"):
+                with st.spinner("Maestro Sosa realizando reengenharia de acessibilidade..."):
+                    # Usamos conteudo_alu_base aqui com segurança
+                    prompt_adaptacao = f"ADAPTE PARA PEI O SEGUINTE CONTEÚDO: {conteudo_alu_base}"
+                    res_ia = ai.gerar_ia("ARQUITETO_PEI_V24", prompt_adaptacao)
+                    
+                    st.session_state.lab_pei = ai.extrair_tag(res_ia, "PEI")
+                    st.session_state.lab_gab_pei = ai.extrair_tag(res_ia, "GABARITO_PEI")
                     st.rerun()
             
             if "lab_pei" in st.session_state:
-                c_p1, c_p2 = st.columns(2)
-                with c_p1: st.text_area("📄 Material PEI:", st.session_state.lab_pei, height=400, key=f"ed_pei_mat_{v}")
-                with c_p2: st.text_area("✅ Gabarito PEI:", st.session_state.get("lab_gab_pei", ""), height=400, key=f"ed_pei_gab_{v}")
+                col_pei_1, col_pei_2 = st.columns(2)
+                with col_pei_1:
+                    st.session_state.lab_pei = st.text_area("📄 Material do Estudante PEI:", 
+                                                           st.session_state.lab_pei, height=450, key=f"area_pei_mat_{v}")
+                with col_pei_2:
+                    st.session_state.lab_gab_pei = st.text_area("✅ Gabarito Pedagógico PEI:", 
+                                                               st.session_state.get("lab_gab_pei", ""), height=450, key=f"area_pei_gab_{v}")
 
         with t_sync:
-            if st.button("💾 SALVAR E VINCULAR", use_container_width=True, type="primary"):
+            if st.button("💾 FINALIZAR E SINCRONIZAR", use_container_width=True, type="primary", key=f"btn_sync_v28"):
                 with st.status("Sincronizando...") as status:
-                    # CORREÇÃO: Definindo nome_final para evitar NameError
                     nome_final = f"{s_id} - {meta['tipo']}"
                     ano_str = f"{meta['ano']}º"
                     
-                    doc_alu = exporter.gerar_docx_aluno_v24(nome_final, ai.extrair_tag(txt_base, "ALUNO"), {"ano": ano_str, "trimestre": meta['trimestre']})
+                    # Geramos o DOCX usando o que está no editor (ed_alu)
+                    doc_alu = exporter.gerar_docx_aluno_v24(nome_final, ed_alu, {"ano": ano_str, "trimestre": meta['trimestre']})
                     link_alu = db.subir_e_converter_para_google_docs(doc_alu, nome_final, modo="AULA")
                     
                     if "https" in str(link_alu):
                         conteudo_banco = (
                             f"[SOSA_ID: {s_id}]\n"
-                            f"{txt_base}\n\n"
+                            f"[PROFESSOR]\n{ed_prof}\n\n"
+                            f"[ALUNO]\n{ed_alu}\n\n"
+                            f"[GABARITO]\n{ed_res}\n\n"
                             f"[PEI]\n{st.session_state.get('lab_pei', 'N/A')}\n\n"
                             f"[GABARITO_PEI]\n{st.session_state.get('lab_gab_pei', 'N/A')}\n\n"
                             f"--- LINKS ---\nAluno({link_alu})"
