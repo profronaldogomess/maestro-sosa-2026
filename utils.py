@@ -75,12 +75,14 @@ def sosa_to_str(valor, casas=2):
     return formato.format(val_float).replace(".", ",")
 
 def gerar_sosa_id(tipo, ano, trimestre):
+    """Gera um DNA único para o material respeitando o fuso de Itabuna"""
     from datetime import datetime, timedelta
-    import uuid
-    # Ajuste para o fuso de Itabuna (UTC-3)
-    agora = datetime.utcnow() - timedelta(hours=3)
+    # Ajuste manual de fuso (UTC-3) para evitar o erro de "dia seguinte" à noite
+    data_itabuna = datetime.utcnow() - timedelta(hours=3)
+    
     prefixo = str(tipo)[:4].upper()
+    import uuid
     hash_curto = str(uuid.uuid4())[:4].upper()
-    data_slug = agora.strftime("%d%m")
+    data_slug = data_itabuna.strftime("%d%m")
     ano_num = "".join(filter(str.isdigit, str(ano)))
-    return f"{prefixo}-{ano_num}AN-{data_slug}-{hash_curto}"
+    return f"{prefixo}-{ano_num}AN-{str(trimestre)[0]}-{data_slug}-{hash_curto}"
