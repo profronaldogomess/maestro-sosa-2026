@@ -442,7 +442,6 @@ if menu == "🧪 Criador de Aulas":
             ed_prof = st.text_area("Lousa (2 Colunas):", conteudo_prof_base, height=400, key=f"ed_prof_{v}")
         
         with t_alu: 
-            # Agora usamos a variável conteudo_alu_base que já foi definida acima
             ed_alu = st.text_area("Folha do Aluno:", conteudo_alu_base, height=400, key=f"ed_alu_{v}")
         
         with t_gab: 
@@ -452,7 +451,7 @@ if menu == "🧪 Criador de Aulas":
             st.subheader("♿ Adaptação Curricular PEI (Elite)")
             if st.button("✨ GERAR/ATUALIZAR MATERIAL PEI", use_container_width=True, key=f"btn_gen_pei_{v}"):
                 with st.spinner("Maestro Sosa realizando reengenharia de acessibilidade..."):
-                    # Usamos conteudo_alu_base aqui com segurança
+                    # Usamos conteudo_alu_base aqui com segurança total
                     prompt_adaptacao = f"ADAPTE PARA PEI O SEGUINTE CONTEÚDO: {conteudo_alu_base}"
                     res_ia = ai.gerar_ia("ARQUITETO_PEI_V24", prompt_adaptacao)
                     
@@ -475,7 +474,6 @@ if menu == "🧪 Criador de Aulas":
                     nome_final = f"{s_id} - {meta['tipo']}"
                     ano_str = f"{meta['ano']}º"
                     
-                    # Geramos o DOCX usando o que está no editor (ed_alu)
                     doc_alu = exporter.gerar_docx_aluno_v24(nome_final, ed_alu, {"ano": ano_str, "trimestre": meta['trimestre']})
                     link_alu = db.subir_e_converter_para_google_docs(doc_alu, nome_final, modo="AULA")
                     
