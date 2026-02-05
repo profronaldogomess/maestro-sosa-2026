@@ -459,15 +459,23 @@ if menu == "🧪 Criador de Aulas":
                                 
                                 # PROMPT REFORMULADO PARA NÃO QUEBRAR AS TAGS
                                 prompt_sonda = (
-                                    f"PERSONA: ARQUITETO_SONDA_DIAGNOSTICA. ID: {s_id}.\n"
-                                    f"SÉRIE: {ano_sonda}º ANO. HABILIDADES DO {ano_alvo}º ANO: {habilidades_sel}.\n"
-                                    f"EIXO: {eixo_sonda}. CONTEXTO: {contexto_local}. QTD REGULAR: {qtd_q_sonda} questões.\n\n"
-                                    f"🚨 REQUISITOS TÉCNICOS:\n"
-                                    f"1. [ALUNO]: Gere {qtd_q_sonda} questões contextualizadas.\n"
-                                    f"2. [IMAGENS]: Gere prompts de 'Line Art' para as questões que necessitem de apoio visual.\n"
-                                    f"3. [PEI]: Gere uma versão com APENAS {max(3, qtd_q_sonda // 2)} questões (metade da regular), focando nos pré-requisitos mais básicos das habilidades selecionadas.\n"
-                                    f"4. [GABARITO_PEI]: Justificativa pedagógica para cada acerto do aluno PEI.\n\n"
-                                    f"ENTREGA: Use as tags [PROFESSOR], [ALUNO], [GABARITO], [IMAGENS], [PEI], [GABARITO_PEI]."
+                                    f"VOCÊ É O ARQUITETO_SONDA_DIAGNOSTICA. ID: {s_id}.\n"
+                                    f"SÉRIE: {ano_sonda}º ANO. HABILIDADES: {habilidades_sel}.\n"
+                                    f"EIXO: {eixo_sonda}. CONTEXTO: {contexto_local}. QTD REGULAR: {qtd_q_sonda}.\n\n"
+                                    
+                                    f"🚨 LEIS DE COMPOSIÇÃO (INEGOCIÁVEIS):\n"
+                                    f"1. PROIBIDO CABEÇALHOS: Jamais escreva 'Escola', 'Aluno', 'Data' ou 'Turma'. Comece direto no conteúdo.\n"
+                                    f"2. DNA VISUAL OBRIGATÓRIO: Para cada questão que envolva geometria, frações, balanças, mapas ou tabelas, você DEVE inserir a linha 'PROMPT IMAGEM: [descrição detalhada]' logo abaixo do enunciado no bloco [ALUNO].\n"
+                                    f"3. CALIBRAGEM PEI: Gere exatamente {max(3, qtd_q_sonda // 2)} questões. Elas devem ser versões simplificadas das questões regulares, focando no alicerce e SEMPRE com 'PROMPT IMAGEM' para apoio visual.\n"
+                                    f"4. SEM MARKDOWN: Proibido usar ** ou #. Use Unicode.\n\n"
+                                    
+                                    f"ENTREGA ESTRUTURADA:\n"
+                                    f"[PROFESSOR]\n(Mapa de Sondagem e Análise de Distratores)\n\n"
+                                    f"[ALUNO]\n(Questões com PROMPT IMAGEM inserido no texto)\n\n"
+                                    f"[GABARITO]\n(Gabarito e Justificativa)\n\n"
+                                    f"[IMAGENS]\n(Lista consolidada de todos os prompts para o professor)\n\n"
+                                    f"[PEI]\n(Versão reduzida com suporte visual e 3 alternativas)\n\n"
+                                    f"[GABARITO_PEI]\n(Respostas PEI)"
                                 )
                                 st.session_state.lab_temp = ai.gerar_ia("ARQUITETO_SONDA_DIAGNOSTICA", prompt_sonda)
                                 st.rerun()
