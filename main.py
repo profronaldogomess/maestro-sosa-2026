@@ -438,41 +438,58 @@ if menu == "🧪 Criador de Aulas":
                         status.update(label="✅ Triple-Sync Concluído!", state="complete")
                         st.balloons(); time.sleep(1); reset_laboratorio()
 
-    # --- ABA 1: PRODUÇÃO (FORMULÁRIO) ---
+# --- ABA 1: PRODUÇÃO (AULA 1/2) - VERSÃO V32.8 ELITE ---
     with tab_producao:
         if "lab_temp" not in st.session_state:
+            st.markdown("### ⚙️ Configurar Produção de Aula")
             with st.container(border=True):
-                st.markdown("### ⚙️ 1. Parâmetros de Regência")
-                c1, c2, c3 = st.columns([1, 2, 1.5])
+                c1, c2, c3 = st.columns([1, 2, 1])
                 ano_lab = c1.selectbox("Série/Ano:", [6, 7, 8, 9], key=f"prod_ano_{v}")
+                
                 planos_ano = df_planos[df_planos['ANO'].astype(str).str.contains(str(ano_lab))]
                 
-                if planos_ano.empty: st.error("❌ Nenhum plano encontrado.")
+                if planos_ano.empty: 
+                    st.error("❌ Nenhum planejamento encontrado para este ano.")
                 else:
-                    sem_lab = c2.selectbox("Semana Base (PIP):", planos_ano['SEMANA'].tolist(), key=f"prod_sem_{v}")
-                    aula_alvo = c3.radio("🎯 Alvo:", ["Aula 1", "Aula 2", "Ambas"], horizontal=True, key=f"prod_alvo_{v}")
-                    plano_ref = planos_ano[planos_ano['SEMANA'] == sem_lab].iloc[0]['PLANO_TEXTO']
+                    sem_lab = c2.selectbox("Semana Base (Ponto ID):", planos_ano['SEMANA'].tolist(), key=f"prod_sem_{v}")
+                    
+                    # Filtra se a aula já foi criada para evitar duplicidade
+                    aulas_criadas = df_aulas[df_aulas['SEMANA_REF'] == sem_lab]['TIPO_MATERIAL'].tolist()
+                    opcoes_aula = ["Aula 1", "Aula 2"]
+                    # Se quiser bloquear as já criadas, descomente a linha abaixo:
+                    # opcoes_aula = [a for a in opcoes_aula if a not in str(aulas_criadas)]
+                    
+                    aula_alvo = c3.radio("🎯 Selecione a Aula:", opcoes_aula, horizontal=True, key=f"prod_alvo_{v}")
+                    
+                    plano_row = planos_ano[planos_ano['SEMANA'] == sem_lab].iloc[0]
+                    plano_ref = plano_row['PLANO_TEXTO']
+                    
+                    # EXTRAÇÃO DA METODOLOGIA ESPECÍFICA DO PLANEJAMENTO
+                    tag_metodologia = "AULA_1" if aula_alvo == "Aula 1" else "AULA_2"
+                    metodologia_especifica = ai.extrair_tag(plano_ref, tag_metodologia)
                     
                     col_p1, col_p2 = st.columns(2)
                     qtd_q = col_p1.slider("Nº de Questões:", 1, 15, 5, key=f"prod_q_{v}")
-                    instr_extra = col_p2.text_input("Instruções Adicionais:", key=f"prod_extra_{v}")
+                    instr_extra = col_p2.text_input("Instruções Adicionais (Ex: Focar em frações):", key=f"prod_extra_{v}")
                     
-                    if st.button("💎 COMPILAR MATERIAL", use_container_width=True, type="primary"):
-                        s_id = util.gerar_sosa_id("AULA", ano_lab, "I")
-                        st.session_state.sosa_id_atual = s_id
-                        st.session_state.lab_meta = {"ano": ano_lab, "trimestre": "I Trimestre", "tipo": "AULA_ELITE"}
-                        
-                        prompt_elite = (
-                            f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {s_id}.\n"
-                            f"SÉRIE: {ano_lab}º ANO. SEMANA: {sem_lab}. ALVO: {aula_alvo}.\n"
-                            f"PLANO DE REFERÊNCIA: {plano_ref}.\n"
-                            f"QTD QUESTÕES: {qtd_q}. EXTRA: {instr_extra}.\n\n"
-                            f"🚨 REQUISITO: Siga a Tríade da Práxis (Síncrese, Analítica, Síntese). "
-                            f"Insira 'PROMPT IMAGEM: [descrição]' para cada suporte visual necessário."
-                            f"\n\n⚠️ IMPORTANTE: Inicie cada seção com sua tag entre colchetes, ex: [PROFESSOR]. Não use títulos com #."
-                        )
-                        st.session_state.lab_temp = ai.gerar_ia("MAESTRO_SOSA_V28_ELITE", prompt_elite)
-                        st.rerun()
+                    if st.button("💎 COMPILAR MATERIAL DE ELITE", use_container_width=True, type="primary"):
+                        with st.spinner("Maestro Sosa processando Planejamento e Metodologia..."):
+                            s_id = util.gerar_sosa_id("AULA", ano_lab, "I")
+                            st.session_state.sosa_id_atual = s_id
+                            st.session_state.lab_meta = {"ano": ano_lab, "trimestre": "I Trimestre", "tipo": aula_alvo}
+                            
+                            # PROMPT QUE ENVIA A METODOLOGIA REAL DO PLANEJAMENTO
+                            prompt_elite = (
+                                f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {s_id}.\n"
+                                f"SÉRIE: {ano_lab}º ANO. SEMANA: {sem_lab}. ALVO: {aula_alvo}.\n"
+                                f"CONTEÚDO BASE: {ai.extrair_tag(plano_ref, 'CONTEUDOS_ESPECIFICOS')}.\n"
+                                f"OBJETIVOS: {ai.extrair_tag(plano_ref, 'OBJETIVOS_ENSINO')}.\n"
+                                f"METODOLOGIA DO PLANEJAMENTO (SIGA ISSO): {metodologia_especifica}.\n\n"
+                                f"QTD QUESTÕES: {qtd_q}. EXTRA: {instr_extra}.\n"
+                                f"🚨 REQUISITO: Não crie cabeçalhos. Use PROMPT IMAGEM para suporte visual."
+                            )
+                            st.session_state.lab_temp = ai.gerar_ia("MAESTRO_SOSA_V28_ELITE", prompt_elite)
+                            st.rerun()
 
 # --- ABA 2: SONDA DIAGNÓSTICA (V29.3 - INTERFACE LIMPA) ---
     with tab_diagnostico:
