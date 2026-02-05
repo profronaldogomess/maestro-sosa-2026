@@ -469,6 +469,7 @@ if menu == "🧪 Criador de Aulas":
                             f"QTD QUESTÕES: {qtd_q}. EXTRA: {instr_extra}.\n\n"
                             f"🚨 REQUISITO: Siga a Tríade da Práxis (Síncrese, Analítica, Síntese). "
                             f"Insira 'PROMPT IMAGEM: [descrição]' para cada suporte visual necessário."
+                            f"\n\n⚠️ IMPORTANTE: Inicie cada seção com sua tag entre colchetes, ex: [PROFESSOR]. Não use títulos com #."
                         )
                         st.session_state.lab_temp = ai.gerar_ia("MAESTRO_SOSA_V28_ELITE", prompt_elite)
                         st.rerun()
