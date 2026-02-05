@@ -55,29 +55,29 @@ PERSONAS = {
 # ==============================================================================
 
  # --- PERSONA MESTRE V28: O MAESTRO DA SINFONIA PEDAGÓGICA ---
-    "MAESTRO_SOSA_V28_ELITE": """VOCÊ É O ARQUITETO COGNITIVO E MAESTRO PEDAGÓGICO V28.
-    Sua missão é a TRANSPOSIÇÃO SEMIÓTICA DE ELITE, integrando a BNCC à Pedagogia Histórico-Crítica (PHC) e aos parâmetros da Prefeitura de Itabuna/BA.
+    "MAESTRO_SOSA_V28_ELITE": """VOCÊ É O ARQUITETO COGNITIVO V28.
+    Sua missão é transformar o PLANEJAMENTO (Ponto ID) em MATERIAL DIDÁTICO DE ALTA PERFORMANCE.
 
-    🚨 O MOVIMENTO DIALÉTICO (TRÍADE DA PRÁXIS):
-    Não gere apenas tarefas. Construa um percurso de transformação:
-    1. SÍNCRESE (Prática Social): Conecte o tema à realidade de Itabuna e às Competências Gerais da BNCC. Por que isso importa hoje?
-    2. ANALÍTICA (Instrumentalização): O Rigor Técnico. Definições, fórmulas e o "Tradicional Forte" para a lousa. É o saber sistematizado.
-    3. SÍNTESE (Catarse/Desafio): O momento em que o aluno domina a ferramenta. Questões nível OBMEP/ENEM que exigem aplicação crítica.
+    🚨 LEI DO CONTEXTO (OBRIGATÓRIO):
+    Você deve ler a METODOLOGIA específica (Aula 1 ou Aula 2) fornecida no prompt e expandi-la. 
+    Não invente um contexto novo se o planejamento já define um.
 
-    🚨 PROTOCOLO DO PROFESSOR (MAPA DE REGÊNCIA):
-    [PROFESSOR] deve ser fatiado em:
-    [COLUNA_1] -> MEDIAÇÃO PEDAGÓGICA: Como intervir nos erros e qual a habilidade BNCC em foco.
-    [COLUNA_2] -> MAPA DE LOUSA: O que deve ser escrito, usando símbolos Unicode e Prompts Visuais [PROMPT: ...].
+    🚨 DNA VISUAL E SUPORTE:
+    Para cada conceito complexo ou questão, insira a linha 'PROMPT IMAGEM: [descrição]' no bloco [ALUNO].
+    Use o estilo 'Educational line art, high contrast'.
 
-    🚨 REGRAS DE OURO:
-    - SOSA-ID obrigatório no topo.
-    - PROIBIDO Markdown (** ou #). Use Unicode (🎯, 📘, 🔢).
-    - Fidelidade absoluta aos conteúdos literais do banco de dados.
-    
-    🚨 FORMATAÇÃO DE SAÍDA (CRÍTICO):
-    - Use EXATAMENTE os colchetes: [SOSA_ID], [PROFESSOR], [ALUNO], [GABARITO], [IMAGENS], [PEI].
-    - NÃO use hashtags (#) ou negritos (**) nos nomes das tags.
-    - Comece o conteúdo imediatamente após fechar o colchete.""",
+    🚨 HIGIENE DE LAYOUT:
+    - PROIBIDO gerar cabeçalhos (Escola, Aluno, Data).
+    - PROIBIDO usar [COLUNA_1] ou [COLUNA_2]. O exportador cuida disso.
+    - Comece direto no conteúdo pedagógico.
+
+    🚨 ESTRUTURA DE ENTREGA:
+    [SOSA_ID]: Identificador único.
+    [PROFESSOR]: Fundamentação técnica e orientações de regência baseadas na PHC.
+    [ALUNO]: Conteúdo expositivo e Questões (com PROMPT IMAGEM).
+    [GABARITO]: Respostas e justificativas.
+    [IMAGENS]: Lista de prompts para o professor.
+    [PEI]: Versão reduzida (Andaime Cognitivo).""",
 
     # --- PERSONA PEI V28: O ENGENHEIRO DE EQUIDADE ---
     "ARQUITETO_PEI_V28_SINFONIA": """VOCÊ É O ENGENHEIRO DE EQUIDADE E ACESSIBILIDADE V28.
@@ -286,86 +286,38 @@ def extrair_tag(texto, tag):
     if not texto: return ""
     import re
     
-    # 1. PRÉ-PROCESSAMENTO (ESCUDO SOSA)
-    # Remove negritos e títulos Markdown que "colam" nas tags e quebram a Regex
-    texto_limpo = re.sub(r'\*+', '', texto) # Remove todos os asteriscos
-    texto_limpo = re.sub(r'#+', '', texto_limpo) # Remove todas as hashtags
+    # 1. LIMPEZA PRÉVIA: Remove negritos e hashtags que a IA insiste em colocar nas tags
+    texto_limpo = re.sub(r'\*+', '', texto)
+    texto_limpo = re.sub(r'#+', '', texto_limpo)
     
-    # 2. DEFINIÇÃO DE HIERARQUIA SOSA (PRESERVADA)
-    tags_bloco = ["PROFESSOR", "ALUNO", "GABARITO", "PEI", "IMAGENS", "RUBRICA", "SOSA_ID"]
-    tags_conteudo = ["COLUNA_1", "COLUNA_2", "MAPA_MENTAL", "ALGORITMO", "ATIVIDADES_SINTESE", "GABARITO_COMENTADO_PEI"]
+    # 2. LISTA MESTRA DE TAGS (Hierarquia SOSA V28)
+    tags_sosa = [
+        "SOSA_ID", "PROFESSOR", "ALUNO", "GABARITO", "IMAGENS", "PEI", "RUBRICA",
+        "GABARITO_PEI", "ORIENTACOES", "QUESTOES", "GABARITO_TEXTO", "RESPOSTAS_IA",
+        "CONTEUDO_GERAL", "CONTEUDOS_ESPECIFICOS", "OBJETIVOS_ENSINO", "METODOLOGIA",
+        "AULA_1", "AULA_2", "SABADO_LETIVO"
+    ]
     
     tag_busca = tag.upper()
-    
-    # 3. LÓGICA DE PARADA DINÂMICA (PRESERVADA)
-    if tag_busca in tags_bloco:
-        parada = [t for t in tags_bloco if t != tag_busca]
-    else:
-        parada = [t for t in (tags_bloco + tags_conteudo) if t != tag_busca]
-    
+    parada = [t for t in tags_sosa if t != tag_busca]
     lista_parada = "|".join(parada)
     
-    # 4. REGEX ULTRA-RESILIENTE
-    # \s*\[\s* -> Aceita espaços antes e dentro do colchete
-    # (?::.*?)? -> Aceita [TAG: valor] ou [TAG]
-    # \s*\]\s*[:\-]* -> Aceita fechar colchete com espaços, dois pontos ou hífen depois
-    padrao = rf"\[\s*{tag_busca}\s*(?::.*?)?\]\s*[:\-]*\s*(.*?)(?=\[\s*(?:{lista_parada})\s*(?::.*?)?\]|$)"
+    # 3. REGEX DE ALTA RESILIÊNCIA
+    # Aceita [TAG], [ TAG ], [TAG: valor], MARKER_TAG
+    padrao = rf"(?:\[\s*{tag_busca}\s*(?::.*?)?\]|MARKER_{tag_busca})\s*[:\-]*\s*(.*?)(?=\[\s*(?:{lista_parada})\s*(?::.*?)?\]|MARKER_(?:{lista_parada})|$)"
     
     match = re.search(padrao, texto_limpo, re.DOTALL | re.IGNORECASE)
     
     if match:
         res = match.group(1).strip()
-        # Limpeza de resíduos de caracteres especiais no início do bloco
+        # Remove ":" ou "-" que sobram no início do texto
         res = re.sub(r'^[:\-\s]+', '', res)
         return res.strip()
     
-    # 5. FALLBACK ESTRATÉGICO (PRESERVADO)
+    # Fallback para PEI
     if tag_busca == "PEI" and "MAPA MENTAL" in texto_limpo.upper():
         m = re.search(r"MAPA MENTAL.*", texto_limpo, re.DOTALL | re.IGNORECASE)
         if m: return m.group(0).strip()
-
-    return ""
-
-    if not texto: return ""
-    import re
-    
-    # Limpeza de Markdown que a IA insiste em colocar nas tags (ex: **[TAG]**)
-    texto = re.sub(r'\*\*\[(.*?)\]\*\*', r'[\1]', texto)
-    texto = re.sub(r'###\s*\[(.*?)\]', r'[\1]', texto)
-
-    # 1. DEFINIÇÃO DE HIERARQUIA SOSA
-    # Tags de Bloco: Definem as abas do seu sistema (Devem ignorar sub-tags)
-    tags_bloco = ["PROFESSOR", "ALUNO", "GABARITO", "PEI", "IMAGENS", "RUBRICA", "SOSA_ID"]
-    
-    # Tags de Conteúdo: Marcadores internos (Devem parar em qualquer outra tag)
-    tags_conteudo = ["COLUNA_1", "COLUNA_2", "MAPA_MENTAL", "ALGORITMO", "ATIVIDADES_SINTESE", "GABARITO_COMENTADO_PEI"]
-    
-    tag_busca = tag.upper()
-    
-    # 2. LÓGICA DE PARADA DINÂMICA
-    if tag_busca in tags_bloco:
-        # Se estou buscando uma aba, só paro quando encontrar OUTRA aba principal
-        parada = [t for t in tags_bloco if t != tag_busca]
-    else:
-        # Se estou buscando conteúdo interno, paro em qualquer tag (bloco ou conteúdo)
-        parada = [t for t in (tags_bloco + tags_conteudo) if t != tag_busca]
-    
-    lista_parada = "|".join(parada)
-    
-    # 3. REGEX DE CAPTURA (Aceita [TAG] ou [TAG: valor])
-    padrao = rf"\[{tag_busca}(?::.*?)?\]\s*(.*?)(?=\[(?:{lista_parada})(?::.*?)?\]|$)"
-    
-    match = re.search(padrao, texto, re.DOTALL | re.IGNORECASE)
-    
-    if match:
-        res = match.group(1).strip()
-        return res.replace("**", "").strip()
-    
-    # Fallback para PEI (Preservado)
-    if tag_busca == "PEI" and "[PEI]" not in texto.upper():
-        if "MAPA MENTAL" in texto.upper():
-            m = re.search(r"MAPA MENTAL.*", texto, re.DOTALL | re.IGNORECASE)
-            if m: return m.group(0).strip()
 
     return ""
 
