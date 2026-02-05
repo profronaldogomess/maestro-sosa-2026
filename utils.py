@@ -74,22 +74,13 @@ def sosa_to_str(valor, casas=2):
     formato = "{:." + str(casas) + "f}"
     return formato.format(val_float).replace(".", ",")
 
-def gerar_sosa_id(tipo, aula, semana, ano, trimestre):
+def gerar_sosa_id(tipo, ano, trimestre):
     from datetime import datetime, timedelta
     import uuid
     # Ajuste para o fuso de Itabuna (UTC-3)
     agora = datetime.utcnow() - timedelta(hours=3)
-    
-    # Extrai apenas o número da semana (ex: "Semana 01" -> "S01")
-    sem_num = "".join(filter(str.isdigit, semana.split(' ')[1])) if 'Semana' in semana else "JD"
-    
-    # Define o prefixo da aula (A1 ou A2)
-    a_pref = "A1" if "1" in aula else "A2"
-    
     prefixo = str(tipo)[:4].upper()
     hash_curto = str(uuid.uuid4())[:4].upper()
     data_slug = agora.strftime("%d%m")
     ano_num = "".join(filter(str.isdigit, str(ano)))
-    
-    # NOVO FORMATO: A1-S01-6AN-0402-HASH
-    return f"{a_pref}-S{sem_num}-{ano_num}AN-{data_slug}-{hash_curto}"
+    return f"{prefixo}-{ano_num}AN-{data_slug}-{hash_curto}"
