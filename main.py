@@ -515,8 +515,6 @@ if menu == "🧪 Criador de Aulas":
                         st.rerun()
 
 # --- ABA 5: ACERVO (CORREÇÃO TYPEERROR - LINK_BUTTON) ---
-# --- SUBSTITUIÇÃO NO main.py (DENTRO DO with tab_acervo) ---
-
     with tab_acervo:
         st.subheader("📂 Repositório de Planos Estratégicos")
         if not df_planos.empty:
@@ -569,7 +567,7 @@ if menu == "🧪 Criador de Aulas":
             st.info("📭 Acervo vazio.")
                             
 # ==============================================================================
-# MÓDULO: PLANEJAMENTO ESTRATÉGICO (PONTO ID) - ARQUITETURA V30.0 (SINCRO TOTAL)
+# MÓDULO: PLANEJAMENTO ESTRATÉGICO (PONTO ID) - ARQUITETURA V32.0 (SHIELDED)
 # ==============================================================================
 if menu == "📅 Planejamento (Ponto ID)":
     st.title("📅 Engenharia de Planejamento (Ponto ID)")
@@ -590,7 +588,7 @@ if menu == "📅 Planejamento (Ponto ID)":
     ])
     
     with tab_gerar:
-        # --- 1. STATUS E PARÂMETROS ---
+        # --- 1. STATUS E CALENDÁRIO ---
         with st.container(border=True):
             st.markdown("### 🛡️ 1. Status e Calendário")
             cg1, cg2, cg3 = st.columns([1.5, 1, 1])
@@ -598,6 +596,7 @@ if menu == "📅 Planejamento (Ponto ID)":
             tem_sabado = cg2.toggle("Sábado Letivo?", key=f"gate_sab_{v}")
             carga_horaria = cg3.select_slider("Aulas Úteis:", options=["1 Aula", "2 Aulas", "3 Aulas"], value="2 Aulas", key=f"gate_carga_{v}")
 
+        # --- 2. PARÂMETROS DE REGÊNCIA ---
         with st.container(border=True):
             st.markdown("### ⚙️ 2. Parâmetros de Regência")
             c1, c2, c3 = st.columns([1, 2, 1.5])
@@ -608,7 +607,7 @@ if menu == "📅 Planejamento (Ponto ID)":
             trim_atual = sem_p.split(" - ")[1] if " - " in sem_p else "I Trimestre"
             modo_p = c3.radio("Método:", ["📖 Livro Didático", "🎛️ Manual (Banco)"], horizontal=True, key=f"modo_p_{v}")
 
-        # --- 2. SELEÇÃO HIERÁRQUICA ---
+        # --- 3. SELEÇÃO HIERÁRQUICA (CORREÇÃO DEFINITIVA PYLANCE) ---
         with st.container(border=True):
             f_eixo, f_cont, f_obj = "", "", ""
             if modo_p == "🎛️ Manual (Banco)":
@@ -616,13 +615,16 @@ if menu == "📅 Planejamento (Ponto ID)":
                 df_ano = df_curriculo[df_curriculo['ANO'] == int(ano_p)]
                 if not df_ano.empty:
                     c_h1, c_h2 = st.columns(2)
+                    # 1. Eixo
                     lista_eixos = sorted(df_ano['EIXO'].unique().tolist())
                     sel_eixo = c_h1.selectbox("1. Eixo:", [""] + lista_eixos, key=f"h_eixo_{v}")
                     if sel_eixo:
+                        # 2. Conteúdo (CORREÇÃO: 'CONTEUDO_ESPECIFICO' entre aspas)
                         df_cont = df_ano[df_ano['EIXO'] == sel_eixo]
                         lista_conts = sorted(df_cont['CONTEUDO_ESPECIFICO'].unique().tolist())
                         sel_cont = c_h2.multiselect("2. Conteúdos:", lista_conts, key=f"h_cont_{v}")
                         if sel_cont:
+                            # 3. Objetivos (CORREÇÃO: 'OBJETIVOS' entre aspas)
                             df_obj = df_cont[df_cont['CONTEUDO_ESPECIFICO'].isin(sel_cont)]
                             lista_objs = sorted(df_obj['OBJETIVOS'].unique().tolist())
                             sel_obj = st.multiselect("3. Objetivos:", lista_objs, key=f"h_obj_{v}")
@@ -644,7 +646,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                 st.session_state.p_temp = ai.gerar_ia("PLANE_PEDAGOGICO", prompt)
                 st.rerun()
 
-        # --- 3. EDITOR (SÓ APARECE SE GERADO) ---
+        # --- 4. EDITOR (SÓ APARECE SE GERADO) ---
         if "p_temp" in st.session_state:
             st.markdown("---")
             txt_bruto = st.session_state.p_temp
@@ -665,19 +667,20 @@ if menu == "📅 Planejamento (Ponto ID)":
                 ed_ava = st.text_area("Avaliação:", ai.extrair_tag(txt_bruto, "AVALIACAO"), key=f"ed_ava_{v}")
                 ed_pei = st.text_area("Adaptação PEI:", ai.extrair_tag(txt_bruto, "ADAPTACAO_PEI"), key=f"ed_pei_{v}")
 
-                # BOTÃO ÚNICO DE SALVAMENTO
                 if st.button("💾 FINALIZAR E DISPARAR PRODUÇÃO", use_container_width=True, type="primary", key=f"btn_final_hub_{v}"):
                     with st.status("Sincronizando...") as status:
                         final_ano_str = f"{ano_p}º"
                         nome_arquivo = f"PLANO_{ano_p}ANO_{sem_limpa.replace(' ', '')}"
                         db.excluir_plano_completo(sem_limpa, final_ano_str)
-                        metodologia_unificada = f"AULA 1:\n{ed_a1}\n\nAULA 2:\n{ed_a2}"
-                        if ed_a3 != "N/A": metodologia_unificada += f"\n\nSÁBADO LETIVO:\n{ed_a3}"
+                        metodologia_unificada = f"[AULA_1]\n{ed_a1}\n\n[AULA_2]\n{ed_a2}"
+                        if ed_a3 != "N/A": metodologia_unificada += f"\n\n[SABADO_LETIVO]\n{ed_a3}"
+                        
                         dados_docx = {"geral": f"[{ed_bncc}] {ed_geral}", "especificos": ed_espec, "objetivos": ed_objs, "metodologia": metodologia_unificada, "avaliacao": ed_ava, "pei": ed_pei}
                         doc_io = exporter.gerar_docx_plano_pedagogico_ELITE(nome_arquivo, dados_docx, {"ano": final_ano_str, "semana": sem_limpa, "trimestre": trim_atual})
                         link_drive = db.subir_e_converter_para_google_docs(doc_io, nome_arquivo, trimestre=trim_atual, categoria=final_ano_str, semana=sem_limpa, modo="PLANEJAMENTO")
                         if "https" in str(link_drive):
                             final_txt = f"[BNCC_CODE] {ed_bncc} \n[CONTEUDO_GERAL] {ed_geral} \n[CONTEUDOS_ESPECIFICOS] {ed_espec} \n[OBJETIVOS_ENSINO] {ed_objs} \n[AULA_1] {ed_a1} \n[AULA_2] {ed_a2} \n[SABADO_LETIVO] {ed_a3} \n[AVALIACAO] {ed_ava} \n[ADAPTACAO_PEI] {ed_pei} \n--- LINK DRIVE --- {link_drive}"
+                            # SALVA HUB_ATIVO NA COLUNA 5 (EIXO) CONFORME SEU CSV
                             db.salvar_no_banco("DB_PLANOS", [datetime.now().strftime("%d/%m/%Y"), sem_limpa, final_ano_str, trim_atual, "HUB_ATIVO", final_txt, link_drive])
                             status.update(label="✅ Plano Salvo!", state="complete")
                             st.balloons(); reset_planejamento()
@@ -693,11 +696,12 @@ if menu == "📅 Planejamento (Ponto ID)":
                 st.markdown(f"**📝 AVALIAÇÃO:** {ed_ava}")
                 st.markdown(f"**♿ ESTRATÉGIA PEI:** {ed_pei}")
 
-    # --- ABA 2: DASHBOARD DE PRODUÇÃO (FILTRO ROBUSTO) ---
+    # --- ABA 2: DASHBOARD DE PRODUÇÃO (FILTRO NA COLUNA EIXO) ---
     with tab_producao:
         st.subheader("🏗️ Linha de Montagem de Materiais")
         if not df_planos.empty:
-            planos_ativos = df_planos[df_planos['TURMA'].astype(str).str.contains("HUB_ATIVO", case=False, na=False)].iloc[::-1]
+            # FILTRO CORRIGIDO: Agora olha para a coluna EIXO (onde está o HUB_ATIVO no seu CSV)
+            planos_ativos = df_planos[df_planos['EIXO'].astype(str).str.contains("HUB_ATIVO", case=False, na=False)].iloc[::-1]
             if not planos_ativos.empty:
                 for _, row in planos_ativos.iterrows():
                     with st.container(border=True):
@@ -707,8 +711,8 @@ if menu == "📅 Planejamento (Ponto ID)":
                         c_p2.markdown(f"🎯 **Eixo:** {eixo_card}")
                         if c_p3.button("🧪 GERAR MATERIAIS", key=f"gen_hub_{row.name}", use_container_width=True):
                             st.session_state.lab_temp = row['PLANO_TEXTO']
-                            st.session_state.sosa_id_atual = util.gerar_sosa_id("AULA", row['ANO'], row['TRIMESTRE'])
-                            st.session_state.lab_meta = {"ano": str(row['ANO']).replace('º',''), "trimestre": row['TRIMESTRE'], "tipo": "PRODUÇÃO_HUB"}
+                            st.session_state.sosa_id_atual = util.gerar_sosa_id("AULA", row['ANO'], row['TURMA'])
+                            st.session_state.lab_meta = {"ano": str(row['ANO']).replace('º',''), "trimestre": row['TURMA'], "tipo": "PRODUÇÃO_HUB"}
                             st.success("✅ Enviado ao Laboratório! Clique em '🧪 Criador de Aulas' no menu lateral.")
             else: st.info("📭 Nenhum plano pendente. Finalize um planejamento ou use o botão 'Mandar para Produção' no Acervo.")
         else: st.info("📭 Banco de planos vazio.")
@@ -731,17 +735,14 @@ if menu == "📅 Planejamento (Ponto ID)":
                 with col_btn1:
                     if st.button("🔄 REABRIR PARA REFINO", use_container_width=True):
                         st.session_state.refino_ativo = {"ano": dados_h['ANO'], "semana": sel_h}
-                        st.session_state.p_temp = raw_h
-                        st.rerun()
+                        st.session_state.p_temp = raw_h; st.rerun()
                 
                 with col_btn2:
-                    # BOTÃO CORRIGIDO COM A NOVA FUNÇÃO
                     if st.button("🚀 MANDAR PARA PRODUÇÃO", use_container_width=True, type="primary", key=f"btn_hub_act_{sel_h}"):
                         with st.spinner("Enviando para Linha de Montagem..."):
                             if db.ativar_plano_no_hub(sel_h, dados_h['ANO']):
                                 st.success("✅ Plano enviado com sucesso!")
-                                time.sleep(1)
-                                st.rerun() # O rerun agora lerá os dados novos sem cache
+                                time.sleep(1); st.rerun()
                 
                 with col_btn3:
                     if "https" in str(dados_h['LINK_DRIVE']): 
@@ -760,123 +761,61 @@ if menu == "📅 Planejamento (Ponto ID)":
                         st.write(ai.extrair_tag(raw_h, "AULA_2"))
                 
                 if st.button("🗑️ EXCLUIR PLANO", use_container_width=True):
-                    if db.excluir_plano_completo(sel_h, dados_h['ANO']): 
-                        st.rerun()
+                    if db.excluir_plano_completo(sel_h, dados_h['ANO']): st.rerun()
             else:
                 st.info("Nenhum plano encontrado para esta série.")
         else:
             st.info("📭 Acervo vazio.")
 
-    # --- ABA 3: MATRIZ CURRICULAR ATIVA (V27.2 - BUSCA ROBUSTA) ---
+    # --- ABA 4: MATRIZ CURRICULAR ATIVA ---
     with tab_matriz:
         st.subheader("📖 Matriz de Competências e Status de Execução")
         if not df_curriculo.empty:
             ano_c = st.selectbox("Série para Consulta:", [6, 7, 8, 9], key="matriz_ano_v27")
-            
-            # 1. Filtrar currículo do ano selecionado
             df_c = df_curriculo[df_curriculo['ANO'] == ano_c].copy()
-            
-            # 2. Capturar planos e normalizar texto para busca
-            # Filtra planos que contenham o número do ano (ex: "6" em "6º")
             planos_feitos = df_planos[df_planos['ANO'].astype(str).str.contains(str(ano_c))]
             texto_todos_planos = " ".join(planos_feitos['PLANO_TEXTO'].astype(str)).upper()
 
-            # 3. Função de Verificação Inteligente (Busca por palavras-chave)
             def checar_conclusao_robusta(conteudo_db):
                 if not texto_todos_planos: return "⏳ PENDENTE"
-                
                 conteudo_limpo = str(conteudo_db).upper()
-                # Teste 1: Busca exata (Literal)
-                if conteudo_limpo in texto_todos_planos:
-                    return "✅ CONCLUÍDO"
-                
-                # Teste 2: Busca por palavras-chave (Garante que termos técnicos batam)
-                # Removemos palavras curtas (e, de, o, os) e focamos nos termos principais
+                if conteudo_limpo in texto_todos_planos: return "✅ CONCLUÍDO"
                 palavras = [p for p in conteudo_limpo.replace(";", "").replace(",", "").split() if len(p) > 3]
                 if not palavras: return "⏳ PENDENTE"
-                
-                # Se pelo menos 2 palavras-chave importantes existirem no plano, consideramos concluído
                 matches = sum(1 for p in palavras if p in texto_todos_planos)
-                if matches >= 2:
-                    return "✅ CONCLUÍDO"
-                
-                return "⏳ PENDENTE"
+                return "✅ CONCLUÍDO" if matches >= 2 else "⏳ PENDENTE"
 
             df_c['STATUS'] = df_c['CONTEUDO_ESPECIFICO'].apply(checar_conclusao_robusta)
+            st.dataframe(df_c[['TRIMESTRE', 'EIXO', 'CONTEUDO_ESPECIFICO', 'STATUS']], use_container_width=True, hide_index=True)
 
-            # 4. Exibição da Tabela
-            st.dataframe(
-                df_c[['TRIMESTRE', 'EIXO', 'CONTEUDO_ESPECIFICO', 'STATUS']],
-                use_container_width=True,
-                hide_index=True,
-                column_config={
-                    "STATUS": st.column_config.TextColumn("Situação", width="small"),
-                    "CONTEUDO_ESPECIFICO": st.column_config.TextColumn("Conteúdo do Currículo", width="large")
-                }
-            )
-        else:
-            st.info("📭 Base de currículo não localizada.")
-
-    # --- ABA 4: ANALYTICS DE COBERTURA (V27.2 - KPI TRIMESTRAL) ---
+    # --- ABA 5: ANALYTICS DE COBERTURA ---
     with tab_auditoria:
         st.subheader("📈 Analytics de Cobertura Curricular")
         if not df_curriculo.empty:
             ano_m = st.selectbox("Analisar Série:", [6, 7, 8, 9], key="auditoria_ano_v27")
-            
-            # Processamento para o Gráfico
             df_m = df_curriculo[df_curriculo['ANO'] == ano_m].copy()
             planos_m = df_planos[df_planos['ANO'].astype(str).str.contains(str(ano_m))]
             texto_m = " ".join(planos_m['PLANO_TEXTO'].astype(str)).upper()
             
-            # Aplicando a mesma lógica robusta para o gráfico
             def concluido_num(x):
                 txt = str(x).upper()
                 if txt in texto_m: return 1
                 palavras = [p for p in txt.replace(";", "").replace(",", "").split() if len(p) > 3]
-                if palavras and sum(1 for p in palavras if p in texto_m) >= 2: return 1
-                return 0
+                return 1 if (palavras and sum(1 for p in palavras if p in texto_m) >= 2) else 0
 
             df_m['CONCLUIDO'] = df_m['CONTEUDO_ESPECIFICO'].apply(concluido_num)
-            
-            # Agrupamento por Trimestre
             progresso_trim = df_m.groupby('TRIMESTRE')['CONCLUIDO'].agg(['sum', 'count']).reset_index()
             progresso_trim['%'] = (progresso_trim['sum'] / progresso_trim['count'] * 100).round(1)
             
-            # KPIs de Topo (Cartões Modernos)
             c1, c2, c3 = st.columns(3)
             total_geral = (df_m['CONCLUIDO'].sum() / len(df_m) * 100)
             c1.metric("Cobertura Anual", f"{total_geral:.1f}%")
-            
-            # Progresso por Trimestre (I e II)
             p_i = progresso_trim[progresso_trim['TRIMESTRE'] == 'I']['%'].values[0] if 'I' in progresso_trim['TRIMESTRE'].values else 0
             c2.metric("Progresso I Trimestre", f"{p_i}%")
-            
             p_ii = progresso_trim[progresso_trim['TRIMESTRE'] == 'II']['%'].values[0] if 'II' in progresso_trim['TRIMESTRE'].values else 0
             c3.metric("Progresso II Trimestre", f"{p_ii}%")
 
-            # Gráfico de Barras
-            fig_cob = px.bar(
-                progresso_trim, 
-                x='TRIMESTRE', 
-                y='%', 
-                text='%',
-                title=f"Evolução da Cobertura - {ano_m}º Ano",
-                color='%',
-                color_continuous_scale='RdYlGn',
-                range_y=[0, 110]
-            )
-            st.plotly_chart(fig_cob, use_container_width=True)
-
-            # Lista de Pendências
-            with st.expander("🔍 Ver Conteúdos Pendentes (Próximos Passos)"):
-                pendentes = df_m[df_m['CONCLUIDO'] == 0][['TRIMESTRE', 'EIXO', 'CONTEUDO_ESPECIFICO']]
-                if not pendentes.empty:
-                    st.table(pendentes)
-                else:
-                    st.success("🎉 Excelente! Todo o currículo planejado.")
-        else:
-            st.info("Aguardando dados para gerar analytics.")
-
+            st.plotly_chart(px.bar(progresso_trim, x='TRIMESTRE', y='%', text='%', title=f"Evolução da Cobertura - {ano_m}º Ano", color='%', color_continuous_scale='RdYlGn', range_y=[0, 110]), use_container_width=True)
 
 # ==============================================================================
 # MÓDULO: DIÁRIO DE BORDO RÁPIDO V26.6 - COM REGISTRO DE BÔNUS ⭐
