@@ -547,24 +547,36 @@ if menu == "🧪 Criador de Aulas":
                 
                 if not planos_comp.empty:
                     sem_comp = c2.selectbox("Vincular ao Planejamento:", planos_comp["SEMANA"].tolist(), key=f"comp_sem_{v}")
-                    tipo_comp = st.radio("Objetivo do Material:", ["Fixação de Conteúdo", "Reforço/Recuperação", "Aprofundamento (Elite)"], horizontal=True, key=f"comp_tipo_{v}")
+                    
+                    c_q1, c_q2 = st.columns([1, 2])
+                    tipo_comp = c_q1.radio("Objetivo do Material:", ["Fixação de Conteúdo", "Reforço/Recuperação", "Aprofundamento (Elite)"], key=f"comp_tipo_{v}")
+                    qtd_q_comp = c_q2.slider("Nº de Questões:", 1, 20, 10, key=f"comp_q_{v}")
+                    
+                    instr_extra_comp = st.text_area("📝 Instruções de Desenvolvimento (Como a IA deve criar?):", 
+                                                   placeholder="Ex: Use situações-problema do cotidiano, foque em interpretação de texto matemático...", 
+                                                   key=f"comp_instr_{v}")
                     
                     if st.button("🚀 GERAR MATERIAL COMPLEMENTAR", use_container_width=True, type="primary"):
-                        with st.spinner("Gerando material extra..."):
+                        with st.spinner("Maestro Sosa arquitetando material extra..."):
                             plano_ref = planos_comp[planos_comp["SEMANA"] == sem_comp].iloc[0]
                             s_id = util.gerar_sosa_id("COMP", ano_comp, "I")
                             st.session_state.sosa_id_atual = s_id
                             st.session_state.lab_meta = {"ano": ano_comp, "trimestre": "I Trimestre", "tipo": "COMPLEMENTAR"}
                             
                             prompt_comp = (
-                                f"Gere um material COMPLEMENTAR de {tipo_comp}.\n"
-                                f"CONTEÚDO: {ai.extrair_tag(plano_ref['PLANO_TEXTO'], 'CONTEUDOS_ESPECIFICOS')}.\n"
-                                f"SÉRIE: {ano_comp}º Ano. ID: {s_id}.\n"
-                                f"ENTREGA: [PROFESSOR], [ALUNO], [GABARITO], [PEI]."
+                                f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {s_id}.\n"
+                                f"OBJETIVO: Gerar material COMPLEMENTAR de {tipo_comp}.\n"
+                                f"SÉRIE: {ano_comp}º Ano.\n"
+                                f"CONTEÚDO BASE: {ai.extrair_tag(plano_ref['PLANO_TEXTO'], 'CONTEUDOS_ESPECIFICOS')}.\n"
+                                f"QUANTIDADE: Gerar EXATAMENTE {qtd_q_comp} questões de múltipla escolha (A-E).\n"
+                                f"INSTRUÇÕES DO PROFESSOR: {instr_extra_comp}.\n\n"
+                                f"🚨 MISSÃO: Entregue um material denso e profissional.\n"
+                                f"ENTREGA: [PROFESSOR], [ALUNO], [GABARITO], [PEI], [GABARITO_PEI]."
                             )
-                            st.session_state.lab_temp = ai.gerar_ia("MAESTRO_SOSA_V28_ELITE", prompt_comp)
+                            st.session_state.lab_temp = ai.gerar_ia("MAESTRO_SOSA_V28_ELITE", prompt_comp, usar_busca=True)
                             st.rerun()
-                else: st.info("Crie um planejamento para esta série primeiro.")
+                else: 
+                    st.info("📭 Crie um planejamento para esta série no Ponto ID primeiro para vincular o conteúdo.")
 
         # --- ABA 5: ACERVO DE MATERIAIS ---
         with tab_acervo:
