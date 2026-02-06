@@ -612,7 +612,7 @@ if menu == "🧪 Criador de Aulas":
                             if db.excluir_registro_com_drive("DB_AULAS_PRONTAS", s_id_h): st.rerun()
 
 # ==============================================================================
-# MÓDULO: PLANEJAMENTO ESTRATÉGICO (PONTO ID) - ARQUITETURA V38.0 (VISÃO 360°)
+# MÓDULO: PLANEJAMENTO ESTRATÉGICO (PONTO ID) - ARQUITETURA V39.0 (SHIELD & REFINO)
 # ==============================================================================
 if menu == "📅 Planejamento (Ponto ID)":
     st.title("📅 Engenharia de Planejamento (Ponto ID)")
@@ -630,7 +630,7 @@ if menu == "📅 Planejamento (Ponto ID)":
 
     # --- ALERTA DE MODO REFINO ATIVO ---
     if "refino_ativo" in st.session_state:
-        st.info(f"🛠️ **MODO REFINO ATIVO:** O plano de **{st.session_state.refino_ativo['semana']}** está aberto para edição na aba **'🚀 Engenharia de Planejamento'**.")
+        st.info(f"🛠️ **MODO REFINO ATIVO:** Editando o plano de **{st.session_state.refino_ativo['semana']}**.")
 
     tab_gerar, tab_producao, tab_acervo, tab_matriz, tab_auditoria = st.tabs([
         "🚀 Engenharia de Planejamento", "🏗️ Dashboard de Produção", "📂 Gestão de Acervo (PIP)", "📖 Matriz Curricular Ativa", "📈 Auditoria de Cobertura"
@@ -638,7 +638,6 @@ if menu == "📅 Planejamento (Ponto ID)":
     
     with tab_gerar:
         is_refinando = "refino_ativo" in st.session_state
-        
         if is_refinando:
             if st.button("❌ CANCELAR REFINO E VOLTAR AO NOVO", use_container_width=True, key=f"cancel_ref_{v}"):
                 reset_planejamento()
@@ -667,30 +666,23 @@ if menu == "📅 Planejamento (Ponto ID)":
             f_eixo, f_cont, f_obj = "", "", ""
             if modo_p == "🎛️ Manual (Banco)":
                 st.markdown("#### 🎯 Matriz Curricular (Soberania do Banco)")
-                
-                # Opção de busca expandida (Ano atual + Anos anteriores para Sonda)
                 c_filt1, c_filt2 = st.columns([1, 2])
                 ano_busca = c_filt1.multiselect("Filtrar por Ano(s):", ["1","2","3","4","5","6","7","8","9"], default=[str(ano_p)], key=f"busc_ano_{v}")
-                
-                df_filtrado = df_curriculo[df_curriculo['ANO'].isin(ano_busca)]
+                df_filtrado = df_curriculo[df_curriculo['ANO'].astype(str).isin(ano_busca)]
                 
                 if not df_filtrado.empty:
                     lista_eixos = sorted(df_filtrado['EIXO'].unique().tolist())
                     sel_eixo = st.multiselect("1. Selecione o(s) Eixo(s):", lista_eixos, key=f"h_eixo_{v}")
-                    
                     if sel_eixo:
                         df_cont = df_filtrado[df_filtrado['EIXO'].isin(sel_eixo)]
                         lista_conts = sorted(df_cont['CONTEUDO_ESPECIFICO'].unique().tolist())
                         sel_cont = st.multiselect("2. Selecione os Conteúdos:", lista_conts, key=f"h_cont_{v}")
-                        
                         if sel_cont:
                             df_obj = df_cont[df_cont['CONTEUDO_ESPECIFICO'].isin(sel_cont)]
                             lista_objs = sorted(df_obj['OBJETIVOS'].unique().tolist())
                             sel_obj = st.multiselect("3. Selecione os Objetivos:", lista_objs, key=f"h_obj_{v}")
-                            
-                            f_eixo = " / ".join(sel_eixo)
-                            f_cont = " / ".join(sel_cont)
-                            f_obj = " \n ".join(sel_obj)
+                            f_eixo, f_cont, f_obj = " / ".join(sel_eixo), " / ".join(sel_cont), " \n ".join(sel_obj)
+                ctx_ia = f"MÉTODO MANUAL. EIXO: {f_eixo}. CONTEÚDO: {f_cont}. OBJETIVOS: {f_obj}."
             else:
                 st.markdown("#### 📖 Referência Bibliográfica")
                 cx1, cx2 = st.columns([2, 1])
@@ -710,22 +702,16 @@ if menu == "📅 Planejamento (Ponto ID)":
         # --- 4. EDITOR E REFINADOR (SÓ APARECE SE GERADO) ---
         if "p_temp" in st.session_state:
             st.markdown("---")
-            
-            # --- REFINADOR MAESTRO V39 (COM RESET DE VERSÃO) ---
             with st.container(border=True):
                 st.subheader("🤖 Refinador Maestro")
                 cmd_refine = st.chat_input("Solicite ajustes no plano...", key=f"SOSA_CHAT_PLAN_{v}")
                 if cmd_refine:
                     with st.spinner("Maestro Sosa realizando reengenharia..."):
-                        # Passamos o texto ATUAL para ser refinado
                         novo_texto = ai.gerar_ia("REFINADOR_PEDAGOGICO", f"ORDEM: {cmd_refine}\n\nATUAL:\n{st.session_state.p_temp}")
                         if novo_texto and "[BNCC_CODE]" in novo_texto:
                             st.session_state.p_temp = novo_texto
-                            # INCREMENTA A VERSÃO PARA FORÇAR O STREAMLIT A ATUALIZAR AS CAIXAS DE TEXTO
-                            st.session_state.v_plano += 1 
+                            st.session_state.v_plano += 1 # GATILHO DE ATUALIZAÇÃO VISUAL
                             st.rerun()
-                        else:
-                            st.error("⚠️ A IA não retornou um formato válido. Tente novamente com um comando mais específico.")
 
             txt_bruto = st.session_state.p_temp
             t_ed, t_vis = st.tabs(["✏️ Editor de Texto", "👁️ Estrutura de Regência"])
@@ -792,7 +778,7 @@ if menu == "📅 Planejamento (Ponto ID)":
             else: st.info("📭 Nenhum plano pendente.")
         else: st.info("📭 Banco de planos vazio.")
 
-    # --- ABA 3: GESTÃO DE ACERVO (VISÃO 360°) ---
+    # --- ABA 3: GESTÃO DE ACERVO ---
     with tab_acervo:
         st.subheader("📂 Repositório de Planos Estratégicos")
         if not df_planos.empty:
@@ -820,142 +806,90 @@ if menu == "📅 Planejamento (Ponto ID)":
                     if "https" in str(dados_h["LINK_DRIVE"]): 
                         st.link_button("🚀 ABRIR NO DRIVE", str(dados_h["LINK_DRIVE"]), use_container_width=True)
 
-                # --- VISUALIZAÇÃO 360° DOS DETALHES ---
                 with st.container(border=True):
                     st.markdown(f"### 🎯 {ai.extrair_tag(raw_h, 'CONTEUDO_GERAL')}")
                     st.caption(f"🆔 **BNCC:** {ai.extrair_tag(raw_h, 'BNCC_CODE')}")
-                    
                     col_info1, col_info2 = st.columns(2)
-                    with col_info1:
-                        st.info(f"**Conteúdos:**\n{ai.extrair_tag(raw_h, 'CONTEUDOS_ESPECIFICOS')}")
-                    with col_info2:
-                        st.success(f"**Objetivos:**\n{ai.extrair_tag(raw_h, 'OBJETIVOS_ENSINO')}")
-                    
+                    with col_info1: st.info(f"**Conteúdos:**\n{ai.extrair_tag(raw_h, 'CONTEUDOS_ESPECIFICOS')}")
+                    with col_info2: st.success(f"**Objetivos:**\n{ai.extrair_tag(raw_h, 'OBJETIVOS_ENSINO')}")
                     st.divider()
-                    
                     c_v1, c_v2 = st.columns(2)
-                    with c_v1: 
-                        st.markdown("##### 📘 Aula 1")
-                        st.write(ai.extrair_tag(raw_h, "AULA_1"))
-                    with c_v2: 
-                        st.markdown("##### 📗 Aula 2")
-                        st.write(ai.extrair_tag(raw_h, "AULA_2"))
-                    
+                    with c_v1: st.markdown("##### 📘 Aula 1"); st.write(ai.extrair_tag(raw_h, "AULA_1"))
+                    with c_v2: st.markdown("##### 📗 Aula 2"); st.write(ai.extrair_tag(raw_h, "AULA_2"))
                     sab_txt = ai.extrair_tag(raw_h, "SABADO_LETIVO")
-                    if sab_txt and "N/A" not in sab_txt.upper():
-                        st.warning(f"##### 🗓️ Sábado Letivo\n{sab_txt}")
-                    
+                    if sab_txt and "N/A" not in sab_txt.upper(): st.warning(f"##### 🗓️ Sábado Letivo\n{sab_txt}")
                     st.divider()
-                    
                     c_v3, c_v4 = st.columns(2)
-                    with c_v3:
-                        st.markdown("##### 📝 Avaliação")
-                        st.write(ai.extrair_tag(raw_h, "AVALIACAO"))
-                    with c_v4:
-                        st.markdown("##### ♿ Estratégia PEI")
-                        st.write(ai.extrair_tag(raw_h, "ADAPTACAO_PEI"))
+                    with c_v3: st.markdown("##### 📝 Avaliação"); st.write(ai.extrair_tag(raw_h, "AVALIACAO"))
+                    with c_v4: st.markdown("##### ♿ Estratégia PEI"); st.write(ai.extrair_tag(raw_h, "ADAPTACAO_PEI"))
                 
                 if st.button("🗑️ EXCLUIR PLANO", use_container_width=True, key=f"btn_del_plan_{v}"):
                     if db.excluir_plano_completo(sel_h, dados_h["ANO"]): st.rerun()
             else: st.info("Nenhum plano encontrado.")
         else: st.info("📭 Acervo vazio.")
 
-
- # --- ABA 4: MATRIZ CURRICULAR ATIVA (PRECISÃO SOBERANA V35.2) ---
+    # --- ABA 4: MATRIZ CURRICULAR ATIVA ---
     with tab_matriz:
         st.subheader("📖 Matriz de Competências e Status de Execução")
         if not df_curriculo.empty:
             ano_c = st.selectbox("Série para Consulta:", [1, 2, 3, 4, 5, 6, 7, 8, 9], index=5, key="matriz_ano_v35")
-            
-            # CORREÇÃO 1: Filtro de Ano Blindado (converte tudo para string para não haver erro de tipo)
             df_c = df_curriculo[df_curriculo["ANO"].astype(str).str.contains(str(ano_c))].copy()
-            
-            # Captura os planos filtrando pelo ano (ex: "6" ou "6º")
             planos_feitos = df_planos[df_planos["ANO"].astype(str).str.contains(str(ano_c))]
-            
-            lista_conteudos_oficiais = []
-            for p_txt in planos_feitos["PLANO_TEXTO"]:
-                cont_extraido = ai.extrair_tag(p_txt, "CONTEUDOS_ESPECIFICOS").upper()
-                lista_conteudos_oficiais.append(cont_extraido)
-            
+            lista_conteudos_oficiais = [ai.extrair_tag(p, "CONTEUDOS_ESPECIFICOS").upper() for p in planos_feitos["PLANO_TEXTO"]]
             texto_soberano_planos = " | ".join(lista_conteudos_oficiais)
 
             def checar_conclusao_cirurgica(conteudo_db):
                 if not texto_soberano_planos: return "⏳ PENDENTE"
-                
-                # Função interna para limpar ruídos (remove > , - , . e espaços extras)
-                def limpar(t):
-                    return re.sub(r'[^A-Z0-9]', '', str(t).upper())
-
+                def limpar(t): return re.sub(r'[^A-Z0-9]', '', str(t).upper())
                 target_limpo = limpar(conteudo_db)
                 soberano_limpo = limpar(texto_soberano_planos)
-                
-                # Teste 1: Busca Direta no texto normalizado
-                if target_limpo in soberano_limpo:
-                    return "✅ CONCLUÍDO"
-                
-                # Teste 2: Quebra por palavras-chave (mínimo 2 palavras longas)
+                if target_limpo in soberano_limpo: return "✅ CONCLUÍDO"
                 palavras = [p for p in str(conteudo_db).upper().replace(";", "").replace(",", "").split() if len(p) > 4]
                 if not palavras: return "⏳ PENDENTE"
-                
                 matches = sum(1 for p in palavras if limpar(p) in soberano_limpo)
                 return "✅ CONCLUÍDO" if matches >= 2 else "⏳ PENDENTE"
 
             df_c["STATUS"] = df_c["CONTEUDO_ESPECIFICO"].apply(checar_conclusao_cirurgica)
-            
-            # Exibição da Tabela
-            st.dataframe(
-                df_c[["TRIMESTRE", "EIXO", "CONTEUDO_ESPECIFICO", "STATUS"]],
-                use_container_width=True,
-                hide_index=True,
-                column_config={
-                    "STATUS": st.column_config.TextColumn("Situação", width="small"),
-                    "CONTEUDO_ESPECIFICO": st.column_config.TextColumn("Conteúdo do Currículo", width="large")
-                }
-            )
-        else:
-            st.info("📭 Base de currículo não localizada.")
+            st.dataframe(df_c[["TRIMESTRE", "EIXO", "CONTEUDO_ESPECIFICO", "STATUS"]], use_container_width=True, hide_index=True)
 
-    # --- ABA 5: ANALYTICS DE COBERTURA (SINCRO TOTAL V35) ---
+    # --- ABA 5: ANALYTICS DE COBERTURA (CORREÇÃO TYPEERROR) ---
     with tab_auditoria:
         st.subheader("📈 Analytics de Cobertura Curricular")
         if not df_curriculo.empty:
             ano_m = st.selectbox("Analisar Série:", [1, 2, 3, 4, 5, 6, 7, 8, 9], index=5, key="auditoria_ano_v35")
-            df_m = df_curriculo[df_curriculo["ANO"] == int(ano_m)].copy()
-            
+            df_m = df_curriculo[df_curriculo["ANO"].astype(str).str.contains(str(ano_m))].copy()
             planos_m = df_planos[df_planos["ANO"].astype(str).str.contains(str(ano_m))]
             lista_cont_m = [ai.extrair_tag(t, "CONTEUDOS_ESPECIFICOS").upper() for t in planos_m["PLANO_TEXTO"]]
             texto_m_soberano = " | ".join(lista_cont_m)
             
             def concluido_num_cirurgico(x):
-                txt = str(x).upper().strip()
-                if txt in texto_m_soberano: return 1
-                palavras = [p for p in txt.replace(";", "").replace(",", "").split() if len(p) > 3]
-                return 1 if (palavras and sum(1 for p in palavras if p in texto_m_soberano) >= 2) else 0
+                def limpar(t): return re.sub(r'[^A-Z0-9]', '', str(t).upper())
+                txt = limpar(x)
+                if txt in limpar(texto_m_soberano): return 1
+                palavras = [p for p in str(x).upper().split() if len(p) > 4]
+                return 1 if (palavras and sum(1 for p in palavras if limpar(p) in limpar(texto_m_soberano)) >= 2) else 0
 
             df_m["CONCLUIDO"] = df_m["CONTEUDO_ESPECIFICO"].apply(concluido_num_cirurgico)
             progresso_trim = df_m.groupby("TRIMESTRE")["CONCLUIDO"].agg(["sum", "count"]).reset_index()
-            progresso_trim["%"] = (progresso_trim["sum"] / progresso_trim["count"] * 100).round(1)
             
-            c1, c2, c3 = st.columns(3)
-            total_geral = (df_m["CONCLUIDO"].sum() / len(df_m) * 100)
-            c1.metric("Cobertura Anual", f"{total_geral:.1f}%")
-            
-            p_i = progresso_trim[progresso_trim["TRIMESTRE"] == "I"]["%"].values[0] if "I" in progresso_trim["TRIMESTRE"].values else 0
-            c2.metric("Progresso I Trimestre", f"{p_i}%")
-            
-            p_ii = progresso_trim[progresso_trim["TRIMESTRE"] == "II"]["%"].values[0] if "II" in progresso_trim["TRIMESTRE"].values else 0
-            c3.metric("Progresso II Trimestre", f"{p_ii}%")
+            if not progresso_trim.empty:
+                # VACINA CONTRA TYPEERROR: Força conversão para numérico antes do cálculo
+                progresso_trim["sum"] = pd.to_numeric(progresso_trim["sum"], errors='coerce').fillna(0)
+                progresso_trim["count"] = pd.to_numeric(progresso_trim["count"], errors='coerce').fillna(1)
+                
+                progresso_trim["%"] = (progresso_trim["sum"] / progresso_trim["count"] * 100)
+                # Converte o resultado final para float antes de arredondar
+                progresso_trim["%"] = pd.to_numeric(progresso_trim["%"]).round(1)
+                
+                c1, c2, c3 = st.columns(3)
+                total_geral = (progresso_trim["sum"].sum() / progresso_trim["count"].sum() * 100) if progresso_trim["count"].sum() > 0 else 0
+                c1.metric("Cobertura Anual", f"{total_geral:.1f}%")
+                p_i = progresso_trim[progresso_trim["TRIMESTRE"] == "I"]["%"].values[0] if "I" in progresso_trim["TRIMESTRE"].values else 0
+                c2.metric("Progresso I Trimestre", f"{p_i}%")
+                p_ii = progresso_trim[progresso_trim["TRIMESTRE"] == "II"]["%"].values[0] if "II" in progresso_trim["TRIMESTRE"].values else 0
+                c3.metric("Progresso II Trimestre", f"{p_ii}%")
 
-            st.plotly_chart(px.bar(
-                progresso_trim, x="TRIMESTRE", y="%", text="%", 
-                title=f"Evolução da Cobertura Real - {ano_m}º Ano",
-                color="%", color_continuous_scale="RdYlGn", range_y=[0, 110]
-            ), use_container_width=True)
-            
-            with st.expander("🔍 Ver Conteúdos Pendentes"):
-                pendentes = df_m[df_m["CONCLUIDO"] == 0][["TRIMESTRE", "EIXO", "CONTEUDO_ESPECIFICO"]]
-                st.table(pendentes)
+                st.plotly_chart(px.bar(progresso_trim, x="TRIMESTRE", y="%", text="%", title=f"Evolução da Cobertura Real - {ano_m}º Ano", color="%", color_continuous_scale="RdYlGn", range_y=[0, 110]), use_container_width=True)
             
 # ==============================================================================
 # MÓDULO: DIÁRIO DE BORDO RÁPIDO V26.6 - COM REGISTRO DE BÔNUS ⭐
