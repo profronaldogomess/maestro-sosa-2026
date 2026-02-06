@@ -72,9 +72,11 @@ def carregar_tudo():
                 if "LINK_DRIVE" not in df.columns: df["LINK_DRIVE"] = ""
 
             elif nome == "DB_CURRICULO":
-                # VACINA SOSA: Garante que o ANO do currículo seja numérico para os filtros
+                # VACINA SOSA: Garante que o ANO seja sempre string para comparação
                 if "ANO" in df.columns:
-                    df['ANO'] = pd.to_numeric(df['ANO'], errors='coerce')
+                    df['ANO'] = df['ANO'].astype(str).str.replace('.0', '', regex=False)
+                # Limpeza de espaços em branco invisíveis que matam o filtro
+                df = df.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
 
             return df
         except Exception as e: 
