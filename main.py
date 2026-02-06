@@ -612,7 +612,7 @@ if menu == "🧪 Criador de Aulas":
                             if db.excluir_registro_com_drive("DB_AULAS_PRONTAS", s_id_h): st.rerun()
 
 # ==============================================================================
-# MÓDULO: PLANEJAMENTO ESTRATÉGICO (PONTO ID) - ARQUITETURA V37.0 (CHAVES ÚNICAS)
+# MÓDULO: PLANEJAMENTO ESTRATÉGICO (PONTO ID) - ARQUITETURA V38.0 (VISÃO 360°)
 # ==============================================================================
 if menu == "📅 Planejamento (Ponto ID)":
     st.title("📅 Engenharia de Planejamento (Ponto ID)")
@@ -628,11 +628,21 @@ if menu == "📅 Planejamento (Ponto ID)":
     if "v_plano" not in st.session_state: st.session_state.v_plano = 1
     v = st.session_state.v_plano 
 
+    # --- ALERTA DE MODO REFINO ATIVO ---
+    if "refino_ativo" in st.session_state:
+        st.info(f"🛠️ **MODO REFINO ATIVO:** O plano de **{st.session_state.refino_ativo['semana']}** está aberto para edição na aba **'🚀 Engenharia de Planejamento'**.")
+
     tab_gerar, tab_producao, tab_acervo, tab_matriz, tab_auditoria = st.tabs([
         "🚀 Engenharia de Planejamento", "🏗️ Dashboard de Produção", "📂 Gestão de Acervo (PIP)", "📖 Matriz Curricular Ativa", "📈 Auditoria de Cobertura"
     ])
     
     with tab_gerar:
+        is_refinando = "refino_ativo" in st.session_state
+        
+        if is_refinando:
+            if st.button("❌ CANCELAR REFINO E VOLTAR AO NOVO", use_container_width=True, key=f"cancel_ref_{v}"):
+                reset_planejamento()
+        
         # --- 1. STATUS E CALENDÁRIO ---
         with st.container(border=True):
             st.markdown("### 🛡️ 1. Status e Calendário")
@@ -658,26 +668,19 @@ if menu == "📅 Planejamento (Ponto ID)":
             if modo_p == "🎛️ Manual (Banco)":
                 st.markdown("#### 🎯 Matriz Curricular (Funil Hierárquico)")
                 df_ano = df_curriculo[df_curriculo["ANO"] == int(ano_p)]
-                
                 if not df_ano.empty:
                     c_h1, c_h2 = st.columns(2)
                     lista_eixos = sorted(df_ano["EIXO"].unique().tolist())
                     sel_eixo = c_h1.multiselect("1. Eixo:", lista_eixos, key=f"h_eixo_{v}")
-                    
                     if sel_eixo:
                         df_cont = df_ano[df_ano["EIXO"].isin(sel_eixo)]
                         lista_conts = sorted(df_cont["CONTEUDO_ESPECIFICO"].unique().tolist())
                         sel_cont = c_h2.multiselect("2. Conteúdos:", lista_conts, key=f"h_cont_{v}")
-                        
                         if sel_cont:
                             df_obj = df_cont[df_cont["CONTEUDO_ESPECIFICO"].isin(sel_cont)]
                             lista_objs = sorted(df_obj["OBJETIVOS"].unique().tolist())
                             sel_obj = st.multiselect("3. Objetivos:", lista_objs, key=f"h_obj_{v}")
-                            
-                            f_eixo = " / ".join(sel_eixo)
-                            f_cont = " / ".join(sel_cont)
-                            f_obj = " \n ".join(sel_obj)
-                
+                            f_eixo, f_cont, f_obj = " / ".join(sel_eixo), " / ".join(sel_cont), " \n ".join(sel_obj)
                 ctx_ia = f"MÉTODO MANUAL. EIXO: {f_eixo}. CONTEÚDO: {f_cont}. OBJETIVOS: {f_obj}."
             else:
                 st.markdown("#### 📖 Referência Bibliográfica")
@@ -691,20 +694,13 @@ if menu == "📅 Planejamento (Ponto ID)":
 
         if st.button("🚀 COMPILAR PLANEJAMENTO BNCC", use_container_width=True, type="primary", key=f"btn_compilar_{v}"):
             with st.spinner("Maestro SOSA processando..."):
-                prompt = (
-                    f"SÉRIE: {ano_p}º Ano. SEMANA: {sem_limpa}. TRIMESTRE: {trim_atual}.\n"
-                    f"DADOS SOBERANOS: EIXO({f_eixo}), CONTEÚDO({f_cont}), OBJETIVOS({f_obj}).\n"
-                    f"ESTRATÉGIA: {strat}.\n\n"
-                    f"MISSÃO: Gere o plano com ciclos Início/Meio/Fim. Use tags [TAG] puras."
-                )
+                prompt = f"ANO: {ano_p}º. SEMANA: {sem_limpa}. TRIMESTRE: {trim_atual}. CARGA: {carga_horaria}. SABADO: {tem_sabado}. {ctx_ia}. ESTRATÉGIA: {strat}."
                 st.session_state.p_temp = ai.gerar_ia("PLANE_PEDAGOGICO", prompt)
                 st.rerun()
 
-        # --- 4. EDITOR E REFINADOR (SÓ APARECE SE GERADO) ---
+        # --- 4. EDITOR E REFINADOR ---
         if "p_temp" in st.session_state:
             st.markdown("---")
-            
-            # --- REFINADOR COM CHAVE ÚNICA SOSA ---
             with st.container(border=True):
                 st.subheader("🤖 Refinador Maestro")
                 cmd_refine = st.chat_input("Solicite ajustes no plano...", key=f"SOSA_CHAT_PLAN_{v}")
@@ -712,8 +708,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                     with st.spinner("Refinando..."):
                         novo_texto = ai.gerar_ia("REFINADOR_PEDAGOGICO", f"ORDEM: {cmd_refine}\n\nATUAL:\n{st.session_state.p_temp}")
                         if novo_texto:
-                            st.session_state.p_temp = novo_texto
-                            st.rerun()
+                            st.session_state.p_temp = novo_texto; st.rerun()
 
             txt_bruto = st.session_state.p_temp
             t_ed, t_vis = st.tabs(["✏️ Editor de Texto", "👁️ Estrutura de Regência"])
@@ -740,7 +735,6 @@ if menu == "📅 Planejamento (Ponto ID)":
                         db.excluir_plano_completo(sem_limpa, final_ano_str)
                         metodologia_unificada = f"[AULA_1]\n{ed_a1}\n\n[AULA_2]\n{ed_a2}"
                         if ed_a3 != "N/A": metodologia_unificada += f"\n\n[SABADO_LETIVO]\n{ed_a3}"
-                        
                         dados_docx = {"geral": f"[{ed_bncc}] {ed_geral}", "especificos": ed_espec, "objetivos": ed_objs, "metodologia": metodologia_unificada, "avaliacao": ed_ava, "pei": ed_pei}
                         doc_io = exporter.gerar_docx_plano_pedagogico_ELITE(nome_arquivo, dados_docx, {"ano": final_ano_str, "semana": sem_limpa, "trimestre": trim_atual})
                         link_drive = db.subir_e_converter_para_google_docs(doc_io, nome_arquivo, trimestre=trim_atual, categoria=final_ano_str, semana=sem_limpa, modo="PLANEJAMENTO")
@@ -781,7 +775,7 @@ if menu == "📅 Planejamento (Ponto ID)":
             else: st.info("📭 Nenhum plano pendente.")
         else: st.info("📭 Banco de planos vazio.")
 
-    # --- ABA 3: GESTÃO DE ACERVO ---
+    # --- ABA 3: GESTÃO DE ACERVO (VISÃO 360°) ---
     with tab_acervo:
         st.subheader("📂 Repositório de Planos Estratégicos")
         if not df_planos.empty:
@@ -799,7 +793,8 @@ if menu == "📅 Planejamento (Ponto ID)":
                 with col_btn1:
                     if st.button("🔄 REABRIR PARA REFINO", use_container_width=True, key=f"btn_reopen_{v}"):
                         st.session_state.refino_ativo = {"ano": dados_h["ANO"], "semana": sel_h}
-                        st.session_state.p_temp = raw_h; st.rerun()
+                        st.session_state.p_temp = raw_h
+                        st.success("✅ Plano carregado! Clique na aba '🚀 Engenharia de Planejamento' para editar.")
                 with col_btn2:
                     if st.button("🚀 MANDAR PARA PRODUÇÃO", use_container_width=True, type="primary", key=f"btn_hub_act_{sel_h}"):
                         if db.ativar_plano_no_hub(sel_h, dados_h["ANO"]):
@@ -808,13 +803,40 @@ if menu == "📅 Planejamento (Ponto ID)":
                     if "https" in str(dados_h["LINK_DRIVE"]): 
                         st.link_button("🚀 ABRIR NO DRIVE", str(dados_h["LINK_DRIVE"]), use_container_width=True)
 
+                # --- VISUALIZAÇÃO 360° DOS DETALHES ---
                 with st.container(border=True):
-                    st.markdown(f"#### 🎯 {ai.extrair_tag(raw_h, 'CONTEUDO_GERAL')}")
-                    st.write(f"**Conteúdos:** {ai.extrair_tag(raw_h, 'CONTEUDOS_ESPECIFICOS')}")
+                    st.markdown(f"### 🎯 {ai.extrair_tag(raw_h, 'CONTEUDO_GERAL')}")
+                    st.caption(f"🆔 **BNCC:** {ai.extrair_tag(raw_h, 'BNCC_CODE')}")
+                    
+                    col_info1, col_info2 = st.columns(2)
+                    with col_info1:
+                        st.info(f"**Conteúdos:**\n{ai.extrair_tag(raw_h, 'CONTEUDOS_ESPECIFICOS')}")
+                    with col_info2:
+                        st.success(f"**Objetivos:**\n{ai.extrair_tag(raw_h, 'OBJETIVOS_ENSINO')}")
+                    
                     st.divider()
+                    
                     c_v1, c_v2 = st.columns(2)
-                    with c_v1: st.markdown("##### 📘 Aula 1"); st.write(ai.extrair_tag(raw_h, "AULA_1"))
-                    with c_v2: st.markdown("##### 📗 Aula 2"); st.write(ai.extrair_tag(raw_h, "AULA_2"))
+                    with c_v1: 
+                        st.markdown("##### 📘 Aula 1")
+                        st.write(ai.extrair_tag(raw_h, "AULA_1"))
+                    with c_v2: 
+                        st.markdown("##### 📗 Aula 2")
+                        st.write(ai.extrair_tag(raw_h, "AULA_2"))
+                    
+                    sab_txt = ai.extrair_tag(raw_h, "SABADO_LETIVO")
+                    if sab_txt and "N/A" not in sab_txt.upper():
+                        st.warning(f"##### 🗓️ Sábado Letivo\n{sab_txt}")
+                    
+                    st.divider()
+                    
+                    c_v3, c_v4 = st.columns(2)
+                    with c_v3:
+                        st.markdown("##### 📝 Avaliação")
+                        st.write(ai.extrair_tag(raw_h, "AVALIACAO"))
+                    with c_v4:
+                        st.markdown("##### ♿ Estratégia PEI")
+                        st.write(ai.extrair_tag(raw_h, "ADAPTACAO_PEI"))
                 
                 if st.button("🗑️ EXCLUIR PLANO", use_container_width=True, key=f"btn_del_plan_{v}"):
                     if db.excluir_plano_completo(sel_h, dados_h["ANO"]): st.rerun()
