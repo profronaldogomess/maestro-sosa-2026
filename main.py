@@ -702,25 +702,42 @@ if menu == "📅 Planejamento (Ponto ID)":
 
     with tab_producao:
         st.subheader("🏗️ Linha de Montagem de Materiais")
+        
         if not df_planos.empty:
-            planos_ativos = df_planos[df_planos['TURMA'] == "HUB_ATIVO"].iloc[::-1]
-            for _, row in planos_ativos.iterrows():
-                with st.container(border=True):
-                    c_p1, c_p2, c_p3 = st.columns([1.5, 2, 1])
-                    c_p1.markdown(f"**{row['SEMANA']} ({row['ANO']})**")
-                    c_p2.caption(f"🎯 {ai.extrair_tag(row['PLANO_TEXTO'], 'CONTEUDO_GERAL')}")
-                    
-                    if c_p3.button("🧪 GERAR MATERIAIS", key=f"gen_hub_{row.name}"):
-                        # Lógica de "Empurrar" para o Criador de Aulas
-                        st.session_state.lab_temp = row['PLANO_TEXTO']
-                        st.session_state.sosa_id_atual = util.gerar_sosa_id("AULA", row['ANO'], row['TRIMESTRE'])
-                        st.session_state.lab_meta = {"ano": row['ANO'].replace('º',''), "trimestre": row['TRIMESTRE'], "tipo": "PRODUÇÃO_HUB"}
-                        st.info("Redirecionando para o Laboratório...")
-                        time.sleep(1)
-                        # Aqui você mudaria o menu manualmente ou daria a instrução
-                        st.warning("Clique em '🧪 Criador de Aulas' para finalizar a produção.")
+            # FILTRO ROBUSTO: Procura "HUB_ATIVO" ignorando maiúsculas/minúsculas e espaços
+            planos_ativos = df_planos[
+                df_planos['TURMA'].astype(str).str.contains("HUB_ATIVO", case=False, na=False)
+            ].iloc[::-1]
+            
+            if not planos_ativos.empty:
+                for _, row in planos_ativos.iterrows():
+                    with st.container(border=True):
+                        c_p1, c_p2, c_p3 = st.columns([1.5, 2, 1])
+                        
+                        # Identificação do Plano
+                        c_p1.markdown(f"**{row['SEMANA']}**")
+                        c_p1.caption(f"Série: {row['ANO']}")
+                        
+                        # Conteúdo extraído via SOSA-ID
+                        eixo_card = ai.extrair_tag(row['PLANO_TEXTO'], 'CONTEUDO_GERAL')
+                        c_p2.markdown(f"🎯 **Eixo:** {eixo_card}")
+                        
+                        # Botão de Disparo para o Criador
+                        if c_p3.button("🧪 GERAR MATERIAIS", key=f"gen_hub_{row.name}", use_container_width=True):
+                            # "Empurra" os dados para o estado global do Criador de Aulas
+                            st.session_state.lab_temp = row['PLANO_TEXTO']
+                            st.session_state.sosa_id_atual = util.gerar_sosa_id("AULA", row['ANO'], row['TRIMESTRE'])
+                            st.session_state.lab_meta = {
+                                "ano": str(row['ANO']).replace('º',''), 
+                                "trimestre": row['TRIMESTRE'], 
+                                "tipo": "PRODUÇÃO_HUB"
+                            }
+                            st.success("✅ Conteúdo enviado ao Laboratório!")
+                            st.info("Clique em '🧪 Criador de Aulas' no menu lateral para finalizar.")
+            else:
+                st.info("📭 Nenhum plano pendente. Finalize um planejamento para disparar a produção.")
         else:
-            st.info("Nenhum plano ativo aguardando produção.")
+            st.info("📭 O banco de planos está vazio.")
 
     # --- ABA 2: GESTÃO DE ACERVO (PIP) ---
     with tab_acervo:
