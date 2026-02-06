@@ -28,43 +28,87 @@ def adicionar_texto_formatado(paragraph, texto):
             paragraph.add_run(parte)
 
 # ==============================================================================
-# 1. MATERIAL DO ALUNO (VERSÃO ELITE V41 - FORMATADA)
+# 1. MATERIAL DO ALUNO REGULAR (VERSÃO ELITE V42 - CABEÇALHO PADRONIZADO)
 # ==============================================================================
 def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     import re, io, os
     from docx import Document
-    from docx.shared import Inches, Pt
+    from docx.shared import Inches, Pt, RGBColor
     from docx.enum.text import WD_ALIGN_PARAGRAPH
     from docx.enum.section import WD_SECTION
+    from docx.enum.table import WD_ALIGN_VERTICAL
+    from docx.oxml.ns import qn
+    from docx.oxml import OxmlElement
+
+    def set_row_height(row, height_pt):
+        tr = row._tr
+        trPr = tr.get_or_add_trPr()
+        trHeight = OxmlElement('w:trHeight')
+        trHeight.set(qn('w:val'), str(int(height_pt * 20))) 
+        trHeight.set(qn('w:hRule'), "atLeast")
+        trPr.append(trHeight)
+
+    def adicionar_texto_formatado(paragraph, texto):
+        """Converte padrões **texto** em negrito real no Word"""
+        partes = re.split(r'(\*\*.*?\*\*)', texto)
+        for parte in partes:
+            if parte.startswith('**') and parte.endswith('**'):
+                run = paragraph.add_run(parte.replace('**', ''))
+                run.bold = True
+            else:
+                paragraph.add_run(parte)
 
     file_stream = io.BytesIO()
     doc = Document()
     
-    # Estilo Global
+    # --- CONFIGURAÇÃO DE ESTILO GLOBAL ---
     style = doc.styles['Normal']
     style.font.name = 'Arial'
     style.font.size = Pt(11)
     style.paragraph_format.line_spacing = 1.15
-    style.paragraph_format.space_after = Pt(10)
+    style.paragraph_format.space_after = Pt(8)
 
     section = doc.sections[0]
     section.top_margin, section.bottom_margin = Inches(0.4), Inches(0.4)
     section.left_margin, section.right_margin = Inches(0.5), Inches(0.5)
 
-    # Cabeçalho (Simplificado para o exemplo, mantenha sua lógica de tabela se preferir)
-    p_header = doc.add_paragraph()
-    p_header.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run_h = p_header.add_run(f"ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA\nATIVIDADE DE SALA - {info.get('ano', '6º')}")
-    run_h.bold = True
-    doc.add_paragraph("-" * 50)
+    # --- 1. CABEÇALHO PADRONIZADO (IGUAL AO PEI) ---
+    header_table = doc.add_table(rows=3, cols=5)
+    header_table.style = 'Table Grid'
+    widths = [Inches(0.9), Inches(2.8), Inches(1.0), Inches(1.4), Inches(1.5)]
+    for i, w in enumerate(widths): header_table.columns[i].width = w
+    
+    # Mesclagens para Identidade Visual
+    c_logo = header_table.cell(0, 0).merge(header_table.cell(2, 0))
+    header_table.cell(0, 1).merge(header_table.cell(0, 3)).paragraphs[0].add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA").font.bold = True
+    header_table.cell(0, 4).paragraphs[0].add_run(info.get('trimestre', 'I TRIMESTRE')).font.bold = True
+    
+    header_table.cell(1, 1).merge(header_table.cell(1, 4)).paragraphs[0].add_run("ALUNO(A):").font.size = Pt(11)
+    
+    header_table.cell(2, 1).paragraphs[0].add_run("PROF: Ronaldo Gomes").font.size = Pt(10)
+    header_table.cell(2, 2).paragraphs[0].add_run(f"TURMA: {info.get('ano', '')}").font.size = Pt(10)
+    header_table.cell(2, 3).paragraphs[0].add_run("DATA:").font.size = Pt(10)
+    header_table.cell(2, 4).paragraphs[0].add_run("ATIVIDADE DE SALA").font.bold = True
 
-    # Ativação de Colunas Nativas
+    # Inserção da Logo
+    logo_path = "logo_escola.png" if os.path.exists("logo_escola.png") else "logo.png"
+    if os.path.exists(logo_path):
+        c_logo.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+        p_logo = c_logo.paragraphs[0]
+        p_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p_logo.add_run().add_picture(logo_path, width=Inches(0.75))
+
+    for row in header_table.rows: set_row_height(row, 25)
+    doc.add_paragraph()
+
+    # --- 2. ATIVAÇÃO DE COLUNAS NATIVAS ---
     new_section = doc.add_section(WD_SECTION.CONTINUOUS)
     sectPr = new_section._sectPr
     cols = sectPr.xpath('./w:cols')[0]
     cols.set(qn('w:num'), '2')
     cols.set(qn('w:space'), '720')
 
+    # --- 3. PROCESSAMENTO DE CONTEÚDO COM NEGRITO E ESPAÇAMENTO ---
     linhas = conteudo.split('\n')
     for linha in linhas:
         l_s = linha.strip()
@@ -72,8 +116,8 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
         
         p = doc.add_paragraph()
         p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-        
-        # Se for título de seção ou questão, aplica negrito na linha toda
+
+        # Destaque automático para Títulos de Seção e Questões
         if any(x in l_s.upper() for x in ["QUESTÃO", "TEXTO BASE", "FIXAÇÃO", "APLICAÇÃO", "DESAFIO"]):
             run = p.add_run(l_s.replace('**', ''))
             run.bold = True
