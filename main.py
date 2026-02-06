@@ -515,54 +515,58 @@ if menu == "🧪 Criador de Aulas":
                         st.rerun()
 
 # --- ABA 5: ACERVO (CORREÇÃO TYPEERROR - LINK_BUTTON) ---
-    with tab_acervo:
-        st.subheader("📂 Acervo de Materiais Produzidos")
-        if not df_aulas.empty:
-            f_ano_g = st.selectbox("Filtrar Série:", ["Todos", "6º", "7º", "8º", "9º"], key=f"acervo_filter_ano_{v}")
-            df_g = df_aulas.copy()
-            if f_ano_g != "Todos": df_g = df_g[df_g['ANO'] == f_ano_g]
-            
-            for _, row in df_g.iloc[::-1].iterrows():
-                raw_c = str(row['CONTEUDO'])
-                s_id_h = ai.extrair_tag(raw_c, "SOSA_ID")
-                with st.container(border=True):
-                    c_t1, c_t2, c_t3, c_t4, c_t5, c_t6 = st.columns([1.5, 1, 1, 1, 1, 1])
-                    c_t1.markdown(f"**{row['TIPO_MATERIAL']}**\n`ID: {s_id_h}`")
-                    
-                    # Extração de Links via Regex
-                    l_alu = re.search(r"Aluno\((.*?)\)", raw_c)
-                    l_prof = re.search(r"Prof\((.*?)\)", raw_c)
-                    l_pei = re.search(r"PEI\((.*?)\)", raw_c)
-                    
-                    link_alu = l_alu.group(1) if l_alu else row.get('LINK_DRIVE')
-                    link_prof = l_prof.group(1) if l_prof else None
-                    link_pei = l_pei.group(1) if l_pei and "N/A" not in l_pei.group(1) else None
-                    
-                    # CORREÇÃO AQUI: Removido o argumento 'key' dos link_buttons
-                    if link_alu: c_t2.link_button("📝 ALUNO", str(link_alu), use_container_width=True)
-                    if link_prof: c_t3.link_button("👨‍🏫 PROF", str(link_prof), use_container_width=True)
-                    if link_pei: c_t4.link_button("♿ PEI", str(link_pei), use_container_width=True)
-                    else: c_t4.button("⚪ SEM PEI", disabled=True, use_container_width=True, key=f"no_pei_{row.name}")
-                    
-                    # Botões de ação (Estes PRECISAM de key)
-                    if c_t5.button("🔄 REFINAR", key=f"ref_acervo_{row.name}", use_container_width=True):
-                        st.session_state.lab_temp = raw_c
-                        st.session_state.sosa_id_atual = s_id_h
-                        st.session_state.lab_meta = {"ano": row['ANO'].replace('º',''), "trimestre": "I Trimestre", "tipo": "REFINO"}
-                        st.rerun()
+# --- SUBSTITUIÇÃO NO main.py (DENTRO DO with tab_acervo) ---
 
-                    if c_t6.button("🗑️ APAGAR", key=f"del_acervo_{row.name}", use_container_width=True):
-                        if db.excluir_registro_com_drive("DB_AULAS_PRONTAS", s_id_h): 
-                            st.rerun()
-                    
-                    with st.expander(f"👁️ Visualizar Estrutura: {s_id_h}"):
-                        col_v1, col_v2 = st.columns(2)
-                        with col_v1:
-                            st.info("**👨‍🏫 Guia do Professor**")
-                            st.write(ai.extrair_tag(raw_c, "PROFESSOR"))
-                        with col_v2:
-                            st.success("**📝 Folha do Aluno**")
-                            st.write(ai.extrair_tag(raw_c, "ALUNO"))
+    with tab_acervo:
+        st.subheader("📂 Repositório de Planos Estratégicos")
+        if not df_planos.empty:
+            c_h1, c_h2 = st.columns(2)
+            f_ano_h = c_h1.selectbox("Filtrar por Série:", ["Todos", "1º", "2º", "3º", "4º", "5º", "6º", "7º", "8º", "9º"], key="hist_ano_v27")
+            df_h = df_planos.copy()
+            if f_ano_h != "Todos": df_h = df_h[df_h['ANO'] == f_ano_h]
+            
+            if not df_h.empty:
+                sel_h = st.selectbox("Selecionar Plano:", df_h['SEMANA'].tolist(), key="hist_sem_v27")
+                dados_h = df_h[df_h['SEMANA'] == sel_h].iloc[0]
+                raw_h = str(dados_h['PLANO_TEXTO'])
+                
+                col_btn1, col_btn2, col_btn3 = st.columns(3)
+                with col_btn1:
+                    if st.button("🔄 REABRIR PARA REFINO", use_container_width=True):
+                        st.session_state.refino_ativo = {"ano": dados_h['ANO'], "semana": sel_h}
+                        st.session_state.p_temp = raw_h; st.rerun()
+                
+                with col_btn2:
+                    # BOTÃO ATUALIZADO COM A FUNÇÃO BLINDADA
+                    if st.button("🚀 MANDAR PARA PRODUÇÃO", use_container_width=True, type="primary", key=f"btn_hub_{sel_h}"):
+                        with st.spinner("Sincronizando com a Linha de Montagem..."):
+                            if db.ativar_plano_no_hub(sel_h, dados_h['ANO']):
+                                st.success("✅ Plano enviado com sucesso!")
+                                time.sleep(1)
+                                st.rerun() # Recarrega tudo com os dados novos
+                
+                with col_btn3:
+                    if "https" in str(dados_h['LINK_DRIVE']): 
+                        st.link_button("🚀 ABRIR NO DRIVE", str(dados_h['LINK_DRIVE']), use_container_width=True)
+
+                with st.container(border=True):
+                    st.markdown(f"#### 🎯 {ai.extrair_tag(raw_h, 'CONTEUDO_GERAL')}")
+                    st.write(f"**Conteúdos:** {ai.extrair_tag(raw_h, 'CONTEUDOS_ESPECIFICOS')}")
+                    st.divider()
+                    c_v1, c_v2 = st.columns(2)
+                    with c_v1: 
+                        st.markdown("##### 📘 Aula 1")
+                        st.write(ai.extrair_tag(raw_h, "AULA_1"))
+                    with c_v2: 
+                        st.markdown("##### 📗 Aula 2")
+                        st.write(ai.extrair_tag(raw_h, "AULA_2"))
+                
+                if st.button("🗑️ EXCLUIR PLANO", use_container_width=True):
+                    if db.excluir_plano_completo(sel_h, dados_h['ANO']): st.rerun()
+            else:
+                st.info("Nenhum plano encontrado para esta série.")
+        else:
+            st.info("📭 Acervo vazio.")
                             
 # ==============================================================================
 # MÓDULO: PLANEJAMENTO ESTRATÉGICO (PONTO ID) - ARQUITETURA V30.0 (SINCRO TOTAL)
