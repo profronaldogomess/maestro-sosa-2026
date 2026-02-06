@@ -137,6 +137,10 @@ PERSONAS = {
     🚨 PROTOCOLO DE TAGS OBRIGATÓRIO:
     [ORIENTACOES], [QUESTOES], [GABARITO_TEXTO], [RESPOSTAS_IA], [PEI], [GABARITO_PEI].
 
+    🚨 REGRAS DE RÓTULO:
+    - Cada questão deve iniciar EXATAMENTE assim: **QUESTÃO XX (0,XX ponto) -**
+    - Substitua XX pelo número e pelo valor proporcional (Valor Total / Qtd de Questões).
+
     🚨 REGRAS: Sem Markdown (** ou #). Use Unicode. Proibido cabeçalhos.""",
 
 # REFINADOR_PEDAGOGICO
