@@ -460,22 +460,22 @@ def salvar_gabarito_escaneado(dados_lista):
 def ativar_plano_no_hub(semana, ano):
     """
     Localiza o plano exato por Semana e Ano e ativa o status HUB_ATIVO.
-    Limpa o cache para que o Dashboard veja a mudança na hora.
+    Limpa o cache para que o Dashboard veja a mudança instantaneamente.
     """
     try:
         wb = conectar()
         ws = wb.worksheet("DB_PLANOS")
         dados = ws.get_all_values()
         
-        # Procura a linha que combina Semana (col 1) e Ano (col 2)
+        # Busca a linha correta combinando Semana (Col 2) e Ano (Col 3)
         for i, row in enumerate(dados):
-            if i == 0: continue
+            if i == 0: continue # Pula cabeçalho
             if row[1].strip() == semana.strip() and row[2].strip() == ano.strip():
-                # Coluna 5 é a 'TURMA' onde guardamos o status HUB_ATIVO
+                # Coluna 5 (E) é onde gravamos o status (HUB_ATIVO ou PADRÃO)
                 ws.update_cell(i + 1, 5, "HUB_ATIVO")
                 st.cache_data.clear() # LIMPEZA CRÍTICA DO CACHE
                 return True
         return False
     except Exception as e:
-        st.error(f"Erro ao ativar hub: {e}")
+        st.error(f"Erro na ativação: {e}")
         return False
