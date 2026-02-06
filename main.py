@@ -851,55 +851,92 @@ if menu == "📅 Planejamento (Ponto ID)":
             else: st.info("Nenhum plano encontrado.")
         else: st.info("📭 Acervo vazio.")
 
-    # --- ABA 4: MATRIZ CURRICULAR ATIVA ---
+
+    # --- ABA 4: MATRIZ CURRICULAR ATIVA (PRECISÃO SOBERANA V35) ---
     with tab_matriz:
         st.subheader("📖 Matriz de Competências e Status de Execução")
         if not df_curriculo.empty:
-            ano_c = st.selectbox("Série para Consulta:", [6, 7, 8, 9], key="matriz_ano_v27")
-            df_c = df_curriculo[df_curriculo["ANO"] == ano_c].copy()
+            ano_c = st.selectbox("Série para Consulta:", [1, 2, 3, 4, 5, 6, 7, 8, 9], index=5, key="matriz_ano_v35")
+            df_c = df_curriculo[df_curriculo["ANO"] == int(ano_c)].copy()
+            
+            # Captura apenas a tag de CONTEÚDOS de cada plano para evitar falsos positivos
             planos_feitos = df_planos[df_planos["ANO"].astype(str).str.contains(str(ano_c))]
-            texto_todos_planos = " ".join(planos_feitos["PLANO_TEXTO"].astype(str)).upper()
+            
+            # Criamos uma lista limpa apenas com os conteúdos oficiais planejados
+            lista_conteudos_oficiais = []
+            for p_txt in planos_feitos["PLANO_TEXTO"]:
+                cont_extraido = ai.extrair_tag(p_txt, "CONTEUDOS_ESPECIFICOS").upper()
+                lista_conteudos_oficiais.append(cont_extraido)
+            
+            texto_soberano_planos = " | ".join(lista_conteudos_oficiais)
 
-            def checar_conclusao_robusta(conteudo_db):
-                if not texto_todos_planos: return "⏳ PENDENTE"
-                conteudo_limpo = str(conteudo_db).upper()
-                if conteudo_limpo in texto_todos_planos: return "✅ CONCLUÍDO"
-                palavras = [p for p in conteudo_limpo.replace(";", "").replace(",", "").split() if len(p) > 3]
+            def checar_conclusao_cirurgica(conteudo_db):
+                if not texto_soberano_planos: return "⏳ PENDENTE"
+                target = str(conteudo_db).upper().strip()
+                
+                # Teste 1: Busca exata no campo de conteúdos oficiais
+                if target in texto_soberano_planos:
+                    return "✅ CONCLUÍDO"
+                
+                # Teste 2: Quebra por palavras-chave técnicas (mínimo 3 matches para segurança)
+                palavras = [p for p in target.replace(";", "").replace(",", "").split() if len(p) > 3]
                 if not palavras: return "⏳ PENDENTE"
-                matches = sum(1 for p in palavras if p in texto_todos_planos)
+                
+                matches = sum(1 for p in palavras if p in texto_soberano_planos)
+                # Aumentamos o rigor: precisa de mais coincidências para marcar como feito
                 return "✅ CONCLUÍDO" if matches >= 2 else "⏳ PENDENTE"
 
-            df_c["STATUS"] = df_c["CONTEUDO_ESPECIFICO"].apply(checar_conclusao_robusta)
-            st.dataframe(df_c[["TRIMESTRE", "EIXO", "CONTEUDO_ESPECIFICO", "STATUS"]], use_container_width=True, hide_index=True)
+            df_c["STATUS"] = df_c["CONTEUDO_ESPECIFICO"].apply(checar_conclusao_cirurgica)
+            
+            st.dataframe(
+                df_c[["TRIMESTRE", "EIXO", "CONTEUDO_ESPECIFICO", "STATUS"]],
+                use_container_width=True,
+                hide_index=True,
+                column_config={"STATUS": st.column_config.TextColumn("Situação", width="small")}
+            )
+        else:
+            st.info("📭 Base de currículo não localizada.")
 
-    # --- ABA 5: ANALYTICS DE COBERTURA ---
+    # --- ABA 5: ANALYTICS DE COBERTURA (SINCRO TOTAL V35) ---
     with tab_auditoria:
         st.subheader("📈 Analytics de Cobertura Curricular")
         if not df_curriculo.empty:
-            ano_m = st.selectbox("Analisar Série:", [6, 7, 8, 9], key="auditoria_ano_v27")
-            df_m = df_curriculo[df_curriculo["ANO"] == ano_m].copy()
-            planos_m = df_planos[df_planos["ANO"].astype(str).str.contains(str(ano_m))]
-            texto_m = " ".join(planos_m["PLANO_TEXTO"].astype(str)).upper()
+            ano_m = st.selectbox("Analisar Série:", [1, 2, 3, 4, 5, 6, 7, 8, 9], index=5, key="auditoria_ano_v35")
+            df_m = df_curriculo[df_curriculo["ANO"] == int(ano_m)].copy()
             
-            def concluido_num(x):
-                txt = str(x).upper()
-                if txt in texto_m: return 1
+            planos_m = df_planos[df_planos["ANO"].astype(str).str.contains(str(ano_m))]
+            lista_cont_m = [ai.extrair_tag(t, "CONTEUDOS_ESPECIFICOS").upper() for t in planos_m["PLANO_TEXTO"]]
+            texto_m_soberano = " | ".join(lista_cont_m)
+            
+            def concluido_num_cirurgico(x):
+                txt = str(x).upper().strip()
+                if txt in texto_m_soberano: return 1
                 palavras = [p for p in txt.replace(";", "").replace(",", "").split() if len(p) > 3]
-                return 1 if (palavras and sum(1 for p in palavras if p in texto_m) >= 2) else 0
+                return 1 if (palavras and sum(1 for p in palavras if p in texto_m_soberano) >= 2) else 0
 
-            df_m["CONCLUIDO"] = df_m["CONTEUDO_ESPECIFICO"].apply(concluido_num)
+            df_m["CONCLUIDO"] = df_m["CONTEUDO_ESPECIFICO"].apply(concluido_num_cirurgico)
             progresso_trim = df_m.groupby("TRIMESTRE")["CONCLUIDO"].agg(["sum", "count"]).reset_index()
             progresso_trim["%"] = (progresso_trim["sum"] / progresso_trim["count"] * 100).round(1)
             
             c1, c2, c3 = st.columns(3)
             total_geral = (df_m["CONCLUIDO"].sum() / len(df_m) * 100)
             c1.metric("Cobertura Anual", f"{total_geral:.1f}%")
+            
             p_i = progresso_trim[progresso_trim["TRIMESTRE"] == "I"]["%"].values[0] if "I" in progresso_trim["TRIMESTRE"].values else 0
             c2.metric("Progresso I Trimestre", f"{p_i}%")
+            
             p_ii = progresso_trim[progresso_trim["TRIMESTRE"] == "II"]["%"].values[0] if "II" in progresso_trim["TRIMESTRE"].values else 0
             c3.metric("Progresso II Trimestre", f"{p_ii}%")
 
-            st.plotly_chart(px.bar(progresso_trim, x="TRIMESTRE", y="%", text="%", title=f"Evolução da Cobertura - {ano_m}º Ano", color="%", color_continuous_scale="RdYlGn", range_y=[0, 110]), use_container_width=True)
+            st.plotly_chart(px.bar(
+                progresso_trim, x="TRIMESTRE", y="%", text="%", 
+                title=f"Evolução da Cobertura Real - {ano_m}º Ano",
+                color="%", color_continuous_scale="RdYlGn", range_y=[0, 110]
+            ), use_container_width=True)
+            
+            with st.expander("🔍 Ver Conteúdos Pendentes"):
+                pendentes = df_m[df_m["CONCLUIDO"] == 0][["TRIMESTRE", "EIXO", "CONTEUDO_ESPECIFICO"]]
+                st.table(pendentes)
             
 # ==============================================================================
 # MÓDULO: DIÁRIO DE BORDO RÁPIDO V26.6 - COM REGISTRO DE BÔNUS ⭐
