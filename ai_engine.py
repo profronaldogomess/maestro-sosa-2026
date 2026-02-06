@@ -10,27 +10,24 @@ client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 PERSONAS = {
 # --- 1. PLANEJAMENTO NEO-CLÁSSICO V25 (PHC + RIGOR + CÓPIA LITERAL DO BANCO) ---
 
-    "PLANE_PEDAGOGICO": """VOCÊ É O ARQUITETO PEDAGÓGICO BNCC DE ELITE (PADRÃO SOSA V29).
-    Sua missão é gerar um planejamento denso, com ciclos completos de aula, usando obrigatoriamente as tags de extração.
+    "PLANE_PEDAGOGICO": """VOCÊ É O ARQUITETO PEDAGÓGICO BNCC DE ELITE (V29).
+    Sua missão é gerar um planejamento denso usando OBRIGATORIAMENTE as tags abaixo entre colchetes.
 
-    🚨 LEI DO CICLO COMPLETO (INÍCIO, MEIO E FIM):
-    Cada aula deve conter:
-    1. INÍCIO (Lousa): Sistematização técnica via Brasil Escola.
-    2. MEIO (Sala): Prática e exercícios.
-    3. FIM (Casa): Consolidação e Desafio de Elite.
+    🚨 REGRAS DE OURO:
+    1. Use [AULA_1], [AULA_2] e [SABADO_LETIVO] para os ciclos de aula.
+    2. Cada aula deve ter INÍCIO (Lousa), MEIO (Sala) e FIM (Casa).
+    3. NÃO use Markdown (** ou #). Use apenas texto puro e Unicode.
 
-    🚨 PROTOCOLO DE TAGS OBRIGATÓRIO (USE EXATAMENTE ASSIM):
+    🚨 ESTRUTURA OBRIGATÓRIA:
     [BNCC_CODE] -> Código da habilidade.
     [CONTEUDO_GERAL] -> Eixo temático.
     [CONTEUDOS_ESPECIFICOS] -> Conteúdo literal do banco.
     [OBJETIVOS_ENSINO] -> Objetivos literais do banco.
-    [AULA_1] -> Ciclo completo da Aula 1.
-    [AULA_2] -> Ciclo completo da Aula 2.
-    [AULA_3] -> Ciclo completo da Aula 3 (se houver Sábado).
-    [AVALIACAO] -> Critérios de avaliação.
-    [ADAPTACAO_PEI] -> Estratégia DUA (Material Dourado/Balança).
-
-    🚨 REGRAS: Sem Markdown (** ou #). Use Unicode. Seja fiel aos conteúdos do banco fornecidos no prompt.""",
+    [AULA_1] -> Ciclo completo.
+    [AULA_2] -> Ciclo completo.
+    [SABADO_LETIVO] -> Ciclo completo (se houver sábado).
+    [AVALIACAO] -> Critérios.
+    [ADAPTACAO_PEI] -> Estratégia DUA.""",
 
 # ==============================================================================
 # PERSONAS ATUALIZADAS V28 - FOCO BNCC & RASTREABILIDADE TOTAL
@@ -277,35 +274,27 @@ def extrair_tag(texto, tag):
     # 1. ESCUDO SOSA: Limpeza de Markdown e ruído visual
     texto_limpo = re.sub(r'[*#]', '', texto)
     
-    # 2. LISTA MESTRA DE TAGS (Âncoras de Parada)
+    # 2. LISTA MESTRA DE TAGS ATUALIZADA (Adicionado BNCC_CODE)
     tags_sosa = [
         "SOSA_ID", "PROFESSOR", "ALUNO", "GABARITO", "IMAGENS", "PEI", "RUBRICA",
         "GABARITO_PEI", "ORIENTACOES", "QUESTOES", "GABARITO_TEXTO", "RESPOSTAS_IA",
-        "CONTEUDO_GERAL", "CONTEUDOS_ESPECIFICOS", "OBJETIVOS_ENSINO", "METODOLOGIA",
-        "AULA_1", "AULA_2", "SABADO_LETIVO"
+        "BNCC_CODE", "CONTEUDO_GERAL", "CONTEUDOS_ESPECIFICOS", "OBJETIVOS_ENSINO", 
+        "METODOLOGIA", "AULA_1", "AULA_2", "SABADO_LETIVO"
     ]
     
     tag_busca = tag.upper()
     parada = [t for t in tags_sosa if t.upper() != tag_busca]
     lista_parada = "|".join(parada)
     
-    # 3. REGEX DE ALTA PRECISÃO V32 (COM FRONTEIRA \b)
-    # \b garante que 'GABARITO' não case com 'GABARITO_PEI'
+    # 3. REGEX DE ALTA PRECISÃO
     padrao = rf"\[\s*{tag_busca}\b[^\]]*\]\s*[:\-]*\s*(.*?)(?=\s*\[\s*(?:{lista_parada})\b[^\]]*\]|$)"
     
     match = re.search(padrao, texto_limpo, re.DOTALL | re.IGNORECASE)
     
     if match:
         res = match.group(1).strip()
-        # Remove resíduos de pontuação no início do bloco
         res = re.sub(r'^[:\-\s]+', '', res)
         return res.strip()
-    
-    # 4. FALLBACK PARA PEI (Preservado)
-    if tag_busca == "PEI" and "MAPA MENTAL" in texto_limpo.upper():
-        m = re.search(r"MAPA MENTAL.*", texto_limpo, re.DOTALL | re.IGNORECASE)
-        if m: return m.group(0).strip()
-
     return ""
 
 def subir_para_google(caminho_arquivo, nome_exibicao):
