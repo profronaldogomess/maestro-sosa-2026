@@ -479,3 +479,24 @@ def ativar_plano_no_hub(semana, ano):
     except Exception as e:
         st.error(f"Erro na ativação: {e}")
         return False
+
+def arquivar_plano_produzido(semana, ano):
+    """
+    Muda o status do plano de HUB_ATIVO para PRODUZIDO.
+    Isso remove o plano do Dashboard de Produção e o mantém apenas no Acervo.
+    """
+    try:
+        wb = conectar()
+        ws = wb.worksheet("DB_PLANOS")
+        dados = ws.get_all_values()
+        for i, row in enumerate(dados):
+            if i == 0: continue
+            if row[1].strip() == semana.strip() and row[2].strip() == ano.strip():
+                # Coluna 5 (E) é o status no seu banco
+                ws.update_cell(i + 1, 5, "PRODUZIDO")
+                st.cache_data.clear()
+                return True
+        return False
+    except Exception as e:
+        st.error(f"Erro ao arquivar: {e}")
+        return False
