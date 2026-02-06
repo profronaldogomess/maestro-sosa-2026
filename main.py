@@ -565,7 +565,7 @@ if menu == "🧪 Criador de Aulas":
                             st.write(ai.extrair_tag(raw_c, "ALUNO"))
                             
 # ==============================================================================
-# MÓDULO: PLANEJAMENTO ESTRATÉGICO (PONTO ID) - ARQUITETURA V28 (FLUXO EM CASCATA)
+# MÓDULO: PLANEJAMENTO ESTRATÉGICO (PONTO ID) - ARQUITETURA V28.5 (HÍBRIDA)
 # ==============================================================================
 if menu == "📅 Planejamento (Ponto ID)":
     st.title("📅 Engenharia de Planejamento (Ponto ID)")
@@ -593,10 +593,8 @@ if menu == "📅 Planejamento (Ponto ID)":
         is_refinando = "refino_ativo" in st.session_state
         
         if is_refinando:
-            meta = st.session_state.refino_ativo
-            st.warning(f"🛠️ **MODO REFINO ATIVO:** Editando **{meta['ano']}** | **{meta['semana']}**.")
-            if st.button("❌ CANCELAR REFINO E VOLTAR AO NOVO", use_container_width=True):
-                reset_planejamento()
+            st.warning(f"🛠️ **MODO REFINO ATIVO:** Editando **{st.session_state.refino_ativo['ano']}**.")
+            if st.button("❌ CANCELAR REFINO", use_container_width=True): reset_planejamento()
         
         # --- 1. STATUS DA JORNADA ---
         with st.container(border=True):
@@ -606,59 +604,62 @@ if menu == "📅 Planejamento (Ponto ID)":
             tem_sabado = cg2.toggle("Sábado Letivo?", key=f"gate_sab_{v}")
             carga_horaria = cg3.select_slider("Carga Horária Útil:", options=["1 Aula", "2 Aulas", "3 Aulas"], value="2 Aulas", key=f"gate_carga_{v}")
 
-        # --- 2. PARÂMETROS E BUSCA NO CSV ---
+        # --- 2. PARÂMETROS DE REGÊNCIA ---
         with st.container(border=True):
-            st.markdown("### ⚙️ 2. Parâmetros de Regência (Fiel ao Banco)")
+            st.markdown("### ⚙️ 2. Parâmetros de Regência")
             c1, c2, c3 = st.columns([1, 2, 1.5])
-            ano_p = c1.selectbox("Série/Ano:", [1, 2, 3, 4, 5, 6, 7, 8, 9], index=5, key=f"ano_sel_{v}") # Default 6º ano
+            ano_p = c1.selectbox("Série/Ano:", [1, 2, 3, 4, 5, 6, 7, 8, 9], index=5, key=f"ano_sel_{v}")
             todas_semanas = util.gerar_semanas()
             sem_p = c2.selectbox("Semana de Referência:", todas_semanas, key=f"sem_sel_{v}")
             sem_limpa = sem_p.split(" (")[0]
+            trim_atual = sem_p.split(" - ")[1] if " - " in sem_p else "I Trimestre"
             
-            # Lógica de Trimestre Robusta
-            if " - " in sem_p:
-                trim_atual = sem_p.split(" - ")[1]
-            else:
-                trim_atual = "I Trimestre" # Fallback para Jornada Pedagógica
+            modo_p = c3.radio("Método de Elaboração:", ["📖 Livro Didático", "🎛️ Manual (Banco)"], horizontal=True, key=f"modo_p_{v}")
+
+        # --- 3. CONTEÚDO DINÂMICO (CSV OU LIVRO) ---
+        with st.container(border=True):
+            eixo_val, cont_val, obj_val = "", "", ""
             
-            # CORREÇÃO DO FILTRO (Comparação Numérica + Trimestre)
-            # Convertemos o ano_p para int e comparamos com a coluna ANO que também é int
-            df_curriculo_filtrado = df_curriculo[
-                (df_curriculo['ANO'] == int(ano_p)) & 
-                (df_curriculo['TRIMESTRE'].str.contains(trim_atual[0], na=False))
-            ]
-            
-            if not df_curriculo_filtrado.empty:
-                # Tenta encontrar o conteúdo baseado na ordem das semanas (Ciclo)
-                idx_semana = (todas_semanas.index(sem_p) % len(df_curriculo_filtrado))
-                linha_csv = df_curriculo_filtrado.iloc[idx_semana]
+            if modo_p == "🎛️ Manual (Banco)":
+                st.markdown("#### 🎯 Matriz Curricular (Fiel ao Banco CSV)")
+                # Busca no CSV
+                df_csv = df_curriculo[(df_curriculo['ANO'] == int(ano_p)) & (df_curriculo['TRIMESTRE'].str.contains(trim_atual[0], na=False))]
+                if not df_csv.empty:
+                    idx = (todas_semanas.index(sem_p) % len(df_csv))
+                    linha = df_csv.iloc[idx]
+                    eixo_val, cont_val, obj_val = linha['EIXO'], linha['CONTEUDO_ESPECIFICO'], linha['OBJETIVOS']
                 
-                eixo_pre = st.text_input("Eixo (CSV):", linha_csv['EIXO'], disabled=True)
-                cont_pre = st.text_area("Conteúdo Literal (CSV):", linha_csv['CONTEUDO_ESPECIFICO'], disabled=True)
-                obj_pre = st.text_area("Objetivos Literais (CSV):", linha_csv['OBJETIVOS'], disabled=True)
-                pronto_para_gerar = True
+                ed_eixo = st.text_input("Eixo Temático:", value=eixo_val, key=f"eixo_manual_{v}")
+                ed_cont = st.text_area("Conteúdo Literal:", value=cont_val, key=f"cont_manual_{v}")
+                ed_obj = st.text_area("Objetivos Literais:", value=obj_val, key=f"obj_manual_{v}")
+                ctx_ia = f"MÉTODO MANUAL. EIXO: {ed_eixo}. CONTEÚDO: {ed_cont}. OBJETIVOS: {ed_obj}."
+            
             else:
-                st.error(f"⚠️ Currículo não localizado para o {ano_p}º Ano no {trim_atual}. Verifique o CSV.")
-                eixo_pre, cont_pre, obj_pre = "", "", ""
-                pronto_para_gerar = False
+                st.markdown("#### 📖 Referência Bibliográfica")
+                cx1, cx2 = st.columns([2, 1])
+                lista_mats = df_materiais['NOME_ARQUIVO'].tolist() if not df_materiais.empty else []
+                sel_mat = cx1.multiselect("Livro Didático:", lista_mats, key=f"livro_sel_{v}")
+                pags = cx2.text_input("Páginas:", placeholder="Ex: 10-15", key=f"pags_{v}")
+                ed_eixo = st.text_input("Eixo Temático (Opcional):", key=f"eixo_livro_{v}")
+                ed_cont = st.text_area("Conteúdo do Livro:", key=f"cont_livro_{v}")
+                ed_obj = st.text_area("Objetivos do Livro:", key=f"obj_livro_{v}")
+                ctx_ia = f"MÉTODO LIVRO: {sel_mat} PÁGINAS: {pags}. CONTEÚDO: {ed_cont}."
 
-        strat = st.text_area("Estratégia Pedagógica / Observações:", placeholder="Ex: Focar em Material Dourado...", key=f"strat_{v}")
+            strat = st.text_area("Estratégia Pedagógica / Observações:", key=f"strat_{v}")
 
-        if st.button("🚀 COMPILAR PLANEJAMENTO BNCC", use_container_width=True, type="primary", disabled=not pronto_para_gerar):
+        # --- 4. BOTÃO DE COMPILAÇÃO ---
+        if st.button("🚀 COMPILAR PLANEJAMENTO BNCC", use_container_width=True, type="primary"):
             with st.spinner("Maestro SOSA consultando Brasil Escola e BNCC..."):
                 prompt = (
                     f"ANO: {ano_p}º Ano. SEMANA: {sem_limpa}. TRIMESTRE: {trim_atual}.\n"
-                    f"CARGA: {carga_horaria}. SABADO: {tem_sabado}.\n"
-                    f"CONTEÚDO DO BANCO: {cont_pre}.\n"
-                    f"OBJETIVOS DO BANCO: {obj_pre}.\n"
-                    f"EIXO: {eixo_pre}. ESTRATÉGIA: {strat}.\n"
-                    f"MISSÃO: Gere ciclos completos (Início, Meio, Fim) para cada aula."
+                    f"CARGA: {carga_horaria}. SABADO: {tem_sabado}. {ctx_ia}.\n"
+                    f"ESTRATÉGIA: {strat}. MISSÃO: Ciclos Início/Meio/Fim."
                 )
                 st.session_state.p_temp = ai.gerar_ia("PLANE_PEDAGOGICO", prompt)
                 st.rerun()
 
-        # --- SÓ EXIBE O EDITOR SE O TEXTO FOI GERADO ---
-        if "p_temp" in st.session_state and len(st.session_state.p_temp) > 50:
+        # --- 5. EDITOR (SÓ APARECE APÓS GERAÇÃO) ---
+        if "p_temp" in st.session_state:
             st.markdown("---")
             txt_bruto = st.session_state.p_temp
             
@@ -666,22 +667,21 @@ if menu == "📅 Planejamento (Ponto ID)":
             with t_ed:
                 col_ed1, col_ed2 = st.columns([1, 2])
                 ed_bncc = col_ed1.text_input("Código BNCC:", ai.extrair_tag(txt_bruto, "BNCC_CODE"), key=f"ed_b_{v}")
-                ed_geral = col_ed2.text_input("Eixo:", eixo_pre, key=f"ed_g_{v}")
-                ed_espec = st.text_area("Conteúdos (Literais):", cont_pre, key=f"ed_e_{v}")
-                ed_objs = st.text_area("Objetivos (Literais):", obj_pre, key=f"ed_o_{v}")
+                ed_geral = col_ed2.text_input("Eixo Final:", ed_eixo, key=f"ed_g_{v}")
+                ed_espec = st.text_area("Conteúdos Finais:", ed_cont, key=f"ed_e_{v}")
+                ed_objs = st.text_area("Objetivos Finais:", ed_obj, key=f"ed_o_{v}")
                 
                 ed_a1 = st.text_area("AULA 1 (Início/Meio/Fim):", ai.extrair_tag(txt_bruto, "AULA_1"), height=250, key=f"a1_{v}")
                 ed_a2 = st.text_area("AULA 2 (Início/Meio/Fim):", ai.extrair_tag(txt_bruto, "AULA_2"), height=250, key=f"a2_{v}")
                 
                 if tem_sabado or "3" in carga_horaria:
                     ed_a3 = st.text_area("AULA 3 (Sábado Letivo):", ai.extrair_tag(txt_bruto, "AULA_3"), height=250, key=f"a3_{v}")
-                else: 
-                    ed_a3 = "N/A"
+                else: ed_a3 = "N/A"
                 
                 ed_ava = st.text_area("Avaliação:", ai.extrair_tag(txt_bruto, "AVALIACAO"), key=f"ed_ava_{v}")
                 ed_pei = st.text_area("Adaptação PEI:", ai.extrair_tag(txt_bruto, "ADAPTACAO_PEI"), key=f"ed_pei_{v}")
 
-                if st.button("💾 FINALIZAR E DISPARAR PRODUÇÃO", use_container_width=True, type="primary"):
+                if st.button("💾 FINALIZAR E DISPARAR PRODUÇÃO", use_container_width=True, type="primary", key=f"btn_finalizar_hub_{v}"):
                     with st.status("Sincronizando Hub...") as status:
                         final_ano = f"{ano_p}º"
                         nome_arquivo = f"PLANO_{ano_p}ANO_{sem_limpa.replace(' ', '')}"
@@ -712,7 +712,6 @@ if menu == "📅 Planejamento (Ponto ID)":
                 st.divider()
                 st.markdown(f"**📝 AVALIAÇÃO:** {ed_ava}")
                 st.markdown(f"**♿ ESTRATÉGIA PEI:** {ed_pei}")
-# --- FIM DA CORREÇÃO ---
 
             if st.button("💾 FINALIZAR E DISPARAR PRODUÇÃO", use_container_width=True, type="primary"):
                 with st.status("Sincronizando Hub...") as status:
