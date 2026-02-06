@@ -306,10 +306,10 @@ def exibir_material_estruturado(texto_raw, key_prefix, dados_plano=None, info_au
                        
 
 # ==============================================================================
-# MÓDULO: LABORATÓRIO DE PRODUÇÃO (CRIADOR V35.0) - RESTAURAÇÃO TOTAL & HUB
+# MÓDULO: LABORATÓRIO DE PRODUÇÃO (CRIADOR V36.0) - INTELIGÊNCIA DE SAFRA
 # ==============================================================================
 if menu == "🧪 Criador de Aulas":
-    st.title("🧪 Laboratório de Produção Semiótica (V35.0)")
+    st.title("🧪 Laboratório de Produção Semiótica (V36.0)")
     st.markdown("---")
     
     def reset_laboratorio():
@@ -329,8 +329,8 @@ if menu == "🧪 Criador de Aulas":
     if "lab_temp" in st.session_state and "[PROFESSOR]" in st.session_state.lab_temp:
         txt_base = st.session_state.lab_temp
         s_id = st.session_state.get("sosa_id_atual", "SEM-ID")
-        meta = st.session_state.get("lab_meta", {"ano": "6", "trimestre": "I Trimestre", "tipo": "AULA"})
-        
+        meta = st.session_state.get("lab_meta", {})
+
         st.success(f"💎 Material Gerado: **{s_id}**")
         
         t_prof, t_alu, t_gab, t_pei, t_sync = st.tabs(["👨‍🏫 Professor", "📝 Aluno", "✅ Gabarito/Rubrica", "♿ PEI", "☁️ SINCRONIA"])
@@ -338,8 +338,9 @@ if menu == "🧪 Criador de Aulas":
         with t_prof: 
             ed_prof = st.text_area("Mapa de Regência e Lousa:", ai.extrair_tag(txt_base, "PROFESSOR"), height=450, key=f"ed_prof_{v}")
         with t_alu: 
-            ed_alu = st.text_area("Folha do Aluno (Conteúdo + Questões):", ai.extrair_tag(txt_base, "ALUNO"), height=450, key=f"ed_alu_{v}")
+            ed_alu = st.text_area("Folha do Aluno:", ai.extrair_tag(txt_base, "ALUNO"), height=450, key=f"ed_alu_{v}")
         with t_gab: 
+            # CORREÇÃO: Busca pela tag exata [GABARITO]
             ed_res = st.text_area("Respostas e Justificativas:", ai.extrair_tag(txt_base, "GABARITO"), height=350, key=f"ed_res_{v}")
         
         with t_pei:
@@ -352,50 +353,51 @@ if menu == "🧪 Criador de Aulas":
             st.warning("⚠️ O Triple-Sync salvará Aluno, Professor e PEI no Drive e Planilha.")
             if st.button("💾 EXECUTAR TRIPLE-SYNC", use_container_width=True, type="primary", key=f"btn_triple_{v}"):
                 with st.status("Iniciando Protocolo de Sincronia...") as status:
-                    nome_base = f"{s_id} - {meta.get('tipo', 'AULA')}"
+                    # O nome no banco agora inclui a aula específica para a inteligência de safra
+                    nome_final = f"{s_id} - {meta.get('aula_alvo', 'AULA')}"
                     ano_str = f"{meta.get('ano')}º"
-                    db.excluir_registro_com_drive("DB_AULAS_PRONTAS", s_id)
                     
-                    doc_alu = exporter.gerar_docx_aluno_v24(nome_base, ed_alu, {"ano": ano_str, "trimestre": meta.get('trimestre')})
-                    link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{nome_base}_ALUNO", modo="AULA")
+                    # Limpa duplicatas do mesmo ID e Aula
+                    db.excluir_registro_com_drive("DB_AULAS_PRONTAS", nome_final)
                     
-                    doc_prof = exporter.gerar_docx_professor_v25(nome_base, ed_prof, {"ano": ano_str, "semana": "SOSA-ID", "trimestre": meta.get('trimestre')})
-                    link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_base}_PROF", modo="AULA")
+                    doc_alu = exporter.gerar_docx_aluno_v24(nome_final, ed_alu, {"ano": ano_str, "trimestre": meta.get('trimestre')})
+                    link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{nome_final}_ALUNO", modo="AULA")
+                    
+                    doc_prof = exporter.gerar_docx_professor_v25(nome_final, ed_prof, {"ano": ano_str, "semana": "SOSA-ID", "trimestre": meta.get('trimestre')})
+                    link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_final}_PROF", modo="AULA")
                     
                     link_pei = "N/A"
                     if len(ed_pei_mat) > 10:
-                        doc_pei = exporter.gerar_docx_pei_v25(f"{nome_base}_PEI", ed_pei_mat, {"ano": ano_str, "trimestre": meta.get('trimestre')})
-                        link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_base}_PEI", modo="AULA")
+                        doc_pei = exporter.gerar_docx_pei_v25(f"{nome_final}_PEI", ed_pei_mat, {"ano": ano_str, "trimestre": meta.get('trimestre')})
+                        link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_final}_PEI", modo="AULA")
                     
                     if "https" in str(link_alu):
                         conteudo_banco = (
-                            f"[SOSA_ID: {s_id}]\n[PROFESSOR]\n{ed_prof}\n\n[ALUNO]\n{ed_alu}\n\n"
-                            f"[GABARITO]\n{ed_res}\n\n[IMAGENS]\n{ai.extrair_tag(txt_base, 'IMAGENS')}\n\n[PEI]\n{ed_pei_mat}\n\n"
+                            f"[SOSA_ID: {s_id}]\n[AULA_ALVO: {meta.get('aula_alvo')}]\n[PROFESSOR]\n{ed_prof}\n\n[ALUNO]\n{ed_alu}\n\n"
+                            f"[GABARITO]\n{ed_res}\n\n[PEI]\n{ed_pei_mat}\n\n"
                             f"[GABARITO_PEI]\n{ed_pei_gab}\n\n--- LINKS ---\nAluno({link_alu}) Prof({link_prof}) PEI({link_pei})"
                         )
-                        db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), "PRODUÇÃO", nome_base, conteudo_banco, ano_str, link_alu])
+                        db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), "PRODUÇÃO", nome_final, conteudo_banco, ano_str, link_alu])
                         status.update(label="✅ Sincronia Concluída!", state="complete")
                         st.balloons(); time.sleep(1); reset_laboratorio()
 
         st.markdown("---")
         with st.container(border=True):
             st.subheader("🤖 Refinador Maestro")
-            cmd_refine = st.chat_input("Solicite ajustes no plano...", key=f"refine_p_{v}")
-            if cmd_refine:
-                with st.spinner("Maestro Sosa realizando reengenharia..."):
-                    # O segredo está aqui: passamos o texto atual para a IA reescrever
-                    novo_plano = ai.gerar_ia("REFINADOR_PEDAGOGICO", f"ORDEM: {cmd_refine}\n\nTEXTO ATUAL:\n{st.session_state.p_temp}")
-                    if novo_plano:
-                        st.session_state.p_temp = novo_plano # Substitui o rascunho pelo refinado
-                        st.rerun()
+            cmd_lab = st.chat_input("Solicite ajustes técnicos...", key=f"chat_lab_{v}")
+            if cmd_lab:
+                with st.spinner("Refinando material..."):
+                    st.session_state.lab_temp = ai.gerar_ia("REFINADOR_MATERIAIS", f"ORDEM: {cmd_lab}\n\nATUAL:\n{st.session_state.lab_temp}")
+                    st.session_state.v_lab += 1; st.rerun()
+        
+        if st.button("🆕 GERAR OUTRO MATERIAL (LIMPAR)", use_container_width=True): reset_laboratorio()
 
-    # --- SEÇÃO DE ENTRADA (ABAS INDEPENDENTES RESTAURADAS) ---
+    # --- SEÇÃO DE ENTRADA ---
     else:
         tab_producao, tab_diagnostico, tab_trabalhos, tab_complementar, tab_acervo = st.tabs([
             "🚀 Produção (Aula 1/2)", "🔍 Sonda de Proficiência", "📋 Engenharia de Trabalhos", "📚 Atividades Complementares", "📂 Acervo de Materiais"
         ])
 
-        # --- ABA 1: PRODUÇÃO DE AULA ---
         with tab_producao:
             if is_hub:
                 st.info("📬 **PLANO IMPORTADO DO DASHBOARD**")
@@ -405,27 +407,37 @@ if menu == "🧪 Criador de Aulas":
                     eixo_p = ai.extrair_tag(plano_txt, "CONTEUDO_GERAL")
                     c1.markdown(f"### 🎯 {eixo_p}")
                     c1.caption(f"Série: {st.session_state.lab_meta.get('ano')}º Ano | {st.session_state.lab_meta.get('trimestre')}")
-                    aula_alvo = c2.radio("Escolha qual aula materializar:", ["Aula 1", "Aula 2", "Sábado"], key=f"hub_aula_{v}")
                     
-                    instr_extra = st.text_area("📝 Informações Extras para esta Aula:", placeholder="Ex: Focar em exemplos de Itabuna...", key=f"hub_extra_{v}")
+                    # --- INTELIGÊNCIA DE SAFRA: Verifica o que já foi feito ---
+                    s_id_base = st.session_state.sosa_id_atual
+                    feitos = df_aulas[df_aulas['CONTEUDO'].str.contains(s_id_base, na=False)]['CONTEUDO'].tolist()
+                    
+                    status_a1 = "✅" if any("Aula 1" in str(f) for f in feitos) else "⏳"
+                    status_a2 = "✅" if any("Aula 2" in str(f) for f in feitos) else "⏳"
+                    status_sab = "✅" if any("Sábado" in str(f) for f in feitos) else "⏳"
+
+                    aula_alvo = c2.radio("Escolha a aula para materializar:", 
+                                         [f"{status_a1} Aula 1", f"{status_a2} Aula 2", f"{status_sab} Sábado"], 
+                                         key=f"hub_aula_{v}")
+                    
+                    aula_limpa = aula_alvo.replace("✅ ", "").replace("⏳ ", "")
+                    
+                    instr_extra = st.text_area("📝 Informações Extras:", key=f"hub_extra_{v}")
                     qtd_q = st.slider("Quantidade de Questões:", 3, 15, 10, key=f"hub_q_{v}")
 
                     if st.button("💎 MATERIALIZAR AULA DE ELITE", use_container_width=True, type="primary"):
-                        with st.spinner(f"Arquitetando {aula_alvo} com Rigor V29..."):
-                            s_id = st.session_state.sosa_id_atual
-                            tag_aula = "AULA_1" if aula_alvo == "Aula 1" else "AULA_2" if aula_alvo == "Aula 2" else "SABADO_LETIVO"
+                        with st.spinner(f"Expandindo {aula_limpa}..."):
+                            st.session_state.lab_meta['aula_alvo'] = aula_limpa
+                            tag_aula = "AULA_1" if "Aula 1" in aula_limpa else "AULA_2" if "Aula 2" in aula_limpa else "SABADO_LETIVO"
                             roteiro_plano = ai.extrair_tag(plano_txt, tag_aula)
                             
                             prompt_expansao = (
-                                f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {s_id}.\n"
-                                f"SÉRIE: {st.session_state.lab_meta.get('ano')}º ANO. ALVO: {aula_alvo}.\n"
-                                f"PLANO BASE: {roteiro_plano}.\n"
+                                f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {s_id_base}.\n"
+                                f"SÉRIE: {st.session_state.lab_meta.get('ano')}º ANO. ALVO: {aula_limpa}.\n"
+                                f"ROTEIRO: {roteiro_plano}.\n"
+                                f"EXTRAS: {instr_extra}.\n"
                                 f"ESTRATÉGIA PEI: {ai.extrair_tag(plano_txt, 'ADAPTACAO_PEI')}.\n\n"
-                                f"🚨 ORDEM DE FORMATAÇÃO:\n"
-                                f"1. Use [PROMPT IMAGEM] em todas as versões (Prof/Alu/PEI).\n"
-                                f"2. Garanta que [GABARITO_PEI] seja gerado.\n"
-                                f"3. Use símbolos Unicode para separar FIXAÇÃO, APLICAÇÃO e DESAFIO.\n"
-                                f"4. No PEI, descreva o passo a passo do Material Dourado com clareza visual."
+                                f"ENTREGA: [PROFESSOR], [ALUNO], [GABARITO], [PEI], [GABARITO_PEI]."
                             )
                             st.session_state.lab_temp = ai.gerar_ia("MAESTRO_SOSA_V28_ELITE", prompt_expansao, usar_busca=True)
                             st.rerun()
