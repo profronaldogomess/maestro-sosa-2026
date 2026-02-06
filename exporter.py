@@ -382,12 +382,12 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
     return file_stream
 
 # ==============================================================================
-# 4. PROVA OFICIAL (FLUXO NATIVO - GABARITO ENEM)
+# 4. PROVA OFICIAL (VERSÃO ELITE V43 - DINÂMICA E FORMATADA)
 # ==============================================================================
 def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
     import re, io, os
     from docx import Document
-    from docx.shared import Inches, Pt
+    from docx.shared import Inches, Pt, RGBColor
     from docx.enum.text import WD_ALIGN_PARAGRAPH
     from docx.enum.section import WD_SECTION
     from docx.enum.table import WD_ALIGN_VERTICAL
@@ -409,14 +409,15 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         section.top_margin, section.bottom_margin = Inches(0.3), Inches(0.3)
         section.left_margin, section.right_margin = Inches(0.4), Inches(0.4)
         
-        # Lógica de Valor
-        tipo_raw = info.get('tipo_prova', '').upper()
-        v_total_num = 3.0 if "TESTE" in tipo_raw else 4.0 if "PROVA" in tipo_raw else 10.0
-        v_total_str = f"{v_total_num:.1f}".replace('.', ',')
-        qtd_q = int(info.get('qtd_questoes', 10))
-        v_quest = v_total_num / qtd_q
+        # --- 1. DETECÇÃO DINÂMICA DE QUESTÕES ---
+        # Conta quantas vezes a palavra QUESTÃO aparece para montar o gabarito
+        questoes_encontradas = re.findall(r'QUESTÃO', conteudo_ia.upper())
+        num_total_q = len(questoes_encontradas) if questoes_encontradas else 10
+        
+        v_total_str = str(info.get('valor', '10,0')).replace('.', ',')
+        v_quest_str = str(info.get('valor_questao', '1,0')).replace('.', ',')
 
-        # --- 1. CABEÇALHO ---
+        # --- 2. CABEÇALHO PADRONIZADO SOSA ---
         header_table = doc.add_table(rows=3, cols=5)
         header_table.style = 'Table Grid'
         widths = [Inches(0.8), Inches(2.8), Inches(1.0), Inches(1.4), Inches(1.5)]
@@ -424,13 +425,13 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
 
         c_logo = header_table.cell(0, 0).merge(header_table.cell(2, 0))
         header_table.cell(0, 1).merge(header_table.cell(0, 3)).paragraphs[0].add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA").font.bold = True
-        header_table.cell(0, 4).paragraphs[0].add_run(info.get('trimestre', 'III TRIMESTRE')).font.bold = True
+        header_table.cell(0, 4).paragraphs[0].add_run(info.get('trimestre', 'I TRIMESTRE')).font.bold = True
         header_table.cell(1, 1).merge(header_table.cell(1, 3)).paragraphs[0].add_run("ALUNO(A):").font.size = Pt(11)
         header_table.cell(1, 4).paragraphs[0].add_run("NOTA:").font.size = Pt(11)
         header_table.cell(2, 1).paragraphs[0].add_run(f"PROF: Ronaldo Gomes").font.size = Pt(10)
         header_table.cell(2, 2).paragraphs[0].add_run(f"TURMA: {info.get('ano')}").font.size = Pt(10)
-        header_table.cell(2, 3).paragraphs[0].add_run(f"DATA:").font.size = Pt(10)
-        header_table.cell(2, 4).paragraphs[0].add_run(f"VALOR: {v_total_str} PONTOS").font.bold = True
+        header_table.cell(2, 3).paragraphs[0].add_run("DATA:").font.size = Pt(10)
+        header_table.cell(2, 4).paragraphs[0].add_run(f"VALOR: {v_total_str}").font.bold = True
         
         logo_path = "logo_escola.png" if os.path.exists("logo_escola.png") else "logo.png"
         if os.path.exists(logo_path):
@@ -441,7 +442,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         for row in header_table.rows: set_row_height(row, 25)
         doc.add_paragraph()
 
-        # --- 2. ORIENTAÇÕES E GABARITO ---
+        # --- 3. ORIENTAÇÕES E GABARITO DINÂMICO ---
         top_table = doc.add_table(rows=1, cols=2)
         top_table.columns[0].width = Inches(3.5)
         top_table.columns[1].width = Inches(4.0)
@@ -454,81 +455,77 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
             "Use apenas CANETA AZUL ou PRETA.",
             "Cálculos são obrigatórios para validar a questão.",
             "Pinte completamente o círculo no gabarito.",
-            f"Valor Total: {v_total_str} | Cada questão: {v_quest:.2f}".replace('.', ',')
+            f"Valor Total: {v_total_str} | Cada questão: {v_quest_str}"
         ]
         for idx, text in enumerate(orientacoes, 1):
             p = c_orient.add_paragraph()
             p.add_run(f"{idx}. {text}").font.size = Pt(9)
 
+        # GABARITO DINÂMICO (Ajusta o número de linhas conforme as questões)
         c_gab = top_table.cell(0, 1)
-        gab_grid = c_gab.add_table(rows=11, cols=6)
+        gab_grid = c_gab.add_table(rows=num_total_q + 1, cols=6)
         gab_grid.style = 'Table Grid'
-        for r in range(11):
+        for r in range(num_total_q + 1):
             for c in range(6): gab_grid.cell(r, c).paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+        
         for i, lab in enumerate(["Q", "A", "B", "C", "D", "E"]):
             gab_grid.cell(0, i).paragraphs[0].add_run(lab).font.bold = True
-        for r in range(1, 11):
+        
+        for r in range(1, num_total_q + 1):
             gab_grid.cell(r, 0).paragraphs[0].add_run(f"{r:02d}").font.size = Pt(9)
             for col in range(1, 6):
                 run_b = gab_grid.cell(r, col).paragraphs[0].add_run("○")
                 run_b.font.size = Pt(14)
 
-        # --- 3. ATIVAÇÃO DE COLUNAS NATIVAS ---
+        # --- 4. ATIVAÇÃO DE COLUNAS NATIVAS ---
         new_section = doc.add_section(WD_SECTION.CONTINUOUS)
         sectPr = new_section._sectPr
         cols = sectPr.xpath('./w:cols')[0]
         cols.set(qn('w:num'), '2')
         cols.set(qn('w:space'), '720')
 
-        # --- 4. PROCESSAMENTO DAS QUESTÕES (BLINDAGEM SOSA) ---
-        questoes_raw = ai.extrair_tag(conteudo_ia, "QUESTOES")
+        # --- 5. PROCESSAMENTO DAS QUESTÕES ---
+        # Limpeza de ruídos (números soltos no início)
+        conteudo_limpo = re.sub(r'^\d+\s*\n', '', conteudo_ia.strip())
         
-        # FALLBACK: Se não achou a tag QUESTOES, usa o conteúdo bruto (essencial para PEI)
-        if not questoes_raw or len(questoes_raw) < 10:
-            questoes_raw = conteudo_ia
-            # Limpa tags residuais se houver
-            questoes_raw = re.sub(r'\[PEI\]|\[GABARITO_PEI\]|\[IMAGENS_PEI\]', '', questoes_raw, flags=re.IGNORECASE)
+        linhas = conteudo_limpo.split('\n')
+        for linha in linhas:
+            l_s = linha.strip()
+            if not l_s: continue
+            
+            p = doc.add_paragraph()
+            p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+            p.paragraph_format.line_spacing = 1.0
 
-        questoes_raw = re.sub(r'\(\d+,\d+\s*ponto[s]?\)', '', questoes_raw)
-        padrao_split = r'(\d+[\s\.\ª\º]*Questão[\s\.\:]*)'
-        partes = re.split(padrao_split, questoes_raw, flags=re.IGNORECASE)
-        
-        if len(partes) < 2:
-            # Se não conseguiu fatiar por "Questão", imprime o bloco inteiro justificado
-            for linha in questoes_raw.split('\n'):
-                l_s = linha.strip()
-                if not l_s: continue
-                p = doc.add_paragraph()
-                p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-                p.add_run(l_s.replace('**', '')).font.size = Pt(12)
-        else:
-            i = 1
-            while i < len(partes):
-                marcador = partes[i].strip()
-                corpo = partes[i+1].strip() if i+1 < len(partes) else ""
-                p_q = doc.add_paragraph()
-                p_q.paragraph_format.space_before = Pt(6)
-                run_q = p_q.add_run(f"{marcador} ({v_quest:.2f} ponto) - ".replace('.', ','))
-                run_q.font.bold, run_q.font.size = True, Pt(12)
-                
-                linhas = corpo.split('\n')
-                for linha in linhas:
-                    l_s = linha.strip()
-                    if not l_s: continue
-                    p = doc.add_paragraph()
-                    p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-                    p.paragraph_format.line_spacing = 1.0
-                    run = p.add_run(l_s.replace('**', ''))
-                    run.font.size = Pt(12)
-                    if re.match(r'^[A-E][\)\.]', l_s): p.paragraph_format.left_indent = Inches(0.2)
-                i += 2
+            # Formatação de Questão e Valor
+            if "QUESTÃO" in l_s.upper():
+                run = p.add_run(l_s)
+                run.bold = True
+                run.font.size = Pt(11)
+                p.paragraph_format.space_before = Pt(12)
+            
+            # Formatação de Prompt de Imagem (Igual ao material de sala)
+            elif "PROMPT IMAGEM" in l_s.upper():
+                run = p.add_run(f" [ {l_s} ] ")
+                run.font.italic = True
+                run.font.size = Pt(8)
+                run.font.color.rgb = RGBColor(120, 120, 120)
+                p.paragraph_format.space_after = Pt(2)
+            
+            # Alternativas (Recuo)
+            elif re.match(r'^[A-E][\)\.]', l_s):
+                p.add_run(l_s)
+                p.paragraph_format.left_indent = Inches(0.2)
+            
+            else:
+                p.add_run(l_s)
 
         doc.save(file_stream)
         file_stream.seek(0)
         return file_stream
     except Exception as e:
         file_stream = io.BytesIO()
-        err_doc = Document(); err_doc.add_paragraph(f"ERRO PROVA: {str(e)}"); err_doc.save(file_stream)
+        err_doc = Document(); err_doc.add_paragraph(f"ERRO EXPORTAÇÃO: {str(e)}"); err_doc.save(file_stream)
         file_stream.seek(0)
         return file_stream
 
