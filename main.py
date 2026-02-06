@@ -306,14 +306,14 @@ def exibir_material_estruturado(texto_raw, key_prefix, dados_plano=None, info_au
                        
 
 # ==============================================================================
-# MÓDULO: LABORATÓRIO DE PRODUÇÃO (CRIADOR V34.0) - FERRAMENTAS INDEPENDENTES
+# MÓDULO: LABORATÓRIO DE PRODUÇÃO (CRIADOR V34.0) - ELITE INTEGRADA
 # ==============================================================================
 if menu == "🧪 Criador de Aulas":
     st.title("🧪 Laboratório de Produção Semiótica (V34.0)")
     st.markdown("---")
     
     def reset_laboratorio():
-        keys_to_del = ["lab_temp", "lab_pei", "lab_gab_pei", "refino_lab_ativo", "sosa_id_atual", "lab_meta", "hub_origem"]
+        keys_to_del = ["lab_temp", "lab_pei", "lab_gab_pei", "refino_lab_ativo", "refino_lab_tipo", "comp_temp", "comp_pei", "sosa_id_atual", "lab_meta"]
         for k in keys_to_del:
             if k in st.session_state: del st.session_state[k]
         st.session_state.v_lab = int(time.time())
@@ -322,22 +322,25 @@ if menu == "🧪 Criador de Aulas":
     if "v_lab" not in st.session_state: st.session_state.v_lab = 1
     v = st.session_state.v_lab
 
-    # --- ÁREA DE EXIBIÇÃO E REFINO (SÓ APARECE SE O MATERIAL FOI GERADO) ---
+    # --- VERIFICAÇÃO DE ORIGEM (HUB OU MANUAL) ---
+    is_hub = st.session_state.get("lab_meta", {}).get("tipo") == "PRODUÇÃO_HUB"
+
+    # --- ÁREA DE EXIBIÇÃO E REFINO (SÓ APARECE APÓS GERAÇÃO) ---
     if "lab_temp" in st.session_state and "[PROFESSOR]" in st.session_state.lab_temp:
         txt_base = st.session_state.lab_temp
         s_id = st.session_state.get("sosa_id_atual", "SEM-ID")
-        meta = st.session_state.get("lab_meta", {})
-
-        st.success(f"💎 Material de Elite Gerado: **{s_id}**")
+        meta = st.session_state.get("lab_meta", {"ano": "6", "trimestre": "I Trimestre", "tipo": "AULA"})
+        
+        st.success(f"💎 Material Gerado: **{s_id}**")
         
         t_prof, t_alu, t_gab, t_pei, t_sync = st.tabs(["👨‍🏫 Professor", "📝 Aluno", "✅ Gabarito/Rubrica", "♿ PEI", "☁️ SINCRONIA"])
         
         with t_prof: 
             ed_prof = st.text_area("Mapa de Regência e Lousa:", ai.extrair_tag(txt_base, "PROFESSOR"), height=450, key=f"ed_prof_{v}")
         with t_alu: 
-            ed_alu = st.text_area("Folha do Aluno:", ai.extrair_tag(txt_base, "ALUNO"), height=450, key=f"ed_alu_{v}")
+            ed_alu = st.text_area("Folha do Aluno (Conteúdo + Questões):", ai.extrair_tag(txt_base, "ALUNO"), height=450, key=f"ed_alu_{v}")
         with t_gab: 
-            ed_res = st.text_area("Gabarito Comentado:", ai.extrair_tag(txt_base, "GABARITO"), height=350, key=f"ed_res_{v}")
+            ed_res = st.text_area("Respostas e Justificativas:", ai.extrair_tag(txt_base, "GABARITO"), height=350, key=f"ed_res_{v}")
         
         with t_pei:
             st.subheader("♿ Adaptação Curricular (Andaime Cognitivo)")
@@ -346,10 +349,10 @@ if menu == "🧪 Criador de Aulas":
             with c_p2: ed_pei_gab = st.text_area("✅ Gabarito PEI:", ai.extrair_tag(txt_base, "GABARITO_PEI"), height=400, key=f"ed_pei_gab_{v}")
 
         with t_sync:
-            st.warning("⚠️ O Triple-Sync salvará Aluno, Professor e PEI no Drive e Planilha.")
+            st.warning("⚠️ O Triple-Sync salvará Aluno, Professor e PEI, removendo versões antigas.")
             if st.button("💾 EXECUTAR TRIPLE-SYNC", use_container_width=True, type="primary", key=f"btn_triple_{v}"):
                 with st.status("Iniciando Protocolo de Sincronia...") as status:
-                    nome_base = f"{s_id}"
+                    nome_base = f"{s_id} - {meta.get('tipo', 'AULA')}"
                     ano_str = f"{meta.get('ano')}º"
                     db.excluir_registro_com_drive("DB_AULAS_PRONTAS", s_id)
                     
@@ -367,41 +370,43 @@ if menu == "🧪 Criador de Aulas":
                     if "https" in str(link_alu):
                         conteudo_banco = (
                             f"[SOSA_ID: {s_id}]\n[PROFESSOR]\n{ed_prof}\n\n[ALUNO]\n{ed_alu}\n\n"
-                            f"[GABARITO]\n{ed_res}\n\n[PEI]\n{ed_pei_mat}\n\n"
+                            f"[GABARITO]\n{ed_res}\n\n[IMAGENS]\n{ai.extrair_tag(txt_base, 'IMAGENS')}\n\n[PEI]\n{ed_pei_mat}\n\n"
                             f"[GABARITO_PEI]\n{ed_pei_gab}\n\n--- LINKS ---\nAluno({link_alu}) Prof({link_prof}) PEI({link_pei})"
                         )
                         db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), "PRODUÇÃO", nome_base, conteudo_banco, ano_str, link_alu])
                         status.update(label="✅ Sincronia Concluída!", state="complete")
                         st.balloons(); time.sleep(1); reset_laboratorio()
 
+        # --- REFINADOR MAESTRO ---
         st.markdown("---")
         with st.container(border=True):
             st.subheader("🤖 Refinador Maestro")
-            cmd_lab = st.chat_input("Solicite ajustes técnicos...", key=f"chat_lab_{v}")
+            cmd_lab = st.chat_input("Solicite ajustes técnicos ou mude o contexto...", key=f"chat_lab_{v}")
             if cmd_lab:
                 with st.spinner("Maestro Sosa realizando reengenharia..."):
                     st.session_state.lab_temp = ai.gerar_ia("REFINADOR_MATERIAIS", f"ORDEM: {cmd_lab}\n\nATUAL:\n{st.session_state.lab_temp}")
                     st.session_state.v_lab += 1
                     st.rerun()
         
-        if st.button("🆕 GERAR OUTRO MATERIAL (LIMPAR)", use_container_width=True): reset_laboratorio()
+        if st.button("🆕 GERAR NOVO MATERIAL (LIMPAR ATUAL)", use_container_width=True, key=f"btn_reset_top_{v}"):
+            reset_laboratorio()
 
     # --- SEÇÃO DE ENTRADA (ABAS INDEPENDENTES) ---
     else:
         tab_producao, tab_diagnostico, tab_trabalhos, tab_complementar, tab_acervo = st.tabs([
-            "🚀 Produção de Aula", "🔍 Sonda de Proficiência", "📋 Engenharia de Trabalhos", "📚 Atividades Complementares", "📂 Acervo de Materiais"
+            "🚀 Produção (Aula 1/2)", "🔍 Sonda de Proficiência", "📋 Engenharia de Trabalhos", "📚 Atividades Complementares", "📂 Acervo de Materiais"
         ])
 
-        # --- ABA 1: PRODUÇÃO DE AULA (HUB OU MANUAL) ---
         with tab_producao:
-            if "lab_meta" in st.session_state and st.session_state.lab_meta.get("tipo") == "PRODUÇÃO_HUB":
+            if is_hub:
                 st.info("📬 **PLANO IMPORTADO DO DASHBOARD**")
                 with st.container(border=True):
                     c1, c2 = st.columns([2, 1])
                     plano_txt = st.session_state.lab_temp
                     eixo_p = ai.extrair_tag(plano_txt, "CONTEUDO_GERAL")
                     c1.markdown(f"### 🎯 {eixo_p}")
-                    c1.caption(f"Série: {st.session_state.lab_meta['ano']}º Ano | {st.session_state.lab_meta['trimestre']}")
+                    c1.caption(f"Série: {st.session_state.lab_meta.get('ano')}º Ano | {st.session_state.lab_meta.get('trimestre')}")
+                    
                     aula_alvo = c2.radio("Escolha qual aula materializar:", ["Aula 1", "Aula 2", "Sábado"], key=f"hub_aula_{v}")
                     qtd_q = st.slider("Quantidade de Questões:", 3, 15, 10, key=f"hub_q_{v}")
 
@@ -410,107 +415,106 @@ if menu == "🧪 Criador de Aulas":
                             s_id = st.session_state.sosa_id_atual
                             tag_aula = "AULA_1" if aula_alvo == "Aula 1" else "AULA_2" if aula_alvo == "Aula 2" else "SABADO_LETIVO"
                             roteiro_plano = ai.extrair_tag(plano_txt, tag_aula)
-                            prompt_expansao = f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {s_id}. SÉRIE: {st.session_state.lab_meta['ano']}º ANO. ALVO: {aula_alvo}. ROTEIRO: {roteiro_plano}. ESTRATÉGIA PEI: {ai.extrair_tag(plano_txt, 'ADAPTACAO_PEI')}. MISSÃO: Material completo [PROFESSOR], [ALUNO], [GABARITO], [PEI], [GABARITO_PEI]."
+                            
+                            prompt_expansao = (
+                                f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {s_id}.\n"
+                                f"SÉRIE: {st.session_state.lab_meta.get('ano')}º ANO. ALVO: {aula_alvo}.\n"
+                                f"ROTEIRO DO PLANEJAMENTO: {roteiro_plano}.\n"
+                                f"ESTRATÉGIA PEI PLANEJADA: {ai.extrair_tag(plano_txt, 'ADAPTACAO_PEI')}.\n\n"
+                                f"🚨 MISSÃO: Transforme esse roteiro em material completo.\n"
+                                f"ENTREGA: [PROFESSOR], [ALUNO], [GABARITO], [PEI], [GABARITO_PEI]."
+                            )
                             st.session_state.lab_temp = ai.gerar_ia("MAESTRO_SOSA_V28_ELITE", prompt_expansao, usar_busca=True)
                             st.rerun()
                 if st.button("❌ CANCELAR IMPORTAÇÃO"): reset_laboratorio()
             else:
-                st.markdown("### ⚙️ Configurar Produção Manual")
+                st.markdown("### ⚙️ Configurar Produção de Aula")
                 with st.container(border=True):
                     c1, c2, c3 = st.columns([1, 2, 1])
-                    ano_lab = c1.selectbox("Série/Ano:", [6, 7, 8, 9], key=f"man_ano_{v}")
-                    planos_ano = df_planos[df_planos['ANO'].astype(str).str.contains(str(ano_lab))]
-                    if planos_ano.empty: st.error("Crie um plano no Ponto ID primeiro.")
+                    ano_lab = c1.selectbox("Série/Ano:", [6, 7, 8, 9], key=f"prod_ano_{v}")
+                    planos_ano = df_planos[df_planos["ANO"].astype(str).str.contains(str(ano_lab))]
+                    if planos_ano.empty: st.error("❌ Nenhum planejamento encontrado.")
                     else:
-                        sem_lab = c2.selectbox("Semana Base:", planos_ano['SEMANA'].tolist(), key=f"man_sem_{v}")
-                        aula_alvo_man = c3.radio("🎯 Aula:", ["Aula 1", "Aula 2"], horizontal=True, key=f"man_aula_{v}")
-                        if st.button("🚀 GERAR MATERIAL MANUAL", use_container_width=True, type="primary"):
+                        sem_lab = c2.selectbox("Semana Base (Ponto ID):", planos_ano["SEMANA"].tolist(), key=f"prod_sem_{v}")
+                        aula_alvo = c3.radio("🎯 Selecione a Aula:", ["Aula 1", "Aula 2"], horizontal=True, key=f"prod_alvo_{v}")
+                        plano_row = planos_ano[planos_ano["SEMANA"] == sem_lab].iloc[0]
+                        tag_aula = "AULA_1" if aula_alvo == "Aula 1" else "AULA_2"
+                        
+                        if st.button("💎 COMPILAR MATERIAL DE ELITE", use_container_width=True, type="primary"):
                             with st.spinner("Compilando..."):
                                 s_id = util.gerar_sosa_id("AULA", ano_lab, "I")
                                 st.session_state.sosa_id_atual = s_id
-                                st.session_state.lab_meta = {"ano": ano_lab, "trimestre": "I Trimestre", "tipo": "MANUAL"}
-                                plano_row = planos_ano[planos_ano['SEMANA'] == sem_lab].iloc[0]
-                                tag_aula = "AULA_1" if aula_alvo_man == "Aula 1" else "AULA_2"
-                                prompt_manual = f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {s_id}. SÉRIE: {ano_lab}º ANO. ALVO: {aula_alvo_man}. CONTEÚDO: {ai.extrair_tag(plano_row['PLANO_TEXTO'], 'CONTEUDOS_ESPECIFICOS')}. ROTEIRO: {ai.extrair_tag(plano_row['PLANO_TEXTO'], tag_aula)}. ENTREGA: [PROFESSOR], [ALUNO], [GABARITO], [PEI], [GABARITO_PEI]."
-                                st.session_state.lab_temp = ai.gerar_ia("MAESTRO_SOSA_V28_ELITE", prompt_manual, usar_busca=True)
+                                st.session_state.lab_meta = {"ano": ano_lab, "trimestre": "I Trimestre", "tipo": aula_alvo}
+                                prompt_elite = (
+                                    f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {s_id}.\n"
+                                    f"SÉRIE: {ano_lab}º ANO. ALVO: {aula_alvo}.\n"
+                                    f"CONTEÚDO: {ai.extrair_tag(plano_row['PLANO_TEXTO'], 'CONTEUDOS_ESPECIFICOS')}.\n"
+                                    f"ROTEIRO: {ai.extrair_tag(plano_row['PLANO_TEXTO'], tag_aula)}.\n\n"
+                                    f"ENTREGA: [PROFESSOR], [ALUNO], [GABARITO], [PEI], [GABARITO_PEI]."
+                                )
+                                st.session_state.lab_temp = ai.gerar_ia("MAESTRO_SOSA_V28_ELITE", prompt_elite, usar_busca=True)
                                 st.rerun()
 
-        # --- ABA 2: SONDA DIAGNÓSTICA (INDEPENDENTE) ---
         with tab_diagnostico:
             st.markdown("### 🔍 Configurar Sonda de Proficiência")
             with st.container(border=True):
-                c1, c2, c3 = st.columns([1, 2, 1])
-                ano_sonda = c1.selectbox("Série/Ano:", [6, 7, 8, 9], key=f"sonda_ano_{v}")
-                planos_sonda = df_planos[df_planos['ANO'].astype(str).str.contains(str(ano_sonda))]
-                if planos_sonda.empty: st.warning("Nenhum plano base encontrado.")
-                else:
-                    sem_sonda = c2.selectbox("Semana de Referência:", planos_sonda['SEMANA'].tolist(), key=f"sonda_sem_{v}")
-                    qtd_sonda = c3.number_input("Nº Questões:", 5, 20, 10, key=f"sonda_q_{v}")
-                    if st.button("🚀 GERAR SONDA DIAGNÓSTICA", use_container_width=True, type="primary"):
-                        with st.spinner("Estruturando Sonda..."):
-                            s_id = util.gerar_sosa_id("SONDA", ano_sonda, "I")
-                            st.session_state.sosa_id_atual = s_id
-                            st.session_state.lab_meta = {"ano": ano_sonda, "trimestre": "I Trimestre", "tipo": "SONDA"}
-                            plano_ref = planos_sonda[planos_sonda['SEMANA'] == sem_sonda].iloc[0]
-                            prompt_sonda = f"PERSONA: ARQUITETO_SONDA_DIAGNOSTICA. ID: {s_id}. SÉRIE: {ano_sonda}º ANO. CONTEÚDO: {ai.extrair_tag(plano_ref['PLANO_TEXTO'], 'CONTEUDOS_ESPECIFICOS')}. QTD: {qtd_sonda}. MISSÃO: Mapear lacunas cognitivas. ENTREGA: [PROFESSOR], [ALUNO], [GABARITO], [PEI], [GABARITO_PEI]."
-                            st.session_state.lab_temp = ai.gerar_ia("ARQUITETO_SONDA_DIAGNOSTICA", prompt_sonda, usar_busca=True)
-                            st.rerun()
+                c1, c2, c3, c4 = st.columns([1, 1, 1.2, 0.8])
+                ano_sonda = c1.selectbox("Série Atual:", [6, 7, 8, 9], key=f"s_ano_{v}")
+                eixo_sonda = c2.selectbox("Eixo Temático:", ["Números e Álgebra", "Geometria e Medidas", "Estatística"], key=f"s_eixo_{v}")
+                nivel_sonda = c3.select_slider("Profundidade:", options=["Base (-2 anos)", "Transição (-1 ano)", "Ciclo (Atual)"], value="Transição (-1 ano)", key=f"s_niv_{v}")
+                qtd_q_sonda = c4.number_input("Nº Questões:", 5, 20, 10, key=f"s_qtd_{v}")
+                
+                if st.button("🚀 GERAR SONDA", use_container_width=True, type="primary", key=f"s_btn_{v}"):
+                    with st.spinner("Estruturando Sonda..."):
+                        s_id = util.gerar_sosa_id("SONDA", ano_sonda, "I")
+                        st.session_state.sosa_id_atual = s_id
+                        st.session_state.lab_meta = {"ano": ano_sonda, "trimestre": "I Trimestre", "tipo": "SONDA"}
+                        prompt_sonda = f"PERSONA: ARQUITETO_SONDA_DIAGNOSTICA. ID: {s_id}. SÉRIE: {ano_sonda}º. EIXO: {eixo_sonda}. QTD: {qtd_q_sonda}."
+                        st.session_state.lab_temp = ai.gerar_ia("ARQUITETO_SONDA_DIAGNOSTICA", prompt_sonda)
+                        st.rerun()
 
-        # --- ABA 3: ENGENHARIA DE TRABALHOS (INDEPENDENTE) ---
         with tab_trabalhos:
-            st.markdown("### 📋 Engenharia de Projetos e Trabalhos")
+            st.subheader("📋 Engenharia de Projetos e Trabalhos (BNCC)")
             with st.container(border=True):
-                c1, c2, c3 = st.columns([1, 2, 1])
-                ano_trab = c1.selectbox("Série/Ano:", [6, 7, 8, 9], key=f"trab_ano_{v}")
-                planos_trab = df_planos[df_planos['ANO'].astype(str).str.contains(str(ano_trab))]
-                if planos_trab.empty: st.warning("Nenhum plano base encontrado.")
-                else:
-                    sem_trab = c2.selectbox("Semana Base:", planos_trab['SEMANA'].tolist(), key=f"trab_sem_{v}")
-                    val_trab = c3.number_input("Valor (Pontos):", 0.0, 10.0, 2.0, step=0.5, key=f"trab_val_{v}")
-                    if st.button("🚀 CRIAR PROJETO BNCC", use_container_width=True, type="primary"):
-                        with st.spinner("Articulando competências..."):
-                            s_id = util.gerar_sosa_id("TRAB", ano_trab, "I")
-                            st.session_state.sosa_id_atual = s_id
-                            st.session_state.lab_meta = {"ano": ano_trab, "trimestre": "I Trimestre", "tipo": "TRABALHO"}
-                            plano_ref = planos_trab[planos_trab['SEMANA'] == sem_trab].iloc[0]
-                            prompt_trab = f"PERSONA: ARQUITETO_TRABALHOS_BNCC. ID: {s_id}. SÉRIE: {ano_trab}º ANO. VALOR: {val_trab}. CONTEÚDO: {ai.extrair_tag(plano_ref['PLANO_TEXTO'], 'CONTEUDOS_ESPECIFICOS')}. MISSÃO: Criar roteiro de pesquisa e rubrica. ENTREGA: [PROFESSOR], [ALUNO], [GABARITO], [PEI]."
-                            st.session_state.lab_temp = ai.gerar_ia("ARQUITETO_TRABALHOS_BNCC", prompt_trab, usar_busca=True)
-                            st.rerun()
+                c1, c2, c3 = st.columns(3)
+                ano_t = c1.selectbox("Série:", [6, 7, 8, 9], key=f"t_ano_{v}")
+                tema_t = c2.text_input("Tema do Trabalho:", key=f"t_tema_{v}")
+                valor_t = c3.number_input("Valor:", 0.0, 10.0, 2.0, step=0.5, key=f"t_val_{v}")
+                if st.button("🚀 CRIAR PROJETO BNCC", use_container_width=True, type="primary", key=f"t_btn_{v}"):
+                    with st.spinner("Articulando competências..."):
+                        s_id = util.gerar_sosa_id("TRAB", ano_t, "I")
+                        st.session_state.sosa_id_atual = s_id
+                        st.session_state.lab_meta = {"ano": ano_t, "trimestre": "I Trimestre", "tipo": "TRABALHO"}
+                        prompt_t = f"PERSONA: ARQUITETO_TRABALHOS_BNCC. ID: {s_id}. TEMA: {tema_t}. VALOR: {valor_t}."
+                        st.session_state.lab_temp = ai.gerar_ia("ARQUITETO_TRABALHOS_BNCC", prompt_t)
+                        st.rerun()
 
-        # --- ABA 4: ATIVIDADES COMPLEMENTARES (INDEPENDENTE) ---
-        with tab_complementar:
-            st.markdown("### 📚 Atividades Complementares (Reforço/Casa)")
-            with st.container(border=True):
-                c1, c2, c3 = st.columns([1, 2, 1])
-                ano_comp = c1.selectbox("Série/Ano:", [6, 7, 8, 9], key=f"comp_ano_{v}")
-                planos_comp = df_planos[df_planos['ANO'].astype(str).str.contains(str(ano_comp))]
-                if planos_comp.empty: st.warning("Nenhum plano base encontrado.")
-                else:
-                    sem_comp = c2.selectbox("Semana Base:", planos_comp['SEMANA'].tolist(), key=f"comp_sem_{v}")
-                    tipo_comp = c3.selectbox("Tipo:", ["Reforço Escolar", "Tarefa de Casa Extra", "Aprofundamento"], key=f"comp_tipo_{v}")
-                    if st.button("🚀 GERAR COMPLEMENTAR", use_container_width=True, type="primary"):
-                        with st.spinner("Gerando material extra..."):
-                            s_id = util.gerar_sosa_id("COMP", ano_comp, "I")
-                            st.session_state.sosa_id_atual = s_id
-                            st.session_state.lab_meta = {"ano": ano_comp, "trimestre": "I Trimestre", "tipo": "COMPLEMENTAR"}
-                            plano_ref = planos_comp[planos_comp['SEMANA'] == sem_comp].iloc[0]
-                            prompt_comp = f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {s_id}. SÉRIE: {ano_comp}º ANO. TIPO: {tipo_comp}. CONTEÚDO: {ai.extrair_tag(plano_ref['PLANO_TEXTO'], 'CONTEUDOS_ESPECIFICOS')}. MISSÃO: Criar lista de exercícios focada em {tipo_comp}. ENTREGA: [PROFESSOR], [ALUNO], [GABARITO], [PEI], [GABARITO_PEI]."
-                            st.session_state.lab_temp = ai.gerar_ia("MAESTRO_SOSA_V28_ELITE", prompt_comp, usar_busca=True)
-                            st.rerun()
-
-        # --- ABA 5: ACERVO ---
         with tab_acervo:
             st.subheader("📂 Acervo de Materiais Produzidos")
             if not df_aulas.empty:
-                for _, row in df_aulas.iloc[::-1].iterrows():
+                f_ano_g = st.selectbox("Filtrar Série:", ["Todos", "6º", "7º", "8º", "9º"], key=f"acervo_filter_{v}")
+                df_g = df_aulas.copy()
+                if f_ano_g != "Todos": df_g = df_g[df_g["ANO"] == f_ano_g]
+                for _, row in df_g.iloc[::-1].iterrows():
+                    raw_c = str(row["CONTEUDO"])
+                    s_id_h = ai.extrair_tag(raw_c, "SOSA_ID")
                     with st.container(border=True):
-                        st.markdown(f"**{row['TIPO_MATERIAL']}** ({row['ANO']})")
-                        st.caption(f"Data: {row['DATA']}")
-                        if st.button("👁️ VISUALIZAR / REFINAR", key=f"rev_{row.name}"):
-                            st.session_state.lab_temp = row['CONTEUDO']
-                            st.session_state.sosa_id_atual = ai.extrair_tag(row['CONTEUDO'], "SOSA_ID")
-                            st.session_state.lab_meta = {"ano": str(row['ANO']).replace('º',''), "tipo": "REVISÃO"}
+                        c_t1, c_t2, c_t3, c_t4, c_t5, c_t6 = st.columns([1.5, 1, 1, 1, 1, 1])
+                        c_t1.markdown(f"**{row['TIPO_MATERIAL']}**\n`ID: {s_id_h}`")
+                        l_alu = re.search(r"Aluno\((.*?)\)", raw_c)
+                        l_prof = re.search(r"Prof\((.*?)\)", raw_c)
+                        l_pei = re.search(r"PEI\((.*?)\)", raw_c)
+                        if l_alu: c_t2.link_button("📝 ALUNO", str(l_alu.group(1)), use_container_width=True)
+                        if l_prof: c_t3.link_button("👨‍🏫 PROF", str(l_prof.group(1)), use_container_width=True)
+                        if l_pei and "N/A" not in l_pei.group(1): c_t4.link_button("♿ PEI", str(l_pei.group(1)), use_container_width=True)
+                        else: c_t4.button("⚪ SEM PEI", disabled=True, use_container_width=True)
+                        if c_t5.button("🔄 REFINAR", key=f"ref_{row.name}", use_container_width=True):
+                            st.session_state.lab_temp = raw_c
+                            st.session_state.sosa_id_atual = s_id_h
+                            st.session_state.lab_meta = {"ano": str(row["ANO"]).replace("º",""), "tipo": "REFINO"}
                             st.rerun()
+                        if c_t6.button("🗑️ APAGAR", key=f"del_{row.name}", use_container_width=True):
+                            if db.excluir_registro_com_drive("DB_AULAS_PRONTAS", s_id_h): st.rerun()
                             
 # ==============================================================================
 # MÓDULO: PLANEJAMENTO ESTRATÉGICO (PONTO ID) - ARQUITETURA V35.0 (ESCUDO TOTAL)
