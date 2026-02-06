@@ -553,44 +553,60 @@ if menu == "🧪 Criador de Aulas":
 
         # --- ABA 4: ATIVIDADES COMPLEMENTARES (FIXAÇÃO) ---
         with tab_complementar:
-            st.subheader("📚 Atividades Complementares de Fixação")
+            st.subheader("📚 Atividades Complementares de Fixação (Filtro Soberano)")
             with st.container(border=True):
                 c1, c2 = st.columns([1, 2])
                 ano_comp = c1.selectbox("Série:", [6, 7, 8, 9], key=f"comp_ano_{v}")
-                planos_comp = df_planos[df_planos["ANO"].astype(str).str.contains(str(ano_comp))]
                 
-                if not planos_comp.empty:
-                    sem_comp = c2.selectbox("Vincular ao Planejamento:", planos_comp["SEMANA"].tolist(), key=f"comp_sem_{v}")
+                # --- FUNIL HIERÁRQUICO PARA COMPLEMENTARES ---
+                df_cur_comp = df_curriculo[df_curriculo["ANO"].astype(str).str.contains(str(ano_comp))]
+                
+                col_f1, col_f2 = st.columns(2)
+                lista_eixos_comp = sorted(df_cur_comp["EIXO"].unique().tolist())
+                sel_eixo_comp = col_f1.multiselect("1. Selecione o(s) Eixo(s):", lista_eixos_comp, key=f"comp_eixo_{v}")
+                
+                f_cont_comp, f_obj_comp = "", ""
+                
+                if sel_eixo_comp:
+                    df_cont_comp = df_cur_comp[df_cur_comp["EIXO"].isin(sel_eixo_comp)]
+                    lista_conts_comp = sorted(df_cont_comp["CONTEUDO_ESPECIFICO"].unique().tolist())
+                    sel_cont_comp = col_f2.multiselect("2. Selecione os Conteúdos:", lista_conts_comp, key=f"comp_cont_{v}")
                     
-                    c_q1, c_q2 = st.columns([1, 2])
-                    tipo_comp = c_q1.radio("Objetivo do Material:", ["Fixação de Conteúdo", "Reforço/Recuperação", "Aprofundamento (Elite)"], key=f"comp_tipo_{v}")
-                    qtd_q_comp = c_q2.slider("Nº de Questões:", 1, 20, 10, key=f"comp_q_{v}")
-                    
-                    instr_extra_comp = st.text_area("📝 Instruções de Desenvolvimento (Como a IA deve criar?):", 
-                                                   placeholder="Ex: Use situações-problema do cotidiano, foque em interpretação de texto matemático...", 
-                                                   key=f"comp_instr_{v}")
-                    
-                    if st.button("🚀 GERAR MATERIAL COMPLEMENTAR", use_container_width=True, type="primary"):
-                        with st.spinner("Maestro Sosa arquitetando material extra..."):
-                            plano_ref = planos_comp[planos_comp["SEMANA"] == sem_comp].iloc[0]
+                    if sel_cont_comp:
+                        df_obj_comp = df_cont_comp[df_cont_comp["CONTEUDO_ESPECIFICO"].isin(sel_cont_comp)]
+                        lista_objs_comp = sorted(df_obj_comp["OBJETIVOS"].unique().tolist())
+                        sel_obj_comp = st.multiselect("3. Selecione os Objetivos:", lista_objs_comp, key=f"comp_obj_{v}")
+                        
+                        f_cont_comp = " / ".join(sel_cont_comp)
+                        f_obj_comp = " \n ".join(sel_obj_comp)
+
+                st.divider()
+                
+                # Parâmetros de Geração
+                c_q1, c_q2 = st.columns([1, 2])
+                qtd_q_comp = c_q1.slider("Nº de Questões:", 1, 20, 10, key=f"comp_q_{v}")
+                instr_extra_comp = c_q2.text_area("📝 Instruções Extras (ex: 'Foque em jogos', 'Use notícias'):", key=f"comp_instr_{v}")
+                
+                if st.button("🚀 GERAR MATERIAL COMPLEMENTAR", use_container_width=True, type="primary"):
+                    if not sel_obj_comp:
+                        st.error("Selecione pelo menos um Objetivo no funil.")
+                    else:
+                        with st.spinner("Maestro Sosa arquitetando material visual e tecnológico..."):
                             s_id = util.gerar_sosa_id("COMP", ano_comp, "I")
                             st.session_state.sosa_id_atual = s_id
                             st.session_state.lab_meta = {"ano": ano_comp, "trimestre": "I Trimestre", "tipo": "COMPLEMENTAR"}
                             
                             prompt_comp = (
                                 f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {s_id}.\n"
-                                f"OBJETIVO: Gerar material COMPLEMENTAR de {tipo_comp}.\n"
                                 f"SÉRIE: {ano_comp}º Ano.\n"
-                                f"CONTEÚDO BASE: {ai.extrair_tag(plano_ref['PLANO_TEXTO'], 'CONTEUDOS_ESPECIFICOS')}.\n"
-                                f"QUANTIDADE: Gerar EXATAMENTE {qtd_q_comp} questões de múltipla escolha (A-E).\n"
-                                f"INSTRUÇÕES DO PROFESSOR: {instr_extra_comp}.\n\n"
-                                f"🚨 MISSÃO: Entregue um material denso e profissional.\n"
-                                f"ENTREGA: [PROFESSOR], [ALUNO], [GABARITO], [PEI], [GABARITO_PEI]."
+                                f"CONTEÚDO SOBERANO: {f_cont_comp}.\n"
+                                f"OBJETIVOS SOBERANOS: {f_obj_comp}.\n"
+                                f"QUANTIDADE: {qtd_q_comp} questões A-E.\n"
+                                f"INSTRUÇÕES: {instr_extra_comp}.\n\n"
+                                f"🚨 MISSÃO: Use o Google Search. Inclua PROMPT IMAGEM nas questões que precisarem."
                             )
                             st.session_state.lab_temp = ai.gerar_ia("MAESTRO_SOSA_V28_ELITE", prompt_comp, usar_busca=True)
                             st.rerun()
-                else: 
-                    st.info("📭 Crie um planejamento para esta série no Ponto ID primeiro para vincular o conteúdo.")
 
         # --- ABA 5: ACERVO DE MATERIAIS ---
         with tab_acervo:
