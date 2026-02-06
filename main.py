@@ -380,13 +380,14 @@ if menu == "🧪 Criador de Aulas":
         st.markdown("---")
         with st.container(border=True):
             st.subheader("🤖 Refinador Maestro")
-            cmd_lab = st.chat_input("Solicite ajustes técnicos...", key=f"chat_lab_{v}")
-            if cmd_lab:
+            cmd_refine = st.chat_input("Solicite ajustes no plano...", key=f"refine_p_{v}")
+            if cmd_refine:
                 with st.spinner("Maestro Sosa realizando reengenharia..."):
-                    st.session_state.lab_temp = ai.gerar_ia("REFINADOR_MATERIAIS", f"ORDEM: {cmd_lab}\n\nATUAL:\n{st.session_state.lab_temp}")
-                    st.session_state.v_lab += 1; st.rerun()
-        
-        if st.button("🆕 GERAR OUTRO MATERIAL (LIMPAR)", use_container_width=True): reset_laboratorio()
+                    # O segredo está aqui: passamos o texto atual para a IA reescrever
+                    novo_plano = ai.gerar_ia("REFINADOR_PEDAGOGICO", f"ORDEM: {cmd_refine}\n\nTEXTO ATUAL:\n{st.session_state.p_temp}")
+                    if novo_plano:
+                        st.session_state.p_temp = novo_plano # Substitui o rascunho pelo refinado
+                        st.rerun()
 
     # --- SEÇÃO DE ENTRADA (ABAS INDEPENDENTES RESTAURADAS) ---
     else:
