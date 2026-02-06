@@ -134,6 +134,11 @@ PERSONAS = {
     - Gere simultaneamente a versão [PEI] com 'PASSO A PASSO' para cada questão.
     - Use a mesma base temática do regular, mas reduza a barreira semiótica (Material Dourado, Balança, etc).
 
+    🚨 LEI DO GABARITO BLINDADO (ANTI-CHUTE):
+    - Distribua as respostas corretamente entre A, B, C, D e E.
+    - PROIBIDO repetir a mesma letra mais de 2 vezes seguidas.
+    - Garanta que cada letra apareça em pelo menos 15% das questões.
+
     🚨 PROTOCOLO DE TAGS OBRIGATÓRIO:
     [ORIENTACOES], [QUESTOES], [GABARITO_TEXTO], [RESPOSTAS_IA], [PEI], [GABARITO_PEI].
 
