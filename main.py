@@ -565,7 +565,7 @@ if menu == "🧪 Criador de Aulas":
                             st.write(ai.extrair_tag(raw_c, "ALUNO"))
                             
 # ==============================================================================
-# MÓDULO: PLANEJAMENTO ESTRATÉGICO (PONTO ID) - ARQUITETURA V31.0 (SINCRO REAL-TIME)
+# MÓDULO: PLANEJAMENTO ESTRATÉGICO (PONTO ID) - ARQUITETURA V30.0 (SINCRO TOTAL)
 # ==============================================================================
 if menu == "📅 Planejamento (Ponto ID)":
     st.title("📅 Engenharia de Planejamento (Ponto ID)")
@@ -575,7 +575,6 @@ if menu == "📅 Planejamento (Ponto ID)":
         keys = ["p_temp", "refino_ativo"]
         for k in keys:
             if k in st.session_state: del st.session_state[k]
-        st.cache_data.clear() # Limpa cache ao resetar
         st.session_state.v_plano = int(time.time())
         st.rerun()
 
@@ -662,6 +661,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                 ed_ava = st.text_area("Avaliação:", ai.extrair_tag(txt_bruto, "AVALIACAO"), key=f"ed_ava_{v}")
                 ed_pei = st.text_area("Adaptação PEI:", ai.extrair_tag(txt_bruto, "ADAPTACAO_PEI"), key=f"ed_pei_{v}")
 
+                # BOTÃO ÚNICO DE SALVAMENTO
                 if st.button("💾 FINALIZAR E DISPARAR PRODUÇÃO", use_container_width=True, type="primary", key=f"btn_final_hub_{v}"):
                     with st.status("Sincronizando...") as status:
                         final_ano_str = f"{ano_p}º"
@@ -676,8 +676,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                             final_txt = f"[BNCC_CODE] {ed_bncc} \n[CONTEUDO_GERAL] {ed_geral} \n[CONTEUDOS_ESPECIFICOS] {ed_espec} \n[OBJETIVOS_ENSINO] {ed_objs} \n[AULA_1] {ed_a1} \n[AULA_2] {ed_a2} \n[SABADO_LETIVO] {ed_a3} \n[AVALIACAO] {ed_ava} \n[ADAPTACAO_PEI] {ed_pei} \n--- LINK DRIVE --- {link_drive}"
                             db.salvar_no_banco("DB_PLANOS", [datetime.now().strftime("%d/%m/%Y"), sem_limpa, final_ano_str, trim_atual, "HUB_ATIVO", final_txt, link_drive])
                             status.update(label="✅ Plano Salvo!", state="complete")
-                            st.cache_data.clear() # Limpa cache para o Dashboard ver o novo plano
-                            st.balloons(); time.sleep(1); reset_planejamento()
+                            st.balloons(); reset_planejamento()
 
             with t_vis:
                 st.markdown(f"### 🎯 {ed_geral}"); st.caption(f"🆔 BNCC: {ed_bncc}")
@@ -690,11 +689,10 @@ if menu == "📅 Planejamento (Ponto ID)":
                 st.markdown(f"**📝 AVALIAÇÃO:** {ed_ava}")
                 st.markdown(f"**♿ ESTRATÉGIA PEI:** {ed_pei}")
 
-    # --- ABA 2: DASHBOARD DE PRODUÇÃO ---
+    # --- ABA 2: DASHBOARD DE PRODUÇÃO (FILTRO ROBUSTO) ---
     with tab_producao:
         st.subheader("🏗️ Linha de Montagem de Materiais")
         if not df_planos.empty:
-            # Filtro robusto para HUB_ATIVO
             planos_ativos = df_planos[df_planos['TURMA'].astype(str).str.contains("HUB_ATIVO", case=False, na=False)].iloc[::-1]
             if not planos_ativos.empty:
                 for _, row in planos_ativos.iterrows():
@@ -707,11 +705,11 @@ if menu == "📅 Planejamento (Ponto ID)":
                             st.session_state.lab_temp = row['PLANO_TEXTO']
                             st.session_state.sosa_id_atual = util.gerar_sosa_id("AULA", row['ANO'], row['TRIMESTRE'])
                             st.session_state.lab_meta = {"ano": str(row['ANO']).replace('º',''), "trimestre": row['TRIMESTRE'], "tipo": "PRODUÇÃO_HUB"}
-                            st.success("✅ Enviado ao Laboratório! Vá ao menu lateral.")
-            else: st.info("📭 Nenhum plano pendente. Use o botão 'Mandar para Produção' no Acervo.")
+                            st.success("✅ Enviado ao Laboratório! Clique em '🧪 Criador de Aulas' no menu lateral.")
+            else: st.info("📭 Nenhum plano pendente. Finalize um planejamento ou use o botão 'Mandar para Produção' no Acervo.")
         else: st.info("📭 Banco de planos vazio.")
 
-    # --- ABA 3: GESTÃO DE ACERVO (CORREÇÃO DO BOTÃO) ---
+    # --- ABA 3: GESTÃO DE ACERVO (COM BOTÃO DE EMPURRAR) ---
     with tab_acervo:
         st.subheader("📂 Repositório de Planos Estratégicos")
         if not df_planos.empty:
@@ -719,6 +717,7 @@ if menu == "📅 Planejamento (Ponto ID)":
             f_ano_h = c_h1.selectbox("Filtrar por Série:", ["Todos", "1º", "2º", "3º", "4º", "5º", "6º", "7º", "8º", "9º"], key="hist_ano_v27")
             df_h = df_planos.copy()
             if f_ano_h != "Todos": df_h = df_h[df_h['ANO'] == f_ano_h]
+            
             if not df_h.empty:
                 sel_h = st.selectbox("Selecionar Plano:", df_h['SEMANA'].tolist(), key="hist_sem_v27")
                 dados_h = df_h[df_h['SEMANA'] == sel_h].iloc[0]
@@ -728,36 +727,91 @@ if menu == "📅 Planejamento (Ponto ID)":
                 with col_btn1:
                     if st.button("🔄 REABRIR PARA REFINO", use_container_width=True):
                         st.session_state.refino_ativo = {"ano": dados_h['ANO'], "semana": sel_h}
-                        st.session_state.p_temp = raw_h; st.rerun()
+                        st.session_state.p_temp = raw_h
+                        st.rerun()
+                
                 with col_btn2:
-                    if st.button("🚀 MANDAR PARA PRODUÇÃO", use_container_width=True, type="primary", key=f"push_hub_{v}"):
-                        with st.spinner("Ativando na Linha de Montagem..."):
-                            wb_p = db.conectar()
-                            ws_p = wb_p.worksheet("DB_PLANOS")
-                            dados_all = ws_p.get_all_values()
-                            # Busca a linha exata combinando Semana e Ano
-                            for i, r in enumerate(dados_all):
-                                if i > 0 and r[1] == sel_h and r[2] == dados_h['ANO']:
-                                    ws_p.update_cell(i + 1, 5, "HUB_ATIVO")
-                                    st.cache_data.clear() # LIMPA O CACHE PARA O DASHBOARD VER
-                                    st.success("✅ Enviado!")
-                                    time.sleep(1)
-                                    st.rerun()
+                    # BOTÃO CORRIGIDO COM A NOVA FUNÇÃO
+                    if st.button("🚀 MANDAR PARA PRODUÇÃO", use_container_width=True, type="primary", key=f"btn_hub_act_{sel_h}"):
+                        with st.spinner("Enviando para Linha de Montagem..."):
+                            if db.ativar_plano_no_hub(sel_h, dados_h['ANO']):
+                                st.success("✅ Plano enviado com sucesso!")
+                                time.sleep(1)
+                                st.rerun() # O rerun agora lerá os dados novos sem cache
+                
                 with col_btn3:
-                    if "https" in str(dados_h['LINK_DRIVE']): st.link_button("🚀 ABRIR NO DRIVE", str(dados_h['LINK_DRIVE']), use_container_width=True)
+                    if "https" in str(dados_h['LINK_DRIVE']): 
+                        st.link_button("🚀 ABRIR NO DRIVE", str(dados_h['LINK_DRIVE']), use_container_width=True)
 
                 with st.container(border=True):
                     st.markdown(f"#### 🎯 {ai.extrair_tag(raw_h, 'CONTEUDO_GERAL')}")
                     st.write(f"**Conteúdos:** {ai.extrair_tag(raw_h, 'CONTEUDOS_ESPECIFICOS')}")
                     st.divider()
                     c_v1, c_v2 = st.columns(2)
-                    with c_v1: st.markdown("##### 📘 Aula 1"); st.write(ai.extrair_tag(raw_h, "AULA_1"))
-                    with c_v2: st.markdown("##### 📗 Aula 2"); st.write(ai.extrair_tag(raw_h, "AULA_2"))
+                    with c_v1: 
+                        st.markdown("##### 📘 Aula 1")
+                        st.write(ai.extrair_tag(raw_h, "AULA_1"))
+                    with c_v2: 
+                        st.markdown("##### 📗 Aula 2")
+                        st.write(ai.extrair_tag(raw_h, "AULA_2"))
                 
                 if st.button("🗑️ EXCLUIR PLANO", use_container_width=True):
-                    if db.excluir_plano_completo(sel_h, dados_h['ANO']): st.rerun()
-            else: st.info("Nenhum plano encontrado.")
-        else: st.info("📭 Acervo vazio.")
+                    if db.excluir_plano_completo(sel_h, dados_h['ANO']): 
+                        st.rerun()
+            else:
+                st.info("Nenhum plano encontrado para esta série.")
+        else:
+            st.info("📭 Acervo vazio.")
+
+    # --- ABA 3: MATRIZ CURRICULAR ATIVA (V27.2 - BUSCA ROBUSTA) ---
+    with tab_matriz:
+        st.subheader("📖 Matriz de Competências e Status de Execução")
+        if not df_curriculo.empty:
+            ano_c = st.selectbox("Série para Consulta:", [6, 7, 8, 9], key="matriz_ano_v27")
+            
+            # 1. Filtrar currículo do ano selecionado
+            df_c = df_curriculo[df_curriculo['ANO'] == ano_c].copy()
+            
+            # 2. Capturar planos e normalizar texto para busca
+            # Filtra planos que contenham o número do ano (ex: "6" em "6º")
+            planos_feitos = df_planos[df_planos['ANO'].astype(str).str.contains(str(ano_c))]
+            texto_todos_planos = " ".join(planos_feitos['PLANO_TEXTO'].astype(str)).upper()
+
+            # 3. Função de Verificação Inteligente (Busca por palavras-chave)
+            def checar_conclusao_robusta(conteudo_db):
+                if not texto_todos_planos: return "⏳ PENDENTE"
+                
+                conteudo_limpo = str(conteudo_db).upper()
+                # Teste 1: Busca exata (Literal)
+                if conteudo_limpo in texto_todos_planos:
+                    return "✅ CONCLUÍDO"
+                
+                # Teste 2: Busca por palavras-chave (Garante que termos técnicos batam)
+                # Removemos palavras curtas (e, de, o, os) e focamos nos termos principais
+                palavras = [p for p in conteudo_limpo.replace(";", "").replace(",", "").split() if len(p) > 3]
+                if not palavras: return "⏳ PENDENTE"
+                
+                # Se pelo menos 2 palavras-chave importantes existirem no plano, consideramos concluído
+                matches = sum(1 for p in palavras if p in texto_todos_planos)
+                if matches >= 2:
+                    return "✅ CONCLUÍDO"
+                
+                return "⏳ PENDENTE"
+
+            df_c['STATUS'] = df_c['CONTEUDO_ESPECIFICO'].apply(checar_conclusao_robusta)
+
+            # 4. Exibição da Tabela
+            st.dataframe(
+                df_c[['TRIMESTRE', 'EIXO', 'CONTEUDO_ESPECIFICO', 'STATUS']],
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "STATUS": st.column_config.TextColumn("Situação", width="small"),
+                    "CONTEUDO_ESPECIFICO": st.column_config.TextColumn("Conteúdo do Currículo", width="large")
+                }
+            )
+        else:
+            st.info("📭 Base de currículo não localizada.")
 
     # --- ABA 4: ANALYTICS DE COBERTURA (V27.2 - KPI TRIMESTRAL) ---
     with tab_auditoria:
