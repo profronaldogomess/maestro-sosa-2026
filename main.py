@@ -565,7 +565,7 @@ if menu == "🧪 Criador de Aulas":
                             st.write(ai.extrair_tag(raw_c, "ALUNO"))
                             
 # ==============================================================================
-# MÓDULO: PLANEJAMENTO ESTRATÉGICO (PONTO ID) - ARQUITETURA V29.1 (CORREÇÃO TOTAL)
+# MÓDULO: PLANEJAMENTO ESTRATÉGICO (PONTO ID) - ARQUITETURA V29.5 (SINCRO TOTAL)
 # ==============================================================================
 if menu == "📅 Planejamento (Ponto ID)":
     st.title("📅 Engenharia de Planejamento (Ponto ID)")
@@ -605,7 +605,7 @@ if menu == "📅 Planejamento (Ponto ID)":
             trim_atual = sem_p.split(" - ")[1] if " - " in sem_p else "I Trimestre"
             modo_p = c3.radio("Método de Elaboração:", ["📖 Livro Didático", "🎛️ Manual (Banco)"], horizontal=True, key=f"modo_p_{v}")
 
-        # 3. SELEÇÃO HIERÁRQUICA (MANUAL) OU LIVRO
+        # 3. SELEÇÃO HIERÁRQUICA
         with st.container(border=True):
             f_eixo, f_cont, f_obj = "", "", ""
             if modo_p == "🎛️ Manual (Banco)":
@@ -652,7 +652,6 @@ if menu == "📅 Planejamento (Ponto ID)":
                 c_ed1, c_ed2 = st.columns([1, 2])
                 ed_bncc = c_ed1.text_input("Código BNCC:", ai.extrair_tag(txt_bruto, "BNCC_CODE"), key=f"ed_b_{v}")
                 
-                # Se for manual, mantém o que selecionou. Se for livro, pega o que a IA sugeriu.
                 val_eixo = f_eixo if f_eixo else ai.extrair_tag(txt_bruto, "CONTEUDO_GERAL")
                 val_cont = f_cont if f_cont else ai.extrair_tag(txt_bruto, "CONTEUDOS_ESPECIFICOS")
                 val_obj = f_obj if f_obj else ai.extrair_tag(txt_bruto, "OBJETIVOS_ENSINO")
@@ -663,25 +662,28 @@ if menu == "📅 Planejamento (Ponto ID)":
                 
                 ed_a1 = st.text_area("AULA 1 (Início/Meio/Fim):", ai.extrair_tag(txt_bruto, "AULA_1"), height=250, key=f"a1_{v}")
                 ed_a2 = st.text_area("AULA 2 (Início/Meio/Fim):", ai.extrair_tag(txt_bruto, "AULA_2"), height=250, key=f"a2_{v}")
-                ed_a3 = st.text_area("AULA 3 (Sábado):", ai.extrair_tag(txt_bruto, "AULA_3"), height=200, key=f"a3_{v}") if (tem_sabado or "3" in carga_horaria) else "N/A"
+                
+                # EXTRAÇÃO DO SÁBADO USANDO A TAG CORRETA DO EXTRATOR
+                ed_a3 = st.text_area("AULA 3 (Sábado):", ai.extrair_tag(txt_bruto, "SABADO_LETIVO"), height=200, key=f"a3_{v}") if (tem_sabado or "3" in carga_horaria) else "N/A"
                 
                 ed_ava = st.text_area("Avaliação:", ai.extrair_tag(txt_bruto, "AVALIACAO"), key=f"ed_ava_{v}")
                 ed_pei = st.text_area("Adaptação PEI:", ai.extrair_tag(txt_bruto, "ADAPTACAO_PEI"), key=f"ed_pei_{v}")
 
-                if st.button("💾 FINALIZAR E DISPARAR PRODUÇÃO", use_container_width=True, type="primary", key=f"btn_final_hub_{v}"):
+                if st.button("💾 FINALIZAR E DISPARAR PRODUÇÃO", use_container_width=True, type="primary", key=f"btn_finalizar_hub_{v}"):
                     with st.status("Sincronizando...") as status:
                         final_ano_str = f"{ano_p}º"
                         nome_arquivo = f"PLANO_{ano_p}ANO_{sem_limpa.replace(' ', '')}"
                         db.excluir_plano_completo(sem_limpa, final_ano_str)
+                        
                         metodologia_unificada = f"AULA 1:\n{ed_a1}\n\nAULA 2:\n{ed_a2}"
-                        if ed_a3 != "N/A": metodologia_unificada += f"\n\nAULA 3:\n{ed_a3}"
+                        if ed_a3 != "N/A": metodologia_unificada += f"\n\nSÁBADO LETIVO:\n{ed_a3}"
                         
                         dados_docx = {"geral": f"[{ed_bncc}] {ed_geral}", "especificos": ed_espec, "objetivos": ed_objs, "metodologia": metodologia_unificada, "avaliacao": ed_ava, "pei": ed_pei}
                         doc_io = exporter.gerar_docx_plano_pedagogico_ELITE(nome_arquivo, dados_docx, {"ano": final_ano_str, "semana": sem_limpa, "trimestre": trim_atual})
                         link_drive = db.subir_e_converter_para_google_docs(doc_io, nome_arquivo, trimestre=trim_atual, categoria=final_ano_str, semana=sem_limpa, modo="PLANEJAMENTO")
                         
                         if "https" in str(link_drive):
-                            final_txt = f"[BNCC_CODE] {ed_bncc} \n[CONTEUDO_GERAL] {ed_geral} \n[CONTEUDOS_ESPECIFICOS] {ed_espec} \n[OBJETIVOS_ENSINO] {ed_objs} \n[AULA_1] {ed_a1} \n[AULA_2] {ed_a2} \n[AULA_3] {ed_a3} \n[AVALIACAO] {ed_ava} \n[ADAPTACAO_PEI] {ed_pei} \n--- LINK DRIVE --- {link_drive}"
+                            final_txt = f"[BNCC_CODE] {ed_bncc} \n[CONTEUDO_GERAL] {ed_geral} \n[CONTEUDOS_ESPECIFICOS] {ed_espec} \n[OBJETIVOS_ENSINO] {ed_objs} \n[AULA_1] {ed_a1} \n[AULA_2] {ed_a2} \n[SABADO_LETIVO] {ed_a3} \n[AVALIACAO] {ed_ava} \n[ADAPTACAO_PEI] {ed_pei} \n--- LINK DRIVE --- {link_drive}"
                             db.salvar_no_banco("DB_PLANOS", [datetime.now().strftime("%d/%m/%Y"), sem_limpa, final_ano_str, trim_atual, "HUB_ATIVO", final_txt, link_drive])
                             status.update(label="✅ Plano Salvo!", state="complete")
                             st.balloons(); reset_planejamento()
@@ -697,7 +699,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                 st.divider()
                 st.markdown(f"**📝 AVALIAÇÃO:** {ed_ava}")
                 st.markdown(f"**♿ ESTRATÉGIA PEI:** {ed_pei}")
-                
+
     with tab_producao:
         st.subheader("🏗️ Linha de Montagem de Materiais")
         if not df_planos.empty:
