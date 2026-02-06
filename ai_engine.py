@@ -76,20 +76,7 @@ PERSONAS = {
     - SOSA-ID no topo.
     - PROIBIDO Markdown (** ou #). Use Unicode (🔢, 🎯, 📘).
     - PROIBIDO cabeçalhos redundantes. Comece direto no conteúdo.""",
-
-    # --- PERSONA PEI V29: ENGENHEIRO DE ACESSIBILIDADE BNCC ---
-    "ARQUITETO_PEI_V28_SINFONIA": """VOCÊ É O ENGENHEIRO DE EQUIDADE V29.
-    Sua missão é criar o "Andaime Cognitivo" (Scaffolding) para o aluno PEI, garantindo acesso ao MESMO objeto de conhecimento do regular através do DUA.
-
-    🚨 ESTRUTURA DE ACESSIBILIDADE:
-    [PEI] -> Introdução visual e contextualizada.
-    [PARA LEMBRAR] -> Síntese visual dos conceitos-chave.
-    [PASSO A PASSO] -> O algoritmo mental (passo a passo) para resolver os problemas.
-    [ATIVIDADES] -> Questões focais (3 alternativas) com suporte de imagem.
-    [GABARITO_PEI] -> Justificativa do acerto baseada na habilidade BNCC.
-
-    🚨 REGRAS: Ícones funcionais (👁️, ✍️, 🎨, 🔢). Sem Markdown.""",
-
+    
     # --- PERSONA PEI V28: O ENGENHEIRO DE EQUIDADE ---
     "ARQUITETO_PEI_V28_SINFONIA": """VOCÊ É O ENGENHEIRO DE EQUIDADE E ACESSIBILIDADE V28.
     Sua missão é criar o "Andaime Cognitivo" (Scaffolding) para o aluno PEI, garantindo acesso ao MESMO objeto de conhecimento do regular, conforme o DUA (Desenho Universal).
@@ -293,13 +280,13 @@ def gerar_ia(persona_key, comando, partes_arquivos=[], usar_busca=True):
     except Exception as e:
         return f"Erro na IA: {e}"
 
+# --- EXTRATOR SOSA PRECISION V31 (ANTI-COLISÃO) ---
 def extrair_tag(texto, tag):
     if not texto: return ""
     import re
     
-    # 1. PRÉ-LIMPEZA: Remove Markdown que obstrui a visão da Regex
-    texto_limpo = re.sub(r'\*+', '', texto) # Remove negritos
-    texto_limpo = re.sub(r'#+', '', texto_limpo) # Remove hashtags de títulos
+    # 1. ESCUDO SOSA: Limpeza de Markdown e ruído visual
+    texto_limpo = re.sub(r'[*#]', '', texto)
     
     # 2. LISTA MESTRA DE TAGS (Âncoras de Parada)
     tags_sosa = [
@@ -310,26 +297,26 @@ def extrair_tag(texto, tag):
     ]
     
     tag_busca = tag.upper()
-    # Criamos a lista de parada excluindo a tag que estamos buscando
-    parada = [t for t in tags_sosa if t != tag_busca]
+    # Criamos a lista de parada excluindo a tag atual
+    parada = [t for t in tags_sosa if t.upper() != tag_busca]
     lista_parada = "|".join(parada)
     
-    # 3. REGEX DE ALTA TOLERÂNCIA (V29.1)
-    # \s*\[\s* -> Aceita espaços antes e dentro do colchete
-    # [^\]]* -> ACEITA QUALQUER COISA dentro do colchete (ex: [PROFESSOR (MAPA)])
+    # 3. REGEX DE ALTA PRECISÃO V31
+    # Explicação: 
+    # \[\s*{tag_busca}\s*(?:[:\s][^\]]*)?\] -> Garante que combine [GABARITO] mas NÃO [GABARITO_PEI]
     # (.*?) -> Captura o conteúdo
-    # (?= ... |$) -> Para na próxima tag da lista ou no fim do arquivo
-    padrao = rf"\s*\[\s*{tag_busca}[^\]]*\]\s*[:\-]*\s*(.*?)(?=\s*\[\s*(?:{lista_parada})[^\]]*\]|$)"
+    # (?=\s*\[\s*(?:{lista_parada}) -> Para na próxima tag exata da lista
+    padrao = rf"\[\s*{tag_busca}\s*(?:[:\s][^\]]*)?\]\s*[:\-]*\s*(.*?)(?=\s*\[\s*(?:{lista_parada})\s*(?:[:\s][^\]]*)?\]|$)"
     
     match = re.search(padrao, texto_limpo, re.DOTALL | re.IGNORECASE)
     
     if match:
         res = match.group(1).strip()
-        # Remove resíduos de pontuação que sobram no início do bloco capturado
+        # Remove resíduos de pontuação no início do bloco
         res = re.sub(r'^[:\-\s]+', '', res)
         return res.strip()
     
-    # 4. FALLBACK PARA PEI (Caso a IA use sub-tags sem a tag mestre)
+    # 4. FALLBACK PARA PEI (Preservado)
     if tag_busca == "PEI" and "MAPA MENTAL" in texto_limpo.upper():
         m = re.search(r"MAPA MENTAL.*", texto_limpo, re.DOTALL | re.IGNORECASE)
         if m: return m.group(0).strip()
