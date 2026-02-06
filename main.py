@@ -1860,8 +1860,16 @@ elif menu == "📝 Central de Avaliações":
             if st.button("💾 SALVAR COMO PRONTO PARA APLICAÇÃO", use_container_width=True, type="primary"):
                 with st.status("🚀 Sincronizando Ativo...") as status:
                     v_total_num = st.session_state.get('av_valor_total', 10.0)
+                    v_por_quest = v_total_num / qtd_q
                     identificador = f"{tipo_av} - {ano_av}º Ano ({trim_av})"
-                    info_doc = {"ano": f"{ano_av}º", "tipo_prova": tipo_av, "valor": util.sosa_to_str(v_total_num), "qtd_questoes": qtd_q, "trimestre": trim_av}
+                    info_doc = {
+                        "ano": f"{ano_av}º", 
+                        "tipo_prova": tipo_av, 
+                        "valor": util.sosa_to_str(v_total_num), 
+                        "valor_questao": util.sosa_to_str(v_por_quest), # NOVO
+                        "qtd_questoes": qtd_q, 
+                        "trimestre": trim_av
+                    }
                     
                     db.excluir_avaliacao_completa(identificador, tipo_av)
 
