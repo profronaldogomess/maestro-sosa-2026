@@ -592,6 +592,12 @@ if menu == "📅 Planejamento (Ponto ID)":
     with tab_gerar:
         is_refinando = "refino_ativo" in st.session_state
         
+        if is_refinando:
+            meta = st.session_state.refino_ativo
+            st.warning(f"🛠️ **MODO REFINO ATIVO:** Editando **{meta['ano']}** | **{meta['semana']}**.")
+            if st.button("❌ CANCELAR REFINO E VOLTAR AO NOVO", use_container_width=True):
+                reset_planejamento()
+        
         # --- 1. STATUS DA JORNADA ---
         with st.container(border=True):
             st.markdown("### 🛡️ 1. Status da Jornada e Calendário")
@@ -604,31 +610,41 @@ if menu == "📅 Planejamento (Ponto ID)":
         with st.container(border=True):
             st.markdown("### ⚙️ 2. Parâmetros de Regência (Fiel ao Banco)")
             c1, c2, c3 = st.columns([1, 2, 1.5])
-            ano_p = c1.selectbox("Série/Ano:", [1, 2, 3, 4, 5, 6, 7, 8, 9], key=f"ano_sel_{v}")
+            ano_p = c1.selectbox("Série/Ano:", [1, 2, 3, 4, 5, 6, 7, 8, 9], index=5, key=f"ano_sel_{v}") # Default 6º ano
             todas_semanas = util.gerar_semanas()
             sem_p = c2.selectbox("Semana de Referência:", todas_semanas, key=f"sem_sel_{v}")
             sem_limpa = sem_p.split(" (")[0]
-            trim_atual = sem_p.split(" - ")[1] if " - " in sem_p else "I Trimestre"
             
-            # BUSCA AUTOMÁTICA NO CSV (LÓGICA SOBERANA)
-            # Filtra o currículo carregado do CSV pelo Ano e Trimestre
-            df_curriculo_filtrado = df_curriculo[(df_curriculo['ANO'] == str(ano_p)) & (df_curriculo['TRIMESTRE'].str.contains(trim_atual[0]))]
+            # Lógica de Trimestre Robusta
+            if " - " in sem_p:
+                trim_atual = sem_p.split(" - ")[1]
+            else:
+                trim_atual = "I Trimestre" # Fallback para Jornada Pedagógica
+            
+            # CORREÇÃO DO FILTRO (Comparação Numérica + Trimestre)
+            # Convertemos o ano_p para int e comparamos com a coluna ANO que também é int
+            df_curriculo_filtrado = df_curriculo[
+                (df_curriculo['ANO'] == int(ano_p)) & 
+                (df_curriculo['TRIMESTRE'].str.contains(trim_atual[0], na=False))
+            ]
             
             if not df_curriculo_filtrado.empty:
-                # Tenta encontrar o conteúdo baseado na ordem das semanas
+                # Tenta encontrar o conteúdo baseado na ordem das semanas (Ciclo)
                 idx_semana = (todas_semanas.index(sem_p) % len(df_curriculo_filtrado))
                 linha_csv = df_curriculo_filtrado.iloc[idx_semana]
                 
                 eixo_pre = st.text_input("Eixo (CSV):", linha_csv['EIXO'], disabled=True)
                 cont_pre = st.text_area("Conteúdo Literal (CSV):", linha_csv['CONTEUDO_ESPECIFICO'], disabled=True)
                 obj_pre = st.text_area("Objetivos Literais (CSV):", linha_csv['OBJETIVOS'], disabled=True)
+                pronto_para_gerar = True
             else:
-                st.error("⚠️ Currículo não localizado para este Ano/Trimestre no CSV.")
+                st.error(f"⚠️ Currículo não localizado para o {ano_p}º Ano no {trim_atual}. Verifique o CSV.")
                 eixo_pre, cont_pre, obj_pre = "", "", ""
+                pronto_para_gerar = False
 
-        strat = st.text_area("Estratégia Pedagógica / Observações:", key=f"strat_{v}")
+        strat = st.text_area("Estratégia Pedagógica / Observações:", placeholder="Ex: Focar em Material Dourado...", key=f"strat_{v}")
 
-        if st.button("🚀 COMPILAR PLANEJAMENTO BNCC (CICLO COMPLETO)", use_container_width=True, type="primary"):
+        if st.button("🚀 COMPILAR PLANEJAMENTO BNCC", use_container_width=True, type="primary", disabled=not pronto_para_gerar):
             with st.spinner("Maestro SOSA consultando Brasil Escola e BNCC..."):
                 prompt = (
                     f"ANO: {ano_p}º Ano. SEMANA: {sem_limpa}. TRIMESTRE: {trim_atual}.\n"
@@ -641,7 +657,8 @@ if menu == "📅 Planejamento (Ponto ID)":
                 st.session_state.p_temp = ai.gerar_ia("PLANE_PEDAGOGICO", prompt)
                 st.rerun()
 
-        if "p_temp" in st.session_state:
+        # --- SÓ EXIBE O EDITOR SE O TEXTO FOI GERADO ---
+        if "p_temp" in st.session_state and len(st.session_state.p_temp) > 50:
             st.markdown("---")
             txt_bruto = st.session_state.p_temp
             
@@ -655,12 +672,34 @@ if menu == "📅 Planejamento (Ponto ID)":
                 
                 ed_a1 = st.text_area("AULA 1 (Início/Meio/Fim):", ai.extrair_tag(txt_bruto, "AULA_1"), height=250, key=f"a1_{v}")
                 ed_a2 = st.text_area("AULA 2 (Início/Meio/Fim):", ai.extrair_tag(txt_bruto, "AULA_2"), height=250, key=f"a2_{v}")
+                
                 if tem_sabado or "3" in carga_horaria:
                     ed_a3 = st.text_area("AULA 3 (Sábado Letivo):", ai.extrair_tag(txt_bruto, "AULA_3"), height=250, key=f"a3_{v}")
-                else: ed_a3 = "N/A"
+                else: 
+                    ed_a3 = "N/A"
                 
                 ed_ava = st.text_area("Avaliação:", ai.extrair_tag(txt_bruto, "AVALIACAO"), key=f"ed_ava_{v}")
                 ed_pei = st.text_area("Adaptação PEI:", ai.extrair_tag(txt_bruto, "ADAPTACAO_PEI"), key=f"ed_pei_{v}")
+
+                if st.button("💾 FINALIZAR E DISPARAR PRODUÇÃO", use_container_width=True, type="primary"):
+                    with st.status("Sincronizando Hub...") as status:
+                        final_ano = f"{ano_p}º"
+                        nome_arquivo = f"PLANO_{ano_p}ANO_{sem_limpa.replace(' ', '')}"
+                        db.excluir_plano_completo(sem_limpa, final_ano)
+                        
+                        metodologia_unificada = f"AULA 1:\n{ed_a1}\n\nAULA 2:\n{ed_a2}"
+                        if ed_a3 != "N/A": metodologia_unificada += f"\n\nAULA 3:\n{ed_a3}"
+                        
+                        dados_docx = {"geral": f"[{ed_bncc}] {ed_geral}", "especificos": ed_espec, "objetivos": ed_objs, "metodologia": metodologia_unificada, "avaliacao": ed_ava, "pei": ed_pei}
+                        doc_io = exporter.gerar_docx_plano_pedagogico_ELITE(nome_arquivo, dados_docx, {"ano": final_ano, "semana": sem_limpa, "trimestre": trim_atual})
+                        link_drive = db.subir_e_converter_para_google_docs(doc_io, nome_arquivo, trimestre=trim_atual, categoria=final_ano, semana=sem_limpa, modo="PLANEJAMENTO")
+                        
+                        if "https" in str(link_drive):
+                            final_txt = f"MARKER_BNCC_CODE {ed_bncc} \nMARKER_CONTEUDO_GERAL {ed_geral} \nMARKER_CONTEUDOS_ESPECIFICOS {ed_espec} \nMARKER_OBJETIVOS_ENSINO {ed_objs} \nMARKER_AULA_1 {ed_a1} \nMARKER_AULA_2 {ed_a2} \nMARKER_AULA_3 {ed_a3} \nMARKER_AVALIACAO {ed_ava} \nMARKER_ADAPTACAO_PEI {ed_pei} \n--- LINK DRIVE --- {link_drive}"
+                            db.salvar_no_banco("DB_PLANOS", [datetime.now().strftime("%d/%m/%Y"), sem_limpa, final_ano, trim_atual, "HUB_ATIVO", final_txt, link_drive])
+                            status.update(label="✅ Plano Salvo!", state="complete")
+                            st.balloons()
+                            reset_planejamento()
 
             with t_vis:
                 st.markdown(f"### 🎯 {ed_geral}")
@@ -673,6 +712,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                 st.divider()
                 st.markdown(f"**📝 AVALIAÇÃO:** {ed_ava}")
                 st.markdown(f"**♿ ESTRATÉGIA PEI:** {ed_pei}")
+# --- FIM DA CORREÇÃO ---
 
             if st.button("💾 FINALIZAR E DISPARAR PRODUÇÃO", use_container_width=True, type="primary"):
                 with st.status("Sincronizando Hub...") as status:
