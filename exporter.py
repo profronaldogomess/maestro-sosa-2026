@@ -608,15 +608,15 @@ def gerar_docx_plano_pedagogico_ELITE(titulo_arquivo, dados, info):
 
         doc.add_paragraph() # Espaço
 
-        # --- 2. CORPO DO PLANO (PRENSA DE JUSTIFICAÇÃO TOTAL) ---
+        # --- 2. CORPO DO PLANO (PRENSA ACADÊMICA) ---
         campos = [
-            ("CONTEÚDO GERAL EIXO:", "geral"), 
+            ("OBJETO DE CONHECIMENTO (EIXO):", "geral"), 
             ("CONTEÚDOS ESPECÍFICOS:", "especificos"), 
-            ("OBJETIVOS DE ENSINO:", "objetivos"), 
-            ("METODOLOGIA:", "metodologia"), 
-            ("AVALIAÇÃO:", "avaliacao"), 
-            ("OBSERVAÇÃO:", "observacao"), 
-            ("ADAPTAÇÃO PEI:", "pei")
+            ("OBJETIVOS DE APRENDIZAGEM:", "objetivos"), 
+            ("RECURSOS DIDÁTICOS:", "recursos"), # NOVA LINHA
+            ("PROCEDIMENTOS METODOLÓGICOS:", "metodologia"), 
+            ("AVALIAÇÃO E ACOMPANHAMENTO:", "avaliacao"), 
+            ("ESTRATÉGIAS DE ACESSIBILIDADE (DUA):", "pei")
         ]
 
         for label, chave in campos:
