@@ -827,21 +827,50 @@ if menu == "📅 Planejamento (Ponto ID)":
     with tab_producao:
         st.subheader("🏗️ Linha de Montagem de Materiais")
         if not df_planos.empty:
+            # Filtra apenas os planos que estão em produção ativa
             planos_ativos = df_planos[df_planos["EIXO"].astype(str).str.contains("HUB_ATIVO", case=False, na=False)].iloc[::-1]
+            
             if not planos_ativos.empty:
                 for _, row in planos_ativos.iterrows():
                     with st.container(border=True):
-                        c_p1, c_p2, c_p3 = st.columns([1.5, 2, 1])
-                        c_p1.markdown(f"**{row['SEMANA']}**\n`Série: {row['ANO']}`")
-                        eixo_card = ai.extrair_tag(row["PLANO_TEXTO"], "CONTEUDO_GERAL")
-                        c_p2.markdown(f"🎯 **Eixo:** {eixo_card}")
-                        if c_p3.button("🧪 GERAR MATERIAIS", key=f"gen_hub_{row.name}", use_container_width=True):
+                        c_p1, c_p2, c_p3, c_p4 = st.columns([1.5, 1.5, 1, 1])
+                        
+                        sem_ref = row['SEMANA']
+                        ano_ref = row['ANO']
+                        
+                        c_p1.markdown(f"**{sem_ref}**\n`Série: {ano_ref}`")
+                        
+                        # --- VERIFICAÇÃO DE PROGRESSO REAL ---
+                        aulas_no_banco = df_aulas[(df_aulas['SEMANA_REF'] == sem_ref) & (df_aulas['ANO'] == ano_ref)]
+                        txt_aulas = " ".join(aulas_no_banco['CONTEUDO'].astype(str).tolist())
+                        
+                        a1_status = "✅" if "Aula 1" in txt_aulas else "⏳"
+                        a2_status = "✅" if "Aula 2" in txt_aulas else "⏳"
+                        
+                        c_p2.markdown(f"**Progresso:**\n{a1_status} Aula 1 | {a2_status} Aula 2")
+                        
+                        # Botão para ir ao Criador
+                        if c_p3.button("🧪 PRODUZIR", key=f"gen_hub_{row.name}", use_container_width=True):
                             st.session_state.lab_temp = row["PLANO_TEXTO"]
                             st.session_state.sosa_id_atual = util.gerar_sosa_id("AULA", row["ANO"], row["TURMA"])
-                            st.session_state.lab_meta = {"ano": str(row["ANO"]).replace("º",""), "trimestre": row["TURMA"], "tipo": "PRODUÇÃO_HUB"}
-                            st.success("✅ Enviado ao Laboratório!")
-            else: st.info("📭 Nenhum plano pendente.")
-        else: st.info("📭 Banco de planos vazio.")
+                            st.session_state.lab_meta = {
+                                "ano": str(row["ANO"]).replace("º",""), 
+                                "trimestre": row["TURMA"], 
+                                "tipo": "PRODUÇÃO_HUB",
+                                "semana_ref": sem_ref
+                            }
+                            st.success("Conteúdo enviado! Vá ao Criador de Aulas.")
+
+                        # Botão para dar baixa (Arquivar)
+                        if c_p4.button("✅ CONCLUIR", key=f"fin_hub_{row.name}", use_container_width=True, help="Mover para o Acervo Permanente"):
+                            if db.arquivar_plano_produzido(sem_ref, ano_ref):
+                                st.success("Safra Concluída! Plano arquivado.")
+                                time.sleep(1)
+                                st.rerun()
+            else:
+                st.info("📭 Nenhum plano pendente no Dashboard.")
+        else:
+            st.info("📭 Banco de planos vazio.")
 
     # --- ABA 3: GESTÃO DE ACERVO ---
     with tab_acervo:
