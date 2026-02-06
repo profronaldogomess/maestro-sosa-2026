@@ -694,10 +694,32 @@ if menu == "📅 Planejamento (Ponto ID)":
 
         if st.button("🚀 COMPILAR PLANEJAMENTO BNCC", use_container_width=True, type="primary"):
             with st.spinner("Maestro SOSA processando..."):
-                prompt = f"ANO: {ano_p}º. SEMANA: {sem_limpa}. TRIMESTRE: {trim_atual}. CARGA: {carga_horaria}. SABADO: {tem_sabado}. {ctx_ia}. ESTRATÉGIA: {strat}."
+                # Reforçamos a ordem de fidelidade no prompt
+                prompt = (
+                    f"SÉRIE: {ano_p}º Ano. SEMANA: {sem_limpa}. TRIMESTRE: {trim_atual}.\n"
+                    f"DADOS SOBERANOS DO BANCO:\n"
+                    f"EIXO: {f_eixo}\n"
+                    f"CONTEÚDO: {f_cont}\n"
+                    f"OBJETIVOS: {f_obj}\n\n"
+                    f"ORDEM: Gere o plano seguindo RIGOROSAMENTE os dados acima. "
+                    f"Use ciclos Início/Meio/Fim. Não use Markdown."
+                )
                 st.session_state.p_temp = ai.gerar_ia("PLANE_PEDAGOGICO", prompt)
                 st.rerun()
 
+# --- 2. AJUSTE NO BLOCO DO REFINADOR (DENTRO DO main.py) ---
+        if "p_temp" in st.session_state:
+            st.markdown("---")
+            with st.container(border=True):
+                st.subheader("🤖 Refinador Maestro")
+                cmd_refine = st.chat_input("Solicite ajustes no plano...", key=f"refine_p_{v}")
+                if cmd_refine:
+                    with st.spinner("Maestro Sosa realizando reengenharia..."):
+                        # Passamos o texto ATUAL para ser refinado
+                        novo_texto = ai.gerar_ia("REFINADOR_PEDAGOGICO", f"ORDEM: {cmd_refine}\n\nPLANO ATUAL:\n{st.session_state.p_temp}")
+                        if novo_texto:
+                            st.session_state.p_temp = novo_texto
+                            st.rerun()
         # --- 4. EDITOR E REFINADOR (SÓ APARECE SE GERADO) ---
         if "p_temp" in st.session_state:
             st.markdown("---")
