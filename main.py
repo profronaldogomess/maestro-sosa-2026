@@ -1862,26 +1862,27 @@ elif menu == "📝 Central de Avaliações":
                     v_total_num = st.session_state.get('av_valor_total', 10.0)
                     v_por_quest = v_total_num / qtd_q
                     identificador = f"{tipo_av} - {ano_av}º Ano ({trim_av})"
+                    
                     info_doc = {
                         "ano": f"{ano_av}º", 
                         "tipo_prova": tipo_av, 
                         "valor": util.sosa_to_str(v_total_num), 
-                        "valor_questao": util.sosa_to_str(v_por_quest), # NOVO
+                        "valor_questao": util.sosa_to_str(v_por_quest),
                         "qtd_questoes": qtd_q, 
                         "trimestre": trim_av
                     }
                     
                     db.excluir_avaliacao_completa(identificador, tipo_av)
 
-                    # Upload Regular
+                    # 1. GERAÇÃO REGULAR (O exportador agora filtra a tag QUESTOES sozinho)
                     doc_reg = exporter.gerar_docx_prova_v25(nome_arq, st.session_state.temp_prova, info_doc)
                     link_reg = db.subir_e_converter_para_google_docs(doc_reg, nome_arq, trimestre=trim_av, categoria=f"{ano_av}º Ano", semana="AVALIAÇÃO", modo="AVALIACAO")
                     
-                    # Upload PEI
-                    txt_pei = ai.extrair_tag(st.session_state.temp_prova, "PEI")
+                    # 2. GERAÇÃO PEI (Enviamos apenas a tag PEI para o exportador)
+                    txt_pei_puro = ai.extrair_tag(st.session_state.temp_prova, "PEI")
                     link_pei = "N/A"
-                    if txt_pei:
-                        doc_pei = exporter.gerar_docx_prova_v25(f"{nome_arq}_PEI", txt_pei, info_doc)
+                    if txt_pei_puro:
+                        doc_pei = exporter.gerar_docx_prova_v25(f"{nome_arq}_PEI", txt_pei_puro, info_doc)
                         link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_arq}_PEI", trimestre=trim_av, categoria=f"{ano_av}º Ano", semana="AVALIAÇÃO", modo="AVALIACAO")
                     
                     if "https" in str(link_reg):
@@ -1893,7 +1894,6 @@ elif menu == "📝 Central de Avaliações":
                         ])
                         status.update(label="✅ Ativo Salvo com Sucesso!", state="complete")
                         st.balloons(); time.sleep(1.5); reset_avaliacoes()
-        else: st.info("Gere a prova primeiro.")
 
     # --- ABA 5: ACERVO ---
     with tab_acervo:
