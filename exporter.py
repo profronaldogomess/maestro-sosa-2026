@@ -382,7 +382,7 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
     return file_stream
 
 # ==============================================================================
-# 4. PROVA OFICIAL (VERSÃO ELITE V43 - DINÂMICA E FORMATADA)
+# 4. PROVA OFICIAL (VERSÃO ELITE V44 - FILTRO DE PRECISÃO)
 # ==============================================================================
 def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
     import re, io, os
@@ -409,15 +409,21 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         section.top_margin, section.bottom_margin = Inches(0.3), Inches(0.3)
         section.left_margin, section.right_margin = Inches(0.4), Inches(0.4)
         
-        # --- 1. DETECÇÃO DINÂMICA DE QUESTÕES ---
-        # Conta quantas vezes a palavra QUESTÃO aparece para montar o gabarito
-        questoes_encontradas = re.findall(r'QUESTÃO', conteudo_ia.upper())
-        num_total_q = len(questoes_encontradas) if questoes_encontradas else 10
-        
-        v_total_str = str(info.get('valor', '10,0')).replace('.', ',')
-        v_quest_str = str(info.get('valor_questao', '1,0')).replace('.', ',')
+        # --- 1. FILTRAGEM DE CONTEÚDO SOBERANA ---
+        # Se for PEI, o conteúdo já vem filtrado. Se for Regular, extraímos a tag QUESTOES.
+        if "[QUESTOES]" in conteudo_ia.upper():
+            corpo_prova = ai.extrair_tag(conteudo_ia, "QUESTOES")
+        else:
+            corpo_prova = conteudo_ia # Fallback para PEI
 
-        # --- 2. CABEÇALHO PADRONIZADO SOSA ---
+        # Limpeza de resíduos de tags que a IA possa ter repetido
+        corpo_prova = re.sub(r'\[QUESTOES\]|\[ORIENTACOES\]|\[PEI\]', '', corpo_prova, flags=re.IGNORECASE)
+
+        # Contagem real de questões para o gabarito
+        num_total_q = len(re.findall(r'QUESTÃO', corpo_prova.upper()))
+        if num_total_q == 0: num_total_q = int(info.get('qtd_questoes', 10))
+
+        # --- 2. CABEÇALHO PADRONIZADO ---
         header_table = doc.add_table(rows=3, cols=5)
         header_table.style = 'Table Grid'
         widths = [Inches(0.8), Inches(2.8), Inches(1.0), Inches(1.4), Inches(1.5)]
@@ -431,13 +437,14 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         header_table.cell(2, 1).paragraphs[0].add_run(f"PROF: Ronaldo Gomes").font.size = Pt(10)
         header_table.cell(2, 2).paragraphs[0].add_run(f"TURMA: {info.get('ano')}").font.size = Pt(10)
         header_table.cell(2, 3).paragraphs[0].add_run("DATA:").font.size = Pt(10)
-        header_table.cell(2, 4).paragraphs[0].add_run(f"VALOR: {v_total_str}").font.bold = True
+        header_table.cell(2, 4).paragraphs[0].add_run(f"VALOR: {info.get('valor', '10,0')}").font.bold = True
         
         logo_path = "logo_escola.png" if os.path.exists("logo_escola.png") else "logo.png"
         if os.path.exists(logo_path):
             c_logo.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-            c_logo.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
-            c_logo.paragraphs[0].add_run().add_picture(logo_path, width=Inches(0.7))
+            p_logo = c_logo.paragraphs[0]
+            p_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            p_logo.add_run().add_picture(logo_path, width=Inches(0.7))
         
         for row in header_table.rows: set_row_height(row, 25)
         doc.add_paragraph()
@@ -455,22 +462,19 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
             "Use apenas CANETA AZUL ou PRETA.",
             "Cálculos são obrigatórios para validar a questão.",
             "Pinte completamente o círculo no gabarito.",
-            f"Valor Total: {v_total_str} | Cada questão: {v_quest_str}"
+            f"Valor Total: {info.get('valor')} | Cada questão: {info.get('valor_questao')}"
         ]
         for idx, text in enumerate(orientacoes, 1):
             p = c_orient.add_paragraph()
             p.add_run(f"{idx}. {text}").font.size = Pt(9)
 
-        # GABARITO DINÂMICO (Ajusta o número de linhas conforme as questões)
         c_gab = top_table.cell(0, 1)
         gab_grid = c_gab.add_table(rows=num_total_q + 1, cols=6)
         gab_grid.style = 'Table Grid'
         for r in range(num_total_q + 1):
             for c in range(6): gab_grid.cell(r, c).paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
-        
         for i, lab in enumerate(["Q", "A", "B", "C", "D", "E"]):
             gab_grid.cell(0, i).paragraphs[0].add_run(lab).font.bold = True
-        
         for r in range(1, num_total_q + 1):
             gab_grid.cell(r, 0).paragraphs[0].add_run(f"{r:02d}").font.size = Pt(9)
             for col in range(1, 6):
@@ -485,10 +489,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         cols.set(qn('w:space'), '720')
 
         # --- 5. PROCESSAMENTO DAS QUESTÕES ---
-        # Limpeza de ruídos (números soltos no início)
-        conteudo_limpo = re.sub(r'^\d+\s*\n', '', conteudo_ia.strip())
-        
-        linhas = conteudo_limpo.split('\n')
+        linhas = corpo_prova.split('\n')
         for linha in linhas:
             l_s = linha.strip()
             if not l_s: continue
@@ -497,26 +498,18 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
             p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
             p.paragraph_format.line_spacing = 1.0
 
-            # Formatação de Questão e Valor
             if "QUESTÃO" in l_s.upper():
                 run = p.add_run(l_s)
                 run.bold = True
                 run.font.size = Pt(11)
                 p.paragraph_format.space_before = Pt(12)
-            
-            # Formatação de Prompt de Imagem (Igual ao material de sala)
             elif "PROMPT IMAGEM" in l_s.upper():
                 run = p.add_run(f" [ {l_s} ] ")
-                run.font.italic = True
-                run.font.size = Pt(8)
+                run.font.italic, run.font.size = True, Pt(8)
                 run.font.color.rgb = RGBColor(120, 120, 120)
-                p.paragraph_format.space_after = Pt(2)
-            
-            # Alternativas (Recuo)
             elif re.match(r'^[A-E][\)\.]', l_s):
                 p.add_run(l_s)
                 p.paragraph_format.left_indent = Inches(0.2)
-            
             else:
                 p.add_run(l_s)
 
@@ -525,7 +518,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         return file_stream
     except Exception as e:
         file_stream = io.BytesIO()
-        err_doc = Document(); err_doc.add_paragraph(f"ERRO EXPORTAÇÃO: {str(e)}"); err_doc.save(file_stream)
+        err_doc = Document(); err_doc.add_paragraph(f"ERRO: {str(e)}"); err_doc.save(file_stream)
         file_stream.seek(0)
         return file_stream
 
