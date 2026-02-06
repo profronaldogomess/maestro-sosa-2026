@@ -698,17 +698,25 @@ if menu == "📅 Planejamento (Ponto ID)":
                 st.session_state.p_temp = ai.gerar_ia("PLANE_PEDAGOGICO", prompt)
                 st.rerun()
 
-        # --- 4. EDITOR E REFINADOR ---
+        # --- 4. EDITOR E REFINADOR (SÓ APARECE SE GERADO) ---
         if "p_temp" in st.session_state:
             st.markdown("---")
+            
+            # --- REFINADOR MAESTRO V39 (COM RESET DE VERSÃO) ---
             with st.container(border=True):
                 st.subheader("🤖 Refinador Maestro")
                 cmd_refine = st.chat_input("Solicite ajustes no plano...", key=f"SOSA_CHAT_PLAN_{v}")
                 if cmd_refine:
-                    with st.spinner("Refinando..."):
+                    with st.spinner("Maestro Sosa realizando reengenharia..."):
+                        # Passamos o texto ATUAL para ser refinado
                         novo_texto = ai.gerar_ia("REFINADOR_PEDAGOGICO", f"ORDEM: {cmd_refine}\n\nATUAL:\n{st.session_state.p_temp}")
-                        if novo_texto:
-                            st.session_state.p_temp = novo_texto; st.rerun()
+                        if novo_texto and "[BNCC_CODE]" in novo_texto:
+                            st.session_state.p_temp = novo_texto
+                            # INCREMENTA A VERSÃO PARA FORÇAR O STREAMLIT A ATUALIZAR AS CAIXAS DE TEXTO
+                            st.session_state.v_plano += 1 
+                            st.rerun()
+                        else:
+                            st.error("⚠️ A IA não retornou um formato válido. Tente novamente com um comando mais específico.")
 
             txt_bruto = st.session_state.p_temp
             t_ed, t_vis = st.tabs(["✏️ Editor de Texto", "👁️ Estrutura de Regência"])
