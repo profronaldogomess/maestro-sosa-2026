@@ -565,7 +565,7 @@ if menu == "🧪 Criador de Aulas":
                             st.write(ai.extrair_tag(raw_c, "ALUNO"))
                             
 # ==============================================================================
-# MÓDULO: PLANEJAMENTO ESTRATÉGICO (PONTO ID) - ARQUITETURA V28.9 (FILTROS PUROS)
+# MÓDULO: PLANEJAMENTO ESTRATÉGICO (PONTO ID) - ARQUITETURA V29.0 (ELITE)
 # ==============================================================================
 if menu == "📅 Planejamento (Ponto ID)":
     st.title("📅 Engenharia de Planejamento (Ponto ID)")
@@ -616,59 +616,44 @@ if menu == "📅 Planejamento (Ponto ID)":
             
             modo_p = c3.radio("Método de Elaboração:", ["📖 Livro Didático", "🎛️ Manual (Banco)"], horizontal=True, key=f"modo_p_{v}")
 
-        # --- 3. FUNIL HIERÁRQUICO (CSV) OU LIVRO ---
+        # --- 3. CONTEÚDO DINÂMICO ---
         with st.container(border=True):
-            # Variáveis de controle para a IA
             final_eixo, final_cont, final_obj = "", "", ""
             
             if modo_p == "🎛️ Manual (Banco)":
                 st.markdown("#### 🎯 Matriz Curricular (Seleção Hierárquica)")
                 df_ano = df_curriculo[df_curriculo['ANO'] == int(ano_p)]
-                
                 if not df_ano.empty:
-                    # 1. Seleção do Eixo
                     lista_eixos = sorted(df_ano['EIXO'].unique().tolist())
                     sel_eixo = st.selectbox("1. Selecione o Eixo Temático:", [""] + lista_eixos, key=f"h_eixo_{v}")
-                    
                     if sel_eixo:
-                        # 2. Seleção do Conteúdo
                         df_cont = df_ano[df_ano['EIXO'] == sel_eixo]
                         lista_conts = sorted(df_cont['CONTEUDO_ESPECIFICO'].unique().tolist())
                         sel_cont = st.multiselect("2. Selecione os Conteúdos:", lista_conts, key=f"h_cont_{v}")
-                        
                         if sel_cont:
-                            # 3. Seleção do Objetivo
                             df_obj = df_cont[df_cont['CONTEUDO_ESPECIFICO'].isin(sel_cont)]
                             lista_objs = sorted(df_obj['OBJETIVOS'].unique().tolist())
                             sel_obj = st.multiselect("3. Selecione os Objetivos de Ensino:", lista_objs, key=f"h_obj_{v}")
-                            
-                            # Atribuição para o Prompt da IA
-                            final_eixo = sel_eixo
-                            final_cont = " / ".join(sel_cont)
-                            final_obj = " \n ".join(sel_obj)
-                else:
-                    st.error("Base curricular não encontrada para este ano.")
-                
+                            final_eixo, final_cont, final_obj = sel_eixo, " / ".join(sel_cont), " \n ".join(sel_obj)
                 ctx_ia = f"MÉTODO MANUAL. EIXO: {final_eixo}. CONTEÚDO: {final_cont}. OBJETIVOS: {final_obj}."
             
             else:
-                # MODO LIVRO DIDÁTICO
+                # MODO LIVRO DIDÁTICO (SÓ O ESSENCIAL)
                 st.markdown("#### 📖 Referência Bibliográfica")
                 cx1, cx2 = st.columns([2, 1])
                 lista_mats = df_materiais['NOME_ARQUIVO'].tolist() if not df_materiais.empty else []
                 sel_mat = cx1.multiselect("Livro Didático:", lista_mats, key=f"livro_sel_{v}")
-                pags = cx2.text_input("Páginas:", placeholder="Ex: 10-15", key=f"pags_{v}")
-                final_eixo = st.text_input("Eixo Temático:", key=f"eixo_livro_{v}")
-                final_cont = st.text_area("Conteúdo do Livro:", key=f"cont_livro_{v}")
-                final_obj = st.text_area("Objetivos do Livro:", key=f"obj_livro_{v}")
-                ctx_ia = f"MÉTODO LIVRO: {sel_mat} PÁGINAS: {pags}. CONTEÚDO: {final_cont}."
+                pags = cx2.text_input("Páginas:", placeholder="Ex: 12 até 23", key=f"pags_{v}")
+                ctx_ia = f"MÉTODO LIVRO: {sel_mat} PÁGINAS: {pags}."
 
             strat = st.text_area("Estratégia Pedagógica / Observações:", key=f"strat_{v}")
 
         # --- 4. BOTÃO DE COMPILAÇÃO ---
         if st.button("🚀 COMPILAR PLANEJAMENTO BNCC", use_container_width=True, type="primary"):
             if modo_p == "🎛️ Manual (Banco)" and not final_obj:
-                st.error("Selecione pelo menos um Objetivo no funil antes de compilar.")
+                st.error("Selecione os Objetivos no funil antes de compilar.")
+            elif modo_p == "📖 Livro Didático" and (not sel_mat or not pags):
+                st.error("Selecione o Livro e as Páginas antes de compilar.")
             else:
                 with st.spinner("Maestro SOSA consultando Brasil Escola e BNCC..."):
                     prompt = (
@@ -688,9 +673,15 @@ if menu == "📅 Planejamento (Ponto ID)":
             with t_ed:
                 col_ed1, col_ed2 = st.columns([1, 2])
                 ed_bncc = col_ed1.text_input("Código BNCC:", ai.extrair_tag(txt_bruto, "BNCC_CODE"), key=f"ed_b_{v}")
-                ed_geral = col_ed2.text_input("Eixo Final:", final_eixo, key=f"ed_g_{v}")
-                ed_espec = st.text_area("Conteúdos Finais:", final_cont, key=f"ed_e_{v}")
-                ed_objs = st.text_area("Objetivos Finais:", final_obj, key=f"ed_o_{v}")
+                
+                # Lógica: Se veio do manual, usa o selecionado. Se veio do livro, usa o que a IA gerou.
+                val_eixo = final_eixo if final_eixo else ai.extrair_tag(txt_bruto, "CONTEUDO_GERAL")
+                val_cont = final_cont if final_cont else ai.extrair_tag(txt_bruto, "CONTEUDOS_ESPECIFICOS")
+                val_obj = final_obj if final_obj else ai.extrair_tag(txt_bruto, "OBJETIVOS_ENSINO")
+
+                ed_geral = col_ed2.text_input("Eixo Final:", val_eixo, key=f"ed_g_{v}")
+                ed_espec = st.text_area("Conteúdos Finais:", val_cont, key=f"ed_e_{v}")
+                ed_objs = st.text_area("Objetivos Finais:", val_obj, key=f"ed_o_{v}")
                 
                 ed_a1 = st.text_area("AULA 1 (Início/Meio/Fim):", ai.extrair_tag(txt_bruto, "AULA_1"), height=250, key=f"a1_{v}")
                 ed_a2 = st.text_area("AULA 2 (Início/Meio/Fim):", ai.extrair_tag(txt_bruto, "AULA_2"), height=250, key=f"a2_{v}")
@@ -702,8 +693,8 @@ if menu == "📅 Planejamento (Ponto ID)":
                 ed_ava = st.text_area("Avaliação:", ai.extrair_tag(txt_bruto, "AVALIACAO"), key=f"ed_ava_{v}")
                 ed_pei = st.text_area("Adaptação PEI:", ai.extrair_tag(txt_bruto, "ADAPTACAO_PEI"), key=f"ed_pei_{v}")
 
-                # BOTÃO ÚNICO DE FINALIZAÇÃO (DENTRO DA ABA EDITOR)
-                if st.button("💾 FINALIZAR E DISPARAR PRODUÇÃO", use_container_width=True, type="primary", key=f"btn_finalizar_hub_{v}"):
+                # BOTÃO ÚNICO DE FINALIZAÇÃO
+                if st.button("💾 FINALIZAR E DISPARAR PRODUÇÃO", use_container_width=True, type="primary", key=f"btn_final_hub_{v}"):
                     with st.status("Sincronizando Hub...") as status:
                         final_ano_str = f"{ano_p}º"
                         nome_arquivo = f"PLANO_{ano_p}ANO_{sem_limpa.replace(' ', '')}"
