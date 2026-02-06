@@ -76,7 +76,7 @@ PERSONAS = {
     - SOSA-ID no topo.
     - PROIBIDO Markdown (** ou #). Use Unicode (🔢, 🎯, 📘).
     - PROIBIDO cabeçalhos redundantes. Comece direto no conteúdo.""",
-    
+
     # --- PERSONA PEI V28: O ENGENHEIRO DE EQUIDADE ---
     "ARQUITETO_PEI_V28_SINFONIA": """VOCÊ É O ENGENHEIRO DE EQUIDADE E ACESSIBILIDADE V28.
     Sua missão é criar o "Andaime Cognitivo" (Scaffolding) para o aluno PEI, garantindo acesso ao MESMO objeto de conhecimento do regular, conforme o DUA (Desenho Universal).
@@ -297,16 +297,12 @@ def extrair_tag(texto, tag):
     ]
     
     tag_busca = tag.upper()
-    # Criamos a lista de parada excluindo a tag atual
     parada = [t for t in tags_sosa if t.upper() != tag_busca]
     lista_parada = "|".join(parada)
     
-    # 3. REGEX DE ALTA PRECISÃO V31
-    # Explicação: 
-    # \[\s*{tag_busca}\s*(?:[:\s][^\]]*)?\] -> Garante que combine [GABARITO] mas NÃO [GABARITO_PEI]
-    # (.*?) -> Captura o conteúdo
-    # (?=\s*\[\s*(?:{lista_parada}) -> Para na próxima tag exata da lista
-    padrao = rf"\[\s*{tag_busca}\s*(?:[:\s][^\]]*)?\]\s*[:\-]*\s*(.*?)(?=\s*\[\s*(?:{lista_parada})\s*(?:[:\s][^\]]*)?\]|$)"
+    # 3. REGEX DE ALTA PRECISÃO V32 (COM FRONTEIRA \b)
+    # \b garante que 'GABARITO' não case com 'GABARITO_PEI'
+    padrao = rf"\[\s*{tag_busca}\b[^\]]*\]\s*[:\-]*\s*(.*?)(?=\s*\[\s*(?:{lista_parada})\b[^\]]*\]|$)"
     
     match = re.search(padrao, texto_limpo, re.DOTALL | re.IGNORECASE)
     
