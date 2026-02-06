@@ -611,7 +611,7 @@ if menu == "🧪 Criador de Aulas":
                             if db.excluir_registro_com_drive("DB_AULAS_PRONTAS", s_id_h): st.rerun()
 
 # ==============================================================================
-# MÓDULO: PLANEJAMENTO ESTRATÉGICO (PONTO ID) - ARQUITETURA V35.0 (ESCUDO TOTAL)
+# MÓDULO: PLANEJAMENTO ESTRATÉGICO (PONTO ID) - ARQUITETURA V36.0 (REFINADOR + MULTI-EIXO)
 # ==============================================================================
 if menu == "📅 Planejamento (Ponto ID)":
     st.title("📅 Engenharia de Planejamento (Ponto ID)")
@@ -651,33 +651,32 @@ if menu == "📅 Planejamento (Ponto ID)":
             trim_atual = sem_p.split(" - ")[1] if " - " in sem_p else "I Trimestre"
             modo_p = c3.radio("Método:", ["📖 Livro Didático", "🎛️ Manual (Banco)"], horizontal=True, key=f"modo_p_{v}")
 
-        # --- 3. SELEÇÃO HIERÁRQUICA (BLINDAGEM PYLANCE V35) ---
+        # --- 3. SELEÇÃO HIERÁRQUICA (MULTI-EIXO ATIVADO) ---
         with st.container(border=True):
             f_eixo, f_cont, f_obj = "", "", ""
             if modo_p == "🎛️ Manual (Banco)":
                 st.markdown("#### 🎯 Matriz Curricular (Funil Hierárquico)")
-                # Filtro por Ano
                 df_ano = df_curriculo[df_curriculo["ANO"] == int(ano_p)]
                 
                 if not df_ano.empty:
                     c_h1, c_h2 = st.columns(2)
-                    # 1. Eixo
+                    # 1. Eixo (Agora Multiselect)
                     lista_eixos = sorted(df_ano["EIXO"].unique().tolist())
-                    sel_eixo = c_h1.selectbox("1. Eixo:", [""] + lista_eixos, key=f"h_eixo_{v}")
+                    sel_eixo = c_h1.multiselect("1. Selecione o(s) Eixo(s):", lista_eixos, key=f"h_eixo_{v}")
                     
                     if sel_eixo:
-                        # 2. Conteúdo (Blindado com aspas duplas)
-                        df_cont = df_ano[df_ano["EIXO"] == sel_eixo]
+                        # 2. Conteúdo (Filtra por todos os eixos selecionados)
+                        df_cont = df_ano[df_ano["EIXO"].isin(sel_eixo)]
                         lista_conts = sorted(df_cont["CONTEUDO_ESPECIFICO"].unique().tolist())
-                        sel_cont = c_h2.multiselect("2. Conteúdos:", lista_conts, key=f"h_cont_{v}")
+                        sel_cont = c_h2.multiselect("2. Selecione os Conteúdos:", lista_conts, key=f"h_cont_{v}")
                         
                         if sel_cont:
-                            # 3. Objetivo (Blindado com aspas duplas)
+                            # 3. Objetivo
                             df_obj = df_cont[df_cont["CONTEUDO_ESPECIFICO"].isin(sel_cont)]
                             lista_objs = sorted(df_obj["OBJETIVOS"].unique().tolist())
-                            sel_obj = st.multiselect("3. Objetivos:", lista_objs, key=f"h_obj_{v}")
+                            sel_obj = st.multiselect("3. Selecione os Objetivos:", lista_objs, key=f"h_obj_{v}")
                             
-                            f_eixo = sel_eixo
+                            f_eixo = " / ".join(sel_eixo)
                             f_cont = " / ".join(sel_cont)
                             f_obj = " \n ".join(sel_obj)
                 
@@ -698,10 +697,20 @@ if menu == "📅 Planejamento (Ponto ID)":
                 st.session_state.p_temp = ai.gerar_ia("PLANE_PEDAGOGICO", prompt)
                 st.rerun()
 
-        # --- 4. EDITOR (SÓ APARECE SE GERADO) ---
+        # --- 4. EDITOR E REFINADOR (SÓ APARECE SE GERADO) ---
         if "p_temp" in st.session_state:
             st.markdown("---")
             txt_bruto = st.session_state.p_temp
+            
+            # --- BLOCO DO REFINADOR MAESTRO ---
+            with st.container(border=True):
+                st.subheader("🤖 Refinador Maestro")
+                cmd_refine = st.chat_input("Solicite ajustes no plano (ex: 'mude o contexto', 'mais prático')...", key=f"refine_p_{v}")
+                if cmd_refine:
+                    with st.spinner("Maestro Sosa refinando lógica pedagógica..."):
+                        st.session_state.p_temp = ai.gerar_ia("REFINADOR_PEDAGOGICO", f"ORDEM: {cmd_refine}\n\nATUAL:\n{st.session_state.p_temp}")
+                        st.rerun()
+
             t_ed, t_vis = st.tabs(["✏️ Editor de Texto", "👁️ Estrutura de Regência"])
             
             with t_ed:
@@ -719,7 +728,6 @@ if menu == "📅 Planejamento (Ponto ID)":
                 ed_ava = st.text_area("Avaliação:", ai.extrair_tag(txt_bruto, "AVALIACAO"), key=f"ed_ava_{v}")
                 ed_pei = st.text_area("Adaptação PEI:", ai.extrair_tag(txt_bruto, "ADAPTACAO_PEI"), key=f"ed_pei_{v}")
 
-                # BOTÃO ÚNICO DE SALVAMENTO
                 if st.button("💾 FINALIZAR E DISPARAR PRODUÇÃO", use_container_width=True, type="primary", key=f"btn_final_hub_{v}"):
                     with st.status("Sincronizando...") as status:
                         final_ano_str = f"{ano_p}º"
@@ -733,7 +741,6 @@ if menu == "📅 Planejamento (Ponto ID)":
                         link_drive = db.subir_e_converter_para_google_docs(doc_io, nome_arquivo, trimestre=trim_atual, categoria=final_ano_str, semana=sem_limpa, modo="PLANEJAMENTO")
                         if "https" in str(link_drive):
                             final_txt = f"[BNCC_CODE] {ed_bncc} \n[CONTEUDO_GERAL] {ed_geral} \n[CONTEUDOS_ESPECIFICOS] {ed_espec} \n[OBJETIVOS_ENSINO] {ed_objs} \n[AULA_1] {ed_a1} \n[AULA_2] {ed_a2} \n[SABADO_LETIVO] {ed_a3} \n[AVALIACAO] {ed_ava} \n[ADAPTACAO_PEI] {ed_pei} \n--- LINK DRIVE --- {link_drive}"
-                            # SALVA HUB_ATIVO NA COLUNA 5 (EIXO)
                             db.salvar_no_banco("DB_PLANOS", [datetime.now().strftime("%d/%m/%Y"), sem_limpa, final_ano_str, trim_atual, "HUB_ATIVO", final_txt, link_drive])
                             status.update(label="✅ Plano Salvo!", state="complete")
                             st.balloons(); reset_planejamento()
@@ -749,11 +756,10 @@ if menu == "📅 Planejamento (Ponto ID)":
                 st.markdown(f"**📝 AVALIAÇÃO:** {ed_ava}")
                 st.markdown(f"**♿ ESTRATÉGIA PEI:** {ed_pei}")
 
-    # --- ABA 2: DASHBOARD DE PRODUÇÃO (FILTRO NA COLUNA 'EIXO') ---
+    # --- ABA 2: DASHBOARD DE PRODUÇÃO ---
     with tab_producao:
         st.subheader("🏗️ Linha de Montagem de Materiais")
         if not df_planos.empty:
-            # FILTRO CORRIGIDO: Agora olha para a coluna EIXO (onde está o HUB_ATIVO no seu CSV)
             planos_ativos = df_planos[df_planos["EIXO"].astype(str).str.contains("HUB_ATIVO", case=False, na=False)].iloc[::-1]
             if not planos_ativos.empty:
                 for _, row in planos_ativos.iterrows():
@@ -766,7 +772,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                             st.session_state.lab_temp = row["PLANO_TEXTO"]
                             st.session_state.sosa_id_atual = util.gerar_sosa_id("AULA", row["ANO"], row["TURMA"])
                             st.session_state.lab_meta = {"ano": str(row["ANO"]).replace("º",""), "trimestre": row["TURMA"], "tipo": "PRODUÇÃO_HUB"}
-                            st.success("✅ Enviado ao Laboratório! Clique em '🧪 Criador de Aulas' no menu lateral.")
+                            st.success("✅ Enviado ao Laboratório!")
             else: st.info("📭 Nenhum plano pendente.")
         else: st.info("📭 Banco de planos vazio.")
 
@@ -859,7 +865,7 @@ if menu == "📅 Planejamento (Ponto ID)":
             c3.metric("Progresso II Trimestre", f"{p_ii}%")
 
             st.plotly_chart(px.bar(progresso_trim, x="TRIMESTRE", y="%", text="%", title=f"Evolução da Cobertura - {ano_m}º Ano", color="%", color_continuous_scale="RdYlGn", range_y=[0, 110]), use_container_width=True)
-
+            
 # ==============================================================================
 # MÓDULO: DIÁRIO DE BORDO RÁPIDO V26.6 - COM REGISTRO DE BÔNUS ⭐
 # ==============================================================================
