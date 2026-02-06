@@ -82,7 +82,7 @@ def carregar_tudo():
             return pd.DataFrame(columns=colunas_padrao)
 
     # Definição das colunas para as tabelas
-    cols_planos = ["DATA", "SEMANA", "ANO", "TRIMESTRE", "TURMA", "PLANO_TEXTO", "LINK_DRIVE"]
+    cols_planos = ["DATA", "SEMANA", "ANO", "TURMA", "EIXO", "PLANO_TEXTO", "LINK_DRIVE"]
     cols_aulas = ["DATA", "SEMANA_REF", "TIPO_MATERIAL", "CONTEUDO", "ANO", "LINK_DRIVE"]
     cols_alunos = ["ID", "NOME_ALUNO", "TURMA", "STATUS", "NECESSIDADES", "ORIGEM"]
     cols_relatorios = ["DATA", "ID_ALUNO", "NOME_ALUNO", "TIPO", "CONTEUDO"]
@@ -459,21 +459,19 @@ def salvar_gabarito_escaneado(dados_lista):
 
 def ativar_plano_no_hub(semana, ano):
     """
-    Localiza o plano exato por Semana e Ano e ativa o status HUB_ATIVO.
-    Limpa o cache para que o Dashboard veja a mudança instantaneamente.
+    Localiza o plano e ativa o status HUB_ATIVO na coluna EIXO (Coluna 5).
     """
     try:
         wb = conectar()
         ws = wb.worksheet("DB_PLANOS")
         dados = ws.get_all_values()
-        
-        # Busca a linha correta combinando Semana (Col 2) e Ano (Col 3)
         for i, row in enumerate(dados):
-            if i == 0: continue # Pula cabeçalho
+            if i == 0: continue
+            # Compara Semana (Col 2) e Ano (Col 3)
             if row[1].strip() == semana.strip() and row[2].strip() == ano.strip():
-                # Coluna 5 (E) é onde gravamos o status (HUB_ATIVO ou PADRÃO)
+                # Coluna 5 (E) é o EIXO/STATUS no seu CSV
                 ws.update_cell(i + 1, 5, "HUB_ATIVO")
-                st.cache_data.clear() # LIMPEZA CRÍTICA DO CACHE
+                st.cache_data.clear() # Limpa o cache para o Dashboard ler na hora
                 return True
         return False
     except Exception as e:
