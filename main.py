@@ -666,22 +666,31 @@ if menu == "📅 Planejamento (Ponto ID)":
         with st.container(border=True):
             f_eixo, f_cont, f_obj = "", "", ""
             if modo_p == "🎛️ Manual (Banco)":
-                st.markdown("#### 🎯 Matriz Curricular (Funil Hierárquico)")
-                df_ano = df_curriculo[df_curriculo["ANO"] == int(ano_p)]
-                if not df_ano.empty:
-                    c_h1, c_h2 = st.columns(2)
-                    lista_eixos = sorted(df_ano["EIXO"].unique().tolist())
-                    sel_eixo = c_h1.multiselect("1. Eixo:", lista_eixos, key=f"h_eixo_{v}")
+                st.markdown("#### 🎯 Matriz Curricular (Soberania do Banco)")
+                
+                # Opção de busca expandida (Ano atual + Anos anteriores para Sonda)
+                c_filt1, c_filt2 = st.columns([1, 2])
+                ano_busca = c_filt1.multiselect("Filtrar por Ano(s):", ["1","2","3","4","5","6","7","8","9"], default=[str(ano_p)], key=f"busc_ano_{v}")
+                
+                df_filtrado = df_curriculo[df_curriculo['ANO'].isin(ano_busca)]
+                
+                if not df_filtrado.empty:
+                    lista_eixos = sorted(df_filtrado['EIXO'].unique().tolist())
+                    sel_eixo = st.multiselect("1. Selecione o(s) Eixo(s):", lista_eixos, key=f"h_eixo_{v}")
+                    
                     if sel_eixo:
-                        df_cont = df_ano[df_ano["EIXO"].isin(sel_eixo)]
-                        lista_conts = sorted(df_cont["CONTEUDO_ESPECIFICO"].unique().tolist())
-                        sel_cont = c_h2.multiselect("2. Conteúdos:", lista_conts, key=f"h_cont_{v}")
+                        df_cont = df_filtrado[df_filtrado['EIXO'].isin(sel_eixo)]
+                        lista_conts = sorted(df_cont['CONTEUDO_ESPECIFICO'].unique().tolist())
+                        sel_cont = st.multiselect("2. Selecione os Conteúdos:", lista_conts, key=f"h_cont_{v}")
+                        
                         if sel_cont:
-                            df_obj = df_cont[df_cont["CONTEUDO_ESPECIFICO"].isin(sel_cont)]
-                            lista_objs = sorted(df_obj["OBJETIVOS"].unique().tolist())
-                            sel_obj = st.multiselect("3. Objetivos:", lista_objs, key=f"h_obj_{v}")
-                            f_eixo, f_cont, f_obj = " / ".join(sel_eixo), " / ".join(sel_cont), " \n ".join(sel_obj)
-                ctx_ia = f"MÉTODO MANUAL. EIXO: {f_eixo}. CONTEÚDO: {f_cont}. OBJETIVOS: {f_obj}."
+                            df_obj = df_cont[df_cont['CONTEUDO_ESPECIFICO'].isin(sel_cont)]
+                            lista_objs = sorted(df_obj['OBJETIVOS'].unique().tolist())
+                            sel_obj = st.multiselect("3. Selecione os Objetivos:", lista_objs, key=f"h_obj_{v}")
+                            
+                            f_eixo = " / ".join(sel_eixo)
+                            f_cont = " / ".join(sel_cont)
+                            f_obj = " \n ".join(sel_obj)
             else:
                 st.markdown("#### 📖 Referência Bibliográfica")
                 cx1, cx2 = st.columns([2, 1])
@@ -852,17 +861,18 @@ if menu == "📅 Planejamento (Ponto ID)":
         else: st.info("📭 Acervo vazio.")
 
 
-    # --- ABA 4: MATRIZ CURRICULAR ATIVA (PRECISÃO SOBERANA V35) ---
+ # --- ABA 4: MATRIZ CURRICULAR ATIVA (PRECISÃO SOBERANA V35.2) ---
     with tab_matriz:
         st.subheader("📖 Matriz de Competências e Status de Execução")
         if not df_curriculo.empty:
             ano_c = st.selectbox("Série para Consulta:", [1, 2, 3, 4, 5, 6, 7, 8, 9], index=5, key="matriz_ano_v35")
-            df_c = df_curriculo[df_curriculo["ANO"] == int(ano_c)].copy()
             
-            # Captura apenas a tag de CONTEÚDOS de cada plano para evitar falsos positivos
+            # CORREÇÃO 1: Filtro de Ano Blindado (converte tudo para string para não haver erro de tipo)
+            df_c = df_curriculo[df_curriculo["ANO"].astype(str).str.contains(str(ano_c))].copy()
+            
+            # Captura os planos filtrando pelo ano (ex: "6" ou "6º")
             planos_feitos = df_planos[df_planos["ANO"].astype(str).str.contains(str(ano_c))]
             
-            # Criamos uma lista limpa apenas com os conteúdos oficiais planejados
             lista_conteudos_oficiais = []
             for p_txt in planos_feitos["PLANO_TEXTO"]:
                 cont_extraido = ai.extrair_tag(p_txt, "CONTEUDOS_ESPECIFICOS").upper()
@@ -872,27 +882,36 @@ if menu == "📅 Planejamento (Ponto ID)":
 
             def checar_conclusao_cirurgica(conteudo_db):
                 if not texto_soberano_planos: return "⏳ PENDENTE"
-                target = str(conteudo_db).upper().strip()
                 
-                # Teste 1: Busca exata no campo de conteúdos oficiais
-                if target in texto_soberano_planos:
+                # Função interna para limpar ruídos (remove > , - , . e espaços extras)
+                def limpar(t):
+                    return re.sub(r'[^A-Z0-9]', '', str(t).upper())
+
+                target_limpo = limpar(conteudo_db)
+                soberano_limpo = limpar(texto_soberano_planos)
+                
+                # Teste 1: Busca Direta no texto normalizado
+                if target_limpo in soberano_limpo:
                     return "✅ CONCLUÍDO"
                 
-                # Teste 2: Quebra por palavras-chave técnicas (mínimo 3 matches para segurança)
-                palavras = [p for p in target.replace(";", "").replace(",", "").split() if len(p) > 3]
+                # Teste 2: Quebra por palavras-chave (mínimo 2 palavras longas)
+                palavras = [p for p in str(conteudo_db).upper().replace(";", "").replace(",", "").split() if len(p) > 4]
                 if not palavras: return "⏳ PENDENTE"
                 
-                matches = sum(1 for p in palavras if p in texto_soberano_planos)
-                # Aumentamos o rigor: precisa de mais coincidências para marcar como feito
+                matches = sum(1 for p in palavras if limpar(p) in soberano_limpo)
                 return "✅ CONCLUÍDO" if matches >= 2 else "⏳ PENDENTE"
 
             df_c["STATUS"] = df_c["CONTEUDO_ESPECIFICO"].apply(checar_conclusao_cirurgica)
             
+            # Exibição da Tabela
             st.dataframe(
                 df_c[["TRIMESTRE", "EIXO", "CONTEUDO_ESPECIFICO", "STATUS"]],
                 use_container_width=True,
                 hide_index=True,
-                column_config={"STATUS": st.column_config.TextColumn("Situação", width="small")}
+                column_config={
+                    "STATUS": st.column_config.TextColumn("Situação", width="small"),
+                    "CONTEUDO_ESPECIFICO": st.column_config.TextColumn("Conteúdo do Currículo", width="large")
+                }
             )
         else:
             st.info("📭 Base de currículo não localizada.")
