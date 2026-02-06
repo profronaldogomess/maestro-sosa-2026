@@ -437,11 +437,14 @@ if menu == "🧪 Criador de Aulas":
                                 f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {s_id}.\n"
                                 f"SÉRIE: {ano_lab}º ANO. ALVO: {aula_alvo}.\n"
                                 f"CONTEÚDO BASE: {ai.extrair_tag(plano_row['PLANO_TEXTO'], 'CONTEUDOS_ESPECIFICOS')}.\n"
-                                f"METODOLOGIA DO PLANEJAMENTO (EXPANDA ISSO): {metodologia_especifica}.\n\n"
-                                f"🚨 MISSÃO: Use o Google Search para entregar densidade técnica (Estilo Brasil Escola).\n"
+                                f"METODOLOGIA DO PLANEJAMENTO: {metodologia_especifica}.\n\n"
+                                f"🚨 MISSÃO DE ENTREGA (USE AS TAGS [TAG]):\n"
                                 f"1. [PROFESSOR]: Mapa de Regência denso para a lousa.\n"
                                 f"2. [ALUNO]: Texto explicativo e EXATAMENTE {qtd_q} questões A-E com PROMPT IMAGEM.\n"
-                                f"3. [PEI]: Versão focal (metade das questões).\n"
+                                f"3. [GABARITO]: Respostas detalhadas das {qtd_q} questões.\n"
+                                f"4. [PEI]: Versão focal adaptada (metade das questões).\n"
+                                f"5. [GABARITO_PEI]: Respostas da versão adaptada.\n"
+                                f"6. [IMAGENS]: Prompts para o material.\n\n"
                                 f"🚨 REGRAS: Sem cabeçalhos. Sem Markdown. Use tags puras [TAG]."
                             )
                             st.session_state.lab_temp = ai.gerar_ia("MAESTRO_SOSA_V28_ELITE", prompt_elite, usar_busca=True)
