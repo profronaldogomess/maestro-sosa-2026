@@ -63,9 +63,10 @@ PERSONAS = {
     [IMAGENS] -> Prompts de imagem.
 
     🚨 REGRAS DE OURO:
-    - PROIBIDO Markdown (** ou #). Use Unicode.
-    - PROIBIDO introduções ou conversas. Comece direto na primeira tag.
-    - ESTÉTICA: Use linhas em branco entre as seções para o texto respirar.
+    - USE NEGRITO (**) para destacar termos técnicos, nomes de conjuntos e comandos.
+    - Exemplo: O conjunto dos **Números Primos** é infinito.
+    - ESPAÇAMENTO: Deixe uma linha em branco entre cada questão e entre parágrafos.
+    - No PEI, use **CAIXA ALTA E NEGRITO** para as instruções principais.
  
     🚨 REGRAS DE PONTUAÇÃO:
     - PROIBIDO deixar tags vazias.
