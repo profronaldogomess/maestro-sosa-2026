@@ -411,7 +411,7 @@ if menu == "🧪 Criador de Aulas":
                     qtd_q = st.slider("Quantidade de Questões:", 3, 15, 10, key=f"hub_q_{v}")
 
                     if st.button("💎 MATERIALIZAR AULA DE ELITE", use_container_width=True, type="primary"):
-                        with st.spinner(f"Expandindo {aula_alvo}..."):
+                        with st.spinner(f"Arquitetando {aula_alvo} com Rigor V29..."):
                             s_id = st.session_state.sosa_id_atual
                             tag_aula = "AULA_1" if aula_alvo == "Aula 1" else "AULA_2" if aula_alvo == "Aula 2" else "SABADO_LETIVO"
                             roteiro_plano = ai.extrair_tag(plano_txt, tag_aula)
@@ -419,10 +419,13 @@ if menu == "🧪 Criador de Aulas":
                             prompt_expansao = (
                                 f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {s_id}.\n"
                                 f"SÉRIE: {st.session_state.lab_meta.get('ano')}º ANO. ALVO: {aula_alvo}.\n"
-                                f"ROTEIRO DO PLANEJAMENTO: {roteiro_plano}.\n"
-                                f"INSTRUÇÕES EXTRAS: {instr_extra}.\n"
-                                f"ESTRATÉGIA PEI PLANEJADA: {ai.extrair_tag(plano_txt, 'ADAPTACAO_PEI')}.\n\n"
-                                f"🚨 MISSÃO: Transforme esse roteiro em material completo (Professor, Aluno, Gabarito, PEI)."
+                                f"PLANO BASE: {roteiro_plano}.\n"
+                                f"ESTRATÉGIA PEI: {ai.extrair_tag(plano_txt, 'ADAPTACAO_PEI')}.\n\n"
+                                f"🚨 ORDEM DE FORMATAÇÃO:\n"
+                                f"1. Use [PROMPT IMAGEM] em todas as versões (Prof/Alu/PEI).\n"
+                                f"2. Garanta que [GABARITO_PEI] seja gerado.\n"
+                                f"3. Use símbolos Unicode para separar FIXAÇÃO, APLICAÇÃO e DESAFIO.\n"
+                                f"4. No PEI, descreva o passo a passo do Material Dourado com clareza visual."
                             )
                             st.session_state.lab_temp = ai.gerar_ia("MAESTRO_SOSA_V28_ELITE", prompt_expansao, usar_busca=True)
                             st.rerun()
