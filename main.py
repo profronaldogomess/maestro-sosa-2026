@@ -731,32 +731,84 @@ if menu == "📅 Planejamento (Ponto ID)":
                 ed_ava = st.text_area("Avaliação:", ai.extrair_tag(txt_bruto, "AVALIACAO"), key=f"ed_ava_{v}")
                 ed_pei = st.text_area("Adaptação PEI:", ai.extrair_tag(txt_bruto, "ADAPTACAO_PEI"), key=f"ed_pei_{v}")
 
+
+
+# BLOCO DE FINALIZAÇÃO REVISADO (SEM ERROS DE VARIÁVEL)
                 if st.button("💾 FINALIZAR E DISPARAR PRODUÇÃO", use_container_width=True, type="primary", key=f"btn_final_hub_{v}"):
-                    with st.status("Sincronizando...") as status:
+                    with st.status("Sincronizando Hub Acadêmico...") as status:
+                        # 1. DEFINIÇÃO DE VARIÁVEIS DE IDENTIFICAÇÃO
                         final_ano_str = f"{ano_p}º"
                         nome_arquivo = f"PLANO_{ano_p}ANO_{sem_limpa.replace(' ', '')}"
+                        
+                        # 2. LIMPEZA DE VERSÕES ANTIGAS (UPSERT)
                         db.excluir_plano_completo(sem_limpa, final_ano_str)
-                        metodologia_unificada = f"[AULA_1]\n{ed_a1}\n\n[AULA_2]\n{ed_a2}"
-                        if ed_a3 != "N/A": metodologia_unificada += f"\n\n[SABADO_LETIVO]\n{ed_a3}"
-                        dados_docx = {"geral": f"[{ed_bncc}] {ed_geral}", "especificos": ed_espec, "objetivos": ed_objs, "metodologia": metodologia_unificada, "avaliacao": ed_ava, "pei": ed_pei}
-                        doc_io = exporter.gerar_docx_plano_pedagogico_ELITE(nome_arquivo, dados_docx, {"ano": final_ano_str, "semana": sem_limpa, "trimestre": trim_atual})
-                        link_drive = db.subir_e_converter_para_google_docs(doc_io, nome_arquivo, trimestre=trim_atual, categoria=final_ano_str, semana=sem_limpa, modo="PLANEJAMENTO")
+                        
+                        # 3. CAPTURA DE CONTEÚDO E NOVAS TAGS ACADÊMICAS
+                        ed_recursos = ai.extrair_tag(txt_bruto, "RECURSOS_DIDATICOS")
+                        
+                        # Metodologia Unificada (Nomenclatura Acadêmica)
+                        metodologia_unificada = f"AULA 01:\n{ed_a1}\n\nAULA 02:\n{ed_a2}"
+                        if ed_a3 != "N/A": 
+                            metodologia_unificada += f"\n\nAULA 03 (SÁBADO LETIVO):\n{ed_a3}"
+                        
+                        # 4. GERAÇÃO DO DOCUMENTO WORD (EXPORTER)
+                        dados_docx = {
+                            "geral": f"[{ed_bncc}] {ed_geral}", 
+                            "especificos": ed_espec, 
+                            "objetivos": ed_objs, 
+                            "recursos": ed_recursos, 
+                            "metodologia": metodologia_unificada, 
+                            "avaliacao": ed_ava, 
+                            "pei": ed_pei
+                        }
+                        
+                        doc_io = exporter.gerar_docx_plano_pedagogico_ELITE(
+                            nome_arquivo, 
+                            dados_docx, 
+                            {"ano": final_ano_str, "semana": sem_limpa, "trimestre": trim_atual}
+                        )
+                        
+                        # 5. UPLOAD PARA O DRIVE E CAPTURA DO LINK
+                        link_drive = db.subir_e_converter_para_google_docs(
+                            doc_io, nome_arquivo, 
+                            trimestre=trim_atual, 
+                            categoria=final_ano_str, 
+                            semana=sem_limpa, 
+                            modo="PLANEJAMENTO"
+                        )
+                        
+                        # 6. CONSOLIDAÇÃO NO BANCO DE DADOS (SHEETS)
                         if "https" in str(link_drive):
-                            final_txt = f"[BNCC_CODE] {ed_bncc} \n[CONTEUDO_GERAL] {ed_geral} \n[CONTEUDOS_ESPECIFICOS] {ed_espec} \n[OBJETIVOS_ENSINO] {ed_objs} \n[AULA_1] {ed_a1} \n[AULA_2] {ed_a2} \n[SABADO_LETIVO] {ed_a3} \n[AVALIACAO] {ed_ava} \n[ADAPTACAO_PEI] {ed_pei} \n--- LINK DRIVE --- {link_drive}"
-                            db.salvar_no_banco("DB_PLANOS", [datetime.now().strftime("%d/%m/%Y"), sem_limpa, final_ano_str, trim_atual, "HUB_ATIVO", final_txt, link_drive])
-                            status.update(label="✅ Plano Salvo!", state="complete")
-                            st.balloons(); reset_planejamento()
-
-            with t_vis:
-                st.markdown(f"### 🎯 {ed_geral}"); st.caption(f"🆔 BNCC: {ed_bncc}")
-                st.info(f"**Conteúdos:** {ed_espec}\n\n**Objetivos:** {ed_objs}")
-                st.divider()
-                st.markdown("#### 📘 Aula 1"); st.write(ed_a1)
-                st.markdown("#### 📗 Aula 2"); st.write(ed_a2)
-                if ed_a3 != "N/A": st.warning(f"#### 🗓️ Aula 3 (Sábado): \n {ed_a3}")
-                st.divider()
-                st.markdown(f"**📝 AVALIAÇÃO:** {ed_ava}")
-                st.markdown(f"**♿ ESTRATÉGIA PEI:** {ed_pei}")
+                            final_txt = (
+                                f"[BNCC_CODE] {ed_bncc} \n"
+                                f"[CONTEUDO_GERAL] {ed_geral} \n"
+                                f"[CONTEUDOS_ESPECIFICOS] {ed_espec} \n"
+                                f"[OBJETIVOS_ENSINO] {ed_objs} \n"
+                                f"[RECURSOS_DIDATICOS] {ed_recursos} \n"
+                                f"[AULA_1] {ed_a1} \n"
+                                f"[AULA_2] {ed_a2} \n"
+                                f"[SABADO_LETIVO] {ed_a3} \n"
+                                f"[AVALIACAO] {ed_ava} \n"
+                                f"[ADAPTACAO_PEI] {ed_pei} \n"
+                                f"--- LINK DRIVE --- {link_drive}"
+                            )
+                            
+                            # Salva no banco respeitando a ordem das colunas do seu CSV
+                            db.salvar_no_banco("DB_PLANOS", [
+                                datetime.now().strftime("%d/%m/%Y"), 
+                                sem_limpa, 
+                                final_ano_str, 
+                                trim_atual, 
+                                "HUB_ATIVO", 
+                                final_txt, 
+                                link_drive
+                            ])
+                            
+                            status.update(label="✅ Plano Acadêmico Sincronizado!", state="complete")
+                            st.balloons()
+                            reset_planejamento()
+                        else:
+                            st.error(f"Falha no Upload: {link_drive}")
 
     # --- ABA 2: DASHBOARD DE PRODUÇÃO ---
     with tab_producao:
