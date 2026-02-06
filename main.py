@@ -612,7 +612,7 @@ if menu == "🧪 Criador de Aulas":
                             if db.excluir_registro_com_drive("DB_AULAS_PRONTAS", s_id_h): st.rerun()
 
 # ==============================================================================
-# MÓDULO: PLANEJAMENTO ESTRATÉGICO (PONTO ID) - ARQUITETURA V36.0 (REFINADOR + MULTI-EIXO)
+# MÓDULO: PLANEJAMENTO ESTRATÉGICO (PONTO ID) - ARQUITETURA V37.0 (CHAVES ÚNICAS)
 # ==============================================================================
 if menu == "📅 Planejamento (Ponto ID)":
     st.title("📅 Engenharia de Planejamento (Ponto ID)")
@@ -652,7 +652,7 @@ if menu == "📅 Planejamento (Ponto ID)":
             trim_atual = sem_p.split(" - ")[1] if " - " in sem_p else "I Trimestre"
             modo_p = c3.radio("Método:", ["📖 Livro Didático", "🎛️ Manual (Banco)"], horizontal=True, key=f"modo_p_{v}")
 
-        # --- 3. SELEÇÃO HIERÁRQUICA (MULTI-EIXO ATIVADO) ---
+        # --- 3. SELEÇÃO HIERÁRQUICA ---
         with st.container(border=True):
             f_eixo, f_cont, f_obj = "", "", ""
             if modo_p == "🎛️ Manual (Banco)":
@@ -661,21 +661,18 @@ if menu == "📅 Planejamento (Ponto ID)":
                 
                 if not df_ano.empty:
                     c_h1, c_h2 = st.columns(2)
-                    # 1. Eixo (Agora Multiselect)
                     lista_eixos = sorted(df_ano["EIXO"].unique().tolist())
-                    sel_eixo = c_h1.multiselect("1. Selecione o(s) Eixo(s):", lista_eixos, key=f"h_eixo_{v}")
+                    sel_eixo = c_h1.multiselect("1. Eixo:", lista_eixos, key=f"h_eixo_{v}")
                     
                     if sel_eixo:
-                        # 2. Conteúdo (Filtra por todos os eixos selecionados)
                         df_cont = df_ano[df_ano["EIXO"].isin(sel_eixo)]
                         lista_conts = sorted(df_cont["CONTEUDO_ESPECIFICO"].unique().tolist())
-                        sel_cont = c_h2.multiselect("2. Selecione os Conteúdos:", lista_conts, key=f"h_cont_{v}")
+                        sel_cont = c_h2.multiselect("2. Conteúdos:", lista_conts, key=f"h_cont_{v}")
                         
                         if sel_cont:
-                            # 3. Objetivo
                             df_obj = df_cont[df_cont["CONTEUDO_ESPECIFICO"].isin(sel_cont)]
                             lista_objs = sorted(df_obj["OBJETIVOS"].unique().tolist())
-                            sel_obj = st.multiselect("3. Selecione os Objetivos:", lista_objs, key=f"h_obj_{v}")
+                            sel_obj = st.multiselect("3. Objetivos:", lista_objs, key=f"h_obj_{v}")
                             
                             f_eixo = " / ".join(sel_eixo)
                             f_cont = " / ".join(sel_cont)
@@ -692,48 +689,33 @@ if menu == "📅 Planejamento (Ponto ID)":
 
             strat = st.text_area("Estratégia / Observações:", key=f"strat_{v}")
 
-        if st.button("🚀 COMPILAR PLANEJAMENTO BNCC", use_container_width=True, type="primary"):
+        if st.button("🚀 COMPILAR PLANEJAMENTO BNCC", use_container_width=True, type="primary", key=f"btn_compilar_{v}"):
             with st.spinner("Maestro SOSA processando..."):
-                # Reforçamos a ordem de fidelidade no prompt
                 prompt = (
                     f"SÉRIE: {ano_p}º Ano. SEMANA: {sem_limpa}. TRIMESTRE: {trim_atual}.\n"
-                    f"DADOS SOBERANOS DO BANCO:\n"
-                    f"EIXO: {f_eixo}\n"
-                    f"CONTEÚDO: {f_cont}\n"
-                    f"OBJETIVOS: {f_obj}\n\n"
-                    f"ORDEM: Gere o plano seguindo RIGOROSAMENTE os dados acima. "
-                    f"Use ciclos Início/Meio/Fim. Não use Markdown."
+                    f"DADOS SOBERANOS: EIXO({f_eixo}), CONTEÚDO({f_cont}), OBJETIVOS({f_obj}).\n"
+                    f"ESTRATÉGIA: {strat}.\n\n"
+                    f"MISSÃO: Gere o plano com ciclos Início/Meio/Fim. Use tags [TAG] puras."
                 )
                 st.session_state.p_temp = ai.gerar_ia("PLANE_PEDAGOGICO", prompt)
                 st.rerun()
 
-# --- 2. AJUSTE NO BLOCO DO REFINADOR (DENTRO DO main.py) ---
-        if "p_temp" in st.session_state:
-            st.markdown("---")
-            with st.container(border=True):
-                st.subheader("🤖 Refinador Maestro")
-                cmd_refine = st.chat_input("Solicite ajustes no plano...", key=f"refine_p_{v}")
-                if cmd_refine:
-                    with st.spinner("Maestro Sosa realizando reengenharia..."):
-                        # Passamos o texto ATUAL para ser refinado
-                        novo_texto = ai.gerar_ia("REFINADOR_PEDAGOGICO", f"ORDEM: {cmd_refine}\n\nPLANO ATUAL:\n{st.session_state.p_temp}")
-                        if novo_texto:
-                            st.session_state.p_temp = novo_texto
-                            st.rerun()
         # --- 4. EDITOR E REFINADOR (SÓ APARECE SE GERADO) ---
         if "p_temp" in st.session_state:
             st.markdown("---")
-            txt_bruto = st.session_state.p_temp
             
-            # --- BLOCO DO REFINADOR MAESTRO ---
+            # --- REFINADOR COM CHAVE ÚNICA SOSA ---
             with st.container(border=True):
                 st.subheader("🤖 Refinador Maestro")
-                cmd_refine = st.chat_input("Solicite ajustes no plano (ex: 'mude o contexto', 'mais prático')...", key=f"refine_p_{v}")
+                cmd_refine = st.chat_input("Solicite ajustes no plano...", key=f"SOSA_CHAT_PLAN_{v}")
                 if cmd_refine:
-                    with st.spinner("Maestro Sosa refinando lógica pedagógica..."):
-                        st.session_state.p_temp = ai.gerar_ia("REFINADOR_PEDAGOGICO", f"ORDEM: {cmd_refine}\n\nATUAL:\n{st.session_state.p_temp}")
-                        st.rerun()
+                    with st.spinner("Refinando..."):
+                        novo_texto = ai.gerar_ia("REFINADOR_PEDAGOGICO", f"ORDEM: {cmd_refine}\n\nATUAL:\n{st.session_state.p_temp}")
+                        if novo_texto:
+                            st.session_state.p_temp = novo_texto
+                            st.rerun()
 
+            txt_bruto = st.session_state.p_temp
             t_ed, t_vis = st.tabs(["✏️ Editor de Texto", "👁️ Estrutura de Regência"])
             
             with t_ed:
@@ -815,7 +797,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                 
                 col_btn1, col_btn2, col_btn3 = st.columns(3)
                 with col_btn1:
-                    if st.button("🔄 REABRIR PARA REFINO", use_container_width=True):
+                    if st.button("🔄 REABRIR PARA REFINO", use_container_width=True, key=f"btn_reopen_{v}"):
                         st.session_state.refino_ativo = {"ano": dados_h["ANO"], "semana": sel_h}
                         st.session_state.p_temp = raw_h; st.rerun()
                 with col_btn2:
@@ -834,7 +816,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                     with c_v1: st.markdown("##### 📘 Aula 1"); st.write(ai.extrair_tag(raw_h, "AULA_1"))
                     with c_v2: st.markdown("##### 📗 Aula 2"); st.write(ai.extrair_tag(raw_h, "AULA_2"))
                 
-                if st.button("🗑️ EXCLUIR PLANO", use_container_width=True):
+                if st.button("🗑️ EXCLUIR PLANO", use_container_width=True, key=f"btn_del_plan_{v}"):
                     if db.excluir_plano_completo(sel_h, dados_h["ANO"]): st.rerun()
             else: st.info("Nenhum plano encontrado.")
         else: st.info("📭 Acervo vazio.")
