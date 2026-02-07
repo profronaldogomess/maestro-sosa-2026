@@ -1468,59 +1468,66 @@ elif menu == "👥 Gestão da Turma":
         else:
             st.info("📭 Nenhuma turma cadastrada.")
 
-    # --- ABA 2: CRIAR TURMA (ARQUITETURA DINÂMICA V28.2) ---
+    # --- ABA 2: ARQUITETURA DE TURMAS (V28.5 - ULTRA-FLEX) ---
     with tab_criar:
         st.subheader("🏗️ Configurar Nova Turma")
+        st.markdown("---")
         
-        v_t = int(time.time()) # Chave de versão local
+        # Chave de versão única para evitar conflitos de cache
+        v_t = "v285"
 
-        # 1. SELEÇÃO DE DIAS (FORA DO FORM PARA SER DINÂMICO)
-        dias_aula = st.multiselect("1. Selecione os Dias de Aula:", 
-                                   ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"], 
-                                   max_selections=2, key=f"dias_v_{v_t}")
-
-        # 2. FORMULÁRIO PARA OS DEMAIS DADOS
-        with st.form("form_nova_turma_final", clear_on_submit=True):
+        # 1. DADOS BÁSICOS
+        with st.container(border=True):
             c1, c2, c3 = st.columns(3)
-            ano_t = c1.selectbox("Série/Ano:", [6, 7, 8, 9], key=f"ano_v_{v_t}")
-            letra_t = c2.selectbox("Letra:", ["A", "B", "C", "D", "E", "F"], key=f"letra_v_{v_t}")
-            turno_t = c3.selectbox("Turno:", ["Matutino", "Vespertino"], key=f"turno_v_{v_t}")
+            ano_t = c1.selectbox("Série/Ano:", [6, 7, 8, 9], key=f"ano_{v_t}")
+            letra_t = c2.selectbox("Letra da Turma:", ["A", "B", "C", "D", "E", "F"], key=f"letra_{v_t}")
+            turno_t = c3.selectbox("Turno:", ["Matutino", "Vespertino"], key=f"turno_{v_t}")
+
+        # 2. SELEÇÃO DE DIAS (REATIVA)
+        st.markdown("#### 📅 1. Selecione os Dias de Aula")
+        dias_aula = st.multiselect("Selecione até 2 dias na semana:", 
+                                   ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"], 
+                                   max_selections=2, key=f"dias_{v_t}")
+
+        # 3. DEFINIÇÃO DE HORÁRIOS POR DIA
+        horarios_escolhidos = {}
+        
+        if dias_aula:
+            st.markdown("#### ⏰ 2. Defina o Tempo de Aula para cada dia")
             
-            # Dicionário de horários baseado no turno
+            # Define as opções de horário baseadas no turno
             if turno_t == "Matutino":
                 opcoes_h = {"1º Tempo": "07:10h – 09:10h", "2º Tempo": "09:30h – 11:30h"}
             else:
                 opcoes_h = {"1º Tempo": "13:10h – 15:10h", "2º Tempo": "15:30h – 17:30h"}
 
-            st.markdown("#### ⏰ 2. Definir Tempos de Aula por Dia:")
+            # Cria colunas dinâmicas para cada dia selecionado
+            cols_h = st.columns(len(dias_aula))
+            for i, dia in enumerate(dias_aula):
+                with cols_h[i]:
+                    st.info(f"**{dia}**")
+                    t_sel = st.radio(f"Horário:", 
+                                     options=list(opcoes_h.keys()), 
+                                     key=f"radio_{dia}_{v_t}",
+                                     help=opcoes_h[list(opcoes_h.keys())[0]])
+                    horarios_escolhidos[dia] = t_sel
             
-            escolhas_horarios = {}
+            st.markdown("---")
             
-            if dias_aula:
-                cols_h = st.columns(len(dias_aula))
-                for i, dia in enumerate(dias_aula):
-                    with cols_h[i]:
-                        t_sel = st.radio(f"Horário de {dia}:", 
-                                         list(opcoes_h.keys()), 
-                                         key=f"h_{dia}_{v_t}")
-                        escolhas_horarios[dia] = t_sel
-            else:
-                st.warning("⚠️ Selecione os dias acima primeiro para definir os horários.")
-
-            # Botão de Submit
-            btn_cadastrar = st.form_submit_button("🚀 CADASTRAR TURMA")
-
-            if btn_cadastrar:
-                if not dias_aula:
-                    st.error("❌ Erro: Você precisa selecionar os dias de aula no campo acima do formulário.")
-                else:
+            # 4. BOTÃO DE SALVAMENTO (FORA DE FORM PARA FUNCIONAR)
+            if st.button("🚀 CADASTRAR TURMA AGORA", use_container_width=True, type="primary"):
+                with st.spinner("Registrando arquitetura da turma..."):
+                    # Gerar Sigla (Ex: 6ª MA)
                     sigla = f"{ano_t}ª {'M' if turno_t == 'Matutino' else 'V'}{letra_t}"
+                    
+                    # Formatar Dias (Ex: Segunda / Quarta)
                     str_dias = " / ".join(dias_aula)
                     
-                    # Formatação: "Seg: 1º Tempo / Qua: 2º Tempo"
-                    lista_formatada = [f"{d[:3]}: {escolhas_horarios[d]}" for d in dias_aula]
+                    # Formatar Horários (Ex: Seg: 1º Tempo / Qua: 2º Tempo)
+                    lista_formatada = [f"{d[:3]}: {horarios_escolhidos[d]}" for d in dias_aula]
                     str_horarios = " / ".join(lista_formatada)
                     
+                    # Salvar no Banco
                     sucesso = db.salvar_no_banco("DB_TURMAS", [
                         sigla, 
                         f"{ano_t}º Ano {letra_t}", 
@@ -1531,10 +1538,13 @@ elif menu == "👥 Gestão da Turma":
                     ])
                     
                     if sucesso:
-                        st.success(f"✅ Turma {sigla} cadastrada com sucesso!")
+                        st.success(f"✅ Turma {sigla} criada com sucesso!")
+                        st.balloons()
+                        time.sleep(1.5)
                         st.cache_data.clear()
-                        time.sleep(1)
                         st.rerun()
+        else:
+            st.warning("👈 Selecione os dias de aula acima para configurar os horários.")
 
     # --- ABA 3: POVOAR ALUNOS ---
     with tab_povoar:
