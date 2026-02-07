@@ -1471,56 +1471,63 @@ elif menu == "👥 Gestão da Turma":
     # --- ABA 2: CRIAR TURMA (DNA CRONOLÓGICO) ---
     with tab_criar:
         st.subheader("🏗️ Configurar Nova Turma")
-        with st.form("form_nova_turma_v28", clear_on_submit=True):
+        
+        # --- 1. PARÂMETROS BÁSICOS (FORA DO FORM PARA ATUALIZAÇÃO INSTANTÂNEA) ---
+        with st.container(border=True):
             c1, c2, c3 = st.columns(3)
-            ano_t = c1.selectbox("Série/Ano:", [6, 7, 8, 9], key="cad_ano")
-            letra_t = c2.selectbox("Letra:", ["A", "B", "C", "D", "E", "F"], key="cad_letra")
-            turno_t = c3.selectbox("Turno:", ["Matutino", "Vespertino"], key="cad_turno")
+            ano_t = c1.selectbox("Série/Ano:", [6, 7, 8, 9], key=f"cad_ano_{v}")
+            letra_t = c2.selectbox("Letra:", ["A", "B", "C", "D", "E", "F"], key=f"cad_letra_{v}")
+            turno_t = c3.selectbox("Turno:", ["Matutino", "Vespertino"], key=f"cad_turno_{v}")
             
-            st.markdown("---")
-            dias_aula = st.multiselect("📅 Selecione os Dias de Aula:", ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"], max_selections=2)
-            
-            # Definição de Horários por Turno
+            # Definição de Horários (Sempre definida no topo para evitar NameError)
             if turno_t == "Matutino":
                 opcoes_h = {"1º Tempo": "07:10h – 09:10h", "2º Tempo": "09:30h – 11:30h"}
             else:
                 opcoes_h = {"1º Tempo": "13:10h – 15:10h", "2º Tempo": "15:30h – 17:30h"}
             
-            # --- LÓGICA DE HORÁRIO DINÂMICO POR DIA ---
+            st.markdown("---")
+            dias_aula = st.multiselect("📅 Selecione os Dias de Aula (Máx 2):", 
+                                       ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"], 
+                                       max_selections=2, 
+                                       key=f"cad_dias_{v}")
+            
+            # --- 2. MAPEAMENTO DINÂMICO DE HORÁRIOS POR DIA ---
             horarios_mapeados = []
             if dias_aula:
-                st.info("Defina o tempo de aula para cada dia selecionado:")
+                st.info("💡 Defina o tempo de aula para cada dia selecionado:")
                 cols_dias = st.columns(len(dias_aula))
                 for i, dia in enumerate(dias_aula):
                     with cols_dias[i]:
-                        tempo_dia = st.radio(f"Tempo na {dia}:", list(opcoes_h.keys()), key=f"t_{dia}_{v}")
+                        # Agora o sistema reconhece opcoes_h instantaneamente
+                        tempo_dia = st.radio(f"Tempo na {dia}:", list(opcoes_h.keys()), key=f"radio_t_{dia}_{v}")
                         horarios_mapeados.append(f"{dia}: {tempo_dia} ({opcoes_h[tempo_dia]})")
             
             st.markdown("---")
-            btn_cadastrar = st.form_submit_button("🚀 CADASTRAR TURMA")
             
-            if btn_cadastrar:
+            # Botão de ação final (Substitui o submit button do form)
+            if st.button("🚀 CADASTRAR TURMA DEFINITIVAMENTE", use_container_width=True, type="primary", key=f"btn_cad_turma_{v}"):
                 if not dias_aula:
                     st.error("❌ Selecione pelo menos um dia de aula.")
                 else:
-                    sigla = f"{ano_t}ª {'M' if turno_t == 'Matutino' else 'V'}{letra_t}"
-                    horario_final = " | ".join(horarios_mapeados)
-                    
-                    # Salvamento no Banco
-                    sucesso = db.salvar_no_banco("DB_TURMAS", [
-                        sigla, 
-                        f"{ano_t}º Ano {letra_t}", 
-                        turno_t, 
-                        " / ".join(dias_aula), 
-                        horario_final, 
-                        "ATIVO"
-                    ])
-                    
-                    if sucesso:
-                        st.success(f"✅ Turma {sigla} cadastrada com sucesso!")
-                        st.cache_data.clear()
-                        time.sleep(1)
-                        st.rerun()
+                    with st.spinner("Salvando arquitetura da turma..."):
+                        sigla = f"{ano_t}ª {'M' if turno_t == 'Matutino' else 'V'}{letra_t}"
+                        horario_final = " | ".join(horarios_mapeados)
+                        
+                        # Salvamento no Banco
+                        sucesso = db.salvar_no_banco("DB_TURMAS", [
+                            sigla, 
+                            f"{ano_t}º Ano {letra_t}", 
+                            turno_t, 
+                            " / ".join(dias_aula), 
+                            horario_final, 
+                            "ATIVO"
+                        ])
+                        
+                        if sucesso:
+                            st.success(f"✅ Turma {sigla} cadastrada com sucesso!")
+                            st.cache_data.clear()
+                            time.sleep(1)
+                            st.rerun()
 
     # --- ABA 3: POVOAR ALUNOS ---
     with tab_povoar:
