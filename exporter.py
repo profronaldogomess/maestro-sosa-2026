@@ -382,7 +382,7 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
     return file_stream
 
 # ==============================================================================
-# 4. PROVA OFICIAL (VERSÃO ELITE V44 - FILTRO DE PRECISÃO)
+# 4. PROVA OFICIAL (VERSÃO ELITE V46 - LIMPEZA DE MARCADORES E HEADER PEI)
 # ==============================================================================
 def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
     import re, io, os
@@ -402,6 +402,17 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         trHeight.set(qn('w:hRule'), "atLeast")
         trPr.append(trHeight)
 
+    def adicionar_texto_formatado(paragraph, texto):
+        # Remove tags residuais que não devem aparecer no papel
+        texto = re.sub(r'\[PARA LEMBRAR\]|\[PASSO A PASSO\]|\[QUESTOES\]|\[ORIENTACOES\]|\[PEI\]', '', texto, flags=re.IGNORECASE)
+        partes = re.split(r'(\*\*.*?\*\*)', texto)
+        for parte in partes:
+            if parte.startswith('**') and parte.endswith('**'):
+                run = paragraph.add_run(parte.replace('**', ''))
+                run.bold = True
+            else:
+                paragraph.add_run(parte)
+
     file_stream = io.BytesIO()
     try:
         doc = Document()
@@ -409,17 +420,12 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         section.top_margin, section.bottom_margin = Inches(0.3), Inches(0.3)
         section.left_margin, section.right_margin = Inches(0.4), Inches(0.4)
         
-        # --- 1. FILTRAGEM DE CONTEÚDO SOBERANA ---
-        # Se for PEI, o conteúdo já vem filtrado. Se for Regular, extraímos a tag QUESTOES.
-        if "[QUESTOES]" in conteudo_ia.upper():
-            corpo_prova = ai.extrair_tag(conteudo_ia, "QUESTOES")
-        else:
-            corpo_prova = conteudo_ia # Fallback para PEI
+        # --- 1. DETECÇÃO DE TIPO (REGULAR OU PEI) ---
+        is_pei_doc = "PEI" in titulo_doc.upper() or "[PEI]" in conteudo_ia.upper() or "ADAPTADA" in titulo_doc.upper()
+        label_prova = "AVALIAÇÃO ADAPTADA" if is_pei_doc else "AVALIAÇÃO DE MATEMÁTICA"
 
-        # Limpeza de resíduos de tags que a IA possa ter repetido
-        corpo_prova = re.sub(r'\[QUESTOES\]|\[ORIENTACOES\]|\[PEI\]', '', corpo_prova, flags=re.IGNORECASE)
-
-        # Contagem real de questões para o gabarito
+        # Limpeza inicial de tags de controle
+        corpo_prova = conteudo_ia
         num_total_q = len(re.findall(r'QUESTÃO', corpo_prova.upper()))
         if num_total_q == 0: num_total_q = int(info.get('qtd_questoes', 10))
 
@@ -437,19 +443,22 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         header_table.cell(2, 1).paragraphs[0].add_run(f"PROF: Ronaldo Gomes").font.size = Pt(10)
         header_table.cell(2, 2).paragraphs[0].add_run(f"TURMA: {info.get('ano')}").font.size = Pt(10)
         header_table.cell(2, 3).paragraphs[0].add_run("DATA:").font.size = Pt(10)
-        header_table.cell(2, 4).paragraphs[0].add_run(f"VALOR: {info.get('valor', '10,0')}").font.bold = True
         
+        # Título da Prova (Dinâmico)
+        run_tit = header_table.cell(2, 4).paragraphs[0].add_run(label_prova)
+        run_tit.font.bold = True
+        if is_pei_doc: run_tit.font.color.rgb = RGBColor(0, 102, 204) # Azul para destacar PEI no cabeçalho
+
         logo_path = "logo_escola.png" if os.path.exists("logo_escola.png") else "logo.png"
         if os.path.exists(logo_path):
             c_logo.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-            p_logo = c_logo.paragraphs[0]
-            p_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            p_logo.add_run().add_picture(logo_path, width=Inches(0.7))
+            c_logo.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+            c_logo.paragraphs[0].add_run().add_picture(logo_path, width=Inches(0.7))
         
         for row in header_table.rows: set_row_height(row, 25)
         doc.add_paragraph()
 
-        # --- 3. ORIENTAÇÕES E GABARITO DINÂMICO ---
+        # --- 3. ORIENTAÇÕES E GABARITO ---
         top_table = doc.add_table(rows=1, cols=2)
         top_table.columns[0].width = Inches(3.5)
         top_table.columns[1].width = Inches(4.0)
@@ -457,6 +466,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         c_orient = top_table.cell(0, 0)
         p_tit = c_orient.add_paragraph()
         p_tit.add_run("ORIENTAÇÕES PARA AVALIAÇÃO:").font.bold = True
+        
         orientacoes = [
             "A interpretação faz parte da prova.",
             "Use apenas CANETA AZUL ou PRETA.",
@@ -481,7 +491,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
                 run_b = gab_grid.cell(r, col).paragraphs[0].add_run("○")
                 run_b.font.size = Pt(14)
 
-        # --- 4. ATIVAÇÃO DE COLUNAS NATIVAS ---
+        # --- 4. COLUNAS NATIVAS ---
         new_section = doc.add_section(WD_SECTION.CONTINUOUS)
         sectPr = new_section._sectPr
         cols = sectPr.xpath('./w:cols')[0]
@@ -496,22 +506,37 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
             
             p = doc.add_paragraph()
             p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-            p.paragraph_format.line_spacing = 1.0
+            p.paragraph_format.line_spacing = 1.15
 
-            if "QUESTÃO" in l_s.upper():
+            # Lógica de Formatação por Marcador (Sem imprimir o marcador)
+            if "PARA LEMBRAR" in l_s.upper() or "DICA MESTRA" in l_s.upper():
+                run = p.add_run(f"█▓▒░ {l_s.replace('[', '').replace(']', '')} ░▒▓█")
+                run.bold = True
+                p.paragraph_format.space_before = Pt(10)
+            
+            elif "PASSO A PASSO" in l_s.upper():
+                run = p.add_run(f"➔ {l_s.replace('[', '').replace(']', '')}")
+                run.bold = True
+                run.font.color.rgb = RGBColor(0, 102, 204) # Azul para o andaime
+                p.paragraph_format.left_indent = Inches(0.1)
+            
+            elif "QUESTÃO" in l_s.upper():
                 run = p.add_run(l_s)
                 run.bold = True
                 run.font.size = Pt(11)
                 p.paragraph_format.space_before = Pt(12)
+            
             elif "PROMPT IMAGEM" in l_s.upper():
                 run = p.add_run(f" [ {l_s} ] ")
                 run.font.italic, run.font.size = True, Pt(8)
                 run.font.color.rgb = RGBColor(120, 120, 120)
+            
             elif re.match(r'^[A-E][\)\.]', l_s):
                 p.add_run(l_s)
                 p.paragraph_format.left_indent = Inches(0.2)
+            
             else:
-                p.add_run(l_s)
+                adicionar_texto_formatado(p, l_s)
 
         doc.save(file_stream)
         file_stream.seek(0)
