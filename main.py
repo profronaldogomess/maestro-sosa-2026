@@ -1840,14 +1840,27 @@ elif menu == "📝 Central de Avaliações":
     with tab_vis:
         if "temp_prova" in st.session_state:
             txt_f = st.session_state.temp_prova
-            t1, t2, t3, t4 = st.tabs(["📝 Prova Regular", "✅ Gabarito/Psicometria", "♿ Prova PEI", "📊 Gabarito PEI"])
-            with t1: st.text(ai.extrair_tag(txt_f, "QUESTOES"))
+            # Adicionada a 5ª aba para Justificativa PEI
+            t1, t2, t3, t4, t5 = st.tabs([
+                "📝 Prova Regular", 
+                "✅ Gabarito/Psicometria", 
+                "♿ Prova PEI", 
+                "📊 Gabarito PEI", 
+                "🧠 Justificativa PEI"
+            ])
+            with t1: 
+                st.text_area("Conteúdo da Prova Regular:", ai.extrair_tag(txt_f, "QUESTOES"), height=500, key=f"vis_reg_{v}")
             with t2: 
                 st.code(ai.extrair_tag(txt_f, "GABARITO_TEXTO"))
                 st.write(ai.extrair_tag(txt_f, "RESPOSTAS_IA"))
-            with t3: st.text(ai.extrair_tag(txt_f, "PEI"))
-            with t4: st.code(ai.extrair_tag(txt_f, "GABARITO_PEI"))
-        else: st.info("Aguardando geração...")
+            with t3: 
+                st.text_area("Conteúdo da Prova PEI:", ai.extrair_tag(txt_f, "PEI"), height=500, key=f"vis_pei_{v}")
+            with t4: 
+                st.code(ai.extrair_tag(txt_f, "GABARITO_PEI"))
+            with t5:
+                st.write(ai.extrair_tag(txt_f, "RESPOSTAS_PEI_IA"))
+        else:
+            st.info("Aguardando geração do exame...")
 
     # --- ABA 4: FINALIZAR ATIVO (SEM DATA) ---
     with tab_finalizar:
