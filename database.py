@@ -57,10 +57,14 @@ def carregar_tudo():
             df = pd.DataFrame(dados[1:], columns=dados[0])
             df.columns = [str(c).strip().upper() for c in df.columns]
             
-            # --- BLINDAGEM DECIMAL SOSA ---
+            # --- BLINDAGEM DECIMAL E CRONOLÓGICA SOSA ---
             for col in df.columns:
                 if any(x in col for x in ["NOTA", "MEDIA", "VALOR", "SOMA"]):
                     df[col] = df[col].apply(util.sosa_to_float)
+                
+                # NOVA VACINA: Normaliza todas as colunas de DATA para DD/MM/YYYY
+                if col == "DATA":
+                    df[col] = df[col].apply(util.formatar_data_br)
 
             # --- LÓGICA ESPECÍFICA POR TABELA (PRESERVADA) ---
             if nome == "DB_AULAS_PRONTAS":
