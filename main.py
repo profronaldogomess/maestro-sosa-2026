@@ -1871,32 +1871,36 @@ elif menu == "📝 Central de Avaliações":
             nome_arq = c_s2.text_input("Nome do Arquivo (Drive):", st.session_state.get('av_nome_fixo', 'AVALIACAO'), key=f"name_av_in_{v}")
 
             if st.button("💾 SALVAR COMO PRONTO PARA APLICAÇÃO", use_container_width=True, type="primary"):
-                with st.status("🚀 Sincronizando Ativo...") as status:
+                with st.status("🚀 Sincronizando Ativos...") as status:
                     v_total_num = st.session_state.get('av_valor_total', 10.0)
-                    v_por_quest = v_total_num / qtd_q
                     identificador = f"{tipo_av} - {ano_av}º Ano ({trim_av})"
                     
-                    info_doc = {
-                        "ano": f"{ano_av}º", 
-                        "tipo_prova": tipo_av, 
+                    # 1. GERAÇÃO REGULAR
+                    v_por_quest_reg = v_total_num / qtd_q
+                    info_reg = {
+                        "ano": f"{ano_av}º", "tipo_prova": tipo_av, 
                         "valor": util.sosa_to_str(v_total_num), 
-                        "valor_questao": util.sosa_to_str(v_por_quest),
-                        "qtd_questoes": qtd_q, 
-                        "trimestre": trim_av
+                        "valor_questao": util.sosa_to_str(v_por_quest_reg),
+                        "qtd_questoes": qtd_q, "trimestre": trim_av
                     }
-                    
-                    db.excluir_avaliacao_completa(identificador, tipo_av)
-
-                    # 1. GERAÇÃO REGULAR (O exportador agora filtra a tag QUESTOES sozinho)
-                    doc_reg = exporter.gerar_docx_prova_v25(nome_arq, st.session_state.temp_prova, info_doc)
+                    doc_reg = exporter.gerar_docx_prova_v25(nome_arq, st.session_state.temp_prova, info_reg)
                     link_reg = db.subir_e_converter_para_google_docs(doc_reg, nome_arq, trimestre=trim_av, categoria=f"{ano_av}º Ano", semana="AVALIAÇÃO", modo="AVALIACAO")
                     
-                    # 2. GERAÇÃO PEI (Enviamos apenas a tag PEI para o exportador)
+                    # 2. GERAÇÃO PEI (Metade das questões = Dobro do valor por questão)
                     txt_pei_puro = ai.extrair_tag(st.session_state.temp_prova, "PEI")
                     link_pei = "N/A"
                     if txt_pei_puro:
-                        doc_pei = exporter.gerar_docx_prova_v25(f"{nome_arq}_PEI", txt_pei_puro, info_doc)
+                        qtd_q_pei = qtd_q // 2
+                        v_por_quest_pei = v_total_num / qtd_q_pei
+                        info_pei = {
+                            "ano": f"{ano_av}º", "tipo_prova": tipo_av, 
+                            "valor": util.sosa_to_str(v_total_num), 
+                            "valor_questao": util.sosa_to_str(v_por_quest_pei),
+                            "qtd_questoes": qtd_q_pei, "trimestre": trim_av
+                        }
+                        doc_pei = exporter.gerar_docx_prova_v25(f"{nome_arq}_PEI", txt_pei_puro, info_pei)
                         link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_arq}_PEI", trimestre=trim_av, categoria=f"{ano_av}º Ano", semana="AVALIAÇÃO", modo="AVALIACAO")
+                    
                     
                     if "https" in str(link_reg):
                         dna_sosa = f"\n\n[METADADOS_AVALIAÇÃO]\n[VALOR: {v_total_num}]\n[TRIMESTRE: {trim_av}]\n"
