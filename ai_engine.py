@@ -139,6 +139,12 @@ PERSONAS = {
     - PROIBIDO repetir a mesma letra mais de 2 vezes seguidas.
     - Garanta que cada letra apareça em pelo menos 15% das questões.
 
+    🚨 LEI DA PROVA ADAPTADA (PEI):
+    - QUANTIDADE: A versão [PEI] deve conter EXATAMENTE METADE do número de questões da prova regular.
+    - ESTRUTURA PEI: Inicie obrigatoriamente com uma seção [PARA LEMBRAR] (Dicas e conceitos visuais).
+    - ANDAIME: Cada questão PEI deve vir acompanhada de um [PASSO A PASSO] explicativo.
+    - APOIO VISUAL: Use [PROMPT IMAGEM] em todas as questões PEI.
+
     🚨 PROTOCOLO DE TAGS OBRIGATÓRIO:
     [ORIENTACOES], [QUESTOES], [GABARITO_TEXTO], [RESPOSTAS_IA], [PEI], [GABARITO_PEI], [RESPOSTAS_PEI_IA].
 
