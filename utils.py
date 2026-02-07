@@ -86,3 +86,33 @@ def gerar_sosa_id(tipo, ano, trimestre):
     data_slug = data_itabuna.strftime("%d%m")
     ano_num = "".join(filter(str.isdigit, str(ano)))
     return f"{prefixo}-{ano_num}AN-{str(trimestre)[0]}-{data_slug}-{hash_curto}"
+
+# --- ADICIONE AO FINAL DO utils.py ---
+
+def formatar_data_br(valor):
+    """
+    CONVERSOR CRONOLÓGICO SOSA (ANTI-SERIAL)
+    Converte números seriais (46060) ou datas ISO para DD/MM/YYYY.
+    """
+    from datetime import datetime, date, timedelta
+    if not valor or str(valor).strip() == "" or str(valor).lower() == "nan":
+        return ""
+    
+    # Caso 1: É um número serial do Excel/Sheets (ex: 46060)
+    val_str = str(valor).strip()
+    if val_str.replace('.','',1).isdigit():
+        try:
+            # Data base do Google Sheets é 30/12/1899
+            dt = date(1899, 12, 30) + timedelta(days=int(float(val_str)))
+            return dt.strftime("%d/%m/%Y")
+        except: pass
+    
+    # Caso 2: Já é uma string de data (YYYY-MM-DD ou DD/MM/YYYY)
+    try:
+        if "-" in val_str: # Formato ISO
+            return datetime.strptime(val_str[:10], "%Y-%m-%d").strftime("%d/%m/%Y")
+        if "/" in val_str: # Já está no formato BR
+            return val_str
+    except: pass
+    
+    return val_str
