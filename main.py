@@ -1539,9 +1539,9 @@ elif menu == "👥 Gestão da Turma":
                 if not aulas_turma_reg.empty:
                     st.markdown("#### 📌 Últimos Registros")
                     for _, reg in aulas_turma_reg.tail(3).iterrows():
+                        # A data aqui agora virá formatada pelo database.py
                         with st.expander(f"📅 {reg['DATA']} - {reg['CONTEUDO_MINISTRADO'][:50]}..."):
                             st.write(f"**Conteúdo:** {reg['CONTEUDO_MINISTRADO']}")
-                            st.caption(f"Estratégia PEI: {reg['ADAPTACAO_PEI']}")
 
             with col_dir:
                 st.subheader("📂 Inventário da Turma")
