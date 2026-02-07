@@ -1415,11 +1415,16 @@ elif menu == "📈 Boletim Anual & Conselho":
                 st.text_area("Copia e cole na Ata Oficial:", ai.gerar_ia("PLANE_PEDAGOGICO", prompt_ata), height=300)
 
 # ==============================================================================
-# MÓDULO: GESTÃO DA TURMA (V29.0) - COCKPIT DE REGÊNCIA 360°
+# MÓDULO: GESTÃO DA TURMA (V30.5) - COCKPIT 360° COM BLINDAGEM DE CHAVES
 # ==============================================================================
 elif menu == "👥 Gestão da Turma":
     st.title("👥 Cockpit de Regência: Gestão 360°")
     st.markdown("---")
+
+    # --- DEFINIÇÃO DA VARIÁVEL DE VERSÃO (VACINA CONTRA NAMEERROR) ---
+    if "v_gestao" not in st.session_state:
+        st.session_state.v_gestao = 1
+    v = st.session_state.v_gestao
 
     tab_cockpit, tab_criar, tab_povoar, tab_editar = st.tabs([
         "📊 Cockpit da Turma",
@@ -1428,15 +1433,15 @@ elif menu == "👥 Gestão da Turma":
         "✏️ Edição & Transferência"
     ])
 
-    # --- ABA 1: COCKPIT DA TURMA (A GRANDE NOVIDADE) ---
+    # --- ABA 1: COCKPIT DA TURMA (INTEGRAÇÃO TOTAL) ---
     with tab_cockpit:
         if df_turmas.empty:
             st.info("📭 Nenhuma turma cadastrada. Vá em 'Arquitetura de Turmas'.")
         else:
             # 1. FILTROS DE FOCO E SAFRA
             c_f1, c_f2 = st.columns([1, 1])
-            turma_foco = c_f1.selectbox("🎯 Selecione a Turma para Gestão:", sorted(df_turmas['ID_TURMA'].unique()), key="foco_t")
-            trim_foco = c_f2.selectbox("📅 Trimestre de Safra:", ["I Trimestre", "II Trimestre", "III Trimestre"], key="foco_trim")
+            turma_foco = c_f1.selectbox("🎯 Selecione a Turma para Gestão:", sorted(df_turmas['ID_TURMA'].unique()), key=f"foco_t_{v}")
+            trim_foco = c_f2.selectbox("📅 Trimestre de Safra:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"foco_trim_{v}")
             
             # Dados da Turma
             info_t = df_turmas[df_turmas['ID_TURMA'] == turma_foco].iloc[0]
@@ -1448,7 +1453,6 @@ elif menu == "👥 Gestão da Turma":
             c1.metric("Total Alunos", len(alunos_t))
             c2.metric("Estudantes PEI", len(alunos_t[~alunos_t['NECESSIDADES'].astype(str).str.upper().isin(["NENHUMA", "PENDENTE", ""])]))
             
-            # Filtro de registros desta turma
             aulas_turma_reg = df_registro_aulas[df_registro_aulas['TURMA'] == turma_foco]
             c3.metric("Aulas Ministradas", len(aulas_turma_reg))
             c4.metric("Horário", info_t['HORARIO_TEMPO'])
@@ -1460,85 +1464,72 @@ elif menu == "👥 Gestão da Turma":
             with col_esq:
                 st.subheader("🕒 Registro de Aula e Gestão de Ativos")
                 
-                # --- REGISTRO INTELIGENTE (DATA FUSION TOTAL) ---
                 with st.container(border=True):
                     st.markdown("#### 🚀 Aplicar Materiais na Turma")
                     
-                    # A. Busca Planos e TODOS os Materiais (Aulas, Sondas, Trabalhos, Complementares)
                     planos_ano = df_planos[df_planos['ANO'].str.contains(ano_num)]
-                    
-                    # Captura tudo o que foi gerado no Laboratório para este ano
                     materiais_ano = df_aulas[df_aulas['ANO'].str.contains(ano_num)]
 
-                    # B. LÓGICA DE SUMIÇO POR TURMA (Hiding used materials for THIS class)
+                    # LÓGICA DE SUMIÇO POR TURMA
                     mats_ja_usados = aulas_turma_reg['CONTEUDO_MINISTRADO'].astype(str).tolist()
-                    
                     mats_disponiveis = []
                     for _, m_row in materiais_ano.iterrows():
                         m_nome = m_row['TIPO_MATERIAL']
-                        # Se o material não foi usado nesta turma, ele fica disponível
                         if not any(m_nome in r for r in mats_ja_usados):
                             mats_disponiveis.append(m_nome)
 
                     c_r1, c_r2 = st.columns(2)
+                    # CORREÇÃO AQUI: v agora está definido no topo do módulo
                     data_aula = c_r1.date_input("Data da Aplicação:", date.today(), key=f"dt_reg_{v}")
-                    plano_sel = c_r2.selectbox("Vincular ao Plano Base:", ["Nenhum"] + planos_ano['SEMANA'].tolist())
+                    plano_sel = c_r2.selectbox("Vincular ao Plano Base:", ["Nenhum"] + planos_ano['SEMANA'].tolist(), key=f"plano_reg_{v}")
                     
-                    # C. SELEÇÃO MULTIPLA DE ATIVOS (Sondas, Trabalhos, Aulas)
-                    mats_sel = st.multiselect("📦 Selecione os Ativos Aplicados (Sondas, Trabalhos, Aulas):", 
+                    mats_sel = st.multiselect("📦 Selecione os Ativos (Sondas, Trabalhos, Aulas):", 
                                               options=mats_disponiveis,
-                                              help="Aqui aparecem todos os materiais gerados no Laboratório que ainda não foram usados nesta turma.")
+                                              key=f"mats_reg_{v}")
 
-                    if st.button("💾 REGISTRAR AULA E BAIXAR ATIVOS", use_container_width=True, type="primary"):
+                    if st.button("💾 REGISTRAR AULA E BAIXAR ATIVOS", use_container_width=True, type="primary", key=f"btn_reg_{v}"):
                         if not mats_sel and plano_sel == "Nenhum":
-                            st.error("Selecione pelo menos um Plano ou Material para registrar.")
+                            st.error("Selecione pelo menos um Plano ou Material.")
                         else:
                             with st.spinner("Sincronizando Cockpit..."):
                                 lista_conteudos = []
                                 lista_peis = []
                                 
-                                # Extração do Plano
                                 if plano_sel != "Nenhum":
                                     p_row = planos_ano[planos_ano['SEMANA'] == plano_sel].iloc[0]
                                     lista_conteudos.append(f"PLANO: {ai.extrair_tag(p_row['PLANO_TEXTO'], 'CONTEUDOS_ESPECIFICOS')}")
                                     lista_peis.append(ai.extrair_tag(p_row['PLANO_TEXTO'], "ADAPTACAO_PEI"))
                                 
-                                # Extração dos Materiais (Sondas, Trabalhos, etc)
                                 for m in mats_sel:
                                     lista_conteudos.append(m)
                                 
                                 conteudo_final = " + ".join(lista_conteudos)
                                 pei_final = " | ".join(lista_peis) if lista_peis else "Verificar Ativo PEI"
 
-                                # Salva no Registro de Aulas
                                 db.salvar_no_banco("DB_REGISTRO_AULAS", [
                                     data_aula.strftime("%d/%m/%Y"), plano_sel, turma_foco, 
                                     conteudo_final, pei_final, "MINISTRADA"
                                 ])
-                                st.success(f"✅ Sucesso! Ativos vinculados à {turma_foco} e baixados do estoque.")
+                                st.success(f"✅ Ativos vinculados à {turma_foco}!")
                                 time.sleep(1); st.rerun()
 
-                # --- LINHA DO TEMPO RECENTE ---
                 if not aulas_turma_reg.empty:
                     st.markdown("#### 📌 Últimos Registros")
                     for _, reg in aulas_turma_reg.tail(3).iterrows():
                         with st.expander(f"📅 {reg['DATA']} - {reg['CONTEUDO_MINISTRADO'][:50]}..."):
-                            st.write(f"**Conteúdo Completo:** {reg['CONTEUDO_MINISTRADO']}")
+                            st.write(f"**Conteúdo:** {reg['CONTEUDO_MINISTRADO']}")
                             st.caption(f"Estratégia PEI: {reg['ADAPTACAO_PEI']}")
 
             with col_dir:
                 st.subheader("📂 Inventário da Turma")
-                
-                # Mostra o que está disponível para ser usado (Sondas, Trabalhos, etc)
                 with st.container(border=True):
-                    st.markdown(f"**📦 Ativos Prontos (Ainda não usados na {turma_foco})**")
+                    st.markdown(f"**📦 Ativos Prontos para {turma_foco}**")
                     if mats_disponiveis:
                         for m in mats_disponiveis:
-                            # Ícones dinâmicos por tipo
                             icone = "🔍" if "SONDA" in m.upper() else "📋" if "TRAB" in m.upper() else "📚" if "COMP" in m.upper() else "📖"
                             st.write(f"{icone} {m}")
                     else:
-                        st.success("🎉 Todos os ativos produzidos já foram aplicados nesta turma.")
+                        st.success("🎉 Estoque de ativos aplicado!")
 
                 with st.container(border=True):
                     st.markdown("**👥 Estudantes (Foco PEI)**")
@@ -1547,22 +1538,21 @@ elif menu == "👥 Gestão da Turma":
                         if is_pei: st.warning(f"♿ {alu['NOME_ALUNO']}")
                         else: st.write(f"👤 {alu['NOME_ALUNO']}")
 
-    # --- ABA 2: CRIAR TURMA (HORÁRIO FLEXÍVEL V28.5 - PRESERVADO) ---
+    # --- ABA 2: ARQUITETURA DE TURMAS (V28.5 - ULTRA-FLEX) ---
     with tab_criar:
         st.subheader("🏗️ Configurar Nova Turma")
-        v_t = "v285"
+        v_t = f"t_{v}"
         with st.container(border=True):
             c1, c2, c3 = st.columns(3)
             ano_t = c1.selectbox("Série/Ano:", [6, 7, 8, 9], key=f"ano_{v_t}")
-            letra_t = c2.selectbox("Letra da Turma:", ["A", "B", "C", "D", "E", "F"], key=f"letra_{v_t}")
+            letra_t = c2.selectbox("Letra:", ["A", "B", "C", "D", "E", "F"], key=f"letra_{v_t}")
             turno_t = c3.selectbox("Turno:", ["Matutino", "Vespertino"], key=f"turno_{v_t}")
 
-        st.markdown("#### 📅 1. Selecione os Dias de Aula")
-        dias_aula = st.multiselect("Selecione até 2 dias na semana:", ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"], max_selections=2, key=f"dias_{v_t}")
+        dias_aula = st.multiselect("📅 Selecione os Dias de Aula:", ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"], max_selections=2, key=f"dias_{v_t}")
 
         horarios_escolhidos = {}
         if dias_aula:
-            st.markdown("#### ⏰ 2. Defina o Tempo de Aula para cada dia")
+            st.markdown("#### ⏰ Defina o Tempo de Aula por dia")
             opcoes_h = {"1º Tempo": "07:10h – 09:10h", "2º Tempo": "09:30h – 11:30h"} if turno_t == "Matutino" else {"1º Tempo": "13:10h – 15:10h", "2º Tempo": "15:30h – 17:30h"}
             cols_h = st.columns(len(dias_aula))
             for i, dia in enumerate(dias_aula):
@@ -1571,20 +1561,18 @@ elif menu == "👥 Gestão da Turma":
                     t_sel = st.radio(f"Horário:", options=list(opcoes_h.keys()), key=f"radio_{dia}_{v_t}")
                     horarios_escolhidos[dia] = t_sel
             
-            if st.button("🚀 CADASTRAR TURMA AGORA", use_container_width=True, type="primary"):
+            if st.button("🚀 CADASTRAR TURMA AGORA", use_container_width=True, type="primary", key=f"btn_cad_{v_t}"):
                 sigla = f"{ano_t}ª {'M' if turno_t == 'Matutino' else 'V'}{letra_t}"
                 str_dias = " / ".join(dias_aula)
                 str_horarios = " / ".join([f"{d[:3]}: {horarios_escolhidos[d]}" for d in dias_aula])
                 if db.salvar_no_banco("DB_TURMAS", [sigla, f"{ano_t}º Ano {letra_t}", turno_t, str_dias, str_horarios, "ATIVO"]):
-                    st.success(f"✅ Turma {sigla} criada!"); st.balloons(); time.sleep(1.5); st.cache_data.clear(); st.rerun()
-        else:
-            st.warning("👈 Selecione os dias de aula acima.")
+                    st.success(f"✅ Turma {sigla} criada!"); st.cache_data.clear(); time.sleep(1); st.rerun()
 
     # --- ABA 3: POVOAR ALUNOS (PRESERVADO) ---
     with tab_povoar:
         st.subheader("➕ Inclusão de Estudantes")
-        t_dest = st.selectbox("Turma de Destino:", df_turmas['ID_TURMA'].tolist() if not df_turmas.empty else [])
-        metodo = st.radio("Método:", ["Manual", "CSV"], horizontal=True)
+        t_dest = st.selectbox("Turma de Destino:", df_turmas['ID_TURMA'].tolist() if not df_turmas.empty else [], key=f"dest_{v}")
+        metodo = st.radio("Método:", ["Manual", "CSV"], horizontal=True, key=f"met_{v}")
         if metodo == "Manual":
             with st.form("f_manual", clear_on_submit=True):
                 nome_a = st.text_input("Nome Completo:").upper()
@@ -1594,8 +1582,8 @@ elif menu == "👥 Gestão da Turma":
                     db.salvar_no_banco("DB_ALUNOS", [id_n, nome_a, t_dest, "ATIVO", nec_a, "MANUAL"])
                     st.success("Cadastrado!"); st.rerun()
         else:
-            f_csv = st.file_uploader("Arquivo CSV", type=["csv"])
-            if f_csv and st.button("🚀 Importar Lista"):
+            f_csv = st.file_uploader("Arquivo CSV", type=["csv"], key=f"csv_{v}")
+            if f_csv and st.button("🚀 Importar Lista", key=f"btn_csv_{v}"):
                 df_up = pd.read_csv(f_csv)
                 id_b = db.gerar_proximo_id(df_alunos)
                 for idx, r in df_up.iterrows():
@@ -1606,10 +1594,10 @@ elif menu == "👥 Gestão da Turma":
     with tab_editar:
         st.subheader("✏️ Alterar Cadastro ou Transferir Aluno")
         turmas_com_alunos = sorted(df_alunos['TURMA'].unique().tolist())
-        t_origem = st.selectbox("Selecione a Turma Atual:", [""] + turmas_com_alunos, key="ed_t_orig")
+        t_origem = st.selectbox("Selecione a Turma Atual:", [""] + turmas_com_alunos, key=f"orig_{v}")
         if t_origem:
             alunos_opcoes = df_alunos[df_alunos['TURMA'] == t_origem].sort_values(by="NOME_ALUNO")
-            aluno_sel_nome = st.selectbox("Selecione o Aluno:", alunos_opcoes['NOME_ALUNO'].tolist())
+            aluno_sel_nome = st.selectbox("Selecione o Aluno:", alunos_opcoes['NOME_ALUNO'].tolist(), key=f"alu_ed_{v}")
             dados_atuais = alunos_opcoes[alunos_opcoes['NOME_ALUNO'] == aluno_sel_nome].iloc[0]
             with st.form("form_edicao_aluno_v26"):
                 c_e1, c_e2 = st.columns(2)
