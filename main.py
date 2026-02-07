@@ -1433,24 +1433,24 @@ elif menu == "👥 Gestão da Turma":
         if df_turmas.empty:
             st.info("📭 Nenhuma turma cadastrada. Vá em 'Arquitetura de Turmas'.")
         else:
-            # 1. FILTROS DE FOCO
+            # 1. FILTROS DE FOCO E SAFRA
             c_f1, c_f2 = st.columns([1, 1])
             turma_foco = c_f1.selectbox("🎯 Selecione a Turma para Gestão:", sorted(df_turmas['ID_TURMA'].unique()), key="foco_t")
             trim_foco = c_f2.selectbox("📅 Trimestre de Safra:", ["I Trimestre", "II Trimestre", "III Trimestre"], key="foco_trim")
             
-            # Dados da Turma Selecionada
+            # Dados da Turma
             info_t = df_turmas[df_turmas['ID_TURMA'] == turma_foco].iloc[0]
             alunos_t = df_alunos[df_alunos['TURMA'] == turma_foco].sort_values(by="NOME_ALUNO")
-            ano_num = "".join(filter(str.isdigit, turma_foco)) # Extrai "6" de "6ª MA"
+            ano_num = "".join(filter(str.isdigit, turma_foco)) 
 
-            # 2. DASHBOARD DE STATUS (KPIs)
+            # 2. DASHBOARD DE STATUS
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("Total Alunos", len(alunos_t))
             c2.metric("Estudantes PEI", len(alunos_t[~alunos_t['NECESSIDADES'].astype(str).str.upper().isin(["NENHUMA", "PENDENTE", ""])]))
             
-            # Cálculo de aulas dadas (do Registro de Aulas)
-            aulas_dadas = df_registro_aulas[(df_registro_aulas['TURMA'] == turma_foco) & (df_registro_aulas['STATUS_CURRICULO'] != "AGENDADA")]
-            c3.metric("Aulas Ministradas", len(aulas_dadas))
+            # Filtro de registros desta turma
+            aulas_turma_reg = df_registro_aulas[df_registro_aulas['TURMA'] == turma_foco]
+            c3.metric("Aulas Ministradas", len(aulas_turma_reg))
             c4.metric("Horário", info_t['HORARIO_TEMPO'])
 
             st.markdown("---")
@@ -1458,77 +1458,94 @@ elif menu == "👥 Gestão da Turma":
             col_esq, col_dir = st.columns([1.8, 1.2])
 
             with col_esq:
-                st.subheader("🕒 Linha do Tempo de Regência")
+                st.subheader("🕒 Registro de Aula e Gestão de Ativos")
                 
-                # --- BALANÇO DA ÚLTIMA AULA ---
-                if not aulas_dadas.empty:
-                    ultima = aulas_dadas.iloc[-1]
-                    with st.expander(f"📌 Última Aula: {ultima['DATA']}", expanded=True):
-                        st.markdown(f"**Conteúdo:** {ultima['CONTEUDO_MINISTRADO']}")
-                        st.caption(f"Estratégia PEI: {ultima['ADAPTACAO_PEI']}")
-                else:
-                    st.info("Nenhuma aula registrada para este trimestre.")
-
-                # --- REGISTRO INTELIGENTE (O FIM DA DIGITAÇÃO) ---
-                st.markdown("#### 🚀 Registrar Nova Aula (Sincronia Ponto ID)")
+                # --- REGISTRO INTELIGENTE (DATA FUSION TOTAL) ---
                 with st.container(border=True):
-                    # Busca Planos e Materiais para o ano da turma
-                    planos_disponiveis = df_planos[df_planos['ANO'].str.contains(ano_num)]
-                    materiais_disponiveis = df_aulas[df_aulas['ANO'].str.contains(ano_num)]
+                    st.markdown("#### 🚀 Aplicar Materiais na Turma")
+                    
+                    # A. Busca Planos e TODOS os Materiais (Aulas, Sondas, Trabalhos, Complementares)
+                    planos_ano = df_planos[df_planos['ANO'].str.contains(ano_num)]
+                    
+                    # Captura tudo o que foi gerado no Laboratório para este ano
+                    materiais_ano = df_aulas[df_aulas['ANO'].str.contains(ano_num)]
+
+                    # B. LÓGICA DE SUMIÇO POR TURMA (Hiding used materials for THIS class)
+                    mats_ja_usados = aulas_turma_reg['CONTEUDO_MINISTRADO'].astype(str).tolist()
+                    
+                    mats_disponiveis = []
+                    for _, m_row in materiais_ano.iterrows():
+                        m_nome = m_row['TIPO_MATERIAL']
+                        # Se o material não foi usado nesta turma, ele fica disponível
+                        if not any(m_nome in r for r in mats_ja_usados):
+                            mats_disponiveis.append(m_nome)
 
                     c_r1, c_r2 = st.columns(2)
-                    data_aula = c_r1.date_input("Data da Aula:", date.today())
+                    data_aula = c_r1.date_input("Data da Aplicação:", date.today(), key=f"dt_reg_{v}")
+                    plano_sel = c_r2.selectbox("Vincular ao Plano Base:", ["Nenhum"] + planos_ano['SEMANA'].tolist())
                     
-                    # Seleciona o Plano (Ponto ID)
-                    plano_sel = c_r2.selectbox("Vincular Plano:", ["Nenhum"] + planos_disponiveis['SEMANA'].tolist())
-                    
-                    # Seleciona o Material (Laboratório)
-                    mat_sel = st.selectbox("Vincular Material Gerado:", ["Nenhum"] + materiais_disponiveis['TIPO_MATERIAL'].tolist())
+                    # C. SELEÇÃO MULTIPLA DE ATIVOS (Sondas, Trabalhos, Aulas)
+                    mats_sel = st.multiselect("📦 Selecione os Ativos Aplicados (Sondas, Trabalhos, Aulas):", 
+                                              options=mats_disponiveis,
+                                              help="Aqui aparecem todos os materiais gerados no Laboratório que ainda não foram usados nesta turma.")
 
-                    if st.button("💾 REGISTRAR AULA E SINCRONIZAR", use_container_width=True, type="primary"):
-                        with st.spinner("Sincronizando dados pedagógicos..."):
-                            conteudo_final = ""
-                            pei_final = ""
-                            
-                            # Puxa dados do Plano
-                            if plano_sel != "Nenhum":
-                                p_row = planos_disponiveis[planos_disponiveis['SEMANA'] == plano_sel].iloc[0]
-                                conteudo_final = ai.extrair_tag(p_row['PLANO_TEXTO'], "CONTEUDOS_ESPECIFICOS")
-                                pei_final = ai.extrair_tag(p_row['PLANO_TEXTO'], "ADAPTACAO_PEI")
-                            
-                            # Puxa link do Material
-                            link_final = "N/A"
-                            if mat_sel != "Nenhum":
-                                m_row = materiais_disponiveis[materiais_disponiveis['TIPO_MATERIAL'] == mat_sel].iloc[0]
-                                link_final = m_row['LINK_DRIVE']
-                                if not conteudo_final: conteudo_final = mat_sel
+                    if st.button("💾 REGISTRAR AULA E BAIXAR ATIVOS", use_container_width=True, type="primary"):
+                        if not mats_sel and plano_sel == "Nenhum":
+                            st.error("Selecione pelo menos um Plano ou Material para registrar.")
+                        else:
+                            with st.spinner("Sincronizando Cockpit..."):
+                                lista_conteudos = []
+                                lista_peis = []
+                                
+                                # Extração do Plano
+                                if plano_sel != "Nenhum":
+                                    p_row = planos_ano[planos_ano['SEMANA'] == plano_sel].iloc[0]
+                                    lista_conteudos.append(f"PLANO: {ai.extrair_tag(p_row['PLANO_TEXTO'], 'CONTEUDOS_ESPECIFICOS')}")
+                                    lista_peis.append(ai.extrair_tag(p_row['PLANO_TEXTO'], "ADAPTACAO_PEI"))
+                                
+                                # Extração dos Materiais (Sondas, Trabalhos, etc)
+                                for m in mats_sel:
+                                    lista_conteudos.append(m)
+                                
+                                conteudo_final = " + ".join(lista_conteudos)
+                                pei_final = " | ".join(lista_peis) if lista_peis else "Verificar Ativo PEI"
 
-                            # Salva no Registro de Aulas
-                            db.salvar_no_banco("DB_REGISTRO_AULAS", [
-                                data_aula.strftime("%d/%m/%Y"), plano_sel, turma_foco, 
-                                conteudo_final, pei_final, "MINISTRADA"
-                            ])
-                            st.success("✅ Aula registrada com sucesso! Dados importados do Ponto ID.")
-                            time.sleep(1); st.rerun()
+                                # Salva no Registro de Aulas
+                                db.salvar_no_banco("DB_REGISTRO_AULAS", [
+                                    data_aula.strftime("%d/%m/%Y"), plano_sel, turma_foco, 
+                                    conteudo_final, pei_final, "MINISTRADA"
+                                ])
+                                st.success(f"✅ Sucesso! Ativos vinculados à {turma_foco} e baixados do estoque.")
+                                time.sleep(1); st.rerun()
+
+                # --- LINHA DO TEMPO RECENTE ---
+                if not aulas_turma_reg.empty:
+                    st.markdown("#### 📌 Últimos Registros")
+                    for _, reg in aulas_turma_reg.tail(3).iterrows():
+                        with st.expander(f"📅 {reg['DATA']} - {reg['CONTEUDO_MINISTRADO'][:50]}..."):
+                            st.write(f"**Conteúdo Completo:** {reg['CONTEUDO_MINISTRADO']}")
+                            st.caption(f"Estratégia PEI: {reg['ADAPTACAO_PEI']}")
 
             with col_dir:
-                st.subheader("📂 Ativos da Turma")
-                # Lista de Materiais Rápidos
+                st.subheader("📂 Inventário da Turma")
+                
+                # Mostra o que está disponível para ser usado (Sondas, Trabalhos, etc)
                 with st.container(border=True):
-                    st.markdown("**📄 Materiais de Sala (PDFs)**")
-                    if not materiais_disponiveis.empty:
-                        for _, m in materiais_disponiveis.tail(5).iterrows():
-                            st.link_button(f"📖 {m['TIPO_MATERIAL']}", str(m['LINK_DRIVE']), use_container_width=True)
+                    st.markdown(f"**📦 Ativos Prontos (Ainda não usados na {turma_foco})**")
+                    if mats_disponiveis:
+                        for m in mats_disponiveis:
+                            # Ícones dinâmicos por tipo
+                            icone = "🔍" if "SONDA" in m.upper() else "📋" if "TRAB" in m.upper() else "📚" if "COMP" in m.upper() else "📖"
+                            st.write(f"{icone} {m}")
                     else:
-                        st.caption("Nenhum material gerado para este ano.")
+                        st.success("🎉 Todos os ativos produzidos já foram aplicados nesta turma.")
 
-                # Lista de Alunos com Alerta PEI
                 with st.container(border=True):
-                    st.markdown("**👥 Lista de Estudantes**")
+                    st.markdown("**👥 Estudantes (Foco PEI)**")
                     for _, alu in alunos_t.iterrows():
                         is_pei = str(alu['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", ""]
-                        label = f"♿ {alu['NOME_ALUNO']}" if is_pei else alu['NOME_ALUNO']
-                        st.write(f"- {label}")
+                        if is_pei: st.warning(f"♿ {alu['NOME_ALUNO']}")
+                        else: st.write(f"👤 {alu['NOME_ALUNO']}")
 
     # --- ABA 2: CRIAR TURMA (HORÁRIO FLEXÍVEL V28.5 - PRESERVADO) ---
     with tab_criar:
