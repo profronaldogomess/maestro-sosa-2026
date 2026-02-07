@@ -1021,7 +1021,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                 st.plotly_chart(px.bar(progresso_trim, x="TRIMESTRE", y="%", text="%", title=f"Evolução da Cobertura Real - {ano_m}º Ano", color="%", color_continuous_scale="RdYlGn", range_y=[0, 110]), use_container_width=True)
             
 # ==============================================================================
-# MÓDULO: DIÁRIO DE BORDO RÁPIDO V26.6 - COM REGISTRO DE BÔNUS ⭐
+# MÓDULO: DIÁRIO DE BORDO (V27.0) - RECEPTOR INTELIGENTE DE ATIVOS
 # ==============================================================================
 elif menu == "📝 Diário de Bordo Rápido":
     st.title("📝 Diário de Bordo: Engajamento e Bônus")
@@ -1033,48 +1033,57 @@ elif menu == "📝 Diário de Bordo Rápido":
     if df_alunos.empty:
         st.warning("⚠️ Cadastre alunos primeiro.")
     else:
+        # --- 1. FILTROS DE ACESSO ---
         with st.container(border=True):
             c1, c2 = st.columns([1, 1])
-            turma_sel = c1.selectbox("👥 Turma:", sorted(df_alunos['TURMA'].unique()), key="db_turma")
-            data_sel = c2.date_input("📅 Data:", date.today(), key="db_data")
+            turma_sel = c1.selectbox("👥 Selecione a Turma:", sorted(df_alunos['TURMA'].unique()), key=f"db_turma_{v}")
+            data_sel = c2.date_input("📅 Data da Aula:", date.today(), key=f"db_data_{v}")
             data_str = data_sel.strftime("%d/%m/%Y")
 
-            planos_turma = df_planos[df_planos['ANO'] == f"{turma_sel[0]}º"]
-            
-            if not planos_turma.empty:
-                c3, c4 = st.columns([2, 1])
-                semana_sel = c3.selectbox("🔗 Vincular à Semana:", planos_turma['SEMANA'].tolist(), key="db_sem")
-                aula_alvo = c4.radio("🎯 Aula:", ["Aula 1", "Aula 2"], horizontal=True)
-                plano_ref = planos_turma[planos_turma['SEMANA'] == semana_sel].iloc[0]['PLANO_TEXTO']
-                st.caption(f"📖 **Conteúdo Previsto:** {ai.extrair_tag(plano_ref, 'CONTEUDOS_ESPECIFICOS')}")
-            else:
-                st.error("❌ Planejamento não encontrado.")
-                semana_sel, aula_alvo = "N/A", "N/A"
+        # --- 2. MOTOR DE SINCRONIA (BUSCA NO COCKPIT) ---
+        # O sistema procura o que você registrou na Gestão da Turma para este dia/turma
+        registro_cockpit = df_registro_aulas[
+            (df_registro_aulas['TURMA'] == turma_sel) & 
+            (df_registro_aulas['DATA'] == data_str)
+        ]
 
+        if not registro_cockpit.empty:
+            ativo_detectado = registro_cockpit.iloc[0]['CONTEUDO_MINISTRADO']
+            semana_ref = registro_cockpit.iloc[0]['SEMANA']
+            st.info(f"📍 **Ativos Detectados no Cockpit:** {ativo_detectado}")
+            st.caption(f"🔗 Vinculado à: {semana_ref}")
+        else:
+            st.warning("⚠️ Nenhum registro encontrado no Cockpit para esta data. Registre na 'Gestão da Turma' para garantir a rastreabilidade total.")
+            ativo_detectado = "Aula Avulsa"
+            semana_ref = "N/A"
+
+        # --- 3. PREPARAÇÃO DA GRADE DE ESTUDANTES ---
         alunos_turma = df_alunos[df_alunos['TURMA'] == turma_sel].sort_values(by="NOME_ALUNO")
         
+        # Busca se já existe registro de diário para hoje para não perder dados ao recarregar
         df_existente = pd.DataFrame()
         if not df_diario.empty:
             df_existente = df_diario[
                 (df_diario['DATA'] == data_str) & 
-                (df_diario['TURMA'] == turma_sel) &
-                (df_diario['OBSERVACOES'].str.contains(aula_alvo, na=False))
+                (df_diario['TURMA'] == turma_sel)
             ]
 
         dados_editor = []
         for _, aluno in alunos_turma.iterrows():
             id_a = db.limpar_id(aluno['ID'])
+            # Identificação Visual PEI
             is_pei = str(aluno['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", ""]
             
+            # Valores padrão
             visto_val, faltou_val, tag_val, obs_val, bonus_val = True, False, "", "", 0.0
 
+            # Se já houver registro salvo hoje, recupera os dados
             if not df_existente.empty:
                 reg = df_existente[df_existente['ID_ALUNO'].apply(db.limpar_id) == id_a]
                 if not reg.empty:
                     visto_val = str(reg.iloc[0]['VISTO_ATIVIDADE']).upper() == "TRUE"
                     tag_val = str(reg.iloc[0]['TAGS'])
-                    obs_val = str(reg.iloc[0]['OBSERVACOES']).replace(f"[{aula_alvo}]", "").strip()
-                    # Puxa o bônus se a coluna existir no dataframe
+                    obs_val = str(reg.iloc[0]['OBSERVACOES'])
                     if 'BONUS' in reg.columns: bonus_val = util.sosa_to_float(reg.iloc[0]['BONUS'])
                     if "AUSÊNCIA" in tag_val: faltou_val = True
 
@@ -1083,12 +1092,13 @@ elif menu == "📝 Diário de Bordo Rápido":
                 "ALUNO": f"♿ {aluno['NOME_ALUNO']}" if is_pei else aluno['NOME_ALUNO'],
                 "FALTOU": faltou_val,
                 "VISTO": visto_val,
-                "⭐ BÔNUS": bonus_val, # NOVA COLUNA
+                "⭐ BÔNUS": bonus_val,
                 "OCORRÊNCIA": tag_val if tag_val != "nan" else "",
                 "OBS": obs_val if obs_val != "nan" else ""
             })
 
-        st.markdown(f"### 📝 Registro de Engajamento: {aula_alvo}")
+        # --- 4. INTERFACE DE COLETA DE EVIDÊNCIAS ---
+        st.subheader(f"📝 Registro de Engajamento")
         df_editado = st.data_editor(
             pd.DataFrame(dados_editor),
             column_config={
@@ -1098,29 +1108,42 @@ elif menu == "📝 Diário de Bordo Rápido":
                 "VISTO": st.column_config.CheckboxColumn("Visto", width="small"),
                 "⭐ BÔNUS": st.column_config.NumberColumn("Bônus", min_value=0.0, max_value=2.0, step=0.1, format="%.1f"),
                 "OCORRÊNCIA": st.column_config.SelectboxColumn("Tags", options=["", "Dormiu", "Conversa", "Se destacou", "Sem material", "Vetor Disciplinar", "PEI Concluído"]),
-                "OBS": st.column_config.TextColumn("Obs", width="medium")
+                "OBS": st.column_config.TextColumn("Observações Rápidas", width="medium")
             },
             hide_index=True, use_container_width=True, key=f"editor_diario_{v}"
         )
 
-        if st.button("💾 SALVAR DIÁRIO E BÔNUS", type="primary", use_container_width=True):
-            with st.status("Sincronizando...", expanded=False) as status:
+        # --- 5. SALVAMENTO COM RASTREABILIDADE ---
+        if st.button("💾 SALVAR DIÁRIO E CONSOLIDAR BÔNUS", type="primary", use_container_width=True, key=f"btn_save_db_{v}"):
+            with st.status("Sincronizando com o Boletim...", expanded=False) as status:
+                # Limpa registros antigos do mesmo dia/turma para evitar duplicidade
                 db.limpar_diario_data_turma(data_str, turma_sel)
-                linhas = []
+                
+                linhas_para_salvar = []
                 for _, row in df_editado.iterrows():
                     tag_f, visto_f = row['OCORRÊNCIA'], row['VISTO']
                     if row['FALTOU']:
                         tag_f, visto_f = "AUSÊNCIA JUSTIFICADA", False
                     
-                    linhas.append([
-                        data_str, row['ID'], row['ALUNO'].replace("♿ ", ""), turma_sel,
-                        str(visto_f), tag_f, f"[{aula_alvo}] {row['OBS']}".strip(),
-                        util.sosa_to_str(row['⭐ BÔNUS']) # SALVA O BÔNUS NA COLUNA H
+                    # O campo OBSERVAÇÕES agora guarda o vínculo com o material do Cockpit
+                    obs_final = f"[{ativo_detectado}] {row['OBS']}".strip()
+                    
+                    linhas_para_salvar.append([
+                        data_str, 
+                        row['ID'], 
+                        row['ALUNO'].replace("♿ ", ""), 
+                        turma_sel,
+                        str(visto_f), 
+                        tag_f, 
+                        obs_final,
+                        util.sosa_to_str(row['⭐ BÔNUS'])
                     ])
                 
-                if db.salvar_lote("DB_DIARIO_BORDO", linhas):
-                    status.update(label="✅ Salvo com Sucesso!", state="complete")
-                    st.balloons(); time.sleep(1); st.rerun()
+                if db.salvar_lote("DB_DIARIO_BORDO", linhas_para_salvar):
+                    status.update(label="✅ Sincronia Concluída!", state="complete")
+                    st.balloons()
+                    time.sleep(1)
+                    st.rerun()
 
 # ==============================================================================
 # MÓDULO: PAINEL DE NOTAS & VISTOS V26.7 - PESOS PERSISTENTES E AUTO-AJUSTE
