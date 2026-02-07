@@ -1784,7 +1784,7 @@ elif menu == "📝 Central de Avaliações":
     # --- ABA 1: ARQUITETO (GERAÇÃO COM MÉRITO) ---
     with tab_arquiteto:
         if is_refinando_av:
-            st.warning(f"🛠️ **MODO REFINO:** Editando {st.session_state.refino_av_ativo.get('tipo')}")
+            st.warning(f"🛠️ **MODO REFINO:** Editando {st.session_state.refino_ativo_av.get('tipo')}")
             if st.button("❌ CANCELAR E VOLTAR AO NOVO"): reset_avaliacoes()
 
         with st.container(border=True):
@@ -1797,32 +1797,47 @@ elif menu == "📝 Central de Avaliações":
 
         with st.container(border=True):
             st.markdown("### 🎯 2. Matriz de Mérito (Vincular Aulas e Fixação)")
+            
+            # --- NOVO FILTRO DE TRIMESTRE PARA ORGANIZAÇÃO ---
+            c_trim1, c_trim2 = st.columns([1, 2])
+            trim_filtro = c_trim1.selectbox("Filtrar por Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"av_trim_filter_{v}")
+            
             # Busca materiais produzidos para esta série
             df_ref = df_aulas[df_aulas["ANO"].astype(str).str.contains(str(ano_av))]
             
-            mats_selecionados = st.multiselect(
-                "Selecione os Materiais de Referência:", 
-                options=df_ref["TIPO_MATERIAL"].tolist() if not df_ref.empty else [],
-                help="A IA criará a 'Questão de Mérito' baseada nestes IDs.",
-                key=f"av_ref_{v}"
-            )
-            
-            if st.button("💎 COMPILAR EXAME DE ELITE", use_container_width=True, type="primary"):
-                with st.spinner("Maestro Arquiteto processando Protocolo de Mérito..."):
-                    contexto_merito = ""
-                    for m in mats_selecionados:
-                        row_m = df_ref[df_ref["TIPO_MATERIAL"] == m].iloc[0]
-                        contexto_merito += f"\nMATERIAL [ID: {m}]: {row_m['CONTEUDO']}"
+            # Filtra a lista de materiais pelo trimestre selecionado (buscando no conteúdo salvo)
+            if not df_ref.empty:
+                # Filtro inteligente: busca o trimestre dentro do texto do conteúdo ou metadados
+                df_ref_filtrado = df_ref[df_ref["CONTEUDO"].astype(str).str.contains(trim_filtro, case=False, na=False)]
+                
+                mats_selecionados = c_trim2.multiselect(
+                    f"Materiais do {trim_filtro}:", 
+                    options=df_ref_filtrado["TIPO_MATERIAL"].tolist(),
+                    help="A IA criará a 'Questão de Mérito' baseada nestes IDs.",
+                    key=f"av_ref_{v}"
+                )
+                
+                if st.button("💎 COMPILAR EXAME DE ELITE", use_container_width=True, type="primary"):
+                    if not mats_selecionados:
+                        st.warning("⚠️ Selecione pelo menos um material de referência para ativar o Protocolo de Mérito.")
+                    else:
+                        with st.spinner("Maestro Arquiteto processando Protocolo de Mérito..."):
+                            contexto_merito = ""
+                            for m in mats_selecionados:
+                                row_m = df_ref_filtrado[df_ref_filtrado["TIPO_MATERIAL"] == m].iloc[0]
+                                contexto_merito += f"\nMATERIAL [ID: {m}]: {row_m['CONTEUDO']}"
 
-                    prompt = (
-                        f"TIPO: {tipo_av} | VALOR: {v_total} | QTD: {qtd_q} | SÉRIE: {ano_av}º Ano.\n"
-                        f"CONTEXTO DE MÉRITO: {contexto_merito}\n\n"
-                        f"ORDEM: Gere o exame completo (Regular + PEI) com DNA Visual e Tech/News."
-                    )
-                    st.session_state.temp_prova = ai.gerar_ia("ARQUITETO_EXAMES_V30_ELITE", prompt, usar_busca=True)
-                    st.session_state.av_valor_total = v_total
-                    st.session_state.av_nome_fixo = f"{tipo_av.upper()}_{ano_av}ANO_{datetime.now().strftime('%d%m')}"
-                    st.rerun()
+                            prompt = (
+                                f"TIPO: {tipo_av} | VALOR: {v_total} | QTD: {qtd_q} | SÉRIE: {ano_av}º Ano.\n"
+                                f"CONTEXTO DE MÉRITO: {contexto_merito}\n\n"
+                                f"ORDEM: Gere o exame completo (Regular + PEI) com DNA Visual e Tech/News."
+                            )
+                            st.session_state.temp_prova = ai.gerar_ia("ARQUITETO_EXAMES_V30_ELITE", prompt, usar_busca=True)
+                            st.session_state.av_valor_total = v_total
+                            st.session_state.av_nome_fixo = f"{tipo_av.upper()}_{ano_av}ANO_{datetime.now().strftime('%d%m')}"
+                            st.rerun()
+            else:
+                st.warning("Produza materiais no Laboratório primeiro para habilitar o Protocolo de Mérito.")
 
     # --- ABA 2: REFINADOR ---
     with tab_refino:
