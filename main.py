@@ -1468,61 +1468,56 @@ elif menu == "👥 Gestão da Turma":
         else:
             st.info("📭 Nenhuma turma cadastrada.")
 
-    # --- ABA 2: CRIAR TURMA (HORÁRIO FLEXÍVEL V28.1 - CORRIGIDO) ---
+    # --- ABA 2: CRIAR TURMA (ARQUITETURA DINÂMICA V28.2) ---
     with tab_criar:
         st.subheader("🏗️ Configurar Nova Turma")
         
-        # Definição local da variável de versão para evitar NameError
-        v_t = int(time.time()) 
-        
-        with st.form("form_nova_turma_flex", clear_on_submit=True):
+        v_t = int(time.time()) # Chave de versão local
+
+        # 1. SELEÇÃO DE DIAS (FORA DO FORM PARA SER DINÂMICO)
+        dias_aula = st.multiselect("1. Selecione os Dias de Aula:", 
+                                   ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"], 
+                                   max_selections=2, key=f"dias_v_{v_t}")
+
+        # 2. FORMULÁRIO PARA OS DEMAIS DADOS
+        with st.form("form_nova_turma_final", clear_on_submit=True):
             c1, c2, c3 = st.columns(3)
-            ano_t = c1.selectbox("Série/Ano:", [6, 7, 8, 9], key=f"f_ano_{v_t}")
-            letra_t = c2.selectbox("Letra:", ["A", "B", "C", "D", "E", "F"], key=f"f_letra_{v_t}")
-            turno_t = c3.selectbox("Turno:", ["Matutino", "Vespertino"], key=f"f_turno_{v_t}")
+            ano_t = c1.selectbox("Série/Ano:", [6, 7, 8, 9], key=f"ano_v_{v_t}")
+            letra_t = c2.selectbox("Letra:", ["A", "B", "C", "D", "E", "F"], key=f"letra_v_{v_t}")
+            turno_t = c3.selectbox("Turno:", ["Matutino", "Vespertino"], key=f"turno_v_{v_t}")
             
-            dias_aula = st.multiselect("📅 Dias de Aula (Selecione os dias):", 
-                                       ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"], 
-                                       key=f"f_dias_{v_t}")
-            
-            # Dicionário de horários padrão
+            # Dicionário de horários baseado no turno
             if turno_t == "Matutino":
                 opcoes_h = {"1º Tempo": "07:10h – 09:10h", "2º Tempo": "09:30h – 11:30h"}
             else:
                 opcoes_h = {"1º Tempo": "13:10h – 15:10h", "2º Tempo": "15:30h – 17:30h"}
 
-            st.markdown("#### ⏰ Definir Tempos de Aula por Dia:")
+            st.markdown("#### ⏰ 2. Definir Tempos de Aula por Dia:")
             
-            # Lógica para capturar horários diferentes para cada dia selecionado
-            # Criamos um dicionário temporário para armazenar as escolhas antes do submit
             escolhas_horarios = {}
             
             if dias_aula:
                 cols_h = st.columns(len(dias_aula))
                 for i, dia in enumerate(dias_aula):
                     with cols_h[i]:
-                        # O rádio agora é independente para cada dia
-                        t_sel = st.radio(f"{dia}:", 
+                        t_sel = st.radio(f"Horário de {dia}:", 
                                          list(opcoes_h.keys()), 
-                                         key=f"radio_{dia}_{v_t}")
+                                         key=f"h_{dia}_{v_t}")
                         escolhas_horarios[dia] = t_sel
             else:
-                st.info("Selecione os dias acima para definir os horários.")
+                st.warning("⚠️ Selecione os dias acima primeiro para definir os horários.")
 
-            # Botão de Submit obrigatório do Form
-            btn_cadastrar = st.form_submit_button("🚀 CADASTRAR TURMA COM HORÁRIOS DISTINTOS")
+            # Botão de Submit
+            btn_cadastrar = st.form_submit_button("🚀 CADASTRAR TURMA")
 
             if btn_cadastrar:
                 if not dias_aula:
-                    st.error("❌ Erro: Selecione pelo menos um dia de aula.")
+                    st.error("❌ Erro: Você precisa selecionar os dias de aula no campo acima do formulário.")
                 else:
                     sigla = f"{ano_t}ª {'M' if turno_t == 'Matutino' else 'V'}{letra_t}"
-                    
-                    # Montagem das strings para o banco de dados
-                    # Dias: "Segunda / Terça"
                     str_dias = " / ".join(dias_aula)
                     
-                    # Horários: "Seg: 1º Tempo / Ter: 2º Tempo"
+                    # Formatação: "Seg: 1º Tempo / Qua: 2º Tempo"
                     lista_formatada = [f"{d[:3]}: {escolhas_horarios[d]}" for d in dias_aula]
                     str_horarios = " / ".join(lista_formatada)
                     
