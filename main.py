@@ -1977,7 +1977,7 @@ elif menu == "📝 Central de Avaliações":
             trim_av = c_s1.selectbox("Trimestre Alvo:", ["I Trimestre", "II Trimestre", "III Trimestre"])
             nome_arq = c_s2.text_input("Nome do Arquivo (Drive):", st.session_state.get('av_nome_fixo', 'AVALIACAO'), key=f"name_av_in_{v}")
 
-            if st.button("💾 SALVAR COMO PRONTO PARA APLICAÇÃO", use_container_width=True, type="primary"):
+            if st.button("💾 FINALIZAR E SALVAR ATIVO", use_container_width=True, type="primary"):
                 with st.status("🚀 Sincronizando Ativos...") as status:
                     v_total_num = st.session_state.get('av_valor_total', 10.0)
                     identificador = f"{tipo_av} - {ano_av}º Ano ({trim_av})"
@@ -1993,11 +1993,11 @@ elif menu == "📝 Central de Avaliações":
                     doc_reg = exporter.gerar_docx_prova_v25(nome_arq, st.session_state.temp_prova, info_reg)
                     link_reg = db.subir_e_converter_para_google_docs(doc_reg, nome_arq, trimestre=trim_av, categoria=f"{ano_av}º Ano", semana="AVALIAÇÃO", modo="AVALIACAO")
                     
-                    # 2. GERAÇÃO PEI (CONTAGEM REAL)
+                    # 2. GERAÇÃO PEI (CONTAGEM REAL E VALOR AJUSTADO)
                     txt_pei_puro = ai.extrair_tag(st.session_state.temp_prova, "PEI")
                     link_pei = "N/A"
                     if txt_pei_puro:
-                        # CONTAGEM REAL: Conta quantas questões a IA realmente gerou para o PEI
+                        # CONTAGEM REAL: O sistema conta quantas questões a IA realmente gerou para o PEI
                         qtd_q_pei_real = len(re.findall(r'QUESTÃO', txt_pei_puro.upper()))
                         if qtd_q_pei_real == 0: qtd_q_pei_real = qtd_q // 2 # Fallback
                         
@@ -2010,7 +2010,7 @@ elif menu == "📝 Central de Avaliações":
                         }
                         doc_pei = exporter.gerar_docx_prova_v25(f"{nome_arq}_PEI", txt_pei_puro, info_pei)
                         link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_arq}_PEI", trimestre=trim_av, categoria=f"{ano_av}º Ano", semana="AVALIAÇÃO", modo="AVALIACAO")
-                                        
+                                                            
                     if "https" in str(link_reg):
                         dna_sosa = f"\n\n[METADADOS_AVALIAÇÃO]\n[VALOR: {v_total_num}]\n[TRIMESTRE: {trim_av}]\n"
                         conteudo_banco = f"{dna_sosa}{st.session_state.temp_prova}\n\n--- LINKS ---\nRegular({link_reg}) PEI({link_pei})"
