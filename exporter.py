@@ -382,7 +382,7 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
     return file_stream
 
 # ==============================================================================
-# 4. PROVA OFICIAL (VERSÃO ELITE V46 - LIMPEZA DE MARCADORES E HEADER PEI)
+# 4. PROVA OFICIAL (VERSÃO ELITE V46.1 - GABARITO DINÂMICO + MARCADORES LIMPOS)
 # ==============================================================================
 def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
     import re, io, os
@@ -420,14 +420,14 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         section.top_margin, section.bottom_margin = Inches(0.3), Inches(0.3)
         section.left_margin, section.right_margin = Inches(0.4), Inches(0.4)
         
-        # --- 1. DETECÇÃO DE TIPO (REGULAR OU PEI) ---
+        # --- 1. DETECÇÃO DE TIPO E CONTAGEM SOBERANA ---
         is_pei_doc = "PEI" in titulo_doc.upper() or "[PEI]" in conteudo_ia.upper() or "ADAPTADA" in titulo_doc.upper()
         label_prova = "AVALIAÇÃO ADAPTADA" if is_pei_doc else "AVALIAÇÃO DE MATEMÁTICA"
 
-        # Limpeza inicial de tags de controle
+        # AQUI ESTÁ A MUDANÇA: Pegamos a quantidade real enviada pelo sistema
+        num_total_q = int(info.get('qtd_questoes', 10)) 
+        
         corpo_prova = conteudo_ia
-        num_total_q = len(re.findall(r'QUESTÃO', corpo_prova.upper()))
-        if num_total_q == 0: num_total_q = int(info.get('qtd_questoes', 10))
 
         # --- 2. CABEÇALHO PADRONIZADO ---
         header_table = doc.add_table(rows=3, cols=5)
@@ -444,10 +444,9 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         header_table.cell(2, 2).paragraphs[0].add_run(f"TURMA: {info.get('ano')}").font.size = Pt(10)
         header_table.cell(2, 3).paragraphs[0].add_run("DATA:").font.size = Pt(10)
         
-        # Título da Prova (Dinâmico)
         run_tit = header_table.cell(2, 4).paragraphs[0].add_run(label_prova)
         run_tit.font.bold = True
-        if is_pei_doc: run_tit.font.color.rgb = RGBColor(0, 102, 204) # Azul para destacar PEI no cabeçalho
+        if is_pei_doc: run_tit.font.color.rgb = RGBColor(0, 102, 204)
 
         logo_path = "logo_escola.png" if os.path.exists("logo_escola.png") else "logo.png"
         if os.path.exists(logo_path):
@@ -458,7 +457,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         for row in header_table.rows: set_row_height(row, 25)
         doc.add_paragraph()
 
-        # --- 3. ORIENTAÇÕES E GABARITO ---
+        # --- 3. ORIENTAÇÕES E GABARITO DINÂMICO ---
         top_table = doc.add_table(rows=1, cols=2)
         top_table.columns[0].width = Inches(3.5)
         top_table.columns[1].width = Inches(4.0)
@@ -478,6 +477,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
             p = c_orient.add_paragraph()
             p.add_run(f"{idx}. {text}").font.size = Pt(9)
 
+        # GABARITO DINÂMICO: Cria exatamente o número de linhas das questões
         c_gab = top_table.cell(0, 1)
         gab_grid = c_gab.add_table(rows=num_total_q + 1, cols=6)
         gab_grid.style = 'Table Grid'
@@ -498,7 +498,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         cols.set(qn('w:num'), '2')
         cols.set(qn('w:space'), '720')
 
-        # --- 5. PROCESSAMENTO DAS QUESTÕES ---
+        # --- 5. PROCESSAMENTO DAS QUESTÕES (ESTILO V46 PRESERVADO) ---
         linhas = corpo_prova.split('\n')
         for linha in linhas:
             l_s = linha.strip()
@@ -508,7 +508,6 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
             p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
             p.paragraph_format.line_spacing = 1.15
 
-            # Lógica de Formatação por Marcador (Sem imprimir o marcador)
             if "PARA LEMBRAR" in l_s.upper() or "DICA MESTRA" in l_s.upper():
                 run = p.add_run(f"█▓▒░ {l_s.replace('[', '').replace(']', '')} ░▒▓█")
                 run.bold = True
@@ -517,7 +516,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
             elif "PASSO A PASSO" in l_s.upper():
                 run = p.add_run(f"➔ {l_s.replace('[', '').replace(']', '')}")
                 run.bold = True
-                run.font.color.rgb = RGBColor(0, 102, 204) # Azul para o andaime
+                run.font.color.rgb = RGBColor(0, 102, 204)
                 p.paragraph_format.left_indent = Inches(0.1)
             
             elif "QUESTÃO" in l_s.upper():
