@@ -2080,32 +2080,37 @@ elif menu == "📝 Central de Avaliações":
         else: st.info("📭 Nenhum exame no acervo.")
 
 # ==============================================================================
-# MÓDULO: SCANNER & PERÍCIA - ARQUITETURA V28.6 (OMNISCANNER ELITE)
+# MÓDULO: SCANNER & PERÍCIA - ARQUITETURA V28.7 (FUNIL DE PRECISÃO)
 # ==============================================================================
 elif menu == "📸 Scanner de Gabaritos":
     st.title("📸 Inteligência Diagnóstica e Perícia Universal")
     st.markdown("---")
 
     def reset_scanner():
-        if "scan_res" in st.session_state: del st.session_state.scan_res
-        if "scan_img" in st.session_state: del st.session_state.scan_img
+        keys = ["scan_res", "scan_img", "scan_meta"]
+        for k in keys:
+            if k in st.session_state: del st.session_state[k]
         st.session_state.v_scan = int(time.time())
         st.rerun()
 
     if "v_scan" not in st.session_state: st.session_state.v_scan = 1
     v = st.session_state.v_scan
 
-    # --- 1. FILTROS ESTRATÉGICOS (UI ORIGINAL PRESERVADA) ---
+    # --- 1. FILTROS DE PERÍCIA (FUNIL AMPLIADO) ---
     with st.container(border=True):
-        st.markdown("### 🔍 Filtros de Perícia")
-        c1, c2, c3 = st.columns(3)
-        lista_anos = ["6º", "7º", "8º", "9º"]
-        f_ano = c1.selectbox("Série/Ano:", lista_anos, key=f"f_ano_scan_{v}")
-        lista_trim = ["Todos", "I Trimestre", "II Trimestre", "III Trimestre"]
-        f_trim = c2.selectbox("Trimestre:", lista_trim, key=f"f_trim_scan_{v}")
+        st.markdown("### 🔍 1. Filtros de Localização")
+        c1, c2, c3, c4 = st.columns([1, 1, 1, 1.2])
+        
+        f_ano = c1.selectbox("Série/Ano:", ["6º", "7º", "8º", "9º"], key=f"f_ano_s_{v}")
+        f_trim = c2.selectbox("Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"f_trim_s_{v}")
         
         turmas_disponiveis = sorted([t for t in df_alunos['TURMA'].unique() if f_ano[0] in t])
-        f_turma = c3.selectbox("Turma:", turmas_disponiveis, key=f"f_turma_scan_{v}")
+        f_turma = c3.selectbox("Turma:", turmas_disponiveis, key=f"f_turma_s_{v}")
+        
+        # NOVO FILTRO: Tipo de Material para limpar o dropdown
+        f_tipo_alvo = c4.selectbox("Tipo de Material:", 
+                                   ["Todos", "Aulas Regulares", "Avaliações/Testes", "Sondas Diagnósticas", "Atividades Complementares"], 
+                                   key=f"f_tipo_s_{v}")
 
     # --- 2. FILTRAGEM DO BANCO DE DADOS ---
     df_p = df_diagnosticos.copy()
@@ -2117,31 +2122,56 @@ elif menu == "📸 Scanner de Gabaritos":
         "📊 Dashboard de Perícia (Raio-X)"
     ])
 
-    # --- ABA 1: CAPTURAR GABARITO (OMNISCANNER) ---
+    # --- ABA 1: CAPTURAR GABARITO (COM FUNIL INTELIGENTE) ---
     with tab_scan:
-        # OMNI-FILTRO: Busca qualquer material gerado para este ano que tenha conteúdo
-        serie_num = f_ano[0]
-        materiais_filtro = df_aulas[df_aulas['ANO'].str.contains(serie_num)]
+        # A. FILTRAGEM RESILIENTE (Soberania SOSA V28.8)
+        serie_num = f_ano[0] # Pega "6" de "6º"
         
-        if materiais_filtro.empty:
-            st.error(f"❌ Nenhum material (Aula/Prova) encontrado para o {f_ano}.")
+        # 1. Filtro inicial por Série
+        df_mats = df_aulas[df_aulas['ANO'].astype(str).str.contains(serie_num)].copy()
+        
+        # 2. Filtro por Tipo de Material (Refinado)
+        if f_tipo_alvo == "Aulas Regulares":
+            df_mats = df_mats[df_mats['SEMANA_REF'].str.contains("Jornada|Semana", case=False, na=False)]
+        elif f_tipo_alvo == "Avaliações/Testes":
+            df_mats = df_mats[df_mats['SEMANA_REF'].str.contains("AVALIAÇÃO", case=False, na=False)]
+        elif f_tipo_alvo == "Sondas Diagnósticas":
+            # Captura tanto o tipo SOND quanto materiais que tenham SONDA no nome
+            df_mats = df_mats[
+                (df_mats['TIPO_MATERIAL'].str.contains("SOND", case=False, na=False)) | 
+                (df_mats['CONTEUDO'].str.contains("SONDA", case=False, na=False))
+            ]
+        elif f_tipo_alvo == "Atividades Complementares":
+            df_mats = df_mats[df_mats['TIPO_MATERIAL'].str.contains("COMP", case=False, na=False)]
+
+        # 3. Filtro por Trimestre (Agora com Fallback)
+        # Tenta filtrar pelo trimestre, mas se a lista ficar vazia, mantém os materiais da série
+        df_mats_trim = df_mats[df_mats['CONTEUDO'].astype(str).str.contains(f_trim, case=False, na=False)]
+        
+        if not df_mats_trim.empty:
+            df_mats = df_mats_trim
+        elif f_trim != "Todos":
+            st.caption(f"ℹ️ Mostrando todos os materiais de {f_ano} (Filtro de {f_trim} não encontrou correspondência no texto).")
+
+        if df_mats.empty:
+            st.warning(f"📭 Nenhum material encontrado para os filtros selecionados.")
         else:
             c_av1, c_av2 = st.columns([2, 1])
             mat_sel_nome = c_av1.selectbox("📋 Selecione o Material para Corrigir:", 
-                                           materiais_filtro['TIPO_MATERIAL'].tolist(), 
+                                           df_mats['TIPO_MATERIAL'].tolist(), 
                                            key=f"p_scan_act_{v}")
             
-            mat_data = materiais_filtro[materiais_filtro['TIPO_MATERIAL'] == mat_sel_nome].iloc[0]
+            mat_data = df_mats[df_mats['TIPO_MATERIAL'] == mat_sel_nome].iloc[0]
             txt_conteudo = str(mat_data['CONTEUDO'])
             
-            # DNA SOSA: Detecção de Valor e Destino (Nota ou Bônus)
+            # DNA SOSA: Detecção de Valor e Destino
             match_v = re.search(r"\[VALOR:\s*(\d+[\.,]\d+|\d+)\]", txt_conteudo.upper())
             v_prova_base = util.sosa_to_float(match_v.group(1)) if match_v else 10.0
             
             is_oficial = any(x in mat_sel_nome.upper() for x in ["PROVA", "TESTE", "SONDA", "AVALIAÇÃO"])
             label_resultado = "Nota Oficial" if is_oficial else "⭐ Bônus de Engajamento"
 
-            # Filtro de Alunos Pendentes (UI ORIGINAL)
+            # Filtro de Alunos Pendentes
             ids_corrigidos = df_p[df_p['ID_AVALIACAO'] == mat_sel_nome]['ID_ALUNO'].astype(str).tolist() if not df_p.empty else []
             alunos_pendentes = df_alunos[(df_alunos['TURMA'] == f_turma) & (~df_alunos['ID'].astype(str).isin(ids_corrigidos))]
 
@@ -2151,11 +2181,12 @@ elif menu == "📸 Scanner de Gabaritos":
                 aluno_scan = st.selectbox("👤 Aluno Pendente:", alunos_pendentes['NOME_ALUNO'].tolist(), key=f"a_scan_act_{v}")
                 aluno_info = df_alunos[df_alunos['NOME_ALUNO'] == aluno_scan].iloc[0]
                 
-                # DETECÇÃO AUTOMÁTICA PEI (Soberania SOSA)
+                # DETECÇÃO AUTOMÁTICA PEI
                 is_pei_aluno = str(aluno_info['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", ""]
                 
                 if is_pei_aluno:
                     st.warning(f"♿ **MODO PEI ATIVADO:** {aluno_scan}")
+                    # Busca tag PEI ou GABARITO_PEI
                     gab_raw = ai.extrair_tag(txt_conteudo, "GABARITO_PEI") or ai.extrair_tag(txt_conteudo, "GABARITO")
                 else:
                     st.success(f"📝 **MODO REGULAR:** {aluno_scan}")
@@ -2199,9 +2230,7 @@ elif menu == "📸 Scanner de Gabaritos":
                         df_base['Status'] = df_base.apply(calcular_status, axis=1)
 
                         df_edit = st.data_editor(
-                            df_base,
-                            use_container_width=True,
-                            hide_index=True,
+                            df_base, use_container_width=True, hide_index=True,
                             column_config={
                                 "Q": st.column_config.TextColumn("Q", disabled=True),
                                 "Marcação": st.column_config.SelectboxColumn("Marcação", options=["A", "B", "C", "D", "E", "X", "?"], required=True),
@@ -2217,7 +2246,7 @@ elif menu == "📸 Scanner de Gabaritos":
 
                         c_btn1, c_btn2 = st.columns(2)
                         if c_btn1.button("💾 SALVAR E SINCRONIZAR", type="primary", use_container_width=True):
-                            with st.status("Sincronizando com o Ecossistema...", expanded=False) as status:
+                            with st.status("Sincronizando...", expanded=False) as status:
                                 import io
                                 img_io = io.BytesIO(st.session_state.scan_img)
                                 link_foto = db.subir_e_converter_para_google_docs(img_io, f"SCAN_{aluno_scan}", trimestre=f_trim, categoria=f_turma, modo="SCANNER")
@@ -2225,15 +2254,12 @@ elif menu == "📸 Scanner de Gabaritos":
                                 respostas_str = ";".join(df_edit['Marcação'].tolist())
                                 nota_str = util.sosa_to_str(nota_final)
 
-                                # SALVAMENTO INTELIGENTE
                                 if is_oficial:
-                                    # Salva na aba de Diagnósticos/Notas
                                     db.salvar_pericia_scanner([
                                         datetime.now().strftime("%d/%m/%Y"), aluno_info['ID'], aluno_scan, f_turma, mat_sel_nome,
                                         respostas_str, nota_str, link_foto
                                     ], "DB_GABARITOS_ALUNOS")
                                 else:
-                                    # Salva no Diário de Bordo como BÔNUS
                                     db.salvar_no_banco("DB_DIARIO_BORDO", [
                                         datetime.now().strftime("%d/%m/%Y"), aluno_info['ID'], aluno_scan, f_turma,
                                         "TRUE", "ATIVIDADE_FIXACAO", f"Bônus via Scanner: {mat_sel_nome}", nota_str
@@ -2245,7 +2271,7 @@ elif menu == "📸 Scanner de Gabaritos":
                         if c_btn2.button("🗑️ DESCARTAR", use_container_width=True):
                             reset_scanner()
 
-    # --- ABA 2: ACERVO DE EVIDÊNCIAS (UI ORIGINAL) ---
+    # --- ABA 2: ACERVO DE EVIDÊNCIAS ---
     with tab_acervo:
         st.subheader(f"📂 Histórico de Correções - {f_turma}")
         if not df_p.empty:
