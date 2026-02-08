@@ -1969,57 +1969,89 @@ elif menu == "📝 Central de Avaliações":
         else:
             st.info("Aguardando geração do exame...")
 
-    # --- ABA 4: FINALIZAR ATIVO (SEM DATA) ---
+# ==============================================================================
+# ABA 4: FINALIZAR ATIVO (VERSÃO BLINDADA V48 - SINCRO TOTAL)
+# ==============================================================================
     with tab_finalizar:
         if "temp_prova" in st.session_state:
             st.subheader("💾 Consolidação do Ativo de Safra")
+            
+            # --- RECUPERAÇÃO DE VARIÁVEIS (SHIELD) ---
+            # Garante que os dados da Aba 1 não se percam
+            v_tipo = st.session_state.get(f"av_t_{v}", "Prova")
+            v_ano = st.session_state.get(f"av_a_{v}", 6)
+            v_qtd = st.session_state.get(f"av_q_{v}", 10)
+            
             c_s1, c_s2 = st.columns(2)
-            trim_av = c_s1.selectbox("Trimestre Alvo:", ["I Trimestre", "II Trimestre", "III Trimestre"])
+            trim_av = c_s1.selectbox("Trimestre Alvo:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"trim_fin_{v}")
             nome_arq = c_s2.text_input("Nome do Arquivo (Drive):", st.session_state.get('av_nome_fixo', 'AVALIACAO'), key=f"name_av_in_{v}")
 
-            if st.button("💾 FINALIZAR E SALVAR ATIVO", use_container_width=True, type="primary"):
-                with st.status("🚀 Sincronizando Ativos...") as status:
+            if st.button("💾 SALVAR COMO PRONTO PARA APLICAÇÃO", use_container_width=True, type="primary", key=f"btn_save_av_{v}"):
+                with st.status("🚀 Sincronizando Ativos e Gerando Documentos...") as status:
+                    # 1. DEFINIÇÃO DE VALORES
                     v_total_num = st.session_state.get('av_valor_total', 10.0)
-                    identificador = f"{tipo_av} - {ano_av}º Ano ({trim_av})"
+                    identificador = f"{v_tipo} - {v_ano}º Ano ({trim_av})"
                     
-                    # 1. GERAÇÃO REGULAR
-                    v_por_quest_reg = v_total_num / qtd_q
+                    # 2. LIMPEZA (UPSERT) - Remove versões antigas para evitar duplicidade
+                    db.excluir_avaliacao_completa(identificador, v_tipo)
+
+                    # 3. GERAÇÃO REGULAR
+                    v_por_quest_reg = v_total_num / v_qtd if v_qtd > 0 else 0
                     info_reg = {
-                        "ano": f"{ano_av}º", "tipo_prova": tipo_av, 
+                        "ano": f"{v_ano}º", 
+                        "tipo_prova": v_tipo, 
                         "valor": util.sosa_to_str(v_total_num), 
                         "valor_questao": util.sosa_to_str(v_por_quest_reg),
-                        "qtd_questoes": qtd_q, "trimestre": trim_av
+                        "qtd_questoes": v_qtd, 
+                        "trimestre": trim_av
                     }
-                    doc_reg = exporter.gerar_docx_prova_v25(nome_arq, st.session_state.temp_prova, info_reg)
-                    link_reg = db.subir_e_converter_para_google_docs(doc_reg, nome_arq, trimestre=trim_av, categoria=f"{ano_av}º Ano", semana="AVALIAÇÃO", modo="AVALIACAO")
                     
-                    # 2. GERAÇÃO PEI (CONTAGEM REAL E VALOR AJUSTADO)
+                    status.write("📄 Gerando Prova Regular...")
+                    doc_reg = exporter.gerar_docx_prova_v25(nome_arq, st.session_state.temp_prova, info_reg)
+                    link_reg = db.subir_e_converter_para_google_docs(doc_reg, nome_arq, trimestre=trim_av, categoria=f"{v_ano}º Ano", semana="AVALIAÇÃO", modo="AVALIACAO")
+                    
+                    # 4. GERAÇÃO PEI (CONTAGEM REAL)
                     txt_pei_puro = ai.extrair_tag(st.session_state.temp_prova, "PEI")
                     link_pei = "N/A"
                     if txt_pei_puro:
-                        # CONTAGEM REAL: O sistema conta quantas questões a IA realmente gerou para o PEI
+                        status.write("♿ Gerando Prova PEI Adaptada...")
+                        # CONTEGEM REAL: Garante que o gabarito de bolinhas bata com o texto PEI
                         qtd_q_pei_real = len(re.findall(r'QUESTÃO', txt_pei_puro.upper()))
-                        if qtd_q_pei_real == 0: qtd_q_pei_real = qtd_q // 2 # Fallback
+                        if qtd_q_pei_real == 0: qtd_q_pei_real = v_qtd // 2
                         
-                        v_por_quest_pei = v_total_num / qtd_q_pei_real
+                        v_por_quest_pei = v_total_num / qtd_q_pei_real if qtd_q_pei_real > 0 else 0
                         info_pei = {
-                            "ano": f"{ano_av}º", "tipo_prova": tipo_av, 
+                            "ano": f"{v_ano}º", 
+                            "tipo_prova": v_tipo, 
                             "valor": util.sosa_to_str(v_total_num), 
                             "valor_questao": util.sosa_to_str(v_por_quest_pei),
-                            "qtd_questoes": qtd_q_pei_real, "trimestre": trim_av
+                            "qtd_questoes": qtd_q_pei_real, 
+                            "trimestre": trim_av
                         }
                         doc_pei = exporter.gerar_docx_prova_v25(f"{nome_arq}_PEI", txt_pei_puro, info_pei)
-                        link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_arq}_PEI", trimestre=trim_av, categoria=f"{ano_av}º Ano", semana="AVALIAÇÃO", modo="AVALIACAO")
-                                                            
+                        link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_arq}_PEI", trimestre=trim_av, categoria=f"{v_ano}º Ano", semana="AVALIAÇÃO", modo="AVALIACAO")
+                                        
+                    # 5. CONSOLIDAÇÃO NO BANCO DE DADOS
                     if "https" in str(link_reg):
                         dna_sosa = f"\n\n[METADADOS_AVALIAÇÃO]\n[VALOR: {v_total_num}]\n[TRIMESTRE: {trim_av}]\n"
                         conteudo_banco = f"{dna_sosa}{st.session_state.temp_prova}\n\n--- LINKS ---\nRegular({link_reg}) PEI({link_pei})"
                         
                         db.salvar_no_banco("DB_AULAS_PRONTAS", [
-                            datetime.now().strftime("%d/%m/%Y"), "AVALIAÇÃO", identificador, conteudo_banco, f"{ano_av}º", link_reg
+                            datetime.now().strftime("%d/%m/%Y"), 
+                            "AVALIAÇÃO", 
+                            identificador, 
+                            conteudo_banco, 
+                            f"{v_ano}º", 
+                            link_reg
                         ])
-                        status.update(label="✅ Ativo Salvo com Sucesso!", state="complete")
-                        st.balloons(); time.sleep(1.5); reset_avaliacoes()
+                        status.update(label="✅ Ativo de Safra Salvo com Sucesso!", state="complete")
+                        st.balloons()
+                        time.sleep(1.5)
+                        reset_avaliacoes()
+                    else:
+                        st.error(f"Erro no Upload: {link_reg}")
+        else: 
+            st.info("💡 Gere a prova na aba '🚀 Arquiteto de Exames' antes de finalizar.")
 
     # --- ABA 5: ACERVO ---
     with tab_acervo:
