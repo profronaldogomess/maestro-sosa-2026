@@ -504,3 +504,33 @@ def arquivar_plano_produzido(semana, ano):
     except Exception as e:
         st.error(f"Erro ao arquivar: {e}")
         return False
+    
+def salvar_pericia_scanner(dados_lista, aba_alvo="DB_GABARITOS_ALUNOS"):
+    """
+    Salva o resultado do Scanner com lógica de limpeza prévia (Upsert).
+    dados_lista: [DATA, ID_ALUNO, NOME, TURMA, ID_MATERIAL, RESPOSTAS, NOTA, LINK]
+    """
+    try:
+        wb = conectar()
+        ws = wb.worksheet(aba_alvo)
+        dados = ws.get_all_values()
+        
+        id_aluno = str(dados_lista[1])
+        id_material = str(dados_lista[4])
+        
+        # Busca e remove registro antigo do mesmo aluno para o mesmo material
+        indices_para_deletar = []
+        for i, row in enumerate(dados):
+            if i == 0: continue
+            if len(row) > 4 and str(row[1]) == id_aluno and str(row[4]) == id_material:
+                indices_para_deletar.append(i + 1)
+        
+        for idx in reversed(indices_para_deletar):
+            ws.delete_rows(idx)
+            
+        ws.append_row(dados_lista, value_input_option="USER_ENTERED")
+        st.cache_data.clear()
+        return True
+    except Exception as e:
+        st.error(f"Erro na gravação da perícia: {e}")
+        return False
