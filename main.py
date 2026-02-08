@@ -540,23 +540,21 @@ if menu == "🧪 Criador de Aulas":
                                 if not sel_objs_s:
                                     st.error("Selecione pelo menos um Objetivo no funil.")
                                 else:
-                                    with st.spinner("Maestro Sosa estruturando Sonda de Proficiência..."):
+                                    with st.spinner("Maestro Sosa realizando perícia psicométrica..."):
                                         s_id = util.gerar_sosa_id("SONDA", ano_sonda, trim_sonda[0])
                                         st.session_state.sosa_id_atual = s_id
-                                        st.session_state.lab_meta = {
-                                            "ano": ano_sonda, 
-                                            "trimestre": trim_sonda, 
-                                            "tipo": "SONDA_DIAGNOSTICA"
-                                        }
+                                        st.session_state.lab_meta = {"ano": ano_sonda, "trimestre": trim_sonda, "tipo": "SONDA"}
                                         
                                         prompt_sonda = (
-                                            f"PERSONA: ARQUITETO_SONDA_DIAGNOSTICA. ID: {s_id}.\n"
                                             f"SÉRIE ATUAL: {ano_sonda}º Ano. TRIMESTRE: {trim_sonda}.\n"
-                                            f"CONTEÚDOS BASE: {' / '.join(sel_conts_s)}.\n"
-                                            f"OBJETIVOS: {' | '.join(sel_objs_s)}.\n"
-                                            f"QUANTIDADE: {qtd_q_sonda} questões de múltipla escolha.\n"
-                                            f"CONTEXTO EXTRA: {instr_extra_s}.\n\n"
-                                            f"🚨 MISSÃO: Mapear lacunas cognitivas. Use [PROFESSOR], [ALUNO], [GABARITO], [PEI], [GABARITO_PEI]."
+                                            f"CONTEÚDOS DO BANCO: {' / '.join(sel_conts_s)}.\n"
+                                            f"OBJETIVOS DO BANCO: {' | '.join(sel_objs_s)}.\n"
+                                            f"QUANTIDADE: {qtd_q_sonda} questões A-E.\n\n"
+                                            f"🚨 MISSÃO CRÍTICA:\n"
+                                            f"1. NÃO gere cabeçalhos de identificação.\n"
+                                            f"2. No [GABARITO], analise cada alternativa errada (A-E) explicando qual lacuna de aprendizado ela representa.\n"
+                                            f"3. No [PROFESSOR], crie o Mapa de Sondagem por questão.\n"
+                                            f"4. Use PROMPT IMAGEM em todas as questões que precisarem de apoio visual."
                                         )
                                         st.session_state.lab_temp = ai.gerar_ia("ARQUITETO_SONDA_DIAGNOSTICA", prompt_sonda, usar_busca=True)
                                         st.rerun()
