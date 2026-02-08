@@ -306,10 +306,10 @@ def exibir_material_estruturado(texto_raw, key_prefix, dados_plano=None, info_au
                        
 
 # ==============================================================================
-# MÓDULO: LABORATÓRIO DE PRODUÇÃO (CRIADOR V37.0) - SAFRA BLINDADA
+# MÓDULO: LABORATÓRIO DE PRODUÇÃO (CRIADOR V37.5) - SAFRA BLINDADA & ESCANEÁVEL
 # ==============================================================================
 if menu == "🧪 Criador de Aulas":
-    st.title("🧪 Laboratório de Produção Semiótica (V37.0)")
+    st.title("🧪 Laboratório de Produção Semiótica (V37.5)")
     st.markdown("---")
     
     def reset_laboratorio():
@@ -349,13 +349,31 @@ if menu == "🧪 Criador de Aulas":
             if st.button("💾 EXECUTAR TRIPLE-SYNC", use_container_width=True, type="primary", key=f"btn_triple_{v}"):
                 with st.status("Iniciando Protocolo de Sincronia...") as status:
                     aula_nome = meta.get('aula_alvo', 'AULA')
+                    tipo_material = meta.get('tipo', 'AULA')
                     nome_final = f"{s_id} - {aula_nome}"
                     ano_str = f"{meta.get('ano')}º"
-                    semana_ref = meta.get('semana_ref', 'AVULSA') # PEGA A SEMANA REAL DO PLANO
+                    semana_ref = meta.get('semana_ref', 'AVULSA')
                     
+                    # Contagem de questões para o cabeçalho da Sonda
+                    qtd_q_real = len(re.findall(r'QUESTÃO', ed_alu.upper()))
+                    v_total = 10.0 if tipo_material == "SONDA" else 0.0
+                    v_q = v_total / qtd_q_real if qtd_q_real > 0 else 0
+                    
+                    info_doc = {
+                        "ano": ano_str, "trimestre": meta.get('trimestre'),
+                        "valor": util.sosa_to_str(v_total),
+                        "valor_questao": util.sosa_to_str(v_q),
+                        "qtd_questoes": qtd_q_real
+                    }
+
                     db.excluir_registro_com_drive("DB_AULAS_PRONTAS", nome_final)
                     
-                    doc_alu = exporter.gerar_docx_aluno_v24(nome_final, ed_alu, {"ano": ano_str, "trimestre": meta.get('trimestre')})
+                    # --- LÓGICA DE EXPORTAÇÃO INTELIGENTE (AULA vs SONDA) ---
+                    if tipo_material == "SONDA":
+                        doc_alu = exporter.gerar_docx_prova_v25(nome_final, ed_alu, info_doc)
+                    else:
+                        doc_alu = exporter.gerar_docx_aluno_v24(nome_final, ed_alu, info_doc)
+                    
                     link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{nome_final}_ALUNO", modo="AULA")
                     
                     doc_prof = exporter.gerar_docx_professor_v25(nome_final, ed_prof, {"ano": ano_str, "semana": semana_ref, "trimestre": meta.get('trimestre')})
@@ -363,7 +381,10 @@ if menu == "🧪 Criador de Aulas":
                     
                     link_pei = "N/A"
                     if len(ed_pei_mat) > 10:
-                        doc_pei = exporter.gerar_docx_pei_v25(f"{nome_final}_PEI", ed_pei_mat, {"ano": ano_str, "trimestre": meta.get('trimestre')})
+                        if tipo_material == "SONDA":
+                            doc_pei = exporter.gerar_docx_prova_v25(f"{nome_final}_PEI", ed_pei_mat, info_doc)
+                        else:
+                            doc_pei = exporter.gerar_docx_pei_v25(f"{nome_final}_PEI", ed_pei_mat, info_doc)
                         link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_final}_PEI", modo="AULA")
                     
                     if "https" in str(link_alu):
@@ -372,10 +393,9 @@ if menu == "🧪 Criador de Aulas":
                             f"[GABARITO]\n{ed_res}\n\n[PEI]\n{ed_pei_mat}\n\n"
                             f"[GABARITO_PEI]\n{ed_pei_gab}\n\n--- LINKS ---\nAluno({link_alu}) Prof({link_prof}) PEI({link_pei})"
                         )
-                        # SALVA COM A SEMANA REAL PARA O RECONHECIMENTO FUNCIONAR
                         db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), semana_ref, nome_final, conteudo_banco, ano_str, link_alu])
                         status.update(label="✅ Sincronia Concluída!", state="complete")
-                        st.balloons(); time.sleep(1); reset_laboratorio()
+                        st.balloons(); time.sleep(1); reset_laboratorio() # <--- CORREÇÃO: Chama a função do próprio módulo
 
         st.markdown("---")
         with st.container(border=True):
@@ -386,7 +406,9 @@ if menu == "🧪 Criador de Aulas":
                     st.session_state.lab_temp = ai.gerar_ia("REFINADOR_MATERIAIS", f"ORDEM: {cmd_lab}\n\nATUAL:\n{st.session_state.lab_temp}")
                     st.session_state.v_lab += 1; st.rerun()
         
-        if st.button("🆕 GERAR OUTRO MATERIAL (LIMPAR)", use_container_width=True): reset_laboratorio()
+        # BOTÃO ÚNICO (CORRIGIDO)
+        if st.button("🆕 GERAR OUTRO MATERIAL (LIMPAR)", use_container_width=True, key=f"btn_reset_final_{v}"): 
+            reset_laboratorio()
 
     # --- SEÇÃO DE ENTRADA ---
     else:
