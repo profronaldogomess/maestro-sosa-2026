@@ -382,7 +382,7 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
     return file_stream
 
 # ==============================================================================
-# 4. PROVA OFICIAL (VERSÃO ELITE V46.1 - GABARITO DINÂMICO + MARCADORES LIMPOS)
+# 4. PROVA OFICIAL (VERSÃO ELITE V48 - GABARITO E ANDAIME PEI)
 # ==============================================================================
 def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
     import re, io, os
@@ -403,7 +403,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         trPr.append(trHeight)
 
     def adicionar_texto_formatado(paragraph, texto):
-        # Remove tags residuais que não devem aparecer no papel
+        # Limpeza de tags de controle
         texto = re.sub(r'\[PARA LEMBRAR\]|\[PASSO A PASSO\]|\[QUESTOES\]|\[ORIENTACOES\]|\[PEI\]', '', texto, flags=re.IGNORECASE)
         partes = re.split(r'(\*\*.*?\*\*)', texto)
         for parte in partes:
@@ -420,16 +420,15 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         section.top_margin, section.bottom_margin = Inches(0.3), Inches(0.3)
         section.left_margin, section.right_margin = Inches(0.4), Inches(0.4)
         
-        # --- 1. DETECÇÃO DE TIPO E CONTAGEM SOBERANA ---
-        is_pei_doc = "PEI" in titulo_doc.upper() or "[PEI]" in conteudo_ia.upper() or "ADAPTADA" in titulo_doc.upper()
+        # --- 1. LÓGICA DE CONTAGEM ABSOLUTA (FIM DO ERRO DE ESTRUTURA) ---
+        # Conta quantas vezes a palavra QUESTÃO aparece no texto que será impresso
+        num_total_q = len(re.findall(r'QUESTÃO', conteudo_ia.upper()))
+        if num_total_q == 0: num_total_q = int(info.get('qtd_questoes', 10))
+
+        is_pei_doc = "PEI" in titulo_doc.upper() or "ADAPTADA" in titulo_doc.upper()
         label_prova = "AVALIAÇÃO ADAPTADA" if is_pei_doc else "AVALIAÇÃO DE MATEMÁTICA"
 
-        # AQUI ESTÁ A MUDANÇA: Pegamos a quantidade real enviada pelo sistema
-        num_total_q = int(info.get('qtd_questoes', 10)) 
-        
-        corpo_prova = conteudo_ia
-
-        # --- 2. CABEÇALHO PADRONIZADO ---
+        # --- 2. CABEÇALHO ---
         header_table = doc.add_table(rows=3, cols=5)
         header_table.style = 'Table Grid'
         widths = [Inches(0.8), Inches(2.8), Inches(1.0), Inches(1.4), Inches(1.5)]
@@ -457,7 +456,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         for row in header_table.rows: set_row_height(row, 25)
         doc.add_paragraph()
 
-        # --- 3. ORIENTAÇÕES E GABARITO DINÂMICO ---
+        # --- 3. ORIENTAÇÕES E GABARITO SINCRONIZADO ---
         top_table = doc.add_table(rows=1, cols=2)
         top_table.columns[0].width = Inches(3.5)
         top_table.columns[1].width = Inches(4.0)
@@ -477,7 +476,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
             p = c_orient.add_paragraph()
             p.add_run(f"{idx}. {text}").font.size = Pt(9)
 
-        # GABARITO DINÂMICO: Cria exatamente o número de linhas das questões
+        # GABARITO COM NÚMERO REAL DE QUESTÕES (PEI ou REGULAR)
         c_gab = top_table.cell(0, 1)
         gab_grid = c_gab.add_table(rows=num_total_q + 1, cols=6)
         gab_grid.style = 'Table Grid'
@@ -498,12 +497,11 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         cols.set(qn('w:num'), '2')
         cols.set(qn('w:space'), '720')
 
-        # --- 5. PROCESSAMENTO DAS QUESTÕES (ESTILO V46 PRESERVADO) ---
-        linhas = corpo_prova.split('\n')
+        # --- 5. PROCESSAMENTO DO CONTEÚDO (ANDAIME PEI) ---
+        linhas = conteudo_ia.split('\n')
         for linha in linhas:
             l_s = linha.strip()
             if not l_s: continue
-            
             p = doc.add_paragraph()
             p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
             p.paragraph_format.line_spacing = 1.15
@@ -512,28 +510,19 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
                 run = p.add_run(f"█▓▒░ {l_s.replace('[', '').replace(']', '')} ░▒▓█")
                 run.bold = True
                 p.paragraph_format.space_before = Pt(10)
-            
-            elif "PASSO A PASSO" in l_s.upper():
-                run = p.add_run(f"➔ {l_s.replace('[', '').replace(']', '')}")
-                run.bold = True
-                run.font.color.rgb = RGBColor(0, 102, 204)
+            elif "PASSO A PASSO" in l_s.upper() or "➔" in l_s:
+                run = p.add_run(f"➔ {l_s.replace('[', '').replace(']', '').replace('➔', '')}")
+                run.bold, run.font.color.rgb = True, RGBColor(0, 102, 204)
                 p.paragraph_format.left_indent = Inches(0.1)
-            
             elif "QUESTÃO" in l_s.upper():
-                run = p.add_run(l_s)
-                run.bold = True
-                run.font.size = Pt(11)
+                run = p.add_run(l_s); run.bold, run.font.size = True, Pt(11)
                 p.paragraph_format.space_before = Pt(12)
-            
             elif "PROMPT IMAGEM" in l_s.upper():
                 run = p.add_run(f" [ {l_s} ] ")
                 run.font.italic, run.font.size = True, Pt(8)
                 run.font.color.rgb = RGBColor(120, 120, 120)
-            
             elif re.match(r'^[A-E][\)\.]', l_s):
-                p.add_run(l_s)
-                p.paragraph_format.left_indent = Inches(0.2)
-            
+                p.add_run(l_s); p.paragraph_format.left_indent = Inches(0.2)
             else:
                 adicionar_texto_formatado(p, l_s)
 
