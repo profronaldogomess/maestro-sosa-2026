@@ -329,8 +329,17 @@ if menu == "🧪 Criador de Aulas":
         txt_base = st.session_state.lab_temp
         s_id = st.session_state.get("sosa_id_atual", "SEM-ID")
         meta = st.session_state.get("lab_meta", {})
-
-        st.success(f"💎 Material Gerado: **{s_id}**")
+        
+        # --- NOVA LÓGICA DE NOME DE EXIBIÇÃO ---
+        nome_exibicao = util.gerar_nome_material_elite(
+            meta.get('ano'), 
+            meta.get('aula_alvo', 'Aula'), 
+            meta.get('semana_ref', 'Semana')
+        )
+        
+        # Box de sucesso com o nome bonito
+        st.success(f"💎 Material Gerado: **{nome_exibicao}**")
+        st.caption(f"🆔 ID Técnico para Scanner: `{s_id}`") # O ID fica pequeno embaixo, por segurança
         
         t_prof, t_alu, t_gab, t_pei, t_sync = st.tabs(["👨‍🏫 Professor", "📝 Aluno", "✅ Gabarito/Rubrica", "♿ PEI", "☁️ SINCRONIA"])
         
@@ -351,8 +360,12 @@ if menu == "🧪 Criador de Aulas":
                     meta = st.session_state.get("lab_meta", {})
                     s_id = st.session_state.get("sosa_id_atual", "SEM-ID")
                     
-                    # --- CORREÇÃO DO NOME: Pega o nome bonito formatado ---
-                    nome_final = meta.get('nome_formatado', f"{s_id} - AULA")
+                    # --- DEFINIÇÃO DO NOME DE ELITE PARA O DRIVE E PLANILHA ---
+                    nome_final = util.gerar_nome_material_elite(
+                        meta.get('ano'), 
+                        meta.get('aula_alvo', 'Aula'), 
+                        meta.get('semana_ref', 'Semana')
+                    )
                     
                     ano_str = f"{meta.get('ano')}º"
                     semana_ref = meta.get('semana_ref', 'AVULSA')
