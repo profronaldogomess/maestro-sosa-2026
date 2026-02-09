@@ -16,11 +16,11 @@ from datetime import datetime
 # FUNÇÃO AUXILIAR: PARSER DE NEGRITO (MARKDOWN PARA WORD)
 # ==============================================================================
 def adicionar_texto_formatado(paragraph, texto):
-    """Converte padrões **texto** em negrito real e limpa símbolos"""
+    """Converte padrões **texto** em negrito real e limpa símbolos informais"""
     import re
-    # Remove emojis e símbolos não-ASCII (➔, 🟡, etc)
+    # Remove emojis e símbolos não-ASCII
     texto_limpo = re.sub(r'[^\x00-\x7F]+', '', texto)
-    texto_limpo = texto_limpo.replace("->", "").strip()
+    texto_limpo = texto_limpo.replace("->", "").replace("➔", "").strip()
     
     partes = re.split(r'(\*\*.*?\*\*)', texto_limpo)
     for parte in partes:
@@ -30,32 +30,37 @@ def adicionar_texto_formatado(paragraph, texto):
         else:
             paragraph.add_run(parte)
 
-def configurar_cabecalho_atividade(doc, info, tipo_label):
-    """Gera o cabeçalho profissional sem campo de nota/valor"""
+def configurar_cabecalho_unificado(doc, info, tipo_label):
+    """Gera o cabeçalho padrão em tabela sem o campo de nota"""
     table = doc.add_table(rows=3, cols=4)
     table.style = 'Table Grid'
     
-    # Ajuste de larguras
-    widths = [Inches(0.8), Inches(3.5), Inches(1.2), Inches(2.0)]
+    # Ajuste de larguras para ocupar a página toda
+    widths = [Inches(0.9), Inches(3.8), Inches(1.2), Inches(1.6)]
     for i, w in enumerate(widths): table.columns[i].width = w
 
     # Linha 0: Logo, Escola e Trimestre
     c_logo = table.cell(0, 0).merge(table.cell(2, 0))
     c_escola = table.cell(0, 1).merge(table.cell(0, 2))
-    c_escola.paragraphs[0].add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA").font.bold = True
+    p_esc = c_escola.paragraphs[0]
+    p_esc.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    p_esc.add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA").font.bold = True
+    
     table.cell(0, 3).paragraphs[0].add_run(info.get('trimestre', 'I Trimestre')).font.bold = True
 
     # Linha 1: Aluno
     c_aluno = table.cell(1, 1).merge(table.cell(1, 3))
     c_aluno.paragraphs[0].add_run("ALUNO(A):")
 
-    # Linha 2: Professor, Turma, Data e Tipo
+    # Linha 2: Professor, Turma e Tipo de Atividade
     table.cell(2, 1).paragraphs[0].add_run("PROF: Ronaldo Gomes")
     table.cell(2, 2).paragraphs[0].add_run(f"TURMA: {info.get('ano', '6º')}")
+    
     c_tipo = table.cell(2, 3)
-    run_tipo = c_tipo.paragraphs[0].add_run(tipo_label)
+    p_tipo = c_tipo.paragraphs[0]
+    p_tipo.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run_tipo = p_tipo.add_run(tipo_label)
     run_tipo.font.bold = True
-    c_tipo.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
 
     # Inserção da Logo
     logo_path = "logo_escola.png" if os.path.exists("logo_escola.png") else "logo.png"
@@ -63,31 +68,37 @@ def configurar_cabecalho_atividade(doc, info, tipo_label):
         c_logo.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
         p = c_logo.paragraphs[0]
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        p.add_run().add_picture(logo_path, width=Inches(0.65))
+        p.add_run().add_picture(logo_path, width=Inches(0.7))
 
     return table
 
 # ==============================================================================
-# 1. MATERIAL DO ALUNO REGULAR
+# 1. MATERIAL DO ALUNO REGULAR (COM COLUNAS CORRIGIDAS)
 # ==============================================================================
 def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     file_stream = io.BytesIO()
     doc = Document()
     
+    # Estilo Base
     style = doc.styles['Normal']
     style.font.name = 'Arial'
     style.font.size = Pt(11)
 
-    # Cabeçalho de Atividade
-    configurar_cabecalho_atividade(doc, info, "ATIVIDADE DE SALA")
+    # Margens
+    section = doc.sections[0]
+    section.top_margin, section.bottom_margin = Inches(0.4), Inches(0.4)
+    section.left_margin, section.right_margin = Inches(0.5), Inches(0.5)
+
+    # --- PASSO 1: CABEÇALHO EM SEÇÃO DE COLUNA ÚNICA ---
+    configurar_cabecalho_unificado(doc, info, "ATIVIDADE DE SALA")
     doc.add_paragraph()
 
-    # Colunas Nativas
+    # --- PASSO 2: CONTEÚDO EM SEÇÃO DE DUAS COLUNAS ---
     new_section = doc.add_section(WD_SECTION.CONTINUOUS)
     sectPr = new_section._sectPr
     cols = sectPr.xpath('./w:cols')[0]
     cols.set(qn('w:num'), '2')
-    cols.set(qn('w:space'), '720')
+    cols.set(qn('w:space'), '720') # Espaço entre colunas
 
     linhas = conteudo.split('\n')
     for linha in linhas:
@@ -97,22 +108,19 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
         p = doc.add_paragraph()
         p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
 
-        # Títulos em CAIXA ALTA e NEGRITO
         if any(x in l_s.upper() for x in ["ATIVIDADE DE", "JORNADA", "DESAFIO"]):
-            run = p.add_run(l_s.upper().replace('**', ''))
+            run = p.add_run(l_s.upper())
             run.bold = True
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER
         
-        # Prompts de Imagem [ PROMPT: ... ] em fonte 8 cinza
         elif "[" in l_s and "PROMPT IMAGEM" in l_s.upper():
             run = p.add_run(l_s)
             run.font.size = Pt(8)
             run.font.italic = True
             run.font.color.rgb = RGBColor(120, 120, 120)
 
-        # Questões
         elif "QUESTÃO" in l_s.upper():
-            run = p.add_run(l_s.replace('**', ''))
+            run = p.add_run(l_s)
             run.bold = True
             p.paragraph_format.space_before = Pt(12)
         
@@ -124,7 +132,7 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     return file_stream
 
 # ==============================================================================
-# 3. MATERIAL PEI ADAPTADO
+# 3. MATERIAL PEI ADAPTADO (CABEÇALHO PADRONIZADO)
 # ==============================================================================
 def gerar_docx_pei_v25(titulo_doc, conteudo, info):
     file_stream = io.BytesIO()
@@ -134,8 +142,8 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
     style.font.name = 'Arial'
     style.font.size = Pt(12)
 
-    # Cabeçalho de Atividade Adaptada
-    configurar_cabecalho_atividade(doc, info, "ATIVIDADE ADAPTADA")
+    # Cabeçalho Unificado (PEI não costuma usar 2 colunas para facilitar leitura)
+    configurar_cabecalho_unificado(doc, info, "ATIVIDADE ADAPTADA")
     doc.add_paragraph()
 
     linhas = conteudo.split('\n')
@@ -145,9 +153,8 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
         
         p = doc.add_paragraph()
         
-        # Andaime Cognitivo Profissional
         if any(x in l_s.upper() for x in ["PARA LEMBRAR", "OBJETIVO", "INSTRUÇÕES", "ATIVIDADE"]):
-            run = p.add_run(l_s.upper().replace('**', ''))
+            run = p.add_run(l_s.upper())
             run.bold = True
             p.paragraph_format.space_before = Pt(10)
         
