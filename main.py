@@ -472,48 +472,71 @@ if menu == "🧪 Criador de Aulas":
                 if st.button("❌ CANCELAR IMPORTAÇÃO"): reset_laboratorio()
             
             else:
-                st.markdown("### ⚙️ Configurar Produção de Aula (Herança Didática)")
+                st.markdown("### ⚙️ Configurar Produção de Aula (Herança Didática V34)")
                 with st.container(border=True):
                     c1, c2, c3 = st.columns([1, 2, 1])
                     ano_lab = c1.selectbox("Série/Ano:", [6, 7, 8, 9], key=f"prod_ano_{v}")
+                    
+                    # Filtra planos existentes para este ano
                     planos_ano = df_planos[df_planos["ANO"].astype(str).str.contains(str(ano_lab))]
                     
                     if planos_ano.empty: 
-                        st.error("❌ Nenhum planejamento encontrado.")
+                        st.error("❌ Nenhum planejamento encontrado para este ano no Ponto ID.")
                     else:
                         sem_lab = c2.selectbox("Semana Base (Ponto ID):", planos_ano["SEMANA"].tolist(), key=f"prod_sem_{v}")
                         aula_alvo = c3.radio("🎯 Selecione a Aula:", ["Aula 1", "Aula 2"], horizontal=True, key=f"prod_alvo_{v}")
                         
-                        # --- RASTREADOR DE DNA NO MODO MANUAL ---
+                        # --- RASTREADOR DE DNA (EXTRAÇÃO DE CONTEXTO DO PONTO ID) ---
                         plano_row = planos_ano[planos_ano["SEMANA"] == sem_lab].iloc[0]
                         plano_txt = str(plano_row['PLANO_TEXTO'])
                         
+                        # Extração de Referência de Livro e Páginas via Regex
                         match_livro = re.search(r"MÉTODO LIVRO: \[(.*?)\]", plano_txt)
                         match_pags = re.search(r"PÁGINAS: (.*?)\.", plano_txt)
+                        
                         livro_ref = match_livro.group(1) if match_livro else "Manual/Banco"
                         pags_ref = match_pags.group(1) if match_pags else "N/A"
                         
+                        # Extração do Roteiro e Estratégia PEI
+                        tag_aula = "AULA_1" if aula_alvo == "Aula 1" else "AULA_2"
+                        roteiro_plano = ai.extrair_tag(plano_txt, tag_aula)
+                        estrategia_pei = ai.extrair_tag(plano_txt, "ADAPTACAO_PEI")
+                        
+                        # --- CARD DE CONTEXTO ATIVO (VISUALIZAÇÃO) ---
                         st.info(f"📖 **Herança Detectada:** {livro_ref} (Pags: {pags_ref})")
                         
-                        instr_extra = st.text_area("📝 Informações Extras / Contexto:", key=f"prod_extra_{v}")
+                        instr_extra = st.text_area("📝 Informações Extras / Contexto Adicional:", key=f"prod_extra_{v}")
                         
-                        if st.button("💎 COMPILAR MATERIAL DE ELITE", use_container_width=True, type="primary"):
-                            with st.spinner("Compilando com Herança do Livro..."):
+                        # --- NOVO: CONTROLE DESLIZANTE DE QUANTIDADE DE QUESTÕES ---
+                        st.markdown("---")
+                        c_q1, c_q2 = st.columns([2, 1])
+                        qtd_q = c_q1.slider("Quantidade de Questões para o Aluno:", 3, 15, 10, help="Define o volume de exercícios que a IA irá gerar.", key=f"prod_q_{v}")
+                        c_q2.metric("Volume Alvo", f"{qtd_q} Qs")
+
+                        if st.button("💎 COMPILAR MATERIAL DE ELITE V34", use_container_width=True, type="primary"):
+                            with st.spinner(f"Sincronizando Livro e Gerando {qtd_q} Questões..."):
                                 s_id = util.gerar_sosa_id("AULA", ano_lab, "I")
                                 st.session_state.sosa_id_atual = s_id
-                                st.session_state.lab_meta = {"ano": ano_lab, "trimestre": "I Trimestre", "tipo": aula_alvo, "semana_ref": sem_lab}
+                                st.session_state.lab_meta = {
+                                    "ano": ano_lab, 
+                                    "trimestre": "I Trimestre", 
+                                    "tipo": aula_alvo,
+                                    "semana_ref": sem_lab
+                                }
                                 
-                                tag_aula = "AULA_1" if aula_alvo == "Aula 1" else "AULA_2"
-                                
+                                # Prompt Integrado com Herança e Quantidade
                                 prompt_manual = (
                                     f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {s_id}.\n"
                                     f"SÉRIE: {ano_lab}º ANO. ALVO: {aula_alvo}.\n"
-                                    f"--- HERANÇA TÉCNICA ---\n"
+                                    f"QUANTIDADE OBRIGATÓRIA: Gerar EXATAMENTE {qtd_q} questões no total.\n"
+                                    f"--- HERANÇA TÉCNICA DO PONTO ID ---\n"
                                     f"REFERÊNCIA: Livro {livro_ref}, Páginas {pags_ref}.\n"
-                                    f"CONTEÚDO: {ai.extrair_tag(plano_txt, 'CONTEUDOS_ESPECIFICOS')}.\n"
-                                    f"ROTEIRO: {ai.extrair_tag(plano_txt, tag_aula)}.\n"
-                                    f"ESTRATÉGIA PEI: {ai.extrair_tag(plano_txt, 'ADAPTACAO_PEI')}.\n"
+                                    f"CONTEÚDO OFICIAL: {ai.extrair_tag(plano_txt, 'CONTEUDOS_ESPECIFICOS')}.\n"
+                                    f"ROTEIRO PLANEJADO: {roteiro_plano}.\n"
+                                    f"ESTRATÉGIA PEI PLANEJADA: {estrategia_pei}.\n"
+                                    f"--- ADICIONAIS ---\n"
                                     f"EXTRAS: {instr_extra}.\n\n"
+                                    f"MISSÃO: Transforme o roteiro e as páginas do livro em um material de elite com {qtd_q} questões, usando DNA Visual e Contexto Tech/News. "
                                     f"ENTREGA: [PROFESSOR], [ALUNO], [GABARITO], [PEI], [GABARITO_PEI]."
                                 )
                                 st.session_state.lab_temp = ai.gerar_ia("MAESTRO_SOSA_V28_ELITE", prompt_manual, usar_busca=True)
