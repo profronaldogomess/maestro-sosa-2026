@@ -25,12 +25,12 @@ def set_row_height(row, height_pt):
     trPr.append(trHeight)
 
 def adicionar_texto_formatado(paragraph, texto):
-    """Converte padrões **texto** em negrito real preservando acentos"""
+    """Converte padrões **texto** em negrito real preservando acentos e limpando ruídos"""
     import re
-    # REMOVIDA A LINHA QUE APAGAVA ACENTOS
-    # Limpa apenas símbolos específicos que poluem o visual
+    # Limpa símbolos que poluem o visual mas mantém a pontuação
     texto_limpo = texto.replace("➔", "").replace("->", "").strip()
     
+    # Divide o texto para encontrar negritos (**)
     partes = re.split(r'(\*\*.*?\*\*)', texto_limpo)
     for parte in partes:
         if parte.startswith('**') and parte.endswith('**'):
@@ -41,16 +41,14 @@ def adicionar_texto_formatado(paragraph, texto):
 
 def configurar_cabecalho_atividade_limpo(doc, info, tipo_label):
     """Gera o cabeçalho oficial com DATA e sem campo de nota"""
-    # Tabela de 3 linhas e 5 colunas para melhor distribuição
     table = doc.add_table(rows=3, cols=5)
     table.style = 'Table Grid'
     
-    # Ajuste de larguras (Margens 0.3") - Total útil ~7.67"
+    # Ajuste de larguras para margens de 0.3"
     widths = [Inches(0.8), Inches(3.0), Inches(1.0), Inches(1.2), Inches(1.67)]
     for i, w in enumerate(widths): 
         table.columns[i].width = w
 
-    # Ajuste de altura para todas as linhas (Respiro)
     for row in table.rows:
         set_row_height(row, 26)
 
@@ -71,18 +69,9 @@ def configurar_cabecalho_atividade_limpo(doc, info, tipo_label):
     c_aluno.paragraphs[0].add_run("ALUNO(A):")
 
     # Linha 2: Professor, Turma, DATA e Tipo
-    c_prof = table.cell(2, 1)
-    c_prof.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-    c_prof.paragraphs[0].add_run("PROF: Ronaldo Gomes")
-    
-    c_turma = table.cell(2, 2)
-    c_turma.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-    c_turma.paragraphs[0].add_run(f"TURMA: {info.get('ano', '6º')}")
-
-    # NOVO: CAMPO DE DATA RESTAURADO
-    c_data = table.cell(2, 3)
-    c_data.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-    c_data.paragraphs[0].add_run("DATA:    /    /")
+    table.cell(2, 1).paragraphs[0].add_run("PROF: Ronaldo Gomes")
+    table.cell(2, 2).paragraphs[0].add_run(f"TURMA: {info.get('ano', '6º')}")
+    table.cell(2, 3).paragraphs[0].add_run("DATA:    /    /")
     
     c_tipo = table.cell(2, 4)
     c_tipo.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
@@ -102,7 +91,7 @@ def configurar_cabecalho_atividade_limpo(doc, info, tipo_label):
     return table
 
 # ==============================================================================
-# 1. MATERIAL DO ALUNO REGULAR (VERSÃO ELITE V47 - ACENTOS E DATA)
+# 1. MATERIAL DO ALUNO REGULAR (VERSÃO ELITE V48 - CORREÇÃO DE FLUXO)
 # ==============================================================================
 def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     file_stream = io.BytesIO()
@@ -116,11 +105,11 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     style.font.name = 'Arial'
     style.font.size = Pt(10.5)
 
-    # Cabeçalho (Coluna Única)
+    # 1. Cabeçalho (Coluna Única)
     configurar_cabecalho_atividade_limpo(doc, info, "ATIVIDADE DE SALA")
     doc.add_paragraph()
 
-    # Conteúdo (Duas Colunas)
+    # 2. Conteúdo (Duas Colunas)
     new_section = doc.add_section(WD_SECTION.CONTINUOUS)
     sectPr = new_section._sectPr
     cols = sectPr.xpath('./w:cols')[0]
@@ -136,32 +125,38 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
         p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
         p.paragraph_format.space_after = Pt(12)
 
-        # Títulos
-        if any(x in l_s.upper() for x in ["ATIVIDADE DE", "JORNADA", "DESAFIO", "SISTEMAS DE", "MATEMÁTICA"]):
-            run = p.add_run(l_s.upper().replace('**', ''))
-            run.bold = True
-            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        # --- ORDEM DE PRIORIDADE CORRIGIDA ---
         
-        # Regra Inline para Questões
-        elif "QUESTÃO" in l_s.upper():
-            match = re.match(r"^(QUEST[AÃ]O\s+\d+)[\.\s:]*(.*)", l_s, re.IGNORECASE)
+        # PRIORIDADE 1: É UMA QUESTÃO? (Deve vir antes do título para não centralizar)
+        if l_s.upper().startswith("QUESTÃO") or l_s.upper().startswith("QUESTAO"):
+            # Regex aprimorada para capturar o rótulo e o texto
+            match = re.match(r"^(QUEST[AÃ]O\s+\d+)([\.\s:]+)(.*)", l_s, re.IGNORECASE)
             if match:
                 rotulo = match.group(1).upper().strip()
-                texto_q = match.group(2).strip()
+                texto_q = match.group(3).strip()
+                
                 run_r = p.add_run(f"{rotulo}. ")
                 run_r.bold = True
+                # Adiciona o texto da questão na mesma linha, tratando negritos internos
                 adicionar_texto_formatado(p, texto_q)
             else:
                 adicionar_texto_formatado(p, l_s)
             p.paragraph_format.space_before = Pt(8)
 
-        # Prompts de Imagem
+        # PRIORIDADE 2: É UM TÍTULO? (Apenas se não for questão)
+        elif any(x in l_s.upper() for x in ["ATIVIDADE DE", "JORNADA", "HISTÓRIA E EVOLUÇÃO", "MATEMÁTICA"]):
+            run = p.add_run(l_s.upper().replace('**', ''))
+            run.bold = True
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+        # PRIORIDADE 3: É UM PROMPT DE IMAGEM?
         elif "[" in l_s and "PROMPT IMAGEM" in l_s.upper():
             run = p.add_run(l_s)
             run.font.size = Pt(8)
             run.font.italic = True
             run.font.color.rgb = RGBColor(120, 120, 120)
         
+        # PRIORIDADE 4: TEXTO NORMAL
         else:
             adicionar_texto_formatado(p, l_s)
 
@@ -170,12 +165,11 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     return file_stream
 
 # ==============================================================================
-# 3. MATERIAL PEI ADAPTADO (VERSÃO ELITE V47 - ACENTOS E DATA)
+# 3. MATERIAL PEI ADAPTADO (VERSÃO ELITE V48)
 # ==============================================================================
 def gerar_docx_pei_v25(titulo_doc, conteudo, info):
     file_stream = io.BytesIO()
     doc = Document()
-    
     section = doc.sections[0]
     section.top_margin, section.bottom_margin = Inches(0.3), Inches(0.3)
     section.left_margin, section.right_margin = Inches(0.4), Inches(0.4)
