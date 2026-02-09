@@ -306,10 +306,10 @@ def exibir_material_estruturado(texto_raw, key_prefix, dados_plano=None, info_au
                        
 
 # ==============================================================================
-# MÓDULO: LABORATÓRIO DE PRODUÇÃO (CRIADOR V37.5) - SAFRA BLINDADA & ESCANEÁVEL
+# MÓDULO: LABORATÓRIO DE PRODUÇÃO (CRIADOR V39 - INTEGRADO & BLINDADO)
 # ==============================================================================
 if menu == "🧪 Criador de Aulas":
-    st.title("🧪 Laboratório de Produção Semiótica (V37.5)")
+    st.title("🧪 Laboratório de Produção Semiótica (V39)")
     st.markdown("---")
     
     def reset_laboratorio():
@@ -324,80 +324,57 @@ if menu == "🧪 Criador de Aulas":
 
     is_hub = st.session_state.get("lab_meta", {}).get("tipo") == "PRODUÇÃO_HUB"
 
-    # --- ÁREA DE EXIBIÇÃO E REFINO ---
+    # --- ÁREA DE EXIBIÇÃO E REFINO (SÓ APARECE APÓS GERAR) ---
     if "lab_temp" in st.session_state and "[PROFESSOR]" in st.session_state.lab_temp:
         txt_base = st.session_state.lab_temp
         s_id = st.session_state.get("sosa_id_atual", "SEM-ID")
         meta = st.session_state.get("lab_meta", {})
-        
-        # --- NOVA LÓGICA DE NOME DE EXIBIÇÃO ---
-        nome_exibicao = util.gerar_nome_material_elite(
-            meta.get('ano'), 
-            meta.get('aula_alvo', 'Aula'), 
-            meta.get('semana_ref', 'Semana')
-        )
-        
-        # Box de sucesso com o nome bonito
-        st.success(f"💎 Material Gerado: **{nome_exibicao}**")
-        st.caption(f"🆔 ID Técnico para Scanner: `{s_id}`") # O ID fica pequeno embaixo, por segurança
+
+        st.success(f"💎 Material Gerado: **{s_id}**")
         
         t_prof, t_alu, t_gab, t_pei, t_sync = st.tabs(["👨‍🏫 Professor", "📝 Aluno", "✅ Gabarito/Rubrica", "♿ PEI", "☁️ SINCRONIA"])
         
-        with t_prof: ed_prof = st.text_area("Mapa de Regência:", ai.extrair_tag(txt_base, "PROFESSOR"), height=450, key=f"ed_prof_{v}")
-        with t_alu: ed_alu = st.text_area("Folha do Aluno:", ai.extrair_tag(txt_base, "ALUNO"), height=450, key=f"ed_alu_{v}")
-        with t_gab: ed_res = st.text_area("Gabarito:", ai.extrair_tag(txt_base, "GABARITO"), height=350, key=f"ed_res_{v}")
+        with t_prof: st.text_area("Mapa de Regência:", ai.extrair_tag(txt_base, "PROFESSOR"), height=450, key=f"ed_prof_{v}")
+        with t_alu: st.text_area("Folha do Aluno:", ai.extrair_tag(txt_base, "ALUNO"), height=450, key=f"ed_alu_{v}")
+        with t_gab: st.text_area("Gabarito:", ai.extrair_tag(txt_base, "GABARITO"), height=350, key=f"ed_res_{v}")
         
         with t_pei:
             st.subheader("♿ Adaptação Curricular")
             c_p1, c_p2 = st.columns(2)
-            with c_p1: ed_pei_mat = st.text_area("📄 Material PEI:", ai.extrair_tag(txt_base, "PEI"), height=400, key=f"ed_pei_mat_{v}")
-            with c_p2: ed_pei_gab = st.text_area("✅ Gabarito PEI:", ai.extrair_tag(txt_base, "GABARITO_PEI"), height=400, key=f"ed_pei_gab_{v}")
+            with c_p1: st.text_area("📄 Material PEI:", ai.extrair_tag(txt_base, "PEI"), height=400, key=f"ed_pei_mat_{v}")
+            with c_p2: st.text_area("✅ Gabarito PEI:", ai.extrair_tag(txt_base, "GABARITO_PEI"), height=400, key=f"ed_pei_gab_{v}")
 
         with t_sync:
             st.warning("⚠️ O Triple-Sync salvará Aluno, Professor e PEI vinculados ao Plano.")
             if st.button("💾 EXECUTAR TRIPLE-SYNC", use_container_width=True, type="primary", key=f"btn_triple_{v}"):
                 with st.status("Iniciando Protocolo de Sincronia...") as status:
-                    meta = st.session_state.get("lab_meta", {})
-                    # O s_id agora já é o nome bonito vindo do passo anterior
-                    s_id = st.session_state.get("sosa_id_atual", "SEM-ID") 
-                    
-                    nome_final = s_id # Nome do arquivo e ID são iguais
-                                        
+                    nome_final = s_id
                     ano_str = f"{meta.get('ano')}º"
                     semana_ref = meta.get('semana_ref', 'AVULSA')
                     trimestre_ref = meta.get('trimestre', 'I Trimestre')
                     
-                    # Contagem de questões
-                    qtd_q_real = len(re.findall(r'QUESTÃO', ed_alu.upper()))
-                    
+                    ed_alu_val = ai.extrair_tag(txt_base, "ALUNO")
+                    qtd_q_real = len(re.findall(r'QUESTÃO', ed_alu_val.upper()))
                     info_doc = {"ano": ano_str, "trimestre": trimestre_ref, "valor": "0,00", "valor_questao": "0,00", "qtd_questoes": qtd_q_real}
 
-                    # Deleta duplicata antes de salvar
                     db.excluir_registro_com_drive("DB_AULAS_PRONTAS", nome_final)
                     
-                    # Geração dos arquivos
-                    doc_alu = exporter.gerar_docx_aluno_v24(nome_final, ed_alu, info_doc)
+                    doc_alu = exporter.gerar_docx_aluno_v24(nome_final, ed_alu_val, info_doc)
                     link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{nome_final}_ALUNO", modo="AULA")
                     
-                    doc_prof = exporter.gerar_docx_professor_v25(nome_final, ed_prof, {"ano": ano_str, "semana": semana_ref, "trimestre": trimestre_ref})
+                    doc_prof = exporter.gerar_docx_professor_v25(nome_final, ai.extrair_tag(txt_base, "PROFESSOR"), {"ano": ano_str, "semana": semana_ref, "trimestre": trimestre_ref})
                     link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_final}_PROF", modo="AULA")
                     
                     link_pei = "N/A"
-                    if len(ed_pei_mat) > 10:
-                        doc_pei = exporter.gerar_docx_pei_v25(f"{nome_final}_PEI", ed_pei_mat, info_doc)
+                    ed_pei_val = ai.extrair_tag(txt_base, "PEI")
+                    if len(ed_pei_val) > 10:
+                        doc_pei = exporter.gerar_docx_pei_v25(f"{nome_final}_PEI", ed_pei_val, info_doc)
                         link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_final}_PEI", modo="AULA")
                     
                     if "https" in str(link_alu):
-                        conteudo_banco = (
-                            f"[SOSA_ID: {s_id}]\n[AULA_ALVO: {meta.get('aula_alvo')}]\n[PROFESSOR]\n{ed_prof}\n\n[ALUNO]\n{ed_alu}\n\n"
-                            f"[GABARITO]\n{ed_res}\n\n[PEI]\n{ed_pei_mat}\n\n"
-                            f"[GABARITO_PEI]\n{ed_pei_gab}\n\n--- LINKS ---\nAluno({link_alu}) Prof({link_prof}) PEI({link_pei})"
-                        )
-                        db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), semana_ref, nome_final, conteudo_banco, ano_str, link_alu])
+                        db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), semana_ref, nome_final, txt_base, ano_str, link_alu])
                         status.update(label="✅ Sincronia Concluída!", state="complete")
-                        st.balloons()
-                        time.sleep(1)
-                        reset_laboratorio()
+                        st.balloons(); time.sleep(1); reset_laboratorio()
 
         st.markdown("---")
         with st.container(border=True):
@@ -408,11 +385,10 @@ if menu == "🧪 Criador de Aulas":
                     st.session_state.lab_temp = ai.gerar_ia("REFINADOR_MATERIAIS", f"ORDEM: {cmd_lab}\n\nATUAL:\n{st.session_state.lab_temp}")
                     st.session_state.v_lab += 1; st.rerun()
         
-        # BOTÃO ÚNICO (CORRIGIDO)
         if st.button("🆕 GERAR OUTRO MATERIAL (LIMPAR)", use_container_width=True, key=f"btn_reset_final_{v}"): 
             reset_laboratorio()
 
-    # --- SEÇÃO DE ENTRADA ---
+    # --- SEÇÃO DE ENTRADA (CONFIGURAÇÃO) ---
     else:
         tab_producao, tab_diagnostico, tab_trabalhos, tab_complementar, tab_acervo = st.tabs([
             "🚀 Produção (Aula 1/2)", "🔍 Sonda de Proficiência", "📋 Engenharia de Trabalhos", "📚 Atividades Complementares", "📂 Acervo de Materiais"
@@ -428,7 +404,6 @@ if menu == "🧪 Criador de Aulas":
                     sem_ref = st.session_state.lab_meta.get('semana_ref')
                     ano_ref = f"{st.session_state.lab_meta.get('ano')}º"
                     
-                    # --- RASTREADOR DE HERANÇA ---
                     match_livro = re.search(r"MÉTODO LIVRO: \[(.*?)\]", plano_txt)
                     match_pags = re.search(r"PÁGINAS: (.*?)\.", plano_txt)
                     livro_ref = match_livro.group(1) if match_livro else "Manual/Banco"
@@ -438,65 +413,53 @@ if menu == "🧪 Criador de Aulas":
                     c1.caption(f"Semana: {sem_ref} | Série: {ano_ref}")
                     st.warning(f"📖 **Herança Detectada:** {livro_ref} (Pags: {pags_ref})")
                     
-                    # --- ESCUDO DE SAFRA (FILTRO) ---
                     aulas_no_banco = df_aulas[(df_aulas['SEMANA_REF'] == sem_ref) & (df_aulas['ANO'] == ano_ref)]
-                    
                     opcoes_aula = []
                     if not any("Aula 1" in str(x) for x in aulas_no_banco['TIPO_MATERIAL']): opcoes_aula.append("Aula 1")
                     if not any("Aula 2" in str(x) for x in aulas_no_banco['TIPO_MATERIAL']): opcoes_aula.append("Aula 2")
                     if not any("Sábado" in str(x) for x in aulas_no_banco['TIPO_MATERIAL']): opcoes_aula.append("Sábado Letivo")
 
                     if not opcoes_aula:
-                        st.success(f"✅ **Safra Concluída!** Todas as aulas da {sem_ref} já foram produzidas.")
-                        if st.button("🔄 PRODUZIR NOVAMENTE (SOBREPOR)", use_container_width=True):
-                            st.session_state.v_lab += 1
-                            st.rerun()
+                        st.success(f"✅ **Safra Concluída!**")
+                        if st.button("🔄 REPRODUZIR (SOBREPOR)"): reset_laboratorio()
                     else:
-                        aula_alvo = c2.radio("Selecione a Aula Pendente:", opcoes_aula, key=f"hub_aula_{v}")
+                        aula_alvo = c2.radio("Selecione a Aula:", opcoes_aula, key=f"hub_aula_{v}")
                         instr_extra = st.text_area("📝 Informações Extras:", key=f"hub_extra_{v}")
                         qtd_q = st.slider("Quantidade de Questões:", 3, 15, 10, key=f"hub_q_{v}")
 
                         if st.button("💎 MATERIALIZAR AULA DE ELITE", use_container_width=True, type="primary"):
                             with st.spinner(f"Expandindo {aula_alvo}..."):
-                                s_id = util.gerar_sosa_id("AULA", st.session_state.lab_meta.get('ano'), "I")
-                                st.session_state.sosa_id_atual = s_id
+                                nome_elite = util.gerar_nome_material_elite(st.session_state.lab_meta.get('ano'), aula_alvo, sem_ref)
+                                st.session_state.sosa_id_atual = nome_elite
                                 st.session_state.lab_meta['aula_alvo'] = aula_alvo
-                                # NOME BONITO: 6º Ano - Aula 1 - Jornada Pedagógica
-                                st.session_state.lab_meta['nome_formatado'] = f"{ano_ref} - {aula_alvo} - {sem_ref}"
                                 
                                 tag_aula = "AULA_1" if "Aula 1" in aula_alvo else "AULA_2" if "Aula 2" in aula_alvo else "SABADO_LETIVO"
                                 roteiro_plano = ai.extrair_tag(plano_txt, tag_aula)
                                 
                                 prompt_expansao = (
-                                    f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {s_id}.\n"
-                                    f"SÉRIE: {ano_ref}. ALVO: {aula_alvo}.\n"
-                                    f"QUANTIDADE: {qtd_q} questões.\n"
+                                    f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {nome_elite}.\n"
+                                    f"SÉRIE: {ano_ref}. ALVO: {aula_alvo}. QTD: {qtd_q}.\n"
                                     f"--- HERANÇA TÉCNICA ---\n"
                                     f"REFERÊNCIA: Livro {livro_ref}, Páginas {pags_ref}.\n"
                                     f"ROTEIRO DO PLANO: {roteiro_plano}.\n"
                                     f"ESTRATÉGIA PEI: {ai.extrair_tag(plano_txt, 'ADAPTACAO_PEI')}.\n"
                                     f"EXTRAS: {instr_extra}.\n\n"
-                                    f"🚨 MISSÃO: Gere o Tratado Didático (Brasil Escola) + Atividades com DNA Visual."
+                                    f"MISSÃO: Gere o material completo com as TAGS [PROFESSOR], [ALUNO], [GABARITO], [PEI], [GABARITO_PEI]."
                                 )
                                 st.session_state.lab_temp = ai.gerar_ia("MAESTRO_SOSA_V28_ELITE", prompt_expansao, usar_busca=True)
                                 st.rerun()
-                if st.button("❌ CANCELAR IMPORTAÇÃO"): reset_laboratorio()
             
             else:
-                st.markdown("### ⚙️ Configurar Produção de Aula (Herança Didática V38)")
+                st.markdown("### ⚙️ Configurar Produção de Aula (Herança Didática)")
                 with st.container(border=True):
                     c1, c2, c3 = st.columns([1, 2, 1])
                     ano_lab = c1.selectbox("Série/Ano:", [6, 7, 8, 9], key=f"prod_ano_{v}")
                     ano_ref = f"{ano_lab}º"
-                    
                     planos_ano = df_planos[df_planos["ANO"].astype(str).str.contains(str(ano_lab))]
                     
-                    if planos_ano.empty: 
-                        st.error("❌ Nenhum planejamento encontrado para este ano no Ponto ID.")
+                    if planos_ano.empty: st.error("❌ Nenhum planejamento encontrado.")
                     else:
                         sem_lab = c2.selectbox("Semana Base (Ponto ID):", planos_ano["SEMANA"].tolist(), key=f"prod_sem_{v}")
-                        
-                        # --- RASTREADOR DE DNA E ESCUDO DE SAFRA ---
                         plano_row = planos_ano[planos_ano["SEMANA"] == sem_lab].iloc[0]
                         plano_txt = str(plano_row['PLANO_TEXTO'])
                         
@@ -506,53 +469,35 @@ if menu == "🧪 Criador de Aulas":
                         pags_ref = match_pags.group(1) if match_pags else "N/A"
                         
                         aulas_no_banco = df_aulas[(df_aulas['SEMANA_REF'] == sem_lab) & (df_aulas['ANO'] == ano_ref)]
-                        
                         opcoes_aula = []
                         if not any("Aula 1" in str(x) for x in aulas_no_banco['TIPO_MATERIAL']): opcoes_aula.append("Aula 1")
                         if not any("Aula 2" in str(x) for x in aulas_no_banco['TIPO_MATERIAL']): opcoes_aula.append("Aula 2")
                         
                         if not opcoes_aula:
-                            st.success(f"✅ **Safra Concluída!** Aula 1 e Aula 2 já existem para {sem_lab}.")
-                            if st.button("🔄 REPRODUZIR (SOBREPOR)", use_container_width=True):
-                                st.session_state.v_lab += 1
-                                st.rerun()
+                            st.success(f"✅ **Safra Concluída!**")
+                            if st.button("🔄 REPRODUZIR (SOBREPOR)"): reset_laboratorio()
                         else:
                             aula_alvo = c3.radio("🎯 Aula Pendente:", opcoes_aula, horizontal=True, key=f"prod_alvo_{v}")
                             st.info(f"📖 **Herança Detectada:** {livro_ref} (Pags: {pags_ref})")
-                            instr_extra = st.text_area("📝 Contexto Adicional (Opcional):", key=f"prod_extra_{v}")
-                            
-                            st.markdown("---")
-                            c_q1, c_q2 = st.columns([2, 1])
-                            qtd_q = c_q1.slider("Quantidade de Questões:", 3, 15, 10, key=f"prod_q_{v}")
-                            c_q2.metric("Volume", f"{qtd_q} Qs")
+                            instr_extra = st.text_area("📝 Contexto Adicional:", key=f"prod_extra_{v}")
+                            qtd_q = st.slider("Quantidade de Questões:", 3, 15, 10, key=f"prod_q_{v}")
 
-                            if st.button("💎 COMPILAR MATERIAL DE ELITE V38", use_container_width=True, type="primary"):
-                                with st.spinner("Arquitetando Tratado Didático..."):
-                                    # --- UNIFICAÇÃO DE IDENTIDADE (SOSA-ID = NOME DE ELITE) ---
+                            if st.button("💎 COMPILAR MATERIAL DE ELITE", use_container_width=True, type="primary"):
+                                with st.spinner("Arquitetando..."):
                                     nome_elite = util.gerar_nome_material_elite(ano_lab, aula_alvo, sem_lab)
-                                    
-                                    st.session_state.sosa_id_atual = nome_elite # O ID agora é o nome bonito
-                                    st.session_state.lab_meta = {
-                                        "ano": ano_lab, "trimestre": "I Trimestre", 
-                                        "tipo": aula_alvo, "semana_ref": sem_lab,
-                                        "aula_alvo": aula_alvo,
-                                        "nome_formatado": nome_elite
-                                    }
+                                    st.session_state.sosa_id_atual = nome_elite
+                                    st.session_state.lab_meta = {"ano": ano_lab, "trimestre": "I Trimestre", "tipo": aula_alvo, "semana_ref": sem_lab, "aula_alvo": aula_alvo}
                                     
                                     tag_aula = "AULA_1" if aula_alvo == "Aula 1" else "AULA_2"
-                                    roteiro_plano = ai.extrair_tag(plano_txt, tag_aula)
-                                    
                                     prompt_manual = (
-                                        f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {nome_elite}.\n" # IA recebe o nome bonito
-                                        f"SÉRIE: {ano_ref}. ALVO: {aula_alvo}.\n"
-                                        f"QUANTIDADE: {qtd_q} questões.\n"
+                                        f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {nome_elite}.\n"
+                                        f"SÉRIE: {ano_ref}. ALVO: {aula_alvo}. QTD: {qtd_q}.\n"
                                         f"--- HERANÇA TÉCNICA ---\n"
                                         f"REFERÊNCIA: Livro {livro_ref}, Páginas {pags_ref}.\n"
-                                        f"CONTEÚDO: {ai.extrair_tag(plano_txt, 'CONTEUDOS_ESPECIFICOS')}.\n"
-                                        f"ROTEIRO PLANEJADO: {roteiro_plano}.\n"
+                                        f"ROTEIRO: {ai.extrair_tag(plano_txt, tag_aula)}.\n"
                                         f"ESTRATÉGIA PEI: {ai.extrair_tag(plano_txt, 'ADAPTACAO_PEI')}.\n"
                                         f"EXTRAS: {instr_extra}.\n\n"
-                                        f"MISSÃO: Gere o Tratado Didático (Brasil Escola) + Atividades com DNA Visual."
+                                        f"MISSÃO: Gere o material com as TAGS [PROFESSOR], [ALUNO], [GABARITO], [PEI], [GABARITO_PEI]."
                                     )
                                     st.session_state.lab_temp = ai.gerar_ia("MAESTRO_SOSA_V28_ELITE", prompt_manual, usar_busca=True)
                                     st.rerun()
