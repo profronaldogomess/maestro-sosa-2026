@@ -348,54 +348,47 @@ if menu == "🧪 Criador de Aulas":
             st.warning("⚠️ O Triple-Sync salvará Aluno, Professor e PEI vinculados ao Plano.")
             if st.button("💾 EXECUTAR TRIPLE-SYNC", use_container_width=True, type="primary", key=f"btn_triple_{v}"):
                 with st.status("Iniciando Protocolo de Sincronia...") as status:
-                    nome_final = meta.get('nome_formatado', f"{s_id} - {aula_nome}")
-                    tipo_material = meta.get('tipo', 'AULA')
-                    nome_final = f"{s_id} - {aula_nome}"
+                    meta = st.session_state.get("lab_meta", {})
+                    s_id = st.session_state.get("sosa_id_atual", "SEM-ID")
+                    
+                    # --- CORREÇÃO DO NOME: Pega o nome bonito formatado ---
+                    nome_final = meta.get('nome_formatado', f"{s_id} - AULA")
+                    
                     ano_str = f"{meta.get('ano')}º"
                     semana_ref = meta.get('semana_ref', 'AVULSA')
+                    trimestre_ref = meta.get('trimestre', 'I Trimestre')
                     
-                    # Contagem de questões para o cabeçalho da Sonda
+                    # Contagem de questões
                     qtd_q_real = len(re.findall(r'QUESTÃO', ed_alu.upper()))
-                    v_total = 10.0 if tipo_material == "SONDA" else 0.0
-                    v_q = v_total / qtd_q_real if qtd_q_real > 0 else 0
                     
-                    info_doc = {
-                        "ano": ano_str, "trimestre": meta.get('trimestre'),
-                        "valor": util.sosa_to_str(v_total),
-                        "valor_questao": util.sosa_to_str(v_q),
-                        "qtd_questoes": qtd_q_real
-                    }
+                    info_doc = {"ano": ano_str, "trimestre": trimestre_ref, "valor": "0,00", "valor_questao": "0,00", "qtd_questoes": qtd_q_real}
 
+                    # Deleta duplicata antes de salvar
                     db.excluir_registro_com_drive("DB_AULAS_PRONTAS", nome_final)
                     
-                    # --- LÓGICA DE EXPORTAÇÃO INTELIGENTE (AULA vs SONDA) ---
-                    if tipo_material == "SONDA":
-                        doc_alu = exporter.gerar_docx_prova_v25(nome_final, ed_alu, info_doc)
-                    else:
-                        doc_alu = exporter.gerar_docx_aluno_v24(nome_final, ed_alu, info_doc)
-                    
+                    # Geração dos arquivos
+                    doc_alu = exporter.gerar_docx_aluno_v24(nome_final, ed_alu, info_doc)
                     link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{nome_final}_ALUNO", modo="AULA")
                     
-                    doc_prof = exporter.gerar_docx_professor_v25(nome_final, ed_prof, {"ano": ano_str, "semana": semana_ref, "trimestre": meta.get('trimestre')})
+                    doc_prof = exporter.gerar_docx_professor_v25(nome_final, ed_prof, {"ano": ano_str, "semana": semana_ref, "trimestre": trimestre_ref})
                     link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_final}_PROF", modo="AULA")
                     
                     link_pei = "N/A"
                     if len(ed_pei_mat) > 10:
-                        if tipo_material == "SONDA":
-                            doc_pei = exporter.gerar_docx_prova_v25(f"{nome_final}_PEI", ed_pei_mat, info_doc)
-                        else:
-                            doc_pei = exporter.gerar_docx_pei_v25(f"{nome_final}_PEI", ed_pei_mat, info_doc)
+                        doc_pei = exporter.gerar_docx_pei_v25(f"{nome_final}_PEI", ed_pei_mat, info_doc)
                         link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_final}_PEI", modo="AULA")
                     
                     if "https" in str(link_alu):
                         conteudo_banco = (
-                            f"[SOSA_ID: {s_id}]\n[AULA_ALVO: {aula_nome}]\n[PROFESSOR]\n{ed_prof}\n\n[ALUNO]\n{ed_alu}\n\n"
+                            f"[SOSA_ID: {s_id}]\n[AULA_ALVO: {meta.get('aula_alvo')}]\n[PROFESSOR]\n{ed_prof}\n\n[ALUNO]\n{ed_alu}\n\n"
                             f"[GABARITO]\n{ed_res}\n\n[PEI]\n{ed_pei_mat}\n\n"
                             f"[GABARITO_PEI]\n{ed_pei_gab}\n\n--- LINKS ---\nAluno({link_alu}) Prof({link_prof}) PEI({link_pei})"
                         )
                         db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), semana_ref, nome_final, conteudo_banco, ano_str, link_alu])
                         status.update(label="✅ Sincronia Concluída!", state="complete")
-                        st.balloons(); time.sleep(1); reset_laboratorio() # <--- CORREÇÃO: Chama a função do próprio módulo
+                        st.balloons()
+                        time.sleep(1)
+                        reset_laboratorio()
 
         st.markdown("---")
         with st.container(border=True):
@@ -426,7 +419,7 @@ if menu == "🧪 Criador de Aulas":
                     sem_ref = st.session_state.lab_meta.get('semana_ref')
                     ano_ref = f"{st.session_state.lab_meta.get('ano')}º"
                     
-                    # --- RASTREADOR DE HERANÇA (LIVRO/PÁGINAS) ---
+                    # --- RASTREADOR DE HERANÇA ---
                     match_livro = re.search(r"MÉTODO LIVRO: \[(.*?)\]", plano_txt)
                     match_pags = re.search(r"PÁGINAS: (.*?)\.", plano_txt)
                     livro_ref = match_livro.group(1) if match_livro else "Manual/Banco"
@@ -436,7 +429,7 @@ if menu == "🧪 Criador de Aulas":
                     c1.caption(f"Semana: {sem_ref} | Série: {ano_ref}")
                     st.warning(f"📖 **Herança Detectada:** {livro_ref} (Pags: {pags_ref})")
                     
-                    # --- ESCUDO DE SAFRA (FILTRO DE DUPLICIDADE) ---
+                    # --- ESCUDO DE SAFRA (FILTRO) ---
                     aulas_no_banco = df_aulas[(df_aulas['SEMANA_REF'] == sem_ref) & (df_aulas['ANO'] == ano_ref)]
                     
                     opcoes_aula = []
@@ -447,7 +440,7 @@ if menu == "🧪 Criador de Aulas":
                     if not opcoes_aula:
                         st.success(f"✅ **Safra Concluída!** Todas as aulas da {sem_ref} já foram produzidas.")
                         if st.button("🔄 PRODUZIR NOVAMENTE (SOBREPOR)", use_container_width=True):
-                            opcoes_aula = ["Aula 1", "Aula 2", "Sábado Letivo"]
+                            st.session_state.v_lab += 1
                             st.rerun()
                     else:
                         aula_alvo = c2.radio("Selecione a Aula Pendente:", opcoes_aula, key=f"hub_aula_{v}")
@@ -455,17 +448,16 @@ if menu == "🧪 Criador de Aulas":
                         qtd_q = st.slider("Quantidade de Questões:", 3, 15, 10, key=f"hub_q_{v}")
 
                         if st.button("💎 MATERIALIZAR AULA DE ELITE", use_container_width=True, type="primary"):
-                            with st.spinner(f"Expandindo {aula_alvo} (Brasil Escola)..."):
-                                st.session_state.lab_meta['aula_alvo'] = aula_alvo
-                                tag_aula = "AULA_1" if "Aula 1" in aula_alvo else "AULA_2" if "Aula 2" in aula_alvo else "SABADO_LETIVO"
-                                roteiro_plano = ai.extrair_tag(plano_txt, tag_aula)
+                            with st.spinner(f"Expandindo {aula_alvo}..."):
                                 s_id = util.gerar_sosa_id("AULA", st.session_state.lab_meta.get('ano'), "I")
                                 st.session_state.sosa_id_atual = s_id
+                                st.session_state.lab_meta['aula_alvo'] = aula_alvo
+                                # NOME BONITO: 6º Ano - Aula 1 - Jornada Pedagógica
+                                st.session_state.lab_meta['nome_formatado'] = f"{ano_ref} - {aula_alvo} - {sem_ref}"
                                 
-                                # NOME DE ELITE: {ANO} - {AULA} - {SEMANA}
-                                nome_final = f"{ano_ref} - {aula_alvo} - {sem_ref}"
-                                st.session_state.lab_meta['nome_formatado'] = nome_final
-
+                                tag_aula = "AULA_1" if "Aula 1" in aula_alvo else "AULA_2" if "Aula 2" in aula_alvo else "SABADO_LETIVO"
+                                roteiro_plano = ai.extrair_tag(plano_txt, tag_aula)
+                                
                                 prompt_expansao = (
                                     f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {s_id}.\n"
                                     f"SÉRIE: {ano_ref}. ALVO: {aula_alvo}.\n"
@@ -475,10 +467,7 @@ if menu == "🧪 Criador de Aulas":
                                     f"ROTEIRO DO PLANO: {roteiro_plano}.\n"
                                     f"ESTRATÉGIA PEI: {ai.extrair_tag(plano_txt, 'ADAPTACAO_PEI')}.\n"
                                     f"EXTRAS: {instr_extra}.\n\n"
-                                    f"🚨 MISSÃO CRÍTICA:\n"
-                                    f"1. No [PROFESSOR], redija um artigo denso estilo 'Brasil Escola' fundamentando as páginas {pags_ref}.\n"
-                                    f"2. No [ALUNO], gere {qtd_q} questões com DNA Visual.\n"
-                                    f"3. No [PEI], aplique a Sinfonia DUA com passo a passo e cores."
+                                    f"🚨 MISSÃO: Gere o Tratado Didático (Brasil Escola) + Atividades com DNA Visual."
                                 )
                                 st.session_state.lab_temp = ai.gerar_ia("MAESTRO_SOSA_V28_ELITE", prompt_expansao, usar_busca=True)
                                 st.rerun()
@@ -507,7 +496,6 @@ if menu == "🧪 Criador de Aulas":
                         livro_ref = match_livro.group(1) if match_livro else "Manual/Banco"
                         pags_ref = match_pags.group(1) if match_pags else "N/A"
                         
-                        # Verifica o que já existe no banco para esta semana/ano
                         aulas_no_banco = df_aulas[(df_aulas['SEMANA_REF'] == sem_lab) & (df_aulas['ANO'] == ano_ref)]
                         
                         opcoes_aula = []
@@ -516,10 +504,11 @@ if menu == "🧪 Criador de Aulas":
                         
                         if not opcoes_aula:
                             st.success(f"✅ **Safra Concluída!** Aula 1 e Aula 2 já existem para {sem_lab}.")
-                            aula_alvo = "N/A"
+                            if st.button("🔄 REPRODUZIR (SOBREPOR)", use_container_width=True):
+                                st.session_state.v_lab += 1
+                                st.rerun()
                         else:
                             aula_alvo = c3.radio("🎯 Aula Pendente:", opcoes_aula, horizontal=True, key=f"prod_alvo_{v}")
-                            
                             st.info(f"📖 **Herança Detectada:** {livro_ref} (Pags: {pags_ref})")
                             instr_extra = st.text_area("📝 Contexto Adicional (Opcional):", key=f"prod_extra_{v}")
                             
@@ -532,14 +521,11 @@ if menu == "🧪 Criador de Aulas":
                                 with st.spinner("Arquitetando Tratado Didático..."):
                                     s_id = util.gerar_sosa_id("AULA", ano_lab, "I")
                                     st.session_state.sosa_id_atual = s_id
-                                    
-                                    # NOME DE ELITE: {ANO} - {AULA} - {SEMANA}
-                                    nome_final = f"{ano_ref} - {aula_alvo} - {sem_lab}"
-                                    
                                     st.session_state.lab_meta = {
                                         "ano": ano_lab, "trimestre": "I Trimestre", 
                                         "tipo": aula_alvo, "semana_ref": sem_lab,
-                                        "nome_formatado": nome_final
+                                        "aula_alvo": aula_alvo,
+                                        "nome_formatado": f"{ano_ref} - {aula_alvo} - {sem_lab}"
                                     }
                                     
                                     tag_aula = "AULA_1" if aula_alvo == "Aula 1" else "AULA_2"
@@ -552,7 +538,7 @@ if menu == "🧪 Criador de Aulas":
                                         f"--- HERANÇA TÉCNICA ---\n"
                                         f"REFERÊNCIA: Livro {livro_ref}, Páginas {pags_ref}.\n"
                                         f"CONTEÚDO: {ai.extrair_tag(plano_txt, 'CONTEUDOS_ESPECIFICOS')}.\n"
-                                        f"ROTEIRO: {roteiro_plano}.\n"
+                                        f"ROTEIRO PLANEJADO: {roteiro_plano}.\n"
                                         f"ESTRATÉGIA PEI: {ai.extrair_tag(plano_txt, 'ADAPTACAO_PEI')}.\n"
                                         f"EXTRAS: {instr_extra}.\n\n"
                                         f"MISSÃO: Gere o Tratado Didático (Brasil Escola) + Atividades com DNA Visual."
