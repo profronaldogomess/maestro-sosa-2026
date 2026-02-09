@@ -793,13 +793,16 @@ if menu == "📅 Planejamento (Ponto ID)":
 
         if st.button("🚀 COMPILAR PLANEJAMENTO BNCC", use_container_width=True, type="primary", key=f"btn_compilar_{v}"):
             with st.spinner("Maestro SOSA realizando Perícia Curricular..."):
-                # O prompt agora leva a Matriz Inteira para a IA decidir
+                # ORDEM DE RIGOR MÁXIMO
                 prompt = (
                     f"NATUREZA: {tipo_semana} ({sub_tipo}). ANO: {ano_p}º. SEMANA: {sem_limpa}. TRIMESTRE: {trim_atual}.\n"
-                    f"CONTEXTO: {ctx_ia}. ESTRATÉGIA: {strat}.\n\n"
-                    f"--- MATRIZ CURRICULAR OFICIAL PARA MAPEAMENTO ---\n"
+                    f"MÉTODO: {modo_p}. CONTEXTO: {ctx_ia}. ESTRATÉGIA: {strat}.\n\n"
+                    f"--- MATRIZ CURRICULAR OFICIAL (FONTE ÚNICA DE VERDADE) ---\n"
                     f"{matriz_contexto}\n\n"
-                    f"INSTRUÇÃO: Analise a estratégia e as páginas do livro. Identifique na matriz acima quais Eixos, Conteúdos e Objetivos se aplicam. Preencha as tags [CONTEUDO_GERAL], [CONTEUDOS_ESPECIFICOS] e [OBJETIVOS_ENSINO] com os termos EXATOS da matriz."
+                    f"INSTRUÇÃO CRÍTICA:\n"
+                    f"1. Analise as páginas do livro/estratégia e localize a linha correspondente na MATRIZ acima.\n"
+                    f"2. Copie LITERALMENTE os textos da Matriz para as tags [CONTEUDO_GERAL], [CONTEUDOS_ESPECIFICOS] e [OBJETIVOS_ENSINO].\n"
+                    f"3. Desenvolva as Aulas (1 e 2) com base no livro, mas mantendo a linguagem formal do Arquiteto Pedagógico."
                 )
                 st.session_state.p_temp = ai.gerar_ia("PLANE_PEDAGOGICO", prompt)
                 st.rerun()
