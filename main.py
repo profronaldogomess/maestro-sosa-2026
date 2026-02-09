@@ -747,13 +747,45 @@ if menu == "📅 Planejamento (Ponto ID)":
             tem_sabado = cg2.toggle("Sábado Letivo?", key=f"gate_sab_{v}")
             carga_horaria = cg3.select_slider("Aulas Úteis:", options=["1 Aula", "2 Aulas", "3 Aulas"], value="2 Aulas", key=f"gate_carga_{v}")
 
-        # --- 2. PARÂMETROS DE REGÊNCIA ---
+# --- 2. PARÂMETROS DE REGÊNCIA (COM ESCUDO DE SAFRA V28.13) ---
         with st.container(border=True):
             st.markdown("### ⚙️ 2. Parâmetros de Regência")
             c1, c2, c3 = st.columns([1, 2, 1.5])
+            
+            # 1. Seleção do Ano (Gatilho do Filtro)
             ano_p = c1.selectbox("Série/Ano:", [1, 2, 3, 4, 5, 6, 7, 8, 9], index=5, key=f"ano_sel_{v}")
+            ano_formatado = f"{ano_p}º"
+
+            # 2. LÓGICA DO ESCUDO: Identifica semanas já ocupadas para ESTE ano
+            semanas_ja_planejadas = []
+            if not df_planos.empty:
+                # Filtra os planos que já existem para o ano selecionado
+                planos_do_ano = df_planos[df_planos['ANO'] == ano_formatado]
+                semanas_ja_planejadas = planos_do_ano['SEMANA'].tolist()
+
+            # 3. Gera a lista completa e filtra as disponíveis
             todas_semanas = util.gerar_semanas()
-            sem_p = c2.selectbox("Semana de Referência:", todas_semanas, key=f"sem_sel_{v}")
+            
+            # Se estiver em modo REFINO, a semana atual deve aparecer mesmo se já existir
+            if is_refinando:
+                semanas_disponiveis = [s for s in todas_semanas]
+                index_refino = 0
+                sem_alvo = st.session_state.refino_ativo['semana']
+                for i, s in enumerate(semanas_disponiveis):
+                    if sem_alvo in s:
+                        index_refino = i
+                        break
+                sem_p = c2.selectbox("Semana de Referência (MODO REFINO):", semanas_disponiveis, index=index_refino, key=f"sem_sel_{v}")
+            else:
+                # MODO NORMAL: Esconde as semanas que já estão no banco
+                semanas_disponiveis = [s for s in todas_semanas if s.split(" (")[0] not in semanas_ja_planejadas]
+                
+                if not semanas_disponiveis:
+                    st.warning(f"✅ Todas as semanas do {ano_formatado} já foram planejadas!")
+                    sem_p = c2.selectbox("Semana de Referência:", ["Safra Completa"], disabled=True, key=f"sem_sel_{v}")
+                else:
+                    sem_p = c2.selectbox("Semana de Referência (Disponíveis):", semanas_disponiveis, key=f"sem_sel_{v}")
+
             sem_limpa = sem_p.split(" (")[0]
             trim_atual = sem_p.split(" - ")[1] if " - " in sem_p else "I Trimestre"
             modo_p = c3.radio("Método:", ["📖 Livro Didático", "🎛️ Manual (Banco)"], horizontal=True, key=f"modo_p_{v}")
