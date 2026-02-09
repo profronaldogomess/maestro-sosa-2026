@@ -766,15 +766,15 @@ if menu == "📅 Planejamento (Ponto ID)":
                 c_filt1, c_filt2 = st.columns([1, 2])
                 if not df_matriz_ano.empty:
                     lista_eixos = sorted(df_matriz_ano['EIXO'].unique().tolist())
-                    sel_eixo = st.multiselect("1. Eixo:", lista_eixos, key=f"h_eixo_{v}")
+                    sel_eixo = st.multiselect("1. Eixo:", lista_eixos, key=f"ponto_id_eixo_{v}")
                     if sel_eixo:
                         df_cont = df_matriz_ano[df_matriz_ano['EIXO'].isin(sel_eixo)]
                         lista_conts = sorted(df_cont['CONTEUDO_ESPECIFICO'].unique().tolist())
-                        sel_cont = st.multiselect("2. Conteúdo:", lista_conts, key=f"h_cont_{v}")
+                        sel_cont = st.multiselect("2. Conteúdo:", lista_conts, key=f"ponto_id_cont_{v}")
                         if sel_cont:
                             df_obj = df_cont[df_cont['CONTEUDO_ESPECIFICO'].isin(sel_cont)]
                             lista_objs = sorted(df_obj['OBJETIVOS'].unique().tolist())
-                            sel_obj = st.multiselect("3. Objetivos:", lista_objs, key=f"h_obj_{v}")
+                            sel_obj = st.multiselect("3. Objetivos:", lista_objs, key=f"ponto_id_obj_{v}")
                             f_eixo, f_cont, f_obj = " / ".join(sel_eixo), " / ".join(sel_cont), " \n ".join(sel_obj)
                 ctx_ia = f"MÉTODO MANUAL. DADOS SELECIONADOS: EIXO: {f_eixo}, CONTEÚDO: {f_cont}, OBJETIVOS: {f_obj}."
             
@@ -782,11 +782,14 @@ if menu == "📅 Planejamento (Ponto ID)":
                 st.markdown("#### 📖 Mapeamento Automático (IA Perita)")
                 cx1, cx2 = st.columns([2, 1])
                 lista_mats = df_materiais["NOME_ARQUIVO"].tolist() if not df_materiais.empty else []
-                sel_mat = cx1.multiselect("Livro Utilizado:", lista_mats, key=f"livro_sel_{v}")
-                pags = cx2.text_input("Páginas:", placeholder="Ex: 12-23", key=f"pags_{v}")
+                # CHAVE ALTERADA PARA: ponto_id_livro_sel_{v}
+                sel_mat = cx1.multiselect("Livro Utilizado:", lista_mats, key=f"ponto_id_livro_sel_{v}")
+                # CHAVE ALTERADA PARA: ponto_id_pags_{v}
+                pags = cx2.text_input("Páginas:", placeholder="Ex: 12-23", key=f"ponto_id_pags_{v}")
                 ctx_ia = f"MÉTODO LIVRO: {sel_mat} PÁGINAS: {pags}. A IA DEVE DISCERNIR O CONTEÚDO NA MATRIZ ABAIXO."
 
-            strat = st.text_area("Estratégia / Observações / Descrição do Evento:", key=f"strat_{v}")
+            # CHAVE ALTERADA PARA: ponto_id_strat_{v}
+            strat = st.text_area("Estratégia / Observações / Descrição do Evento:", key=f"ponto_id_strat_{v}")
 
         if st.button("🚀 COMPILAR PLANEJAMENTO BNCC", use_container_width=True, type="primary", key=f"btn_compilar_{v}"):
             with st.spinner("Maestro SOSA realizando Perícia Curricular..."):
