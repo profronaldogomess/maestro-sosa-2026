@@ -15,8 +15,19 @@ from datetime import datetime
 # ==============================================================================
 # FUNÇÃO AUXILIAR: PARSER DE NEGRITO (MARKDOWN PARA WORD)
 # ==============================================================================
+import os
+import io
+import re
+from docx import Document
+from docx.shared import Inches, Pt, RGBColor
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.table import WD_ALIGN_VERTICAL
+from docx.enum.section import WD_SECTION
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
+
 def set_row_height(row, height_pt):
-    """Define a altura mínima da linha da tabela"""
+    """Define a altura mínima da linha da tabela para dar respiro"""
     tr = row._tr
     trPr = tr.get_or_add_trPr()
     trHeight = OxmlElement('w:trHeight')
@@ -25,12 +36,9 @@ def set_row_height(row, height_pt):
     trPr.append(trHeight)
 
 def adicionar_texto_formatado(paragraph, texto):
-    """Converte padrões **texto** em negrito real preservando acentos e limpando ruídos"""
+    """Converte padrões **texto** em negrito real preservando acentos"""
     import re
-    # Limpa símbolos que poluem o visual mas mantém a pontuação
-    texto_limpo = texto.replace("➔", "").replace("->", "").strip()
-    
-    # Divide o texto para encontrar negritos (**)
+    texto_limpo = texto.replace("➔", "").replace("->", "").replace("single", "Bastão").strip()
     partes = re.split(r'(\*\*.*?\*\*)', texto_limpo)
     for parte in partes:
         if parte.startswith('**') and parte.endswith('**'):
@@ -39,8 +47,8 @@ def adicionar_texto_formatado(paragraph, texto):
         else:
             paragraph.add_run(parte)
 
-def configurar_cabecalho_atividade_limpo(doc, info, tipo_label):
-    """Gera o cabeçalho oficial com DATA e sem campo de nota"""
+def configurar_cabecalho_mestre(doc, info, tipo_label):
+    """Gera o cabeçalho de ELITE: Sem campo de NOTA, com DATA e altura expandida"""
     table = doc.add_table(rows=3, cols=5)
     table.style = 'Table Grid'
     
@@ -63,7 +71,7 @@ def configurar_cabecalho_atividade_limpo(doc, info, tipo_label):
     c_trim.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
     c_trim.paragraphs[0].add_run(info.get('trimestre', 'I Trimestre')).font.bold = True
 
-    # Linha 1: Aluno
+    # Linha 1: Aluno (Largura total)
     c_aluno = table.cell(1, 1).merge(table.cell(1, 4))
     c_aluno.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
     c_aluno.paragraphs[0].add_run("ALUNO(A):")
@@ -91,12 +99,11 @@ def configurar_cabecalho_atividade_limpo(doc, info, tipo_label):
     return table
 
 # ==============================================================================
-# 1. MATERIAL DO ALUNO REGULAR (VERSÃO ELITE V48 - CORREÇÃO DE FLUXO)
+# 1. MATERIAL DO ALUNO REGULAR (CORRIGIDO)
 # ==============================================================================
 def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     file_stream = io.BytesIO()
     doc = Document()
-    
     section = doc.sections[0]
     section.top_margin, section.bottom_margin = Inches(0.3), Inches(0.3)
     section.left_margin, section.right_margin = Inches(0.3), Inches(0.3)
@@ -105,11 +112,10 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     style.font.name = 'Arial'
     style.font.size = Pt(10.5)
 
-    # 1. Cabeçalho (Coluna Única)
-    configurar_cabecalho_atividade_limpo(doc, info, "ATIVIDADE DE SALA")
+    # CHAMADA CORRIGIDA AQUI:
+    configurar_cabecalho_mestre(doc, info, "ATIVIDADE DE SALA")
     doc.add_paragraph()
 
-    # 2. Conteúdo (Duas Colunas)
     new_section = doc.add_section(WD_SECTION.CONTINUOUS)
     sectPr = new_section._sectPr
     cols = sectPr.xpath('./w:cols')[0]
@@ -120,127 +126,80 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     for linha in linhas:
         l_s = linha.strip()
         if not l_s: continue
-        
         p = doc.add_paragraph()
         p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
         p.paragraph_format.space_after = Pt(12)
 
-        # --- ORDEM DE PRIORIDADE CORRIGIDA ---
-        
-        # PRIORIDADE 1: É UMA QUESTÃO? (Deve vir antes do título para não centralizar)
-        if l_s.upper().startswith("QUESTÃO") or l_s.upper().startswith("QUESTAO"):
-            # Regex aprimorada para capturar o rótulo e o texto
-            match = re.match(r"^(QUEST[AÃ]O\s+\d+)([\.\s:]+)(.*)", l_s, re.IGNORECASE)
-            if match:
-                rotulo = match.group(1).upper().strip()
-                texto_q = match.group(3).strip()
-                
-                run_r = p.add_run(f"{rotulo}. ")
-                run_r.bold = True
-                # Adiciona o texto da questão na mesma linha, tratando negritos internos
-                adicionar_texto_formatado(p, texto_q)
-            else:
-                adicionar_texto_formatado(p, l_s)
-            p.paragraph_format.space_before = Pt(8)
-
-        # PRIORIDADE 2: É UM TÍTULO? (Apenas se não for questão)
-        elif any(x in l_s.upper() for x in ["ATIVIDADE DE", "JORNADA", "HISTÓRIA E EVOLUÇÃO", "MATEMÁTICA"]):
+        if any(x in l_s.upper() for x in ["ATIVIDADE DE", "JORNADA", "HISTÓRIA", "MATEMÁTICA"]):
             run = p.add_run(l_s.upper().replace('**', ''))
             run.bold = True
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-
-        # PRIORIDADE 3: É UM PROMPT DE IMAGEM?
+        elif "QUESTÃO" in l_s.upper():
+            match = re.match(r"^(QUEST[AÃ]O\s+\d+)([\.\s:]+)(.*)", l_s, re.IGNORECASE)
+            if match:
+                run_r = p.add_run(f"{match.group(1).upper()}. ")
+                run_r.bold = True
+                adicionar_texto_formatado(p, match.group(3).strip())
+            else: adicionar_texto_formatado(p, l_s)
         elif "[" in l_s and "PROMPT IMAGEM" in l_s.upper():
             run = p.add_run(l_s)
-            run.font.size = Pt(8)
-            run.font.italic = True
+            run.font.size, run.font.italic = Pt(8), True
             run.font.color.rgb = RGBColor(120, 120, 120)
-        
-        # PRIORIDADE 4: TEXTO NORMAL
-        else:
-            adicionar_texto_formatado(p, l_s)
+        else: adicionar_texto_formatado(p, l_s)
 
     doc.save(file_stream)
     file_stream.seek(0)
     return file_stream
 
 # ==============================================================================
-# 3. MATERIAL PEI ADAPTADO (VERSÃO ELITE V50 - SIMETRIA TOTAL E COLUNAS)
+# 3. MATERIAL PEI ADAPTADO (CORRIGIDO)
 # ==============================================================================
 def gerar_docx_pei_v25(titulo_doc, conteudo, info):
     file_stream = io.BytesIO()
     doc = Document()
-    
-    # --- 1. CONFIGURAÇÃO DE MARGENS MÍNIMAS (APROVEITAMENTO TOTAL A4) ---
     section = doc.sections[0]
-    section.top_margin = Inches(0.3)
-    section.bottom_margin = Inches(0.3)
-    section.left_margin = Inches(0.3)
-    section.right_margin = Inches(0.3)
-    section.page_width = Inches(8.27)
-    section.page_height = Inches(11.69)
+    section.top_margin, section.bottom_margin = Inches(0.3), Inches(0.3)
+    section.left_margin, section.right_margin = Inches(0.3), Inches(0.3)
 
     style = doc.styles['Normal']
     style.font.name = 'Arial'
-    style.font.size = Pt(11) # Mantendo o padrão do regular para simetria
+    style.font.size = Pt(11)
 
-    # --- 2. CABEÇALHO (SEÇÃO 1 - COLUNA ÚNICA) ---
-    # Utiliza a função limpa que removeu o campo "NOTA"
-    configurar_cabecalho_atividade_limpo(doc, info, "ATIVIDADE ADAPTADA")
+    # CHAMADA CORRIGIDA AQUI:
+    configurar_cabecalho_mestre(doc, info, "ATIVIDADE ADAPTADA")
     doc.add_paragraph()
 
-    # --- 3. QUEBRA DE SEÇÃO PARA DUAS COLUNAS (IGUAL AO REGULAR) ---
     new_section = doc.add_section(WD_SECTION.CONTINUOUS)
-    new_section.top_margin = Inches(0.1)
-    
     sectPr = new_section._sectPr
     cols = sectPr.xpath('./w:cols')[0]
     cols.set(qn('w:num'), '2')
-    cols.set(qn('w:space'), '400') # Espaçamento entre colunas otimizado
+    cols.set(qn('w:space'), '400')
 
     linhas = conteudo.split('\n')
     for linha in linhas:
         l_s = linha.strip()
         if not l_s: continue
-        
         p = doc.add_paragraph()
         p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
         p.paragraph_format.space_after = Pt(12)
 
-        # --- LÓGICA DE FORMATAÇÃO PEI ---
-
-        # Títulos e Marcadores de Andaime (Bold Caps)
-        if any(x in l_s.upper() for x in ["PARA LEMBRAR", "OBJETIVO", "INSTRUÇÕES", "ATIVIDADE", "TEMA:"]):
+        if any(x in l_s.upper() for x in ["PARA LEMBRAR", "OBJETIVO", "INSTRUÇÕES", "ATIVIDADE"]):
             txt_limpo = l_s.replace("[", "").replace("]", "").replace(":", "").upper()
-            run = p.add_run(txt_limpo)
+            run = p.add_run(f"█▓▒░ {txt_limpo} ░▒▓█")
             run.bold = True
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            p.paragraph_format.space_before = Pt(10)
-
-        # Questões PEI Inline (Rótulo Bold + Texto Normal)
         elif "QUESTÃO" in l_s.upper():
-            # Regex para capturar "QUESTÃO X" ou "QUESTÃO PEI X"
-            match = re.match(r"^(QUEST[AÃ]O\s+(?:PEI\s+)?\d+)[\.\s:]*(.*)", l_s, re.IGNORECASE)
+            match = re.match(r"^(QUEST[AÃ]O\s+(?:PEI\s+)?\d+)([\.\s:]+)(.*)", l_s, re.IGNORECASE)
             if match:
-                rotulo = match.group(1).upper().strip()
-                texto_q = match.group(2).strip()
-                run_r = p.add_run(f"{rotulo}. ")
+                run_r = p.add_run(f"{match.group(1).upper()}. ")
                 run_r.bold = True
-                adicionar_texto_formatado(p, texto_q)
-            else:
-                adicionar_texto_formatado(p, l_s)
-            p.paragraph_format.space_before = Pt(8)
-
-        # Prompts de Imagem (Fonte 8, Cinza, Itálico)
+                adicionar_texto_formatado(p, match.group(3).strip())
+            else: adicionar_texto_formatado(p, l_s)
         elif "[" in l_s and "PROMPT IMAGEM" in l_s.upper():
             run = p.add_run(l_s)
-            run.font.size = Pt(8)
-            run.font.italic = True
-            run.font.color.rgb = RGBColor(120, 120, 120)
-        
-        # Texto Normal
-        else:
-            adicionar_texto_formatado(p, l_s)
+            run.font.size, run.font.italic = Pt(9), True
+            run.font.color.rgb = RGBColor(100, 100, 100)
+        else: adicionar_texto_formatado(p, l_s)
 
     doc.save(file_stream)
     file_stream.seek(0)
