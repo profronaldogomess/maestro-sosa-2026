@@ -15,12 +15,20 @@ from datetime import datetime
 # ==============================================================================
 # FUNÇÃO AUXILIAR: PARSER DE NEGRITO (MARKDOWN PARA WORD)
 # ==============================================================================
+def set_row_height(row, height_pt):
+    """Define a altura mínima da linha da tabela"""
+    tr = row._tr
+    trPr = tr.get_or_add_trPr()
+    trHeight = OxmlElement('w:trHeight')
+    trHeight.set(qn('w:val'), str(int(height_pt * 20))) 
+    trHeight.set(qn('w:hRule'), "atLeast")
+    trPr.append(trHeight)
+
 def adicionar_texto_formatado(paragraph, texto):
-    """Converte padrões **texto** em negrito real e limpa símbolos informais"""
+    """Converte padrões **texto** em negrito real e limpa símbolos"""
     import re
     texto_limpo = re.sub(r'[^\x00-\x7F]+', '', texto)
     texto_limpo = texto_limpo.replace("->", "").replace("➔", "").strip()
-    
     partes = re.split(r'(\*\*.*?\*\*)', texto_limpo)
     for parte in partes:
         if parte.startswith('**') and parte.endswith('**'):
@@ -30,33 +38,45 @@ def adicionar_texto_formatado(paragraph, texto):
             paragraph.add_run(parte)
 
 def configurar_cabecalho_atividade_limpo(doc, info, tipo_label):
-    """Gera o cabeçalho oficial ocupando a largura total da página"""
-    # Tabela de 3 linhas e 4 colunas
+    """Gera o cabeçalho oficial com altura expandida e sem campo de nota"""
     table = doc.add_table(rows=3, cols=4)
     table.style = 'Table Grid'
     
-    # Ajuste de larguras para margens de 0.3" (Largura total A4 útil ~7.67")
-    widths = [Inches(0.8), Inches(4.2), Inches(1.0), Inches(1.67)]
-    for i, w in enumerate(widths): 
-        table.columns[i].width = w
+    # Ajuste de larguras (Margens 0.3")
+    widths = [Inches(0.9), Inches(4.2), Inches(1.0), Inches(1.67)]
+    for i, w in enumerate(widths): table.columns[i].width = w
+
+    # --- AJUSTE DE ALTURA (RESPIRO DO CABEÇALHO) ---
+    for row in table.rows:
+        set_row_height(row, 28) # Altura de 28 pontos para cada linha
 
     # Linha 0: Logo, Escola e Trimestre
     c_logo = table.cell(0, 0).merge(table.cell(2, 0))
     c_escola = table.cell(0, 1).merge(table.cell(0, 2))
     p_esc = c_escola.paragraphs[0]
+    p_esc.alignment = WD_ALIGN_PARAGRAPH.LEFT
     p_esc.add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA").font.bold = True
     
-    table.cell(0, 3).paragraphs[0].add_run(info.get('trimestre', 'I Trimestre')).font.bold = True
+    c_trim = table.cell(0, 3)
+    c_trim.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+    c_trim.paragraphs[0].add_run(info.get('trimestre', 'I Trimestre')).font.bold = True
 
     # Linha 1: Aluno
     c_aluno = table.cell(1, 1).merge(table.cell(1, 3))
+    c_aluno.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
     c_aluno.paragraphs[0].add_run("ALUNO(A):")
 
     # Linha 2: Professor, Turma e Tipo
-    table.cell(2, 1).paragraphs[0].add_run("PROF: Ronaldo Gomes")
-    table.cell(2, 2).paragraphs[0].add_run(f"TURMA: {info.get('ano', '6º')}")
+    c_prof = table.cell(2, 1)
+    c_prof.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+    c_prof.paragraphs[0].add_run("PROF: Ronaldo Gomes")
+    
+    c_turma = table.cell(2, 2)
+    c_turma.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+    c_turma.paragraphs[0].add_run(f"TURMA: {info.get('ano', '6º')}")
     
     c_tipo = table.cell(2, 3)
+    c_tipo.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
     p_tipo = c_tipo.paragraphs[0]
     p_tipo.alignment = WD_ALIGN_PARAGRAPH.CENTER
     run_tipo = p_tipo.add_run(tipo_label)
@@ -68,43 +88,35 @@ def configurar_cabecalho_atividade_limpo(doc, info, tipo_label):
         c_logo.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
         p = c_logo.paragraphs[0]
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        try:
-            p.add_run().add_picture(logo_path, width=Inches(0.65))
+        try: p.add_run().add_picture(logo_path, width=Inches(0.7))
         except: pass
     return table
 
 # ==============================================================================
-# 1. MATERIAL DO ALUNO REGULAR (ESTRUTURA A4 TOTAL CORRIGIDA)
+# 1. MATERIAL DO ALUNO REGULAR (VERSÃO ELITE V46 - INLINE E ALTURA)
 # ==============================================================================
 def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     file_stream = io.BytesIO()
     doc = Document()
     
-    # --- CONFIGURAÇÃO DE MARGENS MÍNIMAS (APROVEITAMENTO TOTAL) ---
     section = doc.sections[0]
-    section.top_margin = Inches(0.3)
-    section.bottom_margin = Inches(0.3)
-    section.left_margin = Inches(0.3)
-    section.right_margin = Inches(0.3)
-    section.page_width = Inches(8.27)
-    section.page_height = Inches(11.69)
+    section.top_margin, section.bottom_margin = Inches(0.3), Inches(0.3)
+    section.left_margin, section.right_margin = Inches(0.3), Inches(0.3)
 
     style = doc.styles['Normal']
     style.font.name = 'Arial'
-    style.font.size = Pt(10.5) # Fonte levemente menor para caber mais conteúdo
+    style.font.size = Pt(10.5)
 
-    # --- PASSO 1: CABEÇALHO (SEÇÃO 1 - COLUNA ÚNICA) ---
+    # Cabeçalho (Coluna Única)
     configurar_cabecalho_atividade_limpo(doc, info, "ATIVIDADE DE SALA")
     doc.add_paragraph()
 
-    # --- PASSO 2: QUEBRA DE SEÇÃO PARA DUAS COLUNAS ---
+    # Conteúdo (Duas Colunas)
     new_section = doc.add_section(WD_SECTION.CONTINUOUS)
-    new_section.top_margin = Inches(0.1) # Espaço mínimo após cabeçalho
-    
     sectPr = new_section._sectPr
     cols = sectPr.xpath('./w:cols')[0]
     cols.set(qn('w:num'), '2')
-    cols.set(qn('w:space'), '400') # Espaçamento entre colunas otimizado
+    cols.set(qn('w:space'), '400')
 
     linhas = conteudo.split('\n')
     for linha in linhas:
@@ -113,7 +125,7 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
         
         p = doc.add_paragraph()
         p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-        p.paragraph_format.space_after = Pt(10)
+        p.paragraph_format.space_after = Pt(12)
 
         # Títulos
         if any(x in l_s.upper() for x in ["ATIVIDADE DE", "JORNADA", "DESAFIO", "SISTEMAS DE"]):
@@ -121,18 +133,18 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
             run.bold = True
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER
         
-        # Questões com Rótulo Bold
+        # REGRA INLINE: Questão e Texto na mesma linha
         elif "QUESTÃO" in l_s.upper():
-            match = re.match(r"^(QUEST[AÃ]O\s+\d+[\.\s]*)[:\-\s]*(.*)", l_s, re.IGNORECASE)
+            match = re.match(r"^(QUEST[AÃ]O\s+\d+)[\.\s:]*(.*)", l_s, re.IGNORECASE)
             if match:
-                rotulo = match.group(1).upper().replace(":", "").strip()
+                rotulo = match.group(1).upper().strip()
                 texto_q = match.group(2).strip()
                 run_r = p.add_run(f"{rotulo}. ")
                 run_r.bold = True
-                p.add_run(texto_q)
+                # Adiciona o texto da questão imediatamente após o rótulo
+                adicionar_texto_formatado(p, texto_q)
             else:
-                run = p.add_run(l_s)
-                run.bold = True
+                adicionar_texto_formatado(p, l_s)
             p.paragraph_format.space_before = Pt(8)
 
         # Prompts de Imagem
@@ -142,45 +154,6 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
             run.font.italic = True
             run.font.color.rgb = RGBColor(120, 120, 120)
         
-        else:
-            adicionar_texto_formatado(p, l_s)
-
-    doc.save(file_stream)
-    file_stream.seek(0)
-    return file_stream
-
-# ==============================================================================
-# 3. MATERIAL PEI ADAPTADO (MARGENS OTIMIZADAS)
-# ==============================================================================
-def gerar_docx_pei_v25(titulo_doc, conteudo, info):
-    file_stream = io.BytesIO()
-    doc = Document()
-    
-    section = doc.sections[0]
-    section.top_margin = Inches(0.3)
-    section.bottom_margin = Inches(0.3)
-    section.left_margin = Inches(0.4)
-    section.right_margin = Inches(0.4)
-
-    style = doc.styles['Normal']
-    style.font.name = 'Arial'
-    style.font.size = Pt(12)
-
-    configurar_cabecalho_atividade_limpo(doc, info, "ATIVIDADE ADAPTADA")
-    doc.add_paragraph()
-
-    linhas = conteudo.split('\n')
-    for linha in linhas:
-        l_s = linha.strip()
-        if not l_s: continue
-        
-        p = doc.add_paragraph()
-        p.paragraph_format.space_after = Pt(12)
-        
-        if any(x in l_s.upper() for x in ["PARA LEMBRAR", "OBJETIVO", "INSTRUÇÕES", "ATIVIDADE"]):
-            run = p.add_run(l_s.upper().replace('**', ''))
-            run.bold = True
-            p.paragraph_format.space_before = Pt(10)
         else:
             adicionar_texto_formatado(p, l_s)
 
