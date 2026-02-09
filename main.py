@@ -909,12 +909,24 @@ if menu == "📅 Planejamento (Ponto ID)":
                     with st.status("Sincronizando Hub Acadêmico...") as status:
                         final_ano_str = f"{ano_p}º"
                         nome_arquivo = f"PLANO_{ano_p}ANO_{sem_limpa.replace(' ', '')}"
+                        
+                        # 1. LIMPEZA DE VERSÕES ANTIGAS
                         db.excluir_plano_completo(sem_limpa, final_ano_str)
+                        
+                        # 2. PREPARAÇÃO DA "FREQUÊNCIA" DE TRANSMISSÃO (LIVRO/PÁGINAS)
+                        if modo_p == "📖 Livro Didático":
+                            # Formata exatamente como o Criador de Aulas vai buscar via Regex
+                            transmissao_livro = f"MÉTODO LIVRO: [{sel_mat}] PÁGINAS: {pags}."
+                        else:
+                            transmissao_livro = "MÉTODO: MANUAL/BANCO."
+
                         ed_recursos = ai.extrair_tag(txt_bruto, "RECURSOS_DIDATICOS")
                         
                         metodologia_unificada = f"AULA 01:\n{ed_a1}\n\nAULA 02:\n{ed_a2}"
-                        if ed_a3 != "N/A": metodologia_unificada += f"\n\nAULA 03 (SÁBADO LETIVO):\n{ed_a3}"
+                        if ed_a3 != "N/A": 
+                            metodologia_unificada += f"\n\nAULA 03 (SÁBADO LETIVO):\n{ed_a3}"
                         
+                        # 3. GERAÇÃO DO DOCX
                         dados_docx = {
                             "geral": f"[{ed_bncc}] {ed_geral}", 
                             "especificos": ed_espec, 
@@ -929,7 +941,9 @@ if menu == "📅 Planejamento (Ponto ID)":
                         link_drive = db.subir_e_converter_para_google_docs(doc_io, nome_arquivo, trimestre=trim_atual, categoria=final_ano_str, semana=sem_limpa, modo="PLANEJAMENTO")
                         
                         if "https" in str(link_drive):
+                            # 4. CONSOLIDAÇÃO NO BANCO COM O DNA DE TRANSMISSÃO
                             final_txt = (
+                                f"{transmissao_livro} \n" # <--- AQUI ESTÁ A CHAVE DA TRANSMISSÃO
                                 f"[BNCC_CODE] {ed_bncc} \n"
                                 f"[CONTEUDO_GERAL] {ed_geral} \n"
                                 f"[CONTEUDOS_ESPECIFICOS] {ed_espec} \n"
@@ -942,12 +956,20 @@ if menu == "📅 Planejamento (Ponto ID)":
                                 f"[ADAPTACAO_PEI] {ed_pei} \n"
                                 f"--- LINK DRIVE --- {link_drive}"
                             )
-                            db.salvar_no_banco("DB_PLANOS", [datetime.now().strftime("%d/%m/%Y"), sem_limpa, final_ano_str, trim_atual, "HUB_ATIVO", final_txt, link_drive])
-                            status.update(label="✅ Plano Acadêmico Sincronizado!", state="complete")
+                            
+                            db.salvar_no_banco("DB_PLANOS", [
+                                datetime.now().strftime("%d/%m/%Y"), 
+                                sem_limpa, 
+                                final_ano_str, 
+                                trim_atual, 
+                                "HUB_ATIVO", 
+                                final_txt, 
+                                link_drive
+                            ])
+                            
+                            status.update(label="✅ Plano Sincronizado e Transmitindo!", state="complete")
                             st.balloons()
                             reset_planejamento()
-                        else:
-                            st.error(f"Falha no Upload: {link_drive}")
 
     # --- ABA 2: DASHBOARD DE PRODUÇÃO ---
     with tab_producao:
