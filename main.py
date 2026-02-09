@@ -349,35 +349,66 @@ if menu == "🧪 Criador de Aulas":
             st.warning("⚠️ O Triple-Sync salvará Aluno, Professor e PEI vinculados ao Plano.")
             if st.button("💾 EXECUTAR TRIPLE-SYNC", use_container_width=True, type="primary", key=f"btn_triple_{v}"):
                 with st.status("Iniciando Protocolo de Sincronia...") as status:
-                    nome_final = s_id # O nome bonito já é o ID
+                    meta = st.session_state.get("lab_meta", {})
+                    s_id = st.session_state.get("sosa_id_atual", "SEM-ID")
+                    
+                    nome_final = s_id 
                     ano_str = f"{meta.get('ano')}º"
                     semana_ref = meta.get('semana_ref', 'AVULSA')
                     trimestre_ref = meta.get('trimestre', 'I Trimestre')
                     
-                    # Contagem de questões para o cabeçalho
-                    ed_alu_val = ai.extrair_tag(txt_base, "ALUNO")
+                    # Captura os textos das abas
+                    ed_prof_val = ed_prof
+                    ed_alu_val = ed_alu
+                    ed_res_val = ed_res
+                    ed_pei_val = ed_pei_mat
+                    ed_pei_gab_val = ed_pei_gab
+
+                    # --- BLINDAGEM DE TAGS (FORÇA A ESTRUTURA CORRETA) ---
+                    conteudo_banco = (
+                        f"[SOSA_ID] {s_id}\n"
+                        f"[AULA_ALVO] {meta.get('aula_alvo')}\n"
+                        f"[PROFESSOR]\n{ed_prof_val}\n\n"
+                        f"[ALUNO]\n{ed_alu_val}\n\n"
+                        f"[GABARITO]\n{ed_res_val}\n\n"
+                        f"[PEI]\n{ed_pei_val}\n\n"
+                        f"[GABARITO_PEI]\n{ed_pei_gab_val}\n\n"
+                    )
+
+                    # Contagem de questões
                     qtd_q_real = len(re.findall(r'QUESTÃO', ed_alu_val.upper()))
                     info_doc = {"ano": ano_str, "trimestre": trimestre_ref, "valor": "0,00", "valor_questao": "0,00", "qtd_questoes": qtd_q_real}
 
                     db.excluir_registro_com_drive("DB_AULAS_PRONTAS", nome_final)
                     
+                    # Geração dos arquivos (Usa o conteúdo blindado)
                     doc_alu = exporter.gerar_docx_aluno_v24(nome_final, ed_alu_val, info_doc)
                     link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{nome_final}_ALUNO", modo="AULA")
                     
-                    doc_prof = exporter.gerar_docx_professor_v25(nome_final, ai.extrair_tag(txt_base, "PROFESSOR"), {"ano": ano_str, "semana": semana_ref, "trimestre": trimestre_ref})
+                    doc_prof = exporter.gerar_docx_professor_v25(nome_final, ed_prof_val, {"ano": ano_str, "semana": semana_ref, "trimestre": trimestre_ref})
                     link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_final}_PROF", modo="AULA")
                     
                     link_pei = "N/A"
-                    ed_pei_val = ai.extrair_tag(txt_base, "PEI")
                     if len(ed_pei_val) > 10:
                         doc_pei = exporter.gerar_docx_pei_v25(f"{nome_final}_PEI", ed_pei_val, info_doc)
                         link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_final}_PEI", modo="AULA")
                     
                     if "https" in str(link_alu):
-                        # Salva o texto bruto com as tags para permitir refinos futuros
-                        db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), semana_ref, nome_final, txt_base, ano_str, link_alu])
+                        # Adiciona os links ao final do conteúdo do banco
+                        conteudo_banco += f"--- LINKS ---\nAluno({link_alu}) Prof({link_prof}) PEI({link_pei})"
+                        
+                        db.salvar_no_banco("DB_AULAS_PRONTAS", [
+                            datetime.now().strftime("%d/%m/%Y"), 
+                            semana_ref, 
+                            nome_final, 
+                            conteudo_banco, 
+                            ano_str, 
+                            link_alu
+                        ])
                         status.update(label="✅ Sincronia Concluída!", state="complete")
-                        st.balloons(); time.sleep(1); reset_laboratorio()
+                        st.balloons()
+                        time.sleep(1)
+                        reset_laboratorio()
 
         st.markdown("---")
         with st.container(border=True):
