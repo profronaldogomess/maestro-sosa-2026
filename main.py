@@ -324,35 +324,37 @@ if menu == "🧪 Criador de Aulas":
 
     is_hub = st.session_state.get("lab_meta", {}).get("tipo") == "PRODUÇÃO_HUB"
 
-    # --- ÁREA DE EXIBIÇÃO E REFINO (SÓ APARECE APÓS GERAR) ---
+    # --- ÁREA DE EXIBIÇÃO E REFINO ---
     if "lab_temp" in st.session_state and "[PROFESSOR]" in st.session_state.lab_temp:
         txt_base = st.session_state.lab_temp
         s_id = st.session_state.get("sosa_id_atual", "SEM-ID")
         meta = st.session_state.get("lab_meta", {})
 
+        # Exibição com Nome de Elite
         st.success(f"💎 Material Gerado: **{s_id}**")
         
         t_prof, t_alu, t_gab, t_pei, t_sync = st.tabs(["👨‍🏫 Professor", "📝 Aluno", "✅ Gabarito/Rubrica", "♿ PEI", "☁️ SINCRONIA"])
         
-        with t_prof: st.text_area("Mapa de Regência:", ai.extrair_tag(txt_base, "PROFESSOR"), height=450, key=f"ed_prof_{v}")
-        with t_alu: st.text_area("Folha do Aluno:", ai.extrair_tag(txt_base, "ALUNO"), height=450, key=f"ed_alu_{v}")
-        with t_gab: st.text_area("Gabarito:", ai.extrair_tag(txt_base, "GABARITO"), height=350, key=f"ed_res_{v}")
+        with t_prof: ed_prof = st.text_area("Mapa de Regência:", ai.extrair_tag(txt_base, "PROFESSOR"), height=450, key=f"ed_prof_{v}")
+        with t_alu: ed_alu = st.text_area("Folha do Aluno:", ai.extrair_tag(txt_base, "ALUNO"), height=450, key=f"ed_alu_{v}")
+        with t_gab: ed_res = st.text_area("Gabarito:", ai.extrair_tag(txt_base, "GABARITO"), height=350, key=f"ed_res_{v}")
         
         with t_pei:
             st.subheader("♿ Adaptação Curricular")
             c_p1, c_p2 = st.columns(2)
-            with c_p1: st.text_area("📄 Material PEI:", ai.extrair_tag(txt_base, "PEI"), height=400, key=f"ed_pei_mat_{v}")
-            with c_p2: st.text_area("✅ Gabarito PEI:", ai.extrair_tag(txt_base, "GABARITO_PEI"), height=400, key=f"ed_pei_gab_{v}")
+            with c_p1: ed_pei_mat = st.text_area("📄 Material PEI:", ai.extrair_tag(txt_base, "PEI"), height=400, key=f"ed_pei_mat_{v}")
+            with c_p2: ed_pei_gab = st.text_area("✅ Gabarito PEI:", ai.extrair_tag(txt_base, "GABARITO_PEI"), height=400, key=f"ed_pei_gab_{v}")
 
         with t_sync:
             st.warning("⚠️ O Triple-Sync salvará Aluno, Professor e PEI vinculados ao Plano.")
             if st.button("💾 EXECUTAR TRIPLE-SYNC", use_container_width=True, type="primary", key=f"btn_triple_{v}"):
                 with st.status("Iniciando Protocolo de Sincronia...") as status:
-                    nome_final = s_id
+                    nome_final = s_id # O nome bonito já é o ID
                     ano_str = f"{meta.get('ano')}º"
                     semana_ref = meta.get('semana_ref', 'AVULSA')
                     trimestre_ref = meta.get('trimestre', 'I Trimestre')
                     
+                    # Contagem de questões para o cabeçalho
                     ed_alu_val = ai.extrair_tag(txt_base, "ALUNO")
                     qtd_q_real = len(re.findall(r'QUESTÃO', ed_alu_val.upper()))
                     info_doc = {"ano": ano_str, "trimestre": trimestre_ref, "valor": "0,00", "valor_questao": "0,00", "qtd_questoes": qtd_q_real}
@@ -372,6 +374,7 @@ if menu == "🧪 Criador de Aulas":
                         link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_final}_PEI", modo="AULA")
                     
                     if "https" in str(link_alu):
+                        # Salva o texto bruto com as tags para permitir refinos futuros
                         db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), semana_ref, nome_final, txt_base, ano_str, link_alu])
                         status.update(label="✅ Sincronia Concluída!", state="complete")
                         st.balloons(); time.sleep(1); reset_laboratorio()
@@ -404,6 +407,7 @@ if menu == "🧪 Criador de Aulas":
                     sem_ref = st.session_state.lab_meta.get('semana_ref')
                     ano_ref = f"{st.session_state.lab_meta.get('ano')}º"
                     
+                    # Extração de Herança
                     match_livro = re.search(r"MÉTODO LIVRO: \[(.*?)\]", plano_txt)
                     match_pags = re.search(r"PÁGINAS: (.*?)\.", plano_txt)
                     livro_ref = match_livro.group(1) if match_livro else "Manual/Banco"
@@ -413,6 +417,7 @@ if menu == "🧪 Criador de Aulas":
                     c1.caption(f"Semana: {sem_ref} | Série: {ano_ref}")
                     st.warning(f"📖 **Herança Detectada:** {livro_ref} (Pags: {pags_ref})")
                     
+                    # Escudo de Safra
                     aulas_no_banco = df_aulas[(df_aulas['SEMANA_REF'] == sem_ref) & (df_aulas['ANO'] == ano_ref)]
                     opcoes_aula = []
                     if not any("Aula 1" in str(x) for x in aulas_no_banco['TIPO_MATERIAL']): opcoes_aula.append("Aula 1")
@@ -463,11 +468,13 @@ if menu == "🧪 Criador de Aulas":
                         plano_row = planos_ano[planos_ano["SEMANA"] == sem_lab].iloc[0]
                         plano_txt = str(plano_row['PLANO_TEXTO'])
                         
+                        # Extração de Herança
                         match_livro = re.search(r"MÉTODO LIVRO: \[(.*?)\]", plano_txt)
                         match_pags = re.search(r"PÁGINAS: (.*?)\.", plano_txt)
                         livro_ref = match_livro.group(1) if match_livro else "Manual/Banco"
                         pags_ref = match_pags.group(1) if match_pags else "N/A"
                         
+                        # Escudo de Safra
                         aulas_no_banco = df_aulas[(df_aulas['SEMANA_REF'] == sem_lab) & (df_aulas['ANO'] == ano_ref)]
                         opcoes_aula = []
                         if not any("Aula 1" in str(x) for x in aulas_no_banco['TIPO_MATERIAL']): opcoes_aula.append("Aula 1")
@@ -483,7 +490,7 @@ if menu == "🧪 Criador de Aulas":
                             qtd_q = st.slider("Quantidade de Questões:", 3, 15, 10, key=f"prod_q_{v}")
 
                             if st.button("💎 COMPILAR MATERIAL DE ELITE", use_container_width=True, type="primary"):
-                                with st.spinner("Arquitetando..."):
+                                with st.spinner("Arquitetando Tratado Didático..."):
                                     nome_elite = util.gerar_nome_material_elite(ano_lab, aula_alvo, sem_lab)
                                     st.session_state.sosa_id_atual = nome_elite
                                     st.session_state.lab_meta = {"ano": ano_lab, "trimestre": "I Trimestre", "tipo": aula_alvo, "semana_ref": sem_lab, "aula_alvo": aula_alvo}
