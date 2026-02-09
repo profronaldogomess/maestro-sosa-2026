@@ -768,61 +768,69 @@ if menu == "📅 Planejamento (Ponto ID)":
                 st.info(f"📍 Modo: {tipo_semana} ({sub_tipo})")
                 modo_p = "🎛️ Manual (Banco)"
 
-        # --- 3. SELEÇÃO HIERÁRQUICA / CONTEXTO (BLINDADO) ---
+# --- 3. SELEÇÃO HIERÁRQUICA E TRADUÇÃO CURRICULAR (RIGIDEZ PREFEITURA) ---
         with st.container(border=True):
-            f_eixo, f_cont, f_obj, ctx_ia = "", "", "", "" # Inicialização para evitar NameError
-            
-            if tipo_semana == "Aula Regular":
-                if modo_p == "🎛️ Manual (Banco)":
-                    st.markdown("#### 🎯 Matriz Curricular (Soberania do Banco)")
-                    c_filt1, c_filt2 = st.columns([1, 2])
-                    ano_busca = c_filt1.multiselect("Filtrar por Ano(s):", ["1","2","3","4","5","6","7","8","9"], default=[str(ano_p)], key=f"busc_ano_{v}")
-                    df_filtrado = df_curriculo[df_curriculo['ANO'].astype(str).isin(ano_busca)]
-                    
-                    if not df_filtrado.empty:
-                        lista_eixos = sorted(df_filtrado['EIXO'].unique().tolist())
-                        sel_eixo = st.multiselect("1. Selecione o(s) Eixo(s):", lista_eixos, key=f"h_eixo_{v}")
-                        if sel_eixo:
-                            df_cont = df_filtrado[df_filtrado['EIXO'].isin(sel_eixo)]
-                            lista_conts = sorted(df_cont['CONTEUDO_ESPECIFICO'].unique().tolist())
-                            sel_cont = st.multiselect("2. Selecione os Conteúdos:", lista_conts, key=f"h_cont_{v}")
-                            if sel_cont:
-                                df_obj = df_cont[df_cont['CONTEUDO_ESPECIFICO'].isin(sel_cont)]
-                                lista_objs = sorted(df_obj['OBJETIVOS'].unique().tolist())
-                                sel_obj = st.multiselect("3. Selecione os Objetivos:", lista_objs, key=f"h_obj_{v}")
-                                f_eixo, f_cont, f_obj = " / ".join(sel_eixo), " / ".join(sel_cont), " \n ".join(sel_obj)
-                    ctx_ia = f"MÉTODO MANUAL. EIXO: {f_eixo}. CONTEÚDO: {f_cont}. OBJETIVOS: {f_obj}."
-                else:
-                    st.markdown("#### 📖 Referência Bibliográfica")
-                    cx1, cx2 = st.columns([2, 1])
-                    lista_mats = df_materiais["NOME_ARQUIVO"].tolist() if not df_materiais.empty else []
-                    sel_mat = cx1.multiselect("Livro:", lista_mats, key=f"livro_sel_{v}")
-                    pags = cx2.text_input("Páginas:", placeholder="Ex: 12-23", key=f"pags_{v}")
-                    ctx_ia = f"MÉTODO LIVRO: {sel_mat} PÁGINAS: {pags}."
-            
-            elif tipo_semana == "Avaliação / Trabalho":
-                st.markdown(f"#### 📝 Detalhes da {sub_tipo}")
-                # Busca ativos já criados para vincular
-                df_ativos = df_aulas[df_aulas['ANO'].str.contains(str(ano_p))]
-                lista_ativos = df_ativos['TIPO_MATERIAL'].tolist() if not df_ativos.empty else []
-                vinc = st.selectbox("Vincular Ativo (Opcional):", ["Nenhum"] + lista_ativos, key=f"vinc_av_{v}")
-                ctx_ia = f"NATUREZA: AVALIAÇÃO. TIPO: {sub_tipo}. ATIVO VINCULADO: {vinc}."
+            st.markdown("#### 🎯 Sincronia com a Matriz Oficial (Prefeitura)")
+            f_eixo, f_cont, f_obj, ctx_ia = "", "", "", ""
 
-            elif tipo_semana == "Evento Extraordinário":
-                st.markdown(f"#### 🛡️ Detalhes do Evento: {sub_tipo}")
-                ctx_ia = f"NATUREZA: EVENTO EXTRAORDINÁRIO. TIPO: {sub_tipo}."
+            # O FUNIL AGORA É OBRIGATÓRIO PARA AMBOS OS MÉTODOS
+            c_filt1, c_filt2 = st.columns([1, 2])
+            # Filtra o banco pelo ano selecionado no passo 2
+            ano_busca_str = str(ano_p)
+            df_filtrado = df_curriculo[df_curriculo['ANO'].astype(str) == ano_busca_str]
+            
+            if not df_filtrado.empty:
+                # 1. Seleção do Eixo (Obrigatório)
+                lista_eixos = sorted(df_filtrado['EIXO'].unique().tolist())
+                sel_eixo = st.multiselect("1. Eixo Oficial (Prefeitura):", lista_eixos, key=f"h_eixo_{v}")
+                
+                if sel_eixo:
+                    # 2. Seleção do Conteúdo (Obrigatório)
+                    df_cont = df_filtrado[df_filtrado['EIXO'].isin(sel_eixo)]
+                    lista_conts = sorted(df_cont['CONTEUDO_ESPECIFICO'].unique().tolist())
+                    sel_cont = st.multiselect("2. Conteúdo Específico (Prefeitura):", lista_conts, key=f"h_cont_{v}")
+                    
+                    if sel_cont:
+                        # 3. Seleção do Objetivo (Obrigatório)
+                        df_obj = df_cont[df_cont['CONTEUDO_ESPECIFICO'].isin(sel_cont)]
+                        lista_objs = sorted(df_obj['OBJETIVOS'].unique().tolist())
+                        sel_obj = st.multiselect("3. Objetivos de Aprendizagem (Prefeitura):", lista_objs, key=f"h_obj_{v}")
+                        
+                        f_eixo = " / ".join(sel_eixo)
+                        f_cont = " / ".join(sel_cont)
+                        f_obj = " \n ".join(sel_obj)
+            else:
+                st.error(f"❌ Erro: Matriz do {ano_p}º ano não encontrada no CSV.")
+
+            st.divider()
+
+            # AGORA O MÉTODO ENTRA COMO COMPLEMENTO
+            if modo_p == "📖 Livro Didático":
+                st.markdown("#### 📖 Referência do Livro (Ferramenta)")
+                cx1, cx2 = st.columns([2, 1])
+                lista_mats = df_materiais["NOME_ARQUIVO"].tolist() if not df_materiais.empty else []
+                sel_mat = cx1.multiselect("Livro Utilizado:", lista_mats, key=f"livro_sel_{v}")
+                pags = cx2.text_input("Páginas:", placeholder="Ex: 12-23", key=f"pags_{v}")
+                ctx_ia = f"MÉTODO: LIVRO DIDÁTICO ({sel_mat}) PÁGINAS {pags}. TRADUZIR PARA OS TERMOS OFICIAIS ABAIXO."
+            else:
+                ctx_ia = "MÉTODO: MANUAL/BANCO. SEGUIR RIGOROSAMENTE OS TERMOS OFICIAIS ABAIXO."
+
+            # Adiciona os dados do banco ao contexto da IA
+            ctx_ia += f"\nEIXO OFICIAL: {f_eixo}\nCONTEÚDO OFICIAL: {f_cont}\nOBJETIVOS OFICIAIS: {f_obj}"
 
             strat = st.text_area("Estratégia / Observações / Descrição do Evento:", key=f"strat_{v}")
 
+        # --- BOTÃO DE COMPILAÇÃO COM VALIDAÇÃO ---
         if st.button("🚀 COMPILAR PLANEJAMENTO BNCC", use_container_width=True, type="primary", key=f"btn_compilar_{v}"):
-            with st.spinner("Maestro SOSA processando..."):
-                # Prompt enriquecido com a Natureza e Sub-tipo
-                prompt = (f"NATUREZA: {tipo_semana} ({sub_tipo}). "
-                          f"ANO: {ano_p}º. SEMANA: {sem_limpa}. TRIMESTRE: {trim_atual}. "
-                          f"CARGA: {carga_horaria}. SABADO: {tem_sabado}. "
-                          f"CONTEXTO: {ctx_ia}. ESTRATÉGIA: {strat}.")
-                st.session_state.p_temp = ai.gerar_ia("PLANE_PEDAGOGICO", prompt)
-                st.rerun()
+            if not f_cont or not f_obj:
+                st.error("⚠️ Bloqueio de Segurança: Você precisa selecionar o Conteúdo e o Objetivo do Banco de Dados para garantir a aceitação no sistema da prefeitura.")
+            else:
+                with st.spinner("Maestro SOSA realizando Tradução Curricular..."):
+                    prompt = (f"NATUREZA: {tipo_semana}. ANO: {ano_p}º. SEMANA: {sem_limpa}. TRIMESTRE: {trim_atual}. "
+                              f"CARGA: {carga_horaria}. SABADO: {tem_sabado}. "
+                              f"CONTEXTO: {ctx_ia}. ESTRATÉGIA: {strat}.")
+                    st.session_state.p_temp = ai.gerar_ia("PLANE_PEDAGOGICO", prompt)
+                    st.rerun()
 
         # --- 4. EDITOR E REFINADOR (SÓ APARECE SE GERADO) ---
         if "p_temp" in st.session_state:
