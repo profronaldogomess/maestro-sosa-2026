@@ -514,32 +514,29 @@ if menu == "🧪 Criador de Aulas":
                         c_q2.metric("Volume Alvo", f"{qtd_q} Qs")
 
                         if st.button("💎 COMPILAR MATERIAL DE ELITE V34", use_container_width=True, type="primary"):
-                            with st.spinner(f"Sincronizando Livro e Gerando {qtd_q} Questões..."):
+                            with st.spinner("Maestro SOSA arquitetando Tratado Didático (Brasil Escola)..."):
                                 s_id = util.gerar_sosa_id("AULA", ano_lab, "I")
                                 st.session_state.sosa_id_atual = s_id
-                                st.session_state.lab_meta = {
-                                    "ano": ano_lab, 
-                                    "trimestre": "I Trimestre", 
-                                    "tipo": aula_alvo,
-                                    "semana_ref": sem_lab
-                                }
+                                st.session_state.lab_meta = {"ano": ano_lab, "trimestre": "I Trimestre", "tipo": aula_alvo, "semana_ref": sem_lab}
                                 
-                                # Prompt Integrado com Herança e Quantidade
-                                prompt_manual = (
+                                prompt_integrado = (
                                     f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {s_id}.\n"
                                     f"SÉRIE: {ano_lab}º ANO. ALVO: {aula_alvo}.\n"
-                                    f"QUANTIDADE OBRIGATÓRIA: Gerar EXATAMENTE {qtd_q} questões no total.\n"
+                                    f"QUANTIDADE: {qtd_q} questões.\n"
                                     f"--- HERANÇA TÉCNICA DO PONTO ID ---\n"
                                     f"REFERÊNCIA: Livro {livro_ref}, Páginas {pags_ref}.\n"
                                     f"CONTEÚDO OFICIAL: {ai.extrair_tag(plano_txt, 'CONTEUDOS_ESPECIFICOS')}.\n"
                                     f"ROTEIRO PLANEJADO: {roteiro_plano}.\n"
-                                    f"ESTRATÉGIA PEI PLANEJADA: {estrategia_pei}.\n"
+                                    f"ESTRATÉGIA PEI: {estrategia_pei}.\n"
                                     f"--- ADICIONAIS ---\n"
-                                    f"EXTRAS: {instr_extra}.\n\n"
-                                    f"MISSÃO: Transforme o roteiro e as páginas do livro em um material de elite com {qtd_q} questões, usando DNA Visual e Contexto Tech/News. "
-                                    f"ENTREGA: [PROFESSOR], [ALUNO], [GABARITO], [PEI], [GABARITO_PEI]."
+                                    f"CONTEXTO EXTRA: {instr_extra}.\n\n"
+                                    f"🚨 MISSÃO CRÍTICA:\n"
+                                    f"1. No [PROFESSOR], redija um artigo denso estilo 'Brasil Escola' fundamentando as páginas {pags_ref}.\n"
+                                    f"2. Integre Notícias e Tecnologia (Google Search) ao tema.\n"
+                                    f"3. No [ALUNO], gere {qtd_q} questões com DNA Visual.\n"
+                                    f"4. No [PEI], aplique a Sinfonia DUA com passo a passo e cores."
                                 )
-                                st.session_state.lab_temp = ai.gerar_ia("MAESTRO_SOSA_V28_ELITE", prompt_manual, usar_busca=True)
+                                st.session_state.lab_temp = ai.gerar_ia("MAESTRO_SOSA_V28_ELITE", prompt_integrado, usar_busca=True)
                                 st.rerun()
 
         # --- ABA 2: SONDA DE PROFICIÊNCIA (DIAGNÓSTICO REVERSO) ---
