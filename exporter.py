@@ -11,7 +11,6 @@ from docx.oxml.ns import qn
 from pptx import Presentation
 from pptx.util import Inches, Pt
 from datetime import datetime
-import ai_engine as ai 
 
 # ==============================================================================
 # FUNÇÃO AUXILIAR: PARSER DE NEGRITO (MARKDOWN PARA WORD)
@@ -19,7 +18,9 @@ import ai_engine as ai
 def adicionar_texto_formatado(paragraph, texto):
     """Converte padrões **texto** em negrito real no Word"""
     import re
-    partes = re.split(r'(\*\*.*?\*\*)', texto)
+    # Limpeza de símbolos residuais indesejados
+    texto_limpo = texto.replace("➔", "").replace("->", "")
+    partes = re.split(r'(\*\*.*?\*\*)', texto_limpo)
     for parte in partes:
         if parte.startswith('**') and parte.endswith('**'):
             run = paragraph.add_run(parte.replace('**', ''))
@@ -28,7 +29,7 @@ def adicionar_texto_formatado(paragraph, texto):
             paragraph.add_run(parte)
 
 # ==============================================================================
-# 1. MATERIAL DO ALUNO REGULAR (VERSÃO ELITE V42 - CABEÇALHO PADRONIZADO)
+# 1. MATERIAL DO ALUNO REGULAR (VERSÃO ELITE V43 - TÍTULOS E PROMPTS)
 # ==============================================================================
 def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     import re, io, os
@@ -48,16 +49,6 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
         trHeight.set(qn('w:hRule'), "atLeast")
         trPr.append(trHeight)
 
-    def adicionar_texto_formatado(paragraph, texto):
-        """Converte padrões **texto** em negrito real no Word"""
-        partes = re.split(r'(\*\*.*?\*\*)', texto)
-        for parte in partes:
-            if parte.startswith('**') and parte.endswith('**'):
-                run = paragraph.add_run(parte.replace('**', ''))
-                run.bold = True
-            else:
-                paragraph.add_run(parte)
-
     file_stream = io.BytesIO()
     doc = Document()
     
@@ -72,25 +63,21 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     section.top_margin, section.bottom_margin = Inches(0.4), Inches(0.4)
     section.left_margin, section.right_margin = Inches(0.5), Inches(0.5)
 
-    # --- 1. CABEÇALHO PADRONIZADO (IGUAL AO PEI) ---
+    # --- 1. CABEÇALHO PADRONIZADO ---
     header_table = doc.add_table(rows=3, cols=5)
     header_table.style = 'Table Grid'
     widths = [Inches(0.9), Inches(2.8), Inches(1.0), Inches(1.4), Inches(1.5)]
     for i, w in enumerate(widths): header_table.columns[i].width = w
     
-    # Mesclagens para Identidade Visual
     c_logo = header_table.cell(0, 0).merge(header_table.cell(2, 0))
     header_table.cell(0, 1).merge(header_table.cell(0, 3)).paragraphs[0].add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA").font.bold = True
     header_table.cell(0, 4).paragraphs[0].add_run(info.get('trimestre', 'I TRIMESTRE')).font.bold = True
-    
     header_table.cell(1, 1).merge(header_table.cell(1, 4)).paragraphs[0].add_run("ALUNO(A):").font.size = Pt(11)
-    
     header_table.cell(2, 1).paragraphs[0].add_run("PROF: Ronaldo Gomes").font.size = Pt(10)
     header_table.cell(2, 2).paragraphs[0].add_run(f"TURMA: {info.get('ano', '')}").font.size = Pt(10)
     header_table.cell(2, 3).paragraphs[0].add_run("DATA:").font.size = Pt(10)
     header_table.cell(2, 4).paragraphs[0].add_run("ATIVIDADE DE SALA").font.bold = True
 
-    # Inserção da Logo
     logo_path = "logo_escola.png" if os.path.exists("logo_escola.png") else "logo.png"
     if os.path.exists(logo_path):
         c_logo.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
@@ -108,7 +95,7 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     cols.set(qn('w:num'), '2')
     cols.set(qn('w:space'), '720')
 
-    # --- 3. PROCESSAMENTO DE CONTEÚDO COM NEGRITO E ESPAÇAMENTO ---
+    # --- 3. PROCESSAMENTO DE CONTEÚDO ---
     linhas = conteudo.split('\n')
     for linha in linhas:
         l_s = linha.strip()
@@ -117,11 +104,28 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
         p = doc.add_paragraph()
         p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
 
-        # Destaque automático para Títulos de Seção e Questões
-        if any(x in l_s.upper() for x in ["QUESTÃO", "TEXTO BASE", "FIXAÇÃO", "APLICAÇÃO", "DESAFIO"]):
+        # REGRA: Título em CAIXA ALTA e NEGRITO
+        if any(x in l_s.upper() for x in ["ATIVIDADE DE", "JORNADA", "DESAFIO TECH"]):
+            run = p.add_run(l_s.upper().replace('**', ''))
+            run.bold = True
+            run.font.size = Pt(12)
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            p.paragraph_format.space_before = Pt(12)
+        
+        # REGRA: Prompt de Imagem [ PROMPT: ... ] em fonte menor e cinza
+        elif "[" in l_s and "PROMPT IMAGEM" in l_s.upper():
+            run = p.add_run(l_s)
+            run.font.size = Pt(8)
+            run.font.italic = True
+            run.font.color.rgb = RGBColor(100, 100, 100)
+            p.paragraph_format.space_after = Pt(2)
+
+        # REGRA: Questões em Negrito
+        elif "QUESTÃO" in l_s.upper():
             run = p.add_run(l_s.replace('**', ''))
             run.bold = True
-            p.paragraph_format.space_before = Pt(6)
+            p.paragraph_format.space_before = Pt(8)
+        
         else:
             adicionar_texto_formatado(p, l_s)
 
@@ -130,12 +134,12 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     return file_stream
 
 # ==============================================================================
-# 3. MATERIAL PEI (VERSÃO ELITE V41 - FORMATADA)
+# 3. MATERIAL PEI (VERSÃO ELITE V42 - SINFONIA DE CORES E ANDAIME)
 # ==============================================================================
 def gerar_docx_pei_v25(titulo_doc, conteudo, info):
     import re, io, os
     from docx import Document
-    from docx.shared import Inches, Pt
+    from docx.shared import Inches, Pt, RGBColor
     from docx.enum.text import WD_ALIGN_PARAGRAPH
 
     file_stream = io.BytesIO()
@@ -143,8 +147,8 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
     
     style = doc.styles['Normal']
     style.font.name = 'Arial'
-    style.font.size = Pt(12) # Fonte maior para PEI
-    style.paragraph_format.line_spacing = 1.3 # Mais espaço para PEI
+    style.font.size = Pt(12)
+    style.paragraph_format.line_spacing = 1.3
     style.paragraph_format.space_after = Pt(12)
 
     section = doc.sections[0]
@@ -164,12 +168,31 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
         
         p = doc.add_paragraph()
         
-        # Títulos PEI em destaque
-        if l_s.isupper() or any(x in l_s.upper() for x in ["TAREFA", "GUIA", "ATIVIDADE"]):
-            run = p.add_run(l_s.replace('**', ''))
+        # LÓGICA DE CORES DO ANDAIME COGNITIVO
+        if "AMARELO" in l_s.upper():
+            run = p.add_run("🟡 " + l_s.replace("➔", ""))
+            run.font.color.rgb = RGBColor(180, 150, 0)
+            run.bold = True
+        elif "AZUL" in l_s.upper():
+            run = p.add_run("🔵 " + l_s.replace("➔", ""))
+            run.font.color.rgb = RGBColor(0, 102, 204)
+            run.bold = True
+        elif "VERDE" in l_s.upper():
+            run = p.add_run("🟢 " + l_s.replace("➔", ""))
+            run.font.color.rgb = RGBColor(0, 128, 0)
+            run.bold = True
+        elif "VERMELHO" in l_s.upper():
+            run = p.add_run("🔴 " + l_s.replace("➔", ""))
+            run.font.color.rgb = RGBColor(200, 0, 0)
+            run.bold = True
+        
+        # MARCADORES DE SEÇÃO PEI
+        elif any(x in l_s.upper() for x in ["[PARA LEMBRAR]", "[OBJETIVO]", "[INSTRUCOES]"]):
+            run = p.add_run(l_s.replace("[", "").replace("]", ""))
             run.bold = True
             run.font.size = Pt(13)
             p.paragraph_format.space_before = Pt(10)
+            
         else:
             adicionar_texto_formatado(p, l_s)
 
