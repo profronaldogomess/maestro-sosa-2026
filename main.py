@@ -727,20 +727,11 @@ if menu == "📅 Planejamento (Ponto ID)":
     ])
     
     with tab_gerar:
-        is_refinando = "refino_ativo" in st.session_state
-        if is_refinando:
-            if st.button("❌ CANCELAR REFINO E VOLTAR AO NOVO", use_container_width=True, key=f"cancel_ref_{v}"):
-                reset_planejamento()
-        
-        # --- 1. STATUS E CALENDÁRIO (REVISADO V28.9) ---
+        # --- 1. STATUS E CALENDÁRIO ---
         with st.container(border=True):
             st.markdown("### 🛡️ 1. Status e Calendário")
             cg1, cg2, cg3 = st.columns([1.5, 1, 1])
-            
-            # Natureza expandida conforme sua solicitação
-            tipo_semana = cg1.selectbox("Natureza:", 
-                                       ["Aula Regular", "Avaliação / Trabalho", "Evento Extraordinário"], 
-                                       key=f"gate_tipo_{v}")
+            tipo_semana = cg1.selectbox("Natureza:", ["Aula Regular", "Avaliação / Trabalho", "Evento Extraordinário"], key=f"gate_tipo_{v}")
             
             sub_tipo = ""
             if tipo_semana == "Avaliação / Trabalho":
@@ -760,13 +751,55 @@ if menu == "📅 Planejamento (Ponto ID)":
             sem_p = c2.selectbox("Semana de Referência:", todas_semanas, key=f"sem_sel_{v}")
             sem_limpa = sem_p.split(" (")[0]
             trim_atual = sem_p.split(" - ")[1] if " - " in sem_p else "I Trimestre"
+            modo_p = c3.radio("Método:", ["📖 Livro Didático", "🎛️ Manual (Banco)"], horizontal=True, key=f"modo_p_{v}")
+
+        # --- 3. SELEÇÃO HIERÁRQUICA OU MAPEAMENTO INTELIGENTE ---
+        with st.container(border=True):
+            # Captura a Matriz Curricular do Ano para a IA discernir
+            df_matriz_ano = df_curriculo[df_curriculo['ANO'].astype(str) == str(ano_p)]
+            matriz_contexto = df_matriz_ano.to_string(index=False)
             
-            # O Método só faz sentido para Aula Regular. Para os outros, o sistema assume Manual/Contextual.
-            if tipo_semana == "Aula Regular":
-                modo_p = c3.radio("Método:", ["📖 Livro Didático", "🎛️ Manual (Banco)"], horizontal=True, key=f"modo_p_{v}")
+            f_eixo, f_cont, f_obj, ctx_ia = "", "", "", ""
+
+            if modo_p == "🎛️ Manual (Banco)":
+                st.markdown("#### 🎯 Seleção Manual da Matriz")
+                c_filt1, c_filt2 = st.columns([1, 2])
+                if not df_matriz_ano.empty:
+                    lista_eixos = sorted(df_matriz_ano['EIXO'].unique().tolist())
+                    sel_eixo = st.multiselect("1. Eixo:", lista_eixos, key=f"h_eixo_{v}")
+                    if sel_eixo:
+                        df_cont = df_matriz_ano[df_matriz_ano['EIXO'].isin(sel_eixo)]
+                        lista_conts = sorted(df_cont['CONTEUDO_ESPECIFICO'].unique().tolist())
+                        sel_cont = st.multiselect("2. Conteúdo:", lista_conts, key=f"h_cont_{v}")
+                        if sel_cont:
+                            df_obj = df_cont[df_cont['CONTEUDO_ESPECIFICO'].isin(sel_cont)]
+                            lista_objs = sorted(df_obj['OBJETIVOS'].unique().tolist())
+                            sel_obj = st.multiselect("3. Objetivos:", lista_objs, key=f"h_obj_{v}")
+                            f_eixo, f_cont, f_obj = " / ".join(sel_eixo), " / ".join(sel_cont), " \n ".join(sel_obj)
+                ctx_ia = f"MÉTODO MANUAL. DADOS SELECIONADOS: EIXO: {f_eixo}, CONTEÚDO: {f_cont}, OBJETIVOS: {f_obj}."
+            
             else:
-                st.info(f"📍 Modo: {tipo_semana} ({sub_tipo})")
-                modo_p = "🎛️ Manual (Banco)"
+                st.markdown("#### 📖 Mapeamento Automático (IA Perita)")
+                cx1, cx2 = st.columns([2, 1])
+                lista_mats = df_materiais["NOME_ARQUIVO"].tolist() if not df_materiais.empty else []
+                sel_mat = cx1.multiselect("Livro Utilizado:", lista_mats, key=f"livro_sel_{v}")
+                pags = cx2.text_input("Páginas:", placeholder="Ex: 12-23", key=f"pags_{v}")
+                ctx_ia = f"MÉTODO LIVRO: {sel_mat} PÁGINAS: {pags}. A IA DEVE DISCERNIR O CONTEÚDO NA MATRIZ ABAIXO."
+
+            strat = st.text_area("Estratégia / Observações / Descrição do Evento:", key=f"strat_{v}")
+
+        if st.button("🚀 COMPILAR PLANEJAMENTO BNCC", use_container_width=True, type="primary", key=f"btn_compilar_{v}"):
+            with st.spinner("Maestro SOSA realizando Perícia Curricular..."):
+                # O prompt agora leva a Matriz Inteira para a IA decidir
+                prompt = (
+                    f"NATUREZA: {tipo_semana} ({sub_tipo}). ANO: {ano_p}º. SEMANA: {sem_limpa}. TRIMESTRE: {trim_atual}.\n"
+                    f"CONTEXTO: {ctx_ia}. ESTRATÉGIA: {strat}.\n\n"
+                    f"--- MATRIZ CURRICULAR OFICIAL PARA MAPEAMENTO ---\n"
+                    f"{matriz_contexto}\n\n"
+                    f"INSTRUÇÃO: Analise a estratégia e as páginas do livro. Identifique na matriz acima quais Eixos, Conteúdos e Objetivos se aplicam. Preencha as tags [CONTEUDO_GERAL], [CONTEUDOS_ESPECIFICOS] e [OBJETIVOS_ENSINO] com os termos EXATOS da matriz."
+                )
+                st.session_state.p_temp = ai.gerar_ia("PLANE_PEDAGOGICO", prompt)
+                st.rerun()
 
 # --- 3. SELEÇÃO HIERÁRQUICA E TRADUÇÃO CURRICULAR (RIGIDEZ PREFEITURA) ---
         with st.container(border=True):
