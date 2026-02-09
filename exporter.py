@@ -16,10 +16,12 @@ from datetime import datetime
 # FUNÇÃO AUXILIAR: PARSER DE NEGRITO (MARKDOWN PARA WORD)
 # ==============================================================================
 def adicionar_texto_formatado(paragraph, texto):
-    """Converte padrões **texto** em negrito real no Word"""
+    """Converte padrões **texto** em negrito real e limpa símbolos"""
     import re
-    # Limpeza de símbolos residuais indesejados
-    texto_limpo = texto.replace("➔", "").replace("->", "")
+    # Remove emojis e símbolos não-ASCII (➔, 🟡, etc)
+    texto_limpo = re.sub(r'[^\x00-\x7F]+', '', texto)
+    texto_limpo = texto_limpo.replace("->", "").strip()
+    
     partes = re.split(r'(\*\*.*?\*\*)', texto_limpo)
     for parte in partes:
         if parte.startswith('**') and parte.endswith('**'):
@@ -28,89 +30,89 @@ def adicionar_texto_formatado(paragraph, texto):
         else:
             paragraph.add_run(parte)
 
-# ==============================================================================
-# 1. MATERIAL DO ALUNO REGULAR (VERSÃO EXAME OFICIAL V44)
-# ==============================================================================
-def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
-    import re, io, os
-    from docx import Document
-    from docx.shared import Inches, Pt, RGBColor
-    from docx.enum.text import WD_ALIGN_PARAGRAPH
-    from docx.enum.section import WD_SECTION
-    from docx.oxml.ns import qn
-
-    file_stream = io.BytesIO()
-    doc = Document()
+def configurar_cabecalho_atividade(doc, info, tipo_label):
+    """Gera o cabeçalho profissional sem campo de nota/valor"""
+    table = doc.add_table(rows=3, cols=4)
+    table.style = 'Table Grid'
     
-    # Estilo Global (Arial 11 - Padrão ABNT/Exame)
-    style = doc.styles['Normal']
-    style.font.name = 'Arial'
-    style.font.size = Pt(11)
-    style.paragraph_format.line_spacing = 1.15
+    # Ajuste de larguras
+    widths = [Inches(0.8), Inches(3.5), Inches(1.2), Inches(2.0)]
+    for i, w in enumerate(widths): table.columns[i].width = w
 
-    section = doc.sections[0]
-    section.top_margin, section.bottom_margin = Inches(0.4), Inches(0.4)
-    section.left_margin, section.right_margin = Inches(0.5), Inches(0.5)
+    # Linha 0: Logo, Escola e Trimestre
+    c_logo = table.cell(0, 0).merge(table.cell(2, 0))
+    c_escola = table.cell(0, 1).merge(table.cell(0, 2))
+    c_escola.paragraphs[0].add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA").font.bold = True
+    table.cell(0, 3).paragraphs[0].add_run(info.get('trimestre', 'I Trimestre')).font.bold = True
 
-    # --- 1. CABEÇALHO PADRONIZADO (IGUAL AO PEI) ---
-    header_table = doc.add_table(rows=3, cols=5)
-    header_table.style = 'Table Grid'
-    widths = [Inches(0.9), Inches(2.8), Inches(1.0), Inches(1.4), Inches(1.5)]
-    for i, w in enumerate(widths): header_table.columns[i].width = w
-    
-    c_logo = header_table.cell(0, 0).merge(header_table.cell(2, 0))
-    header_table.cell(0, 1).merge(header_table.cell(0, 3)).paragraphs[0].add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA").font.bold = True
-    header_table.cell(0, 4).paragraphs[0].add_run(info.get('trimestre', 'I TRIMESTRE')).font.bold = True
-    header_table.cell(1, 1).merge(header_table.cell(1, 4)).paragraphs[0].add_run("ALUNO(A):").font.size = Pt(11)
-    header_table.cell(2, 1).paragraphs[0].add_run("PROF: Ronaldo Gomes").font.size = Pt(10)
-    header_table.cell(2, 2).paragraphs[0].add_run(f"TURMA: {info.get('ano', '')}").font.size = Pt(10)
-    header_table.cell(2, 3).paragraphs[0].add_run("DATA:").font.size = Pt(10)
-    header_table.cell(2, 4).paragraphs[0].add_run("AVALIAÇÃO").font.bold = True
+    # Linha 1: Aluno
+    c_aluno = table.cell(1, 1).merge(table.cell(1, 3))
+    c_aluno.paragraphs[0].add_run("ALUNO(A):")
 
+    # Linha 2: Professor, Turma, Data e Tipo
+    table.cell(2, 1).paragraphs[0].add_run("PROF: Ronaldo Gomes")
+    table.cell(2, 2).paragraphs[0].add_run(f"TURMA: {info.get('ano', '6º')}")
+    c_tipo = table.cell(2, 3)
+    run_tipo = c_tipo.paragraphs[0].add_run(tipo_label)
+    run_tipo.font.bold = True
+    c_tipo.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    # Inserção da Logo
     logo_path = "logo_escola.png" if os.path.exists("logo_escola.png") else "logo.png"
     if os.path.exists(logo_path):
         c_logo.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-        p_logo = c_logo.paragraphs[0]
-        p_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        p_logo.add_run().add_picture(logo_path, width=Inches(0.75))
+        p = c_logo.paragraphs[0]
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p.add_run().add_picture(logo_path, width=Inches(0.65))
 
+    return table
+
+# ==============================================================================
+# 1. MATERIAL DO ALUNO REGULAR
+# ==============================================================================
+def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
+    file_stream = io.BytesIO()
+    doc = Document()
+    
+    style = doc.styles['Normal']
+    style.font.name = 'Arial'
+    style.font.size = Pt(11)
+
+    # Cabeçalho de Atividade
+    configurar_cabecalho_atividade(doc, info, "ATIVIDADE DE SALA")
     doc.add_paragraph()
 
-    # --- 2. ATIVAÇÃO DE COLUNAS NATIVAS ---
+    # Colunas Nativas
     new_section = doc.add_section(WD_SECTION.CONTINUOUS)
     sectPr = new_section._sectPr
     cols = sectPr.xpath('./w:cols')[0]
     cols.set(qn('w:num'), '2')
     cols.set(qn('w:space'), '720')
 
-    # --- 3. PROCESSAMENTO DE CONTEÚDO (RIGOR EXAME) ---
     linhas = conteudo.split('\n')
     for linha in linhas:
         l_s = linha.strip()
         if not l_s: continue
         
-        # Limpeza de qualquer resíduo de emoji ou setas
-        l_s = re.sub(r'[^\x00-\x7F]+', '', l_s) 
-
         p = doc.add_paragraph()
         p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
 
         # Títulos em CAIXA ALTA e NEGRITO
         if any(x in l_s.upper() for x in ["ATIVIDADE DE", "JORNADA", "DESAFIO"]):
-            run = p.add_run(l_s.upper())
+            run = p.add_run(l_s.upper().replace('**', ''))
             run.bold = True
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER
         
-        # Prompts de Imagem (Fonte 8, Cinza, Itálico)
+        # Prompts de Imagem [ PROMPT: ... ] em fonte 8 cinza
         elif "[" in l_s and "PROMPT IMAGEM" in l_s.upper():
             run = p.add_run(l_s)
             run.font.size = Pt(8)
             run.font.italic = True
             run.font.color.rgb = RGBColor(120, 120, 120)
 
-        # Questões em Negrito
+        # Questões
         elif "QUESTÃO" in l_s.upper():
-            run = p.add_run(l_s)
+            run = p.add_run(l_s.replace('**', ''))
             run.bold = True
             p.paragraph_format.space_before = Pt(12)
         
@@ -122,39 +124,31 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     return file_stream
 
 # ==============================================================================
-# 3. MATERIAL PEI (VERSÃO EXAME ADAPTADO V43 - SEM EMOJIS)
+# 3. MATERIAL PEI ADAPTADO
 # ==============================================================================
 def gerar_docx_pei_v25(titulo_doc, conteudo, info):
-    import re, io, os
-    from docx import Document
-    from docx.shared import Inches, Pt, RGBColor
-    from docx.enum.text import WD_ALIGN_PARAGRAPH
-
     file_stream = io.BytesIO()
     doc = Document()
     
     style = doc.styles['Normal']
     style.font.name = 'Arial'
-    style.font.size = Pt(12) # Fonte maior para acessibilidade
+    style.font.size = Pt(12)
 
-    # [Cabeçalho PEI segue o mesmo padrão do Regular, mas com título "AVALIAÇÃO ADAPTADA"]
-    # ... (Código de cabeçalho similar ao acima)
+    # Cabeçalho de Atividade Adaptada
+    configurar_cabecalho_atividade(doc, info, "ATIVIDADE ADAPTADA")
+    doc.add_paragraph()
 
     linhas = conteudo.split('\n')
     for linha in linhas:
         l_s = linha.strip()
         if not l_s: continue
         
-        # Limpeza de emojis
-        l_s = re.sub(r'[^\x00-\x7F]+', '', l_s)
-
         p = doc.add_paragraph()
         
-        # Andaime Cognitivo via Rótulos em Negrito (Sem cores/emojis)
+        # Andaime Cognitivo Profissional
         if any(x in l_s.upper() for x in ["PARA LEMBRAR", "OBJETIVO", "INSTRUÇÕES", "ATIVIDADE"]):
-            run = p.add_run(l_s.upper())
+            run = p.add_run(l_s.upper().replace('**', ''))
             run.bold = True
-            run.font.size = Pt(12)
             p.paragraph_format.space_before = Pt(10)
         
         elif "[" in l_s and "PROMPT IMAGEM" in l_s.upper():
