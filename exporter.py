@@ -25,10 +25,12 @@ def set_row_height(row, height_pt):
     trPr.append(trHeight)
 
 def adicionar_texto_formatado(paragraph, texto):
-    """Converte padrões **texto** em negrito real e limpa símbolos"""
+    """Converte padrões **texto** em negrito real preservando acentos"""
     import re
-    texto_limpo = re.sub(r'[^\x00-\x7F]+', '', texto)
-    texto_limpo = texto_limpo.replace("->", "").replace("➔", "").strip()
+    # REMOVIDA A LINHA QUE APAGAVA ACENTOS
+    # Limpa apenas símbolos específicos que poluem o visual
+    texto_limpo = texto.replace("➔", "").replace("->", "").strip()
+    
     partes = re.split(r'(\*\*.*?\*\*)', texto_limpo)
     for parte in partes:
         if parte.startswith('**') and parte.endswith('**'):
@@ -38,35 +40,37 @@ def adicionar_texto_formatado(paragraph, texto):
             paragraph.add_run(parte)
 
 def configurar_cabecalho_atividade_limpo(doc, info, tipo_label):
-    """Gera o cabeçalho oficial com altura expandida e sem campo de nota"""
-    table = doc.add_table(rows=3, cols=4)
+    """Gera o cabeçalho oficial com DATA e sem campo de nota"""
+    # Tabela de 3 linhas e 5 colunas para melhor distribuição
+    table = doc.add_table(rows=3, cols=5)
     table.style = 'Table Grid'
     
-    # Ajuste de larguras (Margens 0.3")
-    widths = [Inches(0.9), Inches(4.2), Inches(1.0), Inches(1.67)]
-    for i, w in enumerate(widths): table.columns[i].width = w
+    # Ajuste de larguras (Margens 0.3") - Total útil ~7.67"
+    widths = [Inches(0.8), Inches(3.0), Inches(1.0), Inches(1.2), Inches(1.67)]
+    for i, w in enumerate(widths): 
+        table.columns[i].width = w
 
-    # --- AJUSTE DE ALTURA (RESPIRO DO CABEÇALHO) ---
+    # Ajuste de altura para todas as linhas (Respiro)
     for row in table.rows:
-        set_row_height(row, 28) # Altura de 28 pontos para cada linha
+        set_row_height(row, 26)
 
     # Linha 0: Logo, Escola e Trimestre
     c_logo = table.cell(0, 0).merge(table.cell(2, 0))
-    c_escola = table.cell(0, 1).merge(table.cell(0, 2))
+    c_escola = table.cell(0, 1).merge(table.cell(0, 3))
     p_esc = c_escola.paragraphs[0]
     p_esc.alignment = WD_ALIGN_PARAGRAPH.LEFT
     p_esc.add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA").font.bold = True
     
-    c_trim = table.cell(0, 3)
+    c_trim = table.cell(0, 4)
     c_trim.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
     c_trim.paragraphs[0].add_run(info.get('trimestre', 'I Trimestre')).font.bold = True
 
     # Linha 1: Aluno
-    c_aluno = table.cell(1, 1).merge(table.cell(1, 3))
+    c_aluno = table.cell(1, 1).merge(table.cell(1, 4))
     c_aluno.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
     c_aluno.paragraphs[0].add_run("ALUNO(A):")
 
-    # Linha 2: Professor, Turma e Tipo
+    # Linha 2: Professor, Turma, DATA e Tipo
     c_prof = table.cell(2, 1)
     c_prof.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
     c_prof.paragraphs[0].add_run("PROF: Ronaldo Gomes")
@@ -74,8 +78,13 @@ def configurar_cabecalho_atividade_limpo(doc, info, tipo_label):
     c_turma = table.cell(2, 2)
     c_turma.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
     c_turma.paragraphs[0].add_run(f"TURMA: {info.get('ano', '6º')}")
+
+    # NOVO: CAMPO DE DATA RESTAURADO
+    c_data = table.cell(2, 3)
+    c_data.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+    c_data.paragraphs[0].add_run("DATA:    /    /")
     
-    c_tipo = table.cell(2, 3)
+    c_tipo = table.cell(2, 4)
     c_tipo.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
     p_tipo = c_tipo.paragraphs[0]
     p_tipo.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -88,12 +97,12 @@ def configurar_cabecalho_atividade_limpo(doc, info, tipo_label):
         c_logo.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
         p = c_logo.paragraphs[0]
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        try: p.add_run().add_picture(logo_path, width=Inches(0.7))
+        try: p.add_run().add_picture(logo_path, width=Inches(0.65))
         except: pass
     return table
 
 # ==============================================================================
-# 1. MATERIAL DO ALUNO REGULAR (VERSÃO ELITE V46 - INLINE E ALTURA)
+# 1. MATERIAL DO ALUNO REGULAR (VERSÃO ELITE V47 - ACENTOS E DATA)
 # ==============================================================================
 def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     file_stream = io.BytesIO()
@@ -128,12 +137,12 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
         p.paragraph_format.space_after = Pt(12)
 
         # Títulos
-        if any(x in l_s.upper() for x in ["ATIVIDADE DE", "JORNADA", "DESAFIO", "SISTEMAS DE"]):
+        if any(x in l_s.upper() for x in ["ATIVIDADE DE", "JORNADA", "DESAFIO", "SISTEMAS DE", "MATEMÁTICA"]):
             run = p.add_run(l_s.upper().replace('**', ''))
             run.bold = True
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER
         
-        # REGRA INLINE: Questão e Texto na mesma linha
+        # Regra Inline para Questões
         elif "QUESTÃO" in l_s.upper():
             match = re.match(r"^(QUEST[AÃ]O\s+\d+)[\.\s:]*(.*)", l_s, re.IGNORECASE)
             if match:
@@ -141,7 +150,6 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
                 texto_q = match.group(2).strip()
                 run_r = p.add_run(f"{rotulo}. ")
                 run_r.bold = True
-                # Adiciona o texto da questão imediatamente após o rótulo
                 adicionar_texto_formatado(p, texto_q)
             else:
                 adicionar_texto_formatado(p, l_s)
@@ -154,6 +162,43 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
             run.font.italic = True
             run.font.color.rgb = RGBColor(120, 120, 120)
         
+        else:
+            adicionar_texto_formatado(p, l_s)
+
+    doc.save(file_stream)
+    file_stream.seek(0)
+    return file_stream
+
+# ==============================================================================
+# 3. MATERIAL PEI ADAPTADO (VERSÃO ELITE V47 - ACENTOS E DATA)
+# ==============================================================================
+def gerar_docx_pei_v25(titulo_doc, conteudo, info):
+    file_stream = io.BytesIO()
+    doc = Document()
+    
+    section = doc.sections[0]
+    section.top_margin, section.bottom_margin = Inches(0.3), Inches(0.3)
+    section.left_margin, section.right_margin = Inches(0.4), Inches(0.4)
+
+    style = doc.styles['Normal']
+    style.font.name = 'Arial'
+    style.font.size = Pt(12)
+
+    configurar_cabecalho_atividade_limpo(doc, info, "ATIVIDADE ADAPTADA")
+    doc.add_paragraph()
+
+    linhas = conteudo.split('\n')
+    for linha in linhas:
+        l_s = linha.strip()
+        if not l_s: continue
+        
+        p = doc.add_paragraph()
+        p.paragraph_format.space_after = Pt(12)
+        
+        if any(x in l_s.upper() for x in ["PARA LEMBRAR", "OBJETIVO", "INSTRUÇÕES", "ATIVIDADE"]):
+            run = p.add_run(l_s.upper().replace('**', ''))
+            run.bold = True
+            p.paragraph_format.space_before = Pt(10)
         else:
             adicionar_texto_formatado(p, l_s)
 
