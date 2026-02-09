@@ -732,11 +732,22 @@ if menu == "📅 Planejamento (Ponto ID)":
             if st.button("❌ CANCELAR REFINO E VOLTAR AO NOVO", use_container_width=True, key=f"cancel_ref_{v}"):
                 reset_planejamento()
         
-        # --- 1. STATUS E CALENDÁRIO ---
+        # --- 1. STATUS E CALENDÁRIO (REVISADO V28.9) ---
         with st.container(border=True):
             st.markdown("### 🛡️ 1. Status e Calendário")
             cg1, cg2, cg3 = st.columns([1.5, 1, 1])
-            tipo_semana = cg1.selectbox("Natureza:", ["Aula Regular", "Avaliação", "Recuperação"], key=f"gate_tipo_{v}")
+            
+            # Natureza expandida conforme sua solicitação
+            tipo_semana = cg1.selectbox("Natureza:", 
+                                       ["Aula Regular", "Avaliação / Trabalho", "Evento Extraordinário"], 
+                                       key=f"gate_tipo_{v}")
+            
+            sub_tipo = ""
+            if tipo_semana == "Avaliação / Trabalho":
+                sub_tipo = st.selectbox("Tipo de Ativo:", ["Sonda Diagnóstica", "Teste Trimestral", "Prova Oficial", "Trabalho/Projeto BNCC"], key=f"sub_av_{v}")
+            elif tipo_semana == "Evento Extraordinário":
+                sub_tipo = st.selectbox("Tipo de Evento:", ["Semana Zero (Vetor Disciplinar)", "Interclasses / Esportes", "Seminário / Projeto Temático", "Suspensão de Aula"], key=f"sub_ev_{v}")
+
             tem_sabado = cg2.toggle("Sábado Letivo?", key=f"gate_sab_{v}")
             carga_horaria = cg3.select_slider("Aulas Úteis:", options=["1 Aula", "2 Aulas", "3 Aulas"], value="2 Aulas", key=f"gate_carga_{v}")
 
@@ -749,43 +760,67 @@ if menu == "📅 Planejamento (Ponto ID)":
             sem_p = c2.selectbox("Semana de Referência:", todas_semanas, key=f"sem_sel_{v}")
             sem_limpa = sem_p.split(" (")[0]
             trim_atual = sem_p.split(" - ")[1] if " - " in sem_p else "I Trimestre"
-            modo_p = c3.radio("Método:", ["📖 Livro Didático", "🎛️ Manual (Banco)"], horizontal=True, key=f"modo_p_{v}")
-
-        # --- 3. SELEÇÃO HIERÁRQUICA ---
-        with st.container(border=True):
-            f_eixo, f_cont, f_obj = "", "", ""
-            if modo_p == "🎛️ Manual (Banco)":
-                st.markdown("#### 🎯 Matriz Curricular (Soberania do Banco)")
-                c_filt1, c_filt2 = st.columns([1, 2])
-                ano_busca = c_filt1.multiselect("Filtrar por Ano(s):", ["1","2","3","4","5","6","7","8","9"], default=[str(ano_p)], key=f"busc_ano_{v}")
-                df_filtrado = df_curriculo[df_curriculo['ANO'].astype(str).isin(ano_busca)]
-                
-                if not df_filtrado.empty:
-                    lista_eixos = sorted(df_filtrado['EIXO'].unique().tolist())
-                    sel_eixo = st.multiselect("1. Selecione o(s) Eixo(s):", lista_eixos, key=f"h_eixo_{v}")
-                    if sel_eixo:
-                        df_cont = df_filtrado[df_filtrado['EIXO'].isin(sel_eixo)]
-                        lista_conts = sorted(df_cont['CONTEUDO_ESPECIFICO'].unique().tolist())
-                        sel_cont = st.multiselect("2. Selecione os Conteúdos:", lista_conts, key=f"h_cont_{v}")
-                        if sel_cont:
-                            df_obj = df_cont[df_cont['CONTEUDO_ESPECIFICO'].isin(sel_cont)]
-                            lista_objs = sorted(df_obj['OBJETIVOS'].unique().tolist())
-                            sel_obj = st.multiselect("3. Selecione os Objetivos:", lista_objs, key=f"h_obj_{v}")
-                            f_eixo, f_cont, f_obj = " / ".join(sel_eixo), " / ".join(sel_cont), " \n ".join(sel_obj)
-                ctx_ia = f"MÉTODO MANUAL. EIXO: {f_eixo}. CONTEÚDO: {f_cont}. OBJETIVOS: {f_obj}."
+            
+            # O Método só faz sentido para Aula Regular. Para os outros, o sistema assume Manual/Contextual.
+            if tipo_semana == "Aula Regular":
+                modo_p = c3.radio("Método:", ["📖 Livro Didático", "🎛️ Manual (Banco)"], horizontal=True, key=f"modo_p_{v}")
             else:
-                st.markdown("#### 📖 Referência Bibliográfica")
-                cx1, cx2 = st.columns([2, 1])
-                lista_mats = df_materiais["NOME_ARQUIVO"].tolist() if not df_materiais.empty else []
-                sel_mat = cx1.multiselect("Livro:", lista_mats, key=f"livro_sel_{v}")
-                pags = cx2.text_input("Páginas:", placeholder="Ex: 12-23", key=f"pags_{v}")
-                ctx_ia = f"MÉTODO LIVRO: {sel_mat} PÁGINAS: {pags}."
+                st.info(f"📍 Modo: {tipo_semana} ({sub_tipo})")
+                modo_p = "🎛️ Manual (Banco)"
 
-            strat = st.text_area("Estratégia / Observações:", key=f"strat_{v}")
+        # --- 3. SELEÇÃO HIERÁRQUICA / CONTEXTO (BLINDADO) ---
+        with st.container(border=True):
+            f_eixo, f_cont, f_obj, ctx_ia = "", "", "", "" # Inicialização para evitar NameError
+            
+            if tipo_semana == "Aula Regular":
+                if modo_p == "🎛️ Manual (Banco)":
+                    st.markdown("#### 🎯 Matriz Curricular (Soberania do Banco)")
+                    c_filt1, c_filt2 = st.columns([1, 2])
+                    ano_busca = c_filt1.multiselect("Filtrar por Ano(s):", ["1","2","3","4","5","6","7","8","9"], default=[str(ano_p)], key=f"busc_ano_{v}")
+                    df_filtrado = df_curriculo[df_curriculo['ANO'].astype(str).isin(ano_busca)]
+                    
+                    if not df_filtrado.empty:
+                        lista_eixos = sorted(df_filtrado['EIXO'].unique().tolist())
+                        sel_eixo = st.multiselect("1. Selecione o(s) Eixo(s):", lista_eixos, key=f"h_eixo_{v}")
+                        if sel_eixo:
+                            df_cont = df_filtrado[df_filtrado['EIXO'].isin(sel_eixo)]
+                            lista_conts = sorted(df_cont['CONTEUDO_ESPECIFICO'].unique().tolist())
+                            sel_cont = st.multiselect("2. Selecione os Conteúdos:", lista_conts, key=f"h_cont_{v}")
+                            if sel_cont:
+                                df_obj = df_cont[df_cont['CONTEUDO_ESPECIFICO'].isin(sel_cont)]
+                                lista_objs = sorted(df_obj['OBJETIVOS'].unique().tolist())
+                                sel_obj = st.multiselect("3. Selecione os Objetivos:", lista_objs, key=f"h_obj_{v}")
+                                f_eixo, f_cont, f_obj = " / ".join(sel_eixo), " / ".join(sel_cont), " \n ".join(sel_obj)
+                    ctx_ia = f"MÉTODO MANUAL. EIXO: {f_eixo}. CONTEÚDO: {f_cont}. OBJETIVOS: {f_obj}."
+                else:
+                    st.markdown("#### 📖 Referência Bibliográfica")
+                    cx1, cx2 = st.columns([2, 1])
+                    lista_mats = df_materiais["NOME_ARQUIVO"].tolist() if not df_materiais.empty else []
+                    sel_mat = cx1.multiselect("Livro:", lista_mats, key=f"livro_sel_{v}")
+                    pags = cx2.text_input("Páginas:", placeholder="Ex: 12-23", key=f"pags_{v}")
+                    ctx_ia = f"MÉTODO LIVRO: {sel_mat} PÁGINAS: {pags}."
+            
+            elif tipo_semana == "Avaliação / Trabalho":
+                st.markdown(f"#### 📝 Detalhes da {sub_tipo}")
+                # Busca ativos já criados para vincular
+                df_ativos = df_aulas[df_aulas['ANO'].str.contains(str(ano_p))]
+                lista_ativos = df_ativos['TIPO_MATERIAL'].tolist() if not df_ativos.empty else []
+                vinc = st.selectbox("Vincular Ativo (Opcional):", ["Nenhum"] + lista_ativos, key=f"vinc_av_{v}")
+                ctx_ia = f"NATUREZA: AVALIAÇÃO. TIPO: {sub_tipo}. ATIVO VINCULADO: {vinc}."
+
+            elif tipo_semana == "Evento Extraordinário":
+                st.markdown(f"#### 🛡️ Detalhes do Evento: {sub_tipo}")
+                ctx_ia = f"NATUREZA: EVENTO EXTRAORDINÁRIO. TIPO: {sub_tipo}."
+
+            strat = st.text_area("Estratégia / Observações / Descrição do Evento:", key=f"strat_{v}")
 
         if st.button("🚀 COMPILAR PLANEJAMENTO BNCC", use_container_width=True, type="primary", key=f"btn_compilar_{v}"):
             with st.spinner("Maestro SOSA processando..."):
-                prompt = f"ANO: {ano_p}º. SEMANA: {sem_limpa}. TRIMESTRE: {trim_atual}. CARGA: {carga_horaria}. SABADO: {tem_sabado}. {ctx_ia}. ESTRATÉGIA: {strat}."
+                # Prompt enriquecido com a Natureza e Sub-tipo
+                prompt = (f"NATUREZA: {tipo_semana} ({sub_tipo}). "
+                          f"ANO: {ano_p}º. SEMANA: {sem_limpa}. TRIMESTRE: {trim_atual}. "
+                          f"CARGA: {carga_horaria}. SABADO: {tem_sabado}. "
+                          f"CONTEXTO: {ctx_ia}. ESTRATÉGIA: {strat}.")
                 st.session_state.p_temp = ai.gerar_ia("PLANE_PEDAGOGICO", prompt)
                 st.rerun()
 
