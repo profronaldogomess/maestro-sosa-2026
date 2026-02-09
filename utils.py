@@ -116,3 +116,8 @@ def formatar_data_br(valor):
     except: pass
     
     return val_str
+
+def gerar_nome_material_elite(ano, aula, semana):
+    """Gera o nome formatado para exibição e arquivos: {ANO}º Ano - {AULA} - {SEMANA}"""
+    ano_limpo = str(ano).replace("º", "")
+    return f"{ano_limpo}º Ano - {aula} - {semana}"
