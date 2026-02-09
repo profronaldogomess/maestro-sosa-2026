@@ -13,11 +13,11 @@ from pptx.util import Inches, Pt
 from datetime import datetime
 
 # ==============================================================================
-# FUNÇÕES AUXILIARES TÉCNICAS (PRESERVAÇÃO INTEGRAL)
+# 1. FUNÇÕES AUXILIARES TÉCNICAS (PRESERVAÇÃO INTEGRAL)
 # ==============================================================================
 
 def set_row_height(row, height_pt):
-    """Define a altura mínima da linha da tabela para dar respiro"""
+    """Define a altura mínima da linha da tabela para o cabeçalho não achatar"""
     tr = row._tr
     trPr = tr.get_or_add_trPr()
     trHeight = OxmlElement('w:trHeight')
@@ -37,12 +37,12 @@ def adicionar_texto_formatado(paragraph, texto):
         else:
             paragraph.add_run(parte)
 
-def configurar_cabecalho_mestre(doc, info, tipo_label):
-    """Gera o cabeçalho de ELITE: Com campo de NOTA, DATA e altura expandida (Fiel à Imagem)"""
+def configurar_cabecalho_mestre(doc, info, tipo_label, mostrar_nota=False):
+    """Gera o cabeçalho de ELITE: Campo de NOTA opcional, DATA e altura expandida"""
     table = doc.add_table(rows=3, cols=5)
     table.style = 'Table Grid'
     
-    # Ajuste de larguras para margens de 0.3" (Total ~7.9 polegadas)
+    # Ajuste de larguras para margens de 0.3"
     widths = [Inches(0.8), Inches(3.0), Inches(1.0), Inches(1.2), Inches(1.9)]
     for i, w in enumerate(widths): 
         table.columns[i].width = w
@@ -61,14 +61,20 @@ def configurar_cabecalho_mestre(doc, info, tipo_label):
     c_trim.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
     c_trim.paragraphs[0].add_run(info.get('trimestre', 'I Trimestre')).font.bold = True
 
-    # --- LINHA 1: ALUNO E NOTA (CORREÇÃO DA MESCLA CONFORME IMAGEM) ---
-    c_aluno = table.cell(1, 1).merge(table.cell(1, 3))
-    c_aluno.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-    c_aluno.paragraphs[0].add_run("ALUNO(A):")
-    
-    c_nota = table.cell(1, 4)
-    c_nota.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-    c_nota.paragraphs[0].add_run("NOTA:")
+    # --- LINHA 1: ALUNO (COM OU SEM NOTA) ---
+    if mostrar_nota:
+        c_aluno = table.cell(1, 1).merge(table.cell(1, 3))
+        c_aluno.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+        c_aluno.paragraphs[0].add_run("ALUNO(A):")
+        
+        c_nota = table.cell(1, 4)
+        c_nota.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+        c_nota.paragraphs[0].add_run("NOTA:")
+    else:
+        # Se não tem nota, o campo ALUNO ocupa todo o espaço restante
+        c_aluno = table.cell(1, 1).merge(table.cell(1, 4))
+        c_aluno.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+        c_aluno.paragraphs[0].add_run("ALUNO(A):")
 
     # --- LINHA 2: PROFESSOR, TURMA, DATA E TIPO ---
     table.cell(2, 1).paragraphs[0].add_run("PROF: Ronaldo Gomes").font.size = Pt(9)
@@ -94,7 +100,7 @@ def configurar_cabecalho_mestre(doc, info, tipo_label):
     return table
 
 # ==============================================================================
-# 1. MATERIAL DO ALUNO REGULAR (CORRIGIDO - 2 COLUNAS NATIVAS)
+# 2. MATERIAL DO ALUNO REGULAR (CORRIGIDO - SEM NOTA + 2 COLUNAS)
 # ==============================================================================
 def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     file_stream = io.BytesIO()
@@ -107,8 +113,8 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     style.font.name = 'Arial'
     style.font.size = Pt(10.5)
 
-    # Cabeçalho Mestre
-    configurar_cabecalho_mestre(doc, info, "ATIVIDADE DE SALA")
+    # Cabeçalho Mestre (mostrar_nota=False para Atividades)
+    configurar_cabecalho_mestre(doc, info, "ATIVIDADE DE SALA", mostrar_nota=False)
     doc.add_paragraph()
 
     # Ativação de Colunas Nativas
@@ -148,7 +154,7 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     return file_stream
 
 # ==============================================================================
-# 2. MATERIAL PEI ADAPTADO (CORRIGIDO - 2 COLUNAS NATIVAS + UNIFICAÇÃO)
+# 3. MATERIAL PEI ADAPTADO (CORRIGIDO - SEM NOTA + 2 COLUNAS)
 # ==============================================================================
 def gerar_docx_pei_v25(titulo_doc, conteudo, info):
     file_stream = io.BytesIO()
@@ -161,11 +167,11 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
     style.font.name = 'Arial'
     style.font.size = Pt(11)
 
-    # Cabeçalho Mestre (Idêntico ao Regular)
-    configurar_cabecalho_mestre(doc, info, "ATIVIDADE ADAPTADA")
+    # Cabeçalho Mestre (mostrar_nota=False para Atividades)
+    configurar_cabecalho_mestre(doc, info, "ATIVIDADE ADAPTADA", mostrar_nota=False)
     doc.add_paragraph()
 
-    # Ativação de Colunas Nativas (Obrigatório para aproveitar a folha)
+    # Ativação de Colunas Nativas
     new_section = doc.add_section(WD_SECTION.CONTINUOUS)
     sectPr = new_section._sectPr
     cols = sectPr.xpath('./w:cols')[0]
@@ -180,7 +186,6 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
         p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
         p.paragraph_format.space_after = Pt(10)
 
-        # Seções PEI com Unicode
         secoes_pei = ["PARA LEMBRAR", "OBJETIVO", "INSTRUÇÕES", "ATIVIDADE", "PASSO A PASSO", "DICA MESTRA"]
         if any(x in l_s.upper() for x in secoes_pei):
             txt_limpo = l_s.replace("[", "").replace("]", "").replace(":", "").upper()
@@ -205,7 +210,7 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
     return file_stream
 
 # ==============================================================================
-# 3. GUIA DO PROFESSOR (PRESERVAÇÃO INTEGRAL V27.5)
+# 4. GUIA DO PROFESSOR (PRESERVAÇÃO INTEGRAL)
 # ==============================================================================
 def gerar_docx_professor_v25(titulo_doc, conteudo, info):
     file_stream = io.BytesIO()
@@ -274,7 +279,7 @@ def gerar_docx_professor_v25(titulo_doc, conteudo, info):
     return file_stream
 
 # ==============================================================================
-# 4. PROVA OFICIAL (PRESERVAÇÃO INTEGRAL V48)
+# 5. PROVA OFICIAL (PRESERVAÇÃO INTEGRAL - COM NOTA)
 # ==============================================================================
 def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
     file_stream = io.BytesIO()
@@ -290,7 +295,8 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         is_pei_doc = "PEI" in titulo_doc.upper() or "ADAPTADA" in titulo_doc.upper()
         label_prova = "AVALIAÇÃO ADAPTADA" if is_pei_doc else "AVALIAÇÃO DE MATEMÁTICA"
 
-        configurar_cabecalho_mestre(doc, info, label_prova)
+        # Aqui mostrar_nota=True pois é uma Prova
+        configurar_cabecalho_mestre(doc, info, label_prova, mostrar_nota=True)
         doc.add_paragraph()
 
         top_table = doc.add_table(rows=1, cols=2)
@@ -364,7 +370,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         return file_stream
 
 # ==============================================================================
-# 5. PLANO PEDAGÓGICO (PRESERVAÇÃO INTEGRAL V26)
+# 6. PLANO PEDAGÓGICO (PRESERVAÇÃO INTEGRAL)
 # ==============================================================================
 def gerar_docx_plano_pedagogico_ELITE(titulo_arquivo, dados, info):
     file_stream = io.BytesIO()
@@ -426,7 +432,7 @@ def gerar_docx_plano_pedagogico_ELITE(titulo_arquivo, dados, info):
         return file_stream
 
 # ==============================================================================
-# 6. APRESENTAÇÃO PPTX (PRESERVAÇÃO INTEGRAL)
+# 7. APRESENTAÇÃO PPTX (PRESERVAÇÃO INTEGRAL)
 # ==============================================================================
 def gerar_pptx_v24(titulo_doc, conteudo_ia):
     prs = Presentation()
