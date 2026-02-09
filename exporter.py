@@ -152,54 +152,84 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     return file_stream
 
 # ==============================================================================
-# 3. MATERIAL PEI ADAPTADO (CORRIGIDO)
+# 3. MATERIAL PEI ADAPTADO (VERSÃO ELITE V29 - COLUNAS NATIVAS)
 # ==============================================================================
 def gerar_docx_pei_v25(titulo_doc, conteudo, info):
+    """
+    Gera o material PEI com a mesma estrutura do regular:
+    - Margens 0.3"
+    - Cabeçalho Mestre (configurar_cabecalho_mestre)
+    - Duas colunas nativas do Word
+    - Marcadores Unicode para acessibilidade
+    """
     file_stream = io.BytesIO()
     doc = Document()
+    
+    # Configuração de Margens de Elite (0.3")
     section = doc.sections[0]
     section.top_margin, section.bottom_margin = Inches(0.3), Inches(0.3)
     section.left_margin, section.right_margin = Inches(0.3), Inches(0.3)
 
+    # Estilo Base Arial 11 (Levemente maior para acessibilidade)
     style = doc.styles['Normal']
     style.font.name = 'Arial'
     style.font.size = Pt(11)
 
-    # CHAMADA CORRIGIDA AQUI:
+    # 1. CABEÇALHO IDENTICO AO REGULAR
     configurar_cabecalho_mestre(doc, info, "ATIVIDADE ADAPTADA")
-    doc.add_paragraph()
+    doc.add_paragraph() # Respiro após cabeçalho
 
+    # 2. ATIVAÇÃO DE COLUNAS NATIVAS (2 COLUNAS)
     new_section = doc.add_section(WD_SECTION.CONTINUOUS)
     sectPr = new_section._sectPr
     cols = sectPr.xpath('./w:cols')[0]
     cols.set(qn('w:num'), '2')
-    cols.set(qn('w:space'), '400')
+    cols.set(qn('w:space'), '400') # Espaçamento entre colunas
 
+    # 3. PROCESSAMENTO DO CONTEÚDO
     linhas = conteudo.split('\n')
     for linha in linhas:
         l_s = linha.strip()
         if not l_s: continue
+        
         p = doc.add_paragraph()
         p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-        p.paragraph_format.space_after = Pt(12)
+        p.paragraph_format.space_after = Pt(10) # Espaçamento entre parágrafos
 
-        if any(x in l_s.upper() for x in ["PARA LEMBRAR", "OBJETIVO", "INSTRUÇÕES", "ATIVIDADE"]):
+        # Identificação de Seções PEI (Sinfonia Unicode)
+        secoes_pei = ["PARA LEMBRAR", "OBJETIVO", "INSTRUÇÕES", "ATIVIDADE", "PASSO A PASSO", "DICA MESTRA"]
+        if any(x in l_s.upper() for x in secoes_pei):
             txt_limpo = l_s.replace("[", "").replace("]", "").replace(":", "").upper()
             run = p.add_run(f"█▓▒░ {txt_limpo} ░▒▓█")
             run.bold = True
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            p.paragraph_format.space_before = Pt(6)
+            
+        # Formatação de Questões Inline (Padrão Soberano)
         elif "QUESTÃO" in l_s.upper():
+            # Regex para capturar QUESTÃO X ou QUESTÃO PEI X
             match = re.match(r"^(QUEST[AÃ]O\s+(?:PEI\s+)?\d+)([\.\s:]+)(.*)", l_s, re.IGNORECASE)
             if match:
                 run_r = p.add_run(f"{match.group(1).upper()}. ")
                 run_r.bold = True
                 adicionar_texto_formatado(p, match.group(3).strip())
-            else: adicionar_texto_formatado(p, l_s)
+            else: 
+                adicionar_texto_formatado(p, l_s)
+                
+        # Prompts de Imagem (Estética Discreta)
         elif "[" in l_s and "PROMPT IMAGEM" in l_s.upper():
             run = p.add_run(l_s)
             run.font.size, run.font.italic = Pt(9), True
-            run.font.color.rgb = RGBColor(100, 100, 100)
-        else: adicionar_texto_formatado(p, l_s)
+            run.font.color.rgb = RGBColor(120, 120, 120)
+            
+        # Alternativas (A-E) com recuo para PEI
+        elif re.match(r'^[A-E][\)\.]', l_s):
+            p.paragraph_format.left_indent = Inches(0.2)
+            adicionar_texto_formatado(p, l_s)
+            
+        else:
+            # Texto normal justificado
+            adicionar_texto_formatado(p, l_s)
 
     doc.save(file_stream)
     file_stream.seek(0)
