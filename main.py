@@ -358,15 +358,11 @@ if menu == "🧪 Criador de Aulas":
             if st.button("💾 EXECUTAR TRIPLE-SYNC", use_container_width=True, type="primary", key=f"btn_triple_{v}"):
                 with st.status("Iniciando Protocolo de Sincronia...") as status:
                     meta = st.session_state.get("lab_meta", {})
-                    s_id = st.session_state.get("sosa_id_atual", "SEM-ID")
+                    # O s_id agora já é o nome bonito vindo do passo anterior
+                    s_id = st.session_state.get("sosa_id_atual", "SEM-ID") 
                     
-                    # --- DEFINIÇÃO DO NOME DE ELITE PARA O DRIVE E PLANILHA ---
-                    nome_final = util.gerar_nome_material_elite(
-                        meta.get('ano'), 
-                        meta.get('aula_alvo', 'Aula'), 
-                        meta.get('semana_ref', 'Semana')
-                    )
-                    
+                    nome_final = s_id # Nome do arquivo e ID são iguais
+                                        
                     ano_str = f"{meta.get('ano')}º"
                     semana_ref = meta.get('semana_ref', 'AVULSA')
                     trimestre_ref = meta.get('trimestre', 'I Trimestre')
@@ -532,20 +528,22 @@ if menu == "🧪 Criador de Aulas":
 
                             if st.button("💎 COMPILAR MATERIAL DE ELITE V38", use_container_width=True, type="primary"):
                                 with st.spinner("Arquitetando Tratado Didático..."):
-                                    s_id = util.gerar_sosa_id("AULA", ano_lab, "I")
-                                    st.session_state.sosa_id_atual = s_id
+                                    # --- UNIFICAÇÃO DE IDENTIDADE (SOSA-ID = NOME DE ELITE) ---
+                                    nome_elite = util.gerar_nome_material_elite(ano_lab, aula_alvo, sem_lab)
+                                    
+                                    st.session_state.sosa_id_atual = nome_elite # O ID agora é o nome bonito
                                     st.session_state.lab_meta = {
                                         "ano": ano_lab, "trimestre": "I Trimestre", 
                                         "tipo": aula_alvo, "semana_ref": sem_lab,
                                         "aula_alvo": aula_alvo,
-                                        "nome_formatado": f"{ano_ref} - {aula_alvo} - {sem_lab}"
+                                        "nome_formatado": nome_elite
                                     }
                                     
                                     tag_aula = "AULA_1" if aula_alvo == "Aula 1" else "AULA_2"
                                     roteiro_plano = ai.extrair_tag(plano_txt, tag_aula)
                                     
                                     prompt_manual = (
-                                        f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {s_id}.\n"
+                                        f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {nome_elite}.\n" # IA recebe o nome bonito
                                         f"SÉRIE: {ano_ref}. ALVO: {aula_alvo}.\n"
                                         f"QUANTIDADE: {qtd_q} questões.\n"
                                         f"--- HERANÇA TÉCNICA ---\n"
