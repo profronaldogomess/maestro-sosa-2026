@@ -165,13 +165,13 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     return file_stream
 
 # ==============================================================================
-# 3. MATERIAL PEI ADAPTADO (VERSÃO ELITE V49 - SIMETRIA E COLUNAS)
+# 3. MATERIAL PEI ADAPTADO (VERSÃO ELITE V50 - SIMETRIA TOTAL E COLUNAS)
 # ==============================================================================
 def gerar_docx_pei_v25(titulo_doc, conteudo, info):
     file_stream = io.BytesIO()
     doc = Document()
     
-    # --- 1. CONFIGURAÇÃO DE MARGENS MÍNIMAS (APROVEITAMENTO TOTAL) ---
+    # --- 1. CONFIGURAÇÃO DE MARGENS MÍNIMAS (APROVEITAMENTO TOTAL A4) ---
     section = doc.sections[0]
     section.top_margin = Inches(0.3)
     section.bottom_margin = Inches(0.3)
@@ -182,21 +182,21 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
 
     style = doc.styles['Normal']
     style.font.name = 'Arial'
-    style.font.size = Pt(11.5) # Fonte levemente maior que o regular para acessibilidade
+    style.font.size = Pt(11) # Mantendo o padrão do regular para simetria
 
     # --- 2. CABEÇALHO (SEÇÃO 1 - COLUNA ÚNICA) ---
-    # Usamos a mesma função do regular para garantir padronização
+    # Utiliza a função limpa que removeu o campo "NOTA"
     configurar_cabecalho_atividade_limpo(doc, info, "ATIVIDADE ADAPTADA")
     doc.add_paragraph()
 
-    # --- 3. QUEBRA DE SEÇÃO PARA DUAS COLUNAS ---
+    # --- 3. QUEBRA DE SEÇÃO PARA DUAS COLUNAS (IGUAL AO REGULAR) ---
     new_section = doc.add_section(WD_SECTION.CONTINUOUS)
     new_section.top_margin = Inches(0.1)
     
     sectPr = new_section._sectPr
     cols = sectPr.xpath('./w:cols')[0]
     cols.set(qn('w:num'), '2')
-    cols.set(qn('w:space'), '400') # Espaçamento entre colunas
+    cols.set(qn('w:space'), '400') # Espaçamento entre colunas otimizado
 
     linhas = conteudo.split('\n')
     for linha in linhas:
@@ -207,20 +207,19 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
         p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
         p.paragraph_format.space_after = Pt(12)
 
-        # --- LÓGICA DE ESTRUTURA PEI (ANDAIME COGNITIVO) ---
-        
-        # Rótulos de Andaime (PARA LEMBRAR, OBJETIVO, INSTRUÇÕES)
-        if any(x in l_s.upper() for x in ["PARA LEMBRAR", "OBJETIVO", "INSTRUÇÕES", "ATIVIDADE"]):
-            # Limpa colchetes e símbolos
+        # --- LÓGICA DE FORMATAÇÃO PEI ---
+
+        # Títulos e Marcadores de Andaime (Bold Caps)
+        if any(x in l_s.upper() for x in ["PARA LEMBRAR", "OBJETIVO", "INSTRUÇÕES", "ATIVIDADE", "TEMA:"]):
             txt_limpo = l_s.replace("[", "").replace("]", "").replace(":", "").upper()
-            run = p.add_run(f"█▓▒░ {txt_limpo} ░▒▓█")
+            run = p.add_run(txt_limpo)
             run.bold = True
-            run.font.size = Pt(11)
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER
             p.paragraph_format.space_before = Pt(10)
 
-        # Questões PEI Inline (Igual ao Regular)
+        # Questões PEI Inline (Rótulo Bold + Texto Normal)
         elif "QUESTÃO" in l_s.upper():
+            # Regex para capturar "QUESTÃO X" ou "QUESTÃO PEI X"
             match = re.match(r"^(QUEST[AÃ]O\s+(?:PEI\s+)?\d+)[\.\s:]*(.*)", l_s, re.IGNORECASE)
             if match:
                 rotulo = match.group(1).upper().strip()
@@ -232,14 +231,14 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
                 adicionar_texto_formatado(p, l_s)
             p.paragraph_format.space_before = Pt(8)
 
-        # Prompts de Imagem PEI (Fonte 9 para melhor leitura que o regular)
+        # Prompts de Imagem (Fonte 8, Cinza, Itálico)
         elif "[" in l_s and "PROMPT IMAGEM" in l_s.upper():
             run = p.add_run(l_s)
-            run.font.size = Pt(9)
+            run.font.size = Pt(8)
             run.font.italic = True
-            run.font.color.rgb = RGBColor(100, 100, 100)
+            run.font.color.rgb = RGBColor(120, 120, 120)
         
-        # Texto de Apoio/Dicas
+        # Texto Normal
         else:
             adicionar_texto_formatado(p, l_s)
 
