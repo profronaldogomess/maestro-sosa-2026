@@ -804,69 +804,54 @@ if menu == "📅 Planejamento (Ponto ID)":
                 st.session_state.p_temp = ai.gerar_ia("PLANE_PEDAGOGICO", prompt)
                 st.rerun()
 
-# --- 3. SELEÇÃO HIERÁRQUICA E TRADUÇÃO CURRICULAR (RIGIDEZ PREFEITURA) ---
+# --- 3. SELEÇÃO HIERÁRQUICA OU MAPEAMENTO INTELIGENTE (VERSÃO UNIFICADA V28.11) ---
         with st.container(border=True):
-            st.markdown("#### 🎯 Sincronia com a Matriz Oficial (Prefeitura)")
+            # Captura a Matriz Curricular do Ano para a IA discernir
+            df_matriz_ano = df_curriculo[df_curriculo['ANO'].astype(str) == str(ano_p)]
+            matriz_contexto = df_matriz_ano.to_string(index=False)
+            
             f_eixo, f_cont, f_obj, ctx_ia = "", "", "", ""
 
-            # O FUNIL AGORA É OBRIGATÓRIO PARA AMBOS OS MÉTODOS
-            c_filt1, c_filt2 = st.columns([1, 2])
-            # Filtra o banco pelo ano selecionado no passo 2
-            ano_busca_str = str(ano_p)
-            df_filtrado = df_curriculo[df_curriculo['ANO'].astype(str) == ano_busca_str]
+            if modo_p == "🎛️ Manual (Banco)":
+                st.markdown("#### 🎯 Seleção Manual da Matriz")
+                c_filt1, c_filt2 = st.columns([1, 2])
+                if not df_matriz_ano.empty:
+                    lista_eixos = sorted(df_matriz_ano['EIXO'].unique().tolist())
+                    sel_eixo = st.multiselect("1. Eixo Oficial:", lista_eixos, key=f"ponto_id_eixo_man_{v}")
+                    if sel_eixo:
+                        df_cont = df_matriz_ano[df_matriz_ano['EIXO'].isin(sel_eixo)]
+                        lista_conts = sorted(df_cont['CONTEUDO_ESPECIFICO'].unique().tolist())
+                        sel_cont = st.multiselect("2. Conteúdo Oficial:", lista_conts, key=f"ponto_id_cont_man_{v}")
+                        if sel_cont:
+                            df_obj = df_cont[df_cont['CONTEUDO_ESPECIFICO'].isin(sel_cont)]
+                            lista_objs = sorted(df_obj['OBJETIVOS'].unique().tolist())
+                            sel_obj = st.multiselect("3. Objetivos Oficiais:", lista_objs, key=f"ponto_id_obj_man_{v}")
+                            f_eixo, f_cont, f_obj = " / ".join(sel_eixo), " / ".join(sel_cont), " \n ".join(sel_obj)
+                ctx_ia = f"MÉTODO MANUAL. DADOS SELECIONADOS: EIXO: {f_eixo}, CONTEÚDO: {f_cont}, OBJETIVOS: {f_obj}."
             
-            if not df_filtrado.empty:
-                # 1. Seleção do Eixo (Obrigatório)
-                lista_eixos = sorted(df_filtrado['EIXO'].unique().tolist())
-                sel_eixo = st.multiselect("1. Eixo Oficial (Prefeitura):", lista_eixos, key=f"h_eixo_{v}")
-                
-                if sel_eixo:
-                    # 2. Seleção do Conteúdo (Obrigatório)
-                    df_cont = df_filtrado[df_filtrado['EIXO'].isin(sel_eixo)]
-                    lista_conts = sorted(df_cont['CONTEUDO_ESPECIFICO'].unique().tolist())
-                    sel_cont = st.multiselect("2. Conteúdo Específico (Prefeitura):", lista_conts, key=f"h_cont_{v}")
-                    
-                    if sel_cont:
-                        # 3. Seleção do Objetivo (Obrigatório)
-                        df_obj = df_cont[df_cont['CONTEUDO_ESPECIFICO'].isin(sel_cont)]
-                        lista_objs = sorted(df_obj['OBJETIVOS'].unique().tolist())
-                        sel_obj = st.multiselect("3. Objetivos de Aprendizagem (Prefeitura):", lista_objs, key=f"h_obj_{v}")
-                        
-                        f_eixo = " / ".join(sel_eixo)
-                        f_cont = " / ".join(sel_cont)
-                        f_obj = " \n ".join(sel_obj)
             else:
-                st.error(f"❌ Erro: Matriz do {ano_p}º ano não encontrada no CSV.")
-
-            st.divider()
-
-            # AGORA O MÉTODO ENTRA COMO COMPLEMENTO
-            if modo_p == "📖 Livro Didático":
-                st.markdown("#### 📖 Referência do Livro (Ferramenta)")
+                st.markdown("#### 📖 Mapeamento Automático (IA Perita)")
                 cx1, cx2 = st.columns([2, 1])
                 lista_mats = df_materiais["NOME_ARQUIVO"].tolist() if not df_materiais.empty else []
-                sel_mat = cx1.multiselect("Livro Utilizado:", lista_mats, key=f"livro_sel_{v}")
-                pags = cx2.text_input("Páginas:", placeholder="Ex: 12-23", key=f"pags_{v}")
-                ctx_ia = f"MÉTODO: LIVRO DIDÁTICO ({sel_mat}) PÁGINAS {pags}. TRADUZIR PARA OS TERMOS OFICIAIS ABAIXO."
-            else:
-                ctx_ia = "MÉTODO: MANUAL/BANCO. SEGUIR RIGOROSAMENTE OS TERMOS OFICIAIS ABAIXO."
+                sel_mat = cx1.multiselect("Livro Utilizado:", lista_mats, key=f"ponto_id_livro_auto_{v}")
+                pags = cx2.text_input("Páginas:", placeholder="Ex: 12-23", key=f"ponto_id_pags_auto_{v}")
+                ctx_ia = f"MÉTODO LIVRO: {sel_mat} PÁGINAS: {pags}. A IA DEVE DISCERNIR O CONTEÚDO NA MATRIZ ABAIXO."
 
-            # Adiciona os dados do banco ao contexto da IA
-            ctx_ia += f"\nEIXO OFICIAL: {f_eixo}\nCONTEÚDO OFICIAL: {f_cont}\nOBJETIVOS OFICIAIS: {f_obj}"
+            strat = st.text_area("Estratégia / Observações / Descrição do Evento:", key=f"ponto_id_strat_final_{v}")
 
-            strat = st.text_area("Estratégia / Observações / Descrição do Evento:", key=f"strat_{v}")
-
-        # --- BOTÃO DE COMPILAÇÃO COM VALIDAÇÃO ---
-        if st.button("🚀 COMPILAR PLANEJAMENTO BNCC", use_container_width=True, type="primary", key=f"btn_compilar_{v}"):
-            if not f_cont or not f_obj:
-                st.error("⚠️ Bloqueio de Segurança: Você precisa selecionar o Conteúdo e o Objetivo do Banco de Dados para garantir a aceitação no sistema da prefeitura.")
-            else:
-                with st.spinner("Maestro SOSA realizando Tradução Curricular..."):
-                    prompt = (f"NATUREZA: {tipo_semana}. ANO: {ano_p}º. SEMANA: {sem_limpa}. TRIMESTRE: {trim_atual}. "
-                              f"CARGA: {carga_horaria}. SABADO: {tem_sabado}. "
-                              f"CONTEXTO: {ctx_ia}. ESTRATÉGIA: {strat}.")
-                    st.session_state.p_temp = ai.gerar_ia("PLANE_PEDAGOGICO", prompt)
-                    st.rerun()
+        # --- BOTÃO DE COMPILAÇÃO (ÚNICO E COM CHAVE EXCLUSIVA) ---
+        if st.button("🚀 COMPILAR PLANEJAMENTO BNCC", use_container_width=True, type="primary", key=f"btn_compilar_final_sosa_{v}"):
+            with st.spinner("Maestro SOSA realizando Perícia Curricular..."):
+                # O prompt leva a Matriz Inteira para a IA decidir no modo Livro
+                prompt = (
+                    f"NATUREZA: {tipo_semana} ({sub_tipo}). ANO: {ano_p}º. SEMANA: {sem_limpa}. TRIMESTRE: {trim_atual}.\n"
+                    f"CONTEXTO: {ctx_ia}. ESTRATÉGIA: {strat}.\n\n"
+                    f"--- MATRIZ CURRICULAR OFICIAL PARA MAPEAMENTO ---\n"
+                    f"{matriz_contexto}\n\n"
+                    f"INSTRUÇÃO: Analise a estratégia e as páginas do livro. Identifique na matriz acima quais Eixos, Conteúdos e Objetivos se aplicam. Preencha as tags [CONTEUDO_GERAL], [CONTEUDOS_ESPECIFICOS] e [OBJETIVOS_ENSINO] com os termos EXATOS da matriz."
+                )
+                st.session_state.p_temp = ai.gerar_ia("PLANE_PEDAGOGICO", prompt)
+                st.rerun()
 
         # --- 4. EDITOR E REFINADOR (SÓ APARECE SE GERADO) ---
         if "p_temp" in st.session_state:
