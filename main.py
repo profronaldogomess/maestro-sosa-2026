@@ -327,11 +327,17 @@ if menu == "🧪 Criador de Aulas":
     # --- ÁREA DE EXIBIÇÃO E REFINO ---
     if "lab_temp" in st.session_state and "[PROFESSOR]" in st.session_state.lab_temp:
         txt_base = st.session_state.lab_temp
-        s_id = st.session_state.get("sosa_id_atual", "SEM-ID")
+        
+        # Tenta extrair o ID do texto caso o session_state tenha se perdido no refino
+        s_id_extraido = ai.extrair_tag(txt_base, "SOSA_ID")
+        s_id = s_id_extraido if s_id_extraido else st.session_state.get("sosa_id_atual", "SEM-ID")
+        
+        # Limpeza de segurança: remove tags que possam ter vindo no nome por erro da IA
+        s_id = s_id.split("[")[0].strip()
+        
         meta = st.session_state.get("lab_meta", {})
 
-        # Exibição com Nome de Elite
-        st.success(f"💎 Material Gerado: **{s_id}**")
+        st.success(f"💎 Material em Edição: **{s_id}**")
         
         t_prof, t_alu, t_gab, t_pei, t_sync = st.tabs(["👨‍🏫 Professor", "📝 Aluno", "✅ Gabarito/Rubrica", "♿ PEI", "☁️ SINCRONIA"])
         
@@ -346,57 +352,49 @@ if menu == "🧪 Criador de Aulas":
             with c_p2: ed_pei_gab = st.text_area("✅ Gabarito PEI:", ai.extrair_tag(txt_base, "GABARITO_PEI"), height=400, key=f"ed_pei_gab_{v}")
 
         with t_sync:
-            st.warning("⚠️ O Triple-Sync salvará Aluno, Professor e PEI vinculados ao Plano.")
-            if st.button("💾 EXECUTAR TRIPLE-SYNC", use_container_width=True, type="primary", key=f"btn_triple_{v}"):
-                with st.status("Iniciando Protocolo de Sincronia...") as status:
-                    meta = st.session_state.get("lab_meta", {})
-                    s_id = st.session_state.get("sosa_id_atual", "SEM-ID")
-                    
+            st.warning("⚠️ O Triple-Sync substituirá a versão anterior deste material.")
+            if st.button("💾 EXECUTAR TRIPLE-SYNC (SUBSTITUIR)", use_container_width=True, type="primary", key=f"btn_triple_{v}"):
+                with st.status("Iniciando Protocolo de Substituição...") as status:
+                    # 1. DEFINIÇÃO DO ALVO (NOME LIMPO)
                     nome_final = s_id 
-                    ano_str = f"{meta.get('ano')}º"
+                    ano_str = f"{meta.get('ano', '6')}º"
                     semana_ref = meta.get('semana_ref', 'AVULSA')
-                    trimestre_ref = meta.get('trimestre', 'I Trimestre')
+                    aula_alvo = meta.get('aula_alvo', 'Aula')
                     
-                    # Captura os textos das abas
-                    ed_prof_val = ed_prof
-                    ed_alu_val = ed_alu
-                    ed_res_val = ed_res
-                    ed_pei_val = ed_pei_mat
-                    ed_pei_gab_val = ed_pei_gab
-
-                    # --- BLINDAGEM DE TAGS (FORÇA A ESTRUTURA CORRETA) ---
+                    # 2. BLINDAGEM DE CONTEÚDO
                     conteudo_banco = (
-                        f"[SOSA_ID] {s_id}\n"
-                        f"[AULA_ALVO] {meta.get('aula_alvo')}\n"
-                        f"[PROFESSOR]\n{ed_prof_val}\n\n"
-                        f"[ALUNO]\n{ed_alu_val}\n\n"
-                        f"[GABARITO]\n{ed_res_val}\n\n"
-                        f"[PEI]\n{ed_pei_val}\n\n"
-                        f"[GABARITO_PEI]\n{ed_pei_gab_val}\n\n"
+                        f"[SOSA_ID] {nome_final}\n"
+                        f"[AULA_ALVO] {aula_alvo}\n"
+                        f"[PROFESSOR]\n{ed_prof}\n\n"
+                        f"[ALUNO]\n{ed_alu}\n\n"
+                        f"[GABARITO]\n{ed_res}\n\n"
+                        f"[PEI]\n{ed_pei_mat}\n\n"
+                        f"[GABARITO_PEI]\n{ed_pei_gab}\n\n"
                     )
 
-                    # Contagem de questões
-                    qtd_q_real = len(re.findall(r'QUESTÃO', ed_alu_val.upper()))
-                    info_doc = {"ano": ano_str, "trimestre": trimestre_ref, "valor": "0,00", "valor_questao": "0,00", "qtd_questoes": qtd_q_real}
-
+                    # 3. LIMPEZA CIRÚRGICA (DELETA O ANTIGO NO DRIVE E NA PLANILHA)
+                    status.write("🧹 Removendo versão obsoleta...")
                     db.excluir_registro_com_drive("DB_AULAS_PRONTAS", nome_final)
                     
-                    # Geração dos arquivos (Usa o conteúdo blindado)
-                    doc_alu = exporter.gerar_docx_aluno_v24(nome_final, ed_alu_val, info_doc)
+                    # 4. GERAÇÃO DOS NOVOS ARQUIVOS
+                    qtd_q_real = len(re.findall(r'QUESTÃO', ed_alu.upper()))
+                    info_doc = {"ano": ano_str, "trimestre": "I Trimestre", "valor": "0,00", "valor_questao": "0,00", "qtd_questoes": qtd_q_real}
+
+                    doc_alu = exporter.gerar_docx_aluno_v24(nome_final, ed_alu, info_doc)
                     link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{nome_final}_ALUNO", modo="AULA")
                     
-                    doc_prof = exporter.gerar_docx_professor_v25(nome_final, ed_prof_val, {"ano": ano_str, "semana": semana_ref, "trimestre": trimestre_ref})
+                    doc_prof = exporter.gerar_docx_professor_v25(nome_final, ed_prof, {"ano": ano_str, "semana": semana_ref, "trimestre": "I Trimestre"})
                     link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_final}_PROF", modo="AULA")
                     
                     link_pei = "N/A"
-                    if len(ed_pei_val) > 10:
-                        doc_pei = exporter.gerar_docx_pei_v25(f"{nome_final}_PEI", ed_pei_val, info_doc)
+                    if len(ed_pei_mat) > 10:
+                        doc_pei = exporter.gerar_docx_pei_v25(f"{nome_final}_PEI", ed_pei_mat, info_doc)
                         link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_final}_PEI", modo="AULA")
                     
                     if "https" in str(link_alu):
-                        # Adiciona os links ao final do conteúdo do banco
                         conteudo_banco += f"--- LINKS ---\nAluno({link_alu}) Prof({link_prof}) PEI({link_pei})"
                         
+                        # 5. SALVAMENTO DA NOVA VERSÃO
                         db.salvar_no_banco("DB_AULAS_PRONTAS", [
                             datetime.now().strftime("%d/%m/%Y"), 
                             semana_ref, 
@@ -405,22 +403,10 @@ if menu == "🧪 Criador de Aulas":
                             ano_str, 
                             link_alu
                         ])
-                        status.update(label="✅ Sincronia Concluída!", state="complete")
+                        status.update(label="✅ Material Substituído com Sucesso!", state="complete")
                         st.balloons()
                         time.sleep(1)
                         reset_laboratorio()
-
-        st.markdown("---")
-        with st.container(border=True):
-            st.subheader("🤖 Refinador Maestro")
-            cmd_lab = st.chat_input("Solicite ajustes técnicos...", key=f"chat_lab_{v}")
-            if cmd_lab:
-                with st.spinner("Refinando material..."):
-                    st.session_state.lab_temp = ai.gerar_ia("REFINADOR_MATERIAIS", f"ORDEM: {cmd_lab}\n\nATUAL:\n{st.session_state.lab_temp}")
-                    st.session_state.v_lab += 1; st.rerun()
-        
-        if st.button("🆕 GERAR OUTRO MATERIAL (LIMPAR)", use_container_width=True, key=f"btn_reset_final_{v}"): 
-            reset_laboratorio()
 
     # --- SEÇÃO DE ENTRADA (CONFIGURAÇÃO) ---
     else:
