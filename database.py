@@ -49,7 +49,7 @@ def carregar_tudo():
     # 2. Função interna com o wb passado explicitamente para evitar erro de escopo
     def safe_get(conn, nome, colunas_padrao=[]):
         try:
-            ws = conn.worksheet(nome) # Agora usa 'conn' que foi passado
+            ws = conn.worksheet(nome)
             dados = ws.get_all_values() 
             if not dados or len(dados) < 1:
                 return pd.DataFrame(columns=colunas_padrao)
@@ -57,30 +57,16 @@ def carregar_tudo():
             df = pd.DataFrame(dados[1:], columns=dados[0])
             df.columns = [str(c).strip().upper() for c in df.columns]
             
-            # --- BLINDAGEM DECIMAL E CRONOLÓGICA SOSA ---
+            # --- VACINA DE NORMALIZAÇÃO SOSA (ANTI-ESPAÇO INVISÍVEL) ---
             for col in df.columns:
+                # Limpa espaços em branco de todas as colunas de texto
+                df[col] = df[col].astype(str).str.strip()
+                
                 if any(x in col for x in ["NOTA", "MEDIA", "VALOR", "SOMA"]):
                     df[col] = df[col].apply(util.sosa_to_float)
                 
-                # NOVA VACINA: Normaliza todas as colunas de DATA para DD/MM/YYYY
                 if col == "DATA":
                     df[col] = df[col].apply(util.formatar_data_br)
-
-            # --- LÓGICA ESPECÍFICA POR TABELA (PRESERVADA) ---
-            if nome == "DB_AULAS_PRONTAS":
-                if "LINK_DRIVE" not in df.columns: df["LINK_DRIVE"] = ""
-            
-            elif nome == "DB_PLANOS":
-                if "ANO" in df.columns:
-                    df['ANO'] = df['ANO'].astype(str).apply(lambda x: f"{x}º" if x.isdigit() and "º" not in x else x)
-                if "LINK_DRIVE" not in df.columns: df["LINK_DRIVE"] = ""
-
-            elif nome == "DB_CURRICULO":
-                # VACINA SOSA: Garante que o ANO seja sempre string para comparação
-                if "ANO" in df.columns:
-                    df['ANO'] = df['ANO'].astype(str).str.replace('.0', '', regex=False)
-                # Limpeza de espaços em branco invisíveis que matam o filtro
-                df = df.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
 
             return df
         except Exception as e: 
