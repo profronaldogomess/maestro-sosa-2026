@@ -348,7 +348,7 @@ if menu == "🧪 Criador de Aulas":
             st.warning("⚠️ O Triple-Sync salvará Aluno, Professor e PEI vinculados ao Plano.")
             if st.button("💾 EXECUTAR TRIPLE-SYNC", use_container_width=True, type="primary", key=f"btn_triple_{v}"):
                 with st.status("Iniciando Protocolo de Sincronia...") as status:
-                    aula_nome = meta.get('aula_alvo', 'AULA')
+                    nome_final = meta.get('nome_formatado', f"{s_id} - {aula_nome}")
                     tipo_material = meta.get('tipo', 'AULA')
                     nome_final = f"{s_id} - {aula_nome}"
                     ano_str = f"{meta.get('ano')}º"
