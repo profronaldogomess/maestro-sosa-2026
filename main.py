@@ -702,7 +702,7 @@ if menu == "🧪 Criador de Aulas":
                             if db.excluir_registro_com_drive("DB_AULAS_PRONTAS", s_id_h): st.rerun()
 
 # ==============================================================================
-# MÓDULO: PLANEJAMENTO ESTRATÉGICO (PONTO ID) - ARQUITETURA V39.0 (SHIELD & REFINO)
+# MÓDULO: PLANEJAMENTO ESTRATÉGICO (PONTO ID) - ARQUITETURA V28.12 (INTEGRADA)
 # ==============================================================================
 if menu == "📅 Planejamento (Ponto ID)":
     st.title("📅 Engenharia de Planejamento (Ponto ID)")
@@ -727,6 +727,11 @@ if menu == "📅 Planejamento (Ponto ID)":
     ])
     
     with tab_gerar:
+        is_refinando = "refino_ativo" in st.session_state
+        if is_refinando:
+            if st.button("❌ CANCELAR REFINO E VOLTAR AO NOVO", use_container_width=True, key=f"cancel_ref_{v}"):
+                reset_planejamento()
+        
         # --- 1. STATUS E CALENDÁRIO ---
         with st.container(border=True):
             st.markdown("### 🛡️ 1. Status e Calendário")
@@ -753,61 +758,7 @@ if menu == "📅 Planejamento (Ponto ID)":
             trim_atual = sem_p.split(" - ")[1] if " - " in sem_p else "I Trimestre"
             modo_p = c3.radio("Método:", ["📖 Livro Didático", "🎛️ Manual (Banco)"], horizontal=True, key=f"modo_p_{v}")
 
-        # --- 3. SELEÇÃO HIERÁRQUICA OU MAPEAMENTO INTELIGENTE ---
-        with st.container(border=True):
-            # Captura a Matriz Curricular do Ano para a IA discernir
-            df_matriz_ano = df_curriculo[df_curriculo['ANO'].astype(str) == str(ano_p)]
-            matriz_contexto = df_matriz_ano.to_string(index=False)
-            
-            f_eixo, f_cont, f_obj, ctx_ia = "", "", "", ""
-
-            if modo_p == "🎛️ Manual (Banco)":
-                st.markdown("#### 🎯 Seleção Manual da Matriz")
-                c_filt1, c_filt2 = st.columns([1, 2])
-                if not df_matriz_ano.empty:
-                    lista_eixos = sorted(df_matriz_ano['EIXO'].unique().tolist())
-                    sel_eixo = st.multiselect("1. Eixo:", lista_eixos, key=f"ponto_id_eixo_{v}")
-                    if sel_eixo:
-                        df_cont = df_matriz_ano[df_matriz_ano['EIXO'].isin(sel_eixo)]
-                        lista_conts = sorted(df_cont['CONTEUDO_ESPECIFICO'].unique().tolist())
-                        sel_cont = st.multiselect("2. Conteúdo:", lista_conts, key=f"ponto_id_cont_{v}")
-                        if sel_cont:
-                            df_obj = df_cont[df_cont['CONTEUDO_ESPECIFICO'].isin(sel_cont)]
-                            lista_objs = sorted(df_obj['OBJETIVOS'].unique().tolist())
-                            sel_obj = st.multiselect("3. Objetivos:", lista_objs, key=f"ponto_id_obj_{v}")
-                            f_eixo, f_cont, f_obj = " / ".join(sel_eixo), " / ".join(sel_cont), " \n ".join(sel_obj)
-                ctx_ia = f"MÉTODO MANUAL. DADOS SELECIONADOS: EIXO: {f_eixo}, CONTEÚDO: {f_cont}, OBJETIVOS: {f_obj}."
-            
-            else:
-                st.markdown("#### 📖 Mapeamento Automático (IA Perita)")
-                cx1, cx2 = st.columns([2, 1])
-                lista_mats = df_materiais["NOME_ARQUIVO"].tolist() if not df_materiais.empty else []
-                # CHAVE ALTERADA PARA: ponto_id_livro_sel_{v}
-                sel_mat = cx1.multiselect("Livro Utilizado:", lista_mats, key=f"ponto_id_livro_sel_{v}")
-                # CHAVE ALTERADA PARA: ponto_id_pags_{v}
-                pags = cx2.text_input("Páginas:", placeholder="Ex: 12-23", key=f"ponto_id_pags_{v}")
-                ctx_ia = f"MÉTODO LIVRO: {sel_mat} PÁGINAS: {pags}. A IA DEVE DISCERNIR O CONTEÚDO NA MATRIZ ABAIXO."
-
-            # CHAVE ALTERADA PARA: ponto_id_strat_{v}
-            strat = st.text_area("Estratégia / Observações / Descrição do Evento:", key=f"ponto_id_strat_{v}")
-
-        if st.button("🚀 COMPILAR PLANEJAMENTO BNCC", use_container_width=True, type="primary", key=f"btn_compilar_{v}"):
-            with st.spinner("Maestro SOSA realizando Perícia Curricular..."):
-                # ORDEM DE RIGOR MÁXIMO
-                prompt = (
-                    f"NATUREZA: {tipo_semana} ({sub_tipo}). ANO: {ano_p}º. SEMANA: {sem_limpa}. TRIMESTRE: {trim_atual}.\n"
-                    f"MÉTODO: {modo_p}. CONTEXTO: {ctx_ia}. ESTRATÉGIA: {strat}.\n\n"
-                    f"--- MATRIZ CURRICULAR OFICIAL (FONTE ÚNICA DE VERDADE) ---\n"
-                    f"{matriz_contexto}\n\n"
-                    f"INSTRUÇÃO CRÍTICA:\n"
-                    f"1. Analise as páginas do livro/estratégia e localize a linha correspondente na MATRIZ acima.\n"
-                    f"2. Copie LITERALMENTE os textos da Matriz para as tags [CONTEUDO_GERAL], [CONTEUDOS_ESPECIFICOS] e [OBJETIVOS_ENSINO].\n"
-                    f"3. Desenvolva as Aulas (1 e 2) com base no livro, mas mantendo a linguagem formal do Arquiteto Pedagógico."
-                )
-                st.session_state.p_temp = ai.gerar_ia("PLANE_PEDAGOGICO", prompt)
-                st.rerun()
-
-# --- 3. SELEÇÃO HIERÁRQUICA OU MAPEAMENTO INTELIGENTE (VERSÃO UNIFICADA V28.11) ---
+        # --- 3. SELEÇÃO HIERÁRQUICA OU MAPEAMENTO INTELIGENTE (UNIFICADO) ---
         with st.container(border=True):
             # Captura a Matriz Curricular do Ano para a IA discernir
             df_matriz_ano = df_curriculo[df_curriculo['ANO'].astype(str) == str(ano_p)]
@@ -842,16 +793,18 @@ if menu == "📅 Planejamento (Ponto ID)":
 
             strat = st.text_area("Estratégia / Observações / Descrição do Evento:", key=f"ponto_id_strat_final_{v}")
 
-        # --- BOTÃO DE COMPILAÇÃO (ÚNICO E COM CHAVE EXCLUSIVA) ---
+        # --- BOTÃO DE COMPILAÇÃO ÚNICO ---
         if st.button("🚀 COMPILAR PLANEJAMENTO BNCC", use_container_width=True, type="primary", key=f"btn_compilar_final_sosa_{v}"):
             with st.spinner("Maestro SOSA realizando Perícia Curricular..."):
-                # O prompt leva a Matriz Inteira para a IA decidir no modo Livro
                 prompt = (
                     f"NATUREZA: {tipo_semana} ({sub_tipo}). ANO: {ano_p}º. SEMANA: {sem_limpa}. TRIMESTRE: {trim_atual}.\n"
-                    f"CONTEXTO: {ctx_ia}. ESTRATÉGIA: {strat}.\n\n"
-                    f"--- MATRIZ CURRICULAR OFICIAL PARA MAPEAMENTO ---\n"
+                    f"MÉTODO: {modo_p}. CONTEXTO: {ctx_ia}. ESTRATÉGIA: {strat}.\n\n"
+                    f"--- MATRIZ CURRICULAR OFICIAL (FONTE ÚNICA DE VERDADE) ---\n"
                     f"{matriz_contexto}\n\n"
-                    f"INSTRUÇÃO: Analise a estratégia e as páginas do livro. Identifique na matriz acima quais Eixos, Conteúdos e Objetivos se aplicam. Preencha as tags [CONTEUDO_GERAL], [CONTEUDOS_ESPECIFICOS] e [OBJETIVOS_ENSINO] com os termos EXATOS da matriz."
+                    f"INSTRUÇÃO CRÍTICA:\n"
+                    f"1. Analise as páginas do livro/estratégia e localize a linha correspondente na MATRIZ acima.\n"
+                    f"2. Copie LITERALMENTE os textos da Matriz para as tags [CONTEUDO_GERAL], [CONTEUDOS_ESPECIFICOS] e [OBJETIVOS_ENSINO].\n"
+                    f"3. Desenvolva as Aulas (1 e 2) com base no livro, mas mantendo a linguagem formal do Arquiteto Pedagógico."
                 )
                 st.session_state.p_temp = ai.gerar_ia("PLANE_PEDAGOGICO", prompt)
                 st.rerun()
@@ -867,8 +820,12 @@ if menu == "📅 Planejamento (Ponto ID)":
                         novo_texto = ai.gerar_ia("REFINADOR_PEDAGOGICO", f"ORDEM: {cmd_refine}\n\nATUAL:\n{st.session_state.p_temp}")
                         if novo_texto and "[BNCC_CODE]" in novo_texto:
                             st.session_state.p_temp = novo_texto
-                            st.session_state.v_plano += 1 # GATILHO DE ATUALIZAÇÃO VISUAL
+                            st.session_state.v_plano += 1 
                             st.rerun()
+                
+                # BOTÃO PARA LIMPAR O TEXTO GERADO
+                if st.button("🗑️ LIMPAR PLANEJAMENTO GERADO", use_container_width=True):
+                    reset_planejamento()
 
             txt_bruto = st.session_state.p_temp
             t_ed, t_vis = st.tabs(["✏️ Editor de Texto", "👁️ Estrutura de Regência"])
@@ -876,9 +833,12 @@ if menu == "📅 Planejamento (Ponto ID)":
             with t_ed:
                 c_ed1, c_ed2 = st.columns([1, 2])
                 ed_bncc = c_ed1.text_input("Código BNCC:", ai.extrair_tag(txt_bruto, "BNCC_CODE"), key=f"ed_b_{v}")
-                val_eixo = f_eixo if f_eixo else ai.extrair_tag(txt_bruto, "CONTEUDO_GERAL")
-                val_cont = f_cont if f_cont else ai.extrair_tag(txt_bruto, "CONTEUDOS_ESPECIFICOS")
-                val_obj = f_obj if f_obj else ai.extrair_tag(txt_bruto, "OBJETIVOS_ENSINO")
+                
+                # Lógica de preenchimento: Prioriza o que a IA mapeou, mas aceita o manual
+                val_eixo = ai.extrair_tag(txt_bruto, "CONTEUDO_GERAL") if ai.extrair_tag(txt_bruto, "CONTEUDO_GERAL") else f_eixo
+                val_cont = ai.extrair_tag(txt_bruto, "CONTEUDOS_ESPECIFICOS") if ai.extrair_tag(txt_bruto, "CONTEUDOS_ESPECIFICOS") else f_cont
+                val_obj = ai.extrair_tag(txt_bruto, "OBJETIVOS_ENSINO") if ai.extrair_tag(txt_bruto, "OBJETIVOS_ENSINO") else f_obj
+                
                 ed_geral = c_ed2.text_input("Eixo Final:", val_eixo, key=f"ed_g_{v}")
                 ed_espec = st.text_area("Conteúdos Finais:", val_cont, key=f"ed_e_{v}")
                 ed_objs = st.text_area("Objetivos Finais:", val_obj, key=f"ed_o_{v}")
@@ -888,27 +848,16 @@ if menu == "📅 Planejamento (Ponto ID)":
                 ed_ava = st.text_area("Avaliação:", ai.extrair_tag(txt_bruto, "AVALIACAO"), key=f"ed_ava_{v}")
                 ed_pei = st.text_area("Adaptação PEI:", ai.extrair_tag(txt_bruto, "ADAPTACAO_PEI"), key=f"ed_pei_{v}")
 
-
-
-# BLOCO DE FINALIZAÇÃO REVISADO (SEM ERROS DE VARIÁVEL)
                 if st.button("💾 FINALIZAR E DISPARAR PRODUÇÃO", use_container_width=True, type="primary", key=f"btn_final_hub_{v}"):
                     with st.status("Sincronizando Hub Acadêmico...") as status:
-                        # 1. DEFINIÇÃO DE VARIÁVEIS DE IDENTIFICAÇÃO
                         final_ano_str = f"{ano_p}º"
                         nome_arquivo = f"PLANO_{ano_p}ANO_{sem_limpa.replace(' ', '')}"
-                        
-                        # 2. LIMPEZA DE VERSÕES ANTIGAS (UPSERT)
                         db.excluir_plano_completo(sem_limpa, final_ano_str)
-                        
-                        # 3. CAPTURA DE CONTEÚDO E NOVAS TAGS ACADÊMICAS
                         ed_recursos = ai.extrair_tag(txt_bruto, "RECURSOS_DIDATICOS")
                         
-                        # Metodologia Unificada (Nomenclatura Acadêmica)
                         metodologia_unificada = f"AULA 01:\n{ed_a1}\n\nAULA 02:\n{ed_a2}"
-                        if ed_a3 != "N/A": 
-                            metodologia_unificada += f"\n\nAULA 03 (SÁBADO LETIVO):\n{ed_a3}"
+                        if ed_a3 != "N/A": metodologia_unificada += f"\n\nAULA 03 (SÁBADO LETIVO):\n{ed_a3}"
                         
-                        # 4. GERAÇÃO DO DOCUMENTO WORD (EXPORTER)
                         dados_docx = {
                             "geral": f"[{ed_bncc}] {ed_geral}", 
                             "especificos": ed_espec, 
@@ -919,22 +868,9 @@ if menu == "📅 Planejamento (Ponto ID)":
                             "pei": ed_pei
                         }
                         
-                        doc_io = exporter.gerar_docx_plano_pedagogico_ELITE(
-                            nome_arquivo, 
-                            dados_docx, 
-                            {"ano": final_ano_str, "semana": sem_limpa, "trimestre": trim_atual}
-                        )
+                        doc_io = exporter.gerar_docx_plano_pedagogico_ELITE(nome_arquivo, dados_docx, {"ano": final_ano_str, "semana": sem_limpa, "trimestre": trim_atual})
+                        link_drive = db.subir_e_converter_para_google_docs(doc_io, nome_arquivo, trimestre=trim_atual, categoria=final_ano_str, semana=sem_limpa, modo="PLANEJAMENTO")
                         
-                        # 5. UPLOAD PARA O DRIVE E CAPTURA DO LINK
-                        link_drive = db.subir_e_converter_para_google_docs(
-                            doc_io, nome_arquivo, 
-                            trimestre=trim_atual, 
-                            categoria=final_ano_str, 
-                            semana=sem_limpa, 
-                            modo="PLANEJAMENTO"
-                        )
-                        
-                        # 6. CONSOLIDAÇÃO NO BANCO DE DADOS (SHEETS)
                         if "https" in str(link_drive):
                             final_txt = (
                                 f"[BNCC_CODE] {ed_bncc} \n"
@@ -949,18 +885,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                                 f"[ADAPTACAO_PEI] {ed_pei} \n"
                                 f"--- LINK DRIVE --- {link_drive}"
                             )
-                            
-                            # Salva no banco respeitando a ordem das colunas do seu CSV
-                            db.salvar_no_banco("DB_PLANOS", [
-                                datetime.now().strftime("%d/%m/%Y"), 
-                                sem_limpa, 
-                                final_ano_str, 
-                                trim_atual, 
-                                "HUB_ATIVO", 
-                                final_txt, 
-                                link_drive
-                            ])
-                            
+                            db.salvar_no_banco("DB_PLANOS", [datetime.now().strftime("%d/%m/%Y"), sem_limpa, final_ano_str, trim_atual, "HUB_ATIVO", final_txt, link_drive])
                             status.update(label="✅ Plano Acadêmico Sincronizado!", state="complete")
                             st.balloons()
                             reset_planejamento()
