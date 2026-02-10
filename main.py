@@ -347,7 +347,7 @@ if menu == "🧪 Criador de Aulas":
             ed_pei_mat = c_p1.text_area("📄 Material PEI:", ai.extrair_tag(txt_base, "PEI"), height=400, key=f"ed_pei_mat_{v}")
             ed_pei_gab = c_p2.text_area("✅ Gabarito PEI:", ai.extrair_tag(txt_base, "GABARITO_PEI"), height=400, key=f"ed_pei_gab_{v}")
 
-with t_sync:
+        with t_sync:
             st.warning("⚠️ O Triple-Sync substituirá a versão anterior deste material.")
             if st.button("💾 EXECUTAR TRIPLE-SYNC (SUBSTITUIR)", use_container_width=True, type="primary", key=f"btn_triple_{v}"):
                 with st.status("Iniciando Protocolo de Substituição...") as status:
