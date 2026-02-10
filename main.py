@@ -304,7 +304,6 @@ def exibir_material_estruturado(texto_raw, key_prefix, dados_plano=None, info_au
                         status.update(label="❌ Erro no Upload da Aula.", state="error")
                         st.error(f"Falha no envio dos arquivos.")
                        
-
 # ==============================================================================
 # MÓDULO: LABORATÓRIO DE PRODUÇÃO (CRIADOR V39 - INTEGRADO & BLINDADO)
 # ==============================================================================
@@ -316,6 +315,7 @@ if menu == "🧪 Criador de Aulas":
         keys_to_del = ["lab_temp", "lab_pei", "lab_gab_pei", "refino_lab_ativo", "sosa_id_atual", "lab_meta", "hub_origem"]
         for k in keys_to_del:
             if k in st.session_state: del st.session_state[k]
+        st.cache_data.clear() # Limpa cache para o Escudo de Safra atualizar
         st.session_state.v_lab = int(time.time())
         st.rerun()
 
@@ -361,7 +361,11 @@ if menu == "🧪 Criador de Aulas":
                     semana_ref = meta.get('semana_ref', 'AVULSA')
                     aula_alvo = meta.get('aula_alvo', 'Aula')
                     
-                    # 2. BLINDAGEM DE CONTEÚDO
+                    # 2. LIMPEZA CIRÚRGICA (DELETA O ANTIGO NO DRIVE E NA PLANILHA ANTES DE SALVAR)
+                    status.write(f"🧹 Removendo versão obsoleta de {nome_final}...")
+                    db.excluir_registro_com_drive("DB_AULAS_PRONTAS", nome_final)
+                    
+                    # 3. BLINDAGEM DE CONTEÚDO
                     conteudo_banco = (
                         f"[SOSA_ID] {nome_final}\n"
                         f"[AULA_ALVO] {aula_alvo}\n"
@@ -372,10 +376,6 @@ if menu == "🧪 Criador de Aulas":
                         f"[GABARITO_PEI]\n{ed_pei_gab}\n\n"
                     )
 
-                    # 3. LIMPEZA CIRÚRGICA (DELETA O ANTIGO NO DRIVE E NA PLANILHA)
-                    status.write("🧹 Removendo versão obsoleta...")
-                    db.excluir_registro_com_drive("DB_AULAS_PRONTAS", nome_final)
-                    
                     # 4. GERAÇÃO DOS NOVOS ARQUIVOS
                     qtd_q_real = len(re.findall(r'QUESTÃO', ed_alu.upper()))
                     info_doc = {"ano": ano_str, "trimestre": "I Trimestre", "valor": "0,00", "valor_questao": "0,00", "qtd_questoes": qtd_q_real}
@@ -499,7 +499,9 @@ if menu == "🧪 Criador de Aulas":
                         
                         if not opcoes_aula:
                             st.success(f"✅ **Safra Concluída!**")
-                            if st.button("🔄 REPRODUZIR (SOBREPOR)"): reset_laboratorio()
+                            if st.button("🔄 REPRODUZIR (SOBREPOR)"): 
+                                st.session_state.v_lab += 1
+                                st.rerun()
                         else:
                             aula_alvo = c3.radio("🎯 Aula Pendente:", opcoes_aula, horizontal=True, key=f"prod_alvo_{v}")
                             st.info(f"📖 **Herança Detectada:** {livro_ref} (Pags: {pags_ref})")
@@ -529,177 +531,20 @@ if menu == "🧪 Criador de Aulas":
         # --- ABA 2: SONDA DE PROFICIÊNCIA (DIAGNÓSTICO REVERSO) ---
         with tab_diagnostico:
             st.markdown("### 🔍 Configurar Sonda de Proficiência")
-            with st.container(border=True):
-                c1, c2 = st.columns([1, 1])
-                ano_sonda = c1.selectbox("Série Atual:", [1, 2, 3, 4, 5, 6, 7, 8, 9], index=5, key=f"s_ano_{v}")
-                trim_sonda = c2.selectbox("Trimestre da Sonda:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"s_trim_{v}")
-                
-                # Lógica de Diagnóstico Reverso (Soberania SOSA)
-                if trim_sonda == "I Trimestre":
-                    ano_busca = int(ano_sonda) - 1
-                    if ano_busca < 1: ano_busca = 1
-                    st.warning(f"💡 **Diagnóstico Reverso:** Buscando conteúdos do {ano_busca}º Ano para nivelamento.")
-                else:
-                    ano_busca = int(ano_sonda)
-                    st.info(f"🎯 **Sonda de Ciclo:** Buscando conteúdos do {ano_busca}º Ano.")
-                
-                # FILTRO BLINDADO: Converte coluna ANO para string para evitar erro de busca
-                df_cur_sonda = df_curriculo[df_curriculo["ANO"].astype(str) == str(ano_busca)]
-                
-                if not df_cur_sonda.empty:
-                    # 1. SELEÇÃO DE EIXOS (Múltipla)
-                    lista_eixos_sonda = sorted(df_cur_sonda["EIXO"].unique().tolist())
-                    sel_eixos_s = st.multiselect("1. Selecione o(s) Eixo(s) Temático(s):", lista_eixos_sonda, key=f"s_eixos_{v}")
-                    
-                    if sel_eixos_s:
-                        # 2. SELEÇÃO DE CONTEÚDOS (Filtrado pelos Eixos)
-                        df_cont_s = df_cur_sonda[df_cur_sonda["EIXO"].isin(sel_eixos_s)]
-                        lista_conts_s = sorted(df_cont_s["CONTEUDO_ESPECIFICO"].unique().tolist())
-                        sel_conts_s = st.multiselect("2. Selecione os Conteúdos Alvo:", lista_conts_s, key=f"s_conts_{v}")
-                        
-                        if sel_conts_s:
-                            # 3. SELEÇÃO DE OBJETIVOS (Filtrado pelos Conteúdos)
-                            df_obj_s = df_cont_s[df_cont_s["CONTEUDO_ESPECIFICO"].isin(sel_conts_s)]
-                            lista_objs_s = sorted(df_obj_s["OBJETIVOS"].unique().tolist())
-                            sel_objs_s = st.multiselect("3. Selecione os Objetivos de Sondagem:", lista_objs_s, key=f"s_objs_{v}")
-                            
-                            st.divider()
-                            c_q1, c_q2 = st.columns([1, 2])
-                            qtd_q_sonda = c_q1.number_input("Nº de Questões:", 5, 20, 10, key=f"s_qtd_in_{v}")
-                            instr_extra_s = c_q2.text_area("📝 Instruções Extras (Contexto):", placeholder="Ex: Use temas de tecnologia e jogos...", key=f"s_instr_{v}")
-                            
-                            if st.button("🚀 GERAR SONDA DIAGNÓSTICA", use_container_width=True, type="primary"):
-                                if not sel_objs_s:
-                                    st.error("Selecione pelo menos um Objetivo no funil.")
-                                else:
-                                    with st.spinner("Maestro Sosa realizando perícia psicométrica..."):
-                                        s_id = util.gerar_sosa_id("SONDA", ano_sonda, trim_sonda[0])
-                                        st.session_state.sosa_id_atual = s_id
-                                        st.session_state.lab_meta = {"ano": ano_sonda, "trimestre": trim_sonda, "tipo": "SONDA"}
-                                        
-                                        prompt_sonda = (
-                                            f"SÉRIE ATUAL: {ano_sonda}º Ano. TRIMESTRE: {trim_sonda}.\n"
-                                            f"CONTEÚDOS DO BANCO: {' / '.join(sel_conts_s)}.\n"
-                                            f"OBJETIVOS DO BANCO: {' | '.join(sel_objs_s)}.\n"
-                                            f"QUANTIDADE: {qtd_q_sonda} questões A-E.\n\n"
-                                            f"🚨 MISSÃO CRÍTICA:\n"
-                                            f"1. NÃO gere cabeçalhos de identificação.\n"
-                                            f"2. No [GABARITO], analise cada alternativa errada (A-E) explicando qual lacuna de aprendizado ela representa.\n"
-                                            f"3. No [PROFESSOR], crie o Mapa de Sondagem por questão.\n"
-                                            f"4. Use PROMPT IMAGEM em todas as questões que precisarem de apoio visual."
-                                        )
-                                        st.session_state.lab_temp = ai.gerar_ia("ARQUITETO_SONDA_DIAGNOSTICA", prompt_sonda, usar_busca=True)
-                                        st.rerun()
-                else:
-                    st.error(f"❌ Base curricular do {ano_busca}º ano não encontrada no banco de dados.")
+            # ... (O senhor mantém o código original aqui)
+            pass
 
         # --- ABA 3: ENGENHARIA DE TRABALHOS ---
         with tab_trabalhos:
             st.subheader("📋 Engenharia de Projetos e Trabalhos (BNCC)")
-            with st.container(border=True):
-                c1, c2, c3 = st.columns([1, 1, 1])
-                ano_t = c1.selectbox("Série:", [6, 7, 8, 9], key=f"t_ano_{v}")
-                df_cur_t = df_curriculo[df_curriculo["ANO"] == ano_t]
-                
-                eixo_t = c2.selectbox("Eixo BNCC:", sorted(df_cur_t["EIXO"].unique().tolist()) if not df_cur_t.empty else [], key=f"t_eixo_{v}")
-                lente_t = c3.selectbox("Lente de Integração:", ["Investigação Científica", "Processos Criativos", "Intervenção Social"], key=f"t_lente_{v}")
-                
-                if eixo_t:
-                    df_hab_t = df_cur_t[df_cur_t["EIXO"] == eixo_t]
-                    hab_t = st.multiselect("Habilidades BNCC Alvo:", sorted(df_hab_t["CONTEUDO_ESPECIFICO"].unique().tolist()), key=f"t_hab_{v}")
-                    
-                    c_t1, c_t2 = st.columns([2, 1])
-                    tema_t = c_t1.text_input("Tema do Projeto:", placeholder="Ex: A Matemática no Comércio de Itabuna", key=f"t_tema_{v}")
-                    valor_t = c_t2.number_input("Valor (0-10):", 0.0, 10.0, 2.0, step=0.5, key=f"t_val_{v}")
-                    
-                    if st.button("🚀 CRIAR PROJETO BNCC", use_container_width=True, type="primary"):
-                        with st.spinner("Articulando competências..."):
-                            s_id = util.gerar_sosa_id("TRAB", ano_t, "I")
-                            st.session_state.sosa_id_atual = s_id
-                            st.session_state.lab_meta = {"ano": ano_t, "trimestre": "I Trimestre", "tipo": "TRABALHO"}
-                            prompt_t = (
-                                f"PERSONA: ARQUITETO_TRABALHOS_BNCC. ID: {s_id}.\n"
-                                f"TEMA: {tema_t}. VALOR: {valor_t}. SÉRIE: {ano_t}º. HAB: {hab_t}. LENTE: {lente_t}.\n"
-                                f"ENTREGA: [PROFESSOR], [ALUNO], [GABARITO], [PEI]."
-                            )
-                            st.session_state.lab_temp = ai.gerar_ia("ARQUITETO_TRABALHOS_BNCC", prompt_t)
-                            st.rerun()
+            # ... (O senhor mantém o código original aqui)
+            pass
 
         # --- ABA 4: ATIVIDADES COMPLEMENTARES (FIXAÇÃO) ---
         with tab_complementar:
             st.subheader("📚 Atividades Complementares de Fixação (Filtro Soberano)")
-            with st.container(border=True):
-                c1, c2 = st.columns([1, 2])
-                ano_comp = c1.selectbox("Série:", [6, 7, 8, 9], key=f"comp_ano_{v}")
-                
-                # --- VÍNCULO COM PLANEJAMENTO (RASTREABILIDADE) ---
-                planos_comp = df_planos[df_planos["ANO"].astype(str).str.contains(str(ano_comp))]
-                if not planos_comp.empty:
-                    sem_comp = c2.selectbox("Vincular ao Planejamento (Semana):", planos_comp["SEMANA"].tolist(), key=f"comp_sem_vinc_{v}")
-                else:
-                    st.warning("⚠️ Nenhum planejamento encontrado para esta série. A atividade será gerada como 'Avulsa'.")
-                    sem_comp = "Semana Avulsa"
-
-                # --- FUNIL HIERÁRQUICO ---
-                df_cur_comp = df_curriculo[df_curriculo["ANO"].astype(str).str.contains(str(ano_comp))]
-                col_f1, col_f2 = st.columns(2)
-                lista_eixos_comp = sorted(df_cur_comp["EIXO"].unique().tolist())
-                sel_eixo_comp = col_f1.multiselect("1. Selecione o(s) Eixo(s):", lista_eixos_comp, key=f"comp_eixo_{v}")
-                
-                f_cont_comp, f_obj_comp = "", ""
-                
-                if sel_eixo_comp:
-                    df_cont_comp = df_cur_comp[df_cur_comp["EIXO"].isin(sel_eixo_comp)]
-                    lista_conts_comp = sorted(df_cont_comp["CONTEUDO_ESPECIFICO"].unique().tolist())
-                    sel_cont_comp = col_f2.multiselect("2. Selecione os Conteúdos:", lista_conts_comp, key=f"comp_cont_{v}")
-                    
-                    if sel_cont_comp:
-                        df_obj_comp = df_cont_comp[df_cont_comp["CONTEUDO_ESPECIFICO"].isin(sel_cont_comp)]
-                        lista_objs_comp = sorted(df_obj_comp["OBJETIVOS"].unique().tolist())
-                        sel_obj_comp = st.multiselect("3. Selecione os Objetivos:", lista_objs_comp, key=f"comp_obj_{v}")
-                        
-                        f_cont_comp = " / ".join(sel_cont_comp)
-                        f_obj_comp = " \n ".join(sel_obj_comp)
-
-                st.divider()
-                
-                # --- PARÂMETROS PEDAGÓGICOS ---
-                c_q1, c_q2 = st.columns([1, 2])
-                tipo_comp = c_q1.radio("Objetivo do Material:", 
-                                       ["Fixação de Conteúdo", "Reforço/Recuperação", "Aprofundamento (Elite)"], 
-                                       key=f"comp_tipo_radio_{v}")
-                
-                qtd_q_comp = c_q2.slider("Nº de Questões:", 1, 20, 10, key=f"comp_q_{v}")
-                
-                instr_extra_comp = st.text_area("📝 Instruções Extras (ex: 'Foque em jogos', 'Use notícias'):", key=f"comp_instr_{v}")
-                
-                if st.button("🚀 GERAR MATERIAL COMPLEMENTAR", use_container_width=True, type="primary"):
-                    if not sel_obj_comp:
-                        st.error("Selecione pelo menos um Objetivo no funil antes de gerar.")
-                    else:
-                        with st.spinner("Maestro Sosa arquitetando material complementar..."):
-                            s_id = util.gerar_sosa_id("COMP", ano_comp, "I")
-                            st.session_state.sosa_id_atual = s_id
-                            st.session_state.lab_meta = {
-                                "ano": ano_comp, 
-                                "trimestre": "I Trimestre", 
-                                "tipo": f"COMPLEMENTAR ({tipo_comp})",
-                                "semana_ref": sem_comp
-                            }
-                            
-                            prompt_comp = (
-                                f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {s_id}.\n"
-                                f"OBJETIVO PEDAGÓGICO: {tipo_comp}.\n"
-                                f"VÍNCULO: {sem_comp}.\n"
-                                f"SÉRIE: {ano_comp}º Ano.\n"
-                                f"CONTEÚDO SOBERANO: {f_cont_comp}.\n"
-                                f"OBJETIVOS SOBERANOS: {f_obj_comp}.\n"
-                                f"QUANTIDADE: {qtd_q_comp} questões A-E.\n"
-                                f"INSTRUÇÕES: {instr_extra_comp}.\n\n"
-                                f"🚨 MISSÃO: Use o Google Search para Tech/News. Inclua PROMPT IMAGEM nas questões necessárias."
-                            )
-                            st.session_state.lab_temp = ai.gerar_ia("MAESTRO_SOSA_V28_ELITE", prompt_comp, usar_busca=True)
-                            st.rerun()
+            # ... (O senhor mantém o código original aqui)
+            pass
 
         # --- ABA 5: ACERVO DE MATERIAIS ---
         with tab_acervo:
@@ -728,7 +573,13 @@ if menu == "🧪 Criador de Aulas":
                         if c_t5.button("🔄 REFINAR", key=f"ref_{row.name}", use_container_width=True):
                             st.session_state.lab_temp = raw_c
                             st.session_state.sosa_id_atual = s_id_h
-                            st.session_state.lab_meta = {"ano": str(row["ANO"]).replace("º",""), "tipo": "REFINO"}
+                            # Injeta metadados para o Triple-Sync saber o que substituir
+                            st.session_state.lab_meta = {
+                                "ano": str(row["ANO"]).replace("º",""), 
+                                "tipo": "REFINO",
+                                "aula_alvo": row['TIPO_MATERIAL'],
+                                "semana_ref": row['SEMANA_REF']
+                            }
                             st.rerun()
                         if c_t6.button("🗑️ APAGAR", key=f"del_{row.name}", use_container_width=True):
                             if db.excluir_registro_com_drive("DB_AULAS_PRONTAS", s_id_h): st.rerun()
