@@ -570,30 +570,29 @@ if menu == "🧪 Criador de Aulas":
                 modo_t = c3.selectbox("Modo de Execução:", ["Individual", "Em Grupo (Equipes)"], key=f"t_modo_{v}")
 
             with st.container(border=True):
-                c_t1, c_t2 = st.columns([2, 1])
+                c_t1, c_t2, c_t3 = st.columns([2, 1, 1])
                 tema_t = c_t1.text_input("Título do Tema/Semanário:", placeholder="Ex: Consciência Negra, 67 anos de Itabuna...", key=f"t_tema_{v}")
-                valor_t = c_t2.number_input("Valor do Trabalho (0-10):", 0.0, 10.0, 2.0, step=0.5, key=f"t_val_{v}")
+                valor_t = c_t2.number_input("Valor (0-10):", 0.0, 10.0, 2.0, step=0.5, key=f"t_val_{v}")
+                qtd_aulas = c_t3.slider("Quantidade de Aulas:", 1, 10, 2, key=f"t_q_aulas_{v}")
                 
-                # Lógica de Duração e Aulas
-                duracao_t = st.select_slider("Duração do Projeto:", options=["1 Semana", "2 Semanas", "3 Semanas"], value="1 Semana", key=f"t_dur_{v}")
-                aulas_calc = 2 if duracao_t == "1 Semana" else 4 if duracao_t == "2 Semanas" else 6
-                st.caption(f"📅 Planejamento Automático: {duracao_t} de duração totalizando {aulas_calc} aulas de Matemática.")
-
-            # Filtro BNCC Blindado
+            # --- AJUSTE DE EIXOS (AGORA MULTISELECT) ---
             df_cur_t = df_curriculo[df_curriculo["ANO"].astype(str).str.contains(str(ano_t))]
             if not df_cur_t.empty:
                 lista_eixos = sorted(df_cur_t["EIXO"].unique().tolist())
-                eixo_t = st.selectbox("Eixo BNCC para Integrar:", lista_eixos, key=f"t_eixo_{v}")
+                eixos_sel = st.multiselect("Eixos BNCC para Integrar:", lista_eixos, key=f"t_eixos_multi_{v}")
                 
-                if eixo_t:
-                    df_hab_t = df_cur_t[df_cur_t["EIXO"] == eixo_t]
-                    hab_t = st.multiselect("Habilidade BNCC Âncora:", sorted(df_hab_t["CONTEUDO_ESPECIFICO"].unique().tolist()), key=f"t_hab_{v}")
+                if eixos_sel:
+                    # Filtra habilidades de todos os eixos selecionados
+                    df_hab_t = df_cur_t[df_cur_t["EIXO"].isin(eixos_sel)]
+                    hab_t = st.multiselect("Habilidades BNCC Âncora:", sorted(df_hab_t["CONTEUDO_ESPECIFICO"].unique().tolist()), key=f"t_hab_multi_{v}")
                     
+                    instr_extra_p = st.text_area("📝 Contexto ou Instrução Extra (Opcional):", key=f"t_extra_proj_{v}")
+
                     if st.button("🚀 GERAR PROJETO ESTRUTURADO", use_container_width=True, type="primary"):
                         if not tema_t or not hab_t:
-                            st.error("Por favor, defina o Tema e a Habilidade Âncora.")
+                            st.error("Por favor, defina o Tema e as Habilidades.")
                         else:
-                            with st.spinner("Maestro Sosa realizando a ponte entre o Tema e a Matemática..."):
+                            with st.spinner("Maestro Sosa realizando a ponte transdisciplinar..."):
                                 s_id = util.gerar_sosa_id("PROJ", ano_t, "I")
                                 st.session_state.sosa_id_atual = s_id
                                 st.session_state.lab_meta = {
@@ -602,13 +601,15 @@ if menu == "🧪 Criador de Aulas":
                                 }
                                 
                                 prompt_t = (
-                                    f"PERSONA: ARQUITETO_PROJETOS_V29. ID: {s_id}.\n"
-                                    f"NATUREZA: {natureza_p}. TEMA: {tema_t}.\n"
-                                    f"SÉRIE: {ano_t}º Ano. HABILIDADE BNCC: {hab_t}.\n"
-                                    f"LOGÍSTICA: {modo_t} | DURAÇÃO: {duracao_t} ({aulas_calc} aulas).\n"
-                                    f"VALOR: {util.sosa_to_str(valor_t)} pontos.\n\n"
-                                    f"MISSÃO: Gere o material completo com as tags [MODO_EXECUCAO], [DURACAO_PROJETO], [VALOR_ATIVO], "
-                                    f"[GUIA_PROFESSOR], [ROTEIRO_ALUNO], [RUBRICA_AVALIAÇÃO], [PEI]."
+                                    f"PERSONA: ARQUITETO_PROJETOS_V29.\n"
+                                    f"TEMA: {tema_t}. NATUREZA: {natureza_p}.\n"
+                                    f"SÉRIE: {ano_t}º Ano. EIXOS: {', '.join(eixos_sel)}.\n"
+                                    f"HABILIDADES: {', '.join(hab_t)}.\n"
+                                    f"LOGÍSTICA: {modo_t} | DURAÇÃO: {qtd_aulas} aulas.\n"
+                                    f"VALOR: {util.sosa_to_str(valor_t)} pontos.\n"
+                                    f"EXTRAS: {instr_extra_p}.\n"
+                                    f"ID: {s_id}.\n\n"
+                                    f"MISSÃO: Gere o material usando as tags [PROFESSOR], [ALUNO], [GABARITO], [PEI]."
                                 )
                                 st.session_state.lab_temp = ai.gerar_ia("ARQUITETO_PROJETOS_V29", prompt_t, usar_busca=True)
                                 st.rerun()
