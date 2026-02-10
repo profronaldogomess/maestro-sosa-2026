@@ -359,18 +359,22 @@ if menu == "🧪 Criador de Aulas":
                     
                     conteudo_banco = f"[SOSA_ID] {nome_final}\n[AULA_ALVO] {meta.get('aula_alvo', 'Aula')}\n[PROFESSOR]\n{ed_prof}\n\n[ALUNO]\n{ed_alu}\n\n[GABARITO]\n{ed_res}\n\n[PEI]\n{ed_pei_mat}\n\n[GABARITO_PEI]\n{ed_pei_gab}\n\n"
 
-                    # CONTAGEM REAL NO PAPEL
-                    qtd_q_real = len(re.findall(r"(?i)QUESTÃO\s*\d+", ed_alu))
+                    # CONTAGEM REAL DE QUESTÕES NO MATERIAL REGULAR
+                    qtd_q_real = len(re.findall(r'(?m)^QUESTÃO\s+\d+', ed_alu.upper()))
                     is_sonda_check = "SONDA" in nome_final.upper()
                     
+                    # CÁLCULO DO VALOR POR QUESTÃO (10,0 / QTD)
+                    val_q_str = util.sosa_to_str(10.0 / qtd_q_real) if qtd_q_real > 0 else "1,00"
+
                     info_doc = {
-                        "ano": ano_str, "trimestre": meta.get('trimestre', 'I Trimestre'), 
+                        "ano": ano_str, 
+                        "trimestre": meta.get('trimestre', 'I Trimestre'), 
                         "valor": "10,00" if is_sonda_check else "0,00", 
-                        "valor_questao": util.sosa_to_str(10.0/qtd_q_real) if (is_sonda_check and qtd_q_real > 0) else "0,00",
+                        "valor_questao": val_q_str,
                         "qtd_questoes": qtd_q_real
                     }
 
-                    # GERAÇÃO REGULAR
+                    # GERAÇÃO REGULAR (RESTAURADA)
                     if is_sonda_check:
                         doc_alu = exporter.gerar_docx_prova_v25(nome_final, ed_alu, info_doc)
                     else:
@@ -380,10 +384,11 @@ if menu == "🧪 Criador de Aulas":
                     doc_prof = exporter.gerar_docx_professor_v25(nome_final, ed_prof, {"ano": ano_str, "semana": semana_ref, "trimestre": info_doc["trimestre"]})
                     link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_final}_PROF", modo="AULA")
                     
-                    # GERAÇÃO PEI (Sincronizada com a quantidade do Regular)
+                    # GERAÇÃO PEI (AGORA COM O MESMO GABARITO E VALOR DO REGULAR)
                     link_pei = "N/A"
                     if len(ed_pei_mat) > 10:
                         if is_sonda_check:
+                            # Usa o motor de prova para garantir o quadro de bolinhas no PEI
                             doc_pei = exporter.gerar_docx_prova_v25(f"{nome_final}_PEI", ed_pei_mat, info_doc)
                         else:
                             doc_pei = exporter.gerar_docx_pei_v25(f"{nome_final}_PEI", ed_pei_mat, info_doc)
