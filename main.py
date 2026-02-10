@@ -1954,12 +1954,12 @@ elif menu == "📝 Central de Avaliações":
                             f"VALOR TOTAL: {v_total} | QTD QUESTÕES: {qtd_q}.\n\n"
                             f"{contexto_pedagogico}\n"
                             f"{contexto_aulas}\n\n"
-                            f"🚨 INSTRUÇÕES DE ELITE:\n"
-                            f"1. Use Sentence Case (apenas a primeira letra maiúscula) nos enunciados.\n"
-                            f"2. Formate os rótulos como **QUESTÃO XX (0,XX ponto) -**.\n"
-                            f"3. Crie questões de mérito citando os IDs acima.\n"
-                            f"4. Em [RESPOSTAS_IA], detalhe os erros de Algoritmo, Conceito e Interpretação de cada distrator.\n"
-                            f"5. Prompts de imagem no formato: [ PROMPT IMAGEM: descrição ]."
+                            f"🚨 INSTRUÇÕES DE SOBERANIA:\n"
+                            f"1. NÃO REpita 'Com base em nossa atividade...' em todas as questões. Isso é erro de estilo.\n"
+                            f"2. Escolha apenas 2 ou 3 questões para serem 'QUESTÕES DE MÉRITO'. Somente nestas você deve citar o MATERIAL_ID e usar um contexto mais longo.\n"
+                            f"3. Todas as outras questões devem ser OBJETIVAS e DIRETAS (Ex: 'Determine o valor de...', 'Qual a forma correta de...').\n"
+                            f"4. Formate os rótulos como **QUESTÃO XX (0,XX ponto) -**.\n"
+                            f"5. Em [RESPOSTAS_IA], detalhe os erros de cada distrator."
                         )
                         st.session_state.temp_prova = ai.gerar_ia("ARQUITETO_EXAMES_V30_ELITE", prompt, usar_busca=True)
                         st.session_state.av_valor_total = v_total
