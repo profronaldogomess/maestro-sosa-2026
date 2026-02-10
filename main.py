@@ -1890,7 +1890,7 @@ elif menu == "📝 Central de Avaliações":
     # --- ABA 1: ARQUITETO (GERAÇÃO COM MÉRITO) ---
     with tab_arquiteto:
         if is_refinando_av:
-            st.warning(f"🛠️ **MODO REFINO:** Editando {st.session_state.refino_ativo_av.get('tipo')}")
+            st.warning(f"🛠️ **MODO REFINO:** Editando {st.session_state.refino_av_ativo.get('tipo')}")
             if st.button("❌ CANCELAR E VOLTAR AO NOVO"): reset_avaliacoes()
 
         with st.container(border=True):
@@ -1904,46 +1904,57 @@ elif menu == "📝 Central de Avaliações":
         with st.container(border=True):
             st.markdown("### 🎯 2. Matriz de Mérito (Vincular Aulas e Fixação)")
             
-            # --- NOVO FILTRO DE TRIMESTRE PARA ORGANIZAÇÃO ---
             c_trim1, c_trim2 = st.columns([1, 2])
             trim_filtro = c_trim1.selectbox("Filtrar por Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"av_trim_filter_{v}")
             
-            # Busca materiais produzidos para esta série
+            # --- LÓGICA DE BUSCA INTELIGENTE SOSA V29 ---
+            # 1. Filtra pela série (Ex: "6º")
             df_ref = df_aulas[df_aulas["ANO"].astype(str).str.contains(str(ano_av))]
             
-            # Filtra a lista de materiais pelo trimestre selecionado (buscando no conteúdo salvo)
             if not df_ref.empty:
-                # Filtro inteligente: busca o trimestre dentro do texto do conteúdo ou metadados
-                df_ref_filtrado = df_ref[df_ref["CONTEUDO"].astype(str).str.contains(trim_filtro, case=False, na=False)]
+                # 2. Filtro de Trimestre: Busca no CONTEUDO ou no TIPO_MATERIAL (Nome de Elite)
+                # Isso garante que se o nome for "6º Ano - Sonda - I Trimestre", ele apareça.
+                df_ref_filtrado = df_ref[
+                    df_ref.apply(lambda r: trim_filtro.upper() in str(r["CONTEUDO"]).upper() or 
+                                          trim_filtro.upper() in str(r["TIPO_MATERIAL"]).upper(), axis=1)
+                ]
                 
-                mats_selecionados = c_trim2.multiselect(
-                    f"Materiais do {trim_filtro}:", 
-                    options=df_ref_filtrado["TIPO_MATERIAL"].tolist(),
-                    help="A IA criará a 'Questão de Mérito' baseada nestes IDs.",
-                    key=f"av_ref_{v}"
-                )
+                if df_ref_filtrado.empty:
+                    st.warning(f"📭 Nenhum material de {ano_av}º ano encontrado para o {trim_filtro}.")
+                    mats_selecionados = []
+                else:
+                    mats_selecionados = c_trim2.multiselect(
+                        f"Materiais disponíveis ({len(df_ref_filtrado)}):", 
+                        options=df_ref_filtrado["TIPO_MATERIAL"].tolist(),
+                        help="Selecione os materiais que os alunos estudaram para gerar questões baseadas neles.",
+                        key=f"av_ref_{v}"
+                    )
                 
                 if st.button("💎 COMPILAR EXAME DE ELITE", use_container_width=True, type="primary"):
                     if not mats_selecionados:
-                        st.warning("⚠️ Selecione pelo menos um material de referência para ativar o Protocolo de Mérito.")
+                        st.error("⚠️ Selecione pelo menos um material de referência para que a IA saiba o que foi trabalhado.")
                     else:
-                        with st.spinner("Maestro Arquiteto processando Protocolo de Mérito..."):
+                        with st.spinner("Maestro Arquiteto realizando leitura dos materiais e gerando questões de mérito..."):
                             contexto_merito = ""
                             for m in mats_selecionados:
                                 row_m = df_ref_filtrado[df_ref_filtrado["TIPO_MATERIAL"] == m].iloc[0]
-                                contexto_merito += f"\nMATERIAL [ID: {m}]: {row_m['CONTEUDO']}"
+                                # Extraímos o conteúdo real para a IA ler
+                                contexto_merito += f"\n--- MATERIAL TRABALHADO [ID: {m}] ---\n{row_m['CONTEUDO']}\n"
 
                             prompt = (
-                                f"TIPO: {tipo_av} | VALOR: {v_total} | QTD: {qtd_q} | SÉRIE: {ano_av}º Ano.\n"
-                                f"CONTEXTO DE MÉRITO: {contexto_merito}\n\n"
-                                f"ORDEM: Gere o exame completo (Regular + PEI) com DNA Visual e Tech/News."
+                                f"TIPO: {tipo_av} | VALOR TOTAL: {v_total} | QTD QUESTÕES: {qtd_q} | SÉRIE: {ano_av}º Ano.\n"
+                                f"CONTEXTO DE MÉRITO (O QUE FOI ENSINADO):\n{contexto_merito}\n\n"
+                                f"ORDEM: Gere o exame completo (Regular + PEI). "
+                                f"IMPORTANTE: Pelo menos 2 questões devem ser 'Questões de Mérito', citando os materiais trabalhados. "
+                                f"Ex: 'Com base em nossa aula sobre {mats_selecionados[0]}...'. "
+                                f"Mantenha o DNA Visual e Tech/News."
                             )
                             st.session_state.temp_prova = ai.gerar_ia("ARQUITETO_EXAMES_V30_ELITE", prompt, usar_busca=True)
                             st.session_state.av_valor_total = v_total
                             st.session_state.av_nome_fixo = f"{tipo_av.upper()}_{ano_av}ANO_{datetime.now().strftime('%d%m')}"
                             st.rerun()
             else:
-                st.warning("Produza materiais no Laboratório primeiro para habilitar o Protocolo de Mérito.")
+                st.info("💡 Produza materiais no Laboratório primeiro para que eles apareçam aqui.")
 
     # --- ABA 2: REFINADOR ---
     with tab_refino:
@@ -1961,7 +1972,6 @@ elif menu == "📝 Central de Avaliações":
     with tab_vis:
         if "temp_prova" in st.session_state:
             txt_f = st.session_state.temp_prova
-            # Adicionada a 5ª aba para Justificativa PEI
             t1, t2, t3, t4, t5 = st.tabs([
                 "📝 Prova Regular", 
                 "✅ Gabarito/Psicometria", 
@@ -1969,29 +1979,19 @@ elif menu == "📝 Central de Avaliações":
                 "📊 Gabarito PEI", 
                 "🧠 Justificativa PEI"
             ])
-            with t1: 
-                st.text_area("Conteúdo da Prova Regular:", ai.extrair_tag(txt_f, "QUESTOES"), height=500, key=f"vis_reg_{v}")
+            with t1: st.text_area("Conteúdo da Prova Regular:", ai.extrair_tag(txt_f, "QUESTOES"), height=500, key=f"vis_reg_{v}")
             with t2: 
                 st.code(ai.extrair_tag(txt_f, "GABARITO_TEXTO"))
                 st.write(ai.extrair_tag(txt_f, "RESPOSTAS_IA"))
-            with t3: 
-                st.text_area("Conteúdo da Prova PEI:", ai.extrair_tag(txt_f, "PEI"), height=500, key=f"vis_pei_{v}")
-            with t4: 
-                st.code(ai.extrair_tag(txt_f, "GABARITO_PEI"))
-            with t5:
-                st.write(ai.extrair_tag(txt_f, "RESPOSTAS_PEI_IA"))
-        else:
-            st.info("Aguardando geração do exame...")
+            with t3: st.text_area("Conteúdo da Prova PEI:", ai.extrair_tag(txt_f, "PEI"), height=500, key=f"vis_pei_{v}")
+            with t4: st.code(ai.extrair_tag(txt_f, "GABARITO_PEI"))
+            with t5: st.write(ai.extrair_tag(txt_f, "RESPOSTAS_PEI_IA"))
+        else: st.info("Aguardando geração do exame...")
 
-# ==============================================================================
-# ABA 4: FINALIZAR ATIVO (VERSÃO BLINDADA V48 - SINCRO TOTAL)
-# ==============================================================================
+    # --- ABA 4: FINALIZAR ATIVO ---
     with tab_finalizar:
         if "temp_prova" in st.session_state:
             st.subheader("💾 Consolidação do Ativo de Safra")
-            
-            # --- RECUPERAÇÃO DE VARIÁVEIS (SHIELD) ---
-            # Garante que os dados da Aba 1 não se percam
             v_tipo = st.session_state.get(f"av_t_{v}", "Prova")
             v_ano = st.session_state.get(f"av_a_{v}", 6)
             v_qtd = st.session_state.get(f"av_q_{v}", 10)
@@ -2002,70 +2002,31 @@ elif menu == "📝 Central de Avaliações":
 
             if st.button("💾 SALVAR COMO PRONTO PARA APLICAÇÃO", use_container_width=True, type="primary", key=f"btn_save_av_{v}"):
                 with st.status("🚀 Sincronizando Ativos e Gerando Documentos...") as status:
-                    # 1. DEFINIÇÃO DE VALORES
                     v_total_num = st.session_state.get('av_valor_total', 10.0)
                     identificador = f"{v_tipo} - {v_ano}º Ano ({trim_av})"
-                    
-                    # 2. LIMPEZA (UPSERT) - Remove versões antigas para evitar duplicidade
                     db.excluir_avaliacao_completa(identificador, v_tipo)
 
-                    # 3. GERAÇÃO REGULAR
                     v_por_quest_reg = v_total_num / v_qtd if v_qtd > 0 else 0
-                    info_reg = {
-                        "ano": f"{v_ano}º", 
-                        "tipo_prova": v_tipo, 
-                        "valor": util.sosa_to_str(v_total_num), 
-                        "valor_questao": util.sosa_to_str(v_por_quest_reg),
-                        "qtd_questoes": v_qtd, 
-                        "trimestre": trim_av
-                    }
+                    info_reg = {"ano": f"{v_ano}º", "tipo_prova": v_tipo, "valor": util.sosa_to_str(v_total_num), "valor_questao": util.sosa_to_str(v_por_quest_reg), "qtd_questoes": v_qtd, "trimestre": trim_av}
                     
-                    status.write("📄 Gerando Prova Regular...")
                     doc_reg = exporter.gerar_docx_prova_v25(nome_arq, st.session_state.temp_prova, info_reg)
                     link_reg = db.subir_e_converter_para_google_docs(doc_reg, nome_arq, trimestre=trim_av, categoria=f"{v_ano}º Ano", semana="AVALIAÇÃO", modo="AVALIACAO")
                     
-                    # 4. GERAÇÃO PEI (CONTAGEM REAL)
                     txt_pei_puro = ai.extrair_tag(st.session_state.temp_prova, "PEI")
                     link_pei = "N/A"
                     if txt_pei_puro:
-                        status.write("♿ Gerando Prova PEI Adaptada...")
-                        # CONTEGEM REAL: Garante que o gabarito de bolinhas bata com o texto PEI
                         qtd_q_pei_real = len(re.findall(r'QUESTÃO', txt_pei_puro.upper()))
                         if qtd_q_pei_real == 0: qtd_q_pei_real = v_qtd // 2
-                        
                         v_por_quest_pei = v_total_num / qtd_q_pei_real if qtd_q_pei_real > 0 else 0
-                        info_pei = {
-                            "ano": f"{v_ano}º", 
-                            "tipo_prova": v_tipo, 
-                            "valor": util.sosa_to_str(v_total_num), 
-                            "valor_questao": util.sosa_to_str(v_por_quest_pei),
-                            "qtd_questoes": qtd_q_pei_real, 
-                            "trimestre": trim_av
-                        }
+                        info_pei = {"ano": f"{v_ano}º", "tipo_prova": v_tipo, "valor": util.sosa_to_str(v_total_num), "valor_questao": util.sosa_to_str(v_por_quest_pei), "qtd_questoes": qtd_q_pei_real, "trimestre": trim_av}
                         doc_pei = exporter.gerar_docx_prova_v25(f"{nome_arq}_PEI", txt_pei_puro, info_pei)
                         link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_arq}_PEI", trimestre=trim_av, categoria=f"{v_ano}º Ano", semana="AVALIAÇÃO", modo="AVALIACAO")
                                         
-                    # 5. CONSOLIDAÇÃO NO BANCO DE DADOS
                     if "https" in str(link_reg):
                         dna_sosa = f"\n\n[METADADOS_AVALIAÇÃO]\n[VALOR: {v_total_num}]\n[TRIMESTRE: {trim_av}]\n"
-                        conteudo_banco = f"{dna_sosa}{st.session_state.temp_prova}\n\n--- LINKS ---\nRegular({link_reg}) PEI({link_pei})"
-                        
-                        db.salvar_no_banco("DB_AULAS_PRONTAS", [
-                            datetime.now().strftime("%d/%m/%Y"), 
-                            "AVALIAÇÃO", 
-                            identificador, 
-                            conteudo_banco, 
-                            f"{v_ano}º", 
-                            link_reg
-                        ])
-                        status.update(label="✅ Ativo de Safra Salvo com Sucesso!", state="complete")
-                        st.balloons()
-                        time.sleep(1.5)
-                        reset_avaliacoes()
-                    else:
-                        st.error(f"Erro no Upload: {link_reg}")
-        else: 
-            st.info("💡 Gere a prova na aba '🚀 Arquiteto de Exames' antes de finalizar.")
+                        db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), "AVALIAÇÃO", identificador, f"{dna_sosa}{st.session_state.temp_prova}\n\n--- LINKS ---\nRegular({link_reg}) PEI({link_pei})", f"{v_ano}º", link_reg])
+                        status.update(label="✅ Ativo de Safra Salvo!", state="complete"); st.balloons(); time.sleep(1.5); reset_avaliacoes()
+        else: st.info("💡 Gere a prova na aba '🚀 Arquiteto de Exames' antes de finalizar.")
 
     # --- ABA 5: ACERVO ---
     with tab_acervo:
@@ -2078,19 +2039,16 @@ elif menu == "📝 Central de Avaliações":
                     txt_f = str(row['CONTEUDO'])
                     l_reg = re.search(r"Regular\((.*?)\)", txt_f).group(1) if "Regular(" in txt_f else row.get('LINK_DRIVE')
                     l_pei = re.search(r"PEI\((.*?)\)", txt_f).group(1) if "PEI(" in txt_f and "PEI(N/A)" not in txt_f else None
-
                     c_b1, c_b2, c_b3, c_b4 = st.columns(4)
                     if l_reg: c_b1.link_button("📝 REGULAR", str(l_reg), use_container_width=True)
                     if l_pei: c_b2.link_button("♿ PEI", str(l_pei), use_container_width=True)
                     else: c_b2.button("⚪ SEM PEI", disabled=True, use_container_width=True)
-                    
                     if c_b3.button("🔄 REFINAR", key=f"ref_av_{row.name}", use_container_width=True):
                         st.session_state.temp_prova = txt_f
                         st.session_state.refino_av_ativo = {"tipo": str(row['TIPO_MATERIAL']), "ano": str(row['ANO'])}
                         st.rerun()
                     if c_b4.button("🗑️ APAGAR", key=f"del_av_{row.name}", use_container_width=True):
-                        db.excluir_avaliacao_completa(row['TIPO_MATERIAL'], str(row['TIPO_MATERIAL']).split(" - ")[0])
-                        st.rerun()
+                        db.excluir_avaliacao_completa(row['TIPO_MATERIAL'], str(row['TIPO_MATERIAL']).split(" - ")[0]); st.rerun()
         else: st.info("📭 Nenhum exame no acervo.")
 
 # ==============================================================================
