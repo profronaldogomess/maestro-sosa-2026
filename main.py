@@ -347,7 +347,7 @@ if menu == "🧪 Criador de Aulas":
             ed_pei_mat = c_p1.text_area("📄 Material PEI:", ai.extrair_tag(txt_base, "PEI"), height=400, key=f"ed_pei_mat_{v}")
             ed_pei_gab = c_p2.text_area("✅ Gabarito PEI:", ai.extrair_tag(txt_base, "GABARITO_PEI"), height=400, key=f"ed_pei_gab_{v}")
 
-        with t_sync:
+with t_sync:
             st.warning("⚠️ O Triple-Sync substituirá a versão anterior deste material.")
             if st.button("💾 EXECUTAR TRIPLE-SYNC (SUBSTITUIR)", use_container_width=True, type="primary", key=f"btn_triple_{v}"):
                 with st.status("Iniciando Protocolo de Substituição...") as status:
@@ -359,7 +359,7 @@ if menu == "🧪 Criador de Aulas":
                     
                     conteudo_banco = f"[SOSA_ID] {nome_final}\n[AULA_ALVO] {meta.get('aula_alvo', 'Aula')}\n[PROFESSOR]\n{ed_prof}\n\n[ALUNO]\n{ed_alu}\n\n[GABARITO]\n{ed_res}\n\n[PEI]\n{ed_pei_mat}\n\n[GABARITO_PEI]\n{ed_pei_gab}\n\n"
 
-                    # CONTAGEM BLINDADA (Mesma lógica do Exporter)
+                    # CONTAGEM BLINDADA (Ignora menções no meio do texto)
                     qtd_q_real = len(re.findall(r'(?m)^QUESTÃO\s+\d+', ed_alu.upper()))
                     is_sonda_check = "SONDA" in nome_final.upper()
                     
@@ -370,7 +370,6 @@ if menu == "🧪 Criador de Aulas":
                         "qtd_questoes": qtd_q_real
                     }
 
-                    # GERAÇÃO REGULAR
                     if is_sonda_check:
                         doc_alu = exporter.gerar_docx_prova_v25(nome_final, ed_alu, info_doc)
                     else:
@@ -380,10 +379,8 @@ if menu == "🧪 Criador de Aulas":
                     doc_prof = exporter.gerar_docx_professor_v25(nome_final, ed_prof, {"ano": ano_str, "semana": semana_ref, "trimestre": info_doc["trimestre"]})
                     link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_final}_PROF", modo="AULA")
                     
-                    # GERAÇÃO PEI (Ajuste: Anexando o gabarito ao final do texto)
                     link_pei = "N/A"
                     if len(ed_pei_mat) > 10:
-                        # Enviamos apenas o material (ed_pei_mat), sem o gabarito (ed_pei_gab)
                         if is_sonda_check:
                             doc_pei = exporter.gerar_docx_prova_v25(f"{nome_final}_PEI", ed_pei_mat, info_doc)
                         else:
