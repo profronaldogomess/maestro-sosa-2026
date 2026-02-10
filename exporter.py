@@ -282,7 +282,7 @@ def gerar_docx_professor_v25(titulo_doc, conteudo, info):
 # 5. PROVA OFICIAL (PRESERVAÇÃO INTEGRAL - COM NOTA)
 # ==============================================================================
 def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
-    """Versão V29.11 - Limpeza de Hífens e Negrito Ultra-Blindado"""
+    """Versão V29.13 - Gabarito para TODOS + Negrito Ultra-Blindado + Sem Unicode"""
     file_stream = io.BytesIO()
     try:
         doc = Document()
@@ -290,8 +290,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         section.top_margin = section.bottom_margin = Inches(0.3)
         section.left_margin = section.right_margin = Inches(0.4)
         
-        # 1. LIMPADOR DE RUÍDOS (Remove orientações da IA, inclusive as com hífens ou pontos)
-        # Remove blocos que começam com "Instruções", "Orientações", "Valor" ou hífens soltos
+        # 1. LIMPEZA DE RUÍDOS (Remove orientações e gabaritos de texto da IA)
         limpador = r"(?i)(^|\n)([ \t]*[-•*][^\n]*|INSTRUÇÕES|ORIENTAÇÕES|VALOR TOTAL|GABARITO PEI|SONDA DE PROFICIÊNCIA).*?(\n|$)"
         conteudo_limpo = re.sub(limpador, "\n", conteudo_ia).strip()
 
@@ -307,45 +306,36 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         configurar_cabecalho_mestre(doc, info, label_prova, mostrar_nota=True)
         doc.add_paragraph()
 
-        # 4. QUADRO DE ORIENTAÇÕES + GABARITO (PARA TODOS)
-        if is_pei_doc:
-            top_table = doc.add_table(rows=1, cols=1)
-            top_table.width = Inches(7.5)
-            c_orient = top_table.cell(0, 0)
-            p_tit = c_orient.paragraphs[0]
-            p_tit.add_run("ORIENTAÇÕES ADAPTADAS:").font.bold = True
-            orient_list = [
-                "Leia cada questão com calma.",
-                "Você pode usar desenhos para resolver os problemas.",
-                f"Valor Total: 10,0 | Questões: {num_total_q}"
-            ]
-        else:
-            top_table = doc.add_table(rows=1, cols=2)
-            top_table.columns[0].width = Inches(3.5)
-            top_table.columns[1].width = Inches(4.0)
-            c_orient = top_table.cell(0, 0)
-            p_tit = c_orient.paragraphs[0]
-            p_tit.add_run("ORIENTAÇÕES:").font.bold = True
-            orient_list = [
-                "Leia atentamente cada enunciado.",
-                "Resolva os cálculos no espaço em branco.",
-                "Marque apenas uma alternativa por questão.",
-                f"Valor Total: 10,0 | Cada questão: {info.get('valor_questao', '1,0')}"
-            ]
-            # Gabarito de Bolinhas
-            c_gab = top_table.cell(0, 1)
-            gab_grid = c_gab.add_table(rows=num_total_q + 1, cols=6)
-            gab_grid.style = 'Table Grid'
-            for i, lab in enumerate(["Q", "A", "B", "C", "D", "E"]):
-                gab_grid.cell(0, i).paragraphs[0].add_run(lab).font.bold = True
-            for r in range(1, num_total_q + 1):
-                gab_grid.cell(r, 0).paragraphs[0].add_run(f"{r:02d}").font.size = Pt(9)
-                for col in range(1, 6): gab_grid.cell(r, col).paragraphs[0].add_run("○").font.size = Pt(14)
-
+        # 4. QUADRO DE ORIENTAÇÕES + GABARITO DE BOLINHAS (PARA TODOS - REGULAR E PEI)
+        top_table = doc.add_table(rows=1, cols=2)
+        top_table.columns[0].width = Inches(3.5)
+        top_table.columns[1].width = Inches(4.0)
+        
+        c_orient = top_table.cell(0, 0)
+        p_tit = c_orient.paragraphs[0]
+        p_tit.add_run("ORIENTAÇÕES:").font.bold = True
+        
+        orient_list = [
+            "Leia atentamente cada enunciado.",
+            "Resolva os cálculos no espaço em branco.",
+            "Marque apenas uma alternativa por questão.",
+            f"Valor Total: 10,0 | Questões: {num_total_q}"
+        ]
         for txt in orient_list:
             p = c_orient.add_paragraph()
             p.add_run(f"• {txt}").font.size = Pt(9)
             p.paragraph_format.space_after = Pt(0)
+
+        # Inserção do Gabarito de Bolinhas (Obrigatório para todos)
+        c_gab = top_table.cell(0, 1)
+        gab_grid = c_gab.add_table(rows=num_total_q + 1, cols=6)
+        gab_grid.style = 'Table Grid'
+        for i, lab in enumerate(["Q", "A", "B", "C", "D", "E"]):
+            gab_grid.cell(0, i).paragraphs[0].add_run(lab).font.bold = True
+        for r in range(1, num_total_q + 1):
+            gab_grid.cell(r, 0).paragraphs[0].add_run(f"{r:02d}").font.size = Pt(9)
+            for col in range(1, 6): 
+                gab_grid.cell(r, col).paragraphs[0].add_run("○").font.size = Pt(14)
         
         doc.add_paragraph()
 
@@ -362,19 +352,25 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
             p = doc.add_paragraph()
             p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
             
-            # TRAVA DE NEGRITO (Pega QUESTÃO XX e tudo que vier antes do enunciado real)
+            # FORÇAR NEGRITO NO RÓTULO DA QUESTÃO (BLINDAGEM TOTAL)
             if "QUESTÃO" in l_s.upper():
-                # Regex aprimorada: Pega "QUESTÃO 01" + qualquer pontuação/valor + o resto
+                # Captura QUESTÃO XX + pontuação/valor + enunciado
                 match = re.match(r"^(QUEST[AÃ]O\s+\d+)(.*?)(\.\s*|\s+-\s*|:\s*)(.*)", l_s, re.IGNORECASE)
                 if match:
-                    # Parte 1 e 2 em Negrito (Rótulo e Pontuação)
                     run_r = p.add_run(f"{match.group(1).upper()}{match.group(2)}{match.group(3)}")
                     run_r.bold = True
                     run_r.font.size = Pt(11)
-                    # Parte 3: O texto do enunciado normal
                     adicionar_texto_formatado(p, match.group(4).strip())
                     continue
             
+            # Títulos de Seção (Sem Unicode)
+            secoes_especiais = ["PARA LEMBRAR", "DICA MESTRA", "PASSO A PASSO", "VERSÃO ADAPTADA"]
+            if any(x in l_s.upper() for x in secoes_especiais):
+                run = p.add_run(l_s.replace("[", "").replace("]", "").upper())
+                run.bold = True
+                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                continue
+
             if re.match(r'^[A-E][\)\.]', l_s):
                 p.paragraph_format.left_indent = Inches(0.2)
             
