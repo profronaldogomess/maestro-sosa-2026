@@ -282,7 +282,7 @@ def gerar_docx_professor_v25(titulo_doc, conteudo, info):
 # 5. PROVA OFICIAL (PRESERVAÇÃO INTEGRAL - COM NOTA)
 # ==============================================================================
 def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
-    """Versão V29.14 - Limpeza Universal + Texto Inline Obrigatório"""
+    """Versão V29.15 - Negrito Absoluto + Sincronia de Quantidade"""
     file_stream = io.BytesIO()
     try:
         doc = Document()
@@ -290,16 +290,13 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         section.top_margin = section.bottom_margin = Inches(0.3)
         section.left_margin = section.right_margin = Inches(0.4)
         
-        # 1. LIMPEZA UNIVERSAL: Remove tudo o que vier antes da primeira palavra "QUESTÃO"
-        # Isso elimina instruções duplicadas, saudações ou títulos repetidos da IA.
-        match_primeira_q = re.search(r"(?i)QUESTÃO\s+\d+", conteudo_ia)
-        if match_primeira_q:
-            conteudo_limpo = conteudo_ia[match_primeira_q.start():].strip()
-        else:
-            conteudo_limpo = conteudo_ia.strip()
+        # 1. LIMPEZA AGRESSIVA: Corta tudo o que estiver antes da primeira "QUESTÃO"
+        # Isso garante que orientações duplicadas da IA sumam.
+        match_primeira_q = re.search(r"(?i)QUESTÃO\s*\d+", conteudo_ia)
+        conteudo_limpo = conteudo_ia[match_primeira_q.start():].strip() if match_primeira_q else conteudo_ia.strip()
 
-        # 2. CONTAGEM REAL DE QUESTÕES
-        num_total_q = len(re.findall(r'(?m)^QUESTÃO\s+\d+', conteudo_limpo.upper()))
+        # 2. CONTAGEM REAL (Garante que o gabarito bata com o número de questões no papel)
+        num_total_q = len(re.findall(r"(?i)QUESTÃO\s*\d+", conteudo_limpo))
         if num_total_q == 0: num_total_q = int(info.get('qtd_questoes', 10))
         
         is_pei_doc = "PEI" in titulo_doc.upper() or "ADAPTADA" in titulo_doc.upper()
@@ -310,7 +307,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         configurar_cabecalho_mestre(doc, info, label_prova, mostrar_nota=True)
         doc.add_paragraph()
 
-        # 4. QUADRO DE ORIENTAÇÕES + GABARITO (PARA TODOS)
+        # 4. QUADRO DE ORIENTAÇÕES + GABARITO DE BOLINHAS (PARA TODOS)
         top_table = doc.add_table(rows=1, cols=2)
         top_table.columns[0].width = Inches(3.5)
         top_table.columns[1].width = Inches(4.0)
@@ -329,7 +326,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
             p.add_run(f"• {txt}").font.size = Pt(9)
             p.paragraph_format.space_after = Pt(0)
 
-        # Gabarito de Bolinhas
+        # Inserção do Gabarito de Bolinhas
         c_gab = top_table.cell(0, 1)
         gab_grid = c_gab.add_table(rows=num_total_q + 1, cols=6)
         gab_grid.style = 'Table Grid'
@@ -355,26 +352,20 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
             p = doc.add_paragraph()
             p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
             
-            # FORÇAR NEGRITO INLINE (QUESTÃO XX. Texto...)
-            if "QUESTÃO" in l_s.upper():
-                match = re.match(r"^(QUEST[AÃ]O\s+\d+)(.*?)(\.\s*|\s+-\s*|:\s*)(.*)", l_s, re.IGNORECASE)
-                if match:
-                    # Rótulo e Pontuação em Negrito
-                    run_r = p.add_run(f"{match.group(1).upper()}{match.group(2)}{match.group(3)}")
+            # FORÇAR NEGRITO NO RÓTULO DA QUESTÃO (VERSÃO BLINDADA)
+            if l_s.upper().startswith("QUESTÃO"):
+                # Divide a linha: Pega o rótulo e o resto
+                partes_q = re.split(r"(?i)(QUESTÃO\s*\d+[\s\.\(\d,\s\w\)]*[:\-\.\s]*)", l_s, maxsplit=1)
+                if len(partes_q) > 1:
+                    # partes_q[1] é o rótulo (ex: QUESTÃO 01. )
+                    run_r = p.add_run(partes_q[1].upper())
                     run_r.bold = True
                     run_r.font.size = Pt(11)
-                    # Texto do enunciado na mesma linha
-                    adicionar_texto_formatado(p, match.group(4).strip())
+                    # partes_q[2] é o enunciado
+                    if len(partes_q) > 2:
+                        adicionar_texto_formatado(p, partes_q[2].strip())
                     continue
             
-            # Títulos de Seção PEI (Sem Unicode)
-            secoes_especiais = ["PARA LEMBRAR", "DICA MESTRA", "PASSO A PASSO", "VERSÃO ADAPTADA"]
-            if any(x in l_s.upper() for x in secoes_especiais):
-                run = p.add_run(l_s.replace("[", "").replace("]", "").upper())
-                run.bold = True
-                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                continue
-
             if re.match(r'^[A-E][\)\.]', l_s):
                 p.paragraph_format.left_indent = Inches(0.2)
             
