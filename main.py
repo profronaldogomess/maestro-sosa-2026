@@ -1937,27 +1937,29 @@ elif menu == "📝 Central de Avaliações":
                 if not mats_selecionados:
                     st.error("⚠️ Selecione os materiais para que a IA realize a leitura do que foi ensinado.")
                 else:
-                    with st.spinner("Maestro Arquiteto realizando leitura profunda do trimestre..."):
-                        # A. Captura o DNA do Plano (Objetivos e BNCC)
+                    with st.spinner("Maestro Arquiteto realizando leitura profunda e perícia psicométrica..."):
+                        # A. Captura o DNA do Plano
                         contexto_pedagogico = "--- DNA DO PLANEJAMENTO ---\n"
                         for _, p_row in df_planos_trim.iterrows():
-                            contexto_pedagogico += f"Semana: {p_row['SEMANA']} | Conteúdo: {p_row['PLANO_TEXTO']}\n"
+                            contexto_pedagogico += f"Semana: {p_row['SEMANA']} | Plano: {p_row['PLANO_TEXTO']}\n"
                         
-                        # B. Captura o Conteúdo Real das Aulas/Projetos selecionados
-                        contexto_aulas = "\n--- CONTEÚDO REAL MINISTRADO ---\n"
+                        # B. Captura o Conteúdo Real e IDs para Mérito
+                        contexto_aulas = "\n--- CONTEÚDO REAL E IDs PARA MÉRITO ---\n"
                         for m_nome in mats_selecionados:
                             m_row = df_materiais_trim[df_materiais_trim["TIPO_MATERIAL"] == m_nome].iloc[0]
-                            contexto_aulas += f"Material: {m_nome}\nConteúdo: {m_row['CONTEUDO']}\n"
+                            contexto_aulas += f"MATERIAL_ID: {m_nome}\nCONTEÚDO: {m_row['CONTEUDO']}\n"
 
                         prompt = (
-                            f"VOCÊ É O ARQUITETO DE EXAMES V34. SÉRIE: {ano_av}º Ano. TIPO: {tipo_av}.\n"
+                            f"VOCÊ É O ARQUITETO DE EXAMES V30. SÉRIE: {ano_av}º Ano. TIPO: {tipo_av}.\n"
                             f"VALOR TOTAL: {v_total} | QTD QUESTÕES: {qtd_q}.\n\n"
                             f"{contexto_pedagogico}\n"
                             f"{contexto_aulas}\n\n"
-                            f"MISSÃO CRÍTICA:\n"
-                            f"1. As questões DEVEM ser baseadas nos conteúdos acima (Sistemas Antigos, Itabuna, Múltiplos/Divisores).\n"
-                            f"2. Crie 'Questões de Mérito' que citem os projetos (ex: 'No projeto sobre os 116 anos de Itabuna, vimos que...').\n"
-                            f"3. Gere o exame completo (Regular + PEI) com as tags: [ORIENTACOES], [QUESTOES], [GABARITO_TEXTO], [RESPOSTAS_IA], [PEI], [GABARITO_PEI], [RESPOSTAS_PEI_IA]."
+                            f"🚨 INSTRUÇÕES DE ELITE:\n"
+                            f"1. Use Sentence Case (apenas a primeira letra maiúscula) nos enunciados.\n"
+                            f"2. Formate os rótulos como **QUESTÃO XX (0,XX ponto) -**.\n"
+                            f"3. Crie questões de mérito citando os IDs acima.\n"
+                            f"4. Em [RESPOSTAS_IA], detalhe os erros de Algoritmo, Conceito e Interpretação de cada distrator.\n"
+                            f"5. Prompts de imagem no formato: [ PROMPT IMAGEM: descrição ]."
                         )
                         st.session_state.temp_prova = ai.gerar_ia("ARQUITETO_EXAMES_V30_ELITE", prompt, usar_busca=True)
                         st.session_state.av_valor_total = v_total
