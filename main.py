@@ -463,40 +463,73 @@ if menu == "🧪 Criador de Aulas":
                                     st.session_state.lab_temp = ai.gerar_ia("MAESTRO_SOSA_V28_ELITE", prompt_manual, usar_busca=True)
                                     st.rerun()
 
+# --- ABA 2: SONDA DE PROFICIÊNCIA (DIAGNÓSTICO EM CASCATA V29) ---
         with tab_diagnostico:
             st.markdown("### 🔍 Configurar Sonda de Proficiência")
             with st.container(border=True):
                 c1, c2 = st.columns([1, 1])
-                ano_sonda = c1.selectbox("Série Atual:", [1, 2, 3, 4, 5, 6, 7, 8, 9], index=5, key=f"s_ano_{v}")
+                ano_sonda = c1.selectbox("Série Atual:", [6, 7, 8, 9], key=f"s_ano_{v}")
                 trim_sonda = c2.selectbox("Trimestre da Sonda:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"s_trim_{v}")
-                ano_busca = int(ano_sonda) - 1 if trim_sonda == "I Trimestre" else int(ano_sonda)
-                if ano_busca < 1: ano_busca = 1
+                
+                # LÓGICA DE RETROCESSO SOSA V29
+                if trim_sonda == "I Trimestre":
+                    ano_busca = int(ano_sonda) - 1
+                    trim_busca = "Todos"
+                    st.warning(f"💡 **Diagnóstico Inicial:** Buscando conteúdos do {ano_busca}º Ano para nivelamento.")
+                elif trim_sonda == "II Trimestre":
+                    ano_busca = int(ano_sonda)
+                    trim_busca = "I"
+                    st.info(f"🎯 **Sonda de Ciclo:** Avaliando conteúdos ministrados no I Trimestre.")
+                else:
+                    ano_busca = int(ano_sonda)
+                    trim_busca = "II"
+                    st.info(f"🎯 **Sonda de Ciclo:** Avaliando conteúdos ministrados no II Trimestre.")
+                
+                # FILTRAGEM DA MATRIZ
                 df_cur_sonda = df_curriculo[df_curriculo["ANO"].astype(str) == str(ano_busca)]
+                if trim_busca != "Todos":
+                    df_cur_sonda = df_cur_sonda[df_cur_sonda["TRIMESTRE"] == trim_busca]
+                
                 if not df_cur_sonda.empty:
                     lista_eixos_sonda = sorted(df_cur_sonda["EIXO"].unique().tolist())
-                    sel_eixos_s = st.multiselect("1. Selecione o(s) Eixo(s) Temático(s):", lista_eixos_sonda, key=f"s_eixos_{v}")
+                    sel_eixos_s = st.multiselect("1. Selecione o(s) Eixo(s) para Sondagem:", lista_eixos_sonda, key=f"s_eixos_{v}")
+                    
                     if sel_eixos_s:
                         df_cont_s = df_cur_sonda[df_cur_sonda["EIXO"].isin(sel_eixos_s)]
                         lista_conts_s = sorted(df_cont_s["CONTEUDO_ESPECIFICO"].unique().tolist())
                         sel_conts_s = st.multiselect("2. Selecione os Conteúdos Alvo:", lista_conts_s, key=f"s_conts_{v}")
+                        
                         if sel_conts_s:
-                            df_obj_s = df_cont_s[df_cont_s["CONTEUDO_ESPECIFICO"].isin(sel_conts_s)]
-                            lista_objs_s = sorted(df_obj_s["OBJETIVOS"].unique().tolist())
-                            sel_objs_s = st.multiselect("3. Selecione os Objetivos de Sondagem:", lista_objs_s, key=f"s_objs_{v}")
                             st.divider()
                             c_q1, c_q2 = st.columns([1, 2])
-                            qtd_q_sonda = c_q1.number_input("Nº de Questões:", 5, 20, 10, key=f"s_qtd_in_{v}")
-                            instr_extra_s = c_q2.text_area("📝 Instruções Extras:", key=f"s_instr_{v}")
-                            if st.button("🚀 GERAR SONDA DIAGNÓSTICA", use_container_width=True, type="primary"):
+                            qtd_q_sonda = c_q1.slider("Nº de Questões:", 3, 15, 10, key=f"s_qtd_in_{v}")
+                            instr_extra_s = c_q2.text_area("📝 Contexto Adicional (Opcional):", placeholder="Ex: Use temas de tecnologia...", key=f"s_instr_{v}")
+                            
+                            if st.button("🚀 GERAR SONDA DE PROFICIÊNCIA", use_container_width=True, type="primary"):
                                 with st.spinner("Maestro Sosa realizando perícia psicométrica..."):
-                                    s_id = util.gerar_sosa_id("SONDA", ano_sonda, trim_sonda[0])
-                                    st.session_state.sosa_id_atual = s_id
-                                    st.session_state.lab_meta = {"ano": ano_sonda, "trimestre": trim_sonda, "tipo": "SONDA"}
-                                    prompt_sonda = f"SÉRIE ATUAL: {ano_sonda}º Ano. TRIMESTRE: {trim_sonda}.\nCONTEÚDOS DO BANCO: {' / '.join(sel_conts_s)}.\nOBJETIVOS DO BANCO: {' | '.join(sel_objs_s)}.\nQUANTIDADE: {qtd_q_sonda} questões A-E.\n\n🚨 MISSÃO CRÍTICA: Gere com as TAGS [PROFESSOR], [ALUNO], [GABARITO], [PEI], [GABARITO_PEI]."
+                                    # Nomenclatura de Elite V29
+                                    nome_elite = f"{ano_sonda}º Ano - Sonda Diagnóstica - {trim_sonda}"
+                                    st.session_state.sosa_id_atual = nome_elite
+                                    st.session_state.lab_meta = {
+                                        "ano": ano_sonda, 
+                                        "trimestre": trim_sonda, 
+                                        "tipo": "SONDA",
+                                        "aula_alvo": "Sonda Diagnóstica",
+                                        "semana_ref": "AVALIAÇÃO"
+                                    }
+                                    
+                                    prompt_sonda = (
+                                        f"PERSONA: ARQUITETO_SONDA_DIAGNOSTICA. ID: {nome_elite}.\n"
+                                        f"SÉRIE ATUAL: {ano_sonda}º Ano. TRIMESTRE: {trim_sonda}.\n"
+                                        f"CONTEÚDOS ALVO: {' / '.join(sel_conts_s)}.\n"
+                                        f"QUANTIDADE: {qtd_q_sonda} questões A-E. VALOR TOTAL: 10,0.\n\n"
+                                        f"MISSÃO: Gere o material completo com as TAGS [PROFESSOR], [ALUNO], [GABARITO], [PEI], [GABARITO_PEI]."
+                                    )
                                     st.session_state.lab_temp = ai.gerar_ia("ARQUITETO_SONDA_DIAGNOSTICA", prompt_sonda, usar_busca=True)
                                     st.rerun()
-                else: st.error(f"❌ Base curricular do {ano_busca}º ano não encontrada.")
-
+                else:
+                    st.error(f"❌ Base curricular não encontrada para os critérios de retrocesso.")
+                    
         with tab_trabalhos:
             st.subheader("📋 Engenharia de Projetos e Trabalhos (BNCC)")
             with st.container(border=True):
