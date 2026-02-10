@@ -383,13 +383,11 @@ if menu == "🧪 Criador de Aulas":
                     # GERAÇÃO PEI (Ajuste: Anexando o gabarito ao final do texto)
                     link_pei = "N/A"
                     if len(ed_pei_mat) > 10:
-                        # Adiciona o rótulo GABARITO PEI de forma simples ao final
-                        conteudo_pei_com_gabarito = f"{ed_pei_mat}\n\nGABARITO PEI\n{ed_pei_gab}"
-                        
+                        # Enviamos apenas o material (ed_pei_mat), sem o gabarito (ed_pei_gab)
                         if is_sonda_check:
-                            doc_pei = exporter.gerar_docx_prova_v25(f"{nome_final}_PEI", conteudo_pei_com_gabarito, info_doc)
+                            doc_pei = exporter.gerar_docx_prova_v25(f"{nome_final}_PEI", ed_pei_mat, info_doc)
                         else:
-                            doc_pei = exporter.gerar_docx_pei_v25(f"{nome_final}_PEI", conteudo_pei_com_gabarito, info_doc)
+                            doc_pei = exporter.gerar_docx_pei_v25(f"{nome_final}_PEI", ed_pei_mat, info_doc)
                         link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_final}_PEI", modo="AULA")
                     
                     if "https" in str(link_alu):
