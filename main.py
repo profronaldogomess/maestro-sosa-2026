@@ -560,27 +560,58 @@ if menu == "🧪 Criador de Aulas":
                                     st.rerun()
 
         with tab_trabalhos:
-            st.subheader("📋 Engenharia de Projetos e Trabalhos (BNCC)")
+            st.subheader("📋 Engenharia de Projetos e Semanários (BNCC)")
             with st.container(border=True):
-                c1, c2, c3 = st.columns([1, 1, 1])
-                ano_t = c1.selectbox("Série:", [6, 7, 8, 9], key=f"t_ano_{v}")
-                df_cur_t = df_curriculo[df_curriculo["ANO"] == ano_t]
-                eixo_t = c2.selectbox("Eixo BNCC:", sorted(df_cur_t["EIXO"].unique().tolist()) if not df_cur_t.empty else [], key=f"t_eixo_{v}")
-                lente_t = c3.selectbox("Lente de Integração:", ["Investigação Científica", "Processos Criativos", "Intervenção Social"], key=f"t_lente_{v}")
+                c1, c2, c3 = st.columns([1.5, 1, 1])
+                natureza_p = c1.selectbox("Natureza do Evento:", 
+                    ["Semanário Temático", "Projeto de Identidade (Itabuna)", "Evento Escolar (Interclasses/Gincana)", "Projeto BNCC Livre"], 
+                    key=f"t_nat_{v}")
+                ano_t = c2.selectbox("Série Alvo:", [6, 7, 8, 9], key=f"t_ano_{v}")
+                modo_t = c3.selectbox("Modo de Execução:", ["Individual", "Em Grupo (Equipes)"], key=f"t_modo_{v}")
+
+            with st.container(border=True):
+                c_t1, c_t2 = st.columns([2, 1])
+                tema_t = c_t1.text_input("Título do Tema/Semanário:", placeholder="Ex: Consciência Negra, 67 anos de Itabuna...", key=f"t_tema_{v}")
+                valor_t = c_t2.number_input("Valor do Trabalho (0-10):", 0.0, 10.0, 2.0, step=0.5, key=f"t_val_{v}")
+                
+                # Lógica de Duração e Aulas
+                duracao_t = st.select_slider("Duração do Projeto:", options=["1 Semana", "2 Semanas", "3 Semanas"], value="1 Semana", key=f"t_dur_{v}")
+                aulas_calc = 2 if duracao_t == "1 Semana" else 4 if duracao_t == "2 Semanas" else 6
+                st.caption(f"📅 Planejamento Automático: {duracao_t} de duração totalizando {aulas_calc} aulas de Matemática.")
+
+            # Filtro BNCC Blindado
+            df_cur_t = df_curriculo[df_curriculo["ANO"].astype(str).str.contains(str(ano_t))]
+            if not df_cur_t.empty:
+                lista_eixos = sorted(df_cur_t["EIXO"].unique().tolist())
+                eixo_t = st.selectbox("Eixo BNCC para Integrar:", lista_eixos, key=f"t_eixo_{v}")
+                
                 if eixo_t:
                     df_hab_t = df_cur_t[df_cur_t["EIXO"] == eixo_t]
-                    hab_t = st.multiselect("Habilidades BNCC Alvo:", sorted(df_hab_t["CONTEUDO_ESPECIFICO"].unique().tolist()), key=f"t_hab_{v}")
-                    c_t1, c_t2 = st.columns([2, 1])
-                    tema_t = c_t1.text_input("Tema do Projeto:", key=f"t_tema_{v}")
-                    valor_t = c_t2.number_input("Valor (0-10):", 0.0, 10.0, 2.0, step=0.5, key=f"t_val_{v}")
-                    if st.button("🚀 CRIAR PROJETO BNCC", use_container_width=True, type="primary"):
-                        with st.spinner("Articulando competências..."):
-                            s_id = util.gerar_sosa_id("TRAB", ano_t, "I")
-                            st.session_state.sosa_id_atual = s_id
-                            st.session_state.lab_meta = {"ano": ano_t, "trimestre": "I Trimestre", "tipo": "TRABALHO"}
-                            prompt_t = f"PERSONA: ARQUITETO_TRABALHOS_BNCC. ID: {s_id}.\nTEMA: {tema_t}. VALOR: {valor_t}. SÉRIE: {ano_t}º. HAB: {hab_t}. LENTE: {lente_t}.\nENTREGA: [PROFESSOR], [ALUNO], [GABARITO], [PEI]."
-                            st.session_state.lab_temp = ai.gerar_ia("ARQUITETO_TRABALHOS_BNCC", prompt_t)
-                            st.rerun()
+                    hab_t = st.multiselect("Habilidade BNCC Âncora:", sorted(df_hab_t["CONTEUDO_ESPECIFICO"].unique().tolist()), key=f"t_hab_{v}")
+                    
+                    if st.button("🚀 GERAR PROJETO ESTRUTURADO", use_container_width=True, type="primary"):
+                        if not tema_t or not hab_t:
+                            st.error("Por favor, defina o Tema e a Habilidade Âncora.")
+                        else:
+                            with st.spinner("Maestro Sosa realizando a ponte entre o Tema e a Matemática..."):
+                                s_id = util.gerar_sosa_id("PROJ", ano_t, "I")
+                                st.session_state.sosa_id_atual = s_id
+                                st.session_state.lab_meta = {
+                                    "ano": ano_t, "trimestre": "I Trimestre", 
+                                    "tipo": "TRABALHO", "aula_alvo": tema_t, "semana_ref": "PROJETO"
+                                }
+                                
+                                prompt_t = (
+                                    f"PERSONA: ARQUITETO_PROJETOS_V29. ID: {s_id}.\n"
+                                    f"NATUREZA: {natureza_p}. TEMA: {tema_t}.\n"
+                                    f"SÉRIE: {ano_t}º Ano. HABILIDADE BNCC: {hab_t}.\n"
+                                    f"LOGÍSTICA: {modo_t} | DURAÇÃO: {duracao_t} ({aulas_calc} aulas).\n"
+                                    f"VALOR: {util.sosa_to_str(valor_t)} pontos.\n\n"
+                                    f"MISSÃO: Gere o material completo com as tags [MODO_EXECUCAO], [DURACAO_PROJETO], [VALOR_ATIVO], "
+                                    f"[GUIA_PROFESSOR], [ROTEIRO_ALUNO], [RUBRICA_AVALIAÇÃO], [PEI]."
+                                )
+                                st.session_state.lab_temp = ai.gerar_ia("ARQUITETO_PROJETOS_V29", prompt_t, usar_busca=True)
+                                st.rerun()
 
         with tab_complementar:
             st.subheader("📚 Atividades Complementares de Fixação")
