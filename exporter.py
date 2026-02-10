@@ -353,7 +353,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         
         doc.add_paragraph()
 
-        # 5. CONTEÚDO EM COLUNAS NATIVAS
+# 5. CONTEÚDO EM COLUNAS NATIVAS
         new_section = doc.add_section(WD_SECTION.CONTINUOUS)
         sectPr = new_section._sectPr
         cols = sectPr.xpath('./w:cols')[0]
@@ -366,6 +366,16 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
             p = doc.add_paragraph()
             p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
             
+            # LÓGICA PARA TÍTULOS E GABARITO PEI (SEM UNICODE)
+            secoes_especiais = ["PARA LEMBRAR", "DICA MESTRA", "PASSO A PASSO", "GABARITO", "VERSÃO ADAPTADA"]
+            if any(x in l_s.upper() for x in secoes_especiais):
+                txt_limpo = l_s.replace("[", "").replace("]", "").replace(":", "").upper()
+                run = p.add_run(txt_limpo)
+                run.bold = True
+                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                p.paragraph_format.space_before = Pt(12)
+                continue
+
             # FORÇAR NEGRITO NO RÓTULO DA QUESTÃO
             if "QUESTÃO" in l_s.upper():
                 match = re.match(r"^(QUEST[AÃ]O\s+\d+)([\.\s:]+)(.*)", l_s, re.IGNORECASE)
