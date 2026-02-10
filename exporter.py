@@ -282,7 +282,7 @@ def gerar_docx_professor_v25(titulo_doc, conteudo, info):
 # 5. PROVA OFICIAL (PRESERVAÇÃO INTEGRAL - COM NOTA)
 # ==============================================================================
 def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
-    """Versão V29 - Gabarito Proporcional e Suporte à Sonda"""
+    """Versão V29.9 - Contagem Blindada e Identidade Unificada (Sem Gabarito no PEI)"""
     file_stream = io.BytesIO()
     try:
         doc = Document()
@@ -290,13 +290,13 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         section.top_margin, section.bottom_margin = Inches(0.3), Inches(0.3)
         section.left_margin, section.right_margin = Inches(0.4), Inches(0.4)
         
-        # CONTAGEM REAL DE QUESTÕES PARA O GABARITO
-        num_total_q = len(re.findall(r'QUESTÃO', conteudo_ia.upper()))
+        # 1. CONTAGEM BLINDADA: Conta apenas "QUESTÃO" no início da linha (evita contar instruções)
+        num_total_q = len(re.findall(r'(?m)^QUESTÃO\s+\d+', conteudo_ia.upper()))
         if num_total_q == 0: num_total_q = int(info.get('qtd_questoes', 10))
 
-        # IDENTIFICAÇÃO DO TIPO DE DOCUMENTO
-        is_pei_doc = "PEI" in titulo_doc.upper() or "ADAPTADA" in titulo_doc.upper()
+        # 2. UNIFICAÇÃO DE TÍTULO (Sonda vs Regular vs PEI)
         is_sonda = "SONDA" in titulo_doc.upper() or "DIAGNÓSTICA" in titulo_doc.upper()
+        is_pei_doc = "PEI" in titulo_doc.upper() or "ADAPTADA" in titulo_doc.upper()
         
         if is_sonda:
             label_prova = "SONDA DE PROFICIÊNCIA"
@@ -305,83 +305,54 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         else:
             label_prova = "AVALIAÇÃO DE MATEMÁTICA"
 
-        # CABEÇALHO (Sonda sempre mostra nota para o Scanner)
+        # 3. CABEÇALHO
         configurar_cabecalho_mestre(doc, info, label_prova, mostrar_nota=True)
         doc.add_paragraph()
 
-        # TABELA DE ORIENTAÇÕES E GABARITO DINÂMICO
-        top_table = doc.add_table(rows=1, cols=2)
-        top_table.columns[0].width = Inches(3.5)
-        top_table.columns[1].width = Inches(4.0)
+        # 4. GRADE DE BOLINHAS (APENAS PARA O REGULAR - CONFORME ORDEM DO PROFESSOR)
+        if not is_pei_doc:
+            top_table = doc.add_table(rows=1, cols=2)
+            top_table.columns[0].width = Inches(3.5)
+            top_table.columns[1].width = Inches(4.0)
 
-        c_orient = top_table.cell(0, 0)
-        p_tit = c_orient.add_paragraph()
-        p_tit.add_run("ORIENTAÇÕES:").font.bold = True
-        
-        orientacoes = [
-            "A interpretação faz parte da avaliação.",
-            "Use apenas CANETA AZUL ou PRETA.",
-            "Cálculos são necessários para validar a resposta.",
-            f"Valor Total: {info.get('valor', '10,0')} | Questões: {num_total_q}"
-        ]
-        for idx, text in enumerate(orientacoes, 1):
-            p = c_orient.add_paragraph()
-            p.add_run(f"{idx}. {text}").font.size = Pt(9)
-
-        # GABARITO ESTRITAMENTE PROPORCIONAL (Apenas as linhas necessárias)
-        c_gab = top_table.cell(0, 1)
-        gab_grid = c_gab.add_table(rows=num_total_q + 1, cols=6)
-        gab_grid.style = 'Table Grid'
-        
-        # Cabeçalho do Gabarito
-        for i, lab in enumerate(["Q", "A", "B", "C", "D", "E"]):
-            cell = gab_grid.cell(0, i)
-            cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
-            cell.paragraphs[0].add_run(lab).font.bold = True
+            c_orient = top_table.cell(0, 0)
+            p_tit = c_orient.add_paragraph()
+            p_tit.add_run("ORIENTAÇÕES:").font.bold = True
             
-        # Linhas do Gabarito
-        for r in range(1, num_total_q + 1):
-            gab_grid.cell(r, 0).paragraphs[0].add_run(f"{r:02d}").font.size = Pt(9)
-            for col in range(1, 6):
-                run_b = gab_grid.cell(r, col).paragraphs[0].add_run("○")
-                run_b.font.size = Pt(14)
-                gab_grid.cell(r, col).paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+            orientacoes = [
+                "A interpretação faz parte da avaliação.",
+                "Use apenas CANETA AZUL ou PRETA.",
+                f"Valor Total: 10,0 | Questões: {num_total_q}"
+            ]
+            for idx, text in enumerate(orientacoes, 1):
+                p = c_orient.add_paragraph()
+                p.add_run(f"{idx}. {text}").font.size = Pt(9)
 
-        # COLUNAS NATIVAS PARA O CONTEÚDO
+            c_gab = top_table.cell(0, 1)
+            gab_grid = c_gab.add_table(rows=num_total_q + 1, cols=6)
+            gab_grid.style = 'Table Grid'
+            for i, lab in enumerate(["Q", "A", "B", "C", "D", "E"]):
+                gab_grid.cell(0, i).paragraphs[0].add_run(lab).font.bold = True
+            for r in range(1, num_total_q + 1):
+                gab_grid.cell(r, 0).paragraphs[0].add_run(f"{r:02d}").font.size = Pt(9)
+                for col in range(1, 6):
+                    gab_grid.cell(r, col).paragraphs[0].add_run("○").font.size = Pt(14)
+            doc.add_paragraph()
+
+        # 5. CONTEÚDO EM COLUNAS NATIVAS
         new_section = doc.add_section(WD_SECTION.CONTINUOUS)
         sectPr = new_section._sectPr
         cols = sectPr.xpath('./w:cols')[0]
         cols.set(qn('w:num'), '2')
         cols.set(qn('w:space'), '720')
 
-        # PROCESSAMENTO DO CONTEÚDO
-        linhas = conteudo_ia.split('\n')
-        for linha in linhas:
-            l_s = linha.strip()
-            if not l_s: continue
-            p = doc.add_paragraph()
-            p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-            p.paragraph_format.line_spacing = 1.15
-
-            if "PARA LEMBRAR" in l_s.upper() or "DICA MESTRA" in l_s.upper():
-                run = p.add_run(f"█▓▒░ {l_s.replace('[', '').replace(']', '')} ░▒▓█")
-                run.bold = True
-                p.paragraph_format.space_before = Pt(10)
-            elif "PASSO A PASSO" in l_s.upper() or "➔" in l_s:
-                run = p.add_run(f"➔ {l_s.replace('[', '').replace(']', '').replace('➔', '')}")
-                run.bold, run.font.color.rgb = True, RGBColor(0, 102, 204)
-                p.paragraph_format.left_indent = Inches(0.1)
-            elif "QUESTÃO" in l_s.upper():
-                run = p.add_run(l_s); run.bold, run.font.size = True, Pt(11)
-                p.paragraph_format.space_before = Pt(12)
-            elif "PROMPT IMAGEM" in l_s.upper():
-                run = p.add_run(f" [ {l_s} ] ")
-                run.font.italic, run.font.size = True, Pt(8)
-                run.font.color.rgb = RGBColor(120, 120, 120)
-            elif re.match(r'^[A-E][\)\.]', l_s):
-                p.add_run(l_s); p.paragraph_format.left_indent = Inches(0.2)
-            else:
-                adicionar_texto_formatado(p, l_s)
+        for linha in conteudo_ia.split('\n'):
+            if linha.strip():
+                p = doc.add_paragraph()
+                p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+                if re.match(r'^[A-E][\)\.]', linha.strip()):
+                    p.paragraph_format.left_indent = Inches(0.2)
+                adicionar_texto_formatado(p, linha.strip())
 
         doc.save(file_stream)
         file_stream.seek(0)
