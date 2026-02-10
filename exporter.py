@@ -11,6 +11,7 @@ from docx.oxml.ns import qn
 from pptx import Presentation
 from pptx.util import Inches, Pt
 from datetime import datetime
+import ai_engine as ai
 
 # ==============================================================================
 # 1. FUNÇÕES AUXILIARES TÉCNICAS (PRESERVAÇÃO INTEGRAL)
@@ -282,20 +283,32 @@ def gerar_docx_professor_v25(titulo_doc, conteudo, info):
 # 5. PROVA OFICIAL (PRESERVAÇÃO INTEGRAL - COM NOTA)
 # ==============================================================================
 def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
-    """Versão V29.16 - Restauração do Padrão de Elite (Regular e PEI)"""
+    """Versão V29.20 - SOBERANIA ORTOGRÁFICA E PRECISÃO DE GABARITO"""
+    import re
     file_stream = io.BytesIO()
     try:
         doc = Document()
+        
+        # Configuração de Fonte Global (Arial)
+        style = doc.styles['Normal']
+        style.font.name = 'Arial'
+        style.font.size = Pt(10.5)
+
         section = doc.sections[0]
         section.top_margin = section.bottom_margin = Inches(0.3)
         section.left_margin = section.right_margin = Inches(0.4)
         
-        # 1. LIMPEZA DE RUÍDOS (Corta tudo antes da primeira QUESTÃO)
-        match_primeira_q = re.search(r"(?i)QUESTÃO\s*\d+", conteudo_ia)
-        conteudo_limpo = conteudo_ia[match_primeira_q.start():].strip() if match_primeira_q else conteudo_ia.strip()
+        # 1. EXTRAÇÃO LIMPA (Foca apenas na tag QUESTOES para contar e exibir)
+        # Se não houver a tag, ele tenta limpar o ruído inicial
+        corpo_questoes = ai.extrair_tag(conteudo_ia, "QUESTOES") or ai.extrair_tag(conteudo_ia, "ALUNO")
+        if not corpo_questoes:
+            match_primeira_q = re.search(r"(?i)QUESTÃO\s*\d+", conteudo_ia)
+            corpo_questoes = conteudo_ia[match_primeira_q.start():].strip() if match_primeira_q else conteudo_ia.strip()
 
-        # 2. CONTAGEM REAL DE QUESTÕES
-        num_total_q = len(re.findall(r'(?m)^QUESTÃO\s+\d+', conteudo_limpo.upper()))
+        # 2. CONTAGEM REAL (Evita contar o gabarito no final)
+        # Removemos o que vem depois de [GABARITO] para a contagem não errar
+        texto_para_contagem = corpo_questoes.split("[GABARITO")[0]
+        num_total_q = len(re.findall(r'(?i)QUESTÃO\s+\d+', texto_para_contagem))
         if num_total_q == 0: num_total_q = int(info.get('qtd_questoes', 10))
         
         is_pei_doc = "PEI" in titulo_doc.upper() or "ADAPTADA" in titulo_doc.upper()
@@ -306,7 +319,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         configurar_cabecalho_mestre(doc, info, label_prova, mostrar_nota=True)
         doc.add_paragraph()
 
-        # 4. QUADRO DE ORIENTAÇÕES + GABARITO DE BOLINHAS (IDÊNTICO PARA TODOS)
+        # 4. QUADRO DE ORIENTAÇÕES + GABARITO DE BOLINHAS PROPORCIONAL
         top_table = doc.add_table(rows=1, cols=2)
         top_table.columns[0].width = Inches(3.5)
         top_table.columns[1].width = Inches(4.0)
@@ -315,18 +328,21 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         p_tit = c_orient.paragraphs[0]
         p_tit.add_run("ORIENTAÇÕES:").font.bold = True
         
+        val_total = info.get('valor', '10,0')
+        val_q = info.get('valor_questao', '1,0')
+        
         orient_list = [
             "Leia atentamente cada enunciado.",
             "Resolva os cálculos no espaço em branco.",
             "Marque apenas uma alternativa por questão.",
-            f"Valor Total: 10,0 | Cada questão: {info.get('valor_questao', '1,0')}"
+            f"Valor Total: {val_total} | Cada questão: {val_q}"
         ]
         for txt in orient_list:
             p = c_orient.add_paragraph()
             p.add_run(f"• {txt}").font.size = Pt(9)
             p.paragraph_format.space_after = Pt(0)
 
-        # Inserção do Gabarito de Bolinhas Proporcional
+        # GABARITO DE BOLINHAS (Exatamente num_total_q linhas)
         c_gab = top_table.cell(0, 1)
         gab_grid = c_gab.add_table(rows=num_total_q + 1, cols=6)
         gab_grid.style = 'Table Grid'
@@ -346,38 +362,39 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         cols.set(qn('w:num'), '2')
         cols.set(qn('w:space'), '720')
 
-        for linha in conteudo_limpo.split('\n'):
+        # VACINA ANTI-MARKDOWN: Limpa asteriscos soltos antes de processar
+        corpo_limpo = corpo_questoes.replace("**", "").replace("#", "")
+
+        for linha in corpo_limpo.split('\n'):
             l_s = linha.strip()
             if not l_s: continue
             p = doc.add_paragraph()
             p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
             
-            # FORÇAR NEGRITO NO RÓTULO DA QUESTÃO (INLINE E SOBERANO)
+            # RÓTULO DA QUESTÃO (INLINE E SOBERANO)
             if l_s.upper().startswith("QUESTÃO"):
-                # Regex que captura o rótulo completo até o enunciado
                 match = re.match(r"^(QUEST[AÃ]O\s+\d+)(.*?)(\.\s*|\s+-\s*|:\s*)(.*)", l_s, re.IGNORECASE)
                 if match:
-                    # Parte 1: "QUESTÃO 01" + Parte 2: "(VALOR: 1,25)" + Parte 3: "."
-                    rotulo_completo = f"{match.group(1).upper()}{match.group(2)}{match.group(3)}"
-                    run_r = p.add_run(rotulo_completo)
+                    rotulo = f"{match.group(1).upper()}{match.group(2)}{match.group(3)}"
+                    run_r = p.add_run(rotulo)
                     run_r.bold = True
                     run_r.font.size = Pt(11)
-                    # Parte 4: O texto do enunciado na mesma linha
-                    adicionar_texto_formatado(p, match.group(4).strip())
+                    p.add_run(match.group(4).strip())
                     continue
             
-            # Títulos de Seção (Sem Unicode)
+            # Títulos de Seção
             secoes_especiais = ["PARA LEMBRAR", "DICA MESTRA", "PASSO A PASSO", "VERSÃO ADAPTADA"]
             if any(x in l_s.upper() for x in secoes_especiais):
-                run = p.add_run(l_s.replace("[", "").replace("]", "").upper())
+                run = p.add_run(l_s.upper())
                 run.bold = True
                 p.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 continue
 
+            # Indentação de Alternativas
             if re.match(r'^[A-E][\)\.]', l_s):
                 p.paragraph_format.left_indent = Inches(0.2)
             
-            adicionar_texto_formatado(p, l_s)
+            p.add_run(l_s)
 
         doc.save(file_stream)
         file_stream.seek(0)
