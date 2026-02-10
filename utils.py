@@ -117,7 +117,12 @@ def formatar_data_br(valor):
     
     return val_str
 
-def gerar_nome_material_elite(ano, aula, semana):
-    """Gera o nome formatado para exibição e arquivos: {ANO}º Ano - {AULA} - {SEMANA}"""
+def gerar_nome_material_elite(ano, tipo, detalhe):
+    """
+    Gera o nome legível: 6º Ano - Aula 1 - Jornada Pedagógica
+    ano: int ou str (6)
+    tipo: str (Aula 1, Sonda, Projeto)
+    detalhe: str (Semana 01, I Trimestre, Nome do Tema)
+    """
     ano_limpo = str(ano).replace("º", "")
-    return f"{ano_limpo}º Ano - {aula} - {semana}"
+    return f"{ano_limpo}º Ano - {tipo} - {detalhe}"
