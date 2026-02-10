@@ -322,7 +322,7 @@ if menu == "🧪 Criador de Aulas":
     if "v_lab" not in st.session_state: st.session_state.v_lab = 1
     v = st.session_state.v_lab
 
-    # --- VACINA DE ESCOPO SOSA (is_hub definido no topo do módulo) ---
+    # --- VACINA DE ESCOPO SOSA (is_hub definido no topo) ---
     is_hub = st.session_state.get("lab_meta", {}).get("tipo") == "PRODUÇÃO_HUB"
 
     # --- ÁREA DE EXIBIÇÃO E REFINO (MODO EDIÇÃO ATIVO) ---
@@ -342,7 +342,6 @@ if menu == "🧪 Criador de Aulas":
             cmd_refine_lab = st.chat_input("Solicite ajustes (ex: 'redistribua o gabarito', 'troque a questão 2', 'mude o tema para cacau')...", key=f"chat_lab_ref_{v}")
             if cmd_refine_lab:
                 with st.spinner("Maestro Sosa realizando reengenharia e perícia psicométrica..."):
-                    # Lógica de Seleção de Persona (Sonda vs Material Comum)
                     persona_alvo = "REFINADOR_SONDA_V29" if "SONDA" in s_id.upper() else "REFINADOR_MATERIAIS"
                     novo_texto = ai.gerar_ia(persona_alvo, f"ORDEM: {cmd_refine_lab}\n\nCONTEÚDO ATUAL:\n{st.session_state.lab_temp}")
                     
@@ -375,16 +374,12 @@ if menu == "🧪 Criador de Aulas":
                     ano_str = f"{meta.get('ano', '6')}º"
                     semana_ref = meta.get('semana_ref', 'AVULSA')
                     
-                    # LEI DA LIMPEZA (TRIPLE-SYNC)
                     db.excluir_registro_com_drive("DB_AULAS_PRONTAS", nome_final)
                     
                     conteudo_banco = f"[SOSA_ID] {nome_final}\n[AULA_ALVO] {meta.get('aula_alvo', 'Aula')}\n[PROFESSOR]\n{ed_prof}\n\n[ALUNO]\n{ed_alu}\n\n[GABARITO]\n{ed_res}\n\n[PEI]\n{ed_pei_mat}\n\n[GABARITO_PEI]\n{ed_pei_gab}\n\n"
 
-                    # CONTAGEM REAL DE QUESTÕES NO MATERIAL REGULAR
                     qtd_q_real = len(re.findall(r'(?m)^QUESTÃO\s+\d+', ed_alu.upper()))
                     is_sonda_check = "SONDA" in nome_final.upper()
-                    
-                    # CÁLCULO DO VALOR POR QUESTÃO (10,0 / QTD)
                     val_q_str = util.sosa_to_str(10.0 / qtd_q_real) if qtd_q_real > 0 else "1,00"
 
                     info_doc = {
@@ -395,7 +390,6 @@ if menu == "🧪 Criador de Aulas":
                         "qtd_questoes": qtd_q_real
                     }
 
-                    # GERAÇÃO DE DOCUMENTOS (FLUXO NATIVO)
                     if is_sonda_check:
                         doc_alu = exporter.gerar_docx_prova_v25(nome_final, ed_alu, info_doc)
                     else:
@@ -405,7 +399,6 @@ if menu == "🧪 Criador de Aulas":
                     doc_prof = exporter.gerar_docx_professor_v25(nome_final, ed_prof, {"ano": ano_str, "semana": semana_ref, "trimestre": info_doc["trimestre"]})
                     link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_final}_PROF", modo="AULA")
                     
-                    # GERAÇÃO PEI (GABARITO PROPORCIONAL)
                     link_pei = "N/A"
                     if len(ed_pei_mat) > 10:
                         if is_sonda_check:
@@ -420,7 +413,7 @@ if menu == "🧪 Criador de Aulas":
                         status.update(label="✅ Sincronia Concluída!", state="complete")
                         st.balloons(); time.sleep(1); reset_laboratorio()
 
-    # --- SEÇÃO DE ENTRADA (CONFIGURAÇÃO INICIAL) ---
+    # --- SEÇÃO DE ENTRADA (CONFIGURAÇÃO) ---
     else:
         tab_producao, tab_diagnostico, tab_trabalhos, tab_complementar, tab_acervo = st.tabs([
             "🚀 Produção (Aula 1/2)", "🔍 Sonda de Proficiência", "📋 Engenharia de Trabalhos", "📚 Atividades Complementares", "📂 Acervo de Materiais"
@@ -434,33 +427,29 @@ if menu == "🧪 Criador de Aulas":
                     plano_txt = st.session_state.lab_temp
                     eixo_p = ai.extrair_tag(plano_txt, "CONTEUDO_GERAL")
                     sem_ref = st.session_state.lab_meta.get('semana_ref')
-                    ano_ref = f"{st.session_state.lab_meta.get('ano')}º"
-                    match_livro = re.search(r"MÉTODO LIVRO: \[(.*?)\]", plano_txt)
-                    match_pags = re.search(r"PÁGINAS: (.*?)\.", plano_txt)
-                    livro_ref = match_livro.group(1) if match_livro else "Manual/Banco"
-                    pags_ref = match_pags.group(1) if match_pags else "N/A"
+                    ano_ref_hub = st.session_state.lab_meta.get('ano')
+                    
                     c1.markdown(f"### 🎯 {eixo_p}")
-                    c1.caption(f"Semana: {sem_ref} | Série: {ano_ref}")
-                    st.warning(f"📖 **Herança Detectada:** {livro_ref} (Pags: {pags_ref})")
-                    aulas_no_banco = df_aulas[(df_aulas['SEMANA_REF'] == sem_ref) & (df_aulas['ANO'] == ano_ref)]
+                    c1.caption(f"Semana: {sem_ref} | Série: {ano_ref_hub}º")
+                    
+                    aulas_no_banco = df_aulas[(df_aulas['SEMANA_REF'] == sem_ref) & (df_aulas['ANO'].str.contains(str(ano_ref_hub)))]
                     opcoes_aula = []
                     if not any("Aula 1" in str(x) for x in aulas_no_banco['TIPO_MATERIAL']): opcoes_aula.append("Aula 1")
                     if not any("Aula 2" in str(x) for x in aulas_no_banco['TIPO_MATERIAL']): opcoes_aula.append("Aula 2")
-                    if not any("Sábado" in str(x) for x in aulas_no_banco['TIPO_MATERIAL']): opcoes_aula.append("Sábado Letivo")
+                    
                     if not opcoes_aula:
                         st.success(f"✅ **Safra Concluída!**")
                         if st.button("🔄 REPRODUZIR (SOBREPOR)"): reset_laboratorio()
                     else:
-                        aula_alvo = c2.radio("Selecione a Aula:", opcoes_aula, key=f"hub_aula_{v}")
-                        instr_extra = st.text_area("📝 Informações Extras:", key=f"hub_extra_{v}")
-                        qtd_q = st.slider("Quantidade de Questões:", 3, 15, 10, key=f"hub_q_{v}")
+                        aula_alvo_hub = c2.radio("Selecione a Aula:", opcoes_aula, key=f"hub_aula_{v}")
+                        qtd_q_hub = c2.slider("Quantidade de Questões:", 3, 15, 10, key=f"hub_q_{v}")
                         if st.button("💎 MATERIALIZAR AULA DE ELITE", use_container_width=True, type="primary"):
-                            with st.spinner(f"Expandindo {aula_alvo}..."):
-                                nome_elite = util.gerar_nome_material_elite(st.session_state.lab_meta.get('ano'), aula_alvo, sem_ref)
+                            with st.spinner(f"Expandindo {aula_alvo_hub}..."):
+                                nome_elite = util.gerar_nome_material_elite(ano_ref_hub, aula_alvo_hub, sem_ref)
                                 st.session_state.sosa_id_atual = nome_elite
-                                st.session_state.lab_meta['aula_alvo'] = aula_alvo
-                                tag_aula = "AULA_1" if "Aula 1" in aula_alvo else "AULA_2" if "Aula 2" in aula_alvo else "SABADO_LETIVO"
-                                prompt_expansao = f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {nome_elite}.\nSÉRIE: {ano_ref}. ALVO: {aula_alvo}. QTD: {qtd_q}.\n--- HERANÇA TÉCNICA ---\nREFERÊNCIA: Livro {livro_ref}, Páginas {pags_ref}.\nROTEIRO DO PLANO: {ai.extrair_tag(plano_txt, tag_aula)}.\nESTRATÉGIA PEI: {ai.extrair_tag(plano_txt, 'ADAPTACAO_PEI')}.\nEXTRAS: {instr_extra}.\n\nMISSÃO: Gere o material completo com as TAGS [PROFESSOR], [ALUNO], [GABARITO], [PEI], [GABARITO_PEI]."
+                                st.session_state.lab_meta['aula_alvo'] = aula_alvo_hub
+                                tag_aula = "AULA_1" if "1" in aula_alvo_hub else "AULA_2"
+                                prompt_expansao = f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {nome_elite}.\nSÉRIE: {ano_ref_hub}º. ALVO: {aula_alvo_hub}. QTD: {qtd_q_hub}.\nROTEIRO DO PLANO: {ai.extrair_tag(plano_txt, tag_aula)}.\nESTRATÉGIA PEI: {ai.extrair_tag(plano_txt, 'ADAPTACAO_PEI')}."
                                 st.session_state.lab_temp = ai.gerar_ia("MAESTRO_SOSA_V28_ELITE", prompt_expansao, usar_busca=True)
                                 st.rerun()
             else:
@@ -468,38 +457,22 @@ if menu == "🧪 Criador de Aulas":
                 with st.container(border=True):
                     c1, c2, c3 = st.columns([1, 2, 1])
                     ano_lab = c1.selectbox("Série/Ano:", [6, 7, 8, 9], key=f"prod_ano_{v}")
-                    ano_ref = f"{ano_lab}º"
                     planos_ano = df_planos[df_planos["ANO"].astype(str).str.contains(str(ano_lab))]
                     if planos_ano.empty: st.error("❌ Nenhum planejamento encontrado.")
                     else:
                         sem_lab = c2.selectbox("Semana Base (Ponto ID):", planos_ano["SEMANA"].tolist(), key=f"prod_sem_{v}")
-                        plano_row = planos_ano[planos_ano["SEMANA"] == sem_lab].iloc[0]
-                        plano_txt = str(plano_row['PLANO_TEXTO'])
-                        aulas_no_banco = df_aulas[(df_aulas['SEMANA_REF'] == sem_lab) & (df_aulas['ANO'] == ano_ref)]
-                        opcoes_aula = []
-                        if not any("Aula 1" in str(x) for x in aulas_no_banco['TIPO_MATERIAL']): opcoes_aula.append("Aula 1")
-                        if not any("Aula 2" in str(x) for x in aulas_no_banco['TIPO_MATERIAL']): opcoes_aula.append("Aula 2")
-                        if not opcoes_aula:
-                            st.success(f"✅ **Safra Concluída!**")
-                            if st.button("🔄 REPRODUZIR (SOBREPOR)"): st.cache_data.clear(); st.rerun()
-                        else:
-                            aula_alvo = c3.radio("🎯 Aula Pendente:", opcoes_aula, horizontal=True, key=f"prod_alvo_{v}")
-                            match_livro = re.search(r"MÉTODO LIVRO: \[(.*?)\]", plano_txt)
-                            match_pags = re.search(r"PÁGINAS: (.*?)\.", plano_txt)
-                            livro_ref = match_livro.group(1) if match_livro else "Manual/Banco"
-                            pags_ref = match_pags.group(1) if match_pags else "N/A"
-                            st.info(f"📖 **Herança Detectada:** {livro_ref} (Pags: {pags_ref})")
-                            instr_extra = st.text_area("📝 Contexto Adicional:", key=f"prod_extra_{v}")
-                            qtd_q = st.slider("Quantidade de Questões:", 3, 15, 10, key=f"prod_q_{v}")
-                            if st.button("💎 COMPILAR MATERIAL DE ELITE", use_container_width=True, type="primary"):
-                                with st.spinner("Arquitetando Tratado Didático..."):
-                                    nome_elite = util.gerar_nome_material_elite(ano_lab, aula_alvo, sem_lab)
-                                    st.session_state.sosa_id_atual = nome_elite
-                                    st.session_state.lab_meta = {"ano": ano_lab, "trimestre": "I Trimestre", "tipo": aula_alvo, "semana_ref": sem_lab, "aula_alvo": aula_alvo}
-                                    tag_aula = "AULA_1" if aula_alvo == "Aula 1" else "AULA_2"
-                                    prompt_manual = f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {nome_elite}.\nSÉRIE: {ano_ref}. ALVO: {aula_alvo}. QTD: {qtd_q}.\n--- HERANÇA TÉCNICA ---\nREFERÊNCIA: Livro {livro_ref}, Páginas {pags_ref}.\nROTEIRO: {ai.extrair_tag(plano_txt, tag_aula)}.\nESTRATÉGIA PEI: {ai.extrair_tag(plano_txt, 'ADAPTACAO_PEI')}.\nEXTRAS: {instr_extra}.\n\nMISSÃO: Gere o material com as TAGS [PROFESSOR], [ALUNO], [GABARITO], [PEI], [GABARITO_PEI]."
-                                    st.session_state.lab_temp = ai.gerar_ia("MAESTRO_SOSA_V28_ELITE", prompt_manual, usar_busca=True)
-                                    st.rerun()
+                        aula_alvo_prod = c3.radio("🎯 Aula Pendente:", ["Aula 1", "Aula 2"], horizontal=True, key=f"prod_alvo_{v}")
+                        qtd_q_prod = st.slider("Quantidade de Questões:", 3, 15, 10, key=f"prod_q_{v}")
+                        if st.button("💎 COMPILAR MATERIAL DE ELITE", use_container_width=True, type="primary"):
+                            with st.spinner("Arquitetando Tratado Didático..."):
+                                nome_elite = util.gerar_nome_material_elite(ano_lab, aula_alvo_prod, sem_lab)
+                                st.session_state.sosa_id_atual = nome_elite
+                                st.session_state.lab_meta = {"ano": ano_lab, "trimestre": "I Trimestre", "tipo": aula_alvo_prod, "semana_ref": sem_lab, "aula_alvo": aula_alvo_prod}
+                                plano_txt = str(planos_ano[planos_ano["SEMANA"] == sem_lab].iloc[0]['PLANO_TEXTO'])
+                                tag_aula = "AULA_1" if "1" in aula_alvo_prod else "AULA_2"
+                                prompt_manual = f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {nome_elite}.\nSÉRIE: {ano_lab}º. ALVO: {aula_alvo_prod}. QTD: {qtd_q_prod}.\nROTEIRO: {ai.extrair_tag(plano_txt, tag_aula)}."
+                                st.session_state.lab_temp = ai.gerar_ia("MAESTRO_SOSA_V28_ELITE", prompt_manual, usar_busca=True)
+                                st.rerun()
 
         with tab_diagnostico:
             st.markdown("### 🔍 Configurar Sonda de Proficiência")
@@ -508,54 +481,23 @@ if menu == "🧪 Criador de Aulas":
                 ano_sonda = c1.selectbox("Série Atual:", [6, 7, 8, 9], key=f"s_ano_{v}")
                 trim_sonda = c2.selectbox("Trimestre da Sonda:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"s_trim_{v}")
                 
-                if trim_sonda == "I Trimestre":
-                    ano_busca = int(ano_sonda) - 1
-                    trim_busca = "Todos"
-                    st.warning(f"💡 **Diagnóstico Inicial:** Buscando conteúdos do {ano_busca}º Ano para nivelamento.")
-                elif trim_sonda == "II Trimestre":
-                    ano_busca = int(ano_sonda)
-                    trim_busca = "I"
-                    st.info(f"🎯 **Sonda de Ciclo:** Avaliando conteúdos do I Trimestre.")
-                else:
-                    ano_busca = int(ano_sonda)
-                    trim_busca = "II"
-                    st.info(f"🎯 **Sonda de Ciclo:** Avaliando conteúdos do II Trimestre.")
-                
-                df_cur_sonda = df_curriculo[df_curriculo["ANO"].astype(str) == str(ano_busca)]
-                if trim_busca != "Todos":
-                    df_cur_sonda = df_cur_sonda[df_cur_sonda["TRIMESTRE"] == trim_busca]
+                ano_busca = int(ano_sonda) - 1 if trim_sonda == "I Trimestre" else int(ano_sonda)
+                df_cur_sonda = df_curriculo[df_curriculo["ANO"].astype(str).str.contains(str(ano_busca))]
                 
                 if not df_cur_sonda.empty:
                     lista_eixos_sonda = sorted(df_cur_sonda["EIXO"].unique().tolist())
                     sel_eixos_s = st.multiselect("1. Selecione o(s) Eixo(s):", lista_eixos_sonda, key=f"s_eixos_{v}")
-                    
                     if sel_eixos_s:
                         df_cont_s = df_cur_sonda[df_cur_sonda["EIXO"].isin(sel_eixos_s)]
-                        lista_conts_s = sorted(df_cont_s["CONTEUDO_ESPECIFICO"].unique().tolist())
-                        sel_conts_s = st.multiselect("2. Selecione os Conteúdos:", lista_conts_s, key=f"s_conts_{v}")
-                        
+                        sel_conts_s = st.multiselect("2. Selecione os Conteúdos:", sorted(df_cont_s["CONTEUDO_ESPECIFICO"].unique().tolist()), key=f"s_conts_{v}")
                         if sel_conts_s:
-                            st.divider()
-                            c_q1, c_q2 = st.columns([1, 2])
-                            qtd_q_sonda = c_q1.slider("Nº de Questões:", 3, 15, 10, key=f"s_qtd_in_{v}")
-                            instr_extra_s = c_q2.text_area("📝 Contexto Adicional:", key=f"s_instr_{v}")
-                            
+                            qtd_q_sonda = st.slider("Nº de Questões:", 3, 15, 10, key=f"s_qtd_in_{v}")
                             if st.button("🚀 GERAR SONDA DE PROFICIÊNCIA", use_container_width=True, type="primary"):
                                 with st.spinner("Maestro Sosa realizando perícia psicométrica..."):
-                                    nome_elite = f"{ano_sonda}º Ano - Sonda Diagnóstica - {trim_sonda}"
+                                    nome_elite = util.gerar_nome_material_elite(ano_sonda, "Sonda Diagnóstica", trim_sonda)
                                     st.session_state.sosa_id_atual = nome_elite
-                                    st.session_state.lab_meta = {
-                                        "ano": ano_sonda, "trimestre": trim_sonda, 
-                                        "tipo": "SONDA", "aula_alvo": "Sonda Diagnóstica", "semana_ref": "AVALIAÇÃO"
-                                    }
-                                    
-                                    prompt_sonda = (
-                                        f"PERSONA: ARQUITETO_SONDA_DIAGNOSTICA. ID: {nome_elite}.\n"
-                                        f"SÉRIE ATUAL: {ano_sonda}º Ano. TRIMESTRE: {trim_sonda}.\n"
-                                        f"CONTEÚDOS ALVO (ANO ANTERIOR/TRIMESTRE ANTERIOR): {' / '.join(sel_conts_s)}.\n"
-                                        f"QUANTIDADE: {qtd_q_sonda} questões A-E. VALOR TOTAL: 10,0.\n\n"
-                                        f"MISSÃO: Gere o material completo com as TAGS [PROFESSOR], [ALUNO], [GABARITO], [PEI], [GABARITO_PEI]."
-                                    )
+                                    st.session_state.lab_meta = {"ano": ano_sonda, "trimestre": trim_sonda, "tipo": "SONDA", "aula_alvo": "Sonda", "semana_ref": "AVALIAÇÃO"}
+                                    prompt_sonda = f"PERSONA: ARQUITETO_SONDA_DIAGNOSTICA. ID: {nome_elite}. CONTEÚDOS: {sel_conts_s}. QTD: {qtd_q_sonda}."
                                     st.session_state.lab_temp = ai.gerar_ia("ARQUITETO_SONDA_DIAGNOSTICA", prompt_sonda, usar_busca=True)
                                     st.rerun()
 
@@ -563,59 +505,50 @@ if menu == "🧪 Criador de Aulas":
             st.subheader("📋 Engenharia de Projetos e Semanários (BNCC)")
             with st.container(border=True):
                 c1, c2, c3 = st.columns([1.5, 1, 1])
-                natureza_p = c1.selectbox("Natureza do Evento:", 
-                    ["Semanário Temático", "Projeto de Identidade (Itabuna)", "Evento Escolar (Interclasses/Gincana)", "Projeto BNCC Livre"], 
-                    key=f"t_nat_{v}")
+                natureza_p = c1.selectbox("Natureza do Evento:", ["Semanário Temático", "Projeto de Identidade (Itabuna)", "Evento Escolar", "Projeto BNCC Livre"], key=f"t_nat_{v}")
                 ano_t = c2.selectbox("Série Alvo:", [6, 7, 8, 9], key=f"t_ano_{v}")
                 modo_t = c3.selectbox("Modo de Execução:", ["Individual", "Em Grupo (Equipes)"], key=f"t_modo_{v}")
 
             with st.container(border=True):
                 c_t1, c_t2, c_t3 = st.columns([2, 1, 1])
-                tema_t = c_t1.text_input("Título do Tema/Semanário:", placeholder="Ex: Consciência Negra, 116 anos de Itabuna...", key=f"t_tema_{v}")
+                tema_t = c_t1.text_input("Título do Tema/Semanário:", placeholder="Ex: Consciência Negra...", key=f"t_tema_{v}")
                 valor_t = c_t2.number_input("Valor (0-10):", 0.0, 10.0, 2.0, step=0.5, key=f"t_val_{v}")
-                qtd_aulas = c_t3.slider("Quantidade de Aulas:", 1, 10, 2, key=f"t_q_aulas_{v}")
+                qtd_aulas_t = c_t3.slider("Quantidade de Aulas:", 1, 10, 2, key=f"t_q_aulas_{v}")
                 
             df_cur_t = df_curriculo[df_curriculo["ANO"].astype(str).str.contains(str(ano_t))]
             if not df_cur_t.empty:
-                lista_eixos = sorted(df_cur_t["EIXO"].unique().tolist())
-                eixos_sel = st.multiselect("Eixos BNCC para Integrar:", lista_eixos, key=f"t_eixos_multi_{v}")
-                
-                if eixos_sel:
-                    df_hab_t = df_cur_t[df_cur_t["EIXO"].isin(eixos_sel)]
-                    hab_t = st.multiselect("Habilidades BNCC Âncora (Opcional):", 
-                                           sorted(df_hab_t["CONTEUDO_ESPECIFICO"].unique().tolist()), 
-                                           key=f"t_hab_multi_{v}")
-                    
-                    instr_extra_p = st.text_area("📝 Instruções de Pesquisa (Ex: 'focar em entrevistas', 'usar dados do IBGE'):", key=f"t_extra_proj_{v}")
-
+                eixos_sel_t = st.multiselect("Eixos BNCC:", sorted(df_cur_t["EIXO"].unique().tolist()), key=f"t_eixos_multi_{v}")
+                if eixos_sel_t:
+                    df_hab_t = df_cur_t[df_cur_t["EIXO"].isin(eixos_sel_t)]
+                    hab_t = st.multiselect("Habilidades (Opcional):", sorted(df_hab_t["CONTEUDO_ESPECIFICO"].unique().tolist()), key=f"t_hab_multi_{v}")
                     if st.button("🚀 GERAR ROTEIRO DE INVESTIGAÇÃO", use_container_width=True, type="primary"):
-                        if not tema_t:
-                            st.error("Por favor, defina o Título do Tema.")
+                        if not tema_t: st.error("Defina o Tema.")
                         else:
-                            with st.spinner("Maestro Sosa arquitetando roteiro de pesquisa..."):
-                                s_id = util.gerar_sosa_id("PROJ", ano_t, "I")
-                                st.session_state.sosa_id_atual = s_id
-                                st.session_state.lab_meta = {
-                                    "ano": ano_t, "trimestre": "I Trimestre", 
-                                    "tipo": "TRABALHO", "aula_alvo": tema_t, "semana_ref": "PROJETO"
-                                }
-                                
-                                txt_hab = ", ".join(hab_t) if hab_t else "Escolha habilidades pertinentes aos eixos selecionados."
-
-                                prompt_t = (
-                                    f"PERSONA: ARQUITETO_PROJETOS_V29.\n"
-                                    f"TEMA: {tema_t}. NATUREZA: {natureza_p}.\n"
-                                    f"SÉRIE: {ano_t}º Ano. EIXOS: {', '.join(eixos_sel)}.\n"
-                                    f"HABILIDADES: {txt_hab}.\n"
-                                    f"LOGÍSTICA: {modo_t} | DURAÇÃO: {qtd_aulas} aulas.\n"
-                                    f"VALOR: {util.sosa_to_str(valor_t)} pontos.\n"
-                                    f"INSTRUÇÕES DE CAMPO: {instr_extra_p}.\n"
-                                    f"ID: {s_id}.\n\n"
-                                    f"🚨 MISSÃO CRÍTICA: Não gere uma lista de exercícios. Gere um ROTEIRO DE PESQUISA E INVESTIGAÇÃO. "
-                                    f"Divida o material do aluno em: Contexto, Missão, Onde Pesquisar, Passo a Passo por Aula e O que trazer para a próxima aula."
-                                )
+                            with st.spinner("Arquitetando roteiro..."):
+                                nome_elite = util.gerar_nome_material_elite(ano_t, "Projeto", tema_t)
+                                st.session_state.sosa_id_atual = nome_elite
+                                st.session_state.lab_meta = {"ano": ano_t, "trimestre": "I Trimestre", "tipo": "TRABALHO", "aula_alvo": tema_t, "semana_ref": "PROJETO"}
+                                prompt_t = f"PERSONA: ARQUITETO_PROJETOS_V29. ID: {nome_elite}. TEMA: {tema_t}. HAB: {hab_t}. AULAS: {qtd_aulas_t}."
                                 st.session_state.lab_temp = ai.gerar_ia("ARQUITETO_PROJETOS_V29", prompt_t, usar_busca=True)
                                 st.rerun()
+
+        with tab_acervo:
+            st.subheader("📂 Acervo de Materiais Produzidos")
+            if not df_aulas.empty:
+                f_ano_g = st.selectbox("Filtrar Série:", ["Todos", "6º", "7º", "8º", "9º"], key=f"acervo_filter_{v}")
+                df_g = df_aulas.copy()
+                if f_ano_g != "Todos": df_g = df_g[df_g["ANO"] == f_ano_g]
+                for _, row in df_g.iloc[::-1].iterrows():
+                    with st.container(border=True):
+                        c_t1, c_t2, c_t3, c_t4, c_t5, c_t6 = st.columns([1.5, 1, 1, 1, 1, 1])
+                        c_t1.markdown(f"**{row['TIPO_MATERIAL']}**")
+                        if c_t5.button("🔄 REFINAR", key=f"ref_{row.name}", use_container_width=True):
+                            st.session_state.lab_temp = str(row["CONTEUDO"])
+                            st.session_state.sosa_id_atual = str(row["TIPO_MATERIAL"])
+                            st.session_state.lab_meta = {"ano": str(row["ANO"]).replace("º",""), "semana_ref": row['SEMANA_REF']}
+                            st.rerun()
+                        if c_t6.button("🗑️ APAGAR", key=f"del_{row.name}", use_container_width=True):
+                            if db.excluir_registro_com_drive("DB_AULAS_PRONTAS", str(row["TIPO_MATERIAL"])): st.cache_data.clear(); st.rerun()
 
         with tab_complementar:
             st.subheader("📚 Atividades Complementares de Fixação")
