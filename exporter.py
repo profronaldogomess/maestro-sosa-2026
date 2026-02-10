@@ -352,20 +352,28 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
             p = doc.add_paragraph()
             p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
             
-            # FORÇAR NEGRITO NO RÓTULO DA QUESTÃO (VERSÃO BLINDADA)
-            if l_s.upper().startswith("QUESTÃO"):
-                # Divide a linha: Pega o rótulo e o resto
-                partes_q = re.split(r"(?i)(QUESTÃO\s*\d+[\s\.\(\d,\s\w\)]*[:\-\.\s]*)", l_s, maxsplit=1)
-                if len(partes_q) > 1:
-                    # partes_q[1] é o rótulo (ex: QUESTÃO 01. )
-                    run_r = p.add_run(partes_q[1].upper())
+            # TRAVA DE NEGRITO SOBERANA (Funciona para Regular e PEI)
+            if "QUESTÃO" in l_s.upper():
+                # Captura QUESTÃO + Número + qualquer texto de valor/ponto + pontuação
+                match = re.match(r"^(QUEST[AÃ]O\s+\d+)(.*?)(\.\s*|\s+-\s*|:\s*)(.*)", l_s, re.IGNORECASE)
+                if match:
+                    # Rótulo (QUESTÃO 01) + Pontuação em Negrito
+                    run_r = p.add_run(f"{match.group(1).upper()}{match.group(2)}{match.group(3)}")
                     run_r.bold = True
                     run_r.font.size = Pt(11)
-                    # partes_q[2] é o enunciado
-                    if len(partes_q) > 2:
-                        adicionar_texto_formatado(p, partes_q[2].strip())
+                    # Texto do enunciado na mesma linha (Inline)
+                    adicionar_texto_formatado(p, match.group(4).strip())
                     continue
             
+            # Títulos de Seção (PASSO A PASSO, DICA, etc)
+            secoes_especiais = ["PARA LEMBRAR", "DICA MESTRA", "PASSO A PASSO", "VERSÃO ADAPTADA"]
+            if any(x in l_s.upper() for x in secoes_especiais):
+                run = p.add_run(l_s.replace("[", "").replace("]", "").upper())
+                run.bold = True
+                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                continue
+
+            # Recuo para alternativas A-E (Agora obrigatórias no PEI também)
             if re.match(r'^[A-E][\)\.]', l_s):
                 p.paragraph_format.left_indent = Inches(0.2)
             
