@@ -348,69 +348,52 @@ if menu == "🧪 Criador de Aulas":
             ed_pei_gab = c_p2.text_area("✅ Gabarito PEI:", ai.extrair_tag(txt_base, "GABARITO_PEI"), height=400, key=f"ed_pei_gab_{v}")
 
         with t_sync:
-                st.warning("⚠️ O Triple-Sync substituirá a versão anterior deste material.")
-                if st.button("💾 EXECUTAR TRIPLE-SYNC (SUBSTITUIR)", use_container_width=True, type="primary", key=f"btn_triple_{v}"):
-                    with st.status("Iniciando Protocolo de Substituição...") as status:
-                        # 1. DEFINIÇÃO DO ALVO (NOME LIMPO)
-                        nome_final = s_id 
-                        ano_str = f"{meta.get('ano', '6')}º"
-                        semana_ref = meta.get('semana_ref', 'AVULSA')
-                        aula_alvo = meta.get('aula_alvo', 'Aula')
-                        
-                        # 2. LIMPEZA CIRÚRGICA ANTES DE SALVAR
-                        db.excluir_registro_com_drive("DB_AULAS_PRONTAS", nome_final)
-                        
-                        # 3. BLINDAGEM DE CONTEÚDO
-                        conteudo_banco = f"[SOSA_ID] {nome_final}\n[AULA_ALVO] {aula_alvo}\n[PROFESSOR]\n{ed_prof}\n\n[ALUNO]\n{ed_alu}\n\n[GABARITO]\n{ed_res}\n\n[PEI]\n{ed_pei_mat}\n\n[GABARITO_PEI]\n{ed_pei_gab}\n\n"
+            st.warning("⚠️ O Triple-Sync substituirá a versão anterior deste material.")
+            if st.button("💾 EXECUTAR TRIPLE-SYNC (SUBSTITUIR)", use_container_width=True, type="primary", key=f"btn_triple_{v}"):
+                with st.status("Iniciando Protocolo de Substituição...") as status:
+                    nome_final = s_id 
+                    ano_str = f"{meta.get('ano', '6')}º"
+                    semana_ref = meta.get('semana_ref', 'AVULSA')
+                    aula_alvo = meta.get('aula_alvo', 'Aula')
+                    
+                    db.excluir_registro_com_drive("DB_AULAS_PRONTAS", nome_final)
+                    
+                    conteudo_banco = f"[SOSA_ID] {nome_final}\n[AULA_ALVO] {aula_alvo}\n[PROFESSOR]\n{ed_prof}\n\n[ALUNO]\n{ed_alu}\n\n[GABARITO]\n{ed_res}\n\n[PEI]\n{ed_pei_mat}\n\n[GABARITO_PEI]\n{ed_pei_gab}\n\n"
 
-                        # 4. LÓGICA DE GERAÇÃO INTELIGENTE (SONDA VS AULA)
-                        qtd_q_real = len(re.findall(r'QUESTÃO', ed_alu.upper()))
-                        
-                        # Se for SONDA, o valor é 10,0. Se for AULA, é 0,0.
-                        is_sonda_check = "SONDA" in nome_final.upper()
-                        val_total = "10,00" if is_sonda_check else "0,00"
-                        val_q = util.sosa_to_str(10.0 / qtd_q_real) if (is_sonda_check and qtd_q_real > 0) else "0,00"
+                    qtd_q_real = len(re.findall(r'(?m)^QUESTÃO\s+\d+', ed_alu.upper()))
+                    is_sonda_check = "SONDA" in nome_final.upper()
+                    
+                    info_doc = {
+                        "ano": ano_str, "trimestre": meta.get('trimestre', 'I Trimestre'), 
+                        "valor": "10,00" if is_sonda_check else "0,00", 
+                        "valor_questao": util.sosa_to_str(10.0/qtd_q_real) if (is_sonda_check and qtd_q_real > 0) else "0,00",
+                        "qtd_questoes": qtd_q_real
+                    }
 
-                        info_doc = {
-                            "ano": ano_str, 
-                            "trimestre": meta.get('trimestre', 'I Trimestre'), 
-                            "valor": val_total, 
-                            "valor_questao": val_q, 
-                            "qtd_questoes": qtd_q_real
-                        }
-
-                        # --- AQUI ESTÁ A MUDANÇA CRUCIAL ---
+                    # GERAÇÃO REGULAR
+                    if is_sonda_check:
+                        doc_alu = exporter.gerar_docx_prova_v25(nome_final, ed_alu, info_doc)
+                    else:
+                        doc_alu = exporter.gerar_docx_aluno_v24(nome_final, ed_alu, info_doc)
+                    
+                    link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{nome_final}_ALUNO", modo="AULA")
+                    doc_prof = exporter.gerar_docx_professor_v25(nome_final, ed_prof, {"ano": ano_str, "semana": semana_ref, "trimestre": info_doc["trimestre"]})
+                    link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_final}_PROF", modo="AULA")
+                    
+                    # GERAÇÃO PEI (Respeita o título de Sonda, mas o exporter não porá a grade)
+                    link_pei = "N/A"
+                    if len(ed_pei_mat) > 10:
                         if is_sonda_check:
-                            # Sonda usa o motor de PROVA (Gabarito de bolinhas + Campo NOTA)
-                            status.write("📊 Gerando Sonda com Gabarito de Bolinhas...")
-                            doc_alu = exporter.gerar_docx_prova_v25(nome_final, ed_alu, info_doc)
+                            doc_pei = exporter.gerar_docx_prova_v25(f"{nome_final}_PEI", ed_pei_mat, info_doc)
                         else:
-                            # Aula usa o motor de ALUNO (Sem nota, 2 colunas)
-                            status.write("📄 Gerando Atividade de Sala...")
-                            doc_alu = exporter.gerar_docx_aluno_v24(nome_final, ed_alu, info_doc)
-                        
-                        # 5. UPLOAD E SINCRONIA
-                        link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{nome_final}_ALUNO", modo="AULA")
-                        
-                        doc_prof = exporter.gerar_docx_professor_v25(nome_final, ed_prof, {"ano": ano_str, "semana": semana_ref, "trimestre": info_doc["trimestre"]})
-                        link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_final}_PROF", modo="AULA")
-                        
-                        link_pei = "N/A"
-                        if len(ed_pei_mat) > 10:
-                            # PEI também segue a lógica de Sonda ou Aula
-                            if is_sonda_check:
-                                doc_pei = exporter.gerar_docx_prova_v25(f"{nome_final}_PEI", ed_pei_mat, info_doc)
-                            else:
-                                doc_pei = exporter.gerar_docx_pei_v25(f"{nome_final}_PEI", ed_pei_mat, info_doc)
-                            link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_final}_PEI", modo="AULA")
-                        
-                        if "https" in str(link_alu):
-                            conteudo_banco += f"--- LINKS ---\nAluno({link_alu}) Prof({link_prof}) PEI({link_pei})"
-                            db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), semana_ref, nome_final, conteudo_banco, ano_str, link_alu])
-                            status.update(label="✅ Material Substituído com Sucesso!", state="complete")
-                            st.balloons()
-                            time.sleep(1)
-                            reset_laboratorio()
+                            doc_pei = exporter.gerar_docx_pei_v25(f"{nome_final}_PEI", ed_pei_mat, info_doc)
+                        link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_final}_PEI", modo="AULA")
+                    
+                    if "https" in str(link_alu):
+                        conteudo_banco += f"--- LINKS ---\nAluno({link_alu}) Prof({link_prof}) PEI({link_pei})"
+                        db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), semana_ref, nome_final, conteudo_banco, ano_str, link_alu])
+                        status.update(label="✅ Sincronia Concluída!", state="complete")
+                        st.balloons(); time.sleep(1); reset_laboratorio()
 
     # --- SEÇÃO DE ENTRADA (CONFIGURAÇÃO) ---
     else:
