@@ -483,65 +483,75 @@ if menu == "🧪 Criador de Aulas":
 
 # --- ABA 2: SONDA DE PROFICIÊNCIA (DIAGNÓSTICO EM CASCATA V29) ---
         with tab_diagnostico:
-            st.markdown("### 🔍 Configurar Sonda de Proficiência")
-            with st.container(border=True):
-                c1, c2 = st.columns([1, 1])
-                ano_sonda = c1.selectbox("Série Atual:", [6, 7, 8, 9], key=f"s_ano_{v}")
-                trim_sonda = c2.selectbox("Trimestre da Sonda:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"s_trim_{v}")
+            # Se já houver uma sonda gerada, mostra o Refinador e a Visualização
+            if "lab_temp" in st.session_state and "SONDA" in st.session_state.get("sosa_id_atual", ""):
+                st.markdown("### 🤖 Refinador de Sonda (Perícia V29)")
                 
-                # LÓGICA DE RETROCESSO CURRICULAR SOSA V29
-                if trim_sonda == "I Trimestre":
-                    ano_busca = int(ano_sonda) - 1
-                    trim_busca = "Todos"
-                    st.warning(f"💡 **Diagnóstico Inicial:** Buscando conteúdos do {ano_busca}º Ano para nivelamento.")
-                elif trim_sonda == "II Trimestre":
-                    ano_busca = int(ano_sonda)
-                    trim_busca = "I"
-                    st.info(f"🎯 **Sonda de Ciclo:** Avaliando conteúdos do I Trimestre.")
-                else:
-                    ano_busca = int(ano_sonda)
-                    trim_busca = "II"
-                    st.info(f"🎯 **Sonda de Ciclo:** Avaliando conteúdos do II Trimestre.")
+                # Chat de Refino Específico para Sonda
+                cmd_refine_sonda = st.chat_input("Ex: 'Troque a questão 3', 'Redistribua o gabarito' ou 'Aumente a dificuldade'...", key=f"chat_sonda_{v}")
+                if cmd_refine_sonda:
+                    with st.spinner("Maestro Sosa realizando perícia e redistribuição..."):
+                        novo_texto = ai.gerar_ia("REFINADOR_SONDA_V29", f"ORDEM: {cmd_refine_sonda}\n\nCONTEÚDO ATUAL:\n{st.session_state.lab_temp}")
+                        if "[ALUNO]" in novo_texto:
+                            st.session_state.lab_temp = novo_texto
+                            st.rerun()
                 
-                # FILTRAGEM DA MATRIZ
-                df_cur_sonda = df_curriculo[df_curriculo["ANO"].astype(str) == str(ano_busca)]
-                if trim_busca != "Todos":
-                    df_cur_sonda = df_cur_sonda[df_cur_sonda["TRIMESTRE"] == trim_busca]
+                if st.button("🗑️ DESCARTAR E CRIAR NOVA SONDA", use_container_width=True):
+                    reset_laboratorio()
                 
-                if not df_cur_sonda.empty:
-                    lista_eixos_sonda = sorted(df_cur_sonda["EIXO"].unique().tolist())
-                    sel_eixos_s = st.multiselect("1. Selecione o(s) Eixo(s):", lista_eixos_sonda, key=f"s_eixos_{v}")
+                st.divider()
+                st.info("💡 O conteúdo acima já está disponível nas abas de edição (Professor, Aluno, etc.) para conferência final.")
+
+            else:
+                # Interface de Configuração Inicial (Só aparece se não houver sonda em edição)
+                st.markdown("### 🔍 Configurar Sonda de Proficiência")
+                with st.container(border=True):
+                    c1, c2 = st.columns([1, 1])
+                    ano_sonda = c1.selectbox("Série Atual:", [6, 7, 8, 9], key=f"s_ano_{v}")
+                    trim_sonda = c2.selectbox("Trimestre da Sonda:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"s_trim_{v}")
                     
-                    if sel_eixos_s:
-                        df_cont_s = df_cur_sonda[df_cur_sonda["EIXO"].isin(sel_eixos_s)]
-                        lista_conts_s = sorted(df_cont_s["CONTEUDO_ESPECIFICO"].unique().tolist())
-                        sel_conts_s = st.multiselect("2. Selecione os Conteúdos:", lista_conts_s, key=f"s_conts_{v}")
-                        
-                        if sel_conts_s:
-                            st.divider()
-                            c_q1, c_q2 = st.columns([1, 2])
-                            qtd_q_sonda = c_q1.slider("Nº de Questões:", 3, 15, 10, key=f"s_qtd_in_{v}")
-                            instr_extra_s = c_q2.text_area("📝 Contexto Adicional:", key=f"s_instr_{v}")
+                    # Lógica de retrocesso curricular
+                    if trim_sonda == "I Trimestre":
+                        ano_busca = int(ano_sonda) - 1
+                        st.warning(f"💡 **Diagnóstico Inicial:** Buscando conteúdos do {ano_busca}º Ano.")
+                    else:
+                        ano_busca = int(ano_sonda)
+                        st.info(f"🎯 **Sonda de Ciclo:** Avaliando conteúdos anteriores do {ano_sonda}º Ano.")
+                    
+                    df_cur_sonda = df_curriculo[df_curriculo["ANO"].astype(str) == str(ano_busca)]
+                    
+                    if not df_cur_sonda.empty:
+                        sel_eixos_s = st.multiselect("1. Selecione o(s) Eixo(s):", sorted(df_cur_sonda["EIXO"].unique().tolist()), key=f"s_eixos_{v}")
+                        if sel_eixos_s:
+                            df_cont_s = df_cur_sonda[df_cur_sonda["EIXO"].isin(sel_eixos_s)]
+                            sel_conts_s = st.multiselect("2. Selecione os Conteúdos:", sorted(df_cont_s["CONTEUDO_ESPECIFICO"].unique().tolist()), key=f"s_conts_{v}")
                             
-                            if st.button("🚀 GERAR SONDA DE PROFICIÊNCIA", use_container_width=True, type="primary"):
-                                with st.spinner("Maestro Sosa realizando perícia psicométrica..."):
-                                    # NOMENCLATURA DE ELITE
-                                    nome_elite = f"{ano_sonda}º Ano - Sonda Diagnóstica - {trim_sonda}"
-                                    st.session_state.sosa_id_atual = nome_elite
-                                    st.session_state.lab_meta = {
-                                        "ano": ano_sonda, "trimestre": trim_sonda, 
-                                        "tipo": "SONDA", "aula_alvo": "Sonda Diagnóstica", "semana_ref": "AVALIAÇÃO"
-                                    }
-                                    
-                                    prompt_sonda = (
-                                        f"PERSONA: ARQUITETO_SONDA_DIAGNOSTICA. ID: {nome_elite}.\n"
-                                        f"SÉRIE ATUAL: {ano_sonda}º Ano. TRIMESTRE: {trim_sonda}.\n"
-                                        f"CONTEÚDOS ALVO (ANO ANTERIOR/TRIMESTRE ANTERIOR): {' / '.join(sel_conts_s)}.\n"
-                                        f"QUANTIDADE: {qtd_q_sonda} questões A-E. VALOR TOTAL: 10,0.\n\n"
-                                        f"MISSÃO: Gere o material completo com as TAGS [PROFESSOR], [ALUNO], [GABARITO], [PEI], [GABARITO_PEI]."
-                                    )
-                                    st.session_state.lab_temp = ai.gerar_ia("ARQUITETO_SONDA_DIAGNOSTICA", prompt_sonda, usar_busca=True)
-                                    st.rerun()
+                            if sel_conts_s:
+                                st.divider()
+                                c_q1, c_q2 = st.columns([1, 2])
+                                qtd_q_sonda = c_q1.slider("Nº de Questões:", 3, 15, 10, key=f"s_qtd_in_{v}")
+                                instr_extra_s = c_q2.text_area("📝 Contexto Adicional:", key=f"s_instr_{v}")
+                                
+                                if st.button("🚀 GERAR SONDA DE PROFICIÊNCIA", use_container_width=True, type="primary"):
+                                    with st.spinner("Maestro Sosa arquitetando sonda com gabarito blindado..."):
+                                        nome_elite = f"{ano_sonda}º Ano - Sonda Diagnóstica - {trim_sonda}"
+                                        st.session_state.sosa_id_atual = nome_elite
+                                        st.session_state.lab_meta = {
+                                            "ano": ano_sonda, "trimestre": trim_sonda, 
+                                            "tipo": "SONDA", "aula_alvo": "Sonda Diagnóstica", "semana_ref": "AVALIAÇÃO"
+                                        }
+                                        
+                                        prompt_sonda = (
+                                            f"PERSONA: ARQUITETO_SONDA_DIAGNOSTICA. ID: {nome_elite}.\n"
+                                            f"SÉRIE ATUAL: {ano_sonda}º Ano. TRIMESTRE: {trim_sonda}.\n"
+                                            f"CONTEÚDOS ALVO: {' / '.join(sel_conts_s)}.\n"
+                                            f"QUANTIDADE: {qtd_q_sonda} questões A-E. VALOR TOTAL: 10,0.\n"
+                                            f"EXTRAS: {instr_extra_s}.\n\n"
+                                            f"MISSÃO: Gere o material completo com as TAGS [PROFESSOR], [ALUNO], [GABARITO], [PEI], [GABARITO_PEI]. "
+                                            f"Aplique a LEI DO GABARITO BLINDADO para evitar repetições de letras."
+                                        )
+                                        st.session_state.lab_temp = ai.gerar_ia("ARQUITETO_SONDA_DIAGNOSTICA", prompt_sonda, usar_busca=True)
+                                        st.rerun()
 
         with tab_trabalhos:
             st.subheader("📋 Engenharia de Projetos e Trabalhos (BNCC)")
