@@ -1864,13 +1864,12 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                 st.info("📭 Banco de relatórios vazio.")
 
 # ==============================================================================
-# MÓDULO: CENTRAL DE AVALIAÇÕES (V33.0) - ARQUITETURA DE MÉRITO (SEM DATA)
+# MÓDULO: CENTRAL DE AVALIAÇÕES (V34.0) - INTELIGÊNCIA INTEGRAL (PLANO + AULAS)
 # ==============================================================================
 elif menu == "📝 Central de Avaliações":
     st.title("📝 Arquiteto de Exames e Gestão de Safra")
     st.markdown("---")
     
-    # 1. INICIALIZAÇÃO DE ESTADO E CORREÇÃO PYLANCE
     is_refinando_av = "refino_av_ativo" in st.session_state
 
     def reset_avaliacoes():
@@ -1887,7 +1886,6 @@ elif menu == "📝 Central de Avaliações":
         "🚀 Arquiteto de Exames", "🤖 Refinador Maestro", "👁️ Visualização 360°", "💾 Finalizar Ativo", "🗂️ Acervo de Safra"
     ])
 
-    # --- ABA 1: ARQUITETO (GERAÇÃO COM MÉRITO) ---
     with tab_arquiteto:
         if is_refinando_av:
             st.warning(f"🛠️ **MODO REFINO:** Editando {st.session_state.refino_av_ativo.get('tipo')}")
@@ -1902,57 +1900,69 @@ elif menu == "📝 Central de Avaliações":
             qtd_q = c4.number_input("Nº Questões:", 5, 20, 10, key=f"av_q_{v}")
 
         with st.container(border=True):
-            st.markdown("### 🎯 2. Matriz de Mérito (Vincular Aulas e Fixação)")
+            st.markdown("### 🎯 2. Matriz de Mérito (Visão 360° do Trimestre)")
             
             c_trim1, c_trim2 = st.columns([1, 2])
             trim_filtro = c_trim1.selectbox("Filtrar por Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"av_trim_filter_{v}")
             
-            # --- LÓGICA DE BUSCA INTELIGENTE SOSA V29 ---
-            # 1. Filtra pela série (Ex: "6º")
-            df_ref = df_aulas[df_aulas["ANO"].astype(str).str.contains(str(ano_av))]
+            # --- MOTOR DE BUSCA INTEGRAL SOSA V34 ---
+            # 1. Busca os Planos da série e trimestre para identificar as semanas
+            df_planos_trim = df_planos[
+                (df_planos["ANO"].astype(str).str.contains(str(ano_av))) & 
+                (df_planos["TURMA"].astype(str).str.contains(trim_filtro))
+            ]
             
-            if not df_ref.empty:
-                # 2. Filtro de Trimestre: Busca no CONTEUDO ou no TIPO_MATERIAL (Nome de Elite)
-                # Isso garante que se o nome for "6º Ano - Sonda - I Trimestre", ele apareça.
-                df_ref_filtrado = df_ref[
-                    df_ref.apply(lambda r: trim_filtro.upper() in str(r["CONTEUDO"]).upper() or 
-                                          trim_filtro.upper() in str(r["TIPO_MATERIAL"]).upper(), axis=1)
-                ]
-                
-                if df_ref_filtrado.empty:
-                    st.warning(f"📭 Nenhum material de {ano_av}º ano encontrado para o {trim_filtro}.")
-                    mats_selecionados = []
+            semanas_do_trimestre = df_planos_trim["SEMANA"].unique().tolist()
+            
+            # 2. Busca todos os materiais (Aulas, Projetos, Fixação) vinculados a essas semanas
+            df_materiais_trim = df_aulas[
+                (df_aulas["ANO"].astype(str).str.contains(str(ano_av))) & 
+                (df_aulas["SEMANA_REF"].isin(semanas_do_trimestre))
+            ]
+            
+            if df_materiais_trim.empty:
+                st.warning(f"📭 Nenhum material (Aula/Projeto) encontrado para as semanas do {trim_filtro}.")
+                mats_selecionados = []
+            else:
+                # Criamos uma lista bonita para o multiselect: "Tipo - Nome"
+                opcoes_mats = df_materiais_trim["TIPO_MATERIAL"].tolist()
+                mats_selecionados = c_trim2.multiselect(
+                    f"Ativos de Safra Detectados ({len(opcoes_mats)}):", 
+                    options=opcoes_mats,
+                    help="Selecione as aulas e projetos que cairão na prova.",
+                    key=f"av_ref_{v}"
+                )
+            
+            if st.button("💎 COMPILAR EXAME DE ELITE", use_container_width=True, type="primary"):
+                if not mats_selecionados:
+                    st.error("⚠️ Selecione os materiais para que a IA realize a leitura do que foi ensinado.")
                 else:
-                    mats_selecionados = c_trim2.multiselect(
-                        f"Materiais disponíveis ({len(df_ref_filtrado)}):", 
-                        options=df_ref_filtrado["TIPO_MATERIAL"].tolist(),
-                        help="Selecione os materiais que os alunos estudaram para gerar questões baseadas neles.",
-                        key=f"av_ref_{v}"
-                    )
-                
-                if st.button("💎 COMPILAR EXAME DE ELITE", use_container_width=True, type="primary"):
-                    if not mats_selecionados:
-                        st.error("⚠️ Selecione pelo menos um material de referência para que a IA saiba o que foi trabalhado.")
-                    else:
-                        with st.spinner("Maestro Arquiteto realizando leitura dos materiais e gerando questões de mérito..."):
-                            contexto_merito = ""
-                            for m in mats_selecionados:
-                                row_m = df_ref_filtrado[df_ref_filtrado["TIPO_MATERIAL"] == m].iloc[0]
-                                # Extraímos o conteúdo real para a IA ler
-                                contexto_merito += f"\n--- MATERIAL TRABALHADO [ID: {m}] ---\n{row_m['CONTEUDO']}\n"
+                    with st.spinner("Maestro Arquiteto realizando leitura profunda do trimestre..."):
+                        # A. Captura o DNA do Plano (Objetivos e BNCC)
+                        contexto_pedagogico = "--- DNA DO PLANEJAMENTO ---\n"
+                        for _, p_row in df_planos_trim.iterrows():
+                            contexto_pedagogico += f"Semana: {p_row['SEMANA']} | Conteúdo: {p_row['PLANO_TEXTO']}\n"
+                        
+                        # B. Captura o Conteúdo Real das Aulas/Projetos selecionados
+                        contexto_aulas = "\n--- CONTEÚDO REAL MINISTRADO ---\n"
+                        for m_nome in mats_selecionados:
+                            m_row = df_materiais_trim[df_materiais_trim["TIPO_MATERIAL"] == m_nome].iloc[0]
+                            contexto_aulas += f"Material: {m_nome}\nConteúdo: {m_row['CONTEUDO']}\n"
 
-                            prompt = (
-                                f"TIPO: {tipo_av} | VALOR TOTAL: {v_total} | QTD QUESTÕES: {qtd_q} | SÉRIE: {ano_av}º Ano.\n"
-                                f"CONTEXTO DE MÉRITO (O QUE FOI ENSINADO):\n{contexto_merito}\n\n"
-                                f"ORDEM: Gere o exame completo (Regular + PEI). "
-                                f"IMPORTANTE: Pelo menos 2 questões devem ser 'Questões de Mérito', citando os materiais trabalhados. "
-                                f"Ex: 'Com base em nossa aula sobre {mats_selecionados[0]}...'. "
-                                f"Mantenha o DNA Visual e Tech/News."
-                            )
-                            st.session_state.temp_prova = ai.gerar_ia("ARQUITETO_EXAMES_V30_ELITE", prompt, usar_busca=True)
-                            st.session_state.av_valor_total = v_total
-                            st.session_state.av_nome_fixo = f"{tipo_av.upper()}_{ano_av}ANO_{datetime.now().strftime('%d%m')}"
-                            st.rerun()
+                        prompt = (
+                            f"VOCÊ É O ARQUITETO DE EXAMES V34. SÉRIE: {ano_av}º Ano. TIPO: {tipo_av}.\n"
+                            f"VALOR TOTAL: {v_total} | QTD QUESTÕES: {qtd_q}.\n\n"
+                            f"{contexto_pedagogico}\n"
+                            f"{contexto_aulas}\n\n"
+                            f"MISSÃO CRÍTICA:\n"
+                            f"1. As questões DEVEM ser baseadas nos conteúdos acima (Sistemas Antigos, Itabuna, Múltiplos/Divisores).\n"
+                            f"2. Crie 'Questões de Mérito' que citem os projetos (ex: 'No projeto sobre os 116 anos de Itabuna, vimos que...').\n"
+                            f"3. Gere o exame completo (Regular + PEI) com as tags: [ORIENTACOES], [QUESTOES], [GABARITO_TEXTO], [RESPOSTAS_IA], [PEI], [GABARITO_PEI], [RESPOSTAS_PEI_IA]."
+                        )
+                        st.session_state.temp_prova = ai.gerar_ia("ARQUITETO_EXAMES_V30_ELITE", prompt, usar_busca=True)
+                        st.session_state.av_valor_total = v_total
+                        st.session_state.av_nome_fixo = f"{tipo_av.upper()}_{ano_av}ANO_{trim_filtro.replace(' ', '')}"
+                        st.rerun()
             else:
                 st.info("💡 Produza materiais no Laboratório primeiro para que eles apareçam aqui.")
 
