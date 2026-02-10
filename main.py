@@ -322,7 +322,7 @@ if menu == "🧪 Criador de Aulas":
     if "v_lab" not in st.session_state: st.session_state.v_lab = 1
     v = st.session_state.v_lab
 
-    # --- VACINA DE ESCOPO SOSA (is_hub definido no topo) ---
+    # --- VACINA DE ESCOPO SOSA (is_hub definido no topo do módulo) ---
     is_hub = st.session_state.get("lab_meta", {}).get("tipo") == "PRODUÇÃO_HUB"
 
     # --- ÁREA DE EXIBIÇÃO E REFINO (MODO EDIÇÃO ATIVO) ---
@@ -342,6 +342,7 @@ if menu == "🧪 Criador de Aulas":
             cmd_refine_lab = st.chat_input("Solicite ajustes (ex: 'redistribua o gabarito', 'troque a questão 2', 'mude o tema para cacau')...", key=f"chat_lab_ref_{v}")
             if cmd_refine_lab:
                 with st.spinner("Maestro Sosa realizando reengenharia e perícia psicométrica..."):
+                    # Lógica de Seleção de Persona (Sonda vs Material Comum)
                     persona_alvo = "REFINADOR_SONDA_V29" if "SONDA" in s_id.upper() else "REFINADOR_MATERIAIS"
                     novo_texto = ai.gerar_ia(persona_alvo, f"ORDEM: {cmd_refine_lab}\n\nCONTEÚDO ATUAL:\n{st.session_state.lab_temp}")
                     
@@ -374,12 +375,16 @@ if menu == "🧪 Criador de Aulas":
                     ano_str = f"{meta.get('ano', '6')}º"
                     semana_ref = meta.get('semana_ref', 'AVULSA')
                     
+                    # LEI DA LIMPEZA (TRIPLE-SYNC)
                     db.excluir_registro_com_drive("DB_AULAS_PRONTAS", nome_final)
                     
                     conteudo_banco = f"[SOSA_ID] {nome_final}\n[AULA_ALVO] {meta.get('aula_alvo', 'Aula')}\n[PROFESSOR]\n{ed_prof}\n\n[ALUNO]\n{ed_alu}\n\n[GABARITO]\n{ed_res}\n\n[PEI]\n{ed_pei_mat}\n\n[GABARITO_PEI]\n{ed_pei_gab}\n\n"
 
+                    # CONTAGEM REAL DE QUESTÕES NO MATERIAL REGULAR
                     qtd_q_real = len(re.findall(r'(?m)^QUESTÃO\s+\d+', ed_alu.upper()))
                     is_sonda_check = "SONDA" in nome_final.upper()
+                    
+                    # CÁLCULO DO VALOR POR QUESTÃO (10,0 / QTD)
                     val_q_str = util.sosa_to_str(10.0 / qtd_q_real) if qtd_q_real > 0 else "1,00"
 
                     info_doc = {
@@ -390,6 +395,7 @@ if menu == "🧪 Criador de Aulas":
                         "qtd_questoes": qtd_q_real
                     }
 
+                    # GERAÇÃO DE DOCUMENTOS (FLUXO NATIVO)
                     if is_sonda_check:
                         doc_alu = exporter.gerar_docx_prova_v25(nome_final, ed_alu, info_doc)
                     else:
@@ -399,6 +405,7 @@ if menu == "🧪 Criador de Aulas":
                     doc_prof = exporter.gerar_docx_professor_v25(nome_final, ed_prof, {"ano": ano_str, "semana": semana_ref, "trimestre": info_doc["trimestre"]})
                     link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_final}_PROF", modo="AULA")
                     
+                    # GERAÇÃO PEI (GABARITO PROPORCIONAL)
                     link_pei = "N/A"
                     if len(ed_pei_mat) > 10:
                         if is_sonda_check:
@@ -413,7 +420,7 @@ if menu == "🧪 Criador de Aulas":
                         status.update(label="✅ Sincronia Concluída!", state="complete")
                         st.balloons(); time.sleep(1); reset_laboratorio()
 
-    # --- SEÇÃO DE ENTRADA (CONFIGURAÇÃO) ---
+    # --- SEÇÃO DE ENTRADA (CONFIGURAÇÃO INICIAL) ---
     else:
         tab_producao, tab_diagnostico, tab_trabalhos, tab_complementar, tab_acervo = st.tabs([
             "🚀 Produção (Aula 1/2)", "🔍 Sonda de Proficiência", "📋 Engenharia de Trabalhos", "📚 Atividades Complementares", "📂 Acervo de Materiais"
@@ -439,11 +446,11 @@ if menu == "🧪 Criador de Aulas":
                     
                     if not opcoes_aula:
                         st.success(f"✅ **Safra Concluída!**")
-                        if st.button("🔄 REPRODUZIR (SOBREPOR)"): reset_laboratorio()
+                        if st.button("🔄 REPRODUZIR (SOBREPOR)", key=f"btn_reprod_hub_{v}"): reset_laboratorio()
                     else:
                         aula_alvo_hub = c2.radio("Selecione a Aula:", opcoes_aula, key=f"hub_aula_{v}")
                         qtd_q_hub = c2.slider("Quantidade de Questões:", 3, 15, 10, key=f"hub_q_{v}")
-                        if st.button("💎 MATERIALIZAR AULA DE ELITE", use_container_width=True, type="primary"):
+                        if st.button("💎 MATERIALIZAR AULA DE ELITE", use_container_width=True, type="primary", key=f"btn_gen_hub_{v}"):
                             with st.spinner(f"Expandindo {aula_alvo_hub}..."):
                                 nome_elite = util.gerar_nome_material_elite(ano_ref_hub, aula_alvo_hub, sem_ref)
                                 st.session_state.sosa_id_atual = nome_elite
@@ -463,7 +470,7 @@ if menu == "🧪 Criador de Aulas":
                         sem_lab = c2.selectbox("Semana Base (Ponto ID):", planos_ano["SEMANA"].tolist(), key=f"prod_sem_{v}")
                         aula_alvo_prod = c3.radio("🎯 Aula Pendente:", ["Aula 1", "Aula 2"], horizontal=True, key=f"prod_alvo_{v}")
                         qtd_q_prod = st.slider("Quantidade de Questões:", 3, 15, 10, key=f"prod_q_{v}")
-                        if st.button("💎 COMPILAR MATERIAL DE ELITE", use_container_width=True, type="primary"):
+                        if st.button("💎 COMPILAR MATERIAL DE ELITE", use_container_width=True, type="primary", key=f"btn_gen_prod_{v}"):
                             with st.spinner("Arquitetando Tratado Didático..."):
                                 nome_elite = util.gerar_nome_material_elite(ano_lab, aula_alvo_prod, sem_lab)
                                 st.session_state.sosa_id_atual = nome_elite
@@ -492,7 +499,7 @@ if menu == "🧪 Criador de Aulas":
                         sel_conts_s = st.multiselect("2. Selecione os Conteúdos:", sorted(df_cont_s["CONTEUDO_ESPECIFICO"].unique().tolist()), key=f"s_conts_{v}")
                         if sel_conts_s:
                             qtd_q_sonda = st.slider("Nº de Questões:", 3, 15, 10, key=f"s_qtd_in_{v}")
-                            if st.button("🚀 GERAR SONDA DE PROFICIÊNCIA", use_container_width=True, type="primary"):
+                            if st.button("🚀 GERAR SONDA DE PROFICIÊNCIA", use_container_width=True, type="primary", key=f"btn_gen_sonda_{v}"):
                                 with st.spinner("Maestro Sosa realizando perícia psicométrica..."):
                                     nome_elite = util.gerar_nome_material_elite(ano_sonda, "Sonda Diagnóstica", trim_sonda)
                                     st.session_state.sosa_id_atual = nome_elite
@@ -521,7 +528,7 @@ if menu == "🧪 Criador de Aulas":
                 if eixos_sel_t:
                     df_hab_t = df_cur_t[df_cur_t["EIXO"].isin(eixos_sel_t)]
                     hab_t = st.multiselect("Habilidades (Opcional):", sorted(df_hab_t["CONTEUDO_ESPECIFICO"].unique().tolist()), key=f"t_hab_multi_{v}")
-                    if st.button("🚀 GERAR ROTEIRO DE INVESTIGAÇÃO", use_container_width=True, type="primary"):
+                    if st.button("🚀 GERAR ROTEIRO DE INVESTIGAÇÃO", use_container_width=True, type="primary", key=f"btn_gen_proj_{v}"):
                         if not tema_t: st.error("Defina o Tema.")
                         else:
                             with st.spinner("Arquitetando roteiro..."):
@@ -535,19 +542,21 @@ if menu == "🧪 Criador de Aulas":
         with tab_acervo:
             st.subheader("📂 Acervo de Materiais Produzidos")
             if not df_aulas.empty:
-                f_ano_g = st.selectbox("Filtrar Série:", ["Todos", "6º", "7º", "8º", "9º"], key=f"acervo_filter_{v}")
+                # VACINA DE UNICIDADE: Chave exclusiva para o seletor do Laboratório
+                f_ano_g = st.selectbox("Filtrar Série:", ["Todos", "6º", "7º", "8º", "9º"], key=f"lab_acervo_filter_unique_{v}")
                 df_g = df_aulas.copy()
                 if f_ano_g != "Todos": df_g = df_g[df_g["ANO"] == f_ano_g]
                 for _, row in df_g.iloc[::-1].iterrows():
                     with st.container(border=True):
                         c_t1, c_t2, c_t3, c_t4, c_t5, c_t6 = st.columns([1.5, 1, 1, 1, 1, 1])
                         c_t1.markdown(f"**{row['TIPO_MATERIAL']}**")
-                        if c_t5.button("🔄 REFINAR", key=f"ref_{row.name}", use_container_width=True):
+                        # VACINA DE UNICIDADE: Chaves exclusivas para os botões do loop
+                        if c_t5.button("🔄 REFINAR", key=f"lab_ref_btn_{row.name}_{v}", use_container_width=True):
                             st.session_state.lab_temp = str(row["CONTEUDO"])
                             st.session_state.sosa_id_atual = str(row["TIPO_MATERIAL"])
                             st.session_state.lab_meta = {"ano": str(row["ANO"]).replace("º",""), "semana_ref": row['SEMANA_REF']}
                             st.rerun()
-                        if c_t6.button("🗑️ APAGAR", key=f"del_{row.name}", use_container_width=True):
+                        if c_t6.button("🗑️ APAGAR", key=f"lab_del_btn_{row.name}_{v}", use_container_width=True):
                             if db.excluir_registro_com_drive("DB_AULAS_PRONTAS", str(row["TIPO_MATERIAL"])): st.cache_data.clear(); st.rerun()
 
         with tab_complementar:
