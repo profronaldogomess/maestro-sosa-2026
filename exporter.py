@@ -282,7 +282,7 @@ def gerar_docx_professor_v25(titulo_doc, conteudo, info):
 # 5. PROVA OFICIAL (PRESERVAÇÃO INTEGRAL - COM NOTA)
 # ==============================================================================
 def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
-    """Versão V29.13 - Gabarito para TODOS + Negrito Ultra-Blindado + Sem Unicode"""
+    """Versão V29.14 - Limpeza Universal + Texto Inline Obrigatório"""
     file_stream = io.BytesIO()
     try:
         doc = Document()
@@ -290,9 +290,13 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         section.top_margin = section.bottom_margin = Inches(0.3)
         section.left_margin = section.right_margin = Inches(0.4)
         
-        # 1. LIMPEZA DE RUÍDOS (Remove orientações e gabaritos de texto da IA)
-        limpador = r"(?i)(^|\n)([ \t]*[-•*][^\n]*|INSTRUÇÕES|ORIENTAÇÕES|VALOR TOTAL|GABARITO PEI|SONDA DE PROFICIÊNCIA).*?(\n|$)"
-        conteudo_limpo = re.sub(limpador, "\n", conteudo_ia).strip()
+        # 1. LIMPEZA UNIVERSAL: Remove tudo o que vier antes da primeira palavra "QUESTÃO"
+        # Isso elimina instruções duplicadas, saudações ou títulos repetidos da IA.
+        match_primeira_q = re.search(r"(?i)QUESTÃO\s+\d+", conteudo_ia)
+        if match_primeira_q:
+            conteudo_limpo = conteudo_ia[match_primeira_q.start():].strip()
+        else:
+            conteudo_limpo = conteudo_ia.strip()
 
         # 2. CONTAGEM REAL DE QUESTÕES
         num_total_q = len(re.findall(r'(?m)^QUESTÃO\s+\d+', conteudo_limpo.upper()))
@@ -306,11 +310,10 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         configurar_cabecalho_mestre(doc, info, label_prova, mostrar_nota=True)
         doc.add_paragraph()
 
-        # 4. QUADRO DE ORIENTAÇÕES + GABARITO DE BOLINHAS (PARA TODOS - REGULAR E PEI)
+        # 4. QUADRO DE ORIENTAÇÕES + GABARITO (PARA TODOS)
         top_table = doc.add_table(rows=1, cols=2)
         top_table.columns[0].width = Inches(3.5)
         top_table.columns[1].width = Inches(4.0)
-        
         c_orient = top_table.cell(0, 0)
         p_tit = c_orient.paragraphs[0]
         p_tit.add_run("ORIENTAÇÕES:").font.bold = True
@@ -326,7 +329,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
             p.add_run(f"• {txt}").font.size = Pt(9)
             p.paragraph_format.space_after = Pt(0)
 
-        # Inserção do Gabarito de Bolinhas (Obrigatório para todos)
+        # Gabarito de Bolinhas
         c_gab = top_table.cell(0, 1)
         gab_grid = c_gab.add_table(rows=num_total_q + 1, cols=6)
         gab_grid.style = 'Table Grid'
@@ -352,18 +355,19 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
             p = doc.add_paragraph()
             p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
             
-            # FORÇAR NEGRITO NO RÓTULO DA QUESTÃO (BLINDAGEM TOTAL)
+            # FORÇAR NEGRITO INLINE (QUESTÃO XX. Texto...)
             if "QUESTÃO" in l_s.upper():
-                # Captura QUESTÃO XX + pontuação/valor + enunciado
                 match = re.match(r"^(QUEST[AÃ]O\s+\d+)(.*?)(\.\s*|\s+-\s*|:\s*)(.*)", l_s, re.IGNORECASE)
                 if match:
+                    # Rótulo e Pontuação em Negrito
                     run_r = p.add_run(f"{match.group(1).upper()}{match.group(2)}{match.group(3)}")
                     run_r.bold = True
                     run_r.font.size = Pt(11)
+                    # Texto do enunciado na mesma linha
                     adicionar_texto_formatado(p, match.group(4).strip())
                     continue
             
-            # Títulos de Seção (Sem Unicode)
+            # Títulos de Seção PEI (Sem Unicode)
             secoes_especiais = ["PARA LEMBRAR", "DICA MESTRA", "PASSO A PASSO", "VERSÃO ADAPTADA"]
             if any(x in l_s.upper() for x in secoes_especiais):
                 run = p.add_run(l_s.replace("[", "").replace("]", "").upper())
