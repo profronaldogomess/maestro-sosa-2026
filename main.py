@@ -571,32 +571,28 @@ if menu == "🧪 Criador de Aulas":
 
             with st.container(border=True):
                 c_t1, c_t2, c_t3 = st.columns([2, 1, 1])
-                tema_t = c_t1.text_input("Título do Tema/Semanário:", placeholder="Ex: Consciência Negra, 67 anos de Itabuna...", key=f"t_tema_{v}")
+                tema_t = c_t1.text_input("Título do Tema/Semanário:", placeholder="Ex: Consciência Negra, 116 anos de Itabuna...", key=f"t_tema_{v}")
                 valor_t = c_t2.number_input("Valor (0-10):", 0.0, 10.0, 2.0, step=0.5, key=f"t_val_{v}")
                 qtd_aulas = c_t3.slider("Quantidade de Aulas:", 1, 10, 2, key=f"t_q_aulas_{v}")
                 
-            # --- AJUSTE DE EIXOS ---
             df_cur_t = df_curriculo[df_curriculo["ANO"].astype(str).str.contains(str(ano_t))]
             if not df_cur_t.empty:
                 lista_eixos = sorted(df_cur_t["EIXO"].unique().tolist())
                 eixos_sel = st.multiselect("Eixos BNCC para Integrar:", lista_eixos, key=f"t_eixos_multi_{v}")
                 
                 if eixos_sel:
-                    # Filtra habilidades dos eixos selecionados
                     df_hab_t = df_cur_t[df_cur_t["EIXO"].isin(eixos_sel)]
-                    # Habilidades agora são opcionais
                     hab_t = st.multiselect("Habilidades BNCC Âncora (Opcional):", 
                                            sorted(df_hab_t["CONTEUDO_ESPECIFICO"].unique().tolist()), 
-                                           help="Se deixar vazio, a IA escolherá as melhores habilidades para o tema.",
                                            key=f"t_hab_multi_{v}")
                     
-                    instr_extra_p = st.text_area("📝 Contexto ou Instrução Extra (Opcional):", key=f"t_extra_proj_{v}")
+                    instr_extra_p = st.text_area("📝 Instruções de Pesquisa (Ex: 'focar em entrevistas', 'usar dados do IBGE'):", key=f"t_extra_proj_{v}")
 
-                    if st.button("🚀 GERAR PROJETO ESTRUTURADO", use_container_width=True, type="primary"):
+                    if st.button("🚀 GERAR ROTEIRO DE INVESTIGAÇÃO", use_container_width=True, type="primary"):
                         if not tema_t:
-                            st.error("Por favor, defina pelo menos o Título do Tema.")
+                            st.error("Por favor, defina o Título do Tema.")
                         else:
-                            with st.spinner("Maestro Sosa realizando a ponte transdisciplinar..."):
+                            with st.spinner("Maestro Sosa arquitetando roteiro de pesquisa..."):
                                 s_id = util.gerar_sosa_id("PROJ", ano_t, "I")
                                 st.session_state.sosa_id_atual = s_id
                                 st.session_state.lab_meta = {
@@ -604,19 +600,19 @@ if menu == "🧪 Criador de Aulas":
                                     "tipo": "TRABALHO", "aula_alvo": tema_t, "semana_ref": "PROJETO"
                                 }
                                 
-                                # Lógica de Habilidades no Prompt
-                                txt_hab = ", ".join(hab_t) if hab_t else "O professor não selecionou habilidades específicas. Escolha as habilidades mais pertinentes dos eixos selecionados que se conectem ao tema."
+                                txt_hab = ", ".join(hab_t) if hab_t else "Escolha habilidades pertinentes aos eixos selecionados."
 
                                 prompt_t = (
                                     f"PERSONA: ARQUITETO_PROJETOS_V29.\n"
                                     f"TEMA: {tema_t}. NATUREZA: {natureza_p}.\n"
-                                    f"SÉRIE: {ano_t}º Ano. EIXOS SELECIONADOS: {', '.join(eixos_sel)}.\n"
+                                    f"SÉRIE: {ano_t}º Ano. EIXOS: {', '.join(eixos_sel)}.\n"
                                     f"HABILIDADES: {txt_hab}.\n"
                                     f"LOGÍSTICA: {modo_t} | DURAÇÃO: {qtd_aulas} aulas.\n"
                                     f"VALOR: {util.sosa_to_str(valor_t)} pontos.\n"
-                                    f"EXTRAS: {instr_extra_p}.\n"
+                                    f"INSTRUÇÕES DE CAMPO: {instr_extra_p}.\n"
                                     f"ID: {s_id}.\n\n"
-                                    f"MISSÃO: Gere o material usando as tags [PROFESSOR], [ALUNO], [GABARITO], [PEI]."
+                                    f"🚨 MISSÃO CRÍTICA: Não gere uma lista de exercícios. Gere um ROTEIRO DE PESQUISA E INVESTIGAÇÃO. "
+                                    f"Divida o material do aluno em: Contexto, Missão, Onde Pesquisar, Passo a Passo por Aula e O que trazer para a próxima aula."
                                 )
                                 st.session_state.lab_temp = ai.gerar_ia("ARQUITETO_PROJETOS_V29", prompt_t, usar_busca=True)
                                 st.rerun()
