@@ -575,22 +575,26 @@ if menu == "🧪 Criador de Aulas":
                 valor_t = c_t2.number_input("Valor (0-10):", 0.0, 10.0, 2.0, step=0.5, key=f"t_val_{v}")
                 qtd_aulas = c_t3.slider("Quantidade de Aulas:", 1, 10, 2, key=f"t_q_aulas_{v}")
                 
-            # --- AJUSTE DE EIXOS (AGORA MULTISELECT) ---
+            # --- AJUSTE DE EIXOS ---
             df_cur_t = df_curriculo[df_curriculo["ANO"].astype(str).str.contains(str(ano_t))]
             if not df_cur_t.empty:
                 lista_eixos = sorted(df_cur_t["EIXO"].unique().tolist())
                 eixos_sel = st.multiselect("Eixos BNCC para Integrar:", lista_eixos, key=f"t_eixos_multi_{v}")
                 
                 if eixos_sel:
-                    # Filtra habilidades de todos os eixos selecionados
+                    # Filtra habilidades dos eixos selecionados
                     df_hab_t = df_cur_t[df_cur_t["EIXO"].isin(eixos_sel)]
-                    hab_t = st.multiselect("Habilidades BNCC Âncora:", sorted(df_hab_t["CONTEUDO_ESPECIFICO"].unique().tolist()), key=f"t_hab_multi_{v}")
+                    # Habilidades agora são opcionais
+                    hab_t = st.multiselect("Habilidades BNCC Âncora (Opcional):", 
+                                           sorted(df_hab_t["CONTEUDO_ESPECIFICO"].unique().tolist()), 
+                                           help="Se deixar vazio, a IA escolherá as melhores habilidades para o tema.",
+                                           key=f"t_hab_multi_{v}")
                     
                     instr_extra_p = st.text_area("📝 Contexto ou Instrução Extra (Opcional):", key=f"t_extra_proj_{v}")
 
                     if st.button("🚀 GERAR PROJETO ESTRUTURADO", use_container_width=True, type="primary"):
-                        if not tema_t or not hab_t:
-                            st.error("Por favor, defina o Tema e as Habilidades.")
+                        if not tema_t:
+                            st.error("Por favor, defina pelo menos o Título do Tema.")
                         else:
                             with st.spinner("Maestro Sosa realizando a ponte transdisciplinar..."):
                                 s_id = util.gerar_sosa_id("PROJ", ano_t, "I")
@@ -600,11 +604,14 @@ if menu == "🧪 Criador de Aulas":
                                     "tipo": "TRABALHO", "aula_alvo": tema_t, "semana_ref": "PROJETO"
                                 }
                                 
+                                # Lógica de Habilidades no Prompt
+                                txt_hab = ", ".join(hab_t) if hab_t else "O professor não selecionou habilidades específicas. Escolha as habilidades mais pertinentes dos eixos selecionados que se conectem ao tema."
+
                                 prompt_t = (
                                     f"PERSONA: ARQUITETO_PROJETOS_V29.\n"
                                     f"TEMA: {tema_t}. NATUREZA: {natureza_p}.\n"
-                                    f"SÉRIE: {ano_t}º Ano. EIXOS: {', '.join(eixos_sel)}.\n"
-                                    f"HABILIDADES: {', '.join(hab_t)}.\n"
+                                    f"SÉRIE: {ano_t}º Ano. EIXOS SELECIONADOS: {', '.join(eixos_sel)}.\n"
+                                    f"HABILIDADES: {txt_hab}.\n"
                                     f"LOGÍSTICA: {modo_t} | DURAÇÃO: {qtd_aulas} aulas.\n"
                                     f"VALOR: {util.sosa_to_str(valor_t)} pontos.\n"
                                     f"EXTRAS: {instr_extra_p}.\n"
