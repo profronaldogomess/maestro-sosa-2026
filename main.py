@@ -380,13 +380,16 @@ if menu == "🧪 Criador de Aulas":
                     doc_prof = exporter.gerar_docx_professor_v25(nome_final, ed_prof, {"ano": ano_str, "semana": semana_ref, "trimestre": info_doc["trimestre"]})
                     link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_final}_PROF", modo="AULA")
                     
+                    # GERAÇÃO PEI (Ajuste: Anexando o gabarito ao final do texto)
                     link_pei = "N/A"
                     if len(ed_pei_mat) > 10:
-                        # PEI usa o motor de prova se for Sonda, mas o exporter cuidará de não por a grade
+                        # Adiciona o rótulo GABARITO PEI de forma simples ao final
+                        conteudo_pei_com_gabarito = f"{ed_pei_mat}\n\nGABARITO PEI\n{ed_pei_gab}"
+                        
                         if is_sonda_check:
-                            doc_pei = exporter.gerar_docx_prova_v25(f"{nome_final}_PEI", ed_pei_mat, info_doc)
+                            doc_pei = exporter.gerar_docx_prova_v25(f"{nome_final}_PEI", conteudo_pei_com_gabarito, info_doc)
                         else:
-                            doc_pei = exporter.gerar_docx_pei_v25(f"{nome_final}_PEI", ed_pei_mat, info_doc)
+                            doc_pei = exporter.gerar_docx_pei_v25(f"{nome_final}_PEI", conteudo_pei_com_gabarito, info_doc)
                         link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_final}_PEI", modo="AULA")
                     
                     if "https" in str(link_alu):
