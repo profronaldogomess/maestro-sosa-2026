@@ -348,39 +348,69 @@ if menu == "🧪 Criador de Aulas":
             ed_pei_gab = c_p2.text_area("✅ Gabarito PEI:", ai.extrair_tag(txt_base, "GABARITO_PEI"), height=400, key=f"ed_pei_gab_{v}")
 
         with t_sync:
-            st.warning("⚠️ O Triple-Sync substituirá a versão anterior deste material.")
-            if st.button("💾 EXECUTAR TRIPLE-SYNC (SUBSTITUIR)", use_container_width=True, type="primary", key=f"btn_triple_{v}"):
-                with st.status("Iniciando Protocolo de Substituição...") as status:
-                    nome_final = s_id 
-                    ano_str = f"{meta.get('ano', '6')}º"
-                    semana_ref = meta.get('semana_ref', 'AVULSA')
-                    aula_alvo = meta.get('aula_alvo', 'Aula')
-                    
-                    # LIMPEZA CIRÚRGICA ANTES DE SALVAR
-                    db.excluir_registro_com_drive("DB_AULAS_PRONTAS", nome_final)
-                    
-                    conteudo_banco = f"[SOSA_ID] {nome_final}\n[AULA_ALVO] {aula_alvo}\n[PROFESSOR]\n{ed_prof}\n\n[ALUNO]\n{ed_alu}\n\n[GABARITO]\n{ed_res}\n\n[PEI]\n{ed_pei_mat}\n\n[GABARITO_PEI]\n{ed_pei_gab}\n\n"
+                st.warning("⚠️ O Triple-Sync substituirá a versão anterior deste material.")
+                if st.button("💾 EXECUTAR TRIPLE-SYNC (SUBSTITUIR)", use_container_width=True, type="primary", key=f"btn_triple_{v}"):
+                    with st.status("Iniciando Protocolo de Substituição...") as status:
+                        # 1. DEFINIÇÃO DO ALVO (NOME LIMPO)
+                        nome_final = s_id 
+                        ano_str = f"{meta.get('ano', '6')}º"
+                        semana_ref = meta.get('semana_ref', 'AVULSA')
+                        aula_alvo = meta.get('aula_alvo', 'Aula')
+                        
+                        # 2. LIMPEZA CIRÚRGICA ANTES DE SALVAR
+                        db.excluir_registro_com_drive("DB_AULAS_PRONTAS", nome_final)
+                        
+                        # 3. BLINDAGEM DE CONTEÚDO
+                        conteudo_banco = f"[SOSA_ID] {nome_final}\n[AULA_ALVO] {aula_alvo}\n[PROFESSOR]\n{ed_prof}\n\n[ALUNO]\n{ed_alu}\n\n[GABARITO]\n{ed_res}\n\n[PEI]\n{ed_pei_mat}\n\n[GABARITO_PEI]\n{ed_pei_gab}\n\n"
 
-                    qtd_q_real = len(re.findall(r'QUESTÃO', ed_alu.upper()))
-                    info_doc = {"ano": ano_str, "trimestre": "I Trimestre", "valor": "0,00", "valor_questao": "0,00", "qtd_questoes": qtd_q_real}
+                        # 4. LÓGICA DE GERAÇÃO INTELIGENTE (SONDA VS AULA)
+                        qtd_q_real = len(re.findall(r'QUESTÃO', ed_alu.upper()))
+                        
+                        # Se for SONDA, o valor é 10,0. Se for AULA, é 0,0.
+                        is_sonda_check = "SONDA" in nome_final.upper()
+                        val_total = "10,00" if is_sonda_check else "0,00"
+                        val_q = util.sosa_to_str(10.0 / qtd_q_real) if (is_sonda_check and qtd_q_real > 0) else "0,00"
 
-                    doc_alu = exporter.gerar_docx_aluno_v24(nome_final, ed_alu, info_doc)
-                    link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{nome_final}_ALUNO", modo="AULA")
-                    doc_prof = exporter.gerar_docx_professor_v25(nome_final, ed_prof, {"ano": ano_str, "semana": semana_ref, "trimestre": "I Trimestre"})
-                    link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_final}_PROF", modo="AULA")
-                    
-                    link_pei = "N/A"
-                    if len(ed_pei_mat) > 10:
-                        doc_pei = exporter.gerar_docx_pei_v25(f"{nome_final}_PEI", ed_pei_mat, info_doc)
-                        link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_final}_PEI", modo="AULA")
-                    
-                    if "https" in str(link_alu):
-                        conteudo_banco += f"--- LINKS ---\nAluno({link_alu}) Prof({link_prof}) PEI({link_pei})"
-                        db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), semana_ref, nome_final, conteudo_banco, ano_str, link_alu])
-                        status.update(label="✅ Material Substituído!", state="complete")
-                        st.balloons()
-                        time.sleep(1)
-                        reset_laboratorio()
+                        info_doc = {
+                            "ano": ano_str, 
+                            "trimestre": meta.get('trimestre', 'I Trimestre'), 
+                            "valor": val_total, 
+                            "valor_questao": val_q, 
+                            "qtd_questoes": qtd_q_real
+                        }
+
+                        # --- AQUI ESTÁ A MUDANÇA CRUCIAL ---
+                        if is_sonda_check:
+                            # Sonda usa o motor de PROVA (Gabarito de bolinhas + Campo NOTA)
+                            status.write("📊 Gerando Sonda com Gabarito de Bolinhas...")
+                            doc_alu = exporter.gerar_docx_prova_v25(nome_final, ed_alu, info_doc)
+                        else:
+                            # Aula usa o motor de ALUNO (Sem nota, 2 colunas)
+                            status.write("📄 Gerando Atividade de Sala...")
+                            doc_alu = exporter.gerar_docx_aluno_v24(nome_final, ed_alu, info_doc)
+                        
+                        # 5. UPLOAD E SINCRONIA
+                        link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{nome_final}_ALUNO", modo="AULA")
+                        
+                        doc_prof = exporter.gerar_docx_professor_v25(nome_final, ed_prof, {"ano": ano_str, "semana": semana_ref, "trimestre": info_doc["trimestre"]})
+                        link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_final}_PROF", modo="AULA")
+                        
+                        link_pei = "N/A"
+                        if len(ed_pei_mat) > 10:
+                            # PEI também segue a lógica de Sonda ou Aula
+                            if is_sonda_check:
+                                doc_pei = exporter.gerar_docx_prova_v25(f"{nome_final}_PEI", ed_pei_mat, info_doc)
+                            else:
+                                doc_pei = exporter.gerar_docx_pei_v25(f"{nome_final}_PEI", ed_pei_mat, info_doc)
+                            link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_final}_PEI", modo="AULA")
+                        
+                        if "https" in str(link_alu):
+                            conteudo_banco += f"--- LINKS ---\nAluno({link_alu}) Prof({link_prof}) PEI({link_pei})"
+                            db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), semana_ref, nome_final, conteudo_banco, ano_str, link_alu])
+                            status.update(label="✅ Material Substituído com Sucesso!", state="complete")
+                            st.balloons()
+                            time.sleep(1)
+                            reset_laboratorio()
 
     # --- SEÇÃO DE ENTRADA (CONFIGURAÇÃO) ---
     else:
@@ -471,7 +501,7 @@ if menu == "🧪 Criador de Aulas":
                 ano_sonda = c1.selectbox("Série Atual:", [6, 7, 8, 9], key=f"s_ano_{v}")
                 trim_sonda = c2.selectbox("Trimestre da Sonda:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"s_trim_{v}")
                 
-                # LÓGICA DE RETROCESSO SOSA V29
+                # LÓGICA DE RETROCESSO CURRICULAR SOSA V29
                 if trim_sonda == "I Trimestre":
                     ano_busca = int(ano_sonda) - 1
                     trim_busca = "Todos"
@@ -479,11 +509,11 @@ if menu == "🧪 Criador de Aulas":
                 elif trim_sonda == "II Trimestre":
                     ano_busca = int(ano_sonda)
                     trim_busca = "I"
-                    st.info(f"🎯 **Sonda de Ciclo:** Avaliando conteúdos ministrados no I Trimestre.")
+                    st.info(f"🎯 **Sonda de Ciclo:** Avaliando conteúdos do I Trimestre.")
                 else:
                     ano_busca = int(ano_sonda)
                     trim_busca = "II"
-                    st.info(f"🎯 **Sonda de Ciclo:** Avaliando conteúdos ministrados no II Trimestre.")
+                    st.info(f"🎯 **Sonda de Ciclo:** Avaliando conteúdos do II Trimestre.")
                 
                 # FILTRAGEM DA MATRIZ
                 df_cur_sonda = df_curriculo[df_curriculo["ANO"].astype(str) == str(ano_busca)]
@@ -492,44 +522,39 @@ if menu == "🧪 Criador de Aulas":
                 
                 if not df_cur_sonda.empty:
                     lista_eixos_sonda = sorted(df_cur_sonda["EIXO"].unique().tolist())
-                    sel_eixos_s = st.multiselect("1. Selecione o(s) Eixo(s) para Sondagem:", lista_eixos_sonda, key=f"s_eixos_{v}")
+                    sel_eixos_s = st.multiselect("1. Selecione o(s) Eixo(s):", lista_eixos_sonda, key=f"s_eixos_{v}")
                     
                     if sel_eixos_s:
                         df_cont_s = df_cur_sonda[df_cur_sonda["EIXO"].isin(sel_eixos_s)]
                         lista_conts_s = sorted(df_cont_s["CONTEUDO_ESPECIFICO"].unique().tolist())
-                        sel_conts_s = st.multiselect("2. Selecione os Conteúdos Alvo:", lista_conts_s, key=f"s_conts_{v}")
+                        sel_conts_s = st.multiselect("2. Selecione os Conteúdos:", lista_conts_s, key=f"s_conts_{v}")
                         
                         if sel_conts_s:
                             st.divider()
                             c_q1, c_q2 = st.columns([1, 2])
                             qtd_q_sonda = c_q1.slider("Nº de Questões:", 3, 15, 10, key=f"s_qtd_in_{v}")
-                            instr_extra_s = c_q2.text_area("📝 Contexto Adicional (Opcional):", placeholder="Ex: Use temas de tecnologia...", key=f"s_instr_{v}")
+                            instr_extra_s = c_q2.text_area("📝 Contexto Adicional:", key=f"s_instr_{v}")
                             
                             if st.button("🚀 GERAR SONDA DE PROFICIÊNCIA", use_container_width=True, type="primary"):
                                 with st.spinner("Maestro Sosa realizando perícia psicométrica..."):
-                                    # Nomenclatura de Elite V29
+                                    # NOMENCLATURA DE ELITE
                                     nome_elite = f"{ano_sonda}º Ano - Sonda Diagnóstica - {trim_sonda}"
                                     st.session_state.sosa_id_atual = nome_elite
                                     st.session_state.lab_meta = {
-                                        "ano": ano_sonda, 
-                                        "trimestre": trim_sonda, 
-                                        "tipo": "SONDA",
-                                        "aula_alvo": "Sonda Diagnóstica",
-                                        "semana_ref": "AVALIAÇÃO"
+                                        "ano": ano_sonda, "trimestre": trim_sonda, 
+                                        "tipo": "SONDA", "aula_alvo": "Sonda Diagnóstica", "semana_ref": "AVALIAÇÃO"
                                     }
                                     
                                     prompt_sonda = (
                                         f"PERSONA: ARQUITETO_SONDA_DIAGNOSTICA. ID: {nome_elite}.\n"
                                         f"SÉRIE ATUAL: {ano_sonda}º Ano. TRIMESTRE: {trim_sonda}.\n"
-                                        f"CONTEÚDOS ALVO: {' / '.join(sel_conts_s)}.\n"
+                                        f"CONTEÚDOS ALVO (ANO ANTERIOR/TRIMESTRE ANTERIOR): {' / '.join(sel_conts_s)}.\n"
                                         f"QUANTIDADE: {qtd_q_sonda} questões A-E. VALOR TOTAL: 10,0.\n\n"
                                         f"MISSÃO: Gere o material completo com as TAGS [PROFESSOR], [ALUNO], [GABARITO], [PEI], [GABARITO_PEI]."
                                     )
                                     st.session_state.lab_temp = ai.gerar_ia("ARQUITETO_SONDA_DIAGNOSTICA", prompt_sonda, usar_busca=True)
                                     st.rerun()
-                else:
-                    st.error(f"❌ Base curricular não encontrada para os critérios de retrocesso.")
-                    
+
         with tab_trabalhos:
             st.subheader("📋 Engenharia de Projetos e Trabalhos (BNCC)")
             with st.container(border=True):
