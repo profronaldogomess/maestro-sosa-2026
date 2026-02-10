@@ -347,19 +347,19 @@ if menu == "🧪 Criador de Aulas":
             ed_pei_mat = c_p1.text_area("📄 Material PEI:", ai.extrair_tag(txt_base, "PEI"), height=400, key=f"ed_pei_mat_{v}")
             ed_pei_gab = c_p2.text_area("✅ Gabarito PEI:", ai.extrair_tag(txt_base, "GABARITO_PEI"), height=400, key=f"ed_pei_gab_{v}")
 
-        with t_sync:
+with t_sync:
             st.warning("⚠️ O Triple-Sync substituirá a versão anterior deste material.")
             if st.button("💾 EXECUTAR TRIPLE-SYNC (SUBSTITUIR)", use_container_width=True, type="primary", key=f"btn_triple_{v}"):
                 with st.status("Iniciando Protocolo de Substituição...") as status:
                     nome_final = s_id 
                     ano_str = f"{meta.get('ano', '6')}º"
                     semana_ref = meta.get('semana_ref', 'AVULSA')
-                    aula_alvo = meta.get('aula_alvo', 'Aula')
                     
                     db.excluir_registro_com_drive("DB_AULAS_PRONTAS", nome_final)
                     
-                    conteudo_banco = f"[SOSA_ID] {nome_final}\n[AULA_ALVO] {aula_alvo}\n[PROFESSOR]\n{ed_prof}\n\n[ALUNO]\n{ed_alu}\n\n[GABARITO]\n{ed_res}\n\n[PEI]\n{ed_pei_mat}\n\n[GABARITO_PEI]\n{ed_pei_gab}\n\n"
+                    conteudo_banco = f"[SOSA_ID] {nome_final}\n[AULA_ALVO] {meta.get('aula_alvo', 'Aula')}\n[PROFESSOR]\n{ed_prof}\n\n[ALUNO]\n{ed_alu}\n\n[GABARITO]\n{ed_res}\n\n[PEI]\n{ed_pei_mat}\n\n[GABARITO_PEI]\n{ed_pei_gab}\n\n"
 
+                    # CONTAGEM BLINDADA (Mesma lógica do Exporter)
                     qtd_q_real = len(re.findall(r'(?m)^QUESTÃO\s+\d+', ed_alu.upper()))
                     is_sonda_check = "SONDA" in nome_final.upper()
                     
@@ -380,9 +380,9 @@ if menu == "🧪 Criador de Aulas":
                     doc_prof = exporter.gerar_docx_professor_v25(nome_final, ed_prof, {"ano": ano_str, "semana": semana_ref, "trimestre": info_doc["trimestre"]})
                     link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_final}_PROF", modo="AULA")
                     
-                    # GERAÇÃO PEI (Respeita o título de Sonda, mas o exporter não porá a grade)
                     link_pei = "N/A"
                     if len(ed_pei_mat) > 10:
+                        # PEI usa o motor de prova se for Sonda, mas o exporter cuidará de não por a grade
                         if is_sonda_check:
                             doc_pei = exporter.gerar_docx_prova_v25(f"{nome_final}_PEI", ed_pei_mat, info_doc)
                         else:
