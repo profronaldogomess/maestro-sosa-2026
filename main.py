@@ -2110,7 +2110,7 @@ elif menu == "📸 Scanner de Gabaritos":
     if not f_turma or not f_ativo:
         st.info("💡 Selecione a Turma e o Ativo para iniciar a perícia.")
     else:
-        # --- 2. MOTOR DE DNA E ACERVO DE PASTA ---
+        # --- 2. MOTOR DE DNA E LÓGICA DE ACERVO ---
         dados_ativo = df_aulas[df_aulas['TIPO_MATERIAL'] == f_ativo].iloc[0]
         txt_ativo = str(dados_ativo['CONTEUDO'])
         
@@ -2118,11 +2118,24 @@ elif menu == "📸 Scanner de Gabaritos":
         val_tag = ai.extrair_tag(txt_ativo, "VALOR")
         valor_total_ativo = util.sosa_to_float(val_tag) if val_tag else 10.0
 
-        # --- BOTÃO DE ACERVO (LINK DA PASTA NO DRIVE) ---
-        # Busca ou cria a pasta da prova para exibir o link de acesso rápido
-        _, link_pasta_acervo = db.obter_ou_criar_pasta_drive(f_ativo)
-        if link_pasta_acervo:
-            st.link_button(f"📂 ABRIR ACERVO DE EVIDÊNCIAS (FOTOS: {f_ativo})", link_pasta_acervo, use_container_width=True)
+        # --- BOTÃO DE ACERVO INTELIGENTE (SÓ APARECE SE JÁ EXISTIR) ---
+        # Aqui usamos uma lógica de busca simples para não criar a pasta antes da hora
+        with st.sidebar:
+            st.markdown("---")
+            # Tentamos localizar a pasta na hierarquia oficial
+            try:
+                # Busca o ID da pasta de gabaritos para ver se a pasta da prova está lá dentro
+                id_raiz, _ = db.obter_ou_criar_pasta_drive("SOSA_DOCUMENTOS")
+                id_gab, _ = db.obter_ou_criar_pasta_drive("GABARITOS_ESCANEADOS", id_raiz)
+                
+                # Esta função agora só deve retornar o link se a pasta já existir fisicamente
+                # (Certifique-se de que a função no database.py foi atualizada como te enviei antes)
+                id_prova_existente, link_pasta_acervo = db.obter_ou_criar_pasta_drive(f_ativo, id_gab)
+                
+                if link_pasta_acervo:
+                    st.link_button(f"📂 ACERVO DE FOTOS ({f_ativo})", link_pasta_acervo, use_container_width=True)
+            except:
+                pass # Se não achar, o botão simplesmente não aparece, mantendo o visual limpo
 
         # Função de Extração de Gabarito (Pinça Cirúrgica V52)
         def extrair_gabarito_estrito(texto, is_pei=False):
