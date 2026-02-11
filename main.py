@@ -1864,230 +1864,68 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                 st.info("📭 Banco de relatórios vazio.")
 
 # ==============================================================================
-# MÓDULO: CENTRAL DE AVALIAÇÕES (V37.0) - SINCRO TOTAL E ACERVO DE ELITE
+# MÓDULO: SCANNER & HUB DE HOMOLOGAÇÃO (V42.0) - INTEGRAL E BLINDADO
 # ==============================================================================
-elif menu == "📝 Central de Avaliações":
-    st.title("📝 Arquiteto de Exames e Gestão de Safra")
+elif menu == "📸 Scanner de Gabaritos":
+    st.title("📸 Scanner de Gabaritos e Hub de Homologação")
     st.markdown("---")
-    
-    is_refinando_av = "refino_av_ativo" in st.session_state
 
-    def reset_avaliacoes():
-        keys_to_del = ["temp_prova", "temp_revisao", "av_pei", "refino_av_ativo", "av_valor_total", "av_gab_pei", "av_res_pei_ia", "av_nome_fixo"]
-        for k in keys_to_del:
-            if k in st.session_state: del st.session_state[k]
-        st.cache_data.clear()
-        st.session_state.v_av = int(time.time())
-        st.rerun()
+    if "v_scan" not in st.session_state: st.session_state.v_scan = 1
+    v = st.session_state.v_scan
 
-    if "v_av" not in st.session_state: st.session_state.v_av = 1
-    v = st.session_state.v_av
+    # --- 1. FILTROS DE ACESSO ---
+    with st.container(border=True):
+        c1, c2, c3 = st.columns([1, 1, 1.5])
+        
+        turmas_disponiveis = sorted(df_alunos['TURMA'].unique()) if not df_alunos.empty else []
+        f_turma = c1.selectbox("👥 Selecione a Turma:", [""] + turmas_disponiveis, key=f"sc_t_{v}")
+        f_trim = c2.selectbox("📅 Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"sc_tr_{v}")
+        
+        opcoes_ativos = []
+        if f_turma:
+            serie_alvo = f_turma[0]
+            df_serie = df_aulas[df_aulas['ANO'].astype(str).str.contains(serie_alvo)]
+            permitidos = ["TESTE", "PROVA", "CHAMADA", "SONDA", "DIAGNÓSTICA", "DIAGNOSTICA", "RECUPERAÇÃO"]
+            df_ativos = df_serie[
+                (df_serie['TIPO_MATERIAL'].str.upper().str.contains('|'.join(permitidos))) & 
+                (~df_serie['TIPO_MATERIAL'].str.upper().str.contains("REVISÃO|REVISAO"))
+            ]
+            opcoes_ativos = df_ativos['TIPO_MATERIAL'].tolist()
+        
+        f_ativo = c3.selectbox("📋 Selecione o Ativo para Corrigir:", opcoes_ativos, key=f"sc_at_{v}")
 
-    tab_arquiteto, tab_refino, tab_vis, tab_recomposicao, tab_finalizar, tab_acervo = st.tabs([
-        "🚀 Arquiteto de Exames", "🤖 Refinador Maestro", "👁️ Visualização 360°", "🔥 Recomposição/Revisão", "💾 Finalizar Ativo", "🗂️ Acervo de Safra"
-    ])
+    # --- VALIDAÇÃO DE ENTRADA ---
+    if not f_turma or not f_ativo:
+        st.info("💡 Selecione a Turma e o Ativo para iniciar a perícia.")
+    else:
+        # --- 2. RECUPERAÇÃO DE DADOS DO ATIVO (DEFINIÇÃO DE VARIÁVEIS MESTRAS) ---
+        dados_ativo = df_aulas[df_aulas['TIPO_MATERIAL'] == f_ativo].iloc[0]
+        txt_ativo = str(dados_ativo['CONTEUDO'])
+        
+        match_valor = re.search(r"\[VALOR:\s*(\d+[\.,]\d+|\d+)\]", txt_ativo.upper())
+        valor_total_ativo = util.sosa_to_float(match_valor.group(1)) if match_valor else 10.0
+        is_sonda = "SONDA" in f_ativo.upper() or "DIAGNÓSTICA" in f_ativo.upper()
 
-    # --- ABA 1: ARQUITETO ---
-    with tab_arquiteto:
-        if is_refinando_av:
-            st.warning(f"🛠️ **MODO REFINO:** Editando {st.session_state.refino_av_ativo.get('tipo')}")
-            if st.button("❌ CANCELAR E VOLTAR AO NOVO"): reset_avaliacoes()
+        # Definição das Abas (Resolve o erro de tab_captura não definido)
+        tab_captura, tab_conferencia, tab_raiox = st.tabs([
+            "📸 1. Capturar Gabaritos", 
+            "⚖️ 2. Hub de Homologação (Conferência)", 
+            "📊 3. Raio-X de Desempenho"
+        ])
 
-        with st.container(border=True):
-            st.markdown("### ⚙️ 1. Configuração do Exame")
-            c1, c2, c3, c4 = st.columns([1.5, 1, 1, 1])
-            tipo_av = c1.selectbox("Tipo:", ["Teste", "Prova", "Recuperação", "2ª Chamada"], key=f"av_t_{v}")
-            v_total = c2.number_input("Valor Total:", 0.0, 10.0, 3.0 if "Teste" in tipo_av else 4.0, step=0.5, key=f"av_v_{v}")
-            ano_av = c3.selectbox("Série:", [6, 7, 8, 9], index=0, key=f"av_a_{v}")
-            qtd_q = c4.number_input("Nº Total de Questões:", 2, 20, 10, key=f"av_q_{v}")
-
-        with st.container(border=True):
-            st.markdown("### 📊 2. Distribuição de Dificuldade")
-            cd1, cd2, cd3 = st.columns(3)
-            q_facil = cd1.number_input("Fáceis:", 0, qtd_q, int(qtd_q*0.3), key=f"q_f_{v}")
-            q_medio = cd2.number_input("Médias:", 0, qtd_q, int(qtd_q*0.5), key=f"q_m_{v}")
-            q_dificil = cd3.number_input("Difíceis:", 0, qtd_q, qtd_q - (q_facil + q_medio), key=f"q_d_{v}")
-            soma_q = q_facil + q_medio + q_dificil
-
-        with st.container(border=True):
-            st.markdown("### 🎯 3. Matriz de Mérito e Filtro Curricular")
-            c_trim1, c_trim2 = st.columns([1, 2])
-            trim_filtro = c_trim1.selectbox("Filtrar por Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"av_trim_filter_{v}")
-            
-            df_planos_trim = df_planos[(df_planos["ANO"].astype(str).str.contains(str(ano_av))) & (df_planos["TURMA"].astype(str).str.contains(trim_filtro))]
-            semanas_do_trimestre = df_planos_trim["SEMANA"].unique().tolist()
-            df_materiais_trim = df_aulas[(df_aulas["ANO"].astype(str).str.contains(str(ano_av))) & (df_aulas["SEMANA_REF"].isin(semanas_do_trimestre))]
-            
-            mats_selecionados = c_trim2.multiselect(f"Ativos de Safra Detectados ({len(df_materiais_trim)}):", options=df_materiais_trim["TIPO_MATERIAL"].tolist(), key=f"av_ref_{v}")
-
-            trim_map = {"I Trimestre": "I", "II Trimestre": "II", "III Trimestre": "III"}
-            df_cur_filtrado = df_curriculo[(df_curriculo["ANO"].astype(str) == str(ano_av)) & (df_curriculo["TRIMESTRE"] == trim_map[trim_filtro])]
-            col_c1, col_c2 = st.columns(2)
-            eixos_av = col_c1.multiselect("Eixos Oficiais:", df_cur_filtrado["EIXO"].unique(), key=f"av_eixo_{v}")
-            conts_av = col_c2.multiselect("Conteúdos Oficiais:", df_cur_filtrado[df_cur_filtrado["EIXO"].isin(eixos_av)]["CONTEUDO_ESPECIFICO"].unique(), key=f"av_cont_{v}")
-            objs_av = st.multiselect("Objetivos de Aprendizagem:", df_cur_filtrado[df_cur_filtrado["CONTEUDO_ESPECIFICO"].isin(conts_av)]["OBJETIVOS"].unique(), key=f"av_obj_{v}")
-
-            if st.button("💎 COMPILAR EXAME DE ELITE", use_container_width=True, type="primary"):
-                if soma_q != qtd_q: st.error("Ajuste a distribuição das questões.")
-                elif not mats_selecionados or not objs_av: st.error("Selecione os Ativos e Objetivos.")
-                else:
-                    with st.spinner("Maestro Arquiteto calibrando exame..."):
-                        contexto_aulas = ""
-                        for m_nome in mats_selecionados:
-                            m_row = df_materiais_trim[df_materiais_trim["TIPO_MATERIAL"] == m_nome].iloc[0]
-                            contexto_aulas += f"MATERIAL_ID: {m_nome}\nCONTEÚDO: {m_row['CONTEUDO']}\n"
-
-                        prompt = (f"VOCÊ É O ARQUITETO DE EXAMES V30. SÉRIE: {ano_av}º Ano. TIPO: {tipo_av}. VALOR: {v_total}.\n"
-                                  f"DIFICULDADE: {q_facil}F, {q_medio}M, {q_dificil}D. OBJETIVOS: {objs_av}.\n"
-                                  f"CONTEÚDO MINISTRADO: {contexto_aulas}\n"
-                                  f"MISSÃO: Gere o exame completo (Regular A-E | PEI A-C) com as tags obrigatórias.")
-                        st.session_state.temp_prova = ai.gerar_ia("ARQUITETO_EXAMES_V30_ELITE", prompt, usar_busca=True)
-                        st.session_state.av_valor_total = v_total
-                        st.session_state.av_nome_fixo = f"{tipo_av.upper()}_{ano_av}ANO_{trim_filtro.replace(' ', '')}"
-                        st.rerun()
-
-    # --- ABA 2: REFINADOR ---
-    with tab_refino:
-        if "temp_prova" in st.session_state:
-            st.subheader("🤖 Refinamento de Precisão")
-            cmd = st.chat_input("Solicitar ajuste no exame...", key=f"chat_av_{v}")
-            if cmd:
-                with st.spinner("Reescrevendo..."):
-                    st.session_state.temp_prova = ai.gerar_ia("REFINADOR_EXAMES", f"ORDEM: {cmd}\n\nATUAL:\n{st.session_state.temp_prova}")
-                    st.session_state.v_av += 1; st.rerun()
-            st.text_area("Editor de Exame:", st.session_state.temp_prova, height=500, key=f"ed_av_raw_{v}")
-        else: st.info("Gere um exame para refinar.")
-
-    # --- ABA 3: VISUALIZAÇÃO ---
-    with tab_vis:
-        if "temp_prova" in st.session_state:
-            txt_f = st.session_state.temp_prova
-            t1, t2, t3, t4, t5 = st.tabs(["📝 Prova Regular", "✅ Gabarito/Psicometria", "♿ Prova PEI", "📊 Gabarito PEI", "🧠 Justificativa PEI"])
-            with t1: st.text_area("Conteúdo da Prova Regular:", ai.extrair_tag(txt_f, "QUESTOES"), height=500, key=f"vis_reg_{v}")
-            with t2: st.code(ai.extrair_tag(txt_f, "GABARITO_TEXTO")); st.write(ai.extrair_tag(txt_f, "RESPOSTAS_IA"))
-            with t3: st.text_area("Conteúdo da Prova PEI:", ai.extrair_tag(txt_f, "PEI"), height=500, key=f"vis_pei_{v}")
-            with t4: st.code(ai.extrair_tag(txt_f, "GABARITO_PEI"))
-            with t5: st.write(ai.extrair_tag(txt_f, "RESPOSTAS_PEI_IA"))
-        else: st.info("Aguardando geração do exame...")
-
-    # --- ABA 4: RECOMPOSIÇÃO E REVISÃO (SEPARADA POR PERFIL) ---
-    with tab_recomposicao:
-        if "temp_prova" in st.session_state:
-            st.subheader("🚀 Gerador de Revisão Sincronizada")
-            if st.button("💎 MATERIALIZAR REVISÃO DE ELITE", use_container_width=True, type="primary"):
-                with st.spinner("Maestro Sosa convertendo prova em roteiro de recomposição..."):
-                    prompt_rev = f"PROVA BASE:\n{st.session_state.temp_prova}\n\nID_EXAME: {st.session_state.av_nome_fixo}"
-                    st.session_state.temp_revisao = ai.gerar_ia("ARQUITETO_REVISAO_V29", prompt_rev)
-                    st.rerun()
-            
-            if "temp_revisao" in st.session_state:
-                txt_rev = st.session_state.temp_revisao
-                tr1, tr2, tr3, tr_sync = st.tabs(["👨‍🏫 Professor", "📝 Aluno (Aberto)", "♿ PEI (A-C)", "☁️ SINCRONIA"])
-                with tr1: st.text_area("Guia do Professor:", ai.extrair_tag(txt_rev, "PROFESSOR"), height=400, key=f"rev_prof_{v}")
-                with tr2: st.text_area("Folha do Aluno (Discursiva):", ai.extrair_tag(txt_rev, "ALUNO"), height=400, key=f"rev_alu_{v}")
-                with tr3: st.text_area("Revisão PEI:", ai.extrair_tag(txt_rev, "PEI"), height=400, key=f"rev_pei_{v}")
-                
-                with tr_sync:
-                    if st.button("💾 EXECUTAR TRIPLE-SYNC DA REVISÃO", use_container_width=True, type="primary"):
-                        with st.status("Sincronizando Ativos de Recomposição...") as status:
-                            nome_rev = f"REVISAO_{st.session_state.av_nome_fixo}"
-                            db.excluir_registro_com_drive("DB_AULAS_PRONTAS", nome_rev)
-                            
-                            # 1. Geração Regular (Discursiva)
-                            doc_alu = exporter.gerar_docx_aluno_v24(nome_rev, ai.extrair_tag(txt_rev, "ALUNO"), {"ano": f"{ano_av}º", "trimestre": trim_filtro})
-                            link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{nome_rev}_ALUNO", modo="AULA")
-                            
-                            # 2. Geração PEI (Múltipla Escolha)
-                            doc_pei = exporter.gerar_docx_pei_v25(f"{nome_rev}_PEI", ai.extrair_tag(txt_rev, "PEI"), {"ano": f"{ano_av}º", "trimestre": trim_filtro})
-                            link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_rev}_PEI", modo="AULA")
-                            
-                            # 3. Geração Professor
-                            doc_prof = exporter.gerar_docx_professor_v25(nome_rev, ai.extrair_tag(txt_rev, "PROFESSOR"), {"ano": f"{ano_av}º", "semana": "REVISÃO", "trimestre": trim_filtro})
-                            link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_rev}_PROF", modo="AULA")
-                            
-                            db.salvar_no_banco("DB_AULAS_PRONTAS", [
-                                datetime.now().strftime("%d/%m/%Y"), "REVISÃO", nome_rev, 
-                                txt_rev + f"\n--- LINKS ---\nAluno({link_alu}) Prof({link_prof}) PEI({link_pei})", f"{ano_av}º", link_alu
-                            ])
-                            status.update(label="✅ Revisão Sincronizada!", state="complete"); st.balloons()
-        else: st.warning("⚠️ Gere a prova primeiro.")
-
-    # --- ABA 5: FINALIZAR ATIVO (PROVA) ---
-    with tab_finalizar:
-        if "temp_prova" in st.session_state:
-            st.subheader("💾 Consolidação do Ativo de Safra")
-            v_tipo = st.session_state.get(f"av_t_{v}", "Prova")
-            v_ano = st.session_state.get(f"av_a_{v}", 6)
-            v_qtd = st.session_state.get(f"av_q_{v}", 10)
-            c_s1, c_s2 = st.columns(2)
-            trim_av = c_s1.selectbox("Trimestre Alvo:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"trim_fin_{v}")
-            nome_arq = c_s2.text_input("Nome do Arquivo:", st.session_state.get('av_nome_fixo', 'AVALIACAO'), key=f"name_av_in_{v}")
-
-            if st.button("💾 SALVAR COMO PRONTO PARA APLICAÇÃO", use_container_width=True, type="primary"):
-                with st.status("Sincronizando...") as status:
-                    v_total_num = st.session_state.get('av_valor_total', 10.0)
-                    identificador = f"{v_tipo} - {v_ano}º Ano ({trim_av})"
-                    db.excluir_avaliacao_completa(identificador, v_tipo)
-                    
-                    # Geração Regular
-                    v_por_quest_reg = v_total_num / v_qtd
-                    info_reg = {"ano": f"{v_ano}º", "tipo_prova": v_tipo, "valor": util.sosa_to_str(v_total_num), "valor_questao": util.sosa_to_str(v_por_quest_reg), "qtd_questoes": v_qtd, "trimestre": trim_av}
-                    doc_reg = exporter.gerar_docx_prova_v25(nome_arq, st.session_state.temp_prova, info_reg)
-                    link_reg = db.subir_e_converter_para_google_docs(doc_reg, nome_arq, modo="AVALIACAO")
-                    
-                    # Geração PEI
-                    txt_pei = ai.extrair_tag(st.session_state.temp_prova, "PEI")
-                    link_pei = "N/A"
-                    if txt_pei:
-                        qtd_q_pei = len(re.findall(r'QUESTÃO', txt_pei.upper()))
-                        info_pei = {"ano": f"{v_ano}º", "tipo_prova": v_tipo, "valor": util.sosa_to_str(v_total_num), "valor_questao": util.sosa_to_str(v_total_num/qtd_q_pei), "qtd_questoes": qtd_q_pei, "trimestre": trim_av}
-                        doc_pei = exporter.gerar_docx_prova_v25(f"{nome_arq}_PEI", txt_pei, info_pei)
-                        link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_arq}_PEI", modo="AVALIACAO")
-
-                    db.salvar_no_banco("DB_AULAS_PRONTAS", [
-                        datetime.now().strftime("%d/%m/%Y"), "AVALIAÇÃO", identificador, 
-                        st.session_state.temp_prova + f"\n--- LINKS ---\nRegular({link_reg}) PEI({link_pei})", f"{v_ano}º", link_reg
-                    ])
-                    status.update(label="✅ Ativo Salvo!", state="complete"); st.balloons(); time.sleep(1.5); reset_avaliacoes()
-
-    # --- ABA 6: ACERVO (RESTAURADA COM TODOS OS BOTÕES) ---
-    with tab_acervo:
-        st.markdown("#### 📄 Repositório de Ativos de Safra")
-        df_exames = df_aulas[df_aulas['SEMANA_REF'].isin(["AVALIAÇÃO", "REVISÃO"])].iloc[::-1]
-        if not df_exames.empty:
-            for _, row in df_exames.iterrows():
-                with st.container(border=True):
-                    st.markdown(f"**{row['TIPO_MATERIAL']}**")
-                    txt_f = str(row['CONTEUDO'])
-                    
-                    # Extração de Links via Regex
-                    l_reg = re.search(r"Regular\((.*?)\)", txt_f).group(1) if "Regular(" in txt_f else (re.search(r"Aluno\((.*?)\)", txt_f).group(1) if "Aluno(" in txt_f else row.get('LINK_DRIVE'))
-                    l_pei = re.search(r"PEI\((.*?)\)", txt_f).group(1) if "PEI(" in txt_f and "PEI(N/A)" not in txt_f else None
-                    l_prof = re.search(r"Prof\((.*?)\)", txt_f).group(1) if "Prof(" in txt_f else None
-
-                    c_b1, c_b2, c_b3, c_b4, c_b5 = st.columns([1, 1, 1, 1, 1])
-                    if l_reg: c_b1.link_button("📝 REGULAR", str(l_reg), use_container_width=True)
-                    if l_pei: c_b2.link_button("♿ PEI", str(l_pei), use_container_width=True)
-                    else: c_b2.button("⚪ SEM PEI", disabled=True, use_container_width=True)
-                    if l_prof: c_b3.link_button("👨‍🏫 PROF", str(l_prof), use_container_width=True)
-                    else: c_b3.button("⚪ SEM PROF", disabled=True, use_container_width=True)
-                    
-                    if c_b4.button("🔄 REFINAR", key=f"ref_av_{row.name}", use_container_width=True):
-                        st.session_state.temp_prova = txt_f
-                        st.rerun()
-                    if c_b5.button("🗑️ APAGAR", key=f"del_av_{row.name}", use_container_width=True):
-                        db.excluir_avaliacao_completa(row['TIPO_MATERIAL'], "AVALIAÇÃO"); st.rerun()
-        else: st.info("📭 Nenhum exame no acervo.")
-
-# --- ABA 1: CAPTURA (V41.2 - BLINDAGEM CONTRA INDEXERROR) ---
+        # --- ABA 1: CAPTURA ---
         with tab_captura:
             st.subheader(f"Captura de Evidências: {f_ativo}")
             
-            # 1. LEGENDA DE PERÍCIA
-            with st.expander("ℹ️ LEGENDA DE MARCAÇÕES (SOSA V29)"):
-                st.markdown("| Símbolo | Significado |\n| :--- | :--- |\n| **A, B, C, D, E** | Marcação Única |\n| **X** | Dupla Marcação / Rasura |\n| **?** | Questão em Branco |")
+            with st.expander("ℹ️ LEGENDA DE MARCAÇÕES (SOSA V29)", expanded=False):
+                st.markdown("""
+                | Símbolo | Significado | Ação |
+                | :--- | :--- | :--- |
+                | **A, B, C, D, E** | Marcação Única | Computa acerto/erro. |
+                | **X** | Dupla Marcação | Questão Anulada. |
+                | **?** | Vazia | Questão em Branco. |
+                """)
 
-            # Filtra alunos pendentes
             escaneados = df_diagnosticos[df_diagnosticos['ID_AVALIACAO'] == f_ativo]['ID_ALUNO'].astype(str).tolist()
             alunos_pendentes = df_alunos[(df_alunos['TURMA'] == f_turma) & (~df_alunos['ID'].astype(str).isin(escaneados))]
             
@@ -2098,88 +1936,78 @@ elif menu == "📝 Central de Avaliações":
                 aluno_sel = c_a1.selectbox("👤 Selecione o Aluno:", alunos_pendentes['NOME_ALUNO'].tolist())
                 aluno_info = alunos_pendentes[alunos_pendentes['NOME_ALUNO'] == aluno_sel].iloc[0]
                 
-                # --- VACINA DE MEMÓRIA: Limpa scan antigo se mudar o aluno ---
-                if "last_aluno_scanned" not in st.session_state: st.session_state.last_aluno_scanned = aluno_sel
-                if st.session_state.last_aluno_scanned != aluno_sel:
-                    if "current_scan_res" in st.session_state: del st.session_state.current_scan_res
-                    st.session_state.last_aluno_scanned = aluno_sel
-
-                # DETECÇÃO PEI E EXTRAÇÃO DE GABARITO
+                # Detecção PEI Automática
                 is_pei_aluno = str(aluno_info['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"]
-                tag_gab = "GABARITO_PEI" if is_pei_aluno else "GABARITO"
-                gab_raw = ai.extrair_tag(txt_ativo, tag_gab) or ai.extrair_tag(txt_ativo, "GABARITO_TEXTO") or ai.extrair_tag(txt_ativo, "GABARITO")
+                tag_gab_alvo = "GABARITO_PEI" if is_pei_aluno else "GABARITO"
                 
-                # Motor de Precisão Híbrido
-                matches = re.findall(r"^(?:QUESTÃO\s+)?(\d+)[\s\.\)\-:]*([A-E])", gab_raw.upper(), re.MULTILINE)
-                gab_dict = {num: let for num, let in matches}
+                if is_pei_aluno: st.warning(f"♿ **PERFIL PEI DETECTADO** para {aluno_sel}")
+                else: st.info(f"📝 **PERFIL REGULAR** para {aluno_sel}")
+
+                # Extração do Gabarito Oficial
+                gab_raw = ai.extrair_tag(txt_ativo, tag_gab_alvo) or ai.extrair_tag(txt_ativo, "GABARITO")
+                matches_gab = re.findall(r"^(?:QUESTÃO\s+)?(\d+)[\s\.\)\-:]*([A-E])", gab_raw.upper(), re.MULTILINE)
+                gab_dict = {num: let for num, let in matches_gab}
                 gab_oficial = [gab_dict[num] for num in sorted(gab_dict.keys())]
                 qtd_q = len(gab_oficial)
 
-                if qtd_q == 0:
-                    st.error("❌ Erro: Gabarito não localizado. Verifique as tags no material.")
-                else:
-                    st.warning(f"📋 Perfil: {'♿ PEI' if is_pei_aluno else '📝 REGULAR'} | Questões: {qtd_q}")
-                    img_file = st.camera_input(f"📸 Scan: {aluno_sel}")
-                    
-                    if img_file:
-                        if st.button("🧠 ANALISAR COM GEMINI 2.5 PRO", type="primary", use_container_width=True):
-                            with st.spinner("Perito Sosa analisando..."):
-                                res_json = ai.analisar_gabarito_vision(img_file.getvalue())
-                                
-                                # Busca insistente no JSON (Garante que res_lista tenha o tamanho exato de qtd_q)
-                                res_lista = []
-                                for i in range(qtd_q):
-                                    q_num_longo = f"{i+1:02d}"
-                                    q_num_curto = str(i+1)
-                                    valor_lido = res_json.get(q_num_longo, res_json.get(q_num_curto, "?"))
-                                    res_lista.append(valor_lido)
-                                
-                                st.session_state.current_scan_res = res_lista
-                                st.session_state.current_scan_img = img_file.getvalue()
-                                st.rerun()
-
-                # --- MESA DE PERÍCIA IMEDIATA (COM BLINDAGEM DE ÍNDICE) ---
-                if "current_scan_res" in st.session_state:
-                    # Verifica se o scan na memória bate com a quantidade de questões atual
-                    if len(st.session_state.current_scan_res) != qtd_q:
-                        st.warning("⚠️ O número de questões mudou. Por favor, realize o scan novamente.")
-                        if st.button("🔄 RESETAR SCAN"):
-                            del st.session_state.current_scan_res
+                img_file = st.camera_input(f"📸 Scan: {aluno_sel} ({qtd_q} questões)")
+                
+                if img_file:
+                    if st.button("🧠 ANALISAR COM GEMINI 2.5 PRO", type="primary", use_container_width=True):
+                        with st.spinner("Perito Sosa analisando..."):
+                            res_json = ai.analisar_gabarito_vision(img_file.getvalue())
+                            
+                            # Construção da res_lista (Busca insistente)
+                            res_lista = []
+                            for i in range(qtd_q):
+                                q_num_longo = f"{i+1:02d}"
+                                q_num_curto = str(i+1)
+                                valor_lido = res_json.get(q_num_longo, res_json.get(q_num_curto, "?"))
+                                res_lista.append(valor_lido)
+                            
+                            st.session_state.current_scan_res = res_lista
+                            st.session_state.current_scan_img = img_file.getvalue()
                             st.rerun()
-                    else:
-                        st.markdown("---")
-                        st.subheader("🔍 Mesa de Perícia Imediata")
-                        dados_pericia = []
-                        for i in range(qtd_q):
-                            # Blindagem final: usa .get ou check de segurança
-                            lido = st.session_state.current_scan_res[i]
-                            certo = gab_oficial[i]
-                            status = "✅" if lido == certo else "❌"
-                            if lido == "X": status = "🚫 DUPLA"
-                            if lido == "?": status = "⚪ VAZIA"
-                            dados_pericia.append({"Q": f"{i+1:02d}", "Lido": lido, "Oficial": certo, "Status": status})
-                        
-                        df_mesa = st.data_editor(pd.DataFrame(dados_pericia), hide_index=True, use_container_width=True,
-                            column_config={"Lido": st.column_config.SelectboxColumn("Correção", options=["A", "B", "C", "D", "E", "X", "?"], required=True)})
-                        
-                        novas_respostas = df_mesa["Lido"].tolist()
-                        acertos_rev = sum(1 for i, r in enumerate(novas_respostas) if r == gab_oficial[i])
-                        nota_rev = (acertos_rev / qtd_q) * valor_total_ativo if qtd_q > 0 else 0
-                        st.metric("Nota Final Revisada", f"{nota_rev:.2f}", delta=f"{acertos_rev}/{qtd_q} acertos")
 
-                        c_b1, c_b2 = st.columns(2)
-                        if c_b1.button("💾 CONFIRMAR E ENVIAR AO HUB", type="primary", use_container_width=True):
-                            prefixo = "[PEI]" if is_pei_aluno else "[REGULAR]"
-                            db.salvar_no_banco("DB_GABARITOS_ALUNOS", [datetime.now().strftime("%d/%m/%Y"), aluno_info['ID'], aluno_sel, f_turma, f_ativo, ";".join(novas_respostas), util.sosa_to_str(nota_rev), f"{prefixo} Scan"])
-                            st.success("✅ Enviado!"); del st.session_state.current_scan_res; st.rerun()
-                        if c_b2.button("🗑️ DESCARTAR SCAN", use_container_width=True):
-                            del st.session_state.current_scan_res; st.rerun()
+                # --- MESA DE PERÍCIA IMEDIATA ---
+                if "current_scan_res" in st.session_state:
+                    st.markdown("---")
+                    st.subheader("🔍 Mesa de Perícia Imediata")
+                    
+                    dados_pericia = []
+                    for i in range(qtd_q):
+                        lido = st.session_state.current_scan_res[i]
+                        certo = gab_oficial[i]
+                        status = "✅" if lido == certo else "❌"
+                        if lido == "X": status = "🚫 DUPLA"
+                        if lido == "?": status = "⚪ VAZIA"
+                        dados_pericia.append({"Q": f"{i+1:02d}", "Lido": lido, "Oficial": certo, "Status": status})
+                    
+                    df_mesa = st.data_editor(pd.DataFrame(dados_pericia), hide_index=True, use_container_width=True,
+                        column_config={"Lido": st.column_config.SelectboxColumn("Correção", options=["A", "B", "C", "D", "E", "X", "?"], required=True)},
+                        key=f"mesa_pericia_{aluno_sel}")
+                    
+                    novas_respostas = df_mesa["Lido"].tolist()
+                    acertos_rev = sum(1 for i, r in enumerate(novas_respostas) if r == gab_oficial[i])
+                    nota_rev = (acertos_rev / qtd_q) * valor_total_ativo if qtd_q > 0 else 0
+                    st.metric("Nota Final Revisada", f"{nota_rev:.2f}", delta=f"{acertos_rev}/{qtd_q} acertos")
 
-        # --- ABA 2: HUB DE HOMOLOGAÇÃO (RECALCULO AUTOMÁTICO) ---
+                    c_b1, c_b2 = st.columns(2)
+                    if c_b1.button("💾 CONFIRMAR E ENVIAR AO HUB", type="primary", use_container_width=True):
+                        prefixo = "[PEI]" if is_pei_aluno else "[REGULAR]"
+                        db.salvar_no_banco("DB_GABARITOS_ALUNOS", [
+                            datetime.now().strftime("%d/%m/%Y"), aluno_info['ID'], aluno_sel, f_turma,
+                            f_ativo, ";".join(novas_respostas), util.sosa_to_str(nota_rev), f"{prefixo} Scan"
+                        ])
+                        st.success("✅ Enviado ao Hub!"); del st.session_state.current_scan_res; st.rerun()
+                    if c_b2.button("🗑️ DESCARTAR SCAN", use_container_width=True):
+                        del st.session_state.current_scan_res; st.rerun()
+
+        # --- ABA 2: HUB DE HOMOLOGAÇÃO ---
         with tab_conferencia:
-            st.subheader(f"⚖️ Conferência: {f_turma}")
+            st.subheader(f"⚖️ Hub de Homologação: {f_turma}")
             
-            # Função interna para limpar gabarito usando o novo Regex Híbrido
+            # Gabaritos Oficiais para conferência visual
             def limpar_gab_hibrido(raw):
                 m = re.findall(r"^(?:QUESTÃO\s+)?(\d+)[\s\.\)\-:]*([A-E])", raw.upper(), re.MULTILINE)
                 d = {num: let for num, let in m}
@@ -2214,9 +2042,9 @@ elif menu == "📝 Central de Avaliações":
                     "ID": id_a,
                     "ALUNO": f"♿ {alu['NOME_ALUNO']}" if is_pei else alu['NOME_ALUNO'],
                     "STATUS": status,
-                    "MARCAÇÕES LIDAS": respostas,
+                    "RESPOSTAS": respostas,
                     "GABARITO ALVO": " ".join(gab_pei_list) if is_pei else " ".join(gab_reg_list),
-                    "NOTA/BÔNUS": nota_exibida,
+                    "NOTA": nota_exibida,
                     "OCORRÊNCIA": "Nenhuma"
                 })
             
@@ -2225,10 +2053,10 @@ elif menu == "📝 Central de Avaliações":
                 column_config={
                     "ID": None, "STATUS": st.column_config.TextColumn("Perícia", width="small", disabled=True),
                     "ALUNO": st.column_config.TextColumn("Estudante", width="medium", disabled=True),
-                    "MARCAÇÕES LIDAS": st.column_config.TextColumn("Respostas (A;B;X;?)", width="medium"),
-                    "GABARITO ALVO": st.column_config.TextColumn("Gabarito Oficial", width="medium", disabled=True),
+                    "RESPOSTAS": st.column_config.TextColumn("Lido", width="small"),
+                    "GABARITO ALVO": st.column_config.TextColumn("Oficial", width="small", disabled=True),
                     "OCORRÊNCIA": st.column_config.SelectboxColumn("Tag", options=["Nenhuma", "FALTOU", "ANULADA - PESCA", "REVISÃO"]),
-                    "NOTA/BÔNUS": st.column_config.NumberColumn("Nota Final", format="%.2f")
+                    "NOTA": st.column_config.NumberColumn("Nota Final", format="%.2f")
                 },
                 hide_index=True, use_container_width=True, key=f"ed_auditoria_{v}"
             )
@@ -2238,12 +2066,7 @@ elif menu == "📝 Central de Avaliações":
                     lista_oficial = []
                     for _, row in df_auditoria.iterrows():
                         if row['STATUS'] == "🔵 Aguardando" or row['OCORRÊNCIA'] != "Nenhuma":
-                            res_prof = row['MARCAÇÕES LIDAS'].split(";")
-                            gab_alvo = row['GABARITO ALVO'].split(" ")
-                            acertos = sum(1 for i, r in enumerate(res_prof) if i < len(gab_alvo) and r.upper() == gab_alvo[i].upper())
-                            nota_final = (acertos / len(gab_alvo)) * valor_total_ativo if gab_alvo else 0.0
-                            if row['OCORRÊNCIA'] in ["FALTOU", "ANULADA - PESCA"]: nota_final = 0.0
-                            
+                            nota_final = 0.0 if row['OCORRÊNCIA'] in ["FALTOU", "ANULADA - PESCA"] else row["NOTA"]
                             if not is_sonda:
                                 col_teste = util.sosa_to_str(nota_final) if "TESTE" in f_ativo.upper() else "0,0"
                                 col_prova = util.sosa_to_str(nota_final) if "PROVA" in f_ativo.upper() else "0,0"
@@ -2253,3 +2076,15 @@ elif menu == "📝 Central de Avaliações":
                     
                     if db.homologar_notas_lote(lista_oficial, "TESTE" if not is_sonda else "SONDA"):
                         status.update(label="✅ Homologação Concluída!", state="complete"); st.balloons()
+
+        # --- ABA 3: RAIO-X ---
+        with tab_raiox:
+            st.subheader("📊 Análise de Lacunas")
+            if not gabaritos_lidos.empty:
+                stats = []
+                for i, certa in enumerate(gab_reg_list):
+                    respostas = [r.split(";")[i] if len(r.split(";")) > i else "?" for r in gabaritos_lidos['RESPOSTAS_ALUNO']]
+                    acerto_pct = (respostas.count(certa) / len(respostas)) * 100 if respostas else 0
+                    stats.append({"Questão": f"Q{i+1:02d}", "Acerto %": acerto_pct})
+                st.plotly_chart(px.bar(pd.DataFrame(stats), x="Questão", y="Acerto %", color="Acerto %", color_continuous_scale="RdYlGn", range_y=[0,100]))
+            else: st.info("Aguardando capturas.")
