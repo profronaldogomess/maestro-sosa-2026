@@ -491,19 +491,14 @@ def arquivar_plano_produzido(semana, ano):
         st.error(f"Erro ao arquivar: {e}")
         return False
 
-
-# --- database.py (PROTOCOLO SOSA_DOCUMENTOS V53) ---
-
 def obter_ou_criar_pasta_drive(nome_pasta, parent_id=None):
-    """Busca ou cria pasta no Drive e garante acesso ao Professor Ronaldo."""
+    """Busca ou cria pasta e tenta transferir a propriedade para o Professor."""
     try:
         creds = obter_creds_drive()
         service = build('drive', 'v3', credentials=creds)
         
-        # 1. Busca a pasta
         query = f"name = '{nome_pasta}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
-        if parent_id:
-            query += f" and '{parent_id}' in parents"
+        if parent_id: query += f" and '{parent_id}' in parents"
         
         results = service.files().list(q=query, fields="files(id, webViewLink)").execute()
         items = results.get('files', [])
@@ -512,37 +507,43 @@ def obter_ou_criar_pasta_drive(nome_pasta, parent_id=None):
             folder_id = items[0]['id']
             link = items[0]['webViewLink']
         else:
-            # 2. Cria se não existir
             file_metadata = {'name': nome_pasta, 'mimeType': 'application/vnd.google-apps.folder'}
-            if parent_id:
-                file_metadata['parents'] = [parent_id]
-            
+            if parent_id: file_metadata['parents'] = [parent_id]
             folder = service.files().create(body=file_metadata, fields='id, webViewLink').execute()
             folder_id = folder.get('id')
             link = folder.get('webViewLink')
 
-        # 3. PROTOCOLO DE COMPARTILHAMENTO (Dando acesso ao dono do sistema)
+        # PROTOCOLO DE POSSE: Torna o Professor Ronaldo o proprietário
         email_professor = "prof.ronaldogomess@gmail.com"
-        service.permissions().create(
-            fileId=folder_id,
-            body={'type': 'user', 'role': 'writer', 'emailAddress': email_professor},
-            fields='id'
-        ).execute()
+        try:
+            # Primeiro adiciona como editor, depois tenta transferir
+            service.permissions().create(
+                fileId=folder_id,
+                body={'type': 'user', 'role': 'owner', 'emailAddress': email_professor},
+                transferOwnership=True,
+                fields='id'
+            ).execute()
+        except:
+            # Se o Google bloquear a transferência (comum em contas @gmail), mantém como editor full
+            service.permissions().create(
+                fileId=folder_id,
+                body={'type': 'user', 'role': 'writer', 'emailAddress': email_professor},
+                fields='id'
+            ).execute()
 
         return folder_id, link
     except Exception as e:
-        st.error(f"Erro no Protocolo de Pasta: {e}")
         return None, None
 
 def salvar_foto_pericia_drive(imagem_bytes, nome_aluno, nome_avaliacao):
-    """Executa o salvamento on-demand na hierarquia SOSA_DOCUMENTOS."""
+    """Salva a foto garantindo a hierarquia e a posse do Professor."""
     try:
-        # HIERARQUIA PADRONIZADA SOSA
+        # 1. Localiza/Cria a estrutura
         id_raiz, _ = obter_ou_criar_pasta_drive("SOSA_DOCUMENTOS")
         id_gab, _ = obter_ou_criar_pasta_drive("GABARITOS_ESCANEADOS", id_raiz)
         id_prova, link_pasta_final = obter_ou_criar_pasta_drive(nome_avaliacao, id_gab)
         
-        # UPLOAD DA FOTO
+        # 2. Prepara o Upload
         creds = obter_creds_drive()
         service = build('drive', 'v3', credentials=creds)
         from googleapiclient.http import MediaIoBaseUpload
@@ -550,18 +551,26 @@ def salvar_foto_pericia_drive(imagem_bytes, nome_aluno, nome_avaliacao):
         
         nome_arq = f"{nome_aluno.replace(' ', '_').upper()}.jpg"
         
-        # Limpeza de duplicata (Upsert)
+        # Limpa foto antiga se existir
         q_antiga = f"name = '{nome_arq}' and '{id_prova}' in parents and trashed = false"
         antigos = service.files().list(q=q_antiga).execute().get('files', [])
         for f in antigos: service.files().delete(fileId=f['id']).execute()
             
+        # 3. Cria o arquivo
         media = MediaIoBaseUpload(io.BytesIO(imagem_bytes), mimetype='image/jpeg')
-        service.files().create(
-            body={'name': nome_arq, 'parents': [id_prova]},
-            media_body=media
-        ).execute()
+        file_metadata = {'name': nome_arq, 'parents': [id_prova]}
+        foto_criada = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
         
-        return link_pasta_final # Retorna o link da pasta para o acervo
+        # 4. Tenta transferir a posse da FOTO também
+        try:
+            service.permissions().create(
+                fileId=foto_criada['id'],
+                body={'type': 'user', 'role': 'owner', 'emailAddress': "prof.ronaldogomess@gmail.com"},
+                transferOwnership=True
+            ).execute()
+        except: pass
+
+        return link_pasta_final
     except Exception as e:
-        st.error(f"Falha no Upload: {e}")
+        st.error(f"Erro no salvamento: {e}")
         return None
