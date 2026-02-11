@@ -492,12 +492,15 @@ def arquivar_plano_produzido(semana, ano):
         return False
 
 
+# --- database.py (PROTOCOLO SOSA_DOCUMENTOS V53) ---
+
 def obter_ou_criar_pasta_drive(nome_pasta, parent_id=None):
-    """Busca uma pasta no Drive ou cria se não existir, e compartilha com o professor."""
+    """Busca ou cria pasta no Drive e garante acesso ao Professor Ronaldo."""
     try:
         creds = obter_creds_drive()
         service = build('drive', 'v3', credentials=creds)
         
+        # 1. Busca a pasta
         query = f"name = '{nome_pasta}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
         if parent_id:
             query += f" and '{parent_id}' in parents"
@@ -509,36 +512,56 @@ def obter_ou_criar_pasta_drive(nome_pasta, parent_id=None):
             folder_id = items[0]['id']
             link = items[0]['webViewLink']
         else:
-            # Se não existe, cria
-            file_metadata = {
-                'name': nome_pasta,
-                'mimeType': 'application/vnd.google-apps.folder'
-            }
+            # 2. Cria se não existir
+            file_metadata = {'name': nome_pasta, 'mimeType': 'application/vnd.google-apps.folder'}
             if parent_id:
                 file_metadata['parents'] = [parent_id]
-                
+            
             folder = service.files().create(body=file_metadata, fields='id, webViewLink').execute()
             folder_id = folder.get('id')
             link = folder.get('webViewLink')
 
-        # --- LEI DE SOBERANIA: COMPARTILHAMENTO AUTOMÁTICO ---
-        # Aqui o Robo-Sosa dá a chave da pasta para você (Ronaldo)
-        email_professor = "prof.ronaldogomess@gmail.com" # Seu e-mail
-        
-        permission = {
-            'type': 'user',
-            'role': 'writer', # Permissão de Editor
-            'emailAddress': email_professor
-        }
-        
+        # 3. PROTOCOLO DE COMPARTILHAMENTO (Dando acesso ao dono do sistema)
+        email_professor = "prof.ronaldogomess@gmail.com"
         service.permissions().create(
             fileId=folder_id,
-            body=permission,
-            fields='id',
+            body={'type': 'user', 'role': 'writer', 'emailAddress': email_professor},
+            fields='id'
         ).execute()
-        # -------------------------------------------------------
 
         return folder_id, link
     except Exception as e:
-        st.error(f"Erro no Drive: {e}")
+        st.error(f"Erro no Protocolo de Pasta: {e}")
         return None, None
+
+def salvar_foto_pericia_drive(imagem_bytes, nome_aluno, nome_avaliacao):
+    """Executa o salvamento on-demand na hierarquia SOSA_DOCUMENTOS."""
+    try:
+        # HIERARQUIA PADRONIZADA SOSA
+        id_raiz, _ = obter_ou_criar_pasta_drive("SOSA_DOCUMENTOS")
+        id_gab, _ = obter_ou_criar_pasta_drive("GABARITOS_ESCANEADOS", id_raiz)
+        id_prova, link_pasta_final = obter_ou_criar_pasta_drive(nome_avaliacao, id_gab)
+        
+        # UPLOAD DA FOTO
+        creds = obter_creds_drive()
+        service = build('drive', 'v3', credentials=creds)
+        from googleapiclient.http import MediaIoBaseUpload
+        import io
+        
+        nome_arq = f"{nome_aluno.replace(' ', '_').upper()}.jpg"
+        
+        # Limpeza de duplicata (Upsert)
+        q_antiga = f"name = '{nome_arq}' and '{id_prova}' in parents and trashed = false"
+        antigos = service.files().list(q=q_antiga).execute().get('files', [])
+        for f in antigos: service.files().delete(fileId=f['id']).execute()
+            
+        media = MediaIoBaseUpload(io.BytesIO(imagem_bytes), mimetype='image/jpeg')
+        service.files().create(
+            body={'name': nome_arq, 'parents': [id_prova]},
+            media_body=media
+        ).execute()
+        
+        return link_pasta_final # Retorna o link da pasta para o acervo
+    except Exception as e:
+        st.error(f"Falha no Upload: {e}")
+        return None
