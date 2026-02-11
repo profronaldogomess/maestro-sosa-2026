@@ -2122,7 +2122,7 @@ elif menu == "📸 Scanner de Gabaritos":
 
         tab_captura, tab_conferencia, tab_raiox = st.tabs(["📸 1. Capturar Gabaritos", "⚖️ 2. Hub de Homologação", "📊 3. Raio-X"])
 
-        # --- ABA 1: CAPTURA (COM FILTRO DE PRECISÃO) ---
+# --- ABA 1: CAPTURA (COM FILTRO DE PRECISÃO E CORREÇÃO RES_LISTA) ---
         with tab_captura:
             st.subheader(f"Captura de Evidências: {f_ativo}")
             
@@ -2155,9 +2155,21 @@ elif menu == "📸 Scanner de Gabaritos":
                     if st.button("🧠 ANALISAR MARCAÇÕES", type="primary", use_container_width=True):
                         with st.spinner("Perito Sosa analisando..."):
                             res_json = ai.analisar_gabarito_vision(img_file.getvalue())
-                            # Armazena o resultado bruto no session_state para revisão
-                            st.session_state.current_scan_res = [res_json.get(f"{i+1:02d}", res_json.get(str(i+1), "?")) for i in range(qtd_q)]
+                            
+                            # --- INICIO DA CORREÇÃO RES_LISTA (BUSCA INSISTENTE) ---
+                            res_lista = []
+                            for i in range(qtd_q):
+                                q_num_longo = f"{i+1:02d}" # Formato "01"
+                                q_num_curto = str(i+1)     # Formato "1"
+                                
+                                # Tenta buscar no JSON da IA usando os dois formatos possíveis
+                                valor_lido = res_json.get(q_num_longo, res_json.get(q_num_curto, "?"))
+                                res_lista.append(valor_lido)
+                            
+                            # Armazena o resultado final para a Mesa de Perícia
+                            st.session_state.current_scan_res = res_lista
                             st.session_state.current_scan_img = img_file.getvalue()
+                            # --- FIM DA CORREÇÃO ---
 
                 # --- MESA DE PERÍCIA IMEDIATA (SÓ APARECE APÓS O SCAN) ---
                 if "current_scan_res" in st.session_state:
