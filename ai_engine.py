@@ -430,23 +430,22 @@ def realizar_diagnostico_v25(plano_raw, df_curriculo, ano_sel):
 
 def analisar_gabarito_vision(imagem_bytes):
     """
-    MAESTRO VISION V6.2 - ALTA PRECISÃO (MODELO 1.5-PRO)
-    Focado em localização espacial de grades e detecção de preenchimento.
+    MAESTRO VISION V6.3 - ALTA INTELIGÊNCIA (MODELO 1.5-PRO)
+    Focado em detecção cirúrgica de preenchimento de gabaritos.
     """
     try:
-        # Prompt de Engenharia Espacial
+        # Prompt de Engenharia Espacial para o Gemini 1.5 Pro
         prompt = (
-            "Você é um scanner óptico de alta precisão. Sua missão é analisar a TABELA DE GABARITO na imagem.\n"
+            "Você é um scanner óptico de alta precisão. Analise a imagem do gabarito escolar.\n"
             "A tabela possui as colunas: Q (Questão), A, B, C, D, E.\n"
-            "INSTRUÇÕES DE PERÍCIA:\n"
-            "1. Localize a grade que contém os números de 01 a 10 na coluna Q.\n"
-            "2. Para cada linha, identifique qual círculo (A, B, C, D ou E) está preenchido/pintado.\n"
-            "3. Se houver marcação clara, retorne a letra correspondente.\n"
+            "MISSÃO:\n"
+            "1. Localize a grade numérica de 01 a 10.\n"
+            "2. Identifique qual círculo (A, B, C, D ou E) está preenchido (pintado) em cada linha.\n"
+            "3. Se houver marcação clara, retorne a letra.\n"
             "4. Se houver DUAS marcações ou rasura forte, retorne 'X'.\n"
             "5. Se a linha estiver totalmente VAZIA, retorne '?'.\n"
-            "6. Ignore textos escritos à mão fora da tabela (como 'PEI' ou 'Normal').\n"
-            "Retorne OBRIGATORIAMENTE um JSON puro, sem markdown, no formato:\n"
-            '{"01": "A", "02": "C", "03": "X", "04": "?", ...}'
+            "6. Ignore anotações manuais como 'PEI' ou 'Normal'.\n"
+            "Retorne APENAS um JSON puro no formato: {'01': 'A', '02': 'C', ...}"
         )
         
         conteudo_prompt = [
@@ -454,14 +453,21 @@ def analisar_gabarito_vision(imagem_bytes):
             types.Part.from_text(text=prompt)
         ]
         
-        # Mudança para o modelo 1.5-pro para maior precisão visual
+        # Chamada ao modelo 1.5-pro (O mais inteligente para visão)
         res = client.models.generate_content(
-            model="gemini-1.5-pro", 
+            model="gemini-2.5-pro", 
             contents=[types.Content(role="user", parts=conteudo_prompt)],
             config=types.GenerateContentConfig(
-                response_mime_type="application/json", # Força a saída em JSON
+                response_mime_type="application/json",
             )
         )
+        
+        import json
+        # O modelo 1.5-pro com response_mime_type já entrega o JSON limpo
+        return json.loads(res.text)
+    except Exception as e:
+        # Se o modelo pro falhar por cota, o flash 1.5 é o reserva imediato
+        return {"erro": str(e)}
         
         import json
         # O modelo 1.5-pro com response_mime_type já retorna o texto como JSON puro
