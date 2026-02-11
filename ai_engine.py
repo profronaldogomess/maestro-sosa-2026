@@ -3,6 +3,8 @@ from google import genai
 from google.genai import types
 from dotenv import load_dotenv
 import re
+import streamlit as st
+
 
 load_dotenv()
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
@@ -426,23 +428,25 @@ def realizar_diagnostico_v25(plano_raw, df_curriculo, ano_sel):
         "objetivo_literal": extrair_tag(plano_raw, "OBJETIVOS_ENSINO")
     }
 
-# --- ATUALIZAR NO ai_engine.py ---
-
 def analisar_gabarito_vision(imagem_bytes):
     """
-    MAESTRO VISION V6.1 - RIGOR TOTAL
-    Focado em detectar marcações duplas (X) e campos vazios (?).
+    MAESTRO VISION V6.2 - ALTA PRECISÃO (MODELO 1.5-PRO)
+    Focado em localização espacial de grades e detecção de preenchimento.
     """
     try:
+        # Prompt de Engenharia Espacial
         prompt = (
-            "Você é um scanner óptico de alta precisão para gabaritos escolares.\n"
-            "Analise a imagem e identifique as marcações para cada questão.\n"
-            "REGRAS DE PERÍCIA:\n"
-            "1. Se houver uma marcação clara e única, retorne a letra (A, B, C, D ou E).\n"
-            "2. Se houver DUAS ou mais marcações fortes na mesma linha, ou uma rasura grosseira, retorne 'X'.\n"
-            "3. Se o campo estiver totalmente em BRANCO ou com uma marcação extremamente clara/duvidosa, retorne '?'.\n"
-            "4. Ignore sombras e reflexos de luz.\n"
-            "Retorne APENAS o JSON puro: {'01': 'A', '02': 'X', '03': '?', ...}"
+            "Você é um scanner óptico de alta precisão. Sua missão é analisar a TABELA DE GABARITO na imagem.\n"
+            "A tabela possui as colunas: Q (Questão), A, B, C, D, E.\n"
+            "INSTRUÇÕES DE PERÍCIA:\n"
+            "1. Localize a grade que contém os números de 01 a 10 na coluna Q.\n"
+            "2. Para cada linha, identifique qual círculo (A, B, C, D ou E) está preenchido/pintado.\n"
+            "3. Se houver marcação clara, retorne a letra correspondente.\n"
+            "4. Se houver DUAS marcações ou rasura forte, retorne 'X'.\n"
+            "5. Se a linha estiver totalmente VAZIA, retorne '?'.\n"
+            "6. Ignore textos escritos à mão fora da tabela (como 'PEI' ou 'Normal').\n"
+            "Retorne OBRIGATORIAMENTE um JSON puro, sem markdown, no formato:\n"
+            '{"01": "A", "02": "C", "03": "X", "04": "?", ...}'
         )
         
         conteudo_prompt = [
@@ -450,16 +454,21 @@ def analisar_gabarito_vision(imagem_bytes):
             types.Part.from_text(text=prompt)
         ]
         
+        # Mudança para o modelo 1.5-pro para maior precisão visual
         res = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=[types.Content(role="user", parts=conteudo_prompt)]
+            model="gemini-1.5-pro", 
+            contents=[types.Content(role="user", parts=conteudo_prompt)],
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json", # Força a saída em JSON
+            )
         )
         
-        txt_limpo = res.text.replace("```json", "").replace("```", "").strip()
         import json
-        return json.loads(txt_limpo)
+        # O modelo 1.5-pro com response_mime_type já retorna o texto como JSON puro
+        return json.loads(res.text)
     except Exception as e:
-        return {"erro": str(e)}
+        st.error(f"Erro na Perícia Vision: {e}")
+        return {}
     
 def gerar_prognostico_pedagogico(dados_erros, contexto_prova):
     """
