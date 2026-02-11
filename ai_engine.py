@@ -433,3 +433,4 @@ def gerar_prognostico_pedagogico(dados_erros, contexto_prova):
         return res.text.replace("**", "").replace("#", "").strip()
     except Exception as e:
         return f"Erro ao gerar prognóstico automático: {e}"
+
