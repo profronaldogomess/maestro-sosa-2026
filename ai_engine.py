@@ -361,7 +361,7 @@ def gerar_ia(persona_key, comando, partes_arquivos=[], usar_busca=True):
     except Exception as e:
         return f"Erro na IA: {e}"
 
-# --- EXTRATOR SOSA V33 (ESCUDO DE TAGS INTERNAS) ---
+# --- EXTRATOR SOSA V34 (ESCUDO DE TAGS INTERNAS + DNA DE VALOR) ---
 def extrair_tag(texto, tag):
     if not texto: return ""
     import re
@@ -371,27 +371,24 @@ def extrair_tag(texto, tag):
     
     tag_busca = tag.upper().strip()
     
-    # 2. LISTA DE TAGS MESTRAS (Aquelas que realmente dividem as abas)
-    # O extrator só vai parar de ler quando encontrar uma destas.
+    # 2. LISTA DE TAGS MESTRAS V34 (Sincronizada com Scanner e DNA)
     tags_mestras = [
-        "ORIENTACOES", "QUESTOES", "GABARITO_TEXTO","GABARITO", "RESPOSTAS_IA", 
-        "PEI", "GABARITO_PEI", "RESPOSTAS_PEI_IA", "PROFESSOR", "ALUNO",
-        "BNCC_CODE", "CONTEUDO_GERAL", "CONTEUDOS_ESPECIFICOS", "OBJETIVOS_ENSINO"
+        "VALOR", "ORIENTACOES", "QUESTOES", "GABARITO_TEXTO", "GABARITO", 
+        "RESPOSTAS_IA", "PEI", "GABARITO_PEI", "RESPOSTAS_PEI_IA", 
+        "PROFESSOR", "ALUNO", "BNCC_CODE", "CONTEUDO_GERAL", 
+        "CONTEUDOS_ESPECIFICOS", "OBJETIVOS_ENSINO", "IMAGENS"
     ]
     
-    # Remove a tag atual da lista de parada para não dar conflito
     parada = [t for t in tags_mestras if t != tag_busca]
     lista_parada = "|".join(parada)
     
-    # 3. REGEX V33: Captura tudo até encontrar uma NOVA TAG MESTRA no início de uma linha
-    # Ele ignora colchetes que não sejam divisores de seção (como PROMPT IMAGEM)
-    padrao = rf"\[\s*{tag_busca}\s*\]\s*[:\-]*\s*(.*?)(?=\n\s*\[\s*(?:{lista_parada})\s*\]|$)"
+    # 3. REGEX V34: Captura o conteúdo ignorando colchetes internos (como prompts)
+    padrao = rf"\[\s*{tag_busca}\s*\]\s*[:\-]*\s*(.*?)(?=\n\s*\[\s*(?:{lista_parada})\s*\]|\[\s*(?:{lista_parada})\s*\]|$)"
     
     match = re.search(padrao, texto_limpo, re.DOTALL | re.IGNORECASE)
     
     if match:
         res = match.group(1).strip()
-        # Limpa resíduos de pontuação logo após a tag
         res = re.sub(r'^[:\-\s]+', '', res)
         return res
         
