@@ -2081,7 +2081,7 @@ elif menu == "📝 Central de Avaliações":
         else: st.info("📭 Nenhum exame no acervo.")
 
 # ==============================================================================
-# MÓDULO: SCANNER & HUB DE HOMOLOGAÇÃO (V47.0 - SINCRONIA TOTAL)
+# MÓDULO: SCANNER & HUB DE HOMOLOGAÇÃO (V48.0 - ELITE ACADÊMICA)
 # ==============================================================================
 elif menu == "📸 Scanner de Gabaritos":
     st.title("📸 Scanner de Gabaritos e Hub de Homologação")
@@ -2090,10 +2090,9 @@ elif menu == "📸 Scanner de Gabaritos":
     if "v_scan" not in st.session_state: st.session_state.v_scan = 1
     v = st.session_state.v_scan
 
-    # --- 1. FILTROS DE ACESSO ---
+    # --- 1. FILTROS DE ACESSO E DNA ---
     with st.container(border=True):
         c1, c2, c3 = st.columns([1, 1, 1.5])
-        
         turmas_disponiveis = sorted(df_alunos['TURMA'].unique()) if not df_alunos.empty else []
         f_turma = c1.selectbox("👥 Selecione a Turma:", [""] + turmas_disponiveis, key=f"sc_t_{v}")
         f_trim = c2.selectbox("📅 Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"sc_tr_{v}")
@@ -2103,10 +2102,7 @@ elif menu == "📸 Scanner de Gabaritos":
             serie_alvo = f_turma[0]
             df_serie = df_aulas[df_aulas['ANO'].astype(str).str.contains(serie_alvo)]
             permitidos = ["TESTE", "PROVA", "CHAMADA", "SONDA", "DIAGNÓSTICA", "DIAGNOSTICA", "RECUPERAÇÃO", "AVALIAÇÃO"]
-            df_ativos = df_serie[
-                (df_serie['TIPO_MATERIAL'].str.upper().str.contains('|'.join(permitidos))) & 
-                (~df_serie['TIPO_MATERIAL'].str.upper().str.contains("REVISÃO|REVISAO"))
-            ]
+            df_ativos = df_serie[df_serie['TIPO_MATERIAL'].str.upper().str.contains('|'.join(permitidos))]
             opcoes_ativos = df_ativos['TIPO_MATERIAL'].tolist()
         
         f_ativo = c3.selectbox("📋 Selecione o Ativo para Corrigir:", opcoes_ativos, key=f"sc_at_{v}")
@@ -2114,33 +2110,35 @@ elif menu == "📸 Scanner de Gabaritos":
     if not f_turma or not f_ativo:
         st.info("💡 Selecione a Turma e o Ativo para iniciar a perícia.")
     else:
-        # --- 2. RECUPERAÇÃO DE DADOS E VALOR REAL (V47) ---
+        # --- 2. MOTOR DE PERÍCIA V48 (PINÇA CIRÚRGICA) ---
         dados_ativo = df_aulas[df_aulas['TIPO_MATERIAL'] == f_ativo].iloc[0]
         txt_ativo = str(dados_ativo['CONTEUDO'])
         
-        # Busca o valor total no texto do material (Ex: "Valor Total: 3,0" ou "[VALOR: 3.0]")
-        match_valor = re.search(r"(?:VALOR TOTAL|VALOR)[:\s]*(\d+[\.,]\d+|\d+)", txt_ativo.upper())
-        valor_total_ativo = util.sosa_to_float(match_valor.group(1)) if match_valor else 10.0
+        # DNA de Valor
+        val_extraido = ai.extrair_tag(txt_ativo, "VALOR")
+        valor_total_ativo = util.sosa_to_float(val_extraido) if val_extraido else 10.0
         
-        is_sonda = any(x in f_ativo.upper() for x in ["SONDA", "DIAGNÓSTICA", "DIAGNOSTICA"])
-
-        # --- FUNÇÃO DE EXTRAÇÃO BLINDADA V47 ---
-        def obter_gabarito_lista(texto, tipo_pei=False):
-            tag = "GABARITO_PEI" if tipo_pei else "GABARITO"
+        # Função de Extração de Gabarito com Pinça (Ignora explicações)
+        def extrair_gabarito_estrito(texto, is_pei=False):
+            tag = "GABARITO_PEI" if is_pei else "GABARITO"
             raw = ai.extrair_tag(texto, tag)
-            if not raw and not tipo_pei: raw = ai.extrair_tag(texto, "GABARITO_TEXTO")
-            if not raw and tipo_pei: raw = ai.extrair_tag(texto, "GABARITO") # Fallback PEI
+            if not raw and not is_pei: raw = ai.extrair_tag(texto, "GABARITO_TEXTO")
+            if not raw and is_pei: raw = ai.extrair_tag(texto, "GABARITO")
             
-            matches = re.findall(r"(\d+)[\s\.\)\-:]+([A-E])", raw.upper())
-            d = {}
-            for n, l in matches:
-                ni = int(n)
-                if ni not in d: d[ni] = l
-            return [d[n] for n in sorted(d.keys())]
+            # Regex que busca o número e a primeira letra que aparece na linha
+            linhas = raw.split('\n')
+            mapa = {}
+            for linha in linhas:
+                # Procura "01: A" ou "QUESTÃO 01. B"
+                match = re.search(r"(?:QUEST[AÃ]O\s+)?(\d+)[\s\.\)\-:]+([A-E])", linha.upper())
+                if match:
+                    num = int(match.group(1))
+                    letra = match.group(2)
+                    if num not in mapa: mapa[num] = letra
+            return [mapa[n] for n in sorted(mapa.keys())]
 
-        gab_reg_list = obter_gabarito_lista(txt_ativo, False)
-        gab_pei_list = obter_gabarito_lista(txt_ativo, True) or gab_reg_list
-        qtd_q = len(gab_reg_list)
+        gab_reg_list = extrair_gabarito_estrito(txt_ativo, False)
+        gab_pei_list = extrair_gabarito_estrito(txt_ativo, True) or gab_reg_list
 
         tab_captura, tab_conferencia, tab_raiox = st.tabs([
             "📸 1. Capturar Gabaritos", 
@@ -2148,10 +2146,20 @@ elif menu == "📸 Scanner de Gabaritos":
             "📊 3. Raio-X de Desempenho"
         ])
 
-        # --- ABA 1: CAPTURA ---
+        # --- ABA 1: CAPTURA (DESIGN PREMIUM) ---
         with tab_captura:
-            st.subheader(f"Captura: {f_ativo} (Valor: {valor_total_ativo:.1f})")
+            st.subheader(f"Captura de Evidências: {f_ativo} (Valor: {valor_total_ativo:.1f})")
             
+            with st.expander("📘 LEGENDA DE MARCAÇÕES E STATUS (SOSA V29)", expanded=True):
+                st.markdown("""
+                | Símbolo | Significado | Ação do Sistema |
+                | :--- | :--- | :--- |
+                | ✅ | **Acerto** | Pontuação integral da questão. |
+                | ❌ | **Erro** | Pontuação zero. |
+                | 🚫 **X** | **Dupla Marcação** | Anulada por rasura ou marcação dupla. |
+                | ⚪ **?** | **Vazia** | Questão deixada em branco pelo aluno. |
+                """)
+
             escaneados = df_diagnosticos[df_diagnosticos['ID_AVALIACAO'] == f_ativo]['ID_ALUNO'].astype(str).tolist()
             alunos_pendentes = df_alunos[(df_alunos['TURMA'] == f_turma) & (~df_alunos['ID'].astype(str).isin(escaneados))]
             
@@ -2166,41 +2174,65 @@ elif menu == "📸 Scanner de Gabaritos":
                 gab_alvo = gab_pei_list if is_pei_aluno else gab_reg_list
                 qtd_q_alvo = len(gab_alvo)
 
-                if is_pei_aluno: st.warning(f"♿ **PERFIL PEI** | Gabarito de {qtd_q_alvo} questões.")
-                else: st.info(f"📝 **PERFIL REGULAR** | Gabarito de {qtd_q_alvo} questões.")
+                if is_pei_aluno: st.warning(f"♿ **PERFIL PEI** | Gabarito de {qtd_q_alvo} questões detectado.")
+                else: st.info(f"📝 **PERFIL REGULAR** | Gabarito de {qtd_q_alvo} questões detectado.")
 
                 img_file = st.camera_input(f"📸 Scan: {aluno_sel}")
                 
                 if img_file:
                     if qtd_q_alvo == 0:
-                        st.error("❌ Erro: Gabarito não localizado no material.")
-                    elif st.button("🧠 ANALISAR MARCAÇÕES", type="primary", use_container_width=True):
-                        with st.spinner("Perito Sosa analisando..."):
+                        st.error("❌ Erro Crítico: Gabarito não localizado no banco de dados.")
+                    elif st.button("🧠 INICIAR PERÍCIA COMPUTACIONAL", type="primary", use_container_width=True):
+                        with st.spinner("Maestro Vision analisando densidade de marcações..."):
                             res_json = ai.analisar_gabarito_vision(img_file.getvalue())
                             res_lista = [res_json.get(f"{i+1:02d}", res_json.get(str(i+1), "?")) for i in range(qtd_q_alvo)]
                             st.session_state.current_scan_res = res_lista
-                            st.session_state.current_scan_img = img_file.getvalue()
                             st.rerun()
 
+                # --- MESA DE PERÍCIA IMEDIATA (RESTAURADA E MELHORADA) ---
                 if "current_scan_res" in st.session_state:
                     st.markdown("---")
                     st.subheader("🔍 Mesa de Perícia Imediata")
+                    
                     dados_pericia = []
                     for i in range(len(gab_alvo)):
-                        lido = st.session_state.current_scan_res[i] if i < len(st.session_state.current_scan_res) else "?"
+                        lido = st.session_state.current_scan_res[i]
                         certo = gab_alvo[i]
-                        status = "✅" if lido == certo else "❌"
-                        dados_pericia.append({"Q": f"{i+1:02d}", "Lido": lido, "Oficial": certo, "Status": status})
+                        
+                        # Lógica de Ícones de Status
+                        if lido == certo: status_icon = "✅"
+                        elif lido == "X": status_icon = "🚫 DUPLA"
+                        elif lido == "?": status_icon = "⚪ VAZIA"
+                        else: status_icon = "❌"
+                        
+                        dados_pericia.append({
+                            "Q": f"{i+1:02d}",
+                            "Correção": lido,
+                            "Oficial": certo,
+                            "Status": status_icon
+                        })
                     
-                    df_mesa = st.data_editor(pd.DataFrame(dados_pericia), hide_index=True, use_container_width=True,
-                        column_config={"Lido": st.column_config.SelectboxColumn("Correção", options=["A", "B", "C", "D", "E", "X", "?"], required=True)},
-                        key=f"mesa_{aluno_sel}")
+                    df_mesa = st.data_editor(
+                        pd.DataFrame(dados_pericia), 
+                        hide_index=True, use_container_width=True,
+                        column_config={
+                            "Q": st.column_config.TextColumn("Questão", width="small", disabled=True),
+                            "Correção": st.column_config.SelectboxColumn("Sua Revisão", options=["A", "B", "C", "D", "E", "X", "?"], required=True),
+                            "Oficial": st.column_config.TextColumn("Gabarito", width="small", disabled=True),
+                            "Status": st.column_config.TextColumn("Análise", width="medium", disabled=True)
+                        },
+                        key=f"mesa_{aluno_sel}"
+                    )
                     
-                    novas_res = df_mesa["Lido"].tolist()
+                    # Recálculo em tempo real
+                    novas_res = df_mesa["Correção"].tolist()
                     acertos = sum(1 for i, r in enumerate(novas_res) if r == gab_alvo[i])
                     nota_final = (acertos / len(gab_alvo)) * valor_total_ativo if len(gab_alvo) > 0 else 0
                     
-                    st.metric(f"Nota Final (Peso {valor_total_ativo})", f"{nota_final:.2f}", delta=f"{acertos}/{len(gab_alvo)} acertos")
+                    with st.container(border=True):
+                        c_m1, c_m2 = st.columns([1, 1])
+                        c_m1.metric(f"Nota Final (Peso {valor_total_ativo})", f"{nota_final:.2f}")
+                        c_m2.metric("Desempenho", f"{acertos}/{len(gab_alvo)} acertos")
 
                     c_b1, col_b2 = st.columns(2)
                     if c_b1.button("💾 CONFIRMAR E ENVIAR AO HUB", type="primary", use_container_width=True):
@@ -2208,11 +2240,11 @@ elif menu == "📸 Scanner de Gabaritos":
                             datetime.now().strftime("%d/%m/%Y"), aluno_info['ID'], aluno_sel, f_turma,
                             f_ativo, ";".join(novas_res), util.sosa_to_str(nota_final), "Scan Homologado"
                         ])
-                        st.success("✅ Enviado!"); del st.session_state.current_scan_res; st.rerun()
+                        st.success(f"✅ Evidência de {aluno_sel} arquivada!"); del st.session_state.current_scan_res; st.rerun()
                     if col_b2.button("🗑️ DESCARTAR SCAN", use_container_width=True):
                         del st.session_state.current_scan_res; st.rerun()
 
-        # --- ABA 2: HUB DE HOMOLOGAÇÃO (CORRIGIDA V47) ---
+        # --- ABA 2: HUB DE HOMOLOGAÇÃO ---
         with tab_conferencia:
             st.subheader(f"⚖️ Hub de Homologação: {f_turma}")
             st.markdown(f"🎯 **Ativo:** {f_ativo} | 💰 **Valor Total:** {valor_total_ativo:.1f}")
@@ -2263,11 +2295,12 @@ elif menu == "📸 Scanner de Gabaritos":
             )
             
             if st.button("🚀 HOMOLOGAR E ENVIAR PARA BOLETIM", type="primary", use_container_width=True):
-                with st.status("Homologando...") as status:
+                with st.status("Homologando notas no banco central...") as status:
                     lista_oficial = []
                     for _, row in df_auditoria.iterrows():
                         if row['STATUS'] == "🔵 Aguardando" or row['OCORRÊNCIA'] != "Nenhuma":
                             nota_final = 0.0 if row['OCORRÊNCIA'] in ["FALTOU", "ANULADA"] else row["NOTA"]
+                            is_sonda = any(x in f_ativo.upper() for x in ["SONDA", "DIAGNÓSTICA"])
                             if not is_sonda:
                                 col_teste = util.sosa_to_str(nota_final) if "TESTE" in f_ativo.upper() else "0,0"
                                 col_prova = util.sosa_to_str(nota_final) if "PROVA" in f_ativo.upper() else "0,0"
@@ -2275,17 +2308,23 @@ elif menu == "📸 Scanner de Gabaritos":
                             else:
                                 lista_oficial.append([datetime.now().strftime("%d/%m/%Y"), row['ID'], row['ALUNO'].replace("♿ ", ""), f_turma, "TRUE", "SONDA", f_ativo, util.sosa_to_str(nota_final)])
                     
-                    if db.homologar_notas_lote(lista_oficial, "TESTE" if not is_sonda else "SONDA"):
+                    if db.homologar_notas_lote(lista_oficial, "TESTE" if "TESTE" in f_ativo.upper() or "PROVA" in f_ativo.upper() else "SONDA"):
                         status.update(label="✅ Homologação Concluída!", state="complete"); st.balloons()
 
         # --- ABA 3: RAIO-X ---
         with tab_raiox:
-            st.subheader("📊 Análise de Lacunas")
+            st.subheader("📊 Análise de Lacunas Cognitivas")
             if not gabaritos_lidos.empty:
                 stats = []
                 for i, certa in enumerate(gab_reg_list):
                     respostas = [r.split(";")[i] if len(r.split(";")) > i else "?" for r in gabaritos_lidos['RESPOSTAS_ALUNO']]
                     acerto_pct = (respostas.count(certa) / len(respostas)) * 100 if respostas else 0
                     stats.append({"Questão": f"Q{i+1:02d}", "Acerto %": acerto_pct})
+                
                 st.plotly_chart(px.bar(pd.DataFrame(stats), x="Questão", y="Acerto %", color="Acerto %", color_continuous_scale="RdYlGn", range_y=[0,100]))
-            else: st.info("Aguardando capturas.")
+                
+                if st.button("🧠 GERAR PROGNÓSTICO PEDAGÓGICO (PHC)"):
+                    with st.spinner("Analisando padrões de erro..."):
+                        dados_erros = str(stats)
+                        st.info(ai.gerar_prognostico_pedagogico(dados_erros, f_ativo))
+            else: st.info("Aguardando capturas para gerar estatísticas.")
