@@ -2343,95 +2343,69 @@ elif menu == "📸 Scanner de Gabaritos":
                         status.update(label="✅ Homologação Concluída com Sucesso!", state="complete")
                         st.balloons()
 
-# --- ABA 3: RAIO-X (V58 - DIAGNÓSTICO POR PERFIL REGULAR/PEI) ---
+# --- ABA 3: RAIO-X (V59 - DIAGNÓSTICO POR DESCRITORES E ARQUIVO DE PARÂMETROS) ---
         with tab_raiox:
-            st.subheader(f"📊 Raio-X Pedagógico: {f_turma}")
+            st.subheader(f"📊 Raio-X Pedagógico (Padrão Descritores): {f_turma}")
             
             if not gabaritos_lidos.empty:
-                # 1. FILTRO DE PERFIL PARA ANÁLISE
-                c_perfil1, c_perfil2 = st.columns([1, 2])
-                perfil_analise = c_perfil1.radio("🎯 Perfil para Análise:", ["📝 Regular", "♿ PEI"], horizontal=True, key=f"perfil_raiox_{v}")
+                # 1. FILTRO DE PERFIL
+                c_p1, c_p2 = st.columns([1, 2])
+                perfil_raiox = c_p1.radio("🎯 Perfil:", ["📝 Regular", "♿ PEI"], horizontal=True, key=f"p_rx_{v}")
                 
-                # 2. PREPARAÇÃO E FILTRAGEM DOS DADOS
-                # Mapeia quais alunos são PEI para filtrar os gabaritos lidos
                 ids_pei = df_alunos[~df_alunos['NECESSIDADES'].astype(str).str.upper().isin(["NENHUMA", "PENDENTE", "", "NAN"])]['ID'].astype(str).tolist()
-                
-                if "PEI" in perfil_analise:
-                    df_filtrado = gabaritos_lidos[gabaritos_lidos['ID_ALUNO'].astype(str).isin(ids_pei)]
-                    gab_alvo_raiox = gab_pei_list
-                    label_perfil = "Estudantes PEI"
+                if "PEI" in perfil_raiox:
+                    df_f = gabaritos_lidos[gabaritos_lidos['ID_ALUNO'].astype(str).isin(ids_pei)]
+                    gab_alvo = gab_pei_list
                 else:
-                    df_filtrado = gabaritos_lidos[~gabaritos_lidos['ID_ALUNO'].astype(str).isin(ids_pei)]
-                    gab_alvo_raiox = gab_reg_list
-                    label_perfil = "Estudantes Regulares"
+                    df_f = gabaritos_lidos[~gabaritos_lidos['ID_ALUNO'].astype(str).isin(ids_pei)]
+                    gab_alvo = gab_reg_list
 
-                if df_filtrado.empty:
-                    st.warning(f"⚠️ Nenhum dado de scan encontrado para o perfil: {label_perfil}")
-                elif not gab_alvo_raiox:
-                    st.error("❌ Gabarito não localizado para este perfil no banco de dados.")
-                else:
-                    st.info(f"📈 Analisando performance de **{len(df_filtrado)}** {label_perfil}.")
-
-                    # 3. CÁLCULO DE ESTATÍSTICAS POR QUESTÃO
+                if not df_f.empty and gab_alvo:
+                    # 2. CÁLCULO DE PERFORMANCE
                     stats_list = []
-                    for i, certa in enumerate(gab_alvo_raiox):
-                        q_num = f"Q{i+1:02d}"
-                        respostas = [r.split(";")[i] if len(r.split(";")) > i else "?" for r in df_filtrado['RESPOSTAS_ALUNO']]
-                        
-                        acertos = respostas.count(certa)
-                        pct = (acertos / len(respostas)) * 100 if respostas else 0
-                        
-                        erros_apenas = [r for r in respostas if r != certa and r not in ["?", "X"]]
-                        erro_comum = max(set(erros_apenas), key=erros_apenas.count) if erros_apenas else "N/A"
-                        
-                        stats_list.append({
-                            "Questão": q_num,
-                            "Acerto %": pct,
-                            "Erro Comum": erro_comum,
-                            "Status": "🟢 Domínio" if pct >= 70 else ("🟡 Alerta" if pct >= 40 else "🔴 Crítico")
-                        })
+                    for i, certa in enumerate(gab_alvo):
+                        respostas = [r.split(";")[i] if len(r.split(";")) > i else "?" for r in df_f['RESPOSTAS_ALUNO']]
+                        pct = (respostas.count(certa) / len(respostas)) * 100 if respostas else 0
+                        stats_list.append({"Questão": f"Q{i+1:02d}", "Acerto %": pct})
                     
                     df_stats = pd.DataFrame(stats_list)
-
-                    # 4. GRÁFICO DE DESEMPENHO CALIBRADO
-                    fig = px.bar(df_stats, x="Questão", y="Acerto %", color="Status",
-                                 color_discrete_map={"🟢 Domínio": "#00CC96", "🟡 Alerta": "#FFA500", "🔴 Crítico": "#FF4B4B"},
-                                 text=df_stats["Acerto %"].apply(lambda x: f'{x:.0f}%'),
-                                 title=f"Mapa de Calor de Proficiência - {label_perfil}")
+                    
+                    # 3. GRÁFICO
+                    fig = px.bar(df_stats, x="Questão", y="Acerto %", text=df_stats["Acerto %"].apply(lambda x: f'{x:.0f}%'),
+                                 color="Acerto %", color_continuous_scale="RdYlGn", range_y=[0, 110])
                     st.plotly_chart(fig, use_container_width=True)
 
-                    # 5. MESA DE PERÍCIA DE LACUNAS
-                    st.markdown("### 🔍 Mesa de Perícia de Lacunas")
-                    st.dataframe(df_stats, use_container_width=True, hide_index=True)
-
-                    # 6. BOTÃO DE INTELIGÊNCIA PHC (CONTEXTUALIZADO)
+                    # 4. BOTÃO DE PERÍCIA POR DESCRITORES
                     st.divider()
-                    if st.button(f"🧠 GERAR DIAGNÓSTICO PARA {label_perfil.upper()}", use_container_width=True, type="primary"):
-                        with st.spinner(f"Maestro Sosa analisando distratores do perfil {label_perfil}..."):
-                            resumo_dados = df_stats.to_string(index=False)
-                            # Pega a tag correta do professor (Regular ou PEI se houver)
-                            contexto_pedagogico = ai.extrair_tag(txt_ativo, "PROFESSOR")
+                    if st.button("🧠 GERAR MAPA DE DESCRITORES E PARÂMETROS", use_container_width=True, type="primary"):
+                        with st.spinner("Maestro Sosa mapeando habilidades conforme padrão DF/SAEB..."):
+                            resumo_performance = df_stats.to_string(index=False)
+                            contexto_prova = ai.extrair_tag(txt_ativo, "PROFESSOR") + "\n" + ai.extrair_tag(txt_ativo, "GABARITO_TEXTO")
                             
-                            prompt_recomp = (
-                                f"VOCÊ É O COORDENADOR PEDAGÓGICO SOSA (PHC).\n"
-                                f"Analise os resultados dos {label_perfil.upper()} nesta avaliação.\n\n"
-                                f"DADOS DE PERFORMANCE:\n{resumo_dados}\n\n"
-                                f"CONTEXTO DA PROVA:\n{contexto_pedagogico}\n\n"
-                                f"MISSÃO:\n"
-                                f"1. Identifique a LACUNA COGNITIVA específica deste grupo ({label_perfil}).\n"
-                                f"2. Explique o motivo pedagógico do 'Erro Comum' detectado.\n"
-                                f"3. Sugira uma estratégia de RECOMPOSIÇÃO focada (Se for PEI, foque em DUA/Andaime Cognitivo).\n"
-                                f"4. Use linguagem técnica e formal. SEM MARKDOWN."
-                            )
+                            resultado_ia = ai.gerar_prognostico_pedagogico(resumo_performance, contexto_prova)
                             
-                            analise_pedagogica = ai.gerar_ia("PLANE_PEDAGOGICO", prompt_recomp)
+                            # Separa o que é visual do que é parâmetro para o sistema
+                            parecer_visual = ai.extrair_tag(resultado_ia, "DIAGNOSTICO_VISUAL")
+                            parametros_tecnicos = ai.extrair_tag(resultado_ia, "PARAMETROS_SISTEMA")
                             
-                            with st.container(border=True):
-                                st.markdown(f"#### 📋 Diagnóstico de Recomposição - {label_perfil}")
-                                st.write(analise_pedagogica)
-                                
-                                if st.button("💾 ARQUIVAR NO HISTÓRICO DA TURMA"):
-                                    db.salvar_ata_conselho(datetime.now().strftime("%d/%m/%Y"), f_turma, f"RAIOX_{perfil_analise.upper()}", analise_pedagogica)
-                                    st.success("Análise arquivada!")
+                            st.session_state.last_diag = parecer_visual
+                            st.session_state.last_params = parametros_tecnicos
+                    
+                    if "last_diag" in st.session_state:
+                        with st.container(border=True):
+                            st.markdown("### 📋 Parecer Técnico de Desempenho")
+                            st.write(st.session_state.last_diag)
+                            
+                            st.markdown("---")
+                            st.markdown("### ⚙️ Parâmetros de Recomposição (Arquivados)")
+                            st.code(st.session_state.last_params)
+                            
+                            if st.button("💾 ARQUIVAR PARÂMETROS NO ACERVO DE RECOMPOSIÇÃO", use_container_width=True):
+                                # Salva na planilha para que o Criador de Aulas possa ler depois
+                                data_hoje = datetime.now().strftime("%d/%m/%Y")
+                                db.salvar_ata_conselho(data_hoje, f_turma, f"RECOMP_{perfil_raiox.upper()}", st.session_state.last_params)
+                                st.success("✅ Parâmetros salvos! Agora o Criador de Aulas pode usar esses dados para gerar reforço personalizado.")
+                else:
+                    st.warning("Aguardando dados de scan para este perfil.")
             else:
-                st.info("📭 Realize o scan dos gabaritos para gerar o diagnóstico pedagógico.")
+                st.info("📭 Realize o scan dos gabaritos primeiro.")
