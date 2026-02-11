@@ -1949,19 +1949,22 @@ elif menu == "📝 Central de Avaliações":
                             m_row = df_materiais_trim[df_materiais_trim["TIPO_MATERIAL"] == m_nome].iloc[0]
                             contexto_aulas += f"MATERIAL_ID: {m_nome}\nCONTEÚDO: {m_row['CONTEUDO']}\n"
 
+                        # Cálculo de valores para o prompt
+                        val_quest = v_total / qtd_q
+                        qtd_pei = qtd_q // 2
+
                         prompt = (
                             f"VOCÊ É O ARQUITETO DE EXAMES V30. SÉRIE: {ano_av}º Ano. TIPO: {tipo_av}.\n"
-                            f"VALOR TOTAL: {v_total} | QTD QUESTÕES: {qtd_q}.\n\n"
+                            f"VALOR TOTAL: {util.sosa_to_str(v_total)} | QTD QUESTÕES REGULAR: {qtd_q} | QTD QUESTÕES PEI: {qtd_pei}.\n\n"
                             f"{contexto_pedagogico}\n"
                             f"{contexto_aulas}\n\n"
-                            f"🚨 MISSÃO DE ELITE:\n"
-                            f"1. TODAS AS QUESTÕES DEVEM SER FECHADAS (A-E). Proibido questões abertas.\n"
-                            f"2. Crie 2 ou 3 questões de MÉRITO citando os IDs dos materiais fornecidos.\n"
-                            f"3. Use o GOOGLE SEARCH para contextos REAIS e ATUAIS.\n"
-                            f"4. Formate os rótulos como **QUESTÃO XX (0,XX ponto) -**.\n\n"
-                            f"⚠️ IMPORTANTE: Você DEVE estruturar sua resposta EXATAMENTE com as tags: "
-                            f"[ORIENTACOES], [QUESTOES], [GABARITO_TEXTO], [RESPOSTAS_IA], [PEI], [GABARITO_PEI], [RESPOSTAS_PEI_IA]. "
-                            f"Sem essas tags, o sistema do Professor Ronaldo não conseguirá exibir o conteúdo."
+                            f"🚨 MISSÃO DE SOBERANIA:\n"
+                            f"1. REGULAR: {qtd_q} questões de múltipla escolha (A-E). Valor por questão: {util.sosa_to_str(val_quest)}.\n"
+                            f"2. PEI: EXATAMENTE {qtd_pei} questões (A-C). Valor por questão: {util.sosa_to_str(v_total/qtd_pei)}.\n"
+                            f"3. ESTRUTURA PEI: Cada questão PEI DEVE ter as seções [PARA LEMBRAR] e [PASSO A PASSO] antes das alternativas.\n"
+                            f"4. MÉRITO: Cite os IDs dos materiais em 2 ou 3 questões.\n"
+                            f"5. TAGS OBRIGATÓRIAS: Você deve usar [ORIENTACOES], [QUESTOES], [GABARITO_TEXTO], [RESPOSTAS_IA], [PEI], [GABARITO_PEI], [RESPOSTAS_PEI_IA].\n"
+                            f"6. RÓTULO: **QUESTÃO XX ({util.sosa_to_str(val_quest)} ponto) -** Texto na mesma linha."
                         )
                         st.session_state.temp_prova = ai.gerar_ia("ARQUITETO_EXAMES_V30_ELITE", prompt, usar_busca=True)
                         st.session_state.av_valor_total = v_total
