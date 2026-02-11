@@ -1948,7 +1948,7 @@ elif menu == "📝 Central de Avaliações":
                         for m_nome in mats_selecionados:
                             m_row = df_materiais_trim[df_materiais_trim["TIPO_MATERIAL"] == m_nome].iloc[0]
                             contexto_aulas += f"MATERIAL_ID: {m_nome}\nCONTEÚDO: {m_row['CONTEUDO']}\n"
-                            
+
                         prompt = (
                             f"VOCÊ É O ARQUITETO DE EXAMES V30. SÉRIE: {ano_av}º Ano. TIPO: {tipo_av}.\n"
                             f"VALOR TOTAL: {v_total} | QTD QUESTÕES: {qtd_q}.\n\n"
@@ -1957,10 +1957,11 @@ elif menu == "📝 Central de Avaliações":
                             f"🚨 MISSÃO DE ELITE:\n"
                             f"1. TODAS AS QUESTÕES DEVEM SER FECHADAS (A-E). Proibido questões abertas.\n"
                             f"2. Crie 2 ou 3 questões de MÉRITO citando os IDs dos materiais fornecidos.\n"
-                            f"3. Para as demais questões, use o GOOGLE SEARCH para buscar contextos REAIS e ATUAIS (ex: notícias de hoje, tecnologias novas, dados de Itabuna) que se conectem à matemática.\n"
-                            f"4. Não use 'Com base em nossa atividade' como padrão de início. Varie os enunciados.\n"
-                            f"5. Formate os rótulos como **QUESTÃO XX (0,XX ponto) -**.\n"
-                            f"6. Gere a versão PEI com metade das questões, também em múltipla escolha (A-C)."
+                            f"3. Use o GOOGLE SEARCH para contextos REAIS e ATUAIS.\n"
+                            f"4. Formate os rótulos como **QUESTÃO XX (0,XX ponto) -**.\n\n"
+                            f"⚠️ IMPORTANTE: Você DEVE estruturar sua resposta EXATAMENTE com as tags: "
+                            f"[ORIENTACOES], [QUESTOES], [GABARITO_TEXTO], [RESPOSTAS_IA], [PEI], [GABARITO_PEI], [RESPOSTAS_PEI_IA]. "
+                            f"Sem essas tags, o sistema do Professor Ronaldo não conseguirá exibir o conteúdo."
                         )
                         st.session_state.temp_prova = ai.gerar_ia("ARQUITETO_EXAMES_V30_ELITE", prompt, usar_busca=True)
                         st.session_state.av_valor_total = v_total
