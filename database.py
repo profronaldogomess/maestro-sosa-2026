@@ -520,3 +520,25 @@ def salvar_pericia_scanner(dados_lista, aba_alvo="DB_GABARITOS_ALUNOS"):
     except Exception as e:
         st.error(f"Erro na gravação da perícia: {e}")
         return False
+    
+def homologar_notas_lote(lista_dados, tipo_ativo="TESTE"):
+    """
+    Move os dados da aba de conferência para o destino final.
+    tipo_ativo: 'TESTE' (vai para DB_NOTAS) ou 'SONDA' (vai para DB_DIARIO_BORDO)
+    """
+    try:
+        wb = conectar()
+        if tipo_ativo == "TESTE":
+            ws_destino = wb.worksheet("DB_NOTAS")
+        else:
+            ws_destino = wb.worksheet("DB_DIARIO_BORDO")
+            
+        # Salva no destino final
+        ws_destino.append_rows(lista_dados, value_input_option="USER_ENTERED")
+        
+        # Marcar como homologado na aba de gabaritos (opcional, ou apenas limpar cache)
+        st.cache_data.clear()
+        return True
+    except Exception as e:
+        st.error(f"Erro na homologação: {e}")
+        return False
