@@ -2244,58 +2244,104 @@ elif menu == "📸 Scanner de Gabaritos":
                                                 else:
                                                     st.error(f"Falha no arquivamento: {link_pasta}")
 
-        # --- ABA 2: HUB DE HOMOLOGAÇÃO ---
+# --- ABA 2: HUB DE HOMOLOGAÇÃO (V55 - AUDITORIA DE ELITE) ---
         with tab_conferencia:
-            st.subheader(f"⚖️ Hub de Homologação: {f_turma}")
-            alunos_turma = df_alunos[df_alunos['TURMA'] == f_turma].sort_values(by="NOME_ALUNO")
+            st.subheader(f"⚖️ Mesa de Auditoria: {f_turma}")
+            
+            # 1. DASHBOARD DE PERFORMANCE RÁPIDA (KPIs)
             gabaritos_lidos = df_diagnosticos[df_diagnosticos['ID_AVALIACAO'] == f_ativo]
             
+            if not gabaritos_lidos.empty:
+                c_kpi1, c_kpi2, c_kpi3, c_kpi4 = st.columns(4)
+                notas_num = gabaritos_lidos['NOTA_CALCULADA'].apply(util.sosa_to_float)
+                c_kpi1.metric("Média da Turma", f"{notas_num.mean():.2f}")
+                c_kpi2.metric("Maior Nota", f"{notas_num.max():.2f}")
+                c_kpi3.metric("Escaneados", f"{len(gabaritos_lidos)}/{len(df_alunos[df_alunos['TURMA']==f_turma])}")
+                aproveitamento = (len(notas_num[notas_num >= (valor_total_ativo * 0.6)]) / len(notas_num)) * 100
+                c_kpi4.metric("% Acima da Média", f"{aproveitamento:.0f}%")
+                st.divider()
+
+            # 2. FILTROS DE AUDITORIA
+            col_f1, col_f2 = st.columns([1, 2])
+            so_pei = col_f1.toggle("🎯 Focar apenas em PEI", key=f"filter_pei_{v}")
+            st.caption(f"🎯 **Ativo:** {f_ativo} | 💰 **Valor Real:** {valor_total_ativo:.1f}")
+
+            # 3. PREPARAÇÃO DOS DADOS PARA A MESA DE PERÍCIA
+            alunos_turma = df_alunos[df_alunos['TURMA'] == f_turma].sort_values(by="NOME_ALUNO")
+            if so_pei:
+                alunos_turma = alunos_turma[~alunos_turma['NECESSIDADES'].astype(str).str.upper().isin(["NENHUMA", "PENDENTE", "", "NAN"])]
+
             dados_grade = []
             for _, alu in alunos_turma.iterrows():
                 id_a = str(alu['ID'])
                 leitura = gabaritos_lidos[gabaritos_lidos['ID_ALUNO'].astype(str) == id_a]
                 is_pei = str(alu['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"]
                 
-                status = "⚪ Pendente"
-                respostas = ""; nota_exibida = 0.0
+                # Lógica de Status Semafórico
+                status = "🔴 Pendente"
+                respostas = ""
+                nota_exibida = 0.0
+                link_evidencia = ""
                 
                 if not leitura.empty:
-                    status = "🔵 Aguardando"
                     respostas = leitura.iloc[0]['RESPOSTAS_ALUNO']
                     nota_exibida = util.sosa_to_float(leitura.iloc[0]['NOTA_CALCULADA'])
+                    link_evidencia = leitura.iloc[0].get('LINK_FOTO_DRIVE', '')
+                    
+                    if "X" in respostas or "?" in respostas:
+                        status = "🟡 Revisar (Rasura/Vazio)"
+                    else:
+                        status = "🟢 Pronto"
                 
                 dados_grade.append({
-                    "ID": id_a, "ALUNO": f"♿ {alu['NOME_ALUNO']}" if is_pei else alu['NOME_ALUNO'],
-                    "STATUS": status, "LIDO": respostas, "OFICIAL": " ".join(gab_pei_list) if is_pei else " ".join(gab_reg_list),
-                    "NOTA": nota_exibida, "OCORRÊNCIA": "Nenhuma"
+                    "ID": id_a,
+                    "Estudante": f"♿ {alu['NOME_ALUNO']}" if is_pei else alu['NOME_ALUNO'],
+                    "Auditoria": status,
+                    "Lido": respostas,
+                    "Oficial": " ".join(gab_pei_list) if is_pei else " ".join(gab_reg_list),
+                    "Nota Final": nota_exibida,
+                    "Evidência": link_evidencia,
+                    "Ocorrência": "Nenhuma"
                 })
             
-            df_auditoria = st.data_editor(pd.DataFrame(dados_grade), hide_index=True, use_container_width=True,
+            # 4. INTERFACE DE EDIÇÃO E HOMOLOGAÇÃO
+            df_auditoria = st.data_editor(
+                pd.DataFrame(dados_grade),
                 column_config={
-                    "ID": None, "STATUS": st.column_config.TextColumn("Perícia", width="small", disabled=True),
-                    "ALUNO": st.column_config.TextColumn("Estudante", width="medium", disabled=True),
-                    "LIDO": st.column_config.TextColumn("Respostas", width="small"),
-                    "OFICIAL": st.column_config.TextColumn("Gabarito", width="small", disabled=True),
-                    "OCORRÊNCIA": st.column_config.SelectboxColumn("Tag", options=["Nenhuma", "FALTOU", "ANULADA", "REVISÃO"]),
-                    "NOTA": st.column_config.NumberColumn("Nota Final", format="%.2f")
-                }, key=f"ed_auditoria_{v}")
+                    "ID": None, 
+                    "Auditoria": st.column_config.TextColumn("Status", width="medium", disabled=True),
+                    "Estudante": st.column_config.TextColumn("Nome do Aluno", width="medium", disabled=True),
+                    "Lido": st.column_config.TextColumn("Respostas", width="small"),
+                    "Oficial": st.column_config.TextColumn("Gabarito", width="small", disabled=True),
+                    "Nota Final": st.column_config.NumberColumn("Nota", format="%.2f"),
+                    "Evidência": st.column_config.LinkColumn("🔗 Ver Pasta", width="small"),
+                    "Ocorrência": st.column_config.SelectboxColumn("Tag", options=["Nenhuma", "FALTOU", "ANULADA", "REVISÃO"])
+                },
+                hide_index=True, use_container_width=True, key=f"ed_auditoria_v55_{v}"
+            )
             
+            # 5. BOTÃO DE DISPARO PARA O BOLETIM
             if st.button("🚀 HOMOLOGAR E ENVIAR PARA BOLETIM", type="primary", use_container_width=True):
-                with st.status("Homologando...") as status:
+                with st.status("Sincronizando notas com o banco central...") as status:
                     lista_oficial = []
                     for _, row in df_auditoria.iterrows():
-                        if row['STATUS'] == "🔵 Aguardando" or row['OCORRÊNCIA'] != "Nenhuma":
-                            nota_final = 0.0 if row['OCORRÊNCIA'] in ["FALTOU", "ANULADA"] else row["NOTA"]
+                        # Só homologa quem já foi escaneado ou tem ocorrência (Faltou/Anulada)
+                        if "🔴" not in row['Auditoria'] or row['Ocorrência'] != "Nenhuma":
+                            nota_final = 0.0 if row['Ocorrência'] in ["FALTOU", "ANULADA"] else row["Nota Final"]
                             is_sonda = any(x in f_ativo.upper() for x in ["SONDA", "DIAGNÓSTICA"])
+                            
                             if not is_sonda:
+                                # Padrão Prova/Teste (DB_NOTAS)
                                 col_teste = util.sosa_to_str(nota_final) if "TESTE" in f_ativo.upper() else "0,0"
                                 col_prova = util.sosa_to_str(nota_final) if "PROVA" in f_ativo.upper() else "0,0"
-                                lista_oficial.append([row['ID'], row['ALUNO'].replace("♿ ", ""), f_turma, f_trim, "0,0", col_teste, col_prova, "0,0", util.sosa_to_str(nota_final)])
+                                lista_oficial.append([row['ID'], row['Estudante'].replace("♿ ", ""), f_turma, f_trim, "0,0", col_teste, col_prova, "0,0", util.sosa_to_str(nota_final)])
                             else:
-                                lista_oficial.append([datetime.now().strftime("%d/%m/%Y"), row['ID'], row['ALUNO'].replace("♿ ", ""), f_turma, "TRUE", "SONDA", f_ativo, util.sosa_to_str(nota_final)])
+                                # Padrão Sonda (DB_DIARIO_BORDO)
+                                lista_oficial.append([datetime.now().strftime("%d/%m/%Y"), row['ID'], row['Estudante'].replace("♿ ", ""), f_turma, "TRUE", "SONDA", f_ativo, util.sosa_to_str(nota_final)])
                     
                     if db.homologar_notas_lote(lista_oficial, "TESTE" if "TESTE" in f_ativo.upper() or "PROVA" in f_ativo.upper() else "SONDA"):
-                        status.update(label="✅ Homologação Concluída!", state="complete"); st.balloons()
+                        status.update(label="✅ Homologação Concluída com Sucesso!", state="complete")
+                        st.balloons()
 
         with tab_raiox:
             st.subheader("📊 Análise de Lacunas")
