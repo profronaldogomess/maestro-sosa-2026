@@ -1864,7 +1864,7 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                 st.info("📭 Banco de relatórios vazio.")
 
 # ==============================================================================
-# MÓDULO: CENTRAL DE AVALIAÇÕES (V37.0) - SINCRO TOTAL E ACERVO DE ELITE
+# MÓDULO: CENTRAL DE AVALIAÇÕES (V38.0 - PROTOCOLO DNA DE METADADOS)
 # ==============================================================================
 elif menu == "📝 Central de Avaliações":
     st.title("📝 Arquiteto de Exames e Gestão de Safra")
@@ -1937,7 +1937,9 @@ elif menu == "📝 Central de Avaliações":
                             m_row = df_materiais_trim[df_materiais_trim["TIPO_MATERIAL"] == m_nome].iloc[0]
                             contexto_aulas += f"MATERIAL_ID: {m_nome}\nCONTEÚDO: {m_row['CONTEUDO']}\n"
 
-                        prompt = (f"VOCÊ É O ARQUITETO DE EXAMES V30. SÉRIE: {ano_av}º Ano. TIPO: {tipo_av}. VALOR: {v_total}.\n"
+                        # INSTRUÇÃO DE DNA FORÇADA NO PROMPT
+                        prompt = (f"VOCÊ É O ARQUITETO DE EXAMES V31. SÉRIE: {ano_av}º Ano. TIPO: {tipo_av}. VALOR: {v_total}.\n"
+                                  f"🚨 OBRIGATÓRIO: Inicie o texto com a tag [VALOR: {v_total}] na primeira linha.\n"
                                   f"DIFICULDADE: {q_facil}F, {q_medio}M, {q_dificil}D. OBJETIVOS: {objs_av}.\n"
                                   f"CONTEÚDO MINISTRADO: {contexto_aulas}\n"
                                   f"MISSÃO: Gere o exame completo (Regular A-E | PEI A-C) com as tags obrigatórias.")
@@ -1970,7 +1972,7 @@ elif menu == "📝 Central de Avaliações":
             with t5: st.write(ai.extrair_tag(txt_f, "RESPOSTAS_PEI_IA"))
         else: st.info("Aguardando geração do exame...")
 
-    # --- ABA 4: RECOMPOSIÇÃO E REVISÃO (SEPARADA POR PERFIL) ---
+    # --- ABA 4: RECOMPOSIÇÃO E REVISÃO ---
     with tab_recomposicao:
         if "temp_prova" in st.session_state:
             st.subheader("🚀 Gerador de Revisão Sincronizada")
@@ -1993,15 +1995,12 @@ elif menu == "📝 Central de Avaliações":
                             nome_rev = f"REVISAO_{st.session_state.av_nome_fixo}"
                             db.excluir_registro_com_drive("DB_AULAS_PRONTAS", nome_rev)
                             
-                            # 1. Geração Regular (Discursiva)
                             doc_alu = exporter.gerar_docx_aluno_v24(nome_rev, ai.extrair_tag(txt_rev, "ALUNO"), {"ano": f"{ano_av}º", "trimestre": trim_filtro})
                             link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{nome_rev}_ALUNO", modo="AULA")
                             
-                            # 2. Geração PEI (Múltipla Escolha)
                             doc_pei = exporter.gerar_docx_pei_v25(f"{nome_rev}_PEI", ai.extrair_tag(txt_rev, "PEI"), {"ano": f"{ano_av}º", "trimestre": trim_filtro})
                             link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_rev}_PEI", modo="AULA")
                             
-                            # 3. Geração Professor
                             doc_prof = exporter.gerar_docx_professor_v25(nome_rev, ai.extrair_tag(txt_rev, "PROFESSOR"), {"ano": f"{ano_av}º", "semana": "REVISÃO", "trimestre": trim_filtro})
                             link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_rev}_PROF", modo="AULA")
                             
@@ -2012,7 +2011,7 @@ elif menu == "📝 Central de Avaliações":
                             status.update(label="✅ Revisão Sincronizada!", state="complete"); st.balloons()
         else: st.warning("⚠️ Gere a prova primeiro.")
 
-    # --- ABA 5: FINALIZAR ATIVO (PROVA) ---
+    # --- ABA 5: FINALIZAR ATIVO (COM CARIMBO DE DNA) ---
     with tab_finalizar:
         if "temp_prova" in st.session_state:
             st.subheader("💾 Consolidação do Ativo de Safra")
@@ -2028,6 +2027,9 @@ elif menu == "📝 Central de Avaliações":
                     v_total_num = st.session_state.get('av_valor_total', 10.0)
                     identificador = f"{v_tipo} - {v_ano}º Ano ({trim_av})"
                     db.excluir_avaliacao_completa(identificador, v_tipo)
+                    
+                    # PROTOCOLO DNA: Carimba o valor no início do texto antes de salvar
+                    conteudo_com_dna = f"[VALOR: {v_total_num}]\n" + st.session_state.temp_prova
                     
                     # Geração Regular
                     v_por_quest_reg = v_total_num / v_qtd
@@ -2046,11 +2048,11 @@ elif menu == "📝 Central de Avaliações":
 
                     db.salvar_no_banco("DB_AULAS_PRONTAS", [
                         datetime.now().strftime("%d/%m/%Y"), "AVALIAÇÃO", identificador, 
-                        st.session_state.temp_prova + f"\n--- LINKS ---\nRegular({link_reg}) PEI({link_pei})", f"{v_ano}º", link_reg
+                        conteudo_com_dna + f"\n--- LINKS ---\nRegular({link_reg}) PEI({link_pei})", f"{v_ano}º", link_reg
                     ])
-                    status.update(label="✅ Ativo Salvo!", state="complete"); st.balloons(); time.sleep(1.5); reset_avaliacoes()
+                    status.update(label="✅ Ativo Salvo com DNA!", state="complete"); st.balloons(); time.sleep(1.5); reset_avaliacoes()
 
-    # --- ABA 6: ACERVO (RESTAURADA COM TODOS OS BOTÕES) ---
+    # --- ABA 6: ACERVO ---
     with tab_acervo:
         st.markdown("#### 📄 Repositório de Ativos de Safra")
         df_exames = df_aulas[df_aulas['SEMANA_REF'].isin(["AVALIAÇÃO", "REVISÃO"])].iloc[::-1]
@@ -2060,7 +2062,6 @@ elif menu == "📝 Central de Avaliações":
                     st.markdown(f"**{row['TIPO_MATERIAL']}**")
                     txt_f = str(row['CONTEUDO'])
                     
-                    # Extração de Links via Regex
                     l_reg = re.search(r"Regular\((.*?)\)", txt_f).group(1) if "Regular(" in txt_f else (re.search(r"Aluno\((.*?)\)", txt_f).group(1) if "Aluno(" in txt_f else row.get('LINK_DRIVE'))
                     l_pei = re.search(r"PEI\((.*?)\)", txt_f).group(1) if "PEI(" in txt_f and "PEI(N/A)" not in txt_f else None
                     l_prof = re.search(r"Prof\((.*?)\)", txt_f).group(1) if "Prof(" in txt_f else None
