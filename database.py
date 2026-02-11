@@ -542,3 +542,68 @@ def homologar_notas_lote(lista_dados, tipo_ativo="TESTE"):
     except Exception as e:
         st.error(f"Erro na homologação: {e}")
         return False
+    
+def obter_ou_criar_pasta_drive(nome_pasta, parent_id=None):
+    """Busca uma pasta no Drive ou cria se não existir, retornando o ID e o Link."""
+    try:
+        creds = obter_creds_drive()
+        service = build('drive', 'v3', credentials=creds)
+        
+        query = f"name = '{nome_pasta}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+        if parent_id:
+            query += f" and '{parent_id}' in parents"
+        
+        results = service.files().list(q=query, fields="files(id, webViewLink)").execute()
+        items = results.get('files', [])
+        
+        if items:
+            return items[0]['id'], items[0]['webViewLink']
+        
+        # Se não existe, cria
+        file_metadata = {
+            'name': nome_pasta,
+            'mimeType': 'application/vnd.google-apps.folder'
+        }
+        if parent_id:
+            file_metadata['parents'] = [parent_id]
+            
+        folder = service.files().create(body=file_metadata, fields='id, webViewLink').execute()
+        return folder.get('id'), folder.get('webViewLink')
+    except Exception as e:
+        st.error(f"Erro no Drive: {e}")
+        return None, None
+
+def salvar_foto_pericia_drive(imagem_bytes, nome_aluno, nome_avaliacao):
+    """Executa o Protocolo de Custódia: Cria hierarquia e salva a foto."""
+    try:
+        # 1. Garante a pasta Raiz "AVALIAÇÕES"
+        id_raiz, _ = obter_ou_criar_pasta_drive("AVALIAÇÕES")
+        # 2. Garante a subpasta "GABARITOS_ESCANEADOS"
+        id_custodia, _ = obter_ou_criar_pasta_drive("GABARITOS_ESCANEADOS", id_raiz)
+        # 3. Garante a pasta específica da PROVA
+        id_prova, link_pasta_prova = obter_ou_criar_pasta_drive(nome_avaliacao, id_custodia)
+        
+        # 4. Faz o Upload da Foto
+        creds = obter_creds_drive()
+        service = build('drive', 'v3', credentials=creds)
+        
+        from googleapiclient.http import MediaIoBaseUpload
+        import io
+        
+        file_metadata = {
+            'name': f"{nome_aluno.replace(' ', '_')}.jpg",
+            'parents': [id_prova]
+        }
+        media = MediaIoBaseUpload(io.BytesIO(imagem_bytes), mimetype='image/jpeg')
+        
+        # Se já existir foto do aluno, deleta a antiga (Upsert de Imagem)
+        query_antiga = f"name = '{file_metadata['name']}' and '{id_prova}' in parents and trashed = false"
+        antigos = service.files().list(q=query_antiga).execute().get('files', [])
+        for f in antigos:
+            service.files().delete(fileId=f['id']).execute()
+            
+        service.files().create(body=file_metadata, media_body=media, fields='id').execute()
+        
+        return link_pasta_prova # Retorna o link da PASTA, conforme solicitado
+    except:
+        return None
