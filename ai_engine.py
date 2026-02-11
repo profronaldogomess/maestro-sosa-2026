@@ -493,3 +493,28 @@ def gerar_prognostico_pedagogico(dados_erros, contexto_prova):
         return res.text.replace("**", "").replace("#", "").strip()
     except Exception as e:
         return f"Erro ao gerar prognóstico automático: {e}"
+    
+def gerar_prognostico_pedagogico(dados_stats, contexto_prova):
+    """
+    MAESTRO ANALYST V57 - Perícia de Erros e Lacunas.
+    Analisa o 'Erro Comum' e define a natureza da confusão mental do aluno.
+    """
+    try:
+        prompt = (
+            f"VOCÊ É O COORDENADOR PEDAGÓGICO SOSA (PHC).\n"
+            f"Analise os padrões de erro desta turma de Matemática.\n\n"
+            f"CONTEXTO DA PROVA (Objetivos e Gabarito):\n{contexto_prova}\n\n"
+            f"ESTATÍSTICAS DE ERRO (Questão | % Acerto | Erro mais comum):\n{dados_stats}\n\n"
+            f"MISSÃO:\n"
+            f"1. Para cada questão com menos de 60% de acerto, explique O QUE O ALUNO ESTÁ CONFUNDINDO (Ex: confundindo área com perímetro, falha no SND, erro de interpretação).\n"
+            f"2. Gere um PLANO DE RECOMPOSIÇÃO IMEDIATA: 2 atividades práticas para sanar esses pontos cegos.\n"
+            f"3. Use linguagem técnica e formal. SEM MARKDOWN."
+        )
+        
+        res = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=[types.Part.from_text(text=prompt)]
+        )
+        return res.text.replace("**", "").replace("#", "").strip()
+    except Exception as e:
+        return f"Erro na análise pedagógica: {e}"
