@@ -430,21 +430,21 @@ def realizar_diagnostico_v25(plano_raw, df_curriculo, ano_sel):
 
 def analisar_gabarito_vision(imagem_bytes):
     """
-    MAESTRO VISION V6.3 - ALTA INTELIGÊNCIA (MODELO 1.5-PRO)
-    Focado em detecção cirúrgica de preenchimento de gabaritos.
+    MAESTRO VISION V6.4 - ULTRA INTELIGÊNCIA (MODELO 2.5-PRO)
+    Focado em detecção de alta precisão com lógica de raciocínio espacial.
     """
     try:
-        # Prompt de Engenharia Espacial para o Gemini 1.5 Pro
+        # Prompt de Engenharia de Perícia para o Gemini 2.5 Pro
         prompt = (
-            "Você é um scanner óptico de alta precisão. Analise a imagem do gabarito escolar.\n"
+            "Você é um perito em visão computacional de alta precisão. Analise a imagem do gabarito.\n"
             "A tabela possui as colunas: Q (Questão), A, B, C, D, E.\n"
-            "MISSÃO:\n"
-            "1. Localize a grade numérica de 01 a 10.\n"
-            "2. Identifique qual círculo (A, B, C, D ou E) está preenchido (pintado) em cada linha.\n"
-            "3. Se houver marcação clara, retorne a letra.\n"
-            "4. Se houver DUAS marcações ou rasura forte, retorne 'X'.\n"
-            "5. Se a linha estiver totalmente VAZIA, retorne '?'.\n"
-            "6. Ignore anotações manuais como 'PEI' ou 'Normal'.\n"
+            "MISSÃO DE RACIOCÍNIO:\n"
+            "1. Localize a grade de respostas (linhas 01 a 10).\n"
+            "2. Analise a densidade de preenchimento de cada círculo.\n"
+            "3. Se houver uma marcação única e clara, retorne a letra correspondente.\n"
+            "4. Se houver DUAS ou mais marcações (mesmo que uma esteja levemente riscada), retorne 'X' (Dupla Marcação).\n"
+            "5. Se a linha estiver totalmente sem marcação, retorne '?' (Vazia).\n"
+            "6. Ignore anotações manuais como 'PEI' ou 'Normal' feitas pelo professor.\n"
             "Retorne APENAS um JSON puro no formato: {'01': 'A', '02': 'C', ...}"
         )
         
@@ -453,7 +453,7 @@ def analisar_gabarito_vision(imagem_bytes):
             types.Part.from_text(text=prompt)
         ]
         
-        # Chamada ao modelo 1.5-pro (O mais inteligente para visão)
+        # Chamada ao modelo 2.5-pro (O topo da inteligência Google)
         res = client.models.generate_content(
             model="gemini-2.5-pro", 
             contents=[types.Content(role="user", parts=conteudo_prompt)],
@@ -463,18 +463,9 @@ def analisar_gabarito_vision(imagem_bytes):
         )
         
         import json
-        # O modelo 1.5-pro com response_mime_type já entrega o JSON limpo
         return json.loads(res.text)
     except Exception as e:
-        # Se o modelo pro falhar por cota, o flash 1.5 é o reserva imediato
         return {"erro": str(e)}
-        
-        import json
-        # O modelo 1.5-pro com response_mime_type já retorna o texto como JSON puro
-        return json.loads(res.text)
-    except Exception as e:
-        st.error(f"Erro na Perícia Vision: {e}")
-        return {}
     
 def gerar_prognostico_pedagogico(dados_erros, contexto_prova):
     """
