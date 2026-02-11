@@ -1897,7 +1897,21 @@ elif menu == "📝 Central de Avaliações":
             tipo_av = c1.selectbox("Tipo:", ["Teste", "Prova", "Recuperação", "2ª Chamada"], key=f"av_t_{v}")
             v_total = c2.number_input("Valor Total:", 0.0, 10.0, 3.0 if "Teste" in tipo_av else 4.0, step=0.5, key=f"av_v_{v}")
             ano_av = c3.selectbox("Série:", [6, 7, 8, 9], index=0, key=f"av_a_{v}")
-            qtd_q = c4.number_input("Nº Questões:", 5, 20, 10, key=f"av_q_{v}")
+            qtd_q = c4.number_input("Nº Total de Questões:", 2, 20, 10, key=f"av_q_{v}")
+
+        # --- NOVO: CONTROLE DE NÍVEL DE DIFICULDADE ---
+        with st.container(border=True):
+            st.markdown("### 📊 2. Distribuição de Dificuldade")
+            cd1, cd2, cd3 = st.columns(3)
+            q_facil = cd1.number_input("Fáceis:", 0, qtd_q, int(qtd_q*0.3), key=f"q_f_{v}")
+            q_medio = cd2.number_input("Médias:", 0, qtd_q, int(qtd_q*0.5), key=f"q_m_{v}")
+            q_dificil = cd3.number_input("Difíceis:", 0, qtd_q, qtd_q - (q_facil + q_medio), key=f"q_d_{v}")
+            
+            soma_q = q_facil + q_medio + q_dificil
+            if soma_q != qtd_q:
+                st.error(f"⚠️ A soma das questões ({soma_q}) deve ser igual ao total ({qtd_q})!")
+            else:
+                st.success(f"✅ Distribuição validada: {q_facil}F | {q_medio}M | {q_dificil}D")
 
         with st.container(border=True):
             st.markdown("### 🎯 2. Matriz de Mérito e Filtro Curricular")
@@ -1943,11 +1957,12 @@ elif menu == "📝 Central de Avaliações":
             objs_av = st.multiselect("Objetivos de Aprendizagem:", df_obj_av["OBJETIVOS"].unique(), key=f"av_obj_{v}")
 
             if st.button("💎 COMPILAR EXAME DE ELITE", use_container_width=True, type="primary"):
-                if not mats_selecionados or not objs_av:
-                    st.error("⚠️ Selecione os Ativos de Safra e os Objetivos Curriculares.")
+                if soma_q != qtd_q:
+                    st.error("Ajuste a distribuição das questões antes de gerar.")
+                elif not mats_selecionados or not objs_av:
+                    st.error("Selecione os Ativos de Safra e os Objetivos Curriculares.")
                 else:
-                    with st.spinner("Maestro Arquiteto gerando exame de múltipla escolha..."):
-                        # Cálculo de valores
+                    with st.spinner(f"Maestro Arquiteto calibrando linguagem para o {ano_av}º Ano..."):
                         val_quest = v_total / qtd_q
                         qtd_pei = qtd_q // 2
                         
@@ -1958,17 +1973,18 @@ elif menu == "📝 Central de Avaliações":
 
                         prompt = (
                             f"VOCÊ É O ARQUITETO DE EXAMES V30. SÉRIE: {ano_av}º Ano. TIPO: {tipo_av}.\n"
-                            f"VALOR TOTAL: {util.sosa_to_str(v_total)} | QTD QUESTÕES: {qtd_q}.\n\n"
+                            f"VALOR TOTAL: {util.sosa_to_str(v_total)} | QTD TOTAL: {qtd_q}.\n\n"
+                            f"🚨 DISTRIBUIÇÃO DE DIFICULDADE:\n"
+                            f"- {q_facil} questões FÁCEIS (Aplicação direta).\n"
+                            f"- {q_medio} questões MÉDIAS (Padrão Prova Brasil).\n"
+                            f"- {q_dificil} questões DIFÍCEIS (Análise Crítica/Alpha).\n\n"
+                            f"🚨 CALIBRAGEM DE LINGUAGEM: O aluno é do {ano_av}º Ano. "
+                            f"Ajuste o vocabulário e a complexidade dos textos para esta faixa etária.\n\n"
                             f"--- CURRÍCULO E SAFRA ---\n"
                             f"OBJETIVOS: {objs_av}\n"
                             f"CONTEÚDO MINISTRADO: {contexto_aulas}\n\n"
-                            f"🚨 MISSÃO DE SOBERANIA (LEIA COM ATENÇÃO):\n"
-                            f"1. TODAS as questões do bloco [QUESTOES] devem ser de MÚLTIPLA ESCOLHA (A até E).\n"
-                            f"2. TODAS as questões do bloco [PEI] devem ser de MÚLTIPLA ESCOLHA (A até C).\n"
-                            f"3. PROIBIDO criar questões abertas ou de completar.\n"
-                            f"4. Use o GOOGLE SEARCH para contextos Alpha (Tech/News).\n"
-                            f"5. Formate os rótulos como **QUESTÃO XX ({util.sosa_to_str(val_quest)} ponto) -**.\n"
-                            f"6. Estruture rigorosamente com as tags: [ORIENTACOES], [QUESTOES], [GABARITO_TEXTO], [RESPOSTAS_IA], [PEI], [GABARITO_PEI], [RESPOSTAS_PEI_IA]."
+                            f"MISSÃO: Gere o exame completo (Regular + PEI) com as tags obrigatórias. "
+                            f"Lembre-se: PEI deve ter {qtd_pei} questões e ser de múltipla escolha A-C."
                         )
                         st.session_state.temp_prova = ai.gerar_ia("ARQUITETO_EXAMES_V30_ELITE", prompt, usar_busca=True)
                         st.session_state.av_valor_total = v_total
