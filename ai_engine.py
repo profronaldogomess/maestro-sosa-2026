@@ -361,7 +361,7 @@ def gerar_ia(persona_key, comando, partes_arquivos=[], usar_busca=True):
     except Exception as e:
         return f"Erro na IA: {e}"
 
-# --- EXTRATOR SOSA V35 (ULTRA FLEX - ANTI-ERRO DE SINTAXE) ---
+# --- EXTRATOR SOSA V36 (BLINDAGEM DE FRONTEIRA - ANTI-CONFLITO) ---
 def extrair_tag(texto, tag):
     if not texto: return ""
     import re
@@ -370,13 +370,14 @@ def extrair_tag(texto, tag):
     texto_limpo = texto.replace("**[", "[").replace("]**", "]")
     tag_busca = tag.upper().strip()
     
-    # 1. Tenta capturar valor INTERNO (Ex: [VALOR: 3.0])
-    padrao_interno = rf"\[\s*{tag_busca}\s*[:\-]*\s*(.*?)\]"
+    # 1. Tenta capturar valor INTERNO estrito (Ex: [VALOR: 3.0])
+    # O \b garante que GABARITO não bata em GABARITO_TEXTO
+    padrao_interno = rf"\[\s*\b{tag_busca}\b\s*[:\-]*\s*(.*?)\]"
     match_int = re.search(padrao_interno, texto_limpo, re.IGNORECASE)
     if match_int:
         res_int = match_int.group(1).strip()
-        # Se o que estiver dentro for curto (como um número), retorna ele
-        if len(res_int) > 0 and len(res_int) < 15:
+        # Retorna apenas se for um valor curto (metadado)
+        if 0 < len(res_int) < 20:
             return res_int
 
     # 2. Tenta capturar BLOCO (Ex: [QUESTOES] ... [PROXIMA_TAG])
@@ -390,8 +391,8 @@ def extrair_tag(texto, tag):
     parada = [t for t in tags_mestras if t != tag_busca]
     lista_parada = "|".join(parada)
     
-    # Captura tudo após a tag até encontrar a próxima tag mestra
-    padrao_bloco = rf"\[\s*{tag_busca}\s*\]\s*[:\-]*\s*(.*?)(?=\n\s*\[\s*(?:{lista_parada})\s*\]|\[\s*(?:{lista_parada})\s*\]|$)"
+    # Captura o bloco até a próxima tag mestra no início da linha ou fim do texto
+    padrao_bloco = rf"\[\s*\b{tag_busca}\b\s*\]\s*[:\-]*\s*(.*?)(?=\n\s*\[\s*(?:{lista_parada})\s*\]|\[\s*(?:{lista_parada})\s*\]|$)"
     match_bloco = re.search(padrao_bloco, texto_limpo, re.DOTALL | re.IGNORECASE)
     
     if match_bloco:
