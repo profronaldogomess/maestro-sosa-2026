@@ -2080,7 +2080,7 @@ elif menu == "📝 Central de Avaliações":
         else: st.info("📭 Nenhum exame no acervo.")
 
 # ==============================================================================
-# MÓDULO: SCANNER & HUB DE HOMOLOGAÇÃO (V39.0) - PERÍCIA E AUDITORIA
+# MÓDULO: SCANNER & HUB DE HOMOLOGAÇÃO (V39.1) - FILTRO DE ELITE
 # ==============================================================================
 elif menu == "📸 Scanner de Gabaritos":
     st.title("📸 Scanner de Gabaritos e Hub de Homologação")
@@ -2089,7 +2089,7 @@ elif menu == "📸 Scanner de Gabaritos":
     if "v_scan" not in st.session_state: st.session_state.v_scan = 1
     v = st.session_state.v_scan
 
-    # --- 1. FILTROS DE ACESSO (COM VACINA CONTRA ERRO DE SELEÇÃO) ---
+    # --- 1. FILTROS DE ACESSO ---
     with st.container(border=True):
         c1, c2, c3 = st.columns([1, 1, 1.5])
         
@@ -2097,35 +2097,43 @@ elif menu == "📸 Scanner de Gabaritos":
         f_turma = c1.selectbox("👥 Selecione a Turma:", [""] + turmas_disponiveis, key=f"sc_t_{v}")
         f_trim = c2.selectbox("📅 Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"sc_tr_{v}")
         
-        # Só busca ativos se uma turma for selecionada
         opcoes_ativos = []
         if f_turma:
             serie_alvo = f_turma[0] # Pega o '6' de '6ºA'
-            # Busca Provas, Testes e Sondas daquela série
-            df_ativos = df_aulas[
-                (df_aulas['ANO'].astype(str).str.contains(serie_alvo)) & 
-                (df_aulas['SEMANA_REF'].isin(["AVALIAÇÃO", "REVISÃO"]))
+            
+            # --- FILTRO DE ELITE SOSA V39.1 (BUSCA POR PALAVRAS-CHAVE) ---
+            # 1. Filtra pela série
+            df_serie = df_aulas[df_aulas['ANO'].astype(str).str.contains(serie_alvo)]
+            
+            # 2. Define o que PODE entrar (Avaliações e Sondas)
+            permitidos = ["TESTE", "PROVA", "CHAMADA", "SONDA", "DIAGNÓSTICA", "DIAGNOSTICA", "RECUPERAÇÃO"]
+            
+            # 3. Aplica a lógica: Deve conter um dos permitidos E NÃO conter "REVISÃO"
+            df_ativos = df_serie[
+                (df_serie['TIPO_MATERIAL'].str.upper().str.contains('|'.join(permitidos))) & 
+                (~df_serie['TIPO_MATERIAL'].str.upper().str.contains("REVISÃO|REVISAO"))
             ]
+            
             opcoes_ativos = df_ativos['TIPO_MATERIAL'].tolist()
         
         f_ativo = c3.selectbox("📋 Selecione o Ativo para Corrigir:", opcoes_ativos, key=f"sc_at_{v}")
 
     if not f_turma or not f_ativo:
-        st.info("💡 Selecione a Turma e o Ativo para iniciar a perícia.")
+        st.info("💡 Selecione a Turma e o Ativo (Teste, Prova ou Sonda) para iniciar a perícia.")
     else:
-        # --- RECUPERAÇÃO DO GABARITO OFICIAL DO ATIVO ---
+        # --- O RESTANTE DO CÓDIGO PERMANECE IGUAL (GABARITO, CAPTURA, CONFERÊNCIA) ---
+        # (Mantenha toda a lógica de captura e homologação que enviamos anteriormente)
+        
         dados_ativo = df_aulas[df_aulas['TIPO_MATERIAL'] == f_ativo].iloc[0]
         txt_ativo = str(dados_ativo['CONTEUDO'])
         
-        # Busca Gabarito e Valor no DNA do material
         gab_oficial_raw = ai.extrair_tag(txt_ativo, "GABARITO_TEXTO") or ai.extrair_tag(txt_ativo, "GABARITO")
-        # Regex para pegar as letras do gabarito (Ex: 01: A, 02: B...)
         gab_oficial = re.findall(r"(?:QUESTÃO\s*\d+[:\s-]*|^\d+[:\s-]*)([A-E])", gab_oficial_raw.upper(), re.MULTILINE)
         
         match_valor = re.search(r"\[VALOR:\s*(\d+[\.,]\d+|\d+)\]", txt_ativo.upper())
         valor_total_ativo = util.sosa_to_float(match_valor.group(1)) if match_valor else 10.0
         
-        is_sonda = "SONDA" in f_ativo.upper()
+        is_sonda = "SONDA" in f_ativo.upper() or "DIAGNÓSTICA" in f_ativo.upper()
         label_nota = "⭐ Bônus Sugerido" if is_sonda else "📝 Nota Calculada"
 
         tab_captura, tab_conferencia, tab_raiox = st.tabs([
