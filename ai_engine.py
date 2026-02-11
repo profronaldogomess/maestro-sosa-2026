@@ -361,17 +361,25 @@ def gerar_ia(persona_key, comando, partes_arquivos=[], usar_busca=True):
     except Exception as e:
         return f"Erro na IA: {e}"
 
-# --- EXTRATOR SOSA V34 (ESCUDO DE TAGS INTERNAS + DNA DE VALOR) ---
+# --- EXTRATOR SOSA V35 (ULTRA FLEX - ANTI-ERRO DE SINTAXE) ---
 def extrair_tag(texto, tag):
     if not texto: return ""
     import re
     
-    # 1. Limpeza de ruídos de Markdown nas tags
+    # Limpeza de ruídos de Markdown
     texto_limpo = texto.replace("**[", "[").replace("]**", "]")
-    
     tag_busca = tag.upper().strip()
     
-    # 2. LISTA DE TAGS MESTRAS V34 (Sincronizada com Scanner e DNA)
+    # 1. Tenta capturar valor INTERNO (Ex: [VALOR: 3.0])
+    padrao_interno = rf"\[\s*{tag_busca}\s*[:\-]*\s*(.*?)\]"
+    match_int = re.search(padrao_interno, texto_limpo, re.IGNORECASE)
+    if match_int:
+        res_int = match_int.group(1).strip()
+        # Se o que estiver dentro for curto (como um número), retorna ele
+        if len(res_int) > 0 and len(res_int) < 15:
+            return res_int
+
+    # 2. Tenta capturar BLOCO (Ex: [QUESTOES] ... [PROXIMA_TAG])
     tags_mestras = [
         "VALOR", "ORIENTACOES", "QUESTOES", "GABARITO_TEXTO", "GABARITO", 
         "RESPOSTAS_IA", "PEI", "GABARITO_PEI", "RESPOSTAS_PEI_IA", 
@@ -382,15 +390,12 @@ def extrair_tag(texto, tag):
     parada = [t for t in tags_mestras if t != tag_busca]
     lista_parada = "|".join(parada)
     
-    # 3. REGEX V34: Captura o conteúdo ignorando colchetes internos (como prompts)
-    padrao = rf"\[\s*{tag_busca}\s*\]\s*[:\-]*\s*(.*?)(?=\n\s*\[\s*(?:{lista_parada})\s*\]|\[\s*(?:{lista_parada})\s*\]|$)"
+    # Captura tudo após a tag até encontrar a próxima tag mestra
+    padrao_bloco = rf"\[\s*{tag_busca}\s*\]\s*[:\-]*\s*(.*?)(?=\n\s*\[\s*(?:{lista_parada})\s*\]|\[\s*(?:{lista_parada})\s*\]|$)"
+    match_bloco = re.search(padrao_bloco, texto_limpo, re.DOTALL | re.IGNORECASE)
     
-    match = re.search(padrao, texto_limpo, re.DOTALL | re.IGNORECASE)
-    
-    if match:
-        res = match.group(1).strip()
-        res = re.sub(r'^[:\-\s]+', '', res)
-        return res
+    if match_bloco:
+        return match_bloco.group(1).strip()
         
     return ""
 
