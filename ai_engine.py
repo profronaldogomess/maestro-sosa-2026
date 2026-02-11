@@ -496,19 +496,23 @@ def gerar_prognostico_pedagogico(dados_erros, contexto_prova):
     
 def gerar_prognostico_pedagogico(dados_stats, contexto_prova):
     """
-    MAESTRO ANALYST V57 - Perícia de Erros e Lacunas.
-    Analisa o 'Erro Comum' e define a natureza da confusão mental do aluno.
+    MAESTRO ANALYST V59 - DIAGNÓSTICO POR DESCRITORES (PADRÃO DF/SAEB).
+    Mapeia habilidades e gera parâmetros para o Módulo de Recomposição.
     """
     try:
         prompt = (
-            f"VOCÊ É O COORDENADOR PEDAGÓGICO SOSA (PHC).\n"
-            f"Analise os padrões de erro desta turma de Matemática.\n\n"
-            f"CONTEXTO DA PROVA (Objetivos e Gabarito):\n{contexto_prova}\n\n"
-            f"ESTATÍSTICAS DE ERRO (Questão | % Acerto | Erro mais comum):\n{dados_stats}\n\n"
+            f"VOCÊ É O PERITO EM AVALIAÇÃO EDUCACIONAL SOSA.\n"
+            f"Sua missão é realizar um diagnóstico no padrão dos Cadernos de Revisão do DF.\n\n"
+            f"CONTEXTO DA PROVA:\n{contexto_prova}\n\n"
+            f"DESEMPENHO DA TURMA:\n{dados_stats}\n\n"
             f"MISSÃO:\n"
-            f"1. Para cada questão com menos de 60% de acerto, explique O QUE O ALUNO ESTÁ CONFUNDINDO (Ex: confundindo área com perímetro, falha no SND, erro de interpretação).\n"
-            f"2. Gere um PLANO DE RECOMPOSIÇÃO IMEDIATA: 2 atividades práticas para sanar esses pontos cegos.\n"
-            f"3. Use linguagem técnica e formal. SEM MARKDOWN."
+            f"1. MAPEAMENTO DE DESCRITORES: Para cada questão, identifique o Descritor/Habilidade (Ex: D1, D5, EF06MA01).\n"
+            f"2. ANÁLISE DE LACUNA: Explique o processo cognitivo que falhou (Ex: O aluno não domina a conversão de medidas).\n"
+            f"3. PARÂMETROS TÉCNICOS: Gere uma lista curta de 'Tópicos de Recomposição'.\n\n"
+            f"🚨 FORMATO DE SAÍDA (OBRIGATÓRIO):\n"
+            f"[DIAGNOSTICO_VISUAL]\n(Escreva aqui o parecer técnico para o professor ler)\n\n"
+            f"[PARAMETROS_SISTEMA]\n(Gere uma lista simples: Descritor: Nome da Habilidade | Nível de Alerta)\n"
+            f"Linguagem formal. SEM MARKDOWN."
         )
         
         res = client.models.generate_content(
@@ -517,4 +521,4 @@ def gerar_prognostico_pedagogico(dados_stats, contexto_prova):
         )
         return res.text.replace("**", "").replace("#", "").strip()
     except Exception as e:
-        return f"Erro na análise pedagógica: {e}"
+        return f"Erro na perícia: {e}"
