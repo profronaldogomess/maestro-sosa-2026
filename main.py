@@ -1946,8 +1946,11 @@ elif menu == "📝 Central de Avaliações":
                 if not mats_selecionados or not objs_av:
                     st.error("⚠️ Selecione os Ativos de Safra e os Objetivos Curriculares.")
                 else:
-                    with st.spinner("Maestro Arquiteto realizando fusão entre Safra e Currículo..."):
-                        # Captura o Conteúdo Real das Aulas
+                    with st.spinner("Maestro Arquiteto gerando exame de múltipla escolha..."):
+                        # Cálculo de valores
+                        val_quest = v_total / qtd_q
+                        qtd_pei = qtd_q // 2
+                        
                         contexto_aulas = ""
                         for m_nome in mats_selecionados:
                             m_row = df_materiais_trim[df_materiais_trim["TIPO_MATERIAL"] == m_nome].iloc[0]
@@ -1955,17 +1958,17 @@ elif menu == "📝 Central de Avaliações":
 
                         prompt = (
                             f"VOCÊ É O ARQUITETO DE EXAMES V30. SÉRIE: {ano_av}º Ano. TIPO: {tipo_av}.\n"
-                            f"VALOR TOTAL: {v_total} | QTD QUESTÕES: {qtd_q}.\n\n"
-                            f"--- CURRÍCULO OBRIGATÓRIO (NÃO ADICIONE NADA ALÉM DISSO) ---\n"
-                            f"EIXOS: {eixos_av}\n"
-                            f"CONTEÚDOS: {conts_av}\n"
-                            f"OBJETIVOS: {objs_av}\n\n"
-                            f"--- CONTEÚDO REAL MINISTRADO (PARA QUESTÕES DE MÉRITO) ---\n"
-                            f"{contexto_aulas}\n\n"
-                            f"🚨 MISSÃO CRÍTICA:\n"
-                            f"1. Use apenas os conteúdos e objetivos listados acima. PROIBIDO usar MMC ou outros temas não citados.\n"
-                            f"2. Crie questões de mérito citando os IDs dos materiais.\n"
-                            f"3. Use Sentence Case e tags [ORIENTACOES], [QUESTOES], [GABARITO_TEXTO], [RESPOSTAS_IA], [PEI], [GABARITO_PEI], [RESPOSTAS_PEI_IA]."
+                            f"VALOR TOTAL: {util.sosa_to_str(v_total)} | QTD QUESTÕES: {qtd_q}.\n\n"
+                            f"--- CURRÍCULO E SAFRA ---\n"
+                            f"OBJETIVOS: {objs_av}\n"
+                            f"CONTEÚDO MINISTRADO: {contexto_aulas}\n\n"
+                            f"🚨 MISSÃO DE SOBERANIA (LEIA COM ATENÇÃO):\n"
+                            f"1. TODAS as questões do bloco [QUESTOES] devem ser de MÚLTIPLA ESCOLHA (A até E).\n"
+                            f"2. TODAS as questões do bloco [PEI] devem ser de MÚLTIPLA ESCOLHA (A até C).\n"
+                            f"3. PROIBIDO criar questões abertas ou de completar.\n"
+                            f"4. Use o GOOGLE SEARCH para contextos Alpha (Tech/News).\n"
+                            f"5. Formate os rótulos como **QUESTÃO XX ({util.sosa_to_str(val_quest)} ponto) -**.\n"
+                            f"6. Estruture rigorosamente com as tags: [ORIENTACOES], [QUESTOES], [GABARITO_TEXTO], [RESPOSTAS_IA], [PEI], [GABARITO_PEI], [RESPOSTAS_PEI_IA]."
                         )
                         st.session_state.temp_prova = ai.gerar_ia("ARQUITETO_EXAMES_V30_ELITE", prompt, usar_busca=True)
                         st.session_state.av_valor_total = v_total
