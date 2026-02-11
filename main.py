@@ -2343,13 +2343,82 @@ elif menu == "📸 Scanner de Gabaritos":
                         status.update(label="✅ Homologação Concluída com Sucesso!", state="complete")
                         st.balloons()
 
+# --- ABA 3: RAIO-X (V56 - INTELIGÊNCIA DE RECOMPOSIÇÃO) ---
         with tab_raiox:
-            st.subheader("📊 Análise de Lacunas")
+            st.subheader(f"📊 Diagnóstico de Proficiência: {f_turma}")
+            
             if not gabaritos_lidos.empty:
+                # 1. PROCESSAMENTO DE DADOS DE PERFORMANCE
                 stats = []
+                detalhes_erros = []
+                
                 for i, certa in enumerate(gab_reg_list):
-                    respostas = [r.split(";")[i] if len(r.split(";")) > i else "?" for r in gabaritos_lidos['RESPOSTAS_ALUNO']]
-                    acerto_pct = (respostas.count(certa) / len(respostas)) * 100 if respostas else 0
-                    stats.append({"Questão": f"Q{i+1:02d}", "Acerto %": acerto_pct})
-                st.plotly_chart(px.bar(pd.DataFrame(stats), x="Questão", y="Acerto %", color="Acerto %", color_continuous_scale="RdYlGn", range_y=[0,100]))
-            else: st.info("Aguardando capturas.")
+                    q_num = f"Q{i+1:02d}"
+                    # Coleta todas as respostas dadas para esta questão
+                    respostas_dadas = [r.split(";")[i] if len(r.split(";")) > i else "?" for r in gabaritos_lidos['RESPOSTAS_ALUNO']]
+                    
+                    acertos = respostas_dadas.count(certa)
+                    total = len(respostas_dadas)
+                    pct = (acertos / total) * 100 if total > 0 else 0
+                    
+                    # Identifica o erro mais comum (Distrator Principal)
+                    erros = [r for r in respostas_dadas if r != certa and r not in ["?", "X"]]
+                    distrator_comum = max(set(erros), key=erros.count) if erros else "N/A"
+                    
+                    stats.append({"Questão": q_num, "Acerto %": pct, "Erro Comum": distrator_comum})
+                
+                df_stats = pd.DataFrame(stats)
+
+                # 2. VISUALIZAÇÃO ANALÍTICA
+                c_v1, c_v2 = st.columns([2, 1])
+                
+                with c_v1:
+                    # Gráfico de Barras Colorido por Performance
+                    fig = px.bar(df_stats, x="Questão", y="Acerto %", 
+                                 text=df_stats["Acerto %"].apply(lambda x: f'{x:.0f}%'),
+                                 color="Acerto %", 
+                                 color_continuous_scale=["#FF4B4B", "#FFA500", "#00CC96"], # Vermelho, Laranja, Verde
+                                 range_y=[0, 110],
+                                 title="Nível de Domínio por Questão")
+                    st.plotly_chart(fig, use_container_width=True)
+
+                with c_v2:
+                    st.markdown("##### 🚨 Zonas de Alerta")
+                    questoes_criticas = df_stats[df_stats["Acerto %"] < 50]
+                    if not questoes_criticas.empty:
+                        for _, row in questoes_criticas.iterrows():
+                            st.error(f"**{row['Questão']}:** Apenas {row['Acerto %']:.0f}% de acerto. Erro comum: Letra {row['Erro Comum']}")
+                    else:
+                        st.success("✅ Nenhuma questão com erro crítico detectada!")
+
+                # 3. MOTOR DE RECOMPOSIÇÃO (IA PEDAGÓGICA)
+                st.divider()
+                st.subheader("🧠 Plano de Recomposição Maestro Sosa")
+                
+                if st.button("💎 GERAR PROGNÓSTICO E ROTEIRO DE RECUPERAÇÃO", use_container_width=True, type="primary"):
+                    with st.spinner("Maestro analisando lacunas cognitivas e cruzando com a BNCC..."):
+                        # Prepara o contexto para a IA
+                        resumo_performance = df_stats.to_string(index=False)
+                        contexto_prova = ai.extrair_tag(txt_ativo, "PROFESSOR") # Pega os objetivos originais
+                        
+                        prompt_recomp = (
+                            f"Analise os resultados desta avaliação de Matemática:\n\n"
+                            f"DADOS DE PERFORMANCE:\n{resumo_performance}\n\n"
+                            f"OBJETIVOS ORIGINAIS:\n{contexto_prova}\n\n"
+                            f"MISSÃO:\n"
+                            f"1. Identifique a LACUNA COGNITIVA principal (Ex: dificuldade em frações, SND).\n"
+                            f"2. Explique o provável motivo do 'Erro Comum' detectado.\n"
+                            f"3. Sugira uma ATIVIDADE DE RECOMPOSIÇÃO prática (mão na massa) para sanar esses erros.\n"
+                            f"4. Use a Pedagogia Histórico-Crítica (PHC). Seja direto e técnico. SEM MARKDOWN."
+                        )
+                        
+                        prognostico = ai.gerar_ia("PLANE_PEDAGOGICO", prompt_recomp)
+                        st.info(prognostico)
+                        
+                        # Botão para salvar o relatório no Diário de Bordo
+                        if st.button("💾 ARQUIVAR PROGNÓSTICO NO RELATÓRIO DA TURMA"):
+                            db.salvar_ata_conselho(datetime.now().strftime("%d/%m/%Y"), f_turma, "PROGNÓSTICO_RECOMPOSIÇÃO", prognostico)
+                            st.success("Relatório arquivado com sucesso!")
+
+            else:
+                st.info("📭 Aguardando a captura de gabaritos para gerar o Raio-X de proficiência.")
