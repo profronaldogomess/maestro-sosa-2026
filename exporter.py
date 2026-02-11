@@ -283,13 +283,13 @@ def gerar_docx_professor_v25(titulo_doc, conteudo, info):
 # 5. PROVA OFICIAL (PRESERVAÇÃO INTEGRAL - COM NOTA)
 # ==============================================================================
 def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
-    """Versão V29.20 - SOBERANIA ORTOGRÁFICA E PRECISÃO DE GABARITO"""
+    """Versão V29.21 - SOBERANIA INTEGRAL, ORTOGRAFIA E ESCUDO V33"""
     import re
     file_stream = io.BytesIO()
     try:
         doc = Document()
         
-        # Configuração de Fonte Global (Arial)
+        # 1. CONFIGURAÇÃO DE ESTILO GLOBAL (ARIAL)
         style = doc.styles['Normal']
         style.font.name = 'Arial'
         style.font.size = Pt(10.5)
@@ -298,28 +298,31 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         section.top_margin = section.bottom_margin = Inches(0.3)
         section.left_margin = section.right_margin = Inches(0.4)
         
-        # 1. EXTRAÇÃO LIMPA (Foca apenas na tag QUESTOES para contar e exibir)
-        # Se não houver a tag, ele tenta limpar o ruído inicial
-        corpo_questoes = ai.extrair_tag(conteudo_ia, "QUESTOES") or ai.extrair_tag(conteudo_ia, "ALUNO")
-        if not corpo_questoes:
-            match_primeira_q = re.search(r"(?i)QUESTÃO\s*\d+", conteudo_ia)
-            corpo_questoes = conteudo_ia[match_primeira_q.start():].strip() if match_primeira_q else conteudo_ia.strip()
-
-        # 2. CONTAGEM REAL (Evita contar o gabarito no final)
-        # Removemos o que vem depois de [GABARITO] para a contagem não errar
-        texto_para_contagem = corpo_questoes.split("[GABARITO")[0]
-        num_total_q = len(re.findall(r'(?i)QUESTÃO\s+\d+', texto_para_contagem))
-        if num_total_q == 0: num_total_q = int(info.get('qtd_questoes', 10))
-        
+        # 2. DETECÇÃO DE TIPO E EXTRAÇÃO (USANDO EXTRATOR V33)
         is_pei_doc = "PEI" in titulo_doc.upper() or "ADAPTADA" in titulo_doc.upper()
-        is_sonda = "SONDA" in titulo_doc.upper() or "DIAGNÓSTICA" in titulo_doc.upper()
-        label_prova = "SONDA DE PROFICIÊNCIA" if is_sonda else ("AVALIAÇÃO ADAPTADA" if is_pei_doc else "AVALIAÇÃO DE MATEMÁTICA")
+        tag_alvo = "PEI" if is_pei_doc else "QUESTOES"
+        
+        # Extrai o conteúdo usando a tag correta
+        corpo_bruto = ai.extrair_tag(conteudo_ia, tag_alvo)
+        
+        # Fallback caso a IA não tenha usado a tag QUESTOES
+        if not corpo_bruto:
+            match_primeira_q = re.search(r"(?i)QUESTÃO\s*\d+", conteudo_ia)
+            corpo_bruto = conteudo_ia[match_primeira_q.start():].strip() if match_primeira_q else conteudo_ia.strip()
 
-        # 3. CABEÇALHO MESTRE
+        # 3. CONTAGEM REAL PARA GABARITO PROPORCIONAL
+        # Conta apenas no texto extraído para não contar o gabarito final
+        num_total_q = len(re.findall(r'(?i)QUESTÃO\s+\d+', corpo_bruto))
+        if num_total_q == 0: num_total_q = int(info.get('qtd_questoes', 5))
+        
+        label_prova = "AVALIAÇÃO ADAPTADA" if is_pei_doc else "AVALIAÇÃO DE MATEMÁTICA"
+        if "SONDA" in titulo_doc.upper(): label_prova = "SONDA DE PROFICIÊNCIA"
+
+        # 4. CABEÇALHO MESTRE
         configurar_cabecalho_mestre(doc, info, label_prova, mostrar_nota=True)
         doc.add_paragraph()
 
-        # 4. QUADRO DE ORIENTAÇÕES + GABARITO DE BOLINHAS PROPORCIONAL
+        # 5. QUADRO DE ORIENTAÇÕES + GABARITO DE BOLINHAS
         top_table = doc.add_table(rows=1, cols=2)
         top_table.columns[0].width = Inches(3.5)
         top_table.columns[1].width = Inches(4.0)
@@ -342,7 +345,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
             p.add_run(f"• {txt}").font.size = Pt(9)
             p.paragraph_format.space_after = Pt(0)
 
-        # GABARITO DE BOLINHAS (Exatamente num_total_q linhas)
+        # GABARITO DE BOLINHAS PROPORCIONAL (num_total_q linhas)
         c_gab = top_table.cell(0, 1)
         gab_grid = c_gab.add_table(rows=num_total_q + 1, cols=6)
         gab_grid.style = 'Table Grid'
@@ -355,34 +358,38 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         
         doc.add_paragraph()
 
-        # 5. CONTEÚDO EM COLUNAS NATIVAS
+        # 6. CONTEÚDO EM 2 COLUNAS NATIVAS
         new_section = doc.add_section(WD_SECTION.CONTINUOUS)
         sectPr = new_section._sectPr
         cols = sectPr.xpath('./w:cols')[0]
         cols.set(qn('w:num'), '2')
         cols.set(qn('w:space'), '720')
 
-        # VACINA ANTI-MARKDOWN: Limpa asteriscos soltos antes de processar
-        corpo_limpo = corpo_questoes.replace("**", "").replace("#", "")
+        # VACINA ANTI-MARKDOWN E LIMPEZA DE CARACTERES
+        corpo_limpo = corpo_bruto.replace("**", "").replace("#", "")
 
         for linha in corpo_limpo.split('\n'):
             l_s = linha.strip()
             if not l_s: continue
+            
             p = doc.add_paragraph()
             p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+            p.paragraph_format.space_after = Pt(6)
             
-            # RÓTULO DA QUESTÃO (INLINE E SOBERANO)
+            # LEI DA FORMATAÇÃO INLINE (QUESTÃO XX (0,XX ponto) - Texto)
             if l_s.upper().startswith("QUESTÃO"):
                 match = re.match(r"^(QUEST[AÃ]O\s+\d+)(.*?)(\.\s*|\s+-\s*|:\s*)(.*)", l_s, re.IGNORECASE)
                 if match:
-                    rotulo = f"{match.group(1).upper()}{match.group(2)}{match.group(3)}"
-                    run_r = p.add_run(rotulo)
+                    # Rótulo em Negrito e Caixa Alta
+                    rotulo_completo = f"{match.group(1).upper()}{match.group(2)}{match.group(3)}"
+                    run_r = p.add_run(rotulo_completo)
                     run_r.bold = True
                     run_r.font.size = Pt(11)
+                    # Texto na mesma linha
                     p.add_run(match.group(4).strip())
                     continue
             
-            # Títulos de Seção
+            # Títulos de Seção PEI (Sem Unicode, apenas Negrito/Caixa Alta)
             secoes_especiais = ["PARA LEMBRAR", "DICA MESTRA", "PASSO A PASSO", "VERSÃO ADAPTADA"]
             if any(x in l_s.upper() for x in secoes_especiais):
                 run = p.add_run(l_s.upper())
@@ -390,7 +397,15 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
                 p.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 continue
 
-            # Indentação de Alternativas
+            # Estilização de Prompts de Imagem
+            if "PROMPT IMAGEM" in l_s.upper():
+                run = p.add_run(l_s)
+                run.font.italic = True
+                run.font.size = Pt(8)
+                run.font.color.rgb = RGBColor(100, 100, 100)
+                continue
+
+            # Indentação de Alternativas A, B, C, D, E
             if re.match(r'^[A-E][\)\.]', l_s):
                 p.paragraph_format.left_indent = Inches(0.2)
             
@@ -401,7 +416,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         return file_stream
     except Exception as e:
         file_stream = io.BytesIO()
-        err_doc = Document(); err_doc.add_paragraph(f"ERRO: {str(e)}"); err_doc.save(file_stream)
+        err_doc = Document(); err_doc.add_paragraph(f"ERRO NO EXPORTER: {str(e)}"); err_doc.save(file_stream)
         file_stream.seek(0)
         return file_stream
     
