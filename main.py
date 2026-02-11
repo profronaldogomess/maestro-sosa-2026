@@ -2122,7 +2122,7 @@ elif menu == "📸 Scanner de Gabaritos":
 
         tab_captura, tab_conferencia, tab_raiox = st.tabs(["📸 1. Capturar Gabaritos", "⚖️ 2. Hub de Homologação", "📊 3. Raio-X"])
 
-# --- ABA 1: CAPTURA (COM FILTRO DE PRECISÃO E CORREÇÃO RES_LISTA) ---
+# --- ABA 1: CAPTURA (COM DETECÇÃO AUTOMÁTICA PEI/REGULAR V43) ---
         with tab_captura:
             st.subheader(f"Captura de Evidências: {f_ativo}")
             
@@ -2137,89 +2137,90 @@ elif menu == "📸 Scanner de Gabaritos":
                 aluno_sel = c_a1.selectbox("👤 Selecione o Aluno:", alunos_pendentes['NOME_ALUNO'].tolist())
                 aluno_info = alunos_pendentes[alunos_pendentes['NOME_ALUNO'] == aluno_sel].iloc[0]
                 
-                # Detecção PEI para carregar o gabarito certo
+                # --- LÓGICA DE SOBERANIA PEI ---
                 is_pei_aluno = str(aluno_info['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"]
-                tag_gab = "GABARITO_PEI" if is_pei_aluno else "GABARITO"
-                gab_raw = ai.extrair_tag(txt_ativo, tag_gab) or ai.extrair_tag(txt_ativo, "GABARITO")
                 
-                # Motor de Precisão para o Gabarito Oficial
+                if is_pei_aluno:
+                    st.warning(f"♿ **PERFIL PEI DETECTADO:** O sistema usará o Gabarito Adaptado para {aluno_sel}.")
+                    tag_alvo = "GABARITO_PEI"
+                else:
+                    st.info(f"📝 **PERFIL REGULAR:** O sistema usará o Gabarito Padrão para {aluno_sel}.")
+                    tag_alvo = "GABARITO"
+
+                # Extração do Gabarito Oficial Específico
+                gab_raw = ai.extrair_tag(txt_ativo, tag_alvo)
+                if is_pei_aluno and not gab_raw: # Fallback
+                    gab_raw = ai.extrair_tag(txt_ativo, "GABARITO")
+                
                 matches = re.findall(r"^(\d+)[\s\.\)\-]*([A-E])", gab_raw.upper(), re.MULTILINE)
                 gab_dict = {num: let for num, let in matches}
                 gab_oficial = [gab_dict[num] for num in sorted(gab_dict.keys())]
                 qtd_q = len(gab_oficial)
 
-                img_file = st.camera_input(f"📸 Scan: {aluno_sel}")
+                img_file = st.camera_input(f"📸 Scan: {aluno_sel} ({qtd_q} questões)")
                 
                 if img_file:
-                    # Botão para disparar a análise
                     if st.button("🧠 ANALISAR MARCAÇÕES", type="primary", use_container_width=True):
-                        with st.spinner("Perito Sosa analisando..."):
+                        with st.spinner("Perito Sosa (1.5 Pro) analisando com alta precisão..."):
                             res_json = ai.analisar_gabarito_vision(img_file.getvalue())
                             
-                            # --- INICIO DA CORREÇÃO RES_LISTA (BUSCA INSISTENTE) ---
+                            # Busca as respostas no JSON da IA de forma insistente
                             res_lista = []
                             for i in range(qtd_q):
-                                q_num_longo = f"{i+1:02d}" # Formato "01"
-                                q_num_curto = str(i+1)     # Formato "1"
-                                
-                                # Tenta buscar no JSON da IA usando os dois formatos possíveis
+                                q_num_longo = f"{i+1:02d}"
+                                q_num_curto = str(i+1)
                                 valor_lido = res_json.get(q_num_longo, res_json.get(q_num_curto, "?"))
                                 res_lista.append(valor_lido)
                             
-                            # Armazena o resultado final para a Mesa de Perícia
                             st.session_state.current_scan_res = res_lista
                             st.session_state.current_scan_img = img_file.getvalue()
-                            # --- FIM DA CORREÇÃO ---
 
-                # --- MESA DE PERÍCIA IMEDIATA (SÓ APARECE APÓS O SCAN) ---
+                # --- MESA DE PERÍCIA IMEDIATA ---
                 if "current_scan_res" in st.session_state:
                     st.markdown("---")
                     st.subheader("🔍 Mesa de Perícia Imediata")
-                    st.info("Confira as marcações abaixo. 'X' = Dupla/Rasura | '?' = Vazia.")
                     
-                    # Prepara dados para a tabela de conferência rápida
                     dados_pericia = []
                     for i in range(qtd_q):
                         lido = st.session_state.current_scan_res[i]
                         certo = gab_oficial[i]
                         status = "✅" if lido == certo else "❌"
-                        if lido == "X": status = "🚫 ANULADA"
+                        if lido == "X": status = "🚫 DUPLA"
                         if lido == "?": status = "⚪ VAZIA"
                         
                         dados_pericia.append({
-                            "Questão": f"{i+1:02d}",
-                            "Marcação Lida": lido,
-                            "Gabarito Oficial": certo,
-                            "Resultado": status
+                            "Q": f"{i+1:02d}",
+                            "Lido": lido,
+                            "Gabarito": certo,
+                            "Status": status
                         })
                     
-                    # Tabela editável para o professor consertar erros da IA
-                    df_revisao_imediata = st.data_editor(
+                    df_revisao = st.data_editor(
                         pd.DataFrame(dados_pericia),
                         column_config={
-                            "Questão": st.column_config.TextColumn("Q", disabled=True),
-                            "Marcação Lida": st.column_config.SelectboxColumn("Correção", options=["A", "B", "C", "D", "E", "X", "?"], required=True),
-                            "Gabarito Oficial": st.column_config.TextColumn("Gabarito", disabled=True),
-                            "Resultado": st.column_config.TextColumn("Status", disabled=True)
+                            "Q": st.column_config.TextColumn("Q", disabled=True),
+                            "Lido": st.column_config.SelectboxColumn("Correção", options=["A", "B", "C", "D", "E", "X", "?"], required=True),
+                            "Gabarito": st.column_config.TextColumn("Oficial", disabled=True),
+                            "Status": st.column_config.TextColumn("Status", disabled=True)
                         },
-                        hide_index=True, use_container_width=True, key=f"mesa_pericia_{aluno_sel}"
+                        hide_index=True, use_container_width=True, key=f"mesa_{aluno_sel}"
                     )
                     
-                    # Cálculo da nota em tempo real baseado na edição do professor
-                    novas_respostas = df_revisao_imediata["Marcação Lida"].tolist()
+                    novas_respostas = df_revisao["Lido"].tolist()
                     acertos_rev = sum(1 for i, r in enumerate(novas_respostas) if r == gab_oficial[i])
-                    nota_rev = (acertos_rev / qtd_q) * valor_total_ativo
+                    nota_rev = (acertos_rev / qtd_q) * valor_total_ativo if qtd_q > 0 else 0
                     
-                    st.metric("Nota Final Revisada", f"{nota_rev:.2f}", delta=f"{acertos_rev} acertos")
+                    st.metric("Nota Final Revisada", f"{nota_rev:.2f}", delta=f"{acertos_rev}/{qtd_q} acertos")
 
                     col_b1, col_b2 = st.columns(2)
                     if col_b1.button("💾 CONFIRMAR E ENVIAR AO HUB", type="primary", use_container_width=True):
+                        prefixo = "[PEI]" if is_pei_aluno else "[REGULAR]"
                         db.salvar_no_banco("DB_GABARITOS_ALUNOS", [
                             datetime.now().strftime("%d/%m/%Y"), aluno_info['ID'], aluno_sel, f_turma,
-                            f_ativo, ";".join(novas_respostas), util.sosa_to_str(nota_rev), "PENDENTE"
+                            f_ativo, ";".join(novas_respostas), util.sosa_to_str(nota_rev), f"{prefixo} Scan"
                         ])
-                        st.success(f"✅ Prova de {aluno_sel} enviada ao Hub!")
-                        del st.session_state.current_scan_res # Limpa para o próximo
+                        st.success(f"✅ Enviado ao Hub!")
+                        del st.session_state.current_scan_res
                         st.rerun()
                     
                     if col_b2.button("🗑️ DESCARTAR SCAN", use_container_width=True):
