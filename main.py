@@ -2122,10 +2122,20 @@ elif menu == "📸 Scanner de Gabaritos":
 
         tab_captura, tab_conferencia, tab_raiox = st.tabs(["📸 1. Capturar Gabaritos", "⚖️ 2. Hub de Homologação", "📊 3. Raio-X"])
 
-# --- ABA 1: CAPTURA (COM DETECÇÃO AUTOMÁTICA PEI/REGULAR V43) ---
+# --- ABA 1: CAPTURA (GEMINI 2.5 PRO + DETECÇÃO PEI V44) ---
         with tab_captura:
             st.subheader(f"Captura de Evidências: {f_ativo}")
             
+            # 1. LEGENDA DE PERÍCIA PARA O PROFESSOR
+            with st.expander("ℹ️ LEGENDA DE MARCAÇÕES (SOSA V29)", expanded=True):
+                st.markdown("""
+                | Símbolo | Significado | Ação do Sistema |
+                | :--- | :--- | :--- |
+                | **A, B, C, D, E** | Marcação Única | Computa acerto ou erro conforme gabarito. |
+                | **X** | Dupla Marcação / Rasura | Considera a questão como **ANULADA** (Erro). |
+                | **?** | Questão em Branco | Considera a questão como **VAZIA** (Erro). |
+                """)
+
             # Filtra alunos pendentes
             escaneados = df_diagnosticos[df_diagnosticos['ID_AVALIACAO'] == f_ativo]['ID_ALUNO'].astype(str).tolist()
             alunos_pendentes = df_alunos[(df_alunos['TURMA'] == f_turma) & (~df_alunos['ID'].astype(str).isin(escaneados))]
@@ -2149,8 +2159,7 @@ elif menu == "📸 Scanner de Gabaritos":
 
                 # Extração do Gabarito Oficial Específico
                 gab_raw = ai.extrair_tag(txt_ativo, tag_alvo)
-                if is_pei_aluno and not gab_raw: # Fallback
-                    gab_raw = ai.extrair_tag(txt_ativo, "GABARITO")
+                if is_pei_aluno and not gab_raw: gab_raw = ai.extrair_tag(txt_ativo, "GABARITO")
                 
                 matches = re.findall(r"^(\d+)[\s\.\)\-]*([A-E])", gab_raw.upper(), re.MULTILINE)
                 gab_dict = {num: let for num, let in matches}
@@ -2160,8 +2169,8 @@ elif menu == "📸 Scanner de Gabaritos":
                 img_file = st.camera_input(f"📸 Scan: {aluno_sel} ({qtd_q} questões)")
                 
                 if img_file:
-                    if st.button("🧠 ANALISAR MARCAÇÕES", type="primary", use_container_width=True):
-                        with st.spinner("Perito Sosa (1.5 Pro) analisando com alta precisão..."):
+                    if st.button("🧠 ANALISAR COM GEMINI 2.5 PRO", type="primary", use_container_width=True):
+                        with st.spinner("Perito Sosa (2.5 Pro) realizando perícia de alta densidade..."):
                             res_json = ai.analisar_gabarito_vision(img_file.getvalue())
                             
                             # Busca as respostas no JSON da IA de forma insistente
