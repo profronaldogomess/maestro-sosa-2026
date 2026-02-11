@@ -2142,11 +2142,11 @@ elif menu == "📸 Scanner de Gabaritos":
             "📊 3. Raio-X de Desempenho"
         ])
 
-        # --- ABA 1: CAPTURA (BUFFER) ---
+# --- ABA 1: CAPTURA (BUFFER COM DETECÇÃO PEI) ---
         with tab_captura:
             st.subheader(f"Captura de Evidências: {f_ativo}")
             
-            # Filtra alunos pendentes (que não estão no DB_GABARITOS_ALUNOS para este ativo)
+            # Filtra alunos pendentes
             escaneados = df_diagnosticos[df_diagnosticos['ID_AVALIACAO'] == f_ativo]['ID_ALUNO'].astype(str).tolist()
             alunos_pendentes = df_alunos[(df_alunos['TURMA'] == f_turma) & (~df_alunos['ID'].astype(str).isin(escaneados))]
             
@@ -2157,25 +2157,45 @@ elif menu == "📸 Scanner de Gabaritos":
                 aluno_sel = c_a1.selectbox("👤 Selecione o Aluno para Escanear:", alunos_pendentes['NOME_ALUNO'].tolist())
                 aluno_info = alunos_pendentes[alunos_pendentes['NOME_ALUNO'] == aluno_sel].iloc[0]
                 
-                img_file = st.camera_input(f"📸 Posicione o gabarito de {aluno_sel}")
+                # --- LÓGICA DE SOBERANIA PEI ---
+                is_pei_aluno = str(aluno_info['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"]
+                
+                if is_pei_aluno:
+                    st.warning(f"♿ **PERFIL PEI DETECTADO:** O sistema usará o Gabarito Adaptado para {aluno_sel}.")
+                    tag_gabarito = "GABARITO_PEI"
+                else:
+                    st.info(f"📝 **PERFIL REGULAR:** O sistema usará o Gabarito Padrão para {aluno_sel}.")
+                    tag_gabarito = "GABARITO"
+
+                # Extrai o gabarito específico (Regular ou PEI)
+                gab_especifico_raw = ai.extrair_tag(txt_ativo, tag_gabarito)
+                # Se o gabarito PEI estiver vazio por erro da IA, ele usa o regular como fallback de segurança
+                if not gab_especifico_raw: gab_especifico_raw = ai.extrair_tag(txt_ativo, "GABARITO")
+                
+                gab_especifico = re.findall(r"(?:QUESTÃO\s*\d+[:\s-]*|^\d+[:\s-]*)([A-E])", gab_especifico_raw.upper(), re.MULTILINE)
+                qtd_questoes_alvo = len(gab_especifico)
+
+                img_file = st.camera_input(f"📸 Escanear folha de {aluno_sel} ({qtd_questoes_alvo} questões)")
                 
                 if img_file:
                     if st.button("🧠 ANALISAR MARCAÇÕES", type="primary", use_container_width=True):
-                        with st.spinner("Perito Sosa analisando marcações..."):
+                        with st.spinner(f"Perito Sosa analisando {qtd_questoes_alvo} questões..."):
+                            # Passamos a quantidade de questões para a IA não tentar ler o que não existe
                             res_aluno_json = ai.analisar_gabarito_vision(img_file.getvalue())
                             
-                            # Cálculo da Nota Provisória
+                            # Cálculo da Nota baseado no gabarito do perfil do aluno
                             acertos = 0
                             res_lista = []
-                            for i, letra_certa in enumerate(gab_oficial):
+                            for i, letra_certa in enumerate(gab_especifico):
                                 q_num = f"{i+1:02d}"
                                 resp_aluno = res_aluno_json.get(q_num, "?")
                                 res_lista.append(resp_aluno)
                                 if resp_aluno == letra_certa: acertos += 1
                             
-                            nota_prov = (acertos / len(gab_oficial)) * valor_total_ativo if gab_oficial else 0
+                            nota_prov = (acertos / qtd_questoes_alvo) * valor_total_ativo if qtd_questoes_alvo > 0 else 0
                             
-                            # Salva no Buffer (DB_GABARITOS_ALUNOS)
+                            # Salva no Buffer com a marcação de que foi PEI ou Regular
+                            prefixo_obs = "[PEI]" if is_pei_aluno else "[REGULAR]"
                             db.salvar_no_banco("DB_GABARITOS_ALUNOS", [
                                 datetime.now().strftime("%d/%m/%Y"), 
                                 aluno_info['ID'], 
@@ -2184,9 +2204,9 @@ elif menu == "📸 Scanner de Gabaritos":
                                 f_ativo, 
                                 ";".join(res_lista), 
                                 util.sosa_to_str(nota_prov), 
-                                "LINK_PENDENTE"
+                                f"{prefixo_obs} Scan realizado"
                             ])
-                            st.success(f"✅ Perícia realizada para {aluno_sel}! Nota: {nota_prov:.2f}")
+                            st.success(f"✅ Perícia concluída! {acertos}/{qtd_questoes_alvo} acertos. Nota: {nota_prov:.2f}")
                             st.rerun()
 
         # --- ABA 2: HUB DE HOMOLOGAÇÃO (CONFERÊNCIA EM LOTE) ---
