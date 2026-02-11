@@ -2223,15 +2223,26 @@ elif menu == "📸 Scanner de Gabaritos":
 
                     c_b1, col_b2 = st.columns(2)
                     if c_b1.button("💾 CONFIRMAR E ENVIAR AO HUB", type="primary", use_container_width=True):
-                        with st.spinner("Sincronizando Foto e Nota..."):
-                            link_pasta = db.salvar_foto_pericia_drive(st.session_state.current_scan_img, aluno_sel, f_ativo)
-                            db.salvar_no_banco("DB_GABARITOS_ALUNOS", [
-                                datetime.now().strftime("%d/%m/%Y"), aluno_info['ID'], aluno_sel, f_turma,
-                                f_ativo, ";".join(novas_res), util.sosa_to_str(nota_final), link_pasta
-                            ])
-                            st.success("✅ Evidência arquivada!"); del st.session_state.current_scan_res; st.rerun()
-                    if col_b2.button("🗑️ DESCARTAR SCAN", use_container_width=True):
-                        del st.session_state.current_scan_res; st.rerun()
+                                            with st.spinner("Sincronizando Foto via SOSA Bridge..."):
+                                                # Envia a foto via Script do Google
+                                                # categoria = f_turma (ex: 6º Ano), semanaRef = f_ativo (Nome da Prova)
+                                                link_pasta = db.subir_e_converter_para_google_docs(
+                                                    st.session_state.current_scan_img, 
+                                                    aluno_sel.replace(" ", "_").upper(), 
+                                                    trimestre=f_trim, 
+                                                    categoria=f_turma, 
+                                                    semana=f_ativo, 
+                                                    modo="SCANNER"
+                                                )
+                                                
+                                                if "https" in link_pasta:
+                                                    db.salvar_no_banco("DB_GABARITOS_ALUNOS", [
+                                                        datetime.now().strftime("%d/%m/%Y"), aluno_info['ID'], aluno_sel, f_turma,
+                                                        f_ativo, ";".join(novas_res), util.sosa_to_str(nota_final), link_pasta
+                                                    ])
+                                                    st.success("✅ Evidência arquivada com sucesso!"); del st.session_state.current_scan_res; st.rerun()
+                                                else:
+                                                    st.error(f"Falha no arquivamento: {link_pasta}")
 
         # --- ABA 2: HUB DE HOMOLOGAÇÃO ---
         with tab_conferencia:
