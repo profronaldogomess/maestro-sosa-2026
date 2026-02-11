@@ -374,7 +374,7 @@ def extrair_tag(texto, tag):
     # 2. LISTA DE TAGS MESTRAS (Aquelas que realmente dividem as abas)
     # O extrator só vai parar de ler quando encontrar uma destas.
     tags_mestras = [
-        "ORIENTACOES", "QUESTOES", "GABARITO_TEXTO", "RESPOSTAS_IA", 
+        "ORIENTACOES", "QUESTOES", "GABARITO_TEXTO","GABARITO", "RESPOSTAS_IA", 
         "PEI", "GABARITO_PEI", "RESPOSTAS_PEI_IA", "PROFESSOR", "ALUNO",
         "BNCC_CODE", "CONTEUDO_GERAL", "CONTEUDOS_ESPECIFICOS", "OBJETIVOS_ENSINO"
     ]
