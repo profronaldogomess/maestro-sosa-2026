@@ -2081,7 +2081,7 @@ elif menu == "📝 Central de Avaliações":
         else: st.info("📭 Nenhum exame no acervo.")
 
 # ==============================================================================
-# MÓDULO: SCANNER & HUB DE HOMOLOGAÇÃO (V50.0 - ESTABILIDADE TOTAL)
+# MÓDULO: SCANNER & HUB DE HOMOLOGAÇÃO (V52.0 - PROTOCOLO DE CUSTÓDIA)
 # ==============================================================================
 elif menu == "📸 Scanner de Gabaritos":
     st.title("📸 Scanner de Gabaritos e Hub de Homologação")
@@ -2110,33 +2110,32 @@ elif menu == "📸 Scanner de Gabaritos":
     if not f_turma or not f_ativo:
         st.info("💡 Selecione a Turma e o Ativo para iniciar a perícia.")
     else:
-        # --- 2. MOTOR DE DNA V50 ---
+        # --- 2. MOTOR DE DNA E ACERVO DE PASTA ---
         dados_ativo = df_aulas[df_aulas['TIPO_MATERIAL'] == f_ativo].iloc[0]
         txt_ativo = str(dados_ativo['CONTEUDO'])
         
         # Extração de Valor (DNA)
         val_tag = ai.extrair_tag(txt_ativo, "VALOR")
-        if val_tag and val_tag.replace(',','.').replace('.','').isdigit():
-            valor_total_ativo = util.sosa_to_float(val_tag)
-        else:
-            match_v = re.search(r"(?:VALOR TOTAL|VALOR)[:\s]*(\d+[\.,]\d+|\d+)", txt_ativo.upper())
-            valor_total_ativo = util.sosa_to_float(match_v.group(1)) if match_v else 10.0
-        
-        # Função de Extração de Gabarito (Pinça Cirúrgica V50)
+        valor_total_ativo = util.sosa_to_float(val_tag) if val_tag else 10.0
+
+        # --- BOTÃO DE ACERVO (LINK DA PASTA NO DRIVE) ---
+        # Busca ou cria a pasta da prova para exibir o link de acesso rápido
+        _, link_pasta_acervo = db.obter_ou_criar_pasta_drive(f_ativo)
+        if link_pasta_acervo:
+            st.link_button(f"📂 ABRIR ACERVO DE EVIDÊNCIAS (FOTOS: {f_ativo})", link_pasta_acervo, use_container_width=True)
+
+        # Função de Extração de Gabarito (Pinça Cirúrgica V52)
         def extrair_gabarito_estrito(texto, is_pei=False):
             tag = "GABARITO_PEI" if is_pei else "GABARITO_TEXTO"
             raw = ai.extrair_tag(texto, tag)
-            # Fallback se a tag principal falhar
             if not raw: raw = ai.extrair_tag(texto, "GABARITO")
             
             linhas = raw.split('\n')
             mapa = {}
             for linha in linhas:
-                # Regex captura: Número + Letra (A-E)
                 match = re.search(r"(?:QUEST[AÃ]O\s+)?(\d+)[\s\.\)\-:]+([A-E])", linha.upper())
                 if match:
-                    num = int(match.group(1))
-                    letra = match.group(2)
+                    num = int(match.group(1)); letra = match.group(2)
                     if num not in mapa: mapa[num] = letra
             return [mapa[n] for n in sorted(mapa.keys())]
 
@@ -2147,12 +2146,10 @@ elif menu == "📸 Scanner de Gabaritos":
             "📸 1. Capturar Gabaritos", "⚖️ 2. Hub de Homologação", "📊 3. Raio-X"
         ])
 
+        # --- ABA 1: CAPTURA ---
         with tab_captura:
             st.subheader(f"Captura: {f_ativo} (Valor: {valor_total_ativo:.1f})")
             
-            with st.expander("📘 LEGENDA DE MARCAÇÕES E STATUS", expanded=False):
-                st.markdown("| ✅ Acerto | ❌ Erro | 🚫 **X** Dupla | ⚪ **?** Vazia |")
-
             escaneados = df_diagnosticos[df_diagnosticos['ID_AVALIACAO'] == f_ativo]['ID_ALUNO'].astype(str).tolist()
             alunos_pendentes = df_alunos[(df_alunos['TURMA'] == f_turma) & (~df_alunos['ID'].astype(str).isin(escaneados))]
             
@@ -2168,7 +2165,7 @@ elif menu == "📸 Scanner de Gabaritos":
                 qtd_q_alvo = len(gab_alvo)
 
                 if qtd_q_alvo == 0:
-                    st.error("⚠️ Erro: Gabarito não detectado no banco. Verifique as tags do material.")
+                    st.error("⚠️ Erro: Gabarito não detectado. Verifique as tags do material.")
                 else:
                     if is_pei_aluno: st.warning(f"♿ **PERFIL PEI** | {qtd_q_alvo} questões detectadas.")
                     else: st.info(f"📝 **PERFIL REGULAR** | {qtd_q_alvo} questões detectadas.")
@@ -2181,9 +2178,10 @@ elif menu == "📸 Scanner de Gabaritos":
                                 res_json = ai.analisar_gabarito_vision(img_file.getvalue())
                                 res_lista = [res_json.get(f"{i+1:02d}", res_json.get(str(i+1), "?")) for i in range(qtd_q_alvo)]
                                 st.session_state.current_scan_res = res_lista
+                                st.session_state.current_scan_img = img_file.getvalue() # Guarda a foto para o Drive
                                 st.rerun()
 
-                    # --- MESA DE PERÍCIA IMEDIATA V50 ---
+                    # --- MESA DE PERÍCIA IMEDIATA ---
                     if "current_scan_res" in st.session_state:
                         st.markdown("---")
                         st.subheader("🔍 Mesa de Perícia Imediata")
@@ -2199,23 +2197,24 @@ elif menu == "📸 Scanner de Gabaritos":
                             column_config={"Correção": st.column_config.SelectboxColumn("Sua Revisão", options=["A", "B", "C", "D", "E", "X", "?"], required=True)},
                             key=f"mesa_{aluno_sel}")
                         
-                        # Lógica de Cálculo Blindada
                         novas_res = df_mesa["Correção"].tolist()
                         acertos = sum(1 for i, r in enumerate(novas_res) if r == gab_alvo[i])
                         nota_final = (acertos / len(gab_alvo)) * valor_total_ativo if len(gab_alvo) > 0 else 0
                         
-                        with st.container(border=True):
-                            c_m1, c_m2 = st.columns(2)
-                            c_m1.metric(f"Nota Final (Peso {valor_total_ativo})", f"{nota_final:.2f}")
-                            c_m2.metric("Desempenho", f"{acertos}/{len(gab_alvo)} acertos")
+                        st.metric(f"Nota Final (Peso {valor_total_ativo})", f"{nota_final:.2f}")
 
                         c_b1, col_b2 = st.columns(2)
                         if c_b1.button("💾 CONFIRMAR E ENVIAR AO HUB", type="primary", use_container_width=True):
-                            db.salvar_no_banco("DB_GABARITOS_ALUNOS", [
-                                datetime.now().strftime("%d/%m/%Y"), aluno_info['ID'], aluno_sel, f_turma,
-                                f_ativo, ";".join(novas_res), util.sosa_to_str(nota_final), "Scan Homologado"
-                            ])
-                            st.success("✅ Evidência arquivada!"); del st.session_state.current_scan_res; st.rerun()
+                            with st.spinner("Executando Protocolo de Custódia (Upload Foto)..."):
+                                # 1. Salva a Foto no Drive e pega o link da PASTA
+                                link_pasta = db.salvar_foto_pericia_drive(st.session_state.current_scan_img, aluno_sel, f_ativo)
+                                
+                                # 2. Salva os dados na Planilha (O link da pasta vai na última coluna)
+                                db.salvar_no_banco("DB_GABARITOS_ALUNOS", [
+                                    datetime.now().strftime("%d/%m/%Y"), aluno_info['ID'], aluno_sel, f_turma,
+                                    f_ativo, ";".join(novas_res), util.sosa_to_str(nota_final), link_pasta
+                                ])
+                                st.success("✅ Evidência e Foto arquivadas!"); del st.session_state.current_scan_res; st.rerun()
                         if col_b2.button("🗑️ DESCARTAR SCAN", use_container_width=True):
                             del st.session_state.current_scan_res; st.rerun()
 
@@ -2234,8 +2233,7 @@ elif menu == "📸 Scanner de Gabaritos":
                 is_pei = str(alu['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"]
                 
                 status = "⚪ Pendente"
-                respostas = ""
-                nota_exibida = 0.0
+                respostas = ""; nota_exibida = 0.0
                 
                 if not leitura.empty:
                     status = "🔵 Aguardando"
@@ -2243,13 +2241,9 @@ elif menu == "📸 Scanner de Gabaritos":
                     nota_exibida = util.sosa_to_float(leitura.iloc[0]['NOTA_CALCULADA'])
                 
                 dados_grade.append({
-                    "ID": id_a,
-                    "ALUNO": f"♿ {alu['NOME_ALUNO']}" if is_pei else alu['NOME_ALUNO'],
-                    "STATUS": status,
-                    "LIDO": respostas,
-                    "OFICIAL": " ".join(gab_pei_list) if is_pei else " ".join(gab_reg_list),
-                    "NOTA": nota_exibida,
-                    "OCORRÊNCIA": "Nenhuma"
+                    "ID": id_a, "ALUNO": f"♿ {alu['NOME_ALUNO']}" if is_pei else alu['NOME_ALUNO'],
+                    "STATUS": status, "LIDO": respostas, "OFICIAL": " ".join(gab_pei_list) if is_pei else " ".join(gab_reg_list),
+                    "NOTA": nota_exibida, "OCORRÊNCIA": "Nenhuma"
                 })
             
             df_auditoria = st.data_editor(pd.DataFrame(dados_grade), hide_index=True, use_container_width=True,
