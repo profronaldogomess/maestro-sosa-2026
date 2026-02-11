@@ -490,61 +490,10 @@ def arquivar_plano_produzido(semana, ano):
     except Exception as e:
         st.error(f"Erro ao arquivar: {e}")
         return False
-    
-def salvar_pericia_scanner(dados_lista, aba_alvo="DB_GABARITOS_ALUNOS"):
-    """
-    Salva o resultado do Scanner com lógica de limpeza prévia (Upsert).
-    dados_lista: [DATA, ID_ALUNO, NOME, TURMA, ID_MATERIAL, RESPOSTAS, NOTA, LINK]
-    """
-    try:
-        wb = conectar()
-        ws = wb.worksheet(aba_alvo)
-        dados = ws.get_all_values()
-        
-        id_aluno = str(dados_lista[1])
-        id_material = str(dados_lista[4])
-        
-        # Busca e remove registro antigo do mesmo aluno para o mesmo material
-        indices_para_deletar = []
-        for i, row in enumerate(dados):
-            if i == 0: continue
-            if len(row) > 4 and str(row[1]) == id_aluno and str(row[4]) == id_material:
-                indices_para_deletar.append(i + 1)
-        
-        for idx in reversed(indices_para_deletar):
-            ws.delete_rows(idx)
-            
-        ws.append_row(dados_lista, value_input_option="USER_ENTERED")
-        st.cache_data.clear()
-        return True
-    except Exception as e:
-        st.error(f"Erro na gravação da perícia: {e}")
-        return False
-    
-def homologar_notas_lote(lista_dados, tipo_ativo="TESTE"):
-    """
-    Move os dados da aba de conferência para o destino final.
-    tipo_ativo: 'TESTE' (vai para DB_NOTAS) ou 'SONDA' (vai para DB_DIARIO_BORDO)
-    """
-    try:
-        wb = conectar()
-        if tipo_ativo == "TESTE":
-            ws_destino = wb.worksheet("DB_NOTAS")
-        else:
-            ws_destino = wb.worksheet("DB_DIARIO_BORDO")
-            
-        # Salva no destino final
-        ws_destino.append_rows(lista_dados, value_input_option="USER_ENTERED")
-        
-        # Marcar como homologado na aba de gabaritos (opcional, ou apenas limpar cache)
-        st.cache_data.clear()
-        return True
-    except Exception as e:
-        st.error(f"Erro na homologação: {e}")
-        return False
-    
+
+
 def obter_ou_criar_pasta_drive(nome_pasta, parent_id=None):
-    """Busca uma pasta no Drive ou cria se não existir, retornando o ID e o Link."""
+    """Busca uma pasta no Drive ou cria se não existir, e compartilha com o professor."""
     try:
         creds = obter_creds_drive()
         service = build('drive', 'v3', credentials=creds)
@@ -557,53 +506,39 @@ def obter_ou_criar_pasta_drive(nome_pasta, parent_id=None):
         items = results.get('files', [])
         
         if items:
-            return items[0]['id'], items[0]['webViewLink']
+            folder_id = items[0]['id']
+            link = items[0]['webViewLink']
+        else:
+            # Se não existe, cria
+            file_metadata = {
+                'name': nome_pasta,
+                'mimeType': 'application/vnd.google-apps.folder'
+            }
+            if parent_id:
+                file_metadata['parents'] = [parent_id]
+                
+            folder = service.files().create(body=file_metadata, fields='id, webViewLink').execute()
+            folder_id = folder.get('id')
+            link = folder.get('webViewLink')
+
+        # --- LEI DE SOBERANIA: COMPARTILHAMENTO AUTOMÁTICO ---
+        # Aqui o Robo-Sosa dá a chave da pasta para você (Ronaldo)
+        email_professor = "prof.ronaldogomess@gmail.com" # Seu e-mail
         
-        # Se não existe, cria
-        file_metadata = {
-            'name': nome_pasta,
-            'mimeType': 'application/vnd.google-apps.folder'
+        permission = {
+            'type': 'user',
+            'role': 'writer', # Permissão de Editor
+            'emailAddress': email_professor
         }
-        if parent_id:
-            file_metadata['parents'] = [parent_id]
-            
-        folder = service.files().create(body=file_metadata, fields='id, webViewLink').execute()
-        return folder.get('id'), folder.get('webViewLink')
+        
+        service.permissions().create(
+            fileId=folder_id,
+            body=permission,
+            fields='id',
+        ).execute()
+        # -------------------------------------------------------
+
+        return folder_id, link
     except Exception as e:
         st.error(f"Erro no Drive: {e}")
         return None, None
-
-def salvar_foto_pericia_drive(imagem_bytes, nome_aluno, nome_avaliacao):
-    """Executa o Protocolo de Custódia: Cria hierarquia e salva a foto."""
-    try:
-        # 1. Garante a pasta Raiz "AVALIAÇÕES"
-        id_raiz, _ = obter_ou_criar_pasta_drive("AVALIAÇÕES")
-        # 2. Garante a subpasta "GABARITOS_ESCANEADOS"
-        id_custodia, _ = obter_ou_criar_pasta_drive("GABARITOS_ESCANEADOS", id_raiz)
-        # 3. Garante a pasta específica da PROVA
-        id_prova, link_pasta_prova = obter_ou_criar_pasta_drive(nome_avaliacao, id_custodia)
-        
-        # 4. Faz o Upload da Foto
-        creds = obter_creds_drive()
-        service = build('drive', 'v3', credentials=creds)
-        
-        from googleapiclient.http import MediaIoBaseUpload
-        import io
-        
-        file_metadata = {
-            'name': f"{nome_aluno.replace(' ', '_')}.jpg",
-            'parents': [id_prova]
-        }
-        media = MediaIoBaseUpload(io.BytesIO(imagem_bytes), mimetype='image/jpeg')
-        
-        # Se já existir foto do aluno, deleta a antiga (Upsert de Imagem)
-        query_antiga = f"name = '{file_metadata['name']}' and '{id_prova}' in parents and trashed = false"
-        antigos = service.files().list(q=query_antiga).execute().get('files', [])
-        for f in antigos:
-            service.files().delete(fileId=f['id']).execute()
-            
-        service.files().create(body=file_metadata, media_body=media, fields='id').execute()
-        
-        return link_pasta_prova # Retorna o link da PASTA, conforme solicitado
-    except:
-        return None
