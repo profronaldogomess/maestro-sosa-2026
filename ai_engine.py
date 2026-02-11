@@ -318,35 +318,40 @@ def gerar_ia(persona_key, comando, partes_arquivos=[], usar_busca=True):
     except Exception as e:
         return f"Erro na IA: {e}"
 
-# --- EXTRATOR SOSA PRECISION V31 (ANTI-COLISÃO) ---
+# --- EXTRATOR SOSA UNIVERSAL V32 (BLINDADO) ---
 def extrair_tag(texto, tag):
     if not texto: return ""
     import re
     
-    # 1. ESCUDO SOSA: Limpeza de Markdown e ruído visual
-    texto_limpo = re.sub(r'[*#]', '', texto)
+    # 1. LIMPEZA INICIAL: Remove negritos e ruídos que a IA coloca nas tags
+    # Ex: **[QUESTOES]** vira [QUESTOES]
+    texto_limpo = texto.replace("**[", "[").replace("]**", "]")
     
-    # 2. LISTA MESTRA DE TAGS ATUALIZADA (Adicionado BNCC_CODE)
-    tags_sosa = [
-        "SOSA_ID", "PROFESSOR", "ALUNO", "GABARITO", "IMAGENS", "PEI", "GABARITO_PEI","RESPOSTAS_PEI_IA",
-        "RUBRICA", "ORIENTACOES", "QUESTOES", "GABARITO_TEXTO", "RESPOSTAS_IA",
-        "BNCC_CODE", "CONTEUDO_GERAL", "CONTEUDOS_ESPECIFICOS", "OBJETIVOS_ENSINO", 
-        "RECURSOS_DIDATICOS", "AULA_1", "AULA_2", "SABADO_LETIVO", "AVALIACAO", "ADAPTACAO_PEI"
-    ]
+    # 2. NORMALIZAÇÃO: Remove os símbolos de Markdown (# e *) do corpo do texto
+    texto_limpo = re.sub(r'[*#]', '', texto_limpo)
     
-    tag_busca = tag.upper()
-    parada = [t for t in tags_sosa if t.upper() != tag_busca]
-    lista_parada = "|".join(parada)
+    tag_busca = tag.upper().strip()
     
-    # 3. REGEX DE ALTA PRECISÃO
-    padrao = rf"\[\s*{tag_busca}\b[^\]]*\]\s*[:\-]*\s*(.*?)(?=\s*\[\s*(?:{lista_parada})\b[^\]]*\]|$)"
+    # 3. REGEX DINÂMICO V32:
+    # Procura a [TAG] e captura tudo até encontrar o próximo [ de uma nova tag ou o fim do texto.
+    # O (?:...) é um grupo de não captura para o lookahead.
+    padrao = rf"\[\s*{tag_busca}\s*\]\s*[:\-]*\s*(.*?)(?=\n\s*\[|$)"
     
     match = re.search(padrao, texto_limpo, re.DOTALL | re.IGNORECASE)
     
     if match:
         res = match.group(1).strip()
+        # Limpa resíduos de pontuação logo após a tag
         res = re.sub(r'^[:\-\s]+', '', res)
-        return res.strip()
+        return res
+    
+    # 4. FALLBACK (Plano B): Se a IA não usou colchetes, tenta achar por "TAG:"
+    padrao_fallback = rf"^{tag_busca}\s*:\s*(.*?)(?=\n\s*[A-Z_]+\s*:|$)"
+    match_fb = re.search(padrao_fallback, texto_limpo, re.DOTALL | re.IGNORECASE | re.MULTILINE)
+    
+    if match_fb:
+        return match_fb.group(1).strip()
+        
     return ""
 
 def subir_para_google(caminho_arquivo, nome_exibicao):
