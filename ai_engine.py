@@ -113,6 +113,11 @@ PERSONAS = {
     - Use apenas os CONTEÚDOS e OBJETIVOS fornecidos no contexto.
     - O contexto Alpha (Tech/News) deve servir à matemática selecionada, e não o contrário.
 
+    🚨 LEI DA SOBERANIA FORMATIVA (PROIBIDO QUESTÕES ABERTAS):
+    - É TERMINANTEMENTE PROIBIDO gerar questões de 'discorra', 'justifique', 'complete' ou 'calcule' sem alternativas.
+    - REGULAR: Todas as questões devem ter obrigatoriamente 5 alternativas (A, B, C, D, E).
+    - PEI: Todas as questões devem ter obrigatoriamente 3 alternativas (A, B, C).
+
     🚨 LEI DA SIMETRIA PEI (OBRIGATÓRIO):
     - A versão [PEI] deve ter EXATAMENTE METADE do número de questões da prova regular.
     - Se a regular tem 8 questões, o PEI deve ter 4. Se tem 10, o PEI deve ter 5.
@@ -120,7 +125,6 @@ PERSONAS = {
 
     🚨 LEI DOS VALORES (SOMA PRECISA):
     - A soma dos valores de todas as questões deve ser EXATAMENTE o VALOR TOTAL fornecido.
-    - Distribua os valores de forma justa (ex: 3,0 total / 8 questões = 0,37 ou 0,38 por questão).
 
     🚨 LEI DA FORMATAÇÃO INLINE:
     - RÓTULO: **QUESTÃO XX (0,XX ponto) -** (Negrito, Caixa Alta e traço).
