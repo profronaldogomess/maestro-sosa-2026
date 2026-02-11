@@ -2343,82 +2343,64 @@ elif menu == "📸 Scanner de Gabaritos":
                         status.update(label="✅ Homologação Concluída com Sucesso!", state="complete")
                         st.balloons()
 
-# --- ABA 3: RAIO-X (V56 - INTELIGÊNCIA DE RECOMPOSIÇÃO) ---
+# --- ABA 3: RAIO-X (V57 - MESA DE PERÍCIA PEDAGÓGICA) ---
         with tab_raiox:
-            st.subheader(f"📊 Diagnóstico de Proficiência: {f_turma}")
+            st.subheader(f"📊 Raio-X Pedagógico: {f_turma}")
             
             if not gabaritos_lidos.empty:
-                # 1. PROCESSAMENTO DE DADOS DE PERFORMANCE
-                stats = []
-                detalhes_erros = []
-                
+                # 1. CÁLCULO DE ESTATÍSTICAS DE ELITE
+                stats_list = []
                 for i, certa in enumerate(gab_reg_list):
                     q_num = f"Q{i+1:02d}"
-                    # Coleta todas as respostas dadas para esta questão
-                    respostas_dadas = [r.split(";")[i] if len(r.split(";")) > i else "?" for r in gabaritos_lidos['RESPOSTAS_ALUNO']]
+                    respostas = [r.split(";")[i] if len(r.split(";")) > i else "?" for r in gabaritos_lidos['RESPOSTAS_ALUNO']]
                     
-                    acertos = respostas_dadas.count(certa)
-                    total = len(respostas_dadas)
-                    pct = (acertos / total) * 100 if total > 0 else 0
+                    acertos = respostas.count(certa)
+                    pct = (acertos / len(respostas)) * 100 if respostas else 0
                     
-                    # Identifica o erro mais comum (Distrator Principal)
-                    erros = [r for r in respostas_dadas if r != certa and r not in ["?", "X"]]
-                    distrator_comum = max(set(erros), key=erros.count) if erros else "N/A"
+                    # Identifica o distrator (erro) mais frequente
+                    erros_apenas = [r for r in respostas if r != certa and r not in ["?", "X"]]
+                    erro_comum = max(set(erros_apenas), key=erros_apenas.count) if erros_apenas else "N/A"
                     
-                    stats.append({"Questão": q_num, "Acerto %": pct, "Erro Comum": distrator_comum})
+                    stats_list.append({
+                        "Questão": q_num,
+                        "Acerto %": pct,
+                        "Erro Comum": erro_comum,
+                        "Status": "🟢 Domínio" if pct >= 70 else ("🟡 Alerta" if pct >= 40 else "🔴 Crítico")
+                    })
                 
-                df_stats = pd.DataFrame(stats)
+                df_stats = pd.DataFrame(stats_list)
 
-                # 2. VISUALIZAÇÃO ANALÍTICA
-                c_v1, c_v2 = st.columns([2, 1])
+                # 2. GRÁFICO DE DESEMPENHO
+                fig = px.bar(df_stats, x="Questão", y="Acerto %", color="Status",
+                             color_discrete_map={"🟢 Domínio": "#00CC96", "🟡 Alerta": "#FFA500", "🔴 Crítico": "#FF4B4B"},
+                             text=df_stats["Acerto %"].apply(lambda x: f'{x:.0f}%'),
+                             title="Mapa de Calor de Proficiência")
+                st.plotly_chart(fig, use_container_width=True)
+
+                # 3. MESA DE PERÍCIA (O QUE O ERRO REVELA)
+                st.markdown("### 🔍 Mesa de Perícia de Lacunas")
+                st.info("Esta tabela cruza o erro mais comum da turma com a lógica da questão.")
                 
-                with c_v1:
-                    # Gráfico de Barras Colorido por Performance
-                    fig = px.bar(df_stats, x="Questão", y="Acerto %", 
-                                 text=df_stats["Acerto %"].apply(lambda x: f'{x:.0f}%'),
-                                 color="Acerto %", 
-                                 color_continuous_scale=["#FF4B4B", "#FFA500", "#00CC96"], # Vermelho, Laranja, Verde
-                                 range_y=[0, 110],
-                                 title="Nível de Domínio por Questão")
-                    st.plotly_chart(fig, use_container_width=True)
+                # Exibe a tabela de estatísticas para o professor
+                st.dataframe(df_stats, use_container_width=True, hide_index=True)
 
-                with c_v2:
-                    st.markdown("##### 🚨 Zonas de Alerta")
-                    questoes_criticas = df_stats[df_stats["Acerto %"] < 50]
-                    if not questoes_criticas.empty:
-                        for _, row in questoes_criticas.iterrows():
-                            st.error(f"**{row['Questão']}:** Apenas {row['Acerto %']:.0f}% de acerto. Erro comum: Letra {row['Erro Comum']}")
-                    else:
-                        st.success("✅ Nenhuma questão com erro crítico detectada!")
-
-                # 3. MOTOR DE RECOMPOSIÇÃO (IA PEDAGÓGICA)
+                # 4. BOTÃO DE INTELIGÊNCIA PHC
                 st.divider()
-                st.subheader("🧠 Plano de Recomposição Maestro Sosa")
-                
-                if st.button("💎 GERAR PROGNÓSTICO E ROTEIRO DE RECUPERAÇÃO", use_container_width=True, type="primary"):
-                    with st.spinner("Maestro analisando lacunas cognitivas e cruzando com a BNCC..."):
-                        # Prepara o contexto para a IA
-                        resumo_performance = df_stats.to_string(index=False)
-                        contexto_prova = ai.extrair_tag(txt_ativo, "PROFESSOR") # Pega os objetivos originais
+                if st.button("🧠 GERAR DIAGNÓSTICO E PLANO DE RECOMPOSIÇÃO", use_container_width=True, type="primary"):
+                    with st.spinner("Maestro Sosa realizando perícia nos distratores..."):
+                        # Envia os dados para a IA analisar
+                        resumo_dados = df_stats.to_string(index=False)
+                        contexto_prova = ai.extrair_tag(txt_ativo, "PROFESSOR") + "\n" + ai.extrair_tag(txt_ativo, "GABARITO_TEXTO")
                         
-                        prompt_recomp = (
-                            f"Analise os resultados desta avaliação de Matemática:\n\n"
-                            f"DADOS DE PERFORMANCE:\n{resumo_performance}\n\n"
-                            f"OBJETIVOS ORIGINAIS:\n{contexto_prova}\n\n"
-                            f"MISSÃO:\n"
-                            f"1. Identifique a LACUNA COGNITIVA principal (Ex: dificuldade em frações, SND).\n"
-                            f"2. Explique o provável motivo do 'Erro Comum' detectado.\n"
-                            f"3. Sugira uma ATIVIDADE DE RECOMPOSIÇÃO prática (mão na massa) para sanar esses erros.\n"
-                            f"4. Use a Pedagogia Histórico-Crítica (PHC). Seja direto e técnico. SEM MARKDOWN."
-                        )
+                        analise_pedagogica = ai.gerar_prognostico_pedagogico(resumo_dados, contexto_prova)
                         
-                        prognostico = ai.gerar_ia("PLANE_PEDAGOGICO", prompt_recomp)
-                        st.info(prognostico)
-                        
-                        # Botão para salvar o relatório no Diário de Bordo
-                        if st.button("💾 ARQUIVAR PROGNÓSTICO NO RELATÓRIO DA TURMA"):
-                            db.salvar_ata_conselho(datetime.now().strftime("%d/%m/%Y"), f_turma, "PROGNÓSTICO_RECOMPOSIÇÃO", prognostico)
-                            st.success("Relatório arquivado com sucesso!")
-
+                        with st.container(border=True):
+                            st.markdown("#### 📋 Diagnóstico de Lacunas Cognitivas")
+                            st.write(analise_pedagogica)
+                            
+                            # Opção de salvar no Diário de Bordo como evidência de Recomposição
+                            if st.button("💾 ARQUIVAR ANÁLISE NO HISTÓRICO DA TURMA"):
+                                db.salvar_ata_conselho(datetime.now().strftime("%d/%m/%Y"), f_turma, "DIAGNÓSTICO_RAIOX", analise_pedagogica)
+                                st.success("Análise arquivada para o Conselho de Classe!")
             else:
-                st.info("📭 Aguardando a captura de gabaritos para gerar o Raio-X de proficiência.")
+                st.info("📭 Realize o scan dos gabaritos para gerar o diagnóstico pedagógico.")
