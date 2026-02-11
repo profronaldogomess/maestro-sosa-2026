@@ -426,20 +426,23 @@ def realizar_diagnostico_v25(plano_raw, df_curriculo, ano_sel):
         "objetivo_literal": extrair_tag(plano_raw, "OBJETIVOS_ENSINO")
     }
 
+# --- ATUALIZAR NO ai_engine.py ---
+
 def analisar_gabarito_vision(imagem_bytes):
     """
-    MAESTRO VISION V6.0 - Análise de Densidade e Contraste.
-    Focado em distinguir marcações reais de sombras e reflexos.
+    MAESTRO VISION V6.1 - RIGOR TOTAL
+    Focado em detectar marcações duplas (X) e campos vazios (?).
     """
     try:
         prompt = (
-            "Você é um scanner óptico de alta precisão. Analise a grade de 10 questões.\n"
-            "Para cada linha (01 a 10), compare os 5 círculos (A, B, C, D, E):\n"
-            "1. Identifique o círculo que possui a maior densidade de preenchimento (mais escuro).\n"
-            "2. Se um círculo estiver claramente mais preenchido que os outros, retorne a letra.\n"
-            "3. Se houver marcações fortes em DOIS ou mais círculos, retorne 'X' (Anulada).\n"
-            "4. Se todos os círculos estiverem vazios ou apenas com sombras leves, retorne '?'.\n"
-            "Retorne APENAS o JSON puro: {'01': 'A', '02': 'B', ...}"
+            "Você é um scanner óptico de alta precisão para gabaritos escolares.\n"
+            "Analise a imagem e identifique as marcações para cada questão.\n"
+            "REGRAS DE PERÍCIA:\n"
+            "1. Se houver uma marcação clara e única, retorne a letra (A, B, C, D ou E).\n"
+            "2. Se houver DUAS ou mais marcações fortes na mesma linha, ou uma rasura grosseira, retorne 'X'.\n"
+            "3. Se o campo estiver totalmente em BRANCO ou com uma marcação extremamente clara/duvidosa, retorne '?'.\n"
+            "4. Ignore sombras e reflexos de luz.\n"
+            "Retorne APENAS o JSON puro: {'01': 'A', '02': 'X', '03': '?', ...}"
         )
         
         conteudo_prompt = [
