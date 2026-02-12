@@ -578,7 +578,7 @@ if menu == "🧪 Criador de Aulas":
                             instr_extra_s = c_q2.text_area("📝 Contexto Adicional:", key=f"s_instr_{v}")
                             
                             if st.button("🚀 GERAR SONDA DE PROFICIÊNCIA", use_container_width=True, type="primary"):
-                                with st.spinner("Maestro Sosa realizando perícia psicométrica..."):
+                                with st.spinner("Maestro Sosa arquitetando Tratado Diagnóstico..."):
                                     nome_elite_sonda = util.gerar_nome_material_elite(ano_sonda, "Sonda Diagnóstica", trim_sonda)
                                     st.session_state.sosa_id_atual = nome_elite_sonda
                                     st.session_state.lab_meta = {
@@ -586,22 +586,21 @@ if menu == "🧪 Criador de Aulas":
                                         "tipo": "SONDA", "aula_alvo": "Sonda Diagnóstica", "semana_ref": "AVALIAÇÃO"
                                     }
                                     
-                                    # CÁLCULO DE PESO IGUAL PARA SONDA
                                     peso_q = 10.0 / qtd_q_sonda
                                     peso_q_str = util.sosa_to_str(peso_q)
 
+                                    # PROMPT IMPERATIVO V68
                                     prompt_sonda = (
-                                        f"ORDEM DE PERÍCIA V67 - SONDA DE PROFICIÊNCIA\n"
-                                        f"SÉRIE: {ano_sonda}º Ano | TRIMESTRE: {trim_sonda} | VALOR: 10.0\n"
-                                        f"QUANTIDADE: {qtd_q_sonda} questões A-E.\n"
-                                        f"PESO POR QUESTÃO: {peso_q_str}.\n"
+                                        f"ORDEM DE PERÍCIA V68 - RIGOR NUMÉRICO E DENSIDADE\n"
+                                        f"SÉRIE: {ano_sonda}º Ano | VALOR: 10.0 | QTD: {qtd_q_sonda}\n"
                                         f"CONTEÚDOS: {' / '.join(sel_conts_s)}.\n\n"
-                                        f"🚨 DIRETRIZES CRÍTICAS:\n"
-                                        f"1. Inicie com [VALOR: 10.0].\n"
-                                        f"2. Use o formato: **QUESTÃO XX ({peso_q_str} ponto) -**.\n"
-                                        f"3. Gere a [GRADE_DE_CORRECAO] detalhando a lógica de cada erro (Distratores).\n"
-                                        f"4. Aplique Engenharia Anti-Chute no gabarito.\n"
-                                        f"5. Gere a versão [PEI] com {int(qtd_q_sonda/2 if qtd_q_sonda%2==0 else (qtd_q_sonda+1)/2)} questões."
+                                        f"🚨 DIRETRIZES DE EXECUÇÃO:\n"
+                                        f"1. [VALOR: 10.0] na linha 1.\n"
+                                        f"2. [PROFESSOR]: Escreva no mínimo 3 parágrafos técnicos de fundamentação e mediação.\n"
+                                        f"3. [ALUNO]: Gere EXATAMENTE {qtd_q_sonda} questões no formato inline: **QUESTÃO XX ({peso_q_str} ponto) -**.\n"
+                                        f"4. [GRADE_DE_CORRECAO]: Tabela ou lista técnica de descritores e análise de distratores.\n"
+                                        f"5. [PEI]: Gere {int(qtd_q_sonda/2 if qtd_q_sonda%2==0 else (qtd_q_sonda+1)/2)} questões com andaime cognitivo.\n\n"
+                                        f"CHECKLIST: Proibido introduções ou conversas. Vá direto às tags."
                                     )
                                     st.session_state.lab_temp = ai.gerar_ia("ARQUITETO_SONDA_DIAGNOSTICA", prompt_sonda, usar_busca=True)
                                     st.rerun()
