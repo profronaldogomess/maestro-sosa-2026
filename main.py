@@ -639,36 +639,89 @@ if menu == "🧪 Criador de Aulas":
                                 st.session_state.lab_temp = ai.gerar_ia("MAESTRO_SOSA_V28_ELITE", prompt_comp, usar_busca=True)
                                 st.rerun()
 
+# --- ABA 5: ACERVO DE MATERIAIS (V66 - DESIGN PIP UNIFICADO) ---
         with tab_acervo:
-            st.subheader("📂 Acervo de Materiais Produzidos")
-            if not df_aulas.empty:
-                f_ano_g = st.selectbox("Filtrar Série:", ["Todos", "6º", "7º", "8º", "9º"], key=f"acervo_filter_{v}")
-                df_g = df_aulas.copy()
-                if f_ano_g != "Todos": df_g = df_g[df_g["ANO"] == f_ano_g]
-                for _, row in df_g.iloc[::-1].iterrows():
-                    raw_c = str(row["CONTEUDO"])
-                    s_id_h = ai.extrair_tag(raw_c, "SOSA_ID")
+            st.subheader("📂 Gestão de Acervo de Materiais (PIP - Aulas, Projetos e Revisões)")
+            
+            # 1. FILTROS DE BUSCA DE ELITE
+            c_m1, c_m2, c_m3 = st.columns([1, 1, 1])
+            f_trim_m = c_m1.selectbox("📅 Filtrar Trimestre:", ["Todos", "I Trimestre", "II Trimestre", "III Trimestre"], key="m_trim_filter")
+            f_ano_m = c_m2.selectbox("🎓 Filtrar Série:", ["Todos", "6º", "7º", "8º", "9º"], key="m_ano_filter")
+            f_tipo_m = c_m3.selectbox("🧪 Tipo de Ativo:", ["Todos", "Aula", "Projeto", "Fixação", "REVISÃO"], key="m_tipo_filter")
+
+            # 2. PROCESSAMENTO DA BASE
+            df_m = df_aulas.copy()
+            
+            if f_trim_m != "Todos":
+                df_m = df_m[df_m['CONTEUDO'].str.contains(f_trim_m, na=False)]
+            if f_ano_m != "Todos":
+                df_m = df_m[df_m['ANO'] == f_ano_m]
+            if f_tipo_m != "Todos":
+                df_m = df_m[df_m['TIPO_MATERIAL'].str.upper().str.contains(f_tipo_m.upper())]
+
+            df_m = df_m.iloc[::-1] # Mais recentes no topo
+
+            if not df_m.empty:
+                for _, row in df_m.iterrows():
                     with st.container(border=True):
-                        c_t1, c_t2, c_t3, c_t4, c_t5, c_t6 = st.columns([1.5, 1, 1, 1, 1, 1])
-                        c_t1.markdown(f"**{row['TIPO_MATERIAL']}**\n`ID: {s_id_h}`")
-                        links_alu = re.findall(r"Aluno\((.*?)\)", raw_c)
-                        links_prof = re.findall(r"Prof\((.*?)\)", raw_c)
-                        links_pei = re.findall(r"PEI\((.*?)\)", raw_c)
-                        l_alu = links_alu[-1] if links_alu else None
-                        l_prof = links_prof[-1] if links_prof else None
-                        l_pei = links_pei[-1] if links_pei else None
-                        if l_alu: c_t2.link_button("📝 ALUNO", str(l_alu), use_container_width=True)
-                        if l_prof: c_t3.link_button("👨‍🏫 PROF", str(l_prof), use_container_width=True)
-                        if l_pei and "N/A" not in l_pei: c_t4.link_button("♿ PEI", str(l_pei), use_container_width=True)
-                        else: c_t4.button("⚪ SEM PEI", disabled=True, use_container_width=True)
-                        if c_t5.button("🔄 REFINAR", key=f"ref_{row.name}", use_container_width=True):
-                            st.session_state.lab_temp = raw_c
+                        txt_f = str(row['CONTEUDO'])
+                        # SOSA-ID ou Nome do Material
+                        s_id_h = ai.extrair_tag(txt_f, "SOSA_ID")
+                        identificador = s_id_h if s_id_h else row['TIPO_MATERIAL']
+                        
+                        st.markdown(f"### 📘 {identificador}")
+                        
+                        # 3. EXTRAÇÃO ROBUSTA DE LINKS (SINFONIA DE TRÊS BOTÕES)
+                        # O regex busca tanto 'Aluno' quanto 'Regular' para ser compatível com Revisões
+                        l_alu = re.search(r"(?:Aluno|Regular)\((.*?)\)", txt_f).group(1) if re.search(r"(?:Aluno|Regular)\((.*?)\)", txt_f) else row.get('LINK_DRIVE')
+                        l_pei = re.search(r"PEI\((.*?)\)", txt_f).group(1) if "PEI(" in txt_f and "PEI(N/A)" not in txt_f else None
+                        l_prof = re.search(r"Prof\((.*?)\)", txt_f).group(1) if "Prof(" in txt_f and "Prof(N/A)" not in txt_f else None
+
+                        c_b1, c_b2, c_b3, c_b4, c_b5 = st.columns(5)
+                        
+                        # Botão Aluno/Regular
+                        if l_alu: c_b1.link_button("📝 ALUNO", str(l_alu), use_container_width=True, type="primary")
+                        
+                        # Botão PEI (Sempre visível se existir link)
+                        if l_pei: c_b2.link_button("♿ PEI", str(l_pei), use_container_width=True)
+                        else: c_b2.button("⚪ SEM PEI", disabled=True, use_container_width=True)
+                        
+                        # Botão Professor (Guia de Regência ou Perícia)
+                        if l_prof: c_b3.link_button("👨‍🏫 PROF", str(l_prof), use_container_width=True)
+                        else: c_b3.button("⚪ SEM GUIA", disabled=True, use_container_width=True)
+                        
+                        # Botões de Gestão
+                        if c_b4.button("🔄 REFINAR", key=f"ref_mat_h_{row.name}", use_container_width=True):
+                            st.session_state.lab_temp = txt_f
                             st.session_state.sosa_id_atual = s_id_h
                             st.session_state.lab_meta = {"ano": str(row["ANO"]).replace("º",""), "tipo": "REFINO", "aula_alvo": row['TIPO_MATERIAL'], "semana_ref": row['SEMANA_REF']}
-                            st.rerun()
-                        if c_t6.button("🗑️ APAGAR", key=f"del_{row.name}", use_container_width=True):
-                            if db.excluir_registro_com_drive("DB_AULAS_PRONTAS", s_id_h): st.cache_data.clear(); st.rerun()
+                            st.success("Material carregado no Laboratório!"); time.sleep(1); st.rerun()
+                            
+                        if c_b5.button("🗑️ APAGAR", key=f"del_mat_h_{row.name}", use_container_width=True):
+                            if db.excluir_registro_com_drive("DB_AULAS_PRONTAS", identificador):
+                                st.rerun()
 
+                        # 4. EXPANDER DE CONTEÚDO (RAIO-X DA AULA)
+                        with st.expander("👁️ VER ESQUEMA DE LOUSA E ROTEIRO DO ALUNO"):
+                            col_v1, col_v2 = st.columns(2)
+                            with col_v1:
+                                st.markdown("#### 👨‍🏫 Seção do Professor")
+                                prof_txt = ai.extrair_tag(txt_f, "PROFESSOR")
+                                st.write(prof_txt if prof_txt else "Conteúdo não formatado.")
+                            with col_v2:
+                                st.markdown("#### 📝 Seção do Aluno")
+                                alu_txt = ai.extrair_tag(txt_f, "ALUNO")
+                                st.write(alu_txt if alu_txt else "Conteúdo não formatado.")
+                            
+                            # Se for uma Revisão, mostra a Grade de Perícia também
+                            grade_rev = ai.extrair_tag(txt_f, "GRADE_DE_CORRECAO")
+                            if grade_rev:
+                                st.divider()
+                                st.markdown("#### 🔍 Grade de Perícia (Revisão)")
+                                st.write(grade_rev)
+            else:
+                st.info("📭 Nenhum material encontrado com os filtros selecionados.")
+                
 # ==============================================================================
 # MÓDULO: PLANEJAMENTO ESTRATÉGICO (PONTO ID) - ARQUITETURA V28.12 (INTEGRADA)
 # ==============================================================================
