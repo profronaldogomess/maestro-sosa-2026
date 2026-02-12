@@ -1932,18 +1932,28 @@ elif menu == "📝 Central de Avaliações":
                 elif not mats_selecionados: 
                     st.error("Selecione os Ativos de Safra.")
                 else:
-                    with st.spinner("Maestro Arquiteto calibrando taxonomia e mapeando descritores..."):
+                    with st.spinner(f"Arquitetando {qtd_q} questões com rigor numérico..."):
                         contexto_aulas = ""
                         for m_nome in mats_selecionados:
                             m_row = df_materiais_trim[df_materiais_trim["TIPO_MATERIAL"] == m_nome].iloc[0]
                             contexto_aulas += f"MATERIAL_ID: {m_nome}\nCONTEÚDO: {m_row['CONTEUDO']}\n"
 
-                        prompt = (f"VOCÊ É O ARQUITETO DE EXAMES V61. SÉRIE: {ano_av}º Ano. TIPO: {tipo_av}. VALOR: {v_total}.\n"
-                                  f"🚨 OBRIGATÓRIO: Inicie com [VALOR: {v_total}].\n"
-                                  f"🚨 TAXONOMIA: Gere {q_facil} fáceis, {q_medio} médias e {q_dificil} difíceis.\n"
-                                  f"🚨 OBRIGATÓRIO: Gere a seção [GRADE_DE_CORRECAO] com Habilidades e Análise de Distratores.\n"
-                                  f"CONTEÚDO MINISTRADO: {contexto_aulas}\n"
-                                  f"MISSÃO: Gere o exame completo com todas as tags.")
+                        # PROMPT ADAPTADO PARA RIGOR NUMÉRICO
+                        prompt = (
+                            f"ORDEM DE PRODUÇÃO V62 - RIGOR TOTAL\n"
+                            f"TIPO: {tipo_av} | SÉRIE: {ano_av}º Ano | VALOR: {v_total}\n"
+                            f"QUANTIDADE OBRIGATÓRIA: {qtd_q} questões na Prova Regular.\n"
+                            f"DISTRIBUIÇÃO: {q_facil} Fáceis, {q_medio} Médias, {q_dificil} Difíceis.\n\n"
+                            f"🚨 DIRETRIZES CRÍTICAS:\n"
+                            f"1. Inicie com a tag [VALOR: {v_total}].\n"
+                            f"2. Gere EXATAMENTE {qtd_q} questões de múltipla escolha (A-E) em [QUESTOES]. Não pule nenhuma.\n"
+                            f"3. Gere a [GRADE_DE_CORRECAO] para as {qtd_q} questões geradas.\n"
+                            f"4. Gere a versão [PEI] com {int(qtd_q/2 if qtd_q%2==0 else (qtd_q+1)/2)} questões.\n\n"
+                            f"CONTEÚDO BASE:\n{contexto_aulas}\n\n"
+                            f"CONTAGEM FINAL: Verifique se você escreveu as {qtd_q} questões antes de finalizar."
+                        )
+                        
+                        # Chamada com maior limite de saída para não cortar o texto
                         st.session_state.temp_prova = ai.gerar_ia("ARQUITETO_EXAMES_V30_ELITE", prompt, usar_busca=True)
                         st.session_state.av_valor_total = v_total
                         st.session_state.av_nome_fixo = f"{tipo_av.upper()}_{ano_av}ANO_{trim_filtro.replace(' ', '')}"
