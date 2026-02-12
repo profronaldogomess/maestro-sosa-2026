@@ -1312,24 +1312,25 @@ elif menu == "📝 Diário de Bordo Rápido":
                     st.rerun()
 
 # ==============================================================================
-# MÓDULO: PAINEL DE NOTAS V30 - TORRE DE COMANDO E SOBERANIA (FUSÃO INTELIGENTE)
+# MÓDULO: PAINEL DE NOTAS V31 - ENGENHARIA DE COMPATIBILIDADE (PADRÃO PREFEITURA)
 # ==============================================================================
 elif menu == "📊 Painel de Notas & Vistos":
     st.title("📊 Torre de Comando: Gestão de Notas e Performance")
     st.markdown("---")
 
-    # 1. PERSISTÊNCIA DE ESTADO (PESOS)
-    if "p_visto" not in st.session_state: st.session_state.p_visto = 3.0
+    # 1. PERSISTÊNCIA DE PESOS POR TRIMESTRE
+    if "p_visto" not in st.session_state: st.session_state.p_visto = 2.0
     if "p_teste" not in st.session_state: st.session_state.p_teste = 3.0
-    if "p_prova" not in st.session_state: st.session_state.p_prova = 4.0
+    if "p_prova" not in st.session_state: st.session_state.p_prova = 5.0
     if "v_notas" not in st.session_state: st.session_state.v_notas = 1
     v = st.session_state.v_notas
 
     if df_alunos.empty:
         st.warning("⚠️ Cadastre alunos primeiro na aba 'Gestão da Turma'.")
     else:
-        # 2. CONFIGURADOR DE PESOS E FILTROS
+        # 2. CONFIGURADOR DE PESOS (CRITÉRIOS DO TRIMESTRE)
         with st.container(border=True):
+            st.markdown("### ⚙️ Definição de Critérios Avaliativos")
             c_f1, c_f2, c_f3, c_f4, c_f5 = st.columns([1.5, 1, 0.8, 0.8, 0.8])
             turma_sel = c_f1.selectbox("👥 Selecione a Turma:", sorted(df_alunos['TURMA'].unique()), key="n_turma")
             trimestre_sel = c_f2.selectbox("📅 Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key="n_trim")
@@ -1337,22 +1338,24 @@ elif menu == "📊 Painel de Notas & Vistos":
             st.session_state.p_visto = c_f3.number_input("Peso Vistos:", 0.0, 10.0, value=st.session_state.p_visto, step=0.5)
             st.session_state.p_teste = c_f4.number_input("Peso Teste:", 0.0, 10.0, value=st.session_state.p_teste, step=0.5)
             st.session_state.p_prova = c_f5.number_input("Peso Prova:", 0.0, 10.0, value=st.session_state.p_prova, step=0.5)
+            
+            soma_pesos = st.session_state.p_visto + st.session_state.p_teste + st.session_state.p_prova
+            if soma_pesos != 10.0:
+                st.error(f"⚠️ Atenção: A soma dos pesos é {soma_pesos:.1f}. O ideal para a prefeitura é 10.0.")
 
         # 3. CENTRAL DE SINCRONIZAÇÃO (SCANNER)
         with st.expander("🔄 Sincronizar com Scanner de Gabaritos", expanded=False):
             c_s1, c_s2 = st.columns(2)
             provas_escaneadas = df_diagnosticos[df_diagnosticos['TURMA'] == turma_sel]['ID_AVALIACAO'].unique().tolist() if not df_diagnosticos.empty else []
-            
             av_teste_id = c_s1.selectbox("Vincular Teste:", ["Nenhum"] + [p for p in provas_escaneadas if "TESTE" in p.upper() or "SONDA" in p.upper()])
             av_prova_id = c_s2.selectbox("Vincular Prova:", ["Nenhum"] + [p for p in provas_escaneadas if "PROVA" in p.upper()])
-            
             if st.button("📸 IMPORTAR NOTAS DO SCANNER", use_container_width=True, type="primary"):
                 st.cache_data.clear()
                 st.rerun()
 
-        # 4. PROCESSAMENTO DE DADOS (VISTOS E BÔNUS DO DIÁRIO)
-        vistos_map = {}
+        # 4. PROCESSAMENTO DE BÔNUS (DIÁRIO DE BORDO)
         bonus_map = {}
+        vistos_base_map = {}
         calendario = {"I Trimestre": (date(2026, 2, 9), date(2026, 5, 22)), "II Trimestre": (date(2026, 5, 25), date(2026, 9, 4)), "III Trimestre": (date(2026, 9, 8), date(2026, 12, 17))}
         dt_ini, dt_fim = calendario.get(trimestre_sel)
 
@@ -1366,12 +1369,12 @@ elif menu == "📊 Painel de Notas & Vistos":
                 d_alu = df_d_trim[df_d_trim['ID_ALUNO'].apply(db.limpar_id) == id_l]
                 if not d_alu.empty:
                     v_entregues = len(d_alu[d_alu['VISTO_ATIVIDADE'].astype(str).upper() == "TRUE"])
-                    vistos_map[id_l] = round((v_entregues / len(d_alu) * st.session_state.p_visto), 2)
+                    vistos_base_map[id_l] = round((v_entregues / len(d_alu) * st.session_state.p_visto), 2)
                     bonus_map[id_l] = d_alu['BONUS'].apply(util.sosa_to_float).sum() if 'BONUS' in d_alu.columns else 0.0
                 else:
-                    vistos_map[id_l], bonus_map[id_l] = 0.0, 0.0
+                    vistos_base_map[id_l], bonus_map[id_l] = 0.0, 0.0
 
-        # 5. CONSTRUÇÃO DA BASE DE DADOS PARA A TABELA ÚNICA
+        # 5. CONSTRUÇÃO DA TABELA DE SOBERANIA (ALGORITMO DE TRANSBORDO)
         alunos_turma = df_alunos[df_alunos['TURMA'] == turma_sel].sort_values(by="NOME_ALUNO")
         notas_banco = df_notas[(df_notas['TURMA'] == turma_sel) & (df_notas['TRIMESTRE'] == trimestre_sel)]
         
@@ -1380,89 +1383,73 @@ elif menu == "📊 Painel de Notas & Vistos":
             id_a = db.limpar_id(alu['ID'])
             reg_b = notas_banco[notas_banco['ID_ALUNO'].apply(db.limpar_id) == id_a]
             
-            # Valores Base
-            n_visto = vistos_map.get(id_a, 0.0)
-            n_bonus = bonus_map.get(id_a, 0.0)
-            n_teste = util.sosa_to_float(reg_b.iloc[0]['NOTA_TESTE']) if not reg_b.empty else 0.0
-            n_prova = util.sosa_to_float(reg_b.iloc[0]['NOTA_PROVA']) if not reg_b.empty else 0.0
+            # Notas Brutas (Sem bônus ainda)
+            n_v_bruto = vistos_base_map.get(id_a, 0.0)
+            n_t_bruto = util.sosa_to_float(reg_b.iloc[0]['NOTA_TESTE']) if not reg_b.empty else 0.0
+            n_p_bruto = util.sosa_to_float(reg_b.iloc[0]['NOTA_PROVA']) if not reg_b.empty else 0.0
             n_rec = util.sosa_to_float(reg_b.iloc[0]['NOTA_REC']) if not reg_b.empty else 0.0
+            total_bonus = bonus_map.get(id_a, 0.0)
 
             # Sobrescrita via Scanner
             if av_teste_id != "Nenhum":
                 reg_s = df_diagnosticos[(df_diagnosticos['ID_ALUNO'].apply(db.limpar_id) == id_a) & (df_diagnosticos['ID_AVALIACAO'] == av_teste_id)]
-                if not reg_s.empty: n_teste = util.sosa_to_float(reg_s.iloc[0]['NOTA_CALCULADA'])
+                if not reg_s.empty: n_t_bruto = util.sosa_to_float(reg_s.iloc[0]['NOTA_CALCULADA'])
             if av_prova_id != "Nenhum":
                 reg_p = df_diagnosticos[(df_diagnosticos['ID_ALUNO'].apply(db.limpar_id) == id_a) & (df_diagnosticos['ID_AVALIACAO'] == av_prova_id)]
-                if not reg_p.empty: n_prova = util.sosa_to_float(reg_p.iloc[0]['NOTA_CALCULADA'])
+                if not reg_p.empty: n_p_bruto = util.sosa_to_float(reg_p.iloc[0]['NOTA_CALCULADA'])
 
-            # Lógica de Distribuição de Bônus (Visto -> Teste -> Prova)
-            b_temp = n_bonus
-            v_f = n_visto + min(b_temp, max(0, st.session_state.p_visto - n_visto)); b_temp -= (v_f - n_visto)
-            t_f = n_teste + min(b_temp, max(0, st.session_state.p_teste - n_teste)); b_temp -= (t_f - n_teste)
-            p_f = n_prova + min(b_temp, max(0, st.session_state.p_prova - n_prova))
+            # --- ALGORITMO DE TRANSBORDO SOSA V31 ---
+            b_restante = total_bonus
             
-            media_final = min(10.0, max(v_f + t_f + p_f, n_rec))
+            # 1. Preenche Vistos
+            v_final = min(st.session_state.p_visto, n_v_bruto + b_restante)
+            b_restante -= (v_final - n_v_bruto)
             
-            status = "✅ SOBERANO" if media_final >= 6.0 else "⚠️ ATENÇÃO" if media_final >= 4.0 else "🚨 CRÍTICO"
+            # 2. Preenche Teste
+            t_final = min(st.session_state.p_teste, n_t_bruto + max(0, b_restante))
+            b_restante -= (t_final - n_t_bruto)
+            
+            # 3. Preenche Prova
+            p_final = min(st.session_state.p_prova, n_p_bruto + max(0, b_restante))
+            
+            media_final = min(10.0, max(v_final + t_final + p_final, n_rec))
             is_pei = str(alu['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"]
 
             dados_finais.append({
                 "ID": id_a,
                 "ESTUDANTE": f"♿ {alu['NOME_ALUNO']}" if is_pei else alu['NOME_ALUNO'],
-                "VISTOS": v_f,
-                "TESTE": t_f,
-                "PROVA": p_f,
-                "BÔNUS (DIÁRIO)": n_bonus,
-                "REC. PARALELA": n_rec,
-                "MÉDIA FINAL": media_final,
-                "PROGRESSO": media_final / 10,
-                "STATUS": status
+                "VISTOS_F": v_final,
+                "TESTE_F": t_final,
+                "PROVA_F": p_final,
+                "BÔNUS_TOTAL": total_bonus,
+                "REC_P": n_rec,
+                "MÉDIA": media_final,
+                "STATUS": "✅" if media_final >= 6.0 else "🚨" if media_final < 4.0 else "⚠️"
             })
 
         df_painel = pd.DataFrame(dados_finais)
 
-        # 6. MÉTRICAS DE IMPACTO (O TERMÔMETRO)
-        st.markdown("### 🛡️ Termômetro de Performance da Turma")
-        m1, m2, m3, m4 = st.columns(4)
-        media_t = df_painel['MÉDIA FINAL'].mean()
-        m1.metric("Média da Turma", f"{media_t:.2f}", delta=f"{media_t-6:.1f}", delta_color="normal" if media_t >=6 else "inverse")
-        
-        aprovados = len(df_painel[df_painel['MÉDIA FINAL'] >= 6.0])
-        m2.metric("% Aprovação", f"{(aprovados/len(df_painel)*100):.0f}%")
-        
-        criticos = len(df_painel[df_painel['STATUS'] == "🚨 CRÍTICO"])
-        m3.metric("Alunos Críticos", criticos, delta="Intervir!", delta_color="inverse" if criticos > 0 else "normal")
-        
-        m4.metric("Bônus Distribuídos", f"{df_painel['BÔNUS (DIÁRIO)'].sum():.1f} pts")
+        # 6. BARRA DE CONSOLIDAÇÃO EXPLÍCITA
+        st.info(f"**📊 Critério de Soberania:** Vistos (Max {st.session_state.p_visto:.1f}) | Teste (Max {st.session_state.p_teste:.1f}) | Prova (Max {st.session_state.p_prova:.1f})")
 
-        # 7. FILTRO DE FOCO NA RECUPERAÇÃO
-        st.markdown("---")
-        foco_rec = st.toggle("🎯 **Foco na Recuperação** (Esconder alunos aprovados)", value=False)
-        if foco_rec:
-            df_painel = df_painel[df_painel['MÉDIA FINAL'] < 6.0]
-
-        # 8. SMART EDITOR (TABELA ÚNICA DE ELITE)
-        st.subheader("📝 Consolidação e Ajuste de Soberania")
-        st.caption("Ajuste as notas de Teste, Prova ou Rec. Paralela diretamente na tabela. O bônus do diário já está integrado.")
-        
+        # 7. SMART EDITOR (COMPATIBILIDADE PREFEITURA)
         df_editado = st.data_editor(
             df_painel,
             column_config={
                 "ID": None,
                 "ESTUDANTE": st.column_config.TextColumn("Estudante", width="medium", disabled=True),
-                "VISTOS": st.column_config.NumberColumn("Vistos", format="%.1f", disabled=True),
-                "TESTE": st.column_config.NumberColumn("Teste", min_value=0.0, max_value=10.0, format="%.1f"),
-                "PROVA": st.column_config.NumberColumn("Prova", min_value=0.0, max_value=10.0, format="%.1f"),
-                "BÔNUS (DIÁRIO)": st.column_config.NumberColumn("⭐ Bônus", format="%.1f", disabled=True),
-                "REC. PARALELA": st.column_config.NumberColumn("🔄 Rec.", min_value=0.0, max_value=10.0, format="%.1f"),
-                "MÉDIA FINAL": st.column_config.NumberColumn("Média", format="%.2f", disabled=True),
-                "PROGRESSO": st.column_config.ProgressColumn("Aproveitamento", min_value=0, max_value=1, format=""),
-                "STATUS": st.column_config.TextColumn("Status", width="small", disabled=True)
+                "VISTOS_F": st.column_config.NumberColumn(f"Atividades (Max {st.session_state.p_visto})", format="%.1f", disabled=True),
+                "TESTE_F": st.column_config.NumberColumn(f"Teste (Max {st.session_state.p_teste})", min_value=0.0, max_value=st.session_state.p_teste, format="%.1f"),
+                "PROVA_F": st.column_config.NumberColumn(f"Prova (Max {st.session_state.p_prova})", min_value=0.0, max_value=st.session_state.p_prova, format="%.1f"),
+                "BÔNUS_TOTAL": st.column_config.NumberColumn("⭐ Bônus Diário", format="%.1f", disabled=True),
+                "REC_P": st.column_config.NumberColumn("🔄 Rec. Paralela", min_value=0.0, max_value=10.0, format="%.1f"),
+                "MÉDIA": st.column_config.NumberColumn("Média Final", format="%.2f", disabled=True),
+                "STATUS": st.column_config.TextColumn("ST", width="small", disabled=True)
             },
-            hide_index=True, use_container_width=True, key=f"smart_editor_notas_{v}"
+            hide_index=True, use_container_width=True, key=f"editor_v31_{v}"
         )
 
-        # 9. SALVAMENTO INTEGRAL
+        # 8. SALVAMENTO INTEGRAL
         if st.button("💾 SALVAR E SINCRONIZAR BOLETIM", type="primary", use_container_width=True):
             with st.status("Sincronizando com o Banco de Dados...") as status:
                 db.limpar_notas_turma_trimestre(turma_sel, trimestre_sel)
@@ -1470,16 +1457,16 @@ elif menu == "📊 Painel de Notas & Vistos":
                 for _, r in df_editado.iterrows():
                     linhas_save.append([
                         r['ID'], r['ESTUDANTE'].replace("♿ ", ""), turma_sel, trimestre_sel,
-                        util.sosa_to_str(r["VISTOS"]), util.sosa_to_str(r["TESTE"]),
-                        util.sosa_to_str(r["PROVA"]), util.sosa_to_str(r["REC. PARALELA"]),
-                        util.sosa_to_str(r['MÉDIA FINAL'])
+                        util.sosa_to_str(r["VISTOS_F"]), util.sosa_to_str(r["TESTE_F"]),
+                        util.sosa_to_str(r["PROVA_F"]), util.sosa_to_str(r["REC_P"]),
+                        util.sosa_to_str(r['MÉDIA'])
                     ])
                 if db.salvar_lote("DB_NOTAS", linhas_save):
-                    status.update(label="✅ Boletim Sincronizado com Sucesso!", state="complete")
+                    status.update(label="✅ Boletim Sincronizado!", state="complete")
                     st.balloons()
                     time.sleep(1)
                     st.rerun()
-
+                    
 # ==============================================================================
 # MÓDULO: BOLETIM ANUAL & CONSELHO V26 - INTELIGÊNCIA PREDITIVA E 360°
 # ==============================================================================
