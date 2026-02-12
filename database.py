@@ -517,3 +517,25 @@ def subir_e_converter_para_google_docs(file_stream, nome_arquivo, trimestre="I T
         return response.text.strip()
     except Exception as e: 
         return f"Erro na Ponte: {e}"
+    
+def excluir_aluno_por_id(id_aluno):
+    """
+    EXCLUSÃO CIRÚRGICA V33 - MAESTRO SOSA
+    Localiza o aluno pelo ID único e remove a linha exata.
+    """
+    try:
+        wb = conectar()
+        ws = wb.worksheet("DB_ALUNOS")
+        # Limpa o ID para garantir comparação pura
+        id_busca = str(limpar_id(id_aluno))
+        
+        # Busca o ID na Coluna A (Coluna 1)
+        celula = ws.find(id_busca)
+        if celula:
+            ws.delete_rows(celula.row)
+            st.cache_data.clear()
+            return True
+        return False
+    except Exception as e:
+        print(f"Erro na exclusão por ID: {e}")
+        return False
