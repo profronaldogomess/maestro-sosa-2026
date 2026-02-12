@@ -1187,129 +1187,93 @@ if menu == "📅 Planejamento (Ponto ID)":
                 st.plotly_chart(px.bar(progresso_trim, x="TRIMESTRE", y="%", text="%", title=f"Evolução da Cobertura Real - {ano_m}º Ano", color="%", color_continuous_scale="RdYlGn", range_y=[0, 110]), use_container_width=True)
             
 # ==============================================================================
-# MÓDULO: DIÁRIO DE BORDO (V27.0) - RECEPTOR INTELIGENTE DE ATIVOS
+# MÓDULO: DIÁRIO DE BORDO (V28.0) - INTERFACE MOBILE FAST
 # ==============================================================================
 elif menu == "📝 Diário de Bordo Rápido":
-    st.title("📝 Diário de Bordo: Engajamento e Bônus")
-    st.markdown("---")
-
+    st.title("📝 Diário de Bordo: Execução Rápida")
+    
     if "v_diario" not in st.session_state: st.session_state.v_diario = 1
     v = st.session_state.v_diario
 
-    if df_alunos.empty:
-        st.warning("⚠️ Cadastre alunos primeiro.")
+    # 1. FILTROS RÁPIDOS
+    with st.container(border=True):
+        c1, c2 = st.columns(2)
+        turma_sel = c1.selectbox("👥 Turma:", sorted(df_alunos['TURMA'].unique()), key=f"db_t_{v}")
+        data_sel = c2.date_input("📅 Data:", date.today(), key=f"db_d_{v}")
+        data_str = data_sel.strftime("%d/%m/%Y")
+
+    # 2. DETECÇÃO AUTOMÁTICA DO COCKPIT (O HANDSHAKE)
+    aula_ativa = df_registro_aulas[(df_registro_aulas['TURMA'] == turma_sel) & (df_registro_aulas['DATA'] == data_str)]
+    
+    if not aula_ativa.empty:
+        material_hoje = aula_ativa.iloc[0]['CONTEUDO_MINISTRADO']
+        st.info(f"🚀 **Aula Ativa:** {material_hoje}")
     else:
-        # --- 1. FILTROS DE ACESSO ---
-        with st.container(border=True):
-            c1, c2 = st.columns([1, 1])
-            turma_sel = c1.selectbox("👥 Selecione a Turma:", sorted(df_alunos['TURMA'].unique()), key=f"db_turma_{v}")
-            data_sel = c2.date_input("📅 Data da Aula:", date.today(), key=f"db_data_{v}")
-            data_str = data_sel.strftime("%d/%m/%Y")
+        st.warning("⚠️ Nenhuma aula aberta no Cockpit para hoje. Registre primeiro na 'Gestão da Turma'.")
+        material_hoje = "Aula Avulsa"
 
-        # --- 2. MOTOR DE SINCRONIA (BUSCA NO COCKPIT) ---
-        # O sistema procura o que você registrou na Gestão da Turma para este dia/turma
-        registro_cockpit = df_registro_aulas[
-            (df_registro_aulas['TURMA'] == turma_sel) & 
-            (df_registro_aulas['DATA'] == data_str)
-        ]
+    # 3. MESA DE LANÇAMENTO MOBILE
+    st.markdown("---")
+    alunos_turma = df_alunos[df_alunos['TURMA'] == turma_sel].sort_values(by="NOME_ALUNO")
+    
+    # Botão de Visto em Lote (Economia de Cliques)
+    if st.button("✅ DAR VISTO EM TODOS OS ALUNOS", use_container_width=True):
+        st.session_state[f"visto_lote_{turma_sel}"] = True
+        st.rerun()
 
-        if not registro_cockpit.empty:
-            ativo_detectado = registro_cockpit.iloc[0]['CONTEUDO_MINISTRADO']
-            semana_ref = registro_cockpit.iloc[0]['SEMANA']
-            st.info(f"📍 **Ativos Detectados no Cockpit:** {ativo_detectado}")
-            st.caption(f"🔗 Vinculado à: {semana_ref}")
-        else:
-            st.warning("⚠️ Nenhum registro encontrado no Cockpit para esta data. Registre na 'Gestão da Turma' para garantir a rastreabilidade total.")
-            ativo_detectado = "Aula Avulsa"
-            semana_ref = "N/A"
-
-        # --- 3. PREPARAÇÃO DA GRADE DE ESTUDANTES ---
-        alunos_turma = df_alunos[df_alunos['TURMA'] == turma_sel].sort_values(by="NOME_ALUNO")
+    dados_diario = []
+    for _, alu in alunos_turma.iterrows():
+        id_a = db.limpar_id(alu['ID'])
+        is_pei = str(alu['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", ""]
         
-        # Busca se já existe registro de diário para hoje para não perder dados ao recarregar
-        df_existente = pd.DataFrame()
-        if not df_diario.empty:
-            df_existente = df_diario[
-                (df_diario['DATA'] == data_str) & 
-                (df_diario['TURMA'] == turma_sel)
-            ]
+        # Valor padrão do visto (checa se o botão de lote foi clicado)
+        visto_padrao = st.session_state.get(f"visto_lote_{turma_sel}", True)
 
-        dados_editor = []
-        for _, aluno in alunos_turma.iterrows():
-            id_a = db.limpar_id(aluno['ID'])
-            # Identificação Visual PEI
-            is_pei = str(aluno['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", ""]
+        dados_diario.append({
+            "ID": id_a,
+            "ESTUDANTE": f"♿ {alu['NOME_ALUNO']}" if is_pei else alu['NOME_ALUNO'],
+            "FALTOU": False,
+            "VISTO": visto_padrao,
+            "⭐ BÔNUS": 0.0,
+            "TAG": "",
+            "OBS": ""
+        })
+
+    # Editor Vertical (Otimizado para Celular)
+    df_editado = st.data_editor(
+        pd.DataFrame(dados_diario),
+        column_config={
+            "ID": None,
+            "ESTUDANTE": st.column_config.TextColumn("Estudante", width="medium", disabled=True),
+            "FALTOU": st.column_config.CheckboxColumn("F", help="Faltou"),
+            "VISTO": st.column_config.CheckboxColumn("V", help="Visto"),
+            "⭐ BÔNUS": st.column_config.SelectboxColumn("Bônus", options=[0.0, 0.1, 0.2, 0.3, 0.5, 1.0]),
+            "TAG": st.column_config.SelectboxColumn("Tag", options=["", "Dormiu", "Conversa", "Destaque", "Sem Material", "PEI Concluído"]),
+            "OBS": st.column_config.TextColumn("Obs")
+        },
+        hide_index=True, use_container_width=True, key=f"editor_diario_{v}"
+    )
+
+    # 4. SALVAMENTO E SINCRONIA
+    if st.button("💾 SALVAR REGISTROS E CONSOLIDAR", type="primary", use_container_width=True):
+        with st.status("Sincronizando Práxis...") as status:
+            db.limpar_diario_data_turma(data_str, turma_sel)
+            linhas_diario = []
+            for _, r in df_editado.iterrows():
+                tag_f = "AUSÊNCIA" if r['FALTOU'] else r['TAG']
+                visto_f = False if r['FALTOU'] else r['VISTO']
+                
+                linhas_diario.append([
+                    data_str, r['ID'], r['ESTUDANTE'].replace("♿ ", ""), turma_sel,
+                    str(visto_f), tag_f, f"[{material_hoje}] {r['OBS']}", util.sosa_to_str(r['⭐ BÔNUS'])
+                ])
             
-            # Valores padrão
-            visto_val, faltou_val, tag_val, obs_val, bonus_val = True, False, "", "", 0.0
-
-            # Se já houver registro salvo hoje, recupera os dados
-            if not df_existente.empty:
-                reg = df_existente[df_existente['ID_ALUNO'].apply(db.limpar_id) == id_a]
-                if not reg.empty:
-                    visto_val = str(reg.iloc[0]['VISTO_ATIVIDADE']).upper() == "TRUE"
-                    tag_val = str(reg.iloc[0]['TAGS'])
-                    obs_val = str(reg.iloc[0]['OBSERVACOES'])
-                    if 'BONUS' in reg.columns: bonus_val = util.sosa_to_float(reg.iloc[0]['BONUS'])
-                    if "AUSÊNCIA" in tag_val: faltou_val = True
-
-            dados_editor.append({
-                "ID": id_a,
-                "ALUNO": f"♿ {aluno['NOME_ALUNO']}" if is_pei else aluno['NOME_ALUNO'],
-                "FALTOU": faltou_val,
-                "VISTO": visto_val,
-                "⭐ BÔNUS": bonus_val,
-                "OCORRÊNCIA": tag_val if tag_val != "nan" else "",
-                "OBS": obs_val if obs_val != "nan" else ""
-            })
-
-        # --- 4. INTERFACE DE COLETA DE EVIDÊNCIAS ---
-        st.subheader(f"📝 Registro de Engajamento")
-        df_editado = st.data_editor(
-            pd.DataFrame(dados_editor),
-            column_config={
-                "ID": None,
-                "ALUNO": st.column_config.TextColumn("Estudante", width="medium", disabled=True),
-                "FALTOU": st.column_config.CheckboxColumn("Faltou?", width="small"),
-                "VISTO": st.column_config.CheckboxColumn("Visto", width="small"),
-                "⭐ BÔNUS": st.column_config.NumberColumn("Bônus", min_value=0.0, max_value=2.0, step=0.1, format="%.1f"),
-                "OCORRÊNCIA": st.column_config.SelectboxColumn("Tags", options=["", "Dormiu", "Conversa", "Se destacou", "Sem material", "Vetor Disciplinar", "PEI Concluído"]),
-                "OBS": st.column_config.TextColumn("Observações Rápidas", width="medium")
-            },
-            hide_index=True, use_container_width=True, key=f"editor_diario_{v}"
-        )
-
-        # --- 5. SALVAMENTO COM RASTREABILIDADE ---
-        if st.button("💾 SALVAR DIÁRIO E CONSOLIDAR BÔNUS", type="primary", use_container_width=True, key=f"btn_save_db_{v}"):
-            with st.status("Sincronizando com o Boletim...", expanded=False) as status:
-                # Limpa registros antigos do mesmo dia/turma para evitar duplicidade
-                db.limpar_diario_data_turma(data_str, turma_sel)
-                
-                linhas_para_salvar = []
-                for _, row in df_editado.iterrows():
-                    tag_f, visto_f = row['OCORRÊNCIA'], row['VISTO']
-                    if row['FALTOU']:
-                        tag_f, visto_f = "AUSÊNCIA JUSTIFICADA", False
-                    
-                    # O campo OBSERVAÇÕES agora guarda o vínculo com o material do Cockpit
-                    obs_final = f"[{ativo_detectado}] {row['OBS']}".strip()
-                    
-                    linhas_para_salvar.append([
-                        data_str, 
-                        row['ID'], 
-                        row['ALUNO'].replace("♿ ", ""), 
-                        turma_sel,
-                        str(visto_f), 
-                        tag_f, 
-                        obs_final,
-                        util.sosa_to_str(row['⭐ BÔNUS'])
-                    ])
-                
-                if db.salvar_lote("DB_DIARIO_BORDO", linhas_para_salvar):
-                    status.update(label="✅ Sincronia Concluída!", state="complete")
-                    st.balloons()
-                    time.sleep(1)
-                    st.rerun()
+            if db.salvar_lote("DB_DIARIO_BORDO", linhas_diario):
+                status.update(label="✅ Diário Sincronizado!", state="complete")
+                st.balloons()
+                # Limpa o estado do visto em lote
+                if f"visto_lote_{turma_sel}" in st.session_state: del st.session_state[f"visto_lote_{turma_sel}"]
+                time.sleep(1); st.rerun()
 
 # ==============================================================================
 # MÓDULO: PAINEL DE NOTAS V32 - CÁLCULO AUTOMÁTICO E TRANSBORDAMENTO DE BÔNUS
@@ -1619,128 +1583,90 @@ elif menu == "📈 Boletim Anual & Conselho":
                 st.text_area("Copia e cole na Ata Oficial:", ai.gerar_ia("PLANE_PEDAGOGICO", prompt_ata), height=300)
 
 # ==============================================================================
-# MÓDULO: GESTÃO DA TURMA (V30.5) - COCKPIT 360° COM BLINDAGEM DE CHAVES
+# MÓDULO: GESTÃO DA TURMA (V31.0) - COCKPIT DE INTELIGÊNCIA ESTRATÉGICA
 # ==============================================================================
 elif menu == "👥 Gestão da Turma":
     st.title("👥 Cockpit de Regência: Gestão 360°")
     st.markdown("---")
 
-    # --- DEFINIÇÃO DA VARIÁVEL DE VERSÃO (VACINA CONTRA NAMEERROR) ---
-    if "v_gestao" not in st.session_state:
-        st.session_state.v_gestao = 1
+    if "v_gestao" not in st.session_state: st.session_state.v_gestao = 1
     v = st.session_state.v_gestao
 
     tab_cockpit, tab_criar, tab_povoar, tab_editar = st.tabs([
-        "📊 Cockpit da Turma",
-        "🏗️ Arquitetura de Turmas", 
-        "➕ Povoar Alunos", 
-        "✏️ Edição & Transferência"
+        "📊 Cockpit da Turma", "🏗️ Arquitetura de Turmas", "➕ Povoar Alunos", "✏️ Edição & Transferência"
     ])
 
-    # --- ABA 1: COCKPIT DA TURMA (INTEGRAÇÃO TOTAL) ---
     with tab_cockpit:
         if df_turmas.empty:
-            st.info("📭 Nenhuma turma cadastrada. Vá em 'Arquitetura de Turmas'.")
+            st.info("📭 Nenhuma turma cadastrada.")
         else:
-            # 1. FILTROS DE FOCO E SAFRA
             c_f1, c_f2 = st.columns([1, 1])
-            turma_foco = c_f1.selectbox("🎯 Selecione a Turma para Gestão:", sorted(df_turmas['ID_TURMA'].unique()), key=f"foco_t_{v}")
+            turma_foco = c_f1.selectbox("🎯 Selecione a Turma:", sorted(df_turmas['ID_TURMA'].unique()), key=f"foco_t_{v}")
             trim_foco = c_f2.selectbox("📅 Trimestre de Safra:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"foco_trim_{v}")
             
-            # Dados da Turma
-            info_t = df_turmas[df_turmas['ID_TURMA'] == turma_foco].iloc[0]
             alunos_t = df_alunos[df_alunos['TURMA'] == turma_foco].sort_values(by="NOME_ALUNO")
             ano_num = "".join(filter(str.isdigit, turma_foco)) 
 
-            # 2. DASHBOARD DE STATUS
+            # --- 1. DASHBOARD DE STATUS (KPIs) ---
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("Total Alunos", len(alunos_t))
-            c2.metric("Estudantes PEI", len(alunos_t[~alunos_t['NECESSIDADES'].astype(str).str.upper().isin(["NENHUMA", "PENDENTE", ""])]))
+            c2.metric("Estudantes PEI", len(alunos_t[~alunos_t['NECESSIDADES'].astype(str).upper().isin(["NENHUMA", "PENDENTE", ""])]))
             
-            aulas_turma_reg = df_registro_aulas[df_registro_aulas['TURMA'] == turma_foco]
-            c3.metric("Aulas Ministradas", len(aulas_turma_reg))
-            c4.metric("Horário", info_t['HORARIO_TEMPO'])
+            # Cálculo de Engajamento Médio (Vistos)
+            engaj_medio = 0
+            if not df_diario.empty:
+                vistos_t = df_diario[df_diario['TURMA'] == turma_foco]
+                if not vistos_t.empty:
+                    engaj_medio = (len(vistos_t[vistos_t['VISTO_ATIVIDADE'].astype(str).upper() == "TRUE"]) / len(vistos_t)) * 100
+            c3.metric("Engajamento Médio", f"{engaj_medio:.0f}%")
+            c4.metric("Série", f"{ano_num}º Ano")
 
             st.markdown("---")
-
             col_esq, col_dir = st.columns([1.8, 1.2])
 
             with col_esq:
-                st.subheader("🕒 Registro de Aula e Gestão de Ativos")
-                
+                st.subheader("🕒 Abertura de Aula (Handshake Diário)")
                 with st.container(border=True):
-                    st.markdown("#### 🚀 Aplicar Materiais na Turma")
-                    
+                    st.markdown("#### 🚀 Registrar Ativo para Hoje")
                     planos_ano = df_planos[df_planos['ANO'].str.contains(ano_num)]
                     materiais_ano = df_aulas[df_aulas['ANO'].str.contains(ano_num)]
 
-                    # LÓGICA DE SUMIÇO POR TURMA
-                    mats_ja_usados = aulas_turma_reg['CONTEUDO_MINISTRADO'].astype(str).tolist()
-                    mats_disponiveis = []
-                    for _, m_row in materiais_ano.iterrows():
-                        m_nome = m_row['TIPO_MATERIAL']
-                        if not any(m_nome in r for r in mats_ja_usados):
-                            mats_disponiveis.append(m_nome)
-
                     c_r1, c_r2 = st.columns(2)
-                    # CORREÇÃO AQUI: v agora está definido no topo do módulo
-                    data_aula = c_r1.date_input("Data da Aplicação:", date.today(), key=f"dt_reg_{v}")
-                    plano_sel = c_r2.selectbox("Vincular ao Plano Base:", ["Nenhum"] + planos_ano['SEMANA'].tolist(), key=f"plano_reg_{v}")
+                    data_aula = c_r1.date_input("Data da Aula:", date.today(), key=f"dt_reg_{v}")
+                    plano_sel = c_r2.selectbox("Vincular Plano Base:", ["Nenhum"] + planos_ano['SEMANA'].tolist(), key=f"plano_reg_{v}")
                     
-                    mats_sel = st.multiselect("📦 Selecione os Ativos (Sondas, Trabalhos, Aulas):", 
-                                              options=mats_disponiveis,
-                                              key=f"mats_reg_{v}")
+                    mats_sel = st.multiselect("📦 Selecione o Material (Aula/Sonda/Projeto):", options=materiais_ano['TIPO_MATERIAL'].tolist(), key=f"mats_reg_{v}")
 
-                    if st.button("💾 REGISTRAR AULA E BAIXAR ATIVOS", use_container_width=True, type="primary", key=f"btn_reg_{v}"):
-                        if not mats_sel and plano_sel == "Nenhum":
-                            st.error("Selecione pelo menos um Plano ou Material.")
-                        else:
-                            with st.spinner("Sincronizando Cockpit..."):
-                                lista_conteudos = []
-                                lista_peis = []
-                                
-                                if plano_sel != "Nenhum":
-                                    p_row = planos_ano[planos_ano['SEMANA'] == plano_sel].iloc[0]
-                                    lista_conteudos.append(f"PLANO: {ai.extrair_tag(p_row['PLANO_TEXTO'], 'CONTEUDOS_ESPECIFICOS')}")
-                                    lista_peis.append(ai.extrair_tag(p_row['PLANO_TEXTO'], "ADAPTACAO_PEI"))
-                                
-                                for m in mats_sel:
-                                    lista_conteudos.append(m)
-                                
-                                conteudo_final = " + ".join(lista_conteudos)
-                                pei_final = " | ".join(lista_peis) if lista_peis else "Verificar Ativo PEI"
+                    if st.button("💾 ABRIR AULA NO DIÁRIO", use_container_width=True, type="primary"):
+                        with st.spinner("Sincronizando com o Diário Mobile..."):
+                            conteudo_final = " + ".join(mats_sel) if mats_sel else "Aula Baseada no Plano"
+                            db.salvar_no_banco("DB_REGISTRO_AULAS", [
+                                data_aula.strftime("%d/%m/%Y"), plano_sel, turma_foco, 
+                                conteudo_final, "PENDENTE", "ABERTA"
+                            ])
+                            st.success(f"✅ Aula aberta! Agora você pode preencher o Diário de Bordo.")
+                            time.sleep(1); st.rerun()
 
-                                db.salvar_no_banco("DB_REGISTRO_AULAS", [
-                                    data_aula.strftime("%d/%m/%Y"), plano_sel, turma_foco, 
-                                    conteudo_final, pei_final, "MINISTRADA"
-                                ])
-                                st.success(f"✅ Ativos vinculados à {turma_foco}!")
-                                time.sleep(1); st.rerun()
-
-                if not aulas_turma_reg.empty:
-                    st.markdown("#### 📌 Últimos Registros")
-                    for _, reg in aulas_turma_reg.tail(3).iterrows():
-                        # A data aqui agora virá formatada pelo database.py
-                        with st.expander(f"📅 {reg['DATA']} - {reg['CONTEUDO_MINISTRADO'][:50]}..."):
-                            st.write(f"**Conteúdo:** {reg['CONTEUDO_MINISTRADO']}")
+                st.subheader("📜 Histórico de Ativos Aplicados")
+                aulas_reg = df_registro_aulas[df_registro_aulas['TURMA'] == turma_foco].iloc[::-1]
+                if not aulas_reg.empty:
+                    for _, reg in aulas_reg.head(5).iterrows():
+                        with st.expander(f"📅 {reg['DATA']} - {reg['CONTEUDO_MINISTRADO'][:40]}..."):
+                            st.write(f"**Material:** {reg['CONTEUDO_MINISTRADO']}")
+                            st.write(f"**Plano Vinculado:** {reg['SEMANA']}")
 
             with col_dir:
-                st.subheader("📂 Inventário da Turma")
+                st.subheader("📂 Inventário e Alunos")
                 with st.container(border=True):
-                    st.markdown(f"**📦 Ativos Prontos para {turma_foco}**")
-                    if mats_disponiveis:
-                        for m in mats_disponiveis:
-                            icone = "🔍" if "SONDA" in m.upper() else "📋" if "TRAB" in m.upper() else "📚" if "COMP" in m.upper() else "📖"
-                            st.write(f"{icone} {m}")
-                    else:
-                        st.success("🎉 Estoque de ativos aplicado!")
-
+                    st.markdown(f"**📦 Ativos Disponíveis ({ano_num}º Ano)**")
+                    for m in materiais_ano['TIPO_MATERIAL'].tail(5):
+                        st.caption(f"• {m}")
+                
                 with st.container(border=True):
-                    st.markdown("**👥 Estudantes (Foco PEI)**")
+                    st.markdown("**👥 Foco PEI**")
                     for _, alu in alunos_t.iterrows():
-                        is_pei = str(alu['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", ""]
-                        if is_pei: st.warning(f"♿ {alu['NOME_ALUNO']}")
-                        else: st.write(f"👤 {alu['NOME_ALUNO']}")
+                        if str(alu['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", ""]:
+                            st.warning(f"♿ {alu['NOME_ALUNO']}")
 
     # --- ABA 2: ARQUITETURA DE TURMAS (V28.5 - ULTRA-FLEX) ---
     with tab_criar:
