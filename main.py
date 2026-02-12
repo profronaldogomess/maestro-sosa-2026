@@ -10,7 +10,9 @@ import os
 import plotly.express as px
 import exporter
 import re
-import ai_engine as ai  # <--- ADICIONE ESTA LINHA AQUI
+import ai_engine as ai
+from datetime import date, datetime, timedelta
+
 
 
 st.set_page_config(page_title="SOSA 2026 | Master Intelligence", layout="wide", page_icon="🏫")
@@ -2237,7 +2239,7 @@ elif menu == "📝 Central de Avaliações":
         else: st.info("📭 Nenhum ativo de safra encontrado.")
 
 # ==============================================================================
-# MÓDULO: CENTRAL DE INTELIGÊNCIA DE RESULTADOS (V64.1 - CORREÇÃO DE VARIÁVEL)
+# MÓDULO: CENTRAL DE INTELIGÊNCIA DE RESULTADOS (V64.2 - CORREÇÃO DE FILTROS)
 # ==============================================================================
 elif menu == "📸 Scanner de Gabaritos":
     st.title("📸 Central de Inteligência de Resultados (CIR)")
@@ -2246,19 +2248,51 @@ elif menu == "📸 Scanner de Gabaritos":
     if "v_scan" not in st.session_state: st.session_state.v_scan = 1
     v = st.session_state.v_scan
 
-    # --- FUNÇÃO AUXILIAR: FILTRO HIERÁRQUICO BLINDADO ---
-    def filtrar_ativos_cir_v64(turma, trimestre):
-        if not turma or not trimestre: return []
+    # --- FUNÇÃO AUXILIAR: FILTRO HIERÁRQUICO BLINDADO V64.2 ---
+    def filtrar_ativos_cir_v64(turma, trimestre_nome, apenas_provas=True):
+        """
+        Motor de busca inteligente que cruza Série, Trimestre e Tipo de Material.
+        """
+        if not turma or not trimestre_nome: return []
         try:
-            serie_num = turma[0]
-            permitidos = ["TESTE", "PROVA", "SONDA", "DIAGNÓSTICA", "DIAGNOSTICA", "RECUPERAÇÃO", "AVALIAÇÃO"]
+            serie_num = str(turma)[0] # Pega o "6" de "6º Ano"
             df_f = df_aulas[df_aulas['ANO'].astype(str).str.contains(serie_num)].copy()
-            mask_trim = (df_f['TIPO_MATERIAL'].str.contains(trimestre, na=False)) | \
-                        (df_f['CONTEUDO'].str.contains(trimestre, na=False))
+            
+            # Normalização de Data para detecção de Trimestre
+            def detectar_trimestre(x):
+                try:
+                    # Se for serial do Sheets (ex: 46063)
+                    if str(x).replace('.','',1).isdigit():
+                        dt = date(1899, 12, 30) + timedelta(days=int(float(x)))
+                        return util.obter_info_trimestre(dt)[0]
+                    # Se for string de data (DD/MM/YYYY)
+                    if "/" in str(x):
+                        partes = str(x).split("/")
+                        dt = date(int(partes[2]), int(partes[1]), int(partes[0]))
+                        return util.obter_info_trimestre(dt)[0]
+                except: pass
+                return "Outros"
+
+            df_f['TRIM_DETECTADO'] = df_f['DATA'].apply(detectar_trimestre)
+            
+            # Filtro por Trimestre (na data ou no texto do conteúdo)
+            mask_trim = (df_f['TRIM_DETECTADO'] == trimestre_nome) | \
+                        (df_f['CONTEUDO'].str.contains(trimestre_nome, na=False))
             df_f = df_f[mask_trim]
-            df_f = df_f[df_f['TIPO_MATERIAL'].str.upper().str.contains('|'.join(permitidos))]
-            return df_f['TIPO_MATERIAL'].tolist()
-        except: return []
+
+            if apenas_provas:
+                permitidos = ["TESTE", "PROVA", "SONDA", "DIAGNÓSTICA", "DIAGNOSTICA", "RECUPERAÇÃO", "AVALIAÇÃO"]
+                df_f = df_f[df_f['TIPO_MATERIAL'].str.upper().str.contains('|'.join(permitidos))]
+            else:
+                # Filtro para Aba 2: Trabalhos, Projetos e Fixação
+                permitidos = ["PROJETO", "FIXAÇÃO", "REFORÇO", "ATIVIDADE", "TRABALHO", "AULA"]
+                proibidos = ["TESTE", "PROVA", "RECUPERAÇÃO", "SONDA"]
+                df_f = df_f[df_f['TIPO_MATERIAL'].str.upper().str.contains('|'.join(permitidos))]
+                df_f = df_f[~df_f['TIPO_MATERIAL'].str.upper().str.contains('|'.join(proibidos))]
+            
+            return sorted(df_f['TIPO_MATERIAL'].unique().tolist())
+        except Exception as e: 
+            return []
 
     # --- ABAS PERSISTENTES ---
     tab_pericia, tab_atividades, tab_soberania, tab_raiox, tab_acervo_cir, tab_dash_cir = st.tabs([
@@ -2271,7 +2305,7 @@ elif menu == "📸 Scanner de Gabaritos":
         c1, c2, c3 = st.columns([1, 1, 1.5])
         t_sel = c1.selectbox("👥 Turma:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"t_p_{v}")
         tr_sel = c2.selectbox("📅 Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_p_{v}")
-        opcoes_p = filtrar_ativos_cir_v64(t_sel, tr_sel)
+        opcoes_p = filtrar_ativos_cir_v64(t_sel, tr_sel, apenas_provas=True)
         at_sel = c3.selectbox("📋 Selecione a Avaliação:", [""] + opcoes_p, key=f"at_p_{v}")
 
         if not t_sel or not at_sel:
@@ -2305,7 +2339,6 @@ elif menu == "📸 Scanner de Gabaritos":
                 if pendentes.empty: 
                     st.success("✅ Todos os alunos desta turma foram escaneados!")
                 else:
-                    # CORREÇÃO AQUI: Padronizei o nome para 'al_sel'
                     al_sel = st.selectbox("👤 Selecionar Aluno:", pendentes['NOME_ALUNO'].tolist(), key=f"al_p_sel_{v}")
                     al_info = pendentes[pendentes['NOME_ALUNO'] == al_sel].iloc[0]
                     is_pei_aluno = str(al_info['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"]
@@ -2330,7 +2363,6 @@ elif menu == "📸 Scanner de Gabaritos":
                         if "current_scan_res" in st.session_state: del st.session_state.current_scan_res
                         st.rerun()
 
-                    # --- MESA DE PERÍCIA IMEDIATA (CORRIGIDA) ---
                     if "current_scan_res" in st.session_state:
                         st.markdown("---")
                         st.subheader("🔍 Mesa de Perícia Imediata")
@@ -2343,7 +2375,6 @@ elif menu == "📸 Scanner de Gabaritos":
                             else: status = "❌ ERRO"
                             dados_pericia.append({"Q": f"{i+1:02d}", "Sua Revisão": lido, "Gabarito": certo, "Status": status})
                         
-                        # CORREÇÃO DO KEYERROR: O nome da variável agora é 'al_sel'
                         df_mesa = st.data_editor(pd.DataFrame(dados_pericia), hide_index=True, use_container_width=True,
                             column_config={"Sua Revisão": st.column_config.SelectboxColumn("Sua Revisão", options=["A", "B", "C", "D", "E", "X", "?"], required=True)},
                             key=f"mesa_editor_{al_sel.replace(' ','_')}")
@@ -2385,49 +2416,20 @@ elif menu == "📸 Scanner de Gabaritos":
                 
                 st.data_editor(pd.DataFrame(dados_hub), hide_index=True, use_container_width=True,
                     column_config={"Evidência": st.column_config.LinkColumn("🔗 Ver Foto")}, key=f"hub_ed_{v}")
-                
-                if st.button("🚀 HOMOLOGAR NOTAS NO BOLETIM", use_container_width=True):
-                    st.success("Notas enviadas para o Painel de Notas!")
 
-# --- ABA 2: ATIVIDADES & PROJETOS (V65.0 - FILTRO CRONOLÓGICO E MÉRITO) ---
+    # --- ABA 2: ATIVIDADES & PROJETOS (V65.1 - CORREÇÃO DE FILTRO) ---
     with tab_atividades:
-        # 1. FILTROS INTERNOS
         c_f1, c_f2 = st.columns(2)
         t_sel_a = c_f1.selectbox("👥 Selecione a Turma:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"t_a_v65_{v}")
         tr_sel_a = c_f2.selectbox("📅 Selecione o Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_a_v65_{v}")
 
-        # --- MOTOR DE FILTRAGEM CRONOLÓGICA V65 ---
-        def filtrar_trabalhos_v65(turma, trimestre_nome):
-            if not turma: return []
-            try:
-                serie_alvo = turma[0] # Pega o "6"
-                # Filtra pela série
-                df_f = df_aulas[df_aulas['ANO'].astype(str).str.contains(serie_alvo)].copy()
-                
-                # Converte a coluna DATA para o formato de data real para comparar
-                df_f['DT_OBJ'] = df_f['DATA'].apply(lambda x: util.obter_info_trimestre(pd.to_datetime(x, unit='D', origin='1899-12-30').date())[0] if str(x).isdigit() else "Outros")
-                
-                # Filtra pelo Trimestre detectado pela data ou pelo nome no conteúdo
-                mask = (df_f['DT_OBJ'] == trimestre_nome) | (df_f['CONTEUDO'].str.contains(trimestre_nome, na=False))
-                df_f = df_f[mask]
-                
-                # Filtra apenas o que NÃO é prova/teste (foco em trabalhos e fixação)
-                permitidos = ["PROJETO", "FIXAÇÃO", "REFORÇO", "ATIVIDADE", "TRABALHO", "AULA"]
-                proibidos = ["TESTE", "PROVA", "RECUPERAÇÃO", "SONDA"]
-                
-                df_f = df_f[df_f['TIPO_MATERIAL'].str.upper().str.contains('|'.join(permitidos))]
-                df_f = df_f[~df_f['TIPO_MATERIAL'].str.upper().str.contains('|'.join(proibidos))]
-                
-                return df_f['TIPO_MATERIAL'].tolist()
-            except: return []
-
-        opcoes_a = filtrar_trabalhos_v65(t_sel_a, tr_sel_a)
+        # Usa a função unificada com apenas_provas=False
+        opcoes_a = filtrar_ativos_cir_v64(t_sel_a, tr_sel_a, apenas_provas=False)
         at_sel_a = st.selectbox("📋 Selecione o Trabalho ou Atividade:", [""] + opcoes_a, key=f"at_a_sel_v65_{v}")
 
         if not t_sel_a or not at_sel_a:
             st.info("💡 Selecione a Turma e o Material para analisar o conteúdo e lançar os bônus.")
         else:
-            # 2. LEITURA DO MATERIAL
             dados_at = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel_a].iloc[0]
             txt_at = str(dados_at['CONTEUDO'])
             
@@ -2441,68 +2443,52 @@ elif menu == "📸 Scanner de Gabaritos":
                     st.markdown("**📝 Roteiro do Aluno:**")
                     st.write(ai.extrair_tag(txt_at, "ALUNO"))
 
-            # 3. MESA DE ATRIBUIÇÃO DE BÔNUS (MÉRITO)
             st.divider()
             st.subheader("⭐ Atribuição de Pontos de Mérito")
-            st.caption("Estes pontos serão somados como bônus no Painel de Notas.")
-            
             alunos_a = df_alunos[df_alunos['TURMA'] == t_sel_a].sort_values(by="NOME_ALUNO")
             
             dados_bonus = []
             for _, alu in alunos_a.iterrows():
-                dados_bonus.append({
-                    "ID": alu['ID'], 
-                    "Estudante": alu['NOME_ALUNO'], 
-                    "Bônus (0-2.0)": 0.0, 
-                    "Entregou?": True
-                })
+                dados_bonus.append({"ID": alu['ID'], "Estudante": alu['NOME_ALUNO'], "Bônus (0-2.0)": 0.0, "Entregou?": True})
             
-            df_bonus_ed = st.data_editor(
-                pd.DataFrame(dados_bonus),
-                hide_index=True, use_container_width=True,
+            df_bonus_ed = st.data_editor(pd.DataFrame(dados_bonus), hide_index=True, use_container_width=True,
                 column_config={
                     "ID": None,
                     "Bônus (0-2.0)": st.column_config.NumberColumn("Pontos", min_value=0.0, max_value=10.0, step=0.1, format="%.1f"),
                     "Entregou?": st.column_config.CheckboxColumn("Visto")
-                },
-                key=f"ed_bonus_v65_{at_sel_a.replace(' ','_')}"
-            )
+                }, key=f"ed_bonus_v65_{at_sel_a.replace(' ','_')}")
 
             if st.button("💾 CONSOLIDAR MÉRITO NO BOLETIM", type="primary", use_container_width=True):
                 with st.status("Sincronizando bônus...") as status:
                     lista_lote = []
                     for _, r in df_bonus_ed.iterrows():
                         if r['Bônus (0-2.0)'] > 0 or r['Entregou?']:
-                            # Envia para a coluna de Vistos/Atividades
-                            lista_lote.append([
-                                r['ID'], r['Estudante'], t_sel_a, tr_sel_a, 
-                                util.sosa_to_str(r['Bônus (0-2.0)']), "0,0", "0,0", "0,0", util.sosa_to_str(r['Bônus (0-2.0)'])
-                            ])
-                    
+                            lista_lote.append([r['ID'], r['Estudante'], t_sel_a, tr_sel_a, util.sosa_to_str(r['Bônus (0-2.0)']), "0,0", "0,0", "0,0", util.sosa_to_str(r['Bônus (0-2.0)'])])
                     if lista_lote:
                         db.salvar_lote("DB_NOTAS", lista_lote)
-                        status.update(label="✅ Bônus e Vistos integrados!", state="complete")
-                        st.balloons()
+                        status.update(label="✅ Bônus e Vistos integrados!", state="complete"); st.balloons()
 
-    # --- ABA 4: RAIO-X PEDAGÓGICO ---
+    # --- ABA 4: RAIO-X PEDAGÓGICO (CORREÇÃO DO NAMERROR) ---
     with tab_raiox:
         c1, c2, c3 = st.columns([1, 1, 1.5])
         t_sel_r = c1.selectbox("👥 Turma:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"t_r_{v}")
         tr_sel_r = c2.selectbox("📅 Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_r_{v}")
-        opcoes_r = filtrar_ativos_cir(t_sel_r, tr_sel_r)
+        # CORREÇÃO: Chamando a função correta filtrar_ativos_cir_v64
+        opcoes_r = filtrar_ativos_cir_v64(t_sel_r, tr_sel_r, apenas_provas=True)
         at_sel_r = c3.selectbox("📋 Selecione o Ativo:", [""] + opcoes_r, key=f"at_r_{v}")
+        
+        if t_sel_r and at_sel_r:
+            st.info(f"Analisando desempenho de {at_sel_r}...")
+            # Lógica de Raio-X aqui...
 
     # --- ABA 5: ACERVO DE EVIDÊNCIAS ---
     with tab_acervo_cir:
         st.subheader("📂 Cofre Digital de Evidências")
-        # Busca na planilha de gabaritos escaneados
         if not df_diagnosticos.empty:
             df_exibicao = df_diagnosticos.copy().iloc[::-1]
-            st.dataframe(
-                df_exibicao[['DATA', 'NOME_ALUNO', 'TURMA', 'ID_AVALIACAO', 'NOTA_CALCULADA', 'LINK_FOTO_DRIVE']],
+            st.dataframe(df_exibicao[['DATA', 'NOME_ALUNO', 'TURMA', 'ID_AVALIACAO', 'NOTA_CALCULADA', 'LINK_FOTO_DRIVE']],
                 column_config={"LINK_FOTO_DRIVE": st.column_config.LinkColumn("🔗 Ver Evidência")},
-                use_container_width=True, hide_index=True
-            )
+                use_container_width=True, hide_index=True)
         else: st.info("Nenhuma evidência arquivada ainda.")
 
     # --- ABA 6: DASHBOARD DE CONTROLE ---
@@ -2510,12 +2496,9 @@ elif menu == "📸 Scanner de Gabaritos":
         st.subheader("📈 Torre de Comando de Resultados")
         if not df_diagnosticos.empty:
             c_d1, c_d2 = st.columns(2)
-            # Gráfico de volume de correções
             fig_vol = px.pie(df_diagnosticos, names='TURMA', title="Volume de Avaliações por Turma")
             c_d1.plotly_chart(fig_vol, use_container_width=True)
-            # Gráfico de média por avaliação
             df_diagnosticos['NOTA_NUM'] = df_diagnosticos['NOTA_CALCULADA'].apply(util.sosa_to_float)
-            fig_med = px.bar(df_diagnosticos.groupby('ID_AVALIACAO')['NOTA_NUM'].mean().reset_index(), 
-                             x='ID_AVALIACAO', y='NOTA_NUM', title="Média Global por Ativo")
+            fig_med = px.bar(df_diagnosticos.groupby('ID_AVALIACAO')['NOTA_NUM'].mean().reset_index(), x='ID_AVALIACAO', y='NOTA_NUM', title="Média Global por Ativo")
             c_d2.plotly_chart(fig_med, use_container_width=True)
         else: st.info("Aguardando dados para gerar indicadores.")
