@@ -2617,22 +2617,22 @@ elif menu == "📸 Scanner de Gabaritos":
                                 ])
                         st.success("✅ Indicadores externos integrados ao histórico dos alunos!")
 
-# --- ABA 4: RAIO-X PEDAGÓGICO (V69.0 - PERÍCIA INDIVIDUAL E DIFERENCIAÇÃO PEI) ---
+# --- ABA 4: RAIO-X PEDAGÓGICO (V70.0 - ANÁLISE HÍBRIDA: ITEM + INDIVIDUAL) ---
     with tab_raiox:
-        st.subheader("📊 Raio-X Pedagógico: Diagnóstico Individual de Lacunas")
+        st.subheader("📊 Raio-X Pedagógico: Diagnóstico Híbrido de Performance")
         st.markdown("---")
 
         c1, c2, c3 = st.columns([1, 1, 1.5])
-        t_sel_r = c1.selectbox("👥 Selecione a Turma:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"t_r_v69_{v}")
-        tr_sel_r = c2.selectbox("📅 Selecione o Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_r_v69_{v}")
+        t_sel_r = c1.selectbox("👥 Selecione a Turma:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"t_r_v70_{v}")
+        tr_sel_r = c2.selectbox("📅 Selecione o Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_r_v70_{v}")
         
         opcoes_r = filtrar_ativos_cir_v64(t_sel_r, tr_sel_r, apenas_provas=True)
-        at_sel_r = c3.selectbox("📋 Selecione a Avaliação para Raio-X:", [""] + opcoes_r, key=f"at_r_v69_{v}")
+        at_sel_r = c3.selectbox("📋 Selecione a Avaliação para Raio-X:", [""] + opcoes_r, key=f"at_r_v70_{v}")
 
         if not t_sel_r or not at_sel_r:
-            st.info("💡 Selecione a Turma e a Avaliação para visualizar o Mapa de Calor e o Diagnóstico por Aluno.")
+            st.info("💡 Selecione a Turma e a Avaliação para carregar a Perícia Pedagógica.")
         else:
-            # 1. CARREGAMENTO E NORMALIZAÇÃO DE METADADOS
+            # 1. RECUPERAÇÃO DE METADADOS DA PROVA
             prova_query = df_aulas[df_aulas['TIPO_MATERIAL'].str.strip() == at_sel_r.strip()]
             
             if prova_query.empty:
@@ -2642,20 +2642,17 @@ elif menu == "📸 Scanner de Gabaritos":
                 txt_prova = str(dados_prova['CONTEUDO'])
                 grade_pericia = ai.extrair_tag(txt_prova, "GRADE_DE_CORRECAO")
                 
-                # Extração de Gabaritos (Regular e PEI)
-                def extrair_gab_v69(texto, tag_alvo="GABARITO_TEXTO"):
+                def extrair_gab_v70(texto, tag_alvo="GABARITO_TEXTO"):
                     raw = ai.extrair_tag(texto, tag_alvo) or ai.extrair_tag(texto, "GABARITO")
                     matches = re.findall(r"(\d+)\s*[\-\.\:]\s*([A-E])", raw.upper())
-                    if matches:
-                        return {int(num): letra for num, letra in matches}
-                    # Fallback para letras isoladas
+                    if matches: return {int(num): letra for num, letra in matches}
                     letras = re.findall(r"\b[A-E]\b", raw.upper())
                     return {i+1: letra for i, letra in enumerate(letras)}
 
-                gab_reg_map = extrair_gab_v69(txt_prova, "GABARITO_TEXTO")
-                gab_pei_map = extrair_gab_v69(txt_prova, "GABARITO_PEI")
+                gab_reg_map = extrair_gab_v70(txt_prova, "GABARITO_TEXTO")
+                gab_pei_map = extrair_gab_v70(txt_prova, "GABARITO_PEI")
 
-                # 2. PROCESSAMENTO DA TURMA (MAPA DE CALOR)
+                # 2. PROCESSAMENTO DE RESPOSTAS
                 respostas_alunos = df_diagnosticos[
                     (df_diagnosticos['TURMA'].str.strip() == t_sel_r.strip()) & 
                     (df_diagnosticos['ID_AVALIACAO'].str.strip() == at_sel_r.strip())
@@ -2664,97 +2661,100 @@ elif menu == "📸 Scanner de Gabaritos":
                 if respostas_alunos.empty:
                     st.warning("⚠️ Nenhuma resposta de aluno encontrada para esta avaliação.")
                 else:
-                    # Gráfico de Calor (Visão Geral)
-                    st.markdown("#### 📈 Desempenho Geral da Turma")
+                    # --- PARTE A: ANÁLISE POR QUESTÃO (A CAIXA QUE VOCÊ SOLICITOU) ---
+                    st.markdown("#### 📈 1. Análise de Performance por Item (Macro)")
+                    
                     num_q_total = len(gab_reg_map)
-                    stats_q = []
+                    stats_list = []
+                    matriz_respostas = [r.split(';') for r in respostas_alunos['RESPOSTAS_ALUNO']]
+
                     for i in range(1, num_q_total + 1):
                         correta = gab_reg_map.get(i, "?")
-                        votos = [r.split(';')[i-1] if (len(r.split(';')) >= i) else "?" for r in respostas_alunos['RESPOSTAS_ALUNO']]
+                        votos = [res[i-1] if len(res) >= i else "?" for res in matriz_respostas]
+                        
+                        total_votos = len(votos)
                         acertos = votos.count(correta)
-                        perc = (acertos / len(votos)) * 100 if votos else 0
-                        stats_q.append({"Questão": f"Q{i:02d}", "Acerto %": perc})
-                    
-                    fig = px.bar(pd.DataFrame(stats_q), x="Questão", y="Acerto %", text_auto='.0f', color="Acerto %", color_continuous_scale="RdYlGn")
-                    fig.update_layout(yaxis_range=[0, 110], height=300)
-                    st.plotly_chart(fig, use_container_width=True)
+                        perc = (acertos / total_votos) * 100 if total_votos > 0 else 0
+                        
+                        erradas = [v for v in votos if v != correta and v in ["A", "B", "C", "D", "E"]]
+                        distrator = max(set(erradas), key=erradas.count) if erradas else "Nenhum"
+                        
+                        stats_list.append({
+                            "Questão": f"Q{i:02d}", "Acerto %": perc, "Gabarito": correta, 
+                            "Distrator Crítico": distrator,
+                            "Status": "🟢 OK" if perc >= 70 else "🟡 Alerta" if perc >= 40 else "🔴 Crítico"
+                        })
 
-                    # 3. 👤 DIAGNÓSTICO INDIVIDUAL (O CORAÇÃO DA SUA SOLICITAÇÃO)
+                    df_stats = pd.DataFrame(stats_list)
+
+                    col_graf, col_item = st.columns([1.2, 1])
+                    
+                    with col_graf:
+                        fig = px.bar(df_stats, x="Questão", y="Acerto %", color="Status",
+                                    color_discrete_map={"🟢 OK": "#2ECC71", "🟡 Alerta": "#F1C40F", "🔴 Crítico": "#E74C3C"},
+                                    text=df_stats["Acerto %"].apply(lambda x: f"{x:.0f}%"))
+                        fig.update_layout(yaxis_range=[0, 110], height=350, showlegend=False)
+                        st.plotly_chart(fig, use_container_width=True)
+
+                    with col_item:
+                        with st.container(border=True):
+                            st.markdown("**🔬 Perícia do Item Selecionado**")
+                            q_sel = st.selectbox("Analisar questão específica:", df_stats["Questão"].tolist(), key="q_sel_v70")
+                            info_q = df_stats[df_stats["Questão"] == q_sel].iloc[0]
+                            idx_num = int(q_sel[1:])
+
+                            st.write(f"**Gabarito:** :green[{info_q['Gabarito']}] | **Média:** {info_q['Acerto %']:.1f}%")
+                            if info_q['Distrator Crítico'] != "Nenhum":
+                                st.error(f"**Distrator Crítico:** Alternativa {info_q['Distrator Crítico']}")
+                            
+                            # Busca na Grade de Perícia
+                            try:
+                                padrao = rf"(?si)QUESTÃO\s*0?{idx_num}\b.*?(?=QUESTÃO\s*0?{idx_num+1}\b|$)"
+                                match = re.search(padrao, grade_pericia)
+                                if match: st.info(match.group(0).strip())
+                                else: st.caption("Detalhes não localizados na grade.")
+                            except: st.caption("Erro ao ler grade.")
+
+                    # --- PARTE B: DIAGNÓSTICO INDIVIDUAL (TABELA) ---
                     st.markdown("---")
-                    st.markdown("#### 👤 Perícia Individual: Diagnóstico de Lacunas por Aluno")
-                    st.caption("O sistema identifica automaticamente se o aluno é PEI e mapeia as habilidades que ele errou.")
-
-                    alunos_turma = df_alunos[df_alunos['TURMA'] == t_sel_r].sort_values(by="NOME_ALUNO")
+                    st.markdown("#### 👤 2. Perícia Individual: Lacunas por Estudante (Micro)")
                     
-                    dados_diagnostico_individual = []
+                    alunos_turma = df_alunos[df_alunos['TURMA'] == t_sel_r].sort_values(by="NOME_ALUNO")
+                    dados_indiv = []
 
                     for _, alu in alunos_turma.iterrows():
                         id_a = db.limpar_id(alu['ID'])
-                        nome_a = alu['NOME_ALUNO']
                         is_pei = str(alu['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"]
-                        
-                        # Busca resposta do aluno
                         reg_aluno = respostas_alunos[respostas_alunos['ID_ALUNO'].apply(db.limpar_id) == id_a]
                         
                         if reg_aluno.empty:
-                            status_alu = "🔴 Ausente"
-                            nota_alu = 0.0
-                            lacunas = "N/A"
+                            dados_indiv.append({"Estudante": alu['NOME_ALUNO'], "Perfil": "🔴 Ausente", "Nota": 0.0, "Lacunas": "N/A"})
                         else:
-                            status_alu = "♿ PEI" if is_pei else "📝 Regular"
                             nota_alu = util.sosa_to_float(reg_aluno.iloc[0]['NOTA_CALCULADA'])
                             resp_lista = reg_aluno.iloc[0]['RESPOSTAS_ALUNO'].split(';')
+                            gab_alvo = gab_pei_map if is_pei else gab_reg_map
                             
-                            # Define qual gabarito usar para comparar
-                            gab_comparar = gab_pei_map if is_pei else gab_reg_map
-                            
-                            # Mapeamento de Lacunas (Habilidades dos Erros)
-                            erros_detectados = []
+                            erros_hab = []
                             for i, r in enumerate(resp_lista):
-                                q_num = i + 1
-                                if r != gab_comparar.get(q_num):
-                                    # Busca o nome da habilidade na grade de perícia
-                                    try:
-                                        # Busca o texto da questão na grade
-                                        match_habil = re.search(rf"QUESTÃO\s*0?{q_num}\b.*?:(.*?)(?=\n|JUSTIFICATIVA|PERÍCIA|$)", grade_pericia, re.IGNORECASE)
-                                        if match_habil:
-                                            hab_nome = match_habil.group(1).strip().replace("[", "").replace("]", "")
-                                            erros_detectados.append(hab_nome)
-                                        else:
-                                            erros_detectados.append(f"Q{q_num}")
-                                    except:
-                                        erros_detectados.append(f"Q{q_num}")
+                                q_n = i + 1
+                                if r != gab_alvo.get(q_n):
+                                    match_h = re.search(rf"QUESTÃO\s*0?{q_n}\b.*?:(.*?)(?=\n|JUSTIFICATIVA|PERÍCIA|$)", grade_pericia, re.IGNORECASE)
+                                    erros_hab.append(match_h.group(1).strip().replace("[","").replace("]","") if match_h else f"Q{q_n}")
                             
-                            lacunas = " | ".join(list(set(erros_detectados))) if erros_detectados else "✅ Domínio Total"
+                            dados_indiv.append({
+                                "Estudante": alu['NOME_ALUNO'],
+                                "Perfil": "♿ PEI" if is_pei else "📝 Regular",
+                                "Nota": nota_alu,
+                                "Lacunas Cognitivas (Habilidades a Reforçar)": " | ".join(list(set(erros_hab))) if erros_hab else "✅ Domínio Total"
+                            })
 
-                        dados_diagnostico_individual.append({
-                            "Estudante": nome_a,
-                            "Perfil": status_alu,
-                            "Nota": nota_alu,
-                            "Lacunas Cognitivas (Habilidades a Reforçar)": lacunas
-                        })
+                    df_indiv = pd.DataFrame(dados_indiv)
+                    st.dataframe(df_indiv.style.applymap(lambda v: 'color: #FF4B4B; font-weight: bold' if isinstance(v, float) and v < 6.0 else '', subset=['Nota']),
+                                 use_container_width=True, hide_index=True)
 
-                    # Exibição em Tabela de Elite
-                    df_diag_final = pd.DataFrame(dados_diagnostico_individual)
-                    
-                    def colorir_nota(val):
-                        color = '#FF4B4B' if val < 6.0 else '#2ECC71'
-                        return f'color: {color}; font-weight: bold'
-
-                    st.dataframe(
-                        df_diag_final.style.applymap(colorir_nota, subset=['Nota']),
-                        use_container_width=True,
-                        hide_index=True,
-                        column_config={
-                            "Nota": st.column_config.NumberColumn("Nota", format="%.1f"),
-                            "Lacunas Cognitivas (Habilidades a Reforçar)": st.column_config.TextColumn("Lacunas Cognitivas (Habilidades a Reforçar)", width="large")
-                        }
-                    )
-
-                    # 4. EXPANDER DE DETALHAMENTO (OPCIONAL PARA O PROFESSOR)
-                    with st.expander("🔍 Ver Grade de Perícia da Prova (Referência)"):
+                    with st.expander("🔍 Ver Grade de Perícia Completa (Referência)"):
                         st.info(grade_pericia)
-
+                        
     # --- ABA 5: ACERVO DE EVIDÊNCIAS ---
     with tab_acervo_cir:
         st.subheader("📂 Cofre Digital de Evidências")
