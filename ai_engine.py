@@ -527,3 +527,4 @@ def gerar_prognostico_pedagogico(dados_stats, contexto_prova):
         return res.text.replace("**", "").replace("#", "").strip()
     except Exception as e:
         return f"Erro na perícia: {e}"
+
