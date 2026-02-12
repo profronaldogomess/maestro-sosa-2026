@@ -2617,7 +2617,7 @@ elif menu == "📸 Scanner de Gabaritos":
                                 ])
                         st.success("✅ Indicadores externos integrados ao histórico dos alunos!")
 
-# --- ABA 4: RAIO-X PEDAGÓGICO (V68.0 - ANÁLISE DE DISTRATORES E LACUNAS) ---
+# --- ABA 4: RAIO-X PEDAGÓGICO (V68.2 - VACINA DE PRECISÃO E DISTRATORES) ---
     with tab_raiox:
         st.subheader("📊 Raio-X Pedagógico: Diagnóstico de Lacunas e Distratores")
         st.markdown("---")
@@ -2626,7 +2626,6 @@ elif menu == "📸 Scanner de Gabaritos":
         t_sel_r = c1.selectbox("👥 Selecione a Turma:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"t_r_v68_{v}")
         tr_sel_r = c2.selectbox("📅 Selecione o Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_r_v68_{v}")
         
-        # Filtra apenas avaliações que possuem gabarito escaneado
         opcoes_r = filtrar_ativos_cir_v64(t_sel_r, tr_sel_r, apenas_provas=True)
         at_sel_r = c3.selectbox("📋 Selecione a Avaliação para Raio-X:", [""] + opcoes_r, key=f"at_r_v68_{v}")
 
@@ -2638,36 +2637,41 @@ elif menu == "📸 Scanner de Gabaritos":
             txt_prova = str(dados_prova['CONTEUDO'])
             grade_pericia = ai.extrair_tag(txt_prova, "GRADE_DE_CORRECAO")
             
-            # Gabarito Oficial (Lista de letras)
-            def extrair_lista_gab(texto):
+            # --- EXTRAÇÃO CIRÚRGICA DO GABARITO (VACINA V68.2) ---
+            def extrair_lista_gab_preciso(texto):
                 raw = ai.extrair_tag(texto, "GABARITO_TEXTO") or ai.extrair_tag(texto, "GABARITO")
-                return re.findall(r"[A-E]", raw.upper())
+                # Busca o padrão "1-A" ou "1. A" ou "1:A"
+                matches = re.findall(r"(\d+)\s*[\-\.\:]\s*([A-E])", raw.upper())
+                if matches:
+                    # Ordena pelo número da questão para garantir a sequência
+                    mapa = {int(num): letra for num, letra in matches}
+                    return [mapa[n] for n in sorted(mapa.keys())]
+                # Fallback: se não achar o padrão, pega apenas as letras A-E isoladas
+                return re.findall(r"\b[A-E]\b", raw.upper())
             
-            gab_oficial = extrair_lista_gab(txt_prova)
+            gab_oficial = extrair_lista_gab_preciso(txt_prova)
             respostas_alunos = df_diagnosticos[df_diagnosticos['ID_AVALIACAO'] == at_sel_r]
 
             if respostas_alunos.empty:
                 st.warning("⚠️ Não há dados de gabaritos escaneados para esta avaliação.")
+            elif not gab_oficial:
+                st.error("❌ Erro ao localizar o Gabarito Oficial no conteúdo da prova.")
             else:
-                # 2. PROCESSAMENTO ESTATÍSTICO POR QUESTÃO
-                st.markdown(f"### 🔬 Diagnóstico de Performance: {at_sel_r}")
-                
+                # 2. PROCESSAMENTO ESTATÍSTICO
                 num_questoes = len(gab_oficial)
                 stats_questoes = []
-
-                # Transforma as strings de respostas "A;B;C..." em listas
                 matriz_respostas = respostas_alunos['RESPOSTAS_ALUNO'].str.split(';').tolist()
                 
                 for i in range(num_questoes):
                     correta = gab_oficial[i]
-                    # Coleta o que cada aluno marcou para esta questão específica
-                    votos = [res[i] if i < len(res) else "?" for res in matriz_respostas]
+                    # Coleta respostas dos alunos para esta questão
+                    votos = [res[i] if (res and i < len(res)) else "?" for res in matriz_respostas]
                     
                     total_resp = len(votos)
                     acertos = votos.count(correta)
-                    perc_acerto = (acertos / total_resp) * 100
+                    perc_acerto = (acertos / total_resp) * 100 if total_resp > 0 else 0
                     
-                    # Identifica o Distrator Crítico (A alternativa errada mais marcada)
+                    # Identifica o Distrator Crítico
                     erradas = [v for v in votos if v != correta and v in ["A", "B", "C", "D", "E"]]
                     distrator_critico = max(set(erradas), key=erradas.count) if erradas else "Nenhum"
                     
@@ -2681,7 +2685,8 @@ elif menu == "📸 Scanner de Gabaritos":
 
                 df_stats = pd.DataFrame(stats_questoes)
 
-                # 3. VISUALIZAÇÃO: MAPA DE CALOR E PERÍCIA
+                # 3. VISUALIZAÇÃO
+                st.markdown(f"### 🔬 Diagnóstico de Performance: {at_sel_r}")
                 col_graf, col_pericia = st.columns([1, 1.2])
 
                 with col_graf:
@@ -2689,52 +2694,50 @@ elif menu == "📸 Scanner de Gabaritos":
                     fig_raiox = px.bar(df_stats, x="Questão", y="Acerto %", color="Status",
                                       color_discrete_map={"🟢 OK": "#2ECC71", "🟡 Alerta": "#F1C40F", "🔴 Crítico": "#E74C3C"},
                                       text=df_stats["Acerto %"].apply(lambda x: f"{x:.0f}%"))
-                    fig_raiox.update_layout(yaxis_range=[0, 100], showlegend=False)
+                    fig_raiox.update_layout(yaxis_range=[0, 105], showlegend=False)
                     st.plotly_chart(fig_raiox, use_container_width=True)
 
                 with col_pericia:
                     st.markdown("**🔬 Perícia de Distratores (Lógica do Erro)**")
                     q_analise = st.selectbox("Selecione uma questão para analisar a lacuna:", df_stats["Questão"].tolist())
-                    idx_q = int(q_analise[1:]) - 1
-                    info_q = df_stats.iloc[idx_q]
+                    idx_q = int(q_analise[1:]) # Pega o número real (1, 2, 3...)
+                    info_q = df_stats.iloc[idx_q-1]
                     
                     with st.container(border=True):
                         st.write(f"**Gabarito:** {info_q['Gabarito']} | **Acertos:** {info_q['Acerto %']:.1f}%")
-                        st.error(f"**Distrator Crítico:** {info_q['Distrator Crítico']}")
+                        if info_q['Distrator Crítico'] != "Nenhum":
+                            st.error(f"**Distrator Crítico (Maior Erro):** Alternativa {info_q['Distrator Crítico']}")
                         
-                        # Busca a explicação na Grade de Perícia gerada pela IA
-                        # Tenta localizar o bloco da questão na grade de correção
+                        # --- BUSCA CIRÚRGICA NA GRADE (VACINA DE FRONTEIRA) ---
                         try:
-                            # Regex para pegar o texto entre "QUESTÃO X" e "QUESTÃO X+1"
-                            padrao_pericia = rf"(?s)QUESTÃO\s*{idx_q+1}.*?(?=QUESTÃO\s*{idx_q+2}|$)"
-                            match_pericia = re.search(padrao_pericia, grade_pericia, re.IGNORECASE)
+                            # Procura por "QUESTÃO X" ou "QUESTÃO 0X" garantindo que não pegue "QUESTÃO 10" ao buscar "1"
+                            # Usamos \b para limite de palavra e garantimos que o número seja exato
+                            num_q_str = f"{idx_q:02d}" if idx_q < 10 else str(idx_q)
+                            # Regex que busca "QUESTÃO" seguido de espaço opcional, o número, e para antes da próxima "QUESTÃO"
+                            padrao_pericia = rf"(?si)QUESTÃO\s*0?{idx_q}\b.*?(?=QUESTÃO\s*0?{idx_q+1}\b|$)"
+                            match_pericia = re.search(padrao_pericia, grade_pericia)
+                            
                             if match_pericia:
-                                st.info(match_pericia.group(0))
+                                st.info(match_pericia.group(0).strip())
                             else:
                                 st.write("Justificativa técnica não localizada na grade original.")
                         except:
                             st.write("Erro ao processar grade de perícia.")
 
-                # 4. PROGNÓSTICO DE RECOMPOSIÇÃO (IA ANALYST)
+                # 4. PROGNÓSTICO DE RECOMPOSIÇÃO
                 st.divider()
                 if st.button("🧠 GERAR PROGNÓSTICO DE RECOMPOSIÇÃO (PHC)", use_container_width=True, type="primary"):
-                    with st.spinner("Maestro Sosa analisando padrões de erro e sugerindo intervenção..."):
+                    with st.spinner("Maestro Sosa analisando padrões de erro..."):
                         resumo_stats = df_stats.to_string()
                         prompt_prognostico = (
                             f"Analise os resultados da turma {t_sel_r} na prova {at_sel_r}.\n"
                             f"DADOS DE PERFORMANCE:\n{resumo_stats}\n\n"
-                            f"GRADE DE PERÍCIA ORIGINAL:\n{grade_pericia}\n\n"
-                            f"MISSÃO: Com base na Pedagogia Histórico-Crítica, identifique as 2 maiores lacunas da turma "
-                            f"e sugira uma atividade de RECOMPOSIÇÃO prática para a próxima aula. Seja direto e técnico."
+                            f"GRADE DE PERÍCIA:\n{grade_pericia}\n\n"
+                            f"MISSÃO: Identifique as 2 maiores lacunas e sugira uma atividade de RECOMPOSIÇÃO PHC."
                         )
                         diagnostico_ia = ai.gerar_ia("PLANE_PEDAGOGICO", prompt_prognostico)
                         st.markdown(f"### 📋 Parecer Técnico do Coordenador\n{diagnostico_ia}")
-                        
-                        # Opção de salvar o relatório
-                        if st.button("💾 Arquivar Diagnóstico no Histórico da Turma"):
-                            db.salvar_no_banco("DB_RELATORIOS", [datetime.now().strftime("%d/%m/%Y"), "TURMA", t_sel_r, "RAIO-X_PEDAGOGICO", diagnostico_ia])
-                            st.success("Diagnóstico arquivado!")
-                            
+
     # --- ABA 5: ACERVO DE EVIDÊNCIAS ---
     with tab_acervo_cir:
         st.subheader("📂 Cofre Digital de Evidências")
