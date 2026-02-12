@@ -2237,7 +2237,7 @@ elif menu == "📝 Central de Avaliações":
         else: st.info("📭 Nenhum ativo de safra encontrado.")
 
 # ==============================================================================
-# MÓDULO: CENTRAL DE INTELIGÊNCIA DE RESULTADOS (V63.0 - PERÍCIA DE PRECISÃO)
+# MÓDULO: CENTRAL DE INTELIGÊNCIA DE RESULTADOS (V64.0 - PERÍCIA GLOBAL)
 # ==============================================================================
 elif menu == "📸 Scanner de Gabaritos":
     st.title("📸 Central de Inteligência de Resultados (CIR)")
@@ -2246,20 +2246,29 @@ elif menu == "📸 Scanner de Gabaritos":
     if "v_scan" not in st.session_state: st.session_state.v_scan = 1
     v = st.session_state.v_scan
 
-    # --- FUNÇÃO AUXILIAR: FILTRO HIERÁRQUICO AMPLO (V63) ---
-    def filtrar_ativos_cir(turma, trimestre):
+    # --- 1. FUNÇÃO AUXILIAR: FILTRO HIERÁRQUICO BLINDADO V64 ---
+    def filtrar_ativos_cir_v64(turma, trimestre):
         if not turma or not trimestre: return []
         try:
             serie_num = turma[0]
-            # Busca Testes, Provas, Sondas, Recuperações e Avaliações
+            # Busca ampla: Testes, Provas, Sondas, Recuperações, Avaliações
             permitidos = ["TESTE", "PROVA", "SONDA", "DIAGNÓSTICA", "DIAGNOSTICA", "RECUPERAÇÃO", "AVALIAÇÃO"]
+            
+            # Filtra pela série (6, 7, 8, 9)
             df_f = df_aulas[df_aulas['ANO'].astype(str).str.contains(serie_num)].copy()
-            df_f = df_f[df_f['CONTEUDO'].str.contains(trimestre, na=False)]
+            
+            # Filtra pelo Trimestre: Checa tanto no TÍTULO quanto no CONTEÚDO
+            mask_trim = (df_f['TIPO_MATERIAL'].str.contains(trimestre, na=False)) | \
+                        (df_f['CONTEUDO'].str.contains(trimestre, na=False))
+            df_f = df_f[mask_trim]
+            
+            # Filtra pelos tipos permitidos
             df_f = df_f[df_f['TIPO_MATERIAL'].str.upper().str.contains('|'.join(permitidos))]
+            
             return df_f['TIPO_MATERIAL'].tolist()
         except: return []
 
-    # --- DEFINIÇÃO DAS ABAS PERSISTENTES ---
+    # --- 2. DEFINIÇÃO DAS ABAS PERSISTENTES ---
     tab_pericia, tab_atividades, tab_soberania, tab_raiox, tab_acervo_cir, tab_dash_cir = st.tabs([
         "📸 1. Perícia de Gabaritos", "✍️ 2. Atividades & Projetos", "🏛️ 3. Hub de Soberania", 
         "📊 4. Raio-X Pedagógico", "📂 5. Acervo de Evidências", "📈 6. Dashboard"
@@ -2270,7 +2279,8 @@ elif menu == "📸 Scanner de Gabaritos":
         c1, c2, c3 = st.columns([1, 1, 1.5])
         t_sel = c1.selectbox("👥 Turma:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"t_p_{v}")
         tr_sel = c2.selectbox("📅 Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_p_{v}")
-        opcoes_p = filtrar_ativos_cir(t_sel, tr_sel)
+        
+        opcoes_p = filtrar_ativos_cir_v64(t_sel, tr_sel)
         at_sel = c3.selectbox("📋 Selecione a Avaliação:", [""] + opcoes_p, key=f"at_p_{v}")
 
         if not t_sel or not at_sel:
@@ -2278,23 +2288,30 @@ elif menu == "📸 Scanner de Gabaritos":
         else:
             sub_cap, sub_hub = st.tabs(["📸 Captura Vision", "⚖️ Hub de Auditoria"])
             
-            # Recupera dados do ativo e extrai gabaritos
+            # Recupera dados do ativo
             dados_at = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel].iloc[0]
             txt_at = str(dados_at['CONTEUDO'])
             val_tag = ai.extrair_tag(txt_at, "VALOR")
             v_total_at = util.sosa_to_float(val_tag) if val_tag else 10.0
 
-            def extrair_gab_v63(texto, is_pei=False):
+            # --- MOTOR DE EXTRAÇÃO GLOBAL V64 (LÊ TUDO EM UMA LINHA SÓ) ---
+            def extrair_gab_v64(texto, is_pei=False):
                 tag = "GABARITO_PEI" if is_pei else "GABARITO_TEXTO"
                 raw = ai.extrair_tag(texto, tag) or ai.extrair_tag(texto, "GABARITO")
+                if not raw: return []
+                
+                # REDE DE ARRASTO: Captura todos os pares (Número-Letra) no bloco inteiro
+                matches = re.findall(r"(\d+)[\s\.\)\-:]+([A-E])", raw.upper())
+                
                 mapa = {}
-                for linha in raw.split('\n'):
-                    match = re.search(r"(?:QUEST[AÃ]O\s+)?(\d+)[\s\.\)\-:]+([A-E])", linha.upper())
-                    if match: mapa[int(match.group(1))] = match.group(2)
+                for num, letra in matches:
+                    n_int = int(num)
+                    if n_int not in mapa: mapa[n_int] = letra # Pega a primeira ocorrência de cada número
+                
                 return [mapa[n] for n in sorted(mapa.keys())]
 
-            gab_reg = extrair_gab_v63(txt_at, False)
-            gab_pei = extrair_gab_v63(txt_at, True) or gab_reg
+            gab_reg = extrair_gab_v64(txt_at, False)
+            gab_pei = extrair_gab_v64(txt_at, True) or gab_reg
 
             with sub_cap:
                 escaneados = df_diagnosticos[df_diagnosticos['ID_AVALIACAO'] == at_sel]['ID_ALUNO'].astype(str).tolist()
@@ -2306,8 +2323,11 @@ elif menu == "📸 Scanner de Gabaritos":
                     al_info = pendentes[pendentes['NOME_ALUNO'] == al_sel].iloc[0]
                     is_pei_aluno = str(al_info['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"]
                     
-                    if is_pei_aluno: st.warning(f"♿ **PERFIL PEI DETECTADO** | Gabarito de {len(gab_pei)} questões.")
-                    else: st.info(f"📝 **PERFIL REGULAR** | Gabarito de {len(gab_reg)} questões.")
+                    gab_alvo = gab_pei if is_pei_aluno else gab_reg
+                    qtd_q = len(gab_alvo)
+
+                    if is_pei_aluno: st.warning(f"♿ **PERFIL PEI DETECTADO** | Gabarito de {qtd_q} questões.")
+                    else: st.info(f"📝 **PERFIL REGULAR** | Gabarito de {qtd_q} questões.")
 
                     img = st.camera_input(f"📸 Capturar Gabarito: {al_sel}")
                     
@@ -2315,8 +2335,8 @@ elif menu == "📸 Scanner de Gabaritos":
                     if img and col_btn1.button("🧠 ANALISAR MARCAÇÕES", type="primary", use_container_width=True):
                         with st.spinner("Perito Sosa analisando..."):
                             res_json = ai.analisar_gabarito_vision(img.getvalue())
-                            gab_alvo = gab_pei if is_pei_aluno else gab_reg
-                            st.session_state.current_scan_res = [res_json.get(f"{i+1:02d}", res_json.get(str(i+1), "?")) for i in range(len(gab_alvo))]
+                            # Busca as respostas lidas pela IA Vision
+                            st.session_state.current_scan_res = [res_json.get(f"{i+1:02d}", res_json.get(str(i+1), "?")) for i in range(qtd_q)]
                             st.session_state.current_scan_img = img.getvalue()
                             st.rerun()
                     
@@ -2327,7 +2347,6 @@ elif menu == "📸 Scanner de Gabaritos":
                 if "current_scan_res" in st.session_state:
                     st.markdown("---")
                     st.subheader("🔍 Mesa de Perícia Imediata")
-                    gab_alvo = gab_pei if is_pei_aluno else gab_reg
                     dados_pericia = []
                     for i, lido in enumerate(st.session_state.current_scan_res):
                         certo = gab_alvo[i]
@@ -2339,11 +2358,11 @@ elif menu == "📸 Scanner de Gabaritos":
                     
                     df_mesa = st.data_editor(pd.DataFrame(dados_pericia), hide_index=True, use_container_width=True,
                         column_config={"Sua Revisão": st.column_config.SelectboxColumn("Sua Revisão", options=["A", "B", "C", "D", "E", "X", "?"], required=True)},
-                        key=f"mesa_{al_sel}")
+                        key=f"mesa_{aluno_sel}")
                     
                     novas_res = df_mesa["Sua Revisão"].tolist()
                     acertos = sum(1 for i, r in enumerate(novas_res) if r == gab_alvo[i])
-                    nota_f = (acertos / len(gab_alvo)) * v_total_at
+                    nota_f = (acertos / len(gab_alvo)) * v_total_at if len(gab_alvo) > 0 else 0
                     st.metric(f"Nota Final (Peso {v_total_at})", f"{nota_f:.2f}", delta=f"{acertos}/{len(gab_alvo)} acertos")
 
                     if st.button("💾 CONFIRMAR E ENVIAR AO HUB", type="primary", use_container_width=True):
@@ -2424,7 +2443,7 @@ elif menu == "📸 Scanner de Gabaritos":
         tr_sel_r = c2.selectbox("📅 Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_r_{v}")
         opcoes_r = filtrar_ativos_cir(t_sel_r, tr_sel_r)
         at_sel_r = c3.selectbox("📋 Selecione o Ativo:", [""] + opcoes_r, key=f"at_r_{v}")
-        
+
     # --- ABA 5: ACERVO DE EVIDÊNCIAS ---
     with tab_acervo_cir:
         st.subheader("📂 Cofre Digital de Evidências")
