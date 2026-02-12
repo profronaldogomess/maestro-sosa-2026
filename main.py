@@ -2523,6 +2523,100 @@ elif menu == "📸 Scanner de Gabaritos":
                         time.sleep(1)
                         st.rerun()
 
+# --- ABA 3: HUB DE SOBERANIA (V67.0 - AUDITORIA E NOTAS EXTERNAS) ---
+    with tab_soberania:
+        st.subheader("🏛️ Hub de Soberania: Autoridade do Professor")
+        st.markdown("---")
+
+        c_h1, c_h2 = st.columns([1, 1])
+        t_sel_h = c_h1.selectbox("👥 Selecione a Turma:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"t_h_v67_{v}")
+        tr_sel_h = c_h2.selectbox("📅 Trimestre de Referência:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_h_v67_{v}")
+
+        if not t_sel_h:
+            st.info("💡 Selecione uma turma para exercer a soberania sobre os resultados.")
+        else:
+            sub_auditoria, sub_externas = st.tabs(["⚖️ Auditoria de Gabaritos", "🌍 Notas Externas (SAEB/Governo)"])
+
+            # --- SUB-ABA 1: AUDITORIA DE GABARITOS ---
+            with sub_auditoria:
+                st.markdown("#### 🔍 Revisão de Leituras do Scanner")
+                # Busca todos os gabaritos escaneados desta turma
+                gabaritos_turma = df_diagnosticos[df_diagnosticos['TURMA'] == t_sel_h]
+                
+                if gabaritos_turma.empty:
+                    st.warning("📭 Nenhum gabarito escaneado encontrado para esta turma.")
+                else:
+                    # Filtra por avaliação específica para não misturar
+                    av_alvo_h = st.selectbox("Selecione a Avaliação para Auditoria:", gabaritos_turma['ID_AVALIACAO'].unique())
+                    dados_av_h = gabaritos_turma[gabaritos_turma['ID_AVALIACAO'] == av_alvo_h]
+
+                    st.caption("Ajuste as notas abaixo se houver erro de leitura ou necessidade pedagógica.")
+                    
+                    df_auditoria_ed = st.data_editor(
+                        dados_av_h[['ID_ALUNO', 'NOME_ALUNO', 'RESPOSTAS_ALUNO', 'NOTA_CALCULADA', 'LINK_FOTO_DRIVE']],
+                        column_config={
+                            "ID_ALUNO": None,
+                            "NOME_ALUNO": st.column_config.TextColumn("Estudante", disabled=True),
+                            "RESPOSTAS_ALUNO": st.column_config.TextColumn("Leitura Scanner", disabled=True),
+                            "NOTA_CALCULADA": st.column_config.NumberColumn("Nota Final (Soberana)", min_value=0.0, max_value=10.0, step=0.1, format="%.1f"),
+                            "LINK_FOTO_DRIVE": st.column_config.LinkColumn("🔗 Ver Prova")
+                        },
+                        hide_index=True, use_container_width=True, key=f"ed_soberania_{v}"
+                    )
+
+                    if st.button("⚖️ HOMOLOGAR NOTAS AUDITADAS", use_container_width=True, type="primary"):
+                        with st.spinner("Atualizando registros oficiais..."):
+                            # Aqui o sistema pega a nota editada e envia para o DB_NOTAS
+                            lista_homologacao = []
+                            for _, r in df_auditoria_ed.iterrows():
+                                lista_homologacao.append([
+                                    r['ID_ALUNO'], r['NOME_ALUNO'], t_sel_h, tr_sel_h, 
+                                    "0,0", "0,0", util.sosa_to_str(r['NOTA_CALCULADA']), "0,0", util.sosa_to_str(r['NOTA_CALCULADA'])
+                                ])
+                            
+                            if db.salvar_lote("DB_NOTAS", lista_homologacao):
+                                st.success("✅ Notas auditadas e enviadas ao Boletim!")
+                                st.balloons()
+
+            # --- SUB-ABA 2: NOTAS EXTERNAS ---
+            with sub_externas:
+                st.markdown("#### 🌍 Lançamento de Indicadores Externos (SAEB / Município)")
+                st.caption("Use este espaço para integrar resultados de provas do Governo ou da Prefeitura.")
+                
+                alunos_h = df_alunos[df_alunos['TURMA'] == t_sel_h].sort_values(by="NOME_ALUNO")
+                
+                dados_externos = []
+                for _, alu in alunos_h.iterrows():
+                    dados_externos.append({
+                        "ID": alu['ID'],
+                        "Estudante": alu['NOME_ALUNO'],
+                        "Nota SAEB/Externa": 0.0,
+                        "Observação": ""
+                    })
+                
+                df_ext_ed = st.data_editor(
+                    pd.DataFrame(dados_externos),
+                    column_config={
+                        "ID": None,
+                        "Nota SAEB/Externa": st.column_config.NumberColumn("Nota (0-10)", min_value=0.0, max_value=10.0, step=0.1),
+                        "Observação": st.column_config.TextColumn("Origem (Ex: SAEB 2026)")
+                    },
+                    hide_index=True, use_container_width=True, key=f"ed_externas_{v}"
+                )
+
+                if st.button("💾 INTEGRAR NOTAS EXTERNAS AO PERFIL", use_container_width=True):
+                    with st.spinner("Arquivando indicadores externos..."):
+                        # Salva na aba de Relatórios para consulta no Raio-X e Conselho
+                        for _, r in df_ext_ed.iterrows():
+                            if r['Nota SAEB/Externa'] > 0:
+                                db.salvar_no_banco("DB_RELATORIOS", [
+                                    datetime.now().strftime("%d/%m/%Y"), 
+                                    r['ID'], r['Estudante'], 
+                                    "NOTA_EXTERNA", 
+                                    f"Nota: {r['Nota SAEB/Externa']} | Origem: {r['Observação']}"
+                                ])
+                        st.success("✅ Indicadores externos integrados ao histórico dos alunos!")
+
     # --- ABA 4: RAIO-X PEDAGÓGICO (CORREÇÃO DO NAMERROR) ---
     with tab_raiox:
         c1, c2, c3 = st.columns([1, 1, 1.5])
