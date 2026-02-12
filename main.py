@@ -354,18 +354,41 @@ if menu == "🧪 Criador de Aulas":
             if st.button("🗑️ DESCARTAR EDIÇÃO E VOLTAR", use_container_width=True):
                 reset_laboratorio()
         
-        # --- TABS DE VISUALIZAÇÃO E EDIÇÃO ---
-        t_prof, t_alu, t_gab, t_pei, t_sync = st.tabs(["👨‍🏫 Professor", "📝 Aluno", "✅ Gabarito/Rubrica", "♿ PEI", "☁️ SINCRONIA"])
+        # --- TABS DE VISUALIZAÇÃO E EDIÇÃO V39 (HÍBRIDA) ---
+        t_prof, t_alu, t_gab, t_pei, t_sync = st.tabs(["👨‍🏫 Professor", "📝 Aluno", "✅ Gabarito/Perícia", "♿ PEI", "☁️ SINCRONIA"])
         
-        with t_prof: ed_prof = st.text_area("Mapa de Regência:", ai.extrair_tag(txt_base, "PROFESSOR"), height=450, key=f"ed_prof_{v}")
-        with t_alu: ed_alu = st.text_area("Folha do Aluno:", ai.extrair_tag(txt_base, "ALUNO"), height=450, key=f"ed_alu_{v}")
-        with t_gab: ed_res = st.text_area("Gabarito:", ai.extrair_tag(txt_base, "GABARITO"), height=350, key=f"ed_res_{v}")
+        with t_prof: 
+            # Mostra SOSA_ID e Professor juntos para não perder informação
+            s_id_display = ai.extrair_tag(txt_base, "SOSA_ID")
+            if s_id_display: st.info(f"🆔 ID do Material: {s_id_display}")
+            ed_prof = st.text_area("Mapa de Regência:", ai.extrair_tag(txt_base, "PROFESSOR"), height=450, key=f"ed_prof_{v}")
+            
+        with t_alu: 
+            ed_alu = st.text_area("Folha do Aluno:", ai.extrair_tag(txt_base, "ALUNO"), height=450, key=f"ed_alu_{v}")
+            
+        with t_gab: 
+            # LÓGICA MULTITAG: Tenta Gabarito, se vazio tenta Gabarito_Texto, se vazio tenta Grade
+            gab_final = ai.extrair_tag(txt_base, "GABARITO")
+            if not gab_final: gab_final = ai.extrair_tag(txt_base, "GABARITO_TEXTO")
+            
+            grade_pericia = ai.extrair_tag(txt_base, "GRADE_DE_CORRECAO")
+            
+            ed_res = st.text_area("Gabarito Oficial:", gab_final, height=200, key=f"ed_res_{v}")
+            if grade_pericia:
+                st.markdown("---")
+                st.subheader("🔬 Grade de Perícia Pedagógica")
+                st.text_area("Análise de Descritores e Erros:", grade_pericia, height=300, key=f"ed_grade_{v}")
         
         with t_pei:
             st.subheader("♿ Adaptação Curricular")
             c_p1, c_p2 = st.columns(2)
             ed_pei_mat = c_p1.text_area("📄 Material PEI:", ai.extrair_tag(txt_base, "PEI"), height=400, key=f"ed_pei_mat_{v}")
-            ed_pei_gab = c_p2.text_area("✅ Gabarito PEI:", ai.extrair_tag(txt_base, "GABARITO_PEI"), height=400, key=f"ed_pei_gab_{v}")
+            
+            # Tenta Gabarito_PEI ou Respostas_PEI_IA
+            gab_pei_final = ai.extrair_tag(txt_base, "GABARITO_PEI")
+            if not gab_pei_final: gab_pei_final = ai.extrair_tag(txt_base, "RESPOSTAS_PEI_IA")
+            
+            ed_pei_gab = c_p2.text_area("✅ Gabarito PEI:", gab_pei_final, height=400, key=f"ed_pei_gab_{v}")
 
         with t_sync:
             st.warning("⚠️ O Triple-Sync substituirá a versão anterior deste material.")
