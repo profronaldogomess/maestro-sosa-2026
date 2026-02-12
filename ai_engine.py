@@ -369,49 +369,39 @@ def gerar_ia(persona_key, comando, partes_arquivos=[], usar_busca=True):
     except Exception as e:
         return f"Erro na IA: {e}"
 
-# --- EXTRATOR SOSA V36 (BLINDAGEM DE FRONTEIRA - ANTI-CONFLITO) ---
-# --- EXTRATOR SOSA V37 (BLINDAGEM TOTAL + GRADE DE PERÍCIA) ---
+# --- EXTRATOR SOSA V38 (BLINDAGEM TOTAL + LIMPEZA DE MARKDOWN) ---
 def extrair_tag(texto, tag):
     if not texto: return ""
     import re
     
-    # 1. Limpeza de ruídos de Markdown nas tags (Garante que **[TAG]** vire [TAG])
-    texto_limpo = texto.replace("**[", "[").replace("]**", "]")
+    # 1. LIMPEZA DE RUÍDOS: Remove # e * de todo o texto para normalizar as tags
+    # Isso garante que ### [TAG] ou **[TAG]** sejam lidos apenas como [TAG]
+    texto_limpo = re.sub(r'[*#]', '', texto)
     tag_busca = tag.upper().strip()
     
     # 2. Tenta capturar valor INTERNO estrito (Ex: [VALOR: 3.0])
-    # O \b garante que GABARITO não bata em GABARITO_TEXTO
     padrao_interno = rf"\[\s*\b{tag_busca}\b\s*[:\-]*\s*(.*?)\]"
     match_int = re.search(padrao_interno, texto_limpo, re.IGNORECASE)
     if match_int:
         res_int = match_int.group(1).strip()
-        # Retorna apenas se for um metadado curto (evita pegar o corpo da prova por erro)
-        if 0 < len(res_int) < 25:
-            return res_int
+        if 0 < len(res_int) < 35: return res_int
 
-    # 3. LISTA DE TAGS MESTRAS V37 (O "Escudo de Fronteira")
-    # Adicionamos GRADE_DE_CORRECAO para o extrator saber onde parar
+    # 3. LISTA DE TAGS MESTRAS V38 (Escudo de Fronteira)
     tags_mestras = [
-        "VALOR", "ORIENTACOES", "QUESTOES", "GABARITO_TEXTO", "GRADE_DE_CORRECAO", 
+        "SOSA_ID", "VALOR", "ORIENTACOES", "QUESTOES", "GABARITO_TEXTO", "GRADE_DE_CORRECAO", 
         "GABARITO", "RESPOSTAS_IA", "PEI", "GABARITO_PEI", "RESPOSTAS_PEI_IA", 
         "PROFESSOR", "ALUNO", "BNCC_CODE", "CONTEUDO_GERAL", 
-        "CONTEUDOS_ESPECIFICOS", "OBJETIVOS_ENSINO", "IMAGENS"
+        "CONTEUDOS_ESPECIFICOS", "OBJETIVOS_ENSINO", "IMAGENS", "AULA_ALVO"
     ]
     
-    # Cria a lista de parada (todas as tags exceto a que estamos buscando)
     parada = [t for t in tags_mestras if t != tag_busca]
     lista_parada = "|".join(parada)
     
-    # 4. REGEX DE BLOCO V37: Captura até encontrar a próxima tag mestra
-    # Ele olha se a próxima tag está no início de uma linha ou colada no texto
+    # 4. REGEX DE BLOCO V38: Captura até a próxima tag mestra
     padrao_bloco = rf"\[\s*\b{tag_busca}\b\s*\]\s*[:\-]*\s*(.*?)(?=\n\s*\[\s*(?:{lista_parada})\s*\]|\[\s*(?:{lista_parada})\s*\]|$)"
-    
     match_bloco = re.search(padrao_bloco, texto_limpo, re.DOTALL | re.IGNORECASE)
     
-    if match_bloco:
-        return match_bloco.group(1).strip()
-        
-    return ""
+    return match_bloco.group(1).strip() if match_bloco else ""
 
 def subir_para_google(caminho_arquivo, nome_exibicao):
     try:
