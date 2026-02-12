@@ -152,6 +152,7 @@ menu = st.sidebar.radio("Navegação:", [
     "📝 Central de Avaliações",
     "📸 Scanner de Gabaritos",
     "📝 Diário de Bordo Rápido",
+    "👤 Biografia do Estudante",
     "📊 Painel de Notas & Vistos",
     "📈 Boletim Anual & Conselho",
     "👥 Gestão da Turma",
@@ -1760,7 +1761,7 @@ elif menu == "👥 Gestão da Turma":
                             if sucesso:
                                 status.update(label="✅ Cadastro Atualizado!", state="complete")
                                 st.balloons(); time.sleep(1); st.rerun()
-                                
+
 # ==============================================================================
 # MÓDULO: BASE DE CONHECIMENTO
 # ==============================================================================
@@ -2867,3 +2868,128 @@ elif menu == "📸 Scanner de Gabaritos":
                 st.dataframe(df_alerta.sort_values(by='Qtd. Avaliações Críticas', ascending=False), use_container_width=True, hide_index=True)
             else:
                 st.success("Nenhum aluno em zona de risco crítico detectado no momento.")
+
+# ==============================================================================
+# MÓDULO: BIOGRAFIA DO ESTUDANTE (V33.0) - VISÃO MOBILE 360° (PAIS E MESTRES)
+# ==============================================================================
+elif menu == "👤 Biografia do Estudante":
+    st.title("👤 Biografia do Estudante: Fatos e Resultados")
+    st.markdown("---")
+
+    if df_alunos.empty:
+        st.warning("⚠️ Base de alunos vazia.")
+    else:
+        # 1. SELEÇÃO RÁPIDA (MOBILE FRIENDLY)
+        c_t, c_a = st.columns([1, 2])
+        turma_b = c_t.selectbox("Turma:", sorted(df_alunos['TURMA'].unique()), key="bio_t")
+        lista_alunos = df_alunos[df_alunos['TURMA'] == turma_b].sort_values(by="NOME_ALUNO")
+        aluno_b = c_a.selectbox("Selecione o Estudante:", lista_alunos['NOME_ALUNO'].tolist(), key="bio_a")
+
+        # Captura dados básicos
+        info_alu = lista_alunos[lista_alunos['NOME_ALUNO'] == aluno_b].iloc[0]
+        id_alu = db.limpar_id(info_alu['ID'])
+        is_pei = str(info_alu['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"]
+
+        # --- 2. CARD 1: ENGAJAMENTO E ATITUDE (DIÁRIO) ---
+        st.subheader("📊 Engajamento e Atitude")
+        with st.container(border=True):
+            if not df_diario.empty:
+                d_alu = df_diario[df_diario['ID_ALUNO'].apply(db.limpar_id) == id_alu]
+                if not d_alu.empty:
+                    total_aulas = len(d_alu)
+                    vistos = len(d_alu[d_alu['VISTO_ATIVIDADE'].astype(str).upper() == "TRUE"])
+                    perc_visto = (vistos / total_aulas)
+                    
+                    col1, col2 = st.columns(2)
+                    col1.metric("Vistos Recebidos", f"{vistos}/{total_aulas}")
+                    col2.progress(perc_visto, text=f"{perc_visto*100:.0f}% de entrega")
+                    
+                    # Histórico de Tags (Atitude)
+                    tags_recentes = d_alu[d_alu['TAGS'] != ""]['TAGS'].tail(3).tolist()
+                    if tags_recentes:
+                        st.markdown("**Últimas Observações de Atitude:**")
+                        for t in tags_recentes:
+                            st.caption(f"• {t}")
+                else:
+                    st.info("Nenhum registro de diário para este aluno.")
+            else:
+                st.info("Diário de bordo vazio.")
+
+        # --- 3. CARD 2: DESEMPENHO ACADÊMICO (NOTAS) ---
+        st.subheader("📈 Desempenho Acadêmico")
+        with st.container(border=True):
+            if not df_notas.empty:
+                n_alu = df_notas[df_notas['ID_ALUNO'].apply(db.limpar_id) == id_alu]
+                if not n_alu.empty:
+                    # Tabela Anual Simples
+                    pivot_bio = n_alu.pivot(index="ID_ALUNO", columns="TRIMESTRE", values="MEDIA_FINAL").fillna(0.0)
+                    for c in ["I Trimestre", "II Trimestre", "III Trimestre"]:
+                        if c not in pivot_bio.columns: pivot_bio[c] = 0.0
+                    
+                    st.markdown("**Médias por Trimestre:**")
+                    st.dataframe(pivot_bio[["I Trimestre", "II Trimestre", "III Trimestre"]], hide_index=True, use_container_width=True)
+                    
+                    # Calculadora de Aprovação (Meta 18.0)
+                    soma_atual = pivot_bio["I Trimestre"].iloc[0] + pivot_bio["II Trimestre"].iloc[0] + pivot_bio["III Trimestre"].iloc[0]
+                    falta = max(0.0, 18.0 - soma_atual)
+                    
+                    st.divider()
+                    c_m1, c_m2 = st.columns(2)
+                    c_m1.metric("Soma Atual", f"{soma_atual:.1f} pts")
+                    if soma_atual >= 18.0:
+                        c_m2.success("✅ APROVADO ANUAL")
+                    else:
+                        c_m2.metric("Precisa para Passar", f"{falta:.1f} pts", delta_color="inverse")
+                else:
+                    st.info("Nenhuma nota lançada para este aluno.")
+
+        # --- 4. CARD 3: RAIO-X DE DIFICULDADES (SCANNER) ---
+        st.subheader("🔍 Raio-X de Dificuldades (O que estudar?)")
+        with st.container(border=True):
+            if not df_diagnosticos.empty:
+                diag_alu = df_diagnosticos[df_diagnosticos['ID_ALUNO'].apply(db.limpar_id) == id_alu].iloc[::-1]
+                if not diag_alu.empty:
+                    st.markdown("**Habilidades que precisam de atenção:**")
+                    
+                    # Pega a última avaliação para mostrar as lacunas
+                    ultima_av = diag_alu.iloc[0]
+                    id_av = ultima_av['ID_AVALIACAO']
+                    respostas = str(ultima_av['RESPOSTAS_ALUNO']).split(';')
+                    
+                    # Busca a prova para pegar a grade de correção
+                    prova_ref = df_aulas[df_aulas['TIPO_MATERIAL'].str.strip() == id_av.strip()]
+                    if not prova_ref.empty:
+                        txt_prova = str(prova_ref.iloc[0]['CONTEUDO'])
+                        grade = ai.extrair_tag(txt_prova, "GRADE_DE_CORRECAO")
+                        
+                        # Extrai gabarito (Regular ou PEI)
+                        tag_gab = "GABARITO_PEI" if is_pei else "GABARITO_TEXTO"
+                        raw_gab = ai.extrair_tag(txt_prova, tag_gab) or ai.extrair_tag(txt_prova, "GABARITO")
+                        gab_oficial = re.findall(r"\b[A-E]\b", raw_gab.upper())
+                        
+                        lacunas_encontradas = []
+                        for i, resp in enumerate(respostas):
+                            if i < len(gab_oficial) and resp != gab_oficial[i]:
+                                # Busca o nome da habilidade na grade
+                                q_num = i + 1
+                                match_h = re.search(rf"QUESTÃO\s*0?{q_num}\b.*?:(.*?)(?=\n|JUSTIFICATIVA|PERÍCIA|$)", grade, re.IGNORECASE)
+                                if match_h:
+                                    lacunas_encontradas.append(match_h.group(1).strip().replace("[","").replace("]",""))
+                        
+                        if lacunas_encontradas:
+                            for lac in list(set(lacunas_encontradas))[:5]: # Mostra as top 5
+                                st.error(f"❌ {lac}")
+                        else:
+                            st.success("✅ Nenhuma lacuna crítica detectada na última avaliação.")
+                    else:
+                        st.caption("Não foi possível mapear as habilidades desta prova.")
+                else:
+                    st.info("Nenhum gabarito escaneado para este aluno.")
+            else:
+                st.info("Banco de diagnósticos vazio.")
+
+        # Rodapé Mobile
+        st.markdown("---")
+        st.caption(f"Dossiê gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+        if is_pei:
+            st.warning("♿ Estudante com Plano de Ensino Individualizado (PEI)")
