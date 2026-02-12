@@ -2417,24 +2417,35 @@ elif menu == "📸 Scanner de Gabaritos":
                 st.data_editor(pd.DataFrame(dados_hub), hide_index=True, use_container_width=True,
                     column_config={"Evidência": st.column_config.LinkColumn("🔗 Ver Foto")}, key=f"hub_ed_{v}")
 
-    # --- ABA 2: ATIVIDADES & PROJETOS (V65.1 - CORREÇÃO DE FILTRO) ---
+# --- ABA 2: ATIVIDADES & PROJETOS (V66.0 - SOBERANIA DE NOTAS E MÉRITO) ---
     with tab_atividades:
+        st.subheader("✍️ Gestão de Notas de Projetos e Atividades")
+        
         c_f1, c_f2 = st.columns(2)
-        t_sel_a = c_f1.selectbox("👥 Selecione a Turma:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"t_a_v65_{v}")
-        tr_sel_a = c_f2.selectbox("📅 Selecione o Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_a_v65_{v}")
+        t_sel_a = c_f1.selectbox("👥 Selecione a Turma:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"t_a_v66_{v}")
+        tr_sel_a = c_f2.selectbox("📅 Selecione o Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_a_v66_{v}")
 
-        # Usa a função unificada com apenas_provas=False
+        # Busca ativos que não são provas (Projetos, Fixação, etc)
         opcoes_a = filtrar_ativos_cir_v64(t_sel_a, tr_sel_a, apenas_provas=False)
-        at_sel_a = st.selectbox("📋 Selecione o Trabalho ou Atividade:", [""] + opcoes_a, key=f"at_a_sel_v65_{v}")
+        at_sel_a = st.selectbox("📋 Selecione o Trabalho ou Atividade:", [""] + opcoes_a, key=f"at_a_sel_v66_{v}")
 
         if not t_sel_a or not at_sel_a:
-            st.info("💡 Selecione a Turma e o Material para analisar o conteúdo e lançar os bônus.")
+            st.info("💡 Selecione a Turma e o Material para abrir a Mesa de Lançamento de Notas.")
         else:
+            # 1. LEITURA E DNA DO MATERIAL
             dados_at = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel_a].iloc[0]
             txt_at = str(dados_at['CONTEUDO'])
             
-            st.warning(f"📝 **CONTEÚDO DO MATERIAL:** {at_sel_a}")
-            with st.expander("👁️ CLIQUE PARA REVISAR O ROTEIRO APLICADO", expanded=True):
+            # Tenta extrair o valor sugerido no material, senão assume 2.0 como padrão
+            val_sugerido = ai.extrair_tag(txt_at, "VALOR")
+            v_max_padrao = util.sosa_to_float(val_sugerido) if val_sugerido else 2.0
+
+            with st.container(border=True):
+                c_m1, c_m2 = st.columns([2, 1])
+                c_m1.warning(f"📝 **ATIVIDADE EM FOCO:** {at_sel_a}")
+                v_max_ativ = c_m2.number_input("💎 Valor Máximo desta Atividade:", 0.0, 10.0, v_max_padrao, step=0.5, key=f"v_max_{v}")
+
+            with st.expander("👁️ REVISAR ROTEIRO E CRITÉRIOS (RUBRICA)"):
                 c_v1, c_v2 = st.columns(2)
                 with c_v1:
                     st.markdown("**👨‍🏫 Guia do Professor:**")
@@ -2443,30 +2454,74 @@ elif menu == "📸 Scanner de Gabaritos":
                     st.markdown("**📝 Roteiro do Aluno:**")
                     st.write(ai.extrair_tag(txt_at, "ALUNO"))
 
+            # 2. MESA DE LANÇAMENTO DE NOTAS (AUTONOMIA TOTAL)
             st.divider()
-            st.subheader("⭐ Atribuição de Pontos de Mérito")
+            st.subheader(f"⭐ Mesa de Notas: {at_sel_a}")
+            st.caption(f"As notas lançadas abaixo (até {v_max_ativ}) serão integradas ao bônus do aluno no boletim.")
+            
             alunos_a = df_alunos[df_alunos['TURMA'] == t_sel_a].sort_values(by="NOME_ALUNO")
             
-            dados_bonus = []
+            # Busca se já existem notas lançadas para este material no Diário de Bordo
+            notas_existentes = {}
+            if not df_diario.empty:
+                # Filtra registros que contenham o nome deste material nas observações
+                df_filtro_mat = df_diario[df_diario['OBSERVACOES'].str.contains(at_sel_a, na=False)]
+                for _, row_d in df_filtro_mat.iterrows():
+                    notas_existentes[db.limpar_id(row_d['ID_ALUNO'])] = util.sosa_to_float(row_d.get('BONUS', 0))
+
+            dados_notas_projeto = []
             for _, alu in alunos_a.iterrows():
-                dados_bonus.append({"ID": alu['ID'], "Estudante": alu['NOME_ALUNO'], "Bônus (0-2.0)": 0.0, "Entregou?": True})
+                id_a = db.limpar_id(alu['ID'])
+                nota_atual = notas_existentes.get(id_a, 0.0)
+                
+                dados_notas_projeto.append({
+                    "ID": id_a, 
+                    "Estudante": alu['NOME_ALUNO'], 
+                    "Nota Alcançada": nota_atual,
+                    "Status": "✅ Lançado" if nota_atual > 0 else "⏳ Pendente"
+                })
             
-            df_bonus_ed = st.data_editor(pd.DataFrame(dados_bonus), hide_index=True, use_container_width=True,
+            df_notas_ed = st.data_editor(
+                pd.DataFrame(dados_notas_projeto),
+                hide_index=True, use_container_width=True,
                 column_config={
                     "ID": None,
-                    "Bônus (0-2.0)": st.column_config.NumberColumn("Pontos", min_value=0.0, max_value=10.0, step=0.1, format="%.1f"),
-                    "Entregou?": st.column_config.CheckboxColumn("Visto")
-                }, key=f"ed_bonus_v65_{at_sel_a.replace(' ','_')}")
+                    "Estudante": st.column_config.TextColumn("Estudante", width="medium", disabled=True),
+                    "Nota Alcançada": st.column_config.NumberColumn(f"Nota (0 a {v_max_ativ})", min_value=0.0, max_value=v_max_ativ, step=0.1, format="%.1f"),
+                    "Status": st.column_config.TextColumn("Status", width="small", disabled=True)
+                },
+                key=f"ed_notas_proj_{at_sel_a.replace(' ','_')}"
+            )
 
-            if st.button("💾 CONSOLIDAR MÉRITO NO BOLETIM", type="primary", use_container_width=True):
-                with st.status("Sincronizando bônus...") as status:
-                    lista_lote = []
-                    for _, r in df_bonus_ed.iterrows():
-                        if r['Bônus (0-2.0)'] > 0 or r['Entregou?']:
-                            lista_lote.append([r['ID'], r['Estudante'], t_sel_a, tr_sel_a, util.sosa_to_str(r['Bônus (0-2.0)']), "0,0", "0,0", "0,0", util.sosa_to_str(r['Bônus (0-2.0)'])])
-                    if lista_lote:
-                        db.salvar_lote("DB_NOTAS", lista_lote)
-                        status.update(label="✅ Bônus e Vistos integrados!", state="complete"); st.balloons()
+            # 3. SALVAMENTO NO DIÁRIO DE BORDO (INTEGRAÇÃO COM PAINEL DE NOTAS)
+            if st.button("💾 CONSOLIDAR NOTAS NO BOLETIM ANUAL", type="primary", use_container_width=True):
+                with st.status("Sincronizando Notas de Mérito com o Ecossistema...") as status:
+                    data_hoje = datetime.now().strftime("%d/%m/%Y")
+                    lista_lote_diario = []
+                    
+                    for _, r in df_notas_ed.iterrows():
+                        # Salvamos no Diário de Bordo para que o Painel de Notas some como Bônus
+                        # A tag 'PROJETO' ajuda a identificar a origem da nota
+                        lista_lote_diario.append([
+                            data_hoje, 
+                            r['ID'], 
+                            r['Estudante'], 
+                            t_sel_a, 
+                            "TRUE", # Visto como True pois houve entrega
+                            "PROJETO/ATIVIDADE", 
+                            f"[{at_sel_a}] Nota atribuída na CIR.", 
+                            util.sosa_to_str(r['Nota Alcançada'])
+                        ])
+                    
+                    if lista_lote_diario:
+                        # Limpa registros antigos deste material para esta turma para evitar duplicidade de bônus
+                        db.limpar_diario_data_turma(data_hoje, t_sel_a) # Opcional: pode-se criar uma função específica para limpar por material
+                        
+                        db.salvar_lote("DB_DIARIO_BORDO", lista_lote_diario)
+                        status.update(label=f"✅ Notas de {at_sel_a} integradas com sucesso!", state="complete")
+                        st.balloons()
+                        time.sleep(1)
+                        st.rerun()
 
     # --- ABA 4: RAIO-X PEDAGÓGICO (CORREÇÃO DO NAMERROR) ---
     with tab_raiox:
