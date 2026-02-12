@@ -107,24 +107,21 @@ PERSONAS = {
 
 # --- 4. ARQUITETO DE EXAMES V25 (SUPER PERSONA INTEGRADA) ---
 
-    "ARQUITETO_EXAMES_V30_ELITE": """VOCÊ É O ARQUITETO-CHEFE DE EXAMES DE ELITE (V30 - PROTOCOLO DE MÉRITO, PERÍCIA E CALIBRAGEM).
-    Sua missão é criar avaliações de alta densidade acadêmica, com rigor absoluto na estrutura PEI e calibragem por série.
+    "ARQUITETO_EXAMES_V30_ELITE": """VOCÊ É O ARQUITETO-CHEFE DE EXAMES DE ELITE (V60 - PROTOCOLO DE PERÍCIA PEDAGÓGICA).
+    Sua missão é criar avaliações de alta densidade acadêmica com mapeamento de descritores e análise de lacunas.
+
+    🚨 LEI DO DNA (OBRIGATÓRIO):
+    Você deve iniciar o documento EXATAMENTE com a tag [VALOR: X.X] na primeira linha.
+
+    🚨 LEI DA GRADE DE PERÍCIA (PADRÃO AAP/DF):
+    Você deve obrigatoriamente gerar a seção [GRADE_DE_CORRECAO] detalhando para cada questão:
+    1. Habilidade/Descritor (BNCC/SAEB).
+    2. Justificativa da Alternativa Correta (O que o acerto prova).
+    3. Análise dos Distratores (O que o erro em cada letra errada revela sobre a confusão mental do aluno).
 
     🚨 LEI DA CALIBRAGEM DE LINGUAGEM (POR SÉRIE):
-    - 6º e 7º ANO: Use linguagem concreta, direta e evite termos excessivamente abstratos. O contexto Alpha deve ser lúdico ou cotidiano.
-    - 8º e 9º ANO: Use linguagem técnica, acadêmica e formal. O contexto Alpha deve focar em economia, tecnologia avançada e preparação para o Ensino Médio.
-
-    🚨 LEI DA TAXONOMIA DE DIFICULDADE:
-    - FÁCIL: Aplicação direta de conceito. Contexto simples de leitura imediata.
-    - MÉDIO: Exige interpretação e conexão de ideias. Padrão Prova Brasil / Avaliações de Governo.
-    - DIFÍCIL: Exige análise crítica, múltiplos passos de resolução e contexto Alpha avançado.
-
-    🚨 LEI DO ESCUDO CURRICULAR (ANTI-ALUCINAÇÃO):
-    - Você está PROIBIDO de incluir assuntos não selecionados (Ex: Se não houver MMC no prompt, não use MMC).
-    - Use apenas os CONTEÚDOS e OBJETIVOS fornecidos.
-
-    🚨 LEI DA SOBERANIA FORMATIVA:
-    - TODAS as questões devem ser de MÚLTIPLA ESCOLHA (Regular A-E | PEI A-C). PROIBIDO questões abertas.
+    - 6º e 7º ANO: Linguagem concreta, direta e contexto Alpha lúdico/cotidiano.
+    - 8º e 9º ANO: Linguagem técnica, acadêmica e formal. Contexto Alpha focado em News/Tech.
 
     🚨 LEI DA SIMETRIA PEI (OBRIGATÓRIO):
     - A versão [PEI] deve ter EXATAMENTE METADE do número de questões da prova regular.
@@ -132,11 +129,10 @@ PERSONAS = {
 
     🚨 LEI DA FORMATAÇÃO INLINE:
     - RÓTULO: **QUESTÃO XX (0,XX ponto) -** (Negrito, Caixa Alta e traço).
-    - TEXTO: Começa na mesma linha do rótulo. Use Sentence Case.
-    - PROMPT IMAGEM: [ PROMPT IMAGEM: descrição ] em nova linha.
+    - TEXTO: Começa na mesma linha do rótulo.
 
     🚨 PROTOCOLO DE TAGS:
-    [ORIENTACOES], [QUESTOES], [GABARITO_TEXTO], [RESPOSTAS_IA], [PEI], [GABARITO_PEI], [RESPOSTAS_PEI_IA].""",
+    [VALOR], [ORIENTACOES], [QUESTOES], [GABARITO_TEXTO], [GRADE_DE_CORRECAO], [RESPOSTAS_IA], [PEI], [GABARITO_PEI], [RESPOSTAS_PEI_IA].""",
 
 # REFINADOR_MATERIAIS
 
@@ -362,37 +358,42 @@ def gerar_ia(persona_key, comando, partes_arquivos=[], usar_busca=True):
         return f"Erro na IA: {e}"
 
 # --- EXTRATOR SOSA V36 (BLINDAGEM DE FRONTEIRA - ANTI-CONFLITO) ---
+# --- EXTRATOR SOSA V37 (BLINDAGEM TOTAL + GRADE DE PERÍCIA) ---
 def extrair_tag(texto, tag):
     if not texto: return ""
     import re
     
-    # Limpeza de ruídos de Markdown
+    # 1. Limpeza de ruídos de Markdown nas tags (Garante que **[TAG]** vire [TAG])
     texto_limpo = texto.replace("**[", "[").replace("]**", "]")
     tag_busca = tag.upper().strip()
     
-    # 1. Tenta capturar valor INTERNO estrito (Ex: [VALOR: 3.0])
+    # 2. Tenta capturar valor INTERNO estrito (Ex: [VALOR: 3.0])
     # O \b garante que GABARITO não bata em GABARITO_TEXTO
     padrao_interno = rf"\[\s*\b{tag_busca}\b\s*[:\-]*\s*(.*?)\]"
     match_int = re.search(padrao_interno, texto_limpo, re.IGNORECASE)
     if match_int:
         res_int = match_int.group(1).strip()
-        # Retorna apenas se for um valor curto (metadado)
-        if 0 < len(res_int) < 20:
+        # Retorna apenas se for um metadado curto (evita pegar o corpo da prova por erro)
+        if 0 < len(res_int) < 25:
             return res_int
 
-    # 2. Tenta capturar BLOCO (Ex: [QUESTOES] ... [PROXIMA_TAG])
+    # 3. LISTA DE TAGS MESTRAS V37 (O "Escudo de Fronteira")
+    # Adicionamos GRADE_DE_CORRECAO para o extrator saber onde parar
     tags_mestras = [
-        "VALOR", "ORIENTACOES", "QUESTOES", "GABARITO_TEXTO", "GABARITO", 
-        "RESPOSTAS_IA", "PEI", "GABARITO_PEI", "RESPOSTAS_PEI_IA", 
+        "VALOR", "ORIENTACOES", "QUESTOES", "GABARITO_TEXTO", "GRADE_DE_CORRECAO", 
+        "GABARITO", "RESPOSTAS_IA", "PEI", "GABARITO_PEI", "RESPOSTAS_PEI_IA", 
         "PROFESSOR", "ALUNO", "BNCC_CODE", "CONTEUDO_GERAL", 
         "CONTEUDOS_ESPECIFICOS", "OBJETIVOS_ENSINO", "IMAGENS"
     ]
     
+    # Cria a lista de parada (todas as tags exceto a que estamos buscando)
     parada = [t for t in tags_mestras if t != tag_busca]
     lista_parada = "|".join(parada)
     
-    # Captura o bloco até a próxima tag mestra no início da linha ou fim do texto
+    # 4. REGEX DE BLOCO V37: Captura até encontrar a próxima tag mestra
+    # Ele olha se a próxima tag está no início de uma linha ou colada no texto
     padrao_bloco = rf"\[\s*\b{tag_busca}\b\s*\]\s*[:\-]*\s*(.*?)(?=\n\s*\[\s*(?:{lista_parada})\s*\]|\[\s*(?:{lista_parada})\s*\]|$)"
+    
     match_bloco = re.search(padrao_bloco, texto_limpo, re.DOTALL | re.IGNORECASE)
     
     if match_bloco:
