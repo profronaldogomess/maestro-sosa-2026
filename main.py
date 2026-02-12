@@ -370,42 +370,41 @@ if menu == "🧪 Criador de Aulas":
         with t_sync:
             st.warning("⚠️ O Triple-Sync substituirá a versão anterior deste material.")
             if st.button("💾 EXECUTAR TRIPLE-SYNC (SUBSTITUIR)", use_container_width=True, type="primary", key=f"btn_triple_{v}"):
-                with st.status("Iniciando Protocolo de Substituição...") as status:
+                with st.status("Iniciando Protocolo de Custódia e Sincronia...") as status:
                     nome_final = s_id 
                     ano_str = f"{meta.get('ano', '6')}º"
                     semana_ref = meta.get('semana_ref', 'AVULSA')
-                    
-                    # LEI DA LIMPEZA (TRIPLE-SYNC)
-                    db.excluir_registro_com_drive("DB_AULAS_PRONTAS", nome_final)
-                    
-                    conteudo_banco = f"[SOSA_ID] {nome_final}\n[AULA_ALVO] {meta.get('aula_alvo', 'Aula')}\n[PROFESSOR]\n{ed_prof}\n\n[ALUNO]\n{ed_alu}\n\n[GABARITO]\n{ed_res}\n\n[PEI]\n{ed_pei_mat}\n\n[GABARITO_PEI]\n{ed_pei_gab}\n\n"
-
-                    # CONTAGEM REAL DE QUESTÕES NO MATERIAL REGULAR
-                    qtd_q_real = len(re.findall(r'(?m)^QUESTÃO\s+\d+', ed_alu.upper()))
                     is_sonda_check = "SONDA" in nome_final.upper()
                     
-                    # CÁLCULO DO VALOR POR QUESTÃO (10,0 / QTD)
-                    val_q_str = util.sosa_to_str(10.0 / qtd_q_real) if qtd_q_real > 0 else "1,00"
+                    # 1. LEI DA LIMPEZA (TRIPLE-SYNC): Deleta versões antigas no Drive e Planilha
+                    db.excluir_registro_com_drive("DB_AULAS_PRONTAS", nome_final)
+                    
+                    # 2. CONTAGEM REAL E CÁLCULO DE PESO
+                    qtd_q_real = len(re.findall(r'(?m)^QUESTÃO\s+\d+', ed_alu.upper()))
+                    valor_total_doc = "10,00" if is_sonda_check else "0,00"
+                    val_q_str = util.sosa_to_str(10.0 / qtd_q_real) if (is_sonda_check and qtd_q_real > 0) else "0,00"
 
                     info_doc = {
                         "ano": ano_str, 
                         "trimestre": meta.get('trimestre', 'I Trimestre'), 
-                        "valor": "10,00" if is_sonda_check else "0,00", 
+                        "valor": valor_total_doc, 
                         "valor_questao": val_q_str,
                         "qtd_questoes": qtd_q_real
                     }
 
-                    # GERAÇÃO DE DOCUMENTOS (FLUXO NATIVO)
+                    # 3. GERAÇÃO DE DOCUMENTOS (FLUXO NATIVO)
+                    # Regular
                     if is_sonda_check:
                         doc_alu = exporter.gerar_docx_prova_v25(nome_final, ed_alu, info_doc)
                     else:
                         doc_alu = exporter.gerar_docx_aluno_v24(nome_final, ed_alu, info_doc)
+                    link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{nome_final}_REGULAR", modo="AULA")
                     
-                    link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{nome_final}_ALUNO", modo="AULA")
+                    # Guia do Professor (Com Grade de Perícia)
                     doc_prof = exporter.gerar_docx_professor_v25(nome_final, ed_prof, {"ano": ano_str, "semana": semana_ref, "trimestre": info_doc["trimestre"]})
                     link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_final}_PROF", modo="AULA")
                     
-                    # GERAÇÃO PEI (GABARITO PROPORCIONAL)
+                    # PEI (Gabarito Proporcional)
                     link_pei = "N/A"
                     if len(ed_pei_mat) > 10:
                         if is_sonda_check:
@@ -415,10 +414,35 @@ if menu == "🧪 Criador de Aulas":
                         link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_final}_PEI", modo="AULA")
                     
                     if "https" in str(link_alu):
-                        conteudo_banco += f"--- LINKS ---\nAluno({link_alu}) Prof({link_prof}) PEI({link_pei})"
-                        db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), semana_ref, nome_final, conteudo_banco, ano_str, link_alu])
-                        status.update(label="✅ Sincronia Concluída!", state="complete")
-                        st.balloons(); time.sleep(1); reset_laboratorio()
+                        # 4. CONSOLIDAÇÃO DO CONTEÚDO COM DNA DE VALOR (Para o Scanner ler)
+                        # Colocamos o [VALOR] no topo para garantir a leitura do Scanner
+                        conteudo_final_banco = (
+                            f"[VALOR: {valor_total_doc}]\n"
+                            f"[SOSA_ID] {nome_final}\n"
+                            f"[PROFESSOR]\n{ed_prof}\n\n"
+                            f"[ALUNO]\n{ed_alu}\n\n"
+                            f"[GABARITO]\n{ed_res}\n\n"
+                            f"[GRADE_DE_CORRECAO]\n{ai.extrair_tag(st.session_state.lab_temp, 'GRADE_DE_CORRECAO')}\n\n"
+                            f"[PEI]\n{ed_pei_mat}\n\n"
+                            f"--- LINKS ---\nRegular({link_alu}) PEI({link_pei}) Prof({link_prof})"
+                        )
+                        
+                        db.salvar_no_banco("DB_AULAS_PRONTAS", [
+                            datetime.now().strftime("%d/%m/%Y"), 
+                            semana_ref, 
+                            nome_final, 
+                            conteudo_final_banco, 
+                            ano_str, 
+                            link_alu
+                        ])
+                        
+                        status.update(label="✅ Sincronia de Elite Concluída!", state="complete")
+                        st.balloons()
+                        time.sleep(1)
+                        reset_laboratorio()
+                    else:
+                        status.update(label="❌ Erro no Upload ao Drive", state="error")
+                        st.error(f"Resposta do Servidor: {link_alu}")
 
     # --- SEÇÃO DE ENTRADA (CONFIGURAÇÃO INICIAL) ---
     else:
@@ -532,7 +556,6 @@ if menu == "🧪 Criador de Aulas":
                             
                             if st.button("🚀 GERAR SONDA DE PROFICIÊNCIA", use_container_width=True, type="primary"):
                                 with st.spinner("Maestro Sosa realizando perícia psicométrica..."):
-                                    # NOMENCLATURA DE ELITE
                                     nome_elite_sonda = util.gerar_nome_material_elite(ano_sonda, "Sonda Diagnóstica", trim_sonda)
                                     st.session_state.sosa_id_atual = nome_elite_sonda
                                     st.session_state.lab_meta = {
@@ -540,12 +563,22 @@ if menu == "🧪 Criador de Aulas":
                                         "tipo": "SONDA", "aula_alvo": "Sonda Diagnóstica", "semana_ref": "AVALIAÇÃO"
                                     }
                                     
+                                    # CÁLCULO DE PESO IGUAL PARA SONDA
+                                    peso_q = 10.0 / qtd_q_sonda
+                                    peso_q_str = util.sosa_to_str(peso_q)
+
                                     prompt_sonda = (
-                                        f"PERSONA: ARQUITETO_SONDA_DIAGNOSTICA. ID: {nome_elite_sonda}.\n"
-                                        f"SÉRIE ATUAL: {ano_sonda}º Ano. TRIMESTRE: {trim_sonda}.\n"
-                                        f"CONTEÚDOS ALVO: {' / '.join(sel_conts_s)}.\n"
-                                        f"QUANTIDADE: {qtd_q_sonda} questões A-E. VALOR TOTAL: 10,0.\n\n"
-                                        f"MISSÃO: Gere o material completo com as TAGS [PROFESSOR], [ALUNO], [GABARITO], [PEI], [GABARITO_PEI]."
+                                        f"ORDEM DE PERÍCIA V67 - SONDA DE PROFICIÊNCIA\n"
+                                        f"SÉRIE: {ano_sonda}º Ano | TRIMESTRE: {trim_sonda} | VALOR: 10.0\n"
+                                        f"QUANTIDADE: {qtd_q_sonda} questões A-E.\n"
+                                        f"PESO POR QUESTÃO: {peso_q_str}.\n"
+                                        f"CONTEÚDOS: {' / '.join(sel_conts_s)}.\n\n"
+                                        f"🚨 DIRETRIZES CRÍTICAS:\n"
+                                        f"1. Inicie com [VALOR: 10.0].\n"
+                                        f"2. Use o formato: **QUESTÃO XX ({peso_q_str} ponto) -**.\n"
+                                        f"3. Gere a [GRADE_DE_CORRECAO] detalhando a lógica de cada erro (Distratores).\n"
+                                        f"4. Aplique Engenharia Anti-Chute no gabarito.\n"
+                                        f"5. Gere a versão [PEI] com {int(qtd_q_sonda/2 if qtd_q_sonda%2==0 else (qtd_q_sonda+1)/2)} questões."
                                     )
                                     st.session_state.lab_temp = ai.gerar_ia("ARQUITETO_SONDA_DIAGNOSTICA", prompt_sonda, usar_busca=True)
                                     st.rerun()
