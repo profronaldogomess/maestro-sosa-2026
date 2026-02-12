@@ -1864,7 +1864,7 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                 st.info("📭 Banco de relatórios vazio.")
 
 # ==============================================================================
-# MÓDULO: CENTRAL DE AVALIAÇÕES (V60.0 - PERÍCIA PEDAGÓGICA INTEGRADA)
+# MÓDULO: CENTRAL DE AVALIAÇÕES (V61.0 - TAXONOMIA E PERÍCIA INTEGRADA)
 # ==============================================================================
 elif menu == "📝 Central de Avaliações":
     st.title("📝 Arquiteto de Exames e Gestão de Safra")
@@ -1893,6 +1893,7 @@ elif menu == "📝 Central de Avaliações":
             st.warning(f"🛠️ **MODO REFINO:** Editando {st.session_state.refino_av_ativo.get('tipo')}")
             if st.button("❌ CANCELAR E VOLTAR AO NOVO"): reset_avaliacoes()
 
+        # 1. CONFIGURAÇÃO BÁSICA
         with st.container(border=True):
             st.markdown("### ⚙️ 1. Configuração do Exame")
             c1, c2, c3, c4 = st.columns([1.5, 1, 1, 1])
@@ -1901,8 +1902,21 @@ elif menu == "📝 Central de Avaliações":
             ano_av = c3.selectbox("Série:", [6, 7, 8, 9], index=0, key=f"av_a_{v}")
             qtd_q = c4.number_input("Nº Total de Questões:", 2, 20, 10, key=f"av_q_{v}")
 
+        # 2. DISTRIBUIÇÃO DE DIFICULDADE (RESTAURADO)
         with st.container(border=True):
-            st.markdown("### 🎯 2. Matriz de Mérito e Filtro Curricular")
+            st.markdown("### 📊 2. Distribuição de Dificuldade (Taxonomia)")
+            cd1, cd2, cd3 = st.columns(3)
+            q_facil = cd1.number_input("Fáceis:", 0, qtd_q, int(qtd_q*0.3), key=f"q_f_{v}")
+            q_medio = cd2.number_input("Médias:", 0, qtd_q, int(qtd_q*0.5), key=f"q_m_{v}")
+            q_dificil = cd3.number_input("Difíceis:", 0, qtd_q, qtd_q - (q_facil + q_medio), key=f"q_d_{v}")
+            soma_q = q_facil + q_medio + q_dificil
+            
+            if soma_q != qtd_q:
+                st.warning(f"⚠️ Atenção: A soma ({soma_q}) está diferente do total ({qtd_q}).")
+
+        # 3. MATRIZ E FILTRO
+        with st.container(border=True):
+            st.markdown("### 🎯 3. Matriz de Mérito e Filtro Curricular")
             c_trim1, c_trim2 = st.columns([1, 2])
             trim_filtro = c_trim1.selectbox("Filtrar por Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"av_trim_filter_{v}")
             
@@ -1913,17 +1927,21 @@ elif menu == "📝 Central de Avaliações":
             mats_selecionados = c_trim2.multiselect(f"Ativos de Safra Detectados ({len(df_materiais_trim)}):", options=df_materiais_trim["TIPO_MATERIAL"].tolist(), key=f"av_ref_{v}")
 
             if st.button("💎 COMPILAR EXAME COM GRADE DE PERÍCIA", use_container_width=True, type="primary"):
-                if not mats_selecionados: st.error("Selecione os Ativos de Safra.")
+                if soma_q != qtd_q: 
+                    st.error(f"Erro: A soma das dificuldades ({soma_q}) deve ser igual ao total de questões ({qtd_q}).")
+                elif not mats_selecionados: 
+                    st.error("Selecione os Ativos de Safra.")
                 else:
-                    with st.spinner("Maestro Arquiteto mapeando descritores e distratores..."):
+                    with st.spinner("Maestro Arquiteto calibrando taxonomia e mapeando descritores..."):
                         contexto_aulas = ""
                         for m_nome in mats_selecionados:
                             m_row = df_materiais_trim[df_materiais_trim["TIPO_MATERIAL"] == m_nome].iloc[0]
                             contexto_aulas += f"MATERIAL_ID: {m_nome}\nCONTEÚDO: {m_row['CONTEUDO']}\n"
 
-                        prompt = (f"VOCÊ É O ARQUITETO DE EXAMES V60. SÉRIE: {ano_av}º Ano. TIPO: {tipo_av}. VALOR: {v_total}.\n"
+                        prompt = (f"VOCÊ É O ARQUITETO DE EXAMES V61. SÉRIE: {ano_av}º Ano. TIPO: {tipo_av}. VALOR: {v_total}.\n"
                                   f"🚨 OBRIGATÓRIO: Inicie com [VALOR: {v_total}].\n"
-                                  f"🚨 OBRIGATÓRIO: Gere a seção [GRADE_DE_CORRECAO] com Habilidades e Análise de Distratores (Padrão AAP/DF).\n"
+                                  f"🚨 TAXONOMIA: Gere {q_facil} fáceis, {q_medio} médias e {q_dificil} difíceis.\n"
+                                  f"🚨 OBRIGATÓRIO: Gere a seção [GRADE_DE_CORRECAO] com Habilidades e Análise de Distratores.\n"
                                   f"CONTEÚDO MINISTRADO: {contexto_aulas}\n"
                                   f"MISSÃO: Gere o exame completo com todas as tags.")
                         st.session_state.temp_prova = ai.gerar_ia("ARQUITETO_EXAMES_V30_ELITE", prompt, usar_busca=True)
@@ -1943,15 +1961,13 @@ elif menu == "📝 Central de Avaliações":
             st.text_area("Editor de Exame:", st.session_state.temp_prova, height=500, key=f"ed_av_raw_{v}")
         else: st.info("Gere um exame para refinar.")
 
-    # --- ABA 3: VISUALIZAÇÃO (COM GRADE DE PERÍCIA) ---
+    # --- ABA 3: VISUALIZAÇÃO ---
     with tab_vis:
         if "temp_prova" in st.session_state:
             txt_f = st.session_state.temp_prova
             t1, t2, t3, t4 = st.tabs(["📝 Prova Regular", "🔍 Grade de Perícia (AAP/DF)", "♿ Prova PEI", "✅ Gabaritos"])
             with t1: st.text_area("Questões:", ai.extrair_tag(txt_f, "QUESTOES"), height=500, key=f"vis_reg_{v}")
-            with t2: 
-                st.info("🔬 Esta grade mapeia o que cada erro do aluno revela.")
-                st.text_area("Habilidades e Distratores:", ai.extrair_tag(txt_f, "GRADE_DE_CORRECAO"), height=500, key=f"vis_grade_{v}")
+            with t2: st.text_area("Habilidades e Distratores:", ai.extrair_tag(txt_f, "GRADE_DE_CORRECAO"), height=500, key=f"vis_grade_{v}")
             with t3: st.text_area("PEI:", ai.extrair_tag(txt_f, "PEI"), height=500, key=f"vis_pei_{v}")
             with t4: 
                 c_g1, c_g2 = st.columns(2)
@@ -1987,7 +2003,7 @@ elif menu == "📝 Central de Avaliações":
                             status.update(label="✅ Revisão Sincronizada!", state="complete"); st.balloons()
         else: st.warning("⚠️ Gere a prova primeiro.")
 
-    # --- ABA 5: FINALIZAR ATIVO (SALVANDO A GRADE NO BANCO) ---
+    # --- ABA 5: FINALIZAR ATIVO ---
     with tab_finalizar:
         if "temp_prova" in st.session_state:
             st.subheader("💾 Consolidação do Ativo de Safra")
@@ -2004,10 +2020,8 @@ elif menu == "📝 Central de Avaliações":
                     identificador = f"{v_tipo} - {v_ano}º Ano ({trim_av})"
                     db.excluir_avaliacao_completa(identificador, v_tipo)
                     
-                    # PROTOCOLO DNA V60: Inclui a Grade de Correção no texto do banco
                     conteudo_banco = f"[VALOR: {v_total_num}]\n" + st.session_state.temp_prova
                     
-                    # Geração Regular
                     info_reg = {"ano": f"{v_ano}º", "tipo_prova": v_tipo, "valor": util.sosa_to_str(v_total_num), "valor_questao": util.sosa_to_str(v_total_num/v_qtd), "qtd_questoes": v_qtd, "trimestre": trim_av}
                     doc_reg = exporter.gerar_docx_prova_v25(nome_arq, st.session_state.temp_prova, info_reg)
                     link_reg = db.subir_e_converter_para_google_docs(doc_reg, nome_arq, modo="AVALIACAO")
@@ -2016,7 +2030,7 @@ elif menu == "📝 Central de Avaliações":
                         datetime.now().strftime("%d/%m/%Y"), "AVALIAÇÃO", identificador, 
                         conteudo_banco + f"\n--- LINKS ---\nRegular({link_reg})", f"{v_ano}º", link_reg
                     ])
-                    status.update(label="✅ Ativo Salvo com Grade de Perícia!", state="complete"); st.balloons(); time.sleep(1.5); reset_avaliacoes()
+                    status.update(label="✅ Ativo Salvo!", state="complete"); st.balloons(); time.sleep(1.5); reset_avaliacoes()
 
     # --- ABA 6: ACERVO ---
     with tab_acervo:
