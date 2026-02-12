@@ -2617,9 +2617,9 @@ elif menu == "📸 Scanner de Gabaritos":
                                 ])
                         st.success("✅ Indicadores externos integrados ao histórico dos alunos!")
 
-# --- ABA 4: RAIO-X PEDAGÓGICO (V69.0 - DOSSIÊ INDIVIDUAL E EQUIDADE PEI) ---
+# --- ABA 4: RAIO-X PEDAGÓGICO (V69.0 - PERÍCIA INDIVIDUAL E DIFERENCIAÇÃO PEI) ---
     with tab_raiox:
-        st.subheader("📊 Raio-X Pedagógico: Dossiê de Performance Individual")
+        st.subheader("📊 Raio-X Pedagógico: Diagnóstico Individual de Lacunas")
         st.markdown("---")
 
         c1, c2, c3 = st.columns([1, 1, 1.5])
@@ -2627,112 +2627,133 @@ elif menu == "📸 Scanner de Gabaritos":
         tr_sel_r = c2.selectbox("📅 Selecione o Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_r_v69_{v}")
         
         opcoes_r = filtrar_ativos_cir_v64(t_sel_r, tr_sel_r, apenas_provas=True)
-        at_sel_r = c3.selectbox("📋 Selecione a Avaliação:", [""] + opcoes_r, key=f"at_r_v69_{v}")
+        at_sel_r = c3.selectbox("📋 Selecione a Avaliação para Raio-X:", [""] + opcoes_r, key=f"at_r_v69_{v}")
 
         if not t_sel_r or not at_sel_r:
-            st.info("💡 Selecione a Turma e a Avaliação para visualizar o diagnóstico individual dos alunos.")
+            st.info("💡 Selecione a Turma e a Avaliação para visualizar o Mapa de Calor e o Diagnóstico por Aluno.")
         else:
-            # 1. CARREGAMENTO DOS METADADOS DA PROVA
+            # 1. CARREGAMENTO E NORMALIZAÇÃO DE METADADOS
             prova_query = df_aulas[df_aulas['TIPO_MATERIAL'].str.strip() == at_sel_r.strip()]
+            
             if prova_query.empty:
-                st.error("❌ Material não localizado.")
+                st.error("❌ Material não localizado no banco.")
             else:
                 dados_prova = prova_query.iloc[0]
                 txt_prova = str(dados_prova['CONTEUDO'])
                 grade_pericia = ai.extrair_tag(txt_prova, "GRADE_DE_CORRECAO")
                 
                 # Extração de Gabaritos (Regular e PEI)
-                def extrair_gab_lista(texto, tag_alvo):
-                    raw = ai.extrair_tag(texto, tag_alvo)
-                    if not raw and tag_alvo == "GABARITO_PEI": raw = ai.extrair_tag(texto, "GABARITO") # Fallback
+                def extrair_gab_v69(texto, tag_alvo="GABARITO_TEXTO"):
+                    raw = ai.extrair_tag(texto, tag_alvo) or ai.extrair_tag(texto, "GABARITO")
                     matches = re.findall(r"(\d+)\s*[\-\.\:]\s*([A-E])", raw.upper())
                     if matches:
-                        mapa = {int(num): letra for num, letra in matches}
-                        return [mapa[n] for n in sorted(mapa.keys())]
-                    return re.findall(r"\b[A-E]\b", raw.upper())
+                        return {int(num): letra for num, letra in matches}
+                    # Fallback para letras isoladas
+                    letras = re.findall(r"\b[A-E]\b", raw.upper())
+                    return {i+1: letra for i, letra in enumerate(letras)}
 
-                gab_reg = extrair_gab_lista(txt_prova, "GABARITO_TEXTO")
-                gab_pei = extrair_gab_lista(txt_prova, "GABARITO_PEI")
+                gab_reg_map = extrair_gab_v69(txt_prova, "GABARITO_TEXTO")
+                gab_pei_map = extrair_gab_v69(txt_prova, "GABARITO_PEI")
 
-                # 2. BUSCA DE RESPOSTAS DOS ALUNOS
+                # 2. PROCESSAMENTO DA TURMA (MAPA DE CALOR)
                 respostas_alunos = df_diagnosticos[
                     (df_diagnosticos['TURMA'].str.strip() == t_sel_r.strip()) & 
                     (df_diagnosticos['ID_AVALIACAO'].str.strip() == at_sel_r.strip())
                 ]
 
                 if respostas_alunos.empty:
-                    st.warning("⚠️ Nenhum gabarito escaneado para esta turma.")
+                    st.warning("⚠️ Nenhuma resposta de aluno encontrada para esta avaliação.")
                 else:
-                    st.markdown(f"### 👤 Diagnóstico por Estudante: {at_sel_r}")
+                    # Gráfico de Calor (Visão Geral)
+                    st.markdown("#### 📈 Desempenho Geral da Turma")
+                    num_q_total = len(gab_reg_map)
+                    stats_q = []
+                    for i in range(1, num_q_total + 1):
+                        correta = gab_reg_map.get(i, "?")
+                        votos = [r.split(';')[i-1] if (len(r.split(';')) >= i) else "?" for r in respostas_alunos['RESPOSTAS_ALUNO']]
+                        acertos = votos.count(correta)
+                        perc = (acertos / len(votos)) * 100 if votos else 0
+                        stats_q.append({"Questão": f"Q{i:02d}", "Acerto %": perc})
                     
-                    # Itera sobre cada aluno que tem gabarito escaneado
-                    for _, row_al in respostas_alunos.sort_values(by="NOME_ALUNO").iterrows():
-                        id_a = db.limpar_id(row_al['ID_ALUNO'])
-                        nome_a = row_al['NOME_ALUNO']
-                        
-                        # Identifica Perfil (PEI ou Regular) no cadastro de alunos
-                        info_cad = df_alunos[df_alunos['ID'].apply(db.limpar_id) == id_a]
-                        is_pei = False
-                        if not info_cad.empty:
-                            nec = str(info_cad.iloc[0]['NECESSIDADES']).upper()
-                            is_pei = nec not in ["NENHUMA", "PENDENTE", "", "NAN"]
+                    fig = px.bar(pd.DataFrame(stats_q), x="Questão", y="Acerto %", text_auto='.0f', color="Acerto %", color_continuous_scale="RdYlGn")
+                    fig.update_layout(yaxis_range=[0, 110], height=300)
+                    st.plotly_chart(fig, use_container_width=True)
 
-                        # Seleciona o gabarito correto para comparar
-                        gab_referencia = gab_pei if is_pei else gab_reg
-                        resp_aluno = str(row_al['RESPOSTAS_ALUNO']).split(';')
-                        
-                        # Cálculo de Acertos
-                        acertos = 0
-                        lacunas = []
-                        
-                        for i, correta in enumerate(gab_referencia):
-                            marcada = resp_aluno[i] if i < len(resp_aluno) else "?"
-                            if marcada == correta:
-                                acertos += 1
-                            else:
-                                # Se errou, busca a habilidade na grade de perícia
-                                num_q = i + 1
-                                try:
-                                    # Busca o que a questão tratava na grade
-                                    padrao_hab = rf"(?si)QUESTÃO\s*0?{num_q}\b(.*?)(?=QUESTÃO|$)"
-                                    match_hab = re.search(padrao_hab, grade_pericia)
-                                    descritor = match_hab.group(1).split('\n')[0].strip() if match_hab else "Habilidade não mapeada"
-                                    lacunas.append(f"Q{num_q:02d}: {descritor} (Marcou {marcada}, era {correta})")
-                                except:
-                                    lacunas.append(f"Q{num_q:02d}: Erro de interpretação (Marcou {marcada})")
+                    # 3. 👤 DIAGNÓSTICO INDIVIDUAL (O CORAÇÃO DA SUA SOLICITAÇÃO)
+                    st.markdown("---")
+                    st.markdown("#### 👤 Perícia Individual: Diagnóstico de Lacunas por Aluno")
+                    st.caption("O sistema identifica automaticamente se o aluno é PEI e mapeia as habilidades que ele errou.")
 
-                        # 3. EXIBIÇÃO DO CARD INDIVIDUAL (DESIGN DE ELITE)
-                        with st.container(border=True):
-                            col_a, col_b, col_c = st.columns([2, 1, 1])
-                            
-                            perfil_label = "♿ PEI" if is_pei else "📝 REGULAR"
-                            col_a.markdown(f"**{nome_a}**")
-                            col_a.caption(f"Perfil: {perfil_label} | ID: {id_a}")
-                            
-                            nota_exibida = (acertos / len(gab_referencia)) * 10 if len(gab_referencia) > 0 else 0
-                            col_b.metric("Nota", f"{nota_exibida:.1f}")
-                            
-                            status_cor = "green" if nota_exibida >= 6 else "orange" if nota_exibida >= 4 else "red"
-                            col_c.markdown(f"<div style='text-align:center; color:{status_cor}; font-weight:bold; margin-top:15px;'>{acertos}/{len(gab_referencia)} Acertos</div>", unsafe_allow_html=True)
+                    alunos_turma = df_alunos[df_alunos['TURMA'] == t_sel_r].sort_values(by="NOME_ALUNO")
+                    
+                    dados_diagnostico_individual = []
 
-                            # Expander com as lacunas específicas
-                            if lacunas:
-                                with st.expander(f"🔍 Ver Lacunas Cognitivas ({len(lacunas)} pontos de atenção)"):
-                                    st.write("O aluno demonstrou dificuldade nos seguintes descritores:")
-                                    for lac in lacunas:
-                                        st.write(f"• {lac}")
-                                    
-                                    # Botão para gerar orientação PHC para este aluno específico
-                                    if st.button(f"🧠 Orientação Pedagógica para {nome_a.split()[0]}", key=f"btn_phc_{id_a}"):
-                                        prompt_ind = (
-                                            f"ALUNO: {nome_a} ({perfil_label}).\n"
-                                            f"LACUNAS DETECTADAS: {'; '.join(lacunas)}.\n"
-                                            f"MISSÃO: Escreva uma orientação curta (2 parágrafos) para o professor Ronaldo Gomes "
-                                            f"sobre como realizar a recomposição deste aluno específico usando a PHC."
-                                        )
-                                        st.info(ai.gerar_ia("PLANE_PEDAGOGICO", prompt_ind))
-                            else:
-                                st.success("✅ Domínio Integral: O aluno atingiu todos os objetivos desta avaliação.")
+                    for _, alu in alunos_turma.iterrows():
+                        id_a = db.limpar_id(alu['ID'])
+                        nome_a = alu['NOME_ALUNO']
+                        is_pei = str(alu['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"]
+                        
+                        # Busca resposta do aluno
+                        reg_aluno = respostas_alunos[respostas_alunos['ID_ALUNO'].apply(db.limpar_id) == id_a]
+                        
+                        if reg_aluno.empty:
+                            status_alu = "🔴 Ausente"
+                            nota_alu = 0.0
+                            lacunas = "N/A"
+                        else:
+                            status_alu = "♿ PEI" if is_pei else "📝 Regular"
+                            nota_alu = util.sosa_to_float(reg_aluno.iloc[0]['NOTA_CALCULADA'])
+                            resp_lista = reg_aluno.iloc[0]['RESPOSTAS_ALUNO'].split(';')
+                            
+                            # Define qual gabarito usar para comparar
+                            gab_comparar = gab_pei_map if is_pei else gab_reg_map
+                            
+                            # Mapeamento de Lacunas (Habilidades dos Erros)
+                            erros_detectados = []
+                            for i, r in enumerate(resp_lista):
+                                q_num = i + 1
+                                if r != gab_comparar.get(q_num):
+                                    # Busca o nome da habilidade na grade de perícia
+                                    try:
+                                        # Busca o texto da questão na grade
+                                        match_habil = re.search(rf"QUESTÃO\s*0?{q_num}\b.*?:(.*?)(?=\n|JUSTIFICATIVA|PERÍCIA|$)", grade_pericia, re.IGNORECASE)
+                                        if match_habil:
+                                            hab_nome = match_habil.group(1).strip().replace("[", "").replace("]", "")
+                                            erros_detectados.append(hab_nome)
+                                        else:
+                                            erros_detectados.append(f"Q{q_num}")
+                                    except:
+                                        erros_detectados.append(f"Q{q_num}")
+                            
+                            lacunas = " | ".join(list(set(erros_detectados))) if erros_detectados else "✅ Domínio Total"
+
+                        dados_diagnostico_individual.append({
+                            "Estudante": nome_a,
+                            "Perfil": status_alu,
+                            "Nota": nota_alu,
+                            "Lacunas Cognitivas (Habilidades a Reforçar)": lacunas
+                        })
+
+                    # Exibição em Tabela de Elite
+                    df_diag_final = pd.DataFrame(dados_diagnostico_individual)
+                    
+                    def colorir_nota(val):
+                        color = '#FF4B4B' if val < 6.0 else '#2ECC71'
+                        return f'color: {color}; font-weight: bold'
+
+                    st.dataframe(
+                        df_diag_final.style.applymap(colorir_nota, subset=['Nota']),
+                        use_container_width=True,
+                        hide_index=True,
+                        column_config={
+                            "Nota": st.column_config.NumberColumn("Nota", format="%.1f"),
+                            "Lacunas Cognitivas (Habilidades a Reforçar)": st.column_config.TextColumn("Lacunas Cognitivas (Habilidades a Reforçar)", width="large")
+                        }
+                    )
+
+                    # 4. EXPANDER DE DETALHAMENTO (OPCIONAL PARA O PROFESSOR)
+                    with st.expander("🔍 Ver Grade de Perícia da Prova (Referência)"):
+                        st.info(grade_pericia)
 
     # --- ABA 5: ACERVO DE EVIDÊNCIAS ---
     with tab_acervo_cir:
