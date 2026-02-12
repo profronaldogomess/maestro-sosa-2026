@@ -1926,10 +1926,10 @@ elif menu == "📝 Central de Avaliações":
                 elif not mats_selecionados: 
                     st.error("Selecione os Ativos de Safra.")
                 else:
-                    with st.spinner(f"Arquitetando {qtd_q} questões com Isonomia de Notas..."):
-                        # CÁLCULO AUTOMÁTICO DO PESO IGUALITÁRIO
-                        peso_cada = v_total / qtd_q
-                        peso_str = util.sosa_to_str(peso_cada)
+                    with st.spinner(f"Arquitetando {qtd_q} questões com pesos iguais e gabarito blindado..."):
+                        # CÁLCULO AUTOMÁTICO DE PESO IGUAL
+                        peso_por_questao = v_total / qtd_q
+                        peso_str = util.sosa_to_str(peso_por_questao)
 
                         contexto_aulas = ""
                         for m_nome in mats_selecionados:
@@ -1937,16 +1937,17 @@ elif menu == "📝 Central de Avaliações":
                             contexto_aulas += f"MATERIAL_ID: {m_nome}\nCONTEÚDO: {m_row['CONTEUDO']}\n"
 
                         prompt = (
-                            f"ORDEM DE PRODUÇÃO V65 - ISONOMIA E SUPORTE VISUAL\n"
+                            f"ORDEM DE PRODUÇÃO V65 - RIGOR TOTAL E ANTI-CHUTE\n"
                             f"TIPO: {tipo_av} | SÉRIE: {ano_av}º Ano | VALOR TOTAL: {v_total}\n"
-                            f"QUANTIDADE: {qtd_q} questões | VALOR POR QUESTÃO: {peso_str}\n"
+                            f"QUANTIDADE OBRIGATÓRIA: {qtd_q} questões.\n"
+                            f"VALOR POR QUESTÃO: {peso_str} (Todas com o mesmo peso).\n"
                             f"DISTRIBUIÇÃO: {q_facil} Fáceis, {q_medio} Médias, {q_dificil} Difíceis.\n\n"
                             f"🚨 DIRETRIZES DE ELITE:\n"
                             f"1. Inicie com [VALOR: {v_total}].\n"
-                            f"2. Todas as questões em [QUESTOES] devem ter o rótulo: **QUESTÃO XX ({peso_str} ponto) -**.\n"
-                            f"3. Inclua [ PROMPT IMAGEM: ... ] em todas as questões que necessitem de representação visual.\n"
-                            f"4. Organize a [GRADE_DE_CORRECAO] de forma explicativa e separada por tópicos para o professor.\n"
-                            f"5. Gere a versão [PEI] com {int(qtd_q/2 if qtd_q%2==0 else (qtd_q+1)/2)} questões usando o mesmo peso proporcional.\n\n"
+                            f"2. Use o formato: **QUESTÃO XX ({peso_str} ponto) -** para todas.\n"
+                            f"3. Aplique a Engenharia Anti-Chute no gabarito (distribuição equilibrada).\n"
+                            f"4. Inclua [ PROMPT IMAGEM: ... ] para questões que necessitem de suporte visual.\n"
+                            f"5. Organize a [GRADE_DE_CORRECAO] de forma ultra-detalhada (Habilidade + Justificativa + Perícia de Distratores).\n\n"
                             f"CONTEÚDO BASE:\n{contexto_aulas}"
                         )
                         
