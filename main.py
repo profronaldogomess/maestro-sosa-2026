@@ -2754,16 +2754,75 @@ elif menu == "📸 Scanner de Gabaritos":
 
                     with st.expander("🔍 Ver Grade de Perícia Completa (Referência)"):
                         st.info(grade_pericia)
-                        
-    # --- ABA 5: ACERVO DE EVIDÊNCIAS ---
+
+# --- ABA 5: ACERVO DE EVIDÊNCIAS (V71.0 - CUSTÓDIA COM FILTROS INTELIGENTES) ---
     with tab_acervo_cir:
-        st.subheader("📂 Cofre Digital de Evidências")
-        if not df_diagnosticos.empty:
-            df_exibicao = df_diagnosticos.copy().iloc[::-1]
-            st.dataframe(df_exibicao[['DATA', 'NOME_ALUNO', 'TURMA', 'ID_AVALIACAO', 'NOTA_CALCULADA', 'LINK_FOTO_DRIVE']],
-                column_config={"LINK_FOTO_DRIVE": st.column_config.LinkColumn("🔗 Ver Evidência")},
-                use_container_width=True, hide_index=True)
-        else: st.info("Nenhuma evidência arquivada ainda.")
+        st.subheader("📂 Cofre Digital de Evidências: Localização Rápida")
+        st.markdown("---")
+
+        if df_diagnosticos.empty:
+            st.info("📭 Nenhuma evidência arquivada ainda.")
+        else:
+            # 1. BARRA DE FILTROS DE ELITE
+            with st.container(border=True):
+                c_f1, c_f2, c_f3 = st.columns([1, 1, 1.5])
+                
+                # Filtro 1: Turma
+                lista_turmas_ev = ["Todas"] + sorted(df_diagnosticos['TURMA'].unique().tolist())
+                f_turma = c_f1.selectbox("👥 Filtrar por Turma:", lista_turmas_ev, key=f"f_t_ev_{v}")
+                
+                # Filtro 2: Trimestre (Busca por texto no ID da Avaliação)
+                f_trim = c_f2.selectbox("📅 Filtrar por Trimestre:", ["Todos", "I Trimestre", "II Trimestre", "III Trimestre"], key=f"f_tr_ev_{v}")
+                
+                # Preparação da base filtrada para o Filtro 3
+                df_ev_filtrado = df_diagnosticos.copy()
+                if f_turma != "Todas":
+                    df_ev_filtrado = df_ev_filtrado[df_ev_filtrado['TURMA'] == f_turma]
+                if f_trim != "Todos":
+                    df_ev_filtrado = df_ev_filtrado[df_ev_filtrado['ID_AVALIACAO'].str.contains(f_trim, na=False)]
+                
+                # Filtro 3: Material (Dinâmico com base nos filtros anteriores)
+                lista_mats_ev = ["Todos"] + sorted(df_ev_filtrado['ID_AVALIACAO'].unique().tolist())
+                f_mat = c_f3.selectbox("📋 Selecionar Material Específico:", lista_mats_ev, key=f"f_m_ev_{v}")
+                
+                if f_mat != "Todos":
+                    df_ev_filtrado = df_ev_filtrado[df_ev_filtrado['ID_AVALIACAO'] == f_mat]
+
+            # 2. EXIBIÇÃO DOS RESULTADOS
+            st.markdown(f"**🔍 Registros Localizados:** {len(df_ev_filtrado)}")
+            
+            if df_ev_filtrado.empty:
+                st.warning("⚠️ Nenhum registro encontrado com os filtros selecionados.")
+            else:
+                # Ordena pelos mais recentes
+                df_ev_exibicao = df_ev_filtrado.iloc[::-1]
+                
+                # Tabela de Custódia com Link Direto
+                st.dataframe(
+                    df_ev_exibicao[['DATA', 'NOME_ALUNO', 'TURMA', 'ID_AVALIACAO', 'NOTA_CALCULADA', 'LINK_FOTO_DRIVE']],
+                    column_config={
+                        "DATA": st.column_config.TextColumn("Data", width="small"),
+                        "NOME_ALUNO": st.column_config.TextColumn("Estudante", width="medium"),
+                        "TURMA": st.column_config.TextColumn("Turma", width="small"),
+                        "ID_AVALIACAO": st.column_config.TextColumn("Avaliação", width="medium"),
+                        "NOTA_CALCULADA": st.column_config.NumberColumn("Nota", format="%.1f", width="small"),
+                        "LINK_FOTO_DRIVE": st.column_config.LinkColumn("🔗 Ver Evidência (Drive)", width="medium")
+                    },
+                    use_container_width=True,
+                    hide_index=True
+                )
+
+                # 3. RESUMO DE PERFORMANCE DO FILTRO
+                with st.expander("📊 Resumo Rápido desta Seleção"):
+                    c_r1, c_r2, c_r3 = st.columns(3)
+                    media_sel = df_ev_filtrado['NOTA_CALCULADA'].apply(util.sosa_to_float).mean()
+                    c_r1.metric("Média do Grupo", f"{media_sel:.2f}")
+                    
+                    acima_media = len(df_ev_filtrado[df_ev_filtrado['NOTA_CALCULADA'].apply(util.sosa_to_float) >= 6.0])
+                    c_r2.metric("Alunos com Sucesso", acima_media)
+                    
+                    abaixo_media = len(df_ev_filtrado) - acima_media
+                    c_r3.metric("Alunos em Alerta", abaixo_media, delta_color="inverse")
 
     # --- ABA 6: DASHBOARD DE CONTROLE ---
     with tab_dash_cir:
