@@ -2389,39 +2389,85 @@ elif menu == "📸 Scanner de Gabaritos":
                 if st.button("🚀 HOMOLOGAR NOTAS NO BOLETIM", use_container_width=True):
                     st.success("Notas enviadas para o Painel de Notas!")
 
-    # --- ABA 2: ATIVIDADES & PROJETOS (MÉRITO) ---
+# --- ABA 2: ATIVIDADES & PROJETOS (V64.2 - MÉRITO E LEITURA) ---
     with tab_atividades:
-        c1, c2, c3 = st.columns([1, 1, 1.5])
-        t_sel_a = c1.selectbox("👥 Turma:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"t_a_{v}")
-        tr_sel_a = c2.selectbox("📅 Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_a_{v}")
-        opcoes_a = filtrar_ativos_cir(t_sel_a, tr_sel_a)
-        at_sel_a = c3.selectbox("📋 Selecione a Atividade:", [""] + [o for o in opcoes_a if "AULA" in o.upper() or "PROJETO" in o.upper()], key=f"at_a_{v}")
+        # 1. FILTROS INTERNOS DA ABA
+        c_f1, c_f2 = st.columns(2)
+        t_sel_a = c_f1.selectbox("👥 Selecione a Turma:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"t_a_int_{v}")
+        tr_sel_a = c_f2.selectbox("📅 Selecione o Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_a_int_{v}")
 
-        if t_sel_a and at_sel_a:
-            st.subheader(f"✍️ Atribuição de Pontos: {at_sel_a}")
-            alunos_a = df_alunos[df_alunos['TURMA'] == t_sel_a].sort_values(by="NOME_ALUNO")
-            df_at = st.data_editor(pd.DataFrame({"ID": alunos_a['ID'], "Estudante": alunos_a['NOME_ALUNO'], "Pontos": 0.0}), 
-                                   hide_index=True, use_container_width=True)
-            if st.button("💾 SALVAR PONTOS DE ATIVIDADE"): st.success("Pontos salvos!")
-
-    # --- ABA 3: HUB DE SOBERANIA (NOTAS EXTERNAS) ---
-    with tab_soberania:
-        c1, c2 = st.columns(2)
-        t_sel_s = c1.selectbox("👥 Turma:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"t_s_{v}")
-        tr_sel_s = c2.selectbox("📅 Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_s_{v}")
+        # Filtra apenas Trabalhos e Atividades Complementares (Ignora Provas)
+        permitidos_a = ["PROJETO", "FIXAÇÃO", "REFORÇO", "ATIVIDADE", "TRABALHO"]
+        # Chamada corrigida para a função definida na Aba 1
+        opcoes_a = filtrar_ativos_cir_v64(t_sel_a, tr_sel_a)
+        # Filtra a lista para garantir que só apareçam os tipos de atividade
+        opcoes_a = [o for o in opcoes_a if any(p in o.upper() for p in permitidos_a)]
         
-        if t_sel_s:
-            st.subheader("🏛️ Criar Lançamento Externo (Governo/SAEB)")
-            with st.container(border=True):
-                cx1, cx2, cx3 = st.columns([2, 1, 1])
-                n_ext = cx1.text_input("Nome da Avaliação:", placeholder="Ex: Prova SAEB")
-                v_ext = cx2.number_input("Valor:", 0.0, 10.0, 2.0)
-                col_alvo = cx3.selectbox("Destino:", ["Teste", "Prova", "Vistos"])
-                
-                if n_ext:
-                    alunos_s = df_alunos[df_alunos['TURMA'] == t_sel_s].sort_values(by="NOME_ALUNO")
-                    df_ext = st.data_editor(pd.DataFrame({"ID": alunos_s['ID'], "Estudante": alunos_s['NOME_ALUNO'], "Nota": 0.0}), hide_index=True, use_container_width=True)
-                    if st.button("🏛️ APLICAR NOTAS EXTERNAS"): st.success("Notas integradas!")
+        at_sel_a = st.selectbox("📋 Selecione o Trabalho ou Atividade:", [""] + opcoes_a, key=f"at_a_sel_{v}")
+
+        if not t_sel_a or not at_sel_a:
+            st.info("💡 Selecione a Turma e o Material para analisar o conteúdo e lançar os bônus.")
+        else:
+            # 2. RECUPERAÇÃO E EXIBIÇÃO DO CONTEÚDO DO MATERIAL
+            dados_at = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel_a].iloc[0]
+            txt_at = str(dados_at['CONTEUDO'])
+            
+            st.warning("📝 **ANÁLISE PEDAGÓGICA DO MATERIAL:**")
+            with st.expander("👁️ CLIQUE PARA LER O QUE FOI DESCRITO NESTE MATERIAL", expanded=True):
+                c_v1, c_v2 = st.columns(2)
+                with c_v1:
+                    st.markdown("**👨‍🏫 Guia do Professor:**")
+                    st.write(ai.extrair_tag(txt_at, "PROFESSOR"))
+                with c_v2:
+                    st.markdown("**📝 Roteiro do Aluno:**")
+                    st.write(ai.extrair_tag(txt_at, "ALUNO"))
+
+            # 3. MESA DE ATRIBUIÇÃO DE BÔNUS
+            st.divider()
+            st.subheader(f"⭐ Atribuição de Bônus: {at_sel_a}")
+            alunos_a = df_alunos[df_alunos['TURMA'] == t_sel_a].sort_values(by="NOME_ALUNO")
+            
+            # Prepara a tabela de lançamento
+            dados_bonus = []
+            for _, alu in alunos_a.iterrows():
+                dados_bonus.append({
+                    "ID": alu['ID'], 
+                    "Estudante": alu['NOME_ALUNO'], 
+                    "Bônus (0-2.0)": 0.0, 
+                    "Observação": ""
+                })
+            
+            df_bonus_ed = st.data_editor(
+                pd.DataFrame(dados_bonus),
+                hide_index=True, use_container_width=True,
+                column_config={
+                    "ID": None,
+                    "Estudante": st.column_config.TextColumn("Nome do Aluno", width="medium", disabled=True),
+                    "Bônus (0-2.0)": st.column_config.NumberColumn("Pontos", min_value=0.0, max_value=5.0, step=0.1, format="%.1f"),
+                    "Observação": st.column_config.TextColumn("Motivo do Bônus", width="medium")
+                },
+                key=f"editor_bonus_{at_sel_a.replace(' ','_')}"
+            )
+
+            # 4. BOTÃO DE CONSOLIDAÇÃO
+            if st.button("💾 CONSOLIDAR BÔNUS NO PAINEL DE NOTAS", type="primary", use_container_width=True):
+                with st.status("Integrando bônus ao boletim...") as status:
+                    lista_lote = []
+                    for _, r in df_bonus_ed.iterrows():
+                        if r['Bônus (0-2.0)'] > 0:
+                            # Salva na coluna de NOTA_VISTOS (que funciona como bônus no seu sistema)
+                            # Estrutura: [ID, NOME, TURMA, TRIMESTRE, VISTOS, TESTE, PROVA, REC, MEDIA]
+                            lista_lote.append([
+                                r['ID'], r['Estudante'], t_sel_a, tr_sel_a, 
+                                util.sosa_to_str(r['Bônus (0-2.0)']), "0,0", "0,0", "0,0", util.sosa_to_str(r['Bônus (0-2.0)'])
+                            ])
+                    
+                    if lista_lote:
+                        db.salvar_lote("DB_NOTAS", lista_lote)
+                        status.update(label="✅ Bônus integrados com sucesso!", state="complete")
+                        st.balloons()
+                    else:
+                        st.warning("Nenhum bônus foi atribuído para salvar.")
 
     # --- ABA 4: RAIO-X PEDAGÓGICO ---
     with tab_raiox:
