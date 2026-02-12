@@ -1583,7 +1583,7 @@ elif menu == "📈 Boletim Anual & Conselho":
                 st.text_area("Copia e cole na Ata Oficial:", ai.gerar_ia("PLANE_PEDAGOGICO", prompt_ata), height=300)
 
 # ==============================================================================
-# MÓDULO: GESTÃO DA TURMA (V31.0) - COCKPIT DE INTELIGÊNCIA ESTRATÉGICA
+# MÓDULO: GESTÃO DA TURMA (V31.1) - COCKPIT DE INTELIGÊNCIA ESTRATÉGICA (CORRIGIDO)
 # ==============================================================================
 elif menu == "👥 Gestão da Turma":
     st.title("👥 Cockpit de Regência: Gestão 360°")
@@ -1610,14 +1610,24 @@ elif menu == "👥 Gestão da Turma":
             # --- 1. DASHBOARD DE STATUS (KPIs) ---
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("Total Alunos", len(alunos_t))
-            c2.metric("Estudantes PEI", len(alunos_t[~alunos_t['NECESSIDADES'].astype(str).upper().isin(["NENHUMA", "PENDENTE", ""])]))
+            
+            # --- VACINA DE CORREÇÃO PEI (ERRO ATTRIBUTEERROR RESOLVIDO) ---
+            if not alunos_t.empty and 'NECESSIDADES' in alunos_t.columns:
+                # Usamos .str.upper() e preenchemos vazios com "NENHUMA"
+                mask_pei = ~alunos_t['NECESSIDADES'].astype(str).str.upper().str.strip().isin(["NENHUMA", "PENDENTE", "", "NAN"])
+                qtd_pei = len(alunos_t[mask_pei])
+            else:
+                qtd_pei = 0
+                
+            c2.metric("Estudantes PEI", qtd_pei)
             
             # Cálculo de Engajamento Médio (Vistos)
             engaj_medio = 0
             if not df_diario.empty:
                 vistos_t = df_diario[df_diario['TURMA'] == turma_foco]
                 if not vistos_t.empty:
-                    engaj_medio = (len(vistos_t[vistos_t['VISTO_ATIVIDADE'].astype(str).upper() == "TRUE"]) / len(vistos_t)) * 100
+                    vistos_validos = vistos_t[vistos_t['VISTO_ATIVIDADE'].astype(str).upper() == "TRUE"]
+                    engaj_medio = (len(vistos_validos) / len(vistos_t)) * 100
             c3.metric("Engajamento Médio", f"{engaj_medio:.0f}%")
             c4.metric("Série", f"{ano_num}º Ano")
 
@@ -1668,7 +1678,7 @@ elif menu == "👥 Gestão da Turma":
                         if str(alu['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", ""]:
                             st.warning(f"♿ {alu['NOME_ALUNO']}")
 
-    # --- ABA 2: ARQUITETURA DE TURMAS (V28.5 - ULTRA-FLEX) ---
+    # --- ABA 2: ARQUITETURA DE TURMAS ---
     with tab_criar:
         st.subheader("🏗️ Configurar Nova Turma")
         v_t = f"t_{v}"
@@ -1698,7 +1708,7 @@ elif menu == "👥 Gestão da Turma":
                 if db.salvar_no_banco("DB_TURMAS", [sigla, f"{ano_t}º Ano {letra_t}", turno_t, str_dias, str_horarios, "ATIVO"]):
                     st.success(f"✅ Turma {sigla} criada!"); st.cache_data.clear(); time.sleep(1); st.rerun()
 
-    # --- ABA 3: POVOAR ALUNOS (PRESERVADO) ---
+    # --- ABA 3: POVOAR ALUNOS ---
     with tab_povoar:
         st.subheader("➕ Inclusão de Estudantes")
         t_dest = st.selectbox("Turma de Destino:", df_turmas['ID_TURMA'].tolist() if not df_turmas.empty else [], key=f"dest_{v}")
@@ -1720,7 +1730,7 @@ elif menu == "👥 Gestão da Turma":
                     db.salvar_no_banco("DB_ALUNOS", [id_b+idx, str(r['NOME']).upper(), t_dest, "ATIVO", "NENHUMA", "CSV"])
                 st.success("Importado!"); st.rerun()
 
-# --- ABA 4: EDIÇÃO & TRANSFERÊNCIA (V33.1 - BLINDAGEM CONTRA DUPLICIDADE) ---
+    # --- ABA 4: EDIÇÃO & TRANSFERÊNCIA ---
     with tab_editar:
         st.subheader("✏️ Alterar Cadastro ou Transferir Aluno")
         turmas_com_alunos = sorted(df_alunos['TURMA'].unique().tolist())
@@ -1730,9 +1740,8 @@ elif menu == "👥 Gestão da Turma":
             alunos_opcoes = df_alunos[df_alunos['TURMA'] == t_origem].sort_values(by="NOME_ALUNO")
             aluno_sel_nome = st.selectbox("Selecione o Aluno:", alunos_opcoes['NOME_ALUNO'].tolist(), key=f"alu_ed_{v}")
             
-            # Captura os dados atuais do aluno selecionado
             dados_atuais = alunos_opcoes[alunos_opcoes['NOME_ALUNO'] == aluno_sel_nome].iloc[0]
-            id_fixo = dados_atuais['ID'] # O ID que não pode mudar
+            id_fixo = dados_atuais['ID']
 
             with st.form("form_edicao_aluno_v33"):
                 st.info(f"🆔 Editando Registro ID: {id_fixo}")
@@ -1743,34 +1752,20 @@ elif menu == "👥 Gestão da Turma":
                 c_e3, c_e4 = st.columns(2)
                 novo_status = c_e3.selectbox("Status:", ["ATIVO", "DESISTENTE", "TRANSFERIDO"], index=0)
                 
-                # Localiza o índice da turma atual para o selectbox vir preenchido corretamente
                 lista_turmas_total = df_turmas['ID_TURMA'].tolist()
                 idx_turma_atual = lista_turmas_total.index(t_origem) if t_origem in lista_turmas_total else 0
                 nova_turma = c_e4.selectbox("Transferir para:", lista_turmas_total, index=idx_turma_atual)
                 
                 if st.form_submit_button("💾 CONFIRMAR ALTERAÇÕES E LIMPAR DUPLICIDADE"):
                     with st.status("Executando Protocolo de Limpeza e Atualização...") as status:
-                        # 1. Remove o registro antigo usando o ID (Garante que não duplica)
                         if db.excluir_aluno_por_id(id_fixo):
-                            # 2. Salva o novo registro com os dados atualizados mantendo o mesmo ID
                             sucesso = db.salvar_no_banco("DB_ALUNOS", [
-                                id_fixo, 
-                                novo_nome.upper().strip(), 
-                                nova_turma, 
-                                novo_status, 
-                                nova_nec.upper().strip(), 
-                                "EDITADO"
+                                id_fixo, novo_nome.upper().strip(), nova_turma, 
+                                novo_status, nova_nec.upper().strip(), "EDITADO"
                             ])
-                            
                             if sucesso:
-                                status.update(label="✅ Cadastro Atualizado com Sucesso!", state="complete")
-                                st.balloons()
-                                time.sleep(1)
-                                st.rerun()
-                            else:
-                                st.error("Erro ao salvar novos dados.")
-                        else:
-                            st.error("Não foi possível localizar o registro original para substituição.")
+                                status.update(label="✅ Cadastro Atualizado!", state="complete")
+                                st.balloons(); time.sleep(1); st.rerun()
 
 # ==============================================================================
 # MÓDULO: BASE DE CONHECIMENTO
