@@ -1921,22 +1921,35 @@ elif menu == "📝 Central de Avaliações":
             mats_selecionados = c_trim2.multiselect(f"Ativos de Safra Detectados ({len(df_materiais_trim)}):", options=df_materiais_trim["TIPO_MATERIAL"].tolist(), key=f"av_ref_{v}")
 
             if st.button("💎 COMPILAR EXAME COM GRADE DE PERÍCIA", use_container_width=True, type="primary"):
-                if soma_q != qtd_q: st.error("Ajuste a distribuição das questões.")
-                elif not mats_selecionados: st.error("Selecione os Ativos de Safra.")
+                if soma_q != qtd_q: 
+                    st.error(f"Erro: A soma das dificuldades ({soma_q}) deve ser igual ao total de questões ({qtd_q}).")
+                elif not mats_selecionados: 
+                    st.error("Selecione os Ativos de Safra.")
                 else:
-                    with st.spinner("Maestro Arquiteto calibrando taxonomia e mapeando descritores..."):
+                    with st.spinner(f"Arquitetando {qtd_q} questões com Isonomia de Notas..."):
+                        # CÁLCULO AUTOMÁTICO DO PESO IGUALITÁRIO
+                        peso_cada = v_total / qtd_q
+                        peso_str = util.sosa_to_str(peso_cada)
+
                         contexto_aulas = ""
                         for m_nome in mats_selecionados:
                             m_row = df_materiais_trim[df_materiais_trim["TIPO_MATERIAL"] == m_nome].iloc[0]
                             contexto_aulas += f"MATERIAL_ID: {m_nome}\nCONTEÚDO: {m_row['CONTEUDO']}\n"
 
-                        prompt = (f"VOCÊ É O ARQUITETO DE EXAMES V62. SÉRIE: {ano_av}º Ano. TIPO: {tipo_av} | VALOR: {v_total}\n"
-                                  f"🚨 OBRIGATÓRIO: Inicie com [VALOR: {v_total}].\n"
-                                  f"🚨 QUANTIDADE: Gere EXATAMENTE {qtd_q} questões na Prova Regular.\n"
-                                  f"🚨 TAXONOMIA: {q_facil} fáceis, {q_medio} médias, {q_dificil} difíceis.\n"
-                                  f"🚨 OBRIGATÓRIO: Gere a seção [GRADE_DE_CORRECAO] para as {qtd_q} questões.\n"
-                                  f"CONTEÚDO BASE: {contexto_aulas}\n"
-                                  f"MISSÃO: Gere o exame completo com todas as tags.")
+                        prompt = (
+                            f"ORDEM DE PRODUÇÃO V65 - ISONOMIA E SUPORTE VISUAL\n"
+                            f"TIPO: {tipo_av} | SÉRIE: {ano_av}º Ano | VALOR TOTAL: {v_total}\n"
+                            f"QUANTIDADE: {qtd_q} questões | VALOR POR QUESTÃO: {peso_str}\n"
+                            f"DISTRIBUIÇÃO: {q_facil} Fáceis, {q_medio} Médias, {q_dificil} Difíceis.\n\n"
+                            f"🚨 DIRETRIZES DE ELITE:\n"
+                            f"1. Inicie com [VALOR: {v_total}].\n"
+                            f"2. Todas as questões em [QUESTOES] devem ter o rótulo: **QUESTÃO XX ({peso_str} ponto) -**.\n"
+                            f"3. Inclua [ PROMPT IMAGEM: ... ] em todas as questões que necessitem de representação visual.\n"
+                            f"4. Organize a [GRADE_DE_CORRECAO] de forma explicativa e separada por tópicos para o professor.\n"
+                            f"5. Gere a versão [PEI] com {int(qtd_q/2 if qtd_q%2==0 else (qtd_q+1)/2)} questões usando o mesmo peso proporcional.\n\n"
+                            f"CONTEÚDO BASE:\n{contexto_aulas}"
+                        )
+                        
                         st.session_state.temp_prova = ai.gerar_ia("ARQUITETO_EXAMES_V30_ELITE", prompt, usar_busca=True)
                         st.session_state.av_valor_total = v_total
                         st.session_state.av_nome_fixo = f"{tipo_av.upper()}_{ano_av}ANO_{trim_filtro.replace(' ', '')}"
