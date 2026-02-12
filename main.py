@@ -2617,17 +2617,17 @@ elif menu == "📸 Scanner de Gabaritos":
                                 ])
                         st.success("✅ Indicadores externos integrados ao histórico dos alunos!")
 
-# --- ABA 4: RAIO-X PEDAGÓGICO (V70.0 - ANÁLISE HÍBRIDA: ITEM + INDIVIDUAL) ---
+# --- ABA 4: RAIO-X PEDAGÓGICO (V71.0 - PERÍCIA INDIVIDUAL E FORMATO LIMPO) ---
     with tab_raiox:
-        st.subheader("📊 Raio-X Pedagógico: Diagnóstico Híbrido de Performance")
+        st.subheader("📊 Raio-X Pedagógico: Diagnóstico Individual de Lacunas")
         st.markdown("---")
 
         c1, c2, c3 = st.columns([1, 1, 1.5])
-        t_sel_r = c1.selectbox("👥 Selecione a Turma:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"t_r_v70_{v}")
-        tr_sel_r = c2.selectbox("📅 Selecione o Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_r_v70_{v}")
+        t_sel_r = c1.selectbox("👥 Selecione a Turma:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"t_r_v71_{v}")
+        tr_sel_r = c2.selectbox("📅 Selecione o Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_r_v71_{v}")
         
         opcoes_r = filtrar_ativos_cir_v64(t_sel_r, tr_sel_r, apenas_provas=True)
-        at_sel_r = c3.selectbox("📋 Selecione a Avaliação para Raio-X:", [""] + opcoes_r, key=f"at_r_v70_{v}")
+        at_sel_r = c3.selectbox("📋 Selecione a Avaliação para Raio-X:", [""] + opcoes_r, key=f"at_r_v71_{v}")
 
         if not t_sel_r or not at_sel_r:
             st.info("💡 Selecione a Turma e a Avaliação para carregar a Perícia Pedagógica.")
@@ -2635,22 +2635,20 @@ elif menu == "📸 Scanner de Gabaritos":
             # 1. RECUPERAÇÃO DE METADADOS DA PROVA
             prova_query = df_aulas[df_aulas['TIPO_MATERIAL'].str.strip() == at_sel_r.strip()]
             
-            if prova_query.empty:
-                st.error("❌ Material não localizado no banco.")
-            else:
+            if not prova_query.empty:
                 dados_prova = prova_query.iloc[0]
                 txt_prova = str(dados_prova['CONTEUDO'])
                 grade_pericia = ai.extrair_tag(txt_prova, "GRADE_DE_CORRECAO")
                 
-                def extrair_gab_v70(texto, tag_alvo="GABARITO_TEXTO"):
+                def extrair_gab_v71(texto, tag_alvo="GABARITO_TEXTO"):
                     raw = ai.extrair_tag(texto, tag_alvo) or ai.extrair_tag(texto, "GABARITO")
                     matches = re.findall(r"(\d+)\s*[\-\.\:]\s*([A-E])", raw.upper())
                     if matches: return {int(num): letra for num, letra in matches}
                     letras = re.findall(r"\b[A-E]\b", raw.upper())
                     return {i+1: letra for i, letra in enumerate(letras)}
 
-                gab_reg_map = extrair_gab_v70(txt_prova, "GABARITO_TEXTO")
-                gab_pei_map = extrair_gab_v70(txt_prova, "GABARITO_PEI")
+                gab_reg_map = extrair_gab_v71(txt_prova, "GABARITO_TEXTO")
+                gab_pei_map = extrair_gab_v71(txt_prova, "GABARITO_PEI")
 
                 # 2. PROCESSAMENTO DE RESPOSTAS
                 respostas_alunos = df_diagnosticos[
@@ -2661,9 +2659,8 @@ elif menu == "📸 Scanner de Gabaritos":
                 if respostas_alunos.empty:
                     st.warning("⚠️ Nenhuma resposta de aluno encontrada para esta avaliação.")
                 else:
-                    # --- PARTE A: ANÁLISE POR QUESTÃO (A CAIXA QUE VOCÊ SOLICITOU) ---
-                    st.markdown("#### 📈 1. Análise de Performance por Item (Macro)")
-                    
+                    # --- PARTE A: ANÁLISE POR QUESTÃO (MACRO) ---
+                    st.markdown("#### 📈 1. Análise de Performance por Item")
                     num_q_total = len(gab_reg_map)
                     stats_list = []
                     matriz_respostas = [r.split(';') for r in respostas_alunos['RESPOSTAS_ALUNO']]
@@ -2671,53 +2668,38 @@ elif menu == "📸 Scanner de Gabaritos":
                     for i in range(1, num_q_total + 1):
                         correta = gab_reg_map.get(i, "?")
                         votos = [res[i-1] if len(res) >= i else "?" for res in matriz_respostas]
-                        
-                        total_votos = len(votos)
                         acertos = votos.count(correta)
-                        perc = (acertos / total_votos) * 100 if total_votos > 0 else 0
-                        
+                        perc = (acertos / len(votos)) * 100 if votos else 0
                         erradas = [v for v in votos if v != correta and v in ["A", "B", "C", "D", "E"]]
                         distrator = max(set(erradas), key=erradas.count) if erradas else "Nenhum"
-                        
-                        stats_list.append({
-                            "Questão": f"Q{i:02d}", "Acerto %": perc, "Gabarito": correta, 
-                            "Distrator Crítico": distrator,
-                            "Status": "🟢 OK" if perc >= 70 else "🟡 Alerta" if perc >= 40 else "🔴 Crítico"
-                        })
+                        stats_list.append({"Questão": f"Q{i:02d}", "Acerto %": perc, "Gabarito": correta, "Distrator Crítico": distrator})
 
                     df_stats = pd.DataFrame(stats_list)
-
                     col_graf, col_item = st.columns([1.2, 1])
                     
                     with col_graf:
-                        fig = px.bar(df_stats, x="Questão", y="Acerto %", color="Status",
-                                    color_discrete_map={"🟢 OK": "#2ECC71", "🟡 Alerta": "#F1C40F", "🔴 Crítico": "#E74C3C"},
-                                    text=df_stats["Acerto %"].apply(lambda x: f"{x:.0f}%"))
-                        fig.update_layout(yaxis_range=[0, 110], height=350, showlegend=False)
+                        fig = px.bar(df_stats, x="Questão", y="Acerto %", text_auto='.0f', color="Acerto %", color_continuous_scale="RdYlGn")
+                        fig.update_layout(yaxis_range=[0, 110], height=300)
                         st.plotly_chart(fig, use_container_width=True)
 
                     with col_item:
                         with st.container(border=True):
-                            st.markdown("**🔬 Perícia do Item Selecionado**")
-                            q_sel = st.selectbox("Analisar questão específica:", df_stats["Questão"].tolist(), key="q_sel_v70")
+                            st.markdown("**🔬 Perícia do Item**")
+                            q_sel = st.selectbox("Analisar questão:", df_stats["Questão"].tolist(), key="q_sel_v71")
                             info_q = df_stats[df_stats["Questão"] == q_sel].iloc[0]
                             idx_num = int(q_sel[1:])
-
                             st.write(f"**Gabarito:** :green[{info_q['Gabarito']}] | **Média:** {info_q['Acerto %']:.1f}%")
-                            if info_q['Distrator Crítico'] != "Nenhum":
-                                st.error(f"**Distrator Crítico:** Alternativa {info_q['Distrator Crítico']}")
+                            if info_q['Distrator Crítico'] != "Nenhum": st.error(f"**Distrator Crítico:** {info_q['Distrator Crítico']}")
                             
-                            # Busca na Grade de Perícia
                             try:
                                 padrao = rf"(?si)QUESTÃO\s*0?{idx_num}\b.*?(?=QUESTÃO\s*0?{idx_num+1}\b|$)"
                                 match = re.search(padrao, grade_pericia)
                                 if match: st.info(match.group(0).strip())
-                                else: st.caption("Detalhes não localizados na grade.")
                             except: st.caption("Erro ao ler grade.")
 
-                    # --- PARTE B: DIAGNÓSTICO INDIVIDUAL (TABELA) ---
+                    # --- PARTE B: DIAGNÓSTICO INDIVIDUAL (MICRO) ---
                     st.markdown("---")
-                    st.markdown("#### 👤 2. Perícia Individual: Lacunas por Estudante (Micro)")
+                    st.markdown("#### 👤 2. Perícia Individual: Lacunas por Estudante")
                     
                     alunos_turma = df_alunos[df_alunos['TURMA'] == t_sel_r].sort_values(by="NOME_ALUNO")
                     dados_indiv = []
@@ -2728,7 +2710,7 @@ elif menu == "📸 Scanner de Gabaritos":
                         reg_aluno = respostas_alunos[respostas_alunos['ID_ALUNO'].apply(db.limpar_id) == id_a]
                         
                         if reg_aluno.empty:
-                            dados_indiv.append({"Estudante": alu['NOME_ALUNO'], "Perfil": "🔴 Ausente", "Nota": 0.0, "Lacunas": "N/A"})
+                            dados_indiv.append({"Estudante": alu['NOME_ALUNO'], "Perfil": "🔴 Ausente", "Nota": 0.0, "Lacunas Cognitivas": "N/A"})
                         else:
                             nota_alu = util.sosa_to_float(reg_aluno.iloc[0]['NOTA_CALCULADA'])
                             resp_lista = reg_aluno.iloc[0]['RESPOSTAS_ALUNO'].split(';')
@@ -2745,15 +2727,16 @@ elif menu == "📸 Scanner de Gabaritos":
                                 "Estudante": alu['NOME_ALUNO'],
                                 "Perfil": "♿ PEI" if is_pei else "📝 Regular",
                                 "Nota": nota_alu,
-                                "Lacunas Cognitivas (Habilidades a Reforçar)": " | ".join(list(set(erros_hab))) if erros_hab else "✅ Domínio Total"
+                                "Lacunas Cognitivas": " | ".join(list(set(erros_hab))) if erros_hab else "✅ Domínio Total"
                             })
 
+                    # TABELA FINAL COM FORMATAÇÃO DE NOTA (1 CASA DECIMAL)
                     df_indiv = pd.DataFrame(dados_indiv)
-                    st.dataframe(df_indiv.style.applymap(lambda v: 'color: #FF4B4B; font-weight: bold' if isinstance(v, float) and v < 6.0 else '', subset=['Nota']),
-                                 use_container_width=True, hide_index=True)
-
-                    with st.expander("🔍 Ver Grade de Perícia Completa (Referência)"):
-                        st.info(grade_pericia)
+                    st.dataframe(
+                        df_indiv.style.format({"Nota": "{:.1f}"}).applymap(lambda v: 'color: #FF4B4B; font-weight: bold' if isinstance(v, float) and v < 6.0 else '', subset=['Nota']),
+                        use_container_width=True, hide_index=True,
+                        column_config={"Lacunas Cognitivas": st.column_config.TextColumn("Lacunas Cognitivas (Habilidades a Reforçar)", width="large")}
+                    )
 
 # --- ABA 5: ACERVO DE EVIDÊNCIAS (V71.0 - CUSTÓDIA COM FILTROS INTELIGENTES) ---
     with tab_acervo_cir:
