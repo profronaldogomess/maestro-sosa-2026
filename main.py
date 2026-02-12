@@ -1794,26 +1794,57 @@ elif menu == "👥 Gestão da Turma":
                     db.salvar_no_banco("DB_ALUNOS", [id_b+idx, str(r['NOME']).upper(), t_dest, "ATIVO", "NENHUMA", "CSV"])
                 st.success("Importado!"); st.rerun()
 
-    # --- ABA 4: EDIÇÃO & TRANSFERÊNCIA (PRESERVADO) ---
+# --- ABA 4: EDIÇÃO & TRANSFERÊNCIA (V33.1 - BLINDAGEM CONTRA DUPLICIDADE) ---
     with tab_editar:
         st.subheader("✏️ Alterar Cadastro ou Transferir Aluno")
         turmas_com_alunos = sorted(df_alunos['TURMA'].unique().tolist())
         t_origem = st.selectbox("Selecione a Turma Atual:", [""] + turmas_com_alunos, key=f"orig_{v}")
+        
         if t_origem:
             alunos_opcoes = df_alunos[df_alunos['TURMA'] == t_origem].sort_values(by="NOME_ALUNO")
             aluno_sel_nome = st.selectbox("Selecione o Aluno:", alunos_opcoes['NOME_ALUNO'].tolist(), key=f"alu_ed_{v}")
+            
+            # Captura os dados atuais do aluno selecionado
             dados_atuais = alunos_opcoes[alunos_opcoes['NOME_ALUNO'] == aluno_sel_nome].iloc[0]
-            with st.form("form_edicao_aluno_v26"):
+            id_fixo = dados_atuais['ID'] # O ID que não pode mudar
+
+            with st.form("form_edicao_aluno_v33"):
+                st.info(f"🆔 Editando Registro ID: {id_fixo}")
                 c_e1, c_e2 = st.columns(2)
                 novo_nome = c_e1.text_input("Nome Completo:", value=dados_atuais['NOME_ALUNO'])
                 nova_nec = c_e2.text_input("Necessidades/CID:", value=dados_atuais['NECESSIDADES'])
+                
                 c_e3, c_e4 = st.columns(2)
                 novo_status = c_e3.selectbox("Status:", ["ATIVO", "DESISTENTE", "TRANSFERIDO"], index=0)
-                nova_turma = c_e4.selectbox("Transferir para:", df_turmas['ID_TURMA'].tolist(), index=df_turmas['ID_TURMA'].tolist().index(t_origem))
-                if st.form_submit_button("💾 CONFIRMAR ALTERAÇÕES"):
-                    db.excluir_registro("DB_ALUNOS", dados_atuais['NOME_ALUNO'])
-                    db.salvar_no_banco("DB_ALUNOS", [dados_atuais['ID'], novo_nome.upper(), nova_turma, novo_status, nova_nec.upper(), "EDITADO"])
-                    st.success("Atualizado!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+                
+                # Localiza o índice da turma atual para o selectbox vir preenchido corretamente
+                lista_turmas_total = df_turmas['ID_TURMA'].tolist()
+                idx_turma_atual = lista_turmas_total.index(t_origem) if t_origem in lista_turmas_total else 0
+                nova_turma = c_e4.selectbox("Transferir para:", lista_turmas_total, index=idx_turma_atual)
+                
+                if st.form_submit_button("💾 CONFIRMAR ALTERAÇÕES E LIMPAR DUPLICIDADE"):
+                    with st.status("Executando Protocolo de Limpeza e Atualização...") as status:
+                        # 1. Remove o registro antigo usando o ID (Garante que não duplica)
+                        if db.excluir_aluno_por_id(id_fixo):
+                            # 2. Salva o novo registro com os dados atualizados mantendo o mesmo ID
+                            sucesso = db.salvar_no_banco("DB_ALUNOS", [
+                                id_fixo, 
+                                novo_nome.upper().strip(), 
+                                nova_turma, 
+                                novo_status, 
+                                nova_nec.upper().strip(), 
+                                "EDITADO"
+                            ])
+                            
+                            if sucesso:
+                                status.update(label="✅ Cadastro Atualizado com Sucesso!", state="complete")
+                                st.balloons()
+                                time.sleep(1)
+                                st.rerun()
+                            else:
+                                st.error("Erro ao salvar novos dados.")
+                        else:
+                            st.error("Não foi possível localizar o registro original para substituição.")
 
 # ==============================================================================
 # MÓDULO: BASE DE CONHECIMENTO
