@@ -1583,7 +1583,7 @@ elif menu == "📈 Boletim Anual & Conselho":
                 st.text_area("Copia e cole na Ata Oficial:", ai.gerar_ia("PLANE_PEDAGOGICO", prompt_ata), height=300)
 
 # ==============================================================================
-# MÓDULO: GESTÃO DA TURMA (V31.1) - COCKPIT DE INTELIGÊNCIA ESTRATÉGICA (CORRIGIDO)
+# MÓDULO: GESTÃO DA TURMA (V32.0) - COCKPIT DE INTELIGÊNCIA ESTRATÉGICA
 # ==============================================================================
 elif menu == "👥 Gestão da Turma":
     st.title("👥 Cockpit de Regência: Gestão 360°")
@@ -1607,26 +1607,20 @@ elif menu == "👥 Gestão da Turma":
             alunos_t = df_alunos[df_alunos['TURMA'] == turma_foco].sort_values(by="NOME_ALUNO")
             ano_num = "".join(filter(str.isdigit, turma_foco)) 
 
-            # --- 1. DASHBOARD DE STATUS (KPIs) ---
+            # --- 1. DASHBOARD DE STATUS (KPIs) COM VACINA DE SINTAXE ---
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("Total Alunos", len(alunos_t))
             
-            # --- VACINA DE CORREÇÃO PEI (ERRO ATTRIBUTEERROR RESOLVIDO) ---
-            if not alunos_t.empty and 'NECESSIDADES' in alunos_t.columns:
-                # Usamos .str.upper() e preenchemos vazios com "NENHUMA"
-                mask_pei = ~alunos_t['NECESSIDADES'].astype(str).str.upper().str.strip().isin(["NENHUMA", "PENDENTE", "", "NAN"])
-                qtd_pei = len(alunos_t[mask_pei])
-            else:
-                qtd_pei = 0
-                
-            c2.metric("Estudantes PEI", qtd_pei)
+            # Correção PEI (str.upper)
+            mask_pei = ~alunos_t['NECESSIDADES'].astype(str).str.upper().str.strip().isin(["NENHUMA", "PENDENTE", "", "NAN"])
+            c2.metric("Estudantes PEI", len(alunos_t[mask_pei]))
             
-            # Cálculo de Engajamento Médio (Vistos)
+            # Cálculo de Engajamento (Correção str.upper)
             engaj_medio = 0
             if not df_diario.empty:
                 vistos_t = df_diario[df_diario['TURMA'] == turma_foco]
                 if not vistos_t.empty:
-                    vistos_validos = vistos_t[vistos_t['VISTO_ATIVIDADE'].astype(str).upper() == "TRUE"]
+                    vistos_validos = vistos_t[vistos_t['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"]
                     engaj_medio = (len(vistos_validos) / len(vistos_t)) * 100
             c3.metric("Engajamento Médio", f"{engaj_medio:.0f}%")
             c4.metric("Série", f"{ano_num}º Ano")
@@ -1766,7 +1760,7 @@ elif menu == "👥 Gestão da Turma":
                             if sucesso:
                                 status.update(label="✅ Cadastro Atualizado!", state="complete")
                                 st.balloons(); time.sleep(1); st.rerun()
-
+                                
 # ==============================================================================
 # MÓDULO: BASE DE CONHECIMENTO
 # ==============================================================================
