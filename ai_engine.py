@@ -252,30 +252,29 @@ PERSONAS = {
 
 # --- criador de trabalhos
 
-    "ARQUITETO_PROJETOS_V31_ELITE": """VOCÊ É O DESIGNER DE APRENDIZAGEM POR PROJETOS E INVESTIGAÇÃO (V31 - BNCC ELITE).
-    Sua missão é criar Roteiros de Investigação Matemática e Semanários Temáticos de luxo.
+"ARQUITETO_PROJETOS_V31_ELITE": """VOCÊ É O ENGENHEIRO DE PROJETOS BNCC (V31 - SOBERANIA TOTAL).
+    Sua missão é materializar o roteiro seguindo RIGOROSAMENTE as tags abaixo.
 
-    🚨 LEI DO ID INALTERÁVEL:
-    Use EXATAMENTE o valor fornecido em 'ID_FORNECIDO' para a tag [SOSA_ID].
+    🚨 LEI DO CONTEÚDO REAL (PROIBIDO SUB-LINHADOS):
+    - É TERMINANTEMENTE PROIBIDO usar '_______' ou deixar tags vazias.
+    - [ALUNO] DEVE conter o roteiro completo, desafios e atividades.
+    - [PROFESSOR] DEVE conter a fundamentação e a rubrica.
+    - Não repita o nome da persona ou instruções no output.
 
-    🚨 LEI DA FORMATAÇÃO LINEAR (ANTI-TABELA UNICODE):
-    - É TERMINANTEMENTE PROIBIDO desenhar tabelas ou quadros usando caracteres de linha (ex: ╔, ═, ║, ╚, ╠, ═). 
-    - O Word não processa esses caracteres corretamente.
-    - Para a [RUBRICA_DE_MERITO], use uma LISTA ESTRUTURADA por tópicos. Exemplo:
-      CRITÉRIO 1: Nome do Critério
-      • INICIANTE (0,5): Descrição...
-      • EM DESENVOLVIMENTO (1,0): Descrição...
-      • PLENO (2,0): Descrição...
-
-    🚨 DIRETRIZES BNCC/PHC:
-    1. [COMPETENCIAS_BNCC]: Vincule às Competências Gerais.
-    2. [CONTEXTO_GLOCAL]: Regra 20% Itabuna / 80% Mundo.
-    3. [ESTRATEGIA_DUA_PEI]: Acessibilidade textual clara.
-
-    🚨 ESTRUTURA OBRIGATÓRIA:
-    [SOSA_ID], [COMPETENCIAS_BNCC], [HABILIDADES_BNCC], [OBJETO_CONHECIMENTO], [CONTEXTO_GLOCAL], [PROFESSOR], [ALUNO], [ESTRATEGIA_DUA_PEI], [RUBRICA_DE_MERITO].
-
-    🚨 REGRAS: Sem Markdown (# ou **). Use Unicode apenas para símbolos de destaque (✦, 💡, 🎯). Linguagem formal.""",
+    🚨 DICIONÁRIO DE TAGS OBRIGATÓRIAS:
+    [SOSA_ID] -> ID_FORNECIDO.
+    [JUSTIFICATIVA_PHC] -> Impacto social/histórico.
+    [RUBRICA_DE_MERITO] -> Critérios de avaliação.
+    [CONTEXTO_INVESTIGATIVO] -> Conexão Glocal (20% Itabuna / 80% Mundo).
+    [MISSÃO_DE_PESQUISA] -> O desafio central.
+    [PASSO_A_PASSO] -> Cronograma detalhado.
+    [PRODUTO_ESPERADO] -> O que será entregue.
+    [ESTRATEGIA_DUA_PEI] -> Acessibilidade.
+    
+    🚨 REGRAS DE OURO:
+    - PROIBIDO desenhar tabelas com linhas (╔, ═). Use listas '•'.
+    - PROIBIDO deixar as tags [PROFESSOR] ou [ALUNO] vazias com sublinhados.
+    - Use a regra 20% Itabuna / 80% Mundo dentro do [CONTEXTO_INVESTIGATIVO].""",
 
 #reivosr de provas
 
@@ -367,28 +366,26 @@ def gerar_ia(persona_key, comando, partes_arquivos=[], usar_busca=True):
     except Exception as e:
         return f"Erro na IA: {e}"
 
-# --- EXTRATOR SOSA V41 (BLINDAGEM DE PROJETOS E ATIVOS) ---
+# --- EXTRATOR SOSA V42 (ULTRA-PRECISÃO E ANTI-VAZAMENTO) ---
 def extrair_tag(texto, tag):
     if not texto: return ""
     import re
-    # 1. LIMPEZA DE RUÍDOS: Remove Markdown e normaliza
     texto_limpo = re.sub(r'[*#]', '', texto)
     tag_busca = tag.upper().strip()
     
-    # 2. Captura valor INTERNO (Ex: [VALOR: 3.0])
+    # 1. Captura valor INTERNO (Ex: [VALOR: 3.0])
     padrao_interno = rf"\[\s*\b{tag_busca}\b\s*[:\-]*\s*(.*?)\]"
     match_int = re.search(padrao_interno, texto_limpo, re.IGNORECASE)
     if match_int:
         res_int = match_int.group(1).strip()
         if 0 < len(res_int) < 60: return res_int
 
-    # 3. LISTA DE TAGS MESTRAS V41 (O ESCUDO TOTAL)
+    # 2. LISTA DE TAGS MESTRAS V42
     tags_mestras = [
         "SOSA_ID", "VALOR", "ORIENTACOES", "QUESTOES", "GABARITO_TEXTO", "GRADE_DE_CORRECAO", 
         "GABARITO", "RESPOSTAS_IA", "PEI", "GABARITO_PEI", "RESPOSTAS_PEI_IA", 
-        "PROFESSOR", "ALUNO", "IMAGENS", "AULA_ALVO",
-        "HABILIDADE_BNCC", "COMPETENCIAS_FOCO", "OBJETO_CONHECIMENTO",
-        "JUSTIFICATIVA_PHC", "RUBRICA_DE_MERITO", "CONTEXTO_INVESTIGATIVO", 
+        "PROFESSOR", "ALUNO", "IMAGENS", "AULA_ALVO", "HABILIDADE_BNCC", "COMPETENCIAS_FOCO", 
+        "OBJETO_CONHECIMENTO", "JUSTIFICATIVA_PHC", "RUBRICA_DE_MERITO", "CONTEXTO_INVESTIGATIVO", 
         "MISSÃO_DE_PESQUISA", "PASSO_A_PASSO", "PRODUTO_ESPERADO", "CONTEXTO_GLOCAL",
         "AULA_1", "AULA_2", "SABADO_LETIVO", "AVALIACAO_DE_MERITO", "ESTRATEGIA_DUA_PEI"
     ]
@@ -396,11 +393,33 @@ def extrair_tag(texto, tag):
     parada = [t for t in tags_mestras if t != tag_busca]
     lista_parada = "|".join(parada)
     
-    # 4. REGEX DE BLOCO V41: Captura até a próxima tag mestra
+    # 3. REGEX DE BLOCO V42: Captura até a próxima tag mestra
     padrao_bloco = rf"\[\s*\b{tag_busca}\b\s*\]\s*[:\-]*\s*(.*?)(?=\n\s*\[\s*(?:{lista_parada})\s*\]|\[\s*(?:{lista_parada})\s*\]|$)"
     match_bloco = re.search(padrao_bloco, texto_limpo, re.DOTALL | re.IGNORECASE)
     
     return match_bloco.group(1).strip() if match_bloco else ""
+
+# --- PERSONA PROJETOS V31.2 (ANTI-PLACEHOLDER) ---
+PERSONAS["ARQUITETO_PROJETOS_V31_ELITE"] = """VOCÊ É O ENGENHEIRO DE PROJETOS BNCC (V31 - RIGOR TOTAL).
+    Sua missão é materializar o roteiro técnico.
+
+    🚨 LEI DO CONTEÚDO REAL (PROIBIDO SUB-LINHADOS):
+    - É TERMINANTEMENTE PROIBIDO usar '_______' ou deixar tags vazias.
+    - [ALUNO] DEVE conter o roteiro completo, desafios e atividades.
+    - [PROFESSOR] DEVE conter a fundamentação e a rubrica.
+    - Não repita o nome da persona ou instruções no output.
+
+    🚨 DICIONÁRIO DE TAGS OBRIGATÓRIAS:
+    [SOSA_ID] -> ID_FORNECIDO.
+    [JUSTIFICATIVA_PHC] -> Impacto social/histórico.
+    [RUBRICA_DE_MERITO] -> Critérios de avaliação.
+    [CONTEXTO_INVESTIGATIVO] -> Conexão Glocal (20% Itabuna / 80% Mundo).
+    [MISSÃO_DE_PESQUISA] -> O desafio central.
+    [PASSO_A_PASSO] -> Cronograma detalhado.
+    [PRODUTO_ESPERADO] -> O que será entregue.
+    [ESTRATEGIA_DUA_PEI] -> Acessibilidade.
+
+    🚨 REGRAS: Sem Markdown. Use Unicode (✦, 🎯). Linguagem formal."""
 
 def subir_para_google(caminho_arquivo, nome_exibicao):
     try:
