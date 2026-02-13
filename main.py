@@ -781,20 +781,22 @@ if menu == "🧪 Criador de Aulas":
                 st.info("📭 Nenhum material encontrado com os filtros selecionados.")
                 
 # ==============================================================================
-# MÓDULO: PLANEJAMENTO ESTRATÉGICO (PONTO ID) - VERSÃO V31 (BNCC ELITE)
+# MÓDULO: PLANEJAMENTO ESTRATÉGICO (PONTO ID) - VERSÃO V31.2 (RESET DE ESTADO)
 # ==============================================================================
 if menu == "📅 Planejamento (Ponto ID)":
     st.title("📅 Engenharia de Planejamento (Ponto ID)")
     st.markdown("---")
 
     def reset_planejamento():
-        keys = ["p_temp", "refino_ativo"]
-        for k in keys:
+        keys_to_clear = ["p_temp", "refino_ativo"]
+        for k in keys_to_clear:
             if k in st.session_state: del st.session_state[k]
         st.session_state.v_plano = int(time.time())
         st.rerun()
 
-    if "v_plano" not in st.session_state: st.session_state.v_plano = 1
+    if "v_plano" not in st.session_state: 
+        st.session_state.v_plano = int(time.time())
+    
     v = st.session_state.v_plano 
 
     tab_gerar, tab_producao, tab_acervo, tab_matriz, tab_auditoria = st.tabs([
@@ -802,8 +804,7 @@ if menu == "📅 Planejamento (Ponto ID)":
     ])
     
     with tab_gerar:
-        is_refinando = "refino_ativo" in st.session_state
-        
+        # ... (Mantenha os containers 1 e 2 iguais) ...
         with st.container(border=True):
             st.markdown("### 🛡️ 1. Status e Calendário")
             cg1, cg2, cg3 = st.columns([1.5, 1, 1])
@@ -815,7 +816,6 @@ if menu == "📅 Planejamento (Ponto ID)":
             st.markdown("### ⚙️ 2. Parâmetros de Regência")
             c1, c2, c3 = st.columns([1, 2, 1.5])
             ano_p = c1.selectbox("Série/Ano:", [1, 2, 3, 4, 5, 6, 7, 8, 9], index=5, key=f"ano_sel_{v}")
-            
             todas_semanas = util.gerar_semanas()
             sem_p = c2.selectbox("Semana de Referência:", todas_semanas, key=f"sem_sel_{v}")
             sem_limpa = sem_p.split(" (")[0]
@@ -841,7 +841,8 @@ if menu == "📅 Planejamento (Ponto ID)":
 
             strat = st.text_area("Estratégia / Contexto Adicional:", key=f"p_strat_{v}")
 
-        if st.button("🚀 COMPILAR PLANEJAMENTO BNCC ELITE", use_container_width=True, type="primary"):
+        # --- BOTÃO DE COMPILAÇÃO (COM VACINA DE RESET) ---
+        if st.button("🚀 COMPILAR PLANEJAMENTO BNCC ELITE", use_container_width=True, type="primary", key=f"btn_compilar_{v}"):
             with st.spinner("Maestro SOSA realizando Sinfonia BNCC/PHC..."):
                 status_sabado = "ATIVADO" if tem_sabado else "DESATIVADO"
                 prompt = (
@@ -850,6 +851,8 @@ if menu == "📅 Planejamento (Ponto ID)":
                     f"--- MATRIZ ITABUNA ---\n{matriz_contexto}"
                 )
                 st.session_state.p_temp = ai.gerar_ia("PLANE_PEDAGOGICO", prompt)
+                # AQUI ESTÁ A VACINA: Mudamos a versão para forçar o reset dos campos
+                st.session_state.v_plano = int(time.time())
                 st.rerun()
 
         if "p_temp" in st.session_state:
@@ -857,8 +860,23 @@ if menu == "📅 Planejamento (Ponto ID)":
             t_ed, t_vis = st.tabs(["✏️ Editor de Texto", "👁️ Estrutura BNCC Elite"])
             
             with t_ed:
+                # --- REFINADOR INTEGRADO ---
+                with st.container(border=True):
+                    st.subheader("🤖 Refinador Maestro")
+                    cmd_refine = st.chat_input("Solicite ajustes no plano...", key=f"chat_refine_{v}")
+                    if cmd_refine:
+                        with st.spinner("Maestro Sosa realizando reengenharia..."):
+                            novo_texto = ai.gerar_ia("REFINADOR_PEDAGOGICO", f"ORDEM: {cmd_refine}\n\nATUAL:\n{st.session_state.p_temp}")
+                            if novo_texto:
+                                st.session_state.p_temp = novo_texto
+                                st.session_state.v_plano = int(time.time()) # Reset após refinar
+                                st.rerun()
+                    if st.button("🗑️ LIMPAR PLANEJAMENTO GERADO", use_container_width=True, key=f"btn_clear_{v}"): reset_planejamento()
+
+                # --- CAMPOS DO EDITOR (USANDO FALLBACKS E NOVAS TAGS) ---
                 c_ed1, c_ed2 = st.columns([1, 2])
-                # Busca a nova tag, se falhar busca a antiga (Fallback)
+                
+                # Extração com Fallback para compatibilidade
                 val_hab = ai.extrair_tag(txt_bruto, "HABILIDADE_BNCC") or ai.extrair_tag(txt_bruto, "BNCC_CODE")
                 val_comp = ai.extrair_tag(txt_bruto, "COMPETENCIAS_FOCO") or ai.extrair_tag(txt_bruto, "COMPETENCIAS_BNCC")
                 val_objeto = ai.extrair_tag(txt_bruto, "OBJETO_CONHECIMENTO") or ai.extrair_tag(txt_bruto, "CONTEUDO_GERAL")
