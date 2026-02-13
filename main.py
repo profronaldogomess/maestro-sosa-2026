@@ -1673,35 +1673,79 @@ elif menu == "👥 Gestão da Turma":
                         if str(alu['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", ""]:
                             st.warning(f"♿ {alu['NOME_ALUNO']}")
 
-    # --- ABA 2: ARQUITETURA DE TURMAS ---
+# --- ABA 2: ARQUITETURA DE TURMAS (VERSÃO V32.1 - COM ESCUDO ANTI-DUPLICIDADE) ---
     with tab_criar:
         st.subheader("🏗️ Configurar Nova Turma")
         v_t = f"t_{v}"
+        
         with st.container(border=True):
             c1, c2, c3 = st.columns(3)
-            ano_t = c1.selectbox("Série/Ano:", [6, 7, 8, 9], key=f"ano_{v_t}")
-            letra_t = c2.selectbox("Letra:", ["A", "B", "C", "D", "E", "F"], key=f"letra_{v_t}")
-            turno_t = c3.selectbox("Turno:", ["Matutino", "Vespertino"], key=f"turno_{v_t}")
+            ano_t = c1.selectbox("Série/Ano:", [1, 2, 3, 4, 5, 6, 7, 8, 9], index=5, key=f"ano_{v_t}")
+            letra_t = c2.selectbox("Letra:", ["A", "B", "C", "D", "E", "F", "G"], key=f"letra_{v_t}")
+            turno_t = c3.selectbox("Turno:", ["Matutino", "Vespertino", "Noturno"], key=f"turno_{v_t}")
 
-        dias_aula = st.multiselect("📅 Selecione os Dias de Aula:", ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"], max_selections=2, key=f"dias_{v_t}")
+        dias_aula = st.multiselect(
+            "📅 Selecione os Dias de Aula (Máx 2):", 
+            ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"], 
+            max_selections=2, 
+            key=f"dias_{v_t}"
+        )
 
         horarios_escolhidos = {}
         if dias_aula:
             st.markdown("#### ⏰ Defina o Tempo de Aula por dia")
-            opcoes_h = {"1º Tempo": "07:10h – 09:10h", "2º Tempo": "09:30h – 11:30h"} if turno_t == "Matutino" else {"1º Tempo": "13:10h – 15:10h", "2º Tempo": "15:30h – 17:30h"}
+            # Define opções de horário baseadas no turno
+            if turno_t == "Matutino":
+                opcoes_h = {"1º Tempo": "07:10h – 09:10h", "2º Tempo": "09:30h – 11:30h"}
+            elif turno_t == "Vespertino":
+                opcoes_h = {"1º Tempo": "13:10h – 15:10h", "2º Tempo": "15:30h – 17:30h"}
+            else:
+                opcoes_h = {"1º Tempo": "18:30h – 20:30h", "2º Tempo": "20:40h – 22:40h"}
+
             cols_h = st.columns(len(dias_aula))
             for i, dia in enumerate(dias_aula):
                 with cols_h[i]:
                     st.info(f"**{dia}**")
-                    t_sel = st.radio(f"Horário:", options=list(opcoes_h.keys()), key=f"radio_{dia}_{v_t}")
+                    t_sel = st.radio(f"Horário para {dia}:", options=list(opcoes_h.keys()), key=f"radio_{dia}_{v_t}")
                     horarios_escolhidos[dia] = t_sel
             
+            st.divider()
+            
             if st.button("🚀 CADASTRAR TURMA AGORA", use_container_width=True, type="primary", key=f"btn_cad_{v_t}"):
-                sigla = f"{ano_t}ª {'M' if turno_t == 'Matutino' else 'V'}{letra_t}"
-                str_dias = " / ".join(dias_aula)
-                str_horarios = " / ".join([f"{d[:3]}: {horarios_escolhidos[d]}" for d in dias_aula])
-                if db.salvar_no_banco("DB_TURMAS", [sigla, f"{ano_t}º Ano {letra_t}", turno_t, str_dias, str_horarios, "ATIVO"]):
-                    st.success(f"✅ Turma {sigla} criada!"); st.cache_data.clear(); time.sleep(1); st.rerun()
+                # 1. GERAÇÃO DA SIGLA ÚNICA (DNA DA TURMA)
+                prefixo_turno = turno_t[0].upper() # M, V ou N
+                sigla = f"{ano_t}ª {prefixo_turno}{letra_t}" # Ex: 6ª MA
+                
+                # 2. ESCUDO DE INTEGRIDADE: VERIFICAÇÃO DE DUPLICIDADE
+                turmas_existentes = []
+                if not df_turmas.empty:
+                    turmas_existentes = df_turmas['ID_TURMA'].astype(str).str.strip().tolist()
+
+                if sigla in turmas_existentes:
+                    st.error(f"🚨 **ERRO DE SOBERANIA:** A turma **{sigla}** já está cadastrada no sistema. Verifique o Cockpit ou a aba de Edição.")
+                else:
+                    with st.status("Sincronizando Nova Arquitetura...") as status:
+                        str_dias = " / ".join(dias_aula)
+                        str_horarios = " / ".join([f"{d[:3]}: {horarios_escolhidos[d]}" for d in dias_aula])
+                        
+                        # Salva no banco: [ID_TURMA, NOME_TURMA, TURNO, DIAS_SEMANA, HORARIO_TEMPO, STATUS]
+                        sucesso = db.salvar_no_banco("DB_TURMAS", [
+                            sigla, 
+                            f"{ano_t}º Ano {letra_t}", 
+                            turno_t, 
+                            str_dias, 
+                            str_horarios, 
+                            "ATIVO"
+                        ])
+                        
+                        if sucesso:
+                            status.update(label=f"✅ Turma {sigla} cadastrada com sucesso!", state="complete")
+                            st.balloons()
+                            time.sleep(1.5)
+                            st.cache_data.clear() # Limpa o cache para a nova turma aparecer nos filtros
+                            st.rerun()
+                        else:
+                            status.update(label="❌ Erro ao acessar o Google Sheets.", state="error")
 
     # --- ABA 3: POVOAR ALUNOS ---
     with tab_povoar:
