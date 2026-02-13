@@ -858,16 +858,23 @@ if menu == "📅 Planejamento (Ponto ID)":
             
             with t_ed:
                 c_ed1, c_ed2 = st.columns([1, 2])
-                ed_hab = c_ed1.text_input("Habilidade BNCC:", ai.extrair_tag(txt_bruto, "HABILIDADE_BNCC"), key=f"ed_h_{v}")
-                ed_comp = c_ed2.text_input("Competências Foco:", ai.extrair_tag(txt_bruto, "COMPETENCIAS_FOCO"), key=f"ed_c_{v}")
-                ed_geral = st.text_input("Objeto de Conhecimento (Eixo):", ai.extrair_tag(txt_bruto, "OBJETO_CONHECIMENTO"), key=f"ed_g_{v}")
+                # Busca a nova tag, se falhar busca a antiga (Fallback)
+                val_hab = ai.extrair_tag(txt_bruto, "HABILIDADE_BNCC") or ai.extrair_tag(txt_bruto, "BNCC_CODE")
+                val_comp = ai.extrair_tag(txt_bruto, "COMPETENCIAS_FOCO") or ai.extrair_tag(txt_bruto, "COMPETENCIAS_BNCC")
+                val_objeto = ai.extrair_tag(txt_bruto, "OBJETO_CONHECIMENTO") or ai.extrair_tag(txt_bruto, "CONTEUDO_GERAL")
+                val_ava = ai.extrair_tag(txt_bruto, "AVALIACAO_DE_MERITO") or ai.extrair_tag(txt_bruto, "AVALIACAO")
+                val_dua = ai.extrair_tag(txt_bruto, "ESTRATEGIA_DUA_PEI") or ai.extrair_tag(txt_bruto, "ADAPTACAO_PEI")
+
+                ed_hab = c_ed1.text_input("Habilidade BNCC:", val_hab, key=f"ed_h_{v}")
+                ed_comp = c_ed2.text_input("Competências Foco:", val_comp, key=f"ed_c_{v}")
+                ed_geral = st.text_input("Objeto de Conhecimento (Eixo):", val_objeto, key=f"ed_g_{v}")
                 ed_espec = st.text_area("Conteúdos Específicos:", ai.extrair_tag(txt_bruto, "CONTEUDOS_ESPECIFICOS"), key=f"ed_e_{v}")
                 ed_objs = st.text_area("Objetivos de Aprendizagem:", ai.extrair_tag(txt_bruto, "OBJETIVOS_ENSINO"), key=f"ed_o_{v}")
                 ed_a1 = st.text_area("AULA 1 (Fundamentação):", ai.extrair_tag(txt_bruto, "AULA_1"), height=200, key=f"a1_{v}")
                 ed_a2 = st.text_area("AULA 2 (Aplicação):", ai.extrair_tag(txt_bruto, "AULA_2"), height=200, key=f"a2_{v}")
                 ed_a3 = st.text_area("SÁBADO LETIVO:", ai.extrair_tag(txt_bruto, "SABADO_LETIVO"), key=f"a3_{v}")
-                ed_ava = st.text_area("Avaliação de Mérito:", ai.extrair_tag(txt_bruto, "AVALIACAO_DE_MERITO"), key=f"ed_ava_{v}")
-                ed_dua = st.text_area("Estratégia DUA/PEI:", ai.extrair_tag(txt_bruto, "ESTRATEGIA_DUA_PEI"), key=f"ed_dua_{v}")
+                ed_ava = st.text_area("Avaliação de Mérito:", val_ava, key=f"ed_ava_{v}")
+                ed_dua = st.text_area("Estratégia DUA/PEI:", val_dua, key=f"ed_dua_{v}")
 
                 if st.button("💾 FINALIZAR E DISPARAR PRODUÇÃO", use_container_width=True, type="primary"):
                     with st.status("Sincronizando Soberania...") as status:
