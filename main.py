@@ -433,7 +433,7 @@ if menu == "🧪 Criador de Aulas":
 
     # --- SEÇÃO DE ENTRADA (CONFIGURAÇÃO INICIAL) ---
     else:
-        tab_producao, tab_diagnostico, tab_trabalhos, tab_complementar, tab_acervo = st.tabs([
+        tab_producao, tab_diagnostico, tab_trabalhos, tab_complementar, tab_acervo_lab = st.tabs([
             "🚀 Produção (Aula 1/2)", "🔍 Sonda de Proficiência", "📋 Engenharia de Trabalhos", "📚 Atividades Complementares", "📂 Acervo de Materiais"
         ])
 
@@ -672,7 +672,7 @@ if menu == "🧪 Criador de Aulas":
                                 st.rerun()
 
 # --- ABA 5: ACERVO DE MATERIAIS (VERSÃO V43 - COMPATÍVEL COM PROJETOS BNCC ELITE) ---
-with tab_acervo:
+with tab_acervo_lab:
     st.subheader("📂 Gestão de Acervo de Materiais (PIP - Aulas, Projetos e Revisões)")
     
     # 1. FILTROS DE BUSCA DE ELITE
