@@ -10,38 +10,25 @@ load_dotenv()
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 PERSONAS = {
-"PLANE_PEDAGOGICO": """VOCÊ É O ARQUITETO PEDAGÓGICO SÊNIOR E PERITO EM INTEGRAÇÃO BNCC/PHC (V31).
-    Sua missão é gerar um Plano de Ensino de elite, fundindo a Matriz de Itabuna com as Competências da BNCC.
+"PLANE_PEDAGOGICO": """VOCÊ É O ARQUITETO PEDAGÓGICO SÊNIOR E HUB DE INTEGRAÇÃO (V31).
+    Sua missão é gerar Planos de Ensino que podem ser Aulas Regulares, Aplicação de Ativos ou Eventos.
 
-    🚨 LEI DA EXTRAÇÃO LITERAL (ANTI-ALUCINAÇÃO):
-    Ao receber a MATRIZ CURRICULAR (CSV), você deve agir como um buscador:
-    - [OBJETO_CONHECIMENTO]: Deve ser EXATAMENTE o texto da coluna 'EIXO'.
-    - [CONTEUDOS_ESPECIFICOS]: Deve ser EXATAMENTE o texto da coluna 'CONTEUDO_SPECIFICO'.
-    - [OBJETIVOS_ENSINO]: Deve ser EXATAMENTE o texto da coluna 'OBJETIVOS'.
-    - PROIBIDO: Usar sinônimos para estas 3 tags. Use o que está no CSV.
+    🚨 MODO 1: AVALIAÇÃO / TRABALHO (AUDITOR DE ATIVOS)
+    - Se receber um 'ATIVO DE SAFRA', você não deve inventar aulas.
+    - [AULA_1] e [AULA_2]: Descreva a logística de aplicação do material, tempo de execução e critérios de coleta.
+    - [JUSTIFICATIVA_PEDAGOGICA]: Explique por que este ativo (Prova/Sonda/Projeto) é essencial para medir o conteúdo do banco.
 
-    🚨 PROTOCOLO DE SOBERANIA BNCC:
-    1. [HABILIDADE_BNCC]: Identifique e descreva o código EFxxMAxx correspondente ao conteúdo.
-    2. [COMPETENCIAS_FOCO]: Selecione 2 das 10 Competências Gerais da BNCC que serão fortalecidas.
-    3. CONTEXTUALIZAÇÃO (GLOCAL): Use a regra 20% Itabuna/Bahia e 80% Mundo/Tech/News.
+    🚨 MODO 2: EVENTO EXTRAORDINÁRIO (PROTOCOLO DE COMPETÊNCIAS)
+    - Foque nas 10 Competências Gerais da BNCC fornecidas.
+    - [COMPETENCIA_GERAL]: Detalhe como o evento (Gincana/Semana Zero) desenvolve o socioemocional e a cidadania.
+    - [OBJETIVOS_ENSINO]: Vincule o evento a temas transversais da PHC (Ética, Trabalho, Social).
 
-    🚨 FLUXO DE AULA FLEXÍVEL:
-    - [AULA_1]: Foco em FUNDAMENTAÇÃO E CONCEITOS. Inicie com aula expositiva/tradicional densa, seguida de exemplos.
-    - [AULA_2]: Foco em APLICAÇÃO E INVESTIGAÇÃO. Inicie com uma problematização real (Glocal) e desafie o protagonismo do aluno.
+    🚨 MODO 3: AULA REGULAR (PADRÃO ELITE)
+    - [AULA_1]: Fundamentação Teórica/Tradicional.
+    - [AULA_2]: Aplicação Glocal (20% Itabuna / 80% Mundo).
 
-    🚨 ESTRUTURA DE TAGS OBRIGATÓRIA:
-    [HABILIDADE_BNCC], [COMPETENCIAS_FOCO], [OBJETO_CONHECIMENTO], [CONTEUDOS_ESPECIFICOS], [OBJETIVOS_ENSINO], [RECURSOS_ELITE], [AULA_1], [AULA_2], [SABADO_LETIVO], [AVALIACAO_DE_MERITO], [ESTRATEGIA_DUA_PEI].
-
-    🚨 REGRAS: Sem Markdown. Use Unicode. Linguagem formal e impessoal.""",
-
-"REFINADOR_PEDAGOGICO": """VOCÊ É O EDITOR-CHEFE ACADÊMICO DO SISTEMA SOSA V31.
-    Sua missão é REESCREVER o plano mantendo o tom formal e a RIGIDEZ LITERAL ao banco de dados.
-
-    🚨 DIRETRIZ DE INTEGRAÇÃO:
-    - Mantenha as tags [TAG] intactas.
-    - Se o professor pedir para mudar o tom da aula (mais tradicional ou mais prático), adapte o fluxo de [AULA_1] ou [AULA_2].
-    - NUNCA altere os textos extraídos do CSV ([OBJETO_CONHECIMENTO], [CONTEUDOS_ESPECIFICOS], [OBJETIVOS_ENSINO]).
-    - Retorne o documento COMPLETO, começando em [HABILIDADE_BNCC].""",
+    🚨 LEI DA EXTRAÇÃO LITERAL: Objeto, Conteúdos e Objetivos devem ser IDÊNTICOS ao CSV fornecido.
+    🚨 TAGS: [HABILIDADE_BNCC], [COMPETENCIAS_FOCO], [COMPETENCIA_GERAL], [OBJETO_CONHECIMENTO], [CONTEUDOS_ESPECIFICOS], [OBJETIVOS_ENSINO], [JUSTIFICATIVA_PEDAGOGICA], [AULA_1], [AULA_2], [SABADO_LETIVO], [AVALIACAO_DE_MERITO], [ESTRATEGIA_DUA_PEI].""",
 
 # ==============================================================================
 # PERSONAS ATUALIZADAS V28 - FOCO BNCC & RASTREABILIDADE TOTAL
@@ -377,41 +364,32 @@ def gerar_ia(persona_key, comando, partes_arquivos=[], usar_busca=True):
         return f"Erro na IA: {e}"
 
 # --- EXTRATOR SOSA V39 (SINCRONIA BNCC ELITE) ---
+# --- EXTRATOR SOSA V40 (INTEGRAÇÃO TOTAL & HUB DE ATIVOS) ---
 def extrair_tag(texto, tag):
     if not texto: return ""
     import re
-    
-    # 1. LIMPEZA DE RUÍDOS: Remove # e * para normalizar
     texto_limpo = re.sub(r'[*#]', '', texto)
     tag_busca = tag.upper().strip()
     
-    # 2. Tenta capturar valor INTERNO estrito (Ex: [VALOR: 3.0])
     padrao_interno = rf"\[\s*\b{tag_busca}\b\s*[:\-]*\s*(.*?)\]"
     match_int = re.search(padrao_interno, texto_limpo, re.IGNORECASE)
     if match_int:
         res_int = match_int.group(1).strip()
-        if 0 < len(res_int) < 45: return res_int
+        if 0 < len(res_int) < 60: return res_int
 
-    # 3. LISTA DE TAGS MESTRAS V39 (HÍBRIDA: ANTIGAS + BNCC ELITE)
     tags_mestras = [
         "SOSA_ID", "VALOR", "ORIENTACOES", "QUESTOES", "GABARITO_TEXTO", "GRADE_DE_CORRECAO", 
         "GABARITO", "RESPOSTAS_IA", "PEI", "GABARITO_PEI", "RESPOSTAS_PEI_IA", 
         "PROFESSOR", "ALUNO", "IMAGENS", "AULA_ALVO",
-        # Tags de Planejamento (Antigas e Novas)
-        "BNCC_CODE", "HABILIDADE_BNCC", 
-        "COMPETENCIAS_FOCO", "COMPETENCIAS_BNCC",
-        "CONTEUDO_GERAL", "OBJETO_CONHECIMENTO",
-        "CONTEUDOS_ESPECIFICOS", "OBJETIVOS_ENSINO", 
-        "RECURSOS_DIDATICOS", "RECURSOS_ELITE",
-        "AULA_1", "AULA_2", "SABADO_LETIVO", 
-        "AVALIACAO", "AVALIACAO_DE_MERITO",
-        "ADAPTACAO_PEI", "ESTRATEGIA_DUA_PEI"
+        "BNCC_CODE", "HABILIDADE_BNCC", "COMPETENCIAS_FOCO", "COMPETENCIAS_BNCC",
+        "COMPETENCIA_GERAL", "JUSTIFICATIVA_PEDAGOGICA", # Novas Tags V40
+        "CONTEUDO_GERAL", "OBJETO_CONHECIMENTO", "CONTEUDOS_ESPECIFICOS", "OBJETIVOS_ENSINO", 
+        "RECURSOS_DIDATICOS", "RECURSOS_ELITE", "AULA_1", "AULA_2", "SABADO_LETIVO", 
+        "AVALIACAO", "AVALIACAO_DE_MERITO", "ADAPTACAO_PEI", "ESTRATEGIA_DUA_PEI"
     ]
     
     parada = [t for t in tags_mestras if t != tag_busca]
     lista_parada = "|".join(parada)
-    
-    # 4. REGEX DE BLOCO V39: Captura até a próxima tag mestra ou fim do texto
     padrao_bloco = rf"\[\s*\b{tag_busca}\b\s*\]\s*[:\-]*\s*(.*?)(?=\n\s*\[\s*(?:{lista_parada})\s*\]|\[\s*(?:{lista_parada})\s*\]|$)"
     match_bloco = re.search(padrao_bloco, texto_limpo, re.DOTALL | re.IGNORECASE)
     
