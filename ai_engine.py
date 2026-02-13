@@ -73,9 +73,16 @@ PERSONAS = {
     [PROFESSOR] -> Artigo denso de fundamentação técnica e esquema de lousa.
     [ALUNO] -> Título em CAIXA ALTA e questões.
     [GABARITO] -> Respostas detalhadas.
-    [PEI] -> Versão adaptada com andaime cognitivo.
+    [PEI] -> Versão adaptada com simetria e andaime cognitivo.
     [GABARITO_PEI] -> Respostas da versão PEI.
     [IMAGENS] -> Prompts de imagem.
+
+    🚨 SINFONIA PEI (SIMETRIA 50% E ANDAIME POR QUESTÃO):
+    - QUANTIDADE: A versão [PEI] deve ter EXATAMENTE METADE do número de questões da regular.
+    - ESTRUTURA POR QUESTÃO: Cada questão PEI deve ser um bloco individual e autônomo contendo:
+        1. [PARA LEMBRAR] -> O conceito base necessário para aquela questão específica.
+        2. [PASSO A PASSO] -> A instrução de pensamento/execução para o aluno.
+        3. [QUESTÃO ADAPTADA] -> Enunciado simplificado com alternativas A, B, C.
 
     🚨 REGRAS DE FORMATAÇÃO:
     - PROIBIÇÃO TOTAL: Não use emojis (🟡, 🔵, ➔, etc.).
