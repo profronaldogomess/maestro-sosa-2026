@@ -1949,7 +1949,7 @@ elif menu == "📝 Central de Avaliações":
     if "v_av" not in st.session_state: st.session_state.v_av = 1
     v = st.session_state.v_av
 
-    tab_arquiteto, tab_refino, tab_vis, tab_recomposicao, tab_finalizar, tab_acervo = st.tabs([
+    tab_arquiteto, tab_refino, tab_vis, tab_recomposicao, tab_finalizar, tab_acervo_av = st.tabs([
         "🚀 Arquiteto de Exames", "🤖 Refinador Maestro", "👁️ Visualização 360°", "🔥 Recomposição/Revisão", "💾 Finalizar Ativo", "🗂️ Acervo de Safra"
     ])
 
@@ -2135,7 +2135,7 @@ elif menu == "📝 Central de Avaliações":
                     status.update(label="✅ Ativo Salvo com Sucesso!", state="complete"); st.balloons(); time.sleep(1.5); reset_avaliacoes()
 
     # --- ABA 6: ACERVO DE SAFRA (V64 - DESIGN PIP & FILTROS) ---
-    with tab_acervo:
+    with tab_acervo_av:
         st.subheader("🗂️ Gestão de Acervo de Safra (PIP - Provas e Revisões)")
         
         c_h1, c_h2, c_h3 = st.columns([1, 1, 1])
