@@ -353,10 +353,18 @@ if menu == "🧪 Criador de Aulas":
         val_dua = ai.extrair_tag(txt_base, "ESTRATEGIA_DUA_PEI") or ai.extrair_tag(txt_base, "PEI")
 
         if is_recomp:
-            ed_prof = ai.extrair_tag(txt_base, "PROFESSOR")
-            ed_alu = ai.extrair_tag(txt_base, "ALUNO")
-            ed_res = ai.extrair_tag(txt_base, "RESPOSTAS_PEDAGOGICAS")
-            ed_dua = ai.extrair_tag(txt_base, "PEI")
+            t_prof, t_alu, t_gab, t_pei, t_sync = st.tabs(["👨‍🏫 Tratado do Professor", "📝 Folha do Aluno (Apoio Visual)", "✅ Respostas Pedagógicas", "♿ Material PEI (Andaime)", "☁️ SINCRONIA"])
+            with t_prof: 
+                st.info("🔬 Gênese Científica e Perícia de Mediação (BNCC/PHC)")
+                st.text_area("Mapa de Regência:", ed_prof, height=450, key=f"p_recomp_{v}")
+            with t_alu: 
+                st.warning("📸 SOBERANIA VISUAL: Verifique se os [ PROMPT IMAGEM ] dão suporte a todos os enunciados complexos.")
+                st.text_area("Questões Regulares:", ed_alu, height=450, key=f"a_recomp_{v}")
+            with t_gab: 
+                st.text_area("Gabarito e Expectativa de Aprendizagem:", ed_res, height=450, key=f"g_recomp_{v}")
+            with t_pei: 
+                st.info("♿ Simetria 50%: Cada questão com seu próprio Para Lembrar e Passo a Passo.")
+                st.text_area("Atividade Adaptada:", ed_dua, height=450, key=f"pei_recomp_{v}")
         elif is_projeto:
             ed_prof = f"[JUSTIFICATIVA]\n{val_just}\n\n[RUBRICA]\n{val_rub}"
             # Lógica de Recuperação: Se as sub-tags falharem, usa o bloco ALUNO ou DUA
