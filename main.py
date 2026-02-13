@@ -308,167 +308,128 @@ def exibir_material_estruturado(texto_raw, key_prefix, dados_plano=None, info_au
                         st.error(f"Falha no envio dos arquivos.")
                        
 # ==============================================================================
-# MÓDULO: LABORATÓRIO DE PRODUÇÃO (CRIADOR V39 - INTEGRADO & BLINDADO)
+# MÓDULO: LABORATÓRIO DE PRODUÇÃO (CRIADOR V39.8 - INTEGRADO & BLINDADO)
 # ==============================================================================
 if menu == "🧪 Criador de Aulas":
-    st.title("🧪 Laboratório de Produção Semiótica (V39)")
+    st.title("🧪 Laboratório de Produção Semiótica (V39.8)")
     st.markdown("---")
     
     def reset_laboratorio():
         keys_to_del = ["lab_temp", "lab_pei", "lab_gab_pei", "refino_lab_ativo", "sosa_id_atual", "lab_meta", "hub_origem"]
         for k in keys_to_del:
             if k in st.session_state: del st.session_state[k]
-        st.cache_data.clear() # Limpa cache para o Escudo de Safra atualizar
+        st.cache_data.clear() 
         st.session_state.v_lab = int(time.time())
         st.rerun()
 
-    if "v_lab" not in st.session_state: st.session_state.v_lab = 1
+    if "v_lab" not in st.session_state: 
+        st.session_state.v_lab = int(time.time())
     v = st.session_state.v_lab
 
-    # --- VACINA DE ESCOPO SOSA (is_hub definido no topo do módulo) ---
-    is_hub = st.session_state.get("lab_meta", {}).get("tipo") == "PRODUÇÃO_HUB"
+    # 1. INICIALIZAÇÃO DE METADADOS (Resolve erro "meta" undefined)
+    meta = st.session_state.get("lab_meta", {})
+    is_hub = meta.get("tipo") == "PRODUÇÃO_HUB"
 
     # --- ÁREA DE EXIBIÇÃO E REFINO (MODO EDIÇÃO ATIVO) ---
-    if "lab_temp" in st.session_state and "[PROFESSOR]" in st.session_state.lab_temp:
+    if "lab_temp" in st.session_state:
         txt_base = st.session_state.lab_temp
         
+        # 2. EXTRAÇÃO PREVENTIVA (Resolve erros "ed_alu", "ed_prof", "ed_res" undefined)
         s_id_extraido = ai.extrair_tag(txt_base, "SOSA_ID")
         s_id = s_id_extraido if s_id_extraido else st.session_state.get("sosa_id_atual", "SEM-ID")
         s_id = s_id.split("[")[0].strip()
         
-        meta = st.session_state.get("lab_meta", {})
+        is_projeto = "PROJETO" in s_id.upper() or "[JUSTIFICATIVA_PHC]" in txt_base
+
+        # Captura de variáveis para uso no Triple-Sync (Independente da aba)
+        if is_projeto:
+            # Para projetos, o "ed_prof" e "ed_alu" são a soma de suas sub-tags
+            ed_prof = f"[JUSTIFICATIVA_PHC]\n{ai.extrair_tag(txt_base, 'JUSTIFICATIVA_PHC')}\n\n[RUBRICA_DE_MERITO]\n{ai.extrair_tag(txt_base, 'RUBRICA_DE_MERITO')}"
+            ed_alu = f"[CONTEXTO_INVESTIGATIVO]\n{ai.extrair_tag(txt_base, 'CONTEXTO_INVESTIGATIVO')}\n\n[MISSÃO_DE_PESQUISA]\n{ai.extrair_tag(txt_base, 'MISSÃO_DE_PESQUISA')}\n\n[PASSO_A_PASSO]\n{ai.extrair_tag(txt_base, 'PASSO_A_PASSO')}\n\n[PRODUTO_ESPERADO]\n{ai.extrair_tag(txt_base, 'PRODUTO_ESPERADO')}"
+            ed_res = "RUBRICA INTEGRADA"
+            ed_dua = ai.extrair_tag(txt_base, "ESTRATEGIA_DUA_PEI")
+        else:
+            ed_prof = ai.extrair_tag(txt_base, "PROFESSOR")
+            ed_alu = ai.extrair_tag(txt_base, "ALUNO")
+            ed_res = ai.extrair_tag(txt_base, "GABARITO") or ai.extrair_tag(txt_base, "GABARITO_TEXTO")
+            ed_dua = ai.extrair_tag(txt_base, "PEI")
+
         st.success(f"💎 Material em Edição: **{s_id}**")
 
-        # --- 🤖 REFINADOR MAESTRO V29 (INTEGRADO: NOVO + ACERVO) ---
+        # --- 🤖 REFINADOR MAESTRO V31 ---
         with st.container(border=True):
-            st.subheader("🤖 Refinador Maestro (Perícia V29)")
-            cmd_refine_lab = st.chat_input("Solicite ajustes (ex: 'redistribua o gabarito', 'troque a questão 2', 'mude o tema para cacau')...", key=f"chat_lab_ref_{v}")
+            st.subheader("🤖 Refinador Maestro (Perícia V31)")
+            cmd_refine_lab = st.chat_input("Solicite ajustes no material...", key=f"chat_lab_ref_{v}")
             if cmd_refine_lab:
-                with st.spinner("Maestro Sosa realizando reengenharia e perícia psicométrica..."):
-                    # Lógica de Seleção de Persona (Sonda vs Material Comum)
-                    persona_alvo = "REFINADOR_SONDA_V29" if "SONDA" in s_id.upper() else "REFINADOR_MATERIAIS"
+                with st.spinner("Maestro Sosa realizando reengenharia..."):
+                    persona_alvo = "REFINADOR_PEDAGOGICO" if is_projeto else "REFINADOR_MATERIAIS"
                     novo_texto = ai.gerar_ia(persona_alvo, f"ORDEM: {cmd_refine_lab}\n\nCONTEÚDO ATUAL:\n{st.session_state.lab_temp}")
-                    
-                    if "[PROFESSOR]" in novo_texto or "[ALUNO]" in novo_texto:
+                    if len(novo_texto) > 50:
                         st.session_state.lab_temp = novo_texto
-                        st.session_state.v_lab += 1
+                        st.session_state.v_lab = int(time.time())
                         st.rerun()
             
             if st.button("🗑️ DESCARTAR EDIÇÃO E VOLTAR", use_container_width=True):
                 reset_laboratorio()
         
-        # --- TABS DE VISUALIZAÇÃO E EDIÇÃO V39 (HÍBRIDA) ---
-        t_prof, t_alu, t_gab, t_pei, t_sync = st.tabs(["👨‍🏫 Professor", "📝 Aluno", "✅ Gabarito/Perícia", "♿ PEI", "☁️ SINCRONIA"])
-        
-        with t_prof: 
-            # Mostra SOSA_ID e Professor juntos para não perder informação
-            s_id_display = ai.extrair_tag(txt_base, "SOSA_ID")
-            if s_id_display: st.info(f"🆔 ID do Material: {s_id_display}")
-            ed_prof = st.text_area("Mapa de Regência:", ai.extrair_tag(txt_base, "PROFESSOR"), height=450, key=f"ed_prof_{v}")
-            
-        with t_alu: 
-            ed_alu = st.text_area("Folha do Aluno:", ai.extrair_tag(txt_base, "ALUNO"), height=450, key=f"ed_alu_{v}")
-            
-        with t_gab: 
-            # LÓGICA MULTITAG: Tenta Gabarito, se vazio tenta Gabarito_Texto, se vazio tenta Grade
-            gab_final = ai.extrair_tag(txt_base, "GABARITO")
-            if not gab_final: gab_final = ai.extrair_tag(txt_base, "GABARITO_TEXTO")
-            
-            grade_pericia = ai.extrair_tag(txt_base, "GRADE_DE_CORRECAO")
-            
-            ed_res = st.text_area("Gabarito Oficial:", gab_final, height=200, key=f"ed_res_{v}")
-            if grade_pericia:
-                st.markdown("---")
-                st.subheader("🔬 Grade de Perícia Pedagógica")
-                st.text_area("Análise de Descritores e Erros:", grade_pericia, height=300, key=f"ed_grade_{v}")
-        
-        with t_pei:
-            st.subheader("♿ Adaptação Curricular")
-            c_p1, c_p2 = st.columns(2)
-            ed_pei_mat = c_p1.text_area("📄 Material PEI:", ai.extrair_tag(txt_base, "PEI"), height=400, key=f"ed_pei_mat_{v}")
-            
-            # Tenta Gabarito_PEI ou Respostas_PEI_IA
-            gab_pei_final = ai.extrair_tag(txt_base, "GABARITO_PEI")
-            if not gab_pei_final: gab_pei_final = ai.extrair_tag(txt_base, "RESPOSTAS_PEI_IA")
-            
-            ed_pei_gab = c_p2.text_area("✅ Gabarito PEI:", gab_pei_final, height=400, key=f"ed_pei_gab_{v}")
+        # --- 🗂️ TABS DINÂMICAS ---
+        if is_projeto:
+            t_prof, t_alu, t_dua, t_sync = st.tabs(["👨‍🏫 Mapa do Professor", "📝 Roteiro do Aluno", "♿ DUA/PEI", "☁️ SINCRONIA"])
+            with t_prof:
+                st.text_area("Justificativa PHC:", ai.extrair_tag(txt_base, "JUSTIFICATIVA_PHC"), height=200, key=f"p_just_{v}")
+                st.text_area("Rubrica de Mérito:", ai.extrair_tag(txt_base, "RUBRICA_DE_MERITO"), height=300, key=f"p_rub_{v}")
+            with t_alu:
+                st.text_area("Contexto Investigativo:", ai.extrair_tag(txt_base, "CONTEXTO_INVESTIGATIVO"), height=150, key=f"a_ctx_{v}")
+                st.text_area("Missão de Pesquisa:", ai.extrair_tag(txt_base, "MISSÃO_DE_PESQUISA"), height=150, key=f"a_mis_{v}")
+                st.text_area("Passo a Passo:", ai.extrair_tag(txt_base, "PASSO_A_PASSO"), height=300, key=f"a_passo_{v}")
+                st.text_area("Produto Esperado:", ai.extrair_tag(txt_base, "PRODUTO_ESPERADO"), height=100, key=f"a_prod_{v}")
+            with t_dua:
+                st.text_area("Estratégia DUA/PEI:", ed_dua, height=300, key=f"a_dua_{v}")
+        else:
+            t_prof, t_alu, t_gab, t_pei, t_sync = st.tabs(["👨‍🏫 Professor", "📝 Aluno", "✅ Gabarito/Perícia", "♿ PEI", "☁️ SINCRONIA"])
+            with t_prof: st.text_area("Mapa de Regência:", ed_prof, height=450, key=f"ed_prof_f_{v}")
+            with t_alu: st.text_area("Folha do Aluno:", ed_alu, height=450, key=f"ed_alu_f_{v}")
+            with t_gab: 
+                st.text_area("Gabarito Oficial:", ed_res, height=200, key=f"ed_res_f_{v}")
+                grade = ai.extrair_tag(txt_base, "GRADE_DE_CORRECAO")
+                if grade: st.text_area("Grade de Perícia:", grade, height=300, key=f"ed_grade_f_{v}")
+            with t_pei: st.text_area("Material PEI:", ed_dua, height=400, key=f"ed_pei_f_{v}")
 
+        # --- ☁️ ABA DE SINCRONIA (TRIPLE-SYNC) ---
         with t_sync:
-            st.warning("⚠️ O Triple-Sync substituirá a versão anterior deste material.")
+            st.subheader("🚀 Protocolo de Custódia Digital")
+            st.warning("O Triple-Sync substituirá a versão anterior no Drive e na Planilha.")
+            
             if st.button("💾 EXECUTAR TRIPLE-SYNC (SUBSTITUIR)", use_container_width=True, type="primary", key=f"btn_triple_{v}"):
-                with st.status("Iniciando Protocolo de Custódia e Sincronia...") as status:
-                    nome_final = s_id 
+                with st.status("Iniciando Protocolo de Sincronia...") as status:
+                    # 1. Limpeza
+                    db.excluir_registro_com_drive("DB_AULAS_PRONTAS", s_id)
+                    
+                    # 2. Metadados para o Exporter
                     ano_str = f"{meta.get('ano', '6')}º"
-                    semana_ref = meta.get('semana_ref', 'AVULSA')
-                    is_sonda_check = "SONDA" in nome_final.upper()
+                    trim_str = meta.get('trimestre', 'I Trimestre')
+                    sem_ref = meta.get('semana_ref', 'PROJETO' if is_projeto else 'AULA')
                     
-                    # 1. LEI DA LIMPEZA (TRIPLE-SYNC): Deleta versões antigas no Drive e Planilha
-                    db.excluir_registro_com_drive("DB_AULAS_PRONTAS", nome_final)
-                    
-                    # 2. CONTAGEM REAL E CÁLCULO DE PESO
-                    qtd_q_real = len(re.findall(r'(?m)^QUESTÃO\s+\d+', ed_alu.upper()))
-                    valor_total_doc = "10,00" if is_sonda_check else "0,00"
-                    val_q_str = util.sosa_to_str(10.0 / qtd_q_real) if (is_sonda_check and qtd_q_real > 0) else "0,00"
+                    info_doc = {"ano": ano_str, "trimestre": trim_str, "valor": "0,00", "valor_questao": "0,00", "qtd_questoes": 0}
 
-                    info_doc = {
-                        "ano": ano_str, 
-                        "trimestre": meta.get('trimestre', 'I Trimestre'), 
-                        "valor": valor_total_doc, 
-                        "valor_questao": val_q_str,
-                        "qtd_questoes": qtd_q_real
-                    }
-
-                    # 3. GERAÇÃO DE DOCUMENTOS (FLUXO NATIVO)
-                    # Regular
-                    if is_sonda_check:
-                        doc_alu = exporter.gerar_docx_prova_v25(nome_final, ed_alu, info_doc)
-                    else:
-                        doc_alu = exporter.gerar_docx_aluno_v24(nome_final, ed_alu, info_doc)
-                    link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{nome_final}_REGULAR", modo="AULA")
+                    # 3. Geração de Documentos
+                    doc_alu = exporter.gerar_docx_aluno_v24(s_id, ed_alu, info_doc)
+                    link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{s_id}_ALUNO", modo="AULA")
                     
-                    # Guia do Professor (Com Grade de Perícia)
-                    doc_prof = exporter.gerar_docx_professor_v25(nome_final, ed_prof, {"ano": ano_str, "semana": semana_ref, "trimestre": info_doc["trimestre"]})
-                    link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_final}_PROF", modo="AULA")
+                    doc_prof = exporter.gerar_docx_professor_v25(s_id, ed_prof, {"ano": ano_str, "semana": sem_ref, "trimestre": trim_str})
+                    link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{s_id}_PROF", modo="AULA")
                     
-                    # PEI (Gabarito Proporcional)
-                    link_pei = "N/A"
-                    if len(ed_pei_mat) > 10:
-                        if is_sonda_check:
-                            doc_pei = exporter.gerar_docx_prova_v25(f"{nome_final}_PEI", ed_pei_mat, info_doc)
-                        else:
-                            doc_pei = exporter.gerar_docx_pei_v25(f"{nome_final}_PEI", ed_pei_mat, info_doc)
-                        link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_final}_PEI", modo="AULA")
+                    # 4. Consolidação no Banco
+                    conteudo_final = f"[SOSA_ID] {s_id}\n{txt_base}\n--- LINKS ---\nRegular({link_alu}) Prof({link_prof})"
                     
-                    if "https" in str(link_alu):
-                        # 4. CONSOLIDAÇÃO DO CONTEÚDO COM DNA DE VALOR (Para o Scanner ler)
-                        # Colocamos o [VALOR] no topo para garantir a leitura do Scanner
-                        conteudo_final_banco = (
-                            f"[VALOR: {valor_total_doc}]\n"
-                            f"[SOSA_ID] {nome_final}\n"
-                            f"[PROFESSOR]\n{ed_prof}\n\n"
-                            f"[ALUNO]\n{ed_alu}\n\n"
-                            f"[GABARITO]\n{ed_res}\n\n"
-                            f"[GRADE_DE_CORRECAO]\n{ai.extrair_tag(st.session_state.lab_temp, 'GRADE_DE_CORRECAO')}\n\n"
-                            f"[PEI]\n{ed_pei_mat}\n\n"
-                            f"--- LINKS ---\nRegular({link_alu}) PEI({link_pei}) Prof({link_prof})"
-                        )
-                        
-                        db.salvar_no_banco("DB_AULAS_PRONTAS", [
-                            datetime.now().strftime("%d/%m/%Y"), 
-                            semana_ref, 
-                            nome_final, 
-                            conteudo_final_banco, 
-                            ano_str, 
-                            link_alu
-                        ])
-                        
-                        status.update(label="✅ Sincronia de Elite Concluída!", state="complete")
-                        st.balloons()
-                        time.sleep(1)
-                        reset_laboratorio()
-                    else:
-                        status.update(label="❌ Erro no Upload ao Drive", state="error")
-                        st.error(f"Resposta do Servidor: {link_alu}")
+                    db.salvar_no_banco("DB_AULAS_PRONTAS", [
+                        datetime.now().strftime("%d/%m/%Y"), sem_ref, s_id, conteudo_final, ano_str, link_alu
+                    ])
+                    
+                    status.update(label="✅ Sincronia Concluída!", state="complete")
+                    st.balloons()
+                    time.sleep(1)
+                    reset_laboratorio()
 
     # --- SEÇÃO DE ENTRADA (CONFIGURAÇÃO INICIAL) ---
     else:
