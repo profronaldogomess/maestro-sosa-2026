@@ -2870,126 +2870,136 @@ elif menu == "📸 Scanner de Gabaritos":
                 st.success("Nenhum aluno em zona de risco crítico detectado no momento.")
 
 # ==============================================================================
-# MÓDULO: BIOGRAFIA DO ESTUDANTE (V33.0) - VISÃO MOBILE 360° (PAIS E MESTRES)
+# MÓDULO: BIOGRAFIA DO ESTUDANTE (V34.0) - VISÃO COMPACTA E FILTRADA (MOBILE)
 # ==============================================================================
 elif menu == "👤 Biografia do Estudante":
-    st.title("👤 Biografia do Estudante: Fatos e Resultados")
+    st.title("👤 Biografia do Estudante")
     st.markdown("---")
 
     if df_alunos.empty:
         st.warning("⚠️ Base de alunos vazia.")
     else:
-        # 1. SELEÇÃO RÁPIDA (MOBILE FRIENDLY)
-        c_t, c_a = st.columns([1, 2])
-        turma_b = c_t.selectbox("Turma:", sorted(df_alunos['TURMA'].unique()), key="bio_t")
-        lista_alunos = df_alunos[df_alunos['TURMA'] == turma_b].sort_values(by="NOME_ALUNO")
-        aluno_b = c_a.selectbox("Selecione o Estudante:", lista_alunos['NOME_ALUNO'].tolist(), key="bio_a")
+        # 1. BARRA DE FILTROS (COMPACTA)
+        with st.container(border=True):
+            c1, c2, c3 = st.columns([1, 1.5, 1])
+            turma_b = c1.selectbox("Turma:", sorted(df_alunos['TURMA'].unique()), key="bio_t")
+            
+            lista_alunos = df_alunos[df_alunos['TURMA'] == turma_b].sort_values(by="NOME_ALUNO")
+            aluno_b = c2.selectbox("Estudante:", lista_alunos['NOME_ALUNO'].tolist(), key="bio_a")
+            
+            trim_b = c3.selectbox("Trimestre:", ["Todos", "I Trimestre", "II Trimestre", "III Trimestre"], key="bio_trim")
 
         # Captura dados básicos
         info_alu = lista_alunos[lista_alunos['NOME_ALUNO'] == aluno_b].iloc[0]
         id_alu = db.limpar_id(info_alu['ID'])
         is_pei = str(info_alu['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"]
 
-        # --- 2. CARD 1: ENGAJAMENTO E ATITUDE (DIÁRIO) ---
-        st.subheader("📊 Engajamento e Atitude")
-        with st.container(border=True):
-            if not df_diario.empty:
-                d_alu = df_diario[df_diario['ID_ALUNO'].apply(db.limpar_id) == id_alu]
-                if not d_alu.empty:
-                    total_aulas = len(d_alu)
-                    vistos = len(d_alu[d_alu['VISTO_ATIVIDADE'].astype(str).upper() == "TRUE"])
-                    perc_visto = (vistos / total_aulas)
-                    
-                    col1, col2 = st.columns(2)
-                    col1.metric("Vistos Recebidos", f"{vistos}/{total_aulas}")
-                    col2.progress(perc_visto, text=f"{perc_visto*100:.0f}% de entrega")
-                    
-                    # Histórico de Tags (Atitude)
-                    tags_recentes = d_alu[d_alu['TAGS'] != ""]['TAGS'].tail(3).tolist()
-                    if tags_recentes:
-                        st.markdown("**Últimas Observações de Atitude:**")
-                        for t in tags_recentes:
-                            st.caption(f"• {t}")
-                else:
-                    st.info("Nenhum registro de diário para este aluno.")
-            else:
-                st.info("Diário de bordo vazio.")
+        # Definição de Datas para Filtro de Engajamento
+        calendario = {
+            "I Trimestre": (date(2026, 2, 9), date(2026, 5, 22)),
+            "II Trimestre": (date(2026, 5, 25), date(2026, 9, 4)),
+            "III Trimestre": (date(2026, 9, 8), date(2026, 12, 17)),
+            "Todos": (date(2026, 2, 1), date(2026, 12, 31))
+        }
+        dt_ini, dt_fim = calendario.get(trim_b)
 
-        # --- 3. CARD 2: DESEMPENHO ACADÊMICO (NOTAS) ---
-        st.subheader("📈 Desempenho Acadêmico")
-        with st.container(border=True):
+        # --- SEÇÃO 1: ENGAJAMENTO (EXPANDER) ---
+        with st.expander("📊 Engajamento e Atitude", expanded=False):
+            if not df_diario.empty:
+                d_alu = df_diario[df_diario['ID_ALUNO'].apply(db.limpar_id) == id_alu].copy()
+                if not d_alu.empty:
+                    # Filtro por Data
+                    d_alu['DATA_DT'] = pd.to_datetime(d_alu['DATA'], format="%d/%m/%Y", errors='coerce').dt.date
+                    d_alu_f = d_alu[(d_alu['DATA_DT'] >= dt_ini) & (d_alu['DATA_DT'] <= dt_fim)]
+                    
+                    if not d_alu_f.empty:
+                        total_aulas = len(d_alu_f)
+                        vistos = len(d_alu_f[d_alu_f['VISTO_ATIVIDADE'].astype(str).upper() == "TRUE"])
+                        perc = (vistos / total_aulas)
+                        
+                        c_e1, c_e2 = st.columns(2)
+                        c_e1.metric("Vistos", f"{vistos}/{total_aulas}")
+                        c_e2.metric("Frequência Ativa", f"{perc*100:.0f}%")
+                        st.progress(perc)
+                        
+                        tags = d_alu_f[d_alu_f['TAGS'] != ""]['TAGS'].tail(5).tolist()
+                        if tags:
+                            st.markdown("**Observações do Período:**")
+                            for t in tags: st.caption(f"• {t}")
+                    else:
+                        st.info(f"Sem registros no {trim_b}.")
+                else: st.info("Sem histórico no diário.")
+            else: st.info("Diário vazio.")
+
+        # --- SEÇÃO 2: DESEMPENHO ACADÊMICO (EXPANDER) ---
+        with st.expander("📈 Desempenho Acadêmico", expanded=False):
             if not df_notas.empty:
                 n_alu = df_notas[df_notas['ID_ALUNO'].apply(db.limpar_id) == id_alu]
                 if not n_alu.empty:
-                    # Tabela Anual Simples
-                    pivot_bio = n_alu.pivot(index="ID_ALUNO", columns="TRIMESTRE", values="MEDIA_FINAL").fillna(0.0)
-                    for c in ["I Trimestre", "II Trimestre", "III Trimestre"]:
-                        if c not in pivot_bio.columns: pivot_bio[c] = 0.0
-                    
-                    st.markdown("**Médias por Trimestre:**")
-                    st.dataframe(pivot_bio[["I Trimestre", "II Trimestre", "III Trimestre"]], hide_index=True, use_container_width=True)
-                    
-                    # Calculadora de Aprovação (Meta 18.0)
-                    soma_atual = pivot_bio["I Trimestre"].iloc[0] + pivot_bio["II Trimestre"].iloc[0] + pivot_bio["III Trimestre"].iloc[0]
-                    falta = max(0.0, 18.0 - soma_atual)
-                    
-                    st.divider()
-                    c_m1, c_m2 = st.columns(2)
-                    c_m1.metric("Soma Atual", f"{soma_atual:.1f} pts")
-                    if soma_atual >= 18.0:
-                        c_m2.success("✅ APROVADO ANUAL")
+                    if trim_b == "Todos":
+                        # Visão Anual
+                        pivot_bio = n_alu.pivot(index="ID_ALUNO", columns="TRIMESTRE", values="MEDIA_FINAL").fillna(0.0)
+                        for c in ["I Trimestre", "II Trimestre", "III Trimestre"]:
+                            if c not in pivot_bio.columns: pivot_bio[c] = 0.0
+                        st.dataframe(pivot_bio[["I Trimestre", "II Trimestre", "III Trimestre"]], hide_index=True, use_container_width=True)
+                        
+                        soma = pivot_bio.sum(axis=1).iloc[0]
+                        falta = max(0.0, 18.0 - soma)
+                        c_n1, c_n2 = st.columns(2)
+                        c_n1.metric("Soma Total", f"{soma:.1f}")
+                        if soma >= 18.0: c_n2.success("APROVADO")
+                        else: c_n2.metric("Falta para passar", f"{falta:.1f}")
                     else:
-                        c_m2.metric("Precisa para Passar", f"{falta:.1f} pts", delta_color="inverse")
-                else:
-                    st.info("Nenhuma nota lançada para este aluno.")
-
-        # --- 4. CARD 3: RAIO-X DE DIFICULDADES (SCANNER) ---
-        st.subheader("🔍 Raio-X de Dificuldades (O que estudar?)")
-        with st.container(border=True):
-            if not df_diagnosticos.empty:
-                diag_alu = df_diagnosticos[df_diagnosticos['ID_ALUNO'].apply(db.limpar_id) == id_alu].iloc[::-1]
-                if not diag_alu.empty:
-                    st.markdown("**Habilidades que precisam de atenção:**")
-                    
-                    # Pega a última avaliação para mostrar as lacunas
-                    ultima_av = diag_alu.iloc[0]
-                    id_av = ultima_av['ID_AVALIACAO']
-                    respostas = str(ultima_av['RESPOSTAS_ALUNO']).split(';')
-                    
-                    # Busca a prova para pegar a grade de correção
-                    prova_ref = df_aulas[df_aulas['TIPO_MATERIAL'].str.strip() == id_av.strip()]
-                    if not prova_ref.empty:
-                        txt_prova = str(prova_ref.iloc[0]['CONTEUDO'])
-                        grade = ai.extrair_tag(txt_prova, "GRADE_DE_CORRECAO")
-                        
-                        # Extrai gabarito (Regular ou PEI)
-                        tag_gab = "GABARITO_PEI" if is_pei else "GABARITO_TEXTO"
-                        raw_gab = ai.extrair_tag(txt_prova, tag_gab) or ai.extrair_tag(txt_prova, "GABARITO")
-                        gab_oficial = re.findall(r"\b[A-E]\b", raw_gab.upper())
-                        
-                        lacunas_encontradas = []
-                        for i, resp in enumerate(respostas):
-                            if i < len(gab_oficial) and resp != gab_oficial[i]:
-                                # Busca o nome da habilidade na grade
-                                q_num = i + 1
-                                match_h = re.search(rf"QUESTÃO\s*0?{q_num}\b.*?:(.*?)(?=\n|JUSTIFICATIVA|PERÍCIA|$)", grade, re.IGNORECASE)
-                                if match_h:
-                                    lacunas_encontradas.append(match_h.group(1).strip().replace("[","").replace("]",""))
-                        
-                        if lacunas_encontradas:
-                            for lac in list(set(lacunas_encontradas))[:5]: # Mostra as top 5
-                                st.error(f"❌ {lac}")
+                        # Visão Detalhada do Trimestre Selecionado
+                        n_trim = n_alu[n_alu['TRIMESTRE'] == trim_b]
+                        if not n_trim.empty:
+                            row = n_trim.iloc[0]
+                            c_t1, c_t2, c_t3 = st.columns(3)
+                            c_t1.metric("Atividades", row.get('NOTA_VISTOS', 0))
+                            c_t2.metric("Teste", row.get('NOTA_TESTE', 0))
+                            c_t3.metric("Prova", row.get('NOTA_PROVA', 0))
+                            st.metric("Média do Trimestre", row.get('MEDIA_FINAL', 0))
                         else:
-                            st.success("✅ Nenhuma lacuna crítica detectada na última avaliação.")
-                    else:
-                        st.caption("Não foi possível mapear as habilidades desta prova.")
-                else:
-                    st.info("Nenhum gabarito escaneado para este aluno.")
-            else:
-                st.info("Banco de diagnósticos vazio.")
+                            st.info(f"Notas do {trim_b} ainda não consolidadas.")
+                else: st.info("Sem notas lançadas.")
 
-        # Rodapé Mobile
-        st.markdown("---")
-        st.caption(f"Dossiê gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+        # --- SEÇÃO 3: RAIO-X DE DIFICULDADES (EXPANDER) ---
+        with st.expander("🔍 Raio-X de Dificuldades (O que estudar?)", expanded=True):
+            if not df_diagnosticos.empty:
+                # Filtra diagnósticos do aluno
+                diag_alu = df_diagnosticos[df_diagnosticos['ID_ALUNO'].apply(db.limpar_id) == id_alu].copy()
+                
+                if trim_b != "Todos":
+                    diag_alu = diag_alu[diag_alu['ID_AVALIACAO'].str.contains(trim_b, na=False)]
+
+                if not diag_alu.empty:
+                    ultima_av = diag_alu.iloc[-1] # Pega a mais recente do filtro
+                    st.markdown(f"**Avaliação Analisada:** {ultima_av['ID_AVALIACAO']}")
+                    
+                    # Busca a prova para mapear habilidades
+                    prova_ref = df_aulas[df_aulas['TIPO_MATERIAL'].str.strip() == ultima_av['ID_AVALIACAO'].strip()]
+                    if not prova_ref.empty:
+                        txt_p = str(prova_ref.iloc[0]['CONTEUDO'])
+                        grade = ai.extrair_tag(txt_p, "GRADE_DE_CORRECAO")
+                        tag_g = "GABARITO_PEI" if is_pei else "GABARITO_TEXTO"
+                        gab_oficial = re.findall(r"\b[A-E]\b", (ai.extrair_tag(txt_p, tag_g) or ai.extrair_tag(txt_p, "GABARITO")).upper())
+                        respostas = str(ultima_av['RESPOSTAS_ALUNO']).split(';')
+                        
+                        lacunas = []
+                        for i, r in enumerate(respostas):
+                            if i < len(gab_oficial) and r != gab_oficial[i]:
+                                q_n = i + 1
+                                m_h = re.search(rf"QUESTÃO\s*0?{q_n}\b.*?:(.*?)(?=\n|JUSTIFICATIVA|PERÍCIA|$)", grade, re.IGNORECASE)
+                                lacunas.append(m_h.group(1).strip().replace("[","").replace("]","") if m_h else f"Questão {q_n}")
+                        
+                        if lacunas:
+                            for l in list(set(lacunas)): st.error(f"❌ {l}")
+                        else: st.success("✅ Domínio total nesta avaliação.")
+                    else: st.caption("Grade de habilidades não localizada.")
+                else: st.info(f"Nenhum scanner realizado no {trim_b}.")
+            else: st.info("Banco de diagnósticos vazio.")
+
+        # Rodapé e Alerta PEI
         if is_pei:
-            st.warning("♿ Estudante com Plano de Ensino Individualizado (PEI)")
+            st.warning(f"♿ **Estudante PEI:** {info_alu['NECESSIDADES']}")
+        st.caption(f"Dossiê atualizado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
