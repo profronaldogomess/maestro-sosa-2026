@@ -638,38 +638,82 @@ if menu == "🧪 Criador de Aulas":
                                 st.session_state.v_lab = int(time.time())
                                 st.rerun()
 
+# --- ABA 4: ATIVIDADES COMPLEMENTARES (VERSÃO V31.9 - MÓDULO RECOMPOSIÇÃO) ---
         with tab_complementar:
-            st.subheader("📚 Atividades Complementares de Fixação")
+            st.subheader("📚 Atividades Complementares e Recomposição (Ponte Curricular)")
+            
             with st.container(border=True):
                 c1, c2 = st.columns([1, 2])
-                ano_comp = c1.selectbox("Série:", [6, 7, 8, 9], key=f"comp_ano_{v}")
-                planos_comp = df_planos[df_planos["ANO"].astype(str).str.contains(str(ano_comp))]
-                sem_comp = c2.selectbox("Vincular ao Planejamento:", planos_comp["SEMANA"].tolist() if not planos_comp.empty else ["Semana Avulsa"], key=f"comp_sem_vinc_{v}")
-                df_cur_comp = df_curriculo[df_curriculo["ANO"].astype(str).str.contains(str(ano_comp))]
-                col_f1, col_f2 = st.columns(2)
-                lista_eixos_comp = sorted(df_cur_comp["EIXO"].unique().tolist())
-                sel_eixo_comp = col_f1.multiselect("1. Selecione o(s) Eixo(s):", lista_eixos_comp, key=f"comp_eixo_{v}")
-                if sel_eixo_comp:
-                    df_cont_comp = df_cur_comp[df_cur_comp["EIXO"].isin(sel_eixo_comp)]
-                    lista_conts_comp = sorted(df_cont_comp["CONTEUDO_ESPECIFICO"].unique().tolist())
-                    sel_cont_comp = col_f2.multiselect("2. Selecione os Conteúdos:", lista_conts_comp, key=f"comp_cont_{v}")
-                    if sel_cont_comp:
-                        df_obj_comp = df_cont_comp[df_cont_comp["CONTEUDO_ESPECIFICO"].isin(sel_cont_comp)]
-                        lista_objs_comp = sorted(df_obj_comp["OBJETIVOS"].unique().tolist())
-                        sel_obj_comp = st.multiselect("3. Selecione os Objetivos:", lista_objs_comp, key=f"comp_obj_{v}")
-                        st.divider()
-                        c_q1, c_q2 = st.columns([1, 2])
-                        tipo_comp = c_q1.radio("Objetivo:", ["Fixação", "Reforço", "Aprofundamento"], key=f"comp_tipo_radio_{v}")
-                        qtd_q_comp = c_q2.slider("Nº Questões:", 1, 20, 10, key=f"comp_q_{v}")
-                        instr_extra_comp = st.text_area("📝 Instruções Extras:", key=f"comp_instr_{v}")
-                        if st.button("🚀 GERAR MATERIAL COMPLEMENTAR", use_container_width=True, type="primary"):
-                            with st.spinner("Maestro Sosa arquitetando material..."):
-                                nome_elite_comp = util.gerar_nome_material_elite(ano_comp, f"Fixação ({tipo_comp})", sem_comp)
-                                st.session_state.sosa_id_atual = nome_elite_comp
-                                st.session_state.lab_meta = {"ano": ano_comp, "trimestre": "I Trimestre", "tipo": f"COMPLEMENTAR ({tipo_comp})", "semana_ref": sem_comp}
-                                prompt_comp = f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {nome_elite_comp}.\nOBJETIVO: {tipo_comp}. VÍNCULO: {sem_comp}. SÉRIE: {ano_comp}º Ano.\nCONTEÚDO: {' / '.join(sel_cont_comp)}.\nQUANTIDADE: {qtd_q_comp} questões A-E.\nINSTRUÇÕES: {instr_extra_comp}.\n\n🚨 MISSÃO: Gere com as TAGS [PROFESSOR], [ALUNO], [GABARITO], [PEI], [GABARITO_PEI]."
-                                st.session_state.lab_temp = ai.gerar_ia("MAESTRO_SOSA_V28_ELITE", prompt_comp, usar_busca=True)
-                                st.rerun()
+                ano_alvo = c1.selectbox("Série Alvo (Sua Turma):", [6, 7, 8, 9], key=f"comp_ano_alvo_{v}")
+                
+                # --- MOTOR DE ORIGEM DO CONTEÚDO ---
+                origem_tipo = c2.radio("Origem do Conteúdo (DNA Curricular):", 
+                    ["Série Atual (Consolidação)", "Ano Anterior (Recomposição/Base)"], 
+                    horizontal=True, key=f"comp_origem_tipo_{v}")
+                
+                if "Ano Anterior" in origem_tipo:
+                    ano_origem = st.selectbox("Buscar base em qual série?", [1, 2, 3, 4, 5, 6, 7, 8], index=ano_alvo-2, key=f"comp_ano_origem_{v}")
+                    st.warning(f"🔍 Buscando conteúdos do {ano_origem}º Ano para aplicar no {ano_alvo}º Ano.")
+                else:
+                    ano_origem = ano_alvo
+
+            # --- FILTRAGEM DINÂMICA DA MATRIZ DE ITABUNA ---
+            df_cur_comp = df_curriculo[df_curriculo["ANO"].astype(str).str.contains(str(ano_origem))]
+            
+            if not df_cur_comp.empty:
+                with st.container(border=True):
+                    c_f1, c_f2 = st.columns(2)
+                    lista_eixos_c = sorted(df_cur_comp["EIXO"].unique().tolist())
+                    sel_eixo_c = c_f1.multiselect("1. Selecione o Eixo:", lista_eixos_c, key=f"comp_eixo_{v}")
+                    
+                    if sel_eixo_c:
+                        df_cont_c = df_cur_comp[df_cur_comp["EIXO"].isin(sel_eixo_c)]
+                        sel_cont_c = c_f2.multiselect("2. Selecione o Conteúdo:", sorted(df_cont_c["CONTEUDO_ESPECIFICO"].unique().tolist()), key=f"comp_cont_{v}")
+                        
+                        if sel_cont_c:
+                            df_obj_c = df_cont_c[df_cont_c["CONTEUDO_ESPECIFICO"].isin(sel_cont_c)]
+                            sel_obj_c = st.multiselect("3. Selecione os Objetivos Oficiais:", sorted(df_obj_c["OBJETIVOS"].unique().tolist()), key=f"comp_obj_{v}")
+                            
+                            st.divider()
+                            
+                            # --- CALIBRAGEM DO MATERIAL ---
+                            c_q1, c_q2, c_q3 = st.columns([1, 1, 2])
+                            tipo_comp = c_q1.selectbox("Objetivo:", ["Fixação", "Reforço", "Aprofundamento", "Recomposição"], key=f"comp_tipo_{v}")
+                            qtd_q_comp = c_q2.slider("Nº Questões:", 3, 15, 10, key=f"comp_q_{v}")
+                            instr_extra_c = c_q3.text_area("📝 Contexto Adicional (Opcional):", key=f"comp_instr_{v}")
+
+                            if st.button("🚀 GERAR MATERIAL DE ELITE", use_container_width=True, type="primary"):
+                                with st.spinner("Maestro Sosa arquitetando Ponte Curricular..."):
+                                    # Geração do Nome e Metadados
+                                    label_tipo = "Recomposição" if "Ano Anterior" in origem_tipo else "Fixação"
+                                    nome_elite_c = util.gerar_nome_material_elite(ano_alvo, label_tipo, f"Base {ano_origem}º Ano")
+                                    
+                                    st.session_state.sosa_id_atual = nome_elite_c
+                                    st.session_state.lab_meta = {
+                                        "ano": ano_alvo, "trimestre": "I Trimestre", 
+                                        "tipo": label_tipo.upper(), "semana_ref": "RECOMPOSIÇÃO"
+                                    }
+                                    
+                                    # Seleção da Persona
+                                    persona_alvo = "ARQUITETO_RECOMPOSICAO_V31" if "Recomposição" in tipo_comp else "MAESTRO_SOSA_V28_ELITE"
+
+                                    prompt_c = (
+                                        f"ID_FORNECIDO: {nome_elite_c}.\n"
+                                        f"SÉRIE ALVO: {ano_alvo}º Ano | SÉRIE DE ORIGEM (BASE): {ano_origem}º Ano.\n"
+                                        f"OBJETIVO: {tipo_comp}.\n"
+                                        f"CONTEÚDOS ITABUNA: {', '.join(sel_cont_c)}.\n"
+                                        f"OBJETIVOS MATRIZ: {', '.join(sel_obj_c)}.\n"
+                                        f"QUANTIDADE: {qtd_q_comp} questões.\n"
+                                        f"EXTRAS: {instr_extra_c}.\n\n"
+                                        f"MISSÃO: Use o ID_FORNECIDO. Gere o material com as TAGS [SOSA_ID], [RESGATE_COGNITIVO], [HABILIDADE_BNCC], [OBJETO_CONHECIMENTO], [CONTEXTO_GLOCAL], [PROFESSOR], [ALUNO], [GABARITO], [ESTRATEGIA_DUA_PEI]."
+                                    )
+                                    
+                                    st.session_state.lab_temp = ai.gerar_ia(persona_alvo, prompt_c, usar_busca=True)
+                                    st.session_state.v_lab = int(time.time())
+                                    st.success("Material enviado ao Laboratório!"); time.sleep(1)
+                                    st.rerun()
+            else:
+                st.error(f"📭 Matriz Curricular do {ano_origem}º Ano não localizada no banco.")
 
         # --- ABA 5: ACERVO DE MATERIAIS (VERSÃO V43 - COMPATÍVEL COM PROJETOS BNCC ELITE) ---
         with tab_acervo_lab:
