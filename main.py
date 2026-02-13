@@ -308,10 +308,10 @@ def exibir_material_estruturado(texto_raw, key_prefix, dados_plano=None, info_au
                         st.error(f"Falha no envio dos arquivos.")
                        
 # ==============================================================================
-# MÓDULO: LABORATÓRIO DE PRODUÇÃO (CRIADOR V40.5 - RECOVERY MODE)
+# MÓDULO: LABORATÓRIO DE PRODUÇÃO (CRIADOR V41.0 - INTEGRADO & REFINADO)
 # ==============================================================================
 if menu == "🧪 Criador de Aulas":
-    st.title("🧪 Laboratório de Produção Semiótica (V40.5)")
+    st.title("🧪 Laboratório de Produção Semiótica (V41.0)")
     st.markdown("---")
     
     def reset_laboratorio():
@@ -326,45 +326,39 @@ if menu == "🧪 Criador de Aulas":
         st.session_state.v_lab = int(time.time())
     v = st.session_state.v_lab
 
+    # --- 1. INICIALIZAÇÃO DE SEGURANÇA ---
     meta = st.session_state.get("lab_meta", {})
     is_hub = meta.get("tipo") == "PRODUÇÃO_HUB"
     ed_prof, ed_alu, ed_res, ed_dua = "", "", "", ""
     s_id = st.session_state.get("sosa_id_atual", "SEM-ID")
 
+    # --- ÁREA DE EXIBIÇÃO E REFINO (MODO EDIÇÃO ATIVO) ---
     if "lab_temp" in st.session_state:
         txt_base = st.session_state.lab_temp
         
-        # 1. EXTRAÇÃO DE SEGURANÇA
+        # 2. EXTRAÇÃO DE SEGURANÇA E DNA
         s_id_extraido = ai.extrair_tag(txt_base, "SOSA_ID")
         if s_id_extraido: s_id = s_id_extraido.split("[")[0].strip()
         
         is_projeto = "PROJETO" in s_id.upper() or "[JUSTIFICATIVA_PHC]" in txt_base or "[CONTEXTO_GLOCAL]" in txt_base
 
-        # 2. MOTOR DE RECUPERAÇÃO (RECOVERY MODE)
-        # Se a IA jogou tudo no DUA, vamos capturar para não perder o trabalho
+        # 3. MOTOR DE RECUPERAÇÃO (RECOVERY MODE)
         conteudo_bruto_aluno = ai.extrair_tag(txt_base, "ALUNO")
         conteudo_bruto_dua = ai.extrair_tag(txt_base, "ESTRATEGIA_DUA_PEI")
         
         # Se o aluno estiver vazio ou só com linhas, e o DUA estiver muito grande, o conteúdo está no DUA
-        if len(conteudo_bruto_aluno) < 100 and len(conteudo_bruto_dua) > 300:
-            recovery_txt = conteudo_bruto_dua
-        else:
-            recovery_txt = conteudo_bruto_aluno
+        recovery_txt = conteudo_bruto_dua if (len(conteudo_bruto_aluno) < 100 and len(conteudo_bruto_dua) > 300) else conteudo_bruto_aluno
 
         if is_projeto:
             val_just = ai.extrair_tag(txt_base, "JUSTIFICATIVA_PHC") or ai.extrair_tag(txt_base, "CONTEXTO_GLOCAL")
             val_rub = ai.extrair_tag(txt_base, "RUBRICA_DE_MERITO")
+            ed_prof = f"MAPA DO PROFESSOR\n\n[JUSTIFICATIVA]\n{val_just}\n\n[RUBRICA]\n{val_rub}"
             
-            # Montagem do Professor
-            ed_prof = f"[JUSTIFICATIVA]\n{val_just}\n\n[RUBRICA]\n{val_rub}"
-            
-            # Montagem do Aluno (Tenta sub-tags, se não, usa o recovery)
             val_ctx = ai.extrair_tag(txt_base, "CONTEXTO_INVESTIGATIVO")
             if val_ctx and len(val_ctx) > 10:
                 ed_alu = f"[CONTEXTO]\n{val_ctx}\n\n[MISSÃO]\n{ai.extrair_tag(txt_base, 'MISSÃO_DE_PESQUISA')}\n\n[PASSO_A_PASSO]\n{ai.extrair_tag(txt_base, 'PASSO_A_PASSO')}\n\n[PRODUTO]\n{ai.extrair_tag(txt_base, 'PRODUTO_ESPERADO')}"
             else:
                 ed_alu = recovery_txt
-            
             ed_res = "RUBRICA INTEGRADA"
             ed_dua = conteudo_bruto_dua
         else:
@@ -375,7 +369,28 @@ if menu == "🧪 Criador de Aulas":
 
         st.success(f"💎 Material em Edição: **{s_id}**")
 
-        # --- TABS DINÂMICAS ---
+        # --- 🤖 REFINADOR MAESTRO (REINTEGRADO V41) ---
+        with st.container(border=True):
+            st.subheader("🤖 Refinador Maestro (Perícia V31)")
+            cmd_refine_lab = st.chat_input("Solicite ajustes (ex: 'mude o tema para cacau', 'torne a aula 1 mais prática')...", key=f"chat_lab_ref_{v}")
+            if cmd_refine_lab:
+                with st.spinner("Maestro Sosa realizando reengenharia..."):
+                    # Seleção inteligente de Persona para o Refino
+                    if "SONDA" in s_id.upper(): persona_alvo = "REFINADOR_SONDA_V29"
+                    elif is_projeto: persona_alvo = "REFINADOR_PEDAGOGICO"
+                    else: persona_alvo = "REFINADOR_MATERIAIS"
+                    
+                    novo_texto = ai.gerar_ia(persona_alvo, f"ORDEM: {cmd_refine_lab}\n\nCONTEÚDO ATUAL:\n{st.session_state.lab_temp}")
+                    
+                    if len(novo_texto) > 50:
+                        st.session_state.lab_temp = novo_texto
+                        st.session_state.v_lab = int(time.time())
+                        st.rerun()
+            
+            if st.button("🗑️ DESCARTAR EDIÇÃO E VOLTAR", use_container_width=True):
+                reset_laboratorio()
+        
+        # --- 🗂️ TABS DINÂMICAS ---
         if is_projeto:
             t_prof, t_alu, t_dua, t_sync = st.tabs(["👨‍🏫 Mapa do Professor", "📝 Roteiro do Aluno", "♿ DUA/PEI", "☁️ SINCRONIA"])
             with t_prof:
@@ -393,12 +408,14 @@ if menu == "🧪 Criador de Aulas":
                 st.text_area("Gabarito Oficial:", ed_res, height=200, key=f"ed_res_f_{v}")
             with t_pei: st.text_area("Material PEI:", ed_dua, height=400, key=f"ed_pei_f_{v}")
 
+        # --- ☁️ ABA DE SINCRONIA (TRIPLE-SYNC) ---
         with t_sync:
+            st.subheader("🚀 Protocolo de Custódia Digital")
             if st.button("💾 EXECUTAR TRIPLE-SYNC (SUBSTITUIR)", use_container_width=True, type="primary", key=f"btn_triple_{v}"):
                 with st.status("Sincronizando...") as status:
                     db.excluir_registro_com_drive("DB_AULAS_PRONTAS", s_id)
                     ano_str = f"{meta.get('ano', '6')}º"
-                    sem_ref = meta.get('semana_ref', 'PROJETO')
+                    sem_ref = meta.get('semana_ref', 'PROJETO' if is_projeto else 'AULA')
                     
                     doc_alu = exporter.gerar_docx_aluno_v24(s_id, ed_alu, {"ano": ano_str, "trimestre": meta.get('trimestre', 'I Trimestre')})
                     link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{s_id}_ALUNO", modo="AULA")
@@ -411,7 +428,7 @@ if menu == "🧪 Criador de Aulas":
                     ])
                     status.update(label="✅ Sincronizado!", state="complete")
                     st.balloons(); time.sleep(1); reset_laboratorio()
-                    
+
     # --- SEÇÃO DE ENTRADA (CONFIGURAÇÃO INICIAL) ---
     else:
         tab_producao, tab_diagnostico, tab_trabalhos, tab_complementar, tab_acervo = st.tabs([
