@@ -690,18 +690,32 @@ if menu == "🧪 Criador de Aulas":
                             instr_extra_c = c_q3.text_area("📝 Contexto Adicional:", key=f"comp_instr_{v}")
 
                             if st.button("🚀 GERAR MATERIAL DE ELITE", use_container_width=True, type="primary"):
-                                with st.spinner("Maestro Sosa arquitetando Intervenção..."):
-                                    # Nomenclatura de Soberania
+                                with st.spinner("Maestro Sosa arquitetando material com DNA único..."):
+                                    
+                                    # 1. GERAÇÃO DO DNA ÚNICO (SOSA-ID)
+                                    # O util.gerar_sosa_id já traz o fuso de Itabuna e um hash aleatório
+                                    sosa_id_hash = util.gerar_sosa_id(tipo_comp, ano_alvo, "I") 
+                                    
+                                    # 2. DEFINIÇÃO DA NOMENCLATURA DE SOBERANIA
                                     if "Ano Anterior" in origem_tipo:
-                                        nome_elite_c = f"RECOMP_{ano_alvo}ANO_{turma_interv.replace(' ','')}_{sel_cont_c[0][:15]}"
+                                        # PADRÃO: RECOMP - {TURMA} - ID
+                                        nome_elite_c = f"RECOMP - {turma_interv} - {sosa_id_hash}"
                                         persona_alvo = "ARQUITETO_RECOMPOSICAO_V68_ELITE"
                                     else:
-                                        nome_elite_c = util.gerar_nome_material_elite(ano_alvo, tipo_comp, "Safra Atual")
+                                        # PADRÃO: {ANO}º Ano - {TIPO} - ID
+                                        nome_elite_c = f"{ano_alvo}º Ano - {tipo_comp} - {sosa_id_hash}"
                                         persona_alvo = "MAESTRO_SOSA_V28_ELITE"
 
+                                    # 3. CARREGAMENTO NO ESTADO DO SISTEMA
                                     st.session_state.sosa_id_atual = nome_elite_c
-                                    st.session_state.lab_meta = {"ano": ano_alvo, "trimestre": "I Trimestre", "tipo": tipo_comp.upper(), "semana_ref": "RECOMPOSIÇÃO"}
+                                    st.session_state.lab_meta = {
+                                        "ano": ano_alvo, 
+                                        "trimestre": "I Trimestre", 
+                                        "tipo": tipo_comp.upper(), 
+                                        "semana_ref": "RECOMPOSIÇÃO" if "Ano Anterior" in origem_tipo else "SAFRA"
+                                    }
                                     
+                                    # 4. DISPARO DA IA COM O ID FORNECIDO
                                     prompt_c = (
                                         f"ID_FORNECIDO: {nome_elite_c}.\n"
                                         f"SÉRIE ALVO: {ano_alvo}º Ano | SÉRIE ORIGEM: {ano_origem}º Ano.\n"
@@ -709,8 +723,9 @@ if menu == "🧪 Criador de Aulas":
                                         f"CONTEÚDOS: {', '.join(sel_cont_c)}.\n"
                                         f"OBJETIVOS: {', '.join(sel_obj_c)}.\n"
                                         f"QUANTIDADE: {qtd_q_comp} questões. EXTRAS: {instr_extra_c}.\n\n"
-                                        f"MISSÃO: Use o ID_FORNECIDO. Gere com as TAGS [VALOR: 0.0], [SOSA_ID], [MAPA_DE_RECOMPOSICAO], [PROFESSOR], [ALUNO], [GRADE_DE_CORRECAO], [PEI]."
+                                        f"MISSÃO: Use o ID_FORNECIDO na tag [SOSA_ID]. Gere com as TAGS [VALOR: 0.0], [SOSA_ID], [MAPA_DE_RECOMPOSICAO], [PROFESSOR], [ALUNO], [RESPOSTAS_PEDAGOGICAS], [GRADE_DE_CORRECAO], [PEI]."
                                     )
+                                    
                                     st.session_state.lab_temp = ai.gerar_ia(persona_alvo, prompt_c, usar_busca=True)
                                     st.session_state.v_lab = int(time.time())
                                     st.rerun()
