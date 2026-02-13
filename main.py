@@ -364,7 +364,7 @@ if menu == "🧪 Criador de Aulas":
                     st.session_state.v_lab = int(time.time()); st.rerun()
             if st.button("🗑️ DESCARTAR EDIÇÃO"): reset_laboratorio()
         
-        # --- 🗂️ TABS DINÂMICAS (BLOCO ÚNICO E PROTEGIDO) ---
+        # --- 🗂️ TABS DINÂMICAS (BLOCO ÚNICO E PROTEGIDO) --
         if is_recomp:
             t_prof, t_alu, t_gab, t_pei, t_sync = st.tabs(["👨‍🏫 Tratado do Professor", "📝 Folha do Aluno", "✅ Respostas Pedagógicas", "♿ Material PEI", "☁️ SINCRONIA"])
             with t_prof: 
@@ -374,11 +374,18 @@ if menu == "🧪 Criador de Aulas":
                 st.warning("📸 SOBERANIA VISUAL: Verifique os [ PROMPT IMAGEM ]")
                 st.text_area("Questões Regulares:", ed_alu, height=450, key=f"a_recomp_area_{v}")
             with t_gab: 
-                st.text_area("Gabarito e Expectativa:", ed_res, height=450, key=f"g_recomp_area_{v}")
-                if ed_grade: st.text_area("Grade de Perícia:", ed_grade, height=200, key=f"grade_recomp_area_{v}")
+                st.subheader("✅ Expectativa de Aprendizagem")
+                st.text_area("Respostas Detalhadas:", ed_res, height=300, key=f"g_recomp_area_{v}")
+                st.divider()
+                st.subheader("🔍 Grade de Perícia (Descritores)")
+                # Extrai a grade que agora virá em formato de lista
+                val_grade = ai.extrair_tag(txt_base, "GRADE_DE_CORRECAO")
+                st.text_area("Análise por Item:", val_grade, height=300, key=f"grade_recomp_area_{v}")
             with t_pei: 
-                st.info("♿ Simetria 50%: Cada questão com seu próprio Andaime.")
+                st.info("♿ Simetria 50%: Andaime Cognitivo por Questão.")
                 st.text_area("Atividade Adaptada:", ed_dua, height=450, key=f"pei_recomp_area_{v}")
+
+# ... (No Triple-Sync, o código permanece o mesmo da V42.1, pois ele já é robusto)
         
         elif is_projeto:
             t_prof, t_alu, t_dua, t_sync = st.tabs(["👨‍🏫 Mapa do Professor", "📝 Roteiro do Aluno", "♿ DUA/PEI", "☁️ SINCRONIA"])
