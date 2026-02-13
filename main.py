@@ -419,38 +419,41 @@ if menu == "🧪 Criador de Aulas":
             with t_pei: st.text_area("Material PEI:", ed_dua, height=400, key=f"ed_pei_f_{v}")
 
         # --- ☁️ ABA DE SINCRONIA (TRIPLE-SYNC V44) ---
+# --- ABA DE SINCRONIA (VERSÃO V45 - TRIPLE-SYNC ELITE) ---
         with t_sync:
-            st.subheader("🚀 Protocolo de Custódia Digital")
+            st.subheader("🚀 Protocolo de Custódia Digital V45")
             if st.button("💾 EXECUTAR TRIPLE-SYNC (SUBSTITUIR)", use_container_width=True, type="primary", key=f"btn_triple_{v}"):
                 with st.status("Iniciando Protocolo de Sincronia Total...") as status:
                     db.excluir_registro_com_drive("DB_AULAS_PRONTAS", s_id)
                     
                     ano_str = f"{meta.get('ano', '6')}º"
                     trim_str = meta.get('trimestre', 'I Trimestre')
-                    # AJUSTE DE COERÊNCIA: Pega a semana_ref do meta ou define pelo tipo
-                    sem_ref = meta.get('semana_ref', 'PROJETO' if is_projeto else ('RECOMPOSIÇÃO' if is_recomp else 'AULA'))
+                    sem_ref = meta.get('semana_ref', 'RECOMPOSIÇÃO')
                     
-                    info_doc = {"ano": ano_str, "trimestre": trim_str, "valor": "0,00", "valor_questao": "0,00", "qtd_questoes": 0}
+                    # Metadados para o Exporter (Valor 0.0 para atividades)
+                    info_doc = {"ano": ano_str, "trimestre": trim_str, "valor": "0,00", "valor_questao": "0,00", "qtd_questoes": 10}
 
-                    # Geração dos 3 Arquivos
+                    # 1. Geração Material Regular (Com Image Prompts)
                     doc_alu = exporter.gerar_docx_aluno_v24(s_id, ed_alu, info_doc)
                     link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{s_id}_ALUNO", modo="AULA")
                     
-                    doc_pei = exporter.gerar_docx_pei_v25(f"{s_id}_PEI", ed_dua, info_doc)
+                    # 2. Geração Material PEI (Simetria 50% + Andaime)
+                    txt_pei = ai.extrair_tag(txt_base, "PEI")
+                    doc_pei = exporter.gerar_docx_pei_v25(f"{s_id}_PEI", txt_pei, info_doc)
                     link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{s_id}_PEI", modo="AULA")
                     
-                    # Guia do Professor (Híbrido)
-                    txt_prof_final = f"{ed_prof}\n\n[RESPOSTAS_PEDAGOGICAS]\n{ed_res}" if is_recomp else ed_prof
-                    doc_prof = exporter.gerar_docx_professor_v25(s_id, txt_prof_final, {"ano": ano_str, "semana": sem_ref, "trimestre": trim_str})
+                    # 3. Geração Guia do Professor (Tratado + Respostas Pedagógicas)
+                    txt_prof_completo = f"{ed_prof}\n\n[RESPOSTAS_PEDAGOGICAS]\n{ed_res}\n\n[GRADE_DE_CORRECAO]\n{ai.extrair_tag(txt_base, 'GRADE_DE_CORRECAO')}"
+                    doc_prof = exporter.gerar_docx_professor_v25(s_id, txt_prof_completo, {"ano": ano_str, "semana": sem_ref, "trimestre": trim_str})
                     link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{s_id}_PROF", modo="AULA")
                     
-                    # Consolidação no Banco com os 3 Links
+                    # 4. Consolidação no Banco
                     links_f = f"--- LINKS ---\nRegular({link_alu}) PEI({link_pei}) Prof({link_prof})"
                     db.salvar_no_banco("DB_AULAS_PRONTAS", [
                         datetime.now().strftime("%d/%m/%Y"), sem_ref, s_id, txt_base + f"\n\n{links_f}", ano_str, link_alu
                     ])
                     
-                    status.update(label="✅ Sincronia Total Concluída!", state="complete")
+                    status.update(label="✅ Sincronia de Elite Concluída!", state="complete")
                     st.balloons(); time.sleep(1); reset_laboratorio()
 
     # --- SEÇÃO DE ENTRADA (CONFIGURAÇÃO INICIAL) ---
