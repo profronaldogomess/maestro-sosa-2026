@@ -367,33 +367,36 @@ def gerar_ia(persona_key, comando, partes_arquivos=[], usar_busca=True):
     except Exception as e:
         return f"Erro na IA: {e}"
 
-# --- EXTRATOR SOSA V39 (SINCRONIA BNCC ELITE) ---
-# --- EXTRATOR SOSA V40 (INTEGRAÇÃO TOTAL & HUB DE ATIVOS) ---
+# --- EXTRATOR SOSA V41 (BLINDAGEM DE PROJETOS E ATIVOS) ---
 def extrair_tag(texto, tag):
     if not texto: return ""
     import re
+    # 1. LIMPEZA DE RUÍDOS: Remove Markdown e normaliza
     texto_limpo = re.sub(r'[*#]', '', texto)
     tag_busca = tag.upper().strip()
     
+    # 2. Captura valor INTERNO (Ex: [VALOR: 3.0])
     padrao_interno = rf"\[\s*\b{tag_busca}\b\s*[:\-]*\s*(.*?)\]"
     match_int = re.search(padrao_interno, texto_limpo, re.IGNORECASE)
     if match_int:
         res_int = match_int.group(1).strip()
         if 0 < len(res_int) < 60: return res_int
 
+    # 3. LISTA DE TAGS MESTRAS V41 (O ESCUDO TOTAL)
     tags_mestras = [
         "SOSA_ID", "VALOR", "ORIENTACOES", "QUESTOES", "GABARITO_TEXTO", "GRADE_DE_CORRECAO", 
         "GABARITO", "RESPOSTAS_IA", "PEI", "GABARITO_PEI", "RESPOSTAS_PEI_IA", 
         "PROFESSOR", "ALUNO", "IMAGENS", "AULA_ALVO",
-        "BNCC_CODE", "HABILIDADE_BNCC", "COMPETENCIAS_FOCO", "COMPETENCIAS_BNCC",
-        "COMPETENCIA_GERAL", "JUSTIFICATIVA_PEDAGOGICA", # Novas Tags V40
-        "CONTEUDO_GERAL", "OBJETO_CONHECIMENTO", "CONTEUDOS_ESPECIFICOS", "OBJETIVOS_ENSINO", 
-        "RECURSOS_DIDATICOS", "RECURSOS_ELITE", "AULA_1", "AULA_2", "SABADO_LETIVO", 
-        "AVALIACAO", "AVALIACAO_DE_MERITO", "ADAPTACAO_PEI", "ESTRATEGIA_DUA_PEI"
+        "HABILIDADE_BNCC", "COMPETENCIAS_FOCO", "OBJETO_CONHECIMENTO",
+        "JUSTIFICATIVA_PHC", "RUBRICA_DE_MERITO", "CONTEXTO_INVESTIGATIVO", 
+        "MISSÃO_DE_PESQUISA", "PASSO_A_PASSO", "PRODUTO_ESPERADO", "CONTEXTO_GLOCAL",
+        "AULA_1", "AULA_2", "SABADO_LETIVO", "AVALIACAO_DE_MERITO", "ESTRATEGIA_DUA_PEI"
     ]
     
     parada = [t for t in tags_mestras if t != tag_busca]
     lista_parada = "|".join(parada)
+    
+    # 4. REGEX DE BLOCO V41: Captura até a próxima tag mestra
     padrao_bloco = rf"\[\s*\b{tag_busca}\b\s*\]\s*[:\-]*\s*(.*?)(?=\n\s*\[\s*(?:{lista_parada})\s*\]|\[\s*(?:{lista_parada})\s*\]|$)"
     match_bloco = re.search(padrao_bloco, texto_limpo, re.DOTALL | re.IGNORECASE)
     
