@@ -638,7 +638,7 @@ if menu == "🧪 Criador de Aulas":
                                 st.session_state.v_lab = int(time.time())
                                 st.rerun()
 
-# --- ABA 4: ATIVIDADES COMPLEMENTARES (VERSÃO V31.9 - MÓDULO RECOMPOSIÇÃO) ---
+# --- ABA 4: ATIVIDADES COMPLEMENTARES (VERSÃO V32.0 - CLÍNICA PEDAGÓGICA) ---
         with tab_complementar:
             st.subheader("📚 Atividades Complementares e Recomposição (Ponte Curricular)")
             
@@ -646,74 +646,77 @@ if menu == "🧪 Criador de Aulas":
                 c1, c2 = st.columns([1, 2])
                 ano_alvo = c1.selectbox("Série Alvo (Sua Turma):", [6, 7, 8, 9], key=f"comp_ano_alvo_{v}")
                 
-                # --- MOTOR DE ORIGEM DO CONTEÚDO ---
                 origem_tipo = c2.radio("Origem do Conteúdo (DNA Curricular):", 
-                    ["Série Atual (Consolidação)", "Ano Anterior (Recomposição/Base)"], 
+                    ["Série Atual (Safra/Consolidação)", "Ano Anterior (Intervenção/Recomposição)"], 
                     horizontal=True, key=f"comp_origem_tipo_{v}")
-                
-                if "Ano Anterior" in origem_tipo:
-                    ano_origem = st.selectbox("Buscar base em qual série?", [1, 2, 3, 4, 5, 6, 7, 8], index=ano_alvo-2, key=f"comp_ano_origem_{v}")
-                    st.warning(f"🔍 Buscando conteúdos do {ano_origem}º Ano para aplicar no {ano_alvo}º Ano.")
-                else:
-                    ano_origem = ano_alvo
+            
+            # --- LÓGICA DE INTERVENÇÃO CLÍNICA (SCANNER LOOKUP) ---
+            contexto_scanner = ""
+            if "Ano Anterior" in origem_tipo:
+                with st.container(border=True):
+                    st.markdown("#### 🔍 1. Análise de Evidências (Scanner)")
+                    c_t1, c_t2 = st.columns([1, 1])
+                    turma_interv = c_t1.selectbox("Selecione a Turma para Diagnóstico:", sorted(df_alunos['TURMA'].unique()), key=f"comp_turma_{v}")
+                    ano_origem = c_t2.selectbox("Buscar base em qual série?", [1, 2, 3, 4, 5, 6, 7, 8], index=ano_alvo-2, key=f"comp_ano_orig_{v}")
+                    
+                    # Busca erros reais no Scanner para esta turma
+                    if not df_diagnosticos.empty:
+                        erros_turma = df_diagnosticos[df_diagnosticos['TURMA'] == turma_interv]
+                        if not erros_turma.empty:
+                            media_baixa = erros_turma[erros_turma['NOTA_CALCULADA'].apply(util.sosa_to_float) < 6.0]
+                            if not media_baixa.empty:
+                                lista_avs = media_baixa['ID_AVALIACAO'].unique()
+                                st.error(f"🚨 **Lacunas Detectadas:** A turma teve baixo desempenho em: {', '.join(lista_avs[:2])}")
+                                contexto_scanner = f"A Turma {turma_interv} apresentou dificuldades reais nas avaliações: {lista_avs}. Foque em resgatar a base do {ano_origem}º ano."
+                            else:
+                                st.success("✅ Turma com bom desempenho médio no Scanner.")
+            else:
+                ano_origem = ano_alvo
+                st.info(f"📖 **Modo Safra:** Consolidando o conteúdo planejado para o {ano_alvo}º Ano.")
 
-            # --- FILTRAGEM DINÂMICA DA MATRIZ DE ITABUNA ---
+            # --- FILTRAGEM DA MATRIZ ---
             df_cur_comp = df_curriculo[df_curriculo["ANO"].astype(str).str.contains(str(ano_origem))]
             
             if not df_cur_comp.empty:
                 with st.container(border=True):
                     c_f1, c_f2 = st.columns(2)
-                    lista_eixos_c = sorted(df_cur_comp["EIXO"].unique().tolist())
-                    sel_eixo_c = c_f1.multiselect("1. Selecione o Eixo:", lista_eixos_c, key=f"comp_eixo_{v}")
-                    
+                    sel_eixo_c = c_f1.multiselect("2. Eixo da Matriz:", sorted(df_cur_comp["EIXO"].unique().tolist()), key=f"comp_eixo_{v}")
                     if sel_eixo_c:
-                        df_cont_c = df_cur_comp[df_cur_comp["EIXO"].isin(sel_eixo_c)]
-                        sel_cont_c = c_f2.multiselect("2. Selecione o Conteúdo:", sorted(df_cont_c["CONTEUDO_ESPECIFICO"].unique().tolist()), key=f"comp_cont_{v}")
-                        
+                        sel_cont_c = c_f2.multiselect("3. Conteúdo Base:", sorted(df_cur_comp[df_cur_comp["EIXO"].isin(sel_eixo_c)]["CONTEUDO_ESPECIFICO"].unique().tolist()), key=f"comp_cont_{v}")
                         if sel_cont_c:
-                            df_obj_c = df_cont_c[df_cont_c["CONTEUDO_ESPECIFICO"].isin(sel_cont_c)]
-                            sel_obj_c = st.multiselect("3. Selecione os Objetivos Oficiais:", sorted(df_obj_c["OBJETIVOS"].unique().tolist()), key=f"comp_obj_{v}")
+                            sel_obj_c = st.multiselect("4. Objetivos Oficiais:", sorted(df_cur_comp[df_cur_comp["CONTEUDO_ESPECIFICO"].isin(sel_cont_c)]["OBJETIVOS"].unique().tolist()), key=f"comp_obj_{v}")
                             
                             st.divider()
-                            
-                            # --- CALIBRAGEM DO MATERIAL ---
                             c_q1, c_q2, c_q3 = st.columns([1, 1, 2])
                             tipo_comp = c_q1.selectbox("Objetivo:", ["Fixação", "Reforço", "Aprofundamento", "Recomposição"], key=f"comp_tipo_{v}")
                             qtd_q_comp = c_q2.slider("Nº Questões:", 3, 15, 10, key=f"comp_q_{v}")
-                            instr_extra_c = c_q3.text_area("📝 Contexto Adicional (Opcional):", key=f"comp_instr_{v}")
+                            instr_extra_c = c_q3.text_area("📝 Contexto Adicional:", key=f"comp_instr_{v}")
 
                             if st.button("🚀 GERAR MATERIAL DE ELITE", use_container_width=True, type="primary"):
-                                with st.spinner("Maestro Sosa arquitetando Ponte Curricular..."):
-                                    # Geração do Nome e Metadados
-                                    label_tipo = "Recomposição" if "Ano Anterior" in origem_tipo else "Fixação"
-                                    nome_elite_c = util.gerar_nome_material_elite(ano_alvo, label_tipo, f"Base {ano_origem}º Ano")
-                                    
-                                    st.session_state.sosa_id_atual = nome_elite_c
-                                    st.session_state.lab_meta = {
-                                        "ano": ano_alvo, "trimestre": "I Trimestre", 
-                                        "tipo": label_tipo.upper(), "semana_ref": "RECOMPOSIÇÃO"
-                                    }
-                                    
-                                    # Seleção da Persona
-                                    persona_alvo = "ARQUITETO_RECOMPOSICAO_V31" if "Recomposição" in tipo_comp else "MAESTRO_SOSA_V28_ELITE"
+                                with st.spinner("Maestro Sosa arquitetando Intervenção..."):
+                                    # Nomenclatura de Soberania
+                                    if "Ano Anterior" in origem_tipo:
+                                        nome_elite_c = f"RECOMP_{ano_alvo}ANO_{turma_interv.replace(' ','')}_{sel_cont_c[0][:15]}"
+                                        persona_alvo = "ARQUITETO_RECOMPOSICAO_V68_ELITE"
+                                    else:
+                                        nome_elite_c = util.gerar_nome_material_elite(ano_alvo, tipo_comp, "Safra Atual")
+                                        persona_alvo = "MAESTRO_SOSA_V28_ELITE"
 
+                                    st.session_state.sosa_id_atual = nome_elite_c
+                                    st.session_state.lab_meta = {"ano": ano_alvo, "trimestre": "I Trimestre", "tipo": tipo_comp.upper(), "semana_ref": "RECOMPOSIÇÃO"}
+                                    
                                     prompt_c = (
                                         f"ID_FORNECIDO: {nome_elite_c}.\n"
-                                        f"SÉRIE ALVO: {ano_alvo}º Ano | SÉRIE DE ORIGEM (BASE): {ano_origem}º Ano.\n"
-                                        f"OBJETIVO: {tipo_comp}.\n"
-                                        f"CONTEÚDOS ITABUNA: {', '.join(sel_cont_c)}.\n"
-                                        f"OBJETIVOS MATRIZ: {', '.join(sel_obj_c)}.\n"
-                                        f"QUANTIDADE: {qtd_q_comp} questões.\n"
-                                        f"EXTRAS: {instr_extra_c}.\n\n"
-                                        f"MISSÃO: Use o ID_FORNECIDO. Gere o material com as TAGS [SOSA_ID], [RESGATE_COGNITIVO], [HABILIDADE_BNCC], [OBJETO_CONHECIMENTO], [CONTEXTO_GLOCAL], [PROFESSOR], [ALUNO], [GABARITO], [ESTRATEGIA_DUA_PEI]."
+                                        f"SÉRIE ALVO: {ano_alvo}º Ano | SÉRIE ORIGEM: {ano_origem}º Ano.\n"
+                                        f"OBJETIVO: {tipo_comp}. CONTEXTO SCANNER: {contexto_scanner}.\n"
+                                        f"CONTEÚDOS: {', '.join(sel_cont_c)}.\n"
+                                        f"OBJETIVOS: {', '.join(sel_obj_c)}.\n"
+                                        f"QUANTIDADE: {qtd_q_comp} questões. EXTRAS: {instr_extra_c}.\n\n"
+                                        f"MISSÃO: Use o ID_FORNECIDO. Gere com as TAGS [VALOR: 0.0], [SOSA_ID], [MAPA_DE_RECOMPOSICAO], [PROFESSOR], [ALUNO], [GRADE_DE_CORRECAO], [PEI]."
                                     )
-                                    
                                     st.session_state.lab_temp = ai.gerar_ia(persona_alvo, prompt_c, usar_busca=True)
                                     st.session_state.v_lab = int(time.time())
-                                    st.success("Material enviado ao Laboratório!"); time.sleep(1)
                                     st.rerun()
-            else:
-                st.error(f"📭 Matriz Curricular do {ano_origem}º Ano não localizada no banco.")
 
         # --- ABA 5: ACERVO DE MATERIAIS (VERSÃO V43 - COMPATÍVEL COM PROJETOS BNCC ELITE) ---
         with tab_acervo_lab:
