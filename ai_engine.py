@@ -42,7 +42,7 @@ PERSONAS = {
     - Se o professor pedir para mudar o tom da aula (mais tradicional ou mais prático), adapte o fluxo de [AULA_1] ou [AULA_2].
     - NUNCA altere os textos extraídos do CSV ([OBJETO_CONHECIMENTO], [CONTEUDOS_ESPECIFICOS], [OBJETIVOS_ENSINO]).
     - Retorne o documento COMPLETO, começando em [HABILIDADE_BNCC].""",
-    
+
 # ==============================================================================
 # PERSONAS ATUALIZADAS V28 - FOCO BNCC & RASTREABILIDADE TOTAL
 # ==============================================================================
@@ -376,12 +376,12 @@ def gerar_ia(persona_key, comando, partes_arquivos=[], usar_busca=True):
     except Exception as e:
         return f"Erro na IA: {e}"
 
-# --- EXTRATOR SOSA V38 (BLINDAGEM TOTAL + LIMPEZA DE MARKDOWN) ---
+# --- EXTRATOR SOSA V39 (SINCRONIA BNCC ELITE) ---
 def extrair_tag(texto, tag):
     if not texto: return ""
     import re
     
-    # 1. LIMPEZA DE RUÍDOS: Remove # e * de todo o texto para normalizar as tags
+    # 1. LIMPEZA DE RUÍDOS: Remove # e * para normalizar
     texto_limpo = re.sub(r'[*#]', '', texto)
     tag_busca = tag.upper().strip()
     
@@ -390,21 +390,28 @@ def extrair_tag(texto, tag):
     match_int = re.search(padrao_interno, texto_limpo, re.IGNORECASE)
     if match_int:
         res_int = match_int.group(1).strip()
-        if 0 < len(res_int) < 35: return res_int
+        if 0 < len(res_int) < 45: return res_int
 
-    # 3. LISTA DE TAGS MESTRAS V38.1 (LISTA COMPLETA PARA EVITAR VAZAMENTOS)
+    # 3. LISTA DE TAGS MESTRAS V39 (HÍBRIDA: ANTIGAS + BNCC ELITE)
     tags_mestras = [
         "SOSA_ID", "VALOR", "ORIENTACOES", "QUESTOES", "GABARITO_TEXTO", "GRADE_DE_CORRECAO", 
         "GABARITO", "RESPOSTAS_IA", "PEI", "GABARITO_PEI", "RESPOSTAS_PEI_IA", 
-        "PROFESSOR", "ALUNO", "BNCC_CODE", "CONTEUDO_GERAL", 
-        "CONTEUDOS_ESPECIFICOS", "OBJETIVOS_ENSINO", "IMAGENS", "AULA_ALVO",
-        "RECURSOS_DIDATICOS", "AULA_1", "AULA_2", "SABADO_LETIVO", "AVALIACAO", "ADAPTACAO_PEI"
+        "PROFESSOR", "ALUNO", "IMAGENS", "AULA_ALVO",
+        # Tags de Planejamento (Antigas e Novas)
+        "BNCC_CODE", "HABILIDADE_BNCC", 
+        "COMPETENCIAS_FOCO", "COMPETENCIAS_BNCC",
+        "CONTEUDO_GERAL", "OBJETO_CONHECIMENTO",
+        "CONTEUDOS_ESPECIFICOS", "OBJETIVOS_ENSINO", 
+        "RECURSOS_DIDATICOS", "RECURSOS_ELITE",
+        "AULA_1", "AULA_2", "SABADO_LETIVO", 
+        "AVALIACAO", "AVALIACAO_DE_MERITO",
+        "ADAPTACAO_PEI", "ESTRATEGIA_DUA_PEI"
     ]
     
     parada = [t for t in tags_mestras if t != tag_busca]
     lista_parada = "|".join(parada)
     
-    # 4. REGEX DE BLOCO V38: Captura até a próxima tag mestra
+    # 4. REGEX DE BLOCO V39: Captura até a próxima tag mestra ou fim do texto
     padrao_bloco = rf"\[\s*\b{tag_busca}\b\s*\]\s*[:\-]*\s*(.*?)(?=\n\s*\[\s*(?:{lista_parada})\s*\]|\[\s*(?:{lista_parada})\s*\]|$)"
     match_bloco = re.search(padrao_bloco, texto_limpo, re.DOTALL | re.IGNORECASE)
     
