@@ -608,7 +608,7 @@ if menu == "🧪 Criador de Aulas":
                                     st.session_state.lab_temp = ai.gerar_ia("ARQUITETO_SONDA_DIAGNOSTICA", prompt_sonda, usar_busca=True)
                                     st.rerun()
 
-# --- ABA 3: ENGENHARIA DE TRABALHOS (VERSÃO V31.5 - INTEGRAÇÃO BNCC ELITE) ---
+# --- ABA 3: ENGENHARIA DE TRABALHOS (VERSÃO V31.6 - FIX NOMENCLATURA) ---
         with tab_trabalhos:
             st.subheader("📋 Engenharia de Projetos e Semanários (BNCC Elite)")
             
@@ -620,7 +620,6 @@ if menu == "🧪 Criador de Aulas":
                 ano_t = c2.selectbox("Série Alvo:", [6, 7, 8, 9], key=f"t_ano_{v}")
                 modo_t = c3.selectbox("Modo de Execução:", ["Individual", "Em Grupo (Equipes)", "Interdisciplinar"], key=f"t_modo_{v}")
 
-            # --- NOVO: SELETOR DE COMPETÊNCIAS GERAIS (IGUAL AO PONTO ID) ---
             with st.container(border=True):
                 st.markdown("#### 🌟 Alinhamento de Competências Gerais (BNCC)")
                 comps_proj = st.multiselect("Selecione as Competências Âncora do Projeto:", [
@@ -631,11 +630,10 @@ if menu == "🧪 Criador de Aulas":
 
             with st.container(border=True):
                 c_t1, c_t2, c_t3 = st.columns([2, 1, 1])
-                tema_t = c_t1.text_input("Título do Projeto/Tema:", placeholder="Ex: A Matemática do Cacau, Criptografia e Segurança...", key=f"t_tema_{v}")
+                tema_t = c_t1.text_input("Título do Projeto/Tema:", placeholder="Ex: A Matemática do Cacau...", key=f"t_tema_{v}")
                 valor_t = c_t2.number_input("Valor (0-10):", 0.0, 10.0, 2.0, step=0.5, key=f"t_val_{v}")
                 qtd_aulas_t = c_t3.slider("Duração (Aulas):", 1, 10, 2, key=f"t_q_aulas_{v}")
                 
-            # --- FILTRO DA MATRIZ DE ITABUNA ---
             df_cur_t = df_curriculo[df_curriculo["ANO"].astype(str).str.contains(str(ano_t))]
             if not df_cur_t.empty:
                 lista_eixos_t = sorted(df_cur_t["EIXO"].unique().tolist())
@@ -654,22 +652,24 @@ if menu == "🧪 Criador de Aulas":
                             st.error("Defina o Título e selecione ao menos um Conteúdo da Matriz.")
                         else:
                             with st.spinner("Maestro Sosa arquitetando roteiro investigativo..."):
-                                nome_elite_proj = util.gerar_nome_material_elite(ano_t, "Projeto", tema_t)
-                                st.session_state.sosa_id_atual = nome_elite_proj
+                                # GERAÇÃO DO NOME PADRÃO SOSA (COMO ESTAVA ANTES)
+                                nome_legivel = util.gerar_nome_material_elite(ano_t, "Projeto", tema_t)
+                                
+                                st.session_state.sosa_id_atual = nome_legivel
                                 st.session_state.lab_meta = {
                                     "ano": ano_t, "trimestre": "I Trimestre", 
                                     "tipo": "PROJETO", "aula_alvo": tema_t, "semana_ref": "PROJETO"
                                 }
                                 
                                 prompt_t = (
-                                    f"PERSONA: ARQUITETO_PROJETOS_V31_ELITE. ID: {nome_elite_proj}.\n"
+                                    f"ID_FORNECIDO: {nome_legivel}.\n" # <--- COMANDO DE SOBERANIA
                                     f"TEMA: {tema_t}. NATUREZA: {natureza_p}.\n"
                                     f"SÉRIE: {ano_t}º Ano. MODO: {modo_t}.\n"
                                     f"COMPETÊNCIAS BNCC: {', '.join(comps_proj)}.\n"
                                     f"CONTEÚDOS ITABUNA: {', '.join(conts_t)}.\n"
                                     f"VALOR: {util.sosa_to_str(valor_t)} | DURAÇÃO: {qtd_aulas_t} aulas.\n"
                                     f"EXTRAS: {instr_extra_p}.\n\n"
-                                    f"MISSÃO: Gere o material completo com as TAGS [SOSA_ID], [COMPETENCIAS_BNCC], [HABILIDADES_BNCC], [OBJETO_CONHECIMENTO], [CONTEXTO_GLOCAL], [PROFESSOR], [ALUNO], [ESTRATEGIA_DUA_PEI], [RUBRICA_DE_MERITO]."
+                                    f"MISSÃO: Use o ID_FORNECIDO na tag [SOSA_ID]. Gere o material completo com as TAGS [SOSA_ID], [COMPETENCIAS_BNCC], [HABILIDADES_BNCC], [OBJETO_CONHECIMENTO], [CONTEXTO_GLOCAL], [PROFESSOR], [ALUNO], [ESTRATEGIA_DUA_PEI], [RUBRICA_DE_MERITO]."
                                 )
                                 st.session_state.lab_temp = ai.gerar_ia("ARQUITETO_PROJETOS_V31_ELITE", prompt_t, usar_busca=True)
                                 st.session_state.v_lab = int(time.time())
