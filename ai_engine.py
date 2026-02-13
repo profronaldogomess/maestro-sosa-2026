@@ -377,7 +377,6 @@ def extrair_tag(texto, tag):
     import re
     
     # 1. LIMPEZA DE RUÍDOS: Remove # e * de todo o texto para normalizar as tags
-    # Isso garante que ### [TAG] ou **[TAG]** sejam lidos apenas como [TAG]
     texto_limpo = re.sub(r'[*#]', '', texto)
     tag_busca = tag.upper().strip()
     
@@ -388,12 +387,13 @@ def extrair_tag(texto, tag):
         res_int = match_int.group(1).strip()
         if 0 < len(res_int) < 35: return res_int
 
-    # 3. LISTA DE TAGS MESTRAS V38 (Escudo de Fronteira)
+    # 3. LISTA DE TAGS MESTRAS V38.1 (LISTA COMPLETA PARA EVITAR VAZAMENTOS)
     tags_mestras = [
         "SOSA_ID", "VALOR", "ORIENTACOES", "QUESTOES", "GABARITO_TEXTO", "GRADE_DE_CORRECAO", 
         "GABARITO", "RESPOSTAS_IA", "PEI", "GABARITO_PEI", "RESPOSTAS_PEI_IA", 
         "PROFESSOR", "ALUNO", "BNCC_CODE", "CONTEUDO_GERAL", 
-        "CONTEUDOS_ESPECIFICOS", "OBJETIVOS_ENSINO", "IMAGENS", "AULA_ALVO"
+        "CONTEUDOS_ESPECIFICOS", "OBJETIVOS_ENSINO", "IMAGENS", "AULA_ALVO",
+        "RECURSOS_DIDATICOS", "AULA_1", "AULA_2", "SABADO_LETIVO", "AVALIACAO", "ADAPTACAO_PEI"
     ]
     
     parada = [t for t in tags_mestras if t != tag_busca]
@@ -527,4 +527,3 @@ def gerar_prognostico_pedagogico(dados_stats, contexto_prova):
         return res.text.replace("**", "").replace("#", "").strip()
     except Exception as e:
         return f"Erro na perícia: {e}"
-
