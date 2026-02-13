@@ -414,22 +414,46 @@ if menu == "🧪 Criador de Aulas":
         with t_sync:
             st.subheader("🚀 Protocolo de Custódia Digital")
             if st.button("💾 EXECUTAR TRIPLE-SYNC (SUBSTITUIR)", use_container_width=True, type="primary", key=f"btn_triple_{v}"):
-                with st.status("Sincronizando...") as status:
+                with st.status("Iniciando Protocolo de Sincronia Total...") as status:
+                    # 1. Limpeza de versões antigas
                     db.excluir_registro_com_drive("DB_AULAS_PRONTAS", s_id)
-                    ano_str = f"{meta.get('ano', '6')}º"
-                    sem_ref = meta.get('semana_ref', 'PROJETO')
                     
-                    doc_alu = exporter.gerar_docx_aluno_v24(s_id, ed_alu, {"ano": ano_str, "trimestre": meta.get('trimestre', 'I Trimestre')})
+                    # 2. Preparação de Metadados
+                    ano_str = f"{meta.get('ano', '6')}º"
+                    trim_str = meta.get('trimestre', 'I Trimestre')
+                    sem_ref = meta.get('semana_ref', 'RECOMPOSIÇÃO')
+                    info_doc = {"ano": ano_str, "trimestre": trim_str, "valor": "0,00", "valor_questao": "0,00", "qtd_questoes": 0}
+
+                    # 3. GERAÇÃO DOS 3 ARQUIVOS (Regular, PEI e Professor)
+                    status.write("📄 Gerando Material do Aluno...")
+                    doc_alu = exporter.gerar_docx_aluno_v24(s_id, ed_alu, info_doc)
                     link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{s_id}_ALUNO", modo="AULA")
                     
-                    doc_prof = exporter.gerar_docx_professor_v25(s_id, ed_prof, {"ano": ano_str, "semana": sem_ref, "trimestre": meta.get('trimestre', 'I Trimestre')})
+                    status.write("♿ Gerando Material PEI Adaptado...")
+                    # Extrai o PEI e gera o arquivo
+                    txt_pei = ai.extrair_tag(txt_base, "PEI")
+                    doc_pei = exporter.gerar_docx_pei_v25(f"{s_id}_PEI", txt_pei, info_doc)
+                    link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{s_id}_PEI", modo="AULA")
+                    
+                    status.write("👨‍🏫 Gerando Guia e Perícia do Professor...")
+                    # Monta o Guia do Professor com o Tratado + Grade + Respostas Pedagógicas
+                    txt_guia_prof = f"{ed_prof}\n\n[GRADE_DE_CORRECAO]\n{ai.extrair_tag(txt_base, 'GRADE_DE_CORRECAO')}\n\n[RESPOSTAS_PEDAGOGICAS]\n{ai.extrair_tag(txt_base, 'RESPOSTAS_PEDAGOGICAS')}"
+                    doc_prof = exporter.gerar_docx_professor_v25(s_id, txt_guia_prof, {"ano": ano_str, "semana": sem_ref, "trimestre": trim_str})
                     link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{s_id}_PROF", modo="AULA")
                     
+                    # 4. CONSOLIDAÇÃO NO BANCO (SALVANDO OS 3 LINKS)
+                    # O Acervo precisa que os links estejam neste formato exato para os botões funcionarem
+                    links_formatados = f"--- LINKS ---\nRegular({link_alu}) PEI({link_pei}) Prof({link_prof})"
+                    conteudo_final_banco = f"[SOSA_ID] {s_id}\n{txt_base}\n\n{links_formatados}"
+                    
                     db.salvar_no_banco("DB_AULAS_PRONTAS", [
-                        datetime.now().strftime("%d/%m/%Y"), sem_ref, s_id, txt_base, ano_str, link_alu
+                        datetime.now().strftime("%d/%m/%Y"), sem_ref, s_id, conteudo_final_banco, ano_str, link_alu
                     ])
-                    status.update(label="✅ Sincronizado!", state="complete")
-                    st.balloons(); time.sleep(1); reset_laboratorio()
+                    
+                    status.update(label="✅ Sincronia Total Concluída!", state="complete")
+                    st.balloons()
+                    time.sleep(1)
+                    reset_laboratorio()
 
     # --- SEÇÃO DE ENTRADA (CONFIGURAÇÃO INICIAL) ---
     else:
