@@ -332,136 +332,93 @@ if menu == "🧪 Criador de Aulas":
     ed_prof, ed_alu, ed_res, ed_dua = "", "", "", ""
     s_id = st.session_state.get("sosa_id_atual", "SEM-ID")
 
-    # --- ÁREA DE EXIBIÇÃO E REFINO (MODO EDIÇÃO ATIVO) ---
+# --- ÁREA DE EXIBIÇÃO E REFINO (VERSÃO V42.2 - FIX DUPLICIDADE & NOMENCLATURA) ---
     if "lab_temp" in st.session_state:
         txt_base = st.session_state.lab_temp
         
-        # Extração de ID e Detecção de Tipo
+        # 1. EXTRAÇÃO DE SEGURANÇA E IDENTIFICAÇÃO
         s_id_extraido = ai.extrair_tag(txt_base, "SOSA_ID")
-        if s_id_extraido: s_id = s_id_extraido.split("[")[0].strip()
+        # Se a IA gerou um ID feio, mantemos o que o sistema criou originalmente
+        s_id = st.session_state.get("sosa_id_atual", "SEM-ID")
         
         is_recomp = "RECOMP" in s_id.upper()
         is_projeto = "PROJETO" in s_id.upper() or "[JUSTIFICATIVA_PHC]" in txt_base
 
-        # 2. MOTOR DE RECUPERAÇÃO E DISTRIBUIÇÃO DE VARIÁVEIS (VACINA ANTI-VAZIO)
-        val_just = ai.extrair_tag(txt_base, "JUSTIFICATIVA_PHC") or ai.extrair_tag(txt_base, "CONTEXTO_GLOCAL")
-        val_rub = ai.extrair_tag(txt_base, "RUBRICA_DE_MERITO")
-        val_ctx = ai.extrair_tag(txt_base, "CONTEXTO_INVESTIGATIVO")
-        val_mis = ai.extrair_tag(txt_base, "MISSÃO_DE_PESQUISA")
-        val_pas = ai.extrair_tag(txt_base, "PASSO_A_PASSO")
-        val_prod = ai.extrair_tag(txt_base, "PRODUTO_ESPERADO")
-        val_dua = ai.extrair_tag(txt_base, "ESTRATEGIA_DUA_PEI") or ai.extrair_tag(txt_base, "PEI")
-
-        if is_recomp:
-            t_prof, t_alu, t_gab, t_pei, t_sync = st.tabs(["👨‍🏫 Tratado do Professor", "📝 Folha do Aluno (Apoio Visual)", "✅ Respostas Pedagógicas", "♿ Material PEI (Andaime)", "☁️ SINCRONIA"])
-            with t_prof: 
-                st.info("🔬 Gênese Científica e Perícia de Mediação (BNCC/PHC)")
-                st.text_area("Mapa de Regência:", ed_prof, height=450, key=f"p_recomp_{v}")
-            with t_alu: 
-                st.warning("📸 SOBERANIA VISUAL: Verifique se os [ PROMPT IMAGEM ] dão suporte a todos os enunciados complexos.")
-                st.text_area("Questões Regulares:", ed_alu, height=450, key=f"a_recomp_{v}")
-            with t_gab: 
-                st.text_area("Gabarito e Expectativa de Aprendizagem:", ed_res, height=450, key=f"g_recomp_{v}")
-            with t_pei: 
-                st.info("♿ Simetria 50%: Cada questão com seu próprio Para Lembrar e Passo a Passo.")
-                st.text_area("Atividade Adaptada:", ed_dua, height=450, key=f"pei_recomp_{v}")
-        elif is_projeto:
-            ed_prof = f"[JUSTIFICATIVA]\n{val_just}\n\n[RUBRICA]\n{val_rub}"
-            # Lógica de Recuperação: Se as sub-tags falharem, usa o bloco ALUNO ou DUA
-            if not val_ctx or len(val_ctx) < 10:
-                ed_alu = ai.extrair_tag(txt_base, "ALUNO") or val_dua
-            else:
-                ed_alu = f"[CONTEXTO]\n{val_ctx}\n\n[MISSÃO]\n{val_mis}\n\n[PASSO_A_PASSO]\n{val_pas}\n\n[PRODUTO]\n{val_prod}"
-            ed_res = "RUBRICA INTEGRADA"
-            ed_dua = val_dua
-        else:
-            ed_prof = ai.extrair_tag(txt_base, "PROFESSOR")
-            ed_alu = ai.extrair_tag(txt_base, "ALUNO")
-            ed_res = ai.extrair_tag(txt_base, "GABARITO") or ai.extrair_tag(txt_base, "GABARITO_TEXTO")
-            ed_dua = ai.extrair_tag(txt_base, "PEI")
+        # 2. MOTOR DE DISTRIBUIÇÃO DE VARIÁVEIS (PREVENTIVO)
+        ed_prof = ai.extrair_tag(txt_base, "PROFESSOR")
+        ed_alu = ai.extrair_tag(txt_base, "ALUNO")
+        ed_res = ai.extrair_tag(txt_base, "RESPOSTAS_PEDAGOGICAS") or ai.extrair_tag(txt_base, "GABARITO")
+        ed_dua = ai.extrair_tag(txt_base, "PEI")
+        ed_grade = ai.extrair_tag(txt_base, "GRADE_DE_CORRECAO")
 
         st.success(f"💎 Material em Edição: **{s_id}**")
 
-        # --- 🤖 REFINADOR MAESTRO (LÓGICA CONTEXTUAL V31) ---
+        # --- 🤖 REFINADOR MAESTRO ---
         with st.container(border=True):
             st.subheader("🤖 Refinador Maestro (Perícia V31)")
-            placeholder_msg = "Ex: 'mais foco em Itabuna', 'simplifique a rubrica'..." if is_projeto else "Ex: 'mude o tema', 'troque a questão 2'..."
-            cmd_refine_lab = st.chat_input(placeholder_msg, key=f"chat_lab_ref_{v}")
-            
+            cmd_refine_lab = st.chat_input("Solicite ajustes...", key=f"chat_lab_ref_{v}")
             if cmd_refine_lab:
-                with st.spinner("Maestro Sosa realizando reengenharia especializada..."):
-                    if is_projeto: persona_refino = "REFINADOR_PROJETOS_V31"
-                    elif is_recomp: persona_refino = "REFINADOR_PEDAGOGICO"
-                    else: persona_refino = "REFINADOR_MATERIAIS"
-                    
-                    novo_texto = ai.gerar_ia(persona_refino, f"ORDEM: {cmd_refine_lab}\n\nCONTEÚDO ATUAL:\n{txt_base}")
-                    if len(novo_texto) > 50:
-                        st.session_state.lab_temp = novo_texto
-                        st.session_state.v_lab = int(time.time())
-                        st.rerun()
-            
-            if st.button("🗑️ DESCARTAR EDIÇÃO E VOLTAR", use_container_width=True):
-                reset_laboratorio()
+                with st.spinner("Reengenharia..."):
+                    persona_refino = "REFINADOR_PROJETOS_V31" if is_projeto else "REFINADOR_MATERIAIS"
+                    st.session_state.lab_temp = ai.gerar_ia(persona_refino, f"ORDEM: {cmd_refine_lab}\n\nATUAL:\n{txt_base}")
+                    st.session_state.v_lab = int(time.time()); st.rerun()
+            if st.button("🗑️ DESCARTAR EDIÇÃO"): reset_laboratorio()
         
-        # --- 🗂️ TABS DINÂMICAS ---
+        # --- 🗂️ TABS DINÂMICAS (BLOCO ÚNICO E PROTEGIDO) ---
         if is_recomp:
             t_prof, t_alu, t_gab, t_pei, t_sync = st.tabs(["👨‍🏫 Tratado do Professor", "📝 Folha do Aluno", "✅ Respostas Pedagógicas", "♿ Material PEI", "☁️ SINCRONIA"])
-            with t_prof: st.text_area("Mapa de Regência:", ed_prof, height=450, key=f"p_recomp_{v}")
-            with t_alu: st.text_area("Questões:", ed_alu, height=450, key=f"a_recomp_{v}")
-            with t_gab: st.text_area("Gabarito e Expectativa:", ed_res, height=450, key=f"g_recomp_{v}")
-            with t_pei: st.text_area("Atividade Adaptada:", ed_dua, height=450, key=f"pei_recomp_{v}")
+            with t_prof: 
+                st.info("🔬 Gênese Científica e Perícia de Mediação (BNCC/PHC)")
+                st.text_area("Mapa de Regência:", ed_prof, height=450, key=f"p_recomp_area_{v}")
+            with t_alu: 
+                st.warning("📸 SOBERANIA VISUAL: Verifique os [ PROMPT IMAGEM ]")
+                st.text_area("Questões Regulares:", ed_alu, height=450, key=f"a_recomp_area_{v}")
+            with t_gab: 
+                st.text_area("Gabarito e Expectativa:", ed_res, height=450, key=f"g_recomp_area_{v}")
+                if ed_grade: st.text_area("Grade de Perícia:", ed_grade, height=200, key=f"grade_recomp_area_{v}")
+            with t_pei: 
+                st.info("♿ Simetria 50%: Cada questão com seu próprio Andaime.")
+                st.text_area("Atividade Adaptada:", ed_dua, height=450, key=f"pei_recomp_area_{v}")
+        
         elif is_projeto:
             t_prof, t_alu, t_dua, t_sync = st.tabs(["👨‍🏫 Mapa do Professor", "📝 Roteiro do Aluno", "♿ DUA/PEI", "☁️ SINCRONIA"])
             with t_prof:
-                st.text_area("Justificativa Pedagógica:", val_just, height=200, key=f"p_just_{v}")
-                st.text_area("Rubrica de Mérito:", val_rub, height=300, key=f"p_rub_{v}")
+                st.text_area("Justificativa e Rubrica:", ed_prof, height=450, key=f"p_proj_area_{v}")
             with t_alu:
-                st.text_area("Roteiro de Investigação (Completo):", ed_alu, height=500, key=f"a_full_{v}")
+                st.text_area("Roteiro Investigativo:", ed_alu, height=450, key=f"a_proj_area_{v}")
             with t_dua:
-                st.text_area("Estratégia DUA/PEI:", ed_dua, height=300, key=f"a_dua_{v}")
+                st.text_area("Estratégia DUA:", ed_dua, height=450, key=f"dua_proj_area_{v}")
+        
         else:
             t_prof, t_alu, t_gab, t_pei, t_sync = st.tabs(["👨‍🏫 Professor", "📝 Aluno", "✅ Gabarito", "♿ PEI", "☁️ SINCRONIA"])
-            with t_prof: st.text_area("Mapa de Regência:", ed_prof, height=450, key=f"ed_prof_f_{v}")
-            with t_alu: st.text_area("Folha do Aluno:", ed_alu, height=450, key=f"ed_alu_f_{v}")
-            with t_gab: st.text_area("Gabarito Oficial:", ed_res, height=200, key=f"ed_res_f_{v}")
-            with t_pei: st.text_area("Material PEI:", ed_dua, height=400, key=f"ed_pei_f_{v}")
+            with t_prof: st.text_area("Lousa:", ed_prof, height=450, key=f"ed_prof_reg_{v}")
+            with t_alu: st.text_area("Folha:", ed_alu, height=450, key=f"ed_alu_reg_{v}")
+            with t_gab: st.text_area("Gabarito:", ed_res, height=200, key=f"ed_res_reg_{v}")
+            with t_pei: st.text_area("PEI:", ed_dua, height=400, key=f"ed_pei_reg_{v}")
 
-        # --- ☁️ ABA DE SINCRONIA (TRIPLE-SYNC V44) ---
-# --- ABA DE SINCRONIA (VERSÃO V45 - TRIPLE-SYNC ELITE) ---
+        # --- ☁️ ABA DE SINCRONIA (TRIPLE-SYNC V45) ---
         with t_sync:
             st.subheader("🚀 Protocolo de Custódia Digital V45")
             if st.button("💾 EXECUTAR TRIPLE-SYNC (SUBSTITUIR)", use_container_width=True, type="primary", key=f"btn_triple_{v}"):
-                with st.status("Iniciando Protocolo de Sincronia Total...") as status:
+                with st.status("Sincronizando Ativos de Elite...") as status:
                     db.excluir_registro_com_drive("DB_AULAS_PRONTAS", s_id)
-                    
                     ano_str = f"{meta.get('ano', '6')}º"
-                    trim_str = meta.get('trimestre', 'I Trimestre')
                     sem_ref = meta.get('semana_ref', 'RECOMPOSIÇÃO')
-                    
-                    # Metadados para o Exporter (Valor 0.0 para atividades)
-                    info_doc = {"ano": ano_str, "trimestre": trim_str, "valor": "0,00", "valor_questao": "0,00", "qtd_questoes": 10}
+                    info_doc = {"ano": ano_str, "trimestre": meta.get('trimestre', 'I Trimestre'), "valor": "0,00", "valor_questao": "0,00", "qtd_questoes": 10}
 
-                    # 1. Geração Material Regular (Com Image Prompts)
                     doc_alu = exporter.gerar_docx_aluno_v24(s_id, ed_alu, info_doc)
                     link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{s_id}_ALUNO", modo="AULA")
                     
-                    # 2. Geração Material PEI (Simetria 50% + Andaime)
-                    txt_pei = ai.extrair_tag(txt_base, "PEI")
-                    doc_pei = exporter.gerar_docx_pei_v25(f"{s_id}_PEI", txt_pei, info_doc)
+                    doc_pei = exporter.gerar_docx_pei_v25(f"{s_id}_PEI", ed_dua, info_doc)
                     link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{s_id}_PEI", modo="AULA")
                     
-                    # 3. Geração Guia do Professor (Tratado + Respostas Pedagógicas)
-                    txt_prof_completo = f"{ed_prof}\n\n[RESPOSTAS_PEDAGOGICAS]\n{ed_res}\n\n[GRADE_DE_CORRECAO]\n{ai.extrair_tag(txt_base, 'GRADE_DE_CORRECAO')}"
-                    doc_prof = exporter.gerar_docx_professor_v25(s_id, txt_prof_completo, {"ano": ano_str, "semana": sem_ref, "trimestre": trim_str})
+                    txt_prof_final = f"{ed_prof}\n\n[RESPOSTAS_PEDAGOGICAS]\n{ed_res}\n\n[GRADE_DE_CORRECAO]\n{ed_grade}"
+                    doc_prof = exporter.gerar_docx_professor_v25(s_id, txt_prof_final, {"ano": ano_str, "semana": sem_ref, "trimestre": info_doc['trimestre']})
                     link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{s_id}_PROF", modo="AULA")
                     
-                    # 4. Consolidação no Banco
                     links_f = f"--- LINKS ---\nRegular({link_alu}) PEI({link_pei}) Prof({link_prof})"
-                    db.salvar_no_banco("DB_AULAS_PRONTAS", [
-                        datetime.now().strftime("%d/%m/%Y"), sem_ref, s_id, txt_base + f"\n\n{links_f}", ano_str, link_alu
-                    ])
-                    
-                    status.update(label="✅ Sincronia de Elite Concluída!", state="complete")
+                    db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), sem_ref, s_id, txt_base + f"\n\n{links_f}", ano_str, link_alu])
+                    status.update(label="✅ Sincronizado!", state="complete")
                     st.balloons(); time.sleep(1); reset_laboratorio()
 
     # --- SEÇÃO DE ENTRADA (CONFIGURAÇÃO INICIAL) ---
