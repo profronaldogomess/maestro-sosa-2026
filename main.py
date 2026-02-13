@@ -608,60 +608,71 @@ if menu == "🧪 Criador de Aulas":
                                     st.session_state.lab_temp = ai.gerar_ia("ARQUITETO_SONDA_DIAGNOSTICA", prompt_sonda, usar_busca=True)
                                     st.rerun()
 
+# --- ABA 3: ENGENHARIA DE TRABALHOS (VERSÃO V31.5 - INTEGRAÇÃO BNCC ELITE) ---
         with tab_trabalhos:
-            st.subheader("📋 Engenharia de Projetos e Semanários (BNCC)")
+            st.subheader("📋 Engenharia de Projetos e Semanários (BNCC Elite)")
+            
             with st.container(border=True):
                 c1, c2, c3 = st.columns([1.5, 1, 1])
-                natureza_p = c1.selectbox("Natureza do Evento:", 
-                    ["Semanário Temático", "Projeto de Identidade (Itabuna)", "Evento Escolar (Interclasses/Gincana)", "Projeto BNCC Livre"], 
+                natureza_p = c1.selectbox("Natureza do Ativo:", 
+                    ["Semanário Temático", "Projeto de Identidade (Itabuna)", "Investigação Científica", "Projeto BNCC Livre"], 
                     key=f"t_nat_{v}")
                 ano_t = c2.selectbox("Série Alvo:", [6, 7, 8, 9], key=f"t_ano_{v}")
-                modo_t = c3.selectbox("Modo de Execução:", ["Individual", "Em Grupo (Equipes)"], key=f"t_modo_{v}")
+                modo_t = c3.selectbox("Modo de Execução:", ["Individual", "Em Grupo (Equipes)", "Interdisciplinar"], key=f"t_modo_{v}")
+
+            # --- NOVO: SELETOR DE COMPETÊNCIAS GERAIS (IGUAL AO PONTO ID) ---
+            with st.container(border=True):
+                st.markdown("#### 🌟 Alinhamento de Competências Gerais (BNCC)")
+                comps_proj = st.multiselect("Selecione as Competências Âncora do Projeto:", [
+                    "1. Conhecimento", "2. Pensamento Crítico e Criativo", "3. Repertório Cultural",
+                    "4. Comunicação", "5. Cultura Digital", "6. Trabalho e Projeto de Vida",
+                    "7. Argumentação", "8. Autoconhecimento", "9. Empatia e Cooperação", "10. Responsabilidade e Cidadania"
+                ], key=f"t_comp_bncc_{v}")
 
             with st.container(border=True):
                 c_t1, c_t2, c_t3 = st.columns([2, 1, 1])
-                tema_t = c_t1.text_input("Título do Tema/Semanário:", placeholder="Ex: Consciência Negra, 116 anos de Itabuna...", key=f"t_tema_{v}")
+                tema_t = c_t1.text_input("Título do Projeto/Tema:", placeholder="Ex: A Matemática do Cacau, Criptografia e Segurança...", key=f"t_tema_{v}")
                 valor_t = c_t2.number_input("Valor (0-10):", 0.0, 10.0, 2.0, step=0.5, key=f"t_val_{v}")
-                qtd_aulas_t = c_t3.slider("Quantidade de Aulas:", 1, 10, 2, key=f"t_q_aulas_{v}")
+                qtd_aulas_t = c_t3.slider("Duração (Aulas):", 1, 10, 2, key=f"t_q_aulas_{v}")
                 
+            # --- FILTRO DA MATRIZ DE ITABUNA ---
             df_cur_t = df_curriculo[df_curriculo["ANO"].astype(str).str.contains(str(ano_t))]
             if not df_cur_t.empty:
                 lista_eixos_t = sorted(df_cur_t["EIXO"].unique().tolist())
-                eixos_sel_t = st.multiselect("Eixos BNCC para Integrar:", lista_eixos_t, key=f"t_eixos_multi_{v}")
+                eixos_sel_t = st.multiselect("Eixos da Matriz para Integrar:", lista_eixos_t, key=f"t_eixos_multi_{v}")
                 
                 if eixos_sel_t:
                     df_hab_t = df_cur_t[df_cur_t["EIXO"].isin(eixos_sel_t)]
-                    hab_t = st.multiselect("Habilidades BNCC Âncora (Opcional):", 
+                    conts_t = st.multiselect("Conteúdos Específicos (Itabuna):", 
                                            sorted(df_hab_t["CONTEUDO_ESPECIFICO"].unique().tolist()), 
-                                           key=f"t_hab_multi_{v}")
+                                           key=f"t_cont_multi_{v}")
                     
-                    instr_extra_p = st.text_area("📝 Instruções de Pesquisa:", key=f"t_extra_proj_{v}")
+                    instr_extra_p = st.text_area("📝 Instruções de Pesquisa / Contexto Adicional:", key=f"t_extra_proj_{v}")
 
-                    if st.button("🚀 GERAR ROTEIRO DE INVESTIGAÇÃO", use_container_width=True, type="primary"):
-                        if not tema_t:
-                            st.error("Por favor, defina o Título do Tema.")
+                    if st.button("🚀 MATERIALIZAR PROJETO DE ELITE", use_container_width=True, type="primary"):
+                        if not tema_t or not conts_t:
+                            st.error("Defina o Título e selecione ao menos um Conteúdo da Matriz.")
                         else:
-                            with st.spinner("Maestro Sosa arquitetando roteiro de pesquisa..."):
+                            with st.spinner("Maestro Sosa arquitetando roteiro investigativo..."):
                                 nome_elite_proj = util.gerar_nome_material_elite(ano_t, "Projeto", tema_t)
                                 st.session_state.sosa_id_atual = nome_elite_proj
                                 st.session_state.lab_meta = {
                                     "ano": ano_t, "trimestre": "I Trimestre", 
-                                    "tipo": "TRABALHO", "aula_alvo": tema_t, "semana_ref": "PROJETO"
+                                    "tipo": "PROJETO", "aula_alvo": tema_t, "semana_ref": "PROJETO"
                                 }
                                 
-                                txt_hab_t = ", ".join(hab_t) if hab_t else "Escolha habilidades pertinentes."
-
                                 prompt_t = (
-                                    f"PERSONA: ARQUITETO_PROJETOS_V29. ID: {nome_elite_proj}.\n"
+                                    f"PERSONA: ARQUITETO_PROJETOS_V31_ELITE. ID: {nome_elite_proj}.\n"
                                     f"TEMA: {tema_t}. NATUREZA: {natureza_p}.\n"
-                                    f"SÉRIE: {ano_t}º Ano. EIXOS: {', '.join(eixos_sel_t)}.\n"
-                                    f"HABILIDADES: {txt_hab_t}.\n"
-                                    f"LOGÍSTICA: {modo_t} | DURAÇÃO: {qtd_aulas_t} aulas.\n"
-                                    f"VALOR: {util.sosa_to_str(valor_t)} pontos.\n"
-                                    f"INSTRUÇÕES: {instr_extra_p}.\n\n"
-                                    f"🚨 MISSÃO: Gere um ROTEIRO DE PESQUISA E INVESTIGAÇÃO com as TAGS [PROFESSOR], [ALUNO], [GABARITO], [PEI]."
+                                    f"SÉRIE: {ano_t}º Ano. MODO: {modo_t}.\n"
+                                    f"COMPETÊNCIAS BNCC: {', '.join(comps_proj)}.\n"
+                                    f"CONTEÚDOS ITABUNA: {', '.join(conts_t)}.\n"
+                                    f"VALOR: {util.sosa_to_str(valor_t)} | DURAÇÃO: {qtd_aulas_t} aulas.\n"
+                                    f"EXTRAS: {instr_extra_p}.\n\n"
+                                    f"MISSÃO: Gere o material completo com as TAGS [SOSA_ID], [COMPETENCIAS_BNCC], [HABILIDADES_BNCC], [OBJETO_CONHECIMENTO], [CONTEXTO_GLOCAL], [PROFESSOR], [ALUNO], [ESTRATEGIA_DUA_PEI], [RUBRICA_DE_MERITO]."
                                 )
-                                st.session_state.lab_temp = ai.gerar_ia("ARQUITETO_PROJETOS_V29", prompt_t, usar_busca=True)
+                                st.session_state.lab_temp = ai.gerar_ia("ARQUITETO_PROJETOS_V31_ELITE", prompt_t, usar_busca=True)
+                                st.session_state.v_lab = int(time.time())
                                 st.rerun()
 
         with tab_complementar:
