@@ -308,10 +308,10 @@ def exibir_material_estruturado(texto_raw, key_prefix, dados_plano=None, info_au
                         st.error(f"Falha no envio dos arquivos.")
                        
 # ==============================================================================
-# MÓDULO: LABORATÓRIO DE PRODUÇÃO (CRIADOR V40.0 - INTEGRADO & BLINDADO)
+# MÓDULO: LABORATÓRIO DE PRODUÇÃO (CRIADOR V40.5 - RECOVERY MODE)
 # ==============================================================================
 if menu == "🧪 Criador de Aulas":
-    st.title("🧪 Laboratório de Produção Semiótica (V40.0)")
+    st.title("🧪 Laboratório de Produção Semiótica (V40.5)")
     st.markdown("---")
     
     def reset_laboratorio():
@@ -326,86 +326,79 @@ if menu == "🧪 Criador de Aulas":
         st.session_state.v_lab = int(time.time())
     v = st.session_state.v_lab
 
-    # --- 1. INICIALIZAÇÃO DE SEGURANÇA (Resolve reportUndefinedVariable) ---
     meta = st.session_state.get("lab_meta", {})
     is_hub = meta.get("tipo") == "PRODUÇÃO_HUB"
     ed_prof, ed_alu, ed_res, ed_dua = "", "", "", ""
     s_id = st.session_state.get("sosa_id_atual", "SEM-ID")
 
-    # --- ÁREA DE EXIBIÇÃO E REFINO (MODO EDIÇÃO ATIVO) ---
     if "lab_temp" in st.session_state:
         txt_base = st.session_state.lab_temp
         
-        # 2. EXTRAÇÃO PREVENTIVA PARA O ESCOPO GLOBAL
+        # 1. EXTRAÇÃO DE SEGURANÇA
         s_id_extraido = ai.extrair_tag(txt_base, "SOSA_ID")
         if s_id_extraido: s_id = s_id_extraido.split("[")[0].strip()
         
-        # Identifica se é Projeto ou Aula
         is_projeto = "PROJETO" in s_id.upper() or "[JUSTIFICATIVA_PHC]" in txt_base or "[CONTEXTO_GLOCAL]" in txt_base
 
-        # Popula as variáveis que o Triple-Sync vai usar
+        # 2. MOTOR DE RECUPERAÇÃO (RECOVERY MODE)
+        # Se a IA jogou tudo no DUA, vamos capturar para não perder o trabalho
+        conteudo_bruto_aluno = ai.extrair_tag(txt_base, "ALUNO")
+        conteudo_bruto_dua = ai.extrair_tag(txt_base, "ESTRATEGIA_DUA_PEI")
+        
+        # Se o aluno estiver vazio ou só com linhas, e o DUA estiver muito grande, o conteúdo está no DUA
+        if len(conteudo_bruto_aluno) < 100 and len(conteudo_bruto_dua) > 300:
+            recovery_txt = conteudo_bruto_dua
+        else:
+            recovery_txt = conteudo_bruto_aluno
+
         if is_projeto:
             val_just = ai.extrair_tag(txt_base, "JUSTIFICATIVA_PHC") or ai.extrair_tag(txt_base, "CONTEXTO_GLOCAL")
-            ed_prof = f"MAPA DO PROFESSOR\n\n[JUSTIFICATIVA]\n{val_just}\n\n[RUBRICA]\n{ai.extrair_tag(txt_base, 'RUBRICA_DE_MERITO')}"
+            val_rub = ai.extrair_tag(txt_base, "RUBRICA_DE_MERITO")
             
+            # Montagem do Professor
+            ed_prof = f"[JUSTIFICATIVA]\n{val_just}\n\n[RUBRICA]\n{val_rub}"
+            
+            # Montagem do Aluno (Tenta sub-tags, se não, usa o recovery)
             val_ctx = ai.extrair_tag(txt_base, "CONTEXTO_INVESTIGATIVO")
-            if not val_ctx: # Fallback se a IA mandou o bloco Aluno inteiro
-                ed_alu = ai.extrair_tag(txt_base, "ALUNO") or ai.extrair_tag(txt_base, "ESTRATEGIA_DUA_PEI")
+            if val_ctx and len(val_ctx) > 10:
+                ed_alu = f"[CONTEXTO]\n{val_ctx}\n\n[MISSÃO]\n{ai.extrair_tag(txt_base, 'MISSÃO_DE_PESQUISA')}\n\n[PASSO_A_PASSO]\n{ai.extrair_tag(txt_base, 'PASSO_A_PASSO')}\n\n[PRODUTO]\n{ai.extrair_tag(txt_base, 'PRODUTO_ESPERADO')}"
             else:
-                ed_alu = f"[CONTEXTO]\n{val_ctx}\n\n[MISSÃO]\n{ai.extrair_tag(txt_base, 'MISSÃO_DE_PESQUISA')}\n\n[PASSO_A_PASSO]\n{ai.extrair_tag(txt_base, 'PASSO_A_PASSO')}"
+                ed_alu = recovery_txt
             
-            ed_res = "RUBRICA DE PROJETO"
-            ed_dua = ai.extrair_tag(txt_base, "ESTRATEGIA_DUA_PEI")
+            ed_res = "RUBRICA INTEGRADA"
+            ed_dua = conteudo_bruto_dua
         else:
             ed_prof = ai.extrair_tag(txt_base, "PROFESSOR")
-            ed_alu = ai.extrair_tag(txt_base, "ALUNO")
+            ed_alu = recovery_txt
             ed_res = ai.extrair_tag(txt_base, "GABARITO") or ai.extrair_tag(txt_base, "GABARITO_TEXTO")
-            ed_dua = ai.extrair_tag(txt_base, "PEI")
+            ed_dua = conteudo_bruto_dua
 
         st.success(f"💎 Material em Edição: **{s_id}**")
 
-        # --- 🤖 REFINADOR MAESTRO ---
-        with st.container(border=True):
-            st.subheader("🤖 Refinador Maestro (Perícia V31)")
-            cmd_refine_lab = st.chat_input("Solicite ajustes...", key=f"chat_lab_ref_{v}")
-            if cmd_refine_lab:
-                with st.spinner("Reengenharia..."):
-                    persona_alvo = "REFINADOR_PEDAGOGICO" if is_projeto else "REFINADOR_MATERIAIS"
-                    st.session_state.lab_temp = ai.gerar_ia(persona_alvo, f"ORDEM: {cmd_refine_lab}\n\nATUAL:\n{txt_base}")
-                    st.session_state.v_lab = int(time.time())
-                    st.rerun()
-            if st.button("🗑️ DESCARTAR EDIÇÃO"): reset_laboratorio()
-        
-        # --- 🗂️ TABS DINÂMICAS ---
+        # --- TABS DINÂMICAS ---
         if is_projeto:
             t_prof, t_alu, t_dua, t_sync = st.tabs(["👨‍🏫 Mapa do Professor", "📝 Roteiro do Aluno", "♿ DUA/PEI", "☁️ SINCRONIA"])
             with t_prof:
-                st.text_area("Justificativa Pedagógica:", ai.extrair_tag(txt_base, "JUSTIFICATIVA_PHC") or ai.extrair_tag(txt_base, "CONTEXTO_GLOCAL"), height=200, key=f"p_just_{v}")
-                st.text_area("Rubrica de Mérito:", ai.extrair_tag(txt_base, "RUBRICA_DE_MERITO"), height=300, key=f"p_rub_{v}")
+                st.text_area("Justificativa Pedagógica:", val_just if 'val_just' in locals() else "", height=200, key=f"p_just_{v}")
+                st.text_area("Rubrica de Mérito:", val_rub if 'val_rub' in locals() else "", height=300, key=f"p_rub_{v}")
             with t_alu:
-                if "[CONTEXTO_INVESTIGATIVO]" in txt_base:
-                    st.text_area("Contexto:", ai.extrair_tag(txt_base, "CONTEXTO_INVESTIGATIVO"), height=150, key=f"a_ctx_{v}")
-                    st.text_area("Missão:", ai.extrair_tag(txt_base, "MISSÃO_DE_PESQUISA"), height=150, key=f"a_mis_{v}")
-                    st.text_area("Passo a Passo:", ai.extrair_tag(txt_base, "PASSO_A_PASSO"), height=300, key=f"a_pas_{v}")
-                else:
-                    st.text_area("Roteiro Completo:", ed_alu, height=450, key=f"a_full_{v}")
+                st.text_area("Roteiro de Investigação:", ed_alu, height=500, key=f"a_full_{v}")
             with t_dua:
                 st.text_area("Estratégia DUA/PEI:", ed_dua, height=300, key=f"a_dua_{v}")
         else:
             t_prof, t_alu, t_gab, t_pei, t_sync = st.tabs(["👨‍🏫 Professor", "📝 Aluno", "✅ Gabarito", "♿ PEI", "☁️ SINCRONIA"])
-            with t_prof: st.text_area("Lousa:", ed_prof, height=450, key=f"ed_prof_f_{v}")
-            with t_alu: st.text_area("Folha:", ed_alu, height=450, key=f"ed_alu_f_{v}")
-            with t_gab: st.text_area("Gabarito:", ed_res, height=200, key=f"ed_res_f_{v}")
-            with t_pei: st.text_area("PEI:", ed_dua, height=400, key=f"ed_pei_f_{v}")
+            with t_prof: st.text_area("Mapa de Regência:", ed_prof, height=450, key=f"ed_prof_f_{v}")
+            with t_alu: st.text_area("Folha do Aluno:", ed_alu, height=450, key=f"ed_alu_f_{v}")
+            with t_gab: 
+                st.text_area("Gabarito Oficial:", ed_res, height=200, key=f"ed_res_f_{v}")
+            with t_pei: st.text_area("Material PEI:", ed_dua, height=400, key=f"ed_pei_f_{v}")
 
-        # --- ☁️ ABA DE SINCRONIA (TRIPLE-SYNC) ---
         with t_sync:
-            st.subheader("🚀 Protocolo de Custódia Digital")
             if st.button("💾 EXECUTAR TRIPLE-SYNC (SUBSTITUIR)", use_container_width=True, type="primary", key=f"btn_triple_{v}"):
                 with st.status("Sincronizando...") as status:
                     db.excluir_registro_com_drive("DB_AULAS_PRONTAS", s_id)
                     ano_str = f"{meta.get('ano', '6')}º"
-                    sem_ref = meta.get('semana_ref', 'PROJETO' if is_projeto else 'AULA')
+                    sem_ref = meta.get('semana_ref', 'PROJETO')
                     
                     doc_alu = exporter.gerar_docx_aluno_v24(s_id, ed_alu, {"ano": ano_str, "trimestre": meta.get('trimestre', 'I Trimestre')})
                     link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{s_id}_ALUNO", modo="AULA")
@@ -418,7 +411,7 @@ if menu == "🧪 Criador de Aulas":
                     ])
                     status.update(label="✅ Sincronizado!", state="complete")
                     st.balloons(); time.sleep(1); reset_laboratorio()
-
+                    
     # --- SEÇÃO DE ENTRADA (CONFIGURAÇÃO INICIAL) ---
     else:
         tab_producao, tab_diagnostico, tab_trabalhos, tab_complementar, tab_acervo = st.tabs([
