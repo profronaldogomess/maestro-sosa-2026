@@ -476,26 +476,58 @@ if menu == "🧪 Criador de Aulas":
                     c1, c2, c3 = st.columns([1, 2, 1])
                     ano_lab = c1.selectbox("Série/Ano:", [6, 7, 8, 9], key=f"prod_ano_{v}")
                     ano_ref_prod = f"{ano_lab}º"
+                    
                     planos_ano = df_planos[df_planos["ANO"].astype(str).str.contains(str(ano_lab))]
-                    if planos_ano.empty: st.error("❌ Nenhum planejamento encontrado.")
+                    
+                    if planos_ano.empty: 
+                        st.error("❌ Nenhum planejamento encontrado para esta série.")
                     else:
                         sem_lab = c2.selectbox("Semana Base (Ponto ID):", planos_ano["SEMANA"].tolist(), key=f"prod_sem_{v}")
                         plano_row = planos_ano[planos_ano["SEMANA"] == sem_lab].iloc[0]
                         plano_txt = str(plano_row['PLANO_TEXTO'])
                         
-                        aula_alvo_prod = c3.radio("🎯 Aula Pendente:", ["Aula 1", "Aula 2"], horizontal=True, key=f"prod_alvo_{v}")
-                        instr_extra_prod = st.text_area("📝 Contexto Adicional:", key=f"prod_extra_{v}")
-                        qtd_q_prod = st.slider("Quantidade de Questões:", 3, 15, 10, key=f"prod_q_{v}")
+                        # --- MOTOR DE FILTRAGEM DE SAFRA (A MÁGICA ESTÁ AQUI) ---
+                        # Busca o que já foi produzido para esta semana e ano
+                        aulas_existentes = df_aulas[(df_aulas['SEMANA_REF'] == sem_lab) & (df_aulas['ANO'] == ano_ref_prod)]
+                        lista_prontas = aulas_existentes['TIPO_MATERIAL'].astype(str).tolist()
                         
-                        if st.button("💎 COMPILAR MATERIAL DE ELITE", use_container_width=True, type="primary"):
-                            with st.spinner("Arquitetando Tratado Didático..."):
-                                nome_elite = util.gerar_nome_material_elite(ano_lab, aula_alvo_prod, sem_lab)
-                                st.session_state.sosa_id_atual = nome_elite
-                                st.session_state.lab_meta = {"ano": ano_lab, "trimestre": "I Trimestre", "tipo": aula_alvo_prod, "semana_ref": sem_lab, "aula_alvo": aula_alvo_prod}
-                                tag_aula = "AULA_1" if "1" in aula_alvo_prod else "AULA_2"
-                                prompt_manual = f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {nome_elite}.\nSÉRIE: {ano_ref_prod}. ALVO: {aula_alvo_prod}. QTD: {qtd_q_prod}.\nROTEIRO: {ai.extrair_tag(plano_txt, tag_aula)}.\nEXTRAS: {instr_extra_prod}."
-                                st.session_state.lab_temp = ai.gerar_ia("MAESTRO_SOSA_V28_ELITE", prompt_manual, usar_busca=True)
-                                st.rerun()
+                        opcoes_pendentes = []
+                        if not any("Aula 1" in t for t in lista_prontas): opcoes_pendentes.append("Aula 1")
+                        if not any("Aula 2" in t for t in lista_prontas): opcoes_pendentes.append("Aula 2")
+                        
+                        if not opcoes_pendentes:
+                            c3.success("✅ Safra Completa!")
+                            st.info(f"As Aulas 1 e 2 da '{sem_lab}' já estão no seu Acervo.")
+                        else:
+                            aula_alvo_prod = c3.radio("🎯 Aula Pendente:", opcoes_pendentes, horizontal=True, key=f"prod_alvo_{v}")
+                            
+                            instr_extra_prod = st.text_area("📝 Contexto Adicional:", key=f"prod_extra_{v}")
+                            qtd_q_prod = st.slider("Quantidade de Questões:", 3, 15, 10, key=f"prod_q_{v}")
+                            
+                            if st.button("💎 COMPILAR MATERIAL DE ELITE", use_container_width=True, type="primary"):
+                                with st.spinner("Arquitetando Tratado Didático..."):
+                                    nome_elite = util.gerar_nome_material_elite(ano_lab, aula_alvo_prod, sem_lab)
+                                    st.session_state.sosa_id_atual = nome_elite
+                                    st.session_state.lab_meta = {
+                                        "ano": ano_lab, 
+                                        "trimestre": plano_row.get('TURMA', 'I Trimestre'), 
+                                        "tipo": aula_alvo_prod, 
+                                        "semana_ref": sem_lab, 
+                                        "aula_alvo": aula_alvo_prod
+                                    }
+                                    
+                                    # Seleciona a tag correta do plano (AULA_1 ou AULA_2)
+                                    tag_alvo = "AULA_1" if "1" in aula_alvo_prod else "AULA_2"
+                                    roteiro_plano = ai.extrair_tag(plano_txt, tag_alvo)
+                                    
+                                    prompt_manual = (
+                                        f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {nome_elite}.\n"
+                                        f"SÉRIE: {ano_ref_prod}. ALVO: {aula_alvo_prod}. QTD: {qtd_q_prod}.\n"
+                                        f"--- HERANÇA DO PLANO ---\n{roteiro_plano}\n"
+                                        f"--- EXTRAS ---\n{instr_extra_prod}"
+                                    )
+                                    st.session_state.lab_temp = ai.gerar_ia("MAESTRO_SOSA_V28_ELITE", prompt_manual, usar_busca=True)
+                                    st.rerun()
 
         with tab_diagnostico:
             st.markdown("### 🔍 Configurar Sonda de Proficiência")
