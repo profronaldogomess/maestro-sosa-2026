@@ -997,11 +997,10 @@ if menu == "📅 Planejamento (Ponto ID)":
                 with c_v4: st.error(f"**📝 Avaliação:**\n{ed_ava}")
                 if ed_a3 != "N/A": st.info(f"**🗓️ Sábado Letivo:**\n{ed_a3}")
                 
-    # --- ABA 2: DASHBOARD DE PRODUÇÃO ---
+# --- ABA 2: DASHBOARD DE PRODUÇÃO (VERSÃO V31.9 - FIX LOGIC) ---
     with tab_producao:
         st.subheader("🏗️ Linha de Montagem de Materiais")
         if not df_planos.empty:
-            # Filtra apenas os planos que estão em produção ativa
             planos_ativos = df_planos[df_planos["EIXO"].astype(str).str.contains("HUB_ATIVO", case=False, na=False)].iloc[::-1]
             
             if not planos_ativos.empty:
@@ -1014,12 +1013,14 @@ if menu == "📅 Planejamento (Ponto ID)":
                         
                         c_p1.markdown(f"**{sem_ref}**\n`Série: {ano_ref}`")
                         
-                        # --- VERIFICAÇÃO DE PROGRESSO REAL ---
+                        # --- VERIFICAÇÃO DE PROGRESSO REAL (CORRIGIDA) ---
+                        # Agora olhamos para a coluna TIPO_MATERIAL, que é onde o nome da aula reside
                         aulas_no_banco = df_aulas[(df_aulas['SEMANA_REF'] == sem_ref) & (df_aulas['ANO'] == ano_ref)]
-                        txt_aulas = " ".join(aulas_no_banco['CONTEUDO'].astype(str).tolist())
+                        lista_tipos = aulas_no_banco['TIPO_MATERIAL'].astype(str).tolist()
                         
-                        a1_status = "✅" if "Aula 1" in txt_aulas else "⏳"
-                        a2_status = "✅" if "Aula 2" in txt_aulas else "⏳"
+                        # Verifica se "Aula 1" ou "Aula 2" constam na lista de materiais prontos
+                        a1_status = "✅" if any("Aula 1" in t for t in lista_tipos) else "⏳"
+                        a2_status = "✅" if any("Aula 2" in t for t in lista_tipos) else "⏳"
                         
                         c_p2.markdown(f"**Progresso:**\n{a1_status} Aula 1 | {a2_status} Aula 2")
                         
@@ -1035,16 +1036,11 @@ if menu == "📅 Planejamento (Ponto ID)":
                             }
                             st.success("Conteúdo enviado! Vá ao Criador de Aulas.")
 
-                        # Botão para dar baixa (Arquivar)
-                        if c_p4.button("✅ CONCLUIR", key=f"fin_hub_{row.name}", use_container_width=True, help="Mover para o Acervo Permanente"):
+                        if c_p4.button("✅ CONCLUIR", key=f"fin_hub_{row.name}", use_container_width=True):
                             if db.arquivar_plano_produzido(sem_ref, ano_ref):
-                                st.success("Safra Concluída! Plano arquivado.")
-                                time.sleep(1)
-                                st.rerun()
+                                st.success("Safra Concluída!"); time.sleep(1); st.rerun()
             else:
                 st.info("📭 Nenhum plano pendente no Dashboard.")
-        else:
-            st.info("📭 Banco de planos vazio.")
 
 # --- ABA 3: GESTÃO DE ACERVO (VERSÃO V31.5 - FULL BNCC ELITE) ---
     with tab_acervo:
