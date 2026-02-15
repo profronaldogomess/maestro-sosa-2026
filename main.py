@@ -2147,7 +2147,7 @@ elif menu == "📝 Central de Avaliações":
         "🚀 Arquiteto de Exames", "🤖 Refinador Maestro", "👁️ Visualização 360°", "🔥 Recomposição/Revisão", "💾 Finalizar Ativo", "🗂️ Acervo de Safra"
     ])
 
-# --- ABA 1: ARQUITETO (VERSÃO V65.5 - ESPECIALIZAÇÃO EM RECUPERAÇÃO) ---
+# --- ABA 1: ARQUITETO (VERSÃO V66.0 - PROTOCOLO DE ESPELHAMENTO) ---
     with tab_arquiteto_av:
         if is_refinando_av:
             st.warning(f"🛠️ **MODO REFINO:** Editando {st.session_state.refino_av_ativo.get('tipo')}")
@@ -2157,7 +2157,6 @@ elif menu == "📝 Central de Avaliações":
             st.markdown("### ⚙️ 1. Configuração do Exame")
             c1, c2, c3, c4 = st.columns([1.5, 1, 1, 1])
             
-            # --- ATUALIZAÇÃO DE TIPOS (Soberania Itabuna) ---
             tipo_av = c1.selectbox("Tipo:", 
                 ["Teste", "Prova", "Recuperação Paralela", "Recuperação Final", "2ª Chamada"], 
                 key=f"av_t_{v}")
@@ -2170,69 +2169,86 @@ elif menu == "📝 Central de Avaliações":
             ano_av = c3.selectbox("Série:", [6, 7, 8, 9], index=0, key=f"av_a_{v}")
             qtd_q = c4.number_input("Nº Total de Questões:", 2, 20, 10, key=f"av_q_{v}")
 
-        with st.container(border=True):
-            st.markdown("### 📊 2. Distribuição de Dificuldade (Taxonomia)")
-            cd1, cd2, cd3 = st.columns(3)
-            q_facil = cd1.number_input("Fáceis:", 0, qtd_q, int(qtd_q*0.3), key=f"q_f_{v}")
-            q_medio = cd2.number_input("Médias:", 0, qtd_q, int(qtd_q*0.5), key=f"q_m_{v}")
-            q_dificil = cd3.number_input("Difíceis:", 0, qtd_q, qtd_q - (q_facil + q_medio), key=f"q_d_{v}")
-            soma_q = q_facil + q_medio + q_dificil
+        # --- BLOCO DE TAXONOMIA (SÓ APARECE SE NÃO FOR 2ª CHAMADA) ---
+        is_segunda_chamada = tipo_av == "2ª Chamada"
+        
+        if not is_segunda_chamada:
+            with st.container(border=True):
+                st.markdown("### 📊 2. Distribuição de Dificuldade (Taxonomia)")
+                cd1, cd2, cd3 = st.columns(3)
+                q_facil = cd1.number_input("Fáceis:", 0, qtd_q, int(qtd_q*0.3), key=f"q_f_{v}")
+                q_medio = cd2.number_input("Médias:", 0, qtd_q, int(qtd_q*0.5), key=f"q_m_{v}")
+                q_dificil = cd3.number_input("Difíceis:", 0, qtd_q, qtd_q - (q_facil + q_medio), key=f"q_d_{v}")
+                soma_q = q_facil + q_medio + q_dificil
+        else:
+            st.info("💡 **Modo 2ª Chamada:** A dificuldade e a quantidade de questões serão herdadas da prova original.")
+            soma_q = qtd_q # Força a validação para passar
 
         with st.container(border=True):
-            st.markdown("### 🎯 3. Matriz de Mérito e Filtro Curricular")
+            st.markdown("### 🎯 3. Matriz de Mérito e Vínculo")
             c_trim1, c_trim2 = st.columns([1, 2])
             
-            # --- LÓGICA DE FILTRO PARA RECUPERAÇÃO FINAL ---
-            is_final = tipo_av == "Recuperação Final"
-            
-            if is_final:
-                trim_filtro = c_trim1.selectbox("Abrangência:", ["Ano Inteiro"], disabled=True, key=f"av_trim_filter_{v}")
-                st.info("💡 Modo Final: O sistema buscará materiais de todos os trimestres.")
-                # Busca materiais do ano todo
-                df_materiais_trim = df_aulas[df_aulas["ANO"].astype(str).str.contains(str(ano_av))]
+            if is_segunda_chamada:
+                trim_filtro = c_trim1.selectbox("Trimestre da Original:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"av_trim_filter_{v}")
+                # Busca apenas AVALIAÇÕES já prontas para servir de parâmetro
+                df_provas_prontas = df_aulas[(df_aulas['SEMANA_REF'] == "AVALIAÇÃO") & (df_aulas['ANO'].str.contains(str(ano_av)))]
+                mats_selecionados = c_trim2.selectbox("📦 Selecione a Prova Original (Parâmetro):", [""] + df_provas_prontas['TIPO_MATERIAL'].tolist(), key=f"av_ref_{v}")
             else:
                 trim_filtro = c_trim1.selectbox("Filtrar por Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"av_trim_filter_{v}")
                 df_planos_trim = df_planos[(df_planos["ANO"].astype(str).str.contains(str(ano_av))) & (df_planos["TURMA"].astype(str).str.contains(trim_filtro))]
                 semanas_do_trimestre = df_planos_trim["SEMANA"].unique().tolist()
                 df_materiais_trim = df_aulas[(df_aulas["ANO"].astype(str).str.contains(str(ano_av))) & (df_aulas["SEMANA_REF"].isin(semanas_do_trimestre))]
-            
-            mats_selecionados = c_trim2.multiselect(f"Ativos de Safra Detectados ({len(df_materiais_trim)}):", options=df_materiais_trim["TIPO_MATERIAL"].tolist(), key=f"av_ref_{v}")
+                mats_selecionados = c_trim2.multiselect(f"Ativos de Safra Detectados ({len(df_materiais_trim)}):", options=df_materiais_trim["TIPO_MATERIAL"].tolist(), key=f"av_ref_{v}")
 
         # --- DIAGNÓSTICO DE CONFIGURAÇÃO ---
         with st.container(border=True):
             st.markdown("#### 🔍 Diagnóstico de Configuração")
             col_diag1, col_diag2 = st.columns(2)
             with col_diag1:
-                if soma_q == qtd_q: st.success(f"✅ Taxonomia: {soma_q}/{qtd_q} questões.")
-                else: st.error(f"🚨 Erro: Soma ({soma_q}) diferente do total ({qtd_q}).")
-                
-                if is_final: st.warning("⚠️ Atenção: Exame de abrangência anual.")
+                if is_segunda_chamada:
+                    if mats_selecionados: st.success(f"✅ Pronto para espelhar: {mats_selecionados}")
+                    else: st.error("🚨 Selecione a prova original para continuar.")
+                else:
+                    if soma_q == qtd_q: st.success(f"✅ Taxonomia: {soma_q}/{qtd_q} questões.")
+                    else: st.error(f"🚨 Erro: Soma ({soma_q}) diferente do total ({qtd_q}).")
             with col_diag2:
                 peso_q_live = v_total / qtd_q if qtd_q > 0 else 0
                 st.metric("Peso por Questão", f"{peso_q_live:.2f} pts")
 
         # --- BOTÃO DE COMPILAÇÃO ---
         if st.button("💎 COMPILAR EXAME COM GRADE DE PERÍCIA", use_container_width=True, type="primary"):
-            if soma_q != qtd_q: 
+            if not is_segunda_chamada and soma_q != qtd_q: 
                 st.error("Ajuste a distribuição de dificuldade.")
             elif not mats_selecionados: 
-                st.error("Selecione os Ativos de Safra.")
+                st.error("Selecione os Ativos de Safra ou a Prova Original.")
             else:
-                with st.spinner(f"Arquitetando {tipo_av} com Rigor V30..."):
+                with st.spinner(f"Arquitetando {tipo_av}..."):
                     peso_str = util.sosa_to_str(v_total / qtd_q)
-                    contexto_aulas = ""
-                    for m_nome in mats_selecionados:
-                        m_row = df_materiais_trim[df_materiais_trim["TIPO_MATERIAL"] == m_nome].iloc[0]
-                        contexto_aulas += f"MATERIAL_ID: {m_nome}\nCONTEÚDO: {m_row['CONTEUDO']}\n"
+                    
+                    # Busca o conteúdo base
+                    if is_segunda_chamada:
+                        m_row = df_aulas[df_aulas["TIPO_MATERIAL"] == mats_selecionados].iloc[0]
+                        contexto_base = f"PROVA ORIGINAL PARA ESPELHAMENTO:\n{m_row['CONTEUDO']}"
+                        diretriz_especifica = (
+                            "VOCÊ ESTÁ GERANDO UMA 2ª CHAMADA. "
+                            "Mantenha rigorosamente as mesmas HABILIDADES e DESCRITORES da prova original. "
+                            "Crie 'Questões Gêmeas': mude os valores numéricos, nomes de personagens e o contexto da situação-problema, "
+                            "mas mantenha o mesmo nível de raciocínio. "
+                            "Para o aluno PEI, mantenha a mesma lógica de adaptação da prova original."
+                        )
+                    else:
+                        contexto_base = ""
+                        for m_nome in mats_selecionados:
+                            m_row = df_materiais_trim[df_materiais_trim["TIPO_MATERIAL"] == m_nome].iloc[0]
+                            contexto_base += f"MATERIAL_ID: {m_nome}\nCONTEÚDO: {m_row['CONTEUDO']}\n"
+                        diretriz_especifica = f"DISTRIBUIÇÃO: {q_facil} Fáceis, {q_medio} Médias, {q_dificil} Difíceis."
 
                     prompt = (
-                        f"ORDEM DE PRODUÇÃO V65 - RIGOR TOTAL\n"
+                        f"ORDEM DE PRODUÇÃO V66 - SOBERANIA DE EXAMES\n"
                         f"TIPO: {tipo_av} | SÉRIE: {ano_av}º Ano | VALOR TOTAL: {v_total}\n"
                         f"QUANTIDADE: {qtd_q} questões | VALOR POR QUESTÃO: {peso_str}.\n"
-                        f"DISTRIBUIÇÃO: {q_facil} Fáceis, {q_medio} Médias, {q_dificil} Difíceis.\n\n"
-                        f"🚨 DIRETRIZ DE RECUPERAÇÃO:\n"
-                        f"{'Foque em uma revisão abrangente de todos os conteúdos do ano.' if is_final else 'Foque nas lacunas específicas do trimestre atual.'}\n\n"
-                        f"CONTEÚDO BASE:\n{contexto_aulas}"
+                        f"🚨 DIRETRIZ:\n{diretriz_especifica}\n\n"
+                        f"CONTEÚDO DE REFERÊNCIA:\n{contexto_base}"
                     )
                     
                     st.session_state.temp_prova = ai.gerar_ia("ARQUITETO_EXAMES_V30_ELITE", prompt, usar_busca=True)
