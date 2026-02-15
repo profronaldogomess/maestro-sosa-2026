@@ -2040,7 +2040,7 @@ elif menu == "📝 Central de Avaliações":
         "🚀 Arquiteto de Exames", "🤖 Refinador Maestro", "👁️ Visualização 360°", "🔥 Recomposição/Revisão", "💾 Finalizar Ativo", "🗂️ Acervo de Safra"
     ])
 
-    # --- ABA 1: ARQUITETO ---
+# --- ABA 1: ARQUITETO (VERSÃO V65.2 - COM DIAGNÓSTICO ATIVO) ---
     with tab_arquiteto:
         if is_refinando_av:
             st.warning(f"🛠️ **MODO REFINO:** Editando {st.session_state.refino_av_ativo.get('tipo')}")
@@ -2073,41 +2073,74 @@ elif menu == "📝 Central de Avaliações":
             
             mats_selecionados = c_trim2.multiselect(f"Ativos de Safra Detectados ({len(df_materiais_trim)}):", options=df_materiais_trim["TIPO_MATERIAL"].tolist(), key=f"av_ref_{v}")
 
-            if st.button("💎 COMPILAR EXAME COM GRADE DE PERÍCIA", use_container_width=True, type="primary"):
-                if soma_q != qtd_q: 
-                    st.error(f"Erro: A soma das dificuldades ({soma_q}) deve ser igual ao total de questões ({qtd_q}).")
-                elif not mats_selecionados: 
-                    st.error("Selecione os Ativos de Safra.")
+        # ==============================================================================
+        # 🔍 NOVO BLOCO: DIAGNÓSTICO DE SOBERANIA (INTELIGÊNCIA EM TEMPO REAL)
+        # ==============================================================================
+        with st.container(border=True):
+            st.markdown("#### 🔍 Diagnóstico de Configuração")
+            col_diag1, col_diag2 = st.columns(2)
+            
+            with col_diag1:
+                # Validação de Soma de Questões
+                if soma_q == qtd_q:
+                    st.success(f"✅ Taxonomia: {soma_q}/{qtd_q} questões distribuídas.")
+                elif soma_q < qtd_q:
+                    st.warning(f"⚠️ Taxonomia: Faltam {qtd_q - soma_q} questões para o total.")
                 else:
-                    with st.spinner(f"Arquitetando {qtd_q} questões com pesos iguais e gabarito blindado..."):
-                        # CÁLCULO AUTOMÁTICO DE PESO IGUAL
-                        peso_por_questao = v_total / qtd_q
-                        peso_str = util.sosa_to_str(peso_por_questao)
+                    st.error(f"🚨 Taxonomia: Você excedeu o total em {soma_q - qtd_q} questões.")
+                
+                # Validação de Peso Municipal (Itabuna)
+                if tipo_av == "Teste" and v_total != 3.0:
+                    st.info("💡 Nota: O padrão para Testes em Itabuna costuma ser 3,0.")
+                elif tipo_av == "Prova" and v_total != 4.0:
+                    st.info("💡 Nota: O padrão para Provas em Itabuna costuma ser 4,0.")
 
-                        contexto_aulas = ""
-                        for m_nome in mats_selecionados:
-                            m_row = df_materiais_trim[df_materiais_trim["TIPO_MATERIAL"] == m_nome].iloc[0]
-                            contexto_aulas += f"MATERIAL_ID: {m_nome}\nCONTEÚDO: {m_row['CONTEUDO']}\n"
+            with col_diag2:
+                # Cálculo de Peso por Questão
+                peso_q_live = v_total / qtd_q if qtd_q > 0 else 0
+                st.metric("Peso por Questão", f"{peso_q_live:.2f} pts")
+                
+                # Validação de Materiais
+                if not mats_selecionados:
+                    st.error("❌ Nenhum material de safra selecionado.")
+                else:
+                    st.success(f"📚 Cobertura: {len(mats_selecionados)} aula(s) vinculada(s).")
 
-                        prompt = (
-                            f"ORDEM DE PRODUÇÃO V65 - RIGOR TOTAL E ANTI-CHUTE\n"
-                            f"TIPO: {tipo_av} | SÉRIE: {ano_av}º Ano | VALOR TOTAL: {v_total}\n"
-                            f"QUANTIDADE OBRIGATÓRIA: {qtd_q} questões.\n"
-                            f"VALOR POR QUESTÃO: {peso_str} (Todas com o mesmo peso).\n"
-                            f"DISTRIBUIÇÃO: {q_facil} Fáceis, {q_medio} Médias, {q_dificil} Difíceis.\n\n"
-                            f"🚨 DIRETRIZES DE ELITE:\n"
-                            f"1. Inicie com [VALOR: {v_total}].\n"
-                            f"2. Use o formato: **QUESTÃO XX ({peso_str} ponto) -** para todas.\n"
-                            f"3. Aplique a Engenharia Anti-Chute no gabarito (distribuição equilibrada).\n"
-                            f"4. Inclua [ PROMPT IMAGEM: ... ] para questões que necessitem de suporte visual.\n"
-                            f"5. Organize a [GRADE_DE_CORRECAO] de forma ultra-detalhada (Habilidade + Justificativa + Perícia de Distratores).\n\n"
-                            f"CONTEÚDO BASE:\n{contexto_aulas}"
-                        )
-                        
-                        st.session_state.temp_prova = ai.gerar_ia("ARQUITETO_EXAMES_V30_ELITE", prompt, usar_busca=True)
-                        st.session_state.av_valor_total = v_total
-                        st.session_state.av_nome_fixo = f"{tipo_av.upper()}_{ano_av}ANO_{trim_filtro.replace(' ', '')}"
-                        st.rerun()
+        # --- BOTÃO DE COMPILAÇÃO ---
+        if st.button("💎 COMPILAR EXAME COM GRADE DE PERÍCIA", use_container_width=True, type="primary"):
+            if soma_q != qtd_q: 
+                st.error(f"Erro: A soma das dificuldades ({soma_q}) deve ser igual ao total de questões ({qtd_q}).")
+            elif not mats_selecionados: 
+                st.error("Selecione os Ativos de Safra.")
+            else:
+                with st.spinner(f"Arquitetando {qtd_q} questões com pesos iguais e gabarito blindado..."):
+                    peso_por_questao = v_total / qtd_q
+                    peso_str = util.sosa_to_str(peso_por_questao)
+
+                    contexto_aulas = ""
+                    for m_nome in mats_selecionados:
+                        m_row = df_materiais_trim[df_materiais_trim["TIPO_MATERIAL"] == m_nome].iloc[0]
+                        contexto_aulas += f"MATERIAL_ID: {m_nome}\nCONTEÚDO: {m_row['CONTEUDO']}\n"
+
+                    prompt = (
+                        f"ORDEM DE PRODUÇÃO V65 - RIGOR TOTAL E ANTI-CHUTE\n"
+                        f"TIPO: {tipo_av} | SÉRIE: {ano_av}º Ano | VALOR TOTAL: {v_total}\n"
+                        f"QUANTIDADE OBRIGATÓRIA: {qtd_q} questões.\n"
+                        f"VALOR POR QUESTÃO: {peso_str} (Todas com o mesmo peso).\n"
+                        f"DISTRIBUIÇÃO: {q_facil} Fáceis, {q_medio} Médias, {q_dificil} Difíceis.\n\n"
+                        f"🚨 DIRETRIZES DE ELITE:\n"
+                        f"1. Inicie com [VALOR: {v_total}].\n"
+                        f"2. Use o formato: **QUESTÃO XX ({peso_str} ponto) -** para todas.\n"
+                        f"3. Aplique a Engenharia Anti-Chute no gabarito (distribuição equilibrada).\n"
+                        f"4. Inclua [ PROMPT IMAGEM: ... ] para questões que necessitem de suporte visual.\n"
+                        f"5. Organize a [GRADE_DE_CORRECAO] de forma ultra-detalhada (Habilidade + Justificativa + Perícia de Distratores).\n\n"
+                        f"CONTEÚDO BASE:\n{contexto_aulas}"
+                    )
+                    
+                    st.session_state.temp_prova = ai.gerar_ia("ARQUITETO_EXAMES_V30_ELITE", prompt, usar_busca=True)
+                    st.session_state.av_valor_total = v_total
+                    st.session_state.av_nome_fixo = f"{tipo_av.upper()}_{ano_av}ANO_{trim_filtro.replace(' ', '')}"
+                    st.rerun()
 
     # --- ABA 2: REFINADOR ---
     with tab_refino:
