@@ -2922,147 +2922,172 @@ elif menu == "📸 Scanner de Gabaritos":
                                 ])
                         st.success("✅ Indicadores externos integrados ao histórico dos alunos!")
 
-    # --- ABA 4: RAIO-X PEDAGÓGICO (V72.1 - FIX UNDEFINED VARIABLE & ROBUSTEZ) ---
+    # --- ABA 4: RAIO-X PEDAGÓGICO (V73.0 - LENTE DE VERSÃO E PERFIL) ---
     with tab_raiox:
         st.subheader("📊 Raio-X Pedagógico: Diagnóstico Individual de Lacunas")
         st.markdown("---")
 
         c1, c2, c3 = st.columns([1, 1, 1.5])
-        t_sel_r = c1.selectbox("👥 Selecione a Turma:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"t_r_v72_{v}")
-        tr_sel_r = c2.selectbox("📅 Selecione o Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_r_v72_{v}")
+        t_sel_r = c1.selectbox("👥 Selecione a Turma:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"t_r_v73_{v}")
+        tr_sel_r = c2.selectbox("📅 Selecione o Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_r_v73_{v}")
         
         opcoes_r = filtrar_ativos_cir_v64(t_sel_r, tr_sel_r, apenas_provas=True)
-        at_sel_r = c3.selectbox("📋 Selecione a Avaliação para Raio-X:", [""] + opcoes_r, key=f"at_r_v72_{v}")
+        # Mostra apenas as avaliações "Base" no seletor principal
+        opcoes_base_r = [opt for opt in opcoes_r if "2ª" not in opt.upper()]
+        at_sel_r = c3.selectbox("📋 Selecione a Avaliação Base:", [""] + opcoes_base_r, key=f"at_r_v73_{v}")
 
         if not t_sel_r or not at_sel_r:
             st.info("💡 Selecione a Turma e a Avaliação para carregar a Perícia Pedagógica.")
         else:
-            # 1. RECUPERAÇÃO DE METADADOS E GABARITOS
-            prova_query = df_aulas[df_aulas['TIPO_MATERIAL'].str.strip() == at_sel_r.strip()]
-            
-            if not prova_query.empty:
-                dados_prova = prova_query.iloc[0]
-                txt_prova = str(dados_prova['CONTEUDO'])
-                grade_pericia = ai.extrair_tag(txt_prova, "GRADE_DE_CORRECAO")
+            # 1. CRUZAMENTO DE DADOS (RESPOSTAS + PERFIL DO ALUNO)
+            # Busca todos os registros que pertencem a este "Slot" (Original ou 2ª Chamada)
+            nome_curto_av = at_sel_r.split("-")[0].strip()
+            respostas_brutas = df_diagnosticos[
+                (df_diagnosticos['TURMA'].str.strip() == t_sel_r.strip()) & 
+                (df_diagnosticos['ID_AVALIACAO'].str.contains(nome_curto_av))
+            ].copy()
+
+            if respostas_brutas.empty:
+                st.warning("⚠️ Nenhuma resposta de aluno encontrada para esta avaliação.")
+            else:
+                # Identificação de Perfil e Versão
+                df_alunos_min = df_alunos[['ID', 'NECESSIDADES']].copy()
+                df_alunos_min['ID'] = df_alunos_min['ID'].apply(db.limpar_id)
+                respostas_brutas['ID_ALUNO_L'] = respostas_brutas['ID_ALUNO'].apply(db.limpar_id)
                 
-                def extrair_gab_v72(texto, tag_alvo="GABARITO_TEXTO"):
-                    raw = ai.extrair_tag(texto, tag_alvo) or ai.extrair_tag(texto, "GABARITO")
-                    matches = re.findall(r"(\d+)\s*[\-\.\:]\s*([A-E])", raw.upper())
-                    if matches: return {int(num): letra for num, letra in matches}
-                    letras = re.findall(r"\b[A-E]\b", raw.upper())
-                    return {i+1: letra for i, letra in enumerate(letras)}
+                df_analise = pd.merge(respostas_brutas, df_alunos_min, left_on='ID_ALUNO_L', right_on='ID', how='left')
+                df_analise['IS_PEI'] = df_analise['NECESSIDADES'].apply(lambda x: str(x).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"])
+                df_analise['IS_2A_CHAMADA'] = df_analise['ID_AVALIACAO'].str.contains("2ª", case=False)
 
-                gab_reg_map = extrair_gab_v72(txt_prova, "GABARITO_TEXTO")
-                gab_pei_map = extrair_gab_v72(txt_prova, "GABARITO_PEI")
+                # --- SELETOR DE LENTE PEDAGÓGICA (DUPLO FILTRO) ---
+                st.markdown("### 🎯 1. Análise de Performance por Item")
+                col_l1, col_l2 = st.columns(2)
+                
+                perfil_visao = col_l1.radio("1. Perfil do Aluno:", ["📝 Alunos Regulares", "♿ Alunos PEI"], horizontal=True, key=f"perf_v_{v}")
+                versao_visao = col_l2.radio("2. Versão da Prova:", ["📄 Prova Original", "🔄 2ª Chamada"], horizontal=True, key=f"vers_v_{v}")
+                
+                is_pei_view = "PEI" in perfil_visao
+                is_2a_view = "2ª" in versao_visao
+                
+                # Filtra os dados para o gráfico
+                df_filtrado = df_analise[(df_analise['IS_PEI'] == is_pei_view) & (df_analise['IS_2A_CHAMADA'] == is_2a_view)]
 
-                # 2. CRUZAMENTO DE DADOS (RESPOSTAS + PERFIL DO ALUNO)
-                respostas_brutas = df_diagnosticos[
-                    (df_diagnosticos['TURMA'].str.strip() == t_sel_r.strip()) & 
-                    (df_diagnosticos['ID_AVALIACAO'].str.strip() == at_sel_r.strip())
-                ].copy()
-
-                if respostas_brutas.empty:
-                    st.warning("⚠️ Nenhuma resposta de aluno encontrada para esta avaliação.")
+                # --- BUSCA DO GABARITO CORRETO PARA A LENTE ATIVA ---
+                if is_2a_view:
+                    # Busca o material de 2ª chamada no banco
+                    query_mat = df_aulas[df_aulas['TIPO_MATERIAL'].str.contains("2ª Chamada", case=False) & 
+                                        df_aulas['TIPO_MATERIAL'].str.contains(nome_curto_av, case=False)]
                 else:
-                    # Normalização de IDs para o merge
-                    df_alunos_min = df_alunos[['ID', 'NECESSIDADES']].copy()
-                    df_alunos_min['ID'] = df_alunos_min['ID'].apply(db.limpar_id)
-                    respostas_brutas['ID_ALUNO_L'] = respostas_brutas['ID_ALUNO'].apply(db.limpar_id)
-                    
-                    df_analise = pd.merge(respostas_brutas, df_alunos_min, left_on='ID_ALUNO_L', right_on='ID', how='left')
-                    df_analise['IS_PEI'] = df_analise['NECESSIDADES'].apply(lambda x: str(x).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"])
+                    query_mat = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel_r]
 
-                    # --- SELETOR DE LENTE PEDAGÓGICA ---
-                    st.markdown("### 🎯 1. Análise de Performance por Item")
-                    perfil_visao = st.radio("Filtrar Visão Macro:", ["📝 Alunos Regulares", "♿ Alunos PEI"], horizontal=True, key=f"perfil_v_{v}")
+                if query_mat.empty:
+                    st.error(f"❌ Gabarito da {versao_visao} não localizado no banco de materiais.")
+                elif df_filtrado.empty:
+                    st.info(f"📭 Não há dados de {perfil_visao} para a {versao_visao}.")
+                else:
+                    dados_prova = query_mat.iloc[0]
+                    txt_prova = str(dados_prova['CONTEUDO'])
+                    grade_pericia = ai.extrair_tag(txt_prova, "GRADE_DE_CORRECAO")
                     
-                    is_pei_view = "PEI" in perfil_visao
-                    df_filtrado = df_analise[df_analise['IS_PEI'] == is_pei_view]
-                    gab_ativo = gab_pei_map if is_pei_view else gab_reg_map
+                    def extrair_gab_v73(texto, is_pei=False):
+                        tag_alvo = "GABARITO_PEI" if is_pei else "GABARITO_TEXTO"
+                        raw = ai.extrair_tag(texto, tag_alvo) or ai.extrair_tag(texto, "GABARITO")
+                        matches = re.findall(r"(\d+)\s*[\-\.\:]\s*([A-E])", raw.upper())
+                        if matches: return {int(num): letra for num, letra in matches}
+                        letras = re.findall(r"\b[A-E]\b", raw.upper())
+                        return {i+1: letra for i, letra in enumerate(letras)}
 
-                    if df_filtrado.empty:
-                        st.info(f"📭 Não há dados de {perfil_visao} para esta avaliação.")
+                    gab_ativo = extrair_gab_v73(txt_prova, is_pei_view)
+
+                    # --- CÁLCULO DE ESTATÍSTICAS ---
+                    num_q_total = len(gab_ativo)
+                    stats_list = []
+                    matriz_respostas = [str(r).split(';') for r in df_filtrado['RESPOSTAS_ALUNO']]
+
+                    for i in range(1, num_q_total + 1):
+                        correta = gab_ativo.get(i, "?")
+                        votos = [res[i-1] if len(res) >= i else "?" for res in matriz_respostas]
+                        acertos = votos.count(correta)
+                        perc = (acertos / len(votos)) * 100 if len(votos) > 0 else 0
+                        erradas = [v for v in votos if v != correta and v in ["A", "B", "C", "D", "E"]]
+                        distrator = max(set(erradas), key=erradas.count) if erradas else "Nenhum"
+                        stats_list.append({"Questão": f"Q{i:02d}", "Acerto %": perc, "Gabarito": correta, "Distrator Crítico": distrator})
+
+                    df_stats = pd.DataFrame(stats_list)
+                    col_graf, col_item = st.columns([1.2, 1])
+                    
+                    with col_graf:
+                        fig = px.bar(df_stats, x="Questão", y="Acerto %", text_auto='.0f', 
+                                color="Acerto %", color_continuous_scale="RdYlGn",
+                                title=f"Performance: {perfil_visao} ({versao_visao})")
+                        fig.update_layout(yaxis_range=[0, 110], height=350)
+                        st.plotly_chart(fig, use_container_width=True)
+
+                    with col_item:
+                        with st.container(border=True):
+                            st.markdown("**🔬 Perícia do Item**")
+                            q_sel = st.selectbox("Analisar questão:", df_stats["Questão"].tolist(), key=f"q_sel_v73_{is_pei_view}_{is_2a_view}")
+                            info_q = df_stats[df_stats["Questão"] == q_sel].iloc[0]
+                            idx_num = int(q_sel[1:])
+                            st.write(f"**Gabarito:** :green[{info_q['Gabarito']}] | **Média:** {info_q['Acerto %']:.1f}%")
+                            if info_q['Distrator Crítico'] != "Nenhum": st.error(f"**Distrator Crítico:** {info_q['Distrator Crítico']}")
+                            
+                            try:
+                                padrao = rf"(?si)QUESTÃO\s*0?{idx_num}\b.*?(?=QUESTÃO\s*0?{idx_num+1}\b|$)"
+                                match = re.search(padrao, grade_pericia)
+                                if match: st.info(match.group(0).strip())
+                            except: st.caption("Detalhes da grade não localizados.")
+
+                # --- PARTE B: DIAGNÓSTICO INDIVIDUAL (MICRO) ---
+                st.markdown("---")
+                st.markdown("#### 👤 2. Perícia Individual: Lacunas por Estudante")
+                
+                alunos_turma = df_alunos[df_alunos['TURMA'] == t_sel_r].sort_values(by="NOME_ALUNO")
+                dados_indiv = []
+
+                for _, alu in alunos_turma.iterrows():
+                    id_a = db.limpar_id(alu['ID'])
+                    is_pei_alu = str(alu['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"]
+                    reg_aluno = df_analise[df_analise['ID_ALUNO_L'] == id_a]
+                    
+                    if reg_aluno.empty:
+                        dados_indiv.append({"Estudante": alu['NOME_ALUNO'], "Perfil": "🔴 Ausente", "Versão": "N/A", "Nota": 0.0, "Lacunas": "N/A"})
                     else:
-                        # --- CÁLCULO DE ESTATÍSTICAS POR ITEM (FIX UNDEFINED VARIABLE) ---
-                        num_q_total = len(gab_ativo)
-                        stats_list = []
+                        reg = reg_aluno.iloc[-1]
+                        nota_alu = util.sosa_to_float(reg['NOTA_CALCULADA'])
+                        v_prova = "2ª CHAMADA" if reg['IS_2A_CHAMADA'] else "ORIGINAL"
                         
-                        # Vacina Anti-Erro: Garante que a coluna seja tratada como string e lida corretamente
-                        matriz_respostas = [str(r).split(';') for r in df_filtrado['RESPOSTAS_ALUNO']]
-
-                        for i in range(1, num_q_total + 1):
-                            correta = gab_ativo.get(i, "?")
-                            votos = [res[i-1] if len(res) >= i else "?" for res in matriz_respostas]
-                            acertos = votos.count(correta)
-                            perc = (acertos / len(votos)) * 100 if len(votos) > 0 else 0
-                            erradas = [v for v in votos if v != correta and v in ["A", "B", "C", "D", "E"]]
-                            distrator = max(set(erradas), key=erradas.count) if erradas else "Nenhum"
-                            stats_list.append({"Questão": f"Q{i:02d}", "Acerto %": perc, "Gabarito": correta, "Distrator Crítico": distrator})
-
-                        df_stats = pd.DataFrame(stats_list)
-                        col_graf, col_item = st.columns([1.2, 1])
-                        
-                        with col_graf:
-                            fig = px.bar(df_stats, x="Questão", y="Acerto %", text_auto='.0f', 
-                                    color="Acerto %", color_continuous_scale="RdYlGn",
-                                    title=f"Desempenho: {perfil_visao}")
-                            fig.update_layout(yaxis_range=[0, 110], height=350)
-                            st.plotly_chart(fig, use_container_width=True)
-
-                        with col_item:
-                            with st.container(border=True):
-                                st.markdown("**🔬 Perícia do Item**")
-                                q_sel = st.selectbox("Analisar questão:", df_stats["Questão"].tolist(), key=f"q_sel_v72_{is_pei_view}")
-                                info_q = df_stats[df_stats["Questão"] == q_sel].iloc[0]
-                                idx_num = int(q_sel[1:])
-                                st.write(f"**Gabarito:** :green[{info_q['Gabarito']}] | **Média:** {info_q['Acerto %']:.1f}%")
-                                if info_q['Distrator Crítico'] != "Nenhum": st.error(f"**Distrator Crítico:** {info_q['Distrator Crítico']}")
-                                
-                                try:
-                                    padrao = rf"(?si)QUESTÃO\s*0?{idx_num}\b.*?(?=QUESTÃO\s*0?{idx_num+1}\b|$)"
-                                    match = re.search(padrao, grade_pericia)
-                                    if match: st.info(match.group(0).strip())
-                                except: st.caption("Detalhes da grade não localizados.")
-
-                    # --- PARTE B: DIAGNÓSTICO INDIVIDUAL (MICRO) ---
-                    st.markdown("---")
-                    st.markdown("#### 👤 2. Perícia Individual: Lacunas por Estudante")
-                    
-                    alunos_turma = df_alunos[df_alunos['TURMA'] == t_sel_r].sort_values(by="NOME_ALUNO")
-                    dados_indiv = []
-
-                    for _, alu in alunos_turma.iterrows():
-                        id_a = db.limpar_id(alu['ID'])
-                        is_pei_alu = str(alu['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"]
-                        reg_aluno = df_analise[df_analise['ID_ALUNO_L'] == id_a]
-                        
-                        if reg_aluno.empty:
-                            dados_indiv.append({"Estudante": alu['NOME_ALUNO'], "Perfil": "🔴 Ausente", "Nota": 0.0, "Lacunas Cognitivas": "N/A"})
+                        # Busca o gabarito específico para este aluno (Perfil + Versão)
+                        if reg['IS_2A_CHAMADA']:
+                            m_ref = df_aulas[df_aulas['TIPO_MATERIAL'].str.contains("2ª Chamada", case=False) & 
+                                            df_aulas['TIPO_MATERIAL'].str.contains(nome_curto_av, case=False)].iloc[0]
                         else:
-                            nota_alu = util.sosa_to_float(reg_aluno.iloc[0]['NOTA_CALCULADA'])
-                            resp_lista = str(reg_aluno.iloc[0]['RESPOSTAS_ALUNO']).split(';')
-                            gab_alvo_alu = gab_pei_map if is_pei_alu else gab_reg_map
-                            
-                            erros_hab = []
-                            for i, r in enumerate(resp_lista):
-                                q_n = i + 1
-                                if r != gab_alvo_alu.get(q_n):
-                                    match_h = re.search(rf"QUESTÃO\s*0?{q_n}\b.*?:(.*?)(?=\n|JUSTIFICATIVA|PERÍCIA|$)", grade_pericia, re.IGNORECASE)
-                                    erros_hab.append(match_h.group(1).strip().replace("[","").replace("]","") if match_h else f"Q{q_n}")
-                            
-                            dados_indiv.append({
-                                "Estudante": alu['NOME_ALUNO'],
-                                "Perfil": "♿ PEI" if is_pei_alu else "📝 Regular",
-                                "Nota": nota_alu,
-                                "Lacunas Cognitivas": " | ".join(list(set(erros_hab))) if erros_hab else "✅ Domínio Total"
-                            })
+                            m_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel_r].iloc[0]
+                        
+                        gab_ref_alu = extrair_gab_v73(str(m_ref['CONTEUDO']), is_pei_alu)
+                        resp_lista = str(reg['RESPOSTAS_ALUNO']).split(';')
+                        
+                        erros_hab = []
+                        for i, r in enumerate(resp_lista):
+                            q_n = i + 1
+                            if r != gab_ref_alu.get(q_n) and r not in ["FALTOU", "X", "?"]:
+                                match_h = re.search(rf"QUESTÃO\s*0?{q_n}\b.*?:(.*?)(?=\n|JUSTIFICATIVA|PERÍCIA|$)", str(m_ref['CONTEUDO']), re.IGNORECASE)
+                                erros_hab.append(match_h.group(1).strip().replace("[","").replace("]","") if match_h else f"Q{q_n}")
+                        
+                        dados_indiv.append({
+                            "Estudante": alu['NOME_ALUNO'],
+                            "Perfil": "♿ PEI" if is_pei_alu else "📝 Regular",
+                            "Versão": v_prova,
+                            "Nota": nota_alu,
+                            "Lacunas": " | ".join(list(set(erros_hab))) if erros_hab else "✅ Domínio Total"
+                        })
 
-                    df_indiv = pd.DataFrame(dados_indiv)
-                    st.dataframe(
-                        df_indiv.style.format({"Nota": "{:.1f}"}).applymap(lambda v: 'color: #FF4B4B; font-weight: bold' if isinstance(v, float) and v < 6.0 else '', subset=['Nota']),
-                        use_container_width=True, hide_index=True,
-                        column_config={"Lacunas Cognitivas": st.column_config.TextColumn("Lacunas Cognitivas (Habilidades a Reforçar)", width="large")}
-                    )
+                df_indiv = pd.DataFrame(dados_indiv)
+                st.dataframe(
+                    df_indiv.style.format({"Nota": "{:.1f}"}).applymap(lambda v: 'color: #FF4B4B; font-weight: bold' if isinstance(v, float) and v < 6.0 else '', subset=['Nota']),
+                    use_container_width=True, hide_index=True,
+                    column_config={"Lacunas": st.column_config.TextColumn("Lacunas Cognitivas (Habilidades a Reforçar)", width="large")}
+                )
 
 # --- ABA 5: ACERVO DE EVIDÊNCIAS (V71.0 - CUSTÓDIA COM FILTROS INTELIGENTES) ---
     with tab_acervo_cir:
