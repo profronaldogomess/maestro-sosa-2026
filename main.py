@@ -2519,19 +2519,24 @@ elif menu == "📸 Scanner de Gabaritos":
         "📊 4. Raio-X Pedagógico", "📂 5. Acervo de Evidências", "📈 6. Dashboard"
     ])
 
-# --- ABA 1: PERÍCIA DE GABARITOS (VERSÃO V47.0 - CHAVE DE 2ª CHAMADA) ---
+# --- ABA 1: PERÍCIA DE GABARITOS (VERSÃO V47.5 - LENTE DE VERSÃO REGULAR/2ª CHAMADA) ---
     with tab_pericia:
         c1, c2, c3 = st.columns([1, 1, 1.5])
         t_sel = c1.selectbox("👥 Turma:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"t_p_{v}")
         tr_sel = c2.selectbox("📅 Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_p_{v}")
+        
+        # Filtra as avaliações base (geralmente as Regulares)
         opcoes_p = filtrar_ativos_cir_v64(t_sel, tr_sel, apenas_provas=True)
-        at_sel = c3.selectbox("📋 Selecione a Avaliação Base:", [""] + opcoes_p, key=f"at_p_{v}")
+        # Remove o prefixo "2ª Chamada" da lista principal para não poluir, deixando apenas como opção interna
+        opcoes_base = [opt for opt in opcoes_p if "2ª" not in opt]
+        at_sel = c3.selectbox("📋 Selecione a Avaliação Base:", [""] + opcoes_base, key=f"at_p_{v}")
 
         if not t_sel or not at_sel:
             st.info("💡 Selecione a Turma e a Avaliação para iniciar.")
         else:
             # 1. FILTRAGEM DE PENDENTES
-            escaneados = df_diagnosticos[df_diagnosticos['ID_AVALIACAO'].str.contains(at_sel)]['ID_ALUNO'].astype(str).tolist()
+            # Consideramos pendente quem não tem registro nem na prova regular nem na 2ª chamada deste título
+            escaneados = df_diagnosticos[df_diagnosticos['ID_AVALIACAO'].str.contains(at_sel.split("-")[0].strip())]['ID_ALUNO'].astype(str).tolist()
             pendentes = df_alunos[(df_alunos['TURMA'] == t_sel) & (~df_alunos['ID'].astype(str).isin(escaneados))].sort_values(by="NOME_ALUNO")
 
             if pendentes.empty:
@@ -2545,33 +2550,41 @@ elif menu == "📸 Scanner de Gabaritos":
                 
                 st.markdown(f"### 📸 Corrigindo agora: **{al_sel}**")
                 
-                # --- 2. PROTOCOLO DE LENTE DE VERSÃO (A MÁGICA ESTÁ AQUI) ---
+                # --- 2. SELETOR DE VERSÃO (REGULAR VS 2ª CHAMADA) ---
                 with st.container(border=True):
                     col_v1, col_v2 = st.columns([2, 1])
                     
-                    # Busca se existe uma 2ª Chamada para esta prova no banco
-                    busca_2a = df_aulas[df_aulas['TIPO_MATERIAL'].str.contains("2ª Chamada", case=False) & 
-                                       df_aulas['TIPO_MATERIAL'].str.contains(at_sel.split("-")[0].strip(), case=False)]
+                    # Busca automática: Procura no banco um material que contenha "2ª Chamada" e o nome da prova base
+                    nome_base_prova = at_sel.split("-")[0].strip() # Ex: "Teste" ou "Prova"
+                    busca_2a = df_aulas[
+                        (df_aulas['TIPO_MATERIAL'].str.contains("2ª Chamada", case=False)) & 
+                        (df_aulas['TIPO_MATERIAL'].str.contains(nome_base_prova, case=False)) &
+                        (df_aulas['ANO'].str.contains(t_sel[0])) # Garante a mesma série
+                    ]
                     
                     opcoes_versao = ["Prova Regular"]
                     if not busca_2a.empty:
                         opcoes_versao.append("2ª Chamada")
                     
-                    if is_pei_aluno:
-                        st.warning("♿ **ALUNO PEI:** O sistema utilizará o Gabarito Adaptado Original.")
-                        versao_final_sel = "Prova Regular" # PEI geralmente não muda para 2ª chamada
-                    else:
-                        versao_final_sel = col_v1.radio("Selecione a versão que o aluno realizou:", opcoes_versao, horizontal=True, key=f"v_sel_{id_aluno_atual}")
+                    versao_sel = col_v1.radio(
+                        f"Qual versão o aluno {al_sel} realizou?", 
+                        opcoes_versao, 
+                        horizontal=True, 
+                        key=f"v_choice_{id_aluno_atual}"
+                    )
                     
-                    # Define qual material carregar para extrair o gabarito
-                    if versao_final_sel == "2ª Chamada":
-                        material_referencia = busca_2a.iloc[0]
-                        st.info(f"📂 Usando Parâmetros de: {material_referencia['TIPO_MATERIAL']}")
+                    # Define qual conteúdo carregar para o gabarito
+                    if versao_sel == "2ª Chamada":
+                        material_ref = busca_2a.iloc[0]
+                        st.warning(f"⚠️ Usando Gabarito da 2ª CHAMADA")
                     else:
-                        material_referencia = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel].iloc[0]
+                        material_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel].iloc[0]
+                    
+                    perfil_txt = "♿ PERFIL PEI" if is_pei_aluno else "📝 PERFIL REGULAR"
+                    col_v2.info(perfil_txt)
 
-                # 3. EXTRAÇÃO DO GABARITO DA VERSÃO ESCOLHIDA
-                txt_ref = str(material_referencia['CONTEUDO'])
+                # 3. EXTRAÇÃO DO GABARITO (DA VERSÃO SELECIONADA)
+                txt_ref = str(material_ref['CONTEUDO'])
                 val_tag = ai.extrair_tag(txt_ref, "VALOR")
                 v_total_at = util.sosa_to_float(val_tag) if val_tag else 10.0
 
@@ -2582,9 +2595,10 @@ elif menu == "📸 Scanner de Gabaritos":
                     mapa = {int(num): letra for num, letra in matches}
                     return [mapa[n] for n in sorted(mapa.keys())]
 
+                # O sistema usa o gabarito (Regular ou PEI) de dentro da versão escolhida
                 gab_alvo = extrair_gab_v47(txt_ref, is_pei_aluno)
 
-                # 4. ÁREA DE CAPTURA E FALTA
+                # 4. ÁREA DE CAPTURA
                 col_cam, col_falta = st.columns([2, 1])
                 img = col_cam.camera_input(f"Gabarito de {al_sel}", key=f"cam_{id_aluno_atual}")
                 
@@ -2592,7 +2606,7 @@ elif menu == "📸 Scanner de Gabaritos":
                     st.write("---")
                     if st.button("❌ REGISTRAR FALTA", use_container_width=True):
                         db.salvar_no_banco("DB_GABARITOS_ALUNOS", [datetime.now().strftime("%d/%m/%Y"), id_aluno_atual, al_sel, t_sel, at_sel, "FALTOU", "0,00", "N/A"])
-                        st.warning(f"Falta de {al_sel} registrada."); time.sleep(0.5); st.rerun()
+                        st.rerun()
 
                 if img and "current_scan_res" not in st.session_state:
                     with st.spinner("Analisando marcações..."):
@@ -2633,8 +2647,8 @@ elif menu == "📸 Scanner de Gabaritos":
                         
                         if st.button("💾 SALVAR E PRÓXIMO ➔", type="primary", use_container_width=True):
                             with st.spinner("Arquivando..."):
-                                # Salva com o nome da versão utilizada para rastro total
-                                id_av_final = material_referencia['TIPO_MATERIAL']
+                                # Salva com o nome da versão real para o Raio-X saber qual prova foi feita
+                                id_av_final = material_ref['TIPO_MATERIAL']
                                 link_pasta = db.subir_e_converter_para_google_docs(st.session_state.current_scan_img, al_sel.replace(" ","_"), trimestre=tr_sel, categoria=t_sel, semana=id_av_final, modo="SCANNER")
                                 db.salvar_no_banco("DB_GABARITOS_ALUNOS", [datetime.now().strftime("%d/%m/%Y"), id_aluno_atual, al_sel, t_sel, id_av_final, ";".join(novas_res), util.sosa_to_str(nota_f), link_pasta])
                                 del st.session_state.current_scan_res
@@ -2645,7 +2659,7 @@ elif menu == "📸 Scanner de Gabaritos":
                         del st.session_state.current_scan_res
                         del st.session_state.current_scan_img
                         st.rerun()
-                        
+
 # --- ABA 2: ATIVIDADES & PROJETOS (V66.0 - SOBERANIA DE NOTAS E MÉRITO) ---
     with tab_atividades:
         st.subheader("✍️ Gestão de Notas de Projetos e Atividades")
