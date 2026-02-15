@@ -2761,15 +2761,15 @@ elif menu == "📸 Scanner de Gabaritos":
                         st.rerun()
 
     # ==============================================================================
-    # MÓDULO: HUB DE SOBERANIA (V69.0 - AUDITORIA DE VERSÕES E RESGATE DE FALTAS)
+    # MÓDULO: HUB DE SOBERANIA (V70.0 - SOBERANIA DE VERSÕES E PERFIS)
     # ==============================================================================
     with tab_soberania:
         st.subheader("🏛️ Hub de Soberania: Autoridade do Professor")
         st.markdown("---")
 
         c_h1, c_h2 = st.columns([1, 1])
-        t_sel_h = c_h1.selectbox("👥 Selecione a Turma:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"t_h_v69_{v}")
-        tr_sel_h = c_h2.selectbox("📅 Trimestre de Referência:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_h_v69_{v}")
+        t_sel_h = c_h1.selectbox("👥 Selecione a Turma:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"t_h_v70_{v}")
+        tr_sel_h = c_h2.selectbox("📅 Trimestre de Referência:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_h_v70_{v}")
 
         if not t_sel_h:
             st.info("💡 Selecione uma turma para abrir a Mesa de Soberania.")
@@ -2779,15 +2779,14 @@ elif menu == "📸 Scanner de Gabaritos":
             with sub_auditoria:
                 st.markdown("#### 🔍 Consolidação de Notas e Resgate de Faltas")
                 
-                # 1. FILTRO BLINDADO (APENAS MATERIAIS DA CENTRAL DE AVALIAÇÕES)
-                # Busca materiais que são AVALIAÇÃO e pertencem à série da turma
+                # 1. FILTRO DE ATIVOS OFICIAIS (CENTRAL DE AVALIAÇÕES)
                 serie_num = t_sel_h[0]
                 df_oficiais = df_aulas[
                     (df_aulas['SEMANA_REF'] == "AVALIAÇÃO") & 
                     (df_aulas['ANO'].str.contains(serie_num))
                 ]
                 
-                # Filtra para não mostrar 2ª chamada no seletor principal (ela entra como detalhe do aluno)
+                # Filtra apenas as avaliações "Base" (ignora o sufixo 2ª chamada no seletor principal)
                 opcoes_base = [opt for opt in df_oficiais['TIPO_MATERIAL'].unique().tolist() if "2ª" not in opt.upper()]
                 av_alvo_h = st.selectbox("📋 Selecione a Avaliação Base (Slot do Boletim):", [""] + opcoes_base, key=f"av_h_sel_{v}")
 
@@ -2795,7 +2794,7 @@ elif menu == "📸 Scanner de Gabaritos":
                     # 2. DATA FUSION: CRUZAMENTO DE ALUNOS + SCANNER
                     alunos_turma = df_alunos[df_alunos['TURMA'] == t_sel_h].sort_values(by="NOME_ALUNO")
                     
-                    # Busca todos os registros do scanner que pertencem a esta avaliação base OU sua 2ª chamada
+                    # Busca registros do scanner que pertencem a este "Slot" (Base ou 2ª Chamada)
                     nome_curto_av = av_alvo_h.split("-")[0].strip()
                     gabaritos_lidos = df_diagnosticos[
                         (df_diagnosticos['TURMA'] == t_sel_h) & 
@@ -2805,42 +2804,42 @@ elif menu == "📸 Scanner de Gabaritos":
                     dados_soberania = []
                     for _, alu in alunos_turma.iterrows():
                         id_a = db.limpar_id(alu['ID'])
-                        # Tenta localizar o registro do aluno
+                        is_pei = str(alu['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"]
+                        
+                        # Tenta localizar o registro do aluno (pega o mais recente)
                         leitura = gabaritos_lidos[gabaritos_lidos['ID_ALUNO'].apply(db.limpar_id) == id_a]
                         
-                        status_txt = "✍️ PENDENTE"
-                        versao_txt = "N/A"
+                        situacao_txt = "✍️ PENDENTE"
+                        versao_prova = "N/A"
                         nota_atual = 0.0
                         link_ev = ""
-                        respostas = ""
 
                         if not leitura.empty:
-                            # Pega o registro mais recente (caso tenha faltado e depois feito 2ª chamada)
-                            reg = leitura.iloc[-1]
-                            respostas = reg['RESPOSTAS_ALUNO']
+                            reg = leitura.iloc[-1] # Pega a última ação (ex: se faltou e depois fez 2ª chamada)
                             nota_atual = util.sosa_to_float(reg['NOTA_CALCULADA'])
                             link_ev = reg.get('LINK_FOTO_DRIVE', '')
                             
-                            if respostas == "FALTOU":
-                                status_txt = "❌ FALTOU"
-                                versao_txt = "N/A"
+                            if reg['RESPOSTAS_ALUNO'] == "FALTOU":
+                                situacao_txt = "❌ FALTOU"
+                                versao_prova = "N/A"
                             elif "2ª" in reg['ID_AVALIACAO'].upper():
-                                status_txt = "✅ REALIZADA"
-                                versao_txt = "2ª CHAMADA"
+                                situacao_txt = "✅ REALIZADA"
+                                versao_prova = "SEGUNDA CHAMADA"
                             else:
-                                status_txt = "✅ REALIZADA"
-                                versao_txt = "REGULAR"
+                                situacao_txt = "✅ REALIZADA"
+                                versao_prova = "PROVA ORIGINAL"
 
                         dados_soberania.append({
                             "ID": id_a,
                             "Estudante": alu['NOME_ALUNO'],
-                            "Status": status_txt,
-                            "Versão": versao_txt,
+                            "Perfil": "♿ PEI" if is_pei else "📝 REGULAR",
+                            "Situação": situacao_txt,
+                            "Versão Aplicada": versao_prova,
                             "Nota Final (Soberana)": nota_atual,
                             "Evidência": link_ev
                         })
 
-                    st.info(f"💡 **Soberania do Professor:** Alunos com 'FALTOU' podem ter a nota da 2ª Chamada lançada manualmente abaixo.")
+                    st.info(f"💡 **Soberania:** O senhor pode alterar a nota de quem 'FALTOU' caso ele tenha realizado a Segunda Chamada manualmente.")
                     
                     # 3. MESA DE SOBERANIA (DATA EDITOR)
                     df_soberano_ed = st.data_editor(
@@ -2848,20 +2847,20 @@ elif menu == "📸 Scanner de Gabaritos":
                         column_config={
                             "ID": None,
                             "Estudante": st.column_config.TextColumn("Estudante", width="medium", disabled=True),
-                            "Status": st.column_config.TextColumn("Situação", width="small", disabled=True),
-                            "Versão": st.column_config.TextColumn("Lente", width="small", disabled=True),
+                            "Perfil": st.column_config.TextColumn("Perfil", width="small", disabled=True),
+                            "Situação": st.column_config.TextColumn("Situação", width="small", disabled=True),
+                            "Versão Aplicada": st.column_config.TextColumn("Versão", width="small", disabled=True),
                             "Nota Final (Soberana)": st.column_config.NumberColumn("Nota (0-10)", min_value=0.0, max_value=10.0, step=0.1, format="%.1f"),
                             "Evidência": st.column_config.LinkColumn("🔗 Ver Prova")
                         },
-                        hide_index=True, use_container_width=True, key=f"ed_soberania_v69_{v}"
+                        hide_index=True, use_container_width=True, key=f"ed_soberania_v70_{v}"
                     )
 
-                    # 4. HOMOLOGAÇÃO FINAL
+                    # 4. HOMOLOGAÇÃO
                     if st.button("⚖️ HOMOLOGAR NOTAS E ATUALIZAR BOLETIM", use_container_width=True, type="primary"):
                         with st.status("Sincronizando com o Boletim Oficial...") as status_h:
                             lista_homologacao = []
                             for _, r in df_soberano_ed.iterrows():
-                                # Define a coluna correta no DB_NOTAS baseado no tipo de material
                                 col_teste = "0,0"
                                 col_prova = "0,0"
                                 nota_str = util.sosa_to_str(r['Nota Final (Soberana)'])
