@@ -3162,7 +3162,7 @@ elif menu == "📸 Scanner de Gabaritos":
                     st.success(f"Nenhum aluno da turma {turma_sel_dash} em zona de risco crítico no momento.")
 
 # ==============================================================================
-# MÓDULO: BIOGRAFIA DO ESTUDANTE (V36.0 - BOLETIM 360° E PROJETOS)
+# MÓDULO: BIOGRAFIA DO ESTUDANTE (V36.1 - FIX SINTAXE & ESTABILIDADE)
 # ==============================================================================
 elif menu == "👤 Biografia do Estudante":
     st.title("👤 Dossiê de Soberania do Estudante")
@@ -3189,8 +3189,6 @@ elif menu == "👤 Biografia do Estudante":
         with st.container(border=True):
             if not df_notas.empty:
                 n_alu = df_notas[df_notas['ID_ALUNO'].apply(db.limpar_id) == id_alu]
-                
-                # Criamos colunas para os 3 trimestres + Soma
                 c_t1, c_t2, c_t3, c_soma = st.columns(4)
                 
                 def get_nota(trim):
@@ -3208,22 +3206,16 @@ elif menu == "👤 Biografia do Estudante":
                 
                 status_cor = "normal" if soma_anual >= 18.0 else "inverse"
                 c_soma.metric("Soma Total", f"{soma_anual:.1f}", delta=f"{soma_anual - 18.0:.1f}", delta_color=status_cor)
-                
-                # Verificação de Recuperação Paralela
-                rec_paralela = n_alu['NOTA_REC'].apply(util.sosa_to_float).max() if not n_alu.empty else 0.0
-                if rec_paralela > 0:
-                    st.info(f"🔄 **Recuperação Paralela Detectada:** O aluno realizou estudos de recuperação com nota máxima de {rec_paralela:.1f}")
             else:
-                st.info("Aguardando lançamento de notas no sistema.")
+                st.info("Aguardando lançamento de notas.")
 
         st.markdown("---")
 
-        # --- SEÇÃO 1: TRABALHOS E PROJETOS (INTEGRAÇÃO CIR) ---
+        # --- SEÇÃO 1: TRABALHOS E PROJETOS ---
         st.markdown("### ✍️ 1. Trabalhos e Projetos (Entregas)")
         with st.container(border=True):
             if not df_diario.empty:
                 d_alu = df_diario[df_diario['ID_ALUNO'].apply(db.limpar_id) == id_alu].copy()
-                # Filtra apenas o que tem a tag de PROJETO ou ATIVIDADE vinda da CIR
                 trabalhos = d_alu[d_alu['TAGS'].str.contains("PROJETO|ATIVIDADE", na=False, case=False)]
                 
                 if not trabalhos.empty:
@@ -3232,34 +3224,37 @@ elif menu == "👤 Biografia do Estudante":
                         c_p1.markdown(f"📘 **{trab['OBSERVACOES']}**")
                         c_p2.success(f"Nota: {trab['BONUS']}")
                 else:
-                    st.warning("⚠️ Nenhuma entrega de projeto ou trabalho registrada até o momento.")
-            else:
-                st.info("Sem registros no diário.")
+                    st.warning("⚠️ Nenhuma entrega de projeto registrada.")
 
-        # --- SEÇÃO 2: ENGAJAMENTO E ATITUDE ---
+        # --- SEÇÃO 2: ENGAJAMENTO E ATITUDE (ONDE ESTAVA O ERRO) ---
         st.markdown("### 📊 2. Engajamento e Atitude")
         col_v1, col_v2 = st.columns([1.2, 1.8])
 
         with col_v1:
             if not d_alu.empty:
                 total_aulas = len(d_alu)
-                vistos = len(d_alu[d_alu['VISTO_ATIVIDADE'].astype(str).upper() == "TRUE"])
+                # --- VACINA APLICADA AQUI: .str.upper() ---
+                vistos_validos = d_alu[d_alu['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"]
+                vistos = len(vistos_validos)
                 perc_visto = (vistos / total_aulas) * 100 if total_aulas > 0 else 0
+                
                 st.metric("Vistos no Caderno", f"{perc_visto:.0f}%", f"{vistos} de {total_aulas} aulas")
                 st.progress(perc_visto / 100)
+            else:
+                st.info("Sem registros de vistos.")
 
         with col_v2:
             st.markdown("**🚩 Ocorrências e Observações:**")
-            tags_obs = d_alu[d_alu['TAGS'] != ""]
-            if not tags_obs.empty:
-                for _, row in tags_obs.tail(5).iterrows():
-                    # Cores baseadas na gravidade
-                    emoji = "🔴" if any(x in row['TAGS'].upper() for x in ["DORMIU", "CONVERSA", "MATERIAL", "FALTOU"]) else "🟢"
-                    st.caption(f"{emoji} **{row['DATA']}**: {row['TAGS']} - *{row['OBSERVACOES']}*")
-            else:
-                st.success("✅ Nenhuma ocorrência negativa registrada.")
+            if not d_alu.empty:
+                tags_obs = d_alu[d_alu['TAGS'] != ""]
+                if not tags_obs.empty:
+                    for _, row in tags_obs.tail(5).iterrows():
+                        emoji = "🔴" if any(x in str(row['TAGS']).upper() for x in ["DORMIU", "CONVERSA", "MATERIAL", "FALTOU"]) else "🟢"
+                        st.caption(f"{emoji} **{row['DATA']}**: {row['TAGS']} - *{row['OBSERVACOES']}*")
+                else:
+                    st.success("✅ Nenhuma ocorrência negativa.")
 
-        # --- SEÇÃO 3: RAIO-X DE DIFICULDADES (SCANNER) ---
+        # --- SEÇÃO 3: RAIO-X DE DIFICULDADES ---
         st.markdown("---")
         with st.container(border=True):
             st.markdown("### 🔍 3. Raio-X de Dificuldades (O que estudar?)")
@@ -3267,7 +3262,7 @@ elif menu == "👤 Biografia do Estudante":
                 diag_alu = df_diagnosticos[df_diagnosticos['ID_ALUNO'].apply(db.limpar_id) == id_alu].copy()
                 if not diag_alu.empty:
                     ultima_av = diag_alu.iloc[-1]
-                    st.caption(f"Análise baseada na última prova: **{ultima_av['ID_AVALIACAO']}**")
+                    st.caption(f"Análise baseada em: **{ultima_av['ID_AVALIACAO']}**")
                     
                     prova_ref = df_aulas[df_aulas['TIPO_MATERIAL'].str.strip() == ultima_av['ID_AVALIACAO'].strip()]
                     if not prova_ref.empty:
@@ -3286,8 +3281,8 @@ elif menu == "👤 Biografia do Estudante":
                         
                         if lacunas:
                             for l in list(set(lacunas)): st.error(f"❌ **Reforçar:** {l}")
-                        else: st.success("✅ O aluno demonstrou domínio total na última avaliação.")
-                else: st.info("Aguardando primeira avaliação escaneada.")
+                        else: st.success("✅ Domínio total na última avaliação.")
+                else: st.info("Aguardando avaliações escaneadas.")
 
         if is_pei:
             st.warning(f"♿ **Estudante PEI:** {info_alu['NECESSIDADES']}")
