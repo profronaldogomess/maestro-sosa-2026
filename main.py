@@ -2922,20 +2922,19 @@ elif menu == "📸 Scanner de Gabaritos":
                                 ])
                         st.success("✅ Indicadores externos integrados ao histórico dos alunos!")
 
-    # --- ABA 4: RAIO-X PEDAGÓGICO (V73.1 - FIX NAMEERROR & SCOPE) ---
+    # ==============================================================================
+    # MÓDULO: RAIO-X PEDAGÓGICO V73.2 (FIX SMART MATCH 2ª CHAMADA)
+    # ==============================================================================
     with tab_raiox:
         st.subheader("📊 Raio-X Pedagógico: Diagnóstico Individual de Lacunas")
         st.markdown("---")
 
-        # --- FUNÇÃO DE EXTRAÇÃO (DEFINIDA NO TOPO PARA EVITAR NAMEERROR) ---
         def extrair_gab_v73_universal(texto, is_pei=False):
             if not texto: return {}
             tag_alvo = "GABARITO_PEI" if is_pei else "GABARITO_TEXTO"
             raw = ai.extrair_tag(texto, tag_alvo) or ai.extrair_tag(texto, "GABARITO")
-            # Tenta padrão numérico: 01-A, 02:B
             matches = re.findall(r"(\d+)\s*[\-\.\:]\s*([A-E])", raw.upper())
             if matches: return {int(num): letra for num, letra in matches}
-            # Tenta padrão sequencial: A;B;C
             letras = re.findall(r"\b[A-E]\b", raw.upper())
             return {i+1: letra for i, letra in enumerate(letras)}
 
@@ -2951,7 +2950,9 @@ elif menu == "📸 Scanner de Gabaritos":
             st.info("💡 Selecione a Turma e a Avaliação para carregar a Perícia Pedagógica.")
         else:
             # 1. CRUZAMENTO DE DADOS
+            ano_num_r = "".join(filter(str.isdigit, t_sel_r))
             nome_curto_av = at_sel_r.split("-")[0].strip()
+            
             respostas_brutas = df_diagnosticos[
                 (df_diagnosticos['TURMA'].str.strip() == t_sel_r.strip()) & 
                 (df_diagnosticos['ID_AVALIACAO'].str.contains(nome_curto_av))
@@ -2960,7 +2961,6 @@ elif menu == "📸 Scanner de Gabaritos":
             if respostas_brutas.empty:
                 st.warning("⚠️ Nenhuma resposta de aluno encontrada para esta avaliação.")
             else:
-                # Identificação de Perfil e Versão
                 df_alunos_min = df_alunos[['ID', 'NECESSIDADES']].copy()
                 df_alunos_min['ID'] = df_alunos_min['ID'].apply(db.limpar_id)
                 respostas_brutas['ID_ALUNO_L'] = respostas_brutas['ID_ALUNO'].apply(db.limpar_id)
@@ -2980,10 +2980,14 @@ elif menu == "📸 Scanner de Gabaritos":
                 
                 df_filtrado = df_analise[(df_analise['IS_PEI'] == is_pei_view) & (df_analise['IS_2A_CHAMADA'] == is_2a_view)]
 
-                # --- BUSCA DO GABARITO ---
+                # --- BUSCA DO GABARITO (SMART MATCH V73.2) ---
                 if is_2a_view:
-                    query_mat = df_aulas[df_aulas['TIPO_MATERIAL'].str.contains("2ª Chamada", case=False) & 
-                                        df_aulas['TIPO_MATERIAL'].str.contains(nome_curto_av, case=False)]
+                    # Busca por 2ª Chamada + Ano + Trimestre (Mais robusto)
+                    query_mat = df_aulas[
+                        (df_aulas['TIPO_MATERIAL'].str.contains("2ª Chamada", case=False)) & 
+                        (df_aulas['ANO'].str.contains(ano_num_r)) &
+                        (df_aulas['CONTEUDO'].str.contains(tr_sel_r, na=False))
+                    ]
                 else:
                     query_mat = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel_r]
 
@@ -3049,10 +3053,13 @@ elif menu == "📸 Scanner de Gabaritos":
                         nota_alu = util.sosa_to_float(reg['NOTA_CALCULADA'])
                         v_prova = "2ª CHAMADA" if reg['IS_2A_CHAMADA'] else "ORIGINAL"
                         
-                        # Busca material de referência para o mapa de lacunas
+                        # Busca material de referência (Smart Match)
                         if reg['IS_2A_CHAMADA']:
-                            m_ref_query = df_aulas[df_aulas['TIPO_MATERIAL'].str.contains("2ª Chamada", case=False) & 
-                                                df_aulas['TIPO_MATERIAL'].str.contains(nome_curto_av, case=False)]
+                            m_ref_query = df_aulas[
+                                (df_aulas['TIPO_MATERIAL'].str.contains("2ª Chamada", case=False)) & 
+                                (df_aulas['ANO'].str.contains(ano_num_r)) &
+                                (df_aulas['CONTEUDO'].str.contains(tr_sel_r, na=False))
+                            ]
                         else:
                             m_ref_query = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel_r]
                         
