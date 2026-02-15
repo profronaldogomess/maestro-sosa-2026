@@ -2519,13 +2519,13 @@ elif menu == "📸 Scanner de Gabaritos":
         "📊 4. Raio-X Pedagógico", "📂 5. Acervo de Evidências", "📈 6. Dashboard"
     ])
 
-# --- ABA 1: PERÍCIA DE GABARITOS (VERSÃO V48.0 - HUB DE SEGUNDA CHAMADA) ---
+# --- ABA 1: PERÍCIA DE GABARITOS (VERSÃO V48.5 - SOBERANIA DE VERSÃO E PERFIL) ---
     with tab_pericia:
         c1, c2, c3 = st.columns([1, 1, 1.5])
         t_sel = c1.selectbox("👥 Turma:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"t_p_{v}")
         tr_sel = c2.selectbox("📅 Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_p_{v}")
         
-        # Filtro de Avaliação Base (O "Slot" no Boletim)
+        # Filtro de Avaliação Base (O "Slot" onde a nota será guardada no Boletim)
         opcoes_p = filtrar_ativos_cir_v64(t_sel, tr_sel, apenas_provas=True)
         opcoes_base = [opt for opt in opcoes_p if "2ª" not in opt.upper()]
         at_sel = c3.selectbox("📋 Selecione a Avaliação Base (Slot):", [""] + opcoes_base, key=f"at_p_{v}")
@@ -2534,7 +2534,6 @@ elif menu == "📸 Scanner de Gabaritos":
             st.info("💡 Selecione a Turma e a Avaliação Base para abrir o Scanner.")
         else:
             # 1. BUSCA DE PENDENTES NO SLOT SELECIONADO
-            # Verifica quem já tem nota (seja regular ou 2ª chamada) para este slot
             escaneados = df_diagnosticos[df_diagnosticos['ID_AVALIACAO'].str.contains(at_sel.split("-")[0].strip())]['ID_ALUNO'].astype(str).tolist()
             pendentes = df_alunos[(df_alunos['TURMA'] == t_sel) & (~df_alunos['ID'].astype(str).isin(escaneados))].sort_values(by="NOME_ALUNO")
 
@@ -2545,47 +2544,52 @@ elif menu == "📸 Scanner de Gabaritos":
                 al_info = pendentes.iloc[0]
                 al_sel = al_info['NOME_ALUNO']
                 id_aluno_atual = al_info['ID']
+                # DETECÇÃO AUTOMÁTICA DE PERFIL PEI
                 is_pei_aluno = str(al_info['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"]
                 
                 st.markdown(f"### 📸 Corrigindo agora: **{al_sel}**")
                 
-                # --- 2. HUB DE SEGUNDA CHAMADA (O FILTRO QUE O SENHOR PEDIU) ---
+                # --- 2. HUB DE SELEÇÃO DE PARÂMETROS (VERSÃO + PERFIL) ---
                 with st.container(border=True):
                     c_v1, c_v2 = st.columns([1, 1])
                     
-                    # Toggle para ativar o modo 2ª Chamada
-                    modo_2a = c_v1.toggle("🚀 Aplicar Segunda Chamada para este aluno?", key=f"toggle_2a_{id_aluno_atual}")
+                    # A. Seleção de Versão (Regular ou 2ª Chamada)
+                    modo_2a = c_v1.toggle("🚀 Aplicar Segunda Chamada?", key=f"toggle_2a_{id_aluno_atual}")
                     
                     if modo_2a:
-                        # Filtra no banco apenas materiais que são de 2ª Chamada
                         opcoes_2a = df_aulas[df_aulas['TIPO_MATERIAL'].str.contains("2ª Chamada", case=False)]['TIPO_MATERIAL'].unique().tolist()
                         at_segunda = c_v2.selectbox("📋 Selecione o Ativo de 2ª Chamada:", [""] + opcoes_2a, key=f"sel_2a_{id_aluno_atual}")
-                        
                         if at_segunda:
                             material_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == at_segunda].iloc[0]
-                            st.warning(f"⚠️ ATENÇÃO: Corrigindo com o Gabarito de: **{at_segunda}**")
                         else:
-                            st.error("Selecione o material de 2ª chamada no filtro ao lado.")
+                            st.error("Selecione o material de 2ª chamada.")
                             material_ref = None
                     else:
-                        # Usa a prova base selecionada no topo
                         material_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel].iloc[0]
-                        st.info(f"📝 Usando Gabarito da Prova Regular: **{at_sel}**")
+                    
+                    # B. Feedback Visual do Perfil Detectado
+                    if material_ref is not None:
+                        tipo_txt = "2ª CHAMADA" if modo_2a else "REGULAR"
+                        perfil_txt = "♿ PEI" if is_pei_aluno else "📝 REGULAR"
+                        st.info(f"⚖️ **Lente Ativa:** Prova {tipo_txt} | Perfil {perfil_txt}")
 
-                # 3. PROCESSAMENTO DO GABARITO
+                # 3. EXTRAÇÃO INTELIGENTE DO GABARITO (Sincronia Perfil/Versão)
                 if material_ref is not None:
                     txt_ref = str(material_ref['CONTEUDO'])
                     val_tag = ai.extrair_tag(txt_ref, "VALOR")
                     v_total_at = util.sosa_to_float(val_tag) if val_tag else 10.0
 
-                    def extrair_gab_v48(texto, is_pei=False):
-                        tag = "GABARITO_PEI" if is_pei else "GABARITO_TEXTO"
-                        raw = ai.extrair_tag(texto, tag) or ai.extrair_tag(texto, "GABARITO")
+                    def extrair_gab_v48_5(texto, is_pei=False):
+                        # Se o aluno for PEI, tenta GABARITO_PEI, senão cai no GABARITO_TEXTO
+                        tag_alvo = "GABARITO_PEI" if is_pei else "GABARITO_TEXTO"
+                        raw = ai.extrair_tag(texto, tag_alvo) or ai.extrair_tag(texto, "GABARITO")
+                        if not raw: return []
                         matches = re.findall(r"(\d+)[\s\.\)\-:]+([A-E])", raw.upper())
                         mapa = {int(num): letra for num, letra in matches}
                         return [mapa[n] for n in sorted(mapa.keys())]
 
-                    gab_alvo = extrair_gab_v48(txt_ref, is_pei_aluno)
+                    # A mágica: extrai o gabarito correto do material de referência escolhido
+                    gab_alvo = extrair_gab_v48_5(txt_ref, is_pei_aluno)
 
                     # 4. ÁREA DE CAPTURA
                     col_cam, col_falta = st.columns([2, 1])
@@ -2633,19 +2637,13 @@ elif menu == "📸 Scanner de Gabaritos":
                             
                             if st.button("💾 SALVAR E PRÓXIMO ➔", type="primary", use_container_width=True):
                                 with st.spinner("Arquivando..."):
-                                    # SOBERANIA DE SOBREPOSIÇÃO:
-                                    # Salvamos com o nome da AVALIAÇÃO BASE para preencher o slot do boletim,
-                                    # mas guardamos o nome da 2ª chamada na observação do link.
-                                    info_versao = f" (Via {material_ref['TIPO_MATERIAL']})" if modo_2a else ""
-                                    link_pasta = db.subir_e_converter_para_google_docs(st.session_state.current_scan_img, al_sel.replace(" ","_"), trimestre=tr_sel, categoria=t_sel, semana=at_sel + info_versao, modo="SCANNER")
+                                    # SOBERANIA DE SOBREPOSIÇÃO: Salva no slot da BASE
+                                    info_v = f" (Via {material_ref['TIPO_MATERIAL']})" if modo_2a else ""
+                                    link_pasta = db.subir_e_converter_para_google_docs(st.session_state.current_scan_img, al_sel.replace(" ","_"), trimestre=tr_sel, categoria=t_sel, semana=at_sel + info_v, modo="SCANNER")
                                     
                                     db.salvar_no_banco("DB_GABARITOS_ALUNOS", [
-                                        datetime.now().strftime("%d/%m/%Y"), 
-                                        id_aluno_atual, al_sel, t_sel, 
-                                        at_sel, # <--- Salva no slot da BASE para o Boletim ler
-                                        ";".join(novas_res), 
-                                        util.sosa_to_str(nota_f), 
-                                        link_pasta
+                                        datetime.now().strftime("%d/%m/%Y"), id_aluno_atual, al_sel, t_sel, 
+                                        at_sel, ";".join(novas_res), util.sosa_to_str(nota_f), link_pasta
                                     ])
                                     del st.session_state.current_scan_res
                                     del st.session_state.current_scan_img
