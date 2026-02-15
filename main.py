@@ -2925,7 +2925,7 @@ elif menu == "📸 Scanner de Gabaritos":
                     abaixo_media = len(df_ev_filtrado) - acima_media
                     c_r3.metric("Alunos em Alerta", abaixo_media, delta_color="inverse")
 
-# --- ABA 6: DASHBOARD (V72.0 - TORRE DE COMANDO DE ALTA PERFORMANCE) ---
+    # --- ABA 6: DASHBOARD (V73.0 - TORRE DE COMANDO COM FILTRO DE TURMA) ---
     with tab_dash_cir:
         st.subheader("📈 Torre de Comando: Inteligência de Resultados 360°")
         st.markdown("---")
@@ -2933,97 +2933,118 @@ elif menu == "📸 Scanner de Gabaritos":
         if df_diagnosticos.empty:
             st.info("📭 Aguardando dados de gabaritos para gerar a inteligência analítica.")
         else:
-            # 1. PREPARAÇÃO DE DADOS (DATA FUSION)
+            # 1. PREPARAÇÃO E FUSÃO DE DADOS (DATA FUSION)
             df_dash = df_diagnosticos.copy()
             df_dash['NOTA_NUM'] = df_dash['NOTA_CALCULADA'].apply(util.sosa_to_float)
             
-            # Cruzamento com a base de alunos para saber quem é PEI
+            # Cruzamento com a base de alunos para identificar Perfil (Regular/PEI)
             df_alunos_min = df_alunos[['ID', 'NECESSIDADES']].copy()
             df_alunos_min['ID'] = df_alunos_min['ID'].apply(db.limpar_id)
-            df_dash['ID_ALUNO'] = df_dash['ID_ALUNO'].apply(db.limpar_id)
+            df_dash['ID_ALUNO_L'] = df_dash['ID_ALUNO'].apply(db.limpar_id)
             
-            df_final = pd.merge(df_dash, df_alunos_min, left_on='ID_ALUNO', right_on='ID', how='left')
-            df_final['PERFIL'] = df_final['NECESSIDADES'].apply(lambda x: "♿ PEI" if str(x).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"] else "📝 REGULAR")
+            df_final_base = pd.merge(df_dash, df_alunos_min, left_on='ID_ALUNO_L', right_on='ID', how='left')
+            df_final_base['PERFIL'] = df_final_base['NECESSIDADES'].apply(
+                lambda x: "♿ PEI" if str(x).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"] else "📝 REGULAR"
+            )
 
-            # 2. KPIs DE TOPO (MÉTRICAS DE SOBERANIA)
-            c1, c2, c3, c4 = st.columns(4)
-            media_geral = df_final['NOTA_NUM'].mean()
-            c1.metric("Média Global", f"{media_geral:.2f}", delta=f"{media_geral - 6.0:.1f}", delta_color="normal" if media_geral >= 6 else "inverse")
-            
-            total_avaliacoes = len(df_final)
-            c2.metric("Total de Correções", total_avaliacoes)
-            
-            taxa_sucesso = (len(df_final[df_final['NOTA_NUM'] >= 6.0]) / total_avaliacoes) * 100
-            c3.metric("Taxa de Sucesso", f"{taxa_sucesso:.1f}%")
-            
-            impacto_pei = df_final[df_final['PERFIL'] == "♿ PEI"]['NOTA_NUM'].mean()
-            c4.metric("Média PEI", f"{impacto_pei:.2f}" if not pd.isna(impacto_pei) else "0.0")
+            # --- SELETOR DE SOBERANIA (FILTRO DE TURMA) ---
+            with st.container(border=True):
+                lista_turmas_dash = ["Todas as Turmas"] + sorted(df_final_base['TURMA'].unique().tolist())
+                turma_sel_dash = st.selectbox("🎯 Selecione a Turma para Análise de Performance:", lista_turmas_dash, key=f"dash_t_filter_{v}")
 
-            st.markdown("---")
+            # Aplicação do Filtro
+            if turma_sel_dash != "Todas as Turmas":
+                df_final = df_final_base[df_final_base['TURMA'] == turma_sel_dash].copy()
+            else:
+                df_final = df_final_base.copy()
 
-            # 3. ANÁLISE GRÁFICA AVANÇADA
-            col_esq, col_dir = st.columns(2)
-
-            with col_esq:
-                st.markdown("**⚖️ Índice de Equidade (Desempenho por Perfil)**")
-                # Gráfico de Violino ou Box para ver a distribuição real das notas
-                fig_perfil = px.box(df_final, x="PERFIL", y="NOTA_NUM", color="PERFIL",
-                                   points="all", title="Distribuição de Notas: Regular vs PEI",
-                                   color_discrete_map={"📝 REGULAR": BRAND_BLUE, "♿ PEI": "#FF4B4B"})
-                fig_perfil.update_layout(showlegend=False, yaxis_range=[0, 11])
-                st.plotly_chart(fig_perfil, use_container_width=True)
-
-            with col_dir:
-                st.markdown("**📊 Ranking de Performance por Ativo**")
-                # Média de cada prova aplicada
-                df_ativos = df_final.groupby('ID_AVALIACAO')['NOTA_NUM'].mean().reset_index().sort_values(by='NOTA_NUM')
-                fig_ativos = px.bar(df_ativos, x="NOTA_NUM", y="ID_AVALIACAO", orientation='h',
-                                   title="Média de Acertos por Avaliação",
-                                   text_auto='.1f', color="NOTA_NUM", color_continuous_scale="RdYlGn")
-                fig_ativos.update_layout(xaxis_range=[0, 11])
-                st.plotly_chart(fig_ativos, use_container_width=True)
-
-            # 4. MAPA DE CALOR DE HABILIDADES (LACUNAS BNCC)
-            st.markdown("---")
-            st.markdown("**🔥 Mapa de Calor: Domínio de Habilidades (BNCC)**")
-            
-            # Lógica para extrair habilidades dos erros (Simulação baseada nos dados do Raio-X)
-            # Aqui o sistema consolida quais questões tiveram mais erros em todas as turmas
-            df_habilidades = []
-            for avaliacao in df_final['ID_AVALIACAO'].unique():
-                prova_txt = df_aulas[df_aulas['TIPO_MATERIAL'] == avaliacao]['CONTEUDO'].iloc[0]
-                grade = ai.extrair_tag(prova_txt, "GRADE_DE_CORRECAO")
+            if df_final.empty:
+                st.warning(f"⚠️ Não há dados processados para a turma {turma_sel_dash}.")
+            else:
+                # 2. KPIs DE TOPO (MÉTRICAS AJUSTADAS AO FILTRO)
+                c1, c2, c3, c4 = st.columns(4)
                 
-                # Busca os códigos BNCC na grade (Ex: EF06MA01)
-                codigos = re.findall(r"EF\d{2}MA\d{2}", grade)
-                for cod in set(codigos):
-                    # Calcula a média de acerto para as questões que citam esse código
-                    # (Simplificação: associa a média da prova ao código para o Dashboard)
-                    media_hab = df_final[df_final['ID_AVALIACAO'] == avaliacao]['NOTA_NUM'].mean()
-                    df_habilidades.append({"Habilidade": cod, "Domínio %": media_hab * 10, "Ativo": avaliacao})
+                media_geral = df_final['NOTA_NUM'].mean()
+                c1.metric("Média do Grupo", f"{media_geral:.2f}", 
+                        delta=f"{media_geral - 6.0:.1f}", 
+                        delta_color="normal" if media_geral >= 6 else "inverse")
+                
+                total_correcoes = len(df_final)
+                c2.metric("Total de Correções", total_correcoes)
+                
+                taxa_sucesso = (len(df_final[df_final['NOTA_NUM'] >= 6.0]) / total_correcoes) * 100 if total_correcoes > 0 else 0
+                c3.metric("Taxa de Sucesso", f"{taxa_sucesso:.1f}%")
+                
+                media_pei = df_final[df_final['PERFIL'] == "♿ PEI"]['NOTA_NUM'].mean()
+                c4.metric("Média PEI", f"{media_pei:.2f}" if not pd.isna(media_pei) else "0.00")
 
-            if df_habilidades:
-                df_hab_plot = pd.DataFrame(df_habilidades)
-                fig_hab = px.scatter(df_hab_plot, x="Habilidade", y="Domínio %", size="Domínio %", color="Domínio %",
-                                    hover_name="Ativo", title="Nível de Domínio por Descritor BNCC",
-                                    color_continuous_scale="RdYlGn", range_y=[0, 105])
-                st.plotly_chart(fig_hab, use_container_width=True)
-            else:
-                st.info("Habilidades BNCC serão mapeadas conforme o senhor realizar mais perícias no Raio-X.")
+                st.markdown("---")
 
-            # 5. ALERTAS DE INTERVENÇÃO (QUEM PRECISA DE VOCÊ AGORA?)
-            st.markdown("---")
-            st.markdown("#### 🚨 Alertas de Intervenção Imediata (Risco Pedagógico)")
-            
-            # Filtra alunos com média abaixo de 5.0 nas últimas avaliações
-            df_alerta = df_final[df_final['NOTA_NUM'] < 5.0].groupby(['NOME_ALUNO', 'TURMA', 'PERFIL'])['NOTA_NUM'].count().reset_index()
-            df_alerta.columns = ['Estudante', 'Turma', 'Perfil', 'Qtd. Avaliações Críticas']
-            
-            if not df_alerta.empty:
-                st.warning(f"Identificamos {len(df_alerta)} alunos que necessitam de recomposição de aprendizagem urgente.")
-                st.dataframe(df_alerta.sort_values(by='Qtd. Avaliações Críticas', ascending=False), use_container_width=True, hide_index=True)
-            else:
-                st.success("Nenhum aluno em zona de risco crítico detectado no momento.")
+                # 3. ANÁLISE GRÁFICA (VISÃO SEGREGADA)
+                col_esq, col_dir = st.columns(2)
+
+                with col_esq:
+                    st.markdown(f"**⚖️ Índice de Equidade: {turma_sel_dash}**")
+                    # Gráfico de Box Plot para ver a dispersão das notas por perfil
+                    fig_perfil = px.box(df_final, x="PERFIL", y="NOTA_NUM", color="PERFIL",
+                                    points="all", title="Distribuição de Notas: Regular vs PEI",
+                                    color_discrete_map={"📝 REGULAR": BRAND_BLUE, "♿ PEI": "#FF4B4B"})
+                    fig_perfil.update_layout(showlegend=False, yaxis_range=[0, 11], height=400)
+                    st.plotly_chart(fig_perfil, use_container_width=True)
+
+                with col_dir:
+                    st.markdown(f"**📊 Performance por Ativo: {turma_sel_dash}**")
+                    # Média de cada prova aplicada para o grupo selecionado
+                    df_ativos = df_final.groupby('ID_AVALIACAO')['NOTA_NUM'].mean().reset_index().sort_values(by='NOTA_NUM')
+                    fig_ativos = px.bar(df_ativos, x="NOTA_NUM", y="ID_AVALIACAO", orientation='h',
+                                    title="Média de Acertos por Avaliação",
+                                    text_auto='.1f', color="NOTA_NUM", color_continuous_scale="RdYlGn")
+                    fig_ativos.update_layout(xaxis_range=[0, 11], height=400)
+                    st.plotly_chart(fig_ativos, use_container_width=True)
+
+                # 4. MAPA DE CALOR DE HABILIDADES (LACUNAS BNCC ESPECÍFICAS)
+                st.markdown("---")
+                st.markdown(f"**🔥 Mapa de Calor: Domínio de Habilidades BNCC ({turma_sel_dash})**")
+                
+                df_habilidades = []
+                # Itera apenas sobre as avaliações que aparecem no filtro atual
+                for avaliacao in df_final['ID_AVALIACAO'].unique():
+                    # Busca o conteúdo da prova no banco de materiais
+                    prova_query = df_aulas[df_aulas['TIPO_MATERIAL'] == avaliacao]
+                    if not prova_query.empty:
+                        prova_txt = prova_query['CONTEUDO'].iloc[0]
+                        grade = ai.extrair_tag(prova_txt, "GRADE_DE_CORRECAO")
+                        
+                        # Busca códigos BNCC (Ex: EF06MA01)
+                        codigos = re.findall(r"EF\d{2}MA\d{2}", grade)
+                        for cod in set(codigos):
+                            # Calcula a média de acerto do grupo filtrado para esta prova
+                            media_hab = df_final[df_final['ID_AVALIACAO'] == avaliacao]['NOTA_NUM'].mean()
+                            df_habilidades.append({"Habilidade": cod, "Domínio %": media_hab * 10, "Ativo": avaliacao})
+
+                if df_habilidades:
+                    df_hab_plot = pd.DataFrame(df_habilidades)
+                    fig_hab = px.scatter(df_hab_plot, x="Habilidade", y="Domínio %", size="Domínio %", color="Domínio %",
+                                        hover_name="Ativo", title="Nível de Domínio por Descritor",
+                                        color_continuous_scale="RdYlGn", range_y=[0, 105])
+                    st.plotly_chart(fig_hab, use_container_width=True)
+                else:
+                    st.info("Habilidades BNCC serão mapeadas conforme o senhor realizar as perícias no Raio-X.")
+
+                # 5. ALERTAS DE INTERVENÇÃO (FOCO NA TURMA)
+                st.markdown("---")
+                st.markdown(f"#### 🚨 Alertas de Risco Pedagógico: {turma_sel_dash}")
+                
+                # Filtra alunos do grupo atual com média abaixo de 5.0
+                df_alerta = df_final[df_final['NOTA_NUM'] < 5.0].groupby(['NOME_ALUNO', 'TURMA', 'PERFIL'])['NOTA_NUM'].count().reset_index()
+                df_alerta.columns = ['Estudante', 'Turma', 'Perfil', 'Qtd. Avaliações Críticas']
+                
+                if not df_alerta.empty:
+                    st.warning(f"Identificamos {len(df_alerta)} alunos em {turma_sel_dash} que necessitam de recomposição urgente.")
+                    st.dataframe(df_alerta.sort_values(by='Qtd. Avaliações Críticas', ascending=False), 
+                                use_container_width=True, hide_index=True)
+                else:
+                    st.success(f"Nenhum aluno da turma {turma_sel_dash} em zona de risco crítico no momento.")
 
 # ==============================================================================
 # MÓDULO: BIOGRAFIA DO ESTUDANTE (V34.0) - VISÃO COMPACTA E FILTRADA (MOBILE)
