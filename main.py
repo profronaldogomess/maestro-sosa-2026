@@ -1302,17 +1302,25 @@ elif menu == "📝 Diário de Bordo Rápido":
 
     st.caption("💡 **Dica de Agilidade:** No celular, clique na caixa de 'Obs', ative o microfone do seu teclado e relate a ocorrência por voz.")
 
-    # 5. SALVAMENTO E SINCRONIA DE SOBERANIA
+# 5. SALVAMENTO E SINCRONIA DE SOBERANIA (VERSÃO V29.1 - AUTO-TAG PEI)
     if st.button("💾 SALVAR REGISTROS E CONSOLIDAR", type="primary", use_container_width=True):
-        with st.status("Sincronizando Práxis e Vetor Disciplinar...") as status:
+        with st.status("Sincronizando Práxis e Evidências PEI...") as status:
             db.limpar_diario_data_turma(data_str, turma_sel)
             linhas_diario = []
+            
             for _, r in df_editado.iterrows():
-                # Lógica de Falta
+                # Identifica se o aluno é PEI pelo ícone no nome
+                aluno_eh_pei = "♿" in r['ESTUDANTE']
+                
+                # Lógica de Falta e Visto
                 tag_f = "AUSÊNCIA" if r['F'] else r['VETOR DISCIPLINAR']
                 visto_f = False if r['F'] else r['V']
                 
-                # Se houver "Comunicação", o sistema destaca na observação
+                # --- INTELIGÊNCIA DE EVIDÊNCIA PEI ---
+                # Se for PEI, tiver visto e nenhuma tag disciplinar, marca como conclusão de atividade adaptada
+                if aluno_eh_pei and visto_f and not tag_f:
+                    tag_f = "PEI CONCLUÍDO"
+                
                 obs_final = r['OBSERVAÇÃO (🎙️ DITE AQUI)']
                 prefixo_obs = f"[{material_hoje}]"
                 if r['VETOR DISCIPLINAR'] == "Comunicação":
@@ -1324,7 +1332,7 @@ elif menu == "📝 Diário de Bordo Rápido":
                 ])
             
             if db.salvar_lote("DB_DIARIO_BORDO", linhas_diario):
-                status.update(label="✅ Diário e Vetor Disciplinar Sincronizados!", state="complete")
+                status.update(label="✅ Diário e Evidências PEI Sincronizados!", state="complete")
                 st.balloons()
                 if f"visto_lote_{turma_sel}" in st.session_state: del st.session_state[f"visto_lote_{turma_sel}"]
                 time.sleep(1); st.rerun()
