@@ -2406,7 +2406,7 @@ elif menu == "📸 Scanner de Gabaritos":
         "📊 4. Raio-X Pedagógico", "📂 5. Acervo de Evidências", "📈 6. Dashboard"
     ])
 
-# --- ABA 1: PERÍCIA DE GABARITOS (VERSÃO V65.5 - CAPTURA PRO & FLASH FIX) ---
+# --- ABA 1: PERÍCIA DE GABARITOS (VERSÃO V65.6 - FIX PERSISTÊNCIA MOBILE) ---
     with tab_pericia:
         c1, c2, c3 = st.columns([1, 1, 1.5])
         t_sel = c1.selectbox("👥 Turma:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"t_p_{v}")
@@ -2419,6 +2419,7 @@ elif menu == "📸 Scanner de Gabaritos":
         else:
             sub_cap, sub_hub = st.tabs(["📸 Captura Vision", "⚖️ Hub de Auditoria"])
             
+            # Carregamento de Gabaritos (Lógica preservada)
             dados_at = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel].iloc[0]
             txt_at = str(dados_at['CONTEUDO'])
             val_tag = ai.extrair_tag(txt_at, "VALOR")
@@ -2429,10 +2430,7 @@ elif menu == "📸 Scanner de Gabaritos":
                 raw = ai.extrair_tag(texto, tag) or ai.extrair_tag(texto, "GABARITO")
                 if not raw: return []
                 matches = re.findall(r"(\d+)[\s\.\)\-:]+([A-E])", raw.upper())
-                mapa = {}
-                for num, letra in matches:
-                    n_int = int(num)
-                    if n_int not in mapa: mapa[n_int] = letra
+                mapa = {int(num): letra for num, letra in matches}
                 return [mapa[n] for n in sorted(mapa.keys())]
 
             gab_reg = extrair_gab_v64(txt_at, False)
@@ -2452,43 +2450,38 @@ elif menu == "📸 Scanner de Gabaritos":
                     gab_alvo = gab_pei if is_pei_aluno else gab_reg
                     qtd_q = len(gab_alvo)
 
-                    # --- NOVO: SELETOR DE MÉTODO DE CAPTURA ---
-                    st.markdown("### 📸 Método de Captura")
-                    metodo_foto = st.radio(
-                        "Escolha como capturar o gabarito:",
-                        ["Câmera do Sistema (Recomendado - Com Flash/Giro)", "Câmera Integrada (Rápida)"],
-                        horizontal=True, key=f"metodo_foto_{v}"
-                    )
-
-                    img = None
-                    if "Recomendado" in metodo_foto:
-                        st.info("💡 Ao clicar abaixo, escolha 'Câmera' para usar o flash e tirar fotos na horizontal.")
-                        img = st.file_uploader(f"Tirar foto do gabarito: {al_sel}", type=['jpg', 'jpeg', 'png'], key=f"file_cam_{v}")
-                    else:
-                        img = st.camera_input(f"Capturar Gabarito: {al_sel}", key=f"cam_input_{v}")
+                    st.markdown("### 📸 Captura do Gabarito")
                     
-                    if img:
-                        # Mostra a prévia da imagem capturada
-                        st.image(img, caption="Imagem Capturada", width=300)
+                    # --- MOTOR DE CAPTURA COM PERSISTÊNCIA ---
+                    # Usamos o file_uploader como "Câmera do Sistema"
+                    img_file = st.file_uploader(f"Clique para tirar foto: {al_sel}", type=['jpg', 'jpeg', 'png'], key=f"file_cam_{v}")
+                    
+                    # Se o arquivo foi carregado, salvamos os bytes no session_state imediatamente
+                    if img_file is not None:
+                        st.session_state.current_scan_img = img_file.getvalue()
+
+                    # Se existe uma imagem na sessão, mostramos a prévia e os botões
+                    if "current_scan_img" in st.session_state:
+                        st.image(st.session_state.current_scan_img, caption="Foto capturada com sucesso!", width=400)
                         
-                        col_btn1, col_btn2 = st.columns(2)
-                        if col_btn1.button("🧠 ANALISAR MARCAÇÕES", type="primary", use_container_width=True):
+                        c_btn1, c_btn2 = st.columns(2)
+                        
+                        if c_btn1.button("🧠 ANALISAR MARCAÇÕES", type="primary", use_container_width=True):
                             with st.spinner("Perito Sosa analisando com Vision AI..."):
-                                # Converte para bytes se vier do file_uploader
-                                img_bytes = img.getvalue() if hasattr(img, 'getvalue') else img.read()
-                                res_json = ai.analisar_gabarito_vision(img_bytes)
-                                
+                                res_json = ai.analisar_gabarito_vision(st.session_state.current_scan_img)
                                 if "erro" in res_json:
-                                    st.error(f"Falha na análise: {res_json['erro']}")
+                                    st.error(f"Erro na IA: {res_json['erro']}")
                                 else:
+                                    # Mapeia as respostas lidas para a lista de resultados
                                     st.session_state.current_scan_res = [res_json.get(f"{i+1:02d}", res_json.get(str(i+1), "?")) for i in range(qtd_q)]
-                                    st.session_state.current_scan_img = img_bytes
                                     st.rerun()
-                        
-                        if col_btn2.button("🗑️ LIMPAR FOTO", use_container_width=True):
+
+                        if c_btn2.button("🗑️ DESCARTAR FOTO", use_container_width=True):
+                            if "current_scan_img" in st.session_state: del st.session_state.current_scan_img
                             if "current_scan_res" in st.session_state: del st.session_state.current_scan_res
                             st.rerun()
 
+                    # --- MESA DE PERÍCIA (SÓ APARECE APÓS A ANÁLISE) ---
                     if "current_scan_res" in st.session_state:
                         st.markdown("---")
                         st.subheader("🔍 Mesa de Perícia Imediata")
@@ -2514,7 +2507,31 @@ elif menu == "📸 Scanner de Gabaritos":
                             with st.spinner("Sincronizando via SOSA Bridge..."):
                                 link_pasta = db.subir_e_converter_para_google_docs(st.session_state.current_scan_img, al_sel.replace(" ","_"), trimestre=tr_sel, categoria=t_sel, semana=at_sel, modo="SCANNER")
                                 db.salvar_no_banco("DB_GABARITOS_ALUNOS", [datetime.now().strftime("%d/%m/%Y"), al_info['ID'], al_sel, t_sel, at_sel, ";".join(novas_res), util.sosa_to_str(nota_f), link_pasta])
-                                st.success("✅ Evidência arquivada!"); del st.session_state.current_scan_res; st.rerun()
+                                st.success("✅ Evidência arquivada!")
+                                # Limpa a sessão para o próximo aluno
+                                del st.session_state.current_scan_img
+                                del st.session_state.current_scan_res
+                                time.sleep(1)
+                                st.rerun()
+
+            with sub_hub:
+                # (Mantenha o código do Hub de Auditoria como estava, ele está correto)
+                st.subheader(f"⚖️ Hub de Auditoria: {t_sel}")
+                gabaritos_lidos = df_diagnosticos[df_diagnosticos['ID_AVALIACAO'] == at_sel]
+                alunos_t = df_alunos[df_alunos['TURMA'] == t_sel].sort_values(by="NOME_ALUNO")
+                dados_hub = []
+                for _, alu in alunos_t.iterrows():
+                    id_a = str(alu['ID'])
+                    leitura = gabaritos_lidos[gabaritos_lidos['ID_ALUNO'].astype(str) == id_a]
+                    is_pei = str(alu['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"]
+                    status = "🔴 Pendente"; respostas = ""; nota_ex = 0.0; link_ev = ""
+                    if not leitura.empty:
+                        respostas = leitura.iloc[0]['RESPOSTAS_ALUNO']
+                        nota_ex = util.sosa_to_float(leitura.iloc[0]['NOTA_CALCULADA'])
+                        link_ev = leitura.iloc[0].get('LINK_FOTO_DRIVE', '')
+                        status = "🟡 Revisar" if ("X" in respostas or "?" in respostas) else "🟢 Pronto"
+                    dados_hub.append({"ID": id_a, "Estudante": f"♿ {alu['NOME_ALUNO']}" if is_pei else alu['NOME_ALUNO'], "Status": status, "Lido": respostas, "Nota": nota_ex, "Evidência": link_ev})
+                st.dataframe(pd.DataFrame(dados_hub), hide_index=True, use_container_width=True, column_config={"Evidência": st.column_config.LinkColumn("🔗 Ver Foto")})
 
 # --- ABA 2: ATIVIDADES & PROJETOS (V66.0 - SOBERANIA DE NOTAS E MÉRITO) ---
     with tab_atividades:
