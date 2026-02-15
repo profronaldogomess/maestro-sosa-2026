@@ -2760,63 +2760,87 @@ elif menu == "📸 Scanner de Gabaritos":
                         time.sleep(1)
                         st.rerun()
 
-    # --- ABA 3: HUB DE SOBERANIA (V68.0 - SOBERANIA PLENA E SEGUNDA CHAMADA) ---
+    # ==============================================================================
+    # MÓDULO: HUB DE SOBERANIA (V69.0 - AUDITORIA DE VERSÕES E RESGATE DE FALTAS)
+    # ==============================================================================
     with tab_soberania:
         st.subheader("🏛️ Hub de Soberania: Autoridade do Professor")
         st.markdown("---")
 
         c_h1, c_h2 = st.columns([1, 1])
-        t_sel_h = c_h1.selectbox("👥 Selecione a Turma:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"t_h_v68_{v}")
-        tr_sel_h = c_h2.selectbox("📅 Trimestre de Referência:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_h_v68_{v}")
+        t_sel_h = c_h1.selectbox("👥 Selecione a Turma:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"t_h_v69_{v}")
+        tr_sel_h = c_h2.selectbox("📅 Trimestre de Referência:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_h_v69_{v}")
 
         if not t_sel_h:
-            st.info("💡 Selecione uma turma para exercer a soberania sobre os resultados.")
+            st.info("💡 Selecione uma turma para abrir a Mesa de Soberania.")
         else:
             sub_auditoria, sub_externas = st.tabs(["⚖️ Auditoria e Lançamento Manual", "🌍 Notas Externas (SAEB/Governo)"])
 
             with sub_auditoria:
-                st.markdown("#### 🔍 Consolidação de Notas da Turma")
+                st.markdown("#### 🔍 Consolidação de Notas e Resgate de Faltas")
                 
-                # 1. IDENTIFICAÇÃO DA AVALIAÇÃO ALVO
-                # Busca todas as avaliações disponíveis para esta série no banco de materiais
-                serie_alvo = t_sel_h[0] # Pega o "6" de "6ª MA"
-                opcoes_av = df_aulas[df_aulas['ANO'].str.contains(serie_alvo)]['TIPO_MATERIAL'].unique().tolist()
-                av_alvo_h = st.selectbox("Selecione a Avaliação para Consolidar:", [""] + opcoes_av, key=f"av_h_sel_{v}")
+                # 1. FILTRO BLINDADO (APENAS MATERIAIS DA CENTRAL DE AVALIAÇÕES)
+                # Busca materiais que são AVALIAÇÃO e pertencem à série da turma
+                serie_num = t_sel_h[0]
+                df_oficiais = df_aulas[
+                    (df_aulas['SEMANA_REF'] == "AVALIAÇÃO") & 
+                    (df_aulas['ANO'].str.contains(serie_num))
+                ]
+                
+                # Filtra para não mostrar 2ª chamada no seletor principal (ela entra como detalhe do aluno)
+                opcoes_base = [opt for opt in df_oficiais['TIPO_MATERIAL'].unique().tolist() if "2ª" not in opt.upper()]
+                av_alvo_h = st.selectbox("📋 Selecione a Avaliação Base (Slot do Boletim):", [""] + opcoes_base, key=f"av_h_sel_{v}")
 
                 if av_alvo_h:
-                    # 2. CRUZAMENTO DE DADOS (SOSA DATA FUSION)
-                    # Pega todos os alunos da turma
+                    # 2. DATA FUSION: CRUZAMENTO DE ALUNOS + SCANNER
                     alunos_turma = df_alunos[df_alunos['TURMA'] == t_sel_h].sort_values(by="NOME_ALUNO")
-                    # Pega os registros que já existem no Scanner para esta prova
-                    gabaritos_lidos = df_diagnosticos[df_diagnosticos['ID_AVALIACAO'] == av_alvo_h]
+                    
+                    # Busca todos os registros do scanner que pertencem a esta avaliação base OU sua 2ª chamada
+                    nome_curto_av = av_alvo_h.split("-")[0].strip()
+                    gabaritos_lidos = df_diagnosticos[
+                        (df_diagnosticos['TURMA'] == t_sel_h) & 
+                        (df_diagnosticos['ID_AVALIACAO'].str.contains(nome_curto_av))
+                    ]
                     
                     dados_soberania = []
                     for _, alu in alunos_turma.iterrows():
                         id_a = db.limpar_id(alu['ID'])
-                        # Tenta achar o registro no scanner
+                        # Tenta localizar o registro do aluno
                         leitura = gabaritos_lidos[gabaritos_lidos['ID_ALUNO'].apply(db.limpar_id) == id_a]
                         
+                        status_txt = "✍️ PENDENTE"
+                        versao_txt = "N/A"
+                        nota_atual = 0.0
+                        link_ev = ""
+                        respostas = ""
+
                         if not leitura.empty:
-                            status = "📸 Escaneado"
-                            respostas = leitura.iloc[0]['RESPOSTAS_ALUNO']
-                            nota_atual = util.sosa_to_float(leitura.iloc[0]['NOTA_CALCULADA'])
-                            link_ev = leitura.iloc[0].get('LINK_FOTO_DRIVE', '')
-                        else:
-                            status = "✍️ Pendente / Manual"
-                            respostas = "N/A"
-                            nota_atual = 0.0
-                            link_ev = ""
+                            # Pega o registro mais recente (caso tenha faltado e depois feito 2ª chamada)
+                            reg = leitura.iloc[-1]
+                            respostas = reg['RESPOSTAS_ALUNO']
+                            nota_atual = util.sosa_to_float(reg['NOTA_CALCULADA'])
+                            link_ev = reg.get('LINK_FOTO_DRIVE', '')
+                            
+                            if respostas == "FALTOU":
+                                status_txt = "❌ FALTOU"
+                                versao_txt = "N/A"
+                            elif "2ª" in reg['ID_AVALIACAO'].upper():
+                                status_txt = "✅ REALIZADA"
+                                versao_txt = "2ª CHAMADA"
+                            else:
+                                status_txt = "✅ REALIZADA"
+                                versao_txt = "REGULAR"
 
                         dados_soberania.append({
                             "ID": id_a,
                             "Estudante": alu['NOME_ALUNO'],
-                            "Origem": status,
-                            "Leitura": respostas,
+                            "Status": status_txt,
+                            "Versão": versao_txt,
                             "Nota Final (Soberana)": nota_atual,
                             "Evidência": link_ev
                         })
 
-                    st.caption("Ajuste as notas abaixo. Alunos sem foto podem ter a nota lançada manualmente (Segunda Chamada).")
+                    st.info(f"💡 **Soberania do Professor:** Alunos com 'FALTOU' podem ter a nota da 2ª Chamada lançada manualmente abaixo.")
                     
                     # 3. MESA DE SOBERANIA (DATA EDITOR)
                     df_soberano_ed = st.data_editor(
@@ -2824,24 +2848,22 @@ elif menu == "📸 Scanner de Gabaritos":
                         column_config={
                             "ID": None,
                             "Estudante": st.column_config.TextColumn("Estudante", width="medium", disabled=True),
-                            "Origem": st.column_config.TextColumn("Status", width="small", disabled=True),
-                            "Leitura": st.column_config.TextColumn("Respostas", width="small", disabled=True),
+                            "Status": st.column_config.TextColumn("Situação", width="small", disabled=True),
+                            "Versão": st.column_config.TextColumn("Lente", width="small", disabled=True),
                             "Nota Final (Soberana)": st.column_config.NumberColumn("Nota (0-10)", min_value=0.0, max_value=10.0, step=0.1, format="%.1f"),
                             "Evidência": st.column_config.LinkColumn("🔗 Ver Prova")
                         },
-                        hide_index=True, use_container_width=True, key=f"ed_soberania_v68_{v}"
+                        hide_index=True, use_container_width=True, key=f"ed_soberania_v69_{v}"
                     )
 
-                    # 4. HOMOLOGAÇÃO (ENVIO PARA O BOLETIM)
-                    if st.button("⚖️ HOMOLOGAR E ENVIAR PARA O BOLETIM", use_container_width=True, type="primary"):
-                        with st.status("Sincronizando Notas Oficiais...") as status_h:
+                    # 4. HOMOLOGAÇÃO FINAL
+                    if st.button("⚖️ HOMOLOGAR NOTAS E ATUALIZAR BOLETIM", use_container_width=True, type="primary"):
+                        with st.status("Sincronizando com o Boletim Oficial...") as status_h:
                             lista_homologacao = []
                             for _, r in df_soberano_ed.iterrows():
-                                # Identifica se é Teste ou Prova pelo nome do material para salvar na coluna certa
-                                col_vistos = "0,0"
+                                # Define a coluna correta no DB_NOTAS baseado no tipo de material
                                 col_teste = "0,0"
                                 col_prova = "0,0"
-                                
                                 nota_str = util.sosa_to_str(r['Nota Final (Soberana)'])
                                 
                                 if "TESTE" in av_alvo_h.upper():
@@ -2851,16 +2873,14 @@ elif menu == "📸 Scanner de Gabaritos":
 
                                 lista_homologacao.append([
                                     r['ID'], r['Estudante'], t_sel_h, tr_sel_h, 
-                                    col_vistos, col_teste, col_prova, "0,0", nota_str
+                                    "0,0", col_teste, col_prova, "0,0", nota_str
                                 ])
                             
-                            # Salva no DB_NOTAS (O Painel de Notas lerá esses dados)
                             if db.salvar_lote("DB_NOTAS", lista_homologacao):
-                                status_h.update(label="✅ Notas homologadas com sucesso!", state="complete")
+                                status_h.update(label="✅ Notas homologadas! O Boletim Anual foi atualizado.", state="complete")
                                 st.balloons()
                 else:
-                    st.info("Seleção necessária: Escolha a Avaliação para abrir a mesa de notas.")
-
+                    st.info("Selecione a Avaliação para abrir a mesa de auditoria.")
 
             # --- SUB-ABA 2: NOTAS EXTERNAS ---
             with sub_externas:
