@@ -2450,7 +2450,7 @@ elif menu == "📸 Scanner de Gabaritos":
         "📊 4. Raio-X Pedagógico", "📂 5. Acervo de Evidências", "📈 6. Dashboard"
     ])
 
-# --- ABA 1: PERÍCIA DE GABARITOS (VERSÃO V45.1 - PROTOCOLO DE RASURA) ---
+# --- ABA 1: PERÍCIA DE GABARITOS (VERSÃO V46.0 - TURBO + REGISTRO DE FALTA) ---
     with tab_pericia:
         c1, c2, c3 = st.columns([1, 1, 1.5])
         t_sel = c1.selectbox("👥 Turma:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"t_p_{v}")
@@ -2497,15 +2497,26 @@ elif menu == "📸 Scanner de Gabaritos":
                 with c_p1: st.caption(f"Fila de Espera: {len(pendentes)} alunos restantes.")
                 with c_p2: st.info("♿ PEI" if is_pei_aluno else "📝 REGULAR")
 
-                # 3. CAPTURA E ANÁLISE VISION AI
-                img = st.camera_input(f"Posicione o gabarito de {al_sel}", key=f"cam_{id_aluno_atual}")
+                # --- ÁREA DE CAPTURA E BOTÃO DE FALTA ---
+                col_cam, col_falta = st.columns([2, 1])
+                img = col_cam.camera_input(f"Gabarito de {al_sel}", key=f"cam_{id_aluno_atual}")
+                
+                with col_falta:
+                    st.write("---")
+                    st.markdown("**O aluno faltou?**")
+                    if st.button("❌ REGISTRAR FALTA", use_container_width=True, help="Remove o aluno da fila e marca nota 0,00"):
+                        db.salvar_no_banco("DB_GABARITOS_ALUNOS", [
+                            datetime.now().strftime("%d/%m/%Y"), id_aluno_atual, al_sel, t_sel, at_sel, 
+                            "FALTOU", "0,00", "N/A"
+                        ])
+                        st.warning(f"Falta de {al_sel} registrada."); time.sleep(0.5); st.rerun()
 
                 if img and "current_scan_res" not in st.session_state:
                     with st.spinner("Perito Sosa analisando marcações..."):
                         res_json = ai.analisar_gabarito_vision(img.getvalue())
                         gab_alvo = gab_pei if is_pei_aluno else gab_reg
                         qtd_q = len(gab_alvo)
-                        # Normaliza a resposta da IA (A-E, X ou ?)
+                        # Normaliza a resposta da IA garantindo o tamanho correto do gabarito
                         st.session_state.current_scan_res = [res_json.get(f"{i+1:02d}", res_json.get(str(i+1), "?")) for i in range(qtd_q)]
                         st.session_state.current_scan_img = img.getvalue()
                         st.rerun()
@@ -2522,14 +2533,14 @@ elif menu == "📸 Scanner de Gabaritos":
                         st.subheader("⚖️ Mesa de Perícia")
                         dados_pericia = []
                         for i, lido in enumerate(res_lidas):
-                            certo = gab_alvo[i]
-                            if lido == certo: status = "✅ ACERTO"
-                            elif lido == "X": status = "🚫 DUPLA"
-                            elif lido == "?": status = "⚪ VAZIA"
-                            else: status = f"❌ (Era {certo})"
-                            dados_pericia.append({"Q": f"{i+1:02d}", "Lido": lido, "Status": status})
+                            if i < len(gab_alvo): # Trava de segurança
+                                certo = gab_alvo[i]
+                                if lido == certo: status = "✅ ACERTO"
+                                elif lido == "X": status = "🚫 DUPLA"
+                                elif lido == "?": status = "⚪ VAZIA"
+                                else: status = f"❌ (Era {certo})"
+                                dados_pericia.append({"Q": f"{i+1:02d}", "Lido": lido, "Status": status})
                         
-                        # EDITOR COM OPÇÕES COMPLETAS: A, B, C, D, E, X, ?
                         df_mesa = st.data_editor(pd.DataFrame(dados_pericia), hide_index=True, use_container_width=True,
                             column_config={"Lido": st.column_config.SelectboxColumn("Ajustar", options=["A", "B", "C", "D", "E", "X", "?"], required=True)},
                             key=f"ed_turbo_{id_aluno_atual}")
@@ -2537,7 +2548,7 @@ elif menu == "📸 Scanner de Gabaritos":
                     with col_res2:
                         st.subheader("📊 Resultado")
                         novas_res = df_mesa["Lido"].tolist()
-                        acertos = sum(1 for i, r in enumerate(novas_res) if r == gab_alvo[i])
+                        acertos = sum(1 for i, r in enumerate(novas_res) if i < len(gab_alvo) and r == gab_alvo[i])
                         nota_f = (acertos / len(gab_alvo)) * v_total_at if len(gab_alvo) > 0 else 0
                         
                         st.metric("Nota Final", f"{nota_f:.2f}", delta=f"{acertos}/{len(gab_alvo)} acertos")
