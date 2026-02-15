@@ -1490,19 +1490,19 @@ elif menu == "📊 Painel de Notas & Vistos":
                     st.rerun()
 
 # ==============================================================================
-# MÓDULO: BOLETIM ANUAL & CONSELHO V26 - INTELIGÊNCIA PREDITIVA E 360°
+# MÓDULO: BOLETIM ANUAL & CONSELHO V27 - INTELIGÊNCIA COLETIVA E ATA 360°
 # ==============================================================================
 elif menu == "📈 Boletim Anual & Conselho":
-    st.title("📈 Boletim Estratégico e Inteligência de Conselho")
+    st.title("📈 Inteligência de Conselho e Performance Coletiva")
     st.markdown("---")
 
     if df_notas.empty:
-        st.warning("⚠️ Sem notas lançadas no sistema.")
+        st.warning("⚠️ Sem notas lançadas no sistema para gerar o boletim.")
     else:
         # --- 1. FILTRO DE TURMA ---
-        turma_sel = st.selectbox("🎯 Selecione a Turma para Análise:", sorted(df_alunos['TURMA'].unique()), key="bol_turma_v26")
+        turma_sel = st.selectbox("🎯 Selecione a Turma para Análise Coletiva:", sorted(df_alunos['TURMA'].unique()), key="bol_turma_v27")
         
-        # --- 2. PROCESSAMENTO DE DADOS (DATA FUSION) ---
+        # --- 2. PROCESSAMENTO DE DADOS (DATA FUSION ANUAL) ---
         df_t = df_notas[df_notas['TURMA'] == turma_sel].copy()
         
         # Pivotagem para visão anual
@@ -1532,41 +1532,63 @@ elif menu == "📈 Boletim Anual & Conselho":
             soma = t1 + t2 + t3
             falta = max(0.0, 18.0 - soma)
             
-            # Tendência
             seta = "➖"
             if t2 > t1 and t1 > 0: seta = "⬆️"
             elif t2 < t1 and t2 > 0: seta = "⬇️"
             
-            # Status e Risco
             if soma >= 18.0: status = "✅ APROVADO"
             elif falta > 10.0: status = "🚨 RISCO CRÍTICO"
             elif soma > 0: status = "⚠️ EM RECUPERAÇÃO"
             else: status = "⏳ AGUARDANDO"
             
-            # PEI Tag
             aluno_info = df_alunos[df_alunos['ID'].apply(db.limpar_id) == db.limpar_id(row['ID_ALUNO'])].iloc[0]
             pei = "♿" if str(aluno_info['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", ""] else "📝"
-            
             esforco = esforco_map.get(db.limpar_id(row['ID_ALUNO']), 0.0)
             
             return pd.Series([pei, seta, esforco, soma, falta, status])
 
         pivot[['PERFIL', 'EVOLUÇÃO', 'ESFORÇO %', 'TOTAL', 'PRECISA DE', 'SITUAÇÃO']] = pivot.apply(calcular_predicao, axis=1)
 
-        # --- 5. DASHBOARD DE TOPO (KPIs) ---
+        # --- 5. DASHBOARD DE TOPO (KPIs COLETIVOS) ---
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Média da Turma", f"{pivot['TOTAL'].mean()/3:.1f}")
-        c2.metric("Aprovação Atual", f"{(len(pivot[pivot['TOTAL']>=18])/len(pivot)*100):.0f}%")
-        c3.metric("Esforço Médio", f"{pivot['ESFORÇO %'].mean():.0f}%")
-        c4.metric("Risco Crítico", len(pivot[pivot['SITUAÇÃO'] == "🚨 RISCO CRÍTICO"]), delta_color="inverse")
+        media_turma = pivot['TOTAL'].mean() / 3
+        c1.metric("Média Geral da Turma", f"{media_turma:.1f}")
+        
+        taxa_aprov = (len(pivot[pivot['TOTAL'] >= 18]) / len(pivot) * 100)
+        c2.metric("Taxa de Aprovação Atual", f"{taxa_aprov:.0f}%")
+        
+        esforco_geral = pivot['ESFORÇO %'].mean()
+        c3.metric("Engajamento (Vistos)", f"{esforco_geral:.0f}%")
+        
+        risco_count = len(pivot[pivot['SITUAÇÃO'] == "🚨 RISCO CRÍTICO"])
+        c4.metric("Alunos em Risco Crítico", risco_count, delta_color="inverse")
 
-        # --- 6. TABELA DE ELITE (VISUALIZAÇÃO) ---
-        st.markdown("### 📊 Mapa de Desempenho Anual")
+        # --- 6. ANÁLISE VISUAL DE SAÚDE DA TURMA ---
+        st.markdown("---")
+        col_graf1, col_graf2 = st.columns(2)
+        
+        with col_graf1:
+            st.markdown("**📊 Distribuição de Situações**")
+            fig_sit = px.pie(pivot, names='SITUAÇÃO', color='SITUAÇÃO',
+                             color_discrete_map={'✅ APROVADO':'#2ECC71', '🚨 RISCO CRÍTICO':'#E74C3C', '⚠️ EM RECUPERAÇÃO':'#F1C40F', '⏳ AGUARDANDO':'#95A5A6'})
+            fig_sit.update_layout(showlegend=False, height=300)
+            st.plotly_chart(fig_sit, use_container_width=True)
+
+        with col_graf2:
+            st.markdown("**⚖️ Equidade: Regular vs PEI**")
+            fig_pei = px.box(pivot, x='PERFIL', y='TOTAL', color='PERFIL', 
+                             title="Dispersão de Notas por Perfil",
+                             color_discrete_map={'📝':'#2962FF', '♿':'#FF4B4B'})
+            fig_pei.update_layout(showlegend=False, height=300)
+            st.plotly_chart(fig_pei, use_container_width=True)
+
+        # --- 7. TABELA DE ELITE (MAPA ANUAL) ---
+        st.markdown("### 📋 Mapa de Desempenho Anual")
         
         def style_boletim(v):
-            if v == "✅ APROVADO": return 'background-color: #006400; color: white;'
-            if v == "🚨 RISCO CRÍTICO": return 'background-color: #8B0000; color: white; font-weight: bold;'
-            if v == "⚠️ EM RECUPERAÇÃO": return 'background-color: #FFD700; color: black;'
+            if v == "✅ APROVADO": return 'background-color: rgba(46, 204, 113, 0.2); color: #2ECC71; font-weight: bold;'
+            if v == "🚨 RISCO CRÍTICO": return 'background-color: rgba(231, 76, 60, 0.2); color: #E74C3C; font-weight: bold;'
+            if v == "⚠️ EM RECUPERAÇÃO": return 'background-color: rgba(241, 196, 15, 0.2); color: #F1C40F;'
             return ''
 
         st.dataframe(
@@ -1577,48 +1599,44 @@ elif menu == "📈 Boletim Anual & Conselho":
             use_container_width=True, hide_index=True
         )
 
-        # --- 7. FLASHCARD DE CONSELHO (INDIVIDUAL) ---
+        # --- 8. ATA DE CONSELHO INTELIGENTE (SÍNTESE COLETIVA) ---
         st.markdown("---")
-        st.subheader("👤 Perícia Individual para Conselho")
-        aluno_c = st.selectbox("Selecione o aluno para ver o diagnóstico 360°:", pivot['NOME_ALUNO'].tolist())
+        st.subheader("📝 Ata de Conselho e Parecer Coletivo")
+        st.info("O Maestro Sosa analisará os dados acima para redigir uma ata técnica baseada em evidências.")
         
-        if aluno_c:
-            dados_a = pivot[pivot['NOME_ALUNO'] == aluno_c].iloc[0]
-            id_a = db.limpar_id(dados_a['ID_ALUNO'])
-            
-            col_f1, col_f2 = st.columns([1, 2])
-            with col_f1:
-                st.markdown(f"**Status:** {dados_a['SITUAÇÃO']}")
-                st.metric("Esforço (Vistos)", f"{dados_a['ESFORÇO %']:.0f}%")
-                st.metric("Pontos Restantes", f"{dados_a['PRECISA DE']:.1f}")
-            
-            with col_f2:
-                # Busca lacunas no Scanner
-                if not df_diagnosticos.empty:
-                    erros = df_diagnosticos[(df_diagnosticos['ID_ALUNO'].apply(db.limpar_id) == id_a) & (df_diagnosticos['NOTA_CALCULADA'] < 0.5)]
-                    if not erros.empty:
-                        st.error(f"🚨 **Lacunas Cognitivas:** Errou {len(erros)} questões críticas nas últimas avaliações.")
-                    else:
-                        st.success("✅ **Domínio Técnico:** Bom desempenho nas questões do Scanner.")
+        if st.button("🚀 GERAR ATA SINTÉTICA DA TURMA", use_container_width=True, type="primary"):
+            with st.spinner("Compilando indicadores e redigindo parecer..."):
+                # Prepara o resumo de dados para a IA
+                resumo_turma = {
+                    "Turma": turma_sel,
+                    "Média Geral": f"{media_turma:.1f}",
+                    "Taxa Aprovação": f"{taxa_aprov:.0f}%",
+                    "Esforço Médio": f"{esforco_geral:.0f}%",
+                    "Qtd Risco Crítico": risco_count,
+                    "Alunos em Risco": pivot[pivot['SITUAÇÃO'] == "🚨 RISCO CRÍTICO"]['NOME_ALUNO'].tolist()
+                }
                 
-                if st.button(f"🧠 Gerar Argumento de Conselho para {aluno_c}"):
-                    with st.spinner("Maestro analisando biografia escolar..."):
-                        prompt = (
-                            f"Gere um argumento técnico para conselho de classe.\n"
-                            f"ALUNO: {aluno_c}. NOTAS: I({dados_a['I Trimestre']}), II({dados_a['II Trimestre']}).\n"
-                            f"ESFORÇO (VISTOS): {dados_a['ESFORÇO %']:.0f}%.\n"
-                            f"TENDÊNCIA: {dados_a['EVOLUÇÃO']}.\n"
-                            f"SITUAÇÃO: {dados_a['SITUAÇÃO']}.\n"
-                            f"Use a Pedagogia Histórico-Crítica. Foque se o problema é falta de base ou falta de engajamento."
-                        )
-                        st.info(ai.gerar_ia("PLANE_PEDAGOGICO", prompt))
-
-        # --- 8. ATA AUTOMÁTICA ---
-        if st.button("📝 GERAR ATA SINTÉTICA DA TURMA", use_container_width=True):
-            with st.spinner("Compilando dados da turma..."):
-                resumo = pivot[['NOME_ALUNO', 'TOTAL', 'ESFORÇO %', 'SITUAÇÃO']].to_string()
-                prompt_ata = f"Escreva uma ata de conselho de classe para a turma {turma_sel}. Resumo dos dados:\n{resumo}\nSeja formal e sugira ações de recomposição."
-                st.text_area("Copia e cole na Ata Oficial:", ai.gerar_ia("PLANE_PEDAGOGICO", prompt_ata), height=300)
+                prompt_ata = (
+                    f"VOCÊ É O COORDENADOR PEDAGÓGICO SOSA.\n"
+                    f"Sua missão é redigir uma ATA DE CONSELHO DE CLASSE para a turma {turma_sel}.\n\n"
+                    f"DADOS COLETADOS:\n"
+                    f"- Média da Turma: {resumo_turma['Média Geral']}\n"
+                    f"- Engajamento (Vistos): {resumo_turma['Esforço Médio']}\n"
+                    f"- Alunos em Risco Crítico: {resumo_turma['Qtd Risco Crítico']}\n"
+                    f"- Lista de Risco: {resumo_turma['Alunos em Risco']}\n\n"
+                    f"ESTRUTURA DA ATA:\n"
+                    f"1. ANÁLISE GLOBAL: Comente sobre o rendimento da turma e a relação entre esforço (vistos) e notas.\n"
+                    f"2. ALERTAS: Cite os alunos em risco crítico e sugira intervenções (Recomposição).\n"
+                    f"3. PARECER PHC: Use a Pedagogia Histórico-Crítica para justificar a necessidade de resgate de conteúdos base.\n"
+                    f"Linguagem formal, técnica e sem Markdown."
+                )
+                
+                parecer_ia = ai.gerar_ia("PLANE_PEDAGOGICO", prompt_ata)
+                st.text_area("Texto da Ata (Pronto para copiar):", parecer_ia, height=400)
+                
+                if st.button("💾 ARQUIVAR ATA NO BANCO"):
+                    db.salvar_no_banco("DB_RELATORIOS", [datetime.now().strftime("%d/%m/%Y"), "TURMA", turma_sel, "ATA_CONSELHO", parecer_ia])
+                    st.success("Ata arquivada com sucesso!")
 
 # ==============================================================================
 # MÓDULO: GESTÃO DA TURMA (V32.0) - COCKPIT DE INTELIGÊNCIA ESTRATÉGICA
