@@ -1355,13 +1355,14 @@ elif menu == "📝 Diário de Bordo Rápido":
                 time.sleep(1); st.rerun()
 
 # ==============================================================================
-# MÓDULO: PAINEL DE NOTAS V32.1 - CÁLCULO AUTOMÁTICO E TRANSBORDAMENTO
+# MÓDULO: PAINEL DE NOTAS V32.2 - CÁLCULO AUTOMÁTICO E RECUPERAÇÃO PARALELA
 # ==============================================================================
 elif menu == "📊 Painel de Notas & Vistos":
     st.title("📊 Torre de Comando: Gestão de Notas e Performance")
     st.markdown("---")
 
-    if "v_notas" not in st.session_state: st.session_state.v_notas = 1
+    if "v_notas" not in st.session_state: 
+        st.session_state.v_notas = int(time.time())
     v = st.session_state.v_notas
 
     if df_alunos.empty:
@@ -1379,13 +1380,12 @@ elif menu == "📊 Painel de Notas & Vistos":
             p_prova = c_f5.number_input("Peso Prova:", 0.0, 10.0, 4.0, step=0.5, key=f"p_p_{v}")
             
             if (p_visto + p_teste + p_prova) != 10.0:
-                st.warning(f"⚠️ A soma dos pesos ({p_visto + p_teste + p_prova}) deve ser 10.0 para o sistema da prefeitura.")
+                st.warning(f"⚠️ A soma dos pesos ({p_visto + p_teste + p_prova}) deve ser 10.0 para o sistema oficial.")
 
         # 2. MOTOR DE CÁLCULO AUTOMÁTICO (DIÁRIO DE BORDO)
         vistos_auto_map = {}
         bonus_total_map = {}
         
-        # Datas oficiais de Itabuna (conforme utils.py)
         calendario = {
             "I Trimestre": (date(2026, 2, 9), date(2026, 5, 22)),
             "II Trimestre": (date(2026, 5, 25), date(2026, 9, 4)),
@@ -1395,9 +1395,7 @@ elif menu == "📊 Painel de Notas & Vistos":
 
         if not df_diario.empty:
             df_d_t = df_diario[df_diario['TURMA'] == turma_sel].copy()
-            # Converte datas para comparação real
             df_d_t['DATA_DT'] = pd.to_datetime(df_d_t['DATA'], format="%d/%m/%Y", errors='coerce').dt.date
-            # Filtra apenas o que aconteceu NESTE trimestre
             df_d_trim = df_d_t[(df_d_t['DATA_DT'] >= dt_ini) & (df_d_t['DATA_DT'] <= dt_fim)]
             
             for id_aluno in df_alunos[df_alunos['TURMA'] == turma_sel]['ID']:
@@ -1405,15 +1403,10 @@ elif menu == "📊 Painel de Notas & Vistos":
                 d_alu = df_d_trim[df_d_trim['ID_ALUNO'].apply(db.limpar_id) == id_l]
                 
                 if not d_alu.empty:
-                    # --- CORREÇÃO DO ERRO ATTRIBUTEERROR (USANDO .STR.UPPER) ---
                     vistos_validos = d_alu[d_alu['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"]
                     aulas_com_visto = len(vistos_validos)
                     total_aulas_periodo = len(d_alu)
-                    
-                    # Cálculo Proporcional: (Vistos / Total) * Peso do Trimestre
                     vistos_auto_map[id_l] = round((aulas_com_visto / total_aulas_periodo * p_visto), 2)
-                    
-                    # Soma de Bônus (Mérito)
                     bonus_total_map[id_l] = d_alu['BONUS'].apply(util.sosa_to_float).sum()
                 else:
                     vistos_auto_map[id_l], bonus_total_map[id_l] = 0.0, 0.0
@@ -1443,7 +1436,7 @@ elif menu == "📊 Painel de Notas & Vistos":
                 "REC. PARALELA": n_rec
             })
 
-        # 4. TABELA DE ENTRADA E AJUSTE
+        # 4. TABELA 1: CONSOLIDAÇÃO E ENTRADA
         st.subheader("📝 1. Consolidação de Dados")
         df_input = st.data_editor(
             pd.DataFrame(dados_editor),
@@ -1454,17 +1447,18 @@ elif menu == "📊 Painel de Notas & Vistos":
                 "BÔNUS (TOTAL)": st.column_config.NumberColumn("⭐ Bônus", format="%.1f", disabled=True),
                 "TESTE (LANÇAR)": st.column_config.NumberColumn("Nota Teste", min_value=0.0, max_value=p_teste, format="%.1f"),
                 "PROVA (LANÇAR)": st.column_config.NumberColumn("Nota Prova", min_value=0.0, max_value=p_prova, format="%.1f"),
-                "REC. PARALELA": st.column_config.NumberColumn("🔄 Rec.", min_value=0.0, max_value=10.0, format="%.1f"),
+                "REC. PARALELA": st.column_config.NumberColumn("🔄 Rec. Paralela", min_value=0.0, max_value=10.0, format="%.1f"),
             },
             hide_index=True, use_container_width=True, key=f"editor_notas_{v}"
         )
 
-        # 5. ALGORITMO DE TRANSBORDAMENTO (COMPATIBILIDADE PREFEITURA)
+        # 5. ALGORITMO DE TRANSBORDAMENTO E SUBSTITUIÇÃO POR RECUPERAÇÃO
         def aplicar_transbordamento(row):
             bonus_restante = row['BÔNUS (TOTAL)']
             v_base = row['VISTOS (AUTO)']
             t_base = row['TESTE (LANÇAR)']
             p_base = row['PROVA (LANÇAR)']
+            rec_paralela = row['REC. PARALELA']
             
             # Passo 1: Completar Vistos
             v_final = min(p_visto, v_base + bonus_restante)
@@ -1477,28 +1471,37 @@ elif menu == "📊 Painel de Notas & Vistos":
             # Passo 3: Completar Prova
             p_final = min(p_prova, p_base + max(0, bonus_restante))
             
+            # Média Final: Soma das notas ou a Recuperação (o que for maior)
             soma_notas = v_final + t_final + p_final
-            media_final = min(10.0, max(soma_notas, row['REC. PARALELA']))
+            media_final = min(10.0, max(soma_notas, rec_paralela))
             
-            return pd.Series([v_final, t_final, p_final, media_final])
+            return pd.Series([v_final, t_final, p_final, rec_paralela, media_final])
 
-        df_input[['V_PREF', 'T_PREF', 'P_PREF', 'MEDIA_FINAL']] = df_input.apply(aplicar_transbordamento, axis=1)
+        df_input[['V_PREF', 'T_PREF', 'P_PREF', 'REC_PREF', 'MEDIA_FINAL']] = df_input.apply(aplicar_transbordamento, axis=1)
 
-        # 6. GABARITO DE LANÇAMENTO (SISTEMA PREFEITURA)
+        # 6. TABELA 2: GABARITO DE LANÇAMENTO (SISTEMA PREFEITURA)
         st.markdown("---")
         st.subheader("🏛️ 2. Gabarito de Lançamento (Sistema Prefeitura)")
+        st.info("As notas abaixo já consideram o bônus e a substituição pela Recuperação Paralela.")
         
         def style_situacao(v):
             color = '#2ECC71' if v >= 6.0 else '#FF4B4B'
             return f'color: {color}; font-weight: bold'
 
         st.dataframe(
-            df_input[['ESTUDANTE', 'V_PREF', 'T_PREF', 'P_PREF', 'MEDIA_FINAL']].style.applymap(
+            df_input[['ESTUDANTE', 'V_PREF', 'T_PREF', 'P_PREF', 'REC_PREF', 'MEDIA_FINAL']].style.applymap(
                 style_situacao, subset=['MEDIA_FINAL']
             ).format({
-                "V_PREF": "{:.1f}", "T_PREF": "{:.1f}", "P_PREF": "{:.1f}", "MEDIA_FINAL": "{:.2f}"
+                "V_PREF": "{:.1f}", "T_PREF": "{:.1f}", "P_PREF": "{:.1f}", "REC_PREF": "{:.1f}", "MEDIA_FINAL": "{:.2f}"
             }),
-            use_container_width=True, hide_index=True
+            use_container_width=True, hide_index=True,
+            column_config={
+                "V_PREF": "Atividades",
+                "T_PREF": "Teste",
+                "P_PREF": "Prova",
+                "REC_PREF": "🔄 Rec. Paralela",
+                "MEDIA_FINAL": "Média Final"
+            }
         )
 
         # 7. SALVAMENTO
@@ -1510,7 +1513,7 @@ elif menu == "📊 Painel de Notas & Vistos":
                     linhas_save.append([
                         r['ID'], r['ESTUDANTE'].replace("♿ ", ""), turma_sel, trimestre_sel,
                         util.sosa_to_str(r["V_PREF"]), util.sosa_to_str(r["T_PREF"]),
-                        util.sosa_to_str(r["P_PREF"]), util.sosa_to_str(r["REC. PARALELA"]),
+                        util.sosa_to_str(r["P_PREF"]), util.sosa_to_str(r["REC_PREF"]),
                         util.sosa_to_str(r['MEDIA_FINAL'])
                     ])
                 if db.salvar_lote("DB_NOTAS", linhas_save):
