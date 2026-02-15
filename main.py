@@ -2406,7 +2406,7 @@ elif menu == "📸 Scanner de Gabaritos":
         "📊 4. Raio-X Pedagógico", "📂 5. Acervo de Evidências", "📈 6. Dashboard"
     ])
 
-# --- ABA 1: PERÍCIA DE GABARITOS (VERSÃO V45 - MODO TURBO 100+ PROVAS) ---
+# --- ABA 1: PERÍCIA DE GABARITOS (VERSÃO V45.1 - PROTOCOLO DE RASURA) ---
     with tab_pericia:
         c1, c2, c3 = st.columns([1, 1, 1.5])
         t_sel = c1.selectbox("👥 Turma:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"t_p_{v}")
@@ -2440,10 +2440,9 @@ elif menu == "📸 Scanner de Gabaritos":
 
             if pendentes.empty:
                 st.success("🏆 SOBERANIA ALCANÇADA: Todos os alunos desta turma foram corrigidos!")
-                if st.button("🔄 REVISAR HUB DE AUDITORIA"):
-                    st.rerun()
+                if st.button("🔄 REVISAR HUB DE AUDITORIA"): st.rerun()
             else:
-                # --- MODO TURBO: SELECIONA O PRIMEIRO DA FILA AUTOMATICAMENTE ---
+                # SELECIONA O PRIMEIRO DA FILA
                 al_info = pendentes.iloc[0]
                 al_sel = al_info['NOME_ALUNO']
                 id_aluno_atual = al_info['ID']
@@ -2451,13 +2450,10 @@ elif menu == "📸 Scanner de Gabaritos":
                 
                 st.markdown(f"### 📸 Corrigindo agora: **{al_sel}**")
                 c_p1, c_p2 = st.columns([2, 1])
-                with c_p1:
-                    st.caption(f"Fila de Espera: {len(pendentes)} alunos restantes.")
-                with c_p2:
-                    perfil_txt = "♿ PEI" if is_pei_aluno else "📝 REGULAR"
-                    st.info(perfil_txt)
+                with c_p1: st.caption(f"Fila de Espera: {len(pendentes)} alunos restantes.")
+                with c_p2: st.info("♿ PEI" if is_pei_aluno else "📝 REGULAR")
 
-                # 3. CAPTURA E ANÁLISE
+                # 3. CAPTURA E ANÁLISE VISION AI
                 img = st.camera_input(f"Posicione o gabarito de {al_sel}", key=f"cam_{id_aluno_atual}")
 
                 if img and "current_scan_res" not in st.session_state:
@@ -2465,13 +2461,12 @@ elif menu == "📸 Scanner de Gabaritos":
                         res_json = ai.analisar_gabarito_vision(img.getvalue())
                         gab_alvo = gab_pei if is_pei_aluno else gab_reg
                         qtd_q = len(gab_alvo)
-                        
-                        # Normaliza a resposta da IA para o tamanho do gabarito
+                        # Normaliza a resposta da IA (A-E, X ou ?)
                         st.session_state.current_scan_res = [res_json.get(f"{i+1:02d}", res_json.get(str(i+1), "?")) for i in range(qtd_q)]
                         st.session_state.current_scan_img = img.getvalue()
                         st.rerun()
 
-                # 4. MESA DE PERÍCIA IMEDIATA (VISÃO RÁPIDA)
+                # 4. MESA DE PERÍCIA IMEDIATA
                 if "current_scan_res" in st.session_state:
                     gab_alvo = gab_pei if is_pei_aluno else gab_reg
                     res_lidas = st.session_state.current_scan_res
@@ -2484,13 +2479,13 @@ elif menu == "📸 Scanner de Gabaritos":
                         dados_pericia = []
                         for i, lido in enumerate(res_lidas):
                             certo = gab_alvo[i]
-                            if lido == certo: status = "✅"
+                            if lido == certo: status = "✅ ACERTO"
                             elif lido == "X": status = "🚫 DUPLA"
                             elif lido == "?": status = "⚪ VAZIA"
                             else: status = f"❌ (Era {certo})"
                             dados_pericia.append({"Q": f"{i+1:02d}", "Lido": lido, "Status": status})
                         
-                        # Editor ultra-rápido para correções manuais
+                        # EDITOR COM OPÇÕES COMPLETAS: A, B, C, D, E, X, ?
                         df_mesa = st.data_editor(pd.DataFrame(dados_pericia), hide_index=True, use_container_width=True,
                             column_config={"Lido": st.column_config.SelectboxColumn("Ajustar", options=["A", "B", "C", "D", "E", "X", "?"], required=True)},
                             key=f"ed_turbo_{id_aluno_atual}")
@@ -2503,21 +2498,16 @@ elif menu == "📸 Scanner de Gabaritos":
                         
                         st.metric("Nota Final", f"{nota_f:.2f}", delta=f"{acertos}/{len(gab_alvo)} acertos")
                         
-                        # BOTÃO DE SALVAMENTO E AUTO-AVANÇO
                         if st.button("💾 SALVAR E PRÓXIMO ALUNO ➔", type="primary", use_container_width=True):
                             with st.spinner("Arquivando evidência..."):
                                 link_pasta = db.subir_e_converter_para_google_docs(st.session_state.current_scan_img, al_sel.replace(" ","_"), trimestre=tr_sel, categoria=t_sel, semana=at_sel, modo="SCANNER")
                                 db.salvar_no_banco("DB_GABARITOS_ALUNOS", [
-                                    datetime.now().strftime("%d/%m/%Y"), 
-                                    id_aluno_atual, al_sel, t_sel, at_sel, 
+                                    datetime.now().strftime("%d/%m/%Y"), id_aluno_atual, al_sel, t_sel, at_sel, 
                                     ";".join(novas_res), util.sosa_to_str(nota_f), link_pasta
                                 ])
-                                # LIMPA TUDO PARA O PRÓXIMO ALUNO
                                 del st.session_state.current_scan_res
                                 del st.session_state.current_scan_img
-                                st.success(f"✅ {al_sel} salvo!")
-                                time.sleep(0.5)
-                                st.rerun()
+                                st.success(f"✅ {al_sel} salvo!"); time.sleep(0.5); st.rerun()
 
                     if st.button("🗑️ DESCARTAR E REPETIR FOTO"):
                         del st.session_state.current_scan_res
