@@ -2143,12 +2143,12 @@ elif menu == "📝 Central de Avaliações":
     if "v_av" not in st.session_state: st.session_state.v_av = 1
     v = st.session_state.v_av
 
-    tab_arquiteto, tab_refino, tab_vis, tab_recomposicao, tab_finalizar, tab_acervo_av = st.tabs([
+    tab_arquiteto_av, tab_refino, tab_vis, tab_recomposicao, tab_finalizar, tab_acervo_av = st.tabs([
         "🚀 Arquiteto de Exames", "🤖 Refinador Maestro", "👁️ Visualização 360°", "🔥 Recomposição/Revisão", "💾 Finalizar Ativo", "🗂️ Acervo de Safra"
     ])
 
-# --- ABA 1: ARQUITETO (VERSÃO V65.2 - COM DIAGNÓSTICO ATIVO) ---
-    with tab_arquiteto:
+# --- ABA 1: ARQUITETO (VERSÃO V65.5 - ESPECIALIZAÇÃO EM RECUPERAÇÃO) ---
+    with tab_arquiteto_av:
         if is_refinando_av:
             st.warning(f"🛠️ **MODO REFINO:** Editando {st.session_state.refino_av_ativo.get('tipo')}")
             if st.button("❌ CANCELAR E VOLTAR AO NOVO"): reset_avaliacoes()
@@ -2156,8 +2156,17 @@ elif menu == "📝 Central de Avaliações":
         with st.container(border=True):
             st.markdown("### ⚙️ 1. Configuração do Exame")
             c1, c2, c3, c4 = st.columns([1.5, 1, 1, 1])
-            tipo_av = c1.selectbox("Tipo:", ["Teste", "Prova", "Recuperação", "2ª Chamada"], key=f"av_t_{v}")
-            v_total = c2.number_input("Valor Total:", 0.0, 10.0, 3.0 if "Teste" in tipo_av else 4.0, step=0.5, key=f"av_v_{v}")
+            
+            # --- ATUALIZAÇÃO DE TIPOS (Soberania Itabuna) ---
+            tipo_av = c1.selectbox("Tipo:", 
+                ["Teste", "Prova", "Recuperação Paralela", "Recuperação Final", "2ª Chamada"], 
+                key=f"av_t_{v}")
+            
+            # Lógica de Valor Padrão
+            val_sugerido = 3.0 if "Teste" in tipo_av else 4.0
+            if "Recuperação" in tipo_av: val_sugerido = 10.0
+            
+            v_total = c2.number_input("Valor Total:", 0.0, 10.0, val_sugerido, step=0.5, key=f"av_v_{v}")
             ano_av = c3.selectbox("Série:", [6, 7, 8, 9], index=0, key=f"av_a_{v}")
             qtd_q = c4.number_input("Nº Total de Questões:", 2, 20, 10, key=f"av_q_{v}")
 
@@ -2172,81 +2181,63 @@ elif menu == "📝 Central de Avaliações":
         with st.container(border=True):
             st.markdown("### 🎯 3. Matriz de Mérito e Filtro Curricular")
             c_trim1, c_trim2 = st.columns([1, 2])
-            trim_filtro = c_trim1.selectbox("Filtrar por Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"av_trim_filter_{v}")
             
-            df_planos_trim = df_planos[(df_planos["ANO"].astype(str).str.contains(str(ano_av))) & (df_planos["TURMA"].astype(str).str.contains(trim_filtro))]
-            semanas_do_trimestre = df_planos_trim["SEMANA"].unique().tolist()
-            df_materiais_trim = df_aulas[(df_aulas["ANO"].astype(str).str.contains(str(ano_av))) & (df_aulas["SEMANA_REF"].isin(semanas_do_trimestre))]
+            # --- LÓGICA DE FILTRO PARA RECUPERAÇÃO FINAL ---
+            is_final = tipo_av == "Recuperação Final"
+            
+            if is_final:
+                trim_filtro = c_trim1.selectbox("Abrangência:", ["Ano Inteiro"], disabled=True, key=f"av_trim_filter_{v}")
+                st.info("💡 Modo Final: O sistema buscará materiais de todos os trimestres.")
+                # Busca materiais do ano todo
+                df_materiais_trim = df_aulas[df_aulas["ANO"].astype(str).str.contains(str(ano_av))]
+            else:
+                trim_filtro = c_trim1.selectbox("Filtrar por Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"av_trim_filter_{v}")
+                df_planos_trim = df_planos[(df_planos["ANO"].astype(str).str.contains(str(ano_av))) & (df_planos["TURMA"].astype(str).str.contains(trim_filtro))]
+                semanas_do_trimestre = df_planos_trim["SEMANA"].unique().tolist()
+                df_materiais_trim = df_aulas[(df_aulas["ANO"].astype(str).str.contains(str(ano_av))) & (df_aulas["SEMANA_REF"].isin(semanas_do_trimestre))]
             
             mats_selecionados = c_trim2.multiselect(f"Ativos de Safra Detectados ({len(df_materiais_trim)}):", options=df_materiais_trim["TIPO_MATERIAL"].tolist(), key=f"av_ref_{v}")
 
-        # ==============================================================================
-        # 🔍 NOVO BLOCO: DIAGNÓSTICO DE SOBERANIA (INTELIGÊNCIA EM TEMPO REAL)
-        # ==============================================================================
+        # --- DIAGNÓSTICO DE CONFIGURAÇÃO ---
         with st.container(border=True):
             st.markdown("#### 🔍 Diagnóstico de Configuração")
             col_diag1, col_diag2 = st.columns(2)
-            
             with col_diag1:
-                # Validação de Soma de Questões
-                if soma_q == qtd_q:
-                    st.success(f"✅ Taxonomia: {soma_q}/{qtd_q} questões distribuídas.")
-                elif soma_q < qtd_q:
-                    st.warning(f"⚠️ Taxonomia: Faltam {qtd_q - soma_q} questões para o total.")
-                else:
-                    st.error(f"🚨 Taxonomia: Você excedeu o total em {soma_q - qtd_q} questões.")
+                if soma_q == qtd_q: st.success(f"✅ Taxonomia: {soma_q}/{qtd_q} questões.")
+                else: st.error(f"🚨 Erro: Soma ({soma_q}) diferente do total ({qtd_q}).")
                 
-                # Validação de Peso Municipal (Itabuna)
-                if tipo_av == "Teste" and v_total != 3.0:
-                    st.info("💡 Nota: O padrão para Testes em Itabuna costuma ser 3,0.")
-                elif tipo_av == "Prova" and v_total != 4.0:
-                    st.info("💡 Nota: O padrão para Provas em Itabuna costuma ser 4,0.")
-
+                if is_final: st.warning("⚠️ Atenção: Exame de abrangência anual.")
             with col_diag2:
-                # Cálculo de Peso por Questão
                 peso_q_live = v_total / qtd_q if qtd_q > 0 else 0
                 st.metric("Peso por Questão", f"{peso_q_live:.2f} pts")
-                
-                # Validação de Materiais
-                if not mats_selecionados:
-                    st.error("❌ Nenhum material de safra selecionado.")
-                else:
-                    st.success(f"📚 Cobertura: {len(mats_selecionados)} aula(s) vinculada(s).")
 
         # --- BOTÃO DE COMPILAÇÃO ---
         if st.button("💎 COMPILAR EXAME COM GRADE DE PERÍCIA", use_container_width=True, type="primary"):
             if soma_q != qtd_q: 
-                st.error(f"Erro: A soma das dificuldades ({soma_q}) deve ser igual ao total de questões ({qtd_q}).")
+                st.error("Ajuste a distribuição de dificuldade.")
             elif not mats_selecionados: 
                 st.error("Selecione os Ativos de Safra.")
             else:
-                with st.spinner(f"Arquitetando {qtd_q} questões com pesos iguais e gabarito blindado..."):
-                    peso_por_questao = v_total / qtd_q
-                    peso_str = util.sosa_to_str(peso_por_questao)
-
+                with st.spinner(f"Arquitetando {tipo_av} com Rigor V30..."):
+                    peso_str = util.sosa_to_str(v_total / qtd_q)
                     contexto_aulas = ""
                     for m_nome in mats_selecionados:
                         m_row = df_materiais_trim[df_materiais_trim["TIPO_MATERIAL"] == m_nome].iloc[0]
                         contexto_aulas += f"MATERIAL_ID: {m_nome}\nCONTEÚDO: {m_row['CONTEUDO']}\n"
 
                     prompt = (
-                        f"ORDEM DE PRODUÇÃO V65 - RIGOR TOTAL E ANTI-CHUTE\n"
+                        f"ORDEM DE PRODUÇÃO V65 - RIGOR TOTAL\n"
                         f"TIPO: {tipo_av} | SÉRIE: {ano_av}º Ano | VALOR TOTAL: {v_total}\n"
-                        f"QUANTIDADE OBRIGATÓRIA: {qtd_q} questões.\n"
-                        f"VALOR POR QUESTÃO: {peso_str} (Todas com o mesmo peso).\n"
+                        f"QUANTIDADE: {qtd_q} questões | VALOR POR QUESTÃO: {peso_str}.\n"
                         f"DISTRIBUIÇÃO: {q_facil} Fáceis, {q_medio} Médias, {q_dificil} Difíceis.\n\n"
-                        f"🚨 DIRETRIZES DE ELITE:\n"
-                        f"1. Inicie com [VALOR: {v_total}].\n"
-                        f"2. Use o formato: **QUESTÃO XX ({peso_str} ponto) -** para todas.\n"
-                        f"3. Aplique a Engenharia Anti-Chute no gabarito (distribuição equilibrada).\n"
-                        f"4. Inclua [ PROMPT IMAGEM: ... ] para questões que necessitem de suporte visual.\n"
-                        f"5. Organize a [GRADE_DE_CORRECAO] de forma ultra-detalhada (Habilidade + Justificativa + Perícia de Distratores).\n\n"
+                        f"🚨 DIRETRIZ DE RECUPERAÇÃO:\n"
+                        f"{'Foque em uma revisão abrangente de todos os conteúdos do ano.' if is_final else 'Foque nas lacunas específicas do trimestre atual.'}\n\n"
                         f"CONTEÚDO BASE:\n{contexto_aulas}"
                     )
                     
                     st.session_state.temp_prova = ai.gerar_ia("ARQUITETO_EXAMES_V30_ELITE", prompt, usar_busca=True)
                     st.session_state.av_valor_total = v_total
-                    st.session_state.av_nome_fixo = f"{tipo_av.upper()}_{ano_av}ANO_{trim_filtro.replace(' ', '')}"
+                    st.session_state.av_nome_fixo = f"{tipo_av.replace(' ', '_').upper()}_{ano_av}ANO_{trim_filtro.replace(' ', '')}"
                     st.rerun()
 
     # --- ABA 2: REFINADOR ---
