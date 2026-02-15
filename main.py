@@ -1225,7 +1225,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                 st.plotly_chart(px.bar(progresso_trim, x="TRIMESTRE", y="%", text="%", title=f"Evolução da Cobertura Real - {ano_m}º Ano", color="%", color_continuous_scale="RdYlGn", range_y=[0, 110]), use_container_width=True)
             
 # ==============================================================================
-# MÓDULO: DIÁRIO DE BORDO (V29.0) - INTERFACE MOBILE FAST & VETOR DISCIPLINAR
+# MÓDULO: DIÁRIO DE BORDO (V29.5 - INTERFACE COM MEMÓRIA E PERSISTÊNCIA)
 # ==============================================================================
 elif menu == "📝 Diário de Bordo Rápido":
     st.title("📝 Diário de Bordo: Prontidão e Disciplina")
@@ -1233,7 +1233,7 @@ elif menu == "📝 Diário de Bordo Rápido":
     if "v_diario" not in st.session_state: st.session_state.v_diario = 1
     v = st.session_state.v_diario
 
-    # 1. FILTROS RÁPIDOS (Otimizados para toque)
+    # 1. FILTROS RÁPIDOS
     with st.container(border=True):
         c1, c2 = st.columns(2)
         turma_sel = c1.selectbox("👥 Turma:", sorted(df_alunos['TURMA'].unique()), key=f"db_t_{v}")
@@ -1250,7 +1250,11 @@ elif menu == "📝 Diário de Bordo Rápido":
         st.warning("⚠️ Nenhuma aula aberta no Cockpit. Registre primeiro na 'Gestão da Turma'.")
         material_hoje = "Instrução Avulsa"
 
-    # 3. AÇÕES EM LOTE (Agilidade Mobile)
+    # 3. BUSCA DE REGISTROS EXISTENTES (MEMÓRIA DO SISTEMA)
+    # Filtra o que já existe no banco para este dia e turma
+    df_existente = df_diario[(df_diario['DATA'] == data_str) & (df_diario['TURMA'] == turma_sel)]
+
+    # 4. AÇÕES EM LOTE
     st.markdown("---")
     col_lote1, col_lote2 = st.columns(2)
     if col_lote1.button("✅ VISTO EM TODOS", use_container_width=True):
@@ -1260,26 +1264,44 @@ elif menu == "📝 Diário de Bordo Rápido":
         st.session_state[f"visto_lote_{turma_sel}"] = False
         st.rerun()
 
-    # 4. MESA DE LANÇAMENTO DISCIPLINAR E PEDAGÓGICO
+    # 5. MESA DE LANÇAMENTO COM CARREGAMENTO DE DADOS
     alunos_turma = df_alunos[df_alunos['TURMA'] == turma_sel].sort_values(by="NOME_ALUNO")
     
     dados_diario = []
     for _, alu in alunos_turma.iterrows():
         id_a = db.limpar_id(alu['ID'])
         is_pei = str(alu['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"]
-        visto_padrao = st.session_state.get(f"visto_lote_{turma_sel}", True)
+        
+        # --- LÓGICA DE LOOKUP (BUSCA NO BANCO) ---
+        reg_banco = df_existente[df_existente['ID_ALUNO'].apply(db.limpar_id) == id_a]
+        
+        if not reg_banco.empty:
+            # Se já existe no banco, carrega os valores reais
+            visto_val = str(reg_banco.iloc[0]['VISTO_ATIVIDADE']).upper() == "TRUE"
+            falta_val = str(reg_banco.iloc[0]['TAGS']).upper() == "AUSÊNCIA"
+            bonus_val = util.sosa_to_float(reg_banco.iloc[0]['BONUS'])
+            tag_val = reg_banco.iloc[0]['TAGS'] if not falta_val else ""
+            # Limpa o prefixo da observação para não duplicar [Aula] [Aula]
+            obs_limpa = str(reg_banco.iloc[0]['OBSERVACOES']).split("] ", 1)[-1] if "] " in str(reg_banco.iloc[0]['OBSERVACOES']) else str(reg_banco.iloc[0]['OBSERVACOES'])
+        else:
+            # Se não existe, usa o padrão ou o botão de lote
+            visto_val = st.session_state.get(f"visto_lote_{turma_sel}", False)
+            falta_val = False
+            bonus_val = 0.0
+            tag_val = ""
+            obs_limpa = ""
 
         dados_diario.append({
             "ID": id_a,
             "ESTUDANTE": f"♿ {alu['NOME_ALUNO']}" if is_pei else alu['NOME_ALUNO'],
-            "F": False, # Falta
-            "V": visto_padrao, # Visto
-            "⭐": 0.0, # Bônus
-            "VETOR DISCIPLINAR": "", # Tags Militares
-            "OBSERVAÇÃO (🎙️ DITE AQUI)": "" # Campo para Voz
+            "F": falta_val,
+            "V": visto_val,
+            "⭐": bonus_val,
+            "VETOR DISCIPLINAR": tag_val if tag_val != "PEI CONCLUÍDO" else "",
+            "OBSERVAÇÃO (🎙️ DITE AQUI)": obs_limpa
         })
 
-    # Editor Vertical (Otimizado para Celular)
+    # Editor Vertical
     df_editado = st.data_editor(
         pd.DataFrame(dados_diario),
         column_config={
@@ -1290,34 +1312,26 @@ elif menu == "📝 Diário de Bordo Rápido":
             "⭐": st.column_config.SelectboxColumn("⭐", options=[0.0, 0.1, 0.2, 0.3, 0.5, 1.0]),
             "VETOR DISCIPLINAR": st.column_config.SelectboxColumn(
                 "Vetor", 
-                options=[
-                    "", "Fardamento", "Postura", "Atraso", "Celular", 
-                    "Indisciplina", "Comunicação", "Elogio", "Destaque", "Dormiu"
-                ]
+                options=["", "Fardamento", "Postura", "Atraso", "Celular", "Indisciplina", "Comunicação", "Elogio", "Destaque", "Dormiu"]
             ),
             "OBSERVAÇÃO (🎙️ DITE AQUI)": st.column_config.TextColumn("Obs / Comunicação", width="large")
         },
         hide_index=True, use_container_width=True, key=f"editor_diario_{v}"
     )
 
-    st.caption("💡 **Dica de Agilidade:** No celular, clique na caixa de 'Obs', ative o microfone do seu teclado e relate a ocorrência por voz.")
-
-# 5. SALVAMENTO E SINCRONIA DE SOBERANIA (VERSÃO V29.1 - AUTO-TAG PEI)
+    # 6. SALVAMENTO E SINCRONIA (COM SOBREPOSIÇÃO)
     if st.button("💾 SALVAR REGISTROS E CONSOLIDAR", type="primary", use_container_width=True):
-        with st.status("Sincronizando Práxis e Evidências PEI...") as status:
+        with st.status("Sincronizando Práxis e Evidências...") as status:
+            # Limpa o que existia para evitar duplicidade ao salvar de novo
             db.limpar_diario_data_turma(data_str, turma_sel)
-            linhas_diario = []
             
+            linhas_diario = []
             for _, r in df_editado.iterrows():
-                # Identifica se o aluno é PEI pelo ícone no nome
                 aluno_eh_pei = "♿" in r['ESTUDANTE']
-                
-                # Lógica de Falta e Visto
                 tag_f = "AUSÊNCIA" if r['F'] else r['VETOR DISCIPLINAR']
                 visto_f = False if r['F'] else r['V']
                 
-                # --- INTELIGÊNCIA DE EVIDÊNCIA PEI ---
-                # Se for PEI, tiver visto e nenhuma tag disciplinar, marca como conclusão de atividade adaptada
+                # Auto-Tag PEI
                 if aluno_eh_pei and visto_f and not tag_f:
                     tag_f = "PEI CONCLUÍDO"
                 
@@ -1332,9 +1346,10 @@ elif menu == "📝 Diário de Bordo Rápido":
                 ])
             
             if db.salvar_lote("DB_DIARIO_BORDO", linhas_diario):
-                status.update(label="✅ Diário e Evidências PEI Sincronizados!", state="complete")
+                status.update(label="✅ Diário Sincronizado e Atualizado!", state="complete")
                 st.balloons()
                 if f"visto_lote_{turma_sel}" in st.session_state: del st.session_state[f"visto_lote_{turma_sel}"]
+                st.cache_data.clear() # Limpa cache para o lookup ler o novo dado
                 time.sleep(1); st.rerun()
 
 # ==============================================================================
