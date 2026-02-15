@@ -1634,6 +1634,7 @@ elif menu == "👥 Gestão da Turma":
         "📊 Cockpit da Turma", "🏗️ Arquitetura de Turmas", "➕ Povoar Alunos", "✏️ Edição & Transferência"
     ])
 
+# --- ABA 1: COCKPIT DA TURMA (VERSÃO V33.0 - RADAR DE ALERTAS INTEGRADO) ---
     with tab_cockpit:
         if df_turmas.empty:
             st.info("📭 Nenhuma turma cadastrada.")
@@ -1645,15 +1646,13 @@ elif menu == "👥 Gestão da Turma":
             alunos_t = df_alunos[df_alunos['TURMA'] == turma_foco].sort_values(by="NOME_ALUNO")
             ano_num = "".join(filter(str.isdigit, turma_foco)) 
 
-            # --- 1. DASHBOARD DE STATUS (KPIs) COM VACINA DE SINTAXE ---
+            # --- 1. DASHBOARD DE STATUS (KPIs) ---
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("Total Alunos", len(alunos_t))
             
-            # Correção PEI (str.upper)
             mask_pei = ~alunos_t['NECESSIDADES'].astype(str).str.upper().str.strip().isin(["NENHUMA", "PENDENTE", "", "NAN"])
             c2.metric("Estudantes PEI", len(alunos_t[mask_pei]))
             
-            # Cálculo de Engajamento (Correção str.upper)
             engaj_medio = 0
             if not df_diario.empty:
                 vistos_t = df_diario[df_diario['TURMA'] == turma_foco]
@@ -1662,6 +1661,49 @@ elif menu == "👥 Gestão da Turma":
                     engaj_medio = (len(vistos_validos) / len(vistos_t)) * 100
             c3.metric("Engajamento Médio", f"{engaj_medio:.0f}%")
             c4.metric("Série", f"{ano_num}º Ano")
+
+            # ==============================================================================
+            # 🚨 NOVO BLOCO: RADAR DE ALERTA PEDAGÓGICO (INTEGRAÇÃO COM SCANNER)
+            # ==============================================================================
+            st.markdown("---")
+            with st.container(border=True):
+                st.subheader("📡 Radar de Alerta Pedagógico (Baseado no Scanner)")
+                
+                if df_diagnosticos.empty:
+                    st.info("💡 Aguardando dados de gabaritos para gerar alertas de lacunas.")
+                else:
+                    # Filtra diagnósticos da turma atual
+                    diag_turma = df_diagnosticos[df_diagnosticos['TURMA'] == turma_foco]
+                    
+                    if diag_turma.empty:
+                        st.success("✅ Nenhuma lacuna crítica detectada para esta turma até o momento.")
+                    else:
+                        col_r1, col_r2 = st.columns([1.2, 1.8])
+                        
+                        with col_r1:
+                            # Média da última avaliação
+                            ultima_av_nome = diag_turma['ID_AVALIACAO'].iloc[-1]
+                            media_av = diag_turma[diag_turma['ID_AVALIACAO'] == ultima_av_nome]['NOTA_CALCULADA'].apply(util.sosa_to_float).mean()
+                            st.metric(f"Última Avaliação: {ultima_av_nome[:20]}...", f"{media_av:.2f}")
+                            
+                            if media_av < 6.0:
+                                st.error("🚨 DESEMPENHO EM ALERTA")
+                            else:
+                                st.success("🟢 DESEMPENHO DENTRO DA META")
+
+                        with col_r2:
+                            # Identifica alunos em risco (notas baixas recorrentes)
+                            alunos_risco = diag_turma[diag_turma['NOTA_CALCULADA'].apply(util.sosa_to_float) < 5.0]['NOME_ALUNO'].unique()
+                            if len(alunos_risco) > 0:
+                                st.warning(f"⚠️ **Atenção Prioritária:** {len(alunos_risco)} alunos com dificuldades críticas.")
+                                with st.expander("Ver lista de alunos em risco"):
+                                    for a in alunos_risco: st.caption(f"• {a}")
+                            
+                            # Sugestão de Ação
+                            if media_av < 6.0:
+                                st.markdown("💡 **Sugestão do Maestro:** Gere um material de **Recomposição** focado nos erros desta avaliação antes de avançar o conteúdo.")
+                            else:
+                                st.markdown("💡 **Sugestão do Maestro:** Prossiga com a **Safra Atual** planejada.")
 
             st.markdown("---")
             col_esq, col_dir = st.columns([1.8, 1.2])
@@ -1677,6 +1719,7 @@ elif menu == "👥 Gestão da Turma":
                     data_aula = c_r1.date_input("Data da Aula:", date.today(), key=f"dt_reg_{v}")
                     plano_sel = c_r2.selectbox("Vincular Plano Base:", ["Nenhum"] + planos_ano['SEMANA'].tolist(), key=f"plano_reg_{v}")
                     
+                    # Filtro inteligente de materiais (Prioriza Recomposição se a média for baixa)
                     mats_sel = st.multiselect("📦 Selecione o Material (Aula/Sonda/Projeto):", options=materiais_ano['TIPO_MATERIAL'].tolist(), key=f"mats_reg_{v}")
 
                     if st.button("💾 ABRIR AULA NO DIÁRIO", use_container_width=True, type="primary"):
@@ -1701,6 +1744,7 @@ elif menu == "👥 Gestão da Turma":
                 st.subheader("📂 Inventário e Alunos")
                 with st.container(border=True):
                     st.markdown(f"**📦 Ativos Disponíveis ({ano_num}º Ano)**")
+                    # Mostra os últimos 5 materiais criados para esta série
                     for m in materiais_ano['TIPO_MATERIAL'].tail(5):
                         st.caption(f"• {m}")
                 
@@ -2714,7 +2758,7 @@ elif menu == "📸 Scanner de Gabaritos":
                                 ])
                         st.success("✅ Indicadores externos integrados ao histórico dos alunos!")
 
-    # --- ABA 4: RAIO-X PEDAGÓGICO (V72.0 - VISÃO SEGREGADA POR PERFIL) ---
+    # --- ABA 4: RAIO-X PEDAGÓGICO (V72.1 - FIX UNDEFINED VARIABLE & ROBUSTEZ) ---
     with tab_raiox:
         st.subheader("📊 Raio-X Pedagógico: Diagnóstico Individual de Lacunas")
         st.markdown("---")
@@ -2756,7 +2800,7 @@ elif menu == "📸 Scanner de Gabaritos":
                 if respostas_brutas.empty:
                     st.warning("⚠️ Nenhuma resposta de aluno encontrada para esta avaliação.")
                 else:
-                    # Adiciona o perfil (Regular/PEI) às respostas para filtragem
+                    # Normalização de IDs para o merge
                     df_alunos_min = df_alunos[['ID', 'NECESSIDADES']].copy()
                     df_alunos_min['ID'] = df_alunos_min['ID'].apply(db.limpar_id)
                     respostas_brutas['ID_ALUNO_L'] = respostas_brutas['ID_ALUNO'].apply(db.limpar_id)
@@ -2775,16 +2819,18 @@ elif menu == "📸 Scanner de Gabaritos":
                     if df_filtrado.empty:
                         st.info(f"📭 Não há dados de {perfil_visao} para esta avaliação.")
                     else:
-                        # --- CÁLCULO DE ESTATÍSTICAS POR ITEM ---
+                        # --- CÁLCULO DE ESTATÍSTICAS POR ITEM (FIX UNDEFINED VARIABLE) ---
                         num_q_total = len(gab_ativo)
                         stats_list = []
-                        matriz_respostas = [r.split(';') for r in df_filtrado['RESPOSTAS_ALUNO']]
+                        
+                        # Vacina Anti-Erro: Garante que a coluna seja tratada como string e lida corretamente
+                        matriz_respostas = [str(r).split(';') for r in df_filtrado['RESPOSTAS_ALUNO']]
 
                         for i in range(1, num_q_total + 1):
                             correta = gab_ativo.get(i, "?")
                             votos = [res[i-1] if len(res) >= i else "?" for res in matriz_respostas]
                             acertos = votos.count(correta)
-                            perc = (acertos / len(votos)) * 100 if votos else 0
+                            perc = (acertos / len(votos)) * 100 if len(votos) > 0 else 0
                             erradas = [v for v in votos if v != correta and v in ["A", "B", "C", "D", "E"]]
                             distrator = max(set(erradas), key=erradas.count) if erradas else "Nenhum"
                             stats_list.append({"Questão": f"Q{i:02d}", "Acerto %": perc, "Gabarito": correta, "Distrator Crítico": distrator})
@@ -2808,7 +2854,6 @@ elif menu == "📸 Scanner de Gabaritos":
                                 st.write(f"**Gabarito:** :green[{info_q['Gabarito']}] | **Média:** {info_q['Acerto %']:.1f}%")
                                 if info_q['Distrator Crítico'] != "Nenhum": st.error(f"**Distrator Crítico:** {info_q['Distrator Crítico']}")
                                 
-                                # Busca a habilidade na grade de perícia
                                 try:
                                     padrao = rf"(?si)QUESTÃO\s*0?{idx_num}\b.*?(?=QUESTÃO\s*0?{idx_num+1}\b|$)"
                                     match = re.search(padrao, grade_pericia)
@@ -2831,14 +2876,13 @@ elif menu == "📸 Scanner de Gabaritos":
                             dados_indiv.append({"Estudante": alu['NOME_ALUNO'], "Perfil": "🔴 Ausente", "Nota": 0.0, "Lacunas Cognitivas": "N/A"})
                         else:
                             nota_alu = util.sosa_to_float(reg_aluno.iloc[0]['NOTA_CALCULADA'])
-                            resp_lista = reg_aluno.iloc[0]['RESPOSTAS_ALUNO'].split(';')
+                            resp_lista = str(reg_aluno.iloc[0]['RESPOSTAS_ALUNO']).split(';')
                             gab_alvo_alu = gab_pei_map if is_pei_alu else gab_reg_map
                             
                             erros_hab = []
                             for i, r in enumerate(resp_lista):
                                 q_n = i + 1
                                 if r != gab_alvo_alu.get(q_n):
-                                    # Tenta extrair a habilidade da grade para o erro
                                     match_h = re.search(rf"QUESTÃO\s*0?{q_n}\b.*?:(.*?)(?=\n|JUSTIFICATIVA|PERÍCIA|$)", grade_pericia, re.IGNORECASE)
                                     erros_hab.append(match_h.group(1).strip().replace("[","").replace("]","") if match_h else f"Q{q_n}")
                             
@@ -2854,7 +2898,7 @@ elif menu == "📸 Scanner de Gabaritos":
                         df_indiv.style.format({"Nota": "{:.1f}"}).applymap(lambda v: 'color: #FF4B4B; font-weight: bold' if isinstance(v, float) and v < 6.0 else '', subset=['Nota']),
                         use_container_width=True, hide_index=True,
                         column_config={"Lacunas Cognitivas": st.column_config.TextColumn("Lacunas Cognitivas (Habilidades a Reforçar)", width="large")}
-                )
+                    )
 
 # --- ABA 5: ACERVO DE EVIDÊNCIAS (V71.0 - CUSTÓDIA COM FILTROS INTELIGENTES) ---
     with tab_acervo_cir:
