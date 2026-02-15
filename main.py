@@ -1225,56 +1225,58 @@ if menu == "📅 Planejamento (Ponto ID)":
                 st.plotly_chart(px.bar(progresso_trim, x="TRIMESTRE", y="%", text="%", title=f"Evolução da Cobertura Real - {ano_m}º Ano", color="%", color_continuous_scale="RdYlGn", range_y=[0, 110]), use_container_width=True)
             
 # ==============================================================================
-# MÓDULO: DIÁRIO DE BORDO (V28.0) - INTERFACE MOBILE FAST
+# MÓDULO: DIÁRIO DE BORDO (V29.0) - INTERFACE MOBILE FAST & VETOR DISCIPLINAR
 # ==============================================================================
 elif menu == "📝 Diário de Bordo Rápido":
-    st.title("📝 Diário de Bordo: Execução Rápida")
+    st.title("📝 Diário de Bordo: Prontidão e Disciplina")
     
     if "v_diario" not in st.session_state: st.session_state.v_diario = 1
     v = st.session_state.v_diario
 
-    # 1. FILTROS RÁPIDOS
+    # 1. FILTROS RÁPIDOS (Otimizados para toque)
     with st.container(border=True):
         c1, c2 = st.columns(2)
         turma_sel = c1.selectbox("👥 Turma:", sorted(df_alunos['TURMA'].unique()), key=f"db_t_{v}")
         data_sel = c2.date_input("📅 Data:", date.today(), key=f"db_d_{v}")
         data_str = data_sel.strftime("%d/%m/%Y")
 
-    # 2. DETECÇÃO AUTOMÁTICA DO COCKPIT (O HANDSHAKE)
+    # 2. DETECÇÃO AUTOMÁTICA DO COCKPIT (HANDSHAKE)
     aula_ativa = df_registro_aulas[(df_registro_aulas['TURMA'] == turma_sel) & (df_registro_aulas['DATA'] == data_str)]
     
     if not aula_ativa.empty:
         material_hoje = aula_ativa.iloc[0]['CONTEUDO_MINISTRADO']
         st.info(f"🚀 **Aula Ativa:** {material_hoje}")
     else:
-        st.warning("⚠️ Nenhuma aula aberta no Cockpit para hoje. Registre primeiro na 'Gestão da Turma'.")
-        material_hoje = "Aula Avulsa"
+        st.warning("⚠️ Nenhuma aula aberta no Cockpit. Registre primeiro na 'Gestão da Turma'.")
+        material_hoje = "Instrução Avulsa"
 
-    # 3. MESA DE LANÇAMENTO MOBILE
+    # 3. AÇÕES EM LOTE (Agilidade Mobile)
     st.markdown("---")
-    alunos_turma = df_alunos[df_alunos['TURMA'] == turma_sel].sort_values(by="NOME_ALUNO")
-    
-    # Botão de Visto em Lote (Economia de Cliques)
-    if st.button("✅ DAR VISTO EM TODOS OS ALUNOS", use_container_width=True):
+    col_lote1, col_lote2 = st.columns(2)
+    if col_lote1.button("✅ VISTO EM TODOS", use_container_width=True):
         st.session_state[f"visto_lote_{turma_sel}"] = True
         st.rerun()
+    if col_lote2.button("🧹 LIMPAR TUDO", use_container_width=True):
+        st.session_state[f"visto_lote_{turma_sel}"] = False
+        st.rerun()
 
+    # 4. MESA DE LANÇAMENTO DISCIPLINAR E PEDAGÓGICO
+    alunos_turma = df_alunos[df_alunos['TURMA'] == turma_sel].sort_values(by="NOME_ALUNO")
+    
     dados_diario = []
     for _, alu in alunos_turma.iterrows():
         id_a = db.limpar_id(alu['ID'])
-        is_pei = str(alu['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", ""]
-        
-        # Valor padrão do visto (checa se o botão de lote foi clicado)
+        is_pei = str(alu['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"]
         visto_padrao = st.session_state.get(f"visto_lote_{turma_sel}", True)
 
         dados_diario.append({
             "ID": id_a,
             "ESTUDANTE": f"♿ {alu['NOME_ALUNO']}" if is_pei else alu['NOME_ALUNO'],
-            "FALTOU": False,
-            "VISTO": visto_padrao,
-            "⭐ BÔNUS": 0.0,
-            "TAG": "",
-            "OBS": ""
+            "F": False, # Falta
+            "V": visto_padrao, # Visto
+            "⭐": 0.0, # Bônus
+            "VETOR DISCIPLINAR": "", # Tags Militares
+            "OBSERVAÇÃO (🎙️ DITE AQUI)": "" # Campo para Voz
         })
 
     # Editor Vertical (Otimizado para Celular)
@@ -1283,33 +1285,47 @@ elif menu == "📝 Diário de Bordo Rápido":
         column_config={
             "ID": None,
             "ESTUDANTE": st.column_config.TextColumn("Estudante", width="medium", disabled=True),
-            "FALTOU": st.column_config.CheckboxColumn("F", help="Faltou"),
-            "VISTO": st.column_config.CheckboxColumn("V", help="Visto"),
-            "⭐ BÔNUS": st.column_config.SelectboxColumn("Bônus", options=[0.0, 0.1, 0.2, 0.3, 0.5, 1.0]),
-            "TAG": st.column_config.SelectboxColumn("Tag", options=["", "Dormiu", "Conversa", "Destaque", "Sem Material", "PEI Concluído"]),
-            "OBS": st.column_config.TextColumn("Obs")
+            "F": st.column_config.CheckboxColumn("F", help="Faltou"),
+            "V": st.column_config.CheckboxColumn("V", help="Visto"),
+            "⭐": st.column_config.SelectboxColumn("⭐", options=[0.0, 0.1, 0.2, 0.3, 0.5, 1.0]),
+            "VETOR DISCIPLINAR": st.column_config.SelectboxColumn(
+                "Vetor", 
+                options=[
+                    "", "Fardamento", "Postura", "Atraso", "Celular", 
+                    "Indisciplina", "Comunicação", "Elogio", "Destaque", "Dormiu"
+                ]
+            ),
+            "OBSERVAÇÃO (🎙️ DITE AQUI)": st.column_config.TextColumn("Obs / Comunicação", width="large")
         },
         hide_index=True, use_container_width=True, key=f"editor_diario_{v}"
     )
 
-    # 4. SALVAMENTO E SINCRONIA
+    st.caption("💡 **Dica de Agilidade:** No celular, clique na caixa de 'Obs', ative o microfone do seu teclado e relate a ocorrência por voz.")
+
+    # 5. SALVAMENTO E SINCRONIA DE SOBERANIA
     if st.button("💾 SALVAR REGISTROS E CONSOLIDAR", type="primary", use_container_width=True):
-        with st.status("Sincronizando Práxis...") as status:
+        with st.status("Sincronizando Práxis e Vetor Disciplinar...") as status:
             db.limpar_diario_data_turma(data_str, turma_sel)
             linhas_diario = []
             for _, r in df_editado.iterrows():
-                tag_f = "AUSÊNCIA" if r['FALTOU'] else r['TAG']
-                visto_f = False if r['FALTOU'] else r['VISTO']
+                # Lógica de Falta
+                tag_f = "AUSÊNCIA" if r['F'] else r['VETOR DISCIPLINAR']
+                visto_f = False if r['F'] else r['V']
                 
+                # Se houver "Comunicação", o sistema destaca na observação
+                obs_final = r['OBSERVAÇÃO (🎙️ DITE AQUI)']
+                prefixo_obs = f"[{material_hoje}]"
+                if r['VETOR DISCIPLINAR'] == "Comunicação":
+                    prefixo_obs = f"🚨 [COMUNICAÇÃO - {material_hoje}]"
+
                 linhas_diario.append([
                     data_str, r['ID'], r['ESTUDANTE'].replace("♿ ", ""), turma_sel,
-                    str(visto_f), tag_f, f"[{material_hoje}] {r['OBS']}", util.sosa_to_str(r['⭐ BÔNUS'])
+                    str(visto_f), tag_f, f"{prefixo_obs} {obs_final}", util.sosa_to_str(r['⭐'])
                 ])
             
             if db.salvar_lote("DB_DIARIO_BORDO", linhas_diario):
-                status.update(label="✅ Diário Sincronizado!", state="complete")
+                status.update(label="✅ Diário e Vetor Disciplinar Sincronizados!", state="complete")
                 st.balloons()
-                # Limpa o estado do visto em lote
                 if f"visto_lote_{turma_sel}" in st.session_state: del st.session_state[f"visto_lote_{turma_sel}"]
                 time.sleep(1); st.rerun()
 
