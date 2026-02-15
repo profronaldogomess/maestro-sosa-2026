@@ -2452,24 +2452,21 @@ elif menu == "📸 Scanner de Gabaritos":
     if "v_scan" not in st.session_state: st.session_state.v_scan = 1
     v = st.session_state.v_scan
 
-    # --- FUNÇÃO AUXILIAR: FILTRO HIERÁRQUICO BLINDADO V64.2 ---
+# --- FUNÇÃO AUXILIAR: FILTRO HIERÁRQUICO BLINDADO V64.5 (FIX RECUPERAÇÃO) ---
     def filtrar_ativos_cir_v64(turma, trimestre_nome, apenas_provas=True):
         """
-        Motor de busca inteligente que cruza Série, Trimestre e Tipo de Material.
+        Motor de busca inteligente que agora entende a abrangência da Recuperação Final.
         """
         if not turma or not trimestre_nome: return []
         try:
-            serie_num = str(turma)[0] # Pega o "6" de "6º Ano"
+            serie_num = str(turma)[0] 
             df_f = df_aulas[df_aulas['ANO'].astype(str).str.contains(serie_num)].copy()
             
-            # Normalização de Data para detecção de Trimestre
             def detectar_trimestre(x):
                 try:
-                    # Se for serial do Sheets (ex: 46063)
                     if str(x).replace('.','',1).isdigit():
                         dt = date(1899, 12, 30) + timedelta(days=int(float(x)))
                         return util.obter_info_trimestre(dt)[0]
-                    # Se for string de data (DD/MM/YYYY)
                     if "/" in str(x):
                         partes = str(x).split("/")
                         dt = date(int(partes[2]), int(partes[1]), int(partes[0]))
@@ -2479,20 +2476,22 @@ elif menu == "📸 Scanner de Gabaritos":
 
             df_f['TRIM_DETECTADO'] = df_f['DATA'].apply(detectar_trimestre)
             
-            # Filtro por Trimestre (na data ou no texto do conteúdo)
-            mask_trim = (df_f['TRIM_DETECTADO'] == trimestre_nome) | \
-                        (df_f['CONTEUDO'].str.contains(trimestre_nome, na=False))
-            df_f = df_f[mask_trim]
-
+            # --- LÓGICA DE SOBERANIA PARA RECUPERAÇÃO FINAL ---
+            # Se for prova, permitimos que "Recuperação Final" apareça independente do trimestre selecionado
             if apenas_provas:
-                permitidos = ["TESTE", "PROVA", "SONDA", "DIAGNÓSTICA", "DIAGNOSTICA", "RECUPERAÇÃO", "AVALIAÇÃO"]
+                permitidos = ["TESTE", "PROVA", "SONDA", "DIAGNÓSTICA", "RECUPERAÇÃO", "AVALIAÇÃO"]
                 df_f = df_f[df_f['TIPO_MATERIAL'].str.upper().str.contains('|'.join(permitidos))]
+                
+                # Filtro: Mostra o que é do trimestre OU o que é "FINAL / ANO INTEIRO"
+                mask_trim = (df_f['TRIM_DETECTADO'] == trimestre_nome) | \
+                            (df_f['CONTEUDO'].str.contains(trimestre_nome, na=False)) | \
+                            (df_f['TIPO_MATERIAL'].str.upper().str.contains("FINAL"))
+                df_f = df_f[mask_trim]
             else:
-                # Filtro para Aba 2: Trabalhos, Projetos e Fixação
+                # Filtro para Atividades/Projetos (Aba 2)
                 permitidos = ["PROJETO", "FIXAÇÃO", "REFORÇO", "ATIVIDADE", "TRABALHO", "AULA"]
-                proibidos = ["TESTE", "PROVA", "RECUPERAÇÃO", "SONDA"]
                 df_f = df_f[df_f['TIPO_MATERIAL'].str.upper().str.contains('|'.join(permitidos))]
-                df_f = df_f[~df_f['TIPO_MATERIAL'].str.upper().str.contains('|'.join(proibidos))]
+                df_f = df_f[df_f['TRIM_DETECTADO'] == trimestre_nome]
             
             return sorted(df_f['TIPO_MATERIAL'].unique().tolist())
         except Exception as e: 
