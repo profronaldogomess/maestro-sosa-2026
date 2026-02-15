@@ -2519,82 +2519,92 @@ elif menu == "📸 Scanner de Gabaritos":
         "📊 4. Raio-X Pedagógico", "📂 5. Acervo de Evidências", "📈 6. Dashboard"
     ])
 
-# --- ABA 1: PERÍCIA DE GABARITOS (VERSÃO V46.0 - TURBO + REGISTRO DE FALTA) ---
+# --- ABA 1: PERÍCIA DE GABARITOS (VERSÃO V47.0 - CHAVE DE 2ª CHAMADA) ---
     with tab_pericia:
         c1, c2, c3 = st.columns([1, 1, 1.5])
         t_sel = c1.selectbox("👥 Turma:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"t_p_{v}")
         tr_sel = c2.selectbox("📅 Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_p_{v}")
         opcoes_p = filtrar_ativos_cir_v64(t_sel, tr_sel, apenas_provas=True)
-        at_sel = c3.selectbox("📋 Selecione a Avaliação:", [""] + opcoes_p, key=f"at_p_{v}")
+        at_sel = c3.selectbox("📋 Selecione a Avaliação Base:", [""] + opcoes_p, key=f"at_p_{v}")
 
         if not t_sel or not at_sel:
-            st.info("💡 Selecione a Turma e a Avaliação para iniciar o fluxo de correção em massa.")
+            st.info("💡 Selecione a Turma e a Avaliação para iniciar.")
         else:
-            # 1. CARREGAMENTO DE GABARITO MESTRE
-            dados_at = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel].iloc[0]
-            txt_at = str(dados_at['CONTEUDO'])
-            val_tag = ai.extrair_tag(txt_at, "VALOR")
-            v_total_at = util.sosa_to_float(val_tag) if val_tag else 10.0
-
-            def extrair_gab_v64(texto, is_pei=False):
-                tag = "GABARITO_PEI" if is_pei else "GABARITO_TEXTO"
-                raw = ai.extrair_tag(texto, tag) or ai.extrair_tag(texto, "GABARITO")
-                if not raw: return []
-                matches = re.findall(r"(\d+)[\s\.\)\-:]+([A-E])", raw.upper())
-                mapa = {int(num): letra for num, letra in matches}
-                return [mapa[n] for n in sorted(mapa.keys())]
-
-            gab_reg = extrair_gab_v64(txt_at, False)
-            gab_pei = extrair_gab_v64(txt_at, True) or gab_reg
-
-            # 2. FILTRAGEM DE PENDENTES (AUTO-AVANÇO)
-            escaneados = df_diagnosticos[df_diagnosticos['ID_AVALIACAO'] == at_sel]['ID_ALUNO'].astype(str).tolist()
+            # 1. FILTRAGEM DE PENDENTES
+            escaneados = df_diagnosticos[df_diagnosticos['ID_AVALIACAO'].str.contains(at_sel)]['ID_ALUNO'].astype(str).tolist()
             pendentes = df_alunos[(df_alunos['TURMA'] == t_sel) & (~df_alunos['ID'].astype(str).isin(escaneados))].sort_values(by="NOME_ALUNO")
 
             if pendentes.empty:
-                st.success("🏆 SOBERANIA ALCANÇADA: Todos os alunos desta turma foram corrigidos!")
-                if st.button("🔄 REVISAR HUB DE AUDITORIA"): st.rerun()
+                st.success("🏆 SOBERANIA: Todos os alunos processados!")
+                if st.button("🔄 REVISAR HUB"): st.rerun()
             else:
-                # SELECIONA O PRIMEIRO DA FILA
                 al_info = pendentes.iloc[0]
                 al_sel = al_info['NOME_ALUNO']
                 id_aluno_atual = al_info['ID']
                 is_pei_aluno = str(al_info['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"]
                 
                 st.markdown(f"### 📸 Corrigindo agora: **{al_sel}**")
-                c_p1, c_p2 = st.columns([2, 1])
-                with c_p1: st.caption(f"Fila de Espera: {len(pendentes)} alunos restantes.")
-                with c_p2: st.info("♿ PEI" if is_pei_aluno else "📝 REGULAR")
+                
+                # --- 2. PROTOCOLO DE LENTE DE VERSÃO (A MÁGICA ESTÁ AQUI) ---
+                with st.container(border=True):
+                    col_v1, col_v2 = st.columns([2, 1])
+                    
+                    # Busca se existe uma 2ª Chamada para esta prova no banco
+                    busca_2a = df_aulas[df_aulas['TIPO_MATERIAL'].str.contains("2ª Chamada", case=False) & 
+                                       df_aulas['TIPO_MATERIAL'].str.contains(at_sel.split("-")[0].strip(), case=False)]
+                    
+                    opcoes_versao = ["Prova Regular"]
+                    if not busca_2a.empty:
+                        opcoes_versao.append("2ª Chamada")
+                    
+                    if is_pei_aluno:
+                        st.warning("♿ **ALUNO PEI:** O sistema utilizará o Gabarito Adaptado Original.")
+                        versao_final_sel = "Prova Regular" # PEI geralmente não muda para 2ª chamada
+                    else:
+                        versao_final_sel = col_v1.radio("Selecione a versão que o aluno realizou:", opcoes_versao, horizontal=True, key=f"v_sel_{id_aluno_atual}")
+                    
+                    # Define qual material carregar para extrair o gabarito
+                    if versao_final_sel == "2ª Chamada":
+                        material_referencia = busca_2a.iloc[0]
+                        st.info(f"📂 Usando Parâmetros de: {material_referencia['TIPO_MATERIAL']}")
+                    else:
+                        material_referencia = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel].iloc[0]
 
-                # --- ÁREA DE CAPTURA E BOTÃO DE FALTA ---
+                # 3. EXTRAÇÃO DO GABARITO DA VERSÃO ESCOLHIDA
+                txt_ref = str(material_referencia['CONTEUDO'])
+                val_tag = ai.extrair_tag(txt_ref, "VALOR")
+                v_total_at = util.sosa_to_float(val_tag) if val_tag else 10.0
+
+                def extrair_gab_v47(texto, is_pei=False):
+                    tag = "GABARITO_PEI" if is_pei else "GABARITO_TEXTO"
+                    raw = ai.extrair_tag(texto, tag) or ai.extrair_tag(texto, "GABARITO")
+                    matches = re.findall(r"(\d+)[\s\.\)\-:]+([A-E])", raw.upper())
+                    mapa = {int(num): letra for num, letra in matches}
+                    return [mapa[n] for n in sorted(mapa.keys())]
+
+                gab_alvo = extrair_gab_v47(txt_ref, is_pei_aluno)
+
+                # 4. ÁREA DE CAPTURA E FALTA
                 col_cam, col_falta = st.columns([2, 1])
                 img = col_cam.camera_input(f"Gabarito de {al_sel}", key=f"cam_{id_aluno_atual}")
                 
                 with col_falta:
                     st.write("---")
-                    st.markdown("**O aluno faltou?**")
-                    if st.button("❌ REGISTRAR FALTA", use_container_width=True, help="Remove o aluno da fila e marca nota 0,00"):
-                        db.salvar_no_banco("DB_GABARITOS_ALUNOS", [
-                            datetime.now().strftime("%d/%m/%Y"), id_aluno_atual, al_sel, t_sel, at_sel, 
-                            "FALTOU", "0,00", "N/A"
-                        ])
+                    if st.button("❌ REGISTRAR FALTA", use_container_width=True):
+                        db.salvar_no_banco("DB_GABARITOS_ALUNOS", [datetime.now().strftime("%d/%m/%Y"), id_aluno_atual, al_sel, t_sel, at_sel, "FALTOU", "0,00", "N/A"])
                         st.warning(f"Falta de {al_sel} registrada."); time.sleep(0.5); st.rerun()
 
                 if img and "current_scan_res" not in st.session_state:
-                    with st.spinner("Perito Sosa analisando marcações..."):
+                    with st.spinner("Analisando marcações..."):
                         res_json = ai.analisar_gabarito_vision(img.getvalue())
-                        gab_alvo = gab_pei if is_pei_aluno else gab_reg
                         qtd_q = len(gab_alvo)
-                        # Normaliza a resposta da IA garantindo o tamanho correto do gabarito
                         st.session_state.current_scan_res = [res_json.get(f"{i+1:02d}", res_json.get(str(i+1), "?")) for i in range(qtd_q)]
                         st.session_state.current_scan_img = img.getvalue()
                         st.rerun()
 
-                # 4. MESA DE PERÍCIA IMEDIATA
+                # 5. MESA DE PERÍCIA
                 if "current_scan_res" in st.session_state:
-                    gab_alvo = gab_pei if is_pei_aluno else gab_reg
                     res_lidas = st.session_state.current_scan_res
-                    
                     st.markdown("---")
                     col_res1, col_res2 = st.columns([1.5, 1])
                     
@@ -2602,7 +2612,7 @@ elif menu == "📸 Scanner de Gabaritos":
                         st.subheader("⚖️ Mesa de Perícia")
                         dados_pericia = []
                         for i, lido in enumerate(res_lidas):
-                            if i < len(gab_alvo): # Trava de segurança
+                            if i < len(gab_alvo):
                                 certo = gab_alvo[i]
                                 if lido == certo: status = "✅ ACERTO"
                                 elif lido == "X": status = "🚫 DUPLA"
@@ -2619,25 +2629,23 @@ elif menu == "📸 Scanner de Gabaritos":
                         novas_res = df_mesa["Lido"].tolist()
                         acertos = sum(1 for i, r in enumerate(novas_res) if i < len(gab_alvo) and r == gab_alvo[i])
                         nota_f = (acertos / len(gab_alvo)) * v_total_at if len(gab_alvo) > 0 else 0
-                        
                         st.metric("Nota Final", f"{nota_f:.2f}", delta=f"{acertos}/{len(gab_alvo)} acertos")
                         
-                        if st.button("💾 SALVAR E PRÓXIMO ALUNO ➔", type="primary", use_container_width=True):
-                            with st.spinner("Arquivando evidência..."):
-                                link_pasta = db.subir_e_converter_para_google_docs(st.session_state.current_scan_img, al_sel.replace(" ","_"), trimestre=tr_sel, categoria=t_sel, semana=at_sel, modo="SCANNER")
-                                db.salvar_no_banco("DB_GABARITOS_ALUNOS", [
-                                    datetime.now().strftime("%d/%m/%Y"), id_aluno_atual, al_sel, t_sel, at_sel, 
-                                    ";".join(novas_res), util.sosa_to_str(nota_f), link_pasta
-                                ])
+                        if st.button("💾 SALVAR E PRÓXIMO ➔", type="primary", use_container_width=True):
+                            with st.spinner("Arquivando..."):
+                                # Salva com o nome da versão utilizada para rastro total
+                                id_av_final = material_referencia['TIPO_MATERIAL']
+                                link_pasta = db.subir_e_converter_para_google_docs(st.session_state.current_scan_img, al_sel.replace(" ","_"), trimestre=tr_sel, categoria=t_sel, semana=id_av_final, modo="SCANNER")
+                                db.salvar_no_banco("DB_GABARITOS_ALUNOS", [datetime.now().strftime("%d/%m/%Y"), id_aluno_atual, al_sel, t_sel, id_av_final, ";".join(novas_res), util.sosa_to_str(nota_f), link_pasta])
                                 del st.session_state.current_scan_res
                                 del st.session_state.current_scan_img
                                 st.success(f"✅ {al_sel} salvo!"); time.sleep(0.5); st.rerun()
 
-                    if st.button("🗑️ DESCARTAR E REPETIR FOTO"):
+                    if st.button("🗑️ DESCARTAR"):
                         del st.session_state.current_scan_res
                         del st.session_state.current_scan_img
                         st.rerun()
-
+                        
 # --- ABA 2: ATIVIDADES & PROJETOS (V66.0 - SOBERANIA DE NOTAS E MÉRITO) ---
     with tab_atividades:
         st.subheader("✍️ Gestão de Notas de Projetos e Atividades")
