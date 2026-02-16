@@ -2384,9 +2384,20 @@ elif menu == "📝 Central de Avaliações":
             with st.container(border=True):
                 st.markdown("### 📊 2. Distribuição de Dificuldade (Taxonomia)")
                 cd1, cd2, cd3 = st.columns(3)
+                
+                # 1. Entrada de Fáceis e Médias
                 q_facil = cd1.number_input("Fáceis:", 0, qtd_q, int(qtd_q*0.3), key=f"q_f_{v}")
                 q_medio = cd2.number_input("Médias:", 0, qtd_q, int(qtd_q*0.5), key=f"q_m_{v}")
-                q_dificil = cd3.number_input("Difíceis:", 0, qtd_q, qtd_q - (q_facil + q_medio), key=f"q_d_{v}")
+                
+                # 2. CÁLCULO BLINDADO (A VACINA):
+                # Calcula o restante, mas garante que o mínimo seja 0 para não dar erro
+                restante_calc = qtd_q - (q_facil + q_medio)
+                valor_dificil_inicial = max(0, restante_calc)
+                
+                # 3. Entrada de Difíceis (Agora com valor protegido)
+                q_dificil = cd3.number_input("Difíceis:", 0, qtd_q, valor_dificil_inicial, key=f"q_d_{v}")
+                
+                # Cálculo da Soma Real para validação visual
                 soma_q = q_facil + q_medio + q_dificil
         else:
             st.info("💡 **Modo 2ª Chamada:** A dificuldade será herdada da prova original.")
