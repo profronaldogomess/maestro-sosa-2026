@@ -485,6 +485,33 @@ if menu == "🧪 Criador de Aulas":
                         c2.markdown("### 📅 Cronograma")
                         sem_lab = c2.selectbox("Semana Base (Ponto ID):", planos_ano["SEMANA"].tolist(), key=f"prod_sem_{v}")
                         plano_row = planos_ano[planos_ano["SEMANA"] == sem_lab].iloc[0]
+                        with st.expander("📡 Radar de Regência (Memória das Turmas)", expanded=True):
+                            # Criamos uma variável para guardar o texto que enviaremos para a IA
+                            contexto_turmas_ia = ""
+                            
+                            # Filtramos os registros de aula que pertencem a este ano (Ex: 6º ano)
+                            reg_ano = df_registro_aulas[df_registro_aulas['TURMA'].str.contains(str(ano_lab))]
+                            
+                            if not reg_ano.empty:
+                                st.markdown("##### 🚦 Status de Execução por Turma:")
+                                for t_nome in sorted(reg_ano['TURMA'].unique()):
+                                    # Pega o registro mais recente daquela turma específica
+                                    dados_t = reg_ano[reg_ano['TURMA'] == t_nome].iloc[-1]
+                                    est = dados_t.get('STATUS_EXECUCAO', 'Não Iniciado')
+                                    pnt = dados_t.get('PONTE_PEDAGOGICA', 'Sem pendências.')
+                                    
+                                    # Define o emoji baseado no status
+                                    emoji = "🟢" if "Concluído" in est else "🟡" if "Parcial" in est else "🔴"
+                                    
+                                    # Mostra na tela para o professor
+                                    st.write(f"{emoji} **{t_nome}:** {est}")
+                                    st.caption(f"↳ {pnt}")
+                                    
+                                    # Adiciona ao texto que a IA vai ler
+                                    contexto_turmas_ia += f"- Turma {t_nome}: Status {est}. Pendência: {pnt}\n"
+                            else:
+                                st.info("ℹ️ Nenhuma regência anterior encontrada para esta série.")
+                                contexto_turmas_ia = "Nenhum histórico anterior."
                         plano_txt = str(plano_row['PLANO_TEXTO'])
                         
                         # Extração de Metadados para o Cockpit
@@ -566,11 +593,15 @@ if menu == "🧪 Criador de Aulas":
                                     prompt_manual = (
                                         f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {nome_elite}.\n"
                                         f"SÉRIE: {ano_lab}º Ano. ALVO: {aula_alvo_prod}. QTD: {qtd_q_prod}.\n"
-                                        f"--- HERANÇA DO PLANO (ROTEIRO OBRIGATÓRIO) ---\n{roteiro_herdado}\n"
-                                        f"--- SENSOR DE INCLUSÃO (PERFIL DA TURMA) ---\n"
+                                        f"--- HERANÇA DO PLANO ---\n{roteiro_herdado}\n"
+                                        f"--- STATUS DE REGÊNCIA POR TURMA ---\n{contexto_turmas_ia}\n" # <--- ESTA LINHA É A CHAVE
+                                        f"--- SENSOR DE INCLUSÃO (TURMA REAL) ---\n"
                                         f"A turma possui alunos com: {texto_clinico}.\n"
-                                        f"ORDEM PARA [PEI]: Adapte rigorosamente para TEA (visual/direto) e DISLEXIA (espaçado/limpo).\n"
-                                        f"--- CONTEXTO ADICIONAL DO PROFESSOR ---\n{instr_extra_prod}"
+                                        f"--- MISSÃO DIFERENCIADA ---\n"
+                                        "No campo [PROFESSOR], crie uma seção 'DIRETRIZES DE REGÊNCIA' específica. "
+                                        "Se uma turma estiver com status 'Parcial', diga o que o professor deve retomar primeiro. "
+                                        "Se estiver 'Concluído', diga como avançar."
+                                        f"--- EXTRAS ---\n{instr_extra_prod}"
                                     )
                                     
                                     st.session_state.lab_temp = ai.gerar_ia("MAESTRO_SOSA_V28_ELITE", prompt_manual, usar_busca=True)
