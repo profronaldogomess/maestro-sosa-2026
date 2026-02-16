@@ -3699,21 +3699,24 @@ elif menu == "👤 Biografia do Estudante":
                         st.caption(f"{emoji} **{row['DATA']}**: {row['TAGS']} - *{row['OBSERVACOES']}*")
                 else: st.success("✅ Nenhuma ocorrência negativa.")
 
-# --- SEÇÃO 4: RAIO-X DE DIFICULDADES (CONSOLIDAÇÃO TOTAL V83) ---
+# --- SEÇÃO 4: RAIO-X DE DIFICULDADES (VERSÃO V40 - REFINAMENTO ESTÉTICO) ---
         st.markdown("---")
         with st.container(border=True):
             st.markdown(f"### 🔍 4. Raio-X de Dificuldades: {trim_b}")
             
             if not diag_alu_f.empty:
-                st.info(f"📊 Analisando {len(diag_alu_f)} avaliações para compor o diagnóstico.")
+                # 1. IDENTIFICAÇÃO NOMINAL DAS AVALIAÇÕES
+                lista_nomes_av = diag_alu_f['ID_AVALIACAO'].unique().tolist()
+                nomes_formatados = ", ".join([f"**{n}**" for n in lista_nomes_av])
+                st.info(f"📊 Analisando {len(lista_nomes_av)} avaliações para compor o diagnóstico: {nomes_formatados}")
                 
                 todas_as_lacunas = []
                 
-                # LOOP SOBERANO: Percorre cada prova que o aluno fez
+                # 2. LOOP DE EXTRAÇÃO DE HABILIDADES
                 for _, reg_av in diag_alu_f.iterrows():
                     nome_av_real = reg_av['ID_AVALIACAO']
                     
-                    # Busca material de referência no banco de aulas
+                    # Busca material de referência
                     m_ref_query = df_aulas[df_aulas['TIPO_MATERIAL'] == nome_av_real.replace(" (2ª CHAMADA)", "")]
                     
                     if not m_ref_query.empty:
@@ -3735,25 +3738,26 @@ elif menu == "👤 Biografia do Estudante":
                         for i, r in enumerate(respostas_aluno):
                             if i < len(gab_oficial) and r != gab_oficial[i] and r not in ["FALTOU", "?", "X"]:
                                 q_n = i + 1
-                                # Extrator V82 de Habilidades
+                                # Extrator V82 de Habilidades (Código + Descrição)
                                 padrao_h = rf"(?si)QUEST[AÃ]O\s*(?:PEI\s*)?0?{q_n}\b.*?(?:[:\-])\s*(.*?)(?=\.?\s*(?:JUSTIFICATIVA|PERÍCIA|ANÁLISE|DISTRATORES|$))"
                                 m_h = re.search(padrao_h, grade)
                                 
                                 if m_h:
+                                    # Limpeza profunda: remove [], **, # e espaços extras
                                     txt_limpo = re.sub(r'[*#\[\]]', '', m_h.group(1)).strip()
-                                    # Adiciona à lista com o nome da prova para o professor saber a origem
-                                    todas_as_lacunas.append(f"{txt_limpo} (Origem: {nome_av_real})")
+                                    # Adiciona apenas o texto da habilidade (sem a tag de origem)
+                                    todas_as_lacunas.append(txt_limpo)
                 
                 if todas_as_lacunas:
                     st.markdown("**Mapa de Habilidades que precisam de reforço:**")
-                    # Remove duplicatas mantendo a ordem
+                    # Remove duplicatas mantendo a ordem e exibe com o ícone de erro
                     for l in list(dict.fromkeys(todas_as_lacunas)): 
                         st.error(f"❌ {l}")
                 else:
                     st.success("✅ Domínio total nas habilidades das avaliações realizadas.")
             else:
                 st.info("Aguardando avaliações escaneadas para gerar o Raio-X.")
-
+                
         if is_pei:
             st.warning(f"♿ **Observação PEI:** {info_alu['NECESSIDADES']}")
         st.caption(f"Dossiê atualizado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
