@@ -2518,29 +2518,28 @@ elif menu == "📸 Scanner de Gabaritos":
         "📊 4. Raio-X Pedagógico", "📂 5. Acervo de Evidências", "📈 6. Dashboard"
     ])
 
-# --- ABA 1: PERÍCIA DE GABARITOS (VERSÃO V49.0 - NOMENCLATURA TÉCNICA V67) ---
+# --- ABA 1: PERÍCIA DE GABARITOS (VERSÃO V48.2 - SMART LOOKUP 2ª CHAMADA) ---
     with tab_pericia:
         c1, c2, c3 = st.columns([1, 1, 1.5])
         t_sel = c1.selectbox("👥 Turma:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"t_p_{v}")
         tr_sel = c2.selectbox("📅 Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_p_{v}")
         
-        # Filtro de Avaliação Base (Slot do Boletim)
+        # Filtro de Avaliação Base (O "Slot" no Boletim)
         opcoes_p = filtrar_ativos_cir_v64(t_sel, tr_sel, apenas_provas=True)
-        # Filtra para mostrar apenas as originais (que não começam com 2CHAMADA)
-        opcoes_base = [opt for opt in opcoes_p if not opt.upper().startswith("2CHAMADA")]
+        opcoes_base = [opt for opt in opcoes_p if "2ª" not in opt.upper() and "CHAMADA" not in opt.upper()]
         at_sel = c3.selectbox("📋 Selecione a Avaliação Base (Slot):", [""] + opcoes_base, key=f"at_p_{v}")
 
         if not t_sel or not at_sel:
             st.info("💡 Selecione a Turma e a Avaliação Base para abrir o Scanner.")
         else:
-            # 1. FILTRAGEM DE PENDENTES
-            # Busca quem já tem nota na original ou na 2ª chamada deste slot
-            nome_base_limpo = at_sel.split("_")[0].strip() # Pega "TESTE" ou "PROVA"
-            escaneados = df_diagnosticos[df_diagnosticos['ID_AVALIACAO'].str.contains(nome_base_limpo)]['ID_ALUNO'].astype(str).tolist()
+            # 1. BUSCA DE PENDENTES NO SLOT SELECIONADO
+            # Normaliza a busca para ignorar sufixos e focar no título da prova (Teste, Prova, etc)
+            nome_filtro_pendente = at_sel.split("-")[0].strip()
+            escaneados = df_diagnosticos[df_diagnosticos['ID_AVALIACAO'].str.contains(nome_filtro_pendente)]['ID_ALUNO'].astype(str).tolist()
             pendentes = df_alunos[(df_alunos['TURMA'] == t_sel) & (~df_alunos['ID'].astype(str).isin(escaneados))].sort_values(by="NOME_ALUNO")
 
             if pendentes.empty:
-                st.success(f"🏆 SOBERANIA: Todos os alunos da {t_sel} já possuem nota para este slot!")
+                st.success(f"🏆 SOBERANIA: Todos os alunos da {t_sel} já possuem nota para {at_sel}!")
                 if st.button("🔄 REVISAR HUB"): st.rerun()
             else:
                 al_info = pendentes.iloc[0]
@@ -2550,54 +2549,50 @@ elif menu == "📸 Scanner de Gabaritos":
                 
                 st.markdown(f"### 📸 Corrigindo agora: **{al_sel}**")
                 
-                # --- 2. HUB DE SELEÇÃO DE PARÂMETROS (NOMENCLATURA V67) ---
-                versao_final_sel = "Prova Original"
-                material_ref = None
-
+                # --- 2. HUB DE SEGUNDA CHAMADA (SMART LOOKUP V48.2) ---
                 with st.container(border=True):
                     c_v1, c_v2 = st.columns([1, 1])
-                    
-                    # A. Seleção de Versão
-                    modo_2a = c_v1.toggle("🚀 Aplicar Segunda Chamada?", key=f"toggle_2a_{id_aluno_atual}")
+                    modo_2a = c_v1.toggle("🚀 Aplicar Segunda Chamada para este aluno?", key=f"toggle_2a_{id_aluno_atual}")
                     
                     if modo_2a:
-                        # Busca no banco materiais que começam com 2CHAMADA e batem com o tipo da base
-                        tipo_base = at_sel.split("_")[0].upper() # TESTE, PROVA ou RECUPERACAO
-                        opcoes_2a = df_aulas[
-                            (df_aulas['TIPO_MATERIAL'].str.startswith("2CHAMADA")) & 
-                            (df_aulas['TIPO_MATERIAL'].str.contains(tipo_base))
-                        ]['TIPO_MATERIAL'].unique().tolist()
+                        # BUSCA POR DNA: Procura materiais que contenham "2ª" ou "CHAMADA" 
+                        # e que batam com a SÉRIE (ex: 6º) e o TRIMESTRE selecionado
+                        serie_alvo_dna = t_sel[0] # Pega o "6" de "6ª MA"
                         
-                        at_segunda = c_v2.selectbox("📋 Selecione o Ativo 2CHAMADA:", [""] + opcoes_2a, key=f"sel_2a_{id_aluno_atual}")
+                        df_2a_candidatos = df_aulas[
+                            (df_aulas['TIPO_MATERIAL'].str.contains(r"2[ªa]|CHAMADA", case=False, regex=True)) & 
+                            (df_aulas['ANO'].str.contains(serie_alvo_dna)) &
+                            (df_aulas['CONTEUDO'].str.contains(tr_sel, na=False))
+                        ]
+                        
+                        opcoes_2a = df_2a_candidatos['TIPO_MATERIAL'].unique().tolist()
+                        
+                        at_segunda = c_v2.selectbox("📋 Selecione o Ativo 2ªCHAMADA:", [""] + opcoes_2a, key=f"sel_2a_{id_aluno_atual}")
+                        
                         if at_segunda:
                             material_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == at_segunda].iloc[0]
-                            versao_final_sel = "2ª Chamada"
+                            st.warning(f"⚖️ Lente Ativa: Gabarito de **{at_segunda}**")
                         else:
                             st.error("Selecione o material de 2ª chamada gerado no Arquiteto.")
+                            material_ref = None
                     else:
                         material_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel].iloc[0]
-                        versao_final_sel = "Prova Original"
-                    
-                    # B. Feedback Visual
-                    if material_ref is not None:
-                        perfil_txt = "♿ PEI" if is_pei_aluno else "📝 REGULAR"
-                        st.info(f"⚖️ **Lente Ativa:** {versao_final_sel} | Perfil {perfil_txt}")
+                        st.info(f"📝 Lente Ativa: Gabarito Regular de **{at_sel}**")
 
-                # 3. EXTRAÇÃO DO GABARITO
+                # 3. PROCESSAMENTO DO GABARITO (Sincronia Perfil/Versão)
                 if material_ref is not None:
                     txt_ref = str(material_ref['CONTEUDO'])
                     val_tag = ai.extrair_tag(txt_ref, "VALOR")
                     v_total_at = util.sosa_to_float(val_tag) if val_tag else 10.0
 
-                    def extrair_gab_v49(texto, is_pei=False):
+                    def extrair_gab_v48_2(texto, is_pei=False):
                         tag_alvo = "GABARITO_PEI" if is_pei else "GABARITO_TEXTO"
                         raw = ai.extrair_tag(texto, tag_alvo) or ai.extrair_tag(texto, "GABARITO")
-                        if not raw: return []
                         matches = re.findall(r"(\d+)[\s\.\)\-:]+([A-E])", raw.upper())
                         mapa = {int(num): letra for num, letra in matches}
                         return [mapa[n] for n in sorted(mapa.keys())]
 
-                    gab_alvo = extrair_gab_v49(txt_ref, is_pei_aluno)
+                    gab_alvo = extrair_gab_v48_2(txt_ref, is_pei_aluno)
 
                     # 4. ÁREA DE CAPTURA
                     col_cam, col_falta = st.columns([2, 1])
@@ -2644,27 +2639,24 @@ elif menu == "📸 Scanner de Gabaritos":
                             st.metric("Nota Final", f"{nota_f:.2f}", delta=f"{acertos}/{len(gab_alvo)} acertos")
                             
                             if st.button("💾 SALVAR E PRÓXIMO ➔", type="primary", use_container_width=True):
-                                with st.spinner("Arquivando com Etiqueta Técnica..."):
-                                    # Salva com o nome técnico real (Original ou 2CHAMADA)
-                                    id_av_final = material_ref['TIPO_MATERIAL']
-                                    
+                                with st.spinner("Arquivando..."):
+                                    # Salva com a etiqueta de versão para o Hub de Soberania ler
+                                    id_av_final = f"{at_sel} (2ª CHAMADA)" if modo_2a else at_sel
                                     link_pasta = db.subir_e_converter_para_google_docs(st.session_state.current_scan_img, al_sel.replace(" ","_"), trimestre=tr_sel, categoria=t_sel, semana=id_av_final, modo="SCANNER")
                                     
                                     db.salvar_no_banco("DB_GABARITOS_ALUNOS", [
                                         datetime.now().strftime("%d/%m/%Y"), id_aluno_atual, al_sel, t_sel, 
                                         id_av_final, ";".join(novas_res), util.sosa_to_str(nota_f), link_pasta
                                     ])
-                                    
                                     del st.session_state.current_scan_res
                                     del st.session_state.current_scan_img
-                                    st.success(f"✅ {al_sel} salvo como {id_av_final}!")
-                                    time.sleep(0.5); st.rerun()
+                                    st.success(f"✅ {al_sel} processado!"); time.sleep(0.5); st.rerun()
 
                         if st.button("🗑️ DESCARTAR"):
                             del st.session_state.current_scan_res
                             del st.session_state.current_scan_img
                             st.rerun()
-
+                            
 # --- ABA 2: ATIVIDADES & PROJETOS (V66.0 - SOBERANIA DE NOTAS E MÉRITO) ---
     with tab_atividades:
         st.subheader("✍️ Gestão de Notas de Projetos e Atividades")
