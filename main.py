@@ -3463,133 +3463,146 @@ elif menu == "👤 Biografia do Estudante":
         st.caption(f"Dossiê atualizado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
 
 # ==============================================================================
-# MÓDULO: BOLETIM ANUAL & CONSELHO V28 - INTELIGÊNCIA COLETIVA E RECUPERAÇÃO
+# MÓDULO: BOLETIM ANUAL & CONSELHO V29 - MAPA DE RESGATE E REC. FINAL
 # ==============================================================================
 elif menu == "📈 Boletim Anual & Conselho":
-    st.title("📈 Inteligência de Conselho e Performance Coletiva")
+    st.title("📈 Inteligência de Conselho e Gestão de Recuperação")
     st.markdown("---")
 
     if df_notas.empty:
         st.warning("⚠️ Sem notas lançadas no sistema para gerar o boletim.")
     else:
         # --- 1. FILTRO DE TURMA ---
-        turma_sel = st.selectbox("🎯 Selecione a Turma para Análise Coletiva:", sorted(df_alunos['TURMA'].unique()), key="bol_turma_v28")
+        turma_sel = st.selectbox("🎯 Selecione a Turma para Análise:", sorted(df_alunos['TURMA'].unique()), key="bol_turma_v29")
         
         # --- 2. PROCESSAMENTO DE DADOS (DATA FUSION ANUAL) ---
         df_t = df_notas[df_notas['TURMA'] == turma_sel].copy()
         
-        # Pivotagem para visão anual (Transforma linhas de trimestre em colunas)
+        # Pivotagem Dupla: Média Final e Recuperação Paralela por Trimestre
         pivot = df_t.pivot_table(
             index=["ID_ALUNO", "NOME_ALUNO"], 
             columns="TRIMESTRE", 
-            values=["NOTA_VISTOS", "NOTA_TESTE", "NOTA_PROVA", "NOTA_REC", "MEDIA_FINAL"], 
+            values=["MEDIA_FINAL", "NOTA_REC"], 
             aggfunc='first'
         ).reset_index()
 
-        # Normalização de Colunas (Flatten MultiIndex)
+        # Achatar o MultiIndex das colunas para nomes simples
         pivot.columns = [f"{col[0]}_{col[1]}".strip('_') for col in pivot.columns.values]
 
-        # Garantir que as colunas essenciais existam para evitar erros
-        for t in ["I Trimestre", "II Trimestre", "III Trimestre"]:
+        # Garantir existência das colunas para evitar erro de visualização
+        trims = ["I Trimestre", "II Trimestre", "III Trimestre"]
+        for t in trims:
             if f"MEDIA_FINAL_{t}" not in pivot.columns: pivot[f"MEDIA_FINAL_{t}"] = 0.0
             if f"NOTA_REC_{t}" not in pivot.columns: pivot[f"NOTA_REC_{t}"] = 0.0
 
-        # --- 3. LÓGICA DE RECUPERAÇÃO E PREDIÇÃO ---
-        def processar_linha_boletim(row):
-            # Notas de cada trimestre
+        # Busca nota de REC_FINAL (se existir uma linha com esse trimestre no banco)
+        rec_final_df = df_t[df_t['TRIMESTRE'] == "REC_FINAL"][['ID_ALUNO', 'MEDIA_FINAL']]
+        rec_final_df.columns = ['ID_ALUNO', 'NOTA_REC_FINAL']
+        pivot = pd.merge(pivot, rec_final_df, on='ID_ALUNO', how='left').fillna(0.0)
+
+        # --- 3. LÓGICA DE SOBERANIA E SITUAÇÃO ---
+        def calcular_status_anual(row):
             t1 = util.sosa_to_float(row.get("MEDIA_FINAL_I Trimestre", 0))
             t2 = util.sosa_to_float(row.get("MEDIA_FINAL_II Trimestre", 0))
             t3 = util.sosa_to_float(row.get("MEDIA_FINAL_III Trimestre", 0))
+            r_final = util.sosa_to_float(row.get("NOTA_REC_FINAL", 0))
             
-            # Recuperações (Pega a maior nota de recuperação do ano)
-            rec_i = util.sosa_to_float(row.get("NOTA_REC_I Trimestre", 0))
-            rec_ii = util.sosa_to_float(row.get("NOTA_REC_II Trimestre", 0))
-            rec_iii = util.sosa_to_float(row.get("NOTA_REC_III Trimestre", 0))
-            max_rec = max(rec_i, rec_ii, rec_iii)
-
-            # Soma e Meta
-            soma_atual = t1 + t2 + t3
-            falta = max(0.0, 18.0 - soma_atual)
+            soma = t1 + t2 + t3
+            falta = max(0.0, 18.0 - soma)
             
-            # Status Pedagógico
-            if soma_atual >= 18.0: 
-                status = "✅ APROVADO"
-            elif soma_atual > 0 and falta <= 10.0: 
-                status = "⚠️ EM RECUPERAÇÃO"
-            elif soma_atual > 0 and falta > 10.0: 
-                status = "🚨 RISCO CRÍTICO"
-            else: 
-                status = "⏳ AGUARDANDO"
-
-            # Identificação PEI
+            # Perfil PEI
             aluno_info = df_alunos[df_alunos['ID'].apply(db.limpar_id) == db.limpar_id(row['ID_ALUNO'])].iloc[0]
-            perfil = "♿ PEI" if str(aluno_info['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", ""] else "📝 REGULAR"
+            pei = "♿" if str(aluno_info['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", ""] else "📝"
             
-            return pd.Series([perfil, t1, t2, t3, max_rec, soma_atual, falta, status])
+            # Situação
+            if soma >= 18.0: status = "✅ APROVADO"
+            elif r_final >= 6.0: status = "🔄 APROV. REC"
+            elif soma > 0 and falta <= 10.0: status = "⚠️ REC. FINAL"
+            elif soma > 0 and falta > 10.0: status = "🚨 RISCO CRÍTICO"
+            else: status = "⏳ AGUARDANDO"
+            
+            return pd.Series([pei, soma, falta, status])
 
-        pivot[['PERFIL', 'T1', 'T2', 'T3', 'MAIOR_REC', 'TOTAL', 'PRECISA', 'SITUAÇÃO']] = pivot.apply(processar_linha_boletim, axis=1)
+        pivot[['P', 'SOMA', 'FALTA', 'SITUAÇÃO']] = pivot.apply(calcular_status_anual, axis=1)
 
         # --- 4. DASHBOARD DE TOPO (KPIs) ---
         c1, c2, c3, c4 = st.columns(4)
-        media_turma = pivot['TOTAL'].mean() / 3
-        c1.metric("Média da Turma", f"{media_turma:.1f}")
-        
-        aprovados = len(pivot[pivot['TOTAL'] >= 18])
-        c2.metric("Aprovados (Meta 18.0)", aprovados, f"{(aprovados/len(pivot)*100):.0f}%")
-        
-        rec_ativa = len(pivot[pivot['MAIOR_REC'] > 0])
-        c3.metric("Recup. Paralela", rec_ativa, "Alunos")
-        
-        risco = len(pivot[pivot['SITUAÇÃO'] == "🚨 RISCO CRÍTICO"])
-        c4.metric("Risco Crítico", risco, delta_color="inverse")
+        c1.metric("Média da Turma", f"{pivot['SOMA'].mean()/3:.1f}")
+        aprovados = len(pivot[pivot['SITUAÇÃO'].str.contains("APROVADO")])
+        c2.metric("Aprovação", f"{(aprovados/len(pivot)*100):.0f}%")
+        em_rec = len(pivot[pivot['SITUAÇÃO'] == "⚠️ REC. FINAL"])
+        c3.metric("Em Rec. Final", em_rec)
+        c4.metric("Risco Crítico", len(pivot[pivot['SITUAÇÃO'] == "🚨 RISCO CRÍTICO"]), delta_color="inverse")
 
-        # --- 5. MAPA DE DESEMPENHO ANUAL ---
-        st.markdown("### 📋 Mapa de Desempenho e Recuperação")
+        # --- 5. MAPA DE DESEMPENHO E RESGATE (TABELA DE ELITE) ---
+        st.markdown("### 📋 Mapa de Desempenho e Resgate Anual")
         
-        def colorir_situacao(v):
-            if v == "✅ APROVADO": return 'background-color: rgba(46, 204, 113, 0.2); color: #2ECC71; font-weight: bold;'
-            if v == "🚨 RISCO CRÍTICO": return 'background-color: rgba(231, 76, 60, 0.2); color: #E74C3C; font-weight: bold;'
-            if v == "⚠️ EM RECUPERAÇÃO": return 'background-color: rgba(241, 196, 15, 0.2); color: #F1C40F;'
+        # Estilização
+        def style_situacao(v):
+            if "APROVADO" in v: return 'color: #2ECC71; font-weight: bold;'
+            if "RISCO" in v: return 'color: #E74C3C; font-weight: bold;'
+            if "REC. FINAL" in v: return 'color: #F1C40F; font-weight: bold;'
             return ''
 
+        # Exibição da Tabela com todas as colunas de Recuperação
         st.dataframe(
-            pivot[['PERFIL', 'NOME_ALUNO', 'T1', 'T2', 'T3', 'MAIOR_REC', 'TOTAL', 'PRECISA', 'SITUAÇÃO']]
-            .style.applymap(colorir_situacao, subset=['SITUAÇÃO'])
-            .format("{:.1f}", subset=['T1', 'T2', 'T3', 'MAIOR_REC', 'TOTAL', 'PRECISA']),
+            pivot[['P', 'NOME_ALUNO', 
+                   'MEDIA_FINAL_I Trimestre', 'NOTA_REC_I Trimestre',
+                   'MEDIA_FINAL_II Trimestre', 'NOTA_REC_II Trimestre',
+                   'MEDIA_FINAL_III Trimestre', 'NOTA_REC_III Trimestre',
+                   'SOMA', 'NOTA_REC_FINAL', 'SITUAÇÃO']]
+            .style.applymap(style_situacao, subset=['SITUAÇÃO'])
+            .format("{:.1f}", subset=['MEDIA_FINAL_I Trimestre', 'NOTA_REC_I Trimestre', 
+                                      'MEDIA_FINAL_II Trimestre', 'NOTA_REC_II Trimestre', 
+                                      'MEDIA_FINAL_III Trimestre', 'NOTA_REC_III Trimestre', 
+                                      'SOMA', 'NOTA_REC_FINAL']),
             use_container_width=True, hide_index=True,
             column_config={
-                "T1": "I Trim", "T2": "II Trim", "T3": "III Trim", 
-                "MAIOR_REC": "🔄 Rec. Paralela", "TOTAL": "Soma", "PRECISA": "Falta (Meta 18)"
+                "MEDIA_FINAL_I Trimestre": "I Trim", "NOTA_REC_I Trimestre": "Rec I",
+                "MEDIA_FINAL_II Trimestre": "II Trim", "NOTA_REC_II Trimestre": "Rec II",
+                "MEDIA_FINAL_III Trimestre": "III Trim", "NOTA_REC_III Trimestre": "Rec III",
+                "SOMA": "Soma", "NOTA_REC_FINAL": "🔥 REC FINAL", "SITUAÇÃO": "Status"
             }
         )
 
-        # --- 6. ATA DE CONSELHO INTELIGENTE ---
+        # --- 6. MÓDULO DE RECUPERAÇÃO FINAL (SUBSTITUI A ATA) ---
         st.markdown("---")
-        st.subheader("📝 Síntese para Ata de Conselho")
+        st.subheader("🔥 Gestão de Recuperação Final")
         
-        if st.button("🚀 GERAR PARECER TÉCNICO DA TURMA", use_container_width=True, type="primary"):
-            with st.spinner("Maestro Sosa analisando evidências coletivas..."):
-                # Consolida dados para a IA
-                alunos_criticos = pivot[pivot['SITUAÇÃO'] == "🚨 RISCO CRÍTICO"]['NOME_ALUNO'].tolist()
-                
-                prompt_ata = (
-                    f"VOCÊ É O COORDENADOR PEDAGÓGICO SOSA.\n"
-                    f"Gere um parecer técnico para o Conselho de Classe da turma {turma_sel}.\n\n"
-                    f"DADOS DA TURMA:\n"
-                    f"- Média Global: {media_turma:.1f}\n"
-                    f"- Taxa de Aprovação: {(aprovados/len(pivot)*100):.0f}%\n"
-                    f"- Alunos em Risco Crítico: {len(alunos_criticos)}\n"
-                    f"- Lista de Alunos Críticos: {alunos_criticos}\n\n"
-                    f"MISSÃO:\n"
-                    f"1. Analise o rendimento geral.\n"
-                    f"2. Sugira estratégias de Recomposição para os alunos críticos.\n"
-                    f"3. Use a Pedagogia Histórico-Crítica (PHC) como base teórica.\n"
-                    f"Linguagem formal, sem Markdown."
-                )
-                
-                ata_texto = ai.gerar_ia("PLANE_PEDAGOGICO", prompt_ata)
-                st.text_area("Parecer do Conselho (Copie para a Ata):", ata_texto, height=300)
-                
-                if st.button("💾 ARQUIVAR ATA NO BANCO"):
-                    db.salvar_no_banco("DB_RELATORIOS", [datetime.now().strftime("%d/%m/%Y"), "TURMA", turma_sel, "ATA_CONSELHO", ata_texto])
-                    st.success("Ata arquivada com sucesso!")
+        df_rec_final = pivot[pivot['SITUAÇÃO'].isin(["⚠️ REC. FINAL", "🚨 RISCO CRÍTICO"])]
+        
+        if df_rec_final.empty:
+            st.success("✅ Nenhum aluno em situação de Recuperação Final nesta turma.")
+        else:
+            st.warning(f"Existem {len(df_rec_final)} alunos que necessitam de exame final para atingir a meta de 18.0 pontos.")
+            
+            col_r1, col_r2 = st.columns([1, 1])
+            
+            with col_r1:
+                st.markdown("**Alunos Convocados:**")
+                for _, r in df_rec_final.iterrows():
+                    st.caption(f"• {r['NOME_ALUNO']} (Soma: {r['SOMA']:.1f} | Precisa de: {18.0 - r['SOMA']:.1f})")
+            
+            with col_r2:
+                if st.button("📝 GERAR ROTEIRO DE ESTUDOS PARA REC. FINAL", use_container_width=True):
+                    with st.spinner("Maestro Sosa analisando lacunas anuais..."):
+                        # Pega os nomes para a IA
+                        nomes_rec = ", ".join(df_rec_final['NOME_ALUNO'].tolist())
+                        prompt_rec = (
+                            f"Gere um Roteiro de Estudos de Recuperação Final para a turma {turma_sel}.\n"
+                            f"ALUNOS: {nomes_rec}.\n"
+                            f"CONTEXTO: Os alunos não atingiram a meta de 18.0 pontos no ano.\n"
+                            f"MISSÃO: Liste os 5 tópicos mais críticos do 6º ano (baseado na BNCC) que eles devem revisar "
+                            f"e sugira uma estratégia de estudo intensivo. Seja motivador e técnico. SEM MARKDOWN."
+                        )
+                        st.info(ai.gerar_ia("PLANE_PEDAGOGICO", prompt_rec))
+
+        # --- 7. SALVAMENTO DE NOTA FINAL ---
+        with st.expander("💾 Lançar Nota da Recuperação Final"):
+            with st.form("form_rec_final"):
+                aluno_f = st.selectbox("Selecionar Aluno:", df_rec_final['NOME_ALUNO'].tolist() if not df_rec_final.empty else ["Nenhum"])
+                nota_f = st.number_input("Nota do Exame Final (0-10):", 0.0, 10.0, 6.0, step=0.1)
+                if st.form_submit_button("💾 SALVAR NOTA FINAL"):
+                    id_f = pivot[pivot['NOME_ALUNO'] == aluno_f]['ID_ALUNO'].values[0]
+                    if db.salvar_rec_final(id_f, aluno_f, turma_sel, nota_f):
+                        st.success(f"Nota de {aluno_f} salva! Sincronize os dados."); time.sleep(1); st.rerun()
