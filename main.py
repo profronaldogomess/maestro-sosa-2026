@@ -2552,7 +2552,7 @@ elif menu == "📸 Scanner de Gabaritos":
         "📊 4. Raio-X Pedagógico", "📂 5. Acervo de Evidências", "📈 6. Dashboard"
     ])
 
-# --- ABA 1: PERÍCIA DE GABARITOS (VERSÃO V49.0 - SMART LOOKUP 2CHAMADA) ---
+# --- ABA 1: PERÍCIA DE GABARITOS (VERSÃO V49.5 - TRIAGEM DUPLA) ---
     with tab_pericia:
         c1, c2, c3 = st.columns([1, 1, 1.5])
         t_sel = c1.selectbox("👥 Turma:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"t_p_{v}")
@@ -2560,7 +2560,6 @@ elif menu == "📸 Scanner de Gabaritos":
         
         # Filtro de Avaliação Base (O "Slot" no Boletim)
         opcoes_p = filtrar_ativos_cir_v64(t_sel, tr_sel, apenas_provas=True)
-        # Mostra apenas as provas originais (ignora o que tem 2CHAMADA no nome)
         opcoes_base = [opt for opt in opcoes_p if "2CHAMADA" not in opt.upper()]
         at_sel = c3.selectbox("📋 Selecione a Avaliação Base (Slot):", [""] + opcoes_base, key=f"at_p_{v}")
 
@@ -2579,21 +2578,23 @@ elif menu == "📸 Scanner de Gabaritos":
                 al_info = pendentes.iloc[0]
                 al_sel = al_info['NOME_ALUNO']
                 id_aluno_atual = al_info['ID']
+                
+                # --- 🚀 DETECÇÃO AUTOMÁTICA DE PERFIL (REGULAR OU PEI) ---
                 is_pei_aluno = str(al_info['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"]
                 
                 st.markdown(f"### 📸 Corrigindo agora: **{al_sel}**")
                 
-                # --- 2. HUB DE SEGUNDA CHAMADA (SMART MATCH V49) ---
+                # --- 2. HUB DE SELEÇÃO DE PARÂMETROS (VERSÃO + PERFIL) ---
                 with st.container(border=True):
                     c_v1, c_v2 = st.columns([1, 1])
+                    
+                    # A. Seleção de Versão (Regular ou 2ª Chamada)
                     modo_2a = c_v1.toggle("🚀 Aplicar Segunda Chamada para este aluno?", key=f"toggle_2a_{id_aluno_atual}")
                     
                     if modo_2a:
-                        # LÓGICA DE BUSCA POR DNA:
-                        tipo_base = at_sel.split("-")[0].strip().upper() # Ex: "TESTE"
-                        serie_num = "".join(filter(str.isdigit, t_sel)) # Ex: "6"
+                        tipo_base = at_sel.split("-")[0].strip().upper()
+                        serie_num = "".join(filter(str.isdigit, t_sel))
                         
-                        # Filtra no banco materiais que contenham 2CHAMADA + o Tipo + a Série
                         df_2a_candidatos = df_aulas[
                             (df_aulas['TIPO_MATERIAL'].str.upper().str.contains("2CHAMADA")) & 
                             (df_aulas['TIPO_MATERIAL'].str.upper().str.contains(tipo_base)) &
@@ -2601,33 +2602,39 @@ elif menu == "📸 Scanner de Gabaritos":
                         ]
                         
                         opcoes_2a = df_2a_candidatos['TIPO_MATERIAL'].unique().tolist()
-                        
                         at_segunda = c_v2.selectbox("📋 Selecione o Ativo 2CHAMADA:", [""] + opcoes_2a, key=f"sel_2a_{id_aluno_atual}")
                         
                         if at_segunda:
                             material_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == at_segunda].iloc[0]
-                            st.warning(f"⚖️ Lente Ativa: Gabarito de **{at_segunda}**")
                         else:
-                            st.error("Selecione o material de 2ª chamada gerado no Arquiteto.")
+                            st.error("Selecione o material de 2ª chamada.")
                             material_ref = None
                     else:
                         material_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel].iloc[0]
-                        st.info(f"📝 Lente Ativa: Gabarito Regular de **{at_sel}**")
 
-                # 3. PROCESSAMENTO DO GABARITO (Sincronia Perfil/Versão)
+                    # B. Feedback Visual da Triagem Dupla
+                    if material_ref is not None:
+                        tipo_txt = "2ª CHAMADA" if modo_2a else "REGULAR"
+                        perfil_txt = "♿ PERFIL PEI" if is_pei_aluno else "📝 PERFIL REGULAR"
+                        st.info(f"⚖️ **Lente Ativa:** Prova {tipo_txt} | {perfil_txt}")
+
+                # 3. EXTRAÇÃO INTELIGENTE DO GABARITO (Sincronia Perfil/Versão)
                 if material_ref is not None:
                     txt_ref = str(material_ref['CONTEUDO'])
                     val_tag = ai.extrair_tag(txt_ref, "VALOR")
                     v_total_at = util.sosa_to_float(val_tag) if val_tag else 10.0
 
-                    def extrair_gab_v49(texto, is_pei=False):
+                    def extrair_gab_v49_5(texto, is_pei=False):
+                        # Se o aluno for PEI, busca a tag específica, senão busca a regular
                         tag_alvo = "GABARITO_PEI" if is_pei else "GABARITO_TEXTO"
                         raw = ai.extrair_tag(texto, tag_alvo) or ai.extrair_tag(texto, "GABARITO")
+                        if not raw: return []
                         matches = re.findall(r"(\d+)[\s\.\)\-:]+([A-E])", raw.upper())
                         mapa = {int(num): letra for num, letra in matches}
                         return [mapa[n] for n in sorted(mapa.keys())]
 
-                    gab_alvo = extrair_gab_v49(txt_ref, is_pei_aluno)
+                    # A mágica: extrai o gabarito correto do material escolhido baseado no perfil do aluno
+                    gab_alvo = extrair_gab_v49_5(txt_ref, is_pei_aluno)
 
                     # 4. ÁREA DE CAPTURA
                     col_cam, col_falta = st.columns([2, 1])
@@ -2675,17 +2682,14 @@ elif menu == "📸 Scanner de Gabaritos":
                             
                             if st.button("💾 SALVAR E PRÓXIMO ➔", type="primary", use_container_width=True):
                                 with st.spinner("Arquivando..."):
-                                    # Salva no slot da BASE para o Boletim ler
-                                    id_av_final = f"{at_sel} (2ª CHAMADA)" if modo_2a else at_sel
-                                    link_pasta = db.subir_e_converter_para_google_docs(st.session_state.current_scan_img, al_sel.replace(" ","_"), trimestre=tr_sel, categoria=t_sel, semana=id_av_final, modo="SCANNER")
+                                    # SOBERANIA DE SOBREPOSIÇÃO: Salva no slot da BASE
+                                    info_v = f" (Via {material_ref['TIPO_MATERIAL']})" if modo_2a else ""
+                                    link_pasta = db.subir_e_converter_para_google_docs(st.session_state.current_scan_img, al_sel.replace(" ","_"), trimestre=tr_sel, categoria=t_sel, semana=at_sel + info_v, modo="SCANNER")
                                     
                                     db.salvar_no_banco("DB_GABARITOS_ALUNOS", [
                                         datetime.now().strftime("%d/%m/%Y"), 
                                         id_aluno_atual, al_sel, t_sel, 
-                                        at_sel, # <--- Slot da Base
-                                        ";".join(novas_res), 
-                                        util.sosa_to_str(nota_f), 
-                                        link_pasta
+                                        at_sel, ";".join(novas_res), util.sosa_to_str(nota_f), link_pasta
                                     ])
                                     del st.session_state.current_scan_res
                                     del st.session_state.current_scan_img
