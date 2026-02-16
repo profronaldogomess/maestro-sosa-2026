@@ -1867,6 +1867,147 @@ elif menu == "👥 Gestão da Turma":
                     for _, alu in df_pei_turma.iterrows():
                         st.warning(f"♿ {alu['NOME_ALUNO']}")
 
+# --- ABA 2: ARQUITETURA DE TURMAS (VERSÃO V32.1 - ESCUDO ANTI-DUPLICIDADE) ---
+    with tab_criar:
+        st.subheader("🏗️ Configurar Nova Turma")
+        v_t = f"t_{v}"
+        
+        with st.container(border=True):
+            c1, c2, c3 = st.columns(3)
+            ano_t = c1.selectbox("Série/Ano:", [1, 2, 3, 4, 5, 6, 7, 8, 9], index=5, key=f"ano_{v_t}")
+            letra_t = c2.selectbox("Letra:", ["A", "B", "C", "D", "E", "F", "G"], key=f"letra_{v_t}")
+            turno_t = c3.selectbox("Turno:", ["Matutino", "Vespertino", "Noturno"], key=f"turno_{v_t}")
+
+        dias_aula = st.multiselect(
+            "📅 Selecione os Dias de Aula (Máx 2):", 
+            ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"], 
+            max_selections=2, 
+            key=f"dias_{v_t}"
+        )
+
+        horarios_escolhidos = {}
+        if dias_aula:
+            st.markdown("#### ⏰ Defina o Tempo de Aula por dia")
+            if turno_t == "Matutino":
+                opcoes_h = {"1º Tempo": "07:10h – 09:10h", "2º Tempo": "09:30h – 11:30h"}
+            elif turno_t == "Vespertino":
+                opcoes_h = {"1º Tempo": "13:10h – 15:10h", "2º Tempo": "15:30h – 17:30h"}
+            else:
+                opcoes_h = {"1º Tempo": "18:30h – 20:30h", "2º Tempo": "20:40h – 22:40h"}
+
+            cols_h = st.columns(len(dias_aula))
+            for i, dia in enumerate(dias_aula):
+                with cols_h[i]:
+                    st.info(f"**{dia}**")
+                    t_sel = st.radio(f"Horário para {dia}:", options=list(opcoes_h.keys()), key=f"radio_{dia}_{v_t}")
+                    horarios_escolhidos[dia] = t_sel
+            
+            st.divider()
+            
+            if st.button("🚀 CADASTRAR TURMA AGORA", use_container_width=True, type="primary", key=f"btn_cad_{v_t}"):
+                prefixo_turno = turno_t[0].upper() 
+                sigla = f"{ano_t}ª {prefixo_turno}{letra_t}" 
+                
+                # ESCUDO DE INTEGRIDADE
+                turmas_existentes = df_turmas['ID_TURMA'].astype(str).str.strip().tolist() if not df_turmas.empty else []
+
+                if sigla in turmas_existentes:
+                    st.error(f"🚨 **ERRO DE SOBERANIA:** A turma **{sigla}** já existe.")
+                else:
+                    with st.status("Sincronizando Nova Arquitetura...") as status:
+                        str_dias = " / ".join(dias_aula)
+                        str_horarios = " / ".join([f"{d[:3]}: {horarios_escolhidos[d]}" for d in dias_aula])
+                        
+                        sucesso = db.salvar_no_banco("DB_TURMAS", [
+                            sigla, f"{ano_t}º Ano {letra_t}", turno_t, str_dias, str_horarios, "ATIVO"
+                        ])
+                        
+                        if sucesso:
+                            status.update(label=f"✅ Turma {sigla} cadastrada!", state="complete")
+                            st.balloons()
+                            time.sleep(1.5)
+                            st.cache_data.clear()
+                            st.rerun()
+
+    # --- ABA 3: POVOAR ALUNOS (VERSÃO V33.0 - ID AUTOMÁTICO) ---
+    with tab_povoar:
+        st.subheader("➕ Inclusão de Estudantes")
+        if df_turmas.empty:
+            st.warning("Cadastre uma turma primeiro.")
+        else:
+            t_dest = st.selectbox("Turma de Destino:", df_turmas['ID_TURMA'].tolist(), key=f"dest_{v}")
+            metodo = st.radio("Método de Inclusão:", ["Manual", "Importar CSV"], horizontal=True, key=f"met_{v}")
+            
+            if metodo == "Manual":
+                with st.form("f_manual_povoar", clear_on_submit=True):
+                    c_n1, c_n2 = st.columns([2, 1])
+                    nome_a = c_n1.text_input("Nome Completo do Aluno:").upper()
+                    nec_a = c_n2.text_input("Necessidades/CID:", value="NENHUMA").upper()
+                    
+                    if st.form_submit_button("💾 SALVAR ESTUDANTE"):
+                        if nome_a:
+                            id_n = db.gerar_proximo_id(df_alunos)
+                            if db.salvar_no_banco("DB_ALUNOS", [id_n, nome_a.strip(), t_dest, "ATIVO", nec_a.strip(), "MANUAL"]):
+                                st.success(f"✅ {nome_a} cadastrado com ID {id_n}!")
+                                st.cache_data.clear()
+                        else:
+                            st.error("O nome do aluno é obrigatório.")
+            else:
+                st.info("O CSV deve conter a coluna 'NOME'.")
+                f_csv = st.file_uploader("Selecione o arquivo CSV", type=["csv"], key=f"csv_up_{v}")
+                if f_csv and st.button("🚀 INICIAR IMPORTAÇÃO EM LOTE"):
+                    df_up = pd.read_csv(f_csv)
+                    id_base = db.gerar_proximo_id(df_alunos)
+                    linhas_lote = []
+                    for idx, r in df_up.iterrows():
+                        linhas_lote.append([id_base + idx, str(r['NOME']).upper().strip(), t_dest, "ATIVO", "NENHUMA", "CSV"])
+                    
+                    if db.salvar_lote("DB_ALUNOS", linhas_lote):
+                        st.success(f"✅ {len(linhas_lote)} alunos importados!"); st.cache_data.clear(); st.rerun()
+
+    # --- ABA 4: EDIÇÃO & TRANSFERÊNCIA (VERSÃO V33.5 - EXCLUSÃO CIRÚRGICA) ---
+    with tab_editar:
+        st.subheader("✏️ Gestão de Cadastro e Movimentação")
+        turmas_lista = sorted(df_alunos['TURMA'].unique().tolist()) if not df_alunos.empty else []
+        
+        if not turmas_lista:
+            st.info("Nenhum aluno cadastrado para editar.")
+        else:
+            t_origem = st.selectbox("Selecione a Turma Atual:", [""] + turmas_lista, key=f"orig_ed_{v}")
+            
+            if t_origem:
+                alunos_opcoes = df_alunos[df_alunos['TURMA'] == t_origem].sort_values(by="NOME_ALUNO")
+                aluno_sel_nome = st.selectbox("Selecione o Aluno:", alunos_opcoes['NOME_ALUNO'].tolist(), key=f"alu_ed_{v}")
+                
+                dados_atuais = alunos_opcoes[alunos_opcoes['NOME_ALUNO'] == aluno_sel_nome].iloc[0]
+                id_fixo = dados_atuais['ID']
+
+                with st.form("form_edicao_aluno_v33"):
+                    st.info(f"🆔 Editando Registro ID: {id_fixo}")
+                    c_e1, c_e2 = st.columns(2)
+                    novo_nome = c_e1.text_input("Nome Completo:", value=dados_atuais['NOME_ALUNO']).upper()
+                    nova_nec = c_e2.text_input("Necessidades/CID:", value=dados_atuais['NECESSIDADES']).upper()
+                    
+                    c_e3, c_e4 = st.columns(2)
+                    novo_status = c_e3.selectbox("Status:", ["ATIVO", "DESISTENTE", "TRANSFERIDO"], index=0)
+                    
+                    lista_turmas_total = df_turmas['ID_TURMA'].tolist()
+                    idx_t = lista_turmas_total.index(t_origem) if t_origem in lista_turmas_total else 0
+                    nova_turma = c_e4.selectbox("Transferir para Turma:", lista_turmas_total, index=idx_t)
+                    
+                    if st.form_submit_button("💾 CONFIRMAR ALTERAÇÕES"):
+                        with st.status("Executando Protocolo de Atualização...") as status:
+                            # 1. Remove o registro antigo pelo ID único
+                            if db.excluir_aluno_por_id(id_fixo):
+                                # 2. Salva o novo registro mantendo o mesmo ID
+                                sucesso = db.salvar_no_banco("DB_ALUNOS", [
+                                    id_fixo, novo_nome.strip(), nova_turma, 
+                                    novo_status, nova_nec.strip(), "EDITADO"
+                                ])
+                                if sucesso:
+                                    status.update(label="✅ Cadastro Atualizado!", state="complete")
+                                    st.balloons(); time.sleep(1); st.cache_data.clear(); st.rerun()
+
 # ==============================================================================
 # MÓDULO: BASE DE CONHECIMENTO
 # ==============================================================================
