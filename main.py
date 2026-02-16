@@ -514,7 +514,9 @@ if menu == "🧪 Criador de Aulas":
                                 with col_config1:
                                     aula_alvo_prod = st.radio("🚀 Material a Gerar:", opcoes_pendentes, horizontal=True, key=f"prod_alvo_{v}")
                                 with col_config2:
-                                    qtd_q_prod = st.select_slider("Nº de Questões:", options=[3, 5, 8, 10, 12, 15], value=10, key=f"prod_q_{v}")
+                                    # Novo Slider de precisão unitária
+                                    qtd_q_prod = st.slider("Nº de Questões:", 1, 20, 10, step=1, key=f"prod_q_{v}")
+
 
                                 # Expansor de Roteiro Herdado (Responsivo)
                                 tag_previa = "AULA_1" if "1" in aula_alvo_prod else "AULA_2"
