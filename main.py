@@ -2320,52 +2320,86 @@ elif menu == "📝 Central de Avaliações":
                             status.update(label="✅ Revisão Sincronizada!", state="complete"); st.balloons()
         else: st.warning("⚠️ Gere a prova primeiro.")
 
-    # --- ABA 5: FINALIZAR ATIVO (CORREÇÃO DE SINCRONIA PEI) ---
+# --- ABA 5: FINALIZAR ATIVO (VERSÃO V67.2 - SOBERANIA DE NOMENCLATURA) ---
     with tab_finalizar:
         if "temp_prova" in st.session_state:
             st.subheader("💾 Consolidação do Ativo de Safra")
+            
+            # Recupera os dados da sessão
             v_tipo = st.session_state.get(f"av_t_{v}", "Prova")
             v_ano = st.session_state.get(f"av_a_{v}", 6)
             v_qtd = st.session_state.get(f"av_q_{v}", 10)
+            v_total_num = st.session_state.get('av_valor_total', 10.0)
+            
             c_s1, c_s2 = st.columns(2)
-            trim_av = c_s1.selectbox("Trimestre Alvo:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"trim_fin_{v}")
-            nome_arq = c_s2.text_input("Nome do Arquivo:", st.session_state.get('av_nome_fixo', 'AVALIACAO'), key=f"name_av_in_{v}")
+            trim_av = c_s1.selectbox("Confirmar Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"trim_fin_{v}")
+            
+            # --- O PULO DO GATO: O NOME TÉCNICO É O IDENTIFICADOR ---
+            nome_tecnico_sugerido = st.session_state.get('av_nome_fixo', 'AVALIACAO_SEM_NOME')
+            nome_arq = c_s2.text_input("ID Técnico do Material (Nome no Banco):", nome_tecnico_sugerido, key=f"name_av_in_{v}")
 
-            if st.button("💾 SALVAR COMO PRONTO PARA APLICAÇÃO", use_container_width=True, type="primary"):
+            st.info(f"🚀 O material será salvo como: **{nome_arq}**")
+
+            if st.button("💾 SALVAR E OFICIALIZAR ATIVO", use_container_width=True, type="primary"):
                 with st.status("Sincronizando Ativos e Gerando DOCX...") as status:
-                    v_total_num = st.session_state.get('av_valor_total', 10.0)
-                    identificador = f"{v_tipo} - {v_ano}º Ano ({trim_av})"
+                    # 1. LIMPEZA EM CASCATA (Usa o nome técnico para não duplicar)
+                    identificador = nome_arq 
                     db.excluir_avaliacao_completa(identificador, v_tipo)
                     
-                    # 1. Geração Regular
-                    info_reg = {"ano": f"{v_ano}º", "tipo_prova": v_tipo, "valor": util.sosa_to_str(v_total_num), "valor_questao": util.sosa_to_str(v_total_num/v_qtd), "qtd_questoes": v_qtd, "trimestre": trim_av}
+                    # 2. GERAÇÃO REGULAR
+                    info_reg = {
+                        "ano": f"{v_ano}º", 
+                        "tipo_prova": v_tipo, 
+                        "valor": util.sosa_to_str(v_total_num), 
+                        "valor_questao": util.sosa_to_str(v_total_num/v_qtd), 
+                        "qtd_questoes": v_qtd, 
+                        "trimestre": trim_av
+                    }
                     doc_reg = exporter.gerar_docx_prova_v25(nome_arq, st.session_state.temp_prova, info_reg)
                     link_reg = db.subir_e_converter_para_google_docs(doc_reg, nome_arq, modo="AVALIACAO")
                     
-                    # 2. Geração PEI
+                    # 3. GERAÇÃO PEI
                     txt_pei = ai.extrair_tag(st.session_state.temp_prova, "PEI")
                     link_pei = "N/A"
                     if txt_pei:
                         qtd_q_pei = len(re.findall(r'QUESTÃO', txt_pei.upper()))
-                        info_pei = {"ano": f"{v_ano}º", "tipo_prova": v_tipo, "valor": util.sosa_to_str(v_total_num), "valor_questao": util.sosa_to_str(v_total_num/qtd_q_pei), "qtd_questoes": qtd_q_pei, "trimestre": trim_av}
+                        if qtd_q_pei == 0: qtd_q_pei = 5 # Fallback
+                        info_pei = {
+                            "ano": f"{v_ano}º", 
+                            "tipo_prova": v_tipo, 
+                            "valor": util.sosa_to_str(v_total_num), 
+                            "valor_questao": util.sosa_to_str(v_total_num/qtd_q_pei), 
+                            "qtd_questoes": qtd_q_pei, 
+                            "trimestre": trim_av
+                        }
                         doc_pei = exporter.gerar_docx_prova_v25(f"{nome_arq}_PEI", txt_pei, info_pei)
                         link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_arq}_PEI", modo="AVALIACAO")
 
-                    # 3. Geração Guia Professor (Grade de Perícia)
+                    # 4. GERAÇÃO GUIA PROFESSOR (GRADE DE PERÍCIA)
                     txt_prof = ai.extrair_tag(st.session_state.temp_prova, "GRADE_DE_CORRECAO")
                     link_prof = "N/A"
                     if txt_prof:
                         doc_prof = exporter.gerar_docx_professor_v25(f"{nome_arq}_GRADE", txt_prof, {"ano": f"{v_ano}º", "semana": "AVALIAÇÃO", "trimestre": trim_av})
                         link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_arq}_GRADE", modo="AVALIACAO")
 
-                    # CONSOLIDAÇÃO FINAL NO BANCO (COM TODOS OS LINKS)
+                    # 5. CONSOLIDAÇÃO FINAL NO BANCO (COM O ID TÉCNICO)
                     conteudo_final_banco = f"[VALOR: {v_total_num}]\n" + st.session_state.temp_prova + f"\n--- LINKS ---\nRegular({link_reg}) PEI({link_pei}) Prof({link_prof})"
                     
                     db.salvar_no_banco("DB_AULAS_PRONTAS", [
-                        datetime.now().strftime("%d/%m/%Y"), "AVALIAÇÃO", identificador, 
-                        conteudo_final_banco, f"{v_ano}º", link_reg
+                        datetime.now().strftime("%d/%m/%Y"), 
+                        "AVALIAÇÃO", 
+                        identificador, # <--- AQUI SALVA O NOME TÉCNICO (Ex: 2CHAMADA_TESTE_6ANO_ITrimestre)
+                        conteudo_final_banco, 
+                        f"{v_ano}º", 
+                        link_reg
                     ])
-                    status.update(label="✅ Ativo Salvo com Sucesso!", state="complete"); st.balloons(); time.sleep(1.5); reset_avaliacoes()
+                    
+                    status.update(label="✅ Ativo Salvo com Sucesso!", state="complete")
+                    st.balloons()
+                    time.sleep(1.5)
+                    reset_avaliacoes()
+        else:
+            st.warning("⚠️ Gere a prova no Arquiteto antes de finalizar.")
 
 # --- ABA 6: ACERVO DE SAFRA (VERSÃO V65 - DESIGN PIP & INTELIGÊNCIA DE GABARITO) ---
     with tab_acervo_av:
@@ -2656,7 +2690,7 @@ elif menu == "📸 Scanner de Gabaritos":
                             del st.session_state.current_scan_res
                             del st.session_state.current_scan_img
                             st.rerun()
-                            
+
 # --- ABA 2: ATIVIDADES & PROJETOS (V66.0 - SOBERANIA DE NOTAS E MÉRITO) ---
     with tab_atividades:
         st.subheader("✍️ Gestão de Notas de Projetos e Atividades")
