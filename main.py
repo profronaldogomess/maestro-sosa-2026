@@ -1804,7 +1804,7 @@ elif menu == "👥 Gestão da Turma":
         "📊 Cockpit da Turma", "🏗️ Arquitetura de Turmas", "➕ Povoar Alunos", "✏️ Edição & Transferência"
     ])
 
-# --- ABA 1: COCKPIT DA TURMA (VERSÃO V36.1 - VISÃO TOTAL E FILTRO POR DATA) ---
+# --- ABA 1: COCKPIT DA TURMA (VERSÃO V32 - CORRIGIDA) ---
     with tab_cockpit:
         if df_turmas.empty:
             st.info("📭 Nenhuma turma cadastrada.")
@@ -1815,17 +1815,56 @@ elif menu == "👥 Gestão da Turma":
             
             alunos_t = df_alunos[df_alunos['TURMA'] == turma_foco].sort_values(by="NOME_ALUNO")
             id_alunos_turma = set(alunos_t['ID'].apply(db.limpar_id).tolist())
-            ano_num = "".join(filter(str.isdigit, turma_foco)) 
+            ano_num = "".join(filter(str.isdigit, turma_foco))
 
-            # --- LÓGICA DE DATAS (SOBERANIA TEMPORAL ITABUNA) ---
+            # 1. CÁLCULO DE DATAS
             if "I Trimestre" in trim_foco: dt_ini, dt_fim = date(2026, 2, 9), date(2026, 5, 22)
-            elif "II Trimestre" in trim_foco: dt_ini, dt_f = date(2026, 5, 25), date(2026, 9, 4)
-            elif "III Trimestre" in trim_foco: dt_ini, dt_f = date(2026, 9, 8), date(2026, 12, 17)
+            elif "II Trimestre" in trim_foco: dt_ini, dt_fim = date(2026, 5, 25), date(2026, 9, 4)
+            elif "III Trimestre" in trim_foco: dt_ini, dt_fim = date(2026, 9, 8), date(2026, 12, 17)
             else: dt_ini, dt_fim = date(2026, 1, 1), date(2026, 12, 31)
 
-            # --- 1. DASHBOARD DE STATUS ---
-            c1, c2, c3, c4 = st.columns(4)
-            c1.metric("Total Alunos", len(alunos_t))
+            # 2. CÁLCULO DE PEI
+            mask_pei = alunos_t['NECESSIDADES'].astype(str).str.upper().str.strip().isin(["NENHUMA", "PENDENTE", "", "NAN"]) == False
+            df_pei_turma = alunos_t[mask_pei]
+
+            # 3. CÁLCULO DE ENGAJAMENTO
+            engaj_medio = 0
+            if not df_diario.empty:
+                df_d_t = df_diario[df_diario['TURMA'] == turma_foco].copy()
+                df_d_t['DATA_DT'] = pd.to_datetime(df_d_t['DATA'], format="%d/%m/%Y", errors='coerce').dt.date
+                df_d_trim = df_d_t[(df_d_t['DATA_DT'] >= dt_ini) & (df_d_t['DATA_DT'] <= dt_fim)]
+                if not df_d_trim.empty:
+                    vistos_validos = df_d_trim[df_d_trim['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"]
+                    engaj_medio = (len(vistos_validos) / len(df_d_trim)) * 100
+
+            # 4. CÁLCULO DE SAÚDE DE REGÊNCIA (Novas Colunas)
+            reg_t_foco = df_registro_aulas[df_registro_aulas['TURMA'] == turma_foco]
+            saude_execucao = 0
+            clima_predominante = "N/A"
+            ultima_ponte = "Nenhuma pendência registrada."
+
+            if not reg_t_foco.empty:
+                concluidas = len(reg_t_foco[reg_t_foco['STATUS_EXECUCAO'].str.contains("Concluído", na=False)])
+                saude_execucao = (concluidas / len(reg_t_foco)) * 100
+                if not reg_t_foco['CLIMA_TURMA'].dropna().empty:
+                    clima_predominante = reg_t_foco['CLIMA_TURMA'].mode()[0]
+                ultima_ponte = reg_t_foco.iloc[-1]['PONTE_PEDAGOGICA'] 
+
+            # --- 5. VISUALIZAÇÃO (MÉTRICAS 360°) ---
+            st.markdown("---")
+            m1, m2, m3 = st.columns(3)
+            m1.metric("👥 Total Alunos", len(alunos_t))
+            m2.metric("♿ Estudantes PEI", len(df_pei_turma))
+            m3.metric("🎯 Saúde de Execução", f"{saude_execucao:.0f}%")
+
+            m4, m5, m6 = st.columns(3)
+            m4.metric("📈 Engajamento", f"{engaj_medio:.0f}%")
+            m5.metric("🌡️ Perfil de Clima", clima_predominante.split(" ")[1] if " " in clima_predominante else clima_predominante)
+            m6.metric("🎓 Série Oficial", f"{ano_num}º Ano")
+
+            # Alerta de Pendência
+            if not reg_t_foco.empty and "Concluído" not in str(reg_t_foco.iloc[-1]['STATUS_EXECUCAO']):
+                st.warning(f"📌 **PENDÊNCIA DE REGÊNCIA:** {ultima_ponte}")
             
             mask_pei = alunos_t['NECESSIDADES'].astype(str).str.upper().str.strip().isin(["NENHUMA", "PENDENTE", "", "NAN"]) == False
             df_pei_turma = alunos_t[mask_pei]
