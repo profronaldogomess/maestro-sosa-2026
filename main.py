@@ -1696,8 +1696,8 @@ elif menu == "👥 Gestão da Turma":
     tab_cockpit, tab_criar, tab_povoar, tab_editar = st.tabs([
         "📊 Cockpit da Turma", "🏗️ Arquitetura de Turmas", "➕ Povoar Alunos", "✏️ Edição & Transferência"
     ])
-
-# --- ABA 1: COCKPIT DA TURMA (VERSÃO V33.0 - RADAR DE ALERTAS INTEGRADO) ---
+    
+# --- ABA 1: COCKPIT DA TURMA (VERSÃO V34.0 - RADAR DE PRECISÃO) ---
     with tab_cockpit:
         if df_turmas.empty:
             st.info("📭 Nenhuma turma cadastrada.")
@@ -1713,8 +1713,9 @@ elif menu == "👥 Gestão da Turma":
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("Total Alunos", len(alunos_t))
             
-            mask_pei = ~alunos_t['NECESSIDADES'].astype(str).str.upper().str.strip().isin(["NENHUMA", "PENDENTE", "", "NAN"])
-            c2.metric("Estudantes PEI", len(alunos_t[mask_pei]))
+            mask_pei = alunos_t['NECESSIDADES'].astype(str).str.upper().str.strip().isin(["NENHUMA", "PENDENTE", "", "NAN"]) == False
+            df_pei_turma = alunos_t[mask_pei]
+            c2.metric("Estudantes PEI", len(df_pei_turma))
             
             engaj_medio = 0
             if not df_diario.empty:
@@ -1726,47 +1727,61 @@ elif menu == "👥 Gestão da Turma":
             c4.metric("Série", f"{ano_num}º Ano")
 
             # ==============================================================================
-            # 🚨 NOVO BLOCO: RADAR DE ALERTA PEDAGÓGICO (INTEGRAÇÃO COM SCANNER)
+            # 🚨 RADAR DE ALERTA PEDAGÓGICO V34 (INTEGRAÇÃO CIRÚRGICA)
             # ==============================================================================
             st.markdown("---")
             with st.container(border=True):
-                st.subheader("📡 Radar de Alerta Pedagógico (Baseado no Scanner)")
+                st.subheader("📡 Radar de Alerta Pedagógico (Baseado em Evidências)")
                 
                 if df_diagnosticos.empty:
-                    st.info("💡 Aguardando dados de gabaritos para gerar alertas de lacunas.")
+                    st.info("💡 Aguardando dados de gabaritos para gerar o radar.")
                 else:
-                    # Filtra diagnósticos da turma atual
-                    diag_turma = df_diagnosticos[df_diagnosticos['TURMA'] == turma_foco]
+                    # Filtra diagnósticos da turma
+                    diag_t = df_diagnosticos[df_diagnosticos['TURMA'] == turma_foco]
                     
-                    if diag_turma.empty:
-                        st.success("✅ Nenhuma lacuna crítica detectada para esta turma até o momento.")
+                    if diag_t.empty:
+                        st.success("✅ Nenhuma lacuna crítica detectada para esta turma.")
                     else:
-                        col_r1, col_r2 = st.columns([1.2, 1.8])
+                        # Pega a última avaliação aplicada
+                        ultima_av_nome = diag_t['ID_AVALIACAO'].iloc[-1]
+                        df_ultima = diag_t[diag_t['ID_AVALIACAO'] == ultima_av_nome].copy()
+                        
+                        # Separa Médias (Regular vs PEI)
+                        df_ultima['ID_L'] = df_ultima['ID_ALUNO'].apply(db.limpar_id)
+                        df_alunos_perfil = df_alunos[['ID', 'NECESSIDADES']].copy()
+                        df_alunos_perfil['ID'] = df_alunos_perfil['ID'].apply(db.limpar_id)
+                        
+                        df_radar = pd.merge(df_ultima, df_alunos_perfil, left_on='ID_L', right_on='ID', how='left')
+                        df_radar['IS_PEI'] = df_radar['NECESSIDADES'].apply(lambda x: str(x).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"])
+                        
+                        m_reg = df_radar[df_radar['IS_PEI'] == False]['NOTA_CALCULADA'].apply(util.sosa_to_float).mean()
+                        m_pei = df_radar[df_radar['IS_PEI'] == True]['NOTA_CALCULADA'].apply(util.sosa_to_float).mean()
+
+                        col_r1, col_r2, col_r3 = st.columns([1, 1, 2])
                         
                         with col_r1:
-                            # Média da última avaliação
-                            ultima_av_nome = diag_turma['ID_AVALIACAO'].iloc[-1]
-                            media_av = diag_turma[diag_turma['ID_AVALIACAO'] == ultima_av_nome]['NOTA_CALCULADA'].apply(util.sosa_to_float).mean()
-                            st.metric(f"Última Avaliação: {ultima_av_nome[:20]}...", f"{media_av:.2f}")
-                            
-                            if media_av < 6.0:
-                                st.error("🚨 DESEMPENHO EM ALERTA")
-                            else:
-                                st.success("🟢 DESEMPENHO DENTRO DA META")
-
+                            st.metric("Média Regulares", f"{m_reg:.2f}", delta=f"{m_reg-6.0:.1f}")
+                            if m_reg < 6.0: st.error("🚨 ALERTA REGULAR")
+                        
                         with col_r2:
-                            # Identifica alunos em risco (notas baixas recorrentes)
-                            alunos_risco = diag_turma[diag_turma['NOTA_CALCULADA'].apply(util.sosa_to_float) < 5.0]['NOME_ALUNO'].unique()
-                            if len(alunos_risco) > 0:
-                                st.warning(f"⚠️ **Atenção Prioritária:** {len(alunos_risco)} alunos com dificuldades críticas.")
-                                with st.expander("Ver lista de alunos em risco"):
-                                    for a in alunos_risco: st.caption(f"• {a}")
-                            
-                            # Sugestão de Ação
-                            if media_av < 6.0:
-                                st.markdown("💡 **Sugestão do Maestro:** Gere um material de **Recomposição** focado nos erros desta avaliação antes de avançar o conteúdo.")
+                            st.metric("Média PEI", f"{m_pei:.2f}" if not pd.isna(m_pei) else "N/A", delta=f"{m_pei-6.0:.1f}" if not pd.isna(m_pei) else None)
+                            if not pd.isna(m_pei) and m_pei < 6.0: st.error("🚨 ALERTA PEI")
+
+                        with col_r3:
+                            st.markdown("**🎯 Top Lacunas Detectadas:**")
+                            # Busca a prova no banco para ler a grade
+                            prova_ref = df_aulas[df_aulas['TIPO_MATERIAL'].str.contains(ultima_av_nome.split("(")[0].strip())]
+                            if not prova_ref.empty:
+                                grade = ai.extrair_tag(prova_ref.iloc[0]['CONTEUDO'], "GRADE_DE_CORRECAO")
+                                # Extrai os 2 primeiros descritores citados na grade
+                                descritores = re.findall(r"EF\d{2}MA\d{2}", grade)[:2]
+                                if descritores:
+                                    for d in descritores: st.caption(f"❌ **{d}** (Necessita Recomposição)")
+                                    st.markdown(f"💡 **Sugestão:** Use o material de **Recomposição** focado em {descritores[0]}.")
+                                else:
+                                    st.caption("Analise os erros detalhados no Raio-X da CIR.")
                             else:
-                                st.markdown("💡 **Sugestão do Maestro:** Prossiga com a **Safra Atual** planejada.")
+                                st.caption("Gere uma Recomposição para elevar a média.")
 
             st.markdown("---")
             col_esq, col_dir = st.columns([1.8, 1.2])
@@ -1782,114 +1797,32 @@ elif menu == "👥 Gestão da Turma":
                     data_aula = c_r1.date_input("Data da Aula:", date.today(), key=f"dt_reg_{v}")
                     plano_sel = c_r2.selectbox("Vincular Plano Base:", ["Nenhum"] + planos_ano['SEMANA'].tolist(), key=f"plano_reg_{v}")
                     
-                    # Filtro inteligente de materiais (Prioriza Recomposição se a média for baixa)
-                    mats_sel = st.multiselect("📦 Selecione o Material (Aula/Sonda/Projeto):", options=materiais_ano['TIPO_MATERIAL'].tolist(), key=f"mats_reg_{v}")
+                    # Filtro de Materiais com Identificação de Versão
+                    mats_sel = st.multiselect("📦 Selecione o Material:", options=materiais_ano['TIPO_MATERIAL'].tolist(), key=f"mats_reg_{v}")
 
                     if st.button("💾 ABRIR AULA NO DIÁRIO", use_container_width=True, type="primary"):
-                        with st.spinner("Sincronizando com o Diário Mobile..."):
+                        with st.spinner("Sincronizando..."):
                             conteudo_final = " + ".join(mats_sel) if mats_sel else "Aula Baseada no Plano"
                             db.salvar_no_banco("DB_REGISTRO_AULAS", [
                                 data_aula.strftime("%d/%m/%Y"), plano_sel, turma_foco, 
                                 conteudo_final, "PENDENTE", "ABERTA"
                             ])
-                            st.success(f"✅ Aula aberta! Agora você pode preencher o Diário de Bordo.")
+                            st.success(f"✅ Aula aberta! Preencha o Diário de Bordo.")
                             time.sleep(1); st.rerun()
-
-                st.subheader("📜 Histórico de Ativos Aplicados")
-                aulas_reg = df_registro_aulas[df_registro_aulas['TURMA'] == turma_foco].iloc[::-1]
-                if not aulas_reg.empty:
-                    for _, reg in aulas_reg.head(5).iterrows():
-                        with st.expander(f"📅 {reg['DATA']} - {reg['CONTEUDO_MINISTRADO'][:40]}..."):
-                            st.write(f"**Material:** {reg['CONTEUDO_MINISTRADO']}")
-                            st.write(f"**Plano Vinculado:** {reg['SEMANA']}")
 
             with col_dir:
                 st.subheader("📂 Inventário e Alunos")
                 with st.container(border=True):
                     st.markdown(f"**📦 Ativos Disponíveis ({ano_num}º Ano)**")
-                    # Mostra os últimos 5 materiais criados para esta série
-                    for m in materiais_ano['TIPO_MATERIAL'].tail(5):
-                        st.caption(f"• {m}")
+                    # Diferencia visualmente 2ª Chamada e Recomposição
+                    for m in materiais_ano['TIPO_MATERIAL'].tail(8):
+                        prefixo = "🔄" if "2CHAMADA" in m.upper() else ("🏥" if "RECOMP" in m.upper() else "📘")
+                        st.caption(f"{prefixo} {m}")
                 
                 with st.container(border=True):
                     st.markdown("**👥 Foco PEI**")
-                    for _, alu in alunos_t.iterrows():
-                        if str(alu['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", ""]:
-                            st.warning(f"♿ {alu['NOME_ALUNO']}")
-
-# --- ABA 2: ARQUITETURA DE TURMAS (VERSÃO V32.1 - COM ESCUDO ANTI-DUPLICIDADE) ---
-    with tab_criar:
-        st.subheader("🏗️ Configurar Nova Turma")
-        v_t = f"t_{v}"
-        
-        with st.container(border=True):
-            c1, c2, c3 = st.columns(3)
-            ano_t = c1.selectbox("Série/Ano:", [1, 2, 3, 4, 5, 6, 7, 8, 9], index=5, key=f"ano_{v_t}")
-            letra_t = c2.selectbox("Letra:", ["A", "B", "C", "D", "E", "F", "G"], key=f"letra_{v_t}")
-            turno_t = c3.selectbox("Turno:", ["Matutino", "Vespertino", "Noturno"], key=f"turno_{v_t}")
-
-        dias_aula = st.multiselect(
-            "📅 Selecione os Dias de Aula (Máx 2):", 
-            ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"], 
-            max_selections=2, 
-            key=f"dias_{v_t}"
-        )
-
-        horarios_escolhidos = {}
-        if dias_aula:
-            st.markdown("#### ⏰ Defina o Tempo de Aula por dia")
-            # Define opções de horário baseadas no turno
-            if turno_t == "Matutino":
-                opcoes_h = {"1º Tempo": "07:10h – 09:10h", "2º Tempo": "09:30h – 11:30h"}
-            elif turno_t == "Vespertino":
-                opcoes_h = {"1º Tempo": "13:10h – 15:10h", "2º Tempo": "15:30h – 17:30h"}
-            else:
-                opcoes_h = {"1º Tempo": "18:30h – 20:30h", "2º Tempo": "20:40h – 22:40h"}
-
-            cols_h = st.columns(len(dias_aula))
-            for i, dia in enumerate(dias_aula):
-                with cols_h[i]:
-                    st.info(f"**{dia}**")
-                    t_sel = st.radio(f"Horário para {dia}:", options=list(opcoes_h.keys()), key=f"radio_{dia}_{v_t}")
-                    horarios_escolhidos[dia] = t_sel
-            
-            st.divider()
-            
-            if st.button("🚀 CADASTRAR TURMA AGORA", use_container_width=True, type="primary", key=f"btn_cad_{v_t}"):
-                # 1. GERAÇÃO DA SIGLA ÚNICA (DNA DA TURMA)
-                prefixo_turno = turno_t[0].upper() # M, V ou N
-                sigla = f"{ano_t}ª {prefixo_turno}{letra_t}" # Ex: 6ª MA
-                
-                # 2. ESCUDO DE INTEGRIDADE: VERIFICAÇÃO DE DUPLICIDADE
-                turmas_existentes = []
-                if not df_turmas.empty:
-                    turmas_existentes = df_turmas['ID_TURMA'].astype(str).str.strip().tolist()
-
-                if sigla in turmas_existentes:
-                    st.error(f"🚨 **ERRO DE SOBERANIA:** A turma **{sigla}** já está cadastrada no sistema. Verifique o Cockpit ou a aba de Edição.")
-                else:
-                    with st.status("Sincronizando Nova Arquitetura...") as status:
-                        str_dias = " / ".join(dias_aula)
-                        str_horarios = " / ".join([f"{d[:3]}: {horarios_escolhidos[d]}" for d in dias_aula])
-                        
-                        # Salva no banco: [ID_TURMA, NOME_TURMA, TURNO, DIAS_SEMANA, HORARIO_TEMPO, STATUS]
-                        sucesso = db.salvar_no_banco("DB_TURMAS", [
-                            sigla, 
-                            f"{ano_t}º Ano {letra_t}", 
-                            turno_t, 
-                            str_dias, 
-                            str_horarios, 
-                            "ATIVO"
-                        ])
-                        
-                        if sucesso:
-                            status.update(label=f"✅ Turma {sigla} cadastrada com sucesso!", state="complete")
-                            st.balloons()
-                            time.sleep(1.5)
-                            st.cache_data.clear() # Limpa o cache para a nova turma aparecer nos filtros
-                            st.rerun()
-                        else:
-                            status.update(label="❌ Erro ao acessar o Google Sheets.", state="error")
+                    for _, alu in df_pei_turma.iterrows():
+                        st.warning(f"♿ {alu['NOME_ALUNO']}")
 
     # --- ABA 3: POVOAR ALUNOS ---
     with tab_povoar:
