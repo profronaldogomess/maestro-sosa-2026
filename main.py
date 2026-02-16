@@ -2710,25 +2710,29 @@ elif menu == "📝 Central de Avaliações":
                                         with st.container(border=True):
                                             st.markdown(f"##### 📑 QUESTÃO {q_num}")
                                             
-                                            # --- EXTRAÇÃO TÉCNICA V71 (PRECISÃO CIRÚRGICA) ---
-                                            # A. Busca a Habilidade (Texto entre colchetes ou logo após o número)
+                                            # --- EXTRAÇÃO COM LIMPEZA DE SOBERANIA (ANTI-FONTE-GIGANTE) ---
+                                            
+                                            # A. Habilidade
                                             match_hab = re.search(r"(\[.*?\])", q_txt)
-                                            hab_txt = match_hab.group(1) if match_hab else "Habilidade não identificada"
+                                            hab_txt = match_hab.group(1) if match_hab else ""
                                             
-                                            # B. Busca a Justificativa (Até o início de Perícia ou fim do bloco)
+                                            # B. Justificativa (Limpando # e *)
                                             match_just = re.search(r"(?i)JUSTIFICATIVA:\s*(.*?)(?=PERÍCIA:|DISTRATORES:|$)", q_txt, re.DOTALL)
-                                            just_txt = match_just.group(1).strip() if match_just else "Não detalhada."
+                                            just_raw = match_just.group(1).strip() if match_just else "Não detalhada."
+                                            just_limpa = re.sub(r'[#*]', '', just_raw).strip() # REMOVE O QUE AUMENTA A FONTE
                                             
-                                            # C. Busca a Perícia/Distratores (Até o fim do bloco)
+                                            # C. Perícia (Limpando # e *)
                                             match_peri = re.search(r"(?i)(?:PERÍCIA:|DISTRATORES:)\s*(.*)", q_txt, re.DOTALL)
-                                            peri_txt = match_peri.group(1).strip() if match_peri else "Não detalhada."
+                                            peri_raw = match_peri.group(1).strip() if match_peri else "Não detalhada."
+                                            peri_limpa = re.sub(r'[#*]', '', peri_raw).strip() # REMOVE O QUE AUMENTA A FONTE
 
-                                            # --- EXIBIÇÃO ORGANIZADA ---
-                                            st.caption(f"🆔 **Habilidade:** {hab_txt}")
+                                            # --- EXIBIÇÃO EM FORMATO PADRONIZADO ---
+                                            if hab_txt:
+                                                st.caption(f"🆔 **Habilidade:** {hab_txt}")
                                             
-                                            # Usando st.info e st.warning para destacar a pedagogia
-                                            st.markdown(f"**🎯 Resposta:** {just_txt.replace('*', '')}")
-                                            st.markdown(f"**🔍 Alerta de Erro (Distratores):** {peri_txt.replace('*', '')}")
+                                            # Usamos st.write para maior segurança de tamanho de fonte
+                                            st.write(f"**🎯 Resposta:** {just_limpa}")
+                                            st.write(f"**🔍 Alerta de Erro (Distratores):** {peri_limpa}")
                                 else:
                                     st.info(grade_raw)
                             else:
