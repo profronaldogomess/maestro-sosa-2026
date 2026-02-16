@@ -2699,23 +2699,40 @@ elif menu == "📝 Central de Avaliações":
                             st.markdown("#### 🔬 Grade de Perícia (Habilidades e Justificativas)")
                             grade_raw = ai.extrair_tag(txt_f, "GRADE_DE_CORRECAO")
                             if grade_raw:
-                                # PARSER DE QUESTÕES: Separa cada questão em um box colorido
+                                # 1. Divide a grade por Questões
                                 questoes_grade = re.split(r"(?i)QUEST[AÃ]O\s*0?(\d+)", grade_raw)
-                                # O split gera: [lixo, num, texto, num, texto...]
+                                
                                 if len(questoes_grade) > 1:
                                     for i in range(1, len(questoes_grade), 2):
                                         q_num = questoes_grade[i]
                                         q_txt = questoes_grade[i+1]
+                                        
                                         with st.container(border=True):
-                                            st.markdown(f"**QUESTÃO {q_num}**")
-                                            # Divide Justificativa de Perícia
-                                            partes = re.split(r"(?i)(JUSTIFICATIVA:|PERÍCIA:)", q_txt)
-                                            for p in partes:
-                                                if "JUSTIFICATIVA" in p.upper(): st.write("**🎯 Resposta:**")
-                                                elif "PERÍCIA" in p.upper(): st.write("**🔍 Alerta de Erro (Distratores):**")
-                                                else: st.write(p.strip().replace("-", ""))
-                                else: st.info(grade_raw)
-                            else: st.warning("Grade de perícia não localizada.")
+                                            st.markdown(f"##### 📑 QUESTÃO {q_num}")
+                                            
+                                            # --- EXTRAÇÃO TÉCNICA V71 (PRECISÃO CIRÚRGICA) ---
+                                            # A. Busca a Habilidade (Texto entre colchetes ou logo após o número)
+                                            match_hab = re.search(r"(\[.*?\])", q_txt)
+                                            hab_txt = match_hab.group(1) if match_hab else "Habilidade não identificada"
+                                            
+                                            # B. Busca a Justificativa (Até o início de Perícia ou fim do bloco)
+                                            match_just = re.search(r"(?i)JUSTIFICATIVA:\s*(.*?)(?=PERÍCIA:|DISTRATORES:|$)", q_txt, re.DOTALL)
+                                            just_txt = match_just.group(1).strip() if match_just else "Não detalhada."
+                                            
+                                            # C. Busca a Perícia/Distratores (Até o fim do bloco)
+                                            match_peri = re.search(r"(?i)(?:PERÍCIA:|DISTRATORES:)\s*(.*)", q_txt, re.DOTALL)
+                                            peri_txt = match_peri.group(1).strip() if match_peri else "Não detalhada."
+
+                                            # --- EXIBIÇÃO ORGANIZADA ---
+                                            st.caption(f"🆔 **Habilidade:** {hab_txt}")
+                                            
+                                            # Usando st.info e st.warning para destacar a pedagogia
+                                            st.markdown(f"**🎯 Resposta:** {just_txt.replace('*', '')}")
+                                            st.markdown(f"**🔍 Alerta de Erro (Distratores):** {peri_txt.replace('*', '')}")
+                                else:
+                                    st.info(grade_raw)
+                            else:
+                                st.warning("Grade de perícia não localizada.")
 
                         with t_ques:
                             st.markdown("#### 📋 Conteúdo da Prova Regular")
