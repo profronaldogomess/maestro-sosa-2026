@@ -504,7 +504,27 @@ if menu == "🧪 Criador de Aulas":
                             qtd_q_prod = st.slider("Quantidade de Questões:", 3, 15, 10, key=f"prod_q_{v}")
                             
                             if st.button("💎 COMPILAR MATERIAL DE ELITE", use_container_width=True, type="primary"):
-                                with st.spinner("Arquitetando Tratado Didático..."):
+                                with st.spinner("Arquitetando Tratado Didático com Sensor Clínico..."):
+                                    
+                                    # 1. SENSOR DE NEURODIVERSIDADE (NOVO)
+                                    # Busca alunos dessa série que tenham necessidades registradas
+                                    filtro_ano = str(ano_lab) # Ex: "6"
+                                    alunos_foco = df_alunos[
+                                        (df_alunos['TURMA'].str.contains(filtro_ano)) & 
+                                        (~df_alunos['NECESSIDADES'].isin(["NENHUMA", "PENDENTE", "", "NAN"]))
+                                    ]
+                                    
+                                    lista_needs = []
+                                    if not alunos_foco.empty:
+                                        # Cria uma lista única (ex: "TEA - AUTISMO NIVEL 1, DISLEXIA")
+                                        lista_needs = alunos_foco['NECESSIDADES'].unique().tolist()
+                                        texto_clinico = ", ".join(lista_needs)
+                                        aviso_sensor = f"DETECTADO: {texto_clinico}"
+                                    else:
+                                        texto_clinico = "PADRÃO (Sem laudos específicos registrados)"
+                                        aviso_sensor = "Nenhuma necessidade específica detectada."
+
+                                    # 2. PREPARAÇÃO DO PROMPT
                                     nome_elite = util.gerar_nome_material_elite(ano_lab, aula_alvo_prod, sem_lab)
                                     st.session_state.sosa_id_atual = nome_elite
                                     st.session_state.lab_meta = {
@@ -515,17 +535,27 @@ if menu == "🧪 Criador de Aulas":
                                         "aula_alvo": aula_alvo_prod
                                     }
                                     
-                                    # Seleciona a tag correta do plano (AULA_1 ou AULA_2)
                                     tag_alvo = "AULA_1" if "1" in aula_alvo_prod else "AULA_2"
                                     roteiro_plano = ai.extrair_tag(plano_txt, tag_alvo)
                                     
+                                    # 3. INJEÇÃO NO PROMPT (A MÁGICA ACONTECE AQUI)
                                     prompt_manual = (
                                         f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {nome_elite}.\n"
                                         f"SÉRIE: {ano_ref_prod}. ALVO: {aula_alvo_prod}. QTD: {qtd_q_prod}.\n"
                                         f"--- HERANÇA DO PLANO ---\n{roteiro_plano}\n"
+                                        f"--- SENSOR DE INCLUSÃO (TURMA REAL) ---\n"
+                                        f"A turma possui alunos com: {texto_clinico}.\n"
+                                        f"ORDEM IMPERATIVA PARA O [PEI]: Adapte o material especificamente para essas condições.\n"
+                                        f"Se for AUTISMO: Use suporte visual, linguagem direta e evite metáforas.\n"
+                                        f"Se for DISLEXIA: Use fontes claras, espaçamento maior e evite textos longos.\n"
                                         f"--- EXTRAS ---\n{instr_extra_prod}"
                                     )
+                                    
+                                    # Geração
                                     st.session_state.lab_temp = ai.gerar_ia("MAESTRO_SOSA_V28_ELITE", prompt_manual, usar_busca=True)
+                                    
+                                    # Feedback Visual para você saber que funcionou
+                                    st.toast(f"🧬 Sensor Ativado: {aviso_sensor}", icon="♿")
                                     st.rerun()
 
         with tab_diagnostico:
