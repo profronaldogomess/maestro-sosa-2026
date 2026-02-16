@@ -2563,59 +2563,69 @@ elif menu == "📝 Central de Avaliações":
 
             if st.button("💾 SALVAR E OFICIALIZAR ATIVO", use_container_width=True, type="primary"):
                 with st.status("Sincronizando Ativos e Gerando DOCX...") as status:
-                    # 1. LIMPEZA EM CASCATA (Usa o nome técnico para não duplicar)
+                    # 1. INICIALIZAÇÃO DE SEGURANÇA
+                    link_reg = "N/A"
+                    link_pei = "N/A"
+                    link_prof = "N/A"
                     identificador = nome_arq 
+                    
+                    # 2. LIMPEZA EM CASCATA (Deleta linha antiga e arquivos físicos)
                     db.excluir_avaliacao_completa(identificador, v_tipo)
                     
-                    # 2. GERAÇÃO REGULAR
+                    # 3. TRATAMENTO DO TEXTO DA IA (Remove links fantasmas)
+                    # Certifique-se de que a função ai.limpar_links_antigos existe no seu ai_engine.py
+                    texto_puro_ia = ai.limpar_links_antigos(st.session_state.temp_prova)
+                    
+                    # 4. GERAÇÃO E UPLOAD - MATERIAL REGULAR
+                    status.write("📝 Gerando Prova Regular...")
                     info_reg = {
-                        "ano": f"{v_ano}º", 
-                        "tipo_prova": v_tipo, 
+                        "ano": f"{v_ano}º", "tipo_prova": v_tipo, 
                         "valor": util.sosa_to_str(v_total_num), 
                         "valor_questao": util.sosa_to_str(v_total_num/v_qtd), 
-                        "qtd_questoes": v_qtd, 
-                        "trimestre": trim_av
+                        "qtd_questoes": v_qtd, "trimestre": trim_av
                     }
-                    doc_reg = exporter.gerar_docx_prova_v25(nome_arq, st.session_state.temp_prova, info_reg)
+                    doc_reg = exporter.gerar_docx_prova_v25(nome_arq, texto_puro_ia, info_reg)
                     link_reg = db.subir_e_converter_para_google_docs(doc_reg, nome_arq, modo="AVALIACAO")
                     
-                    # 3. GERAÇÃO PEI
-                    txt_pei = ai.extrair_tag(st.session_state.temp_prova, "PEI")
-                    link_pei = "N/A"
-                    if txt_pei:
-                        qtd_q_pei = len(re.findall(r'QUESTÃO', txt_pei.upper()))
-                        if qtd_q_pei == 0: qtd_q_pei = 5 # Fallback
+                    # 5. GERAÇÃO E UPLOAD - MATERIAL PEI
+                    status.write("♿ Gerando Versão PEI...")
+                    txt_pei_raw = ai.extrair_tag(texto_puro_ia, "PEI")
+                    if txt_pei_raw:
+                        qtd_q_pei = len(re.findall(r'QUESTÃO', txt_pei_raw.upper()))
+                        if qtd_q_pei == 0: qtd_q_pei = 5
                         info_pei = {
-                            "ano": f"{v_ano}º", 
-                            "tipo_prova": v_tipo, 
+                            "ano": f"{v_ano}º", "tipo_prova": v_tipo, 
                             "valor": util.sosa_to_str(v_total_num), 
                             "valor_questao": util.sosa_to_str(v_total_num/qtd_q_pei), 
-                            "qtd_questoes": qtd_q_pei, 
-                            "trimestre": trim_av
+                            "qtd_questoes": qtd_q_pei, "trimestre": trim_av
                         }
-                        doc_pei = exporter.gerar_docx_prova_v25(f"{nome_arq}_PEI", txt_pei, info_pei)
+                        doc_pei = exporter.gerar_docx_prova_v25(f"{nome_arq}_PEI", txt_pei_raw, info_pei)
                         link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_arq}_PEI", modo="AVALIACAO")
 
-                    # 4. GERAÇÃO GUIA PROFESSOR (GRADE DE PERÍCIA)
-                    txt_prof = ai.extrair_tag(st.session_state.temp_prova, "GRADE_DE_CORRECAO")
-                    link_prof = "N/A"
-                    if txt_prof:
-                        doc_prof = exporter.gerar_docx_professor_v25(f"{nome_arq}_GRADE", txt_prof, {"ano": f"{v_ano}º", "semana": "AVALIAÇÃO", "trimestre": trim_av})
+                    # 6. GERAÇÃO E UPLOAD - GUIA DO PROFESSOR (GRADE)
+                    status.write("🔍 Gerando Guia de Perícia...")
+                    txt_gab_letras = ai.extrair_tag(texto_puro_ia, "GABARITO_TEXTO")
+                    txt_grade_analise = ai.extrair_tag(texto_puro_ia, "GRADE_DE_CORRECAO")
+                    if txt_grade_analise:
+                        txt_prof_completo = f"GABARITO OFICIAL:\n{txt_gab_letras}\n\nDETALHAMENTO POR ITEM:\n{txt_grade_analise}"
+                        doc_prof = exporter.gerar_docx_professor_v25(f"{nome_arq}_GRADE", txt_prof_completo, {"ano": f"{v_ano}º", "semana": "AVALIAÇÃO", "trimestre": trim_av})
                         link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_arq}_GRADE", modo="AVALIACAO")
 
-                    # 5. CONSOLIDAÇÃO FINAL NO BANCO (COM O ID TÉCNICO)
-                    conteudo_final_banco = f"[VALOR: {v_total_num}]\n" + st.session_state.temp_prova + f"\n--- LINKS ---\nRegular({link_reg}) PEI({link_pei}) Prof({link_prof})"
+                    # 7. CONSOLIDAÇÃO FINAL NO BANCO (TRIPLE-SYNC)
+                    status.write("💾 Sincronizando com o Banco de Dados...")
+                    links_footer = f"--- LINKS ---\nRegular({link_reg}) PEI({link_pei}) Prof({link_prof})"
+                    conteudo_final_banco = f"[VALOR: {v_total_num}]\n" + texto_puro_ia + f"\n\n{links_footer}"
                     
                     db.salvar_no_banco("DB_AULAS_PRONTAS", [
                         datetime.now().strftime("%d/%m/%Y"), 
                         "AVALIAÇÃO", 
-                        identificador, # <--- AQUI SALVA O NOME TÉCNICO (Ex: 2CHAMADA_TESTE_6ANO_ITrimestre)
+                        identificador, 
                         conteudo_final_banco, 
                         f"{v_ano}º", 
                         link_reg
                     ])
                     
-                    status.update(label="✅ Ativo Salvo com Sucesso!", state="complete")
+                    status.update(label="✅ Ativo Salvo e Sincronizado!", state="complete")
                     st.balloons()
                     time.sleep(1.5)
                     reset_avaliacoes()
@@ -2657,10 +2667,15 @@ elif menu == "📝 Central de Avaliações":
                     if gab_simples:
                         st.markdown(f"**✅ Gabarito Expresso:** `{gab_simples}`")
 
-                    # --- EXTRAÇÃO ROBUSTA DE LINKS ---
-                    l_reg = re.search(r"Regular\((.*?)\)", txt_f).group(1) if "Regular(" in txt_f else (re.search(r"Aluno\((.*?)\)", txt_f).group(1) if "Aluno(" in txt_f else row.get('LINK_DRIVE'))
-                    l_pei = re.search(r"PEI\((.*?)\)", txt_f).group(1) if "PEI(" in txt_f and "PEI(N/A)" not in txt_f else None
-                    l_prof = re.search(r"Prof\((.*?)\)", txt_f).group(1) if "Prof(" in txt_f and "Prof(N/A)" not in txt_f else None
+                    # --- EXTRAÇÃO ROBUSTA DE LINKS (PEGA SEMPRE O ÚLTIMO GERADO) ---
+                    links_reg_all = re.findall(r"Regular\((.*?)\)", txt_f)
+                    l_reg = links_reg_all[-1] if links_reg_all else row.get('LINK_DRIVE')
+                    
+                    links_pei_all = re.findall(r"PEI\((.*?)\)", txt_f)
+                    l_pei = links_pei_all[-1] if links_pei_all and "N/A" not in links_pei_all[-1] else None
+                    
+                    links_prof_all = re.findall(r"Prof\((.*?)\)", txt_f)
+                    l_prof = links_prof_all[-1] if links_prof_all and "N/A" not in links_prof_all[-1] else None
 
                     # --- BOTÕES DE AÇÃO ---
                     c_b1, c_b2, c_b3, c_b4, c_b5 = st.columns(5)
