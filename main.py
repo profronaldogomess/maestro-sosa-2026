@@ -3367,7 +3367,7 @@ elif menu == "📸 Scanner de Gabaritos":
                                 if match: st.info(match.group(0).strip().replace("**", ""))
                             except: st.caption("Detalhes não localizados.")
 
-                # --- PARTE B: DIAGNÓSTICO INDIVIDUAL (MICRO) ---
+                # --- PARTE B: DIAGNÓSTICO INDIVIDUAL (MICRO) - V76 SOBERANIA CLÍNICA ---
                 st.markdown("---")
                 st.markdown("#### 👤 2. Perícia Individual: Lacunas por Estudante")
                 
@@ -3384,15 +3384,15 @@ elif menu == "📸 Scanner de Gabaritos":
                             "Estudante": alu['NOME_ALUNO'], 
                             "Perfil": "🔴 Ausente", 
                             "Versão": "N/A", 
-                            "Nota": 0.0, 
-                            "Lacunas": "N/A"
+                            "Nota": 0.00, 
+                            "Lacunas": "Aguardando Realização"
                         })
                     else:
                         reg = reg_aluno.iloc[-1]
                         nota_alu = util.sosa_to_float(reg['NOTA_CALCULADA'])
                         v_prova = "2ª CHAMADA" if reg['IS_2A_CHAMADA'] else "ORIGINAL"
                         
-                        # --- SMART MATCH V76 (MAPEAMENTO DE DNA) ---
+                        # --- SMART MATCH DE MATERIAL V76 ---
                         nome_av_no_banco = reg['ID_AVALIACAO']
                         m_ref_query = df_aulas[df_aulas['TIPO_MATERIAL'] == nome_av_no_banco]
                         
@@ -3408,35 +3408,38 @@ elif menu == "📸 Scanner de Gabaritos":
                         
                         if not m_ref_query.empty:
                             m_ref = m_ref_query.iloc[0]
-                            txt_p = str(m_ref['CONTEUDO'])
+                            txt_cont = str(m_ref['CONTEUDO'])
                             
-                            # 1. Seleciona o Gabarito e a Grade de Perícia Correta (Regular vs PEI)
-                            tag_gabarito = "GABARITO_PEI" if is_pei_alu else "GABARITO_TEXTO"
+                            # 1. Identifica a Grade Correta (Regular ou PEI)
                             tag_grade = "GRADE_DE_CORRECAO_PEI" if is_pei_alu else "GRADE_DE_CORRECAO"
+                            grade_texto = ai.extrair_tag(txt_cont, tag_grade) or ai.extrair_tag(txt_cont, "GRADE_DE_CORRECAO")
                             
-                            gab_ref_alu = extrair_gab_v75_universal(txt_p, is_pei_alu)
-                            grade_pericia = ai.extrair_tag(txt_p, tag_grade)
-                            
+                            # 2. Identifica o Gabarito Correto
+                            gab_ref_alu = extrair_gab_v75_universal(txt_cont, is_pei_alu)
                             resp_lista = str(reg['RESPOSTAS_ALUNO']).split(';')
-                            erros_hab = []
                             
+                            erros_descritivos = []
                             for i, r in enumerate(resp_lista):
                                 q_n = i + 1
-                                # Verifica se a resposta está errada e não é falta
-                                if r != gab_ref_alu.get(q_n) and r not in ["FALTOU", ""]:
-                                    # --- BUSCA CIRÚRGICA DA HABILIDADE NA GRADE ---
-                                    # Procura o padrão [EF...MA...] logo após o número da questão na grade
-                                    padrao_q = rf"(?i)QUEST[AÃ]O\s*(?:PEI\s*)?0?{q_n}.*?(\[EF\d{{2}}[A-Z]{{2}}\d{{2}}\])"
-                                    match_h = re.search(padrao_q, grade_pericia)
+                                if r != gab_ref_alu.get(q_n) and r != "FALTOU":
+                                    # --- MOTOR DE EXTRAÇÃO DE ASSUNTO V76 ---
+                                    # Busca a linha da questão na grade e pega o que está entre o código BNCC e a Justificativa
+                                    padrao_q = rf"(?i)QUEST[AÃ]O\s*(?:PEI\s*)?0?{q_n}\b(.*?)(?=JUSTIFICATIVA|QUEST[AÃ]O|$)"
+                                    match_h = re.search(padrao_q, grade_texto, re.DOTALL)
                                     
                                     if match_h:
-                                        erros_hab.append(match_h.group(1).replace("[", "").replace("]", ""))
+                                        raw_text = match_h.group(1)
+                                        # Limpa códigos BNCC [EF...], setas, hashtags e asteriscos
+                                        limpo = re.sub(r'\[.*?\]|#|\*|->|▬|:', '', raw_text).strip()
+                                        # Se o texto for muito curto ou vazio, usa um fallback
+                                        assunto = limpo if len(limpo) > 2 else f"Questão {q_n}"
+                                        erros_descritivos.append(assunto)
                                     else:
-                                        erros_hab.append(f"Q{q_n}")
+                                        erros_descritivos.append(f"Item {q_n}")
                             
-                            lacunas_txt = " | ".join(sorted(list(set(erros_hab)))) if erros_hab else "✅ Domínio Total"
+                            lacunas_txt = " | ".join(list(dict.fromkeys(erros_descritivos))) if erros_descritivos else "✅ Domínio Total"
                         else:
-                            lacunas_txt = "⚠️ Ativo não localizado"
+                            lacunas_txt = "⚠️ Gabarito não localizado"
 
                         dados_indiv.append({
                             "Estudante": alu['NOME_ALUNO'],
@@ -3446,9 +3449,10 @@ elif menu == "📸 Scanner de Gabaritos":
                             "Lacunas": lacunas_txt
                         })
 
-                # Exibição com Estilização Master
+                # Exibição com Formatação Master (Duas casas decimais)
+                df_final_indiv = pd.DataFrame(dados_indiv)
                 st.dataframe(
-                    pd.DataFrame(dados_indiv).style.apply(lambda x: ['color: #ff4b4b' if 'Q' in str(v) or 'EF' in str(v) else '' for v in x], subset=['Lacunas']),
+                    df_final_indiv.style.format({"Nota": "{:.2f}"}), 
                     use_container_width=True, 
                     hide_index=True
                 )
