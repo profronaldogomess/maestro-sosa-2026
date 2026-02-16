@@ -1696,8 +1696,8 @@ elif menu == "👥 Gestão da Turma":
     tab_cockpit, tab_criar, tab_povoar, tab_editar = st.tabs([
         "📊 Cockpit da Turma", "🏗️ Arquitetura de Turmas", "➕ Povoar Alunos", "✏️ Edição & Transferência"
     ])
-    
-# --- ABA 1: COCKPIT DA TURMA (VERSÃO V34.0 - RADAR DE PRECISÃO) ---
+
+# --- ABA 1: COCKPIT DA TURMA (VERSÃO V34.1 - FILTRO DE TRIMESTRE REAL) ---
     with tab_cockpit:
         if df_turmas.empty:
             st.info("📭 Nenhuma turma cadastrada.")
@@ -1709,6 +1709,12 @@ elif menu == "👥 Gestão da Turma":
             alunos_t = df_alunos[df_alunos['TURMA'] == turma_foco].sort_values(by="NOME_ALUNO")
             ano_num = "".join(filter(str.isdigit, turma_foco)) 
 
+            # --- LÓGICA DE DATAS DO TRIMESTRE (Sincronia com Itabuna) ---
+            # Buscamos as datas limites no utils.py para filtrar o Diário
+            if trim_foco == "I Trimestre": dt_ini, dt_fim = date(2026, 2, 9), date(2026, 5, 22)
+            elif trim_foco == "II Trimestre": dt_ini, dt_fim = date(2026, 5, 25), date(2026, 9, 4)
+            else: dt_ini, dt_fim = date(2026, 9, 8), date(2026, 12, 17)
+
             # --- 1. DASHBOARD DE STATUS (KPIs) ---
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("Total Alunos", len(alunos_t))
@@ -1717,36 +1723,43 @@ elif menu == "👥 Gestão da Turma":
             df_pei_turma = alunos_t[mask_pei]
             c2.metric("Estudantes PEI", len(df_pei_turma))
             
+            # Engajamento Filtrado pelo Trimestre
             engaj_medio = 0
             if not df_diario.empty:
-                vistos_t = df_diario[df_diario['TURMA'] == turma_foco]
-                if not vistos_t.empty:
-                    vistos_validos = vistos_t[vistos_t['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"]
-                    engaj_medio = (len(vistos_validos) / len(vistos_t)) * 100
-            c3.metric("Engajamento Médio", f"{engaj_medio:.0f}%")
+                df_d_t = df_diario[df_diario['TURMA'] == turma_foco].copy()
+                df_d_t['DATA_DT'] = pd.to_datetime(df_d_t['DATA'], format="%d/%m/%Y", errors='coerce').dt.date
+                # Filtra o diário pelas datas do trimestre
+                df_d_trim = df_d_t[(df_d_t['DATA_DT'] >= dt_ini) & (df_d_t['DATA_DT'] <= dt_fim)]
+                
+                if not df_d_trim.empty:
+                    vistos_validos = df_d_trim[df_d_trim['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"]
+                    engaj_medio = (len(vistos_validos) / len(df_d_trim)) * 100
+            c3.metric(f"Engajamento {trim_foco[0]}T", f"{engaj_medio:.0f}%")
             c4.metric("Série", f"{ano_num}º Ano")
 
             # ==============================================================================
-            # 🚨 RADAR DE ALERTA PEDAGÓGICO V34 (INTEGRAÇÃO CIRÚRGICA)
+            # 🚨 RADAR DE ALERTA PEDAGÓGICO V34.1 (FILTRADO POR TRIMESTRE)
             # ==============================================================================
             st.markdown("---")
             with st.container(border=True):
-                st.subheader("📡 Radar de Alerta Pedagógico (Baseado em Evidências)")
+                st.subheader(f"📡 Radar de Alerta: {trim_foco}")
                 
                 if df_diagnosticos.empty:
                     st.info("💡 Aguardando dados de gabaritos para gerar o radar.")
                 else:
-                    # Filtra diagnósticos da turma
-                    diag_t = df_diagnosticos[df_diagnosticos['TURMA'] == turma_foco]
+                    # Filtra diagnósticos da turma E do trimestre selecionado
+                    diag_t = df_diagnosticos[
+                        (df_diagnosticos['TURMA'] == turma_foco) & 
+                        (df_diagnosticos['ID_AVALIACAO'].str.contains(trim_foco, na=False))
+                    ]
                     
                     if diag_t.empty:
-                        st.success("✅ Nenhuma lacuna crítica detectada para esta turma.")
+                        st.success(f"✅ Nenhuma avaliação registrada para o {trim_foco} nesta turma.")
                     else:
-                        # Pega a última avaliação aplicada
                         ultima_av_nome = diag_t['ID_AVALIACAO'].iloc[-1]
                         df_ultima = diag_t[diag_t['ID_AVALIACAO'] == ultima_av_nome].copy()
                         
-                        # Separa Médias (Regular vs PEI)
+                        # Preparação para Médias
                         df_ultima['ID_L'] = df_ultima['ID_ALUNO'].apply(db.limpar_id)
                         df_alunos_perfil = df_alunos[['ID', 'NECESSIDADES']].copy()
                         df_alunos_perfil['ID'] = df_alunos_perfil['ID'].apply(db.limpar_id)
@@ -1754,34 +1767,37 @@ elif menu == "👥 Gestão da Turma":
                         df_radar = pd.merge(df_ultima, df_alunos_perfil, left_on='ID_L', right_on='ID', how='left')
                         df_radar['IS_PEI'] = df_radar['NECESSIDADES'].apply(lambda x: str(x).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"])
                         
-                        m_reg = df_radar[df_radar['IS_PEI'] == False]['NOTA_CALCULADA'].apply(util.sosa_to_float).mean()
-                        m_pei = df_radar[df_radar['IS_PEI'] == True]['NOTA_CALCULADA'].apply(util.sosa_to_float).mean()
+                        # Cálculo de Médias com Vacina Anti-NaN
+                        reg_slice = df_radar[df_radar['IS_PEI'] == False]['NOTA_CALCULADA'].apply(util.sosa_to_float)
+                        pei_slice = df_radar[df_radar['IS_PEI'] == True]['NOTA_CALCULADA'].apply(util.sosa_to_float)
+                        
+                        m_reg = reg_slice.mean() if not reg_slice.empty else 0.0
+                        m_pei = pei_slice.mean() if not pei_slice.empty else 0.0
 
                         col_r1, col_r2, col_r3 = st.columns([1, 1, 2])
                         
                         with col_r1:
-                            st.metric("Média Regulares", f"{m_reg:.2f}", delta=f"{m_reg-6.0:.1f}")
-                            if m_reg < 6.0: st.error("🚨 ALERTA REGULAR")
+                            st.metric("Média Regulares", f"{m_reg:.2f}", delta=f"{m_reg-6.0:.1f}" if m_reg > 0 else None)
+                            if m_reg > 0 and m_reg < 6.0: st.error("🚨 ALERTA REGULAR")
+                            elif m_reg == 0: st.caption("Sem dados de regulares.")
                         
                         with col_r2:
-                            st.metric("Média PEI", f"{m_pei:.2f}" if not pd.isna(m_pei) else "N/A", delta=f"{m_pei-6.0:.1f}" if not pd.isna(m_pei) else None)
-                            if not pd.isna(m_pei) and m_pei < 6.0: st.error("🚨 ALERTA PEI")
+                            st.metric("Média PEI", f"{m_pei:.2f}", delta=f"{m_pei-6.0:.1f}" if m_pei > 0 else None)
+                            if m_pei > 0 and m_pei < 6.0: st.error("🚨 ALERTA PEI")
+                            elif m_pei == 0: st.caption("Sem dados de PEI.")
 
                         with col_r3:
-                            st.markdown("**🎯 Top Lacunas Detectadas:**")
+                            st.markdown(f"**🎯 Análise da Avaliação:**\n`{ultima_av_nome}`")
                             # Busca a prova no banco para ler a grade
                             prova_ref = df_aulas[df_aulas['TIPO_MATERIAL'].str.contains(ultima_av_nome.split("(")[0].strip())]
                             if not prova_ref.empty:
                                 grade = ai.extrair_tag(prova_ref.iloc[0]['CONTEUDO'], "GRADE_DE_CORRECAO")
-                                # Extrai os 2 primeiros descritores citados na grade
                                 descritores = re.findall(r"EF\d{2}MA\d{2}", grade)[:2]
                                 if descritores:
-                                    for d in descritores: st.caption(f"❌ **{d}** (Necessita Recomposição)")
-                                    st.markdown(f"💡 **Sugestão:** Use o material de **Recomposição** focado em {descritores[0]}.")
-                                else:
-                                    st.caption("Analise os erros detalhados no Raio-X da CIR.")
+                                    for d in descritores: st.caption(f"❌ **{d}** (Habilidade em Alerta)")
+                                    st.markdown(f"💡 **Sugestão:** Priorize a revisão de {descritores[0]}.")
                             else:
-                                st.caption("Gere uma Recomposição para elevar a média.")
+                                st.caption("Gere um material de Recomposição para esta turma.")
 
             st.markdown("---")
             col_esq, col_dir = st.columns([1.8, 1.2])
@@ -1790,14 +1806,13 @@ elif menu == "👥 Gestão da Turma":
                 st.subheader("🕒 Abertura de Aula (Handshake Diário)")
                 with st.container(border=True):
                     st.markdown("#### 🚀 Registrar Ativo para Hoje")
-                    planos_ano = df_planos[df_planos['ANO'].str.contains(ano_num)]
+                    planos_ano = df_planos[(df_planos['ANO'].str.contains(ano_num)) & (df_planos['TURMA'] == trim_foco)]
                     materiais_ano = df_aulas[df_aulas['ANO'].str.contains(ano_num)]
 
                     c_r1, c_r2 = st.columns(2)
                     data_aula = c_r1.date_input("Data da Aula:", date.today(), key=f"dt_reg_{v}")
                     plano_sel = c_r2.selectbox("Vincular Plano Base:", ["Nenhum"] + planos_ano['SEMANA'].tolist(), key=f"plano_reg_{v}")
                     
-                    # Filtro de Materiais com Identificação de Versão
                     mats_sel = st.multiselect("📦 Selecione o Material:", options=materiais_ano['TIPO_MATERIAL'].tolist(), key=f"mats_reg_{v}")
 
                     if st.button("💾 ABRIR AULA NO DIÁRIO", use_container_width=True, type="primary"):
@@ -1807,14 +1822,13 @@ elif menu == "👥 Gestão da Turma":
                                 data_aula.strftime("%d/%m/%Y"), plano_sel, turma_foco, 
                                 conteudo_final, "PENDENTE", "ABERTA"
                             ])
-                            st.success(f"✅ Aula aberta! Preencha o Diário de Bordo.")
+                            st.success(f"✅ Aula aberta!")
                             time.sleep(1); st.rerun()
 
             with col_dir:
                 st.subheader("📂 Inventário e Alunos")
                 with st.container(border=True):
                     st.markdown(f"**📦 Ativos Disponíveis ({ano_num}º Ano)**")
-                    # Diferencia visualmente 2ª Chamada e Recomposição
                     for m in materiais_ano['TIPO_MATERIAL'].tail(8):
                         prefixo = "🔄" if "2CHAMADA" in m.upper() else ("🏥" if "RECOMP" in m.upper() else "📘")
                         st.caption(f"{prefixo} {m}")
@@ -1823,65 +1837,6 @@ elif menu == "👥 Gestão da Turma":
                     st.markdown("**👥 Foco PEI**")
                     for _, alu in df_pei_turma.iterrows():
                         st.warning(f"♿ {alu['NOME_ALUNO']}")
-
-    # --- ABA 3: POVOAR ALUNOS ---
-    with tab_povoar:
-        st.subheader("➕ Inclusão de Estudantes")
-        t_dest = st.selectbox("Turma de Destino:", df_turmas['ID_TURMA'].tolist() if not df_turmas.empty else [], key=f"dest_{v}")
-        metodo = st.radio("Método:", ["Manual", "CSV"], horizontal=True, key=f"met_{v}")
-        if metodo == "Manual":
-            with st.form("f_manual", clear_on_submit=True):
-                nome_a = st.text_input("Nome Completo:").upper()
-                nec_a = st.text_input("Necessidades/CID:", value="NENHUMA").upper()
-                if st.form_submit_button("💾 Salvar"):
-                    id_n = db.gerar_proximo_id(df_alunos)
-                    db.salvar_no_banco("DB_ALUNOS", [id_n, nome_a, t_dest, "ATIVO", nec_a, "MANUAL"])
-                    st.success("Cadastrado!"); st.rerun()
-        else:
-            f_csv = st.file_uploader("Arquivo CSV", type=["csv"], key=f"csv_{v}")
-            if f_csv and st.button("🚀 Importar Lista", key=f"btn_csv_{v}"):
-                df_up = pd.read_csv(f_csv)
-                id_b = db.gerar_proximo_id(df_alunos)
-                for idx, r in df_up.iterrows():
-                    db.salvar_no_banco("DB_ALUNOS", [id_b+idx, str(r['NOME']).upper(), t_dest, "ATIVO", "NENHUMA", "CSV"])
-                st.success("Importado!"); st.rerun()
-
-    # --- ABA 4: EDIÇÃO & TRANSFERÊNCIA ---
-    with tab_editar:
-        st.subheader("✏️ Alterar Cadastro ou Transferir Aluno")
-        turmas_com_alunos = sorted(df_alunos['TURMA'].unique().tolist())
-        t_origem = st.selectbox("Selecione a Turma Atual:", [""] + turmas_com_alunos, key=f"orig_{v}")
-        
-        if t_origem:
-            alunos_opcoes = df_alunos[df_alunos['TURMA'] == t_origem].sort_values(by="NOME_ALUNO")
-            aluno_sel_nome = st.selectbox("Selecione o Aluno:", alunos_opcoes['NOME_ALUNO'].tolist(), key=f"alu_ed_{v}")
-            
-            dados_atuais = alunos_opcoes[alunos_opcoes['NOME_ALUNO'] == aluno_sel_nome].iloc[0]
-            id_fixo = dados_atuais['ID']
-
-            with st.form("form_edicao_aluno_v33"):
-                st.info(f"🆔 Editando Registro ID: {id_fixo}")
-                c_e1, c_e2 = st.columns(2)
-                novo_nome = c_e1.text_input("Nome Completo:", value=dados_atuais['NOME_ALUNO'])
-                nova_nec = c_e2.text_input("Necessidades/CID:", value=dados_atuais['NECESSIDADES'])
-                
-                c_e3, c_e4 = st.columns(2)
-                novo_status = c_e3.selectbox("Status:", ["ATIVO", "DESISTENTE", "TRANSFERIDO"], index=0)
-                
-                lista_turmas_total = df_turmas['ID_TURMA'].tolist()
-                idx_turma_atual = lista_turmas_total.index(t_origem) if t_origem in lista_turmas_total else 0
-                nova_turma = c_e4.selectbox("Transferir para:", lista_turmas_total, index=idx_turma_atual)
-                
-                if st.form_submit_button("💾 CONFIRMAR ALTERAÇÕES E LIMPAR DUPLICIDADE"):
-                    with st.status("Executando Protocolo de Limpeza e Atualização...") as status:
-                        if db.excluir_aluno_por_id(id_fixo):
-                            sucesso = db.salvar_no_banco("DB_ALUNOS", [
-                                id_fixo, novo_nome.upper().strip(), nova_turma, 
-                                novo_status, nova_nec.upper().strip(), "EDITADO"
-                            ])
-                            if sucesso:
-                                status.update(label="✅ Cadastro Atualizado!", state="complete")
-                                st.balloons(); time.sleep(1); st.rerun()
 
 # ==============================================================================
 # MÓDULO: BASE DE CONHECIMENTO
