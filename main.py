@@ -2552,7 +2552,7 @@ elif menu == "📸 Scanner de Gabaritos":
         "📊 4. Raio-X Pedagógico", "📂 5. Acervo de Evidências", "📈 6. Dashboard"
     ])
 
-# --- ABA 1: PERÍCIA DE GABARITOS (VERSÃO V48.2 - SMART LOOKUP 2ª CHAMADA) ---
+# --- ABA 1: PERÍCIA DE GABARITOS (VERSÃO V49.0 - SMART LOOKUP 2CHAMADA) ---
     with tab_pericia:
         c1, c2, c3 = st.columns([1, 1, 1.5])
         t_sel = c1.selectbox("👥 Turma:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"t_p_{v}")
@@ -2560,14 +2560,14 @@ elif menu == "📸 Scanner de Gabaritos":
         
         # Filtro de Avaliação Base (O "Slot" no Boletim)
         opcoes_p = filtrar_ativos_cir_v64(t_sel, tr_sel, apenas_provas=True)
-        opcoes_base = [opt for opt in opcoes_p if "2ª" not in opt.upper() and "CHAMADA" not in opt.upper()]
+        # Mostra apenas as provas originais (ignora o que tem 2CHAMADA no nome)
+        opcoes_base = [opt for opt in opcoes_p if "2CHAMADA" not in opt.upper()]
         at_sel = c3.selectbox("📋 Selecione a Avaliação Base (Slot):", [""] + opcoes_base, key=f"at_p_{v}")
 
         if not t_sel or not at_sel:
             st.info("💡 Selecione a Turma e a Avaliação Base para abrir o Scanner.")
         else:
             # 1. BUSCA DE PENDENTES NO SLOT SELECIONADO
-            # Normaliza a busca para ignorar sufixos e focar no título da prova (Teste, Prova, etc)
             nome_filtro_pendente = at_sel.split("-")[0].strip()
             escaneados = df_diagnosticos[df_diagnosticos['ID_AVALIACAO'].str.contains(nome_filtro_pendente)]['ID_ALUNO'].astype(str).tolist()
             pendentes = df_alunos[(df_alunos['TURMA'] == t_sel) & (~df_alunos['ID'].astype(str).isin(escaneados))].sort_values(by="NOME_ALUNO")
@@ -2583,25 +2583,26 @@ elif menu == "📸 Scanner de Gabaritos":
                 
                 st.markdown(f"### 📸 Corrigindo agora: **{al_sel}**")
                 
-                # --- 2. HUB DE SEGUNDA CHAMADA (SMART LOOKUP V48.2) ---
+                # --- 2. HUB DE SEGUNDA CHAMADA (SMART MATCH V49) ---
                 with st.container(border=True):
                     c_v1, c_v2 = st.columns([1, 1])
                     modo_2a = c_v1.toggle("🚀 Aplicar Segunda Chamada para este aluno?", key=f"toggle_2a_{id_aluno_atual}")
                     
                     if modo_2a:
-                        # BUSCA POR DNA: Procura materiais que contenham "2ª" ou "CHAMADA" 
-                        # e que batam com a SÉRIE (ex: 6º) e o TRIMESTRE selecionado
-                        serie_alvo_dna = t_sel[0] # Pega o "6" de "6ª MA"
+                        # LÓGICA DE BUSCA POR DNA:
+                        tipo_base = at_sel.split("-")[0].strip().upper() # Ex: "TESTE"
+                        serie_num = "".join(filter(str.isdigit, t_sel)) # Ex: "6"
                         
+                        # Filtra no banco materiais que contenham 2CHAMADA + o Tipo + a Série
                         df_2a_candidatos = df_aulas[
-                            (df_aulas['TIPO_MATERIAL'].str.contains(r"2[ªa]|CHAMADA", case=False, regex=True)) & 
-                            (df_aulas['ANO'].str.contains(serie_alvo_dna)) &
-                            (df_aulas['CONTEUDO'].str.contains(tr_sel, na=False))
+                            (df_aulas['TIPO_MATERIAL'].str.upper().str.contains("2CHAMADA")) & 
+                            (df_aulas['TIPO_MATERIAL'].str.upper().str.contains(tipo_base)) &
+                            (df_aulas['ANO'].str.contains(serie_num))
                         ]
                         
                         opcoes_2a = df_2a_candidatos['TIPO_MATERIAL'].unique().tolist()
                         
-                        at_segunda = c_v2.selectbox("📋 Selecione o Ativo 2ªCHAMADA:", [""] + opcoes_2a, key=f"sel_2a_{id_aluno_atual}")
+                        at_segunda = c_v2.selectbox("📋 Selecione o Ativo 2CHAMADA:", [""] + opcoes_2a, key=f"sel_2a_{id_aluno_atual}")
                         
                         if at_segunda:
                             material_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == at_segunda].iloc[0]
@@ -2619,14 +2620,14 @@ elif menu == "📸 Scanner de Gabaritos":
                     val_tag = ai.extrair_tag(txt_ref, "VALOR")
                     v_total_at = util.sosa_to_float(val_tag) if val_tag else 10.0
 
-                    def extrair_gab_v48_2(texto, is_pei=False):
+                    def extrair_gab_v49(texto, is_pei=False):
                         tag_alvo = "GABARITO_PEI" if is_pei else "GABARITO_TEXTO"
                         raw = ai.extrair_tag(texto, tag_alvo) or ai.extrair_tag(texto, "GABARITO")
                         matches = re.findall(r"(\d+)[\s\.\)\-:]+([A-E])", raw.upper())
                         mapa = {int(num): letra for num, letra in matches}
                         return [mapa[n] for n in sorted(mapa.keys())]
 
-                    gab_alvo = extrair_gab_v48_2(txt_ref, is_pei_aluno)
+                    gab_alvo = extrair_gab_v49(txt_ref, is_pei_aluno)
 
                     # 4. ÁREA DE CAPTURA
                     col_cam, col_falta = st.columns([2, 1])
@@ -2674,13 +2675,17 @@ elif menu == "📸 Scanner de Gabaritos":
                             
                             if st.button("💾 SALVAR E PRÓXIMO ➔", type="primary", use_container_width=True):
                                 with st.spinner("Arquivando..."):
-                                    # Salva com a etiqueta de versão para o Hub de Soberania ler
+                                    # Salva no slot da BASE para o Boletim ler
                                     id_av_final = f"{at_sel} (2ª CHAMADA)" if modo_2a else at_sel
                                     link_pasta = db.subir_e_converter_para_google_docs(st.session_state.current_scan_img, al_sel.replace(" ","_"), trimestre=tr_sel, categoria=t_sel, semana=id_av_final, modo="SCANNER")
                                     
                                     db.salvar_no_banco("DB_GABARITOS_ALUNOS", [
-                                        datetime.now().strftime("%d/%m/%Y"), id_aluno_atual, al_sel, t_sel, 
-                                        id_av_final, ";".join(novas_res), util.sosa_to_str(nota_f), link_pasta
+                                        datetime.now().strftime("%d/%m/%Y"), 
+                                        id_aluno_atual, al_sel, t_sel, 
+                                        at_sel, # <--- Slot da Base
+                                        ";".join(novas_res), 
+                                        util.sosa_to_str(nota_f), 
+                                        link_pasta
                                     ])
                                     del st.session_state.current_scan_res
                                     del st.session_state.current_scan_img
