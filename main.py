@@ -2308,12 +2308,36 @@ elif menu == "📝 Central de Avaliações":
                 st.markdown("### 🎯 3. Matriz de Mérito e Vínculo de Safra")
                 trim_filtro = st.selectbox("Filtrar Ativos por Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"av_trim_filter_{v}")
                 
+                # --- MOTOR DE BUSCA CRONOLÓGICA V33 (FIX: ATIVOS DE SAFRA) ---
+                # 1. Filtra pela série (Ano)
+                df_ref = df_aulas[df_aulas['ANO'].str.contains(str(ano_av))].copy()
+                
+                def validar_pertenca_trimestre(row):
+                    # Prioridade 1: Se o texto contém o nome do trimestre
+                    if trim_filtro.upper() in str(row['CONTEUDO']).upper():
+                        return True
+                    # Prioridade 2: Pela data da aula (Sincronia com Calendário Itabuna)
+                    try:
+                        data_str = str(row['DATA'])
+                        # Converte DD/MM/YYYY para objeto date
+                        d, m, y = map(int, data_str.split('/'))
+                        dt_aula = date(y, m, d)
+                        trim_nome, _ = util.obter_info_trimestre(dt_aula)
+                        return trim_nome == trim_filtro
+                    except:
+                        return False
+
+                # Aplica a validação inteligente
+                if not df_ref.empty:
+                    mask = df_ref.apply(validar_pertenca_trimestre, axis=1)
+                    df_ref = df_ref[mask]
+
                 if is_segunda:
-                    df_ref = df_aulas[(df_aulas['SEMANA_REF'] == "AVALIAÇÃO") & (df_aulas['ANO'].str.contains(str(ano_av)))]
-                    mats_selecionados = st.selectbox("📦 Selecione a Prova Original (Parâmetro):", [""] + df_ref['TIPO_MATERIAL'].tolist(), key=f"av_ref_{v}")
+                    # Para 2ª Chamada, busca apenas o que é AVALIAÇÃO
+                    df_ref_2a = df_ref[df_ref['SEMANA_REF'] == "AVALIAÇÃO"]
+                    mats_selecionados = st.selectbox(f"📦 Selecione a Prova Original ({len(df_ref_2a)} detectadas):", [""] + df_ref_2a['TIPO_MATERIAL'].tolist(), key=f"av_ref_{v}")
                 else:
-                    # Filtra aulas do banco que batem com a série e o trimestre
-                    df_ref = df_aulas[(df_aulas['ANO'].str.contains(str(ano_av))) & (df_aulas['CONTEUDO'].str.contains(trim_filtro))]
+                    # Para Provas Normais, mostra todos os ativos de safra (Aulas, Projetos, etc)
                     mats_selecionados = st.multiselect(f"Ativos de Safra ({len(df_ref)} detectados):", options=df_ref["TIPO_MATERIAL"].tolist(), key=f"av_ref_{v}")
                 
                 instr_extra = st.text_area("📝 Instruções Extras de Composição:", key=f"av_extra_{v}")
