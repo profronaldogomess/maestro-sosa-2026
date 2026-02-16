@@ -3313,9 +3313,10 @@ elif menu == "📸 Scanner de Gabaritos":
                                 if match: st.info(match.group(0).strip().replace("**", ""))
                             except: st.caption("Detalhes não localizados.")
 
-# --- PARTE B: DIAGNÓSTICO INDIVIDUAL (MICRO) - V77 SOBERANIA INTEGRAL ---
+# --- PARTE B: DIAGNÓSTICO INDIVIDUAL (MICRO) - V77 PERÍCIA INTEGRAL DE DISTRATORES ---
                 st.markdown("---")
                 st.markdown("#### 👤 2. Perícia Individual: Lacunas por Estudante")
+                st.caption("O sistema analisa a letra marcada pelo aluno e extrai a perícia técnica do erro direto da Grade de Correção.")
                 
                 alunos_turma = df_alunos[df_alunos['TURMA'] == t_sel_r].sort_values(by="NOME_ALUNO")
                 dados_indiv = []
@@ -3327,91 +3328,84 @@ elif menu == "📸 Scanner de Gabaritos":
                     
                     if reg_aluno.empty:
                         dados_indiv.append({
-                            "Estudante": alu['NOME_ALUNO'], "Perfil": "🔴 Ausente", 
-                            "Versão": "N/A", "Nota": 0.00, "Lacunas / Diagnóstico Clínico": "Aguardando Realização"
+                            "Estudante": alu['NOME_ALUNO'], "Perfil": "🔴 Ausente", "Nota": 0.00, "Perícia de Erros (Lacunas)": "Aguardando Realização"
                         })
                     else:
                         reg = reg_aluno.iloc[-1]
                         nota_alu = util.sosa_to_float(reg['NOTA_CALCULADA'])
-                        v_prova = "2ª CHAMADA" if reg['IS_2A_CHAMADA'] else "ORIGINAL"
                         
-                        # --- MOTOR DE BUSCA DE ATIVOS ---
+                        # --- SMART MATCH DE MATERIAL V77 ---
                         nome_av_no_banco = reg['ID_AVALIACAO']
                         m_ref_query = df_aulas[df_aulas['TIPO_MATERIAL'] == nome_av_no_banco]
                         
+                        # Fallback por DNA (Série + Nome Curto)
                         if m_ref_query.empty:
-                            if reg['IS_2A_CHAMADA']:
-                                m_ref_query = df_aulas[
-                                    (df_aulas['TIPO_MATERIAL'].str.upper().str.contains("2CHAMADA")) & 
-                                    (df_aulas['TIPO_MATERIAL'].str.upper().str.contains(nome_curto_av.upper())) &
-                                    (df_aulas['ANO'].str.contains(ano_num_r))
-                                ]
-                            else:
-                                m_ref_query = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel_r]
+                            m_ref_query = df_aulas[
+                                (df_aulas['TIPO_MATERIAL'].str.upper().str.contains(nome_curto_av.upper())) &
+                                (df_aulas['ANO'].str.contains(ano_num_r))
+                            ]
                         
                         if not m_ref_query.empty:
                             m_ref = m_ref_query.iloc[0]
                             txt_cont = str(m_ref['CONTEUDO'])
                             
-                            # Define qual grade usar
+                            # Identifica a Grade e o Gabarito corretos
                             tag_grade = "GRADE_DE_CORRECAO_PEI" if is_pei_alu else "GRADE_DE_CORRECAO"
                             grade_texto = ai.extrair_tag(txt_cont, tag_grade) or ai.extrair_tag(txt_cont, "GRADE_DE_CORRECAO")
-                            
-                            # Pega gabarito e respostas
                             gab_ref_alu = extrair_gab_v75_universal(txt_cont, is_pei_alu)
-                            resp_lista = str(reg['RESPOSTAS_ALUNO']).split(';')
+                            resp_aluno_lista = str(reg['RESPOSTAS_ALUNO']).split(';')
                             
-                            pericia_erros = []
-                            for i, resp_aluno in enumerate(resp_lista):
+                            analise_de_erros = []
+                            for i, letra_marcada in enumerate(resp_aluno_lista):
                                 q_n = i + 1
-                                correta = gab_ref_alu.get(q_n)
+                                letra_correta = gab_ref_alu.get(q_n)
                                 
-                                # Se o aluno errou e não faltou
-                                if resp_aluno != correta and resp_aluno not in ["FALTOU", "?", "X"]:
-                                    # --- MOTOR DE RASPAGEM DE DISTRATORES V77 ---
+                                # Se o aluno errou e não foi falta
+                                if letra_marcada != letra_correta and letra_marcada not in ["FALTOU", "?", "X"]:
+                                    # --- MOTOR DE EXTRAÇÃO DE DISTRATOR INTEGRAL ---
                                     # 1. Localiza o bloco da questão na grade
-                                    padrao_bloco = rf"(?i)QUEST[AÃ]O\s*(?:PEI\s*)?0?{q_n}\b(.*?)(?=QUEST[AÃ]O|$)"
-                                    match_bloco = re.search(padrao_bloco, grade_texto, re.DOTALL)
+                                    padrao_bloco = rf"(?si)QUEST[AÃ]O\s*(?:PEI\s*)?0?{q_n}\b.*?(?=QUEST[AÃ]O|$)"
+                                    bloco_q = re.search(padrao_bloco, grade_texto)
                                     
-                                    if match_bloco:
-                                        bloco_q = match_bloco.group(1)
-                                        # 2. Localiza o texto do distrator específico (A, B, C, D ou E) que o aluno marcou
-                                        # Procura formatos como: Distrator A:, A), A -, A:
-                                        padrao_distrator = rf"(?i)(?:DISTRATOR|LETRA|OPÇÃO)?\s*{resp_aluno}\b[:\-\)]\s*(.*?)(?=(?:DISTRATOR|LETRA|OPÇÃO)?\s*[A-E]\b[:\-\)]|JUSTIFICATIVA|ANÁLISE|$)"
-                                        match_d = re.search(padrao_distrator, bloco_q, re.DOTALL)
+                                    if bloco_q:
+                                        texto_bloco = bloco_q.group(0)
+                                        # 2. Busca especificamente a análise da letra que o aluno marcou
+                                        # Procura por "A)" ou "Distrator A" ou "Letra A" dentro do bloco
+                                        padrao_distrator = rf"(?i)(?:{letra_marcada}[\)\:\s\-]+|DISTRATOR\s+{letra_marcada}|{letra_marcada}\s+[\-:]+)(.*?)(?=[A-E][\)\:\s\-]|JUSTIFICATIVA|PERÍCIA|QUEST[AÃ]O|$)"
+                                        match_d = re.search(padrao_distrator, texto_bloco, re.DOTALL)
                                         
                                         if match_d:
-                                            texto_erro = match_d.group(1).strip()
-                                            # Limpeza de ruído visual (#, *)
-                                            texto_erro = re.sub(r'[#*]', '', texto_erro)
-                                            pericia_erros.append(f"Q{q_n}({resp_aluno}): {texto_erro}")
+                                            detalhe_erro = match_d.group(1).strip().replace("*", "").replace("#", "")
+                                            analise_de_erros.append(f"Q{q_n}({letra_marcada}): {detalhe_erro}")
                                         else:
-                                            # Fallback caso a IA não tenha usado rótulos de distrator (pega o assunto)
-                                            assunto = re.sub(r'\[.*?\]|#|\*|->|▬|:', '', bloco_q.split('\n')[0]).strip()
-                                            pericia_erros.append(f"Q{q_n}: Falha em {assunto}")
-                                    else:
-                                        pericia_erros.append(f"Q{q_n}: Lacuna identificada.")
-
-                            lacunas_txt = " \n\n ".join(pericia_erros) if pericia_erros else "✅ Domínio Total"
+                                            # Se não achou a letra específica, traz a perícia geral daquela questão
+                                            match_peri = re.search(r"(?i)(?:PERÍCIA|ANÁLISE).*?:\s*(.*)", texto_bloco, re.DOTALL)
+                                            if match_peri:
+                                                analise_de_erros.append(f"Q{q_n}({letra_marcada}): {match_peri.group(1).strip()[:100]}...")
+                                            else:
+                                                analise_de_erros.append(f"Q{q_n}: Falha no conceito de {letra_marcada}")
+                            
+                            lacunas_txt = " \n\n ".join(analise_de_erros) if analise_de_erros else "✅ Domínio Total"
                         else:
-                            lacunas_txt = "⚠️ Gabarito não localizado"
+                            lacunas_txt = "⚠️ Gabarito não localizado para perícia."
 
                         dados_indiv.append({
                             "Estudante": alu['NOME_ALUNO'],
                             "Perfil": "♿ PEI" if is_pei_alu else "📝 Regular",
-                            "Versão": v_prova,
                             "Nota": nota_alu,
-                            "Lacunas / Diagnóstico Clínico": lacunas_txt
+                            "Perícia de Erros (Lacunas)": lacunas_txt
                         })
 
-                # --- EXIBIÇÃO EM TABELA DE ALTA DENSIDADE ---
+                # Exibição Master com Notas em 2 Casas Decimais e Colunas Largas
                 df_final_indiv = pd.DataFrame(dados_indiv)
                 st.dataframe(
                     df_final_indiv.style.format({"Nota": "{:.2f}"}), 
                     use_container_width=True, 
                     hide_index=True,
                     column_config={
-                        "Lacunas / Diagnóstico Clínico": st.column_config.TextColumn("Lacunas / Diagnóstico Clínico", width="large")
+                        "Estudante": st.column_config.TextColumn("Estudante", width="medium"),
+                        "Perícia de Erros (Lacunas)": st.column_config.TextColumn("Diagnóstico Técnico de Erros", width="large"),
+                        "Nota": st.column_config.NumberColumn("Nota", format="%.2f")
                     }
                 )
 
