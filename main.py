@@ -2489,18 +2489,33 @@ elif menu == "📝 Central de Avaliações":
         else: st.info("Gere um exame para refinar.")
 
     # --- ABA 3: VISUALIZAÇÃO ---
-    with tab_vis:
-        if "temp_prova" in st.session_state:
-            txt_f = st.session_state.temp_prova
-            t1, t2, t3, t4 = st.tabs(["📝 Prova Regular", "🔍 Grade de Perícia (AAP/DF)", "♿ Prova PEI", "✅ Gabaritos"])
-            with t1: st.text_area("Questões:", ai.extrair_tag(txt_f, "QUESTOES"), height=500, key=f"vis_reg_{v}")
-            with t2: st.text_area("Habilidades e Distratores:", ai.extrair_tag(txt_f, "GRADE_DE_CORRECAO"), height=500, key=f"vis_grade_{v}")
-            with t3: st.text_area("PEI:", ai.extrair_tag(txt_f, "PEI"), height=500, key=f"vis_pei_{v}")
-            with t4: 
-                c_g1, c_g2 = st.columns(2)
-                c_g1.markdown("### Regular"); c_g1.code(ai.extrair_tag(txt_f, "GABARITO_TEXTO"))
-                c_g2.markdown("### PEI"); c_g2.code(ai.extrair_tag(txt_f, "GABARITO_PEI"))
-        else: st.info("Aguardando geração...")
+        with tab_vis:
+            if "temp_prova" in st.session_state:
+                txt_f = st.session_state.temp_prova
+                # Adicionamos a aba "🔬 Perícia PEI"
+                t1, t2, t3, t4, t5 = st.tabs(["📝 Prova Regular", "🔍 Perícia Regular", "♿ Prova PEI", "🔬 Perícia PEI", "✅ Gabaritos"])
+                
+                with t1: st.text_area("Questões Regulares:", ai.extrair_tag(txt_f, "QUESTOES"), height=500, key=f"vis_reg_{v}")
+                with t2: st.text_area("Grade de Perícia Regular:", ai.extrair_tag(txt_f, "GRADE_DE_CORRECAO"), height=500, key=f"vis_grade_reg_{v}")
+                with t3: st.text_area("Questões PEI:", ai.extrair_tag(txt_f, "PEI"), height=500, key=f"vis_pei_q_{v}")
+                
+                with t4: 
+                    # ABA NOVA: Perícia de Inclusão
+                    val_grade_pei = ai.extrair_tag(txt_f, "GRADE_DE_CORRECAO_PEI")
+                    if val_grade_pei:
+                        st.text_area("Habilidades e Lacunas PEI:", val_grade_pei, height=500, key=f"vis_grade_pei_{v}")
+                    else:
+                        st.info("Aguardando nova geração para povoar a Perícia PEI.")
+                        
+                with t5: 
+                    c_g1, c_g2 = st.columns(2)
+                    with c_g1:
+                        st.markdown("### 📝 Gabarito Regular")
+                        st.code(ai.extrair_tag(txt_f, "GABARITO_TEXTO"))
+                    with c_g2:
+                        st.markdown("### ♿ Gabarito PEI")
+                        st.code(ai.extrair_tag(txt_f, "GABARITO_PEI"))
+            else: st.info("Gere um exame para carregar a Visualização 360°.")
 
     # --- ABA 4: RECOMPOSIÇÃO ---
     with tab_recomposicao:
@@ -2632,11 +2647,11 @@ elif menu == "📝 Central de Avaliações":
         else:
             st.warning("⚠️ Gere a prova no Arquiteto antes de finalizar.")
 
-# --- ABA 6: ACERVO DE SAFRA (VERSÃO V70 - LAYOUT DE ELITE & PARSER TÉCNICO) ---
+# --- ABA 6: ACERVO DE SAFRA (VERSÃO V75 - LAYOUT SOBERANO 360 COM PERÍCIA PEI) ---
     with tab_acervo_av:
         st.subheader("🗂️ Gestão de Acervo de Safra (PIP - Provas e Revisões)")
         
-        # 1. FILTROS DE BUSCA (DESIGN CLEAN)
+        # 1. FILTROS DE BUSCA
         with st.container(border=True):
             c_h1, c_h2, c_h3 = st.columns([1, 1, 1])
             f_trim_h = c_h1.selectbox("📅 Filtrar Trimestre:", ["Todos", "I Trimestre", "II Trimestre", "III Trimestre"], key="h_trim_av")
@@ -2665,12 +2680,12 @@ elif menu == "📝 Central de Avaliações":
                     with col_meta:
                         st.markdown(f"**💰 Valor:** `{valor_ex if valor_ex else 'N/A'}` | **🎓 Série:** `{row['ANO']}`")
 
-                    # --- GABARITO EXPRESSO FORMATADO ---
+                    # --- GABARITO EXPRESSO ---
                     gab_simples = ai.extrair_tag(txt_f, "GABARITO_TEXTO") or ai.extrair_tag(txt_f, "RESPOSTAS_IA")
                     if gab_simples:
-                        st.markdown(f"**✅ Gabarito de Referência:** `{gab_simples.replace('QUESTÃO', '').strip()}`")
+                        st.markdown(f"**✅ Gabarito Regular:** `{gab_simples.replace('QUESTÃO', '').strip()}`")
 
-                    # --- EXTRAÇÃO DE LINKS (ÚLTIMA VERSÃO) ---
+                    # --- EXTRAÇÃO DE LINKS ---
                     l_reg = (re.findall(r"Regular\((.*?)\)", txt_f) or [row.get('LINK_DRIVE')])[-1]
                     l_pei = (re.findall(r"PEI\((.*?)\)", txt_f) or [None])[-1]
                     l_prof = (re.findall(r"Prof\((.*?)\)", txt_f) or [None])[-1]
@@ -2691,71 +2706,67 @@ elif menu == "📝 Central de Avaliações":
                     if c_b5.button("🗑️ APAGAR", key=f"del_av_h_{row.name}", use_container_width=True):
                         if db.excluir_avaliacao_completa(identificador, row['SEMANA_REF']): st.rerun()
 
-                    # --- EXPANDER RAIO-X (O GRANDE MELHORAMENTO VISUAL) ---
+                    # --- EXPANDER RAIO-X (4 ABAS TÉCNICAS) ---
                     with st.expander("👁️ ANALISAR ESTRUTURA PEDAGÓGICA E ITENS"):
-                        t_gab, t_ques, t_pei_v = st.tabs(["🎯 Perícia de Itens", "📝 Prova Regular", "♿ Adaptação PEI"])
+                        t_gab, t_ques, t_pei_v, t_peri_pei = st.tabs([
+                            "🎯 Perícia Regular", "📝 Prova Regular", "♿ Adaptação PEI", "🔬 Perícia PEI"
+                        ])
                         
+                        # ABA 1: PERÍCIA REGULAR
                         with t_gab:
-                            st.markdown("#### 🔬 Grade de Perícia (Habilidades e Justificativas)")
+                            st.markdown("#### 🔬 Grade de Perícia (Regular)")
                             grade_raw = ai.extrair_tag(txt_f, "GRADE_DE_CORRECAO")
                             if grade_raw:
-                                # 1. Divide a grade por Questões
                                 questoes_grade = re.split(r"(?i)QUEST[AÃ]O\s*0?(\d+)", grade_raw)
-                                
                                 if len(questoes_grade) > 1:
                                     for i in range(1, len(questoes_grade), 2):
-                                        q_num = questoes_grade[i]
-                                        q_txt = questoes_grade[i+1]
-                                        
+                                        q_num, q_txt = questoes_grade[i], questoes_grade[i+1]
                                         with st.container(border=True):
                                             st.markdown(f"##### 📑 QUESTÃO {q_num}")
-                                            
-                                            # --- EXTRAÇÃO COM LIMPEZA DE SOBERANIA (ANTI-FONTE-GIGANTE) ---
-                                            
-                                            # A. Habilidade
-                                            match_hab = re.search(r"(\[.*?\])", q_txt)
-                                            hab_txt = match_hab.group(1) if match_hab else ""
-                                            
-                                            # B. Justificativa (Limpando # e *)
-                                            match_just = re.search(r"(?i)JUSTIFICATIVA:\s*(.*?)(?=PERÍCIA:|DISTRATORES:|$)", q_txt, re.DOTALL)
-                                            just_raw = match_just.group(1).strip() if match_just else "Não detalhada."
-                                            just_limpa = re.sub(r'[#*]', '', just_raw).strip() # REMOVE O QUE AUMENTA A FONTE
-                                            
-                                            # C. Perícia (Limpando # e *)
-                                            match_peri = re.search(r"(?i)(?:PERÍCIA:|DISTRATORES:)\s*(.*)", q_txt, re.DOTALL)
-                                            peri_raw = match_peri.group(1).strip() if match_peri else "Não detalhada."
-                                            peri_limpa = re.sub(r'[#*]', '', peri_raw).strip() # REMOVE O QUE AUMENTA A FONTE
+                                            m_hab = re.search(r"(\[.*?\])", q_txt)
+                                            m_just = re.search(r"(?i)JUSTIFICATIVA:\s*(.*?)(?=PERÍCIA:|DISTRATORES:|$)", q_txt, re.DOTALL)
+                                            m_peri = re.search(r"(?i)(?:PERÍCIA:|DISTRATORES:)\s*(.*)", q_txt, re.DOTALL)
+                                            if m_hab: st.caption(f"🆔 **Habilidade:** {m_hab.group(1)}")
+                                            st.write(f"**🎯 Resposta:** {re.sub(r'[#*]', '', m_just.group(1)).strip() if m_just else 'N/A'}")
+                                            st.write(f"**🔍 Alerta de Erro:** {re.sub(r'[#*]', '', m_peri.group(1)).strip() if m_peri else 'N/A'}")
+                                else: st.info(grade_raw)
+                            else: st.warning("Grade não localizada.")
 
-                                            # --- EXIBIÇÃO EM FORMATO PADRONIZADO ---
-                                            if hab_txt:
-                                                st.caption(f"🆔 **Habilidade:** {hab_txt}")
-                                            
-                                            # Usamos st.write para maior segurança de tamanho de fonte
-                                            st.write(f"**🎯 Resposta:** {just_limpa}")
-                                            st.write(f"**🔍 Alerta de Erro (Distratores):** {peri_limpa}")
-                                else:
-                                    st.info(grade_raw)
-                            else:
-                                st.warning("Grade de perícia não localizada.")
-
+                        # ABA 2: PROVA REGULAR
                         with t_ques:
                             st.markdown("#### 📋 Conteúdo da Prova Regular")
                             questoes_reg = ai.extrair_tag(txt_f, "QUESTOES")
                             if questoes_reg:
-                                # Remove Prompts de imagem para leitura limpa do professor
-                                texto_limpo = re.sub(r'\[\s*PROMPT IMAGEM:.*?\]', '🖼️ *(Imagem)*', questoes_reg, flags=re.IGNORECASE)
-                                st.write(texto_limpo)
-                            else: st.info("Questões não localizadas.")
+                                st.write(re.sub(r'\[\s*PROMPT IMAGEM:.*?\]', '🖼️ *(Imagem)*', questoes_reg, flags=re.IGNORECASE))
 
+                        # ABA 3: ADAPTAÇÃO PEI
                         with t_pei_v:
-                            st.markdown("#### ♿ Detalhes da Adaptação (Inclusão)")
+                            st.markdown("#### ♿ Detalhes da Adaptação PEI")
                             pei_txt = ai.extrair_tag(txt_f, "PEI")
                             if pei_txt:
                                 st.info(pei_txt)
                                 st.divider()
                                 st.markdown("**✅ Gabarito PEI:**")
                                 st.code(ai.extrair_tag(txt_f, "GABARITO_PEI") or "N/A")
-                            else: st.info("Este ativo não possui versão PEI.")
+
+                        # ABA 4: PERÍCIA PEI (NOVA)
+                        with t_peri_pei:
+                            st.markdown("#### 🔬 Grade de Perícia PEI (Diagnóstico Inclusivo)")
+                            grade_pei_raw = ai.extrair_tag(txt_f, "GRADE_DE_CORRECAO_PEI")
+                            if grade_pei_raw:
+                                q_grade_pei = re.split(r"(?i)QUEST[AÃ]O\s*PEI\s*0?(\d+)", grade_pei_raw)
+                                if len(q_grade_pei) > 1:
+                                    for i in range(1, len(q_grade_pei), 2):
+                                        q_n, q_t = q_grade_pei[i], q_grade_pei[i+1]
+                                        with st.container(border=True):
+                                            st.markdown(f"##### ♿ QUESTÃO PEI {q_n}")
+                                            m_just_p = re.search(r"(?i)JUSTIFICATIVA:\s*(.*?)(?=ANÁLISE:|LACUNA:|$)", q_t, re.DOTALL)
+                                            m_lacu_p = re.search(r"(?i)(?:ANÁLISE:|LACUNA:)\s*(.*)", q_t, re.DOTALL)
+                                            st.write(f"**🎯 Resposta:** {re.sub(r'[#*]', '', m_just_p.group(1)).strip() if m_just_p else 'N/A'}")
+                                            st.write(f"**🧠 Análise de Lacuna:** {re.sub(r'[#*]', '', m_lacu_p.group(1)).strip() if m_lacu_p else 'N/A'}")
+                                else: st.info(grade_pei_raw)
+                            else:
+                                st.warning("Este ativo ainda não possui perícia PEI salva. Gere um novo exame para ativar.")
         else:
             st.info("📭 Acervo vazio para os filtros selecionados.")
 
