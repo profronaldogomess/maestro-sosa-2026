@@ -78,7 +78,7 @@ def carregar_tudo():
     cols_aulas = ["DATA", "SEMANA_REF", "TIPO_MATERIAL", "CONTEUDO", "ANO", "LINK_DRIVE"]
     cols_alunos = ["ID", "NOME_ALUNO", "TURMA", "STATUS", "NECESSIDADES", "ORIGEM"]
     cols_relatorios = ["DATA", "ID_ALUNO", "NOME_ALUNO", "TIPO", "CONTEUDO"]
-    cols_diario = ["DATA", "ID_ALUNO", "NOME_ALUNO", "TURMA", "VISTO_ATIVIDADE", "TAGS", "OBSERVACOES"]
+    cols_diario = ["DATA", "ID_ALUNO", "NOME_ALUNO", "TURMA", "VISTO_ATIVIDADE", "TAGS", "OBSERVACOES", "BONUS"]
     cols_registro = ["DATA", "SEMANA", "TURMA", "CONTEUDO_MINISTRADO", "ADAPTACAO_PEI", "STATUS_CURRICULO"]
     cols_notas = ["ID_ALUNO", "NOME_ALUNO", "TURMA", "TRIMESTRE", "NOTA_VISTOS", "NOTA_TESTE", "NOTA_PROVA", "NOTA_REC", "MEDIA_FINAL"]
     cols_diagnosticos = ["DATA", "ID_ALUNO", "NOME_ALUNO", "TURMA", "ID_AVALIACAO", "RESPOSTAS_ALUNO", "NOTA_CALCULADA", "LINK_FOTO_DRIVE"]
@@ -541,27 +541,26 @@ def excluir_aluno_por_id(id_aluno):
         return False
     
 def atualizar_fechamento_aula(data, turma, status, ponte, clima):
-    """
-    Atualiza o registro da aula com os dados de Regência (Semáforo, Ponte e Clima).
-    Busca pela DATA e TURMA na aba DB_REGISTRO_AULAS.
-    """
     try:
         wb = conectar()
         ws = wb.worksheet("DB_REGISTRO_AULAS")
         dados = ws.get_all_values()
         
-        # Procura a linha correspondente
+        # Tenta encontrar a linha para atualizar
         for i, row in enumerate(dados):
-            # row[0] é DATA, row[2] é TURMA (ajuste conforme seus índices se mudou algo)
-            if i > 0 and row[0] == data and row[2] == turma:
-                # Atualiza as colunas G (7), H (8), I (9) - Índices 7, 8, 9 (base 1)
-                # Se suas colunas novas são G, H, I, os índices são 7, 8, 9.
-                ws.update_cell(i + 1, 7, status) # STATUS_EXECUCAO
-                ws.update_cell(i + 1, 8, ponte)  # PONTE_PEDAGOGICA
-                ws.update_cell(i + 1, 9, clima)  # CLIMA_TURMA
+            if i > 0 and len(row) >= 3 and row[0] == data and row[2] == turma:
+                ws.update_cell(i + 1, 7, status)
+                ws.update_cell(i + 1, 8, ponte)
+                ws.update_cell(i + 1, 9, clima)
                 st.cache_data.clear()
                 return True
-        return False
+        
+        # SE NÃO ENCONTROU, CRIA UMA NOVA LINHA (Proteção contra apagar dados)
+        # Formato: [DATA, SEMANA, TURMA, CONTEUDO, PEI, STATUS_CURR, STATUS_EXEC, PONTE, CLIMA]
+        nova_linha = [data, "AVULSA", turma, "Registro via Diário", "N/A", "N/A", status, ponte, clima]
+        ws.append_row(nova_linha, value_input_option="USER_ENTERED")
+        st.cache_data.clear()
+        return True
     except Exception as e:
-        print(f"Erro ao fechar regência: {e}")
+        print(f"Erro no fechamento: {e}")
         return False
