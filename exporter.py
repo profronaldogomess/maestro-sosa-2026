@@ -211,10 +211,10 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
     return file_stream
 
 # ==============================================================================
-# 4. GUIA DO PROFESSOR (VERSÃO V27 - COM DESTAQUE DE GABARITO E PERÍCIA)
+# 4. GUIA DO PROFESSOR (VERSÃO V28 - SOBERANIA TOTAL REGULAR + PEI)
 # ==============================================================================
 def gerar_docx_professor_v25(titulo_doc, conteudo, info):
-    """Versão V27 - SOBERANIA VISUAL: Gabarito Verde + Perícia Técnica"""
+    """Versão V28 - Layout 360: Regular (Azul) e PEI (Roxo) com Gabaritos Verdes"""
     file_stream = io.BytesIO()
     doc = Document()
     
@@ -224,23 +224,20 @@ def gerar_docx_professor_v25(titulo_doc, conteudo, info):
 
     section = doc.sections[0]
     section.top_margin, section.bottom_margin = Inches(0.4), Inches(0.4)
-    section.left_margin, section.right_margin = Inches(0.5), Inches(0.5)
+    section.left_margin, section.right_margin = Inches(0.4), Inches(0.4)
 
     # 1. CABEÇALHO MESTRE
     header_table = doc.add_table(rows=2, cols=3)
     header_table.style = 'Table Grid'
     c_tit = header_table.cell(0, 0).merge(header_table.cell(0, 2))
-    p_tit = c_tit.paragraphs[0]
-    p_tit.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run_tit = p_tit.add_run("GUIA DE CORREÇÃO E GRADE DE PERÍCIA - SOSA MASTER")
-    run_tit.font.bold = True
-    run_tit.font.size = Pt(12)
+    run_tit = c_tit.paragraphs[0].add_run("GUIA DE CORREÇÃO INTEGRAL E GRADE DE PERÍCIA")
+    run_tit.font.bold, run_tit.font.size = True, Pt(12)
+    c_tit.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-    header_table.cell(1, 0).paragraphs[0].add_run(f"ANO: {info.get('ano', '')}").font.size = Pt(10)
-    header_table.cell(1, 1).paragraphs[0].add_run(f"SEMANA: {info.get('semana', '')}").font.size = Pt(10)
-    header_table.cell(1, 2).paragraphs[0].add_run(f"TRIMESTRE: {info.get('trimestre', 'I')}")
-
-    for row in header_table.rows: set_row_height(row, 22)
+    header_table.cell(1, 0).paragraphs[0].add_run(f"ANO: {info.get('ano', '')}").font.size = Pt(9)
+    header_table.cell(1, 1).paragraphs[0].add_run(f"SEMANA: {info.get('semana', '')}").font.size = Pt(9)
+    header_table.cell(1, 2).paragraphs[0].add_run(f"TRIMESTRE: {info.get('trimestre', 'I')}").font.size = Pt(9)
+    for row in header_table.rows: set_row_height(row, 20)
     doc.add_paragraph()
 
     # 2. COLUNAS NATIVAS
@@ -248,67 +245,62 @@ def gerar_docx_professor_v25(titulo_doc, conteudo, info):
     sectPr = new_section._sectPr
     cols = sectPr.xpath('./w:cols')[0]
     cols.set(qn('w:num'), '2')
-    cols.set(qn('w:space'), '400')
+    cols.set(qn('w:space'), '500')
 
     linhas = conteudo.split('\n')
-    
     for linha in linhas:
         l_s = linha.strip()
         if not l_s: continue
-        
         p = doc.add_paragraph()
         p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
         p.paragraph_format.line_spacing = 1.0
-        
-        # --- REGRA: TÍTULOS DE SEÇÃO (GABARITO OFICIAL / DETALHAMENTO) ---
-        if l_s.endswith(":") and len(l_s) < 30:
-            run = p.add_run(l_s.upper())
-            run.font.bold = True
-            run.font.underline = True
-            p.paragraph_format.space_before = Pt(10)
-            continue
 
-        # --- REGRA: GABARITO EXPRESSO (A, B, C...) ---
-        # Detecta linhas como "QUESTÃO 01: A" ou "1. A"
-        if re.search(r"(?i)QUEST[AÃ]O\s*\d+\s*[:\-]\s*[A-E]$|^\d+[\.\s\-]+[A-E]$", l_s):
-            run = p.add_run(f"✅ {l_s}")
+        # --- REGRAS VISUAIS DE SOBERANIA ---
+        
+        # A. TÍTULOS DE SEÇÃO (GABARITOS E DETALHAMENTOS)
+        if l_s.endswith(":") and len(l_s) < 40:
+            p.paragraph_format.space_before = Pt(10)
+            run = p.add_run(f"█▓▒░ {l_s.upper()} ░▒▓█")
             run.font.bold = True
             run.font.size = Pt(11)
+            continue
+
+        # B. GABARITO DE LETRAS (VERDE)
+        if re.search(r"(?i)QUEST[AÃ]O\s*(?:PEI\s*)?\d+\s*[:\-]\s*[A-E]$|^\d+[\.\s\-]+[A-E]$", l_s):
+            run = p.add_run(f"✅ {l_s}")
+            run.font.bold, run.font.size = True, Pt(11)
             run.font.color.rgb = RGBColor(0, 128, 0) # Verde
             continue
 
-        # --- REGRA: QUESTÃO NA GRADE DE PERÍCIA ---
-        if l_s.upper().startswith("QUESTÃO") or l_s.upper().startswith("- QUESTÃO"):
-            p.paragraph_format.space_before = Pt(10)
-            match_q = re.match(r"(?i)(?:- )?(QUEST[AÃ]O\s+\d+)([:\s\-]*)(\[.*?\])?(.*)", l_s)
-            if match_q:
-                run_q = p.add_run(f"{match_q.group(1).upper()}: ")
-                run_q.font.bold = True
-                run_q.font.color.rgb = RGBColor(0, 51, 153) # Azul
-                if match_q.group(3):
-                    run_h = p.add_run(f"{match_q.group(3)} ")
-                    run_h.font.italic, run_h.font.color.rgb = True, RGBColor(100, 100, 100)
-                p.add_run(match_q.group(4).strip())
+        # C. QUESTÃO REGULAR (AZUL)
+        if "QUESTÃO" in l_s.upper() and "PEI" not in l_s.upper() and (":" in l_s or "[" in l_s):
+            p.paragraph_format.space_before = Pt(8)
+            run = p.add_run(l_s)
+            run.font.bold = True
+            run.font.color.rgb = RGBColor(0, 51, 153) # Azul Escuro
             continue
 
-        # --- REGRA: JUSTIFICATIVA ---
-        if "JUSTIFICATIVA" in l_s.upper():
+        # D. QUESTÃO PEI (ROXO)
+        if "QUESTÃO PEI" in l_s.upper():
+            p.paragraph_format.space_before = Pt(8)
+            run = p.add_run(f"♿ {l_s}")
+            run.font.bold = True
+            run.font.color.rgb = RGBColor(112, 48, 160) # Roxo PEI
+            continue
+
+        # E. JUSTIFICATIVAS E LACUNAS
+        if any(x in l_s.upper() for x in ["JUSTIFICATIVA", "PERÍCIA", "LACUNA", "ANÁLISE"]):
             p.paragraph_format.left_indent = Inches(0.15)
-            run_label = p.add_run("🎯 Resposta: ")
+            icon = "🎯" if "JUST" in l_s.upper() else "🧠"
+            run_label = p.add_run(f"{icon} {l_s.split(':', 1)[0]}:")
             run_label.font.bold = True
-            p.add_run(l_s.split(":", 1)[-1].strip() if ":" in l_s else l_s).font.size = Pt(9.5)
+            if "LACUNA" in l_s.upper() or "PERÍCIA" in l_s.upper():
+                 run_label.font.color.rgb = RGBColor(204, 0, 0) # Alerta Vinho
+            p.add_run(f" {l_s.split(':', 1)[1] if ':' in l_s else ''}").font.size = Pt(9.5)
             continue
 
-        # --- REGRA: PERÍCIA / DISTRATORES ---
-        if "PERÍCIA" in l_s.upper() or "DISTRATORES" in l_s.upper():
-            p.paragraph_format.left_indent = Inches(0.15)
-            run_label = p.add_run("🔍 Alerta de Erro: ")
-            run_label.font.bold, run_label.font.color.rgb = True, RGBColor(153, 0, 0)
-            p.add_run(l_s.split(":", 1)[-1].strip() if ":" in l_s else l_s).font.size = Pt(9.5)
-            continue
-
-        # Texto normal
-        p.add_run(l_s).font.size = Pt(10)
+        # Texto padrão limpo (sem # ou *)
+        p.add_run(re.sub(r'[#*]', '', l_s)).font.size = Pt(10)
 
     doc.save(file_stream)
     file_stream.seek(0)
