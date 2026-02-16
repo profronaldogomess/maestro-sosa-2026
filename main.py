@@ -3640,52 +3640,60 @@ elif menu == "👤 Biografia do Estudante":
                         st.caption(f"{emoji} **{row['DATA']}**: {row['TAGS']} - *{row['OBSERVACOES']}*")
                 else: st.success("✅ Nenhuma ocorrência negativa.")
 
-        # --- SEÇÃO 4: RAIO-X DE DIFICULDADES (EXTRATOR V82) ---
+# --- SEÇÃO 4: RAIO-X DE DIFICULDADES (CONSOLIDAÇÃO TOTAL V83) ---
         st.markdown("---")
         with st.container(border=True):
             st.markdown(f"### 🔍 4. Raio-X de Dificuldades: {trim_b}")
             
             if not diag_alu_f.empty:
-                ultima_av_reg = diag_alu_f.iloc[-1]
-                nome_av_real = ultima_av_reg['ID_AVALIACAO']
-                st.info(f"📝 **Última Avaliação Analisada:** {nome_av_real}")
+                st.info(f"📊 Analisando {len(diag_alu_f)} avaliações para compor o diagnóstico.")
                 
-                # Busca material de referência (Soberania de Vínculo)
-                m_ref_query = df_aulas[df_aulas['TIPO_MATERIAL'] == nome_av_real.replace(" (2ª CHAMADA)", "")]
+                todas_as_lacunas = []
                 
-                if not m_ref_query.empty:
-                    m_ref = m_ref_query.iloc[0]
-                    txt_p = str(m_ref['CONTEUDO'])
-                    # Seleciona a grade correta (Regular ou PEI)
-                    tag_grade = "GRADE_DE_CORRECAO_PEI" if is_pei else "GRADE_DE_CORRECAO"
-                    grade = ai.extrair_tag(txt_p, tag_grade) or ai.extrair_tag(txt_p, "GRADE_DE_CORRECAO")
+                # LOOP SOBERANO: Percorre cada prova que o aluno fez
+                for _, reg_av in diag_alu_f.iterrows():
+                    nome_av_real = reg_av['ID_AVALIACAO']
                     
-                    tag_g = "GABARITO_PEI" if is_pei else "GABARITO_TEXTO"
-                    gab_raw = ai.extrair_tag(txt_p, tag_g) or ai.extrair_tag(txt_p, "GABARITO")
-                    gab_oficial = re.findall(r"\b[A-E]\b", gab_raw.upper())
-                    respostas_aluno = str(ultima_av_reg['RESPOSTAS_ALUNO']).split(';')
+                    # Busca material de referência no banco de aulas
+                    m_ref_query = df_aulas[df_aulas['TIPO_MATERIAL'] == nome_av_real.replace(" (2ª CHAMADA)", "")]
                     
-                    lacunas = []
-                    for i, r in enumerate(respostas_aluno):
-                        if i < len(gab_oficial) and r != gab_oficial[i] and r not in ["FALTOU", "?", "X"]:
-                            q_n = i + 1
-                            # Regex V82: Captura o marcador e a descrição ignorando ruídos de formatação
-                            padrao_h = rf"(?si)QUEST[AÃ]O\s*(?:PEI\s*)?0?{q_n}\b.*?(?:[:\-])\s*(.*?)(?=\.?\s*(?:JUSTIFICATIVA|PERÍCIA|ANÁLISE|DISTRATORES|$))"
-                            m_h = re.search(padrao_h, grade)
-                            
-                            if m_h:
-                                # Limpeza profunda: remove [], **, # e espaços extras
-                                txt_limpo = re.sub(r'[*#\[\]]', '', m_h.group(1)).strip()
-                                lacunas.append(txt_limpo)
-                            else:
-                                lacunas.append(f"Questão {q_n}: Habilidade não descrita na grade.")
-                    
-                    if lacunas:
-                        st.markdown("**Habilidades que precisam de reforço:**")
-                        for l in list(set(lacunas)): st.error(f"❌ {l}")
-                    else: st.success("✅ Domínio total nas habilidades desta avaliação.")
-                else: st.warning("⚠️ Gabarito de referência não localizado.")
-            else: st.info(f"Aguardando avaliações escaneadas.")
+                    if not m_ref_query.empty:
+                        m_ref = m_ref_query.iloc[0]
+                        txt_p = str(m_ref['CONTEUDO'])
+                        
+                        # Define a grade correta (Regular ou PEI)
+                        tag_grade = "GRADE_DE_CORRECAO_PEI" if is_pei else "GRADE_DE_CORRECAO"
+                        grade = ai.extrair_tag(txt_p, tag_grade) or ai.extrair_tag(txt_p, "GRADE_DE_CORRECAO")
+                        
+                        # Gabarito oficial
+                        tag_g = "GABARITO_PEI" if is_pei else "GABARITO_TEXTO"
+                        gab_raw = ai.extrair_tag(txt_p, tag_g) or ai.extrair_tag(txt_p, "GABARITO")
+                        gab_oficial = re.findall(r"\b[A-E]\b", gab_raw.upper())
+                        
+                        # Respostas do aluno
+                        respostas_aluno = str(reg_av['RESPOSTAS_ALUNO']).split(';')
+                        
+                        for i, r in enumerate(respostas_aluno):
+                            if i < len(gab_oficial) and r != gab_oficial[i] and r not in ["FALTOU", "?", "X"]:
+                                q_n = i + 1
+                                # Extrator V82 de Habilidades
+                                padrao_h = rf"(?si)QUEST[AÃ]O\s*(?:PEI\s*)?0?{q_n}\b.*?(?:[:\-])\s*(.*?)(?=\.?\s*(?:JUSTIFICATIVA|PERÍCIA|ANÁLISE|DISTRATORES|$))"
+                                m_h = re.search(padrao_h, grade)
+                                
+                                if m_h:
+                                    txt_limpo = re.sub(r'[*#\[\]]', '', m_h.group(1)).strip()
+                                    # Adiciona à lista com o nome da prova para o professor saber a origem
+                                    todas_as_lacunas.append(f"{txt_limpo} (Origem: {nome_av_real})")
+                
+                if todas_as_lacunas:
+                    st.markdown("**Mapa de Habilidades que precisam de reforço:**")
+                    # Remove duplicatas mantendo a ordem
+                    for l in list(dict.fromkeys(todas_as_lacunas)): 
+                        st.error(f"❌ {l}")
+                else:
+                    st.success("✅ Domínio total nas habilidades das avaliações realizadas.")
+            else:
+                st.info("Aguardando avaliações escaneadas para gerar o Raio-X.")
 
         if is_pei:
             st.warning(f"♿ **Observação PEI:** {info_alu['NECESSIDADES']}")
