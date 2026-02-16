@@ -3313,7 +3313,7 @@ elif menu == "📸 Scanner de Gabaritos":
                                 if match: st.info(match.group(0).strip().replace("**", ""))
                             except: st.caption("Detalhes não localizados.")
 
-                # --- PARTE B: DIAGNÓSTICO INDIVIDUAL (MICRO) - V76 SOBERANIA CLÍNICA ---
+# --- PARTE B: PERÍCIA INDIVIDUAL (V78 - MOTOR DE DISTRATORES) ---
                 st.markdown("---")
                 st.markdown("#### 👤 2. Perícia Individual: Lacunas por Estudante")
                 
@@ -3326,81 +3326,72 @@ elif menu == "📸 Scanner de Gabaritos":
                     reg_aluno = df_analise[df_analise['ID_ALUNO_L'] == id_a]
                     
                     if reg_aluno.empty:
-                        dados_indiv.append({
-                            "Estudante": alu['NOME_ALUNO'], 
-                            "Perfil": "🔴 Ausente", 
-                            "Versão": "N/A", 
-                            "Nota": 0.00, 
-                            "Lacunas": "Aguardando Realização"
-                        })
+                        dados_indiv.append({"Estudante": alu['NOME_ALUNO'], "Perfil": "🔴 Ausente", "Versão": "N/A", "Nota": 0.00, "Perícia de Lacunas": "Aguardando Realização"})
                     else:
                         reg = reg_aluno.iloc[-1]
                         nota_alu = util.sosa_to_float(reg['NOTA_CALCULADA'])
                         v_prova = "2ª CHAMADA" if reg['IS_2A_CHAMADA'] else "ORIGINAL"
                         
-                        # --- SMART MATCH DE MATERIAL V76 ---
+                        # --- SMART MATCH DE MATERIAL ---
                         nome_av_no_banco = reg['ID_AVALIACAO']
                         m_ref_query = df_aulas[df_aulas['TIPO_MATERIAL'] == nome_av_no_banco]
-                        
                         if m_ref_query.empty:
                             if reg['IS_2A_CHAMADA']:
-                                m_ref_query = df_aulas[
-                                    (df_aulas['TIPO_MATERIAL'].str.upper().str.contains("2CHAMADA")) & 
-                                    (df_aulas['TIPO_MATERIAL'].str.upper().str.contains(nome_curto_av.upper())) &
-                                    (df_aulas['ANO'].str.contains(ano_num_r))
-                                ]
+                                m_ref_query = df_aulas[(df_aulas['TIPO_MATERIAL'].str.upper().str.contains("2CHAMADA")) & (df_aulas['TIPO_MATERIAL'].str.upper().str.contains(nome_curto_av.upper())) & (df_aulas['ANO'].str.contains(ano_num_r))]
                             else:
                                 m_ref_query = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel_r]
                         
+                        pericia_erros = []
                         if not m_ref_query.empty:
                             m_ref = m_ref_query.iloc[0]
                             txt_cont = str(m_ref['CONTEUDO'])
                             
-                            # 1. Identifica a Grade Correta (Regular ou PEI)
+                            # Define gabarito e grade (Regular vs PEI)
                             tag_grade = "GRADE_DE_CORRECAO_PEI" if is_pei_alu else "GRADE_DE_CORRECAO"
                             grade_texto = ai.extrair_tag(txt_cont, tag_grade) or ai.extrair_tag(txt_cont, "GRADE_DE_CORRECAO")
-                            
-                            # 2. Identifica o Gabarito Correto
                             gab_ref_alu = extrair_gab_v75_universal(txt_cont, is_pei_alu)
                             resp_lista = str(reg['RESPOSTAS_ALUNO']).split(';')
                             
-                            erros_descritivos = []
-                            for i, r in enumerate(resp_lista):
+                            for i, letra_marcada in enumerate(resp_lista):
                                 q_n = i + 1
-                                if r != gab_ref_alu.get(q_n) and r != "FALTOU":
-                                    # --- MOTOR DE EXTRAÇÃO DE ASSUNTO V76 ---
-                                    # Busca a linha da questão na grade e pega o que está entre o código BNCC e a Justificativa
-                                    padrao_q = rf"(?i)QUEST[AÃ]O\s*(?:PEI\s*)?0?{q_n}\b(.*?)(?=JUSTIFICATIVA|QUEST[AÃ]O|$)"
-                                    match_h = re.search(padrao_q, grade_texto, re.DOTALL)
+                                correta = gab_ref_alu.get(q_n)
+                                
+                                # Se o aluno errou e não faltou
+                                if letra_marcada != correta and letra_marcada not in ["FALTOU", "?", "X"]:
+                                    # 1. Isola o bloco da Questão na Grade
+                                    padrao_q = rf"(?i)QUEST[AÃ]O\s*(?:PEI\s*)?0?{q_n}\b(.*?)(?=QUEST[AÃ]O|$)"
+                                    match_q = re.search(padrao_q, grade_texto, re.DOTALL)
                                     
-                                    if match_h:
-                                        raw_text = match_h.group(1)
-                                        # Limpa códigos BNCC [EF...], setas, hashtags e asteriscos
-                                        limpo = re.sub(r'\[.*?\]|#|\*|->|▬|:', '', raw_text).strip()
-                                        # Se o texto for muito curto ou vazio, usa um fallback
-                                        assunto = limpo if len(limpo) > 2 else f"Questão {q_n}"
-                                        erros_descritivos.append(assunto)
-                                    else:
-                                        erros_descritivos.append(f"Item {q_n}")
-                            
-                            lacunas_txt = " | ".join(list(dict.fromkeys(erros_descritivos))) if erros_descritivos else "✅ Domínio Total"
-                        else:
-                            lacunas_txt = "⚠️ Gabarito não localizado"
+                                    if match_q:
+                                        q_bloco = match_q.group(1)
+                                        # 2. Busca o assunto (entre o código e a justificativa)
+                                        assunto = re.sub(r'\[.*?\]|#|\*|->|▬|:', '', re.split(r'(?i)JUSTIFICATIVA', q_bloco)[0]).strip()
+                                        
+                                        # 3. MÁGICA: Busca a explicação específica da LETRA que o aluno marcou
+                                        # Procura por "B)" ou "B -" ou "(B)" dentro da Perícia
+                                        padrao_letra = rf"(?i){letra_marcada}\s*[\)\-\: ]\s*(.*?)(?=[A-E]\s*[\)\-\: ]|JUSTIFICATIVA|ANÁLISE|$)"
+                                        match_expl = re.search(padrao_letra, q_bloco, re.DOTALL)
+                                        
+                                        if match_expl:
+                                            explicacao = re.sub(r'[#*]', '', match_expl.group(1)).strip()
+                                            pericia_erros.append(f"Q{q_n} ({assunto}): {explicacao}")
+                                        else:
+                                            pericia_erros.append(f"Q{q_n}: Errou em {assunto}")
+                        
+                        lacunas_finais = " | ".join(dict.fromkeys(pericia_erros)) if pericia_erros else "✅ Domínio Total"
 
                         dados_indiv.append({
                             "Estudante": alu['NOME_ALUNO'],
                             "Perfil": "♿ PEI" if is_pei_alu else "📝 Regular",
                             "Versão": v_prova,
                             "Nota": nota_alu,
-                            "Lacunas": lacunas_txt
+                            "Perícia de Lacunas": lacunas_finais
                         })
 
-                # Exibição com Formatação Master (Duas casas decimais)
-                df_final_indiv = pd.DataFrame(dados_indiv)
+                # Exibição com Formatação Soberana
                 st.dataframe(
-                    df_final_indiv.style.format({"Nota": "{:.2f}"}), 
-                    use_container_width=True, 
-                    hide_index=True
+                    pd.DataFrame(dados_indiv).style.format({"Nota": "{:.2f}"}), 
+                    use_container_width=True, hide_index=True
                 )
 
 # --- ABA 5: ACERVO DE EVIDÊNCIAS (V71.0 - CUSTÓDIA COM FILTROS INTELIGENTES) ---
