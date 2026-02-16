@@ -650,30 +650,36 @@ if menu == "🧪 Criador de Aulas":
                             instr_extra_s = c_q2.text_area("📝 Contexto Adicional:", key=f"s_instr_{v}")
                             
                             if st.button("🚀 GERAR SONDA DE PROFICIÊNCIA", use_container_width=True, type="primary"):
-                                with st.spinner("Maestro Sosa arquitetando Tratado Diagnóstico..."):
-                                    nome_elite_sonda = util.gerar_nome_material_elite(ano_sonda, "Sonda Diagnóstica", trim_sonda)
-                                    st.session_state.sosa_id_atual = nome_elite_sonda
+                                with st.spinner("Maestro Sosa arquitetando Tratado Diagnóstico padrão Governo..."):
+                                    
+                                    # 1. GERAÇÃO DE DNA ÚNICO
+                                    sosa_id_sonda = util.gerar_sosa_id("SONDA", ano_sonda, trim_sonda)
+                                    st.session_state.sosa_id_atual = sosa_id_sonda
                                     st.session_state.lab_meta = {
                                         "ano": ano_sonda, "trimestre": trim_sonda, 
-                                        "tipo": "SONDA", "aula_alvo": "Sonda Diagnóstica", "semana_ref": "AVALIAÇÃO"
+                                        "tipo": "SONDA", "semana_ref": "AVALIAÇÃO"
                                     }
                                     
+                                    # Cálculo de peso (Sondas geralmente valem 10.0 para escala de proficiência)
                                     peso_q = 10.0 / qtd_q_sonda
                                     peso_q_str = util.sosa_to_str(peso_q)
 
-                                    # PROMPT IMPERATIVO V68
+                                    # 2. PROMPT DE SOBERANIA V70
                                     prompt_sonda = (
-                                        f"ORDEM DE PERÍCIA V68 - RIGOR NUMÉRICO E DENSIDADE\n"
-                                        f"SÉRIE: {ano_sonda}º Ano | VALOR: 10.0 | QTD: {qtd_q_sonda}\n"
-                                        f"CONTEÚDOS: {' / '.join(sel_conts_s)}.\n\n"
-                                        f"🚨 DIRETRIZES DE EXECUÇÃO:\n"
-                                        f"1. [VALOR: 10.0] na linha 1.\n"
-                                        f"2. [PROFESSOR]: Escreva no mínimo 3 parágrafos técnicos de fundamentação e mediação.\n"
-                                        f"3. [ALUNO]: Gere EXATAMENTE {qtd_q_sonda} questões no formato inline: **QUESTÃO XX ({peso_q_str} ponto) -**.\n"
-                                        f"4. [GRADE_DE_CORRECAO]: Tabela ou lista técnica de descritores e análise de distratores.\n"
-                                        f"5. [PEI]: Gere {int(qtd_q_sonda/2 if qtd_q_sonda%2==0 else (qtd_q_sonda+1)/2)} questões com andaime cognitivo.\n\n"
-                                        f"CHECKLIST: Proibido introduções ou conversas. Vá direto às tags."
+                                        f"ORDEM DE PERÍCIA V70 - RIGOR PSICOMÉTRICO\n"
+                                        f"SÉRIE ATUAL: {ano_sonda}º Ano | SÉRIE BUSCADA (BASE): {ano_busca}º Ano.\n"
+                                        f"CONTEÚDOS: {', '.join(sel_conts_s)}.\n"
+                                        f"OBJETIVO: Identificar lacunas de transição entre séries.\n"
+                                        f"VALOR TOTAL: 10.0 | QTD: {qtd_q_sonda} questões.\n"
+                                        f"SOSA_ID: {sosa_id_sonda}.\n\n"
+                                        f"🚨 DIRETRIZ TÉCNICA:\n"
+                                        f"1. Use o ID no marcador [SOSA_ID].\n"
+                                        f"2. Em [ALUNO], as questões devem ser desafiadoras e contextualizadas.\n"
+                                        f"3. Em [PROFESSOR], escreva o 'Parecer de Sondagem' orientando como interpretar os resultados da turma.\n"
+                                        f"4. Siga rigorosamente a formatação INLINE: **QUESTÃO XX ({peso_q_str} ponto) -** Texto."
                                     )
+                                    
+                                    # Chama a persona CORRETA (Sem o _V28 no final para bater com o database)
                                     st.session_state.lab_temp = ai.gerar_ia("ARQUITETO_SONDA_DIAGNOSTICA", prompt_sonda, usar_busca=True)
                                     st.rerun()
 
