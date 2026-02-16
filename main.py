@@ -481,11 +481,17 @@ if menu == "🧪 Criador de Aulas":
                     if planos_ano.empty: 
                         st.error("❌ Nenhum planejamento encontrado para esta série.")
                     else:
+                        # --- 1. SELEÇÃO DA BASE ---
+                        c2.markdown("### 📅 Cronograma")
                         sem_lab = c2.selectbox("Semana Base (Ponto ID):", planos_ano["SEMANA"].tolist(), key=f"prod_sem_{v}")
                         plano_row = planos_ano[planos_ano["SEMANA"] == sem_lab].iloc[0]
                         plano_txt = str(plano_row['PLANO_TEXTO'])
                         
-                        # --- MOTOR DE FILTRAGEM DE SAFRA ---
+                        # Extração de Metadados para o Cockpit
+                        obj_geral = ai.extrair_tag(plano_txt, "OBJETO_CONHECIMENTO") or ai.extrair_tag(plano_txt, "CONTEUDO_GERAL")
+                        hab_bncc = ai.extrair_tag(plano_txt, "HABILIDADE_BNCC")
+                        
+                        # --- 2. MOTOR DE FILTRAGEM DE SAFRA ---
                         aulas_existentes = df_aulas[(df_aulas['SEMANA_REF'] == sem_lab) & (df_aulas['ANO'] == ano_ref_prod)]
                         lista_prontas = aulas_existentes['TIPO_MATERIAL'].astype(str).tolist()
                         
@@ -494,60 +500,56 @@ if menu == "🧪 Criador de Aulas":
                         if not any("Aula 2" in t for t in lista_prontas): opcoes_pendentes.append("Aula 2")
                         
                         if not opcoes_pendentes:
-                            c3.success("✅ Safra Completa!")
-                            st.info(f"As Aulas 1 e 2 da '{sem_lab}' já estão no seu Acervo.")
+                            st.balloons()
+                            st.success(f"✅ **Safra Concluída!** Todas as aulas da {sem_lab} já estão no acervo.")
+                            if st.button("🔄 REGERAR MATERIAL (SOBREPOR)"): st.rerun()
                         else:
-                            aula_alvo_prod = c3.radio("🎯 Aula Pendente:", opcoes_pendentes, horizontal=True, key=f"prod_alvo_{v}")
-                            
-                            # --- NOVO: RAIO-X DO DNA PEDAGÓGICO (PRE-VISUALIZAÇÃO) ---
+                            # --- 3. COCKPIT DE HERANÇA DIDÁTICA (MODERNO & CLEAN) ---
                             with st.container(border=True):
-                                st.markdown(f"### 🧬 Raio-X do Plano: {sem_lab}")
+                                st.markdown(f"#### 🎯 Alvo Curricular: {obj_geral}")
+                                st.caption(f"🆔 **BNCC:** {hab_bncc}")
                                 
-                                # Extração de Metadados para exibição
-                                obj_conhecimento = ai.extrair_tag(plano_txt, "OBJETO_CONHECIMENTO") or ai.extrair_tag(plano_txt, "CONTEUDO_GERAL")
-                                cont_especifico = ai.extrair_tag(plano_txt, "CONTEUDOS_ESPECIFICOS")
-                                pei_estrategia = ai.extrair_tag(plano_txt, "ESTRATEGIA_DUA_PEI") or ai.extrair_tag(plano_txt, "ADAPTACAO_PEI")
-                                
-                                # Define qual roteiro mostrar com base no rádio
-                                tag_roteiro = "AULA_1" if "1" in aula_alvo_prod else "AULA_2"
-                                roteiro_detalhado = ai.extrair_tag(plano_txt, tag_roteiro)
+                                # Linha de Configuração de Aula
+                                col_config1, col_config2 = st.columns([1, 1])
+                                with col_config1:
+                                    aula_alvo_prod = st.radio("🚀 Material a Gerar:", opcoes_pendentes, horizontal=True, key=f"prod_alvo_{v}")
+                                with col_config2:
+                                    qtd_q_prod = st.select_slider("Nº de Questões:", options=[3, 5, 8, 10, 12, 15], value=10, key=f"prod_q_{v}")
 
-                                col_plan1, col_plan2 = st.columns([1, 1])
+                                # Expansor de Roteiro Herdado (Responsivo)
+                                tag_previa = "AULA_1" if "1" in aula_alvo_prod else "AULA_2"
+                                roteiro_herdado = ai.extrair_tag(plano_txt, tag_previa)
                                 
-                                with col_plan1:
-                                    st.markdown(f"**🎯 Objeto:**\n{obj_conhecimento}")
-                                    st.markdown(f"**📖 Conteúdos:**\n{cont_especifico}")
-                                
-                                with col_plan2:
-                                    st.info(f"**📝 Roteiro Base ({aula_alvo_prod}):**\n{roteiro_detalhado}")
-                                    if pei_estrategia:
-                                        st.warning(f"**♿ Estratégia PEI Herdadada:**\n{pei_estrategia}")
+                                with st.expander(f"👁️ Visualizar Roteiro do Plano ({aula_alvo_prod})", expanded=False):
+                                    st.info(roteiro_herdado if roteiro_herdado else "Roteiro não detalhado no plano.")
 
-                            # Parâmetros Adicionais
-                            c_p1, c_p2 = st.columns([2, 1])
-                            instr_extra_prod = c_p1.text_area("📝 Contexto Adicional (Personalize aqui):", key=f"prod_extra_{v}")
-                            qtd_q_prod = c_p2.slider("Quantidade de Questões:", 3, 15, 10, key=f"prod_q_{v}")
+                            # --- 4. SENSOR DE NEURODIVERSIDADE ATIVO ---
+                            filtro_ano = str(ano_lab)
+                            alunos_foco = df_alunos[
+                                (df_alunos['TURMA'].str.contains(filtro_ano)) & 
+                                (~df_alunos['NECESSIDADES'].isin(["NENHUMA", "PENDENTE", "", "NAN"]))
+                            ]
+
+                            if not alunos_foco.empty:
+                                lista_needs = alunos_foco['NECESSIDADES'].unique().tolist()
+                                st.warning(f"♿ **Sensor PEI Ativo:** Este material será adaptado para: {', '.join(lista_needs)}")
                             
-                            if st.button("💎 COMPILAR MATERIAL DE ELITE", use_container_width=True, type="primary"):
-                                with st.spinner("Arquitetando Tratado Didático com Sensor Clínico..."):
+                            # --- 5. INPUTS FINAIS E GERAÇÃO ---
+                            instr_extra_prod = st.text_area("📝 Contexto Extra / Ajustes Específicos:", 
+                                                         placeholder="Ex: Foque mais em exemplos práticos de Itabuna...",
+                                                         key=f"prod_extra_{v}")
+
+                            if st.button("💎 MATERIALIZAR TRATADO DE ELITE", use_container_width=True, type="primary"):
+                                with st.spinner("Sosa arquitetando material com Sensor Clínico e Herança de Safra..."):
                                     
-                                    # 1. SENSOR DE NEURODIVERSIDADE
-                                    filtro_ano = str(ano_lab)
-                                    alunos_foco = df_alunos[
-                                        (df_alunos['TURMA'].str.contains(filtro_ano)) & 
-                                        (~df_alunos['NECESSIDADES'].isin(["NENHUMA", "PENDENTE", "", "NAN"]))
-                                    ]
-                                    
-                                    lista_needs = []
+                                    # Lógica do Sensor para o Prompt
                                     if not alunos_foco.empty:
-                                        lista_needs = alunos_foco['NECESSIDADES'].unique().tolist()
                                         texto_clinico = ", ".join(lista_needs)
                                         aviso_sensor = f"DETECTADO: {texto_clinico}"
                                     else:
                                         texto_clinico = "PADRÃO"
                                         aviso_sensor = "Nenhuma necessidade específica detectada."
 
-                                    # 2. PREPARAÇÃO DO PROMPT
                                     nome_elite = util.gerar_nome_material_elite(ano_lab, aula_alvo_prod, sem_lab)
                                     st.session_state.sosa_id_atual = nome_elite
                                     st.session_state.lab_meta = {
@@ -558,19 +560,15 @@ if menu == "🧪 Criador de Aulas":
                                         "aula_alvo": aula_alvo_prod
                                     }
                                     
-                                    # 3. INJEÇÃO NO PROMPT
+                                    # Prompt com Injeção de Soberania
                                     prompt_manual = (
                                         f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {nome_elite}.\n"
-                                        f"SÉRIE: {ano_ref_prod}. ALVO: {aula_alvo_prod}. QTD: {qtd_q_prod}.\n"
-                                        f"--- HERANÇA DO PLANO ---\n"
-                                        f"OBJETO: {obj_conhecimento}\n"
-                                        f"CONTEÚDOS: {cont_especifico}\n"
-                                        f"ROTEIRO DA AULA: {roteiro_detalhado}\n"
-                                        f"ESTRATEGIA PEI/DUA: {pei_estrategia}\n\n"
-                                        f"--- SENSOR DE INCLUSÃO ---\n"
+                                        f"SÉRIE: {ano_lab}º Ano. ALVO: {aula_alvo_prod}. QTD: {qtd_q_prod}.\n"
+                                        f"--- HERANÇA DO PLANO (ROTEIRO OBRIGATÓRIO) ---\n{roteiro_herdado}\n"
+                                        f"--- SENSOR DE INCLUSÃO (PERFIL DA TURMA) ---\n"
                                         f"A turma possui alunos com: {texto_clinico}.\n"
-                                        f"Adapte o material [PEI] para estas condições.\n"
-                                        f"--- EXTRAS ---\n{instr_extra_prod}"
+                                        f"ORDEM PARA [PEI]: Adapte rigorosamente para TEA (visual/direto) e DISLEXIA (espaçado/limpo).\n"
+                                        f"--- CONTEXTO ADICIONAL DO PROFESSOR ---\n{instr_extra_prod}"
                                     )
                                     
                                     st.session_state.lab_temp = ai.gerar_ia("MAESTRO_SOSA_V28_ELITE", prompt_manual, usar_busca=True)
