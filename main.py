@@ -429,8 +429,8 @@ if menu == "🧪 Criador de Aulas":
 
     # --- SEÇÃO DE ENTRADA (CONFIGURAÇÃO INICIAL) ---
     else:
-        tab_producao, tab_diagnostico, tab_trabalhos, tab_complementar, tab_acervo_lab = st.tabs([
-            "🚀 Produção (Aula 1/2)", "🔍 Sonda de Proficiência", "📋 Engenharia de Trabalhos", "📚 Atividades Complementares", "📂 Acervo de Materiais"
+        tab_producao, tab_trabalhos, tab_complementar, tab_acervo_lab = st.tabs([
+            "🚀 Produção (Aula 1/2)", "📋 Engenharia de Trabalhos", "📚 Atividades Complementares", "📂 Acervo de Materiais"
         ])
 
         with tab_producao:
@@ -608,102 +608,6 @@ if menu == "🧪 Criador de Aulas":
                                     st.toast(f"🧬 Sensor Ativado: {aviso_sensor}", icon="♿")
                                     st.rerun()
 
-# --- ABA 2: SONDA DE PROFICIÊNCIA (VERSÃO V72 - NAVEGAÇÃO HIERÁRQUICA & RIGOR) ---
-        with tab_diagnostico:
-            st.markdown("### 🔍 Engenharia de Sonda Diagnóstica (Padrão SAEB)")
-            
-            with st.container(border=True):
-                c1, c2 = st.columns([1, 1])
-                ano_sonda = c1.selectbox("Série Atual:", [6, 7, 8, 9], index=0, key=f"s_ano_v72_{v}")
-                trim_sonda = c2.selectbox("Trimestre da Sonda:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"s_trim_v72_{v}")
-                
-                # Lógica de Retrocesso Curricular (Soberania V32)
-                if trim_sonda == "I Trimestre":
-                    ano_busca = int(ano_sonda) - 1
-                    msg_sonda = f"💡 **Diagnóstico Inicial:** Mapeando lacunas do {ano_busca}º Ano para nivelamento."
-                    color_sonda = "orange"
-                else:
-                    ano_busca = int(ano_sonda)
-                    msg_sonda = f"🎯 **Sonda de Ciclo:** Avaliando domínio do trimestre atual."
-                    color_sonda = "blue"
-                
-                st.markdown(f":{color_sonda}[{msg_sonda}]")
-
-            # --- FILTRAGEM HIERÁRQUICA DA MATRIZ ---
-            df_cur_sonda = df_curriculo[df_curriculo["ANO"].astype(str).str.contains(str(ano_busca))]
-            
-            if not df_cur_sonda.empty:
-                with st.container(border=True):
-                    st.markdown("#### 🎯 1. Definição do Escopo Curricular")
-                    
-                    # NÍVEL 1: EIXO
-                    lista_eixos = sorted(df_cur_sonda["EIXO"].unique().tolist())
-                    sel_eixos = st.multiselect("Selecione o(s) Eixo(s):", lista_eixos, key=f"s_eixo_v72_{v}")
-                    
-                    if sel_eixos:
-                        # NÍVEL 2: CONTEÚDO ESPECÍFICO
-                        df_cont_s = df_cur_sonda[df_cur_sonda["EIXO"].isin(sel_eixos)]
-                        lista_conts = sorted(df_cont_s["CONTEUDO_ESPECIFICO"].unique().tolist())
-                        sel_conts = st.multiselect("Selecione os Conteúdos Base:", lista_conts, key=f"s_cont_v72_{v}")
-                        
-                        if sel_conts:
-                            # NÍVEL 3: OBJETIVOS / DETALHAMENTO (PRECISÃO MÁXIMA)
-                            df_obj_s = df_cont_s[df_cont_s["CONTEUDO_ESPECIFICO"].isin(sel_conts)]
-                            lista_objs = sorted(df_obj_s["OBJETIVOS"].unique().tolist())
-                            sel_objs = st.multiselect("Refine pelos Objetivos/Habilidades:", lista_objs, key=f"s_obj_v72_{v}")
-                            
-                            st.divider()
-                            
-                            # --- PARÂMETROS DE GERAÇÃO ---
-                            c_q1, c_q2 = st.columns([1.2, 1.8])
-                            with c_q1:
-                                st.markdown("#### ⚙️ Configuração")
-                                qtd_q_sonda = st.slider("Quantidade de Questões:", 1, 20, 10, step=1, key=f"s_qtd_v72_{v}")
-                                
-                                # Cálculo de peso automático
-                                peso_unit = 10.0 / qtd_q_sonda
-                                st.caption(f"💎 Valor por Questão: **{peso_unit:.2f} pts**")
-                            
-                            with c_q2:
-                                st.markdown("#### 📝 Contexto Adicional")
-                                instr_extra_s = st.text_area("Ex: Focar em situações-problema de compra e venda...", key=f"s_instr_v72_{v}", height=110)
-
-                            # --- BOTÃO DE DISPARO (TRIPLE-MATCH) ---
-                            if st.button("🚀 MATERIALIZAR SONDA DE ALTA PRECISÃO", use_container_width=True, type="primary"):
-                                with st.spinner("Maestro Sosa arquitetando Exame Diagnóstico SAEB/AAP..."):
-                                    
-                                    # 1. GERAÇÃO DE DNA ÚNICO (SOSA-ID)
-                                    sosa_id_sonda = util.gerar_sosa_id("SONDA", ano_sonda, trim_sonda)
-                                    st.session_state.sosa_id_atual = sosa_id_sonda
-                                    st.session_state.lab_meta = {
-                                        "ano": ano_sonda, "trimestre": trim_sonda, 
-                                        "tipo": "SONDA", "semana_ref": "AVALIAÇÃO"
-                                    }
-                                    
-                                    # 2. CONSTRUÇÃO DO COMANDO DE ELITE
-                                    prompt_sonda = (
-                                        f"ORDEM DE PERÍCIA V70 - PADRÃO SAEB/PROVA BRASIL\n"
-                                        f"SÉRIE ATUAL: {ano_sonda}º Ano | SÉRIE BASE: {ano_busca}º Ano.\n"
-                                        f"EIXOS: {', '.join(sel_eixos)}.\n"
-                                        f"CONTEÚDOS: {', '.join(sel_conts)}.\n"
-                                        f"OBJETIVOS ESPECÍFICOS: {', '.join(sel_objs)}.\n"
-                                        f"QTD: {qtd_q_sonda} questões | VALOR TOTAL: 10.0.\n"
-                                        f"SOSA_ID: {sosa_id_sonda}.\n"
-                                        f"EXTRAS: {instr_extra_s}.\n\n"
-                                        f"🚨 DIRETRIZ DE ENGENHARIA:\n"
-                                        f"1. Use o ID no marcador [SOSA_ID].\n"
-                                        f"2. Formatação INLINE: **QUESTÃO XX ({util.sosa_to_str(peso_unit)} ponto) -** Texto.\n"
-                                        f"3. [GRADE_DE_CORRECAO]: Detalhe descritores e análise clínica de distratores.\n"
-                                        f"4. [PEI]: Simetria 50% adaptada para TEA/Dislexia com suporte visual."
-                                    )
-                                    
-                                    # 3. DISPARO
-                                    st.session_state.lab_temp = ai.gerar_ia("ARQUITETO_SONDA_DIAGNOSTICA", prompt_sonda, usar_busca=True)
-                                    st.toast("🧬 Sonda Gerada com Sucesso!", icon="🔍")
-                                    st.rerun()
-            else:
-                st.error("❌ Base curricular não encontrada para o ano de busca.")
-                
 # --- ABA 3: ENGENHARIA DE TRABALHOS (VERSÃO V31.7 - BLINDAGEM DE TABELAS) ---
         with tab_trabalhos:
             st.subheader("📋 Engenharia de Projetos e Semanários (BNCC Elite)")
@@ -2384,123 +2288,138 @@ elif menu == "📝 Central de Avaliações":
         "🚀 Arquiteto de Exames", "🤖 Refinador Maestro", "👁️ Visualização 360°", "🔥 Recomposição/Revisão", "💾 Finalizar Ativo", "🗂️ Acervo de Safra"
     ])
 
-# --- ABA 1: ARQUITETO (VERSÃO V67.0 - NOMENCLATURA TÉCNICA DE ELITE) ---
+# --- ABA 1: ARQUITETO DE EXAMES (VERSÃO V76 - HÍBRIDA: SAFRA + SONDA SAEB) ---
     with tab_arquiteto_av:
         if is_refinando_av:
             st.warning(f"🛠️ **MODO REFINO:** Editando {st.session_state.refino_av_ativo.get('tipo')}")
             if st.button("❌ CANCELAR E VOLTAR AO NOVO"): reset_avaliacoes()
 
+        # --- 1. CONFIGURAÇÃO BÁSICA ---
         with st.container(border=True):
             st.markdown("### ⚙️ 1. Configuração do Exame")
             c1, c2, c3, c4 = st.columns([1.5, 1, 1, 1])
             
-            tipo_av = c1.selectbox("Tipo:", 
-                ["Teste", "Prova", "Recuperação Paralela", "Recuperação Final", "2ª Chamada"], 
+            tipo_av = c1.selectbox("Tipo de Ativo:", 
+                ["Teste", "Prova", "Sonda de Proficiência", "Recuperação Paralela", "Recuperação Final", "2ª Chamada"], 
                 key=f"av_t_{v}")
             
-            val_sugerido = 3.0 if "Teste" in tipo_av else 4.0
-            if "Recuperação" in tipo_av: val_sugerido = 10.0
-            
+            # Ajuste de valores automáticos
+            val_sugerido = 3.0 if "Teste" in tipo_av else 10.0 if "Sonda" in tipo_av else 4.0
             v_total = c2.number_input("Valor Total:", 0.0, 10.0, val_sugerido, step=0.5, key=f"av_v_{v}")
-            ano_av = c3.selectbox("Série:", [6, 7, 8, 9], index=0, key=f"av_a_{v}")
-            qtd_q = c4.number_input("Nº Total de Questões:", 2, 20, 10, key=f"av_q_{v}")
+            ano_av = c3.selectbox("Série Atual:", [6, 7, 8, 9], index=0, key=f"av_a_{v}")
+            qtd_q = c4.number_input("Nº de Questões:", 1, 20, 10, key=f"av_q_{v}")
 
-        is_segunda_chamada = tipo_av == "2ª Chamada"
-        
-        if not is_segunda_chamada:
+        # --- LÓGICA DE MODO (SONDA VS SAFRA) ---
+        is_sonda = "Sonda" in tipo_av
+        is_segunda = "2ª Chamada" in tipo_av
+
+        if is_sonda:
+            # --- MODO 2: ENGENHARIA DE SONDAGEM (MATRIZ SAEB / GOVERNO) ---
+            with st.container(border=True):
+                st.markdown("#### 🔍 2. Parâmetros de Sondagem Diagnóstica")
+                trim_filtro = st.selectbox("Trimestre de Referência:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"s_trim_{v}")
+                
+                # Lógica de Retrocesso Curricular (I Trimestre busca base do ano anterior)
+                ano_busca = int(ano_av) - 1 if trim_filtro == "I Trimestre" else int(ano_av)
+                st.info(f"💡 **Foco Diagnóstico:** Buscando conteúdos do **{ano_busca}º Ano** para mapear lacunas.")
+
+                df_matriz = df_curriculo[df_curriculo["ANO"].astype(str).str.contains(str(ano_busca))]
+                
+                c_s1, c_s2 = st.columns(2)
+                lista_eixos = sorted(df_matriz["EIXO"].unique().tolist())
+                sel_eixos = c_s1.multiselect("Selecione o(s) Eixo(s):", lista_eixos, key=f"s_e_m_{v}")
+                
+                sel_conts = []
+                sel_objs = []
+                if sel_eixos:
+                    df_c_f = df_matriz[df_matriz["EIXO"].isin(sel_eixos)]
+                    lista_conts = sorted(df_c_f["CONTEUDO_ESPECIFICO"].unique().tolist())
+                    sel_conts = c_s2.multiselect("Conteúdo(s) Base:", lista_conts, key=f"s_c_m_{v}")
+                    
+                    if sel_conts:
+                        lista_objs = sorted(df_c_f[df_c_f["CONTEUDO_ESPECIFICO"].isin(sel_conts)]["OBJETIVOS"].unique().tolist())
+                        sel_objs = st.multiselect("Refine pelos Objetivos (Descritores):", lista_objs, key=f"s_o_m_{v}")
+                
+                instr_extra = st.text_area("📝 Instruções de Sondagem (Ex: Buscar itens do SAEB sobre este tema):", key=f"s_instr_{v}")
+
+        else:
+            # --- MODO 1: ENGENHARIA DE SAFRA (TESTE/PROVA/2ª CHAMADA) ---
             with st.container(border=True):
                 st.markdown("### 📊 2. Distribuição de Dificuldade (Taxonomia)")
                 cd1, cd2, cd3 = st.columns(3)
-                
-                # 1. Entrada de Fáceis e Médias
                 q_facil = cd1.number_input("Fáceis:", 0, qtd_q, int(qtd_q*0.3), key=f"q_f_{v}")
                 q_medio = cd2.number_input("Médias:", 0, qtd_q, int(qtd_q*0.5), key=f"q_m_{v}")
-                
-                # 2. CÁLCULO BLINDADO (A VACINA):
-                # Calcula o restante, mas garante que o mínimo seja 0 para não dar erro
-                restante_calc = qtd_q - (q_facil + q_medio)
-                valor_dificil_inicial = max(0, restante_calc)
-                
-                # 3. Entrada de Difíceis (Agora com valor protegido)
-                q_dificil = cd3.number_input("Difíceis:", 0, qtd_q, valor_dificil_inicial, key=f"q_d_{v}")
-                
-                # Cálculo da Soma Real para validação visual
+                q_dificil = cd3.number_input("Difíceis:", 0, qtd_q, max(0, qtd_q-(q_facil+q_medio)), key=f"q_d_{v}")
                 soma_q = q_facil + q_medio + q_dificil
-        else:
-            st.info("💡 **Modo 2ª Chamada:** A dificuldade será herdada da prova original.")
-            soma_q = qtd_q 
 
-        with st.container(border=True):
-            st.markdown("### 🎯 3. Matriz de Mérito e Vínculo")
-            c_trim1, c_trim2 = st.columns([1, 2])
-            
-            if is_segunda_chamada:
-                trim_filtro = c_trim1.selectbox("Trimestre da Original:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"av_trim_filter_{v}")
-                df_provas_prontas = df_aulas[(df_aulas['SEMANA_REF'] == "AVALIAÇÃO") & (df_aulas['ANO'].str.contains(str(ano_av)))]
-                mats_selecionados = c_trim2.selectbox("📦 Selecione a Prova Original (Parâmetro):", [""] + df_provas_prontas['TIPO_MATERIAL'].tolist(), key=f"av_ref_{v}")
-            else:
-                trim_filtro = c_trim1.selectbox("Filtrar por Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"av_trim_filter_{v}")
-                df_planos_trim = df_planos[(df_planos["ANO"].astype(str).str.contains(str(ano_av))) & (df_planos["TURMA"].astype(str).str.contains(trim_filtro))]
-                semanas_do_trimestre = df_planos_trim["SEMANA"].unique().tolist()
-                df_materiais_trim = df_aulas[(df_aulas["ANO"].astype(str).str.contains(str(ano_av))) & (df_aulas["SEMANA_REF"].isin(semanas_do_trimestre))]
-                mats_selecionados = c_trim2.multiselect(f"Ativos de Safra Detectados ({len(df_materiais_trim)}):", options=df_materiais_trim["TIPO_MATERIAL"].tolist(), key=f"av_ref_{v}")
+            with st.container(border=True):
+                st.markdown("### 🎯 3. Matriz de Mérito e Vínculo de Safra")
+                trim_filtro = st.selectbox("Filtrar Ativos por Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"av_trim_filter_{v}")
+                
+                if is_segunda:
+                    df_ref = df_aulas[(df_aulas['SEMANA_REF'] == "AVALIAÇÃO") & (df_aulas['ANO'].str.contains(str(ano_av)))]
+                    mats_selecionados = st.selectbox("📦 Selecione a Prova Original (Parâmetro):", [""] + df_ref['TIPO_MATERIAL'].tolist(), key=f"av_ref_{v}")
+                else:
+                    # Filtra aulas do banco que batem com a série e o trimestre
+                    df_ref = df_aulas[(df_aulas['ANO'].str.contains(str(ano_av))) & (df_aulas['CONTEUDO'].str.contains(trim_filtro))]
+                    mats_selecionados = st.multiselect(f"Ativos de Safra ({len(df_ref)} detectados):", options=df_ref["TIPO_MATERIAL"].tolist(), key=f"av_ref_{v}")
+                
+                instr_extra = st.text_area("📝 Instruções Extras de Composição:", key=f"av_extra_{v}")
 
-        # --- DIAGNÓSTICO DE CONFIGURAÇÃO ---
+        # --- 4. DIAGNÓSTICO DE CONFIGURAÇÃO ---
         with st.container(border=True):
-            st.markdown("#### 🔍 Diagnóstico de Configuração")
             col_diag1, col_diag2 = st.columns(2)
             with col_diag1:
-                if is_segunda_chamada:
-                    if mats_selecionados: st.success(f"✅ Pronto para espelhar: {mats_selecionados}")
-                    else: st.error("🚨 Selecione a prova original.")
+                if is_sonda:
+                    if sel_conts: st.success(f"✅ Sonda configurada: {len(sel_conts)} conteúdos.")
+                    else: st.warning("⚠️ Selecione os conteúdos da matriz.")
                 else:
                     if soma_q == qtd_q: st.success(f"✅ Taxonomia: {soma_q}/{qtd_q} questões.")
-                    else: st.error(f"🚨 Erro: Soma ({soma_q}) diferente do total ({qtd_q}).")
+                    else: st.error(f"🚨 Erro: Soma ({soma_q}) ≠ Total ({qtd_q}).")
             with col_diag2:
-                peso_q_live = v_total / qtd_q if qtd_q > 0 else 0
-                st.metric("Peso por Questão", f"{peso_q_live:.2f} pts")
+                peso_q = v_total / qtd_q if qtd_q > 0 else 0
+                st.metric("Peso por Questão", f"{peso_q:.2f} pts")
 
-        # --- BOTÃO DE COMPILAÇÃO COM LÓGICA DE NOMENCLATURA ---
-        if st.button("💎 COMPILAR EXAME COM GRADE DE PERÍCIA", use_container_width=True, type="primary"):
-            if not is_segunda_chamada and soma_q != qtd_q: 
+        # --- 5. BOTÃO DE COMPILAÇÃO UNIFICADO ---
+        if st.button("💎 MATERIALIZAR ATIVO DE ELITE", use_container_width=True, type="primary"):
+            if not is_sonda and not is_segunda and soma_q != qtd_q:
                 st.error("Ajuste a distribuição de dificuldade.")
-            elif not mats_selecionados: 
-                st.error("Selecione os parâmetros.")
             else:
-                with st.spinner(f"Arquitetando {tipo_av}..."):
-                    peso_str = util.sosa_to_str(v_total / qtd_q)
+                with st.spinner("Maestro Sosa arquitetando Tratado Pedagógico..."):
+                    peso_str = util.sosa_to_str(peso_q)
+                    nome_tecnico = f"{tipo_av.upper().replace(' ', '_')}_{ano_av}ANO_{trim_filtro.replace(' ', '')}"
                     
-                    # --- 🚀 LÓGICA DE NOMENCLATURA DE ELITE (SOSA V67) ---
-                    trim_slug = trim_filtro.replace(" ", "")
-                    if is_segunda_chamada:
-                        # Extrai o tipo da prova original (ex: TESTE ou PROVA)
-                        tipo_original = str(mats_selecionados).split("-")[0].strip().upper().replace(" ", "_")
-                        nome_tecnico = f"2CHAMADA_{tipo_original}_{ano_av}ANO_{trim_slug}"
-                        
-                        m_row = df_aulas[df_aulas["TIPO_MATERIAL"] == mats_selecionados].iloc[0]
-                        contexto_base = f"PROVA ORIGINAL PARA ESPELHAMENTO:\n{m_row['CONTEUDO']}"
-                        diretriz = "Gere uma 2ª CHAMADA. Mantenha HABILIDADES e mude os valores/contextos (Questões Gêmeas)."
+                    if is_sonda:
+                        # PROMPT ESPECÍFICO PARA SONDA (PROVA BRASIL/SAEB)
+                        prompt = (
+                            f"ORDEM DE PERÍCIA V70 - PSICOMETRIA DIAGNÓSTICA\n"
+                            f"SÉRIE ATUAL: {ano_av}º. SÉRIE BASE: {ano_busca}º. VALOR: 10.0. QTD: {qtd_q}.\n"
+                            f"CONTEÚDOS MATRIZ: {sel_conts}. OBJETIVOS: {sel_objs}.\n"
+                            f"EXTRAS: {instr_extra}.\n\n"
+                            f"🚨 MISSÃO: Use o Google Search para encontrar itens de avaliação diagnóstica oficiais (SAEB, Prova Brasil, AAP). "
+                            f"Gere questões de múltipla escolha com erros planejados para mapear lacunas. "
+                            f"Formatação INLINE: **QUESTÃO XX ({peso_str} ponto) -** Texto."
+                        )
+                        persona_alvo = "ARQUITETO_SONDA_DIAGNOSTICA"
                     else:
-                        tipo_slug = tipo_av.upper().replace(" ", "_")
-                        nome_tecnico = f"{tipo_slug}_{ano_av}ANO_{trim_slug}"
-                        
+                        # PROMPT PARA PROVA/TESTE (SAFRA)
                         contexto_base = ""
-                        for m_nome in mats_selecionados:
+                        for m_nome in (mats_selecionados if isinstance(mats_selecionados, list) else [mats_selecionados]):
                             m_row = df_aulas[df_aulas["TIPO_MATERIAL"] == m_nome].iloc[0]
-                            contexto_base += f"MATERIAL_ID: {m_nome}\nCONTEÚDO: {m_row['CONTEUDO']}\n"
-                        diretriz = f"DISTRIBUIÇÃO: {q_facil} Fáceis, {q_medio} Médias, {q_dificil} Difíceis."
+                            contexto_base += f"MATERIAL: {m_nome}\n{m_row['CONTEUDO']}\n"
+                        
+                        diretriz = f"DISTRIBUIÇÃO: {q_facil} Fáceis, {q_medio} Médias, {q_dificil} Difíceis." if not is_segunda else "MODO 2ª CHAMADA (QUESTÕES GÊMEAS)."
+                        
+                        prompt = (
+                            f"TIPO: {tipo_av}. SÉRIE: {ano_av}º. VALOR: {v_total}. QTD: {qtd_q}.\n"
+                            f"DIRETRIZ: {diretriz}. EXTRAS: {instr_extra}.\n\n"
+                            f"--- CONTEÚDO HERDADO DAS AULAS ---\n{contexto_base}"
+                        )
+                        persona_alvo = "ARQUITETO_EXAMES_V30_ELITE"
 
-                    prompt = (
-                        f"ORDEM DE PRODUÇÃO V67 - RIGOR TOTAL\n"
-                        f"TIPO: {tipo_av} | SÉRIE: {ano_av}º Ano | VALOR TOTAL: {v_total}\n"
-                        f"QUANTIDADE: {qtd_q} questões | VALOR POR QUESTÃO: {peso_str}.\n"
-                        f"🚨 DIRETRIZ: {diretriz}\n\n"
-                        f"CONTEÚDO DE REFERÊNCIA:\n{contexto_base}"
-                    )
-                    
-                    st.session_state.temp_prova = ai.gerar_ia("ARQUITETO_EXAMES_V30_ELITE", prompt, usar_busca=True)
+                    st.session_state.temp_prova = ai.gerar_ia(persona_alvo, prompt, usar_busca=True)
                     st.session_state.av_valor_total = v_total
-                    st.session_state.av_nome_fixo = nome_tecnico # <--- NOME TÉCNICO SALVO AQUI
+                    st.session_state.av_nome_fixo = nome_tecnico
                     st.rerun()
 
     # --- ABA 2: REFINADOR ---
