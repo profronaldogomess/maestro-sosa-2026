@@ -307,10 +307,10 @@ def gerar_docx_professor_v25(titulo_doc, conteudo, info):
     return file_stream
 
 # ==============================================================================
-# 5. PROVA OFICIAL (PRESERVAÇÃO INTEGRAL - COM NOTA)
+# 5. PROVA OFICIAL (VERSÃO V30 - BLINDAGEM DE NEGRI TO E DIFICULDADE)
 # ==============================================================================
 def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
-    """Versão V29.21 - SOBERANIA INTEGRAL, ORTOGRAFIA E ESCUDO V33"""
+    """Versão V30 - SOBERANIA DE FORMATO: Correção de Bolding e Etiquetas de Dificuldade"""
     import re
     file_stream = io.BytesIO()
     try:
@@ -325,20 +325,18 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         section.top_margin = section.bottom_margin = Inches(0.3)
         section.left_margin = section.right_margin = Inches(0.4)
         
-        # 2. DETECÇÃO DE TIPO E EXTRAÇÃO (USANDO EXTRATOR V33)
+        # 2. DETECÇÃO DE TIPO E EXTRAÇÃO
         is_pei_doc = "PEI" in titulo_doc.upper() or "ADAPTADA" in titulo_doc.upper()
         tag_alvo = "PEI" if is_pei_doc else "QUESTOES"
         
-        # Extrai o conteúdo usando a tag correta
         corpo_bruto = ai.extrair_tag(conteudo_ia, tag_alvo)
         
-        # Fallback caso a IA não tenha usado a tag QUESTOES
+        # Fallback de segurança
         if not corpo_bruto:
             match_primeira_q = re.search(r"(?i)QUESTÃO\s*\d+", conteudo_ia)
             corpo_bruto = conteudo_ia[match_primeira_q.start():].strip() if match_primeira_q else conteudo_ia.strip()
 
-        # 3. CONTAGEM REAL PARA GABARITO PROPORCIONAL
-        # Conta apenas no texto extraído para não contar o gabarito final
+        # 3. CONTAGEM PARA GABARITO
         num_total_q = len(re.findall(r'(?i)QUESTÃO\s+\d+', corpo_bruto))
         if num_total_q == 0: num_total_q = int(info.get('qtd_questoes', 5))
         
@@ -372,7 +370,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
             p.add_run(f"• {txt}").font.size = Pt(9)
             p.paragraph_format.space_after = Pt(0)
 
-        # GABARITO DE BOLINHAS PROPORCIONAL (num_total_q linhas)
+        # GABARITO DE BOLINHAS PROPORCIONAL
         c_gab = top_table.cell(0, 1)
         gab_grid = c_gab.add_table(rows=num_total_q + 1, cols=6)
         gab_grid.style = 'Table Grid'
@@ -390,9 +388,9 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         sectPr = new_section._sectPr
         cols = sectPr.xpath('./w:cols')[0]
         cols.set(qn('w:num'), '2')
-        cols.set(qn('w:space'), '720')
+        cols.set(qn('w:space'), '550') # Espaço entre colunas calibrado
 
-        # VACINA ANTI-MARKDOWN E LIMPEZA DE CARACTERES
+        # LIMPEZA DE RUÍDO (Remove negritos artificiais da IA e símbolos de título)
         corpo_limpo = corpo_bruto.replace("**", "").replace("#", "")
 
         for linha in corpo_limpo.split('\n'):
@@ -402,21 +400,25 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
             p = doc.add_paragraph()
             p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
             p.paragraph_format.space_after = Pt(6)
+            p.paragraph_format.line_spacing = 1.05
             
-            # LEI DA FORMATAÇÃO INLINE (QUESTÃO XX (0,XX ponto) - Texto)
+            # --- LEI DA FORMATAÇÃO INLINE V30 (QUESTÃO XX + ETIQUETAS + TEXTO) ---
             if l_s.upper().startswith("QUESTÃO"):
-                match = re.match(r"^(QUEST[AÃ]O\s+\d+)(.*?)(\.\s*|\s+-\s*|:\s*)(.*)", l_s, re.IGNORECASE)
+                # Regex potente: Pega "QUESTÃO XX", e opcionalmente qualquer coisa entre parênteses/colchetes, 
+                # e os sinais de pontuação finais (.-:).
+                match = re.match(r"^(QUEST[AÃ]O\s+\d+(?:\s*[\(\[].*?[\)\]])*[\s\.\-:]*)(.*)", l_s, re.IGNORECASE)
+                
                 if match:
-                    # Rótulo em Negrito e Caixa Alta
-                    rotulo_completo = f"{match.group(1).upper()}{match.group(2)}{match.group(3)}"
-                    run_r = p.add_run(rotulo_completo)
+                    # Rótulo completo (Número + Pontos + Dificuldade) em NEGRITO e CAIXA ALTA
+                    run_r = p.add_run(match.group(1).upper())
                     run_r.bold = True
                     run_r.font.size = Pt(11)
-                    # Texto na mesma linha
-                    p.add_run(match.group(4).strip())
+                    
+                    # Corpo da pergunta (Normal)
+                    p.add_run(match.group(2).strip())
                     continue
             
-            # Títulos de Seção PEI (Sem Unicode, apenas Negrito/Caixa Alta)
+            # Títulos de Seção PEI
             secoes_especiais = ["PARA LEMBRAR", "DICA MESTRA", "PASSO A PASSO", "VERSÃO ADAPTADA"]
             if any(x in l_s.upper() for x in secoes_especiais):
                 run = p.add_run(l_s.upper())
@@ -427,15 +429,17 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
             # Estilização de Prompts de Imagem
             if "PROMPT IMAGEM" in l_s.upper():
                 run = p.add_run(l_s)
-                run.font.italic = True
-                run.font.size = Pt(8)
+                run.font.italic, run.font.size = True, Pt(8)
                 run.font.color.rgb = RGBColor(100, 100, 100)
                 continue
 
             # Indentação de Alternativas A, B, C, D, E
             if re.match(r'^[A-E][\)\.]', l_s):
                 p.paragraph_format.left_indent = Inches(0.2)
+                p.add_run(l_s)
+                continue
             
+            # Texto comum
             p.add_run(l_s)
 
         doc.save(file_stream)
@@ -443,7 +447,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         return file_stream
     except Exception as e:
         file_stream = io.BytesIO()
-        err_doc = Document(); err_doc.add_paragraph(f"ERRO NO EXPORTER: {str(e)}"); err_doc.save(file_stream)
+        err_doc = Document(); err_doc.add_paragraph(f"ERRO EXPORTER V30: {str(e)}"); err_doc.save(file_stream)
         file_stream.seek(0)
         return file_stream
     
