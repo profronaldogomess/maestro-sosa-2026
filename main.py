@@ -1382,16 +1382,20 @@ elif menu == "📝 Diário de Bordo Rápido":
         reg_existente = registros_atuais[registros_atuais['ID_ALUNO'].apply(db.limpar_id) == id_a]
         
         if not reg_existente.empty:
-            # CARREGA DADOS DO BANCO
-            visto_val = reg_existente.iloc[0]['VISTO_ATIVIDADE'].upper() == "TRUE"
+            # CARREGA DADOS DO BANCO (Incluindo o Bônus)
+            visto_val = str(reg_existente.iloc[0]['VISTO_ATIVIDADE']).upper() == "TRUE"
             falta_val = reg_existente.iloc[0]['TAGS'] == "AUSÊNCIA"
-            bonus_val = util.sosa_to_float(reg_existente.iloc[0].get('BONUS', 0))
+            
+            # PROTEÇÃO: Busca o bônus, se não existir na linha, assume 0
+            if 'BONUS' in reg_existente.columns:
+                bonus_val = util.sosa_to_float(reg_existente.iloc[0]['BONUS'])
+            else:
+                bonus_val = 0.0
+                
             tag_val = reg_existente.iloc[0]['TAGS'] if not falta_val else ""
             obs_val = reg_existente.iloc[0]['OBSERVACOES']
-            # Limpa o prefixo da aula se ele existir na observação antiga para não duplicar
-            if "]" in obs_val: obs_val = obs_val.split("]", 1)[-1].strip()
         else:
-            # VALORES PADRÃO (NOVO REGISTRO)
+            # VALORES PADRÃO PARA NOVO REGISTRO
             visto_val = st.session_state.get(f"visto_lote_{turma_sel}", True)
             falta_val = False
             bonus_val = 0.0
