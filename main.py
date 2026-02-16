@@ -1739,7 +1739,7 @@ elif menu == "👥 Gestão da Turma":
         "📊 Cockpit da Turma", "🏗️ Arquitetura de Turmas", "➕ Povoar Alunos", "✏️ Edição & Transferência"
     ])
 
-# --- ABA 1: COCKPIT DA TURMA (VERSÃO V32 - CORREÇÃO DEFINITIVA) ---
+# --- ABA 1: COCKPIT DA TURMA (VERSÃO V81 - SOBERANIA ANALÍTICA & RADAR ATIVO) ---
     with tab_cockpit:
         if df_turmas.empty:
             st.info("📭 Nenhuma turma cadastrada.")
@@ -1749,201 +1749,153 @@ elif menu == "👥 Gestão da Turma":
             turma_foco = c_f1.selectbox("🎯 Selecione a Turma:", sorted(df_turmas['ID_TURMA'].unique()), key=f"foco_t_{v}")
             trim_foco = c_f2.selectbox("📅 Trimestre de Safra:", ["I Trimestre", "II Trimestre", "III Trimestre", "Todos os Trimestres"], key=f"foco_trim_{v}")
             
-            # --- 2. CÁLCULOS E LÓGICA (TUDO ANTES DE EXIBIR) ---
+            # --- 2. CÁLCULOS DE BASE ---
             alunos_t = df_alunos[df_alunos['TURMA'] == turma_foco].sort_values(by="NOME_ALUNO")
             id_alunos_turma = set(alunos_t['ID'].apply(db.limpar_id).tolist())
             ano_num = "".join(filter(str.isdigit, turma_foco))
 
-            # Cálculo de Datas
-            if "I Trimestre" in trim_foco: dt_ini, dt_fim = date(2026, 2, 9), date(2026, 5, 22)
-            elif "II Trimestre" in trim_foco: dt_ini, dt_fim = date(2026, 5, 25), date(2026, 9, 4)
-            elif "III Trimestre" in trim_foco: dt_ini, dt_fim = date(2026, 9, 8), date(2026, 12, 17)
-            else: dt_ini, dt_fim = date(2026, 1, 1), date(2026, 12, 31)
-
-            # Cálculo de PEI (IMPORTANTE: Definir df_pei_turma aqui!)
-            mask_pei = alunos_t['NECESSIDADES'].astype(str).str.upper().str.strip().isin(["NENHUMA", "PENDENTE", "", "NAN"]) == False
+            # Cálculo de PEI
+            mask_pei = ~alunos_t['NECESSIDADES'].astype(str).str.upper().str.strip().isin(["NENHUMA", "PENDENTE", "", "NAN"])
             df_pei_turma = alunos_t[mask_pei]
 
-            # Cálculo de Engajamento
-            engaj_medio = 0
-            if not df_diario.empty:
-                df_d_t = df_diario[df_diario['TURMA'] == turma_foco].copy()
-                df_d_t['DATA_DT'] = pd.to_datetime(df_d_t['DATA'], format="%d/%m/%Y", errors='coerce').dt.date
-                df_d_trim = df_d_t[(df_d_t['DATA_DT'] >= dt_ini) & (df_d_t['DATA_DT'] <= dt_fim)]
-                if not df_d_trim.empty:
-                    vistos_validos = df_d_trim[df_d_trim['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"]
-                    engaj_medio = (len(vistos_validos) / len(df_d_trim)) * 100
-
-            # Cálculo de Saúde de Regência (Novas Colunas)
+            # Saúde de Regência
             reg_t_foco = df_registro_aulas[df_registro_aulas['TURMA'] == turma_foco]
             saude_execucao = 0
             clima_predominante = "N/A"
-            ultima_ponte = "Nenhuma pendência registrada."
-
             if not reg_t_foco.empty:
                 concluidas = len(reg_t_foco[reg_t_foco['STATUS_EXECUCAO'].astype(str).str.contains("Concluído", na=False)])
-                saude_execucao = (concluidas / len(reg_t_foco)) * 100
-                if not reg_t_foco['CLIMA_TURMA'].dropna().empty:
-                    clima_predominante = reg_t_foco['CLIMA_TURMA'].mode()[0]
-                ultima_ponte = reg_t_foco.iloc[-1]['PONTE_PEDAGOGICA'] 
+                saude_execucao = (concluidas / len(reg_t_foco)) * 100 if len(reg_t_foco) > 0 else 0
+                clima_predominante = reg_t_foco['CLIMA_TURMA'].mode()[0] if not reg_t_foco['CLIMA_TURMA'].dropna().empty else "Estável"
 
-            # --- 3. EXIBIÇÃO VISUAL (AGORA COM AS VARIÁVEIS GARANTIDAS) ---
+            # --- 3. EXIBIÇÃO DE MÉTRICAS ---
             st.markdown("---")
-            
-            # Linha 1 de Métricas
             m1, m2, m3 = st.columns(3)
             m1.metric("👥 Total Alunos", len(alunos_t))
             m2.metric("♿ Estudantes PEI", len(df_pei_turma))
             m3.metric("🎯 Saúde de Execução", f"{saude_execucao:.0f}%")
 
-            # Linha 2 de Métricas
             m4, m5, m6 = st.columns(3)
-            m4.metric("📈 Engajamento", f"{engaj_medio:.0f}%")
-            m5.metric("🌡️ Perfil de Clima", clima_predominante.split(" ")[1] if " " in clima_predominante else clima_predominante)
+            # Engajamento (Vistos)
+            engaj = 0
+            if not df_diario.empty:
+                d_t = df_diario[df_diario['TURMA'] == turma_foco]
+                if not d_t.empty:
+                    vistos = len(d_t[d_t['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"])
+                    engaj = (vistos / len(d_t)) * 100
+            
+            m4.metric("📈 Engajamento", f"{engaj:.0f}%")
+            m5.metric("🌡️ Perfil de Clima", clima_predominante)
             m6.metric("🎓 Série Oficial", f"{ano_num}º Ano")
 
-            # Alerta de Pendência (Se houver)
-            if not reg_t_foco.empty and "Concluído" not in str(reg_t_foco.iloc[-1]['STATUS_EXECUCAO']):
-                st.warning(f"📌 **PENDÊNCIA DE REGÊNCIA:** {ultima_ponte}")
-
-            # --- 4. ÁREA DE RESULTADOS E INVENTÁRIO (RESTAURADO) ---
+            # --- 4. RADAR DE RESULTADOS (FIX: BUSCA FLEXÍVEL) ---
             st.markdown("---")
             st.subheader(f"📡 Radar de Resultados: {trim_foco}")
             
             diag_t = df_diagnosticos[df_diagnosticos['TURMA'] == turma_foco].copy()
+            
             if not diag_t.empty:
-                # Normaliza para agrupar Original e 2ª Chamada no mesmo Slot
-                def normalizar_slot(nome):
-                    return nome.replace(" (2ª CHAMADA)", "").replace("2CHAMADA_", "").strip()
+                # Normalização de Slot para agrupar 2ª Chamada
+                diag_t['SLOT'] = diag_t['ID_AVALIACAO'].apply(lambda x: x.replace(" (2ª CHAMADA)", "").strip())
                 
-                diag_t['SLOT'] = diag_t['ID_AVALIACAO'].apply(normalizar_slot)
-                
-                # Filtra os slots que pertencem ao trimestre (pelo nome ou pela data do registro)
+                # Filtro de Trimestre Flexível
                 if trim_foco != "Todos os Trimestres":
-                    slots_trimestre = [s for s in diag_t['SLOT'].unique() if trim_foco in s]
-                else:
-                    slots_trimestre = diag_t['SLOT'].unique()
+                    # Busca o termo (ex: "ITrimestre") removendo espaços para evitar erro de digitação
+                    termo_busca = trim_foco.replace(" ", "").upper()
+                    diag_t = diag_t[diag_t['ID_AVALIACAO'].str.replace(" ", "").str.upper().str.contains(termo_busca, na=False)]
 
-                if not slots_trimestre:
-                    st.success(f"✅ Nenhuma avaliação registrada para o período selecionado.")
+                if diag_t.empty:
+                    st.info(f"ℹ️ Nenhuma avaliação processada para {trim_foco} nesta turma.")
                 else:
-                    for slot in slots_trimestre:
-                        with st.expander(f"📊 SLOT DE AVALIAÇÃO: {slot}"):
+                    for slot in diag_t['SLOT'].unique():
+                        with st.expander(f"📊 AVALIAÇÃO: {slot}", expanded=True):
                             df_slot = diag_t[diag_t['SLOT'] == slot].copy()
                             df_slot['ID_L'] = df_slot['ID_ALUNO'].apply(db.limpar_id)
-                            
-                            # Pega a última nota (2ª chamada sobrepõe a original)
                             df_consolidado = df_slot.sort_values('DATA').groupby('ID_L').last().reset_index()
                             
-                            m_reg = df_consolidado[~df_consolidado['ID_L'].isin(df_pei_turma['ID'].apply(db.limpar_id))]['NOTA_CALCULADA'].apply(util.sosa_to_float).mean()
-                            m_pei = df_consolidado[df_consolidado['ID_L'].isin(df_pei_turma['ID'].apply(db.limpar_id))]['NOTA_CALCULADA'].apply(util.sosa_to_float).mean()
+                            # Médias Segregadas
+                            ids_pei = set(df_pei_turma['ID'].apply(db.limpar_id).tolist())
+                            m_reg = df_consolidado[~df_consolidado['ID_L'].isin(ids_pei)]['NOTA_CALCULADA'].apply(util.sosa_to_float).mean()
+                            m_pei = df_consolidado[df_consolidado['ID_L'].isin(ids_pei)]['NOTA_CALCULADA'].apply(util.sosa_to_float).mean()
                             
-                            col_m1, col_m2, col_m3 = st.columns([1, 1, 2])
-                            col_m1.metric("Média Regular", f"{m_reg:.2f}" if not pd.isna(m_reg) else "0.00")
-                            col_m2.metric("Média PEI", f"{m_pei:.2f}" if not pd.isna(m_pei) else "0.00")
+                            c_r1, c_r2, c_r3 = st.columns([1, 1, 2])
+                            c_r1.metric("Média Regular", f"{m_reg:.2f}" if not pd.isna(m_reg) else "0.00")
+                            c_r2.metric("Média PEI", f"{m_pei:.2f}" if not pd.isna(m_pei) else "0.00")
                             
-                            alunos_com_nota = set(df_consolidado[df_consolidado['RESPOSTAS_ALUNO'] != "FALTOU"]['ID_L'].tolist())
-                            faltosos_ids = id_alunos_turma - alunos_com_nota
-                            if faltosos_ids:
-                                faltosos_nomes = alunos_t[alunos_t['ID'].apply(db.limpar_id).isin(faltosos_ids)]['NOME_ALUNO'].tolist()
-                                col_m3.error(f"⚠️ Pendentes ({len(faltosos_nomes)}): {', '.join(faltosos_nomes)}")
+                            # Faltosos
+                            fez_prova = set(df_consolidado[df_consolidado['RESPOSTAS_ALUNO'] != "FALTOU"]['ID_L'].tolist())
+                            faltosos = id_alunos_turma - fez_prova
+                            if faltosos:
+                                nomes_f = alunos_t[alunos_t['ID'].apply(db.limpar_id).isin(faltosos)]['NOME_ALUNO'].tolist()
+                                c_r3.error(f"⚠️ Pendentes ({len(nomes_f)}): {', '.join(nomes_f)}")
                             else:
-                                col_m3.success("✅ Todos os alunos possuem nota neste slot.")
+                                c_r3.success("✅ Turma Completa")
 
-            # ==============================================================================
-            # 🔥 RAIO-X DE LACUNAS COLETIVO (FIX: ENXERGA RASURAS E BRANCOS)
-            # ==============================================================================
+            # --- 5. RAIO-X DE LACUNAS (FIX: EXTRAÇÃO DE HABILIDADES V81) ---
             st.markdown("---")
             with st.container(border=True):
                 st.subheader(f"🔥 Raio-X de Lacunas da Turma ({trim_foco})")
                 
                 if not diag_t.empty:
-                    # Filtra diagnósticos do período
-                    if trim_foco != "Todos os Trimestres":
-                        df_lacunas = diag_t[diag_t['ID_AVALIACAO'].str.contains(trim_foco, na=False)]
-                    else:
-                        df_lacunas = diag_t.copy()
-                    
                     mapa_erros_coletivo = []
-                    for _, reg in df_lacunas.iterrows():
+                    for _, reg in diag_t.iterrows():
                         if reg['RESPOSTAS_ALUNO'] == "FALTOU": continue
                         
-                        prova_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == reg['ID_AVALIACAO']]
+                        # Busca a prova para pegar a grade
+                        prova_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == reg['ID_AVALIACAO'].replace(" (2ª CHAMADA)", "")]
                         if not prova_ref.empty:
                             txt_p = str(prova_ref.iloc[0]['CONTEUDO'])
-                            grade = ai.extrair_tag(txt_p, "GRADE_DE_CORRECAO")
+                            is_p = db.limpar_id(reg['ID_ALUNO']) in set(df_pei_turma['ID'].apply(db.limpar_id).tolist())
                             
-                            is_p = str(reg['ID_ALUNO']) in df_pei_turma['ID'].astype(str).tolist()
-                            tag_g = "GABARITO_PEI" if is_p else "GABARITO_TEXTO"
-                            gab_raw = ai.extrair_tag(txt_p, tag_g) or ai.extrair_tag(txt_p, "GABARITO")
+                            # Pega Gabarito e Grade
+                            gab_raw = ai.extrair_tag(txt_p, "GABARITO_PEI" if is_p else "GABARITO_TEXTO") or ai.extrair_tag(txt_p, "GABARITO")
                             gab_oficial = re.findall(r"\b[A-E]\b", gab_raw.upper())
-                            respostas = str(reg['RESPOSTAS_ALUNO']).split(';')
+                            grade = ai.extrair_tag(txt_p, "GRADE_DE_CORRECAO_PEI" if is_p else "GRADE_DE_CORRECAO")
                             
+                            respostas = str(reg['RESPOSTAS_ALUNO']).split(';')
                             for i, r in enumerate(respostas):
-                                # --- VACINA: Agora qualquer coisa diferente da resposta certa é lacuna ---
                                 if i < len(gab_oficial) and r != gab_oficial[i]:
                                     q_n = i + 1
-                                    match_h = re.search(rf"QUESTÃO\s*0?{q_n}\b.*?(EF\d{{2}}MA\d{{2}})", grade, re.IGNORECASE)
+                                    # Busca o código da habilidade (EF06MA...) no bloco da questão
+                                    match_h = re.search(rf"(?si)QUEST[AÃ]O\s*(?:PEI\s*)?0?{q_n}\b.*?(EF\d{{2}}MA\d{{2}})", grade)
                                     if match_h: mapa_erros_coletivo.append(match_h.group(1))
                     
                     if mapa_erros_coletivo:
                         from collections import Counter
-                        contagem = Counter(mapa_erros_coletivo)
-                        top_lacunas = contagem.most_common(3)
+                        top_lacunas = Counter(mapa_erros_coletivo).most_common(3)
                         cols_l = st.columns(len(top_lacunas))
                         for idx, (hab, qtd) in enumerate(top_lacunas):
                             with cols_l[idx]:
                                 st.error(f"🚨 **{hab}**")
-                                st.caption(f"Detectada em {qtd} correções.")
-                        st.info(f"💡 **Sugestão:** Priorize a Recomposição de **{top_lacunas[0][0]}**.")
+                                st.caption(f"Falha em {qtd} correções")
                     else:
-                        st.success("✅ Nenhuma lacuna recorrente detectada.")
+                        st.success("✅ Nenhuma lacuna recorrente detectada no período.")
                 else:
-                    st.info("Aguardando dados de Scanner.")
+                    st.info("Aguardando dados de avaliações.")
 
-            # --- 2. INVENTÁRIO INTELIGENTE (FILTRO POR DATA) ---
+            # --- 6. ABERTURA DE AULA E INVENTÁRIO ---
             st.markdown("---")
             col_esq, col_dir = st.columns([1.8, 1.2])
-
             with col_esq:
                 st.subheader("🕒 Abertura de Aula")
                 with st.container(border=True):
                     st.markdown("#### 🚀 Registrar Ativo para Hoje")
-                    df_p_f = df_planos[df_planos['ANO'].str.contains(ano_num)]
-                    if trim_foco != "Todos os Trimestres":
-                        df_p_f = df_p_f[df_p_f['TURMA'] == trim_foco]
-                    
                     c_r1, c_r2 = st.columns(2)
                     data_aula = c_r1.date_input("Data da Aula:", date.today(), key=f"dt_reg_{v}")
+                    df_p_f = df_planos[df_planos['ANO'].str.contains(ano_num)]
                     plano_sel = c_r2.selectbox("Vincular Plano Base:", ["Nenhum"] + df_p_f['SEMANA'].tolist(), key=f"plano_reg_{v}")
                     
-                    # Filtro de Materiais por Data (Soberania Temporal)
-                    df_m_all = df_aulas[df_aulas['ANO'].str.contains(ano_num)].copy()
-                    df_m_all['DATA_DT'] = pd.to_datetime(df_m_all['DATA'], format="%d/%m/%Y", errors='coerce').dt.date
-                    
-                    if trim_foco != "Todos os Trimestres":
-                        df_m_f = df_m_all[(df_m_all['DATA_DT'] >= dt_ini) & (df_m_all['DATA_DT'] <= dt_fim)]
-                    else:
-                        df_m_f = df_m_all.copy()
-                    
-                    mats_sel = st.multiselect("📦 Selecione o Material:", options=df_m_f['TIPO_MATERIAL'].tolist(), key=f"mats_reg_{v}")
+                    mats_disp = df_aulas[df_aulas['ANO'].str.contains(ano_num)]['TIPO_MATERIAL'].tolist()
+                    mats_sel = st.multiselect("📦 Selecione o Material:", options=mats_disp, key=f"mats_reg_{v}")
 
                     if st.button("💾 ABRIR AULA NO DIÁRIO", use_container_width=True, type="primary"):
-                        with st.spinner("Sincronizando..."):
-                            conteudo_final = " + ".join(mats_sel) if mats_sel else "Aula Baseada no Plano"
-                            db.salvar_no_banco("DB_REGISTRO_AULAS", [data_aula.strftime("%d/%m/%Y"), plano_sel, turma_foco, conteudo_final, "PENDENTE", "ABERTA"])
-                            st.success(f"✅ Aula aberta!"); time.sleep(1); st.rerun()
+                        db.salvar_no_banco("DB_REGISTRO_AULAS", [data_aula.strftime("%d/%m/%Y"), plano_sel, turma_foco, " + ".join(mats_sel), "PENDENTE", "ABERTA"])
+                        st.success("✅ Aula aberta!"); time.sleep(1); st.rerun()
 
             with col_dir:
                 st.subheader("📂 Inventário e Alunos")
                 with st.container(border=True):
-                    st.markdown(f"**📦 Ativos Disponíveis ({trim_foco})**")
-                    if df_m_f.empty:
-                        st.caption("📭 Nenhum material para este período.")
-                    else:
-                        for m in df_m_f['TIPO_MATERIAL'].tail(10):
-                            prefix = "🔄" if "2CHAMADA" in m.upper() else ("🏥" if "RECOMP" in m.upper() else "📘")
-                            st.caption(f"{prefix} {m}")
+                    st.markdown(f"**📦 Ativos Disponíveis ({ano_num}º Ano)**")
+                    for m in mats_disp[-5:]: st.caption(f"📘 {m}")
                 
                 with st.container(border=True):
                     st.markdown("**👥 Foco PEI**")
