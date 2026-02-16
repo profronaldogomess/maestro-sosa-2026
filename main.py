@@ -1830,17 +1830,20 @@ elif menu == "👥 Gestão da Turma":
                             else:
                                 c_r3.success("✅ Turma Completa")
 
-            # --- 5. RAIO-X DE LACUNAS (FIX: EXTRAÇÃO DE HABILIDADES V81) ---
+        # --- 5. RAIO-X DE LACUNAS (VERSÃO V86 - LISTA EXPANSIVA BNCC) ---
             st.markdown("---")
             with st.container(border=True):
                 st.subheader(f"🔥 Raio-X de Lacunas da Turma ({trim_foco})")
+                st.caption("Clique nas habilidades abaixo para ver o detalhamento da BNCC e o nível de alerta.")
                 
                 if not diag_t.empty:
                     mapa_erros_coletivo = []
+                    descricoes_habilidades = {} # Dicionário para guardar o texto da BNCC
+                    
                     for _, reg in diag_t.iterrows():
                         if reg['RESPOSTAS_ALUNO'] == "FALTOU": continue
                         
-                        # Busca a prova para pegar a grade
+                        # Busca a prova original para extrair a descrição
                         prova_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == reg['ID_AVALIACAO'].replace(" (2ª CHAMADA)", "")]
                         if not prova_ref.empty:
                             txt_p = str(prova_ref.iloc[0]['CONTEUDO'])
@@ -1855,22 +1858,37 @@ elif menu == "👥 Gestão da Turma":
                             for i, r in enumerate(respostas):
                                 if i < len(gab_oficial) and r != gab_oficial[i]:
                                     q_n = i + 1
-                                    # Busca o código da habilidade (EF06MA...) no bloco da questão
-                                    match_h = re.search(rf"(?si)QUEST[AÃ]O\s*(?:PEI\s*)?0?{q_n}\b.*?(EF\d{{2}}MA\d{{2}})", grade)
-                                    if match_h: mapa_erros_coletivo.append(match_h.group(1))
+                                    # Regex V86: Captura o Código E a Descrição que vem logo após
+                                    match_h = re.search(rf"(?si)QUEST[AÃ]O\s*(?:PEI\s*)?0?{q_n}\b.*?(EF\d{{2}}MA\d{{2}})(.*?)(?=\.?\s*(?:JUSTIFICATIVA|PERÍCIA|ANÁLISE|DISTRATORES|$))", grade)
+                                    
+                                    if match_h:
+                                        cod_h = match_h.group(1)
+                                        # Limpa a descrição de ruídos (*, #, [])
+                                        desc_h = re.sub(r'[*#\[\]\-\:]', '', match_h.group(2)).strip()
+                                        
+                                        mapa_erros_coletivo.append(cod_h)
+                                        # Guarda a descrição mais completa encontrada
+                                        if cod_h not in descricoes_habilidades or len(desc_h) > len(descricoes_habilidades[cod_h]):
+                                            descricoes_habilidades[cod_h] = desc_h
                     
                     if mapa_erros_coletivo:
                         from collections import Counter
-                        top_lacunas = Counter(mapa_erros_coletivo).most_common(3)
-                        cols_l = st.columns(len(top_lacunas))
-                        for idx, (hab, qtd) in enumerate(top_lacunas):
-                            with cols_l[idx]:
-                                st.error(f"🚨 **{hab}**")
-                                st.caption(f"Falha em {qtd} correções")
+                        top_lacunas = Counter(mapa_erros_coletivo).most_common(5)
+                        
+                        for cod, qtd in top_lacunas:
+                            # Define a cor do alerta baseada na gravidade
+                            cor_alerta = "🔴" if qtd > (len(alunos_t) * 0.5) else "🟡"
+                            texto_bncc = descricoes_habilidades.get(cod, "Descrição não localizada na grade de correção.")
+                            
+                            # Cria a Lista Expansiva (Expander)
+                            with st.expander(f"{cor_alerta} **{cod}** — Falha detectada em {qtd} correções"):
+                                st.markdown(f"**Descrição da Habilidade:**")
+                                st.info(texto_bncc)
+                                st.caption("💡 Sugestão Sosa: Aplique uma atividade de Recomposição focada neste descritor.")
                     else:
                         st.success("✅ Nenhuma lacuna recorrente detectada no período.")
                 else:
-                    st.info("Aguardando dados de avaliações.")
+                    st.info("Aguardando dados de avaliações para gerar o Raio-X.")
 
             # --- 6. ABERTURA DE AULA E INVENTÁRIO ---
             st.markdown("---")
@@ -3376,7 +3394,7 @@ elif menu == "📸 Scanner de Gabaritos":
                     },
                     hide_index=True, use_container_width=True, disabled=True, key=f"raiox_final_v85_{v}"
                 )
-                
+
 # --- ABA 5: ACERVO DE EVIDÊNCIAS (V71.0 - CUSTÓDIA COM FILTROS INTELIGENTES) ---
     with tab_acervo_cir:
         st.subheader("📂 Cofre Digital de Evidências: Localização Rápida")
