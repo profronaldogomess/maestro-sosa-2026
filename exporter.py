@@ -307,10 +307,10 @@ def gerar_docx_professor_v25(titulo_doc, conteudo, info):
     return file_stream
 
 # ==============================================================================
-# 5. PROVA OFICIAL (VERSÃO V30 - BLINDAGEM DE NEGRI TO E DIFICULDADE)
+# 5. PROVA OFICIAL (VERSÃO V33 - ESCUDO DE TAXONOMIA E NEG RITO INLINE)
 # ==============================================================================
 def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
-    """Versão V30 - SOBERANIA DE FORMATO: Correção de Bolding e Etiquetas de Dificuldade"""
+    """Versão V33 - SOBERANIA INTEGRAL: Correção de Negritos, Taxonomia e Prompts"""
     import re
     file_stream = io.BytesIO()
     try:
@@ -336,7 +336,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
             match_primeira_q = re.search(r"(?i)QUESTÃO\s*\d+", conteudo_ia)
             corpo_bruto = conteudo_ia[match_primeira_q.start():].strip() if match_primeira_q else conteudo_ia.strip()
 
-        # 3. CONTAGEM PARA GABARITO
+        # 3. CONTAGEM PARA GABARITO DE BOLINHAS
         num_total_q = len(re.findall(r'(?i)QUESTÃO\s+\d+', corpo_bruto))
         if num_total_q == 0: num_total_q = int(info.get('qtd_questoes', 5))
         
@@ -370,7 +370,6 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
             p.add_run(f"• {txt}").font.size = Pt(9)
             p.paragraph_format.space_after = Pt(0)
 
-        # GABARITO DE BOLINHAS PROPORCIONAL
         c_gab = top_table.cell(0, 1)
         gab_grid = c_gab.add_table(rows=num_total_q + 1, cols=6)
         gab_grid.style = 'Table Grid'
@@ -388,9 +387,9 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         sectPr = new_section._sectPr
         cols = sectPr.xpath('./w:cols')[0]
         cols.set(qn('w:num'), '2')
-        cols.set(qn('w:space'), '550') # Espaço entre colunas calibrado
+        cols.set(qn('w:space'), '720')
 
-        # LIMPEZA DE RUÍDO (Remove negritos artificiais da IA e símbolos de título)
+        # LIMPEZA DE RUÍDO MARKDOWN
         corpo_limpo = corpo_bruto.replace("**", "").replace("#", "")
 
         for linha in corpo_limpo.split('\n'):
@@ -400,46 +399,53 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
             p = doc.add_paragraph()
             p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
             p.paragraph_format.space_after = Pt(6)
-            p.paragraph_format.line_spacing = 1.05
             
-            # --- LEI DA FORMATAÇÃO INLINE V30 (QUESTÃO XX + ETIQUETAS + TEXTO) ---
+            # --- LEI DA FORMATAÇÃO INLINE COM SUPORTE A TAXONOMIA (FÁCIL/MÉDIA/DIFÍCIL) ---
             if l_s.upper().startswith("QUESTÃO"):
-                # Regex potente: Pega "QUESTÃO XX", e opcionalmente qualquer coisa entre parênteses/colchetes, 
-                # e os sinais de pontuação finais (.-:).
-                match = re.match(r"^(QUEST[AÃ]O\s+\d+(?:\s*[\(\[].*?[\)\]])*[\s\.\-:]*)(.*)", l_s, re.IGNORECASE)
-                
+                # Regex V33: Captura (Rótulo) + (Dificuldade opcional) + (Separador) + (Texto)
+                match = re.match(r"^(QUEST[AÃ]O\s*\d+)(\s*\(.*?\))?([\s\.\-\:]+)(.*)", l_s, re.IGNORECASE)
                 if match:
-                    # Rótulo completo (Número + Pontos + Dificuldade) em NEGRITO e CAIXA ALTA
-                    run_r = p.add_run(match.group(1).upper())
+                    # Gr 1: QUESTÃO XX | Gr 2: (FÁCIL) | Gr 3: - ou .
+                    rotulo_negrito = f"{match.group(1).upper()}{match.group(2) if match.group(2) else ''}{match.group(3)}"
+                    run_r = p.add_run(rotulo_negrito)
                     run_r.bold = True
                     run_r.font.size = Pt(11)
                     
-                    # Corpo da pergunta (Normal)
-                    p.add_run(match.group(2).strip())
+                    # Gr 4: O resto do texto (Normal)
+                    p.add_run(match.group(4).strip())
                     continue
             
             # Títulos de Seção PEI
             secoes_especiais = ["PARA LEMBRAR", "DICA MESTRA", "PASSO A PASSO", "VERSÃO ADAPTADA"]
             if any(x in l_s.upper() for x in secoes_especiais):
-                run = p.add_run(l_s.upper())
+                run = p.add_run(f"█ {l_s.upper()} █")
                 run.bold = True
                 p.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 continue
 
-            # Estilização de Prompts de Imagem
+            # --- ESTILIZAÇÃO DE PROMPTS DE IMAGEM ---
             if "PROMPT IMAGEM" in l_s.upper():
-                run = p.add_run(l_s)
-                run.font.italic, run.font.size = True, Pt(8)
+                p.paragraph_format.space_before = Pt(3)
+                # Limpa colchetes duplos se houver
+                txt_img = l_s.replace("[", "").replace("]", "").strip()
+                run = p.add_run(f"🖼️ [ {txt_img} ]")
+                run.font.italic = True
+                run.font.size = Pt(8.5)
                 run.font.color.rgb = RGBColor(100, 100, 100)
+                p.alignment = WD_ALIGN_PARAGRAPH.LEFT
                 continue
 
-            # Indentação de Alternativas A, B, C, D, E
+            # --- INDENTAÇÃO DE ALTERNATIVAS ---
             if re.match(r'^[A-E][\)\.]', l_s):
                 p.paragraph_format.left_indent = Inches(0.2)
-                p.add_run(l_s)
-                continue
+                # Força a letra da alternativa em negrito para facilitar leitura
+                letra_match = re.match(r'^([A-E][\)\.])(.*)', l_s)
+                if letra_match:
+                    run_letra = p.add_run(letra_match.group(1))
+                    run_letra.bold = True
+                    p.add_run(letra_match.group(2))
+                    continue
             
-            # Texto comum
             p.add_run(l_s)
 
         doc.save(file_stream)
@@ -447,7 +453,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         return file_stream
     except Exception as e:
         file_stream = io.BytesIO()
-        err_doc = Document(); err_doc.add_paragraph(f"ERRO EXPORTER V30: {str(e)}"); err_doc.save(file_stream)
+        err_doc = Document(); err_doc.add_paragraph(f"ERRO NO EXPORTER V33: {str(e)}"); err_doc.save(file_stream)
         file_stream.seek(0)
         return file_stream
     
