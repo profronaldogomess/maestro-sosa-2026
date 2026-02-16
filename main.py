@@ -1697,25 +1697,27 @@ elif menu == "👥 Gestão da Turma":
         "📊 Cockpit da Turma", "🏗️ Arquitetura de Turmas", "➕ Povoar Alunos", "✏️ Edição & Transferência"
     ])
 
-# --- ABA 1: COCKPIT DA TURMA (VERSÃO V34.1 - FILTRO DE TRIMESTRE REAL) ---
+# --- ABA 1: COCKPIT DA TURMA (VERSÃO V35.0 - AUDITORIA DE PENDÊNCIAS) ---
     with tab_cockpit:
         if df_turmas.empty:
             st.info("📭 Nenhuma turma cadastrada.")
         else:
             c_f1, c_f2 = st.columns([1, 1])
             turma_foco = c_f1.selectbox("🎯 Selecione a Turma:", sorted(df_turmas['ID_TURMA'].unique()), key=f"foco_t_{v}")
-            trim_foco = c_f2.selectbox("📅 Trimestre de Safra:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"foco_trim_{v}")
+            # NOVIDADE: Opção "Todos os Trimestres"
+            trim_foco = c_f2.selectbox("📅 Trimestre de Safra:", ["Todos os Trimestres", "I Trimestre", "II Trimestre", "III Trimestre"], key=f"foco_trim_{v}")
             
             alunos_t = df_alunos[df_alunos['TURMA'] == turma_foco].sort_values(by="NOME_ALUNO")
+            id_alunos_turma = set(alunos_t['ID'].apply(db.limpar_id).tolist())
             ano_num = "".join(filter(str.isdigit, turma_foco)) 
 
-            # --- LÓGICA DE DATAS DO TRIMESTRE (Sincronia com Itabuna) ---
-            # Buscamos as datas limites no utils.py para filtrar o Diário
+            # --- LÓGICA DE DATAS ---
             if trim_foco == "I Trimestre": dt_ini, dt_fim = date(2026, 2, 9), date(2026, 5, 22)
             elif trim_foco == "II Trimestre": dt_ini, dt_fim = date(2026, 5, 25), date(2026, 9, 4)
-            else: dt_ini, dt_fim = date(2026, 9, 8), date(2026, 12, 17)
+            elif trim_foco == "III Trimestre": dt_ini, dt_fim = date(2026, 9, 8), date(2026, 12, 17)
+            else: dt_ini, dt_fim = date(2026, 1, 1), date(2026, 12, 31)
 
-            # --- 1. DASHBOARD DE STATUS (KPIs) ---
+            # --- 1. DASHBOARD DE STATUS ---
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("Total Alunos", len(alunos_t))
             
@@ -1723,121 +1725,122 @@ elif menu == "👥 Gestão da Turma":
             df_pei_turma = alunos_t[mask_pei]
             c2.metric("Estudantes PEI", len(df_pei_turma))
             
-            # Engajamento Filtrado pelo Trimestre
             engaj_medio = 0
             if not df_diario.empty:
                 df_d_t = df_diario[df_diario['TURMA'] == turma_foco].copy()
                 df_d_t['DATA_DT'] = pd.to_datetime(df_d_t['DATA'], format="%d/%m/%Y", errors='coerce').dt.date
-                # Filtra o diário pelas datas do trimestre
                 df_d_trim = df_d_t[(df_d_t['DATA_DT'] >= dt_ini) & (df_d_t['DATA_DT'] <= dt_fim)]
-                
                 if not df_d_trim.empty:
                     vistos_validos = df_d_trim[df_d_trim['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"]
                     engaj_medio = (len(vistos_validos) / len(df_d_trim)) * 100
-            c3.metric(f"Engajamento {trim_foco[0]}T", f"{engaj_medio:.0f}%")
+            c3.metric("Engajamento", f"{engaj_medio:.0f}%")
             c4.metric("Série", f"{ano_num}º Ano")
 
             # ==============================================================================
-            # 🚨 RADAR DE ALERTA PEDAGÓGICO V34.1 (FILTRADO POR TRIMESTRE)
+            # 🚨 RADAR DE ALERTA E PENDÊNCIAS V35 (VISÃO POR ATIVO)
             # ==============================================================================
             st.markdown("---")
-            with st.container(border=True):
-                st.subheader(f"📡 Radar de Alerta: {trim_foco}")
-                
-                if df_diagnosticos.empty:
-                    st.info("💡 Aguardando dados de gabaritos para gerar o radar.")
-                else:
-                    # Filtra diagnósticos da turma E do trimestre selecionado
-                    diag_t = df_diagnosticos[
-                        (df_diagnosticos['TURMA'] == turma_foco) & 
-                        (df_diagnosticos['ID_AVALIACAO'].str.contains(trim_foco, na=False))
-                    ]
-                    
-                    if diag_t.empty:
-                        st.success(f"✅ Nenhuma avaliação registrada para o {trim_foco} nesta turma.")
-                    else:
-                        ultima_av_nome = diag_t['ID_AVALIACAO'].iloc[-1]
-                        df_ultima = diag_t[diag_t['ID_AVALIACAO'] == ultima_av_nome].copy()
+            st.subheader(f"📡 Radar de Resultados e Pendências: {trim_foco}")
+            
+            # --- PARTE A: AVALIAÇÕES (SCANNER) ---
+            diag_t = df_diagnosticos[df_diagnosticos['TURMA'] == turma_foco]
+            if trim_foco != "Todos os Trimestres":
+                diag_t = diag_t[diag_t['ID_AVALIACAO'].str.contains(trim_foco, na=False)]
+            
+            if not diag_t.empty:
+                for av_nome in diag_t['ID_AVALIACAO'].unique():
+                    with st.expander(f"📝 AVALIAÇÃO: {av_nome}"):
+                        df_av = diag_t[diag_t['ID_AVALIACAO'] == av_nome].copy()
+                        df_av['ID_L'] = df_av['ID_ALUNO'].apply(db.limpar_id)
                         
-                        # Preparação para Médias
-                        df_ultima['ID_L'] = df_ultima['ID_ALUNO'].apply(db.limpar_id)
-                        df_alunos_perfil = df_alunos[['ID', 'NECESSIDADES']].copy()
-                        df_alunos_perfil['ID'] = df_alunos_perfil['ID'].apply(db.limpar_id)
+                        # Médias
+                        m_reg = df_av[~df_av['ID_L'].isin(df_pei_turma['ID'].apply(db.limpar_id))]['NOTA_CALCULADA'].apply(util.sosa_to_float).mean()
+                        m_pei = df_av[df_av['ID_L'].isin(df_pei_turma['ID'].apply(db.limpar_id))]['NOTA_CALCULADA'].apply(util.sosa_to_float).mean()
                         
-                        df_radar = pd.merge(df_ultima, df_alunos_perfil, left_on='ID_L', right_on='ID', how='left')
-                        df_radar['IS_PEI'] = df_radar['NECESSIDADES'].apply(lambda x: str(x).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"])
+                        col_m1, col_m2, col_m3 = st.columns([1, 1, 2])
+                        col_m1.metric("Média Regular", f"{m_reg:.2f}" if not pd.isna(m_reg) else "0.00")
+                        col_m2.metric("Média PEI", f"{m_pei:.2f}" if not pd.isna(m_pei) else "0.00")
                         
-                        # Cálculo de Médias com Vacina Anti-NaN
-                        reg_slice = df_radar[df_radar['IS_PEI'] == False]['NOTA_CALCULADA'].apply(util.sosa_to_float)
-                        pei_slice = df_radar[df_radar['IS_PEI'] == True]['NOTA_CALCULADA'].apply(util.sosa_to_float)
-                        
-                        m_reg = reg_slice.mean() if not reg_slice.empty else 0.0
-                        m_pei = pei_slice.mean() if not pei_slice.empty else 0.0
+                        # Pendentes (Quem não fez a prova)
+                        alunos_com_nota = set(df_av['ID_L'].tolist())
+                        faltosos_ids = id_alunos_turma - alunos_com_nota
+                        if faltosos_ids:
+                            faltosos_nomes = alunos_t[alunos_t['ID'].apply(db.limpar_id).isin(faltosos_ids)]['NOME_ALUNO'].tolist()
+                            col_m3.error(f"⚠️ Pendentes ({len(faltosos_nomes)}): {', '.join(faltosos_nomes)}")
+                        else:
+                            col_m3.success("✅ Todos os alunos realizaram esta avaliação.")
 
-                        col_r1, col_r2, col_r3 = st.columns([1, 1, 2])
+            # --- PARTE B: TRABALHOS E PROJETOS (DIÁRIO) ---
+            if not df_diario.empty:
+                # Filtra trabalhos (tags que contenham PROJETO ou ATIVIDADE)
+                df_trabs = df_d_trim[df_d_trim['TAGS'].str.contains("PROJETO|ATIVIDADE", na=False, case=False)]
+                if not df_trabs.empty:
+                    for trab_nome in df_trabs['OBSERVACOES'].unique():
+                        # Limpa o nome do trabalho (remove o prefixo da aula se houver)
+                        nome_limpo = trab_nome.split("]")[-1].strip() if "]" in trab_nome else trab_nome
                         
-                        with col_r1:
-                            st.metric("Média Regulares", f"{m_reg:.2f}", delta=f"{m_reg-6.0:.1f}" if m_reg > 0 else None)
-                            if m_reg > 0 and m_reg < 6.0: st.error("🚨 ALERTA REGULAR")
-                            elif m_reg == 0: st.caption("Sem dados de regulares.")
-                        
-                        with col_r2:
-                            st.metric("Média PEI", f"{m_pei:.2f}", delta=f"{m_pei-6.0:.1f}" if m_pei > 0 else None)
-                            if m_pei > 0 and m_pei < 6.0: st.error("🚨 ALERTA PEI")
-                            elif m_pei == 0: st.caption("Sem dados de PEI.")
-
-                        with col_r3:
-                            st.markdown(f"**🎯 Análise da Avaliação:**\n`{ultima_av_nome}`")
-                            # Busca a prova no banco para ler a grade
-                            prova_ref = df_aulas[df_aulas['TIPO_MATERIAL'].str.contains(ultima_av_nome.split("(")[0].strip())]
-                            if not prova_ref.empty:
-                                grade = ai.extrair_tag(prova_ref.iloc[0]['CONTEUDO'], "GRADE_DE_CORRECAO")
-                                descritores = re.findall(r"EF\d{2}MA\d{2}", grade)[:2]
-                                if descritores:
-                                    for d in descritores: st.caption(f"❌ **{d}** (Habilidade em Alerta)")
-                                    st.markdown(f"💡 **Sugestão:** Priorize a revisão de {descritores[0]}.")
+                        with st.expander(f"✍️ TRABALHO/PROJETO: {nome_limpo}"):
+                            df_t_atual = df_trabs[df_trabs['OBSERVACOES'] == trab_nome]
+                            df_t_atual['ID_L'] = df_t_atual['ID_ALUNO'].apply(db.limpar_id)
+                            
+                            media_trab = df_t_atual['BONUS'].apply(util.sosa_to_float).mean()
+                            st.metric("Média de Notas do Trabalho", f"{media_trab:.2f}")
+                            
+                            # Pendentes do Trabalho
+                            entregaram = set(df_t_atual['ID_L'].tolist())
+                            nao_entregaram_ids = id_alunos_turma - entregaram
+                            if nao_entregaram_ids:
+                                nomes_pend = alunos_t[alunos_t['ID'].apply(db.limpar_id).isin(nao_entregaram_ids)]['NOME_ALUNO'].tolist()
+                                st.warning(f"🚩 Não entregaram ({len(nomes_pend)}): {', '.join(nomes_pend)}")
                             else:
-                                st.caption("Gere um material de Recomposição para esta turma.")
+                                st.success("✅ Todos entregaram o trabalho.")
 
+            # --- 2. INVENTÁRIO FILTRADO ---
             st.markdown("---")
             col_esq, col_dir = st.columns([1.8, 1.2])
 
             with col_esq:
-                st.subheader("🕒 Abertura de Aula (Handshake Diário)")
+                st.subheader("🕒 Abertura de Aula")
                 with st.container(border=True):
                     st.markdown("#### 🚀 Registrar Ativo para Hoje")
-                    planos_ano = df_planos[(df_planos['ANO'].str.contains(ano_num)) & (df_planos['TURMA'] == trim_foco)]
-                    materiais_ano = df_aulas[df_aulas['ANO'].str.contains(ano_num)]
-
+                    # Filtra planos pelo trimestre
+                    df_p_f = df_planos[df_planos['ANO'].str.contains(ano_num)]
+                    if trim_foco != "Todos os Trimestres":
+                        df_p_f = df_p_f[df_p_f['TURMA'] == trim_foco]
+                    
                     c_r1, c_r2 = st.columns(2)
                     data_aula = c_r1.date_input("Data da Aula:", date.today(), key=f"dt_reg_{v}")
-                    plano_sel = c_r2.selectbox("Vincular Plano Base:", ["Nenhum"] + planos_ano['SEMANA'].tolist(), key=f"plano_reg_{v}")
+                    plano_sel = c_r2.selectbox("Vincular Plano Base:", ["Nenhum"] + df_p_f['SEMANA'].tolist(), key=f"plano_reg_{v}")
                     
-                    mats_sel = st.multiselect("📦 Selecione o Material:", options=materiais_ano['TIPO_MATERIAL'].tolist(), key=f"mats_reg_{v}")
+                    # Filtra materiais pelo trimestre
+                    df_m_f = df_aulas[df_aulas['ANO'].str.contains(ano_num)]
+                    if trim_foco != "Todos os Trimestres":
+                        df_m_f = df_m_f[df_m_f['CONTEUDO'].str.contains(trim_foco, na=False)]
+                    
+                    mats_sel = st.multiselect("📦 Selecione o Material:", options=df_m_f['TIPO_MATERIAL'].tolist(), key=f"mats_reg_{v}")
 
                     if st.button("💾 ABRIR AULA NO DIÁRIO", use_container_width=True, type="primary"):
                         with st.spinner("Sincronizando..."):
                             conteudo_final = " + ".join(mats_sel) if mats_sel else "Aula Baseada no Plano"
-                            db.salvar_no_banco("DB_REGISTRO_AULAS", [
-                                data_aula.strftime("%d/%m/%Y"), plano_sel, turma_foco, 
-                                conteudo_final, "PENDENTE", "ABERTA"
-                            ])
-                            st.success(f"✅ Aula aberta!")
-                            time.sleep(1); st.rerun()
+                            db.salvar_no_banco("DB_REGISTRO_AULAS", [data_aula.strftime("%d/%m/%Y"), plano_sel, turma_foco, conteudo_final, "PENDENTE", "ABERTA"])
+                            st.success(f"✅ Aula aberta!"); time.sleep(1); st.rerun()
 
             with col_dir:
                 st.subheader("📂 Inventário e Alunos")
                 with st.container(border=True):
-                    st.markdown(f"**📦 Ativos Disponíveis ({ano_num}º Ano)**")
-                    for m in materiais_ano['TIPO_MATERIAL'].tail(8):
-                        prefixo = "🔄" if "2CHAMADA" in m.upper() else ("🏥" if "RECOMP" in m.upper() else "📘")
-                        st.caption(f"{prefixo} {m}")
+                    st.markdown(f"**📦 Ativos Disponíveis ({trim_foco})**")
+                    if df_m_f.empty:
+                        st.caption("📭 Nenhum material para este período.")
+                    else:
+                        for m in df_m_f['TIPO_MATERIAL'].tail(10):
+                            prefixo = "🔄" if "2CHAMADA" in m.upper() else ("🏥" if "RECOMP" in m.upper() else "📘")
+                            st.caption(f"{prefixo} {m}")
                 
                 with st.container(border=True):
                     st.markdown("**👥 Foco PEI**")
                     for _, alu in df_pei_turma.iterrows():
                         st.warning(f"♿ {alu['NOME_ALUNO']}")
-
+                        
 # ==============================================================================
 # MÓDULO: BASE DE CONHECIMENTO
 # ==============================================================================
