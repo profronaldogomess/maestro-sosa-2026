@@ -211,14 +211,13 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
     return file_stream
 
 # ==============================================================================
-# 4. GUIA DO PROFESSOR (VERSÃO V26 - LAYOUT DE PERÍCIA E ALTA DENSIDADE)
+# 4. GUIA DO PROFESSOR (VERSÃO V27 - COM DESTAQUE DE GABARITO E PERÍCIA)
 # ==============================================================================
 def gerar_docx_professor_v25(titulo_doc, conteudo, info):
-    """Versão V26.1 - SOBERANIA VISUAL: Organização de Grade de Perícia"""
+    """Versão V27 - SOBERANIA VISUAL: Gabarito Verde + Perícia Técnica"""
     file_stream = io.BytesIO()
     doc = Document()
     
-    # Configuração de Estilo Global
     style = doc.styles['Normal']
     style.font.name = 'Arial'
     style.font.size = Pt(10.5)
@@ -227,13 +226,13 @@ def gerar_docx_professor_v25(titulo_doc, conteudo, info):
     section.top_margin, section.bottom_margin = Inches(0.4), Inches(0.4)
     section.left_margin, section.right_margin = Inches(0.5), Inches(0.5)
 
-    # 1. CABEÇALHO MESTRE (MANTIDO)
+    # 1. CABEÇALHO MESTRE
     header_table = doc.add_table(rows=2, cols=3)
     header_table.style = 'Table Grid'
     c_tit = header_table.cell(0, 0).merge(header_table.cell(0, 2))
     p_tit = c_tit.paragraphs[0]
     p_tit.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run_tit = p_tit.add_run("GUIA DE REGÊNCIA E GRADE DE PERÍCIA PEDAGÓGICA")
+    run_tit = p_tit.add_run("GUIA DE CORREÇÃO E GRADE DE PERÍCIA - SOSA MASTER")
     run_tit.font.bold = True
     run_tit.font.size = Pt(12)
 
@@ -244,16 +243,14 @@ def gerar_docx_professor_v25(titulo_doc, conteudo, info):
     for row in header_table.rows: set_row_height(row, 22)
     doc.add_paragraph()
 
-    # 2. ATIVAÇÃO DE 2 COLUNAS PARA ECONOMIA DE PAPEL E FLUXO RÁPIDO
+    # 2. COLUNAS NATIVAS
     new_section = doc.add_section(WD_SECTION.CONTINUOUS)
     sectPr = new_section._sectPr
     cols = sectPr.xpath('./w:cols')[0]
     cols.set(qn('w:num'), '2')
     cols.set(qn('w:space'), '400')
 
-    # 3. MOTOR DE PROCESSAMENTO DE CONTEÚDO (DIFERENCIADO)
-    conteudo_limpo = conteudo.replace("[GRADE_DE_CORRECAO]", "").replace("[PROFESSOR]", "").strip()
-    linhas = conteudo_limpo.split('\n')
+    linhas = conteudo.split('\n')
     
     for linha in linhas:
         l_s = linha.strip()
@@ -263,60 +260,55 @@ def gerar_docx_professor_v25(titulo_doc, conteudo, info):
         p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
         p.paragraph_format.line_spacing = 1.0
         
-        # --- REGRA: TÍTULO DA QUESTÃO (Ex: QUESTÃO 01:) ---
+        # --- REGRA: TÍTULOS DE SEÇÃO (GABARITO OFICIAL / DETALHAMENTO) ---
+        if l_s.endswith(":") and len(l_s) < 30:
+            run = p.add_run(l_s.upper())
+            run.font.bold = True
+            run.font.underline = True
+            p.paragraph_format.space_before = Pt(10)
+            continue
+
+        # --- REGRA: GABARITO EXPRESSO (A, B, C...) ---
+        # Detecta linhas como "QUESTÃO 01: A" ou "1. A"
+        if re.search(r"(?i)QUEST[AÃ]O\s*\d+\s*[:\-]\s*[A-E]$|^\d+[\.\s\-]+[A-E]$", l_s):
+            run = p.add_run(f"✅ {l_s}")
+            run.font.bold = True
+            run.font.size = Pt(11)
+            run.font.color.rgb = RGBColor(0, 128, 0) # Verde
+            continue
+
+        # --- REGRA: QUESTÃO NA GRADE DE PERÍCIA ---
         if l_s.upper().startswith("QUESTÃO") or l_s.upper().startswith("- QUESTÃO"):
-            p.paragraph_format.space_before = Pt(12)
-            # Extrai o número e a habilidade entre colchetes
+            p.paragraph_format.space_before = Pt(10)
             match_q = re.match(r"(?i)(?:- )?(QUEST[AÃ]O\s+\d+)([:\s\-]*)(\[.*?\])?(.*)", l_s)
             if match_q:
-                # O número da questão em AZUL ESCURO e NEGRITO
                 run_q = p.add_run(f"{match_q.group(1).upper()}: ")
                 run_q.font.bold = True
-                run_q.font.color.rgb = RGBColor(0, 51, 153)
-                
-                # A Habilidade BNCC em Itálico Cinza
+                run_q.font.color.rgb = RGBColor(0, 51, 153) # Azul
                 if match_q.group(3):
                     run_h = p.add_run(f"{match_q.group(3)} ")
-                    run_h.font.italic = True
-                    run_h.font.color.rgb = RGBColor(100, 100, 100)
-                
-                # O restante do texto (Título do assunto)
+                    run_h.font.italic, run_h.font.color.rgb = True, RGBColor(100, 100, 100)
                 p.add_run(match_q.group(4).strip())
-            else:
-                p.add_run(l_s).font.bold = True
             continue
 
-        # --- REGRA: JUSTIFICATIVA (Explicativa) ---
+        # --- REGRA: JUSTIFICATIVA ---
         if "JUSTIFICATIVA" in l_s.upper():
             p.paragraph_format.left_indent = Inches(0.15)
-            run_label = p.add_run("🎯 Justificativa: ")
+            run_label = p.add_run("🎯 Resposta: ")
             run_label.font.bold = True
-            run_label.font.size = Pt(9)
             p.add_run(l_s.split(":", 1)[-1].strip() if ":" in l_s else l_s).font.size = Pt(9.5)
             continue
 
-        # --- REGRA: PERÍCIA DE DISTRATORES (Alerta) ---
+        # --- REGRA: PERÍCIA / DISTRATORES ---
         if "PERÍCIA" in l_s.upper() or "DISTRATORES" in l_s.upper():
             p.paragraph_format.left_indent = Inches(0.15)
-            # Estilo de Alerta (Vinho/Vermelho Escuro)
-            run_label = p.add_run("🔍 Perícia de Erros: ")
-            run_label.font.bold = True
-            run_label.font.color.rgb = RGBColor(153, 0, 0)
-            run_label.font.size = Pt(9)
+            run_label = p.add_run("🔍 Alerta de Erro: ")
+            run_label.font.bold, run_label.font.color.rgb = True, RGBColor(153, 0, 0)
             p.add_run(l_s.split(":", 1)[-1].strip() if ":" in l_s else l_s).font.size = Pt(9.5)
             continue
-            
-        # --- REGRA: DIRETRIZES DE REGÊNCIA (Especial V32) ---
-        if "DIRETRIZES DE REGÊNCIA" in l_s.upper() or "TURMA" in l_s.upper():
-            p.paragraph_format.space_before = Pt(8)
-            run = p.add_run(f"🚦 {l_s.upper()}")
-            run.font.bold = True
-            run.font.color.rgb = RGBColor(0, 102, 0) # Verde Escuro
-            continue
 
-        # Texto Padrão (Menor para caber tudo)
-        run = p.add_run(l_s.replace('**', ''))
-        run.font.size = Pt(10)
+        # Texto normal
+        p.add_run(l_s).font.size = Pt(10)
 
     doc.save(file_stream)
     file_stream.seek(0)
