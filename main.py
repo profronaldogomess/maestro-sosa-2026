@@ -608,51 +608,71 @@ if menu == "🧪 Criador de Aulas":
                                     st.toast(f"🧬 Sensor Ativado: {aviso_sensor}", icon="♿")
                                     st.rerun()
 
+# --- ABA 2: SONDA DE PROFICIÊNCIA (VERSÃO V72 - NAVEGAÇÃO HIERÁRQUICA & RIGOR) ---
         with tab_diagnostico:
-            st.markdown("### 🔍 Configurar Sonda de Proficiência")
+            st.markdown("### 🔍 Engenharia de Sonda Diagnóstica (Padrão SAEB)")
+            
             with st.container(border=True):
                 c1, c2 = st.columns([1, 1])
-                ano_sonda = c1.selectbox("Série Atual:", [6, 7, 8, 9], key=f"s_ano_{v}")
-                trim_sonda = c2.selectbox("Trimestre da Sonda:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"s_trim_{v}")
+                ano_sonda = c1.selectbox("Série Atual:", [6, 7, 8, 9], index=0, key=f"s_ano_v72_{v}")
+                trim_sonda = c2.selectbox("Trimestre da Sonda:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"s_trim_v72_{v}")
                 
-                # Lógica de retrocesso curricular
+                # Lógica de Retrocesso Curricular (Soberania V32)
                 if trim_sonda == "I Trimestre":
                     ano_busca = int(ano_sonda) - 1
-                    trim_busca = "Todos"
-                    st.warning(f"💡 **Diagnóstico Inicial:** Buscando conteúdos do {ano_busca}º Ano para nivelamento.")
-                elif trim_sonda == "II Trimestre":
-                    ano_busca = int(ano_sonda)
-                    trim_busca = "I"
-                    st.info(f"🎯 **Sonda de Ciclo:** Avaliando conteúdos do I Trimestre.")
+                    msg_sonda = f"💡 **Diagnóstico Inicial:** Mapeando lacunas do {ano_busca}º Ano para nivelamento."
+                    color_sonda = "orange"
                 else:
                     ano_busca = int(ano_sonda)
-                    trim_busca = "II"
-                    st.info(f"🎯 **Sonda de Ciclo:** Avaliando conteúdos do II Trimestre.")
+                    msg_sonda = f"🎯 **Sonda de Ciclo:** Avaliando domínio do trimestre atual."
+                    color_sonda = "blue"
                 
-                # FILTRAGEM DA MATRIZ
-                df_cur_sonda = df_curriculo[df_curriculo["ANO"].astype(str).str.contains(str(ano_busca))]
-                if trim_busca != "Todos":
-                    df_cur_sonda = df_cur_sonda[df_cur_sonda["TRIMESTRE"] == trim_busca]
-                
-                if not df_cur_sonda.empty:
-                    lista_eixos_sonda = sorted(df_cur_sonda["EIXO"].unique().tolist())
-                    sel_eixos_s = st.multiselect("1. Selecione o(s) Eixo(s):", lista_eixos_sonda, key=f"s_eixos_{v}")
+                st.markdown(f":{color_sonda}[{msg_sonda}]")
+
+            # --- FILTRAGEM HIERÁRQUICA DA MATRIZ ---
+            df_cur_sonda = df_curriculo[df_curriculo["ANO"].astype(str).str.contains(str(ano_busca))]
+            
+            if not df_cur_sonda.empty:
+                with st.container(border=True):
+                    st.markdown("#### 🎯 1. Definição do Escopo Curricular")
                     
-                    if sel_eixos_s:
-                        df_cont_s = df_cur_sonda[df_cur_sonda["EIXO"].isin(sel_eixos_s)]
-                        lista_conts_s = sorted(df_cont_s["CONTEUDO_ESPECIFICO"].unique().tolist())
-                        sel_conts_s = st.multiselect("2. Selecione os Conteúdos:", lista_conts_s, key=f"s_conts_{v}")
+                    # NÍVEL 1: EIXO
+                    lista_eixos = sorted(df_cur_sonda["EIXO"].unique().tolist())
+                    sel_eixos = st.multiselect("Selecione o(s) Eixo(s):", lista_eixos, key=f"s_eixo_v72_{v}")
+                    
+                    if sel_eixos:
+                        # NÍVEL 2: CONTEÚDO ESPECÍFICO
+                        df_cont_s = df_cur_sonda[df_cur_sonda["EIXO"].isin(sel_eixos)]
+                        lista_conts = sorted(df_cont_s["CONTEUDO_ESPECIFICO"].unique().tolist())
+                        sel_conts = st.multiselect("Selecione os Conteúdos Base:", lista_conts, key=f"s_cont_v72_{v}")
                         
-                        if sel_conts_s:
-                            st.divider()
-                            c_q1, c_q2 = st.columns([1, 2])
-                            qtd_q_sonda = c_q1.slider("Nº de Questões:", 3, 15, 10, key=f"s_qtd_in_{v}")
-                            instr_extra_s = c_q2.text_area("📝 Contexto Adicional:", key=f"s_instr_{v}")
+                        if sel_conts:
+                            # NÍVEL 3: OBJETIVOS / DETALHAMENTO (PRECISÃO MÁXIMA)
+                            df_obj_s = df_cont_s[df_cont_s["CONTEUDO_ESPECIFICO"].isin(sel_conts)]
+                            lista_objs = sorted(df_obj_s["OBJETIVOS"].unique().tolist())
+                            sel_objs = st.multiselect("Refine pelos Objetivos/Habilidades:", lista_objs, key=f"s_obj_v72_{v}")
                             
-                            if st.button("🚀 GERAR SONDA DE PROFICIÊNCIA", use_container_width=True, type="primary"):
-                                with st.spinner("Maestro Sosa arquitetando Tratado Diagnóstico padrão Governo..."):
+                            st.divider()
+                            
+                            # --- PARÂMETROS DE GERAÇÃO ---
+                            c_q1, c_q2 = st.columns([1.2, 1.8])
+                            with c_q1:
+                                st.markdown("#### ⚙️ Configuração")
+                                qtd_q_sonda = st.slider("Quantidade de Questões:", 1, 20, 10, step=1, key=f"s_qtd_v72_{v}")
+                                
+                                # Cálculo de peso automático
+                                peso_unit = 10.0 / qtd_q_sonda
+                                st.caption(f"💎 Valor por Questão: **{peso_unit:.2f} pts**")
+                            
+                            with c_q2:
+                                st.markdown("#### 📝 Contexto Adicional")
+                                instr_extra_s = st.text_area("Ex: Focar em situações-problema de compra e venda...", key=f"s_instr_v72_{v}", height=110)
+
+                            # --- BOTÃO DE DISPARO (TRIPLE-MATCH) ---
+                            if st.button("🚀 MATERIALIZAR SONDA DE ALTA PRECISÃO", use_container_width=True, type="primary"):
+                                with st.spinner("Maestro Sosa arquitetando Exame Diagnóstico SAEB/AAP..."):
                                     
-                                    # 1. GERAÇÃO DE DNA ÚNICO
+                                    # 1. GERAÇÃO DE DNA ÚNICO (SOSA-ID)
                                     sosa_id_sonda = util.gerar_sosa_id("SONDA", ano_sonda, trim_sonda)
                                     st.session_state.sosa_id_atual = sosa_id_sonda
                                     st.session_state.lab_meta = {
@@ -660,29 +680,30 @@ if menu == "🧪 Criador de Aulas":
                                         "tipo": "SONDA", "semana_ref": "AVALIAÇÃO"
                                     }
                                     
-                                    # Cálculo de peso (Sondas geralmente valem 10.0 para escala de proficiência)
-                                    peso_q = 10.0 / qtd_q_sonda
-                                    peso_q_str = util.sosa_to_str(peso_q)
-
-                                    # 2. PROMPT DE SOBERANIA V70
+                                    # 2. CONSTRUÇÃO DO COMANDO DE ELITE
                                     prompt_sonda = (
-                                        f"ORDEM DE PERÍCIA V70 - RIGOR PSICOMÉTRICO\n"
-                                        f"SÉRIE ATUAL: {ano_sonda}º Ano | SÉRIE BUSCADA (BASE): {ano_busca}º Ano.\n"
-                                        f"CONTEÚDOS: {', '.join(sel_conts_s)}.\n"
-                                        f"OBJETIVO: Identificar lacunas de transição entre séries.\n"
-                                        f"VALOR TOTAL: 10.0 | QTD: {qtd_q_sonda} questões.\n"
-                                        f"SOSA_ID: {sosa_id_sonda}.\n\n"
-                                        f"🚨 DIRETRIZ TÉCNICA:\n"
+                                        f"ORDEM DE PERÍCIA V70 - PADRÃO SAEB/PROVA BRASIL\n"
+                                        f"SÉRIE ATUAL: {ano_sonda}º Ano | SÉRIE BASE: {ano_busca}º Ano.\n"
+                                        f"EIXOS: {', '.join(sel_eixos)}.\n"
+                                        f"CONTEÚDOS: {', '.join(sel_conts)}.\n"
+                                        f"OBJETIVOS ESPECÍFICOS: {', '.join(sel_objs)}.\n"
+                                        f"QTD: {qtd_q_sonda} questões | VALOR TOTAL: 10.0.\n"
+                                        f"SOSA_ID: {sosa_id_sonda}.\n"
+                                        f"EXTRAS: {instr_extra_s}.\n\n"
+                                        f"🚨 DIRETRIZ DE ENGENHARIA:\n"
                                         f"1. Use o ID no marcador [SOSA_ID].\n"
-                                        f"2. Em [ALUNO], as questões devem ser desafiadoras e contextualizadas.\n"
-                                        f"3. Em [PROFESSOR], escreva o 'Parecer de Sondagem' orientando como interpretar os resultados da turma.\n"
-                                        f"4. Siga rigorosamente a formatação INLINE: **QUESTÃO XX ({peso_q_str} ponto) -** Texto."
+                                        f"2. Formatação INLINE: **QUESTÃO XX ({util.sosa_to_str(peso_unit)} ponto) -** Texto.\n"
+                                        f"3. [GRADE_DE_CORRECAO]: Detalhe descritores e análise clínica de distratores.\n"
+                                        f"4. [PEI]: Simetria 50% adaptada para TEA/Dislexia com suporte visual."
                                     )
                                     
-                                    # Chama a persona CORRETA (Sem o _V28 no final para bater com o database)
+                                    # 3. DISPARO
                                     st.session_state.lab_temp = ai.gerar_ia("ARQUITETO_SONDA_DIAGNOSTICA", prompt_sonda, usar_busca=True)
+                                    st.toast("🧬 Sonda Gerada com Sucesso!", icon="🔍")
                                     st.rerun()
-
+            else:
+                st.error("❌ Base curricular não encontrada para o ano de busca.")
+                
 # --- ABA 3: ENGENHARIA DE TRABALHOS (VERSÃO V31.7 - BLINDAGEM DE TABELAS) ---
         with tab_trabalhos:
             st.subheader("📋 Engenharia de Projetos e Semanários (BNCC Elite)")
