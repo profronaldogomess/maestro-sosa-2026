@@ -3313,9 +3313,10 @@ elif menu == "📸 Scanner de Gabaritos":
                                 if match: st.info(match.group(0).strip().replace("**", ""))
                             except: st.caption("Detalhes não localizados.")
 
-# --- PARTE B: DIAGNÓSTICO INDIVIDUAL (MICRO) - V78 SOBERANIA TOTAL (SEM CORTES) ---
+# --- PARTE B: DIAGNÓSTICO INDIVIDUAL (MICRO) - V79 SOBERANIA DE VÍNCULO (ANTI-CONTAMINAÇÃO) ---
                 st.markdown("---")
-                st.markdown("#### 👤 2. Perícia Individual: Lacunas por Estudante")
+                st.markdown("#### 👤 2. Perícia Individual: Lacunas e Diagnóstico de Erros")
+                st.caption("🔍 O sistema realiza o Smart Match entre a resposta do aluno e a Grade de Perícia específica do material realizado.")
                 
                 alunos_turma = df_alunos[df_alunos['TURMA'] == t_sel_r].sort_values(by="NOME_ALUNO")
                 dados_indiv = []
@@ -3323,6 +3324,8 @@ elif menu == "📸 Scanner de Gabaritos":
                 for _, alu in alunos_turma.iterrows():
                     id_a = db.limpar_id(alu['ID'])
                     is_pei_alu = str(alu['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"]
+                    
+                    # Filtra o diagnóstico do aluno (pega o mais recente deste slot)
                     reg_aluno = df_analise[df_analise['ID_ALUNO_L'] == id_a]
                     
                     if reg_aluno.empty:
@@ -3333,20 +3336,28 @@ elif menu == "📸 Scanner de Gabaritos":
                         reg = reg_aluno.iloc[-1]
                         nota_alu = util.sosa_to_float(reg['NOTA_CALCULADA'])
                         
-                        nome_av_no_banco = reg['ID_AVALIACAO']
-                        m_ref_query = df_aulas[df_aulas['TIPO_MATERIAL'] == nome_av_no_banco]
+                        # --- MOTOR DE SOBERANIA DE VÍNCULO V79 ---
+                        # Aqui forçamos o sistema a buscar o material que está gravado na ficha do aluno (ID_AVALIACAO)
+                        material_que_o_aluno_fez = reg['ID_AVALIACAO']
+                        m_ref_query = df_aulas[df_aulas['TIPO_MATERIAL'] == material_que_o_aluno_fez]
                         
+                        # Se não achar pelo nome exato (caso de 2ª chamada ou renomeação), busca por aproximação no mesmo ano
                         if m_ref_query.empty:
                             m_ref_query = df_aulas[
-                                (df_aulas['TIPO_MATERIAL'].str.upper().str.contains(nome_curto_av.upper())) &
+                                (df_aulas['TIPO_MATERIAL'].str.upper().str.contains(str(material_que_o_aluno_fez).split('_')[0])) &
                                 (df_aulas['ANO'].str.contains(ano_num_r))
                             ]
                         
                         if not m_ref_query.empty:
+                            # Pega o conteúdo REAL da prova que o aluno fez, não o que está na memória da IA agora
                             m_ref = m_ref_query.iloc[0]
                             txt_cont = str(m_ref['CONTEUDO'])
+                            
+                            # Define se busca na grade Regular ou PEI
                             tag_grade = "GRADE_DE_CORRECAO_PEI" if is_pei_alu else "GRADE_DE_CORRECAO"
                             grade_texto = ai.extrair_tag(txt_cont, tag_grade) or ai.extrair_tag(txt_cont, "GRADE_DE_CORRECAO")
+                            
+                            # Gabarito oficial daquela prova específica
                             gab_ref_alu = extrair_gab_v75_universal(txt_cont, is_pei_alu)
                             resp_aluno_lista = str(reg['RESPOSTAS_ALUNO']).split(';')
                             
@@ -3355,29 +3366,33 @@ elif menu == "📸 Scanner de Gabaritos":
                                 q_n = i + 1
                                 letra_correta = gab_ref_alu.get(q_n)
                                 
+                                # Se o aluno errou e marcou algo válido
                                 if letra_marcada != letra_correta and letra_marcada not in ["FALTOU", "?", "X"]:
-                                    # --- NOVO MOTOR DE CAPTURA V78 (ANTI-CORTE) ---
-                                    # Localiza o bloco da questão
-                                    bloco_q = re.search(rf"(?si)QUEST[AÃ]O\s*(?:PEI\s*)?0?{q_n}\b.*?(?=QUEST[AÃ]O|$)", grade_texto)
+                                    # 1. Localiza o bloco da questão (V79 - Regex Blindado)
+                                    # O padrão busca "QUESTÃO XX" ou "QUESTÃO PEI XX" e captura até a próxima questão
+                                    padrao_bloco = rf"(?si)QUEST[AÃ]O\s*(?:PEI\s*)?0?{q_n}\b.*?(?=QUEST[AÃ]O|$)"
+                                    bloco_q = re.search(padrao_bloco, grade_texto)
                                     
                                     if bloco_q:
                                         texto_bloco = bloco_q.group(0)
-                                        # Regex mais robusta: busca a letra e captura até os marcadores estruturais reais da IA
-                                        # Ela só para se encontrar outra letra [A-E] QUE ESTEJA NO INÍCIO de uma linha ou após um traço claro
-                                        padrao_distrator = rf"(?i)(?:{letra_marcada}[\)\:\s\-]+|DISTRATOR\s+{letra_marcada}|{letra_marcada}\s+[\-:]+)(.*?)(?=\n\s*[A-E][\)\:\s\-]|JUSTIFICATIVA|PERÍCIA|ANÁLISE|$)"
+                                        # 2. Busca o distrator específico da letra marcada
+                                        # A regex agora é "gananciosa" mas respeita a estrutura de letras A a E no início da linha
+                                        padrao_distrator = rf"(?i)(?:{letra_marcada}[\)\:\s\-]+|DISTRATOR\s+{letra_marcada}|{letra_marcada}\s+[\-:]+)(.*?)(?=\n\s*[A-E][\)\:\s\-]|JUSTIFICATIVA|PERÍCIA|ANÁLISE|QUEST[AÃ]O|$)"
                                         match_d = re.search(padrao_distrator, texto_bloco, re.DOTALL)
                                         
                                         if match_d:
-                                            detalhe = match_d.group(1).strip()
-                                            # Limpeza final de ruído
-                                            detalhe = re.sub(r'[#*]', '', detalhe).strip()
-                                            analise_de_erros.append(f"Q{q_n}({letra_marcada}): {detalhe}")
+                                            # Limpeza Master: remove hashtags, asteriscos e quebras excessivas
+                                            detalhe = re.sub(r'[#*]', '', match_d.group(1)).strip()
+                                            analise_de_erros.append(f"**Q{q_n}({letra_marcada}):** {detalhe}")
                                         else:
-                                            analise_de_erros.append(f"Q{q_n}({letra_marcada}): Falha identificada na habilidade BNCC.")
+                                            # Fallback: Se não achar a letra, traz o resumo da perícia da questão
+                                            match_resumo = re.search(r"(?i)(?:PERÍCIA|ANÁLISE).*?:\s*(.*)", texto_bloco, re.DOTALL)
+                                            resumo_txt = re.sub(r'[#*]', '', match_resumo.group(1)).strip() if match_resumo else "Falha técnica no distrator."
+                                            analise_de_erros.append(f"**Q{q_n}({letra_marcada}):** {resumo_txt}")
                             
-                            lacunas_txt = " \n\n ".join(analise_de_erros) if analise_de_erros else "✅ Domínio Total"
+                            lacunas_txt = " \n\n ".join(analise_de_erros) if analise_de_erros else "✅ Domínio Total das Habilidades"
                         else:
-                            lacunas_txt = "⚠️ Gabarito não localizado."
+                            lacunas_txt = "⚠️ ATENÇÃO: Material original não localizado para perícia."
 
                         dados_indiv.append({
                             "Estudante": alu['NOME_ALUNO'],
@@ -3386,18 +3401,17 @@ elif menu == "📸 Scanner de Gabaritos":
                             "Diagnóstico Técnico de Erros": lacunas_txt
                         })
 
-                # --- EXIBIÇÃO COM CONFIGURAÇÃO DE LARGURA TOTAL ---
+                # --- EXIBIÇÃO MASTER COM DATA EDITOR (MAIS ESPAÇO) ---
                 df_f = pd.DataFrame(dados_indiv)
-                st.dataframe(
-                    df_f.style.format({"Nota": "{:.2f}"}), 
-                    use_container_width=True, 
-                    hide_index=True,
+                st.data_editor(
+                    df_f,
                     column_config={
                         "Estudante": st.column_config.TextColumn("Estudante", width="medium"),
                         "Perfil": st.column_config.TextColumn("Perfil", width="small"),
                         "Nota": st.column_config.NumberColumn("Nota", format="%.2f", width="small"),
                         "Diagnóstico Técnico de Erros": st.column_config.TextColumn("Diagnóstico Técnico (Raciocínio do Erro)", width="large")
-                    }
+                    },
+                    hide_index=True, use_container_width=True, disabled=True, key=f"raiox_final_{v}"
                 )
 
 # --- ABA 5: ACERVO DE EVIDÊNCIAS (V71.0 - CUSTÓDIA COM FILTROS INTELIGENTES) ---
