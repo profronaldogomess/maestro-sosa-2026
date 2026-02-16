@@ -613,3 +613,11 @@ def gerar_prognostico_pedagogico(dados_stats, contexto_prova):
         return res.text.replace("**", "").replace("#", "").strip()
     except Exception as e:
         return f"Erro na perícia: {e}"
+
+def limpar_links_antigos(texto):
+    """Remove qualquer bloco de --- LINKS --- anterior para evitar duplicidade"""
+    if not texto: return ""
+    import re
+    # Divide o texto no primeiro marcador de links e pega apenas a parte de cima
+    partes = re.split(r"--- LINKS ---", texto, flags=re.IGNORECASE)
+    return partes[0].strip()
