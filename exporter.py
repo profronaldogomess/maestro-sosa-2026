@@ -211,25 +211,29 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
     return file_stream
 
 # ==============================================================================
-# 4. GUIA DO PROFESSOR (PRESERVAÇÃO INTEGRAL)
+# 4. GUIA DO PROFESSOR (VERSÃO V26 - LAYOUT DE PERÍCIA E ALTA DENSIDADE)
 # ==============================================================================
 def gerar_docx_professor_v25(titulo_doc, conteudo, info):
+    """Versão V26.1 - SOBERANIA VISUAL: Organização de Grade de Perícia"""
     file_stream = io.BytesIO()
     doc = Document()
+    
+    # Configuração de Estilo Global
     style = doc.styles['Normal']
     style.font.name = 'Arial'
-    style.font.size = Pt(11)
+    style.font.size = Pt(10.5)
 
     section = doc.sections[0]
-    section.top_margin, section.bottom_margin = Inches(0.3), Inches(0.3)
-    section.left_margin, section.right_margin = Inches(0.4), Inches(0.4)
+    section.top_margin, section.bottom_margin = Inches(0.4), Inches(0.4)
+    section.left_margin, section.right_margin = Inches(0.5), Inches(0.5)
 
+    # 1. CABEÇALHO MESTRE (MANTIDO)
     header_table = doc.add_table(rows=2, cols=3)
     header_table.style = 'Table Grid'
     c_tit = header_table.cell(0, 0).merge(header_table.cell(0, 2))
     p_tit = c_tit.paragraphs[0]
     p_tit.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run_tit = p_tit.add_run("GUIA DE REGÊNCIA E ESQUEMA DE LOUSA - PROF. RONALDO GOMES")
+    run_tit = p_tit.add_run("GUIA DE REGÊNCIA E GRADE DE PERÍCIA PEDAGÓGICA")
     run_tit.font.bold = True
     run_tit.font.size = Pt(12)
 
@@ -240,40 +244,79 @@ def gerar_docx_professor_v25(titulo_doc, conteudo, info):
     for row in header_table.rows: set_row_height(row, 22)
     doc.add_paragraph()
 
+    # 2. ATIVAÇÃO DE 2 COLUNAS PARA ECONOMIA DE PAPEL E FLUXO RÁPIDO
     new_section = doc.add_section(WD_SECTION.CONTINUOUS)
     sectPr = new_section._sectPr
     cols = sectPr.xpath('./w:cols')[0]
     cols.set(qn('w:num'), '2')
     cols.set(qn('w:space'), '400')
 
-    conteudo_limpo = conteudo.replace("[PROFESSOR]", "").replace("[COLUNA_1]", "").replace("[COLUNA_2]", "")
+    # 3. MOTOR DE PROCESSAMENTO DE CONTEÚDO (DIFERENCIADO)
+    conteudo_limpo = conteudo.replace("[GRADE_DE_CORRECAO]", "").replace("[PROFESSOR]", "").strip()
     linhas = conteudo_limpo.split('\n')
+    
     for linha in linhas:
         l_s = linha.strip()
         if not l_s: continue
+        
         p = doc.add_paragraph()
         p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
         p.paragraph_format.line_spacing = 1.0
-        p.paragraph_format.space_after = Pt(2)
+        
+        # --- REGRA: TÍTULO DA QUESTÃO (Ex: QUESTÃO 01:) ---
+        if l_s.upper().startswith("QUESTÃO") or l_s.upper().startswith("- QUESTÃO"):
+            p.paragraph_format.space_before = Pt(12)
+            # Extrai o número e a habilidade entre colchetes
+            match_q = re.match(r"(?i)(?:- )?(QUEST[AÃ]O\s+\d+)([:\s\-]*)(\[.*?\])?(.*)", l_s)
+            if match_q:
+                # O número da questão em AZUL ESCURO e NEGRITO
+                run_q = p.add_run(f"{match_q.group(1).upper()}: ")
+                run_q.font.bold = True
+                run_q.font.color.rgb = RGBColor(0, 51, 153)
+                
+                # A Habilidade BNCC em Itálico Cinza
+                if match_q.group(3):
+                    run_h = p.add_run(f"{match_q.group(3)} ")
+                    run_h.font.italic = True
+                    run_h.font.color.rgb = RGBColor(100, 100, 100)
+                
+                # O restante do texto (Título do assunto)
+                p.add_run(match_q.group(4).strip())
+            else:
+                p.add_run(l_s).font.bold = True
+            continue
 
-        if l_s.isupper() and (":" in l_s or len(l_s) < 30):
-            run = p.add_run(l_s.replace('**', ''))
-            run.font.bold = True
-            run.font.size = Pt(11)
+        # --- REGRA: JUSTIFICATIVA (Explicativa) ---
+        if "JUSTIFICATIVA" in l_s.upper():
+            p.paragraph_format.left_indent = Inches(0.15)
+            run_label = p.add_run("🎯 Justificativa: ")
+            run_label.font.bold = True
+            run_label.font.size = Pt(9)
+            p.add_run(l_s.split(":", 1)[-1].strip() if ":" in l_s else l_s).font.size = Pt(9.5)
+            continue
+
+        # --- REGRA: PERÍCIA DE DISTRATORES (Alerta) ---
+        if "PERÍCIA" in l_s.upper() or "DISTRATORES" in l_s.upper():
+            p.paragraph_format.left_indent = Inches(0.15)
+            # Estilo de Alerta (Vinho/Vermelho Escuro)
+            run_label = p.add_run("🔍 Perícia de Erros: ")
+            run_label.font.bold = True
+            run_label.font.color.rgb = RGBColor(153, 0, 0)
+            run_label.font.size = Pt(9)
+            p.add_run(l_s.split(":", 1)[-1].strip() if ":" in l_s else l_s).font.size = Pt(9.5)
+            continue
+            
+        # --- REGRA: DIRETRIZES DE REGÊNCIA (Especial V32) ---
+        if "DIRETRIZES DE REGÊNCIA" in l_s.upper() or "TURMA" in l_s.upper():
             p.paragraph_format.space_before = Pt(8)
-        elif "[" in l_s and "]" in l_s:
-            p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT
-            run = p.add_run(l_s.replace('**', ''))
-            run.font.italic = True
-            run.font.size = Pt(10)
-            run.font.color.rgb = RGBColor(0, 102, 204)
-        elif "DICA DE REGÊNCIA" in l_s.upper():
-            run = p.add_run(l_s.replace('**', ''))
+            run = p.add_run(f"🚦 {l_s.upper()}")
             run.font.bold = True
-            run.font.color.rgb = RGBColor(200, 0, 0)
-        else:
-            run = p.add_run(l_s.replace('**', ''))
-            run.font.size = Pt(10.5)
+            run.font.color.rgb = RGBColor(0, 102, 0) # Verde Escuro
+            continue
+
+        # Texto Padrão (Menor para caber tudo)
+        run = p.add_run(l_s.replace('**', ''))
+        run.font.size = Pt(10)
 
     doc.save(file_stream)
     file_stream.seek(0)
