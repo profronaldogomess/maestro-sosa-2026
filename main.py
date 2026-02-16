@@ -2617,12 +2617,23 @@ elif menu == "📝 Central de Avaliações":
                         doc_pei = exporter.gerar_docx_prova_v25(f"{nome_arq}_PEI", txt_pei_raw, info_pei)
                         link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_arq}_PEI", modo="AVALIACAO")
 
-                    # 6. GERAÇÃO E UPLOAD - GUIA DO PROFESSOR (GRADE)
-                    status.write("🔍 Gerando Guia de Perícia...")
-                    txt_gab_letras = ai.extrair_tag(texto_puro_ia, "GABARITO_TEXTO")
-                    txt_grade_analise = ai.extrair_tag(texto_puro_ia, "GRADE_DE_CORRECAO")
-                    if txt_grade_analise:
-                        txt_prof_completo = f"GABARITO OFICIAL:\n{txt_gab_letras}\n\nDETALHAMENTO POR ITEM:\n{txt_grade_analise}"
+                    # 6. GERAÇÃO E UPLOAD - GUIA DO PROFESSOR (GRADE TOTAL)
+                    status.write("🔍 Gerando Guia de Perícia Integral...")
+                    # Coleta os 4 Pilares de Inteligência
+                    txt_gab_reg = ai.extrair_tag(texto_puro_ia, "GABARITO_TEXTO")
+                    txt_grade_reg = ai.extrair_tag(texto_puro_ia, "GRADE_DE_CORRECAO")
+                    txt_gab_pei = ai.extrair_tag(texto_puro_ia, "GABARITO_PEI")
+                    txt_grade_pei = ai.extrair_tag(texto_puro_ia, "GRADE_DE_CORRECAO_PEI")
+
+                    # Montagem da estrutura de Soberania
+                    txt_prof_completo = (
+                        f"GABARITO OFICIAL (REGULAR):\n{txt_gab_reg}\n\n"
+                        f"GABARITO OFICIAL (PEI):\n{txt_gab_pei}\n\n"
+                        f"DETALHAMENTO POR ITEM (REGULAR):\n{txt_grade_reg}\n\n"
+                        f"DETALHAMENTO POR ITEM (PEI):\n{txt_grade_pei}"
+                    )
+
+                    if txt_grade_reg:
                         doc_prof = exporter.gerar_docx_professor_v25(f"{nome_arq}_GRADE", txt_prof_completo, {"ano": f"{v_ano}º", "semana": "AVALIAÇÃO", "trimestre": trim_av})
                         link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_arq}_GRADE", modo="AVALIACAO")
 
