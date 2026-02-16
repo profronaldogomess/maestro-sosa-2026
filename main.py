@@ -2972,40 +2972,34 @@ elif menu == "📸 Scanner de Gabaritos":
         st.subheader("📊 Raio-X Pedagógico: Diagnóstico Individual de Lacunas")
         st.markdown("---")
 
-        # --- 1. FUNÇÃO DE EXTRAÇÃO UNIVERSAL (BLINDADA) ---
-        def extrair_gab_v74_universal(texto, is_pei=False):
+        # --- 1. FUNÇÃO DE EXTRAÇÃO UNIVERSAL (VERSÃO V75 - ANTI-RUÍDO) ---
+        def extrair_gab_v75_universal(texto, is_pei=False):
             if not texto: return {}
-            # Tenta as tags de Recomposição, Sonda ou Prova Regular
             tag_alvo = "GABARITO_PEI" if is_pei else "GABARITO_TEXTO"
             raw = ai.extrair_tag(texto, tag_alvo) or ai.extrair_tag(texto, "GABARITO") or ai.extrair_tag(texto, "RESPOSTAS_IA")
-            
-            # Padrão 1: 01-A, 02:B
+            # Captura padrões 01-A ou 01:A
             matches = re.findall(r"(\d+)\s*[\-\.\:]\s*([A-E])", raw.upper())
             if matches: return {int(num): letra for num, letra in matches}
-            
-            # Padrão 2: A;B;C;D
+            # Captura padrões sequenciais A;B;C
             letras = re.findall(r"\b[A-E]\b", raw.upper())
             return {i+1: letra for i, letra in enumerate(letras)}
 
-        # --- 2. FILTROS DE SELEÇÃO ---
         c1, c2, c3 = st.columns([1, 1, 1.5])
-        t_sel_r = c1.selectbox("👥 Selecione a Turma:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"t_r_v74_{v}")
-        tr_sel_r = c2.selectbox("📅 Selecione o Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_r_v74_{v}")
+        t_sel_r = c1.selectbox("👥 Selecione a Turma:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"t_r_v75_{v}")
+        tr_sel_r = c2.selectbox("📅 Selecione o Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_r_v75_{v}")
         
-        # Busca todos os ativos de avaliação (Teste, Prova, Recup, Sonda)
         opcoes_r = filtrar_ativos_cir_v64(t_sel_r, tr_sel_r, apenas_provas=True)
-        # Mostra apenas as avaliações "Base" (Slots) para não poluir o seletor
         opcoes_base_r = [opt for opt in opcoes_r if not re.search(r"2[ªA]|CHAMADA", opt, re.IGNORECASE)]
-        at_sel_r = c3.selectbox("📋 Selecione a Avaliação Base (Slot):", [""] + opcoes_base_r, key=f"at_r_v74_{v}")
+        at_sel_r = c3.selectbox("📋 Selecione a Avaliação Base (Slot):", [""] + opcoes_base_r, key=f"at_r_v75_{v}")
 
         if not t_sel_r or not at_sel_r:
             st.info("💡 Selecione a Turma e a Avaliação para carregar a Perícia Pedagógica.")
         else:
-            # 3. DATA FUSION: CRUZAMENTO DE DADOS
+            # 1. DATA FUSION: CRUZAMENTO DE DADOS
             nome_curto_av = at_sel_r.split("-")[0].strip()
             ano_num_r = "".join(filter(str.isdigit, t_sel_r))
             
-            # Busca todos os registros que pertencem a este "Slot" (Original ou 2ª Chamada)
+            # Busca registros que pertencem a este Slot (Original ou 2ª Chamada)
             respostas_brutas = df_diagnosticos[
                 (df_diagnosticos['TURMA'].str.strip() == t_sel_r.strip()) & 
                 (df_diagnosticos['ID_AVALIACAO'].str.contains(nome_curto_av, case=False))
@@ -3023,7 +3017,7 @@ elif menu == "📸 Scanner de Gabaritos":
                 df_analise['IS_PEI'] = df_analise['NECESSIDADES'].apply(lambda x: str(x).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"])
                 df_analise['IS_2A_CHAMADA'] = df_analise['ID_AVALIACAO'].str.contains(r"2[ªA]|CHAMADA", case=False, regex=True)
 
-                # --- PARTE A: ANÁLISE MACRO (PERFORMANCE POR ITEM) ---
+                # --- PARTE A: ANÁLISE MACRO ---
                 st.markdown("### 🎯 1. Análise de Performance por Item")
                 col_l1, col_l2 = st.columns(2)
                 perfil_visao = col_l1.radio("1. Perfil do Aluno:", ["📝 Alunos Regulares", "♿ Alunos PEI"], horizontal=True, key=f"perf_v_{v}")
@@ -3034,11 +3028,11 @@ elif menu == "📸 Scanner de Gabaritos":
                 
                 df_filtrado = df_analise[(df_analise['IS_PEI'] == is_pei_view) & (df_analise['IS_2A_CHAMADA'] == is_2a_view)]
 
-                # BUSCA DO GABARITO PARA O GRÁFICO (SMART MATCH)
+                # BUSCA DO GABARITO (SMART MATCH V75)
                 if is_2a_view:
                     query_mat = df_aulas[
-                        (df_aulas['TIPO_MATERIAL'].str.contains(r"2[ªA]|CHAMADA", case=False, regex=True)) & 
-                        (df_aulas['TIPO_MATERIAL'].str.contains(nome_curto_av, case=False)) &
+                        (df_aulas['TIPO_MATERIAL'].str.upper().str.contains("2CHAMADA")) & 
+                        (df_aulas['TIPO_MATERIAL'].str.upper().str.contains(nome_curto_av.upper())) &
                         (df_aulas['ANO'].str.contains(ano_num_r))
                     ]
                 else:
@@ -3052,7 +3046,7 @@ elif menu == "📸 Scanner de Gabaritos":
                     dados_prova = query_mat.iloc[0]
                     txt_prova = str(dados_prova['CONTEUDO'])
                     grade_pericia = ai.extrair_tag(txt_prova, "GRADE_DE_CORRECAO")
-                    gab_ativo = extrair_gab_v74_universal(txt_prova, is_pei_view)
+                    gab_ativo = extrair_gab_v75_universal(txt_prova, is_pei_view)
 
                     # CÁLCULO DE ESTATÍSTICAS
                     num_q_total = len(gab_ativo)
@@ -3077,14 +3071,14 @@ elif menu == "📸 Scanner de Gabaritos":
                     with col_item:
                         with st.container(border=True):
                             st.markdown("**🔬 Perícia do Item**")
-                            q_sel = st.selectbox("Analisar questão:", df_stats["Questão"].tolist(), key=f"q_sel_v74_{is_pei_view}_{is_2a_view}")
+                            q_sel = st.selectbox("Analisar questão:", df_stats["Questão"].tolist(), key=f"q_sel_v75_{is_pei_view}_{is_2a_view}")
                             info_q = df_stats[df_stats["Questão"] == q_sel].iloc[0]
                             st.write(f"**Gabarito:** :green[{info_q['Gabarito']}] | **Média:** {info_q['Acerto %']:.1f}%")
                             try:
                                 idx_num = int(q_sel[1:])
                                 padrao = rf"(?si)QUESTÃO\s*0?{idx_num}\b.*?(?=QUESTÃO\s*0?{idx_num+1}\b|$)"
                                 match = re.search(padrao, grade_pericia)
-                                if match: st.info(match.group(0).strip())
+                                if match: st.info(match.group(0).strip().replace("**", ""))
                             except: st.caption("Detalhes não localizados.")
 
                 # --- PARTE B: DIAGNÓSTICO INDIVIDUAL (MICRO) ---
@@ -3106,30 +3100,25 @@ elif menu == "📸 Scanner de Gabaritos":
                         nota_alu = util.sosa_to_float(reg['NOTA_CALCULADA'])
                         v_prova = "2ª CHAMADA" if reg['IS_2A_CHAMADA'] else "ORIGINAL"
                         
-                        # --- BUSCA DINÂMICA DO MATERIAL (RASTREABILIDADE TOTAL) ---
-                        # O sistema agora busca o material EXATO que está escrito na linha do aluno
-                        nome_av_real = reg['ID_AVALIACAO']
-                        m_ref_query = df_aulas[df_aulas['TIPO_MATERIAL'] == nome_av_real]
+                        # Busca material de referência exato
+                        m_ref_query = df_aulas[df_aulas['TIPO_MATERIAL'] == reg['ID_AVALIACAO']]
                         
-                        # Fallback caso o nome exato falhe (busca por aproximação)
-                        if m_ref_query.empty:
-                            m_ref_query = df_aulas[
-                                (df_aulas['TIPO_MATERIAL'].str.contains(nome_curto_av, case=False)) & 
-                                (df_aulas['ANO'].str.contains(ano_num_r)) &
-                                (df_aulas['TIPO_MATERIAL'].str.contains("2ª|CHAMADA" if reg['IS_2A_CHAMADA'] else "^((?!2ª|CHAMADA).)*$", case=False, regex=True))
-                            ]
-
                         if not m_ref_query.empty:
                             m_ref = m_ref_query.iloc[0]
-                            gab_ref_alu = extrair_gab_v74_universal(str(m_ref['CONTEUDO']), is_pei_alu)
+                            gab_ref_alu = extrair_gab_v75_universal(str(m_ref['CONTEUDO']), is_pei_alu)
                             resp_lista = str(reg['RESPOSTAS_ALUNO']).split(';')
                             
                             erros_hab = []
                             for i, r in enumerate(resp_lista):
                                 q_n = i + 1
-                                if r != gab_ref_alu.get(q_n) and r not in ["FALTOU", "X", "?"]:
+                                # --- CORREÇÃO DA TRAVA: Agora 'X' e '?' também geram lacunas ---
+                                if r != gab_ref_alu.get(q_n) and r != "FALTOU":
                                     match_h = re.search(rf"QUESTÃO\s*0?{q_n}\b.*?:(.*?)(?=\n|JUSTIFICATIVA|PERÍCIA|$)", str(m_ref['CONTEUDO']), re.IGNORECASE)
-                                    erros_hab.append(match_h.group(1).strip().replace("[","").replace("]","") if match_h else f"Q{q_n}")
+                                    if match_h:
+                                        txt_hab = match_h.group(1).strip().replace("[","").replace("]","").replace("**", "")
+                                        erros_hab.append(txt_hab)
+                                    else:
+                                        erros_hab.append(f"Questão {q_n}")
                             
                             lacunas_txt = " | ".join(list(set(erros_hab))) if erros_hab else "✅ Domínio Total"
                         else:
