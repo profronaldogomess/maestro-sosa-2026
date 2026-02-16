@@ -2972,15 +2972,13 @@ elif menu == "📸 Scanner de Gabaritos":
         st.subheader("📊 Raio-X Pedagógico: Diagnóstico Individual de Lacunas")
         st.markdown("---")
 
-        # --- 1. FUNÇÃO DE EXTRAÇÃO UNIVERSAL (VERSÃO V75 - ANTI-RUÍDO) ---
+        # --- 1. FUNÇÃO DE EXTRAÇÃO UNIVERSAL ---
         def extrair_gab_v75_universal(texto, is_pei=False):
             if not texto: return {}
             tag_alvo = "GABARITO_PEI" if is_pei else "GABARITO_TEXTO"
             raw = ai.extrair_tag(texto, tag_alvo) or ai.extrair_tag(texto, "GABARITO") or ai.extrair_tag(texto, "RESPOSTAS_IA")
-            # Captura padrões 01-A ou 01:A
             matches = re.findall(r"(\d+)\s*[\-\.\:]\s*([A-E])", raw.upper())
             if matches: return {int(num): letra for num, letra in matches}
-            # Captura padrões sequenciais A;B;C
             letras = re.findall(r"\b[A-E]\b", raw.upper())
             return {i+1: letra for i, letra in enumerate(letras)}
 
@@ -2999,7 +2997,6 @@ elif menu == "📸 Scanner de Gabaritos":
             nome_curto_av = at_sel_r.split("-")[0].strip()
             ano_num_r = "".join(filter(str.isdigit, t_sel_r))
             
-            # Busca registros que pertencem a este Slot (Original ou 2ª Chamada)
             respostas_brutas = df_diagnosticos[
                 (df_diagnosticos['TURMA'].str.strip() == t_sel_r.strip()) & 
                 (df_diagnosticos['ID_AVALIACAO'].str.contains(nome_curto_av, case=False))
@@ -3008,7 +3005,6 @@ elif menu == "📸 Scanner de Gabaritos":
             if respostas_brutas.empty:
                 st.warning("⚠️ Nenhuma resposta de aluno encontrada para esta avaliação.")
             else:
-                # Identificação de Perfil e Versão
                 df_alunos_min = df_alunos[['ID', 'NECESSIDADES']].copy()
                 df_alunos_min['ID'] = df_alunos_min['ID'].apply(db.limpar_id)
                 respostas_brutas['ID_ALUNO_L'] = respostas_brutas['ID_ALUNO'].apply(db.limpar_id)
@@ -3028,7 +3024,7 @@ elif menu == "📸 Scanner de Gabaritos":
                 
                 df_filtrado = df_analise[(df_analise['IS_PEI'] == is_pei_view) & (df_analise['IS_2A_CHAMADA'] == is_2a_view)]
 
-                # BUSCA DO GABARITO (SMART MATCH V75)
+                # BUSCA DO GABARITO PARA O GRÁFICO (SMART MATCH)
                 if is_2a_view:
                     query_mat = df_aulas[
                         (df_aulas['TIPO_MATERIAL'].str.upper().str.contains("2CHAMADA")) & 
@@ -3073,9 +3069,9 @@ elif menu == "📸 Scanner de Gabaritos":
                             st.markdown("**🔬 Perícia do Item**")
                             q_sel = st.selectbox("Analisar questão:", df_stats["Questão"].tolist(), key=f"q_sel_v75_{is_pei_view}_{is_2a_view}")
                             info_q = df_stats[df_stats["Questão"] == q_sel].iloc[0]
+                            idx_num = int(q_sel[1:])
                             st.write(f"**Gabarito:** :green[{info_q['Gabarito']}] | **Média:** {info_q['Acerto %']:.1f}%")
                             try:
-                                idx_num = int(q_sel[1:])
                                 padrao = rf"(?si)QUESTÃO\s*0?{idx_num}\b.*?(?=QUESTÃO\s*0?{idx_num+1}\b|$)"
                                 match = re.search(padrao, grade_pericia)
                                 if match: st.info(match.group(0).strip().replace("**", ""))
@@ -3100,8 +3096,21 @@ elif menu == "📸 Scanner de Gabaritos":
                         nota_alu = util.sosa_to_float(reg['NOTA_CALCULADA'])
                         v_prova = "2ª CHAMADA" if reg['IS_2A_CHAMADA'] else "ORIGINAL"
                         
-                        # Busca material de referência exato
-                        m_ref_query = df_aulas[df_aulas['TIPO_MATERIAL'] == reg['ID_AVALIACAO']]
+                        # --- BUSCA INTELIGENTE DO MATERIAL (SMART MATCH V75.2) ---
+                        nome_av_no_banco = reg['ID_AVALIACAO']
+                        # Tenta match exato primeiro
+                        m_ref_query = df_aulas[df_aulas['TIPO_MATERIAL'] == nome_av_no_banco]
+                        
+                        # Se falhar (como no caso da 2ª chamada), busca por DNA
+                        if m_ref_query.empty:
+                            if reg['IS_2A_CHAMADA']:
+                                m_ref_query = df_aulas[
+                                    (df_aulas['TIPO_MATERIAL'].str.upper().str.contains("2CHAMADA")) & 
+                                    (df_aulas['TIPO_MATERIAL'].str.upper().str.contains(nome_curto_av.upper())) &
+                                    (df_aulas['ANO'].str.contains(ano_num_r))
+                                ]
+                            else:
+                                m_ref_query = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel_r]
                         
                         if not m_ref_query.empty:
                             m_ref = m_ref_query.iloc[0]
@@ -3111,7 +3120,6 @@ elif menu == "📸 Scanner de Gabaritos":
                             erros_hab = []
                             for i, r in enumerate(resp_lista):
                                 q_n = i + 1
-                                # --- CORREÇÃO DA TRAVA: Agora 'X' e '?' também geram lacunas ---
                                 if r != gab_ref_alu.get(q_n) and r != "FALTOU":
                                     match_h = re.search(rf"QUESTÃO\s*0?{q_n}\b.*?:(.*?)(?=\n|JUSTIFICATIVA|PERÍCIA|$)", str(m_ref['CONTEUDO']), re.IGNORECASE)
                                     if match_h:
