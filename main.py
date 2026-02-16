@@ -2001,8 +2001,8 @@ elif menu == "👥 Gestão da Turma":
                     id_base = db.gerar_proximo_id(df_alunos)
                     linhas_lote = []
                     for idx, r in df_up.iterrows():
-                        linhas_lote.append([id_base + idx, str(r['NOME']).upper().strip(), t_dest, "ATIVO", "NENHUMA", "CSV"])
-                    
+                        nec_csv = str(r['NECESSIDADES']).upper().strip() if 'NECESSIDADES' in df_up.columns else "NENHUMA"
+                        linhas_lote.append([id_base + idx, str(r['NOME']).upper().strip(), t_dest, "ATIVO", nec_csv, "CSV"])                   
                     if db.salvar_lote("DB_ALUNOS", linhas_lote):
                         st.success(f"✅ {len(linhas_lote)} alunos importados!"); st.cache_data.clear(); st.rerun()
 
