@@ -3527,7 +3527,7 @@ elif menu == "📸 Scanner de Gabaritos":
                     st.success(f"Nenhum aluno da turma {turma_sel_dash} em zona de risco crítico no momento.")
 
 # ==============================================================================
-# MÓDULO: BIOGRAFIA DO ESTUDANTE (V39.0 - DOSSIÊ COM PERÍCIA DE HABILIDADES BNCC)
+# MÓDULO: BIOGRAFIA DO ESTUDANTE (V39.0 - DOSSIÊ COM EXTRATOR DE HABILIDADES V82)
 # ==============================================================================
 elif menu == "👤 Biografia do Estudante":
     st.title("👤 Dossiê de Soberania do Estudante")
@@ -3544,18 +3544,21 @@ elif menu == "👤 Biografia do Estudante":
             aluno_b = c2.selectbox("Estudante:", lista_alunos['NOME_ALUNO'].tolist(), key="bio_a")
             trim_b = c3.selectbox("Trimestre em Foco:", ["Todos", "I Trimestre", "II Trimestre", "III Trimestre"], key="bio_trim")
 
-        # --- LÓGICA DE DATAS (Sincronia Itabuna 2026) ---
+        # --- LÓGICA DE DATAS DO TRIMESTRE (Sincronia Itabuna 2026) ---
         if trim_b == "I Trimestre": dt_ini, dt_fim = date(2026, 2, 9), date(2026, 5, 22)
         elif trim_b == "II Trimestre": dt_ini, dt_fim = date(2026, 5, 25), date(2026, 9, 4)
         elif trim_b == "III Trimestre": dt_ini, dt_fim = date(2026, 9, 8), date(2026, 12, 17)
         else: dt_ini, dt_fim = date(2026, 1, 1), date(2026, 12, 31)
 
+        # Captura dados básicos
         info_alu = lista_alunos[lista_alunos['NOME_ALUNO'] == aluno_b].iloc[0]
         id_alu = db.limpar_id(info_alu['ID'])
         is_pei = str(info_alu['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"]
         
-        # --- FILTRAGEM DE BASES ---
+        # --- FILTRAGEM DE BASES POR ALUNO E TEMPO ---
         n_alu = df_notas[df_notas['ID_ALUNO'].apply(db.limpar_id) == id_alu]
+        n_alu_f = n_alu[n_alu['TRIMESTRE'] == trim_b] if trim_b != "Todos" else n_alu.copy()
+
         d_alu_f = pd.DataFrame()
         if not df_diario.empty:
             d_alu = df_diario[df_diario['ID_ALUNO'].apply(db.limpar_id) == id_alu].copy()
@@ -3567,107 +3570,126 @@ elif menu == "👤 Biografia do Estudante":
         if not df_diagnosticos.empty:
             diag_alu = df_diagnosticos[df_diagnosticos['ID_ALUNO'].apply(db.limpar_id) == id_alu]
             if trim_b != "Todos":
-                diag_alu_f = diag_alu[diag_alu['ID_AVALIACAO'].str.contains(trim_b.replace(" ",""), na=False, case=False)]
+                diag_alu_f = diag_alu[diag_alu['ID_AVALIACAO'].str.replace(" ","").str.upper().str.contains(trim_b.replace(" ","").upper(), na=False)]
             else:
                 diag_alu_f = diag_alu.copy()
 
-        # --- CABEÇALHO ---
+        # --- CABEÇALHO DE STATUS ---
         c_h1, c_h2 = st.columns([2, 1])
         with c_h1:
             st.subheader(f"🎓 {aluno_b}")
-            st.caption(f"**Perfil:** {'♿ PEI' if is_pei else '📝 REGULAR'} | **ID:** {id_alu}")
+            perfil_label = "♿ ESTUDANTE PEI" if is_pei else "📝 ESTUDANTE REGULAR"
+            st.caption(f"**Perfil:** {perfil_label} | **ID:** {id_alu}")
         with c_h2:
             if not n_alu.empty:
                 soma_anual = n_alu[n_alu['TRIMESTRE'].isin(["I Trimestre", "II Trimestre", "III Trimestre"])]['MEDIA_FINAL'].apply(util.sosa_to_float).sum()
                 st.metric("Soma Anual (Meta 18.0)", f"{soma_anual:.1f}", delta=f"{soma_anual - 18.0:.1f}")
 
-        # --- SEÇÃO 1: DESEMPENHO ---
+        # --- SEÇÃO 1: DESEMPENHO ACADÊMICO ---
         st.markdown(f"### 📈 1. Desempenho Acadêmico: {trim_b}")
         with st.container(border=True):
-            if not n_alu.empty:
-                trims_exibir = ["I Trimestre", "II Trimestre", "III Trimestre"] if trim_b == "Todos" else [trim_b]
-                dados_n = []
-                for t in trims_exibir:
+            if not n_alu_f.empty:
+                dados_notas = []
+                trims_para_exibir = ["I Trimestre", "II Trimestre", "III Trimestre"] if trim_b == "Todos" else [trim_b]
+                for t in trims_para_exibir:
                     reg = n_alu[n_alu['TRIMESTRE'] == t]
                     if not reg.empty:
-                        dados_n.append({"Trimestre": t, "Média": util.sosa_to_float(reg.iloc[0]['MEDIA_FINAL']), "Rec.": util.sosa_to_float(reg.iloc[0]['NOTA_REC'])})
-                if dados_n: st.dataframe(pd.DataFrame(dados_n), use_container_width=True, hide_index=True)
-                else: st.info("Sem notas para este período.")
-            else: st.info("Aguardando lançamento de notas.")
+                        dados_notas.append({
+                            "Trimestre": t,
+                            "Média": util.sosa_to_float(reg.iloc[0]['MEDIA_FINAL']),
+                            "Rec. Paralela": util.sosa_to_float(reg.iloc[0]['NOTA_REC']),
+                            "Situação": "✅ OK" if util.sosa_to_float(reg.iloc[0]['MEDIA_FINAL']) >= 6.0 else "⚠️ ABAIXO"
+                        })
+                if dados_notas:
+                    st.dataframe(pd.DataFrame(dados_notas), use_container_width=True, hide_index=True)
+                else: st.info(f"Sem notas lançadas para o {trim_b}.")
+            else: st.info(f"Aguardando lançamento de notas.")
 
-        # --- SEÇÃO 2: ENGAJAMENTO ---
-        st.markdown(f"### 📊 2. Engajamento e Atitude: {trim_b}")
-        col_v1, col_v2 = st.columns([1, 2])
+        # --- SEÇÃO 2: TRABALHOS E PROJETOS ---
+        st.markdown(f"### ✍️ 2. Trabalhos e Projetos: {trim_b}")
+        with st.container(border=True):
+            if not d_alu_f.empty:
+                trabalhos = d_alu_f[d_alu_f['TAGS'].astype(str).str.contains("PROJETO|ATIVIDADE", na=False, case=False)]
+                if not trabalhos.empty:
+                    for _, trab in trabalhos.iterrows():
+                        c_p1, c_p2 = st.columns([3, 1])
+                        c_p1.markdown(f"📘 **{trab['OBSERVACOES']}**")
+                        c_p2.success(f"Nota: {trab['BONUS']}")
+                else: st.warning(f"Nenhuma entrega de projeto registrada.")
+            else: st.info(f"Sem registros de atividades.")
+
+        # --- SEÇÃO 3: ENGAJAMENTO E ATITUDE ---
+        st.markdown(f"### 📊 3. Engajamento e Atitude: {trim_b}")
+        col_v1, col_v2 = st.columns([1.2, 1.8])
         with col_v1:
             if not d_alu_f.empty:
+                total_aulas = len(d_alu_f)
                 vistos = len(d_alu_f[d_alu_f['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"])
-                perc = (vistos / len(d_alu_f)) * 100 if len(d_alu_f) > 0 else 0
-                st.metric("Vistos no Caderno", f"{perc:.0f}%", f"{vistos}/{len(d_alu_f)} aulas")
-                st.progress(perc / 100)
-        with col_v2:
-            if not d_alu_f.empty:
-                tags = d_alu_f[d_alu_f['TAGS'] != ""]
-                if not tags.empty:
-                    for _, row in tags.tail(5).iterrows():
-                        st.caption(f"🚩 **{row['DATA']}**: {row['TAGS']} - {row['OBSERVACOES']}")
+                perc_visto = (vistos / total_aulas) * 100 if total_aulas > 0 else 0
+                st.metric("Vistos no Caderno", f"{perc_visto:.0f}%", f"{vistos}/{total_aulas} aulas")
+                st.progress(perc_visto / 100)
+            else: st.info(f"Sem registros de vistos.")
 
-        # --- SEÇÃO 3: RAIO-X DE DIFICULDADES (V39 - EXTRAÇÃO COMPLETA) ---
+        with col_v2:
+            st.markdown("**🚩 Ocorrências e Observações:**")
+            if not d_alu_f.empty:
+                tags_obs = d_alu_f[d_alu_f['TAGS'] != ""]
+                if not tags_obs.empty:
+                    for _, row in tags_obs.tail(10).iterrows():
+                        emoji = "🔴" if any(x in str(row['TAGS']).upper() for x in ["DORMIU", "CONVERSA", "MATERIAL", "FALTOU"]) else "🟢"
+                        st.caption(f"{emoji} **{row['DATA']}**: {row['TAGS']} - *{row['OBSERVACOES']}*")
+                else: st.success("✅ Nenhuma ocorrência negativa.")
+
+        # --- SEÇÃO 4: RAIO-X DE DIFICULDADES (EXTRATOR V82) ---
         st.markdown("---")
         with st.container(border=True):
-            st.markdown(f"### 🔍 3. Raio-X de Dificuldades (Habilidades BNCC)")
+            st.markdown(f"### 🔍 4. Raio-X de Dificuldades: {trim_b}")
             
             if not diag_alu_f.empty:
-                # Pega a última avaliação realizada (independente de ser Sonda ou Teste)
-                ultima_av = diag_alu_f.iloc[-1]
-                id_av_real = ultima_av['ID_AVALIACAO']
-                st.info(f"📝 **Análise baseada em:** {id_av_real}")
+                ultima_av_reg = diag_alu_f.iloc[-1]
+                nome_av_real = ultima_av_reg['ID_AVALIACAO']
+                st.info(f"📝 **Última Avaliação Analisada:** {nome_av_real}")
                 
-                # Busca o material no banco
-                m_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == id_av_real.replace(" (2ª CHAMADA)", "")]
-                if not m_ref.empty:
-                    txt_p = str(m_ref.iloc[0]['CONTEUDO'])
-                    # Pega a grade correta (Regular ou PEI)
+                # Busca material de referência (Soberania de Vínculo)
+                m_ref_query = df_aulas[df_aulas['TIPO_MATERIAL'] == nome_av_real.replace(" (2ª CHAMADA)", "")]
+                
+                if not m_ref_query.empty:
+                    m_ref = m_ref_query.iloc[0]
+                    txt_p = str(m_ref['CONTEUDO'])
+                    # Seleciona a grade correta (Regular ou PEI)
                     tag_grade = "GRADE_DE_CORRECAO_PEI" if is_pei else "GRADE_DE_CORRECAO"
-                    grade_raw = ai.extrair_tag(txt_p, tag_grade) or ai.extrair_tag(txt_p, "GRADE_DE_CORRECAO")
+                    grade = ai.extrair_tag(txt_p, tag_grade) or ai.extrair_tag(txt_p, "GRADE_DE_CORRECAO")
                     
-                    # Pega o gabarito
-                    tag_gab = "GABARITO_PEI" if is_pei else "GABARITO_TEXTO"
-                    gab_raw = ai.extrair_tag(txt_p, tag_gab) or ai.extrair_tag(txt_p, "GABARITO")
+                    tag_g = "GABARITO_PEI" if is_pei else "GABARITO_TEXTO"
+                    gab_raw = ai.extrair_tag(txt_p, tag_g) or ai.extrair_tag(txt_p, "GABARITO")
                     gab_oficial = re.findall(r"\b[A-E]\b", gab_raw.upper())
+                    respostas_aluno = str(ultima_av_reg['RESPOSTAS_ALUNO']).split(';')
                     
-                    respostas_aluno = str(ultima_av['RESPOSTAS_ALUNO']).split(';')
-                    
-                    lacunas_encontradas = []
-                    for i, resp in enumerate(respostas_aluno):
-                        if i < len(gab_oficial) and resp != gab_oficial[i] and resp not in ["FALTOU", "?", "X"]:
+                    lacunas = []
+                    for i, r in enumerate(respostas_aluno):
+                        if i < len(gab_oficial) and r != gab_oficial[i] and r not in ["FALTOU", "?", "X"]:
                             q_n = i + 1
-                            # REGEX V39: Busca o bloco da questão e extrai o marcador [CÓDIGO] + Descrição
-                            padrao_bloco = rf"(?si)QUEST[AÃ]O\s*(?:PEI\s*)?0?{q_n}\b.*?(?=QUEST[AÃ]O|$)"
-                            bloco = re.search(padrao_bloco, grade_raw)
-                            if bloco:
-                                texto_bloco = bloco.group(0)
-                                # Busca o marcador BNCC/SAEB e a descrição que vem logo após
-                                match_hab = re.search(r"(?:\[(.*?)\]|:\s*)(.*?)(?=\n|JUSTIFICATIVA|PERÍCIA|ANÁLISE|$)", texto_bloco)
-                                if match_hab:
-                                    cod = match_hab.group(1) if match_hab.group(1) else ""
-                                    desc = match_hab.group(2).strip()
-                                    lacunas_encontradas.append(f"**{cod}** - {desc}")
-                                else:
-                                    lacunas_encontradas.append(f"Questão {q_n}: Ver detalhe na grade.")
+                            # Regex V82: Captura o marcador e a descrição ignorando ruídos de formatação
+                            padrao_h = rf"(?si)QUEST[AÃ]O\s*(?:PEI\s*)?0?{q_n}\b.*?(?:[:\-])\s*(.*?)(?=\.?\s*(?:JUSTIFICATIVA|PERÍCIA|ANÁLISE|DISTRATORES|$))"
+                            m_h = re.search(padrao_h, grade)
+                            
+                            if m_h:
+                                # Limpeza profunda: remove [], **, # e espaços extras
+                                txt_limpo = re.sub(r'[*#\[\]]', '', m_h.group(1)).strip()
+                                lacunas.append(txt_limpo)
+                            else:
+                                lacunas.append(f"Questão {q_n}: Habilidade não descrita na grade.")
+                    
+                    if lacunas:
+                        st.markdown("**Habilidades que precisam de reforço:**")
+                        for l in list(set(lacunas)): st.error(f"❌ {l}")
+                    else: st.success("✅ Domínio total nas habilidades desta avaliação.")
+                else: st.warning("⚠️ Gabarito de referência não localizado.")
+            else: st.info(f"Aguardando avaliações escaneadas.")
 
-                    if lacunas_encontradas:
-                        st.markdown("**Habilidades que precisam de intervenção:**")
-                        for lac in list(set(lacunas_encontradas)):
-                            st.error(f"❌ {lac.replace('**None** - ', '')}")
-                    else:
-                        st.success("✅ Nenhuma lacuna detectada nesta avaliação.")
-                else:
-                    st.warning("⚠️ Material de referência não localizado no acervo.")
-            else:
-                st.info("Aguardando dados de avaliações escaneadas.")
-
-        if is_pei: st.warning(f"♿ **Observação PEI:** {info_alu['NECESSIDADES']}")
-        st.caption(f"Dossiê gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+        if is_pei:
+            st.warning(f"♿ **Observação PEI:** {info_alu['NECESSIDADES']}")
+        st.caption(f"Dossiê atualizado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
         
 # ==============================================================================
 # MÓDULO: BOLETIM ANUAL & CONSELHO V30 - FOCO EM DADOS E MOBILE-FIRST
