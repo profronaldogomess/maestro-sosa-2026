@@ -3380,18 +3380,22 @@ elif menu == "📸 Scanner de Gabaritos":
                     reg_aluno = df_analise[df_analise['ID_ALUNO_L'] == id_a]
                     
                     if reg_aluno.empty:
-                        dados_indiv.append({"Estudante": alu['NOME_ALUNO'], "Perfil": "🔴 Ausente", "Versão": "N/A", "Nota": 0.0, "Lacunas": "N/A"})
+                        dados_indiv.append({
+                            "Estudante": alu['NOME_ALUNO'], 
+                            "Perfil": "🔴 Ausente", 
+                            "Versão": "N/A", 
+                            "Nota": 0.0, 
+                            "Lacunas": "N/A"
+                        })
                     else:
                         reg = reg_aluno.iloc[-1]
                         nota_alu = util.sosa_to_float(reg['NOTA_CALCULADA'])
                         v_prova = "2ª CHAMADA" if reg['IS_2A_CHAMADA'] else "ORIGINAL"
                         
-                        # --- BUSCA INTELIGENTE DO MATERIAL (SMART MATCH V75.2) ---
+                        # --- SMART MATCH V76 (MAPEAMENTO DE DNA) ---
                         nome_av_no_banco = reg['ID_AVALIACAO']
-                        # Tenta match exato primeiro
                         m_ref_query = df_aulas[df_aulas['TIPO_MATERIAL'] == nome_av_no_banco]
                         
-                        # Se falhar (como no caso da 2ª chamada), busca por DNA
                         if m_ref_query.empty:
                             if reg['IS_2A_CHAMADA']:
                                 m_ref_query = df_aulas[
@@ -3404,23 +3408,35 @@ elif menu == "📸 Scanner de Gabaritos":
                         
                         if not m_ref_query.empty:
                             m_ref = m_ref_query.iloc[0]
-                            gab_ref_alu = extrair_gab_v75_universal(str(m_ref['CONTEUDO']), is_pei_alu)
-                            resp_lista = str(reg['RESPOSTAS_ALUNO']).split(';')
+                            txt_p = str(m_ref['CONTEUDO'])
                             
+                            # 1. Seleciona o Gabarito e a Grade de Perícia Correta (Regular vs PEI)
+                            tag_gabarito = "GABARITO_PEI" if is_pei_alu else "GABARITO_TEXTO"
+                            tag_grade = "GRADE_DE_CORRECAO_PEI" if is_pei_alu else "GRADE_DE_CORRECAO"
+                            
+                            gab_ref_alu = extrair_gab_v75_universal(txt_p, is_pei_alu)
+                            grade_pericia = ai.extrair_tag(txt_p, tag_grade)
+                            
+                            resp_lista = str(reg['RESPOSTAS_ALUNO']).split(';')
                             erros_hab = []
+                            
                             for i, r in enumerate(resp_lista):
                                 q_n = i + 1
-                                if r != gab_ref_alu.get(q_n) and r != "FALTOU":
-                                    match_h = re.search(rf"QUESTÃO\s*0?{q_n}\b.*?:(.*?)(?=\n|JUSTIFICATIVA|PERÍCIA|$)", str(m_ref['CONTEUDO']), re.IGNORECASE)
+                                # Verifica se a resposta está errada e não é falta
+                                if r != gab_ref_alu.get(q_n) and r not in ["FALTOU", ""]:
+                                    # --- BUSCA CIRÚRGICA DA HABILIDADE NA GRADE ---
+                                    # Procura o padrão [EF...MA...] logo após o número da questão na grade
+                                    padrao_q = rf"(?i)QUEST[AÃ]O\s*(?:PEI\s*)?0?{q_n}.*?(\[EF\d{{2}}[A-Z]{{2}}\d{{2}}\])"
+                                    match_h = re.search(padrao_q, grade_pericia)
+                                    
                                     if match_h:
-                                        txt_hab = match_h.group(1).strip().replace("[","").replace("]","").replace("**", "")
-                                        erros_hab.append(txt_hab)
+                                        erros_hab.append(match_h.group(1).replace("[", "").replace("]", ""))
                                     else:
-                                        erros_hab.append(f"Questão {q_n}")
+                                        erros_hab.append(f"Q{q_n}")
                             
-                            lacunas_txt = " | ".join(list(set(erros_hab))) if erros_hab else "✅ Domínio Total"
+                            lacunas_txt = " | ".join(sorted(list(set(erros_hab)))) if erros_hab else "✅ Domínio Total"
                         else:
-                            lacunas_txt = "⚠️ Gabarito não localizado"
+                            lacunas_txt = "⚠️ Ativo não localizado"
 
                         dados_indiv.append({
                             "Estudante": alu['NOME_ALUNO'],
@@ -3430,7 +3446,12 @@ elif menu == "📸 Scanner de Gabaritos":
                             "Lacunas": lacunas_txt
                         })
 
-                st.dataframe(pd.DataFrame(dados_indiv).style.format({"Nota": "{:.1f}"}), use_container_width=True, hide_index=True)
+                # Exibição com Estilização Master
+                st.dataframe(
+                    pd.DataFrame(dados_indiv).style.apply(lambda x: ['color: #ff4b4b' if 'Q' in str(v) or 'EF' in str(v) else '' for v in x], subset=['Lacunas']),
+                    use_container_width=True, 
+                    hide_index=True
+                )
 
 # --- ABA 5: ACERVO DE EVIDÊNCIAS (V71.0 - CUSTÓDIA COM FILTROS INTELIGENTES) ---
     with tab_acervo_cir:
