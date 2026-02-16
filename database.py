@@ -539,3 +539,29 @@ def excluir_aluno_por_id(id_aluno):
     except Exception as e:
         print(f"Erro na exclusão por ID: {e}")
         return False
+    
+def atualizar_fechamento_aula(data, turma, status, ponte, clima):
+    """
+    Atualiza o registro da aula com os dados de Regência (Semáforo, Ponte e Clima).
+    Busca pela DATA e TURMA na aba DB_REGISTRO_AULAS.
+    """
+    try:
+        wb = conectar()
+        ws = wb.worksheet("DB_REGISTRO_AULAS")
+        dados = ws.get_all_values()
+        
+        # Procura a linha correspondente
+        for i, row in enumerate(dados):
+            # row[0] é DATA, row[2] é TURMA (ajuste conforme seus índices se mudou algo)
+            if i > 0 and row[0] == data and row[2] == turma:
+                # Atualiza as colunas G (7), H (8), I (9) - Índices 7, 8, 9 (base 1)
+                # Se suas colunas novas são G, H, I, os índices são 7, 8, 9.
+                ws.update_cell(i + 1, 7, status) # STATUS_EXECUCAO
+                ws.update_cell(i + 1, 8, ponte)  # PONTE_PEDAGOGICA
+                ws.update_cell(i + 1, 9, clima)  # CLIMA_TURMA
+                st.cache_data.clear()
+                return True
+        return False
+    except Exception as e:
+        print(f"Erro ao fechar regência: {e}")
+        return False
