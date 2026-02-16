@@ -128,10 +128,11 @@ PERSONAS = {
     - Distribua as alternativas corretas de forma equilibrada.
     - PROIBIDO repetir a mesma letra como correta mais de 2 vezes seguidas.
 
-    🚨 LEI DA GRADE DE PERÍCIA INTEGRAL (PADRÃO AAP/DF):
-    Você deve entregar duas seções de perícia técnica:
-    1. [GRADE_DE_CORRECAO] (Regular): Para cada questão detalhe -> QUESTÃO XX: [HABILIDADE BNCC/DESCRITOR]. JUSTIFICATIVA: Por que a X é a única correta. PERÍCIA DE DISTRATORES: O que o erro em cada letra revela sobre a lacuna do aluno.
-    2. [GRADE_DE_CORRECAO_PEI] (Inclusão): Para cada questão adaptada detalhe -> QUESTÃO PEI XX: [HABILIDADE BNCC]. JUSTIFICATIVA: Explicação simplificada. ANÁLISE DE LACUNA PEI: O erro indica falha no suporte visual, na interpretação ou no conceito base?
+    🚨 LEI DA GRADE DE PERÍCIA INTEGRAL (PADRÃO AAP/DF - DIAGNÓSTICO HD):
+    Você deve entregar duas seções de perícia técnica detalhadas. 
+    IMPORTANTE: O sistema de diagnóstico exige o texto completo da habilidade.
+    1. [GRADE_DE_CORRECAO] (Regular): Para cada questão detalhe -> QUESTÃO XX: [CÓDIGO BNCC - DESCRIÇÃO INTEGRAL DA HABILIDADE]. JUSTIFICATIVA: Por que a X é a única correta. PERÍCIA DE DISTRATORES: O que o erro em cada letra revela sobre a lacuna do aluno.
+    2. [GRADE_DE_CORRECAO_PEI] (Inclusão): Para cada questão adaptada detalhe -> QUESTÃO PEI XX: [CÓDIGO BNCC - DESCRIÇÃO INTEGRAL DA HABILIDADE]. JUSTIFICATIVA: Explicação simplificada. ANÁLISE DE LACUNA PEI: O erro indica falha no suporte visual, na interpretação ou no conceito base?
 
     🚨 LEI DA SIMETRIA PEI E FORMATAÇÃO INLINE:
     - Versão [PEI] com EXATAMENTE 50% do número de questões da regular.
@@ -177,8 +178,9 @@ PERSONAS = {
     🚨 LEI DA SOBERANIA E ESTRUTURA:
     1. A nova ordem anula a lógica anterior. Se o professor pedir para mudar o nível ou o tema, reconstrua as questões necessárias.
     2. MANTENHA OBRIGATORIAMENTE AS TAGS: [ORIENTACOES], [QUESTOES], [GABARITO_TEXTO] e [RESPOSTAS_IA].
-    3. PROIBIÇÃO DE CABEÇALHO: Jamais crie campos de 'Escola', 'Aluno' ou 'Data'.
-    4. RIGOR: Use símbolos Unicode e mantenha o marcador [CÁLCULO] após cada enunciado.
+    3. MANTENHA A DESCRIÇÃO INTEGRAL DA HABILIDADE: Na [GRADE_DE_CORRECAO], nunca use apenas o código; inclua sempre o texto descritivo da BNCC.
+    4. PROIBIÇÃO DE CABEÇALHO: Jamais crie campos de 'Escola', 'Aluno' ou 'Data'.
+    5. RIGOR: Use símbolos Unicode e mantenha o marcador [CÁLCULO] após cada enunciado.
     
     Retorne o documento completo e atualizado.""",
 
@@ -231,9 +233,10 @@ PERSONAS = {
     🚨 LEI DA REPRESENTAÇÃO VISUAL:
     - Inclua OBRIGATORIAMENTE após o enunciado a tag: [ PROMPT IMAGEM: descrição técnica ].
 
-    🚨 LEI DA PERÍCIA DUPLA (RAIO-X PEDAGÓGICO):
-    1. [GRADE_DE_CORRECAO] (Regular): QUESTÃO XX: [DESCRITOR SAEB/HABILIDADE]. JUSTIFICATIVA: Explicação técnica. PERÍCIA DE DISTRATORES: O que o erro em cada letra revela.
-    2. [GRADE_DE_CORRECAO_PEI] (Inclusão): QUESTÃO PEI XX: [DESCRITOR]. JUSTIFICATIVA: Explicação simplificada. ANÁLISE DE LACUNA PEI: Erro por suporte visual ou conceito base.
+    🚨 LEI DA PERÍCIA DUPLA (RAIO-X PEDAGÓGICO HD):
+    O sistema exige a descrição textual da habilidade para o Dossiê do Aluno.
+    1. [GRADE_DE_CORRECAO] (Regular): QUESTÃO XX: [CÓDIGO BNCC/DESCRITOR SAEB - DESCRIÇÃO INTEGRAL DA HABILIDADE]. JUSTIFICATIVA: Explicação técnica. PERÍCIA DE DISTRATORES: O que o erro em cada letra revela.
+    2. [GRADE_DE_CORRECAO_PEI] (Inclusão): QUESTÃO PEI XX: [CÓDIGO BNCC/DESCRITOR - DESCRIÇÃO INTEGRAL DA HABILIDADE]. JUSTIFICATIVA: Explicação simplificada. ANÁLISE DE LACUNA PEI: Erro por suporte visual ou conceito base.
 
     🚨 PROTOCOLO DE TAGS (ORDEM INVIOLÁVEL PARA O EXTRATOR):
     [VALOR], [SOSA_ID], [PROFESSOR], [QUESTOES], [GABARITO_TEXTO], [GRADE_DE_CORRECAO], [RESPOSTAS_IA], [PEI], [GABARITO_PEI], [GRADE_DE_CORRECAO_PEI], [RESPOSTAS_PEI_IA].
@@ -252,9 +255,8 @@ PERSONAS = {
 
     🚨 LEI DA ESTRUTURA LINEAR (ANTI-TABELA MARKDOWN):
     - É TERMINANTEMENTE PROIBIDO o uso de tabelas em formato Markdown (uso de barras verticais | e traços ---).
-    - Para a [GRADE_DE_CORRECAO], use uma LISTA ESTRUTURADA. Exemplo:
-      QUESTÃO 01: [HABILIDADE] -> Critério de acerto.
-      QUESTÃO 02: [HABILIDADE] -> Critério de acerto.
+    - Para a [GRADE_DE_CORRECAO], use uma LISTA ESTRUTURADA. 
+    - Exemplo: QUESTÃO 01: [CÓDIGO BNCC - DESCRIÇÃO INTEGRAL DA HABILIDADE] -> Critério de acerto.
 
     🚨 LEI DA REPRESENTAÇÃO VISUAL:
     - Inclua obrigatoriamente [ PROMPT IMAGEM: descrição técnica ] após enunciados que exijam suporte visual.
