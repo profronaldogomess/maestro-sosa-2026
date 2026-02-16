@@ -1248,6 +1248,33 @@ elif menu == "📝 Diário de Bordo Rápido":
     else:
         st.warning("⚠️ Nenhuma aula aberta no Cockpit para esta data.")
         material_hoje = "Instrução Avulsa"
+    
+    # 3. PAINEL DE REGÊNCIA (CONTINUIDADE) ---
+    with st.expander("🚦 Painel de Regência (Fechamento de Aula)", expanded=True):
+        c_reg1, c_reg2, c_reg3 = st.columns([1, 2, 1])
+        
+        # 1. Semáforo
+        status_aula = c_reg1.selectbox(
+            "Status da Execução:", 
+            ["🟢 Concluído (100%)", "🟡 Parcial (Pendência)", "🔴 Bloqueado (Crítico)"],
+            key=f"status_reg_{v}"
+        )
+        
+        # 2. Ponte Pedagógica (Memória para a IA)
+        ponte_pedagogica = c_reg2.text_area(
+            "🔗 Ponte Pedagógica (Onde paramos?):", 
+            placeholder="Ex: Parei no slide 5. Faltou corrigir a atividade...",
+            height=68,
+            key=f"ponte_reg_{v}"
+        )
+        
+        # 3. Clima da Turma
+        clima_turma = c_reg3.select_slider(
+            "🌡️ Clima da Turma:", 
+            options=["😴 Apática", "😐 Dispersa", "🧠 Focada", "⚡ Agitada", "🤯 Dificuldade Alta"],
+            value="🧠 Focada",
+            key=f"clima_reg_{v}"
+        )
 
     # 3. BUSCA DE REGISTROS EXISTENTES (PERSISTÊNCIA)
     # Filtra o diário para ver se já trabalhamos nesta turma hoje
@@ -1346,9 +1373,10 @@ elif menu == "📝 Diário de Bordo Rápido":
                     data_str, r['ID'], r['ESTUDANTE'].replace("♿ ", ""), turma_sel,
                     str(visto_f), tag_f, obs_final, util.sosa_to_str(r['⭐'])
                 ])
-            
+                        
             if db.salvar_lote("DB_DIARIO_BORDO", linhas_diario):
-                status.update(label="✅ Diário Atualizado com Sucesso!", state="complete")
+                db.atualizar_fechamento_aula(data_str, turma_sel, status_aula, ponte_pedagogica, clima_turma)
+                status.update(label="✅ Diário e Regência Atualizados!", state="complete")
                 st.balloons()
                 if f"visto_lote_{turma_sel}" in st.session_state: del st.session_state[f"visto_lote_{turma_sel}"]
                 time.sleep(1); st.rerun()
