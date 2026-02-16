@@ -2632,15 +2632,16 @@ elif menu == "📝 Central de Avaliações":
         else:
             st.warning("⚠️ Gere a prova no Arquiteto antes de finalizar.")
 
-# --- ABA 6: ACERVO DE SAFRA (VERSÃO V65 - DESIGN PIP & INTELIGÊNCIA DE GABARITO) ---
+# --- ABA 6: ACERVO DE SAFRA (VERSÃO V70 - LAYOUT DE ELITE & PARSER TÉCNICO) ---
     with tab_acervo_av:
         st.subheader("🗂️ Gestão de Acervo de Safra (PIP - Provas e Revisões)")
         
-        # 1. FILTROS DE BUSCA DE ELITE
-        c_h1, c_h2, c_h3 = st.columns([1, 1, 1])
-        f_trim_h = c_h1.selectbox("📅 Filtrar Trimestre:", ["Todos", "I Trimestre", "II Trimestre", "III Trimestre"], key="h_trim_av")
-        f_ano_h = c_h2.selectbox("🎓 Filtrar Série:", ["Todos", "6º", "7º", "8º", "9º"], key="h_ano_av")
-        f_tipo_h = c_h3.selectbox("📝 Tipo de Ativo:", ["Todos", "AVALIAÇÃO", "REVISÃO"], key="h_tipo_av")
+        # 1. FILTROS DE BUSCA (DESIGN CLEAN)
+        with st.container(border=True):
+            c_h1, c_h2, c_h3 = st.columns([1, 1, 1])
+            f_trim_h = c_h1.selectbox("📅 Filtrar Trimestre:", ["Todos", "I Trimestre", "II Trimestre", "III Trimestre"], key="h_trim_av")
+            f_ano_h = c_h2.selectbox("🎓 Filtrar Série:", ["Todos", "6º", "7º", "8º", "9º"], key="h_ano_av")
+            f_tipo_h = c_h3.selectbox("📝 Tipo de Ativo:", ["Todos", "AVALIAÇÃO", "REVISÃO"], key="h_tipo_av")
 
         # 2. FILTRAGEM DA BASE
         df_exames = df_aulas[df_aulas['SEMANA_REF'].isin(["AVALIAÇÃO", "REVISÃO"])].copy()
@@ -2648,7 +2649,7 @@ elif menu == "📝 Central de Avaliações":
         if f_ano_h != "Todos": df_exames = df_exames[df_exames['ANO'] == f_ano_h]
         if f_tipo_h != "Todos": df_exames = df_exames[df_exames['SEMANA_REF'] == f_tipo_h]
 
-        df_exames = df_exames.iloc[::-1] # Mais recentes no topo
+        df_exames = df_exames.iloc[::-1] 
 
         if not df_exames.empty:
             for _, row in df_exames.iterrows():
@@ -2657,32 +2658,29 @@ elif menu == "📝 Central de Avaliações":
                     identificador = row['TIPO_MATERIAL']
                     valor_ex = ai.extrair_tag(txt_f, "VALOR")
                     
-                    # --- CABEÇALHO DO CARD ---
-                    c_tit, c_val = st.columns([3, 1])
-                    c_tit.markdown(f"### 📄 {identificador}")
-                    if valor_ex: c_val.info(f"💰 Valor: {valor_ex}")
+                    # --- CABEÇALHO DO DOSSIÊ ---
+                    col_tit, col_meta = st.columns([2, 1])
+                    with col_tit:
+                        st.markdown(f"### 📄 {identificador}")
+                    with col_meta:
+                        st.markdown(f"**💰 Valor:** `{valor_ex if valor_ex else 'N/A'}` | **🎓 Série:** `{row['ANO']}`")
 
-                    # --- EXTRAÇÃO DE GABARITO EXPRESSO (PARA VISÃO RÁPIDA) ---
+                    # --- GABARITO EXPRESSO FORMATADO ---
                     gab_simples = ai.extrair_tag(txt_f, "GABARITO_TEXTO") or ai.extrair_tag(txt_f, "RESPOSTAS_IA")
                     if gab_simples:
-                        st.markdown(f"**✅ Gabarito Expresso:** `{gab_simples}`")
+                        st.markdown(f"**✅ Gabarito de Referência:** `{gab_simples.replace('QUESTÃO', '').strip()}`")
 
-                    # --- EXTRAÇÃO ROBUSTA DE LINKS (PEGA SEMPRE O ÚLTIMO GERADO) ---
-                    links_reg_all = re.findall(r"Regular\((.*?)\)", txt_f)
-                    l_reg = links_reg_all[-1] if links_reg_all else row.get('LINK_DRIVE')
-                    
-                    links_pei_all = re.findall(r"PEI\((.*?)\)", txt_f)
-                    l_pei = links_pei_all[-1] if links_pei_all and "N/A" not in links_pei_all[-1] else None
-                    
-                    links_prof_all = re.findall(r"Prof\((.*?)\)", txt_f)
-                    l_prof = links_prof_all[-1] if links_prof_all and "N/A" not in links_prof_all[-1] else None
+                    # --- EXTRAÇÃO DE LINKS (ÚLTIMA VERSÃO) ---
+                    l_reg = (re.findall(r"Regular\((.*?)\)", txt_f) or [row.get('LINK_DRIVE')])[-1]
+                    l_pei = (re.findall(r"PEI\((.*?)\)", txt_f) or [None])[-1]
+                    l_prof = (re.findall(r"Prof\((.*?)\)", txt_f) or [None])[-1]
 
                     # --- BOTÕES DE AÇÃO ---
                     c_b1, c_b2, c_b3, c_b4, c_b5 = st.columns(5)
-                    if l_reg: c_b1.link_button("📝 REGULAR", str(l_reg), use_container_width=True, type="primary")
-                    if l_pei: c_b2.link_button("♿ PEI", str(l_pei), use_container_width=True)
+                    c_b1.link_button("📝 REGULAR", str(l_reg), use_container_width=True, type="primary")
+                    if l_pei and "N/A" not in str(l_pei): c_b2.link_button("♿ PEI", str(l_pei), use_container_width=True)
                     else: c_b2.button("⚪ SEM PEI", disabled=True, use_container_width=True)
-                    if l_prof: c_b3.link_button("🔍 PERÍCIA", str(l_prof), use_container_width=True)
+                    if l_prof and "N/A" not in str(l_prof): c_b3.link_button("🔍 PERÍCIA", str(l_prof), use_container_width=True)
                     else: c_b3.button("⚪ SEM GRADE", disabled=True, use_container_width=True)
                     
                     if c_b4.button("🔄 REFINAR", key=f"ref_av_h_{row.name}", use_container_width=True):
@@ -2693,39 +2691,52 @@ elif menu == "📝 Central de Avaliações":
                     if c_b5.button("🗑️ APAGAR", key=f"del_av_h_{row.name}", use_container_width=True):
                         if db.excluir_avaliacao_completa(identificador, row['SEMANA_REF']): st.rerun()
 
-                    # --- EXPANDER COM ABAS INTERNAS (O GRANDE MELHORAMENTO) ---
-                    with st.expander("👁️ RAIO-X DO ATIVO (GABARITO, PERÍCIA E QUESTÕES)"):
-                        t_gab, t_ques, t_pei_v = st.tabs(["🎯 Gabarito & Perícia", "📝 Questões Regulares", "♿ Versão PEI"])
+                    # --- EXPANDER RAIO-X (O GRANDE MELHORAMENTO VISUAL) ---
+                    with st.expander("👁️ ANALISAR ESTRUTURA PEDAGÓGICA E ITENS"):
+                        t_gab, t_ques, t_pei_v = st.tabs(["🎯 Perícia de Itens", "📝 Prova Regular", "♿ Adaptação PEI"])
                         
                         with t_gab:
-                            st.markdown("#### 🔍 Análise de Habilidades e Distratores")
-                            grade = ai.extrair_tag(txt_f, "GRADE_DE_CORRECAO")
-                            if grade:
-                                st.info(grade)
-                            else:
-                                st.warning("Grade de perícia não localizada neste ativo.")
-                            
-                            st.markdown("#### ✅ Respostas Detalhadas")
-                            respostas = ai.extrair_tag(txt_f, "RESPOSTAS_IA") or ai.extrair_tag(txt_f, "GABARITO_TEXTO")
-                            st.code(respostas if respostas else "Gabarito não processado.")
+                            st.markdown("#### 🔬 Grade de Perícia (Habilidades e Justificativas)")
+                            grade_raw = ai.extrair_tag(txt_f, "GRADE_DE_CORRECAO")
+                            if grade_raw:
+                                # PARSER DE QUESTÕES: Separa cada questão em um box colorido
+                                questoes_grade = re.split(r"(?i)QUEST[AÃ]O\s*0?(\d+)", grade_raw)
+                                # O split gera: [lixo, num, texto, num, texto...]
+                                if len(questoes_grade) > 1:
+                                    for i in range(1, len(questoes_grade), 2):
+                                        q_num = questoes_grade[i]
+                                        q_txt = questoes_grade[i+1]
+                                        with st.container(border=True):
+                                            st.markdown(f"**QUESTÃO {q_num}**")
+                                            # Divide Justificativa de Perícia
+                                            partes = re.split(r"(?i)(JUSTIFICATIVA:|PERÍCIA:)", q_txt)
+                                            for p in partes:
+                                                if "JUSTIFICATIVA" in p.upper(): st.write("**🎯 Resposta:**")
+                                                elif "PERÍCIA" in p.upper(): st.write("**🔍 Alerta de Erro (Distratores):**")
+                                                else: st.write(p.strip().replace("-", ""))
+                                else: st.info(grade_raw)
+                            else: st.warning("Grade de perícia não localizada.")
 
                         with t_ques:
-                            st.markdown("#### 📝 Visualização das Questões (Regular)")
-                            questoes = ai.extrair_tag(txt_f, "QUESTOES")
-                            st.write(questoes if questoes else "Texto das questões não localizado.")
+                            st.markdown("#### 📋 Conteúdo da Prova Regular")
+                            questoes_reg = ai.extrair_tag(txt_f, "QUESTOES")
+                            if questoes_reg:
+                                # Remove Prompts de imagem para leitura limpa do professor
+                                texto_limpo = re.sub(r'\[\s*PROMPT IMAGEM:.*?\]', '🖼️ *(Imagem)*', questoes_reg, flags=re.IGNORECASE)
+                                st.write(texto_limpo)
+                            else: st.info("Questões não localizadas.")
 
                         with t_pei_v:
-                            st.markdown("#### ♿ Visualização da Versão Adaptada (PEI)")
+                            st.markdown("#### ♿ Detalhes da Adaptação (Inclusão)")
                             pei_txt = ai.extrair_tag(txt_f, "PEI")
                             if pei_txt:
-                                st.write(pei_txt)
+                                st.info(pei_txt)
                                 st.divider()
                                 st.markdown("**✅ Gabarito PEI:**")
-                                st.code(ai.extrair_tag(txt_f, "GABARITO_PEI") or "Gabarito PEI não localizado.")
-                            else:
-                                st.info("Este ativo não possui versão PEI gerada.")
+                                st.code(ai.extrair_tag(txt_f, "GABARITO_PEI") or "N/A")
+                            else: st.info("Este ativo não possui versão PEI.")
         else:
-            st.info("📭 Nenhum ativo de safra encontrado com os filtros selecionados.")
+            st.info("📭 Acervo vazio para os filtros selecionados.")
 
 # ==============================================================================
 # MÓDULO: CENTRAL DE INTELIGÊNCIA DE RESULTADOS (V64.2 - CORREÇÃO DE FILTROS)
