@@ -772,7 +772,7 @@ if menu == "🧪 Criador de Aulas":
                                     st.session_state.v_lab = int(time.time())
                                     st.rerun()
 
-# --- ABA 5: ACERVO DE MATERIAIS (VERSÃO V89 - CORREÇÃO DE SINTAXE & SEGREGAÇÃO) ---
+# --- ABA 5: ACERVO DE MATERIAIS (VERSÃO V90 - PADRÃO ANALÍTICO 360°) ---
         with tab_acervo_lab:
             st.subheader("📂 Gestão de Acervo de Materiais (Aulas, Projetos e Complementares)")
             
@@ -810,15 +810,13 @@ if menu == "🧪 Criador de Aulas":
                         
                         st.markdown(f"#### 📘 {identificador}")
                         
-                        # EXTRAÇÃO DE METADADOS BNCC (CORREÇÃO DE SINTAXE AQUI)
-                        if is_projeto_h:
-                            val_hab = ai.extrair_tag(txt_f, "HABILIDADES_BNCC") or ai.extrair_tag(txt_f, "HABILIDADE_BNCC")
-                            if val_hab: 
-                                # Limpa fora da f-string para evitar o erro de backslash
-                                hab_limpa = re.sub(r'[*#\[\]]', '', val_hab).strip()
-                                st.caption(f"🆔 **Habilidades:** {hab_limpa}")
+                        # EXTRAÇÃO DE METADADOS BNCC
+                        val_hab = ai.extrair_tag(txt_f, "HABILIDADES_BNCC") or ai.extrair_tag(txt_f, "HABILIDADE_BNCC")
+                        if val_hab: 
+                            hab_limpa = re.sub(r'[*#\[\]]', '', val_hab).strip()
+                            st.caption(f"🆔 **Habilidades:** {hab_limpa}")
 
-                        # 3. EXTRAÇÃO DE LINKS
+                        # 4. EXTRAÇÃO DE LINKS
                         l_alu = re.search(r"(?:Aluno|Regular)\((.*?)\)", txt_f).group(1) if re.search(r"(?:Aluno|Regular)\((.*?)\)", txt_f) else row.get('LINK_DRIVE')
                         l_pei = re.search(r"PEI\((.*?)\)", txt_f).group(1) if "PEI(" in txt_f and "PEI(N/A)" not in txt_f else None
                         l_prof = re.search(r"Prof\((.*?)\)", txt_f).group(1) if "Prof(" in txt_f and "Prof(N/A)" not in txt_f else None
@@ -840,29 +838,47 @@ if menu == "🧪 Criador de Aulas":
                             if db.excluir_registro_com_drive("DB_AULAS_PRONTAS", identificador):
                                 st.rerun()
 
-                        # 4. EXPANDER DE CONTEÚDO (VISÃO HÍBRIDA COM LIMPEZA PRÉVIA)
-                        with st.expander("👁️ VER DETALHES DO MATERIAL"):
-                            col_v1, col_v2 = st.columns(2)
-                            if is_projeto_h:
-                                with col_v1:
-                                    st.markdown("**👨‍🏫 Seção do Professor (PHC)**")
-                                    txt_prof_p = re.sub(r'[*#]', '', ai.extrair_tag(txt_f, 'JUSTIFICATIVA_PHC'))
-                                    st.info(txt_prof_p)
-                                with col_v2:
-                                    st.markdown("**📝 Roteiro do Aluno**")
-                                    txt_alu_p = re.sub(r'[*#]', '', ai.extrair_tag(txt_f, 'MISSÃO_DE_PESQUISA'))
-                                    st.success(txt_alu_p)
-                            else:
-                                with col_v1:
-                                    st.markdown("#### 👨‍🏫 Seção do Professor")
-                                    txt_prof_r = re.sub(r'[*#]', '', ai.extrair_tag(txt_f, "PROFESSOR") or "Conteúdo não formatado.")
-                                    st.write(txt_prof_r)
-                                with col_v2:
-                                    st.markdown("#### 📝 Seção do Aluno")
-                                    txt_alu_r = re.sub(r'[*#]', '', ai.extrair_tag(txt_f, "ALUNO") or "Conteúdo não formatado.")
-                                    st.write(txt_alu_r)
+                        # 5. EXPANDER ANALÍTICO (MODELO ACERVO DE SAFRA)
+                        with st.expander("👁️ ANALISAR ESTRUTURA PEDAGÓGICA E ITENS"):
+                            t_prof, t_alu, t_gab, t_pei = st.tabs([
+                                "👨‍🏫 Guia do Professor", "📝 Material do Aluno", "✅ Gabarito & Rubrica", "♿ Inclusão PEI/DUA"
+                            ])
+                            
+                            with t_prof:
+                                st.markdown("##### 🔬 Fundamentação e Mediação")
+                                # Busca tags de Professor ou Justificativa PHC
+                                raw_prof = ai.extrair_tag(txt_f, "PROFESSOR") or ai.extrair_tag(txt_f, "JUSTIFICATIVA_PHC")
+                                if raw_prof:
+                                    st.info(re.sub(r'[*#]', '', raw_prof).strip())
+                                else: st.write("Conteúdo não localizado.")
+
+                            with t_alu:
+                                st.markdown("##### 📋 Conteúdo para o Estudante")
+                                # Busca tags de Aluno ou Missão de Pesquisa
+                                raw_alu = ai.extrair_tag(txt_f, "ALUNO") or ai.extrair_tag(txt_f, "MISSÃO_DE_PESQUISA")
+                                if raw_alu:
+                                    # Limpa prompts de imagem para leitura fluida
+                                    txt_limpo_alu = re.sub(r'\[\s*PROMPT IMAGEM:.*?\]', '🖼️ *(Imagem)*', raw_alu, flags=re.IGNORECASE)
+                                    st.write(re.sub(r'[*#]', '', txt_limpo_alu).strip())
+                                else: st.write("Conteúdo não localizado.")
+
+                            with t_gab:
+                                st.markdown("##### ✅ Expectativa de Aprendizagem")
+                                # Busca tags de Gabarito ou Rubrica de Mérito
+                                raw_gab = ai.extrair_tag(txt_f, "GABARITO") or ai.extrair_tag(txt_f, "RUBRICA_DE_MERITO") or ai.extrair_tag(txt_f, "RESPOSTAS_PEDAGOGICAS")
+                                if raw_gab:
+                                    st.success(re.sub(r'[*#]', '', raw_gab).strip())
+                                else: st.write("Gabarito ou Rubrica não disponíveis.")
+
+                            with t_pei:
+                                st.markdown("##### ♿ Estratégia de Acessibilidade")
+                                # Busca tags de PEI ou Estratégia DUA
+                                raw_pei = ai.extrair_tag(txt_f, "PEI") or ai.extrair_tag(txt_f, "ESTRATEGIA_DUA_PEI")
+                                if raw_pei:
+                                    st.warning(re.sub(r'[*#]', '', raw_pei).strip())
+                                else: st.write("Nenhuma adaptação específica registrada para este material.")
             else:
-                st.info("📭 Nenhum material didático encontrado. (Avaliações são exibidas na Central de Avaliações)")
+                st.info("📭 Nenhum material didático encontrado.")
                 
 # ==============================================================================
 # MÓDULO: PLANEJAMENTO ESTRATÉGICO (PONTO ID) - VERSÃO V31.9 (FULL INTEGRATION)
