@@ -421,29 +421,47 @@ if menu == "🧪 Criador de Aulas":
             with t_gab: st.text_area("Gabarito:", ed_res, height=200, key=f"ed_res_reg_{v}")
             with t_pei: st.text_area("PEI:", ed_dua, height=400, key=f"ed_pei_reg_{v}")
 
-        # --- ☁️ ABA DE SINCRONIA (TRIPLE-SYNC V45) ---
+# --- ☁️ ABA DE SINCRONIA (TRIPLE-SYNC V46 - HÍBRIDO) ---
         with t_sync:
-            st.subheader("🚀 Protocolo de Custódia Digital V45")
+            st.subheader("🚀 Protocolo de Custódia Digital V46")
             if st.button("💾 EXECUTAR TRIPLE-SYNC (SUBSTITUIR)", use_container_width=True, type="primary", key=f"btn_triple_{v}"):
                 with st.status("Sincronizando Ativos de Elite...") as status:
                     db.excluir_registro_com_drive("DB_AULAS_PRONTAS", s_id)
                     ano_str = f"{meta.get('ano', '6')}º"
-                    sem_ref = meta.get('semana_ref', 'RECOMPOSIÇÃO')
-                    info_doc = {"ano": ano_str, "trimestre": meta.get('trimestre', 'I Trimestre'), "valor": "0,00", "valor_questao": "0,00", "qtd_questoes": 10}
+                    sem_ref = meta.get('semana_ref', 'PROJETO')
+                    info_doc = {"ano": ano_str, "trimestre": meta.get('trimestre', 'I Trimestre'), "semana": sem_ref}
 
-                    doc_alu = exporter.gerar_docx_aluno_v24(s_id, ed_alu, info_doc)
+                    if is_projeto:
+                        # FLUXO DE PROJETO
+                        status.write("🧪 Gerando Roteiro de Investigação...")
+                        doc_alu = exporter.gerar_docx_projeto_cientifico_V33(s_id, txt_base, info_doc)
+                        
+                        # Para o Professor no Projeto, unimos Justificativa e Rubrica
+                        val_just = ai.extrair_tag(txt_base, "JUSTIFICATIVA_PHC")
+                        val_rub = ai.extrair_tag(txt_base, "RUBRICA_DE_MERITO")
+                        txt_prof_final = f"JUSTIFICATIVA PHC:\n{val_just}\n\nRUBRICA DE MÉRITO:\n{val_rub}"
+                    else:
+                        # FLUXO de AULA REGULAR
+                        status.write("📄 Gerando Material de Aula...")
+                        doc_alu = exporter.gerar_docx_aluno_v24(s_id, ed_alu, info_doc)
+                        
+                        val_res = ai.extrair_tag(txt_base, "RESPOSTAS_PEDAGOGICAS") or ai.extrair_tag(txt_base, "GABARITO")
+                        val_grade = ai.extrair_tag(txt_base, "GRADE_DE_CORRECAO")
+                        txt_prof_final = f"{ed_prof}\n\n[RESPOSTAS_PEDAGOGICAS]\n{val_res}\n\n[GRADE_DE_CORRECAO]\n{val_grade}"
+
                     link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{s_id}_ALUNO", modo="AULA")
                     
+                    # PEI e Professor
                     doc_pei = exporter.gerar_docx_pei_v25(f"{s_id}_PEI", ed_dua, info_doc)
                     link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{s_id}_PEI", modo="AULA")
                     
-                    txt_prof_final = f"{ed_prof}\n\n[RESPOSTAS_PEDAGOGICAS]\n{ed_res}\n\n[GRADE_DE_CORRECAO]\n{ed_grade}"
-                    doc_prof = exporter.gerar_docx_professor_v25(s_id, txt_prof_final, {"ano": ano_str, "semana": sem_ref, "trimestre": info_doc['trimestre']})
+                    doc_prof = exporter.gerar_docx_professor_v25(s_id, txt_prof_final, info_doc)
                     link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{s_id}_PROF", modo="AULA")
                     
                     links_f = f"--- LINKS ---\nRegular({link_alu}) PEI({link_pei}) Prof({link_prof})"
                     db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), sem_ref, s_id, txt_base + f"\n\n{links_f}", ano_str, link_alu])
-                    status.update(label="✅ Sincronizado!", state="complete")
+                    
+                    status.update(label="✅ Sincronizado com Sucesso!", state="complete")
                     st.balloons(); time.sleep(1); reset_laboratorio()
 
     # --- SEÇÃO DE ENTRADA (CONFIGURAÇÃO INICIAL) ---
