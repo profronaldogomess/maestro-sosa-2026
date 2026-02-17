@@ -2642,7 +2642,6 @@ elif menu == "📝 Central de Avaliações":
         else:
             st.warning("⚠️ Gere a prova no Arquiteto antes de finalizar.")
 
-# --- ABA 6: ACERVO DE SAFRA (VERSÃO V75 - LAYOUT SOBERANO 360 COM PERÍCIA PEI) ---
 # --- ABA 6: ACERVO DE SAFRA (VERSÃO V84 - PADRONIZAÇÃO ESTÉTICA ELITE) ---
     with tab_acervo_av:
         st.subheader("🗂️ Gestão de Acervo de Safra (PIP - Provas e Revisões)")
@@ -2715,19 +2714,15 @@ elif menu == "📝 Central de Avaliações":
                             st.markdown("##### 🔬 Grade de Perícia (Regular)")
                             grade_raw = ai.extrair_tag(txt_f, "GRADE_DE_CORRECAO")
                             if grade_raw:
-                                # Regex para separar as questões
                                 questoes_grade = re.split(r"(?i)QUEST[AÃ]O\s*0?(\d+)", grade_raw)
                                 if len(questoes_grade) > 1:
                                     for i in range(1, len(questoes_grade), 2):
                                         q_num, q_txt = questoes_grade[i], questoes_grade[i+1]
                                         with st.container(border=True):
-                                            # Título da questão em negrito padrão (sem ser header gigante)
                                             st.markdown(f"**📑 QUESTÃO {q_num}**")
-                                            
-                                            # Limpeza de ruídos Markdown da IA
+                                            # VACINA: Remove hashtags e asteriscos que causam fontes gigantes
                                             q_txt_limpo = re.sub(r'[*#]', '', q_txt).strip()
                                             
-                                            # Extração de campos com ícones padronizados
                                             m_hab = re.search(r"(?i)(?:HABILIDADE|BNCC|DESCRITOR).*?[:\-]\s*(.*?)(?=RESPOSTA|JUSTIFICATIVA|ALERTA|PERÍCIA|$)", q_txt_limpo, re.DOTALL)
                                             m_just = re.search(r"(?i)(?:RESPOSTA|JUSTIFICATIVA).*?[:\-]\s*(.*?)(?=ALERTA|PERÍCIA|DISTRATORES|$)", q_txt_limpo, re.DOTALL)
                                             m_peri = re.search(r"(?i)(?:ALERTA|PERÍCIA|DISTRATORES).*?[:\-]\s*(.*)", q_txt_limpo, re.DOTALL)
@@ -2743,7 +2738,6 @@ elif menu == "📝 Central de Avaliações":
                             st.markdown("##### 📋 Conteúdo da Prova Regular")
                             questoes_reg = ai.extrair_tag(txt_f, "QUESTOES")
                             if questoes_reg:
-                                # Remove prompts de imagem para leitura limpa
                                 txt_limpo_q = re.sub(r'\[\s*PROMPT IMAGEM:.*?\]', '🖼️ *(Imagem)*', questoes_reg, flags=re.IGNORECASE)
                                 st.write(re.sub(r'[*#]', '', txt_limpo_q))
 
@@ -2769,16 +2763,14 @@ elif menu == "📝 Central de Avaliações":
                                         with st.container(border=True):
                                             st.markdown(f"**♿ QUESTÃO PEI {q_n}**")
                                             q_t_limpo = re.sub(r'[*#]', '', q_t).strip()
-                                            
                                             m_just_p = re.search(r"(?i)(?:JUSTIFICATIVA|RESPOSTA).*?[:\-]\s*(.*?)(?=ANÁLISE|LACUNA|ERRO|$)", q_t_limpo, re.DOTALL)
                                             m_lacu_p = re.search(r"(?i)(?:ANÁLISE|LACUNA|ERRO).*?[:\-]\s*(.*)", q_t_limpo, re.DOTALL)
-                                            
                                             if m_just_p: st.write(f"**🎯 Resposta:** {m_just_p.group(1).strip()}")
                                             if m_lacu_p: st.warning(f"**🧠 Análise de Lacuna:** {m_lacu_p.group(1).strip()}")
                                 else: st.write(re.sub(r'[*#]', '', grade_pei_raw))
-                            else: st.info("Perícia PEI não disponível para este ativo.")
+                            else: st.info("Perícia PEI não disponível.")
         else:
-            st.info("📭 Acervo vazio para os filtros selecionados.")
+            st.info("📭 Acervo vazio.")
 
 # ==============================================================================
 # MÓDULO: CENTRAL DE INTELIGÊNCIA DE RESULTADOS (V64.2 - CORREÇÃO DE FILTROS)
