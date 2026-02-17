@@ -2994,9 +2994,10 @@ elif menu == "📸 Scanner de Gabaritos":
                             del st.session_state.current_scan_img
                             st.rerun()
 
-# --- ABA 2: ATIVIDADES & PROJETOS (V68.0 - EDIÇÃO LIBERADA & SINCRO DE DNA) ---
+# --- ABA 2: ATIVIDADES & PROJETOS (V68.0 - MESA DE NOTAS EDITÁVEL & AUTÔNOMA) ---
     with tab_atividades:
         st.subheader("✍️ Gestão de Notas de Projetos e Atividades")
+        st.caption("Use esta mesa para lançar notas de Redações, Cartazes e Apresentações que não podem ser escaneadas.")
         
         c_f1, c_f2 = st.columns(2)
         t_sel_a = c_f1.selectbox("👥 Selecione a Turma:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"t_a_v68_{v}")
@@ -3009,102 +3010,96 @@ elif menu == "📸 Scanner de Gabaritos":
         if not t_sel_a or not at_sel_a:
             st.info("💡 Selecione a Turma e o Material para abrir a Mesa de Lançamento.")
         else:
-            # 1. LEITURA E DETECÇÃO DE DNA
+            # 1. LEITURA DE DNA E VALOR
             dados_at = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel_a].iloc[0]
             txt_at = str(dados_at['CONTEUDO'])
             is_projeto_v68 = "[JUSTIFICATIVA_PHC]" in txt_at or "PROJETO" in at_sel_a.upper()
             
-            val_sugerido = ai.extrair_tag(txt_at, "VALOR")
-            v_max_ativ = st.number_input("💎 Valor Máximo (Autonomia do Professor):", 0.0, 10.0, util.sosa_to_float(val_sugerido) if val_sugerido else 2.0, step=0.5, key=f"v_max_v68_{v}")
+            val_tag = ai.extrair_tag(txt_at, "VALOR")
+            v_max_padrao = util.sosa_to_float(val_tag) if val_tag else 2.0
 
-            # --- 2. VISUALIZAÇÃO DE APOIO ---
-            with st.expander("👁️ REVISAR ROTEIRO E CRITÉRIOS (RUBRICA)"):
-                c_v1, c_v2 = st.columns(2)
-                with c_v1:
-                    st.markdown("**👨‍🏫 Guia / Justificativa:**")
-                    txt_p = ai.extrair_tag(txt_at, "JUSTIFICATIVA_PHC") if is_projeto_v68 else ai.extrair_tag(txt_at, "PROFESSOR")
-                    st.write(re.sub(r'[*#]', '', txt_p))
-                with c_v2:
-                    st.markdown("**📝 Roteiro / Missão:**")
-                    txt_a = f"**MISSÃO:**\n{ai.extrair_tag(txt_at, 'MISSÃO_DE_PESQUISA')}" if is_projeto_v68 else ai.extrair_tag(txt_at, "ALUNO")
-                    st.write(re.sub(r'[*#]', '', txt_a))
+            with st.container(border=True):
+                c_m1, c_m2 = st.columns([2, 1])
+                c_m1.warning(f"📝 **ATIVIDADE EM FOCO:** {at_sel_a}")
+                # Autonomia do Professor para definir o valor do trabalho
+                v_max_ativ = c_m2.number_input("💎 Valor Máximo deste Trabalho:", 0.0, 10.0, v_max_padrao, step=0.5, key=f"v_max_v68_{v}")
 
-            # --- 3. MESA DE LANÇAMENTO (CORREÇÃO DE EDITABILIDADE) ---
+            # 2. MESA DE LANÇAMENTO (FORÇANDO EDITABILIDADE)
             st.divider()
             st.subheader(f"⭐ Mesa de Notas: {at_sel_a}")
+            st.info("💡 **DICA:** Clique duas vezes na célula da coluna 'Nota' para digitar o valor.")
             
             alunos_a = df_alunos[df_alunos['TURMA'] == t_sel_a].sort_values(by="NOME_ALUNO")
             
-            # Busca notas existentes no Diário
-            notas_existentes = {}
+            # Busca notas já lançadas para persistência
+            notas_atuais = {}
             if not df_diario.empty:
-                df_filtro_mat = df_diario[(df_diario['TURMA'] == t_sel_a) & (df_diario['OBSERVACOES'].str.contains(at_sel_a, na=False))]
-                for _, row_d in df_filtro_mat.iterrows():
-                    notas_existentes[db.limpar_id(row_d['ID_ALUNO'])] = util.sosa_to_float(row_d.get('BONUS', 0))
+                # Filtra registros que contenham o nome deste material nas observações
+                mask_p = (df_diario['TURMA'] == t_sel_a) & (df_diario['OBSERVACOES'].str.contains(at_sel_a, na=False))
+                df_p = df_diario[mask_p]
+                for _, row_d in df_p.iterrows():
+                    notas_atuais[db.limpar_id(row_d['ID_ALUNO'])] = util.sosa_to_float(row_d.get('BONUS', 0))
 
-            dados_notas_projeto = []
+            dados_editor = []
             for _, alu in alunos_a.iterrows():
                 id_a = db.limpar_id(alu['ID'])
-                nota_atual = notas_existentes.get(id_a, 0.0)
+                nota_v = notas_atuais.get(id_a, 0.0)
                 is_pei = str(alu['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"]
                 
-                dados_notas_projeto.append({
+                dados_editor.append({
                     "ID": id_a, 
                     "Estudante": f"♿ {alu['NOME_ALUNO']}" if is_pei else alu['NOME_ALUNO'], 
-                    "Nota": nota_atual, # Nome da coluna simplificado para "Nota"
-                    "Status": "✅ Lançado" if nota_atual > 0 else "⏳ Pendente"
+                    "Nota": nota_v,
+                    "Status": "✅ Lançado" if nota_v > 0 else "⏳ Pendente"
                 })
             
-            # TABELA COM EDIÇÃO FORÇADA
+            # --- O MOTOR EDITÁVEL ---
             df_notas_ed = st.data_editor(
-                pd.DataFrame(dados_notas_projeto),
+                pd.DataFrame(dados_editor),
                 hide_index=True, 
                 use_container_width=True,
-                num_rows="fixed", # Trava o número de linhas para evitar bugs de scroll
                 column_config={
                     "ID": None,
                     "Estudante": st.column_config.TextColumn("Estudante", width="medium", disabled=True),
                     "Nota": st.column_config.NumberColumn(
-                        f"Nota (0 a {v_max_ativ})", 
+                        "Nota", 
                         min_value=0.0, 
                         max_value=v_max_ativ, 
                         step=0.1, 
                         format="%.1f",
-                        disabled=False # <--- FORÇA A EDIÇÃO AQUI
+                        required=True # Força a coluna a ser interagível
                     ),
                     "Status": st.column_config.TextColumn("Status", width="small", disabled=True)
                 },
-                key=f"ed_notas_v68_{at_sel_a.replace(' ','_')}"
+                key=f"editor_atividades_v68_{at_sel_a.replace(' ','_')}"
             )
 
-            # --- 4. CONSOLIDAÇÃO NO DIÁRIO ---
+            # 3. CONSOLIDAÇÃO NO DIÁRIO (INTEGRAÇÃO COM BÔNUS)
             if st.button("💾 CONSOLIDAR NOTAS NO BOLETIM ANUAL", type="primary", use_container_width=True):
                 with st.status("Sincronizando Notas de Mérito...") as status:
                     data_hoje = datetime.now().strftime("%d/%m/%Y")
-                    lista_lote_diario = []
+                    lista_lote = []
                     
                     for _, r in df_notas_ed.iterrows():
-                        lista_lote_diario.append([
-                            data_hoje, r['ID'], r['Estudante'].replace("♿ ", ""), 
-                            t_sel_a, "TRUE", "PROJETO/ATIVIDADE", 
-                            f"[{at_sel_a}] Nota lançada via CIR.", 
+                        # Registra no Diário para somar como bônus no Painel de Notas
+                        lista_lote.append([
+                            data_hoje, 
+                            r['ID'], 
+                            r['Estudante'].replace("♿ ", ""), 
+                            t_sel_a, 
+                            "TRUE", 
+                            "PROJETO/ATIVIDADE", 
+                            f"[{at_sel_a}] Nota atribuída manualmente.", 
                             util.sosa_to_str(r['Nota'])
                         ])
                     
-                    if lista_lote_diario:
-                        # Limpeza cirúrgica: Remove apenas os registros deste material para esta turma
-                        if not df_diario.empty:
-                            wb_d = db.conectar()
-                            ws_d = wb_d.worksheet("DB_DIARIO_BORDO")
-                            dados_d = ws_d.get_all_values()
-                            # Deleta de baixo para cima para não errar o índice
-                            for i in range(len(dados_d) - 1, 0, -1):
-                                row = dados_d[i]
-                                if len(row) > 6 and t_sel_a in row[3] and f"[{at_sel_a}]" in row[6]:
-                                    ws_d.delete_rows(i + 1)
+                    if lista_lote:
+                        # Limpeza cirúrgica: remove registros antigos deste projeto para esta turma
+                        # para evitar que o bônus seja somado duas vezes se o professor salvar de novo.
+                        db.excluir_registro_com_drive("DB_DIARIO_BORDO", f"[{at_sel_a}]")
                         
-                        db.salvar_lote("DB_DIARIO_BORDO", lista_lote_diario)
-                        status.update(label=f"✅ Notas de {at_sel_a} consolidadas!", state="complete")
+                        db.salvar_lote("DB_DIARIO_BORDO", lista_lote)
+                        status.update(label=f"✅ Notas de {at_sel_a} salvas com sucesso!", state="complete")
                         st.balloons()
                         time.sleep(1); st.rerun()
 
