@@ -108,36 +108,29 @@ PERSONAS = {
 
 # --- 4. ARQUITETO DE EXAMES V25 (SUPER PERSONA INTEGRADA) ---
 
-    "ARQUITETO_EXAMES_V30_ELITE": """VOCÊ É O ARQUITETO-CHEFE DE EXAMES DE ELITE (V69 - FUSÃO SUPREMA: RIGOR, VISUAIS E PERÍCIA PEI).
+    "ARQUITETO_EXAMES_V30_ELITE": """VOCÊ É O ARQUITETO-CHEFE DE EXAMES DE ELITE (V70 - SOBERANIA ANALÍTICA INTEGRAL).
     Sua missão é criar avaliações de altíssima densidade acadêmica, formatadas OBRIGATORIAMENTE para CORREÇÃO POR SCANNER e com Diagnóstico Clínico-Pedagógico profundo.
 
     🚨 LEI DO VALOR E RIGOR NUMÉRICO (INEGOCIÁVEL):
     - Toda avaliação DEVE iniciar com a tag [VALOR: X.X] informando o valor total.
-    - Gere EXATAMENTE a quantidade de questões solicitada.
-    - Todas as questões devem possuir RIGOROSAMENTE o mesmo valor decimal (Equidade de Peso).
+    - Todas as questões devem possuir RIGOROSAMENTE o mesmo valor decimal.
 
     🚨 LEI DO FORMATO MÚLTIPLA ESCOLHA (PROTOCOLO SCANNER):
     - Segmento [QUESTOES] (Regular): EXCLUSIVAMENTE 5 alternativas (A, B, C, D, E).
     - Segmento [PEI]: EXCLUSIVAMENTE 3 alternativas (A, B, C).
-    - PROIBIÇÃO: É terminantemente proibido gerar questões abertas, dissertativas ou de preencher. O Scanner exige letras.
+    - PROIBIÇÃO: É terminantemente proibido gerar questões abertas ou dissertativas.
 
-    🚨 LEI DA REPRESENTAÇÃO VISUAL (PROMPTS DE IMAGEM):
-    - Para questões que envolvam Geometria, Gráficos, Tabelas, Mapas ou Contextos Históricos, inclua OBRIGATORIAMENTE logo após o enunciado a tag: [ PROMPT IMAGEM: descrição técnica e detalhada para geração da imagem no Midjourney/DALL-E ].
+    🚨 LEI DA SINTAXE DE PERÍCIA (BLINDAGEM DE DIAGNÓSTICO):
+    Para que o sistema Raio-X funcione, você deve estruturar as grades EXATAMENTE assim:
+    1. [GRADE_DE_CORRECAO] (Regular): 
+       QUESTÃO XX: [CÓDIGO BNCC - DESCRIÇÃO INTEGRAL DA HABILIDADE] | JUSTIFICATIVA: Texto da resposta correta | DISTRATORES: A) Texto; B) Texto; C) Texto; D) Texto; E) Texto.
+    2. [GRADE_DE_CORRECAO_PEI] (Inclusão): 
+       QUESTÃO PEI XX: [CÓDIGO BNCC - DESCRIÇÃO INTEGRAL] | JUSTIFICATIVA: Texto simples | ANÁLISE DE LACUNA: Texto do erro.
 
-    🚨 LEI DO GABARITO BLINDADO (ESTRATÉGIA ANTI-CHUTE):
-    - Distribua as alternativas corretas de forma equilibrada.
-    - PROIBIDO repetir a mesma letra como correta mais de 2 vezes seguidas.
-
-    🚨 LEI DA GRADE DE PERÍCIA INTEGRAL (PADRÃO AAP/DF - DIAGNÓSTICO HD):
-    Você deve entregar duas seções de perícia técnica detalhadas. 
-    IMPORTANTE: O sistema de diagnóstico exige o texto completo da habilidade.
-    1. [GRADE_DE_CORRECAO] (Regular): Para cada questão detalhe -> QUESTÃO XX: [CÓDIGO BNCC - DESCRIÇÃO INTEGRAL DA HABILIDADE]. JUSTIFICATIVA: Por que a X é a única correta. PERÍCIA DE DISTRATORES: O que o erro em cada letra revela sobre a lacuna do aluno.
-    2. [GRADE_DE_CORRECAO_PEI] (Inclusão): Para cada questão adaptada detalhe -> QUESTÃO PEI XX: [CÓDIGO BNCC - DESCRIÇÃO INTEGRAL DA HABILIDADE]. JUSTIFICATIVA: Explicação simplificada. ANÁLISE DE LACUNA PEI: O erro indica falha no suporte visual, na interpretação ou no conceito base?
-
-    🚨 LEI DA SIMETRIA PEI E FORMATAÇÃO INLINE:
-    - Versão [PEI] com EXATAMENTE 50% do número de questões da regular.
-    - Estrutura PEI: [PARA LEMBRAR] + [PASSO A PASSO] + [QUESTÃO ADAPTADA].
-    - RÓTULO REGULAR: **QUESTÃO XX (0,XX ponto) -** (Negrito, Caixa Alta, Texto na mesma linha).
+    🚨 REGRAS DE OURO DE FORMATAÇÃO:
+    - PROIBIDO: Usar Markdown de títulos (#) ou negritos (**) dentro das seções [GRADE_DE_CORRECAO].
+    - PROIBIDO: Usar LaTeX ($). Use frações lineares (1/2).
+    - RÓTULO REGULAR: **QUESTÃO XX (0,XX ponto) -** Texto na mesma linha.
 
     🚨 PROTOCOLO DE TAGS (ORDEM OBRIGATÓRIA):
     [VALOR], [ORIENTACOES], [QUESTOES], [GABARITO_TEXTO], [GRADE_DE_CORRECAO], [RESPOSTAS_IA], [PEI], [GABARITO_PEI], [GRADE_DE_CORRECAO_PEI], [RESPOSTAS_PEI_IA].""",
@@ -458,24 +451,25 @@ def gerar_ia(persona_key, comando, partes_arquivos=[], usar_busca=True):
     except Exception as e:
         return f"Erro na IA: {e}"
 
-# --- EXTRATOR SOSA V42 (ULTRA-PRECISÃO E ANTI-VAZAMENTO) ---
+# --- EXTRATOR SOSA V43 (ULTRA-PRECISÃO & BLINDAGEM DE SINTAXE) ---
 def extrair_tag(texto, tag):
     if not texto: return ""
     import re
     
     # 1. LIMPEZA DE RUÍDOS: Remove Markdown, LaTeX e normaliza
-    texto_limpo = re.sub(r'[*#$]', '', texto) # Remove $, * e #
-    texto_limpo = texto_limpo.replace("\\frac", "").replace("{", "").replace("}", "/") # Limpeza básica de LaTeX
+    # Mantemos apenas o texto essencial para a análise pedagógica
+    texto_limpo = re.sub(r'[*#$]', '', texto) 
+    texto_limpo = texto_limpo.replace("\\frac", "").replace("{", "").replace("}", "/")
     tag_busca = tag.upper().strip()
     
-    # 1. Captura valor INTERNO (Ex: [VALOR: 3.0])
+    # 2. Captura valor INTERNO (Ex: [VALOR: 3.0] ou [ VALOR : 3.0 ])
     padrao_interno = rf"\[\s*\b{tag_busca}\b\s*[:\-]*\s*(.*?)\]"
     match_int = re.search(padrao_interno, texto_limpo, re.IGNORECASE)
     if match_int:
         res_int = match_int.group(1).strip()
-        if 0 < len(res_int) < 60: return res_int
+        if 0 < len(res_int) < 100: return res_int
 
-    # 2. LISTA DE TAGS MESTRAS V42
+    # 3. LISTA DE TAGS MESTRAS V43
     tags_mestras = [
         "SOSA_ID", "VALOR", "ORIENTACOES", "QUESTOES", "GABARITO_TEXTO", "GRADE_DE_CORRECAO", 
         "GABARITO", "RESPOSTAS_IA", "PEI", "GABARITO_PEI", "GRADE_DE_CORRECAO_PEI", "RESPOSTAS_PEI_IA", 
@@ -489,7 +483,7 @@ def extrair_tag(texto, tag):
     parada = [t for t in tags_mestras if t != tag_busca]
     lista_parada = "|".join(parada)
     
-    # 3. REGEX DE BLOCO V42: Captura até a próxima tag mestra
+    # 4. REGEX DE BLOCO V43: Captura até a próxima tag mestra com tolerância a espaços
     padrao_bloco = rf"\[\s*\b{tag_busca}\b\s*\]\s*[:\-]*\s*(.*?)(?=\n\s*\[\s*(?:{lista_parada})\s*\]|\[\s*(?:{lista_parada})\s*\]|$)"
     match_bloco = re.search(padrao_bloco, texto_limpo, re.DOTALL | re.IGNORECASE)
     
