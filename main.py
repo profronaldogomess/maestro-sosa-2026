@@ -772,18 +772,26 @@ if menu == "🧪 Criador de Aulas":
                                     st.session_state.v_lab = int(time.time())
                                     st.rerun()
 
-        # --- ABA 5: ACERVO DE MATERIAIS (VERSÃO V43 - COMPATÍVEL COM PROJETOS BNCC ELITE) ---
+# --- ABA 5: ACERVO DE MATERIAIS (VERSÃO V88 - SEGREGAÇÃO DE ATIVOS DIDÁTICOS) ---
         with tab_acervo_lab:
-            st.subheader("📂 Gestão de Acervo de Materiais (PIP - Aulas, Projetos e Revisões)")
+            st.subheader("📂 Gestão de Acervo de Materiais (Aulas, Projetos e Complementares)")
             
             # 1. FILTROS DE BUSCA DE ELITE
             c_m1, c_m2, c_m3 = st.columns([1, 1, 1])
             f_trim_m = c_m1.selectbox("📅 Filtrar Trimestre:", ["Todos", "I Trimestre", "II Trimestre", "III Trimestre"], key="m_trim_filter")
             f_ano_m = c_m2.selectbox("🎓 Filtrar Série:", ["Todos", "6º", "7º", "8º", "9º"], key="m_ano_filter")
-            f_tipo_m = c_m3.selectbox("🧪 Tipo de Ativo:", ["Todos", "Aula", "PROJETO", "Fixação", "REVISÃO"], key="m_tipo_filter")
+            f_tipo_m = c_m3.selectbox("🧪 Tipo de Ativo:", ["Todos", "Aula", "PROJETO", "Fixação", "Reforço", "Recomposição"], key="m_tipo_filter")
 
-            # 2. PROCESSAMENTO DA BASE
-            df_m = df_aulas.copy()
+            # 2. MOTOR DE FILTRAGEM DE SOBERANIA (EXCLUSÃO DE AVALIAÇÕES)
+            # Filtro A: Remove o que está marcado como AVALIAÇÃO ou REVISÃO na semana de referência
+            df_m = df_aulas[~df_aulas['SEMANA_REF'].isin(["AVALIAÇÃO", "REVISÃO"])].copy()
+
+            # Filtro B: Remove por palavras-chave no título (Segurança contra contaminação)
+            termos_proibidos = ["TESTE", "PROVA", "SONDA", "RECUPERAÇÃO", "2ª CHAMADA", "2CHAMADA"]
+            pattern_excluir = '|'.join(termos_proibidos)
+            df_m = df_m[~df_m['TIPO_MATERIAL'].str.upper().str.contains(pattern_excluir, na=False)]
+
+            # 3. APLICAÇÃO DOS FILTROS DE USUÁRIO
             if f_trim_m != "Todos":
                 df_m = df_m[df_m['CONTEUDO'].str.contains(f_trim_m, na=False)]
             if f_ano_m != "Todos":
@@ -794,6 +802,7 @@ if menu == "🧪 Criador de Aulas":
             df_m = df_m.iloc[::-1] # Mais recentes no topo
 
             if not df_m.empty:
+                st.write(f"📚 **Materiais Didáticos Localizados:** {len(df_m)}")
                 for _, row in df_m.iterrows():
                     with st.container(border=True):
                         txt_f = str(row['CONTEUDO'])
@@ -802,14 +811,12 @@ if menu == "🧪 Criador de Aulas":
                         # DETECÇÃO DE TIPO (AULA VS PROJETO)
                         is_projeto_h = "[JUSTIFICATIVA_PHC]" in txt_f or "PROJETO" in identificador.upper()
                         
-                        st.markdown(f"### 📘 {identificador}")
+                        st.markdown(f"#### 📘 {identificador}")
                         
                         # EXTRAÇÃO DE METADADOS BNCC (Se for projeto)
                         if is_projeto_h:
                             val_hab = ai.extrair_tag(txt_f, "HABILIDADES_BNCC") or ai.extrair_tag(txt_f, "HABILIDADE_BNCC")
-                            val_comp = ai.extrair_tag(txt_f, "COMPETENCIAS_BNCC")
-                            if val_hab: st.caption(f"🆔 **Habilidades:** {val_hab}")
-                            if val_comp: st.caption(f"🌟 **Competências:** {val_comp}")
+                            if val_hab: st.caption(f"🆔 **Habilidades:** {re.sub(r'[*#\[\]]', '', val_hab)}")
 
                         # 3. EXTRAÇÃO DE LINKS
                         l_alu = re.search(r"(?:Aluno|Regular)\((.*?)\)", txt_f).group(1) if re.search(r"(?:Aluno|Regular)\((.*?)\)", txt_f) else row.get('LINK_DRIVE')
@@ -836,36 +843,22 @@ if menu == "🧪 Criador de Aulas":
                         # 4. EXPANDER DE CONTEÚDO (VISÃO HÍBRIDA)
                         with st.expander("👁️ VER DETALHES DO MATERIAL"):
                             col_v1, col_v2 = st.columns(2)
-                            
                             if is_projeto_h:
-                                # VISÃO DE PROJETO
                                 with col_v1:
                                     st.markdown("**👨‍🏫 Seção do Professor (PHC)**")
-                                    st.info(f"**Justificativa:**\n{ai.extrair_tag(txt_f, 'JUSTIFICATIVA_PHC')}")
-                                    st.warning(f"**Rubrica de Mérito:**\n{ai.extrair_tag(txt_f, 'RUBRICA_DE_MERITO')}")
+                                    st.info(re.sub(r'[*#]', '', ai.extrair_tag(txt_f, 'JUSTIFICATIVA_PHC')))
                                 with col_v2:
-                                    st.markdown("**📝 Roteiro do Aluno (Investigação)**")
-                                    st.success(f"**Contexto:**\n{ai.extrair_tag(txt_f, 'CONTEXTO_INVESTIGATIVO')}")
-                                    st.write(f"**Missão:**\n{ai.extrair_tag(txt_f, 'MISSÃO_DE_PESQUISA')}")
-                                    st.write(f"**Passo a Passo:**\n{ai.extrair_tag(txt_f, 'PASSO_A_PASSO')}")
-                                    st.caption(f"**Produto:** {ai.extrair_tag(txt_f, 'PRODUTO_ESPERADO')}")
+                                    st.markdown("**📝 Roteiro do Aluno**")
+                                    st.success(re.sub(r'[*#]', '', ai.extrair_tag(txt_f, 'MISSÃO_DE_PESQUISA')))
                             else:
-                                # VISÃO DE AULA REGULAR
                                 with col_v1:
                                     st.markdown("#### 👨‍🏫 Seção do Professor")
-                                    st.write(ai.extrair_tag(txt_f, "PROFESSOR") or "Conteúdo não formatado.")
+                                    st.write(re.sub(r'[*#]', '', ai.extrair_tag(txt_f, "PROFESSOR") or "Conteúdo não formatado."))
                                 with col_v2:
                                     st.markdown("#### 📝 Seção do Aluno")
-                                    st.write(ai.extrair_tag(txt_f, "ALUNO") or "Conteúdo não formatado.")
-                            
-                            # Rodapé de Acessibilidade
-                            dua_txt = ai.extrair_tag(txt_f, "ESTRATEGIA_DUA_PEI") or ai.extrair_tag(txt_f, "PEI")
-                            if dua_txt:
-                                st.divider()
-                                st.markdown("♿ **Estratégia de Acessibilidade (DUA/PEI):**")
-                                st.caption(dua_txt)
+                                    st.write(re.sub(r'[*#]', '', ai.extrair_tag(txt_f, "ALUNO") or "Conteúdo não formatado."))
             else:
-                st.info("📭 Nenhum material encontrado com os filtros selecionados.")
+                st.info("📭 Nenhum material didático encontrado. (Avaliações são exibidas na Central de Avaliações)")
                 
 # ==============================================================================
 # MÓDULO: PLANEJAMENTO ESTRATÉGICO (PONTO ID) - VERSÃO V31.9 (FULL INTEGRATION)
