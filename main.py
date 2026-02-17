@@ -3116,24 +3116,24 @@ elif menu == "📸 Scanner de Gabaritos":
 
             with sub_auditoria:
                 st.markdown("#### 🔍 Consolidação de Notas e Resgate de Faltas")
+                st.caption("Nesta mesa, o senhor tem soberania total. Alterar para 'PENDENTE' faz o aluno voltar para a fila do Scanner.")
                 
-                # 1. FILTRO DE ATIVOS OFICIAIS (CENTRAL DE AVALIAÇÕES)
-                serie_num = t_sel_h[0]
+                # 1. FILTRO DE ATIVOS OFICIAIS
+                serie_num = "".join(filter(str.isdigit, t_sel_h))
                 df_oficiais = df_aulas[
                     (df_aulas['SEMANA_REF'] == "AVALIAÇÃO") & 
                     (df_aulas['ANO'].str.contains(serie_num))
                 ]
                 
-                # Filtra apenas as avaliações "Base" (ignora o sufixo 2ª chamada no seletor principal)
                 opcoes_base = [opt for opt in df_oficiais['TIPO_MATERIAL'].unique().tolist() if "2ª" not in opt.upper()]
                 av_alvo_h = st.selectbox("📋 Selecione a Avaliação Base (Slot do Boletim):", [""] + opcoes_base, key=f"av_h_sel_{v}")
 
                 if av_alvo_h:
                     # 2. DATA FUSION: CRUZAMENTO DE ALUNOS + SCANNER
                     alunos_turma = df_alunos[df_alunos['TURMA'] == t_sel_h].sort_values(by="NOME_ALUNO")
-                    
-                    # Busca registros do scanner que pertencem a este "Slot" (Base ou 2ª Chamada)
                     nome_curto_av = av_alvo_h.split("-")[0].strip()
+                    
+                    # Busca todos os registros (originais e 2ª chamada) vinculados a este slot
                     gabaritos_lidos = df_diagnosticos[
                         (df_diagnosticos['TURMA'] == t_sel_h) & 
                         (df_diagnosticos['ID_AVALIACAO'].str.contains(nome_curto_av))
@@ -3144,23 +3144,22 @@ elif menu == "📸 Scanner de Gabaritos":
                         id_a = db.limpar_id(alu['ID'])
                         is_pei = str(alu['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"]
                         
-                        # Tenta localizar o registro do aluno (pega o mais recente)
                         leitura = gabaritos_lidos[gabaritos_lidos['ID_ALUNO'].apply(db.limpar_id) == id_a]
                         
                         situacao_txt = "✍️ PENDENTE"
-                        versao_prova = "N/A"
+                        versao_prova = "PROVA ORIGINAL"
                         nota_atual = 0.0
                         link_ev = ""
 
                         if not leitura.empty:
-                            reg = leitura.iloc[-1] # Pega a última ação (ex: se faltou e depois fez 2ª chamada)
+                            reg = leitura.iloc[-1]
                             nota_atual = util.sosa_to_float(reg['NOTA_CALCULADA'])
                             link_ev = reg.get('LINK_FOTO_DRIVE', '')
                             
                             if reg['RESPOSTAS_ALUNO'] == "FALTOU":
                                 situacao_txt = "❌ FALTOU"
                                 versao_prova = "N/A"
-                            elif "2ª" in reg['ID_AVALIACAO'].upper():
+                            elif "2ª" in reg['ID_AVALIACAO'].upper() or "2CHAMADA" in reg['ID_AVALIACAO'].upper():
                                 situacao_txt = "✅ REALIZADA"
                                 versao_prova = "SEGUNDA CHAMADA"
                             else:
@@ -3172,91 +3171,90 @@ elif menu == "📸 Scanner de Gabaritos":
                             "Estudante": alu['NOME_ALUNO'],
                             "Perfil": "♿ PEI" if is_pei else "📝 REGULAR",
                             "Situação": situacao_txt,
-                            "Versão Aplicada": versao_prova,
+                            "Versão": versao_prova,
                             "Nota Final (Soberana)": nota_atual,
                             "Evidência": link_ev
                         })
 
-                    st.info(f"💡 **Soberania:** O senhor pode alterar a nota de quem 'FALTOU' caso ele tenha realizado a Segunda Chamada manualmente.")
-                    
-                    # 3. MESA DE SOBERANIA (DATA EDITOR)
+                    # 3. MESA DE SOBERANIA (DATA EDITOR COM GATILHOS DE STATUS)
                     df_soberano_ed = st.data_editor(
                         pd.DataFrame(dados_soberania),
                         column_config={
                             "ID": None,
                             "Estudante": st.column_config.TextColumn("Estudante", width="medium", disabled=True),
                             "Perfil": st.column_config.TextColumn("Perfil", width="small", disabled=True),
-                            "Situação": st.column_config.TextColumn("Situação", width="small", disabled=True),
-                            "Versão Aplicada": st.column_config.TextColumn("Versão", width="small", disabled=True),
+                            "Situação": st.column_config.SelectboxColumn(
+                                "Situação", 
+                                options=["✅ REALIZADA", "❌ FALTOU", "✍️ PENDENTE"],
+                                help="PENDENTE remove o aluno do banco para que ele possa ser escaneado novamente."
+                            ),
+                            "Versão": st.column_config.SelectboxColumn(
+                                "Versão", 
+                                options=["PROVA ORIGINAL", "SEGUNDA CHAMADA", "N/A"]
+                            ),
                             "Nota Final (Soberana)": st.column_config.NumberColumn("Nota (0-10)", min_value=0.0, max_value=10.0, step=0.1, format="%.1f"),
                             "Evidência": st.column_config.LinkColumn("🔗 Ver Prova")
                         },
-                        hide_index=True, use_container_width=True, key=f"ed_soberania_v70_{v}"
+                        hide_index=True, use_container_width=True, key=f"ed_soberania_v72_{v}"
                     )
 
-                    # 4. HOMOLOGAÇÃO
-                    if st.button("⚖️ HOMOLOGAR NOTAS E ATUALIZAR BOLETIM", use_container_width=True, type="primary"):
-                        with st.status("Sincronizando com o Boletim Oficial...") as status_h:
-                            lista_homologacao = []
+                    # 4. HOMOLOGAÇÃO COM LIMPEZA CIRÚRGICA
+                    if st.button("⚖️ HOMOLOGAR NOTAS E ATUALIZAR SISTEMA", use_container_width=True, type="primary"):
+                        with st.status("Executando Protocolo de Soberania...") as status_h:
+                            lista_boletim = []
+                            
+                            # Conecta ao banco para operações de linha a linha
+                            wb_soberano = db.conectar()
+                            ws_gabaritos = wb_soberano.worksheet("DB_GABARITOS_ALUNOS")
+                            dados_atuais_gab = ws_gabaritos.get_all_values()
+
                             for _, r in df_soberano_ed.iterrows():
-                                col_teste = "0,0"
-                                col_prova = "0,0"
+                                id_aluno_limpo = str(r['ID'])
                                 nota_str = util.sosa_to_str(r['Nota Final (Soberana)'])
                                 
-                                if "TESTE" in av_alvo_h.upper():
-                                    col_teste = nota_str
-                                else:
-                                    col_prova = nota_str
+                                # A. LÓGICA DE LIMPEZA (Para REALIZADA, FALTOU ou PENDENTE, removemos o que existia antes)
+                                # Procuramos a linha que tenha o ID do aluno E o nome da avaliação (ou parte dele)
+                                for i, row_gab in enumerate(dados_atuais_gab):
+                                    if i == 0: continue
+                                    if db.limpar_id(row_gab[1]) == id_aluno_limpo and nome_curto_av in row_gab[4]:
+                                        ws_gabaritos.delete_rows(i + 1)
+                                        # Atualiza a lista local para não errar o índice nas próximas deleções
+                                        dados_atuais_gab.pop(i)
+                                        break
 
-                                lista_homologacao.append([
-                                    r['ID'], r['Estudante'], t_sel_h, tr_sel_h, 
+                                # B. REINSERÇÃO OU DESCARTE
+                                if r['Situação'] == "✅ REALIZADA":
+                                    id_av_final = av_alvo_h if r['Versão'] == "PROVA ORIGINAL" else f"{av_alvo_h} (2ª CHAMADA)"
+                                    ws_gabaritos.append_row([
+                                        datetime.now().strftime("%d/%m/%Y"), 
+                                        id_aluno_limpo, r['Estudante'].replace("♿ ", ""), t_sel_h, 
+                                        id_av_final, "MANUAL", nota_str, r['Evidência'] if r['Evidência'] else "N/A"
+                                    ])
+                                
+                                elif r['Situação'] == "❌ FALTOU":
+                                    ws_gabaritos.append_row([
+                                        datetime.now().strftime("%d/%m/%Y"), 
+                                        id_aluno_limpo, r['Estudante'].replace("♿ ", ""), t_sel_h, 
+                                        av_alvo_h, "FALTOU", "0,00", "N/A"
+                                    ])
+                                
+                                # Se for '✍️ PENDENTE', não fazemos o append_row. 
+                                # O registro já foi deletado acima, então o aluno reaparecerá no Scanner.
+
+                                # C. Prepara dados para o Boletim (DB_NOTAS)
+                                col_teste = nota_str if "TESTE" in av_alvo_h.upper() else "0,0"
+                                col_prova = nota_str if "TESTE" not in av_alvo_h.upper() else "0,0"
+                                lista_boletim.append([
+                                    id_aluno_limpo, r['Estudante'].replace("♿ ", ""), t_sel_h, tr_sel_h, 
                                     "0,0", col_teste, col_prova, "0,0", nota_str
                                 ])
-                            
-                            if db.salvar_lote("DB_NOTAS", lista_homologacao):
-                                status_h.update(label="✅ Notas homologadas! O Boletim Anual foi atualizado.", state="complete")
+
+                            # D. Atualização Final do Boletim
+                            db.limpar_notas_turma_trimestre(t_sel_h, tr_sel_h)
+                            if db.salvar_lote("DB_NOTAS", lista_boletim):
+                                status_h.update(label="✅ Soberania Aplicada! O Scanner foi resetado para os alunos pendentes.", state="complete")
                                 st.balloons()
-                else:
-                    st.info("Selecione a Avaliação para abrir a mesa de auditoria.")
-
-            # --- SUB-ABA 2: NOTAS EXTERNAS ---
-            with sub_externas:
-                st.markdown("#### 🌍 Lançamento de Indicadores Externos (SAEB / Município)")
-                st.caption("Use este espaço para integrar resultados de provas do Governo ou da Prefeitura.")
-                
-                alunos_h = df_alunos[df_alunos['TURMA'] == t_sel_h].sort_values(by="NOME_ALUNO")
-                
-                dados_externos = []
-                for _, alu in alunos_h.iterrows():
-                    dados_externos.append({
-                        "ID": alu['ID'],
-                        "Estudante": alu['NOME_ALUNO'],
-                        "Nota SAEB/Externa": 0.0,
-                        "Observação": ""
-                    })
-                
-                df_ext_ed = st.data_editor(
-                    pd.DataFrame(dados_externos),
-                    column_config={
-                        "ID": None,
-                        "Nota SAEB/Externa": st.column_config.NumberColumn("Nota (0-10)", min_value=0.0, max_value=10.0, step=0.1),
-                        "Observação": st.column_config.TextColumn("Origem (Ex: SAEB 2026)")
-                    },
-                    hide_index=True, use_container_width=True, key=f"ed_externas_{v}"
-                )
-
-                if st.button("💾 INTEGRAR NOTAS EXTERNAS AO PERFIL", use_container_width=True):
-                    with st.spinner("Arquivando indicadores externos..."):
-                        # Salva na aba de Relatórios para consulta no Raio-X e Conselho
-                        for _, r in df_ext_ed.iterrows():
-                            if r['Nota SAEB/Externa'] > 0:
-                                db.salvar_no_banco("DB_RELATORIOS", [
-                                    datetime.now().strftime("%d/%m/%Y"), 
-                                    r['ID'], r['Estudante'], 
-                                    "NOTA_EXTERNA", 
-                                    f"Nota: {r['Nota SAEB/Externa']} | Origem: {r['Observação']}"
-                                ])
-                        st.success("✅ Indicadores externos integrados ao histórico dos alunos!")
+                                time.sleep(1); st.rerun()
 
 # --- ABA 4: RAIO-X PEDAGÓGICO (V87 - SOBERANIA ESTÉTICA & CLAREZA INDIVIDUAL) ---
     with tab_raiox:
