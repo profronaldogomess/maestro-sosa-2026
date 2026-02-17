@@ -557,7 +557,7 @@ def gerar_docx_projeto_cientifico_V33(titulo_doc, conteudo_ia, info):
         style.font.name = 'Arial'
         style.font.size = Pt(10.5)
 
-        # 1. CABEÇALHO MESTRE (Sem nota, pois é projeto)
+        # 1. CABEÇALHO MESTRE
         configurar_cabecalho_mestre(doc, info, "ROTEIRO DE INVESTIGAÇÃO", mostrar_nota=False)
         doc.add_paragraph()
 
@@ -574,34 +574,28 @@ def gerar_docx_projeto_cientifico_V33(titulo_doc, conteudo_ia, info):
         for label, tag in tags_projeto:
             texto_secao = ai.extrair_tag(conteudo_ia, tag)
             if texto_secao:
-                # Título da Seção
                 p_tit = doc.add_paragraph()
                 run_tit = p_tit.add_run(f"█▓▒░ {label}")
                 run_tit.bold = True
                 run_tit.font.size = Pt(11)
-                p_tit.paragraph_format.space_before = Pt(12)
-                p_tit.paragraph_format.space_after = Pt(6)
-
-                # Conteúdo da Seção (Limpeza de ruído)
+                
                 linhas = texto_secao.split('\n')
                 for linha in linhas:
                     l_s = linha.strip()
                     if not l_s: continue
                     p = doc.add_paragraph()
                     p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-                    
-                    # Se for a Rubrica, aplica um recuo para parecer tabela
                     if tag == "RUBRICA_DE_MERITO":
                         p.paragraph_format.left_indent = Inches(0.2)
                         p.add_run("• ").bold = True
-                    
                     adicionar_texto_formatado(p, re.sub(r'[*#]', '', l_s))
+                doc.add_paragraph()
 
         doc.save(file_stream)
         file_stream.seek(0)
         return file_stream
     except Exception as e:
         file_stream = io.BytesIO()
-        err_doc = Document(); err_doc.add_paragraph(f"ERRO NO EXPORTER PROJETO: {str(e)}"); err_doc.save(file_stream)
+        err_doc = Document(); err_doc.add_paragraph(f"ERRO: {str(e)}"); err_doc.save(file_stream)
         file_stream.seek(0)
         return file_stream
