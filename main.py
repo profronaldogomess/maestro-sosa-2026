@@ -1335,9 +1335,13 @@ elif menu == "📝 Diário de Bordo Rápido":
             key=f"clima_reg_{v}"
         )
 
-    # 3. BUSCA DE REGISTROS EXISTENTES (PERSISTÊNCIA)
-    # Filtra o diário para ver se já trabalhamos nesta turma hoje
-    registros_atuais = df_diario[(df_diario['DATA'] == data_str) & (df_diario['TURMA'] == turma_sel)]
+# 3. BUSCA DE REGISTROS EXISTENTES (FILTRANDO NOTAS DE SISTEMA)
+    # O Diário agora ignora linhas que são apenas lançamentos de notas de trabalhos
+    registros_atuais = df_diario[
+        (df_diario['DATA'] == data_str) & 
+        (df_diario['TURMA'] == turma_sel) & 
+        (df_diario['TAGS'] != "SISTEMA_NOTA") # <--- A VACINA ESTÁ AQUI
+    ]
 
     # 4. AÇÕES EM LOTE
     st.markdown("---")
@@ -1349,7 +1353,7 @@ elif menu == "📝 Diário de Bordo Rápido":
         st.session_state[f"visto_lote_{turma_sel}"] = False
         st.rerun()
 
-    # 5. MONTAGEM DA MESA DE LANÇAMENTO (CARREGANDO DADOS DO BANCO)
+    # 5. MONTAGEM DA MESA DE LANÇAMENTO
     alunos_turma = df_alunos[df_alunos['TURMA'] == turma_sel].sort_values(by="NOME_ALUNO")
     
     dados_diario = []
@@ -1357,24 +1361,16 @@ elif menu == "📝 Diário de Bordo Rápido":
         id_a = db.limpar_id(alu['ID'])
         is_pei = str(alu['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"]
         
-        # Tenta localizar se este aluno já tem registro hoje
+        # Busca apenas registros de ocorrência real (ignora notas de sistema)
         reg_existente = registros_atuais[registros_atuais['ID_ALUNO'].apply(db.limpar_id) == id_a]
         
         if not reg_existente.empty:
-            # CARREGA DADOS DO BANCO (Incluindo o Bônus)
             visto_val = str(reg_existente.iloc[0]['VISTO_ATIVIDADE']).upper() == "TRUE"
             falta_val = reg_existente.iloc[0]['TAGS'] == "AUSÊNCIA"
-            
-            # PROTEÇÃO: Busca o bônus, se não existir na linha, assume 0
-            if 'BONUS' in reg_existente.columns:
-                bonus_val = util.sosa_to_float(reg_existente.iloc[0]['BONUS'])
-            else:
-                bonus_val = 0.0
-                
+            bonus_val = util.sosa_to_float(reg_existente.iloc[0].get('BONUS', 0))
             tag_val = reg_existente.iloc[0]['TAGS'] if not falta_val else ""
             obs_val = reg_existente.iloc[0]['OBSERVACOES']
         else:
-            # VALORES PADRÃO PARA NOVO REGISTRO
             visto_val = st.session_state.get(f"visto_lote_{turma_sel}", True)
             falta_val = False
             bonus_val = 0.0
@@ -3074,32 +3070,31 @@ elif menu == "📸 Scanner de Gabaritos":
                 key=f"editor_atividades_v68_{at_sel_a.replace(' ','_')}"
             )
 
-            # 3. CONSOLIDAÇÃO NO DIÁRIO (INTEGRAÇÃO COM BÔNUS)
+# --- 4. CONSOLIDAÇÃO SILENCIOSA (V69 - APENAS NOTA, SEM POLUIR DIÁRIO) ---
             if st.button("💾 CONSOLIDAR NOTAS NO BOLETIM ANUAL", type="primary", use_container_width=True):
                 with st.status("Sincronizando Notas de Mérito...") as status:
                     data_hoje = datetime.now().strftime("%d/%m/%Y")
                     lista_lote = []
                     
                     for _, r in df_notas_ed.iterrows():
-                        # Registra no Diário para somar como bônus no Painel de Notas
+                        # Registra com a TAG 'SISTEMA_NOTA' para o Diário ignorar na visualização
                         lista_lote.append([
                             data_hoje, 
                             r['ID'], 
                             r['Estudante'].replace("♿ ", ""), 
                             t_sel_a, 
-                            "TRUE", 
-                            "PROJETO/ATIVIDADE", 
-                            f"[{at_sel_a}] Nota atribuída manualmente.", 
+                            "FALSE", # Não conta como 'Visto de Caderno' para não inflar engajamento
+                            "SISTEMA_NOTA", 
+                            f"Nota de Trabalho: {at_sel_a}", 
                             util.sosa_to_str(r['Nota'])
                         ])
                     
                     if lista_lote:
-                        # Limpeza cirúrgica: remove registros antigos deste projeto para esta turma
-                        # para evitar que o bônus seja somado duas vezes se o professor salvar de novo.
-                        db.excluir_registro_com_drive("DB_DIARIO_BORDO", f"[{at_sel_a}]")
+                        # Limpeza cirúrgica para não duplicar se salvar duas vezes
+                        db.excluir_registro("DB_DIARIO_BORDO", f"Nota de Trabalho: {at_sel_a}")
                         
                         db.salvar_lote("DB_DIARIO_BORDO", lista_lote)
-                        status.update(label=f"✅ Notas de {at_sel_a} salvas com sucesso!", state="complete")
+                        status.update(label=f"✅ Notas de {at_sel_a} consolidadas no Boletim!", state="complete")
                         st.balloons()
                         time.sleep(1); st.rerun()
 
