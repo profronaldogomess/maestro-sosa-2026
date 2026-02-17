@@ -2642,7 +2642,7 @@ elif menu == "📝 Central de Avaliações":
         else:
             st.warning("⚠️ Gere a prova no Arquiteto antes de finalizar.")
 
-# --- ABA 6: ACERVO DE SAFRA (VERSÃO V84 - PADRONIZAÇÃO ESTÉTICA ELITE) ---
+# --- ABA 6: ACERVO DE SAFRA (VERSÃO V85 - LIMPEZA TOTAL DE RUÍDO VISUAL) ---
     with tab_acervo_av:
         st.subheader("🗂️ Gestão de Acervo de Safra (PIP - Provas e Revisões)")
         
@@ -2666,15 +2666,14 @@ elif menu == "📝 Central de Avaliações":
                 with st.container(border=True):
                     txt_f = str(row['CONTEUDO'])
                     identificador = row['TIPO_MATERIAL']
-                    # Limpa o valor para não vir com hashtags
-                    valor_ex = re.sub(r'[*#]', '', ai.extrair_tag(txt_f, "VALOR")).strip()
                     
-                    # --- CABEÇALHO DO DOSSIÊ (PADRONIZADO) ---
+                    # --- CABEÇALHO DO DOSSIÊ ---
                     col_tit, col_meta = st.columns([2, 1])
                     with col_tit:
                         st.markdown(f"#### 📄 {identificador}")
                     with col_meta:
-                        st.markdown(f"**💰 Valor:** `{valor_ex if valor_ex else 'N/A'}` | **🎓 Série:** `{row['ANO']}`")
+                        val_ex = re.sub(r'[*#]', '', ai.extrair_tag(txt_f, "VALOR")).strip()
+                        st.markdown(f"**💰 Valor:** `{val_ex if val_ex else 'N/A'}` | **🎓 Série:** `{row['ANO']}`")
 
                     # --- GABARITO EXPRESSO ---
                     gab_simples = ai.extrair_tag(txt_f, "GABARITO_TEXTO") or ai.extrair_tag(txt_f, "RESPOSTAS_IA")
@@ -2703,13 +2702,12 @@ elif menu == "📝 Central de Avaliações":
                     if c_b5.button("🗑️ APAGAR", key=f"del_av_h_{row.name}", use_container_width=True):
                         if db.excluir_avaliacao_completa(identificador, row['SEMANA_REF']): st.rerun()
 
-                    # --- EXPANDER RAIO-X (VISUAL CLEAN V84) ---
+                    # --- EXPANDER RAIO-X (VISUAL CLEAN V85) ---
                     with st.expander("👁️ ANALISAR ESTRUTURA PEDAGÓGICA E ITENS"):
                         t_gab, t_ques, t_pei_v, t_peri_pei = st.tabs([
                             "🎯 Perícia Regular", "📝 Prova Regular", "♿ Adaptação PEI", "🔬 Perícia PEI"
                         ])
                         
-                        # ABA 1: PERÍCIA REGULAR (REMOÇÃO DE FONTES GIGANTES)
                         with t_gab:
                             st.markdown("##### 🔬 Grade de Perícia (Regular)")
                             grade_raw = ai.extrair_tag(txt_f, "GRADE_DE_CORRECAO")
@@ -2720,7 +2718,7 @@ elif menu == "📝 Central de Avaliações":
                                         q_num, q_txt = questoes_grade[i], questoes_grade[i+1]
                                         with st.container(border=True):
                                             st.markdown(f"**📑 QUESTÃO {q_num}**")
-                                            # VACINA: Remove hashtags e asteriscos que causam fontes gigantes
+                                            # LIMPEZA RADICAL: Remove hashtags e asteriscos de cada campo
                                             q_txt_limpo = re.sub(r'[*#]', '', q_txt).strip()
                                             
                                             m_hab = re.search(r"(?i)(?:HABILIDADE|BNCC|DESCRITOR).*?[:\-]\s*(.*?)(?=RESPOSTA|JUSTIFICATIVA|ALERTA|PERÍCIA|$)", q_txt_limpo, re.DOTALL)
@@ -2728,12 +2726,11 @@ elif menu == "📝 Central de Avaliações":
                                             m_peri = re.search(r"(?i)(?:ALERTA|PERÍCIA|DISTRATORES).*?[:\-]\s*(.*)", q_txt_limpo, re.DOTALL)
                                             
                                             if m_hab: st.caption(f"🆔 **Habilidade:** {m_hab.group(1).strip()}")
-                                            if m_just: st.write(f"**🎯 Resposta:** {m_just.group(1).strip()}")
-                                            if m_peri: st.info(f"**🔍 Análise de Erros:** {m_peri.group(1).strip()}")
+                                            if m_just: st.write(f"🎯 **Resposta:** {m_just.group(1).strip()}")
+                                            if m_peri: st.info(f"🔍 **Análise de Erros:** {m_peri.group(1).strip()}")
                                 else: st.write(re.sub(r'[*#]', '', grade_raw))
                             else: st.warning("Grade não localizada.")
 
-                        # ABA 2: PROVA REGULAR
                         with t_ques:
                             st.markdown("##### 📋 Conteúdo da Prova Regular")
                             questoes_reg = ai.extrair_tag(txt_f, "QUESTOES")
@@ -2741,7 +2738,6 @@ elif menu == "📝 Central de Avaliações":
                                 txt_limpo_q = re.sub(r'\[\s*PROMPT IMAGEM:.*?\]', '🖼️ *(Imagem)*', questoes_reg, flags=re.IGNORECASE)
                                 st.write(re.sub(r'[*#]', '', txt_limpo_q))
 
-                        # ABA 3: ADAPTAÇÃO PEI
                         with t_pei_v:
                             st.markdown("##### ♿ Detalhes da Adaptação PEI")
                             pei_txt = ai.extrair_tag(txt_f, "PEI")
@@ -2751,7 +2747,6 @@ elif menu == "📝 Central de Avaliações":
                                 gab_pei = ai.extrair_tag(txt_f, "GABARITO_PEI")
                                 if gab_pei: st.code(re.sub(r'[*#]', '', gab_pei))
 
-                        # ABA 4: PERÍCIA PEI
                         with t_peri_pei:
                             st.markdown("##### 🔬 Grade de Perícia PEI")
                             grade_pei_raw = ai.extrair_tag(txt_f, "GRADE_DE_CORRECAO_PEI")
@@ -2765,8 +2760,8 @@ elif menu == "📝 Central de Avaliações":
                                             q_t_limpo = re.sub(r'[*#]', '', q_t).strip()
                                             m_just_p = re.search(r"(?i)(?:JUSTIFICATIVA|RESPOSTA).*?[:\-]\s*(.*?)(?=ANÁLISE|LACUNA|ERRO|$)", q_t_limpo, re.DOTALL)
                                             m_lacu_p = re.search(r"(?i)(?:ANÁLISE|LACUNA|ERRO).*?[:\-]\s*(.*)", q_t_limpo, re.DOTALL)
-                                            if m_just_p: st.write(f"**🎯 Resposta:** {m_just_p.group(1).strip()}")
-                                            if m_lacu_p: st.warning(f"**🧠 Análise de Lacuna:** {m_lacu_p.group(1).strip()}")
+                                            if m_just_p: st.write(f"🎯 **Resposta:** {m_just_p.group(1).strip()}")
+                                            if m_lacu_p: st.warning(f"🧠 **Análise de Lacuna:** {m_lacu_p.group(1).strip()}")
                                 else: st.write(re.sub(r'[*#]', '', grade_pei_raw))
                             else: st.info("Perícia PEI não disponível.")
         else:
