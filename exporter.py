@@ -540,3 +540,68 @@ def gerar_pptx_v24(titulo_doc, conteudo_ia):
     prs.save(file_stream)
     file_stream.seek(0)
     return file_stream
+
+# ==============================================================================
+# 8. EXPORTADOR DE INICIAÇÃO CIENTÍFICA (V33 - EXCLUSIVO PARA PROJETOS)
+# ==============================================================================
+def gerar_docx_projeto_cientifico_V33(titulo_doc, conteudo_ia, info):
+    """Exportador de Elite para Roteiros de Pesquisa e Projetos BNCC/PHC"""
+    file_stream = io.BytesIO()
+    try:
+        doc = Document()
+        section = doc.sections[0]
+        section.top_margin = section.bottom_margin = Inches(0.4)
+        section.left_margin = section.right_margin = Inches(0.5)
+
+        style = doc.styles['Normal']
+        style.font.name = 'Arial'
+        style.font.size = Pt(10.5)
+
+        # 1. CABEÇALHO MESTRE (Sem nota, pois é projeto)
+        configurar_cabecalho_mestre(doc, info, "ROTEIRO DE INVESTIGAÇÃO", mostrar_nota=False)
+        doc.add_paragraph()
+
+        # 2. MAPEAMENTO DE TAGS CIENTÍFICAS
+        tags_projeto = [
+            ("🎯 CONTEXTO DA INVESTIGAÇÃO", "CONTEXTO_INVESTIGATIVO"),
+            ("🚀 MISSÃO DE PESQUISA", "MISSÃO_DE_PESQUISA"),
+            ("📑 PASSO A PASSO METODOLÓGICO", "PASSO_A_PASSO"),
+            ("📦 PRODUTO ESPERADO", "PRODUTO_ESPERADO"),
+            ("♿ ACESSIBILIDADE (DUA)", "ESTRATEGIA_DUA_PEI"),
+            ("⚖️ RUBRICA DE MÉRITO", "RUBRICA_DE_MERITO")
+        ]
+
+        for label, tag in tags_projeto:
+            texto_secao = ai.extrair_tag(conteudo_ia, tag)
+            if texto_secao:
+                # Título da Seção
+                p_tit = doc.add_paragraph()
+                run_tit = p_tit.add_run(f"█▓▒░ {label}")
+                run_tit.bold = True
+                run_tit.font.size = Pt(11)
+                p_tit.paragraph_format.space_before = Pt(12)
+                p_tit.paragraph_format.space_after = Pt(6)
+
+                # Conteúdo da Seção (Limpeza de ruído)
+                linhas = texto_secao.split('\n')
+                for linha in linhas:
+                    l_s = linha.strip()
+                    if not l_s: continue
+                    p = doc.add_paragraph()
+                    p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+                    
+                    # Se for a Rubrica, aplica um recuo para parecer tabela
+                    if tag == "RUBRICA_DE_MERITO":
+                        p.paragraph_format.left_indent = Inches(0.2)
+                        p.add_run("• ").bold = True
+                    
+                    adicionar_texto_formatado(p, re.sub(r'[*#]', '', l_s))
+
+        doc.save(file_stream)
+        file_stream.seek(0)
+        return file_stream
+    except Exception as e:
+        file_stream = io.BytesIO()
+        err_doc = Document(); err_doc.add_paragraph(f"ERRO NO EXPORTER PROJETO: {str(e)}"); err_doc.save(file_stream)
+        file_stream.seek(0)
+        return file_stream
