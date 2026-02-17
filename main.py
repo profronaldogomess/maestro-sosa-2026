@@ -387,13 +387,32 @@ if menu == "🧪 Criador de Aulas":
 # ... (No Triple-Sync, o código permanece o mesmo da V42.1, pois ele já é robusto)
         
         elif is_projeto:
+            # EXTRAÇÃO ESPECÍFICA PARA PROJETOS CIENTÍFICOS
+            val_just = ai.extrair_tag(txt_base, "JUSTIFICATIVA_PHC")
+            val_ctx = ai.extrair_tag(txt_base, "CONTEXTO_INVESTIGATIVO")
+            val_missao = ai.extrair_tag(txt_base, "MISSÃO_DE_PESQUISA")
+            val_passo = ai.extrair_tag(txt_base, "PASSO_A_PASSO")
+            val_prod = ai.extrair_tag(txt_base, "PRODUTO_ESPERADO")
+            val_rubrica = ai.extrair_tag(txt_base, "RUBRICA_DE_MERITO")
+            val_dua_proj = ai.extrair_tag(txt_base, "ESTRATEGIA_DUA_PEI")
+
             t_prof, t_alu, t_dua, t_sync = st.tabs(["👨‍🏫 Mapa do Professor", "📝 Roteiro do Aluno", "♿ DUA/PEI", "☁️ SINCRONIA"])
+            
             with t_prof:
-                st.text_area("Justificativa e Rubrica:", ed_prof, height=450, key=f"p_proj_area_{v}")
+                st.markdown("#### 🔬 Fundamentação e Rubrica")
+                st.text_area("Justificativa PHC:", val_just, height=200, key=f"p_just_{v}")
+                st.text_area("Rubrica de Mérito:", val_rubrica, height=200, key=f"p_rub_{v}")
+            
             with t_alu:
-                st.text_area("Roteiro Investigativo:", ed_alu, height=450, key=f"a_proj_area_{v}")
+                st.markdown("#### 📋 Guia de Investigação Científica")
+                st.text_area("Contexto Glocal:", val_ctx, height=150, key=f"a_ctx_{v}")
+                st.text_area("Missão de Pesquisa:", val_missao, height=200, key=f"a_missao_{v}")
+                st.text_area("Passo a Passo Metodológico:", val_passo, height=300, key=f"a_passo_{v}")
+                st.text_input("Produto Final:", val_prod, key=f"a_prod_{v}")
+            
             with t_dua:
-                st.text_area("Estratégia DUA:", ed_dua, height=450, key=f"dua_proj_area_{v}")
+                st.markdown("#### ♿ Acessibilidade na Pesquisa")
+                st.text_area("Estratégia DUA:", val_dua_proj, height=300, key=f"dua_proj_area_{v}")
         
         else:
             t_prof, t_alu, t_gab, t_pei, t_sync = st.tabs(["👨‍🏫 Professor", "📝 Aluno", "✅ Gabarito", "♿ PEI", "☁️ SINCRONIA"])
@@ -668,12 +687,10 @@ if menu == "🧪 Criador de Aulas":
                                     f"CONTEÚDOS ITABUNA: {', '.join(conts_t)}.\n"
                                     f"VALOR: {util.sosa_to_str(valor_t)} | DURAÇÃO: {qtd_aulas_t} aulas.\n"
                                     f"EXTRAS: {instr_extra_p}.\n\n"
-                                    f"🚨 AVISO CRÍTICO DE FORMATAÇÃO:\n"
-                                    f"NÃO USE TABELAS DE CARACTERES (BORDAS). O Word quebra a formatação.\n"
-                                    f"Entregue a [RUBRICA_DE_MERITO] em formato de lista de tópicos clara.\n\n"
-                                    f"MISSÃO: Use o ID_FORNECIDO na tag [SOSA_ID]. Gere o material completo com as TAGS [SOSA_ID], [COMPETENCIAS_BNCC], [HABILIDADES_BNCC], [OBJETO_CONHECIMENTO], [CONTEXTO_GLOCAL], [PROFESSOR], [ALUNO], [ESTRATEGIA_DUA_PEI], [RUBRICA_DE_MERITO]."
+                                    f"MISSÃO: Use o ID_FORNECIDO na tag [SOSA_ID]. Gere o material completo com as TAGS [SOSA_ID], [JUSTIFICATIVA_PHC], [CONTEXTO_INVESTIGATIVO], [MISSÃO_DE_PESQUISA], [PASSO_A_PASSO], [PRODUTO_ESPERADO], [ESTRATEGIA_DUA_PEI], [RUBRICA_DE_MERITO]."
                                 )
-                                st.session_state.lab_temp = ai.gerar_ia("ARQUITETO_PROJETOS_V31_ELITE", prompt_t, usar_busca=True)
+                                # CHAMADA PARA A NOVA PERSONA V33
+                                st.session_state.lab_temp = ai.gerar_ia("ARQUITETO_CIENTIFICO_V33", prompt_t, usar_busca=True)
                                 st.session_state.v_lab = int(time.time())
                                 st.rerun()
 
