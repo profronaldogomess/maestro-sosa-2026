@@ -2994,7 +2994,7 @@ elif menu == "📸 Scanner de Gabaritos":
                             del st.session_state.current_scan_img
                             st.rerun()
 
-# --- ABA 2: ATIVIDADES & PROJETOS (V67.0 - SINCRO-CIENTÍFICO & MÉRITO) ---
+# --- ABA 2: ATIVIDADES & PROJETOS (V67.0 - SOBERANIA DE DNA CIENTÍFICO) ---
     with tab_atividades:
         st.subheader("✍️ Gestão de Notas de Projetos e Atividades")
         
@@ -3002,19 +3002,19 @@ elif menu == "📸 Scanner de Gabaritos":
         t_sel_a = c_f1.selectbox("👥 Selecione a Turma:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"t_a_v67_{v}")
         tr_sel_a = c_f2.selectbox("📅 Selecione o Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_a_v67_{v}")
 
-        # Busca ativos (Projetos, Fixação, Reforço, etc)
+        # Busca ativos (Projetos, Fixação, etc)
         opcoes_a = filtrar_ativos_cir_v64(t_sel_a, tr_sel_a, apenas_provas=False)
         at_sel_a = st.selectbox("📋 Selecione o Trabalho ou Atividade:", [""] + opcoes_a, key=f"at_a_sel_v67_{v}")
 
         if not t_sel_a or not at_sel_a:
-            st.info("💡 Selecione a Turma e o Material para abrir a Mesa de Lançamento de Notas.")
+            st.info("💡 Selecione a Turma e o Material para abrir a Mesa de Lançamento.")
         else:
-            # 1. LEITURA E DNA DO MATERIAL
+            # 1. LEITURA E DETECÇÃO DE DNA (HÍBRIDO: AULA OU PROJETO)
             dados_at = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel_a].iloc[0]
             txt_at = str(dados_at['CONTEUDO'])
             
-            # Detecção de Tipo para exibição de Tags
-            is_proj_cientifico = "[JUSTIFICATIVA_PHC]" in txt_at or "PROJETO" in at_sel_a.upper()
+            # Identifica se é o novo formato de Projeto Científico
+            is_projeto_v67 = "[JUSTIFICATIVA_PHC]" in txt_at or "PROJETO" in at_sel_a.upper()
             
             val_sugerido = ai.extrair_tag(txt_at, "VALOR")
             v_max_padrao = util.sosa_to_float(val_sugerido) if val_sugerido else 2.0
@@ -3022,38 +3022,37 @@ elif menu == "📸 Scanner de Gabaritos":
             with st.container(border=True):
                 c_m1, c_m2 = st.columns([2, 1])
                 c_m1.warning(f"📝 **ATIVIDADE EM FOCO:** {at_sel_a}")
-                v_max_ativ = c_m2.number_input("💎 Valor Máximo desta Atividade:", 0.0, 10.0, v_max_padrao, step=0.5, key=f"v_max_v67_{v}")
+                v_max_ativ = c_m2.number_input("💎 Valor Máximo (Autonomia do Professor):", 0.0, 10.0, v_max_padrao, step=0.5, key=f"v_max_v67_{v}")
 
-            # --- 2. VISUALIZAÇÃO HÍBRIDA DE CRITÉRIOS ---
+            # --- 2. VISUALIZAÇÃO INTELIGENTE (MAPEAMENTO DE TAGS V33) ---
             with st.expander("👁️ REVISAR ROTEIRO E CRITÉRIOS (RUBRICA)"):
-                col_v1, col_v2 = st.columns(2)
+                c_v1, c_v2 = st.columns(2)
+                with c_v1:
+                    st.markdown("**👨‍🏫 Guia do Professor / Justificativa:**")
+                    # Se for projeto, pega JUSTIFICATIVA_PHC, se for aula, pega PROFESSOR
+                    txt_p_v67 = ai.extrair_tag(txt_at, "JUSTIFICATIVA_PHC") if is_projeto_v67 else ai.extrair_tag(txt_at, "PROFESSOR")
+                    st.write(re.sub(r'[*#]', '', txt_p_v67))
+                    
+                    if is_projeto_v67:
+                        st.markdown("**⚖️ Rubrica de Mérito:**")
+                        st.info(re.sub(r'[*#]', '', ai.extrair_tag(txt_at, "RUBRICA_DE_MERITO")))
                 
-                if is_proj_cientifico:
-                    with col_v1:
-                        st.markdown("**👨‍🏫 Justificativa e Rubrica:**")
-                        st.info(ai.extrair_tag(txt_at, "JUSTIFICATIVA_PHC"))
-                        st.divider()
-                        st.success(ai.extrair_tag(txt_at, "RUBRICA_DE_MERITO"))
-                    with col_v2:
-                        st.markdown("**📝 Missão e Metodologia:**")
-                        st.warning(ai.extrair_tag(txt_at, "MISSÃO_DE_PESQUISA"))
-                        st.write(ai.extrair_tag(txt_at, "PASSO_A_PASSO"))
-                else:
-                    # Fallback para Aulas de Fixação/Reforço
-                    with col_v1:
-                        st.markdown("**👨‍🏫 Guia do Professor:**")
-                        st.write(ai.extrair_tag(txt_at, "PROFESSOR"))
-                    with col_v2:
-                        st.markdown("**📝 Roteiro do Aluno:**")
-                        st.write(ai.extrair_tag(txt_at, "ALUNO"))
+                with c_v2:
+                    st.markdown("**📝 Roteiro do Aluno / Missão:**")
+                    # Se for projeto, une MISSÃO e PASSO_A_PASSO, se for aula, pega ALUNO
+                    if is_projeto_v67:
+                        txt_a_v67 = f"**MISSÃO:**\n{ai.extrair_tag(txt_at, 'MISSÃO_DE_PESQUISA')}\n\n**PASSO A PASSO:**\n{ai.extrair_tag(txt_at, 'PASSO_A_PASSO')}"
+                    else:
+                        txt_a_v67 = ai.extrair_tag(txt_at, "ALUNO")
+                    st.write(re.sub(r'[*#]', '', txt_a_v67))
 
-            # 3. MESA DE LANÇAMENTO DE NOTAS
+            # --- 3. MESA DE LANÇAMENTO (AUTONOMIA TOTAL) ---
             st.divider()
             st.subheader(f"⭐ Mesa de Notas: {at_sel_a}")
             
             alunos_a = df_alunos[df_alunos['TURMA'] == t_sel_a].sort_values(by="NOME_ALUNO")
             
-            # Busca notas já lançadas no Diário para este material
+            # Busca notas já lançadas para evitar sobreposição acidental
             notas_existentes = {}
             if not df_diario.empty:
                 df_filtro_mat = df_diario[(df_diario['TURMA'] == t_sel_a) & (df_diario['OBSERVACOES'].str.contains(at_sel_a, na=False))]
@@ -3064,9 +3063,11 @@ elif menu == "📸 Scanner de Gabaritos":
             for _, alu in alunos_a.iterrows():
                 id_a = db.limpar_id(alu['ID'])
                 nota_atual = notas_existentes.get(id_a, 0.0)
+                is_pei = str(alu['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"]
+                
                 dados_notas_projeto.append({
                     "ID": id_a, 
-                    "Estudante": alu['NOME_ALUNO'], 
+                    "Estudante": f"♿ {alu['NOME_ALUNO']}" if is_pei else alu['NOME_ALUNO'], 
                     "Nota Alcançada": nota_atual,
                     "Status": "✅ Lançado" if nota_atual > 0 else "⏳ Pendente"
                 })
@@ -3080,31 +3081,38 @@ elif menu == "📸 Scanner de Gabaritos":
                     "Nota Alcançada": st.column_config.NumberColumn(f"Nota (0 a {v_max_ativ})", min_value=0.0, max_value=v_max_ativ, step=0.1, format="%.1f"),
                     "Status": st.column_config.TextColumn("Status", width="small", disabled=True)
                 },
-                key=f"ed_notas_proj_v67_{at_sel_a.replace(' ','_')}"
+                key=f"ed_notas_v67_{at_sel_a.replace(' ','_')}"
             )
 
-            # 4. CONSOLIDAÇÃO NO DIÁRIO (BÔNUS)
+            # --- 4. CONSOLIDAÇÃO NO DIÁRIO (INTEGRAÇÃO COM BÔNUS) ---
             if st.button("💾 CONSOLIDAR NOTAS NO BOLETIM ANUAL", type="primary", use_container_width=True):
                 with st.status("Sincronizando Notas de Mérito...") as status:
                     data_hoje = datetime.now().strftime("%d/%m/%Y")
                     lista_lote_diario = []
                     
                     for _, r in df_notas_ed.iterrows():
-                        # Registra como bônus para somar no Painel de Notas
-                        lista_lote_diario.append([
-                            data_hoje, r['ID'], r['Estudante'], t_sel_a, 
-                            "TRUE", "PROJETO/ATIVIDADE", 
-                            f"[{at_sel_a}] Nota atribuída na CIR.", 
-                            util.sosa_to_str(r['Nota Alcançada'])
-                        ])
+                        # Só salva se o professor atribuiu uma nota ou se já existia uma
+                        if r['Nota Alcançada'] >= 0:
+                            lista_lote_diario.append([
+                                data_hoje, 
+                                r['ID'], 
+                                r['Estudante'].replace("♿ ", ""), 
+                                t_sel_a, 
+                                "TRUE", 
+                                "PROJETO/ATIVIDADE", 
+                                f"[{at_sel_a}] Nota lançada via CIR.", 
+                                util.sosa_to_str(r['Nota Alcançada'])
+                            ])
                     
                     if lista_lote_diario:
-                        # Limpa apenas os registros deste material específico para esta turma hoje
-                        db.excluir_registro("DB_DIARIO_BORDO", f"[{at_sel_a}] Nota atribuída na CIR.")
+                        # Limpa registros antigos deste material para não duplicar bônus
+                        db.excluir_registro("DB_DIARIO_BORDO", f"[{at_sel_a}]")
                         db.salvar_lote("DB_DIARIO_BORDO", lista_lote_diario)
-                        status.update(label=f"✅ Notas de {at_sel_a} integradas!", state="complete")
-                        st.balloons(); time.sleep(1); st.rerun()
                         
+                        status.update(label=f"✅ Notas de {at_sel_a} integradas ao Bônus!", state="complete")
+                        st.balloons()
+                        time.sleep(1); st.rerun()
+
     # ==============================================================================
     # MÓDULO: HUB DE SOBERANIA (V70.0 - SOBERANIA DE VERSÕES E PERFIS)
     # ==============================================================================
