@@ -772,7 +772,7 @@ if menu == "🧪 Criador de Aulas":
                                     st.session_state.v_lab = int(time.time())
                                     st.rerun()
 
-# --- ABA 5: ACERVO DE MATERIAIS (VERSÃO V88 - SEGREGAÇÃO DE ATIVOS DIDÁTICOS) ---
+# --- ABA 5: ACERVO DE MATERIAIS (VERSÃO V89 - CORREÇÃO DE SINTAXE & SEGREGAÇÃO) ---
         with tab_acervo_lab:
             st.subheader("📂 Gestão de Acervo de Materiais (Aulas, Projetos e Complementares)")
             
@@ -783,10 +783,7 @@ if menu == "🧪 Criador de Aulas":
             f_tipo_m = c_m3.selectbox("🧪 Tipo de Ativo:", ["Todos", "Aula", "PROJETO", "Fixação", "Reforço", "Recomposição"], key="m_tipo_filter")
 
             # 2. MOTOR DE FILTRAGEM DE SOBERANIA (EXCLUSÃO DE AVALIAÇÕES)
-            # Filtro A: Remove o que está marcado como AVALIAÇÃO ou REVISÃO na semana de referência
             df_m = df_aulas[~df_aulas['SEMANA_REF'].isin(["AVALIAÇÃO", "REVISÃO"])].copy()
-
-            # Filtro B: Remove por palavras-chave no título (Segurança contra contaminação)
             termos_proibidos = ["TESTE", "PROVA", "SONDA", "RECUPERAÇÃO", "2ª CHAMADA", "2CHAMADA"]
             pattern_excluir = '|'.join(termos_proibidos)
             df_m = df_m[~df_m['TIPO_MATERIAL'].str.upper().str.contains(pattern_excluir, na=False)]
@@ -799,7 +796,7 @@ if menu == "🧪 Criador de Aulas":
             if f_tipo_m != "Todos":
                 df_m = df_m[df_m['TIPO_MATERIAL'].str.upper().str.contains(f_tipo_m.upper())]
 
-            df_m = df_m.iloc[::-1] # Mais recentes no topo
+            df_m = df_m.iloc[::-1] 
 
             if not df_m.empty:
                 st.write(f"📚 **Materiais Didáticos Localizados:** {len(df_m)}")
@@ -813,10 +810,13 @@ if menu == "🧪 Criador de Aulas":
                         
                         st.markdown(f"#### 📘 {identificador}")
                         
-                        # EXTRAÇÃO DE METADADOS BNCC (Se for projeto)
+                        # EXTRAÇÃO DE METADADOS BNCC (CORREÇÃO DE SINTAXE AQUI)
                         if is_projeto_h:
                             val_hab = ai.extrair_tag(txt_f, "HABILIDADES_BNCC") or ai.extrair_tag(txt_f, "HABILIDADE_BNCC")
-                            if val_hab: st.caption(f"🆔 **Habilidades:** {re.sub(r'[*#\[\]]', '', val_hab)}")
+                            if val_hab: 
+                                # Limpa fora da f-string para evitar o erro de backslash
+                                hab_limpa = re.sub(r'[*#\[\]]', '', val_hab).strip()
+                                st.caption(f"🆔 **Habilidades:** {hab_limpa}")
 
                         # 3. EXTRAÇÃO DE LINKS
                         l_alu = re.search(r"(?:Aluno|Regular)\((.*?)\)", txt_f).group(1) if re.search(r"(?:Aluno|Regular)\((.*?)\)", txt_f) else row.get('LINK_DRIVE')
@@ -840,23 +840,27 @@ if menu == "🧪 Criador de Aulas":
                             if db.excluir_registro_com_drive("DB_AULAS_PRONTAS", identificador):
                                 st.rerun()
 
-                        # 4. EXPANDER DE CONTEÚDO (VISÃO HÍBRIDA)
+                        # 4. EXPANDER DE CONTEÚDO (VISÃO HÍBRIDA COM LIMPEZA PRÉVIA)
                         with st.expander("👁️ VER DETALHES DO MATERIAL"):
                             col_v1, col_v2 = st.columns(2)
                             if is_projeto_h:
                                 with col_v1:
                                     st.markdown("**👨‍🏫 Seção do Professor (PHC)**")
-                                    st.info(re.sub(r'[*#]', '', ai.extrair_tag(txt_f, 'JUSTIFICATIVA_PHC')))
+                                    txt_prof_p = re.sub(r'[*#]', '', ai.extrair_tag(txt_f, 'JUSTIFICATIVA_PHC'))
+                                    st.info(txt_prof_p)
                                 with col_v2:
                                     st.markdown("**📝 Roteiro do Aluno**")
-                                    st.success(re.sub(r'[*#]', '', ai.extrair_tag(txt_f, 'MISSÃO_DE_PESQUISA')))
+                                    txt_alu_p = re.sub(r'[*#]', '', ai.extrair_tag(txt_f, 'MISSÃO_DE_PESQUISA'))
+                                    st.success(txt_alu_p)
                             else:
                                 with col_v1:
                                     st.markdown("#### 👨‍🏫 Seção do Professor")
-                                    st.write(re.sub(r'[*#]', '', ai.extrair_tag(txt_f, "PROFESSOR") or "Conteúdo não formatado."))
+                                    txt_prof_r = re.sub(r'[*#]', '', ai.extrair_tag(txt_f, "PROFESSOR") or "Conteúdo não formatado.")
+                                    st.write(txt_prof_r)
                                 with col_v2:
                                     st.markdown("#### 📝 Seção do Aluno")
-                                    st.write(re.sub(r'[*#]', '', ai.extrair_tag(txt_f, "ALUNO") or "Conteúdo não formatado."))
+                                    txt_alu_r = re.sub(r'[*#]', '', ai.extrair_tag(txt_f, "ALUNO") or "Conteúdo não formatado.")
+                                    st.write(txt_alu_r)
             else:
                 st.info("📭 Nenhum material didático encontrado. (Avaliações são exibidas na Central de Avaliações)")
                 
