@@ -2147,20 +2147,20 @@ elif menu == "📚 Base de Conhecimento":
         st.dataframe(df_materiais, use_container_width=True, hide_index=True)
 
 # ==============================================================================
-# MÓDULO: RELATÓRIOS PEI V36 - ANÁLISE LONGITUDINAL DE EVOLUÇÃO (COMPLETO)
+# MÓDULO: RELATÓRIOS PEI V37 - HUB DE INTERCONEXÃO E CUSTÓDIA (REGENERADO)
 # ==============================================================================
 elif menu == "♿ Relatórios PEI / Perfil IA":
-    st.title("♿ Analista de Inclusão: Dossiê de Evolução & Perfil IA")
+    st.title("♿ Analista de Inclusão: Hub de Interconexão V37")
     st.markdown("---")
 
     if df_alunos.empty:
         st.warning("⚠️ Base de alunos vazia.")
     else:
-        # --- 1. SELEÇÃO DE ESTUDANTE ---
+        # --- 1. SELEÇÃO DE ESTUDANTE (Soberania de Observação) ---
         with st.container(border=True):
             c_t, c_a = st.columns([1, 2])
             lista_turmas = sorted(df_alunos['TURMA'].unique())
-            turma_pei = c_t.selectbox("🎯 Filtrar Turma:", lista_turmas, key="pei_t_v36")
+            turma_pei = c_t.selectbox("🎯 Filtrar Turma:", lista_turmas, key="pei_t_v37")
             df_turma_foco = df_alunos[df_alunos['TURMA'] == turma_pei].copy()
             
             def definir_icone_status(nec):
@@ -2172,93 +2172,125 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
             df_turma_foco['STATUS_ICON'] = df_turma_foco['NECESSIDADES'].apply(definir_icone_status)
             df_turma_foco['LABEL'] = df_turma_foco.apply(lambda x: f"{x['STATUS_ICON']} {x['NOME_ALUNO']} | {x['NECESSIDADES']}", axis=1)
             
-            aluno_sel_label = c_a.selectbox("🔍 Selecionar Estudante:", df_turma_foco['LABEL'].tolist(), key="pei_a_v36")
+            aluno_sel_label = c_a.selectbox("🔍 Selecionar Estudante:", df_turma_foco['LABEL'].tolist(), key="pei_a_v37")
             
             nome_limpo = aluno_sel_label.split(" | ")[0][2:].strip()
             dados_a = df_turma_foco[df_turma_foco['NOME_ALUNO'] == nome_limpo].iloc[0]
             id_a = db.limpar_id(dados_a['ID'])
             perfil_atual = dados_a['NECESSIDADES']
 
-        # --- 2. MOTOR DE BUSCA DE PASSADO E PRESENTE ---
-        with st.status("🔍 Maestro Sosa realizando busca longitudinal...", expanded=False) as status:
-            # A. Busca o ÚLTIMO relatório salvo (O Passado)
-            ultimo_relatorio_txt = "Nenhum relatório anterior localizado para comparação."
-            data_ultimo = "N/A"
-            if not df_relatorios.empty:
-                hist_aluno = df_relatorios[df_relatorios['ID_ALUNO'].apply(db.limpar_id) == id_a]
-                if not hist_aluno.empty:
-                    # Pega a última linha (mais recente)
-                    registro_antigo = hist_aluno.iloc[-1]
-                    ultimo_relatorio_txt = registro_antigo['CONTEUDO']
-                    data_ultimo = registro_antigo['DATA']
-
-            # B. Dados do Diário (O Presente)
+        # --- 2. MOTOR DE FUSÃO DE DADOS (INTERCONEXÃO) ---
+        with st.status("🔍 Maestro Sosa interconectando painéis...", expanded=False) as status:
+            # A. Busca do Passado (Relatórios)
+            ultimo_relatorio = df_relatorios[df_relatorios['ID_ALUNO'].apply(db.limpar_id) == id_a].iloc[-1]['CONTEUDO'] if not df_relatorios.empty and not df_relatorios[df_relatorios['ID_ALUNO'].apply(db.limpar_id) == id_a].empty else "Primeiro registro."
+            
+            # B. Busca do Presente (Diário)
             d_aluno = df_diario[df_diario['ID_ALUNO'].apply(db.limpar_id) == id_a] if not df_diario.empty else pd.DataFrame()
-            vistos_contagem = len(d_aluno[d_aluno['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"])
-            bonus_total = d_aluno['BONUS'].apply(util.sosa_to_float).sum()
-            obs_campo = d_aluno[d_aluno['OBSERVACOES'] != ""]['OBSERVACOES'].tail(5).tolist()
+            vistos = len(d_aluno[d_aluno['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"])
+            bonus = d_aluno['BONUS'].apply(util.sosa_to_float).sum()
+            obs_recentes = d_aluno[d_aluno['OBSERVACOES'] != ""]['OBSERVACOES'].tail(5).tolist()
             
-            # C. Dados do Scanner
+            # C. Busca da Performance (Scanner)
             s_aluno = df_diagnosticos[df_diagnosticos['ID_ALUNO'].apply(db.limpar_id) == id_a] if not df_diagnosticos.empty else pd.DataFrame()
-            media_scanner = s_aluno['NOTA_CALCULADA'].apply(util.sosa_to_float).mean() if not s_aluno.empty else 0.0
-            nota_safra_hoje = min(10.0, media_scanner + bonus_total)
+            media_scan = s_aluno['NOTA_CALCULADA'].apply(util.sosa_to_float).mean() if not s_aluno.empty else 0.0
+            nota_safra = min(10.0, media_scan + bonus)
 
-            status.update(label=f"✅ Memória de Safra Carregada! (Último relato: {data_ultimo})", state="complete")
+            # D. Busca da Intencionalidade (Ponto ID)
+            # Pega a estratégia DUA do último plano gerado para este ano
+            estrategia_planejada = "Aguardando novo plano no Ponto ID."
+            if not df_planos.empty:
+                p_ano = df_planos[df_planos['ANO'].str.contains(str(turma_pei[0]), na=False)]
+                if not p_ano.empty:
+                    ultimo_p = p_ano.iloc[-1]['PLANO_TEXTO']
+                    estrategia_planejada = ai.extrair_tag(ultimo_p, "ESTRATEGIA_DUA_PEI") or ai.extrair_tag(ultimo_p, "ADAPTACAO_PEI")
 
-        # --- 3. DASHBOARD COMPARATIVO ---
-        st.markdown(f"### 📊 Evolução Pedagógica: {nome_limpo}")
+            status.update(label="✅ Interconexão Concluída!", state="complete")
+
+        # --- 3. DASHBOARD DE SOBERANIA ---
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Vistos Atuais", f"{vistos_contagem}")
-        c2.metric("Mérito ⭐", f"{bonus_total:.1f}")
-        c3.metric("Nota de Safra", f"{nota_safra_hoje:.1f}")
-        c4.metric("Relatos Anteriores", len(hist_aluno) if 'hist_aluno' in locals() else 0)
+        c1.metric("Engajamento (Vistos)", vistos)
+        c2.metric("Mérito (Estrelas ⭐)", f"{bonus:.1f}")
+        c3.metric("Nota de Safra", f"{nota_safra:.1f}")
+        c4.metric("Status", "Típico" if "NENHUMA" in perfil_atual.upper() else "Inclusão")
 
-        tab_rel, tab_zap, tab_hist = st.tabs(["🧠 Gerar Relatório de Evolução", "📱 Comunicado Pais", "🗂️ Histórico Completo"])
+        # --- 4. ABAS MODERNIZADAS ---
+        tab_evolucao, tab_pei_doc, tab_familia, tab_timeline = st.tabs([
+            "📈 1. Relatório de Evolução", 
+            "🏛️ 2. Plano de Acessibilidade (PEI)", 
+            "📱 3. Ponte Família (WhatsApp)", 
+            "🗂️ 4. Linha do Tempo"
+        ])
 
-        with tab_rel:
-            if data_ultimo != "N/A":
-                st.info(f"📜 **Contexto Detectado:** O sistema encontrou um relatório de {data_ultimo}. A IA irá comparar os dados atuais com este registro.")
+        # ABA 1: EVOLUÇÃO (O que o senhor já testou e aprovou)
+        with tab_evolucao:
+            st.subheader("📝 Análise Longitudinal de Processos")
+            percepcao_v37 = st.text_area("Observações de campo (O que a IA não viu?):", key="perc_v37")
+            if st.button("🚀 GERAR RELATÓRIO DE EVOLUÇÃO", type="primary", use_container_width=True):
+                prompt_ev = f"ESTUDANTE: {nome_limpo}. PASSADO: {ultimo_relatorio}. VISTOS: {vistos}. NOTA: {nota_safra}. OBS: {obs_recentes}. PERCEPÇÃO: {percepcao_v37}. Compare e gere o relatório de evolução pedagógica."
+                st.session_state.res_v37_rel = ai.gerar_ia("ESPECIALISTA_INCLUSAO", prompt_ev)
             
-            percepcao_input = st.text_area("O que você notou de DIFERENTE desde o último relatório?", 
-                                   placeholder="Ex: Ela parou de chorar e começou a tentar ler as primeiras sílabas...",
-                                   key="area_percepcao_v36")
+            if "res_v37_rel" in st.session_state:
+                st.text_area("Resultado:", st.session_state.res_v37_rel, height=300)
+                if st.button("💾 ARQUIVAR NO DOSSIÊ"):
+                    db.salvar_no_banco("DB_RELATORIOS", [datetime.now().strftime("%d/%m/%Y"), id_a, nome_limpo, "EVOLUÇÃO", st.session_state.res_v37_rel])
+                    st.success("Arquivado!")
+
+        # ABA 2: CAPA DO PEI (INTERLIGADO AO PONTO ID)
+        with tab_pei_doc:
+            st.subheader("🏛️ Seção 1: Plano de Acessibilidade Individual")
+            st.info(f"🔍 **Estratégia detectada no Ponto ID:** {estrategia_planejada}")
             
-            if st.button("🚀 GERAR ANÁLISE DE EVOLUÇÃO", type="primary", use_container_width=True):
-                with st.spinner("Maestro Sosa cruzando as safras..."):
-                    prompt_v36 = (
-                        f"ESTUDANTE: {nome_limpo}. PERFIL: {perfil_atual}.\n\n"
-                        f"--- CONTEXTO HISTÓRICO (RELATÓRIO ANTERIOR DE {data_ultimo}) ---\n"
-                        f"{ultimo_relatorio_txt}\n\n"
-                        f"--- DADOS ATUAIS (EVIDÊNCIAS DE AGORA) ---\n"
-                        f"- VISTOS: {vistos_contagem}.\n"
-                        f"- NOTA DE SAFRA: {nota_safra_hoje:.1f}.\n"
-                        f"- OBSERVAÇÕES RECENTES: {'; '.join(obs_campo)}.\n"
-                        f"- PERCEPÇÃO DO PROFESSOR: {percepcao_input}\n\n"
-                        f"🚨 MISSÃO DE SOBERANIA:\n"
-                        f"1. Compare o presente com o passado.\n"
-                        f"2. Se os vistos aumentaram, registre como 'AVANÇO NO ENGAJAMENTO'.\n"
-                        f"3. Se a barreira (ex: choro) diminuiu, registre como 'MELHORA NO CLIMA EMOCIONAL'.\n"
-                        f"4. Se nada mudou, aponte a 'ESTAGNAÇÃO' e sugira novos caminhos.\n"
-                        f"5. Mantenha o tom técnico e sem diagnósticos médicos."
+            if st.button("📄 GERAR DOCUMENTO OFICIAL (SINCRO)", use_container_width=True):
+                with st.spinner("Sincronizando intencionalidade pedagógica..."):
+                    prompt_pei_doc = (
+                        f"ALUNO: {nome_limpo}. PERFIL: {perfil_atual}.\n"
+                        f"ESTRATÉGIA PLANEJADA NO PONTO ID: {estrategia_planejada}.\n"
+                        f"MISSÃO: Redija a Seção 1 do PEI (Habilidades e Acessibilidade). "
+                        f"O texto deve validar que o professor Ronaldo está aplicando a estratégia planejada."
                     )
-                    st.session_state.res_pei_v36 = ai.gerar_ia("ESPECIALISTA_INCLUSAO", prompt_v36)
+                    st.session_state.res_v37_pei = ai.gerar_ia("ESPECIALISTA_PEI", prompt_pei_doc)
             
-            if "res_pei_v36" in st.session_state:
-                txt_final = st.text_area("Relatório de Evolução:", st.session_state.res_pei_v36, height=450)
-                if st.button("💾 ARQUIVAR NOVA ETAPA NO DOSSIÊ"):
-                    db.salvar_no_banco("DB_RELATORIOS", [datetime.now().strftime("%d/%m/%Y"), id_a, nome_limpo, "EVOLUÇÃO_TRIMESTRAL", txt_final])
-                    st.success("Nova etapa do dossiê arquivada!")
-                    st.rerun()
+            if "res_v37_pei" in st.session_state:
+                st.text_area("Plano de Acessibilidade:", st.session_state.res_v37_pei, height=300)
+                if st.button("💾 SALVAR COMO CAPA DO PEI"):
+                    db.salvar_no_banco("DB_RELATORIOS", [datetime.now().strftime("%d/%m/%Y"), id_a, nome_limpo, "CAPA_PEI", st.session_state.res_v37_pei])
+                    st.success("Capa do PEI salva!")
 
-        # (Aba de Histórico permanece para consulta de todos os anteriores)
-        with tab_hist:
-            st.subheader("🗂️ Linha do Tempo do Estudante")
+        # ABA 3: PONTE FAMÍLIA (INTERLIGADO AO DIÁRIO/BÔNUS)
+        with tab_familia:
+            st.subheader("📱 Comunicação Inteligente com Responsáveis")
+            
+            # Lógica de Tom Automático
+            tom_sugerido = "Celebrativo (Foco no Bônus)" if bonus > 0 else "Incentivador (Foco no Engajamento)"
+            st.write(f"💡 **Sugestão Sosa:** Tom {tom_sugerido}")
+            
+            c_zap1, c_zap2 = st.columns(2)
+            tom_manual = c_zap1.selectbox("Ajustar Tom:", ["Celebrativo", "Incentivador", "Alerta de Frequência", "Convite para Reunião"])
+            canal = c_zap2.selectbox("Canal:", ["WhatsApp", "Bilhete no Caderno", "E-mail Oficial"])
+
+            if st.button("🚀 GERAR MENSAGEM INTERCONECTADA", use_container_width=True):
+                prompt_zap = (
+                    f"ALUNO: {nome_limpo}. DADOS: {vistos} vistos, {bonus} estrelas de bônus. "
+                    f"OBSERVAÇÕES: {obs_recentes}. TOM: {tom_manual}. CANAL: {canal}. "
+                    f"MISSÃO: Gere uma mensagem curta e humana para os pais."
+                )
+                st.session_state.res_v37_zap = ai.gerar_ia("PONTE_FAMILIA", prompt_zap)
+            
+            if "res_v37_zap" in st.session_state:
+                st.success(f"Mensagem para {canal}:")
+                st.write(st.session_state.res_v37_zap)
+                st.caption("Copiado para a área de transferência (Simulado)")
+
+        # ABA 4: TIMELINE (CUSTÓDIA TOTAL)
+        with tab_timeline:
+            st.subheader("🗂️ Linha do Tempo de Custódia Digital")
             if not df_relatorios.empty:
                 hist_total = df_relatorios[df_relatorios['ID_ALUNO'].apply(db.limpar_id) == id_a].iloc[::-1]
-                for _, row in hist_total.iterrows():
-                    with st.expander(f"📅 {row.get('DATA')} - {row.get('TIPO')}"):
-                        st.write(row.get('CONTEUDO'))
-
+                if not hist_total.empty:
+                    for _, row in hist_total.iterrows():
+                        with st.expander(f"📅 {row.get('DATA')} — {row.get('TURMA')}"): # Aqui 'TURMA' guarda o TIPO do relatório
+                            st.write(row.get('CONTEUDO'))
+                else: st.info("📭 Nenhuma evidência arquivada.")
 
 # ==============================================================================
 # MÓDULO: CENTRAL DE AVALIAÇÕES (V64.0 - ACERVO PIP E SINCRONIA TOTAL)
