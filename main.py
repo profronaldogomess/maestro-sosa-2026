@@ -1964,7 +1964,7 @@ elif menu == "👥 Gestão da Turma":
                     for _, alu in df_pei_turma.iterrows():
                         st.warning(f"♿ {alu['NOME_ALUNO']}")
 
-# --- ABA 2: ARQUITETURA DE TURMAS (VERSÃO V32.1 - ESCUDO ANTI-DUPLICIDADE) ---
+    # --- ABA 2: ARQUITETURA DE TURMAS (V34 - ESCUDO ANTI-DUPLICIDADE) ---
     with tab_criar:
         st.subheader("🏗️ Configurar Nova Turma")
         v_t = f"t_{v}"
@@ -1985,18 +1985,17 @@ elif menu == "👥 Gestão da Turma":
         horarios_escolhidos = {}
         if dias_aula:
             st.markdown("#### ⏰ Defina o Tempo de Aula por dia")
-            if turno_t == "Matutino":
-                opcoes_h = {"1º Tempo": "07:10h – 09:10h", "2º Tempo": "09:30h – 11:30h"}
-            elif turno_t == "Vespertino":
-                opcoes_h = {"1º Tempo": "13:10h – 15:10h", "2º Tempo": "15:30h – 17:30h"}
-            else:
-                opcoes_h = {"1º Tempo": "18:30h – 20:30h", "2º Tempo": "20:40h – 22:40h"}
-
+            opcoes_h = {
+                "Matutino": {"1º Tempo": "07:10h – 09:10h", "2º Tempo": "09:30h – 11:30h"},
+                "Vespertino": {"1º Tempo": "13:10h – 15:10h", "2º Tempo": "15:30h – 17:30h"},
+                "Noturno": {"1º Tempo": "18:30h – 20:30h", "2º Tempo": "20:40h – 22:40h"}
+            }
+            
             cols_h = st.columns(len(dias_aula))
             for i, dia in enumerate(dias_aula):
                 with cols_h[i]:
                     st.info(f"**{dia}**")
-                    t_sel = st.radio(f"Horário para {dia}:", options=list(opcoes_h.keys()), key=f"radio_{dia}_{v_t}")
+                    t_sel = st.radio(f"Horário para {dia}:", options=list(opcoes_h[turno_t].keys()), key=f"radio_{dia}_{v_t}")
                     horarios_escolhidos[dia] = t_sel
             
             st.divider()
@@ -2005,7 +2004,6 @@ elif menu == "👥 Gestão da Turma":
                 prefixo_turno = turno_t[0].upper() 
                 sigla = f"{ano_t}ª {prefixo_turno}{letra_t}" 
                 
-                # ESCUDO DE INTEGRIDADE
                 turmas_existentes = df_turmas['ID_TURMA'].astype(str).str.strip().tolist() if not df_turmas.empty else []
 
                 if sigla in turmas_existentes:
@@ -2014,63 +2012,87 @@ elif menu == "👥 Gestão da Turma":
                     with st.status("Sincronizando Nova Arquitetura...") as status:
                         str_dias = " / ".join(dias_aula)
                         str_horarios = " / ".join([f"{d[:3]}: {horarios_escolhidos[d]}" for d in dias_aula])
-                        
-                        sucesso = db.salvar_no_banco("DB_TURMAS", [
-                            sigla, f"{ano_t}º Ano {letra_t}", turno_t, str_dias, str_horarios, "ATIVO"
-                        ])
-                        
+                        sucesso = db.salvar_no_banco("DB_TURMAS", [sigla, f"{ano_t}º Ano {letra_t}", turno_t, str_dias, str_horarios, "ATIVO"])
                         if sucesso:
                             status.update(label=f"✅ Turma {sigla} cadastrada!", state="complete")
-                            st.balloons()
-                            time.sleep(1.5)
-                            st.cache_data.clear()
-                            st.rerun()
+                            st.balloons(); time.sleep(1); st.cache_data.clear(); st.rerun()
 
-    # --- ABA 3: POVOAR ALUNOS (VERSÃO V33.0 - ID AUTOMÁTICO) ---
+    # --- ABA 3: POVOAR ALUNOS (V34 - SENSOR CLÍNICO & IMPORTAÇÃO BLINDADA) ---
     with tab_povoar:
         st.subheader("➕ Inclusão de Estudantes")
         if df_turmas.empty:
             st.warning("Cadastre uma turma primeiro.")
         else:
             t_dest = st.selectbox("Turma de Destino:", df_turmas['ID_TURMA'].tolist(), key=f"dest_{v}")
-            metodo = st.radio("Método de Inclusão:", ["Manual", "Importar CSV"], horizontal=True, key=f"met_{v}")
+            metodo = st.radio("Método de Inclusão:", ["Manual (Perfil Clínico)", "Importar CSV (Lote)"], horizontal=True, key=f"met_{v}")
             
-            if metodo == "Manual":
-                with st.form("f_manual_povoar", clear_on_submit=True):
-                    c_n1, c_n2 = st.columns([2, 1])
-                    nome_a = c_n1.text_input("Nome Completo do Aluno:").upper()
-                    nec_a = c_n2.text_input("Necessidades/CID:", value="NENHUMA").upper()
+            if "Manual" in metodo:
+                with st.form("f_manual_povoar_v34", clear_on_submit=True):
+                    st.markdown("#### 👤 Cadastro Individual de Elite")
+                    nome_a = st.text_input("Nome Completo do Aluno:").upper()
                     
-                    if st.form_submit_button("💾 SALVAR ESTUDANTE"):
+                    c1, c2 = st.columns(2)
+                    perfil_base = c1.selectbox("Perfil de Inclusão:", 
+                        ["TÍPICO (SEM NECESSIDADES)", "TEA (AUTISMO)", "TDAH", "DISLEXIA", "DISCALCULIA", "DEFICIÊNCIA INTELECTUAL", "ALTAS HABILIDADES", "OUTRO"])
+                    
+                    status_clinico = c2.radio("Status do Diagnóstico:", ["Laudado (Confirmado)", "Sob Suspeita (Em Investigação)"], horizontal=True)
+                    
+                    detalhe_cid = st.text_input("CID ou Observação Clínica (Opcional):", placeholder="Ex: CID 10 - F84.0")
+                    
+                    if st.form_submit_button("💾 SALVAR ESTUDANTE NO BANCO"):
                         if nome_a:
+                            # Lógica de Tag Clínica
+                            tag_final = perfil_base
+                            if "Suspeita" in status_clinico:
+                                tag_final = f"SUSPEITA: {perfil_base}"
+                            if detalhe_cid:
+                                tag_final += f" ({detalhe_cid.upper()})"
+                            if perfil_base == "TÍPICO (SEM NECESSIDADES)":
+                                tag_final = "NENHUMA"
+
                             id_n = db.gerar_proximo_id(df_alunos)
-                            if db.salvar_no_banco("DB_ALUNOS", [id_n, nome_a.strip(), t_dest, "ATIVO", nec_a.strip(), "MANUAL"]):
+                            if db.salvar_no_banco("DB_ALUNOS", [id_n, nome_a.strip(), t_dest, "ATIVO", tag_final, "MANUAL"]):
                                 st.success(f"✅ {nome_a} cadastrado com ID {id_n}!")
                                 st.cache_data.clear()
                         else:
                             st.error("O nome do aluno é obrigatório.")
             else:
-                st.info("O CSV deve conter a coluna 'NOME'.")
+                st.markdown("#### 📥 Importação em Lote (CSV)")
+                st.info("O CSV deve conter as colunas: **NOME_ALUNO** e **NECESSIDADES**.")
                 f_csv = st.file_uploader("Selecione o arquivo CSV", type=["csv"], key=f"csv_up_{v}")
-                if f_csv and st.button("🚀 INICIAR IMPORTAÇÃO EM LOTE"):
+                
+                if f_csv:
                     df_up = pd.read_csv(f_csv)
-                    id_base = db.gerar_proximo_id(df_alunos)
-                    linhas_lote = []
-                    for idx, r in df_up.iterrows():
-                        nec_csv = str(r['NECESSIDADES']).upper().strip() if 'NECESSIDADES' in df_up.columns else "NENHUMA"
-                        linhas_lote.append([id_base + idx, str(r['NOME']).upper().strip(), t_dest, "ATIVO", nec_csv, "CSV"])                   
-                    if db.salvar_lote("DB_ALUNOS", linhas_lote):
-                        st.success(f"✅ {len(linhas_lote)} alunos importados!"); st.cache_data.clear(); st.rerun()
+                    # Normalização de Colunas (Vacina contra KeyError)
+                    df_up.columns = [c.strip().upper() for c in df_up.columns]
+                    
+                    # Mapeamento de colunas flexível
+                    col_nome = "NOME_ALUNO" if "NOME_ALUNO" in df_up.columns else "NOME" if "NOME" in df_up.columns else None
+                    col_nec = "NECESSIDADES" if "NECESSIDADES" in df_up.columns else "NECESSIDADE" if "NECESSIDADE" in df_up.columns else None
 
-    # --- ABA 4: EDIÇÃO & TRANSFERÊNCIA (VERSÃO V33.5 - EXCLUSÃO CIRÚRGICA) ---
+                    if not col_nome:
+                        st.error("❌ Coluna de Nome não encontrada no CSV. Use 'NOME_ALUNO'.")
+                    else:
+                        st.dataframe(df_up.head(), use_container_width=True)
+                        if st.button("🚀 INICIAR IMPORTAÇÃO EM LOTE", type="primary"):
+                            id_base = db.gerar_proximo_id(df_alunos)
+                            linhas_lote = []
+                            for idx, r in df_up.iterrows():
+                                nec_val = str(r[col_nec]).upper().strip() if col_nec else "NENHUMA"
+                                if nec_val == "NAN" or not nec_val: nec_val = "NENHUMA"
+                                
+                                linhas_lote.append([id_base + idx, str(r[col_nome]).upper().strip(), t_dest, "ATIVO", nec_val, "CSV"])
+                            
+                            if db.salvar_lote("DB_ALUNOS", linhas_lote):
+                                st.success(f"✅ {len(linhas_lote)} alunos importados com sucesso!"); st.cache_data.clear(); st.rerun()
+
+    # --- ABA 4: EDIÇÃO & TRANSFERÊNCIA (V34 - SOBERANIA DE MOVIMENTAÇÃO) ---
     with tab_editar:
         st.subheader("✏️ Gestão de Cadastro e Movimentação")
-        turmas_lista = sorted(df_alunos['TURMA'].unique().tolist()) if not df_alunos.empty else []
-        
-        if not turmas_lista:
-            st.info("Nenhum aluno cadastrado para editar.")
+        if df_alunos.empty:
+            st.info("Nenhum aluno cadastrado.")
         else:
-            t_origem = st.selectbox("Selecione a Turma Atual:", [""] + turmas_lista, key=f"orig_ed_{v}")
+            t_origem = st.selectbox("Selecione a Turma Atual:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"orig_ed_{v}")
             
             if t_origem:
                 alunos_opcoes = df_alunos[df_alunos['TURMA'] == t_origem].sort_values(by="NOME_ALUNO")
@@ -2079,30 +2101,28 @@ elif menu == "👥 Gestão da Turma":
                 dados_atuais = alunos_opcoes[alunos_opcoes['NOME_ALUNO'] == aluno_sel_nome].iloc[0]
                 id_fixo = dados_atuais['ID']
 
-                with st.form("form_edicao_aluno_v33"):
-                    st.info(f"🆔 Editando Registro ID: {id_fixo}")
-                    c_e1, c_e2 = st.columns(2)
-                    novo_nome = c_e1.text_input("Nome Completo:", value=dados_atuais['NOME_ALUNO']).upper()
-                    nova_nec = c_e2.text_input("Necessidades/CID:", value=dados_atuais['NECESSIDADES']).upper()
+                with st.form("form_edicao_v34"):
+                    st.markdown(f"#### 📝 Editando: {aluno_sel_nome} (ID: {id_fixo})")
+                    c1, c2 = st.columns(2)
+                    novo_nome = c1.text_input("Nome Completo:", value=dados_atuais['NOME_ALUNO']).upper()
+                    nova_nec = c2.text_input("Necessidades/CID/Suspeita:", value=dados_atuais['NECESSIDADES']).upper()
                     
-                    c_e3, c_e4 = st.columns(2)
-                    novo_status = c_e3.selectbox("Status:", ["ATIVO", "DESISTENTE", "TRANSFERIDO"], index=0)
+                    c3, c4 = st.columns(2)
+                    novo_status = c3.selectbox("Status do Aluno:", ["ATIVO", "DESISTENTE", "TRANSFERIDO", "AFASTADO"], 
+                                             index=["ATIVO", "DESISTENTE", "TRANSFERIDO", "AFASTADO"].index(dados_atuais['STATUS']) if dados_atuais['STATUS'] in ["ATIVO", "DESISTENTE", "TRANSFERIDO", "AFASTADO"] else 0)
                     
-                    lista_turmas_total = df_turmas['ID_TURMA'].tolist()
-                    idx_t = lista_turmas_total.index(t_origem) if t_origem in lista_turmas_total else 0
-                    nova_turma = c_e4.selectbox("Transferir para Turma:", lista_turmas_total, index=idx_t)
+                    lista_turmas = df_turmas['ID_TURMA'].tolist()
+                    idx_t = lista_turmas.index(t_origem) if t_origem in lista_turmas else 0
+                    nova_turma = c4.selectbox("Transferir para Turma:", lista_turmas, index=idx_t)
                     
-                    if st.form_submit_button("💾 CONFIRMAR ALTERAÇÕES"):
+                    if st.form_submit_button("💾 CONFIRMAR ALTERAÇÕES E SINCRONIZAR"):
                         with st.status("Executando Protocolo de Atualização...") as status:
-                            # 1. Remove o registro antigo pelo ID único
+                            # 1. Remove o registro antigo
                             if db.excluir_aluno_por_id(id_fixo):
-                                # 2. Salva o novo registro mantendo o mesmo ID
-                                sucesso = db.salvar_no_banco("DB_ALUNOS", [
-                                    id_fixo, novo_nome.strip(), nova_turma, 
-                                    novo_status, nova_nec.strip(), "EDITADO"
-                                ])
+                                # 2. Salva o novo registro mantendo o ID original
+                                sucesso = db.salvar_no_banco("DB_ALUNOS", [id_fixo, novo_nome.strip(), nova_turma, novo_status, nova_nec.strip(), "EDITADO"])
                                 if sucesso:
-                                    status.update(label="✅ Cadastro Atualizado!", state="complete")
+                                    status.update(label="✅ Cadastro Atualizado com Sucesso!", state="complete")
                                     st.balloons(); time.sleep(1); st.cache_data.clear(); st.rerun()
 
 # ==============================================================================
