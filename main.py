@@ -2214,10 +2214,10 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
         c4.metric("Status", "Típico" if "NENHUMA" in perfil_atual.upper() else "Inclusão")
 
         # --- 4. ABAS MODERNIZADAS ---
-        tab_evolucao, tab_pei_doc, tab_familia, tab_timeline = st.tabs([
+        tab_evolucao, tab_pei_doc, tab_coord, tab_timeline = st.tabs([
             "📈 1. Relatório de Evolução", 
             "🏛️ 2. Plano de Acessibilidade (PEI)", 
-            "📱 3. Ponte Família (WhatsApp)", 
+            "📱 Relato Rápido para Coordenação", 
             "🗂️ 4. Linha do Tempo"
         ])
 
@@ -2256,31 +2256,27 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                     db.salvar_no_banco("DB_RELATORIOS", [datetime.now().strftime("%d/%m/%Y"), id_a, nome_limpo, "CAPA_PEI", st.session_state.res_v37_pei])
                     st.success("Capa do PEI salva!")
 
-        # ABA 3: PONTE FAMÍLIA (INTERLIGADO AO DIÁRIO/BÔNUS)
-        with tab_familia:
-            st.subheader("📱 Comunicação Inteligente com Responsáveis")
-            
-            # Lógica de Tom Automático
-            tom_sugerido = "Celebrativo (Foco no Bônus)" if bonus > 0 else "Incentivador (Foco no Engajamento)"
-            st.write(f"💡 **Sugestão Sosa:** Tom {tom_sugerido}")
-            
-            c_zap1, c_zap2 = st.columns(2)
-            tom_manual = c_zap1.selectbox("Ajustar Tom:", ["Celebrativo", "Incentivador", "Alerta de Frequência", "Convite para Reunião"])
-            canal = c_zap2.selectbox("Canal:", ["WhatsApp", "Bilhete no Caderno", "E-mail Oficial"])
+        # ABA 3: PONTE COORDENAÇÃO (WHATSAPP RÁPIDO)
+        with tab_coord: # Pode renomear a variável da aba para tab_coord se desejar
+            st.subheader("📱 Relato Rápido para Coordenação")
+            st.caption("Gere um texto curto e simples para copiar e colar no WhatsApp.")
 
-            if st.button("🚀 GERAR MENSAGEM INTERCONECTADA", use_container_width=True):
-                prompt_zap = (
-                    f"ALUNO: {nome_limpo}. DADOS: {vistos} vistos, {bonus} estrelas de bônus. "
-                    f"OBSERVAÇÕES: {obs_recentes}. TOM: {tom_manual}. CANAL: {canal}. "
-                    f"MISSÃO: Gere uma mensagem curta e humana para os pais."
-                )
-                st.session_state.res_v37_zap = ai.gerar_ia("PONTE_FAMILIA", prompt_zap)
+            if st.button("🚀 GERAR RELATO CURTO (WHATSAPP)", use_container_width=True):
+                with st.spinner("Resumindo evidências..."):
+                    prompt_coord = (
+                        f"ALUNO: {nome_limpo}. "
+                        f"DADOS REAIS: {vistos} vistos, {bonus} estrelas de bônus, nota de safra {nota_safra:.1f}. "
+                        f"OBSERVAÇÕES RECENTES: {'; '.join(obs_recentes)}. "
+                        f"MISSÃO: Gere um relato curto e objetivo para a coordenação. "
+                        f"Fale do perfil pedagógico e comportamental com palavras fáceis."
+                    )
+                    st.session_state.res_v37_coord = ai.gerar_ia("PONTE_COORDENACAO", prompt_coord)
             
-            if "res_v37_zap" in st.session_state:
-                st.success(f"Mensagem para {canal}:")
-                st.write(st.session_state.res_v37_zap)
-                st.caption("Copiado para a área de transferência (Simulado)")
-
+            if "res_v37_coord" in st.session_state:
+                st.info("📋 Texto pronto para copiar:")
+                # Usamos st.code para que o senhor clique e copie tudo de uma vez
+                st.code(st.session_state.res_v37_coord, language=None)
+                st.warning("⚠️ Dica: Basta clicar no ícone de copiar no canto superior direito do quadro acima.")
         # ABA 4: TIMELINE (CUSTÓDIA TOTAL)
         with tab_timeline:
             st.subheader("🗂️ Linha do Tempo de Custódia Digital")
