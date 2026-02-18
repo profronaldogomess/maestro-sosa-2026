@@ -2147,7 +2147,7 @@ elif menu == "📚 Base de Conhecimento":
         st.dataframe(df_materiais, use_container_width=True, hide_index=True)
 
 # ==============================================================================
-# MÓDULO: RELATÓRIOS PEI V34 - DOSSIÊ DE SOBERANIA E INVESTIGAÇÃO CLÍNICA
+# MÓDULO: RELATÓRIOS PEI V34 - DOSSIÊ PEDAGÓGICO DE EVIDÊNCIAS (CORRIGIDO)
 # ==============================================================================
 elif menu == "♿ Relatórios PEI / Perfil IA":
     st.title("♿ Analista de Inclusão: Dossiê de Evidências & Perfil IA")
@@ -2156,143 +2156,132 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
     if df_alunos.empty:
         st.warning("⚠️ Base de alunos vazia. Cadastre alunos na Gestão da Turma.")
     else:
-        # --- 1. SOBERANIA DE SELEÇÃO (SEM FILTROS RESTRITIVOS) ---
+        # --- 1. SOBERANIA DE SELEÇÃO (TODOS OS ALUNOS APARECEM) ---
         with st.container(border=True):
             c_t, c_a = st.columns([1, 2])
-            
-            # Seleção de Turma
             lista_turmas = sorted(df_alunos['TURMA'].unique())
             turma_pei = c_t.selectbox("🎯 Filtrar Turma:", lista_turmas, key="pei_t_v34")
-            
-            # Filtra alunos da turma selecionada (TODOS, sem exceção)
             df_turma_foco = df_alunos[df_alunos['TURMA'] == turma_pei].copy()
             
-            # --- 2. MOTOR DE IDENTIFICAÇÃO VISUAL (STATUS DINÂMICO) ---
             def definir_icone_status(nec):
                 n = str(nec).upper()
-                if "SUSPEITA" in n: return "🟠" # Alerta de Investigação
-                if n in ["NENHUMA", "PENDENTE", "", "NAN"]: return "📝" # Típico
-                return "♿" # Laudado/Confirmado
+                if "SUSPEITA" in n: return "🟠"
+                if n in ["NENHUMA", "PENDENTE", "", "NAN"]: return "📝"
+                return "♿"
 
             df_turma_foco['STATUS_ICON'] = df_turma_foco['NECESSIDADES'].apply(definir_icone_status)
-            df_turma_foco['LABEL'] = df_turma_foco.apply(
-                lambda x: f"{x['STATUS_ICON']} {x['NOME_ALUNO']} | {x['NECESSIDADES']}", axis=1
-            )
+            df_turma_foco['LABEL'] = df_turma_foco.apply(lambda x: f"{x['STATUS_ICON']} {x['NOME_ALUNO']} | {x['NECESSIDADES']}", axis=1)
             
-            aluno_sel_label = c_a.selectbox("🔍 Selecionar Estudante (Típico ou Atípico):", 
-                                          df_turma_foco['LABEL'].tolist(), 
-                                          key="pei_a_v34")
+            aluno_sel_label = c_a.selectbox("🔍 Selecionar Estudante:", df_turma_foco['LABEL'].tolist(), key="pei_a_v34")
             
-            # Recupera dados puros
-            nome_aluno_limpo = aluno_sel_label.split(" | ")[0][2:].strip() # Remove o ícone e pega o nome
+            # Recuperação de Dados Segura
+            nome_aluno_limpo = aluno_sel_label.split(" | ")[0][2:].strip()
             dados_a = df_turma_foco[df_turma_foco['NOME_ALUNO'] == nome_aluno_limpo].iloc[0]
             id_a = db.limpar_id(dados_a['ID'])
             perfil_atual = dados_a['NECESSIDADES']
-            
-            # Identifica se é um caso de investigação (aluno típico com comportamento atípico)
             is_tipico = perfil_atual.upper() in ["NENHUMA", "PENDENTE", "", "NAN"]
-            is_suspeita = "SUSPEITA" in perfil_atual.upper()
 
-        # --- 3. MOTOR DE FUSÃO DE EVIDÊNCIAS (DATA FUSION V34) ---
-        with st.status("🔍 Maestro Sosa compilando evidências de todos os painéis...", expanded=False) as status:
+        # --- 2. MOTOR DE FUSÃO DE EVIDÊNCIAS (NOTA DE SAFRA EM TEMPO REAL) ---
+        with st.status("🔍 Maestro Sosa compilando evidências atualizadas...", expanded=False) as status:
+            # A. Dados do Diário (Vistos e Bônus)
             d_aluno = df_diario[df_diario['ID_ALUNO'].apply(db.limpar_id) == id_a] if not df_diario.empty else pd.DataFrame()
+            vistos_concluidos = len(d_aluno[d_aluno['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"])
+            bonus_total = d_aluno['BONUS'].apply(util.sosa_to_float).sum()
+            observacoes_clinicas = d_aluno[d_aluno['OBSERVACOES'] != ""]['OBSERVACOES'].tail(8).tolist()
             
-            vistos_concluidos = 0
-            bonus_total = 0.0
-            observacoes_clinicas = []
-            
-            if not d_aluno.empty:
-                vistos_concluidos = len(d_aluno[d_aluno['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"])
-                bonus_total = d_aluno['BONUS'].apply(util.sosa_to_float).sum()
-                observacoes_clinicas = d_aluno[d_aluno['OBSERVACOES'] != ""]['OBSERVACOES'].tail(8).tolist()
-            
+            # B. Dados do Scanner (Performance)
             s_aluno = df_diagnosticos[df_diagnosticos['ID_ALUNO'].apply(db.limpar_id) == id_a] if not df_diagnosticos.empty else pd.DataFrame()
             media_scanner = s_aluno['NOTA_CALCULADA'].apply(util.sosa_to_float).mean() if not s_aluno.empty else 0.0
             
+            # C. CÁLCULO DA NOTA DE SAFRA (Soma de tudo o que ele produziu até hoje)
+            nota_safra_hoje = min(10.0, media_scanner + bonus_total)
+
+            # D. Estratégias do Ponto ID
+            estrategias = []
+            if not df_planos.empty:
+                p_ano = df_planos[df_planos['ANO'].str.contains(str(turma_pei[0]), na=False)]
+                for p_txt in p_ano['PLANO_TEXTO']:
+                    est = ai.extrair_tag(p_txt, "ESTRATEGIA_DUA_PEI") or ai.extrair_tag(p_txt, "ADAPTACAO_PEI")
+                    if est and len(est) > 5: estrategias.append(est)
+            estrategias_unicas = list(set(estrategias))[-2:] 
+
             status.update(label="✅ Dossiê de Evidências Compilado!", state="complete")
 
-        # --- 4. DASHBOARD DE SAÚDE PEDAGÓGICA ---
-        st.markdown(f"### 📊 Dossiê de Investigação: {nome_aluno_limpo}")
+        # --- 3. DASHBOARD DE SAÚDE PEDAGÓGICA ---
+        st.markdown(f"### 📊 Dossiê Pedagógico: {nome_aluno_limpo}")
         c_m1, c_m2, c_m3, c_m4 = st.columns(4)
+        c_m1.metric("Vistos Acumulados", f"{vistos_concluidos}")
+        c_m2.metric("Mérito (Bônus) ⭐", f"{bonus_total:.1f}")
+        c_m3.metric("Nota de Safra (Hoje)", f"{nota_safra_hoje:.1f}")
         
-        c_m1.metric("Engajamento", f"{vistos_concluidos} Vistos")
-        c_m2.metric("Mérito ⭐", f"{bonus_total:.1f}")
-        c_m3.metric("Média Scanner", f"{media_scanner:.1f}")
-        
-        # Status Visual de Soberania
-        if is_tipico:
-            status_txt, cor_b = "📝 PERFIL TÍPICO", "#475569"
-        elif is_suspeita:
-            status_txt, cor_b = "🟠 SOB INVESTIGAÇÃO", "#D97706"
-        else:
-            status_txt, cor_b = "♿ LAUDADO / PEI", "#1E3A8A"
-            
-        c_m4.markdown(f"<div style='background-color:{cor_b}; padding:10px; border-radius:10px; text-align:center; color:white; font-weight:bold;'>{status_txt}</div>", unsafe_allow_html=True)
+        status_txt = "📝 TÍPICO" if is_tipico else "♿ INCLUSÃO"
+        c_m4.markdown(f"<div style='background-color:#1E3A8A; padding:10px; border-radius:10px; text-align:center; color:white; font-weight:bold;'>{status_txt}</div>", unsafe_allow_html=True)
 
-        # --- 5. ABAS DE TRABALHO ---
+        # --- 4. ABAS DE TRABALHO ---
         tab_rel, tab_doc, tab_zap, tab_hist = st.tabs([
             "🧠 Relatório de Evidências (IA)", "📄 Capa do PEI Oficial", "📱 Comunicado Pais", "🗂️ Histórico Salvo"
         ])
 
         with tab_rel:
             st.subheader("📝 Relatório Técnico de Acompanhamento")
-            
-            if is_tipico:
-                st.warning("⚠️ **ALERTA DE SOBERANIA:** Este aluno é listado como TÍPICO. Use este relatório para documentar sinais de alerta e fundamentar um futuro encaminhamento.")
+            if is_tipico: st.warning("⚠️ Aluno sem indicação de necessidade. O relatório focará em sinais observados.")
             
             if observacoes_clinicas:
-                with st.expander("👁️ Ver evidências coletadas no Diário", expanded=True):
-                    for obs in observacoes_clinicas:
-                        st.caption(f"• {obs}")
+                with st.expander("👁️ Ver evidências do Diário de Bordo", expanded=True):
+                    for obs in observacoes_clinicas: st.caption(f"• {obs}")
             
-            percepcao = st.text_area("Sua percepção analítica (O que você observou em sala?):", 
-                                   placeholder="Ex: Apresenta choro ao ler, dificuldade de foco, troca de letras...")
+            percepcao = st.text_area("Sua percepção sobre a produção e comportamento do aluno:", 
+                                   placeholder="Ex: O aluno demonstra dificuldade em organizar o raciocínio lógico...")
             
-            if st.button("🚀 GERAR RELATÓRIO DE INVESTIGAÇÃO IA", type="primary", use_container_width=True):
-                with st.spinner("Maestro Sosa analisando padrões ocultos..."):
-                    prompt_pei = (
-                        f"PERSONA: ESPECIALISTA_INCLUSAO_V34.\n"
-                        f"ESTUDANTE: {nome_aluno_limpo}. STATUS ATUAL: {perfil_atual}.\n\n"
-                        f"EVIDÊNCIAS COLETADAS:\n"
-                        f"- OBSERVAÇÕES DO PROFESSOR: {'; '.join(observacoes_clinicas)}.\n"
-                        f"- PERCEPÇÃO ATUAL: {percepcao}\n"
-                        f"- PERFORMANCE: Média {media_scanner:.2f}.\n\n"
-                        f"MISSÃO: Escreva um relatório técnico. "
-                        f"Se o aluno for TÍPICO, aja como um 'Detector de Sinais'. Analise se as observações sugerem Dislexia, TDAH ou TEA e sugira ao professor Ronaldo quais sondagens aplicar. "
-                        f"Se for LAUDADO, foque na evolução."
+            if st.button("🚀 GERAR RELATÓRIO PEDAGÓGICO", type="primary", use_container_width=True):
+                with st.spinner("Maestro Sosa analisando evidências empíricas..."):
+                    prompt_v34 = (
+                        f"ESTUDANTE: {nome_aluno_limpo}. PERFIL: {perfil_atual}.\n\n"
+                        f"EVIDÊNCIAS DE PRODUÇÃO:\n"
+                        f"- ENGAJAMENTO: {vistos_concluidos} vistos.\n"
+                        f"- NOTA DE SAFRA ATUAL: {nota_safra_hoje:.1f}.\n"
+                        f"- OBSERVAÇÕES DE CAMPO: {'; '.join(observacoes_clinicas)}.\n"
+                        f"- PERCEPÇÃO DOCENTE: {percepcao}\n\n"
+                        f"MISSÃO: Redija um relatório focado em PROCESSOS DE APRENDIZAGEM. "
+                        f"Não diagnostique. Descreva barreiras e potencialidades observadas."
                     )
-                    st.session_state.res_pei_v34 = ai.gerar_ia("ESPECIALISTA_INCLUSAO", prompt_pei)
+                    st.session_state.res_pei_v34 = ai.gerar_ia("ESPECIALISTA_INCLUSAO", prompt_v34)
             
             if "res_pei_v34" in st.session_state:
                 txt_final = st.text_area("Relatório Gerado:", st.session_state.res_pei_v34, height=400)
-                
-                c_save1, c_save2 = st.columns(2)
-                if c_save1.button("💾 ARQUIVAR NO DOSSIÊ"):
-                    db.salvar_no_banco("DB_RELATORIOS", [datetime.now().strftime("%d/%m/%Y"), id_a, nome_aluno_limpo, "INVESTIGAÇÃO_PEDAGÓGICA", txt_final])
-                    st.success("Relatório arquivado!")
-                
-                if is_tipico and c_save2.button("🟠 MARCAR COMO 'SOB SUSPEITA'"):
+                c_s1, c_s2 = st.columns(2)
+                if c_s1.button("💾 ARQUIVAR NO DOSSIÊ"):
+                    db.salvar_no_banco("DB_RELATORIOS", [datetime.now().strftime("%d/%m/%Y"), id_a, nome_aluno_limpo, "RELATÓRIO_PEDAGÓGICO", txt_final])
+                    st.success("Arquivado!")
+                if is_tipico and c_s2.button("🟠 MARCAR COMO 'SOB SUSPEITA'"):
                     if db.atualizar_necessidade_aluno(id_a, "SOB SUSPEITA (INVESTIGAÇÃO)"):
-                        st.success("Status atualizado na base de dados! Sincronize para refletir."); time.sleep(1); st.rerun()
+                        st.success("Status atualizado!"); time.sleep(1); st.rerun()
 
-        # (As outras abas seguem a mesma lógica de suporte ao aluno selecionado)
         with tab_doc:
-            st.subheader("📄 Plano de Acessibilidade / Encaminhamento")
-            if is_tipico:
-                st.info("Para alunos típicos, este documento servirá como 'Ficha de Encaminhamento' para a coordenação/AEE.")
-            # ... lógica de geração de documento ...
+            st.subheader("📄 Seção 1: Plano de Acessibilidade")
+            if st.button("📄 Gerar Documento Baseado no Planejamento"):
+                with st.spinner("Sincronizando estratégias..."):
+                    prompt_capa = f"ALUNO: {nome_aluno_limpo}. PERFIL: {perfil_atual}. ESTRATÉGIAS PONTO ID: {estrategias_unicas}. Gere a Seção 1 do PEI focando em acessibilidade curricular."
+                    st.session_state.res_capa_v34 = ai.gerar_ia("ESPECIALISTA_PEI", prompt_capa)
+            if "res_capa_v34" in st.session_state:
+                st.text_area("Texto da Capa:", st.session_state.res_capa_v34, height=400)
 
         with tab_zap:
             st.subheader("📱 Mensagem para Família")
-            # ... lógica de geração de mensagem ...
+            motivo = st.text_input("Motivo:", "Evolução nas atividades")
+            if st.button("🚀 Gerar Mensagem WhatsApp"):
+                base = st.session_state.get("res_pei_v34", "O aluno está progredindo.")
+                prompt_zap = f"Gere uma mensagem acolhedora para os pais de {nome_aluno_limpo} baseada nisto: {base}. Motivo: {motivo}."
+                st.info(ai.gerar_ia("ESPECIALISTA_INCLUSAO", prompt_zap))
 
         with tab_hist:
-            st.subheader("🗂️ Histórico de Documentos")
+            st.subheader("🗂️ Histórico Salvo")
             if not df_relatorios.empty:
                 hist = df_relatorios[df_relatorios['ID_ALUNO'].apply(db.limpar_id) == id_a].iloc[::-1]
                 for _, row in hist.iterrows():
-                    with st.expander(f"📅 {row.get('DATA')} - {row.get('TIPO')}"):
-                        st.write(row.get('CONTEUDO'))
+                    with st.expander(f"📅 {row.get('DATA', 'S/D')} - {row.get('TIPO', 'REGISTRO')}"):
+                        st.write(row.get('CONTEUDO', 'Sem conteúdo.'))
+
 
 # ==============================================================================
 # MÓDULO: CENTRAL DE AVALIAÇÕES (V64.0 - ACERVO PIP E SINCRONIA TOTAL)
