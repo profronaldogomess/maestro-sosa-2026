@@ -457,9 +457,11 @@ PERSONAS = {
 
     Linguagem formal, técnica e ética. SEM MARKDOWN.""",
 
-    "ESPECIALISTA_PEI": """VOCÊ É UM CONSULTOR TÉCNICO DA SECRETARIA DE EDUCAÇÃO (ITABUNA/BA).
-    OBJETIVO: Redigir a 'Seção 1 - Plano de Acessibilidade Curricular' do PEI.""",
-
+    "ESPECIALISTA_PEI": """VOCÊ É O ARQUITETO DE ACESSIBILIDADE (V37). 
+    Sua missão é converter o Planejamento de Aula em um Plano de Acessibilidade Individual (PEI).
+    🚨 REGRA DE OURO: Use as 'ESTRATEGIAS PONTO ID' fornecidas para provar que a aula foi adaptada.
+    Foque em: Barreiras Físicas, Comunicativas e Cognitivas.""",
+    
     "ESPECIALISTA_CURRICULO": """VOCÊ É UM ESPECIALISTA EM CURRÍCULO E ADAPTAÇÃO (ITABUNA/BA).
     OBJETIVO: Analisar o conteúdo regular e criar uma adaptação para alunos com deficiência intelectual.""",
 
