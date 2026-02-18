@@ -2267,18 +2267,41 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
             if "res_v38_pei" in st.session_state:
                 st.text_area("Plano de Acessibilidade:", st.session_state.res_v38_pei, height=300)
 
-        # ABA 3: PONTE COORDENAÇÃO (WHATSAPP RÁPIDO)
+# ABA 3: PONTE COORDENAÇÃO (WHATSAPP RÁPIDO V38.1)
         with tab_coord:
             st.subheader("📱 Relato Rápido para Coordenação")
-            estilo_zap = st.radio("Foco do relato:", ["Opção 1: Engajamento e Evolução", "Opção 2: Dificuldades e Suporte", "Opção 3: Status Ultra-conciso"], key="zap_v38")
             
-            if st.button("🚀 GERAR RELATO (WHATSAPP)", use_container_width=True):
-                prompt_zap = f"ALUNO: {nome_limpo}. DADOS: {vistos} vistos, {bonus} bônus. CHECKLIST: {v_autonomia}, {v_social}, {v_participa}, {v_resposta}. ESTILO: {estilo_zap}. Gere um parágrafo único, sem negritos, para WhatsApp."
-                st.session_state.res_v38_coord = ai.gerar_ia("PONTE_COORDENACAO", prompt_zap)
+            # 1. MAPA DE INTENCIONALIDADE (Explicação clara para o professor)
+            mapa_estilos = {
+                "Opção 1: Engajamento e Evolução": "🌟 **Foco:** Ideal para destacar progressos, participação ativa e melhora no interesse do aluno. Use quando quiser mostrar que o trabalho está surtindo efeito.",
+                "Opção 2: Dificuldades e Suporte": "⚠️ **Foco:** Relatar barreiras de aprendizagem, oscilações de humor ou foco, e solicitar que a coordenação ajude no suporte ou contato com especialistas.",
+                "Opção 3: Status Ultra-conciso": "⚡ **Foco:** Papo reto e direto. Apenas 2 ou 3 linhas com o status atual, ideal para atualizações de rotina sem necessidade de análise profunda."
+            }
+
+            estilo_zap = st.radio("Qual o objetivo deste relato?", list(mapa_estilos.keys()), key="zap_v38")
+            
+            # 2. EXIBIÇÃO DA DESCRIÇÃO DINÂMICA (O senhor vê o que escolheu)
+            st.info(mapa_estilos[estilo_zap])
+
+            if st.button("🚀 GERAR RELATO PARA WHATSAPP", use_container_width=True):
+                with st.spinner("Traduzindo evidências em narrativa humana..."):
+                    prompt_zap = (
+                        f"ALUNO: {nome_limpo}. "
+                        f"DADOS: {vistos} vistos, {bonus} bônus, nota {nota_safra:.1f}. "
+                        f"CHECKLIST: Autonomia {v_autonomia}, Socialização {v_social}, Participação {v_participa}, Resposta {v_resposta}. "
+                        f"ESTILO: {estilo_zap}. "
+                        f"MISSÃO: Gere um parágrafo único, sem negritos, sem asteriscos, em tom de conversa de WhatsApp entre professor e coordenador."
+                    )
+                    st.session_state.res_v38_coord = ai.gerar_ia("PONTE_COORDENACAO", prompt_zap)
             
             if "res_v38_coord" in st.session_state:
-                st.info("📋 Texto para copiar:")
+                st.success("✅ Relato gerado com sucesso:")
+                # Exibição limpa para leitura
+                st.write(st.session_state.res_v38_coord)
+                
+                # Campo de cópia rápida
                 st.code(st.session_state.res_v38_coord, language=None)
+                st.caption("Dica: Clique no ícone de copiar no canto superior direito do quadro cinza acima.")
 
         # ABA 4: TIMELINE
         with tab_timeline:
