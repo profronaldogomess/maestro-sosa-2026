@@ -2257,41 +2257,45 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                     db.salvar_no_banco("DB_RELATORIOS", [datetime.now().strftime("%d/%m/%Y"), id_a, nome_limpo, "EVOLUÇÃO", st.session_state.res_v38_rel])
                     st.success("Arquivado!"); st.rerun()
 
-# ABA 2: PLANO DE ACESSIBILIDADE (PEI V38.2 - LIMPO E DIRETO)
+# ABA 2: PLANO DE ACESSIBILIDADE (PEI V38.3 - FILTRAGEM CIRÚRGICA)
         with tab_pei_doc:
             st.subheader("🏛️ Seção 1: Plano de Acessibilidade Individual")
             
-            # Verifica se existe um relatório gerado na Aba 1 para servir de base
             relatorio_base = st.session_state.get("res_v38_rel", "")
             
             if not relatorio_base:
-                st.warning("⚠️ Gere primeiro o 'Relatório de Evolução' na Aba 1 para extrair os dados para o PEI.")
+                st.warning("⚠️ Gere primeiro o 'Relatório de Evolução' na Aba 1.")
             else:
                 if st.button("🎯 ORGANIZAR PÁGINA 1 DO PEI", use_container_width=True, type="primary"):
-                    with st.spinner("Sintetizando pilares oficiais..."):
-                        prompt_pei_limpo = (
-                            f"BASE DE DADOS (RELATÓRIO DE EVOLUÇÃO):\n{relatorio_base}\n\n"
-                            f"ESTUDANTE: {nome_limpo}. PERFIL: {perfil_atual}.\n"
-                            f"MISSÃO: Extraia as informações do relatório acima e preencha as tags [SOCIAIS], [COMUNICATIVAS], [EMOCIONAIS] e [FUNCIONAIS]."
+                    with st.spinner("Fatiando evidências por pilar oficial..."):
+                        # Prompt reforçado para evitar repetição
+                        prompt_pei_cirurgico = (
+                            f"RELATÓRIO BASE:\n{relatorio_base}\n\n"
+                            f"MISSÃO: Fatie o relatório acima em 4 partes distintas. "
+                            f"Não repita informações. Se um parágrafo fala de choro, ele vai para [EMOCIONAIS]. "
+                            f"Se fala de não fazer a tarefa, vai para [FUNCIONAIS]. "
+                            f"Retorne apenas as tags [SOCIAIS], [COMUNICATIVAS], [EMOCIONAIS] e [FUNCIONAIS] com seus respectivos conteúdos exclusivos."
                         )
-                        st.session_state.res_v38_pei_tags = ai.gerar_ia("ESPECIALISTA_PEI", prompt_pei_limpo)
+                        st.session_state.res_v38_pei_tags = ai.gerar_ia("ESPECIALISTA_PEI", prompt_pei_cirurgico)
 
-                # Exibição Organizada por Tags (Igual ao Criador de Aulas)
                 if "res_v38_pei_tags" in st.session_state:
                     txt_tags = st.session_state.res_v38_pei_tags
                     
-                    ed_soc = st.text_area("Habilidades Sociais:", ai.extrair_tag(txt_tags, "SOCIAIS"), height=150)
-                    ed_com = st.text_area("Habilidades Comunicativas:", ai.extrair_tag(txt_tags, "COMUNICATIVAS"), height=150)
-                    ed_emo = st.text_area("Habilidades Emocionais:", ai.extrair_tag(txt_tags, "EMOCIONAIS"), height=150)
-                    ed_fun = st.text_area("Habilidades Funcionais:", ai.extrair_tag(txt_tags, "FUNCIONAIS"), height=150)
+                    # Exibição em colunas para melhor aproveitamento de tela e conferência
+                    col_p1, col_p2 = st.columns(2)
+                    with col_p1:
+                        ed_soc = st.text_area("1. Habilidades Sociais:", ai.extrair_tag(txt_tags, "SOCIAIS"), height=200)
+                        ed_emo = st.text_area("3. Habilidades Emocionais:", ai.extrair_tag(txt_tags, "EMOCIONAIS"), height=200)
+                    with col_p2:
+                        ed_com = st.text_area("2. Habilidades Comunicativas:", ai.extrair_tag(txt_tags, "COMUNICATIVAS"), height=200)
+                        ed_fun = st.text_area("4. Habilidades Funcionais:", ai.extrair_tag(txt_tags, "FUNCIONAIS"), height=200)
 
                     if st.button("💾 SALVAR PÁGINA 1 OFICIAL", use_container_width=True):
-                        # Consolida para salvar no banco em formato legível
                         texto_consolidado = f"SOCIAIS: {ed_soc}\n\nCOMUNICATIVAS: {ed_com}\n\nEMOCIONAIS: {ed_emo}\n\nFUNCIONAIS: {ed_fun}"
                         db.salvar_no_banco("DB_RELATORIOS", [
                             datetime.now().strftime("%d/%m/%Y"), id_a, nome_limpo, "CAPA_PEI_OFICIAL", texto_consolidado
                         ])
-                        st.success("✅ Documento arquivado na Linha do Tempo!")
+                        st.success("✅ Documento arquivado com sucesso!")
                         st.balloons()
 
 # ABA 3: PONTE COORDENAÇÃO (WHATSAPP RÁPIDO V38.1)
