@@ -2313,9 +2313,10 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                 st.write(st.session_state.res_v38_coord)
                 st.code(st.session_state.res_v38_coord, language=None)
 
-        # --- ABA 4: CURRÍCULO ADAPTADO (CONSTRUTOR) ---
+# ABA 4: CURRÍCULO ADAPTADO (LAYOUT EM COLUNAS V39.2)
         with tab_curr:
-            st.subheader("⚙️ Construtor de Matriz Adaptada")
+            st.subheader("⚙️ Construtor de Matriz Adaptada (Padrão Itabuna)")
+            
             ano_aluno = "".join(filter(str.isdigit, turma_pei))
             df_matriz_ano = df_curriculo[df_curriculo['ANO'].astype(str) == ano_aluno].copy()
 
@@ -2326,50 +2327,63 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                 selecionados = st.multiselect("📚 Escolha os conteúdos para adaptar:", opcoes_conteudo, key="sel_curr_v39")
 
                 if selecionados:
-                    if st.button("🚀 GERAR MATRIZ ADAPTADA (IA)", use_container_width=True, type="primary"):
-                        with st.spinner("Traduzindo objetivos..."):
+                    if st.button("🚀 GERAR GRADE DE EDIÇÃO", use_container_width=True, type="primary"):
+                        with st.spinner("Arquitetando colunas..."):
                             conteudos_brutos = [s.split("] ")[1] for s in selecionados]
                             df_focada = df_matriz_ano[df_matriz_ano['CONTEUDO_ESPECIFICO'].isin(conteudos_brutos)]
                             contexto_oficial = df_focada[['CONTEUDO_ESPECIFICO', 'OBJETIVOS']].to_string(index=False)
-                            prompt_curr = f"ESTUDANTE: {nome_limpo}. PERFIL: {perfil_atual}. MATRIZ: {contexto_oficial}. Gere a tabela adaptada (Tags [ITEM], [C], [O], [F], [M])."
+                            
+                            prompt_curr = f"ESTUDANTE: {nome_limpo}. PERFIL: {perfil_atual}. MATRIZ: {contexto_oficial}. Gere os itens adaptados."
                             st.session_state.res_v39_curr = ai.gerar_ia("TRADUTOR_CURRICULAR_V39", prompt_curr)
 
-                # 2. MESA DE EDIÇÃO DA MATRIZ (VERSÃO REFINADA V39.1)
+                    # --- ÁREA DE EDIÇÃO EM COLUNAS (IGUAL À IMAGEM) ---
                     if "res_v39_curr" in st.session_state:
-                        st.markdown("### 📝 Ajuste Fino da Matriz")
-                        raw_curr = st.session_state.res_v39_curr
-                        
-                        def limpar_vazamento_curr(texto):
-                            import re
-                            # Remove tags como [O], [F], [M] e colchetes que a IA insiste em repetir
-                            return re.sub(r'\[.*?\]', '', texto).replace('>', '').strip()
+                        st.markdown("---")
+                        # Cabeçalho da Tabela Visual
+                        h1, h2, h3, h4 = st.columns([1, 2, 1, 2])
+                        h1.markdown("**CONTEÚDO**")
+                        h2.markdown("**OBJETIVO DE ENSINO**")
+                        h3.markdown("**FUNÇÕES PSÍQUICAS**")
+                        h4.markdown("**SELEÇÃO DE MATERIAIS**")
 
-                        itens_processados = []
+                        raw_curr = st.session_state.res_v39_curr
                         blocos = re.findall(r"\[ITEM\](.*?)\[/ITEM\]", raw_curr, re.DOTALL)
                         
-                        for b in blocos:
-                            itens_processados.append({
-                                "CONTEÚDO": limpar_vazamento_curr(ai.extrair_tag(b, "C")),
-                                "OBJETIVO DE ENSINO": limpar_vazamento_curr(ai.extrair_tag(b, "O")),
-                                "FUNÇÕES PSÍQUICAS": limpar_vazamento_curr(ai.extrair_tag(b, "F")),
-                                "SELEÇÃO DE MATERIAIS": limpar_vazamento_curr(ai.extrair_tag(b, "M"))
-                            })
+                        lista_final_para_salvar = []
 
-                        # Exibição em Tabela Editável
-                        df_editavel = st.data_editor(
-                            pd.DataFrame(itens_processados),
-                            use_container_width=True,
-                            hide_index=True,
-                            key="editor_curr_v39_refinado"
-                        )
-                        
+                        for idx, b in enumerate(blocos):
+                            with st.container():
+                                c1, c2, c3, c4 = st.columns([1, 2, 1, 2])
+                                
+                                # Extração e Limpeza
+                                def limpar(t): return re.sub(r'\[.*?\]', '', t).strip()
+                                
+                                v_c = limpar(ai.extrair_tag(b, "C"))
+                                v_o = limpar(ai.extrair_tag(b, "O"))
+                                v_f = limpar(ai.extrair_tag(b, "F"))
+                                v_m = limpar(ai.extrair_tag(b, "M"))
+
+                                # Caixas de Texto Individuais por Coluna
+                                edit_c = c1.text_area(f"C_{idx}", v_c, height=150, label_visibility="collapsed")
+                                edit_o = c2.text_area(f"O_{idx}", v_o, height=150, label_visibility="collapsed")
+                                edit_f = c3.text_area(f"F_{idx}", v_f, height=150, label_visibility="collapsed")
+                                edit_m = c4.text_area(f"M_{idx}", v_m, height=150, label_visibility="collapsed")
+                                
+                                lista_final_para_salvar.append({"C": edit_c, "O": edit_o, "F": edit_f, "M": edit_m})
+                                st.markdown("---")
+
+                        # SALVAMENTO
                         trim_destino = st.selectbox("Salvar em qual trimestre?", ["I Trimestre", "II Trimestre", "III Trimestre"])
-                        if st.button("💾 ARQUIVAR CURRÍCULO ADAPTADO", use_container_width=True):
-                            texto_final = f"PLANO ADAPTADO - {trim_destino}\n\n"
-                            for _, r in df_editavel.iterrows():
-                                texto_final += f"• {r['CONTEÚDO']}\n  OBJ: {r['OBJETIVO DE ENSINO']}\n  FUNÇÕES: {r['FUNÇÕES PSÍQUICAS']}\n  MATERIAIS: {r['SELEÇÃO DE MATERIAIS']}\n\n"
-                            db.salvar_no_banco("DB_RELATORIOS", [datetime.now().strftime("%d/%m/%Y"), id_a, nome_limpo, f"CURRICULO_ADAPTADO_{trim_destino[0]}T", texto_final])
-                            st.success("✅ Arquivado!"); st.balloons()
+                        if st.button("💾 ARQUIVAR PLANO TRIMESTRAL COMPLETO", use_container_width=True):
+                            texto_banco = f"PLANO ADAPTADO - {trim_destino}\n\n"
+                            for item in lista_final_para_salvar:
+                                texto_banco += f"CONTEÚDO: {item['C']}\nOBJETIVO: {item['O']}\nFUNÇÕES: {item['F']}\nMATERIAIS: {item['M']}\n\n"
+                            
+                            db.salvar_no_banco("DB_RELATORIOS", [
+                                datetime.now().strftime("%d/%m/%Y"), id_a, nome_limpo, f"CURRICULO_ADAPTADO_{trim_destino[0]}T", texto_banco
+                            ])
+                            st.success(f"✅ Currículo do {trim_destino} arquivado com sucesso!")
+                            st.balloons()
 
         # --- ABA 5: LINHA DO TEMPO (CUSTÓDIA) ---
         with tab_timeline:
