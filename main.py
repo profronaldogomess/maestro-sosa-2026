@@ -2350,16 +2350,7 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                 st.code(st.session_state.res_v38_coord, language=None)
                 st.caption("Dica: Clique no ícone de copiar no canto superior direito do quadro cinza acima.")
 
-        # ABA 4: TIMELINE
-        with tab_timeline:
-            st.subheader("🗂️ Linha do Tempo de Custódia")
-            if tem_passado:
-                for _, row in hist_aluno.iloc[::-1].iterrows():
-                    with st.expander(f"📅 {row.get('DATA')} — {row.get('TURMA')}"):
-                        st.write(row.get('CONTEUDO'))
-            else: st.info("📭 Nenhuma evidência arquivada.")
-
-# ABA 5: CURRÍCULO ADAPTADO (CONSTRUTOR TRIMESTRAL V39)
+# ABA 4: CURRÍCULO ADAPTADO (CONSTRUTOR TRIMESTRAL V39)
         with tab_timeline: # Apenas como referência, adicione a nova aba na lista de tabs
             pass # (Isso é apenas um marcador, use o código abaixo na nova aba)
 
