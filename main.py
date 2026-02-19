@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone # <--- CORRIGIDO: date incluído
 import database as db
 import ai_engine as ai
 import utils as util
@@ -18,8 +18,38 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# --- SISTEMA DE BLINDAGEM (LOGIN V40) ---
+def check_password():
+    """Retorna True se o usuário inseriu a senha correta."""
+    def password_entered():
+        # SENHA DEFINIDA AQUI: SOSA2026
+        if st.session_state["password"] == "2496":
+            st.session_state["password_correct"] = True
+            del st.session_state["password"]
+        else:
+            st.session_state["password_correct"] = False
+
+    if "password_correct" not in st.session_state:
+        col1, col2, col3 = st.columns([1, 1, 1])
+        with col2:
+            st.markdown("<br><br><br>", unsafe_allow_html=True)
+            try: st.image("logo.png", width=150)
+            except: st.title("Ronaldo Gomes")
+            
+            st.markdown("### 🔐 Portal de Soberania")
+            st.text_input("Insira a Chave de Acesso:", type="password", on_change=password_entered, key="password")
+            
+            if "password_correct" in st.session_state and not st.session_state["password_correct"]:
+                st.error("❌ Chave incorreta. Acesso negado.")
+            
+            st.caption("Sistema restrito ao Prof. Ronaldo Gomes (Itabuna/BA)")
+        return False
+    return True
+
+if not check_password():
+    st.stop()
+
 # --- LÓGICA DE AUTO-ATUALIZAÇÃO (Sincronia Automática) ---
-# Limpa o cache automaticamente a cada 600 segundos (10 minutos)
 if 'last_sync' not in st.session_state:
     st.session_state.last_sync = time.time()
 
@@ -27,7 +57,7 @@ if time.time() - st.session_state.last_sync > 600:
     st.cache_data.clear()
     st.session_state.last_sync = time.time()
 
-# --- ESTILIZAÇÃO DE LUXO (CSS V39) ---
+# --- ESTILIZAÇÃO DE LUXO (CSS V40) ---
 BRAND_BLUE = "#2962FF"
 BRAND_NAVY = "#000B1A"
 
@@ -45,92 +75,32 @@ st.markdown(f"""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
         * {{ font-family: 'Plus Jakarta Sans', sans-serif; }}
-
         .stApp {{ background-color: {cor_fundo} !important; color: {cor_texto} !important; }}
-        
-        /* SIDEBAR GLASSMORPHISM */
-        [data-testid="stSidebar"] {{
-            background-color: {cor_sidebar} !important;
-            border-right: 1px solid {cor_borda};
-            box-shadow: 10px 0 30px rgba(0,0,0,0.1);
-        }}
-
-        /* CARDS DE MÉTRICAS MODERNOS */
-        div[data-testid="stMetric"] {{
-            background: {cor_card} !important;
-            border: 1px solid {cor_borda} !important;
-            border-radius: 20px !important;
-            padding: 20px !important;
-            transition: all 0.3s ease;
-        }}
-        div[data-testid="stMetric"]:hover {{
-            transform: translateY(-5px);
-            border-color: {BRAND_BLUE} !important;
-            box-shadow: 0 10px 20px rgba(41, 98, 255, 0.1);
-        }}
-
-        /* BOTÕES DE ELITE */
-        .stButton button {{
-            background: linear-gradient(135deg, {BRAND_BLUE}, #0039CB) !important;
-            color: white !important;
-            border-radius: 12px !important;
-            border: none !important;
-            font-weight: 700 !important;
-            padding: 10px 24px !important;
-            width: 100%;
-            transition: all 0.3s ease;
-        }}
-        .stButton button:hover {{
-            transform: scale(1.02);
-            box-shadow: 0 5px 15px {BRAND_BLUE}44;
-        }}
-
-        /* RELÓGIO E IDENTIDADE */
-        .user-profile {{
-            text-align: center;
-            padding: 20px 0;
-            border-bottom: 1px solid {cor_borda};
-            margin-bottom: 20px;
-        }}
-        .clock-container {{
-            background: {BRAND_BLUE}15;
-            color: {BRAND_BLUE};
-            padding: 8px 15px;
-            border-radius: 30px;
-            font-weight: 800;
-            font-size: 14px;
-            text-align: center;
-            margin: 10px 0;
-            border: 1px solid {BRAND_BLUE}33;
-        }}
+        [data-testid="stSidebar"] {{ background-color: {cor_sidebar} !important; border-right: 1px solid {cor_borda}; }}
+        div[data-testid="stMetric"] {{ background: {cor_card} !important; border: 1px solid {cor_borda} !important; border-radius: 20px !important; }}
+        .stButton button {{ background: linear-gradient(135deg, {BRAND_BLUE}, #0039CB) !important; color: white !important; border-radius: 12px !important; font-weight: 700 !important; width: 100%; }}
+        .clock-container {{ background: {BRAND_BLUE}15; color: {BRAND_BLUE}; padding: 8px 15px; border-radius: 30px; font-weight: 800; font-size: 14px; text-align: center; margin: 10px 0; border: 1px solid {BRAND_BLUE}33; }}
     </style>
 """, unsafe_allow_html=True)
 
-# --- SIDEBAR: IDENTIDADE E RELÓGIO ---
+# --- SIDEBAR: IDENTIDADE, LOGO E RELÓGIO ---
 with st.sidebar:
-    # Perfil do Usuário
-    st.markdown(f"""
-        <div class="user-profile">
-            <img src="https://cdn-icons-png.flaticon.com/512/1995/1995531.png" width="80" style="border-radius: 50%; margin-bottom: 10px;">
-            <h2 style='font-size: 20px; margin: 0;'>Ronaldo Gomes</h2>
-            <p style='font-size: 12px; color: {BRAND_BLUE}; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;'>Soberania Pedagógica</p>
-        </div>
-    """, unsafe_allow_html=True)
+    col_l1, col_l2, col_l3 = st.columns([1, 2, 1])
+    with col_l2:
+        try: st.image("logo.png", width=100)
+        except: pass
+    
+    st.markdown(f"<h2 style='text-align: center; font-size: 20px; margin-top: 10px;'>Ronaldo Gomes</h2>", unsafe_allow_html=True)
+    st.markdown(f"<p style='text-align: center; font-size: 11px; color: {BRAND_BLUE}; font-weight: 800; margin-top: -15px;'>SOBERANIA PEDAGÓGICA</p>", unsafe_allow_html=True)
 
     # Relógio Automático (Brasília)
     fuso_br = timezone(timedelta(hours=-3))
     hora_atual = datetime.now(fuso_br).strftime("%H:%M:%S")
     data_atual = datetime.now(fuso_br).strftime("%d/%m/%Y")
     
-    st.markdown(f"""
-        <div class="clock-container">
-            🕒 {hora_atual} | 📅 {data_atual}
-        </div>
-    """, unsafe_allow_html=True)
-
+    st.markdown(f"""<div class="clock-container">🕒 {hora_atual} | 📅 {data_atual}</div>""", unsafe_allow_html=True)
     st.markdown("---")
 
-    # Navegação
     menu = st.radio("Navegação Estratégica:", [
         "📅 Planejamento (Ponto ID)",
         "🧪 Criador de Aulas",
