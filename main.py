@@ -122,6 +122,7 @@ with st.sidebar:
     st.markdown(f"""<div class="clock-container">🕒 {hora_atual} | 📅 {data_atual}</div>""", unsafe_allow_html=True)
     st.markdown("---")
 
+    # Menu de Navegação
     menu = st.radio("Navegação Estratégica:", [
         "📅 Planejamento (Ponto ID)",
         "🧪 Criador de Aulas",
@@ -136,10 +137,25 @@ with st.sidebar:
         "♿ Relatórios PEI / Perfil IA"
     ])
 
+    st.markdown("<br>" * 2, unsafe_allow_html=True) # Espaçamento estético
     st.markdown("---")
-    if st.button("🔄 Sincronizar Agora"):
-        st.cache_data.clear()
-        st.rerun()
+    
+    # --- BOTÕES DE AÇÃO DE RODAPÉ ---
+    col_sync, col_exit = st.columns(2)
+    
+    with col_sync:
+        if st.button("🔄 Sync", help="Sincronizar Banco de Dados"):
+            st.cache_data.clear()
+            st.rerun()
+            
+    with col_exit:
+        # Botão de Sair com lógica de limpeza de sessão
+        if st.button("🚪 Sair", help="Encerrar Sessão de Soberania"):
+            st.session_state["password_correct"] = False
+            st.session_state["login_timestamp"] = None
+            st.rerun()
+
+    st.caption(f"Ronaldo Gomes | © 2026")
 
 # --- CARREGAMENTO DE DADOS ---
 wb, (df_alunos, df_curriculo, df_materiais, df_planos, df_aulas, df_notas, df_diario, df_turmas, df_relatorios, df_horarios, df_registro_aulas, df_diagnosticos) = db.carregar_tudo()
