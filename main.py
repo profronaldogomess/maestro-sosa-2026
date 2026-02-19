@@ -2147,14 +2147,14 @@ elif menu == "📚 Base de Conhecimento":
         st.dataframe(df_materiais, use_container_width=True, hide_index=True)
 
 # ==============================================================================
-# MÓDULO: RELATÓRIOS PEI V38 - ANALISTA DE EVOLUÇÃO E CUSTÓDIA (MASTER)
+# MÓDULO: RELATÓRIOS PEI V38.5 - ANALISTA DE EVOLUÇÃO E CUSTÓDIA (MASTER)
 # ==============================================================================
 elif menu == "♿ Relatórios PEI / Perfil IA":
-    st.title("♿ Analista de Inclusão: Dossiê de Evolução V38")
+    st.title("♿ Analista de Inclusão: Dossiê de Evolução V38.5")
     st.markdown("---")
 
     if df_alunos.empty:
-        st.warning("⚠️ Base de alunos vazia.")
+        st.warning("⚠️ Base de alunos vazia. Cadastre alunos na Gestão da Turma.")
     else:
         # --- 1. SELEÇÃO DE ESTUDANTE (Soberania de Observação) ---
         with st.container(border=True):
@@ -2179,7 +2179,7 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
             id_a = db.limpar_id(dados_a['ID'])
             perfil_atual = dados_a['NECESSIDADES']
 
-        # --- 2. MOTOR DE FUSÃO E MEMÓRIA ---
+        # --- 2. MOTOR DE FUSÃO E MEMÓRIA (DATA FUSION) ---
         with st.status("🔍 Maestro Sosa interconectando safras...", expanded=False) as status:
             # A. Busca Histórica
             hist_aluno = df_relatorios[df_relatorios['ID_ALUNO'].apply(db.limpar_id) == id_a]
@@ -2213,29 +2213,30 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
         c3.metric("Nota de Safra", f"{nota_safra:.1f}")
         c4.metric("Relatos Salvos", len(hist_aluno))
 
-        # --- 4. CHECKLIST DE OBSERVAÇÃO (MODERNO) ---
+        # --- 4. CHECKLIST DE OBSERVAÇÃO (Obrigatório para alimentar a IA) ---
         with st.container(border=True):
-            st.markdown("#### 📋 Checklist de Percepção Pedagógica (Obrigatório)")
+            st.markdown("#### 📋 Checklist de Percepção Pedagógica")
             col_ch1, col_ch2 = st.columns(2)
-            
             with col_ch1:
                 v_autonomia = st.select_slider("Autonomia (Início/Fim de tarefas):", options=["Dependente", "Com Apoio", "Em Evolução", "Autônomo"], value="Com Apoio")
                 v_social = st.select_slider("Socialização (Pares e Professor):", options=["Isolado", "Passivo", "Interage", "Líder"], value="Interage")
-            
             with col_ch2:
                 v_participa = st.select_slider("Participação (Engajamento Oral):", options=["Não participa", "Raramente", "Participativo", "Ativo"], value="Participativo")
                 v_resposta = st.select_slider("Resposta às Intervenções:", options=["Resistente", "Lento", "Receptivo", "Rápido"], value="Receptivo")
-
             sem_mudancas = st.checkbox("📢 O quadro permanece idêntico ao relatório anterior (Sem alterações significativas)")
 
-        # --- 5. ABAS DE TRABALHO ---
-        tab_evolucao, tab_pei_doc, tab_coord, tab_timeline = st.tabs([
-            "📈 1. Relatório de Evolução", "🏛️ 2. Plano de Acessibilidade (PEI)", "📱 3. Relato para Coordenação", "🗂️ 4. Linha do Tempo"
+        # --- 5. ABAS DE TRABALHO ORGANIZADAS ---
+        tab_evolucao, tab_pei_doc, tab_coord, tab_curr, tab_timeline = st.tabs([
+            "📈 1. Relatório de Evolução", 
+            "🏛️ 2. Plano de Acessibilidade (PEI)", 
+            "📱 3. Relato para Coordenação",
+            "📖 4. Currículo Adaptado",
+            "🗂️ 5. Linha do Tempo"
         ])
 
-        # ABA 1: RELATÓRIO DE EVOLUÇÃO
+        # --- ABA 1: RELATÓRIO DE EVOLUÇÃO ---
         with tab_evolucao:
-            st.subheader("📝 Análise Longitudinal")
+            st.subheader("📝 Análise Longitudinal de Processos")
             percepcao_extra = st.text_area("Observações Adicionais (Opcional):", key="perc_v38")
             
             if st.button("🚀 GERAR RELATÓRIO DE SOBERANIA", type="primary", use_container_width=True):
@@ -2257,174 +2258,108 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                     db.salvar_no_banco("DB_RELATORIOS", [datetime.now().strftime("%d/%m/%Y"), id_a, nome_limpo, "EVOLUÇÃO", st.session_state.res_v38_rel])
                     st.success("Arquivado!"); st.rerun()
 
-# ABA 2: PLANO DE ACESSIBILIDADE (PEI V38.4 - ZERO REPETIÇÃO)
+        # --- ABA 2: PLANO DE ACESSIBILIDADE (PEI PÁGINA 1) ---
         with tab_pei_doc:
             st.subheader("🏛️ Seção 1: Plano de Acessibilidade Individual")
-            
             relatorio_base = st.session_state.get("res_v38_rel", "")
             
             if not relatorio_base:
-                st.warning("⚠️ Gere primeiro o 'Relatório de Evolução' na Aba 1.")
+                st.warning("⚠️ Gere primeiro o 'Relatório de Evolução' na Aba 1 para extrair os dados.")
             else:
                 if st.button("🎯 ORGANIZAR PÁGINA 1 DO PEI", use_container_width=True, type="primary"):
                     with st.spinner("Fatiando evidências de forma atômica..."):
-                        # Prompt de "Zero Tolerância" para repetição
                         prompt_fatiar = (
                             f"RELATÓRIO PARA PROCESSAR:\n{relatorio_base}\n\n"
-                            f"ORDEM SOBERANA:\n"
-                            f"Extraia 4 resumos CURTOS e DIFERENTES. "
-                            f"Não repita frases. Não use negritos. "
-                            f"Responda EXATAMENTE neste formato:\n"
-                            f"[SOCIAIS] (texto aqui)\n"
-                            f"[COMUNICATIVAS] (texto aqui)\n"
-                            f"[EMOCIONAIS] (texto aqui)\n"
-                            f"[FUNCIONAIS] (texto aqui)"
+                            f"ORDEM SOBERANA: Extraia 4 resumos CURTOS e DIFERENTES. Responda EXATAMENTE nas tags [SOCIAIS], [COMUNICATIVAS], [EMOCIONAIS] e [FUNCIONAIS]."
                         )
                         st.session_state.res_v38_pei_tags = ai.gerar_ia("ESPECIALISTA_PEI", prompt_fatiar)
 
                 if "res_v38_pei_tags" in st.session_state:
                     res_bruta = st.session_state.res_v38_pei_tags
-                    
-                    # Função interna de limpeza para garantir que uma tag não apareça dentro da outra
                     def limpar_vazamento(texto):
                         import re
-                        # Remove qualquer menção a [TAGS] que a IA possa ter escrito por erro
                         return re.sub(r'\[.*?\]', '', texto).replace('>', '').strip()
 
                     col_p1, col_p2 = st.columns(2)
                     with col_p1:
-                        val_soc = limpar_vazamento(ai.extrair_tag(res_bruta, "SOCIAIS"))
-                        ed_soc = st.text_area("1. Habilidades Sociais:", val_soc, height=180)
-                        
-                        val_emo = limpar_vazamento(ai.extrair_tag(res_bruta, "EMOCIONAIS"))
-                        ed_emo = st.text_area("3. Habilidades Emocionais:", val_emo, height=180)
-                    
+                        ed_soc = st.text_area("1. Habilidades Sociais:", limpar_vazamento(ai.extrair_tag(res_bruta, "SOCIAIS")), height=180)
+                        ed_emo = st.text_area("3. Habilidades Emocionais:", limpar_vazamento(ai.extrair_tag(res_bruta, "EMOCIONAIS")), height=180)
                     with col_p2:
-                        val_com = limpar_vazamento(ai.extrair_tag(res_bruta, "COMUNICATIVAS"))
-                        ed_com = st.text_area("2. Habilidades Comunicativas:", val_com, height=180)
-                        
-                        val_fun = limpar_vazamento(ai.extrair_tag(res_bruta, "FUNCIONAIS"))
-                        ed_fun = st.text_area("4. Habilidades Funcionais:", val_fun, height=180)
+                        ed_com = st.text_area("2. Habilidades Comunicativas:", limpar_vazamento(ai.extrair_tag(res_bruta, "COMUNICATIVAS")), height=180)
+                        ed_fun = st.text_area("4. Habilidades Funcionais:", limpar_vazamento(ai.extrair_tag(res_bruta, "FUNCIONAIS")), height=180)
 
                     if st.button("💾 SALVAR PÁGINA 1 OFICIAL", use_container_width=True):
                         texto_consolidado = f"SOCIAIS: {ed_soc}\n\nCOMUNICATIVAS: {ed_com}\n\nEMOCIONAIS: {ed_emo}\n\nFUNCIONAIS: {ed_fun}"
-                        db.salvar_no_banco("DB_RELATORIOS", [
-                            datetime.now().strftime("%d/%m/%Y"), id_a, nome_limpo, "CAPA_PEI_OFICIAL", texto_consolidado
-                        ])
-                        st.success("✅ Documento arquivado com sucesso!")
-                        st.balloons()
+                        db.salvar_no_banco("DB_RELATORIOS", [datetime.now().strftime("%d/%m/%Y"), id_a, nome_limpo, "CAPA_PEI_OFICIAL", texto_consolidado])
+                        st.success("✅ Documento arquivado!"); st.balloons()
 
-# ABA 3: PONTE COORDENAÇÃO (WHATSAPP RÁPIDO V38.1)
+        # --- ABA 3: RELATO PARA COORDENAÇÃO (WHATSAPP) ---
         with tab_coord:
             st.subheader("📱 Relato Rápido para Coordenação")
-            
-            # 1. MAPA DE INTENCIONALIDADE (Explicação clara para o professor)
             mapa_estilos = {
-                "Opção 1: Engajamento e Evolução": "🌟 **Foco:** Ideal para destacar progressos, participação ativa e melhora no interesse do aluno. Use quando quiser mostrar que o trabalho está surtindo efeito.",
-                "Opção 2: Dificuldades e Suporte": "⚠️ **Foco:** Relatar barreiras de aprendizagem, oscilações de humor ou foco, e solicitar que a coordenação ajude no suporte ou contato com especialistas.",
-                "Opção 3: Status Ultra-conciso": "⚡ **Foco:** Papo reto e direto. Apenas 2 ou 3 linhas com o status atual, ideal para atualizações de rotina sem necessidade de análise profunda."
+                "Opção 1: Engajamento e Evolução": "🌟 **Foco:** Destacar progressos e participação ativa.",
+                "Opção 2: Dificuldades e Suporte": "⚠️ **Foco:** Relatar barreiras e solicitar apoio da coordenação.",
+                "Opção 3: Status Ultra-conciso": "⚡ **Foco:** Papo reto e direto (2-3 linhas)."
             }
-
             estilo_zap = st.radio("Qual o objetivo deste relato?", list(mapa_estilos.keys()), key="zap_v38")
-            
-            # 2. EXIBIÇÃO DA DESCRIÇÃO DINÂMICA (O senhor vê o que escolheu)
             st.info(mapa_estilos[estilo_zap])
 
             if st.button("🚀 GERAR RELATO PARA WHATSAPP", use_container_width=True):
-                with st.spinner("Traduzindo evidências em narrativa humana..."):
-                    prompt_zap = (
-                        f"ALUNO: {nome_limpo}. "
-                        f"DADOS: {vistos} vistos, {bonus} bônus, nota {nota_safra:.1f}. "
-                        f"CHECKLIST: Autonomia {v_autonomia}, Socialização {v_social}, Participação {v_participa}, Resposta {v_resposta}. "
-                        f"ESTILO: {estilo_zap}. "
-                        f"MISSÃO: Gere um parágrafo único, sem negritos, sem asteriscos, em tom de conversa de WhatsApp entre professor e coordenador."
-                    )
+                with st.spinner("Traduzindo evidências..."):
+                    prompt_zap = f"ALUNO: {nome_limpo}. DADOS: {vistos} vistos, {bonus} bônus. CHECKLIST: {v_autonomia}, {v_social}, {v_participa}, {v_resposta}. ESTILO: {estilo_zap}. Gere um parágrafo único, sem negritos, para WhatsApp."
                     st.session_state.res_v38_coord = ai.gerar_ia("PONTE_COORDENACAO", prompt_zap)
             
             if "res_v38_coord" in st.session_state:
-                st.success("✅ Relato gerado com sucesso:")
-                # Exibição limpa para leitura
                 st.write(st.session_state.res_v38_coord)
-                
-                # Campo de cópia rápida
                 st.code(st.session_state.res_v38_coord, language=None)
-                st.caption("Dica: Clique no ícone de copiar no canto superior direito do quadro cinza acima.")
 
-# ABA 4: CURRÍCULO ADAPTADO (CONSTRUTOR TRIMESTRAL V39)
-        with tab_timeline: # Apenas como referência, adicione a nova aba na lista de tabs
-            pass # (Isso é apenas um marcador, use o código abaixo na nova aba)
-
-        # --- CÓDIGO DA NOVA ABA 5 ---
-        with st.expander("📖 5. Currículo Adaptado (Plano Trimestral)", expanded=False):
+        # --- ABA 4: CURRÍCULO ADAPTADO (CONSTRUTOR) ---
+        with tab_curr:
             st.subheader("⚙️ Construtor de Matriz Adaptada")
-            st.caption("Selecione livremente os conteúdos do ano para adaptar ao perfil do aluno.")
-
-            # 1. FILTRAGEM DA MATRIZ DO ANO INTEIRO
-            ano_aluno = "".join(filter(str.isdigit, turma_pei)) # Pega '6' de '6ª MA'
+            ano_aluno = "".join(filter(str.isdigit, turma_pei))
             df_matriz_ano = df_curriculo[df_curriculo['ANO'].astype(str) == ano_aluno].copy()
 
             if df_matriz_ano.empty:
-                st.warning(f"⚠️ Matriz curricular do {ano_aluno}º ano não localizada.")
+                st.warning(f"⚠️ Matriz do {ano_aluno}º ano não localizada.")
             else:
-                # Seleção Multitrimestre
                 opcoes_conteudo = df_matriz_ano.apply(lambda x: f"[{x['TRIMESTRE']}] {x['CONTEUDO_ESPECIFICO']}", axis=1).tolist()
-                selecionados = st.multiselect("📚 Escolha os conteúdos para este trimestre:", opcoes_conteudo, key="sel_curr_v39")
+                selecionados = st.multiselect("📚 Escolha os conteúdos para adaptar:", opcoes_conteudo, key="sel_curr_v39")
 
                 if selecionados:
                     if st.button("🚀 GERAR MATRIZ ADAPTADA (IA)", use_container_width=True, type="primary"):
-                        with st.spinner("Traduzindo objetivos para o perfil do aluno..."):
-                            # Captura os objetivos oficiais dos itens selecionados
+                        with st.spinner("Traduzindo objetivos..."):
                             conteudos_brutos = [s.split("] ")[1] for s in selecionados]
                             df_focada = df_matriz_ano[df_matriz_ano['CONTEUDO_ESPECIFICO'].isin(conteudos_brutos)]
                             contexto_oficial = df_focada[['CONTEUDO_ESPECIFICO', 'OBJETIVOS']].to_string(index=False)
-
-                            prompt_curr = (
-                                f"ESTUDANTE: {nome_limpo}. PERFIL: {perfil_atual}.\n"
-                                f"BARREIRAS ATUAIS: Autonomia {v_autonomia}, Socialização {v_social}.\n"
-                                f"--- MATRIZ OFICIAL PARA ADAPTAR ---\n{contexto_oficial}\n\n"
-                                f"MISSÃO: Gere a tabela adaptada com as 4 colunas de Itabuna."
-                            )
+                            prompt_curr = f"ESTUDANTE: {nome_limpo}. PERFIL: {perfil_atual}. MATRIZ: {contexto_oficial}. Gere a tabela adaptada (Tags [ITEM], [C], [O], [F], [M])."
                             st.session_state.res_v39_curr = ai.gerar_ia("TRADUTOR_CURRICULAR_V39", prompt_curr)
 
-                    # 2. MESA DE EDIÇÃO DA MATRIZ
                     if "res_v39_curr" in st.session_state:
-                        st.markdown("### 📝 Ajuste Fino da Matriz")
-                        raw_curr = st.session_state.res_v39_curr
-                        
-                        # Extração dos itens para uma lista de dicionários (para o data_editor)
                         itens_processados = []
-                        blocos = re.findall(r"\[ITEM\](.*?)\[/ITEM\]", raw_curr, re.DOTALL)
-                        
+                        blocos = re.findall(r"\[ITEM\](.*?)\[/ITEM\]", st.session_state.res_v39_curr, re.DOTALL)
                         for b in blocos:
                             itens_processados.append({
-                                "CONTEÚDO": ai.extrair_tag(b, "C"),
-                                "OBJETIVO DE ENSINO": ai.extrair_tag(b, "O"),
-                                "FUNÇÕES PSÍQUICAS": ai.extrair_tag(b, "F"),
-                                "SELEÇÃO DE MATERIAIS": ai.extrair_tag(b, "M")
+                                "CONTEÚDO": ai.extrair_tag(b, "C"), "OBJETIVO DE ENSINO": ai.extrair_tag(b, "O"),
+                                "FUNÇÕES PSÍQUICAS": ai.extrair_tag(b, "F"), "SELEÇÃO DE MATERIAIS": ai.extrair_tag(b, "M")
                             })
-
-                        # Exibição em Tabela Editável (Soberania Total)
-                        df_editavel = st.data_editor(
-                            pd.DataFrame(itens_processados),
-                            use_container_width=True,
-                            hide_index=True,
-                            key="editor_curr_v39"
-                        )
-
-                        # 3. SALVAMENTO E CUSTÓDIA
-                        trim_destino = st.selectbox("Salvar este plano em qual trimestre?", ["I Trimestre", "II Trimestre", "III Trimestre"])
+                        df_editavel = st.data_editor(pd.DataFrame(itens_processados), use_container_width=True, hide_index=True, key="editor_curr_v39")
                         
+                        trim_destino = st.selectbox("Salvar em qual trimestre?", ["I Trimestre", "II Trimestre", "III Trimestre"])
                         if st.button("💾 ARQUIVAR CURRÍCULO ADAPTADO", use_container_width=True):
-                            # Converte a tabela em texto para salvar no banco
                             texto_final = f"PLANO ADAPTADO - {trim_destino}\n\n"
                             for _, r in df_editavel.iterrows():
                                 texto_final += f"• {r['CONTEÚDO']}\n  OBJ: {r['OBJETIVO DE ENSINO']}\n  FUNÇÕES: {r['FUNÇÕES PSÍQUICAS']}\n  MATERIAIS: {r['SELEÇÃO DE MATERIAIS']}\n\n"
-                            
-                            db.salvar_no_banco("DB_RELATORIOS", [
-                                datetime.now().strftime("%d/%m/%Y"), id_a, nome_limpo, f"CURRICULO_ADAPTADO_{trim_destino[0]}T", texto_final
-                            ])
-                            st.success(f"✅ Currículo Adaptado do {trim_destino} arquivado!")
-                            st.balloons()
+                            db.salvar_no_banco("DB_RELATORIOS", [datetime.now().strftime("%d/%m/%Y"), id_a, nome_limpo, f"CURRICULO_ADAPTADO_{trim_destino[0]}T", texto_final])
+                            st.success("✅ Arquivado!"); st.balloons()
+
+        # --- ABA 5: LINHA DO TEMPO (CUSTÓDIA) ---
+        with tab_timeline:
+            st.subheader("🗂️ Linha do Tempo de Custódia Digital")
+            if tem_passado:
+                for _, row in hist_aluno.iloc[::-1].iterrows():
+                    with st.expander(f"📅 {row.get('DATA')} — {row.get('TURMA')}"):
+                        st.write(row.get('CONTEUDO'))
+            else: st.info("📭 Nenhuma evidência arquivada.")
 
 # ==============================================================================
 # MÓDULO: CENTRAL DE AVALIAÇÕES (V64.0 - ACERVO PIP E SINCRONIA TOTAL)
