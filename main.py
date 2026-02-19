@@ -2257,7 +2257,7 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                     db.salvar_no_banco("DB_RELATORIOS", [datetime.now().strftime("%d/%m/%Y"), id_a, nome_limpo, "EVOLUÇÃO", st.session_state.res_v38_rel])
                     st.success("Arquivado!"); st.rerun()
 
-# ABA 2: PLANO DE ACESSIBILIDADE (PEI V38.3 - FILTRAGEM CIRÚRGICA)
+# ABA 2: PLANO DE ACESSIBILIDADE (PEI V38.4 - ZERO REPETIÇÃO)
         with tab_pei_doc:
             st.subheader("🏛️ Seção 1: Plano de Acessibilidade Individual")
             
@@ -2267,28 +2267,44 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                 st.warning("⚠️ Gere primeiro o 'Relatório de Evolução' na Aba 1.")
             else:
                 if st.button("🎯 ORGANIZAR PÁGINA 1 DO PEI", use_container_width=True, type="primary"):
-                    with st.spinner("Fatiando evidências por pilar oficial..."):
-                        # Prompt reforçado para evitar repetição
-                        prompt_pei_cirurgico = (
-                            f"RELATÓRIO BASE:\n{relatorio_base}\n\n"
-                            f"MISSÃO: Fatie o relatório acima em 4 partes distintas. "
-                            f"Não repita informações. Se um parágrafo fala de choro, ele vai para [EMOCIONAIS]. "
-                            f"Se fala de não fazer a tarefa, vai para [FUNCIONAIS]. "
-                            f"Retorne apenas as tags [SOCIAIS], [COMUNICATIVAS], [EMOCIONAIS] e [FUNCIONAIS] com seus respectivos conteúdos exclusivos."
+                    with st.spinner("Fatiando evidências de forma atômica..."):
+                        # Prompt de "Zero Tolerância" para repetição
+                        prompt_fatiar = (
+                            f"RELATÓRIO PARA PROCESSAR:\n{relatorio_base}\n\n"
+                            f"ORDEM SOBERANA:\n"
+                            f"Extraia 4 resumos CURTOS e DIFERENTES. "
+                            f"Não repita frases. Não use negritos. "
+                            f"Responda EXATAMENTE neste formato:\n"
+                            f"[SOCIAIS] (texto aqui)\n"
+                            f"[COMUNICATIVAS] (texto aqui)\n"
+                            f"[EMOCIONAIS] (texto aqui)\n"
+                            f"[FUNCIONAIS] (texto aqui)"
                         )
-                        st.session_state.res_v38_pei_tags = ai.gerar_ia("ESPECIALISTA_PEI", prompt_pei_cirurgico)
+                        st.session_state.res_v38_pei_tags = ai.gerar_ia("ESPECIALISTA_PEI", prompt_fatiar)
 
                 if "res_v38_pei_tags" in st.session_state:
-                    txt_tags = st.session_state.res_v38_pei_tags
+                    res_bruta = st.session_state.res_v38_pei_tags
                     
-                    # Exibição em colunas para melhor aproveitamento de tela e conferência
+                    # Função interna de limpeza para garantir que uma tag não apareça dentro da outra
+                    def limpar_vazamento(texto):
+                        import re
+                        # Remove qualquer menção a [TAGS] que a IA possa ter escrito por erro
+                        return re.sub(r'\[.*?\]', '', texto).replace('>', '').strip()
+
                     col_p1, col_p2 = st.columns(2)
                     with col_p1:
-                        ed_soc = st.text_area("1. Habilidades Sociais:", ai.extrair_tag(txt_tags, "SOCIAIS"), height=200)
-                        ed_emo = st.text_area("3. Habilidades Emocionais:", ai.extrair_tag(txt_tags, "EMOCIONAIS"), height=200)
+                        val_soc = limpar_vazamento(ai.extrair_tag(res_bruta, "SOCIAIS"))
+                        ed_soc = st.text_area("1. Habilidades Sociais:", val_soc, height=180)
+                        
+                        val_emo = limpar_vazamento(ai.extrair_tag(res_bruta, "EMOCIONAIS"))
+                        ed_emo = st.text_area("3. Habilidades Emocionais:", val_emo, height=180)
+                    
                     with col_p2:
-                        ed_com = st.text_area("2. Habilidades Comunicativas:", ai.extrair_tag(txt_tags, "COMUNICATIVAS"), height=200)
-                        ed_fun = st.text_area("4. Habilidades Funcionais:", ai.extrair_tag(txt_tags, "FUNCIONAIS"), height=200)
+                        val_com = limpar_vazamento(ai.extrair_tag(res_bruta, "COMUNICATIVAS"))
+                        ed_com = st.text_area("2. Habilidades Comunicativas:", val_com, height=180)
+                        
+                        val_fun = limpar_vazamento(ai.extrair_tag(res_bruta, "FUNCIONAIS"))
+                        ed_fun = st.text_area("4. Habilidades Funcionais:", val_fun, height=180)
 
                     if st.button("💾 SALVAR PÁGINA 1 OFICIAL", use_container_width=True):
                         texto_consolidado = f"SOCIAIS: {ed_soc}\n\nCOMUNICATIVAS: {ed_com}\n\nEMOCIONAIS: {ed_emo}\n\nFUNCIONAIS: {ed_fun}"
