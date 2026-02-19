@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from datetime import date, datetime, timedelta, timezone # <--- CORRIGIDO: date incluído
+from datetime import date, datetime, timedelta, timezone
 import database as db
 import ai_engine as ai
 import utils as util
@@ -10,41 +10,61 @@ import plotly.express as px
 import exporter
 import re
 
-# --- CONFIGURAÇÃO DE ALTA PERFORMANCE ---
+# --- CONFIGURAÇÃO DE ALTA PERFORMANCE (BRANDING EXCLUSIVO) ---
 st.set_page_config(
-    page_title="SOSA 2026 | Ronaldo Gomes", 
+    page_title="Ronaldo Gomes", # Alterado conforme ordem soberana
     layout="wide", 
     page_icon="🏫",
     initial_sidebar_state="expanded"
 )
 
-# --- SISTEMA DE BLINDAGEM (LOGIN V40) ---
+# --- SISTEMA DE BLINDAGEM E PERSISTÊNCIA (6 HORAS) ---
 def check_password():
-    """Retorna True se o usuário inseriu a senha correta."""
+    """Gerencia o acesso e a persistência de 6 horas."""
+    
+    # Inicializa o controle de tempo se não existir
+    if "login_timestamp" not in st.session_state:
+        st.session_state["login_timestamp"] = None
+
     def password_entered():
-        # SENHA DEFINIDA AQUI: SOSA2026
         if st.session_state["password"] == "2496":
             st.session_state["password_correct"] = True
+            st.session_state["login_timestamp"] = time.time() # Registra o momento do login
             del st.session_state["password"]
         else:
             st.session_state["password_correct"] = False
 
-    if "password_correct" not in st.session_state:
-        col1, col2, col3 = st.columns([1, 1, 1])
-        with col2:
-            st.markdown("<br><br><br>", unsafe_allow_html=True)
-            try: st.image("logo.png", width=150)
-            except: st.title("Ronaldo Gomes")
-            
-            st.markdown("### 🔐 Portal de Soberania")
-            st.text_input("Insira a Chave de Acesso:", type="password", on_change=password_entered, key="password")
-            
-            if "password_correct" in st.session_state and not st.session_state["password_correct"]:
-                st.error("❌ Chave incorreta. Acesso negado.")
-            
-            st.caption("Sistema restrito ao Prof. Ronaldo Gomes (Itabuna/BA)")
-        return False
-    return True
+    # Verifica se já está logado e se o tempo de 6h (21600 segundos) ainda é válido
+    if st.session_state.get("password_correct", False):
+        tempo_decorrido = time.time() - st.session_state["login_timestamp"]
+        if tempo_decorrido < 21600: # 6 horas
+            return True
+        else:
+            # Sessão expirada
+            st.session_state["password_correct"] = False
+            st.session_state["login_timestamp"] = None
+            st.warning("Sessão expirada (Limite de 6h). Por favor, revalide seu acesso.")
+
+    # Interface de Login Profissional
+    col1, col2, col3 = st.columns([1, 1, 1])
+    with col2:
+        st.markdown("<br><br><br>", unsafe_allow_html=True)
+        try: 
+            st.image("logo.png", width=180) # Logo Ronaldo Gomes
+        except: 
+            st.markdown("<h1 style='text-align: center;'>Ronaldo Gomes</h1>", unsafe_allow_html=True)
+        
+        st.markdown("<h3 style='text-align: center;'>🔐 Portal de Soberania</h3>", unsafe_allow_html=True)
+        
+        with st.container(border=True):
+            st.text_input("Chave de Acesso:", type="password", on_change=password_entered, key="password")
+            st.checkbox("Manter conectado por 6 horas", value=True, disabled=True, help="Protocolo V40 ativo: Sessão estendida para 6h.")
+        
+        if "password_correct" in st.session_state and not st.session_state["password_correct"]:
+            st.error("❌ Chave incorreta. Acesso negado.")
+        
+        st.caption("Acesso restrito ao Prof. Ronaldo Gomes (Itabuna/BA)")
+    return False
 
 if not check_password():
     st.stop()
@@ -53,11 +73,12 @@ if not check_password():
 if 'last_sync' not in st.session_state:
     st.session_state.last_sync = time.time()
 
+# Sincroniza dados a cada 10 minutos para manter performance
 if time.time() - st.session_state.last_sync > 600:
     st.cache_data.clear()
     st.session_state.last_sync = time.time()
 
-# --- ESTILIZAÇÃO DE LUXO (CSS V40) ---
+# --- ESTILIZAÇÃO DE LUXO (CSS V40 - BRANDING RONALDO GOMES) ---
 BRAND_BLUE = "#2962FF"
 BRAND_NAVY = "#000B1A"
 
@@ -83,15 +104,15 @@ st.markdown(f"""
     </style>
 """, unsafe_allow_html=True)
 
-# --- SIDEBAR: IDENTIDADE, LOGO E RELÓGIO ---
+# --- SIDEBAR: IDENTIDADE EXCLUSIVA ---
 with st.sidebar:
     col_l1, col_l2, col_l3 = st.columns([1, 2, 1])
     with col_l2:
-        try: st.image("logo.png", width=100)
+        try: st.image("logo.png", width=120)
         except: pass
     
-    st.markdown(f"<h2 style='text-align: center; font-size: 20px; margin-top: 10px;'>Ronaldo Gomes</h2>", unsafe_allow_html=True)
-    st.markdown(f"<p style='text-align: center; font-size: 11px; color: {BRAND_BLUE}; font-weight: 800; margin-top: -15px;'>SOBERANIA PEDAGÓGICA</p>", unsafe_allow_html=True)
+    st.markdown(f"<h2 style='text-align: center; font-size: 22px; margin-top: 10px;'>Ronaldo Gomes</h2>", unsafe_allow_html=True)
+    st.markdown(f"<p style='text-align: center; font-size: 12px; color: {BRAND_BLUE}; font-weight: 800; margin-top: -15px; letter-spacing: 1px;'>SOBERANIA PEDAGÓGICA</p>", unsafe_allow_html=True)
 
     # Relógio Automático (Brasília)
     fuso_br = timezone(timedelta(hours=-3))
