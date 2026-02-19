@@ -2334,15 +2334,34 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                             prompt_curr = f"ESTUDANTE: {nome_limpo}. PERFIL: {perfil_atual}. MATRIZ: {contexto_oficial}. Gere a tabela adaptada (Tags [ITEM], [C], [O], [F], [M])."
                             st.session_state.res_v39_curr = ai.gerar_ia("TRADUTOR_CURRICULAR_V39", prompt_curr)
 
+                # 2. MESA DE EDIÇÃO DA MATRIZ (VERSÃO REFINADA V39.1)
                     if "res_v39_curr" in st.session_state:
+                        st.markdown("### 📝 Ajuste Fino da Matriz")
+                        raw_curr = st.session_state.res_v39_curr
+                        
+                        def limpar_vazamento_curr(texto):
+                            import re
+                            # Remove tags como [O], [F], [M] e colchetes que a IA insiste em repetir
+                            return re.sub(r'\[.*?\]', '', texto).replace('>', '').strip()
+
                         itens_processados = []
-                        blocos = re.findall(r"\[ITEM\](.*?)\[/ITEM\]", st.session_state.res_v39_curr, re.DOTALL)
+                        blocos = re.findall(r"\[ITEM\](.*?)\[/ITEM\]", raw_curr, re.DOTALL)
+                        
                         for b in blocos:
                             itens_processados.append({
-                                "CONTEÚDO": ai.extrair_tag(b, "C"), "OBJETIVO DE ENSINO": ai.extrair_tag(b, "O"),
-                                "FUNÇÕES PSÍQUICAS": ai.extrair_tag(b, "F"), "SELEÇÃO DE MATERIAIS": ai.extrair_tag(b, "M")
+                                "CONTEÚDO": limpar_vazamento_curr(ai.extrair_tag(b, "C")),
+                                "OBJETIVO DE ENSINO": limpar_vazamento_curr(ai.extrair_tag(b, "O")),
+                                "FUNÇÕES PSÍQUICAS": limpar_vazamento_curr(ai.extrair_tag(b, "F")),
+                                "SELEÇÃO DE MATERIAIS": limpar_vazamento_curr(ai.extrair_tag(b, "M"))
                             })
-                        df_editavel = st.data_editor(pd.DataFrame(itens_processados), use_container_width=True, hide_index=True, key="editor_curr_v39")
+
+                        # Exibição em Tabela Editável
+                        df_editavel = st.data_editor(
+                            pd.DataFrame(itens_processados),
+                            use_container_width=True,
+                            hide_index=True,
+                            key="editor_curr_v39_refinado"
+                        )
                         
                         trim_destino = st.selectbox("Salvar em qual trimestre?", ["I Trimestre", "II Trimestre", "III Trimestre"])
                         if st.button("💾 ARQUIVAR CURRÍCULO ADAPTADO", use_container_width=True):
