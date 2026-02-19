@@ -14,7 +14,7 @@ import re
 st.set_page_config(
     page_title="Ronaldo Gomes", 
     layout="wide", 
-    page_icon="🏫",
+    page_icon="💻", # Ícone da aba atualizado para 💻
     initial_sidebar_state="expanded"
 )
 
@@ -37,7 +37,7 @@ def check_password():
             st.warning("Sessão expirada. Por favor, entre novamente.")
 
     # INTERFACE DE LOGIN (Design Responsivo e Limpo)
-    _, col_login, _ = st.columns([1, 2, 1]) # Layout seguro para Mobile/Desktop
+    _, col_login, _ = st.columns([1, 2, 1]) 
     
     with col_login:
         st.markdown("<br><br>", unsafe_allow_html=True)
@@ -48,12 +48,11 @@ def check_password():
         
         st.markdown("<h3 style='text-align: center; margin-bottom: 20px;'>🔐 Portal de Soberania</h3>", unsafe_allow_html=True)
         
-        # FORMULÁRIO DE LOGIN: Habilita o botão "Entrar" e a tecla "Enter"
+        # FORMULÁRIO DE LOGIN
         with st.form("login_portal"):
             input_password = st.text_input("Chave de Acesso:", type="password", placeholder="Digite sua chave...")
             st.checkbox("Manter conectado por 6 horas", value=True, disabled=True)
             
-            # Botão de Entrar (Essencial para Mobile)
             btn_entrar = st.form_submit_button("ENTRAR NO PAINEL", use_container_width=True)
             
             if btn_entrar:
@@ -154,10 +153,12 @@ with st.sidebar:
             st.session_state["login_timestamp"] = None
             st.rerun()
 
-    st.caption(f"V40 Master Elite | © 2026")
+    # Rodapé atualizado conforme ordem soberana
+    st.caption("Ronaldo Gomes | © 2026")
 
 # --- CARREGAMENTO DE DADOS ---
 wb, (df_alunos, df_curriculo, df_materiais, df_planos, df_aulas, df_notas, df_diario, df_turmas, df_relatorios, df_horarios, df_registro_aulas, df_diagnosticos) = db.carregar_tudo()
+
 
 
 # --- FUNÇÕES AUXILIARES ---
@@ -2481,7 +2482,7 @@ elif menu == "📝 Central de Avaliações":
         "🚀 Arquiteto de Exames", "🤖 Refinador Maestro", "👁️ Visualização 360°", "🔥 Recomposição/Revisão", "💾 Finalizar Ativo", "🗂️ Acervo de Safra"
     ])
 
-# --- ABA 1: ARQUITETO DE EXAMES (VERSÃO V76 - HÍBRIDA: SAFRA + SONDA SAEB) ---
+    # --- ABA 1: ARQUITETO DE EXAMES (VERSÃO V76 - CORRIGIDA) ---
     with tab_arquiteto_av:
         if is_refinando_av:
             st.warning(f"🛠️ **MODO REFINO:** Editando {st.session_state.refino_av_ativo.get('tipo')}")
@@ -2496,44 +2497,47 @@ elif menu == "📝 Central de Avaliações":
                 ["Teste", "Prova", "Sonda de Proficiência", "Recuperação Paralela", "Recuperação Final", "2ª Chamada"], 
                 key=f"av_t_{v}")
             
-            # Ajuste de valores automáticos
             val_sugerido = 3.0 if "Teste" in tipo_av else 10.0 if "Sonda" in tipo_av else 4.0
             v_total = c2.number_input("Valor Total:", 0.0, 10.0, val_sugerido, step=0.5, key=f"av_v_{v}")
             ano_av = c3.selectbox("Série Atual:", [6, 7, 8, 9], index=0, key=f"av_a_{v}")
             qtd_q = c4.number_input("Nº de Questões:", 1, 20, 10, key=f"av_q_{v}")
 
-        # --- LÓGICA DE MODO (SONDA VS SAFRA) ---
         is_sonda = "Sonda" in tipo_av
         is_segunda = "2ª Chamada" in tipo_av
 
         if is_sonda:
-            # --- MODO 2: ENGENHARIA DE SONDAGEM (MATRIZ SAEB / GOVERNO) ---
+            # --- MODO 2: ENGENHARIA DE SONDAGEM (CORREÇÃO DE COLUNAS) ---
             with st.container(border=True):
                 st.markdown("#### 🔍 2. Parâmetros de Sondagem Diagnóstica")
                 trim_filtro = st.selectbox("Trimestre de Referência:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"s_trim_{v}")
                 
-                # Lógica de Retrocesso Curricular (I Trimestre busca base do ano anterior)
                 ano_busca = int(ano_av) - 1 if trim_filtro == "I Trimestre" else int(ano_av)
                 st.info(f"💡 **Foco Diagnóstico:** Buscando conteúdos do **{ano_busca}º Ano** para mapear lacunas.")
 
-                df_matriz = df_curriculo[df_curriculo["ANO"].astype(str).str.contains(str(ano_busca))]
+                # Filtra a matriz garantindo que o DataFrame não seja nulo
+                df_matriz = df_curriculo[df_curriculo["ANO"].astype(str).str.contains(str(ano_busca))].copy()
                 
                 c_s1, c_s2 = st.columns(2)
-                lista_eixos = sorted(df_matriz["EIXO"].unique().tolist())
+                lista_eixos = sorted(df_matriz["EIXO"].unique().tolist()) if not df_matriz.empty else []
                 sel_eixos = c_s1.multiselect("Selecione o(s) Eixo(s):", lista_eixos, key=f"s_e_m_{v}")
                 
                 sel_conts = []
                 sel_objs = []
                 if sel_eixos:
-                    df_c_f = df_matriz[df_matriz["EIXO"].isin(sel_eixos)]
+                    # Filtra por Eixo
+                    df_c_f = df_matriz[df_matriz["EIXO"].isin(sel_eixos)].copy()
+                    
+                    # BUSCA DE CONTEÚDOS (USANDO ASPAS PARA EVITAR reportUndefinedVariable)
                     lista_conts = sorted(df_c_f["CONTEUDO_ESPECIFICO"].unique().tolist())
                     sel_conts = c_s2.multiselect("Conteúdo(s) Base:", lista_conts, key=f"s_c_m_{v}")
                     
                     if sel_conts:
-                        lista_objs = sorted(df_c_f[df_c_f["CONTEUDO_ESPECIFICO"].isin(sel_conts)]["OBJETIVOS"].unique().tolist())
+                        # BUSCA DE OBJETIVOS (USANDO ASPAS)
+                        df_o_f = df_c_f[df_c_f["CONTEUDO_ESPECIFICO"].isin(sel_conts)]
+                        lista_objs = sorted(df_o_f["OBJETIVOS"].unique().tolist())
                         sel_objs = st.multiselect("Refine pelos Objetivos (Descritores):", lista_objs, key=f"s_o_m_{v}")
                 
-                instr_extra = st.text_area("📝 Instruções de Sondagem (Ex: Buscar itens do SAEB sobre este tema):", key=f"s_instr_{v}")
+                instr_extra = st.text_area("📝 Instruções de Sondagem:", key=f"s_instr_{v}")
 
         else:
             # --- MODO 1: ENGENHARIA DE SAFRA (TESTE/PROVA/2ª CHAMADA) ---
