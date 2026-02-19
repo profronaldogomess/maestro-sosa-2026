@@ -1,164 +1,164 @@
 import streamlit as st
 import pandas as pd
-from datetime import date, datetime
+from datetime import datetime, timedelta, timezone
 import database as db
 import ai_engine as ai
 import utils as util
-from google.genai import types
 import time
 import os
 import plotly.express as px
 import exporter
 import re
-import ai_engine as ai
-from datetime import date, datetime, timedelta
 
+# --- CONFIGURAÇÃO DE ALTA PERFORMANCE ---
+st.set_page_config(
+    page_title="SOSA 2026 | Ronaldo Gomes", 
+    layout="wide", 
+    page_icon="🏫",
+    initial_sidebar_state="expanded"
+)
 
-st.set_page_config(page_title="SOSA 2026 | Master Intelligence", layout="wide", page_icon="🏫")
+# --- LÓGICA DE AUTO-ATUALIZAÇÃO (Sincronia Automática) ---
+# Limpa o cache automaticamente a cada 600 segundos (10 minutos)
+if 'last_sync' not in st.session_state:
+    st.session_state.last_sync = time.time()
 
-# --- CONTROLE DE TEMA (DESIGN PREMIUM CORRIGIDO) ---
+if time.time() - st.session_state.last_sync > 600:
+    st.cache_data.clear()
+    st.session_state.last_sync = time.time()
+
+# --- ESTILIZAÇÃO DE LUXO (CSS V39) ---
+BRAND_BLUE = "#2962FF"
+BRAND_NAVY = "#000B1A"
+
 with st.sidebar:
     tema_selecionado = st.radio("Visual do Sistema:", ["🌙 Dark Mode", "🌞 Light Mode"], horizontal=True)
 
-# --- DEFINIÇÃO DA PALETA DE CORES ---
-BRAND_BLUE = "#2962FF" 
-BRAND_NAVY = "#000B1A" 
-
 if tema_selecionado == "🌙 Dark Mode":
-    cor_fundo = BRAND_NAVY
-    cor_texto = "#FFFFFF"
-    cor_sidebar = "#001226"
-    cor_card_bg = "#001E3C"
-    cor_card_borda = "#003366"
-    cor_titulo_card = "#A0AEC0"
+    cor_fundo, cor_texto, cor_sidebar, cor_card = BRAND_NAVY, "#FFFFFF", "#001226", "#001E3C"
+    cor_borda = "#003366"
 else:
-    cor_fundo = "#F8FAFC"
-    cor_texto = "#1A202C"  # Texto bem escuro para o Light Mode
-    cor_sidebar = "#FFFFFF"
-    cor_card_bg = "#FFFFFF"
-    cor_card_borda = "#E2E8F0"
-    cor_titulo_card = "#4A5568"
+    cor_fundo, cor_texto, cor_sidebar, cor_card = "#F8FAFC", "#1A202C", "#FFFFFF", "#FFFFFF"
+    cor_borda = "#E2E8F0"
 
-# --- INJEÇÃO DE CSS DINÂMICO (CORREÇÃO DE CONTRASTE) ---
 st.markdown(f"""
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
-        * {{ font-family: 'Inter', sans-serif; }}
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
+        * {{ font-family: 'Plus Jakarta Sans', sans-serif; }}
 
-        .stApp {{
-            background-color: {cor_fundo} !important;
-            color: {cor_texto} !important;
-        }}
-
-        /* FORÇAR COR DO TEXTO EM TODO O SISTEMA */
-        p, span, label, h1, h2, h3, .stMarkdown {{
-            color: {cor_texto} !important;
-        }}
+        .stApp {{ background-color: {cor_fundo} !important; color: {cor_texto} !important; }}
         
-        /* SIDEBAR */
+        /* SIDEBAR GLASSMORPHISM */
         [data-testid="stSidebar"] {{
             background-color: {cor_sidebar} !important;
-            border-right: 1px solid {cor_card_borda};
-        }}
-        
-        /* CORRIGIR TEXTO DOS BOTÕES DE RÁDIO (NAVEGAÇÃO) */
-        div[role="radiogroup"] label p {{
-            color: {cor_texto} !important;
-            font-weight: 500;
+            border-right: 1px solid {cor_borda};
+            box-shadow: 10px 0 30px rgba(0,0,0,0.1);
         }}
 
-        /* BOTÃO SELECIONADO (AZUL DA LOGO) */
-        div[role="radiogroup"] label[aria-checked="true"] {{
-            background-color: {BRAND_BLUE}22 !important;
-            border: 1px solid {BRAND_BLUE} !important;
-        }}
-        
-        div[role="radiogroup"] label[aria-checked="true"] p {{
-            color: {BRAND_BLUE} !important;
-            font-weight: 700;
-        }}
-
-        /* CARDS DE MÉTRICAS */
+        /* CARDS DE MÉTRICAS MODERNOS */
         div[data-testid="stMetric"] {{
-            background-color: {cor_card_bg} !important;
-            border: 1px solid {cor_card_borda} !important;
-            border-radius: 16px;
+            background: {cor_card} !important;
+            border: 1px solid {cor_borda} !important;
+            border-radius: 20px !important;
+            padding: 20px !important;
+            transition: all 0.3s ease;
         }}
-        
-        div[data-testid="stMetricLabel"] p {{
-            color: {cor_titulo_card} !important;
-        }}
-        
-        div[data-testid="stMetricValue"] div {{
-            color: {BRAND_BLUE} !important;
-        }}
-
-        /* INPUTS E SELECTBOXES */
-        .stSelectbox div[data-baseweb="select"] {{
-            background-color: {cor_card_bg} !important;
-            color: {cor_texto} !important;
-        }}
-        
-        /* CORRIGIR TEXTO DENTRO DO SELECTBOX */
-        div[data-testid="stSelectbox"] p {{
-            color: {cor_texto} !important;
+        div[data-testid="stMetric"]:hover {{
+            transform: translateY(-5px);
+            border-color: {BRAND_BLUE} !important;
+            box-shadow: 0 10px 20px rgba(41, 98, 255, 0.1);
         }}
 
-        /* BOTÕES DE AÇÃO */
+        /* BOTÕES DE ELITE */
         .stButton button {{
-            background-color: {BRAND_BLUE} !important;
+            background: linear-gradient(135deg, {BRAND_BLUE}, #0039CB) !important;
             color: white !important;
-            border-radius: 10px !important;
+            border-radius: 12px !important;
+            border: none !important;
             font-weight: 700 !important;
+            padding: 10px 24px !important;
+            width: 100%;
+            transition: all 0.3s ease;
+        }}
+        .stButton button:hover {{
+            transform: scale(1.02);
+            box-shadow: 0 5px 15px {BRAND_BLUE}44;
+        }}
+
+        /* RELÓGIO E IDENTIDADE */
+        .user-profile {{
+            text-align: center;
+            padding: 20px 0;
+            border-bottom: 1px solid {cor_borda};
+            margin-bottom: 20px;
+        }}
+        .clock-container {{
+            background: {BRAND_BLUE}15;
+            color: {BRAND_BLUE};
+            padding: 8px 15px;
+            border-radius: 30px;
+            font-weight: 800;
+            font-size: 14px;
+            text-align: center;
+            margin: 10px 0;
+            border: 1px solid {BRAND_BLUE}33;
         }}
     </style>
 """, unsafe_allow_html=True)
 
-# --- CARREGAMENTO ---
-wb, (df_alunos, df_curriculo, df_materiais, df_planos, df_aulas, df_notas, df_diario, df_turmas, df_relatorios, df_horarios, df_registro_aulas, df_diagnosticos) = db.carregar_tudo()
-# --- SIDEBAR COM LOGOTIPO ---
+# --- SIDEBAR: IDENTIDADE E RELÓGIO ---
 with st.sidebar:
-    try:
-        col_esq, col_meio, col_dir = st.columns([1, 2, 1])
-        with col_meio:
-            st.image("logo.png", width=100) 
-    except:
-        st.markdown("### 🏫 **SOSA**")
+    # Perfil do Usuário
+    st.markdown(f"""
+        <div class="user-profile">
+            <img src="https://cdn-icons-png.flaticon.com/512/1995/1995531.png" width="80" style="border-radius: 50%; margin-bottom: 10px;">
+            <h2 style='font-size: 20px; margin: 0;'>Ronaldo Gomes</h2>
+            <p style='font-size: 12px; color: {BRAND_BLUE}; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;'>Soberania Pedagógica</p>
+        </div>
+    """, unsafe_allow_html=True)
+
+    # Relógio Automático (Brasília)
+    fuso_br = timezone(timedelta(hours=-3))
+    hora_atual = datetime.now(fuso_br).strftime("%H:%M:%S")
+    data_atual = datetime.now(fuso_br).strftime("%d/%m/%Y")
     
-    st.markdown("<h3 style='text-align: center; margin-top: -15px; font-size: 14px;'>Maestro V14</h3>", unsafe_allow_html=True)
+    st.markdown(f"""
+        <div class="clock-container">
+            🕒 {hora_atual} | 📅 {data_atual}
+        </div>
+    """, unsafe_allow_html=True)
+
     st.markdown("---")
 
-    if st.sidebar.button("🚨 Resetar Espaço do Drive"):
-        msg = db.limpar_todo_drive_da_conta_servico()
-        st.sidebar.success(msg)
-    
-    if st.button("🔄 Sincronizar Dados"):
+    # Navegação
+    menu = st.radio("Navegação Estratégica:", [
+        "📅 Planejamento (Ponto ID)",
+        "🧪 Criador de Aulas",
+        "📝 Central de Avaliações",
+        "📸 Scanner de Gabaritos",
+        "📝 Diário de Bordo Rápido",
+        "👤 Biografia do Estudante",
+        "📊 Painel de Notas & Vistos",
+        "📈 Boletim Anual & Conselho",
+        "👥 Gestão da Turma",
+        "📚 Base de Conhecimento",
+        "♿ Relatórios PEI / Perfil IA"
+    ])
+
+    st.markdown("---")
+    if st.button("🔄 Sincronizar Agora"):
         st.cache_data.clear()
         st.rerun()
-    
+
+# --- CARREGAMENTO DE DADOS ---
+wb, (df_alunos, df_curriculo, df_materiais, df_planos, df_aulas, df_notas, df_diario, df_turmas, df_relatorios, df_horarios, df_registro_aulas, df_diagnosticos) = db.carregar_tudo()
+
+# --- FUNÇÕES AUXILIARES ---
 def prensa_hidraulica_texto(texto, label):
-    # Remove o rótulo se a IA insistir em escrever, independente de maiúscula/minúscula ou acento
     limpo = texto.replace(label, "").replace(label.upper(), "").replace(label.lower(), "")
-    # Remove os dois pontos iniciais que costumam sobrar
     if limpo.startswith(":") or limpo.startswith(" :"):
         limpo = limpo.split(":", 1)[-1]
     return limpo.strip()
-
-# MENU DE NAVEGAÇÃO
-menu = st.sidebar.radio("Navegação:", [
-    "📅 Planejamento (Ponto ID)",
-    "🧪 Criador de Aulas",
-    "📝 Central de Avaliações",
-    "📸 Scanner de Gabaritos",
-    "📝 Diário de Bordo Rápido",
-    "👤 Biografia do Estudante",
-    "📊 Painel de Notas & Vistos",
-    "📈 Boletim Anual & Conselho",
-    "👥 Gestão da Turma",
-    "📚 Base de Conhecimento",
-    "♿ Relatórios PEI / Perfil IA"
-])
-
 
 # ==============================================================================
 # FUNÇÃO AUXILIAR DE VISUALIZAÇÃO HÍBRIDA (VERSÃO V25.11 - CONTEXTUAL)
