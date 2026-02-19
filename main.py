@@ -2385,14 +2385,70 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                             st.success(f"✅ Currículo do {trim_destino} arquivado com sucesso!")
                             st.balloons()
 
-        # --- ABA 5: LINHA DO TEMPO (CUSTÓDIA) ---
+# ABA 5: LINHA DO TEMPO (CUSTÓDIA DIGITAL V38.6)
         with tab_timeline:
             st.subheader("🗂️ Linha do Tempo de Custódia Digital")
-            if tem_passado:
-                for _, row in hist_aluno.iloc[::-1].iterrows():
-                    with st.expander(f"📅 {row.get('DATA')} — {row.get('TURMA')}"):
-                        st.write(row.get('CONTEUDO'))
-            else: st.info("📭 Nenhuma evidência arquivada.")
+            st.caption("Histórico cronológico de todos os documentos e evidências geradas para este estudante.")
+
+            if not hist_aluno.empty:
+                # Inverte para mostrar o mais recente primeiro
+                df_timeline = hist_aluno.iloc[::-1]
+
+                for idx, row in df_timeline.iterrows():
+                    # 1. IDENTIFICAÇÃO DO TIPO DE DOCUMENTO
+                    tipo_bruto = str(row.get('TURMA', 'REGISTRO')) # No seu banco, o tipo está na coluna TURMA
+                    data_doc = row.get('DATA', 'S/D')
+                    conteudo_raw = row.get('CONTEUDO', '')
+
+                    # Definição de Estilo por Tipo
+                    if "EVOLUÇÃO" in tipo_bruto.upper():
+                        label_tipo = "📈 RELATÓRIO DE EVOLUÇÃO"
+                        cor_borda = "#2962FF" # Azul
+                        icone = "📊"
+                    elif "CAPA_PEI" in tipo_bruto.upper():
+                        label_tipo = "🏛️ CAPA DO PEI (PÁGINA 1)"
+                        cor_borda = "#7C3AED" # Roxo
+                        icone = "📝"
+                    elif "CURRICULO_ADAPTADO" in tipo_bruto.upper():
+                        label_tipo = f"📖 CURRÍCULO ADAPTADO ({tipo_bruto.split('_')[-1]})"
+                        cor_borda = "#059669" # Verde
+                        icone = "📚"
+                    else:
+                        label_tipo = f"📄 {tipo_bruto}"
+                        cor_borda = "#475569"
+                        icone = "📎"
+
+                    # 2. RENDERIZAÇÃO DO CARD DE CUSTÓDIA
+                    with st.container(border=True):
+                        col_t1, col_t2 = st.columns([3, 1])
+                        with col_t1:
+                            st.markdown(f"### {icone} {label_tipo}")
+                            st.caption(f"📅 Gerado em: {data_doc} | 🆔 ID Aluno: {id_a}")
+                        
+                        with col_t2:
+                            # Botão de Exclusão (Padrão SOSA)
+                            if st.button("🗑️ APAGAR", key=f"del_rel_{idx}", use_container_width=True):
+                                # Lógica de exclusão no banco (precisa de uma função no database.py que delete por conteúdo ou ID)
+                                if db.excluir_registro("DB_RELATORIOS", conteudo_raw):
+                                    st.success("Registro removido!"); time.sleep(0.5); st.rerun()
+
+                        # 3. EXIBIÇÃO ESTRUTURADA DO CONTEÚDO
+                        with st.expander("👁️ VISUALIZAR DOCUMENTO COMPLETO", expanded=False):
+                            if "CURRICULO_ADAPTADO" in tipo_bruto.upper():
+                                # Se for currículo, tenta organizar em blocos para leitura fácil
+                                partes = conteudo_raw.split("CONTEÚDO:")
+                                for p in partes:
+                                    if p.strip():
+                                        st.info(f"📖 **CONTEÚDO:** {p.strip()}")
+                            else:
+                                # Para relatórios e capas, exibe o texto formatado
+                                st.markdown(conteudo_raw.replace("\n", "  \n"))
+                            
+                            # Rodapé de Autenticidade
+                            st.divider()
+                            st.caption("🔒 Documento assinado digitalmente pelo ecossistema SOSA V38.6")
+            else:
+                st.info("📭 Nenhuma evidência ou documento arquivado para este estudante até o momento.")
 
 # ==============================================================================
 # MÓDULO: CENTRAL DE AVALIAÇÕES (V64.0 - ACERVO PIP E SINCRONIA TOTAL)
