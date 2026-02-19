@@ -18,52 +18,57 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- SISTEMA DE BLINDAGEM E PERSISTÊNCIA (6 HORAS) ---
+# --- SISTEMA DE BLINDAGEM E PERSISTÊNCIA (6 HORAS - OTIMIZADO MOBILE) ---
 def check_password():
-    """Gerencia o acesso e a persistência de 6 horas."""
+    """Gerencia o acesso com botão de entrada explícito para Mobile/Desktop."""
     
-    # Inicializa o controle de tempo se não existir
+    if "password_correct" not in st.session_state:
+        st.session_state["password_correct"] = False
     if "login_timestamp" not in st.session_state:
         st.session_state["login_timestamp"] = None
 
-    def password_entered():
-        if st.session_state["password"] == "2496":
-            st.session_state["password_correct"] = True
-            st.session_state["login_timestamp"] = time.time() # Registra o momento do login
-            del st.session_state["password"]
-        else:
-            st.session_state["password_correct"] = False
-
-    # Verifica se já está logado e se o tempo de 6h (21600 segundos) ainda é válido
-    if st.session_state.get("password_correct", False):
+    # Verifica se a sessão de 6h ainda é válida
+    if st.session_state["password_correct"]:
         tempo_decorrido = time.time() - st.session_state["login_timestamp"]
         if tempo_decorrido < 21600: # 6 horas
             return True
         else:
-            # Sessão expirada
             st.session_state["password_correct"] = False
-            st.session_state["login_timestamp"] = None
-            st.warning("Sessão expirada (Limite de 6h). Por favor, revalide seu acesso.")
+            st.warning("Sessão expirada. Por favor, entre novamente.")
 
-    # Interface de Login Profissional
-    col1, col2, col3 = st.columns([1, 1, 1])
-    with col2:
-        st.markdown("<br><br><br>", unsafe_allow_html=True)
+    # INTERFACE DE LOGIN (Design Responsivo)
+    # No mobile, colunas se ajustam. Usamos um layout centralizado.
+    _, col_login, _ = st.columns([0.2, 0.6, 0.2]) if not st.get_option("embed.showSidebarNavigation") else st.columns([0.1, 0.8, 0.1])
+    
+    with col_login:
+        st.markdown("<br><br>", unsafe_allow_html=True)
         try: 
-            st.image("logo.png", width=180) # Logo Ronaldo Gomes
+            st.image("logo.png", width=180) 
         except: 
             st.markdown("<h1 style='text-align: center;'>Ronaldo Gomes</h1>", unsafe_allow_html=True)
         
-        st.markdown("<h3 style='text-align: center;'>🔐 Portal de Soberania</h3>", unsafe_allow_html=True)
+        st.markdown("<h3 style='text-align: center; margin-bottom: 20px;'>🔐 Portal de Soberania</h3>", unsafe_allow_html=True)
         
-        with st.container(border=True):
-            st.text_input("Chave de Acesso:", type="password", on_change=password_entered, key="password")
-            st.checkbox("Manter conectado por 6 horas", value=True, disabled=True, help="Protocolo V40 ativo: Sessão estendida para 6h.")
+        # Uso de FORM para habilitar o botão "Entrar" e o "Enter" do teclado
+        with st.form("login_portal"):
+            input_password = st.text_input("Chave de Acesso:", type="password", placeholder="Digite sua chave...")
+            st.checkbox("Manter conectado por 6 horas", value=True, disabled=True)
+            
+            # Botão de Entrar estilizado automaticamente pelo CSS do sistema
+            btn_entrar = st.form_submit_button("ENTRAR NO PAINEL", use_container_width=True)
+            
+            if btn_entrar:
+                if input_password == "2496":
+                    st.session_state["password_correct"] = True
+                    st.session_state["login_timestamp"] = time.time()
+                    st.success("Acesso Autorizado!")
+                    time.sleep(0.5)
+                    st.rerun()
+                else:
+                    st.error("❌ Chave incorreta. Acesso negado.")
         
-        if "password_correct" in st.session_state and not st.session_state["password_correct"]:
-            st.error("❌ Chave incorreta. Acesso negado.")
-        
-        st.caption("Acesso restrito ao Prof. Ronaldo Gomes (Itabuna/BA)")
+        st.markdown("<p style='text-align: center; font-size: 12px; color: gray;'>Sistema restrito ao Prof. Ronaldo Gomes (Itabuna/BA)</p>", unsafe_allow_html=True)
+    
     return False
 
 if not check_password():
