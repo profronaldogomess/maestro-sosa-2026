@@ -2359,6 +2359,82 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                         st.write(row.get('CONTEUDO'))
             else: st.info("📭 Nenhuma evidência arquivada.")
 
+# ABA 5: CURRÍCULO ADAPTADO (CONSTRUTOR TRIMESTRAL V39)
+        with tab_timeline: # Apenas como referência, adicione a nova aba na lista de tabs
+            pass # (Isso é apenas um marcador, use o código abaixo na nova aba)
+
+        # --- CÓDIGO DA NOVA ABA 5 ---
+        with st.expander("📖 5. Currículo Adaptado (Plano Trimestral)", expanded=False):
+            st.subheader("⚙️ Construtor de Matriz Adaptada")
+            st.caption("Selecione livremente os conteúdos do ano para adaptar ao perfil do aluno.")
+
+            # 1. FILTRAGEM DA MATRIZ DO ANO INTEIRO
+            ano_aluno = "".join(filter(str.isdigit, turma_pei)) # Pega '6' de '6ª MA'
+            df_matriz_ano = df_curriculo[df_curriculo['ANO'].astype(str) == ano_aluno].copy()
+
+            if df_matriz_ano.empty:
+                st.warning(f"⚠️ Matriz curricular do {ano_aluno}º ano não localizada.")
+            else:
+                # Seleção Multitrimestre
+                opcoes_conteudo = df_matriz_ano.apply(lambda x: f"[{x['TRIMESTRE']}] {x['CONTEUDO_ESPECIFICO']}", axis=1).tolist()
+                selecionados = st.multiselect("📚 Escolha os conteúdos para este trimestre:", opcoes_conteudo, key="sel_curr_v39")
+
+                if selecionados:
+                    if st.button("🚀 GERAR MATRIZ ADAPTADA (IA)", use_container_width=True, type="primary"):
+                        with st.spinner("Traduzindo objetivos para o perfil do aluno..."):
+                            # Captura os objetivos oficiais dos itens selecionados
+                            conteudos_brutos = [s.split("] ")[1] for s in selecionados]
+                            df_focada = df_matriz_ano[df_matriz_ano['CONTEUDO_ESPECIFICO'].isin(conteudos_brutos)]
+                            contexto_oficial = df_focada[['CONTEUDO_ESPECIFICO', 'OBJETIVOS']].to_string(index=False)
+
+                            prompt_curr = (
+                                f"ESTUDANTE: {nome_limpo}. PERFIL: {perfil_atual}.\n"
+                                f"BARREIRAS ATUAIS: Autonomia {v_autonomia}, Socialização {v_social}.\n"
+                                f"--- MATRIZ OFICIAL PARA ADAPTAR ---\n{contexto_oficial}\n\n"
+                                f"MISSÃO: Gere a tabela adaptada com as 4 colunas de Itabuna."
+                            )
+                            st.session_state.res_v39_curr = ai.gerar_ia("TRADUTOR_CURRICULAR_V39", prompt_curr)
+
+                    # 2. MESA DE EDIÇÃO DA MATRIZ
+                    if "res_v39_curr" in st.session_state:
+                        st.markdown("### 📝 Ajuste Fino da Matriz")
+                        raw_curr = st.session_state.res_v39_curr
+                        
+                        # Extração dos itens para uma lista de dicionários (para o data_editor)
+                        itens_processados = []
+                        blocos = re.findall(r"\[ITEM\](.*?)\[/ITEM\]", raw_curr, re.DOTALL)
+                        
+                        for b in blocos:
+                            itens_processados.append({
+                                "CONTEÚDO": ai.extrair_tag(b, "C"),
+                                "OBJETIVO DE ENSINO": ai.extrair_tag(b, "O"),
+                                "FUNÇÕES PSÍQUICAS": ai.extrair_tag(b, "F"),
+                                "SELEÇÃO DE MATERIAIS": ai.extrair_tag(b, "M")
+                            })
+
+                        # Exibição em Tabela Editável (Soberania Total)
+                        df_editavel = st.data_editor(
+                            pd.DataFrame(itens_processados),
+                            use_container_width=True,
+                            hide_index=True,
+                            key="editor_curr_v39"
+                        )
+
+                        # 3. SALVAMENTO E CUSTÓDIA
+                        trim_destino = st.selectbox("Salvar este plano em qual trimestre?", ["I Trimestre", "II Trimestre", "III Trimestre"])
+                        
+                        if st.button("💾 ARQUIVAR CURRÍCULO ADAPTADO", use_container_width=True):
+                            # Converte a tabela em texto para salvar no banco
+                            texto_final = f"PLANO ADAPTADO - {trim_destino}\n\n"
+                            for _, r in df_editavel.iterrows():
+                                texto_final += f"• {r['CONTEÚDO']}\n  OBJ: {r['OBJETIVO DE ENSINO']}\n  FUNÇÕES: {r['FUNÇÕES PSÍQUICAS']}\n  MATERIAIS: {r['SELEÇÃO DE MATERIAIS']}\n\n"
+                            
+                            db.salvar_no_banco("DB_RELATORIOS", [
+                                datetime.now().strftime("%d/%m/%Y"), id_a, nome_limpo, f"CURRICULO_ADAPTADO_{trim_destino[0]}T", texto_final
+                            ])
+                            st.success(f"✅ Currículo Adaptado do {trim_destino} arquivado!")
+                            st.balloons()
+
 # ==============================================================================
 # MÓDULO: CENTRAL DE AVALIAÇÕES (V64.0 - ACERVO PIP E SINCRONIA TOTAL)
 # ==============================================================================
