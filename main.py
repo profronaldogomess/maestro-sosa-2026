@@ -12,15 +12,15 @@ import re
 
 # --- CONFIGURAÇÃO DE ALTA PERFORMANCE (BRANDING EXCLUSIVO) ---
 st.set_page_config(
-    page_title="Ronaldo Gomes", # Alterado conforme ordem soberana
+    page_title="Ronaldo Gomes", 
     layout="wide", 
     page_icon="🏫",
     initial_sidebar_state="expanded"
 )
 
-# --- SISTEMA DE BLINDAGEM E PERSISTÊNCIA (6 HORAS - OTIMIZADO MOBILE) ---
+# --- SISTEMA DE BLINDAGEM E PERSISTÊNCIA (6 HORAS) ---
 def check_password():
-    """Gerencia o acesso com botão de entrada explícito para Mobile/Desktop."""
+    """Gerencia o acesso com botão de entrada explícito e persistência de 6h."""
     
     if "password_correct" not in st.session_state:
         st.session_state["password_correct"] = False
@@ -36,9 +36,8 @@ def check_password():
             st.session_state["password_correct"] = False
             st.warning("Sessão expirada. Por favor, entre novamente.")
 
-    # INTERFACE DE LOGIN (Design Responsivo)
-    # No mobile, colunas se ajustam. Usamos um layout centralizado.
-    _, col_login, _ = st.columns([0.2, 0.6, 0.2]) if not st.get_option("embed.showSidebarNavigation") else st.columns([0.1, 0.8, 0.1])
+    # INTERFACE DE LOGIN (Design Responsivo e Limpo)
+    _, col_login, _ = st.columns([1, 2, 1]) # Layout seguro para Mobile/Desktop
     
     with col_login:
         st.markdown("<br><br>", unsafe_allow_html=True)
@@ -49,12 +48,12 @@ def check_password():
         
         st.markdown("<h3 style='text-align: center; margin-bottom: 20px;'>🔐 Portal de Soberania</h3>", unsafe_allow_html=True)
         
-        # Uso de FORM para habilitar o botão "Entrar" e o "Enter" do teclado
+        # FORMULÁRIO DE LOGIN: Habilita o botão "Entrar" e a tecla "Enter"
         with st.form("login_portal"):
             input_password = st.text_input("Chave de Acesso:", type="password", placeholder="Digite sua chave...")
             st.checkbox("Manter conectado por 6 horas", value=True, disabled=True)
             
-            # Botão de Entrar estilizado automaticamente pelo CSS do sistema
+            # Botão de Entrar (Essencial para Mobile)
             btn_entrar = st.form_submit_button("ENTRAR NO PAINEL", use_container_width=True)
             
             if btn_entrar:
@@ -74,16 +73,15 @@ def check_password():
 if not check_password():
     st.stop()
 
-# --- LÓGICA DE AUTO-ATUALIZAÇÃO (Sincronia Automática) ---
+# --- LÓGICA DE AUTO-ATUALIZAÇÃO ---
 if 'last_sync' not in st.session_state:
     st.session_state.last_sync = time.time()
 
-# Sincroniza dados a cada 10 minutos para manter performance
 if time.time() - st.session_state.last_sync > 600:
     st.cache_data.clear()
     st.session_state.last_sync = time.time()
 
-# --- ESTILIZAÇÃO DE LUXO (CSS V40 - BRANDING RONALDO GOMES) ---
+# --- ESTILIZAÇÃO DE LUXO (CSS V40) ---
 BRAND_BLUE = "#2962FF"
 BRAND_NAVY = "#000B1A"
 
@@ -109,7 +107,7 @@ st.markdown(f"""
     </style>
 """, unsafe_allow_html=True)
 
-# --- SIDEBAR: IDENTIDADE EXCLUSIVA ---
+# --- SIDEBAR: IDENTIDADE E NAVEGAÇÃO ---
 with st.sidebar:
     col_l1, col_l2, col_l3 = st.columns([1, 2, 1])
     with col_l2:
@@ -127,7 +125,6 @@ with st.sidebar:
     st.markdown(f"""<div class="clock-container">🕒 {hora_atual} | 📅 {data_atual}</div>""", unsafe_allow_html=True)
     st.markdown("---")
 
-    # Menu de Navegação
     menu = st.radio("Navegação Estratégica:", [
         "📅 Planejamento (Ponto ID)",
         "🧪 Criador de Aulas",
@@ -142,28 +139,26 @@ with st.sidebar:
         "♿ Relatórios PEI / Perfil IA"
     ])
 
-    st.markdown("<br>" * 2, unsafe_allow_html=True) # Espaçamento estético
+    st.markdown("<br>" * 2, unsafe_allow_html=True)
     st.markdown("---")
     
-    # --- BOTÕES DE AÇÃO DE RODAPÉ ---
+    # BOTÕES DE RODAPÉ (SYNC E SAIR)
     col_sync, col_exit = st.columns(2)
-    
     with col_sync:
-        if st.button("🔄 Sync", help="Sincronizar Banco de Dados"):
+        if st.button("🔄 Sync"):
             st.cache_data.clear()
             st.rerun()
-            
     with col_exit:
-        # Botão de Sair com lógica de limpeza de sessão
-        if st.button("🚪 Sair", help="Encerrar Sessão de Soberania"):
+        if st.button("🚪 Sair"):
             st.session_state["password_correct"] = False
             st.session_state["login_timestamp"] = None
             st.rerun()
 
-    st.caption(f"Ronaldo Gomes | © 2026")
+    st.caption(f"V40 Master Elite | © 2026")
 
 # --- CARREGAMENTO DE DADOS ---
 wb, (df_alunos, df_curriculo, df_materiais, df_planos, df_aulas, df_notas, df_diario, df_turmas, df_relatorios, df_horarios, df_registro_aulas, df_diagnosticos) = db.carregar_tudo()
+
 
 # --- FUNÇÕES AUXILIARES ---
 def prensa_hidraulica_texto(texto, label):
