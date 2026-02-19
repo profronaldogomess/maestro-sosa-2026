@@ -2257,68 +2257,42 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                     db.salvar_no_banco("DB_RELATORIOS", [datetime.now().strftime("%d/%m/%Y"), id_a, nome_limpo, "EVOLUÇÃO", st.session_state.res_v38_rel])
                     st.success("Arquivado!"); st.rerun()
 
-# ABA 2: PLANO DE ACESSIBILIDADE (CAPA DO PEI V38 - SINCRO TOTAL)
+# ABA 2: PLANO DE ACESSIBILIDADE (PEI V38.2 - LIMPO E DIRETO)
         with tab_pei_doc:
-            st.subheader("🏛️ Seção 1: Plano de Acessibilidade Individual (PEI)")
-            st.info("Este documento converte seus Sliders e seu Planejamento em um formulário oficial de Itabuna.")
+            st.subheader("🏛️ Seção 1: Plano de Acessibilidade Individual")
             
-            # 1. PREPARAÇÃO DE METADADOS PARA O DOCUMENTO
-            data_nasc = util.formatar_data_br(dados_a.get('DATA_NASCIMENTO', ' / / '))
-            # Cálculo simples de idade (se houver data)
-            idade_txt = "___ anos"
-            try:
-                if "/" in data_nasc:
-                    ano_nasc = int(data_nasc.split("/")[-1])
-                    idade_txt = f"{datetime.now().year - ano_nasc} anos"
-            except: pass
+            # Verifica se existe um relatório gerado na Aba 1 para servir de base
+            relatorio_base = st.session_state.get("res_v38_rel", "")
+            
+            if not relatorio_base:
+                st.warning("⚠️ Gere primeiro o 'Relatório de Evolução' na Aba 1 para extrair os dados para o PEI.")
+            else:
+                if st.button("🎯 ORGANIZAR PÁGINA 1 DO PEI", use_container_width=True, type="primary"):
+                    with st.spinner("Sintetizando pilares oficiais..."):
+                        prompt_pei_limpo = (
+                            f"BASE DE DADOS (RELATÓRIO DE EVOLUÇÃO):\n{relatorio_base}\n\n"
+                            f"ESTUDANTE: {nome_limpo}. PERFIL: {perfil_atual}.\n"
+                            f"MISSÃO: Extraia as informações do relatório acima e preencha as tags [SOCIAIS], [COMUNICATIVAS], [EMOCIONAIS] e [FUNCIONAIS]."
+                        )
+                        st.session_state.res_v38_pei_tags = ai.gerar_ia("ESPECIALISTA_PEI", prompt_pei_limpo)
 
-            if st.button("📄 GERAR PÁGINA 1 DO PEI (SINCRO)", use_container_width=True, type="primary"):
-                with st.spinner("Sincronizando Sliders e Ponto ID..."):
-                    # O Prompt envia a "fotografia" exata do que o professor marcou
-                    prompt_pei_oficial = (
-                        f"ESTUDANTE: {nome_limpo}. IDADE: {idade_txt}. PERFIL: {perfil_atual}.\n"
-                        f"--- EVIDÊNCIAS DOS SLIDERS ---\n"
-                        f"- Nível de Autonomia: {v_autonomia}\n"
-                        f"- Nível de Socialização: {v_social}\n"
-                        f"- Nível de Participação: {v_participa}\n"
-                        f"- Resposta às Intervenções: {v_resposta}\n\n"
-                        f"--- ESTRATÉGIA PLANEJADA NO PONTO ID ---\n"
-                        f"{estrategia_planejada}\n\n"
-                        f"MISSÃO: Redija o Plano de Acessibilidade Curricular seguindo as 4 seções: "
-                        f"Habilidades Sociais, Comunicativas, Emocionais e Funcionais. "
-                        f"Seja formal e utilize os termos técnicos dos PEIs de Itabuna."
-                    )
-                    st.session_state.res_v38_pei_doc = ai.gerar_ia("ESPECIALISTA_PEI", prompt_pei_oficial)
-            
-            if "res_v38_pei_doc" in st.session_state:
-                # Montagem Visual do Cabeçalho Padrão Itabuna
-                st.markdown(f"""
-                <div style="border: 1px solid #ccc; padding: 20px; background-color: white; color: black; font-family: Arial;">
-                    <center><b>SECRETARIA MUNICIPAL DA EDUCAÇÃO - ITABUNA/BA</b><br>
-                    PLANO EDUCACIONAL INDIVIDUALIZADO - PEI</center><br>
-                    <b>ALUNO:</b> {nome_limpo} &nbsp;&nbsp;&nbsp; <b>IDADE:</b> {idade_txt}<br>
-                    <b>TURMA:</b> {turma_pei} &nbsp;&nbsp;&nbsp; <b>ANO LETIVO:</b> 2026<br>
-                    <b>DEFICIÊNCIA/SUSPEIÇÃO:</b> {perfil_atual}<br>
-                    <hr>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                txt_pei_final = st.text_area("Conteúdo do Plano (Editável):", st.session_state.res_v38_pei_doc, height=500)
-                
-                if st.button("💾 SALVAR E ARQUIVAR NA LINHA DO TEMPO", use_container_width=True):
-                    # Salvamento com o tipo 'CAPA_PEI' para aparecer na timeline
-                    sucesso = db.salvar_no_banco("DB_RELATORIOS", [
-                        datetime.now().strftime("%d/%m/%Y"), 
-                        id_a, 
-                        nome_limpo, 
-                        "CAPA_PEI_OFICIAL", 
-                        txt_pei_final
-                    ])
-                    if sucesso:
-                        st.success("✅ Capa do PEI arquivada com sucesso na Linha do Tempo!")
+                # Exibição Organizada por Tags (Igual ao Criador de Aulas)
+                if "res_v38_pei_tags" in st.session_state:
+                    txt_tags = st.session_state.res_v38_pei_tags
+                    
+                    ed_soc = st.text_area("Habilidades Sociais:", ai.extrair_tag(txt_tags, "SOCIAIS"), height=150)
+                    ed_com = st.text_area("Habilidades Comunicativas:", ai.extrair_tag(txt_tags, "COMUNICATIVAS"), height=150)
+                    ed_emo = st.text_area("Habilidades Emocionais:", ai.extrair_tag(txt_tags, "EMOCIONAIS"), height=150)
+                    ed_fun = st.text_area("Habilidades Funcionais:", ai.extrair_tag(txt_tags, "FUNCIONAIS"), height=150)
+
+                    if st.button("💾 SALVAR PÁGINA 1 OFICIAL", use_container_width=True):
+                        # Consolida para salvar no banco em formato legível
+                        texto_consolidado = f"SOCIAIS: {ed_soc}\n\nCOMUNICATIVAS: {ed_com}\n\nEMOCIONAIS: {ed_emo}\n\nFUNCIONAIS: {ed_fun}"
+                        db.salvar_no_banco("DB_RELATORIOS", [
+                            datetime.now().strftime("%d/%m/%Y"), id_a, nome_limpo, "CAPA_PEI_OFICIAL", texto_consolidado
+                        ])
+                        st.success("✅ Documento arquivado na Linha do Tempo!")
                         st.balloons()
-                        time.sleep(1)
-                        st.rerun()
 
 # ABA 3: PONTE COORDENAÇÃO (WHATSAPP RÁPIDO V38.1)
         with tab_coord:
