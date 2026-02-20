@@ -2112,25 +2112,62 @@ elif menu == "👥 Gestão da Turma":
                                     st.balloons(); time.sleep(1); st.cache_data.clear(); st.rerun()
 
 # ==============================================================================
-# MÓDULO: BASE DE CONHECIMENTO
+# MÓDULO: BASE DE CONHECIMENTO (V45 - COFRE DIGITAL NO GOOGLE DRIVE)
 # ==============================================================================
 elif menu == "📚 Base de Conhecimento":
-    st.header("📚 Central de Inteligência SOSA")
-    tab_upload, tab_biblioteca = st.tabs(["📤 Upload", "📖 Biblioteca"])
+    st.title("📚 Biblioteca Digital de Soberania")
+    st.markdown("---")
+    
+    tab_upload, tab_acervo_lib = st.tabs(["📤 Novo Upload (Drive)", "📖 Acervo Permanente"])
+    
     with tab_upload:
-        with st.form("form_upload"):
-            tipo_doc = st.selectbox("Categoria:", ["Livro Didático - 6º Ano", "Livro Didático - 7º Ano", "Livro Didático - 8º Ano", "Livro Didático - 9º Ano", "Referencial Pedagógico (Prefeitura)", "Documento PEI / AEE", "Outros"])
-            nome_arq = st.text_input("Nome do Arquivo")
-            uploaded_file = st.file_uploader("Selecione o PDF", type=["pdf"])
-            if st.form_submit_button("🚀 Salvar"):
+        with st.form("form_upload_drive", clear_on_submit=True):
+            st.markdown("#### 📤 Armazenar Material no Cofre")
+            c1, c2 = st.columns(2)
+            tipo_doc = c1.selectbox("Categoria:", ["Livro Didático", "Referencial Curricular", "Documento PEI", "Outros"])
+            ano_doc = c2.selectbox("Série Alvo:", ["6º Ano", "7º Ano", "8º Ano", "9º Ano", "Geral"])
+            
+            nome_arq = st.text_input("Nome de Exibição do Material:", placeholder="Ex: Livro do 6 ano Flavio Simoes")
+            uploaded_file = st.file_uploader("Selecione o arquivo PDF:", type=["pdf"])
+            
+            if st.form_submit_button("🚀 SALVAR NO GOOGLE DRIVE"):
                 if uploaded_file and nome_arq:
-                    temp_path = f"temp_{uploaded_file.name}"
-                    with open(temp_path, "wb") as f: f.write(uploaded_file.getbuffer())
-                    uri = ai.subir_para_google(temp_path, nome_arq)
-                    db.salvar_no_banco("DB_MATERIAIS", [datetime.now().strftime("%d/%m/%Y"), nome_arq, uri, tipo_doc])
-                    st.success("Catalogado!"); os.remove(temp_path); st.rerun()
-    with tab_biblioteca:
-        st.dataframe(df_materiais, use_container_width=True, hide_index=True)
+                    with st.spinner("Enviando para o seu Cofre Digital..."):
+                        # Usa a sua ponte para salvar no Drive
+                        link_drive = db.subir_e_converter_para_google_docs(
+                            uploaded_file, 
+                            nome_arq, 
+                            categoria=ano_doc, 
+                            modo="BIBLIOTECA"
+                        )
+                        
+                        if "drive.google.com" in link_drive:
+                            # Salva no CSV do Banco de Dados
+                            db.salvar_no_banco("DB_MATERIAIS", [
+                                datetime.now().strftime("%d/%m/%Y"), 
+                                nome_arq, 
+                                link_drive, 
+                                f"{tipo_doc} - {ano_doc}"
+                            ])
+                            st.success(f"✅ '{nome_arq}' guardado com segurança no Drive!")
+                            st.balloons()
+                            time.sleep(1)
+                            st.rerun()
+                        else:
+                            st.error(f"Erro no upload: {link_drive}")
+
+    with tab_acervo_lib:
+        if not df_materiais.empty:
+            st.markdown(f"**📚 Materiais no Cofre:** {len(df_materiais)}")
+            for _, row in df_materiais.iterrows():
+                with st.container(border=True):
+                    col_icon, col_txt, col_btn = st.columns([0.5, 3, 1])
+                    col_icon.markdown("# 📕")
+                    col_txt.markdown(f"**{row['NOME_ARQUIVO']}**")
+                    col_txt.caption(f"📅 Upload: {row['DATA_UPLOAD']} | 🏷️ {row['TIPO']}")
+                    col_btn.link_button("👁️ Ver no Drive", row['URI_ARQUIVO'], use_container_width=True)
+        else:
+            st.info("📭 Sua biblioteca está vazia.")
 
 # ==============================================================================
 # MÓDULO: RELATÓRIOS PEI V38.5 - ANALISTA DE EVOLUÇÃO E CUSTÓDIA (MASTER)
