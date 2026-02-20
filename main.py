@@ -1101,10 +1101,11 @@ if menu == "📅 Planejamento (Ponto ID)":
                 with c_v4: st.error(f"**📝 Avaliação:**\n{ed_ava}")
                 if ed_a3 != "N/A": st.info(f"**🗓️ Sábado Letivo:**\n{ed_a3}")
                 
-# --- ABA 2: DASHBOARD DE PRODUÇÃO (VERSÃO V31.9 - FIX LOGIC) ---
+# --- ABA 2: DASHBOARD DE PRODUÇÃO (VERSÃO V32.0 - CARGA HORÁRIA DINÂMICA) ---
     with tab_producao:
         st.subheader("🏗️ Linha de Montagem de Materiais")
         if not df_planos.empty:
+            # Filtra apenas planos ativos no Hub
             planos_ativos = df_planos[df_planos["EIXO"].astype(str).str.contains("HUB_ATIVO", case=False, na=False)].iloc[::-1]
             
             if not planos_ativos.empty:
@@ -1114,26 +1115,37 @@ if menu == "📅 Planejamento (Ponto ID)":
                         
                         sem_ref = row['SEMANA']
                         ano_ref = row['ANO']
+                        plano_txt = row["PLANO_TEXTO"]
                         
                         c_p1.markdown(f"**{sem_ref}**\n`Série: {ano_ref}`")
                         
-                        # --- VERIFICAÇÃO DE PROGRESSO REAL (CORRIGIDA) ---
-                        # Agora olhamos para a coluna TIPO_MATERIAL, que é onde o nome da aula reside
+                        # --- DETECÇÃO INTELIGENTE DE CARGA HORÁRIA ---
+                        # Verifica no texto do plano quais aulas foram realmente planejadas
+                        aulas_planejadas = ["Aula 1"] # Aula 1 é sempre obrigatória
+                        val_a2 = ai.extrair_tag(plano_txt, "AULA_2")
+                        
+                        # Se a Aula 2 existir, não for N/A e tiver conteúdo real (> 10 caracteres)
+                        if val_a2 and "N/A" not in val_a2.upper() and len(val_a2) > 10:
+                            aulas_planejadas.append("Aula 2")
+                        
+                        # --- VERIFICAÇÃO DE PROGRESSO REAL ---
                         aulas_no_banco = df_aulas[(df_aulas['SEMANA_REF'] == sem_ref) & (df_aulas['ANO'] == ano_ref)]
-                        lista_tipos = aulas_no_banco['TIPO_MATERIAL'].astype(str).tolist()
+                        lista_tipos_prontos = aulas_no_banco['TIPO_MATERIAL'].astype(str).tolist()
                         
-                        # Verifica se "Aula 1" ou "Aula 2" constam na lista de materiais prontos
-                        a1_status = "✅" if any("Aula 1" in t for t in lista_tipos) else "⏳"
-                        a2_status = "✅" if any("Aula 2" in t for t in lista_tipos) else "⏳"
+                        # Monta a string de progresso apenas com o que foi planejado
+                        status_list = []
+                        for a_plan in aulas_planejadas:
+                            icon = "✅" if any(a_plan in t for t in lista_tipos_prontos) else "⏳"
+                            status_list.append(f"{icon} {a_plan}")
                         
-                        c_p2.markdown(f"**Progresso:**\n{a1_status} Aula 1 | {a2_status} Aula 2")
+                        c_p2.markdown(f"**Progresso:**\n{' | '.join(status_list)}")
                         
-                        # Botão para ir ao Criador
+                        # --- BOTÃO PRODUZIR ---
                         if c_p3.button("🧪 PRODUZIR", key=f"gen_hub_{row.name}", use_container_width=True):
-                            st.session_state.lab_temp = row["PLANO_TEXTO"]
-                            st.session_state.sosa_id_atual = util.gerar_sosa_id("AULA", row["ANO"], row["TURMA"])
+                            st.session_state.lab_temp = plano_txt
+                            st.session_state.sosa_id_atual = util.gerar_sosa_id("AULA", ano_ref, row["TURMA"])
                             st.session_state.lab_meta = {
-                                "ano": str(row["ANO"]).replace("º",""), 
+                                "ano": str(ano_ref).replace("º",""), 
                                 "trimestre": row["TURMA"], 
                                 "tipo": "PRODUÇÃO_HUB",
                                 "semana_ref": sem_ref
