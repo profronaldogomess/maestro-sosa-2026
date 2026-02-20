@@ -761,7 +761,7 @@ if menu == "🧪 Criador de Aulas":
                 st.info("📭 Nenhum material didático encontrado.")
                 
 # ==============================================================================
-# MÓDULO: PLANEJAMENTO ESTRATÉGICO (PONTO ID) - VERSÃO V45 MASTER ELITE (DRIVE SYNC)
+# MÓDULO: PLANEJAMENTO ESTRATÉGICO (PONTO ID) - VERSÃO V45.1 (FIX NAMEERROR)
 # ==============================================================================
 if menu == "📅 Planejamento (Ponto ID)":
     st.title("📅 Engenharia de Planejamento (Ponto ID)")
@@ -783,7 +783,7 @@ if menu == "📅 Planejamento (Ponto ID)":
     ])
     
     with tab_gerar:
-        # --- 🛡️ 1. STATUS E NATUREZA (PRESERVADO) ---
+        # --- 🛡️ 1. STATUS E NATUREZA ---
         with st.container(border=True):
             st.markdown("### 🛡️ 1. Natureza Pedagógica da Semana")
             cg1, cg2, cg3 = st.columns([1.5, 1, 1])
@@ -794,15 +794,22 @@ if menu == "📅 Planejamento (Ponto ID)":
             tem_sabado = cg2.toggle("Sábado Letivo?", key=f"gate_sab_{v}")
             carga_horaria = cg3.select_slider("Aulas Úteis:", options=["1 Aula", "2 Aulas", "3 Aulas"], value="2 Aulas", key=f"gate_carga_{v}")
 
-        # --- ⚙️ 2. PARÂMETROS E SMART MATCH (PRESERVADO) ---
+        # --- ⚙️ 2. PARÂMETROS E SMART MATCH ---
         with st.container(border=True):
             st.markdown("### ⚙️ 2. Parâmetros de Regência e Vínculo de Ativos")
-            c1, c2, c3 = st.columns([1, 2, 1.5])
             
+            # --- VACINA DE INICIALIZAÇÃO (EVITA NAMEERROR) ---
+            ctx_ia = ""
+            strat = ""
+            ctx_ativo_vinculado = ""
+            uri_livro_drive = None
+            base_didatica_info = "Matriz Curricular de Itabuna"
+            
+            c1, c2, c3 = st.columns([1, 2, 1.5])
             ano_p = c1.selectbox("Série/Ano:", [6, 7, 8, 9], index=0, key=f"ano_sel_{v}")
             ano_str_busca = f"{ano_p}º"
 
-            # Lógica de Filtro de Semanas (Preservado)
+            # Lógica de Filtro de Semanas
             todas_semanas = util.gerar_semanas()
             semanas_planejadas = df_planos[df_planos['ANO'] == ano_str_busca]['SEMANA'].tolist()
             semanas_disponiveis = [s for s in todas_semanas if s.split(" (")[0] not in semanas_planejadas]
@@ -816,8 +823,7 @@ if menu == "📅 Planejamento (Ponto ID)":
             sem_limpa = sem_p.split(" (")[0]
             trim_atual = sem_p.split(" - ")[1] if " - " in sem_p else "I Trimestre"
 
-            # Smart Match (Preservado)
-            ctx_ativo_vinculado = ""
+            # Smart Match
             if tipo_semana != "📗 Aula de Safra (Regular)":
                 df_ativos_ano = df_aulas[df_aulas['ANO'] == ano_str_busca]
                 opcoes_ativos = []
@@ -832,12 +838,9 @@ if menu == "📅 Planejamento (Ponto ID)":
                         dados_ativo = df_ativos_ano[df_ativos_ano['TIPO_MATERIAL'] == ativo_sel].iloc[0]
                         ctx_ativo_vinculado = f"--- ATIVO VINCULADO: {ativo_sel} ---\nCONTEÚDO: {dados_ativo['CONTEUDO']}"
 
-            # --- SELEÇÃO DE MÉTODO E REGISTRO DE BASE (INTEGRADO AO DRIVE) ---
+            # Seleção de Método
             modo_p = c3.radio("Método de Base:", ["📖 Livro Didático", "🎛️ Manual (Banco)"], horizontal=True, key=f"modo_p_{v}")
             
-            base_didatica_info = "Matriz Curricular de Itabuna"
-            uri_livro_drive = None # Variável para o Fresh-Sync
-
             if modo_p == "🎛️ Manual (Banco)":
                 df_matriz_ano = df_curriculo[df_curriculo['ANO'].astype(str) == str(ano_p)]
                 sel_eixo = st.multiselect("1. Eixo:", sorted(df_matriz_ano['EIXO'].unique().tolist()), key=f"p_eixo_{v}")
@@ -846,28 +849,25 @@ if menu == "📅 Planejamento (Ponto ID)":
                 ctx_ia = f"EIXO: {sel_eixo}, CONTEÚDO: {sel_cont}, OBJETIVOS: {sel_obj}."
             else:
                 cx1, cx2 = st.columns([2, 1])
-                # Busca livros na biblioteca que combinem com o ano selecionado
                 livros_disponiveis = df_materiais[df_materiais['TIPO'].str.contains(str(ano_p), na=False)]['NOME_ARQUIVO'].tolist()
                 sel_mat = cx1.selectbox("Selecionar Livro do Cofre:", [""] + livros_disponiveis, key=f"p_livro_{v}")
                 pags = cx2.text_input("Páginas:", key=f"p_pags_{v}")
                 
                 if sel_mat:
-                    # Pega a URI (Link do Drive) para o Fresh-Sync
                     match_mat = df_materiais[df_materiais['NOME_ARQUIVO'] == sel_mat].iloc[0]
                     uri_livro_drive = match_mat['URI_ARQUIVO']
                     base_didatica_info = f"Livro: {sel_mat} | Páginas: {pags}"
+                    ctx_ia = f"LIVRO: {sel_mat} PÁGINAS: {pags}."
                     st.success(f"🔗 Link do Drive Vinculado: {sel_mat}")
 
             strat = st.text_area("Estratégia / Observações do Professor:", key=f"p_strat_{v}")
 
         if st.button("🚀 COMPILAR PLANEJAMENTO INTEGRADO", use_container_width=True, type="primary", key=f"btn_compilar_{v}"):
             with st.spinner("Maestro SOSA ativando Fresh-Sync e lendo material do Drive..."):
-                # 1. BUSCA DE CONTINUIDADE
                 plano_anterior_txt = "Início de Safra."
                 df_hist = df_planos[df_planos['ANO'] == ano_str_busca].sort_values(by='DATA', ascending=False)
                 if not df_hist.empty: plano_anterior_txt = df_hist.iloc[0]['PLANO_TEXTO']
 
-                # 2. PROMPT DE SOBERANIA V45 (OTIMIZADO PARA LEITURA DE DRIVE)
                 prompt = (
                     f"ORDEM SOBERANA: Analise o arquivo do Google Drive anexo e a Matriz de Itabuna.\n"
                     f"NATUREZA: {tipo_semana}. SEMANA: {sem_limpa}. SÉRIE: {ano_p}º Ano. TRIMESTRE: {trim_atual}.\n"
@@ -880,7 +880,6 @@ if menu == "📅 Planejamento (Ponto ID)":
                     f"--- MATRIZ ITABUNA ---\n{df_curriculo[df_curriculo['ANO'].astype(str)==str(ano_p)].to_string(index=False)}"
                 )
                 
-                # 3. CHAMADA DA IA COM PROTOCOLO FRESH-SYNC
                 st.session_state.p_temp = ai.gerar_ia("PLANE_PEDAGOGICO", prompt, url_drive=uri_livro_drive)
                 
                 st.session_state.p_meta = {
