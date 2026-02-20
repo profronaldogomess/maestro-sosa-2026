@@ -447,21 +447,47 @@ if menu == "🧪 Criador de Aulas":
                     instr_extra_prod = st.text_area("📝 Contexto Extra / Ajustes Específicos:", key=f"prod_extra_{v}")
 
                     if st.button("💎 MATERIALIZAR TRATADO DE ELITE", use_container_width=True, type="primary"):
-                        with st.spinner("Sosa arquitetando material integrado..."):
+                        with st.spinner("Sosa estudando o livro e arquitetando material integrado..."):
+                            
+                            # 1. BUSCA DE URI NA BIBLIOTECA (DNA REAL PARA AULA)
+                            uri_referencia_aula = None
+                            if "Livro" in metodo_entrega:
+                                # Extrai o nome do livro do DNA herdado para buscar o arquivo
+                                nome_livro_plano = base_herdada.split('|')[0].replace("Livro:", "").strip()
+                                # Busca flexível no banco de materiais
+                                match_biblioteca = df_materiais[df_materiais['NOME_ARQUIVO'].str.contains(nome_livro_plano[:10], case=False, na=False)]
+                                
+                                if not match_biblioteca.empty:
+                                    uri_referencia_aula = match_biblioteca.iloc[0]['URI_ARQUIVO']
+                                    st.toast(f"📖 Fonte '{match_biblioteca.iloc[0]['NOME_ARQUIVO']}' vinculada à produção.", icon="📚")
+
+                            # 2. CONFIGURAÇÃO DE IDENTIDADE (Preservado)
                             nome_elite = util.gerar_nome_material_elite(ano_lab, aula_alvo_prod, sem_lab)
                             st.session_state.sosa_id_atual = nome_elite
                             st.session_state.lab_meta = {"ano": ano_lab, "semana_ref": sem_lab}
                             
+                            # 3. PROMPT DE SOBERANIA V45 (INTEGRAÇÃO TOTAL + SENSOR PEI)
                             prompt_manual = (
                                 f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {nome_elite}.\n"
                                 f"MÉTODO: {metodo_entrega}. {info_biblioteca}\n"
                                 f"REFERÊNCIA PLANO: {base_herdada}\n"
-                                f"SÉRIE: {ano_lab}º Ano. ALVO: {aula_alvo_prod}. QTD: {qtd_q_prod}.\n"
-                                f"--- HERANÇA DO PLANO ---\n{ai.extrair_tag(plano_txt, tag_previa)}\n"
-                                f"--- SENSOR DE INCLUSÃO ---\nA turma possui alunos com: {texto_clinico}.\n"
-                                f"--- EXTRAS ---\n{instr_extra_prod}"
+                                f"SÉRIE: {ano_lab}º Ano. ALVO: {aula_alvo_prod}. QTD: {qtd_q_prod}.\n\n"
+                                f"--- HERANÇA DO PLANO (ROTEIRO) ---\n{ai.extrair_tag(plano_txt, tag_previa)}\n\n"
+                                f"--- SENSOR DE INCLUSÃO (TURMA REAL) ---\nA turma possui alunos com: {texto_clinico}.\n\n"
+                                f"🚨 MISSÃO DE VISÃO: Se houver um arquivo anexo, utilize-o como fonte primária. "
+                                f"O [PROFESSOR] deve ser um guia de mediação para as páginas citadas. "
+                                f"O [PEI] deve ser uma adaptação fiel e visual dos exercícios presentes no anexo.\n\n"
+                                f"--- EXTRAS E AJUSTES ---\n{instr_extra_prod}"
                             )
-                            st.session_state.lab_temp = ai.gerar_ia("MAESTRO_SOSA_V28_ELITE", prompt_manual, usar_busca=True)
+                            
+                            # 4. CHAMADA DA IA COM SUPORTE A URI (VISÃO)
+                            st.session_state.lab_temp = ai.gerar_ia(
+                                "MAESTRO_SOSA_V28_ELITE", 
+                                prompt_manual, 
+                                uri_referencia=uri_referencia_aula, 
+                                usar_busca=True
+                            )
+                            
                             st.rerun()
 
 # --- ABA 3: ENGENHARIA DE TRABALHOS (VERSÃO V31.7 - BLINDAGEM DE TABELAS) ---
@@ -827,34 +853,52 @@ if menu == "📅 Planejamento (Ponto ID)":
             strat = st.text_area("Estratégia / Observações do Professor:", key=f"p_strat_{v}")
 
         if st.button("🚀 COMPILAR PLANEJAMENTO INTEGRADO", use_container_width=True, type="primary", key=f"btn_compilar_{v}"):
-            with st.spinner("Maestro SOSA realizando Integração de Safra..."):
-                # Busca Continuidade (Preservado)
+            with st.spinner("Maestro SOSA lendo o material e integrando safra..."):
+                
+                # 1. BUSCA DE ARQUIVO NA BIBLIOTECA (DNA REAL PARA VISÃO)
+                uri_livro = None
+                if modo_p == "📖 Livro Didático" and sel_mat:
+                    nome_busca = sel_mat[0]
+                    # Busca o arquivo exato no banco de materiais
+                    match_mat = df_materiais[df_materiais['NOME_ARQUIVO'] == nome_busca]
+                    if not match_mat.empty:
+                        uri_livro = match_mat.iloc[0]['URI_ARQUIVO']
+                        st.toast(f"📚 Livro '{nome_busca}' anexado para leitura da IA.", icon="📖")
+
+                # 2. BUSCA DE CONTINUIDADE (Preservado)
                 plano_anterior_txt = "Início de Safra."
                 df_hist = df_planos[df_planos['ANO'] == ano_str_busca].sort_values(by='DATA', ascending=False)
-                if not df_hist.empty: plano_anterior_txt = df_hist.iloc[0]['PLANO_TEXTO']
+                if not df_hist.empty: 
+                    plano_anterior_txt = df_hist.iloc[0]['PLANO_TEXTO']
 
-                # Prompt de Soberania V40.2 (Injetando a Base Didática)
+                # 3. PROMPT DE SOBERANIA V45 (INTEGRAÇÃO TOTAL + ORDEM DE LEITURA)
                 prompt = (
                     f"ORDEM SOBERANA: Gere um Plano de Ensino ÚNICO e SEM REPETIÇÕES.\n"
                     f"NATUREZA: {tipo_semana}. SEMANA: {sem_limpa}. SÉRIE: {ano_p}º Ano. TRIMESTRE: {trim_atual}.\n"
                     f"CARGA HORÁRIA: {carga_horaria}. SÁBADO: {'ATIVADO' if tem_sabado else 'DESATIVADO'}.\n"
-                    f"BASE DIDÁTICA OFICIAL: {base_didatica_info}.\n" # <--- INJEÇÃO DE DNA
+                    f"BASE DIDÁTICA OFICIAL: {base_didatica_info}.\n"
                     f"CONTEXTO TÉCNICO: {ctx_ia}.\n"
                     f"ESTRATEGIA: {strat}.\n\n"
                     f"{ctx_ativo_vinculado}\n\n"
-                    f"--- PONTE DE CONTINUIDADE ---\n{plano_anterior_txt}\n\n"
-                    f"🚨 REGRAS: Use a tag [BASE_DIDATICA] para registrar a referência do livro/páginas. "
-                    f"Se carga for '1 Aula', gere apenas [AULA_1]. Proibido Markdown (#) ou Unicode decorativo.\n"
+                    f"--- PONTE DE CONTINUIDADE (ANTERIOR) ---\n{plano_anterior_txt}\n\n"
+                    f"🚨 MISSÃO DE VISÃO: Se houver um arquivo anexo, leia as páginas citadas na BASE DIDÁTICA. "
+                    f"Extraia a sequência didática exata do autor e integre com a modernidade exigida. "
+                    f"Se a carga for '1 Aula', gere apenas [AULA_1]. Proibido Markdown (#) ou Unicode decorativo.\n\n"
                     f"--- MATRIZ ITABUNA ---\n{df_curriculo[df_curriculo['ANO'].astype(str)==str(ano_p)].to_string(index=False)}"
                 )
                 
-                st.session_state.p_temp = ai.gerar_ia("PLANE_PEDAGOGICO", prompt)
-                # Salva a base didática na meta para a conferência azul
+                # 4. CHAMADA DA IA COM SUPORTE A URI (VISÃO)
+                st.session_state.p_temp = ai.gerar_ia("PLANE_PEDAGOGICO", prompt, uri_referencia=uri_livro)
+                
+                # 5. SALVAMENTO DA META PARA O PAINEL AZUL (Preservado)
                 st.session_state.p_meta = {
-                    "semana": sem_limpa, "carga": carga_horaria, 
-                    "trimestre": trim_atual, "ano": ano_str_busca,
-                    "base": base_didatica_info # <--- SALVA PARA O PAINEL AZUL
+                    "semana": sem_limpa, 
+                    "carga": carga_horaria, 
+                    "trimestre": trim_atual, 
+                    "ano": ano_str_busca,
+                    "base": base_didatica_info
                 }
+                
                 st.session_state.v_plano = int(time.time())
                 st.rerun()
 
