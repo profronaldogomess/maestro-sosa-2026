@@ -991,18 +991,44 @@ if menu == "📅 Planejamento (Ponto ID)":
 
             with t_vis:
                 st.subheader("👁️ Estrutura BNCC Elite (Visão de Regência)")
+                # Cabeçalho de Metadados para conferência rápida
+                st.caption(f"📅 {meta.get('semana')} | 🎓 {meta.get('ano')} Ano | 📅 {meta.get('trimestre')}")
+                
                 c_v1, c_v2 = st.columns(2)
+                
                 with c_v1:
-                    if keep_objeto: st.info(f"**🎯 Objeto:** {ed_geral}")
-                    st.markdown(f"**🆔 Habilidade:** {ed_hab}")
-                    st.markdown(f"**🌟 Competências:** {ed_comp}")
+                    # Bloco de Identidade Curricular
+                    if keep_objeto: 
+                        st.info(f"**🎯 Objeto de Conhecimento:**\n{ed_geral}")
+                    
+                    st.markdown(f"**🆔 Habilidade:** `{ed_hab}`")
+                    st.markdown(f"**🌟 Competências Foco:**\n{ed_comp}")
+                    
+                    # NOVO: Bloco de Base Didática em destaque
+                    st.success(f"**📖 Base Didática (DNA):**\n{ed_base}")
+                
                 with c_v2:
-                    st.success(f"**👨‍🏫 Aula 1:**\n{ed_a1}")
-                    if "1 Aula" not in meta.get('carga', ''): st.success(f"**👨‍🏫 Aula 2:**\n{ed_a2}")
+                    # Bloco de Roteiro de Aulas
+                    st.markdown("##### 🏫 Roteiro de Execução")
+                    with st.container(border=True):
+                        st.write(f"**📘 AULA 1:**\n{ed_a1}")
+                    
+                    if "1 Aula" not in meta.get('carga', ''):
+                        with st.container(border=True):
+                            st.write(f"**📗 AULA 2:**\n{ed_a2}")
+                
                 st.divider()
+                
+                # Bloco de Inclusão e Avaliação (Rodapé do Mapa)
                 c_v3, c_v4 = st.columns(2)
-                with c_v3: st.warning(f"**♿ DUA/PEI:**\n{ed_dua}")
-                with c_v4: st.error(f"**📝 Avaliação:**\n{ed_ava}")
+                with c_v3:
+                    st.warning(f"**♿ Estratégia DUA/PEI (Equidade):**\n{ed_dua}")
+                with c_v4:
+                    st.error(f"**📝 Avaliação de Mérito:**\n{ed_ava}")
+                
+                # Exibição do Sábado se houver conteúdo
+                if ed_a3 and "N/A" not in ed_a3.upper() and "Atividade desativada" not in ed_a3:
+                    st.info(f"**🗓️ Sábado Letivo:**\n{ed_a3}")
                 
 # --- ABA 2: DASHBOARD DE PRODUÇÃO (VERSÃO V40.1 - CARGA HORÁRIA REAL) ---
     with tab_producao:
