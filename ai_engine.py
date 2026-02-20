@@ -504,28 +504,38 @@ PERSONAS = {
 }
    
 def gerar_ia(persona_key, comando, uri_referencia=None, usar_busca=True):
-    """MOTOR SOSA V45 - Suporte a Visão de Documentos (PDF/Imagens)"""
-    config = {'tools': [{'google_search': {}}]} if usar_busca else {}
+    """MOTOR SOSA V46 - GEMINI 3.1 PRO (REASONING & DOCUMENT UNDERSTANDING)"""
     
-    # Inicia as partes do prompt com a Persona e o Comando
+    # Configuração de Pensamento de Alto Nível para Pedagogia Densa
+    config = types.GenerateContentConfig(
+        thinking_config=types.ThinkingConfig(include_thoughts=False), # Mantemos False para não poluir as tags
+        tools=[{'google_search': {}}] if usar_busca else [],
+        temperature=1.0 # Recomendado para Gemini 3
+    )
+    
+    # Inicia as partes do prompt
     conteudo_prompt = [types.Part.from_text(text=f"{PERSONAS[persona_key]}\n\n{comando}")]
     
-    # INJEÇÃO DE VISÃO: Se houver uma URI de arquivo, anexa como referência binária
+    # INJEÇÃO DE DOCUMENTO (PDF)
     if uri_referencia and "https://" in uri_referencia:
         try:
-            conteudo_prompt.append(types.Part.from_uri(file_uri=uri_referencia, mime_type="application/pdf"))
+            # Gemini 3 lê PDFs nativamente com alta resolução
+            conteudo_prompt.append(types.Part.from_uri(
+                file_uri=uri_referencia, 
+                mime_type="application/pdf"
+            ))
         except Exception as e:
-            print(f"Erro ao anexar arquivo: {e}")
+            print(f"Erro ao anexar PDF no Gemini 3: {e}")
 
     try:
         res = client.models.generate_content(
-            model="gemini-3-flash-preview", # Modelo de alta performance com visão
+            model="gemini-3.1-pro-preview", # O modelo mais inteligente da nova família
             contents=[types.Content(role="user", parts=conteudo_prompt)],
             config=config
         )
         return res.text
     except Exception as e:
-        return f"Erro na IA: {e}"
+        return f"Erro na IA (Gemini 3): {e}"
 
 # --- EXTRATOR SOSA V45 (FUZZY MATCH & BLINDAGEM DE SINTAXE) ---
 def extrair_tag(texto, tag):
