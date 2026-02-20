@@ -953,6 +953,7 @@ if menu == "📅 Planejamento (Ponto ID)":
             cg1, cg2, cg3 = st.columns([1.5, 1, 1])
             tipo_semana = cg1.selectbox("Natureza:", ["Aula Regular", "Avaliação / Trabalho", "Evento Extraordinário"], key=f"gate_tipo_{v}")
             tem_sabado = cg2.toggle("Sábado Letivo?", key=f"gate_sab_{v}")
+            # Slider de Carga Horária
             carga_horaria = cg3.select_slider("Aulas Úteis:", options=["1 Aula", "2 Aulas", "3 Aulas"], value="2 Aulas", key=f"gate_carga_{v}")
 
         # --- ⚙️ 2. PARÂMETROS DE REGÊNCIA ---
@@ -1004,36 +1005,50 @@ if menu == "📅 Planejamento (Ponto ID)":
 
         if st.button("🚀 COMPILAR PLANEJAMENTO INTEGRADO", use_container_width=True, type="primary", key=f"btn_compilar_{v}"):
             with st.spinner("Maestro SOSA realizando Integração de Safra..."):
+                # 1. BUSCA DE CONTINUIDADE (Lê o plano anterior)
+                plano_anterior_txt = "Início de Safra (Sem histórico anterior)."
+                df_hist = df_planos[df_planos['ANO'].str.contains(str(ano_p))].sort_values(by='DATA', ascending=False)
+                if not df_hist.empty:
+                    plano_anterior_txt = df_hist.iloc[0]['PLANO_TEXTO']
+
+                # 2. FILTRAGEM DA MATRIZ
                 df_matriz_ano = df_curriculo[df_curriculo['ANO'].astype(str).str.contains(str(ano_p))]
                 status_sabado = "ATIVADO" if tem_sabado else "DESATIVADO"
-                num_aulas = f"{carga_horaria} (Gere apenas o necessário)"
-
+                
+                # 3. PROMPT DE SOBERANIA V40
                 prompt = (
                     f"ORDEM SOBERANA: Gere um Plano de Ensino ÚNICO e SEM REPETIÇÕES.\n"
-                    f"TIPO SEMANA: {tipo_semana}. ANO: {ano_p}º. SEMANA: {sem_limpa}. TRIMESTRE: {trim_atual}.\n"
-                    f"CARGA HORÁRIA: {num_aulas}. SÁBADO: {status_sabado}.\n"
+                    f"ESTA É A SEMANA: {sem_limpa}. (NÃO GERE PARA OUTRA SEMANA).\n"
+                    f"SÉRIE: {ano_p}º Ano. TRIMESTRE: {trim_atual}.\n"
+                    f"CARGA HORÁRIA SOLICITADA: {carga_horaria}.\n"
+                    f"SÁBADO LETIVO: {status_sabado}.\n"
                     f"CONTEXTO TÉCNICO: {ctx_ia}. ESTRATÉGIA: {strat}.\n\n"
+                    f"--- PONTE DE CONTINUIDADE (SEMANA ANTERIOR) ---\n{plano_anterior_txt}\n\n"
                     f"🚨 REGRAS DE OURO:\n"
-                    f"1. Proibido repetir as tags [CONTEUDOS_ESPECIFICOS], [OBJETIVOS_ENSINO] ou [JUSTIFICATIVA_PEDAGOGICA].\n"
-                    f"2. Use a Matriz de Itabuna abaixo para extração literal.\n"
+                    f"1. Se a carga for '1 Aula', gere APENAS [AULA_1]. É PROIBIDO gerar [AULA_2].\n"
+                    f"2. Proibido usar Markdown (#) ou Unicode decorativo.\n"
+                    f"3. Use a Matriz de Itabuna abaixo para extração literal.\n\n"
                     f"--- MATRIZ ITABUNA ---\n{df_matriz_ano.to_string(index=False)}"
                 )
                 
                 st.session_state.p_temp = ai.gerar_ia("PLANE_PEDAGOGICO", prompt)
+                # Salva os metadados da geração para conferência
+                st.session_state.p_meta = {"semana": sem_limpa, "carga": carga_horaria, "trimestre": trim_atual, "ano": f"{ano_p}º"}
                 st.session_state.v_plano = int(time.time())
                 st.rerun()
 
-        # --- ✏️ EDITOR E VISUALIZAÇÃO (COM FILTROS DE SOBERANIA) ---
+        # --- ✏️ EDITOR E VISUALIZAÇÃO ---
         if "p_temp" in st.session_state:
             txt_bruto = st.session_state.p_temp
+            meta = st.session_state.get("p_meta", {})
             
-            # --- 📊 PAINEL DE CONFERÊNCIA DE METADADOS ---
+            # --- 📊 PAINEL DE CONFERÊNCIA REAL (O que foi gerado) ---
             with st.container(border=True):
-                st.markdown(f"### 📋 Conferência de Regência: **{sem_limpa}**")
+                st.markdown(f"### 📋 Conferência de Regência: **{meta.get('semana')}**")
                 cm1, cm2, cm3 = st.columns(3)
-                cm1.metric("Série/Ano", f"{ano_p}º Ano")
-                cm2.metric("Carga Horária", carga_horaria)
-                cm3.metric("Trimestre", trim_atual)
+                cm1.metric("Série/Ano", meta.get('ano'))
+                cm2.metric("Carga Horária", meta.get('carga'))
+                cm3.metric("Trimestre", meta.get('trimestre'))
 
             t_ed, t_vis = st.tabs(["✏️ Editor de Texto", "👁️ Estrutura BNCC Elite"])
             
@@ -1047,13 +1062,13 @@ if menu == "📅 Planejamento (Ponto ID)":
                             st.session_state.v_plano = int(time.time()); st.rerun()
                     if st.button("🗑️ LIMPAR GERADO", use_container_width=True): reset_planejamento()
 
-                # --- 🛡️ FILTROS DE SOBERANIA (DESMARCAR SEÇÕES) ---
+                # --- 🛡️ FILTROS DE CURADORIA ---
                 st.markdown("#### 🛡️ Filtros de Curadoria (O que manter no documento?)")
                 col_f1, col_f2, col_f3, col_f4 = st.columns(4)
-                keep_objeto = col_f1.checkbox("Objeto de Conhecimento", value=True)
-                keep_conteudo = col_f2.checkbox("Conteúdos Específicos", value=True)
-                keep_objetivos = col_f3.checkbox("Objetivos de Ensino", value=True)
-                keep_justificativa = col_f4.checkbox("Justificativa PHC", value=True)
+                keep_objeto = col_f1.checkbox("Objeto de Conhecimento", value=True, key=f"k_obj_{v}")
+                keep_conteudo = col_f2.checkbox("Conteúdos Específicos", value=True, key=f"k_cont_{v}")
+                keep_objetivos = col_f3.checkbox("Objetivos de Ensino", value=True, key=f"k_objt_{v}")
+                keep_justificativa = col_f4.checkbox("Justificativa PHC", value=True, key=f"k_just_{v}")
 
                 st.divider()
 
@@ -1061,7 +1076,6 @@ if menu == "📅 Planejamento (Ponto ID)":
                 ed_hab = st.text_input("Habilidade/Competência:", ai.extrair_tag(txt_bruto, "HABILIDADE_BNCC") or ai.extrair_tag(txt_bruto, "COMPETENCIA_GERAL"), key=f"ed_h_{v}")
                 ed_comp = st.text_input("Competências Foco:", ai.extrair_tag(txt_bruto, "COMPETENCIAS_FOCO"), key=f"ed_c_{v}")
                 
-                # Campos Condicionais baseados nos Filtros
                 ed_geral = st.text_input("Objeto de Conhecimento:", ai.extrair_tag(txt_bruto, "OBJETO_CONHECIMENTO") or ai.extrair_tag(txt_bruto, "CONTEUDO_GERAL"), key=f"ed_g_{v}") if keep_objeto else "N/A"
                 ed_espec = st.text_area("Conteúdos Específicos:", ai.extrair_tag(txt_bruto, "CONTEUDOS_ESPECIFICOS"), key=f"ed_e_{v}") if keep_conteudo else "N/A"
                 ed_objs = st.text_area("Objetivos de Aprendizagem:", ai.extrair_tag(txt_bruto, "OBJETIVOS_ENSINO"), key=f"ed_o_{v}") if keep_objetivos else "N/A"
@@ -1069,30 +1083,31 @@ if menu == "📅 Planejamento (Ponto ID)":
                 
                 st.markdown("#### 🏫 Roteiro de Aulas")
                 ed_a1 = st.text_area("AULA 1:", ai.extrair_tag(txt_bruto, "AULA_1"), height=200, key=f"a1_{v}")
-                ed_a2 = st.text_area("AULA 2:", ai.extrair_tag(txt_bruto, "AULA_2"), height=200, key=f"a2_{v}") if carga_horaria != "1 Aula" else "N/A"
+                # Lógica de exibição da Aula 2 baseada na meta gerada
+                if "1 Aula" not in meta.get('carga', ''):
+                    ed_a2 = st.text_area("AULA 2:", ai.extrair_tag(txt_bruto, "AULA_2"), height=200, key=f"a2_{v}")
+                else:
+                    ed_a2 = "Conteúdo não previsto para esta carga horária (Carga horária solicitada: 1 aula)."
                 
-                ed_a3 = st.text_area("SÁBADO LETIVO:", ai.extrair_tag(txt_bruto, "SABADO_LETIVO") or "N/A", key=f"ed_a3_{v}")
+                ed_a3 = st.text_area("SÁBADO LETIVO:", ai.extrair_tag(txt_bruto, "SABADO_LETIVO") or "Atividade desativada conforme parâmetros de entrada.", key=f"ed_a3_{v}")
                 ed_ava = st.text_area("Avaliação/Logística:", ai.extrair_tag(txt_bruto, "AVALIACAO_DE_MERITO") or ai.extrair_tag(txt_bruto, "AVALIACAO"), key=f"ed_ava_{v}")
                 ed_dua = st.text_area("Estratégia DUA/PEI:", ai.extrair_tag(txt_bruto, "ESTRATEGIA_DUA_PEI") or ai.extrair_tag(txt_bruto, "ADAPTACAO_PEI"), key=f"ed_dua_{v}")
 
                 if st.button("💾 FINALIZAR E DISPARAR PRODUÇÃO", use_container_width=True, type="primary"):
                     with st.status("Sincronizando Hub Acadêmico...") as status:
-                        final_ano_str = f"{ano_p}º"
-                        nome_arquivo = f"PLANO_{ano_p}ANO_{sem_limpa.replace(' ', '')}"
-                        db.excluir_plano_completo(sem_limpa, final_ano_str)
+                        final_ano_str = meta.get('ano')
+                        nome_arquivo = f"PLANO_{final_ano_str.replace('º','')}_{meta.get('semana').replace(' ', '')}"
+                        db.excluir_plano_completo(meta.get('semana'), final_ano_str)
                         
-                        # Consolidação para o DOCX (Respeitando os filtros)
                         dados_docx = {
-                            "geral": ed_geral, 
-                            "especificos": ed_espec, 
-                            "objetivos": ed_objs, 
+                            "geral": ed_geral, "especificos": ed_espec, "objetivos": ed_objs, 
                             "recursos": "Livro Didático e Materiais de Safra",
                             "metodologia": f"JUSTIFICATIVA: {ed_just}\n\nCOMPETÊNCIAS: {ed_comp}\n\nAULA 01:\n{ed_a1}\n\nAULA 02:\n{ed_a2}",
                             "avaliacao": ed_ava, "pei": ed_dua
                         }
                         
-                        doc_io = exporter.gerar_docx_plano_pedagogico_ELITE(nome_arquivo, dados_docx, {"ano": final_ano_str, "semana": sem_limpa, "trimestre": trim_atual})
-                        link_drive = db.subir_e_converter_para_google_docs(doc_io, nome_arquivo, trimestre=trim_atual, categoria=final_ano_str, semana=sem_limpa, modo="PLANEJAMENTO")
+                        doc_io = exporter.gerar_docx_plano_pedagogico_ELITE(nome_arquivo, dados_docx, {"ano": final_ano_str, "semana": meta.get('semana'), "trimestre": meta.get('trimestre')})
+                        link_drive = db.subir_e_converter_para_google_docs(doc_io, nome_arquivo, trimestre=meta.get('trimestre'), categoria=final_ano_str, semana=meta.get('semana'), modo="PLANEJAMENTO")
                         
                         if "https" in str(link_drive):
                             final_txt = (
@@ -1103,7 +1118,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                                 f"[SABADO_LETIVO] {ed_a3} \n[AVALIACAO_DE_MERITO] {ed_ava} \n"
                                 f"[ESTRATEGIA_DUA_PEI] {ed_dua} \n--- LINK DRIVE --- {link_drive}"
                             )
-                            db.salvar_no_banco("DB_PLANOS", [datetime.now().strftime("%d/%m/%Y"), sem_limpa, final_ano_str, trim_atual, "HUB_ATIVO", final_txt, link_drive])
+                            db.salvar_no_banco("DB_PLANOS", [datetime.now().strftime("%d/%m/%Y"), meta.get('semana'), final_ano_str, meta.get('trimestre'), "HUB_ATIVO", final_txt, link_drive])
                             status.update(label="✅ Plano Sincronizado!", state="complete")
                             st.balloons(); reset_planejamento()
 
