@@ -4,6 +4,9 @@ from google.genai import types
 from dotenv import load_dotenv
 import re
 import streamlit as st
+import requests
+import requests
+import io
 
 
 load_dotenv()
@@ -503,39 +506,48 @@ PERSONAS = {
     "AVALIADOR_ADAPTADO": """VOCÊ É UM ESPECIALISTA EM AVALIAÇÃO INCLUSIVA. Transformar PROVA REGULAR em ADAPTADA."""
 }
    
-def gerar_ia(persona_key, comando, uri_referencia=None, usar_busca=True):
-    """MOTOR SOSA V46 - GEMINI 3.1 PRO (REASONING & DOCUMENT UNDERSTANDING)"""
+def gerar_ia(persona_key, comando, url_drive=None, usar_busca=True):
+    """MOTOR SOSA V45 - PROTOCOLO FRESH-SYNC (DRIVE -> GEMINI)"""
     
-    # Configuração de Pensamento de Alto Nível para Pedagogia Densa
     config = types.GenerateContentConfig(
-        thinking_config=types.ThinkingConfig(include_thoughts=False), # Mantemos False para não poluir as tags
+        thinking_config=types.ThinkingConfig(include_thoughts=False),
         tools=[{'google_search': {}}] if usar_busca else [],
-        temperature=1.0 # Recomendado para Gemini 3
+        temperature=1.0
     )
     
-    # Inicia as partes do prompt
     conteudo_prompt = [types.Part.from_text(text=f"{PERSONAS[persona_key]}\n\n{comando}")]
     
-    # INJEÇÃO DE DOCUMENTO (PDF)
-    if uri_referencia and "https://" in uri_referencia:
+    # --- PROTOCOLO FRESH-SYNC ---
+    if url_drive and "drive.google.com" in url_drive:
         try:
-            # Gemini 3 lê PDFs nativamente com alta resolução
-            conteudo_prompt.append(types.Part.from_uri(
-                file_uri=uri_referencia, 
-                mime_type="application/pdf"
-            ))
+            # 1. Extrai o ID do arquivo da URL do Drive
+            file_id = url_drive.split('/d/')[1].split('/')[0]
+            download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+            
+            # 2. Baixa o arquivo do seu Drive para a memória
+            response = requests.get(download_url)
+            if response.status_code == 200:
+                # 3. Faz o upload temporário para a API do Gemini (Válido por 48h)
+                arquivo_temp = client.files.upload(
+                    file=io.BytesIO(response.content),
+                    config=types.UploadFileConfig(mime_type="application/pdf")
+                )
+                conteudo_prompt.append(types.Part.from_uri(
+                    file_uri=arquivo_temp.uri, 
+                    mime_type="application/pdf"
+                ))
         except Exception as e:
-            print(f"Erro ao anexar PDF no Gemini 3: {e}")
+            print(f"Erro no Fresh-Sync: {e}")
 
     try:
         res = client.models.generate_content(
-            model="gemini-3.1-pro-preview", # O modelo mais inteligente da nova família
+            model="gemini-3.1-pro-preview",
             contents=[types.Content(role="user", parts=conteudo_prompt)],
             config=config
         )
         return res.text
     except Exception as e:
-        return f"Erro na IA (Gemini 3): {e}"
+        return f"Erro na IA: {e}"
 
 # --- EXTRATOR SOSA V45 (FUZZY MATCH & BLINDAGEM DE SINTAXE) ---
 def extrair_tag(texto, tag):
