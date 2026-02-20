@@ -1005,19 +1005,27 @@ if menu == "📅 Planejamento (Ponto ID)":
 
         if st.button("🚀 COMPILAR PLANEJAMENTO INTEGRADO", use_container_width=True, type="primary", key=f"btn_compilar_{v}"):
             with st.spinner("Maestro SOSA realizando Integração de Safra..."):
-                df_matriz_ano = df_curriculo[df_curriculo['ANO'].astype(str) == str(ano_p)]
+                # Filtra a matriz para o ano selecionado
+                df_matriz_ano = df_curriculo[df_curriculo['ANO'].astype(str).str.contains(str(ano_p))]
                 status_sabado = "ATIVADO" if tem_sabado else "DESATIVADO"
                 
                 # Instrução de Rigor de Aulas
                 num_aulas = "APENAS 1 AULA (Gere apenas [AULA_1])" if carga_horaria == "1 Aula" else "2 AULAS (Gere [AULA_1] e [AULA_2])"
                 if carga_horaria == "3 Aulas": num_aulas = "3 AULAS (Gere [AULA_1], [AULA_2] e [AULA_3])"
 
+                # Prompt com Comando de Limpeza
                 prompt = (
+                    f"ORDEM SOBERANA: Gere um Plano de Ensino ÚNICO e SEM REPETIÇÕES.\n"
                     f"TIPO SEMANA: {tipo_semana}. ANO: {ano_p}º. SEMANA: {sem_limpa}. TRIMESTRE: {trim_atual}.\n"
                     f"CARGA HORÁRIA: {num_aulas}. SÁBADO: {status_sabado}.\n"
                     f"CONTEXTO TÉCNICO: {ctx_ia}. ESTRATÉGIA: {strat}.\n\n"
+                    f"🚨 REGRAS DE OURO:\n"
+                    f"1. Proibido repetir as tags [CONTEUDOS_ESPECIFICOS], [OBJETIVOS_ENSINO] ou [JUSTIFICATIVA_PEDAGOGICA].\n"
+                    f"2. Use a Matriz de Itabuna abaixo para extração literal.\n"
+                    f"3. Não use separadores de linha (---).\n\n"
                     f"--- MATRIZ ITABUNA ---\n{df_matriz_ano.to_string(index=False)}"
                 )
+                
                 st.session_state.p_temp = ai.gerar_ia("PLANE_PEDAGOGICO", prompt)
                 st.session_state.v_plano = int(time.time())
                 st.rerun()
