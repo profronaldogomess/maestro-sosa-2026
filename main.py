@@ -761,7 +761,7 @@ if menu == "🧪 Criador de Aulas":
                 st.info("📭 Nenhum material didático encontrado.")
                 
 # ==============================================================================
-# MÓDULO: PLANEJAMENTO ESTRATÉGICO (PONTO ID) - VERSÃO V40.2 MASTER ELITE
+# MÓDULO: PLANEJAMENTO ESTRATÉGICO (PONTO ID) - VERSÃO V45 MASTER ELITE (DRIVE SYNC)
 # ==============================================================================
 if menu == "📅 Planejamento (Ponto ID)":
     st.title("📅 Engenharia de Planejamento (Ponto ID)")
@@ -794,7 +794,7 @@ if menu == "📅 Planejamento (Ponto ID)":
             tem_sabado = cg2.toggle("Sábado Letivo?", key=f"gate_sab_{v}")
             carga_horaria = cg3.select_slider("Aulas Úteis:", options=["1 Aula", "2 Aulas", "3 Aulas"], value="2 Aulas", key=f"gate_carga_{v}")
 
-        # --- ⚙️ 2. PARÂMETROS E SMART MATCH (PRESERVADO + REFINO DE BASE) ---
+        # --- ⚙️ 2. PARÂMETROS E SMART MATCH (PRESERVADO) ---
         with st.container(border=True):
             st.markdown("### ⚙️ 2. Parâmetros de Regência e Vínculo de Ativos")
             c1, c2, c3 = st.columns([1, 2, 1.5])
@@ -832,10 +832,12 @@ if menu == "📅 Planejamento (Ponto ID)":
                         dados_ativo = df_ativos_ano[df_ativos_ano['TIPO_MATERIAL'] == ativo_sel].iloc[0]
                         ctx_ativo_vinculado = f"--- ATIVO VINCULADO: {ativo_sel} ---\nCONTEÚDO: {dados_ativo['CONTEUDO']}"
 
-            # --- SELEÇÃO DE MÉTODO E REGISTRO DE BASE (O AJUSTE SOLICITADO) ---
+            # --- SELEÇÃO DE MÉTODO E REGISTRO DE BASE (INTEGRADO AO DRIVE) ---
             modo_p = c3.radio("Método de Base:", ["📖 Livro Didático", "🎛️ Manual (Banco)"], horizontal=True, key=f"modo_p_{v}")
             
             base_didatica_info = "Matriz Curricular de Itabuna"
+            uri_livro_drive = None # Variável para o Fresh-Sync
+
             if modo_p == "🎛️ Manual (Banco)":
                 df_matriz_ano = df_curriculo[df_curriculo['ANO'].astype(str) == str(ano_p)]
                 sel_eixo = st.multiselect("1. Eixo:", sorted(df_matriz_ano['EIXO'].unique().tolist()), key=f"p_eixo_{v}")
@@ -844,77 +846,64 @@ if menu == "📅 Planejamento (Ponto ID)":
                 ctx_ia = f"EIXO: {sel_eixo}, CONTEÚDO: {sel_cont}, OBJETIVOS: {sel_obj}."
             else:
                 cx1, cx2 = st.columns([2, 1])
-                sel_mat = cx1.multiselect("Livro:", df_materiais["NOME_ARQUIVO"].tolist() if not df_materiais.empty else [], key=f"p_livro_{v}")
+                # Busca livros na biblioteca que combinem com o ano selecionado
+                livros_disponiveis = df_materiais[df_materiais['TIPO'].str.contains(str(ano_p), na=False)]['NOME_ARQUIVO'].tolist()
+                sel_mat = cx1.selectbox("Selecionar Livro do Cofre:", [""] + livros_disponiveis, key=f"p_livro_{v}")
                 pags = cx2.text_input("Páginas:", key=f"p_pags_{v}")
-                ctx_ia = f"LIVRO: {sel_mat} PÁGINAS: {pags}."
-                if sel_mat and pags:
-                    base_didatica_info = f"Livro: {', '.join(sel_mat)} | Páginas: {pags}"
+                
+                if sel_mat:
+                    # Pega a URI (Link do Drive) para o Fresh-Sync
+                    match_mat = df_materiais[df_materiais['NOME_ARQUIVO'] == sel_mat].iloc[0]
+                    uri_livro_drive = match_mat['URI_ARQUIVO']
+                    base_didatica_info = f"Livro: {sel_mat} | Páginas: {pags}"
+                    st.success(f"🔗 Link do Drive Vinculado: {sel_mat}")
 
             strat = st.text_area("Estratégia / Observações do Professor:", key=f"p_strat_{v}")
 
         if st.button("🚀 COMPILAR PLANEJAMENTO INTEGRADO", use_container_width=True, type="primary", key=f"btn_compilar_{v}"):
-            with st.spinner("Maestro SOSA lendo o material e integrando safra..."):
-                
-                # 1. BUSCA DE ARQUIVO NA BIBLIOTECA (DNA REAL PARA VISÃO)
-                uri_livro = None
-                if modo_p == "📖 Livro Didático" and sel_mat:
-                    nome_busca = sel_mat[0]
-                    # Busca o arquivo exato no banco de materiais
-                    match_mat = df_materiais[df_materiais['NOME_ARQUIVO'] == nome_busca]
-                    if not match_mat.empty:
-                        uri_livro = match_mat.iloc[0]['URI_ARQUIVO']
-                        st.toast(f"📚 Livro '{nome_busca}' anexado para leitura da IA.", icon="📖")
-
-                # 2. BUSCA DE CONTINUIDADE (Preservado)
+            with st.spinner("Maestro SOSA ativando Fresh-Sync e lendo material do Drive..."):
+                # 1. BUSCA DE CONTINUIDADE
                 plano_anterior_txt = "Início de Safra."
                 df_hist = df_planos[df_planos['ANO'] == ano_str_busca].sort_values(by='DATA', ascending=False)
-                if not df_hist.empty: 
-                    plano_anterior_txt = df_hist.iloc[0]['PLANO_TEXTO']
+                if not df_hist.empty: plano_anterior_txt = df_hist.iloc[0]['PLANO_TEXTO']
 
-                # 3. PROMPT DE SOBERANIA V45 (INTEGRAÇÃO TOTAL + ORDEM DE LEITURA)
+                # 2. PROMPT DE SOBERANIA V45 (OTIMIZADO PARA LEITURA DE DRIVE)
                 prompt = (
-                    f"ORDEM SOBERANA: Gere um Plano de Ensino ÚNICO e SEM REPETIÇÕES.\n"
+                    f"ORDEM SOBERANA: Analise o arquivo do Google Drive anexo e a Matriz de Itabuna.\n"
                     f"NATUREZA: {tipo_semana}. SEMANA: {sem_limpa}. SÉRIE: {ano_p}º Ano. TRIMESTRE: {trim_atual}.\n"
-                    f"CARGA HORÁRIA: {carga_horaria}. SÁBADO: {'ATIVADO' if tem_sabado else 'DESATIVADO'}.\n"
-                    f"BASE DIDÁTICA OFICIAL: {base_didatica_info}.\n"
-                    f"CONTEXTO TÉCNICO: {ctx_ia}.\n"
-                    f"ESTRATEGIA: {strat}.\n\n"
+                    f"CARGA HORÁRIA: {carga_horaria}. BASE DIDÁTICA: {base_didatica_info}.\n"
+                    f"CONTEXTO TÉCNICO: {ctx_ia}. ESTRATEGIA: {strat}.\n\n"
                     f"{ctx_ativo_vinculado}\n\n"
-                    f"--- PONTE DE CONTINUIDADE (ANTERIOR) ---\n{plano_anterior_txt}\n\n"
-                    f"🚨 MISSÃO DE VISÃO: Se houver um arquivo anexo, leia as páginas citadas na BASE DIDÁTICA. "
-                    f"Extraia a sequência didática exata do autor e integre com a modernidade exigida. "
-                    f"Se a carga for '1 Aula', gere apenas [AULA_1]. Proibido Markdown (#) ou Unicode decorativo.\n\n"
+                    f"--- PONTE DE CONTINUIDADE ---\n{plano_anterior_txt}\n\n"
+                    f"🚨 MISSÃO: Extraia a sequência didática exata das páginas citadas no anexo. "
+                    f"Preencha TODAS as tags e garanta densidade acadêmica estilo Brasil Escola.\n"
                     f"--- MATRIZ ITABUNA ---\n{df_curriculo[df_curriculo['ANO'].astype(str)==str(ano_p)].to_string(index=False)}"
                 )
                 
-                # 4. CHAMADA DA IA COM SUPORTE A URI (VISÃO)
-                st.session_state.p_temp = ai.gerar_ia("PLANE_PEDAGOGICO", prompt, uri_referencia=uri_livro)
+                # 3. CHAMADA DA IA COM PROTOCOLO FRESH-SYNC
+                st.session_state.p_temp = ai.gerar_ia("PLANE_PEDAGOGICO", prompt, url_drive=uri_livro_drive)
                 
-                # 5. SALVAMENTO DA META PARA O PAINEL AZUL (Preservado)
                 st.session_state.p_meta = {
-                    "semana": sem_limpa, 
-                    "carga": carga_horaria, 
-                    "trimestre": trim_atual, 
-                    "ano": ano_str_busca,
+                    "semana": sem_limpa, "carga": carga_horaria, 
+                    "trimestre": trim_atual, "ano": ano_str_busca,
                     "base": base_didatica_info
                 }
-                
                 st.session_state.v_plano = int(time.time())
                 st.rerun()
 
-        # --- ✏️ EDITOR E VISUALIZAÇÃO (CONFERÊNCIA EXPANDIDA) ---
+        # --- EDITOR E VISUALIZAÇÃO (MANTIDOS) ---
         if "p_temp" in st.session_state:
+            # (O restante do código do editor permanece igual, garantindo a preservação do painel)
             txt_bruto = st.session_state.p_temp
             meta = st.session_state.get("p_meta", {})
             
-            # --- 📊 PAINEL DE CONFERÊNCIA REAL (4 COLUNAS) ---
             with st.container(border=True):
                 st.markdown(f"### 📋 Conferência de Regência: **{meta.get('semana')}**")
                 cm1, cm2, cm3, cm4 = st.columns([1, 1, 1, 2])
                 cm1.metric("Série/Ano", meta.get('ano'))
                 cm2.metric("Carga Horária", meta.get('carga'))
                 cm3.metric("Trimestre", meta.get('trimestre'))
-                cm4.metric("📖 Base Didática", meta.get('base')) # <--- NOVA COLUNA DE CONFERÊNCIA
+                cm4.metric("📖 Base Didática", meta.get('base'))
 
             t_ed, t_vis = st.tabs(["✏️ Editor de Texto", "👁️ Estrutura BNCC Elite"])
             
