@@ -315,10 +315,10 @@ def exibir_material_estruturado(texto_raw, key_prefix, dados_plano=None, info_au
                         st.error(f"Falha no envio dos arquivos.")
                        
 # ==============================================================================
-# MÓDULO: LABORATÓRIO DE PRODUÇÃO (CRIADOR V43.1 - HERANÇA DE DNA DIDÁTICO)
+# MÓDULO: LABORATÓRIO DE PRODUÇÃO (CRIADOR V44 - INTEGRAÇÃO COM BIBLIOTECA)
 # ==============================================================================
 if menu == "🧪 Criador de Aulas":
-    st.title("🧪 Laboratório de Produção Semiótica (V43.1)")
+    st.title("🧪 Laboratório de Produção Semiótica (V44)")
     st.markdown("---")
     
     def reset_laboratorio():
@@ -337,13 +337,11 @@ if menu == "🧪 Criador de Aulas":
     meta = st.session_state.get("lab_meta", {})
     is_hub = meta.get("tipo") == "PRODUÇÃO_HUB"
     
-    # --- ÁREA DE EXIBIÇÃO E REFINO (MANTIDA) ---
+    # --- ÁREA DE EXIBIÇÃO E REFINO (PRESERVADA) ---
     if "lab_temp" in st.session_state:
         txt_base = st.session_state.lab_temp
         s_id = st.session_state.get("sosa_id_atual", "SEM-ID")
-        is_recomp = "RECOMP" in s_id.upper()
-        is_projeto = "PROJETO" in s_id.upper() or "[JUSTIFICATIVA_PHC]" in txt_base
-
+        
         st.success(f"💎 Material em Edição: **{s_id}**")
 
         with st.container(border=True):
@@ -351,12 +349,10 @@ if menu == "🧪 Criador de Aulas":
             cmd_refine_lab = st.chat_input("Solicite ajustes...", key=f"chat_lab_ref_{v}")
             if cmd_refine_lab:
                 with st.spinner("Reengenharia..."):
-                    persona_refino = "REFINADOR_PROJETOS_V31" if is_projeto else "REFINADOR_MATERIAIS"
-                    st.session_state.lab_temp = ai.gerar_ia(persona_refino, f"ORDEM: {cmd_refine_lab}\n\nATUAL:\n{txt_base}")
+                    st.session_state.lab_temp = ai.gerar_ia("REFINADOR_MATERIAIS", f"ORDEM: {cmd_refine_lab}\n\nATUAL:\n{txt_base}")
                     st.session_state.v_lab = int(time.time()); st.rerun()
             if st.button("🗑️ DESCARTAR EDIÇÃO"): reset_laboratorio()
         
-        # Tabs de Visualização (Professor, Aluno, PEI, Sync)
         t_prof, t_alu, t_gab, t_pei, t_sync = st.tabs(["👨‍🏫 Professor", "📝 Aluno", "✅ Gabarito", "♿ PEI", "☁️ SINCRONIA"])
         with t_prof: st.text_area("Lousa/Mediação:", ai.extrair_tag(txt_base, "PROFESSOR"), height=450, key=f"ed_prof_reg_{v}")
         with t_alu: st.text_area("Folha/Roteiro:", ai.extrair_tag(txt_base, "ALUNO"), height=450, key=f"ed_alu_reg_{v}")
@@ -377,7 +373,7 @@ if menu == "🧪 Criador de Aulas":
                     db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), meta.get('semana_ref'), s_id, txt_base, f"{meta.get('ano')}º", link_alu])
                     status.update(label="✅ Sincronizado!", state="complete"); st.balloons(); time.sleep(1); reset_laboratorio()
 
-    # --- SEÇÃO DE ENTRADA (CONFIGURAÇÃO COM HERANÇA DE DNA) ---
+    # --- SEÇÃO DE ENTRADA (CONFIGURAÇÃO INTELIGENTE) ---
     else:
         tab_producao, tab_trabalhos, tab_complementar, tab_acervo_lab = st.tabs([
             "🚀 Produção (Aula 1/2)", "📋 Engenharia de Trabalhos", "📚 Atividades Complementares", "📂 Acervo de Materiais"
@@ -397,29 +393,42 @@ if menu == "🧪 Criador de Aulas":
                     plano_row = planos_ano[planos_ano["SEMANA"] == sem_lab].iloc[0]
                     plano_txt = str(plano_row['PLANO_TEXTO'])
 
-                    # --- 1. MOTOR DE HERANÇA DE DNA (LIVRO E PÁGINAS) ---
-                    base_herdada = ai.extrair_tag(plano_txt, "BASE_DIDATICA")
-                    obj_geral = ai.extrair_tag(plano_txt, "OBJETO_CONHECIMENTO") or ai.extrair_tag(plano_txt, "CONTEUDO_GERAL")
-                    
-                    # --- 2. SELEÇÃO DE MÉTODO ---
-                    st.divider()
-                    metodo_entrega = st.radio("🎯 Método de Entrega:", 
-                        ["🚀 Geração Integral (SOSA AI)", "📖 Livro Didático + PEI (Híbrido)"], 
-                        horizontal=True, key=f"metodo_{v}")
-                    
-                    ctx_livro = ""
-                    if "Livro" in metodo_entrega:
-                        st.info(f"📖 **DNA Detectado no Plano:** {base_herdada}")
-                        cl1, cl2 = st.columns(2)
-                        # Preenchimento automático vindo do plano!
-                        pags = cl1.text_input("Confirmar Páginas:", value=base_herdada if "Páginas" in base_herdada else "", key=f"pags_{v}")
-                        tema_livro = cl2.text_input("Tema/Exercícios:", value=obj_geral, key=f"tema_l_{v}")
-                        ctx_livro = f"MODO LIVRO DIDÁTICO: Base {pags} sobre {tema_livro}. Gere Roteiro de Mediação e Atividade PEI."
+                    # --- 1. RADAR DE REGÊNCIA (PRESERVADO) ---
+                    with st.expander("📡 Radar de Regência (Memória das Turmas)", expanded=True):
+                        contexto_turmas_ia = ""
+                        reg_ano = df_registro_aulas[df_registro_aulas['TURMA'].str.contains(str(ano_lab))]
+                        if not reg_ano.empty:
+                            for t_nome in sorted(reg_ano['TURMA'].unique()):
+                                dados_t = reg_ano[reg_ano['TURMA'] == t_nome].iloc[-1]
+                                est = dados_t.get('STATUS_EXECUCAO', 'Não Iniciado')
+                                pnt = dados_t.get('PONTE_PEDAGOGICA', 'Sem pendências.')
+                                emoji = "🟢" if "Concluído" in est else "🟡" if "Parcial" in est else "🔴"
+                                st.write(f"{emoji} **{t_nome}:** {est}")
+                                contexto_turmas_ia += f"- Turma {t_nome}: Status {est}. Pendência: {pnt}\n"
+                        else: st.info("ℹ️ Nenhuma regência anterior.")
 
-                    # --- 3. COCKPIT DE PRODUÇÃO ---
+                    # --- 2. MOTOR DE BUSCA NA BIBLIOTECA (SMART MATCH) ---
+                    base_herdada = ai.extrair_tag(plano_txt, "BASE_DIDATICA")
+                    metodo_entrega = st.radio("🎯 Método de Entrega:", ["🚀 Geração Integral (SOSA AI)", "📖 Livro Didático + PEI (Híbrido)"], horizontal=True, key=f"metodo_{v}")
+                    
+                    info_biblioteca = ""
+                    if "Livro" in metodo_entrega:
+                        # Busca o arquivo na biblioteca que contenha parte do nome do livro citado no plano
+                        nome_livro_busca = base_herdada.split('|')[0].replace("Livro:", "").strip()
+                        match_biblioteca = df_materiais[df_materiais['NOME_ARQUIVO'].str.contains(nome_livro_busca[:15], case=False, na=False)]
+                        
+                        if not match_biblioteca.empty:
+                            arquivo_ref = match_biblioteca.iloc[0]
+                            st.success(f"📚 **Fonte Vinculada:** {arquivo_ref['NOME_ARQUIVO']} | {base_herdada}")
+                            info_biblioteca = f"FONTE BIBLIOTECA: {arquivo_ref['LINK_ARQUIVO']}. Use este arquivo para basear a aula."
+                        else:
+                            st.warning(f"⚠️ **Atenção:** '{nome_livro_busca}' não localizado na Biblioteca. A IA usará conhecimento geral para as {base_herdada}.")
+
+                    # --- 3. COCKPIT DE PRODUÇÃO (PRESERVADO) ---
                     opcoes_disponiveis = ["Aula 1"]
                     if len(ai.extrair_tag(plano_txt, "AULA_2")) > 30: opcoes_disponiveis.append("Aula 2")
-
+                    obj_geral = ai.extrair_tag(plano_txt, "OBJETO_CONHECIMENTO") or ai.extrair_tag(plano_txt, "CONTEUDO_GERAL")
+                    
                     with st.container(border=True):
                         st.markdown(f"#### 🎯 Alvo Curricular: {obj_geral}")
                         col_config1, col_config2 = st.columns([1, 1])
@@ -432,7 +441,7 @@ if menu == "🧪 Criador de Aulas":
                         with st.expander(f"👁️ Visualizar Roteiro do Plano ({aula_alvo_prod})", expanded=False):
                             st.info(ai.extrair_tag(plano_txt, tag_previa))
 
-                    # --- 4. SENSOR DE NEURODIVERSIDADE ---
+                    # --- 4. SENSOR DE NEURODIVERSIDADE (PRESERVADO) ---
                     alunos_foco = df_alunos[(df_alunos['TURMA'].str.contains(str(ano_lab))) & (~df_alunos['NECESSIDADES'].isin(["NENHUMA", "PENDENTE", "", "NAN"]))]
                     texto_clinico = ", ".join(alunos_foco['NECESSIDADES'].unique().tolist()) if not alunos_foco.empty else "PADRÃO"
                     if not alunos_foco.empty: st.warning(f"♿ **Sensor PEI Ativo:** {texto_clinico}")
@@ -440,14 +449,15 @@ if menu == "🧪 Criador de Aulas":
                     instr_extra_prod = st.text_area("📝 Contexto Extra / Ajustes Específicos:", key=f"prod_extra_{v}")
 
                     if st.button("💎 MATERIALIZAR TRATADO DE ELITE", use_container_width=True, type="primary"):
-                        with st.spinner("Sosa arquitetando material híbrido..."):
+                        with st.spinner("Sosa arquitetando material integrado..."):
                             nome_elite = util.gerar_nome_material_elite(ano_lab, aula_alvo_prod, sem_lab)
                             st.session_state.sosa_id_atual = nome_elite
                             st.session_state.lab_meta = {"ano": ano_lab, "semana_ref": sem_lab}
                             
                             prompt_manual = (
                                 f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {nome_elite}.\n"
-                                f"MÉTODO: {metodo_entrega}. {ctx_livro}\n"
+                                f"MÉTODO: {metodo_entrega}. {info_biblioteca}\n"
+                                f"REFERÊNCIA PLANO: {base_herdada}\n"
                                 f"SÉRIE: {ano_lab}º Ano. ALVO: {aula_alvo_prod}. QTD: {qtd_q_prod}.\n"
                                 f"--- HERANÇA DO PLANO ---\n{ai.extrair_tag(plano_txt, tag_previa)}\n"
                                 f"--- SENSOR DE INCLUSÃO ---\nA turma possui alunos com: {texto_clinico}.\n"
@@ -455,7 +465,7 @@ if menu == "🧪 Criador de Aulas":
                             )
                             st.session_state.lab_temp = ai.gerar_ia("MAESTRO_SOSA_V28_ELITE", prompt_manual, usar_busca=True)
                             st.rerun()
-
+                            
 # --- ABA 3: ENGENHARIA DE TRABALHOS (VERSÃO V31.7 - BLINDAGEM DE TABELAS) ---
         with tab_trabalhos:
             st.subheader("📋 Engenharia de Projetos e Semanários (BNCC Elite)")
