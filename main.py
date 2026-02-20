@@ -1097,12 +1097,12 @@ if menu == "📅 Planejamento (Ponto ID)":
             else:
                 st.info("📭 Nenhum plano pendente no Dashboard de Produção.")
 
-# --- ABA 3: GESTÃO DE ACERVO (VERSÃO V31.5 - FULL BNCC ELITE) ---
+# --- ABA 3: GESTÃO DE ACERVO (VERSÃO V40.2 - REPOSITÓRIO DE ELITE) ---
     with tab_acervo:
         st.subheader("📂 Repositório de Planos Estratégicos (Visão 360°)")
         if not df_planos.empty:
             c_h1, c_h2 = st.columns([1, 2])
-            f_ano_h = c_h1.selectbox("Filtrar por Série:", ["Todos", "1º", "2º", "3º", "4º", "5º", "6º", "7º", "8º", "9º"], key="hist_ano_v31")
+            f_ano_h = c_h1.selectbox("Filtrar por Série:", ["Todos", "1º", "2º", "3º", "4º", "5º", "6º", "7º", "8º", "9º"], key="hist_ano_v40")
             
             df_h = df_planos.copy()
             if f_ano_h != "Todos": 
@@ -1111,70 +1111,90 @@ if menu == "📅 Planejamento (Ponto ID)":
             if not df_h.empty:
                 # Inverte para mostrar os mais recentes primeiro
                 lista_semanas = df_h["SEMANA"].tolist()[::-1]
-                sel_h = st.selectbox("Selecionar Plano para Visualização:", lista_semanas, key="hist_sem_v31")
+                sel_h = st.selectbox("Selecionar Plano para Visualização:", lista_semanas, key="hist_sem_v40")
                 
                 dados_h = df_h[df_h["SEMANA"] == sel_h].iloc[0]
                 raw_h = str(dados_h["PLANO_TEXTO"])
                 
-                # --- BOTÕES DE AÇÃO ---
+                # --- BOTÕES DE AÇÃO SOBERANA ---
                 col_btn1, col_btn2, col_btn3 = st.columns(3)
                 with col_btn1:
                     if st.button("🔄 REABRIR PARA REFINO", use_container_width=True, key=f"btn_reopen_{sel_h}"):
-                        st.session_state.refino_ativo = {"ano": dados_h["ANO"], "semana": sel_h}
                         st.session_state.p_temp = raw_h
-                        st.session_state.v_plano = int(time.time())
-                        st.success("✅ Plano carregado no Editor!")
-                        st.rerun()
+                        st.session_state.p_meta = {
+                            "semana": sel_h, "ano": dados_h["ANO"], 
+                            "trimestre": dados_h["TURMA"],
+                            "carga": "2 Aulas", # Fallback
+                            "base": ai.extrair_tag(raw_h, "BASE_DIDATICA")
+                        }
+                        st.success("✅ Plano carregado no Editor!"); st.rerun()
                 with col_btn2:
                     if st.button("🚀 MANDAR PARA PRODUÇÃO", use_container_width=True, type="primary", key=f"btn_hub_act_{sel_h}"):
                         if db.ativar_plano_no_hub(sel_h, dados_h["ANO"]):
                             st.success("✅ Plano enviado ao Dashboard!"); time.sleep(1); st.rerun()
                 with col_btn3:
-                    if "https" in str(dados_h["LINK_DRIVE"]): 
-                        st.link_button("📂 ABRIR NO DRIVE", str(dados_h["LINK_DRIVE"]), use_container_width=True)
+                    link_d = dados_h.get("LINK_DRIVE", "#")
+                    st.link_button("📂 ABRIR NO DRIVE", str(link_d), use_container_width=True)
 
-                # --- VISUALIZAÇÃO DE ELITE (MAPA DO PLANO) ---
+                # --- VISUALIZAÇÃO DE ACERVO (MAPA DE SAFRA) ---
                 with st.container(border=True):
                     # 1. CABEÇALHO TÉCNICO
                     val_objeto = ai.extrair_tag(raw_h, "OBJETO_CONHECIMENTO") or ai.extrair_tag(raw_h, "CONTEUDO_GERAL")
-                    val_hab = ai.extrair_tag(raw_h, "HABILIDADE_BNCC") or ai.extrair_tag(raw_h, "BNCC_CODE")
-                    val_comp = ai.extrair_tag(raw_h, "COMPETENCIAS_FOCO") or ai.extrair_tag(raw_h, "COMPETENCIAS_BNCC")
+                    val_hab = ai.extrair_tag(raw_h, "HABILIDADE_BNCC")
+                    val_comp = ai.extrair_tag(raw_h, "COMPETENCIAS_FOCO")
+                    val_base = ai.extrair_tag(raw_h, "BASE_DIDATICA") or "Matriz Curricular"
                     
                     st.markdown(f"### 🎯 {val_objeto}")
-                    st.markdown(f"**🆔 Habilidade:** `{val_hab}`")
-                    st.info(f"**🌟 Competências Foco:** {val_comp}")
+                    st.caption(f"📅 {sel_h} | 🎓 {dados_h['ANO']} | 📅 {dados_h['TURMA']}")
                     
-                    # 2. CONTEÚDOS E OBJETIVOS (LITERAL ITABUNA)
+                    c_meta1, c_meta2 = st.columns([1, 1])
+                    with c_meta1:
+                        st.markdown(f"**🆔 Habilidade:** `{val_hab}`")
+                        st.markdown(f"**🌟 Competências:** {val_comp}")
+                    with c_meta2:
+                        # DESTAQUE PARA O DNA DO LIVRO NO ACERVO
+                        st.success(f"**📖 Base Didática (DNA):**\n{val_base}")
+                    
+                    st.divider()
+                    
+                    # 2. CONTEÚDOS E OBJETIVOS
                     c_info1, c_info2 = st.columns(2)
                     with c_info1:
-                        st.markdown("<div style='background-color:rgba(41, 98, 255, 0.1); padding:10px; border-radius:5px;'><b>📖 Conteúdos:</b><br>"+ai.extrair_tag(raw_h, 'CONTEUDOS_ESPECIFICOS')+"</div>", unsafe_allow_html=True)
+                        st.markdown("##### 📖 Conteúdos Específicos")
+                        st.info(ai.extrair_tag(raw_h, 'CONTEUDOS_ESPECIFICOS'))
                     with c_info2:
-                        st.markdown("<div style='background-color:rgba(46, 204, 113, 0.1); padding:10px; border-radius:5px;'><b>✅ Objetivos:</b><br>"+ai.extrair_tag(raw_h, 'OBJETIVOS_ENSINO')+"</div>", unsafe_allow_html=True)
+                        st.markdown("##### ✅ Objetivos de Aprendizagem")
+                        st.info(ai.extrair_tag(raw_h, 'OBJETIVOS_ENSINO'))
                     
                     st.divider()
                     
-                    # 3. ROTEIRO DE AULAS
+                    # 3. ROTEIRO DE AULAS (CONTAINERS LADO A LADO)
+                    st.markdown("##### 🏫 Roteiro de Execução")
                     c_v1, c_v2 = st.columns(2)
                     with c_v1: 
-                        st.markdown("##### 📘 Aula 1 (Fundamentação)")
-                        st.write(ai.extrair_tag(raw_h, "AULA_1"))
+                        with st.container(border=True):
+                            st.write(f"**📘 AULA 1:**\n{ai.extrair_tag(raw_h, 'AULA_1')}")
                     with c_v2: 
-                        st.markdown("##### 📗 Aula 2 (Aplicação)")
-                        st.write(ai.extrair_tag(raw_h, "AULA_2"))
+                        val_a2 = ai.extrair_tag(raw_h, 'AULA_2')
+                        if val_a2 and "N/A" not in val_a2.upper() and "não previsto" not in val_a2:
+                            with st.container(border=True):
+                                st.write(f"**📗 AULA 2:**\n{val_a2}")
+                        else:
+                            st.caption("Sem Aula 2 planejada para esta semana.")
                     
-                    # 4. SÁBADO, AVALIAÇÃO E DUA
                     st.divider()
+                    
+                    # 4. INCLUSÃO E AVALIAÇÃO
                     c_v3, c_v4 = st.columns(2)
                     with c_v3:
-                        val_dua = ai.extrair_tag(raw_h, "ESTRATEGIA_DUA_PEI") or ai.extrair_tag(raw_h, "ADAPTACAO_PEI")
-                        st.warning(f"**♿ Estratégia DUA/PEI:**\n{val_dua}")
+                        st.warning(f"**♿ Estratégia DUA/PEI:**\n{ai.extrair_tag(raw_h, 'ESTRATEGIA_DUA_PEI')}")
                     with c_v4:
-                        val_ava = ai.extrair_tag(raw_h, "AVALIACAO_DE_MERITO") or ai.extrair_tag(raw_h, "AVALIACAO")
-                        st.error(f"**📝 Avaliação de Mérito:**\n{val_ava}")
+                        st.error(f"**📝 Avaliação de Mérito:**\n{ai.extrair_tag(raw_h, 'AVALIACAO_DE_MERITO')}")
                     
-                    sab_txt = ai.extrair_tag(raw_h, "SABADO_LETIVO")
-                    if sab_txt and "N/A" not in sab_txt.upper():
-                        st.success(f"**🗓️ Sábado Letivo:**\n{sab_txt}")
+                    # Sábado Letivo
+                    val_sab = ai.extrair_tag(raw_h, "SABADO_LETIVO")
+                    if val_sab and "N/A" not in val_sab.upper() and "não programada" not in val_sab:
+                        st.info(f"**🗓️ Sábado Letivo:**\n{val_sab}")
                 
                 if st.button("🗑️ EXCLUIR PLANO DO ACERVO", use_container_width=True, key=f"btn_del_plan_{sel_h}"):
                     if db.excluir_plano_completo(sel_h, dados_h["ANO"]): 
