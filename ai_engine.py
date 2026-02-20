@@ -13,6 +13,11 @@ PERSONAS = {
     "PLANE_PEDAGOGICO": """VOCÊ É O ARQUITETO PEDAGÓGICO SÊNIOR E ENGENHEIRO DE DNA CURRICULAR (V40 - MASTER ELITE).
     Sua missão é projetar o roteiro que servirá de base para a produção de materiais de luxo. Se o seu plano for superficial, a aula será superficial. Você deve entregar densidade, modernidade e rigor.
 
+    🚨 PROTOCOLO DE BLINDAGEM DE SINTAXE (ANTI-VAZAMENTO):
+    - Você deve obrigatoriamente pular DUAS LINHAS entre o fim de um bloco e o início da próxima tag [TAG].
+    - É TERMINANTEMENTE PROIBIDO escrever o nome de uma tag (ex: [OBJETIVOS_ENSINO]) dentro do conteúdo de outra tag.
+    - No campo [COMPETENCIAS_FOCO], cite APENAS as competências selecionadas. Não liste as 10 competências gerais da BNCC a menos que seja no campo [COMPETENCIA_GERAL].
+
     🚨 LEI DA INTEGRAÇÃO TOTAL (FIM DA DISTINÇÃO TEORIA/PRÁTICA):
     - Cada aula ([AULA_1], [AULA_2]) deve ser um ciclo completo: Contextualização Crítica + Fundamentação Densa + Aplicação Real.
     - Proibido deixar a teoria para uma aula e a prática para outra. O conhecimento deve ser construído de forma orgânica e aplicada.
@@ -514,40 +519,42 @@ def gerar_ia(persona_key, comando, partes_arquivos=[], usar_busca=True):
     except Exception as e:
         return f"Erro na IA: {e}"
 
-# --- EXTRATOR SOSA V43 (ULTRA-PRECISÃO & BLINDAGEM DE SINTAXE) ---
+# --- EXTRATOR SOSA V44 (ULTRA-PRECISÃO & BLINDAGEM DE SINTAXE) ---
 def extrair_tag(texto, tag):
     if not texto: return ""
     import re
     
     # 1. LIMPEZA DE RUÍDOS: Remove Markdown, LaTeX e normaliza
-    # Mantemos apenas o texto essencial para a análise pedagógica
     texto_limpo = re.sub(r'[*#$]', '', texto) 
     texto_limpo = texto_limpo.replace("\\frac", "").replace("{", "").replace("}", "/")
     tag_busca = tag.upper().strip()
     
-    # 2. Captura valor INTERNO (Ex: [VALOR: 3.0] ou [ VALOR : 3.0 ])
+    # 2. Captura valor INTERNO (Ex: [VALOR: 3.0])
     padrao_interno = rf"\[\s*\b{tag_busca}\b\s*[:\-]*\s*(.*?)\]"
     match_int = re.search(padrao_interno, texto_limpo, re.IGNORECASE)
     if match_int:
         res_int = match_int.group(1).strip()
         if 0 < len(res_int) < 100: return res_int
 
-    # 3. LISTA DE TAGS MESTRAS V43
+    # 3. LISTA DE TAGS MESTRAS V44 (Atualizada com tags de Planejamento)
     tags_mestras = [
         "SOSA_ID", "VALOR", "ORIENTACOES", "QUESTOES", "GABARITO_TEXTO", "GRADE_DE_CORRECAO", 
         "GABARITO", "RESPOSTAS_IA", "PEI", "GABARITO_PEI", "GRADE_DE_CORRECAO_PEI", "RESPOSTAS_PEI_IA", 
         "PROFESSOR", "ALUNO", "IMAGENS", "AULA_ALVO", "HABILIDADE_BNCC", "COMPETENCIAS_FOCO", 
-        "OBJETO_CONHECIMENTO", "JUSTIFICATIVA_PHC", "RUBRICA_DE_MERITO", "CONTEXTO_INVESTIGATIVO", 
+        "COMPETENCIA_GERAL", "OBJETO_CONHECIMENTO", "CONTEUDOS_ESPECIFICOS", "OBJETIVOS_ENSINO",
+        "JUSTIFICATIVA_PEDAGOGICA", "JUSTIFICATIVA_PHC", "RUBRICA_DE_MERITO", "CONTEXTO_INVESTIGATIVO", 
         "MISSÃO_DE_PESQUISA", "PASSO_A_PASSO", "PRODUTO_ESPERADO", "CONTEXTO_GLOCAL",
         "AULA_1", "AULA_2", "SABADO_LETIVO", "AVALIACAO_DE_MERITO", "ESTRATEGIA_DUA_PEI",
         "MAPA_DE_RECOMPOSICAO", "RESPOSTAS_PEDAGOGICAS"
     ]
     
+    # Filtra a lista de parada para não incluir a própria tag buscada
     parada = [t for t in tags_mestras if t != tag_busca]
     lista_parada = "|".join(parada)
     
-    # 4. REGEX DE BLOCO V43: Captura até a próxima tag mestra com tolerância a espaços
-    padrao_bloco = rf"\[\s*\b{tag_busca}\b\s*\]\s*[:\-]*\s*(.*?)(?=\n\s*\[\s*(?:{lista_parada})\s*\]|\[\s*(?:{lista_parada})\s*\]|$)"
+    # 4. REGEX DE BLOCO V44: Lookahead agressivo para evitar vazamento
+    # Ele busca a tag e captura tudo até encontrar o próximo "[" seguido de uma tag mestra ou o fim do texto
+    padrao_bloco = rf"\[\s*{tag_busca}\s*\]\s*[:\-]*\s*(.*?)(?=\s*\[\s*(?:{lista_parada})\s*\]|$)"
     match_bloco = re.search(padrao_bloco, texto_limpo, re.DOTALL | re.IGNORECASE)
     
     return match_bloco.group(1).strip() if match_bloco else ""
