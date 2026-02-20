@@ -502,15 +502,24 @@ PERSONAS = {
 
     "AVALIADOR_ADAPTADO": """VOCÊ É UM ESPECIALISTA EM AVALIAÇÃO INCLUSIVA. Transformar PROVA REGULAR em ADAPTADA."""
 }
-
-def gerar_ia(persona_key, comando, partes_arquivos=[], usar_busca=True):
+   
+def gerar_ia(persona_key, comando, uri_referencia=None, usar_busca=True):
+    """MOTOR SOSA V45 - Suporte a Visão de Documentos (PDF/Imagens)"""
     config = {'tools': [{'google_search': {}}]} if usar_busca else {}
+    
+    # Inicia as partes do prompt com a Persona e o Comando
     conteudo_prompt = [types.Part.from_text(text=f"{PERSONAS[persona_key]}\n\n{comando}")]
-    if partes_arquivos:
-        conteudo_prompt.extend(partes_arquivos)
+    
+    # INJEÇÃO DE VISÃO: Se houver uma URI de arquivo, anexa como referência binária
+    if uri_referencia and "https://" in uri_referencia:
+        try:
+            conteudo_prompt.append(types.Part.from_uri(file_uri=uri_referencia, mime_type="application/pdf"))
+        except Exception as e:
+            print(f"Erro ao anexar arquivo: {e}")
+
     try:
         res = client.models.generate_content(
-            model="gemini-3-flash-preview",
+            model="gemini-3-flash-preview", # Modelo de alta performance com visão
             contents=[types.Content(role="user", parts=conteudo_prompt)],
             config=config
         )
