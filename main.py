@@ -1135,11 +1135,11 @@ if menu == "📅 Planejamento (Ponto ID)":
                 with c_v3: st.warning(f"**♿ DUA/PEI:**\n{ed_dua}")
                 with c_v4: st.error(f"**📝 Avaliação:**\n{ed_ava}")
                 
-# --- ABA 2: DASHBOARD DE PRODUÇÃO (VERSÃO V32.0 - CARGA HORÁRIA DINÂMICA) ---
+# --- ABA 2: DASHBOARD DE PRODUÇÃO (VERSÃO V40.1 - CARGA HORÁRIA REAL) ---
     with tab_producao:
         st.subheader("🏗️ Linha de Montagem de Materiais")
         if not df_planos.empty:
-            # Filtra apenas planos ativos no Hub
+            # Filtra apenas planos ativos no Hub (Status HUB_ATIVO)
             planos_ativos = df_planos[df_planos["EIXO"].astype(str).str.contains("HUB_ATIVO", case=False, na=False)].iloc[::-1]
             
             if not planos_ativos.empty:
@@ -1149,32 +1149,42 @@ if menu == "📅 Planejamento (Ponto ID)":
                         
                         sem_ref = row['SEMANA']
                         ano_ref = row['ANO']
-                        plano_txt = row["PLANO_TEXTO"]
+                        plano_txt = str(row["PLANO_TEXTO"])
                         
                         c_p1.markdown(f"**{sem_ref}**\n`Série: {ano_ref}`")
                         
-                        # --- DETECÇÃO INTELIGENTE DE CARGA HORÁRIA ---
-                        # Verifica no texto do plano quais aulas foram realmente planejadas
-                        aulas_planejadas = ["Aula 1"] # Aula 1 é sempre obrigatória
-                        val_a2 = ai.extrair_tag(plano_txt, "AULA_2")
+                        # --- MOTOR DE DETECÇÃO DE CARGA HORÁRIA REAL ---
+                        # Aula 1 é sempre o ponto de partida
+                        aulas_que_devem_existir = ["Aula 1"] 
                         
-                        # Se a Aula 2 existir, não for N/A e tiver conteúdo real (> 10 caracteres)
-                        if val_a2 and "N/A" not in val_a2.upper() and len(val_a2) > 10:
-                            aulas_planejadas.append("Aula 2")
+                        # Extrai o conteúdo da Aula 2 para validar se ela foi planejada
+                        conteudo_a2 = ai.extrair_tag(plano_txt, "AULA_2")
                         
-                        # --- VERIFICAÇÃO DE PROGRESSO REAL ---
+                        # Critérios para considerar que a Aula 2 EXISTE no planejamento:
+                        # 1. Não pode conter "não previsto" ou "N/A"
+                        # 2. Deve ter uma densidade mínima de texto (mais de 30 caracteres)
+                        if conteudo_a2 and \
+                           "não previsto" not in conteudo_a2.lower() and \
+                           "n/a" not in conteudo_a2.lower() and \
+                           len(conteudo_a2) > 30:
+                            aulas_que_devem_existir.append("Aula 2")
+                        
+                        # --- VERIFICAÇÃO DE PROGRESSO NO BANCO DE AULAS ---
                         aulas_no_banco = df_aulas[(df_aulas['SEMANA_REF'] == sem_ref) & (df_aulas['ANO'] == ano_ref)]
-                        lista_tipos_prontos = aulas_no_banco['TIPO_MATERIAL'].astype(str).tolist()
+                        lista_materiais_prontos = aulas_no_banco['TIPO_MATERIAL'].astype(str).tolist()
                         
-                        # Monta a string de progresso apenas com o que foi planejado
-                        status_list = []
-                        for a_plan in aulas_planejadas:
-                            icon = "✅" if any(a_plan in t for t in lista_tipos_prontos) else "⏳"
-                            status_list.append(f"{icon} {a_plan}")
+                        # Monta a string de progresso dinamicamente
+                        icones_progresso = []
+                        for aula_alvo in aulas_que_devem_existir:
+                            # Verifica se a aula específica (Aula 1 ou Aula 2) já está na gaveta
+                            foi_feita = any(aula_alvo in mat for mat in lista_materiais_prontos)
+                            status_icon = "✅" if foi_feita else "⏳"
+                            icones_progresso.append(f"{status_icon} {aula_alvo}")
                         
-                        c_p2.markdown(f"**Progresso:**\n{' | '.join(status_list)}")
+                        # Exibe apenas o que é real
+                        c_p2.markdown(f"**Progresso:**\n{' | '.join(icones_progresso)}")
                         
-                        # --- BOTÃO PRODUZIR ---
+                        # --- BOTÕES DE AÇÃO ---
                         if c_p3.button("🧪 PRODUZIR", key=f"gen_hub_{row.name}", use_container_width=True):
                             st.session_state.lab_temp = plano_txt
                             st.session_state.sosa_id_atual = util.gerar_sosa_id("AULA", ano_ref, row["TURMA"])
@@ -1190,7 +1200,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                             if db.arquivar_plano_produzido(sem_ref, ano_ref):
                                 st.success("Safra Concluída!"); time.sleep(1); st.rerun()
             else:
-                st.info("📭 Nenhum plano pendente no Dashboard.")
+                st.info("📭 Nenhum plano pendente no Dashboard de Produção.")
 
 # --- ABA 3: GESTÃO DE ACERVO (VERSÃO V31.5 - FULL BNCC ELITE) ---
     with tab_acervo:
