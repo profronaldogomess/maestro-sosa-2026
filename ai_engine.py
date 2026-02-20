@@ -55,7 +55,12 @@ PERSONAS = {
 
     "MAESTRO_SOSA_V28_ELITE": """VOCÊ É O ENGENHEIRO DE PRODUÇÃO SEMIÓTICA SÊNIOR (V40 - MASTER ELITE & SENSOR CLÍNICO).
     Sua missão é materializar materiais de luxo pedagógico, fundindo o LIVRO DIDÁTICO com tecnologia, densidade acadêmica (Estilo Brasil Escola) e personalização clínica.
-
+    
+    🚨 LEI DAS TAGS PURAS (INEGOCIÁVEL):
+    - Use EXATAMENTE as tags: [PROFESSOR], [ALUNO], [GABARITO], [PEI], [IMAGENS].
+    - É PROIBIDO adicionar qualquer palavra dentro dos colchetes (ex: NÃO USE [DIRETRIZ PROFESSOR]).
+    - É PROIBIDO usar símbolos Unicode (█▓▒░) ou Markdown (#) nos títulos das seções.
+    
     🚨 LEI DA CONTINUIDADE (HERANÇA DE SAFRA):
     - Você receberá um roteiro vindo do "Ponto ID". 
     - Se houver uma "Ponte Pedagógica" ou "Roteiro Herdado", use isso para iniciar a aula, conectando o conhecimento prévio ao novo. Evite redundâncias: se o plano diz "Parei na página X", comece a partir dali.
@@ -513,24 +518,14 @@ def gerar_ia(persona_key, comando, partes_arquivos=[], usar_busca=True):
     except Exception as e:
         return f"Erro na IA: {e}"
 
-# --- EXTRATOR SOSA V44 (ULTRA-PRECISÃO & BLINDAGEM DE SINTAXE) ---
+# --- EXTRATOR SOSA V45 (FUZZY MATCH & BLINDAGEM DE SINTAXE) ---
 def extrair_tag(texto, tag):
     if not texto: return ""
     import re
     
-    # 1. LIMPEZA DE RUÍDOS: Remove Markdown, LaTeX e normaliza
-    texto_limpo = re.sub(r'[*#$]', '', texto) 
-    texto_limpo = texto_limpo.replace("\\frac", "").replace("{", "").replace("}", "/")
     tag_busca = tag.upper().strip()
     
-    # 2. Captura valor INTERNO (Ex: [VALOR: 3.0])
-    padrao_interno = rf"\[\s*\b{tag_busca}\b\s*[:\-]*\s*(.*?)\]"
-    match_int = re.search(padrao_interno, texto_limpo, re.IGNORECASE)
-    if match_int:
-        res_int = match_int.group(1).strip()
-        if 0 < len(res_int) < 100: return res_int
-
-    # 3. LISTA DE TAGS MESTRAS V44 (Atualizada com tags de Planejamento)
+    # 1. LISTA DE TAGS MESTRAS V45 (Para definir os pontos de parada)
     tags_mestras = [
         "SOSA_ID", "VALOR", "ORIENTACOES", "QUESTOES", "GABARITO_TEXTO", "GRADE_DE_CORRECAO", 
         "GABARITO", "RESPOSTAS_IA", "PEI", "GABARITO_PEI", "GRADE_DE_CORRECAO_PEI", "RESPOSTAS_PEI_IA", 
@@ -542,16 +537,31 @@ def extrair_tag(texto, tag):
         "MAPA_DE_RECOMPOSICAO", "RESPOSTAS_PEDAGOGICAS", "BASE_DIDATICA"
     ]
     
-    # Filtra a lista de parada para não incluir a própria tag buscada
     parada = [t for t in tags_mestras if t != tag_busca]
     lista_parada = "|".join(parada)
+
+    # 2. Captura valor INTERNO (Ex: [VALOR: 3.0] ou [DIRETRIZ PROFESSOR: ...])
+    # O segredo está no [^\]]*? que aceita qualquer texto dentro do colchete antes ou depois da tag
+    padrao_interno = rf"\[[^\]]*?{tag_busca}[^\]]*?[:\-]\s*(.*?)\]"
+    match_int = re.search(padrao_interno, texto, re.IGNORECASE)
+    if match_int:
+        res_int = match_int.group(1).strip()
+        if 0 < len(res_int) < 100: return res_int
+
+    # 3. REGEX DE BLOCO V45 (FUZZY): Captura blocos mesmo com decorações Unicode
+    # Busca um colchete que contenha a tag_busca e para no próximo colchete que contenha uma tag_mestra
+    padrao_bloco = rf"\[[^\]]*?{tag_busca}[^\]]*?\]\s*[:\-]*\s*(.*?)(?=\s*\[[^\]]*?(?:{lista_parada})[^\]]*?\]|$)"
+    match_bloco = re.search(padrao_bloco, texto, re.DOTALL | re.IGNORECASE)
     
-    # 4. REGEX DE BLOCO V44: Lookahead agressivo para evitar vazamento
-    # Ele busca a tag e captura tudo até encontrar o próximo "[" seguido de uma tag mestra ou o fim do texto
-    padrao_bloco = rf"\[\s*{tag_busca}\s*\]\s*[:\-]*\s*(.*?)(?=\s*\[\s*(?:{lista_parada})\s*\]|$)"
-    match_bloco = re.search(padrao_bloco, texto_limpo, re.DOTALL | re.IGNORECASE)
+    if match_bloco:
+        res = match_bloco.group(1).strip()
+        # LIMPEZA DE SOBERANIA: Remove Markdown e os símbolos Unicode que a IA usou (░▒▓█)
+        res_limpo = re.sub(r'[*#$░▒▓█]', '', res)
+        # Remove também possíveis restos de separadores "---"
+        res_limpo = re.sub(r'-{3,}', '', res_limpo)
+        return res_limpo.strip()
     
-    return match_bloco.group(1).strip() if match_bloco else ""
+    return ""
 
 # --- PERSONA PROJETOS V31.2 (ANTI-PLACEHOLDER) ---
 PERSONAS["ARQUITETO_PROJETOS_V31_ELITE"] = """VOCÊ É O ENGENHEIRO DE PROJETOS BNCC (V31 - RIGOR TOTAL).
