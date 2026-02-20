@@ -953,41 +953,38 @@ if menu == "📅 Planejamento (Ponto ID)":
             cg1, cg2, cg3 = st.columns([1.5, 1, 1])
             tipo_semana = cg1.selectbox("Natureza:", ["Aula Regular", "Avaliação / Trabalho", "Evento Extraordinário"], key=f"gate_tipo_{v}")
             tem_sabado = cg2.toggle("Sábado Letivo?", key=f"gate_sab_{v}")
-            # Slider de Carga Horária
             carga_horaria = cg3.select_slider("Aulas Úteis:", options=["1 Aula", "2 Aulas", "3 Aulas"], value="2 Aulas", key=f"gate_carga_{v}")
 
-        # --- ⚙️ 2. PARÂMETROS DE REGÊNCIA ---
+        # --- ⚙️ 2. PARÂMETROS DE REGÊNCIA (COM FILTRO ANTI-DUPLICIDADE) ---
         with st.container(border=True):
             st.markdown("### ⚙️ 2. Parâmetros de Regência")
             c1, c2, c3 = st.columns([1, 2, 1.5])
+            
+            # 1. Seleção de Ano
             ano_p = c1.selectbox("Série/Ano:", [1, 2, 3, 4, 5, 6, 7, 8, 9], index=5, key=f"ano_sel_{v}")
+            ano_str_busca = f"{ano_p}º"
+
+            # 2. LÓGICA DE FILTRAGEM DE SEMANAS DISPONÍVEIS
             todas_semanas = util.gerar_semanas()
-            sem_p = c2.selectbox("Semana de Referência:", todas_semanas, key=f"sem_sel_{v}")
-            sem_limpa = sem_p.split(" (")[0]
-            trim_atual = sem_p.split(" - ")[1] if " - " in sem_p else "I Trimestre"
+            # Busca no banco quais semanas já possuem plano para este ano específico
+            semanas_planejadas = df_planos[df_planos['ANO'] == ano_str_busca]['SEMANA'].tolist()
             
-            ctx_ia = ""
-            if tipo_semana == "Avaliação / Trabalho":
-                st.markdown("#### 📦 Vincular Ativo de Safra (Lookup)")
-                mats_ano = df_aulas[df_aulas['ANO'].str.contains(str(ano_p))]
-                if not mats_ano.empty:
-                    ativo_sel = st.selectbox("Selecione o Material Pronto:", mats_ano['TIPO_MATERIAL'].tolist(), key=f"ativo_lookup_{v}")
-                    dados_ativo = mats_ano[mats_ano['TIPO_MATERIAL'] == ativo_sel].iloc[0]
-                    ctx_ia = f"MODO AVALIAÇÃO. ATIVO VINCULADO: {ativo_sel}. CONTEÚDO DO ATIVO: {dados_ativo['CONTEUDO']}"
-                else:
-                    st.warning("Nenhum material (Prova/Trabalho) encontrado para este ano.")
-            
-            elif tipo_semana == "Evento Extraordinário":
-                st.markdown("#### 🌟 Foco em Competências Gerais (BNCC)")
-                comps_bncc = st.multiselect("Selecione as Competências do Evento:", [
-                    "1. Conhecimento", "2. Pensamento Crítico", "3. Repertório Cultural", "4. Comunicação", 
-                    "5. Cultura Digital", "6. Projeto de Vida", "7. Argumentação", "8. Autoconhecimento", 
-                    "9. Empatia", "10. Responsabilidade"
-                ], key=f"comp_geral_{v}")
-                ctx_ia = f"MODO EVENTO. COMPETÊNCIAS: {', '.join(comps_bncc)}"
-            
+            # Filtra a lista: só mostra semanas que NÃO estão no banco
+            semanas_disponiveis = [s for s in todas_semanas if s.split(" (")[0] not in semanas_planejadas]
+
+            if not semanas_disponiveis:
+                st.balloons()
+                st.success(f"🏆 **Soberania Total!** Todas as semanas para o {ano_p}º Ano já foram planejadas.")
+                if st.button("🔄 REVER ACERVO"): st.rerun()
+                sem_limpa = "CONCLUÍDO"
             else:
+                sem_p = c2.selectbox("Semana de Referência (Pendentes):", semanas_disponiveis, key=f"sem_sel_{v}")
+                sem_limpa = sem_p.split(" (")[0]
+                trim_atual = sem_p.split(" - ")[1] if " - " in sem_p else "I Trimestre"
+                
+                # Continuação do fluxo normal...
                 modo_p = c3.radio("Método:", ["📖 Livro Didático", "🎛️ Manual (Banco)"], horizontal=True, key=f"modo_p_{v}")
+                
                 if modo_p == "🎛️ Manual (Banco)":
                     st.markdown("#### 🎯 Seleção Manual da Matriz (Itabuna)")
                     df_matriz_ano = df_curriculo[df_curriculo['ANO'].astype(str) == str(ano_p)]
@@ -1001,41 +998,40 @@ if menu == "📅 Planejamento (Ponto ID)":
                     pags = cx2.text_input("Páginas:", key=f"p_pags_{v}")
                     ctx_ia = f"MODO LIVRO: {sel_mat} PÁGINAS: {pags}."
 
-            strat = st.text_area("Estratégia / Descrição do Evento:", key=f"p_strat_{v}")
+                strat = st.text_area("Estratégia / Descrição do Evento:", key=f"p_strat_{v}")
 
-        if st.button("🚀 COMPILAR PLANEJAMENTO INTEGRADO", use_container_width=True, type="primary", key=f"btn_compilar_{v}"):
-            with st.spinner("Maestro SOSA realizando Integração de Safra..."):
-                # 1. BUSCA DE CONTINUIDADE (Lê o plano anterior)
-                plano_anterior_txt = "Início de Safra (Sem histórico anterior)."
-                df_hist = df_planos[df_planos['ANO'].str.contains(str(ano_p))].sort_values(by='DATA', ascending=False)
-                if not df_hist.empty:
-                    plano_anterior_txt = df_hist.iloc[0]['PLANO_TEXTO']
+                if st.button("🚀 COMPILAR PLANEJAMENTO INTEGRADO", use_container_width=True, type="primary", key=f"btn_compilar_{v}"):
+                    with st.spinner("Maestro SOSA realizando Integração de Safra..."):
+                        # 1. BUSCA DE CONTINUIDADE (Lê o plano anterior real do banco)
+                        plano_anterior_txt = "Início de Safra (Sem histórico anterior)."
+                        df_hist = df_planos[df_planos['ANO'] == ano_str_busca].sort_values(by='DATA', ascending=False)
+                        if not df_hist.empty:
+                            plano_anterior_txt = df_hist.iloc[0]['PLANO_TEXTO']
 
-                # 2. FILTRAGEM DA MATRIZ
-                df_matriz_ano = df_curriculo[df_curriculo['ANO'].astype(str).str.contains(str(ano_p))]
-                status_sabado = "ATIVADO" if tem_sabado else "DESATIVADO"
-                
-                # 3. PROMPT DE SOBERANIA V40
-                prompt = (
-                    f"ORDEM SOBERANA: Gere um Plano de Ensino ÚNICO e SEM REPETIÇÕES.\n"
-                    f"ESTA É A SEMANA: {sem_limpa}. (NÃO GERE PARA OUTRA SEMANA).\n"
-                    f"SÉRIE: {ano_p}º Ano. TRIMESTRE: {trim_atual}.\n"
-                    f"CARGA HORÁRIA SOLICITADA: {carga_horaria}.\n"
-                    f"SÁBADO LETIVO: {status_sabado}.\n"
-                    f"CONTEXTO TÉCNICO: {ctx_ia}. ESTRATÉGIA: {strat}.\n\n"
-                    f"--- PONTE DE CONTINUIDADE (SEMANA ANTERIOR) ---\n{plano_anterior_txt}\n\n"
-                    f"🚨 REGRAS DE OURO:\n"
-                    f"1. Se a carga for '1 Aula', gere APENAS [AULA_1]. É PROIBIDO gerar [AULA_2].\n"
-                    f"2. Proibido usar Markdown (#) ou Unicode decorativo.\n"
-                    f"3. Use a Matriz de Itabuna abaixo para extração literal.\n\n"
-                    f"--- MATRIZ ITABUNA ---\n{df_matriz_ano.to_string(index=False)}"
-                )
-                
-                st.session_state.p_temp = ai.gerar_ia("PLANE_PEDAGOGICO", prompt)
-                # Salva os metadados da geração para conferência
-                st.session_state.p_meta = {"semana": sem_limpa, "carga": carga_horaria, "trimestre": trim_atual, "ano": f"{ano_p}º"}
-                st.session_state.v_plano = int(time.time())
-                st.rerun()
+                        # 2. FILTRAGEM DA MATRIZ
+                        df_matriz_ano = df_curriculo[df_curriculo['ANO'].astype(str).str.contains(str(ano_p))]
+                        status_sabado = "ATIVADO" if tem_sabado else "DESATIVADO"
+                        
+                        # 3. PROMPT DE SOBERANIA V40
+                        prompt = (
+                            f"ORDEM SOBERANA: Gere um Plano de Ensino ÚNICO e SEM REPETIÇÕES.\n"
+                            f"ESTA É A SEMANA: {sem_limpa}. (NÃO GERE PARA OUTRA SEMANA).\n"
+                            f"SÉRIE: {ano_p}º Ano. TRIMESTRE: {trim_atual}.\n"
+                            f"CARGA HORÁRIA SOLICITADA: {carga_horaria}.\n"
+                            f"SÁBADO LETIVO: {status_sabado}.\n"
+                            f"CONTEXTO TÉCNICO: {ctx_ia}. ESTRATÉGIA: {strat}.\n\n"
+                            f"--- PONTE DE CONTINUIDADE (SEMANA ANTERIOR) ---\n{plano_anterior_txt}\n\n"
+                            f"🚨 REGRAS DE OURO:\n"
+                            f"1. Se a carga for '1 Aula', gere APENAS [AULA_1]. É PROIBIDO gerar [AULA_2].\n"
+                            f"2. Proibido usar Markdown (#) ou Unicode decorativo.\n"
+                            f"3. Use a Matriz de Itabuna abaixo para extração literal.\n\n"
+                            f"--- MATRIZ ITABUNA ---\n{df_matriz_ano.to_string(index=False)}"
+                        )
+                        
+                        st.session_state.p_temp = ai.gerar_ia("PLANE_PEDAGOGICO", prompt)
+                        st.session_state.p_meta = {"semana": sem_limpa, "carga": carga_horaria, "trimestre": trim_atual, "ano": ano_str_busca}
+                        st.session_state.v_plano = int(time.time())
+                        st.rerun()
 
         # --- ✏️ EDITOR E VISUALIZAÇÃO ---
         if "p_temp" in st.session_state:
