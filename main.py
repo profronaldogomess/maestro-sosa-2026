@@ -1003,17 +1003,35 @@ if menu == "📅 Planejamento (Ponto ID)":
             t_ed, t_vis = st.tabs(["✏️ Editor de Texto", "👁️ Estrutura BNCC Elite"])
             
             with t_ed:
-                # (Refinador e Filtros de Curadoria - Preservados)
+                # --- 🤖 REFINADOR MAESTRO (V40 MASTER ELITE COM VISÃO) ---
                 with st.container(border=True):
                     st.subheader("🤖 Refinador Maestro")
-                    cmd_refine = st.chat_input("Solicite ajustes...", key=f"chat_refine_{v}")
+                    cmd_refine = st.chat_input("Solicite ajustes (Ex: 'Foque mais na pág 15')...", key=f"chat_refine_{v}")
+                    
                     if cmd_refine:
-                        with st.spinner("Reengenharia..."):
-                            st.session_state.p_temp = ai.gerar_ia("REFINADOR_PEDAGOGICO", f"ORDEM: {cmd_refine}\n\nATUAL:\n{st.session_state.p_temp}")
-                            st.session_state.v_plano = int(time.time()); st.rerun()
+                        with st.spinner("Reengenharia em curso..."):
+                            # AJUSTE: Agora o Refinador também recebe o PDF e a Matriz para não "alucinar"
+                            prompt_refino = (
+                                f"ORDEM SOBERANA: {cmd_refine}\n\n"
+                                f"PLANO ATUAL PARA REFINAR:\n{st.session_state.p_temp}\n\n"
+                                f"MATRIZ DE REFERÊNCIA:\n{df_curriculo[df_curriculo['ANO'].astype(str)==str(ano_p)].to_string(index=False)}"
+                            )
+                            
+                            # CHAMADA CORRIGIDA: Inclui url_drive para manter a visão do PDF ativa
+                            resultado_refino = ai.gerar_ia(
+                                "REFINADOR_PEDAGOGICO", 
+                                prompt_refino, 
+                                url_drive=uri_livro_drive # <--- ESSENCIAL PARA O REFINO LER O LIVRO
+                            )
+                            
+                            st.session_state.p_temp = resultado_refino
+                            st.session_state.v_plano = int(time.time())
+                            st.rerun()
+
                     if st.button("🗑️ LIMPAR GERADO", use_container_width=True): reset_planejamento()
 
-                st.markdown("#### 🛡️ Filtros de Curadoria")
+                # --- 🛡️ FILTROS DE CURADORIA (PRESERVADOS) ---
+                st.markdown("#### 🛡️ Filtros de Curadoria (O que manter no documento?)")
                 col_f1, col_f2, col_f3, col_f4 = st.columns(4)
                 keep_objeto = col_f1.checkbox("Objeto de Conhecimento", value=True, key=f"k_obj_{v}")
                 keep_conteudo = col_f2.checkbox("Conteúdos Específicos", value=True, key=f"k_cont_{v}")
@@ -1022,6 +1040,7 @@ if menu == "📅 Planejamento (Ponto ID)":
 
                 st.divider()
 
+                # --- CAMPOS DO EDITOR (PRESERVADOS E INTEGRADOS) ---
                 ed_hab = st.text_input("Habilidade/Competência:", ai.extrair_tag(txt_bruto, "HABILIDADE_BNCC") or ai.extrair_tag(txt_bruto, "COMPETENCIA_GERAL"), key=f"ed_h_{v}")
                 ed_comp = st.text_input("Competências Foco:", ai.extrair_tag(txt_bruto, "COMPETENCIAS_FOCO"), key=f"ed_c_{v}")
                 
@@ -1029,7 +1048,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                 ed_espec = st.text_area("Conteúdos Específicos:", ai.extrair_tag(txt_bruto, "CONTEUDOS_ESPECIFICOS"), key=f"ed_e_{v}") if keep_conteudo else "N/A"
                 ed_objs = st.text_area("Objetivos de Aprendizagem:", ai.extrair_tag(txt_bruto, "OBJETIVOS_ENSINO"), key=f"ed_o_{v}") if keep_objetivos else "N/A"
                 
-                # NOVO CAMPO: BASE DIDÁTICA (Para o professor conferir o DNA que será herdado)
+                # NOVO CAMPO: BASE DIDÁTICA (DNA DE HERANÇA)
                 ed_base = st.text_input("📖 Referência de Base (Livro/Páginas):", ai.extrair_tag(txt_bruto, "BASE_DIDATICA") or meta.get('base'), key=f"ed_base_{v}")
                 
                 ed_just = st.text_area("Justificativa Pedagógica:", ai.extrair_tag(txt_bruto, "JUSTIFICATIVA_PEDAGOGICA"), key=f"ed_j_{v}") if keep_justificativa else "N/A"
@@ -1044,15 +1063,18 @@ if menu == "📅 Planejamento (Ponto ID)":
                 ed_ava = st.text_area("Avaliação/Logística:", ai.extrair_tag(txt_bruto, "AVALIACAO_DE_MERITO") or ai.extrair_tag(txt_bruto, "AVALIACAO"), key=f"ed_ava_{v}")
                 ed_dua = st.text_area("Estratégia DUA/PEI:", ai.extrair_tag(txt_bruto, "ESTRATEGIA_DUA_PEI") or ai.extrair_tag(txt_bruto, "ADAPTACAO_PEI"), key=f"ed_dua_{v}")
 
+                # --- BOTÃO DE SALVAMENTO (TRIPLE-SYNC) ---
                 if st.button("💾 FINALIZAR E DISPARAR PRODUÇÃO", use_container_width=True, type="primary"):
                     with st.status("Sincronizando Hub Acadêmico...") as status:
                         final_ano_str = meta.get('ano')
                         nome_arquivo = f"PLANO_{final_ano_str.replace('º','')}_{meta.get('semana').replace(' ', '')}"
+                        
+                        # Limpeza de duplicatas antes de salvar
                         db.excluir_plano_completo(meta.get('semana'), final_ano_str)
                         
                         dados_docx = {
                             "geral": ed_geral, "especificos": ed_espec, "objetivos": ed_objs, 
-                            "recursos": ed_base, # <--- O DOCX agora cita o livro/páginas aqui
+                            "recursos": ed_base, 
                             "metodologia": f"JUSTIFICATIVA: {ed_just}\n\nCOMPETÊNCIAS: {ed_comp}\n\nAULA 01:\n{ed_a1}\n\nAULA 02:\n{ed_a2}",
                             "avaliacao": ed_ava, "pei": ed_dua
                         }
@@ -1064,7 +1086,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                             final_txt = (
                                 f"[HABILIDADE_BNCC] {ed_hab} \n[COMPETENCIAS_FOCO] {ed_comp} \n"
                                 f"[OBJETO_CONHECIMENTO] {ed_geral} \n[CONTEUDOS_ESPECIFICOS] {ed_espec} \n"
-                                f"[OBJETIVOS_ENSINO] {ed_objs} \n[BASE_DIDATICA] {ed_base} \n" # <--- SALVA O DNA NO BANCO
+                                f"[OBJETIVOS_ENSINO] {ed_objs} \n[BASE_DIDATICA] {ed_base} \n"
                                 f"[JUSTIFICATIVA_PEDAGOGICA] {ed_just} \n"
                                 f"[AULA_1] {ed_a1} \n[AULA_2] {ed_a2} \n"
                                 f"[SABADO_LETIVO] {ed_a3} \n[AVALIACAO_DE_MERITO] {ed_ava} \n"
