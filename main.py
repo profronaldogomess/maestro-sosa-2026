@@ -453,25 +453,53 @@ if menu == "🧪 Criador de Aulas":
                     instr_extra_prod = st.text_area("📝 Contexto Extra / Ajustes Específicos:", key=f"prod_extra_{v}")
 
                     if st.button("💎 MATERIALIZAR TRATADO DE ELITE", use_container_width=True, type="primary"):
-                        with st.spinner(f"Sosa estudando as páginas de {aula_alvo_prod} e arquitetando material..."):
+                        with st.spinner("Sosa estudando o livro e arquitetando material híbrido..."):
+                            
+                            # --- 1. DEFINIÇÃO DE VARIÁVEIS DE ESCOPO (FIX NAMEERROR) ---
+                            # Define a tag de busca baseada na aula selecionada no rádio
+                            tag_previa = "AULA_1" if "1" in aula_alvo_prod else "AULA_2"
+                            
+                            # Define as páginas específicas baseadas no intervalo (se houver ;)
+                            paginas_aula = base_herdada
+                            if ";" in base_herdada:
+                                partes_pag = base_herdada.split(";")
+                                paginas_aula = partes_pag[0].strip() if "1" in aula_alvo_prod else partes_pag[1].strip()
+
+                            # --- 2. BUSCA DE URI NA BIBLIOTECA (DNA REAL) ---
+                            uri_referencia_aula = None
+                            if "Livro" in metodo_entrega:
+                                # Usa o nome do livro limpo para a busca
+                                nome_livro_limpo = base_herdada.split('|')[0].replace("Livro:", "").strip()
+                                match_biblioteca = df_materiais[df_materiais['NOME_ARQUIVO'].str.contains(nome_livro_limpo[:10], case=False, na=False)]
+                                if not match_biblioteca.empty:
+                                    uri_referencia_aula = match_biblioteca.iloc[0]['URI_ARQUIVO']
+
+                            # --- 3. CONFIGURAÇÃO DE IDENTIDADE ---
                             nome_elite = util.gerar_nome_material_elite(ano_lab, aula_alvo_prod, sem_lab)
                             st.session_state.sosa_id_atual = nome_elite
                             st.session_state.lab_meta = {"ano": ano_lab, "semana_ref": sem_lab}
                             
+                            # --- 4. PROMPT DE SOBERANIA V45 (ORDEM DE DISTINÇÃO) ---
                             prompt_manual = (
                                 f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {nome_elite}.\n"
-                                f"MÉTODO: {metodo_entrega}. ALVO: {aula_alvo_prod}.\n"
-                                f"PÁGINAS ESPECÍFICAS DESTA AULA: {paginas_aula}\n"
-                                f"SÉRIE: {ano_lab}º Ano. QTD: {qtd_q_prod}.\n\n"
-                                f"🚨 MISSÃO DE SOBERANIA:\n"
-                                f"1. Use o arquivo anexo para fundamentar APENAS as páginas {paginas_aula}.\n"
-                                f"2. O [PROFESSOR] deve mediar o roteiro: {roteiro_especifico}.\n"
-                                f"3. O [PEI] deve ser uma atividade adaptada fiel ao conteúdo destas páginas.\n\n"
-                                f"--- STATUS DE REGÊNCIA ---\n{contexto_turmas_ia}\n"
+                                f"MÉTODO: {metodo_entrega}. REFERÊNCIA: {base_herdada}\n"
+                                f"SÉRIE: {ano_lab}º Ano. ALVO: {aula_alvo_prod}. QTD QUESTÕES PEI: {qtd_q_prod}.\n\n"
+                                f"🚨 MISSÃO DE DISTINÇÃO:\n"
+                                f"1. Para o ALUNO REGULAR: Não crie questões. Crie um roteiro de estudo que aponte para os exercícios das páginas {paginas_aula} do livro anexo.\n"
+                                f"2. Para o ALUNO PEI: Crie {qtd_q_prod} questões adaptadas e completas baseadas no conteúdo das páginas {paginas_aula}.\n"
+                                f"3. O [PROFESSOR] deve receber o guia de mediação para ambos os públicos.\n\n"
+                                f"--- HERANÇA DO PLANO ---\n{ai.extrair_tag(plano_txt, tag_previa)}\n"
                                 f"--- SENSOR DE INCLUSÃO ---\nA turma possui alunos com: {texto_clinico}.\n"
                                 f"--- EXTRAS ---\n{instr_extra_prod}"
                             )
-                            st.session_state.lab_temp = ai.gerar_ia("MAESTRO_SOSA_V28_ELITE", prompt_manual, url_drive=uri_referencia_aula, usar_busca=True)
+                            
+                            # --- 5. CHAMADA DA IA ---
+                            st.session_state.lab_temp = ai.gerar_ia(
+                                "MAESTRO_SOSA_V28_ELITE", 
+                                prompt_manual, 
+                                url_drive=uri_referencia_aula, 
+                                usar_busca=True
+                            )
                             st.rerun()
 
 # --- ABA 3: ENGENHARIA DE TRABALHOS (VERSÃO V31.7 - BLINDAGEM DE TABELAS) ---
