@@ -505,9 +505,9 @@ PERSONAS = {
 
     "AVALIADOR_ADAPTADO": """VOCÊ É UM ESPECIALISTA EM AVALIAÇÃO INCLUSIVA. Transformar PROVA REGULAR em ADAPTADA."""
 }
-   
+
 def gerar_ia(persona_key, comando, url_drive=None, usar_busca=True):
-    """MOTOR SOSA V45 - PROTOCOLO FRESH-SYNC (DRIVE -> GEMINI)"""
+    """MOTOR SOSA V46 - PROTOCOLO DE RESILIÊNCIA (DRIVE + FALLBACK)"""
     
     config = types.GenerateContentConfig(
         thinking_config=types.ThinkingConfig(include_thoughts=False),
@@ -517,25 +517,30 @@ def gerar_ia(persona_key, comando, url_drive=None, usar_busca=True):
     
     conteudo_prompt = [types.Part.from_text(text=f"{PERSONAS[persona_key]}\n\n{comando}")]
     
-    # --- PROTOCOLO FRESH-SYNC ---
+    # --- PROTOCOLO FRESH-SYNC COM BLINDAGEM ---
     if url_drive and "drive.google.com" in url_drive:
         try:
-            # 1. Extrai o ID do arquivo da URL do Drive
-            file_id = url_drive.split('/d/')[1].split('/')[0]
-            download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
-            
-            # 2. Baixa o arquivo do seu Drive para a memória
-            response = requests.get(download_url)
-            if response.status_code == 200:
-                # 3. Faz o upload temporário para a API do Gemini (Válido por 48h)
-                arquivo_temp = client.files.upload(
-                    file=io.BytesIO(response.content),
-                    config=types.UploadFileConfig(mime_type="application/pdf")
-                )
-                conteudo_prompt.append(types.Part.from_uri(
-                    file_uri=arquivo_temp.uri, 
-                    mime_type="application/pdf"
-                ))
+            # 1. Extração Robusta do ID do Google Drive
+            file_id_match = re.search(r"/d/([a-zA-Z0-9-_]+)", url_drive)
+            if file_id_match:
+                file_id = file_id_match.group(1)
+                # Link de download direto (UC - User Content)
+                download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+                
+                # 2. Tentativa de Download
+                response = requests.get(download_url, timeout=15)
+                if response.status_code == 200 and b"%PDF" in response.content[:10]:
+                    # 3. Upload para a API do Gemini
+                    arquivo_temp = client.files.upload(
+                        file=io.BytesIO(response.content),
+                        config=types.UploadFileConfig(mime_type="application/pdf")
+                    )
+                    conteudo_prompt.append(types.Part.from_uri(
+                        file_uri=arquivo_temp.uri, 
+                        mime_type="application/pdf"
+                    ))
+                else:
+                    print("Aviso: O link do Drive não retornou um PDF válido ou está privado.")
         except Exception as e:
             print(f"Erro no Fresh-Sync: {e}")
 
@@ -545,9 +550,14 @@ def gerar_ia(persona_key, comando, url_drive=None, usar_busca=True):
             contents=[types.Content(role="user", parts=conteudo_prompt)],
             config=config
         )
+        
+        # VACINA ANTI-VÁZIO: Se a IA retornar algo sem as tags mínimas, forçamos um aviso
+        if "[HABILIDADE_BNCC]" not in res.text:
+            return res.text + "\n\n⚠️ Erro de Formatação: A IA não gerou as tags. Tente novamente."
+            
         return res.text
     except Exception as e:
-        return f"Erro na IA: {e}"
+        return f"Erro Crítico na IA: {e}. Verifique sua conexão ou a chave de API."
 
 # --- EXTRATOR SOSA V45 (FUZZY MATCH & BLINDAGEM DE SINTAXE) ---
 def extrair_tag(texto, tag):
