@@ -357,19 +357,54 @@ if menu == "🧪 Criador de Aulas":
         with t_gab: st.text_area("Gabarito:", ai.extrair_tag(txt_base, "GABARITO"), height=200, key=f"ed_res_reg_{v}")
         with t_pei: st.text_area("PEI (Obrigatório):", ai.extrair_tag(txt_base, "PEI"), height=400, key=f"ed_pei_reg_{v}")
 
+# --- ☁️ ABA DE SINCRONIA (TRIPLE-SYNC V47 - SOBERANIA DE LINKS) ---
         with t_sync:
-            if st.button("💾 EXECUTAR TRIPLE-SYNC", use_container_width=True, type="primary"):
+            st.subheader("🚀 Protocolo de Custódia Digital V47")
+            st.info("Este comando irá gerar os documentos oficiais e salvar os links permanentes no seu banco de dados.")
+            
+            if st.button("💾 EXECUTAR TRIPLE-SYNC (SUBSTITUIR)", use_container_width=True, type="primary", key=f"btn_triple_{v}"):
                 with st.status("Sincronizando Ativos de Elite...") as status:
+                    # 1. Limpeza de versões antigas
                     db.excluir_registro_com_drive("DB_AULAS_PRONTAS", s_id)
-                    info_doc = {"ano": f"{meta.get('ano')}º", "trimestre": "I Trimestre", "semana": meta.get('semana_ref')}
+                    
+                    ano_str = f"{meta.get('ano', '6')}º"
+                    sem_ref = meta.get('semana_ref', 'Geral')
+                    info_doc = {"ano": ano_str, "trimestre": "I Trimestre", "semana": sem_ref}
+
+                    # 2. Geração e Upload dos 3 Arquivos
+                    status.write("📝 Gerando Material do Aluno/Roteiro...")
                     doc_alu = exporter.gerar_docx_aluno_v24(s_id, ai.extrair_tag(txt_base, "ALUNO"), info_doc)
                     link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{s_id}_ALUNO", modo="AULA")
+                    
+                    status.write("♿ Gerando Atividade Adaptada PEI...")
                     doc_pei = exporter.gerar_docx_pei_v25(f"{s_id}_PEI", ai.extrair_tag(txt_base, "PEI"), info_doc)
                     link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{s_id}_PEI", modo="AULA")
+                    
+                    status.write("👨‍🏫 Gerando Guia de Mediação do Professor...")
                     doc_prof = exporter.gerar_docx_professor_v25(s_id, ai.extrair_tag(txt_base, "PROFESSOR"), info_doc)
                     link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{s_id}_PROF", modo="AULA")
-                    db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), meta.get('semana_ref'), s_id, txt_base, f"{meta.get('ano')}º", link_alu])
-                    status.update(label="✅ Sincronizado!", state="complete"); st.balloons(); time.sleep(1); reset_laboratorio()
+                    
+                    # 3. Consolidação da String de Links (A CHAVE DO PROBLEMA)
+                    # Criamos uma string clara que o Acervo consiga ler depois
+                    links_f = f"--- LINKS ---\nRegular({link_alu})\nPEI({link_pei})\nProf({link_prof})"
+                    
+                    # 4. Salvamento no Banco de Dados
+                    # O conteúdo salvo será o texto da IA + a nova string de links
+                    conteudo_final = txt_base + f"\n\n{links_f}"
+                    
+                    db.salvar_no_banco("DB_AULAS_PRONTAS", [
+                        datetime.now().strftime("%d/%m/%Y"), 
+                        sem_ref, 
+                        s_id, 
+                        conteudo_final, 
+                        ano_str, 
+                        link_alu # Link principal (Aluno)
+                    ])
+                    
+                    status.update(label="✅ Sincronizado com Sucesso!", state="complete")
+                    st.balloons()
+                    time.sleep(1)
+                    reset_laboratorio()
 
     # --- SEÇÃO DE ENTRADA (CONFIGURAÇÃO COM INTELIGÊNCIA DE TRILHAS) ---
     else:
@@ -697,40 +732,41 @@ if menu == "🧪 Criador de Aulas":
                         
                         st.markdown(f"#### 📘 {identificador}")
                         
-                        # --- MOTOR DE EXTRAÇÃO DE LINKS V46 (ULTRA-PRECISÃO) ---
-                        def extrair_link_especifico(texto, chave):
-                            # Busca padrões como: Regular(link), PEI: link, Prof (link)
-                            padrao = rf"{chave}.*?\(?(https?://[^\s\)]+)\)?"
+                        # --- MOTOR DE EXTRAÇÃO DE LINKS V47 (ULTRA-RESILIENTE) ---
+                        def buscar_link_soberano(texto, rotulo, link_reserva):
+                            # 1. Tenta buscar o padrão Rotulo(link)
+                            padrao = rf"{rotulo}\s*\(?\s*(https?://[^\s\)]+)\)?"
                             match = re.search(padrao, texto, re.IGNORECASE)
-                            return match.group(1).strip() if match else None
+                            if match:
+                                return match.group(1).strip()
+                            
+                            # 2. Se for o Aluno e não achou no texto, usa o link da coluna LINK_DRIVE
+                            if rotulo.lower() in ["regular", "aluno"]:
+                                return link_reserva
+                            
+                            return None
 
-                        # Lógica de Prioridade:
-                        # 1. Aluno: Tenta pegar da coluna LINK_DRIVE (que é o padrão do sistema)
-                        l_alu = row.get('LINK_DRIVE') 
-                        if not l_alu or "http" not in str(l_alu):
-                            l_alu = extrair_link_especifico(txt_f, "Regular") or extrair_link_especifico(txt_f, "Aluno")
-
-                        # 2. PEI e PROF: Estão obrigatoriamente dentro do CONTEUDO
-                        l_pei = extrair_link_especifico(txt_f, "PEI")
-                        l_prof = extrair_link_especifico(txt_f, "Prof") or extrair_link_especifico(txt_f, "Guia")
+                        l_alu = buscar_link_soberano(txt_f, "Regular", row.get('LINK_DRIVE'))
+                        l_pei = buscar_link_soberano(txt_f, "PEI", None)
+                        l_prof = buscar_link_soberano(txt_f, "Prof", None)
 
                         # --- BOTÕES DE AÇÃO ---
                         c_b1, c_b2, c_b3, c_b4, c_b5 = st.columns(5)
-                        
-                        # Botão Aluno (Sempre Primary)
+
+                        # Botão Aluno
                         if l_alu and "http" in str(l_alu):
                             c_b1.link_button("📝 ALUNO", str(l_alu), use_container_width=True, type="primary")
                         else:
                             c_b1.button("⚪ SEM LINK", disabled=True, use_container_width=True)
 
                         # Botão PEI
-                        if l_pei and "http" in str(l_pei):
+                        if l_pei and "http" in str(l_pei) and "N/A" not in str(l_pei):
                             c_b2.link_button("♿ PEI", str(l_pei), use_container_width=True)
                         else:
                             c_b2.button("⚪ SEM PEI", disabled=True, use_container_width=True)
 
                         # Botão Professor
-                        if l_prof and "http" in str(l_prof):
+                        if l_prof and "http" in str(l_prof) and "N/A" not in str(l_prof):
                             c_b3.link_button("👨‍🏫 PROF", str(l_prof), use_container_width=True)
                         else:
                             c_b3.button("⚪ SEM GUIA", disabled=True, use_container_width=True)
