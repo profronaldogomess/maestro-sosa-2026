@@ -841,12 +841,43 @@ if menu == "📅 Planejamento (Ponto ID)":
             # Seleção de Método
             modo_p = c3.radio("Método de Base:", ["📖 Livro Didático", "🎛️ Manual (Banco)"], horizontal=True, key=f"modo_p_{v}")
             
+            # --- SEÇÃO DE PARÂMETROS (MODO MANUAL / BANCO) ---
             if modo_p == "🎛️ Manual (Banco)":
+                st.markdown("#### 🎯 Curadoria da Matriz de Itabuna")
+                
+                # Seletor de Estratégia de Distribuição
+                dist_manual = st.radio("Distribuição de Conteúdo:", 
+                    ["Integrar Aula 1 e 2", "Definir Trilhas Individuais (Aula 1 / Aula 2)"], 
+                    horizontal=True, key=f"dist_m_{v}")
+
                 df_matriz_ano = df_curriculo[df_curriculo['ANO'].astype(str) == str(ano_p)]
-                sel_eixo = st.multiselect("1. Eixo:", sorted(df_matriz_ano['EIXO'].unique().tolist()), key=f"p_eixo_{v}")
-                sel_cont = st.multiselect("2. Conteúdo:", sorted(df_matriz_ano[df_matriz_ano['EIXO'].isin(sel_eixo)]['CONTEUDO_ESPECIFICO'].unique().tolist()) if sel_eixo else [], key=f"p_cont_{v}")
-                sel_obj = st.multiselect("3. Objetivos:", sorted(df_matriz_ano[df_matriz_ano['CONTEUDO_ESPECIFICO'].isin(sel_cont)]['OBJETIVOS'].unique().tolist()) if sel_cont else [], key=f"p_obj_{v}")
-                ctx_ia = f"EIXO: {sel_eixo}, CONTEÚDO: {sel_cont}, OBJETIVOS: {sel_obj}."
+                
+                if "Trilhas Individuais" in dist_manual:
+                    # --- TRILHA 1 (AULA 1) ---
+                    with st.expander("📘 TRILHA 01: Conteúdo da Aula 1", expanded=True):
+                        c1a, c1b = st.columns(2)
+                        eixo_1 = c1a.multiselect("1. Eixo (Aula 1):", sorted(df_matriz_ano['EIXO'].unique().tolist()), key=f"e1_{v}")
+                        cont_1 = c1b.multiselect("2. Conteúdo (Aula 1):", sorted(df_matriz_ano[df_matriz_ano['EIXO'].isin(eixo_1)]['CONTEUDO_ESPECIFICO'].unique().tolist()) if eixo_1 else [], key=f"c1_{v}")
+                        obj_1 = st.multiselect("3. Objetivos (Aula 1):", sorted(df_matriz_ano[df_matriz_ano['CONTEUDO_ESPECIFICO'].isin(cont_1)]['OBJETIVOS'].unique().tolist()) if cont_1 else [], key=f"o1_{v}")
+                    
+                    # --- TRILHA 2 (AULA 2) ---
+                    with st.expander("📗 TRILHA 02: Conteúdo da Aula 2", expanded=(carga_horaria != "1 Aula")):
+                        if carga_horaria == "1 Aula":
+                            st.warning("Carga horária de 1 aula. Trilha 2 desativada.")
+                            ctx_ia = f"AULA 1: Eixo {eixo_1}, Conteúdo {cont_1}, Objetivos {obj_1}."
+                        else:
+                            c2a, c2b = st.columns(2)
+                            eixo_2 = c2a.multiselect("1. Eixo (Aula 2):", sorted(df_matriz_ano['EIXO'].unique().tolist()), key=f"e2_{v}")
+                            cont_2 = c2b.multiselect("2. Conteúdo (Aula 2):", sorted(df_matriz_ano[df_matriz_ano['EIXO'].isin(eixo_2)]['CONTEUDO_ESPECIFICO'].unique().tolist()) if eixo_2 else [], key=f"c2_{v}")
+                            obj_2 = st.multiselect("3. Objetivos (Aula 2):", sorted(df_matriz_ano[df_matriz_ano['CONTEUDO_ESPECIFICO'].isin(cont_2)]['OBJETIVOS'].unique().tolist()) if cont_2 else [], key=f"o2_{v}")
+                            ctx_ia = f"TRILHA 1 (AULA 1): Eixo {eixo_1}, Conteúdo {cont_1}, Objetivos {obj_1}. \nTRILHA 2 (AULA 2): Eixo {eixo_2}, Conteúdo {cont_2}, Objetivos {obj_2}."
+                
+                else:
+                    # --- MODO INTEGRADO (O QUE JÁ EXISTIA) ---
+                    sel_eixo = st.multiselect("1. Eixo (Semana):", sorted(df_matriz_ano['EIXO'].unique().tolist()), key=f"p_eixo_{v}")
+                    sel_cont = st.multiselect("2. Conteúdo (Semana):", sorted(df_matriz_ano[df_matriz_ano['EIXO'].isin(sel_eixo)]['CONTEUDO_ESPECIFICO'].unique().tolist()) if sel_eixo else [], key=f"p_cont_{v}")
+                    sel_obj = st.multiselect("3. Objetivos (Semana):", sorted(df_matriz_ano[df_matriz_ano['CONTEUDO_ESPECIFICO'].isin(sel_cont)]['OBJETIVOS'].unique().tolist()) if sel_cont else [], key=f"p_obj_{v}")
+                    ctx_ia = f"MODO INTEGRADO: EIXO: {sel_eixo}, CONTEÚDO: {sel_cont}, OBJETIVOS: {sel_obj}."
             else:
                 cx1, cx2 = st.columns([2, 1])
                 livros_disponiveis = df_materiais[df_materiais['TIPO'].str.contains(str(ano_p), na=False)]['NOME_ARQUIVO'].tolist()
