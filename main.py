@@ -2148,18 +2148,61 @@ elif menu == "👥 Gestão da Turma":
                 if db.salvar_no_banco("DB_TURMAS", [sigla_final, nome_final, turno_t, " / ".join(dias_aula), "N/A", "ATIVO"]):
                     st.success(f"✅ {sigla_final} alocado com sucesso na grade oficial!"); time.sleep(1.5); st.rerun()
 
-    # --- ABA 3: POVOAR ALUNOS (PRESERVADO V34) ---
+# --- ABA 3: POVOAR ALUNOS (ATUALIZADO V46.3 - IMPORTAÇÃO EM LOTE) ---
     with tab_povoar:
-        st.subheader("➕ Inclusão de Estudantes")
-        t_dest = st.selectbox("Turma de Destino:", df_turmas['ID_TURMA'].tolist() if not df_turmas.empty else [], key=f"dest_pov_{v}")
+        st.subheader("➕ Inclusão de Estudantes (Manual e Lote)")
         
-        with st.form("f_manual_povoar"):
-            nome_a = st.text_input("Nome Completo:").upper()
-            perfil_base = st.selectbox("Perfil:", ["TÍPICO", "TEA", "TDAH", "DISLEXIA", "DEF. INTELECTUAL", "OUTRO"])
-            if st.form_submit_button("💾 SALVAR ALUNO"):
-                id_n = db.gerar_proximo_id(df_alunos)
-                if db.salvar_no_banco("DB_ALUNOS", [id_n, nome_a, t_dest, "ATIVO", perfil_base, "MANUAL"]):
-                    st.success(f"{nome_a} cadastrado!"); st.rerun()
+        # Filtra apenas turmas reais (ignora PI/PC)
+        turmas_reais_pov = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
+        t_dest = st.selectbox("Turma de Destino:", turmas_reais_pov['ID_TURMA'].tolist() if not turmas_reais_pov.empty else [], key=f"dest_pov_{v}")
+        
+        if t_dest:
+            t1_man, t2_lote = st.tabs(["✍️ Cadastro Manual", "📄 Importação em Lote (CSV)"])
+            
+            with t1_man:
+                with st.form("f_manual_povoar"):
+                    nome_a = st.text_input("Nome Completo:").upper()
+                    perfil_base = st.selectbox("Perfil:", ["TÍPICO", "TEA", "TDAH", "DISLEXIA", "DEF. INTELECTUAL", "PEI - PENDENTE", "OUTRO"])
+                    if st.form_submit_button("💾 SALVAR ALUNO"):
+                        id_n = db.gerar_proximo_id(df_alunos)
+                        if db.salvar_no_banco("DB_ALUNOS", [id_n, nome_a, t_dest, "ATIVO", perfil_base, "MANUAL"]):
+                            st.success(f"{nome_a} cadastrado!"); st.rerun()
+            
+            with t2_lote:
+                st.info("💡 Cole a lista de alunos abaixo. Formato esperado: NOME,PERFIL (Ex: JOAO SILVA,TÍPICO). Se o aluno tiver um asterisco (*), o sistema detectará automaticamente como PEI.")
+                texto_lote = st.text_area("Cole os dados CSV aqui:", height=300, placeholder="ADRIEL VINICIUS ALVES MARTINS,TÍPICO\nJOSE LEVI BRONZE SANTOS*,PEI - PENDENTE")
+                
+                if st.button("🚀 PROCESSAR IMPORTAÇÃO EM LOTE", type="primary", use_container_width=True):
+                    if texto_lote.strip():
+                        linhas = texto_lote.strip().split('\n')
+                        novos_alunos = []
+                        id_atual = db.gerar_proximo_id(df_alunos)
+                        
+                        with st.status("Importando alunos para o Banco de Dados...") as status:
+                            for linha in linhas:
+                                if not linha.strip(): continue
+                                
+                                partes = linha.split(',')
+                                nome_bruto = partes[0].strip().upper()
+                                
+                                # Detecção automática de asterisco (Blindagem extra)
+                                if "*" in nome_bruto:
+                                    nome_limpo = nome_bruto.replace("*", "").strip()
+                                    perfil = "PEI - PENDENTE"
+                                else:
+                                    nome_limpo = nome_bruto
+                                    perfil = partes[1].strip().upper() if len(partes) > 1 else "TÍPICO"
+                                
+                                novos_alunos.append([id_atual, nome_limpo, t_dest, "ATIVO", perfil, "LOTE"])
+                                id_atual += 1 # Incrementa o ID para o próximo aluno
+                            
+                            if db.salvar_lote("DB_ALUNOS", novos_alunos):
+                                status.update(label=f"✅ {len(novos_alunos)} alunos importados com sucesso para a turma {t_dest}!", state="complete")
+                                st.balloons()
+                                time.sleep(1.5)
+                                st.rerun()
+                    else:
+                        st.error("⚠️ Cole os dados na caixa de texto antes de processar.")
 
     # --- ABA 4: EDIÇÃO & TRANSFERÊNCIA (PRESERVADO V34) ---
     with tab_editar:
