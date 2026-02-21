@@ -2163,7 +2163,7 @@ elif menu == "📚 Base de Conhecimento":
             st.info("📭 Sua biblioteca está vazia.")
 
 # ==============================================================================
-# MÓDULO: RELATÓRIOS PEI V38.5 - ANALISTA DE EVOLUÇÃO (CORRIGIDO)
+# MÓDULO: RELATÓRIOS PEI V38.5 - ANALISTA DE EVOLUÇÃO (CORREÇÃO DE ABAS)
 # ==============================================================================
 elif menu == "♿ Relatórios PEI / Perfil IA":
     st.title("♿ Analista de Inclusão: Dossiê de Evolução V38.5")
@@ -2195,14 +2195,12 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
             id_a = db.limpar_id(dados_a['ID'])
             perfil_atual = dados_a['NECESSIDADES']
 
-        # --- 2. MOTOR DE FUSÃO E MEMÓRIA (DATA FUSION COM VACINA ANTI-ERRO) ---
+        # --- 2. MOTOR DE FUSÃO E MEMÓRIA ---
         with st.status("🔍 Maestro Sosa interconectando safras...", expanded=False) as status:
-            # A. Busca Histórica
             hist_aluno = df_relatorios[df_relatorios['ID_ALUNO'].apply(db.limpar_id) == id_a]
             tem_passado = not hist_aluno.empty
             ultimo_relatorio = hist_aluno.iloc[-1]['CONTEUDO'] if tem_passado else "Primeiro Relatório (Linha de Base)."
             
-            # B. Dados Atuais (Diário e Scanner) - PROTEÇÃO CONTRA KEYERROR
             vistos = 0
             bonus = 0.0
             if not df_diario.empty:
@@ -2218,12 +2216,11 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                     media_scan = s_aluno['NOTA_CALCULADA'].apply(util.sosa_to_float).mean()
             
             nota_safra = min(10.0, media_scan + bonus)
-
             status.update(label="✅ Dados Sincronizados!", state="complete")
 
         # --- 3. DASHBOARD DE MÉTRICAS ---
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Engajamento (Vistos)", vistos)
+        c1.metric("Engajamento", vistos)
         c2.metric("Mérito ⭐", f"{bonus:.1f}")
         c3.metric("Nota de Safra", f"{nota_safra:.1f}")
         c4.metric("Relatos Salvos", len(hist_aluno))
@@ -2240,12 +2237,13 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                 v_resposta = st.select_slider("Resposta às Intervenções:", options=["Resistente", "Lento", "Receptivo", "Rápido"], value="Receptivo")
             sem_mudancas = st.checkbox("📢 Quadro estável (Sem alterações significativas)")
 
-        # --- 5. ABAS DE TRABALHO ---
-        tab_evolucao, tab_pei_doc, tab_coord, tab_timeline = st.tabs([
+        # --- 5. ABAS DE TRABALHO (CORRIGIDO: tab_curr incluída) ---
+        tab_evolucao, tab_pei_doc, tab_coord, tab_curr, tab_timeline = st.tabs([
             "📈 1. Relatório de Evolução", 
             "🏛️ 2. Plano de Acessibilidade (PEI)", 
             "📱 3. Relato para Coordenação",
-            "🗂️ 4. Linha do Tempo"
+            "📖 4. Currículo Adaptado",
+            "🗂️ 5. Linha do Tempo"
         ])
 
         with tab_evolucao:
@@ -2270,6 +2268,13 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                 if st.button("💾 ARQUIVAR NO DOSSIÊ"):
                     db.salvar_no_banco("DB_RELATORIOS", [datetime.now().strftime("%d/%m/%Y"), id_a, nome_limpo, "EVOLUÇÃO", st.session_state.res_v38_rel])
                     st.success("Arquivado!"); st.rerun()
+
+        with tab_timeline:
+            st.subheader("🗂️ Linha do Tempo de Custódia Digital")
+            if not hist_aluno.empty:
+                st.dataframe(hist_aluno[['DATA', 'TURMA', 'CONTEUDO']], use_container_width=True, hide_index=True)
+            else:
+                st.info("Nenhum registro histórico encontrado.")
 
         # --- ABA 2: PLANO DE ACESSIBILIDADE (PEI PÁGINA 1) ---
         with tab_pei_doc:
