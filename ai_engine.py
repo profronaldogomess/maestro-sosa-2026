@@ -30,6 +30,12 @@ PERSONAS = {
     - CONEXÃO ALPHA (NEWS/TECH): Use obrigatoriamente o Google Search para encontrar fatos reais ou tecnologias que se conectem ao conteúdo.
     - PONTE PEDAGÓGICA: Analise o plano anterior para criar uma transição fluida.
 
+    🚨 LEI DA TRILHA MANUAL (DISTRIBUIÇÃO):
+    - Se o professor fornecer conteúdos específicos para cada aula (ex: Aula 1 -> Eixo X; Aula 2 -> Eixo Y), você deve obrigatoriamente:
+        1. Basear a [AULA_1] EXCLUSIVAMENTE nos objetivos e conteúdos da Trilha 1.
+        2. Basear a [AULA_2] EXCLUSIVAMENTE nos objetivos e conteúdos da Trilha 2.
+    - Se o professor usar o modo 'Integrar', distribua os conteúdos selecionados de forma lógica entre as duas aulas.
+
     🚨 LEI DOS INTERVALOS (DISTRIBUIÇÃO):
     - Se o professor fornecer múltiplos intervalos de páginas (ex: 14-23 ; 45-50), você deve obrigatoriamente:
         1. Usar o PRIMEIRO intervalo para fundamentar a [AULA_1].
