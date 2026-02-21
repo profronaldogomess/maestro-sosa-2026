@@ -2148,7 +2148,7 @@ elif menu == "👥 Gestão da Turma":
                 if db.salvar_no_banco("DB_TURMAS", [sigla_final, nome_final, turno_t, " / ".join(dias_aula), "N/A", "ATIVO"]):
                     st.success(f"✅ {sigla_final} alocado com sucesso na grade oficial!"); time.sleep(1.5); st.rerun()
 
-# --- ABA 3: POVOAR ALUNOS (ATUALIZADO V46.3 - IMPORTAÇÃO EM LOTE) ---
+# --- ABA 3: POVOAR ALUNOS (ATUALIZADO V46.4 - COMORBIDADES E MÚLTIPLOS CIDs) ---
     with tab_povoar:
         st.subheader("➕ Inclusão de Estudantes (Manual e Lote)")
         
@@ -2162,11 +2162,25 @@ elif menu == "👥 Gestão da Turma":
             with t1_man:
                 with st.form("f_manual_povoar"):
                     nome_a = st.text_input("Nome Completo:").upper()
-                    perfil_base = st.selectbox("Perfil:", ["TÍPICO", "TEA", "TDAH", "DISLEXIA", "DEF. INTELECTUAL", "PEI - PENDENTE", "OUTRO"])
+                    
+                    # MULTISELETOR DE SOBERANIA: Permite múltiplas condições
+                    opcoes_nec = ["TÍPICO", "TEA", "TDAH", "DISLEXIA", "DEF. INTELECTUAL", "TOD", "BAIXA VISÃO", "SURDEZ", "PEI - PENDENTE", "OUTRO"]
+                    perfil_base = st.multiselect("Perfil / Necessidades (Pode selecionar vários):", opcoes_nec, default=["TÍPICO"])
+                    
                     if st.form_submit_button("💾 SALVAR ALUNO"):
-                        id_n = db.gerar_proximo_id(df_alunos)
-                        if db.salvar_no_banco("DB_ALUNOS", [id_n, nome_a, t_dest, "ATIVO", perfil_base, "MANUAL"]):
-                            st.success(f"{nome_a} cadastrado!"); st.rerun()
+                        if not nome_a:
+                            st.error("⚠️ Digite o nome do aluno.")
+                        else:
+                            # Lógica de Comorbidade: Remove "TÍPICO" se o professor marcou outras coisas junto
+                            if "TÍPICO" in perfil_base and len(perfil_base) > 1:
+                                perfil_base.remove("TÍPICO")
+                            
+                            # Junta as condições com um "+"
+                            perfil_str = " + ".join(perfil_base) if perfil_base else "TÍPICO"
+                            
+                            id_n = db.gerar_proximo_id(df_alunos)
+                            if db.salvar_no_banco("DB_ALUNOS", [id_n, nome_a, t_dest, "ATIVO", perfil_str, "MANUAL"]):
+                                st.success(f"✅ {nome_a} cadastrado com perfil: {perfil_str}!"); st.rerun()
             
             with t2_lote:
                 st.info("💡 Cole a lista de alunos abaixo. Formato esperado: NOME,PERFIL (Ex: JOAO SILVA,TÍPICO). Se o aluno tiver um asterisco (*), o sistema detectará automaticamente como PEI.")
@@ -2204,9 +2218,9 @@ elif menu == "👥 Gestão da Turma":
                     else:
                         st.error("⚠️ Cole os dados na caixa de texto antes de processar.")
 
-    # --- ABA 4: EDIÇÃO & TRANSFERÊNCIA (PRESERVADO V34) ---
+    # --- ABA 4: EDIÇÃO & TRANSFERÊNCIA (ATUALIZADO V46.4 - LAUDOS LIVRES) ---
     with tab_editar:
-        st.subheader("✏️ Gestão de Cadastro")
+        st.subheader("✏️ Gestão de Cadastro e Laudos")
         t_origem = st.selectbox("Selecione a Turma:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"orig_ed_{v}")
         if t_origem:
             alunos_opcoes = df_alunos[df_alunos['TURMA'] == t_origem].sort_values(by="NOME_ALUNO")
@@ -2215,11 +2229,14 @@ elif menu == "👥 Gestão da Turma":
             
             with st.form("form_edicao"):
                 novo_nome = st.text_input("Nome:", value=dados_atuais['NOME_ALUNO']).upper()
-                nova_nec = st.text_input("Necessidade:", value=dados_atuais['NECESSIDADES']).upper()
-                if st.form_submit_button("💾 ATUALIZAR"):
+                
+                st.info("💡 **Dica de Soberania:** Para alunos PEI com múltiplas condições, digite separando por '+' ou vírgula. O sistema aceita códigos CID exatos (Ex: TEA + TDAH + F84.0).")
+                nova_nec = st.text_input("Necessidades / CIDs:", value=dados_atuais['NECESSIDADES']).upper()
+                
+                if st.form_submit_button("💾 ATUALIZAR DADOS"):
                     if db.excluir_aluno_por_id(dados_atuais['ID']):
                         db.salvar_no_banco("DB_ALUNOS", [dados_atuais['ID'], novo_nome, t_origem, "ATIVO", nova_nec, "EDITADO"])
-                        st.success("Atualizado!"); st.rerun()
+                        st.success("✅ Cadastro atualizado com sucesso!"); time.sleep(1); st.rerun()
                         
 # ==============================================================================
 # MÓDULO: BASE DE CONHECIMENTO (V45 - COFRE DIGITAL NO GOOGLE DRIVE)
