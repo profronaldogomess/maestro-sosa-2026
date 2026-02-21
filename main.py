@@ -664,17 +664,17 @@ if menu == "🧪 Criador de Aulas":
                                     st.session_state.v_lab = int(time.time())
                                     st.rerun()
 
-# --- ABA 5: ACERVO DE MATERIAIS (VERSÃO V45 - SINCRO TOTAL DE LINKS) ---
+# --- ABA 5: ACERVO DE MATERIAIS (VERSÃO V46 - SOBERANIA DE LINKS) ---
         with tab_acervo_lab:
             st.subheader("📂 Gestão de Acervo de Materiais (Aulas e Projetos)")
             
-            # 1. FILTROS DE BUSCA DE ELITE
+            # 1. FILTROS DE BUSCA (Preservados)
             c_m1, c_m2, c_m3 = st.columns([1, 1, 1])
             f_trim_m = c_m1.selectbox("📅 Filtrar Trimestre:", ["Todos", "I Trimestre", "II Trimestre", "III Trimestre"], key="m_trim_filter")
             f_ano_m = c_m2.selectbox("🎓 Filtrar Série:", ["Todos", "6º", "7º", "8º", "9º"], key="m_ano_filter")
             f_tipo_m = c_m3.selectbox("🧪 Tipo de Ativo:", ["Todos", "Aula", "PROJETO", "Fixação", "Reforço", "Recomposição"], key="m_tipo_filter")
 
-            # 2. FILTRAGEM DA BASE (EXCLUINDO AVALIAÇÕES PARA LIMPEZA)
+            # 2. FILTRAGEM DA BASE
             df_m = df_aulas[~df_aulas['SEMANA_REF'].isin(["AVALIAÇÃO", "REVISÃO"])].copy()
             termos_proibidos = ["TESTE", "PROVA", "SONDA", "RECUPERAÇÃO", "2ª CHAMADA"]
             df_m = df_m[~df_m['TIPO_MATERIAL'].str.upper().str.contains('|'.join(termos_proibidos), na=False)]
@@ -697,35 +697,45 @@ if menu == "🧪 Criador de Aulas":
                         
                         st.markdown(f"#### 📘 {identificador}")
                         
-                        # --- MOTOR DE EXTRAÇÃO DE LINKS V45 (ULTRA-RESILIENTE) ---
-                        def buscar_link(texto, rotulo):
-                            # Busca formatos: Rotulo(link), Rotulo (link), [Rotulo](link)
-                            padrao = rf"{rotulo}\s*\(?\s*(https?://[^\s\)]+)"
+                        # --- MOTOR DE EXTRAÇÃO DE LINKS V46 (ULTRA-PRECISÃO) ---
+                        def extrair_link_especifico(texto, chave):
+                            # Busca padrões como: Regular(link), PEI: link, Prof (link)
+                            padrao = rf"{chave}.*?\(?(https?://[^\s\)]+)\)?"
                             match = re.search(padrao, texto, re.IGNORECASE)
                             return match.group(1).strip() if match else None
 
-                        l_alu = buscar_link(txt_f, "Regular") or buscar_link(txt_f, "Aluno") or row.get('LINK_DRIVE')
-                        l_pei = buscar_link(txt_f, "PEI")
-                        l_prof = buscar_link(txt_f, "Prof") or buscar_link(txt_f, "Guia")
+                        # Lógica de Prioridade:
+                        # 1. Aluno: Tenta pegar da coluna LINK_DRIVE (que é o padrão do sistema)
+                        l_alu = row.get('LINK_DRIVE') 
+                        if not l_alu or "http" not in str(l_alu):
+                            l_alu = extrair_link_especifico(txt_f, "Regular") or extrair_link_especifico(txt_f, "Aluno")
+
+                        # 2. PEI e PROF: Estão obrigatoriamente dentro do CONTEUDO
+                        l_pei = extrair_link_especifico(txt_f, "PEI")
+                        l_prof = extrair_link_especifico(txt_f, "Prof") or extrair_link_especifico(txt_f, "Guia")
 
                         # --- BOTÕES DE AÇÃO ---
                         c_b1, c_b2, c_b3, c_b4, c_b5 = st.columns(5)
                         
+                        # Botão Aluno (Sempre Primary)
                         if l_alu and "http" in str(l_alu):
                             c_b1.link_button("📝 ALUNO", str(l_alu), use_container_width=True, type="primary")
                         else:
                             c_b1.button("⚪ SEM LINK", disabled=True, use_container_width=True)
 
-                        if l_pei and "http" in str(l_pei) and "N/A" not in str(l_pei):
+                        # Botão PEI
+                        if l_pei and "http" in str(l_pei):
                             c_b2.link_button("♿ PEI", str(l_pei), use_container_width=True)
                         else:
                             c_b2.button("⚪ SEM PEI", disabled=True, use_container_width=True)
 
-                        if l_prof and "http" in str(l_prof) and "N/A" not in str(l_prof):
+                        # Botão Professor
+                        if l_prof and "http" in str(l_prof):
                             c_b3.link_button("👨‍🏫 PROF", str(l_prof), use_container_width=True)
                         else:
                             c_b3.button("⚪ SEM GUIA", disabled=True, use_container_width=True)
                         
+                        # Ações de Sistema
                         if c_b4.button("🔄 REFINAR", key=f"ref_mat_h_{row.name}", use_container_width=True):
                             st.session_state.lab_temp = txt_f
                             st.session_state.sosa_id_atual = identificador
@@ -738,7 +748,7 @@ if menu == "🧪 Criador de Aulas":
 
                         # --- EXPANDER ANALÍTICO (USANDO EXTRATOR V45) ---
                         with st.expander("👁️ ANALISAR ESTRUTURA PEDAGÓGICA E ITENS"):
-                            t_prof, t_alu, t_gab, t_pei = st.tabs([
+                            t_prof, t_alu, t_gab, t_pei_tab = st.tabs([
                                 "👨‍🏫 Guia do Professor", "📝 Material do Aluno", "✅ Gabarito", "♿ Inclusão PEI"
                             ])
                             
@@ -749,6 +759,7 @@ if menu == "🧪 Criador de Aulas":
                             with t_alu:
                                 val_alu = ai.extrair_tag(txt_f, "ALUNO")
                                 if val_alu:
+                                    # Limpa prompts de imagem para leitura
                                     st.write(re.sub(r'\[\s*PROMPT IMAGEM:.*?\]', '🖼️ *(Imagem)*', val_alu, flags=re.IGNORECASE))
                                 else: st.write("Roteiro não localizado.")
 
@@ -756,7 +767,7 @@ if menu == "🧪 Criador de Aulas":
                                 val_gab = ai.extrair_tag(txt_f, "GABARITO")
                                 st.success(val_gab if val_gab else "Gabarito não disponível.")
 
-                            with t_pei:
+                            with t_pei_tab:
                                 val_pei = ai.extrair_tag(txt_f, "PEI")
                                 st.warning(val_pei if val_pei else "Nenhuma adaptação registrada.")
             else:
