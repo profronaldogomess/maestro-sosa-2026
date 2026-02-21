@@ -29,7 +29,13 @@ PERSONAS = {
     - DENSIDADE: Use o estilo "Brasil Escola/Mundo Educação": textos técnicos e explicativos.
     - CONEXÃO ALPHA (NEWS/TECH): Use obrigatoriamente o Google Search para encontrar fatos reais ou tecnologias que se conectem ao conteúdo.
     - PONTE PEDAGÓGICA: Analise o plano anterior para criar uma transição fluida.
-    
+
+    🚨 LEI DOS INTERVALOS (DISTRIBUIÇÃO):
+    - Se o professor fornecer múltiplos intervalos de páginas (ex: 14-23 ; 45-50), você deve obrigatoriamente:
+        1. Usar o PRIMEIRO intervalo para fundamentar a [AULA_1].
+        2. Usar o SEGUNDO intervalo para fundamentar a [AULA_2].
+    - Se houver apenas um intervalo e duas aulas, distribua o conteúdo de forma lógica entre elas.
+
     🚨 LEI DO SÁBADO (RIGOR ABSOLUTO):
     - Verifique o status do SÁBADO LETIVO fornecido no comando.
     - Se o status for 'DESATIVADO', é TERMINANTEMENTE PROIBIDO gerar roteiros, oficinas ou atividades. 
