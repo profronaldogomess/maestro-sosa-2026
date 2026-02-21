@@ -1375,43 +1375,64 @@ if menu == "📅 Planejamento (Ponto ID)":
                 st.plotly_chart(px.bar(progresso_trim, x="TRIMESTRE", y="%", text="%", title=f"Evolução da Cobertura Real - {ano_m}º Ano", color="%", color_continuous_scale="RdYlGn", range_y=[0, 110]), use_container_width=True)
             
 # ==============================================================================
-# MÓDULO: DIÁRIO DE BORDO (V30.0 - PERSISTÊNCIA E CANAL DISCIPLINAR LIMPO)
+# MÓDULO: DIÁRIO DE BORDO (V47 - PRONTIDÃO E ATIVOS DE SAFRA)
 # ==============================================================================
 elif menu == "📝 Diário de Bordo Rápido":
     st.title("📝 Diário de Bordo: Prontidão e Disciplina")
     
-    if "v_diario" not in st.session_state: st.session_state.v_diario = 1
+    if "v_diario" not in st.session_state: st.session_state.v_diario = int(time.time())
     v = st.session_state.v_diario
 
-    # 1. FILTROS RÁPIDOS
+    # 1. FILTROS RÁPIDOS (PRESERVADO)
     with st.container(border=True):
         c1, c2 = st.columns(2)
         turma_sel = c1.selectbox("👥 Turma:", sorted(df_alunos['TURMA'].unique()), key=f"db_t_{v}")
         data_sel = c2.date_input("📅 Data:", date.today(), key=f"db_d_{v}")
         data_str = data_sel.strftime("%d/%m/%Y")
 
-    # 2. DETECÇÃO DO COCKPIT (HANDSHAKE)
+    # 2. DETECÇÃO DO COCKPIT E ATIVOS DE SAFRA (AVANÇO V47)
     aula_ativa = df_registro_aulas[(df_registro_aulas['TURMA'] == turma_sel) & (df_registro_aulas['DATA'] == data_str)]
     
     if not aula_ativa.empty:
         material_hoje = aula_ativa.iloc[0]['CONTEUDO_MINISTRADO']
         st.info(f"🚀 **Aula Ativa:** {material_hoje}")
+        
+        # --- BUSCA DE LINKS DOS ATIVOS (SMART MATCH) ---
+        # Tenta localizar o material no banco de aulas prontas para extrair os links
+        match_material = df_aulas[df_aulas['TIPO_MATERIAL'].str.contains(material_hoje.split('+')[0].strip(), na=False)]
+        
+        if not match_material.empty:
+            with st.container(border=True):
+                st.markdown("#### 📦 Ativos de Safra para esta Aula")
+                txt_m = str(match_material.iloc[0]['CONTEUDO'])
+                
+                # Motor de Extração de Links V47
+                def extrair_link(t, k):
+                    m = re.search(rf"{k}.*?\(?(https?://[^\s\)]+)\)?", t, re.IGNORECASE)
+                    return m.group(1).strip() if m else None
+                
+                l_alu = match_material.iloc[0].get('LINK_DRIVE')
+                l_pei = extrair_link(txt_m, "PEI")
+                l_prof = extrair_link(txt_m, "Prof")
+                
+                c_at1, c_at2, c_at3 = st.columns(3)
+                if l_alu: c_at1.link_button("📄 MATERIAL ALUNO", l_alu, use_container_width=True, type="primary")
+                if l_pei: c_at2.link_button("♿ ATIVIDADE PEI", l_pei, use_container_width=True)
+                if l_prof: c_at3.link_button("👨‍🏫 GUIA PROFESSOR", l_prof, use_container_width=True)
     else:
         st.warning("⚠️ Nenhuma aula aberta no Cockpit para esta data.")
         material_hoje = "Instrução Avulsa"
     
-    # 3. PAINEL DE REGÊNCIA (CONTINUIDADE) ---
+    # 3. PAINEL DE REGÊNCIA (CONTINUIDADE - PRESERVADO)
     with st.expander("🚦 Painel de Regência (Fechamento de Aula)", expanded=True):
         c_reg1, c_reg2, c_reg3 = st.columns([1, 2, 1])
         
-        # 1. Semáforo
         status_aula = c_reg1.selectbox(
             "Status da Execução:", 
             ["🟢 Concluído (100%)", "🟡 Parcial (Pendência)", "🔴 Bloqueado (Crítico)"],
             key=f"status_reg_{v}"
         )
         
-        # 2. Ponte Pedagógica (Memória para a IA)
         ponte_pedagogica = c_reg2.text_area(
             "🔗 Ponte Pedagógica (Onde paramos?):", 
             placeholder="Ex: Parei no slide 5. Faltou corrigir a atividade...",
@@ -1419,7 +1440,6 @@ elif menu == "📝 Diário de Bordo Rápido":
             key=f"ponte_reg_{v}"
         )
         
-        # 3. Clima da Turma
         clima_turma = c_reg3.select_slider(
             "🌡️ Clima da Turma:", 
             options=["😴 Apática", "😐 Dispersa", "🧠 Focada", "⚡ Agitada", "🤯 Dificuldade Alta"],
@@ -1427,15 +1447,14 @@ elif menu == "📝 Diário de Bordo Rápido":
             key=f"clima_reg_{v}"
         )
 
-# 3. BUSCA DE REGISTROS EXISTENTES (FILTRANDO NOTAS DE SISTEMA)
-    # O Diário agora ignora linhas que são apenas lançamentos de notas de trabalhos
+    # 4. BUSCA DE REGISTROS EXISTENTES (PRESERVADO)
     registros_atuais = df_diario[
         (df_diario['DATA'] == data_str) & 
         (df_diario['TURMA'] == turma_sel) & 
-        (df_diario['TAGS'] != "SISTEMA_NOTA") # <--- A VACINA ESTÁ AQUI
+        (df_diario['TAGS'] != "SISTEMA_NOTA")
     ]
 
-    # 4. AÇÕES EM LOTE
+    # 5. AÇÕES EM LOTE (PRESERVADO)
     st.markdown("---")
     col_lote1, col_lote2 = st.columns(2)
     if col_lote1.button("✅ VISTO EM TODOS", use_container_width=True):
@@ -1445,7 +1464,7 @@ elif menu == "📝 Diário de Bordo Rápido":
         st.session_state[f"visto_lote_{turma_sel}"] = False
         st.rerun()
 
-    # 5. MONTAGEM DA MESA DE LANÇAMENTO
+    # 6. MONTAGEM DA MESA DE LANÇAMENTO (PRESERVADO)
     alunos_turma = df_alunos[df_alunos['TURMA'] == turma_sel].sort_values(by="NOME_ALUNO")
     
     dados_diario = []
@@ -1453,7 +1472,6 @@ elif menu == "📝 Diário de Bordo Rápido":
         id_a = db.limpar_id(alu['ID'])
         is_pei = str(alu['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"]
         
-        # Busca apenas registros de ocorrência real (ignora notas de sistema)
         reg_existente = registros_atuais[registros_atuais['ID_ALUNO'].apply(db.limpar_id) == id_a]
         
         if not reg_existente.empty:
@@ -1479,7 +1497,7 @@ elif menu == "📝 Diário de Bordo Rápido":
             "OBSERVAÇÃO (🎙️ DITE AQUI)": obs_val
         })
 
-    # Editor Vertical Otimizado
+    # Editor Vertical Otimizado (PRESERVADO)
     df_editado = st.data_editor(
         pd.DataFrame(dados_diario),
         column_config={
@@ -1497,25 +1515,20 @@ elif menu == "📝 Diário de Bordo Rápido":
         hide_index=True, use_container_width=True, key=f"editor_diario_{v}"
     )
 
-    # 6. SALVAMENTO E SINCRONIA
+    # 7. SALVAMENTO E SINCRONIA (PRESERVADO)
     if st.button("💾 SALVAR ALTERAÇÕES E CONSOLIDAR", type="primary", use_container_width=True):
         with st.status("Sincronizando Práxis...") as status:
-            # Limpa os registros antigos daquela data/turma antes de salvar o novo lote
             db.limpar_diario_data_turma(data_str, turma_sel)
             
             linhas_diario = []
             for _, r in df_editado.iterrows():
                 aluno_eh_pei = "♿" in r['ESTUDANTE']
-                
-                # Lógica de Falta e Visto
                 tag_f = "AUSÊNCIA" if r['F'] else r['VETOR DISCIPLINAR']
                 visto_f = False if r['F'] else r['V']
                 
-                # Auto-Tag PEI
                 if aluno_eh_pei and visto_f and not tag_f:
                     tag_f = "PEI CONCLUÍDO"
                 
-                # Observação Pura (O material da aula fica implícito pela data/turma no banco)
                 obs_final = r['OBSERVAÇÃO (🎙️ DITE AQUI)']
                 if r['VETOR DISCIPLINAR'] == "Comunicação":
                     obs_final = f"🚨 COMUNICAÇÃO: {obs_final}"
