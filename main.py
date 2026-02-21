@@ -2163,7 +2163,7 @@ elif menu == "📚 Base de Conhecimento":
             st.info("📭 Sua biblioteca está vazia.")
 
 # ==============================================================================
-# MÓDULO: RELATÓRIOS PEI V38.5 - ANALISTA DE EVOLUÇÃO E CUSTÓDIA (MASTER)
+# MÓDULO: RELATÓRIOS PEI V38.5 - ANALISTA DE EVOLUÇÃO (CORRIGIDO)
 # ==============================================================================
 elif menu == "♿ Relatórios PEI / Perfil IA":
     st.title("♿ Analista de Inclusão: Dossiê de Evolução V38.5")
@@ -2172,7 +2172,7 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
     if df_alunos.empty:
         st.warning("⚠️ Base de alunos vazia. Cadastre alunos na Gestão da Turma.")
     else:
-        # --- 1. SELEÇÃO DE ESTUDANTE (Soberania de Observação) ---
+        # --- 1. SELEÇÃO DE ESTUDANTE ---
         with st.container(border=True):
             c_t, c_a = st.columns([1, 2])
             lista_turmas = sorted(df_alunos['TURMA'].unique())
@@ -2195,65 +2195,62 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
             id_a = db.limpar_id(dados_a['ID'])
             perfil_atual = dados_a['NECESSIDADES']
 
-        # --- 2. MOTOR DE FUSÃO E MEMÓRIA (DATA FUSION) ---
+        # --- 2. MOTOR DE FUSÃO E MEMÓRIA (DATA FUSION COM VACINA ANTI-ERRO) ---
         with st.status("🔍 Maestro Sosa interconectando safras...", expanded=False) as status:
             # A. Busca Histórica
             hist_aluno = df_relatorios[df_relatorios['ID_ALUNO'].apply(db.limpar_id) == id_a]
             tem_passado = not hist_aluno.empty
             ultimo_relatorio = hist_aluno.iloc[-1]['CONTEUDO'] if tem_passado else "Primeiro Relatório (Linha de Base)."
             
-            # B. Dados Atuais (Diário e Scanner)
-            d_aluno = df_diario[df_diario['ID_ALUNO'].apply(db.limpar_id) == id_a] if not df_diario.empty else pd.DataFrame()
-            vistos = len(d_aluno[d_aluno['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"])
-            bonus = d_aluno['BONUS'].apply(util.sosa_to_float).sum()
-            obs_recentes = d_aluno[d_aluno['OBSERVACOES'] != ""]['OBSERVACOES'].tail(5).tolist()
+            # B. Dados Atuais (Diário e Scanner) - PROTEÇÃO CONTRA KEYERROR
+            vistos = 0
+            bonus = 0.0
+            if not df_diario.empty:
+                d_aluno = df_diario[df_diario['ID_ALUNO'].apply(db.limpar_id) == id_a]
+                if not d_aluno.empty and 'VISTO_ATIVIDADE' in d_aluno.columns:
+                    vistos = len(d_aluno[d_aluno['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"])
+                    bonus = d_aluno['BONUS'].apply(util.sosa_to_float).sum()
             
-            s_aluno = df_diagnosticos[df_diagnosticos['ID_ALUNO'].apply(db.limpar_id) == id_a] if not df_diagnosticos.empty else pd.DataFrame()
-            media_scan = s_aluno['NOTA_CALCULADA'].apply(util.sosa_to_float).mean() if not s_aluno.empty else 0.0
+            media_scan = 0.0
+            if not df_diagnosticos.empty:
+                s_aluno = df_diagnosticos[df_diagnosticos['ID_ALUNO'].apply(db.limpar_id) == id_a]
+                if not s_aluno.empty:
+                    media_scan = s_aluno['NOTA_CALCULADA'].apply(util.sosa_to_float).mean()
+            
             nota_safra = min(10.0, media_scan + bonus)
-
-            # C. Intencionalidade (Ponto ID)
-            estrategia_planejada = "Aguardando novo plano no Ponto ID."
-            if not df_planos.empty:
-                p_ano = df_planos[df_planos['ANO'].str.contains(str(turma_pei[0]), na=False)]
-                if not p_ano.empty:
-                    ultimo_p = p_ano.iloc[-1]['PLANO_TEXTO']
-                    estrategia_planejada = ai.extrair_tag(ultimo_p, "ESTRATEGIA_DUA_PEI") or ai.extrair_tag(ultimo_p, "ADAPTACAO_PEI")
 
             status.update(label="✅ Dados Sincronizados!", state="complete")
 
         # --- 3. DASHBOARD DE MÉTRICAS ---
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Engajamento", vistos)
+        c1.metric("Engajamento (Vistos)", vistos)
         c2.metric("Mérito ⭐", f"{bonus:.1f}")
         c3.metric("Nota de Safra", f"{nota_safra:.1f}")
         c4.metric("Relatos Salvos", len(hist_aluno))
 
-        # --- 4. CHECKLIST DE OBSERVAÇÃO (Obrigatório para alimentar a IA) ---
+        # --- 4. CHECKLIST DE OBSERVAÇÃO ---
         with st.container(border=True):
             st.markdown("#### 📋 Checklist de Percepção Pedagógica")
             col_ch1, col_ch2 = st.columns(2)
             with col_ch1:
-                v_autonomia = st.select_slider("Autonomia (Início/Fim de tarefas):", options=["Dependente", "Com Apoio", "Em Evolução", "Autônomo"], value="Com Apoio")
-                v_social = st.select_slider("Socialização (Pares e Professor):", options=["Isolado", "Passivo", "Interage", "Líder"], value="Interage")
+                v_autonomia = st.select_slider("Autonomia:", options=["Dependente", "Com Apoio", "Em Evolução", "Autônomo"], value="Com Apoio")
+                v_social = st.select_slider("Socialização:", options=["Isolado", "Passivo", "Interage", "Líder"], value="Interage")
             with col_ch2:
-                v_participa = st.select_slider("Participação (Engajamento Oral):", options=["Não participa", "Raramente", "Participativo", "Ativo"], value="Participativo")
+                v_participa = st.select_slider("Participação:", options=["Não participa", "Raramente", "Participativo", "Ativo"], value="Participativo")
                 v_resposta = st.select_slider("Resposta às Intervenções:", options=["Resistente", "Lento", "Receptivo", "Rápido"], value="Receptivo")
-            sem_mudancas = st.checkbox("📢 O quadro permanece idêntico ao relatório anterior (Sem alterações significativas)")
+            sem_mudancas = st.checkbox("📢 Quadro estável (Sem alterações significativas)")
 
-        # --- 5. ABAS DE TRABALHO ORGANIZADAS ---
-        tab_evolucao, tab_pei_doc, tab_coord, tab_curr, tab_timeline = st.tabs([
+        # --- 5. ABAS DE TRABALHO ---
+        tab_evolucao, tab_pei_doc, tab_coord, tab_timeline = st.tabs([
             "📈 1. Relatório de Evolução", 
             "🏛️ 2. Plano de Acessibilidade (PEI)", 
             "📱 3. Relato para Coordenação",
-            "📖 4. Currículo Adaptado",
-            "🗂️ 5. Linha do Tempo"
+            "🗂️ 4. Linha do Tempo"
         ])
 
-        # --- ABA 1: RELATÓRIO DE EVOLUÇÃO ---
         with tab_evolucao:
             st.subheader("📝 Análise Longitudinal de Processos")
-            percepcao_extra = st.text_area("Observações Adicionais (Opcional):", key="perc_v38")
+            percepcao_extra = st.text_area("Observações Adicionais:", key="perc_v38")
             
             if st.button("🚀 GERAR RELATÓRIO DE SOBERANIA", type="primary", use_container_width=True):
                 with st.spinner("Maestro Sosa analisando a linha do tempo..."):
@@ -2262,9 +2259,9 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                         f"--- PASSADO ---\n{ultimo_relatorio}\n\n"
                         f"--- PRESENTE (DADOS) ---\n- Vistos: {vistos}, Bônus: {bonus}, Nota: {nota_safra}.\n"
                         f"--- CHECKLIST ATUAL ---\n- Autonomia: {v_autonomia}, Socialização: {v_social}, Participação: {v_participa}, Resposta: {v_resposta}.\n"
-                        f"--- STATUS DE MUDANÇA ---\n{'Quadro Estável (Sem mudanças)' if sem_mudancas else 'Houve alterações no período'}.\n"
-                        f"--- PERCEPÇÃO EXTRA ---\n{percepcao_extra}\n\n"
-                        f"MISSÃO: Gere o relatório comparativo. Se for o primeiro, foque na Linha de Base. Se for o segundo em diante, foque no Delta (o que mudou)."
+                        f"--- STATUS: {'Quadro Estável' if sem_mudancas else 'Houve alterações'}.\n"
+                        f"--- OBSERVAÇÃO: {percepcao_extra}\n\n"
+                        f"MISSÃO: Gere um relatório técnico comparativo focando no Delta de evolução."
                     )
                     st.session_state.res_v38_rel = ai.gerar_ia("ESPECIALISTA_INCLUSAO", prompt_ev)
             
