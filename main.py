@@ -2516,9 +2516,13 @@ elif menu == "📝 Central de Avaliações":
         is_segunda = "2ª Chamada" in tipo_av
 
         if is_sonda:
-            # --- MODO 2: ENGENHARIA DE SONDAGEM (CORREÇÃO DE COLUNAS) ---
+            # --- MODO 2: ENGENHARIA DE SONDAGEM (CORREÇÃO DE ESCOPO) ---
             with st.container(border=True):
                 st.markdown("#### 🔍 2. Parâmetros de Sondagem Diagnóstica")
+                
+                # Inicialização de segurança para evitar NameError
+                instr_extra = "" 
+                
                 trim_filtro = st.selectbox("Trimestre de Referência:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"s_trim_{v}")
                 
                 ano_busca = int(ano_av) - 1 if trim_filtro == "I Trimestre" else int(ano_av)
@@ -2533,21 +2537,21 @@ elif menu == "📝 Central de Avaliações":
                 
                 sel_conts = []
                 sel_objs = []
+                
                 if sel_eixos:
                     # Filtra por Eixo
                     df_c_f = df_matriz[df_matriz["EIXO"].isin(sel_eixos)].copy()
-                    
-                    # BUSCA DE CONTEÚDOS (USANDO ASPAS PARA EVITAR reportUndefinedVariable)
-                    lista_conts = sorted(df_c_f["CONTEUDO_ESPECIFICO"].unique().tolist())
+                    lista_conts = sorted(df_c_f["CONTEUDO_ESPECIFICO"].unique().tolist()) if not df_c_f.empty else []
                     sel_conts = c_s2.multiselect("Conteúdo(s) Base:", lista_conts, key=f"s_c_m_{v}")
                     
                     if sel_conts:
-                        # BUSCA DE OBJETIVOS (USANDO ASPAS)
-                        df_o_f = df_c_f[df_c_f["CONTEUDO_ESPECIFICO"].isin(sel_conts)]
-                        lista_objs = sorted(df_o_f["OBJETIVOS"].unique().tolist())
+                        # Filtra por Objetivos
+                        df_o_f = df_c_f[df_c_f["CONTEUDO_ESPECIFICO"].isin(sel_conts)].copy()
+                        lista_objs = sorted(df_o_f["OBJETIVOS"].unique().tolist()) if not df_o_f.empty else []
                         sel_objs = st.multiselect("Refine pelos Objetivos (Descritores):", lista_objs, key=f"s_o_m_{v}")
                 
-                instr_extra = st.text_area("📝 Instruções de Sondagem:", key=f"s_instr_{v}")
+                # CAMPO MOVIDO PARA FORA DO IF: Garante que a variável sempre exista
+                instr_extra = st.text_area("📝 Instruções de Sondagem (Ex: Focar em itens do SAEB):", key=f"s_instr_{v}")
 
         else:
             # --- MODO 1: ENGENHARIA DE SAFRA (TESTE/PROVA/2ª CHAMADA) ---
@@ -2563,18 +2567,14 @@ elif menu == "📝 Central de Avaliações":
                 st.markdown("### 🎯 3. Matriz de Mérito e Vínculo de Safra")
                 trim_filtro = st.selectbox("Filtrar Ativos por Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"av_trim_filter_{v}")
                 
-                # --- MOTOR DE BUSCA CRONOLÓGICA V33 (FIX: ATIVOS DE SAFRA) ---
-                # 1. Filtra pela série (Ano)
+                # Filtra pela série (Ano)
                 df_ref = df_aulas[df_aulas['ANO'].str.contains(str(ano_av))].copy()
                 
                 def validar_pertenca_trimestre(row):
-                    # Prioridade 1: Se o texto contém o nome do trimestre
                     if trim_filtro.upper() in str(row['CONTEUDO']).upper():
                         return True
-                    # Prioridade 2: Pela data da aula (Sincronia com Calendário Itabuna)
                     try:
                         data_str = str(row['DATA'])
-                        # Converte DD/MM/YYYY para objeto date
                         d, m, y = map(int, data_str.split('/'))
                         dt_aula = date(y, m, d)
                         trim_nome, _ = util.obter_info_trimestre(dt_aula)
@@ -2582,17 +2582,14 @@ elif menu == "📝 Central de Avaliações":
                     except:
                         return False
 
-                # Aplica a validação inteligente
                 if not df_ref.empty:
                     mask = df_ref.apply(validar_pertenca_trimestre, axis=1)
                     df_ref = df_ref[mask]
 
                 if is_segunda:
-                    # Para 2ª Chamada, busca apenas o que é AVALIAÇÃO
                     df_ref_2a = df_ref[df_ref['SEMANA_REF'] == "AVALIAÇÃO"]
                     mats_selecionados = st.selectbox(f"📦 Selecione a Prova Original ({len(df_ref_2a)} detectadas):", [""] + df_ref_2a['TIPO_MATERIAL'].tolist(), key=f"av_ref_{v}")
                 else:
-                    # Para Provas Normais, mostra todos os ativos de safra (Aulas, Projetos, etc)
                     mats_selecionados = st.multiselect(f"Ativos de Safra ({len(df_ref)} detectados):", options=df_ref["TIPO_MATERIAL"].tolist(), key=f"av_ref_{v}")
                 
                 instr_extra = st.text_area("📝 Instruções Extras de Composição:", key=f"av_extra_{v}")
