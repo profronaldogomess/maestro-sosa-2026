@@ -1923,146 +1923,179 @@ elif menu == "👥 Gestão da Turma":
         "📊 Cockpit de Prontidão", "🏗️ Arquitetura de Turmas", "➕ Povoar Alunos", "✏️ Edição & Transferência"
     ])
 
-# --- ABA 1: COCKPIT DA TURMA (VERSÃO V46 - INTEGRAÇÃO TOTAL) ---
+# --- ABA 1: COCKPIT DA TURMA (VERSÃO V46.2 - GRADE VISUAL E FILTRO PI/PC) ---
     with tab_cockpit:
         if df_turmas.empty:
             st.info("📭 Nenhuma turma cadastrada. Vá na aba 'Arquitetura' para iniciar.")
         else:
-            # --- 1. SELEÇÃO DE PARÂMETROS ---
-            c_f1, c_f2 = st.columns([1, 1])
-            turma_foco = c_f1.selectbox("🎯 Selecione a Turma para Comando:", sorted(df_turmas['ID_TURMA'].unique()), key=f"foco_t_{v}")
-            trim_foco = c_f2.selectbox("📅 Trimestre de Safra:", ["I Trimestre", "II Trimestre", "III Trimestre", "Todos"], key=f"foco_trim_{v}")
+            # --- NOVO: GRADE VISUAL DE HORÁRIOS ---
+            st.markdown("### 📅 Grade Oficial de Regência")
             
-            # Cálculos de Base
-            alunos_t = df_alunos[df_alunos['TURMA'] == turma_foco].sort_values(by="NOME_ALUNO")
-            id_alunos_turma = set(alunos_t['ID'].apply(db.limpar_id).tolist())
-            ano_num = "".join(filter(str.isdigit, turma_foco))
-            ano_str_ref = f"{ano_num}º"
+            dias_semana = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"]
+            tempos = ["1º Tempo", "2º Tempo"]
+            grade_map = {t: {d: "---" for d in dias_semana} for t in tempos}
 
-            # --- 2. MÉTRICAS DE TOPO (DASHBOARD EXECUTIVO) ---
-            st.markdown("---")
-            m1, m2, m3 = st.columns(3)
-            m1.metric("👥 Total Alunos", len(alunos_t))
-            
-            mask_pei = ~alunos_t['NECESSIDADES'].astype(str).str.upper().str.strip().isin(["NENHUMA", "PENDENTE", "", "NAN"])
-            df_pei_turma = alunos_t[mask_pei]
-            m2.metric("♿ Estudantes PEI", len(df_pei_turma))
-            
-            # Saúde de Execução: Compara Planos no Ponto ID vs Aulas no Diário
-            planos_totais = len(df_planos[df_planos['ANO'] == ano_str_ref])
-            aulas_feitas = len(df_registro_aulas[df_registro_aulas['TURMA'] == turma_foco])
-            # Estimativa de 2 aulas por plano semanal
-            saude_val = (aulas_feitas / (planos_totais * 2) * 100) if planos_totais > 0 else 0
-            m3.metric("🎯 Saúde de Execução", f"{min(100, int(saude_val))}%")
-
-            # --- 3. RADAR DE RESULTADOS E RAIO-X (PRESERVADO) ---
-            with st.expander("📡 Radar de Resultados e Raio-X de Lacunas", expanded=False):
-                diag_t = df_diagnosticos[df_diagnosticos['TURMA'] == turma_foco].copy()
-                if diag_t.empty:
-                    st.info("Aguardando dados de avaliações para gerar o Raio-X.")
-                else:
-                    st.subheader(f"🔥 Habilidades em Alerta ({trim_foco})")
-                    # Lógica simplificada de exibição para o Cockpit
-                    st.caption("Consulte a aba 'Scanner' para o detalhamento individual de erros.")
-
-            st.markdown("---")
-            col_esq, col_dir = st.columns([1.6, 1.4])
-
-            # --- 4. ABERTURA DE AULA (PRONTIDÃO INTELIGENTE V46) ---
-            with col_esq:
-                st.subheader("🕒 Abertura de Aula")
+            for _, row in df_turmas.iterrows():
+                sigla = str(row['ID_TURMA'])
+                nome_turma = str(row.iloc[1]) # NOME_TURMA
+                horarios_str = str(row.iloc[3]) # DIAS_AULA
                 
-                # BUSCA DE DNA NO PONTO ID
-                plano_sugerido = "Nenhum"
-                base_didatica_sugerida = "Matriz Curricular"
-                ponte_sugerida = "Início de novo ciclo pedagógico."
+                # Formatação limpa para a tabela (Ex: "6º ANO A" ou "PI")
+                display_name = sigla
+                if "ª" in sigla: # É uma turma regular (Ex: 6ª MA)
+                    # Tenta extrair o ano e a letra do NOME_TURMA (Ex: 6º Ano A -> 6 ANO A)
+                    display_name = nome_turma.replace("Ano ", "ANO ").upper()
                 
-                # Pega o plano mais recente para sugerir
-                df_p_atual = df_planos[df_planos['ANO'] == ano_str_ref].sort_values(by='DATA', ascending=False)
-                if not df_p_atual.empty:
-                    row_p = df_p_atual.iloc[0]
-                    plano_sugerido = row_p['SEMANA']
-                    txt_p = row_p['PLANO_TEXTO']
-                    base_didatica_sugerida = ai.extrair_tag(txt_p, "BASE_DIDATICA") or "Matriz de Itabuna"
-                    
-                    # Extração da Ponte Pedagógica para o Professor
-                    ponte_match = re.search(r"Ponte Pedagógica:(.*?)(?=Início|Meio|Fim|$)", ai.extrair_tag(txt_p, "AULA_1"), re.DOTALL)
-                    if ponte_match: 
-                        ponte_sugerida = ponte_match.group(1).strip()
+                if horarios_str and horarios_str != "N/A":
+                    for h in [x.strip() for x in horarios_str.split("/")]:
+                        for dia in dias_semana:
+                            for tempo in tempos:
+                                if dia in h and tempo in h:
+                                    grade_map[tempo][dia] = display_name
 
-                with st.container(border=True):
-                    st.markdown("#### 🚀 MISSÃO PLANEJADA PARA HOJE")
-                    st.success(f"**Semana de Referência:** {plano_sugerido}")
-                    st.info(f"**📖 Base Didática (DNA):**\n{base_didatica_sugerida}")
-                    
-                    with st.expander("🔗 Ver Ponte de Continuidade (Onde paramos?)"):
-                        st.caption(ponte_sugerida)
-                    
-                    st.divider()
-                    c_r1, c_r2 = st.columns(2)
-                    data_aula = c_r1.date_input("Data da Aula:", date.today(), key=f"dt_reg_{v}")
-                    
-                    # Lista de planos disponíveis para vínculo
-                    lista_planos = ["Nenhum"] + df_p_atual['SEMANA'].tolist()
-                    idx_sugerido = lista_planos.index(plano_sugerido) if plano_sugerido in lista_planos else 0
-                    plano_vinc = c_r2.selectbox("Vincular Plano Base:", lista_planos, index=idx_sugerido, key=f"plano_reg_{v}")
-                    
-                    # Busca materiais produzidos no Laboratório
-                    mats_disp = df_aulas[df_aulas['ANO'].str.contains(ano_num)]['TIPO_MATERIAL'].tolist()
-                    mats_sel = st.multiselect("📦 Selecione o Material (Ativos de Safra):", options=mats_disp, key=f"mats_reg_{v}")
+            df_grade = pd.DataFrame(grade_map).T
+            
+            # Estilização da Tabela (Glassmorphism Executive)
+            def colorir_grade(val):
+                if val in ["PI", "PC", "AC", "HTPC"]: 
+                    return 'background-color: #2962FF; color: white; font-weight: bold; text-align: center;'
+                if val != "---": 
+                    return 'background-color: #001E3C; color: #2ECC71; font-weight: bold; text-align: center;'
+                return 'color: gray; text-align: center;'
 
-                    if st.button("💾 CONFIRMAR ABERTURA DE AULA", use_container_width=True, type="primary"):
-                        db.salvar_no_banco("DB_REGISTRO_AULAS", [
-                            data_aula.strftime("%d/%m/%Y"), plano_vinc, turma_foco, 
-                            " + ".join(mats_sel), "PENDENTE", "ABERTA"
-                        ])
-                        st.success("✅ Aula aberta com sucesso! Vá para o Diário de Bordo.")
-                        time.sleep(1)
-                        st.rerun()
+            st.dataframe(df_grade.style.applymap(colorir_grade), use_container_width=True)
+            st.markdown("---")
 
-            # --- 5. INVENTÁRIO (HUB DE ACESSO RÁPIDO V46) ---
-            with col_dir:
-                st.subheader("📂 Inventário de Ativos")
-                with st.container(border=True):
-                    st.markdown(f"**Ativos de Safra ({ano_str_ref} Ano)**")
-                    
-                    df_mats_ano = df_aulas[df_aulas['ANO'].str.contains(ano_num)].iloc[::-1]
-                    
-                    if df_mats_ano.empty:
-                        st.caption("Nenhum material gerado para esta série.")
+            # --- 1. SELEÇÃO DE PARÂMETROS (FILTRANDO PI/PC) ---
+            # Filtra apenas turmas reais para o comando acadêmico
+            turmas_reais = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
+            
+            if turmas_reais.empty:
+                st.warning("⚠️ Apenas horários de planejamento cadastrados. Cadastre turmas regulares para liberar o comando acadêmico.")
+            else:
+                c_f1, c_f2 = st.columns([1, 1])
+                turma_foco = c_f1.selectbox("🎯 Selecione a Turma para Comando:", sorted(turmas_reais['ID_TURMA'].unique()), key=f"foco_t_{v}")
+                trim_foco = c_f2.selectbox("📅 Trimestre de Safra:", ["I Trimestre", "II Trimestre", "III Trimestre", "Todos"], key=f"foco_trim_{v}")
+                
+                # Cálculos de Base
+                alunos_t = df_alunos[df_alunos['TURMA'] == turma_foco].sort_values(by="NOME_ALUNO")
+                id_alunos_turma = set(alunos_t['ID'].apply(db.limpar_id).tolist())
+                ano_num = "".join(filter(str.isdigit, turma_foco))
+                ano_str_ref = f"{ano_num}º"
+
+                # --- 2. MÉTRICAS DE TOPO (DASHBOARD EXECUTIVO) ---
+                m1, m2, m3 = st.columns(3)
+                m1.metric("👥 Total Alunos", len(alunos_t))
+                
+                mask_pei = ~alunos_t['NECESSIDADES'].astype(str).str.upper().str.strip().isin(["NENHUMA", "PENDENTE", "", "NAN"])
+                df_pei_turma = alunos_t[mask_pei]
+                m2.metric("♿ Estudantes PEI", len(df_pei_turma))
+                
+                # Saúde de Execução: Compara Planos no Ponto ID vs Aulas no Diário
+                planos_totais = len(df_planos[df_planos['ANO'] == ano_str_ref])
+                aulas_feitas = len(df_registro_aulas[df_registro_aulas['TURMA'] == turma_foco])
+                saude_val = (aulas_feitas / (planos_totais * 2) * 100) if planos_totais > 0 else 0
+                m3.metric("🎯 Saúde de Execução", f"{min(100, int(saude_val))}%")
+
+                # --- 3. RADAR DE RESULTADOS E RAIO-X (PRESERVADO) ---
+                with st.expander("📡 Radar de Resultados e Raio-X de Lacunas", expanded=False):
+                    diag_t = df_diagnosticos[df_diagnosticos['TURMA'] == turma_foco].copy()
+                    if diag_t.empty:
+                        st.info("Aguardando dados de avaliações para gerar o Raio-X.")
                     else:
-                        # Mostra os 5 materiais mais recentes com links diretos
-                        for _, m_row in df_mats_ano.head(5).iterrows():
-                            with st.container():
-                                c_m_txt, c_m_links = st.columns([1.8, 1.2])
-                                c_m_txt.markdown(f"📘 {m_row['TIPO_MATERIAL']}")
-                                
-                                # Motor de Extração de Links V47
-                                txt_m = str(m_row['CONTEUDO'])
-                                def extrair_url(t, k):
-                                    match = re.search(rf"{k}.*?\(?(https?://[^\s\)]+)\)?", t, re.IGNORECASE)
-                                    return match.group(1).strip() if match else None
-                                
-                                l_alu = m_row.get('LINK_DRIVE')
-                                l_pei = extrair_url(txt_m, "PEI")
-                                l_prof = extrair_url(txt_m, "Prof")
-                                
-                                # Renderização de ícones de acesso rápido
-                                btn_html = ""
-                                if l_alu: btn_html += f"[📄]({l_alu}) "
-                                if l_pei: btn_html += f"[♿]({l_pei}) "
-                                if l_prof: btn_html += f"[👨‍🏫]({l_prof})"
-                                c_m_links.markdown(btn_html)
-                                st.divider()
+                        st.subheader(f"🔥 Habilidades em Alerta ({trim_foco})")
+                        st.caption("Consulte a aba 'Scanner' para o detalhamento individual de erros.")
 
-                # Bloco de Monitoramento PEI
-                with st.container(border=True):
-                    st.markdown("**👥 Foco em Inclusão (Alunos PEI)**")
-                    if not df_pei_turma.empty:
-                        for _, alu in df_pei_turma.iterrows():
-                            st.warning(f"♿ **{alu['NOME_ALUNO']}**\n↳ {alu['NECESSIDADES']}")
-                    else:
-                        st.success("✅ Nenhum aluno PEI nesta turma.")
+                st.markdown("---")
+                col_esq, col_dir = st.columns([1.6, 1.4])
+
+                # --- 4. ABERTURA DE AULA (PRONTIDÃO INTELIGENTE V46) ---
+                with col_esq:
+                    st.subheader("🕒 Abertura de Aula")
+                    
+                    # BUSCA DE DNA NO PONTO ID
+                    plano_sugerido = "Nenhum"
+                    base_didatica_sugerida = "Matriz Curricular"
+                    ponte_sugerida = "Início de novo ciclo pedagógico."
+                    
+                    df_p_atual = df_planos[df_planos['ANO'] == ano_str_ref].sort_values(by='DATA', ascending=False)
+                    if not df_p_atual.empty:
+                        row_p = df_p_atual.iloc[0]
+                        plano_sugerido = row_p['SEMANA']
+                        txt_p = row_p['PLANO_TEXTO']
+                        base_didatica_sugerida = ai.extrair_tag(txt_p, "BASE_DIDATICA") or "Matriz de Itabuna"
+                        
+                        ponte_match = re.search(r"Ponte Pedagógica:(.*?)(?=Início|Meio|Fim|$)", ai.extrair_tag(txt_p, "AULA_1"), re.DOTALL)
+                        if ponte_match: 
+                            ponte_sugerida = ponte_match.group(1).strip()
+
+                    with st.container(border=True):
+                        st.markdown("#### 🚀 MISSÃO PLANEJADA PARA HOJE")
+                        st.success(f"**Semana de Referência:** {plano_sugerido}")
+                        st.info(f"**📖 Base Didática (DNA):**\n{base_didatica_sugerida}")
+                        
+                        with st.expander("🔗 Ver Ponte de Continuidade (Onde paramos?)"):
+                            st.caption(ponte_sugerida)
+                        
+                        st.divider()
+                        c_r1, c_r2 = st.columns(2)
+                        data_aula = c_r1.date_input("Data da Aula:", date.today(), key=f"dt_reg_{v}")
+                        
+                        lista_planos = ["Nenhum"] + df_p_atual['SEMANA'].tolist()
+                        idx_sugerido = lista_planos.index(plano_sugerido) if plano_sugerido in lista_planos else 0
+                        plano_vinc = c_r2.selectbox("Vincular Plano Base:", lista_planos, index=idx_sugerido, key=f"plano_reg_{v}")
+                        
+                        mats_disp = df_aulas[df_aulas['ANO'].str.contains(ano_num)]['TIPO_MATERIAL'].tolist()
+                        mats_sel = st.multiselect("📦 Selecione o Material (Ativos de Safra):", options=mats_disp, key=f"mats_reg_{v}")
+
+                        if st.button("💾 CONFIRMAR ABERTURA DE AULA", use_container_width=True, type="primary"):
+                            db.salvar_no_banco("DB_REGISTRO_AULAS", [
+                                data_aula.strftime("%d/%m/%Y"), plano_vinc, turma_foco, 
+                                " + ".join(mats_sel), "PENDENTE", "ABERTA"
+                            ])
+                            st.success("✅ Aula aberta com sucesso! Vá para o Diário de Bordo.")
+                            time.sleep(1)
+                            st.rerun()
+
+                # --- 5. INVENTÁRIO (HUB DE ACESSO RÁPIDO V46) ---
+                with col_dir:
+                    st.subheader("📂 Inventário de Ativos")
+                    with st.container(border=True):
+                        st.markdown(f"**Ativos de Safra ({ano_str_ref} Ano)**")
+                        
+                        df_mats_ano = df_aulas[df_aulas['ANO'].str.contains(ano_num)].iloc[::-1]
+                        
+                        if df_mats_ano.empty:
+                            st.caption("Nenhum material gerado para esta série.")
+                        else:
+                            for _, m_row in df_mats_ano.head(5).iterrows():
+                                with st.container():
+                                    c_m_txt, c_m_links = st.columns([1.8, 1.2])
+                                    c_m_txt.markdown(f"📘 {m_row['TIPO_MATERIAL']}")
+                                    
+                                    txt_m = str(m_row['CONTEUDO'])
+                                    def extrair_url(t, k):
+                                        match = re.search(rf"{k}.*?\(?(https?://[^\s\)]+)\)?", t, re.IGNORECASE)
+                                        return match.group(1).strip() if match else None
+                                    
+                                    l_alu = m_row.get('LINK_DRIVE')
+                                    l_pei = extrair_url(txt_m, "PEI")
+                                    l_prof = extrair_url(txt_m, "Prof")
+                                    
+                                    btn_html = ""
+                                    if l_alu: btn_html += f"[📄]({l_alu}) "
+                                    if l_pei: btn_html += f"[♿]({l_pei}) "
+                                    if l_prof: btn_html += f"[👨‍🏫]({l_prof})"
+                                    c_m_links.markdown(btn_html)
+                                    st.divider()
+
+                    with st.container(border=True):
+                        st.markdown("**👥 Foco em Inclusão (Alunos PEI)**")
+                        if not df_pei_turma.empty:
+                            for _, alu in df_pei_turma.iterrows():
+                                st.warning(f"♿ **{alu['NOME_ALUNO']}**\n↳ {alu['NECESSIDADES']}")
+                        else:
+                            st.success("✅ Nenhum aluno PEI nesta turma.")
 
 # --- ABA 2: ARQUITETURA DE TURMAS E HORÁRIOS (ATUALIZADO V46.2 - AUTONOMIA TOTAL) ---
     with tab_criar:
