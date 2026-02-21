@@ -862,10 +862,9 @@ if menu == "📅 Planejamento (Ponto ID)":
 
             strat = st.text_area("Estratégia / Observações do Professor:", key=f"p_strat_{v}")
 
-# --- BOTÃO DE COMPILAÇÃO (PADRÃO SOBERANO V48) ---
+# --- BOTÃO DE COMPILAÇÃO (PADRÃO SOBERANO V48.1 - FIX SÁBADO) ---
         if st.button("🚀 COMPILAR PLANEJAMENTO INTEGRADO", use_container_width=True, type="primary", key=f"btn_compilar_{v}"):
             
-            # 1. Validação de Segurança (Garante que as variáveis existam antes de disparar)
             v_ctx_ia = ctx_ia if 'ctx_ia' in locals() else ""
             v_strat = strat if 'strat' in locals() else ""
             v_ctx_ativo = ctx_ativo_vinculado if 'ctx_ativo_vinculado' in locals() else ""
@@ -874,39 +873,37 @@ if menu == "📅 Planejamento (Ponto ID)":
                 st.error("❌ Erro: O livro selecionado não possui um link válido no banco de materiais.")
             else:
                 with st.spinner("Maestro SOSA em análise profunda do PDF..."):
-                    # 2. Busca de Continuidade (Ponte Pedagógica)
                     plano_anterior_txt = "Início de Safra."
                     df_hist = df_planos[df_planos['ANO'] == ano_str_busca].sort_values(by='DATA', ascending=False)
                     if not df_hist.empty: 
                         plano_anterior_txt = df_hist.iloc[0]['PLANO_TEXTO']
 
-                    # 3. Prompt de Rigor Científico (Fidelidade ao Livro)
+                    # Definição explícita do status para a IA
+                    status_sabado_cmd = "ATIVADO (Gere uma oficina/atividade extra)" if tem_sabado else "DESATIVADO (Escreva apenas N/A)"
+
                     prompt = (
-                        f"ORDEM SOBERANA DE FIDELIDADE: Use EXCLUSIVAMENTE o PDF anexo como fonte de conceitos.\n"
+                        f"ORDEM SOBERANA DE FIDELIDADE: Use EXCLUSIVAMENTE o PDF anexo como fonte.\n"
                         f"PÁGINAS ALVO: {base_didatica_info}.\n"
                         f"SÉRIE: {ano_p}º Ano. SEMANA: {sem_limpa}. TRIMESTRE: {trim_atual}.\n"
-                        f"CARGA HORÁRIA: {carga_horaria}.\n\n"
-                        f"🚨 REGRAS DE OURO:\n"
-                        f"1. É PROIBIDO usar conhecimentos externos que não estejam no anexo.\n"
-                        f"2. Se o autor (Flávio Simões) usa um exemplo, VOCÊ DEVE USAR ESSE EXEMPLO.\n"
-                        f"3. Proibido usar Markdown (#) ou Unicode decorativo (█▓▒░).\n"
-                        f"4. Preencha TODAS as tags [TAG] com densidade acadêmica.\n\n"
+                        f"CARGA HORÁRIA: {carga_horaria}.\n"
+                        f"SÁBADO LETIVO: {status_sabado_cmd}.\n\n" # <--- ORDEM REFORÇADA
+                        f"🚨 REGRAS INEGOCIÁVEIS:\n"
+                        f"1. Se SÁBADO LETIVO estiver DESATIVADO, não invente conteúdo, escreva N/A.\n"
+                        f"2. Se a carga for '1 Aula', gere apenas [AULA_1].\n"
+                        f"3. Use os exemplos exatos do autor Flávio Simões.\n"
+                        f"4. Proibido Markdown (#) ou Unicode decorativo.\n\n"
                         f"--- CONTEXTO DE APOIO ---\n{v_strat}\n{v_ctx_ia}\n"
                         f"{v_ctx_ativo}\n"
                         f"--- PONTE ANTERIOR ---\n{plano_anterior_txt}\n\n"
                         f"--- MATRIZ OFICIAL (ITABUNA) ---\n{df_curriculo[df_curriculo['ANO'].astype(str)==str(ano_p)].to_string(index=False)}"
                     )
                     
-                    # 4. Chamada do Motor V48 (Flash)
                     resultado = ai.gerar_ia("PLANE_PEDAGOGICO", prompt, url_drive=uri_livro_drive)
                     
-                    # 5. Atualização do Estado (Garante a exibição no Painel e no Quadro Azul)
                     st.session_state.p_temp = resultado
                     st.session_state.p_meta = {
-                        "semana": sem_limpa, 
-                        "carga": carga_horaria, 
-                        "trimestre": trim_atual, 
-                        "ano": ano_str_busca,
+                        "semana": sem_limpa, "carga": carga_horaria, 
+                        "trimestre": trim_atual, "ano": ano_str_busca,
                         "base": base_didatica_info
                     }
                     st.session_state.v_plano = int(time.time())
