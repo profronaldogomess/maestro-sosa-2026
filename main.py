@@ -2064,21 +2064,36 @@ elif menu == "👥 Gestão da Turma":
                     else:
                         st.success("✅ Nenhum aluno PEI nesta turma.")
 
-    # --- ABA 2: ARQUITETURA DE TURMAS (PRESERVADO V34) ---
+# --- ABA 2: ARQUITETURA DE TURMAS (ATUALIZADO V46.1 - ALOCAÇÃO DE TEMPOS) ---
     with tab_criar:
-        st.subheader("🏗️ Configurar Nova Turma")
+        st.subheader("🏗️ Configurar Nova Turma e Horários")
         with st.container(border=True):
             c1, c2, c3 = st.columns(3)
             ano_t = c1.selectbox("Série/Ano:", [1, 2, 3, 4, 5, 6, 7, 8, 9], index=5, key=f"ano_cad_{v}")
             letra_t = c2.selectbox("Letra:", ["A", "B", "C", "D", "E", "F", "G"], key=f"letra_cad_{v}")
             turno_t = c3.selectbox("Turno:", ["Matutino", "Vespertino", "Noturno"], key=f"turno_cad_{v}")
 
-        dias_aula = st.multiselect("📅 Dias de Aula:", ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"], key=f"dias_cad_{v}")
+        st.markdown("#### 📅 Alocação de Horário (Dias e Tempos)")
+        st.info("💡 Selecione os dias e os tempos exatos em que o senhor leciona para esta turma.")
+        
+        opcoes_horarios = [
+            "Segunda (1º Tempo)", "Segunda (2º Tempo)", 
+            "Terça (1º Tempo)", "Terça (2º Tempo)", 
+            "Quarta (1º Tempo)", "Quarta (2º Tempo)", 
+            "Quinta (1º Tempo)", "Quinta (2º Tempo)", 
+            "Sexta (1º Tempo)", "Sexta (2º Tempo)"
+        ]
+        
+        dias_aula = st.multiselect("Selecione a grade da turma:", opcoes_horarios, key=f"dias_cad_{v}")
         
         if st.button("🚀 CADASTRAR TURMA", use_container_width=True, type="primary"):
-            sigla = f"{ano_t}ª {turno_t[0].upper()}{letra_t}"
-            if db.salvar_no_banco("DB_TURMAS", [sigla, f"{ano_t}º Ano {letra_t}", turno_t, " / ".join(dias_aula), "N/A", "ATIVO"]):
-                st.success(f"Turma {sigla} cadastrada!"); time.sleep(1); st.rerun()
+            if not dias_aula:
+                st.error("⚠️ Ordem negada: Selecione pelo menos um horário para a turma.")
+            else:
+                sigla = f"{ano_t}ª {turno_t[0].upper()}{letra_t}"
+                # Salva no banco unindo os horários selecionados
+                if db.salvar_no_banco("DB_TURMAS", [sigla, f"{ano_t}º Ano {letra_t}", turno_t, " / ".join(dias_aula), "N/A", "ATIVO"]):
+                    st.success(f"✅ Turma {sigla} cadastrada com sucesso na grade oficial!"); time.sleep(1.5); st.rerun()
 
     # --- ABA 3: POVOAR ALUNOS (PRESERVADO V34) ---
     with tab_povoar:
