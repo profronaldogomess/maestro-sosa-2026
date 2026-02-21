@@ -2064,17 +2064,38 @@ elif menu == "👥 Gestão da Turma":
                     else:
                         st.success("✅ Nenhum aluno PEI nesta turma.")
 
-# --- ABA 2: ARQUITETURA DE TURMAS (ATUALIZADO V46.1 - ALOCAÇÃO DE TEMPOS) ---
+# --- ABA 2: ARQUITETURA DE TURMAS E HORÁRIOS (ATUALIZADO V46.2 - AUTONOMIA TOTAL) ---
     with tab_criar:
-        st.subheader("🏗️ Configurar Nova Turma e Horários")
+        st.subheader("🏗️ Configurar Grade: Turmas e Planejamento")
+        
+        # Chave de Autonomia: O professor decide o que vai cadastrar
+        tipo_cadastro = st.radio(
+            "O que o senhor deseja alocar na grade?", 
+            ["📚 Turma Regular (Alunos)", "⚙️ Planejamento (PI / PC)"], 
+            horizontal=True, 
+            key=f"tipo_cad_{v}"
+        )
+        
         with st.container(border=True):
-            c1, c2, c3 = st.columns(3)
-            ano_t = c1.selectbox("Série/Ano:", [1, 2, 3, 4, 5, 6, 7, 8, 9], index=5, key=f"ano_cad_{v}")
-            letra_t = c2.selectbox("Letra:", ["A", "B", "C", "D", "E", "F", "G"], key=f"letra_cad_{v}")
-            turno_t = c3.selectbox("Turno:", ["Matutino", "Vespertino", "Noturno"], key=f"turno_cad_{v}")
+            if tipo_cadastro == "📚 Turma Regular (Alunos)":
+                c1, c2, c3 = st.columns(3)
+                ano_t = c1.selectbox("Série/Ano:", [1, 2, 3, 4, 5, 6, 7, 8, 9], index=5, key=f"ano_cad_{v}")
+                letra_t = c2.selectbox("Letra:", ["A", "B", "C", "D", "E", "F", "G"], key=f"letra_cad_{v}")
+                turno_t = c3.selectbox("Turno:", ["Matutino", "Vespertino", "Noturno"], key=f"turno_cad_{v}")
+                
+                sigla_final = f"{ano_t}ª {turno_t[0].upper()}{letra_t}"
+                nome_final = f"{ano_t}º Ano {letra_t}"
+            else:
+                c1, c2, c3 = st.columns([1, 2, 1])
+                sigla_plan = c1.selectbox("Sigla:", ["PI", "PC", "AC", "HTPC", "OUTRO"], key=f"sigla_plan_{v}")
+                desc_plan = c2.text_input("Descrição:", placeholder="Ex: Planejamento Individual", key=f"desc_plan_{v}")
+                turno_t = c3.selectbox("Turno:", ["Matutino", "Vespertino", "Noturno"], key=f"turno_plan_{v}")
+                
+                sigla_final = sigla_plan
+                nome_final = desc_plan if desc_plan else "Planejamento"
 
         st.markdown("#### 📅 Alocação de Horário (Dias e Tempos)")
-        st.info("💡 Selecione os dias e os tempos exatos em que o senhor leciona para esta turma.")
+        st.info("💡 Selecione os dias e os tempos exatos para esta alocação.")
         
         opcoes_horarios = [
             "Segunda (1º Tempo)", "Segunda (2º Tempo)", 
@@ -2084,16 +2105,15 @@ elif menu == "👥 Gestão da Turma":
             "Sexta (1º Tempo)", "Sexta (2º Tempo)"
         ]
         
-        dias_aula = st.multiselect("Selecione a grade da turma:", opcoes_horarios, key=f"dias_cad_{v}")
+        dias_aula = st.multiselect("Selecione a grade:", opcoes_horarios, key=f"dias_cad_{v}")
         
-        if st.button("🚀 CADASTRAR TURMA", use_container_width=True, type="primary"):
+        if st.button("🚀 CADASTRAR NA GRADE OFICIAL", use_container_width=True, type="primary"):
             if not dias_aula:
-                st.error("⚠️ Ordem negada: Selecione pelo menos um horário para a turma.")
+                st.error("⚠️ Ordem negada: Selecione pelo menos um horário.")
             else:
-                sigla = f"{ano_t}ª {turno_t[0].upper()}{letra_t}"
                 # Salva no banco unindo os horários selecionados
-                if db.salvar_no_banco("DB_TURMAS", [sigla, f"{ano_t}º Ano {letra_t}", turno_t, " / ".join(dias_aula), "N/A", "ATIVO"]):
-                    st.success(f"✅ Turma {sigla} cadastrada com sucesso na grade oficial!"); time.sleep(1.5); st.rerun()
+                if db.salvar_no_banco("DB_TURMAS", [sigla_final, nome_final, turno_t, " / ".join(dias_aula), "N/A", "ATIVO"]):
+                    st.success(f"✅ {sigla_final} alocado com sucesso na grade oficial!"); time.sleep(1.5); st.rerun()
 
     # --- ABA 3: POVOAR ALUNOS (PRESERVADO V34) ---
     with tab_povoar:
