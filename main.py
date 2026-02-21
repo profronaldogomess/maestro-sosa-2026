@@ -2262,10 +2262,10 @@ elif menu == "📚 Base de Conhecimento":
             st.info("📭 Sua biblioteca está vazia.")
 
 # ==============================================================================
-# MÓDULO: RELATÓRIOS PEI V38.5 - ANALISTA DE EVOLUÇÃO (CORREÇÃO DE ABAS)
+# MÓDULO: RELATÓRIOS PEI V38.6 - ANALISTA DE EVOLUÇÃO (CORREÇÃO DE ÍCONES)
 # ==============================================================================
 elif menu == "♿ Relatórios PEI / Perfil IA":
-    st.title("♿ Analista de Inclusão: Dossiê de Evolução V38.5")
+    st.title("♿ Analista de Inclusão: Dossiê de Evolução V38.6")
     st.markdown("---")
 
     if df_alunos.empty:
@@ -2274,14 +2274,19 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
         # --- 1. SELEÇÃO DE ESTUDANTE ---
         with st.container(border=True):
             c_t, c_a = st.columns([1, 2])
-            lista_turmas = sorted(df_alunos['TURMA'].unique())
+            
+            # Filtra apenas turmas reais (ignora PI/PC)
+            turmas_reais_pei = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
+            lista_turmas = sorted(turmas_reais_pei['ID_TURMA'].unique()) if not turmas_reais_pei.empty else sorted(df_alunos['TURMA'].unique())
+            
             turma_pei = c_t.selectbox("🎯 Filtrar Turma:", lista_turmas, key="pei_t_v38")
             df_turma_foco = df_alunos[df_alunos['TURMA'] == turma_pei].copy()
             
             def definir_icone_status(nec):
-                n = str(nec).upper()
+                n = str(nec).upper().strip()
                 if "SUSPEITA" in n: return "🟠"
-                if n in ["NENHUMA", "PENDENTE", "", "NAN"]: return "📝"
+                # 🚨 CORREÇÃO SOBERANA: "TÍPICO" agora recebe o ícone de aluno regular
+                if n in ["NENHUMA", "PENDENTE", "", "NAN", "TÍPICO", "TIPICO"]: return "👤"
                 return "♿"
 
             df_turma_foco['STATUS_ICON'] = df_turma_foco['NECESSIDADES'].apply(definir_icone_status)
@@ -2289,7 +2294,9 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
             
             aluno_sel_label = c_a.selectbox("🔍 Selecionar Estudante:", df_turma_foco['LABEL'].tolist(), key="pei_a_v38")
             
-            nome_limpo = aluno_sel_label.split(" | ")[0][2:].strip()
+            # Extração blindada do nome (remove os ícones conhecidos para não quebrar a busca)
+            nome_limpo = aluno_sel_label.split(" | ")[0].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("📝 ", "").strip()
+            
             dados_a = df_turma_foco[df_turma_foco['NOME_ALUNO'] == nome_limpo].iloc[0]
             id_a = db.limpar_id(dados_a['ID'])
             perfil_atual = dados_a['NECESSIDADES']
@@ -2336,7 +2343,7 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                 v_resposta = st.select_slider("Resposta às Intervenções:", options=["Resistente", "Lento", "Receptivo", "Rápido"], value="Receptivo")
             sem_mudancas = st.checkbox("📢 Quadro estável (Sem alterações significativas)")
 
-        # --- 5. ABAS DE TRABALHO (CORRIGIDO: tab_curr incluída) ---
+        # --- 5. ABAS DE TRABALHO ---
         tab_evolucao, tab_pei_doc, tab_coord, tab_curr, tab_timeline = st.tabs([
             "📈 1. Relatório de Evolução", 
             "🏛️ 2. Plano de Acessibilidade (PEI)", 
@@ -2430,7 +2437,7 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                 st.write(st.session_state.res_v38_coord)
                 st.code(st.session_state.res_v38_coord, language=None)
 
-# ABA 4: CURRÍCULO ADAPTADO (LAYOUT EM COLUNAS V39.2)
+        # --- ABA 4: CURRÍCULO ADAPTADO (LAYOUT EM COLUNAS V39.2) ---
         with tab_curr:
             st.subheader("⚙️ Construtor de Matriz Adaptada (Padrão Itabuna)")
             
@@ -2453,10 +2460,8 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                             prompt_curr = f"ESTUDANTE: {nome_limpo}. PERFIL: {perfil_atual}. MATRIZ: {contexto_oficial}. Gere os itens adaptados."
                             st.session_state.res_v39_curr = ai.gerar_ia("TRADUTOR_CURRICULAR_V39", prompt_curr)
 
-                    # --- ÁREA DE EDIÇÃO EM COLUNAS (IGUAL À IMAGEM) ---
                     if "res_v39_curr" in st.session_state:
                         st.markdown("---")
-                        # Cabeçalho da Tabela Visual
                         h1, h2, h3, h4 = st.columns([1, 2, 1, 2])
                         h1.markdown("**CONTEÚDO**")
                         h2.markdown("**OBJETIVO DE ENSINO**")
@@ -2472,7 +2477,6 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                             with st.container():
                                 c1, c2, c3, c4 = st.columns([1, 2, 1, 2])
                                 
-                                # Extração e Limpeza
                                 def limpar(t): return re.sub(r'\[.*?\]', '', t).strip()
                                 
                                 v_c = limpar(ai.extrair_tag(b, "C"))
@@ -2480,7 +2484,6 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                                 v_f = limpar(ai.extrair_tag(b, "F"))
                                 v_m = limpar(ai.extrair_tag(b, "M"))
 
-                                # Caixas de Texto Individuais por Coluna
                                 edit_c = c1.text_area(f"C_{idx}", v_c, height=150, label_visibility="collapsed")
                                 edit_o = c2.text_area(f"O_{idx}", v_o, height=150, label_visibility="collapsed")
                                 edit_f = c3.text_area(f"F_{idx}", v_f, height=150, label_visibility="collapsed")
@@ -2489,7 +2492,6 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                                 lista_final_para_salvar.append({"C": edit_c, "O": edit_o, "F": edit_f, "M": edit_m})
                                 st.markdown("---")
 
-                        # SALVAMENTO
                         trim_destino = st.selectbox("Salvar em qual trimestre?", ["I Trimestre", "II Trimestre", "III Trimestre"])
                         if st.button("💾 ARQUIVAR PLANO TRIMESTRAL COMPLETO", use_container_width=True):
                             texto_banco = f"PLANO ADAPTADO - {trim_destino}\n\n"
@@ -2502,40 +2504,32 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                             st.success(f"✅ Currículo do {trim_destino} arquivado com sucesso!")
                             st.balloons()
 
-# ABA 5: LINHA DO TEMPO (CUSTÓDIA DIGITAL V38.6)
+        # --- ABA 5: LINHA DO TEMPO (CUSTÓDIA DIGITAL V38.6) ---
         with tab_timeline:
             st.subheader("🗂️ Linha do Tempo de Custódia Digital")
             st.caption("Histórico cronológico de todos os documentos e evidências geradas para este estudante.")
 
             if not hist_aluno.empty:
-                # Inverte para mostrar o mais recente primeiro
                 df_timeline = hist_aluno.iloc[::-1]
 
                 for idx, row in df_timeline.iterrows():
-                    # 1. IDENTIFICAÇÃO DO TIPO DE DOCUMENTO
-                    tipo_bruto = str(row.get('TURMA', 'REGISTRO')) # No seu banco, o tipo está na coluna TURMA
+                    tipo_bruto = str(row.get('TURMA', 'REGISTRO')) 
                     data_doc = row.get('DATA', 'S/D')
                     conteudo_raw = row.get('CONTEUDO', '')
 
-                    # Definição de Estilo por Tipo
                     if "EVOLUÇÃO" in tipo_bruto.upper():
                         label_tipo = "📈 RELATÓRIO DE EVOLUÇÃO"
-                        cor_borda = "#2962FF" # Azul
                         icone = "📊"
                     elif "CAPA_PEI" in tipo_bruto.upper():
                         label_tipo = "🏛️ CAPA DO PEI (PÁGINA 1)"
-                        cor_borda = "#7C3AED" # Roxo
                         icone = "📝"
                     elif "CURRICULO_ADAPTADO" in tipo_bruto.upper():
                         label_tipo = f"📖 CURRÍCULO ADAPTADO ({tipo_bruto.split('_')[-1]})"
-                        cor_borda = "#059669" # Verde
                         icone = "📚"
                     else:
                         label_tipo = f"📄 {tipo_bruto}"
-                        cor_borda = "#475569"
                         icone = "📎"
 
-                    # 2. RENDERIZAÇÃO DO CARD DE CUSTÓDIA
                     with st.container(border=True):
                         col_t1, col_t2 = st.columns([3, 1])
                         with col_t1:
@@ -2543,25 +2537,19 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                             st.caption(f"📅 Gerado em: {data_doc} | 🆔 ID Aluno: {id_a}")
                         
                         with col_t2:
-                            # Botão de Exclusão (Padrão SOSA)
                             if st.button("🗑️ APAGAR", key=f"del_rel_{idx}", use_container_width=True):
-                                # Lógica de exclusão no banco (precisa de uma função no database.py que delete por conteúdo ou ID)
                                 if db.excluir_registro("DB_RELATORIOS", conteudo_raw):
                                     st.success("Registro removido!"); time.sleep(0.5); st.rerun()
 
-                        # 3. EXIBIÇÃO ESTRUTURADA DO CONTEÚDO
                         with st.expander("👁️ VISUALIZAR DOCUMENTO COMPLETO", expanded=False):
                             if "CURRICULO_ADAPTADO" in tipo_bruto.upper():
-                                # Se for currículo, tenta organizar em blocos para leitura fácil
                                 partes = conteudo_raw.split("CONTEÚDO:")
                                 for p in partes:
                                     if p.strip():
                                         st.info(f"📖 **CONTEÚDO:** {p.strip()}")
                             else:
-                                # Para relatórios e capas, exibe o texto formatado
                                 st.markdown(conteudo_raw.replace("\n", "  \n"))
                             
-                            # Rodapé de Autenticidade
                             st.divider()
                             st.caption("🔒 Documento assinado digitalmente pelo ecossistema SOSA V38.6")
             else:
