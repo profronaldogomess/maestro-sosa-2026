@@ -1375,7 +1375,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                 st.plotly_chart(px.bar(progresso_trim, x="TRIMESTRE", y="%", text="%", title=f"Evolução da Cobertura Real - {ano_m}º Ano", color="%", color_continuous_scale="RdYlGn", range_y=[0, 110]), use_container_width=True)
             
 # ==============================================================================
-# MÓDULO: DIÁRIO DE BORDO (V47.1 - PRONTIDÃO, ATIVOS E DNA DO PLANO)
+# MÓDULO: DIÁRIO DE BORDO (V47.2 - SOBERANIA TOTAL E CORREÇÃO DE RENDERIZAÇÃO)
 # ==============================================================================
 elif menu == "📝 Diário de Bordo Rápido":
     st.title("📝 Diário de Bordo: Prontidão e Disciplina")
@@ -1387,197 +1387,168 @@ elif menu == "📝 Diário de Bordo Rápido":
     if df_alunos.empty:
         st.warning("⚠️ Base de alunos vazia. Por favor, cadastre as turmas e os alunos na aba 'Gestão da Turma' antes de acessar o Diário de Bordo.")
     else:
-        # 1. FILTROS RÁPIDOS (PRESERVADO)
-        with st.container(border=True):
-            c1, c2 = st.columns(2)
-            turma_sel = c1.selectbox("👥 Turma:", sorted(df_alunos['TURMA'].unique()), key=f"db_t_{v}")
-            data_sel = c2.date_input("📅 Data:", date.today(), key=f"db_d_{v}")
-            data_str = data_sel.strftime("%d/%m/%Y")
-            
-            # Dupla blindagem: garante que turma_sel seja tratado como string mesmo se nulo
-            ano_num = "".join(filter(str.isdigit, str(turma_sel)))
-
-        # 2. DETECÇÃO DO COCKPIT E DNA DO PLANO (AVANÇO V47.1)
-        aula_ativa = df_registro_aulas[(df_registro_aulas['TURMA'] == turma_sel) & (df_registro_aulas['DATA'] == data_str)]
+        # Filtra apenas turmas reais (ignora PI/PC no Diário)
+        turmas_reais_db = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
         
-        if not aula_ativa.empty:
-            row_ativa = aula_ativa.iloc[0]
-            material_hoje = row_ativa['CONTEUDO_MINISTRADO']
-            semana_ref = row_ativa['SEMANA']
-            
-            st.info(f"🚀 **Aula Ativa:** {material_hoje}")
-
-            # --- BUSCA DE DNA (PÁGINAS ALVO E MÉTODO) ---
-            # Busca o plano original no Ponto ID para extrair a Base Didática
-            plano_vinculado = df_planos[(df_planos['SEMANA'] == semana_ref) & (df_planos['ANO'].str.contains(ano_num))]
-            
-            if not plano_vinculado.empty:
-                plano_txt = str(plano_vinculado.iloc[0]['PLANO_TEXTO'])
-                base_didatica = ai.extrair_tag(plano_txt, "BASE_DIDATICA")
-                
-                if base_didatica:
-                    st.success(f"📍 **Páginas Alvo:** {base_didatica}")
-                else:
-                    st.warning("📍 **Páginas Alvo:** Método Manual (Sem livro vinculado)")
-
-            # --- BUSCA DE LINKS DOS ATIVOS (SMART MATCH) ---
-            match_material = df_aulas[df_aulas['TIPO_MATERIAL'].str.contains(material_hoje.split('+')[0].strip(), na=False)]
-            
-            if not match_material.empty:
-                with st.container(border=True):
-                    st.markdown("#### 📦 Ativos de Safra para esta Aula")
-                    txt_m = str(match_material.iloc[0]['CONTEUDO'])
-                    
-                    def extrair_link(t, k):
-                        m = re.search(rf"{k}.*?\(?(https?://[^\s\)]+)\)?", t, re.IGNORECASE)
-                        return m.group(1).strip() if m else None
-                    
-                    l_alu = match_material.iloc[0].get('LINK_DRIVE')
-                    l_pei = extrair_link(txt_m, "PEI")
-                    l_prof = extrair_link(txt_m, "Prof")
-                    
-                    c_at1, c_at2, c_at3 = st.columns(3)
-                    if l_alu: c_at1.link_button("📄 MATERIAL ALUNO", l_alu, use_container_width=True, type="primary")
-                    if l_pei: c_at2.link_button("♿ ATIVIDADE PEI", l_pei, use_container_width=True)
-                    if l_prof: c_at3.link_button("👨‍🏫 GUIA PROFESSOR", l_prof, use_container_width=True)
-            
-            # --- LEMBRETE DE PONTE (ONDE PARAMOS?) ---
-            # Busca o último registro de aula desta turma (anterior à data de hoje)
-            reg_anterior = df_registro_aulas[
-                (df_registro_aulas['TURMA'] == turma_sel) & 
-                (df_registro_aulas['DATA'] != data_str)
-            ].sort_values(by='DATA', ascending=False)
-            
-            if not reg_anterior.empty:
-                ultima_ponte = reg_anterior.iloc[0].get('PONTE_PEDAGOGICA', 'Sem registro.')
-                if ultima_ponte and str(ultima_ponte).strip() != "":
-                    st.warning(f"🔙 **Na aula anterior paramos em:** {ultima_ponte}")
-
+        if turmas_reais_db.empty:
+            st.warning("⚠️ Nenhuma turma regular cadastrada para o Diário.")
         else:
-            st.warning("⚠️ Nenhuma aula aberta no Cockpit para esta data.")
-            material_hoje = "Instrução Avulsa"
-        
-        # 3. PAINEL DE REGÊNCIA (FECHAMENTO - PRESERVADO)
-        with st.expander("🚦 Painel de Regência (Fechamento de Aula)", expanded=True):
-            c_reg1, c_reg2, c_reg3 = st.columns([1, 2, 1])
-            
-            status_aula = c_reg1.selectbox(
-                "Status da Execução:", 
-                ["🟢 Concluído (100%)", "🟡 Parcial (Pendência)", "🔴 Bloqueado (Crítico)"],
-                key=f"status_reg_{v}"
-            )
-            
-            ponte_pedagogica = c_reg2.text_area(
-                "🔗 Ponte Pedagógica (Onde paramos?):", 
-                placeholder="Ex: Parei no slide 5. Faltou corrigir a atividade...",
-                height=68,
-                key=f"ponte_reg_{v}"
-            )
-            
-            clima_turma = c_reg3.select_slider(
-                "🌡️ Clima da Turma:", 
-                options=["😴 Apática", "😐 Dispersa", "🧠 Focada", "⚡ Agitada", "🤯 Dificuldade Alta"],
-                value="🧠 Focada",
-                key=f"clima_reg_{v}"
-            )
-
-        # 4. BUSCA DE REGISTROS EXISTENTES (PRESERVADO)
-        registros_atuais = df_diario[
-            (df_diario['DATA'] == data_str) & 
-            (df_diario['TURMA'] == turma_sel) & 
-            (df_diario['TAGS'] != "SISTEMA_NOTA")
-        ]
-
-        # 5. AÇÕES EM LOTE (PRESERVADO)
-        st.markdown("---")
-        col_lote1, col_lote2 = st.columns(2)
-        if col_lote1.button("✅ VISTO EM TODOS", use_container_width=True):
-            st.session_state[f"visto_lote_{turma_sel}"] = True
-            st.rerun()
-        if col_lote2.button("🧹 LIMPAR TUDO", use_container_width=True):
-            st.session_state[f"visto_lote_{turma_sel}"] = False
-            st.rerun()
-
-        # 6. MONTAGEM DA MESA DE LANÇAMENTO (PRESERVADO)
-        alunos_turma = df_alunos[df_alunos['TURMA'] == turma_sel].sort_values(by="NOME_ALUNO")
-        
-        dados_diario = []
-        for _, alu in alunos_turma.iterrows():
-            id_a = db.limpar_id(alu['ID'])
-            is_pei = str(alu['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"]
-            
-            reg_existente = registros_atuais[registros_atuais['ID_ALUNO'].apply(db.limpar_id) == id_a]
-            
-            if not reg_existente.empty:
-                visto_val = str(reg_existente.iloc[0]['VISTO_ATIVIDADE']).upper() == "TRUE"
-                falta_val = reg_existente.iloc[0]['TAGS'] == "AUSÊNCIA"
-                bonus_val = util.sosa_to_float(reg_existente.iloc[0].get('BONUS', 0))
-                tag_val = reg_existente.iloc[0]['TAGS'] if not falta_val else ""
-                obs_val = reg_existente.iloc[0]['OBSERVACOES']
-            else:
-                visto_val = st.session_state.get(f"visto_lote_{turma_sel}", True)
-                falta_val = False
-                bonus_val = 0.0
-                tag_val = ""
-                obs_val = ""
-
-            dados_diario.append({
-                "ID": id_a,
-                "ESTUDANTE": f"♿ {alu['NOME_ALUNO']}" if is_pei else alu['NOME_ALUNO'],
-                "F": falta_val,
-                "V": visto_val,
-                "⭐": bonus_val,
-                "VETOR DISCIPLINAR": tag_val,
-                "OBSERVAÇÃO (🎙️ DITE AQUI)": obs_val
-            })
-
-        # Editor Vertical Otimizado (PRESERVADO)
-        df_editado = st.data_editor(
-            pd.DataFrame(dados_diario),
-            column_config={
-                "ID": None,
-                "ESTUDANTE": st.column_config.TextColumn("Estudante", width="medium", disabled=True),
-                "F": st.column_config.CheckboxColumn("F", help="Faltou"),
-                "V": st.column_config.CheckboxColumn("V", help="Visto"),
-                "⭐": st.column_config.SelectboxColumn("⭐", options=[0.0, 0.1, 0.2, 0.3, 0.5, 1.0]),
-                "VETOR DISCIPLINAR": st.column_config.SelectboxColumn(
-                    "Vetor", 
-                    options=["", "Fardamento", "Postura", "Atraso", "Celular", "Indisciplina", "Comunicação", "Elogio", "Destaque", "Dormiu", "PEI CONCLUÍDO"]
-                ),
-                "OBSERVAÇÃO (🎙️ DITE AQUI)": st.column_config.TextColumn("Ocorrências / Comunicação", width="large")
-            },
-            hide_index=True, use_container_width=True, key=f"editor_diario_{v}"
-        )
-
-        # 7. SALVAMENTO E SINCRONIA (PRESERVADO)
-        if st.button("💾 SALVAR ALTERAÇÕES E CONSOLIDAR", type="primary", use_container_width=True):
-            with st.status("Sincronizando Práxis...") as status:
-                db.limpar_diario_data_turma(data_str, turma_sel)
+            # 1. FILTROS RÁPIDOS
+            with st.container(border=True):
+                c1, c2 = st.columns(2)
+                turma_sel = c1.selectbox("👥 Turma:", sorted(turmas_reais_db['ID_TURMA'].unique()), key=f"db_t_{v}")
+                data_sel = c2.date_input("📅 Data:", date.today(), key=f"db_d_{v}")
+                data_str = data_sel.strftime("%d/%m/%Y")
                 
-                linhas_diario = []
-                for _, r in df_editado.iterrows():
-                    aluno_eh_pei = "♿" in r['ESTUDANTE']
-                    tag_f = "AUSÊNCIA" if r['F'] else r['VETOR DISCIPLINAR']
-                    visto_f = False if r['F'] else r['V']
-                    
-                    if aluno_eh_pei and visto_f and not tag_f:
-                        tag_f = "PEI CONCLUÍDO"
-                    
-                    obs_final = r['OBSERVAÇÃO (🎙️ DITE AQUI)']
-                    if r['VETOR DISCIPLINAR'] == "Comunicação":
-                        obs_final = f"🚨 COMUNICAÇÃO: {obs_final}"
+                ano_num = "".join(filter(str.isdigit, str(turma_sel)))
 
-                    linhas_diario.append([
-                        data_str, r['ID'], r['ESTUDANTE'].replace("♿ ", ""), turma_sel,
-                        str(visto_f), tag_f, obs_final, util.sosa_to_str(r['⭐'])
-                    ])
-                            
-                if db.salvar_lote("DB_DIARIO_BORDO", linhas_diario):
-                    db.atualizar_fechamento_aula(data_str, turma_sel, status_aula, ponte_pedagogica, clima_turma)
-                    status.update(label="✅ Diário e Regência Atualizados!", state="complete")
-                    st.balloons()
-                    if f"visto_lote_{turma_sel}" in st.session_state: del st.session_state[f"visto_lote_{turma_sel}"]
-                    time.sleep(1); st.rerun()
+            # 2. DETECÇÃO DO COCKPIT E DNA DO PLANO
+            aula_ativa = df_registro_aulas[(df_registro_aulas['TURMA'] == turma_sel) & (df_registro_aulas['DATA'] == data_str)]
+            
+            if not aula_ativa.empty:
+                row_ativa = aula_ativa.iloc[0]
+                material_hoje = row_ativa['CONTEUDO_MINISTRADO']
+                semana_ref = row_ativa['SEMANA']
+                
+                st.info(f"🚀 **Aula Ativa:** {material_hoje}")
+
+                # Busca DNA
+                plano_vinculado = df_planos[(df_planos['SEMANA'] == semana_ref) & (df_planos['ANO'].str.contains(ano_num))]
+                if not plano_vinculado.empty:
+                    plano_txt = str(plano_vinculado.iloc[0]['PLANO_TEXTO'])
+                    base_didatica = ai.extrair_tag(plano_txt, "BASE_DIDATICA")
+                    if base_didatica: st.success(f"📍 **Páginas Alvo:** {base_didatica}")
+                    else: st.warning("📍 **Páginas Alvo:** Método Manual (Sem livro vinculado)")
+
+                # Busca Links
+                match_material = df_aulas[df_aulas['TIPO_MATERIAL'].str.contains(material_hoje.split('+')[0].strip(), na=False)]
+                if not match_material.empty:
+                    with st.container(border=True):
+                        st.markdown("#### 📦 Ativos de Safra para esta Aula")
+                        txt_m = str(match_material.iloc[0]['CONTEUDO'])
+                        def extrair_link(t, k):
+                            m = re.search(rf"{k}.*?\(?(https?://[^\s\)]+)\)?", t, re.IGNORECASE)
+                            return m.group(1).strip() if m else None
+                        
+                        l_alu = match_material.iloc[0].get('LINK_DRIVE')
+                        l_pei = extrair_link(txt_m, "PEI")
+                        l_prof = extrair_link(txt_m, "Prof")
+                        
+                        c_at1, c_at2, c_at3 = st.columns(3)
+                        if l_alu: c_at1.link_button("📄 MATERIAL ALUNO", l_alu, use_container_width=True, type="primary")
+                        if l_pei: c_at2.link_button("♿ ATIVIDADE PEI", l_pei, use_container_width=True)
+                        if l_prof: c_at3.link_button("👨‍🏫 GUIA PROFESSOR", l_prof, use_container_width=True)
+                
+                # Lembrete de Ponte
+                reg_anterior = df_registro_aulas[(df_registro_aulas['TURMA'] == turma_sel) & (df_registro_aulas['DATA'] != data_str)].sort_values(by='DATA', ascending=False)
+                if not reg_anterior.empty:
+                    ultima_ponte = reg_anterior.iloc[0].get('PONTE_PEDAGOGICA', 'Sem registro.')
+                    if ultima_ponte and str(ultima_ponte).strip() != "":
+                        st.warning(f"🔙 **Na aula anterior paramos em:** {ultima_ponte}")
+            else:
+                st.warning("⚠️ Nenhuma aula aberta no Cockpit para esta data.")
+                material_hoje = "Instrução Avulsa"
+            
+            # 3. PAINEL DE REGÊNCIA
+            with st.expander("🚦 Painel de Regência (Fechamento de Aula)", expanded=True):
+                c_reg1, c_reg2, c_reg3 = st.columns([1, 2, 1])
+                status_aula = c_reg1.selectbox("Status da Execução:", ["🟢 Concluído (100%)", "🟡 Parcial (Pendência)", "🔴 Bloqueado (Crítico)"], key=f"status_reg_{v}")
+                ponte_pedagogica = c_reg2.text_area("🔗 Ponte Pedagógica (Onde paramos?):", placeholder="Ex: Parei no slide 5...", height=68, key=f"ponte_reg_{v}")
+                clima_turma = c_reg3.select_slider("🌡️ Clima da Turma:", options=["😴 Apática", "😐 Dispersa", "🧠 Focada", "⚡ Agitada", "🤯 Dificuldade Alta"], value="🧠 Focada", key=f"clima_reg_{v}")
+
+            # 4. BUSCA DE REGISTROS
+            registros_atuais = df_diario[(df_diario['DATA'] == data_str) & (df_diario['TURMA'] == turma_sel) & (df_diario['TAGS'] != "SISTEMA_NOTA")]
+
+            # 5. AÇÕES EM LOTE
+            st.markdown("---")
+            col_lote1, col_lote2 = st.columns(2)
+            if col_lote1.button("✅ VISTO EM TODOS", use_container_width=True):
+                st.session_state[f"visto_lote_{turma_sel}"] = True
+                st.rerun()
+            if col_lote2.button("🧹 LIMPAR TUDO", use_container_width=True):
+                st.session_state[f"visto_lote_{turma_sel}"] = False
+                st.rerun()
+
+            # 6. MONTAGEM DA MESA DE LANÇAMENTO
+            alunos_turma = df_alunos[df_alunos['TURMA'] == turma_sel].sort_values(by="NOME_ALUNO")
+            
+            dados_diario = []
+            for _, alu in alunos_turma.iterrows():
+                id_a = db.limpar_id(alu['ID'])
+                is_pei = str(alu['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", "", "NAN", "TÍPICO", "TIPICO"]
+                
+                reg_existente = registros_atuais[registros_atuais['ID_ALUNO'].apply(db.limpar_id) == id_a]
+                
+                if not reg_existente.empty:
+                    visto_val = str(reg_existente.iloc[0]['VISTO_ATIVIDADE']).upper() == "TRUE"
+                    falta_val = reg_existente.iloc[0]['TAGS'] == "AUSÊNCIA"
+                    bonus_val = util.sosa_to_float(reg_existente.iloc[0].get('BONUS', 0))
+                    tag_val = reg_existente.iloc[0]['TAGS'] if not falta_val else ""
+                    obs_val = reg_existente.iloc[0]['OBSERVACOES']
+                else:
+                    visto_val = st.session_state.get(f"visto_lote_{turma_sel}", True)
+                    falta_val = False
+                    bonus_val = 0.0
+                    tag_val = ""
+                    obs_val = ""
+
+                dados_diario.append({
+                    "ID": id_a,
+                    "ESTUDANTE": f"♿ {alu['NOME_ALUNO']}" if is_pei else alu['NOME_ALUNO'],
+                    "F": falta_val,
+                    "V": visto_val,
+                    "⭐": bonus_val,
+                    "VETOR DISCIPLINAR": tag_val,
+                    "OBSERVAÇÃO (🎙️ DITE AQUI)": obs_val
+                })
+
+            # --- AQUI ESTÁ A TABELA QUE HAVIA SUMIDO ---
+            df_editado = st.data_editor(
+                pd.DataFrame(dados_diario),
+                column_config={
+                    "ID": None,
+                    "ESTUDANTE": st.column_config.TextColumn("Estudante", width="medium", disabled=True),
+                    "F": st.column_config.CheckboxColumn("F", help="Faltou"),
+                    "V": st.column_config.CheckboxColumn("V", help="Visto"),
+                    "⭐": st.column_config.SelectboxColumn("⭐", options=[0.0, 0.1, 0.2, 0.3, 0.5, 1.0]),
+                    "VETOR DISCIPLINAR": st.column_config.SelectboxColumn(
+                        "Vetor", 
+                        options=["", "Fardamento", "Postura", "Atraso", "Celular", "Indisciplina", "Comunicação", "Elogio", "Destaque", "Dormiu", "PEI CONCLUÍDO"]
+                    ),
+                    "OBSERVAÇÃO (🎙️ DITE AQUI)": st.column_config.TextColumn("Ocorrências / Comunicação", width="large")
+                },
+                hide_index=True, use_container_width=True, key=f"editor_diario_{v}"
+            )
+
+            # 7. SALVAMENTO E SINCRONIA
+            if st.button("💾 SALVAR ALTERAÇÕES E CONSOLIDAR", type="primary", use_container_width=True):
+                with st.status("Sincronizando Práxis...") as status:
+                    db.limpar_diario_data_turma(data_str, turma_sel)
+                    
+                    linhas_diario = []
+                    for _, r in df_editado.iterrows():
+                        aluno_eh_pei = "♿" in r['ESTUDANTE']
+                        tag_f = "AUSÊNCIA" if r['F'] else r['VETOR DISCIPLINAR']
+                        visto_f = False if r['F'] else r['V']
+                        
+                        if aluno_eh_pei and visto_f and not tag_f:
+                            tag_f = "PEI CONCLUÍDO"
+                        
+                        obs_final = r['OBSERVAÇÃO (🎙️ DITE AQUI)']
+                        if r['VETOR DISCIPLINAR'] == "Comunicação":
+                            obs_final = f"🚨 COMUNICAÇÃO: {obs_final}"
+
+                        linhas_diario.append([
+                            data_str, r['ID'], r['ESTUDANTE'].replace("♿ ", ""), turma_sel,
+                            str(visto_f), tag_f, obs_final, util.sosa_to_str(r['⭐'])
+                        ])
+                                
+                    if db.salvar_lote("DB_DIARIO_BORDO", linhas_diario):
+                        db.atualizar_fechamento_aula(data_str, turma_sel, status_aula, ponte_pedagogica, clima_turma)
+                        status.update(label="✅ Diário e Regência Atualizados!", state="complete")
+                        st.balloons()
+                        if f"visto_lote_{turma_sel}" in st.session_state: del st.session_state[f"visto_lote_{turma_sel}"]
+                        time.sleep(1); st.rerun()
 
 # ==============================================================================
 # MÓDULO: PAINEL DE NOTAS V32.2 - CÁLCULO AUTOMÁTICO E RECUPERAÇÃO PARALELA
