@@ -315,10 +315,10 @@ def exibir_material_estruturado(texto_raw, key_prefix, dados_plano=None, info_au
                         st.error(f"Falha no envio dos arquivos.")
                        
 # ==============================================================================
-# MÓDULO: LABORATÓRIO DE PRODUÇÃO (CRIADOR V44.1 - FIX DE VÍNCULO)
+# MÓDULO: LABORATÓRIO DE PRODUÇÃO (CRIADOR V44.2 - SINCRONIA DE TRILHAS)
 # ==============================================================================
 if menu == "🧪 Criador de Aulas":
-    st.title("🧪 Laboratório de Produção Semiótica (V44.1)")
+    st.title("🧪 Laboratório de Produção Semiótica (V44.2)")
     st.markdown("---")
     
     def reset_laboratorio():
@@ -336,11 +336,12 @@ if menu == "🧪 Criador de Aulas":
     meta = st.session_state.get("lab_meta", {})
     is_hub = meta.get("tipo") == "PRODUÇÃO_HUB"
     
+    # --- ÁREA DE EXIBIÇÃO E REFINO (PRESERVADA) ---
     if "lab_temp" in st.session_state:
-        # (Bloco de exibição e refino permanece igual ao anterior)
         txt_base = st.session_state.lab_temp
         s_id = st.session_state.get("sosa_id_atual", "SEM-ID")
         st.success(f"💎 Material em Edição: **{s_id}**")
+
         with st.container(border=True):
             st.subheader("🤖 Refinador Maestro")
             cmd_refine_lab = st.chat_input("Solicite ajustes...", key=f"chat_lab_ref_{v}")
@@ -358,7 +359,7 @@ if menu == "🧪 Criador de Aulas":
 
         with t_sync:
             if st.button("💾 EXECUTAR TRIPLE-SYNC", use_container_width=True, type="primary"):
-                with st.status("Sincronizando...") as status:
+                with st.status("Sincronizando Ativos de Elite...") as status:
                     db.excluir_registro_com_drive("DB_AULAS_PRONTAS", s_id)
                     info_doc = {"ano": f"{meta.get('ano')}º", "trimestre": "I Trimestre", "semana": meta.get('semana_ref')}
                     doc_alu = exporter.gerar_docx_aluno_v24(s_id, ai.extrair_tag(txt_base, "ALUNO"), info_doc)
@@ -370,6 +371,7 @@ if menu == "🧪 Criador de Aulas":
                     db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), meta.get('semana_ref'), s_id, txt_base, f"{meta.get('ano')}º", link_alu])
                     status.update(label="✅ Sincronizado!", state="complete"); st.balloons(); time.sleep(1); reset_laboratorio()
 
+    # --- SEÇÃO DE ENTRADA (CONFIGURAÇÃO COM INTELIGÊNCIA DE TRILHAS) ---
     else:
         tab_producao, tab_trabalhos, tab_complementar, tab_acervo_lab = st.tabs([
             "🚀 Produção (Aula 1/2)", "📋 Engenharia de Trabalhos", "📚 Atividades Complementares", "📂 Acervo de Materiais"
@@ -403,28 +405,14 @@ if menu == "🧪 Criador de Aulas":
                                 contexto_turmas_ia += f"- Turma {t_nome}: Status {est}. Pendência: {pnt}\n"
                         else: st.info("ℹ️ Nenhuma regência anterior.")
 
-                    # --- 2. MOTOR DE BUSCA NA BIBLIOTECA (CORREÇÃO DE COLUNA) ---
+                    # --- 2. MOTOR DE HERANÇA DE DNA (LIVRO E TRILHAS) ---
                     base_herdada = ai.extrair_tag(plano_txt, "BASE_DIDATICA")
                     metodo_entrega = st.radio("🎯 Método de Entrega:", ["🚀 Geração Integral (SOSA AI)", "📖 Livro Didático + PEI (Híbrido)"], horizontal=True, key=f"metodo_{v}")
                     
-                    info_biblioteca = ""
-                    if "Livro" in metodo_entrega:
-                        # Limpa o nome do livro para busca (remove "Livro:" e espaços)
-                        nome_livro_limpo = base_herdada.split('|')[0].replace("Livro:", "").strip()
-                        # Busca na coluna NOME_ARQUIVO
-                        match_biblioteca = df_materiais[df_materiais['NOME_ARQUIVO'].str.contains(nome_livro_limpo[:10], case=False, na=False)]
-                        
-                        if not match_biblioteca.empty:
-                            arquivo_ref = match_biblioteca.iloc[0]
-                            st.success(f"📚 **Fonte Vinculada:** {arquivo_ref['NOME_ARQUIVO']} | {base_herdada}")
-                            # CORREÇÃO AQUI: Usando URI_ARQUIVO em vez de LINK_ARQUIVO
-                            info_biblioteca = f"FONTE BIBLIOTECA (URI): {arquivo_ref['URI_ARQUIVO']}. Use este arquivo como base técnica."
-                        else:
-                            st.warning(f"⚠️ **Atenção:** '{nome_livro_limpo}' não localizado na Biblioteca. A IA usará conhecimento geral.")
-
-                    # --- 3. COCKPIT DE PRODUÇÃO ---
+                    # --- 3. COCKPIT DE PRODUÇÃO (COM FILTRAGEM DE AULA) ---
                     opcoes_disponiveis = ["Aula 1"]
                     if len(ai.extrair_tag(plano_txt, "AULA_2")) > 30: opcoes_disponiveis.append("Aula 2")
+                    
                     obj_geral = ai.extrair_tag(plano_txt, "OBJETO_CONHECIMENTO") or ai.extrair_tag(plano_txt, "CONTEUDO_GERAL")
                     
                     with st.container(border=True):
@@ -435,11 +423,29 @@ if menu == "🧪 Criador de Aulas":
                         with col_config2:
                             qtd_q_prod = st.slider("Nº de Questões (PEI/Regular):", 1, 20, 10, key=f"prod_q_{v}")
 
-                        tag_previa = "AULA_1" if "1" in aula_alvo_prod else "AULA_2"
-                        with st.expander(f"👁️ Visualizar Roteiro do Plano ({aula_alvo_prod})", expanded=False):
-                            st.info(ai.extrair_tag(plano_txt, tag_previa))
+                        # --- LÓGICA DE FILTRAGEM DE CONTEÚDO POR AULA ---
+                        tag_roteiro = "AULA_1" if "1" in aula_alvo_prod else "AULA_2"
+                        roteiro_especifico = ai.extrair_tag(plano_txt, tag_roteiro)
+                        
+                        # Separação de Páginas (se houver ;)
+                        paginas_aula = base_herdada
+                        if ";" in base_herdada:
+                            partes_pag = base_herdada.split(";")
+                            paginas_aula = partes_pag[0].strip() if "1" in aula_alvo_prod else partes_pag[1].strip()
 
-                    # --- 4. SENSOR DE NEURODIVERSIDADE ---
+                        with st.expander(f"👁️ Roteiro Herdado para {aula_alvo_prod}", expanded=False):
+                            st.info(f"📍 **Páginas Alvo:** {paginas_aula}\n\n{roteiro_especifico}")
+
+                    # --- 4. SMART MATCH COM BIBLIOTECA (FRESH-SYNC) ---
+                    uri_referencia_aula = None
+                    if "Livro" in metodo_entrega:
+                        nome_livro_limpo = base_herdada.split('|')[0].replace("Livro:", "").strip()
+                        match_biblioteca = df_materiais[df_materiais['NOME_ARQUIVO'].str.contains(nome_livro_limpo[:10], case=False, na=False)]
+                        if not match_biblioteca.empty:
+                            uri_referencia_aula = match_biblioteca.iloc[0]['URI_ARQUIVO']
+                            st.success(f"📚 **Fonte Vinculada:** {match_biblioteca.iloc[0]['NOME_ARQUIVO']} (Páginas: {paginas_aula})")
+
+                    # --- 5. SENSOR DE NEURODIVERSIDADE ---
                     alunos_foco = df_alunos[(df_alunos['TURMA'].str.contains(str(ano_lab))) & (~df_alunos['NECESSIDADES'].isin(["NENHUMA", "PENDENTE", "", "NAN"]))]
                     texto_clinico = ", ".join(alunos_foco['NECESSIDADES'].unique().tolist()) if not alunos_foco.empty else "PADRÃO"
                     if not alunos_foco.empty: st.warning(f"♿ **Sensor PEI Ativo:** {texto_clinico}")
@@ -447,47 +453,25 @@ if menu == "🧪 Criador de Aulas":
                     instr_extra_prod = st.text_area("📝 Contexto Extra / Ajustes Específicos:", key=f"prod_extra_{v}")
 
                     if st.button("💎 MATERIALIZAR TRATADO DE ELITE", use_container_width=True, type="primary"):
-                        with st.spinner("Sosa estudando o livro e arquitetando material integrado..."):
-                            
-                            # 1. BUSCA DE URI NA BIBLIOTECA (DNA REAL PARA AULA)
-                            uri_referencia_aula = None
-                            if "Livro" in metodo_entrega:
-                                # Extrai o nome do livro do DNA herdado para buscar o arquivo
-                                nome_livro_plano = base_herdada.split('|')[0].replace("Livro:", "").strip()
-                                # Busca flexível no banco de materiais
-                                match_biblioteca = df_materiais[df_materiais['NOME_ARQUIVO'].str.contains(nome_livro_plano[:10], case=False, na=False)]
-                                
-                                if not match_biblioteca.empty:
-                                    uri_referencia_aula = match_biblioteca.iloc[0]['URI_ARQUIVO']
-                                    st.toast(f"📖 Fonte '{match_biblioteca.iloc[0]['NOME_ARQUIVO']}' vinculada à produção.", icon="📚")
-
-                            # 2. CONFIGURAÇÃO DE IDENTIDADE (Preservado)
+                        with st.spinner(f"Sosa estudando as páginas de {aula_alvo_prod} e arquitetando material..."):
                             nome_elite = util.gerar_nome_material_elite(ano_lab, aula_alvo_prod, sem_lab)
                             st.session_state.sosa_id_atual = nome_elite
                             st.session_state.lab_meta = {"ano": ano_lab, "semana_ref": sem_lab}
                             
-                            # 3. PROMPT DE SOBERANIA V45 (INTEGRAÇÃO TOTAL + SENSOR PEI)
                             prompt_manual = (
                                 f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {nome_elite}.\n"
-                                f"MÉTODO: {metodo_entrega}. {info_biblioteca}\n"
-                                f"REFERÊNCIA PLANO: {base_herdada}\n"
-                                f"SÉRIE: {ano_lab}º Ano. ALVO: {aula_alvo_prod}. QTD: {qtd_q_prod}.\n\n"
-                                f"--- HERANÇA DO PLANO (ROTEIRO) ---\n{ai.extrair_tag(plano_txt, tag_previa)}\n\n"
-                                f"--- SENSOR DE INCLUSÃO (TURMA REAL) ---\nA turma possui alunos com: {texto_clinico}.\n\n"
-                                f"🚨 MISSÃO DE VISÃO: Se houver um arquivo anexo, utilize-o como fonte primária. "
-                                f"O [PROFESSOR] deve ser um guia de mediação para as páginas citadas. "
-                                f"O [PEI] deve ser uma adaptação fiel e visual dos exercícios presentes no anexo.\n\n"
-                                f"--- EXTRAS E AJUSTES ---\n{instr_extra_prod}"
+                                f"MÉTODO: {metodo_entrega}. ALVO: {aula_alvo_prod}.\n"
+                                f"PÁGINAS ESPECÍFICAS DESTA AULA: {paginas_aula}\n"
+                                f"SÉRIE: {ano_lab}º Ano. QTD: {qtd_q_prod}.\n\n"
+                                f"🚨 MISSÃO DE SOBERANIA:\n"
+                                f"1. Use o arquivo anexo para fundamentar APENAS as páginas {paginas_aula}.\n"
+                                f"2. O [PROFESSOR] deve mediar o roteiro: {roteiro_especifico}.\n"
+                                f"3. O [PEI] deve ser uma atividade adaptada fiel ao conteúdo destas páginas.\n\n"
+                                f"--- STATUS DE REGÊNCIA ---\n{contexto_turmas_ia}\n"
+                                f"--- SENSOR DE INCLUSÃO ---\nA turma possui alunos com: {texto_clinico}.\n"
+                                f"--- EXTRAS ---\n{instr_extra_prod}"
                             )
-                            
-                            # 4. CHAMADA DA IA COM SUPORTE A URI (VISÃO)
-                            st.session_state.lab_temp = ai.gerar_ia(
-                                "MAESTRO_SOSA_V28_ELITE", 
-                                prompt_manual, 
-                                uri_referencia=uri_referencia_aula, 
-                                usar_busca=True
-                            )
-                            
+                            st.session_state.lab_temp = ai.gerar_ia("MAESTRO_SOSA_V28_ELITE", prompt_manual, url_drive=uri_referencia_aula, usar_busca=True)
                             st.rerun()
 
 # --- ABA 3: ENGENHARIA DE TRABALHOS (VERSÃO V31.7 - BLINDAGEM DE TABELAS) ---
