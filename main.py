@@ -863,32 +863,40 @@ if menu == "📅 Planejamento (Ponto ID)":
             strat = st.text_area("Estratégia / Observações do Professor:", key=f"p_strat_{v}")
 
         if st.button("🚀 COMPILAR PLANEJAMENTO INTEGRADO", use_container_width=True, type="primary", key=f"btn_compilar_{v}"):
-            with st.spinner("Maestro SOSA ativando Fresh-Sync e lendo material do Drive..."):
-                plano_anterior_txt = "Início de Safra."
-                df_hist = df_planos[df_planos['ANO'] == ano_str_busca].sort_values(by='DATA', ascending=False)
-                if not df_hist.empty: plano_anterior_txt = df_hist.iloc[0]['PLANO_TEXTO']
+            if modo_p == "📖 Livro Didático" and not uri_livro_drive:
+                st.error("❌ Erro: O livro selecionado não possui um link válido no banco de materiais.")
+            else:
+                with st.spinner("Maestro SOSA processando... (Isso pode levar 30s devido à leitura do PDF)"):
+                    # Busca Continuidade
+                    plano_anterior_txt = "Início de Safra."
+                    df_hist = df_planos[df_planos['ANO'] == ano_str_busca].sort_values(by='DATA', ascending=False)
+                    if not df_hist.empty: plano_anterior_txt = df_hist.iloc[0]['PLANO_TEXTO']
 
-                prompt = (
-                    f"ORDEM SOBERANA: Analise o arquivo do Google Drive anexo e a Matriz de Itabuna.\n"
-                    f"NATUREZA: {tipo_semana}. SEMANA: {sem_limpa}. SÉRIE: {ano_p}º Ano. TRIMESTRE: {trim_atual}.\n"
-                    f"CARGA HORÁRIA: {carga_horaria}. BASE DIDÁTICA: {base_didatica_info}.\n"
-                    f"CONTEXTO TÉCNICO: {ctx_ia}. ESTRATEGIA: {strat}.\n\n"
-                    f"{ctx_ativo_vinculado}\n\n"
-                    f"--- PONTE DE CONTINUIDADE ---\n{plano_anterior_txt}\n\n"
-                    f"🚨 MISSÃO: Extraia a sequência didática exata das páginas citadas no anexo. "
-                    f"Preencha TODAS as tags e garanta densidade acadêmica estilo Brasil Escola.\n"
-                    f"--- MATRIZ ITABUNA ---\n{df_curriculo[df_curriculo['ANO'].astype(str)==str(ano_p)].to_string(index=False)}"
-                )
-                
-                st.session_state.p_temp = ai.gerar_ia("PLANE_PEDAGOGICO", prompt, url_drive=uri_livro_drive)
-                
-                st.session_state.p_meta = {
-                    "semana": sem_limpa, "carga": carga_horaria, 
-                    "trimestre": trim_atual, "ano": ano_str_busca,
-                    "base": base_didatica_info
-                }
-                st.session_state.v_plano = int(time.time())
-                st.rerun()
+                    prompt = (
+                        f"ORDEM SOBERANA: Gere um Plano de Ensino ÚNICO e SEM REPETIÇÕES.\n"
+                        f"NATUREZA: {tipo_semana}. SEMANA: {sem_limpa}. SÉRIE: {ano_p}º Ano. TRIMESTRE: {trim_atual}.\n"
+                        f"CARGA HORÁRIA: {carga_horaria}. BASE DIDÁTICA: {base_didatica_info}.\n"
+                        f"CONTEXTO TÉCNICO: {ctx_ia}. ESTRATEGIA: {strat}.\n\n"
+                        f"{ctx_ativo_vinculado}\n\n"
+                        f"--- PONTE DE CONTINUIDADE ---\n{plano_anterior_txt}\n\n"
+                        f"🚨 MISSÃO: Se houver um arquivo anexo, use-o. Se não houver ou o link falhar, use seu conhecimento sobre o tema {base_didatica_info}. "
+                        f"É OBRIGATÓRIO preencher todas as tags: [HABILIDADE_BNCC], [COMPETENCIAS_FOCO], [OBJETO_CONHECIMENTO], [CONTEUDOS_ESPECIFICOS], [OBJETIVOS_ENSINO], [JUSTIFICATIVA_PEDAGOGICA], [AULA_1], [AULA_2], [SABADO_LETIVO], [AVALIACAO_DE_MERITO], [ESTRATEGIA_DUA_PEI].\n"
+                        f"--- MATRIZ ITABUNA ---\n{df_curriculo[df_curriculo['ANO'].astype(str)==str(ano_p)].to_string(index=False)}"
+                    )
+                    
+                    resultado = ai.gerar_ia("PLANE_PEDAGOGICO", prompt, url_drive=uri_livro_drive)
+                    
+                    if "Erro Crítico" in resultado:
+                        st.error(resultado)
+                    else:
+                        st.session_state.p_temp = resultado
+                        st.session_state.p_meta = {
+                            "semana": sem_limpa, "carga": carga_horaria, 
+                            "trimestre": trim_atual, "ano": ano_str_busca,
+                            "base": base_didatica_info
+                        }
+                        st.session_state.v_plano = int(time.time())
+                        st.rerun()
 
         # --- EDITOR E VISUALIZAÇÃO (MANTIDOS) ---
         if "p_temp" in st.session_state:
