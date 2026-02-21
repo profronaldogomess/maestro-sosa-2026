@@ -851,16 +851,15 @@ if menu == "📅 Planejamento (Ponto ID)":
                 cx1, cx2 = st.columns([2, 1])
                 livros_disponiveis = df_materiais[df_materiais['TIPO'].str.contains(str(ano_p), na=False)]['NOME_ARQUIVO'].tolist()
                 sel_mat = cx1.selectbox("Selecionar Livro do Cofre:", [""] + livros_disponiveis, key=f"p_livro_{v}")
-                pags = cx2.text_input("Páginas:", key=f"p_pags_{v}")
+                
+                # Campo de páginas com instrução de múltiplos intervalos
+                pags = cx2.text_input("Páginas:", placeholder="Ex: 14-23 ; 45-50", help="Use ';' para separar capítulos diferentes.", key=f"p_pags_{v}")
                 
                 if sel_mat:
                     match_mat = df_materiais[df_materiais['NOME_ARQUIVO'] == sel_mat].iloc[0]
                     uri_livro_drive = match_mat['URI_ARQUIVO']
                     base_didatica_info = f"Livro: {sel_mat} | Páginas: {pags}"
-                    ctx_ia = f"LIVRO: {sel_mat} PÁGINAS: {pags}."
-                    st.success(f"🔗 Link do Drive Vinculado: {sel_mat}")
-
-            strat = st.text_area("Estratégia / Observações do Professor:", key=f"p_strat_{v}")
+                    st.caption(f"💡 **Dica:** Se usar ';' a Aula 1 focará no 1º intervalo e a Aula 2 no 2º.")
 
 # --- BOTÃO DE COMPILAÇÃO (PADRÃO SOBERANO V48.1 - FIX SÁBADO) ---
         if st.button("🚀 COMPILAR PLANEJAMENTO INTEGRADO", use_container_width=True, type="primary", key=f"btn_compilar_{v}"):
@@ -886,15 +885,13 @@ if menu == "📅 Planejamento (Ponto ID)":
                         f"PÁGINAS ALVO: {base_didatica_info}.\n"
                         f"SÉRIE: {ano_p}º Ano. SEMANA: {sem_limpa}. TRIMESTRE: {trim_atual}.\n"
                         f"CARGA HORÁRIA: {carga_horaria}.\n"
-                        f"SÁBADO LETIVO: {status_sabado_cmd}.\n\n" # <--- ORDEM REFORÇADA
-                        f"🚨 REGRAS INEGOCIÁVEIS:\n"
-                        f"1. Se SÁBADO LETIVO estiver DESATIVADO, não invente conteúdo, escreva N/A.\n"
-                        f"2. Se a carga for '1 Aula', gere apenas [AULA_1].\n"
-                        f"3. Use os exemplos exatos do autor Flávio Simões.\n"
-                        f"4. Proibido Markdown (#) ou Unicode decorativo.\n\n"
+                        f"SÁBADO LETIVO: {status_sabado_cmd}.\n\n"
+                        f"🚨 MISSÃO DE DISTRIBUIÇÃO:\n"
+                        f"1. Se houver múltiplos intervalos de páginas separados por ';', use o primeiro para a [AULA_1] e o segundo para a [AULA_2].\n"
+                        f"2. Extraia os conceitos exatos de cada capítulo/intervalo citado.\n"
+                        f"3. Se a carga for '1 Aula', foque apenas no primeiro intervalo.\n"
+                        f"4. Preencha todas as tags [TAG] com densidade acadêmica.\n\n"
                         f"--- CONTEXTO DE APOIO ---\n{v_strat}\n{v_ctx_ia}\n"
-                        f"{v_ctx_ativo}\n"
-                        f"--- PONTE ANTERIOR ---\n{plano_anterior_txt}\n\n"
                         f"--- MATRIZ OFICIAL (ITABUNA) ---\n{df_curriculo[df_curriculo['ANO'].astype(str)==str(ano_p)].to_string(index=False)}"
                     )
                     
