@@ -484,14 +484,13 @@ if menu == "🧪 Criador de Aulas":
                                 f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {nome_elite}.\n"
                                 f"MÉTODO: {metodo_entrega}. REFERÊNCIA: {base_herdada}\n"
                                 f"SÉRIE: {ano_lab}º Ano. ALVO: {aula_alvo_prod}. QTD QUESTÕES PEI: {qtd_q_prod}.\n\n"
-                                f"🚨 MISSÃO DE SOBERANIA E ENGAJAMENTO:\n"
-                                f"1. Use o Google Search para buscar um fato científico ou notícia de do ano de 2026 ou mais atualizado possível que se conecte ao tema {obj_geral} para criar a 'Conexão Alpha'.\n"
-                                f"2. Para o ALUNO REGULAR: Roteiro de estudo focado nas páginas {paginas_aula} + Desafio Alpha.\n"
-                                f"3. Para o ALUNO PEI: Gere {qtd_q_prod} questões adaptadas. OBRIGATÓRIO incluir [ PROMPT IMAGEM ] em cada uma para apoio visual.\n"
-                                f"4. O [PROFESSOR] deve receber o guia de mediação moderna com os fatos encontrados na busca.\n\n"
+                                f"🚨 MISSÃO DE ALTA DENSIDADE (ESTILO BRASIL ESCOLA):\n"
+                                f"1. O [PROFESSOR] deve ser um TRATADO DIDÁTICO. Explique o conceito de {obj_geral} com profundidade técnica antes de dar o roteiro de aula.\n"
+                                f"2. Use o Google Search para trazer dados científicos do ano de 2026 ou mais atualizado possível que validem a importância deste tema.\n"
+                                f"3. Se for MODO LIVRO, o roteiro deve dizer exatamente: 'Inicie na página X explorando a imagem Y...'.\n"
+                                f"4. Para o ALUNO PEI: Gere {qtd_q_prod} questões com apoio visual [ PROMPT IMAGEM ].\n\n"
                                 f"--- HERANÇA DO PLANO ---\n{ai.extrair_tag(plano_txt, tag_previa)}\n"
-                                f"--- SENSOR DE INCLUSÃO ---\nA turma possui alunos com: {texto_clinico}.\n"
-                                f"--- EXTRAS ---\n{instr_extra_prod}"
+                                f"--- SENSOR DE INCLUSÃO ---\nA turma possui alunos com: {texto_clinico}."
                             )
                             
                             # --- 5. CHAMADA DA IA ---
