@@ -507,54 +507,57 @@ PERSONAS = {
 }
 
 def gerar_ia(persona_key, comando, url_drive=None, usar_busca=True):
-    """MOTOR SOSA V47 - GEMINI 3 FLASH (VELOCIDADE & RESILIÊNCIA)"""
+    """MOTOR SOSA V48 - RIGOR CIENTÍFICO (FIDELIDADE TOTAL AO PDF)"""
     
-    # Configuração para o modelo Flash (Mais rápido)
+    # Configuração de Alta Resolução para leitura de textos densos
     config = types.GenerateContentConfig(
         tools=[{'google_search': {}}] if usar_busca else [],
-        temperature=1.0
+        temperature=1.0,
+        # Força a IA a processar o documento com máxima atenção aos detalhes
+        media_resolution="media_resolution_high" 
     )
     
-    conteudo_prompt = [types.Part.from_text(text=f"{PERSONAS[persona_key]}\n\n{comando}")]
+    conteudo_prompt = []
     
-    # --- TENTATIVA RÁPIDA DE ANEXAR ARQUIVO ---
+    # --- PROTOCOLO DE ANEXO OBRIGATÓRIO ---
     if url_drive and "drive.google.com" in url_drive:
         try:
-            # Extração do ID do Drive
-            file_id = ""
-            if "/d/" in url_drive:
-                file_id = url_drive.split('/d/')[1].split('/')[0]
-            elif "id=" in url_drive:
-                file_id = url_drive.split('id=')[1].split('&')[0]
-
-            if file_id:
-                download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
-                # Timeout curto (10s) para não travar o sistema
-                response = requests.get(download_url, timeout=10)
-                
-                if response.status_code == 200 and b"%PDF" in response.content[:10]:
-                    arquivo_temp = client.files.upload(
-                        file=io.BytesIO(response.content),
-                        config=types.UploadFileConfig(mime_type="application/pdf")
-                    )
-                    conteudo_prompt.append(types.Part.from_uri(
-                        file_uri=arquivo_temp.uri, 
-                        mime_type="application/pdf"
-                    ))
-                    st.toast("📖 Livro lido com sucesso!", icon="✅")
+            # Extração precisa do ID
+            file_id = re.search(r"(?:id=|[dD]/)([\w-]+)", url_drive).group(1)
+            download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+            
+            # Download sem limite de tempo curto para garantir a entrega
+            response = requests.get(download_url, timeout=60) 
+            
+            if response.status_code == 200 and b"%PDF" in response.content[:10]:
+                # Upload para a mesa de trabalho da IA
+                arquivo_temp = client.files.upload(
+                    file=io.BytesIO(response.content),
+                    config=types.UploadFileConfig(mime_type="application/pdf")
+                )
+                # Adiciona o arquivo como a PRIMEIRA parte do contexto (Prioridade Máxima)
+                conteudo_prompt.append(types.Part.from_uri(
+                    file_uri=arquivo_temp.uri, 
+                    mime_type="application/pdf"
+                ))
+                st.toast("📖 Documento anexo lido com sucesso. Iniciando extração fiel...", icon="✅")
+            else:
+                return "❌ ERRO DE SOBERANIA: O arquivo do Drive não pôde ser lido ou não é um PDF válido. A geração foi interrompida para evitar alucinações."
         except Exception as e:
-            # Se falhar, o sistema apenas avisa e segue com o texto
-            st.toast("⚠️ Ocorreu um erro ao ler o PDF. Gerando com base na Matriz.", icon="ℹ️")
+            return f"❌ ERRO TÉCNICO NO DRIVE: {e}. Verifique se o arquivo está compartilhado como 'Qualquer pessoa com o link'."
+
+    # Adiciona a Persona e o Comando após o arquivo
+    conteudo_prompt.append(types.Part.from_text(text=f"{PERSONAS[persona_key]}\n\n{comando}"))
 
     try:
         res = client.models.generate_content(
-            model="gemini-3-flash-preview", # Voltando para o Flash conforme solicitado
+            model="gemini-3-flash-preview", 
             contents=[types.Content(role="user", parts=conteudo_prompt)],
             config=config
         )
         
-        if not res.text or "[HABILIDADE_BNCC]" not in res.text:
-            return "⚠️ Erro na geração. Por favor, clique em Compilar novamente."
+        if not res.text:
+            return "⚠️ A IA não retornou dados. Verifique o conteúdo das páginas selecionadas."
             
         return res.text
     except Exception as e:
