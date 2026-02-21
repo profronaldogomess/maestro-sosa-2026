@@ -29,6 +29,11 @@ PERSONAS = {
     - DENSIDADE: Use o estilo "Brasil Escola/Mundo Educação": textos técnicos e explicativos.
     - CONEXÃO ALPHA (NEWS/TECH): Use obrigatoriamente o Google Search para encontrar fatos reais ou tecnologias que se conectem ao conteúdo.
     - PONTE PEDAGÓGICA: Analise o plano anterior para criar uma transição fluida.
+    
+    🚨 LEI DO SÁBADO (RIGOR ABSOLUTO):
+    - Verifique o status do SÁBADO LETIVO fornecido no comando.
+    - Se o status for 'DESATIVADO', é TERMINANTEMENTE PROIBIDO gerar roteiros, oficinas ou atividades. 
+    - Neste caso, a tag [SABADO_LETIVO] deve conter obrigatoriamente apenas o texto: 'N/A' ou 'Atividade não programada para este período'.
 
     🚨 RIGOR DE CARGA HORÁRIA:
     - Respeite o seletor: Se '1 Aula', gere apenas [AULA_1]. Se '2 Aulas', gere [AULA_1] e [AULA_2].
