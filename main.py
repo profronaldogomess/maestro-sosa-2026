@@ -1375,7 +1375,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                 st.plotly_chart(px.bar(progresso_trim, x="TRIMESTRE", y="%", text="%", title=f"Evolução da Cobertura Real - {ano_m}º Ano", color="%", color_continuous_scale="RdYlGn", range_y=[0, 110]), use_container_width=True)
             
 # ==============================================================================
-# MÓDULO: DIÁRIO DE BORDO (V47 - PRONTIDÃO E ATIVOS DE SAFRA)
+# MÓDULO: DIÁRIO DE BORDO (V47.1 - PRONTIDÃO, ATIVOS E DNA DO PLANO)
 # ==============================================================================
 elif menu == "📝 Diário de Bordo Rápido":
     st.title("📝 Diário de Bordo: Prontidão e Disciplina")
@@ -1389,16 +1389,32 @@ elif menu == "📝 Diário de Bordo Rápido":
         turma_sel = c1.selectbox("👥 Turma:", sorted(df_alunos['TURMA'].unique()), key=f"db_t_{v}")
         data_sel = c2.date_input("📅 Data:", date.today(), key=f"db_d_{v}")
         data_str = data_sel.strftime("%d/%m/%Y")
+        ano_num = "".join(filter(str.isdigit, turma_sel))
 
-    # 2. DETECÇÃO DO COCKPIT E ATIVOS DE SAFRA (AVANÇO V47)
+    # 2. DETECÇÃO DO COCKPIT E DNA DO PLANO (AVANÇO V47.1)
     aula_ativa = df_registro_aulas[(df_registro_aulas['TURMA'] == turma_sel) & (df_registro_aulas['DATA'] == data_str)]
     
     if not aula_ativa.empty:
-        material_hoje = aula_ativa.iloc[0]['CONTEUDO_MINISTRADO']
-        st.info(f"🚀 **Aula Ativa:** {material_hoje}")
+        row_ativa = aula_ativa.iloc[0]
+        material_hoje = row_ativa['CONTEUDO_MINISTRADO']
+        semana_ref = row_ativa['SEMANA']
         
+        st.info(f"🚀 **Aula Ativa:** {material_hoje}")
+
+        # --- BUSCA DE DNA (PÁGINAS ALVO E MÉTODO) ---
+        # Busca o plano original no Ponto ID para extrair a Base Didática
+        plano_vinculado = df_planos[(df_planos['SEMANA'] == semana_ref) & (df_planos['ANO'].str.contains(ano_num))]
+        
+        if not plano_vinculado.empty:
+            plano_txt = str(plano_vinculado.iloc[0]['PLANO_TEXTO'])
+            base_didatica = ai.extrair_tag(plano_txt, "BASE_DIDATICA")
+            
+            if base_didatica:
+                st.success(f"📍 **Páginas Alvo:** {base_didatica}")
+            else:
+                st.warning("📍 **Páginas Alvo:** Método Manual (Sem livro vinculado)")
+
         # --- BUSCA DE LINKS DOS ATIVOS (SMART MATCH) ---
-        # Tenta localizar o material no banco de aulas prontas para extrair os links
         match_material = df_aulas[df_aulas['TIPO_MATERIAL'].str.contains(material_hoje.split('+')[0].strip(), na=False)]
         
         if not match_material.empty:
@@ -1406,7 +1422,6 @@ elif menu == "📝 Diário de Bordo Rápido":
                 st.markdown("#### 📦 Ativos de Safra para esta Aula")
                 txt_m = str(match_material.iloc[0]['CONTEUDO'])
                 
-                # Motor de Extração de Links V47
                 def extrair_link(t, k):
                     m = re.search(rf"{k}.*?\(?(https?://[^\s\)]+)\)?", t, re.IGNORECASE)
                     return m.group(1).strip() if m else None
@@ -1419,11 +1434,24 @@ elif menu == "📝 Diário de Bordo Rápido":
                 if l_alu: c_at1.link_button("📄 MATERIAL ALUNO", l_alu, use_container_width=True, type="primary")
                 if l_pei: c_at2.link_button("♿ ATIVIDADE PEI", l_pei, use_container_width=True)
                 if l_prof: c_at3.link_button("👨‍🏫 GUIA PROFESSOR", l_prof, use_container_width=True)
+        
+        # --- LEMBRETE DE PONTE (ONDE PARAMOS?) ---
+        # Busca o último registro de aula desta turma (anterior à data de hoje)
+        reg_anterior = df_registro_aulas[
+            (df_registro_aulas['TURMA'] == turma_sel) & 
+            (df_registro_aulas['DATA'] != data_str)
+        ].sort_values(by='DATA', ascending=False)
+        
+        if not reg_anterior.empty:
+            ultima_ponte = reg_anterior.iloc[0].get('PONTE_PEDAGOGICA', 'Sem registro.')
+            if ultima_ponte and str(ultima_ponte).strip() != "":
+                st.warning(f"🔙 **Na aula anterior paramos em:** {ultima_ponte}")
+
     else:
         st.warning("⚠️ Nenhuma aula aberta no Cockpit para esta data.")
         material_hoje = "Instrução Avulsa"
     
-    # 3. PAINEL DE REGÊNCIA (CONTINUIDADE - PRESERVADO)
+    # 3. PAINEL DE REGÊNCIA (FECHAMENTO - PRESERVADO)
     with st.expander("🚦 Painel de Regência (Fechamento de Aula)", expanded=True):
         c_reg1, c_reg2, c_reg3 = st.columns([1, 2, 1])
         
