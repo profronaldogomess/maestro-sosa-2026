@@ -1923,12 +1923,12 @@ elif menu == "👥 Gestão da Turma":
         "📊 Cockpit de Prontidão", "🏗️ Arquitetura de Turmas", "➕ Povoar Alunos", "✏️ Edição & Transferência"
     ])
 
-# --- ABA 1: COCKPIT DA TURMA (VERSÃO V46.2 - GRADE VISUAL E FILTRO PI/PC) ---
+# --- ABA 1: COCKPIT DA TURMA (VERSÃO V46.3 - CORREÇÃO DO SENSOR PEI) ---
     with tab_cockpit:
         if df_turmas.empty:
             st.info("📭 Nenhuma turma cadastrada. Vá na aba 'Arquitetura' para iniciar.")
         else:
-            # --- NOVO: GRADE VISUAL DE HORÁRIOS ---
+            # --- GRADE VISUAL DE HORÁRIOS ---
             st.markdown("### 📅 Grade Oficial de Regência")
             
             dias_semana = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"]
@@ -1940,10 +1940,8 @@ elif menu == "👥 Gestão da Turma":
                 nome_turma = str(row.iloc[1]) # NOME_TURMA
                 horarios_str = str(row.iloc[3]) # DIAS_AULA
                 
-                # Formatação limpa para a tabela (Ex: "6º ANO A" ou "PI")
                 display_name = sigla
-                if "ª" in sigla: # É uma turma regular (Ex: 6ª MA)
-                    # Tenta extrair o ano e a letra do NOME_TURMA (Ex: 6º Ano A -> 6 ANO A)
+                if "ª" in sigla: 
                     display_name = nome_turma.replace("Ano ", "ANO ").upper()
                 
                 if horarios_str and horarios_str != "N/A":
@@ -1955,7 +1953,6 @@ elif menu == "👥 Gestão da Turma":
 
             df_grade = pd.DataFrame(grade_map).T
             
-            # Estilização da Tabela (Glassmorphism Executive)
             def colorir_grade(val):
                 if val in ["PI", "PC", "AC", "HTPC"]: 
                     return 'background-color: #2962FF; color: white; font-weight: bold; text-align: center;'
@@ -1966,8 +1963,7 @@ elif menu == "👥 Gestão da Turma":
             st.dataframe(df_grade.style.applymap(colorir_grade), use_container_width=True)
             st.markdown("---")
 
-            # --- 1. SELEÇÃO DE PARÂMETROS (FILTRANDO PI/PC) ---
-            # Filtra apenas turmas reais para o comando acadêmico
+            # --- 1. SELEÇÃO DE PARÂMETROS ---
             turmas_reais = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
             
             if turmas_reais.empty:
@@ -1977,27 +1973,26 @@ elif menu == "👥 Gestão da Turma":
                 turma_foco = c_f1.selectbox("🎯 Selecione a Turma para Comando:", sorted(turmas_reais['ID_TURMA'].unique()), key=f"foco_t_{v}")
                 trim_foco = c_f2.selectbox("📅 Trimestre de Safra:", ["I Trimestre", "II Trimestre", "III Trimestre", "Todos"], key=f"foco_trim_{v}")
                 
-                # Cálculos de Base
                 alunos_t = df_alunos[df_alunos['TURMA'] == turma_foco].sort_values(by="NOME_ALUNO")
                 id_alunos_turma = set(alunos_t['ID'].apply(db.limpar_id).tolist())
                 ano_num = "".join(filter(str.isdigit, turma_foco))
                 ano_str_ref = f"{ano_num}º"
 
-                # --- 2. MÉTRICAS DE TOPO (DASHBOARD EXECUTIVO) ---
+                # --- 2. MÉTRICAS DE TOPO ---
                 m1, m2, m3 = st.columns(3)
                 m1.metric("👥 Total Alunos", len(alunos_t))
                 
-                mask_pei = ~alunos_t['NECESSIDADES'].astype(str).str.upper().str.strip().isin(["NENHUMA", "PENDENTE", "", "NAN"])
+                # 🚨 CORREÇÃO SOBERANA: Adicionado "TÍPICO" na lista de exclusão do Sensor PEI
+                mask_pei = ~alunos_t['NECESSIDADES'].astype(str).str.upper().str.strip().isin(["NENHUMA", "PENDENTE", "", "NAN", "TÍPICO", "TIPICO"])
                 df_pei_turma = alunos_t[mask_pei]
                 m2.metric("♿ Estudantes PEI", len(df_pei_turma))
                 
-                # Saúde de Execução: Compara Planos no Ponto ID vs Aulas no Diário
                 planos_totais = len(df_planos[df_planos['ANO'] == ano_str_ref])
                 aulas_feitas = len(df_registro_aulas[df_registro_aulas['TURMA'] == turma_foco])
                 saude_val = (aulas_feitas / (planos_totais * 2) * 100) if planos_totais > 0 else 0
                 m3.metric("🎯 Saúde de Execução", f"{min(100, int(saude_val))}%")
 
-                # --- 3. RADAR DE RESULTADOS E RAIO-X (PRESERVADO) ---
+                # --- 3. RADAR DE RESULTADOS ---
                 with st.expander("📡 Radar de Resultados e Raio-X de Lacunas", expanded=False):
                     diag_t = df_diagnosticos[df_diagnosticos['TURMA'] == turma_foco].copy()
                     if diag_t.empty:
@@ -2009,11 +2004,10 @@ elif menu == "👥 Gestão da Turma":
                 st.markdown("---")
                 col_esq, col_dir = st.columns([1.6, 1.4])
 
-                # --- 4. ABERTURA DE AULA (PRONTIDÃO INTELIGENTE V46) ---
+                # --- 4. ABERTURA DE AULA ---
                 with col_esq:
                     st.subheader("🕒 Abertura de Aula")
                     
-                    # BUSCA DE DNA NO PONTO ID
                     plano_sugerido = "Nenhum"
                     base_didatica_sugerida = "Matriz Curricular"
                     ponte_sugerida = "Início de novo ciclo pedagógico."
@@ -2057,7 +2051,7 @@ elif menu == "👥 Gestão da Turma":
                             time.sleep(1)
                             st.rerun()
 
-                # --- 5. INVENTÁRIO (HUB DE ACESSO RÁPIDO V46) ---
+                # --- 5. INVENTÁRIO E FOCO PEI ---
                 with col_dir:
                     st.subheader("📂 Inventário de Ativos")
                     with st.container(border=True):
