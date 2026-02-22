@@ -2173,25 +2173,36 @@ elif menu == "👥 Gestão da Turma":
                     else:
                         st.error("⚠️ Cole os dados na caixa de texto antes de processar.")
 
-    # --- ABA 4: EDIÇÃO & TRANSFERÊNCIA (ATUALIZADO V46.4 - LAUDOS LIVRES) ---
+# --- ABA 4: EDIÇÃO & TRANSFERÊNCIA (ATUALIZADO V48 - CASCATA E TRANSFERÊNCIA) ---
     with tab_editar:
-        st.subheader("✏️ Gestão de Cadastro e Laudos")
-        t_origem = st.selectbox("Selecione a Turma:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"orig_ed_{v}")
+        st.subheader("✏️ Gestão de Cadastro e Transferência")
+        t_origem = st.selectbox("Selecione a Turma Atual:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"orig_ed_{v}")
+        
         if t_origem:
             alunos_opcoes = df_alunos[df_alunos['TURMA'] == t_origem].sort_values(by="NOME_ALUNO")
             aluno_sel_nome = st.selectbox("Selecione o Aluno:", alunos_opcoes['NOME_ALUNO'].tolist(), key=f"alu_ed_{v}")
             dados_atuais = alunos_opcoes[alunos_opcoes['NOME_ALUNO'] == aluno_sel_nome].iloc[0]
             
             with st.form("form_edicao"):
-                novo_nome = st.text_input("Nome:", value=dados_atuais['NOME_ALUNO']).upper()
+                novo_nome = st.text_input("Nome Completo:", value=dados_atuais['NOME_ALUNO']).upper()
+                
+                # 🚨 NOVO: Seletor de Transferência de Turma
+                turmas_reais_ed = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
+                lista_turmas_dest = sorted(turmas_reais_ed['ID_TURMA'].unique()) if not turmas_reais_ed.empty else [t_origem]
+                idx_turma = lista_turmas_dest.index(t_origem) if t_origem in lista_turmas_dest else 0
+                
+                nova_turma = st.selectbox("Turma de Destino (Para Transferência):", lista_turmas_dest, index=idx_turma)
                 
                 st.info("💡 **Dica de Soberania:** Para alunos PEI com múltiplas condições, digite separando por '+' ou vírgula. O sistema aceita códigos CID exatos (Ex: TEA + TDAH + F84.0).")
                 nova_nec = st.text_input("Necessidades / CIDs:", value=dados_atuais['NECESSIDADES']).upper()
                 
-                if st.form_submit_button("💾 ATUALIZAR DADOS"):
-                    if db.excluir_aluno_por_id(dados_atuais['ID']):
-                        db.salvar_no_banco("DB_ALUNOS", [dados_atuais['ID'], novo_nome, t_origem, "ATIVO", nova_nec, "EDITADO"])
-                        st.success("✅ Cadastro atualizado com sucesso!"); time.sleep(1); st.rerun()
+                if st.form_submit_button("💾 ATUALIZAR DADOS EM CASCATA"):
+                    with st.spinner("Viajando no tempo e atualizando todo o histórico do aluno..."):
+                        # Chama o novo motor de cascata do database.py
+                        if db.atualizar_aluno_cascata(dados_atuais['ID'], novo_nome, nova_turma, nova_nec):
+                            st.success("✅ Cadastro, laudos e histórico atualizados em cascata com sucesso!")
+                            time.sleep(1.5)
+                            st.rerun()
                         
 # ==============================================================================
 # MÓDULO: BASE DE CONHECIMENTO (V45 - COFRE DIGITAL NO GOOGLE DRIVE)
