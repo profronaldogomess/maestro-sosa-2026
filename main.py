@@ -3061,7 +3061,7 @@ elif menu == "📝 Central de Avaliações":
             st.info("📭 Acervo vazio.")
 
 # ==============================================================================
-# MÓDULO: CENTRAL DE INTELIGÊNCIA DE RESULTADOS (V64.2 - CORREÇÃO DE FILTROS)
+# MÓDULO: CENTRAL DE INTELIGÊNCIA DE RESULTADOS (V64.3 - CORREÇÃO DE PERFIL PEI)
 # ==============================================================================
 elif menu == "📸 Scanner de Gabaritos":
     st.title("📸 Central de Inteligência de Resultados (CIR)")
@@ -3070,11 +3070,8 @@ elif menu == "📸 Scanner de Gabaritos":
     if "v_scan" not in st.session_state: st.session_state.v_scan = 1
     v = st.session_state.v_scan
 
-# --- FUNÇÃO AUXILIAR: FILTRO HIERÁRQUICO BLINDADO V64.5 (FIX RECUPERAÇÃO) ---
+# --- FUNÇÃO AUXILIAR: FILTRO HIERÁRQUICO BLINDADO V64.5 ---
     def filtrar_ativos_cir_v64(turma, trimestre_nome, apenas_provas=True):
-        """
-        Motor de busca inteligente que agora entende a abrangência da Recuperação Final.
-        """
         if not turma or not trimestre_nome: return []
         try:
             serie_num = str(turma)[0] 
@@ -3094,19 +3091,14 @@ elif menu == "📸 Scanner de Gabaritos":
 
             df_f['TRIM_DETECTADO'] = df_f['DATA'].apply(detectar_trimestre)
             
-            # --- LÓGICA DE SOBERANIA PARA RECUPERAÇÃO FINAL ---
-            # Se for prova, permitimos que "Recuperação Final" apareça independente do trimestre selecionado
             if apenas_provas:
                 permitidos = ["TESTE", "PROVA", "SONDA", "DIAGNÓSTICA", "RECUPERAÇÃO", "AVALIAÇÃO"]
                 df_f = df_f[df_f['TIPO_MATERIAL'].str.upper().str.contains('|'.join(permitidos))]
-                
-                # Filtro: Mostra o que é do trimestre OU o que é "FINAL / ANO INTEIRO"
                 mask_trim = (df_f['TRIM_DETECTADO'] == trimestre_nome) | \
                             (df_f['CONTEUDO'].str.contains(trimestre_nome, na=False)) | \
                             (df_f['TIPO_MATERIAL'].str.upper().str.contains("FINAL"))
                 df_f = df_f[mask_trim]
             else:
-                # Filtro para Atividades/Projetos (Aba 2)
                 permitidos = ["PROJETO", "FIXAÇÃO", "REFORÇO", "ATIVIDADE", "TRABALHO", "AULA"]
                 df_f = df_f[df_f['TIPO_MATERIAL'].str.upper().str.contains('|'.join(permitidos))]
                 df_f = df_f[df_f['TRIM_DETECTADO'] == trimestre_nome]
@@ -3121,13 +3113,16 @@ elif menu == "📸 Scanner de Gabaritos":
         "📊 4. Raio-X Pedagógico", "📂 5. Acervo de Evidências", "📈 6. Dashboard"
     ])
 
-# --- ABA 1: PERÍCIA DE GABARITOS (VERSÃO V50.0 - SOBERANIA TOTAL) ---
+# --- ABA 1: PERÍCIA DE GABARITOS ---
     with tab_pericia:
+        # Filtra turmas reais
+        turmas_reais_cir = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
+        lista_turmas_cir = sorted(turmas_reais_cir['ID_TURMA'].unique()) if not turmas_reais_cir.empty else sorted(df_alunos['TURMA'].unique())
+        
         c1, c2, c3 = st.columns([1, 1, 1.5])
-        t_sel = c1.selectbox("👥 Turma:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"t_p_{v}")
+        t_sel = c1.selectbox("👥 Turma:", [""] + lista_turmas_cir, key=f"t_p_{v}")
         tr_sel = c2.selectbox("📅 Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_p_{v}")
         
-        # Filtro de Avaliação Base (O "Slot" no Boletim)
         opcoes_p = filtrar_ativos_cir_v64(t_sel, tr_sel, apenas_provas=True)
         opcoes_base = [opt for opt in opcoes_p if "2CHAMADA" not in opt.upper()]
         at_sel = c3.selectbox("📋 Selecione a Avaliação Base (Slot):", [""] + opcoes_base, key=f"at_p_{v}")
@@ -3135,7 +3130,6 @@ elif menu == "📸 Scanner de Gabaritos":
         if not t_sel or not at_sel:
             st.info("💡 Selecione a Turma e a Avaliação Base para abrir o Scanner.")
         else:
-            # 1. BUSCA DE PENDENTES (Considera quem não tem nota na base nem na 2ª chamada)
             nome_filtro_pendente = at_sel.split("-")[0].strip()
             escaneados = df_diagnosticos[df_diagnosticos['ID_AVALIACAO'].str.contains(nome_filtro_pendente)]['ID_ALUNO'].astype(str).tolist()
             pendentes = df_alunos[(df_alunos['TURMA'] == t_sel) & (~df_alunos['ID'].astype(str).isin(escaneados))].sort_values(by="NOME_ALUNO")
@@ -3148,16 +3142,13 @@ elif menu == "📸 Scanner de Gabaritos":
                 al_sel = al_info['NOME_ALUNO']
                 id_aluno_atual = al_info['ID']
                 
-                # --- DETECÇÃO AUTOMÁTICA DE PERFIL (REGULAR OU PEI) ---
-                is_pei_aluno = str(al_info['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"]
+                # 🚨 CORREÇÃO SOBERANA: "TÍPICO" não é mais considerado PEI
+                is_pei_aluno = str(al_info['NECESSIDADES']).upper().strip() not in ["NENHUMA", "PENDENTE", "", "NAN", "TÍPICO", "TIPICO"]
                 
                 st.markdown(f"### 📸 Corrigindo agora: **{al_sel}**")
                 
-                # --- 2. HUB DE SELEÇÃO DE PARÂMETROS (VERSÃO + PERFIL) ---
                 with st.container(border=True):
                     c_v1, c_v2 = st.columns([1, 1])
-                    
-                    # A. Seleção de Versão (Regular ou 2ª Chamada)
                     modo_2a = c_v1.toggle("🚀 Aplicar Segunda Chamada para este aluno?", key=f"toggle_2a_{id_aluno_atual}")
                     
                     if modo_2a:
@@ -3178,13 +3169,11 @@ elif menu == "📸 Scanner de Gabaritos":
                     else:
                         material_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel].iloc[0]
                     
-                    # B. Feedback Visual de Lente
                     if material_ref is not None:
                         tipo_txt = "2ª CHAMADA" if modo_2a else "REGULAR"
                         perfil_txt = "♿ PEI" if is_pei_aluno else "📝 REGULAR"
                         st.info(f"⚖️ **Lente Ativa:** Prova {tipo_txt} | Perfil {perfil_txt}")
 
-                # 3. EXTRAÇÃO INTELIGENTE DO GABARITO
                 if material_ref is not None:
                     txt_ref = str(material_ref['CONTEUDO'])
                     val_tag = ai.extrair_tag(txt_ref, "VALOR")
@@ -3198,10 +3187,8 @@ elif menu == "📸 Scanner de Gabaritos":
                         mapa = {int(num): letra for num, letra in matches}
                         return [mapa[n] for n in sorted(mapa.keys())]
 
-                    # A mágica: extrai o gabarito correto (Regular ou PEI) da versão escolhida
                     gab_alvo = extrair_gab_v50(txt_ref, is_pei_aluno)
 
-                    # 4. ÁREA DE CAPTURA
                     col_cam, col_falta = st.columns([2, 1])
                     img = col_cam.camera_input(f"Gabarito de {al_sel}", key=f"cam_{id_aluno_atual}")
                     
@@ -3219,7 +3206,6 @@ elif menu == "📸 Scanner de Gabaritos":
                             st.session_state.current_scan_img = img.getvalue()
                             st.rerun()
 
-                    # 5. MESA DE PERÍCIA E SALVAMENTO
                     if "current_scan_res" in st.session_state:
                         res_lidas = st.session_state.current_scan_res
                         st.markdown("---")
@@ -3247,16 +3233,13 @@ elif menu == "📸 Scanner de Gabaritos":
                             
                             if st.button("💾 SALVAR E PRÓXIMO ➔", type="primary", use_container_width=True):
                                 with st.spinner("Arquivando com Rastreabilidade..."):
-                                    # --- LÓGICA DE ETIQUETA DE SOBERANIA ---
-                                    # O ID_AVALIACAO no banco será o nome da BASE + a marca da 2ª CHAMADA
                                     id_av_final = f"{at_sel} (2ª CHAMADA)" if modo_2a else at_sel
-                                    
                                     link_pasta = db.subir_e_converter_para_google_docs(st.session_state.current_scan_img, al_sel.replace(" ","_"), trimestre=tr_sel, categoria=t_sel, semana=id_av_final, modo="SCANNER")
                                     
                                     db.salvar_no_banco("DB_GABARITOS_ALUNOS", [
                                         datetime.now().strftime("%d/%m/%Y"), 
                                         id_aluno_atual, al_sel, t_sel, 
-                                        id_av_final, # <--- Salva com a etiqueta solicitada
+                                        id_av_final, 
                                         ";".join(novas_res), 
                                         util.sosa_to_str(nota_f), 
                                         link_pasta
@@ -3270,26 +3253,23 @@ elif menu == "📸 Scanner de Gabaritos":
                             del st.session_state.current_scan_img
                             st.rerun()
 
-# --- ABA 2: ATIVIDADES & PROJETOS (V68.0 - MESA DE NOTAS EDITÁVEL & AUTÔNOMA) ---
+# --- ABA 2: ATIVIDADES & PROJETOS ---
     with tab_atividades:
         st.subheader("✍️ Gestão de Notas de Projetos e Atividades")
         st.caption("Use esta mesa para lançar notas de Redações, Cartazes e Apresentações que não podem ser escaneadas.")
         
         c_f1, c_f2 = st.columns(2)
-        t_sel_a = c_f1.selectbox("👥 Selecione a Turma:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"t_a_v68_{v}")
+        t_sel_a = c_f1.selectbox("👥 Selecione a Turma:", [""] + lista_turmas_cir, key=f"t_a_v68_{v}")
         tr_sel_a = c_f2.selectbox("📅 Selecione o Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_a_v68_{v}")
 
-        # Busca ativos (Projetos, Fixação, etc)
         opcoes_a = filtrar_ativos_cir_v64(t_sel_a, tr_sel_a, apenas_provas=False)
         at_sel_a = st.selectbox("📋 Selecione o Trabalho ou Atividade:", [""] + opcoes_a, key=f"at_a_sel_v68_{v}")
 
         if not t_sel_a or not at_sel_a:
             st.info("💡 Selecione a Turma e o Material para abrir a Mesa de Lançamento.")
         else:
-            # 1. LEITURA DE DNA E VALOR
             dados_at = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel_a].iloc[0]
             txt_at = str(dados_at['CONTEUDO'])
-            is_projeto_v68 = "[JUSTIFICATIVA_PHC]" in txt_at or "PROJETO" in at_sel_a.upper()
             
             val_tag = ai.extrair_tag(txt_at, "VALOR")
             v_max_padrao = util.sosa_to_float(val_tag) if val_tag else 2.0
@@ -3297,20 +3277,16 @@ elif menu == "📸 Scanner de Gabaritos":
             with st.container(border=True):
                 c_m1, c_m2 = st.columns([2, 1])
                 c_m1.warning(f"📝 **ATIVIDADE EM FOCO:** {at_sel_a}")
-                # Autonomia do Professor para definir o valor do trabalho
                 v_max_ativ = c_m2.number_input("💎 Valor Máximo deste Trabalho:", 0.0, 10.0, v_max_padrao, step=0.5, key=f"v_max_v68_{v}")
 
-            # 2. MESA DE LANÇAMENTO (FORÇANDO EDITABILIDADE)
             st.divider()
             st.subheader(f"⭐ Mesa de Notas: {at_sel_a}")
             st.info("💡 **DICA:** Clique duas vezes na célula da coluna 'Nota' para digitar o valor.")
             
             alunos_a = df_alunos[df_alunos['TURMA'] == t_sel_a].sort_values(by="NOME_ALUNO")
             
-            # Busca notas já lançadas para persistência
             notas_atuais = {}
             if not df_diario.empty:
-                # Filtra registros que contenham o nome deste material nas observações
                 mask_p = (df_diario['TURMA'] == t_sel_a) & (df_diario['OBSERVACOES'].str.contains(at_sel_a, na=False))
                 df_p = df_diario[mask_p]
                 for _, row_d in df_p.iterrows():
@@ -3320,7 +3296,8 @@ elif menu == "📸 Scanner de Gabaritos":
             for _, alu in alunos_a.iterrows():
                 id_a = db.limpar_id(alu['ID'])
                 nota_v = notas_atuais.get(id_a, 0.0)
-                is_pei = str(alu['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"]
+                # 🚨 CORREÇÃO SOBERANA
+                is_pei = str(alu['NECESSIDADES']).upper().strip() not in ["NENHUMA", "PENDENTE", "", "NAN", "TÍPICO", "TIPICO"]
                 
                 dados_editor.append({
                     "ID": id_a, 
@@ -3329,7 +3306,6 @@ elif menu == "📸 Scanner de Gabaritos":
                     "Status": "✅ Lançado" if nota_v > 0 else "⏳ Pendente"
                 })
             
-            # --- O MOTOR EDITÁVEL ---
             df_notas_ed = st.data_editor(
                 pd.DataFrame(dados_editor),
                 hide_index=True, 
@@ -3337,71 +3313,46 @@ elif menu == "📸 Scanner de Gabaritos":
                 column_config={
                     "ID": None,
                     "Estudante": st.column_config.TextColumn("Estudante", width="medium", disabled=True),
-                    "Nota": st.column_config.NumberColumn(
-                        "Nota", 
-                        min_value=0.0, 
-                        max_value=v_max_ativ, 
-                        step=0.1, 
-                        format="%.1f",
-                        required=True # Força a coluna a ser interagível
-                    ),
+                    "Nota": st.column_config.NumberColumn("Nota", min_value=0.0, max_value=v_max_ativ, step=0.1, format="%.1f", required=True),
                     "Status": st.column_config.TextColumn("Status", width="small", disabled=True)
                 },
                 key=f"editor_atividades_v68_{at_sel_a.replace(' ','_')}"
             )
 
-# --- 4. CONSOLIDAÇÃO SILENCIOSA (V69 - APENAS NOTA, SEM POLUIR DIÁRIO) ---
             if st.button("💾 CONSOLIDAR NOTAS NO BOLETIM ANUAL", type="primary", use_container_width=True):
                 with st.status("Sincronizando Notas de Mérito...") as status:
                     data_hoje = datetime.now().strftime("%d/%m/%Y")
                     lista_lote = []
                     
                     for _, r in df_notas_ed.iterrows():
-                        # Registra com a TAG 'SISTEMA_NOTA' para o Diário ignorar na visualização
                         lista_lote.append([
-                            data_hoje, 
-                            r['ID'], 
-                            r['Estudante'].replace("♿ ", ""), 
-                            t_sel_a, 
-                            "FALSE", # Não conta como 'Visto de Caderno' para não inflar engajamento
-                            "SISTEMA_NOTA", 
-                            f"Nota de Trabalho: {at_sel_a}", 
-                            util.sosa_to_str(r['Nota'])
+                            data_hoje, r['ID'], r['Estudante'].replace("♿ ", ""), t_sel_a, 
+                            "FALSE", "SISTEMA_NOTA", f"Nota de Trabalho: {at_sel_a}", util.sosa_to_str(r['Nota'])
                         ])
                     
                     if lista_lote:
-                        # Limpeza cirúrgica para não duplicar se salvar duas vezes
                         db.excluir_registro("DB_DIARIO_BORDO", f"Nota de Trabalho: {at_sel_a}")
-                        
                         db.salvar_lote("DB_DIARIO_BORDO", lista_lote)
                         status.update(label=f"✅ Notas de {at_sel_a} consolidadas no Boletim!", state="complete")
-                        st.balloons()
-                        time.sleep(1); st.rerun()
+                        st.balloons(); time.sleep(1); st.rerun()
 
-    # ==============================================================================
-    # MÓDULO: HUB DE SOBERANIA (V73.0 - INTEGRAÇÃO DE NOTAS EXTERNAS E INTERNAS)
-    # ==============================================================================
+    # --- ABA 3: HUB DE SOBERANIA ---
     with tab_soberania:
         st.subheader("🏛️ Hub de Soberania: Autoridade do Professor")
         st.markdown("---")
 
         c_h1, c_h2 = st.columns([1, 1])
-        t_sel_h = c_h1.selectbox("👥 Selecione a Turma:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"t_h_v73_{v}")
+        t_sel_h = c_h1.selectbox("👥 Selecione a Turma:", [""] + lista_turmas_cir, key=f"t_h_v73_{v}")
         tr_sel_h = c_h2.selectbox("📅 Trimestre de Referência:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_h_v73_{v}")
 
         if not t_sel_h:
             st.info("💡 Selecione uma turma para abrir a Mesa de Soberania.")
         else:
-            # Carrega os alunos da turma uma única vez para ambas as sub-abas
             alunos_turma_h = df_alunos[df_alunos['TURMA'] == t_sel_h].sort_values(by="NOME_ALUNO")
-            
             sub_auditoria, sub_externas = st.tabs(["⚖️ Auditoria e Lançamento Manual", "🌍 Notas Externas (SAEB/Governo)"])
 
-            # --- SUB-ABA 1: AUDITORIA INTERNA ---
             with sub_auditoria:
                 st.markdown("#### 🔍 Consolidação de Notas e Resgate de Faltas")
-                st.caption("Nesta mesa, o senhor tem soberania total. Alterar para 'PENDENTE' faz o aluno voltar para a fila do Scanner.")
-                
                 serie_num = "".join(filter(str.isdigit, t_sel_h))
                 df_oficiais = df_aulas[(df_aulas['SEMANA_REF'] == "AVALIAÇÃO") & (df_aulas['ANO'].str.contains(serie_num))]
                 opcoes_base = [opt for opt in df_oficiais['TIPO_MATERIAL'].unique().tolist() if "2ª" not in opt.upper()]
@@ -3426,9 +3377,12 @@ elif menu == "📸 Scanner de Gabaritos":
                             elif "2ª" in reg['ID_AVALIACAO'].upper(): situacao_txt, versao_prova = "✅ REALIZADA", "SEGUNDA CHAMADA"
                             else: situacao_txt = "✅ REALIZADA"
 
+                        # 🚨 CORREÇÃO SOBERANA
+                        is_pei_sob = str(alu['NECESSIDADES']).upper().strip() not in ["NENHUMA", "PENDENTE", "", "NAN", "TÍPICO", "TIPICO"]
+
                         dados_soberania.append({
                             "ID": id_a, "Estudante": alu['NOME_ALUNO'],
-                            "Perfil": "♿ PEI" if str(alu['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", ""] else "📝 REGULAR",
+                            "Perfil": "♿ PEI" if is_pei_sob else "📝 REGULAR",
                             "Situação": situacao_txt, "Versão": versao_prova,
                             "Nota Final (Soberana)": nota_atual, "Evidência": link_ev
                         })
@@ -3458,22 +3412,15 @@ elif menu == "📸 Scanner de Gabaritos":
                             if db.salvar_lote("DB_NOTAS", lista_boletim):
                                 status_h.update(label="✅ Sistema Atualizado!", state="complete"); st.balloons(); time.sleep(1); st.rerun()
 
-            # --- SUB-ABA 2: NOTAS EXTERNAS (CORRIGIDA E INTEGRADA) ---
             with sub_externas:
                 st.markdown("#### 🌍 Integração de Notas Externas (SAEB / Governo)")
-                st.info("Use esta mesa para que a nota do Governo substitua a nota do seu Teste ou Prova no Boletim.")
-                
                 c_ext1, c_ext2 = st.columns([1, 1])
                 alvo_sub = c_ext1.radio("Onde aplicar esta nota externa?", ["Substituir Teste", "Substituir Prova"], horizontal=True, key=f"alvo_ext_{v}")
                 origem_ext = c_ext2.text_input("Origem da Nota:", "SAEB 2026", key=f"orig_ext_{v}")
 
                 dados_externos = []
                 for _, alu in alunos_turma_h.iterrows():
-                    dados_externos.append({
-                        "ID": alu['ID'],
-                        "Estudante": alu['NOME_ALUNO'],
-                        "Nota Externa (0-10)": 0.0
-                    })
+                    dados_externos.append({"ID": alu['ID'], "Estudante": alu['NOME_ALUNO'], "Nota Externa (0-10)": 0.0})
                 
                 df_ext_ed = st.data_editor(pd.DataFrame(dados_externos), hide_index=True, use_container_width=True, key=f"ed_ext_v73_{v}",
                     column_config={"ID": None, "Nota Externa (0-10)": st.column_config.NumberColumn("Nota", format="%.1f", min_value=0.0, max_value=10.0)})
@@ -3481,62 +3428,47 @@ elif menu == "📸 Scanner de Gabaritos":
                 if st.button("🚀 INTEGRAR NOTAS EXTERNAS AO BOLETIM", use_container_width=True):
                     with st.status("Processando Substituição de Notas...") as status_ext:
                         lista_boletim_ext = []
-                        # Busca notas atuais para não zerar as outras colunas
                         notas_atuais = df_notas[(df_notas['TURMA'] == t_sel_h) & (df_notas['TRIMESTRE'] == tr_sel_h)]
                         
                         for _, r in df_ext_ed.iterrows():
                             id_l = db.limpar_id(r['ID'])
                             nota_ext_str = util.sosa_to_str(r['Nota Externa (0-10)'])
-                            
-                            # Busca o registro atual do aluno no boletim
                             reg_atual = notas_atuais[notas_atuais['ID_ALUNO'].apply(db.limpar_id) == id_l]
                             
-                            # Valores padrão (preserva o que já existe se a nota externa for 0)
                             v_vistos = reg_atual.iloc[0]['NOTA_VISTOS'] if not reg_atual.empty else "0,0"
                             v_teste = reg_atual.iloc[0]['NOTA_TESTE'] if not reg_atual.empty else "0,0"
                             v_prova = reg_atual.iloc[0]['NOTA_PROVA'] if not reg_atual.empty else "0,0"
                             v_rec = reg_atual.iloc[0]['NOTA_REC'] if not reg_atual.empty else "0,0"
 
-                            # Aplica a substituição apenas se a nota externa for maior que zero
                             if r['Nota Externa (0-10)'] > 0:
                                 if "Teste" in alvo_sub: v_teste = nota_ext_str
                                 else: v_prova = nota_ext_str
-                                
-                                # Registra no histórico (Evidência)
                                 db.salvar_no_banco("DB_RELATORIOS", [datetime.now().strftime("%d/%m/%Y"), id_l, r['Estudante'], "NOTA_EXTERNA", f"Substituição via {origem_ext} no {alvo_sub}"])
 
-                            # Calcula nova média simples para o boletim
                             nova_media = (util.sosa_to_float(v_vistos) + util.sosa_to_float(v_teste) + util.sosa_to_float(v_prova))
                             lista_boletim_ext.append([id_l, r['Estudante'], t_sel_h, tr_sel_h, v_vistos, v_teste, v_prova, v_rec, util.sosa_to_str(nova_media)])
 
                         db.limpar_notas_turma_trimestre(t_sel_h, tr_sel_h)
                         if db.salvar_lote("DB_NOTAS", lista_boletim_ext):
-                            status_ext.update(label=f"✅ Notas do {origem_ext} integradas com sucesso!", state="complete")
-                            st.balloons(); time.sleep(1); st.rerun()
+                            status_ext.update(label=f"✅ Notas do {origem_ext} integradas com sucesso!", state="complete"); st.balloons(); time.sleep(1); st.rerun()
 
-# --- ABA 4: RAIO-X PEDAGÓGICO (V88 - BLINDAGEM TOTAL & SOBERANIA ANALÍTICA) ---
+# --- ABA 4: RAIO-X PEDAGÓGICO ---
     with tab_raiox:
         st.subheader("📊 Raio-X Pedagógico: Diagnóstico Individual de Lacunas")
         st.markdown("---")
 
-        # --- 1. MOTOR DE EXTRAÇÃO ELÁSTICA (ANTI-FALHA) ---
         def extrair_gab_v88_blindado(texto, is_pei=False):
             if not texto: return {}
-            # Limpa ruídos antes de processar
             txt_limpo = re.sub(r'[*#]', '', texto).upper()
             tag_alvo = "GABARITO_PEI" if is_pei else "GABARITO_TEXTO"
             bloco = ai.extrair_tag(txt_limpo, tag_alvo) or ai.extrair_tag(txt_limpo, "GABARITO")
-            
-            # Regex Elástica: Captura 1:A, 01.B, 1) C, Questão 1-D, etc.
             matches = re.findall(r"(?:QUEST[AÃ]O\s*)?0?(\d+)\s*[\s\.\-\:\)]+\s*([A-E])", bloco)
             if matches: return {int(num): letra for num, letra in matches}
-            
-            # Fallback: Busca apenas a sequência de letras isoladas
             letras = re.findall(r"\b[A-E]\b", bloco)
             return {i+1: letra for i, letra in enumerate(letras)}
 
         c1, c2, c3 = st.columns([1, 1, 1.5])
-        t_sel_r = c1.selectbox("👥 Selecione a Turma:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"t_r_v88_{v}")
+        t_sel_r = c1.selectbox("👥 Selecione a Turma:", [""] + lista_turmas_cir, key=f"t_r_v88_{v}")
         tr_sel_r = c2.selectbox("📅 Selecione o Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_r_v88_{v}")
         
         opcoes_r = filtrar_ativos_cir_v64(t_sel_r, tr_sel_r, apenas_provas=True)
@@ -3546,7 +3478,6 @@ elif menu == "📸 Scanner de Gabaritos":
         if not t_sel_r or not at_sel_r:
             st.info("💡 Selecione a Turma e a Avaliação para carregar a Perícia Pedagógica.")
         else:
-            # 1. DATA FUSION: CRUZAMENTO DE DADOS
             nome_curto_av = at_sel_r.split("-")[0].strip()
             ano_num_r = "".join(filter(str.isdigit, t_sel_r))
             
@@ -3563,10 +3494,11 @@ elif menu == "📸 Scanner de Gabaritos":
                 respostas_brutas['ID_ALUNO_L'] = respostas_brutas['ID_ALUNO'].apply(db.limpar_id)
                 
                 df_analise = pd.merge(respostas_brutas, df_alunos_min, left_on='ID_ALUNO_L', right_on='ID', how='left')
-                df_analise['IS_PEI'] = df_analise['NECESSIDADES'].apply(lambda x: str(x).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"])
+                
+                # 🚨 CORREÇÃO SOBERANA
+                df_analise['IS_PEI'] = df_analise['NECESSIDADES'].apply(lambda x: str(x).upper().strip() not in ["NENHUMA", "PENDENTE", "", "NAN", "TÍPICO", "TIPICO"])
                 df_analise['IS_2A_CHAMADA'] = df_analise['ID_AVALIACAO'].str.contains(r"2[ªA]|CHAMADA", case=False, regex=True)
 
-                # --- PARTE A: ANÁLISE MACRO (VISÃO 360°) ---
                 st.markdown("### 🎯 1. Análise de Performance por Item")
                 col_l1, col_l2 = st.columns(2)
                 perfil_visao = col_l1.radio("1. Perfil do Aluno:", ["📝 Alunos Regulares", "♿ Alunos PEI"], horizontal=True, key=f"perf_v88_{v}")
@@ -3576,7 +3508,6 @@ elif menu == "📸 Scanner de Gabaritos":
                 is_2a_view = "2ª" in versao_visao
                 df_filtrado = df_analise[(df_analise['IS_PEI'] == is_pei_view) & (df_analise['IS_2A_CHAMADA'] == is_2a_view)]
 
-                # Busca do Material para Gabarito
                 if is_2a_view:
                     query_mat = df_aulas[(df_aulas['TIPO_MATERIAL'].str.upper().str.contains("2CHAMADA")) & (df_aulas['TIPO_MATERIAL'].str.upper().str.contains(nome_curto_av.upper()))]
                 else:
@@ -3589,11 +3520,9 @@ elif menu == "📸 Scanner de Gabaritos":
                 else:
                     dados_prova = query_mat.iloc[0]
                     txt_prova = str(dados_prova['CONTEUDO'])
-                    # Vacina Anti-Header: Limpa o texto da grade antes de exibir
                     grade_pericia = re.sub(r'[*#]', '', ai.extrair_tag(txt_prova, "GRADE_DE_CORRECAO"))
                     gab_ativo = extrair_gab_v88_blindado(txt_prova, is_pei_view)
 
-                    # Cálculo de Estatísticas
                     num_q_total = len(gab_ativo)
                     stats_list = []
                     matriz_respostas = [str(r).split(';') for r in df_filtrado['RESPOSTAS_ALUNO']]
@@ -3618,12 +3547,10 @@ elif menu == "📸 Scanner de Gabaritos":
                             info_q = df_stats[df_stats["Questão"] == q_sel].iloc[0]
                             idx_num = int(q_sel[1:])
                             st.write(f"**Gabarito:** :green[{info_q['Gabarito']}] | **Média:** {info_q['Acerto %']:.1f}%")
-                            # Regex Lookahead Blindada
                             padrao = rf"(?si)QUEST[AÃ]O\s*(?:PEI\s*)?0?{idx_num}\b.*?(?=QUEST[AÃ]O\s*(?:PEI\s*)?0?{idx_num+1}\b|GABARITO|RESPOSTAS|$)"
                             match = re.search(padrao, grade_pericia)
                             if match: st.info(match.group(0).strip())
 
-                # --- PARTE B: DIAGNÓSTICO INDIVIDUAL (MICRO V88 - BLINDAGEM DE DISTRATORES) ---
                 st.markdown("---")
                 st.markdown("#### 👤 2. Perícia Individual: Lacunas e Diagnóstico de Erros")
                 
@@ -3632,7 +3559,10 @@ elif menu == "📸 Scanner de Gabaritos":
 
                 for _, alu in alunos_turma.iterrows():
                     id_a = db.limpar_id(alu['ID'])
-                    is_pei_alu = str(alu['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"]
+                    
+                    # 🚨 CORREÇÃO SOBERANA
+                    is_pei_alu = str(alu['NECESSIDADES']).upper().strip() not in ["NENHUMA", "PENDENTE", "", "NAN", "TÍPICO", "TIPICO"]
+                    
                     reg_aluno = df_analise[df_analise['ID_ALUNO_L'] == id_a]
                     
                     if reg_aluno.empty:
@@ -3647,7 +3577,6 @@ elif menu == "📸 Scanner de Gabaritos":
                             m_ref = m_ref_query.iloc[0]
                             txt_cont = str(m_ref['CONTEUDO'])
                             tag_grade = "GRADE_DE_CORRECAO_PEI" if is_pei_alu else "GRADE_DE_CORRECAO"
-                            # Limpeza Soberana de Markdown
                             grade_texto = re.sub(r'[*#]', '', ai.extrair_tag(txt_cont, tag_grade) or ai.extrair_tag(txt_cont, "GRADE_DE_CORRECAO"))
                             
                             gab_ref_alu = extrair_gab_v88_blindado(txt_cont, is_pei_alu)
@@ -3667,7 +3596,6 @@ elif menu == "📸 Scanner de Gabaritos":
                                         match_hab = re.search(r"(EF\d{2}MA\d{2})", texto_bloco)
                                         cod_h = match_hab.group(1) if match_hab else "BNCC"
 
-                                        # Busca o erro na seção de distratores
                                         secao_erros = re.search(r"(?i)(?:ALERTA|PERÍCIA|DISTRATORES).*?[:\-]\s*(.*)", texto_bloco, re.DOTALL)
                                         texto_para_busca = secao_erros.group(1) if secao_erros else texto_bloco
                                         
@@ -3677,12 +3605,10 @@ elif menu == "📸 Scanner de Gabaritos":
                                         if match_d:
                                             analise_de_erros.append(f"[{cod_h}] Q{q_n}({letra_marcada}): {match_d.group(1).strip()}")
                                         else:
-                                            # Fallback: Se não achar o distrator, pega a perícia geral da questão
                                             resumo = re.search(r"(?i)(?:PERÍCIA|ANÁLISE|JUSTIFICATIVA).*?[:\-]\s*(.*?)(?=QUEST[AÃ]O|$)", texto_bloco, re.DOTALL)
                                             txt_res = resumo.group(1).strip() if resumo else "Erro de interpretação."
                                             analise_de_erros.append(f"[{cod_h}] Q{q_n}({letra_marcada}): {txt_res}")
                             
-                            # Alerta de Segurança: Se o aluno errou mas o sistema não extraiu o motivo
                             if nota_alu < 10.0 and not analise_de_erros:
                                 lacunas_txt = "⚠️ Erro na leitura da grade de correção."
                             else:
@@ -3696,7 +3622,7 @@ elif menu == "📸 Scanner de Gabaritos":
                 st.data_editor(df_f, column_config={"Estudante": st.column_config.TextColumn("Estudante", width="medium"), "Diagnóstico Técnico de Erros": st.column_config.TextColumn("Diagnóstico (Raciocínio do Erro)", width="large")},
                     hide_index=True, use_container_width=True, disabled=True, key=f"raiox_final_v88_{v}")
 
-# --- ABA 5: ACERVO DE EVIDÊNCIAS (V71.0 - CUSTÓDIA COM FILTROS INTELIGENTES) ---
+# --- ABA 5: ACERVO DE EVIDÊNCIAS ---
     with tab_acervo_cir:
         st.subheader("📂 Cofre Digital de Evidências: Localização Rápida")
         st.markdown("---")
@@ -3704,41 +3630,27 @@ elif menu == "📸 Scanner de Gabaritos":
         if df_diagnosticos.empty:
             st.info("📭 Nenhuma evidência arquivada ainda.")
         else:
-            # 1. BARRA DE FILTROS DE ELITE
             with st.container(border=True):
                 c_f1, c_f2, c_f3 = st.columns([1, 1, 1.5])
-                
-                # Filtro 1: Turma
                 lista_turmas_ev = ["Todas"] + sorted(df_diagnosticos['TURMA'].unique().tolist())
                 f_turma = c_f1.selectbox("👥 Filtrar por Turma:", lista_turmas_ev, key=f"f_t_ev_{v}")
-                
-                # Filtro 2: Trimestre (Busca por texto no ID da Avaliação)
                 f_trim = c_f2.selectbox("📅 Filtrar por Trimestre:", ["Todos", "I Trimestre", "II Trimestre", "III Trimestre"], key=f"f_tr_ev_{v}")
                 
-                # Preparação da base filtrada para o Filtro 3
                 df_ev_filtrado = df_diagnosticos.copy()
-                if f_turma != "Todas":
-                    df_ev_filtrado = df_ev_filtrado[df_ev_filtrado['TURMA'] == f_turma]
-                if f_trim != "Todos":
-                    df_ev_filtrado = df_ev_filtrado[df_ev_filtrado['ID_AVALIACAO'].str.contains(f_trim, na=False)]
+                if f_turma != "Todas": df_ev_filtrado = df_ev_filtrado[df_ev_filtrado['TURMA'] == f_turma]
+                if f_trim != "Todos": df_ev_filtrado = df_ev_filtrado[df_ev_filtrado['ID_AVALIACAO'].str.contains(f_trim, na=False)]
                 
-                # Filtro 3: Material (Dinâmico com base nos filtros anteriores)
                 lista_mats_ev = ["Todos"] + sorted(df_ev_filtrado['ID_AVALIACAO'].unique().tolist())
                 f_mat = c_f3.selectbox("📋 Selecionar Material Específico:", lista_mats_ev, key=f"f_m_ev_{v}")
                 
-                if f_mat != "Todos":
-                    df_ev_filtrado = df_ev_filtrado[df_ev_filtrado['ID_AVALIACAO'] == f_mat]
+                if f_mat != "Todos": df_ev_filtrado = df_ev_filtrado[df_ev_filtrado['ID_AVALIACAO'] == f_mat]
 
-            # 2. EXIBIÇÃO DOS RESULTADOS
             st.markdown(f"**🔍 Registros Localizados:** {len(df_ev_filtrado)}")
             
             if df_ev_filtrado.empty:
                 st.warning("⚠️ Nenhum registro encontrado com os filtros selecionados.")
             else:
-                # Ordena pelos mais recentes
                 df_ev_exibicao = df_ev_filtrado.iloc[::-1]
-                
-                # Tabela de Custódia com Link Direto
                 st.dataframe(
                     df_ev_exibicao[['DATA', 'NOME_ALUNO', 'TURMA', 'ID_AVALIACAO', 'NOTA_CALCULADA', 'LINK_FOTO_DRIVE']],
                     column_config={
@@ -3749,23 +3661,19 @@ elif menu == "📸 Scanner de Gabaritos":
                         "NOTA_CALCULADA": st.column_config.NumberColumn("Nota", format="%.1f", width="small"),
                         "LINK_FOTO_DRIVE": st.column_config.LinkColumn("🔗 Ver Evidência (Drive)", width="medium")
                     },
-                    use_container_width=True,
-                    hide_index=True
+                    use_container_width=True, hide_index=True
                 )
 
-                # 3. RESUMO DE PERFORMANCE DO FILTRO
                 with st.expander("📊 Resumo Rápido desta Seleção"):
                     c_r1, c_r2, c_r3 = st.columns(3)
                     media_sel = df_ev_filtrado['NOTA_CALCULADA'].apply(util.sosa_to_float).mean()
                     c_r1.metric("Média do Grupo", f"{media_sel:.2f}")
-                    
                     acima_media = len(df_ev_filtrado[df_ev_filtrado['NOTA_CALCULADA'].apply(util.sosa_to_float) >= 6.0])
                     c_r2.metric("Alunos com Sucesso", acima_media)
-                    
                     abaixo_media = len(df_ev_filtrado) - acima_media
                     c_r3.metric("Alunos em Alerta", abaixo_media, delta_color="inverse")
 
-    # --- ABA 6: DASHBOARD (V73.0 - TORRE DE COMANDO COM FILTRO DE TURMA) ---
+    # --- ABA 6: DASHBOARD ---
     with tab_dash_cir:
         st.subheader("📈 Torre de Comando: Inteligência de Resultados 360°")
         st.markdown("---")
@@ -3773,116 +3681,85 @@ elif menu == "📸 Scanner de Gabaritos":
         if df_diagnosticos.empty:
             st.info("📭 Aguardando dados de gabaritos para gerar a inteligência analítica.")
         else:
-            # 1. PREPARAÇÃO E FUSÃO DE DADOS (DATA FUSION)
             df_dash = df_diagnosticos.copy()
             df_dash['NOTA_NUM'] = df_dash['NOTA_CALCULADA'].apply(util.sosa_to_float)
             
-            # Cruzamento com a base de alunos para identificar Perfil (Regular/PEI)
             df_alunos_min = df_alunos[['ID', 'NECESSIDADES']].copy()
             df_alunos_min['ID'] = df_alunos_min['ID'].apply(db.limpar_id)
             df_dash['ID_ALUNO_L'] = df_dash['ID_ALUNO'].apply(db.limpar_id)
             
             df_final_base = pd.merge(df_dash, df_alunos_min, left_on='ID_ALUNO_L', right_on='ID', how='left')
+            
+            # 🚨 CORREÇÃO SOBERANA
             df_final_base['PERFIL'] = df_final_base['NECESSIDADES'].apply(
-                lambda x: "♿ PEI" if str(x).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"] else "📝 REGULAR"
+                lambda x: "♿ PEI" if str(x).upper().strip() not in ["NENHUMA", "PENDENTE", "", "NAN", "TÍPICO", "TIPICO"] else "📝 REGULAR"
             )
 
-            # --- SELETOR DE SOBERANIA (FILTRO DE TURMA) ---
             with st.container(border=True):
                 lista_turmas_dash = ["Todas as Turmas"] + sorted(df_final_base['TURMA'].unique().tolist())
                 turma_sel_dash = st.selectbox("🎯 Selecione a Turma para Análise de Performance:", lista_turmas_dash, key=f"dash_t_filter_{v}")
 
-            # Aplicação do Filtro
-            if turma_sel_dash != "Todas as Turmas":
-                df_final = df_final_base[df_final_base['TURMA'] == turma_sel_dash].copy()
-            else:
-                df_final = df_final_base.copy()
+            if turma_sel_dash != "Todas as Turmas": df_final = df_final_base[df_final_base['TURMA'] == turma_sel_dash].copy()
+            else: df_final = df_final_base.copy()
 
             if df_final.empty:
                 st.warning(f"⚠️ Não há dados processados para a turma {turma_sel_dash}.")
             else:
-                # 2. KPIs DE TOPO (MÉTRICAS AJUSTADAS AO FILTRO)
                 c1, c2, c3, c4 = st.columns(4)
-                
                 media_geral = df_final['NOTA_NUM'].mean()
-                c1.metric("Média do Grupo", f"{media_geral:.2f}", 
-                        delta=f"{media_geral - 6.0:.1f}", 
-                        delta_color="normal" if media_geral >= 6 else "inverse")
-                
+                c1.metric("Média do Grupo", f"{media_geral:.2f}", delta=f"{media_geral - 6.0:.1f}", delta_color="normal" if media_geral >= 6 else "inverse")
                 total_correcoes = len(df_final)
                 c2.metric("Total de Correções", total_correcoes)
-                
                 taxa_sucesso = (len(df_final[df_final['NOTA_NUM'] >= 6.0]) / total_correcoes) * 100 if total_correcoes > 0 else 0
                 c3.metric("Taxa de Sucesso", f"{taxa_sucesso:.1f}%")
-                
                 media_pei = df_final[df_final['PERFIL'] == "♿ PEI"]['NOTA_NUM'].mean()
                 c4.metric("Média PEI", f"{media_pei:.2f}" if not pd.isna(media_pei) else "0.00")
 
                 st.markdown("---")
-
-                # 3. ANÁLISE GRÁFICA (VISÃO SEGREGADA)
                 col_esq, col_dir = st.columns(2)
 
                 with col_esq:
                     st.markdown(f"**⚖️ Índice de Equidade: {turma_sel_dash}**")
-                    # Gráfico de Box Plot para ver a dispersão das notas por perfil
-                    fig_perfil = px.box(df_final, x="PERFIL", y="NOTA_NUM", color="PERFIL",
-                                    points="all", title="Distribuição de Notas: Regular vs PEI",
-                                    color_discrete_map={"📝 REGULAR": BRAND_BLUE, "♿ PEI": "#FF4B4B"})
+                    fig_perfil = px.box(df_final, x="PERFIL", y="NOTA_NUM", color="PERFIL", points="all", title="Distribuição de Notas: Regular vs PEI", color_discrete_map={"📝 REGULAR": BRAND_BLUE, "♿ PEI": "#FF4B4B"})
                     fig_perfil.update_layout(showlegend=False, yaxis_range=[0, 11], height=400)
                     st.plotly_chart(fig_perfil, use_container_width=True)
 
                 with col_dir:
                     st.markdown(f"**📊 Performance por Ativo: {turma_sel_dash}**")
-                    # Média de cada prova aplicada para o grupo selecionado
                     df_ativos = df_final.groupby('ID_AVALIACAO')['NOTA_NUM'].mean().reset_index().sort_values(by='NOTA_NUM')
-                    fig_ativos = px.bar(df_ativos, x="NOTA_NUM", y="ID_AVALIACAO", orientation='h',
-                                    title="Média de Acertos por Avaliação",
-                                    text_auto='.1f', color="NOTA_NUM", color_continuous_scale="RdYlGn")
+                    fig_ativos = px.bar(df_ativos, x="NOTA_NUM", y="ID_AVALIACAO", orientation='h', title="Média de Acertos por Avaliação", text_auto='.1f', color="NOTA_NUM", color_continuous_scale="RdYlGn")
                     fig_ativos.update_layout(xaxis_range=[0, 11], height=400)
                     st.plotly_chart(fig_ativos, use_container_width=True)
 
-                # 4. MAPA DE CALOR DE HABILIDADES (LACUNAS BNCC ESPECÍFICAS)
                 st.markdown("---")
                 st.markdown(f"**🔥 Mapa de Calor: Domínio de Habilidades BNCC ({turma_sel_dash})**")
                 
                 df_habilidades = []
-                # Itera apenas sobre as avaliações que aparecem no filtro atual
                 for avaliacao in df_final['ID_AVALIACAO'].unique():
-                    # Busca o conteúdo da prova no banco de materiais
                     prova_query = df_aulas[df_aulas['TIPO_MATERIAL'] == avaliacao]
                     if not prova_query.empty:
                         prova_txt = prova_query['CONTEUDO'].iloc[0]
                         grade = ai.extrair_tag(prova_txt, "GRADE_DE_CORRECAO")
-                        
-                        # Busca códigos BNCC (Ex: EF06MA01)
                         codigos = re.findall(r"EF\d{2}MA\d{2}", grade)
                         for cod in set(codigos):
-                            # Calcula a média de acerto do grupo filtrado para esta prova
                             media_hab = df_final[df_final['ID_AVALIACAO'] == avaliacao]['NOTA_NUM'].mean()
                             df_habilidades.append({"Habilidade": cod, "Domínio %": media_hab * 10, "Ativo": avaliacao})
 
                 if df_habilidades:
                     df_hab_plot = pd.DataFrame(df_habilidades)
-                    fig_hab = px.scatter(df_hab_plot, x="Habilidade", y="Domínio %", size="Domínio %", color="Domínio %",
-                                        hover_name="Ativo", title="Nível de Domínio por Descritor",
-                                        color_continuous_scale="RdYlGn", range_y=[0, 105])
+                    fig_hab = px.scatter(df_hab_plot, x="Habilidade", y="Domínio %", size="Domínio %", color="Domínio %", hover_name="Ativo", title="Nível de Domínio por Descritor", color_continuous_scale="RdYlGn", range_y=[0, 105])
                     st.plotly_chart(fig_hab, use_container_width=True)
                 else:
                     st.info("Habilidades BNCC serão mapeadas conforme o senhor realizar as perícias no Raio-X.")
 
-                # 5. ALERTAS DE INTERVENÇÃO (FOCO NA TURMA)
                 st.markdown("---")
                 st.markdown(f"#### 🚨 Alertas de Risco Pedagógico: {turma_sel_dash}")
-                
-                # Filtra alunos do grupo atual com média abaixo de 5.0
                 df_alerta = df_final[df_final['NOTA_NUM'] < 5.0].groupby(['NOME_ALUNO', 'TURMA', 'PERFIL'])['NOTA_NUM'].count().reset_index()
                 df_alerta.columns = ['Estudante', 'Turma', 'Perfil', 'Qtd. Avaliações Críticas']
                 
                 if not df_alerta.empty:
                     st.warning(f"Identificamos {len(df_alerta)} alunos em {turma_sel_dash} que necessitam de recomposição urgente.")
-                    st.dataframe(df_alerta.sort_values(by='Qtd. Avaliações Críticas', ascending=False), 
-                                use_container_width=True, hide_index=True)
+                    st.dataframe(df_alerta.sort_values(by='Qtd. Avaliações Críticas', ascending=False), use_container_width=True, hide_index=True)
                 else:
                     st.success(f"Nenhum aluno da turma {turma_sel_dash} em zona de risco crítico no momento.")
 
