@@ -1024,7 +1024,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                     st.caption(f"💡 **Dica:** Se usar ';' a Aula 1 focará no 1º intervalo e a Aula 2 no 2º.")
 
 
-# --- BOTÃO DE COMPILAÇÃO (PADRÃO SOBERANO V48.1 - FIX SÁBADO) ---
+# --- BOTÃO DE COMPILAÇÃO (PADRÃO SOBERANO V48.2 - INJEÇÃO DE NATUREZA) ---
         if st.button("🚀 COMPILAR PLANEJAMENTO INTEGRADO", use_container_width=True, type="primary", key=f"btn_compilar_{v}"):
             
             v_ctx_ia = ctx_ia if 'ctx_ia' in locals() else ""
@@ -1034,17 +1034,17 @@ if menu == "📅 Planejamento (Ponto ID)":
             if modo_p == "📖 Livro Didático" and not uri_livro_drive:
                 st.error("❌ Erro: O livro selecionado não possui um link válido no banco de materiais.")
             else:
-                with st.spinner("Maestro SOSA em análise profunda do PDF..."):
+                with st.spinner("Maestro SOSA em análise profunda do PDF e do Contexto..."):
                     plano_anterior_txt = "Início de Safra."
                     df_hist = df_planos[df_planos['ANO'] == ano_str_busca].sort_values(by='DATA', ascending=False)
                     if not df_hist.empty: 
                         plano_anterior_txt = df_hist.iloc[0]['PLANO_TEXTO']
 
-                    # Definição explícita do status para a IA
                     status_sabado_cmd = "ATIVADO (Gere uma oficina/atividade extra)" if tem_sabado else "DESATIVADO (Escreva apenas N/A)"
 
                     prompt = (
-                        f"ORDEM SOBERANA DE FIDELIDADE: Use EXCLUSIVAMENTE o PDF anexo como fonte.\n"
+                        f"NATUREZA DA SEMANA: {tipo_semana}\n"
+                        f"ORDEM SOBERANA DE FIDELIDADE: Use EXCLUSIVAMENTE o PDF anexo como fonte (se houver).\n"
                         f"PÁGINAS ALVO: {base_didatica_info}.\n"
                         f"SÉRIE: {ano_p}º Ano. SEMANA: {sem_limpa}. TRIMESTRE: {trim_atual}.\n"
                         f"CARGA HORÁRIA: {carga_horaria}.\n"
@@ -1054,7 +1054,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                         f"2. Extraia os conceitos exatos de cada capítulo/intervalo citado.\n"
                         f"3. Se a carga for '1 Aula', foque apenas no primeiro intervalo.\n"
                         f"4. Preencha todas as tags [TAG] com densidade acadêmica.\n\n"
-                        f"--- CONTEXTO DE APOIO ---\n{v_strat}\n{v_ctx_ia}\n"
+                        f"--- CONTEXTO DE APOIO E ATIVOS VINCULADOS ---\n{v_strat}\n{v_ctx_ia}\n{v_ctx_ativo}\n"
                         f"--- MATRIZ OFICIAL (ITABUNA) ---\n{df_curriculo[df_curriculo['ANO'].astype(str)==str(ano_p)].to_string(index=False)}"
                     )
                     
