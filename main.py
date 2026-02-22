@@ -591,20 +591,22 @@ if menu == "🧪 Criador de Aulas":
                                     st.session_state.sosa_id_atual = nome_elite
                                     st.session_state.lab_meta = {"ano": ano_lab, "semana_ref": sem_lab}
                                     
-                                    # 🚨 INSTRUÇÕES ESPECÍFICAS BASEADAS NO CONTEXTO
+                                    # 🚨 INSTRUÇÕES ESPECÍFICAS BASEADAS NO CONTEXTO (COM BLINDAGEM DE FORMATO)
                                     if is_avaliacao and not is_correcao:
                                         missao_especifica = (
                                             f"🚨 ATENÇÃO: Esta é uma aula de APLICAÇÃO DE AVALIAÇÃO.\n"
-                                            f"1. [PROFESSOR]: Escreva apenas as instruções de logística, tempo, regras da prova e orientações de preenchimento de gabarito.\n"
-                                            f"2. [ALUNO] e [PEI]: Escreva APENAS 'Material de avaliação impresso separadamente. Não há atividade de caderno hoje.'\n"
-                                            f"3. É TERMINANTEMENTE PROIBIDO gerar questões ou exercícios."
+                                            f"1. Na tag [PROFESSOR]: Escreva apenas as instruções de logística, tempo, regras da prova e orientações de preenchimento de gabarito.\n"
+                                            f"2. Nas tags [ALUNO] e [PEI]: Escreva APENAS 'Material de avaliação impresso separadamente. Não há atividade de caderno hoje.'\n"
+                                            f"3. É TERMINANTEMENTE PROIBIDO gerar questões ou exercícios.\n"
+                                            f"🚨 FORMATO OBRIGATÓRIO: Você DEVE separar o texto usando EXATAMENTE as tags entre colchetes: [PROFESSOR], [ALUNO], [PEI], [GABARITO], [IMAGENS]."
                                         )
                                     elif is_correcao:
                                         missao_especifica = (
                                             f"🚨 ATENÇÃO: Esta é uma aula de CORREÇÃO DE AVALIAÇÃO (Clínica Pedagógica).\n"
-                                            f"1. [PROFESSOR]: Escreva um guia de como mediar a correção no quadro. USE AS QUESTÕES DA AVALIAÇÃO VINCULADA ABAIXO para dar exemplos reais de como explicar os erros (distratores).\n"
-                                            f"2. [ALUNO] e [PEI]: Escreva APENAS 'Acompanhamento da correção no quadro e anotações de feedback. Não há nova lista de exercícios hoje.'\n"
-                                            f"3. É TERMINANTEMENTE PROIBIDO gerar novas questões."
+                                            f"1. Na tag [PROFESSOR]: Escreva um guia de como mediar a correção no quadro. USE AS QUESTÕES DA AVALIAÇÃO VINCULADA ABAIXO para dar exemplos reais de como explicar os erros (distratores).\n"
+                                            f"2. Nas tags [ALUNO] e [PEI]: Escreva APENAS 'Acompanhamento da correção no quadro e anotações de feedback. Não há nova lista de exercícios hoje.'\n"
+                                            f"3. É TERMINANTEMENTE PROIBIDO gerar novas questões.\n"
+                                            f"🚨 FORMATO OBRIGATÓRIO: Você DEVE separar o texto usando EXATAMENTE as tags entre colchetes: [PROFESSOR], [ALUNO], [PEI], [GABARITO], [IMAGENS]."
                                         )
                                     else:
                                         missao_especifica = (
@@ -612,7 +614,8 @@ if menu == "🧪 Criador de Aulas":
                                             f"1. O [PROFESSOR] deve ser um TRATADO DIDÁTICO. Explique o conceito de {obj_geral} com profundidade técnica antes de dar o roteiro de aula.\n"
                                             f"2. Use o Google Search para trazer dados científicos do ano de 2026 ou mais atualizado possível que validem a importância deste tema.\n"
                                             f"3. Se for MODO LIVRO, o roteiro deve dizer exatamente: 'Inicie na página X explorando a imagem Y...'.\n"
-                                            f"4. Para o ALUNO PEI: Gere {qtd_q_prod} questões com apoio visual [ PROMPT IMAGEM ]."
+                                            f"4. Para o ALUNO PEI: Gere {qtd_q_prod} questões com apoio visual [ PROMPT IMAGEM ].\n"
+                                            f"🚨 FORMATO OBRIGATÓRIO: Você DEVE separar o texto usando EXATAMENTE as tags entre colchetes: [PROFESSOR], [ALUNO], [PEI], [GABARITO], [IMAGENS]."
                                         )
 
                                     prompt_manual = (
@@ -628,12 +631,22 @@ if menu == "🧪 Criador de Aulas":
                                     if conteudo_prova_vinculada:
                                         prompt_manual += f"\n\n--- CONTEÚDO DA AVALIAÇÃO VINCULADA ---\n{conteudo_prova_vinculada}"
                                     
-                                    st.session_state.lab_temp = ai.gerar_ia(
+                                    resultado_ia = ai.gerar_ia(
                                         "MAESTRO_SOSA_V28_ELITE", 
                                         prompt_manual, 
                                         url_drive=uri_referencia_aula, 
                                         usar_busca=True
                                     )
+                                    
+                                    # 🚨 VACINA ANTI-MARKDOWN: Força a conversão de **TAG** para [TAG]
+                                    import re
+                                    tags_para_limpar = ["PROFESSOR", "ALUNO", "PEI", "GABARITO", "GABARITO_PEI", "IMAGENS"]
+                                    for t in tags_para_limpar:
+                                        resultado_ia = re.sub(rf"\*\*{t}\*\*", f"[{t}]", resultado_ia, flags=re.IGNORECASE)
+                                        resultado_ia = re.sub(rf"\*\*{t}:\*\*", f"[{t}]", resultado_ia, flags=re.IGNORECASE)
+                                        resultado_ia = re.sub(rf"^{t}$", f"[{t}]", resultado_ia, flags=re.IGNORECASE | re.MULTILINE)
+                                        
+                                    st.session_state.lab_temp = resultado_ia
                                     st.rerun()
 
 # --- ABA 3: ENGENHARIA DE TRABALHOS (VERSÃO V31.7 - BLINDAGEM DE TABELAS) ---
