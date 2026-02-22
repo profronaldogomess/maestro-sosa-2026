@@ -1551,7 +1551,7 @@ elif menu == "📝 Diário de Bordo Rápido":
                         time.sleep(1); st.rerun()
 
 # ==============================================================================
-# MÓDULO: PAINEL DE NOTAS V32.3 - CÁLCULO AUTOMÁTICO E CORREÇÃO DE PERFIL
+# MÓDULO: PAINEL DE NOTAS V32.4 - CÁLCULO AUTOMÁTICO E VACINA ANTI-VAZIO
 # ==============================================================================
 elif menu == "📊 Painel de Notas & Vistos":
     st.title("📊 Torre de Comando: Gestão de Notas e Performance")
@@ -1586,6 +1586,13 @@ elif menu == "📊 Painel de Notas & Vistos":
             if (p_visto + p_teste + p_prova) != 10.0:
                 st.warning(f"⚠️ A soma dos pesos ({p_visto + p_teste + p_prova}) deve ser 10.0 para o sistema oficial.")
 
+        # 🚨 VACINA ANTI-VAZIO: Verifica se a turma selecionada tem alunos ANTES de calcular
+        alunos_turma = df_alunos[df_alunos['TURMA'] == turma_sel].sort_values(by="NOME_ALUNO")
+        
+        if alunos_turma.empty:
+            st.warning(f"⚠️ Nenhum aluno cadastrado na turma {turma_sel} ainda. Vá em 'Gestão da Turma' para povoar.")
+            st.stop()
+
         # 2. MOTOR DE CÁLCULO AUTOMÁTICO (DIÁRIO DE BORDO)
         vistos_auto_map = {}
         bonus_total_map = {}
@@ -1602,7 +1609,7 @@ elif menu == "📊 Painel de Notas & Vistos":
             df_d_t['DATA_DT'] = pd.to_datetime(df_d_t['DATA'], format="%d/%m/%Y", errors='coerce').dt.date
             df_d_trim = df_d_t[(df_d_t['DATA_DT'] >= dt_ini) & (df_d_t['DATA_DT'] <= dt_fim)]
             
-            for id_aluno in df_alunos[df_alunos['TURMA'] == turma_sel]['ID']:
+            for id_aluno in alunos_turma['ID']:
                 id_l = db.limpar_id(id_aluno)
                 d_alu = df_d_trim[df_d_trim['ID_ALUNO'].apply(db.limpar_id) == id_l]
                 
@@ -1617,7 +1624,6 @@ elif menu == "📊 Painel de Notas & Vistos":
 
         # 3. CONSOLIDAÇÃO DA MESA DE LANÇAMENTO
         notas_banco = df_notas[(df_notas['TURMA'] == turma_sel) & (df_notas['TRIMESTRE'] == trimestre_sel)]
-        alunos_turma = df_alunos[df_alunos['TURMA'] == turma_sel].sort_values(by="NOME_ALUNO")
         
         dados_editor = []
         for _, alu in alunos_turma.iterrows():
@@ -1628,7 +1634,6 @@ elif menu == "📊 Painel de Notas & Vistos":
             n_prova = util.sosa_to_float(reg_b.iloc[0]['NOTA_PROVA']) if not reg_b.empty else 0.0
             n_rec = util.sosa_to_float(reg_b.iloc[0]['NOTA_REC']) if not reg_b.empty else 0.0
             
-            # 🚨 CORREÇÃO SOBERANA: "TÍPICO" não é mais considerado PEI
             is_pei = str(alu['NECESSIDADES']).upper().strip() not in ["NENHUMA", "PENDENTE", "", "NAN", "TÍPICO", "TIPICO"]
 
             dados_editor.append({
@@ -1724,170 +1729,7 @@ elif menu == "📊 Painel de Notas & Vistos":
                 if db.salvar_lote("DB_NOTAS", linhas_save):
                     status.update(label="✅ Boletim Sincronizado!", state="complete")
                     st.balloons(); time.sleep(1); st.rerun()
-
-# ==============================================================================
-# MÓDULO: PAINEL DE NOTAS V32.1 - CÁLCULO AUTOMÁTICO E TRANSBORDAMENTO
-# ==============================================================================
-elif menu == "📊 Painel de Notas & Vistos":
-    st.title("📊 Torre de Comando: Gestão de Notas e Performance")
-    st.markdown("---")
-
-    if "v_notas" not in st.session_state: st.session_state.v_notas = 1
-    v = st.session_state.v_notas
-
-    if df_alunos.empty:
-        st.warning("⚠️ Cadastre alunos primeiro na aba 'Gestão da Turma'.")
-    else:
-        # 1. CONFIGURADOR DE PESOS (CRITÉRIOS DO TRIMESTRE)
-        with st.container(border=True):
-            st.markdown("### ⚙️ Configuração de Critérios do Trimestre")
-            c_f1, c_f2, c_f3, c_f4, c_f5 = st.columns([1.5, 1, 0.8, 0.8, 0.8])
-            turma_sel = c_f1.selectbox("👥 Selecione a Turma:", sorted(df_alunos['TURMA'].unique()), key=f"n_turma_{v}")
-            trimestre_sel = c_f2.selectbox("📅 Trimestre Atual:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"n_trim_{v}")
-            
-            p_visto = c_f3.number_input("Peso Vistos:", 0.0, 10.0, 3.0, step=0.5, key=f"p_v_{v}")
-            p_teste = c_f4.number_input("Peso Teste:", 0.0, 10.0, 3.0, step=0.5, key=f"p_t_{v}")
-            p_prova = c_f5.number_input("Peso Prova:", 0.0, 10.0, 4.0, step=0.5, key=f"p_p_{v}")
-            
-            if (p_visto + p_teste + p_prova) != 10.0:
-                st.warning(f"⚠️ A soma dos pesos ({p_visto + p_teste + p_prova}) deve ser 10.0 para o sistema da prefeitura.")
-
-        # 2. MOTOR DE CÁLCULO AUTOMÁTICO (DIÁRIO DE BORDO)
-        vistos_auto_map = {}
-        bonus_total_map = {}
-        
-        # Datas oficiais de Itabuna (conforme utils.py)
-        calendario = {
-            "I Trimestre": (date(2026, 2, 9), date(2026, 5, 22)),
-            "II Trimestre": (date(2026, 5, 25), date(2026, 9, 4)),
-            "III Trimestre": (date(2026, 9, 8), date(2026, 12, 17))
-        }
-        dt_ini, dt_fim = calendario.get(trimestre_sel)
-
-        if not df_diario.empty:
-            df_d_t = df_diario[df_diario['TURMA'] == turma_sel].copy()
-            # Converte datas para comparação real
-            df_d_t['DATA_DT'] = pd.to_datetime(df_d_t['DATA'], format="%d/%m/%Y", errors='coerce').dt.date
-            # Filtra apenas o que aconteceu NESTE trimestre
-            df_d_trim = df_d_t[(df_d_t['DATA_DT'] >= dt_ini) & (df_d_t['DATA_DT'] <= dt_fim)]
-            
-            for id_aluno in df_alunos[df_alunos['TURMA'] == turma_sel]['ID']:
-                id_l = db.limpar_id(id_aluno)
-                d_alu = df_d_trim[df_d_trim['ID_ALUNO'].apply(db.limpar_id) == id_l]
-                
-                if not d_alu.empty:
-                    # --- CORREÇÃO DO ERRO ATTRIBUTEERROR (USANDO .STR.UPPER) ---
-                    vistos_validos = d_alu[d_alu['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"]
-                    aulas_com_visto = len(vistos_validos)
-                    total_aulas_periodo = len(d_alu)
                     
-                    # Cálculo Proporcional: (Vistos / Total) * Peso do Trimestre
-                    vistos_auto_map[id_l] = round((aulas_com_visto / total_aulas_periodo * p_visto), 2)
-                    
-                    # Soma de Bônus (Mérito)
-                    bonus_total_map[id_l] = d_alu['BONUS'].apply(util.sosa_to_float).sum()
-                else:
-                    vistos_auto_map[id_l], bonus_total_map[id_l] = 0.0, 0.0
-
-        # 3. CONSOLIDAÇÃO DA MESA DE LANÇAMENTO
-        notas_banco = df_notas[(df_notas['TURMA'] == turma_sel) & (df_notas['TRIMESTRE'] == trimestre_sel)]
-        alunos_turma = df_alunos[df_alunos['TURMA'] == turma_sel].sort_values(by="NOME_ALUNO")
-        
-        dados_editor = []
-        for _, alu in alunos_turma.iterrows():
-            id_a = db.limpar_id(alu['ID'])
-            reg_b = notas_banco[notas_banco['ID_ALUNO'].apply(db.limpar_id) == id_a]
-            
-            n_teste = util.sosa_to_float(reg_b.iloc[0]['NOTA_TESTE']) if not reg_b.empty else 0.0
-            n_prova = util.sosa_to_float(reg_b.iloc[0]['NOTA_PROVA']) if not reg_b.empty else 0.0
-            n_rec = util.sosa_to_float(reg_b.iloc[0]['NOTA_REC']) if not reg_b.empty else 0.0
-            
-            is_pei = str(alu['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"]
-
-            dados_editor.append({
-                "ID": id_a,
-                "ESTUDANTE": f"♿ {alu['NOME_ALUNO']}" if is_pei else alu['NOME_ALUNO'],
-                "VISTOS (AUTO)": vistos_auto_map.get(id_a, 0.0),
-                "BÔNUS (TOTAL)": bonus_total_map.get(id_a, 0.0),
-                "TESTE (LANÇAR)": n_teste,
-                "PROVA (LANÇAR)": n_prova,
-                "REC. PARALELA": n_rec
-            })
-
-        # 4. TABELA DE ENTRADA E AJUSTE
-        st.subheader("📝 1. Consolidação de Dados")
-        df_input = st.data_editor(
-            pd.DataFrame(dados_editor),
-            column_config={
-                "ID": None,
-                "ESTUDANTE": st.column_config.TextColumn("Estudante", width="medium", disabled=True),
-                "VISTOS (AUTO)": st.column_config.NumberColumn("Vistos (Sistema)", format="%.1f", disabled=True),
-                "BÔNUS (TOTAL)": st.column_config.NumberColumn("⭐ Bônus", format="%.1f", disabled=True),
-                "TESTE (LANÇAR)": st.column_config.NumberColumn("Nota Teste", min_value=0.0, max_value=p_teste, format="%.1f"),
-                "PROVA (LANÇAR)": st.column_config.NumberColumn("Nota Prova", min_value=0.0, max_value=p_prova, format="%.1f"),
-                "REC. PARALELA": st.column_config.NumberColumn("🔄 Rec.", min_value=0.0, max_value=10.0, format="%.1f"),
-            },
-            hide_index=True, use_container_width=True, key=f"editor_notas_{v}"
-        )
-
-        # 5. ALGORITMO DE TRANSBORDAMENTO (COMPATIBILIDADE PREFEITURA)
-        def aplicar_transbordamento(row):
-            bonus_restante = row['BÔNUS (TOTAL)']
-            v_base = row['VISTOS (AUTO)']
-            t_base = row['TESTE (LANÇAR)']
-            p_base = row['PROVA (LANÇAR)']
-            
-            # Passo 1: Completar Vistos
-            v_final = min(p_visto, v_base + bonus_restante)
-            bonus_restante -= (v_final - v_base)
-            
-            # Passo 2: Completar Teste
-            t_final = min(p_teste, t_base + max(0, bonus_restante))
-            bonus_restante -= (t_final - t_base)
-            
-            # Passo 3: Completar Prova
-            p_final = min(p_prova, p_base + max(0, bonus_restante))
-            
-            soma_notas = v_final + t_final + p_final
-            media_final = min(10.0, max(soma_notas, row['REC. PARALELA']))
-            
-            return pd.Series([v_final, t_final, p_final, media_final])
-
-        df_input[['V_PREF', 'T_PREF', 'P_PREF', 'MEDIA_FINAL']] = df_input.apply(aplicar_transbordamento, axis=1)
-
-        # 6. GABARITO DE LANÇAMENTO (SISTEMA PREFEITURA)
-        st.markdown("---")
-        st.subheader("🏛️ 2. Gabarito de Lançamento (Sistema Prefeitura)")
-        
-        def style_situacao(v):
-            color = '#2ECC71' if v >= 6.0 else '#FF4B4B'
-            return f'color: {color}; font-weight: bold'
-
-        st.dataframe(
-            df_input[['ESTUDANTE', 'V_PREF', 'T_PREF', 'P_PREF', 'MEDIA_FINAL']].style.applymap(
-                style_situacao, subset=['MEDIA_FINAL']
-            ).format({
-                "V_PREF": "{:.1f}", "T_PREF": "{:.1f}", "P_PREF": "{:.1f}", "MEDIA_FINAL": "{:.2f}"
-            }),
-            use_container_width=True, hide_index=True
-        )
-
-        # 7. SALVAMENTO
-        if st.button("💾 SALVAR E SINCRONIZAR BOLETIM", type="primary", use_container_width=True):
-            with st.status("Sincronizando registros...") as status:
-                db.limpar_notas_turma_trimestre(turma_sel, trimestre_sel)
-                linhas_save = []
-                for _, r in df_input.iterrows():
-                    linhas_save.append([
-                        r['ID'], r['ESTUDANTE'].replace("♿ ", ""), turma_sel, trimestre_sel,
-                        util.sosa_to_str(r["V_PREF"]), util.sosa_to_str(r["T_PREF"]),
-                        util.sosa_to_str(r["P_PREF"]), util.sosa_to_str(r["REC. PARALELA"]),
-                        util.sosa_to_str(r['MEDIA_FINAL'])
-                    ])
-                if db.salvar_lote("DB_NOTAS", linhas_save):
-                    status.update(label="✅ Boletim Sincronizado!", state="complete")
-                    st.balloons(); time.sleep(1); st.rerun()
-
 # ==============================================================================
 # MÓDULO: GESTÃO DA TURMA (V46 - COCKPIT DE PRONTIDÃO E COMANDO)
 # ==============================================================================
