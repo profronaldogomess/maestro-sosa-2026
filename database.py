@@ -564,3 +564,60 @@ def atualizar_fechamento_aula(data, turma, status, ponte, clima):
     except Exception as e:
         print(f"Erro no fechamento: {e}")
         return False
+    
+def atualizar_aluno_cascata(id_aluno, novo_nome, nova_turma, nova_nec):
+    """
+    MOTOR DE PROPAGAÇÃO EM CASCATA V48
+    Atualiza o nome e a turma do aluno em TODAS as abas do sistema simultaneamente.
+    """
+    try:
+        wb = conectar()
+        id_str = str(limpar_id(id_aluno))
+        
+        # 1. Atualiza a Tabela Mestre (DB_ALUNOS)
+        ws_alunos = wb.worksheet("DB_ALUNOS")
+        dados_alunos = ws_alunos.get_all_values()
+        for i, row in enumerate(dados_alunos):
+            if i > 0 and limpar_id(row[0]) == id_str:
+                ws_alunos.update_cell(i + 1, 2, novo_nome)
+                ws_alunos.update_cell(i + 1, 3, nova_turma)
+                ws_alunos.update_cell(i + 1, 5, nova_nec)
+                break
+        
+        # Função interna para atualizar as outras abas em lote (Alta Performance)
+        def update_tab(aba, col_id, col_nome, col_turma=None):
+            try:
+                ws = wb.worksheet(aba)
+                dados = ws.get_all_values()
+                updates = []
+                for i, row in enumerate(dados):
+                    if i > 0 and len(row) > col_id and limpar_id(row[col_id]) == id_str:
+                        # Prepara a atualização do Nome
+                        updates.append(gspread.Cell(row=i+1, col=col_nome+1, value=novo_nome))
+                        # Prepara a atualização da Turma (se aplicável)
+                        if col_turma is not None:
+                            updates.append(gspread.Cell(row=i+1, col=col_turma+1, value=nova_turma))
+                
+                # Dispara a atualização de todas as células de uma vez só
+                if updates:
+                    ws.update_cells(updates)
+            except Exception as e:
+                print(f"Erro ao atualizar {aba}: {e}")
+
+        # 2. Propaga para o Diário de Bordo
+        update_tab("DB_DIARIO_BORDO", 1, 2, 3)
+        
+        # 3. Propaga para o Painel de Notas
+        update_tab("DB_NOTAS", 0, 1, 2)
+        
+        # 4. Propaga para os Relatórios PEI (Não tem coluna de turma aqui)
+        update_tab("DB_RELATORIOS", 1, 2, None)
+        
+        # 5. Propaga para o Scanner de Gabaritos
+        update_tab("DB_GABARITOS_ALUNOS", 1, 2, 3)
+        
+        st.cache_data.clear()
+        return True
+    except Exception as e:
+        print(f"Erro na cascata: {e}")
+        return False
