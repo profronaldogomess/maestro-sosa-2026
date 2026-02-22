@@ -3871,7 +3871,7 @@ elif menu == "📸 Scanner de Gabaritos":
                     st.success(f"Nenhum aluno da turma {turma_sel_dash} em zona de risco crítico no momento.")
 
 # ==============================================================================
-# MÓDULO: BIOGRAFIA DO ESTUDANTE (V39.0 - DOSSIÊ COM EXTRATOR DE HABILIDADES V82)
+# MÓDULO: BIOGRAFIA DO ESTUDANTE (V39.1 - DOSSIÊ COM CORREÇÃO DE PERFIL)
 # ==============================================================================
 elif menu == "👤 Biografia do Estudante":
     st.title("👤 Dossiê de Soberania do Estudante")
@@ -3883,8 +3883,18 @@ elif menu == "👤 Biografia do Estudante":
         # 1. FILTROS DE ACESSO RÁPIDO
         with st.container(border=True):
             c1, c2, c3 = st.columns([1, 1.5, 1])
-            turma_b = c1.selectbox("Turma:", sorted(df_alunos['TURMA'].unique()), key="bio_t")
+            
+            # Filtra apenas turmas reais (ignora PI/PC)
+            turmas_reais_bio = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
+            lista_turmas_bio = sorted(turmas_reais_bio['ID_TURMA'].unique()) if not turmas_reais_bio.empty else sorted(df_alunos['TURMA'].unique())
+            
+            turma_b = c1.selectbox("Turma:", lista_turmas_bio, key="bio_t")
             lista_alunos = df_alunos[df_alunos['TURMA'] == turma_b].sort_values(by="NOME_ALUNO")
+            
+            if lista_alunos.empty:
+                st.warning("Nenhum aluno nesta turma.")
+                st.stop()
+                
             aluno_b = c2.selectbox("Estudante:", lista_alunos['NOME_ALUNO'].tolist(), key="bio_a")
             trim_b = c3.selectbox("Trimestre em Foco:", ["Todos", "I Trimestre", "II Trimestre", "III Trimestre"], key="bio_trim")
 
@@ -3897,7 +3907,9 @@ elif menu == "👤 Biografia do Estudante":
         # Captura dados básicos
         info_alu = lista_alunos[lista_alunos['NOME_ALUNO'] == aluno_b].iloc[0]
         id_alu = db.limpar_id(info_alu['ID'])
-        is_pei = str(info_alu['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"]
+        
+        # 🚨 CORREÇÃO SOBERANA: "TÍPICO" não é mais considerado PEI
+        is_pei = str(info_alu['NECESSIDADES']).upper().strip() not in ["NENHUMA", "PENDENTE", "", "NAN", "TÍPICO", "TIPICO"]
         
         # --- FILTRAGEM DE BASES POR ALUNO E TEMPO ---
         n_alu = df_notas[df_notas['ID_ALUNO'].apply(db.limpar_id) == id_alu]
@@ -3922,7 +3934,7 @@ elif menu == "👤 Biografia do Estudante":
         c_h1, c_h2 = st.columns([2, 1])
         with c_h1:
             st.subheader(f"🎓 {aluno_b}")
-            perfil_label = "♿ ESTUDANTE PEI" if is_pei else "📝 ESTUDANTE REGULAR"
+            perfil_label = "♿ ESTUDANTE PEI" if is_pei else "👤 ESTUDANTE REGULAR"
             st.caption(f"**Perfil:** {perfil_label} | **ID:** {id_alu}")
         with c_h2:
             if not n_alu.empty:
@@ -3984,58 +3996,48 @@ elif menu == "👤 Biografia do Estudante":
                         st.caption(f"{emoji} **{row['DATA']}**: {row['TAGS']} - *{row['OBSERVACOES']}*")
                 else: st.success("✅ Nenhuma ocorrência negativa.")
 
-# --- SEÇÃO 4: RAIO-X DE DIFICULDADES (VERSÃO V40 - REFINAMENTO ESTÉTICO) ---
+# --- SEÇÃO 4: RAIO-X DE DIFICULDADES ---
         st.markdown("---")
         with st.container(border=True):
             st.markdown(f"### 🔍 4. Raio-X de Dificuldades: {trim_b}")
             
             if not diag_alu_f.empty:
-                # 1. IDENTIFICAÇÃO NOMINAL DAS AVALIAÇÕES
                 lista_nomes_av = diag_alu_f['ID_AVALIACAO'].unique().tolist()
                 nomes_formatados = ", ".join([f"**{n}**" for n in lista_nomes_av])
                 st.info(f"📊 Analisando {len(lista_nomes_av)} avaliações para compor o diagnóstico: {nomes_formatados}")
                 
                 todas_as_lacunas = []
                 
-                # 2. LOOP DE EXTRAÇÃO DE HABILIDADES
                 for _, reg_av in diag_alu_f.iterrows():
                     nome_av_real = reg_av['ID_AVALIACAO']
                     
-                    # Busca material de referência
                     m_ref_query = df_aulas[df_aulas['TIPO_MATERIAL'] == nome_av_real.replace(" (2ª CHAMADA)", "")]
                     
                     if not m_ref_query.empty:
                         m_ref = m_ref_query.iloc[0]
                         txt_p = str(m_ref['CONTEUDO'])
                         
-                        # Define a grade correta (Regular ou PEI)
                         tag_grade = "GRADE_DE_CORRECAO_PEI" if is_pei else "GRADE_DE_CORRECAO"
                         grade = ai.extrair_tag(txt_p, tag_grade) or ai.extrair_tag(txt_p, "GRADE_DE_CORRECAO")
                         
-                        # Gabarito oficial
                         tag_g = "GABARITO_PEI" if is_pei else "GABARITO_TEXTO"
                         gab_raw = ai.extrair_tag(txt_p, tag_g) or ai.extrair_tag(txt_p, "GABARITO")
                         gab_oficial = re.findall(r"\b[A-E]\b", gab_raw.upper())
                         
-                        # Respostas do aluno
                         respostas_aluno = str(reg_av['RESPOSTAS_ALUNO']).split(';')
                         
                         for i, r in enumerate(respostas_aluno):
                             if i < len(gab_oficial) and r != gab_oficial[i] and r not in ["FALTOU", "?", "X"]:
                                 q_n = i + 1
-                                # Extrator V82 de Habilidades (Código + Descrição)
                                 padrao_h = rf"(?si)QUEST[AÃ]O\s*(?:PEI\s*)?0?{q_n}\b.*?(?:[:\-])\s*(.*?)(?=\.?\s*(?:JUSTIFICATIVA|PERÍCIA|ANÁLISE|DISTRATORES|$))"
                                 m_h = re.search(padrao_h, grade)
                                 
                                 if m_h:
-                                    # Limpeza profunda: remove [], **, # e espaços extras
                                     txt_limpo = re.sub(r'[*#\[\]]', '', m_h.group(1)).strip()
-                                    # Adiciona apenas o texto da habilidade (sem a tag de origem)
                                     todas_as_lacunas.append(txt_limpo)
                 
                 if todas_as_lacunas:
                     st.markdown("**Mapa de Habilidades que precisam de reforço:**")
-                    # Remove duplicatas mantendo a ordem e exibe com o ícone de erro
                     for l in list(dict.fromkeys(todas_as_lacunas)): 
                         st.error(f"❌ {l}")
                 else:
@@ -4043,8 +4045,10 @@ elif menu == "👤 Biografia do Estudante":
             else:
                 st.info("Aguardando avaliações escaneadas para gerar o Raio-X.")
 
+        # 🚨 CORREÇÃO SOBERANA: Só exibe a caixa de observação PEI se o aluno for realmente PEI
         if is_pei:
             st.warning(f"♿ **Observação PEI:** {info_alu['NECESSIDADES']}")
+            
         st.caption(f"Dossiê atualizado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
         
 # ==============================================================================
