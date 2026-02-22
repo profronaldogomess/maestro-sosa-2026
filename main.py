@@ -442,7 +442,13 @@ if menu == "🧪 Criador de Aulas":
 
                     # --- 2. MOTOR DE HERANÇA DE DNA (LIVRO E TRILHAS) ---
                     base_herdada = ai.extrair_tag(plano_txt, "BASE_DIDATICA")
-                    metodo_entrega = st.radio("🎯 Método de Entrega:", ["🚀 Geração Integral (SOSA AI)", "📖 Livro Didático + PEI (Híbrido)"], horizontal=True, key=f"metodo_{v}")
+                    
+                    # 🚨 ALTERAÇÃO SOBERANA: Adicionada a 3ª opção (Evento)
+                    metodo_entrega = st.radio("🎯 Método de Entrega:", [
+                        "🚀 Geração Integral (SOSA AI)", 
+                        "📖 Livro Didático + PEI (Híbrido)",
+                        "🎟️ Registro de Evento / Dinâmica (Sem Material Físico)"
+                    ], horizontal=True, key=f"metodo_{v}")
                     
                     # --- 3. COCKPIT DE PRODUÇÃO (COM FILTRAGEM DE AULA) ---
                     opcoes_disponiveis = ["Aula 1"]
@@ -456,7 +462,11 @@ if menu == "🧪 Criador de Aulas":
                         with col_config1:
                             aula_alvo_prod = st.radio("🚀 Material a Gerar:", opcoes_disponiveis, horizontal=True, key=f"prod_alvo_{v}")
                         with col_config2:
-                            qtd_q_prod = st.slider("Nº de Questões (PEI/Regular):", 1, 20, 10, key=f"prod_q_{v}")
+                            # 🚨 ALTERAÇÃO SOBERANA: Esconde o slider se for Evento
+                            if "Evento" not in metodo_entrega:
+                                qtd_q_prod = st.slider("Nº de Questões (PEI/Regular):", 1, 20, 10, key=f"prod_q_{v}")
+                            else:
+                                nome_evento = st.text_input("Nome do Evento/Dinâmica:", placeholder="Ex: Palestra sobre a Dengue", key=f"nome_ev_{v}")
 
                         # --- LÓGICA DE FILTRAGEM DE CONTEÚDO POR AULA ---
                         tag_roteiro = "AULA_1" if "1" in aula_alvo_prod else "AULA_2"
@@ -471,71 +481,110 @@ if menu == "🧪 Criador de Aulas":
                         with st.expander(f"👁️ Roteiro Herdado para {aula_alvo_prod}", expanded=False):
                             st.info(f"📍 **Páginas Alvo:** {paginas_aula}\n\n{roteiro_especifico}")
 
-                    # --- 4. SMART MATCH COM BIBLIOTECA (FRESH-SYNC) ---
-                    uri_referencia_aula = None
-                    if "Livro" in metodo_entrega:
-                        nome_livro_limpo = base_herdada.split('|')[0].replace("Livro:", "").strip()
-                        match_biblioteca = df_materiais[df_materiais['NOME_ARQUIVO'].str.contains(nome_livro_limpo[:10], case=False, na=False)]
-                        if not match_biblioteca.empty:
-                            uri_referencia_aula = match_biblioteca.iloc[0]['URI_ARQUIVO']
-                            st.success(f"📚 **Fonte Vinculada:** {match_biblioteca.iloc[0]['NOME_ARQUIVO']} (Páginas: {paginas_aula})")
+                    # 🚨 ALTERAÇÃO SOBERANA: Lógica de Bypass da IA para Eventos
+                    if "Evento" in metodo_entrega:
+                        if st.button("💾 OFICIALIZAR EVENTO NO ACERVO", use_container_width=True, type="primary"):
+                            if not nome_evento:
+                                st.error("⚠️ Digite o nome do evento para registrar.")
+                            else:
+                                with st.spinner("Registrando evento com rastreabilidade curricular..."):
+                                    # Extração do DNA do Plano para Rastreabilidade
+                                    hab_herdada = ai.extrair_tag(plano_txt, "HABILIDADE_BNCC")
+                                    cont_herdado = ai.extrair_tag(plano_txt, "CONTEUDOS_ESPECIFICOS")
+                                    obj_herdado = ai.extrair_tag(plano_txt, "OBJETIVOS_ENSINO")
+                                    
+                                    # Construção do Material Fantasma (Preserva o histórico)
+                                    conteudo_fantasma = (
+                                        f"[PROFESSOR]\n"
+                                        f"🎟️ **REGISTRO DE EVENTO / DINÂMICA**\n"
+                                        f"**Tema:** {nome_evento}\n"
+                                        f"**Habilidade:** {hab_herdada}\n"
+                                        f"**Conteúdos:** {cont_herdado}\n"
+                                        f"**Objetivos:** {obj_herdado}\n\n"
+                                        f"**Roteiro Executado:**\n{roteiro_especifico}\n\n"
+                                        f"[ALUNO]\nAtividade prática/evento. Sem material físico gerado.\n\n"
+                                        f"[GABARITO]\nN/A\n\n"
+                                        f"[PEI]\nParticipação inclusiva no evento garantida via mediação direta.\n\n"
+                                        f"--- LINKS ---\nRegular(N/A)\nPEI(N/A)\nProf(N/A)"
+                                    )
+                                    
+                                    nome_elite = util.gerar_nome_material_elite(ano_lab, aula_alvo_prod, nome_evento)
+                                    
+                                    # Salva direto no banco (Bypass da IA)
+                                    db.salvar_no_banco("DB_AULAS_PRONTAS", [
+                                        datetime.now().strftime("%d/%m/%Y"), 
+                                        sem_lab, 
+                                        nome_elite, 
+                                        conteudo_fantasma, 
+                                        f"{ano_lab}º", 
+                                        "N/A"
+                                    ])
+                                    st.success("✅ Evento oficializado no Acervo! Já disponível no Cockpit.")
+                                    time.sleep(1.5)
+                                    st.rerun()
+                    else:
+                        # --- 4. SMART MATCH COM BIBLIOTECA (FRESH-SYNC) ---
+                        uri_referencia_aula = None
+                        if "Livro" in metodo_entrega:
+                            nome_livro_limpo = base_herdada.split('|')[0].replace("Livro:", "").strip()
+                            match_biblioteca = df_materiais[df_materiais['NOME_ARQUIVO'].str.contains(nome_livro_limpo[:10], case=False, na=False)]
+                            if not match_biblioteca.empty:
+                                uri_referencia_aula = match_biblioteca.iloc[0]['URI_ARQUIVO']
+                                st.success(f"📚 **Fonte Vinculada:** {match_biblioteca.iloc[0]['NOME_ARQUIVO']} (Páginas: {paginas_aula})")
 
-                    # --- 5. SENSOR DE NEURODIVERSIDADE ---
-                    alunos_foco = df_alunos[(df_alunos['TURMA'].str.contains(str(ano_lab))) & (~df_alunos['NECESSIDADES'].isin(["NENHUMA", "PENDENTE", "", "NAN"]))]
-                    texto_clinico = ", ".join(alunos_foco['NECESSIDADES'].unique().tolist()) if not alunos_foco.empty else "PADRÃO"
-                    if not alunos_foco.empty: st.warning(f"♿ **Sensor PEI Ativo:** {texto_clinico}")
-                    
-                    instr_extra_prod = st.text_area("📝 Contexto Extra / Ajustes Específicos:", key=f"prod_extra_{v}")
+                        # --- 5. SENSOR DE NEURODIVERSIDADE (COM CORREÇÃO DO TÍPICO) ---
+                        alunos_foco = df_alunos[(df_alunos['TURMA'].str.contains(str(ano_lab))) & (~df_alunos['NECESSIDADES'].isin(["NENHUMA", "PENDENTE", "", "NAN", "TÍPICO", "TIPICO"]))]
+                        texto_clinico = ", ".join(alunos_foco['NECESSIDADES'].unique().tolist()) if not alunos_foco.empty else "PADRÃO"
+                        if not alunos_foco.empty: st.warning(f"♿ **Sensor PEI Ativo:** {texto_clinico}")
+                        
+                        instr_extra_prod = st.text_area("📝 Contexto Extra / Ajustes Específicos:", key=f"prod_extra_{v}")
 
-                    if st.button("💎 MATERIALIZAR TRATADO DE ELITE", use_container_width=True, type="primary"):
-                        with st.spinner("Sosa estudando o livro e arquitetando material híbrido..."):
-                            
-                            # --- 1. DEFINIÇÃO DE VARIÁVEIS DE ESCOPO (FIX NAMEERROR) ---
-                            # Define a tag de busca baseada na aula selecionada no rádio
-                            tag_previa = "AULA_1" if "1" in aula_alvo_prod else "AULA_2"
-                            
-                            # Define as páginas específicas baseadas no intervalo (se houver ;)
-                            paginas_aula = base_herdada
-                            if ";" in base_herdada:
-                                partes_pag = base_herdada.split(";")
-                                paginas_aula = partes_pag[0].strip() if "1" in aula_alvo_prod else partes_pag[1].strip()
+                        if st.button("💎 MATERIALIZAR TRATADO DE ELITE", use_container_width=True, type="primary"):
+                            with st.spinner("Sosa estudando o livro e arquitetando material híbrido..."):
+                                
+                                # --- 1. DEFINIÇÃO DE VARIÁVEIS DE ESCOPO (FIX NAMEERROR) ---
+                                tag_previa = "AULA_1" if "1" in aula_alvo_prod else "AULA_2"
+                                
+                                paginas_aula = base_herdada
+                                if ";" in base_herdada:
+                                    partes_pag = base_herdada.split(";")
+                                    paginas_aula = partes_pag[0].strip() if "1" in aula_alvo_prod else partes_pag[1].strip()
 
-                            # --- 2. BUSCA DE URI NA BIBLIOTECA (DNA REAL) ---
-                            uri_referencia_aula = None
-                            if "Livro" in metodo_entrega:
-                                # Usa o nome do livro limpo para a busca
-                                nome_livro_limpo = base_herdada.split('|')[0].replace("Livro:", "").strip()
-                                match_biblioteca = df_materiais[df_materiais['NOME_ARQUIVO'].str.contains(nome_livro_limpo[:10], case=False, na=False)]
-                                if not match_biblioteca.empty:
-                                    uri_referencia_aula = match_biblioteca.iloc[0]['URI_ARQUIVO']
+                                # --- 2. BUSCA DE URI NA BIBLIOTECA (DNA REAL) ---
+                                uri_referencia_aula = None
+                                if "Livro" in metodo_entrega:
+                                    nome_livro_limpo = base_herdada.split('|')[0].replace("Livro:", "").strip()
+                                    match_biblioteca = df_materiais[df_materiais['NOME_ARQUIVO'].str.contains(nome_livro_limpo[:10], case=False, na=False)]
+                                    if not match_biblioteca.empty:
+                                        uri_referencia_aula = match_biblioteca.iloc[0]['URI_ARQUIVO']
 
-                            # --- 3. CONFIGURAÇÃO DE IDENTIDADE ---
-                            nome_elite = util.gerar_nome_material_elite(ano_lab, aula_alvo_prod, sem_lab)
-                            st.session_state.sosa_id_atual = nome_elite
-                            st.session_state.lab_meta = {"ano": ano_lab, "semana_ref": sem_lab}
-                            
-                            # --- 4. PROMPT DE SOBERANIA V45 (ORDEM DE DISTINÇÃO) ---
-                            prompt_manual = (
-                                f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {nome_elite}.\n"
-                                f"MÉTODO: {metodo_entrega}. REFERÊNCIA: {base_herdada}\n"
-                                f"SÉRIE: {ano_lab}º Ano. ALVO: {aula_alvo_prod}. QTD QUESTÕES PEI: {qtd_q_prod}.\n\n"
-                                f"🚨 MISSÃO DE ALTA DENSIDADE (ESTILO BRASIL ESCOLA):\n"
-                                f"1. O [PROFESSOR] deve ser um TRATADO DIDÁTICO. Explique o conceito de {obj_geral} com profundidade técnica antes de dar o roteiro de aula.\n"
-                                f"2. Use o Google Search para trazer dados científicos do ano de 2026 ou mais atualizado possível que validem a importância deste tema.\n"
-                                f"3. Se for MODO LIVRO, o roteiro deve dizer exatamente: 'Inicie na página X explorando a imagem Y...'.\n"
-                                f"4. Para o ALUNO PEI: Gere {qtd_q_prod} questões com apoio visual [ PROMPT IMAGEM ].\n\n"
-                                f"--- HERANÇA DO PLANO ---\n{ai.extrair_tag(plano_txt, tag_previa)}\n"
-                                f"--- SENSOR DE INCLUSÃO ---\nA turma possui alunos com: {texto_clinico}."
-                            )
-                            
-                            # --- 5. CHAMADA DA IA ---
-                            st.session_state.lab_temp = ai.gerar_ia(
-                                "MAESTRO_SOSA_V28_ELITE", 
-                                prompt_manual, 
-                                url_drive=uri_referencia_aula, 
-                                usar_busca=True
-                            )
-                            st.rerun()
+                                # --- 3. CONFIGURAÇÃO DE IDENTIDADE ---
+                                nome_elite = util.gerar_nome_material_elite(ano_lab, aula_alvo_prod, sem_lab)
+                                st.session_state.sosa_id_atual = nome_elite
+                                st.session_state.lab_meta = {"ano": ano_lab, "semana_ref": sem_lab}
+                                
+                                # --- 4. PROMPT DE SOBERANIA V45 (ORDEM DE DISTINÇÃO) ---
+                                prompt_manual = (
+                                    f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {nome_elite}.\n"
+                                    f"MÉTODO: {metodo_entrega}. REFERÊNCIA: {base_herdada}\n"
+                                    f"SÉRIE: {ano_lab}º Ano. ALVO: {aula_alvo_prod}. QTD QUESTÕES PEI: {qtd_q_prod}.\n\n"
+                                    f"🚨 MISSÃO DE ALTA DENSIDADE (ESTILO BRASIL ESCOLA):\n"
+                                    f"1. O [PROFESSOR] deve ser um TRATADO DIDÁTICO. Explique o conceito de {obj_geral} com profundidade técnica antes de dar o roteiro de aula.\n"
+                                    f"2. Use o Google Search para trazer dados científicos do ano de 2026 ou mais atualizado possível que validem a importância deste tema.\n"
+                                    f"3. Se for MODO LIVRO, o roteiro deve dizer exatamente: 'Inicie na página X explorando a imagem Y...'.\n"
+                                    f"4. Para o ALUNO PEI: Gere {qtd_q_prod} questões com apoio visual [ PROMPT IMAGEM ].\n\n"
+                                    f"--- HERANÇA DO PLANO ---\n{ai.extrair_tag(plano_txt, tag_previa)}\n"
+                                    f"--- SENSOR DE INCLUSÃO ---\nA turma possui alunos com: {texto_clinico}."
+                                )
+                                
+                                # --- 5. CHAMADA DA IA ---
+                                st.session_state.lab_temp = ai.gerar_ia(
+                                    "MAESTRO_SOSA_V28_ELITE", 
+                                    prompt_manual, 
+                                    url_drive=uri_referencia_aula, 
+                                    usar_busca=True
+                                )
+                                st.rerun()
 
 # --- ABA 3: ENGENHARIA DE TRABALHOS (VERSÃO V31.7 - BLINDAGEM DE TABELAS) ---
         with tab_trabalhos:
