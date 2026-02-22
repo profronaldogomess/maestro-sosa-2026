@@ -838,7 +838,8 @@ if menu == "📅 Planejamento (Ponto ID)":
             cg1, cg2, cg3 = st.columns([1.5, 1, 1])
             tipo_semana = cg1.selectbox("DNA da Semana:", [
                 "📗 Aula de Safra (Regular)", "📝 Aplicação de Exame", 
-                "🔥 Revisão & Recomposição", "📋 Trabalho Investigativo", "🔍 Sonda de Proficiência"
+                "🔥 Revisão & Recomposição", "📋 Trabalho Investigativo", "🔍 Sonda de Proficiência",
+                "💡 Aula Aberta (Dinâmicas e Eventos)"
             ], key=f"gate_tipo_{v}")
             tem_sabado = cg2.toggle("Sábado Letivo?", key=f"gate_sab_{v}")
             carga_horaria = cg3.select_slider("Aulas Úteis:", options=["1 Aula", "2 Aulas", "3 Aulas"], value="2 Aulas", key=f"gate_carga_{v}")
@@ -872,8 +873,8 @@ if menu == "📅 Planejamento (Ponto ID)":
             sem_limpa = sem_p.split(" (")[0]
             trim_atual = sem_p.split(" - ")[1] if " - " in sem_p else "I Trimestre"
 
-            # Smart Match
-            if tipo_semana != "📗 Aula de Safra (Regular)":
+            # Smart Match (Ignora se for Aula Regular ou Aula Aberta)
+            if tipo_semana not in ["📗 Aula de Safra (Regular)", "💡 Aula Aberta (Dinâmicas e Eventos)"]:
                 df_ativos_ano = df_aulas[df_aulas['ANO'] == ano_str_busca]
                 opcoes_ativos = []
                 if "Exame" in tipo_semana: opcoes_ativos = df_ativos_ano[df_ativos_ano['SEMANA_REF'] == "AVALIAÇÃO"]['TIPO_MATERIAL'].tolist()
@@ -892,47 +893,52 @@ if menu == "📅 Planejamento (Ponto ID)":
             
             # --- SEÇÃO DE PARÂMETROS (MODO MANUAL / BANCO) ---
             if modo_p == "🎛️ Manual (Banco)":
-                st.markdown("#### 🎯 Curadoria da Matriz de Itabuna")
                 
-                # Seletor de Estratégia de Distribuição
-                dist_manual = st.radio("Distribuição de Conteúdo:", 
-                    ["Integrar Aula 1 e 2", "Definir Trilhas Individuais (Aula 1 / Aula 2)"], 
-                    horizontal=True, key=f"dist_m_{v}")
-
-                df_matriz_ano = df_curriculo[df_curriculo['ANO'].astype(str) == str(ano_p)]
+                # 🚨 NOVA LÓGICA: AULA ABERTA (ENGENHARIA REVERSA)
+                if tipo_semana == "💡 Aula Aberta (Dinâmicas e Eventos)":
+                    st.markdown("#### 💡 Engenharia Reversa (Aula Aberta)")
+                    st.info("Descreva o evento, palestra ou dinâmica. A IA varrerá a Matriz e fará o alinhamento curricular automaticamente.")
+                    desc_evento = st.text_area("Contexto da Aula Livre:", placeholder="Ex: Palestra da prefeitura sobre a Dengue no pátio. Os alunos farão anotações...", height=150, key=f"p_evento_{v}")
+                    ctx_ia = f"MODO AULA ABERTA. EVENTO DESCRITO: {desc_evento}. MISSÃO: Faça engenharia reversa na matriz para justificar este evento."
                 
-                if "Trilhas Individuais" in dist_manual:
-                    # --- TRILHA 1 (AULA 1) ---
-                    with st.expander("📘 TRILHA 01: Conteúdo da Aula 1", expanded=True):
-                        c1a, c1b = st.columns(2)
-                        eixo_1 = c1a.multiselect("1. Eixo (Aula 1):", sorted(df_matriz_ano['EIXO'].unique().tolist()), key=f"e1_{v}")
-                        cont_1 = c1b.multiselect("2. Conteúdo (Aula 1):", sorted(df_matriz_ano[df_matriz_ano['EIXO'].isin(eixo_1)]['CONTEUDO_ESPECIFICO'].unique().tolist()) if eixo_1 else [], key=f"c1_{v}")
-                        obj_1 = st.multiselect("3. Objetivos (Aula 1):", sorted(df_matriz_ano[df_matriz_ano['CONTEUDO_ESPECIFICO'].isin(cont_1)]['OBJETIVOS'].unique().tolist()) if cont_1 else [], key=f"o1_{v}")
-                    
-                    # --- TRILHA 2 (AULA 2) ---
-                    with st.expander("📗 TRILHA 02: Conteúdo da Aula 2", expanded=(carga_horaria != "1 Aula")):
-                        if carga_horaria == "1 Aula":
-                            st.warning("Carga horária de 1 aula. Trilha 2 desativada.")
-                            ctx_ia = f"AULA 1: Eixo {eixo_1}, Conteúdo {cont_1}, Objetivos {obj_1}."
-                        else:
-                            c2a, c2b = st.columns(2)
-                            eixo_2 = c2a.multiselect("1. Eixo (Aula 2):", sorted(df_matriz_ano['EIXO'].unique().tolist()), key=f"e2_{v}")
-                            cont_2 = c2b.multiselect("2. Conteúdo (Aula 2):", sorted(df_matriz_ano[df_matriz_ano['EIXO'].isin(eixo_2)]['CONTEUDO_ESPECIFICO'].unique().tolist()) if eixo_2 else [], key=f"c2_{v}")
-                            obj_2 = st.multiselect("3. Objetivos (Aula 2):", sorted(df_matriz_ano[df_matriz_ano['CONTEUDO_ESPECIFICO'].isin(cont_2)]['OBJETIVOS'].unique().tolist()) if cont_2 else [], key=f"o2_{v}")
-                            ctx_ia = f"TRILHA 1 (AULA 1): Eixo {eixo_1}, Conteúdo {cont_1}, Objetivos {obj_1}. \nTRILHA 2 (AULA 2): Eixo {eixo_2}, Conteúdo {cont_2}, Objetivos {obj_2}."
-                
+                # LÓGICA PADRÃO (TRILHAS OU INTEGRADO)
                 else:
-                    # --- MODO INTEGRADO (O QUE JÁ EXISTIA) ---
-                    sel_eixo = st.multiselect("1. Eixo (Semana):", sorted(df_matriz_ano['EIXO'].unique().tolist()), key=f"p_eixo_{v}")
-                    sel_cont = st.multiselect("2. Conteúdo (Semana):", sorted(df_matriz_ano[df_matriz_ano['EIXO'].isin(sel_eixo)]['CONTEUDO_ESPECIFICO'].unique().tolist()) if sel_eixo else [], key=f"p_cont_{v}")
-                    sel_obj = st.multiselect("3. Objetivos (Semana):", sorted(df_matriz_ano[df_matriz_ano['CONTEUDO_ESPECIFICO'].isin(sel_cont)]['OBJETIVOS'].unique().tolist()) if sel_cont else [], key=f"p_obj_{v}")
-                    ctx_ia = f"MODO INTEGRADO: EIXO: {sel_eixo}, CONTEÚDO: {sel_cont}, OBJETIVOS: {sel_obj}."
+                    st.markdown("#### 🎯 Curadoria da Matriz de Itabuna")
+                    
+                    dist_manual = st.radio("Distribuição de Conteúdo:", 
+                        ["Integrar Aula 1 e 2", "Definir Trilhas Individuais (Aula 1 / Aula 2)"], 
+                        horizontal=True, key=f"dist_m_{v}")
+
+                    df_matriz_ano = df_curriculo[df_curriculo['ANO'].astype(str) == str(ano_p)]
+                    
+                    if "Trilhas Individuais" in dist_manual:
+                        with st.expander("📘 TRILHA 01: Conteúdo da Aula 1", expanded=True):
+                            c1a, c1b = st.columns(2)
+                            eixo_1 = c1a.multiselect("1. Eixo (Aula 1):", sorted(df_matriz_ano['EIXO'].unique().tolist()), key=f"e1_{v}")
+                            cont_1 = c1b.multiselect("2. Conteúdo (Aula 1):", sorted(df_matriz_ano[df_matriz_ano['EIXO'].isin(eixo_1)]['CONTEUDO_ESPECIFICO'].unique().tolist()) if eixo_1 else [], key=f"c1_{v}")
+                            obj_1 = st.multiselect("3. Objetivos (Aula 1):", sorted(df_matriz_ano[df_matriz_ano['CONTEUDO_ESPECIFICO'].isin(cont_1)]['OBJETIVOS'].unique().tolist()) if cont_1 else [], key=f"o1_{v}")
+                        
+                        with st.expander("📗 TRILHA 02: Conteúdo da Aula 2", expanded=(carga_horaria != "1 Aula")):
+                            if carga_horaria == "1 Aula":
+                                st.warning("Carga horária de 1 aula. Trilha 2 desativada.")
+                                ctx_ia = f"AULA 1: Eixo {eixo_1}, Conteúdo {cont_1}, Objetivos {obj_1}."
+                            else:
+                                c2a, c2b = st.columns(2)
+                                eixo_2 = c2a.multiselect("1. Eixo (Aula 2):", sorted(df_matriz_ano['EIXO'].unique().tolist()), key=f"e2_{v}")
+                                cont_2 = c2b.multiselect("2. Conteúdo (Aula 2):", sorted(df_matriz_ano[df_matriz_ano['EIXO'].isin(eixo_2)]['CONTEUDO_ESPECIFICO'].unique().tolist()) if eixo_2 else [], key=f"c2_{v}")
+                                obj_2 = st.multiselect("3. Objetivos (Aula 2):", sorted(df_matriz_ano[df_matriz_ano['CONTEUDO_ESPECIFICO'].isin(cont_2)]['OBJETIVOS'].unique().tolist()) if cont_2 else [], key=f"o2_{v}")
+                                ctx_ia = f"TRILHA 1 (AULA 1): Eixo {eixo_1}, Conteúdo {cont_1}, Objetivos {obj_1}. \nTRILHA 2 (AULA 2): Eixo {eixo_2}, Conteúdo {cont_2}, Objetivos {obj_2}."
+                    
+                    else:
+                        sel_eixo = st.multiselect("1. Eixo (Semana):", sorted(df_matriz_ano['EIXO'].unique().tolist()), key=f"p_eixo_{v}")
+                        sel_cont = st.multiselect("2. Conteúdo (Semana):", sorted(df_matriz_ano[df_matriz_ano['EIXO'].isin(sel_eixo)]['CONTEUDO_ESPECIFICO'].unique().tolist()) if sel_eixo else [], key=f"p_cont_{v}")
+                        sel_obj = st.multiselect("3. Objetivos (Semana):", sorted(df_matriz_ano[df_matriz_ano['CONTEUDO_ESPECIFICO'].isin(sel_cont)]['OBJETIVOS'].unique().tolist()) if sel_cont else [], key=f"p_obj_{v}")
+                        ctx_ia = f"MODO INTEGRADO: EIXO: {sel_eixo}, CONTEÚDO: {sel_cont}, OBJETIVOS: {sel_obj}."
             else:
                 cx1, cx2 = st.columns([2, 1])
                 livros_disponiveis = df_materiais[df_materiais['TIPO'].str.contains(str(ano_p), na=False)]['NOME_ARQUIVO'].tolist()
                 sel_mat = cx1.selectbox("Selecionar Livro do Cofre:", [""] + livros_disponiveis, key=f"p_livro_{v}")
                 
-                # Campo de páginas com instrução de múltiplos intervalos
                 pags = cx2.text_input("Páginas:", placeholder="Ex: 14-23 ; 45-50", help="Use ';' para separar capítulos diferentes.", key=f"p_pags_{v}")
                 
                 if sel_mat:
@@ -940,6 +946,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                     uri_livro_drive = match_mat['URI_ARQUIVO']
                     base_didatica_info = f"Livro: {sel_mat} | Páginas: {pags}"
                     st.caption(f"💡 **Dica:** Se usar ';' a Aula 1 focará no 1º intervalo e a Aula 2 no 2º.")
+
 
 # --- BOTÃO DE COMPILAÇÃO (PADRÃO SOBERANO V48.1 - FIX SÁBADO) ---
         if st.button("🚀 COMPILAR PLANEJAMENTO INTEGRADO", use_container_width=True, type="primary", key=f"btn_compilar_{v}"):
