@@ -1431,7 +1431,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                 st.plotly_chart(px.bar(progresso_trim, x="TRIMESTRE", y="%", text="%", title=f"Evolução da Cobertura Real - {ano_m}º Ano", color="%", color_continuous_scale="RdYlGn", range_y=[0, 110]), use_container_width=True)
             
 # ==============================================================================
-# MÓDULO: DIÁRIO DE BORDO (V47.2 - SOBERANIA TOTAL E CORREÇÃO DE RENDERIZAÇÃO)
+# MÓDULO: DIÁRIO DE BORDO (V47.3 - PROTOCOLO DE ISENÇÃO DE VISTO)
 # ==============================================================================
 elif menu == "📝 Diário de Bordo Rápido":
     st.title("📝 Diário de Bordo: Prontidão e Disciplina")
@@ -1439,11 +1439,9 @@ elif menu == "📝 Diário de Bordo Rápido":
     if "v_diario" not in st.session_state: st.session_state.v_diario = int(time.time())
     v = st.session_state.v_diario
 
-    # --- VACINA ANTI-VAZIO (BLINDAGEM DE SOBERANIA) ---
     if df_alunos.empty:
         st.warning("⚠️ Base de alunos vazia. Por favor, cadastre as turmas e os alunos na aba 'Gestão da Turma' antes de acessar o Diário de Bordo.")
     else:
-        # Filtra apenas turmas reais (ignora PI/PC no Diário)
         turmas_reais_db = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
         
         if turmas_reais_db.empty:
@@ -1468,7 +1466,6 @@ elif menu == "📝 Diário de Bordo Rápido":
                 
                 st.info(f"🚀 **Aula Ativa:** {material_hoje}")
 
-                # Busca DNA
                 plano_vinculado = df_planos[(df_planos['SEMANA'] == semana_ref) & (df_planos['ANO'].str.contains(ano_num))]
                 if not plano_vinculado.empty:
                     plano_txt = str(plano_vinculado.iloc[0]['PLANO_TEXTO'])
@@ -1476,7 +1473,6 @@ elif menu == "📝 Diário de Bordo Rápido":
                     if base_didatica: st.success(f"📍 **Páginas Alvo:** {base_didatica}")
                     else: st.warning("📍 **Páginas Alvo:** Método Manual (Sem livro vinculado)")
 
-                # Busca Links
                 match_material = df_aulas[df_aulas['TIPO_MATERIAL'].str.contains(material_hoje.split('+')[0].strip(), na=False)]
                 if not match_material.empty:
                     with st.container(border=True):
@@ -1491,11 +1487,10 @@ elif menu == "📝 Diário de Bordo Rápido":
                         l_prof = extrair_link(txt_m, "Prof")
                         
                         c_at1, c_at2, c_at3 = st.columns(3)
-                        if l_alu: c_at1.link_button("📄 MATERIAL ALUNO", l_alu, use_container_width=True, type="primary")
-                        if l_pei: c_at2.link_button("♿ ATIVIDADE PEI", l_pei, use_container_width=True)
-                        if l_prof: c_at3.link_button("👨‍🏫 GUIA PROFESSOR", l_prof, use_container_width=True)
+                        if l_alu and "N/A" not in l_alu: c_at1.link_button("📄 MATERIAL ALUNO", l_alu, use_container_width=True, type="primary")
+                        if l_pei and "N/A" not in l_pei: c_at2.link_button("♿ ATIVIDADE PEI", l_pei, use_container_width=True)
+                        if l_prof and "N/A" not in l_prof: c_at3.link_button("👨‍🏫 GUIA PROFESSOR", l_prof, use_container_width=True)
                 
-                # Lembrete de Ponte
                 reg_anterior = df_registro_aulas[(df_registro_aulas['TURMA'] == turma_sel) & (df_registro_aulas['DATA'] != data_str)].sort_values(by='DATA', ascending=False)
                 if not reg_anterior.empty:
                     ultima_ponte = reg_anterior.iloc[0].get('PONTE_PEDAGOGICA', 'Sem registro.')
@@ -1511,6 +1506,19 @@ elif menu == "📝 Diário de Bordo Rápido":
                 status_aula = c_reg1.selectbox("Status da Execução:", ["🟢 Concluído (100%)", "🟡 Parcial (Pendência)", "🔴 Bloqueado (Crítico)"], key=f"status_reg_{v}")
                 ponte_pedagogica = c_reg2.text_area("🔗 Ponte Pedagógica (Onde paramos?):", placeholder="Ex: Parei no slide 5...", height=68, key=f"ponte_reg_{v}")
                 clima_turma = c_reg3.select_slider("🌡️ Clima da Turma:", options=["😴 Apática", "😐 Dispersa", "🧠 Focada", "⚡ Agitada", "🤯 Dificuldade Alta"], value="🧠 Focada", key=f"clima_reg_{v}")
+
+            # 🚨 NOVA CHAVE DE SOBERANIA: NATUREZA DO REGISTRO
+            st.markdown("---")
+            st.markdown("#### 🎯 Natureza do Registro")
+            natureza_registro = st.radio(
+                "Selecione o tipo de aula de hoje:",
+                ["📝 Aula com Coleta de Visto (Padrão)", "🗣️ Aula Expositiva / Evento (Sem Visto)"],
+                horizontal=True,
+                key=f"nat_reg_{v}"
+            )
+            
+            if "Sem Visto" in natureza_registro:
+                st.info("💡 **Modo Evento Ativado:** A coluna de vistos será ignorada no cálculo de notas. O senhor ainda pode registrar faltas, bônus e ocorrências.")
 
             # 4. BUSCA DE REGISTROS
             registros_atuais = df_diario[(df_diario['DATA'] == data_str) & (df_diario['TURMA'] == turma_sel) & (df_diario['TAGS'] != "SISTEMA_NOTA")]
@@ -1558,14 +1566,13 @@ elif menu == "📝 Diário de Bordo Rápido":
                     "OBSERVAÇÃO (🎙️ DITE AQUI)": obs_val
                 })
 
-            # --- AQUI ESTÁ A TABELA QUE HAVIA SUMIDO ---
             df_editado = st.data_editor(
                 pd.DataFrame(dados_diario),
                 column_config={
                     "ID": None,
                     "ESTUDANTE": st.column_config.TextColumn("Estudante", width="medium", disabled=True),
                     "F": st.column_config.CheckboxColumn("F", help="Faltou"),
-                    "V": st.column_config.CheckboxColumn("V", help="Visto"),
+                    "V": st.column_config.CheckboxColumn("V", help="Visto", disabled=("Sem Visto" in natureza_registro)),
                     "⭐": st.column_config.SelectboxColumn("⭐", options=[0.0, 0.1, 0.2, 0.3, 0.5, 1.0]),
                     "VETOR DISCIPLINAR": st.column_config.SelectboxColumn(
                         "Vetor", 
@@ -1585,9 +1592,12 @@ elif menu == "📝 Diário de Bordo Rápido":
                     for _, r in df_editado.iterrows():
                         aluno_eh_pei = "♿" in r['ESTUDANTE']
                         tag_f = "AUSÊNCIA" if r['F'] else r['VETOR DISCIPLINAR']
-                        visto_f = False if r['F'] else r['V']
                         
-                        if aluno_eh_pei and visto_f and not tag_f:
+                        # 🚨 LÓGICA DE ISENÇÃO: Se for evento, salva como ISENTO. Se não, salva True/False.
+                        visto_f = False if r['F'] else r['V']
+                        visto_db = "ISENTO" if "Sem Visto" in natureza_registro else str(visto_f)
+                        
+                        if aluno_eh_pei and visto_f and not tag_f and "Sem Visto" not in natureza_registro:
                             tag_f = "PEI CONCLUÍDO"
                         
                         obs_final = r['OBSERVAÇÃO (🎙️ DITE AQUI)']
@@ -1596,7 +1606,7 @@ elif menu == "📝 Diário de Bordo Rápido":
 
                         linhas_diario.append([
                             data_str, r['ID'], r['ESTUDANTE'].replace("♿ ", ""), turma_sel,
-                            str(visto_f), tag_f, obs_final, util.sosa_to_str(r['⭐'])
+                            visto_db, tag_f, obs_final, util.sosa_to_str(r['⭐'])
                         ])
                                 
                     if db.salvar_lote("DB_DIARIO_BORDO", linhas_diario):
@@ -1670,10 +1680,16 @@ elif menu == "📊 Painel de Notas & Vistos":
                 d_alu = df_d_trim[df_d_trim['ID_ALUNO'].apply(db.limpar_id) == id_l]
                 
                 if not d_alu.empty:
-                    vistos_validos = d_alu[d_alu['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"]
+                    # 🚨 MATEMÁTICA SOBERANA: Ignora as aulas ISENTAS no cálculo do total
+                    d_alu_validas = d_alu[d_alu['VISTO_ATIVIDADE'].astype(str).str.upper() != "ISENTO"]
+                    
+                    vistos_validos = d_alu_validas[d_alu_validas['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"]
                     aulas_com_visto = len(vistos_validos)
-                    total_aulas_periodo = len(d_alu)
+                    total_aulas_periodo = len(d_alu_validas)
+                    
                     vistos_auto_map[id_l] = round((aulas_com_visto / total_aulas_periodo * p_visto), 2) if total_aulas_periodo > 0 else 0.0
+                    
+                    # O Bônus continua somando de TODAS as aulas (inclusive eventos)
                     bonus_total_map[id_l] = d_alu['BONUS'].apply(util.sosa_to_float).sum()
                 else:
                     vistos_auto_map[id_l], bonus_total_map[id_l] = 0.0, 0.0
