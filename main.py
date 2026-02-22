@@ -1551,7 +1551,7 @@ elif menu == "📝 Diário de Bordo Rápido":
                         time.sleep(1); st.rerun()
 
 # ==============================================================================
-# MÓDULO: PAINEL DE NOTAS V32.2 - CÁLCULO AUTOMÁTICO E RECUPERAÇÃO PARALELA
+# MÓDULO: PAINEL DE NOTAS V32.3 - CÁLCULO AUTOMÁTICO E CORREÇÃO DE PERFIL
 # ==============================================================================
 elif menu == "📊 Painel de Notas & Vistos":
     st.title("📊 Torre de Comando: Gestão de Notas e Performance")
@@ -1564,11 +1564,19 @@ elif menu == "📊 Painel de Notas & Vistos":
     if df_alunos.empty:
         st.warning("⚠️ Cadastre alunos primeiro na aba 'Gestão da Turma'.")
     else:
+        # Filtra apenas turmas reais (ignora PI/PC)
+        turmas_reais_notas = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
+        lista_turmas_notas = sorted(turmas_reais_notas['ID_TURMA'].unique()) if not turmas_reais_notas.empty else sorted(df_alunos['TURMA'].unique())
+
+        if not lista_turmas_notas:
+            st.warning("⚠️ Nenhuma turma regular cadastrada.")
+            st.stop()
+
         # 1. CONFIGURADOR DE PESOS (CRITÉRIOS DO TRIMESTRE)
         with st.container(border=True):
             st.markdown("### ⚙️ Configuração de Critérios do Trimestre")
             c_f1, c_f2, c_f3, c_f4, c_f5 = st.columns([1.5, 1, 0.8, 0.8, 0.8])
-            turma_sel = c_f1.selectbox("👥 Selecione a Turma:", sorted(df_alunos['TURMA'].unique()), key=f"n_turma_{v}")
+            turma_sel = c_f1.selectbox("👥 Selecione a Turma:", lista_turmas_notas, key=f"n_turma_{v}")
             trimestre_sel = c_f2.selectbox("📅 Trimestre Atual:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"n_trim_{v}")
             
             p_visto = c_f3.number_input("Peso Vistos:", 0.0, 10.0, 3.0, step=0.5, key=f"p_v_{v}")
@@ -1602,7 +1610,7 @@ elif menu == "📊 Painel de Notas & Vistos":
                     vistos_validos = d_alu[d_alu['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"]
                     aulas_com_visto = len(vistos_validos)
                     total_aulas_periodo = len(d_alu)
-                    vistos_auto_map[id_l] = round((aulas_com_visto / total_aulas_periodo * p_visto), 2)
+                    vistos_auto_map[id_l] = round((aulas_com_visto / total_aulas_periodo * p_visto), 2) if total_aulas_periodo > 0 else 0.0
                     bonus_total_map[id_l] = d_alu['BONUS'].apply(util.sosa_to_float).sum()
                 else:
                     vistos_auto_map[id_l], bonus_total_map[id_l] = 0.0, 0.0
@@ -1620,7 +1628,8 @@ elif menu == "📊 Painel de Notas & Vistos":
             n_prova = util.sosa_to_float(reg_b.iloc[0]['NOTA_PROVA']) if not reg_b.empty else 0.0
             n_rec = util.sosa_to_float(reg_b.iloc[0]['NOTA_REC']) if not reg_b.empty else 0.0
             
-            is_pei = str(alu['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"]
+            # 🚨 CORREÇÃO SOBERANA: "TÍPICO" não é mais considerado PEI
+            is_pei = str(alu['NECESSIDADES']).upper().strip() not in ["NENHUMA", "PENDENTE", "", "NAN", "TÍPICO", "TIPICO"]
 
             dados_editor.append({
                 "ID": id_a,
@@ -1715,7 +1724,7 @@ elif menu == "📊 Painel de Notas & Vistos":
                 if db.salvar_lote("DB_NOTAS", linhas_save):
                     status.update(label="✅ Boletim Sincronizado!", state="complete")
                     st.balloons(); time.sleep(1); st.rerun()
-
+                    
 # ==============================================================================
 # MÓDULO: PAINEL DE NOTAS V32.1 - CÁLCULO AUTOMÁTICO E TRANSBORDAMENTO
 # ==============================================================================
