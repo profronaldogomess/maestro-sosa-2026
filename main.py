@@ -1724,7 +1724,7 @@ elif menu == "📊 Painel de Notas & Vistos":
                 if db.salvar_lote("DB_NOTAS", linhas_save):
                     status.update(label="✅ Boletim Sincronizado!", state="complete")
                     st.balloons(); time.sleep(1); st.rerun()
-                    
+
 # ==============================================================================
 # MÓDULO: PAINEL DE NOTAS V32.1 - CÁLCULO AUTOMÁTICO E TRANSBORDAMENTO
 # ==============================================================================
@@ -2271,10 +2271,10 @@ elif menu == "📚 Base de Conhecimento":
             st.info("📭 Sua biblioteca está vazia.")
 
 # ==============================================================================
-# MÓDULO: RELATÓRIOS PEI V38.6 - ANALISTA DE EVOLUÇÃO (CORREÇÃO DE ÍCONES)
+# MÓDULO: RELATÓRIOS PEI V38.7 - ANALISTA DE EVOLUÇÃO (VACINA ANTI-VAZIO)
 # ==============================================================================
 elif menu == "♿ Relatórios PEI / Perfil IA":
-    st.title("♿ Analista de Inclusão: Dossiê de Evolução V38.6")
+    st.title("♿ Analista de Inclusão: Dossiê de Evolução V38.7")
     st.markdown("---")
 
     if df_alunos.empty:
@@ -2291,10 +2291,14 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
             turma_pei = c_t.selectbox("🎯 Filtrar Turma:", lista_turmas, key="pei_t_v38")
             df_turma_foco = df_alunos[df_alunos['TURMA'] == turma_pei].copy()
             
+            # 🚨 VACINA ANTI-VAZIO: Se a turma não tiver alunos, avisa e para a execução
+            if df_turma_foco.empty:
+                st.warning(f"⚠️ Nenhum aluno cadastrado na turma {turma_pei} ainda. Vá em 'Gestão da Turma' para povoar.")
+                st.stop()
+            
             def definir_icone_status(nec):
                 n = str(nec).upper().strip()
                 if "SUSPEITA" in n: return "🟠"
-                # 🚨 CORREÇÃO SOBERANA: "TÍPICO" agora recebe o ícone de aluno regular
                 if n in ["NENHUMA", "PENDENTE", "", "NAN", "TÍPICO", "TIPICO"]: return "👤"
                 return "♿"
 
@@ -2560,7 +2564,7 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                                 st.markdown(conteudo_raw.replace("\n", "  \n"))
                             
                             st.divider()
-                            st.caption("🔒 Documento assinado digitalmente pelo ecossistema SOSA V38.6")
+                            st.caption("🔒 Documento assinado digitalmente pelo ecossistema SOSA V38.7")
             else:
                 st.info("📭 Nenhuma evidência ou documento arquivado para este estudante até o momento.")
 
