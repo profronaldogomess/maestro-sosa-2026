@@ -1849,12 +1849,11 @@ elif menu == "👥 Gestão da Turma":
         "📊 Cockpit de Prontidão", "🏗️ Arquitetura de Turmas", "➕ Povoar Alunos", "✏️ Edição & Transferência"
     ])
 
-# --- ABA 1: COCKPIT DA TURMA (VERSÃO V46.5 - BORRACHA TEMPORAL E DATA BR) ---
+# --- ABA 1: COCKPIT DA TURMA (VERSÃO V46.6 - RADAR DE BUSCA ATIVA) ---
     with tab_cockpit:
         if df_turmas.empty:
             st.info("📭 Nenhuma turma cadastrada. Vá na aba 'Arquitetura' para iniciar.")
         else:
-            # --- GRADE VISUAL DE HORÁRIOS ---
             st.markdown("### 📅 Grade Oficial de Regência")
             
             dias_semana = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"]
@@ -1867,8 +1866,7 @@ elif menu == "👥 Gestão da Turma":
                 horarios_str = str(row.iloc[3])
                 
                 display_name = sigla
-                if "ª" in sigla: 
-                    display_name = nome_turma.replace("Ano ", "ANO ").upper()
+                if "ª" in sigla: display_name = nome_turma.replace("Ano ", "ANO ").upper()
                 
                 if horarios_str and horarios_str != "N/A":
                     for h in [x.strip() for x in horarios_str.split("/")]:
@@ -1880,16 +1878,13 @@ elif menu == "👥 Gestão da Turma":
             df_grade = pd.DataFrame(grade_map).T
             
             def colorir_grade(val):
-                if val in ["PI", "PC", "AC", "HTPC"]: 
-                    return 'background-color: #2962FF; color: white; font-weight: bold; text-align: center;'
-                if val != "---": 
-                    return 'background-color: #001E3C; color: #2ECC71; font-weight: bold; text-align: center;'
+                if val in ["PI", "PC", "AC", "HTPC"]: return 'background-color: #2962FF; color: white; font-weight: bold; text-align: center;'
+                if val != "---": return 'background-color: #001E3C; color: #2ECC71; font-weight: bold; text-align: center;'
                 return 'color: gray; text-align: center;'
 
             st.dataframe(df_grade.style.applymap(colorir_grade), use_container_width=True)
             st.markdown("---")
 
-            # --- 1. SELEÇÃO DE PARÂMETROS ---
             turmas_reais = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
             
             if turmas_reais.empty:
@@ -1904,7 +1899,6 @@ elif menu == "👥 Gestão da Turma":
                 ano_num = "".join(filter(str.isdigit, turma_foco))
                 ano_str_ref = f"{ano_num}º"
 
-                # --- 2. MÉTRICAS DE TOPO ---
                 m1, m2, m3 = st.columns(3)
                 m1.metric("👥 Total Alunos", len(alunos_t))
                 
@@ -1917,7 +1911,32 @@ elif menu == "👥 Gestão da Turma":
                 saude_val = (aulas_feitas / (planos_totais * 2) * 100) if planos_totais > 0 else 0
                 m3.metric("🎯 Saúde de Execução", f"{min(100, int(saude_val))}%")
 
-                # --- 3. RADAR DE RESULTADOS ---
+                # 🚨 NOVO: RADAR DE BUSCA ATIVA (PREVENÇÃO DE EVASÃO)
+                with st.container(border=True):
+                    st.markdown("#### 🚨 Radar de Busca Ativa (Risco de Evasão)")
+                    df_diario_turma = df_diario[df_diario['TURMA'] == turma_foco].copy()
+                    if not df_diario_turma.empty:
+                        # Converte datas para ordenar cronologicamente
+                        df_diario_turma['DATA_DT'] = pd.to_datetime(df_diario_turma['DATA'], format="%d/%m/%Y", errors='coerce')
+                        df_diario_turma = df_diario_turma.sort_values(by=['ID_ALUNO', 'DATA_DT'])
+                        
+                        alunos_risco = []
+                        for id_aluno, group in df_diario_turma.groupby('ID_ALUNO'):
+                            # Pega os últimos 3 registros do aluno
+                            last_3 = group.tail(3)
+                            # Se ele tem 3 registros e TODOS são falta, aciona o alerta
+                            if len(last_3) == 3 and all(last_3['TAGS'] == "AUSÊNCIA"):
+                                nome_aluno = group.iloc[0]['NOME_ALUNO']
+                                alunos_risco.append(nome_aluno)
+                        
+                        if alunos_risco:
+                            st.error(f"⚠️ **ATENÇÃO:** {len(alunos_risco)} aluno(s) faltaram às últimas 3 aulas consecutivas. Acionar Coordenação:")
+                            st.write(", ".join([f"**{a}**" for a in alunos_risco]))
+                        else:
+                            st.success("✅ Nenhum aluno com 3 faltas consecutivas recentes. Frequência estabilizada.")
+                    else:
+                        st.caption("Aguardando registros no diário para ativar o radar.")
+
                 with st.expander("📡 Radar de Resultados e Raio-X de Lacunas", expanded=False):
                     diag_t = df_diagnosticos[df_diagnosticos['TURMA'] == turma_foco].copy()
                     if diag_t.empty:
@@ -1929,10 +1948,8 @@ elif menu == "👥 Gestão da Turma":
                 st.markdown("---")
                 col_esq, col_dir = st.columns([1.6, 1.4])
 
-                # --- 4. ABERTURA DE AULA ---
                 with col_esq:
                     st.subheader("🕒 Abertura de Aula")
-                    
                     mostrar_historico = st.toggle("🔄 Mostrar histórico completo (Modo Revisão / Continuidade)", key=f"tog_hist_{v}")
                     
                     historico_turma = df_registro_aulas[df_registro_aulas['TURMA'] == turma_foco]
@@ -1948,20 +1965,16 @@ elif menu == "👥 Gestão da Turma":
                     ponte_sugerida = "Início de novo ciclo pedagógico."
                     
                     df_p_atual = df_planos[df_planos['ANO'] == ano_str_ref].sort_values(by='DATA', ascending=False)
-                    
                     df_p_sugestao = df_p_atual.copy()
-                    if not mostrar_historico:
-                        df_p_sugestao = df_p_sugestao[~df_p_sugestao['SEMANA'].isin(planos_usados)]
+                    if not mostrar_historico: df_p_sugestao = df_p_sugestao[~df_p_sugestao['SEMANA'].isin(planos_usados)]
                         
                     if not df_p_sugestao.empty:
                         row_p = df_p_sugestao.iloc[0]
                         plano_sugerido = row_p['SEMANA']
                         txt_p = row_p['PLANO_TEXTO']
                         base_didatica_sugerida = ai.extrair_tag(txt_p, "BASE_DIDATICA") or "Matriz de Itabuna"
-                        
                         ponte_match = re.search(r"Ponte Pedagógica:(.*?)(?=Início|Meio|Fim|$)", ai.extrair_tag(txt_p, "AULA_1"), re.DOTALL)
-                        if ponte_match: 
-                            ponte_sugerida = ponte_match.group(1).strip()
+                        if ponte_match: ponte_sugerida = ponte_match.group(1).strip()
 
                     with st.container(border=True):
                         st.markdown("#### 🚀 MISSÃO PLANEJADA PARA HOJE")
@@ -1976,26 +1989,19 @@ elif menu == "👥 Gestão da Turma":
                         
                         st.divider()
                         c_r1, c_r2 = st.columns(2)
-                        
-                        # 🚨 FORMATO BRASILEIRO DE DATA INJETADO AQUI
                         data_aula = c_r1.date_input("Data da Aula:", date.today(), format="DD/MM/YYYY", key=f"dt_reg_{v}")
                         
                         lista_planos_bruta = df_p_atual['SEMANA'].tolist()
-                        if not mostrar_historico:
-                            lista_planos_filtrada = [p for p in lista_planos_bruta if p not in planos_usados]
-                        else:
-                            lista_planos_filtrada = lista_planos_bruta
+                        if not mostrar_historico: lista_planos_filtrada = [p for p in lista_planos_bruta if p not in planos_usados]
+                        else: lista_planos_filtrada = lista_planos_bruta
                             
                         lista_planos = ["Nenhum"] + lista_planos_filtrada
                         idx_sugerido = lista_planos.index(plano_sugerido) if plano_sugerido in lista_planos else 0
-                        
                         plano_vinc = c_r2.selectbox("Vincular Plano Base:", lista_planos, index=idx_sugerido, key=f"plano_reg_{v}")
                         
                         mats_disp_bruto = df_aulas[df_aulas['ANO'].str.contains(ano_num)]['TIPO_MATERIAL'].tolist()
-                        if not mostrar_historico:
-                            mats_disp = [m for m in mats_disp_bruto if m not in materiais_usados]
-                        else:
-                            mats_disp = mats_disp_bruto
+                        if not mostrar_historico: mats_disp = [m for m in mats_disp_bruto if m not in materiais_usados]
+                        else: mats_disp = mats_disp_bruto
                             
                         label_mats = "📦 Selecione o Material (Ativos Inéditos):" if not mostrar_historico else "📦 Selecione o Material (Todos):"
                         mats_sel = st.multiselect(label_mats, options=mats_disp, key=f"mats_reg_{v}")
@@ -2006,17 +2012,13 @@ elif menu == "👥 Gestão da Turma":
                                 " + ".join(mats_sel), "PENDENTE", "ABERTA"
                             ])
                             st.success("✅ Aula aberta com sucesso! Vá para o Diário de Bordo.")
-                            time.sleep(1)
-                            st.rerun()
+                            time.sleep(1); st.rerun()
 
-                    # 🚨 NOVO: BORRACHA TEMPORAL (GERENCIAR AULAS ABERTAS)
                     st.markdown("---")
                     with st.expander("🗑️ Gerenciar Aulas Abertas (Corrigir Erros de Data)"):
                         st.caption("Apagar uma aula aqui também removerá os vistos/faltas lançados no Diário para aquele dia.")
                         aulas_abertas = df_registro_aulas[df_registro_aulas['TURMA'] == turma_foco].sort_values(by='DATA', ascending=False).head(5)
-                        
-                        if aulas_abertas.empty:
-                            st.info("Nenhuma aula registrada para esta turma.")
+                        if aulas_abertas.empty: st.info("Nenhuma aula registrada para esta turma.")
                         else:
                             for _, row_aula in aulas_abertas.iterrows():
                                 c_del1, c_del2 = st.columns([3, 1])
@@ -2025,38 +2027,29 @@ elif menu == "👥 Gestão da Turma":
                                     with st.spinner("Apagando registros..."):
                                         if db.excluir_aula_aberta(row_aula['DATA'], turma_foco):
                                             st.success("Aula e diário apagados com sucesso!")
-                                            time.sleep(1)
-                                            st.rerun()
+                                            time.sleep(1); st.rerun()
 
-                # --- 5. INVENTÁRIO ---
                 with col_dir:
                     st.subheader("📂 Inventário de Ativos")
                     with st.container(border=True):
                         titulo_inv = f"**Próximos Ativos Inéditos ({ano_str_ref} Ano)**" if not mostrar_historico else f"**Todos os Ativos ({ano_str_ref} Ano)**"
                         st.markdown(titulo_inv)
-                        
                         df_mats_ano = df_aulas[df_aulas['ANO'].str.contains(ano_num)].iloc[::-1]
+                        if not mostrar_historico and not df_mats_ano.empty: df_mats_ano = df_mats_ano[~df_mats_ano['TIPO_MATERIAL'].isin(materiais_usados)]
                         
-                        if not mostrar_historico and not df_mats_ano.empty:
-                            df_mats_ano = df_mats_ano[~df_mats_ano['TIPO_MATERIAL'].isin(materiais_usados)]
-                        
-                        if df_mats_ano.empty:
-                            st.caption("Nenhum material pendente para esta turma. Tudo em dia!")
+                        if df_mats_ano.empty: st.caption("Nenhum material pendente para esta turma. Tudo em dia!")
                         else:
                             for _, m_row in df_mats_ano.head(5).iterrows():
                                 with st.container():
                                     c_m_txt, c_m_links = st.columns([1.8, 1.2])
                                     c_m_txt.markdown(f"📘 {m_row['TIPO_MATERIAL']}")
-                                    
                                     txt_m = str(m_row['CONTEUDO'])
                                     def extrair_url(t, k):
                                         match = re.search(rf"{k}.*?\(?(https?://[^\s\)]+)\)?", t, re.IGNORECASE)
                                         return match.group(1).strip() if match else None
-                                    
                                     l_alu = m_row.get('LINK_DRIVE')
                                     l_pei = extrair_url(txt_m, "PEI")
                                     l_prof = extrair_url(txt_m, "Prof")
-                                    
                                     btn_html = ""
                                     if l_alu: btn_html += f"[📄]({l_alu}) "
                                     if l_pei: btn_html += f"[♿]({l_pei}) "
@@ -2067,10 +2060,8 @@ elif menu == "👥 Gestão da Turma":
                     with st.container(border=True):
                         st.markdown("**👥 Foco em Inclusão (Alunos PEI)**")
                         if not df_pei_turma.empty:
-                            for _, alu in df_pei_turma.iterrows():
-                                st.warning(f"♿ **{alu['NOME_ALUNO']}**\n↳ {alu['NECESSIDADES']}")
-                        else:
-                            st.success("✅ Nenhum aluno PEI nesta turma.")
+                            for _, alu in df_pei_turma.iterrows(): st.warning(f"♿ **{alu['NOME_ALUNO']}**\n↳ {alu['NECESSIDADES']}")
+                        else: st.success("✅ Nenhum aluno PEI nesta turma.")
 
 # --- ABA 2: ARQUITETURA DE TURMAS E HORÁRIOS (ATUALIZADO V46.2 - AUTONOMIA TOTAL) ---
     with tab_criar:
@@ -3999,17 +3990,25 @@ elif menu == "👤 Biografia do Estudante":
                 else: st.warning(f"Nenhuma entrega de projeto registrada.")
             else: st.info(f"Sem registros de atividades.")
 
-        # --- SEÇÃO 3: ENGAJAMENTO E ATITUDE ---
-        st.markdown(f"### 📊 3. Engajamento e Atitude: {trim_b}")
+        # --- SEÇÃO 3: ENGAJAMENTO E ATITUDE (COM TERMÔMETRO DE FALTAS) ---
+        st.markdown(f"### 📊 3. Engajamento e Assiduidade: {trim_b}")
         col_v1, col_v2 = st.columns([1.2, 1.8])
         with col_v1:
             if not d_alu_f.empty:
                 total_aulas = len(d_alu_f)
                 vistos = len(d_alu_f[d_alu_f['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"])
+                faltas = len(d_alu_f[d_alu_f['TAGS'] == "AUSÊNCIA"])
+                presencas = total_aulas - faltas
+                
+                perc_presenca = (presencas / total_aulas) * 100 if total_aulas > 0 else 0
                 perc_visto = (vistos / total_aulas) * 100 if total_aulas > 0 else 0
+                
+                # Termômetro de Assiduidade
+                st.metric("Assiduidade (Presença)", f"{perc_presenca:.0f}%", f"{faltas} faltas registradas", delta_color="inverse" if faltas > 0 else "normal")
+                st.progress(perc_presenca / 100)
+                
                 st.metric("Vistos no Caderno", f"{perc_visto:.0f}%", f"{vistos}/{total_aulas} aulas")
-                st.progress(perc_visto / 100)
-            else: st.info(f"Sem registros de vistos.")
+            else: st.info(f"Sem registros de diário para o período.")
 
         with col_v2:
             st.markdown("**🚩 Ocorrências e Observações:**")
@@ -4017,7 +4016,7 @@ elif menu == "👤 Biografia do Estudante":
                 tags_obs = d_alu_f[d_alu_f['TAGS'] != ""]
                 if not tags_obs.empty:
                     for _, row in tags_obs.tail(10).iterrows():
-                        emoji = "🔴" if any(x in str(row['TAGS']).upper() for x in ["DORMIU", "CONVERSA", "MATERIAL", "FALTOU"]) else "🟢"
+                        emoji = "🔴" if any(x in str(row['TAGS']).upper() for x in ["DORMIU", "CONVERSA", "MATERIAL", "FALTOU", "AUSÊNCIA"]) else "🟢"
                         st.caption(f"{emoji} **{row['DATA']}**: {row['TAGS']} - *{row['OBSERVACOES']}*")
                 else: st.success("✅ Nenhuma ocorrência negativa.")
 
@@ -4077,7 +4076,7 @@ elif menu == "👤 Biografia do Estudante":
         st.caption(f"Dossiê atualizado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
         
 # ==============================================================================
-# MÓDULO: BOLETIM ANUAL & CONSELHO V30 - FOCO EM DADOS E MOBILE-FIRST
+# MÓDULO: BOLETIM ANUAL & CONSELHO V31 - INTELIGÊNCIA DE FALTAS E EVASÃO
 # ==============================================================================
 elif menu == "📈 Boletim Anual & Conselho":
     st.title("📈 Inteligência de Conselho e Resultados")
@@ -4087,12 +4086,13 @@ elif menu == "📈 Boletim Anual & Conselho":
         st.warning("⚠️ Sem notas lançadas no sistema.")
     else:
         # --- 1. FILTRO DE TURMA ---
-        turma_sel = st.selectbox("🎯 Selecione a Turma:", sorted(df_alunos['TURMA'].unique()), key="bol_turma_v30")
+        turmas_reais_bol = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
+        lista_turmas_bol = sorted(turmas_reais_bol['ID_TURMA'].unique()) if not turmas_reais_bol.empty else sorted(df_alunos['TURMA'].unique())
+        turma_sel = st.selectbox("🎯 Selecione a Turma:", lista_turmas_bol, key="bol_turma_v31")
         
         # --- 2. PROCESSAMENTO DE DADOS (DATA FUSION) ---
         df_t = df_notas[df_notas['TURMA'] == turma_sel].copy()
         
-        # Pivotagem: Média e Rec por Trimestre
         pivot = df_t.pivot_table(
             index=["ID_ALUNO", "NOME_ALUNO"], 
             columns="TRIMESTRE", 
@@ -4100,16 +4100,13 @@ elif menu == "📈 Boletim Anual & Conselho":
             aggfunc='first'
         ).reset_index()
 
-        # Achatar colunas para nomes curtos (Otimização Mobile)
         pivot.columns = [f"{col[0]}_{col[1]}".strip('_') for col in pivot.columns.values]
 
-        # Garantir colunas e limpar espaços (Vacina Strip)
         trims = ["I Trimestre", "II Trimestre", "III Trimestre"]
         for t in trims:
             if f"MEDIA_FINAL_{t}" not in pivot.columns: pivot[f"MEDIA_FINAL_{t}"] = 0.0
             if f"NOTA_REC_{t}" not in pivot.columns: pivot[f"NOTA_REC_{t}"] = 0.0
 
-        # Busca nota de REC_FINAL vinda do Scanner/CIR (Salva no banco como TRIMESTRE='REC_FINAL')
         rec_f_data = df_t[df_t['TRIMESTRE'].str.contains("REC_FINAL|FINAL", na=False, case=False)]
         if not rec_f_data.empty:
             rec_f_min = rec_f_data[['ID_ALUNO', 'MEDIA_FINAL']].rename(columns={'MEDIA_FINAL': 'RF'})
@@ -4117,59 +4114,75 @@ elif menu == "📈 Boletim Anual & Conselho":
         else:
             pivot['RF'] = 0.0
         
+        # 🚨 NOVO: CÁLCULO DE FALTAS TOTAIS DO ANO
+        faltas_df = df_diario[(df_diario['TURMA'] == turma_sel) & (df_diario['TAGS'] == "AUSÊNCIA")]
+        faltas_count = faltas_df.groupby('ID_ALUNO').size().reset_index(name='FALTAS')
+        faltas_count['ID_ALUNO'] = faltas_count['ID_ALUNO'].apply(db.limpar_id)
+        
+        pivot['ID_ALUNO_CLEAN'] = pivot['ID_ALUNO'].apply(db.limpar_id)
+        pivot = pd.merge(pivot, faltas_count, left_on='ID_ALUNO_CLEAN', right_on='ID_ALUNO', how='left').drop(columns=['ID_ALUNO_y', 'ID_ALUNO_CLEAN'])
+        pivot['FALTAS'] = pivot['FALTAS'].fillna(0).astype(int)
+        pivot.rename(columns={'ID_ALUNO_x': 'ID_ALUNO'}, inplace=True)
+        
         pivot = pivot.fillna(0.0)
 
-        # --- 3. LÓGICA DE STATUS ---
-        def calcular_situacao_v30(row):
+        # Total de dias letivos registrados para a turma (para calcular o limite de 25%)
+        total_dias_letivos = df_diario[df_diario['TURMA'] == turma_sel]['DATA'].nunique()
+        limite_faltas = total_dias_letivos * 0.25 # Reprovação por 25% de faltas
+
+        # --- 3. LÓGICA DE STATUS (COM PESO DE FALTAS) ---
+        def calcular_situacao_v31(row):
             t1 = util.sosa_to_float(row.get("MEDIA_FINAL_I Trimestre", 0))
             t2 = util.sosa_to_float(row.get("MEDIA_FINAL_II Trimestre", 0))
             t3 = util.sosa_to_float(row.get("MEDIA_FINAL_III Trimestre", 0))
             rf = util.sosa_to_float(row.get("RF", 0))
+            faltas_aluno = row.get("FALTAS", 0)
             
             soma = t1 + t2 + t3
-            falta = max(0.0, 18.0 - soma)
+            falta_pts = max(0.0, 18.0 - soma)
             
-            # Perfil
             aluno_info = df_alunos[df_alunos['ID'].apply(db.limpar_id) == db.limpar_id(row['ID_ALUNO'])].iloc[0]
-            pei = "♿" if str(aluno_info['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", ""] else "📝"
+            pei = "♿" if str(aluno_info['NECESSIDADES']).upper().strip() not in ["NENHUMA", "PENDENTE", "", "NAN", "TÍPICO", "TIPICO"] else "👤"
             
-            # Status
-            if soma >= 18.0: status = "✅ APROV"
+            # 🚨 INTELIGÊNCIA DE STATUS: Faltas pesam mais que nota
+            if faltas_aluno > limite_faltas and total_dias_letivos > 20: 
+                status = "🚨 RISCO (FALTAS)"
+            elif soma >= 18.0: status = "✅ APROV"
             elif rf >= 6.0: status = "🔄 APROV.REC"
-            elif soma > 0 and falta <= 10.0: status = "⚠️ REC.FINAL"
-            elif soma > 0 and falta > 10.0: status = "🚨 RISCO"
+            elif soma > 0 and falta_pts <= 10.0: status = "⚠️ REC.FINAL"
+            elif soma > 0 and falta_pts > 10.0: status = "🚨 RISCO (NOTA)"
             else: status = "⏳ AGUARD"
             
-            return pd.Series([pei, soma, falta, status])
+            return pd.Series([pei, soma, falta_pts, status])
 
-        pivot[['P', 'Σ', 'FALTA', 'SITUAÇÃO']] = pivot.apply(calcular_situacao_v30, axis=1)
+        pivot[['P', 'Σ', 'FALTA_PTS', 'SITUAÇÃO']] = pivot.apply(calcular_situacao_v31, axis=1)
 
         # --- 4. KPIs DE TOPO ---
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Média Turma", f"{pivot['Σ'].mean()/3:.1f}")
         aprov = len(pivot[pivot['SITUAÇÃO'].str.contains("APROV")])
-        c2.metric("Aprovação", f"{(aprov/len(pivot)*100):.0f}%")
+        c2.metric("Aprovação", f"{(aprov/len(pivot)*100):.0f}%" if len(pivot) > 0 else "0%")
         c3.metric("Em Rec. Final", len(pivot[pivot['SITUAÇÃO'] == "⚠️ REC.FINAL"]))
-        c4.metric("Risco Crítico", len(pivot[pivot['SITUAÇÃO'] == "🚨 RISCO"]), delta_color="inverse")
-
-        # --- 5. TABELA MOBILE-FIRST (COLUNAS CURTAS E SEM ESPAÇO) ---
-        st.markdown("### 📋 Mapa de Desempenho Anual")
         
-        # Estilização de Situação
-        def style_v30(v):
+        risco_total = len(pivot[pivot['SITUAÇÃO'].str.contains("🚨 RISCO")])
+        c4.metric("Risco Crítico (Nota/Falta)", risco_total, delta_color="inverse")
+
+        # --- 5. TABELA MOBILE-FIRST (COM COLUNA DE FALTAS) ---
+        st.markdown("### 📋 Mapa de Desempenho Anual e Assiduidade")
+        
+        def style_v31(v):
             if "APROV" in str(v): return 'color: #2ECC71; font-weight: bold;'
             if "RISCO" in str(v): return 'color: #E74C3C; font-weight: bold;'
             if "REC.FINAL" in str(v): return 'color: #F1C40F; font-weight: bold;'
             return ''
 
-        # Configuração de Colunas para Mobile
         st.dataframe(
             pivot[['P', 'NOME_ALUNO', 
                    'MEDIA_FINAL_I Trimestre', 'NOTA_REC_I Trimestre',
                    'MEDIA_FINAL_II Trimestre', 'NOTA_REC_II Trimestre',
                    'MEDIA_FINAL_III Trimestre', 'NOTA_REC_III Trimestre',
-                   'Σ', 'RF', 'SITUAÇÃO']]
-            .style.applymap(style_v30, subset=['SITUAÇÃO'])
+                   'Σ', 'RF', 'FALTAS', 'SITUAÇÃO']]
+            .style.applymap(style_v31, subset=['SITUAÇÃO'])
             .format("{:.1f}", subset=['MEDIA_FINAL_I Trimestre', 'NOTA_REC_I Trimestre', 
                                       'MEDIA_FINAL_II Trimestre', 'NOTA_REC_II Trimestre', 
                                       'MEDIA_FINAL_III Trimestre', 'NOTA_REC_III Trimestre', 
@@ -4185,9 +4198,10 @@ elif menu == "📈 Boletim Anual & Conselho":
                 "MEDIA_FINAL_III Trimestre": st.column_config.NumberColumn("III", width="small"),
                 "NOTA_REC_III Trimestre": st.column_config.NumberColumn("R3", width="small"),
                 "Σ": st.column_config.NumberColumn("Σ", width="small"),
-                "RF": st.column_config.NumberColumn("RF", width="small", help="Nota da Recuperação Final vinda do Scanner"),
+                "RF": st.column_config.NumberColumn("RF", width="small"),
+                "FALTAS": st.column_config.NumberColumn("F", width="small", help="Total de Faltas no Ano"),
                 "SITUAÇÃO": st.column_config.TextColumn("Status", width="small")
             }
         )
         
-        st.caption("📌 Legenda: I, II, III (Médias) | R1, R2, R3 (Rec. Paralelas) | Σ (Soma Anual) | RF (Rec. Final do Scanner)")
+        st.caption(f"📌 Legenda: I, II, III (Médias) | R1, R2, R3 (Rec. Paralelas) | Σ (Soma Anual) | RF (Rec. Final) | F (Faltas). Limite de faltas atual: {int(limite_faltas)}.")
