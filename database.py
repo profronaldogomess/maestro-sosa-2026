@@ -621,3 +621,34 @@ def atualizar_aluno_cascata(id_aluno, novo_nome, nova_turma, nova_nec):
     except Exception as e:
         print(f"Erro na cascata: {e}")
         return False
+    
+def excluir_aula_aberta(data_str, turma):
+    """
+    BORRACHA TEMPORAL V49
+    Deleta o registro de abertura de aula e limpa os lançamentos do diário daquele dia.
+    """
+    try:
+        wb = conectar()
+        
+        # 1. Deleta do DB_REGISTRO_AULAS (Abertura no Cockpit)
+        ws_reg = wb.worksheet("DB_REGISTRO_AULAS")
+        dados_reg = ws_reg.get_all_values()
+        # Deleta de baixo para cima para não bagunçar os índices
+        for i in range(len(dados_reg) - 1, 0, -1):
+            row = dados_reg[i]
+            if len(row) >= 3 and row[0] == data_str and row[2] == turma:
+                ws_reg.delete_rows(i + 1)
+        
+        # 2. Deleta do DB_DIARIO_BORDO (Vistos e Faltas daquele dia)
+        ws_diario = wb.worksheet("DB_DIARIO_BORDO")
+        dados_diario = ws_diario.get_all_values()
+        for i in range(len(dados_diario) - 1, 0, -1):
+            row = dados_diario[i]
+            if len(row) >= 4 and row[0] == data_str and row[3] == turma:
+                ws_diario.delete_rows(i + 1)
+                
+        st.cache_data.clear()
+        return True
+    except Exception as e:
+        print(f"Erro na Borracha Temporal: {e}")
+        return False
