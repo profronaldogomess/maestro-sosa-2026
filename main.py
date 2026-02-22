@@ -1458,7 +1458,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                 st.plotly_chart(px.bar(progresso_trim, x="TRIMESTRE", y="%", text="%", title=f"Evolução da Cobertura Real - {ano_m}º Ano", color="%", color_continuous_scale="RdYlGn", range_y=[0, 110]), use_container_width=True)
             
 # ==============================================================================
-# MÓDULO: DIÁRIO DE BORDO (V47.3 - PROTOCOLO DE ISENÇÃO DE VISTO)
+# MÓDULO: DIÁRIO DE BORDO (V47.4 - TABELA INFINITA MOBILE E DATA BR)
 # ==============================================================================
 elif menu == "📝 Diário de Bordo Rápido":
     st.title("📝 Diário de Bordo: Prontidão e Disciplina")
@@ -1478,7 +1478,9 @@ elif menu == "📝 Diário de Bordo Rápido":
             with st.container(border=True):
                 c1, c2 = st.columns(2)
                 turma_sel = c1.selectbox("👥 Turma:", sorted(turmas_reais_db['ID_TURMA'].unique()), key=f"db_t_{v}")
-                data_sel = c2.date_input("📅 Data:", date.today(), key=f"db_d_{v}")
+                
+                # 🚨 FORMATO BRASILEIRO DE DATA INJETADO AQUI
+                data_sel = c2.date_input("📅 Data:", date.today(), format="DD/MM/YYYY", key=f"db_d_{v}")
                 data_str = data_sel.strftime("%d/%m/%Y")
                 
                 ano_num = "".join(filter(str.isdigit, str(turma_sel)))
@@ -1534,7 +1536,6 @@ elif menu == "📝 Diário de Bordo Rápido":
                 ponte_pedagogica = c_reg2.text_area("🔗 Ponte Pedagógica (Onde paramos?):", placeholder="Ex: Parei no slide 5...", height=68, key=f"ponte_reg_{v}")
                 clima_turma = c_reg3.select_slider("🌡️ Clima da Turma:", options=["😴 Apática", "😐 Dispersa", "🧠 Focada", "⚡ Agitada", "🤯 Dificuldade Alta"], value="🧠 Focada", key=f"clima_reg_{v}")
 
-            # 🚨 NOVA CHAVE DE SOBERANIA: NATUREZA DO REGISTRO
             st.markdown("---")
             st.markdown("#### 🎯 Natureza do Registro")
             natureza_registro = st.radio(
@@ -1566,7 +1567,7 @@ elif menu == "📝 Diário de Bordo Rápido":
             dados_diario = []
             for _, alu in alunos_turma.iterrows():
                 id_a = db.limpar_id(alu['ID'])
-                is_pei = str(alu['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", "", "NAN", "TÍPICO", "TIPICO"]
+                is_pei = str(alu['NECESSIDADES']).upper().strip() not in ["NENHUMA", "PENDENTE", "", "NAN", "TÍPICO", "TIPICO"]
                 
                 reg_existente = registros_atuais[registros_atuais['ID_ALUNO'].apply(db.limpar_id) == id_a]
                 
@@ -1593,8 +1594,13 @@ elif menu == "📝 Diário de Bordo Rápido":
                     "OBSERVAÇÃO (🎙️ DITE AQUI)": obs_val
                 })
 
+            # 🚨 CÁLCULO DINÂMICO DE ALTURA (TABELA INFINITA MOBILE-FIRST)
+            # 35 pixels por linha + 40 pixels do cabeçalho
+            altura_dinamica = (len(dados_diario) * 35) + 40
+
             df_editado = st.data_editor(
                 pd.DataFrame(dados_diario),
+                height=altura_dinamica, # <--- A MÁGICA ACONTECE AQUI
                 column_config={
                     "ID": None,
                     "ESTUDANTE": st.column_config.TextColumn("Estudante", width="medium", disabled=True),
@@ -1620,7 +1626,6 @@ elif menu == "📝 Diário de Bordo Rápido":
                         aluno_eh_pei = "♿" in r['ESTUDANTE']
                         tag_f = "AUSÊNCIA" if r['F'] else r['VETOR DISCIPLINAR']
                         
-                        # 🚨 LÓGICA DE ISENÇÃO: Se for evento, salva como ISENTO. Se não, salva True/False.
                         visto_f = False if r['F'] else r['V']
                         visto_db = "ISENTO" if "Sem Visto" in natureza_registro else str(visto_f)
                         
@@ -1844,7 +1849,7 @@ elif menu == "👥 Gestão da Turma":
         "📊 Cockpit de Prontidão", "🏗️ Arquitetura de Turmas", "➕ Povoar Alunos", "✏️ Edição & Transferência"
     ])
 
-# --- ABA 1: COCKPIT DA TURMA (VERSÃO V46.4 - SMART CLEAN E MEMÓRIA INDIVIDUAL) ---
+# --- ABA 1: COCKPIT DA TURMA (VERSÃO V46.5 - BORRACHA TEMPORAL E DATA BR) ---
     with tab_cockpit:
         if df_turmas.empty:
             st.info("📭 Nenhuma turma cadastrada. Vá na aba 'Arquitetura' para iniciar.")
@@ -1858,8 +1863,8 @@ elif menu == "👥 Gestão da Turma":
 
             for _, row in df_turmas.iterrows():
                 sigla = str(row['ID_TURMA'])
-                nome_turma = str(row.iloc[1]) # NOME_TURMA
-                horarios_str = str(row.iloc[3]) # DIAS_AULA
+                nome_turma = str(row.iloc[1])
+                horarios_str = str(row.iloc[3])
                 
                 display_name = sigla
                 if "ª" in sigla: 
@@ -1924,14 +1929,12 @@ elif menu == "👥 Gestão da Turma":
                 st.markdown("---")
                 col_esq, col_dir = st.columns([1.6, 1.4])
 
-                # --- 4. ABERTURA DE AULA (COM MOTOR DE MEMÓRIA) ---
+                # --- 4. ABERTURA DE AULA ---
                 with col_esq:
                     st.subheader("🕒 Abertura de Aula")
                     
-                    # 🚨 VÁLVULA DE SEGURANÇA (TOGGLE)
                     mostrar_historico = st.toggle("🔄 Mostrar histórico completo (Modo Revisão / Continuidade)", key=f"tog_hist_{v}")
                     
-                    # 🚨 MOTOR DE MEMÓRIA (SMART CLEAN)
                     historico_turma = df_registro_aulas[df_registro_aulas['TURMA'] == turma_foco]
                     planos_usados = historico_turma['SEMANA'].unique().tolist()
                     
@@ -1940,7 +1943,6 @@ elif menu == "👥 Gestão da Turma":
                     for raw in materiais_usados_raw:
                         materiais_usados.extend([m.strip() for m in str(raw).split('+')])
                     
-                    # Lógica de Sugestão Inteligente (Pega o mais recente NÃO USADO)
                     plano_sugerido = "Nenhum"
                     base_didatica_sugerida = "Matriz Curricular"
                     ponte_sugerida = "Início de novo ciclo pedagógico."
@@ -1974,9 +1976,10 @@ elif menu == "👥 Gestão da Turma":
                         
                         st.divider()
                         c_r1, c_r2 = st.columns(2)
-                        data_aula = c_r1.date_input("Data da Aula:", date.today(), key=f"dt_reg_{v}")
                         
-                        # 🚨 FILTRAGEM DE PLANOS NO SELETOR
+                        # 🚨 FORMATO BRASILEIRO DE DATA INJETADO AQUI
+                        data_aula = c_r1.date_input("Data da Aula:", date.today(), format="DD/MM/YYYY", key=f"dt_reg_{v}")
+                        
                         lista_planos_bruta = df_p_atual['SEMANA'].tolist()
                         if not mostrar_historico:
                             lista_planos_filtrada = [p for p in lista_planos_bruta if p not in planos_usados]
@@ -1988,7 +1991,6 @@ elif menu == "👥 Gestão da Turma":
                         
                         plano_vinc = c_r2.selectbox("Vincular Plano Base:", lista_planos, index=idx_sugerido, key=f"plano_reg_{v}")
                         
-                        # 🚨 FILTRAGEM DE MATERIAIS NO SELETOR
                         mats_disp_bruto = df_aulas[df_aulas['ANO'].str.contains(ano_num)]['TIPO_MATERIAL'].tolist()
                         if not mostrar_historico:
                             mats_disp = [m for m in mats_disp_bruto if m not in materiais_usados]
@@ -2007,7 +2009,26 @@ elif menu == "👥 Gestão da Turma":
                             time.sleep(1)
                             st.rerun()
 
-                # --- 5. INVENTÁRIO (COM FILTRO DE INÉDITOS) ---
+                    # 🚨 NOVO: BORRACHA TEMPORAL (GERENCIAR AULAS ABERTAS)
+                    st.markdown("---")
+                    with st.expander("🗑️ Gerenciar Aulas Abertas (Corrigir Erros de Data)"):
+                        st.caption("Apagar uma aula aqui também removerá os vistos/faltas lançados no Diário para aquele dia.")
+                        aulas_abertas = df_registro_aulas[df_registro_aulas['TURMA'] == turma_foco].sort_values(by='DATA', ascending=False).head(5)
+                        
+                        if aulas_abertas.empty:
+                            st.info("Nenhuma aula registrada para esta turma.")
+                        else:
+                            for _, row_aula in aulas_abertas.iterrows():
+                                c_del1, c_del2 = st.columns([3, 1])
+                                c_del1.markdown(f"📅 **{row_aula['DATA']}** - {row_aula['CONTEUDO_MINISTRADO']}")
+                                if c_del2.button("❌ APAGAR", key=f"del_aula_{row_aula['DATA']}_{turma_foco}"):
+                                    with st.spinner("Apagando registros..."):
+                                        if db.excluir_aula_aberta(row_aula['DATA'], turma_foco):
+                                            st.success("Aula e diário apagados com sucesso!")
+                                            time.sleep(1)
+                                            st.rerun()
+
+                # --- 5. INVENTÁRIO ---
                 with col_dir:
                     st.subheader("📂 Inventário de Ativos")
                     with st.container(border=True):
@@ -2016,7 +2037,6 @@ elif menu == "👥 Gestão da Turma":
                         
                         df_mats_ano = df_aulas[df_aulas['ANO'].str.contains(ano_num)].iloc[::-1]
                         
-                        # 🚨 FILTRAGEM DO INVENTÁRIO
                         if not mostrar_historico and not df_mats_ano.empty:
                             df_mats_ano = df_mats_ano[~df_mats_ano['TIPO_MATERIAL'].isin(materiais_usados)]
                         
