@@ -450,25 +450,21 @@ if menu == "🧪 Criador de Aulas":
                     ], horizontal=True, key=f"metodo_{v}")
                     
                     # --- 3. COCKPIT DE PRODUÇÃO (COM FILTRAGEM INTELIGENTE DE AULAS) ---
-                    # Verifica o que já foi gerado no banco de aulas para esta semana e ano
                     aulas_ja_geradas = df_aulas[(df_aulas['ANO'].str.contains(str(ano_lab))) & (df_aulas['SEMANA_REF'] == sem_lab)]['TIPO_MATERIAL'].astype(str).tolist()
                     
                     tem_aula1 = any("Aula 1" in mat for mat in aulas_ja_geradas)
                     tem_aula2 = any("Aula 2" in mat for mat in aulas_ja_geradas)
                     tem_sabado = any("Sábado" in mat or "Sabado" in mat for mat in aulas_ja_geradas)
 
-                    # Verifica o que o plano exige
                     plano_pede_a2 = len(ai.extrair_tag(plano_txt, "AULA_2")) > 30 and "N/A" not in ai.extrair_tag(plano_txt, "AULA_2").upper()
                     txt_sabado = ai.extrair_tag(plano_txt, "SABADO_LETIVO")
                     plano_pede_sab = len(txt_sabado) > 10 and "N/A" not in txt_sabado.upper() and "NÃO PROGRAMADA" not in txt_sabado.upper()
 
-                    # Monta as opções disponíveis (escondendo o que já foi feito)
                     opcoes_disponiveis = []
                     if not tem_aula1: opcoes_disponiveis.append("Aula 1")
                     if plano_pede_a2 and not tem_aula2: opcoes_disponiveis.append("Aula 2")
                     if plano_pede_sab and not tem_sabado: opcoes_disponiveis.append("Sábado Letivo")
 
-                    # Válvula de segurança
                     mostrar_tudo_lab = st.toggle("🔄 Mostrar aulas já produzidas (Modo Sobrescrita)", key=f"tog_lab_{v}")
                     if mostrar_tudo_lab:
                         opcoes_disponiveis = ["Aula 1"]
@@ -500,7 +496,11 @@ if menu == "🧪 Criador de Aulas":
                             
                             roteiro_especifico = ai.extrair_tag(plano_txt, tag_roteiro)
                             
-                            # Separação de Páginas (se houver ;)
+                            # 🚨 MOTOR DE CONTEXTO INTELIGENTE (MOVIDO PARA FORA DO BOTÃO)
+                            roteiro_upper = roteiro_especifico.upper()
+                            is_avaliacao = any(x in roteiro_upper for x in ["APLICAÇÃO", "PROVA", "TESTE", "SONDA", "EXAME"])
+                            is_correcao = any(x in roteiro_upper for x in ["CORREÇÃO", "FEEDBACK", "VISTO", "CLÍNICA PEDAGÓGICA"])
+                            
                             paginas_aula = base_herdada
                             if ";" in base_herdada:
                                 partes_pag = base_herdada.split(";")
@@ -510,6 +510,23 @@ if menu == "🧪 Criador de Aulas":
 
                             with st.expander(f"👁️ Roteiro Herdado para {aula_alvo_prod}", expanded=False):
                                 st.info(f"📍 **Páginas Alvo:** {paginas_aula}\n\n{roteiro_especifico}")
+
+                            # 🚨 NOVO: PONTE DE MEMÓRIA PARA AVALIAÇÕES
+                            conteudo_prova_vinculada = ""
+                            if is_correcao or is_avaliacao:
+                                st.markdown("---")
+                                st.warning("🔍 **Modo de Avaliação/Correção Detectado:** Selecione a prova correspondente para que a IA possa ler as questões e gerar o guia.")
+                                
+                                mask_provas = df_aulas['TIPO_MATERIAL'].str.upper().str.contains("PROVA|TESTE|SONDA|AVALIAÇÃO|EXAME")
+                                provas_disponiveis = df_aulas[(df_aulas['ANO'].str.contains(str(ano_lab))) & mask_provas]
+                                
+                                if not provas_disponiveis.empty:
+                                    prova_sel = st.selectbox("Vincular Avaliação do Acervo:", [""] + provas_disponiveis['TIPO_MATERIAL'].tolist(), key=f"vinc_prova_{v}")
+                                    if prova_sel:
+                                        conteudo_prova_vinculada = provas_disponiveis[provas_disponiveis['TIPO_MATERIAL'] == prova_sel].iloc[0]['CONTEUDO']
+                                        st.success("✅ Avaliação vinculada! A IA usará as questões reais para montar a aula.")
+                                else:
+                                    st.info("Nenhuma avaliação encontrada no acervo para esta série.")
 
                     # 🚨 SÓ EXIBE OS BOTÕES DE GERAÇÃO SE HOUVER AULA PENDENTE
                     if opcoes_disponiveis:
@@ -567,81 +584,57 @@ if menu == "🧪 Criador de Aulas":
                             
                             instr_extra_prod = st.text_area("📝 Contexto Extra / Ajustes Específicos:", key=f"prod_extra_{v}")
 
-                        if st.button("💎 MATERIALIZAR TRATADO DE ELITE", use_container_width=True, type="primary"):
-                            with st.spinner("Sosa estudando o roteiro e arquitetando material..."):
-                                
-                                # 1. Define qual aula estamos gerando
-                                if "1" in aula_alvo_prod: tag_previa = "AULA_1"
-                                elif "2" in aula_alvo_prod: tag_previa = "AULA_2"
-                                else: tag_previa = "SABADO_LETIVO"
-                                
-                                roteiro_herdado = ai.extrair_tag(plano_txt, tag_previa)
-                                
-                                # 2. Define as páginas
-                                paginas_aula = base_herdada
-                                if ";" in base_herdada:
-                                    partes_pag = base_herdada.split(";")
-                                    if "1" in aula_alvo_prod: paginas_aula = partes_pag[0].strip()
-                                    elif "2" in aula_alvo_prod and len(partes_pag) > 1: paginas_aula = partes_pag[1].strip()
-                                    else: paginas_aula = partes_pag[-1].strip()
+                            if st.button("💎 MATERIALIZAR TRATADO DE ELITE", use_container_width=True, type="primary"):
+                                with st.spinner("Sosa estudando o roteiro e arquitetando material..."):
+                                    
+                                    nome_elite = util.gerar_nome_material_elite(ano_lab, aula_alvo_prod, sem_lab)
+                                    st.session_state.sosa_id_atual = nome_elite
+                                    st.session_state.lab_meta = {"ano": ano_lab, "semana_ref": sem_lab}
+                                    
+                                    # 🚨 INSTRUÇÕES ESPECÍFICAS BASEADAS NO CONTEXTO
+                                    if is_avaliacao and not is_correcao:
+                                        missao_especifica = (
+                                            f"🚨 ATENÇÃO: Esta é uma aula de APLICAÇÃO DE AVALIAÇÃO.\n"
+                                            f"1. [PROFESSOR]: Escreva apenas as instruções de logística, tempo, regras da prova e orientações de preenchimento de gabarito.\n"
+                                            f"2. [ALUNO] e [PEI]: Escreva APENAS 'Material de avaliação impresso separadamente. Não há atividade de caderno hoje.'\n"
+                                            f"3. É TERMINANTEMENTE PROIBIDO gerar questões ou exercícios."
+                                        )
+                                    elif is_correcao:
+                                        missao_especifica = (
+                                            f"🚨 ATENÇÃO: Esta é uma aula de CORREÇÃO DE AVALIAÇÃO (Clínica Pedagógica).\n"
+                                            f"1. [PROFESSOR]: Escreva um guia de como mediar a correção no quadro. USE AS QUESTÕES DA AVALIAÇÃO VINCULADA ABAIXO para dar exemplos reais de como explicar os erros (distratores).\n"
+                                            f"2. [ALUNO] e [PEI]: Escreva APENAS 'Acompanhamento da correção no quadro e anotações de feedback. Não há nova lista de exercícios hoje.'\n"
+                                            f"3. É TERMINANTEMENTE PROIBIDO gerar novas questões."
+                                        )
+                                    else:
+                                        missao_especifica = (
+                                            f"🚨 MISSÃO DE ALTA DENSIDADE (ESTILO BRASIL ESCOLA):\n"
+                                            f"1. O [PROFESSOR] deve ser um TRATADO DIDÁTICO. Explique o conceito de {obj_geral} com profundidade técnica antes de dar o roteiro de aula.\n"
+                                            f"2. Use o Google Search para trazer dados científicos do ano de 2026 ou mais atualizado possível que validem a importância deste tema.\n"
+                                            f"3. Se for MODO LIVRO, o roteiro deve dizer exatamente: 'Inicie na página X explorando a imagem Y...'.\n"
+                                            f"4. Para o ALUNO PEI: Gere {qtd_q_prod} questões com apoio visual [ PROMPT IMAGEM ]."
+                                        )
 
-                                # 3. Busca o Livro no Drive (se houver)
-                                uri_referencia_aula = None
-                                if "Livro" in metodo_entrega:
-                                    nome_livro_limpo = base_herdada.split('|')[0].replace("Livro:", "").strip()
-                                    match_biblioteca = df_materiais[df_materiais['NOME_ARQUIVO'].str.contains(nome_livro_limpo[:10], case=False, na=False)]
-                                    if not match_biblioteca.empty:
-                                        uri_referencia_aula = match_biblioteca.iloc[0]['URI_ARQUIVO']
-
-                                nome_elite = util.gerar_nome_material_elite(ano_lab, aula_alvo_prod, sem_lab)
-                                st.session_state.sosa_id_atual = nome_elite
-                                st.session_state.lab_meta = {"ano": ano_lab, "semana_ref": sem_lab}
-                                
-                                # 🚨 MOTOR DE CONTEXTO INTELIGENTE (NOVO)
-                                roteiro_upper = roteiro_herdado.upper()
-                                is_avaliacao = any(x in roteiro_upper for x in ["APLICAÇÃO", "PROVA", "TESTE", "SONDA", "EXAME"])
-                                is_correcao = any(x in roteiro_upper for x in ["CORREÇÃO", "FEEDBACK", "VISTO"])
-                                
-                                if is_avaliacao and not is_correcao:
-                                    missao_especifica = (
-                                        f"🚨 ATENÇÃO: Esta é uma aula de APLICAÇÃO DE AVALIAÇÃO.\n"
-                                        f"1. [PROFESSOR]: Escreva apenas as instruções de logística, tempo, regras da prova e orientações de preenchimento de gabarito.\n"
-                                        f"2. [ALUNO] e [PEI]: Escreva APENAS 'Material de avaliação impresso separadamente. Não há atividade de caderno hoje.'\n"
-                                        f"3. É TERMINANTEMENTE PROIBIDO gerar questões ou exercícios."
+                                    prompt_manual = (
+                                        f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {nome_elite}.\n"
+                                        f"MÉTODO: {metodo_entrega}. REFERÊNCIA: {base_herdada}\n"
+                                        f"SÉRIE: {ano_lab}º Ano. ALVO: {aula_alvo_prod}.\n\n"
+                                        f"{missao_especifica}\n\n"
+                                        f"--- HERANÇA DO PLANO ---\n{roteiro_especifico}\n"
+                                        f"--- SENSOR DE INCLUSÃO ---\nA turma possui alunos com: {texto_clinico}."
                                     )
-                                elif is_correcao:
-                                    missao_especifica = (
-                                        f"🚨 ATENÇÃO: Esta é uma aula de CORREÇÃO DE AVALIAÇÃO.\n"
-                                        f"1. [PROFESSOR]: Escreva um guia de como mediar a correção no quadro, focando nos erros mais comuns e na recomposição imediata.\n"
-                                        f"2. [ALUNO] e [PEI]: Escreva APENAS 'Acompanhamento da correção no quadro e anotações de feedback. Não há nova lista de exercícios hoje.'\n"
-                                        f"3. É TERMINANTEMENTE PROIBIDO gerar novas questões."
+                                    
+                                    # 🚨 INJETA A PROVA NO CÉREBRO DA IA
+                                    if conteudo_prova_vinculada:
+                                        prompt_manual += f"\n\n--- CONTEÚDO DA AVALIAÇÃO VINCULADA ---\n{conteudo_prova_vinculada}"
+                                    
+                                    st.session_state.lab_temp = ai.gerar_ia(
+                                        "MAESTRO_SOSA_V28_ELITE", 
+                                        prompt_manual, 
+                                        url_drive=uri_referencia_aula, 
+                                        usar_busca=True
                                     )
-                                else:
-                                    missao_especifica = (
-                                        f"🚨 MISSÃO DE ALTA DENSIDADE (ESTILO BRASIL ESCOLA):\n"
-                                        f"1. O [PROFESSOR] deve ser um TRATADO DIDÁTICO. Explique o conceito de {obj_geral} com profundidade técnica antes de dar o roteiro de aula.\n"
-                                        f"2. Use o Google Search para trazer dados científicos do ano de 2026 ou mais atualizado possível que validem a importância deste tema.\n"
-                                        f"3. Se for MODO LIVRO, o roteiro deve dizer exatamente: 'Inicie na página X explorando a imagem Y...'.\n"
-                                        f"4. Para o ALUNO PEI: Gere {qtd_q_prod} questões com apoio visual [ PROMPT IMAGEM ]."
-                                    )
-
-                                # 4. Montagem do Prompt Final
-                                prompt_manual = (
-                                    f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {nome_elite}.\n"
-                                    f"MÉTODO: {metodo_entrega}. REFERÊNCIA: {base_herdada}\n"
-                                    f"SÉRIE: {ano_lab}º Ano. ALVO: {aula_alvo_prod}.\n\n"
-                                    f"{missao_especifica}\n\n"
-                                    f"--- HERANÇA DO PLANO ---\n{roteiro_herdado}\n"
-                                    f"--- SENSOR DE INCLUSÃO ---\nA turma possui alunos com: {texto_clinico}."
-                                )
-                                
-                                st.session_state.lab_temp = ai.gerar_ia(
-                                    "MAESTRO_SOSA_V28_ELITE", 
-                                    prompt_manual, 
-                                    url_drive=uri_referencia_aula, 
-                                    usar_busca=True
-                                )
-                                st.rerun()
+                                    st.rerun()
 
 # --- ABA 3: ENGENHARIA DE TRABALHOS (VERSÃO V31.7 - BLINDAGEM DE TABELAS) ---
         with tab_trabalhos:
