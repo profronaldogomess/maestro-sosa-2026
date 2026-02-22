@@ -1817,7 +1817,7 @@ elif menu == "👥 Gestão da Turma":
         "📊 Cockpit de Prontidão", "🏗️ Arquitetura de Turmas", "➕ Povoar Alunos", "✏️ Edição & Transferência"
     ])
 
-# --- ABA 1: COCKPIT DA TURMA (VERSÃO V46.3 - CORREÇÃO DO SENSOR PEI) ---
+# --- ABA 1: COCKPIT DA TURMA (VERSÃO V46.4 - SMART CLEAN E MEMÓRIA INDIVIDUAL) ---
     with tab_cockpit:
         if df_turmas.empty:
             st.info("📭 Nenhuma turma cadastrada. Vá na aba 'Arquitetura' para iniciar.")
@@ -1876,7 +1876,6 @@ elif menu == "👥 Gestão da Turma":
                 m1, m2, m3 = st.columns(3)
                 m1.metric("👥 Total Alunos", len(alunos_t))
                 
-                # 🚨 CORREÇÃO SOBERANA: Adicionado "TÍPICO" na lista de exclusão do Sensor PEI
                 mask_pei = ~alunos_t['NECESSIDADES'].astype(str).str.upper().str.strip().isin(["NENHUMA", "PENDENTE", "", "NAN", "TÍPICO", "TIPICO"])
                 df_pei_turma = alunos_t[mask_pei]
                 m2.metric("♿ Estudantes PEI", len(df_pei_turma))
@@ -1898,17 +1897,35 @@ elif menu == "👥 Gestão da Turma":
                 st.markdown("---")
                 col_esq, col_dir = st.columns([1.6, 1.4])
 
-                # --- 4. ABERTURA DE AULA ---
+                # --- 4. ABERTURA DE AULA (COM MOTOR DE MEMÓRIA) ---
                 with col_esq:
                     st.subheader("🕒 Abertura de Aula")
                     
+                    # 🚨 VÁLVULA DE SEGURANÇA (TOGGLE)
+                    mostrar_historico = st.toggle("🔄 Mostrar histórico completo (Modo Revisão / Continuidade)", key=f"tog_hist_{v}")
+                    
+                    # 🚨 MOTOR DE MEMÓRIA (SMART CLEAN)
+                    historico_turma = df_registro_aulas[df_registro_aulas['TURMA'] == turma_foco]
+                    planos_usados = historico_turma['SEMANA'].unique().tolist()
+                    
+                    materiais_usados_raw = historico_turma['CONTEUDO_MINISTRADO'].dropna().tolist()
+                    materiais_usados = []
+                    for raw in materiais_usados_raw:
+                        materiais_usados.extend([m.strip() for m in str(raw).split('+')])
+                    
+                    # Lógica de Sugestão Inteligente (Pega o mais recente NÃO USADO)
                     plano_sugerido = "Nenhum"
                     base_didatica_sugerida = "Matriz Curricular"
                     ponte_sugerida = "Início de novo ciclo pedagógico."
                     
                     df_p_atual = df_planos[df_planos['ANO'] == ano_str_ref].sort_values(by='DATA', ascending=False)
-                    if not df_p_atual.empty:
-                        row_p = df_p_atual.iloc[0]
+                    
+                    df_p_sugestao = df_p_atual.copy()
+                    if not mostrar_historico:
+                        df_p_sugestao = df_p_sugestao[~df_p_sugestao['SEMANA'].isin(planos_usados)]
+                        
+                    if not df_p_sugestao.empty:
+                        row_p = df_p_sugestao.iloc[0]
                         plano_sugerido = row_p['SEMANA']
                         txt_p = row_p['PLANO_TEXTO']
                         base_didatica_sugerida = ai.extrair_tag(txt_p, "BASE_DIDATICA") or "Matriz de Itabuna"
@@ -1919,8 +1936,11 @@ elif menu == "👥 Gestão da Turma":
 
                     with st.container(border=True):
                         st.markdown("#### 🚀 MISSÃO PLANEJADA PARA HOJE")
-                        st.success(f"**Semana de Referência:** {plano_sugerido}")
-                        st.info(f"**📖 Base Didática (DNA):**\n{base_didatica_sugerida}")
+                        if plano_sugerido != "Nenhum":
+                            st.success(f"**Próxima Semana Inédita:** {plano_sugerido}")
+                            st.info(f"**📖 Base Didática (DNA):**\n{base_didatica_sugerida}")
+                        else:
+                            st.success("✅ Todos os planos gerados já foram aplicados nesta turma!")
                         
                         with st.expander("🔗 Ver Ponte de Continuidade (Onde paramos?)"):
                             st.caption(ponte_sugerida)
@@ -1929,12 +1949,27 @@ elif menu == "👥 Gestão da Turma":
                         c_r1, c_r2 = st.columns(2)
                         data_aula = c_r1.date_input("Data da Aula:", date.today(), key=f"dt_reg_{v}")
                         
-                        lista_planos = ["Nenhum"] + df_p_atual['SEMANA'].tolist()
+                        # 🚨 FILTRAGEM DE PLANOS NO SELETOR
+                        lista_planos_bruta = df_p_atual['SEMANA'].tolist()
+                        if not mostrar_historico:
+                            lista_planos_filtrada = [p for p in lista_planos_bruta if p not in planos_usados]
+                        else:
+                            lista_planos_filtrada = lista_planos_bruta
+                            
+                        lista_planos = ["Nenhum"] + lista_planos_filtrada
                         idx_sugerido = lista_planos.index(plano_sugerido) if plano_sugerido in lista_planos else 0
+                        
                         plano_vinc = c_r2.selectbox("Vincular Plano Base:", lista_planos, index=idx_sugerido, key=f"plano_reg_{v}")
                         
-                        mats_disp = df_aulas[df_aulas['ANO'].str.contains(ano_num)]['TIPO_MATERIAL'].tolist()
-                        mats_sel = st.multiselect("📦 Selecione o Material (Ativos de Safra):", options=mats_disp, key=f"mats_reg_{v}")
+                        # 🚨 FILTRAGEM DE MATERIAIS NO SELETOR
+                        mats_disp_bruto = df_aulas[df_aulas['ANO'].str.contains(ano_num)]['TIPO_MATERIAL'].tolist()
+                        if not mostrar_historico:
+                            mats_disp = [m for m in mats_disp_bruto if m not in materiais_usados]
+                        else:
+                            mats_disp = mats_disp_bruto
+                            
+                        label_mats = "📦 Selecione o Material (Ativos Inéditos):" if not mostrar_historico else "📦 Selecione o Material (Todos):"
+                        mats_sel = st.multiselect(label_mats, options=mats_disp, key=f"mats_reg_{v}")
 
                         if st.button("💾 CONFIRMAR ABERTURA DE AULA", use_container_width=True, type="primary"):
                             db.salvar_no_banco("DB_REGISTRO_AULAS", [
@@ -1945,16 +1980,21 @@ elif menu == "👥 Gestão da Turma":
                             time.sleep(1)
                             st.rerun()
 
-                # --- 5. INVENTÁRIO E FOCO PEI ---
+                # --- 5. INVENTÁRIO (COM FILTRO DE INÉDITOS) ---
                 with col_dir:
                     st.subheader("📂 Inventário de Ativos")
                     with st.container(border=True):
-                        st.markdown(f"**Ativos de Safra ({ano_str_ref} Ano)**")
+                        titulo_inv = f"**Próximos Ativos Inéditos ({ano_str_ref} Ano)**" if not mostrar_historico else f"**Todos os Ativos ({ano_str_ref} Ano)**"
+                        st.markdown(titulo_inv)
                         
                         df_mats_ano = df_aulas[df_aulas['ANO'].str.contains(ano_num)].iloc[::-1]
                         
+                        # 🚨 FILTRAGEM DO INVENTÁRIO
+                        if not mostrar_historico and not df_mats_ano.empty:
+                            df_mats_ano = df_mats_ano[~df_mats_ano['TIPO_MATERIAL'].isin(materiais_usados)]
+                        
                         if df_mats_ano.empty:
-                            st.caption("Nenhum material gerado para esta série.")
+                            st.caption("Nenhum material pendente para esta turma. Tudo em dia!")
                         else:
                             for _, m_row in df_mats_ano.head(5).iterrows():
                                 with st.container():
