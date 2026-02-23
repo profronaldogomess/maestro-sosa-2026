@@ -496,10 +496,15 @@ if menu == "🧪 Criador de Aulas":
                             
                             roteiro_especifico = ai.extrair_tag(plano_txt, tag_roteiro)
                             
-                            # 🚨 MOTOR DE CONTEXTO INTELIGENTE (MOVIDO PARA FORA DO BOTÃO)
+                            # 🚨 MOTOR DE CONTEXTO INTELIGENTE (CORRIGIDO V46.5 - ANTI FALSO-POSITIVO)
                             roteiro_upper = roteiro_especifico.upper()
-                            is_avaliacao = any(x in roteiro_upper for x in ["APLICAÇÃO", "PROVA", "TESTE", "SONDA", "EXAME"])
-                            is_correcao = any(x in roteiro_upper for x in ["CORREÇÃO", "FEEDBACK", "VISTO", "CLÍNICA PEDAGÓGICA"])
+                            
+                            # Termos fortes e compostos para evitar que palavras comuns ativem o modo prova
+                            termos_av = ["LOGÍSTICA DE APLICAÇÃO", "APLICAÇÃO DE AVALIAÇÃO", "APLICAÇÃO DE PROVA", "APLICAÇÃO DE TESTE", "APLICAÇÃO DA SONDA", "APLICAÇÃO DO EXAME"]
+                            termos_cor = ["CORREÇÃO COMENTADA", "CLÍNICA PEDAGÓGICA", "CORREÇÃO DE AVALIAÇÃO", "CORREÇÃO DA PROVA", "CORREÇÃO DO TESTE", "CORREÇÃO DA SONDA", "MAPEAMENTO DE DISTRATORES"]
+                            
+                            is_avaliacao = any(t in roteiro_upper for t in termos_av)
+                            is_correcao = any(t in roteiro_upper for t in termos_cor)
                             
                             paginas_aula = base_herdada
                             if ";" in base_herdada:
@@ -511,7 +516,7 @@ if menu == "🧪 Criador de Aulas":
                             with st.expander(f"👁️ Roteiro Herdado para {aula_alvo_prod}", expanded=False):
                                 st.info(f"📍 **Páginas Alvo:** {paginas_aula}\n\n{roteiro_especifico}")
 
-                            # 🚨 NOVO: PONTE DE MEMÓRIA PARA AVALIAÇÕES
+                            # 🚨 PONTE DE MEMÓRIA PARA AVALIAÇÕES
                             conteudo_prova_vinculada = ""
                             if is_correcao or is_avaliacao:
                                 st.markdown("---")
@@ -591,7 +596,7 @@ if menu == "🧪 Criador de Aulas":
                                     st.session_state.sosa_id_atual = nome_elite
                                     st.session_state.lab_meta = {"ano": ano_lab, "semana_ref": sem_lab}
                                     
-                                    # 🚨 INSTRUÇÕES ESPECÍFICAS BASEADAS NO CONTEXTO (COM BLINDAGEM DE FORMATO)
+                                    # 🚨 INSTRUÇÕES ESPECÍFICAS BASEADAS NO CONTEXTO
                                     if is_avaliacao and not is_correcao:
                                         missao_especifica = (
                                             f"🚨 ATENÇÃO: Esta é uma aula de APLICAÇÃO DE AVALIAÇÃO.\n"
