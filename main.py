@@ -3444,7 +3444,7 @@ elif menu == "📸 Scanner de Gabaritos":
                         st.balloons()
                         time.sleep(1); st.rerun()
 
-# --- ABA 3: HUB DE SOBERANIA (V74.0 - DELEÇÃO REVERSA E BLINDAGEM PEI) ---
+# --- ABA 3: HUB DE SOBERANIA (V74.1 - PRESERVAÇÃO DE GABARITOS PARA O RAIO-X) ---
     with tab_soberania:
         st.subheader("🏛️ Hub de Soberania: Autoridade do Professor")
         st.markdown("---")
@@ -3478,16 +3478,20 @@ elif menu == "📸 Scanner de Gabaritos":
                         leitura = gabaritos_lidos[gabaritos_lidos['ID_ALUNO'].apply(db.limpar_id) == id_a]
                         
                         situacao_txt, versao_prova, nota_atual, link_ev = "✍️ PENDENTE", "PROVA ORIGINAL", 0.0, ""
+                        respostas_salvas = "MANUAL" # Padrão caso não tenha sido escaneado
 
                         if not leitura.empty:
                             reg = leitura.iloc[-1]
                             nota_atual = util.sosa_to_float(reg['NOTA_CALCULADA'])
                             link_ev = reg.get('LINK_FOTO_DRIVE', '')
+                            
+                            # 🚨 COFRE DE MEMÓRIA: Salva as respostas reais (A;B;C) para não perder
+                            respostas_salvas = reg.get('RESPOSTAS_ALUNO', 'MANUAL')
+                            
                             if reg['RESPOSTAS_ALUNO'] == "FALTOU": situacao_txt, versao_prova = "❌ FALTOU", "N/A"
                             elif "2ª" in reg['ID_AVALIACAO'].upper(): situacao_txt, versao_prova = "✅ REALIZADA", "SEGUNDA CHAMADA"
                             else: situacao_txt = "✅ REALIZADA"
 
-                        # 🚨 BLINDAGEM DEFINITIVA DO PERFIL PEI
                         nec_str = str(alu['NECESSIDADES']).upper().strip()
                         is_pei_sob = True
                         if nec_str in ["NENHUMA", "PENDENTE", "", "NAN", "TÍPICO", "TIPICO"] or "TIPICO" in nec_str or "TÍPICO" in nec_str:
@@ -3500,10 +3504,11 @@ elif menu == "📸 Scanner de Gabaritos":
                             "Situação": situacao_txt, 
                             "Versão": versao_prova,
                             "Nota Final (Soberana)": nota_atual, 
-                            "Evidência": link_ev
+                            "Evidência": link_ev,
+                            "_Respostas": respostas_salvas # 🚨 Coluna oculta com o gabarito
                         })
 
-                    # Tabela Editável com Selectbox para Situação
+                    # Tabela Editável
                     df_soberano_ed = st.data_editor(
                         pd.DataFrame(dados_soberania), 
                         hide_index=True, 
@@ -3511,6 +3516,7 @@ elif menu == "📸 Scanner de Gabaritos":
                         key=f"ed_soberania_v74_{v}",
                         column_config={
                             "ID": None, 
+                            "_Respostas": None, # 🚨 Esconde a coluna de respostas da tela para ficar limpo
                             "Estudante": st.column_config.TextColumn("Estudante", disabled=True),
                             "Perfil": st.column_config.TextColumn("Perfil", disabled=True),
                             "Situação": st.column_config.SelectboxColumn("Situação", options=["✅ REALIZADA", "❌ FALTOU", "✍️ PENDENTE"], required=True),
@@ -3526,24 +3532,20 @@ elif menu == "📸 Scanner de Gabaritos":
                             ws_g = wb_s.worksheet("DB_GABARITOS_ALUNOS")
                             d_g = ws_g.get_all_values()
                             
-                            # 1. MAPEAMENTO DE LINHAS PARA DELETAR (Apenas desta turma e desta prova)
                             linhas_para_deletar = []
                             ids_na_tabela = df_soberano_ed['ID'].astype(str).tolist()
                             
                             for i, row_g in enumerate(d_g):
-                                if i == 0: continue # Pula cabeçalho
+                                if i == 0: continue 
                                 if len(row_g) > 4:
                                     id_banco = db.limpar_id(row_g[1])
                                     av_banco = row_g[4]
-                                    # Se a linha pertence a um aluno desta turma e é referente a esta prova
                                     if id_banco in ids_na_tabela and nome_curto_av in av_banco:
-                                        linhas_para_deletar.append(i + 1) # +1 porque o gspread conta a partir do 1
+                                        linhas_para_deletar.append(i + 1) 
                             
-                            # 2. DELEÇÃO REVERSA (De baixo para cima para não quebrar os índices)
                             for row_idx in sorted(linhas_para_deletar, reverse=True):
                                 ws_g.delete_rows(row_idx)
                             
-                            # 3. INSERÇÃO DOS NOVOS DADOS HOMOLOGADOS
                             novos_registros_gabarito = []
                             lista_boletim = []
                             
@@ -3552,23 +3554,26 @@ elif menu == "📸 Scanner de Gabaritos":
                                 nota_s = util.sosa_to_str(r['Nota Final (Soberana)'])
                                 nome_limpo = r['Estudante'].replace("♿ ", "").replace("👤 ", "")
                                 
-                                # Se for PENDENTE, não insere nada no DB_GABARITOS (ele volta pra fila do scanner)
+                                # 🚨 Resgata o gabarito do cofre de memória
+                                resp_originais = r['_Respostas']
+                                
                                 if r['Situação'] == "✅ REALIZADA":
                                     id_f = av_alvo_h if r['Versão'] == "PROVA ORIGINAL" else f"{av_alvo_h} (2ª CHAMADA)"
-                                    novos_registros_gabarito.append([datetime.now().strftime("%d/%m/%Y"), id_l, nome_limpo, t_sel_h, id_f, "MANUAL", nota_s, r['Evidência'] if r['Evidência'] else "N/A"])
+                                    
+                                    # Se antes era FALTOU e o professor deu nota manual, vira MANUAL. Se já tinha gabarito, mantém o gabarito.
+                                    resp_final = "MANUAL" if resp_originais == "FALTOU" else resp_originais
+                                    
+                                    novos_registros_gabarito.append([datetime.now().strftime("%d/%m/%Y"), id_l, nome_limpo, t_sel_h, id_f, resp_final, nota_s, r['Evidência'] if r['Evidência'] else "N/A"])
                                 elif r['Situação'] == "❌ FALTOU":
                                     novos_registros_gabarito.append([datetime.now().strftime("%d/%m/%Y"), id_l, nome_limpo, t_sel_h, av_alvo_h, "FALTOU", "0,00", "N/A"])
                                 
-                                # Prepara os dados para o Boletim (DB_NOTAS)
                                 c_t = nota_s if "TESTE" in av_alvo_h.upper() else "0,0"
                                 c_p = nota_s if "TESTE" not in av_alvo_h.upper() else "0,0"
                                 lista_boletim.append([id_l, nome_limpo, t_sel_h, tr_sel_h, "0,0", c_t, c_p, "0,0", nota_s])
                             
-                            # Salva os gabaritos em lote
                             if novos_registros_gabarito:
                                 ws_g.append_rows(novos_registros_gabarito, value_input_option="USER_ENTERED")
                             
-                            # 4. ATUALIZAÇÃO DO BOLETIM
                             db.limpar_notas_turma_trimestre(t_sel_h, tr_sel_h)
                             if db.salvar_lote("DB_NOTAS", lista_boletim):
                                 status_h.update(label="✅ Sistema Atualizado com Sucesso!", state="complete")
