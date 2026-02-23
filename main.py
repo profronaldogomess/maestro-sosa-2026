@@ -422,7 +422,7 @@ if menu == "🧪 Criador de Aulas":
                 if planos_ano.empty: 
                     st.error("❌ Nenhum planejamento encontrado.")
                 else:
-                    sem_lab = c2.selectbox("Semana Base (Ponto ID):", planos_ano["SEMANA"].tolist(), key=f"prod_sem_{v}")
+                    sem_lab = c2.selectbox("Semana Base (Ponto ID):", planos_ano["SEMANA"].unique().tolist(), key=f"prod_sem_{v}")
                     plano_row = planos_ano[planos_ano["SEMANA"] == sem_lab].iloc[0]
                     plano_txt = str(plano_row['PLANO_TEXTO'])
 
