@@ -596,6 +596,12 @@ if menu == "🧪 Criador de Aulas":
                                     st.session_state.sosa_id_atual = nome_elite
                                     st.session_state.lab_meta = {"ano": ano_lab, "semana_ref": sem_lab}
                                     
+                                    # 🚨 BLINDAGEM DE MODO NO CRIADOR DE AULAS
+                                    if "Geração Integral" in metodo_entrega:
+                                        regra_livro = "3. MODO MANUAL: Crie o conteúdo do zero com base na BNCC. É TERMINANTEMENTE PROIBIDO citar páginas de livros didáticos."
+                                    else:
+                                        regra_livro = "3. MODO LIVRO: O roteiro deve dizer exatamente: 'Inicie na página X explorando a imagem Y...' baseando-se no PDF."
+
                                     # 🚨 INSTRUÇÕES ESPECÍFICAS BASEADAS NO CONTEXTO
                                     if is_avaliacao and not is_correcao:
                                         missao_especifica = (
@@ -618,7 +624,7 @@ if menu == "🧪 Criador de Aulas":
                                             f"🚨 MISSÃO DE ALTA DENSIDADE (ESTILO BRASIL ESCOLA):\n"
                                             f"1. O [PROFESSOR] deve ser um TRATADO DIDÁTICO. Explique o conceito de {obj_geral} com profundidade técnica antes de dar o roteiro de aula.\n"
                                             f"2. Use o Google Search para trazer dados científicos do ano de 2026 ou mais atualizado possível que validem a importância deste tema.\n"
-                                            f"3. Se for MODO LIVRO, o roteiro deve dizer exatamente: 'Inicie na página X explorando a imagem Y...'.\n"
+                                            f"{regra_livro}\n"
                                             f"4. Para o ALUNO PEI: Gere {qtd_q_prod} questões com apoio visual [ PROMPT IMAGEM ].\n"
                                             f"🚨 FORMATO OBRIGATÓRIO: Você DEVE separar o texto usando EXATAMENTE as tags entre colchetes: [PROFESSOR], [ALUNO], [PEI], [GABARITO], [IMAGENS]."
                                         )
@@ -628,11 +634,10 @@ if menu == "🧪 Criador de Aulas":
                                         f"MÉTODO: {metodo_entrega}. REFERÊNCIA: {base_herdada}\n"
                                         f"SÉRIE: {ano_lab}º Ano. ALVO: {aula_alvo_prod}.\n\n"
                                         f"{missao_especifica}\n\n"
-                                        f"--- HERANÇA DO PLANO ---\n{roteiro_especifico}\n"
+                                        f"--- HERANÇA DO PLANO ATUAL ---\n{roteiro_especifico}\n"
                                         f"--- SENSOR DE INCLUSÃO ---\nA turma possui alunos com: {texto_clinico}."
                                     )
                                     
-                                    # 🚨 INJETA A PROVA NO CÉREBRO DA IA
                                     if conteudo_prova_vinculada:
                                         prompt_manual += f"\n\n--- CONTEÚDO DA AVALIAÇÃO VINCULADA ---\n{conteudo_prova_vinculada}"
                                     
@@ -643,7 +648,6 @@ if menu == "🧪 Criador de Aulas":
                                         usar_busca=True
                                     )
                                     
-                                    # 🚨 VACINA ANTI-MARKDOWN: Força a conversão de **TAG** para [TAG]
                                     import re
                                     tags_para_limpar = ["PROFESSOR", "ALUNO", "PEI", "GABARITO", "GABARITO_PEI", "IMAGENS"]
                                     for t in tags_para_limpar:
@@ -1065,7 +1069,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                     st.caption(f"💡 **Dica:** Se usar ';' a Aula 1 focará no 1º intervalo e a Aula 2 no 2º.")
 
 
-# --- BOTÃO DE COMPILAÇÃO (PADRÃO SOBERANO V48.1 - FIX SÁBADO) ---
+# --- BOTÃO DE COMPILAÇÃO (PADRÃO SOBERANO V48.3 - MEMÓRIA E BLINDAGEM DE MODO) ---
         if st.button("🚀 COMPILAR PLANEJAMENTO INTEGRADO", use_container_width=True, type="primary", key=f"btn_compilar_{v}"):
             
             v_ctx_ia = ctx_ia if 'ctx_ia' in locals() else ""
@@ -1075,27 +1079,35 @@ if menu == "📅 Planejamento (Ponto ID)":
             if modo_p == "📖 Livro Didático" and not uri_livro_drive:
                 st.error("❌ Erro: O livro selecionado não possui um link válido no banco de materiais.")
             else:
-                with st.spinner("Maestro SOSA em análise profunda do PDF..."):
-                    plano_anterior_txt = "Início de Safra."
+                with st.spinner("Maestro SOSA em análise profunda do Histórico e do Contexto..."):
+                    # 1. Resgate da Memória (Plano Anterior)
+                    plano_anterior_txt = "Início de Safra. Não há plano anterior."
                     df_hist = df_planos[df_planos['ANO'] == ano_str_busca].sort_values(by='DATA', ascending=False)
                     if not df_hist.empty: 
                         plano_anterior_txt = df_hist.iloc[0]['PLANO_TEXTO']
 
-                    # Definição explícita do status para a IA
                     status_sabado_cmd = "ATIVADO (Gere uma oficina/atividade extra)" if tem_sabado else "DESATIVADO (Escreva apenas N/A)"
 
+                    # 2. 🚨 BLINDAGEM DE MODO (MANUAL VS LIVRO)
+                    if modo_p == "🎛️ Manual (Banco)":
+                        diretriz_base = "MÉTODO MANUAL: Baseie-se EXCLUSIVAMENTE na Matriz Curricular. É TERMINANTEMENTE PROIBIDO citar livros didáticos ou páginas."
+                    else:
+                        diretriz_base = f"MÉTODO LIVRO: Use EXCLUSIVAMENTE o PDF anexo como fonte. PÁGINAS ALVO: {base_didatica_info}."
+
+                    # 3. Montagem do Prompt com Injeção de Memória
                     prompt = (
-                        f"ORDEM SOBERANA DE FIDELIDADE: Use EXCLUSIVAMENTE o PDF anexo como fonte.\n"
-                        f"PÁGINAS ALVO: {base_didatica_info}.\n"
+                        f"NATUREZA DA SEMANA: {tipo_semana}\n"
+                        f"{diretriz_base}\n"
                         f"SÉRIE: {ano_p}º Ano. SEMANA: {sem_limpa}. TRIMESTRE: {trim_atual}.\n"
                         f"CARGA HORÁRIA: {carga_horaria}.\n"
                         f"SÁBADO LETIVO: {status_sabado_cmd}.\n\n"
                         f"🚨 MISSÃO DE DISTRIBUIÇÃO:\n"
                         f"1. Se houver múltiplos intervalos de páginas separados por ';', use o primeiro para a [AULA_1] e o segundo para a [AULA_2].\n"
-                        f"2. Extraia os conceitos exatos de cada capítulo/intervalo citado.\n"
+                        f"2. Extraia os conceitos exatos de cada capítulo/intervalo citado (se for modo livro).\n"
                         f"3. Se a carga for '1 Aula', foque apenas no primeiro intervalo.\n"
                         f"4. Preencha todas as tags [TAG] com densidade acadêmica.\n\n"
-                        f"--- CONTEXTO DE APOIO ---\n{v_strat}\n{v_ctx_ia}\n"
+                        f"--- PONTE PEDAGÓGICA (MEMÓRIA DA TURMA) ---\nAnalise o plano da semana anterior abaixo para criar o gancho de continuidade na AULA 1:\n{plano_anterior_txt}\n\n"
+                        f"--- CONTEXTO DE APOIO E ATIVOS VINCULADOS ---\n{v_strat}\n{v_ctx_ia}\n{v_ctx_ativo}\n"
                         f"--- MATRIZ OFICIAL (ITABUNA) ---\n{df_curriculo[df_curriculo['ANO'].astype(str)==str(ano_p)].to_string(index=False)}"
                     )
                     
