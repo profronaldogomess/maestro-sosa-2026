@@ -4296,24 +4296,29 @@ elif menu == "👤 Biografia do Estudante":
                 else: st.warning(f"Nenhuma entrega de projeto registrada.")
             else: st.info(f"Sem registros de atividades.")
 
-        # --- SEÇÃO 3: ENGAJAMENTO E ATITUDE (COM TERMÔMETRO DE FALTAS) ---
+        # --- SEÇÃO 3: ENGAJAMENTO E ASSIDUIDADE (V39.2 - MATEMÁTICA BLINDADA) ---
         st.markdown(f"### 📊 3. Engajamento e Assiduidade: {trim_b}")
         col_v1, col_v2 = st.columns([1.2, 1.8])
         with col_v1:
             if not d_alu_f.empty:
-                total_aulas = len(d_alu_f)
-                vistos = len(d_alu_f[d_alu_f['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"])
+                # 🚨 LÓGICA DE ASSIDUIDADE (Conta todas as aulas, inclusive eventos)
+                total_aulas_presenca = len(d_alu_f)
                 faltas = len(d_alu_f[d_alu_f['TAGS'] == "AUSÊNCIA"])
-                presencas = total_aulas - faltas
+                presencas = total_aulas_presenca - faltas
+                perc_presenca = (presencas / total_aulas_presenca) * 100 if total_aulas_presenca > 0 else 0
                 
-                perc_presenca = (presencas / total_aulas) * 100 if total_aulas > 0 else 0
-                perc_visto = (vistos / total_aulas) * 100 if total_aulas > 0 else 0
+                # 🚨 LÓGICA DE VISTOS (Ignora aulas ISENTAS)
+                d_alu_vistos = d_alu_f[d_alu_f['VISTO_ATIVIDADE'].astype(str).str.upper() != "ISENTO"]
+                total_aulas_visto = len(d_alu_vistos)
+                vistos = len(d_alu_vistos[d_alu_vistos['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"])
+                perc_visto = (vistos / total_aulas_visto) * 100 if total_aulas_visto > 0 else 0
                 
                 # Termômetro de Assiduidade
                 st.metric("Assiduidade (Presença)", f"{perc_presenca:.0f}%", f"{faltas} faltas registradas", delta_color="inverse" if faltas > 0 else "normal")
                 st.progress(perc_presenca / 100)
                 
-                st.metric("Vistos no Caderno", f"{perc_visto:.0f}%", f"{vistos}/{total_aulas} aulas")
+                # Termômetro de Vistos
+                st.metric("Vistos no Caderno", f"{perc_visto:.0f}%", f"{vistos}/{total_aulas_visto} aulas válidas")
             else: st.info(f"Sem registros de diário para o período.")
 
         with col_v2:
