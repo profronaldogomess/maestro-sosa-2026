@@ -3177,7 +3177,7 @@ elif menu == "📸 Scanner de Gabaritos":
         "📊 4. Raio-X Pedagógico", "📂 5. Acervo de Evidências", "📈 6. Dashboard"
     ])
 
-# --- ABA 1: PERÍCIA DE GABARITOS (V51.0 - MESA DE TRIAGEM E FILA DINÂMICA) ---
+# --- ABA 1: PERÍCIA DE GABARITOS (V52.0 - CAPTURA NATIVA MOBILE) ---
     with tab_pericia:
         # Filtra turmas reais
         turmas_reais_cir = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
@@ -3204,7 +3204,6 @@ elif menu == "📸 Scanner de Gabaritos":
             else:
                 st.markdown("### 🗂️ Mesa de Triagem e Fila Dinâmica")
                 
-                # --- AÇÃO 1: FALTAS EM LOTE (LIMPEZA RÁPIDA) ---
                 with st.expander("❌ Registrar Faltas em Lote", expanded=False):
                     st.caption("Selecione todos os alunos que não entregaram esta prova para retirá-los da fila.")
                     faltosos = st.multiselect("Alunos Ausentes:", pendentes['NOME_ALUNO'].tolist(), key=f"faltas_{v}")
@@ -3223,7 +3222,6 @@ elif menu == "📸 Scanner de Gabaritos":
                         else:
                             st.warning("Selecione ao menos um aluno.")
 
-                # --- AÇÃO 2: SELETOR DO TOPO DA PILHA ---
                 st.markdown("#### 📄 Qual prova está no topo da sua pilha agora?")
                 al_sel = st.selectbox("Selecione o aluno para escanear:", [""] + pendentes['NOME_ALUNO'].tolist(), key=f"pilha_{v}")
                 
@@ -3231,7 +3229,6 @@ elif menu == "📸 Scanner de Gabaritos":
                     al_info = pendentes[pendentes['NOME_ALUNO'] == al_sel].iloc[0]
                     id_aluno_atual = al_info['ID']
                     
-                    # 🚨 CORREÇÃO SOBERANA: "TÍPICO" não é mais considerado PEI
                     is_pei_aluno = str(al_info['NECESSIDADES']).upper().strip() not in ["NENHUMA", "PENDENTE", "", "NAN", "TÍPICO", "TIPICO"]
                     
                     st.markdown("---")
@@ -3279,11 +3276,27 @@ elif menu == "📸 Scanner de Gabaritos":
 
                         gab_alvo = extrair_gab_v50(txt_ref, is_pei_aluno)
 
-                        # A câmera só abre depois que o senhor seleciona o aluno da pilha
-                        img = st.camera_input(f"Gabarito de {al_sel}", key=f"cam_{id_aluno_atual}")
+                        # 🚨 NOVO: MODO HÍBRIDO DE CAPTURA (CÂMERA NATIVA MOBILE)
+                        col_cam, col_falta = st.columns([2, 1])
+                        
+                        with col_cam:
+                            st.info("📱 **Dica Mobile:** Clique abaixo para abrir a câmera nativa do seu celular (melhor foco e resolução).")
+                            img_file = st.file_uploader(f"📸 Capturar Gabarito de {al_sel}", type=["jpg", "jpeg", "png"], key=f"up_{id_aluno_atual}")
+                            
+                            with st.expander("💻 Usar Webcam (Computador)"):
+                                img_cam = st.camera_input("Webcam", key=f"cam_{id_aluno_atual}")
+                                
+                            # O sistema aceita a imagem de onde ela vier (Upload Nativo ou Webcam)
+                            img = img_file if img_file else img_cam
+                        
+                        with col_falta:
+                            st.write("---")
+                            if st.button("❌ REGISTRAR FALTA", use_container_width=True):
+                                db.salvar_no_banco("DB_GABARITOS_ALUNOS", [datetime.now().strftime("%d/%m/%Y"), id_aluno_atual, al_sel, t_sel, at_sel, "FALTOU", "0,00", "N/A"])
+                                st.rerun()
 
                         if img and "current_scan_res" not in st.session_state:
-                            with st.spinner("Analisando marcações..."):
+                            with st.spinner("Analisando marcações com Visão Computacional..."):
                                 res_json = ai.analisar_gabarito_vision(img.getvalue())
                                 qtd_q = len(gab_alvo)
                                 st.session_state.current_scan_res = [res_json.get(f"{i+1:02d}", res_json.get(str(i+1), "?")) for i in range(qtd_q)]
@@ -3336,7 +3349,7 @@ elif menu == "📸 Scanner de Gabaritos":
                                 del st.session_state.current_scan_res
                                 del st.session_state.current_scan_img
                                 st.rerun()
-
+                                
 # --- ABA 2: ATIVIDADES & PROJETOS (V68.0 - MESA DE NOTAS EDITÁVEL & AUTÔNOMA) ---
     with tab_atividades:
         st.subheader("✍️ Gestão de Notas de Projetos e Atividades")
