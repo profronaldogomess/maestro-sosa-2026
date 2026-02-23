@@ -3821,10 +3821,17 @@ elif menu == "📸 Scanner de Gabaritos":
                         if db.salvar_lote("DB_NOTAS", lista_boletim_ext):
                             status_ext.update(label=f"✅ Notas do {origem_ext} integradas com sucesso!", state="complete"); st.balloons(); time.sleep(1); st.rerun()
 
-# --- ABA 4: RAIO-X PEDAGÓGICO (V89 - BLINDAGEM DE PERFIL E EXTRAÇÃO HD) ---
+# --- ABA 4: RAIO-X PEDAGÓGICO (V90 - ULTRA BLINDAGEM DE PERFIL E REGEX) ---
     with tab_raiox:
         st.subheader("📊 Raio-X Pedagógico: Diagnóstico Individual de Lacunas")
         st.markdown("---")
+
+        # 🚨 VACINA SOBERANA DEFINITIVA: Função robusta para detectar alunos regulares
+        def is_regular_student(nec_val):
+            val = str(nec_val).upper()
+            if "TIPICO" in val or "TÍPICO" in val or "TÃPICO" in val: return True
+            if val.strip() in ["", "NAN", "NONE", "NENHUMA", "PENDENTE"]: return True
+            return False
 
         def extrair_gab_v88_blindado(texto, is_pei=False):
             if not texto: return {}
@@ -3837,12 +3844,12 @@ elif menu == "📸 Scanner de Gabaritos":
             return {i+1: letra for i, letra in enumerate(letras)}
 
         c1, c2, c3 = st.columns([1, 1, 1.5])
-        t_sel_r = c1.selectbox("👥 Selecione a Turma:", [""] + lista_turmas_cir, key=f"t_r_v88_{v}")
-        tr_sel_r = c2.selectbox("📅 Selecione o Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_r_v88_{v}")
+        t_sel_r = c1.selectbox("👥 Selecione a Turma:", [""] + lista_turmas_cir, key=f"t_r_v90_{v}")
+        tr_sel_r = c2.selectbox("📅 Selecione o Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_r_v90_{v}")
         
         opcoes_r = filtrar_ativos_cir_v64(t_sel_r, tr_sel_r, apenas_provas=True)
         opcoes_base_r = [opt for opt in opcoes_r if not re.search(r"2[ªA]|CHAMADA", opt, re.IGNORECASE)]
-        at_sel_r = c3.selectbox("📋 Selecione a Avaliação Base (Slot):", [""] + opcoes_base_r, key=f"at_r_v88_{v}")
+        at_sel_r = c3.selectbox("📋 Selecione a Avaliação Base (Slot):", [""] + opcoes_base_r, key=f"at_r_v90_{v}")
 
         if not t_sel_r or not at_sel_r:
             st.info("💡 Selecione a Turma e a Avaliação para carregar a Perícia Pedagógica.")
@@ -3864,20 +3871,14 @@ elif menu == "📸 Scanner de Gabaritos":
                 
                 df_analise = pd.merge(respostas_brutas, df_alunos_min, left_on='ID_ALUNO_L', right_on='ID', how='left')
                 
-                # 🚨 VACINA SOBERANA: Correção do Perfil no DataFrame de Análise
-                def checar_pei(nec):
-                    n = str(nec).upper().strip()
-                    if n in ["NENHUMA", "PENDENTE", "", "NAN", "TÍPICO", "TIPICO"] or "TIPICO" in n or "TÍPICO" in n:
-                        return False
-                    return True
-                
-                df_analise['IS_PEI'] = df_analise['NECESSIDADES'].apply(checar_pei)
+                # Aplica a vacina no DataFrame
+                df_analise['IS_PEI'] = ~df_analise['NECESSIDADES'].apply(is_regular_student)
                 df_analise['IS_2A_CHAMADA'] = df_analise['ID_AVALIACAO'].str.contains(r"2[ªA]|CHAMADA", case=False, regex=True)
 
                 st.markdown("### 🎯 1. Análise de Performance por Item")
                 col_l1, col_l2 = st.columns(2)
-                perfil_visao = col_l1.radio("1. Perfil do Aluno:", ["📝 Alunos Regulares", "♿ Alunos PEI"], horizontal=True, key=f"perf_v88_{v}")
-                versao_visao = col_l2.radio("2. Versão da Prova:", ["📄 Prova Original", "🔄 2ª Chamada"], horizontal=True, key=f"vers_v88_{v}")
+                perfil_visao = col_l1.radio("1. Perfil do Aluno:", ["📝 Alunos Regulares", "♿ Alunos PEI"], horizontal=True, key=f"perf_v90_{v}")
+                versao_visao = col_l2.radio("2. Versão da Prova:", ["📄 Prova Original", "🔄 2ª Chamada"], horizontal=True, key=f"vers_v90_{v}")
                 
                 is_pei_view = "PEI" in perfil_visao
                 is_2a_view = "2ª" in versao_visao
@@ -3918,7 +3919,7 @@ elif menu == "📸 Scanner de Gabaritos":
                     with col_item:
                         with st.container(border=True):
                             st.markdown("**🔬 Perícia do Item**")
-                            q_sel = st.selectbox("Analisar questão:", df_stats["Questão"].tolist(), key=f"q_sel_v88_{is_pei_view}_{is_2a_view}")
+                            q_sel = st.selectbox("Analisar questão:", df_stats["Questão"].tolist(), key=f"q_sel_v90_{is_pei_view}_{is_2a_view}")
                             info_q = df_stats[df_stats["Questão"] == q_sel].iloc[0]
                             idx_num = int(q_sel[1:])
                             st.write(f"**Gabarito:** :green[{info_q['Gabarito']}] | **Média:** {info_q['Acerto %']:.1f}%")
@@ -3935,11 +3936,8 @@ elif menu == "📸 Scanner de Gabaritos":
                 for _, alu in alunos_turma.iterrows():
                     id_a = db.limpar_id(alu['ID'])
                     
-                    # 🚨 VACINA SOBERANA: Correção do Perfil no Loop Individual
-                    nec_str = str(alu['NECESSIDADES']).upper().strip()
-                    is_pei_alu = True
-                    if nec_str in ["NENHUMA", "PENDENTE", "", "NAN", "TÍPICO", "TIPICO"] or "TIPICO" in nec_str or "TÍPICO" in nec_str:
-                        is_pei_alu = False
+                    # Aplica a vacina no loop individual
+                    is_pei_alu = not is_regular_student(alu['NECESSIDADES'])
                     
                     reg_aluno = df_analise[df_analise['ID_ALUNO_L'] == id_a]
                     
@@ -3950,7 +3948,7 @@ elif menu == "📸 Scanner de Gabaritos":
                         nota_alu = util.sosa_to_float(reg['NOTA_CALCULADA'])
                         material_aluno = reg['ID_AVALIACAO']
                         
-                        # 🚨 TRATAMENTO DE FALTAS E BRANCOS
+                        # 🚨 TRATAMENTO DE FALTAS
                         if str(reg['RESPOSTAS_ALUNO']).upper() == "FALTOU":
                             dados_indiv.append({"Estudante": alu['NOME_ALUNO'], "Perfil": "♿ PEI" if is_pei_alu else "📝 Regular", "Nota": 0.00, "Diagnóstico Técnico de Erros": "🔴 Aluno Ausente no dia da aplicação."})
                             continue
@@ -3978,40 +3976,43 @@ elif menu == "📸 Scanner de Gabaritos":
                                     analise_de_erros.append(f"Q{q_n}: 🚫 Dupla marcação / Rasura.")
                                     continue
                                 
-                                if letra_marcada != letra_correta and letra_marcada in ["A", "B", "C", "D", "E"]:
+                                if letra_marcada != letra_correta:
+                                    if letra_marcada not in ["A", "B", "C", "D", "E"]:
+                                        analise_de_erros.append(f"Q{q_n}: Marcação inválida ({letra_marcada}).")
+                                        continue
+                                        
                                     padrao_bloco = rf"(?si)QUEST[AÃ]O\s*(?:PEI\s*)?0?{q_n}\b.*?(?=QUEST[AÃ]O|$)"
                                     bloco_q = re.search(padrao_bloco, grade_texto)
                                     
                                     if bloco_q:
                                         texto_bloco = bloco_q.group(0)
-                                        
-                                        # Extrai o código BNCC
                                         match_hab = re.search(r"\[?(EF\d{2}MA\d{2})", texto_bloco)
                                         cod_h = match_hab.group(1) if match_hab else "BNCC"
 
-                                        # 🚨 EXTRAÇÃO HD: Busca o distrator exato sem cortar a frase
+                                        # 🚨 EXTRAÇÃO HD V90: re.DOTALL para não cortar em quebras de linha
                                         if is_pei_alu:
-                                            # No PEI, a lacuna é geral para a questão
-                                            m_lacuna = re.search(r"(?i)ANÁLISE DE LACUNA PEI:\s*(.*)", texto_bloco)
-                                            txt_erro = m_lacuna.group(1).strip() if m_lacuna else "Falha na compreensão do conceito base."
+                                            m_lacuna = re.search(r"(?i)(?:ANÁLISE DE LACUNA PEI|LACUNA|ERRO)[\s\:]*(.*)", texto_bloco, re.DOTALL)
+                                            if m_lacuna:
+                                                txt_erro = m_lacuna.group(1).replace('\n', ' ').strip()
+                                            else:
+                                                m_just = re.search(r"(?i)JUSTIFICATIVA[\s\:]*(.*?)(?=ANÁLISE|$)", texto_bloco, re.DOTALL)
+                                                txt_erro = m_just.group(1).replace('\n', ' ').strip() if m_just else "Falha na compreensão do conceito."
                                             analise_de_erros.append(f"[{cod_h}] Q{q_n}({letra_marcada}): {txt_erro}")
                                         else:
-                                            # No Regular, busca a letra específica (Ex: (A) Confunde...)
                                             padrao_distrator = rf"\({letra_marcada}\)\s*(.*?)(?=\([A-E]\)|$)"
                                             match_d = re.search(padrao_distrator, texto_bloco, re.DOTALL)
-                                            
                                             if match_d:
-                                                analise_de_erros.append(f"[{cod_h}] Q{q_n}({letra_marcada}): {match_d.group(1).strip()}")
+                                                txt_erro = match_d.group(1).replace('\n', ' ').strip()
                                             else:
-                                                # Fallback se a IA não gerou a letra específica
-                                                resumo = re.search(r"(?i)(?:PERÍCIA|ANÁLISE|JUSTIFICATIVA).*?[:\-]\s*(.*?)(?=QUEST[AÃ]O|$)", texto_bloco, re.DOTALL)
-                                                txt_res = resumo.group(1).strip() if resumo else "Erro de interpretação."
-                                                analise_de_erros.append(f"[{cod_h}] Q{q_n}({letra_marcada}): {txt_res}")
+                                                m_peri = re.search(r"(?i)(?:PERÍCIA DE DISTRATORES|PERÍCIA|ANÁLISE)[\s\:]*(.*)", texto_bloco, re.DOTALL)
+                                                txt_erro = m_peri.group(1).replace('\n', ' ').strip() if m_peri else "Erro de interpretação."
+                                            analise_de_erros.append(f"[{cod_h}] Q{q_n}({letra_marcada}): {txt_erro}")
                             
                             if nota_alu < 10.0 and not analise_de_erros:
                                 lacunas_txt = "⚠️ Erro na leitura da grade de correção. Verifique se a IA gerou a seção 'PERÍCIA DE DISTRATORES'."
                             else:
-                                lacunas_txt = " \n\n ".join(analise_de_erros) if analise_de_erros else "✅ Domínio Total das Habilidades"
+                                # Usa " | " para separar os erros e deixar a tabela mais limpa
+                                lacunas_txt = " | ".join(analise_de_erros) if analise_de_erros else "✅ Domínio Total das Habilidades"
                         else:
                             lacunas_txt = "⚠️ Material não localizado no Acervo."
 
@@ -4019,7 +4020,7 @@ elif menu == "📸 Scanner de Gabaritos":
 
                 df_f = pd.DataFrame(dados_indiv)
                 st.data_editor(df_f, column_config={"Estudante": st.column_config.TextColumn("Estudante", width="medium"), "Diagnóstico Técnico de Erros": st.column_config.TextColumn("Diagnóstico (Raciocínio do Erro)", width="large")},
-                    hide_index=True, use_container_width=True, disabled=True, key=f"raiox_final_v89_{v}")
+                    hide_index=True, use_container_width=True, disabled=True, key=f"raiox_final_v90_{v}")
 
 # --- ABA 5: ACERVO DE EVIDÊNCIAS (V71.0 - CUSTÓDIA COM FILTROS INTELIGENTES) ---
     with tab_acervo_cir:
