@@ -3176,21 +3176,23 @@ elif menu == "📸 Scanner de Gabaritos":
         "📊 4. Raio-X Pedagógico", "📂 5. Acervo de Evidências", "📈 6. Dashboard"
     ])
 
-# --- ABA 1: PERÍCIA DE GABARITOS (VERSÃO V50.0 - SOBERANIA TOTAL) ---
+# --- ABA 1: PERÍCIA DE GABARITOS (V51.0 - MESA DE TRIAGEM E FILA DINÂMICA) ---
     with tab_pericia:
+        # Filtra turmas reais
+        turmas_reais_cir = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
+        lista_turmas_cir = sorted(turmas_reais_cir['ID_TURMA'].unique()) if not turmas_reais_cir.empty else sorted(df_alunos['TURMA'].unique())
+        
         c1, c2, c3 = st.columns([1, 1, 1.5])
-        t_sel = c1.selectbox("👥 Turma:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"t_p_{v}")
+        t_sel = c1.selectbox("👥 Turma:", [""] + lista_turmas_cir, key=f"t_p_{v}")
         tr_sel = c2.selectbox("📅 Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_p_{v}")
         
-        # Filtro de Avaliação Base (O "Slot" no Boletim)
         opcoes_p = filtrar_ativos_cir_v64(t_sel, tr_sel, apenas_provas=True)
         opcoes_base = [opt for opt in opcoes_p if "2CHAMADA" not in opt.upper()]
         at_sel = c3.selectbox("📋 Selecione a Avaliação Base (Slot):", [""] + opcoes_base, key=f"at_p_{v}")
 
         if not t_sel or not at_sel:
-            st.info("💡 Selecione a Turma e a Avaliação Base para abrir o Scanner.")
+            st.info("💡 Selecione a Turma e a Avaliação Base para abrir a Mesa de Triagem.")
         else:
-            # 1. BUSCA DE PENDENTES (Considera quem não tem nota na base nem na 2ª chamada)
             nome_filtro_pendente = at_sel.split("-")[0].strip()
             escaneados = df_diagnosticos[df_diagnosticos['ID_AVALIACAO'].str.contains(nome_filtro_pendente)]['ID_ALUNO'].astype(str).tolist()
             pendentes = df_alunos[(df_alunos['TURMA'] == t_sel) & (~df_alunos['ID'].astype(str).isin(escaneados))].sort_values(by="NOME_ALUNO")
@@ -3199,131 +3201,140 @@ elif menu == "📸 Scanner de Gabaritos":
                 st.success(f"🏆 SOBERANIA: Todos os alunos da {t_sel} já possuem nota para {at_sel}!")
                 if st.button("🔄 REVISAR HUB"): st.rerun()
             else:
-                al_info = pendentes.iloc[0]
-                al_sel = al_info['NOME_ALUNO']
-                id_aluno_atual = al_info['ID']
+                st.markdown("### 🗂️ Mesa de Triagem e Fila Dinâmica")
                 
-                # --- DETECÇÃO AUTOMÁTICA DE PERFIL (REGULAR OU PEI) ---
-                is_pei_aluno = str(al_info['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"]
-                
-                st.markdown(f"### 📸 Corrigindo agora: **{al_sel}**")
-                
-                # --- 2. HUB DE SELEÇÃO DE PARÂMETROS (VERSÃO + PERFIL) ---
-                with st.container(border=True):
-                    c_v1, c_v2 = st.columns([1, 1])
+                # --- AÇÃO 1: FALTAS EM LOTE (LIMPEZA RÁPIDA) ---
+                with st.expander("❌ Registrar Faltas em Lote", expanded=False):
+                    st.caption("Selecione todos os alunos que não entregaram esta prova para retirá-los da fila.")
+                    faltosos = st.multiselect("Alunos Ausentes:", pendentes['NOME_ALUNO'].tolist(), key=f"faltas_{v}")
                     
-                    # A. Seleção de Versão (Regular ou 2ª Chamada)
-                    modo_2a = c_v1.toggle("🚀 Aplicar Segunda Chamada para este aluno?", key=f"toggle_2a_{id_aluno_atual}")
-                    
-                    if modo_2a:
-                        tipo_base = at_sel.split("-")[0].strip().upper()
-                        serie_num = "".join(filter(str.isdigit, t_sel))
-                        df_2a_candidatos = df_aulas[
-                            (df_aulas['TIPO_MATERIAL'].str.upper().str.contains("2CHAMADA")) & 
-                            (df_aulas['TIPO_MATERIAL'].str.upper().str.contains(tipo_base)) &
-                            (df_aulas['ANO'].str.contains(serie_num))
-                        ]
-                        opcoes_2a = df_2a_candidatos['TIPO_MATERIAL'].unique().tolist()
-                        at_segunda = c_v2.selectbox("📋 Selecione o Ativo 2CHAMADA:", [""] + opcoes_2a, key=f"sel_2a_{id_aluno_atual}")
-                        if at_segunda:
-                            material_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == at_segunda].iloc[0]
+                    if st.button("💾 CONFIRMAR FALTAS", type="primary"):
+                        if faltosos:
+                            with st.spinner("Registrando ausências no banco de dados..."):
+                                linhas_faltas = []
+                                data_hoje = datetime.now().strftime("%d/%m/%Y")
+                                for f_nome in faltosos:
+                                    f_id = pendentes[pendentes['NOME_ALUNO'] == f_nome].iloc[0]['ID']
+                                    linhas_faltas.append([data_hoje, f_id, f_nome, t_sel, at_sel, "FALTOU", "0,00", "N/A"])
+                                
+                                if db.salvar_lote("DB_GABARITOS_ALUNOS", linhas_faltas):
+                                    st.success(f"✅ {len(faltosos)} faltas registradas com sucesso!"); time.sleep(1); st.rerun()
                         else:
-                            st.error("Selecione o material de 2ª chamada.")
-                            material_ref = None
-                    else:
-                        material_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel].iloc[0]
+                            st.warning("Selecione ao menos um aluno.")
+
+                # --- AÇÃO 2: SELETOR DO TOPO DA PILHA ---
+                st.markdown("#### 📄 Qual prova está no topo da sua pilha agora?")
+                al_sel = st.selectbox("Selecione o aluno para escanear:", [""] + pendentes['NOME_ALUNO'].tolist(), key=f"pilha_{v}")
+                
+                if al_sel:
+                    al_info = pendentes[pendentes['NOME_ALUNO'] == al_sel].iloc[0]
+                    id_aluno_atual = al_info['ID']
                     
-                    # B. Feedback Visual de Lente
+                    # 🚨 CORREÇÃO SOBERANA: "TÍPICO" não é mais considerado PEI
+                    is_pei_aluno = str(al_info['NECESSIDADES']).upper().strip() not in ["NENHUMA", "PENDENTE", "", "NAN", "TÍPICO", "TIPICO"]
+                    
+                    st.markdown("---")
+                    st.markdown(f"### 📸 Corrigindo agora: **{al_sel}**")
+                    
+                    with st.container(border=True):
+                        c_v1, c_v2 = st.columns([1, 1])
+                        modo_2a = c_v1.toggle("🚀 Aplicar Segunda Chamada para este aluno?", key=f"toggle_2a_{id_aluno_atual}")
+                        
+                        if modo_2a:
+                            tipo_base = at_sel.split("-")[0].strip().upper()
+                            serie_num = "".join(filter(str.isdigit, t_sel))
+                            df_2a_candidatos = df_aulas[
+                                (df_aulas['TIPO_MATERIAL'].str.upper().str.contains("2CHAMADA")) & 
+                                (df_aulas['TIPO_MATERIAL'].str.upper().str.contains(tipo_base)) &
+                                (df_aulas['ANO'].str.contains(serie_num))
+                            ]
+                            opcoes_2a = df_2a_candidatos['TIPO_MATERIAL'].unique().tolist()
+                            at_segunda = c_v2.selectbox("📋 Selecione o Ativo 2CHAMADA:", [""] + opcoes_2a, key=f"sel_2a_{id_aluno_atual}")
+                            if at_segunda:
+                                material_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == at_segunda].iloc[0]
+                            else:
+                                st.error("Selecione o material de 2ª chamada.")
+                                material_ref = None
+                        else:
+                            material_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel].iloc[0]
+                        
+                        if material_ref is not None:
+                            tipo_txt = "2ª CHAMADA" if modo_2a else "REGULAR"
+                            perfil_txt = "♿ PEI" if is_pei_aluno else "📝 REGULAR"
+                            st.info(f"⚖️ **Lente Ativa:** Prova {tipo_txt} | Perfil {perfil_txt}")
+
                     if material_ref is not None:
-                        tipo_txt = "2ª CHAMADA" if modo_2a else "REGULAR"
-                        perfil_txt = "♿ PEI" if is_pei_aluno else "📝 REGULAR"
-                        st.info(f"⚖️ **Lente Ativa:** Prova {tipo_txt} | Perfil {perfil_txt}")
+                        txt_ref = str(material_ref['CONTEUDO'])
+                        val_tag = ai.extrair_tag(txt_ref, "VALOR")
+                        v_total_at = util.sosa_to_float(val_tag) if val_tag else 10.0
 
-                # 3. EXTRAÇÃO INTELIGENTE DO GABARITO
-                if material_ref is not None:
-                    txt_ref = str(material_ref['CONTEUDO'])
-                    val_tag = ai.extrair_tag(txt_ref, "VALOR")
-                    v_total_at = util.sosa_to_float(val_tag) if val_tag else 10.0
+                        def extrair_gab_v50(texto, is_pei=False):
+                            tag_alvo = "GABARITO_PEI" if is_pei else "GABARITO_TEXTO"
+                            raw = ai.extrair_tag(texto, tag_alvo) or ai.extrair_tag(texto, "GABARITO")
+                            if not raw: return []
+                            matches = re.findall(r"(\d+)[\s\.\)\-:]+([A-E])", raw.upper())
+                            mapa = {int(num): letra for num, letra in matches}
+                            return [mapa[n] for n in sorted(mapa.keys())]
 
-                    def extrair_gab_v50(texto, is_pei=False):
-                        tag_alvo = "GABARITO_PEI" if is_pei else "GABARITO_TEXTO"
-                        raw = ai.extrair_tag(texto, tag_alvo) or ai.extrair_tag(texto, "GABARITO")
-                        if not raw: return []
-                        matches = re.findall(r"(\d+)[\s\.\)\-:]+([A-E])", raw.upper())
-                        mapa = {int(num): letra for num, letra in matches}
-                        return [mapa[n] for n in sorted(mapa.keys())]
+                        gab_alvo = extrair_gab_v50(txt_ref, is_pei_aluno)
 
-                    # A mágica: extrai o gabarito correto (Regular ou PEI) da versão escolhida
-                    gab_alvo = extrair_gab_v50(txt_ref, is_pei_aluno)
+                        # A câmera só abre depois que o senhor seleciona o aluno da pilha
+                        img = st.camera_input(f"Gabarito de {al_sel}", key=f"cam_{id_aluno_atual}")
 
-                    # 4. ÁREA DE CAPTURA
-                    col_cam, col_falta = st.columns([2, 1])
-                    img = col_cam.camera_input(f"Gabarito de {al_sel}", key=f"cam_{id_aluno_atual}")
-                    
-                    with col_falta:
-                        st.write("---")
-                        if st.button("❌ REGISTRAR FALTA", use_container_width=True):
-                            db.salvar_no_banco("DB_GABARITOS_ALUNOS", [datetime.now().strftime("%d/%m/%Y"), id_aluno_atual, al_sel, t_sel, at_sel, "FALTOU", "0,00", "N/A"])
-                            st.rerun()
+                        if img and "current_scan_res" not in st.session_state:
+                            with st.spinner("Analisando marcações..."):
+                                res_json = ai.analisar_gabarito_vision(img.getvalue())
+                                qtd_q = len(gab_alvo)
+                                st.session_state.current_scan_res = [res_json.get(f"{i+1:02d}", res_json.get(str(i+1), "?")) for i in range(qtd_q)]
+                                st.session_state.current_scan_img = img.getvalue()
+                                st.rerun()
 
-                    if img and "current_scan_res" not in st.session_state:
-                        with st.spinner("Analisando marcações..."):
-                            res_json = ai.analisar_gabarito_vision(img.getvalue())
-                            qtd_q = len(gab_alvo)
-                            st.session_state.current_scan_res = [res_json.get(f"{i+1:02d}", res_json.get(str(i+1), "?")) for i in range(qtd_q)]
-                            st.session_state.current_scan_img = img.getvalue()
-                            st.rerun()
-
-                    # 5. MESA DE PERÍCIA E SALVAMENTO
-                    if "current_scan_res" in st.session_state:
-                        res_lidas = st.session_state.current_scan_res
-                        st.markdown("---")
-                        col_res1, col_res2 = st.columns([1.5, 1])
-                        
-                        with col_res1:
-                            st.subheader("⚖️ Mesa de Perícia")
-                            dados_pericia = []
-                            for i, lido in enumerate(res_lidas):
-                                if i < len(gab_alvo):
-                                    certo = gab_alvo[i]
-                                    status = "✅ ACERTO" if lido == certo else ("🚫 DUPLA" if lido == "X" else ("⚪ VAZIA" if lido == "?" else f"❌ (Era {certo})"))
-                                    dados_pericia.append({"Q": f"{i+1:02d}", "Lido": lido, "Status": status})
+                        if "current_scan_res" in st.session_state:
+                            res_lidas = st.session_state.current_scan_res
+                            st.markdown("---")
+                            col_res1, col_res2 = st.columns([1.5, 1])
                             
-                            df_mesa = st.data_editor(pd.DataFrame(dados_pericia), hide_index=True, use_container_width=True,
-                                column_config={"Lido": st.column_config.SelectboxColumn("Ajustar", options=["A", "B", "C", "D", "E", "X", "?"], required=True)},
-                                key=f"ed_turbo_{id_aluno_atual}")
-                        
-                        with col_res2:
-                            st.subheader("📊 Resultado")
-                            novas_res = df_mesa["Lido"].tolist()
-                            acertos = sum(1 for i, r in enumerate(novas_res) if i < len(gab_alvo) and r == gab_alvo[i])
-                            nota_f = (acertos / len(gab_alvo)) * v_total_at if len(gab_alvo) > 0 else 0
-                            st.metric("Nota Final", f"{nota_f:.2f}", delta=f"{acertos}/{len(gab_alvo)} acertos")
+                            with col_res1:
+                                st.subheader("⚖️ Mesa de Perícia")
+                                dados_pericia = []
+                                for i, lido in enumerate(res_lidas):
+                                    if i < len(gab_alvo):
+                                        certo = gab_alvo[i]
+                                        status = "✅ ACERTO" if lido == certo else ("🚫 DUPLA" if lido == "X" else ("⚪ VAZIA" if lido == "?" else f"❌ (Era {certo})"))
+                                        dados_pericia.append({"Q": f"{i+1:02d}", "Lido": lido, "Status": status})
+                                
+                                df_mesa = st.data_editor(pd.DataFrame(dados_pericia), hide_index=True, use_container_width=True,
+                                    column_config={"Lido": st.column_config.SelectboxColumn("Ajustar", options=["A", "B", "C", "D", "E", "X", "?"], required=True)},
+                                    key=f"ed_turbo_{id_aluno_atual}")
                             
-                            if st.button("💾 SALVAR E PRÓXIMO ➔", type="primary", use_container_width=True):
-                                with st.spinner("Arquivando com Rastreabilidade..."):
-                                    # --- LÓGICA DE ETIQUETA DE SOBERANIA ---
-                                    # O ID_AVALIACAO no banco será o nome da BASE + a marca da 2ª CHAMADA
-                                    id_av_final = f"{at_sel} (2ª CHAMADA)" if modo_2a else at_sel
-                                    
-                                    link_pasta = db.subir_e_converter_para_google_docs(st.session_state.current_scan_img, al_sel.replace(" ","_"), trimestre=tr_sel, categoria=t_sel, semana=id_av_final, modo="SCANNER")
-                                    
-                                    db.salvar_no_banco("DB_GABARITOS_ALUNOS", [
-                                        datetime.now().strftime("%d/%m/%Y"), 
-                                        id_aluno_atual, al_sel, t_sel, 
-                                        id_av_final, # <--- Salva com a etiqueta solicitada
-                                        ";".join(novas_res), 
-                                        util.sosa_to_str(nota_f), 
-                                        link_pasta
-                                    ])
-                                    del st.session_state.current_scan_res
-                                    del st.session_state.current_scan_img
-                                    st.success(f"✅ {al_sel} processado!"); time.sleep(0.5); st.rerun()
+                            with col_res2:
+                                st.subheader("📊 Resultado")
+                                novas_res = df_mesa["Lido"].tolist()
+                                acertos = sum(1 for i, r in enumerate(novas_res) if i < len(gab_alvo) and r == gab_alvo[i])
+                                nota_f = (acertos / len(gab_alvo)) * v_total_at if len(gab_alvo) > 0 else 0
+                                st.metric("Nota Final", f"{nota_f:.2f}", delta=f"{acertos}/{len(gab_alvo)} acertos")
+                                
+                                if st.button("💾 SALVAR E PRÓXIMO ➔", type="primary", use_container_width=True):
+                                    with st.spinner("Arquivando com Rastreabilidade..."):
+                                        id_av_final = f"{at_sel} (2ª CHAMADA)" if modo_2a else at_sel
+                                        link_pasta = db.subir_e_converter_para_google_docs(st.session_state.current_scan_img, al_sel.replace(" ","_"), trimestre=tr_sel, categoria=t_sel, semana=id_av_final, modo="SCANNER")
+                                        
+                                        db.salvar_no_banco("DB_GABARITOS_ALUNOS", [
+                                            datetime.now().strftime("%d/%m/%Y"), 
+                                            id_aluno_atual, al_sel, t_sel, 
+                                            id_av_final, 
+                                            ";".join(novas_res), 
+                                            util.sosa_to_str(nota_f), 
+                                            link_pasta
+                                        ])
+                                        del st.session_state.current_scan_res
+                                        del st.session_state.current_scan_img
+                                        st.success(f"✅ {al_sel} processado!"); time.sleep(0.5); st.rerun()
 
-                        if st.button("🗑️ DESCARTAR"):
-                            del st.session_state.current_scan_res
-                            del st.session_state.current_scan_img
-                            st.rerun()
+                            if st.button("🗑️ DESCARTAR"):
+                                del st.session_state.current_scan_res
+                                del st.session_state.current_scan_img
+                                st.rerun()
 
 # --- ABA 2: ATIVIDADES & PROJETOS (V68.0 - MESA DE NOTAS EDITÁVEL & AUTÔNOMA) ---
     with tab_atividades:
