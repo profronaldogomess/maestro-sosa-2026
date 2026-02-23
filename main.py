@@ -3176,14 +3176,278 @@ elif menu == "📸 Scanner de Gabaritos":
         "📊 4. Raio-X Pedagógico", "📂 5. Acervo de Evidências", "📈 6. Dashboard"
     ])
 
-# --- ABA 3: HUB DE SOBERANIA (V74.1 - DELEÇÃO REVERSA E ESCOPO BLINDADO) ---
+# --- ABA 1: PERÍCIA DE GABARITOS (V51.0 - MESA DE TRIAGEM E FILA DINÂMICA) ---
+    with tab_pericia:
+        # Filtra turmas reais
+        turmas_reais_cir = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
+        lista_turmas_cir = sorted(turmas_reais_cir['ID_TURMA'].unique()) if not turmas_reais_cir.empty else sorted(df_alunos['TURMA'].unique())
+        
+        c1, c2, c3 = st.columns([1, 1, 1.5])
+        t_sel = c1.selectbox("👥 Turma:", [""] + lista_turmas_cir, key=f"t_p_{v}")
+        tr_sel = c2.selectbox("📅 Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_p_{v}")
+        
+        opcoes_p = filtrar_ativos_cir_v64(t_sel, tr_sel, apenas_provas=True)
+        opcoes_base = [opt for opt in opcoes_p if "2CHAMADA" not in opt.upper()]
+        at_sel = c3.selectbox("📋 Selecione a Avaliação Base (Slot):", [""] + opcoes_base, key=f"at_p_{v}")
+
+        if not t_sel or not at_sel:
+            st.info("💡 Selecione a Turma e a Avaliação Base para abrir a Mesa de Triagem.")
+        else:
+            nome_filtro_pendente = at_sel.split("-")[0].strip()
+            escaneados = df_diagnosticos[df_diagnosticos['ID_AVALIACAO'].str.contains(nome_filtro_pendente)]['ID_ALUNO'].astype(str).tolist()
+            pendentes = df_alunos[(df_alunos['TURMA'] == t_sel) & (~df_alunos['ID'].astype(str).isin(escaneados))].sort_values(by="NOME_ALUNO")
+
+            if pendentes.empty:
+                st.success(f"🏆 SOBERANIA: Todos os alunos da {t_sel} já possuem nota para {at_sel}!")
+                if st.button("🔄 REVISAR HUB"): st.rerun()
+            else:
+                st.markdown("### 🗂️ Mesa de Triagem e Fila Dinâmica")
+                
+                # --- AÇÃO 1: FALTAS EM LOTE (LIMPEZA RÁPIDA) ---
+                with st.expander("❌ Registrar Faltas em Lote", expanded=False):
+                    st.caption("Selecione todos os alunos que não entregaram esta prova para retirá-los da fila.")
+                    faltosos = st.multiselect("Alunos Ausentes:", pendentes['NOME_ALUNO'].tolist(), key=f"faltas_{v}")
+                    
+                    if st.button("💾 CONFIRMAR FALTAS", type="primary"):
+                        if faltosos:
+                            with st.spinner("Registrando ausências no banco de dados..."):
+                                linhas_faltas = []
+                                data_hoje = datetime.now().strftime("%d/%m/%Y")
+                                for f_nome in faltosos:
+                                    f_id = pendentes[pendentes['NOME_ALUNO'] == f_nome].iloc[0]['ID']
+                                    linhas_faltas.append([data_hoje, f_id, f_nome, t_sel, at_sel, "FALTOU", "0,00", "N/A"])
+                                
+                                if db.salvar_lote("DB_GABARITOS_ALUNOS", linhas_faltas):
+                                    st.success(f"✅ {len(faltosos)} faltas registradas com sucesso!"); time.sleep(1); st.rerun()
+                        else:
+                            st.warning("Selecione ao menos um aluno.")
+
+                # --- AÇÃO 2: SELETOR DO TOPO DA PILHA ---
+                st.markdown("#### 📄 Qual prova está no topo da sua pilha agora?")
+                al_sel = st.selectbox("Selecione o aluno para escanear:", [""] + pendentes['NOME_ALUNO'].tolist(), key=f"pilha_{v}")
+                
+                if al_sel:
+                    al_info = pendentes[pendentes['NOME_ALUNO'] == al_sel].iloc[0]
+                    id_aluno_atual = al_info['ID']
+                    
+                    # 🚨 CORREÇÃO SOBERANA: "TÍPICO" não é mais considerado PEI
+                    is_pei_aluno = str(al_info['NECESSIDADES']).upper().strip() not in ["NENHUMA", "PENDENTE", "", "NAN", "TÍPICO", "TIPICO"]
+                    
+                    st.markdown("---")
+                    st.markdown(f"### 📸 Corrigindo agora: **{al_sel}**")
+                    
+                    with st.container(border=True):
+                        c_v1, c_v2 = st.columns([1, 1])
+                        modo_2a = c_v1.toggle("🚀 Aplicar Segunda Chamada para este aluno?", key=f"toggle_2a_{id_aluno_atual}")
+                        
+                        if modo_2a:
+                            tipo_base = at_sel.split("-")[0].strip().upper()
+                            serie_num = "".join(filter(str.isdigit, t_sel))
+                            df_2a_candidatos = df_aulas[
+                                (df_aulas['TIPO_MATERIAL'].str.upper().str.contains("2CHAMADA")) & 
+                                (df_aulas['TIPO_MATERIAL'].str.upper().str.contains(tipo_base)) &
+                                (df_aulas['ANO'].str.contains(serie_num))
+                            ]
+                            opcoes_2a = df_2a_candidatos['TIPO_MATERIAL'].unique().tolist()
+                            at_segunda = c_v2.selectbox("📋 Selecione o Ativo 2CHAMADA:", [""] + opcoes_2a, key=f"sel_2a_{id_aluno_atual}")
+                            if at_segunda:
+                                material_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == at_segunda].iloc[0]
+                            else:
+                                st.error("Selecione o material de 2ª chamada.")
+                                material_ref = None
+                        else:
+                            material_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel].iloc[0]
+                        
+                        if material_ref is not None:
+                            tipo_txt = "2ª CHAMADA" if modo_2a else "REGULAR"
+                            perfil_txt = "♿ PEI" if is_pei_aluno else "📝 REGULAR"
+                            st.info(f"⚖️ **Lente Ativa:** Prova {tipo_txt} | Perfil {perfil_txt}")
+
+                    if material_ref is not None:
+                        txt_ref = str(material_ref['CONTEUDO'])
+                        val_tag = ai.extrair_tag(txt_ref, "VALOR")
+                        v_total_at = util.sosa_to_float(val_tag) if val_tag else 10.0
+
+                        def extrair_gab_v50(texto, is_pei=False):
+                            tag_alvo = "GABARITO_PEI" if is_pei else "GABARITO_TEXTO"
+                            raw = ai.extrair_tag(texto, tag_alvo) or ai.extrair_tag(texto, "GABARITO")
+                            if not raw: return []
+                            matches = re.findall(r"(\d+)[\s\.\)\-:]+([A-E])", raw.upper())
+                            mapa = {int(num): letra for num, letra in matches}
+                            return [mapa[n] for n in sorted(mapa.keys())]
+
+                        gab_alvo = extrair_gab_v50(txt_ref, is_pei_aluno)
+
+                        # A câmera só abre depois que o senhor seleciona o aluno da pilha
+                        img = st.camera_input(f"Gabarito de {al_sel}", key=f"cam_{id_aluno_atual}")
+
+                        if img and "current_scan_res" not in st.session_state:
+                            with st.spinner("Analisando marcações..."):
+                                res_json = ai.analisar_gabarito_vision(img.getvalue())
+                                qtd_q = len(gab_alvo)
+                                st.session_state.current_scan_res = [res_json.get(f"{i+1:02d}", res_json.get(str(i+1), "?")) for i in range(qtd_q)]
+                                st.session_state.current_scan_img = img.getvalue()
+                                st.rerun()
+
+                        if "current_scan_res" in st.session_state:
+                            res_lidas = st.session_state.current_scan_res
+                            st.markdown("---")
+                            col_res1, col_res2 = st.columns([1.5, 1])
+                            
+                            with col_res1:
+                                st.subheader("⚖️ Mesa de Perícia")
+                                dados_pericia = []
+                                for i, lido in enumerate(res_lidas):
+                                    if i < len(gab_alvo):
+                                        certo = gab_alvo[i]
+                                        status = "✅ ACERTO" if lido == certo else ("🚫 DUPLA" if lido == "X" else ("⚪ VAZIA" if lido == "?" else f"❌ (Era {certo})"))
+                                        dados_pericia.append({"Q": f"{i+1:02d}", "Lido": lido, "Status": status})
+                                
+                                df_mesa = st.data_editor(pd.DataFrame(dados_pericia), hide_index=True, use_container_width=True,
+                                    column_config={"Lido": st.column_config.SelectboxColumn("Ajustar", options=["A", "B", "C", "D", "E", "X", "?"], required=True)},
+                                    key=f"ed_turbo_{id_aluno_atual}")
+                            
+                            with col_res2:
+                                st.subheader("📊 Resultado")
+                                novas_res = df_mesa["Lido"].tolist()
+                                acertos = sum(1 for i, r in enumerate(novas_res) if i < len(gab_alvo) and r == gab_alvo[i])
+                                nota_f = (acertos / len(gab_alvo)) * v_total_at if len(gab_alvo) > 0 else 0
+                                st.metric("Nota Final", f"{nota_f:.2f}", delta=f"{acertos}/{len(gab_alvo)} acertos")
+                                
+                                if st.button("💾 SALVAR E PRÓXIMO ➔", type="primary", use_container_width=True):
+                                    with st.spinner("Arquivando com Rastreabilidade..."):
+                                        id_av_final = f"{at_sel} (2ª CHAMADA)" if modo_2a else at_sel
+                                        link_pasta = db.subir_e_converter_para_google_docs(st.session_state.current_scan_img, al_sel.replace(" ","_"), trimestre=tr_sel, categoria=t_sel, semana=id_av_final, modo="SCANNER")
+                                        
+                                        db.salvar_no_banco("DB_GABARITOS_ALUNOS", [
+                                            datetime.now().strftime("%d/%m/%Y"), 
+                                            id_aluno_atual, al_sel, t_sel, 
+                                            id_av_final, 
+                                            ";".join(novas_res), 
+                                            util.sosa_to_str(nota_f), 
+                                            link_pasta
+                                        ])
+                                        del st.session_state.current_scan_res
+                                        del st.session_state.current_scan_img
+                                        st.success(f"✅ {al_sel} processado!"); time.sleep(0.5); st.rerun()
+
+                            if st.button("🗑️ DESCARTAR"):
+                                del st.session_state.current_scan_res
+                                del st.session_state.current_scan_img
+                                st.rerun()
+
+# --- ABA 2: ATIVIDADES & PROJETOS (V68.0 - MESA DE NOTAS EDITÁVEL & AUTÔNOMA) ---
+    with tab_atividades:
+        st.subheader("✍️ Gestão de Notas de Projetos e Atividades")
+        st.caption("Use esta mesa para lançar notas de Redações, Cartazes e Apresentações que não podem ser escaneadas.")
+        
+        c_f1, c_f2 = st.columns(2)
+        t_sel_a = c_f1.selectbox("👥 Selecione a Turma:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"t_a_v68_{v}")
+        tr_sel_a = c_f2.selectbox("📅 Selecione o Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_a_v68_{v}")
+
+        # Busca ativos (Projetos, Fixação, etc)
+        opcoes_a = filtrar_ativos_cir_v64(t_sel_a, tr_sel_a, apenas_provas=False)
+        at_sel_a = st.selectbox("📋 Selecione o Trabalho ou Atividade:", [""] + opcoes_a, key=f"at_a_sel_v68_{v}")
+
+        if not t_sel_a or not at_sel_a:
+            st.info("💡 Selecione a Turma e o Material para abrir a Mesa de Lançamento.")
+        else:
+            # 1. LEITURA DE DNA E VALOR
+            dados_at = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel_a].iloc[0]
+            txt_at = str(dados_at['CONTEUDO'])
+            is_projeto_v68 = "[JUSTIFICATIVA_PHC]" in txt_at or "PROJETO" in at_sel_a.upper()
+            
+            val_tag = ai.extrair_tag(txt_at, "VALOR")
+            v_max_padrao = util.sosa_to_float(val_tag) if val_tag else 2.0
+
+            with st.container(border=True):
+                c_m1, c_m2 = st.columns([2, 1])
+                c_m1.warning(f"📝 **ATIVIDADE EM FOCO:** {at_sel_a}")
+                # Autonomia do Professor para definir o valor do trabalho
+                v_max_ativ = c_m2.number_input("💎 Valor Máximo deste Trabalho:", 0.0, 10.0, v_max_padrao, step=0.5, key=f"v_max_v68_{v}")
+
+            # 2. MESA DE LANÇAMENTO (FORÇANDO EDITABILIDADE)
+            st.divider()
+            st.subheader(f"⭐ Mesa de Notas: {at_sel_a}")
+            st.info("💡 **DICA:** Clique duas vezes na célula da coluna 'Nota' para digitar o valor.")
+            
+            alunos_a = df_alunos[df_alunos['TURMA'] == t_sel_a].sort_values(by="NOME_ALUNO")
+            
+            # Busca notas já lançadas para persistência
+            notas_atuais = {}
+            if not df_diario.empty:
+                # Filtra registros que contenham o nome deste material nas observações
+                mask_p = (df_diario['TURMA'] == t_sel_a) & (df_diario['OBSERVACOES'].str.contains(at_sel_a, na=False))
+                df_p = df_diario[mask_p]
+                for _, row_d in df_p.iterrows():
+                    notas_atuais[db.limpar_id(row_d['ID_ALUNO'])] = util.sosa_to_float(row_d.get('BONUS', 0))
+
+            dados_editor = []
+            for _, alu in alunos_a.iterrows():
+                id_a = db.limpar_id(alu['ID'])
+                nota_v = notas_atuais.get(id_a, 0.0)
+                is_pei = str(alu['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"]
+                
+                dados_editor.append({
+                    "ID": id_a, 
+                    "Estudante": f"♿ {alu['NOME_ALUNO']}" if is_pei else alu['NOME_ALUNO'], 
+                    "Nota": nota_v,
+                    "Status": "✅ Lançado" if nota_v > 0 else "⏳ Pendente"
+                })
+            
+            # --- O MOTOR EDITÁVEL ---
+            df_notas_ed = st.data_editor(
+                pd.DataFrame(dados_editor),
+                hide_index=True, 
+                use_container_width=True,
+                column_config={
+                    "ID": None,
+                    "Estudante": st.column_config.TextColumn("Estudante", width="medium", disabled=True),
+                    "Nota": st.column_config.NumberColumn(
+                        "Nota", 
+                        min_value=0.0, 
+                        max_value=v_max_ativ, 
+                        step=0.1, 
+                        format="%.1f",
+                        required=True # Força a coluna a ser interagível
+                    ),
+                    "Status": st.column_config.TextColumn("Status", width="small", disabled=True)
+                },
+                key=f"editor_atividades_v68_{at_sel_a.replace(' ','_')}"
+            )
+
+# --- 4. CONSOLIDAÇÃO SILENCIOSA (V69 - APENAS NOTA, SEM POLUIR DIÁRIO) ---
+            if st.button("💾 CONSOLIDAR NOTAS NO BOLETIM ANUAL", type="primary", use_container_width=True):
+                with st.status("Sincronizando Notas de Mérito...") as status:
+                    data_hoje = datetime.now().strftime("%d/%m/%Y")
+                    lista_lote = []
+                    
+                    for _, r in df_notas_ed.iterrows():
+                        # Registra com a TAG 'SISTEMA_NOTA' para o Diário ignorar na visualização
+                        lista_lote.append([
+                            data_hoje, 
+                            r['ID'], 
+                            r['Estudante'].replace("♿ ", ""), 
+                            t_sel_a, 
+                            "FALSE", # Não conta como 'Visto de Caderno' para não inflar engajamento
+                            "SISTEMA_NOTA", 
+                            f"Nota de Trabalho: {at_sel_a}", 
+                            util.sosa_to_str(r['Nota'])
+                        ])
+                    
+                    if lista_lote:
+                        # Limpeza cirúrgica para não duplicar se salvar duas vezes
+                        db.excluir_registro("DB_DIARIO_BORDO", f"Nota de Trabalho: {at_sel_a}")
+                        
+                        db.salvar_lote("DB_DIARIO_BORDO", lista_lote)
+                        status.update(label=f"✅ Notas de {at_sel_a} consolidadas no Boletim!", state="complete")
+                        st.balloons()
+                        time.sleep(1); st.rerun()
+
+# --- ABA 3: HUB DE SOBERANIA (V74.0 - DELEÇÃO REVERSA E BLINDAGEM PEI) ---
     with tab_soberania:
         st.subheader("🏛️ Hub de Soberania: Autoridade do Professor")
         st.markdown("---")
-
-        # 🚨 CORREÇÃO PYLANCE: Definindo a lista de turmas localmente para esta aba
-        turmas_reais_cir = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
-        lista_turmas_cir = sorted(turmas_reais_cir['ID_TURMA'].unique()) if not turmas_reais_cir.empty else sorted(df_alunos['TURMA'].unique())
 
         c_h1, c_h2 = st.columns([1, 1])
         t_sel_h = c_h1.selectbox("👥 Selecione a Turma:", [""] + lista_turmas_cir, key=f"t_h_v74_{v}")
@@ -3351,250 +3615,6 @@ elif menu == "📸 Scanner de Gabaritos":
                         db.limpar_notas_turma_trimestre(t_sel_h, tr_sel_h)
                         if db.salvar_lote("DB_NOTAS", lista_boletim_ext):
                             status_ext.update(label=f"✅ Notas do {origem_ext} integradas com sucesso!", state="complete"); st.balloons(); time.sleep(1); st.rerun()
-
-# --- ABA 2: ATIVIDADES & PROJETOS (V68.0 - MESA DE NOTAS EDITÁVEL & AUTÔNOMA) ---
-    with tab_atividades:
-        st.subheader("✍️ Gestão de Notas de Projetos e Atividades")
-        st.caption("Use esta mesa para lançar notas de Redações, Cartazes e Apresentações que não podem ser escaneadas.")
-        
-        c_f1, c_f2 = st.columns(2)
-        t_sel_a = c_f1.selectbox("👥 Selecione a Turma:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"t_a_v68_{v}")
-        tr_sel_a = c_f2.selectbox("📅 Selecione o Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_a_v68_{v}")
-
-        # Busca ativos (Projetos, Fixação, etc)
-        opcoes_a = filtrar_ativos_cir_v64(t_sel_a, tr_sel_a, apenas_provas=False)
-        at_sel_a = st.selectbox("📋 Selecione o Trabalho ou Atividade:", [""] + opcoes_a, key=f"at_a_sel_v68_{v}")
-
-        if not t_sel_a or not at_sel_a:
-            st.info("💡 Selecione a Turma e o Material para abrir a Mesa de Lançamento.")
-        else:
-            # 1. LEITURA DE DNA E VALOR
-            dados_at = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel_a].iloc[0]
-            txt_at = str(dados_at['CONTEUDO'])
-            is_projeto_v68 = "[JUSTIFICATIVA_PHC]" in txt_at or "PROJETO" in at_sel_a.upper()
-            
-            val_tag = ai.extrair_tag(txt_at, "VALOR")
-            v_max_padrao = util.sosa_to_float(val_tag) if val_tag else 2.0
-
-            with st.container(border=True):
-                c_m1, c_m2 = st.columns([2, 1])
-                c_m1.warning(f"📝 **ATIVIDADE EM FOCO:** {at_sel_a}")
-                # Autonomia do Professor para definir o valor do trabalho
-                v_max_ativ = c_m2.number_input("💎 Valor Máximo deste Trabalho:", 0.0, 10.0, v_max_padrao, step=0.5, key=f"v_max_v68_{v}")
-
-            # 2. MESA DE LANÇAMENTO (FORÇANDO EDITABILIDADE)
-            st.divider()
-            st.subheader(f"⭐ Mesa de Notas: {at_sel_a}")
-            st.info("💡 **DICA:** Clique duas vezes na célula da coluna 'Nota' para digitar o valor.")
-            
-            alunos_a = df_alunos[df_alunos['TURMA'] == t_sel_a].sort_values(by="NOME_ALUNO")
-            
-            # Busca notas já lançadas para persistência
-            notas_atuais = {}
-            if not df_diario.empty:
-                # Filtra registros que contenham o nome deste material nas observações
-                mask_p = (df_diario['TURMA'] == t_sel_a) & (df_diario['OBSERVACOES'].str.contains(at_sel_a, na=False))
-                df_p = df_diario[mask_p]
-                for _, row_d in df_p.iterrows():
-                    notas_atuais[db.limpar_id(row_d['ID_ALUNO'])] = util.sosa_to_float(row_d.get('BONUS', 0))
-
-            dados_editor = []
-            for _, alu in alunos_a.iterrows():
-                id_a = db.limpar_id(alu['ID'])
-                nota_v = notas_atuais.get(id_a, 0.0)
-                is_pei = str(alu['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"]
-                
-                dados_editor.append({
-                    "ID": id_a, 
-                    "Estudante": f"♿ {alu['NOME_ALUNO']}" if is_pei else alu['NOME_ALUNO'], 
-                    "Nota": nota_v,
-                    "Status": "✅ Lançado" if nota_v > 0 else "⏳ Pendente"
-                })
-            
-            # --- O MOTOR EDITÁVEL ---
-            df_notas_ed = st.data_editor(
-                pd.DataFrame(dados_editor),
-                hide_index=True, 
-                use_container_width=True,
-                column_config={
-                    "ID": None,
-                    "Estudante": st.column_config.TextColumn("Estudante", width="medium", disabled=True),
-                    "Nota": st.column_config.NumberColumn(
-                        "Nota", 
-                        min_value=0.0, 
-                        max_value=v_max_ativ, 
-                        step=0.1, 
-                        format="%.1f",
-                        required=True # Força a coluna a ser interagível
-                    ),
-                    "Status": st.column_config.TextColumn("Status", width="small", disabled=True)
-                },
-                key=f"editor_atividades_v68_{at_sel_a.replace(' ','_')}"
-            )
-
-# --- 4. CONSOLIDAÇÃO SILENCIOSA (V69 - APENAS NOTA, SEM POLUIR DIÁRIO) ---
-            if st.button("💾 CONSOLIDAR NOTAS NO BOLETIM ANUAL", type="primary", use_container_width=True):
-                with st.status("Sincronizando Notas de Mérito...") as status:
-                    data_hoje = datetime.now().strftime("%d/%m/%Y")
-                    lista_lote = []
-                    
-                    for _, r in df_notas_ed.iterrows():
-                        # Registra com a TAG 'SISTEMA_NOTA' para o Diário ignorar na visualização
-                        lista_lote.append([
-                            data_hoje, 
-                            r['ID'], 
-                            r['Estudante'].replace("♿ ", ""), 
-                            t_sel_a, 
-                            "FALSE", # Não conta como 'Visto de Caderno' para não inflar engajamento
-                            "SISTEMA_NOTA", 
-                            f"Nota de Trabalho: {at_sel_a}", 
-                            util.sosa_to_str(r['Nota'])
-                        ])
-                    
-                    if lista_lote:
-                        # Limpeza cirúrgica para não duplicar se salvar duas vezes
-                        db.excluir_registro("DB_DIARIO_BORDO", f"Nota de Trabalho: {at_sel_a}")
-                        
-                        db.salvar_lote("DB_DIARIO_BORDO", lista_lote)
-                        status.update(label=f"✅ Notas de {at_sel_a} consolidadas no Boletim!", state="complete")
-                        st.balloons()
-                        time.sleep(1); st.rerun()
-
-    # ==============================================================================
-    # MÓDULO: HUB DE SOBERANIA (V73.0 - INTEGRAÇÃO DE NOTAS EXTERNAS E INTERNAS)
-    # ==============================================================================
-    with tab_soberania:
-        st.subheader("🏛️ Hub de Soberania: Autoridade do Professor")
-        st.markdown("---")
-
-        c_h1, c_h2 = st.columns([1, 1])
-        t_sel_h = c_h1.selectbox("👥 Selecione a Turma:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"t_h_v73_{v}")
-        tr_sel_h = c_h2.selectbox("📅 Trimestre de Referência:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_h_v73_{v}")
-
-        if not t_sel_h:
-            st.info("💡 Selecione uma turma para abrir a Mesa de Soberania.")
-        else:
-            # Carrega os alunos da turma uma única vez para ambas as sub-abas
-            alunos_turma_h = df_alunos[df_alunos['TURMA'] == t_sel_h].sort_values(by="NOME_ALUNO")
-            
-            sub_auditoria, sub_externas = st.tabs(["⚖️ Auditoria e Lançamento Manual", "🌍 Notas Externas (SAEB/Governo)"])
-
-            # --- SUB-ABA 1: AUDITORIA INTERNA ---
-            with sub_auditoria:
-                st.markdown("#### 🔍 Consolidação de Notas e Resgate de Faltas")
-                st.caption("Nesta mesa, o senhor tem soberania total. Alterar para 'PENDENTE' faz o aluno voltar para a fila do Scanner.")
-                
-                serie_num = "".join(filter(str.isdigit, t_sel_h))
-                df_oficiais = df_aulas[(df_aulas['SEMANA_REF'] == "AVALIAÇÃO") & (df_aulas['ANO'].str.contains(serie_num))]
-                opcoes_base = [opt for opt in df_oficiais['TIPO_MATERIAL'].unique().tolist() if "2ª" not in opt.upper()]
-                av_alvo_h = st.selectbox("📋 Selecione a Avaliação Base (Slot do Boletim):", [""] + opcoes_base, key=f"av_h_sel_{v}")
-
-                if av_alvo_h:
-                    nome_curto_av = av_alvo_h.split("-")[0].strip()
-                    gabaritos_lidos = df_diagnosticos[(df_diagnosticos['TURMA'] == t_sel_h) & (df_diagnosticos['ID_AVALIACAO'].str.contains(nome_curto_av))]
-                    
-                    dados_soberania = []
-                    for _, alu in alunos_turma_h.iterrows():
-                        id_a = db.limpar_id(alu['ID'])
-                        leitura = gabaritos_lidos[gabaritos_lidos['ID_ALUNO'].apply(db.limpar_id) == id_a]
-                        
-                        situacao_txt, versao_prova, nota_atual, link_ev = "✍️ PENDENTE", "PROVA ORIGINAL", 0.0, ""
-
-                        if not leitura.empty:
-                            reg = leitura.iloc[-1]
-                            nota_atual = util.sosa_to_float(reg['NOTA_CALCULADA'])
-                            link_ev = reg.get('LINK_FOTO_DRIVE', '')
-                            if reg['RESPOSTAS_ALUNO'] == "FALTOU": situacao_txt, versao_prova = "❌ FALTOU", "N/A"
-                            elif "2ª" in reg['ID_AVALIACAO'].upper(): situacao_txt, versao_prova = "✅ REALIZADA", "SEGUNDA CHAMADA"
-                            else: situacao_txt = "✅ REALIZADA"
-
-                        dados_soberania.append({
-                            "ID": id_a, "Estudante": alu['NOME_ALUNO'],
-                            "Perfil": "♿ PEI" if str(alu['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", ""] else "📝 REGULAR",
-                            "Situação": situacao_txt, "Versão": versao_prova,
-                            "Nota Final (Soberana)": nota_atual, "Evidência": link_ev
-                        })
-
-                    df_soberano_ed = st.data_editor(pd.DataFrame(dados_soberania), hide_index=True, use_container_width=True, key=f"ed_soberania_v73_{v}",
-                        column_config={"ID": None, "Nota Final (Soberana)": st.column_config.NumberColumn("Nota", format="%.1f"), "Evidência": st.column_config.LinkColumn("🔗 Ver")})
-
-                    if st.button("⚖️ HOMOLOGAR NOTAS INTERNAS", use_container_width=True, type="primary"):
-                        with st.status("Sincronizando...") as status_h:
-                            lista_boletim = []
-                            wb_s = db.conectar(); ws_g = wb_s.worksheet("DB_GABARITOS_ALUNOS"); d_g = ws_g.get_all_values()
-                            for _, r in df_soberano_ed.iterrows():
-                                id_l = str(r['ID']); nota_s = util.sosa_to_str(r['Nota Final (Soberana)'])
-                                for i, row_g in enumerate(d_g):
-                                    if i > 0 and db.limpar_id(row_g[1]) == id_l and nome_curto_av in row_g[4]:
-                                        ws_g.delete_rows(i + 1); d_g.pop(i); break
-                                if r['Situação'] == "✅ REALIZADA":
-                                    id_f = av_alvo_h if r['Versão'] == "PROVA ORIGINAL" else f"{av_alvo_h} (2ª CHAMADA)"
-                                    ws_g.append_row([datetime.now().strftime("%d/%m/%Y"), id_l, r['Estudante'].replace("♿ ", ""), t_sel_h, id_f, "MANUAL", nota_s, r['Evidência'] if r['Evidência'] else "N/A"])
-                                elif r['Situação'] == "❌ FALTOU":
-                                    ws_g.append_row([datetime.now().strftime("%d/%m/%Y"), id_l, r['Estudante'].replace("♿ ", ""), t_sel_h, av_alvo_h, "FALTOU", "0,00", "N/A"])
-                                
-                                c_t = nota_s if "TESTE" in av_alvo_h.upper() else "0,0"
-                                c_p = nota_s if "TESTE" not in av_alvo_h.upper() else "0,0"
-                                lista_boletim.append([id_l, r['Estudante'].replace("♿ ", ""), t_sel_h, tr_sel_h, "0,0", c_t, c_p, "0,0", nota_s])
-                            db.limpar_notas_turma_trimestre(t_sel_h, tr_sel_h)
-                            if db.salvar_lote("DB_NOTAS", lista_boletim):
-                                status_h.update(label="✅ Sistema Atualizado!", state="complete"); st.balloons(); time.sleep(1); st.rerun()
-
-            # --- SUB-ABA 2: NOTAS EXTERNAS (CORRIGIDA E INTEGRADA) ---
-            with sub_externas:
-                st.markdown("#### 🌍 Integração de Notas Externas (SAEB / Governo)")
-                st.info("Use esta mesa para que a nota do Governo substitua a nota do seu Teste ou Prova no Boletim.")
-                
-                c_ext1, c_ext2 = st.columns([1, 1])
-                alvo_sub = c_ext1.radio("Onde aplicar esta nota externa?", ["Substituir Teste", "Substituir Prova"], horizontal=True, key=f"alvo_ext_{v}")
-                origem_ext = c_ext2.text_input("Origem da Nota:", "SAEB 2026", key=f"orig_ext_{v}")
-
-                dados_externos = []
-                for _, alu in alunos_turma_h.iterrows():
-                    dados_externos.append({
-                        "ID": alu['ID'],
-                        "Estudante": alu['NOME_ALUNO'],
-                        "Nota Externa (0-10)": 0.0
-                    })
-                
-                df_ext_ed = st.data_editor(pd.DataFrame(dados_externos), hide_index=True, use_container_width=True, key=f"ed_ext_v73_{v}",
-                    column_config={"ID": None, "Nota Externa (0-10)": st.column_config.NumberColumn("Nota", format="%.1f", min_value=0.0, max_value=10.0)})
-
-                if st.button("🚀 INTEGRAR NOTAS EXTERNAS AO BOLETIM", use_container_width=True):
-                    with st.status("Processando Substituição de Notas...") as status_ext:
-                        lista_boletim_ext = []
-                        # Busca notas atuais para não zerar as outras colunas
-                        notas_atuais = df_notas[(df_notas['TURMA'] == t_sel_h) & (df_notas['TRIMESTRE'] == tr_sel_h)]
-                        
-                        for _, r in df_ext_ed.iterrows():
-                            id_l = db.limpar_id(r['ID'])
-                            nota_ext_str = util.sosa_to_str(r['Nota Externa (0-10)'])
-                            
-                            # Busca o registro atual do aluno no boletim
-                            reg_atual = notas_atuais[notas_atuais['ID_ALUNO'].apply(db.limpar_id) == id_l]
-                            
-                            # Valores padrão (preserva o que já existe se a nota externa for 0)
-                            v_vistos = reg_atual.iloc[0]['NOTA_VISTOS'] if not reg_atual.empty else "0,0"
-                            v_teste = reg_atual.iloc[0]['NOTA_TESTE'] if not reg_atual.empty else "0,0"
-                            v_prova = reg_atual.iloc[0]['NOTA_PROVA'] if not reg_atual.empty else "0,0"
-                            v_rec = reg_atual.iloc[0]['NOTA_REC'] if not reg_atual.empty else "0,0"
-
-                            # Aplica a substituição apenas se a nota externa for maior que zero
-                            if r['Nota Externa (0-10)'] > 0:
-                                if "Teste" in alvo_sub: v_teste = nota_ext_str
-                                else: v_prova = nota_ext_str
-                                
-                                # Registra no histórico (Evidência)
-                                db.salvar_no_banco("DB_RELATORIOS", [datetime.now().strftime("%d/%m/%Y"), id_l, r['Estudante'], "NOTA_EXTERNA", f"Substituição via {origem_ext} no {alvo_sub}"])
-
-                            # Calcula nova média simples para o boletim
-                            nova_media = (util.sosa_to_float(v_vistos) + util.sosa_to_float(v_teste) + util.sosa_to_float(v_prova))
-                            lista_boletim_ext.append([id_l, r['Estudante'], t_sel_h, tr_sel_h, v_vistos, v_teste, v_prova, v_rec, util.sosa_to_str(nova_media)])
-
-                        db.limpar_notas_turma_trimestre(t_sel_h, tr_sel_h)
-                        if db.salvar_lote("DB_NOTAS", lista_boletim_ext):
-                            status_ext.update(label=f"✅ Notas do {origem_ext} integradas com sucesso!", state="complete")
-                            st.balloons(); time.sleep(1); st.rerun()
 
 # --- ABA 4: RAIO-X PEDAGÓGICO (V88 - BLINDAGEM TOTAL & SOBERANIA ANALÍTICA) ---
     with tab_raiox:
