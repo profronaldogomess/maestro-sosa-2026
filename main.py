@@ -621,11 +621,13 @@ if menu == "🧪 Criador de Aulas":
                                         )
                                     else:
                                         missao_especifica = (
-                                            f"🚨 MISSÃO DE ALTA DENSIDADE (ESTILO BRASIL ESCOLA):\n"
-                                            f"1. O [PROFESSOR] deve ser um TRATADO DIDÁTICO. Explique o conceito de {obj_geral} com profundidade técnica antes de dar o roteiro de aula.\n"
-                                            f"2. Use o Google Search para trazer dados científicos do ano de 2026 ou mais atualizado possível que validem a importância deste tema.\n"
+                                            f"🚨 MISSÃO DE ALTA DENSIDADE E RIGOR QUANTITATIVO:\n"
+                                            f"1. [PROFESSOR]: Escreva um TRATADO DIDÁTICO denso. Explique o conceito de {obj_geral} com profundidade técnica antes de dar o roteiro de aula.\n"
+                                            f"2. CONEXÃO ALPHA: Use o Google Search para trazer dados científicos reais de 2026 que validem a importância deste tema.\n"
                                             f"{regra_livro}\n"
-                                            f"4. Para o ALUNO PEI: Gere {qtd_q_prod} questões com apoio visual [ PROMPT IMAGEM ].\n"
+                                            f"4. [ALUNO] (REGULAR): É OBRIGATÓRIO gerar EXATAMENTE {qtd_q_prod} questões inéditas e desafiadoras. Formato: **QUESTÃO X.** enunciado.\n"
+                                            f"5. [PEI] (INCLUSÃO): É OBRIGATÓRIO gerar EXATAMENTE {qtd_q_prod} questões adaptadas, cada uma com [PARA LEMBRAR], [PASSO A PASSO] e [ PROMPT IMAGEM ].\n"
+                                            f"6. [GABARITO]: Forneça as respostas detalhadas para as {qtd_q_prod} questões regulares e as {qtd_q_prod} questões PEI.\n"
                                             f"🚨 FORMATO OBRIGATÓRIO: Você DEVE separar o texto usando EXATAMENTE as tags entre colchetes: [PROFESSOR], [ALUNO], [PEI], [GABARITO], [IMAGENS]."
                                         )
 
