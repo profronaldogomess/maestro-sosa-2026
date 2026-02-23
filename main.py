@@ -3349,7 +3349,7 @@ elif menu == "📸 Scanner de Gabaritos":
                                 del st.session_state.current_scan_res
                                 del st.session_state.current_scan_img
                                 st.rerun()
-                                
+
 # --- ABA 2: ATIVIDADES & PROJETOS (V68.0 - MESA DE NOTAS EDITÁVEL & AUTÔNOMA) ---
     with tab_atividades:
         st.subheader("✍️ Gestão de Notas de Projetos e Atividades")
@@ -3821,29 +3821,23 @@ elif menu == "📸 Scanner de Gabaritos":
                         if db.salvar_lote("DB_NOTAS", lista_boletim_ext):
                             status_ext.update(label=f"✅ Notas do {origem_ext} integradas com sucesso!", state="complete"); st.balloons(); time.sleep(1); st.rerun()
 
-# --- ABA 4: RAIO-X PEDAGÓGICO (V88 - BLINDAGEM TOTAL & SOBERANIA ANALÍTICA) ---
+# --- ABA 4: RAIO-X PEDAGÓGICO (V89 - BLINDAGEM DE PERFIL E EXTRAÇÃO HD) ---
     with tab_raiox:
         st.subheader("📊 Raio-X Pedagógico: Diagnóstico Individual de Lacunas")
         st.markdown("---")
 
-        # --- 1. MOTOR DE EXTRAÇÃO ELÁSTICA (ANTI-FALHA) ---
         def extrair_gab_v88_blindado(texto, is_pei=False):
             if not texto: return {}
-            # Limpa ruídos antes de processar
             txt_limpo = re.sub(r'[*#]', '', texto).upper()
             tag_alvo = "GABARITO_PEI" if is_pei else "GABARITO_TEXTO"
             bloco = ai.extrair_tag(txt_limpo, tag_alvo) or ai.extrair_tag(txt_limpo, "GABARITO")
-            
-            # Regex Elástica: Captura 1:A, 01.B, 1) C, Questão 1-D, etc.
             matches = re.findall(r"(?:QUEST[AÃ]O\s*)?0?(\d+)\s*[\s\.\-\:\)]+\s*([A-E])", bloco)
             if matches: return {int(num): letra for num, letra in matches}
-            
-            # Fallback: Busca apenas a sequência de letras isoladas
             letras = re.findall(r"\b[A-E]\b", bloco)
             return {i+1: letra for i, letra in enumerate(letras)}
 
         c1, c2, c3 = st.columns([1, 1, 1.5])
-        t_sel_r = c1.selectbox("👥 Selecione a Turma:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"t_r_v88_{v}")
+        t_sel_r = c1.selectbox("👥 Selecione a Turma:", [""] + lista_turmas_cir, key=f"t_r_v88_{v}")
         tr_sel_r = c2.selectbox("📅 Selecione o Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_r_v88_{v}")
         
         opcoes_r = filtrar_ativos_cir_v64(t_sel_r, tr_sel_r, apenas_provas=True)
@@ -3853,7 +3847,6 @@ elif menu == "📸 Scanner de Gabaritos":
         if not t_sel_r or not at_sel_r:
             st.info("💡 Selecione a Turma e a Avaliação para carregar a Perícia Pedagógica.")
         else:
-            # 1. DATA FUSION: CRUZAMENTO DE DADOS
             nome_curto_av = at_sel_r.split("-")[0].strip()
             ano_num_r = "".join(filter(str.isdigit, t_sel_r))
             
@@ -3870,10 +3863,17 @@ elif menu == "📸 Scanner de Gabaritos":
                 respostas_brutas['ID_ALUNO_L'] = respostas_brutas['ID_ALUNO'].apply(db.limpar_id)
                 
                 df_analise = pd.merge(respostas_brutas, df_alunos_min, left_on='ID_ALUNO_L', right_on='ID', how='left')
-                df_analise['IS_PEI'] = df_analise['NECESSIDADES'].apply(lambda x: str(x).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"])
+                
+                # 🚨 VACINA SOBERANA: Correção do Perfil no DataFrame de Análise
+                def checar_pei(nec):
+                    n = str(nec).upper().strip()
+                    if n in ["NENHUMA", "PENDENTE", "", "NAN", "TÍPICO", "TIPICO"] or "TIPICO" in n or "TÍPICO" in n:
+                        return False
+                    return True
+                
+                df_analise['IS_PEI'] = df_analise['NECESSIDADES'].apply(checar_pei)
                 df_analise['IS_2A_CHAMADA'] = df_analise['ID_AVALIACAO'].str.contains(r"2[ªA]|CHAMADA", case=False, regex=True)
 
-                # --- PARTE A: ANÁLISE MACRO (VISÃO 360°) ---
                 st.markdown("### 🎯 1. Análise de Performance por Item")
                 col_l1, col_l2 = st.columns(2)
                 perfil_visao = col_l1.radio("1. Perfil do Aluno:", ["📝 Alunos Regulares", "♿ Alunos PEI"], horizontal=True, key=f"perf_v88_{v}")
@@ -3883,7 +3883,6 @@ elif menu == "📸 Scanner de Gabaritos":
                 is_2a_view = "2ª" in versao_visao
                 df_filtrado = df_analise[(df_analise['IS_PEI'] == is_pei_view) & (df_analise['IS_2A_CHAMADA'] == is_2a_view)]
 
-                # Busca do Material para Gabarito
                 if is_2a_view:
                     query_mat = df_aulas[(df_aulas['TIPO_MATERIAL'].str.upper().str.contains("2CHAMADA")) & (df_aulas['TIPO_MATERIAL'].str.upper().str.contains(nome_curto_av.upper()))]
                 else:
@@ -3896,11 +3895,9 @@ elif menu == "📸 Scanner de Gabaritos":
                 else:
                     dados_prova = query_mat.iloc[0]
                     txt_prova = str(dados_prova['CONTEUDO'])
-                    # Vacina Anti-Header: Limpa o texto da grade antes de exibir
                     grade_pericia = re.sub(r'[*#]', '', ai.extrair_tag(txt_prova, "GRADE_DE_CORRECAO"))
                     gab_ativo = extrair_gab_v88_blindado(txt_prova, is_pei_view)
 
-                    # Cálculo de Estatísticas
                     num_q_total = len(gab_ativo)
                     stats_list = []
                     matriz_respostas = [str(r).split(';') for r in df_filtrado['RESPOSTAS_ALUNO']]
@@ -3925,12 +3922,10 @@ elif menu == "📸 Scanner de Gabaritos":
                             info_q = df_stats[df_stats["Questão"] == q_sel].iloc[0]
                             idx_num = int(q_sel[1:])
                             st.write(f"**Gabarito:** :green[{info_q['Gabarito']}] | **Média:** {info_q['Acerto %']:.1f}%")
-                            # Regex Lookahead Blindada
                             padrao = rf"(?si)QUEST[AÃ]O\s*(?:PEI\s*)?0?{idx_num}\b.*?(?=QUEST[AÃ]O\s*(?:PEI\s*)?0?{idx_num+1}\b|GABARITO|RESPOSTAS|$)"
                             match = re.search(padrao, grade_pericia)
                             if match: st.info(match.group(0).strip())
 
-                # --- PARTE B: DIAGNÓSTICO INDIVIDUAL (MICRO V88 - BLINDAGEM DE DISTRATORES) ---
                 st.markdown("---")
                 st.markdown("#### 👤 2. Perícia Individual: Lacunas e Diagnóstico de Erros")
                 
@@ -3939,7 +3934,13 @@ elif menu == "📸 Scanner de Gabaritos":
 
                 for _, alu in alunos_turma.iterrows():
                     id_a = db.limpar_id(alu['ID'])
-                    is_pei_alu = str(alu['NECESSIDADES']).upper() not in ["NENHUMA", "PENDENTE", "", "NAN"]
+                    
+                    # 🚨 VACINA SOBERANA: Correção do Perfil no Loop Individual
+                    nec_str = str(alu['NECESSIDADES']).upper().strip()
+                    is_pei_alu = True
+                    if nec_str in ["NENHUMA", "PENDENTE", "", "NAN", "TÍPICO", "TIPICO"] or "TIPICO" in nec_str or "TÍPICO" in nec_str:
+                        is_pei_alu = False
+                    
                     reg_aluno = df_analise[df_analise['ID_ALUNO_L'] == id_a]
                     
                     if reg_aluno.empty:
@@ -3948,13 +3949,18 @@ elif menu == "📸 Scanner de Gabaritos":
                         reg = reg_aluno.iloc[-1]
                         nota_alu = util.sosa_to_float(reg['NOTA_CALCULADA'])
                         material_aluno = reg['ID_AVALIACAO']
+                        
+                        # 🚨 TRATAMENTO DE FALTAS E BRANCOS
+                        if str(reg['RESPOSTAS_ALUNO']).upper() == "FALTOU":
+                            dados_indiv.append({"Estudante": alu['NOME_ALUNO'], "Perfil": "♿ PEI" if is_pei_alu else "📝 Regular", "Nota": 0.00, "Diagnóstico Técnico de Erros": "🔴 Aluno Ausente no dia da aplicação."})
+                            continue
+
                         m_ref_query = df_aulas[df_aulas['TIPO_MATERIAL'] == material_aluno]
                         
                         if not m_ref_query.empty:
                             m_ref = m_ref_query.iloc[0]
                             txt_cont = str(m_ref['CONTEUDO'])
                             tag_grade = "GRADE_DE_CORRECAO_PEI" if is_pei_alu else "GRADE_DE_CORRECAO"
-                            # Limpeza Soberana de Markdown
                             grade_texto = re.sub(r'[*#]', '', ai.extrair_tag(txt_cont, tag_grade) or ai.extrair_tag(txt_cont, "GRADE_DE_CORRECAO"))
                             
                             gab_ref_alu = extrair_gab_v88_blindado(txt_cont, is_pei_alu)
@@ -3965,43 +3971,55 @@ elif menu == "📸 Scanner de Gabaritos":
                                 q_n = i + 1
                                 letra_correta = gab_ref_alu.get(q_n)
                                 
+                                if letra_marcada == "?":
+                                    analise_de_erros.append(f"Q{q_n}: ⚪ Deixou em branco.")
+                                    continue
+                                elif letra_marcada == "X":
+                                    analise_de_erros.append(f"Q{q_n}: 🚫 Dupla marcação / Rasura.")
+                                    continue
+                                
                                 if letra_marcada != letra_correta and letra_marcada in ["A", "B", "C", "D", "E"]:
                                     padrao_bloco = rf"(?si)QUEST[AÃ]O\s*(?:PEI\s*)?0?{q_n}\b.*?(?=QUEST[AÃ]O|$)"
                                     bloco_q = re.search(padrao_bloco, grade_texto)
                                     
                                     if bloco_q:
                                         texto_bloco = bloco_q.group(0)
-                                        match_hab = re.search(r"(EF\d{2}MA\d{2})", texto_bloco)
+                                        
+                                        # Extrai o código BNCC
+                                        match_hab = re.search(r"\[?(EF\d{2}MA\d{2})", texto_bloco)
                                         cod_h = match_hab.group(1) if match_hab else "BNCC"
 
-                                        # Busca o erro na seção de distratores
-                                        secao_erros = re.search(r"(?i)(?:ALERTA|PERÍCIA|DISTRATORES).*?[:\-]\s*(.*)", texto_bloco, re.DOTALL)
-                                        texto_para_busca = secao_erros.group(1) if secao_erros else texto_bloco
-                                        
-                                        padrao_distrator = rf"(?i){letra_marcada}[\)\:\s\-]+(.*?)(?=[A-E][\)\:\s\-]|;|\. [A-E][\)\:]|JUSTIFICATIVA|QUEST[AÃ]O|$)"
-                                        match_d = re.search(padrao_distrator, texto_para_busca, re.DOTALL)
-                                        
-                                        if match_d:
-                                            analise_de_erros.append(f"[{cod_h}] Q{q_n}({letra_marcada}): {match_d.group(1).strip()}")
+                                        # 🚨 EXTRAÇÃO HD: Busca o distrator exato sem cortar a frase
+                                        if is_pei_alu:
+                                            # No PEI, a lacuna é geral para a questão
+                                            m_lacuna = re.search(r"(?i)ANÁLISE DE LACUNA PEI:\s*(.*)", texto_bloco)
+                                            txt_erro = m_lacuna.group(1).strip() if m_lacuna else "Falha na compreensão do conceito base."
+                                            analise_de_erros.append(f"[{cod_h}] Q{q_n}({letra_marcada}): {txt_erro}")
                                         else:
-                                            # Fallback: Se não achar o distrator, pega a perícia geral da questão
-                                            resumo = re.search(r"(?i)(?:PERÍCIA|ANÁLISE|JUSTIFICATIVA).*?[:\-]\s*(.*?)(?=QUEST[AÃ]O|$)", texto_bloco, re.DOTALL)
-                                            txt_res = resumo.group(1).strip() if resumo else "Erro de interpretação."
-                                            analise_de_erros.append(f"[{cod_h}] Q{q_n}({letra_marcada}): {txt_res}")
+                                            # No Regular, busca a letra específica (Ex: (A) Confunde...)
+                                            padrao_distrator = rf"\({letra_marcada}\)\s*(.*?)(?=\([A-E]\)|$)"
+                                            match_d = re.search(padrao_distrator, texto_bloco, re.DOTALL)
+                                            
+                                            if match_d:
+                                                analise_de_erros.append(f"[{cod_h}] Q{q_n}({letra_marcada}): {match_d.group(1).strip()}")
+                                            else:
+                                                # Fallback se a IA não gerou a letra específica
+                                                resumo = re.search(r"(?i)(?:PERÍCIA|ANÁLISE|JUSTIFICATIVA).*?[:\-]\s*(.*?)(?=QUEST[AÃ]O|$)", texto_bloco, re.DOTALL)
+                                                txt_res = resumo.group(1).strip() if resumo else "Erro de interpretação."
+                                                analise_de_erros.append(f"[{cod_h}] Q{q_n}({letra_marcada}): {txt_res}")
                             
-                            # Alerta de Segurança: Se o aluno errou mas o sistema não extraiu o motivo
                             if nota_alu < 10.0 and not analise_de_erros:
-                                lacunas_txt = "⚠️ Erro na leitura da grade de correção."
+                                lacunas_txt = "⚠️ Erro na leitura da grade de correção. Verifique se a IA gerou a seção 'PERÍCIA DE DISTRATORES'."
                             else:
                                 lacunas_txt = " \n\n ".join(analise_de_erros) if analise_de_erros else "✅ Domínio Total das Habilidades"
                         else:
-                            lacunas_txt = "⚠️ Material não localizado."
+                            lacunas_txt = "⚠️ Material não localizado no Acervo."
 
                         dados_indiv.append({"Estudante": alu['NOME_ALUNO'], "Perfil": "♿ PEI" if is_pei_alu else "📝 Regular", "Nota": nota_alu, "Diagnóstico Técnico de Erros": lacunas_txt})
 
                 df_f = pd.DataFrame(dados_indiv)
                 st.data_editor(df_f, column_config={"Estudante": st.column_config.TextColumn("Estudante", width="medium"), "Diagnóstico Técnico de Erros": st.column_config.TextColumn("Diagnóstico (Raciocínio do Erro)", width="large")},
-                    hide_index=True, use_container_width=True, disabled=True, key=f"raiox_final_v88_{v}")
+                    hide_index=True, use_container_width=True, disabled=True, key=f"raiox_final_v89_{v}")
 
 # --- ABA 5: ACERVO DE EVIDÊNCIAS (V71.0 - CUSTÓDIA COM FILTROS INTELIGENTES) ---
     with tab_acervo_cir:
