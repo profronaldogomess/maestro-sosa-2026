@@ -3848,7 +3848,7 @@ elif menu == "📸 Scanner de Gabaritos":
                         if db.salvar_lote("DB_NOTAS", lista_boletim_ext):
                             status_ext.update(label=f"✅ Notas do {origem_ext} integradas com sucesso!", state="complete"); st.balloons(); time.sleep(1); st.rerun()
 
-# --- ABA 4: RAIO-X PEDAGÓGICO (V91 - COM EXPORTADOR DE DOSSIÊ IMPRESSO) ---
+# --- ABA 4: RAIO-X PEDAGÓGICO (V92 - EXPORTADOR CLEAN COM GRÁFICO) ---
     with tab_raiox:
         st.subheader("📊 Raio-X Pedagógico: Diagnóstico Individual de Lacunas")
         st.markdown("---")
@@ -3917,6 +3917,7 @@ elif menu == "📸 Scanner de Gabaritos":
                 txt_prova_global = ""
                 grade_pericia_global = ""
                 df_stats_global = pd.DataFrame()
+                fig_global = None # Variável para guardar o gráfico
 
                 if query_mat.empty:
                     st.error(f"❌ Gabarito da {versao_visao} não localizado.")
@@ -3942,9 +3943,9 @@ elif menu == "📸 Scanner de Gabaritos":
                     df_stats_global = pd.DataFrame(stats_list)
                     col_graf, col_item = st.columns([1.2, 1])
                     with col_graf:
-                        fig = px.bar(df_stats_global, x="Questão", y="Acerto %", text_auto='.0f', color="Acerto %", color_continuous_scale="RdYlGn")
-                        fig.update_layout(yaxis_range=[0, 110], height=350)
-                        st.plotly_chart(fig, use_container_width=True)
+                        fig_global = px.bar(df_stats_global, x="Questão", y="Acerto %", text_auto='.0f', color="Acerto %", color_continuous_scale="RdYlGn")
+                        fig_global.update_layout(yaxis_range=[0, 110], height=350)
+                        st.plotly_chart(fig_global, use_container_width=True)
                     with col_item:
                         with st.container(border=True):
                             st.markdown("**🔬 Perícia do Item**")
@@ -4045,7 +4046,7 @@ elif menu == "📸 Scanner de Gabaritos":
                 st.data_editor(df_f, column_config={"Estudante": st.column_config.TextColumn("Estudante", width="medium"), "Diagnóstico Técnico de Erros": st.column_config.TextColumn("Diagnóstico (Raciocínio do Erro)", width="large")},
                     hide_index=True, use_container_width=True, disabled=True, key=f"raiox_final_v90_{v}")
 
-                # 🚨 NOVO: BOTÃO DE EXPORTAÇÃO DO DOSSIÊ IMPRESSO
+                # 🚨 BOTÃO DE EXPORTAÇÃO DO DOSSIÊ IMPRESSO (COM GRÁFICO)
                 st.markdown("---")
                 st.markdown("### 🖨️ Materialização do Dossiê (Para Impressão)")
                 st.info("Gere um documento formatado com a autópsia completa da prova para levar para a sala dos professores.")
@@ -4054,7 +4055,16 @@ elif menu == "📸 Scanner de Gabaritos":
                     if df_stats_global.empty or not txt_prova_global:
                         st.error("⚠️ Dados insuficientes para gerar o dossiê. Certifique-se de que a prova foi carregada corretamente.")
                     else:
-                        with st.spinner("Compilando Dossiê Analítico..."):
+                        with st.spinner("Compilando Dossiê Analítico e renderizando gráficos..."):
+                            
+                            # Tenta converter o gráfico Plotly para imagem (Requer kaleido)
+                            grafico_bytes = None
+                            if fig_global is not None:
+                                try:
+                                    grafico_bytes = fig_global.to_image(format="png", width=800, height=350)
+                                except Exception as e:
+                                    st.warning("⚠️ O gráfico não pôde ser exportado. Certifique-se de que 'kaleido' está no requirements.txt.")
+                            
                             # 1. Dados Gerais
                             media_turma = df_f['Nota'].mean()
                             top_3 = df_stats_global.sort_values(by="Acerto %").head(3)
@@ -4097,9 +4107,9 @@ elif menu == "📸 Scanner de Gabaritos":
                             # 3. Alunos Críticos (Nota < 6.0)
                             criticos = df_f[df_f['Nota'] < 6.0]['Estudante'].tolist()
                             
-                            # 4. Info do Cabeçalho
+                            # 4. Info do Cabeçalho (O exporter usa 'ano' para preencher a Turma)
                             info_doc = {
-                                "turma": t_sel_r,
+                                "ano": t_sel_r, 
                                 "trimestre": tr_sel_r,
                                 "avaliacao": at_sel_r,
                                 "data": datetime.now().strftime("%d/%m/%Y")
@@ -4107,7 +4117,7 @@ elif menu == "📸 Scanner de Gabaritos":
                             
                             # 5. Geração e Upload
                             nome_arquivo_dossie = f"RAIOX_{t_sel_r}_{nome_curto_av}"
-                            doc_stream = exporter.gerar_docx_raiox_v90(nome_arquivo_dossie, info_doc, stats_gerais, questoes_detalhes, criticos)
+                            doc_stream = exporter.gerar_docx_raiox_v90(nome_arquivo_dossie, info_doc, stats_gerais, questoes_detalhes, criticos, grafico_bytes)
                             link_doc = db.subir_e_converter_para_google_docs(doc_stream, nome_arquivo_dossie, trimestre=tr_sel_r, categoria=t_sel_r, modo="PLANEJAMENTO")
                             
                             # 6. Salvar no Banco
