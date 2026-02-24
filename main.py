@@ -1905,7 +1905,7 @@ elif menu == "👥 Gestão da Turma":
         "📊 Cockpit de Prontidão", "🏗️ Arquitetura de Turmas", "➕ Povoar Alunos", "✏️ Edição & Transferência"
     ])
 
-# --- ABA 1: COCKPIT DA TURMA (VERSÃO V46.6 - RADAR DE BUSCA ATIVA) ---
+# --- ABA 1: COCKPIT DA TURMA (VERSÃO V47 - CLIMA E RADAR ATIVOS) ---
     with tab_cockpit:
         if df_turmas.empty:
             st.info("📭 Nenhuma turma cadastrada. Vá na aba 'Arquitetura' para iniciar.")
@@ -1955,7 +1955,8 @@ elif menu == "👥 Gestão da Turma":
                 ano_num = "".join(filter(str.isdigit, turma_foco))
                 ano_str_ref = f"{ano_num}º"
 
-                m1, m2, m3 = st.columns(3)
+                # 🚨 MÉTRICAS DE TOPO (AGORA COM O TERMÔMETRO DE CLIMA)
+                m1, m2, m3, m4 = st.columns(4)
                 m1.metric("👥 Total Alunos", len(alunos_t))
                 
                 mask_pei = ~alunos_t['NECESSIDADES'].astype(str).str.upper().str.strip().isin(["NENHUMA", "PENDENTE", "", "NAN", "TÍPICO", "TIPICO"])
@@ -1967,20 +1968,32 @@ elif menu == "👥 Gestão da Turma":
                 saude_val = (aulas_feitas / (planos_totais * 2) * 100) if planos_totais > 0 else 0
                 m3.metric("🎯 Saúde de Execução", f"{min(100, int(saude_val))}%")
 
-                # 🚨 NOVO: RADAR DE BUSCA ATIVA (PREVENÇÃO DE EVASÃO)
+                # Cálculo do Clima Predominante (Últimas 5 aulas)
+                clima_predominante = "Sem Dados"
+                if not df_registro_aulas.empty and len(df_registro_aulas.columns) >= 9:
+                    try:
+                        climas_turma = df_registro_aulas[df_registro_aulas['TURMA'] == turma_foco].iloc[:, 8].dropna().astype(str).tolist()
+                        climas_validos = [c for c in climas_turma if c.strip() and c.lower() not in ["nan", "none", "n/a"]]
+                        if climas_validos:
+                            recentes = climas_validos[-5:]
+                            clima_predominante = max(set(recentes), key=recentes.count)
+                    except: pass
+                
+                # Exibe apenas o Emoji e a primeira palavra para ficar elegante no card
+                clima_curto = clima_predominante.split(" ")[0] + " " + clima_predominante.split(" ")[1] if " " in clima_predominante else clima_predominante
+                m4.metric("🌡️ Clima Recente", clima_curto, help=f"Clima predominante nas últimas aulas: {clima_predominante}")
+
+                # 🚨 RADAR DE BUSCA ATIVA (PREVENÇÃO DE EVASÃO)
                 with st.container(border=True):
                     st.markdown("#### 🚨 Radar de Busca Ativa (Risco de Evasão)")
                     df_diario_turma = df_diario[df_diario['TURMA'] == turma_foco].copy()
                     if not df_diario_turma.empty:
-                        # Converte datas para ordenar cronologicamente
                         df_diario_turma['DATA_DT'] = pd.to_datetime(df_diario_turma['DATA'], format="%d/%m/%Y", errors='coerce')
                         df_diario_turma = df_diario_turma.sort_values(by=['ID_ALUNO', 'DATA_DT'])
                         
                         alunos_risco = []
                         for id_aluno, group in df_diario_turma.groupby('ID_ALUNO'):
-                            # Pega os últimos 3 registros do aluno
                             last_3 = group.tail(3)
-                            # Se ele tem 3 registros e TODOS são falta, aciona o alerta
                             if len(last_3) == 3 and all(last_3['TAGS'] == "AUSÊNCIA"):
                                 nome_aluno = group.iloc[0]['NOME_ALUNO']
                                 alunos_risco.append(nome_aluno)
@@ -1993,13 +2006,67 @@ elif menu == "👥 Gestão da Turma":
                     else:
                         st.caption("Aguardando registros no diário para ativar o radar.")
 
+                # 🚨 RADAR DE RESULTADOS E RAIO-X (AGORA 100% FUNCIONAL)
                 with st.expander("📡 Radar de Resultados e Raio-X de Lacunas", expanded=False):
                     diag_t = df_diagnosticos[df_diagnosticos['TURMA'] == turma_foco].copy()
+                    
+                    if trim_foco != "Todos":
+                        diag_t = diag_t[diag_t['ID_AVALIACAO'].str.contains(trim_foco.replace(" ", ""), case=False, na=False)]
+                        
                     if diag_t.empty:
-                        st.info("Aguardando dados de avaliações para gerar o Raio-X.")
+                        st.info("Aguardando dados de avaliações escaneadas para gerar o Raio-X.")
                     else:
-                        st.subheader(f"🔥 Habilidades em Alerta ({trim_foco})")
-                        st.caption("Consulte a aba 'Scanner' para o detalhamento individual de erros.")
+                        st.subheader(f"🔥 Habilidades em Alerta Crítico ({trim_foco})")
+                        st.caption("Mapeamento automático de questões com menos de 50% de acerto na turma.")
+                        
+                        alertas_gerados = []
+                        avaliacoes = diag_t['ID_AVALIACAO'].unique()
+                        
+                        with st.spinner("Analisando matriz de respostas..."):
+                            for av in avaliacoes:
+                                nome_curto = av.split("-")[0].strip().replace(" (2ª CHAMADA)", "")
+                                df_ref = df_aulas[df_aulas['TIPO_MATERIAL'].str.contains(nome_curto, regex=False, na=False)]
+                                
+                                if not df_ref.empty:
+                                    txt_prova = str(df_ref.iloc[0]['CONTEUDO'])
+                                    gab_raw = ai.extrair_tag(txt_prova, "GABARITO_TEXTO") or ai.extrair_tag(txt_prova, "GABARITO")
+                                    grade_raw = ai.extrair_tag(txt_prova, "GRADE_DE_CORRECAO")
+                                    
+                                    if gab_raw and grade_raw:
+                                        # Extrai o gabarito oficial
+                                        matches = re.findall(r"(\d+)[\s\.\)\-:]+([A-E])", gab_raw.upper())
+                                        gab_oficial = {int(num): letra for num, letra in matches}
+                                        if not gab_oficial:
+                                            letras = re.findall(r"\b[A-E]\b", gab_raw.upper())
+                                            gab_oficial = {i+1: letra for i, letra in enumerate(letras)}
+                                            
+                                        respostas_alunos = diag_t[diag_t['ID_AVALIACAO'] == av]['RESPOSTAS_ALUNO'].astype(str).tolist()
+                                        
+                                        # Calcula a taxa de acerto por questão
+                                        for q_num, letra_certa in gab_oficial.items():
+                                            acertos = 0
+                                            validos = 0
+                                            for resp in respostas_alunos:
+                                                if resp == "FALTOU": continue
+                                                resp_lista = resp.split(";")
+                                                if len(resp_lista) >= q_num:
+                                                    validos += 1
+                                                    if resp_lista[q_num-1] == letra_certa:
+                                                        acertos += 1
+                                            
+                                            if validos > 0:
+                                                taxa_acerto = acertos / validos
+                                                if taxa_acerto < 0.5: # Menos de 50% de acerto = Alerta
+                                                    padrao_h = rf"(?si)QUEST[AÃ]O\s*0?{q_num}\b.*?(?:\[)(.*?)(?:\])"
+                                                    m_h = re.search(padrao_h, grade_raw)
+                                                    habilidade = m_h.group(1).strip() if m_h else f"Revisar conceito da Questão {q_num}"
+                                                    alertas_gerados.append(f"**{av} (Q{q_num} - {taxa_acerto*100:.0f}% de acerto):** {habilidade}")
+                            
+                        if alertas_gerados:
+                            for alerta in set(alertas_gerados):
+                                st.error(f"🎯 {alerta}")
+                        else:
+                            st.success("✅ Nenhuma lacuna crítica detectada nas avaliações recentes (Todas as questões com >50% de acerto).")
 
                 st.markdown("---")
                 col_esq, col_dir = st.columns([1.6, 1.4])
