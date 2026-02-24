@@ -4172,9 +4172,12 @@ elif menu == "📸 Scanner de Gabaritos":
                     else:
                         c2.button("⚪ SEM LINK", disabled=True, use_container_width=True)
                     
+                    # 🚨 CORREÇÃO SOBERANA: Usa a função universal que apaga a linha E o arquivo no Drive
                     if c3.button("🗑️ APAGAR", key=f"del_dossie_{idx}", use_container_width=True):
-                        db.excluir_registro("DB_RELATORIOS", conteudo_d)
-                        st.rerun()
+                        with st.spinner("Apagando arquivo do Drive e limpando banco..."):
+                            termo_busca = link_d if "http" in link_d else conteudo_d
+                            db.excluir_registro_com_drive("DB_RELATORIOS", termo_busca)
+                            st.rerun()
 
 # ==============================================================================
 # MÓDULO: BIOGRAFIA DO ESTUDANTE (V39.5 - DOSSIÊ DIRETO E OBJETIVO)
