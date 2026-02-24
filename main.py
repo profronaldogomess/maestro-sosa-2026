@@ -427,7 +427,7 @@ if menu == "🧪 Criador de Aulas":
                     plano_row = planos_ano[planos_ano["SEMANA"] == sem_lab].iloc[0]
                     plano_txt = str(plano_row['PLANO_TEXTO'])
 
-                    # --- 1. RADAR DE REGÊNCIA (MANTIDO) ---
+                    # --- 1. RADAR DE REGÊNCIA (MEMÓRIA DAS TURMAS) ---
                     with st.expander("📡 Radar de Regência (Memória das Turmas)", expanded=True):
                         contexto_turmas_ia = ""
                         reg_ano = df_registro_aulas[df_registro_aulas['TURMA'].str.contains(str(ano_lab))]
@@ -438,6 +438,7 @@ if menu == "🧪 Criador de Aulas":
                                 pnt = dados_t.get('PONTE_PEDAGOGICA', 'Sem pendências.')
                                 emoji = "🟢" if "Concluído" in est else "🟡" if "Parcial" in est else "🔴"
                                 st.write(f"{emoji} **{t_nome}:** {est}")
+                                # AQUI A VARIÁVEL É ALIMENTADA COM A PONTE PEDAGÓGICA
                                 contexto_turmas_ia += f"- Turma {t_nome}: Status {est}. Pendência: {pnt}\n"
                         else: st.info("ℹ️ Nenhuma regência anterior.")
 
@@ -497,10 +498,9 @@ if menu == "🧪 Criador de Aulas":
                             
                             roteiro_especifico = ai.extrair_tag(plano_txt, tag_roteiro)
                             
-                            # 🚨 MOTOR DE CONTEXTO INTELIGENTE (CORRIGIDO V46.5 - ANTI FALSO-POSITIVO)
+                            # 🚨 MOTOR DE CONTEXTO INTELIGENTE
                             roteiro_upper = roteiro_especifico.upper()
                             
-                            # Termos fortes e compostos para evitar que palavras comuns ativem o modo prova
                             termos_av = ["LOGÍSTICA DE APLICAÇÃO", "APLICAÇÃO DE AVALIAÇÃO", "APLICAÇÃO DE PROVA", "APLICAÇÃO DE TESTE", "APLICAÇÃO DA SONDA", "APLICAÇÃO DO EXAME"]
                             termos_cor = ["CORREÇÃO COMENTADA", "CLÍNICA PEDAGÓGICA", "CORREÇÃO DE AVALIAÇÃO", "CORREÇÃO DA PROVA", "CORREÇÃO DO TESTE", "CORREÇÃO DA SONDA", "MAPEAMENTO DE DISTRATORES"]
                             
@@ -632,12 +632,14 @@ if menu == "🧪 Criador de Aulas":
                                             f"🚨 FORMATO OBRIGATÓRIO: Você DEVE separar o texto usando EXATAMENTE as tags entre colchetes: [PROFESSOR], [ALUNO], [PEI], [GABARITO], [IMAGENS]."
                                         )
 
+                                    # 🚨 AQUI ESTÁ A CORREÇÃO: INJEÇÃO DA MEMÓRIA DE REGÊNCIA NO PROMPT
                                     prompt_manual = (
                                         f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {nome_elite}.\n"
                                         f"MÉTODO: {metodo_entrega}. REFERÊNCIA: {base_herdada}\n"
                                         f"SÉRIE: {ano_lab}º Ano. ALVO: {aula_alvo_prod}.\n\n"
                                         f"{missao_especifica}\n\n"
                                         f"--- HERANÇA DO PLANO ATUAL ---\n{roteiro_especifico}\n"
+                                        f"--- MEMÓRIA DE REGÊNCIA (PONTE PEDAGÓGICA) ---\n{contexto_turmas_ia}\n"
                                         f"--- SENSOR DE INCLUSÃO ---\nA turma possui alunos com: {texto_clinico}."
                                     )
                                     
