@@ -4220,7 +4220,7 @@ elif menu == "📸 Scanner de Gabaritos":
                     st.success(f"Nenhum aluno da turma {turma_sel_dash} em zona de risco crítico no momento.")
 
 # ==============================================================================
-# MÓDULO: BIOGRAFIA DO ESTUDANTE (V90 - DOSSIÊ CLÍNICO E CUSTÓDIA COGNITIVA)
+# MÓDULO: BIOGRAFIA DO ESTUDANTE (V39.5 - DOSSIÊ DIRETO E OBJETIVO)
 # ==============================================================================
 elif menu == "👤 Biografia do Estudante":
     st.title("👤 Dossiê de Soberania do Estudante")
@@ -4323,7 +4323,7 @@ elif menu == "👤 Biografia do Estudante":
                 else: st.warning(f"Nenhuma entrega de projeto registrada.")
             else: st.info(f"Sem registros de atividades.")
 
-        # --- SEÇÃO 3: ENGAJAMENTO E ASSIDUIDADE (V39.2 - MATEMÁTICA BLINDADA) ---
+        # --- SEÇÃO 3: ENGAJAMENTO E ASSIDUIDADE ---
         st.markdown(f"### 📊 3. Engajamento e Assiduidade: {trim_b}")
         col_v1, col_v2 = st.columns([1.2, 1.8])
         with col_v1:
@@ -4358,10 +4358,10 @@ elif menu == "👤 Biografia do Estudante":
                         st.caption(f"{emoji} **{row['DATA']}**: {row['TAGS']} - *{row['OBSERVACOES']}*")
                 else: st.success("✅ Nenhuma ocorrência negativa.")
 
-        # --- SEÇÃO 4: RAIO-X DE DIFICULDADES E PARECER CLÍNICO (V90) ---
+        # --- SEÇÃO 4: RAIO-X DE DIFICULDADES (LIMPO E DIRETO) ---
         st.markdown("---")
         with st.container(border=True):
-            st.markdown(f"### 🔍 4. Raio-X de Dificuldades e Parecer Clínico: {trim_b}")
+            st.markdown(f"### 🔍 4. Raio-X de Dificuldades: {trim_b}")
             
             if not diag_alu_f.empty:
                 lista_nomes_av = diag_alu_f['ID_AVALIACAO'].unique().tolist()
@@ -4398,63 +4398,12 @@ elif menu == "👤 Biografia do Estudante":
                                     txt_limpo = re.sub(r'[*#\[\]]', '', m_h.group(1)).strip()
                                     todas_as_lacunas.append(txt_limpo)
                 
-                # 🚨 NOVA ARQUITETURA DE ABAS (CLÍNICA, LEGAL E HISTÓRICO)
-                t_clinico, t_legal, t_historico = st.tabs(["🧠 Parecer Clínico (IA)", "🎯 Mapeamento Legal (BNCC)", "🗂️ Linha do Tempo"])
-                
-                with t_clinico:
-                    if todas_as_lacunas:
-                        st.markdown("#### 🤖 Motor de Clínica Pedagógica")
-                        st.caption("Transforme os códigos da BNCC em um laudo narrativo com intervenções práticas.")
-                        
-                        if st.button("🚀 GERAR PARECER CLÍNICO DE LACUNAS", use_container_width=True, type="primary", key=f"btn_parecer_{id_alu}"):
-                            with st.spinner("Analisando lacunas cognitivas e prescrevendo intervenções..."):
-                                lista_unica = list(dict.fromkeys(todas_as_lacunas))
-                                prompt_clinico = (
-                                    f"ESTUDANTE: {aluno_b}\n"
-                                    f"PERFIL: {'PEI (' + info_alu['NECESSIDADES'] + ')' if is_pei else 'REGULAR'}\n"
-                                    f"LACUNAS DETECTADAS NAS AVALIAÇÕES:\n" + "\n".join(lista_unica)
-                                )
-                                st.session_state[f"parecer_{id_alu}"] = ai.gerar_ia("PERITO_CLINICO_V90", prompt_clinico)
-                        
-                        if f"parecer_{id_alu}" in st.session_state:
-                            txt_parecer = st.text_area("Parecer Gerado:", st.session_state[f"parecer_{id_alu}"], height=250)
-                            if st.button("💾 ARQUIVAR NO DOSSIÊ CLÍNICO", use_container_width=True):
-                                db.salvar_no_banco("DB_RELATORIOS", [
-                                    datetime.now().strftime("%d/%m/%Y"), 
-                                    id_alu, 
-                                    aluno_b, 
-                                    "PARECER_CLINICO", 
-                                    txt_parecer
-                                ])
-                                st.success("✅ Parecer arquivado com sucesso na Linha do Tempo!")
-                                st.balloons()
-                    else:
-                        st.success("✅ O aluno não apresenta lacunas pendentes para gerar parecer.")
-
-                with t_legal:
-                    if todas_as_lacunas:
-                        st.markdown("**Mapa de Habilidades que precisam de reforço:**")
-                        for l in list(dict.fromkeys(todas_as_lacunas)): 
-                            st.error(f"❌ {l}")
-                    else:
-                        st.success("✅ Domínio total nas habilidades das avaliações realizadas.")
-                        
-                with t_historico:
-                    st.markdown("#### 🗂️ Histórico de Pareceres Clínicos")
-                    if not df_relatorios.empty:
-                        hist_clinico = df_relatorios[(df_relatorios['ID_ALUNO'].apply(db.limpar_id) == id_alu) & (df_relatorios['TIPO'] == "PARECER_CLINICO")]
-                        if not hist_clinico.empty:
-                            for idx, row_h in hist_clinico.iloc[::-1].iterrows():
-                                with st.container(border=True):
-                                    st.markdown(f"**📅 Data:** {row_h['DATA']}")
-                                    st.info(row_h['CONTEUDO'])
-                                    if st.button("🗑️ APAGAR", key=f"del_par_{idx}"):
-                                        db.excluir_registro("DB_RELATORIOS", row_h['CONTEUDO'])
-                                        st.rerun()
-                        else:
-                            st.info("Nenhum parecer clínico arquivado para este aluno.")
-                    else:
-                        st.info("Base de relatórios vazia.")
+                if todas_as_lacunas:
+                    st.markdown("**Mapa de Habilidades que precisam de reforço:**")
+                    for l in list(dict.fromkeys(todas_as_lacunas)): 
+                        st.error(f"❌ {l}")
+                else:
+                    st.success("✅ Domínio total nas habilidades das avaliações realizadas.")
             else:
                 st.info("Aguardando avaliações escaneadas para gerar o Raio-X.")
 
