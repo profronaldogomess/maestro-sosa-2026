@@ -757,7 +757,7 @@ if menu == "🧪 Criador de Aulas":
                                 st.session_state.v_lab = int(time.time())
                                 st.rerun()
 
-# --- ABA 4: ATIVIDADES COMPLEMENTARES (VERSÃO V32.0 - CLÍNICA PEDAGÓGICA) ---
+# --- ABA 4: ATIVIDADES COMPLEMENTARES (VERSÃO V50 - FÁBRICA DE LISTAS HÍBRIDAS) ---
         with tab_complementar:
             st.subheader("📚 Atividades Complementares e Recomposição (Ponte Curricular)")
             
@@ -766,19 +766,99 @@ if menu == "🧪 Criador de Aulas":
                 ano_alvo = c1.selectbox("Série Alvo (Sua Turma):", [6, 7, 8, 9], key=f"comp_ano_alvo_{v}")
                 
                 origem_tipo = c2.radio("Origem do Conteúdo (DNA Curricular):", 
-                    ["Série Atual (Safra/Consolidação)", "Ano Anterior (Intervenção/Recomposição)"], 
+                    ["🟢 Série Atual (Lista de Consolidação Híbrida)", "🔴 Ano Anterior (Intervenção/Recomposição)"], 
                     horizontal=True, key=f"comp_origem_tipo_{v}")
             
-            # --- LÓGICA DE INTERVENÇÃO CLÍNICA (SCANNER LOOKUP) ---
-            contexto_scanner = ""
-            if "Ano Anterior" in origem_tipo:
+            if "Série Atual" in origem_tipo:
+                # ==================================================================
+                # MODO 1: LISTA DE CONSOLIDAÇÃO HÍBRIDA (NOVO PAINEL)
+                # ==================================================================
+                st.markdown("#### 📦 1. Herança de DNA (Aulas Base)")
+                df_aulas_ano = df_aulas[df_aulas['ANO'].str.contains(str(ano_alvo))].copy()
+                
+                if df_aulas_ano.empty:
+                    st.warning("⚠️ Nenhuma aula encontrada no acervo para esta série. Gere uma aula primeiro.")
+                else:
+                    # Filtra apenas aulas (ignora provas e projetos)
+                    aulas_puras = df_aulas_ano[df_aulas_ano['TIPO_MATERIAL'].str.contains("Aula", case=False, na=False)]
+                    aulas_opcoes = aulas_puras['TIPO_MATERIAL'].tolist()[::-1]
+                    
+                    aulas_selecionadas = st.multiselect(
+                        "Selecione 1 ou 2 aulas para basear a lista:", 
+                        aulas_opcoes, 
+                        max_selections=2, 
+                        key=f"comp_aulas_sel_{v}"
+                    )
+                    
+                    if aulas_selecionadas:
+                        st.markdown("#### ⚙️ 2. Engenharia da Lista (Distribuição de Questões)")
+                        with st.container(border=True):
+                            cq1, cq2, cq3, cq4 = st.columns(4)
+                            qtd_trad = cq1.number_input("📐 Tradicionais (Cálculo):", 0, 20, 4, key=f"qtd_trad_{v}")
+                            qtd_cot = cq2.number_input("🛒 Cotidiano Real:", 0, 20, 3, key=f"qtd_cot_{v}")
+                            qtd_tech = cq3.number_input("📱 Rotina Tecnológica:", 0, 20, 2, key=f"qtd_tech_{v}")
+                            qtd_des = cq4.number_input("🔥 Desafio (Boss Fight):", 0, 5, 1, key=f"qtd_des_{v}")
+                            
+                            total_q = qtd_trad + qtd_cot + qtd_tech + qtd_des
+                            
+                            # Feedback visual do total
+                            st.info(f"**Total de Questões Regulares:** {total_q} | **Questões PEI (50%):** {max(1, total_q//2) if total_q > 0 else 0}")
+                        
+                        instr_extra_h = st.text_area("📝 Contexto Adicional / Foco Específico (Opcional):", placeholder="Ex: Focar mais em frações equivalentes...", key=f"comp_instr_h_{v}")
+                        
+                        if st.button("🚀 MATERIALIZAR LISTA HÍBRIDA DE ELITE", use_container_width=True, type="primary"):
+                            if total_q == 0:
+                                st.error("⚠️ A lista precisa ter pelo menos 1 questão configurada.")
+                            else:
+                                with st.spinner("Maestro Sosa varrendo a internet e arquitetando a lista híbrida..."):
+                                    # Extrai o conteúdo das aulas selecionadas para a IA ler
+                                    contexto_aulas = ""
+                                    for aula_nome in aulas_selecionadas:
+                                        cont_aula = df_aulas_ano[df_aulas_ano['TIPO_MATERIAL'] == aula_nome].iloc[0]['CONTEUDO']
+                                        contexto_aulas += f"\n--- CONTEÚDO DA {aula_nome} ---\n{cont_aula}\n"
+                                    
+                                    # Gera o ID único
+                                    sosa_id_hash = util.gerar_sosa_id("LISTA", ano_alvo, "I")
+                                    nome_elite_c = f"{ano_alvo}º Ano - Lista Híbrida - {sosa_id_hash}"
+                                    
+                                    # Salva no estado para o exportador
+                                    st.session_state.sosa_id_atual = nome_elite_c
+                                    st.session_state.lab_meta = {
+                                        "ano": ano_alvo, 
+                                        "trimestre": "I Trimestre", 
+                                        "tipo": "LISTA_HIBRIDA", 
+                                        "semana_ref": "CONSOLIDAÇÃO"
+                                    }
+                                    
+                                    # Monta o Prompt Cirúrgico
+                                    prompt_h = (
+                                        f"ID_FORNECIDO: {nome_elite_c}.\n"
+                                        f"SÉRIE ALVO: {ano_alvo}º Ano.\n"
+                                        f"DISTRIBUIÇÃO EXATA DE QUESTÕES (TOTAL: {total_q}):\n"
+                                        f"- {qtd_trad} Questões Tradicionais (Mecânica/Cálculo).\n"
+                                        f"- {qtd_cot} Questões de Cotidiano Real.\n"
+                                        f"- {qtd_tech} Questões de Rotina Tecnológica (Use o Google Search para dados reais).\n"
+                                        f"- {qtd_des} Questão Desafio (Alto nível).\n"
+                                        f"EXTRAS: {instr_extra_h}\n\n"
+                                        f"BASE DE CONHECIMENTO (Use os conceitos ensinados nestas aulas para criar as questões):\n{contexto_aulas}\n\n"
+                                        f"MISSÃO: Use o ID_FORNECIDO na tag [SOSA_ID]. Gere o material completo com as TAGS [SOSA_ID], [PROFESSOR], [ALUNO], [GABARITO], [PEI], [GABARITO_PEI]."
+                                    )
+                                    
+                                    st.session_state.lab_temp = ai.gerar_ia("ARQUITETO_LISTAS_HIBRIDAS", prompt_h, usar_busca=True)
+                                    st.session_state.v_lab = int(time.time())
+                                    st.rerun()
+
+            else:
+                # ==================================================================
+                # MODO 2: CLÍNICA DE RECOMPOSIÇÃO (ANO ANTERIOR) - MANTIDO INTACTO
+                # ==================================================================
+                contexto_scanner = ""
                 with st.container(border=True):
                     st.markdown("#### 🔍 1. Análise de Evidências (Scanner)")
                     c_t1, c_t2 = st.columns([1, 1])
                     turma_interv = c_t1.selectbox("Selecione a Turma para Diagnóstico:", sorted(df_alunos['TURMA'].unique()), key=f"comp_turma_{v}")
                     ano_origem = c_t2.selectbox("Buscar base em qual série?", [1, 2, 3, 4, 5, 6, 7, 8], index=ano_alvo-2, key=f"comp_ano_orig_{v}")
                     
-                    # Busca erros reais no Scanner para esta turma
                     if not df_diagnosticos.empty:
                         erros_turma = df_diagnosticos[df_diagnosticos['TURMA'] == turma_interv]
                         if not erros_turma.empty:
@@ -789,68 +869,50 @@ if menu == "🧪 Criador de Aulas":
                                 contexto_scanner = f"A Turma {turma_interv} apresentou dificuldades reais nas avaliações: {lista_avs}. Foque em resgatar a base do {ano_origem}º ano."
                             else:
                                 st.success("✅ Turma com bom desempenho médio no Scanner.")
-            else:
-                ano_origem = ano_alvo
-                st.info(f"📖 **Modo Safra:** Consolidando o conteúdo planejado para o {ano_alvo}º Ano.")
 
-            # --- FILTRAGEM DA MATRIZ ---
-            df_cur_comp = df_curriculo[df_curriculo["ANO"].astype(str).str.contains(str(ano_origem))]
-            
-            if not df_cur_comp.empty:
-                with st.container(border=True):
-                    c_f1, c_f2 = st.columns(2)
-                    sel_eixo_c = c_f1.multiselect("2. Eixo da Matriz:", sorted(df_cur_comp["EIXO"].unique().tolist()), key=f"comp_eixo_{v}")
-                    if sel_eixo_c:
-                        sel_cont_c = c_f2.multiselect("3. Conteúdo Base:", sorted(df_cur_comp[df_cur_comp["EIXO"].isin(sel_eixo_c)]["CONTEUDO_ESPECIFICO"].unique().tolist()), key=f"comp_cont_{v}")
-                        if sel_cont_c:
-                            sel_obj_c = st.multiselect("4. Objetivos Oficiais:", sorted(df_cur_comp[df_cur_comp["CONTEUDO_ESPECIFICO"].isin(sel_cont_c)]["OBJETIVOS"].unique().tolist()), key=f"comp_obj_{v}")
-                            
-                            st.divider()
-                            c_q1, c_q2, c_q3 = st.columns([1, 1, 2])
-                            tipo_comp = c_q1.selectbox("Objetivo:", ["Fixação", "Reforço", "Aprofundamento", "Recomposição"], key=f"comp_tipo_{v}")
-                            qtd_q_comp = c_q2.slider("Nº Questões:", 3, 15, 10, key=f"comp_q_{v}")
-                            instr_extra_c = c_q3.text_area("📝 Contexto Adicional:", key=f"comp_instr_{v}")
+                df_cur_comp = df_curriculo[df_curriculo["ANO"].astype(str).str.contains(str(ano_origem))]
+                
+                if not df_cur_comp.empty:
+                    with st.container(border=True):
+                        c_f1, c_f2 = st.columns(2)
+                        sel_eixo_c = c_f1.multiselect("2. Eixo da Matriz:", sorted(df_cur_comp["EIXO"].unique().tolist()), key=f"comp_eixo_{v}")
+                        if sel_eixo_c:
+                            sel_cont_c = c_f2.multiselect("3. Conteúdo Base:", sorted(df_cur_comp[df_cur_comp["EIXO"].isin(sel_eixo_c)]["CONTEUDO_ESPECIFICO"].unique().tolist()), key=f"comp_cont_{v}")
+                            if sel_cont_c:
+                                sel_obj_c = st.multiselect("4. Objetivos Oficiais:", sorted(df_cur_comp[df_cur_comp["CONTEUDO_ESPECIFICO"].isin(sel_cont_c)]["OBJETIVOS"].unique().tolist()), key=f"comp_obj_{v}")
+                                
+                                st.divider()
+                                c_q1, c_q2, c_q3 = st.columns([1, 1, 2])
+                                tipo_comp = c_q1.selectbox("Objetivo:", ["Fixação", "Reforço", "Aprofundamento", "Recomposição"], key=f"comp_tipo_{v}")
+                                qtd_q_comp = c_q2.slider("Nº Questões:", 3, 15, 10, key=f"comp_q_{v}")
+                                instr_extra_c = c_q3.text_area("📝 Contexto Adicional:", key=f"comp_instr_{v}")
 
-                            if st.button("🚀 GERAR MATERIAL DE ELITE", use_container_width=True, type="primary"):
-                                with st.spinner("Maestro Sosa arquitetando material com DNA único..."):
-                                    
-                                    # 1. GERAÇÃO DO DNA ÚNICO (SOSA-ID)
-                                    # O util.gerar_sosa_id já traz o fuso de Itabuna e um hash aleatório
-                                    sosa_id_hash = util.gerar_sosa_id(tipo_comp, ano_alvo, "I") 
-                                    
-                                    # 2. DEFINIÇÃO DA NOMENCLATURA DE SOBERANIA
-                                    if "Ano Anterior" in origem_tipo:
-                                        # PADRÃO: RECOMP - {TURMA} - ID
+                                if st.button("🚀 GERAR MATERIAL DE RECOMPOSIÇÃO", use_container_width=True, type="primary"):
+                                    with st.spinner("Maestro Sosa arquitetando material com DNA único..."):
+                                        sosa_id_hash = util.gerar_sosa_id(tipo_comp, ano_alvo, "I") 
                                         nome_elite_c = f"RECOMP - {turma_interv} - {sosa_id_hash}"
-                                        persona_alvo = "ARQUITETO_RECOMPOSICAO_V68_ELITE"
-                                    else:
-                                        # PADRÃO: {ANO}º Ano - {TIPO} - ID
-                                        nome_elite_c = f"{ano_alvo}º Ano - {tipo_comp} - {sosa_id_hash}"
-                                        persona_alvo = "MAESTRO_SOSA_V28_ELITE"
-
-                                    # 3. CARREGAMENTO NO ESTADO DO SISTEMA
-                                    st.session_state.sosa_id_atual = nome_elite_c
-                                    st.session_state.lab_meta = {
-                                        "ano": ano_alvo, 
-                                        "trimestre": "I Trimestre", 
-                                        "tipo": tipo_comp.upper(), 
-                                        "semana_ref": "RECOMPOSIÇÃO" if "Ano Anterior" in origem_tipo else "SAFRA"
-                                    }
-                                    
-                                    # 4. DISPARO DA IA COM O ID FORNECIDO
-                                    prompt_c = (
-                                        f"ID_FORNECIDO: {nome_elite_c}.\n"
-                                        f"SÉRIE ALVO: {ano_alvo}º Ano | SÉRIE ORIGEM: {ano_origem}º Ano.\n"
-                                        f"OBJETIVO: {tipo_comp}. CONTEXTO SCANNER: {contexto_scanner}.\n"
-                                        f"CONTEÚDOS: {', '.join(sel_cont_c)}.\n"
-                                        f"OBJETIVOS: {', '.join(sel_obj_c)}.\n"
-                                        f"QUANTIDADE: {qtd_q_comp} questões. EXTRAS: {instr_extra_c}.\n\n"
-                                        f"MISSÃO: Use o ID_FORNECIDO na tag [SOSA_ID]. Gere com as TAGS [VALOR: 0.0], [SOSA_ID], [MAPA_DE_RECOMPOSICAO], [PROFESSOR], [ALUNO], [RESPOSTAS_PEDAGOGICAS], [GRADE_DE_CORRECAO], [PEI]."
-                                    )
-                                    
-                                    st.session_state.lab_temp = ai.gerar_ia(persona_alvo, prompt_c, usar_busca=True)
-                                    st.session_state.v_lab = int(time.time())
-                                    st.rerun()
+                                        
+                                        st.session_state.sosa_id_atual = nome_elite_c
+                                        st.session_state.lab_meta = {
+                                            "ano": ano_alvo, 
+                                            "trimestre": "I Trimestre", 
+                                            "tipo": tipo_comp.upper(), 
+                                            "semana_ref": "RECOMPOSIÇÃO"
+                                        }
+                                        
+                                        prompt_c = (
+                                            f"ID_FORNECIDO: {nome_elite_c}.\n"
+                                            f"SÉRIE ALVO: {ano_alvo}º Ano | SÉRIE ORIGEM: {ano_origem}º Ano.\n"
+                                            f"OBJETIVO: {tipo_comp}. CONTEXTO SCANNER: {contexto_scanner}.\n"
+                                            f"CONTEÚDOS: {', '.join(sel_cont_c)}.\n"
+                                            f"OBJETIVOS: {', '.join(sel_obj_c)}.\n"
+                                            f"QUANTIDADE: {qtd_q_comp} questões. EXTRAS: {instr_extra_c}.\n\n"
+                                            f"MISSÃO: Use o ID_FORNECIDO na tag [SOSA_ID]. Gere com as TAGS [VALOR: 0.0], [SOSA_ID], [MAPA_DE_RECOMPOSICAO], [PROFESSOR], [ALUNO], [RESPOSTAS_PEDAGOGICAS], [GRADE_DE_CORRECAO], [PEI]."
+                                        )
+                                        
+                                        st.session_state.lab_temp = ai.gerar_ia("ARQUITETO_RECOMPOSICAO_V68_ELITE", prompt_c, usar_busca=True)
+                                        st.session_state.v_lab = int(time.time())
+                                        st.rerun()
 
 # --- ABA 5: ACERVO DE MATERIAIS (VERSÃO V46 - SOBERANIA DE LINKS) ---
         with tab_acervo_lab:
