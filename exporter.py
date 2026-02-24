@@ -599,3 +599,92 @@ def gerar_docx_projeto_cientifico_V33(titulo_doc, conteudo_ia, info):
         err_doc = Document(); err_doc.add_paragraph(f"ERRO: {str(e)}"); err_doc.save(file_stream)
         file_stream.seek(0)
         return file_stream
+    
+# ==============================================================================
+# 9. EXPORTADOR DE DOSSIÊ ANALÍTICO (RAIO-X V90)
+# ==============================================================================
+def gerar_docx_raiox_v90(titulo_doc, info, stats_gerais, questoes_detalhes, alunos_criticos):
+    """Gera o documento impresso para a sala dos professores com a autópsia da prova"""
+    file_stream = io.BytesIO()
+    try:
+        doc = Document()
+        section = doc.sections[0]
+        section.top_margin = section.bottom_margin = Inches(0.4)
+        section.left_margin = section.right_margin = Inches(0.5)
+
+        style = doc.styles['Normal']
+        style.font.name = 'Arial'
+        style.font.size = Pt(10)
+
+        # --- CABEÇALHO EXECUTIVO ---
+        p_cab = doc.add_paragraph()
+        p_cab.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run_cab = p_cab.add_run("DOSSIÊ DE PERÍCIA ANALÍTICA (RAIO-X)")
+        run_cab.bold = True
+        run_cab.font.size = Pt(14)
+        
+        p_info = doc.add_paragraph()
+        p_info.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p_info.add_run(f"Turma: {info.get('turma')} | Trimestre: {info.get('trimestre')}\n").bold = True
+        p_info.add_run(f"Avaliação: {info.get('avaliacao')}\n")
+        p_info.add_run(f"Data da Geração: {info.get('data')}")
+        
+        doc.add_paragraph()
+
+        # --- BLOCO 1: TERMÔMETRO DA TURMA ---
+        p_t = doc.add_paragraph()
+        p_t.add_run("█▓▒░ 1. TERMÔMETRO DA TURMA ░▒▓█").bold = True
+        
+        p_s = doc.add_paragraph()
+        p_s.add_run(f"• Total de Alunos Avaliados: {stats_gerais.get('total_alunos')}\n")
+        p_s.add_run(f"• Média Geral da Turma: {stats_gerais.get('media_turma')}\n")
+        p_s.add_run(f"• Alerta Crítico (Piores Índices): {stats_gerais.get('top_3')}").bold = True
+        
+        doc.add_paragraph()
+
+        # --- BLOCO 2: AUTÓPSIA POR QUESTÃO ---
+        p_a = doc.add_paragraph()
+        p_a.add_run("█▓▒░ 2. AUTÓPSIA POR QUESTÃO ░▒▓█").bold = True
+        
+        for q in questoes_detalhes:
+            p_q = doc.add_paragraph()
+            p_q.add_run(f"\n{q['titulo']} ").bold = True
+            p_q.add_run(f"| Acerto: {q['acerto']} | Gabarito: {q['gabarito']}\n").bold = True
+            
+            # Enunciado (Limpo de marcações)
+            p_en = doc.add_paragraph()
+            p_en.add_run(q['enunciado']).font.italic = True
+            
+            # Perícia
+            p_per = doc.add_paragraph()
+            p_per.add_run("🧠 Diagnóstico Técnico:\n").bold = True
+            p_per.add_run(q['pericia'])
+            
+            # Linha separadora
+            p_line = doc.add_paragraph()
+            p_line.add_run("_" * 80)
+
+        doc.add_paragraph()
+
+        # --- BLOCO 3: RADAR DE ALUNOS CRÍTICOS ---
+        p_c = doc.add_paragraph()
+        p_c.add_run("█▓▒░ 3. RADAR DE ALUNOS CRÍTICOS (BUSCA ATIVA) ░▒▓█").bold = True
+        
+        p_cl = doc.add_paragraph()
+        if alunos_criticos:
+            p_cl.add_run("Alunos com nota abaixo da média (Necessitam de intervenção):\n")
+            for aluno in alunos_criticos:
+                p_cl.add_run(f"• {aluno}\n")
+        else:
+            p_cl.add_run("Nenhum aluno em zona crítica nesta avaliação.")
+
+        doc.save(file_stream)
+        file_stream.seek(0)
+        return file_stream
+    except Exception as e:
+        file_stream = io.BytesIO()
+        err_doc = Document()
+        err_doc.add_paragraph(f"ERRO AO GERAR DOSSIÊ: {str(e)}")
+        err_doc.save(file_stream)
+        file_stream.seek(0)
+        return file_stream
