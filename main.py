@@ -4129,8 +4129,11 @@ elif menu == "📸 Scanner de Gabaritos":
         st.subheader("🗂️ Acervo de Dossiês Analíticos (Para Impressão)")
         st.markdown("---")
         
-        # Filtra o banco de relatórios buscando apenas os Dossiês de Raio-X
-        df_dossies = df_relatorios[df_relatorios['TIPO'] == 'DOSSIE_RAIO_X'].copy()
+        # 🚨 VACINA ANTI-KEYERROR: Proteção caso a coluna TIPO não exista no Google Sheets
+        if not df_relatorios.empty and 'TIPO' in df_relatorios.columns:
+            df_dossies = df_relatorios[df_relatorios['TIPO'] == 'DOSSIE_RAIO_X'].copy()
+        else:
+            df_dossies = pd.DataFrame()
         
         if df_dossies.empty:
             st.info("📭 Nenhum Dossiê de Raio-X gerado ainda. Vá na aba 'Raio-X Pedagógico' para gerar o primeiro.")
@@ -4142,9 +4145,9 @@ elif menu == "📸 Scanner de Gabaritos":
                 with st.container(border=True):
                     c1, c2, c3 = st.columns([2, 1, 1])
                     
-                    data_d = row['DATA']
-                    turma_d = row['NOME_ALUNO'] # A turma foi salva nesta coluna
-                    conteudo_d = row['CONTEUDO']
+                    data_d = row.get('DATA', 'S/D')
+                    turma_d = row.get('NOME_ALUNO', 'Desconhecida') # A turma foi salva nesta coluna
+                    conteudo_d = str(row.get('CONTEUDO', ''))
                     
                     # Extrai as informações do texto salvo
                     linhas_cont = conteudo_d.split("\n")
@@ -4154,112 +4157,14 @@ elif menu == "📸 Scanner de Gabaritos":
                     c1.markdown(f"#### 📄 {av_nome}")
                     c1.caption(f"📅 Gerado em: {data_d} | 👥 Turma: {turma_d}")
                     
-                    c2.link_button("🖨️ ABRIR PARA IMPRIMIR", link_d, use_container_width=True, type="primary")
+                    if "http" in link_d:
+                        c2.link_button("🖨️ ABRIR PARA IMPRIMIR", link_d, use_container_width=True, type="primary")
+                    else:
+                        c2.button("⚪ SEM LINK", disabled=True, use_container_width=True)
                     
                     if c3.button("🗑️ APAGAR", key=f"del_dossie_{idx}", use_container_width=True):
                         db.excluir_registro("DB_RELATORIOS", conteudo_d)
                         st.rerun()
-
-# --- ABA 6: DASHBOARD (V90 - BLINDAGEM DE PERFIL E MÉTRICAS) ---
-    with tab_dash_cir:
-        st.subheader("📈 Torre de Comando: Inteligência de Resultados 360°")
-        st.markdown("---")
-
-        if df_diagnosticos.empty:
-            st.info("📭 Aguardando dados de gabaritos para gerar a inteligência analítica.")
-        else:
-            df_dash = df_diagnosticos.copy()
-            df_dash['NOTA_NUM'] = df_dash['NOTA_CALCULADA'].apply(util.sosa_to_float)
-            
-            df_alunos_min = df_alunos[['ID', 'NECESSIDADES']].copy()
-            df_alunos_min['ID'] = df_alunos_min['ID'].apply(db.limpar_id)
-            df_dash['ID_ALUNO_L'] = df_dash['ID_ALUNO'].apply(db.limpar_id)
-            
-            df_final_base = pd.merge(df_dash, df_alunos_min, left_on='ID_ALUNO_L', right_on='ID', how='left')
-            
-            # 🚨 VACINA SOBERANA DEFINITIVA: Mesma lógica robusta do Raio-X
-            def is_regular_student_dash(nec_val):
-                val = str(nec_val).upper()
-                if "TIPICO" in val or "TÍPICO" in val or "TÃPICO" in val: return True
-                if val.strip() in ["", "NAN", "NONE", "NENHUMA", "PENDENTE"]: return True
-                return False
-
-            df_final_base['PERFIL'] = df_final_base['NECESSIDADES'].apply(
-                lambda x: "📝 REGULAR" if is_regular_student_dash(x) else "♿ PEI"
-            )
-
-            with st.container(border=True):
-                lista_turmas_dash = ["Todas as Turmas"] + sorted(df_final_base['TURMA'].unique().tolist())
-                turma_sel_dash = st.selectbox("🎯 Selecione a Turma para Análise de Performance:", lista_turmas_dash, key=f"dash_t_filter_{v}")
-
-            if turma_sel_dash != "Todas as Turmas": 
-                df_final = df_final_base[df_final_base['TURMA'] == turma_sel_dash].copy()
-            else: 
-                df_final = df_final_base.copy()
-
-            if df_final.empty:
-                st.warning(f"⚠️ Não há dados processados para a turma {turma_sel_dash}.")
-            else:
-                c1, c2, c3, c4 = st.columns(4)
-                media_geral = df_final['NOTA_NUM'].mean()
-                c1.metric("Média do Grupo", f"{media_geral:.2f}", delta=f"{media_geral - 6.0:.1f}", delta_color="normal" if media_geral >= 6 else "inverse")
-                
-                total_correcoes = len(df_final)
-                c2.metric("Total de Correções", total_correcoes)
-                
-                taxa_sucesso = (len(df_final[df_final['NOTA_NUM'] >= 6.0]) / total_correcoes) * 100 if total_correcoes > 0 else 0
-                c3.metric("Taxa de Sucesso", f"{taxa_sucesso:.1f}%")
-                
-                media_pei = df_final[df_final['PERFIL'] == "♿ PEI"]['NOTA_NUM'].mean()
-                c4.metric("Média PEI", f"{media_pei:.2f}" if not pd.isna(media_pei) else "0.00")
-
-                st.markdown("---")
-                col_esq, col_dir = st.columns(2)
-
-                with col_esq:
-                    st.markdown(f"**⚖️ Índice de Equidade: {turma_sel_dash}**")
-                    fig_perfil = px.box(df_final, x="PERFIL", y="NOTA_NUM", color="PERFIL", points="all", title="Distribuição de Notas: Regular vs PEI", color_discrete_map={"📝 REGULAR": BRAND_BLUE, "♿ PEI": "#FF4B4B"})
-                    fig_perfil.update_layout(showlegend=False, yaxis_range=[0, 11], height=400)
-                    st.plotly_chart(fig_perfil, use_container_width=True)
-
-                with col_dir:
-                    st.markdown(f"**📊 Performance por Ativo: {turma_sel_dash}**")
-                    df_ativos = df_final.groupby('ID_AVALIACAO')['NOTA_NUM'].mean().reset_index().sort_values(by='NOTA_NUM')
-                    fig_ativos = px.bar(df_ativos, x="NOTA_NUM", y="ID_AVALIACAO", orientation='h', title="Média de Acertos por Avaliação", text_auto='.1f', color="NOTA_NUM", color_continuous_scale="RdYlGn")
-                    fig_ativos.update_layout(xaxis_range=[0, 11], height=400)
-                    st.plotly_chart(fig_ativos, use_container_width=True)
-
-                st.markdown("---")
-                st.markdown(f"**🔥 Mapa de Calor: Domínio de Habilidades BNCC ({turma_sel_dash})**")
-                
-                df_habilidades = []
-                for avaliacao in df_final['ID_AVALIACAO'].unique():
-                    prova_query = df_aulas[df_aulas['TIPO_MATERIAL'] == avaliacao]
-                    if not prova_query.empty:
-                        prova_txt = prova_query['CONTEUDO'].iloc[0]
-                        grade = ai.extrair_tag(prova_txt, "GRADE_DE_CORRECAO")
-                        codigos = re.findall(r"EF\d{2}MA\d{2}", grade)
-                        for cod in set(codigos):
-                            media_hab = df_final[df_final['ID_AVALIACAO'] == avaliacao]['NOTA_NUM'].mean()
-                            df_habilidades.append({"Habilidade": cod, "Domínio %": media_hab * 10, "Ativo": avaliacao})
-
-                if df_habilidades:
-                    df_hab_plot = pd.DataFrame(df_habilidades)
-                    fig_hab = px.scatter(df_hab_plot, x="Habilidade", y="Domínio %", size="Domínio %", color="Domínio %", hover_name="Ativo", title="Nível de Domínio por Descritor", color_continuous_scale="RdYlGn", range_y=[0, 105])
-                    st.plotly_chart(fig_hab, use_container_width=True)
-                else:
-                    st.info("Habilidades BNCC serão mapeadas conforme o senhor realizar as perícias no Raio-X.")
-
-                st.markdown("---")
-                st.markdown(f"#### 🚨 Alertas de Risco Pedagógico: {turma_sel_dash}")
-                df_alerta = df_final[df_final['NOTA_NUM'] < 5.0].groupby(['NOME_ALUNO', 'TURMA', 'PERFIL'])['NOTA_NUM'].count().reset_index()
-                df_alerta.columns = ['Estudante', 'Turma', 'Perfil', 'Qtd. Avaliações Críticas']
-                
-                if not df_alerta.empty:
-                    st.warning(f"Identificamos {len(df_alerta)} alunos em {turma_sel_dash} que necessitam de recomposição urgente.")
-                    st.dataframe(df_alerta.sort_values(by='Qtd. Avaliações Críticas', ascending=False), use_container_width=True, hide_index=True)
-                else:
-                    st.success(f"Nenhum aluno da turma {turma_sel_dash} em zona de risco crítico no momento.")
 
 # ==============================================================================
 # MÓDULO: BIOGRAFIA DO ESTUDANTE (V39.5 - DOSSIÊ DIRETO E OBJETIVO)
