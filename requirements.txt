@@ -13,3 +13,4 @@ google-auth-oauthlib
 python-docx
 google-api-python-client
 python-pptx
+kaleido
