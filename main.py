@@ -3848,12 +3848,11 @@ elif menu == "📸 Scanner de Gabaritos":
                         if db.salvar_lote("DB_NOTAS", lista_boletim_ext):
                             status_ext.update(label=f"✅ Notas do {origem_ext} integradas com sucesso!", state="complete"); st.balloons(); time.sleep(1); st.rerun()
 
-# --- ABA 4: RAIO-X PEDAGÓGICO (V90 - ULTRA BLINDAGEM DE PERFIL E REGEX) ---
+# --- ABA 4: RAIO-X PEDAGÓGICO (V91 - COM EXPORTADOR DE DOSSIÊ IMPRESSO) ---
     with tab_raiox:
         st.subheader("📊 Raio-X Pedagógico: Diagnóstico Individual de Lacunas")
         st.markdown("---")
 
-        # 🚨 VACINA SOBERANA DEFINITIVA: Função robusta para detectar alunos regulares
         def is_regular_student(nec_val):
             val = str(nec_val).upper()
             if "TIPICO" in val or "TÍPICO" in val or "TÃPICO" in val: return True
@@ -3897,8 +3896,6 @@ elif menu == "📸 Scanner de Gabaritos":
                 respostas_brutas['ID_ALUNO_L'] = respostas_brutas['ID_ALUNO'].apply(db.limpar_id)
                 
                 df_analise = pd.merge(respostas_brutas, df_alunos_min, left_on='ID_ALUNO_L', right_on='ID', how='left')
-                
-                # Aplica a vacina no DataFrame
                 df_analise['IS_PEI'] = ~df_analise['NECESSIDADES'].apply(is_regular_student)
                 df_analise['IS_2A_CHAMADA'] = df_analise['ID_AVALIACAO'].str.contains(r"2[ªA]|CHAMADA", case=False, regex=True)
 
@@ -3916,15 +3913,20 @@ elif menu == "📸 Scanner de Gabaritos":
                 else:
                     query_mat = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel_r]
 
+                # Variáveis globais para o exportador
+                txt_prova_global = ""
+                grade_pericia_global = ""
+                df_stats_global = pd.DataFrame()
+
                 if query_mat.empty:
                     st.error(f"❌ Gabarito da {versao_visao} não localizado.")
                 elif df_filtrado.empty:
                     st.info(f"📭 Não há dados de {perfil_visao} para a {versao_visao}.")
                 else:
                     dados_prova = query_mat.iloc[0]
-                    txt_prova = str(dados_prova['CONTEUDO'])
-                    grade_pericia = re.sub(r'[*#]', '', ai.extrair_tag(txt_prova, "GRADE_DE_CORRECAO"))
-                    gab_ativo = extrair_gab_v88_blindado(txt_prova, is_pei_view)
+                    txt_prova_global = str(dados_prova['CONTEUDO'])
+                    grade_pericia_global = re.sub(r'[*#]', '', ai.extrair_tag(txt_prova_global, "GRADE_DE_CORRECAO"))
+                    gab_ativo = extrair_gab_v88_blindado(txt_prova_global, is_pei_view)
 
                     num_q_total = len(gab_ativo)
                     stats_list = []
@@ -3937,21 +3939,21 @@ elif menu == "📸 Scanner de Gabaritos":
                         perc = (acertos / len(votos)) * 100 if len(votos) > 0 else 0
                         stats_list.append({"Questão": f"Q{i:02d}", "Acerto %": perc, "Gabarito": correta})
 
-                    df_stats = pd.DataFrame(stats_list)
+                    df_stats_global = pd.DataFrame(stats_list)
                     col_graf, col_item = st.columns([1.2, 1])
                     with col_graf:
-                        fig = px.bar(df_stats, x="Questão", y="Acerto %", text_auto='.0f', color="Acerto %", color_continuous_scale="RdYlGn")
+                        fig = px.bar(df_stats_global, x="Questão", y="Acerto %", text_auto='.0f', color="Acerto %", color_continuous_scale="RdYlGn")
                         fig.update_layout(yaxis_range=[0, 110], height=350)
                         st.plotly_chart(fig, use_container_width=True)
                     with col_item:
                         with st.container(border=True):
                             st.markdown("**🔬 Perícia do Item**")
-                            q_sel = st.selectbox("Analisar questão:", df_stats["Questão"].tolist(), key=f"q_sel_v90_{is_pei_view}_{is_2a_view}")
-                            info_q = df_stats[df_stats["Questão"] == q_sel].iloc[0]
+                            q_sel = st.selectbox("Analisar questão:", df_stats_global["Questão"].tolist(), key=f"q_sel_v90_{is_pei_view}_{is_2a_view}")
+                            info_q = df_stats_global[df_stats_global["Questão"] == q_sel].iloc[0]
                             idx_num = int(q_sel[1:])
                             st.write(f"**Gabarito:** :green[{info_q['Gabarito']}] | **Média:** {info_q['Acerto %']:.1f}%")
                             padrao = rf"(?si)QUEST[AÃ]O\s*(?:PEI\s*)?0?{idx_num}\b.*?(?=QUEST[AÃ]O\s*(?:PEI\s*)?0?{idx_num+1}\b|GABARITO|RESPOSTAS|$)"
-                            match = re.search(padrao, grade_pericia)
+                            match = re.search(padrao, grade_pericia_global)
                             if match: st.info(match.group(0).strip())
 
                 st.markdown("---")
@@ -3962,10 +3964,7 @@ elif menu == "📸 Scanner de Gabaritos":
 
                 for _, alu in alunos_turma.iterrows():
                     id_a = db.limpar_id(alu['ID'])
-                    
-                    # Aplica a vacina no loop individual
                     is_pei_alu = not is_regular_student(alu['NECESSIDADES'])
-                    
                     reg_aluno = df_analise[df_analise['ID_ALUNO_L'] == id_a]
                     
                     if reg_aluno.empty:
@@ -3975,7 +3974,6 @@ elif menu == "📸 Scanner de Gabaritos":
                         nota_alu = util.sosa_to_float(reg['NOTA_CALCULADA'])
                         material_aluno = reg['ID_AVALIACAO']
                         
-                        # 🚨 TRATAMENTO DE FALTAS
                         if str(reg['RESPOSTAS_ALUNO']).upper() == "FALTOU":
                             dados_indiv.append({"Estudante": alu['NOME_ALUNO'], "Perfil": "♿ PEI" if is_pei_alu else "📝 Regular", "Nota": 0.00, "Diagnóstico Técnico de Erros": "🔴 Aluno Ausente no dia da aplicação."})
                             continue
@@ -4016,7 +4014,6 @@ elif menu == "📸 Scanner de Gabaritos":
                                         match_hab = re.search(r"\[?(EF\d{2}MA\d{2})", texto_bloco)
                                         cod_h = match_hab.group(1) if match_hab else "BNCC"
 
-                                        # 🚨 EXTRAÇÃO HD V90: re.DOTALL para não cortar em quebras de linha
                                         if is_pei_alu:
                                             m_lacuna = re.search(r"(?i)(?:ANÁLISE DE LACUNA PEI|LACUNA|ERRO)[\s\:]*(.*)", texto_bloco, re.DOTALL)
                                             if m_lacuna:
@@ -4038,7 +4035,6 @@ elif menu == "📸 Scanner de Gabaritos":
                             if nota_alu < 10.0 and not analise_de_erros:
                                 lacunas_txt = "⚠️ Erro na leitura da grade de correção. Verifique se a IA gerou a seção 'PERÍCIA DE DISTRATORES'."
                             else:
-                                # Usa " | " para separar os erros e deixar a tabela mais limpa
                                 lacunas_txt = " | ".join(analise_de_erros) if analise_de_erros else "✅ Domínio Total das Habilidades"
                         else:
                             lacunas_txt = "⚠️ Material não localizado no Acervo."
@@ -4049,74 +4045,120 @@ elif menu == "📸 Scanner de Gabaritos":
                 st.data_editor(df_f, column_config={"Estudante": st.column_config.TextColumn("Estudante", width="medium"), "Diagnóstico Técnico de Erros": st.column_config.TextColumn("Diagnóstico (Raciocínio do Erro)", width="large")},
                     hide_index=True, use_container_width=True, disabled=True, key=f"raiox_final_v90_{v}")
 
-# --- ABA 5: ACERVO DE EVIDÊNCIAS (V71.0 - CUSTÓDIA COM FILTROS INTELIGENTES) ---
+                # 🚨 NOVO: BOTÃO DE EXPORTAÇÃO DO DOSSIÊ IMPRESSO
+                st.markdown("---")
+                st.markdown("### 🖨️ Materialização do Dossiê (Para Impressão)")
+                st.info("Gere um documento formatado com a autópsia completa da prova para levar para a sala dos professores.")
+                
+                if st.button("💾 GERAR E SALVAR DOSSIÊ DE RAIO-X (DOCX)", type="primary", use_container_width=True):
+                    if df_stats_global.empty or not txt_prova_global:
+                        st.error("⚠️ Dados insuficientes para gerar o dossiê. Certifique-se de que a prova foi carregada corretamente.")
+                    else:
+                        with st.spinner("Compilando Dossiê Analítico..."):
+                            # 1. Dados Gerais
+                            media_turma = df_f['Nota'].mean()
+                            top_3 = df_stats_global.sort_values(by="Acerto %").head(3)
+                            top_3_str = ", ".join([f"{r['Questão']} ({r['Acerto %']:.1f}%)" for _, r in top_3.iterrows()])
+                            
+                            stats_gerais = {
+                                "total_alunos": len(df_f),
+                                "media_turma": f"{media_turma:.1f}",
+                                "top_3": top_3_str
+                            }
+                            
+                            # 2. Detalhes das Questões
+                            questoes_detalhes = []
+                            questoes_raw = ai.extrair_tag(txt_prova_global, "QUESTOES")
+                            
+                            for _, r_stat in df_stats_global.iterrows():
+                                q_str = r_stat['Questão']
+                                q_num = int(q_str.replace("Q", ""))
+                                
+                                # Extrai Enunciado
+                                padrao_q = rf"(?si)(QUEST[AÃ]O\s*0?{q_num}\b.*?)(?=QUEST[AÃ]O\s*0?{q_num+1}\b|GABARITO|$)"
+                                m_q = re.search(padrao_q, questoes_raw)
+                                enunciado = re.sub(r'\[\s*PROMPT IMAGEM:.*?\]', '[IMAGEM DE APOIO]', m_q.group(1)).strip() if m_q else "Enunciado não localizado."
+                                enunciado = re.sub(r'[*#]', '', enunciado)
+                                
+                                # Extrai Perícia
+                                padrao_p = rf"(?si)(QUEST[AÃ]O\s*0?{q_num}\b.*?)(?=QUEST[AÃ]O\s*0?{q_num+1}\b|$)"
+                                m_p = re.search(padrao_p, grade_pericia_global)
+                                pericia_txt = m_p.group(1).strip() if m_p else "Perícia não localizada."
+                                pericia_txt = re.sub(r'[*#]', '', pericia_txt)
+                                
+                                questoes_detalhes.append({
+                                    "titulo": q_str,
+                                    "enunciado": enunciado,
+                                    "acerto": f"{r_stat['Acerto %']:.1f}%",
+                                    "gabarito": r_stat['Gabarito'],
+                                    "pericia": pericia_txt
+                                })
+                            
+                            # 3. Alunos Críticos (Nota < 6.0)
+                            criticos = df_f[df_f['Nota'] < 6.0]['Estudante'].tolist()
+                            
+                            # 4. Info do Cabeçalho
+                            info_doc = {
+                                "turma": t_sel_r,
+                                "trimestre": tr_sel_r,
+                                "avaliacao": at_sel_r,
+                                "data": datetime.now().strftime("%d/%m/%Y")
+                            }
+                            
+                            # 5. Geração e Upload
+                            nome_arquivo_dossie = f"RAIOX_{t_sel_r}_{nome_curto_av}"
+                            doc_stream = exporter.gerar_docx_raiox_v90(nome_arquivo_dossie, info_doc, stats_gerais, questoes_detalhes, criticos)
+                            link_doc = db.subir_e_converter_para_google_docs(doc_stream, nome_arquivo_dossie, trimestre=tr_sel_r, categoria=t_sel_r, modo="PLANEJAMENTO")
+                            
+                            # 6. Salvar no Banco
+                            if "https" in link_doc:
+                                db.salvar_no_banco("DB_RELATORIOS", [
+                                    datetime.now().strftime("%d/%m/%Y"), 
+                                    "TURMA", 
+                                    t_sel_r, 
+                                    "DOSSIE_RAIO_X", 
+                                    f"Avaliação: {at_sel_r}\nLink: {link_doc}"
+                                ])
+                                st.success("✅ Dossiê gerado e salvo no Acervo!")
+                                st.balloons()
+                            else:
+                                st.error(f"Erro ao salvar no Drive: {link_doc}")
+
+# --- ABA 5: ACERVO DE DOSSIÊS (NOVA GAVETA DE IMPRESSÃO) ---
     with tab_acervo_cir:
-        st.subheader("📂 Cofre Digital de Evidências: Localização Rápida")
+        st.subheader("🗂️ Acervo de Dossiês Analíticos (Para Impressão)")
         st.markdown("---")
-
-        if df_diagnosticos.empty:
-            st.info("📭 Nenhuma evidência arquivada ainda.")
+        
+        # Filtra o banco de relatórios buscando apenas os Dossiês de Raio-X
+        df_dossies = df_relatorios[df_relatorios['TIPO'] == 'DOSSIE_RAIO_X'].copy()
+        
+        if df_dossies.empty:
+            st.info("📭 Nenhum Dossiê de Raio-X gerado ainda. Vá na aba 'Raio-X Pedagógico' para gerar o primeiro.")
         else:
-            # 1. BARRA DE FILTROS DE ELITE
-            with st.container(border=True):
-                c_f1, c_f2, c_f3 = st.columns([1, 1, 1.5])
-                
-                # Filtro 1: Turma
-                lista_turmas_ev = ["Todas"] + sorted(df_diagnosticos['TURMA'].unique().tolist())
-                f_turma = c_f1.selectbox("👥 Filtrar por Turma:", lista_turmas_ev, key=f"f_t_ev_{v}")
-                
-                # Filtro 2: Trimestre (Busca por texto no ID da Avaliação)
-                f_trim = c_f2.selectbox("📅 Filtrar por Trimestre:", ["Todos", "I Trimestre", "II Trimestre", "III Trimestre"], key=f"f_tr_ev_{v}")
-                
-                # Preparação da base filtrada para o Filtro 3
-                df_ev_filtrado = df_diagnosticos.copy()
-                if f_turma != "Todas":
-                    df_ev_filtrado = df_ev_filtrado[df_ev_filtrado['TURMA'] == f_turma]
-                if f_trim != "Todos":
-                    df_ev_filtrado = df_ev_filtrado[df_ev_filtrado['ID_AVALIACAO'].str.contains(f_trim, na=False)]
-                
-                # Filtro 3: Material (Dinâmico com base nos filtros anteriores)
-                lista_mats_ev = ["Todos"] + sorted(df_ev_filtrado['ID_AVALIACAO'].unique().tolist())
-                f_mat = c_f3.selectbox("📋 Selecionar Material Específico:", lista_mats_ev, key=f"f_m_ev_{v}")
-                
-                if f_mat != "Todos":
-                    df_ev_filtrado = df_ev_filtrado[df_ev_filtrado['ID_AVALIACAO'] == f_mat]
-
-            # 2. EXIBIÇÃO DOS RESULTADOS
-            st.markdown(f"**🔍 Registros Localizados:** {len(df_ev_filtrado)}")
+            # Inverte para mostrar os mais recentes primeiro
+            df_dossies = df_dossies.iloc[::-1]
             
-            if df_ev_filtrado.empty:
-                st.warning("⚠️ Nenhum registro encontrado com os filtros selecionados.")
-            else:
-                # Ordena pelos mais recentes
-                df_ev_exibicao = df_ev_filtrado.iloc[::-1]
-                
-                # Tabela de Custódia com Link Direto
-                st.dataframe(
-                    df_ev_exibicao[['DATA', 'NOME_ALUNO', 'TURMA', 'ID_AVALIACAO', 'NOTA_CALCULADA', 'LINK_FOTO_DRIVE']],
-                    column_config={
-                        "DATA": st.column_config.TextColumn("Data", width="small"),
-                        "NOME_ALUNO": st.column_config.TextColumn("Estudante", width="medium"),
-                        "TURMA": st.column_config.TextColumn("Turma", width="small"),
-                        "ID_AVALIACAO": st.column_config.TextColumn("Avaliação", width="medium"),
-                        "NOTA_CALCULADA": st.column_config.NumberColumn("Nota", format="%.1f", width="small"),
-                        "LINK_FOTO_DRIVE": st.column_config.LinkColumn("🔗 Ver Evidência (Drive)", width="medium")
-                    },
-                    use_container_width=True,
-                    hide_index=True
-                )
-
-                # 3. RESUMO DE PERFORMANCE DO FILTRO
-                with st.expander("📊 Resumo Rápido desta Seleção"):
-                    c_r1, c_r2, c_r3 = st.columns(3)
-                    media_sel = df_ev_filtrado['NOTA_CALCULADA'].apply(util.sosa_to_float).mean()
-                    c_r1.metric("Média do Grupo", f"{media_sel:.2f}")
+            for idx, row in df_dossies.iterrows():
+                with st.container(border=True):
+                    c1, c2, c3 = st.columns([2, 1, 1])
                     
-                    acima_media = len(df_ev_filtrado[df_ev_filtrado['NOTA_CALCULADA'].apply(util.sosa_to_float) >= 6.0])
-                    c_r2.metric("Alunos com Sucesso", acima_media)
+                    data_d = row['DATA']
+                    turma_d = row['NOME_ALUNO'] # A turma foi salva nesta coluna
+                    conteudo_d = row['CONTEUDO']
                     
-                    abaixo_media = len(df_ev_filtrado) - acima_media
-                    c_r3.metric("Alunos em Alerta", abaixo_media, delta_color="inverse")
+                    # Extrai as informações do texto salvo
+                    linhas_cont = conteudo_d.split("\n")
+                    av_nome = linhas_cont[0].replace("Avaliação: ", "") if len(linhas_cont) > 0 else "Avaliação Desconhecida"
+                    link_d = linhas_cont[1].replace("Link: ", "") if len(linhas_cont) > 1 else "#"
+                    
+                    c1.markdown(f"#### 📄 {av_nome}")
+                    c1.caption(f"📅 Gerado em: {data_d} | 👥 Turma: {turma_d}")
+                    
+                    c2.link_button("🖨️ ABRIR PARA IMPRIMIR", link_d, use_container_width=True, type="primary")
+                    
+                    if c3.button("🗑️ APAGAR", key=f"del_dossie_{idx}", use_container_width=True):
+                        db.excluir_registro("DB_RELATORIOS", conteudo_d)
+                        st.rerun()
 
 # --- ABA 6: DASHBOARD (V90 - BLINDAGEM DE PERFIL E MÉTRICAS) ---
     with tab_dash_cir:
