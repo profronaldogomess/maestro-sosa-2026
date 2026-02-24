@@ -1905,7 +1905,7 @@ elif menu == "👥 Gestão da Turma":
         "📊 Cockpit de Prontidão", "🏗️ Arquitetura de Turmas", "➕ Povoar Alunos", "✏️ Edição & Transferência"
     ])
 
-# --- ABA 1: COCKPIT DA TURMA (VERSÃO V47 - CLIMA E RADAR ATIVOS) ---
+# --- ABA 1: COCKPIT DA TURMA (VERSÃO V47.1 - CLIMA E RADAR CLEAN) ---
     with tab_cockpit:
         if df_turmas.empty:
             st.info("📭 Nenhuma turma cadastrada. Vá na aba 'Arquitetura' para iniciar.")
@@ -1955,7 +1955,7 @@ elif menu == "👥 Gestão da Turma":
                 ano_num = "".join(filter(str.isdigit, turma_foco))
                 ano_str_ref = f"{ano_num}º"
 
-                # 🚨 MÉTRICAS DE TOPO (AGORA COM O TERMÔMETRO DE CLIMA)
+                # 🚨 MÉTRICAS DE TOPO (COM O TERMÔMETRO DE CLIMA)
                 m1, m2, m3, m4 = st.columns(4)
                 m1.metric("👥 Total Alunos", len(alunos_t))
                 
@@ -1979,7 +1979,6 @@ elif menu == "👥 Gestão da Turma":
                             clima_predominante = max(set(recentes), key=recentes.count)
                     except: pass
                 
-                # Exibe apenas o Emoji e a primeira palavra para ficar elegante no card
                 clima_curto = clima_predominante.split(" ")[0] + " " + clima_predominante.split(" ")[1] if " " in clima_predominante else clima_predominante
                 m4.metric("🌡️ Clima Recente", clima_curto, help=f"Clima predominante nas últimas aulas: {clima_predominante}")
 
@@ -2006,7 +2005,7 @@ elif menu == "👥 Gestão da Turma":
                     else:
                         st.caption("Aguardando registros no diário para ativar o radar.")
 
-                # 🚨 RADAR DE RESULTADOS E RAIO-X (AGORA 100% FUNCIONAL)
+                # 🚨 RADAR DE RESULTADOS E RAIO-X (AGRUPADO E LIMPO)
                 with st.expander("📡 Radar de Resultados e Raio-X de Lacunas", expanded=False):
                     diag_t = df_diagnosticos[df_diagnosticos['TURMA'] == turma_foco].copy()
                     
@@ -2019,11 +2018,12 @@ elif menu == "👥 Gestão da Turma":
                         st.subheader(f"🔥 Habilidades em Alerta Crítico ({trim_foco})")
                         st.caption("Mapeamento automático de questões com menos de 50% de acerto na turma.")
                         
-                        alertas_gerados = []
                         avaliacoes = diag_t['ID_AVALIACAO'].unique()
+                        teve_alerta_geral = False
                         
                         with st.spinner("Analisando matriz de respostas..."):
                             for av in avaliacoes:
+                                alertas_desta_prova = []
                                 nome_curto = av.split("-")[0].strip().replace(" (2ª CHAMADA)", "")
                                 df_ref = df_aulas[df_aulas['TIPO_MATERIAL'].str.contains(nome_curto, regex=False, na=False)]
                                 
@@ -2060,12 +2060,16 @@ elif menu == "👥 Gestão da Turma":
                                                     padrao_h = rf"(?si)QUEST[AÃ]O\s*0?{q_num}\b.*?(?:\[)(.*?)(?:\])"
                                                     m_h = re.search(padrao_h, grade_raw)
                                                     habilidade = m_h.group(1).strip() if m_h else f"Revisar conceito da Questão {q_num}"
-                                                    alertas_gerados.append(f"**{av} (Q{q_num} - {taxa_acerto*100:.0f}% de acerto):** {habilidade}")
+                                                    alertas_desta_prova.append(f"**Q{q_num} ({taxa_acerto*100:.0f}% de acerto):** {habilidade}")
+                                
+                                # Exibe os alertas agrupados por prova
+                                if alertas_desta_prova:
+                                    teve_alerta_geral = True
+                                    st.markdown(f"📄 **{av}**")
+                                    for alerta in set(alertas_desta_prova):
+                                        st.error(f"🎯 {alerta}")
                             
-                        if alertas_gerados:
-                            for alerta in set(alertas_gerados):
-                                st.error(f"🎯 {alerta}")
-                        else:
+                        if not teve_alerta_geral:
                             st.success("✅ Nenhuma lacuna crítica detectada nas avaliações recentes (Todas as questões com >50% de acerto).")
 
                 st.markdown("---")
