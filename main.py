@@ -337,7 +337,7 @@ if menu == "🧪 Criador de Aulas":
     meta = st.session_state.get("lab_meta", {})
     is_hub = meta.get("tipo") == "PRODUÇÃO_HUB"
     
-    # --- ÁREA DE EXIBIÇÃO E REFINO (PRESERVADA) ---
+# --- ÁREA DE EXIBIÇÃO E REFINO (PRESERVADA) ---
     if "lab_temp" in st.session_state:
         txt_base = st.session_state.lab_temp
         s_id = st.session_state.get("sosa_id_atual", "SEM-ID")
@@ -352,11 +352,13 @@ if menu == "🧪 Criador de Aulas":
                     st.rerun()
             if st.button("🗑️ DESCARTAR EDIÇÃO"): reset_laboratorio()
         
-        t_prof, t_alu, t_gab, t_pei, t_sync = st.tabs(["👨‍🏫 Professor", "📝 Aluno", "✅ Gabarito", "♿ PEI", "☁️ SINCRONIA"])
+        # 🚨 CORREÇÃO: Aba de Imagens adicionada ao Editor Principal
+        t_prof, t_alu, t_gab, t_pei, t_img, t_sync = st.tabs(["👨‍🏫 Professor", "📝 Aluno", "✅ Gabarito", "♿ PEI", "🎨 Imagens", "☁️ SINCRONIA"])
         with t_prof: st.text_area("Lousa/Mediação:", ai.extrair_tag(txt_base, "PROFESSOR"), height=450, key=f"ed_prof_reg_{v}")
         with t_alu: st.text_area("Folha/Roteiro:", ai.extrair_tag(txt_base, "ALUNO"), height=450, key=f"ed_alu_reg_{v}")
         with t_gab: st.text_area("Gabarito:", ai.extrair_tag(txt_base, "GABARITO"), height=200, key=f"ed_res_reg_{v}")
         with t_pei: st.text_area("PEI (Obrigatório):", ai.extrair_tag(txt_base, "PEI"), height=400, key=f"ed_pei_reg_{v}")
+        with t_img: st.text_area("Prompts de Imagem:", ai.extrair_tag(txt_base, "IMAGENS"), height=200, key=f"ed_img_reg_{v}")
 
 # --- ☁️ ABA DE SINCRONIA (TRIPLE-SYNC V47 - SOBERANIA DE LINKS) ---
         with t_sync:
@@ -838,10 +840,10 @@ if menu == "🧪 Criador de Aulas":
                                         f"- {qtd_trad} Questões Tradicionais (Mecânica/Cálculo).\n"
                                         f"- {qtd_cot} Questões de Cotidiano Real.\n"
                                         f"- {qtd_tech} Questões de Rotina Tecnológica (Use o Google Search para dados reais).\n"
-                                        f"- {qtd_des} Questão Desafio (Alto nível).\n"
+                                        f"- {qtd_des} Questão Desafio (Boss Fight).\n"
                                         f"EXTRAS: {instr_extra_h}\n\n"
                                         f"BASE DE CONHECIMENTO (Use os conceitos ensinados nestas aulas para criar as questões):\n{contexto_aulas}\n\n"
-                                        f"MISSÃO: Use o ID_FORNECIDO na tag [SOSA_ID]. Gere o material completo com as TAGS [SOSA_ID], [PROFESSOR], [ALUNO], [GABARITO], [PEI], [GABARITO_PEI]."
+                                        f"MISSÃO: Use o ID_FORNECIDO na tag [SOSA_ID]. Gere o material completo com as TAGS [SOSA_ID], [PROFESSOR], [ALUNO], [GABARITO], [PEI], [GABARITO_PEI], [IMAGENS]."
                                     )
                                     
                                     st.session_state.lab_temp = ai.gerar_ia("ARQUITETO_LISTAS_HIBRIDAS", prompt_h, usar_busca=True)
