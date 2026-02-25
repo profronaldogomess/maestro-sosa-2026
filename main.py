@@ -3095,7 +3095,7 @@ elif menu == "📝 Diário de Bordo Rápido":
                         time.sleep(1); st.rerun()
 
 
-## ==============================================================================
+# ==============================================================================
 # MÓDULO: BIOGRAFIA DO ESTUDANTE - DOSSIÊ DE EVOLUÇÃO (CLEAN & UX)
 # ==============================================================================
 elif menu == "👤 Biografia do Estudante":
@@ -3114,14 +3114,27 @@ elif menu == "👤 Biografia do Estudante":
             lista_turmas_bio = sorted(turmas_reais_bio['ID_TURMA'].unique()) if not turmas_reais_bio.empty else sorted(df_alunos['TURMA'].unique())
             
             turma_b = c1.selectbox("👥 Turma:", lista_turmas_bio, key="bio_t")
-            lista_alunos = df_alunos[df_alunos['TURMA'] == turma_b].sort_values(by="NOME_ALUNO")
+            lista_alunos = df_alunos[df_alunos['TURMA'] == turma_b].sort_values(by="NOME_ALUNO").copy()
             
             if lista_alunos.empty:
                 st.warning("Nenhum aluno cadastrado nesta turma.")
                 st.stop()
+            
+            # 🚨 MOTOR DE ÍCONES MULTIPERFIL
+            def definir_icone_status(nec):
+                n = str(nec).upper().strip()
+                if "PENDENTE" in n or "SUSPEITA" in n: return "🟠"
+                if "DEFASAGEM LEITURA" in n: return "🧱"
+                if "DEFASAGEM MATEMÁTICA" in n or "DEFASAGEM MATEMATICA" in n: return "🧮"
+                if "ALTA PERFORMANCE" in n: return "🚀"
+                if n in["NENHUMA", "", "NAN", "TÍPICO", "TIPICO"]: return "👤"
+                return "♿"
+
+            lista_alunos['STATUS_ICON'] = lista_alunos['NECESSIDADES'].apply(definir_icone_status)
+            lista_alunos['LABEL'] = lista_alunos.apply(lambda x: f"{x['STATUS_ICON']} {x['NOME_ALUNO']}", axis=1)
                 
-            aluno_b = c2.selectbox("🎓 Estudante:", lista_alunos['NOME_ALUNO'].tolist(), key="bio_a")
-            trim_b = c3.selectbox("📅 Período de Análise:", ["Todos", "I Trimestre", "II Trimestre", "III Trimestre"], help="Filtre para ver o desempenho em um trimestre específico ou o consolidado do ano.", key="bio_trim")
+            aluno_b_label = c2.selectbox("🎓 Estudante:", lista_alunos['LABEL'].tolist(), key="bio_a")
+            trim_b = c3.selectbox("📅 Período de Análise:",["Todos", "I Trimestre", "II Trimestre", "III Trimestre"], help="Filtre para ver o desempenho em um trimestre específico ou o consolidado do ano.", key="bio_trim")
 
         # --- LÓGICA DE DATAS DO TRIMESTRE (Sincronia Itabuna 2026) ---
         if trim_b == "I Trimestre": dt_ini, dt_fim = date(2026, 2, 9), date(2026, 5, 22)
@@ -3130,11 +3143,10 @@ elif menu == "👤 Biografia do Estudante":
         else: dt_ini, dt_fim = date(2026, 1, 1), date(2026, 12, 31)
 
         # Captura dados básicos do aluno
-        info_alu = lista_alunos[lista_alunos['NOME_ALUNO'] == aluno_b].iloc[0]
+        nome_limpo = aluno_b_label.split(" ", 1)[1].strip() # Remove o ícone para buscar no banco
+        info_alu = lista_alunos[lista_alunos['NOME_ALUNO'] == nome_limpo].iloc[0]
         id_alu = db.limpar_id(info_alu['ID'])
-        
-        # 🚨 VACINA DO FANTASMA DO TÍPICO
-        is_pei = str(info_alu['NECESSIDADES']).upper().strip() not in["NENHUMA", "PENDENTE", "", "NAN", "TÍPICO", "TIPICO"]
+        perfil_atual = str(info_alu['NECESSIDADES']).upper().strip()
         
         # --- FILTRAGEM DE BASES POR ALUNO E TEMPO ---
         n_alu = df_notas[df_notas['ID_ALUNO'].apply(db.limpar_id) == id_alu]
@@ -3158,17 +3170,24 @@ elif menu == "👤 Biografia do Estudante":
         # --- CABEÇALHO DE STATUS (IDENTIDADE DO ALUNO) ---
         c_h1, c_h2 = st.columns([2, 1])
         with c_h1:
-            st.subheader(f"🎓 {aluno_b}")
-            perfil_label = "♿ ESTUDANTE PEI" if is_pei else "👤 ESTUDANTE REGULAR"
-            st.caption(f"**Perfil:** {perfil_label} | **ID:** {id_alu}")
+            st.subheader(f"🎓 {nome_limpo}")
+            st.caption(f"**ID do Sistema:** {id_alu}")
         with c_h2:
             if not n_alu.empty:
                 soma_anual = n_alu[n_alu['TRIMESTRE'].isin(["I Trimestre", "II Trimestre", "III Trimestre"])]['MEDIA_FINAL'].apply(util.sosa_to_float).sum()
                 st.metric("Soma Anual (Meta 18.0)", f"{soma_anual:.1f}", delta=f"{soma_anual - 18.0:.1f}")
 
-        # 🚨 ALERTA PEI (Se aplicável)
-        if is_pei:
-            st.warning(f"♿ **Condição Clínica / Necessidade:** {info_alu['NECESSIDADES']}")
+        # 🚨 BANNERS DINÂMICOS DE PERFIL COGNITIVO
+        if "PENDENTE" in perfil_atual or "SUSPEITA" in perfil_atual:
+            st.warning(f"🟠 **Radar de Investigação:** {perfil_atual}")
+        elif "DEFASAGEM" in perfil_atual:
+            st.error(f"🧱 **Barreira de Aprendizagem:** {perfil_atual}")
+        elif "ALTA PERFORMANCE" in perfil_atual:
+            st.info(f"🚀 **Destaque Cognitivo:** {perfil_atual}")
+        elif perfil_atual not in["NENHUMA", "", "NAN", "TÍPICO", "TIPICO"]:
+            st.warning(f"♿ **Condição Clínica (PEI):** {perfil_atual}")
+        else:
+            st.success(f"👤 **Perfil Cognitivo:** Típico / Padrão")
 
         # --- BLOCO 1: EXTRATO ANALÍTICO DE NOTAS ---
         st.markdown(f"### 🧾 1. Extrato Analítico de Notas ({trim_b})")
@@ -3288,17 +3307,20 @@ elif menu == "👤 Biografia do Estudante":
                         m_ref = m_ref_query.iloc[0]
                         txt_p = str(m_ref['CONTEUDO'])
                         
-                        tag_grade = "GRADE_DE_CORRECAO_PEI" if is_pei else "GRADE_DE_CORRECAO"
+                        # Verifica se o aluno é PEI para buscar a grade correta
+                        is_pei_alu = perfil_atual not in["NENHUMA", "PENDENTE", "", "NAN", "TÍPICO", "TIPICO"] and "TIPICO" not in perfil_atual
+                        
+                        tag_grade = "GRADE_DE_CORRECAO_PEI" if is_pei_alu else "GRADE_DE_CORRECAO"
                         grade = ai.extrair_tag(txt_p, tag_grade) or ai.extrair_tag(txt_p, "GRADE_DE_CORRECAO")
                         
-                        tag_g = "GABARITO_PEI" if is_pei else "GABARITO_TEXTO"
+                        tag_g = "GABARITO_PEI" if is_pei_alu else "GABARITO_TEXTO"
                         gab_raw = ai.extrair_tag(txt_p, tag_g) or ai.extrair_tag(txt_p, "GABARITO")
                         gab_oficial = re.findall(r"\b[A-E]\b", gab_raw.upper())
                         
                         respostas_aluno = str(reg_av['RESPOSTAS_ALUNO']).split(';')
                         
                         for i, r in enumerate(respostas_aluno):
-                            if i < len(gab_oficial) and r != gab_oficial[i] and r not in ["FALTOU", "?", "X"]:
+                            if i < len(gab_oficial) and r != gab_oficial[i] and r not in["FALTOU", "?", "X"]:
                                 q_n = i + 1
                                 padrao_h = rf"(?si)QUEST[AÃ]O\s*(?:PEI\s*)?0?{q_n}\b.*?(?:[:\-])\s*(.*?)(?=\.?\s*(?:JUSTIFICATIVA|PERÍCIA|ANÁLISE|DISTRATORES|$))"
                                 m_h = re.search(padrao_h, grade)
