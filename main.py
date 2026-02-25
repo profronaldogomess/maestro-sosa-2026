@@ -3801,10 +3801,11 @@ elif menu == "📈 Boletim Anual & Conselho":
         st.caption(f"📌 **Legenda:** I, II, III (Médias Trimestrais) | R1, R2, R3 (Recuperações Paralelas) | Σ (Soma Anual) | RF (Recuperação Final) | F (Faltas). Limite de faltas atual: **{int(limite_faltas)}**.")
 
 # ==============================================================================
-# MÓDULO: GESTÃO DA TURMA (V46 - COCKPIT DE PRONTIDÃO E COMANDO)
+# MÓDULO: GESTÃO DA TURMA (COCKPIT DE REGÊNCIA) - CLEAN & UX
 # ==============================================================================
 elif menu == "👥 Gestão da Turma":
     st.title("👥 Cockpit de Regência: Gestão 360°")
+    st.caption("💡 **Guia de Comando:** Central de controle da sua rotina. Aqui você abre a aula do dia, monitora o clima da turma, detecta risco de evasão (faltas) e gerencia o cadastro de alunos.")
     st.markdown("---")
 
     if "v_gestao" not in st.session_state: 
@@ -3812,18 +3813,18 @@ elif menu == "👥 Gestão da Turma":
     v = st.session_state.v_gestao
 
     tab_cockpit, tab_criar, tab_povoar, tab_editar = st.tabs([
-        "📊 Cockpit de Prontidão", "🏗️ Arquitetura de Turmas", "➕ Povoar Alunos", "✏️ Edição & Transferência"
+        "📊 1. Cockpit de Prontidão", "🏗️ 2. Arquitetura de Turmas", "➕ 3. Povoar Alunos", "✏️ 4. Edição & Transferência"
     ])
 
-# --- ABA 1: COCKPIT DA TURMA (VERSÃO V49 - OCULTAÇÃO INTELIGENTE DE CONCLUÍDOS) ---
+    # --- ABA 1: COCKPIT DA TURMA ---
     with tab_cockpit:
         if df_turmas.empty:
-            st.info("📭 Nenhuma turma cadastrada. Vá na aba 'Arquitetura' para iniciar.")
+            st.info("📭 Nenhuma turma cadastrada. Vá na aba '2. Arquitetura de Turmas' para iniciar.")
         else:
             st.markdown("### 📅 Grade Oficial de Regência")
             
-            dias_semana =["Segunda", "Terça", "Quarta", "Quinta", "Sexta"]
-            tempos =["1º Tempo", "2º Tempo"]
+            dias_semana = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"]
+            tempos = ["1º Tempo", "2º Tempo"]
             grade_map = {t: {d: "---" for d in dias_semana} for t in tempos}
 
             for _, row in df_turmas.iterrows():
@@ -3844,7 +3845,7 @@ elif menu == "👥 Gestão da Turma":
             df_grade = pd.DataFrame(grade_map).T
             
             def colorir_grade(val):
-                if val in ["PI", "PC", "AC", "HTPC"]: return 'background-color: #2962FF; color: white; font-weight: bold; text-align: center;'
+                if val in["PI", "PC", "AC", "HTPC"]: return 'background-color: #2962FF; color: white; font-weight: bold; text-align: center;'
                 if val != "---": return 'background-color: #001E3C; color: #2ECC71; font-weight: bold; text-align: center;'
                 return 'color: gray; text-align: center;'
 
@@ -3876,7 +3877,7 @@ elif menu == "👥 Gestão da Turma":
                 planos_totais = len(df_planos[df_planos['ANO'] == ano_str_ref])
                 aulas_feitas = len(df_registro_aulas[df_registro_aulas['TURMA'] == turma_foco])
                 saude_val = (aulas_feitas / (planos_totais * 2) * 100) if planos_totais > 0 else 0
-                m3.metric("🎯 Saúde de Execução", f"{min(100, int(saude_val))}%")
+                m3.metric("🎯 Saúde de Execução", f"{min(100, int(saude_val))}%", help="Percentual de aulas ministradas em relação ao total planejado.")
 
                 clima_predominante = "Sem Dados"
                 if not df_registro_aulas.empty and len(df_registro_aulas.columns) >= 9:
@@ -3894,6 +3895,7 @@ elif menu == "👥 Gestão da Turma":
                 # 🚨 RADAR DE BUSCA ATIVA
                 with st.container(border=True):
                     st.markdown("#### 🚨 Radar de Busca Ativa (Risco de Evasão)")
+                    st.caption("O sistema monitora automaticamente alunos que faltaram às últimas 3 aulas consecutivas.")
                     df_diario_turma = df_diario[df_diario['TURMA'] == turma_foco].copy()
                     if not df_diario_turma.empty:
                         df_diario_turma['DATA_DT'] = pd.to_datetime(df_diario_turma['DATA'], format="%d/%m/%Y", errors='coerce')
@@ -3912,7 +3914,7 @@ elif menu == "👥 Gestão da Turma":
                         else:
                             st.success("✅ Nenhum aluno com 3 faltas consecutivas recentes. Frequência estabilizada.")
                     else:
-                        st.caption("Aguardando registros no diário para ativar o radar.")
+                        st.info("Aguardando registros no diário para ativar o radar.")
 
                 # 🚨 RADAR DE RESULTADOS E RAIO-X
                 with st.expander("📡 Radar de Resultados e Raio-X de Lacunas", expanded=False):
@@ -3993,13 +3995,13 @@ elif menu == "👥 Gestão da Turma":
 
                 with col_esq:
                     st.subheader("🕒 Abertura de Aula")
-                    mostrar_historico = st.toggle("🔄 Mostrar histórico completo (Modo Revisão / Continuidade)", key=f"tog_hist_{v}")
+                    mostrar_historico = st.toggle("🔄 Mostrar histórico completo (Modo Revisão / Continuidade)", help="Ative para ver aulas que já foram dadas ou planos já concluídos.", key=f"tog_hist_{v}")
                     
                     historico_turma = df_registro_aulas[df_registro_aulas['TURMA'] == turma_foco]
                     planos_usados = historico_turma['SEMANA'].unique().tolist()
                     
                     materiais_usados_raw = historico_turma['CONTEUDO_MINISTRADO'].dropna().tolist()
-                    materiais_usados = []
+                    materiais_usados =[]
                     for raw in materiais_usados_raw:
                         materiais_usados.extend([m.strip() for m in str(raw).split('+')])
                     
@@ -4009,7 +4011,6 @@ elif menu == "👥 Gestão da Turma":
                     
                     df_p_sugestao = df_p_atual.copy()
                     if not mostrar_historico: 
-                        # 🚨 A MÁGICA ACONTECE AQUI: Remove os usados E os que já foram marcados como PRODUZIDO (Concluídos)
                         df_p_sugestao = df_p_sugestao[~df_p_sugestao['SEMANA'].isin(planos_usados)]
                         df_p_sugestao = df_p_sugestao[df_p_sugestao['EIXO'] == 'HUB_ATIVO']
                         
@@ -4036,7 +4037,6 @@ elif menu == "👥 Gestão da Turma":
                         
                         data_aula = st.date_input("Data da Aula:", date.today(), format="DD/MM/YYYY", key=f"dt_reg_{v}")
                         
-                        # 🚨 FILTRAGEM DE MATERIAIS (Oculta os que pertencem a semanas concluídas)
                         mats_disp_bruto = df_mats_ano['TIPO_MATERIAL'].tolist()
                         if not mostrar_historico: 
                             semanas_concluidas = df_planos[df_planos['EIXO'] == 'PRODUZIDO']['SEMANA'].tolist()
@@ -4068,8 +4068,8 @@ elif menu == "👥 Gestão da Turma":
                                 time.sleep(1); st.rerun()
 
                     st.markdown("---")
-                    with st.expander("🗑️ Gerenciar Aulas Abertas (Corrigir Erros de Data)"):
-                        st.caption("Apagar uma aula aqui também removerá os vistos/faltas lançados no Diário para aquele dia.")
+                    with st.expander("🗑️ Gerenciar Aulas Abertas (Borracha Temporal)"):
+                        st.caption("⚠️ **Atenção:** Apagar uma aula aqui também removerá todos os vistos e faltas lançados no Diário de Bordo para aquele dia específico.")
                         aulas_abertas = df_registro_aulas[df_registro_aulas['TURMA'] == turma_foco].sort_values(by='DATA', ascending=False).head(5)
                         if aulas_abertas.empty: st.info("Nenhuma aula registrada para esta turma.")
                         else:
@@ -4077,7 +4077,7 @@ elif menu == "👥 Gestão da Turma":
                                 c_del1, c_del2 = st.columns([3, 1])
                                 c_del1.markdown(f"📅 **{row_aula['DATA']}** - {row_aula['CONTEUDO_MINISTRADO']}")
                                 if c_del2.button("❌ APAGAR", key=f"del_aula_{row_aula['DATA']}_{turma_foco}"):
-                                    with st.spinner("Apagando registros..."):
+                                    with st.spinner("Apagando registros e limpando o diário..."):
                                         if db.excluir_aula_aberta(row_aula['DATA'], turma_foco):
                                             st.success("Aula e diário apagados com sucesso!")
                                             time.sleep(1); st.rerun()
@@ -4090,9 +4090,7 @@ elif menu == "👥 Gestão da Turma":
                         
                         df_mats_exibir = df_mats_ano.copy()
                         if not mostrar_historico and not df_mats_exibir.empty: 
-                            # Remove os usados
                             df_mats_exibir = df_mats_exibir[~df_mats_exibir['TIPO_MATERIAL'].isin(materiais_usados)]
-                            # Remove os que pertencem a semanas concluídas
                             semanas_concluidas = df_planos[df_planos['EIXO'] == 'PRODUZIDO']['SEMANA'].tolist()
                             df_mats_exibir = df_mats_exibir[~df_mats_exibir['SEMANA_REF'].isin(semanas_concluidas)]
                         
@@ -4122,11 +4120,10 @@ elif menu == "👥 Gestão da Turma":
                             for _, alu in df_pei_turma.iterrows(): st.warning(f"♿ **{alu['NOME_ALUNO']}**\n↳ {alu['NECESSIDADES']}")
                         else: st.success("✅ Nenhum aluno PEI nesta turma.")
 
-# --- ABA 2: ARQUITETURA DE TURMAS E HORÁRIOS (ATUALIZADO V46.2 - AUTONOMIA TOTAL) ---
+    # --- ABA 2: ARQUITETURA DE TURMAS E HORÁRIOS ---
     with tab_criar:
         st.subheader("🏗️ Configurar Grade: Turmas e Planejamento")
         
-        # Chave de Autonomia: O professor decide o que vai cadastrar
         tipo_cadastro = st.radio(
             "O que o senhor deseja alocar na grade?", 
             ["📚 Turma Regular (Alunos)", "⚙️ Planejamento (PI / PC)"], 
@@ -4137,8 +4134,8 @@ elif menu == "👥 Gestão da Turma":
         with st.container(border=True):
             if tipo_cadastro == "📚 Turma Regular (Alunos)":
                 c1, c2, c3 = st.columns(3)
-                ano_t = c1.selectbox("Série/Ano:", [1, 2, 3, 4, 5, 6, 7, 8, 9], index=5, key=f"ano_cad_{v}")
-                letra_t = c2.selectbox("Letra:", ["A", "B", "C", "D", "E", "F", "G"], key=f"letra_cad_{v}")
+                ano_t = c1.selectbox("Série/Ano:",[1, 2, 3, 4, 5, 6, 7, 8, 9], index=5, key=f"ano_cad_{v}")
+                letra_t = c2.selectbox("Letra:",["A", "B", "C", "D", "E", "F", "G"], key=f"letra_cad_{v}")
                 turno_t = c3.selectbox("Turno:", ["Matutino", "Vespertino", "Noturno"], key=f"turno_cad_{v}")
                 
                 sigla_final = f"{ano_t}ª {turno_t[0].upper()}{letra_t}"
@@ -4155,7 +4152,7 @@ elif menu == "👥 Gestão da Turma":
         st.markdown("#### 📅 Alocação de Horário (Dias e Tempos)")
         st.info("💡 Selecione os dias e os tempos exatos para esta alocação.")
         
-        opcoes_horarios = [
+        opcoes_horarios =[
             "Segunda (1º Tempo)", "Segunda (2º Tempo)", 
             "Terça (1º Tempo)", "Terça (2º Tempo)", 
             "Quarta (1º Tempo)", "Quarta (2º Tempo)", 
@@ -4165,21 +4162,19 @@ elif menu == "👥 Gestão da Turma":
         
         dias_aula = st.multiselect("Selecione a grade:", opcoes_horarios, key=f"dias_cad_{v}")
         
-        if st.button("🚀 CADASTRAR NA GRADE OFICIAL", use_container_width=True, type="primary"):
+        if st.button("💾 ALOCAR NA GRADE OFICIAL", use_container_width=True, type="primary"):
             if not dias_aula:
                 st.error("⚠️ Ordem negada: Selecione pelo menos um horário.")
             else:
-                # Salva no banco unindo os horários selecionados
-                if db.salvar_no_banco("DB_TURMAS", [sigla_final, nome_final, turno_t, " / ".join(dias_aula), "N/A", "ATIVO"]):
+                if db.salvar_no_banco("DB_TURMAS",[sigla_final, nome_final, turno_t, " / ".join(dias_aula), "N/A", "ATIVO"]):
                     st.success(f"✅ {sigla_final} alocado com sucesso na grade oficial!"); time.sleep(1.5); st.rerun()
 
-# --- ABA 3: POVOAR ALUNOS (ATUALIZADO V46.4 - COMORBIDADES E MÚLTIPLOS CIDs) ---
+    # --- ABA 3: POVOAR ALUNOS ---
     with tab_povoar:
         st.subheader("➕ Inclusão de Estudantes (Manual e Lote)")
         
-        # Filtra apenas turmas reais (ignora PI/PC)
         turmas_reais_pov = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
-        t_dest = st.selectbox("Turma de Destino:", turmas_reais_pov['ID_TURMA'].tolist() if not turmas_reais_pov.empty else [], key=f"dest_pov_{v}")
+        t_dest = st.selectbox("Turma de Destino:", turmas_reais_pov['ID_TURMA'].tolist() if not turmas_reais_pov.empty else[], key=f"dest_pov_{v}")
         
         if t_dest:
             t1_man, t2_lote = st.tabs(["✍️ Cadastro Manual", "📄 Importação em Lote (CSV)"])
@@ -4188,33 +4183,30 @@ elif menu == "👥 Gestão da Turma":
                 with st.form("f_manual_povoar"):
                     nome_a = st.text_input("Nome Completo:").upper()
                     
-                    # MULTISELETOR DE SOBERANIA: Permite múltiplas condições
-                    opcoes_nec = ["TÍPICO", "TEA", "TDAH", "DISLEXIA", "DEF. INTELECTUAL", "TOD", "BAIXA VISÃO", "SURDEZ", "PEI - PENDENTE", "OUTRO"]
+                    opcoes_nec =["TÍPICO", "TEA", "TDAH", "DISLEXIA", "DEF. INTELECTUAL", "TOD", "BAIXA VISÃO", "SURDEZ", "PEI - PENDENTE", "OUTRO"]
                     perfil_base = st.multiselect("Perfil / Necessidades (Pode selecionar vários):", opcoes_nec, default=["TÍPICO"])
                     
                     if st.form_submit_button("💾 SALVAR ALUNO"):
                         if not nome_a:
                             st.error("⚠️ Digite o nome do aluno.")
                         else:
-                            # Lógica de Comorbidade: Remove "TÍPICO" se o professor marcou outras coisas junto
                             if "TÍPICO" in perfil_base and len(perfil_base) > 1:
                                 perfil_base.remove("TÍPICO")
                             
-                            # Junta as condições com um "+"
                             perfil_str = " + ".join(perfil_base) if perfil_base else "TÍPICO"
                             
                             id_n = db.gerar_proximo_id(df_alunos)
-                            if db.salvar_no_banco("DB_ALUNOS", [id_n, nome_a, t_dest, "ATIVO", perfil_str, "MANUAL"]):
+                            if db.salvar_no_banco("DB_ALUNOS",[id_n, nome_a, t_dest, "ATIVO", perfil_str, "MANUAL"]):
                                 st.success(f"✅ {nome_a} cadastrado com perfil: {perfil_str}!"); st.rerun()
             
             with t2_lote:
-                st.info("💡 Cole a lista de alunos abaixo. Formato esperado: NOME,PERFIL (Ex: JOAO SILVA,TÍPICO). Se o aluno tiver um asterisco (*), o sistema detectará automaticamente como PEI.")
-                texto_lote = st.text_area("Cole os dados CSV aqui:", height=300, placeholder="ADRIEL VINICIUS ALVES MARTINS,TÍPICO\nJOSE LEVI BRONZE SANTOS*,PEI - PENDENTE")
+                st.info("💡 **Dica de Soberania:** Cole a lista de alunos abaixo. Se o aluno tiver um asterisco (*) no final do nome, o sistema detectará automaticamente como PEI.")
+                texto_lote = st.text_area("Cole os dados CSV aqui (NOME, PERFIL):", height=300, placeholder="ADRIEL VINICIUS ALVES MARTINS,TÍPICO\nJOSE LEVI BRONZE SANTOS*,PEI - PENDENTE")
                 
                 if st.button("🚀 PROCESSAR IMPORTAÇÃO EM LOTE", type="primary", use_container_width=True):
                     if texto_lote.strip():
                         linhas = texto_lote.strip().split('\n')
-                        novos_alunos = []
+                        novos_alunos =[]
                         id_atual = db.gerar_proximo_id(df_alunos)
                         
                         with st.status("Importando alunos para o Banco de Dados...") as status:
@@ -4224,7 +4216,6 @@ elif menu == "👥 Gestão da Turma":
                                 partes = linha.split(',')
                                 nome_bruto = partes[0].strip().upper()
                                 
-                                # Detecção automática de asterisco (Blindagem extra)
                                 if "*" in nome_bruto:
                                     nome_limpo = nome_bruto.replace("*", "").strip()
                                     perfil = "PEI - PENDENTE"
@@ -4233,7 +4224,7 @@ elif menu == "👥 Gestão da Turma":
                                     perfil = partes[1].strip().upper() if len(partes) > 1 else "TÍPICO"
                                 
                                 novos_alunos.append([id_atual, nome_limpo, t_dest, "ATIVO", perfil, "LOTE"])
-                                id_atual += 1 # Incrementa o ID para o próximo aluno
+                                id_atual += 1 
                             
                             if db.salvar_lote("DB_ALUNOS", novos_alunos):
                                 status.update(label=f"✅ {len(novos_alunos)} alunos importados com sucesso para a turma {t_dest}!", state="complete")
@@ -4243,9 +4234,11 @@ elif menu == "👥 Gestão da Turma":
                     else:
                         st.error("⚠️ Cole os dados na caixa de texto antes de processar.")
 
-# --- ABA 4: EDIÇÃO & TRANSFERÊNCIA (ATUALIZADO V48 - CASCATA E TRANSFERÊNCIA) ---
+    # --- ABA 4: EDIÇÃO & TRANSFERÊNCIA ---
     with tab_editar:
         st.subheader("✏️ Gestão de Cadastro e Transferência")
+        st.caption("Altere o nome, a turma ou o laudo de um aluno. O sistema atualizará todo o histórico dele (notas, faltas, provas) automaticamente.")
+        
         t_origem = st.selectbox("Selecione a Turma Atual:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"orig_ed_{v}")
         
         if t_origem:
@@ -4256,19 +4249,17 @@ elif menu == "👥 Gestão da Turma":
             with st.form("form_edicao"):
                 novo_nome = st.text_input("Nome Completo:", value=dados_atuais['NOME_ALUNO']).upper()
                 
-                # 🚨 NOVO: Seletor de Transferência de Turma
                 turmas_reais_ed = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
-                lista_turmas_dest = sorted(turmas_reais_ed['ID_TURMA'].unique()) if not turmas_reais_ed.empty else [t_origem]
+                lista_turmas_dest = sorted(turmas_reais_ed['ID_TURMA'].unique()) if not turmas_reais_ed.empty else[t_origem]
                 idx_turma = lista_turmas_dest.index(t_origem) if t_origem in lista_turmas_dest else 0
                 
                 nova_turma = st.selectbox("Turma de Destino (Para Transferência):", lista_turmas_dest, index=idx_turma)
                 
-                st.info("💡 **Dica de Soberania:** Para alunos PEI com múltiplas condições, digite separando por '+' ou vírgula. O sistema aceita códigos CID exatos (Ex: TEA + TDAH + F84.0).")
+                st.info("💡 **Dica:** Para alunos PEI com múltiplas condições, digite separando por '+' ou vírgula. O sistema aceita códigos CID exatos (Ex: TEA + TDAH + F84.0).")
                 nova_nec = st.text_input("Necessidades / CIDs:", value=dados_atuais['NECESSIDADES']).upper()
                 
-                if st.form_submit_button("💾 ATUALIZAR DADOS EM CASCATA"):
+                if st.form_submit_button("💾 SALVAR E ATUALIZAR HISTÓRICO EM CASCATA"):
                     with st.spinner("Viajando no tempo e atualizando todo o histórico do aluno..."):
-                        # Chama o novo motor de cascata do database.py
                         if db.atualizar_aluno_cascata(dados_atuais['ID'], novo_nome, nova_turma, nova_nec):
                             st.success("✅ Cadastro, laudos e histórico atualizados em cascata com sucesso!")
                             time.sleep(1.5)
