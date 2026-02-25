@@ -8,13 +8,11 @@ from docx.enum.table import WD_ALIGN_VERTICAL
 from docx.enum.section import WD_SECTION
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
-from pptx import Presentation
-from pptx.util import Inches, Pt
 from datetime import datetime
 import ai_engine as ai
 
 # ==============================================================================
-# 1. FUNÇÕES AUXILIARES TÉCNICAS (PRESERVAÇÃO INTEGRAL)
+# 1. FUNÇÕES AUXILIARES TÉCNICAS
 # ==============================================================================
 
 def set_row_height(row, height_pt):
@@ -28,7 +26,6 @@ def set_row_height(row, height_pt):
 
 def adicionar_texto_formatado(paragraph, texto):
     """Converte padrões **texto** em negrito real preservando acentos"""
-    import re
     texto_limpo = texto.replace("➔", "").replace("->", "").replace("single", "Bastão").strip()
     partes = re.split(r'(\*\*.*?\*\*)', texto_limpo)
     for parte in partes:
@@ -43,8 +40,7 @@ def configurar_cabecalho_mestre(doc, info, tipo_label, mostrar_nota=False):
     table = doc.add_table(rows=3, cols=5)
     table.style = 'Table Grid'
     
-    # Ajuste de larguras para margens de 0.3"
-    widths = [Inches(0.8), Inches(3.0), Inches(1.0), Inches(1.2), Inches(1.9)]
+    widths =[Inches(0.8), Inches(3.0), Inches(1.0), Inches(1.2), Inches(1.9)]
     for i, w in enumerate(widths): 
         table.columns[i].width = w
 
@@ -72,7 +68,6 @@ def configurar_cabecalho_mestre(doc, info, tipo_label, mostrar_nota=False):
         c_nota.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
         c_nota.paragraphs[0].add_run("NOTA:")
     else:
-        # Se não tem nota, o campo ALUNO ocupa todo o espaço restante
         c_aluno = table.cell(1, 1).merge(table.cell(1, 4))
         c_aluno.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
         c_aluno.paragraphs[0].add_run("ALUNO(A):")
@@ -90,7 +85,6 @@ def configurar_cabecalho_mestre(doc, info, tipo_label, mostrar_nota=False):
     run_tipo.font.bold = True
     run_tipo.font.size = Pt(9)
 
-    # Inserção da Logo
     logo_path = "logo_escola.png" if os.path.exists("logo_escola.png") else "logo.png"
     if os.path.exists(logo_path):
         c_logo.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
@@ -101,7 +95,7 @@ def configurar_cabecalho_mestre(doc, info, tipo_label, mostrar_nota=False):
     return table
 
 # ==============================================================================
-# 2. MATERIAL DO ALUNO REGULAR (CORRIGIDO - SEM NOTA + 2 COLUNAS)
+# 2. MATERIAL DO ALUNO REGULAR
 # ==============================================================================
 def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     file_stream = io.BytesIO()
@@ -114,11 +108,9 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     style.font.name = 'Arial'
     style.font.size = Pt(10.5)
 
-    # Cabeçalho Mestre (mostrar_nota=False para Atividades)
     configurar_cabecalho_mestre(doc, info, "ATIVIDADE DE SALA", mostrar_nota=False)
     doc.add_paragraph()
 
-    # Ativação de Colunas Nativas
     new_section = doc.add_section(WD_SECTION.CONTINUOUS)
     sectPr = new_section._sectPr
     cols = sectPr.xpath('./w:cols')[0]
@@ -133,7 +125,7 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
         p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
         p.paragraph_format.space_after = Pt(8)
 
-        if any(x in l_s.upper() for x in ["ATIVIDADE DE", "JORNADA", "HISTÓRIA", "MATEMÁTICA", "AULA"]):
+        if any(x in l_s.upper() for x in["ATIVIDADE DE", "JORNADA", "HISTÓRIA", "MATEMÁTICA", "AULA"]):
             run = p.add_run(l_s.upper().replace('**', ''))
             run.bold = True
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -155,7 +147,7 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     return file_stream
 
 # ==============================================================================
-# 3. MATERIAL PEI ADAPTADO (CORRIGIDO - SEM NOTA + 2 COLUNAS)
+# 3. MATERIAL PEI ADAPTADO
 # ==============================================================================
 def gerar_docx_pei_v25(titulo_doc, conteudo, info):
     file_stream = io.BytesIO()
@@ -168,11 +160,9 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
     style.font.name = 'Arial'
     style.font.size = Pt(11)
 
-    # Cabeçalho Mestre (mostrar_nota=False para Atividades)
     configurar_cabecalho_mestre(doc, info, "ATIVIDADE ADAPTADA", mostrar_nota=False)
     doc.add_paragraph()
 
-    # Ativação de Colunas Nativas
     new_section = doc.add_section(WD_SECTION.CONTINUOUS)
     sectPr = new_section._sectPr
     cols = sectPr.xpath('./w:cols')[0]
@@ -187,10 +177,11 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
         p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
         p.paragraph_format.space_after = Pt(10)
 
-        secoes_pei = ["PARA LEMBRAR", "OBJETIVO", "INSTRUÇÕES", "ATIVIDADE", "PASSO A PASSO", "DICA MESTRA"]
+        secoes_pei =["PARA LEMBRAR", "OBJETIVO", "INSTRUÇÕES", "ATIVIDADE", "PASSO A PASSO", "DICA MESTRA"]
         if any(x in l_s.upper() for x in secoes_pei):
             txt_limpo = l_s.replace("[", "").replace("]", "").replace(":", "").upper()
-            run = p.add_run(f"█▓▒░ {txt_limpo} ░▒▓█")
+            # REMOVIDO OS BLOCOS DE ENFEITE - APENAS TEXTO LIMPO E CENTRALIZADO
+            run = p.add_run(txt_limpo)
             run.bold = True
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER
         elif "QUESTÃO" in l_s.upper():
@@ -211,10 +202,9 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
     return file_stream
 
 # ==============================================================================
-# 4. GUIA DO PROFESSOR (VERSÃO V28 - SOBERANIA TOTAL REGULAR + PEI)
+# 4. GUIA DO PROFESSOR
 # ==============================================================================
 def gerar_docx_professor_v25(titulo_doc, conteudo, info):
-    """Versão V28 - Layout 360: Regular (Azul) e PEI (Roxo) com Gabaritos Verdes"""
     file_stream = io.BytesIO()
     doc = Document()
     
@@ -226,7 +216,6 @@ def gerar_docx_professor_v25(titulo_doc, conteudo, info):
     section.top_margin, section.bottom_margin = Inches(0.4), Inches(0.4)
     section.left_margin, section.right_margin = Inches(0.4), Inches(0.4)
 
-    # 1. CABEÇALHO MESTRE
     header_table = doc.add_table(rows=2, cols=3)
     header_table.style = 'Table Grid'
     c_tit = header_table.cell(0, 0).merge(header_table.cell(0, 2))
@@ -240,7 +229,6 @@ def gerar_docx_professor_v25(titulo_doc, conteudo, info):
     for row in header_table.rows: set_row_height(row, 20)
     doc.add_paragraph()
 
-    # 2. COLUNAS NATIVAS
     new_section = doc.add_section(WD_SECTION.CONTINUOUS)
     sectPr = new_section._sectPr
     cols = sectPr.xpath('./w:cols')[0]
@@ -255,51 +243,44 @@ def gerar_docx_professor_v25(titulo_doc, conteudo, info):
         p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
         p.paragraph_format.line_spacing = 1.0
 
-        # --- REGRAS VISUAIS DE SOBERANIA ---
-        
-        # A. TÍTULOS DE SEÇÃO (GABARITOS E DETALHAMENTOS)
         if l_s.endswith(":") and len(l_s) < 40:
             p.paragraph_format.space_before = Pt(10)
-            run = p.add_run(f"█▓▒░ {l_s.upper()} ░▒▓█")
+            # REMOVIDO OS BLOCOS DE ENFEITE
+            run = p.add_run(l_s.upper())
             run.font.bold = True
             run.font.size = Pt(11)
             continue
 
-        # B. GABARITO DE LETRAS (VERDE)
         if re.search(r"(?i)QUEST[AÃ]O\s*(?:PEI\s*)?\d+\s*[:\-]\s*[A-E]$|^\d+[\.\s\-]+[A-E]$", l_s):
             run = p.add_run(f"✅ {l_s}")
             run.font.bold, run.font.size = True, Pt(11)
-            run.font.color.rgb = RGBColor(0, 128, 0) # Verde
+            run.font.color.rgb = RGBColor(0, 128, 0)
             continue
 
-        # C. QUESTÃO REGULAR (AZUL)
         if "QUESTÃO" in l_s.upper() and "PEI" not in l_s.upper() and (":" in l_s or "[" in l_s):
             p.paragraph_format.space_before = Pt(8)
             run = p.add_run(l_s)
             run.font.bold = True
-            run.font.color.rgb = RGBColor(0, 51, 153) # Azul Escuro
+            run.font.color.rgb = RGBColor(0, 51, 153)
             continue
 
-        # D. QUESTÃO PEI (ROXO)
         if "QUESTÃO PEI" in l_s.upper():
             p.paragraph_format.space_before = Pt(8)
             run = p.add_run(f"♿ {l_s}")
             run.font.bold = True
-            run.font.color.rgb = RGBColor(112, 48, 160) # Roxo PEI
+            run.font.color.rgb = RGBColor(112, 48, 160)
             continue
 
-        # E. JUSTIFICATIVAS E LACUNAS
-        if any(x in l_s.upper() for x in ["JUSTIFICATIVA", "PERÍCIA", "LACUNA", "ANÁLISE"]):
+        if any(x in l_s.upper() for x in["JUSTIFICATIVA", "PERÍCIA", "LACUNA", "ANÁLISE"]):
             p.paragraph_format.left_indent = Inches(0.15)
             icon = "🎯" if "JUST" in l_s.upper() else "🧠"
             run_label = p.add_run(f"{icon} {l_s.split(':', 1)[0]}:")
             run_label.font.bold = True
             if "LACUNA" in l_s.upper() or "PERÍCIA" in l_s.upper():
-                 run_label.font.color.rgb = RGBColor(204, 0, 0) # Alerta Vinho
+                 run_label.font.color.rgb = RGBColor(204, 0, 0)
             p.add_run(f" {l_s.split(':', 1)[1] if ':' in l_s else ''}").font.size = Pt(9.5)
             continue
 
-        # Texto padrão limpo (sem # ou *)
         p.add_run(re.sub(r'[#*]', '', l_s)).font.size = Pt(10)
 
     doc.save(file_stream)
@@ -307,16 +288,13 @@ def gerar_docx_professor_v25(titulo_doc, conteudo, info):
     return file_stream
 
 # ==============================================================================
-# 5. PROVA OFICIAL (VERSÃO V33 - ESCUDO DE TAXONOMIA E NEG RITO INLINE)
+# 5. PROVA OFICIAL
 # ==============================================================================
 def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
-    """Versão V33 - SOBERANIA INTEGRAL: Correção de Negritos, Taxonomia e Prompts"""
-    import re
     file_stream = io.BytesIO()
     try:
         doc = Document()
         
-        # 1. CONFIGURAÇÃO DE ESTILO GLOBAL (ARIAL)
         style = doc.styles['Normal']
         style.font.name = 'Arial'
         style.font.size = Pt(10.5)
@@ -325,29 +303,24 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         section.top_margin = section.bottom_margin = Inches(0.3)
         section.left_margin = section.right_margin = Inches(0.4)
         
-        # 2. DETECÇÃO DE TIPO E EXTRAÇÃO
         is_pei_doc = "PEI" in titulo_doc.upper() or "ADAPTADA" in titulo_doc.upper()
         tag_alvo = "PEI" if is_pei_doc else "QUESTOES"
         
         corpo_bruto = ai.extrair_tag(conteudo_ia, tag_alvo)
         
-        # Fallback de segurança
         if not corpo_bruto:
             match_primeira_q = re.search(r"(?i)QUESTÃO\s*\d+", conteudo_ia)
             corpo_bruto = conteudo_ia[match_primeira_q.start():].strip() if match_primeira_q else conteudo_ia.strip()
 
-        # 3. CONTAGEM PARA GABARITO DE BOLINHAS
         num_total_q = len(re.findall(r'(?i)QUESTÃO\s+\d+', corpo_bruto))
         if num_total_q == 0: num_total_q = int(info.get('qtd_questoes', 5))
         
         label_prova = "AVALIAÇÃO ADAPTADA" if is_pei_doc else "AVALIAÇÃO DE MATEMÁTICA"
         if "SONDA" in titulo_doc.upper(): label_prova = "SONDA DE PROFICIÊNCIA"
 
-        # 4. CABEÇALHO MESTRE
         configurar_cabecalho_mestre(doc, info, label_prova, mostrar_nota=True)
         doc.add_paragraph()
 
-        # 5. QUADRO DE ORIENTAÇÕES + GABARITO DE BOLINHAS
         top_table = doc.add_table(rows=1, cols=2)
         top_table.columns[0].width = Inches(3.5)
         top_table.columns[1].width = Inches(4.0)
@@ -359,7 +332,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         val_total = info.get('valor', '10,0')
         val_q = info.get('valor_questao', '1,0')
         
-        orient_list = [
+        orient_list =[
             "Leia atentamente cada enunciado.",
             "Resolva os cálculos no espaço em branco.",
             "Marque apenas uma alternativa por questão.",
@@ -382,14 +355,12 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         
         doc.add_paragraph()
 
-        # 6. CONTEÚDO EM 2 COLUNAS NATIVAS
         new_section = doc.add_section(WD_SECTION.CONTINUOUS)
         sectPr = new_section._sectPr
         cols = sectPr.xpath('./w:cols')[0]
         cols.set(qn('w:num'), '2')
         cols.set(qn('w:space'), '720')
 
-        # LIMPEZA DE RUÍDO MARKDOWN
         corpo_limpo = corpo_bruto.replace("**", "").replace("#", "")
 
         for linha in corpo_limpo.split('\n'):
@@ -400,45 +371,36 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
             p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
             p.paragraph_format.space_after = Pt(6)
             
-            # --- LEI DA FORMATAÇÃO INLINE COM SUPORTE A TAXONOMIA (FÁCIL/MÉDIA/DIFÍCIL) ---
             if l_s.upper().startswith("QUESTÃO"):
-                # Regex V33: Captura (Rótulo) + (Dificuldade opcional) + (Separador) + (Texto)
                 match = re.match(r"^(QUEST[AÃ]O\s*\d+)(\s*\(.*?\))?([\s\.\-\:]+)(.*)", l_s, re.IGNORECASE)
                 if match:
-                    # Gr 1: QUESTÃO XX | Gr 2: (FÁCIL) | Gr 3: - ou .
                     rotulo_negrito = f"{match.group(1).upper()}{match.group(2) if match.group(2) else ''}{match.group(3)}"
                     run_r = p.add_run(rotulo_negrito)
                     run_r.bold = True
                     run_r.font.size = Pt(11)
-                    
-                    # Gr 4: O resto do texto (Normal)
                     p.add_run(match.group(4).strip())
                     continue
             
-            # Títulos de Seção PEI
-            secoes_especiais = ["PARA LEMBRAR", "DICA MESTRA", "PASSO A PASSO", "VERSÃO ADAPTADA"]
+            secoes_especiais =["PARA LEMBRAR", "DICA MESTRA", "PASSO A PASSO", "VERSÃO ADAPTADA"]
             if any(x in l_s.upper() for x in secoes_especiais):
-                run = p.add_run(f"█ {l_s.upper()} █")
+                # REMOVIDO OS BLOCOS DE ENFEITE
+                run = p.add_run(l_s.upper())
                 run.bold = True
                 p.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 continue
 
-            # --- ESTILIZAÇÃO DE PROMPTS DE IMAGEM ---
             if "PROMPT IMAGEM" in l_s.upper():
                 p.paragraph_format.space_before = Pt(3)
-                # Limpa colchetes duplos se houver
                 txt_img = l_s.replace("[", "").replace("]", "").strip()
-                run = p.add_run(f"🖼️ [ {txt_img} ]")
+                run = p.add_run(f"🖼️[ {txt_img} ]")
                 run.font.italic = True
                 run.font.size = Pt(8.5)
                 run.font.color.rgb = RGBColor(100, 100, 100)
                 p.alignment = WD_ALIGN_PARAGRAPH.LEFT
                 continue
 
-            # --- INDENTAÇÃO DE ALTERNATIVAS ---
             if re.match(r'^[A-E][\)\.]', l_s):
                 p.paragraph_format.left_indent = Inches(0.2)
-                # Força a letra da alternativa em negrito para facilitar leitura
                 letra_match = re.match(r'^([A-E][\)\.])(.*)', l_s)
                 if letra_match:
                     run_letra = p.add_run(letra_match.group(1))
@@ -458,7 +420,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         return file_stream
     
 # ==============================================================================
-# 6. PLANO PEDAGÓGICO (PRESERVAÇÃO INTEGRAL)
+# 6. PLANO PEDAGÓGICO
 # ==============================================================================
 def gerar_docx_plano_pedagogico_ELITE(titulo_arquivo, dados, info):
     file_stream = io.BytesIO()
@@ -490,7 +452,7 @@ def gerar_docx_plano_pedagogico_ELITE(titulo_arquivo, dados, info):
 
         doc.add_paragraph()
 
-        campos = [
+        campos =[
             ("OBJETO DE CONHECIMENTO (EIXO):", "geral"), 
             ("CONTEÚDOS ESPECÍFICOS:", "especificos"), 
             ("OBJETIVOS DE APRENDIZAGEM:", "objetivos"), 
@@ -520,32 +482,9 @@ def gerar_docx_plano_pedagogico_ELITE(titulo_arquivo, dados, info):
         return file_stream
 
 # ==============================================================================
-# 7. APRESENTAÇÃO PPTX (PRESERVAÇÃO INTEGRAL)
-# ==============================================================================
-def gerar_pptx_v24(titulo_doc, conteudo_ia):
-    prs = Presentation()
-    slides_raw = re.findall(r"\[SLIDE.*?\](.*?)(?=\[SLIDE|$)", conteudo_ia, re.DOTALL)
-    for i, bloco in enumerate(slides_raw):
-        layout_idx = 0 if i == 0 else 1
-        slide = prs.slides.add_slide(prs.slide_layouts[layout_idx])
-        titulo = re.search(r"(?:TITULO|TÍTULO).*?:(.*?)\n", bloco, re.IGNORECASE)
-        visual = re.search(r"(?:CONTEÚDO VISUAL|CONTEUDO VISUAL).*?:(.*?)(?=PROMPT|SCRIPT|NOTA|$)", bloco, re.DOTALL | re.IGNORECASE)
-        script = re.search(r"(?:SCRIPT DO PROFESSOR).*?:(.*?)(?=NOTA|$)", bloco, re.DOTALL | re.IGNORECASE)
-        if titulo: slide.shapes.title.text = titulo.group(1).strip().replace("**", "")
-        if visual and len(slide.placeholders) > 1:
-            slide.placeholders[1].text = visual.group(1).strip().replace("**", "")
-        if script:
-            slide.notes_slide.notes_text_frame.text = script.group(1).strip().replace("**", "")
-    file_stream = io.BytesIO()
-    prs.save(file_stream)
-    file_stream.seek(0)
-    return file_stream
-
-# ==============================================================================
-# 8. EXPORTADOR DE INICIAÇÃO CIENTÍFICA (V33 - EXCLUSIVO PARA PROJETOS)
+# 7. EXPORTADOR DE INICIAÇÃO CIENTÍFICA (PROJETOS)
 # ==============================================================================
 def gerar_docx_projeto_cientifico_V33(titulo_doc, conteudo_ia, info):
-    """Exportador de Elite para Roteiros de Pesquisa e Projetos BNCC/PHC"""
     file_stream = io.BytesIO()
     try:
         doc = Document()
@@ -557,12 +496,10 @@ def gerar_docx_projeto_cientifico_V33(titulo_doc, conteudo_ia, info):
         style.font.name = 'Arial'
         style.font.size = Pt(10.5)
 
-        # 1. CABEÇALHO MESTRE
         configurar_cabecalho_mestre(doc, info, "ROTEIRO DE INVESTIGAÇÃO", mostrar_nota=False)
         doc.add_paragraph()
 
-        # 2. MAPEAMENTO DE TAGS CIENTÍFICAS
-        tags_projeto = [
+        tags_projeto =[
             ("🎯 CONTEXTO DA INVESTIGAÇÃO", "CONTEXTO_INVESTIGATIVO"),
             ("🚀 MISSÃO DE PESQUISA", "MISSÃO_DE_PESQUISA"),
             ("📑 PASSO A PASSO METODOLÓGICO", "PASSO_A_PASSO"),
@@ -575,7 +512,8 @@ def gerar_docx_projeto_cientifico_V33(titulo_doc, conteudo_ia, info):
             texto_secao = ai.extrair_tag(conteudo_ia, tag)
             if texto_secao:
                 p_tit = doc.add_paragraph()
-                run_tit = p_tit.add_run(f"█▓▒░ {label}")
+                # REMOVIDO OS BLOCOS DE ENFEITE
+                run_tit = p_tit.add_run(label)
                 run_tit.bold = True
                 run_tit.font.size = Pt(11)
                 
@@ -601,10 +539,9 @@ def gerar_docx_projeto_cientifico_V33(titulo_doc, conteudo_ia, info):
         return file_stream
     
 # ==============================================================================
-# 9. EXPORTADOR DE DOSSIÊ ANALÍTICO (RAIO-X V91 - CLEAN & COLUNAS)
+# 8. EXPORTADOR DE DOSSIÊ ANALÍTICO (RAIO-X V91)
 # ==============================================================================
 def gerar_docx_raiox_v90(titulo_doc, info, stats_gerais, questoes_detalhes, alunos_criticos, grafico_bytes=None):
-    """Gera o documento impresso com Cabeçalho Oficial, Gráfico e 2 Colunas"""
     file_stream = io.BytesIO()
     try:
         doc = Document()
@@ -616,11 +553,9 @@ def gerar_docx_raiox_v90(titulo_doc, info, stats_gerais, questoes_detalhes, alun
         style.font.name = 'Arial'
         style.font.size = Pt(10)
 
-        # 1. CABEÇALHO MESTRE OFICIAL
         configurar_cabecalho_mestre(doc, info, "DOSSIÊ ANALÍTICO", mostrar_nota=False)
         doc.add_paragraph()
 
-        # 2. TERMÔMETRO DA TURMA (Largura Total)
         p_t = doc.add_paragraph()
         run_t = p_t.add_run("1. TERMÔMETRO DE PERFORMANCE DA TURMA")
         run_t.bold = True
@@ -632,7 +567,6 @@ def gerar_docx_raiox_v90(titulo_doc, info, stats_gerais, questoes_detalhes, alun
         p_s.add_run(f"• Média Geral da Turma: {stats_gerais.get('media_turma')}\n")
         p_s.add_run(f"• Alerta Crítico (Piores Índices): {stats_gerais.get('top_3')}").bold = True
 
-        # 3. INSERÇÃO DO GRÁFICO DE BARRAS
         if grafico_bytes:
             try:
                 image_stream = io.BytesIO(grafico_bytes)
@@ -644,14 +578,12 @@ def gerar_docx_raiox_v90(titulo_doc, info, stats_gerais, questoes_detalhes, alun
 
         doc.add_paragraph()
 
-        # 4. ATIVAÇÃO DE 2 COLUNAS NATIVAS
         new_section = doc.add_section(WD_SECTION.CONTINUOUS)
         sectPr = new_section._sectPr
         cols = sectPr.xpath('./w:cols')[0]
         cols.set(qn('w:num'), '2')
         cols.set(qn('w:space'), '450')
 
-        # 5. AUTÓPSIA POR QUESTÃO (Clean)
         p_a = doc.add_paragraph()
         run_a = p_a.add_run("2. AUTÓPSIA POR QUESTÃO")
         run_a.bold = True
@@ -674,7 +606,6 @@ def gerar_docx_raiox_v90(titulo_doc, info, stats_gerais, questoes_detalhes, alun
             p_per.add_run("Diagnóstico Técnico: ").bold = True
             p_per.add_run(q['pericia']).font.size = Pt(9)
 
-        # 6. RADAR DE ALUNOS CRÍTICOS
         p_c = doc.add_paragraph()
         p_c.paragraph_format.space_before = Pt(12)
         run_c = p_c.add_run("3. RADAR DE ALUNOS CRÍTICOS")
