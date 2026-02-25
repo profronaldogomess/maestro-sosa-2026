@@ -1996,15 +1996,15 @@ elif menu == "👥 Gestão da Turma":
         "📊 Cockpit de Prontidão", "🏗️ Arquitetura de Turmas", "➕ Povoar Alunos", "✏️ Edição & Transferência"
     ])
 
-# --- ABA 1: COCKPIT DA TURMA (VERSÃO V48 - AUTOMAÇÃO E FILTROS EM CASCATA) ---
+# --- ABA 1: COCKPIT DA TURMA (VERSÃO V49 - OCULTAÇÃO INTELIGENTE DE CONCLUÍDOS) ---
     with tab_cockpit:
         if df_turmas.empty:
             st.info("📭 Nenhuma turma cadastrada. Vá na aba 'Arquitetura' para iniciar.")
         else:
             st.markdown("### 📅 Grade Oficial de Regência")
             
-            dias_semana = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"]
-            tempos = ["1º Tempo", "2º Tempo"]
+            dias_semana =["Segunda", "Terça", "Quarta", "Quinta", "Sexta"]
+            tempos =["1º Tempo", "2º Tempo"]
             grade_map = {t: {d: "---" for d in dias_semana} for t in tempos}
 
             for _, row in df_turmas.iterrows():
@@ -2016,7 +2016,7 @@ elif menu == "👥 Gestão da Turma":
                 if "ª" in sigla: display_name = nome_turma.replace("Ano ", "ANO ").upper()
                 
                 if horarios_str and horarios_str != "N/A":
-                    for h in [x.strip() for x in horarios_str.split("/")]:
+                    for h in[x.strip() for x in horarios_str.split("/")]:
                         for dia in dias_semana:
                             for tempo in tempos:
                                 if dia in h and tempo in h:
@@ -2063,7 +2063,7 @@ elif menu == "👥 Gestão da Turma":
                 if not df_registro_aulas.empty and len(df_registro_aulas.columns) >= 9:
                     try:
                         climas_turma = df_registro_aulas[df_registro_aulas['TURMA'] == turma_foco].iloc[:, 8].dropna().astype(str).tolist()
-                        climas_validos = [c for c in climas_turma if c.strip() and c.lower() not in ["nan", "none", "n/a"]]
+                        climas_validos =[c for c in climas_turma if c.strip() and c.lower() not in["nan", "none", "n/a"]]
                         if climas_validos:
                             recentes = climas_validos[-5:]
                             clima_predominante = max(set(recentes), key=recentes.count)
@@ -2080,7 +2080,7 @@ elif menu == "👥 Gestão da Turma":
                         df_diario_turma['DATA_DT'] = pd.to_datetime(df_diario_turma['DATA'], format="%d/%m/%Y", errors='coerce')
                         df_diario_turma = df_diario_turma.sort_values(by=['ID_ALUNO', 'DATA_DT'])
                         
-                        alunos_risco = []
+                        alunos_risco =[]
                         for id_aluno, group in df_diario_turma.groupby('ID_ALUNO'):
                             last_3 = group.tail(3)
                             if len(last_3) == 3 and all(last_3['TAGS'] == "AUSÊNCIA"):
@@ -2113,7 +2113,7 @@ elif menu == "👥 Gestão da Turma":
                         
                         with st.spinner("Analisando matriz de respostas..."):
                             for av in avaliacoes:
-                                alertas_desta_prova = []
+                                alertas_desta_prova =[]
                                 nome_curto = av.split("-")[0].strip().replace(" (2ª CHAMADA)", "")
                                 df_ref = df_aulas[df_aulas['TIPO_MATERIAL'].str.contains(nome_curto, regex=False, na=False)]
                                 
@@ -2166,10 +2166,8 @@ elif menu == "👥 Gestão da Turma":
                 df_mats_ano = df_aulas[df_aulas['ANO'].str.contains(ano_num)].iloc[::-1]
 
                 if trim_foco != "Todos":
-                    # Filtra os planos pelo trimestre selecionado
                     df_p_atual = df_p_atual[df_p_atual['TURMA'] == trim_foco]
                     semanas_validas = df_p_atual['SEMANA'].tolist()
-                    # Filtra os materiais para mostrar apenas os que pertencem às semanas do trimestre
                     df_mats_ano = df_mats_ano[df_mats_ano['SEMANA_REF'].isin(semanas_validas)]
 
                 col_esq, col_dir = st.columns([1.6, 1.4])
@@ -2191,7 +2189,10 @@ elif menu == "👥 Gestão da Turma":
                     ponte_sugerida = "Início de novo ciclo pedagógico."
                     
                     df_p_sugestao = df_p_atual.copy()
-                    if not mostrar_historico: df_p_sugestao = df_p_sugestao[~df_p_sugestao['SEMANA'].isin(planos_usados)]
+                    if not mostrar_historico: 
+                        # 🚨 A MÁGICA ACONTECE AQUI: Remove os usados E os que já foram marcados como PRODUZIDO (Concluídos)
+                        df_p_sugestao = df_p_sugestao[~df_p_sugestao['SEMANA'].isin(planos_usados)]
+                        df_p_sugestao = df_p_sugestao[df_p_sugestao['EIXO'] == 'HUB_ATIVO']
                         
                     if not df_p_sugestao.empty:
                         row_p = df_p_sugestao.iloc[0]
@@ -2207,34 +2208,40 @@ elif menu == "👥 Gestão da Turma":
                             st.success(f"**Próxima Semana Inédita:** {plano_sugerido}")
                             st.info(f"**📖 Base Didática (DNA):**\n{base_didatica_sugerida}")
                         else:
-                            st.success("✅ Todos os planos gerados já foram aplicados nesta turma!")
+                            st.success("✅ Todos os planos ativos já foram aplicados nesta turma!")
                         
                         with st.expander("🔗 Ver Ponte de Continuidade (Onde paramos?)"):
                             st.caption(ponte_sugerida)
                         
                         st.divider()
                         
-                        # 🚨 CAMPO "VINCULAR PLANO BASE" REMOVIDO PARA LIMPEZA VISUAL
                         data_aula = st.date_input("Data da Aula:", date.today(), format="DD/MM/YYYY", key=f"dt_reg_{v}")
                         
+                        # 🚨 FILTRAGEM DE MATERIAIS (Oculta os que pertencem a semanas concluídas)
                         mats_disp_bruto = df_mats_ano['TIPO_MATERIAL'].tolist()
-                        if not mostrar_historico: mats_disp = [m for m in mats_disp_bruto if m not in materiais_usados]
-                        else: mats_disp = mats_disp_bruto
+                        if not mostrar_historico: 
+                            semanas_concluidas = df_planos[df_planos['EIXO'] == 'PRODUZIDO']['SEMANA'].tolist()
+                            mats_disp =[]
+                            for m in mats_disp_bruto:
+                                if m not in materiais_usados:
+                                    sem_ref_mat = df_mats_ano[df_mats_ano['TIPO_MATERIAL'] == m].iloc[0]['SEMANA_REF']
+                                    if sem_ref_mat not in semanas_concluidas:
+                                        mats_disp.append(m)
+                        else: 
+                            mats_disp = mats_disp_bruto
                             
                         label_mats = "📦 Selecione o Material (Máx 2):" if not mostrar_historico else "📦 Selecione o Material (Todos):"
                         
-                        # 🚨 TRAVA DE MÁXIMO 2 MATERIAIS ADICIONADA
                         mats_sel = st.multiselect(label_mats, options=mats_disp, max_selections=2, key=f"mats_reg_{v}")
 
                         if st.button("💾 CONFIRMAR ABERTURA DE AULA", use_container_width=True, type="primary"):
                             if not mats_sel:
                                 st.error("⚠️ Selecione ao menos um material para abrir a aula.")
                             else:
-                                # 🚨 AUTOMAÇÃO: O sistema deduz o plano base a partir do material selecionado
                                 mat_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == mats_sel[0]].iloc[0]
                                 plano_inferido = mat_ref['SEMANA_REF']
                                 
-                                db.salvar_no_banco("DB_REGISTRO_AULAS", [
+                                db.salvar_no_banco("DB_REGISTRO_AULAS",[
                                     data_aula.strftime("%d/%m/%Y"), plano_inferido, turma_foco, 
                                     " + ".join(mats_sel), "PENDENTE", "ABERTA"
                                 ])
@@ -2262,10 +2269,13 @@ elif menu == "👥 Gestão da Turma":
                         titulo_inv = f"**Próximos Ativos Inéditos ({ano_str_ref} Ano)**" if not mostrar_historico else f"**Todos os Ativos ({ano_str_ref} Ano)**"
                         st.markdown(titulo_inv)
                         
-                        # O df_mats_ano já está filtrado pelo Trimestre lá em cima
                         df_mats_exibir = df_mats_ano.copy()
                         if not mostrar_historico and not df_mats_exibir.empty: 
+                            # Remove os usados
                             df_mats_exibir = df_mats_exibir[~df_mats_exibir['TIPO_MATERIAL'].isin(materiais_usados)]
+                            # Remove os que pertencem a semanas concluídas
+                            semanas_concluidas = df_planos[df_planos['EIXO'] == 'PRODUZIDO']['SEMANA'].tolist()
+                            df_mats_exibir = df_mats_exibir[~df_mats_exibir['SEMANA_REF'].isin(semanas_concluidas)]
                         
                         if df_mats_exibir.empty: st.caption("Nenhum material pendente para esta turma neste trimestre. Tudo em dia!")
                         else:
