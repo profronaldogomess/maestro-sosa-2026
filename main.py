@@ -2908,7 +2908,7 @@ elif menu == "📸 Scanner de Gabaritos":
 # ==============================================================================
 elif menu == "📝 Diário de Bordo Rápido":
     st.title("📝 Diário de Bordo")
-    st.caption("📱 **Modo Mobile:** Interface otimizada para toques rápidos. Use o ditado por voz do teclado na coluna de observações.")
+    st.caption("📱 **Modo Mobile:** Interface otimizada para toques rápidos. Os ícones ao lado dos nomes indicam o perfil cognitivo do aluno para facilitar a mediação em sala.")
     
     if "v_diario" not in st.session_state: st.session_state.v_diario = int(time.time())
     v = st.session_state.v_diario
@@ -2972,7 +2972,7 @@ elif menu == "📝 Diário de Bordo Rápido":
                 st.warning("⚠️ Nenhuma aula aberta no Cockpit para esta data. O registro será salvo como 'Instrução Avulsa'.")
                 material_hoje = "Instrução Avulsa"
             
-            # --- 3. PAINEL DE REGÊNCIA (FECHADO POR PADRÃO PARA POUPAR TELA NO MOBILE) ---
+            # --- 3. PAINEL DE REGÊNCIA (FECHADO POR PADRÃO) ---
             with st.expander("🚦 Fechamento de Aula (Regência)", expanded=False):
                 st.caption("Preencha ao final da aula para alimentar a memória do sistema.")
                 c_reg1, c_reg2, c_reg3 = st.columns([1, 2, 1])
@@ -3008,10 +3008,20 @@ elif menu == "📝 Diário de Bordo Rápido":
             registros_atuais = df_diario[(df_diario['DATA'] == data_str) & (df_diario['TURMA'] == turma_sel) & (df_diario['TAGS'] != "SISTEMA_NOTA")]
             alunos_turma = df_alunos[df_alunos['TURMA'] == turma_sel].sort_values(by="NOME_ALUNO")
             
+            # 🚨 MOTOR DE ÍCONES MULTIPERFIL
+            def definir_icone_status(nec):
+                n = str(nec).upper().strip()
+                if "PENDENTE" in n or "SUSPEITA" in n: return "🟠"
+                if "DEFASAGEM LEITURA" in n: return "🧱"
+                if "DEFASAGEM MATEMÁTICA" in n or "DEFASAGEM MATEMATICA" in n: return "🧮"
+                if "ALTA PERFORMANCE" in n: return "🚀"
+                if n in["NENHUMA", "", "NAN", "TÍPICO", "TIPICO"]: return "👤"
+                return "♿"
+
             dados_diario =[]
             for _, alu in alunos_turma.iterrows():
                 id_a = db.limpar_id(alu['ID'])
-                is_pei = str(alu['NECESSIDADES']).upper().strip() not in["NENHUMA", "PENDENTE", "", "NAN", "TÍPICO", "TIPICO"]
+                icone_perfil = definir_icone_status(alu['NECESSIDADES'])
                 
                 reg_existente = registros_atuais[registros_atuais['ID_ALUNO'].apply(db.limpar_id) == id_a]
                 
@@ -3028,10 +3038,9 @@ elif menu == "📝 Diário de Bordo Rápido":
                     tag_val = ""
                     obs_val = ""
 
-                # Nomes de colunas curtos para caber na tela do celular
                 dados_diario.append({
                     "ID": id_a,
-                    "Estudante": f"♿ {alu['NOME_ALUNO']}" if is_pei else alu['NOME_ALUNO'],
+                    "Estudante": f"{icone_perfil} {alu['NOME_ALUNO']}",
                     "F": falta_val,
                     "V": visto_val,
                     "⭐": bonus_val,
@@ -3069,7 +3078,8 @@ elif menu == "📝 Diário de Bordo Rápido":
                     
                     linhas_diario =[]
                     for _, r in df_editado.iterrows():
-                        aluno_eh_pei = "♿" in r['Estudante']
+                        # Lógica de PEI Concluído (Apenas para Laudos e Suspeitas)
+                        aluno_eh_pei = "♿" in r['Estudante'] or "🟠" in r['Estudante']
                         tag_f = "AUSÊNCIA" if r['F'] else r['Vetor']
                         
                         visto_f = False if r['F'] else r['V']
@@ -3082,8 +3092,11 @@ elif menu == "📝 Diário de Bordo Rápido":
                         if r['Vetor'] == "Comunicação":
                             obs_final = f"🚨 COMUNICAÇÃO: {obs_final}"
 
+                        # Limpeza blindada do nome para salvar no banco
+                        nome_limpo = r['Estudante'].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
+
                         linhas_diario.append([
-                            data_str, r['ID'], r['Estudante'].replace("♿ ", ""), turma_sel,
+                            data_str, r['ID'], nome_limpo, turma_sel,
                             visto_db, tag_f, obs_final, util.sosa_to_str(r['⭐'])
                         ])
                                 
