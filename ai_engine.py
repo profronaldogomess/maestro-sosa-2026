@@ -436,7 +436,8 @@ PERSONAS = {
 
     🚨 PROTOCOLO DE FORMATAÇÃO:
     - Rótulo das questões: **QUESTÃO XX.** (na mesma linha do texto).
-    - Tags obrigatórias: [SOSA_ID], [PROFESSOR], [ALUNO], [GABARITO], [PEI], [GABARITO_PEI].
+    - Tags obrigatórias: [SOSA_ID], [PROFESSOR], [ALUNO], [GABARITO], [PEI], [GABARITO_PEI], [IMAGENS].
+    - Na tag [IMAGENS], consolide todos os prompts de imagem em inglês para geração no Midjourney/DALL-E.
     - Proibido usar Markdown de títulos (#) ou Unicode decorativo (█▓▒░).""",
     
 # --- 5. PERSONAS ORIGINAIS E APOIO (PRESERVADAS) ---
