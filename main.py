@@ -3352,8 +3352,9 @@ elif menu == "👤 Biografia do Estudante":
 
         st.caption(f"Dossiê atualizado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
 
+
 # ==============================================================================
-# MÓDULO: PAINEL DE NOTAS & VISTOS - CLEAN & UX
+# MÓDULO: PAINEL DE NOTAS & VISTOS - CLEAN & UX (MULTIPERFIL)
 # ==============================================================================
 elif menu == "📊 Painel de Notas & Vistos":
     st.title("📊 Torre de Comando: Gestão de Notas")
@@ -3433,6 +3434,16 @@ elif menu == "📊 Painel de Notas & Vistos":
         # --- 3. CONSOLIDAÇÃO DA MESA DE LANÇAMENTO ---
         notas_banco = df_notas[(df_notas['TURMA'] == turma_sel) & (df_notas['TRIMESTRE'] == trimestre_sel)]
         
+        # 🚨 MOTOR DE ÍCONES MULTIPERFIL
+        def definir_icone_status(nec):
+            n = str(nec).upper().strip()
+            if "PENDENTE" in n or "SUSPEITA" in n: return "🟠"
+            if "DEFASAGEM LEITURA" in n: return "🧱"
+            if "DEFASAGEM MATEMÁTICA" in n or "DEFASAGEM MATEMATICA" in n: return "🧮"
+            if "ALTA PERFORMANCE" in n: return "🚀"
+            if n in["NENHUMA", "", "NAN", "TÍPICO", "TIPICO"]: return "👤"
+            return "♿"
+
         dados_editor =[]
         for _, alu in alunos_turma.iterrows():
             id_a = db.limpar_id(alu['ID'])
@@ -3442,11 +3453,11 @@ elif menu == "📊 Painel de Notas & Vistos":
             n_prova = util.sosa_to_float(reg_b.iloc[0]['NOTA_PROVA']) if not reg_b.empty else 0.0
             n_rec = util.sosa_to_float(reg_b.iloc[0]['NOTA_REC']) if not reg_b.empty else 0.0
             
-            is_pei = str(alu['NECESSIDADES']).upper().strip() not in["NENHUMA", "PENDENTE", "", "NAN", "TÍPICO", "TIPICO"]
+            icone_perfil = definir_icone_status(alu['NECESSIDADES'])
 
             dados_editor.append({
                 "ID": id_a,
-                "ESTUDANTE": f"♿ {alu['NOME_ALUNO']}" if is_pei else alu['NOME_ALUNO'],
+                "ESTUDANTE": f"{icone_perfil} {alu['NOME_ALUNO']}",
                 "VISTOS (AUTO)": vistos_auto_map.get(id_a, 0.0),
                 "BÔNUS (TOTAL)": bonus_total_map.get(id_a, 0.0),
                 "TESTE (LANÇAR)": n_teste,
@@ -3531,8 +3542,11 @@ elif menu == "📊 Painel de Notas & Vistos":
                 db.limpar_notas_turma_trimestre(turma_sel, trimestre_sel)
                 linhas_save =[]
                 for _, r in df_input.iterrows():
+                    # 🚨 LIMPEZA BLINDADA DO NOME ANTES DE SALVAR
+                    nome_limpo = r['ESTUDANTE'].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
+                    
                     linhas_save.append([
-                        r['ID'], r['ESTUDANTE'].replace("♿ ", ""), turma_sel, trimestre_sel,
+                        r['ID'], nome_limpo, turma_sel, trimestre_sel,
                         util.sosa_to_str(r["V_PREF"]), util.sosa_to_str(r["T_PREF"]),
                         util.sosa_to_str(r["P_PREF"]), util.sosa_to_str(r["REC_PREF"]),
                         util.sosa_to_str(r['MEDIA_FINAL'])
