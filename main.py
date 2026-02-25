@@ -3482,6 +3482,165 @@ elif menu == "📊 Painel de Notas & Vistos":
                     status.update(label="✅ Boletim Sincronizado com Sucesso!", state="complete")
                     st.balloons(); time.sleep(1); st.rerun()
 
+
+# ==============================================================================
+# MÓDULO: BOLETIM ANUAL & CONSELHO - CLEAN & UX
+# ==============================================================================
+elif menu == "📈 Boletim Anual & Conselho":
+    st.title("📈 Inteligência de Conselho e Resultados")
+    st.caption("💡 **Guia de Comando:** Visão panorâmica do ano letivo. O sistema cruza notas, recuperações e faltas para calcular automaticamente a situação final de cada estudante.")
+    st.markdown("---")
+
+    if df_notas.empty:
+        st.warning("⚠️ Sem notas lançadas no sistema. O Boletim Anual será gerado assim que houver dados.")
+    else:
+        # --- 1. FILTRO DE TURMA ---
+        turmas_reais_bol = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
+        lista_turmas_bol = sorted(turmas_reais_bol['ID_TURMA'].unique()) if not turmas_reais_bol.empty else sorted(df_alunos['TURMA'].unique())
+        
+        if not lista_turmas_bol:
+            st.warning("Nenhuma turma cadastrada.")
+            st.stop()
+            
+        with st.container(border=True):
+            turma_sel = st.selectbox("🎯 Selecione a Turma para Análise:", lista_turmas_bol, key="bol_turma_clean")
+        
+        # --- 2. PROCESSAMENTO DE DADOS (DATA FUSION) ---
+        df_t = df_notas[df_notas['TURMA'] == turma_sel].copy()
+        
+        if df_t.empty:
+            st.info(f"📭 Nenhuma nota lançada para a turma {turma_sel} ainda.")
+            st.stop()
+
+        pivot = df_t.pivot_table(
+            index=["ID_ALUNO", "NOME_ALUNO"], 
+            columns="TRIMESTRE", 
+            values=["MEDIA_FINAL", "NOTA_REC"], 
+            aggfunc='first'
+        ).reset_index()
+
+        pivot.columns = [f"{col[0]}_{col[1]}".strip('_') for col in pivot.columns.values]
+
+        trims = ["I Trimestre", "II Trimestre", "III Trimestre"]
+        for t in trims:
+            if f"MEDIA_FINAL_{t}" not in pivot.columns: pivot[f"MEDIA_FINAL_{t}"] = 0.0
+            if f"NOTA_REC_{t}" not in pivot.columns: pivot[f"NOTA_REC_{t}"] = 0.0
+
+        rec_f_data = df_t[df_t['TRIMESTRE'].str.contains("REC_FINAL|FINAL", na=False, case=False)]
+        if not rec_f_data.empty:
+            rec_f_min = rec_f_data[['ID_ALUNO', 'MEDIA_FINAL']].rename(columns={'MEDIA_FINAL': 'RF'})
+            pivot = pd.merge(pivot, rec_f_min, on='ID_ALUNO', how='left')
+        else:
+            pivot['RF'] = 0.0
+        
+        # CÁLCULO DE FALTAS TOTAIS DO ANO
+        faltas_df = df_diario[(df_diario['TURMA'] == turma_sel) & (df_diario['TAGS'] == "AUSÊNCIA")]
+        
+        if not faltas_df.empty:
+            faltas_count = faltas_df.groupby('ID_ALUNO').size().reset_index(name='FALTAS')
+            faltas_count['ID_ALUNO'] = faltas_count['ID_ALUNO'].apply(db.limpar_id)
+            
+            pivot['ID_ALUNO_CLEAN'] = pivot['ID_ALUNO'].apply(db.limpar_id)
+            pivot = pd.merge(pivot, faltas_count, left_on='ID_ALUNO_CLEAN', right_on='ID_ALUNO', how='left')
+            
+            if 'ID_ALUNO_y' in pivot.columns: pivot = pivot.drop(columns=['ID_ALUNO_y'])
+            if 'ID_ALUNO_CLEAN' in pivot.columns: pivot = pivot.drop(columns=['ID_ALUNO_CLEAN'])
+            if 'ID_ALUNO_x' in pivot.columns: pivot = pivot.rename(columns={'ID_ALUNO_x': 'ID_ALUNO'})
+                
+            pivot['FALTAS'] = pivot['FALTAS'].fillna(0).astype(int)
+        else:
+            pivot['FALTAS'] = 0
+
+        pivot = pivot.fillna(0.0)
+
+        # Total de dias letivos registrados para a turma (para calcular o limite de 25%)
+        total_dias_letivos = df_diario[df_diario['TURMA'] == turma_sel]['DATA'].nunique()
+        limite_faltas = total_dias_letivos * 0.25 
+
+        # --- 3. LÓGICA DE STATUS (COM PESO DE FALTAS) ---
+        def calcular_situacao_anual(row):
+            t1 = util.sosa_to_float(row.get("MEDIA_FINAL_I Trimestre", 0))
+            t2 = util.sosa_to_float(row.get("MEDIA_FINAL_II Trimestre", 0))
+            t3 = util.sosa_to_float(row.get("MEDIA_FINAL_III Trimestre", 0))
+            rf = util.sosa_to_float(row.get("RF", 0))
+            faltas_aluno = row.get("FALTAS", 0)
+            
+            soma = t1 + t2 + t3
+            falta_pts = max(0.0, 18.0 - soma)
+            
+            aluno_match = df_alunos[df_alunos['ID'].apply(db.limpar_id) == db.limpar_id(row['ID_ALUNO'])]
+            if not aluno_match.empty:
+                aluno_info = aluno_match.iloc[0]
+                pei = "♿" if str(aluno_info['NECESSIDADES']).upper().strip() not in["NENHUMA", "PENDENTE", "", "NAN", "TÍPICO", "TIPICO"] else "👤"
+            else:
+                pei = "👤"
+            
+            # INTELIGÊNCIA DE STATUS: Faltas pesam mais que nota
+            if faltas_aluno > limite_faltas and total_dias_letivos > 20: 
+                status = "🚨 RISCO (FALTAS)"
+            elif soma >= 18.0: status = "✅ APROV"
+            elif rf >= 6.0: status = "🔄 APROV.REC"
+            elif soma > 0 and falta_pts <= 10.0: status = "⚠️ REC.FINAL"
+            elif soma > 0 and falta_pts > 10.0: status = "🚨 RISCO (NOTA)"
+            else: status = "⏳ AGUARD"
+            
+            return pd.Series([pei, soma, falta_pts, status])
+
+        pivot[['P', 'Σ', 'FALTA_PTS', 'SITUAÇÃO']] = pivot.apply(calcular_situacao_anual, axis=1)
+
+        # --- 4. KPIs DE TOPO (TERMÔMETRO DA TURMA) ---
+        st.markdown("### 📊 Termômetro da Turma")
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Média Geral da Turma", f"{pivot['Σ'].mean()/3:.1f}")
+        
+        aprov = len(pivot[pivot['SITUAÇÃO'].str.contains("APROV")])
+        c2.metric("Taxa de Aprovação", f"{(aprov/len(pivot)*100):.0f}%" if len(pivot) > 0 else "0%")
+        
+        c3.metric("Em Rec. Final", len(pivot[pivot['SITUAÇÃO'] == "⚠️ REC.FINAL"]))
+        
+        risco_total = len(pivot[pivot['SITUAÇÃO'].str.contains("🚨 RISCO")])
+        c4.metric("Risco Crítico (Nota/Falta)", risco_total, delta_color="inverse", help="Alunos que já estouraram o limite de faltas ou que precisam de mais de 10 pontos para passar.")
+
+        # --- 5. TABELA MOBILE-FIRST ---
+        st.markdown("---")
+        st.markdown("### 📋 Mapa de Desempenho Anual e Assiduidade")
+        
+        def style_status_anual(v):
+            if "APROV" in str(v): return 'color: #2ECC71; font-weight: bold;'
+            if "RISCO" in str(v): return 'color: #E74C3C; font-weight: bold;'
+            if "REC.FINAL" in str(v): return 'color: #F1C40F; font-weight: bold;'
+            return ''
+
+        st.dataframe(
+            pivot[['P', 'NOME_ALUNO', 
+                   'MEDIA_FINAL_I Trimestre', 'NOTA_REC_I Trimestre',
+                   'MEDIA_FINAL_II Trimestre', 'NOTA_REC_II Trimestre',
+                   'MEDIA_FINAL_III Trimestre', 'NOTA_REC_III Trimestre',
+                   'Σ', 'RF', 'FALTAS', 'SITUAÇÃO']]
+            .style.applymap(style_status_anual, subset=['SITUAÇÃO'])
+            .format("{:.1f}", subset=['MEDIA_FINAL_I Trimestre', 'NOTA_REC_I Trimestre', 
+                                      'MEDIA_FINAL_II Trimestre', 'NOTA_REC_II Trimestre', 
+                                      'MEDIA_FINAL_III Trimestre', 'NOTA_REC_III Trimestre', 
+                                      'Σ', 'RF']),
+            use_container_width=True, hide_index=True,
+            column_config={
+                "P": st.column_config.TextColumn("P", width="small", help="Perfil: ♿ PEI ou 👤 Regular"),
+                "NOME_ALUNO": st.column_config.TextColumn("Estudante", width="medium"),
+                "MEDIA_FINAL_I Trimestre": st.column_config.NumberColumn("I", width="small"),
+                "NOTA_REC_I Trimestre": st.column_config.NumberColumn("R1", width="small"),
+                "MEDIA_FINAL_II Trimestre": st.column_config.NumberColumn("II", width="small"),
+                "NOTA_REC_II Trimestre": st.column_config.NumberColumn("R2", width="small"),
+                "MEDIA_FINAL_III Trimestre": st.column_config.NumberColumn("III", width="small"),
+                "NOTA_REC_III Trimestre": st.column_config.NumberColumn("R3", width="small"),
+                "Σ": st.column_config.NumberColumn("Σ", width="small", help="Soma Anual (Meta: 18.0)"),
+                "RF": st.column_config.NumberColumn("RF", width="small", help="Recuperação Final"),
+                "FALTAS": st.column_config.NumberColumn("F", width="small", help=f"Total de Faltas no Ano. Limite atual: {int(limite_faltas)}"),
+                "SITUAÇÃO": st.column_config.TextColumn("Status", width="small")
+            }
+        )
+        
+        st.caption(f"📌 **Legenda:** I, II, III (Médias Trimestrais) | R1, R2, R3 (Recuperações Paralelas) | Σ (Soma Anual) | RF (Recuperação Final) | F (Faltas). Limite de faltas atual: **{int(limite_faltas)}**.")
+
 # ==============================================================================
 # MÓDULO: GESTÃO DA TURMA (V46 - COCKPIT DE PRONTIDÃO E COMANDO)
 # ==============================================================================
@@ -4311,160 +4470,3 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                             st.caption("🔒 Documento assinado digitalmente pelo ecossistema SOSA V38.7")
             else:
                 st.info("📭 Nenhuma evidência ou documento arquivado para este estudante até o momento.")
-
-
-       
-# ==============================================================================
-# MÓDULO: BOLETIM ANUAL & CONSELHO V31.1 - INTELIGÊNCIA DE FALTAS E CORREÇÃO
-# ==============================================================================
-elif menu == "📈 Boletim Anual & Conselho":
-    st.title("📈 Inteligência de Conselho e Resultados")
-    st.markdown("---")
-
-    if df_notas.empty:
-        st.warning("⚠️ Sem notas lançadas no sistema.")
-    else:
-        # --- 1. FILTRO DE TURMA ---
-        turmas_reais_bol = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
-        lista_turmas_bol = sorted(turmas_reais_bol['ID_TURMA'].unique()) if not turmas_reais_bol.empty else sorted(df_alunos['TURMA'].unique())
-        
-        if not lista_turmas_bol:
-            st.warning("Nenhuma turma cadastrada.")
-            st.stop()
-            
-        turma_sel = st.selectbox("🎯 Selecione a Turma:", lista_turmas_bol, key="bol_turma_v31")
-        
-        # --- 2. PROCESSAMENTO DE DADOS (DATA FUSION) ---
-        df_t = df_notas[df_notas['TURMA'] == turma_sel].copy()
-        
-        if df_t.empty:
-            st.info(f"📭 Nenhuma nota lançada para a turma {turma_sel} ainda.")
-            st.stop()
-
-        pivot = df_t.pivot_table(
-            index=["ID_ALUNO", "NOME_ALUNO"], 
-            columns="TRIMESTRE", 
-            values=["MEDIA_FINAL", "NOTA_REC"], 
-            aggfunc='first'
-        ).reset_index()
-
-        pivot.columns = [f"{col[0]}_{col[1]}".strip('_') for col in pivot.columns.values]
-
-        trims = ["I Trimestre", "II Trimestre", "III Trimestre"]
-        for t in trims:
-            if f"MEDIA_FINAL_{t}" not in pivot.columns: pivot[f"MEDIA_FINAL_{t}"] = 0.0
-            if f"NOTA_REC_{t}" not in pivot.columns: pivot[f"NOTA_REC_{t}"] = 0.0
-
-        # 🚨 CORREÇÃO DAS ASPAS AQUI
-        rec_f_data = df_t[df_t['TRIMESTRE'].str.contains("REC_FINAL|FINAL", na=False, case=False)]
-        if not rec_f_data.empty:
-            rec_f_min = rec_f_data[['ID_ALUNO', 'MEDIA_FINAL']].rename(columns={'MEDIA_FINAL': 'RF'})
-            pivot = pd.merge(pivot, rec_f_min, on='ID_ALUNO', how='left')
-        else:
-            pivot['RF'] = 0.0
-        
-        # 🚨 CÁLCULO DE FALTAS TOTAIS DO ANO (COM BLINDAGEM)
-        faltas_df = df_diario[(df_diario['TURMA'] == turma_sel) & (df_diario['TAGS'] == "AUSÊNCIA")]
-        
-        if not faltas_df.empty:
-            faltas_count = faltas_df.groupby('ID_ALUNO').size().reset_index(name='FALTAS')
-            faltas_count['ID_ALUNO'] = faltas_count['ID_ALUNO'].apply(db.limpar_id)
-            
-            pivot['ID_ALUNO_CLEAN'] = pivot['ID_ALUNO'].apply(db.limpar_id)
-            pivot = pd.merge(pivot, faltas_count, left_on='ID_ALUNO_CLEAN', right_on='ID_ALUNO', how='left')
-            
-            # Limpeza das colunas duplicadas após o merge
-            if 'ID_ALUNO_y' in pivot.columns: pivot = pivot.drop(columns=['ID_ALUNO_y'])
-            if 'ID_ALUNO_CLEAN' in pivot.columns: pivot = pivot.drop(columns=['ID_ALUNO_CLEAN'])
-            if 'ID_ALUNO_x' in pivot.columns: pivot = pivot.rename(columns={'ID_ALUNO_x': 'ID_ALUNO'})
-                
-            pivot['FALTAS'] = pivot['FALTAS'].fillna(0).astype(int)
-        else:
-            pivot['FALTAS'] = 0
-
-        pivot = pivot.fillna(0.0)
-
-        # Total de dias letivos registrados para a turma (para calcular o limite de 25%)
-        total_dias_letivos = df_diario[df_diario['TURMA'] == turma_sel]['DATA'].nunique()
-        limite_faltas = total_dias_letivos * 0.25 # Reprovação por 25% de faltas
-
-        # --- 3. LÓGICA DE STATUS (COM PESO DE FALTAS) ---
-        def calcular_situacao_v31(row):
-            t1 = util.sosa_to_float(row.get("MEDIA_FINAL_I Trimestre", 0))
-            t2 = util.sosa_to_float(row.get("MEDIA_FINAL_II Trimestre", 0))
-            t3 = util.sosa_to_float(row.get("MEDIA_FINAL_III Trimestre", 0))
-            rf = util.sosa_to_float(row.get("RF", 0))
-            faltas_aluno = row.get("FALTAS", 0)
-            
-            soma = t1 + t2 + t3
-            falta_pts = max(0.0, 18.0 - soma)
-            
-            # Busca segura do perfil do aluno
-            aluno_match = df_alunos[df_alunos['ID'].apply(db.limpar_id) == db.limpar_id(row['ID_ALUNO'])]
-            if not aluno_match.empty:
-                aluno_info = aluno_match.iloc[0]
-                pei = "♿" if str(aluno_info['NECESSIDADES']).upper().strip() not in ["NENHUMA", "PENDENTE", "", "NAN", "TÍPICO", "TIPICO"] else "👤"
-            else:
-                pei = "👤"
-            
-            # 🚨 INTELIGÊNCIA DE STATUS: Faltas pesam mais que nota
-            if faltas_aluno > limite_faltas and total_dias_letivos > 20: 
-                status = "🚨 RISCO (FALTAS)"
-            elif soma >= 18.0: status = "✅ APROV"
-            elif rf >= 6.0: status = "🔄 APROV.REC"
-            elif soma > 0 and falta_pts <= 10.0: status = "⚠️ REC.FINAL"
-            elif soma > 0 and falta_pts > 10.0: status = "🚨 RISCO (NOTA)"
-            else: status = "⏳ AGUARD"
-            
-            return pd.Series([pei, soma, falta_pts, status])
-
-        pivot[['P', 'Σ', 'FALTA_PTS', 'SITUAÇÃO']] = pivot.apply(calcular_situacao_v31, axis=1)
-
-        # --- 4. KPIs DE TOPO ---
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Média Turma", f"{pivot['Σ'].mean()/3:.1f}")
-        aprov = len(pivot[pivot['SITUAÇÃO'].str.contains("APROV")])
-        c2.metric("Aprovação", f"{(aprov/len(pivot)*100):.0f}%" if len(pivot) > 0 else "0%")
-        c3.metric("Em Rec. Final", len(pivot[pivot['SITUAÇÃO'] == "⚠️ REC.FINAL"]))
-        
-        risco_total = len(pivot[pivot['SITUAÇÃO'].str.contains("🚨 RISCO")])
-        c4.metric("Risco Crítico (Nota/Falta)", risco_total, delta_color="inverse")
-
-        # --- 5. TABELA MOBILE-FIRST (COM COLUNA DE FALTAS) ---
-        st.markdown("### 📋 Mapa de Desempenho Anual e Assiduidade")
-        
-        def style_v31(v):
-            if "APROV" in str(v): return 'color: #2ECC71; font-weight: bold;'
-            if "RISCO" in str(v): return 'color: #E74C3C; font-weight: bold;'
-            if "REC.FINAL" in str(v): return 'color: #F1C40F; font-weight: bold;'
-            return ''
-
-        st.dataframe(
-            pivot[['P', 'NOME_ALUNO', 
-                   'MEDIA_FINAL_I Trimestre', 'NOTA_REC_I Trimestre',
-                   'MEDIA_FINAL_II Trimestre', 'NOTA_REC_II Trimestre',
-                   'MEDIA_FINAL_III Trimestre', 'NOTA_REC_III Trimestre',
-                   'Σ', 'RF', 'FALTAS', 'SITUAÇÃO']]
-            .style.applymap(style_v31, subset=['SITUAÇÃO'])
-            .format("{:.1f}", subset=['MEDIA_FINAL_I Trimestre', 'NOTA_REC_I Trimestre', 
-                                      'MEDIA_FINAL_II Trimestre', 'NOTA_REC_II Trimestre', 
-                                      'MEDIA_FINAL_III Trimestre', 'NOTA_REC_III Trimestre', 
-                                      'Σ', 'RF']),
-            use_container_width=True, hide_index=True,
-            column_config={
-                "P": st.column_config.TextColumn("P", width="small"),
-                "NOME_ALUNO": st.column_config.TextColumn("Estudante", width="medium"),
-                "MEDIA_FINAL_I Trimestre": st.column_config.NumberColumn("I", width="small"),
-                "NOTA_REC_I Trimestre": st.column_config.NumberColumn("R1", width="small"),
-                "MEDIA_FINAL_II Trimestre": st.column_config.NumberColumn("II", width="small"),
-                "NOTA_REC_II Trimestre": st.column_config.NumberColumn("R2", width="small"),
-                "MEDIA_FINAL_III Trimestre": st.column_config.NumberColumn("III", width="small"),
-                "NOTA_REC_III Trimestre": st.column_config.NumberColumn("R3", width="small"),
-                "Σ": st.column_config.NumberColumn("Σ", width="small"),
-                "RF": st.column_config.NumberColumn("RF", width="small"),
-                "FALTAS": st.column_config.NumberColumn("F", width="small", help="Total de Faltas no Ano"),
-                "SITUAÇÃO": st.column_config.TextColumn("Status", width="small")
-            }
-        )
-        
-        st.caption(f"📌 Legenda: I, II, III (Médias) | R1, R2, R3 (Rec. Paralelas) | Σ (Soma Anual) | RF (Rec. Final) | F (Faltas). Limite de faltas atual: {int(limite_faltas)}.")
