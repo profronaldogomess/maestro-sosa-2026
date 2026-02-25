@@ -325,7 +325,7 @@ if menu == "📅 Planejamento (Ponto ID)":
     st.caption("💡 **Guia de Comando:** Este é o cérebro do ecossistema. O planejamento gerado aqui define a rota da semana e alimenta automaticamente o *Criador de Aulas* e o *Diário de Bordo*.")
 
     def reset_planejamento():
-        keys_to_clear =["p_temp", "refino_ativo", "p_meta"]
+        keys_to_clear = ["p_temp", "refino_ativo", "p_meta"]
         for k in keys_to_clear:
             if k in st.session_state: del st.session_state[k]
         st.session_state.v_plano = int(time.time())
@@ -366,15 +366,8 @@ if menu == "📅 Planejamento (Ponto ID)":
             base_didatica_info = "Matriz Curricular de Itabuna"
             
             c1, c2, c3 = st.columns([1, 2, 1.5])
-            ano_p = c1.selectbox("Série/Ano Alvo:", [6, 7, 8, 9], index=0, key=f"ano_sel_{v}")
+            ano_p = c1.selectbox("Série/Ano Alvo:",[6, 7, 8, 9], index=0, key=f"ano_sel_{v}")
             ano_str_busca = f"{ano_p}º"
-            
-            # 🚨 SELETOR DINÂMICO PARA RECOMPOSIÇÃO
-            turma_p = None
-            if tipo_semana == "🔥 Revisão & Recomposição":
-                turmas_da_serie = sorted(df_alunos[df_alunos['TURMA'].str.contains(str(ano_p))]['TURMA'].unique())
-                if turmas_da_serie:
-                    turma_p = c1.selectbox("Turma Alvo (Diagnóstico):", turmas_da_serie, help="Para recomposição, o plano é personalizado com base nos erros específicos desta turma.", key=f"turma_sel_{v}")
 
             # LÓGICA BLINDADA: FILTRO DE SEMANAS PENDENTES
             todas_semanas = util.gerar_semanas()
@@ -406,14 +399,14 @@ if menu == "📅 Planejamento (Ponto ID)":
                         ctx_ativo_vinculado = f"--- ATIVO VINCULADO: {ativo_sel} ---\nCONTEÚDO: {dados_ativo['CONTEUDO']}"
                         
                         # ==============================================================================
-                        # 🚨 MOTOR DE RECOMPOSIÇÃO GUIADA POR DADOS (DATA-DRIVEN)
+                        # 🚨 MOTOR DE RECOMPOSIÇÃO GUIADA POR DADOS (AGREGADO POR SÉRIE)
                         # ==============================================================================
-                        if tipo_semana == "🔥 Revisão & Recomposição" and turma_p:
-                            with st.expander("📡 Radar de Diagnóstico Ativo (Data-Driven)", expanded=True):
-                                st.markdown(f"**Analisando dados da {turma_p} para {ativo_sel}...**")
+                        if tipo_semana == "🔥 Revisão & Recomposição":
+                            with st.expander(f"📡 Radar de Diagnóstico Ativo (Série: {ano_p}º Ano)", expanded=True):
+                                st.markdown(f"**Analisando dados de todas as turmas do {ano_p}º Ano para {ativo_sel}...**")
                                 
-                                # 1. Perfil da Turma
-                                alunos_rad = df_alunos[df_alunos['TURMA'] == turma_p].copy()
+                                # 1. Perfil da Série Inteira
+                                alunos_rad = df_alunos[df_alunos['TURMA'].str.contains(str(ano_p))].copy()
                                 perfil_txt = ""
                                 if not alunos_rad.empty:
                                     def categorizar_aluno(nec):
@@ -435,14 +428,14 @@ if menu == "📅 Planejamento (Ponto ID)":
                                     
                                     if perfis_relevantes:
                                         perfil_txt = " | ".join(perfis_relevantes)
-                                        st.warning(f"**Perfil Cognitivo:** {perfil_txt}")
+                                        st.warning(f"**Perfil Cognitivo da Série:** {perfil_txt}")
                                     else:
-                                        st.success("**Perfil Cognitivo:** Turma majoritariamente Típica/Padrão.")
+                                        st.success("**Perfil Cognitivo da Série:** Maioria Típica/Padrão.")
                                 
-                                # 2. Lacunas da Prova
+                                # 2. Lacunas da Prova na Série Inteira
                                 lacunas_txt = ""
                                 nome_curto_av = ativo_sel.split("-")[0].strip().replace(" (2ª CHAMADA)", "")
-                                diag_t = df_diagnosticos[(df_diagnosticos['TURMA'] == turma_p) & (df_diagnosticos['ID_AVALIACAO'].str.contains(nome_curto_av, case=False, na=False))]
+                                diag_t = df_diagnosticos[(df_diagnosticos['TURMA'].str.contains(str(ano_p))) & (df_diagnosticos['ID_AVALIACAO'].str.contains(nome_curto_av, case=False, na=False))]
                                 
                                 if not diag_t.empty:
                                     txt_prova = str(dados_ativo['CONTEUDO'])
@@ -480,7 +473,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                                         
                                         if lacunas_stats:
                                             top_lacunas = sorted(lacunas_stats, key=lambda x: x['taxa'])[:3]
-                                            st.error("🚨 **Top 3 Lacunas Críticas Detectadas:**")
+                                            st.error("🚨 **Top 3 Lacunas Críticas da Série:**")
                                             lacunas_str_list =[]
                                             for lac in top_lacunas:
                                                 st.markdown(f"**Q{lac['q']} ({lac['taxa']*100:.0f}% de acerto):** {lac['hab']}")
@@ -488,18 +481,18 @@ if menu == "📅 Planejamento (Ponto ID)":
                                             
                                             lacunas_txt = "\n".join(lacunas_str_list)
                                         else:
-                                            st.success("✅ Nenhuma questão com menos de 60% de acerto.")
+                                            st.success("✅ Nenhuma questão com menos de 60% de acerto na série.")
                                 else:
-                                    st.info("Nenhum gabarito escaneado para esta turma nesta avaliação.")
+                                    st.info("Nenhum gabarito escaneado para esta série nesta avaliação.")
                                 
                                 # 3. Montagem do Strat (Injeção no Prompt)
                                 if lacunas_txt or perfil_txt:
-                                    strat = f"--- DADOS DE DIAGNÓSTICO DA TURMA {turma_p} ---\n"
-                                    if perfil_txt: strat += f"PERFIL COGNITIVO: {perfil_txt}\n"
+                                    strat = f"--- DADOS DE DIAGNÓSTICO DA SÉRIE ({ano_p}º ANO) ---\n"
+                                    if perfil_txt: strat += f"PERFIL COGNITIVO GERAL: {perfil_txt}\n"
                                     if lacunas_txt: strat += f"LACUNAS CRÍTICAS (Foque a revisão nestes pontos):\n{lacunas_txt}\n"
-                                    strat += "🚨 DIRETRIZ DE RECOMPOSIÇÃO: Não revise a prova inteira. Foque EXCLUSIVAMENTE nas lacunas apontadas acima. Adapte a linguagem e as dinâmicas para o perfil cognitivo da turma."
+                                    strat += "🚨 DIRETRIZ DE RECOMPOSIÇÃO: Não revise a prova inteira. Foque EXCLUSIVAMENTE nas lacunas apontadas acima. Adapte a linguagem e as dinâmicas para o perfil cognitivo geral da série."
 
-            modo_p = c3.radio("📚 Método de Base Didática:", ["📖 Livro Didático", "🎛️ Manual (Matriz)"], horizontal=True, help="Livro: A IA lê o PDF do seu cofre. Manual: A IA usa apenas a Matriz Curricular.", key=f"modo_p_{v}")
+            modo_p = c3.radio("📚 Método de Base Didática:",["📖 Livro Didático", "🎛️ Manual (Matriz)"], horizontal=True, help="Livro: A IA lê o PDF do seu cofre. Manual: A IA usa apenas a Matriz Curricular.", key=f"modo_p_{v}")
             
             # --- SEÇÃO DE PARÂMETROS (MODO MANUAL / BANCO) ---
             if modo_p == "🎛️ Manual (Matriz)":
@@ -541,7 +534,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                 st.markdown("#### 📖 Extração Direta do Livro Didático")
                 cx1, cx2 = st.columns([2, 1])
                 livros_disponiveis = df_materiais[df_materiais['TIPO'].str.contains(str(ano_p), na=False)]['NOME_ARQUIVO'].tolist()
-                sel_mat = cx1.selectbox("Selecionar Livro do Cofre Digital:",[""] + livros_disponiveis, key=f"p_livro_{v}")
+                sel_mat = cx1.selectbox("Selecionar Livro do Cofre Digital:", [""] + livros_disponiveis, key=f"p_livro_{v}")
                 
                 pags = cx2.text_input("Páginas Alvo:", placeholder="Ex: 14-23 ; 45-50", help="Use ';' para separar capítulos. A IA usará a 1ª parte na Aula 1 e a 2ª parte na Aula 2.", key=f"p_pags_{v}")
                 
@@ -581,7 +574,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                         f"CARGA HORÁRIA: {carga_horaria}.\n"
                         f"SÁBADO LETIVO: {status_sabado_cmd}.\n\n"
                         f"🚨 MISSÃO DE DISTRIBUIÇÃO:\n"
-                        f"1. Se houver múltiplos intervalos de páginas separados por ';', use o primeiro para a [AULA_1] e o segundo para a[AULA_2].\n"
+                        f"1. Se houver múltiplos intervalos de páginas separados por ';', use o primeiro para a [AULA_1] e o segundo para a [AULA_2].\n"
                         f"2. Extraia os conceitos exatos de cada capítulo/intervalo citado (se for modo livro).\n"
                         f"3. Se a carga for '1 Aula', foque apenas no primeiro intervalo.\n"
                         f"4. Preencha todas as tags [TAG] com densidade acadêmica.\n\n"
