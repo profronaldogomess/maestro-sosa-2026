@@ -4405,20 +4405,67 @@ elif menu == "👥 Gestão da Turma":
     # 🚨 NOVA ABA 5: RADIOGRAFIA COGNITIVA DA TURMA
     # ==============================================================================
     with tab_radiografia:
-        st.subheader("🧠 Radiografia Cognitiva da Turma")
-        st.caption("Mapeamento tático de perfis de aprendizagem para formação de duplas e planejamento de aulas.")
+        st.subheader("🧠 Radiografia Cognitiva e Desempenho Global")
+        st.caption("Mapeamento tático de perfis, engajamento, assiduidade e resultados em avaliações para geração de dossiês futuros.")
         
         turmas_reais_rad = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
         lista_turmas_rad = sorted(turmas_reais_rad['ID_TURMA'].unique()) if not turmas_reais_rad.empty else sorted(df_alunos['TURMA'].unique())
         
-        t_rad = st.selectbox("🎯 Selecione a Turma para Mapeamento:", lista_turmas_rad, key=f"rad_t_{v}")
+        t_rad = st.selectbox("🎯 Selecione a Turma para Mapeamento Global:", lista_turmas_rad, key=f"rad_t_{v}")
         
         if t_rad:
             alunos_rad = df_alunos[df_alunos['TURMA'] == t_rad].copy()
             if alunos_rad.empty:
                 st.info("Nenhum aluno cadastrado nesta turma.")
             else:
-                # Lógica de Categorização
+                # --- 1. KPIs GLOBAIS DA TURMA ---
+                st.markdown("#### 📊 1. Termômetro Global da Turma")
+                df_d_rad = df_diario[df_diario['TURMA'] == t_rad]
+                df_diag_rad = df_diagnosticos[df_diagnosticos['TURMA'] == t_rad]
+                
+                taxa_assiduidade = 0.0
+                taxa_engajamento = 0.0
+                media_geral_av = 0.0
+                
+                if not df_d_rad.empty:
+                    total_registros = len(df_d_rad)
+                    faltas = len(df_d_rad[df_d_rad['TAGS'] == "AUSÊNCIA"])
+                    taxa_assiduidade = ((total_registros - faltas) / total_registros) * 100 if total_registros > 0 else 0
+                    
+                    df_vistos = df_d_rad[df_d_rad['VISTO_ATIVIDADE'].astype(str).str.upper() != "ISENTO"]
+                    vistos_possiveis = len(df_vistos)
+                    vistos_dados = len(df_vistos[df_vistos['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"])
+                    taxa_engajamento = (vistos_dados / vistos_possiveis) * 100 if vistos_possiveis > 0 else 0
+                
+                if not df_diag_rad.empty:
+                    media_geral_av = df_diag_rad['NOTA_CALCULADA'].apply(util.sosa_to_float).mean()
+                
+                c_k1, c_k2, c_k3 = st.columns(3)
+                c_k1.metric("Assiduidade Média", f"{taxa_assiduidade:.1f}%")
+                c_k2.metric("Engajamento (Vistos)", f"{taxa_engajamento:.1f}%")
+                c_k3.metric("Média em Avaliações", f"{media_geral_av:.1f}")
+                
+                st.divider()
+
+                # --- 2. DESEMPENHO EM AVALIAÇÕES ---
+                st.markdown("#### 📈 2. Evolução nas Avaliações")
+                if not df_diag_rad.empty:
+                    df_diag_rad['NOTA_NUM'] = df_diag_rad['NOTA_CALCULADA'].apply(util.sosa_to_float)
+                    evolucao_av = df_diag_rad.groupby('ID_AVALIACAO')['NOTA_NUM'].mean().reset_index()
+                    evolucao_av['AVALIACAO_CURTA'] = evolucao_av['ID_AVALIACAO'].apply(lambda x: str(x).split('-')[0].strip()[:20])
+                    
+                    fig_av = px.bar(evolucao_av, x='AVALIACAO_CURTA', y='NOTA_NUM', text_auto='.1f', 
+                                    title="Média da Turma por Avaliação",
+                                    color='NOTA_NUM', color_continuous_scale="RdYlGn", range_y=[0, 10])
+                    fig_av.update_layout(height=300, margin=dict(t=30, b=0, l=0, r=0))
+                    st.plotly_chart(fig_av, use_container_width=True)
+                else:
+                    st.info("Nenhuma avaliação escaneada para esta turma ainda.")
+
+                st.divider()
+
+                # --- 3. MAPA COGNITIVO (GRÁFICO DE ROSCA) ---
+                st.markdown("#### 🧠 3. Mapa de Perfis Cognitivos")
                 def categorizar_aluno(nec):
                     n = str(nec).upper().strip()
                     if "PENDENTE" in n or "SUSPEITA" in n: return "🟠 Radar (Suspeita/Pendente)"
@@ -4430,7 +4477,6 @@ elif menu == "👥 Gestão da Turma":
                 
                 alunos_rad['PERFIL_COG'] = alunos_rad['NECESSIDADES'].apply(categorizar_aluno)
                 
-                # Gráfico de Rosca
                 contagem = alunos_rad['PERFIL_COG'].value_counts().reset_index()
                 contagem.columns = ['Perfil', 'Quantidade']
                 
@@ -4443,36 +4489,69 @@ elif menu == "👥 Gestão da Turma":
                     "🚀 Alta Performance": "#38B2AC"
                 }
                 
-                fig = px.pie(contagem, values='Quantidade', names='Perfil', hole=0.4, color='Perfil', color_discrete_map=color_map)
-                fig.update_traces(textposition='inside', textinfo='percent+label')
-                fig.update_layout(showlegend=False, margin=dict(t=0, b=0, l=0, r=0))
+                col_graf, col_listas = st.columns([1, 1.5])
+                with col_graf:
+                    fig = px.pie(contagem, values='Quantidade', names='Perfil', hole=0.4, color='Perfil', color_discrete_map=color_map)
+                    fig.update_traces(textposition='inside', textinfo='percent+label')
+                    fig.update_layout(showlegend=False, margin=dict(t=0, b=0, l=0, r=0))
+                    st.plotly_chart(fig, use_container_width=True)
                 
-                st.plotly_chart(fig, use_container_width=True)
-                
-                st.markdown("---")
-                st.markdown("#### 📋 Listas Nominais por Perfil")
-                
-                c_p1, c_p2, c_p3 = st.columns(3)
-                
-                def listar_alunos(perfil, col, emoji):
-                    lista = alunos_rad[alunos_rad['PERFIL_COG'] == perfil]['NOME_ALUNO'].tolist()
-                    with col:
-                        with st.container(border=True):
-                            st.markdown(f"**{emoji} {perfil.split(' ', 1)[1] if ' ' in perfil else perfil} ({len(lista)})**")
-                            if lista:
+                with col_listas:
+                    def listar_alunos(perfil, emoji):
+                        lista = alunos_rad[alunos_rad['PERFIL_COG'] == perfil]['NOME_ALUNO'].tolist()
+                        if lista:
+                            with st.expander(f"{emoji} {perfil.split(' ', 1)[1] if ' ' in perfil else perfil} ({len(lista)})", expanded=False):
                                 for a in lista: st.caption(f"• {a}")
-                            else:
-                                st.caption("-")
-                
-                listar_alunos("♿ Inclusão Oficial (PEI)", c_p1, "♿")
-                listar_alunos("🟠 Radar (Suspeita/Pendente)", c_p2, "🟠")
-                listar_alunos("🧱 Barreira de Leitura", c_p3, "🧱")
-                
-                c_p4, c_p5, c_p6 = st.columns(3)
-                listar_alunos("🧮 Desafio Lógico (Matemática)", c_p4, "🧮")
-                listar_alunos("🚀 Alta Performance", c_p5, "🚀")
-                listar_alunos("👤 Típico / Padrão", c_p6, "👤")
+                    
+                    listar_alunos("♿ Inclusão Oficial (PEI)", "♿")
+                    listar_alunos("🟠 Radar (Suspeita/Pendente)", "🟠")
+                    listar_alunos("🧱 Barreira de Leitura", "🧱")
+                    listar_alunos("🧮 Desafio Lógico (Matemática)", "🧮")
+                    listar_alunos("🚀 Alta Performance", "🚀")
+                    listar_alunos("👤 Típico / Padrão", "👤")
 
+                st.divider()
+
+                # --- 4. SENSOR SEMÂNTICO DO DIÁRIO ---
+                st.markdown("#### 🚨 4. Sensor Semântico do Diário (Ação Rápida)")
+                st.caption("O sistema leu suas anotações recentes no Diário de Bordo. Classifique os alunos com 1 clique.")
+                
+                if not df_d_rad.empty:
+                    # Filtra observações reais (ignora vazios e notas de sistema)
+                    obs_reais = df_d_rad[(df_d_rad['OBSERVACOES'] != "") & (~df_d_rad['OBSERVACOES'].str.contains("Nota de Trabalho", na=False, case=False))]
+                    
+                    if not obs_reais.empty:
+                        # Pega as últimas 5 observações
+                        ultimas_obs = obs_reais.tail(5).iloc[::-1]
+                        
+                        for _, row_obs in ultimas_obs.iterrows():
+                            with st.container(border=True):
+                                st.markdown(f"🗣️ **{row_obs['NOME_ALUNO']}** ({row_obs['DATA']})")
+                                st.info(f"*{row_obs['OBSERVACOES']}*")
+                                
+                                # Botões de classificação rápida
+                                c_b1, c_b2, c_b3 = st.columns(3)
+                                id_aluno_obs = row_obs['ID_ALUNO']
+                                nome_aluno_obs = row_obs['NOME_ALUNO']
+                                
+                                if c_b1.button("🧱 Barreira Leitura", key=f"btn_leit_{id_aluno_obs}_{row_obs.name}", use_container_width=True):
+                                    with st.spinner("Atualizando..."):
+                                        db.atualizar_aluno_cascata(id_aluno_obs, nome_aluno_obs, t_rad, "DEFASAGEM LEITURA")
+                                        st.success("Classificado!"); time.sleep(0.5); st.rerun()
+                                        
+                                if c_b2.button("🧮 Defasagem Mat.", key=f"btn_mat_{id_aluno_obs}_{row_obs.name}", use_container_width=True):
+                                    with st.spinner("Atualizando..."):
+                                        db.atualizar_aluno_cascata(id_aluno_obs, nome_aluno_obs, t_rad, "DEFASAGEM MATEMÁTICA")
+                                        st.success("Classificado!"); time.sleep(0.5); st.rerun()
+                                        
+                                if c_b3.button("🟠 Suspeita PEI", key=f"btn_pei_{id_aluno_obs}_{row_obs.name}", use_container_width=True):
+                                    with st.spinner("Atualizando..."):
+                                        db.atualizar_aluno_cascata(id_aluno_obs, nome_aluno_obs, t_rad, "PEI - PENDENTE")
+                                        st.success("Classificado!"); time.sleep(0.5); st.rerun()
+                    else:
+                        st.success("✅ Nenhuma observação pendente de análise no Diário de Bordo.")
+                else:
+                    st.info("Sem registros no Diário de Bordo para esta turma.")
 
 # ==============================================================================
 # MÓDULO: BASE DE CONHECIMENTO (V45 - COFRE DIGITAL NO GOOGLE DRIVE)
