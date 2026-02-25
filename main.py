@@ -4642,11 +4642,11 @@ elif menu == "📚 Base de Conhecimento":
 
 
 # ==============================================================================
-# MÓDULO: RELATÓRIOS PEI / PERFIL IA - CLEAN & UX
+# MÓDULO: RELATÓRIOS PEI / PERFIL IA - CLEAN & UX (V100 - MULTIPERFIL)
 # ==============================================================================
 elif menu == "♿ Relatórios PEI / Perfil IA":
-    st.title("♿ Analista de Inclusão: Dossiê PEI")
-    st.caption("💡 **Guia de Comando:** O sistema cruza automaticamente a assiduidade, os vistos e as notas do aluno para gerar relatórios evolutivos, adaptar currículos e preencher o Plano Educacional Individualizado.")
+    st.title("🧠 Analista de Perfis e Dossiê PEI")
+    st.caption("💡 **Guia de Comando:** O sistema cruza dados de engajamento e notas para redigir relatórios evolutivos. A IA adapta o texto automaticamente se o aluno for PEI, tiver defasagem de base ou for de alta performance.")
     st.markdown("---")
 
     if df_alunos.empty:
@@ -4667,10 +4667,14 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                 st.warning(f"⚠️ Nenhum aluno cadastrado na turma {turma_pei} ainda. Vá em 'Gestão da Turma' para povoar.")
                 st.stop()
             
+            # 🚨 NOVO MOTOR DE ÍCONES (MULTIPERFIL)
             def definir_icone_status(nec):
                 n = str(nec).upper().strip()
-                if "SUSPEITA" in n: return "🟠"
-                if n in["NENHUMA", "PENDENTE", "", "NAN", "TÍPICO", "TIPICO"]: return "👤"
+                if "PENDENTE" in n or "SUSPEITA" in n: return "🟠"
+                if "DEFASAGEM LEITURA" in n: return "🧱"
+                if "DEFASAGEM MATEMÁTICA" in n or "DEFASAGEM MATEMATICA" in n: return "🧮"
+                if "ALTA PERFORMANCE" in n: return "🚀"
+                if n in["NENHUMA", "", "NAN", "TÍPICO", "TIPICO"]: return "👤"
                 return "♿"
 
             df_turma_foco['STATUS_ICON'] = df_turma_foco['NECESSIDADES'].apply(definir_icone_status)
@@ -4678,11 +4682,12 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
             
             aluno_sel_label = c_a.selectbox("🔍 Selecionar Estudante:", df_turma_foco['LABEL'].tolist(), key="pei_a_clean")
             
-            nome_limpo = aluno_sel_label.split(" | ")[0].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("📝 ", "").strip()
+            # Limpeza blindada do nome
+            nome_limpo = aluno_sel_label.split(" | ")[0].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "").strip()
             
             dados_a = df_turma_foco[df_turma_foco['NOME_ALUNO'] == nome_limpo].iloc[0]
             id_a = db.limpar_id(dados_a['ID'])
-            perfil_atual = dados_a['NECESSIDADES']
+            perfil_atual = str(dados_a['NECESSIDADES']).upper().strip()
 
         # --- 2. MOTOR DE FUSÃO E MEMÓRIA ---
         with st.status("🔍 Maestro Sosa interconectando safras e evidências...", expanded=False) as status:
@@ -4707,7 +4712,17 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
             nota_safra = min(10.0, media_scan + bonus)
             status.update(label="✅ Dados Sincronizados com Sucesso!", state="complete")
 
-        # --- 3. DASHBOARD DE MÉTRICAS ---
+        # --- 3. DASHBOARD DE MÉTRICAS E ALERTA DE PERFIL ---
+        # 🚨 BANNERS DINÂMICOS DE PERFIL
+        if "PENDENTE" in perfil_atual or "SUSPEITA" in perfil_atual:
+            st.warning(f"🟠 **Radar de Investigação:** {perfil_atual}")
+        elif "DEFASAGEM" in perfil_atual:
+            st.error(f"🧱 **Barreira de Aprendizagem:** {perfil_atual}")
+        elif "ALTA PERFORMANCE" in perfil_atual:
+            st.info(f"🚀 **Destaque Cognitivo:** {perfil_atual}")
+        elif perfil_atual not in["NENHUMA", "", "NAN", "TÍPICO", "TIPICO"]:
+            st.warning(f"♿ **Condição Clínica (PEI):** {perfil_atual}")
+
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Engajamento (Vistos)", vistos)
         c2.metric("Mérito Acumulado ⭐", f"{bonus:.1f}")
@@ -4744,14 +4759,18 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
             st.markdown("<br>", unsafe_allow_html=True)
             if st.button("🧠 INICIAR MOTOR DE IA: GERAR RELATÓRIO DE EVOLUÇÃO", type="primary", use_container_width=True):
                 with st.spinner("Maestro Sosa analisando a linha do tempo e redigindo o parecer..."):
+                    # 🚨 INJEÇÃO DE CONTEXTO DE PERFIL NA IA
                     prompt_ev = (
-                        f"ESTUDANTE: {nome_limpo}. PERFIL: {perfil_atual}.\n"
+                        f"ESTUDANTE: {nome_limpo}. PERFIL COGNITIVO/CLÍNICO: {perfil_atual}.\n"
                         f"--- PASSADO ---\n{ultimo_relatorio}\n\n"
                         f"--- PRESENTE (DADOS) ---\n- Vistos: {vistos}, Bônus: {bonus}, Nota: {nota_safra}.\n"
                         f"--- CHECKLIST ATUAL ---\n- Autonomia: {v_autonomia}, Socialização: {v_social}, Participação: {v_participa}, Resposta: {v_resposta}.\n"
                         f"--- STATUS: {'Quadro Estável' if sem_mudancas else 'Houve alterações'}.\n"
                         f"--- OBSERVAÇÃO: {percepcao_extra}\n\n"
-                        f"MISSÃO: Gere um relatório técnico comparativo focando no Delta de evolução."
+                        f"MISSÃO: Gere um relatório técnico comparativo focando no Delta de evolução.\n"
+                        f"🚨 ATENÇÃO AO PERFIL: Como o aluno possui o perfil '{perfil_atual}', direcione o parecer pedagógico para as necessidades específicas desse quadro. "
+                        f"Se for defasagem em leitura, foque na necessidade de letramento matemático. Se for defasagem matemática, foque no resgate das operações básicas. "
+                        f"Se for alta performance, sugira enriquecimento curricular. Se for PEI, foque nas adaptações e no DUA."
                     )
                     st.session_state.res_v38_rel = ai.gerar_ia("ESPECIALISTA_INCLUSAO", prompt_ev)
             
@@ -4774,7 +4793,7 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                     with st.spinner("Fatiando evidências de forma atômica..."):
                         prompt_fatiar = (
                             f"RELATÓRIO PARA PROCESSAR:\n{relatorio_base}\n\n"
-                            f"ORDEM SOBERANA: Extraia 4 resumos CURTOS e DIFERENTES. Responda EXATAMENTE nas tags [SOCIAIS], [COMUNICATIVAS], [EMOCIONAIS] e[FUNCIONAIS]."
+                            f"ORDEM SOBERANA: Extraia 4 resumos CURTOS e DIFERENTES. Responda EXATAMENTE nas tags [SOCIAIS], [COMUNICATIVAS], [EMOCIONAIS] e [FUNCIONAIS]."
                         )
                         st.session_state.res_v38_pei_tags = ai.gerar_ia("ESPECIALISTA_PEI", prompt_fatiar)
 
@@ -4812,7 +4831,7 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
 
             if st.button("🧠 INICIAR MOTOR DE IA: GERAR MENSAGEM", use_container_width=True, type="primary"):
                 with st.spinner("Traduzindo evidências para linguagem humana..."):
-                    prompt_zap = f"ALUNO: {nome_limpo}. DADOS: {vistos} vistos, {bonus} bônus. CHECKLIST: {v_autonomia}, {v_social}, {v_participa}, {v_resposta}. ESTILO: {estilo_zap}. Gere um parágrafo único, sem negritos, para WhatsApp."
+                    prompt_zap = f"ALUNO: {nome_limpo}. PERFIL: {perfil_atual}. DADOS: {vistos} vistos, {bonus} bônus. CHECKLIST: {v_autonomia}, {v_social}, {v_participa}, {v_resposta}. ESTILO: {estilo_zap}. Gere um parágrafo único, sem negritos, para WhatsApp."
                     st.session_state.res_v38_coord = ai.gerar_ia("PONTE_COORDENACAO", prompt_zap)
             
             if "res_v38_coord" in st.session_state:
@@ -4822,7 +4841,7 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
         # --- ABA 4: CURRÍCULO ADAPTADO ---
         with tab_curr:
             st.subheader("⚙️ Construtor de Matriz Adaptada (Padrão Itabuna)")
-            st.caption("Selecione os conteúdos da matriz regular. A IA fará a adaptação e preencherá as 4 colunas exigidas pela Secretaria de Educação.")
+            st.caption("Selecione os conteúdos da matriz regular. A IA fará a adaptação focada na superação das barreiras específicas deste aluno.")
             
             ano_aluno = "".join(filter(str.isdigit, turma_pei))
             df_matriz_ano = df_curriculo[df_curriculo['ANO'].astype(str) == ano_aluno].copy()
@@ -4840,7 +4859,8 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                             df_focada = df_matriz_ano[df_matriz_ano['CONTEUDO_ESPECIFICO'].isin(conteudos_brutos)]
                             contexto_oficial = df_focada[['CONTEUDO_ESPECIFICO', 'OBJETIVOS']].to_string(index=False)
                             
-                            prompt_curr = f"ESTUDANTE: {nome_limpo}. PERFIL: {perfil_atual}. MATRIZ: {contexto_oficial}. Gere os itens adaptados."
+                            # 🚨 INJEÇÃO DE CONTEXTO NO CURRÍCULO
+                            prompt_curr = f"ESTUDANTE: {nome_limpo}. PERFIL/NECESSIDADE: {perfil_atual}. MATRIZ: {contexto_oficial}. Gere os itens adaptados focando em superar as barreiras do perfil {perfil_atual}."
                             st.session_state.res_v39_curr = ai.gerar_ia("TRADUTOR_CURRICULAR_V39", prompt_curr)
 
                     if "res_v39_curr" in st.session_state:
@@ -4875,7 +4895,7 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                                 lista_final_para_salvar.append({"C": edit_c, "O": edit_o, "F": edit_f, "M": edit_m})
                                 st.markdown("---")
 
-                        trim_destino = st.selectbox("Salvar em qual trimestre?", ["I Trimestre", "II Trimestre", "III Trimestre"])
+                        trim_destino = st.selectbox("Salvar em qual trimestre?",["I Trimestre", "II Trimestre", "III Trimestre"])
                         if st.button("💾 ARQUIVAR PLANO TRIMESTRAL COMPLETO", use_container_width=True):
                             texto_banco = f"PLANO ADAPTADO - {trim_destino}\n\n"
                             for item in lista_final_para_salvar:
