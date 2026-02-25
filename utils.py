@@ -1,13 +1,93 @@
-from datetime import date, timedelta
 import re
 import uuid
+from datetime import date, timedelta, datetime
+
+# ==============================================================================
+# 1. FUNÇÕES DE LIMPEZA E FORMATAÇÃO DE TEXTO
+# ==============================================================================
 
 def limpar_texto(texto):
     if not texto: return ""
     return texto.replace("**", "").replace("###", "").replace("##", "").replace("#", "").replace("__", "").replace("`", "").strip()
 
-# --- utils.py (ATUALIZADO V27) ---
-from datetime import date, timedelta
+def gerar_nome_material_elite(ano, tipo, detalhe):
+    """
+    Gera o nome legível: 6º Ano - Aula 1 - Jornada Pedagógica
+    ano: int ou str (6)
+    tipo: str (Aula 1, Sonda, Projeto)
+    detalhe: str (Semana 01, I Trimestre, Nome do Tema)
+    """
+    ano_limpo = str(ano).replace("º", "")
+    return f"{ano_limpo}º Ano - {tipo} - {detalhe}"
+
+def gerar_sosa_id(tipo, ano, trimestre):
+    """Gera um DNA único para o material respeitando o fuso de Itabuna"""
+    # Ajuste manual de fuso (UTC-3) para evitar o erro de "dia seguinte" à noite
+    data_itabuna = datetime.utcnow() - timedelta(hours=3)
+    
+    prefixo = str(tipo)[:4].upper()
+    hash_curto = str(uuid.uuid4())[:4].upper()
+    data_slug = data_itabuna.strftime("%d%m")
+    ano_num = "".join(filter(str.isdigit, str(ano)))
+    return f"{prefixo}-{ano_num}AN-{str(trimestre)[0]}-{data_slug}-{hash_curto}"
+
+# ==============================================================================
+# 2. FUNÇÕES DE CONVERSÃO NUMÉRICA (GOOGLE SHEETS)
+# ==============================================================================
+
+def sosa_to_float(valor):
+    """
+    CONVERSOR UNIVERSAL SOSA (ANTI-ERRO 0.3)
+    Converte qualquer entrada (string com vírgula, ponto ou None) em float puro.
+    """
+    if valor is None or str(valor).strip() == "" or str(valor).lower() == "nan":
+        return 0.0
+    try:
+        # Remove espaços e troca vírgula por ponto
+        limpo = str(valor).replace(" ", "").replace(",", ".")
+        return float(limpo)
+    except ValueError:
+        return 0.0
+
+def sosa_to_str(valor, casas=2):
+    """
+    FORMATADOR DE PERSISTÊNCIA (GOOGLE SHEETS)
+    Converte float para string com vírgula para manter a localidade PT-BR no Sheets.
+    """
+    val_float = sosa_to_float(valor)
+    formato = "{:." + str(casas) + "f}"
+    return formato.format(val_float).replace(".", ",")
+
+# ==============================================================================
+# 3. FUNÇÕES DE DATA E CALENDÁRIO (ITABUNA 2026)
+# ==============================================================================
+
+def formatar_data_br(valor):
+    """
+    CONVERSOR CRONOLÓGICO SOSA (ANTI-SERIAL)
+    Converte números seriais (46060) ou datas ISO para DD/MM/YYYY.
+    """
+    if not valor or str(valor).strip() == "" or str(valor).lower() == "nan":
+        return ""
+    
+    # Caso 1: É um número serial do Excel/Sheets (ex: 46060)
+    val_str = str(valor).strip()
+    if val_str.replace('.','',1).isdigit():
+        try:
+            # Data base do Google Sheets é 30/12/1899
+            dt = date(1899, 12, 30) + timedelta(days=int(float(val_str)))
+            return dt.strftime("%d/%m/%Y")
+        except: pass
+    
+    # Caso 2: Já é uma string de data (YYYY-MM-DD ou DD/MM/YYYY)
+    try:
+        if "-" in val_str: # Formato ISO
+            return datetime.strptime(val_str[:10], "%Y-%m-%d").strftime("%d/%m/%Y")
+        if "/" in val_str: # Já está no formato BR
+            return val_str
+    except: pass
+    
+    return val_str
 
 def obter_info_trimestre(dt):
     # Datas exatas do PDF da Prefeitura de Itabuna 2026
@@ -34,6 +114,7 @@ def verificar_feriado_itabuna(dt):
         date(2026, 12, 25): "Natal"
     }
     return feriados.get(dt, None)
+
 def gerar_semanas():
     semanas = []
     data_atual = date(2026, 2, 2)
@@ -48,81 +129,3 @@ def gerar_semanas():
         data_atual += timedelta(days=7)
         contador += 1
     return semanas
-
-# --- ADICIONE AO FINAL DO SEU utils.py ---
-
-def sosa_to_float(valor):
-    """
-    CONVERSOR UNIVERSAL SOSA (ANTI-ERRO 0.3)
-    Converte qualquer entrada (string com vírgula, ponto ou None) em float puro.
-    """
-    if valor is None or str(valor).strip() == "" or str(valor).lower() == "nan":
-        return 0.0
-    try:
-        # Remove espaços e troca vírgula por ponto
-        limpo = str(valor).replace(" ", "").replace(",", ".")
-        return float(limpo)
-    except ValueError:
-        return 0.0
-
-def sosa_to_str(valor, casas=2):
-    """
-    FORMATADOR DE PERSISTÊNCIA (GOOGLE SHEETS)
-    Converte float para string com vírgula para manter a localidade PT-BR no Sheets.
-    """
-    val_float = sosa_to_float(valor)
-    formato = "{:." + str(casas) + "f}"
-    return formato.format(val_float).replace(".", ",")
-
-def gerar_sosa_id(tipo, ano, trimestre):
-    """Gera um DNA único para o material respeitando o fuso de Itabuna"""
-    from datetime import datetime, timedelta
-    # Ajuste manual de fuso (UTC-3) para evitar o erro de "dia seguinte" à noite
-    data_itabuna = datetime.utcnow() - timedelta(hours=3)
-    
-    prefixo = str(tipo)[:4].upper()
-    import uuid
-    hash_curto = str(uuid.uuid4())[:4].upper()
-    data_slug = data_itabuna.strftime("%d%m")
-    ano_num = "".join(filter(str.isdigit, str(ano)))
-    return f"{prefixo}-{ano_num}AN-{str(trimestre)[0]}-{data_slug}-{hash_curto}"
-
-# --- ADICIONE AO FINAL DO utils.py ---
-
-def formatar_data_br(valor):
-    """
-    CONVERSOR CRONOLÓGICO SOSA (ANTI-SERIAL)
-    Converte números seriais (46060) ou datas ISO para DD/MM/YYYY.
-    """
-    from datetime import datetime, date, timedelta
-    if not valor or str(valor).strip() == "" or str(valor).lower() == "nan":
-        return ""
-    
-    # Caso 1: É um número serial do Excel/Sheets (ex: 46060)
-    val_str = str(valor).strip()
-    if val_str.replace('.','',1).isdigit():
-        try:
-            # Data base do Google Sheets é 30/12/1899
-            dt = date(1899, 12, 30) + timedelta(days=int(float(val_str)))
-            return dt.strftime("%d/%m/%Y")
-        except: pass
-    
-    # Caso 2: Já é uma string de data (YYYY-MM-DD ou DD/MM/YYYY)
-    try:
-        if "-" in val_str: # Formato ISO
-            return datetime.strptime(val_str[:10], "%Y-%m-%d").strftime("%d/%m/%Y")
-        if "/" in val_str: # Já está no formato BR
-            return val_str
-    except: pass
-    
-    return val_str
-
-def gerar_nome_material_elite(ano, tipo, detalhe):
-    """
-    Gera o nome legível: 6º Ano - Aula 1 - Jornada Pedagógica
-    ano: int ou str (6)
-    tipo: str (Aula 1, Sonda, Projeto)
-    detalhe: str (Semana 01, I Trimestre, Nome do Tema)
-    """
-    ano_limpo = str(ano).replace("º", "")
-    return f"{ano_limpo}º Ano - {tipo} - {detalhe}"
