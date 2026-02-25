@@ -4403,7 +4403,7 @@ elif menu == "👥 Gestão da Turma":
 
     # ==============================================================================
     # 🚨 NOVA ABA 5: RADIOGRAFIA COGNITIVA DA TURMA
-    # ==============================================================================
+    # ==============================================================================    
     with tab_radiografia:
         st.subheader("🧠 Radiografia Cognitiva e Desempenho Global")
         st.caption("Mapeamento tático de perfis, engajamento, assiduidade e resultados em avaliações para geração de dossiês futuros.")
@@ -4514,14 +4514,31 @@ elif menu == "👥 Gestão da Turma":
 
                 # --- 4. SENSOR SEMÂNTICO DO DIÁRIO ---
                 st.markdown("#### 🚨 4. Sensor Semântico do Diário (Ação Rápida)")
-                st.caption("O sistema leu suas anotações recentes no Diário de Bordo. Classifique os alunos com 1 clique.")
+                st.caption("O sistema leu suas anotações recentes no Diário de Bordo. Classifique os alunos com 1 clique. Ao classificar ou clicar em 'Ciente', o aviso sumirá da tela.")
                 
+                # Função interna para dar "baixa" na observação
+                def ocultar_aviso_diario(data_obs, id_alu, texto_obs):
+                    try:
+                        wb = db.conectar()
+                        ws = wb.worksheet("DB_DIARIO_BORDO")
+                        dados = ws.get_all_values()
+                        for i, row in enumerate(dados):
+                            if i > 0 and row[0] == data_obs and db.limpar_id(row[1]) == db.limpar_id(id_alu) and row[6] == texto_obs:
+                                ws.update_cell(i + 1, 7, texto_obs + " [LIDO]")
+                                st.cache_data.clear()
+                                return True
+                    except: pass
+                    return False
+
                 if not df_d_rad.empty:
-                    # Filtra observações reais (ignora vazios e notas de sistema)
-                    obs_reais = df_d_rad[(df_d_rad['OBSERVACOES'] != "") & (~df_d_rad['OBSERVACOES'].str.contains("Nota de Trabalho", na=False, case=False))]
+                    # Filtra observações reais e IGNORA as que já foram lidas "[LIDO]"
+                    obs_reais = df_d_rad[
+                        (df_d_rad['OBSERVACOES'] != "") & 
+                        (~df_d_rad['OBSERVACOES'].str.contains("Nota de Trabalho", na=False, case=False)) &
+                        (~df_d_rad['OBSERVACOES'].str.contains(r"\[LIDO\]", na=False, case=False))
+                    ]
                     
                     if not obs_reais.empty:
-                        # Pega as últimas 5 observações
                         ultimas_obs = obs_reais.tail(5).iloc[::-1]
                         
                         for _, row_obs in ultimas_obs.iterrows():
@@ -4529,25 +4546,34 @@ elif menu == "👥 Gestão da Turma":
                                 st.markdown(f"🗣️ **{row_obs['NOME_ALUNO']}** ({row_obs['DATA']})")
                                 st.info(f"*{row_obs['OBSERVACOES']}*")
                                 
-                                # Botões de classificação rápida
-                                c_b1, c_b2, c_b3 = st.columns(3)
+                                c_b1, c_b2, c_b3, c_b4 = st.columns(4)
                                 id_aluno_obs = row_obs['ID_ALUNO']
                                 nome_aluno_obs = row_obs['NOME_ALUNO']
+                                data_obs = row_obs['DATA']
+                                texto_obs = row_obs['OBSERVACOES']
                                 
                                 if c_b1.button("🧱 Barreira Leitura", key=f"btn_leit_{id_aluno_obs}_{row_obs.name}", use_container_width=True):
-                                    with st.spinner("Atualizando..."):
+                                    with st.spinner("Atualizando e ocultando aviso..."):
                                         db.atualizar_aluno_cascata(id_aluno_obs, nome_aluno_obs, t_rad, "DEFASAGEM LEITURA")
+                                        ocultar_aviso_diario(data_obs, id_aluno_obs, texto_obs)
                                         st.success("Classificado!"); time.sleep(0.5); st.rerun()
                                         
                                 if c_b2.button("🧮 Defasagem Mat.", key=f"btn_mat_{id_aluno_obs}_{row_obs.name}", use_container_width=True):
-                                    with st.spinner("Atualizando..."):
+                                    with st.spinner("Atualizando e ocultando aviso..."):
                                         db.atualizar_aluno_cascata(id_aluno_obs, nome_aluno_obs, t_rad, "DEFASAGEM MATEMÁTICA")
+                                        ocultar_aviso_diario(data_obs, id_aluno_obs, texto_obs)
                                         st.success("Classificado!"); time.sleep(0.5); st.rerun()
                                         
                                 if c_b3.button("🟠 Suspeita PEI", key=f"btn_pei_{id_aluno_obs}_{row_obs.name}", use_container_width=True):
-                                    with st.spinner("Atualizando..."):
+                                    with st.spinner("Atualizando e ocultando aviso..."):
                                         db.atualizar_aluno_cascata(id_aluno_obs, nome_aluno_obs, t_rad, "PEI - PENDENTE")
+                                        ocultar_aviso_diario(data_obs, id_aluno_obs, texto_obs)
                                         st.success("Classificado!"); time.sleep(0.5); st.rerun()
+                                        
+                                if c_b4.button("✅ Ciente (Ocultar)", key=f"btn_ok_{id_aluno_obs}_{row_obs.name}", use_container_width=True):
+                                    with st.spinner("Ocultando aviso..."):
+                                        ocultar_aviso_diario(data_obs, id_aluno_obs, texto_obs)
+                                        st.rerun()
                     else:
                         st.success("✅ Nenhuma observação pendente de análise no Diário de Bordo.")
                 else:
