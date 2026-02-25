@@ -3916,71 +3916,182 @@ elif menu == "👥 Gestão da Turma":
                     else:
                         st.info("Aguardando registros no diário para ativar o radar.")
 
-                # 🚨 RADAR DE RESULTADOS E RAIO-X
-                with st.expander("📡 Radar de Resultados e Raio-X de Lacunas", expanded=False):
-                    diag_t = df_diagnosticos[df_diagnosticos['TURMA'] == turma_foco].copy()
-                    
-                    if trim_foco != "Todos":
-                        diag_t = diag_t[diag_t['ID_AVALIACAO'].str.contains(trim_foco.replace(" ", ""), case=False, na=False)]
-                        
-                    if diag_t.empty:
-                        st.info("Aguardando dados de avaliações escaneadas para gerar o Raio-X.")
+                # 🚨 NOVO FUNIL DE PERFORMANCE E ENGAJAMENTO 360°
+                with st.expander("🎯 Funil de Performance e Engajamento 360°", expanded=True):
+                    if trim_foco == "Todos":
+                        st.warning("⚠️ Selecione um trimestre específico (I, II ou III) no topo da tela para habilitar o Funil de Performance.")
                     else:
-                        st.subheader(f"🔥 Habilidades em Alerta Crítico ({trim_foco})")
-                        st.caption("Mapeamento automático de questões com menos de 50% de acerto na turma.")
-                        
-                        avaliacoes = diag_t['ID_AVALIACAO'].unique()
-                        teve_alerta_geral = False
-                        
-                        with st.spinner("Analisando matriz de respostas..."):
-                            for av in avaliacoes:
-                                alertas_desta_prova =[]
-                                nome_curto = av.split("-")[0].strip().replace(" (2ª CHAMADA)", "")
-                                df_ref = df_aulas[df_aulas['TIPO_MATERIAL'].str.contains(nome_curto, regex=False, na=False)]
-                                
-                                if not df_ref.empty:
-                                    txt_prova = str(df_ref.iloc[0]['CONTEUDO'])
-                                    gab_raw = ai.extrair_tag(txt_prova, "GABARITO_TEXTO") or ai.extrair_tag(txt_prova, "GABARITO")
-                                    grade_raw = ai.extrair_tag(txt_prova, "GRADE_DE_CORRECAO")
-                                    
-                                    if gab_raw and grade_raw:
-                                        matches = re.findall(r"(\d+)[\s\.\)\-:]+([A-E])", gab_raw.upper())
-                                        gab_oficial = {int(num): letra for num, letra in matches}
-                                        if not gab_oficial:
-                                            letras = re.findall(r"\b[A-E]\b", gab_raw.upper())
-                                            gab_oficial = {i+1: letra for i, letra in enumerate(letras)}
-                                            
-                                        respostas_alunos = diag_t[diag_t['ID_AVALIACAO'] == av]['RESPOSTAS_ALUNO'].astype(str).tolist()
-                                        
-                                        for q_num, letra_certa in gab_oficial.items():
-                                            acertos = 0
-                                            validos = 0
-                                            for resp in respostas_alunos:
-                                                if resp == "FALTOU": continue
-                                                resp_lista = resp.split(";")
-                                                if len(resp_lista) >= q_num:
-                                                    validos += 1
-                                                    if resp_lista[q_num-1] == letra_certa:
-                                                        acertos += 1
-                                            
-                                            if validos > 0:
-                                                taxa_acerto = acertos / validos
-                                                if taxa_acerto < 0.5:
-                                                    padrao_h = rf"(?si)QUEST[AÃ]O\s*0?{q_num}\b.*?(?:\[)(.*?)(?:\])"
-                                                    m_h = re.search(padrao_h, grade_raw)
-                                                    habilidade = m_h.group(1).strip() if m_h else f"Revisar conceito da Questão {q_num}"
-                                                    alertas_desta_prova.append(f"**Q{q_num} ({taxa_acerto*100:.0f}% de acerto):** {habilidade}")
-                                
-                                if alertas_desta_prova:
-                                    teve_alerta_geral = True
-                                    st.markdown(f"📄 **{av}**")
-                                    for alerta in set(alertas_desta_prova):
-                                        st.error(f"🎯 {alerta}")
-                            
-                        if not teve_alerta_geral:
-                            st.success("✅ Nenhuma lacuna crítica detectada nas avaliações recentes (Todas as questões com >50% de acerto).")
+                        # --- SETUP DE DATAS DO TRIMESTRE ---
+                        calendario = {
+                            "I Trimestre": (date(2026, 2, 9), date(2026, 5, 22)),
+                            "II Trimestre": (date(2026, 5, 25), date(2026, 9, 4)),
+                            "III Trimestre": (date(2026, 9, 8), date(2026, 12, 17))
+                        }
+                        dt_ini, dt_fim = calendario.get(trim_foco, (date(2026, 1, 1), date(2026, 12, 31)))
 
-                st.markdown("---")
+                        # --- BLOCO 1: ENGAJAMENTO (VISTOS) ---
+                        st.markdown("#### 📝 1. Engajamento Contínuo (Vistos e Caderno)")
+                        df_d_t = df_diario[df_diario['TURMA'] == turma_foco].copy()
+                        
+                        if not df_d_t.empty:
+                            df_d_t['DATA_DT'] = pd.to_datetime(df_d_t['DATA'], format="%d/%m/%Y", errors='coerce').dt.date
+                            df_d_trim = df_d_t[(df_d_t['DATA_DT'] >= dt_ini) & (df_d_t['DATA_DT'] <= dt_fim)]
+                            
+                            df_validas = df_d_trim[df_d_trim['VISTO_ATIVIDADE'].astype(str).str.upper() != "ISENTO"]
+                            total_vistos_possiveis = len(df_validas)
+                            vistos_dados = len(df_validas[df_validas['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"])
+                            taxa_geral = (vistos_dados / total_vistos_possiveis * 100) if total_vistos_possiveis > 0 else 0
+                            
+                            st.progress(taxa_geral / 100)
+                            st.caption(f"**Taxa de Entrega da Turma:** {taxa_geral:.1f}% das atividades foram vistadas.")
+                            
+                            alunos_stats =[]
+                            for id_aluno in id_alunos_turma:
+                                d_alu = df_validas[df_validas['ID_ALUNO'].apply(db.limpar_id) == id_aluno]
+                                if not d_alu.empty:
+                                    v_alu = len(d_alu[d_alu['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"])
+                                    b_alu = d_alu['BONUS'].apply(util.sosa_to_float).sum()
+                                    nome_alu = d_alu.iloc[0]['NOME_ALUNO']
+                                    alunos_stats.append({"nome": nome_alu, "vistos": v_alu, "total": len(d_alu), "bonus": b_alu})
+                            
+                            fantasmas = [a['nome'] for a in alunos_stats if a['total'] > 0 and (a['vistos']/a['total']) <= 0.2]
+                            top_alunos = sorted([a for a in alunos_stats if a['total'] > 0 and (a['vistos']/a['total']) >= 0.8], key=lambda x: x['bonus'], reverse=True)[:3]
+                            
+                            c_e1, c_e2 = st.columns(2)
+                            with c_e1:
+                                if fantasmas:
+                                    st.error(f"👻 **Alerta Fantasma (Baixa Entrega):** {', '.join(fantasmas)}")
+                                else:
+                                    st.success("✅ Nenhum aluno com entrega crítica.")
+                            with c_e2:
+                                if top_alunos:
+                                    st.success(f"🌟 **Top Engajamento:** {', '.join([a['nome'] for a in top_alunos])}")
+                        else:
+                            st.info("Sem registros de diário neste trimestre.")
+
+                        st.divider()
+
+                        # --- BLOCO 2: TERMÔMETRO DE AVALIAÇÕES ---
+                        st.markdown("#### 📊 2. Termômetro de Avaliações (Notas)")
+                        df_n_trim = df_notas[(df_notas['TURMA'] == turma_foco) & (df_notas['TRIMESTRE'] == trim_foco)]
+                        if not df_n_trim.empty:
+                            media_teste = df_n_trim['NOTA_TESTE'].apply(util.sosa_to_float).mean()
+                            media_prova = df_n_trim['NOTA_PROVA'].apply(util.sosa_to_float).mean()
+                            
+                            c_n1, c_n2, c_n3 = st.columns(3)
+                            c_n1.metric("Média nos Testes", f"{media_teste:.1f}")
+                            c_n2.metric("Média nas Provas", f"{media_prova:.1f}")
+                            
+                            medias_finais = df_n_trim['MEDIA_FINAL'].apply(util.sosa_to_float)
+                            azul = len(medias_finais[medias_finais >= 7.0])
+                            amarelo = len(medias_finais[(medias_finais >= 5.0) & (medias_finais < 7.0)])
+                            vermelho = len(medias_finais[medias_finais < 5.0])
+                            
+                            c_n3.markdown(f"🟢 **Azul:** {azul} | 🟡 **Média:** {amarelo} | 🔴 **Risco:** {vermelho}")
+                            
+                            alunos_vermelho = df_n_trim[df_n_trim['MEDIA_FINAL'].apply(util.sosa_to_float) < 5.0]['NOME_ALUNO'].tolist()
+                            if alunos_vermelho:
+                                with st.expander("🚨 Ver alunos na Zona de Risco (Abaixo de 5.0)"):
+                                    st.error(", ".join(alunos_vermelho))
+                        else:
+                            st.info("Notas ainda não consolidadas no Boletim para este trimestre.")
+
+                        st.divider()
+
+                        # --- BLOCO 3: ALERTA DE FALTOSOS NAS AVALIAÇÕES ---
+                        st.markdown("#### ❌ 3. Radar de Faltosos em Avaliações")
+                        st.caption("Alunos que não realizaram as provas ou que ainda estão pendentes de escaneamento.")
+                        diag_t = df_diagnosticos[df_diagnosticos['TURMA'] == turma_foco].copy()
+                        
+                        if not diag_t.empty:
+                            diag_trim = diag_t[diag_t['ID_AVALIACAO'].str.contains(trim_foco.replace(" ", ""), case=False, na=False)]
+                            if not diag_trim.empty:
+                                avaliacoes_aplicadas = diag_trim['ID_AVALIACAO'].unique()
+                                houve_falta = False
+                                
+                                cols_faltas = st.columns(len(avaliacoes_aplicadas) if len(avaliacoes_aplicadas) > 0 else 1)
+                                
+                                for idx, av in enumerate(avaliacoes_aplicadas):
+                                    # Busca quem tem status explícito de FALTOU
+                                    faltosos_av = diag_trim[(diag_trim['ID_AVALIACAO'] == av) & (diag_trim['RESPOSTAS_ALUNO'] == "FALTOU")]['NOME_ALUNO'].tolist()
+                                    
+                                    # Busca quem é da turma mas não tem NENHUM registro para esta prova (Pendente de Scanner)
+                                    alunos_com_registro = diag_trim[diag_trim['ID_AVALIACAO'] == av]['ID_ALUNO'].apply(db.limpar_id).tolist()
+                                    pendentes_av = [alu['NOME_ALUNO'] for _, alu in alunos_t.iterrows() if db.limpar_id(alu['ID']) not in alunos_com_registro]
+                                    
+                                    todos_ausentes = list(set(faltosos_av + pendentes_av))
+                                    
+                                    with cols_faltas[idx % len(cols_faltas)]:
+                                        nome_curto = av.split("-")[0].strip()
+                                        if todos_ausentes:
+                                            houve_falta = True
+                                            st.warning(f"**{nome_curto}**\n" + "\n".join([f"• {a}" for a in todos_ausentes]))
+                                        else:
+                                            st.success(f"**{nome_curto}**\n100% de participação!")
+                                            
+                                if not houve_falta:
+                                    st.success("✅ Nenhum aluno faltou às avaliações deste trimestre!")
+                            else:
+                                st.info("Nenhuma avaliação escaneada neste trimestre ainda.")
+                        else:
+                            st.info("Nenhuma avaliação escaneada para esta turma.")
+
+                        st.divider()
+
+                        # --- BLOCO 4: RAIO-X CIRÚRGICO (TOP 3 LACUNAS) ---
+                        st.markdown("#### 🧠 4. Raio-X Cirúrgico (Última Avaliação)")
+                        if not diag_t.empty and 'diag_trim' in locals() and not diag_trim.empty:
+                            ultima_av = diag_trim['ID_AVALIACAO'].unique()[-1]
+                            st.caption(f"Analisando a prova mais recente: **{ultima_av}**")
+                            
+                            nome_curto = ultima_av.split("-")[0].strip().replace(" (2ª CHAMADA)", "")
+                            df_ref = df_aulas[df_aulas['TIPO_MATERIAL'].str.contains(nome_curto, regex=False, na=False)]
+                            
+                            if not df_ref.empty:
+                                txt_prova = str(df_ref.iloc[0]['CONTEUDO'])
+                                gab_raw = ai.extrair_tag(txt_prova, "GABARITO_TEXTO") or ai.extrair_tag(txt_prova, "GABARITO")
+                                grade_raw = ai.extrair_tag(txt_prova, "GRADE_DE_CORRECAO")
+                                
+                                if gab_raw and grade_raw:
+                                    matches = re.findall(r"(\d+)[\s\.\)\-:]+([A-E])", gab_raw.upper())
+                                    gab_oficial = {int(num): letra for num, letra in matches}
+                                    if not gab_oficial:
+                                        letras = re.findall(r"\b[A-E]\b", gab_raw.upper())
+                                        gab_oficial = {i+1: letra for i, letra in enumerate(letras)}
+                                        
+                                    respostas_alunos = diag_trim[diag_trim['ID_AVALIACAO'] == ultima_av]['RESPOSTAS_ALUNO'].astype(str).tolist()
+                                    
+                                    lacunas_stats =[]
+                                    for q_num, letra_certa in gab_oficial.items():
+                                        acertos = 0
+                                        validos = 0
+                                        for resp in respostas_alunos:
+                                            if resp == "FALTOU": continue
+                                            resp_lista = resp.split(";")
+                                            if len(resp_lista) >= q_num:
+                                                validos += 1
+                                                if resp_lista[q_num-1] == letra_certa:
+                                                    acertos += 1
+                                        
+                                        if validos > 0:
+                                            taxa_acerto = acertos / validos
+                                            if taxa_acerto < 0.6: # Alerta para acertos abaixo de 60%
+                                                padrao_h = rf"(?si)QUEST[AÃ]O\s*0?{q_num}\b.*?(?:\[)(.*?)(?:\])"
+                                                m_h = re.search(padrao_h, grade_raw)
+                                                habilidade = m_h.group(1).strip() if m_h else f"Revisar conceito da Questão {q_num}"
+                                                lacunas_stats.append({"q": q_num, "taxa": taxa_acerto, "hab": habilidade})
+                                    
+                                    if lacunas_stats:
+                                        top_lacunas = sorted(lacunas_stats, key=lambda x: x['taxa'])[:3]
+                                        st.error("🚨 **Professor, revise estes conceitos na próxima aula:**")
+                                        for lac in top_lacunas:
+                                            st.markdown(f"**Q{lac['q']} ({lac['taxa']*100:.0f}% de acerto):** {lac['hab']}")
+                                    else:
+                                        st.success("✅ Turma com excelente desempenho! Nenhuma questão com menos de 60% de acerto.")
+                            else:
+                                st.caption("Gabarito oficial não encontrado no acervo.")
+                        else:
+                            st.info("Aguardando dados da primeira avaliação para gerar o Raio-X.")
                 
                 # 🚨 FILTRAGEM EM CASCATA (TRIMESTRE -> PLANOS -> MATERIAIS)
                 df_p_atual = df_planos[df_planos['ANO'] == ano_str_ref].sort_values(by='DATA', ascending=False)
