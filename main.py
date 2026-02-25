@@ -914,15 +914,15 @@ if menu == "🧪 Criador de Aulas":
                                         st.session_state.v_lab = int(time.time())
                                         st.rerun()
 
-# --- ABA 5: ACERVO DE MATERIAIS (VERSÃO V46 - SOBERANIA DE LINKS) ---
+# --- ABA 5: ACERVO DE MATERIAIS (VERSÃO V48.5 - COM ABA DE IMAGENS) ---
         with tab_acervo_lab:
             st.subheader("📂 Gestão de Acervo de Materiais (Aulas e Projetos)")
             
-            # 1. FILTROS DE BUSCA (Preservados)
+            # 1. FILTROS DE BUSCA
             c_m1, c_m2, c_m3 = st.columns([1, 1, 1])
             f_trim_m = c_m1.selectbox("📅 Filtrar Trimestre:", ["Todos", "I Trimestre", "II Trimestre", "III Trimestre"], key="m_trim_filter")
             f_ano_m = c_m2.selectbox("🎓 Filtrar Série:", ["Todos", "6º", "7º", "8º", "9º"], key="m_ano_filter")
-            f_tipo_m = c_m3.selectbox("🧪 Tipo de Ativo:", ["Todos", "Aula", "PROJETO", "Fixação", "Reforço", "Recomposição"], key="m_tipo_filter")
+            f_tipo_m = c_m3.selectbox("🧪 Tipo de Ativo:", ["Todos", "Aula", "PROJETO", "Fixação", "Reforço", "Recomposição", "Lista"], key="m_tipo_filter")
 
             # 2. FILTRAGEM DA BASE
             df_m = df_aulas[~df_aulas['SEMANA_REF'].isin(["AVALIAÇÃO", "REVISÃO"])].copy()
@@ -947,18 +947,14 @@ if menu == "🧪 Criador de Aulas":
                         
                         st.markdown(f"#### 📘 {identificador}")
                         
-                        # --- MOTOR DE EXTRAÇÃO DE LINKS V47 (ULTRA-RESILIENTE) ---
+                        # --- MOTOR DE EXTRAÇÃO DE LINKS V47 ---
                         def buscar_link_soberano(texto, rotulo, link_reserva):
-                            # 1. Tenta buscar o padrão Rotulo(link)
                             padrao = rf"{rotulo}\s*\(?\s*(https?://[^\s\)]+)\)?"
                             match = re.search(padrao, texto, re.IGNORECASE)
                             if match:
                                 return match.group(1).strip()
-                            
-                            # 2. Se for o Aluno e não achou no texto, usa o link da coluna LINK_DRIVE
                             if rotulo.lower() in ["regular", "aluno"]:
                                 return link_reserva
-                            
                             return None
 
                         l_alu = buscar_link_soberano(txt_f, "Regular", row.get('LINK_DRIVE'))
@@ -968,25 +964,21 @@ if menu == "🧪 Criador de Aulas":
                         # --- BOTÕES DE AÇÃO ---
                         c_b1, c_b2, c_b3, c_b4, c_b5 = st.columns(5)
 
-                        # Botão Aluno
                         if l_alu and "http" in str(l_alu):
                             c_b1.link_button("📝 ALUNO", str(l_alu), use_container_width=True, type="primary")
                         else:
                             c_b1.button("⚪ SEM LINK", disabled=True, use_container_width=True)
 
-                        # Botão PEI
                         if l_pei and "http" in str(l_pei) and "N/A" not in str(l_pei):
                             c_b2.link_button("♿ PEI", str(l_pei), use_container_width=True)
                         else:
                             c_b2.button("⚪ SEM PEI", disabled=True, use_container_width=True)
 
-                        # Botão Professor
                         if l_prof and "http" in str(l_prof) and "N/A" not in str(l_prof):
                             c_b3.link_button("👨‍🏫 PROF", str(l_prof), use_container_width=True)
                         else:
                             c_b3.button("⚪ SEM GUIA", disabled=True, use_container_width=True)
                         
-                        # Ações de Sistema
                         if c_b4.button("🔄 REFINAR", key=f"ref_mat_h_{row.name}", use_container_width=True):
                             st.session_state.lab_temp = txt_f
                             st.session_state.sosa_id_atual = identificador
@@ -997,10 +989,10 @@ if menu == "🧪 Criador de Aulas":
                             if db.excluir_registro_com_drive("DB_AULAS_PRONTAS", identificador):
                                 st.rerun()
 
-                        # --- EXPANDER ANALÍTICO (USANDO EXTRATOR V45) ---
+                        # --- EXPANDER ANALÍTICO (AGORA COM ABA DE IMAGENS) ---
                         with st.expander("👁️ ANALISAR ESTRUTURA PEDAGÓGICA E ITENS"):
-                            t_prof, t_alu, t_gab, t_pei_tab = st.tabs([
-                                "👨‍🏫 Guia do Professor", "📝 Material do Aluno", "✅ Gabarito", "♿ Inclusão PEI"
+                            t_prof, t_alu, t_gab, t_pei_tab, t_img = st.tabs([
+                                "👨‍🏫 Guia do Professor", "📝 Material do Aluno", "✅ Gabarito", "♿ Inclusão PEI", "🎨 Imagens"
                             ])
                             
                             with t_prof:
@@ -1010,8 +1002,7 @@ if menu == "🧪 Criador de Aulas":
                             with t_alu:
                                 val_alu = ai.extrair_tag(txt_f, "ALUNO")
                                 if val_alu:
-                                    # Limpa prompts de imagem para leitura
-                                    st.write(re.sub(r'\[\s*PROMPT IMAGEM:.*?\]', '🖼️ *(Imagem)*', val_alu, flags=re.IGNORECASE))
+                                    st.write(val_alu)
                                 else: st.write("Roteiro não localizado.")
 
                             with t_gab:
@@ -1021,6 +1012,13 @@ if menu == "🧪 Criador de Aulas":
                             with t_pei_tab:
                                 val_pei = ai.extrair_tag(txt_f, "PEI")
                                 st.warning(val_pei if val_pei else "Nenhuma adaptação registrada.")
+                                
+                            with t_img:
+                                val_img = ai.extrair_tag(txt_f, "IMAGENS")
+                                if val_img:
+                                    st.info(val_img)
+                                else:
+                                    st.caption("Nenhum prompt de imagem gerado para este material.")
             else:
                 st.info("📭 Nenhum material didático encontrado.")
                 
