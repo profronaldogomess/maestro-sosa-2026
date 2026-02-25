@@ -2142,7 +2142,7 @@ elif menu == "📸 Scanner de Gabaritos":
         
         with st.container(border=True):
             c1, c2, c3 = st.columns([1, 1, 1.5])
-            t_sel = c1.selectbox("👥 Turma:", [""] + lista_turmas_cir, key=f"t_p_{v}")
+            t_sel = c1.selectbox("👥 Turma:",[""] + lista_turmas_cir, key=f"t_p_{v}")
             tr_sel = c2.selectbox("📅 Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_p_{v}")
             
             opcoes_p = filtrar_ativos_cir(t_sel, tr_sel, apenas_provas=True)
@@ -2187,14 +2187,22 @@ elif menu == "📸 Scanner de Gabaritos":
                     al_info = pendentes[pendentes['NOME_ALUNO'] == al_sel].iloc[0]
                     id_aluno_atual = al_info['ID']
                     
-                    is_pei_aluno = str(al_info['NECESSIDADES']).upper().strip() not in["NENHUMA", "PENDENTE", "", "NAN", "TÍPICO", "TIPICO"]
+                    is_pei_aluno_db = str(al_info['NECESSIDADES']).upper().strip() not in["NENHUMA", "PENDENTE", "", "NAN", "TÍPICO", "TIPICO"]
                     
                     st.markdown("---")
                     st.markdown(f"### 📸 Corrigindo agora: **{al_sel}**")
                     
                     with st.container(border=True):
-                        c_v1, c_v2 = st.columns([1, 1])
-                        modo_2a = c_v1.toggle("🚀 Aplicar Segunda Chamada para este aluno?", help="Ative se o aluno fez a prova de 2ª chamada. O sistema buscará o gabarito correto.", key=f"toggle_2a_{id_aluno_atual}")
+                        c_v1, c_v2, c_v3 = st.columns([1, 1, 1.5])
+                        modo_2a = c_v1.toggle("🚀 Aplicar Segunda Chamada?", help="Ative se o aluno fez a prova de 2ª chamada.", key=f"toggle_2a_{id_aluno_atual}")
+                        
+                        # 🚨 BOTÃO DE AUTONOMIA PEI
+                        forcar_regular = False
+                        if is_pei_aluno_db:
+                            forcar_regular = c_v2.toggle("📝 Fez a Prova Regular?", help="Ative se este aluno PEI optou por fazer a prova regular em vez da adaptada.", key=f"toggle_reg_{id_aluno_atual}")
+                        
+                        # Define qual gabarito a IA vai usar para corrigir
+                        is_pei_grading = is_pei_aluno_db and not forcar_regular
                         
                         if modo_2a:
                             tipo_base = at_sel.split("-")[0].strip().upper()
@@ -2205,7 +2213,7 @@ elif menu == "📸 Scanner de Gabaritos":
                                 (df_aulas['ANO'].str.contains(serie_num))
                             ]
                             opcoes_2a = df_2a_candidatos['TIPO_MATERIAL'].unique().tolist()
-                            at_segunda = c_v2.selectbox("📋 Selecione o Ativo 2CHAMADA:", [""] + opcoes_2a, key=f"sel_2a_{id_aluno_atual}")
+                            at_segunda = c_v3.selectbox("📋 Selecione o Ativo 2CHAMADA:",[""] + opcoes_2a, key=f"sel_2a_{id_aluno_atual}")
                             if at_segunda:
                                 material_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == at_segunda].iloc[0]
                             else:
@@ -2216,8 +2224,8 @@ elif menu == "📸 Scanner de Gabaritos":
                         
                         if material_ref is not None:
                             tipo_txt = "2ª CHAMADA" if modo_2a else "REGULAR"
-                            perfil_txt = "♿ PEI" if is_pei_aluno else "📝 REGULAR"
-                            st.info(f"⚖️ **Lente Ativa:** Prova {tipo_txt} | Perfil {perfil_txt}")
+                            perfil_txt = "♿ PEI (Adaptada)" if is_pei_grading else ("📝 REGULAR (Opção do Aluno)" if is_pei_aluno_db else "📝 REGULAR")
+                            st.info(f"⚖️ **Lente Ativa:** Prova {tipo_txt} | Correção: {perfil_txt}")
 
                     if material_ref is not None:
                         txt_ref = str(material_ref['CONTEUDO'])
@@ -2227,12 +2235,13 @@ elif menu == "📸 Scanner de Gabaritos":
                         def extrair_gab_blindado(texto, is_pei=False):
                             tag_alvo = "GABARITO_PEI" if is_pei else "GABARITO_TEXTO"
                             raw = ai.extrair_tag(texto, tag_alvo) or ai.extrair_tag(texto, "GABARITO")
-                            if not raw: return []
+                            if not raw: return[]
                             matches = re.findall(r"(\d+)[\s\.\)\-:]+([A-E])", raw.upper())
                             mapa = {int(num): letra for num, letra in matches}
                             return [mapa[n] for n in sorted(mapa.keys())]
 
-                        gab_alvo = extrair_gab_blindado(txt_ref, is_pei_aluno)
+                        # Usa a variável is_pei_grading que respeita o botão de forçar regular
+                        gab_alvo = extrair_gab_blindado(txt_ref, is_pei_grading)
 
                         col_cam, col_falta = st.columns([2, 1])
                         
