@@ -3829,15 +3829,15 @@ elif menu == "📈 Boletim Anual & Conselho":
 # ==============================================================================
 elif menu == "👥 Gestão da Turma":
     st.title("👥 Cockpit de Regência: Gestão 360°")
-    st.caption("💡 **Guia de Comando:** Central de controle da sua rotina. Aqui você abre a aula do dia, monitora o clima da turma, detecta risco de evasão (faltas) e gerencia o cadastro de alunos.")
+    st.caption("💡 **Guia de Comando:** Central de controle da sua rotina. Aqui você abre a aula do dia, monitora o clima da turma, detecta risco de evasão e mapeia o perfil cognitivo dos alunos.")
     st.markdown("---")
 
     if "v_gestao" not in st.session_state: 
         st.session_state.v_gestao = int(time.time())
     v = st.session_state.v_gestao
 
-    tab_cockpit, tab_criar, tab_povoar, tab_editar = st.tabs([
-        "📊 1. Cockpit de Prontidão", "🏗️ 2. Arquitetura de Turmas", "➕ 3. Povoar Alunos", "✏️ 4. Edição & Transferência"
+    tab_cockpit, tab_criar, tab_povoar, tab_editar, tab_radiografia = st.tabs([
+        "📊 1. Cockpit de Prontidão", "🏗️ 2. Arquitetura de Turmas", "➕ 3. Povoar Alunos", "✏️ 4. Edição & Transferência", "🧠 5. Radiografia Cognitiva"
     ])
 
     # --- ABA 1: COCKPIT DA TURMA ---
@@ -3847,7 +3847,7 @@ elif menu == "👥 Gestão da Turma":
         else:
             st.markdown("### 📅 Grade Oficial de Regência")
             
-            dias_semana = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"]
+            dias_semana =["Segunda", "Terça", "Quarta", "Quinta", "Sexta"]
             tempos = ["1º Tempo", "2º Tempo"]
             grade_map = {t: {d: "---" for d in dias_semana} for t in tempos}
 
@@ -3860,7 +3860,7 @@ elif menu == "👥 Gestão da Turma":
                 if "ª" in sigla: display_name = nome_turma.replace("Ano ", "ANO ").upper()
                 
                 if horarios_str and horarios_str != "N/A":
-                    for h in[x.strip() for x in horarios_str.split("/")]:
+                    for h in [x.strip() for x in horarios_str.split("/")]:
                         for dia in dias_semana:
                             for tempo in tempos:
                                 if dia in h and tempo in h:
@@ -3869,7 +3869,7 @@ elif menu == "👥 Gestão da Turma":
             df_grade = pd.DataFrame(grade_map).T
             
             def colorir_grade(val):
-                if val in["PI", "PC", "AC", "HTPC"]: return 'background-color: #2962FF; color: white; font-weight: bold; text-align: center;'
+                if val in ["PI", "PC", "AC", "HTPC"]: return 'background-color: #2962FF; color: white; font-weight: bold; text-align: center;'
                 if val != "---": return 'background-color: #001E3C; color: #2ECC71; font-weight: bold; text-align: center;'
                 return 'color: gray; text-align: center;'
 
@@ -3907,7 +3907,7 @@ elif menu == "👥 Gestão da Turma":
                 if not df_registro_aulas.empty and len(df_registro_aulas.columns) >= 9:
                     try:
                         climas_turma = df_registro_aulas[df_registro_aulas['TURMA'] == turma_foco].iloc[:, 8].dropna().astype(str).tolist()
-                        climas_validos =[c for c in climas_turma if c.strip() and c.lower() not in["nan", "none", "n/a"]]
+                        climas_validos = [c for c in climas_turma if c.strip() and c.lower() not in["nan", "none", "n/a"]]
                         if climas_validos:
                             recentes = climas_validos[-5:]
                             clima_predominante = max(set(recentes), key=recentes.count)
@@ -3916,36 +3916,13 @@ elif menu == "👥 Gestão da Turma":
                 clima_curto = clima_predominante.split(" ")[0] + " " + clima_predominante.split(" ")[1] if " " in clima_predominante else clima_predominante
                 m4.metric("🌡️ Clima Recente", clima_curto, help=f"Clima predominante nas últimas aulas: {clima_predominante}")
 
-                # 🚨 RADAR DE BUSCA ATIVA
-                with st.container(border=True):
-                    st.markdown("#### 🚨 Radar de Busca Ativa (Risco de Evasão)")
-                    st.caption("O sistema monitora automaticamente alunos que faltaram às últimas 3 aulas consecutivas.")
-                    df_diario_turma = df_diario[df_diario['TURMA'] == turma_foco].copy()
-                    if not df_diario_turma.empty:
-                        df_diario_turma['DATA_DT'] = pd.to_datetime(df_diario_turma['DATA'], format="%d/%m/%Y", errors='coerce')
-                        df_diario_turma = df_diario_turma.sort_values(by=['ID_ALUNO', 'DATA_DT'])
-                        
-                        alunos_risco =[]
-                        for id_aluno, group in df_diario_turma.groupby('ID_ALUNO'):
-                            last_3 = group.tail(3)
-                            if len(last_3) == 3 and all(last_3['TAGS'] == "AUSÊNCIA"):
-                                nome_aluno = group.iloc[0]['NOME_ALUNO']
-                                alunos_risco.append(nome_aluno)
-                        
-                        if alunos_risco:
-                            st.error(f"⚠️ **ATENÇÃO:** {len(alunos_risco)} aluno(s) faltaram às últimas 3 aulas consecutivas. Acionar Coordenação:")
-                            st.write(", ".join([f"**{a}**" for a in alunos_risco]))
-                        else:
-                            st.success("✅ Nenhum aluno com 3 faltas consecutivas recentes. Frequência estabilizada.")
-                    else:
-                        st.info("Aguardando registros no diário para ativar o radar.")
-
-                # 🚨 NOVO FUNIL DE PERFORMANCE E ENGAJAMENTO 360°
+                # ==============================================================================
+                # 🚨 FUNIL DE PERFORMANCE E ENGAJAMENTO 360°
+                # ==============================================================================
                 with st.expander("🎯 Funil de Performance e Engajamento 360°", expanded=True):
                     if trim_foco == "Todos":
                         st.warning("⚠️ Selecione um trimestre específico (I, II ou III) no topo da tela para habilitar o Funil de Performance.")
                     else:
-                        # --- SETUP DE DATAS DO TRIMESTRE ---
                         calendario = {
                             "I Trimestre": (date(2026, 2, 9), date(2026, 5, 22)),
                             "II Trimestre": (date(2026, 5, 25), date(2026, 9, 4)),
@@ -4036,10 +4013,7 @@ elif menu == "👥 Gestão da Turma":
                                 cols_faltas = st.columns(len(avaliacoes_aplicadas) if len(avaliacoes_aplicadas) > 0 else 1)
                                 
                                 for idx, av in enumerate(avaliacoes_aplicadas):
-                                    # Busca quem tem status explícito de FALTOU
                                     faltosos_av = diag_trim[(diag_trim['ID_AVALIACAO'] == av) & (diag_trim['RESPOSTAS_ALUNO'] == "FALTOU")]['NOME_ALUNO'].tolist()
-                                    
-                                    # Busca quem é da turma mas não tem NENHUM registro para esta prova (Pendente de Scanner)
                                     alunos_com_registro = diag_trim[diag_trim['ID_AVALIACAO'] == av]['ID_ALUNO'].apply(db.limpar_id).tolist()
                                     pendentes_av = [alu['NOME_ALUNO'] for _, alu in alunos_t.iterrows() if db.limpar_id(alu['ID']) not in alunos_com_registro]
                                     
@@ -4099,7 +4073,7 @@ elif menu == "👥 Gestão da Turma":
                                         
                                         if validos > 0:
                                             taxa_acerto = acertos / validos
-                                            if taxa_acerto < 0.6: # Alerta para acertos abaixo de 60%
+                                            if taxa_acerto < 0.6: 
                                                 padrao_h = rf"(?si)QUEST[AÃ]O\s*0?{q_num}\b.*?(?:\[)(.*?)(?:\])"
                                                 m_h = re.search(padrao_h, grade_raw)
                                                 habilidade = m_h.group(1).strip() if m_h else f"Revisar conceito da Questão {q_num}"
@@ -4116,6 +4090,8 @@ elif menu == "👥 Gestão da Turma":
                                 st.caption("Gabarito oficial não encontrado no acervo.")
                         else:
                             st.info("Aguardando dados da primeira avaliação para gerar o Raio-X.")
+
+                st.markdown("---")
                 
                 # 🚨 FILTRAGEM EM CASCATA (TRIMESTRE -> PLANOS -> MATERIAIS)
                 df_p_atual = df_planos[df_planos['ANO'] == ano_str_ref].sort_values(by='DATA', ascending=False)
@@ -4260,8 +4236,7 @@ elif menu == "👥 Gestão da Turma":
         st.subheader("🏗️ Configurar Grade: Turmas e Planejamento")
         
         tipo_cadastro = st.radio(
-            "O que o senhor deseja alocar na grade?", 
-            ["📚 Turma Regular (Alunos)", "⚙️ Planejamento (PI / PC)"], 
+            "O que o senhor deseja alocar na grade?",["📚 Turma Regular (Alunos)", "⚙️ Planejamento (PI / PC)"], 
             horizontal=True, 
             key=f"tipo_cad_{v}"
         )
@@ -4271,15 +4246,15 @@ elif menu == "👥 Gestão da Turma":
                 c1, c2, c3 = st.columns(3)
                 ano_t = c1.selectbox("Série/Ano:",[1, 2, 3, 4, 5, 6, 7, 8, 9], index=5, key=f"ano_cad_{v}")
                 letra_t = c2.selectbox("Letra:",["A", "B", "C", "D", "E", "F", "G"], key=f"letra_cad_{v}")
-                turno_t = c3.selectbox("Turno:", ["Matutino", "Vespertino", "Noturno"], key=f"turno_cad_{v}")
+                turno_t = c3.selectbox("Turno:",["Matutino", "Vespertino", "Noturno"], key=f"turno_cad_{v}")
                 
                 sigla_final = f"{ano_t}ª {turno_t[0].upper()}{letra_t}"
                 nome_final = f"{ano_t}º Ano {letra_t}"
             else:
                 c1, c2, c3 = st.columns([1, 2, 1])
-                sigla_plan = c1.selectbox("Sigla:", ["PI", "PC", "AC", "HTPC", "OUTRO"], key=f"sigla_plan_{v}")
+                sigla_plan = c1.selectbox("Sigla:",["PI", "PC", "AC", "HTPC", "OUTRO"], key=f"sigla_plan_{v}")
                 desc_plan = c2.text_input("Descrição:", placeholder="Ex: Planejamento Individual", key=f"desc_plan_{v}")
-                turno_t = c3.selectbox("Turno:", ["Matutino", "Vespertino", "Noturno"], key=f"turno_plan_{v}")
+                turno_t = c3.selectbox("Turno:",["Matutino", "Vespertino", "Noturno"], key=f"turno_plan_{v}")
                 
                 sigla_final = sigla_plan
                 nome_final = desc_plan if desc_plan else "Planejamento"
@@ -4369,7 +4344,7 @@ elif menu == "👥 Gestão da Turma":
                     else:
                         st.error("⚠️ Cole os dados na caixa de texto antes de processar.")
 
-    # --- ABA 4: EDIÇÃO & TRANSFERÊNCIA ---
+    # --- ABA 4: EDIÇÃO & TRANSFERÊNCIA (COM DIAGNÓSTICO RÁPIDO) ---
     with tab_editar:
         st.subheader("✏️ Gestão de Cadastro e Transferência")
         st.caption("Altere o nome, a turma ou o laudo de um aluno. O sistema atualizará todo o histórico dele (notas, faltas, provas) automaticamente.")
@@ -4381,11 +4356,37 @@ elif menu == "👥 Gestão da Turma":
             aluno_sel_nome = st.selectbox("Selecione o Aluno:", alunos_opcoes['NOME_ALUNO'].tolist(), key=f"alu_ed_{v}")
             dados_atuais = alunos_opcoes[alunos_opcoes['NOME_ALUNO'] == aluno_sel_nome].iloc[0]
             
+            # ==============================================================================
+            # 🚨 NOVO: BOTÕES DE DIAGNÓSTICO RÁPIDO (1-CLICK)
+            # ==============================================================================
+            st.markdown("#### ⚡ Diagnóstico Rápido (1-Click)")
+            st.caption("Clique para classificar o aluno instantaneamente na Radiografia Cognitiva.")
+            c_btn1, c_btn2, c_btn3, c_btn4 = st.columns(4)
+            
+            if c_btn1.button("📚 Defasagem Leitura", use_container_width=True):
+                with st.spinner("Atualizando perfil..."):
+                    db.atualizar_aluno_cascata(dados_atuais['ID'], dados_atuais['NOME_ALUNO'], t_origem, "DEFASAGEM LEITURA")
+                    st.success("Perfil atualizado!"); time.sleep(0.5); st.rerun()
+            if c_btn2.button("🧮 Defasagem Matemática", use_container_width=True):
+                with st.spinner("Atualizando perfil..."):
+                    db.atualizar_aluno_cascata(dados_atuais['ID'], dados_atuais['NOME_ALUNO'], t_origem, "DEFASAGEM MATEMÁTICA")
+                    st.success("Perfil atualizado!"); time.sleep(0.5); st.rerun()
+            if c_btn3.button("🚀 Alta Performance", use_container_width=True):
+                with st.spinner("Atualizando perfil..."):
+                    db.atualizar_aluno_cascata(dados_atuais['ID'], dados_atuais['NOME_ALUNO'], t_origem, "ALTA PERFORMANCE")
+                    st.success("Perfil atualizado!"); time.sleep(0.5); st.rerun()
+            if c_btn4.button("👤 Típico (Limpar)", use_container_width=True):
+                with st.spinner("Limpando perfil..."):
+                    db.atualizar_aluno_cascata(dados_atuais['ID'], dados_atuais['NOME_ALUNO'], t_origem, "TÍPICO")
+                    st.success("Perfil limpo!"); time.sleep(0.5); st.rerun()
+            
+            st.markdown("---")
+            
             with st.form("form_edicao"):
                 novo_nome = st.text_input("Nome Completo:", value=dados_atuais['NOME_ALUNO']).upper()
                 
                 turmas_reais_ed = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
-                lista_turmas_dest = sorted(turmas_reais_ed['ID_TURMA'].unique()) if not turmas_reais_ed.empty else[t_origem]
+                lista_turmas_dest = sorted(turmas_reais_ed['ID_TURMA'].unique()) if not turmas_reais_ed.empty else [t_origem]
                 idx_turma = lista_turmas_dest.index(t_origem) if t_origem in lista_turmas_dest else 0
                 
                 nova_turma = st.selectbox("Turma de Destino (Para Transferência):", lista_turmas_dest, index=idx_turma)
@@ -4399,6 +4400,78 @@ elif menu == "👥 Gestão da Turma":
                             st.success("✅ Cadastro, laudos e histórico atualizados em cascata com sucesso!")
                             time.sleep(1.5)
                             st.rerun()
+
+    # ==============================================================================
+    # 🚨 NOVA ABA 5: RADIOGRAFIA COGNITIVA DA TURMA
+    # ==============================================================================
+    with tab_radiografia:
+        st.subheader("🧠 Radiografia Cognitiva da Turma")
+        st.caption("Mapeamento tático de perfis de aprendizagem para formação de duplas e planejamento de aulas.")
+        
+        turmas_reais_rad = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
+        lista_turmas_rad = sorted(turmas_reais_rad['ID_TURMA'].unique()) if not turmas_reais_rad.empty else sorted(df_alunos['TURMA'].unique())
+        
+        t_rad = st.selectbox("🎯 Selecione a Turma para Mapeamento:", lista_turmas_rad, key=f"rad_t_{v}")
+        
+        if t_rad:
+            alunos_rad = df_alunos[df_alunos['TURMA'] == t_rad].copy()
+            if alunos_rad.empty:
+                st.info("Nenhum aluno cadastrado nesta turma.")
+            else:
+                # Lógica de Categorização
+                def categorizar_aluno(nec):
+                    n = str(nec).upper().strip()
+                    if "PENDENTE" in n or "SUSPEITA" in n: return "🟠 Radar (Suspeita/Pendente)"
+                    if "DEFASAGEM LEITURA" in n: return "🧱 Barreira de Leitura"
+                    if "DEFASAGEM MATEMÁTICA" in n or "DEFASAGEM MATEMATICA" in n: return "🧮 Desafio Lógico (Matemática)"
+                    if "ALTA PERFORMANCE" in n: return "🚀 Alta Performance"
+                    if n in["NENHUMA", "", "NAN", "TÍPICO", "TIPICO"]: return "👤 Típico / Padrão"
+                    return "♿ Inclusão Oficial (PEI)" 
+                
+                alunos_rad['PERFIL_COG'] = alunos_rad['NECESSIDADES'].apply(categorizar_aluno)
+                
+                # Gráfico de Rosca
+                contagem = alunos_rad['PERFIL_COG'].value_counts().reset_index()
+                contagem.columns = ['Perfil', 'Quantidade']
+                
+                color_map = {
+                    "👤 Típico / Padrão": "#A0AEC0",
+                    "♿ Inclusão Oficial (PEI)": "#9F7AEA",
+                    "🟠 Radar (Suspeita/Pendente)": "#ED8936",
+                    "🧱 Barreira de Leitura": "#E53E3E",
+                    "🧮 Desafio Lógico (Matemática)": "#D69E2E",
+                    "🚀 Alta Performance": "#38B2AC"
+                }
+                
+                fig = px.pie(contagem, values='Quantidade', names='Perfil', hole=0.4, color='Perfil', color_discrete_map=color_map)
+                fig.update_traces(textposition='inside', textinfo='percent+label')
+                fig.update_layout(showlegend=False, margin=dict(t=0, b=0, l=0, r=0))
+                
+                st.plotly_chart(fig, use_container_width=True)
+                
+                st.markdown("---")
+                st.markdown("#### 📋 Listas Nominais por Perfil")
+                
+                c_p1, c_p2, c_p3 = st.columns(3)
+                
+                def listar_alunos(perfil, col, emoji):
+                    lista = alunos_rad[alunos_rad['PERFIL_COG'] == perfil]['NOME_ALUNO'].tolist()
+                    with col:
+                        with st.container(border=True):
+                            st.markdown(f"**{emoji} {perfil.split(' ', 1)[1] if ' ' in perfil else perfil} ({len(lista)})**")
+                            if lista:
+                                for a in lista: st.caption(f"• {a}")
+                            else:
+                                st.caption("-")
+                
+                listar_alunos("♿ Inclusão Oficial (PEI)", c_p1, "♿")
+                listar_alunos("🟠 Radar (Suspeita/Pendente)", c_p2, "🟠")
+                listar_alunos("🧱 Barreira de Leitura", c_p3, "🧱")
+                
+                c_p4, c_p5, c_p6 = st.columns(3)
+                listar_alunos("🧮 Desafio Lógico (Matemática)", c_p4, "🧮")
+                listar_alunos("🚀 Alta Performance", c_p5, "🚀")
+                listar_alunos("👤 Típico / Padrão", c_p6, "👤")
 
 
 # ==============================================================================
