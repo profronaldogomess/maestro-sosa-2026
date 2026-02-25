@@ -3824,6 +3824,7 @@ elif menu == "📈 Boletim Anual & Conselho":
         
         st.caption(f"📌 **Legenda:** I, II, III (Médias Trimestrais) | R1, R2, R3 (Recuperações Paralelas) | Σ (Soma Anual) | RF (Recuperação Final) | F (Faltas). Limite de faltas atual: **{int(limite_faltas)}**.")
 
+
 # ==============================================================================
 # MÓDULO: GESTÃO DA TURMA (COCKPIT DE REGÊNCIA) - CLEAN & UX
 # ==============================================================================
@@ -3836,13 +3837,21 @@ elif menu == "👥 Gestão da Turma":
         st.session_state.v_gestao = int(time.time())
     v = st.session_state.v_gestao
 
+    # 🚨 VACINA ANTI-KEYERROR (BLINDAGEM GLOBAL DE TURMAS)
+    lista_turmas_segura =[]
+    if not df_turmas.empty and 'ID_TURMA' in df_turmas.columns:
+        turmas_reais = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
+        lista_turmas_segura = sorted(turmas_reais['ID_TURMA'].unique())
+    elif not df_alunos.empty and 'TURMA' in df_alunos.columns:
+        lista_turmas_segura = sorted(df_alunos['TURMA'].unique())
+
     tab_cockpit, tab_criar, tab_povoar, tab_editar, tab_radiografia = st.tabs([
         "📊 1. Cockpit de Prontidão", "🏗️ 2. Arquitetura de Turmas", "➕ 3. Povoar Alunos", "✏️ 4. Edição & Transferência", "🧠 5. Radiografia Cognitiva"
     ])
 
     # --- ABA 1: COCKPIT DA TURMA ---
     with tab_cockpit:
-        if df_turmas.empty:
+        if df_turmas.empty or 'ID_TURMA' not in df_turmas.columns:
             st.info("📭 Nenhuma turma cadastrada. Vá na aba '2. Arquitetura de Turmas' para iniciar.")
         else:
             st.markdown("### 📅 Grade Oficial de Regência")
@@ -3852,15 +3861,16 @@ elif menu == "👥 Gestão da Turma":
             grade_map = {t: {d: "---" for d in dias_semana} for t in tempos}
 
             for _, row in df_turmas.iterrows():
-                sigla = str(row['ID_TURMA'])
-                nome_turma = str(row.iloc[1])
-                horarios_str = str(row.iloc[3])
+                # Uso do .get() para evitar KeyError se a coluna sumir
+                sigla = str(row.get('ID_TURMA', ''))
+                nome_turma = str(row.iloc[1]) if len(row) > 1 else ""
+                horarios_str = str(row.iloc[3]) if len(row) > 3 else ""
                 
                 display_name = sigla
                 if "ª" in sigla: display_name = nome_turma.replace("Ano ", "ANO ").upper()
                 
                 if horarios_str and horarios_str != "N/A":
-                    for h in [x.strip() for x in horarios_str.split("/")]:
+                    for h in[x.strip() for x in horarios_str.split("/")]:
                         for dia in dias_semana:
                             for tempo in tempos:
                                 if dia in h and tempo in h:
@@ -3876,13 +3886,11 @@ elif menu == "👥 Gestão da Turma":
             st.dataframe(df_grade.style.applymap(colorir_grade), use_container_width=True)
             st.markdown("---")
 
-            turmas_reais = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
-            
-            if turmas_reais.empty:
+            if not lista_turmas_segura:
                 st.warning("⚠️ Apenas horários de planejamento cadastrados. Cadastre turmas regulares para liberar o comando acadêmico.")
             else:
                 c_f1, c_f2 = st.columns([1, 1])
-                turma_foco = c_f1.selectbox("🎯 Selecione a Turma para Comando:", sorted(turmas_reais['ID_TURMA'].unique()), key=f"foco_t_{v}")
+                turma_foco = c_f1.selectbox("🎯 Selecione a Turma para Comando:", lista_turmas_segura, key=f"foco_t_{v}")
                 trim_foco = c_f2.selectbox("📅 Trimestre de Safra:", ["I Trimestre", "II Trimestre", "III Trimestre", "Todos"], key=f"foco_trim_{v}")
                 
                 alunos_t = df_alunos[df_alunos['TURMA'] == turma_foco].sort_values(by="NOME_ALUNO")
@@ -3907,7 +3915,7 @@ elif menu == "👥 Gestão da Turma":
                 if not df_registro_aulas.empty and len(df_registro_aulas.columns) >= 9:
                     try:
                         climas_turma = df_registro_aulas[df_registro_aulas['TURMA'] == turma_foco].iloc[:, 8].dropna().astype(str).tolist()
-                        climas_validos = [c for c in climas_turma if c.strip() and c.lower() not in["nan", "none", "n/a"]]
+                        climas_validos =[c for c in climas_turma if c.strip() and c.lower() not in["nan", "none", "n/a"]]
                         if climas_validos:
                             recentes = climas_validos[-5:]
                             clima_predominante = max(set(recentes), key=recentes.count)
@@ -4283,66 +4291,68 @@ elif menu == "👥 Gestão da Turma":
     with tab_povoar:
         st.subheader("➕ Inclusão de Estudantes (Manual e Lote)")
         
-        turmas_reais_pov = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
-        t_dest = st.selectbox("Turma de Destino:", turmas_reais_pov['ID_TURMA'].tolist() if not turmas_reais_pov.empty else[], key=f"dest_pov_{v}")
-        
-        if t_dest:
-            t1_man, t2_lote = st.tabs(["✍️ Cadastro Manual", "📄 Importação em Lote (CSV)"])
+        if not lista_turmas_segura:
+            st.warning("Cadastre uma turma primeiro.")
+        else:
+            t_dest = st.selectbox("Turma de Destino:", lista_turmas_segura, key=f"dest_pov_{v}")
             
-            with t1_man:
-                with st.form("f_manual_povoar"):
-                    nome_a = st.text_input("Nome Completo:").upper()
-                    
-                    opcoes_nec =["TÍPICO", "TEA", "TDAH", "DISLEXIA", "DEF. INTELECTUAL", "TOD", "BAIXA VISÃO", "SURDEZ", "PEI - PENDENTE", "OUTRO"]
-                    perfil_base = st.multiselect("Perfil / Necessidades (Pode selecionar vários):", opcoes_nec, default=["TÍPICO"])
-                    
-                    if st.form_submit_button("💾 SALVAR ALUNO"):
-                        if not nome_a:
-                            st.error("⚠️ Digite o nome do aluno.")
-                        else:
-                            if "TÍPICO" in perfil_base and len(perfil_base) > 1:
-                                perfil_base.remove("TÍPICO")
-                            
-                            perfil_str = " + ".join(perfil_base) if perfil_base else "TÍPICO"
-                            
-                            id_n = db.gerar_proximo_id(df_alunos)
-                            if db.salvar_no_banco("DB_ALUNOS",[id_n, nome_a, t_dest, "ATIVO", perfil_str, "MANUAL"]):
-                                st.success(f"✅ {nome_a} cadastrado com perfil: {perfil_str}!"); st.rerun()
-            
-            with t2_lote:
-                st.info("💡 **Dica de Soberania:** Cole a lista de alunos abaixo. Se o aluno tiver um asterisco (*) no final do nome, o sistema detectará automaticamente como PEI.")
-                texto_lote = st.text_area("Cole os dados CSV aqui (NOME, PERFIL):", height=300, placeholder="ADRIEL VINICIUS ALVES MARTINS,TÍPICO\nJOSE LEVI BRONZE SANTOS*,PEI - PENDENTE")
+            if t_dest:
+                t1_man, t2_lote = st.tabs(["✍️ Cadastro Manual", "📄 Importação em Lote (CSV)"])
                 
-                if st.button("🚀 PROCESSAR IMPORTAÇÃO EM LOTE", type="primary", use_container_width=True):
-                    if texto_lote.strip():
-                        linhas = texto_lote.strip().split('\n')
-                        novos_alunos =[]
-                        id_atual = db.gerar_proximo_id(df_alunos)
+                with t1_man:
+                    with st.form("f_manual_povoar"):
+                        nome_a = st.text_input("Nome Completo:").upper()
                         
-                        with st.status("Importando alunos para o Banco de Dados...") as status:
-                            for linha in linhas:
-                                if not linha.strip(): continue
+                        opcoes_nec =["TÍPICO", "TEA", "TDAH", "DISLEXIA", "DEF. INTELECTUAL", "TOD", "BAIXA VISÃO", "SURDEZ", "PEI - PENDENTE", "OUTRO"]
+                        perfil_base = st.multiselect("Perfil / Necessidades (Pode selecionar vários):", opcoes_nec, default=["TÍPICO"])
+                        
+                        if st.form_submit_button("💾 SALVAR ALUNO"):
+                            if not nome_a:
+                                st.error("⚠️ Digite o nome do aluno.")
+                            else:
+                                if "TÍPICO" in perfil_base and len(perfil_base) > 1:
+                                    perfil_base.remove("TÍPICO")
                                 
-                                partes = linha.split(',')
-                                nome_bruto = partes[0].strip().upper()
+                                perfil_str = " + ".join(perfil_base) if perfil_base else "TÍPICO"
                                 
-                                if "*" in nome_bruto:
-                                    nome_limpo = nome_bruto.replace("*", "").strip()
-                                    perfil = "PEI - PENDENTE"
-                                else:
-                                    nome_limpo = nome_bruto
-                                    perfil = partes[1].strip().upper() if len(partes) > 1 else "TÍPICO"
-                                
-                                novos_alunos.append([id_atual, nome_limpo, t_dest, "ATIVO", perfil, "LOTE"])
-                                id_atual += 1 
+                                id_n = db.gerar_proximo_id(df_alunos)
+                                if db.salvar_no_banco("DB_ALUNOS",[id_n, nome_a, t_dest, "ATIVO", perfil_str, "MANUAL"]):
+                                    st.success(f"✅ {nome_a} cadastrado com perfil: {perfil_str}!"); st.rerun()
+                
+                with t2_lote:
+                    st.info("💡 **Dica de Soberania:** Cole a lista de alunos abaixo. Se o aluno tiver um asterisco (*) no final do nome, o sistema detectará automaticamente como PEI.")
+                    texto_lote = st.text_area("Cole os dados CSV aqui (NOME, PERFIL):", height=300, placeholder="ADRIEL VINICIUS ALVES MARTINS,TÍPICO\nJOSE LEVI BRONZE SANTOS*,PEI - PENDENTE")
+                    
+                    if st.button("🚀 PROCESSAR IMPORTAÇÃO EM LOTE", type="primary", use_container_width=True):
+                        if texto_lote.strip():
+                            linhas = texto_lote.strip().split('\n')
+                            novos_alunos =[]
+                            id_atual = db.gerar_proximo_id(df_alunos)
                             
-                            if db.salvar_lote("DB_ALUNOS", novos_alunos):
-                                status.update(label=f"✅ {len(novos_alunos)} alunos importados com sucesso para a turma {t_dest}!", state="complete")
-                                st.balloons()
-                                time.sleep(1.5)
-                                st.rerun()
-                    else:
-                        st.error("⚠️ Cole os dados na caixa de texto antes de processar.")
+                            with st.status("Importando alunos para o Banco de Dados...") as status:
+                                for linha in linhas:
+                                    if not linha.strip(): continue
+                                    
+                                    partes = linha.split(',')
+                                    nome_bruto = partes[0].strip().upper()
+                                    
+                                    if "*" in nome_bruto:
+                                        nome_limpo = nome_bruto.replace("*", "").strip()
+                                        perfil = "PEI - PENDENTE"
+                                    else:
+                                        nome_limpo = nome_bruto
+                                        perfil = partes[1].strip().upper() if len(partes) > 1 else "TÍPICO"
+                                    
+                                    novos_alunos.append([id_atual, nome_limpo, t_dest, "ATIVO", perfil, "LOTE"])
+                                    id_atual += 1 
+                                
+                                if db.salvar_lote("DB_ALUNOS", novos_alunos):
+                                    status.update(label=f"✅ {len(novos_alunos)} alunos importados com sucesso para a turma {t_dest}!", state="complete")
+                                    st.balloons()
+                                    time.sleep(1.5)
+                                    st.rerun()
+                        else:
+                            st.error("⚠️ Cole os dados na caixa de texto antes de processar.")
 
     # --- ABA 4: EDIÇÃO & TRANSFERÊNCIA (COM DIAGNÓSTICO RÁPIDO) ---
     with tab_editar:
@@ -4357,7 +4367,7 @@ elif menu == "👥 Gestão da Turma":
             dados_atuais = alunos_opcoes[alunos_opcoes['NOME_ALUNO'] == aluno_sel_nome].iloc[0]
             
             # ==============================================================================
-            # 🚨 NOVO: BOTÕES DE DIAGNÓSTICO RÁPIDO (1-CLICK)
+            # 🚨 BOTÕES DE DIAGNÓSTICO RÁPIDO (1-CLICK)
             # ==============================================================================
             st.markdown("#### ⚡ Diagnóstico Rápido (1-Click)")
             st.caption("Clique para classificar o aluno instantaneamente na Radiografia Cognitiva.")
@@ -4385,11 +4395,8 @@ elif menu == "👥 Gestão da Turma":
             with st.form("form_edicao"):
                 novo_nome = st.text_input("Nome Completo:", value=dados_atuais['NOME_ALUNO']).upper()
                 
-                turmas_reais_ed = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
-                lista_turmas_dest = sorted(turmas_reais_ed['ID_TURMA'].unique()) if not turmas_reais_ed.empty else [t_origem]
-                idx_turma = lista_turmas_dest.index(t_origem) if t_origem in lista_turmas_dest else 0
-                
-                nova_turma = st.selectbox("Turma de Destino (Para Transferência):", lista_turmas_dest, index=idx_turma)
+                idx_turma = lista_turmas_segura.index(t_origem) if t_origem in lista_turmas_segura else 0
+                nova_turma = st.selectbox("Turma de Destino (Para Transferência):", lista_turmas_segura, index=idx_turma)
                 
                 st.info("💡 **Dica:** Para alunos PEI com múltiplas condições, digite separando por '+' ou vírgula. O sistema aceita códigos CID exatos (Ex: TEA + TDAH + F84.0).")
                 nova_nec = st.text_input("Necessidades / CIDs:", value=dados_atuais['NECESSIDADES']).upper()
@@ -4402,16 +4409,13 @@ elif menu == "👥 Gestão da Turma":
                             st.rerun()
 
     # ==============================================================================
-    # 🚨 NOVA ABA 5: RADIOGRAFIA COGNITIVA DA TURMA
-    # ==============================================================================    
+    # 🚨 NOVA ABA 5: RADIOGRAFIA COGNITIVA DA TURMA (VISÃO GLOBAL 360°)
+    # ==============================================================================
     with tab_radiografia:
         st.subheader("🧠 Radiografia Cognitiva e Desempenho Global")
         st.caption("Mapeamento tático de perfis, engajamento, assiduidade e resultados em avaliações para geração de dossiês futuros.")
         
-        turmas_reais_rad = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
-        lista_turmas_rad = sorted(turmas_reais_rad['ID_TURMA'].unique()) if not turmas_reais_rad.empty else sorted(df_alunos['TURMA'].unique())
-        
-        t_rad = st.selectbox("🎯 Selecione a Turma para Mapeamento Global:", lista_turmas_rad, key=f"rad_t_{v}")
+        t_rad = st.selectbox("🎯 Selecione a Turma para Mapeamento Global:", lista_turmas_segura, key=f"rad_t_{v}")
         
         if t_rad:
             alunos_rad = df_alunos[df_alunos['TURMA'] == t_rad].copy()
@@ -4516,7 +4520,6 @@ elif menu == "👥 Gestão da Turma":
                 st.markdown("#### 🚨 4. Sensor Semântico do Diário (Ação Rápida)")
                 st.caption("O sistema leu suas anotações recentes no Diário de Bordo. Classifique os alunos com 1 clique. Ao classificar ou clicar em 'Ciente', o aviso sumirá da tela.")
                 
-                # Função interna para dar "baixa" na observação
                 def ocultar_aviso_diario(data_obs, id_alu, texto_obs):
                     try:
                         wb = db.conectar()
@@ -4531,7 +4534,6 @@ elif menu == "👥 Gestão da Turma":
                     return False
 
                 if not df_d_rad.empty:
-                    # Filtra observações reais e IGNORA as que já foram lidas "[LIDO]"
                     obs_reais = df_d_rad[
                         (df_d_rad['OBSERVACOES'] != "") & 
                         (~df_d_rad['OBSERVACOES'].str.contains("Nota de Trabalho", na=False, case=False)) &
@@ -4578,6 +4580,7 @@ elif menu == "👥 Gestão da Turma":
                         st.success("✅ Nenhuma observação pendente de análise no Diário de Bordo.")
                 else:
                     st.info("Sem registros no Diário de Bordo para esta turma.")
+
 
 # ==============================================================================
 # MÓDULO: BASE DE CONHECIMENTO (V45 - COFRE DIGITAL NO GOOGLE DRIVE)
