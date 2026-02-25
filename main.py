@@ -3095,12 +3095,12 @@ elif menu == "📝 Diário de Bordo Rápido":
                         time.sleep(1); st.rerun()
 
 
-# ==============================================================================
-# MÓDULO: BIOGRAFIA DO ESTUDANTE - DOSSIÊ 360° (CLEAN & UX)
+## ==============================================================================
+# MÓDULO: BIOGRAFIA DO ESTUDANTE - DOSSIÊ DE EVOLUÇÃO (CLEAN & UX)
 # ==============================================================================
 elif menu == "👤 Biografia do Estudante":
-    st.title("👤 Biografia do Estudante: Dossiê 360°")
-    st.caption("💡 **Guia de Comando:** Visão consolidada do aluno para reuniões de pais, conselhos de classe e acompanhamento individual. Reúne notas, engajamento, comportamento e lacunas de aprendizagem.")
+    st.title("👤 Biografia do Estudante: Dossiê de Evolução")
+    st.caption("💡 **Guia de Comando:** Visão analítica da jornada do aluno. Use este painel em reuniões de pais para justificar médias mostrando a composição exata das notas, a evolução nas provas e o engajamento em sala.")
     st.markdown("---")
 
     if df_alunos.empty:
@@ -3170,8 +3170,9 @@ elif menu == "👤 Biografia do Estudante":
         if is_pei:
             st.warning(f"♿ **Condição Clínica / Necessidade:** {info_alu['NECESSIDADES']}")
 
-        # --- SEÇÃO 1: DESEMPENHO ACADÊMICO ---
-        st.markdown(f"### 📈 1. Desempenho Acadêmico ({trim_b})")
+        # --- BLOCO 1: EXTRATO ANALÍTICO DE NOTAS ---
+        st.markdown(f"### 🧾 1. Extrato Analítico de Notas ({trim_b})")
+        st.caption("Composição exata da média final. Mostra o peso do engajamento (Vistos) no resultado do aluno.")
         with st.container(border=True):
             if not n_alu_f.empty:
                 dados_notas =[]
@@ -3181,9 +3182,12 @@ elif menu == "👤 Biografia do Estudante":
                     if not reg.empty:
                         dados_notas.append({
                             "Trimestre": t,
-                            "Média Final": util.sosa_to_float(reg.iloc[0]['MEDIA_FINAL']),
+                            "Vistos (Caderno)": util.sosa_to_float(reg.iloc[0]['NOTA_VISTOS']),
+                            "Teste/Trabalho": util.sosa_to_float(reg.iloc[0]['NOTA_TESTE']),
+                            "Prova Oficial": util.sosa_to_float(reg.iloc[0]['NOTA_PROVA']),
                             "Rec. Paralela": util.sosa_to_float(reg.iloc[0]['NOTA_REC']),
-                            "Situação": "✅ OK" if util.sosa_to_float(reg.iloc[0]['MEDIA_FINAL']) >= 6.0 else "⚠️ ABAIXO"
+                            "Média Final": util.sosa_to_float(reg.iloc[0]['MEDIA_FINAL']),
+                            "Status": "✅ OK" if util.sosa_to_float(reg.iloc[0]['MEDIA_FINAL']) >= 6.0 else "⚠️ ABAIXO"
                         })
                 if dados_notas:
                     st.dataframe(pd.DataFrame(dados_notas), use_container_width=True, hide_index=True)
@@ -3192,24 +3196,37 @@ elif menu == "👤 Biografia do Estudante":
             else: 
                 st.info(f"📭 Aguardando lançamento de notas no Boletim.")
 
-        # --- SEÇÃO 2: TRABALHOS E PROJETOS ---
-        st.markdown(f"### ✍️ 2. Trabalhos e Projetos ({trim_b})")
+        # --- BLOCO 2: LINHA DO TEMPO DE EVOLUÇÃO (AVALIAÇÕES) ---
+        st.markdown(f"### 📈 2. Linha do Tempo de Avaliações ({trim_b})")
+        st.caption("Trajetória de aprendizagem extraída diretamente do Scanner de Gabaritos.")
         with st.container(border=True):
-            if not d_alu_f.empty:
-                trabalhos = d_alu_f[d_alu_f['TAGS'].astype(str).str.contains("PROJETO|ATIVIDADE|SISTEMA_NOTA", na=False, case=False)]
-                if not trabalhos.empty:
-                    for _, trab in trabalhos.iterrows():
-                        c_p1, c_p2 = st.columns([3, 1])
-                        nome_trab = str(trab['OBSERVACOES']).replace("Nota de Trabalho: ", "")
-                        c_p1.markdown(f"📘 **{nome_trab}**")
-                        c_p2.success(f"Nota: {trab['BONUS']}")
-                else: 
-                    st.info(f"📭 Nenhuma entrega de projeto registrada neste período.")
-            else: 
-                st.info(f"📭 Sem registros de atividades.")
+            if not diag_alu_f.empty:
+                # Ordena pela data para mostrar a evolução cronológica
+                diag_alu_f['DATA_DT'] = pd.to_datetime(diag_alu_f['DATA'], format="%d/%m/%Y", errors='coerce')
+                diag_ordenado = diag_alu_f.sort_values(by='DATA_DT')
+                
+                qtd_avs = len(diag_ordenado)
+                cols_av = st.columns(qtd_avs if qtd_avs > 0 else 1)
+                
+                for i, (_, row_av) in enumerate(diag_ordenado.iterrows()):
+                    with cols_av[i % len(cols_av)]:
+                        nome_av_curto = row_av['ID_AVALIACAO'].split('-')[0].strip()
+                        nota_av = util.sosa_to_float(row_av['NOTA_CALCULADA'])
+                        
+                        # Define a cor baseada na nota
+                        if nota_av >= 7.0:
+                            cor = "normal" # Verde no Streamlit
+                        elif nota_av >= 5.0:
+                            cor = "off" # Cinza
+                        else:
+                            cor = "inverse" # Vermelho
+                            
+                        st.metric(label=nome_av_curto, value=f"{nota_av:.1f}", delta="Avaliação Escaneada", delta_color=cor)
+            else:
+                st.info("📭 Nenhuma avaliação escaneada para este aluno no período selecionado.")
 
-        # --- SEÇÃO 3: ENGAJAMENTO E ASSIDUIDADE ---
-        st.markdown(f"### 📊 3. Engajamento e Assiduidade ({trim_b})")
+        # --- BLOCO 3: ENGAJAMENTO E COMPORTAMENTO ---
+        st.markdown(f"### 📊 3. Perfil de Engajamento e Comportamento ({trim_b})")
         with st.container(border=True):
             col_v1, col_v2 = st.columns([1.2, 1.8])
             with col_v1:
@@ -3234,24 +3251,33 @@ elif menu == "👤 Biografia do Estudante":
                     st.info(f"📭 Sem registros de diário para o período.")
 
             with col_v2:
-                st.markdown("**🚩 Ocorrências e Observações Recentes:**")
+                st.markdown("**🚩 Ocorrências, Trabalhos e Observações:**")
                 if not d_alu_f.empty:
-                    tags_obs = d_alu_f[(d_alu_f['TAGS'] != "") & (d_alu_f['TAGS'] != "SISTEMA_NOTA")]
+                    tags_obs = d_alu_f[(d_alu_f['TAGS'] != "") | (d_alu_f['OBSERVACOES'] != "")]
                     if not tags_obs.empty:
                         for _, row in tags_obs.tail(8).iterrows():
-                            emoji = "🔴" if any(x in str(row['TAGS']).upper() for x in["DORMIU", "CONVERSA", "MATERIAL", "FALTOU", "AUSÊNCIA", "ATRASO", "CELULAR", "INDISCIPLINA"]) else "🟢"
-                            st.caption(f"{emoji} **{row['DATA']}**: {row['TAGS']} - *{row['OBSERVACOES']}*")
+                            tag_str = str(row['TAGS']).upper()
+                            obs_str = str(row['OBSERVACOES'])
+                            
+                            # Define o ícone baseado na natureza do registro
+                            if "SISTEMA_NOTA" in tag_str or "PROJETO" in obs_str.upper():
+                                emoji = "📘"
+                            elif any(x in tag_str for x in["DORMIU", "CONVERSA", "MATERIAL", "FALTOU", "AUSÊNCIA", "ATRASO", "CELULAR", "INDISCIPLINA"]):
+                                emoji = "🔴"
+                            else:
+                                emoji = "🟢"
+                                
+                            # Formata a exibição
+                            display_tag = tag_str if tag_str != "SISTEMA_NOTA" else "TRABALHO"
+                            st.caption(f"{emoji} **{row['DATA']}**: {display_tag} - *{obs_str}*")
                     else: 
-                        st.success("✅ Nenhuma ocorrência disciplinar registrada.")
+                        st.success("✅ Nenhuma ocorrência ou trabalho registrado.")
 
-        # --- SEÇÃO 4: RAIO-X DE DIFICULDADES ---
-        st.markdown(f"### 🔍 4. Raio-X de Dificuldades ({trim_b})")
+        # --- BLOCO 4: MAPA DE LACUNAS (RAIO-X) ---
+        st.markdown(f"### 🧠 4. Mapa de Lacunas e Dificuldades ({trim_b})")
+        st.caption("Habilidades da BNCC que o aluno errou nas avaliações e que precisam de reforço.")
         with st.container(border=True):
             if not diag_alu_f.empty:
-                lista_nomes_av = diag_alu_f['ID_AVALIACAO'].unique().tolist()
-                nomes_formatados = ", ".join([f"**{n}**" for n in lista_nomes_av])
-                st.info(f"📊 Analisando {len(lista_nomes_av)} avaliações para compor o diagnóstico: {nomes_formatados}")
-                
                 todas_as_lacunas =[]
                 
                 for _, reg_av in diag_alu_f.iterrows():
@@ -3272,7 +3298,7 @@ elif menu == "👤 Biografia do Estudante":
                         respostas_aluno = str(reg_av['RESPOSTAS_ALUNO']).split(';')
                         
                         for i, r in enumerate(respostas_aluno):
-                            if i < len(gab_oficial) and r != gab_oficial[i] and r not in["FALTOU", "?", "X"]:
+                            if i < len(gab_oficial) and r != gab_oficial[i] and r not in ["FALTOU", "?", "X"]:
                                 q_n = i + 1
                                 padrao_h = rf"(?si)QUEST[AÃ]O\s*(?:PEI\s*)?0?{q_n}\b.*?(?:[:\-])\s*(.*?)(?=\.?\s*(?:JUSTIFICATIVA|PERÍCIA|ANÁLISE|DISTRATORES|$))"
                                 m_h = re.search(padrao_h, grade)
@@ -3282,16 +3308,14 @@ elif menu == "👤 Biografia do Estudante":
                                     todas_as_lacunas.append(txt_limpo)
                 
                 if todas_as_lacunas:
-                    st.markdown("**🧠 Mapa de Habilidades que precisam de reforço:**")
                     for l in list(dict.fromkeys(todas_as_lacunas)): 
                         st.error(f"❌ {l}")
                 else:
                     st.success("✅ Domínio total nas habilidades das avaliações realizadas.")
             else:
-                st.info("📭 Aguardando avaliações escaneadas para gerar o Raio-X de lacunas.")
+                st.info("📭 Aguardando avaliações escaneadas para gerar o mapa de lacunas.")
 
         st.caption(f"Dossiê atualizado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
-
 
 # ==============================================================================
 # MÓDULO: PAINEL DE NOTAS & VISTOS - CLEAN & UX
