@@ -2804,7 +2804,7 @@ elif menu == "📸 Scanner de Gabaritos":
 # --- ABA 4: RAIO-X PEDAGÓGICO ---
     with tab_raiox:
         st.subheader("📊 Raio-X Pedagógico: Diagnóstico Individual de Lacunas")
-        st.caption("Analise o desempenho da turma por questão e gere um Dossiê Impresso para o Conselho de Classe.")
+        st.caption("Analise o desempenho da turma (ou de toda a série) por questão e gere um Dossiê Impresso para o Conselho de Classe.")
         st.markdown("---")
 
         def is_regular_student(nec_val):
@@ -2823,9 +2823,14 @@ elif menu == "📸 Scanner de Gabaritos":
             letras = re.findall(r"\b[A-E]\b", bloco)
             return {i+1: letra for i, letra in enumerate(letras)}
 
+        # 🚨 LÓGICA DE AGRUPAMENTO DE SÉRIES (VISÃO GLOBAL)
+        series_presentes = sorted(list(set(["".join(filter(str.isdigit, t)) for t in lista_turmas_cir if any(c.isdigit() for c in t)])))
+        opcoes_agrupadas =[f"{s}º Ano (Todas as Turmas)" for s in series_presentes if s]
+        opcoes_dropdown = [""] + opcoes_agrupadas + lista_turmas_cir
+
         with st.container(border=True):
             c1, c2, c3 = st.columns([1, 1, 1.5])
-            t_sel_r = c1.selectbox("👥 Selecione a Turma:", [""] + lista_turmas_cir, key=f"t_r_v90_{v}")
+            t_sel_r = c1.selectbox("👥 Selecione a Turma ou Série:", opcoes_dropdown, key=f"t_r_v90_{v}")
             tr_sel_r = c2.selectbox("📅 Selecione o Trimestre:",["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_r_v90_{v}")
             
             opcoes_r = filtrar_ativos_cir(t_sel_r, tr_sel_r, apenas_provas=True)
@@ -2833,15 +2838,25 @@ elif menu == "📸 Scanner de Gabaritos":
             at_sel_r = c3.selectbox("📋 Selecione a Avaliação Base (Slot):", [""] + opcoes_base_r, key=f"at_r_v90_{v}")
 
         if not t_sel_r or not at_sel_r:
-            st.info("💡 Selecione a Turma e a Avaliação para carregar a Perícia Pedagógica.")
+            st.info("💡 Selecione a Turma/Série e a Avaliação para carregar a Perícia Pedagógica.")
         else:
             nome_curto_av = at_sel_r.split("-")[0].strip()
             ano_num_r = "".join(filter(str.isdigit, t_sel_r))
+            is_agrupado = "(Todas as Turmas)" in t_sel_r
             
-            respostas_brutas = df_diagnosticos[
-                (df_diagnosticos['TURMA'].str.strip() == t_sel_r.strip()) & 
-                (df_diagnosticos['ID_AVALIACAO'].str.contains(nome_curto_av, case=False))
-            ].copy()
+            # 🚨 FILTRAGEM INTELIGENTE (TURMA ÚNICA VS TODAS AS TURMAS)
+            if is_agrupado:
+                respostas_brutas = df_diagnosticos[
+                    (df_diagnosticos['TURMA'].str.contains(ano_num_r)) & 
+                    (df_diagnosticos['ID_AVALIACAO'].str.contains(nome_curto_av, case=False))
+                ].copy()
+                alunos_turma = df_alunos[df_alunos['TURMA'].str.contains(ano_num_r)].sort_values(by=["TURMA", "NOME_ALUNO"])
+            else:
+                respostas_brutas = df_diagnosticos[
+                    (df_diagnosticos['TURMA'].str.strip() == t_sel_r.strip()) & 
+                    (df_diagnosticos['ID_AVALIACAO'].str.contains(nome_curto_av, case=False))
+                ].copy()
+                alunos_turma = df_alunos[df_alunos['TURMA'] == t_sel_r].sort_values(by="NOME_ALUNO")
 
             if respostas_brutas.empty:
                 st.warning("⚠️ Nenhuma resposta de aluno encontrada para esta avaliação.")
@@ -2859,7 +2874,6 @@ elif menu == "📸 Scanner de Gabaritos":
                 def classificar_prova_realizada(resp):
                     if str(resp) == "FALTOU": return "FALTOU"
                     qtd = len(str(resp).split(';'))
-                    # Se a quantidade de respostas for mais próxima do tamanho do gabarito PEI, ele fez PEI.
                     if len_pei != len_reg:
                         if abs(qtd - len_pei) < abs(qtd - len_reg): return "PEI"
                     return "REGULAR"
@@ -2872,7 +2886,6 @@ elif menu == "📸 Scanner de Gabaritos":
                 df_analise['IS_PEI'] = ~df_analise['NECESSIDADES'].apply(is_regular_student)
                 df_analise['IS_2A_CHAMADA'] = df_analise['ID_AVALIACAO'].str.contains(r"2[ªA]|CHAMADA", case=False, regex=True)
                 
-                # Aplica a detecção de qual prova o aluno REALMENTE fez
                 df_analise['TIPO_PROVA_FEITA'] = df_analise['RESPOSTAS_ALUNO'].apply(classificar_prova_realizada)
 
                 st.markdown("### 🎯 1. Análise de Performance por Item")
@@ -2883,7 +2896,6 @@ elif menu == "📸 Scanner de Gabaritos":
                 is_pei_view = "PEI" in perfil_visao
                 is_2a_view = "2ª" in versao_visao
                 
-                # Filtra pelo tipo de prova que foi FEITA, não apenas pelo laudo do aluno
                 tipo_filtro = "PEI" if is_pei_view else "REGULAR"
                 df_filtrado = df_analise[(df_analise['TIPO_PROVA_FEITA'] == tipo_filtro) & (df_analise['IS_2A_CHAMADA'] == is_2a_view)]
 
@@ -2942,7 +2954,6 @@ elif menu == "📸 Scanner de Gabaritos":
                 st.markdown("---")
                 st.markdown("#### 👤 2. Perícia Individual: Lacunas e Diagnóstico de Erros")
                 
-                alunos_turma = df_alunos[df_alunos['TURMA'] == t_sel_r].sort_values(by="NOME_ALUNO")
                 dados_indiv =[]
 
                 for _, alu in alunos_turma.iterrows():
@@ -2951,21 +2962,20 @@ elif menu == "📸 Scanner de Gabaritos":
                     reg_aluno = df_analise[df_analise['ID_ALUNO_L'] == id_a]
                     
                     if reg_aluno.empty:
-                        dados_indiv.append({"Estudante": alu['NOME_ALUNO'], "Perfil": "🔴 Ausente", "Nota": 0.00, "Diagnóstico Técnico de Erros": "Aguardando Realização"})
+                        dados_indiv.append({"Turma": alu['TURMA'], "Estudante": alu['NOME_ALUNO'], "Perfil": "🔴 Ausente", "Nota": 0.00, "Diagnóstico Técnico de Erros": "Aguardando Realização"})
                     else:
                         reg = reg_aluno.iloc[-1]
                         nota_alu = util.sosa_to_float(reg['NOTA_CALCULADA'])
                         material_aluno = reg['ID_AVALIACAO']
                         tipo_prova_feita = reg['TIPO_PROVA_FEITA']
                         
-                        # Define o display do perfil mostrando se o aluno PEI fez a prova regular
                         if is_pei_alu:
                             perfil_display = "♿ PEI (Fez Regular)" if tipo_prova_feita == "REGULAR" else "♿ PEI"
                         else:
                             perfil_display = "📝 Regular"
                         
                         if str(reg['RESPOSTAS_ALUNO']).upper() == "FALTOU":
-                            dados_indiv.append({"Estudante": alu['NOME_ALUNO'], "Perfil": perfil_display, "Nota": 0.00, "Diagnóstico Técnico de Erros": "🔴 Aluno Ausente no dia da aplicação."})
+                            dados_indiv.append({"Turma": alu['TURMA'], "Estudante": alu['NOME_ALUNO'], "Perfil": perfil_display, "Nota": 0.00, "Diagnóstico Técnico de Erros": "🔴 Aluno Ausente no dia da aplicação."})
                             continue
 
                         m_ref_query = df_aulas[df_aulas['TIPO_MATERIAL'] == material_aluno]
@@ -2974,7 +2984,6 @@ elif menu == "📸 Scanner de Gabaritos":
                             m_ref = m_ref_query.iloc[0]
                             txt_cont = str(m_ref['CONTEUDO'])
                             
-                            # Usa a grade correspondente à prova que o aluno REALMENTE fez
                             usar_grade_pei = (tipo_prova_feita == "PEI")
                             tag_grade = "GRADE_DE_CORRECAO_PEI" if usar_grade_pei else "GRADE_DE_CORRECAO"
                             grade_texto = re.sub(r'[*#]', '', ai.extrair_tag(txt_cont, tag_grade) or ai.extrair_tag(txt_cont, "GRADE_DE_CORRECAO"))
@@ -3033,11 +3042,14 @@ elif menu == "📸 Scanner de Gabaritos":
                         else:
                             lacunas_txt = "⚠️ Material não localizado no Acervo."
 
-                        dados_indiv.append({"Estudante": alu['NOME_ALUNO'], "Perfil": perfil_display, "Nota": nota_alu, "Diagnóstico Técnico de Erros": lacunas_txt})
+                        dados_indiv.append({"Turma": alu['TURMA'], "Estudante": alu['NOME_ALUNO'], "Perfil": perfil_display, "Nota": nota_alu, "Diagnóstico Técnico de Erros": lacunas_txt})
 
                 df_f = pd.DataFrame(dados_indiv)
-                st.data_editor(df_f, column_config={"Estudante": st.column_config.TextColumn("Estudante", width="medium"), "Diagnóstico Técnico de Erros": st.column_config.TextColumn("Diagnóstico (Raciocínio do Erro)", width="large")},
-                    hide_index=True, use_container_width=True, disabled=True, key=f"raiox_final_v90_{v}")
+                st.data_editor(df_f, column_config={
+                    "Turma": st.column_config.TextColumn("Turma", width="small"),
+                    "Estudante": st.column_config.TextColumn("Estudante", width="medium"), 
+                    "Diagnóstico Técnico de Erros": st.column_config.TextColumn("Diagnóstico (Raciocínio do Erro)", width="large")
+                }, hide_index=True, use_container_width=True, disabled=True, key=f"raiox_final_v90_{v}")
 
                 st.markdown("---")
                 st.markdown("### 🖨️ Materialização do Dossiê (Para Impressão)")
@@ -3093,7 +3105,8 @@ elif menu == "📸 Scanner de Gabaritos":
                                     "pericia": pericia_txt
                                 })
                             
-                            criticos = df_f[df_f['Nota'] < 6.0]['Estudante'].tolist()
+                            # 🚨 Adiciona a turma ao lado do nome do aluno crítico no DOCX
+                            criticos = df_f[df_f['Nota'] < 6.0].apply(lambda x: f"[{x['Turma']}] {x['Estudante']}", axis=1).tolist()
                             
                             info_doc = {
                                 "ano": t_sel_r, 
@@ -3102,7 +3115,7 @@ elif menu == "📸 Scanner de Gabaritos":
                                 "data": datetime.now().strftime("%d/%m/%Y")
                             }
                             
-                            nome_arquivo_dossie = f"RAIOX_{t_sel_r}_{nome_curto_av}"
+                            nome_arquivo_dossie = f"RAIOX_{t_sel_r.replace(' ', '_').replace('(', '').replace(')', '')}_{nome_curto_av}"
                             doc_stream = exporter.gerar_docx_raiox_v90(nome_arquivo_dossie, info_doc, stats_gerais, questoes_detalhes, criticos, grafico_bytes)
                             link_doc = db.subir_e_converter_para_google_docs(doc_stream, nome_arquivo_dossie, trimestre=tr_sel_r, categoria=t_sel_r, modo="PLANEJAMENTO")
                             
