@@ -4178,11 +4178,10 @@ elif menu == "👥 Gestão da Turma":
             st.markdown("### 📅 Grade Oficial de Regência")
             
             dias_semana =["Segunda", "Terça", "Quarta", "Quinta", "Sexta"]
-            tempos = ["1º Tempo", "2º Tempo"]
+            tempos =["1º Tempo", "2º Tempo"]
             grade_map = {t: {d: "---" for d in dias_semana} for t in tempos}
 
             for _, row in df_turmas.iterrows():
-                # Uso do .get() para evitar KeyError se a coluna sumir
                 sigla = str(row.get('ID_TURMA', ''))
                 nome_turma = str(row.iloc[1]) if len(row) > 1 else ""
                 horarios_str = str(row.iloc[3]) if len(row) > 3 else ""
@@ -4464,48 +4463,60 @@ elif menu == "👥 Gestão da Turma":
 
                     with st.container(border=True):
                         st.markdown("#### 🚀 MISSÃO PLANEJADA PARA HOJE")
-                        if plano_sugerido != "Nenhum":
-                            st.success(f"**Próxima Semana Inédita:** {plano_sugerido}")
-                            st.info(f"**📖 Base Didática (DNA):**\n{base_didatica_sugerida}")
-                        else:
-                            st.success("✅ Todos os planos ativos já foram aplicados nesta turma!")
                         
-                        with st.expander("🔗 Ver Ponte de Continuidade (Onde paramos?)"):
-                            st.caption(ponte_sugerida)
-                        
-                        st.divider()
-                        
+                        # 🚨 NOVA LÓGICA: DATA PRIMEIRO
                         data_aula = st.date_input("Data da Aula:", date.today(), format="DD/MM/YYYY", key=f"dt_reg_{v}")
+                        data_aula_str = data_aula.strftime("%d/%m/%Y")
                         
-                        mats_disp_bruto = df_mats_ano['TIPO_MATERIAL'].tolist()
-                        if not mostrar_historico: 
-                            semanas_concluidas = df_planos[df_planos['EIXO'] == 'PRODUZIDO']['SEMANA'].tolist()
-                            mats_disp =[]
-                            for m in mats_disp_bruto:
-                                if m not in materiais_usados:
-                                    sem_ref_mat = df_mats_ano[df_mats_ano['TIPO_MATERIAL'] == m].iloc[0]['SEMANA_REF']
-                                    if sem_ref_mat not in semanas_concluidas:
-                                        mats_disp.append(m)
-                        else: 
-                            mats_disp = mats_disp_bruto
-                            
-                        label_mats = "📦 Selecione o Material (Máx 2):" if not mostrar_historico else "📦 Selecione o Material (Todos):"
+                        # Verifica se já existe aula aberta nesta data
+                        aula_existente = historico_turma[historico_turma['DATA'] == data_aula_str]
                         
-                        mats_sel = st.multiselect(label_mats, options=mats_disp, max_selections=2, key=f"mats_reg_{v}")
-
-                        if st.button("💾 CONFIRMAR ABERTURA DE AULA", use_container_width=True, type="primary"):
-                            if not mats_sel:
-                                st.error("⚠️ Selecione ao menos um material para abrir a aula.")
+                        if not aula_existente.empty:
+                            row_ativa = aula_existente.iloc[0]
+                            st.success(f"✅ **Aula já registrada para esta data!**")
+                            st.info(f"📦 **Material Vinculado:** {row_ativa['CONTEUDO_MINISTRADO']}\n\n🚦 **Status:** {row_ativa.get('STATUS_EXECUCAO', 'Pendente')}")
+                            st.caption("💡 Para alterar ou lançar vistos, acesse a aba 'Diário de Bordo Rápido'.")
+                        else:
+                            if plano_sugerido != "Nenhum":
+                                st.success(f"**Próxima Semana Inédita:** {plano_sugerido}")
+                                st.info(f"**📖 Base Didática (DNA):**\n{base_didatica_sugerida}")
                             else:
-                                mat_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == mats_sel[0]].iloc[0]
-                                plano_inferido = mat_ref['SEMANA_REF']
+                                st.success("✅ Todos os planos ativos já foram aplicados nesta turma!")
+                            
+                            with st.expander("🔗 Ver Ponte de Continuidade (Onde paramos?)"):
+                                st.caption(ponte_sugerida)
+                            
+                            st.divider()
+                            
+                            mats_disp_bruto = df_mats_ano['TIPO_MATERIAL'].tolist()
+                            if not mostrar_historico: 
+                                semanas_concluidas = df_planos[df_planos['EIXO'] == 'PRODUZIDO']['SEMANA'].tolist()
+                                mats_disp =[]
+                                for m in mats_disp_bruto:
+                                    if m not in materiais_usados:
+                                        sem_ref_mat = df_mats_ano[df_mats_ano['TIPO_MATERIAL'] == m].iloc[0]['SEMANA_REF']
+                                        if sem_ref_mat not in semanas_concluidas:
+                                            mats_disp.append(m)
+                            else: 
+                                mats_disp = mats_disp_bruto
                                 
-                                db.salvar_no_banco("DB_REGISTRO_AULAS",[
-                                    data_aula.strftime("%d/%m/%Y"), plano_inferido, turma_foco, 
-                                    " + ".join(mats_sel), "PENDENTE", "ABERTA"
-                                ])
-                                st.success("✅ Aula aberta com sucesso! Vá para o Diário de Bordo.")
-                                time.sleep(1); st.rerun()
+                            label_mats = "📦 Selecione o Material (Máx 2):" if not mostrar_historico else "📦 Selecione o Material (Todos):"
+                            
+                            mats_sel = st.multiselect(label_mats, options=mats_disp, max_selections=2, key=f"mats_reg_{v}")
+
+                            if st.button("💾 CONFIRMAR ABERTURA DE AULA", use_container_width=True, type="primary"):
+                                if not mats_sel:
+                                    st.error("⚠️ Selecione ao menos um material para abrir a aula.")
+                                else:
+                                    mat_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == mats_sel[0]].iloc[0]
+                                    plano_inferido = mat_ref['SEMANA_REF']
+                                    
+                                    db.salvar_no_banco("DB_REGISTRO_AULAS",[
+                                        data_aula_str, plano_inferido, turma_foco, 
+                                        " + ".join(mats_sel), "PENDENTE", "ABERTA"
+                                    ])
+                                    st.success("✅ Aula aberta com sucesso! Vá para o Diário de Bordo.")
+                                    time.sleep(1); st.rerun()
 
                     st.markdown("---")
                     with st.expander("🗑️ Gerenciar Aulas Abertas (Borracha Temporal)"):
