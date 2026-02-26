@@ -2801,7 +2801,7 @@ elif menu == "📸 Scanner de Gabaritos":
                         db.limpar_notas_turma_trimestre(t_sel_h, tr_sel_h)
                         if db.salvar_lote("DB_NOTAS", lista_boletim_ext):
                             status_ext.update(label=f"✅ Notas do {origem_ext} integradas com sucesso!", state="complete"); st.balloons(); time.sleep(1); st.rerun()
-    # --- ABA 4: RAIO-X PEDAGÓGICO ---
+# --- ABA 4: RAIO-X PEDAGÓGICO ---
     with tab_raiox:
         st.subheader("📊 Raio-X Pedagógico: Diagnóstico Individual de Lacunas")
         st.caption("Analise o desempenho da turma por questão e gere um Dossiê Impresso para o Conselho de Classe.")
@@ -2846,6 +2846,24 @@ elif menu == "📸 Scanner de Gabaritos":
             if respostas_brutas.empty:
                 st.warning("⚠️ Nenhuma resposta de aluno encontrada para esta avaliação.")
             else:
+                # 🚨 MOTOR DE DETECÇÃO DINÂMICA DE PROVA (REGULAR VS PEI)
+                query_mat_base = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel_r]
+                len_reg = 10
+                len_pei = 5
+                if not query_mat_base.empty:
+                    txt_base = str(query_mat_base.iloc[0]['CONTEUDO'])
+                    len_reg = len(extrair_gab_blindado(txt_base, False))
+                    len_pei = len(extrair_gab_blindado(txt_base, True))
+                    if len_pei == 0: len_pei = len_reg
+
+                def classificar_prova_realizada(resp):
+                    if str(resp) == "FALTOU": return "FALTOU"
+                    qtd = len(str(resp).split(';'))
+                    # Se a quantidade de respostas for mais próxima do tamanho do gabarito PEI, ele fez PEI.
+                    if len_pei != len_reg:
+                        if abs(qtd - len_pei) < abs(qtd - len_reg): return "PEI"
+                    return "REGULAR"
+
                 df_alunos_min = df_alunos[['ID', 'NECESSIDADES']].copy()
                 df_alunos_min['ID'] = df_alunos_min['ID'].apply(db.limpar_id)
                 respostas_brutas['ID_ALUNO_L'] = respostas_brutas['ID_ALUNO'].apply(db.limpar_id)
@@ -2853,15 +2871,21 @@ elif menu == "📸 Scanner de Gabaritos":
                 df_analise = pd.merge(respostas_brutas, df_alunos_min, left_on='ID_ALUNO_L', right_on='ID', how='left')
                 df_analise['IS_PEI'] = ~df_analise['NECESSIDADES'].apply(is_regular_student)
                 df_analise['IS_2A_CHAMADA'] = df_analise['ID_AVALIACAO'].str.contains(r"2[ªA]|CHAMADA", case=False, regex=True)
+                
+                # Aplica a detecção de qual prova o aluno REALMENTE fez
+                df_analise['TIPO_PROVA_FEITA'] = df_analise['RESPOSTAS_ALUNO'].apply(classificar_prova_realizada)
 
                 st.markdown("### 🎯 1. Análise de Performance por Item")
                 col_l1, col_l2 = st.columns(2)
-                perfil_visao = col_l1.radio("1. Perfil do Aluno:",["📝 Alunos Regulares", "♿ Alunos PEI"], horizontal=True, key=f"perf_v90_{v}")
+                perfil_visao = col_l1.radio("1. Lente de Correção:",["📝 Prova Regular", "♿ Prova Adaptada (PEI)"], horizontal=True, key=f"perf_v90_{v}")
                 versao_visao = col_l2.radio("2. Versão da Prova:",["📄 Prova Original", "🔄 2ª Chamada"], horizontal=True, key=f"vers_v90_{v}")
                 
                 is_pei_view = "PEI" in perfil_visao
                 is_2a_view = "2ª" in versao_visao
-                df_filtrado = df_analise[(df_analise['IS_PEI'] == is_pei_view) & (df_analise['IS_2A_CHAMADA'] == is_2a_view)]
+                
+                # Filtra pelo tipo de prova que foi FEITA, não apenas pelo laudo do aluno
+                tipo_filtro = "PEI" if is_pei_view else "REGULAR"
+                df_filtrado = df_analise[(df_analise['TIPO_PROVA_FEITA'] == tipo_filtro) & (df_analise['IS_2A_CHAMADA'] == is_2a_view)]
 
                 if is_2a_view:
                     query_mat = df_aulas[(df_aulas['TIPO_MATERIAL'].str.upper().str.contains("2CHAMADA")) & (df_aulas['TIPO_MATERIAL'].str.upper().str.contains(nome_curto_av.upper()))]
@@ -2876,16 +2900,18 @@ elif menu == "📸 Scanner de Gabaritos":
                 if query_mat.empty:
                     st.error(f"❌ Gabarito da {versao_visao} não localizado.")
                 elif df_filtrado.empty:
-                    st.info(f"📭 Não há dados de {perfil_visao} para a {versao_visao}.")
+                    st.info(f"📭 Não há dados de alunos que realizaram a {perfil_visao} na {versao_visao}.")
                 else:
                     dados_prova = query_mat.iloc[0]
                     txt_prova_global = str(dados_prova['CONTEUDO'])
-                    grade_pericia_global = re.sub(r'[*#]', '', ai.extrair_tag(txt_prova_global, "GRADE_DE_CORRECAO"))
+                    
+                    tag_grade_global = "GRADE_DE_CORRECAO_PEI" if is_pei_view else "GRADE_DE_CORRECAO"
+                    grade_pericia_global = re.sub(r'[*#]', '', ai.extrair_tag(txt_prova_global, tag_grade_global) or ai.extrair_tag(txt_prova_global, "GRADE_DE_CORRECAO"))
                     gab_ativo = extrair_gab_blindado(txt_prova_global, is_pei_view)
 
                     num_q_total = len(gab_ativo)
                     stats_list =[]
-                    matriz_respostas = [str(r).split(';') for r in df_filtrado['RESPOSTAS_ALUNO']]
+                    matriz_respostas =[str(r).split(';') for r in df_filtrado['RESPOSTAS_ALUNO']]
 
                     for i in range(1, num_q_total + 1):
                         correta = gab_ativo.get(i, "?")
@@ -2907,7 +2933,9 @@ elif menu == "📸 Scanner de Gabaritos":
                             info_q = df_stats_global[df_stats_global["Questão"] == q_sel].iloc[0]
                             idx_num = int(q_sel[1:])
                             st.write(f"**Gabarito:** :green[{info_q['Gabarito']}] | **Média:** {info_q['Acerto %']:.1f}%")
-                            padrao = rf"(?si)QUEST[AÃ]O\s*(?:PEI\s*)?0?{idx_num}\b.*?(?=QUEST[AÃ]O\s*(?:PEI\s*)?0?{idx_num+1}\b|GABARITO|RESPOSTAS|$)"
+                            
+                            prefixo_q = "QUEST[AÃ]O\\s*PEI" if is_pei_view else "QUEST[AÃ]O"
+                            padrao = rf"(?si){prefixo_q}\s*0?{idx_num}\b.*?(?={prefixo_q}\s*0?{idx_num+1}\b|GABARITO|RESPOSTAS|$)"
                             match = re.search(padrao, grade_pericia_global)
                             if match: st.info(match.group(0).strip())
 
@@ -2928,9 +2956,16 @@ elif menu == "📸 Scanner de Gabaritos":
                         reg = reg_aluno.iloc[-1]
                         nota_alu = util.sosa_to_float(reg['NOTA_CALCULADA'])
                         material_aluno = reg['ID_AVALIACAO']
+                        tipo_prova_feita = reg['TIPO_PROVA_FEITA']
+                        
+                        # Define o display do perfil mostrando se o aluno PEI fez a prova regular
+                        if is_pei_alu:
+                            perfil_display = "♿ PEI (Fez Regular)" if tipo_prova_feita == "REGULAR" else "♿ PEI"
+                        else:
+                            perfil_display = "📝 Regular"
                         
                         if str(reg['RESPOSTAS_ALUNO']).upper() == "FALTOU":
-                            dados_indiv.append({"Estudante": alu['NOME_ALUNO'], "Perfil": "♿ PEI" if is_pei_alu else "📝 Regular", "Nota": 0.00, "Diagnóstico Técnico de Erros": "🔴 Aluno Ausente no dia da aplicação."})
+                            dados_indiv.append({"Estudante": alu['NOME_ALUNO'], "Perfil": perfil_display, "Nota": 0.00, "Diagnóstico Técnico de Erros": "🔴 Aluno Ausente no dia da aplicação."})
                             continue
 
                         m_ref_query = df_aulas[df_aulas['TIPO_MATERIAL'] == material_aluno]
@@ -2938,10 +2973,13 @@ elif menu == "📸 Scanner de Gabaritos":
                         if not m_ref_query.empty:
                             m_ref = m_ref_query.iloc[0]
                             txt_cont = str(m_ref['CONTEUDO'])
-                            tag_grade = "GRADE_DE_CORRECAO_PEI" if is_pei_alu else "GRADE_DE_CORRECAO"
+                            
+                            # Usa a grade correspondente à prova que o aluno REALMENTE fez
+                            usar_grade_pei = (tipo_prova_feita == "PEI")
+                            tag_grade = "GRADE_DE_CORRECAO_PEI" if usar_grade_pei else "GRADE_DE_CORRECAO"
                             grade_texto = re.sub(r'[*#]', '', ai.extrair_tag(txt_cont, tag_grade) or ai.extrair_tag(txt_cont, "GRADE_DE_CORRECAO"))
                             
-                            gab_ref_alu = extrair_gab_blindado(txt_cont, is_pei_alu)
+                            gab_ref_alu = extrair_gab_blindado(txt_cont, usar_grade_pei)
                             resp_aluno_lista = str(reg['RESPOSTAS_ALUNO']).split(';')
                             
                             analise_de_erros =[]
@@ -2957,11 +2995,12 @@ elif menu == "📸 Scanner de Gabaritos":
                                     continue
                                 
                                 if letra_marcada != letra_correta:
-                                    if letra_marcada not in ["A", "B", "C", "D", "E"]:
+                                    if letra_marcada not in["A", "B", "C", "D", "E"]:
                                         analise_de_erros.append(f"Q{q_n}: Marcação inválida ({letra_marcada}).")
                                         continue
                                         
-                                    padrao_bloco = rf"(?si)QUEST[AÃ]O\s*(?:PEI\s*)?0?{q_n}\b.*?(?=QUEST[AÃ]O|$)"
+                                    prefixo_busca = "QUEST[AÃ]O\\s*PEI" if usar_grade_pei else "QUEST[AÃ]O"
+                                    padrao_bloco = rf"(?si){prefixo_busca}\s*0?{q_n}\b.*?(?={prefixo_busca}|$)"
                                     bloco_q = re.search(padrao_bloco, grade_texto)
                                     
                                     if bloco_q:
@@ -2969,7 +3008,7 @@ elif menu == "📸 Scanner de Gabaritos":
                                         match_hab = re.search(r"\[?(EF\d{2}MA\d{2})", texto_bloco)
                                         cod_h = match_hab.group(1) if match_hab else "BNCC"
 
-                                        if is_pei_alu:
+                                        if usar_grade_pei:
                                             m_lacuna = re.search(r"(?i)(?:ANÁLISE DE LACUNA PEI|LACUNA|ERRO)[\s\:]*(.*)", texto_bloco, re.DOTALL)
                                             if m_lacuna:
                                                 txt_erro = m_lacuna.group(1).replace('\n', ' ').strip()
@@ -2994,7 +3033,7 @@ elif menu == "📸 Scanner de Gabaritos":
                         else:
                             lacunas_txt = "⚠️ Material não localizado no Acervo."
 
-                        dados_indiv.append({"Estudante": alu['NOME_ALUNO'], "Perfil": "♿ PEI" if is_pei_alu else "📝 Regular", "Nota": nota_alu, "Diagnóstico Técnico de Erros": lacunas_txt})
+                        dados_indiv.append({"Estudante": alu['NOME_ALUNO'], "Perfil": perfil_display, "Nota": nota_alu, "Diagnóstico Técnico de Erros": lacunas_txt})
 
                 df_f = pd.DataFrame(dados_indiv)
                 st.data_editor(df_f, column_config={"Estudante": st.column_config.TextColumn("Estudante", width="medium"), "Diagnóstico Técnico de Erros": st.column_config.TextColumn("Diagnóstico (Raciocínio do Erro)", width="large")},
@@ -3028,18 +3067,20 @@ elif menu == "📸 Scanner de Gabaritos":
                             }
                             
                             questoes_detalhes =[]
-                            questoes_raw = ai.extrair_tag(txt_prova_global, "QUESTOES")
+                            tag_questoes_global = "PEI" if is_pei_view else "QUESTOES"
+                            questoes_raw = ai.extrair_tag(txt_prova_global, tag_questoes_global)
                             
                             for _, r_stat in df_stats_global.iterrows():
                                 q_str = r_stat['Questão']
                                 q_num = int(q_str.replace("Q", ""))
                                 
-                                padrao_q = rf"(?si)(QUEST[AÃ]O\s*0?{q_num}\b.*?)(?=QUEST[AÃ]O\s*0?{q_num+1}\b|GABARITO|$)"
+                                prefixo_q = "QUEST[AÃ]O\\s*PEI" if is_pei_view else "QUEST[AÃ]O"
+                                padrao_q = rf"(?si)({prefixo_q}\s*0?{q_num}\b.*?)(?={prefixo_q}\s*0?{q_num+1}\b|GABARITO|$)"
                                 m_q = re.search(padrao_q, questoes_raw)
                                 enunciado = re.sub(r'\[\s*PROMPT IMAGEM:.*?\]', '[IMAGEM DE APOIO]', m_q.group(1)).strip() if m_q else "Enunciado não localizado."
                                 enunciado = re.sub(r'[*#]', '', enunciado)
                                 
-                                padrao_p = rf"(?si)(QUEST[AÃ]O\s*0?{q_num}\b.*?)(?=QUEST[AÃ]O\s*0?{q_num+1}\b|$)"
+                                padrao_p = rf"(?si)({prefixo_q}\s*0?{q_num}\b.*?)(?={prefixo_q}\s*0?{q_num+1}\b|$)"
                                 m_p = re.search(padrao_p, grade_pericia_global)
                                 pericia_txt = m_p.group(1).strip() if m_p else "Perícia não localizada."
                                 pericia_txt = re.sub(r'[*#]', '', pericia_txt)
