@@ -3201,13 +3201,34 @@ elif menu == "📝 Diário de Bordo Rápido":
                 data_str = data_sel.strftime("%d/%m/%Y")
                 ano_num = "".join(filter(str.isdigit, str(turma_sel)))
 
-            # --- 2. DETECÇÃO DO COCKPIT E DNA DO PLANO ---
+            # --- BUSCA PRÉVIA DE REGISTROS PARA PREENCHIMENTO AUTOMÁTICO (EDIÇÃO) ---
+            registros_atuais = df_diario[(df_diario['DATA'] == data_str) & (df_diario['TURMA'] == turma_sel) & (df_diario['TAGS'] != "SISTEMA_NOTA")]
             aula_ativa = df_registro_aulas[(df_registro_aulas['TURMA'] == turma_sel) & (df_registro_aulas['DATA'] == data_str)]
             
+            # Variáveis de estado salvas (Padrão)
+            saved_status = "🟢 Concluído (100%)"
+            saved_ponte = ""
+            saved_clima = "🧠 Focada"
+            modo_idx = 0
+
+            # Se já houver registro, verifica se foi "Sem Visto" (ISENTO)
+            if not registros_atuais.empty:
+                if str(registros_atuais.iloc[0]['VISTO_ATIVIDADE']).upper() == "ISENTO":
+                    modo_idx = 1
+
+            # --- 2. DETECÇÃO DO COCKPIT E DNA DO PLANO ---
             if not aula_ativa.empty:
                 row_ativa = aula_ativa.iloc[0]
                 material_hoje = row_ativa['CONTEUDO_MINISTRADO']
                 semana_ref = row_ativa['SEMANA']
+                
+                # Resgata dados de regência já salvos no banco para preencher o painel
+                if str(row_ativa.get('STATUS_EXECUCAO', '')).strip() and str(row_ativa.get('STATUS_EXECUCAO', '')) != "nan": 
+                    saved_status = row_ativa['STATUS_EXECUCAO']
+                if str(row_ativa.get('PONTE_PEDAGOGICA', '')).strip() and str(row_ativa.get('PONTE_PEDAGOGICA', '')) != "nan": 
+                    saved_ponte = row_ativa['PONTE_PEDAGOGICA']
+                if str(row_ativa.get('CLIMA_TURMA', '')).strip() and str(row_ativa.get('CLIMA_TURMA', '')) != "nan": 
+                    saved_clima = row_ativa['CLIMA_TURMA']
                 
                 st.info(f"🚀 **Aula Ativa:** {material_hoje}")
 
@@ -3218,7 +3239,7 @@ elif menu == "📝 Diário de Bordo Rápido":
                     if base_didatica: st.success(f"📍 **Páginas Alvo:** {base_didatica}")
                     else: st.warning("📍 **Páginas Alvo:** Método Manual (Sem livro vinculado)")
 
-                match_material = df_aulas[df_aulas['TIPO_MATERIAL'].str.contains(material_hoje.split('+')[0].strip(), na=False)]
+                match_material = df_aulas[df_aulas['TIPO_MATERIAL'].str.contains(material_hoje.split('+')[0].strip(), regex=False, na=False)]
                 if not match_material.empty:
                     with st.expander("📦 Ver Ativos de Safra (Links)", expanded=False):
                         txt_m = str(match_material.iloc[0]['CONTEUDO'])
@@ -3238,19 +3259,26 @@ elif menu == "📝 Diário de Bordo Rápido":
                 reg_anterior = df_registro_aulas[(df_registro_aulas['TURMA'] == turma_sel) & (df_registro_aulas['DATA'] != data_str)].sort_values(by='DATA', ascending=False)
                 if not reg_anterior.empty:
                     ultima_ponte = reg_anterior.iloc[0].get('PONTE_PEDAGOGICA', 'Sem registro.')
-                    if ultima_ponte and str(ultima_ponte).strip() != "":
+                    if ultima_ponte and str(ultima_ponte).strip() != "" and str(ultima_ponte).lower() != "nan":
                         st.warning(f"🔙 **Na aula anterior paramos em:** {ultima_ponte}")
             else:
                 st.warning("⚠️ Nenhuma aula aberta no Cockpit para esta data. O registro será salvo como 'Instrução Avulsa'.")
                 material_hoje = "Instrução Avulsa"
             
-            # --- 3. PAINEL DE REGÊNCIA (FECHADO POR PADRÃO) ---
+            # --- 3. PAINEL DE REGÊNCIA (PREENCHIDO COM DADOS SALVOS) ---
             with st.expander("🚦 Fechamento de Aula (Regência)", expanded=False):
                 st.caption("Preencha ao final da aula para alimentar a memória do sistema.")
                 c_reg1, c_reg2, c_reg3 = st.columns([1, 2, 1])
-                status_aula = c_reg1.selectbox("Status da Execução:",["🟢 Concluído (100%)", "🟡 Parcial (Pendência)", "🔴 Bloqueado (Crítico)"], key=f"status_reg_{v}")
-                ponte_pedagogica = c_reg2.text_area("🔗 Ponte Pedagógica (Onde paramos?):", placeholder="Ex: Parei no slide 5...", height=68, key=f"ponte_reg_{v}")
-                clima_turma = c_reg3.select_slider("🌡️ Clima da Turma:", options=["😴 Apática", "😐 Dispersa", "🧠 Focada", "⚡ Agitada", "🤯 Dificuldade Alta"], value="🧠 Focada", key=f"clima_reg_{v}")
+                
+                opcoes_status =["🟢 Concluído (100%)", "🟡 Parcial (Pendência)", "🔴 Bloqueado (Crítico)"]
+                idx_status = opcoes_status.index(saved_status) if saved_status in opcoes_status else 0
+                status_aula = c_reg1.selectbox("Status da Execução:", opcoes_status, index=idx_status, key=f"status_reg_{v}")
+                
+                ponte_pedagogica = c_reg2.text_area("🔗 Ponte Pedagógica (Onde paramos?):", value=saved_ponte, placeholder="Ex: Parei no slide 5...", height=68, key=f"ponte_reg_{v}")
+                
+                opcoes_clima =["😴 Apática", "😐 Dispersa", "🧠 Focada", "⚡ Agitada", "🤯 Dificuldade Alta"]
+                val_clima = saved_clima if saved_clima in opcoes_clima else "🧠 Focada"
+                clima_turma = c_reg3.select_slider("🌡️ Clima da Turma:", options=opcoes_clima, value=val_clima, key=f"clima_reg_{v}")
 
             st.markdown("---")
             
@@ -3260,6 +3288,7 @@ elif menu == "📝 Diário de Bordo Rápido":
             with c_nat:
                 natureza_registro = st.radio(
                     "Modo de Aula:",["📝 Com Visto (Padrão)", "🗣️ Sem Visto (Evento)"],
+                    index=modo_idx,
                     horizontal=True,
                     help="Se 'Sem Visto', a coluna de vistos será ignorada no cálculo de notas.",
                     key=f"nat_reg_{v}"
@@ -3276,8 +3305,7 @@ elif menu == "📝 Diário de Bordo Rápido":
                     st.session_state[f"visto_lote_{turma_sel}"] = False
                     st.rerun()
 
-            # --- 5. BUSCA DE REGISTROS E MONTAGEM DA MESA ---
-            registros_atuais = df_diario[(df_diario['DATA'] == data_str) & (df_diario['TURMA'] == turma_sel) & (df_diario['TAGS'] != "SISTEMA_NOTA")]
+            # --- 5. MONTAGEM DA MESA ---
             alunos_turma = df_alunos[df_alunos['TURMA'] == turma_sel].sort_values(by="NOME_ALUNO")
             
             # 🚨 MOTOR DE ÍCONES MULTIPERFIL
@@ -3303,6 +3331,10 @@ elif menu == "📝 Diário de Bordo Rápido":
                     bonus_val = util.sosa_to_float(reg_existente.iloc[0].get('BONUS', 0))
                     tag_val = reg_existente.iloc[0]['TAGS'] if not falta_val else ""
                     obs_val = reg_existente.iloc[0]['OBSERVACOES']
+                    
+                    # Limpa a tag de PEI CONCLUÍDO para não bugar o selectbox se não estiver na lista
+                    if tag_val not in["", "Fardamento", "Postura", "Atraso", "Celular", "Indisciplina", "Comunicação", "Elogio", "Destaque", "Dormiu", "PEI CONCLUÍDO"]:
+                        tag_val = ""
                 else:
                     visto_val = st.session_state.get(f"visto_lote_{turma_sel}", True)
                     falta_val = False
@@ -3346,6 +3378,7 @@ elif menu == "📝 Diário de Bordo Rápido":
             st.markdown("<br>", unsafe_allow_html=True)
             if st.button("💾 SALVAR DIÁRIO E CONSOLIDAR", type="primary", use_container_width=True):
                 with st.status("Sincronizando Práxis...") as status:
+                    # A função limpar_diario_data_turma garante que não haverá duplicidade ao editar
                     db.limpar_diario_data_turma(data_str, turma_sel)
                     
                     linhas_diario =[]
@@ -3361,7 +3394,7 @@ elif menu == "📝 Diário de Bordo Rápido":
                             tag_f = "PEI CONCLUÍDO"
                         
                         obs_final = r['Obs (🎙️)']
-                        if r['Vetor'] == "Comunicação":
+                        if r['Vetor'] == "Comunicação" and "🚨 COMUNICAÇÃO:" not in obs_final:
                             obs_final = f"🚨 COMUNICAÇÃO: {obs_final}"
 
                         # Limpeza blindada do nome para salvar no banco
