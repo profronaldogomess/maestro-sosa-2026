@@ -4199,7 +4199,7 @@ elif menu == "👥 Gestão da Turma":
             df_grade = pd.DataFrame(grade_map).T
             
             def colorir_grade(val):
-                if val in ["PI", "PC", "AC", "HTPC"]: return 'background-color: #2962FF; color: white; font-weight: bold; text-align: center;'
+                if val in["PI", "PC", "AC", "HTPC"]: return 'background-color: #2962FF; color: white; font-weight: bold; text-align: center;'
                 if val != "---": return 'background-color: #001E3C; color: #2ECC71; font-weight: bold; text-align: center;'
                 return 'color: gray; text-align: center;'
 
@@ -4211,7 +4211,7 @@ elif menu == "👥 Gestão da Turma":
             else:
                 c_f1, c_f2 = st.columns([1, 1])
                 turma_foco = c_f1.selectbox("🎯 Selecione a Turma para Comando:", lista_turmas_segura, key=f"foco_t_{v}")
-                trim_foco = c_f2.selectbox("📅 Trimestre de Safra:", ["I Trimestre", "II Trimestre", "III Trimestre", "Todos"], key=f"foco_trim_{v}")
+                trim_foco = c_f2.selectbox("📅 Trimestre de Safra:",["I Trimestre", "II Trimestre", "III Trimestre", "Todos"], key=f"foco_trim_{v}")
                 
                 alunos_t = df_alunos[df_alunos['TURMA'] == turma_foco].sort_values(by="NOME_ALUNO")
                 id_alunos_turma = set(alunos_t['ID'].apply(db.limpar_id).tolist())
@@ -4226,10 +4226,31 @@ elif menu == "👥 Gestão da Turma":
                 df_pei_turma = alunos_t[mask_pei]
                 m2.metric("♿ Estudantes PEI", len(df_pei_turma))
                 
-                planos_totais = len(df_planos[df_planos['ANO'] == ano_str_ref])
-                aulas_feitas = len(df_registro_aulas[df_registro_aulas['TURMA'] == turma_foco])
-                saude_val = (aulas_feitas / (planos_totais * 2) * 100) if planos_totais > 0 else 0
-                m3.metric("🎯 Saúde de Execução", f"{min(100, int(saude_val))}%", help="Percentual de aulas ministradas em relação ao total planejado.")
+                # 🚨 NOVO MOTOR DE CÁLCULO: SAÚDE DE EXECUÇÃO CURRICULAR
+                df_p_atual = df_planos[df_planos['ANO'] == ano_str_ref]
+                if trim_foco != "Todos":
+                    df_p_atual = df_p_atual[df_p_atual['TURMA'] == trim_foco]
+                
+                planos_totais = len(df_p_atual)
+                
+                df_reg_turma = df_registro_aulas[df_registro_aulas['TURMA'] == turma_foco]
+                if trim_foco != "Todos":
+                    calendario_saude = {
+                        "I Trimestre": (date(2026, 2, 9), date(2026, 5, 22)),
+                        "II Trimestre": (date(2026, 5, 25), date(2026, 9, 4)),
+                        "III Trimestre": (date(2026, 9, 8), date(2026, 12, 17))
+                    }
+                    dt_ini_s, dt_fim_s = calendario_saude.get(trim_foco, (date(2026, 1, 1), date(2026, 12, 31)))
+                    df_reg_turma_f = df_reg_turma.copy()
+                    df_reg_turma_f['DATA_DT'] = pd.to_datetime(df_reg_turma_f['DATA'], format="%d/%m/%Y", errors='coerce').dt.date
+                    df_reg_turma_f = df_reg_turma_f[(df_reg_turma_f['DATA_DT'] >= dt_ini_s) & (df_reg_turma_f['DATA_DT'] <= dt_fim_s)]
+                else:
+                    df_reg_turma_f = df_reg_turma
+                
+                semanas_executadas = df_reg_turma_f[~df_reg_turma_f['SEMANA'].isin(['AVULSA', 'N/A', ''])]['SEMANA'].nunique()
+                saude_val = (semanas_executadas / planos_totais * 100) if planos_totais > 0 else 0
+                
+                m3.metric("🎯 Saúde de Execução", f"{min(100, int(saude_val))}%", help=f"Semanas concluídas ({semanas_executadas}) vs Semanas planejadas ({planos_totais}).")
 
                 clima_predominante = "Sem Dados"
                 if not df_registro_aulas.empty and len(df_registro_aulas.columns) >= 9:
@@ -4283,7 +4304,7 @@ elif menu == "👥 Gestão da Turma":
                                     nome_alu = d_alu.iloc[0]['NOME_ALUNO']
                                     alunos_stats.append({"nome": nome_alu, "vistos": v_alu, "total": len(d_alu), "bonus": b_alu})
                             
-                            fantasmas = [a['nome'] for a in alunos_stats if a['total'] > 0 and (a['vistos']/a['total']) <= 0.2]
+                            fantasmas =[a['nome'] for a in alunos_stats if a['total'] > 0 and (a['vistos']/a['total']) <= 0.2]
                             top_alunos = sorted([a for a in alunos_stats if a['total'] > 0 and (a['vistos']/a['total']) >= 0.8], key=lambda x: x['bonus'], reverse=True)[:3]
                             
                             c_e1, c_e2 = st.columns(2)
@@ -4485,7 +4506,7 @@ elif menu == "👥 Gestão da Turma":
                                 mats_disp_bruto = df_mats_ano['TIPO_MATERIAL'].tolist()
                                 
                                 # Tenta achar os materiais atuais na lista para deixar pré-selecionado
-                                mats_atuais = [m.strip() for m in str(row_ativa['CONTEUDO_MINISTRADO']).split('+')]
+                                mats_atuais =[m.strip() for m in str(row_ativa['CONTEUDO_MINISTRADO']).split('+')]
                                 default_mats =[m for m in mats_atuais if m in mats_disp_bruto]
                                 
                                 novo_mat_sel = st.multiselect("Selecione o material correto:", options=mats_disp_bruto, default=default_mats, key=f"edit_mat_{v}")
@@ -4563,7 +4584,6 @@ elif menu == "👥 Gestão da Turma":
                         aulas_abertas = df_registro_aulas[df_registro_aulas['TURMA'] == turma_foco].sort_values(by='DATA', ascending=False).head(5)
                         if aulas_abertas.empty: st.info("Nenhuma aula registrada para esta turma.")
                         else:
-                            # 🚨 VACINA ANTI-DUPLICIDADE DE CHAVE (Adicionado o idx)
                             for idx, row_aula in aulas_abertas.iterrows():
                                 c_del1, c_del2 = st.columns([3, 1])
                                 c_del1.markdown(f"📅 **{row_aula['DATA']}** - {row_aula['CONTEUDO_MINISTRADO']}")
