@@ -4476,6 +4476,45 @@ elif menu == "👥 Gestão da Turma":
                             st.success(f"✅ **Aula já registrada para esta data!**")
                             st.info(f"📦 **Material Vinculado:** {row_ativa['CONTEUDO_MINISTRADO']}\n\n🚦 **Status:** {row_ativa.get('STATUS_EXECUCAO', 'Pendente')}")
                             st.caption("💡 Para alterar ou lançar vistos, acesse a aba 'Diário de Bordo Rápido'.")
+                            
+                            # ==============================================================================
+                            # 🚨 NOVA FUNÇÃO: EDITAR MATERIAL SEM APAGAR O DIÁRIO
+                            # ==============================================================================
+                            with st.expander("✏️ Corrigir Material Vinculado"):
+                                st.caption("Esqueceu de vincular a aula correta ou o sistema salvou como 'Registro via Diário'? Altere aqui sem perder os vistos e faltas já lançados.")
+                                mats_disp_bruto = df_mats_ano['TIPO_MATERIAL'].tolist()
+                                
+                                # Tenta achar os materiais atuais na lista para deixar pré-selecionado
+                                mats_atuais = [m.strip() for m in str(row_ativa['CONTEUDO_MINISTRADO']).split('+')]
+                                default_mats =[m for m in mats_atuais if m in mats_disp_bruto]
+                                
+                                novo_mat_sel = st.multiselect("Selecione o material correto:", options=mats_disp_bruto, default=default_mats, key=f"edit_mat_{v}")
+                                
+                                if st.button("💾 ATUALIZAR MATERIAL", type="primary", use_container_width=True):
+                                    if not novo_mat_sel:
+                                        st.error("⚠️ Selecione ao menos um material.")
+                                    else:
+                                        with st.spinner("Atualizando o registro da aula..."):
+                                            novo_conteudo = " + ".join(novo_mat_sel)
+                                            mat_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == novo_mat_sel[0]].iloc[0]
+                                            nova_semana = mat_ref['SEMANA_REF']
+                                            
+                                            try:
+                                                wb = db.conectar()
+                                                ws = wb.worksheet("DB_REGISTRO_AULAS")
+                                                dados = ws.get_all_values()
+                                                for i, row in enumerate(dados):
+                                                    if i > 0 and len(row) >= 3 and row[0] == data_aula_str and row[2] == turma_foco:
+                                                        ws.update_cell(i + 1, 2, nova_semana)
+                                                        ws.update_cell(i + 1, 4, novo_conteudo)
+                                                        break
+                                                st.cache_data.clear()
+                                                st.success("✅ Material atualizado com sucesso!")
+                                                import time
+                                                time.sleep(1)
+                                                st.rerun()
+                                            except Exception as e:
+                                                st.error(f"Erro ao atualizar: {e}")
                         else:
                             if plano_sugerido != "Nenhum":
                                 st.success(f"**Próxima Semana Inédita:** {plano_sugerido}")
