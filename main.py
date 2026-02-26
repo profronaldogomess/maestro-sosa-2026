@@ -4524,10 +4524,11 @@ elif menu == "👥 Gestão da Turma":
                         aulas_abertas = df_registro_aulas[df_registro_aulas['TURMA'] == turma_foco].sort_values(by='DATA', ascending=False).head(5)
                         if aulas_abertas.empty: st.info("Nenhuma aula registrada para esta turma.")
                         else:
-                            for _, row_aula in aulas_abertas.iterrows():
+                            # 🚨 VACINA ANTI-DUPLICIDADE DE CHAVE (Adicionado o idx)
+                            for idx, row_aula in aulas_abertas.iterrows():
                                 c_del1, c_del2 = st.columns([3, 1])
                                 c_del1.markdown(f"📅 **{row_aula['DATA']}** - {row_aula['CONTEUDO_MINISTRADO']}")
-                                if c_del2.button("❌ APAGAR", key=f"del_aula_{row_aula['DATA']}_{turma_foco}"):
+                                if c_del2.button("❌ APAGAR", key=f"del_aula_{idx}_{row_aula['DATA']}_{turma_foco}"):
                                     with st.spinner("Apagando registros e limpando o diário..."):
                                         if db.excluir_aula_aberta(row_aula['DATA'], turma_foco):
                                             st.success("Aula e diário apagados com sucesso!")
