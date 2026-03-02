@@ -325,7 +325,7 @@ if menu == "📅 Planejamento (Ponto ID)":
     st.caption("💡 **Guia de Comando:** Este é o cérebro do ecossistema. O planejamento gerado aqui define a rota da semana e alimenta automaticamente o *Criador de Aulas* e o *Diário de Bordo*.")
 
     def reset_planejamento():
-        keys_to_clear = ["p_temp", "refino_ativo", "p_meta"]
+        keys_to_clear =["p_temp", "refino_ativo", "p_meta", "chat_history_ponto_id"]
         for k in keys_to_clear:
             if k in st.session_state: del st.session_state[k]
         st.session_state.v_plano = int(time.time())
@@ -368,6 +368,7 @@ if menu == "📅 Planejamento (Ponto ID)":
             c1, c2, c3 = st.columns([1, 2, 1.5])
             ano_p = c1.selectbox("Série/Ano Alvo:",[6, 7, 8, 9], index=0, key=f"ano_sel_{v}")
             ano_str_busca = f"{ano_p}º"
+            ano_matriz_busca = ano_p # Por padrão, busca a matriz da própria série
 
             # LÓGICA BLINDADA: FILTRO DE SEMANAS PENDENTES
             todas_semanas = util.gerar_semanas()
@@ -383,29 +384,26 @@ if menu == "📅 Planejamento (Ponto ID)":
             sem_limpa = sem_p.split(" (")[0]
             trim_atual = sem_p.split(" - ")[1] if " - " in sem_p else "I Trimestre"
 
-            # Smart Match (Vínculo de Provas/Projetos)
-            if tipo_semana not in["📗 Aula de Safra (Regular)", "💡 Aula Aberta (Dinâmicas e Eventos)"]:
-                df_ativos_ano = df_aulas[df_aulas['ANO'] == ano_str_busca]
-                opcoes_ativos =[]
-                if "Exame" in tipo_semana: opcoes_ativos = df_ativos_ano[df_ativos_ano['SEMANA_REF'] == "AVALIAÇÃO"]['TIPO_MATERIAL'].tolist()
-                elif "Revisão" in tipo_semana: opcoes_ativos = df_ativos_ano[df_ativos_ano['SEMANA_REF'] == "REVISÃO"]['TIPO_MATERIAL'].tolist()
-                elif "Trabalho" in tipo_semana: opcoes_ativos = df_ativos_ano[df_ativos_ano['TIPO_MATERIAL'].str.contains("PROJETO|TRABALHO", case=False, na=False)]['TIPO_MATERIAL'].tolist()
-                else: opcoes_ativos = df_ativos_ano[df_ativos_ano['TIPO_MATERIAL'].str.contains("SONDA|DIAGNÓSTICA", case=False, na=False)]['TIPO_MATERIAL'].tolist()
-
-                if opcoes_ativos:
-                    ativo_sel = st.selectbox("🔗 Vincular Material Existente (Smart Match):", [""] + opcoes_ativos, help="Selecione a prova ou projeto que será aplicado nesta semana para a IA ler o conteúdo.", key=f"ativo_match_{v}")
-                    if ativo_sel:
-                        dados_ativo = df_ativos_ano[df_ativos_ano['TIPO_MATERIAL'] == ativo_sel].iloc[0]
-                        ctx_ativo_vinculado = f"--- ATIVO VINCULADO: {ativo_sel} ---\nCONTEÚDO: {dados_ativo['CONTEUDO']}"
-                        
-                        # ==============================================================================
-                        # 🚨 MOTOR DE RECOMPOSIÇÃO GUIADA POR DADOS (AGREGADO POR SÉRIE)
-                        # ==============================================================================
-                        if tipo_semana == "🔥 Revisão & Recomposição":
+            # ==============================================================================
+            # 🚨 MÁQUINA DO TEMPO CURRICULAR E SMART MATCH
+            # ==============================================================================
+            if tipo_semana == "🔥 Revisão & Recomposição":
+                st.markdown("---")
+                foco_rr = st.radio("Estratégia de Intervenção:",["🔄 Revisão Guiada (Vincular Material)", "🛠️ Recomposição de Base (Máquina do Tempo)"], horizontal=True, key=f"foco_rr_{v}")
+                
+                if "Revisão" in foco_rr:
+                    df_ativos_ano = df_aulas[df_aulas['ANO'] == ano_str_busca]
+                    opcoes_ativos = df_ativos_ano[df_ativos_ano['SEMANA_REF'].isin(["REVISÃO", "AVALIAÇÃO"])]['TIPO_MATERIAL'].tolist()
+                    if opcoes_ativos:
+                        ativo_sel = st.selectbox("🔗 Vincular Material Base (Prova ou Lista):", [""] + opcoes_ativos, key=f"ativo_match_{v}")
+                        if ativo_sel:
+                            dados_ativo = df_ativos_ano[df_ativos_ano['TIPO_MATERIAL'] == ativo_sel].iloc[0]
+                            ctx_ativo_vinculado = f"--- ATIVO VINCULADO: {ativo_sel} ---\nCONTEÚDO: {dados_ativo['CONTEUDO']}"
+                            
+                            # Radar de Diagnóstico Ativo
                             with st.expander(f"📡 Radar de Diagnóstico Ativo (Série: {ano_p}º Ano)", expanded=True):
                                 st.markdown(f"**Analisando dados de todas as turmas do {ano_p}º Ano para {ativo_sel}...**")
                                 
-                                # 1. Perfil da Série Inteira
                                 alunos_rad = df_alunos[df_alunos['TURMA'].str.contains(str(ano_p))].copy()
                                 perfil_txt = ""
                                 if not alunos_rad.empty:
@@ -432,7 +430,6 @@ if menu == "📅 Planejamento (Ponto ID)":
                                     else:
                                         st.success("**Perfil Cognitivo da Série:** Maioria Típica/Padrão.")
                                 
-                                # 2. Lacunas da Prova na Série Inteira
                                 lacunas_txt = ""
                                 nome_curto_av = ativo_sel.split("-")[0].strip().replace(" (2ª CHAMADA)", "")
                                 diag_t = df_diagnosticos[(df_diagnosticos['TURMA'].str.contains(str(ano_p))) & (df_diagnosticos['ID_AVALIACAO'].str.contains(nome_curto_av, case=False, na=False))]
@@ -447,6 +444,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                                         gab_oficial = {int(num): letra for num, letra in matches}
                                         if not gab_oficial:
                                             letras = re.findall(r"\b[A-E]\b", gab_raw.upper())
+                                            # CORREÇÃO DO PYLANCE APLICADA AQUI
                                             gab_oficial = {i+1: letra for i, letra in enumerate(letras)}
                                             
                                         respostas_alunos = diag_t['RESPOSTAS_ALUNO'].astype(str).tolist()
@@ -485,13 +483,30 @@ if menu == "📅 Planejamento (Ponto ID)":
                                 else:
                                     st.info("Nenhum gabarito escaneado para esta série nesta avaliação.")
                                 
-                                # 3. Montagem do Strat (Injeção no Prompt)
                                 if lacunas_txt or perfil_txt:
                                     strat = f"--- DADOS DE DIAGNÓSTICO DA SÉRIE ({ano_p}º ANO) ---\n"
                                     if perfil_txt: strat += f"PERFIL COGNITIVO GERAL: {perfil_txt}\n"
                                     if lacunas_txt: strat += f"LACUNAS CRÍTICAS (Foque a revisão nestes pontos):\n{lacunas_txt}\n"
                                     strat += "🚨 DIRETRIZ DE RECOMPOSIÇÃO: Não revise a prova inteira. Foque EXCLUSIVAMENTE nas lacunas apontadas acima. Adapte a linguagem e as dinâmicas para o perfil cognitivo geral da série."
+                else:
+                    ano_origem_rec = st.selectbox("Série de Origem da Defasagem (Matriz Base):",[1, 2, 3, 4, 5, 6, 7, 8, 9], index=max(0, ano_p - 2), key=f"ano_rec_{v}")
+                    ano_matriz_busca = ano_origem_rec
+                    st.info(f"💡 **Máquina do Tempo Ativada:** A IA usará a Matriz Curricular do **{ano_origem_rec}º Ano** para planejar esta aula de resgate para a turma do **{ano_p}º Ano**.")
 
+            elif tipo_semana not in["📗 Aula de Safra (Regular)", "💡 Aula Aberta (Dinâmicas e Eventos)"]:
+                df_ativos_ano = df_aulas[df_aulas['ANO'] == ano_str_busca]
+                opcoes_ativos =[]
+                if "Exame" in tipo_semana: opcoes_ativos = df_ativos_ano[df_ativos_ano['SEMANA_REF'] == "AVALIAÇÃO"]['TIPO_MATERIAL'].tolist()
+                elif "Trabalho" in tipo_semana: opcoes_ativos = df_ativos_ano[df_ativos_ano['TIPO_MATERIAL'].str.contains("PROJETO|TRABALHO", case=False, na=False)]['TIPO_MATERIAL'].tolist()
+                else: opcoes_ativos = df_ativos_ano[df_ativos_ano['TIPO_MATERIAL'].str.contains("SONDA|DIAGNÓSTICA", case=False, na=False)]['TIPO_MATERIAL'].tolist()
+
+                if opcoes_ativos:
+                    ativo_sel = st.selectbox("🔗 Vincular Material Existente (Smart Match):", [""] + opcoes_ativos, key=f"ativo_match_{v}")
+                    if ativo_sel:
+                        dados_ativo = df_ativos_ano[df_ativos_ano['TIPO_MATERIAL'] == ativo_sel].iloc[0]
+                        ctx_ativo_vinculado = f"--- ATIVO VINCULADO: {ativo_sel} ---\nCONTEÚDO: {dados_ativo['CONTEUDO']}"
+
+            st.markdown("---")
             modo_p = c3.radio("📚 Método de Base Didática:",["📖 Livro Didático", "🎛️ Manual (Matriz)"], horizontal=True, help="Livro: A IA lê o PDF do seu cofre. Manual: A IA usa apenas a Matriz Curricular.", key=f"modo_p_{v}")
             
             # --- SEÇÃO DE PARÂMETROS (MODO MANUAL / BANCO) ---
@@ -506,7 +521,8 @@ if menu == "📅 Planejamento (Ponto ID)":
                     dist_manual = st.radio("Distribuição de Conteúdo:",["Integrar Aula 1 e 2", "Definir Trilhas Individuais (Aula 1 / Aula 2)"], 
                         horizontal=True, help="Integrar: A IA divide o conteúdo logicamente. Trilhas: Você escolhe o que entra em cada dia.", key=f"dist_m_{v}")
 
-                    df_matriz_ano = df_curriculo[df_curriculo['ANO'].astype(str) == str(ano_p)]
+                    # 🚨 Usa a variável ano_matriz_busca (que pode ser do ano atual ou do ano de recomposição)
+                    df_matriz_ano = df_curriculo[df_curriculo['ANO'].astype(str) == str(ano_matriz_busca)]
                     
                     if "Trilhas Individuais" in dist_manual:
                         with st.expander("📘 TRILHA 01: Foco da Aula 1", expanded=True):
@@ -533,8 +549,8 @@ if menu == "📅 Planejamento (Ponto ID)":
             else:
                 st.markdown("#### 📖 Extração Direta do Livro Didático")
                 cx1, cx2 = st.columns([2, 1])
-                livros_disponiveis = df_materiais[df_materiais['TIPO'].str.contains(str(ano_p), na=False)]['NOME_ARQUIVO'].tolist()
-                sel_mat = cx1.selectbox("Selecionar Livro do Cofre Digital:", [""] + livros_disponiveis, key=f"p_livro_{v}")
+                livros_disponiveis = df_materiais[df_materiais['TIPO'].str.contains(str(ano_matriz_busca), na=False)]['NOME_ARQUIVO'].tolist()
+                sel_mat = cx1.selectbox("Selecionar Livro do Cofre Digital:",[""] + livros_disponiveis, key=f"p_livro_{v}")
                 
                 pags = cx2.text_input("Páginas Alvo:", placeholder="Ex: 14-23 ; 45-50", help="Use ';' para separar capítulos. A IA usará a 1ª parte na Aula 1 e a 2ª parte na Aula 2.", key=f"p_pags_{v}")
                 
@@ -543,10 +559,22 @@ if menu == "📅 Planejamento (Ponto ID)":
                     uri_livro_drive = match_mat['URI_ARQUIVO']
                     base_didatica_info = f"Livro: {sel_mat} | Páginas: {pags}"
 
+        # ==============================================================================
+        # 🚨 3. DIRETRIZ SOBERANA (NOVO)
+        # ==============================================================================
+        with st.container(border=True):
+            st.markdown("### ✍️ Passo 3: Diretriz Soberana (Contexto de Regência)")
+            st.caption("Dite as regras do jogo. Como você quer que a IA estruture a metodologia, os espaços e as dinâmicas desta semana?")
+            diretriz_soberana = st.text_area("Suas ordens para o Maestro:", placeholder="Ex: Quero a Aula 1 no pátio com material dourado. A Aula 2 será em duplas focada em resolução de problemas...", height=100, key=f"dir_sob_{v}")
+
         # --- BOTÃO DE COMPILAÇÃO ---
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("🧠 INICIAR MOTOR DE IA: GERAR PLANEJAMENTO", use_container_width=True, type="primary", key=f"btn_compilar_{v}"):
             
+            # Limpa o histórico do chat ao gerar um novo plano
+            if "chat_history_ponto_id" in st.session_state:
+                del st.session_state["chat_history_ponto_id"]
+                
             v_ctx_ia = ctx_ia if 'ctx_ia' in locals() else ""
             v_strat = strat if 'strat' in locals() else ""
             v_ctx_ativo = ctx_ativo_vinculado if 'ctx_ativo_vinculado' in locals() else ""
@@ -570,9 +598,10 @@ if menu == "📅 Planejamento (Ponto ID)":
                     prompt = (
                         f"NATUREZA DA SEMANA: {tipo_semana}\n"
                         f"{diretriz_base}\n"
-                        f"SÉRIE: {ano_p}º Ano. SEMANA: {sem_limpa}. TRIMESTRE: {trim_atual}.\n"
+                        f"SÉRIE ALVO: {ano_p}º Ano. SEMANA: {sem_limpa}. TRIMESTRE: {trim_atual}.\n"
                         f"CARGA HORÁRIA: {carga_horaria}.\n"
                         f"SÁBADO LETIVO: {status_sabado_cmd}.\n\n"
+                        f"🚨 DIRETRIZ SOBERANA DO PROFESSOR (PRIORIDADE MÁXIMA):\n{diretriz_soberana if diretriz_soberana else 'Siga a estrutura padrão de excelência.'}\n\n"
                         f"🚨 MISSÃO DE DISTRIBUIÇÃO:\n"
                         f"1. Se houver múltiplos intervalos de páginas separados por ';', use o primeiro para a [AULA_1] e o segundo para a [AULA_2].\n"
                         f"2. Extraia os conceitos exatos de cada capítulo/intervalo citado (se for modo livro).\n"
@@ -580,7 +609,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                         f"4. Preencha todas as tags [TAG] com densidade acadêmica.\n\n"
                         f"--- PONTE PEDAGÓGICA (MEMÓRIA DA TURMA) ---\nAnalise o plano da semana anterior abaixo para criar o gancho de continuidade na AULA 1:\n{plano_anterior_txt}\n\n"
                         f"--- CONTEXTO DE APOIO E ATIVOS VINCULADOS ---\n{v_strat}\n{v_ctx_ia}\n{v_ctx_ativo}\n"
-                        f"--- MATRIZ OFICIAL (ITABUNA) ---\n{df_curriculo[df_curriculo['ANO'].astype(str)==str(ano_p)].to_string(index=False)}"
+                        f"--- MATRIZ OFICIAL (ITABUNA) ---\n{df_curriculo[df_curriculo['ANO'].astype(str)==str(ano_matriz_busca)].to_string(index=False)}"
                     )
                     
                     resultado = ai.gerar_ia("PLANE_PEDAGOGICO", prompt, url_drive=uri_livro_drive)
@@ -608,25 +637,55 @@ if menu == "📅 Planejamento (Ponto ID)":
                 cm3.metric("Trimestre", meta.get('trimestre'))
                 cm4.metric("📖 Base Didática", meta.get('base'))
 
-            t_ed, t_vis = st.tabs(["✏️ Editor Manual", "👁️ Visão do Documento Final"])
+            t_ed, t_vis = st.tabs(["✏️ Editor Manual & Copilot", "👁️ Visão do Documento Final"])
             
             with t_ed:
+                # ==============================================================================
+                # 🤖 MAESTRO COPILOT (CHATBOT DE REFINO)
+                # ==============================================================================
                 with st.container(border=True):
-                    st.subheader("🤖 Refinador Maestro (Ajuste Rápido)")
-                    st.caption("Não gostou de algo? Peça para a IA reescrever antes de salvar.")
-                    cmd_refine = st.chat_input("Ex: 'Deixe a Aula 1 mais lúdica' ou 'Foque mais na página 15'...", key=f"chat_refine_{v}")
+                    st.subheader("🤖 Maestro Copilot (Coautoria em Tempo Real)")
+                    st.caption("Converse com a IA para ajustar o plano. O editor abaixo será atualizado automaticamente.")
                     
-                    if cmd_refine:
-                        with st.spinner("Reengenharia em curso..."):
-                            prompt_refino = (
-                                f"ORDEM SOBERANA: {cmd_refine}\n\n"
-                                f"PLANO ATUAL PARA REFINAR:\n{st.session_state.p_temp}\n\n"
-                                f"MATRIZ DE REFERÊNCIA:\n{df_curriculo[df_curriculo['ANO'].astype(str)==str(ano_p)].to_string(index=False)}"
-                            )
-                            resultado_refino = ai.gerar_ia("REFINADOR_PEDAGOGICO", prompt_refino, url_drive=uri_livro_drive)
-                            st.session_state.p_temp = resultado_refino
-                            st.session_state.v_plano = int(time.time())
-                            st.rerun()
+                    if "chat_history_ponto_id" not in st.session_state:
+                        st.session_state.chat_history_ponto_id =[{"role": "assistant", "avatar": "🤖", "content": "Saudações, Mestre! O plano base foi gerado. Como deseja refinar a nossa estratégia?"}]
+                    
+                    chat_container = st.container(height=300)
+                    with chat_container:
+                        for msg in st.session_state.chat_history_ponto_id:
+                            with st.chat_message(msg["role"], avatar=msg["avatar"]):
+                                st.markdown(msg["content"])
+                    
+                    if cmd_refine := st.chat_input("Ex: 'Deixe a Aula 1 mais lúdica' ou 'Foque mais na página 15'...", key=f"chat_refine_{v}"):
+                        st.session_state.chat_history_ponto_id.append({"role": "user", "avatar": "💻", "content": cmd_refine})
+                        
+                        with chat_container:
+                            with st.chat_message("user", avatar="💻"):
+                                st.markdown(cmd_refine)
+                            with st.chat_message("assistant", avatar="🤖"):
+                                with st.spinner("Reengenharia em curso..."):
+                                    hist_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history_ponto_id[-5:]])
+                                    prompt_refino = (
+                                        f"HISTÓRICO DA CONVERSA:\n{hist_text}\n\n"
+                                        f"ORDEM ATUAL: {cmd_refine}\n\n"
+                                        f"PLANO ATUAL PARA REFINAR:\n{st.session_state.p_temp}\n\n"
+                                        f"MATRIZ DE REFERÊNCIA:\n{df_curriculo[df_curriculo['ANO'].astype(str)==str(ano_p)].to_string(index=False)}"
+                                    )
+                                    
+                                    resultado_refino = ai.gerar_ia("REFINADOR_PEDAGOGICO", prompt_refino, url_drive=uri_livro_drive)
+                                    
+                                    msg_chat = ai.extrair_tag(resultado_refino, "MENSAGEM_CHAT")
+                                    novo_conteudo = ai.extrair_tag(resultado_refino, "CONTEUDO_ATUALIZADO")
+                                    
+                                    if not novo_conteudo: 
+                                        novo_conteudo = resultado_refino
+                                        msg_chat = "Plano atualizado conforme solicitado, Mestre."
+                                        
+                                    st.markdown(msg_chat)
+                                    st.session_state.chat_history_ponto_id.append({"role": "assistant", "avatar": "🤖", "content": msg_chat})
+                                    st.session_state.p_temp = novo_conteudo
+                                    st.session_state.v_plano = int(time.time())
+                                    st.rerun()
 
                     if st.button("🗑️ DESCARTAR E RECOMEÇAR", use_container_width=True): reset_planejamento()
 
@@ -926,6 +985,735 @@ if menu == "📅 Planejamento (Ponto ID)":
                 c3.metric("Progresso II Trimestre", f"{p_ii}%")
 
                 st.plotly_chart(px.bar(progresso_trim, x="TRIMESTRE", y="%", text="%", title=f"Evolução da Cobertura Real - {ano_m}º Ano", color="%", color_continuous_scale="RdYlGn", range_y=[0, 110]), use_container_width=True)
+
+
+
+# ==============================================================================
+# MÓDULO: LABORATÓRIO DE PRODUÇÃO (CRIADOR DE AULAS) - CLEAN & UX
+# ==============================================================================
+elif menu == "🧪 Criador de Aulas":
+    st.title("🧪 Laboratório de Produção Semiótica")
+    st.markdown("---")
+    st.caption("💡 **Guia de Comando:** Transforme seus planejamentos (Ponto ID) em materiais físicos de alta densidade (Folha do Aluno, Guia do Professor e Adaptação PEI) com um clique.")
+    
+    def reset_laboratorio():
+        keys_to_del =["lab_temp", "lab_pei", "lab_gab_pei", "refino_lab_ativo", "sosa_id_atual", "lab_meta", "hub_origem", "chat_history_lab"]
+        for k in keys_to_del:
+            if k in st.session_state: del st.session_state[k]
+        st.cache_data.clear() 
+        st.session_state.v_lab = int(time.time())
+        st.rerun()
+
+    if "v_lab" not in st.session_state: 
+        st.session_state.v_lab = int(time.time())
+    v = st.session_state.v_lab
+
+    meta = st.session_state.get("lab_meta", {})
+    is_hub = meta.get("tipo") == "PRODUÇÃO_HUB"
+    
+    # --- ÁREA DE EXIBIÇÃO E REFINO ---
+    if "lab_temp" in st.session_state:
+        txt_base = st.session_state.lab_temp
+        s_id = st.session_state.get("sosa_id_atual", "SEM-ID")
+        st.success(f"💎 Material em Edição: **{s_id}**")
+
+        # ==============================================================================
+        # 🤖 MAESTRO COPILOT (CHATBOT DE REFINO)
+        # ==============================================================================
+        with st.container(border=True):
+            st.subheader("🤖 Maestro Copilot (Coautoria em Tempo Real)")
+            st.caption("Converse com a IA para ajustar o material. O editor abaixo será atualizado automaticamente.")
+            
+            if "chat_history_lab" not in st.session_state:
+                st.session_state.chat_history_lab =[{"role": "assistant", "avatar": "🤖", "content": "Saudações, Mestre! O material base foi gerado. Como deseja refinar a nossa estratégia?"}]
+            
+            chat_container_lab = st.container(height=300)
+            with chat_container_lab:
+                for msg in st.session_state.chat_history_lab:
+                    with st.chat_message(msg["role"], avatar=msg["avatar"]):
+                        st.markdown(msg["content"])
+            
+            if cmd_refine_lab := st.chat_input("Ex: 'Deixe o texto do aluno mais simples' ou 'Adicione mais uma questão'...", key=f"chat_lab_ref_{v}"):
+                st.session_state.chat_history_lab.append({"role": "user", "avatar": "💻", "content": cmd_refine_lab})
+                
+                with chat_container_lab:
+                    with st.chat_message("user", avatar="💻"):
+                        st.markdown(cmd_refine_lab)
+                    with st.chat_message("assistant", avatar="🤖"):
+                        with st.spinner("Reengenharia em curso..."):
+                            hist_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history_lab[-5:]])
+                            prompt_refino = (
+                                f"HISTÓRICO DA CONVERSA:\n{hist_text}\n\n"
+                                f"ORDEM ATUAL: {cmd_refine_lab}\n\n"
+                                f"MATERIAL ATUAL PARA REFINAR:\n{txt_base}"
+                            )
+                            
+                            resultado_refino = ai.gerar_ia("REFINADOR_MATERIAIS", prompt_refino)
+                            
+                            msg_chat = ai.extrair_tag(resultado_refino, "MENSAGEM_CHAT")
+                            novo_conteudo = ai.extrair_tag(resultado_refino, "CONTEUDO_ATUALIZADO")
+                            
+                            if not novo_conteudo:
+                                novo_conteudo = resultado_refino
+                                msg_chat = "Material atualizado conforme solicitado, Mestre."
+                                
+                            st.markdown(msg_chat)
+                            st.session_state.chat_history_lab.append({"role": "assistant", "avatar": "🤖", "content": msg_chat})
+                            st.session_state.lab_temp = novo_conteudo
+                            st.session_state.v_lab = int(time.time())
+                            st.rerun()
+
+            if st.button("🗑️ DESCARTAR EDIÇÃO E VOLTAR"): reset_laboratorio()
+        
+        t_prof, t_alu, t_gab, t_pei, t_img, t_sync = st.tabs(["👨‍🏫 Professor", "📝 Aluno", "✅ Gabarito", "♿ PEI", "🎨 Imagens", "☁️ SINCRONIA"])
+        with t_prof: st.text_area("Lousa/Mediação:", ai.extrair_tag(txt_base, "PROFESSOR"), height=450, key=f"ed_prof_reg_{v}")
+        with t_alu: st.text_area("Folha/Roteiro:", ai.extrair_tag(txt_base, "ALUNO"), height=450, key=f"ed_alu_reg_{v}")
+        with t_gab: st.text_area("Gabarito:", ai.extrair_tag(txt_base, "GABARITO"), height=200, key=f"ed_res_reg_{v}")
+        with t_pei: st.text_area("PEI (Obrigatório):", ai.extrair_tag(txt_base, "PEI"), height=400, key=f"ed_pei_reg_{v}")
+        with t_img: st.text_area("Prompts de Imagem:", ai.extrair_tag(txt_base, "IMAGENS"), height=200, key=f"ed_img_reg_{v}")
+
+        # --- ☁️ ABA DE SINCRONIA (TRIPLE-SYNC) ---
+        with t_sync:
+            st.subheader("🚀 Sincronia e Custódia Digital")
+            st.info("Este comando irá gerar os documentos oficiais (DOCX) e salvar os links permanentes no seu banco de dados.")
+            
+            if st.button("💾 SALVAR MATERIAL E SINCRONIZAR NO DRIVE", use_container_width=True, type="primary", key=f"btn_triple_{v}"):
+                with st.status("Sincronizando Ativos de Elite...") as status:
+                    db.excluir_registro_com_drive("DB_AULAS_PRONTAS", s_id)
+                    
+                    ano_str = f"{meta.get('ano', '6')}º"
+                    sem_ref = meta.get('semana_ref', 'Geral')
+                    info_doc = {"ano": ano_str, "trimestre": "I Trimestre", "semana": sem_ref}
+
+                    status.write("📝 Gerando Material do Aluno/Roteiro...")
+                    doc_alu = exporter.gerar_docx_aluno_v24(s_id, ai.extrair_tag(txt_base, "ALUNO"), info_doc)
+                    link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{s_id}_ALUNO", modo="AULA")
+                    
+                    status.write("♿ Gerando Atividade Adaptada PEI...")
+                    doc_pei = exporter.gerar_docx_pei_v25(f"{s_id}_PEI", ai.extrair_tag(txt_base, "PEI"), info_doc)
+                    link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{s_id}_PEI", modo="AULA")
+                    
+                    status.write("👨‍🏫 Gerando Guia de Mediação do Professor...")
+                    doc_prof = exporter.gerar_docx_professor_v25(s_id, ai.extrair_tag(txt_base, "PROFESSOR"), info_doc)
+                    link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{s_id}_PROF", modo="AULA")
+                    
+                    links_f = f"--- LINKS ---\nRegular({link_alu})\nPEI({link_pei})\nProf({link_prof})"
+                    conteudo_final = txt_base + f"\n\n{links_f}"
+                    
+                    db.salvar_no_banco("DB_AULAS_PRONTAS",[
+                        datetime.now().strftime("%d/%m/%Y"), 
+                        sem_ref, 
+                        s_id, 
+                        conteudo_final, 
+                        ano_str, 
+                        link_alu
+                    ])
+                    
+                    status.update(label="✅ Sincronizado com Sucesso!", state="complete")
+                    st.balloons()
+                    time.sleep(1)
+                    reset_laboratorio()
+
+    # --- SEÇÃO DE ENTRADA (CONFIGURAÇÃO COM INTELIGÊNCIA DE TRILHAS) ---
+    else:
+        tab_producao, tab_trabalhos, tab_complementar, tab_acervo_lab = st.tabs([
+            "🚀 1. Produção de Aulas", "📋 2. Projetos e Trabalhos", "📚 3. Listas e Recomposição", "📂 4. Acervo de Materiais"
+        ])
+
+        with tab_producao:
+            st.markdown("### ⚙️ Passo 1: Herança Didática (Ponto ID)")
+            
+            mostrar_tudo_lab = st.toggle("🔄 Mostrar semanas e aulas já concluídas (Modo Sobrescrita)", help="Ative se precisar refazer uma aula que já foi gerada e salva no acervo.", key=f"tog_lab_{v}")
+            
+            with st.container(border=True):
+                c1, c2 = st.columns([1, 2])
+                ano_lab = c1.selectbox("Série/Ano Alvo:",[6, 7, 8, 9], key=f"prod_ano_{v}")
+                planos_ano = df_planos[df_planos["ANO"].astype(str).str.contains(str(ano_lab))]
+                
+                if planos_ano.empty: 
+                    st.error("❌ Nenhum planejamento encontrado para esta série. Vá ao Ponto ID primeiro.")
+                else:
+                    # Lógica de filtragem de semanas concluídas
+                    semanas_pendentes = []
+                    for sem in planos_ano["SEMANA"].unique().tolist():
+                        p_row = planos_ano[planos_ano["SEMANA"] == sem].iloc[0]
+                        p_txt = str(p_row['PLANO_TEXTO'])
+                        
+                        pede_a2 = len(ai.extrair_tag(p_txt, "AULA_2")) > 30 and "N/A" not in ai.extrair_tag(p_txt, "AULA_2").upper()
+                        t_sab = ai.extrair_tag(p_txt, "SABADO_LETIVO")
+                        pede_sab = len(t_sab) > 10 and "N/A" not in t_sab.upper() and "NÃO PROGRAMADA" not in t_sab.upper()
+                        
+                        a_geradas = df_aulas[(df_aulas['ANO'].str.contains(str(ano_lab))) & (df_aulas['SEMANA_REF'] == sem)]['TIPO_MATERIAL'].astype(str).tolist()
+                        t_a1 = any("Aula 1" in mat for mat in a_geradas)
+                        t_a2 = any("Aula 2" in mat for mat in a_geradas)
+                        t_sab_gen = any("Sábado" in mat or "Sabado" in mat for mat in a_geradas)
+                        
+                        if (not t_a1) or (pede_a2 and not t_a2) or (pede_sab and not t_sab_gen):
+                            semanas_pendentes.append(sem)
+                    
+                    semanas_opcoes = planos_ano["SEMANA"].unique().tolist() if mostrar_tudo_lab else semanas_pendentes
+                    
+                    if not semanas_opcoes:
+                        st.success("✅ Todas as semanas planejadas para esta série já tiveram seus materiais produzidos! O acervo está completo.")
+                    else:
+                        sem_lab = c2.selectbox("Semana Base (Herdada do Ponto ID):", semanas_opcoes, key=f"prod_sem_{v}")
+                        plano_row = planos_ano[planos_ano["SEMANA"] == sem_lab].iloc[0]
+                        plano_txt = str(plano_row['PLANO_TEXTO'])
+
+                        with st.expander("📡 Radar de Regência (Memória das Turmas)", expanded=True):
+                            st.caption("O sistema verifica onde você parou na última aula para garantir a continuidade.")
+                            contexto_turmas_ia = ""
+                            reg_ano = df_registro_aulas[df_registro_aulas['TURMA'].str.contains(str(ano_lab))]
+                            if not reg_ano.empty:
+                                for t_nome in sorted(reg_ano['TURMA'].unique()):
+                                    dados_t = reg_ano[reg_ano['TURMA'] == t_nome].iloc[-1]
+                                    est = dados_t.get('STATUS_EXECUCAO', 'Não Iniciado')
+                                    pnt = dados_t.get('PONTE_PEDAGOGICA', 'Sem pendências.')
+                                    emoji = "🟢" if "Concluído" in est else "🟡" if "Parcial" in est else "🔴"
+                                    st.write(f"{emoji} **{t_nome}:** {est}")
+                                    contexto_turmas_ia += f"- Turma {t_nome}: Status {est}. Pendência: {pnt}\n"
+                            else: st.info("ℹ️ Nenhuma regência anterior registrada.")
+
+                        base_herdada = ai.extrair_tag(plano_txt, "BASE_DIDATICA")
+                        
+                        metodo_entrega = st.radio("🎯 Método de Entrega:",[
+                            "🚀 Geração Integral (SOSA AI)", 
+                            "📖 Livro Didático + PEI (Híbrido)",
+                            "🎟️ Registro de Evento / Dinâmica (Sem Material Físico)"
+                        ], horizontal=True, help="Integral: A IA cria o texto e as questões. Livro: A IA cria o roteiro baseado nas páginas do livro. Evento: Apenas registra a aula no sistema.", key=f"metodo_{v}")
+                        
+                        aulas_ja_geradas = df_aulas[(df_aulas['ANO'].str.contains(str(ano_lab))) & (df_aulas['SEMANA_REF'] == sem_lab)]['TIPO_MATERIAL'].astype(str).tolist()
+                        
+                        tem_aula1 = any("Aula 1" in mat for mat in aulas_ja_geradas)
+                        tem_aula2 = any("Aula 2" in mat for mat in aulas_ja_geradas)
+                        tem_sabado = any("Sábado" in mat or "Sabado" in mat for mat in aulas_ja_geradas)
+
+                        plano_pede_a2 = len(ai.extrair_tag(plano_txt, "AULA_2")) > 30 and "N/A" not in ai.extrair_tag(plano_txt, "AULA_2").upper()
+                        txt_sabado = ai.extrair_tag(plano_txt, "SABADO_LETIVO")
+                        plano_pede_sab = len(txt_sabado) > 10 and "N/A" not in txt_sabado.upper() and "NÃO PROGRAMADA" not in txt_sabado.upper()
+
+                        opcoes_disponiveis =[]
+                        if not tem_aula1: opcoes_disponiveis.append("Aula 1")
+                        if plano_pede_a2 and not tem_aula2: opcoes_disponiveis.append("Aula 2")
+                        if plano_pede_sab and not tem_sabado: opcoes_disponiveis.append("Sábado Letivo")
+
+                        if mostrar_tudo_lab:
+                            opcoes_disponiveis = ["Aula 1"]
+                            if plano_pede_a2: opcoes_disponiveis.append("Aula 2")
+                            if plano_pede_sab: opcoes_disponiveis.append("Sábado Letivo")
+
+                        obj_geral = ai.extrair_tag(plano_txt, "OBJETO_CONHECIMENTO") or ai.extrair_tag(plano_txt, "CONTEUDO_GERAL")
+                        
+                        with st.container(border=True):
+                            st.markdown(f"#### 🎯 Alvo Curricular: {obj_geral}")
+                            
+                            if not opcoes_disponiveis:
+                                st.success("✅ Todas as aulas previstas para esta semana já foram produzidas! O acervo está completo.")
+                                aula_alvo_prod = None
+                            else:
+                                col_config1, col_config2 = st.columns([1, 1])
+                                with col_config1:
+                                    aula_alvo_prod = st.radio("🚀 Material a Gerar:", opcoes_disponiveis, horizontal=True, key=f"prod_alvo_{v}")
+                                with col_config2:
+                                    if "Evento" not in metodo_entrega:
+                                        qtd_q_prod = st.slider("Nº de Questões (PEI/Regular):", 1, 20, 10, key=f"prod_q_{v}")
+                                    else:
+                                        nome_evento = st.text_input("Nome do Evento/Dinâmica:", placeholder="Ex: Palestra sobre a Dengue", key=f"nome_ev_{v}")
+
+                                if "1" in aula_alvo_prod: tag_roteiro = "AULA_1"
+                                elif "2" in aula_alvo_prod: tag_roteiro = "AULA_2"
+                                else: tag_roteiro = "SABADO_LETIVO"
+                                
+                                roteiro_especifico = ai.extrair_tag(plano_txt, tag_roteiro)
+                                
+                                roteiro_upper = roteiro_especifico.upper()
+                                termos_av =["LOGÍSTICA DE APLICAÇÃO", "APLICAÇÃO DE AVALIAÇÃO", "APLICAÇÃO DE PROVA", "APLICAÇÃO DE TESTE", "APLICAÇÃO DA SONDA", "APLICAÇÃO DO EXAME"]
+                                termos_cor =["CORREÇÃO COMENTADA", "CLÍNICA PEDAGÓGICA", "CORREÇÃO DE AVALIAÇÃO", "CORREÇÃO DA PROVA", "CORREÇÃO DO TESTE", "CORREÇÃO DA SONDA", "MAPEAMENTO DE DISTRATORES"]
+                                
+                                is_avaliacao = any(t in roteiro_upper for t in termos_av)
+                                is_correcao = any(t in roteiro_upper for t in termos_cor)
+                                
+                                paginas_aula = base_herdada
+                                if ";" in base_herdada:
+                                    partes_pag = base_herdada.split(";")
+                                    if "1" in aula_alvo_prod: paginas_aula = partes_pag[0].strip()
+                                    elif "2" in aula_alvo_prod and len(partes_pag) > 1: paginas_aula = partes_pag[1].strip()
+                                    else: paginas_aula = partes_pag[-1].strip()
+
+                                with st.expander(f"👁️ Roteiro Herdado para {aula_alvo_prod}", expanded=False):
+                                    st.info(f"📍 **Páginas Alvo:** {paginas_aula}\n\n{roteiro_especifico}")
+
+                                conteudo_prova_vinculada = ""
+                                if is_correcao or is_avaliacao:
+                                    st.markdown("---")
+                                    st.warning("🔍 **Modo de Avaliação/Correção Detectado:** Selecione a prova correspondente para que a IA possa ler as questões e gerar o guia.")
+                                    
+                                    mask_provas = df_aulas['TIPO_MATERIAL'].str.upper().str.contains("PROVA|TESTE|SONDA|AVALIAÇÃO|EXAME")
+                                    provas_disponiveis = df_aulas[(df_aulas['ANO'].str.contains(str(ano_lab))) & mask_provas]
+                                    
+                                    if not provas_disponiveis.empty:
+                                        prova_sel = st.selectbox("Vincular Avaliação do Acervo:",[""] + provas_disponiveis['TIPO_MATERIAL'].tolist(), key=f"vinc_prova_{v}")
+                                        if prova_sel:
+                                            conteudo_prova_vinculada = provas_disponiveis[provas_disponiveis['TIPO_MATERIAL'] == prova_sel].iloc[0]['CONTEUDO']
+                                            st.success("✅ Avaliação vinculada! A IA usará as questões reais para montar a aula.")
+                                    else:
+                                        st.info("Nenhuma avaliação encontrada no acervo para esta série.")
+
+                        if opcoes_disponiveis:
+                            if "Evento" in metodo_entrega:
+                                if st.button("💾 OFICIALIZAR EVENTO NO ACERVO", use_container_width=True, type="primary"):
+                                    if not nome_evento:
+                                        st.error("⚠️ Digite o nome do evento para registrar.")
+                                    else:
+                                        with st.spinner("Registrando evento com rastreabilidade curricular..."):
+                                            hab_herdada = ai.extrair_tag(plano_txt, "HABILIDADE_BNCC")
+                                            cont_herdado = ai.extrair_tag(plano_txt, "CONTEUDOS_ESPECIFICOS")
+                                            obj_herdado = ai.extrair_tag(plano_txt, "OBJETIVOS_ENSINO")
+                                            
+                                            conteudo_fantasma = (
+                                                f"[PROFESSOR]\n"
+                                                f"🎟️ **REGISTRO DE EVENTO / DINÂMICA**\n"
+                                                f"**Tema:** {nome_evento}\n"
+                                                f"**Habilidade:** {hab_herdada}\n"
+                                                f"**Conteúdos:** {cont_herdado}\n"
+                                                f"**Objetivos:** {obj_herdado}\n\n"
+                                                f"**Roteiro Executado:**\n{roteiro_especifico}\n\n"
+                                                f"[ALUNO]\nAtividade prática/evento. Sem material físico gerado.\n\n"
+                                                f"[GABARITO]\nN/A\n\n"
+                                                f"[PEI]\nParticipação inclusiva no evento garantida via mediação direta.\n\n"
+                                                f"--- LINKS ---\nRegular(N/A)\nPEI(N/A)\nProf(N/A)"
+                                            )
+                                            
+                                            nome_elite = util.gerar_nome_material_elite(ano_lab, aula_alvo_prod, nome_evento)
+                                            
+                                            db.salvar_no_banco("DB_AULAS_PRONTAS",[
+                                                datetime.now().strftime("%d/%m/%Y"), 
+                                                sem_lab, 
+                                                nome_elite, 
+                                                conteudo_fantasma, 
+                                                f"{ano_lab}º", 
+                                                "N/A"
+                                            ])
+                                            st.success("✅ Evento oficializado no Acervo! Já disponível no Cockpit.")
+                                            time.sleep(1.5)
+                                            st.rerun()
+                            else:
+                                uri_referencia_aula = None
+                                if "Livro" in metodo_entrega:
+                                    nome_livro_limpo = base_herdada.split('|')[0].replace("Livro:", "").strip()
+                                    match_biblioteca = df_materiais[df_materiais['NOME_ARQUIVO'].str.contains(nome_livro_limpo[:10], case=False, na=False)]
+                                    if not match_biblioteca.empty:
+                                        uri_referencia_aula = match_biblioteca.iloc[0]['URI_ARQUIVO']
+                                        st.success(f"📚 **Fonte Vinculada:** {match_biblioteca.iloc[0]['NOME_ARQUIVO']} (Páginas: {paginas_aula})")
+
+                                alunos_foco = df_alunos[(df_alunos['TURMA'].str.contains(str(ano_lab))) & (~df_alunos['NECESSIDADES'].isin(["NENHUMA", "PENDENTE", "", "NAN", "TÍPICO", "TIPICO"]))]
+                                texto_clinico = ", ".join(alunos_foco['NECESSIDADES'].unique().tolist()) if not alunos_foco.empty else "PADRÃO"
+                                if not alunos_foco.empty: st.warning(f"♿ **Sensor PEI Ativo:** {texto_clinico}")
+                                
+                                instr_extra_prod = st.text_area("📝 Contexto Extra / Ajustes Específicos:", placeholder="Ex: Focar mais em frações equivalentes...", key=f"prod_extra_{v}")
+
+                                st.markdown("<br>", unsafe_allow_html=True)
+                                if st.button("🧠 INICIAR MOTOR DE IA: GERAR AULA", use_container_width=True, type="primary"):
+                                    
+                                    # Limpa o histórico do chat ao gerar um novo material
+                                    if "chat_history_lab" in st.session_state:
+                                        del st.session_state["chat_history_lab"]
+                                        
+                                    with st.spinner("Sosa estudando o roteiro e arquitetando material..."):
+                                        
+                                        nome_elite = util.gerar_nome_material_elite(ano_lab, aula_alvo_prod, sem_lab)
+                                        st.session_state.sosa_id_atual = nome_elite
+                                        st.session_state.lab_meta = {"ano": ano_lab, "semana_ref": sem_lab}
+                                        
+                                        if "Geração Integral" in metodo_entrega:
+                                            regra_livro = "3. MODO MANUAL: Crie o conteúdo do zero com base na BNCC. É TERMINANTEMENTE PROIBIDO citar páginas de livros didáticos."
+                                        else:
+                                            regra_livro = "3. MODO LIVRO: O roteiro deve dizer exatamente: 'Inicie na página X explorando a imagem Y...' baseando-se no PDF."
+
+                                        if is_avaliacao and not is_correcao:
+                                            missao_especifica = (
+                                                f"🚨 ATENÇÃO: Esta é uma aula de APLICAÇÃO DE AVALIAÇÃO.\n"
+                                                f"1. Na tag[PROFESSOR]: Escreva apenas as instruções de logística, tempo, regras da prova e orientações de preenchimento de gabarito.\n"
+                                                f"2. Nas tags [ALUNO] e [PEI]: Escreva APENAS 'Material de avaliação impresso separadamente. Não há atividade de caderno hoje.'\n"
+                                                f"3. É TERMINANTEMENTE PROIBIDO gerar questões ou exercícios.\n"
+                                                f"🚨 FORMATO OBRIGATÓRIO: Você DEVE separar o texto usando EXATAMENTE as tags entre colchetes:[PROFESSOR], [ALUNO], [PEI], [GABARITO], [IMAGENS]."
+                                            )
+                                        elif is_correcao:
+                                            missao_especifica = (
+                                                f"🚨 ATENÇÃO: Esta é uma aula de CORREÇÃO DE AVALIAÇÃO (Clínica Pedagógica).\n"
+                                                f"1. Na tag [PROFESSOR]: Escreva um guia de como mediar a correção no quadro. USE AS QUESTÕES DA AVALIAÇÃO VINCULADA ABAIXO para dar exemplos reais de como explicar os erros (distratores).\n"
+                                                f"2. Nas tags [ALUNO] e [PEI]: Escreva APENAS 'Acompanhamento da correção no quadro e anotações de feedback. Não há nova lista de exercícios hoje.'\n"
+                                                f"3. É TERMINANTEMENTE PROIBIDO gerar novas questões.\n"
+                                                f"🚨 FORMATO OBRIGATÓRIO: Você DEVE separar o texto usando EXATAMENTE as tags entre colchetes:[PROFESSOR], [ALUNO], [PEI], [GABARITO],[IMAGENS]."
+                                            )
+                                        else:
+                                            missao_especifica = (
+                                                f"🚨 MISSÃO DE ALTA DENSIDADE E RIGOR QUANTITATIVO:\n"
+                                                f"1.[PROFESSOR]: Escreva um TRATADO DIDÁTICO denso. Explique o conceito de {obj_geral} com profundidade técnica antes de dar o roteiro de aula.\n"
+                                                f"2. CONEXÃO ALPHA: Use o Google Search para trazer dados científicos reais de 2026 que validem a importância deste tema.\n"
+                                                f"{regra_livro}\n"
+                                                f"4.[ALUNO] (REGULAR): É OBRIGATÓRIO gerar EXATAMENTE {qtd_q_prod} questões inéditas e desafiadoras. Formato: **QUESTÃO X.** enunciado.\n"
+                                                f"5.[PEI] (INCLUSÃO): É OBRIGATÓRIO gerar EXATAMENTE {qtd_q_prod} questões adaptadas, cada uma com [PARA LEMBRAR],[PASSO A PASSO] e [ PROMPT IMAGEM ].\n"
+                                                f"6.[GABARITO]: Forneça as respostas detalhadas para as {qtd_q_prod} questões regulares e as {qtd_q_prod} questões PEI.\n"
+                                                f"🚨 FORMATO OBRIGATÓRIO: Você DEVE separar o texto usando EXATAMENTE as tags entre colchetes: [PROFESSOR], [ALUNO], [PEI],[GABARITO], [IMAGENS]."
+                                            )
+
+                                        prompt_manual = (
+                                            f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {nome_elite}.\n"
+                                            f"MÉTODO: {metodo_entrega}. REFERÊNCIA: {base_herdada}\n"
+                                            f"SÉRIE: {ano_lab}º Ano. ALVO: {aula_alvo_prod}.\n\n"
+                                            f"{missao_especifica}\n\n"
+                                            f"--- HERANÇA DO PLANO ATUAL ---\n{roteiro_especifico}\n"
+                                            f"--- MEMÓRIA DE REGÊNCIA (PONTE PEDAGÓGICA) ---\n{contexto_turmas_ia}\n"
+                                            f"--- SENSOR DE INCLUSÃO ---\nA turma possui alunos com: {texto_clinico}."
+                                        )
+                                        
+                                        if conteudo_prova_vinculada:
+                                            prompt_manual += f"\n\n--- CONTEÚDO DA AVALIAÇÃO VINCULADA ---\n{conteudo_prova_vinculada}"
+                                        
+                                        resultado_ia = ai.gerar_ia(
+                                            "MAESTRO_SOSA_V28_ELITE", 
+                                            prompt_manual, 
+                                            url_drive=uri_referencia_aula, 
+                                            usar_busca=True
+                                        )
+                                        
+                                        import re
+                                        tags_para_limpar =["PROFESSOR", "ALUNO", "PEI", "GABARITO", "GABARITO_PEI", "IMAGENS"]
+                                        for t in tags_para_limpar:
+                                            resultado_ia = re.sub(rf"\*\*{t}\*\*", f"[{t}]", resultado_ia, flags=re.IGNORECASE)
+                                            resultado_ia = re.sub(rf"\*\*{t}:\*\*", f"[{t}]", resultado_ia, flags=re.IGNORECASE)
+                                            resultado_ia = re.sub(rf"^{t}$", f"[{t}]", resultado_ia, flags=re.IGNORECASE | re.MULTILINE)
+                                            
+                                        st.session_state.lab_temp = resultado_ia
+                                        st.rerun()
+
+        # --- ABA 2: ENGENHARIA DE TRABALHOS ---
+        with tab_trabalhos:
+            st.subheader("📋 Engenharia de Projetos e Semanários")
+            st.caption("Crie roteiros de pesquisa, trabalhos em grupo e projetos interdisciplinares alinhados à BNCC.")
+            
+            with st.container(border=True):
+                c1, c2, c3 = st.columns([1.5, 1, 1])
+                natureza_p = c1.selectbox("Natureza do Ativo:",["Semanário Temático", "Projeto de Identidade (Itabuna)", "Investigação Científica", "Projeto BNCC Livre"], 
+                    key=f"t_nat_{v}")
+                ano_t = c2.selectbox("Série Alvo:", [6, 7, 8, 9], key=f"t_ano_{v}")
+                modo_t = c3.selectbox("Modo de Execução:",["Individual", "Em Grupo (Equipes)", "Interdisciplinar"], key=f"t_modo_{v}")
+
+            with st.container(border=True):
+                st.markdown("#### 🌟 Alinhamento de Competências Gerais (BNCC)")
+                comps_proj = st.multiselect("Selecione as Competências Âncora do Projeto:",[
+                    "1. Conhecimento", "2. Pensamento Crítico e Criativo", "3. Repertório Cultural",
+                    "4. Comunicação", "5. Cultura Digital", "6. Trabalho e Projeto de Vida",
+                    "7. Argumentação", "8. Autoconhecimento", "9. Empatia e Cooperação", "10. Responsabilidade e Cidadania"
+                ], key=f"t_comp_bncc_{v}")
+
+            with st.container(border=True):
+                c_t1, c_t2, c_t3 = st.columns([2, 1, 1])
+                tema_t = c_t1.text_input("Título do Projeto/Tema:", placeholder="Ex: A Matemática do Cacau...", key=f"t_tema_{v}")
+                valor_t = c_t2.number_input("Valor (0-10):", 0.0, 10.0, 2.0, step=0.5, key=f"t_val_{v}")
+                qtd_aulas_t = c_t3.slider("Duração (Aulas):", 1, 10, 2, key=f"t_q_aulas_{v}")
+                
+            df_cur_t = df_curriculo[df_curriculo["ANO"].astype(str).str.contains(str(ano_t))]
+            if not df_cur_t.empty:
+                lista_eixos_t = sorted(df_cur_t["EIXO"].unique().tolist())
+                eixos_sel_t = st.multiselect("Eixos da Matriz para Integrar:", lista_eixos_t, key=f"t_eixos_multi_{v}")
+                
+                if eixos_sel_t:
+                    df_hab_t = df_cur_t[df_cur_t["EIXO"].isin(eixos_sel_t)]
+                    conts_t = st.multiselect("Conteúdos Específicos (Itabuna):", 
+                                           sorted(df_hab_t["CONTEUDO_ESPECIFICO"].unique().tolist()), 
+                                           key=f"t_cont_multi_{v}")
+                    
+                    instr_extra_p = st.text_area("📝 Instruções de Pesquisa / Contexto Adicional:", key=f"t_extra_proj_{v}")
+
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    if st.button("🧠 INICIAR MOTOR DE IA: GERAR PROJETO", use_container_width=True, type="primary"):
+                        if not tema_t or not conts_t:
+                            st.error("Defina o Título e selecione ao menos um Conteúdo da Matriz.")
+                        else:
+                            if "chat_history_lab" in st.session_state:
+                                del st.session_state["chat_history_lab"]
+                                
+                            with st.spinner("Maestro Sosa arquitetando roteiro investigativo..."):
+                                nome_legivel = util.gerar_nome_material_elite(ano_t, "Projeto", tema_t)
+                                
+                                st.session_state.sosa_id_atual = nome_legivel
+                                st.session_state.lab_meta = {
+                                    "ano": ano_t, "trimestre": "I Trimestre", 
+                                    "tipo": "PROJETO", "aula_alvo": tema_t, "semana_ref": "PROJETO"
+                                }
+                                
+                                prompt_t = (
+                                    f"ID_FORNECIDO: {nome_legivel}.\n"
+                                    f"TEMA: {tema_t}. NATUREZA: {natureza_p}.\n"
+                                    f"SÉRIE: {ano_t}º Ano. MODO: {modo_t}.\n"
+                                    f"COMPETÊNCIAS BNCC: {', '.join(comps_proj)}.\n"
+                                    f"CONTEÚDOS ITABUNA: {', '.join(conts_t)}.\n"
+                                    f"VALOR: {util.sosa_to_str(valor_t)} | DURAÇÃO: {qtd_aulas_t} aulas.\n"
+                                    f"EXTRAS: {instr_extra_p}.\n\n"
+                                    f"MISSÃO: Use o ID_FORNECIDO na tag [SOSA_ID]. Gere o material completo com as TAGS[SOSA_ID], [JUSTIFICATIVA_PHC],[CONTEXTO_INVESTIGATIVO],[MISSÃO_DE_PESQUISA], [PASSO_A_PASSO],[PRODUTO_ESPERADO],[ESTRATEGIA_DUA_PEI],[RUBRICA_DE_MERITO]."
+                                )
+                                st.session_state.lab_temp = ai.gerar_ia("ARQUITETO_CIENTIFICO_V33", prompt_t, usar_busca=True)
+                                st.session_state.v_lab = int(time.time())
+                                st.rerun()
+
+        # --- ABA 3: ATIVIDADES COMPLEMENTARES ---
+        with tab_complementar:
+            st.subheader("📚 Listas Híbridas e Recomposição")
+            st.caption("Crie listas de exercícios mesclando aulas anteriores ou gere material de reforço baseado em anos anteriores.")
+            
+            with st.container(border=True):
+                c1, c2 = st.columns([1, 2])
+                ano_alvo = c1.selectbox("Série Alvo (Sua Turma):",[6, 7, 8, 9], key=f"comp_ano_alvo_{v}")
+                
+                origem_tipo = c2.radio("Origem do Conteúdo (DNA Curricular):",["🟢 Série Atual (Lista de Consolidação Híbrida)", "🔴 Ano Anterior (Intervenção/Recomposição)"], 
+                    horizontal=True, key=f"comp_origem_tipo_{v}")
+            
+            if "Série Atual" in origem_tipo:
+                st.markdown("#### 📦 1. Herança de DNA (Aulas Base)")
+                df_aulas_ano = df_aulas[df_aulas['ANO'].str.contains(str(ano_alvo))].copy()
+                
+                if df_aulas_ano.empty:
+                    st.warning("⚠️ Nenhuma aula encontrada no acervo para esta série. Gere uma aula primeiro.")
+                else:
+                    aulas_puras = df_aulas_ano[df_aulas_ano['TIPO_MATERIAL'].str.contains("Aula", case=False, na=False)]
+                    aulas_opcoes = aulas_puras['TIPO_MATERIAL'].tolist()[::-1]
+                    
+                    aulas_selecionadas = st.multiselect(
+                        "Selecione 1 ou 2 aulas para basear a lista:", 
+                        aulas_opcoes, 
+                        max_selections=2, 
+                        key=f"comp_aulas_sel_{v}"
+                    )
+                    
+                    if aulas_selecionadas:
+                        st.markdown("#### ⚙️ 2. Engenharia da Lista (Distribuição de Questões)")
+                        with st.container(border=True):
+                            cq1, cq2, cq3, cq4 = st.columns(4)
+                            qtd_trad = cq1.number_input("📐 Tradicionais (Cálculo):", 0, 20, 4, key=f"qtd_trad_{v}")
+                            qtd_cot = cq2.number_input("🛒 Cotidiano Real:", 0, 20, 3, key=f"qtd_cot_{v}")
+                            qtd_tech = cq3.number_input("📱 Rotina Tecnológica:", 0, 20, 2, key=f"qtd_tech_{v}")
+                            qtd_des = cq4.number_input("🔥 Desafio (Boss Fight):", 0, 5, 1, key=f"qtd_des_{v}")
+                            
+                            total_q = qtd_trad + qtd_cot + qtd_tech + qtd_des
+                            st.info(f"**Total de Questões Regulares:** {total_q} | **Questões PEI (50%):** {max(1, total_q//2) if total_q > 0 else 0}")
+                        
+                        instr_extra_h = st.text_area("📝 Contexto Adicional / Foco Específico (Opcional):", placeholder="Ex: Focar mais em frações equivalentes...", key=f"comp_instr_h_{v}")
+                        
+                        st.markdown("<br>", unsafe_allow_html=True)
+                        if st.button("🧠 INICIAR MOTOR DE IA: GERAR LISTA HÍBRIDA", use_container_width=True, type="primary"):
+                            if total_q == 0:
+                                st.error("⚠️ A lista precisa ter pelo menos 1 questão configurada.")
+                            else:
+                                if "chat_history_lab" in st.session_state:
+                                    del st.session_state["chat_history_lab"]
+                                    
+                                with st.spinner("Maestro Sosa varrendo a internet e arquitetando a lista híbrida..."):
+                                    contexto_aulas = ""
+                                    for aula_nome in aulas_selecionadas:
+                                        cont_aula = df_aulas_ano[df_aulas_ano['TIPO_MATERIAL'] == aula_nome].iloc[0]['CONTEUDO']
+                                        contexto_aulas += f"\n--- CONTEÚDO DA {aula_nome} ---\n{cont_aula}\n"
+                                    
+                                    sosa_id_hash = util.gerar_sosa_id("LISTA", ano_alvo, "I")
+                                    nome_elite_c = f"{ano_alvo}º Ano - Lista Híbrida - {sosa_id_hash}"
+                                    
+                                    st.session_state.sosa_id_atual = nome_elite_c
+                                    st.session_state.lab_meta = {
+                                        "ano": ano_alvo, 
+                                        "trimestre": "I Trimestre", 
+                                        "tipo": "LISTA_HIBRIDA", 
+                                        "semana_ref": "CONSOLIDAÇÃO"
+                                    }
+                                    
+                                    prompt_h = (
+                                        f"ID_FORNECIDO: {nome_elite_c}.\n"
+                                        f"SÉRIE ALVO: {ano_alvo}º Ano.\n"
+                                        f"DISTRIBUIÇÃO EXATA DE QUESTÕES (TOTAL: {total_q}):\n"
+                                        f"- {qtd_trad} Questões Tradicionais (Mecânica/Cálculo).\n"
+                                        f"- {qtd_cot} Questões de Cotidiano Real.\n"
+                                        f"- {qtd_tech} Questões de Rotina Tecnológica (Use o Google Search para dados reais).\n"
+                                        f"- {qtd_des} Questão Desafio (Boss Fight).\n"
+                                        f"EXTRAS: {instr_extra_h}\n\n"
+                                        f"BASE DE CONHECIMENTO (Use os conceitos ensinados nestas aulas para criar as questões):\n{contexto_aulas}\n\n"
+                                        f"MISSÃO: Use o ID_FORNECIDO na tag [SOSA_ID]. Gere o material completo com as TAGS [SOSA_ID],[PROFESSOR], [ALUNO], [GABARITO],[PEI], [GABARITO_PEI],[IMAGENS]."
+                                    )
+                                    
+                                    st.session_state.lab_temp = ai.gerar_ia("ARQUITETO_LISTAS_HIBRIDAS", prompt_h, usar_busca=True)
+                                    st.session_state.v_lab = int(time.time())
+                                    st.rerun()
+
+            else:
+                contexto_scanner = ""
+                with st.container(border=True):
+                    st.markdown("#### 🔍 1. Análise de Evidências (Scanner)")
+                    c_t1, c_t2 = st.columns([1, 1])
+                    turma_interv = c_t1.selectbox("Selecione a Turma para Diagnóstico:", sorted(df_alunos['TURMA'].unique()), key=f"comp_turma_{v}")
+                    ano_origem = c_t2.selectbox("Buscar base em qual série?",[1, 2, 3, 4, 5, 6, 7, 8], index=ano_alvo-2, key=f"comp_ano_orig_{v}")
+                    
+                    if not df_diagnosticos.empty:
+                        erros_turma = df_diagnosticos[df_diagnosticos['TURMA'] == turma_interv]
+                        if not erros_turma.empty:
+                            media_baixa = erros_turma[erros_turma['NOTA_CALCULADA'].apply(util.sosa_to_float) < 6.0]
+                            if not media_baixa.empty:
+                                lista_avs = media_baixa['ID_AVALIACAO'].unique()
+                                st.error(f"🚨 **Lacunas Detectadas:** A turma teve baixo desempenho em: {', '.join(lista_avs[:2])}")
+                                contexto_scanner = f"A Turma {turma_interv} apresentou dificuldades reais nas avaliações: {lista_avs}. Foque em resgatar a base do {ano_origem}º ano."
+                            else:
+                                st.success("✅ Turma com bom desempenho médio no Scanner.")
+
+                df_cur_comp = df_curriculo[df_curriculo["ANO"].astype(str).str.contains(str(ano_origem))]
+                
+                if not df_cur_comp.empty:
+                    with st.container(border=True):
+                        c_f1, c_f2 = st.columns(2)
+                        sel_eixo_c = c_f1.multiselect("2. Eixo da Matriz:", sorted(df_cur_comp["EIXO"].unique().tolist()), key=f"comp_eixo_{v}")
+                        if sel_eixo_c:
+                            sel_cont_c = c_f2.multiselect("3. Conteúdo Base:", sorted(df_cur_comp[df_cur_comp["EIXO"].isin(sel_eixo_c)]["CONTEUDO_ESPECIFICO"].unique().tolist()), key=f"comp_cont_{v}")
+                            if sel_cont_c:
+                                sel_obj_c = st.multiselect("4. Objetivos Oficiais:", sorted(df_cur_comp[df_cur_comp["CONTEUDO_ESPECIFICO"].isin(sel_cont_c)]["OBJETIVOS"].unique().tolist()), key=f"comp_obj_{v}")
+                                
+                                st.divider()
+                                c_q1, c_q2, c_q3 = st.columns([1, 1, 2])
+                                tipo_comp = c_q1.selectbox("Objetivo:",["Fixação", "Reforço", "Aprofundamento", "Recomposição"], key=f"comp_tipo_{v}")
+                                qtd_q_comp = c_q2.slider("Nº Questões:", 3, 15, 10, key=f"comp_q_{v}")
+                                instr_extra_c = c_q3.text_area("📝 Contexto Adicional:", key=f"comp_instr_{v}")
+
+                                st.markdown("<br>", unsafe_allow_html=True)
+                                if st.button("🧠 INICIAR MOTOR DE IA: GERAR RECOMPOSIÇÃO", use_container_width=True, type="primary"):
+                                    if "chat_history_lab" in st.session_state:
+                                        del st.session_state["chat_history_lab"]
+                                        
+                                    with st.spinner("Maestro Sosa arquitetando material com DNA único..."):
+                                        sosa_id_hash = util.gerar_sosa_id(tipo_comp, ano_alvo, "I") 
+                                        nome_elite_c = f"RECOMP - {turma_interv} - {sosa_id_hash}"
+                                        
+                                        st.session_state.sosa_id_atual = nome_elite_c
+                                        st.session_state.lab_meta = {
+                                            "ano": ano_alvo, 
+                                            "trimestre": "I Trimestre", 
+                                            "tipo": tipo_comp.upper(), 
+                                            "semana_ref": "RECOMPOSIÇÃO"
+                                        }
+                                        
+                                        prompt_c = (
+                                            f"ID_FORNECIDO: {nome_elite_c}.\n"
+                                            f"SÉRIE ALVO: {ano_alvo}º Ano | SÉRIE ORIGEM: {ano_origem}º Ano.\n"
+                                            f"OBJETIVO: {tipo_comp}. CONTEXTO SCANNER: {contexto_scanner}.\n"
+                                            f"CONTEÚDOS: {', '.join(sel_cont_c)}.\n"
+                                            f"OBJETIVOS: {', '.join(sel_obj_c)}.\n"
+                                            f"QUANTIDADE: {qtd_q_comp} questões. EXTRAS: {instr_extra_c}.\n\n"
+                                            f"MISSÃO: Use o ID_FORNECIDO na tag[SOSA_ID]. Gere com as TAGS [VALOR: 0.0],[SOSA_ID],[MAPA_DE_RECOMPOSICAO], [PROFESSOR], [ALUNO],[RESPOSTAS_PEDAGOGICAS], [GRADE_DE_CORRECAO], [PEI]."
+                                        )
+                                        
+                                        st.session_state.lab_temp = ai.gerar_ia("ARQUITETO_RECOMPOSICAO_V68_ELITE", prompt_c, usar_busca=True)
+                                        st.session_state.v_lab = int(time.time())
+                                        st.rerun()
+
+        # --- ABA 4: ACERVO DE MATERIAIS ---
+        with tab_acervo_lab:
+            st.subheader("📂 Gestão de Acervo de Materiais")
+            st.caption("Histórico de todas as aulas, projetos e listas geradas.")
+            
+            c_m1, c_m2, c_m3 = st.columns([1, 1, 1])
+            f_trim_m = c_m1.selectbox("📅 Filtrar Trimestre:",["Todos", "I Trimestre", "II Trimestre", "III Trimestre"], key="m_trim_filter")
+            f_ano_m = c_m2.selectbox("🎓 Filtrar Série:",["Todos", "6º", "7º", "8º", "9º"], key="m_ano_filter")
+            f_tipo_m = c_m3.selectbox("🧪 Tipo de Ativo:",["Todos", "Aula", "PROJETO", "Fixação", "Reforço", "Recomposição", "Lista"], key="m_tipo_filter")
+
+            df_m = df_aulas[~df_aulas['SEMANA_REF'].isin(["AVALIAÇÃO", "REVISÃO"])].copy()
+            termos_proibidos =["TESTE", "PROVA", "SONDA", "RECUPERAÇÃO", "2ª CHAMADA"]
+            df_m = df_m[~df_m['TIPO_MATERIAL'].str.upper().str.contains('|'.join(termos_proibidos), na=False)]
+
+            if f_trim_m != "Todos":
+                df_m = df_m[df_m['CONTEUDO'].str.contains(f_trim_m, na=False)]
+            if f_ano_m != "Todos":
+                df_m = df_m[df_m['ANO'] == f_ano_m]
+            if f_tipo_m != "Todos":
+                df_m = df_m[df_m['TIPO_MATERIAL'].str.upper().str.contains(f_tipo_m.upper())]
+
+            df_m = df_m.iloc[::-1] 
+
+            if not df_m.empty:
+                st.write(f"📚 **Materiais Didáticos Localizados:** {len(df_m)}")
+                for _, row in df_m.iterrows():
+                    with st.container(border=True):
+                        txt_f = str(row['CONTEUDO'])
+                        identificador = row['TIPO_MATERIAL']
+                        
+                        st.markdown(f"#### 📘 {identificador}")
+                        
+                        def buscar_link_soberano(texto, rotulo, link_reserva):
+                            padrao = rf"{rotulo}\s*\(?\s*(https?://[^\s\)]+)\)?"
+                            match = re.search(padrao, texto, re.IGNORECASE)
+                            if match:
+                                return match.group(1).strip()
+                            if rotulo.lower() in["regular", "aluno"]:
+                                return link_reserva
+                            return None
+
+                        l_alu = buscar_link_soberano(txt_f, "Regular", row.get('LINK_DRIVE'))
+                        l_pei = buscar_link_soberano(txt_f, "PEI", None)
+                        l_prof = buscar_link_soberano(txt_f, "Prof", None)
+
+                        c_b1, c_b2, c_b3, c_b4, c_b5 = st.columns(5)
+
+                        if l_alu and "http" in str(l_alu):
+                            c_b1.link_button("📝 ALUNO", str(l_alu), use_container_width=True, type="primary")
+                        else:
+                            c_b1.button("⚪ SEM LINK", disabled=True, use_container_width=True)
+
+                        if l_pei and "http" in str(l_pei) and "N/A" not in str(l_pei):
+                            c_b2.link_button("♿ PEI", str(l_pei), use_container_width=True)
+                        else:
+                            c_b2.button("⚪ SEM PEI", disabled=True, use_container_width=True)
+
+                        if l_prof and "http" in str(l_prof) and "N/A" not in str(l_prof):
+                            c_b3.link_button("👨‍🏫 PROF", str(l_prof), use_container_width=True)
+                        else:
+                            c_b3.button("⚪ SEM GUIA", disabled=True, use_container_width=True)
+                        
+                        if c_b4.button("🔄 REFINAR", key=f"ref_mat_h_{row.name}", use_container_width=True):
+                            st.session_state.lab_temp = txt_f
+                            st.session_state.sosa_id_atual = identificador
+                            st.session_state.lab_meta = {"ano": str(row["ANO"]).replace("º",""), "semana_ref": row['SEMANA_REF']}
+                            if "chat_history_lab" in st.session_state: del st.session_state["chat_history_lab"]
+                            st.rerun()
+                            
+                        if c_b5.button("🗑️ APAGAR", key=f"del_mat_h_{row.name}", use_container_width=True):
+                            if db.excluir_registro_com_drive("DB_AULAS_PRONTAS", identificador):
+                                st.rerun()
+
+                        with st.expander("👁️ ANALISAR ESTRUTURA PEDAGÓGICA E ITENS"):
+                            t_prof, t_alu, t_gab, t_pei_tab, t_img = st.tabs([
+                                "👨‍🏫 Guia do Professor", "📝 Material do Aluno", "✅ Gabarito", "♿ Inclusão PEI", "🎨 Imagens"
+                            ])
+                            
+                            with t_prof:
+                                val_prof = ai.extrair_tag(txt_f, "PROFESSOR")
+                                st.info(val_prof if val_prof else "Conteúdo não localizado.")
+
+                            with t_alu:
+                                val_alu = ai.extrair_tag(txt_f, "ALUNO")
+                                if val_alu:
+                                    st.write(val_alu)
+                                else: st.write("Roteiro não localizado.")
+
+                            with t_gab:
+                                val_gab = ai.extrair_tag(txt_f, "GABARITO")
+                                st.success(val_gab if val_gab else "Gabarito não disponível.")
+
+                            with t_pei_tab:
+                                val_pei = ai.extrair_tag(txt_f, "PEI")
+                                st.warning(val_pei if val_pei else "Nenhuma adaptação registrada.")
+                                
+                            with t_img:
+                                val_img = ai.extrair_tag(txt_f, "IMAGENS")
+                                if val_img:
+                                    st.info(val_img)
+                                else:
+                                    st.caption("Nenhum prompt de imagem gerado para este material.")
+            else:
+                st.info("📭 Nenhum material didático encontrado.")
 
 
 # ==============================================================================
@@ -2142,7 +2930,7 @@ elif menu == "📸 Scanner de Gabaritos":
         
         with st.container(border=True):
             c1, c2, c3 = st.columns([1, 1, 1.5])
-            t_sel = c1.selectbox("👥 Turma:",[""] + lista_turmas_cir, key=f"t_p_{v}")
+            t_sel = c1.selectbox("👥 Turma:", [""] + lista_turmas_cir, key=f"t_p_{v}")
             tr_sel = c2.selectbox("📅 Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_p_{v}")
             
             opcoes_p = filtrar_ativos_cir(t_sel, tr_sel, apenas_provas=True)
@@ -2187,22 +2975,14 @@ elif menu == "📸 Scanner de Gabaritos":
                     al_info = pendentes[pendentes['NOME_ALUNO'] == al_sel].iloc[0]
                     id_aluno_atual = al_info['ID']
                     
-                    is_pei_aluno_db = str(al_info['NECESSIDADES']).upper().strip() not in["NENHUMA", "PENDENTE", "", "NAN", "TÍPICO", "TIPICO"]
+                    is_pei_aluno = str(al_info['NECESSIDADES']).upper().strip() not in["NENHUMA", "PENDENTE", "", "NAN", "TÍPICO", "TIPICO"]
                     
                     st.markdown("---")
                     st.markdown(f"### 📸 Corrigindo agora: **{al_sel}**")
                     
                     with st.container(border=True):
-                        c_v1, c_v2, c_v3 = st.columns([1, 1, 1.5])
-                        modo_2a = c_v1.toggle("🚀 Aplicar Segunda Chamada?", help="Ative se o aluno fez a prova de 2ª chamada.", key=f"toggle_2a_{id_aluno_atual}")
-                        
-                        # 🚨 BOTÃO DE AUTONOMIA PEI
-                        forcar_regular = False
-                        if is_pei_aluno_db:
-                            forcar_regular = c_v2.toggle("📝 Fez a Prova Regular?", help="Ative se este aluno PEI optou por fazer a prova regular em vez da adaptada.", key=f"toggle_reg_{id_aluno_atual}")
-                        
-                        # Define qual gabarito a IA vai usar para corrigir
-                        is_pei_grading = is_pei_aluno_db and not forcar_regular
+                        c_v1, c_v2 = st.columns([1, 1])
+                        modo_2a = c_v1.toggle("🚀 Aplicar Segunda Chamada para este aluno?", help="Ative se o aluno fez a prova de 2ª chamada. O sistema buscará o gabarito correto.", key=f"toggle_2a_{id_aluno_atual}")
                         
                         if modo_2a:
                             tipo_base = at_sel.split("-")[0].strip().upper()
@@ -2213,7 +2993,7 @@ elif menu == "📸 Scanner de Gabaritos":
                                 (df_aulas['ANO'].str.contains(serie_num))
                             ]
                             opcoes_2a = df_2a_candidatos['TIPO_MATERIAL'].unique().tolist()
-                            at_segunda = c_v3.selectbox("📋 Selecione o Ativo 2CHAMADA:",[""] + opcoes_2a, key=f"sel_2a_{id_aluno_atual}")
+                            at_segunda = c_v2.selectbox("📋 Selecione o Ativo 2CHAMADA:", [""] + opcoes_2a, key=f"sel_2a_{id_aluno_atual}")
                             if at_segunda:
                                 material_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == at_segunda].iloc[0]
                             else:
@@ -2224,8 +3004,8 @@ elif menu == "📸 Scanner de Gabaritos":
                         
                         if material_ref is not None:
                             tipo_txt = "2ª CHAMADA" if modo_2a else "REGULAR"
-                            perfil_txt = "♿ PEI (Adaptada)" if is_pei_grading else ("📝 REGULAR (Opção do Aluno)" if is_pei_aluno_db else "📝 REGULAR")
-                            st.info(f"⚖️ **Lente Ativa:** Prova {tipo_txt} | Correção: {perfil_txt}")
+                            perfil_txt = "♿ PEI" if is_pei_aluno else "📝 REGULAR"
+                            st.info(f"⚖️ **Lente Ativa:** Prova {tipo_txt} | Perfil {perfil_txt}")
 
                     if material_ref is not None:
                         txt_ref = str(material_ref['CONTEUDO'])
@@ -2235,13 +3015,12 @@ elif menu == "📸 Scanner de Gabaritos":
                         def extrair_gab_blindado(texto, is_pei=False):
                             tag_alvo = "GABARITO_PEI" if is_pei else "GABARITO_TEXTO"
                             raw = ai.extrair_tag(texto, tag_alvo) or ai.extrair_tag(texto, "GABARITO")
-                            if not raw: return[]
+                            if not raw: return []
                             matches = re.findall(r"(\d+)[\s\.\)\-:]+([A-E])", raw.upper())
                             mapa = {int(num): letra for num, letra in matches}
                             return [mapa[n] for n in sorted(mapa.keys())]
 
-                        # Usa a variável is_pei_grading que respeita o botão de forçar regular
-                        gab_alvo = extrair_gab_blindado(txt_ref, is_pei_grading)
+                        gab_alvo = extrair_gab_blindado(txt_ref, is_pei_aluno)
 
                         col_cam, col_falta = st.columns([2, 1])
                         
@@ -2435,7 +3214,7 @@ elif menu == "📸 Scanner de Gabaritos":
                 
                 serie_num = "".join(filter(str.isdigit, t_sel_h))
                 df_oficiais = df_aulas[(df_aulas['SEMANA_REF'] == "AVALIAÇÃO") & (df_aulas['ANO'].str.contains(serie_num))]
-                opcoes_base =[opt for opt in df_oficiais['TIPO_MATERIAL'].unique().tolist() if "2ª" not in opt.upper()]
+                opcoes_base = [opt for opt in df_oficiais['TIPO_MATERIAL'].unique().tolist() if "2ª" not in opt.upper()]
                 av_alvo_h = st.selectbox("📋 Selecione a Avaliação Base (Slot do Boletim):", [""] + opcoes_base, key=f"av_h_sel_{v}")
 
                 if av_alvo_h:
@@ -2501,7 +3280,7 @@ elif menu == "📸 Scanner de Gabaritos":
                             ws_g = wb_s.worksheet("DB_GABARITOS_ALUNOS")
                             d_g = ws_g.get_all_values()
                             
-                            linhas_para_deletar =[]
+                            linhas_para_deletar = []
                             ids_na_tabela = df_soberano_ed['ID'].astype(str).tolist()
                             
                             for i, row_g in enumerate(d_g):
@@ -2515,7 +3294,7 @@ elif menu == "📸 Scanner de Gabaritos":
                             for row_idx in sorted(linhas_para_deletar, reverse=True):
                                 ws_g.delete_rows(row_idx)
                             
-                            novos_registros_gabarito =[]
+                            novos_registros_gabarito = []
                             lista_boletim =[]
                             notas_atuais = df_notas[(df_notas['TURMA'] == t_sel_h) & (df_notas['TRIMESTRE'] == tr_sel_h)]
                             
@@ -2560,125 +3339,6 @@ elif menu == "📸 Scanner de Gabaritos":
                             st.balloons()
                             time.sleep(1.5)
                             st.rerun()
-
-                    st.markdown("---")
-                    
-                    # ==============================================================================
-                    # ⚖️ REVISÃO DE PERÍCIA (CORREÇÃO DA LEITURA DA IA)
-                    # ==============================================================================
-                    with st.expander("⚖️ Revisão de Perícia (Corrigir Leitura da IA)", expanded=False):
-                        st.info("💡 **Como usar:** Selecione um aluno que já teve o gabarito escaneado. Abra a foto no Drive, compare com a leitura da IA e corrija as alternativas erradas. O sistema recalculará a nota automaticamente.")
-
-                        df_revisao = pd.DataFrame([r for r in dados_soberania if r['Situação'] == "✅ REALIZADA" and r['_Respostas'] not in["MANUAL", "FALTOU", ""]])
-
-                        if not df_revisao.empty:
-                            aluno_rev_nome = st.selectbox("Selecione o Aluno para Revisão:", df_revisao['Estudante'].tolist(), key=f"rev_alu_{v}")
-
-                            if aluno_rev_nome:
-                                aluno_rev_data = df_revisao[df_revisao['Estudante'] == aluno_rev_nome].iloc[0]
-                                id_aluno_rev = aluno_rev_data['ID']
-                                respostas_atuais = str(aluno_rev_data['_Respostas']).split(';')
-                                link_foto = aluno_rev_data['Evidência']
-                                is_pei_rev = "♿" in aluno_rev_data['Perfil']
-
-                                material_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == av_alvo_h].iloc[0]
-                                txt_ref = str(material_ref['CONTEUDO'])
-                                val_tag = ai.extrair_tag(txt_ref, "VALOR")
-                                v_total_at = util.sosa_to_float(val_tag) if val_tag else 10.0
-
-                                def extrair_gab_blindado_rev(texto, is_pei=False):
-                                    tag_alvo = "GABARITO_PEI" if is_pei else "GABARITO_TEXTO"
-                                    raw = ai.extrair_tag(texto, tag_alvo) or ai.extrair_tag(texto, "GABARITO")
-                                    if not raw: return[]
-                                    matches = re.findall(r"(\d+)[\s\.\)\-:]+([A-E])", raw.upper())
-                                    mapa = {int(num): letra for num, letra in matches}
-                                    return [mapa[n] for n in sorted(mapa.keys())]
-
-                                gab_alvo_rev = extrair_gab_blindado_rev(txt_ref, is_pei_rev)
-
-                                c_rev1, c_rev2 = st.columns([1.5, 1])
-
-                                with c_rev1:
-                                    if link_foto and "http" in link_foto:
-                                        st.markdown(f"**📸 Foto do Gabarito:**[Clique aqui para abrir a evidência no Drive]({link_foto})")
-                                    else:
-                                        st.warning("⚠️ Link da foto não encontrado.")
-
-                                    dados_pericia_rev =[]
-                                    for i in range(len(gab_alvo_rev)):
-                                        certo = gab_alvo_rev[i]
-                                        lido = respostas_atuais[i] if i < len(respostas_atuais) else "?"
-                                        status = "✅ ACERTO" if lido == certo else ("🚫 DUPLA" if lido == "X" else ("⚪ VAZIA" if lido == "?" else f"❌ (Era {certo})"))
-                                        dados_pericia_rev.append({"Q": f"{i+1:02d}", "Lido": lido, "Status": status})
-
-                                    df_mesa_rev = st.data_editor(pd.DataFrame(dados_pericia_rev), hide_index=True, use_container_width=True,
-                                        column_config={"Lido": st.column_config.SelectboxColumn("Ajustar", options=["A", "B", "C", "D", "E", "X", "?"], required=True)},
-                                        key=f"ed_rev_{id_aluno_rev}_{v}")
-
-                                with c_rev2:
-                                    novas_res_rev = df_mesa_rev["Lido"].tolist()
-                                    acertos_rev = sum(1 for i, r in enumerate(novas_res_rev) if i < len(gab_alvo_rev) and r == gab_alvo_rev[i])
-                                    nota_f_rev = (acertos_rev / len(gab_alvo_rev)) * v_total_at if len(gab_alvo_rev) > 0 else 0
-
-                                    st.metric("Nova Nota Calculada", f"{nota_f_rev:.2f}", delta=f"{acertos_rev}/{len(gab_alvo_rev)} acertos")
-
-                                    if st.button("💾 SALVAR REVISÃO", type="primary", use_container_width=True):
-                                        with st.spinner("Atualizando gabarito e recalculando boletim..."):
-                                            wb_s = db.conectar()
-                                            ws_g = wb_s.worksheet("DB_GABARITOS_ALUNOS")
-                                            d_g = ws_g.get_all_values()
-
-                                            updates =[]
-                                            resp_formatada = ";".join(novas_res_rev)
-                                            nota_str = util.sosa_to_str(nota_f_rev)
-
-                                            for i, row_g in enumerate(d_g):
-                                                if i > 0 and db.limpar_id(row_g[1]) == str(id_aluno_rev) and nome_curto_av in row_g[4]:
-                                                    updates.append(gspread.Cell(row=i+1, col=6, value=resp_formatada))
-                                                    updates.append(gspread.Cell(row=i+1, col=7, value=nota_str))
-                                                    break
-
-                                            if updates:
-                                                ws_g.update_cells(updates)
-
-                                            if not is_sonda:
-                                                ws_n = wb_s.worksheet("DB_NOTAS")
-                                                d_n = ws_n.get_all_values()
-                                                updates_n =[]
-
-                                                notas_atuais = df_notas[(df_notas['TURMA'] == t_sel_h) & (df_notas['TRIMESTRE'] == tr_sel_h)]
-                                                reg_atual = notas_atuais[notas_atuais['ID_ALUNO'].apply(db.limpar_id) == str(id_aluno_rev)]
-
-                                                if not reg_atual.empty:
-                                                    v_vistos = reg_atual.iloc[0]['NOTA_VISTOS']
-                                                    v_teste = reg_atual.iloc[0]['NOTA_TESTE']
-                                                    v_prova = reg_atual.iloc[0]['NOTA_PROVA']
-
-                                                    if "TESTE" in av_alvo_h.upper():
-                                                        v_teste = nota_str
-                                                    else:
-                                                        v_prova = nota_str
-
-                                                    nova_media = util.sosa_to_str(util.sosa_to_float(v_vistos) + util.sosa_to_float(v_teste) + util.sosa_to_float(v_prova))
-
-                                                    for j, row_n in enumerate(d_n):
-                                                        if j > 0 and db.limpar_id(row_n[0]) == str(id_aluno_rev) and row_n[3] == tr_sel_h:
-                                                            if "TESTE" in av_alvo_h.upper():
-                                                                updates_n.append(gspread.Cell(row=j+1, col=6, value=nota_str))
-                                                            else:
-                                                                updates_n.append(gspread.Cell(row=j+1, col=7, value=nota_str))
-                                                            updates_n.append(gspread.Cell(row=j+1, col=9, value=nova_media))
-                                                            break
-
-                                                if updates_n:
-                                                    ws_n.update_cells(updates_n)
-
-                                            st.success("✅ Revisão salva com sucesso!")
-                                            time.sleep(1.5)
-                                            st.cache_data.clear()
-                                            st.rerun()
-                        else:
-                            st.success("✅ Nenhum gabarito escaneado disponível para revisão nesta avaliação.")
 
                     st.markdown("---")
                     with st.expander("🚑 Protocolo Lázaro: Restaurar Gabaritos Perdidos", expanded=True):
@@ -2777,7 +3437,7 @@ elif menu == "📸 Scanner de Gabaritos":
 
                 if st.button("🚀 INTEGRAR NOTAS EXTERNAS AO BOLETIM", use_container_width=True):
                     with st.status("Processando Substituição de Notas...") as status_ext:
-                        lista_boletim_ext =[]
+                        lista_boletim_ext = []
                         notas_atuais = df_notas[(df_notas['TURMA'] == t_sel_h) & (df_notas['TRIMESTRE'] == tr_sel_h)]
                         
                         for _, r in df_ext_ed.iterrows():
@@ -2801,10 +3461,11 @@ elif menu == "📸 Scanner de Gabaritos":
                         db.limpar_notas_turma_trimestre(t_sel_h, tr_sel_h)
                         if db.salvar_lote("DB_NOTAS", lista_boletim_ext):
                             status_ext.update(label=f"✅ Notas do {origem_ext} integradas com sucesso!", state="complete"); st.balloons(); time.sleep(1); st.rerun()
-# --- ABA 4: RAIO-X PEDAGÓGICO ---
+
+    # --- ABA 4: RAIO-X PEDAGÓGICO ---
     with tab_raiox:
         st.subheader("📊 Raio-X Pedagógico: Diagnóstico Individual de Lacunas")
-        st.caption("Analise o desempenho da turma (ou de toda a série) por questão e gere um Dossiê Impresso para o Conselho de Classe.")
+        st.caption("Analise o desempenho da turma por questão e gere um Dossiê Impresso para o Conselho de Classe.")
         st.markdown("---")
 
         def is_regular_student(nec_val):
@@ -2823,14 +3484,9 @@ elif menu == "📸 Scanner de Gabaritos":
             letras = re.findall(r"\b[A-E]\b", bloco)
             return {i+1: letra for i, letra in enumerate(letras)}
 
-        # 🚨 LÓGICA DE AGRUPAMENTO DE SÉRIES (VISÃO GLOBAL)
-        series_presentes = sorted(list(set(["".join(filter(str.isdigit, t)) for t in lista_turmas_cir if any(c.isdigit() for c in t)])))
-        opcoes_agrupadas =[f"{s}º Ano (Todas as Turmas)" for s in series_presentes if s]
-        opcoes_dropdown = [""] + opcoes_agrupadas + lista_turmas_cir
-
         with st.container(border=True):
             c1, c2, c3 = st.columns([1, 1, 1.5])
-            t_sel_r = c1.selectbox("👥 Selecione a Turma ou Série:", opcoes_dropdown, key=f"t_r_v90_{v}")
+            t_sel_r = c1.selectbox("👥 Selecione a Turma:", [""] + lista_turmas_cir, key=f"t_r_v90_{v}")
             tr_sel_r = c2.selectbox("📅 Selecione o Trimestre:",["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_r_v90_{v}")
             
             opcoes_r = filtrar_ativos_cir(t_sel_r, tr_sel_r, apenas_provas=True)
@@ -2838,46 +3494,19 @@ elif menu == "📸 Scanner de Gabaritos":
             at_sel_r = c3.selectbox("📋 Selecione a Avaliação Base (Slot):", [""] + opcoes_base_r, key=f"at_r_v90_{v}")
 
         if not t_sel_r or not at_sel_r:
-            st.info("💡 Selecione a Turma/Série e a Avaliação para carregar a Perícia Pedagógica.")
+            st.info("💡 Selecione a Turma e a Avaliação para carregar a Perícia Pedagógica.")
         else:
             nome_curto_av = at_sel_r.split("-")[0].strip()
             ano_num_r = "".join(filter(str.isdigit, t_sel_r))
-            is_agrupado = "(Todas as Turmas)" in t_sel_r
             
-            # 🚨 FILTRAGEM INTELIGENTE (TURMA ÚNICA VS TODAS AS TURMAS)
-            if is_agrupado:
-                respostas_brutas = df_diagnosticos[
-                    (df_diagnosticos['TURMA'].str.contains(ano_num_r)) & 
-                    (df_diagnosticos['ID_AVALIACAO'].str.contains(nome_curto_av, case=False))
-                ].copy()
-                alunos_turma = df_alunos[df_alunos['TURMA'].str.contains(ano_num_r)].sort_values(by=["TURMA", "NOME_ALUNO"])
-            else:
-                respostas_brutas = df_diagnosticos[
-                    (df_diagnosticos['TURMA'].str.strip() == t_sel_r.strip()) & 
-                    (df_diagnosticos['ID_AVALIACAO'].str.contains(nome_curto_av, case=False))
-                ].copy()
-                alunos_turma = df_alunos[df_alunos['TURMA'] == t_sel_r].sort_values(by="NOME_ALUNO")
+            respostas_brutas = df_diagnosticos[
+                (df_diagnosticos['TURMA'].str.strip() == t_sel_r.strip()) & 
+                (df_diagnosticos['ID_AVALIACAO'].str.contains(nome_curto_av, case=False))
+            ].copy()
 
             if respostas_brutas.empty:
                 st.warning("⚠️ Nenhuma resposta de aluno encontrada para esta avaliação.")
             else:
-                # 🚨 MOTOR DE DETECÇÃO DINÂMICA DE PROVA (REGULAR VS PEI)
-                query_mat_base = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel_r]
-                len_reg = 10
-                len_pei = 5
-                if not query_mat_base.empty:
-                    txt_base = str(query_mat_base.iloc[0]['CONTEUDO'])
-                    len_reg = len(extrair_gab_blindado(txt_base, False))
-                    len_pei = len(extrair_gab_blindado(txt_base, True))
-                    if len_pei == 0: len_pei = len_reg
-
-                def classificar_prova_realizada(resp):
-                    if str(resp) == "FALTOU": return "FALTOU"
-                    qtd = len(str(resp).split(';'))
-                    if len_pei != len_reg:
-                        if abs(qtd - len_pei) < abs(qtd - len_reg): return "PEI"
-                    return "REGULAR"
-
                 df_alunos_min = df_alunos[['ID', 'NECESSIDADES']].copy()
                 df_alunos_min['ID'] = df_alunos_min['ID'].apply(db.limpar_id)
                 respostas_brutas['ID_ALUNO_L'] = respostas_brutas['ID_ALUNO'].apply(db.limpar_id)
@@ -2885,19 +3514,15 @@ elif menu == "📸 Scanner de Gabaritos":
                 df_analise = pd.merge(respostas_brutas, df_alunos_min, left_on='ID_ALUNO_L', right_on='ID', how='left')
                 df_analise['IS_PEI'] = ~df_analise['NECESSIDADES'].apply(is_regular_student)
                 df_analise['IS_2A_CHAMADA'] = df_analise['ID_AVALIACAO'].str.contains(r"2[ªA]|CHAMADA", case=False, regex=True)
-                
-                df_analise['TIPO_PROVA_FEITA'] = df_analise['RESPOSTAS_ALUNO'].apply(classificar_prova_realizada)
 
                 st.markdown("### 🎯 1. Análise de Performance por Item")
                 col_l1, col_l2 = st.columns(2)
-                perfil_visao = col_l1.radio("1. Lente de Correção:",["📝 Prova Regular", "♿ Prova Adaptada (PEI)"], horizontal=True, key=f"perf_v90_{v}")
+                perfil_visao = col_l1.radio("1. Perfil do Aluno:",["📝 Alunos Regulares", "♿ Alunos PEI"], horizontal=True, key=f"perf_v90_{v}")
                 versao_visao = col_l2.radio("2. Versão da Prova:",["📄 Prova Original", "🔄 2ª Chamada"], horizontal=True, key=f"vers_v90_{v}")
                 
                 is_pei_view = "PEI" in perfil_visao
                 is_2a_view = "2ª" in versao_visao
-                
-                tipo_filtro = "PEI" if is_pei_view else "REGULAR"
-                df_filtrado = df_analise[(df_analise['TIPO_PROVA_FEITA'] == tipo_filtro) & (df_analise['IS_2A_CHAMADA'] == is_2a_view)]
+                df_filtrado = df_analise[(df_analise['IS_PEI'] == is_pei_view) & (df_analise['IS_2A_CHAMADA'] == is_2a_view)]
 
                 if is_2a_view:
                     query_mat = df_aulas[(df_aulas['TIPO_MATERIAL'].str.upper().str.contains("2CHAMADA")) & (df_aulas['TIPO_MATERIAL'].str.upper().str.contains(nome_curto_av.upper()))]
@@ -2912,18 +3537,16 @@ elif menu == "📸 Scanner de Gabaritos":
                 if query_mat.empty:
                     st.error(f"❌ Gabarito da {versao_visao} não localizado.")
                 elif df_filtrado.empty:
-                    st.info(f"📭 Não há dados de alunos que realizaram a {perfil_visao} na {versao_visao}.")
+                    st.info(f"📭 Não há dados de {perfil_visao} para a {versao_visao}.")
                 else:
                     dados_prova = query_mat.iloc[0]
                     txt_prova_global = str(dados_prova['CONTEUDO'])
-                    
-                    tag_grade_global = "GRADE_DE_CORRECAO_PEI" if is_pei_view else "GRADE_DE_CORRECAO"
-                    grade_pericia_global = re.sub(r'[*#]', '', ai.extrair_tag(txt_prova_global, tag_grade_global) or ai.extrair_tag(txt_prova_global, "GRADE_DE_CORRECAO"))
+                    grade_pericia_global = re.sub(r'[*#]', '', ai.extrair_tag(txt_prova_global, "GRADE_DE_CORRECAO"))
                     gab_ativo = extrair_gab_blindado(txt_prova_global, is_pei_view)
 
                     num_q_total = len(gab_ativo)
                     stats_list =[]
-                    matriz_respostas =[str(r).split(';') for r in df_filtrado['RESPOSTAS_ALUNO']]
+                    matriz_respostas = [str(r).split(';') for r in df_filtrado['RESPOSTAS_ALUNO']]
 
                     for i in range(1, num_q_total + 1):
                         correta = gab_ativo.get(i, "?")
@@ -2945,15 +3568,14 @@ elif menu == "📸 Scanner de Gabaritos":
                             info_q = df_stats_global[df_stats_global["Questão"] == q_sel].iloc[0]
                             idx_num = int(q_sel[1:])
                             st.write(f"**Gabarito:** :green[{info_q['Gabarito']}] | **Média:** {info_q['Acerto %']:.1f}%")
-                            
-                            prefixo_q = "QUEST[AÃ]O\\s*PEI" if is_pei_view else "QUEST[AÃ]O"
-                            padrao = rf"(?si){prefixo_q}\s*0?{idx_num}\b.*?(?={prefixo_q}\s*0?{idx_num+1}\b|GABARITO|RESPOSTAS|$)"
+                            padrao = rf"(?si)QUEST[AÃ]O\s*(?:PEI\s*)?0?{idx_num}\b.*?(?=QUEST[AÃ]O\s*(?:PEI\s*)?0?{idx_num+1}\b|GABARITO|RESPOSTAS|$)"
                             match = re.search(padrao, grade_pericia_global)
                             if match: st.info(match.group(0).strip())
 
                 st.markdown("---")
                 st.markdown("#### 👤 2. Perícia Individual: Lacunas e Diagnóstico de Erros")
                 
+                alunos_turma = df_alunos[df_alunos['TURMA'] == t_sel_r].sort_values(by="NOME_ALUNO")
                 dados_indiv =[]
 
                 for _, alu in alunos_turma.iterrows():
@@ -2962,20 +3584,14 @@ elif menu == "📸 Scanner de Gabaritos":
                     reg_aluno = df_analise[df_analise['ID_ALUNO_L'] == id_a]
                     
                     if reg_aluno.empty:
-                        dados_indiv.append({"Turma": alu['TURMA'], "Estudante": alu['NOME_ALUNO'], "Perfil": "🔴 Ausente", "Nota": 0.00, "Diagnóstico Técnico de Erros": "Aguardando Realização"})
+                        dados_indiv.append({"Estudante": alu['NOME_ALUNO'], "Perfil": "🔴 Ausente", "Nota": 0.00, "Diagnóstico Técnico de Erros": "Aguardando Realização"})
                     else:
                         reg = reg_aluno.iloc[-1]
                         nota_alu = util.sosa_to_float(reg['NOTA_CALCULADA'])
                         material_aluno = reg['ID_AVALIACAO']
-                        tipo_prova_feita = reg['TIPO_PROVA_FEITA']
-                        
-                        if is_pei_alu:
-                            perfil_display = "♿ PEI (Fez Regular)" if tipo_prova_feita == "REGULAR" else "♿ PEI"
-                        else:
-                            perfil_display = "📝 Regular"
                         
                         if str(reg['RESPOSTAS_ALUNO']).upper() == "FALTOU":
-                            dados_indiv.append({"Turma": alu['TURMA'], "Estudante": alu['NOME_ALUNO'], "Perfil": perfil_display, "Nota": 0.00, "Diagnóstico Técnico de Erros": "🔴 Aluno Ausente no dia da aplicação."})
+                            dados_indiv.append({"Estudante": alu['NOME_ALUNO'], "Perfil": "♿ PEI" if is_pei_alu else "📝 Regular", "Nota": 0.00, "Diagnóstico Técnico de Erros": "🔴 Aluno Ausente no dia da aplicação."})
                             continue
 
                         m_ref_query = df_aulas[df_aulas['TIPO_MATERIAL'] == material_aluno]
@@ -2983,12 +3599,10 @@ elif menu == "📸 Scanner de Gabaritos":
                         if not m_ref_query.empty:
                             m_ref = m_ref_query.iloc[0]
                             txt_cont = str(m_ref['CONTEUDO'])
-                            
-                            usar_grade_pei = (tipo_prova_feita == "PEI")
-                            tag_grade = "GRADE_DE_CORRECAO_PEI" if usar_grade_pei else "GRADE_DE_CORRECAO"
+                            tag_grade = "GRADE_DE_CORRECAO_PEI" if is_pei_alu else "GRADE_DE_CORRECAO"
                             grade_texto = re.sub(r'[*#]', '', ai.extrair_tag(txt_cont, tag_grade) or ai.extrair_tag(txt_cont, "GRADE_DE_CORRECAO"))
                             
-                            gab_ref_alu = extrair_gab_blindado(txt_cont, usar_grade_pei)
+                            gab_ref_alu = extrair_gab_blindado(txt_cont, is_pei_alu)
                             resp_aluno_lista = str(reg['RESPOSTAS_ALUNO']).split(';')
                             
                             analise_de_erros =[]
@@ -3004,12 +3618,11 @@ elif menu == "📸 Scanner de Gabaritos":
                                     continue
                                 
                                 if letra_marcada != letra_correta:
-                                    if letra_marcada not in["A", "B", "C", "D", "E"]:
+                                    if letra_marcada not in ["A", "B", "C", "D", "E"]:
                                         analise_de_erros.append(f"Q{q_n}: Marcação inválida ({letra_marcada}).")
                                         continue
                                         
-                                    prefixo_busca = "QUEST[AÃ]O\\s*PEI" if usar_grade_pei else "QUEST[AÃ]O"
-                                    padrao_bloco = rf"(?si){prefixo_busca}\s*0?{q_n}\b.*?(?={prefixo_busca}|$)"
+                                    padrao_bloco = rf"(?si)QUEST[AÃ]O\s*(?:PEI\s*)?0?{q_n}\b.*?(?=QUEST[AÃ]O|$)"
                                     bloco_q = re.search(padrao_bloco, grade_texto)
                                     
                                     if bloco_q:
@@ -3017,7 +3630,7 @@ elif menu == "📸 Scanner de Gabaritos":
                                         match_hab = re.search(r"\[?(EF\d{2}MA\d{2})", texto_bloco)
                                         cod_h = match_hab.group(1) if match_hab else "BNCC"
 
-                                        if usar_grade_pei:
+                                        if is_pei_alu:
                                             m_lacuna = re.search(r"(?i)(?:ANÁLISE DE LACUNA PEI|LACUNA|ERRO)[\s\:]*(.*)", texto_bloco, re.DOTALL)
                                             if m_lacuna:
                                                 txt_erro = m_lacuna.group(1).replace('\n', ' ').strip()
@@ -3042,14 +3655,11 @@ elif menu == "📸 Scanner de Gabaritos":
                         else:
                             lacunas_txt = "⚠️ Material não localizado no Acervo."
 
-                        dados_indiv.append({"Turma": alu['TURMA'], "Estudante": alu['NOME_ALUNO'], "Perfil": perfil_display, "Nota": nota_alu, "Diagnóstico Técnico de Erros": lacunas_txt})
+                        dados_indiv.append({"Estudante": alu['NOME_ALUNO'], "Perfil": "♿ PEI" if is_pei_alu else "📝 Regular", "Nota": nota_alu, "Diagnóstico Técnico de Erros": lacunas_txt})
 
                 df_f = pd.DataFrame(dados_indiv)
-                st.data_editor(df_f, column_config={
-                    "Turma": st.column_config.TextColumn("Turma", width="small"),
-                    "Estudante": st.column_config.TextColumn("Estudante", width="medium"), 
-                    "Diagnóstico Técnico de Erros": st.column_config.TextColumn("Diagnóstico (Raciocínio do Erro)", width="large")
-                }, hide_index=True, use_container_width=True, disabled=True, key=f"raiox_final_v90_{v}")
+                st.data_editor(df_f, column_config={"Estudante": st.column_config.TextColumn("Estudante", width="medium"), "Diagnóstico Técnico de Erros": st.column_config.TextColumn("Diagnóstico (Raciocínio do Erro)", width="large")},
+                    hide_index=True, use_container_width=True, disabled=True, key=f"raiox_final_v90_{v}")
 
                 st.markdown("---")
                 st.markdown("### 🖨️ Materialização do Dossiê (Para Impressão)")
@@ -3079,20 +3689,18 @@ elif menu == "📸 Scanner de Gabaritos":
                             }
                             
                             questoes_detalhes =[]
-                            tag_questoes_global = "PEI" if is_pei_view else "QUESTOES"
-                            questoes_raw = ai.extrair_tag(txt_prova_global, tag_questoes_global)
+                            questoes_raw = ai.extrair_tag(txt_prova_global, "QUESTOES")
                             
                             for _, r_stat in df_stats_global.iterrows():
                                 q_str = r_stat['Questão']
                                 q_num = int(q_str.replace("Q", ""))
                                 
-                                prefixo_q = "QUEST[AÃ]O\\s*PEI" if is_pei_view else "QUEST[AÃ]O"
-                                padrao_q = rf"(?si)({prefixo_q}\s*0?{q_num}\b.*?)(?={prefixo_q}\s*0?{q_num+1}\b|GABARITO|$)"
+                                padrao_q = rf"(?si)(QUEST[AÃ]O\s*0?{q_num}\b.*?)(?=QUEST[AÃ]O\s*0?{q_num+1}\b|GABARITO|$)"
                                 m_q = re.search(padrao_q, questoes_raw)
                                 enunciado = re.sub(r'\[\s*PROMPT IMAGEM:.*?\]', '[IMAGEM DE APOIO]', m_q.group(1)).strip() if m_q else "Enunciado não localizado."
                                 enunciado = re.sub(r'[*#]', '', enunciado)
                                 
-                                padrao_p = rf"(?si)({prefixo_q}\s*0?{q_num}\b.*?)(?={prefixo_q}\s*0?{q_num+1}\b|$)"
+                                padrao_p = rf"(?si)(QUEST[AÃ]O\s*0?{q_num}\b.*?)(?=QUEST[AÃ]O\s*0?{q_num+1}\b|$)"
                                 m_p = re.search(padrao_p, grade_pericia_global)
                                 pericia_txt = m_p.group(1).strip() if m_p else "Perícia não localizada."
                                 pericia_txt = re.sub(r'[*#]', '', pericia_txt)
@@ -3105,8 +3713,7 @@ elif menu == "📸 Scanner de Gabaritos":
                                     "pericia": pericia_txt
                                 })
                             
-                            # 🚨 Adiciona a turma ao lado do nome do aluno crítico no DOCX
-                            criticos = df_f[df_f['Nota'] < 6.0].apply(lambda x: f"[{x['Turma']}] {x['Estudante']}", axis=1).tolist()
+                            criticos = df_f[df_f['Nota'] < 6.0]['Estudante'].tolist()
                             
                             info_doc = {
                                 "ano": t_sel_r, 
@@ -3115,7 +3722,7 @@ elif menu == "📸 Scanner de Gabaritos":
                                 "data": datetime.now().strftime("%d/%m/%Y")
                             }
                             
-                            nome_arquivo_dossie = f"RAIOX_{t_sel_r.replace(' ', '_').replace('(', '').replace(')', '')}_{nome_curto_av}"
+                            nome_arquivo_dossie = f"RAIOX_{t_sel_r}_{nome_curto_av}"
                             doc_stream = exporter.gerar_docx_raiox_v90(nome_arquivo_dossie, info_doc, stats_gerais, questoes_detalhes, criticos, grafico_bytes)
                             link_doc = db.subir_e_converter_para_google_docs(doc_stream, nome_arquivo_dossie, trimestre=tr_sel_r, categoria=t_sel_r, modo="PLANEJAMENTO")
                             
@@ -3201,34 +3808,13 @@ elif menu == "📝 Diário de Bordo Rápido":
                 data_str = data_sel.strftime("%d/%m/%Y")
                 ano_num = "".join(filter(str.isdigit, str(turma_sel)))
 
-            # --- BUSCA PRÉVIA DE REGISTROS PARA PREENCHIMENTO AUTOMÁTICO (EDIÇÃO) ---
-            registros_atuais = df_diario[(df_diario['DATA'] == data_str) & (df_diario['TURMA'] == turma_sel) & (df_diario['TAGS'] != "SISTEMA_NOTA")]
+            # --- 2. DETECÇÃO DO COCKPIT E DNA DO PLANO ---
             aula_ativa = df_registro_aulas[(df_registro_aulas['TURMA'] == turma_sel) & (df_registro_aulas['DATA'] == data_str)]
             
-            # Variáveis de estado salvas (Padrão)
-            saved_status = "🟢 Concluído (100%)"
-            saved_ponte = ""
-            saved_clima = "🧠 Focada"
-            modo_idx = 0
-
-            # Se já houver registro, verifica se foi "Sem Visto" (ISENTO)
-            if not registros_atuais.empty:
-                if str(registros_atuais.iloc[0]['VISTO_ATIVIDADE']).upper() == "ISENTO":
-                    modo_idx = 1
-
-            # --- 2. DETECÇÃO DO COCKPIT E DNA DO PLANO ---
             if not aula_ativa.empty:
                 row_ativa = aula_ativa.iloc[0]
                 material_hoje = row_ativa['CONTEUDO_MINISTRADO']
                 semana_ref = row_ativa['SEMANA']
-                
-                # Resgata dados de regência já salvos no banco para preencher o painel
-                if str(row_ativa.get('STATUS_EXECUCAO', '')).strip() and str(row_ativa.get('STATUS_EXECUCAO', '')) != "nan": 
-                    saved_status = row_ativa['STATUS_EXECUCAO']
-                if str(row_ativa.get('PONTE_PEDAGOGICA', '')).strip() and str(row_ativa.get('PONTE_PEDAGOGICA', '')) != "nan": 
-                    saved_ponte = row_ativa['PONTE_PEDAGOGICA']
-                if str(row_ativa.get('CLIMA_TURMA', '')).strip() and str(row_ativa.get('CLIMA_TURMA', '')) != "nan": 
-                    saved_clima = row_ativa['CLIMA_TURMA']
                 
                 st.info(f"🚀 **Aula Ativa:** {material_hoje}")
 
@@ -3239,7 +3825,7 @@ elif menu == "📝 Diário de Bordo Rápido":
                     if base_didatica: st.success(f"📍 **Páginas Alvo:** {base_didatica}")
                     else: st.warning("📍 **Páginas Alvo:** Método Manual (Sem livro vinculado)")
 
-                match_material = df_aulas[df_aulas['TIPO_MATERIAL'].str.contains(material_hoje.split('+')[0].strip(), regex=False, na=False)]
+                match_material = df_aulas[df_aulas['TIPO_MATERIAL'].str.contains(material_hoje.split('+')[0].strip(), na=False)]
                 if not match_material.empty:
                     with st.expander("📦 Ver Ativos de Safra (Links)", expanded=False):
                         txt_m = str(match_material.iloc[0]['CONTEUDO'])
@@ -3259,26 +3845,19 @@ elif menu == "📝 Diário de Bordo Rápido":
                 reg_anterior = df_registro_aulas[(df_registro_aulas['TURMA'] == turma_sel) & (df_registro_aulas['DATA'] != data_str)].sort_values(by='DATA', ascending=False)
                 if not reg_anterior.empty:
                     ultima_ponte = reg_anterior.iloc[0].get('PONTE_PEDAGOGICA', 'Sem registro.')
-                    if ultima_ponte and str(ultima_ponte).strip() != "" and str(ultima_ponte).lower() != "nan":
+                    if ultima_ponte and str(ultima_ponte).strip() != "":
                         st.warning(f"🔙 **Na aula anterior paramos em:** {ultima_ponte}")
             else:
                 st.warning("⚠️ Nenhuma aula aberta no Cockpit para esta data. O registro será salvo como 'Instrução Avulsa'.")
                 material_hoje = "Instrução Avulsa"
             
-            # --- 3. PAINEL DE REGÊNCIA (PREENCHIDO COM DADOS SALVOS) ---
+            # --- 3. PAINEL DE REGÊNCIA (FECHADO POR PADRÃO) ---
             with st.expander("🚦 Fechamento de Aula (Regência)", expanded=False):
                 st.caption("Preencha ao final da aula para alimentar a memória do sistema.")
                 c_reg1, c_reg2, c_reg3 = st.columns([1, 2, 1])
-                
-                opcoes_status =["🟢 Concluído (100%)", "🟡 Parcial (Pendência)", "🔴 Bloqueado (Crítico)"]
-                idx_status = opcoes_status.index(saved_status) if saved_status in opcoes_status else 0
-                status_aula = c_reg1.selectbox("Status da Execução:", opcoes_status, index=idx_status, key=f"status_reg_{v}")
-                
-                ponte_pedagogica = c_reg2.text_area("🔗 Ponte Pedagógica (Onde paramos?):", value=saved_ponte, placeholder="Ex: Parei no slide 5...", height=68, key=f"ponte_reg_{v}")
-                
-                opcoes_clima =["😴 Apática", "😐 Dispersa", "🧠 Focada", "⚡ Agitada", "🤯 Dificuldade Alta"]
-                val_clima = saved_clima if saved_clima in opcoes_clima else "🧠 Focada"
-                clima_turma = c_reg3.select_slider("🌡️ Clima da Turma:", options=opcoes_clima, value=val_clima, key=f"clima_reg_{v}")
+                status_aula = c_reg1.selectbox("Status da Execução:",["🟢 Concluído (100%)", "🟡 Parcial (Pendência)", "🔴 Bloqueado (Crítico)"], key=f"status_reg_{v}")
+                ponte_pedagogica = c_reg2.text_area("🔗 Ponte Pedagógica (Onde paramos?):", placeholder="Ex: Parei no slide 5...", height=68, key=f"ponte_reg_{v}")
+                clima_turma = c_reg3.select_slider("🌡️ Clima da Turma:", options=["😴 Apática", "😐 Dispersa", "🧠 Focada", "⚡ Agitada", "🤯 Dificuldade Alta"], value="🧠 Focada", key=f"clima_reg_{v}")
 
             st.markdown("---")
             
@@ -3288,7 +3867,6 @@ elif menu == "📝 Diário de Bordo Rápido":
             with c_nat:
                 natureza_registro = st.radio(
                     "Modo de Aula:",["📝 Com Visto (Padrão)", "🗣️ Sem Visto (Evento)"],
-                    index=modo_idx,
                     horizontal=True,
                     help="Se 'Sem Visto', a coluna de vistos será ignorada no cálculo de notas.",
                     key=f"nat_reg_{v}"
@@ -3305,7 +3883,8 @@ elif menu == "📝 Diário de Bordo Rápido":
                     st.session_state[f"visto_lote_{turma_sel}"] = False
                     st.rerun()
 
-            # --- 5. MONTAGEM DA MESA ---
+            # --- 5. BUSCA DE REGISTROS E MONTAGEM DA MESA ---
+            registros_atuais = df_diario[(df_diario['DATA'] == data_str) & (df_diario['TURMA'] == turma_sel) & (df_diario['TAGS'] != "SISTEMA_NOTA")]
             alunos_turma = df_alunos[df_alunos['TURMA'] == turma_sel].sort_values(by="NOME_ALUNO")
             
             # 🚨 MOTOR DE ÍCONES MULTIPERFIL
@@ -3331,10 +3910,6 @@ elif menu == "📝 Diário de Bordo Rápido":
                     bonus_val = util.sosa_to_float(reg_existente.iloc[0].get('BONUS', 0))
                     tag_val = reg_existente.iloc[0]['TAGS'] if not falta_val else ""
                     obs_val = reg_existente.iloc[0]['OBSERVACOES']
-                    
-                    # Limpa a tag de PEI CONCLUÍDO para não bugar o selectbox se não estiver na lista
-                    if tag_val not in["", "Fardamento", "Postura", "Atraso", "Celular", "Indisciplina", "Comunicação", "Elogio", "Destaque", "Dormiu", "PEI CONCLUÍDO"]:
-                        tag_val = ""
                 else:
                     visto_val = st.session_state.get(f"visto_lote_{turma_sel}", True)
                     falta_val = False
@@ -3378,7 +3953,6 @@ elif menu == "📝 Diário de Bordo Rápido":
             st.markdown("<br>", unsafe_allow_html=True)
             if st.button("💾 SALVAR DIÁRIO E CONSOLIDAR", type="primary", use_container_width=True):
                 with st.status("Sincronizando Práxis...") as status:
-                    # A função limpar_diario_data_turma garante que não haverá duplicidade ao editar
                     db.limpar_diario_data_turma(data_str, turma_sel)
                     
                     linhas_diario =[]
@@ -3394,7 +3968,7 @@ elif menu == "📝 Diário de Bordo Rápido":
                             tag_f = "PEI CONCLUÍDO"
                         
                         obs_final = r['Obs (🎙️)']
-                        if r['Vetor'] == "Comunicação" and "🚨 COMUNICAÇÃO:" not in obs_final:
+                        if r['Vetor'] == "Comunicação":
                             obs_final = f"🚨 COMUNICAÇÃO: {obs_final}"
 
                         # Limpeza blindada do nome para salvar no banco
@@ -4211,10 +4785,11 @@ elif menu == "👥 Gestão da Turma":
             st.markdown("### 📅 Grade Oficial de Regência")
             
             dias_semana =["Segunda", "Terça", "Quarta", "Quinta", "Sexta"]
-            tempos =["1º Tempo", "2º Tempo"]
+            tempos = ["1º Tempo", "2º Tempo"]
             grade_map = {t: {d: "---" for d in dias_semana} for t in tempos}
 
             for _, row in df_turmas.iterrows():
+                # Uso do .get() para evitar KeyError se a coluna sumir
                 sigla = str(row.get('ID_TURMA', ''))
                 nome_turma = str(row.iloc[1]) if len(row) > 1 else ""
                 horarios_str = str(row.iloc[3]) if len(row) > 3 else ""
@@ -4232,7 +4807,7 @@ elif menu == "👥 Gestão da Turma":
             df_grade = pd.DataFrame(grade_map).T
             
             def colorir_grade(val):
-                if val in["PI", "PC", "AC", "HTPC"]: return 'background-color: #2962FF; color: white; font-weight: bold; text-align: center;'
+                if val in ["PI", "PC", "AC", "HTPC"]: return 'background-color: #2962FF; color: white; font-weight: bold; text-align: center;'
                 if val != "---": return 'background-color: #001E3C; color: #2ECC71; font-weight: bold; text-align: center;'
                 return 'color: gray; text-align: center;'
 
@@ -4244,7 +4819,7 @@ elif menu == "👥 Gestão da Turma":
             else:
                 c_f1, c_f2 = st.columns([1, 1])
                 turma_foco = c_f1.selectbox("🎯 Selecione a Turma para Comando:", lista_turmas_segura, key=f"foco_t_{v}")
-                trim_foco = c_f2.selectbox("📅 Trimestre de Safra:",["I Trimestre", "II Trimestre", "III Trimestre", "Todos"], key=f"foco_trim_{v}")
+                trim_foco = c_f2.selectbox("📅 Trimestre de Safra:", ["I Trimestre", "II Trimestre", "III Trimestre", "Todos"], key=f"foco_trim_{v}")
                 
                 alunos_t = df_alunos[df_alunos['TURMA'] == turma_foco].sort_values(by="NOME_ALUNO")
                 id_alunos_turma = set(alunos_t['ID'].apply(db.limpar_id).tolist())
@@ -4259,31 +4834,10 @@ elif menu == "👥 Gestão da Turma":
                 df_pei_turma = alunos_t[mask_pei]
                 m2.metric("♿ Estudantes PEI", len(df_pei_turma))
                 
-                # 🚨 NOVO MOTOR DE CÁLCULO: SAÚDE DE EXECUÇÃO CURRICULAR
-                df_p_atual = df_planos[df_planos['ANO'] == ano_str_ref]
-                if trim_foco != "Todos":
-                    df_p_atual = df_p_atual[df_p_atual['TURMA'] == trim_foco]
-                
-                planos_totais = len(df_p_atual)
-                
-                df_reg_turma = df_registro_aulas[df_registro_aulas['TURMA'] == turma_foco]
-                if trim_foco != "Todos":
-                    calendario_saude = {
-                        "I Trimestre": (date(2026, 2, 9), date(2026, 5, 22)),
-                        "II Trimestre": (date(2026, 5, 25), date(2026, 9, 4)),
-                        "III Trimestre": (date(2026, 9, 8), date(2026, 12, 17))
-                    }
-                    dt_ini_s, dt_fim_s = calendario_saude.get(trim_foco, (date(2026, 1, 1), date(2026, 12, 31)))
-                    df_reg_turma_f = df_reg_turma.copy()
-                    df_reg_turma_f['DATA_DT'] = pd.to_datetime(df_reg_turma_f['DATA'], format="%d/%m/%Y", errors='coerce').dt.date
-                    df_reg_turma_f = df_reg_turma_f[(df_reg_turma_f['DATA_DT'] >= dt_ini_s) & (df_reg_turma_f['DATA_DT'] <= dt_fim_s)]
-                else:
-                    df_reg_turma_f = df_reg_turma
-                
-                semanas_executadas = df_reg_turma_f[~df_reg_turma_f['SEMANA'].isin(['AVULSA', 'N/A', ''])]['SEMANA'].nunique()
-                saude_val = (semanas_executadas / planos_totais * 100) if planos_totais > 0 else 0
-                
-                m3.metric("🎯 Saúde de Execução", f"{min(100, int(saude_val))}%", help=f"Semanas concluídas ({semanas_executadas}) vs Semanas planejadas ({planos_totais}).")
+                planos_totais = len(df_planos[df_planos['ANO'] == ano_str_ref])
+                aulas_feitas = len(df_registro_aulas[df_registro_aulas['TURMA'] == turma_foco])
+                saude_val = (aulas_feitas / (planos_totais * 2) * 100) if planos_totais > 0 else 0
+                m3.metric("🎯 Saúde de Execução", f"{min(100, int(saude_val))}%", help="Percentual de aulas ministradas em relação ao total planejado.")
 
                 clima_predominante = "Sem Dados"
                 if not df_registro_aulas.empty and len(df_registro_aulas.columns) >= 9:
@@ -4337,7 +4891,7 @@ elif menu == "👥 Gestão da Turma":
                                     nome_alu = d_alu.iloc[0]['NOME_ALUNO']
                                     alunos_stats.append({"nome": nome_alu, "vistos": v_alu, "total": len(d_alu), "bonus": b_alu})
                             
-                            fantasmas =[a['nome'] for a in alunos_stats if a['total'] > 0 and (a['vistos']/a['total']) <= 0.2]
+                            fantasmas = [a['nome'] for a in alunos_stats if a['total'] > 0 and (a['vistos']/a['total']) <= 0.2]
                             top_alunos = sorted([a for a in alunos_stats if a['total'] > 0 and (a['vistos']/a['total']) >= 0.8], key=lambda x: x['bonus'], reverse=True)[:3]
                             
                             c_e1, c_e2 = st.columns(2)
@@ -4517,99 +5071,48 @@ elif menu == "👥 Gestão da Turma":
 
                     with st.container(border=True):
                         st.markdown("#### 🚀 MISSÃO PLANEJADA PARA HOJE")
-                        
-                        # 🚨 NOVA LÓGICA: DATA PRIMEIRO
-                        data_aula = st.date_input("Data da Aula:", date.today(), format="DD/MM/YYYY", key=f"dt_reg_{v}")
-                        data_aula_str = data_aula.strftime("%d/%m/%Y")
-                        
-                        # Verifica se já existe aula aberta nesta data
-                        aula_existente = historico_turma[historico_turma['DATA'] == data_aula_str]
-                        
-                        if not aula_existente.empty:
-                            row_ativa = aula_existente.iloc[0]
-                            st.success(f"✅ **Aula já registrada para esta data!**")
-                            st.info(f"📦 **Material Vinculado:** {row_ativa['CONTEUDO_MINISTRADO']}\n\n🚦 **Status:** {row_ativa.get('STATUS_EXECUCAO', 'Pendente')}")
-                            st.caption("💡 Para alterar ou lançar vistos, acesse a aba 'Diário de Bordo Rápido'.")
-                            
-                            # ==============================================================================
-                            # 🚨 NOVA FUNÇÃO: EDITAR MATERIAL SEM APAGAR O DIÁRIO
-                            # ==============================================================================
-                            with st.expander("✏️ Corrigir Material Vinculado"):
-                                st.caption("Esqueceu de vincular a aula correta ou o sistema salvou como 'Registro via Diário'? Altere aqui sem perder os vistos e faltas já lançados.")
-                                mats_disp_bruto = df_mats_ano['TIPO_MATERIAL'].tolist()
-                                
-                                # Tenta achar os materiais atuais na lista para deixar pré-selecionado
-                                mats_atuais =[m.strip() for m in str(row_ativa['CONTEUDO_MINISTRADO']).split('+')]
-                                default_mats =[m for m in mats_atuais if m in mats_disp_bruto]
-                                
-                                novo_mat_sel = st.multiselect("Selecione o material correto:", options=mats_disp_bruto, default=default_mats, key=f"edit_mat_{v}")
-                                
-                                if st.button("💾 ATUALIZAR MATERIAL", type="primary", use_container_width=True):
-                                    if not novo_mat_sel:
-                                        st.error("⚠️ Selecione ao menos um material.")
-                                    else:
-                                        with st.spinner("Atualizando o registro da aula..."):
-                                            novo_conteudo = " + ".join(novo_mat_sel)
-                                            mat_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == novo_mat_sel[0]].iloc[0]
-                                            nova_semana = mat_ref['SEMANA_REF']
-                                            
-                                            try:
-                                                wb = db.conectar()
-                                                ws = wb.worksheet("DB_REGISTRO_AULAS")
-                                                dados = ws.get_all_values()
-                                                for i, row in enumerate(dados):
-                                                    if i > 0 and len(row) >= 3 and row[0] == data_aula_str and row[2] == turma_foco:
-                                                        ws.update_cell(i + 1, 2, nova_semana)
-                                                        ws.update_cell(i + 1, 4, novo_conteudo)
-                                                        break
-                                                st.cache_data.clear()
-                                                st.success("✅ Material atualizado com sucesso!")
-                                                import time
-                                                time.sleep(1)
-                                                st.rerun()
-                                            except Exception as e:
-                                                st.error(f"Erro ao atualizar: {e}")
+                        if plano_sugerido != "Nenhum":
+                            st.success(f"**Próxima Semana Inédita:** {plano_sugerido}")
+                            st.info(f"**📖 Base Didática (DNA):**\n{base_didatica_sugerida}")
                         else:
-                            if plano_sugerido != "Nenhum":
-                                st.success(f"**Próxima Semana Inédita:** {plano_sugerido}")
-                                st.info(f"**📖 Base Didática (DNA):**\n{base_didatica_sugerida}")
-                            else:
-                                st.success("✅ Todos os planos ativos já foram aplicados nesta turma!")
+                            st.success("✅ Todos os planos ativos já foram aplicados nesta turma!")
+                        
+                        with st.expander("🔗 Ver Ponte de Continuidade (Onde paramos?)"):
+                            st.caption(ponte_sugerida)
+                        
+                        st.divider()
+                        
+                        data_aula = st.date_input("Data da Aula:", date.today(), format="DD/MM/YYYY", key=f"dt_reg_{v}")
+                        
+                        mats_disp_bruto = df_mats_ano['TIPO_MATERIAL'].tolist()
+                        if not mostrar_historico: 
+                            semanas_concluidas = df_planos[df_planos['EIXO'] == 'PRODUZIDO']['SEMANA'].tolist()
+                            mats_disp =[]
+                            for m in mats_disp_bruto:
+                                if m not in materiais_usados:
+                                    sem_ref_mat = df_mats_ano[df_mats_ano['TIPO_MATERIAL'] == m].iloc[0]['SEMANA_REF']
+                                    if sem_ref_mat not in semanas_concluidas:
+                                        mats_disp.append(m)
+                        else: 
+                            mats_disp = mats_disp_bruto
                             
-                            with st.expander("🔗 Ver Ponte de Continuidade (Onde paramos?)"):
-                                st.caption(ponte_sugerida)
-                            
-                            st.divider()
-                            
-                            mats_disp_bruto = df_mats_ano['TIPO_MATERIAL'].tolist()
-                            if not mostrar_historico: 
-                                semanas_concluidas = df_planos[df_planos['EIXO'] == 'PRODUZIDO']['SEMANA'].tolist()
-                                mats_disp =[]
-                                for m in mats_disp_bruto:
-                                    if m not in materiais_usados:
-                                        sem_ref_mat = df_mats_ano[df_mats_ano['TIPO_MATERIAL'] == m].iloc[0]['SEMANA_REF']
-                                        if sem_ref_mat not in semanas_concluidas:
-                                            mats_disp.append(m)
-                            else: 
-                                mats_disp = mats_disp_bruto
-                                
-                            label_mats = "📦 Selecione o Material (Máx 2):" if not mostrar_historico else "📦 Selecione o Material (Todos):"
-                            
-                            mats_sel = st.multiselect(label_mats, options=mats_disp, max_selections=2, key=f"mats_reg_{v}")
+                        label_mats = "📦 Selecione o Material (Máx 2):" if not mostrar_historico else "📦 Selecione o Material (Todos):"
+                        
+                        mats_sel = st.multiselect(label_mats, options=mats_disp, max_selections=2, key=f"mats_reg_{v}")
 
-                            if st.button("💾 CONFIRMAR ABERTURA DE AULA", use_container_width=True, type="primary"):
-                                if not mats_sel:
-                                    st.error("⚠️ Selecione ao menos um material para abrir a aula.")
-                                else:
-                                    mat_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == mats_sel[0]].iloc[0]
-                                    plano_inferido = mat_ref['SEMANA_REF']
-                                    
-                                    db.salvar_no_banco("DB_REGISTRO_AULAS",[
-                                        data_aula_str, plano_inferido, turma_foco, 
-                                        " + ".join(mats_sel), "PENDENTE", "ABERTA"
-                                    ])
-                                    st.success("✅ Aula aberta com sucesso! Vá para o Diário de Bordo.")
-                                    time.sleep(1); st.rerun()
+                        if st.button("💾 CONFIRMAR ABERTURA DE AULA", use_container_width=True, type="primary"):
+                            if not mats_sel:
+                                st.error("⚠️ Selecione ao menos um material para abrir a aula.")
+                            else:
+                                mat_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == mats_sel[0]].iloc[0]
+                                plano_inferido = mat_ref['SEMANA_REF']
+                                
+                                db.salvar_no_banco("DB_REGISTRO_AULAS",[
+                                    data_aula.strftime("%d/%m/%Y"), plano_inferido, turma_foco, 
+                                    " + ".join(mats_sel), "PENDENTE", "ABERTA"
+                                ])
+                                st.success("✅ Aula aberta com sucesso! Vá para o Diário de Bordo.")
+                                time.sleep(1); st.rerun()
 
                     st.markdown("---")
                     with st.expander("🗑️ Gerenciar Aulas Abertas (Borracha Temporal)"):
@@ -4617,10 +5120,10 @@ elif menu == "👥 Gestão da Turma":
                         aulas_abertas = df_registro_aulas[df_registro_aulas['TURMA'] == turma_foco].sort_values(by='DATA', ascending=False).head(5)
                         if aulas_abertas.empty: st.info("Nenhuma aula registrada para esta turma.")
                         else:
-                            for idx, row_aula in aulas_abertas.iterrows():
+                            for _, row_aula in aulas_abertas.iterrows():
                                 c_del1, c_del2 = st.columns([3, 1])
                                 c_del1.markdown(f"📅 **{row_aula['DATA']}** - {row_aula['CONTEUDO_MINISTRADO']}")
-                                if c_del2.button("❌ APAGAR", key=f"del_aula_{idx}_{row_aula['DATA']}_{turma_foco}"):
+                                if c_del2.button("❌ APAGAR", key=f"del_aula_{row_aula['DATA']}_{turma_foco}"):
                                     with st.spinner("Apagando registros e limpando o diário..."):
                                         if db.excluir_aula_aberta(row_aula['DATA'], turma_foco):
                                             st.success("Aula e diário apagados com sucesso!")
