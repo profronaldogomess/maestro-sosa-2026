@@ -3259,11 +3259,22 @@ elif menu == "📸 Scanner de Gabaritos":
                         st.balloons()
                         time.sleep(1); st.rerun()
 
-    # --- ABA 3: HUB DE SOBERANIA ---
+# --- ABA 3: HUB DE SOBERANIA ---
     with tab_soberania:
         st.subheader("🏛️ Hub de Soberania: Autoridade do Professor")
-        st.caption("Audite notas, altere status de alunos e integre notas de avaliações externas (SAEB).")
+        st.caption("Audite notas, altere status de alunos, faça correções manuais (Custo Zero) e integre notas externas.")
         st.markdown("---")
+
+        def extrair_gab_blindado_sob(texto, is_pei=False):
+            tag_alvo = "GABARITO_PEI" if is_pei else "GABARITO_TEXTO"
+            raw = ai.extrair_tag(texto, tag_alvo) or ai.extrair_tag(texto, "GABARITO")
+            if not raw: return []
+            matches = re.findall(r"(\d+)[\s\.\)\-:]+([A-E])", raw.upper())
+            if matches:
+                mapa = {int(num): letra for num, letra in matches}
+                return [mapa[n] for n in sorted(mapa.keys())]
+            letras = re.findall(r"\b[A-E]\b", raw.upper())
+            return letras
 
         with st.container(border=True):
             c_h1, c_h2 = st.columns([1, 1])
@@ -3277,12 +3288,12 @@ elif menu == "📸 Scanner de Gabaritos":
             sub_auditoria, sub_externas = st.tabs(["⚖️ Auditoria e Lançamento Manual", "🌍 Notas Externas (SAEB/Governo)"])
 
             with sub_auditoria:
-                st.markdown("#### 🔍 Consolidação de Notas e Resgate de Faltas")
+                st.markdown("#### 🔍 Consolidação de Notas e Correção Manual")
                 st.caption("Nesta mesa, o senhor tem soberania total. Alterar para '✍️ PENDENTE' faz o aluno voltar para a fila do Scanner.")
                 
                 serie_num = "".join(filter(str.isdigit, t_sel_h))
                 df_oficiais = df_aulas[(df_aulas['SEMANA_REF'] == "AVALIAÇÃO") & (df_aulas['ANO'].str.contains(serie_num))]
-                opcoes_base = [opt for opt in df_oficiais['TIPO_MATERIAL'].unique().tolist() if "2ª" not in opt.upper()]
+                opcoes_base =[opt for opt in df_oficiais['TIPO_MATERIAL'].unique().tolist() if "2ª" not in opt.upper()]
                 av_alvo_h = st.selectbox("📋 Selecione a Avaliação Base (Slot do Boletim):", [""] + opcoes_base, key=f"av_h_sel_{v}")
 
                 if av_alvo_h:
@@ -3290,6 +3301,8 @@ elif menu == "📸 Scanner de Gabaritos":
                     if is_sonda:
                         st.info("💡 **Modo Diagnóstico Ativo:** Esta é uma Sonda. Os gabaritos serão salvos para o Raio-X, mas as notas **NÃO** serão enviadas para o Boletim.")
                     
+                    st.success("💡 **Dica de Economia (Custo Zero):** Para corrigir listas rápidas sem usar a IA do Scanner, mude a situação para `✅ REALIZADA` e digite as alternativas do aluno na coluna `Respostas (Letras)` (Ex: ABCDE). O sistema calculará a nota e alimentará o Raio-X automaticamente.")
+
                     nome_curto_av = av_alvo_h.split("-")[0].strip()
                     gabaritos_lidos = df_diagnosticos[(df_diagnosticos['TURMA'] == t_sel_h) & (df_diagnosticos['ID_AVALIACAO'].str.contains(nome_curto_av))]
                     
@@ -3314,15 +3327,19 @@ elif menu == "📸 Scanner de Gabaritos":
                         nec_str = str(alu['NECESSIDADES']).upper().strip()
                         is_pei_sob = nec_str not in["NENHUMA", "PENDENTE", "", "NAN", "TÍPICO", "TIPICO"]
 
+                        # Formata as respostas para exibição limpa (Ex: A;B;C vira ABC)
+                        respostas_display = respostas_salvas.replace(";", "") if respostas_salvas not in["MANUAL", "FALTOU"] else ""
+
                         dados_soberania.append({
                             "ID": id_a, 
                             "Estudante": alu['NOME_ALUNO'],
                             "Perfil": "♿ PEI" if is_pei_sob else "📝 REGULAR",
                             "Situação": situacao_txt, 
                             "Versão": versao_prova,
+                            "Respostas (Letras)": respostas_display,
                             "Nota Final (Soberana)": nota_atual, 
                             "Evidência": link_ev,
-                            "_Respostas": respostas_salvas
+                            "_Respostas_Originais": respostas_salvas
                         })
 
                     df_soberano_ed = st.data_editor(
@@ -3332,11 +3349,12 @@ elif menu == "📸 Scanner de Gabaritos":
                         key=f"ed_soberania_v74_{v}",
                         column_config={
                             "ID": None, 
-                            "_Respostas": None,
+                            "_Respostas_Originais": None,
                             "Estudante": st.column_config.TextColumn("Estudante", disabled=True),
                             "Perfil": st.column_config.TextColumn("Perfil", disabled=True),
                             "Situação": st.column_config.SelectboxColumn("Situação", options=["✅ REALIZADA", "❌ FALTOU", "✍️ PENDENTE"], required=True),
                             "Versão": st.column_config.SelectboxColumn("Versão", options=["PROVA ORIGINAL", "SEGUNDA CHAMADA", "N/A"]),
+                            "Respostas (Letras)": st.column_config.TextColumn("Respostas (Ex: ABCDE)", width="medium"),
                             "Nota Final (Soberana)": st.column_config.NumberColumn("Nota", format="%.1f"), 
                             "Evidência": st.column_config.LinkColumn("🔗 Ver")
                         }
@@ -3344,11 +3362,20 @@ elif menu == "📸 Scanner de Gabaritos":
 
                     if st.button("⚖️ HOMOLOGAR E SALVAR ALTERAÇÕES", use_container_width=True, type="primary"):
                         with st.status("Executando Engenharia de Deleção Reversa e Sincronizando...") as status_h:
+                            
+                            # Extrai os gabaritos oficiais para correção automática
+                            material_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == av_alvo_h].iloc[0]
+                            txt_ref = str(material_ref['CONTEUDO'])
+                            val_tag = ai.extrair_tag(txt_ref, "VALOR")
+                            v_total_at = util.sosa_to_float(val_tag) if val_tag else 10.0
+                            gab_reg = extrair_gab_blindado_sob(txt_ref, False)
+                            gab_pei = extrair_gab_blindado_sob(txt_ref, True)
+
                             wb_s = db.conectar()
                             ws_g = wb_s.worksheet("DB_GABARITOS_ALUNOS")
                             d_g = ws_g.get_all_values()
                             
-                            linhas_para_deletar = []
+                            linhas_para_deletar =[]
                             ids_na_tabela = df_soberano_ed['ID'].astype(str).tolist()
                             
                             for i, row_g in enumerate(d_g):
@@ -3362,22 +3389,41 @@ elif menu == "📸 Scanner de Gabaritos":
                             for row_idx in sorted(linhas_para_deletar, reverse=True):
                                 ws_g.delete_rows(row_idx)
                             
-                            novos_registros_gabarito = []
+                            novos_registros_gabarito =[]
                             lista_boletim =[]
                             notas_atuais = df_notas[(df_notas['TURMA'] == t_sel_h) & (df_notas['TRIMESTRE'] == tr_sel_h)]
                             
                             for _, r in df_soberano_ed.iterrows():
                                 id_l = str(r['ID'])
-                                nota_s = util.sosa_to_str(r['Nota Final (Soberana)'])
                                 nome_limpo = r['Estudante'].replace("♿ ", "").replace("👤 ", "")
-                                resp_originais = r['_Respostas']
+                                
+                                respostas_digitadas = str(r['Respostas (Letras)']).upper().replace(" ", "").replace(";", "")
+                                nota_s = util.sosa_to_float(r['Nota Final (Soberana)'])
                                 
                                 if r['Situação'] == "✅ REALIZADA":
                                     id_f = av_alvo_h if r['Versão'] == "PROVA ORIGINAL" else f"{av_alvo_h} (2ª CHAMADA)"
-                                    resp_final = "MANUAL" if resp_originais == "FALTOU" else resp_originais
-                                    novos_registros_gabarito.append([datetime.now().strftime("%d/%m/%Y"), id_l, nome_limpo, t_sel_h, id_f, resp_final, nota_s, r['Evidência'] if r['Evidência'] else "N/A"])
+                                    
+                                    # Lógica de Correção Automática (Bypass do Scanner)
+                                    if respostas_digitadas and respostas_digitadas != "NAN" and respostas_digitadas != "NONE":
+                                        resp_final = ";".join(list(respostas_digitadas))
+                                        is_pei_aluno = "♿" in r['Perfil']
+                                        
+                                        # Detecta se o aluno PEI fez a prova regular pelo tamanho da resposta
+                                        gab_alvo = gab_pei if (is_pei_aluno and len(respostas_digitadas) <= len(gab_pei) and len(gab_pei) > 0) else gab_reg
+                                        
+                                        res_lista = list(respostas_digitadas)
+                                        acertos = sum(1 for i, lido in enumerate(res_lista) if i < len(gab_alvo) and lido == gab_alvo[i])
+                                        nota_calculada = (acertos / len(gab_alvo)) * v_total_at if len(gab_alvo) > 0 else 0
+                                        nota_s_str = util.sosa_to_str(nota_calculada)
+                                    else:
+                                        resp_final = r['_Respostas_Originais'] if r['_Respostas_Originais'] not in["FALTOU", ""] else "MANUAL"
+                                        nota_s_str = util.sosa_to_str(nota_s)
+
+                                    novos_registros_gabarito.append([datetime.now().strftime("%d/%m/%Y"), id_l, nome_limpo, t_sel_h, id_f, resp_final, nota_s_str, r['Evidência'] if r['Evidência'] else "N/A"])
+                                
                                 elif r['Situação'] == "❌ FALTOU":
-                                    novos_registros_gabarito.append([datetime.now().strftime("%d/%m/%Y"), id_l, nome_limpo, t_sel_h, av_alvo_h, "FALTOU", "0,00", "N/A"])
+                                    nota_s_str = "0,00"
+                                    novos_registros_gabarito.append([datetime.now().strftime("%d/%m/%Y"), id_l, nome_limpo, t_sel_h, av_alvo_h, "FALTOU", nota_s_str, "N/A"])
                                 
                                 if not is_sonda and r['Situação'] != "✍️ PENDENTE":
                                     reg_atual = notas_atuais[notas_atuais['ID_ALUNO'].apply(db.limpar_id) == id_l]
@@ -3386,7 +3432,7 @@ elif menu == "📸 Scanner de Gabaritos":
                                     v_prova = reg_atual.iloc[0]['NOTA_PROVA'] if not reg_atual.empty else "0,0"
                                     v_rec = reg_atual.iloc[0]['NOTA_REC'] if not reg_atual.empty else "0,0"
                                     
-                                    nota_boletim = nota_s if r['Situação'] == "✅ REALIZADA" else "0,00"
+                                    nota_boletim = nota_s_str if r['Situação'] == "✅ REALIZADA" else "0,00"
                                     
                                     if "TESTE" in av_alvo_h.upper():
                                         v_teste = nota_boletim
@@ -3409,86 +3455,115 @@ elif menu == "📸 Scanner de Gabaritos":
                             st.rerun()
 
                     st.markdown("---")
-                    with st.expander("🚑 Protocolo Lázaro: Restaurar Gabaritos Perdidos", expanded=True):
-                        st.info("💡 **Como usar:** Clique no link para ver a foto da prova. Depois, digite as letras que o aluno marcou tudo junto (Ex: BCCXC) e clique em Salvar. O sistema fará o resto.")
-                        
-                        df_perdidos = pd.DataFrame([r for r in dados_soberania if r['_Respostas'] == "MANUAL" and r['Evidência'] != "N/A" and r['Situação'] == "✅ REALIZADA"])
-                        
-                        if not df_perdidos.empty:
-                            dados_restauracao =[]
-                            for _, row_p in df_perdidos.iterrows():
-                                dados_restauracao.append({
-                                    "ID": row_p['ID'],
-                                    "Estudante": row_p['Estudante'],
-                                    "Ver Foto": row_p['Evidência'],
-                                    "Digite as Letras (Ex: ABCDE)": ""
-                                })
-                            
-                            df_rest_ed = st.data_editor(
-                                pd.DataFrame(dados_restauracao),
-                                hide_index=True,
-                                use_container_width=True,
-                                column_config={
-                                    "ID": None,
-                                    "Estudante": st.column_config.TextColumn("Estudante", disabled=True),
-                                    "Ver Foto": st.column_config.LinkColumn("📸 Abrir Foto no Drive"),
-                                    "Digite as Letras (Ex: ABCDE)": st.column_config.TextColumn("Gabarito (Digite tudo junto)", required=True)
-                                },
-                                key=f"ed_lazaro_{v}"
-                            )
-                            
-                            if st.button("💾 PROCESSAR RESTAURAÇÃO", type="primary", use_container_width=True):
-                                with st.spinner("Restaurando gabaritos e recalculando notas..."):
-                                    material_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == av_alvo_h].iloc[0]
-                                    txt_ref = str(material_ref['CONTEUDO'])
-                                    val_tag = ai.extrair_tag(txt_ref, "VALOR")
-                                    v_total_at = util.sosa_to_float(val_tag) if val_tag else 10.0
-                                    
-                                    def extrair_gab_blindado(texto, is_pei=False):
-                                        tag_alvo = "GABARITO_PEI" if is_pei else "GABARITO_TEXTO"
-                                        raw = ai.extrair_tag(texto, tag_alvo) or ai.extrair_tag(texto, "GABARITO")
-                                        if not raw: return[]
-                                        matches = re.findall(r"(\d+)[\s\.\)\-:]+([A-E])", raw.upper())
-                                        mapa = {int(num): letra for num, letra in matches}
-                                        return [mapa[n] for n in sorted(mapa.keys())]
-                                    
-                                    gab_reg = extrair_gab_blindado(txt_ref, False)
-                                    gab_pei = extrair_gab_blindado(txt_ref, True)
-                                    
-                                    wb_s = db.conectar()
-                                    ws_g = wb_s.worksheet("DB_GABARITOS_ALUNOS")
-                                    d_g = ws_g.get_all_values()
-                                    
-                                    updates =[]
-                                    for _, r in df_rest_ed.iterrows():
-                                        letras_digitadas = str(r['Digite as Letras (Ex: ABCDE)']).upper().replace(" ", "").replace(";", "")
-                                        if len(letras_digitadas) > 0:
-                                            resp_formatada = ";".join(list(letras_digitadas))
-                                            
-                                            alu_info = df_alunos[df_alunos['ID'].apply(db.limpar_id) == str(r['ID'])].iloc[0]
-                                            nec_str = str(alu_info['NECESSIDADES']).upper().strip()
-                                            is_pei_aluno = nec_str not in["NENHUMA", "PENDENTE", "", "NAN", "TÍPICO", "TIPICO"]
-                                            
-                                            gab_alvo = gab_pei if is_pei_aluno else gab_reg
-                                            
-                                            res_lista = list(letras_digitadas)
-                                            acertos = sum(1 for i, lido in enumerate(res_lista) if i < len(gab_alvo) and lido == gab_alvo[i])
-                                            nota_f = (acertos / len(gab_alvo)) * v_total_at if len(gab_alvo) > 0 else 0
-                                            nota_str = util.sosa_to_str(nota_f)
-                                            
+                    
+                    # ==============================================================================
+                    # ⚖️ REVISÃO DE PERÍCIA (CORREÇÃO DA LEITURA DA IA)
+                    # ==============================================================================
+                    with st.expander("⚖️ Revisão de Perícia (Corrigir Leitura da IA)", expanded=False):
+                        st.info("💡 **Como usar:** Selecione um aluno que já teve o gabarito escaneado. Abra a foto no Drive, compare com a leitura da IA e corrija as alternativas erradas. O sistema recalculará a nota automaticamente.")
+
+                        df_revisao = pd.DataFrame([r for r in dados_soberania if r['Situação'] == "✅ REALIZADA" and r['_Respostas_Originais'] not in["MANUAL", "FALTOU", ""]])
+
+                        if not df_revisao.empty:
+                            aluno_rev_nome = st.selectbox("Selecione o Aluno para Revisão:", df_revisao['Estudante'].tolist(), key=f"rev_alu_{v}")
+
+                            if aluno_rev_nome:
+                                aluno_rev_data = df_revisao[df_revisao['Estudante'] == aluno_rev_nome].iloc[0]
+                                id_aluno_rev = aluno_rev_data['ID']
+                                respostas_atuais = str(aluno_rev_data['_Respostas_Originais']).split(';')
+                                link_foto = aluno_rev_data['Evidência']
+                                is_pei_rev = "♿" in aluno_rev_data['Perfil']
+
+                                material_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == av_alvo_h].iloc[0]
+                                txt_ref = str(material_ref['CONTEUDO'])
+                                val_tag = ai.extrair_tag(txt_ref, "VALOR")
+                                v_total_at = util.sosa_to_float(val_tag) if val_tag else 10.0
+
+                                gab_alvo_rev = extrair_gab_blindado_sob(txt_ref, is_pei_rev)
+
+                                c_rev1, c_rev2 = st.columns([1.5, 1])
+
+                                with c_rev1:
+                                    if link_foto and "http" in link_foto:
+                                        st.markdown(f"**📸 Foto do Gabarito:** [Clique aqui para abrir a evidência no Drive]({link_foto})")
+                                    else:
+                                        st.warning("⚠️ Link da foto não encontrado.")
+
+                                    dados_pericia_rev =[]
+                                    for i in range(len(gab_alvo_rev)):
+                                        certo = gab_alvo_rev[i]
+                                        lido = respostas_atuais[i] if i < len(respostas_atuais) else "?"
+                                        status = "✅ ACERTO" if lido == certo else ("🚫 DUPLA" if lido == "X" else ("⚪ VAZIA" if lido == "?" else f"❌ (Era {certo})"))
+                                        dados_pericia_rev.append({"Q": f"{i+1:02d}", "Lido": lido, "Status": status})
+
+                                    df_mesa_rev = st.data_editor(pd.DataFrame(dados_pericia_rev), hide_index=True, use_container_width=True,
+                                        column_config={"Lido": st.column_config.SelectboxColumn("Ajustar", options=["A", "B", "C", "D", "E", "X", "?"], required=True)},
+                                        key=f"ed_rev_{id_aluno_rev}_{v}")
+
+                                with c_rev2:
+                                    novas_res_rev = df_mesa_rev["Lido"].tolist()
+                                    acertos_rev = sum(1 for i, r in enumerate(novas_res_rev) if i < len(gab_alvo_rev) and r == gab_alvo_rev[i])
+                                    nota_f_rev = (acertos_rev / len(gab_alvo_rev)) * v_total_at if len(gab_alvo_rev) > 0 else 0
+
+                                    st.metric("Nova Nota Calculada", f"{nota_f_rev:.2f}", delta=f"{acertos_rev}/{len(gab_alvo_rev)} acertos")
+
+                                    if st.button("💾 SALVAR REVISÃO", type="primary", use_container_width=True):
+                                        with st.spinner("Atualizando gabarito e recalculando boletim..."):
+                                            wb_s = db.conectar()
+                                            ws_g = wb_s.worksheet("DB_GABARITOS_ALUNOS")
+                                            d_g = ws_g.get_all_values()
+
+                                            updates =[]
+                                            resp_formatada = ";".join(novas_res_rev)
+                                            nota_str = util.sosa_to_str(nota_f_rev)
+
                                             for i, row_g in enumerate(d_g):
-                                                if i > 0 and db.limpar_id(row_g[1]) == str(r['ID']) and nome_curto_av in row_g[4]:
-                                                    updates.append(gspread.Cell(row=i+1, col=6, value=resp_formatada)) 
-                                                    updates.append(gspread.Cell(row=i+1, col=7, value=nota_str)) 
+                                                if i > 0 and db.limpar_id(row_g[1]) == str(id_aluno_rev) and nome_curto_av in row_g[4]:
+                                                    updates.append(gspread.Cell(row=i+1, col=6, value=resp_formatada))
+                                                    updates.append(gspread.Cell(row=i+1, col=7, value=nota_str))
                                                     break
-                                    
-                                    if updates:
-                                        ws_g.update_cells(updates)
-                                        st.success("✅ Gabaritos restaurados com sucesso! O Raio-X voltou a enxergar esses alunos.")
-                                        time.sleep(2)
-                                        st.rerun()
+
+                                            if updates:
+                                                ws_g.update_cells(updates)
+
+                                            if not is_sonda:
+                                                ws_n = wb_s.worksheet("DB_NOTAS")
+                                                d_n = ws_n.get_all_values()
+                                                updates_n =[]
+
+                                                notas_atuais = df_notas[(df_notas['TURMA'] == t_sel_h) & (df_notas['TRIMESTRE'] == tr_sel_h)]
+                                                reg_atual = notas_atuais[notas_atuais['ID_ALUNO'].apply(db.limpar_id) == str(id_aluno_rev)]
+
+                                                if not reg_atual.empty:
+                                                    v_vistos = reg_atual.iloc[0]['NOTA_VISTOS']
+                                                    v_teste = reg_atual.iloc[0]['NOTA_TESTE']
+                                                    v_prova = reg_atual.iloc[0]['NOTA_PROVA']
+
+                                                    if "TESTE" in av_alvo_h.upper():
+                                                        v_teste = nota_str
+                                                    else:
+                                                        v_prova = nota_str
+
+                                                    nova_media = util.sosa_to_str(util.sosa_to_float(v_vistos) + util.sosa_to_float(v_teste) + util.sosa_to_float(v_prova))
+
+                                                    for j, row_n in enumerate(d_n):
+                                                        if j > 0 and db.limpar_id(row_n[0]) == str(id_aluno_rev) and row_n[3] == tr_sel_h:
+                                                            if "TESTE" in av_alvo_h.upper():
+                                                                updates_n.append(gspread.Cell(row=j+1, col=6, value=nota_str))
+                                                            else:
+                                                                updates_n.append(gspread.Cell(row=j+1, col=7, value=nota_str))
+                                                            updates_n.append(gspread.Cell(row=j+1, col=9, value=nova_media))
+                                                            break
+
+                                                if updates_n:
+                                                    ws_n.update_cells(updates_n)
+
+                                            st.success("✅ Revisão salva com sucesso!")
+                                            time.sleep(1.5)
+                                            st.cache_data.clear()
+                                            st.rerun()
                         else:
-                            st.success("✅ Nenhum gabarito perdido detectado para esta avaliação.")
+                            st.success("✅ Nenhum gabarito escaneado disponível para revisão nesta avaliação.")
 
             with sub_externas:
                 st.markdown("#### 🌍 Integração de Notas Externas (SAEB / Governo)")
@@ -3505,7 +3580,7 @@ elif menu == "📸 Scanner de Gabaritos":
 
                 if st.button("🚀 INTEGRAR NOTAS EXTERNAS AO BOLETIM", use_container_width=True):
                     with st.status("Processando Substituição de Notas...") as status_ext:
-                        lista_boletim_ext = []
+                        lista_boletim_ext =[]
                         notas_atuais = df_notas[(df_notas['TURMA'] == t_sel_h) & (df_notas['TRIMESTRE'] == tr_sel_h)]
                         
                         for _, r in df_ext_ed.iterrows():
