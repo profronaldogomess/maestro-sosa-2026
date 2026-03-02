@@ -2391,6 +2391,7 @@ elif menu == "🧪 Criador de Aulas":
                 st.info("📭 Nenhum material didático encontrado.")
 
 
+
 # ==============================================================================
 # MÓDULO: CENTRAL DE AVALIAÇÕES - CLEAN & UX
 # ==============================================================================
@@ -2402,7 +2403,7 @@ elif menu == "📝 Central de Avaliações":
     is_refinando_av = "refino_av_ativo" in st.session_state
 
     def reset_avaliacoes():
-        keys_to_del =["temp_prova", "temp_revisao", "av_pei", "refino_av_ativo", "av_valor_total", "av_gab_pei", "av_res_pei_ia", "av_nome_fixo"]
+        keys_to_del =["temp_prova", "temp_revisao", "av_pei", "refino_av_ativo", "av_valor_total", "av_gab_pei", "av_res_pei_ia", "av_nome_fixo", "chat_history_av"]
         for k in keys_to_del:
             if k in st.session_state: del st.session_state[k]
         st.cache_data.clear()
@@ -2413,7 +2414,7 @@ elif menu == "📝 Central de Avaliações":
     v = st.session_state.v_av
 
     tab_arquiteto_av, tab_refino, tab_vis, tab_recomposicao, tab_finalizar, tab_acervo_av = st.tabs([
-        "🚀 1. Arquiteto de Exames", "🤖 2. Refinador", "👁️ 3. Visão 360°", "🔥 4. Recomposição", "💾 5. Finalizar Ativo", "🗂️ 6. Acervo"
+        "🚀 1. Arquiteto de Exames", "🤖 2. Refinador Copilot", "👁️ 3. Visão 360°", "🔥 4. Recomposição", "💾 5. Finalizar Ativo", "🗂️ 6. Acervo"
     ])
 
     # --- ABA 1: ARQUITETO DE EXAMES ---
@@ -2535,6 +2536,10 @@ elif menu == "📝 Central de Avaliações":
             if not is_sonda and not is_segunda and soma_q != qtd_q:
                 st.error("⚠️ Ajuste a distribuição de dificuldade antes de gerar.")
             else:
+                # Limpa o histórico do chat ao gerar uma nova avaliação
+                if "chat_history_av" in st.session_state:
+                    del st.session_state["chat_history_av"]
+                    
                 with st.spinner("Maestro Sosa arquitetando Tratado Pedagógico e Grade de Perícia..."):
                     peso_str = util.sosa_to_str(peso_q)
                     nome_tecnico = f"{tipo_av.upper().replace(' ', '_')}_{ano_av}ANO_{trim_filtro.replace(' ', '')}"
@@ -2570,18 +2575,57 @@ elif menu == "📝 Central de Avaliações":
                     st.session_state.av_nome_fixo = nome_tecnico
                     st.rerun()
 
-    # --- ABA 2: REFINADOR ---
+    # ==============================================================================
+    # 🤖 ABA 2: REFINADOR COPILOT (CHATBOT)
+    # ==============================================================================
     with tab_refino:
         if "temp_prova" in st.session_state:
-            st.subheader("🤖 Refinador Maestro (Ajuste Rápido)")
-            st.caption("Peça para a IA trocar uma questão específica, ajustar o nível de dificuldade ou alterar o gabarito.")
-            cmd = st.chat_input("Ex: 'Troque a questão 3 por uma mais fácil' ou 'Mude o contexto da prova para Itabuna'...", key=f"chat_av_{v}")
-            if cmd:
-                with st.spinner("Reescrevendo avaliação..."):
-                    st.session_state.temp_prova = ai.gerar_ia("REFINADOR_EXAMES", f"ORDEM: {cmd}\n\nATUAL:\n{st.session_state.temp_prova}")
-                    st.session_state.v_av += 1; st.rerun()
+            st.subheader("🤖 Maestro Copilot (Coautoria em Tempo Real)")
+            st.caption("Converse com a IA para trocar uma questão, ajustar a dificuldade ou alterar o gabarito. O editor abaixo será atualizado automaticamente.")
+            
+            if "chat_history_av" not in st.session_state:
+                st.session_state.chat_history_av =[{"role": "assistant", "avatar": "🤖", "content": "Saudações, Mestre! A avaliação base foi gerada. Como deseja refinar as questões ou a perícia?"}]
+            
+            chat_container_av = st.container(height=300)
+            with chat_container_av:
+                for msg in st.session_state.chat_history_av:
+                    with st.chat_message(msg["role"], avatar=msg["avatar"]):
+                        st.markdown(msg["content"])
+            
+            if cmd_refine_av := st.chat_input("Ex: 'Troque a questão 3 por uma mais fácil' ou 'Mude o contexto para Itabuna'...", key=f"chat_av_{v}"):
+                st.session_state.chat_history_av.append({"role": "user", "avatar": "💻", "content": cmd_refine_av})
+                
+                with chat_container_av:
+                    with st.chat_message("user", avatar="💻"):
+                        st.markdown(cmd_refine_av)
+                    with st.chat_message("assistant", avatar="🤖"):
+                        with st.spinner("Reescrevendo avaliação..."):
+                            hist_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history_av[-5:]])
+                            prompt_refino = (
+                                f"HISTÓRICO DA CONVERSA:\n{hist_text}\n\n"
+                                f"ORDEM ATUAL: {cmd_refine_av}\n\n"
+                                f"AVALIAÇÃO ATUAL PARA REFINAR:\n{st.session_state.temp_prova}"
+                            )
+                            
+                            resultado_refino = ai.gerar_ia("REFINADOR_EXAMES", prompt_refino)
+                            
+                            msg_chat = ai.extrair_tag(resultado_refino, "MENSAGEM_CHAT")
+                            novo_conteudo = ai.extrair_tag(resultado_refino, "CONTEUDO_ATUALIZADO")
+                            
+                            if not novo_conteudo:
+                                novo_conteudo = resultado_refino
+                                msg_chat = "Avaliação atualizada conforme solicitado, Mestre."
+                                
+                            st.markdown(msg_chat)
+                            st.session_state.chat_history_av.append({"role": "assistant", "avatar": "🤖", "content": msg_chat})
+                            st.session_state.temp_prova = novo_conteudo
+                            st.session_state.v_av += 1
+                            st.rerun()
+                            
+            st.markdown("---")
             st.text_area("Editor de Exame (Texto Bruto):", st.session_state.temp_prova, height=500, key=f"ed_av_raw_{v}")
-        else: st.info("Gere um exame na aba 'Arquiteto' para habilitar o Refinador.")
+        else: 
+            st.info("Gere um exame na aba 'Arquiteto' para habilitar o Copilot.")
 
     # --- ABA 3: VISUALIZAÇÃO ---
     with tab_vis:
@@ -2753,8 +2797,8 @@ elif menu == "📝 Central de Avaliações":
         with st.container(border=True):
             c_h1, c_h2, c_h3 = st.columns([1, 1, 1])
             f_trim_h = c_h1.selectbox("📅 Filtrar Trimestre:",["Todos", "I Trimestre", "II Trimestre", "III Trimestre"], key="h_trim_av")
-            f_ano_h = c_h2.selectbox("🎓 Filtrar Série:", ["Todos", "6º", "7º", "8º", "9º"], key="h_ano_av")
-            f_tipo_h = c_h3.selectbox("📝 Tipo de Ativo:", ["Todos", "AVALIAÇÃO", "REVISÃO"], key="h_tipo_av")
+            f_ano_h = c_h2.selectbox("🎓 Filtrar Série:",["Todos", "6º", "7º", "8º", "9º"], key="h_ano_av")
+            f_tipo_h = c_h3.selectbox("📝 Tipo de Ativo:",["Todos", "AVALIAÇÃO", "REVISÃO"], key="h_tipo_av")
 
         df_exames = df_aulas[df_aulas['SEMANA_REF'].isin(["AVALIAÇÃO", "REVISÃO"])].copy()
         if f_trim_h != "Todos": df_exames = df_exames[df_exames['CONTEUDO'].str.contains(f_trim_h, na=False)]
@@ -2782,7 +2826,7 @@ elif menu == "📝 Central de Avaliações":
                         st.markdown(f"**✅ Gabarito Regular:** `{gab_limpo}`")
 
                     l_reg = (re.findall(r"Regular\((.*?)\)", txt_f) or[row.get('LINK_DRIVE')])[-1]
-                    l_pei = (re.findall(r"PEI\((.*?)\)", txt_f) or [None])[-1]
+                    l_pei = (re.findall(r"PEI\((.*?)\)", txt_f) or[None])[-1]
                     l_prof = (re.findall(r"Prof\((.*?)\)", txt_f) or [None])[-1]
 
                     c_b1, c_b2, c_b3, c_b4, c_b5 = st.columns(5)
@@ -2795,6 +2839,7 @@ elif menu == "📝 Central de Avaliações":
                     if c_b4.button("🔄 REFINAR", key=f"ref_av_h_{row.name}", use_container_width=True):
                         st.session_state.temp_prova = txt_f
                         st.session_state.av_nome_fixo = identificador
+                        if "chat_history_av" in st.session_state: del st.session_state["chat_history_av"]
                         st.rerun()
                         
                     if c_b5.button("🗑️ APAGAR", key=f"del_av_h_{row.name}", use_container_width=True):
@@ -2862,6 +2907,7 @@ elif menu == "📝 Central de Avaliações":
                             else: st.info("Perícia PEI não disponível.")
         else:
             st.info("📭 Acervo vazio.")
+
 
 
 # ==============================================================================
