@@ -15,26 +15,41 @@ import re
 st.set_page_config(
     page_title="Ronaldo Gomes", 
     layout="wide", 
-    page_icon="💻", # Ícone da aba atualizado para 💻
+    page_icon="💻", 
     initial_sidebar_state="expanded"
 )
 
-# --- SISTEMA DE BLINDAGEM E PERSISTÊNCIA (6 HORAS) ---
+# --- SISTEMA DE BLINDAGEM E PERSISTÊNCIA (6 HORAS COM ÂNCORA DE URL) ---
 def check_password():
-    """Gerencia o acesso com botão de entrada explícito e persistência de 6h."""
+    """Gerencia o acesso com persistência de 6h blindada contra quedas de rede (URL Token)."""
     
+    # 1. Tenta restaurar a sessão via URL (caso a página tenha recarregado pelo 4G/5G)
+    if "password_correct" not in st.session_state or not st.session_state["password_correct"]:
+        if "auth" in st.query_params and "ts" in st.query_params:
+            try:
+                ts_salvo = float(st.query_params["ts"])
+                if time.time() - ts_salvo < 21600: # 6 horas
+                    st.session_state["password_correct"] = True
+                    st.session_state["login_timestamp"] = ts_salvo
+                else:
+                    st.query_params.clear() # Expirou, limpa a URL
+            except:
+                st.query_params.clear()
+
+    # Inicializa variáveis se ainda não existirem
     if "password_correct" not in st.session_state:
         st.session_state["password_correct"] = False
     if "login_timestamp" not in st.session_state:
         st.session_state["login_timestamp"] = None
 
-    # Verifica se a sessão de 6h ainda é válida
+    # 2. Verifica se a sessão atual é válida
     if st.session_state["password_correct"]:
         tempo_decorrido = time.time() - st.session_state["login_timestamp"]
         if tempo_decorrido < 21600: # 6 horas
             return True
         else:
             st.session_state["password_correct"] = False
+            st.query_params.clear()
             st.warning("Sessão expirada. Por favor, entre novamente.")
 
     # INTERFACE DE LOGIN (Design Responsivo e Limpo)
@@ -52,15 +67,21 @@ def check_password():
         # FORMULÁRIO DE LOGIN
         with st.form("login_portal"):
             input_password = st.text_input("Chave de Acesso:", type="password", placeholder="Digite sua chave...")
-            st.checkbox("Manter conectado por 6 horas", value=True, disabled=True)
+            st.checkbox("Manter conectado por 6 horas (Blindagem 4G/5G)", value=True, disabled=True)
             
             btn_entrar = st.form_submit_button("ENTRAR NO PAINEL", use_container_width=True)
             
             if btn_entrar:
                 if input_password == "2496":
                     st.session_state["password_correct"] = True
-                    st.session_state["login_timestamp"] = time.time()
-                    st.success("Acesso Autorizado!")
+                    ts_agora = time.time()
+                    st.session_state["login_timestamp"] = ts_agora
+                    
+                    # 🚨 INJEÇÃO DA ÂNCORA NA URL
+                    st.query_params["auth"] = "true"
+                    st.query_params["ts"] = str(ts_agora)
+                    
+                    st.success("Acesso Autorizado! Blindagem de rede ativada.")
                     time.sleep(0.5)
                     st.rerun()
                 else:
@@ -99,8 +120,7 @@ st.markdown(f"""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
         * {{ font-family: 'Plus Jakarta Sans', sans-serif; }}
-        .stApp {{ background-color: {cor_fundo} !important; color: {cor_texto} !important; }}
-        [data-testid="stSidebar"] {{ background-color: {cor_sidebar} !important; border-right: 1px solid {cor_borda}; }}
+        .stApp {{ background-color: {cor_fundo} !important; color: {cor_texto} !important; }}[data-testid="stSidebar"] {{ background-color: {cor_sidebar} !important; border-right: 1px solid {cor_borda}; }}
         div[data-testid="stMetric"] {{ background: {cor_card} !important; border: 1px solid {cor_borda} !important; border-radius: 20px !important; }}
         .stButton button {{ background: linear-gradient(135deg, {BRAND_BLUE}, #0039CB) !important; color: white !important; border-radius: 12px !important; font-weight: 700 !important; width: 100%; }}
         .clock-container {{ background: {BRAND_BLUE}15; color: {BRAND_BLUE}; padding: 8px 15px; border-radius: 30px; font-weight: 800; font-size: 14px; text-align: center; margin: 10px 0; border: 1px solid {BRAND_BLUE}33; }}
@@ -125,7 +145,7 @@ with st.sidebar:
     st.markdown(f"""<div class="clock-container">🕒 {hora_atual} | 📅 {data_atual}</div>""", unsafe_allow_html=True)
     st.markdown("---")
 
-    menu = st.radio("Navegação Estratégica:", [
+    menu = st.radio("Navegação Estratégica:",[
         "📅 Planejamento (Ponto ID)",
         "🧪 Criador de Aulas",
         "📝 Central de Avaliações",
@@ -152,6 +172,7 @@ with st.sidebar:
         if st.button("🚪 Sair"):
             st.session_state["password_correct"] = False
             st.session_state["login_timestamp"] = None
+            st.query_params.clear() # 🚨 Limpa a âncora da URL ao sair
             st.rerun()
 
     # Rodapé atualizado conforme ordem soberana
@@ -314,6 +335,7 @@ def exibir_material_estruturado(texto_raw, key_prefix, dados_plano=None, info_au
                     else:
                         status.update(label="❌ Erro no Upload da Aula.", state="error")
                         st.error(f"Falha no envio dos arquivos.")
+ 
                        
 
 # ==============================================================================
