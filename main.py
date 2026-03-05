@@ -3355,6 +3355,13 @@ elif menu == "📝 Diário de Bordo Rápido":
             # 🚨 CÁLCULO DINÂMICO DE ALTURA (TABELA INFINITA MOBILE-FIRST)
             altura_dinamica = (len(dados_diario) * 35) + 40
 
+            # 🚨 CHAVE ESTÁVEL (VACINA ANTI-QUEDA DE INTERNET)
+            # A chave agora é baseada na turma e na data, não no relógio. 
+            # Se a internet piscar, o Streamlit recupera o estado da tabela.
+            chave_tabela = f"ed_diario_{turma_sel}_{data_str.replace('/','')}"
+
+            st.info("💡 **Dica Anti-Queda (4G):** Se a sua internet oscila muito, clique em **'Salvar Progresso'** a cada 5 alunos. Isso garante que você não perca os vistos se o celular recarregar a página.")
+
             df_editado = st.data_editor(
                 pd.DataFrame(dados_diario),
                 height=altura_dinamica, 
@@ -3371,46 +3378,61 @@ elif menu == "📝 Diário de Bordo Rápido":
                     ),
                     "Obs (🎙️)": st.column_config.TextColumn("Obs (🎙️)", width="large")
                 },
-                hide_index=True, use_container_width=True, key=f"editor_diario_{v}"
+                hide_index=True, use_container_width=True, key=chave_tabela
             )
 
-            # --- 6. SALVAMENTO E SINCRONIA ---
+            # --- 6. SALVAMENTO E SINCRONIA (DUPLO BOTÃO) ---
             st.markdown("<br>", unsafe_allow_html=True)
-            if st.button("💾 SALVAR DIÁRIO E CONSOLIDAR", type="primary", use_container_width=True):
-                with st.status("Sincronizando Práxis...") as status:
-                    # A função limpar_diario_data_turma garante que não haverá duplicidade ao editar
-                    db.limpar_diario_data_turma(data_str, turma_sel)
+            
+            def preparar_linhas_diario(df_ed):
+                linhas =[]
+                for _, r in df_ed.iterrows():
+                    aluno_eh_pei = "♿" in r['Estudante'] or "🟠" in r['Estudante']
+                    tag_f = "AUSÊNCIA" if r['F'] else r['Vetor']
                     
-                    linhas_diario =[]
-                    for _, r in df_editado.iterrows():
-                        # Lógica de PEI Concluído (Apenas para Laudos e Suspeitas)
-                        aluno_eh_pei = "♿" in r['Estudante'] or "🟠" in r['Estudante']
-                        tag_f = "AUSÊNCIA" if r['F'] else r['Vetor']
-                        
-                        visto_f = False if r['F'] else r['V']
-                        visto_db = "ISENTO" if "Sem Visto" in natureza_registro else str(visto_f)
-                        
-                        if aluno_eh_pei and visto_f and not tag_f and "Sem Visto" not in natureza_registro:
-                            tag_f = "PEI CONCLUÍDO"
-                        
-                        obs_final = r['Obs (🎙️)']
-                        if r['Vetor'] == "Comunicação" and "🚨 COMUNICAÇÃO:" not in obs_final:
-                            obs_final = f"🚨 COMUNICAÇÃO: {obs_final}"
+                    visto_f = False if r['F'] else r['V']
+                    visto_db = "ISENTO" if "Sem Visto" in natureza_registro else str(visto_f)
+                    
+                    if aluno_eh_pei and visto_f and not tag_f and "Sem Visto" not in natureza_registro:
+                        tag_f = "PEI CONCLUÍDO"
+                    
+                    obs_final = r['Obs (🎙️)']
+                    if r['Vetor'] == "Comunicação" and "🚨 COMUNICAÇÃO:" not in obs_final:
+                        obs_final = f"🚨 COMUNICAÇÃO: {obs_final}"
 
-                        # Limpeza blindada do nome para salvar no banco
-                        nome_limpo = r['Estudante'].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
+                    nome_limpo = r['Estudante'].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
 
-                        linhas_diario.append([
-                            data_str, r['ID'], nome_limpo, turma_sel,
-                            visto_db, tag_f, obs_final, util.sosa_to_str(r['⭐'])
-                        ])
+                    linhas.append([
+                        data_str, r['ID'], nome_limpo, turma_sel,
+                        visto_db, tag_f, obs_final, util.sosa_to_str(r['⭐'])
+                    ])
+                return linhas
+
+            c_save1, c_save2 = st.columns(2)
+
+            # BOTÃO 1: SALVAR PROGRESSO (RASCUNHO RÁPIDO)
+            if c_save1.button("💾 SALVAR PROGRESSO (RASCUNHO)", use_container_width=True):
+                with st.spinner("Salvando rascunho no banco..."):
+                    db.limpar_diario_data_turma(data_str, turma_sel)
+                    linhas_diario = preparar_linhas_diario(df_editado)
+                    if db.salvar_lote("DB_DIARIO_BORDO", linhas_diario):
+                        st.toast("✅ Progresso salvo! Pode continuar editando.", icon="💾")
+                        time.sleep(1)
+                        st.rerun()
+
+            # BOTÃO 2: CONSOLIDAR E FECHAR AULA (FINAL)
+            if c_save2.button("✅ CONSOLIDAR E FECHAR AULA", type="primary", use_container_width=True):
+                with st.status("Sincronizando Práxis...") as status:
+                    db.limpar_diario_data_turma(data_str, turma_sel)
+                    linhas_diario = preparar_linhas_diario(df_editado)
                                 
                     if db.salvar_lote("DB_DIARIO_BORDO", linhas_diario):
                         db.atualizar_fechamento_aula(data_str, turma_sel, status_aula, ponte_pedagogica, clima_turma)
                         status.update(label="✅ Diário e Regência Atualizados!", state="complete")
                         st.balloons()
                         if f"visto_lote_{turma_sel}" in st.session_state: del st.session_state[f"visto_lote_{turma_sel}"]
-                        time.sleep(1); st.rerun()
+                        time.sleep(1)
+                        st.rerun()
 
 
 # ==============================================================================
