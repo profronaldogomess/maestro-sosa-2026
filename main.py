@@ -317,7 +317,7 @@ def exibir_material_estruturado(texto_raw, key_prefix, dados_plano=None, info_au
                        
 
 # ==============================================================================
-# MÓDULO: PLANEJAMENTO ESTRATÉGICO (PONTO ID) - VERSÃO V100 (CLEAN & UX)
+# MÓDULO: PLANEJAMENTO ESTRATÉGICO (PONTO ID) - VERSÃO V120 (MICRO-GESTÃO & ELITE)
 # ==============================================================================
 if menu == "📅 Planejamento (Ponto ID)":
     st.title("📅 Ponto ID: Engenharia de Planejamento")
@@ -340,256 +340,160 @@ if menu == "📅 Planejamento (Ponto ID)":
     ])
     
     with tab_gerar:
-        # --- 🛡️ 1. STATUS E NATUREZA ---
+        # --- 🛡️ 1. NATUREZA DO PLANEJAMENTO (NOVO FORMATO AVULSO) ---
         with st.container(border=True):
-            st.markdown("### 🛡️ Passo 1: Natureza Pedagógica da Semana")
-            st.info("Defina o objetivo principal desta semana. Isso mudará completamente a forma como a IA escreve o roteiro.")
+            st.markdown("### 🛡️ Passo 1: Natureza do Planejamento")
             
-            cg1, cg2, cg3 = st.columns([1.5, 1, 1])
-            tipo_semana = cg1.selectbox("DNA da Semana:",[
+            tipo_planejamento = st.radio(
+                "O que você deseja planejar agora?",["📅 Semana Letiva Regular (Gera Aula 1 e Aula 2)", "🗓️ Sábado Letivo Avulso (Gera apenas 1 Aula Extra)"], 
+                horizontal=True, key=f"tipo_plan_{v}"
+            )
+            
+            is_sabado_avulso = "Sábado" in tipo_planejamento
+            
+            cg1, cg2 = st.columns([2, 1])
+            tipo_semana = cg1.selectbox("DNA da Abordagem:",[
                 "📗 Aula de Safra (Regular)", "📝 Aplicação de Exame", 
                 "🔥 Revisão & Recomposição", "📋 Trabalho Investigativo", "🔍 Sonda de Proficiência",
                 "💡 Aula Aberta (Dinâmicas e Eventos)"
-            ], help="Safra: Conteúdo novo. Exame: Foco em logística de prova. Revisão: Foco em correção de lacunas.", key=f"gate_tipo_{v}")
+            ], key=f"gate_tipo_{v}")
             
-            tem_sabado = cg2.toggle("Sábado Letivo?", help="Ative se houver reposição no sábado. A IA gerará uma atividade extra.", key=f"gate_sab_{v}")
-            carga_horaria = cg3.select_slider("Aulas Úteis na Semana:", options=["1 Aula", "2 Aulas", "3 Aulas"], value="2 Aulas", help="Quantos encontros você terá com a turma nesta semana?", key=f"gate_carga_{v}")
+            if is_sabado_avulso:
+                carga_horaria = "1 Aula"
+                st.info("💡 Modo Sábado Letivo ativado. O sistema gerará um plano de aula único (Sábado) vinculado à semana que você escolher abaixo.")
+            else:
+                carga_horaria = cg2.select_slider("Aulas Úteis na Semana:", options=["1 Aula", "2 Aulas", "3 Aulas"], value="2 Aulas", key=f"gate_carga_{v}")
 
-        # --- ⚙️ 2. PARÂMETROS E SMART MATCH ---
+        # --- ⚙️ 2. PARÂMETROS E HERANÇA (PONTE PEDAGÓGICA) ---
         with st.container(border=True):
-            st.markdown("### ⚙️ Passo 2: Parâmetros de Regência e Vínculo")
+            st.markdown("### ⚙️ Passo 2: Parâmetros e Herança (Ponte Pedagógica)")
             
-            ctx_ia = ""
-            strat = ""
-            ctx_ativo_vinculado = ""
-            uri_livro_drive = None
-            base_didatica_info = "Matriz Curricular de Itabuna"
-            
-            c1, c2, c3 = st.columns([1, 2, 1.5])
+            c1, c2 = st.columns([1, 2])
             ano_p = c1.selectbox("Série/Ano Alvo:",[6, 7, 8, 9], index=0, key=f"ano_sel_{v}")
             ano_str_busca = f"{ano_p}º"
 
-            # LÓGICA BLINDADA: FILTRO DE SEMANAS PENDENTES
+            # LÓGICA BLINDADA: FILTRO DE SEMANAS (EXPURGANDO JORNADA PEDAGÓGICA)
             todas_semanas = util.gerar_semanas()
             semanas_planejadas = df_planos[df_planos['ANO'] == ano_str_busca]['SEMANA'].tolist()
-            semanas_disponiveis =[s for s in todas_semanas if s.split(" (")[0] not in semanas_planejadas]
+            
+            # Remove a Jornada Pedagógica e as semanas já planejadas (a menos que seja sábado avulso, aí pode repetir a semana)
+            if is_sabado_avulso:
+                semanas_disponiveis = [s for s in todas_semanas if "Jornada" not in s]
+            else:
+                semanas_disponiveis =[s for s in todas_semanas if s.split(" (")[0] not in semanas_planejadas and "Jornada" not in s]
 
             if not semanas_disponiveis:
                 st.success(f"🏆 **Soberania Total!** Todas as semanas do ano letivo para o {ano_p}º Ano já foram planejadas.")
                 if st.button("🔄 REVER ACERVO"): st.rerun()
                 st.stop()
 
-            sem_p = c2.selectbox("📅 Semana de Referência (Apenas Pendentes):", semanas_disponiveis, help="O sistema oculta automaticamente as semanas já planejadas.", key=f"sem_sel_{v}")
+            sem_p = c2.selectbox("📅 Semana de Referência:", semanas_disponiveis, key=f"sem_sel_{v}")
             sem_limpa = sem_p.split(" (")[0]
             trim_atual = sem_p.split(" - ")[1] if " - " in sem_p else "I Trimestre"
 
-            # Smart Match (Vínculo de Provas/Projetos)
-            if tipo_semana not in["📗 Aula de Safra (Regular)", "💡 Aula Aberta (Dinâmicas e Eventos)"]:
-                df_ativos_ano = df_aulas[df_aulas['ANO'] == ano_str_busca]
-                opcoes_ativos =[]
-                if "Exame" in tipo_semana: opcoes_ativos = df_ativos_ano[df_ativos_ano['SEMANA_REF'] == "AVALIAÇÃO"]['TIPO_MATERIAL'].tolist()
-                elif "Revisão" in tipo_semana: opcoes_ativos = df_ativos_ano[df_ativos_ano['SEMANA_REF'] == "REVISÃO"]['TIPO_MATERIAL'].tolist()
-                elif "Trabalho" in tipo_semana: opcoes_ativos = df_ativos_ano[df_ativos_ano['TIPO_MATERIAL'].str.contains("PROJETO|TRABALHO", case=False, na=False)]['TIPO_MATERIAL'].tolist()
-                else: opcoes_ativos = df_ativos_ano[df_ativos_ano['TIPO_MATERIAL'].str.contains("SONDA|DIAGNÓSTICA", case=False, na=False)]['TIPO_MATERIAL'].tolist()
-
-                if opcoes_ativos:
-                    ativo_sel = st.selectbox("🔗 Vincular Material Existente (Smart Match):", [""] + opcoes_ativos, help="Selecione a prova ou projeto que será aplicado nesta semana para a IA ler o conteúdo.", key=f"ativo_match_{v}")
-                    if ativo_sel:
-                        dados_ativo = df_ativos_ano[df_ativos_ano['TIPO_MATERIAL'] == ativo_sel].iloc[0]
-                        ctx_ativo_vinculado = f"--- ATIVO VINCULADO: {ativo_sel} ---\nCONTEÚDO: {dados_ativo['CONTEUDO']}"
-                        
-                        # ==============================================================================
-                        # 🚨 MOTOR DE RECOMPOSIÇÃO GUIADA POR DADOS (AGREGADO POR SÉRIE)
-                        # ==============================================================================
-                        if tipo_semana == "🔥 Revisão & Recomposição":
-                            with st.expander(f"📡 Radar de Diagnóstico Ativo (Série: {ano_p}º Ano)", expanded=True):
-                                st.markdown(f"**Analisando dados de todas as turmas do {ano_p}º Ano para {ativo_sel}...**")
-                                
-                                # 1. Perfil da Série Inteira
-                                alunos_rad = df_alunos[df_alunos['TURMA'].str.contains(str(ano_p))].copy()
-                                perfil_txt = ""
-                                if not alunos_rad.empty:
-                                    def categorizar_aluno(nec):
-                                        n = str(nec).upper().strip()
-                                        if "PENDENTE" in n or "SUSPEITA" in n: return "Radar"
-                                        if "DEFASAGEM LEITURA" in n: return "Barreira de Leitura"
-                                        if "DEFASAGEM MATEMÁTICA" in n or "DEFASAGEM MATEMATICA" in n: return "Defasagem Matemática"
-                                        if "ALTA PERFORMANCE" in n: return "Alta Performance"
-                                        if n in["NENHUMA", "", "NAN", "TÍPICO", "TIPICO"]: return "Típico"
-                                        return "PEI" 
-                                    
-                                    alunos_rad['PERFIL'] = alunos_rad['NECESSIDADES'].apply(categorizar_aluno)
-                                    contagem = alunos_rad['PERFIL'].value_counts(normalize=True) * 100
-                                    
-                                    perfis_relevantes =[]
-                                    if "Barreira de Leitura" in contagem: perfis_relevantes.append(f"{contagem['Barreira de Leitura']:.0f}% com Barreira de Leitura 🧱")
-                                    if "Defasagem Matemática" in contagem: perfis_relevantes.append(f"{contagem['Defasagem Matemática']:.0f}% com Defasagem Matemática 🧮")
-                                    if "PEI" in contagem: perfis_relevantes.append(f"{contagem['PEI']:.0f}% de Inclusão Oficial ♿")
-                                    
-                                    if perfis_relevantes:
-                                        perfil_txt = " | ".join(perfis_relevantes)
-                                        st.warning(f"**Perfil Cognitivo da Série:** {perfil_txt}")
-                                    else:
-                                        st.success("**Perfil Cognitivo da Série:** Maioria Típica/Padrão.")
-                                
-                                # 2. Lacunas da Prova na Série Inteira
-                                lacunas_txt = ""
-                                nome_curto_av = ativo_sel.split("-")[0].strip().replace(" (2ª CHAMADA)", "")
-                                diag_t = df_diagnosticos[(df_diagnosticos['TURMA'].str.contains(str(ano_p))) & (df_diagnosticos['ID_AVALIACAO'].str.contains(nome_curto_av, case=False, na=False))]
-                                
-                                if not diag_t.empty:
-                                    txt_prova = str(dados_ativo['CONTEUDO'])
-                                    gab_raw = ai.extrair_tag(txt_prova, "GABARITO_TEXTO") or ai.extrair_tag(txt_prova, "GABARITO")
-                                    grade_raw = ai.extrair_tag(txt_prova, "GRADE_DE_CORRECAO")
-                                    
-                                    if gab_raw and grade_raw:
-                                        matches = re.findall(r"(\d+)[\s\.\)\-:]+([A-E])", gab_raw.upper())
-                                        gab_oficial = {int(num): letra for num, letra in matches}
-                                        if not gab_oficial:
-                                            letras = re.findall(r"\b[A-E]\b", gab_raw.upper())
-                                            gab_oficial = {i+1: letra for i, letra in enumerate(letras)}
-                                            
-                                        respostas_alunos = diag_t['RESPOSTAS_ALUNO'].astype(str).tolist()
-                                        
-                                        lacunas_stats =[]
-                                        for q_num, letra_certa in gab_oficial.items():
-                                            acertos = 0
-                                            validos = 0
-                                            for resp in respostas_alunos:
-                                                if resp == "FALTOU": continue
-                                                resp_lista = resp.split(";")
-                                                if len(resp_lista) >= q_num:
-                                                    validos += 1
-                                                    if resp_lista[q_num-1] == letra_certa:
-                                                        acertos += 1
-                                            
-                                            if validos > 0:
-                                                taxa_acerto = acertos / validos
-                                                if taxa_acerto < 0.6: 
-                                                    padrao_h = rf"(?si)QUEST[AÃ]O\s*0?{q_num}\b.*?(?:\[)(.*?)(?:\])"
-                                                    m_h = re.search(padrao_h, grade_raw)
-                                                    habilidade = m_h.group(1).strip() if m_h else f"Revisar conceito da Questão {q_num}"
-                                                    lacunas_stats.append({"q": q_num, "taxa": taxa_acerto, "hab": habilidade})
-                                        
-                                        if lacunas_stats:
-                                            top_lacunas = sorted(lacunas_stats, key=lambda x: x['taxa'])[:3]
-                                            st.error("🚨 **Top 3 Lacunas Críticas da Série:**")
-                                            lacunas_str_list =[]
-                                            for lac in top_lacunas:
-                                                st.markdown(f"**Q{lac['q']} ({lac['taxa']*100:.0f}% de acerto):** {lac['hab']}")
-                                                lacunas_str_list.append(f"Questão {lac['q']} ({lac['taxa']*100:.0f}% acerto) - Habilidade: {lac['hab']}")
-                                            
-                                            lacunas_txt = "\n".join(lacunas_str_list)
-                                        else:
-                                            st.success("✅ Nenhuma questão com menos de 60% de acerto na série.")
-                                else:
-                                    st.info("Nenhum gabarito escaneado para esta série nesta avaliação.")
-                                
-                                # 3. Montagem do Strat (Injeção no Prompt)
-                                if lacunas_txt or perfil_txt:
-                                    strat = f"--- DADOS DE DIAGNÓSTICO DA SÉRIE ({ano_p}º ANO) ---\n"
-                                    if perfil_txt: strat += f"PERFIL COGNITIVO GERAL: {perfil_txt}\n"
-                                    if lacunas_txt: strat += f"LACUNAS CRÍTICAS (Foque a revisão nestes pontos):\n{lacunas_txt}\n"
-                                    strat += "🚨 DIRETRIZ DE RECOMPOSIÇÃO: Não revise a prova inteira. Foque EXCLUSIVAMENTE nas lacunas apontadas acima. Adapte a linguagem e as dinâmicas para o perfil cognitivo geral da série."
-
-            modo_p = c3.radio("📚 Método de Base Didática:",["📖 Livro Didático", "🎛️ Manual (Matriz)"], horizontal=True, help="Livro: A IA lê o PDF do seu cofre. Manual: A IA usa apenas a Matriz Curricular.", key=f"modo_p_{v}")
+            # 🚨 RADAR DE CONTINUIDADE E PENDÊNCIAS
+            st.markdown("#### 🔙 Radar de Continuidade")
+            df_hist = df_planos[df_planos['ANO'] == ano_str_busca].sort_values(by='DATA', ascending=False)
+            plano_anterior_txt = "Início de Safra. Não há plano anterior."
             
-            # --- SEÇÃO DE PARÂMETROS (MODO MANUAL / BANCO) ---
-            if modo_p == "🎛️ Manual (Matriz)":
-                if tipo_semana == "💡 Aula Aberta (Dinâmicas e Eventos)":
-                    st.markdown("#### 💡 Engenharia Reversa (Aula Aberta)")
-                    st.info("Descreva o evento (ex: Palestra sobre Dengue). A IA varrerá a Matriz e fará o alinhamento curricular automaticamente para justificar a aula.")
-                    desc_evento = st.text_area("Contexto do Evento:", placeholder="Ex: Palestra da prefeitura sobre a Dengue no pátio...", height=100, key=f"p_evento_{v}")
-                    ctx_ia = f"MODO AULA ABERTA. EVENTO DESCRITO: {desc_evento}. MISSÃO: Faça engenharia reversa na matriz para justificar este evento."
-                else:
-                    st.markdown("#### 🎯 Curadoria da Matriz de Itabuna")
-                    dist_manual = st.radio("Distribuição de Conteúdo:",["Integrar Aula 1 e 2", "Definir Trilhas Individuais (Aula 1 / Aula 2)"], 
-                        horizontal=True, help="Integrar: A IA divide o conteúdo logicamente. Trilhas: Você escolhe o que entra em cada dia.", key=f"dist_m_{v}")
+            if not df_hist.empty:
+                ultimo_plano = df_hist.iloc[0]
+                plano_anterior_txt = ultimo_plano['PLANO_TEXTO']
+                obj_ant = ai.extrair_tag(plano_anterior_txt, "OBJETO_CONHECIMENTO") or ai.extrair_tag(plano_anterior_txt, "CONTEUDO_GERAL")
+                st.info(f"**Último plano gerado ({ultimo_plano['SEMANA']}):** {obj_ant}")
+            
+            pendencias_ant = st.text_area("Pendências da Semana Anterior (Opcional):", placeholder="Ex: Faltou corrigir as questões 4 e 5 da lista de frações. Iniciar a Aula 1 por isso.", key=f"pend_{v}")
 
-                    df_matriz_ano = df_curriculo[df_curriculo['ANO'].astype(str) == str(ano_p)]
-                    
-                    if "Trilhas Individuais" in dist_manual:
-                        with st.expander("📘 TRILHA 01: Foco da Aula 1", expanded=True):
-                            c1a, c1b = st.columns(2)
-                            eixo_1 = c1a.multiselect("1. Eixo (Aula 1):", sorted(df_matriz_ano['EIXO'].unique().tolist()), key=f"e1_{v}")
-                            cont_1 = c1b.multiselect("2. Conteúdo (Aula 1):", sorted(df_matriz_ano[df_matriz_ano['EIXO'].isin(eixo_1)]['CONTEUDO_ESPECIFICO'].unique().tolist()) if eixo_1 else[], key=f"c1_{v}")
-                            obj_1 = st.multiselect("3. Objetivos (Aula 1):", sorted(df_matriz_ano[df_matriz_ano['CONTEUDO_ESPECIFICO'].isin(cont_1)]['OBJETIVOS'].unique().tolist()) if cont_1 else[], key=f"o1_{v}")
-                        
-                        with st.expander("📗 TRILHA 02: Foco da Aula 2", expanded=(carga_horaria != "1 Aula")):
-                            if carga_horaria == "1 Aula":
-                                st.warning("Carga horária de 1 aula selecionada. Trilha 2 desativada.")
-                                ctx_ia = f"AULA 1: Eixo {eixo_1}, Conteúdo {cont_1}, Objetivos {obj_1}."
-                            else:
-                                c2a, c2b = st.columns(2)
-                                eixo_2 = c2a.multiselect("1. Eixo (Aula 2):", sorted(df_matriz_ano['EIXO'].unique().tolist()), key=f"e2_{v}")
-                                cont_2 = c2b.multiselect("2. Conteúdo (Aula 2):", sorted(df_matriz_ano[df_matriz_ano['EIXO'].isin(eixo_2)]['CONTEUDO_ESPECIFICO'].unique().tolist()) if eixo_2 else[], key=f"c2_{v}")
-                                obj_2 = st.multiselect("3. Objetivos (Aula 2):", sorted(df_matriz_ano[df_matriz_ano['CONTEUDO_ESPECIFICO'].isin(cont_2)]['OBJETIVOS'].unique().tolist()) if cont_2 else[], key=f"o2_{v}")
-                                ctx_ia = f"TRILHA 1 (AULA 1): Eixo {eixo_1}, Conteúdo {cont_1}, Objetivos {obj_1}. \nTRILHA 2 (AULA 2): Eixo {eixo_2}, Conteúdo {cont_2}, Objetivos {obj_2}."
-                    else:
-                        sel_eixo = st.multiselect("1. Eixo (Semana):", sorted(df_matriz_ano['EIXO'].unique().tolist()), key=f"p_eixo_{v}")
-                        sel_cont = st.multiselect("2. Conteúdo (Semana):", sorted(df_matriz_ano[df_matriz_ano['EIXO'].isin(sel_eixo)]['CONTEUDO_ESPECIFICO'].unique().tolist()) if sel_eixo else[], key=f"p_cont_{v}")
-                        sel_obj = st.multiselect("3. Objetivos (Semana):", sorted(df_matriz_ano[df_matriz_ano['CONTEUDO_ESPECIFICO'].isin(sel_cont)]['OBJETIVOS'].unique().tolist()) if sel_cont else[], key=f"p_obj_{v}")
-                        ctx_ia = f"MODO INTEGRADO: EIXO: {sel_eixo}, CONTEÚDO: {sel_cont}, OBJETIVOS: {sel_obj}."
+        # --- 📚 3. BASE CURRICULAR E ENRIQUECIMENTO ---
+        with st.container(border=True):
+            st.markdown("### 📚 Passo 3: Base Curricular e Enriquecimento")
+            
+            enriquecimento_elite = st.toggle("🌟 Ativar Enriquecimento de Elite (Busca Externa, OBMEP, ENEM, Contexto Atual)", value=True, help="Se ativado, a IA buscará referências em sites como Toda Matéria, Khan Academy, e criará conexões com o mundo real e avaliações externas.")
+            
+            modo_p = st.radio("Método de Base Didática:",["📖 Livro Didático", "🎛️ Manual (Matriz)"], horizontal=True, key=f"modo_p_{v}")
+            
+            ctx_ia = ""
+            uri_livro_drive = None
+            base_didatica_info = "Matriz Curricular de Itabuna"
+            
+            if modo_p == "🎛️ Manual (Matriz)":
+                df_matriz_ano = df_curriculo[df_curriculo['ANO'].astype(str) == str(ano_p)]
+                sel_eixo = st.multiselect("1. Eixo (Semana):", sorted(df_matriz_ano['EIXO'].unique().tolist()), key=f"p_eixo_{v}")
+                sel_cont = st.multiselect("2. Conteúdo (Semana):", sorted(df_matriz_ano[df_matriz_ano['EIXO'].isin(sel_eixo)]['CONTEUDO_ESPECIFICO'].unique().tolist()) if sel_eixo else[], key=f"p_cont_{v}")
+                sel_obj = st.multiselect("3. Objetivos (Semana):", sorted(df_matriz_ano[df_matriz_ano['CONTEUDO_ESPECIFICO'].isin(sel_cont)]['OBJETIVOS'].unique().tolist()) if sel_cont else[], key=f"p_obj_{v}")
+                ctx_ia = f"EIXO: {sel_eixo}, CONTEÚDO: {sel_cont}, OBJETIVOS: {sel_obj}."
             else:
-                st.markdown("#### 📖 Extração Direta do Livro Didático")
                 cx1, cx2 = st.columns([2, 1])
                 livros_disponiveis = df_materiais[df_materiais['TIPO'].str.contains(str(ano_p), na=False)]['NOME_ARQUIVO'].tolist()
                 sel_mat = cx1.selectbox("Selecionar Livro do Cofre Digital:", [""] + livros_disponiveis, key=f"p_livro_{v}")
-                
-                pags = cx2.text_input("Páginas Alvo:", placeholder="Ex: 14-23 ; 45-50", help="Use ';' para separar capítulos. A IA usará a 1ª parte na Aula 1 e a 2ª parte na Aula 2.", key=f"p_pags_{v}")
+                pags = cx2.text_input("Páginas Alvo (Geral):", placeholder="Ex: 14-23", key=f"p_pags_{v}")
                 
                 if sel_mat:
                     match_mat = df_materiais[df_materiais['NOME_ARQUIVO'] == sel_mat].iloc[0]
                     uri_livro_drive = match_mat['URI_ARQUIVO']
                     base_didatica_info = f"Livro: {sel_mat} | Páginas: {pags}"
 
+        # --- 🎯 4. DIRETRIZES SOBERANAS (MICRO-GESTÃO) ---
+        with st.container(border=True):
+            st.markdown("### 🎯 Passo 4: Diretrizes Soberanas (Micro-Gestão)")
+            st.caption("Dite exatamente o que a IA deve fazer em cada aula. Você é o Maestro.")
+            
+            if is_sabado_avulso:
+                diretriz_sabado = st.text_area("Diretriz para o Sábado Letivo:", placeholder="Ex: Fazer uma oficina prática sobre frações usando o site O Baricentro da Mente...", height=100, key=f"dir_sab_{v}")
+                diretriz_a1 = "N/A"
+                diretriz_a2 = "N/A"
+            else:
+                diretriz_sabado = "N/A"
+                c_d1, c_d2 = st.columns(2)
+                with c_d1:
+                    diretriz_a1 = st.text_area("📘 Foco da Aula 1:", placeholder="Ex: Págs 14-16. Focar apenas no conceito de potenciação usando exemplos do cotidiano. Não falar de radiciação ainda.", height=120, key=f"dir_a1_{v}")
+                with c_d2:
+                    if carga_horaria != "1 Aula":
+                        diretriz_a2 = st.text_area("📗 Foco da Aula 2:", placeholder="Ex: Págs 17-19. Introduzir radiciação como operação inversa. Aplicar questão do ENEM sobre o tema.", height=120, key=f"dir_a2_{v}")
+                    else:
+                        diretriz_a2 = "N/A"
+                        st.info("Carga horária de 1 Aula. Diretriz da Aula 2 desativada.")
+
         # --- BOTÃO DE COMPILAÇÃO ---
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("🧠 INICIAR MOTOR DE IA: GERAR PLANEJAMENTO", use_container_width=True, type="primary", key=f"btn_compilar_{v}"):
             
-            v_ctx_ia = ctx_ia if 'ctx_ia' in locals() else ""
-            v_strat = strat if 'strat' in locals() else ""
-            v_ctx_ativo = ctx_ativo_vinculado if 'ctx_ativo_vinculado' in locals() else ""
-            
             if modo_p == "📖 Livro Didático" and not uri_livro_drive:
                 st.error("❌ Erro: O livro selecionado não possui um link válido no banco de materiais.")
             else:
-                with st.spinner("Maestro SOSA analisando a Matriz e arquitetando o Plano de Ensino..."):
-                    plano_anterior_txt = "Início de Safra. Não há plano anterior."
-                    df_hist = df_planos[df_planos['ANO'] == ano_str_busca].sort_values(by='DATA', ascending=False)
-                    if not df_hist.empty: 
-                        plano_anterior_txt = df_hist.iloc[0]['PLANO_TEXTO']
-
-                    status_sabado_cmd = "ATIVADO (Gere uma oficina/atividade extra)" if tem_sabado else "DESATIVADO (Escreva apenas N/A)"
-
+                with st.spinner("Maestro SOSA analisando a Matriz, buscando referências de elite e arquitetando o Plano..."):
+                    
                     if modo_p == "🎛️ Manual (Matriz)":
-                        diretriz_base = "MÉTODO MANUAL: Baseie-se EXCLUSIVAMENTE na Matriz Curricular. É TERMINANTEMENTE PROIBIDO citar livros didáticos ou páginas."
+                        diretriz_base = "MÉTODO MANUAL: Baseie-se EXCLUSIVAMENTE na Matriz Curricular e nas fontes de elite da internet."
                     else:
-                        diretriz_base = f"MÉTODO LIVRO: Use EXCLUSIVAMENTE o PDF anexo como fonte. PÁGINAS ALVO: {base_didatica_info}."
+                        diretriz_base = f"MÉTODO LIVRO: Use o PDF anexo como base principal. PÁGINAS ALVO: {base_didatica_info}."
+
+                    status_enriquecimento = "ATIVADO (Use sites de referência: Toda Matéria, Brasil Escola, Khan Academy, O Baricentro da Mente. Traga questões OBMEP/ENEM/SAEB e conecte com fatos atuais/tecnologia)." if enriquecimento_elite else "DESATIVADO (Mantenha-se estritamente ao livro ou matriz básica)."
 
                     prompt = (
                         f"NATUREZA DA SEMANA: {tipo_semana}\n"
+                        f"TIPO DE PLANEJAMENTO: {tipo_planejamento}\n"
                         f"{diretriz_base}\n"
                         f"SÉRIE: {ano_p}º Ano. SEMANA: {sem_limpa}. TRIMESTRE: {trim_atual}.\n"
                         f"CARGA HORÁRIA: {carga_horaria}.\n"
-                        f"SÁBADO LETIVO: {status_sabado_cmd}.\n\n"
-                        f"🚨 MISSÃO DE DISTRIBUIÇÃO:\n"
-                        f"1. Se houver múltiplos intervalos de páginas separados por ';', use o primeiro para a [AULA_1] e o segundo para a [AULA_2].\n"
-                        f"2. Extraia os conceitos exatos de cada capítulo/intervalo citado (se for modo livro).\n"
-                        f"3. Se a carga for '1 Aula', foque apenas no primeiro intervalo.\n"
-                        f"4. Preencha todas as tags [TAG] com densidade acadêmica.\n\n"
-                        f"--- PONTE PEDAGÓGICA (MEMÓRIA DA TURMA) ---\nAnalise o plano da semana anterior abaixo para criar o gancho de continuidade na AULA 1:\n{plano_anterior_txt}\n\n"
-                        f"--- CONTEXTO DE APOIO E ATIVOS VINCULADOS ---\n{v_strat}\n{v_ctx_ia}\n{v_ctx_ativo}\n"
-                        f"--- MATRIZ OFICIAL (ITABUNA) ---\n{df_curriculo[df_curriculo['ANO'].astype(str)==str(ano_p)].to_string(index=False)}"
+                        f"ENRIQUECIMENTO DE ELITE: {status_enriquecimento}\n\n"
+                        f"🚨 DIRETRIZES SOBERANAS DO PROFESSOR (OBEDEÇA CEGAMENTE):\n"
+                        f"- PENDÊNCIAS DA SEMANA ANTERIOR: {pendencias_ant if pendencias_ant else 'Nenhuma.'}\n"
+                        f"- FOCO EXATO DA AULA 1: {diretriz_a1}\n"
+                        f"- FOCO EXATO DA AULA 2: {diretriz_a2}\n"
+                        f"- FOCO EXATO DO SÁBADO: {diretriz_sabado}\n\n"
+                        f"--- PONTE PEDAGÓGICA (MEMÓRIA DA TURMA) ---\nAnalise o plano da semana anterior abaixo para criar o gancho de continuidade:\n{plano_anterior_txt}\n\n"
+                        f"--- MATRIZ OFICIAL (ITABUNA) ---\n{ctx_ia}"
                     )
                     
-                    resultado = ai.gerar_ia("PLANE_PEDAGOGICO", prompt, url_drive=uri_livro_drive)
+                    resultado = ai.gerar_ia("PLANE_PEDAGOGICO", prompt, url_drive=uri_livro_drive, usar_busca=enriquecimento_elite)
                     
                     st.session_state.p_temp = resultado
                     st.session_state.p_meta = {
                         "semana": sem_limpa, "carga": carga_horaria, 
                         "trimestre": trim_atual, "ano": ano_str_busca,
-                        "base": base_didatica_info
+                        "base": base_didatica_info,
+                        "is_sabado": is_sabado_avulso
                     }
                     st.session_state.v_plano = int(time.time())
                     st.rerun()
@@ -598,13 +502,14 @@ if menu == "📅 Planejamento (Ponto ID)":
         if "p_temp" in st.session_state:
             txt_bruto = st.session_state.p_temp
             meta = st.session_state.get("p_meta", {})
+            is_sabado_avulso = meta.get("is_sabado", False)
             
             st.markdown("---")
             with st.container(border=True):
                 st.markdown(f"### 📋 Conferência de Regência: **{meta.get('semana')}**")
                 cm1, cm2, cm3, cm4 = st.columns([1, 1, 1, 2])
                 cm1.metric("Série/Ano", meta.get('ano'))
-                cm2.metric("Carga Horária", meta.get('carga'))
+                cm2.metric("Carga Horária", "Sábado Letivo" if is_sabado_avulso else meta.get('carga'))
                 cm3.metric("Trimestre", meta.get('trimestre'))
                 cm4.metric("📖 Base Didática", meta.get('base'))
 
@@ -646,16 +551,21 @@ if menu == "📅 Planejamento (Ponto ID)":
                 ed_espec = st.text_area("Conteúdos Específicos:", ai.extrair_tag(txt_bruto, "CONTEUDOS_ESPECIFICOS"), key=f"ed_e_{v}") if keep_conteudo else "N/A"
                 ed_objs = st.text_area("Objetivos de Aprendizagem:", ai.extrair_tag(txt_bruto, "OBJETIVOS_ENSINO"), key=f"ed_o_{v}") if keep_objetivos else "N/A"
                 
-                ed_base = st.text_input("📖 Referência de Base (Livro/Páginas):", ai.extrair_tag(txt_bruto, "BASE_DIDATICA") or meta.get('base'), key=f"ed_base_{v}")
+                ed_base = st.text_input("📖 Referência de Base (Livro/Páginas/Sites):", ai.extrair_tag(txt_bruto, "BASE_DIDATICA") or meta.get('base'), key=f"ed_base_{v}")
                 ed_just = st.text_area("Justificativa Pedagógica:", ai.extrair_tag(txt_bruto, "JUSTIFICATIVA_PEDAGOGICA"), key=f"ed_j_{v}") if keep_justificativa else "N/A"
                 
                 st.markdown("#### 🏫 Roteiro de Aulas")
-                ed_a1 = st.text_area("AULA 1:", ai.extrair_tag(txt_bruto, "AULA_1"), height=200, key=f"a1_{v}")
-                if "1 Aula" not in meta.get('carga', ''):
-                    ed_a2 = st.text_area("AULA 2:", ai.extrair_tag(txt_bruto, "AULA_2"), height=200, key=f"a2_{v}")
-                else: ed_a2 = "N/A"
+                if is_sabado_avulso:
+                    ed_a1 = "N/A"
+                    ed_a2 = "N/A"
+                    ed_a3 = st.text_area("SÁBADO LETIVO:", ai.extrair_tag(txt_bruto, "SABADO_LETIVO"), height=300, key=f"ed_a3_{v}")
+                else:
+                    ed_a1 = st.text_area("AULA 1:", ai.extrair_tag(txt_bruto, "AULA_1"), height=200, key=f"a1_{v}")
+                    if "1 Aula" not in meta.get('carga', ''):
+                        ed_a2 = st.text_area("AULA 2:", ai.extrair_tag(txt_bruto, "AULA_2"), height=200, key=f"a2_{v}")
+                    else: ed_a2 = "N/A"
+                    ed_a3 = "N/A"
                 
-                ed_a3 = st.text_area("SÁBADO LETIVO:", ai.extrair_tag(txt_bruto, "SABADO_LETIVO") or "N/A", key=f"ed_a3_{v}")
                 ed_ava = st.text_area("Avaliação/Logística:", ai.extrair_tag(txt_bruto, "AVALIACAO_DE_MERITO") or ai.extrair_tag(txt_bruto, "AVALIACAO"), key=f"ed_ava_{v}")
                 ed_dua = st.text_area("Estratégia DUA/PEI:", ai.extrair_tag(txt_bruto, "ESTRATEGIA_DUA_PEI") or ai.extrair_tag(txt_bruto, "ADAPTACAO_PEI"), key=f"ed_dua_{v}")
 
@@ -663,18 +573,27 @@ if menu == "📅 Planejamento (Ponto ID)":
                 if st.button("💾 HOMOLOGAR PLANO E ENVIAR PARA O HUB DE PRODUÇÃO", use_container_width=True, type="primary"):
                     with st.status("Gerando DOCX e Sincronizando com o Google Drive...") as status:
                         final_ano_str = meta.get('ano')
-                        nome_arquivo = f"PLANO_{final_ano_str.replace('º','')}_{meta.get('semana').replace(' ', '')}"
                         
-                        db.excluir_plano_completo(meta.get('semana'), final_ano_str)
+                        # Se for sábado, adiciona um sufixo para não sobrescrever o plano da semana regular
+                        sufixo_arq = "_SABADO" if is_sabado_avulso else ""
+                        nome_arquivo = f"PLANO_{final_ano_str.replace('º','')}_{meta.get('semana').replace(' ', '')}{sufixo_arq}"
                         
+                        db.excluir_plano_completo(meta.get('semana') + sufixo_arq, final_ano_str)
+                        
+                        roteiro_docx = f"JUSTIFICATIVA: {ed_just}\n\nCOMPETÊNCIAS: {ed_comp}\n\n"
+                        if is_sabado_avulso:
+                            roteiro_docx += f"SÁBADO LETIVO:\n{ed_a3}"
+                        else:
+                            roteiro_docx += f"AULA 01:\n{ed_a1}\n\nAULA 02:\n{ed_a2}"
+
                         dados_docx = {
                             "geral": ed_geral, "especificos": ed_espec, "objetivos": ed_objs, 
                             "recursos": ed_base, 
-                            "metodologia": f"JUSTIFICATIVA: {ed_just}\n\nCOMPETÊNCIAS: {ed_comp}\n\nAULA 01:\n{ed_a1}\n\nAULA 02:\n{ed_a2}",
+                            "metodologia": roteiro_docx,
                             "avaliacao": ed_ava, "pei": ed_dua
                         }
                         
-                        doc_io = exporter.gerar_docx_plano_pedagogico_ELITE(nome_arquivo, dados_docx, {"ano": final_ano_str, "semana": meta.get('semana'), "trimestre": meta.get('trimestre')})
+                        doc_io = exporter.gerar_docx_plano_pedagogico_ELITE(nome_arquivo, dados_docx, {"ano": final_ano_str, "semana": meta.get('semana') + sufixo_arq, "trimestre": meta.get('trimestre')})
                         link_drive = db.subir_e_converter_para_google_docs(doc_io, nome_arquivo, trimestre=meta.get('trimestre'), categoria=final_ano_str, semana=meta.get('semana'), modo="PLANEJAMENTO")
                         
                         if "https" in str(link_drive):
@@ -687,7 +606,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                                 f"[SABADO_LETIVO] {ed_a3} \n[AVALIACAO_DE_MERITO] {ed_ava} \n"
                                 f"[ESTRATEGIA_DUA_PEI] {ed_dua} \n--- LINK DRIVE --- {link_drive}"
                             )
-                            db.salvar_no_banco("DB_PLANOS",[datetime.now().strftime("%d/%m/%Y"), meta.get('semana'), final_ano_str, meta.get('trimestre'), "HUB_ATIVO", final_txt, link_drive])
+                            db.salvar_no_banco("DB_PLANOS",[datetime.now().strftime("%d/%m/%Y"), meta.get('semana') + sufixo_arq, final_ano_str, meta.get('trimestre'), "HUB_ATIVO", final_txt, link_drive])
                             status.update(label="✅ Plano Sincronizado com Sucesso!", state="complete")
                             st.balloons(); reset_planejamento()
 
@@ -704,19 +623,20 @@ if menu == "📅 Planejamento (Ponto ID)":
                 
                 with c_v2:
                     st.markdown("##### 🏫 Roteiro de Execução")
-                    with st.container(border=True):
-                        st.write(f"**📘 AULA 1:**\n{ed_a1}")
-                    if "1 Aula" not in meta.get('carga', ''):
+                    if is_sabado_avulso:
                         with st.container(border=True):
-                            st.write(f"**📗 AULA 2:**\n{ed_a2}")
+                            st.write(f"**🗓️ SÁBADO LETIVO:**\n{ed_a3}")
+                    else:
+                        with st.container(border=True):
+                            st.write(f"**📘 AULA 1:**\n{ed_a1}")
+                        if "1 Aula" not in meta.get('carga', ''):
+                            with st.container(border=True):
+                                st.write(f"**📗 AULA 2:**\n{ed_a2}")
                 
                 st.divider()
                 c_v3, c_v4 = st.columns(2)
                 with c_v3: st.warning(f"**♿ Estratégia DUA/PEI (Equidade):**\n{ed_dua}")
                 with c_v4: st.error(f"**📝 Avaliação de Mérito:**\n{ed_ava}")
-                
-                if ed_a3 and "N/A" not in ed_a3.upper() and "Atividade desativada" not in ed_a3:
-                    st.info(f"**🗓️ Sábado Letivo:**\n{ed_a3}")
 
     # --- ABA 2: DASHBOARD DE PRODUÇÃO ---
     with tab_producao:
@@ -737,11 +657,15 @@ if menu == "📅 Planejamento (Ponto ID)":
                         
                         c_p1.markdown(f"**{sem_ref}**\n`Série: {ano_ref}`")
                         
-                        aulas_que_devem_existir = ["Aula 1"] 
-                        conteudo_a2 = ai.extrair_tag(plano_txt, "AULA_2")
+                        aulas_que_devem_existir =[]
                         
-                        if conteudo_a2 and "não previsto" not in conteudo_a2.lower() and "n/a" not in conteudo_a2.lower() and len(conteudo_a2) > 30:
-                            aulas_que_devem_existir.append("Aula 2")
+                        if "_SABADO" in sem_ref or "Sábado" in sem_ref:
+                            aulas_que_devem_existir.append("Sábado Letivo")
+                        else:
+                            aulas_que_devem_existir.append("Aula 1")
+                            conteudo_a2 = ai.extrair_tag(plano_txt, "AULA_2")
+                            if conteudo_a2 and "não previsto" not in conteudo_a2.lower() and "n/a" not in conteudo_a2.lower() and len(conteudo_a2) > 30:
+                                aulas_que_devem_existir.append("Aula 2")
                         
                         aulas_no_banco = df_aulas[(df_aulas['SEMANA_REF'] == sem_ref) & (df_aulas['ANO'] == ano_ref)]
                         lista_materiais_prontos = aulas_no_banco['TIPO_MATERIAL'].astype(str).tolist()
@@ -837,26 +761,28 @@ if menu == "📅 Planejamento (Ponto ID)":
                     
                     st.divider()
                     st.markdown("##### 🏫 Roteiro de Execução")
-                    c_v1, c_v2 = st.columns(2)
-                    with c_v1: 
+                    
+                    val_sab = ai.extrair_tag(raw_h, "SABADO_LETIVO")
+                    if val_sab and "N/A" not in val_sab.upper() and "não programada" not in val_sab:
                         with st.container(border=True):
-                            st.write(f"**📘 AULA 1:**\n{ai.extrair_tag(raw_h, 'AULA_1')}")
-                    with c_v2: 
-                        val_a2 = ai.extrair_tag(raw_h, 'AULA_2')
-                        if val_a2 and "N/A" not in val_a2.upper() and "não previsto" not in val_a2:
+                            st.write(f"**🗓️ SÁBADO LETIVO:**\n{val_sab}")
+                    else:
+                        c_v1, c_v2 = st.columns(2)
+                        with c_v1: 
                             with st.container(border=True):
-                                st.write(f"**📗 AULA 2:**\n{val_a2}")
-                        else:
-                            st.caption("Sem Aula 2 planejada para esta semana.")
+                                st.write(f"**📘 AULA 1:**\n{ai.extrair_tag(raw_h, 'AULA_1')}")
+                        with c_v2: 
+                            val_a2 = ai.extrair_tag(raw_h, 'AULA_2')
+                            if val_a2 and "N/A" not in val_a2.upper() and "não previsto" not in val_a2:
+                                with st.container(border=True):
+                                    st.write(f"**📗 AULA 2:**\n{val_a2}")
+                            else:
+                                st.caption("Sem Aula 2 planejada para esta semana.")
                     
                     st.divider()
                     c_v3, c_v4 = st.columns(2)
                     with c_v3: st.warning(f"**♿ Estratégia DUA/PEI:**\n{ai.extrair_tag(raw_h, 'ESTRATEGIA_DUA_PEI')}")
                     with c_v4: st.error(f"**📝 Avaliação de Mérito:**\n{ai.extrair_tag(raw_h, 'AVALIACAO_DE_MERITO')}")
-                    
-                    val_sab = ai.extrair_tag(raw_h, "SABADO_LETIVO")
-                    if val_sab and "N/A" not in val_sab.upper() and "não programada" not in val_sab:
-                        st.info(f"**🗓️ Sábado Letivo:**\n{val_sab}")
                 
                 if st.button("🗑️ EXCLUIR PLANO DO ACERVO", use_container_width=True, key=f"btn_del_plan_{sel_h}"):
                     if db.excluir_plano_completo(sel_h, dados_h["ANO"]): 
@@ -926,6 +852,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                 c3.metric("Progresso II Trimestre", f"{p_ii}%")
 
                 st.plotly_chart(px.bar(progresso_trim, x="TRIMESTRE", y="%", text="%", title=f"Evolução da Cobertura Real - {ano_m}º Ano", color="%", color_continuous_scale="RdYlGn", range_y=[0, 110]), use_container_width=True)
+
 
 
 # ==============================================================================
