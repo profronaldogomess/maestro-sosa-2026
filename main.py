@@ -1005,12 +1005,52 @@ elif menu == "🧪 Criador de Aulas":
 
             if st.button("🗑️ DESCARTAR EDIÇÃO E VOLTAR"): reset_laboratorio()
         
-        t_prof, t_alu, t_gab, t_pei, t_img, t_sync = st.tabs(["👨‍🏫 Professor", "📝 Aluno", "✅ Gabarito", "♿ PEI", "🎨 Imagens", "☁️ SINCRONIA"])
-        with t_prof: st.text_area("Lousa/Mediação:", ai.extrair_tag(txt_base, "PROFESSOR"), height=450, key=f"ed_prof_reg_{v}")
-        with t_alu: st.text_area("Folha/Roteiro:", ai.extrair_tag(txt_base, "ALUNO"), height=450, key=f"ed_alu_reg_{v}")
-        with t_gab: st.text_area("Gabarito:", ai.extrair_tag(txt_base, "GABARITO"), height=200, key=f"ed_res_reg_{v}")
-        with t_pei: st.text_area("PEI (Obrigatório):", ai.extrair_tag(txt_base, "PEI"), height=400, key=f"ed_pei_reg_{v}")
-        with t_img: st.text_area("Prompts de Imagem:", ai.extrair_tag(txt_base, "IMAGENS"), height=200, key=f"ed_img_reg_{v}")
+        st.markdown("---")
+        
+        # ==============================================================================
+        # 👁️ MODO LEITURA (RENDERIZAÇÃO LATEX)
+        # ==============================================================================
+        c_tog1, c_tog2 = st.columns([1, 2])
+        modo_leitura = c_tog1.toggle("👁️ Ativar Modo Leitura (Renderizar Matemática)", value=False, help="Ative para ver as equações LaTeX formatadas. Desative para editar o texto.")
+        
+        val_prof = ai.extrair_tag(txt_base, "PROFESSOR")
+        val_alu = ai.extrair_tag(txt_base, "ALUNO")
+        val_gab = ai.extrair_tag(txt_base, "GABARITO")
+        val_pei = ai.extrair_tag(txt_base, "PEI")
+        val_img = ai.extrair_tag(txt_base, "IMAGENS")
+
+        t_prof, t_alu, t_gab, t_pei_tab, t_img_tab, t_sync = st.tabs(["👨‍🏫 Professor", "📝 Aluno", "✅ Gabarito", "♿ PEI", "🎨 Imagens", "☁️ SINCRONIA"])
+        
+        with t_prof: 
+            if modo_leitura:
+                st.markdown(val_prof)
+                ed_prof = val_prof
+            else:
+                ed_prof = st.text_area("Lousa/Mediação:", val_prof, height=450, key=f"ed_prof_reg_{v}")
+        
+        with t_alu: 
+            if modo_leitura:
+                st.markdown(val_alu)
+                ed_alu = val_alu
+            else:
+                ed_alu = st.text_area("Folha/Roteiro:", val_alu, height=450, key=f"ed_alu_reg_{v}")
+        
+        with t_gab: 
+            if modo_leitura:
+                st.markdown(val_gab)
+                ed_gab = val_gab
+            else:
+                ed_gab = st.text_area("Gabarito:", val_gab, height=200, key=f"ed_res_reg_{v}")
+        
+        with t_pei_tab: 
+            if modo_leitura:
+                st.markdown(val_pei)
+                ed_pei = val_pei
+            else:
+                ed_pei = st.text_area("PEI (Obrigatório):", val_pei, height=400, key=f"ed_pei_reg_{v}")
+        
+        with t_img_tab: 
+            ed_img = st.text_area("Prompts de Imagem:", val_img, height=200, key=f"ed_img_reg_{v}")
 
         # --- ☁️ ABA DE SINCRONIA (TRIPLE-SYNC) ---
         with t_sync:
@@ -1026,19 +1066,19 @@ elif menu == "🧪 Criador de Aulas":
                     info_doc = {"ano": ano_str, "trimestre": "I Trimestre", "semana": sem_ref}
 
                     status.write("📝 Gerando Material do Aluno/Roteiro...")
-                    doc_alu = exporter.gerar_docx_aluno_v24(s_id, ai.extrair_tag(txt_base, "ALUNO"), info_doc)
+                    doc_alu = exporter.gerar_docx_aluno_v24(s_id, ed_alu, info_doc)
                     link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{s_id}_ALUNO", modo="AULA")
                     
                     status.write("♿ Gerando Atividade Adaptada PEI...")
-                    doc_pei = exporter.gerar_docx_pei_v25(f"{s_id}_PEI", ai.extrair_tag(txt_base, "PEI"), info_doc)
+                    doc_pei = exporter.gerar_docx_pei_v25(f"{s_id}_PEI", ed_pei, info_doc)
                     link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{s_id}_PEI", modo="AULA")
                     
                     status.write("👨‍🏫 Gerando Guia de Mediação do Professor...")
-                    doc_prof = exporter.gerar_docx_professor_v25(s_id, ai.extrair_tag(txt_base, "PROFESSOR"), info_doc)
+                    doc_prof = exporter.gerar_docx_professor_v25(s_id, ed_prof, info_doc)
                     link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{s_id}_PROF", modo="AULA")
                     
                     links_f = f"--- LINKS ---\nRegular({link_alu})\nPEI({link_pei})\nProf({link_prof})"
-                    conteudo_final = txt_base + f"\n\n{links_f}"
+                    conteudo_final = f"[PROFESSOR]\n{ed_prof}\n\n[ALUNO]\n{ed_alu}\n\n[GABARITO]\n{ed_gab}\n\n[PEI]\n{ed_pei}\n\n[IMAGENS]\n{ed_img}\n\n{links_f}"
                     
                     db.salvar_no_banco("DB_AULAS_PRONTAS",[
                         datetime.now().strftime("%d/%m/%Y"), 
@@ -1277,7 +1317,7 @@ elif menu == "🧪 Criador de Aulas":
                                                 f"1. Na tag[PROFESSOR]: Escreva apenas as instruções de logística, tempo, regras da prova e orientações de preenchimento de gabarito.\n"
                                                 f"2. Nas tags [ALUNO] e [PEI]: Escreva APENAS 'Material de avaliação impresso separadamente. Não há atividade de caderno hoje.'\n"
                                                 f"3. É TERMINANTEMENTE PROIBIDO gerar questões ou exercícios.\n"
-                                                f"🚨 FORMATO OBRIGATÓRIO: Você DEVE separar o texto usando EXATAMENTE as tags entre colchetes:[PROFESSOR],[ALUNO], [PEI], [GABARITO], [IMAGENS]."
+                                                f"🚨 FORMATO OBRIGATÓRIO: Você DEVE separar o texto usando EXATAMENTE as tags entre colchetes:[PROFESSOR],[ALUNO],[PEI], [GABARITO], [IMAGENS]."
                                             )
                                         elif is_correcao:
                                             missao_especifica = (
@@ -1296,7 +1336,7 @@ elif menu == "🧪 Criador de Aulas":
                                                 f"4.[ALUNO] (REGULAR): É OBRIGATÓRIO gerar EXATAMENTE {qtd_q_prod} questões inéditas e desafiadoras. Formato: **QUESTÃO X.** enunciado.\n"
                                                 f"5.[PEI] (INCLUSÃO): É OBRIGATÓRIO gerar EXATAMENTE {qtd_q_prod} questões adaptadas, cada uma com[PARA LEMBRAR],[PASSO A PASSO] e [ PROMPT IMAGEM ].\n"
                                                 f"6.[GABARITO]: Forneça as respostas detalhadas para as {qtd_q_prod} questões regulares e as {qtd_q_prod} questões PEI.\n"
-                                                f"🚨 FORMATO OBRIGATÓRIO: Você DEVE separar o texto usando EXATAMENTE as tags entre colchetes: [PROFESSOR], [ALUNO], [PEI],[GABARITO],[IMAGENS]."
+                                                f"🚨 FORMATO OBRIGATÓRIO: Você DEVE separar o texto usando EXATAMENTE as tags entre colchetes: [PROFESSOR],[ALUNO], [PEI],[GABARITO],[IMAGENS]."
                                             )
 
                                         prompt_manual = (
@@ -1477,7 +1517,7 @@ elif menu == "🧪 Criador de Aulas":
                                         f"- {qtd_des} Questão Desafio (Boss Fight).\n"
                                         f"EXTRAS: {instr_extra_h}\n\n"
                                         f"BASE DE CONHECIMENTO (Use os conceitos ensinados nestas aulas para criar as questões):\n{contexto_aulas}\n\n"
-                                        f"MISSÃO: Use o ID_FORNECIDO na tag [SOSA_ID]. Gere o material completo com as TAGS [SOSA_ID],[PROFESSOR], [ALUNO], [GABARITO],[PEI],[GABARITO_PEI],[IMAGENS]."
+                                        f"MISSÃO: Use o ID_FORNECIDO na tag[SOSA_ID]. Gere o material completo com as TAGS [SOSA_ID],[PROFESSOR],[ALUNO], [GABARITO],[PEI], [GABARITO_PEI],[IMAGENS]."
                                     )
                                     
                                     st.session_state.lab_temp = ai.gerar_ia("ARQUITETO_LISTAS_HIBRIDAS", prompt_h, usar_busca=True)
@@ -1544,7 +1584,7 @@ elif menu == "🧪 Criador de Aulas":
                                             f"CONTEÚDOS: {', '.join(sel_cont_c)}.\n"
                                             f"OBJETIVOS: {', '.join(sel_obj_c)}.\n"
                                             f"QUANTIDADE: {qtd_q_comp} questões. EXTRAS: {instr_extra_c}.\n\n"
-                                            f"MISSÃO: Use o ID_FORNECIDO na tag[SOSA_ID]. Gere com as TAGS [VALOR: 0.0],[SOSA_ID],[MAPA_DE_RECOMPOSICAO], [PROFESSOR], [ALUNO],[RESPOSTAS_PEDAGOGICAS],[GRADE_DE_CORRECAO], [PEI]."
+                                            f"MISSÃO: Use o ID_FORNECIDO na tag[SOSA_ID]. Gere com as TAGS[VALOR: 0.0],[SOSA_ID],[MAPA_DE_RECOMPOSICAO],[PROFESSOR], [ALUNO],[RESPOSTAS_PEDAGOGICAS],[GRADE_DE_CORRECAO], [PEI]."
                                         )
                                         
                                         st.session_state.lab_temp = ai.gerar_ia("ARQUITETO_RECOMPOSICAO_V68_ELITE", prompt_c, usar_busca=True)
@@ -1598,7 +1638,6 @@ elif menu == "🧪 Criador de Aulas":
 
                         c_b1, c_b2, c_b3, c_b4, c_b5 = st.columns(5)
 
-                        # 🚨 VACINA ANTI-DUPLICIDADE APLICADA AQUI
                         if l_alu and "http" in str(l_alu):
                             c_b1.link_button("📝 ALUNO", str(l_alu), use_container_width=True, type="primary")
                         else:
