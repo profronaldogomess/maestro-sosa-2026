@@ -937,7 +937,7 @@ elif menu == "🧪 Criador de Aulas":
     st.caption("💡 **Guia de Comando:** Transforme seus planejamentos (Ponto ID) em materiais físicos de alta densidade (Folha do Aluno, Guia do Professor e Adaptação PEI) com um clique.")
     
     def reset_laboratorio():
-        keys_to_del =["lab_temp", "lab_pei", "lab_gab_pei", "refino_lab_ativo", "sosa_id_atual", "lab_meta", "hub_origem"]
+        keys_to_del =["lab_temp", "lab_pei", "lab_gab_pei", "refino_lab_ativo", "sosa_id_atual", "lab_meta", "hub_origem", "chat_history_lab"]
         for k in keys_to_del:
             if k in st.session_state: del st.session_state[k]
         st.cache_data.clear() 
@@ -957,14 +957,52 @@ elif menu == "🧪 Criador de Aulas":
         s_id = st.session_state.get("sosa_id_atual", "SEM-ID")
         st.success(f"💎 Material em Edição: **{s_id}**")
 
+        # ==============================================================================
+        # 🤖 MAESTRO COPILOT (CHATBOT DE REFINO)
+        # ==============================================================================
         with st.container(border=True):
-            st.subheader("🤖 Refinador Maestro (Ajuste Rápido)")
-            st.caption("Peça para a IA reescrever partes específicas antes de salvar o documento final.")
-            cmd_refine_lab = st.chat_input("Ex: 'Deixe o texto do aluno mais simples' ou 'Adicione mais uma questão'...", key=f"chat_lab_ref_{v}")
-            if cmd_refine_lab:
-                with st.spinner("Reengenharia em curso..."):
-                    st.session_state.lab_temp = ai.gerar_ia("REFINADOR_MATERIAIS", f"ORDEM: {cmd_refine_lab}\n\nATUAL:\n{txt_base}")
-                    st.rerun()
+            st.subheader("🤖 Maestro Copilot (Coautoria em Tempo Real)")
+            st.caption("Converse com a IA para ajustar o material. O editor abaixo será atualizado automaticamente.")
+            
+            if "chat_history_lab" not in st.session_state:
+                st.session_state.chat_history_lab =[{"role": "assistant", "avatar": "🤖", "content": "Saudações, Mestre! O material base foi gerado. Como deseja refinar a nossa estratégia?"}]
+            
+            chat_container_lab = st.container(height=300)
+            with chat_container_lab:
+                for msg in st.session_state.chat_history_lab:
+                    with st.chat_message(msg["role"], avatar=msg["avatar"]):
+                        st.markdown(msg["content"])
+            
+            if cmd_refine_lab := st.chat_input("Ex: 'Deixe o texto do aluno mais simples' ou 'Adicione mais uma questão'...", key=f"chat_lab_ref_{v}"):
+                st.session_state.chat_history_lab.append({"role": "user", "avatar": "💻", "content": cmd_refine_lab})
+                
+                with chat_container_lab:
+                    with st.chat_message("user", avatar="💻"):
+                        st.markdown(cmd_refine_lab)
+                    with st.chat_message("assistant", avatar="🤖"):
+                        with st.spinner("Reengenharia em curso..."):
+                            hist_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history_lab[-5:]])
+                            prompt_refino = (
+                                f"HISTÓRICO DA CONVERSA:\n{hist_text}\n\n"
+                                f"ORDEM ATUAL: {cmd_refine_lab}\n\n"
+                                f"MATERIAL ATUAL PARA REFINAR:\n{txt_base}"
+                            )
+                            
+                            resultado_refino = ai.gerar_ia("REFINADOR_MATERIAIS", prompt_refino)
+                            
+                            msg_chat = ai.extrair_tag(resultado_refino, "MENSAGEM_CHAT")
+                            novo_conteudo = ai.extrair_tag(resultado_refino, "CONTEUDO_ATUALIZADO")
+                            
+                            if not novo_conteudo:
+                                novo_conteudo = resultado_refino
+                                msg_chat = "Material atualizado conforme solicitado, Mestre."
+                                
+                            st.markdown(msg_chat)
+                            st.session_state.chat_history_lab.append({"role": "assistant", "avatar": "🤖", "content": msg_chat})
+                            st.session_state.lab_temp = novo_conteudo
+                            st.session_state.v_lab = int(time.time())
+                            st.rerun()
+
             if st.button("🗑️ DESCARTAR EDIÇÃO E VOLTAR"): reset_laboratorio()
         
         t_prof, t_alu, t_gab, t_pei, t_img, t_sync = st.tabs(["👨‍🏫 Professor", "📝 Aluno", "✅ Gabarito", "♿ PEI", "🎨 Imagens", "☁️ SINCRONIA"])
@@ -1013,6 +1051,7 @@ elif menu == "🧪 Criador de Aulas":
                     
                     status.update(label="✅ Sincronizado com Sucesso!", state="complete")
                     st.balloons()
+                    import time
                     time.sleep(1)
                     reset_laboratorio()
 
@@ -1029,7 +1068,7 @@ elif menu == "🧪 Criador de Aulas":
             
             with st.container(border=True):
                 c1, c2 = st.columns([1, 2])
-                ano_lab = c1.selectbox("Série/Ano Alvo:", [6, 7, 8, 9], key=f"prod_ano_{v}")
+                ano_lab = c1.selectbox("Série/Ano Alvo:",[6, 7, 8, 9], key=f"prod_ano_{v}")
                 planos_ano = df_planos[df_planos["ANO"].astype(str).str.contains(str(ano_lab))]
                 
                 if planos_ano.empty: 
@@ -1197,6 +1236,7 @@ elif menu == "🧪 Criador de Aulas":
                                                 "N/A"
                                             ])
                                             st.success("✅ Evento oficializado no Acervo! Já disponível no Cockpit.")
+                                            import time
                                             time.sleep(1.5)
                                             st.rerun()
                             else:
@@ -1216,6 +1256,10 @@ elif menu == "🧪 Criador de Aulas":
 
                                 st.markdown("<br>", unsafe_allow_html=True)
                                 if st.button("🧠 INICIAR MOTOR DE IA: GERAR AULA", use_container_width=True, type="primary"):
+                                    
+                                    if "chat_history_lab" in st.session_state:
+                                        del st.session_state["chat_history_lab"]
+                                        
                                     with st.spinner("Sosa estudando o roteiro e arquitetando material..."):
                                         
                                         nome_elite = util.gerar_nome_material_elite(ano_lab, aula_alvo_prod, sem_lab)
@@ -1230,10 +1274,10 @@ elif menu == "🧪 Criador de Aulas":
                                         if is_avaliacao and not is_correcao:
                                             missao_especifica = (
                                                 f"🚨 ATENÇÃO: Esta é uma aula de APLICAÇÃO DE AVALIAÇÃO.\n"
-                                                f"1. Na tag [PROFESSOR]: Escreva apenas as instruções de logística, tempo, regras da prova e orientações de preenchimento de gabarito.\n"
+                                                f"1. Na tag[PROFESSOR]: Escreva apenas as instruções de logística, tempo, regras da prova e orientações de preenchimento de gabarito.\n"
                                                 f"2. Nas tags [ALUNO] e [PEI]: Escreva APENAS 'Material de avaliação impresso separadamente. Não há atividade de caderno hoje.'\n"
                                                 f"3. É TERMINANTEMENTE PROIBIDO gerar questões ou exercícios.\n"
-                                                f"🚨 FORMATO OBRIGATÓRIO: Você DEVE separar o texto usando EXATAMENTE as tags entre colchetes: [PROFESSOR], [ALUNO], [PEI], [GABARITO], [IMAGENS]."
+                                                f"🚨 FORMATO OBRIGATÓRIO: Você DEVE separar o texto usando EXATAMENTE as tags entre colchetes:[PROFESSOR],[ALUNO], [PEI], [GABARITO], [IMAGENS]."
                                             )
                                         elif is_correcao:
                                             missao_especifica = (
@@ -1241,18 +1285,18 @@ elif menu == "🧪 Criador de Aulas":
                                                 f"1. Na tag [PROFESSOR]: Escreva um guia de como mediar a correção no quadro. USE AS QUESTÕES DA AVALIAÇÃO VINCULADA ABAIXO para dar exemplos reais de como explicar os erros (distratores).\n"
                                                 f"2. Nas tags [ALUNO] e [PEI]: Escreva APENAS 'Acompanhamento da correção no quadro e anotações de feedback. Não há nova lista de exercícios hoje.'\n"
                                                 f"3. É TERMINANTEMENTE PROIBIDO gerar novas questões.\n"
-                                                f"🚨 FORMATO OBRIGATÓRIO: Você DEVE separar o texto usando EXATAMENTE as tags entre colchetes: [PROFESSOR], [ALUNO], [PEI], [GABARITO],[IMAGENS]."
+                                                f"🚨 FORMATO OBRIGATÓRIO: Você DEVE separar o texto usando EXATAMENTE as tags entre colchetes:[PROFESSOR], [ALUNO], [PEI], [GABARITO],[IMAGENS]."
                                             )
                                         else:
                                             missao_especifica = (
                                                 f"🚨 MISSÃO DE ALTA DENSIDADE E RIGOR QUANTITATIVO:\n"
-                                                f"1. [PROFESSOR]: Escreva um TRATADO DIDÁTICO denso. Explique o conceito de {obj_geral} com profundidade técnica antes de dar o roteiro de aula.\n"
+                                                f"1.[PROFESSOR]: Escreva um TRATADO DIDÁTICO denso. Explique o conceito de {obj_geral} com profundidade técnica antes de dar o roteiro de aula.\n"
                                                 f"2. CONEXÃO ALPHA: Use o Google Search para trazer dados científicos reais de 2026 que validem a importância deste tema.\n"
                                                 f"{regra_livro}\n"
-                                                f"4. [ALUNO] (REGULAR): É OBRIGATÓRIO gerar EXATAMENTE {qtd_q_prod} questões inéditas e desafiadoras. Formato: **QUESTÃO X.** enunciado.\n"
-                                                f"5. [PEI] (INCLUSÃO): É OBRIGATÓRIO gerar EXATAMENTE {qtd_q_prod} questões adaptadas, cada uma com [PARA LEMBRAR],[PASSO A PASSO] e [ PROMPT IMAGEM ].\n"
+                                                f"4.[ALUNO] (REGULAR): É OBRIGATÓRIO gerar EXATAMENTE {qtd_q_prod} questões inéditas e desafiadoras. Formato: **QUESTÃO X.** enunciado.\n"
+                                                f"5.[PEI] (INCLUSÃO): É OBRIGATÓRIO gerar EXATAMENTE {qtd_q_prod} questões adaptadas, cada uma com[PARA LEMBRAR],[PASSO A PASSO] e [ PROMPT IMAGEM ].\n"
                                                 f"6.[GABARITO]: Forneça as respostas detalhadas para as {qtd_q_prod} questões regulares e as {qtd_q_prod} questões PEI.\n"
-                                                f"🚨 FORMATO OBRIGATÓRIO: Você DEVE separar o texto usando EXATAMENTE as tags entre colchetes: [PROFESSOR], [ALUNO], [PEI], [GABARITO], [IMAGENS]."
+                                                f"🚨 FORMATO OBRIGATÓRIO: Você DEVE separar o texto usando EXATAMENTE as tags entre colchetes: [PROFESSOR], [ALUNO], [PEI],[GABARITO],[IMAGENS]."
                                             )
 
                                         prompt_manual = (
@@ -1329,6 +1373,9 @@ elif menu == "🧪 Criador de Aulas":
                         if not tema_t or not conts_t:
                             st.error("Defina o Título e selecione ao menos um Conteúdo da Matriz.")
                         else:
+                            if "chat_history_lab" in st.session_state:
+                                del st.session_state["chat_history_lab"]
+                                
                             with st.spinner("Maestro Sosa arquitetando roteiro investigativo..."):
                                 nome_legivel = util.gerar_nome_material_elite(ano_t, "Projeto", tema_t)
                                 
@@ -1346,7 +1393,7 @@ elif menu == "🧪 Criador de Aulas":
                                     f"CONTEÚDOS ITABUNA: {', '.join(conts_t)}.\n"
                                     f"VALOR: {util.sosa_to_str(valor_t)} | DURAÇÃO: {qtd_aulas_t} aulas.\n"
                                     f"EXTRAS: {instr_extra_p}.\n\n"
-                                    f"MISSÃO: Use o ID_FORNECIDO na tag [SOSA_ID]. Gere o material completo com as TAGS [SOSA_ID], [JUSTIFICATIVA_PHC],[CONTEXTO_INVESTIGATIVO], [MISSÃO_DE_PESQUISA], [PASSO_A_PASSO],[PRODUTO_ESPERADO], [ESTRATEGIA_DUA_PEI],[RUBRICA_DE_MERITO]."
+                                    f"MISSÃO: Use o ID_FORNECIDO na tag[SOSA_ID]. Gere o material completo com as TAGS[SOSA_ID],[JUSTIFICATIVA_PHC],[CONTEXTO_INVESTIGATIVO],[MISSÃO_DE_PESQUISA],[PASSO_A_PASSO],[PRODUTO_ESPERADO],[ESTRATEGIA_DUA_PEI],[RUBRICA_DE_MERITO]."
                                 )
                                 st.session_state.lab_temp = ai.gerar_ia("ARQUITETO_CIENTIFICO_V33", prompt_t, usar_busca=True)
                                 st.session_state.v_lab = int(time.time())
@@ -1359,7 +1406,7 @@ elif menu == "🧪 Criador de Aulas":
             
             with st.container(border=True):
                 c1, c2 = st.columns([1, 2])
-                ano_alvo = c1.selectbox("Série Alvo (Sua Turma):", [6, 7, 8, 9], key=f"comp_ano_alvo_{v}")
+                ano_alvo = c1.selectbox("Série Alvo (Sua Turma):",[6, 7, 8, 9], key=f"comp_ano_alvo_{v}")
                 
                 origem_tipo = c2.radio("Origem do Conteúdo (DNA Curricular):",["🟢 Série Atual (Lista de Consolidação Híbrida)", "🔴 Ano Anterior (Intervenção/Recomposição)"], 
                     horizontal=True, key=f"comp_origem_tipo_{v}")
@@ -1400,6 +1447,9 @@ elif menu == "🧪 Criador de Aulas":
                             if total_q == 0:
                                 st.error("⚠️ A lista precisa ter pelo menos 1 questão configurada.")
                             else:
+                                if "chat_history_lab" in st.session_state:
+                                    del st.session_state["chat_history_lab"]
+                                    
                                 with st.spinner("Maestro Sosa varrendo a internet e arquitetando a lista híbrida..."):
                                     contexto_aulas = ""
                                     for aula_nome in aulas_selecionadas:
@@ -1427,7 +1477,7 @@ elif menu == "🧪 Criador de Aulas":
                                         f"- {qtd_des} Questão Desafio (Boss Fight).\n"
                                         f"EXTRAS: {instr_extra_h}\n\n"
                                         f"BASE DE CONHECIMENTO (Use os conceitos ensinados nestas aulas para criar as questões):\n{contexto_aulas}\n\n"
-                                        f"MISSÃO: Use o ID_FORNECIDO na tag [SOSA_ID]. Gere o material completo com as TAGS [SOSA_ID], [PROFESSOR], [ALUNO], [GABARITO],[PEI], [GABARITO_PEI], [IMAGENS]."
+                                        f"MISSÃO: Use o ID_FORNECIDO na tag [SOSA_ID]. Gere o material completo com as TAGS [SOSA_ID],[PROFESSOR], [ALUNO], [GABARITO],[PEI],[GABARITO_PEI],[IMAGENS]."
                                     )
                                     
                                     st.session_state.lab_temp = ai.gerar_ia("ARQUITETO_LISTAS_HIBRIDAS", prompt_h, usar_busca=True)
@@ -1466,12 +1516,15 @@ elif menu == "🧪 Criador de Aulas":
                                 
                                 st.divider()
                                 c_q1, c_q2, c_q3 = st.columns([1, 1, 2])
-                                tipo_comp = c_q1.selectbox("Objetivo:", ["Fixação", "Reforço", "Aprofundamento", "Recomposição"], key=f"comp_tipo_{v}")
+                                tipo_comp = c_q1.selectbox("Objetivo:",["Fixação", "Reforço", "Aprofundamento", "Recomposição"], key=f"comp_tipo_{v}")
                                 qtd_q_comp = c_q2.slider("Nº Questões:", 3, 15, 10, key=f"comp_q_{v}")
                                 instr_extra_c = c_q3.text_area("📝 Contexto Adicional:", key=f"comp_instr_{v}")
 
                                 st.markdown("<br>", unsafe_allow_html=True)
                                 if st.button("🧠 INICIAR MOTOR DE IA: GERAR RECOMPOSIÇÃO", use_container_width=True, type="primary"):
+                                    if "chat_history_lab" in st.session_state:
+                                        del st.session_state["chat_history_lab"]
+                                        
                                     with st.spinner("Maestro Sosa arquitetando material com DNA único..."):
                                         sosa_id_hash = util.gerar_sosa_id(tipo_comp, ano_alvo, "I") 
                                         nome_elite_c = f"RECOMP - {turma_interv} - {sosa_id_hash}"
@@ -1491,7 +1544,7 @@ elif menu == "🧪 Criador de Aulas":
                                             f"CONTEÚDOS: {', '.join(sel_cont_c)}.\n"
                                             f"OBJETIVOS: {', '.join(sel_obj_c)}.\n"
                                             f"QUANTIDADE: {qtd_q_comp} questões. EXTRAS: {instr_extra_c}.\n\n"
-                                            f"MISSÃO: Use o ID_FORNECIDO na tag [SOSA_ID]. Gere com as TAGS [VALOR: 0.0],[SOSA_ID], [MAPA_DE_RECOMPOSICAO], [PROFESSOR], [ALUNO],[RESPOSTAS_PEDAGOGICAS], [GRADE_DE_CORRECAO], [PEI]."
+                                            f"MISSÃO: Use o ID_FORNECIDO na tag[SOSA_ID]. Gere com as TAGS [VALOR: 0.0],[SOSA_ID],[MAPA_DE_RECOMPOSICAO], [PROFESSOR], [ALUNO],[RESPOSTAS_PEDAGOGICAS],[GRADE_DE_CORRECAO], [PEI]."
                                         )
                                         
                                         st.session_state.lab_temp = ai.gerar_ia("ARQUITETO_RECOMPOSICAO_V68_ELITE", prompt_c, usar_busca=True)
@@ -1504,7 +1557,7 @@ elif menu == "🧪 Criador de Aulas":
             st.caption("Histórico de todas as aulas, projetos e listas geradas.")
             
             c_m1, c_m2, c_m3 = st.columns([1, 1, 1])
-            f_trim_m = c_m1.selectbox("📅 Filtrar Trimestre:", ["Todos", "I Trimestre", "II Trimestre", "III Trimestre"], key="m_trim_filter")
+            f_trim_m = c_m1.selectbox("📅 Filtrar Trimestre:",["Todos", "I Trimestre", "II Trimestre", "III Trimestre"], key="m_trim_filter")
             f_ano_m = c_m2.selectbox("🎓 Filtrar Série:",["Todos", "6º", "7º", "8º", "9º"], key="m_ano_filter")
             f_tipo_m = c_m3.selectbox("🧪 Tipo de Ativo:",["Todos", "Aula", "PROJETO", "Fixação", "Reforço", "Recomposição", "Lista"], key="m_tipo_filter")
 
@@ -1545,25 +1598,27 @@ elif menu == "🧪 Criador de Aulas":
 
                         c_b1, c_b2, c_b3, c_b4, c_b5 = st.columns(5)
 
+                        # 🚨 VACINA ANTI-DUPLICIDADE APLICADA AQUI
                         if l_alu and "http" in str(l_alu):
                             c_b1.link_button("📝 ALUNO", str(l_alu), use_container_width=True, type="primary")
                         else:
-                            c_b1.button("⚪ SEM LINK", disabled=True, use_container_width=True)
+                            c_b1.button("⚪ SEM LINK", disabled=True, use_container_width=True, key=f"no_link_alu_{row.name}")
 
                         if l_pei and "http" in str(l_pei) and "N/A" not in str(l_pei):
                             c_b2.link_button("♿ PEI", str(l_pei), use_container_width=True)
                         else:
-                            c_b2.button("⚪ SEM PEI", disabled=True, use_container_width=True)
+                            c_b2.button("⚪ SEM PEI", disabled=True, use_container_width=True, key=f"no_link_pei_{row.name}")
 
                         if l_prof and "http" in str(l_prof) and "N/A" not in str(l_prof):
                             c_b3.link_button("👨‍🏫 PROF", str(l_prof), use_container_width=True)
                         else:
-                            c_b3.button("⚪ SEM GUIA", disabled=True, use_container_width=True)
+                            c_b3.button("⚪ SEM GUIA", disabled=True, use_container_width=True, key=f"no_link_prof_{row.name}")
                         
                         if c_b4.button("🔄 REFINAR", key=f"ref_mat_h_{row.name}", use_container_width=True):
                             st.session_state.lab_temp = txt_f
                             st.session_state.sosa_id_atual = identificador
                             st.session_state.lab_meta = {"ano": str(row["ANO"]).replace("º",""), "semana_ref": row['SEMANA_REF']}
+                            if "chat_history_lab" in st.session_state: del st.session_state["chat_history_lab"]
                             st.rerun()
                             
                         if c_b5.button("🗑️ APAGAR", key=f"del_mat_h_{row.name}", use_container_width=True):
