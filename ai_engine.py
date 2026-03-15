@@ -229,7 +229,8 @@ def extrair_tag(texto, tag):
     
     if match_bloco:
         res = match_bloco.group(1).strip()
-        res_limpo = re.sub(r'[*#$░▒▓█]', '', res)
+        # 🚨 CORREÇÃO CRÍTICA: Removido o '$' e o '*' para preservar LaTeX e Negrito!
+        res_limpo = re.sub(r'[#░▒▓█]', '', res)
         res_limpo = re.sub(r'-{3,}', '', res_limpo)
         return res_limpo.strip()
     
