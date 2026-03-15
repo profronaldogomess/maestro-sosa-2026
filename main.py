@@ -1067,7 +1067,8 @@ elif menu == "🧪 Criador de Aulas":
         # 🚨 FILTRO DE ILUSÃO DE ÓTICA: Transforma $$ em $ apenas para o Streamlit desenhar inline
         def preparar_para_leitura(texto):
             if not texto: return ""
-            return re.sub(r'\$\$\s*(.*?)\s*\$\$', r'$\1$', texto)
+            # Usa re.DOTALL para garantir que equações com quebra de linha sejam renderizadas na tela
+            return re.sub(r'\$\$(.*?)\$\$', r'$\1$', texto, flags=re.DOTALL)
 
         t_prof, t_alu, t_gab, t_pei_tab, t_img_tab, t_sync = st.tabs(["👨‍🏫 Professor", "📝 Aluno", "✅ Gabarito", "♿ PEI", "🎨 Imagens", "☁️ SINCRONIA"])
         
