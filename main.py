@@ -368,6 +368,9 @@ if menu == "📅 Planejamento (Ponto ID)":
         with st.container(border=True):
             st.markdown("### ⚙️ Passo 2: Parâmetros e Herança (Ponte Pedagógica)")
             
+            ctx_ativo_vinculado = ""
+            strat = ""
+            
             c1, c2 = st.columns([1, 2])
             ano_p = c1.selectbox("Série/Ano Alvo:",[6, 7, 8, 9], index=0, key=f"ano_sel_{v}")
             ano_str_busca = f"{ano_p}º"
@@ -376,9 +379,8 @@ if menu == "📅 Planejamento (Ponto ID)":
             todas_semanas = util.gerar_semanas()
             semanas_planejadas = df_planos[df_planos['ANO'] == ano_str_busca]['SEMANA'].tolist()
             
-            # Remove a Jornada Pedagógica e as semanas já planejadas (a menos que seja sábado avulso, aí pode repetir a semana)
             if is_sabado_avulso:
-                semanas_disponiveis = [s for s in todas_semanas if "Jornada" not in s]
+                semanas_disponiveis =[s for s in todas_semanas if "Jornada" not in s]
             else:
                 semanas_disponiveis =[s for s in todas_semanas if s.split(" (")[0] not in semanas_planejadas and "Jornada" not in s]
 
@@ -391,18 +393,133 @@ if menu == "📅 Planejamento (Ponto ID)":
             sem_limpa = sem_p.split(" (")[0]
             trim_atual = sem_p.split(" - ")[1] if " - " in sem_p else "I Trimestre"
 
-            # 🚨 RADAR DE CONTINUIDADE E PENDÊNCIAS
+            # 🚨 RADAR DE CONTINUIDADE (CORRIGIDO O BUG DA DATA)
             st.markdown("#### 🔙 Radar de Continuidade")
-            df_hist = df_planos[df_planos['ANO'] == ano_str_busca].sort_values(by='DATA', ascending=False)
+            df_hist = df_planos[df_planos['ANO'] == ano_str_busca].copy()
             plano_anterior_txt = "Início de Safra. Não há plano anterior."
             
             if not df_hist.empty:
+                # Converte para datetime real para ordenar cronologicamente de forma correta
+                df_hist['DATA_DT'] = pd.to_datetime(df_hist['DATA'], format="%d/%m/%Y", errors='coerce')
+                df_hist = df_hist.sort_values(by='DATA_DT', ascending=False)
+                
                 ultimo_plano = df_hist.iloc[0]
                 plano_anterior_txt = ultimo_plano['PLANO_TEXTO']
                 obj_ant = ai.extrair_tag(plano_anterior_txt, "OBJETO_CONHECIMENTO") or ai.extrair_tag(plano_anterior_txt, "CONTEUDO_GERAL")
                 st.info(f"**Último plano gerado ({ultimo_plano['SEMANA']}):** {obj_ant}")
             
             pendencias_ant = st.text_area("Pendências da Semana Anterior (Opcional):", placeholder="Ex: Faltou corrigir as questões 4 e 5 da lista de frações. Iniciar a Aula 1 por isso.", key=f"pend_{v}")
+
+            # ==============================================================================
+            # 🚨 SMART MATCH E MOTOR DE RECOMPOSIÇÃO (RESTAURADO)
+            # ==============================================================================
+            if tipo_semana not in["📗 Aula de Safra (Regular)", "💡 Aula Aberta (Dinâmicas e Eventos)"]:
+                st.markdown("#### 🔗 Vínculo de Ativos e Diagnóstico")
+                df_ativos_ano = df_aulas[df_aulas['ANO'] == ano_str_busca]
+                opcoes_ativos =[]
+                
+                if "Exame" in tipo_semana: opcoes_ativos = df_ativos_ano[df_ativos_ano['SEMANA_REF'] == "AVALIAÇÃO"]['TIPO_MATERIAL'].tolist()
+                elif "Revisão" in tipo_semana: opcoes_ativos = df_ativos_ano[df_ativos_ano['SEMANA_REF'] == "REVISÃO"]['TIPO_MATERIAL'].tolist()
+                elif "Trabalho" in tipo_semana: opcoes_ativos = df_ativos_ano[df_ativos_ano['TIPO_MATERIAL'].str.contains("PROJETO|TRABALHO", case=False, na=False)]['TIPO_MATERIAL'].tolist()
+                else: opcoes_ativos = df_ativos_ano[df_ativos_ano['TIPO_MATERIAL'].str.contains("SONDA|DIAGNÓSTICA", case=False, na=False)]['TIPO_MATERIAL'].tolist()
+
+                if opcoes_ativos:
+                    ativo_sel = st.selectbox("Vincular Material Existente (Smart Match):", [""] + opcoes_ativos, help="Selecione a prova ou projeto que será aplicado nesta semana para a IA ler o conteúdo.", key=f"ativo_match_{v}")
+                    if ativo_sel:
+                        dados_ativo = df_ativos_ano[df_ativos_ano['TIPO_MATERIAL'] == ativo_sel].iloc[0]
+                        ctx_ativo_vinculado = f"--- ATIVO VINCULADO: {ativo_sel} ---\nCONTEÚDO: {dados_ativo['CONTEUDO']}"
+                        
+                        # MOTOR DE RECOMPOSIÇÃO GUIADA POR DADOS
+                        if tipo_semana == "🔥 Revisão & Recomposição":
+                            with st.expander(f"📡 Radar de Diagnóstico Ativo (Série: {ano_p}º Ano)", expanded=True):
+                                st.markdown(f"**Analisando dados de todas as turmas do {ano_p}º Ano para {ativo_sel}...**")
+                                
+                                # 1. Perfil da Série Inteira
+                                alunos_rad = df_alunos[df_alunos['TURMA'].str.contains(str(ano_p))].copy()
+                                perfil_txt = ""
+                                if not alunos_rad.empty:
+                                    def categorizar_aluno(nec):
+                                        n = str(nec).upper().strip()
+                                        if "PENDENTE" in n or "SUSPEITA" in n: return "Radar"
+                                        if "DEFASAGEM LEITURA" in n: return "Barreira de Leitura"
+                                        if "DEFASAGEM MATEMÁTICA" in n or "DEFASAGEM MATEMATICA" in n: return "Defasagem Matemática"
+                                        if "ALTA PERFORMANCE" in n: return "Alta Performance"
+                                        if n in ["NENHUMA", "", "NAN", "TÍPICO", "TIPICO"]: return "Típico"
+                                        return "PEI" 
+                                    
+                                    alunos_rad['PERFIL'] = alunos_rad['NECESSIDADES'].apply(categorizar_aluno)
+                                    contagem = alunos_rad['PERFIL'].value_counts(normalize=True) * 100
+                                    
+                                    perfis_relevantes =[]
+                                    if "Barreira de Leitura" in contagem: perfis_relevantes.append(f"{contagem['Barreira de Leitura']:.0f}% com Barreira de Leitura 🧱")
+                                    if "Defasagem Matemática" in contagem: perfis_relevantes.append(f"{contagem['Defasagem Matemática']:.0f}% com Defasagem Matemática 🧮")
+                                    if "PEI" in contagem: perfis_relevantes.append(f"{contagem['PEI']:.0f}% de Inclusão Oficial ♿")
+                                    
+                                    if perfis_relevantes:
+                                        perfil_txt = " | ".join(perfis_relevantes)
+                                        st.warning(f"**Perfil Cognitivo da Série:** {perfil_txt}")
+                                    else:
+                                        st.success("**Perfil Cognitivo da Série:** Maioria Típica/Padrão.")
+                                
+                                # 2. Lacunas da Prova na Série Inteira
+                                lacunas_txt = ""
+                                nome_curto_av = ativo_sel.split("-")[0].strip().replace(" (2ª CHAMADA)", "")
+                                diag_t = df_diagnosticos[(df_diagnosticos['TURMA'].str.contains(str(ano_p))) & (df_diagnosticos['ID_AVALIACAO'].str.contains(nome_curto_av, case=False, na=False))]
+                                
+                                if not diag_t.empty:
+                                    txt_prova = str(dados_ativo['CONTEUDO'])
+                                    gab_raw = ai.extrair_tag(txt_prova, "GABARITO_TEXTO") or ai.extrair_tag(txt_prova, "GABARITO")
+                                    grade_raw = ai.extrair_tag(txt_prova, "GRADE_DE_CORRECAO")
+                                    
+                                    if gab_raw and grade_raw:
+                                        matches = re.findall(r"(\d+)[\s\.\)\-:]+([A-E])", gab_raw.upper())
+                                        gab_oficial = {int(num): letra for num, letra in matches}
+                                        if not gab_oficial:
+                                            letras = re.findall(r"\b[A-E]\b", gab_raw.upper())
+                                            gab_oficial = {i+1: letra for i, letra in enumerate(letras)}
+                                            
+                                        respostas_alunos = diag_t['RESPOSTAS_ALUNO'].astype(str).tolist()
+                                        
+                                        lacunas_stats =[]
+                                        for q_num, letra_certa in gab_oficial.items():
+                                            acertos = 0
+                                            validos = 0
+                                            for resp in respostas_alunos:
+                                                if resp == "FALTOU": continue
+                                                resp_lista = resp.split(";")
+                                                if len(resp_lista) >= q_num:
+                                                    validos += 1
+                                                    if resp_lista[q_num-1] == letra_certa:
+                                                        acertos += 1
+                                            
+                                            if validos > 0:
+                                                taxa_acerto = acertos / validos
+                                                if taxa_acerto < 0.6: 
+                                                    padrao_h = rf"(?si)QUEST[AÃ]O\s*0?{q_num}\b.*?(?:\[)(.*?)(?:\])"
+                                                    m_h = re.search(padrao_h, grade_raw)
+                                                    habilidade = m_h.group(1).strip() if m_h else f"Revisar conceito da Questão {q_num}"
+                                                    lacunas_stats.append({"q": q_num, "taxa": taxa_acerto, "hab": habilidade})
+                                        
+                                        if lacunas_stats:
+                                            top_lacunas = sorted(lacunas_stats, key=lambda x: x['taxa'])[:3]
+                                            st.error("🚨 **Top 3 Lacunas Críticas da Série:**")
+                                            lacunas_str_list =[]
+                                            for lac in top_lacunas:
+                                                st.markdown(f"**Q{lac['q']} ({lac['taxa']*100:.0f}% de acerto):** {lac['hab']}")
+                                                lacunas_str_list.append(f"Questão {lac['q']} ({lac['taxa']*100:.0f}% acerto) - Habilidade: {lac['hab']}")
+                                            
+                                            lacunas_txt = "\n".join(lacunas_str_list)
+                                        else:
+                                            st.success("✅ Nenhuma questão com menos de 60% de acerto na série.")
+                                else:
+                                    st.info("Nenhum gabarito escaneado para esta série nesta avaliação.")
+                                
+                                # 3. Montagem do Strat (Injeção no Prompt)
+                                if lacunas_txt or perfil_txt:
+                                    strat = f"--- DADOS DE DIAGNÓSTICO DA SÉRIE ({ano_p}º ANO) ---\n"
+                                    if perfil_txt: strat += f"PERFIL COGNITIVO GERAL: {perfil_txt}\n"
+                                    if lacunas_txt: strat += f"LACUNAS CRÍTICAS (Foque a revisão nestes pontos):\n{lacunas_txt}\n"
+                                    strat += "🚨 DIRETRIZ DE RECOMPOSIÇÃO: Não revise a prova inteira. Foque EXCLUSIVAMENTE nas lacunas apontadas acima. Adapte a linguagem e as dinâmicas para o perfil cognitivo geral da série."
 
         # --- 📚 3. BASE CURRICULAR E ENRIQUECIMENTO ---
         with st.container(border=True):
@@ -483,6 +600,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                         f"- FOCO EXATO DA AULA 2: {diretriz_a2}\n"
                         f"- FOCO EXATO DO SÁBADO: {diretriz_sabado}\n\n"
                         f"--- PONTE PEDAGÓGICA (MEMÓRIA DA TURMA) ---\nAnalise o plano da semana anterior abaixo para criar o gancho de continuidade:\n{plano_anterior_txt}\n\n"
+                        f"--- CONTEXTO DE APOIO E ATIVOS VINCULADOS ---\n{strat}\n{ctx_ativo_vinculado}\n"
                         f"--- MATRIZ OFICIAL (ITABUNA) ---\n{ctx_ia}"
                     )
                     
