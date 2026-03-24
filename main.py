@@ -4366,8 +4366,8 @@ elif menu == "👥 Gestão da Turma":
     elif not df_alunos.empty and 'TURMA' in df_alunos.columns:
         lista_turmas_segura = sorted(df_alunos['TURMA'].unique())
 
-    tab_cockpit, tab_criar, tab_povoar, tab_editar, tab_radiografia = st.tabs([
-        "📊 1. Cockpit de Prontidão", "🏗️ 2. Arquitetura de Turmas", "➕ 3. Povoar Alunos", "✏️ 4. Edição & Transferência", "🧠 5. Radiografia Cognitiva"
+    tab_cockpit, tab_criar, tab_povoar, tab_editar, tab_radiografia, tab_roleta = st.tabs([
+        "📊 1. Cockpit de Prontidão", "🏗️ 2. Arquitetura de Turmas", "➕ 3. Povoar Alunos", "✏️ 4. Edição & Transferência", "🧠 5. Radiografia Cognitiva", "🎲 6. Roleta de Arguição"
     ])
 
     # --- ABA 1: COCKPIT DA TURMA ---
@@ -5179,6 +5179,179 @@ elif menu == "👥 Gestão da Turma":
                         st.success("✅ Nenhuma observação pendente de análise no Diário de Bordo.")
                 else:
                     st.info("Sem registros no Diário de Bordo para esta turma.")
+
+    # ==============================================================================
+    # 🚨 NOVA ABA 6: ROLETA DE ARGUIÇÃO & DIAGNÓSTICO CLÍNICO
+    # ==============================================================================
+    with tab_roleta:
+        import random
+        st.subheader("🎲 Roleta de Arguição & Diagnóstico Clínico")
+        st.caption("Sorteie alunos, registre o desempenho no quadro e anote lacunas específicas (ex: 'não sabe dividir') para o Dossiê.")
+        
+        c_rol1, c_rol2 = st.columns([1, 1])
+        t_roleta = c_rol1.selectbox("🎯 Selecione a Turma para a Roleta:", lista_turmas_segura, key=f"rol_t_{v}")
+        
+        with st.expander("⚙️ Configurar Pontuação da Arguição"):
+            c_pts1, c_pts2 = st.columns(2)
+            pt_acerto = c_pts1.number_input("Pontos por Acertar/Explicar (+):", 0.0, 5.0, 0.5, step=0.1, key=f"pt_acerto_{v}")
+            pt_recusa = c_pts2.number_input("Punição por Recusa (-):", -5.0, 0.0, -0.5, step=0.1, key=f"pt_recusa_{v}")
+
+        if t_roleta:
+            alunos_roleta = df_alunos[df_alunos['TURMA'] == t_roleta].sort_values(by="NOME_ALUNO").copy()
+            
+            if alunos_roleta.empty:
+                st.warning("Nenhum aluno cadastrado nesta turma.")
+            else:
+                # 🚨 MOTOR DE ÍCONES MULTIPERFIL
+                def definir_icone_status(nec):
+                    n = str(nec).upper().strip()
+                    if "PENDENTE" in n or "SUSPEITA" in n: return "🟠"
+                    if "DEFASAGEM LEITURA" in n: return "🧱"
+                    if "DEFASAGEM MATEMÁTICA" in n or "DEFASAGEM MATEMATICA" in n: return "🧮"
+                    if "ALTA PERFORMANCE" in n: return "🚀"
+                    if n in["NENHUMA", "", "NAN", "TÍPICO", "TIPICO"]: return "👤"
+                    return "♿"
+
+                alunos_roleta['ICONE'] = alunos_roleta['NECESSIDADES'].apply(definir_icone_status)
+                
+                # 🚨 GERENCIAMENTO DE ESTADO DA LISTA FIXA
+                chave_lista = f"lista_roleta_v2_{t_roleta}"
+                chave_sorteado = f"aluno_sorteado_v2_{t_roleta}"
+                
+                if chave_lista not in st.session_state:
+                    # Inicializa a lista fixa com todos os alunos da turma
+                    lista_inicial =[]
+                    for _, row in alunos_roleta.iterrows():
+                        lista_inicial.append({
+                            "ID": row['ID'],
+                            "Estudante": f"{row['ICONE']} {row['NOME_ALUNO']}",
+                            "Status": "⏳ Pendente",
+                            "Diagnóstico / Anotação": "",
+                            "Pontos": 0.0
+                        })
+                    st.session_state[chave_lista] = lista_inicial
+                    
+                if chave_sorteado not in st.session_state:
+                    st.session_state[chave_sorteado] = None
+
+                st.markdown("---")
+                
+                # 🚨 LAYOUT DIVIDIDO: ROLETA (ESQUERDA) | LISTA FIXA (DIREITA)
+                col_roleta, col_lista = st.columns([1.2, 1.8])
+                
+                with col_roleta:
+                    st.markdown("### 🎯 Sorteador")
+                    
+                    # Filtra apenas quem ainda não foi ao quadro
+                    pendentes =[a for a in st.session_state[chave_lista] if a["Status"] == "⏳ Pendente"]
+                    
+                    c_btn_sort, c_btn_reset = st.columns([2, 1])
+                    if c_btn_sort.button("🎲 SORTEAR ESTUDANTE", type="primary", use_container_width=True):
+                        if not pendentes:
+                            st.success("🎉 Todos os alunos já foram chamados!")
+                        else:
+                            sorteado = random.choice(pendentes)
+                            st.session_state[chave_sorteado] = sorteado["ID"]
+                            st.rerun()
+                            
+                    if c_btn_reset.button("🔄 Resetar", use_container_width=True):
+                        del st.session_state[chave_lista]
+                        st.session_state[chave_sorteado] = None
+                        st.rerun()
+                        
+                    # EXIBIÇÃO DO ALUNO SORTEADO
+                    if st.session_state[chave_sorteado]:
+                        id_atual = st.session_state[chave_sorteado]
+                        aluno_atual = next(a for a in st.session_state[chave_lista] if a["ID"] == id_atual)
+                        aluno_db = alunos_roleta[alunos_roleta['ID'] == id_atual].iloc[0]
+                        
+                        with st.container(border=True):
+                            st.markdown(f"<h2 style='text-align: center;'>{aluno_atual['Estudante']}</h2>", unsafe_allow_html=True)
+                            st.markdown(f"<p style='text-align: center; color: gray;'>Perfil: {aluno_db['NECESSIDADES']}</p>", unsafe_allow_html=True)
+                            
+                            # 🚨 CAMPO DE DIAGNÓSTICO CLÍNICO
+                            anotacao = st.text_area("📝 Diagnóstico Clínico (O que ele errou/acertou?):", 
+                                                    placeholder="Ex: Não sabe dividir com vírgula; Esqueceu a regra de sinais; Excelente raciocínio lógico...",
+                                                    key=f"anotacao_{id_atual}")
+                            
+                            st.markdown("<br>", unsafe_allow_html=True)
+                            c_av1, c_av2 = st.columns(2)
+                            c_av3, c_av4 = st.columns(2)
+                            
+                            def registrar_arguicao(status_label, pontos, obs_padrao):
+                                # 1. Atualiza a Lista Fixa na tela
+                                for a in st.session_state[chave_lista]:
+                                    if a["ID"] == id_atual:
+                                        a["Status"] = status_label
+                                        a["Pontos"] = pontos
+                                        a["Diagnóstico / Anotação"] = anotacao if anotacao.strip() else obs_padrao
+                                        obs_final = a["Diagnóstico / Anotação"]
+                                        break
+                                
+                                # 2. Salva no Banco de Dados (Diário de Bordo)
+                                nome_limpo = aluno_db['NOME_ALUNO']
+                                data_hoje = datetime.now().strftime("%d/%m/%Y")
+                                db.salvar_no_banco("DB_DIARIO_BORDO",[
+                                    data_hoje, 
+                                    db.limpar_id(id_atual), 
+                                    nome_limpo, 
+                                    t_roleta, 
+                                    "TRUE", # Ganha o visto de participação do dia
+                                    "ARGUIÇÃO", 
+                                    f"Quadro Negro: {obs_final}", 
+                                    util.sosa_to_str(pontos)
+                                ])
+                                st.session_state[chave_sorteado] = None
+                            
+                            if c_av1.button(f"✅ Dominou (+{pt_acerto})", use_container_width=True):
+                                with st.spinner("Salvando..."):
+                                    registrar_arguicao("✅ Dominou", pt_acerto, "Resolveu e explicou corretamente.")
+                                    st.rerun()
+                                    
+                            if c_av2.button("🤝 Tentou (0.0)", use_container_width=True):
+                                with st.spinner("Salvando..."):
+                                    registrar_arguicao("🤝 Tentou", 0.0, "Foi ao quadro, mas apresentou dificuldades.")
+                                    st.rerun()
+                                    
+                            if c_av3.button(f"❌ Recusou ({pt_recusa})", use_container_width=True):
+                                with st.spinner("Salvando..."):
+                                    registrar_arguicao("❌ Recusou", pt_recusa, "Recusou-se a participar.")
+                                    st.rerun()
+                                    
+                            if c_av4.button("⏭️ Faltou / Pular", use_container_width=True):
+                                for a in st.session_state[chave_lista]:
+                                    if a["ID"] == id_atual:
+                                        a["Status"] = "⏭️ Faltou"
+                                        break
+                                st.session_state[chave_sorteado] = None
+                                st.rerun()
+
+                with col_lista:
+                    st.markdown("### 📋 Lista Fixa de Arguição")
+                    st.caption("Acompanhe quem já foi. Você pode editar as anotações diretamente na tabela se lembrar de algo depois.")
+                    
+                    # 🚨 EXIBIÇÃO DA LISTA FIXA INTERATIVA
+                    df_lista = pd.DataFrame(st.session_state[chave_lista])
+                    
+                    df_editado = st.data_editor(
+                        df_lista,
+                        hide_index=True,
+                        use_container_width=True,
+                        height=550,
+                        column_config={
+                            "ID": None,
+                            "Estudante": st.column_config.TextColumn("Estudante", disabled=True, width="medium"),
+                            "Status": st.column_config.TextColumn("Status", disabled=True, width="small"),
+                            "Pontos": st.column_config.NumberColumn("Pts", disabled=True, width="small"),
+                            "Diagnóstico / Anotação": st.column_config.TextColumn("Anotações do Professor", width="large")
+                        },
+                        key=f"editor_lista_roleta_{t_roleta}"
+                    )
+                    
+                    # Permite salvar edições manuais feitas direto na tabela
+                    if st.button("💾 Salvar Edições Manuais da Tabela", use_container_width=True):
+                        st.session_state[chave_lista] = df_editado.to_dict('records')
+                        st.success("Anotações atualizadas na lista visual!")
 
 
 # ==============================================================================
