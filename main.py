@@ -5181,7 +5181,7 @@ elif menu == "👥 Gestão da Turma":
                     st.info("Sem registros no Diário de Bordo para esta turma.")
 
     # ==============================================================================
-    # 🚨 NOVA ABA 6: ROLETA DE ARGUIÇÃO & DIAGNÓSTICO CLÍNICO
+    # 🚨 NOVA ABA 6: ROLETA DE ARGUIÇÃO & DIAGNÓSTICO CLÍNICO (COM INCLUSÃO)
     # ==============================================================================
     with tab_roleta:
         import random
@@ -5275,8 +5275,11 @@ elif menu == "👥 Gestão da Turma":
                                                     key=f"anotacao_{id_atual}")
                             
                             st.markdown("<br>", unsafe_allow_html=True)
-                            c_av1, c_av2 = st.columns(2)
-                            c_av3, c_av4 = st.columns(2)
+                            
+                            # 🚨 BOTÕES DE AVALIAÇÃO (LINHA 1)
+                            c_av1, c_av2, c_av3 = st.columns(3)
+                            # 🚨 BOTÕES DE EXCEÇÃO/INCLUSÃO (LINHA 2)
+                            c_av4, c_av5, c_av6 = st.columns(3)
                             
                             def registrar_arguicao(status_label, pontos, obs_padrao):
                                 # 1. Atualiza a Lista Fixa na tela
@@ -5303,6 +5306,7 @@ elif menu == "👥 Gestão da Turma":
                                 ])
                                 st.session_state[chave_sorteado] = None
                             
+                            # --- LINHA 1: AVALIAÇÃO PADRÃO ---
                             if c_av1.button(f"✅ Dominou (+{pt_acerto})", use_container_width=True):
                                 with st.spinner("Salvando..."):
                                     registrar_arguicao("✅ Dominou", pt_acerto, "Resolveu e explicou corretamente.")
@@ -5317,8 +5321,19 @@ elif menu == "👥 Gestão da Turma":
                                 with st.spinner("Salvando..."):
                                     registrar_arguicao("❌ Recusou", pt_recusa, "Recusou-se a participar.")
                                     st.rerun()
+                            
+                            # --- LINHA 2: INCLUSÃO E EXCEÇÕES ---
+                            if c_av4.button("🔤 Não Alfabetizado", use_container_width=True):
+                                with st.spinner("Registrando isenção..."):
+                                    registrar_arguicao("🔤 Isento", 0.0, "Isento da arguição no quadro: Não alfabetizado.")
+                                    st.rerun()
                                     
-                            if c_av4.button("⏭️ Faltou / Pular", use_container_width=True):
+                            if c_av5.button("♿ Aluno PEI", use_container_width=True):
+                                with st.spinner("Registrando isenção..."):
+                                    registrar_arguicao("♿ Isento", 0.0, "Isento da arguição no quadro: Aluno PEI (Avaliação adaptada).")
+                                    st.rerun()
+                                    
+                            if c_av6.button("⏭️ Faltou / Pular", use_container_width=True):
                                 for a in st.session_state[chave_lista]:
                                     if a["ID"] == id_atual:
                                         a["Status"] = "⏭️ Faltou"
