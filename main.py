@@ -3830,7 +3830,7 @@ elif menu == "👤 Biografia do Estudante":
 # ==============================================================================
 elif menu == "📊 Painel de Notas & Vistos":
     st.title("📊 Torre de Comando: Gestão de Notas")
-    st.caption("💡 **Guia de Comando:** Defina os pesos do trimestre. O sistema calculará automaticamente a nota de caderno (Vistos) e aplicará o algoritmo de transbordamento de Bônus (preenchendo Vistos, depois Teste, depois Prova).")
+    st.caption("💡 **Guia de Comando:** Defina os pesos do trimestre. O sistema calculará automaticamente a nota de caderno (Vistos) e aplicará o algoritmo de transbordamento de Bônus/Punição (afetando Vistos, depois Teste, depois Prova).")
     st.markdown("---")
 
     if "v_notas" not in st.session_state: 
@@ -3898,7 +3898,7 @@ elif menu == "📊 Painel de Notas & Vistos":
                     
                     vistos_auto_map[id_l] = round((aulas_com_visto / total_aulas_periodo * p_visto), 2) if total_aulas_periodo > 0 else 0.0
                     
-                    # O Bônus continua somando de TODAS as aulas
+                    # O Bônus continua somando de TODAS as aulas (agora aceita negativos)
                     bonus_total_map[id_l] = d_alu['BONUS'].apply(util.sosa_to_float).sum()
                 else:
                     vistos_auto_map[id_l], bonus_total_map[id_l] = 0.0, 0.0
@@ -3939,7 +3939,7 @@ elif menu == "📊 Painel de Notas & Vistos":
 
         # --- 4. TABELA 1: CONSOLIDAÇÃO E ENTRADA ---
         st.subheader("📝 Passo 2: Lançamento e Consolidação")
-        st.info("💡 **Dica:** Digite as notas do Teste, Prova e Recuperação. O sistema somará os Vistos e o Bônus automaticamente.")
+        st.info("💡 **Dica:** Digite as notas do Teste, Prova e Recuperação. O sistema somará os Vistos e o Bônus/Punição automaticamente.")
         
         df_input = st.data_editor(
             pd.DataFrame(dados_editor),
@@ -3947,7 +3947,7 @@ elif menu == "📊 Painel de Notas & Vistos":
                 "ID": None,
                 "ESTUDANTE": st.column_config.TextColumn("Estudante", width="medium", disabled=True),
                 "VISTOS (AUTO)": st.column_config.NumberColumn("Vistos (Sistema)", format="%.1f", disabled=True),
-                "BÔNUS (TOTAL)": st.column_config.NumberColumn("⭐ Bônus", format="%.1f", disabled=True),
+                "BÔNUS (TOTAL)": st.column_config.NumberColumn("⭐ Bônus/Punição", format="%.1f", disabled=True),
                 "TESTE (LANÇAR)": st.column_config.NumberColumn("Nota Teste", min_value=0.0, max_value=p_teste, format="%.1f"),
                 "PROVA (LANÇAR)": st.column_config.NumberColumn("Nota Prova", min_value=0.0, max_value=p_prova, format="%.1f"),
                 "REC. PARALELA": st.column_config.NumberColumn("🔄 Rec. Paralela", min_value=0.0, max_value=10.0, format="%.1f"),
@@ -3955,7 +3955,7 @@ elif menu == "📊 Painel de Notas & Vistos":
             hide_index=True, use_container_width=True, key=f"editor_notas_{v}"
         )
 
-        # --- 5. ALGORITMO DE TRANSBORDAMENTO E SUBSTITUIÇÃO ---
+        # --- 5. ALGORITMO DE TRANSBORDAMENTO E SUBSTITUIÇÃO (ATUALIZADO PARA PUNIÇÕES) ---
         def aplicar_transbordamento(row):
             bonus_restante = row['BÔNUS (TOTAL)']
             v_base = row['VISTOS (AUTO)']
@@ -3963,16 +3963,16 @@ elif menu == "📊 Painel de Notas & Vistos":
             p_base = row['PROVA (LANÇAR)']
             rec_paralela = row['REC. PARALELA']
             
-            # Passo 1: Completar Vistos
-            v_final = min(p_visto, v_base + bonus_restante)
+            # Passo 1: Completar ou Descontar Vistos
+            v_final = max(0.0, min(p_visto, v_base + bonus_restante))
             bonus_restante -= (v_final - v_base)
             
-            # Passo 2: Completar Teste
-            t_final = min(p_teste, t_base + max(0, bonus_restante))
+            # Passo 2: Completar ou Descontar Teste
+            t_final = max(0.0, min(p_teste, t_base + bonus_restante))
             bonus_restante -= (t_final - t_base)
             
-            # Passo 3: Completar Prova
-            p_final = min(p_prova, p_base + max(0, bonus_restante))
+            # Passo 3: Completar ou Descontar Prova
+            p_final = max(0.0, min(p_prova, p_base + bonus_restante))
             
             # Média Final: Soma das notas ou a Recuperação (o que for maior)
             soma_notas = v_final + t_final + p_final
@@ -3985,7 +3985,7 @@ elif menu == "📊 Painel de Notas & Vistos":
         # --- 6. TABELA 2: GABARITO DE LANÇAMENTO ---
         st.markdown("---")
         st.subheader("🏛️ Passo 3: Gabarito Final (Sistema Prefeitura)")
-        st.caption("Estas são as notas finais processadas. O Bônus já foi distribuído e a Recuperação Paralela já substituiu a média (se for maior). Copie estes valores para o sistema da escola.")
+        st.caption("Estas são as notas finais processadas. O Bônus/Punição já foi distribuído e a Recuperação Paralela já substituiu a média (se for maior). Copie estes valores para o sistema da escola.")
         
         def style_situacao(v):
             color = '#2ECC71' if v >= 6.0 else '#FF4B4B'
