@@ -5180,7 +5180,7 @@ elif menu == "👥 Gestão da Turma":
                 else:
                     st.info("Sem registros no Diário de Bordo para esta turma.")
 
-# ==============================================================================
+    # ==============================================================================
     # 🚨 NOVA ABA 6: ROLETA DE ARGUIÇÃO & DIAGNÓSTICO CLÍNICO (COM HISTÓRICO E DATA)
     # ==============================================================================
     with tab_roleta:
@@ -5301,8 +5301,9 @@ elif menu == "👥 Gestão da Turma":
                             st.markdown(f"<h2 style='text-align: center;'>{aluno_atual['Estudante']}</h2>", unsafe_allow_html=True)
                             st.markdown(f"<p style='text-align: center; color: gray;'>Perfil: {aluno_db['NECESSIDADES']}</p>", unsafe_allow_html=True)
                             
-                            # 🚨 CAMPO DE DIAGNÓSTICO CLÍNICO
+                            # 🚨 CAMPO DE DIAGNÓSTICO CLÍNICO (Puxa o texto anterior se houver)
                             anotacao = st.text_area("📝 Diagnóstico Clínico (O que ele errou/acertou?):", 
+                                                    value=aluno_atual["Diagnóstico / Anotação"],
                                                     placeholder="Ex: Não sabe dividir com vírgula; Esqueceu a regra de sinais; Excelente raciocínio lógico...",
                                                     key=f"anotacao_{id_atual}")
                             
@@ -5399,7 +5400,7 @@ elif menu == "👥 Gestão da Turma":
                         df_lista,
                         hide_index=True,
                         use_container_width=True,
-                        height=550,
+                        height=400,
                         column_config={
                             "ID": None,
                             "Estudante": st.column_config.TextColumn("Estudante", disabled=True, width="medium"),
@@ -5434,6 +5435,49 @@ elif menu == "👥 Gestão da Turma":
                                 st.cache_data.clear()
                                 
                             st.success("Anotações atualizadas na lista visual e no banco de dados!")
+
+                    # ==============================================================================
+                    # 🚨 NOVO: MOTOR DE CORREÇÃO (DESFAZER LANÇAMENTO)
+                    # ==============================================================================
+                    st.markdown("---")
+                    with st.expander("✏️ Corrigir Lançamento (Desfazer)"):
+                        st.caption("Clicou no botão errado? Selecione o aluno abaixo para apagar o registro e reavaliá-lo imediatamente.")
+                        
+                        avaliados =[a for a in st.session_state[chave_lista] if a["Status"] not in["⏳ Pendente", "⏭️ Faltou"]]
+                        
+                        if avaliados:
+                            aluno_erro = st.selectbox("Selecione o Estudante:", [a["Estudante"] for a in avaliados], key=f"corr_{t_roleta}_{data_roleta_str}")
+                            
+                            if st.button("🔄 Corrigir Avaliação", use_container_width=True):
+                                with st.spinner("Preparando correção..."):
+                                    id_erro = next(a["ID"] for a in avaliados if a["Estudante"] == aluno_erro)
+                                    
+                                    # 1. Apagar do Banco de Dados (Engenharia de Deleção Reversa)
+                                    try:
+                                        wb = db.conectar()
+                                        ws = wb.worksheet("DB_DIARIO_BORDO")
+                                        dados = ws.get_all_values()
+                                        for i in range(len(dados)-1, 0, -1):
+                                            row = dados[i]
+                                            if row[0] == data_roleta_str and db.limpar_id(row[1]) == id_erro and row[5] == "ARGUIÇÃO":
+                                                ws.delete_rows(i+1)
+                                    except:
+                                        pass
+                                    
+                                    # 2. Atualizar a Lista Visual
+                                    for a in st.session_state[chave_lista]:
+                                        if a["ID"] == id_erro:
+                                            a["Status"] = "⏳ Pendente"
+                                            a["Pontos"] = 0.0
+                                            # Mantemos a anotação intacta para você não precisar digitar de novo!
+                                            break
+                                    
+                                    # 3. Colocar o aluno de volta no palco (Sorteador)
+                                    st.session_state[chave_sorteado] = id_erro
+                                    st.cache_data.clear()
+                                    st.rerun()
+                        else:
+                            st.info("Nenhum aluno avaliado ainda.")
 
 
 # ==============================================================================
