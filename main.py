@@ -5180,16 +5180,20 @@ elif menu == "👥 Gestão da Turma":
                 else:
                     st.info("Sem registros no Diário de Bordo para esta turma.")
 
-    # ==============================================================================
-    # 🚨 NOVA ABA 6: ROLETA DE ARGUIÇÃO & DIAGNÓSTICO CLÍNICO (COM INCLUSÃO)
+# ==============================================================================
+    # 🚨 NOVA ABA 6: ROLETA DE ARGUIÇÃO & DIAGNÓSTICO CLÍNICO (COM HISTÓRICO E DATA)
     # ==============================================================================
     with tab_roleta:
         import random
         st.subheader("🎲 Roleta de Arguição & Diagnóstico Clínico")
-        st.caption("Sorteie alunos, registre o desempenho no quadro e anote lacunas específicas (ex: 'não sabe dividir') para o Dossiê.")
+        st.caption("Sorteie alunos, registre o desempenho no quadro e anote lacunas específicas. O sistema resgata faltas e arguições da data selecionada.")
         
         c_rol1, c_rol2 = st.columns([1, 1])
         t_roleta = c_rol1.selectbox("🎯 Selecione a Turma para a Roleta:", lista_turmas_segura, key=f"rol_t_{v}")
+        
+        # 🚨 MÁQUINA DO TEMPO: Seleção de Data
+        data_roleta = c_rol2.date_input("📅 Data da Arguição:", date.today(), format="DD/MM/YYYY", key=f"rol_d_{v}")
+        data_roleta_str = data_roleta.strftime("%d/%m/%Y")
         
         with st.expander("⚙️ Configurar Pontuação da Arguição"):
             c_pts1, c_pts2 = st.columns(2)
@@ -5214,20 +5218,48 @@ elif menu == "👥 Gestão da Turma":
 
                 alunos_roleta['ICONE'] = alunos_roleta['NECESSIDADES'].apply(definir_icone_status)
                 
-                # 🚨 GERENCIAMENTO DE ESTADO DA LISTA FIXA
-                chave_lista = f"lista_roleta_v2_{t_roleta}"
-                chave_sorteado = f"aluno_sorteado_v2_{t_roleta}"
+                # 🚨 GERENCIAMENTO DE ESTADO DA LISTA FIXA (VINCULADO À DATA)
+                chave_lista = f"lista_roleta_{t_roleta}_{data_roleta_str}"
+                chave_sorteado = f"aluno_sorteado_{t_roleta}_{data_roleta_str}"
                 
                 if chave_lista not in st.session_state:
-                    # Inicializa a lista fixa com todos os alunos da turma
+                    # Resgata o histórico do Diário de Bordo para esta data e turma
+                    diario_dia = df_diario[(df_diario['DATA'] == data_roleta_str) & (df_diario['TURMA'] == t_roleta)]
+                    
                     lista_inicial =[]
                     for _, row in alunos_roleta.iterrows():
+                        id_a = db.limpar_id(row['ID'])
+                        nome_a = row['NOME_ALUNO']
+                        icone_a = row['ICONE']
+                        
+                        status_inicial = "⏳ Pendente"
+                        obs_inicial = ""
+                        pts_inicial = 0.0
+                        
+                        # Verifica se há registro no diário para este aluno nesta data
+                        reg_aluno = diario_dia[diario_dia['ID_ALUNO'].apply(db.limpar_id) == id_a]
+                        if not reg_aluno.empty:
+                            # 🚨 RESGATE AUTOMÁTICO DE FALTAS
+                            if any(reg_aluno['TAGS'] == "AUSÊNCIA"):
+                                status_inicial = "⏭️ Faltou"
+                                obs_inicial = "Ausente no Diário de Bordo."
+                            # 🚨 RESGATE DE ARGUIÇÕES JÁ FEITAS NESTE DIA
+                            elif any(reg_aluno['TAGS'] == "ARGUIÇÃO"):
+                                reg_arg = reg_aluno[reg_aluno['TAGS'] == "ARGUIÇÃO"].iloc[-1]
+                                obs_inicial = reg_arg['OBSERVACOES'].replace("Quadro Negro: ", "")
+                                pts_inicial = util.sosa_to_float(reg_arg['BONUS'])
+                                
+                                if pts_inicial > 0: status_inicial = "✅ Dominou"
+                                elif pts_inicial < 0: status_inicial = "❌ Recusou"
+                                elif "Isento" in obs_inicial: status_inicial = "♿ Isento"
+                                else: status_inicial = "🤝 Tentou"
+                                
                         lista_inicial.append({
-                            "ID": row['ID'],
-                            "Estudante": f"{row['ICONE']} {row['NOME_ALUNO']}",
-                            "Status": "⏳ Pendente",
-                            "Diagnóstico / Anotação": "",
-                            "Pontos": 0.0
+                            "ID": id_a,
+                            "Estudante": f"{icone_a} {nome_a}",
+                            "Status": status_inicial,
+                            "Diagnóstico / Anotação": obs_inicial,
+                            "Pontos": pts_inicial
                         })
                     st.session_state[chave_lista] = lista_inicial
                     
@@ -5242,19 +5274,19 @@ elif menu == "👥 Gestão da Turma":
                 with col_roleta:
                     st.markdown("### 🎯 Sorteador")
                     
-                    # Filtra apenas quem ainda não foi ao quadro
-                    pendentes =[a for a in st.session_state[chave_lista] if a["Status"] == "⏳ Pendente"]
+                    # Filtra apenas quem ainda não foi ao quadro e NÃO FALTOU
+                    pendentes = [a for a in st.session_state[chave_lista] if a["Status"] == "⏳ Pendente"]
                     
                     c_btn_sort, c_btn_reset = st.columns([2, 1])
                     if c_btn_sort.button("🎲 SORTEAR ESTUDANTE", type="primary", use_container_width=True):
                         if not pendentes:
-                            st.success("🎉 Todos os alunos já foram chamados!")
+                            st.success("🎉 Todos os alunos presentes já foram chamados!")
                         else:
                             sorteado = random.choice(pendentes)
                             st.session_state[chave_sorteado] = sorteado["ID"]
                             st.rerun()
                             
-                    if c_btn_reset.button("🔄 Resetar", use_container_width=True):
+                    if c_btn_reset.button("🔄 Resetar Sorteio", use_container_width=True):
                         del st.session_state[chave_lista]
                         st.session_state[chave_sorteado] = None
                         st.rerun()
@@ -5263,7 +5295,7 @@ elif menu == "👥 Gestão da Turma":
                     if st.session_state[chave_sorteado]:
                         id_atual = st.session_state[chave_sorteado]
                         aluno_atual = next(a for a in st.session_state[chave_lista] if a["ID"] == id_atual)
-                        aluno_db = alunos_roleta[alunos_roleta['ID'] == id_atual].iloc[0]
+                        aluno_db = alunos_roleta[alunos_roleta['ID'].apply(db.limpar_id) == id_atual].iloc[0]
                         
                         with st.container(border=True):
                             st.markdown(f"<h2 style='text-align: center;'>{aluno_atual['Estudante']}</h2>", unsafe_allow_html=True)
@@ -5282,28 +5314,43 @@ elif menu == "👥 Gestão da Turma":
                             c_av4, c_av5, c_av6 = st.columns(3)
                             
                             def registrar_arguicao(status_label, pontos, obs_padrao):
+                                # 🚨 INTELIGÊNCIA DE ANOTAÇÃO: Se o professor digitou algo, usa o texto dele. Senão, usa o padrão.
+                                obs_final = anotacao.strip() if anotacao.strip() else obs_padrao
+                                
                                 # 1. Atualiza a Lista Fixa na tela
                                 for a in st.session_state[chave_lista]:
                                     if a["ID"] == id_atual:
                                         a["Status"] = status_label
                                         a["Pontos"] = pontos
-                                        a["Diagnóstico / Anotação"] = anotacao if anotacao.strip() else obs_padrao
-                                        obs_final = a["Diagnóstico / Anotação"]
+                                        a["Diagnóstico / Anotação"] = obs_final
                                         break
                                 
-                                # 2. Salva no Banco de Dados (Diário de Bordo)
-                                nome_limpo = aluno_db['NOME_ALUNO']
-                                data_hoje = datetime.now().strftime("%d/%m/%Y")
-                                db.salvar_no_banco("DB_DIARIO_BORDO",[
-                                    data_hoje, 
-                                    db.limpar_id(id_atual), 
+                                # 2. Salva no Banco de Dados (Substituindo registro anterior se houver)
+                                nome_limpo = aluno_db['NOME_ALUNO'].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
+                                
+                                wb = db.conectar()
+                                ws = wb.worksheet("DB_DIARIO_BORDO")
+                                dados = ws.get_all_values()
+                                
+                                # Engenharia de Deleção Reversa para evitar duplicidade de arguição no mesmo dia
+                                for i in range(len(dados)-1, 0, -1):
+                                    row = dados[i]
+                                    if row[0] == data_roleta_str and db.limpar_id(row[1]) == id_atual and row[5] == "ARGUIÇÃO":
+                                        ws.delete_rows(i+1)
+                                
+                                # Insere o novo registro
+                                ws.append_row([
+                                    data_roleta_str, 
+                                    id_atual, 
                                     nome_limpo, 
                                     t_roleta, 
-                                    "TRUE", # Ganha o visto de participação do dia
+                                    "TRUE", 
                                     "ARGUIÇÃO", 
                                     f"Quadro Negro: {obs_final}", 
                                     util.sosa_to_str(pontos)
-                                ])
+                                ], value_input_option="USER_ENTERED")
+                                
+                                st.cache_data.clear()
                                 st.session_state[chave_sorteado] = None
                             
                             # --- LINHA 1: AVALIAÇÃO PADRÃO ---
@@ -5325,7 +5372,7 @@ elif menu == "👥 Gestão da Turma":
                             # --- LINHA 2: INCLUSÃO E EXCEÇÕES ---
                             if c_av4.button("🔤 Não Alfabetizado", use_container_width=True):
                                 with st.spinner("Registrando isenção..."):
-                                    registrar_arguicao("🔤 Isento", 0.0, "Isento da arguição no quadro: Não alfabetizado.")
+                                    registrar_arguicao("♿ Isento", 0.0, "Isento da arguição no quadro: Não alfabetizado.")
                                     st.rerun()
                                     
                             if c_av5.button("♿ Aluno PEI", use_container_width=True):
@@ -5360,13 +5407,33 @@ elif menu == "👥 Gestão da Turma":
                             "Pontos": st.column_config.NumberColumn("Pts", disabled=True, width="small"),
                             "Diagnóstico / Anotação": st.column_config.TextColumn("Anotações do Professor", width="large")
                         },
-                        key=f"editor_lista_roleta_{t_roleta}"
+                        key=f"editor_lista_roleta_{t_roleta}_{data_roleta_str}"
                     )
                     
                     # Permite salvar edições manuais feitas direto na tabela
                     if st.button("💾 Salvar Edições Manuais da Tabela", use_container_width=True):
-                        st.session_state[chave_lista] = df_editado.to_dict('records')
-                        st.success("Anotações atualizadas na lista visual!")
+                        with st.spinner("Sincronizando edições manuais com o banco de dados..."):
+                            st.session_state[chave_lista] = df_editado.to_dict('records')
+                            
+                            wb = db.conectar()
+                            ws = wb.worksheet("DB_DIARIO_BORDO")
+                            dados = ws.get_all_values()
+                            
+                            # Atualiza as observações no banco para os alunos que já têm arguição registrada
+                            updates = []
+                            for a in st.session_state[chave_lista]:
+                                if a["Status"] not in ["⏳ Pendente", "⏭️ Faltou"]:
+                                    for i, row in enumerate(dados):
+                                        if i > 0 and row[0] == data_roleta_str and db.limpar_id(row[1]) == a["ID"] and row[5] == "ARGUIÇÃO":
+                                            nova_obs = f"Quadro Negro: {a['Diagnóstico / Anotação']}"
+                                            updates.append(gspread.Cell(row=i+1, col=7, value=nova_obs))
+                                            break
+                            
+                            if updates:
+                                ws.update_cells(updates)
+                                st.cache_data.clear()
+                                
+                            st.success("Anotações atualizadas na lista visual e no banco de dados!")
 
 
 # ==============================================================================
