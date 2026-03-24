@@ -3473,18 +3473,24 @@ elif menu == "📝 Diário de Bordo Rápido":
                 if not reg_existente.empty:
                     visto_val = str(reg_existente.iloc[0]['VISTO_ATIVIDADE']).upper() == "TRUE"
                     falta_val = reg_existente.iloc[0]['TAGS'] == "AUSÊNCIA"
-                    bonus_val = util.sosa_to_float(reg_existente.iloc[0].get('BONUS', 0))
-                    tag_val = reg_existente.iloc[0]['TAGS'] if not falta_val else ""
-                    obs_val = reg_existente.iloc[0]['OBSERVACOES']
                     
-                    # Limpa a tag de PEI CONCLUÍDO para não bugar o selectbox se não estiver na lista
-                    if tag_val not in["", "Fardamento", "Postura", "Atraso", "Celular", "Indisciplina", "Comunicação", "Elogio", "Destaque", "Dormiu", "PEI CONCLUÍDO"]:
-                        tag_val = ""
+                    # 🚨 CORREÇÃO DO BÔNUS: Força a conversão para String explícita para o Selectbox funcionar
+                    bonus_float = util.sosa_to_float(reg_existente.iloc[0].get('BONUS', 0))
+                    if bonus_float > 0: bonus_val = f"+{bonus_float:.1f}"
+                    elif bonus_float < 0: bonus_val = f"{bonus_float:.1f}"
+                    else: bonus_val = "0.0"
+                    
+                    # 🚨 CORREÇÃO DO VETOR: Troca o vazio por "Nenhum" para evitar o "None" na tela
+                    tag_val = reg_existente.iloc[0]['TAGS'] if not falta_val else "Nenhum"
+                    if tag_val not in["Nenhum", "Fardamento", "Postura", "Atraso", "Celular", "Indisciplina", "Comunicação", "Elogio", "Destaque", "Dormiu", "PEI CONCLUÍDO"]:
+                        tag_val = "Nenhum"
+                        
+                    obs_val = reg_existente.iloc[0]['OBSERVACOES']
                 else:
                     visto_val = st.session_state.get(f"visto_lote_{turma_sel}", True)
                     falta_val = False
-                    bonus_val = 0.0
-                    tag_val = ""
+                    bonus_val = "0.0"
+                    tag_val = "Nenhum"
                     obs_val = ""
 
                 dados_diario.append({
@@ -3501,8 +3507,6 @@ elif menu == "📝 Diário de Bordo Rápido":
             altura_dinamica = (len(dados_diario) * 35) + 40
 
             # 🚨 CHAVE ESTÁVEL (VACINA ANTI-QUEDA DE INTERNET)
-            # A chave agora é baseada na turma e na data, não no relógio. 
-            # Se a internet piscar, o Streamlit recupera o estado da tabela.
             chave_tabela = f"ed_diario_{turma_sel}_{data_str.replace('/','')}"
 
             st.info("💡 **Dica Anti-Queda (4G):** Se a sua internet oscila muito, clique em **'Salvar Progresso'** a cada 5 alunos. Isso garante que você não perca os vistos se o celular recarregar a página.")
@@ -3515,10 +3519,15 @@ elif menu == "📝 Diário de Bordo Rápido":
                     "Estudante": st.column_config.TextColumn("Estudante", width="medium", disabled=True),
                     "F": st.column_config.CheckboxColumn("F", help="Faltou"),
                     "V": st.column_config.CheckboxColumn("V", help="Visto", disabled=("Sem Visto" in natureza_registro)),
-                    "⭐": st.column_config.SelectboxColumn("⭐", options=[0.0, 0.1, 0.2, 0.3, 0.5, 1.0], width="small"),
+                    "⭐": st.column_config.SelectboxColumn(
+                        "⭐", 
+                        options=["-1.0", "-0.5", "-0.3", "-0.2", "-0.1", "0.0", "+0.1", "+0.2", "+0.3", "+0.5", "+1.0"], 
+                        width="small", 
+                        help="Bônus (+) ou Punição (-)"
+                    ),
                     "Vetor": st.column_config.SelectboxColumn(
                         "Vetor", 
-                        options=["", "Fardamento", "Postura", "Atraso", "Celular", "Indisciplina", "Comunicação", "Elogio", "Destaque", "Dormiu", "PEI CONCLUÍDO"],
+                        options=["Nenhum", "Fardamento", "Postura", "Atraso", "Celular", "Indisciplina", "Comunicação", "Elogio", "Destaque", "Dormiu", "PEI CONCLUÍDO"],
                         width="small"
                     ),
                     "Obs (🎙️)": st.column_config.TextColumn("Obs (🎙️)", width="large")
@@ -3533,7 +3542,10 @@ elif menu == "📝 Diário de Bordo Rápido":
                 linhas =[]
                 for _, r in df_ed.iterrows():
                     aluno_eh_pei = "♿" in r['Estudante'] or "🟠" in r['Estudante']
-                    tag_f = "AUSÊNCIA" if r['F'] else r['Vetor']
+                    
+                    # Trata o Vetor "Nenhum" para salvar vazio no banco
+                    vetor_banco = "" if r['Vetor'] == "Nenhum" else r['Vetor']
+                    tag_f = "AUSÊNCIA" if r['F'] else vetor_banco
                     
                     visto_f = False if r['F'] else r['V']
                     visto_db = "ISENTO" if "Sem Visto" in natureza_registro else str(visto_f)
@@ -3547,9 +3559,12 @@ elif menu == "📝 Diário de Bordo Rápido":
 
                     nome_limpo = r['Estudante'].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
 
+                    # Converte a string "+0.5" ou "-0.5" de volta para o formato numérico do banco
+                    bonus_num = util.sosa_to_float(str(r['⭐']).replace("+", ""))
+
                     linhas.append([
                         data_str, r['ID'], nome_limpo, turma_sel,
-                        visto_db, tag_f, obs_final, util.sosa_to_str(r['⭐'])
+                        visto_db, tag_f, obs_final, util.sosa_to_str(bonus_num)
                     ])
                 return linhas
 
