@@ -332,14 +332,28 @@ def excluir_registro(aba_nome, valor_conteudo):
     except: return False
 
 def limpar_diario_data_turma(data, turma):
+    """Limpa apenas os registros comuns do diário, protegendo Arguições e Notas"""
     try:
         wb = conectar()
         ws = wb.worksheet("DB_DIARIO_BORDO")
         dados = ws.get_all_values()
-        indices =[i + 1 for i, row in enumerate(dados) if i > 0 and len(row) > 3 and row[0] == data and row[3] == turma]
-        for idx in reversed(indices): ws.delete_rows(idx)
+        
+        # 🚨 LEI DAS TAGS PROTEGIDAS: Estes registros NUNCA serão apagados pelo Diário Rápido
+        tags_protegidas =["SISTEMA_NOTA", "ARGUIÇÃO", "NOTA_EXTERNA"]
+        
+        indices =[]
+        for i, row in enumerate(dados):
+            if i > 0 and len(row) > 5:
+                # Se for a mesma data, mesma turma, e NÃO for uma tag protegida, marca para deletar
+                if row[0] == data and row[3] == turma and row[5] not in tags_protegidas:
+                    indices.append(i + 1)
+                    
+        for idx in reversed(indices): 
+            ws.delete_rows(idx)
+            
         return True
-    except: return False
+    except: 
+        return False
 
 def limpar_notas_turma_trimestre(turma, trimestre):
     try:
