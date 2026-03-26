@@ -3347,7 +3347,9 @@ elif menu == "📝 Diário de Bordo Rápido":
                 ano_num = "".join(filter(str.isdigit, str(turma_sel)))
 
             # --- BUSCA PRÉVIA DE REGISTROS PARA PREENCHIMENTO AUTOMÁTICO (EDIÇÃO) ---
-            registros_atuais = df_diario[(df_diario['DATA'] == data_str) & (df_diario['TURMA'] == turma_sel) & (df_diario['TAGS'] != "SISTEMA_NOTA")]
+            # 🚨 BLINDAGEM: Ignora as tags protegidas para não sobrescrever a Arguição
+            tags_protegidas =["SISTEMA_NOTA", "ARGUIÇÃO", "NOTA_EXTERNA"]
+            registros_atuais = df_diario[(df_diario['DATA'] == data_str) & (df_diario['TURMA'] == turma_sel) & (~df_diario['TAGS'].isin(tags_protegidas))]
             aula_ativa = df_registro_aulas[(df_registro_aulas['TURMA'] == turma_sel) & (df_registro_aulas['DATA'] == data_str)]
             
             # Variáveis de estado salvas (Padrão)
@@ -3473,24 +3475,18 @@ elif menu == "📝 Diário de Bordo Rápido":
                 if not reg_existente.empty:
                     visto_val = str(reg_existente.iloc[0]['VISTO_ATIVIDADE']).upper() == "TRUE"
                     falta_val = reg_existente.iloc[0]['TAGS'] == "AUSÊNCIA"
-                    
-                    # 🚨 CORREÇÃO DO BÔNUS: Força a conversão para String explícita para o Selectbox funcionar
-                    bonus_float = util.sosa_to_float(reg_existente.iloc[0].get('BONUS', 0))
-                    if bonus_float > 0: bonus_val = f"+{bonus_float:.1f}"
-                    elif bonus_float < 0: bonus_val = f"{bonus_float:.1f}"
-                    else: bonus_val = "0.0"
-                    
-                    # 🚨 CORREÇÃO DO VETOR: Troca o vazio por "Nenhum" para evitar o "None" na tela
-                    tag_val = reg_existente.iloc[0]['TAGS'] if not falta_val else "Nenhum"
-                    if tag_val not in["Nenhum", "Fardamento", "Postura", "Atraso", "Celular", "Indisciplina", "Comunicação", "Elogio", "Destaque", "Dormiu", "PEI CONCLUÍDO"]:
-                        tag_val = "Nenhum"
-                        
+                    bonus_val = util.sosa_to_float(reg_existente.iloc[0].get('BONUS', 0))
+                    tag_val = reg_existente.iloc[0]['TAGS'] if not falta_val else ""
                     obs_val = reg_existente.iloc[0]['OBSERVACOES']
+                    
+                    # Limpa a tag de PEI CONCLUÍDO para não bugar o selectbox se não estiver na lista
+                    if tag_val not in["", "Fardamento", "Postura", "Atraso", "Celular", "Indisciplina", "Comunicação", "Elogio", "Destaque", "Dormiu", "PEI CONCLUÍDO"]:
+                        tag_val = ""
                 else:
                     visto_val = st.session_state.get(f"visto_lote_{turma_sel}", True)
                     falta_val = False
-                    bonus_val = "0.0"
-                    tag_val = "Nenhum"
+                    bonus_val = 0.0
+                    tag_val = ""
                     obs_val = ""
 
                 dados_diario.append({
@@ -3519,15 +3515,11 @@ elif menu == "📝 Diário de Bordo Rápido":
                     "Estudante": st.column_config.TextColumn("Estudante", width="medium", disabled=True),
                     "F": st.column_config.CheckboxColumn("F", help="Faltou"),
                     "V": st.column_config.CheckboxColumn("V", help="Visto", disabled=("Sem Visto" in natureza_registro)),
-                    "⭐": st.column_config.SelectboxColumn(
-                        "⭐", 
-                        options=["-1.0", "-0.5", "-0.3", "-0.2", "-0.1", "0.0", "+0.1", "+0.2", "+0.3", "+0.5", "+1.0"], 
-                        width="small", 
-                        help="Bônus (+) ou Punição (-)"
-                    ),
+                    # 🚨 ADICIONADO OPÇÕES NEGATIVAS PARA PUNIÇÃO DIRETA
+                    "⭐": st.column_config.SelectboxColumn("⭐", options=[-1.0, -0.5, -0.3, -0.2, -0.1, 0.0, 0.1, 0.2, 0.3, 0.5, 1.0], width="small"),
                     "Vetor": st.column_config.SelectboxColumn(
                         "Vetor", 
-                        options=["Nenhum", "Fardamento", "Postura", "Atraso", "Celular", "Indisciplina", "Comunicação", "Elogio", "Destaque", "Dormiu", "PEI CONCLUÍDO"],
+                        options=["", "Fardamento", "Postura", "Atraso", "Celular", "Indisciplina", "Comunicação", "Elogio", "Destaque", "Dormiu", "PEI CONCLUÍDO"],
                         width="small"
                     ),
                     "Obs (🎙️)": st.column_config.TextColumn("Obs (🎙️)", width="large")
@@ -3542,10 +3534,7 @@ elif menu == "📝 Diário de Bordo Rápido":
                 linhas =[]
                 for _, r in df_ed.iterrows():
                     aluno_eh_pei = "♿" in r['Estudante'] or "🟠" in r['Estudante']
-                    
-                    # Trata o Vetor "Nenhum" para salvar vazio no banco
-                    vetor_banco = "" if r['Vetor'] == "Nenhum" else r['Vetor']
-                    tag_f = "AUSÊNCIA" if r['F'] else vetor_banco
+                    tag_f = "AUSÊNCIA" if r['F'] else r['Vetor']
                     
                     visto_f = False if r['F'] else r['V']
                     visto_db = "ISENTO" if "Sem Visto" in natureza_registro else str(visto_f)
@@ -3559,12 +3548,9 @@ elif menu == "📝 Diário de Bordo Rápido":
 
                     nome_limpo = r['Estudante'].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
 
-                    # Converte a string "+0.5" ou "-0.5" de volta para o formato numérico do banco
-                    bonus_num = util.sosa_to_float(str(r['⭐']).replace("+", ""))
-
                     linhas.append([
                         data_str, r['ID'], nome_limpo, turma_sel,
-                        visto_db, tag_f, obs_final, util.sosa_to_str(bonus_num)
+                        visto_db, tag_f, obs_final, util.sosa_to_str(r['⭐'])
                     ])
                 return linhas
 
@@ -3595,9 +3581,6 @@ elif menu == "📝 Diário de Bordo Rápido":
                         st.rerun()
 
 
-# ==============================================================================
-# MÓDULO: BIOGRAFIA DO ESTUDANTE - DOSSIÊ DE EVOLUÇÃO (CLEAN & UX)
-# ==============================================================================
 # ==============================================================================
 # MÓDULO: BIOGRAFIA DO ESTUDANTE - DOSSIÊ DE EVOLUÇÃO (CLEAN & UX)
 # ==============================================================================
@@ -3773,15 +3756,15 @@ elif menu == "👤 Biografia do Estudante":
                     
                     st.metric("Vistos no Caderno", f"{perc_visto:.0f}%", f"{vistos}/{total_aulas_visto} aulas válidas")
                     
-                    st.metric("Mérito Acumulado (Bônus)", f"+{total_bonus_periodo:.1f} pts", help="Total de pontos extras conquistados no período.")
+                    st.metric("Mérito Acumulado (Bônus)", f"{total_bonus_periodo:+.1f} pts", help="Total de pontos extras ou punições conquistados no período.")
                 else: 
                     st.info(f"📭 Sem registros de diário para o período.")
 
             with col_v2:
                 st.markdown("**🚩 Ocorrências, Bônus e Observações Recentes:**")
                 if not d_alu_f.empty:
-                    # Filtra apenas linhas que tenham alguma anotação, tag ou bônus
-                    mask_obs = (d_alu_f['TAGS'] != "") | (d_alu_f['OBSERVACOES'] != "") | (d_alu_f['BONUS'].apply(util.sosa_to_float) > 0)
+                    # 🚨 BLINDAGEM: Filtra linhas com anotação, tag ou bônus (positivo ou negativo)
+                    mask_obs = (d_alu_f['TAGS'] != "") | (d_alu_f['OBSERVACOES'] != "") | (d_alu_f['BONUS'].apply(util.sosa_to_float) != 0)
                     tags_obs = d_alu_f[mask_obs]
                     
                     if not tags_obs.empty:
@@ -3793,16 +3776,24 @@ elif menu == "👤 Biografia do Estudante":
                             # Define o ícone baseado na natureza do registro
                             if "SISTEMA_NOTA" in tag_str or "PROJETO" in obs_str.upper():
                                 emoji = "📘"
-                            elif any(x in tag_str for x in["DORMIU", "CONVERSA", "MATERIAL", "FALTOU", "AUSÊNCIA", "ATRASO", "CELULAR", "INDISCIPLINA"]):
+                            elif any(x in tag_str for x in["DORMIU", "CONVERSA", "MATERIAL", "FALTOU", "AUSÊNCIA", "ATRASO", "CELULAR", "INDISCIPLINA", "ARGUIÇÃO"]):
                                 emoji = "🔴"
                             elif bonus_val > 0:
                                 emoji = "⭐"
+                            elif bonus_val < 0:
+                                emoji = "📉"
                             else:
                                 emoji = "🟢"
                                 
                             # Formata a exibição
                             display_tag = tag_str if tag_str != "SISTEMA_NOTA" else "TRABALHO"
-                            bonus_badge = f" **[+{bonus_val} pts]**" if bonus_val > 0 else ""
+                            
+                            if bonus_val > 0:
+                                bonus_badge = f" **[+{bonus_val} pts]**"
+                            elif bonus_val < 0:
+                                bonus_badge = f" **[{bonus_val} pts]**"
+                            else:
+                                bonus_badge = ""
                             
                             texto_exibicao = f"{emoji} **{row['DATA']}**"
                             if display_tag: texto_exibicao += f" | {display_tag}"
@@ -3819,7 +3810,13 @@ elif menu == "👤 Biografia do Estudante":
                                 bonus_val = util.sosa_to_float(row.get('BONUS', 0))
                                 
                                 display_tag = tag_str if tag_str != "SISTEMA_NOTA" else "TRABALHO"
-                                bonus_badge = f" **[+{bonus_val} pts]**" if bonus_val > 0 else ""
+                                
+                                if bonus_val > 0:
+                                    bonus_badge = f" **[+{bonus_val} pts]**"
+                                elif bonus_val < 0:
+                                    bonus_badge = f" **[{bonus_val} pts]**"
+                                else:
+                                    bonus_badge = ""
                                 
                                 texto_exibicao = f"**{row['DATA']}**"
                                 if display_tag: texto_exibicao += f" | {display_tag}"
@@ -3881,6 +3878,7 @@ elif menu == "👤 Biografia do Estudante":
                 st.info("📭 Aguardando avaliações escaneadas para gerar o mapa de lacunas.")
 
         st.caption(f"Dossiê atualizado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+
 
 
 # ==============================================================================
