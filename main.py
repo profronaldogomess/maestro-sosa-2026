@@ -3598,6 +3598,9 @@ elif menu == "📝 Diário de Bordo Rápido":
 # ==============================================================================
 # MÓDULO: BIOGRAFIA DO ESTUDANTE - DOSSIÊ DE EVOLUÇÃO (CLEAN & UX)
 # ==============================================================================
+# ==============================================================================
+# MÓDULO: BIOGRAFIA DO ESTUDANTE - DOSSIÊ DE EVOLUÇÃO (CLEAN & UX)
+# ==============================================================================
 elif menu == "👤 Biografia do Estudante":
     st.title("👤 Biografia do Estudante: Dossiê de Evolução")
     st.caption("💡 **Guia de Comando:** Visão analítica da jornada do aluno. Use este painel em reuniões de pais para justificar médias mostrando a composição exata das notas, a evolução nas provas e o engajamento em sala.")
@@ -3695,7 +3698,7 @@ elif menu == "👤 Biografia do Estudante":
         with st.container(border=True):
             if not n_alu_f.empty:
                 dados_notas =[]
-                trims_para_exibir = ["I Trimestre", "II Trimestre", "III Trimestre"] if trim_b == "Todos" else [trim_b]
+                trims_para_exibir =["I Trimestre", "II Trimestre", "III Trimestre"] if trim_b == "Todos" else [trim_b]
                 for t in trims_para_exibir:
                     reg = n_alu[n_alu['TRIMESTRE'] == t]
                     if not reg.empty:
@@ -3762,35 +3765,71 @@ elif menu == "👤 Biografia do Estudante":
                     vistos = len(d_alu_vistos[d_alu_vistos['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"])
                     perc_visto = (vistos / total_aulas_visto) * 100 if total_aulas_visto > 0 else 0
                     
+                    # Lógica de Bônus Total
+                    total_bonus_periodo = d_alu_f['BONUS'].apply(util.sosa_to_float).sum()
+                    
                     st.metric("Assiduidade (Presença)", f"{perc_presenca:.0f}%", f"{faltas} faltas registradas", delta_color="inverse" if faltas > 0 else "normal")
                     st.progress(perc_presenca / 100)
                     
                     st.metric("Vistos no Caderno", f"{perc_visto:.0f}%", f"{vistos}/{total_aulas_visto} aulas válidas")
+                    
+                    st.metric("Mérito Acumulado (Bônus)", f"+{total_bonus_periodo:.1f} pts", help="Total de pontos extras conquistados no período.")
                 else: 
                     st.info(f"📭 Sem registros de diário para o período.")
 
             with col_v2:
-                st.markdown("**🚩 Ocorrências, Trabalhos e Observações:**")
+                st.markdown("**🚩 Ocorrências, Bônus e Observações Recentes:**")
                 if not d_alu_f.empty:
-                    tags_obs = d_alu_f[(d_alu_f['TAGS'] != "") | (d_alu_f['OBSERVACOES'] != "")]
+                    # Filtra apenas linhas que tenham alguma anotação, tag ou bônus
+                    mask_obs = (d_alu_f['TAGS'] != "") | (d_alu_f['OBSERVACOES'] != "") | (d_alu_f['BONUS'].apply(util.sosa_to_float) > 0)
+                    tags_obs = d_alu_f[mask_obs]
+                    
                     if not tags_obs.empty:
-                        for _, row in tags_obs.tail(8).iterrows():
+                        for _, row in tags_obs.tail(5).iterrows():
                             tag_str = str(row['TAGS']).upper()
                             obs_str = str(row['OBSERVACOES'])
+                            bonus_val = util.sosa_to_float(row.get('BONUS', 0))
                             
                             # Define o ícone baseado na natureza do registro
                             if "SISTEMA_NOTA" in tag_str or "PROJETO" in obs_str.upper():
                                 emoji = "📘"
                             elif any(x in tag_str for x in["DORMIU", "CONVERSA", "MATERIAL", "FALTOU", "AUSÊNCIA", "ATRASO", "CELULAR", "INDISCIPLINA"]):
                                 emoji = "🔴"
+                            elif bonus_val > 0:
+                                emoji = "⭐"
                             else:
                                 emoji = "🟢"
                                 
                             # Formata a exibição
                             display_tag = tag_str if tag_str != "SISTEMA_NOTA" else "TRABALHO"
-                            st.caption(f"{emoji} **{row['DATA']}**: {display_tag} - *{obs_str}*")
+                            bonus_badge = f" **[+{bonus_val} pts]**" if bonus_val > 0 else ""
+                            
+                            texto_exibicao = f"{emoji} **{row['DATA']}**"
+                            if display_tag: texto_exibicao += f" | {display_tag}"
+                            if bonus_badge: texto_exibicao += bonus_badge
+                            if obs_str: texto_exibicao += f" - *{obs_str}*"
+                            
+                            st.caption(texto_exibicao)
+                            
+                        st.markdown("<br>", unsafe_allow_html=True)
+                        with st.expander("📂 Ver Histórico Completo de Anotações"):
+                            for _, row in tags_obs.iloc[::-1].iterrows():
+                                tag_str = str(row['TAGS']).upper()
+                                obs_str = str(row['OBSERVACOES'])
+                                bonus_val = util.sosa_to_float(row.get('BONUS', 0))
+                                
+                                display_tag = tag_str if tag_str != "SISTEMA_NOTA" else "TRABALHO"
+                                bonus_badge = f" **[+{bonus_val} pts]**" if bonus_val > 0 else ""
+                                
+                                texto_exibicao = f"**{row['DATA']}**"
+                                if display_tag: texto_exibicao += f" | {display_tag}"
+                                if bonus_badge: texto_exibicao += bonus_badge
+                                if obs_str: texto_exibicao += f" - {obs_str}"
+                                
+                                st.write(texto_exibicao)
+                                st.divider()
                     else: 
-                        st.success("✅ Nenhuma ocorrência ou trabalho registrado.")
+                        st.success("✅ Nenhuma ocorrência ou anotação registrada.")
 
         # --- BLOCO 4: MAPA DE LACUNAS (RAIO-X) ---
         st.markdown(f"### 🧠 4. Mapa de Lacunas e Dificuldades ({trim_b})")
@@ -3830,8 +3869,12 @@ elif menu == "👤 Biografia do Estudante":
                                     todas_as_lacunas.append(txt_limpo)
                 
                 if todas_as_lacunas:
-                    for l in list(dict.fromkeys(todas_as_lacunas)): 
-                        st.error(f"❌ {l}")
+                    lacunas_unicas = list(dict.fromkeys(todas_as_lacunas))
+                    st.warning(f"⚠️ **{len(lacunas_unicas)} habilidades** identificadas com defasagem nas avaliações recentes.")
+                    
+                    with st.expander("🔍 Ver Detalhamento das Lacunas (Recolhido para limpeza visual)", expanded=False):
+                        for l in lacunas_unicas: 
+                            st.error(f"❌ {l}")
                 else:
                     st.success("✅ Domínio total nas habilidades das avaliações realizadas.")
             else:
