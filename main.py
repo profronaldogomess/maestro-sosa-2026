@@ -3346,9 +3346,11 @@ elif menu == "📝 Diário de Bordo Rápido":
                 data_str = data_sel.strftime("%d/%m/%Y")
                 ano_num = "".join(filter(str.isdigit, str(turma_sel)))
 
+            # 🚨 CHAVE DINÂMICA DE ESTADO (Garante que a tela atualize ao mudar a data)
+            key_suffix = f"{turma_sel}_{data_str.replace('/','')}_{v}"
+
             # --- BUSCA PRÉVIA DE REGISTROS PARA PREENCHIMENTO AUTOMÁTICO (EDIÇÃO) ---
-            # 🚨 BLINDAGEM: Ignora as tags protegidas para não sobrescrever a Arguição
-            tags_protegidas =["SISTEMA_NOTA", "ARGUIÇÃO", "NOTA_EXTERNA"]
+            tags_protegidas = ["SISTEMA_NOTA", "ARGUIÇÃO", "NOTA_EXTERNA"]
             registros_atuais = df_diario[(df_diario['DATA'] == data_str) & (df_diario['TURMA'] == turma_sel) & (~df_diario['TAGS'].isin(tags_protegidas))]
             aula_ativa = df_registro_aulas[(df_registro_aulas['TURMA'] == turma_sel) & (df_registro_aulas['DATA'] == data_str)]
             
@@ -3358,10 +3360,13 @@ elif menu == "📝 Diário de Bordo Rápido":
             saved_clima = "🧠 Focada"
             modo_idx = 0
 
-            # Se já houver registro, verifica se foi "Sem Visto" (ISENTO)
+            # Se já houver registro, verifica o modo de aula
             if not registros_atuais.empty:
                 if str(registros_atuais.iloc[0]['VISTO_ATIVIDADE']).upper() == "ISENTO":
                     modo_idx = 1
+                    # Verifica se foi um Evento Surpresa olhando o Cockpit
+                    if not aula_ativa.empty and "Evento Surpresa" in str(aula_ativa.iloc[0]['CONTEUDO_MINISTRADO']):
+                        modo_idx = 2
 
             # --- 2. DETECÇÃO DO COCKPIT E DNA DO PLANO ---
             if not aula_ativa.empty:
@@ -3369,7 +3374,6 @@ elif menu == "📝 Diário de Bordo Rápido":
                 material_hoje = row_ativa['CONTEUDO_MINISTRADO']
                 semana_ref = row_ativa['SEMANA']
                 
-                # Resgata dados de regência já salvos no banco para preencher o painel
                 if str(row_ativa.get('STATUS_EXECUCAO', '')).strip() and str(row_ativa.get('STATUS_EXECUCAO', '')) != "nan": 
                     saved_status = row_ativa['STATUS_EXECUCAO']
                 if str(row_ativa.get('PONTE_PEDAGOGICA', '')).strip() and str(row_ativa.get('PONTE_PEDAGOGICA', '')) != "nan": 
@@ -3419,26 +3423,28 @@ elif menu == "📝 Diário de Bordo Rápido":
                 
                 opcoes_status =["🟢 Concluído (100%)", "🟡 Parcial (Pendência)", "🔴 Bloqueado (Crítico)"]
                 idx_status = opcoes_status.index(saved_status) if saved_status in opcoes_status else 0
-                status_aula = c_reg1.selectbox("Status da Execução:", opcoes_status, index=idx_status, key=f"status_reg_{v}")
+                status_aula = c_reg1.selectbox("Status da Execução:", opcoes_status, index=idx_status, key=f"status_reg_{key_suffix}")
                 
-                ponte_pedagogica = c_reg2.text_area("🔗 Ponte Pedagógica (Onde paramos?):", value=saved_ponte, placeholder="Ex: Parei no slide 5...", height=68, key=f"ponte_reg_{v}")
+                ponte_pedagogica = c_reg2.text_area("🔗 Ponte Pedagógica (Onde paramos?):", value=saved_ponte, placeholder="Ex: Parei no slide 5...", height=68, key=f"ponte_reg_{key_suffix}")
                 
                 opcoes_clima =["😴 Apática", "😐 Dispersa", "🧠 Focada", "⚡ Agitada", "🤯 Dificuldade Alta"]
                 val_clima = saved_clima if saved_clima in opcoes_clima else "🧠 Focada"
-                clima_turma = c_reg3.select_slider("🌡️ Clima da Turma:", options=opcoes_clima, value=val_clima, key=f"clima_reg_{v}")
+                clima_turma = c_reg3.select_slider("🌡️ Clima da Turma:", options=opcoes_clima, value=val_clima, key=f"clima_reg_{key_suffix}")
 
             st.markdown("---")
             
             # --- 4. NATUREZA E AÇÕES EM LOTE ---
             c_nat, c_lote1, c_lote2 = st.columns([2, 1, 1])
             
+            opcoes_modo =["📝 Com Visto (Padrão)", "🗣️ Sem Visto (Evento)", "🎉 Evento Surpresa (Auto-Presença)"]
+            
             with c_nat:
                 natureza_registro = st.radio(
-                    "Modo de Aula:",["📝 Com Visto (Padrão)", "🗣️ Sem Visto (Evento)"],
+                    "Modo de Aula:", opcoes_modo,
                     index=modo_idx,
                     horizontal=True,
-                    help="Se 'Sem Visto', a coluna de vistos será ignorada no cálculo de notas.",
-                    key=f"nat_reg_{v}"
+                    help="Se 'Sem Visto' ou 'Surpresa', a coluna de vistos será ignorada no cálculo de notas.",
+                    key=f"nat_reg_{key_suffix}"
                 )
             
             with c_lote1:
@@ -3452,10 +3458,31 @@ elif menu == "📝 Diário de Bordo Rápido":
                     st.session_state[f"visto_lote_{turma_sel}"] = False
                     st.rerun()
 
+            # ==============================================================================
+            # 🚨 INTELIGÊNCIA DE AUTO-PRESENÇA (EVENTO SURPRESA)
+            # ==============================================================================
+            has_history = False
+            present_students = set()
+            
+            # Só calcula a auto-presença se for um registro NOVO e o modo for Surpresa
+            if "Surpresa" in natureza_registro and registros_atuais.empty:
+                df_past = df_diario[(df_diario['TURMA'] == turma_sel) & (~df_diario['TAGS'].isin(tags_protegidas))].copy()
+                if not df_past.empty:
+                    df_past['DATA_DT'] = pd.to_datetime(df_past['DATA'], format="%d/%m/%Y", errors='coerce')
+                    data_atual_dt = pd.to_datetime(data_str, format="%d/%m/%Y")
+                    df_past = df_past[df_past['DATA_DT'] < data_atual_dt]
+                    
+                    if not df_past.empty:
+                        has_history = True
+                        # Pega as últimas 4 datas únicas de aula
+                        last_4_dates = df_past['DATA_DT'].sort_values(ascending=False).unique()[:4]
+                        df_last_4 = df_past[df_past['DATA_DT'].isin(last_4_dates)]
+                        # Alunos que tiveram pelo menos UMA presença (não tem tag de ausência)
+                        present_students = set(df_last_4[df_last_4['TAGS'] != "AUSÊNCIA"]['ID_ALUNO'].apply(db.limpar_id))
+
             # --- 5. MONTAGEM DA MESA ---
             alunos_turma = df_alunos[df_alunos['TURMA'] == turma_sel].sort_values(by="NOME_ALUNO")
             
-            # 🚨 MOTOR DE ÍCONES MULTIPERFIL
             def definir_icone_status(nec):
                 n = str(nec).upper().strip()
                 if "PENDENTE" in n or "SUSPEITA" in n: return "🟠"
@@ -3479,12 +3506,20 @@ elif menu == "📝 Diário de Bordo Rápido":
                     tag_val = reg_existente.iloc[0]['TAGS'] if not falta_val else ""
                     obs_val = reg_existente.iloc[0]['OBSERVACOES']
                     
-                    # Limpa a tag de PEI CONCLUÍDO para não bugar o selectbox se não estiver na lista
                     if tag_val not in["", "Fardamento", "Postura", "Atraso", "Celular", "Indisciplina", "Comunicação", "Elogio", "Destaque", "Dormiu", "PEI CONCLUÍDO"]:
                         tag_val = ""
                 else:
-                    visto_val = st.session_state.get(f"visto_lote_{turma_sel}", True)
-                    falta_val = False
+                    # Lógica para registros novos
+                    if "Surpresa" in natureza_registro:
+                        if has_history:
+                            falta_val = id_a not in present_students
+                        else:
+                            falta_val = False # Se não tem histórico, dá presença pra todo mundo
+                        visto_val = False
+                    else:
+                        visto_val = st.session_state.get(f"visto_lote_{turma_sel}", True)
+                        falta_val = False
+                        
                     bonus_val = 0.0
                     tag_val = ""
                     obs_val = ""
@@ -3499,10 +3534,7 @@ elif menu == "📝 Diário de Bordo Rápido":
                     "Obs (🎙️)": obs_val
                 })
 
-            # 🚨 CÁLCULO DINÂMICO DE ALTURA (TABELA INFINITA MOBILE-FIRST)
             altura_dinamica = (len(dados_diario) * 35) + 40
-
-            # 🚨 CHAVE ESTÁVEL (VACINA ANTI-QUEDA DE INTERNET)
             chave_tabela = f"ed_diario_{turma_sel}_{data_str.replace('/','')}"
 
             st.info("💡 **Dica Anti-Queda (4G):** Se a sua internet oscila muito, clique em **'Salvar Progresso'** a cada 5 alunos. Isso garante que você não perca os vistos se o celular recarregar a página.")
@@ -3514,8 +3546,7 @@ elif menu == "📝 Diário de Bordo Rápido":
                     "ID": None,
                     "Estudante": st.column_config.TextColumn("Estudante", width="medium", disabled=True),
                     "F": st.column_config.CheckboxColumn("F", help="Faltou"),
-                    "V": st.column_config.CheckboxColumn("V", help="Visto", disabled=("Sem Visto" in natureza_registro)),
-                    # 🚨 ADICIONADO OPÇÕES NEGATIVAS PARA PUNIÇÃO DIRETA
+                    "V": st.column_config.CheckboxColumn("V", help="Visto", disabled=("Sem Visto" in natureza_registro or "Surpresa" in natureza_registro)),
                     "⭐": st.column_config.SelectboxColumn("⭐", options=[-1.0, -0.5, -0.3, -0.2, -0.1, 0.0, 0.1, 0.2, 0.3, 0.5, 1.0], width="small"),
                     "Vetor": st.column_config.SelectboxColumn(
                         "Vetor", 
@@ -3537,9 +3568,14 @@ elif menu == "📝 Diário de Bordo Rápido":
                     tag_f = "AUSÊNCIA" if r['F'] else r['Vetor']
                     
                     visto_f = False if r['F'] else r['V']
-                    visto_db = "ISENTO" if "Sem Visto" in natureza_registro else str(visto_f)
                     
-                    if aluno_eh_pei and visto_f and not tag_f and "Sem Visto" not in natureza_registro:
+                    # 🚨 BLINDAGEM MATEMÁTICA: Salva como ISENTO para não prejudicar a nota
+                    if "Sem Visto" in natureza_registro or "Surpresa" in natureza_registro:
+                        visto_db = "ISENTO"
+                    else:
+                        visto_db = str(visto_f)
+                    
+                    if aluno_eh_pei and visto_f and not tag_f and "Sem Visto" not in natureza_registro and "Surpresa" not in natureza_registro:
                         tag_f = "PEI CONCLUÍDO"
                     
                     obs_final = r['Obs (🎙️)']
@@ -3556,7 +3592,6 @@ elif menu == "📝 Diário de Bordo Rápido":
 
             c_save1, c_save2 = st.columns(2)
 
-            # BOTÃO 1: SALVAR PROGRESSO (RASCUNHO RÁPIDO)
             if c_save1.button("💾 SALVAR PROGRESSO (RASCUNHO)", use_container_width=True):
                 with st.spinner("Salvando rascunho no banco..."):
                     db.limpar_diario_data_turma(data_str, turma_sel)
@@ -3566,7 +3601,6 @@ elif menu == "📝 Diário de Bordo Rápido":
                         time.sleep(1)
                         st.rerun()
 
-            # BOTÃO 2: CONSOLIDAR E FECHAR AULA (FINAL)
             if c_save2.button("✅ CONSOLIDAR E FECHAR AULA", type="primary", use_container_width=True):
                 with st.status("Sincronizando Práxis...") as status:
                     db.limpar_diario_data_turma(data_str, turma_sel)
@@ -3574,11 +3608,26 @@ elif menu == "📝 Diário de Bordo Rápido":
                                 
                     if db.salvar_lote("DB_DIARIO_BORDO", linhas_diario):
                         db.atualizar_fechamento_aula(data_str, turma_sel, status_aula, ponte_pedagogica, clima_turma)
+                        
+                        # 🚨 LIBERA A SEMANA PLANEJADA SE FOR EVENTO SURPRESA
+                        if "Surpresa" in natureza_registro:
+                            try:
+                                wb = db.conectar()
+                                ws = wb.worksheet("DB_REGISTRO_AULAS")
+                                dados_reg = ws.get_all_values()
+                                for i, row_reg in enumerate(dados_reg):
+                                    if i > 0 and len(row_reg) >= 3 and row_reg[0] == data_str and row_reg[2] == turma_sel:
+                                        ws.update_cell(i + 1, 2, "AVULSA")
+                                        ws.update_cell(i + 1, 4, "Evento Surpresa (Sem Registro de Matriz)")
+                                        break
+                            except: pass
+                        
                         status.update(label="✅ Diário e Regência Atualizados!", state="complete")
                         st.balloons()
                         if f"visto_lote_{turma_sel}" in st.session_state: del st.session_state[f"visto_lote_{turma_sel}"]
                         time.sleep(1)
                         st.rerun()
+
 
 
 # ==============================================================================
