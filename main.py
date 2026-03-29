@@ -6061,7 +6061,7 @@ elif menu == "👥 Gestão da Turma":
                         dados = ws.get_all_values()
                         for i, row in enumerate(dados):
                             if i > 0 and row[0] == data_obs and db.limpar_id(row[1]) == db.limpar_id(id_alu) and row[6] == texto_obs:
-                                ws.update_cell(i + 1, 7, texto_obs + " [LIDO]")
+                                ws.update_cell(i + 1, 7, texto_obs + "[LIDO]")
                                 st.cache_data.clear()
                                 return True
                     except: pass
@@ -6259,7 +6259,7 @@ elif menu == "👥 Gestão da Turma":
                         )
 
     # ==============================================================================
-    # 🚨 NOVA ABA 7: ROLETA DE ARGUIÇÃO & DIAGNÓSTICO CLÍNICO (COM HISTÓRICO E DATA)
+    # 🚨 ABA 7: ROLETA DE ARGUIÇÃO & DIAGNÓSTICO CLÍNICO (COM HISTÓRICO E DATA)
     # ==============================================================================
     with tab_roleta:
         import random
@@ -6499,9 +6499,9 @@ elif menu == "👥 Gestão da Turma":
                             dados = ws.get_all_values()
                             
                             # Atualiza as observações no banco para os alunos que já têm arguição registrada
-                            updates = []
+                            updates =[]
                             for a in st.session_state[chave_lista]:
-                                if a["Status"] not in ["⏳ Pendente", "⏭️ Faltou"]:
+                                if a["Status"] not in["⏳ Pendente", "⏭️ Faltou"]:
                                     for i, row in enumerate(dados):
                                         if i > 0 and row[0] == data_roleta_str and db.limpar_id(row[1]) == a["ID"] and row[5] == "ARGUIÇÃO":
                                             nova_obs = f"Quadro Negro: {a['Diagnóstico / Anotação']}"
@@ -6617,6 +6617,8 @@ elif menu == "📚 Base de Conhecimento":
                     col_btn.link_button("👁️ Ver no Drive", row['URI_ARQUIVO'], use_container_width=True)
         else:
             st.info("📭 Sua biblioteca está vazia.")
+
+
 
 
 # ==============================================================================
