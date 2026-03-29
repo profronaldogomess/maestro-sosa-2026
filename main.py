@@ -5306,7 +5306,13 @@ elif menu == "👥 Gestão da Turma":
         lista_turmas_segura = sorted(df_alunos['TURMA'].unique())
 
     tab_cockpit, tab_criar, tab_povoar, tab_editar, tab_radiografia, tab_frequencia, tab_roleta = st.tabs([
-        "📊 1. Cockpit de Prontidão", "🏗️ 2. Arquitetura de Turmas", "➕ 3. Povoar Alunos", "✏️ 4. Edição & Transferência", "🧠 5. Radiografia Cognitiva", "📅 6. Controle de Frequência", "🎲 7. Roleta de Arguição"
+        "📊 1. Cockpit de Prontidão", 
+        "🏗️ 2. Arquitetura de Turmas", 
+        "➕ 3. Povoar Alunos", 
+        "✏️ 4. Edição & Transferência", 
+        "🧠 5. Radiografia Cognitiva", 
+        "📅 6. Controle de Frequência", 
+        "🎲 7. Roleta de Arguição"
     ])
 
     # --- ABA 1: COCKPIT DA TURMA ---
@@ -6061,7 +6067,7 @@ elif menu == "👥 Gestão da Turma":
                         dados = ws.get_all_values()
                         for i, row in enumerate(dados):
                             if i > 0 and row[0] == data_obs and db.limpar_id(row[1]) == db.limpar_id(id_alu) and row[6] == texto_obs:
-                                ws.update_cell(i + 1, 7, texto_obs + "[LIDO]")
+                                ws.update_cell(i + 1, 7, texto_obs + " [LIDO]")
                                 st.cache_data.clear()
                                 return True
                     except: pass
@@ -6499,9 +6505,9 @@ elif menu == "👥 Gestão da Turma":
                             dados = ws.get_all_values()
                             
                             # Atualiza as observações no banco para os alunos que já têm arguição registrada
-                            updates =[]
+                            updates = []
                             for a in st.session_state[chave_lista]:
-                                if a["Status"] not in["⏳ Pendente", "⏭️ Faltou"]:
+                                if a["Status"] not in ["⏳ Pendente", "⏭️ Faltou"]:
                                     for i, row in enumerate(dados):
                                         if i > 0 and row[0] == data_roleta_str and db.limpar_id(row[1]) == a["ID"] and row[5] == "ARGUIÇÃO":
                                             nova_obs = f"Quadro Negro: {a['Diagnóstico / Anotação']}"
