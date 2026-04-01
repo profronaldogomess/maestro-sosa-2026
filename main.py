@@ -4516,7 +4516,8 @@ elif menu == "👥 Gestão da Turma":
                 if val != "---": return 'background-color: #001E3C; color: #2ECC71; font-weight: bold; text-align: center;'
                 return 'color: gray; text-align: center;'
 
-            st.dataframe(df_grade.style.applymap(colorir_grade), use_container_width=True)
+            # 🚨 VACINA PANDAS: Trocado applymap por map
+            st.dataframe(df_grade.style.map(colorir_grade), use_container_width=True)
             st.markdown("---")
 
             if not lista_turmas_segura:
@@ -5067,7 +5068,7 @@ elif menu == "👥 Gestão da Turma":
         st.subheader("✏️ Gestão de Cadastro e Transferência")
         st.caption("Altere o nome, a turma ou o laudo de um aluno. O sistema atualizará todo o histórico dele (notas, faltas, provas) automaticamente.")
         
-        t_origem = st.selectbox("Selecione a Turma Atual:", [""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"orig_ed_{v}")
+        t_origem = st.selectbox("Selecione a Turma Atual:",[""] + sorted(df_alunos['TURMA'].unique().tolist()), key=f"orig_ed_{v}")
         
         if t_origem:
             alunos_opcoes = df_alunos[df_alunos['TURMA'] == t_origem].sort_values(by="NOME_ALUNO")
@@ -5235,7 +5236,7 @@ elif menu == "👥 Gestão da Turma":
                         dados = ws.get_all_values()
                         for i, row in enumerate(dados):
                             if i > 0 and row[0] == data_obs and db.limpar_id(row[1]) == db.limpar_id(id_alu) and row[6] == texto_obs:
-                                ws.update_cell(i + 1, 7, texto_obs + " [LIDO]")
+                                ws.update_cell(i + 1, 7, texto_obs + "[LIDO]")
                                 st.cache_data.clear()
                                 return True
                     except: pass
@@ -5342,7 +5343,8 @@ elif menu == "👥 Gestão da Turma":
                             if val == '•': return 'color: #2ECC71; font-weight: bold;'
                             return 'color: gray;'
                             
-                        st.dataframe(pivot_freq.style.applymap(color_status), use_container_width=True, height=(len(pivot_freq)*35)+40)
+                        # 🚨 VACINA PANDAS: Trocado applymap por map
+                        st.dataframe(pivot_freq.style.map(color_status), use_container_width=True, height=(len(pivot_freq)*35)+40)
 
                     elif modo_visao == "📅 Faltosos por Dia":
                         st.markdown("#### 📅 Visão Diária de Ausências")
@@ -5427,8 +5429,9 @@ elif menu == "👥 Gestão da Turma":
                             if "Irregulares" in val: return 'color: black; background-color: #F1C40F; font-weight: bold;'
                             return 'color: white; background-color: #2ECC71;'
                             
+                        # 🚨 VACINA PANDAS: Trocado applymap por map
                         st.dataframe(
-                            df_evasao.style.applymap(color_diag, subset=['Diagnóstico']).format({"% Ausência": "{:.1f}%"}),
+                            df_evasao.style.map(color_diag, subset=['Diagnóstico']).format({"% Ausência": "{:.1f}%"}),
                             use_container_width=True, hide_index=True
                         )
 
