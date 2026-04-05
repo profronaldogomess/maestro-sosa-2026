@@ -1869,16 +1869,49 @@ elif menu == "📝 Central de Avaliações":
                 if is_segunda:
                     df_ref_2a = df_ref[df_ref['SEMANA_REF'] == "AVALIAÇÃO"]
                     mats_selecionados = c_mats.selectbox(f"📦 Selecione a Prova Original ({len(df_ref_2a)} detectadas):", [""] + df_ref_2a['TIPO_MATERIAL'].tolist(), help="A IA lerá esta prova e criará questões com a mesma estrutura matemática, mas com valores e contextos diferentes.", key=f"av_ref_{v}")
+                    mats_lista = [mats_selecionados] if mats_selecionados else[]
                 else:
                     mats_selecionados = c_mats.multiselect(f"📦 Ativos de Safra ({len(df_ref)} detectados):", options=df_ref["TIPO_MATERIAL"].tolist(), key=f"av_ref_{v}")
+                    mats_lista = mats_selecionados
                 
                 st.markdown("---")
                 
-                # 🚨 NOVO: CURADORIA DE CONTEÚDOS ESPECÍFICOS
-                df_cur_av = df_curriculo[(df_curriculo['ANO'].astype(str).str.contains(str(ano_av))) & (df_curriculo['TRIMESTRE'] == trim_filtro)]
-                lista_conteudos_trimestre = sorted(df_cur_av['CONTEUDO_ESPECIFICO'].unique().tolist()) if not df_cur_av.empty else[]
+                # ==============================================================================
+                # 🚨 EXTRAÇÃO DINÂMICA DE CONTEÚDOS E OBJETIVOS DAS AULAS SELECIONADAS
+                # ==============================================================================
+                conteudos_extraidos = set()
+                objetivos_extraidos = set()
                 
-                conteudos_foco = st.multiselect("🎯 Conteúdos Específicos (Foco da Avaliação):", lista_conteudos_trimestre, help="Selecione os conteúdos exatos que deseja cobrar. A IA criará as questões baseadas APENAS nestes tópicos.", key=f"cont_foco_av_{v}")
+                if mats_lista:
+                    semanas_selecionadas = df_ref[df_ref['TIPO_MATERIAL'].isin(mats_lista)]['SEMANA_REF'].unique()
+                    planos_relacionados = df_planos[(df_planos['ANO'].str.contains(str(ano_av))) & (df_planos['SEMANA'].isin(semanas_selecionadas))]
+                    
+                    for _, row_p in planos_relacionados.iterrows():
+                        txt_plano = str(row_p['PLANO_TEXTO'])
+                        cont = ai.extrair_tag(txt_plano, "CONTEUDOS_ESPECIFICOS")
+                        obj = ai.extrair_tag(txt_plano, "OBJETIVOS_ENSINO")
+                        
+                        if cont and cont.upper() != "N/A":
+                            for item in re.split(r'[;\n]', cont):
+                                item_limpo = item.strip().replace("- ", "").replace("• ", "")
+                                if len(item_limpo) > 5: conteudos_extraidos.add(item_limpo)
+                        if obj and obj.upper() != "N/A":
+                            for item in re.split(r'[;\n]', obj):
+                                item_limpo = item.strip().replace("- ", "").replace("• ", "")
+                                if len(item_limpo) > 5: objetivos_extraidos.add(item_limpo)
+                                
+                lista_conteudos = sorted(list(conteudos_extraidos))
+                lista_objetivos = sorted(list(objetivos_extraidos))
+                
+                # Fallback para a Matriz Curricular se não encontrar nos planos
+                if not lista_conteudos:
+                    df_cur_av = df_curriculo[(df_curriculo['ANO'].astype(str).str.contains(str(ano_av))) & (df_curriculo['TRIMESTRE'] == trim_filtro)]
+                    lista_conteudos = sorted(df_cur_av['CONTEUDO_ESPECIFICO'].unique().tolist()) if not df_cur_av.empty else[]
+                    lista_objetivos = sorted(df_cur_av['OBJETIVOS'].unique().tolist()) if not df_cur_av.empty else[]
+                
+                c_foco1, c_foco2 = st.columns(2)
+                conteudos_foco = c_foco1.multiselect("🎯 Conteúdos Específicos (Extraídos das Aulas):", lista_conteudos, help="Selecione os conteúdos exatos que deseja cobrar.", key=f"cont_foco_av_{v}")
+                objetivos_foco = c_foco2.multiselect("🎯 Objetivos de Ensino (Extraídos das Aulas):", lista_objetivos, help="Selecione as habilidades/objetivos que deseja avaliar.", key=f"obj_foco_av_{v}")
                 
                 instr_extra = st.text_area("📝 Instruções Extras de Composição:", placeholder="Ex: Focar mais em frações do que em decimais...", key=f"av_extra_{v}")
 
@@ -1930,7 +1963,13 @@ elif menu == "📝 Central de Avaliações":
                         diretriz = f"DISTRIBUIÇÃO: {q_facil} Fáceis, {q_medio} Médias, {q_dificil} Difíceis." if not is_segunda else "MODO 2ª CHAMADA (QUESTÕES GÊMEAS)."
                         
                         # 🚨 INJEÇÃO DOS CONTEÚDOS ESPECÍFICOS NO PROMPT
-                        foco_str = f"🎯 CONTEÚDOS ESPECÍFICOS A SEREM COBRADOS (FOCO EXCLUSIVO): {', '.join(conteudos_foco)}" if conteudos_foco else "Conteúdo geral das aulas"
+                        foco_str = ""
+                        if conteudos_foco:
+                            foco_str += f"🎯 CONTEÚDOS ESPECÍFICOS A SEREM COBRADOS (FOCO EXCLUSIVO): {', '.join(conteudos_foco)}\n"
+                        if objetivos_foco:
+                            foco_str += f"🎯 OBJETIVOS DE ENSINO A SEREM AVALIADOS: {', '.join(objetivos_foco)}\n"
+                        if not foco_str:
+                            foco_str = "Conteúdo geral das aulas vinculadas."
                         
                         prompt = (
                             f"TIPO: {tipo_av}. SÉRIE: {ano_av}º. VALOR: {v_total}. QTD: {qtd_q}.\n"
@@ -2127,7 +2166,7 @@ elif menu == "📝 Central de Avaliações":
             v_total_num = st.session_state.get('av_valor_total', 10.0)
             
             c_s1, c_s2 = st.columns(2)
-            trim_av = c_s1.selectbox("Confirmar Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"trim_fin_{v}")
+            trim_av = c_s1.selectbox("Confirmar Trimestre:",["I Trimestre", "II Trimestre", "III Trimestre"], key=f"trim_fin_{v}")
             
             nome_tecnico_sugerido = st.session_state.get('av_nome_fixo', 'AVALIACAO_SEM_NOME')
             nome_arq = c_s2.text_input("ID Técnico do Material (Nome no Banco):", nome_tecnico_sugerido, help="Este é o nome que aparecerá no Scanner de Gabaritos.", key=f"name_av_in_{v}")
