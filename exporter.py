@@ -126,7 +126,8 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
         p.paragraph_format.space_after = Pt(8)
 
         if any(x in l_s.upper() for x in["ATIVIDADE DE", "JORNADA", "HISTÓRIA", "MATEMÁTICA", "AULA"]):
-            run = p.add_run(l_s.upper().replace('**', ''))
+            # 🚨 VACINA LATEX: Removido o .upper() para não quebrar comandos LaTeX
+            run = p.add_run(l_s.replace('**', ''))
             run.bold = True
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER
         elif "QUESTÃO" in l_s.upper():
@@ -179,8 +180,8 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
 
         secoes_pei =["PARA LEMBRAR", "OBJETIVO", "INSTRUÇÕES", "ATIVIDADE", "PASSO A PASSO", "DICA MESTRA"]
         if any(x in l_s.upper() for x in secoes_pei):
-            txt_limpo = l_s.replace("[", "").replace("]", "").replace(":", "").upper()
-            # REMOVIDO OS BLOCOS DE ENFEITE - APENAS TEXTO LIMPO E CENTRALIZADO
+            # 🚨 VACINA LATEX: Removido o .upper() para não quebrar comandos LaTeX como \frac
+            txt_limpo = l_s.replace("[", "").replace("]", "").replace(":", "")
             run = p.add_run(txt_limpo)
             run.bold = True
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -245,8 +246,8 @@ def gerar_docx_professor_v25(titulo_doc, conteudo, info):
 
         if l_s.endswith(":") and len(l_s) < 40:
             p.paragraph_format.space_before = Pt(10)
-            # REMOVIDO OS BLOCOS DE ENFEITE
-            run = p.add_run(l_s.upper())
+            # 🚨 VACINA LATEX: Removido o .upper()
+            run = p.add_run(l_s)
             run.font.bold = True
             run.font.size = Pt(11)
             continue
@@ -383,8 +384,9 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
             
             secoes_especiais =["PARA LEMBRAR", "DICA MESTRA", "PASSO A PASSO", "VERSÃO ADAPTADA"]
             if any(x in l_s.upper() for x in secoes_especiais):
-                # REMOVIDO OS BLOCOS DE ENFEITE
-                run = p.add_run(l_s.upper())
+                # 🚨 VACINA LATEX: Removido o .upper()
+                txt_limpo = l_s.replace("[", "").replace("]", "").replace(":", "")
+                run = p.add_run(txt_limpo)
                 run.bold = True
                 p.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 continue
@@ -432,7 +434,7 @@ def gerar_docx_plano_pedagogico_ELITE(titulo_arquivo, dados, info):
 
         table = doc.add_table(rows=3, cols=3)
         table.style = 'Table Grid'
-        widths = [Inches(1.1), Inches(3.6), Inches(2.0)]
+        widths =[Inches(1.1), Inches(3.6), Inches(2.0)]
         for i, w in enumerate(widths): table.columns[i].width = w
 
         logo_path = "logo_escola.png" if os.path.exists("logo_escola.png") else "logo.png"
@@ -512,7 +514,6 @@ def gerar_docx_projeto_cientifico_V33(titulo_doc, conteudo_ia, info):
             texto_secao = ai.extrair_tag(conteudo_ia, tag)
             if texto_secao:
                 p_tit = doc.add_paragraph()
-                # REMOVIDO OS BLOCOS DE ENFEITE
                 run_tit = p_tit.add_run(label)
                 run_tit.bold = True
                 run_tit.font.size = Pt(11)
