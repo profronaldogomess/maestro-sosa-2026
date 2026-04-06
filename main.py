@@ -1790,7 +1790,7 @@ elif menu == "📝 Central de Avaliações":
             
             val_sugerido = 3.0 if "Teste" in tipo_av else 10.0 if "Sonda" in tipo_av else 4.0
             v_total = c2.number_input("Valor Total:", 0.0, 10.0, val_sugerido, step=0.5, key=f"av_v_{v}")
-            ano_av = c3.selectbox("Série Atual:", [6, 7, 8, 9], index=0, key=f"av_a_{v}")
+            ano_av = c3.selectbox("Série Atual:",[6, 7, 8, 9], index=0, key=f"av_a_{v}")
             qtd_q = c4.number_input("Nº de Questões:", 1, 20, 10, help="A versão PEI terá automaticamente a mesma quantidade ou metade, dependendo da configuração da IA.", key=f"av_q_{v}")
 
         is_sonda = "Sonda" in tipo_av
@@ -1869,7 +1869,7 @@ elif menu == "📝 Central de Avaliações":
                 if is_segunda:
                     df_ref_2a = df_ref[df_ref['SEMANA_REF'] == "AVALIAÇÃO"]
                     mats_selecionados = c_mats.selectbox(f"📦 Selecione a Prova Original ({len(df_ref_2a)} detectadas):", [""] + df_ref_2a['TIPO_MATERIAL'].tolist(), help="A IA lerá esta prova e criará questões com a mesma estrutura matemática, mas com valores e contextos diferentes.", key=f"av_ref_{v}")
-                    mats_lista = [mats_selecionados] if mats_selecionados else[]
+                    mats_lista =[mats_selecionados] if mats_selecionados else[]
                 else:
                     mats_selecionados = c_mats.multiselect(f"📦 Ativos de Safra ({len(df_ref)} detectados):", options=df_ref["TIPO_MATERIAL"].tolist(), key=f"av_ref_{v}")
                     mats_lista = mats_selecionados
@@ -1910,7 +1910,7 @@ elif menu == "📝 Central de Avaliações":
                     lista_objetivos = sorted(df_cur_av['OBJETIVOS'].unique().tolist()) if not df_cur_av.empty else[]
                 
                 c_foco1, c_foco2 = st.columns(2)
-                conteudos_foco = c_foco1.multiselect("🎯 Conteúdos Específicos (Extraídos das Aulas):", lista_conteudos, help="Selecione os conteúdos exatos que deseja cobrar.", key=f"cont_foco_av_{v}")
+                conteudos_foco = c_foco1.multiselect("🎯 Conteúdos Específicos (Extraídos das Aulas):", lista_conteudos, help="Selecione os conteúdos exatos que deseja cobrar. A IA criará as questões baseadas APENAS nestes tópicos.", key=f"cont_foco_av_{v}")
                 objetivos_foco = c_foco2.multiselect("🎯 Objetivos de Ensino (Extraídos das Aulas):", lista_objetivos, help="Selecione as habilidades/objetivos que deseja avaliar.", key=f"obj_foco_av_{v}")
                 
                 instr_extra = st.text_area("📝 Instruções Extras de Composição:", placeholder="Ex: Focar mais em frações do que em decimais...", key=f"av_extra_{v}")
@@ -2051,6 +2051,10 @@ elif menu == "📝 Central de Avaliações":
             
             def preparar_para_leitura(texto):
                 if not texto: return ""
+                # Remove blocos de código markdown que impedem a renderização
+                texto = re.sub(r'^```[a-zA-Z]*\n', '', texto, flags=re.MULTILINE | re.IGNORECASE)
+                texto = re.sub(r'```$', '', texto, flags=re.MULTILINE)
+                # Converte $$ para $ para o Streamlit renderizar inline
                 return re.sub(r'\$\$\s*(.*?)\s*\$\$', r'$\1$', texto)
             
             t1, t2, t3, t4, t5 = st.tabs(["📝 Prova Regular", "🔍 Perícia Regular", "♿ Prova PEI", "🔬 Perícia PEI", "✅ Gabaritos"])
@@ -2113,6 +2117,8 @@ elif menu == "📝 Central de Avaliações":
                 
                 def preparar_para_leitura_rev(texto):
                     if not texto: return ""
+                    texto = re.sub(r'^```[a-zA-Z]*\n', '', texto, flags=re.MULTILINE | re.IGNORECASE)
+                    texto = re.sub(r'```$', '', texto, flags=re.MULTILINE)
                     return re.sub(r'\$\$\s*(.*?)\s*\$\$', r'$\1$', texto)
 
                 tr1, tr2, tr3, tr_sync = st.tabs(["👨‍🏫 Professor", "📝 Aluno", "♿ PEI", "☁️ SINCRONIA"])
@@ -2166,7 +2172,7 @@ elif menu == "📝 Central de Avaliações":
             v_total_num = st.session_state.get('av_valor_total', 10.0)
             
             c_s1, c_s2 = st.columns(2)
-            trim_av = c_s1.selectbox("Confirmar Trimestre:",["I Trimestre", "II Trimestre", "III Trimestre"], key=f"trim_fin_{v}")
+            trim_av = c_s1.selectbox("Confirmar Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"trim_fin_{v}")
             
             nome_tecnico_sugerido = st.session_state.get('av_nome_fixo', 'AVALIACAO_SEM_NOME')
             nome_arq = c_s2.text_input("ID Técnico do Material (Nome no Banco):", nome_tecnico_sugerido, help="Este é o nome que aparecerá no Scanner de Gabaritos.", key=f"name_av_in_{v}")
