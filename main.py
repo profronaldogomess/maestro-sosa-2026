@@ -5995,6 +5995,12 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
             id_a = db.limpar_id(dados_a['ID'])
             perfil_atual = str(dados_a['NECESSIDADES']).upper().strip()
 
+            # 🚨 Limpa o chat se mudar de aluno
+            if st.session_state.get("current_pei_student") != id_a:
+                st.session_state.current_pei_student = id_a
+                if "chat_history_pei" in st.session_state:
+                    del st.session_state["chat_history_pei"]
+
         # --- 2. MOTOR DE FUSÃO E MEMÓRIA ---
         with st.status("🔍 Maestro Sosa interconectando safras e evidências...", expanded=False) as status:
             hist_aluno = df_relatorios[df_relatorios['ID_ALUNO'].apply(db.limpar_id) == id_a]
@@ -6059,7 +6065,7 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
         c3.metric("Nota Média de Safra", f"{nota_safra:.1f}")
         c4.metric("Relatos Salvos", len(hist_aluno))
 
-        # --- 4. CHECKLIST DE OBSERVAÇÃO (COM MEMÓRIA) ---
+        # --- 4. CHECKLIST DE OBSERVAÇÃO E RELATO DO PROFESSOR ---
         with st.container(border=True):
             st.markdown("#### 📋 Checklist de Percepção Pedagógica")
             st.caption("Ajuste os controles abaixo. A IA usará essas informações para dar o tom do relatório.")
@@ -6071,19 +6077,28 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                 v_participa = st.select_slider("Participação:", options=["Não participa", "Raramente", "Participativo", "Ativo"], value=val_part)
                 v_resposta = st.select_slider("Resposta às Intervenções:", options=["Resistente", "Lento", "Receptivo", "Rápido"], value=val_resp)
             sem_mudancas = st.checkbox("📢 Quadro estável (Sem alterações significativas desde o último relatório)")
+            
+            st.markdown("---")
+            # 🚨 NOVO: RELATO DO PROFESSOR (DIRETRIZ SOBERANA DO PEI)
+            relato_professor = st.text_area("✍️ Relato do Professor (Contexto Adicional):", placeholder="Ex: O aluno demonstrou muito interesse nas aulas com uso de tablet, mas fica agressivo com barulho alto. Quero que o relatório foque na necessidade de fones abafadores...", key="relato_prof_clean")
 
         # ==============================================================================
         # 🚨 MOTOR DE GERAÇÃO UNIFICADA (DOSSIÊ MASTER)
         # ==============================================================================
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("🧠 GERAR DOSSIÊ INTEGRADO (EVOLUÇÃO + PEI)", type="primary", use_container_width=True):
+            
+            if "chat_history_pei" in st.session_state:
+                del st.session_state["chat_history_pei"]
+                
             with st.spinner("Maestro Sosa analisando a linha do tempo e redigindo o Dossiê Master..."):
                 prompt_master = (
                     f"ESTUDANTE: {nome_limpo}. PERFIL COGNITIVO/CLÍNICO: {perfil_atual}.\n"
                     f"--- PASSADO ---\n{master_text}\n\n"
                     f"--- PRESENTE (DADOS) ---\n- Vistos: {vistos}, Bônus: {bonus}, Nota: {nota_safra}.\n"
                     f"--- CHECKLIST ATUAL ---\n- Autonomia: {v_autonomia}, Socialização: {v_social}, Participação: {v_participa}, Resposta: {v_resposta}.\n"
-                    f"--- STATUS: {'Quadro Estável' if sem_mudancas else 'Houve alterações'}.\n\n"
+                    f"--- STATUS: {'Quadro Estável' if sem_mudancas else 'Houve alterações'}.\n"
+                    f"🚨 RELATO DO PROFESSOR (PRIORIDADE MÁXIMA): {relato_professor if relato_professor else 'Nenhum relato adicional.'}\n\n"
                     f"MISSÃO: Gere um Dossiê Único e Integrado. Use as tags obrigatórias para separar o Diagnóstico Geral, as 4 Habilidades do PEI e as Diretrizes Curriculares.\n"
                     f"🚨 ATENÇÃO AO PERFIL: Como o aluno possui o perfil '{perfil_atual}', direcione o parecer pedagógico para as necessidades específicas desse quadro."
                 )
@@ -6112,10 +6127,68 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
         # --- ABA 1: RELATÓRIO DE EVOLUÇÃO ---
         with tab_evolucao:
             st.subheader("📝 Análise Longitudinal de Processos")
+            
             if v_diag:
-                st.info(v_diag)
-                st.markdown("#### 🎯 Diretrizes Curriculares Sugeridas")
-                st.success(v_diretrizes)
+                # ==============================================================================
+                # 🤖 MAESTRO COPILOT (CHATBOT DE REFINO DO PEI)
+                # ==============================================================================
+                with st.container(border=True):
+                    st.markdown("#### 🤖 Maestro Copilot (Coautoria em Tempo Real)")
+                    st.caption("Converse com a IA para ajustar o diagnóstico ou as diretrizes. O editor abaixo será atualizado automaticamente.")
+                    
+                    if "chat_history_pei" not in st.session_state:
+                        st.session_state.chat_history_pei =[{"role": "assistant", "avatar": "🤖", "content": "Saudações, Mestre! O Dossiê Master foi carregado. Como deseja refinar o diagnóstico ou as diretrizes?"}]
+                    
+                    chat_container_pei = st.container(height=300)
+                    with chat_container_pei:
+                        for msg in st.session_state.chat_history_pei:
+                            with st.chat_message(msg["role"], avatar=msg["avatar"]):
+                                st.markdown(msg["content"])
+                    
+                    if cmd_refine_pei := st.chat_input("Ex: 'Deixe o diagnóstico mais otimista' ou 'Adicione o uso de fones abafadores nas diretrizes'...", key="chat_pei_input"):
+                        st.session_state.chat_history_pei.append({"role": "user", "avatar": "💻", "content": cmd_refine_pei})
+                        
+                        with chat_container_pei:
+                            with st.chat_message("user", avatar="💻"):
+                                st.markdown(cmd_refine_pei)
+                            with st.chat_message("assistant", avatar="🤖"):
+                                with st.spinner("Reescrevendo Dossiê Master..."):
+                                    hist_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history_pei[-5:]])
+                                    prompt_refino = (
+                                        f"HISTÓRICO DA CONVERSA:\n{hist_text}\n\n"
+                                        f"ORDEM ATUAL: {cmd_refine_pei}\n\n"
+                                        f"DOSSIÊ ATUAL PARA REFINAR:\n{master_text}"
+                                    )
+                                    
+                                    resultado_refino = ai.gerar_ia("REFINADOR_PEI", prompt_refino)
+                                    
+                                    msg_chat = ai.extrair_tag(resultado_refino, "MENSAGEM_CHAT")
+                                    novo_conteudo = ai.extrair_tag(resultado_refino, "CONTEUDO_ATUALIZADO")
+                                    
+                                    if not novo_conteudo:
+                                        novo_conteudo = resultado_refino
+                                        msg_chat = "Dossiê atualizado conforme solicitado, Mestre."
+                                        
+                                    st.markdown(msg_chat)
+                                    st.session_state.chat_history_pei.append({"role": "assistant", "avatar": "🤖", "content": msg_chat})
+                                    
+                                    # Salva o novo conteúdo no banco imediatamente
+                                    checklist_str = f"[CHECKLIST]\n{v_autonomia}|{v_social}|{v_participa}|{v_resposta}"
+                                    texto_final_banco = f"{checklist_str}\n\n{novo_conteudo}"
+                                    db.salvar_no_banco("DB_RELATORIOS",[datetime.now().strftime("%d/%m/%Y"), id_a, nome_limpo, "DOSSIE_MASTER_PEI", texto_final_banco])
+                                    st.rerun()
+
+                st.markdown("---")
+                # 🚨 CAIXAS EDITÁVEIS (SOBERANIA MANUAL)
+                ed_diag = st.text_area("Diagnóstico Geral:", v_diag, height=250, key="ed_diag_clean")
+                ed_dir = st.text_area("Diretrizes Curriculares Sugeridas:", v_diretrizes, height=200, key="ed_dir_clean")
+                
+                if st.button("💾 SALVAR EDIÇÕES MANUAIS (EVOLUÇÃO)", use_container_width=True):
+                    checklist_str = f"[CHECKLIST]\n{v_autonomia}|{v_social}|{v_participa}|{v_resposta}"
+                    texto_consolidado = f"{checklist_str}\n\n[DIAGNOSTICO_GERAL]\n{ed_diag}\n\n[SOCIAIS]\n{v_soc_txt}\n\n[COMUNICATIVAS]\n{v_com_txt}\n\n[EMOCIONAIS]\n{v_emo_txt}\n\n[FUNCIONAIS]\n{v_fun_txt}\n\n[DIRETRIZES_CURRICULARES]\n{ed_dir}"
+                    db.salvar_no_banco("DB_RELATORIOS",[datetime.now().strftime("%d/%m/%Y"), id_a, nome_limpo, "DOSSIE_MASTER_PEI", texto_consolidado])
+                    st.success("✅ Edições salvas no Repositório Vivo!")
+                    st.balloons()
             else:
                 st.info("Clique em 'Gerar Dossiê Integrado' para criar a análise.")
 
@@ -6167,11 +6240,10 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                 if selecionados:
                     if st.button("🧠 INICIAR MOTOR DE IA: GERAR ADAPTAÇÃO", use_container_width=True, type="primary"):
                         with st.spinner("Arquitetando colunas e simplificando objetivos..."):
-                            conteudos_brutos = [s.split("] ")[1] for s in selecionados]
+                            conteudos_brutos =[s.split("] ")[1] for s in selecionados]
                             df_focada = df_matriz_ano[df_matriz_ano['CONTEUDO_ESPECIFICO'].isin(conteudos_brutos)]
                             contexto_oficial = df_focada[['CONTEUDO_ESPECIFICO', 'OBJETIVOS']].to_string(index=False)
                             
-                            # 🚨 INJEÇÃO DA CHAVE ESTRANGEIRA (DIRETRIZES) NO CURRÍCULO
                             prompt_curr = f"ESTUDANTE: {nome_limpo}. PERFIL/NECESSIDADE: {perfil_atual}.\nDIRETRIZES DO DOSSIÊ: {v_diretrizes}\nMATRIZ: {contexto_oficial}.\nGere os itens adaptados focando em superar as barreiras do perfil {perfil_atual} e seguindo as diretrizes."
                             res_ia = ai.gerar_ia("TRADUTOR_CURRICULAR_V39", prompt_curr)
                             
