@@ -126,7 +126,6 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
         p.paragraph_format.space_after = Pt(8)
 
         if any(x in l_s.upper() for x in["ATIVIDADE DE", "JORNADA", "HISTÓRIA", "MATEMÁTICA", "AULA"]):
-            # 🚨 VACINA LATEX: Removido o .upper() para não quebrar comandos LaTeX
             run = p.add_run(l_s.replace('**', ''))
             run.bold = True
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -180,7 +179,6 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
 
         secoes_pei =["PARA LEMBRAR", "OBJETIVO", "INSTRUÇÕES", "ATIVIDADE", "PASSO A PASSO", "DICA MESTRA"]
         if any(x in l_s.upper() for x in secoes_pei):
-            # 🚨 VACINA LATEX: Removido o .upper() para não quebrar comandos LaTeX como \frac
             txt_limpo = l_s.replace("[", "").replace("]", "").replace(":", "")
             run = p.add_run(txt_limpo)
             run.bold = True
@@ -246,7 +244,6 @@ def gerar_docx_professor_v25(titulo_doc, conteudo, info):
 
         if l_s.endswith(":") and len(l_s) < 40:
             p.paragraph_format.space_before = Pt(10)
-            # 🚨 VACINA LATEX: Removido o .upper()
             run = p.add_run(l_s)
             run.font.bold = True
             run.font.size = Pt(11)
@@ -384,7 +381,6 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
             
             secoes_especiais =["PARA LEMBRAR", "DICA MESTRA", "PASSO A PASSO", "VERSÃO ADAPTADA"]
             if any(x in l_s.upper() for x in secoes_especiais):
-                # 🚨 VACINA LATEX: Removido o .upper()
                 txt_limpo = l_s.replace("[", "").replace("]", "").replace(":", "")
                 run = p.add_run(txt_limpo)
                 run.bold = True
@@ -628,6 +624,114 @@ def gerar_docx_raiox_v90(titulo_doc, info, stats_gerais, questoes_detalhes, alun
         file_stream = io.BytesIO()
         err_doc = Document()
         err_doc.add_paragraph(f"ERRO AO GERAR DOSSIÊ: {str(e)}")
+        err_doc.save(file_stream)
+        file_stream.seek(0)
+        return file_stream
+
+# ==============================================================================
+# 9. EXPORTADOR DE PEI OFICIAL (PREFEITURA)
+# ==============================================================================
+def gerar_docx_pei_oficial(nome_arquivo, dados_aluno, habilidades, curriculo_df):
+    file_stream = io.BytesIO()
+    try:
+        doc = Document()
+        section = doc.sections[0]
+        section.top_margin, section.bottom_margin = Inches(0.5), Inches(0.5)
+        section.left_margin, section.right_margin = Inches(0.5), Inches(0.5)
+
+        style = doc.styles['Normal']
+        style.font.name = 'Arial'
+        style.font.size = Pt(10)
+
+        # Cabeçalho
+        p_cab = doc.add_paragraph()
+        p_cab.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run_cab = p_cab.add_run("SECRETARIA MUNICIPAL DA EDUCAÇÃO\nDEPARTAMENTO DE EDUCAÇÃO BÁSICA\nCOORDENAÇÃO TÉCNICA PEDAGÓGICA DA EDUCAÇÃO ESPECIAL\n\n")
+        run_cab.bold = True
+        
+        p_tit = doc.add_paragraph()
+        p_tit.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run_tit = p_tit.add_run("PLANO EDUCACIONAL INDIVIDUALIZADO - PEI")
+        run_tit.bold = True
+        run_tit.font.size = Pt(12)
+        
+        doc.add_paragraph()
+        
+        # Dados do Aluno
+        doc.add_paragraph("DADOS DO ALUNO").runs[0].bold = True
+        
+        p_d1 = doc.add_paragraph()
+        p_d1.add_run("UNIDADE ESCOLAR: ").bold = True
+        p_d1.add_run("Escola Municipal Flávio José Simões Costa\t\t")
+        p_d1.add_run("ANO LETIVO: ").bold = True
+        p_d1.add_run("2026")
+        
+        p_d2 = doc.add_paragraph()
+        p_d2.add_run("NOME: ").bold = True
+        p_d2.add_run(f"{dados_aluno.get('nome', '')}\t\t")
+        p_d2.add_run("DATA NASC.: ").bold = True
+        p_d2.add_run("________\t")
+        p_d2.add_run("IDADE: ").bold = True
+        p_d2.add_run("____\t")
+        p_d2.add_run("TURMA: ").bold = True
+        p_d2.add_run(f"{dados_aluno.get('turma', '')}")
+        
+        p_d3 = doc.add_paragraph()
+        p_d3.add_run("Nome do Responsável: ").bold = True
+        p_d3.add_run("_________________________________________________\t")
+        p_d3.add_run("Fone: ").bold = True
+        p_d3.add_run("_______________")
+        
+        p_d4 = doc.add_paragraph()
+        p_d4.add_run("DEFICIÊNCIA(S)/CID: ").bold = True
+        p_d4.add_run(f"{dados_aluno.get('cid', '')}\t\t")
+        p_d4.add_run("SUSPEIÇÃO: ").bold = True
+        p_d4.add_run("_______________")
+        
+        doc.add_page_break()
+        
+        # 1- Plano de acessibilidade curricular
+        doc.add_paragraph("1- Plano de acessibilidade curricular.").runs[0].bold = True
+        doc.add_paragraph("Com base no estudo de caso, observa-se que o mesmo apresenta dificuldade em:")
+        
+        for hab_name, hab_text in habilidades.items():
+            p_h = doc.add_paragraph()
+            p_h.add_run(f"{hab_name}: ").bold = True
+            p_h.add_run(hab_text)
+        
+        doc.add_page_break()
+        
+        # 2- Plano Trimestral
+        doc.add_paragraph("2- Plano Trimestral").runs[0].bold = True
+        doc.add_paragraph("PLANEJAMENTO POR COMPONENTE CURRICULAR").runs[0].bold = True
+        
+        table = doc.add_table(rows=1, cols=4)
+        table.style = 'Table Grid'
+        hdr_cells = table.rows[0].cells
+        hdr_cells[0].text = 'DISCIPLINA'
+        hdr_cells[1].text = 'OBJETIVOS APRENDIZAGEM'
+        hdr_cells[2].text = 'ESTRATÉGIAS METODOLÓGICAS'
+        hdr_cells[3].text = 'RECURSOS MATERIAIS'
+        
+        for cell in hdr_cells:
+            cell.paragraphs[0].runs[0].bold = True
+            cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+        
+        if not curriculo_df.empty:
+            for _, row in curriculo_df.iterrows():
+                row_cells = table.add_row().cells
+                row_cells[0].text = "MATEMÁTICA"
+                row_cells[1].text = str(row.get('Objetivos de Aprendizagem', ''))
+                row_cells[2].text = str(row.get('Estratégias Metodológicas', ''))
+                row_cells[3].text = str(row.get('Recursos Materiais', ''))
+        
+        doc.save(file_stream)
+        file_stream.seek(0)
+        return file_stream
+    except Exception as e:
+        file_stream = io.BytesIO()
+        err_doc = Document()
+        err_doc.add_paragraph(f"ERRO AO GERAR PEI OFICIAL: {str(e)}")
         err_doc.save(file_stream)
         file_stream.seek(0)
         return file_stream
