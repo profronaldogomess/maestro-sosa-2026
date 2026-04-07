@@ -5951,7 +5951,7 @@ elif menu == "📚 Base de Conhecimento":
 
 
 # ==============================================================================
-# MÓDULO: RELATÓRIOS PEI / PERFIL IA - CLEAN & UX (V100 - MULTIPERFIL)
+# MÓDULO: RELATÓRIOS PEI / PERFIL IA - CLEAN & UX (V110 - MULTIPERFIL RELACIONAL)
 # ==============================================================================
 elif menu == "♿ Relatórios PEI / Perfil IA":
     st.title("🧠 Analista de Perfis e Dossiê PEI")
@@ -5971,12 +5971,10 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
             turma_pei = c_t.selectbox("🎯 Filtrar Turma:", lista_turmas, key="pei_t_clean")
             df_turma_foco = df_alunos[df_alunos['TURMA'] == turma_pei].copy()
             
-            # 🚨 VACINA ANTI-VAZIO
             if df_turma_foco.empty:
                 st.warning(f"⚠️ Nenhum aluno cadastrado na turma {turma_pei} ainda. Vá em 'Gestão da Turma' para povoar.")
                 st.stop()
             
-            # 🚨 NOVO MOTOR DE ÍCONES (MULTIPERFIL)
             def definir_icone_status(nec):
                 n = str(nec).upper().strip()
                 if "PENDENTE" in n or "SUSPEITA" in n: return "🟠"
@@ -5991,7 +5989,6 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
             
             aluno_sel_label = c_a.selectbox("🔍 Selecionar Estudante:", df_turma_foco['LABEL'].tolist(), key="pei_a_clean")
             
-            # Limpeza blindada do nome
             nome_limpo = aluno_sel_label.split(" | ")[0].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "").strip()
             
             dados_a = df_turma_foco[df_turma_foco['NOME_ALUNO'] == nome_limpo].iloc[0]
@@ -6001,11 +5998,33 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
         # --- 2. MOTOR DE FUSÃO E MEMÓRIA ---
         with st.status("🔍 Maestro Sosa interconectando safras e evidências...", expanded=False) as status:
             hist_aluno = df_relatorios[df_relatorios['ID_ALUNO'].apply(db.limpar_id) == id_a]
-            tem_passado = not hist_aluno.empty
             
-            # Busca o último relatório de evolução
-            rel_evolucao = hist_aluno[hist_aluno['TIPO'] == 'EVOLUÇÃO']
-            ultimo_relatorio = rel_evolucao.iloc[-1]['CONTEUDO'] if not rel_evolucao.empty else "Primeiro Relatório (Linha de Base)."
+            # 🚨 MEMÓRIA RELACIONAL: Busca o Dossiê Master
+            rel_master = hist_aluno[hist_aluno['TIPO'] == 'DOSSIE_MASTER_PEI']
+            if not rel_master.empty:
+                master_text = str(rel_master.iloc[-1]['CONTEUDO'])
+                
+                # Extrai o Checklist Salvo
+                saved_checklist = ai.extrair_tag(master_text, "CHECKLIST")
+                if saved_checklist:
+                    try:
+                        val_auto, val_soc, val_part, val_resp = saved_checklist.split('|')
+                    except:
+                        val_auto, val_soc, val_part, val_resp = "Com Apoio", "Interage", "Participativo", "Receptivo"
+                else:
+                    val_auto, val_soc, val_part, val_resp = "Com Apoio", "Interage", "Participativo", "Receptivo"
+                
+                # Extrai os textos
+                v_diag = ai.extrair_tag(master_text, "DIAGNOSTICO_GERAL")
+                v_soc_txt = ai.extrair_tag(master_text, "SOCIAIS")
+                v_com_txt = ai.extrair_tag(master_text, "COMUNICATIVAS")
+                v_emo_txt = ai.extrair_tag(master_text, "EMOCIONAIS")
+                v_fun_txt = ai.extrair_tag(master_text, "FUNCIONAIS")
+                v_diretrizes = ai.extrair_tag(master_text, "DIRETRIZES_CURRICULARES")
+            else:
+                master_text = "Primeiro Relatório (Linha de Base)."
+                val_auto, val_soc, val_part, val_resp = "Com Apoio", "Interage", "Participativo", "Receptivo"
+                v_diag, v_soc_txt, v_com_txt, v_emo_txt, v_fun_txt, v_diretrizes = "", "", "", "", "", ""
             
             vistos = 0
             bonus = 0.0
@@ -6025,7 +6044,6 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
             status.update(label="✅ Dados Sincronizados com Sucesso!", state="complete")
 
         # --- 3. DASHBOARD DE MÉTRICAS E ALERTA DE PERFIL ---
-        # 🚨 BANNERS DINÂMICOS DE PERFIL
         if "PENDENTE" in perfil_atual or "SUSPEITA" in perfil_atual:
             st.warning(f"🟠 **Radar de Investigação:** {perfil_atual}")
         elif "DEFASAGEM" in perfil_atual:
@@ -6041,20 +6059,47 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
         c3.metric("Nota Média de Safra", f"{nota_safra:.1f}")
         c4.metric("Relatos Salvos", len(hist_aluno))
 
-        # --- 4. CHECKLIST DE OBSERVAÇÃO ---
+        # --- 4. CHECKLIST DE OBSERVAÇÃO (COM MEMÓRIA) ---
         with st.container(border=True):
             st.markdown("#### 📋 Checklist de Percepção Pedagógica")
             st.caption("Ajuste os controles abaixo. A IA usará essas informações para dar o tom do relatório.")
             col_ch1, col_ch2 = st.columns(2)
             with col_ch1:
-                v_autonomia = st.select_slider("Autonomia:", options=["Dependente", "Com Apoio", "Em Evolução", "Autônomo"], value="Com Apoio")
-                v_social = st.select_slider("Socialização:", options=["Isolado", "Passivo", "Interage", "Líder"], value="Interage")
+                v_autonomia = st.select_slider("Autonomia:", options=["Dependente", "Com Apoio", "Em Evolução", "Autônomo"], value=val_auto)
+                v_social = st.select_slider("Socialização:", options=["Isolado", "Passivo", "Interage", "Líder"], value=val_soc)
             with col_ch2:
-                v_participa = st.select_slider("Participação:", options=["Não participa", "Raramente", "Participativo", "Ativo"], value="Participativo")
-                v_resposta = st.select_slider("Resposta às Intervenções:", options=["Resistente", "Lento", "Receptivo", "Rápido"], value="Receptivo")
+                v_participa = st.select_slider("Participação:", options=["Não participa", "Raramente", "Participativo", "Ativo"], value=val_part)
+                v_resposta = st.select_slider("Resposta às Intervenções:", options=["Resistente", "Lento", "Receptivo", "Rápido"], value=val_resp)
             sem_mudancas = st.checkbox("📢 Quadro estável (Sem alterações significativas desde o último relatório)")
 
-        # --- 5. ABAS DE TRABALHO ---
+        # ==============================================================================
+        # 🚨 MOTOR DE GERAÇÃO UNIFICADA (DOSSIÊ MASTER)
+        # ==============================================================================
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("🧠 GERAR DOSSIÊ INTEGRADO (EVOLUÇÃO + PEI)", type="primary", use_container_width=True):
+            with st.spinner("Maestro Sosa analisando a linha do tempo e redigindo o Dossiê Master..."):
+                prompt_master = (
+                    f"ESTUDANTE: {nome_limpo}. PERFIL COGNITIVO/CLÍNICO: {perfil_atual}.\n"
+                    f"--- PASSADO ---\n{master_text}\n\n"
+                    f"--- PRESENTE (DADOS) ---\n- Vistos: {vistos}, Bônus: {bonus}, Nota: {nota_safra}.\n"
+                    f"--- CHECKLIST ATUAL ---\n- Autonomia: {v_autonomia}, Socialização: {v_social}, Participação: {v_participa}, Resposta: {v_resposta}.\n"
+                    f"--- STATUS: {'Quadro Estável' if sem_mudancas else 'Houve alterações'}.\n\n"
+                    f"MISSÃO: Gere um Dossiê Único e Integrado. Use as tags obrigatórias para separar o Diagnóstico Geral, as 4 Habilidades do PEI e as Diretrizes Curriculares.\n"
+                    f"🚨 ATENÇÃO AO PERFIL: Como o aluno possui o perfil '{perfil_atual}', direcione o parecer pedagógico para as necessidades específicas desse quadro."
+                )
+                res_master = ai.gerar_ia("ESPECIALISTA_INCLUSAO", prompt_master)
+                
+                # Salva no banco imediatamente
+                checklist_str = f"[CHECKLIST]\n{v_autonomia}|{v_social}|{v_participa}|{v_resposta}"
+                texto_final_banco = f"{checklist_str}\n\n{res_master}"
+                
+                db.salvar_no_banco("DB_RELATORIOS",[datetime.now().strftime("%d/%m/%Y"), id_a, nome_limpo, "DOSSIE_MASTER_PEI", texto_final_banco])
+                st.success("✅ Dossiê Master gerado e salvo no Repositório Vivo!")
+                import time
+                time.sleep(1)
+                st.rerun()
+
+        # --- 5. ABAS DE TRABALHO (REPOSITÓRIO VIVO) ---
         tab_evolucao, tab_pei_doc, tab_curr, tab_coord, tab_timeline, tab_export = st.tabs([
             "📈 1. Relatório de Evolução", 
             "🏛️ 2. Plano PEI (Capa)", 
@@ -6067,99 +6112,39 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
         # --- ABA 1: RELATÓRIO DE EVOLUÇÃO ---
         with tab_evolucao:
             st.subheader("📝 Análise Longitudinal de Processos")
-            percepcao_extra = st.text_area("Observações Adicionais (Opcional):", placeholder="Ex: O aluno demonstrou muito interesse nas aulas com uso de tablet...", key="perc_clean")
-            
-            st.markdown("<br>", unsafe_allow_html=True)
-            if st.button("🧠 INICIAR MOTOR DE IA: GERAR RELATÓRIO DE EVOLUÇÃO", type="primary", use_container_width=True):
-                with st.spinner("Maestro Sosa analisando a linha do tempo e redigindo o parecer..."):
-                    # 🚨 INJEÇÃO DE CONTEXTO DE PERFIL NA IA
-                    prompt_ev = (
-                        f"ESTUDANTE: {nome_limpo}. PERFIL COGNITIVO/CLÍNICO: {perfil_atual}.\n"
-                        f"--- PASSADO ---\n{ultimo_relatorio}\n\n"
-                        f"--- PRESENTE (DADOS) ---\n- Vistos: {vistos}, Bônus: {bonus}, Nota: {nota_safra}.\n"
-                        f"--- CHECKLIST ATUAL ---\n- Autonomia: {v_autonomia}, Socialização: {v_social}, Participação: {v_participa}, Resposta: {v_resposta}.\n"
-                        f"--- STATUS: {'Quadro Estável' if sem_mudancas else 'Houve alterações'}.\n"
-                        f"--- OBSERVAÇÃO: {percepcao_extra}\n\n"
-                        f"MISSÃO: Gere um relatório técnico comparativo focando no Delta de evolução.\n"
-                        f"🚨 ATENÇÃO AO PERFIL: Como o aluno possui o perfil '{perfil_atual}', direcione o parecer pedagógico para as necessidades específicas desse quadro. "
-                        f"Se for defasagem em leitura, foque na necessidade de letramento matemático. Se for defasagem matemática, foque no resgate das operações básicas. "
-                        f"Se for alta performance, sugira enriquecimento curricular. Se for PEI, foque nas adaptações e no DUA."
-                    )
-                    st.session_state.res_v38_rel = ai.gerar_ia("ESPECIALISTA_INCLUSAO", prompt_ev)
-            
-            if "res_v38_rel" in st.session_state:
-                st.text_area("Parecer Técnico Gerado:", st.session_state.res_v38_rel, height=400)
-                if st.button("💾 SALVAR NO DOSSIÊ DO ALUNO", use_container_width=True):
-                    db.salvar_no_banco("DB_RELATORIOS",[datetime.now().strftime("%d/%m/%Y"), id_a, nome_limpo, "EVOLUÇÃO", st.session_state.res_v38_rel])
-                    st.success("✅ Relatório arquivado com sucesso!"); st.rerun()
+            if v_diag:
+                st.info(v_diag)
+                st.markdown("#### 🎯 Diretrizes Curriculares Sugeridas")
+                st.success(v_diretrizes)
+            else:
+                st.info("Clique em 'Gerar Dossiê Integrado' para criar a análise.")
 
         # --- ABA 2: PLANO DE ACESSIBILIDADE (PEI PÁGINA 1) ---
         with tab_pei_doc:
             st.subheader("🏛️ Seção 1: Plano de Acessibilidade Individual (Capa)")
-            st.caption("O sistema extrai as informações do Relatório de Evolução e as divide nas 4 áreas exigidas pelo documento oficial do PEI. Você pode editar e salvar o progresso.")
+            st.caption("O sistema extraiu as informações do Dossiê Master. Você pode editar e salvar o progresso.")
             
-            # 🚨 REPOSITÓRIO VIVO: Busca dados salvos
-            capa_records = hist_aluno[hist_aluno['TIPO'] == 'CAPA_PEI_OFICIAL']
-            if not capa_records.empty:
-                capa_text = str(capa_records.iloc[-1]['CONTEUDO'])
-                v_soc = ai.extrair_tag(capa_text, "SOCIAIS") or re.search(r'\[SOCIAIS\]\n(.*?)(?=\n\n\[COMUNICATIVAS\]|$)', capa_text, re.DOTALL)
-                v_soc = v_soc.group(1).strip() if isinstance(v_soc, re.Match) else v_soc
-                
-                v_com = ai.extrair_tag(capa_text, "COMUNICATIVAS") or re.search(r'\[COMUNICATIVAS\]\n(.*?)(?=\n\n\[EMOCIONAIS\]|$)', capa_text, re.DOTALL)
-                v_com = v_com.group(1).strip() if isinstance(v_com, re.Match) else v_com
-                
-                v_emo = ai.extrair_tag(capa_text, "EMOCIONAIS") or re.search(r'\[EMOCIONAIS\]\n(.*?)(?=\n\n\[FUNCIONAIS\]|$)', capa_text, re.DOTALL)
-                v_emo = v_emo.group(1).strip() if isinstance(v_emo, re.Match) else v_emo
-                
-                v_fun = ai.extrair_tag(capa_text, "FUNCIONAIS") or re.search(r'\[FUNCIONAIS\]\n(.*)', capa_text, re.DOTALL)
-                v_fun = v_fun.group(1).strip() if isinstance(v_fun, re.Match) else v_fun
-            else:
-                v_soc, v_com, v_emo, v_fun = "", "", "", ""
-
-            relatorio_base = st.session_state.get("res_v38_rel", "")
-            
-            if st.button("🧠 INICIAR MOTOR DE IA: EXTRAIR DADOS PARA O PEI", use_container_width=True, type="primary"):
-                if not relatorio_base:
-                    st.error("⚠️ Gere primeiro o 'Relatório de Evolução' na Aba 1 para que a IA tenha dados para extrair.")
-                else:
-                    with st.spinner("Fatiando evidências de forma atômica..."):
-                        prompt_fatiar = (
-                            f"RELATÓRIO PARA PROCESSAR:\n{relatorio_base}\n\n"
-                            f"ORDEM SOBERANA: Extraia 4 resumos CURTOS e DIFERENTES. Responda EXATAMENTE nas tags [SOCIAIS], [COMUNICATIVAS],[EMOCIONAIS] e [FUNCIONAIS]."
-                        )
-                        st.session_state.res_v38_pei_tags = ai.gerar_ia("ESPECIALISTA_PEI", prompt_fatiar)
-
-            if "res_v38_pei_tags" in st.session_state:
-                res_bruta = st.session_state.res_v38_pei_tags
-                def limpar_vazamento(texto):
-                    return re.sub(r'\[.*?\]', '', texto).replace('>', '').strip()
-                
-                v_soc = limpar_vazamento(ai.extrair_tag(res_bruta, "SOCIAIS"))
-                v_com = limpar_vazamento(ai.extrair_tag(res_bruta, "COMUNICATIVAS"))
-                v_emo = limpar_vazamento(ai.extrair_tag(res_bruta, "EMOCIONAIS"))
-                v_fun = limpar_vazamento(ai.extrair_tag(res_bruta, "FUNCIONAIS"))
-
             col_p1, col_p2 = st.columns(2)
             with col_p1:
-                ed_soc = st.text_area("1. Habilidades Sociais:", v_soc, height=180)
-                ed_emo = st.text_area("3. Habilidades Emocionais:", v_emo, height=180)
+                ed_soc = st.text_area("1. Habilidades Sociais:", v_soc_txt, height=180)
+                ed_emo = st.text_area("3. Habilidades Emocionais:", v_emo_txt, height=180)
             with col_p2:
-                ed_com = st.text_area("2. Habilidades Comunicativas:", v_com, height=180)
-                ed_fun = st.text_area("4. Habilidades Funcionais:", v_fun, height=180)
+                ed_com = st.text_area("2. Habilidades Comunicativas:", v_com_txt, height=180)
+                ed_fun = st.text_area("4. Habilidades Funcionais:", v_fun_txt, height=180)
 
-            if st.button("💾 SALVAR PROGRESSO NO BANCO (CAPA)", use_container_width=True):
-                texto_consolidado = f"[SOCIAIS]\n{ed_soc}\n\n[COMUNICATIVAS]\n{ed_com}\n\n[EMOCIONAIS]\n{ed_emo}\n\n[FUNCIONAIS]\n{ed_fun}"
-                db.salvar_no_banco("DB_RELATORIOS",[datetime.now().strftime("%d/%m/%Y"), id_a, nome_limpo, "CAPA_PEI_OFICIAL", texto_consolidado])
-                st.success("✅ Documento arquivado no Repositório Vivo!"); st.balloons()
+            if st.button("💾 SALVAR EDIÇÕES DA CAPA NO BANCO", use_container_width=True):
+                checklist_str = f"[CHECKLIST]\n{v_autonomia}|{v_social}|{v_participa}|{v_resposta}"
+                texto_consolidado = f"{checklist_str}\n\n[DIAGNOSTICO_GERAL]\n{v_diag}\n\n[SOCIAIS]\n{ed_soc}\n\n[COMUNICATIVAS]\n{ed_com}\n\n[EMOCIONAIS]\n{ed_emo}\n\n[FUNCIONAIS]\n{ed_fun}\n\n[DIRETRIZES_CURRICULARES]\n{v_diretrizes}"
+                db.salvar_no_banco("DB_RELATORIOS",[datetime.now().strftime("%d/%m/%Y"), id_a, nome_limpo, "DOSSIE_MASTER_PEI", texto_consolidado])
+                st.success("✅ Edições salvas no Repositório Vivo!"); st.balloons()
 
         # --- ABA 3: CURRÍCULO ADAPTADO (TABELA OFICIAL) ---
         with tab_curr:
             st.subheader("⚙️ Seção 2: Currículo Adaptado (Tabela Oficial)")
-            st.caption("Selecione os conteúdos da matriz regular. A IA fará a adaptação focada na superação das barreiras específicas deste aluno.")
+            st.caption("A IA usará as Diretrizes Curriculares do Dossiê Master para adaptar os conteúdos da matriz.")
             
             trim_destino = st.selectbox("Trimestre de Referência:",["I Trimestre", "II Trimestre", "III Trimestre"], key="trim_curr")
             
-            # 🚨 REPOSITÓRIO VIVO: Busca dados salvos
             curr_records = hist_aluno[hist_aluno['TIPO'] == f"CURRICULO_ADAPTADO_{trim_destino}"]
             if not curr_records.empty:
                 try:
@@ -6186,8 +6171,8 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                             df_focada = df_matriz_ano[df_matriz_ano['CONTEUDO_ESPECIFICO'].isin(conteudos_brutos)]
                             contexto_oficial = df_focada[['CONTEUDO_ESPECIFICO', 'OBJETIVOS']].to_string(index=False)
                             
-                            # 🚨 INJEÇÃO DE CONTEXTO NO CURRÍCULO
-                            prompt_curr = f"ESTUDANTE: {nome_limpo}. PERFIL/NECESSIDADE: {perfil_atual}. MATRIZ: {contexto_oficial}. Gere os itens adaptados focando em superar as barreiras do perfil {perfil_atual}."
+                            # 🚨 INJEÇÃO DA CHAVE ESTRANGEIRA (DIRETRIZES) NO CURRÍCULO
+                            prompt_curr = f"ESTUDANTE: {nome_limpo}. PERFIL/NECESSIDADE: {perfil_atual}.\nDIRETRIZES DO DOSSIÊ: {v_diretrizes}\nMATRIZ: {contexto_oficial}.\nGere os itens adaptados focando em superar as barreiras do perfil {perfil_atual} e seguindo as diretrizes."
                             res_ia = ai.gerar_ia("TRADUTOR_CURRICULAR_V39", prompt_curr)
                             
                             blocos = re.findall(r"\[ITEM\](.*?)\[/ITEM\]", res_ia, re.DOTALL)
@@ -6202,7 +6187,6 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                             if novas_linhas:
                                 df_curr_atual = pd.concat([df_curr_atual, pd.DataFrame(novas_linhas)], ignore_index=True)
 
-            # 🚨 TABELA EDITÁVEL (O PROFESSOR PODE ALTERAR TUDO AQUI)
             st.markdown("---")
             st.markdown("**Tabela de Planejamento (Editável)**")
             df_editado_curr = st.data_editor(
@@ -6259,12 +6243,9 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                     data_doc = row.get('DATA', 'S/D')
                     conteudo_raw = row.get('CONTEUDO', '')
 
-                    if "EVOLUÇÃO" in tipo_bruto.upper():
-                        label_tipo = "📈 RELATÓRIO DE EVOLUÇÃO"
+                    if "DOSSIE_MASTER_PEI" in tipo_bruto.upper():
+                        label_tipo = "📈 DOSSIÊ MASTER (EVOLUÇÃO + CAPA)"
                         icone = "📊"
-                    elif "CAPA_PEI" in tipo_bruto.upper():
-                        label_tipo = "🏛️ CAPA DO PEI (PÁGINA 1)"
-                        icone = "📝"
                     elif "CURRICULO_ADAPTADO" in tipo_bruto.upper():
                         label_tipo = f"📖 CURRÍCULO ADAPTADO ({tipo_bruto.split('_')[-1]})"
                         icone = "📚"
@@ -6320,28 +6301,11 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                     dados_aluno = {"nome": nome_limpo, "turma": turma_pei, "cid": perfil_atual}
                     
                     # 2. Coleta Habilidades (Capa)
-                    capa_records_exp = hist_aluno[hist_aluno['TIPO'] == 'CAPA_PEI_OFICIAL']
-                    if not capa_records_exp.empty:
-                        capa_text_exp = str(capa_records_exp.iloc[-1]['CONTEUDO'])
-                        v_soc_exp = ai.extrair_tag(capa_text_exp, "SOCIAIS") or re.search(r'\[SOCIAIS\]\n(.*?)(?=\n\n\[COMUNICATIVAS\]|$)', capa_text_exp, re.DOTALL)
-                        v_soc_exp = v_soc_exp.group(1).strip() if isinstance(v_soc_exp, re.Match) else v_soc_exp
-                        
-                        v_com_exp = ai.extrair_tag(capa_text_exp, "COMUNICATIVAS") or re.search(r'\[COMUNICATIVAS\]\n(.*?)(?=\n\n\[EMOCIONAIS\]|$)', capa_text_exp, re.DOTALL)
-                        v_com_exp = v_com_exp.group(1).strip() if isinstance(v_com_exp, re.Match) else v_com_exp
-                        
-                        v_emo_exp = ai.extrair_tag(capa_text_exp, "EMOCIONAIS") or re.search(r'\[EMOCIONAIS\]\n(.*?)(?=\n\n\[FUNCIONAIS\]|$)', capa_text_exp, re.DOTALL)
-                        v_emo_exp = v_emo_exp.group(1).strip() if isinstance(v_emo_exp, re.Match) else v_emo_exp
-                        
-                        v_fun_exp = ai.extrair_tag(capa_text_exp, "FUNCIONAIS") or re.search(r'\[FUNCIONAIS\]\n(.*)', capa_text_exp, re.DOTALL)
-                        v_fun_exp = v_fun_exp.group(1).strip() if isinstance(v_fun_exp, re.Match) else v_fun_exp
-                    else:
-                        v_soc_exp, v_com_exp, v_emo_exp, v_fun_exp = "", "", "", ""
-                        
                     habilidades = {
-                        "Habilidades Sociais": v_soc_exp, 
-                        "Habilidades Comunicativas": v_com_exp, 
-                        "Habilidades Emocionais": v_emo_exp, 
-                        "Habilidades Funcionais": v_fun_exp
+                        "Habilidades Sociais": v_soc_txt, 
+                        "Habilidades Comunicativas": v_com_txt, 
+                        "Habilidades Emocionais": v_emo_txt, 
+                        "Habilidades Funcionais": v_fun_txt
                     }
                     
                     # 3. Coleta Currículo
