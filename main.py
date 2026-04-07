@@ -1,3 +1,4 @@
+import io
 import streamlit as st
 import pandas as pd
 import gspread
@@ -6001,7 +6002,10 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
         with st.status("🔍 Maestro Sosa interconectando safras e evidências...", expanded=False) as status:
             hist_aluno = df_relatorios[df_relatorios['ID_ALUNO'].apply(db.limpar_id) == id_a]
             tem_passado = not hist_aluno.empty
-            ultimo_relatorio = hist_aluno.iloc[-1]['CONTEUDO'] if tem_passado else "Primeiro Relatório (Linha de Base)."
+            
+            # Busca o último relatório de evolução
+            rel_evolucao = hist_aluno[hist_aluno['TIPO'] == 'EVOLUÇÃO']
+            ultimo_relatorio = rel_evolucao.iloc[-1]['CONTEUDO'] if not rel_evolucao.empty else "Primeiro Relatório (Linha de Base)."
             
             vistos = 0
             bonus = 0.0
@@ -6051,12 +6055,13 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
             sem_mudancas = st.checkbox("📢 Quadro estável (Sem alterações significativas desde o último relatório)")
 
         # --- 5. ABAS DE TRABALHO ---
-        tab_evolucao, tab_pei_doc, tab_coord, tab_curr, tab_timeline = st.tabs([
+        tab_evolucao, tab_pei_doc, tab_curr, tab_coord, tab_timeline, tab_export = st.tabs([
             "📈 1. Relatório de Evolução", 
-            "🏛️ 2. Plano PEI (Pág 1)", 
-            "📱 3. Relato Coordenação",
-            "📖 4. Currículo Adaptado",
-            "🗂️ 5. Linha do Tempo"
+            "🏛️ 2. Plano PEI (Capa)", 
+            "📖 3. Currículo Adaptado",
+            "📱 4. Relato Coordenação",
+            "🗂️ 5. Linha do Tempo",
+            "🖨️ 6. Exportar PEI Oficial"
         ])
 
         # --- ABA 1: RELATÓRIO DE EVOLUÇÃO ---
@@ -6090,41 +6095,136 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
 
         # --- ABA 2: PLANO DE ACESSIBILIDADE (PEI PÁGINA 1) ---
         with tab_pei_doc:
-            st.subheader("🏛️ Seção 1: Plano de Acessibilidade Individual")
-            st.caption("O sistema extrai as informações do Relatório de Evolução e as divide nas 4 áreas exigidas pelo documento oficial do PEI.")
+            st.subheader("🏛️ Seção 1: Plano de Acessibilidade Individual (Capa)")
+            st.caption("O sistema extrai as informações do Relatório de Evolução e as divide nas 4 áreas exigidas pelo documento oficial do PEI. Você pode editar e salvar o progresso.")
+            
+            # 🚨 REPOSITÓRIO VIVO: Busca dados salvos
+            capa_records = hist_aluno[hist_aluno['TIPO'] == 'CAPA_PEI_OFICIAL']
+            if not capa_records.empty:
+                capa_text = str(capa_records.iloc[-1]['CONTEUDO'])
+                v_soc = ai.extrair_tag(capa_text, "SOCIAIS") or re.search(r'\[SOCIAIS\]\n(.*?)(?=\n\n\[COMUNICATIVAS\]|$)', capa_text, re.DOTALL)
+                v_soc = v_soc.group(1).strip() if isinstance(v_soc, re.Match) else v_soc
+                
+                v_com = ai.extrair_tag(capa_text, "COMUNICATIVAS") or re.search(r'\[COMUNICATIVAS\]\n(.*?)(?=\n\n\[EMOCIONAIS\]|$)', capa_text, re.DOTALL)
+                v_com = v_com.group(1).strip() if isinstance(v_com, re.Match) else v_com
+                
+                v_emo = ai.extrair_tag(capa_text, "EMOCIONAIS") or re.search(r'\[EMOCIONAIS\]\n(.*?)(?=\n\n\[FUNCIONAIS\]|$)', capa_text, re.DOTALL)
+                v_emo = v_emo.group(1).strip() if isinstance(v_emo, re.Match) else v_emo
+                
+                v_fun = ai.extrair_tag(capa_text, "FUNCIONAIS") or re.search(r'\[FUNCIONAIS\]\n(.*)', capa_text, re.DOTALL)
+                v_fun = v_fun.group(1).strip() if isinstance(v_fun, re.Match) else v_fun
+            else:
+                v_soc, v_com, v_emo, v_fun = "", "", "", ""
+
             relatorio_base = st.session_state.get("res_v38_rel", "")
             
-            if not relatorio_base:
-                st.warning("⚠️ Gere primeiro o 'Relatório de Evolução' na Aba 1 para que a IA tenha dados para extrair.")
-            else:
-                if st.button("🧠 INICIAR MOTOR DE IA: EXTRAIR DADOS PARA O PEI", use_container_width=True, type="primary"):
+            if st.button("🧠 INICIAR MOTOR DE IA: EXTRAIR DADOS PARA O PEI", use_container_width=True, type="primary"):
+                if not relatorio_base:
+                    st.error("⚠️ Gere primeiro o 'Relatório de Evolução' na Aba 1 para que a IA tenha dados para extrair.")
+                else:
                     with st.spinner("Fatiando evidências de forma atômica..."):
                         prompt_fatiar = (
                             f"RELATÓRIO PARA PROCESSAR:\n{relatorio_base}\n\n"
-                            f"ORDEM SOBERANA: Extraia 4 resumos CURTOS e DIFERENTES. Responda EXATAMENTE nas tags [SOCIAIS], [COMUNICATIVAS], [EMOCIONAIS] e [FUNCIONAIS]."
+                            f"ORDEM SOBERANA: Extraia 4 resumos CURTOS e DIFERENTES. Responda EXATAMENTE nas tags [SOCIAIS], [COMUNICATIVAS],[EMOCIONAIS] e [FUNCIONAIS]."
                         )
                         st.session_state.res_v38_pei_tags = ai.gerar_ia("ESPECIALISTA_PEI", prompt_fatiar)
 
-                if "res_v38_pei_tags" in st.session_state:
-                    res_bruta = st.session_state.res_v38_pei_tags
-                    def limpar_vazamento(texto):
-                        import re
-                        return re.sub(r'\[.*?\]', '', texto).replace('>', '').strip()
+            if "res_v38_pei_tags" in st.session_state:
+                res_bruta = st.session_state.res_v38_pei_tags
+                def limpar_vazamento(texto):
+                    return re.sub(r'\[.*?\]', '', texto).replace('>', '').strip()
+                
+                v_soc = limpar_vazamento(ai.extrair_tag(res_bruta, "SOCIAIS"))
+                v_com = limpar_vazamento(ai.extrair_tag(res_bruta, "COMUNICATIVAS"))
+                v_emo = limpar_vazamento(ai.extrair_tag(res_bruta, "EMOCIONAIS"))
+                v_fun = limpar_vazamento(ai.extrair_tag(res_bruta, "FUNCIONAIS"))
 
-                    col_p1, col_p2 = st.columns(2)
-                    with col_p1:
-                        ed_soc = st.text_area("1. Habilidades Sociais:", limpar_vazamento(ai.extrair_tag(res_bruta, "SOCIAIS")), height=180)
-                        ed_emo = st.text_area("3. Habilidades Emocionais:", limpar_vazamento(ai.extrair_tag(res_bruta, "EMOCIONAIS")), height=180)
-                    with col_p2:
-                        ed_com = st.text_area("2. Habilidades Comunicativas:", limpar_vazamento(ai.extrair_tag(res_bruta, "COMUNICATIVAS")), height=180)
-                        ed_fun = st.text_area("4. Habilidades Funcionais:", limpar_vazamento(ai.extrair_tag(res_bruta, "FUNCIONAIS")), height=180)
+            col_p1, col_p2 = st.columns(2)
+            with col_p1:
+                ed_soc = st.text_area("1. Habilidades Sociais:", v_soc, height=180)
+                ed_emo = st.text_area("3. Habilidades Emocionais:", v_emo, height=180)
+            with col_p2:
+                ed_com = st.text_area("2. Habilidades Comunicativas:", v_com, height=180)
+                ed_fun = st.text_area("4. Habilidades Funcionais:", v_fun, height=180)
 
-                    if st.button("💾 SALVAR PÁGINA 1 OFICIAL", use_container_width=True):
-                        texto_consolidado = f"SOCIAIS: {ed_soc}\n\nCOMUNICATIVAS: {ed_com}\n\nEMOCIONAIS: {ed_emo}\n\nFUNCIONAIS: {ed_fun}"
-                        db.salvar_no_banco("DB_RELATORIOS",[datetime.now().strftime("%d/%m/%Y"), id_a, nome_limpo, "CAPA_PEI_OFICIAL", texto_consolidado])
-                        st.success("✅ Documento arquivado!"); st.balloons()
+            if st.button("💾 SALVAR PROGRESSO NO BANCO (CAPA)", use_container_width=True):
+                texto_consolidado = f"[SOCIAIS]\n{ed_soc}\n\n[COMUNICATIVAS]\n{ed_com}\n\n[EMOCIONAIS]\n{ed_emo}\n\n[FUNCIONAIS]\n{ed_fun}"
+                db.salvar_no_banco("DB_RELATORIOS",[datetime.now().strftime("%d/%m/%Y"), id_a, nome_limpo, "CAPA_PEI_OFICIAL", texto_consolidado])
+                st.success("✅ Documento arquivado no Repositório Vivo!"); st.balloons()
 
-        # --- ABA 3: RELATO PARA COORDENAÇÃO (WHATSAPP) ---
+        # --- ABA 3: CURRÍCULO ADAPTADO (TABELA OFICIAL) ---
+        with tab_curr:
+            st.subheader("⚙️ Seção 2: Currículo Adaptado (Tabela Oficial)")
+            st.caption("Selecione os conteúdos da matriz regular. A IA fará a adaptação focada na superação das barreiras específicas deste aluno.")
+            
+            trim_destino = st.selectbox("Trimestre de Referência:",["I Trimestre", "II Trimestre", "III Trimestre"], key="trim_curr")
+            
+            # 🚨 REPOSITÓRIO VIVO: Busca dados salvos
+            curr_records = hist_aluno[hist_aluno['TIPO'] == f"CURRICULO_ADAPTADO_{trim_destino}"]
+            if not curr_records.empty:
+                try:
+                    import json
+                    df_curr_atual = pd.read_json(io.StringIO(curr_records.iloc[-1]['CONTEUDO']), orient='records')
+                except:
+                    df_curr_atual = pd.DataFrame(columns=["Objetivos de Aprendizagem", "Estratégias Metodológicas", "Recursos Materiais"])
+            else:
+                df_curr_atual = pd.DataFrame(columns=["Objetivos de Aprendizagem", "Estratégias Metodológicas", "Recursos Materiais"])
+
+            ano_aluno = "".join(filter(str.isdigit, turma_pei))
+            df_matriz_ano = df_curriculo[df_curriculo['ANO'].astype(str) == ano_aluno].copy()
+
+            if df_matriz_ano.empty:
+                st.warning(f"⚠️ Matriz do {ano_aluno}º ano não localizada.")
+            else:
+                opcoes_conteudo = df_matriz_ano.apply(lambda x: f"[{x['TRIMESTRE']}] {x['CONTEUDO_ESPECIFICO']}", axis=1).tolist()
+                selecionados = st.multiselect("📚 Escolha os conteúdos para adaptar:", opcoes_conteudo, key="sel_curr_clean")
+
+                if selecionados:
+                    if st.button("🧠 INICIAR MOTOR DE IA: GERAR ADAPTAÇÃO", use_container_width=True, type="primary"):
+                        with st.spinner("Arquitetando colunas e simplificando objetivos..."):
+                            conteudos_brutos = [s.split("] ")[1] for s in selecionados]
+                            df_focada = df_matriz_ano[df_matriz_ano['CONTEUDO_ESPECIFICO'].isin(conteudos_brutos)]
+                            contexto_oficial = df_focada[['CONTEUDO_ESPECIFICO', 'OBJETIVOS']].to_string(index=False)
+                            
+                            # 🚨 INJEÇÃO DE CONTEXTO NO CURRÍCULO
+                            prompt_curr = f"ESTUDANTE: {nome_limpo}. PERFIL/NECESSIDADE: {perfil_atual}. MATRIZ: {contexto_oficial}. Gere os itens adaptados focando em superar as barreiras do perfil {perfil_atual}."
+                            res_ia = ai.gerar_ia("TRADUTOR_CURRICULAR_V39", prompt_curr)
+                            
+                            blocos = re.findall(r"\[ITEM\](.*?)\[/ITEM\]", res_ia, re.DOTALL)
+                            novas_linhas =[]
+                            for b in blocos:
+                                novas_linhas.append({
+                                    "Objetivos de Aprendizagem": ai.extrair_tag(b, "OBJETIVO"),
+                                    "Estratégias Metodológicas": ai.extrair_tag(b, "ESTRATEGIA"),
+                                    "Recursos Materiais": ai.extrair_tag(b, "RECURSO")
+                                })
+                            
+                            if novas_linhas:
+                                df_curr_atual = pd.concat([df_curr_atual, pd.DataFrame(novas_linhas)], ignore_index=True)
+
+            # 🚨 TABELA EDITÁVEL (O PROFESSOR PODE ALTERAR TUDO AQUI)
+            st.markdown("---")
+            st.markdown("**Tabela de Planejamento (Editável)**")
+            df_editado_curr = st.data_editor(
+                df_curr_atual, 
+                num_rows="dynamic", 
+                use_container_width=True, 
+                key="ed_curr",
+                column_config={
+                    "Objetivos de Aprendizagem": st.column_config.TextColumn(width="large"),
+                    "Estratégias Metodológicas": st.column_config.TextColumn(width="large"),
+                    "Recursos Materiais": st.column_config.TextColumn(width="medium")
+                }
+            )
+            
+            if st.button("💾 SALVAR PROGRESSO NO BANCO (CURRÍCULO)", use_container_width=True):
+                import json
+                json_data = df_editado_curr.to_json(orient='records')
+                db.salvar_no_banco("DB_RELATORIOS",[datetime.now().strftime("%d/%m/%Y"), id_a, nome_limpo, f"CURRICULO_ADAPTADO_{trim_destino}", json_data])
+                st.success(f"✅ Currículo do {trim_destino} arquivado no Repositório Vivo!")
+                st.balloons()
+
+        # --- ABA 4: RELATO PARA COORDENAÇÃO (WHATSAPP) ---
         with tab_coord:
             st.subheader("📱 Relato Rápido para Coordenação")
             st.caption("Gere um texto curto e direto, ideal para copiar e colar no WhatsApp da coordenação ou da família.")
@@ -6146,75 +6246,6 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                 st.write(st.session_state.res_v38_coord)
                 st.code(st.session_state.res_v38_coord, language=None)
 
-        # --- ABA 4: CURRÍCULO ADAPTADO ---
-        with tab_curr:
-            st.subheader("⚙️ Construtor de Matriz Adaptada (Padrão Itabuna)")
-            st.caption("Selecione os conteúdos da matriz regular. A IA fará a adaptação focada na superação das barreiras específicas deste aluno.")
-            
-            ano_aluno = "".join(filter(str.isdigit, turma_pei))
-            df_matriz_ano = df_curriculo[df_curriculo['ANO'].astype(str) == ano_aluno].copy()
-
-            if df_matriz_ano.empty:
-                st.warning(f"⚠️ Matriz do {ano_aluno}º ano não localizada.")
-            else:
-                opcoes_conteudo = df_matriz_ano.apply(lambda x: f"[{x['TRIMESTRE']}] {x['CONTEUDO_ESPECIFICO']}", axis=1).tolist()
-                selecionados = st.multiselect("📚 Escolha os conteúdos para adaptar:", opcoes_conteudo, key="sel_curr_clean")
-
-                if selecionados:
-                    if st.button("🧠 INICIAR MOTOR DE IA: GERAR GRADE DE EDIÇÃO", use_container_width=True, type="primary"):
-                        with st.spinner("Arquitetando colunas e simplificando objetivos..."):
-                            conteudos_brutos = [s.split("] ")[1] for s in selecionados]
-                            df_focada = df_matriz_ano[df_matriz_ano['CONTEUDO_ESPECIFICO'].isin(conteudos_brutos)]
-                            contexto_oficial = df_focada[['CONTEUDO_ESPECIFICO', 'OBJETIVOS']].to_string(index=False)
-                            
-                            # 🚨 INJEÇÃO DE CONTEXTO NO CURRÍCULO
-                            prompt_curr = f"ESTUDANTE: {nome_limpo}. PERFIL/NECESSIDADE: {perfil_atual}. MATRIZ: {contexto_oficial}. Gere os itens adaptados focando em superar as barreiras do perfil {perfil_atual}."
-                            st.session_state.res_v39_curr = ai.gerar_ia("TRADUTOR_CURRICULAR_V39", prompt_curr)
-
-                    if "res_v39_curr" in st.session_state:
-                        st.markdown("---")
-                        h1, h2, h3, h4 = st.columns([1, 2, 1, 2])
-                        h1.markdown("**CONTEÚDO**")
-                        h2.markdown("**OBJETIVO DE ENSINO**")
-                        h3.markdown("**FUNÇÕES PSÍQUICAS**")
-                        h4.markdown("**SELEÇÃO DE MATERIAIS**")
-
-                        raw_curr = st.session_state.res_v39_curr
-                        blocos = re.findall(r"\[ITEM\](.*?)\[/ITEM\]", raw_curr, re.DOTALL)
-                        
-                        lista_final_para_salvar =[]
-
-                        for idx, b in enumerate(blocos):
-                            with st.container():
-                                c1, c2, c3, c4 = st.columns([1, 2, 1, 2])
-                                
-                                def limpar(t): return re.sub(r'\[.*?\]', '', t).strip()
-                                
-                                v_c = limpar(ai.extrair_tag(b, "C"))
-                                v_o = limpar(ai.extrair_tag(b, "O"))
-                                v_f = limpar(ai.extrair_tag(b, "F"))
-                                v_m = limpar(ai.extrair_tag(b, "M"))
-
-                                edit_c = c1.text_area(f"C_{idx}", v_c, height=150, label_visibility="collapsed")
-                                edit_o = c2.text_area(f"O_{idx}", v_o, height=150, label_visibility="collapsed")
-                                edit_f = c3.text_area(f"F_{idx}", v_f, height=150, label_visibility="collapsed")
-                                edit_m = c4.text_area(f"M_{idx}", v_m, height=150, label_visibility="collapsed")
-                                
-                                lista_final_para_salvar.append({"C": edit_c, "O": edit_o, "F": edit_f, "M": edit_m})
-                                st.markdown("---")
-
-                        trim_destino = st.selectbox("Salvar em qual trimestre?",["I Trimestre", "II Trimestre", "III Trimestre"])
-                        if st.button("💾 ARQUIVAR PLANO TRIMESTRAL COMPLETO", use_container_width=True):
-                            texto_banco = f"PLANO ADAPTADO - {trim_destino}\n\n"
-                            for item in lista_final_para_salvar:
-                                texto_banco += f"CONTEÚDO: {item['C']}\nOBJETIVO: {item['O']}\nFUNÇÕES: {item['F']}\nMATERIAIS: {item['M']}\n\n"
-                            
-                            db.salvar_no_banco("DB_RELATORIOS",[
-                                datetime.now().strftime("%d/%m/%Y"), id_a, nome_limpo, f"CURRICULO_ADAPTADO_{trim_destino[0]}T", texto_banco
-                            ])
-                            st.success(f"✅ Currículo do {trim_destino} arquivado com sucesso!")
-                            st.balloons()
-
         # --- ABA 5: LINHA DO TEMPO ---
         with tab_timeline:
             st.subheader("🗂️ Linha do Tempo de Custódia Digital")
@@ -6224,7 +6255,7 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                 df_timeline = hist_aluno.iloc[::-1]
 
                 for idx, row in df_timeline.iterrows():
-                    tipo_bruto = str(row.get('TURMA', 'REGISTRO')) 
+                    tipo_bruto = str(row.get('TIPO', 'REGISTRO')) 
                     data_doc = row.get('DATA', 'S/D')
                     conteudo_raw = row.get('CONTEUDO', '')
 
@@ -6237,6 +6268,9 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                     elif "CURRICULO_ADAPTADO" in tipo_bruto.upper():
                         label_tipo = f"📖 CURRÍCULO ADAPTADO ({tipo_bruto.split('_')[-1]})"
                         icone = "📚"
+                    elif "PEI_EXPORTADO" in tipo_bruto.upper():
+                        label_tipo = "🖨️ PEI OFICIAL EXPORTADO (DOCX)"
+                        icone = "💾"
                     else:
                         label_tipo = f"📄 {tipo_bruto}"
                         icone = "📎"
@@ -6254,10 +6288,15 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
 
                         with st.expander("👁️ VISUALIZAR DOCUMENTO COMPLETO", expanded=False):
                             if "CURRICULO_ADAPTADO" in tipo_bruto.upper():
-                                partes = conteudo_raw.split("CONTEÚDO:")
-                                for p in partes:
-                                    if p.strip():
-                                        st.info(f"📖 **CONTEÚDO:** {p.strip()}")
+                                try:
+                                    import json
+                                    df_view = pd.read_json(io.StringIO(conteudo_raw), orient='records')
+                                    st.dataframe(df_view, use_container_width=True)
+                                except:
+                                    st.write(conteudo_raw)
+                            elif "PEI_EXPORTADO" in tipo_bruto.upper():
+                                link_d = conteudo_raw.replace("Link: ", "").strip()
+                                st.link_button("📂 ABRIR NO DRIVE", link_d, type="primary")
                             else:
                                 st.markdown(conteudo_raw.replace("\n", "  \n"))
                             
@@ -6265,3 +6304,68 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                             st.caption("🔒 Documento assinado digitalmente pelo ecossistema SOSA")
             else:
                 st.info("📭 Nenhuma evidência ou documento arquivado para este estudante até o momento.")
+
+        # ==============================================================================
+        # 🚨 ABA 6: EXPORTAR PEI OFICIAL (DOCX)
+        # ==============================================================================
+        with tab_export:
+            st.subheader("🖨️ Exportar PEI Oficial (DOCX)")
+            st.caption("Gera o documento final no formato da prefeitura, com as lacunas burocráticas prontas para a coordenação preencher.")
+            
+            trim_export = st.selectbox("Qual trimestre deseja exportar?",["I Trimestre", "II Trimestre", "III Trimestre"], key="exp_trim")
+            
+            if st.button("💾 GERAR E SALVAR PEI OFICIAL NO DRIVE", type="primary", use_container_width=True):
+                with st.spinner("Compilando Dossiê Oficial..."):
+                    # 1. Coleta Dados do Aluno
+                    dados_aluno = {"nome": nome_limpo, "turma": turma_pei, "cid": perfil_atual}
+                    
+                    # 2. Coleta Habilidades (Capa)
+                    capa_records_exp = hist_aluno[hist_aluno['TIPO'] == 'CAPA_PEI_OFICIAL']
+                    if not capa_records_exp.empty:
+                        capa_text_exp = str(capa_records_exp.iloc[-1]['CONTEUDO'])
+                        v_soc_exp = ai.extrair_tag(capa_text_exp, "SOCIAIS") or re.search(r'\[SOCIAIS\]\n(.*?)(?=\n\n\[COMUNICATIVAS\]|$)', capa_text_exp, re.DOTALL)
+                        v_soc_exp = v_soc_exp.group(1).strip() if isinstance(v_soc_exp, re.Match) else v_soc_exp
+                        
+                        v_com_exp = ai.extrair_tag(capa_text_exp, "COMUNICATIVAS") or re.search(r'\[COMUNICATIVAS\]\n(.*?)(?=\n\n\[EMOCIONAIS\]|$)', capa_text_exp, re.DOTALL)
+                        v_com_exp = v_com_exp.group(1).strip() if isinstance(v_com_exp, re.Match) else v_com_exp
+                        
+                        v_emo_exp = ai.extrair_tag(capa_text_exp, "EMOCIONAIS") or re.search(r'\[EMOCIONAIS\]\n(.*?)(?=\n\n\[FUNCIONAIS\]|$)', capa_text_exp, re.DOTALL)
+                        v_emo_exp = v_emo_exp.group(1).strip() if isinstance(v_emo_exp, re.Match) else v_emo_exp
+                        
+                        v_fun_exp = ai.extrair_tag(capa_text_exp, "FUNCIONAIS") or re.search(r'\[FUNCIONAIS\]\n(.*)', capa_text_exp, re.DOTALL)
+                        v_fun_exp = v_fun_exp.group(1).strip() if isinstance(v_fun_exp, re.Match) else v_fun_exp
+                    else:
+                        v_soc_exp, v_com_exp, v_emo_exp, v_fun_exp = "", "", "", ""
+                        
+                    habilidades = {
+                        "Habilidades Sociais": v_soc_exp, 
+                        "Habilidades Comunicativas": v_com_exp, 
+                        "Habilidades Emocionais": v_emo_exp, 
+                        "Habilidades Funcionais": v_fun_exp
+                    }
+                    
+                    # 3. Coleta Currículo
+                    curr_records_exp = hist_aluno[hist_aluno['TIPO'] == f"CURRICULO_ADAPTADO_{trim_export}"]
+                    if not curr_records_exp.empty:
+                        try:
+                            import json
+                            df_curr_exp = pd.read_json(io.StringIO(curr_records_exp.iloc[-1]['CONTEUDO']), orient='records')
+                        except:
+                            df_curr_exp = pd.DataFrame(columns=["Objetivos de Aprendizagem", "Estratégias Metodológicas", "Recursos Materiais"])
+                    else:
+                        df_curr_exp = pd.DataFrame(columns=["Objetivos de Aprendizagem", "Estratégias Metodológicas", "Recursos Materiais"])
+                    
+                    # 4. Gera o DOCX
+                    nome_arq_pei = f"PEI_OFICIAL_{nome_limpo.replace(' ', '_')}_{trim_export.replace(' ', '')}"
+                    doc_stream = exporter.gerar_docx_pei_oficial(nome_arq_pei, dados_aluno, habilidades, df_curr_exp)
+                    
+                    # 5. Sobe para o Drive
+                    link_doc = db.subir_e_converter_para_google_docs(doc_stream, nome_arq_pei, trimestre=trim_export, categoria=turma_pei, modo="PLANEJAMENTO")
+                    
+                    if "https" in link_doc:
+                        db.salvar_no_banco("DB_RELATORIOS",[datetime.now().strftime("%d/%m/%Y"), id_a, nome_limpo, "PEI_EXPORTADO", f"Link: {link_doc}"])
+                        st.success("✅ PEI Oficial gerado e salvo no Drive!")
+                        st.link_button("📂 ABRIR PEI OFICIAL", link_doc, type="primary", use_container_width=True)
+                        st.balloons()
+                    else:
+                        st.error(f"Erro ao salvar no Drive: {link_doc}")
