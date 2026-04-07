@@ -5958,6 +5958,24 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
     st.caption("💡 **Guia de Comando:** O sistema cruza dados de engajamento e notas para redigir relatórios evolutivos. A IA adapta o texto automaticamente se o aluno for PEI, tiver defasagem de base ou for de alta performance.")
     st.markdown("---")
 
+    # 🚨 MOTOR ANTI-DUPLICIDADE (UPSERT SOBERANO)
+    def salvar_relatorio_pei_sem_duplicidade(id_aluno, nome_aluno, tipo_rel, conteudo_rel):
+        try:
+            wb = db.conectar()
+            ws = wb.worksheet("DB_RELATORIOS")
+            dados = ws.get_all_values()
+            # Engenharia de Deleção Reversa: Apaga a versão antiga antes de salvar a nova
+            for i in range(len(dados)-1, 0, -1):
+                if len(dados[i]) > 3 and db.limpar_id(dados[i][1]) == str(id_aluno) and dados[i][3] == tipo_rel:
+                    ws.delete_rows(i+1)
+            
+            ws.append_row([datetime.now().strftime("%d/%m/%Y"), id_aluno, nome_aluno, tipo_rel, conteudo_rel], value_input_option="USER_ENTERED")
+            st.cache_data.clear()
+            return True
+        except Exception as e:
+            st.error(f"Erro ao salvar no banco: {e}")
+            return False
+
     if df_alunos.empty:
         st.warning("⚠️ Base de alunos vazia. Cadastre alunos na Gestão da Turma.")
     else:
@@ -6079,7 +6097,6 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
             sem_mudancas = st.checkbox("📢 Quadro estável (Sem alterações significativas desde o último relatório)")
             
             st.markdown("---")
-            # 🚨 NOVO: RELATO DO PROFESSOR (DIRETRIZ SOBERANA DO PEI)
             relato_professor = st.text_area("✍️ Relato do Professor (Contexto Adicional):", placeholder="Ex: O aluno demonstrou muito interesse nas aulas com uso de tablet, mas fica agressivo com barulho alto. Quero que o relatório foque na necessidade de fones abafadores...", key="relato_prof_clean")
 
         # ==============================================================================
@@ -6104,11 +6121,12 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                 )
                 res_master = ai.gerar_ia("ESPECIALISTA_INCLUSAO", prompt_master)
                 
-                # Salva no banco imediatamente
+                # Salva no banco imediatamente (Sem duplicidade)
                 checklist_str = f"[CHECKLIST]\n{v_autonomia}|{v_social}|{v_participa}|{v_resposta}"
                 texto_final_banco = f"{checklist_str}\n\n{res_master}"
                 
-                db.salvar_no_banco("DB_RELATORIOS",[datetime.now().strftime("%d/%m/%Y"), id_a, nome_limpo, "DOSSIE_MASTER_PEI", texto_final_banco])
+                salvar_relatorio_pei_sem_duplicidade(id_a, nome_limpo, "DOSSIE_MASTER_PEI", texto_final_banco)
+                
                 st.success("✅ Dossiê Master gerado e salvo no Repositório Vivo!")
                 import time
                 time.sleep(1)
@@ -6172,10 +6190,10 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                                     st.markdown(msg_chat)
                                     st.session_state.chat_history_pei.append({"role": "assistant", "avatar": "🤖", "content": msg_chat})
                                     
-                                    # Salva o novo conteúdo no banco imediatamente
+                                    # Salva o novo conteúdo no banco imediatamente (Sem duplicidade)
                                     checklist_str = f"[CHECKLIST]\n{v_autonomia}|{v_social}|{v_participa}|{v_resposta}"
                                     texto_final_banco = f"{checklist_str}\n\n{novo_conteudo}"
-                                    db.salvar_no_banco("DB_RELATORIOS",[datetime.now().strftime("%d/%m/%Y"), id_a, nome_limpo, "DOSSIE_MASTER_PEI", texto_final_banco])
+                                    salvar_relatorio_pei_sem_duplicidade(id_a, nome_limpo, "DOSSIE_MASTER_PEI", texto_final_banco)
                                     st.rerun()
 
                 st.markdown("---")
@@ -6186,7 +6204,7 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                 if st.button("💾 SALVAR EDIÇÕES MANUAIS (EVOLUÇÃO)", use_container_width=True):
                     checklist_str = f"[CHECKLIST]\n{v_autonomia}|{v_social}|{v_participa}|{v_resposta}"
                     texto_consolidado = f"{checklist_str}\n\n[DIAGNOSTICO_GERAL]\n{ed_diag}\n\n[SOCIAIS]\n{v_soc_txt}\n\n[COMUNICATIVAS]\n{v_com_txt}\n\n[EMOCIONAIS]\n{v_emo_txt}\n\n[FUNCIONAIS]\n{v_fun_txt}\n\n[DIRETRIZES_CURRICULARES]\n{ed_dir}"
-                    db.salvar_no_banco("DB_RELATORIOS",[datetime.now().strftime("%d/%m/%Y"), id_a, nome_limpo, "DOSSIE_MASTER_PEI", texto_consolidado])
+                    salvar_relatorio_pei_sem_duplicidade(id_a, nome_limpo, "DOSSIE_MASTER_PEI", texto_consolidado)
                     st.success("✅ Edições salvas no Repositório Vivo!")
                     st.balloons()
             else:
@@ -6208,7 +6226,7 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
             if st.button("💾 SALVAR EDIÇÕES DA CAPA NO BANCO", use_container_width=True):
                 checklist_str = f"[CHECKLIST]\n{v_autonomia}|{v_social}|{v_participa}|{v_resposta}"
                 texto_consolidado = f"{checklist_str}\n\n[DIAGNOSTICO_GERAL]\n{v_diag}\n\n[SOCIAIS]\n{ed_soc}\n\n[COMUNICATIVAS]\n{ed_com}\n\n[EMOCIONAIS]\n{ed_emo}\n\n[FUNCIONAIS]\n{ed_fun}\n\n[DIRETRIZES_CURRICULARES]\n{v_diretrizes}"
-                db.salvar_no_banco("DB_RELATORIOS",[datetime.now().strftime("%d/%m/%Y"), id_a, nome_limpo, "DOSSIE_MASTER_PEI", texto_consolidado])
+                salvar_relatorio_pei_sem_duplicidade(id_a, nome_limpo, "DOSSIE_MASTER_PEI", texto_consolidado)
                 st.success("✅ Edições salvas no Repositório Vivo!"); st.balloons()
 
         # --- ABA 3: CURRÍCULO ADAPTADO (TABELA OFICIAL) ---
@@ -6258,6 +6276,12 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                             
                             if novas_linhas:
                                 df_curr_atual = pd.concat([df_curr_atual, pd.DataFrame(novas_linhas)], ignore_index=True)
+                                
+                                # 🚨 AUTO-SAVE: Salva imediatamente para não perder no rerun do Streamlit
+                                import json
+                                json_data = df_curr_atual.to_json(orient='records')
+                                salvar_relatorio_pei_sem_duplicidade(id_a, nome_limpo, f"CURRICULO_ADAPTADO_{trim_destino}", json_data)
+                                st.rerun()
 
             st.markdown("---")
             st.markdown("**Tabela de Planejamento (Editável)**")
@@ -6276,7 +6300,7 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
             if st.button("💾 SALVAR PROGRESSO NO BANCO (CURRÍCULO)", use_container_width=True):
                 import json
                 json_data = df_editado_curr.to_json(orient='records')
-                db.salvar_no_banco("DB_RELATORIOS",[datetime.now().strftime("%d/%m/%Y"), id_a, nome_limpo, f"CURRICULO_ADAPTADO_{trim_destino}", json_data])
+                salvar_relatorio_pei_sem_duplicidade(id_a, nome_limpo, f"CURRICULO_ADAPTADO_{trim_destino}", json_data)
                 st.success(f"✅ Currículo do {trim_destino} arquivado no Repositório Vivo!")
                 st.balloons()
 
@@ -6399,7 +6423,7 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                     link_doc = db.subir_e_converter_para_google_docs(doc_stream, nome_arq_pei, trimestre=trim_export, categoria=turma_pei, modo="PLANEJAMENTO")
                     
                     if "https" in link_doc:
-                        db.salvar_no_banco("DB_RELATORIOS",[datetime.now().strftime("%d/%m/%Y"), id_a, nome_limpo, "PEI_EXPORTADO", f"Link: {link_doc}"])
+                        salvar_relatorio_pei_sem_duplicidade(id_a, nome_limpo, "PEI_EXPORTADO", f"Link: {link_doc}")
                         st.success("✅ PEI Oficial gerado e salvo no Drive!")
                         st.link_button("📂 ABRIR PEI OFICIAL", link_doc, type="primary", use_container_width=True)
                         st.balloons()
