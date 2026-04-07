@@ -1643,7 +1643,7 @@ elif menu == "🧪 Criador de Aulas":
                                         st.session_state.v_lab = int(time.time())
                                         st.rerun()
 
-        # --- ABA 4: ACERVO DE MATERIAIS ---
+# --- ABA 4: ACERVO DE MATERIAIS ---
         with tab_acervo_lab:
             st.subheader("📂 Gestão de Acervo de Materiais")
             st.caption("Histórico de todas as aulas, projetos e listas geradas.")
@@ -1665,6 +1665,79 @@ elif menu == "🧪 Criador de Aulas":
                 df_m = df_m[df_m['TIPO_MATERIAL'].str.upper().str.contains(f_tipo_m.upper())]
 
             df_m = df_m.iloc[::-1] 
+
+            # ==============================================================================
+            # 🚨 MOTOR DE EXPORTAÇÃO EM LOTE (ZIP COM PDFs) PARA COORDENAÇÃO
+            # ==============================================================================
+            st.markdown("---")
+            with st.expander("📦 Exportação em Lote para Coordenação (Baixar PDFs PEI)", expanded=False):
+                st.info("💡 **Como usar:** O sistema pegará todos os materiais filtrados acima, converterá os documentos PEI para PDF e criará um arquivo ZIP único para você enviar à coordenação.")
+                
+                if st.button("🗜️ PREPARAR PACOTE PEI (GERAR ZIP)", type="primary", use_container_width=True):
+                    if df_m.empty:
+                        st.error("⚠️ Nenhum material encontrado no filtro atual.")
+                    else:
+                        with st.status("Acessando o Cofre Digital e convertendo arquivos para PDF...") as status:
+                            import zipfile
+                            import io
+                            from googleapiclient.discovery import build
+                            
+                            try:
+                                creds = db.obter_creds_drive()
+                                service = build('drive', 'v3', credentials=creds)
+                                
+                                zip_buffer = io.BytesIO()
+                                count = 0
+                                
+                                with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+                                    for _, row in df_m.iterrows():
+                                        txt_f = str(row['CONTEUDO'])
+                                        nome_mat = str(row['TIPO_MATERIAL']).replace("/", "-").replace(":", "").strip()
+                                        
+                                        # Busca o link do PEI no texto
+                                        match = re.search(r"PEI\s*\(?(https?://[^\s\)]+)\)?", txt_f, re.IGNORECASE)
+                                        if match:
+                                            link_pei = match.group(1).strip()
+                                            if "N/A" not in link_pei and "http" in link_pei:
+                                                # Extrai o ID do arquivo do Google Docs
+                                                id_match = re.search(r"/d/([a-zA-Z0-9-_]+)", link_pei)
+                                                if id_match:
+                                                    file_id = id_match.group(1)
+                                                    status.write(f"📥 Convertendo: {nome_mat}...")
+                                                    try:
+                                                        # Força a exportação do Google Docs para PDF via API
+                                                        request = service.files().export_media(fileId=file_id, mimeType='application/pdf')
+                                                        pdf_bytes = request.execute()
+                                                        
+                                                        # Adiciona o PDF dentro do arquivo ZIP
+                                                        zip_file.writestr(f"{nome_mat}_PEI.pdf", pdf_bytes)
+                                                        count += 1
+                                                    except Exception as e:
+                                                        status.write(f"⚠️ Erro ao baixar {nome_mat}: {e}")
+                                
+                                if count > 0:
+                                    status.update(label=f"✅ {count} arquivos PEI convertidos e compactados com sucesso!", state="complete")
+                                    st.session_state.zip_pei_ready = zip_buffer.getvalue()
+                                    st.session_state.zip_pei_count = count
+                                else:
+                                    status.update(label="❌ Nenhum arquivo PEI válido encontrado nos materiais filtrados.", state="error")
+                            
+                            except Exception as e:
+                                status.update(label=f"❌ Erro crítico na conexão com o Drive: {e}", state="error")
+                                
+                # Exibe o botão de download se o ZIP estiver pronto na memória
+                if "zip_pei_ready" in st.session_state:
+                    st.success(f"📦 Pacote pronto com {st.session_state.zip_pei_count} atividades PEI em PDF.")
+                    st.download_button(
+                        label="📥 CLIQUE AQUI PARA BAIXAR O ARQUIVO ZIP",
+                        data=st.session_state.zip_pei_ready,
+                        file_name=f"Atividades_PEI_SOSA_{datetime.now().strftime('%d%m%Y')}.zip",
+                        mime="application/zip",
+                        type="primary",
+                        use_container_width=True
+                    )
+
+            st.markdown("---")
 
             if not df_m.empty:
                 st.write(f"📚 **Materiais Didáticos Localizados:** {len(df_m)}")
