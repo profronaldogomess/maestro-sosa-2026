@@ -2366,20 +2366,82 @@ elif menu == "📝 Central de Avaliações":
                     l_pei = (re.findall(r"PEI\((.*?)\)", txt_f) or [None])[-1]
                     l_prof = (re.findall(r"Prof\((.*?)\)", txt_f) or [None])[-1]
 
-                    c_b1, c_b2, c_b3, c_b4, c_b5 = st.columns(5)
+                    c_b1, c_b2, c_b3 = st.columns(3)
                     c_b1.link_button("📝 REGULAR", str(l_reg), use_container_width=True, type="primary")
                     if l_pei and "N/A" not in str(l_pei): c_b2.link_button("♿ PEI", str(l_pei), use_container_width=True)
                     else: c_b2.button("⚪ SEM PEI", disabled=True, use_container_width=True)
                     if l_prof and "N/A" not in str(l_prof): c_b3.link_button("🔍 PERÍCIA", str(l_prof), use_container_width=True)
                     else: c_b3.button("⚪ SEM GRADE", disabled=True, use_container_width=True)
                     
-                    if c_b4.button("🔄 REFINAR", key=f"ref_av_h_{row.name}", use_container_width=True):
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    c_act1, c_act2, c_act3 = st.columns(3)
+                    
+                    if c_act1.button("🔄 REFINAR", key=f"ref_av_h_{row.name}", use_container_width=True):
                         st.session_state.temp_prova = txt_f
                         st.session_state.av_nome_fixo = identificador
                         if "chat_history_av" in st.session_state: del st.session_state["chat_history_av"]
                         st.rerun()
                         
-                    if c_b5.button("🗑️ APAGAR", key=f"del_av_h_{row.name}", use_container_width=True):
+                    # ==============================================================================
+                    # 🚨 PROTOCOLO HYDRA: GERADOR DE VARIANTES (TIPO B, C)
+                    # ==============================================================================
+                    if c_act2.button("🧬 GERAR VARIANTE", key=f"var_av_h_{row.name}", use_container_width=True):
+                        with st.status("Iniciando Protocolo Hydra (Variante Anti-Fraude)...") as status:
+                            txt_original = str(row['CONTEUDO'])
+                            nome_original = row['TIPO_MATERIAL']
+                            ano_original = row['ANO']
+                            
+                            # Descobre qual a próxima letra (B, C, D...)
+                            existentes = df_aulas[df_aulas['TIPO_MATERIAL'].str.startswith(nome_original + " - TIPO", na=False)]
+                            letra = chr(66 + len(existentes)) # 66 é 'B' na tabela ASCII
+                            nome_variante = f"{nome_original} - TIPO {letra}"
+                            
+                            status.write(f"🧠 Analisando {nome_original} e criando questões gêmeas...")
+                            q_reg = ai.extrair_tag(txt_original, "QUESTOES")
+                            g_reg = ai.extrair_tag(txt_original, "GRADE_DE_CORRECAO")
+                            
+                            prompt_hydra = f"PROVA ORIGINAL:\n[QUESTOES]\n{q_reg}\n\n[GRADE_DE_CORRECAO]\n{g_reg}"
+                            res_hydra = ai.gerar_ia("ARQUITETO_VARIANTES_V100", prompt_hydra)
+                            
+                            status.write("🧩 Remontando a prova com o PEI original intacto...")
+                            pei_q = ai.extrair_tag(txt_original, "PEI")
+                            pei_gab = ai.extrair_tag(txt_original, "GABARITO_PEI")
+                            pei_grade = ai.extrair_tag(txt_original, "GRADE_DE_CORRECAO_PEI")
+                            valor_tag = ai.extrair_tag(txt_original, "VALOR")
+                            
+                            novo_conteudo = f"[VALOR: {valor_tag}]\n\n"
+                            novo_conteudo += f"[QUESTOES]\n{ai.extrair_tag(res_hydra, 'QUESTOES')}\n\n"
+                            novo_conteudo += f"[GABARITO_TEXTO]\n{ai.extrair_tag(res_hydra, 'GABARITO_TEXTO')}\n\n"
+                            novo_conteudo += f"[GRADE_DE_CORRECAO]\n{ai.extrair_tag(res_hydra, 'GRADE_DE_CORRECAO')}\n\n"
+                            novo_conteudo += f"[PEI]\n{pei_q}\n\n[GABARITO_PEI]\n{pei_gab}\n\n[GRADE_DE_CORRECAO_PEI]\n{pei_grade}\n\n"
+                            
+                            status.write("📄 Gerando DOCX e Sincronizando no Drive...")
+                            info_reg = {
+                                "ano": ano_original, "tipo_prova": "AVALIAÇÃO", 
+                                "valor": valor_tag if valor_tag else "10,0", 
+                                "valor_questao": "N/A", 
+                                "qtd_questoes": len(re.findall(r'QUESTÃO', ai.extrair_tag(res_hydra, 'QUESTOES').upper())), 
+                                "trimestre": "I Trimestre"
+                            }
+                            
+                            doc_reg = exporter.gerar_docx_prova_v25(nome_variante, novo_conteudo, info_reg)
+                            link_reg = db.subir_e_converter_para_google_docs(doc_reg, nome_variante, modo="AVALIACAO")
+                            
+                            doc_pei = exporter.gerar_docx_prova_v25(f"{nome_variante}_PEI", pei_q, info_reg)
+                            link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_variante}_PEI", modo="AVALIACAO")
+                            
+                            txt_prof_completo = f"GABARITO OFICIAL (REGULAR - {letra}):\n{ai.extrair_tag(res_hydra, 'GABARITO_TEXTO')}\n\nGABARITO OFICIAL (PEI):\n{pei_gab}\n\nDETALHAMENTO POR ITEM (REGULAR):\n{ai.extrair_tag(res_hydra, 'GRADE_DE_CORRECAO')}\n\nDETALHAMENTO POR ITEM (PEI):\n{pei_grade}"
+                            doc_prof = exporter.gerar_docx_professor_v25(f"{nome_variante}_GRADE", txt_prof_completo, {"ano": ano_original, "semana": "AVALIAÇÃO", "trimestre": "I Trimestre"})
+                            link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_variante}_GRADE", modo="AVALIACAO")
+                            
+                            links_footer = f"--- LINKS ---\nRegular({link_reg}) PEI({link_pei}) Prof({link_prof})"
+                            conteudo_final_banco = novo_conteudo + f"\n\n{links_footer}"
+                            
+                            db.salvar_no_banco("DB_AULAS_PRONTAS",[datetime.now().strftime("%d/%m/%Y"), "AVALIAÇÃO", nome_variante, conteudo_final_banco, ano_original, link_reg])
+                            status.update(label=f"✅ Variante {letra} gerada e sincronizada!", state="complete")
+                            st.rerun()
+
+                    if c_act3.button("🗑️ APAGAR", key=f"del_av_h_{row.name}", use_container_width=True):
                         if db.excluir_avaliacao_completa(identificador, row['SEMANA_REF']): st.rerun()
 
                     with st.expander("👁️ ANALISAR ESTRUTURA PEDAGÓGICA E ITENS"):
@@ -2563,37 +2625,52 @@ elif menu == "📸 Scanner de Gabaritos":
                     st.markdown(f"### 📸 Corrigindo agora: **{al_sel}**")
                     
                     with st.container(border=True):
-                        c_v1, c_v2, c_v3 = st.columns([1, 1, 1.5])
-                        modo_2a = c_v1.toggle("🚀 Aplicar Segunda Chamada?", help="Ative se o aluno fez a prova de 2ª chamada.", key=f"toggle_2a_{id_aluno_atual}")
+                        c_v1, c_v2, c_v3, c_v4 = st.columns([1, 1.5, 1, 1.5])
                         
-                        # 🚨 BOTÃO DE AUTONOMIA PEI
+                        # 1. O Botão Sagrado da 2ª Chamada (Intacto)
+                        modo_2a = c_v1.toggle("🚀 2ª Chamada?", help="Ative se o aluno fez a prova de 2ª chamada.", key=f"toggle_2a_{id_aluno_atual}")
+                        
+                        # 2. O NOVO Seletor de Variante (Protocolo Hydra)
+                        tipo_base = at_sel.split("-")[0].strip().upper()
+                        serie_num = "".join(filter(str.isdigit, t_sel))
+                        
+                        df_variantes = df_aulas[
+                            (df_aulas['TIPO_MATERIAL'].str.upper().str.contains(tipo_base)) & 
+                            (df_aulas['TIPO_MATERIAL'].str.upper().str.contains("TIPO")) &
+                            (df_aulas['ANO'].str.contains(serie_num))
+                        ]
+                        opcoes_variantes = ["Padrão (Tipo A)"] + df_variantes['TIPO_MATERIAL'].unique().tolist()
+                        
+                        versao_variante = c_v2.selectbox("🧬 Variante da Prova:", opcoes_variantes, key=f"var_sel_{id_aluno_atual}")
+                        
+                        # 3. Botão de Autonomia PEI
                         forcar_regular = False
                         if is_pei_aluno_db:
-                            forcar_regular = c_v2.toggle("📝 Fez a Prova Regular?", help="Ative se este aluno PEI optou por fazer a prova regular em vez da adaptada.", key=f"toggle_reg_{id_aluno_atual}")
+                            forcar_regular = c_v3.toggle("📝 Fez Regular?", help="Ative se este aluno PEI optou por fazer a prova regular.", key=f"toggle_reg_{id_aluno_atual}")
                         
-                        # Define qual gabarito a IA vai usar para corrigir
                         is_pei_grading = is_pei_aluno_db and not forcar_regular
                         
+                        # 4. Lógica de Seleção do Material Base para Correção
                         if modo_2a:
-                            tipo_base = at_sel.split("-")[0].strip().upper()
-                            serie_num = "".join(filter(str.isdigit, t_sel))
                             df_2a_candidatos = df_aulas[
                                 (df_aulas['TIPO_MATERIAL'].str.upper().str.contains("2CHAMADA")) & 
                                 (df_aulas['TIPO_MATERIAL'].str.upper().str.contains(tipo_base)) &
                                 (df_aulas['ANO'].str.contains(serie_num))
                             ]
                             opcoes_2a = df_2a_candidatos['TIPO_MATERIAL'].unique().tolist()
-                            at_segunda = c_v3.selectbox("📋 Selecione o Ativo 2CHAMADA:",[""] + opcoes_2a, key=f"sel_2a_{id_aluno_atual}")
+                            at_segunda = c_v4.selectbox("📋 Selecione o Ativo 2CHAMADA:",[""] + opcoes_2a, key=f"sel_2a_{id_aluno_atual}")
                             if at_segunda:
                                 material_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == at_segunda].iloc[0]
                             else:
                                 st.error("Selecione o material de 2ª chamada.")
                                 material_ref = None
+                        elif versao_variante != "Padrão (Tipo A)":
+                            material_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == versao_variante].iloc[0]
                         else:
                             material_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel].iloc[0]
                         
                         if material_ref is not None:
-                            tipo_txt = "2ª CHAMADA" if modo_2a else "REGULAR"
+                            tipo_txt = "2ª CHAMADA" if modo_2a else ("VARIANTE" if versao_variante != "Padrão (Tipo A)" else "REGULAR")
                             perfil_txt = "♿ PEI (Adaptada)" if is_pei_grading else ("📝 REGULAR (Opção do Aluno)" if is_pei_aluno_db else "📝 REGULAR")
                             st.info(f"⚖️ **Lente Ativa:** Prova {tipo_txt} | Correção: {perfil_txt}")
 
