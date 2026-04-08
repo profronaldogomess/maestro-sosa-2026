@@ -1265,25 +1265,30 @@ elif menu == "🧪 Criador de Aulas":
                                 col_config1, col_config2 = st.columns([1, 1])
                                 with col_config1:
                                     aula_alvo_prod = st.radio("🚀 Material a Gerar:", opcoes_disponiveis, horizontal=True, key=f"prod_alvo_{v}")
-                                with col_config2:
-                                    if "Evento" not in metodo_entrega:
-                                        qtd_q_prod = st.slider("Nº de Questões (PEI/Regular):", 1, 20, 10, key=f"prod_q_{v}")
-                                    else:
-                                        nome_evento = st.text_input("Nome do Evento/Dinâmica:", placeholder="Ex: Palestra sobre a Dengue", key=f"nome_ev_{v}")
-
+                                
+                                # 🚨 DETECÇÃO ANTECIPADA DE AVALIAÇÃO/CORREÇÃO
                                 if "1" in aula_alvo_prod: tag_roteiro = "AULA_1"
                                 elif "2" in aula_alvo_prod: tag_roteiro = "AULA_2"
                                 else: tag_roteiro = "SABADO_LETIVO"
                                 
                                 roteiro_especifico = ai.extrair_tag(plano_txt, tag_roteiro)
-                                
                                 roteiro_upper = roteiro_especifico.upper()
+                                
                                 termos_av =["LOGÍSTICA DE APLICAÇÃO", "APLICAÇÃO DE AVALIAÇÃO", "APLICAÇÃO DE PROVA", "APLICAÇÃO DE TESTE", "APLICAÇÃO DA SONDA", "APLICAÇÃO DO EXAME"]
                                 termos_cor =["CORREÇÃO COMENTADA", "CLÍNICA PEDAGÓGICA", "CORREÇÃO DE AVALIAÇÃO", "CORREÇÃO DA PROVA", "CORREÇÃO DO TESTE", "CORREÇÃO DA SONDA", "MAPEAMENTO DE DISTRATORES"]
                                 
                                 is_avaliacao = any(t in roteiro_upper for t in termos_av)
                                 is_correcao = any(t in roteiro_upper for t in termos_cor)
-                                
+
+                                with col_config2:
+                                    if is_avaliacao or is_correcao:
+                                        st.info("💡 **Modo Logística:** Sem geração de material físico.")
+                                        nome_evento = ""
+                                    elif "Evento" not in metodo_entrega:
+                                        qtd_q_prod = st.slider("Nº de Questões (PEI/Regular):", 1, 20, 10, key=f"prod_q_{v}")
+                                    else:
+                                        nome_evento = st.text_input("Nome do Evento/Dinâmica:", placeholder="Ex: Palestra sobre a Dengue", key=f"nome_ev_{v}")
+
                                 paginas_aula = base_herdada
                                 if ";" in base_herdada:
                                     partes_pag = base_herdada.split(";")
@@ -1295,9 +1300,10 @@ elif menu == "🧪 Criador de Aulas":
                                     st.info(f"📍 **Páginas Alvo:** {paginas_aula}\n\n{roteiro_especifico}")
 
                                 conteudo_prova_vinculada = ""
+                                prova_sel = ""
                                 if is_correcao or is_avaliacao:
                                     st.markdown("---")
-                                    st.warning("🔍 **Modo de Avaliação/Correção Detectado:** Selecione a prova correspondente para que a IA possa ler as questões e gerar o guia.")
+                                    st.warning("🔍 **Modo de Avaliação/Correção Detectado:** Selecione a prova correspondente para oficializar a aplicação no acervo (Sem gerar novos materiais).")
                                     
                                     mask_provas = df_aulas['TIPO_MATERIAL'].str.upper().str.contains("PROVA|TESTE|SONDA|AVALIAÇÃO|EXAME")
                                     provas_disponiveis = df_aulas[(df_aulas['ANO'].str.contains(str(ano_lab))) & mask_provas]
@@ -1305,37 +1311,48 @@ elif menu == "🧪 Criador de Aulas":
                                     if not provas_disponiveis.empty:
                                         prova_sel = st.selectbox("Vincular Avaliação do Acervo:",[""] + provas_disponiveis['TIPO_MATERIAL'].tolist(), key=f"vinc_prova_{v}")
                                         if prova_sel:
-                                            conteudo_prova_vinculada = provas_disponiveis[provas_disponiveis['TIPO_MATERIAL'] == prova_sel].iloc[0]['CONTEUDO']
-                                            st.success("✅ Avaliação vinculada! A IA usará as questões reais para montar a aula.")
+                                            st.success("✅ Avaliação vinculada! O sistema registrará a logística no acervo.")
                                     else:
                                         st.info("Nenhuma avaliação encontrada no acervo para esta série.")
 
                         if opcoes_disponiveis:
-                            if "Evento" in metodo_entrega:
-                                if st.button("💾 OFICIALIZAR EVENTO NO ACERVO", use_container_width=True, type="primary"):
-                                    if not nome_evento:
+                            # ==============================================================================
+                            # 🚨 ROTA 1: OFICIALIZAÇÃO DIRETA (EVENTOS E AVALIAÇÕES) - SEM IA
+                            # ==============================================================================
+                            if "Evento" in metodo_entrega or is_avaliacao or is_correcao:
+                                if st.button("💾 OFICIALIZAR NO ACERVO (SEM MATERIAL FÍSICO)", use_container_width=True, type="primary"):
+                                    nome_final_evento = nome_evento if "Evento" in metodo_entrega and not (is_avaliacao or is_correcao) else ""
+                                    
+                                    if is_avaliacao or is_correcao:
+                                        if not prova_sel:
+                                            st.error("⚠️ Selecione a avaliação vinculada acima antes de oficializar.")
+                                            st.stop()
+                                        prefixo = "APLICAÇÃO" if is_avaliacao else "CORREÇÃO"
+                                        nome_final_evento = f"{prefixo} - {prova_sel}"
+                                        
+                                    if not nome_final_evento:
                                         st.error("⚠️ Digite o nome do evento para registrar.")
                                     else:
-                                        with st.spinner("Registrando evento com rastreabilidade curricular..."):
+                                        with st.spinner("Registrando no acervo com rastreabilidade curricular..."):
                                             hab_herdada = ai.extrair_tag(plano_txt, "HABILIDADE_BNCC")
                                             cont_herdado = ai.extrair_tag(plano_txt, "CONTEUDOS_ESPECIFICOS")
                                             obj_herdado = ai.extrair_tag(plano_txt, "OBJETIVOS_ENSINO")
                                             
                                             conteudo_fantasma = (
                                                 f"[PROFESSOR]\n"
-                                                f"🎟️ **REGISTRO DE EVENTO / DINÂMICA**\n"
-                                                f"**Tema:** {nome_evento}\n"
+                                                f"🎟️ **REGISTRO DE LOGÍSTICA / EVENTO**\n"
+                                                f"**Tema:** {nome_final_evento}\n"
                                                 f"**Habilidade:** {hab_herdada}\n"
                                                 f"**Conteúdos:** {cont_herdado}\n"
                                                 f"**Objetivos:** {obj_herdado}\n\n"
                                                 f"**Roteiro Executado:**\n{roteiro_especifico}\n\n"
-                                                f"[ALUNO]\nAtividade prática/evento. Sem material físico gerado.\n\n"
+                                                f"[ALUNO]\nAtividade prática/avaliação. Sem material físico gerado nesta etapa.\n\n"
                                                 f"[GABARITO]\nN/A\n\n"
-                                                f"[PEI]\nParticipação inclusiva no evento garantida via mediação direta.\n\n"
+                                                f"[PEI]\nParticipação inclusiva garantida via mediação direta ou prova adaptada já impressa.\n\n"
                                                 f"--- LINKS ---\nRegular(N/A)\nPEI(N/A)\nProf(N/A)"
                                             )
                                             
-                                            nome_elite = util.gerar_nome_material_elite(ano_lab, aula_alvo_prod, nome_evento)
+                                            nome_elite = util.gerar_nome_material_elite(ano_lab, aula_alvo_prod, nome_final_evento)
                                             
                                             db.salvar_no_banco("DB_AULAS_PRONTAS",[
                                                 datetime.now().strftime("%d/%m/%Y"), 
@@ -1345,10 +1362,14 @@ elif menu == "🧪 Criador de Aulas":
                                                 f"{ano_lab}º", 
                                                 "N/A"
                                             ])
-                                            st.success("✅ Evento oficializado no Acervo! Já disponível no Cockpit.")
+                                            st.success("✅ Registro oficializado no Acervo! Já disponível no Cockpit para abertura de aula.")
                                             import time
                                             time.sleep(1.5)
                                             st.rerun()
+                            
+                            # ==============================================================================
+                            # 🚨 ROTA 2: GERAÇÃO DE MATERIAL DIDÁTICO (COM IA)
+                            # ==============================================================================
                             else:
                                 uri_referencia_aula = None
                                 if "Livro" in metodo_entrega:
@@ -1381,33 +1402,16 @@ elif menu == "🧪 Criador de Aulas":
                                         else:
                                             regra_livro = "3. MODO LIVRO: O roteiro deve dizer exatamente: 'Inicie na página X explorando a imagem Y...' baseando-se no PDF."
 
-                                        if is_avaliacao and not is_correcao:
-                                            missao_especifica = (
-                                                f"🚨 ATENÇÃO: Esta é uma aula de APLICAÇÃO DE AVALIAÇÃO.\n"
-                                                f"1. Na tag[PROFESSOR]: Escreva apenas as instruções de logística, tempo, regras da prova e orientações de preenchimento de gabarito.\n"
-                                                f"2. Nas tags [ALUNO] e[PEI]: Escreva APENAS 'Material de avaliação impresso separadamente. Não há atividade de caderno hoje.'\n"
-                                                f"3. É TERMINANTEMENTE PROIBIDO gerar questões ou exercícios.\n"
-                                                f"🚨 FORMATO OBRIGATÓRIO: Você DEVE separar o texto usando EXATAMENTE as tags entre colchetes:[PROFESSOR],[ALUNO],[PEI], [GABARITO], [IMAGENS]."
-                                            )
-                                        elif is_correcao:
-                                            missao_especifica = (
-                                                f"🚨 ATENÇÃO: Esta é uma aula de CORREÇÃO DE AVALIAÇÃO (Clínica Pedagógica).\n"
-                                                f"1. Na tag [PROFESSOR]: Escreva um guia de como mediar a correção no quadro. USE AS QUESTÕES DA AVALIAÇÃO VINCULADA ABAIXO para dar exemplos reais de como explicar os erros (distratores).\n"
-                                                f"2. Nas tags[ALUNO] e [PEI]: Escreva APENAS 'Acompanhamento da correção no quadro e anotações de feedback. Não há nova lista de exercícios hoje.'\n"
-                                                f"3. É TERMINANTEMENTE PROIBIDO gerar novas questões.\n"
-                                                f"🚨 FORMATO OBRIGATÓRIO: Você DEVE separar o texto usando EXATAMENTE as tags entre colchetes:[PROFESSOR], [ALUNO], [PEI], [GABARITO],[IMAGENS]."
-                                            )
-                                        else:
-                                            missao_especifica = (
-                                                f"🚨 MISSÃO DE ALTA DENSIDADE E RIGOR QUANTITATIVO:\n"
-                                                f"1.[PROFESSOR]: Escreva um TRATADO DIDÁTICO denso. Explique o conceito de {obj_geral} com profundidade técnica antes de dar o roteiro de aula.\n"
-                                                f"2. CONEXÃO ALPHA: Use o Google Search para trazer dados científicos reais de 2026 que validem a importância deste tema.\n"
-                                                f"{regra_livro}\n"
-                                                f"4.[ALUNO] (REGULAR): É OBRIGATÓRIO gerar EXATAMENTE {qtd_q_prod} questões inéditas e desafiadoras. Formato: **QUESTÃO X.** enunciado.\n"
-                                                f"5.[PEI] (INCLUSÃO): É OBRIGATÓRIO gerar EXATAMENTE {qtd_q_prod} questões adaptadas, cada uma com[PARA LEMBRAR],[PASSO A PASSO] e[ PROMPT IMAGEM ].\n"
-                                                f"6.[GABARITO]: Forneça as respostas detalhadas para as {qtd_q_prod} questões regulares e as {qtd_q_prod} questões PEI.\n"
-                                                f"🚨 FORMATO OBRIGATÓRIO: Você DEVE separar o texto usando EXATAMENTE as tags entre colchetes: [PROFESSOR],[ALUNO], [PEI],[GABARITO],[IMAGENS]."
-                                            )
+                                        missao_especifica = (
+                                            f"🚨 MISSÃO DE ALTA DENSIDADE E RIGOR QUANTITATIVO:\n"
+                                            f"1.[PROFESSOR]: Escreva um TRATADO DIDÁTICO denso. Explique o conceito de {obj_geral} com profundidade técnica antes de dar o roteiro de aula.\n"
+                                            f"2. CONEXÃO ALPHA: Use o Google Search para trazer dados científicos reais de 2026 que validem a importância deste tema.\n"
+                                            f"{regra_livro}\n"
+                                            f"4.[ALUNO] (REGULAR): É OBRIGATÓRIO gerar EXATAMENTE {qtd_q_prod} questões inéditas e desafiadoras. Formato: **QUESTÃO X.** enunciado.\n"
+                                            f"5.[PEI] (INCLUSÃO): É OBRIGATÓRIO gerar EXATAMENTE {qtd_q_prod} questões adaptadas, cada uma com[PARA LEMBRAR],[PASSO A PASSO] e[ PROMPT IMAGEM ].\n"
+                                            f"6.[GABARITO]: Forneça as respostas detalhadas para as {qtd_q_prod} questões regulares e as {qtd_q_prod} questões PEI.\n"
+                                            f"🚨 FORMATO OBRIGATÓRIO: Você DEVE separar o texto usando EXATAMENTE as tags entre colchetes: [PROFESSOR],[ALUNO], [PEI],[GABARITO],[IMAGENS]."
+                                        )
 
                                         prompt_manual = (
                                             f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {nome_elite}.\n"
@@ -1418,9 +1422,6 @@ elif menu == "🧪 Criador de Aulas":
                                             f"--- MEMÓRIA DE REGÊNCIA (PONTE PEDAGÓGICA) ---\n{contexto_turmas_ia}\n"
                                             f"--- SENSOR DE INCLUSÃO ---\nA turma possui alunos com: {texto_clinico}."
                                         )
-                                        
-                                        if conteudo_prova_vinculada:
-                                            prompt_manual += f"\n\n--- CONTEÚDO DA AVALIAÇÃO VINCULADA ---\n{conteudo_prova_vinculada}"
                                         
                                         resultado_ia = ai.gerar_ia(
                                             "MAESTRO_SOSA_V28_ELITE", 
