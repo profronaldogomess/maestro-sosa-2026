@@ -4130,6 +4130,7 @@ elif menu == "👤 Biografia do Estudante":
         info_alu = lista_alunos[lista_alunos['NOME_ALUNO'] == nome_limpo].iloc[0]
         id_alu = db.limpar_id(info_alu['ID'])
         perfil_atual = str(info_alu['NECESSIDADES']).upper().strip()
+        is_pei_or_gap = perfil_atual not in ["NENHUMA", "", "NAN", "TÍPICO", "TIPICO"]
         
         # --- FILTRAGEM DE BASES POR ALUNO E TEMPO ---
         n_alu = df_notas[df_notas['ID_ALUNO'].apply(db.limpar_id) == id_alu]
@@ -4167,7 +4168,7 @@ elif menu == "👤 Biografia do Estudante":
             st.error(f"🧱 **Barreira de Aprendizagem:** {perfil_atual}")
         elif "ALTA PERFORMANCE" in perfil_atual:
             st.info(f"🚀 **Destaque Cognitivo:** {perfil_atual}")
-        elif perfil_atual not in["NENHUMA", "", "NAN", "TÍPICO", "TIPICO"]:
+        elif is_pei_or_gap:
             st.warning(f"♿ **Condição Clínica (PEI):** {perfil_atual}")
         else:
             st.success(f"👤 **Perfil Cognitivo:** Típico / Padrão")
@@ -4198,34 +4199,106 @@ elif menu == "👤 Biografia do Estudante":
             else: 
                 st.info(f"📭 Aguardando lançamento de notas no Boletim.")
 
-        # --- BLOCO 2: LINHA DO TEMPO DE EVOLUÇÃO (AVALIAÇÕES) ---
-        st.markdown(f"### 📈 2. Linha do Tempo de Avaliações ({trim_b})")
-        st.caption("Trajetória de aprendizagem extraída diretamente do Scanner de Gabaritos.")
-        with st.container(border=True):
-            if not diag_alu_f.empty:
-                # Ordena pela data para mostrar a evolução cronológica
-                diag_alu_f['DATA_DT'] = pd.to_datetime(diag_alu_f['DATA'], format="%d/%m/%Y", errors='coerce')
-                diag_ordenado = diag_alu_f.sort_values(by='DATA_DT')
+        # --- BLOCO 2: AUTÓPSIA DE AVALIAÇÕES (RAIO-X INDIVIDUAL) ---
+        st.markdown(f"### 🎯 2. Autópsia de Avaliações (Raio-X Individual)")
+        st.caption("Detalhamento de cada avaliação realizada. Clique para expandir e ver os acertos, erros e habilidades.")
+        
+        if not diag_alu_f.empty:
+            # Ordena pela data para mostrar a evolução cronológica
+            diag_alu_f['DATA_DT'] = pd.to_datetime(diag_alu_f['DATA'], format="%d/%m/%Y", errors='coerce')
+            diag_ordenado = diag_alu_f.sort_values(by='DATA_DT', ascending=False)
+            
+            def extrair_gab_local(texto, is_pei=False):
+                if not texto: return {}
+                txt_limpo = re.sub(r'[*#]', '', texto).upper()
+                tag_alvo = "GABARITO_PEI" if is_pei else "GABARITO_TEXTO"
+                bloco = ai.extrair_tag(txt_limpo, tag_alvo) or ai.extrair_tag(txt_limpo, "GABARITO")
+                matches = re.findall(r"(?:QUEST[AÃ]O\s*)?0?(\d+)\s*[\s\.\-\:\)]+\s*([A-E])", bloco)
+                if matches: return {int(num): letra for num, letra in matches}
+                letras = re.findall(r"\b[A-E]\b", bloco)
+                return {i+1: letra for i, letra in enumerate(letras)}
+
+            for _, row_av in diag_ordenado.iterrows():
+                av_id = row_av['ID_AVALIACAO']
+                nota_av = util.sosa_to_float(row_av['NOTA_CALCULADA'])
+                respostas_aluno = str(row_av['RESPOSTAS_ALUNO'])
+                link_foto = row_av.get('LINK_FOTO_DRIVE', '')
+                data_av = row_av['DATA']
                 
-                qtd_avs = len(diag_ordenado)
-                cols_av = st.columns(qtd_avs if qtd_avs > 0 else 1)
+                nome_curto = av_id.split('-')[0].strip()
+                cor_nota = "🟢" if nota_av >= 7.0 else "🟡" if nota_av >= 5.0 else "🔴"
                 
-                for i, (_, row_av) in enumerate(diag_ordenado.iterrows()):
-                    with cols_av[i % len(cols_av)]:
-                        nome_av_curto = row_av['ID_AVALIACAO'].split('-')[0].strip()
-                        nota_av = util.sosa_to_float(row_av['NOTA_CALCULADA'])
-                        
-                        # Define a cor baseada na nota
-                        if nota_av >= 7.0:
-                            cor = "normal" # Verde no Streamlit
-                        elif nota_av >= 5.0:
-                            cor = "off" # Cinza
-                        else:
-                            cor = "inverse" # Vermelho
+                with st.expander(f"{cor_nota} {nome_curto} | Nota: {nota_av:.1f} | Data: {data_av}"):
+                    if "http" in link_foto:
+                        st.markdown(f"[📸 **Clique aqui para ver a foto da prova escaneada**]({link_foto})")
+                    
+                    if respostas_aluno.upper() == "FALTOU":
+                        st.error("❌ Aluno ausente no dia da aplicação.")
+                    elif respostas_aluno.upper().startswith("QUALITATIVA"):
+                        parecer = respostas_aluno.split('|')[1] if '|' in respostas_aluno else "Avaliação Qualitativa."
+                        st.info(f"🎨 **Avaliação Qualitativa (PEI Severo):**\n{parecer}")
+                    else:
+                        # Busca a prova no acervo para comparar
+                        m_ref_query = df_aulas[df_aulas['TIPO_MATERIAL'] == av_id.replace(" (2ª CHAMADA)", "")]
+                        if not m_ref_query.empty:
+                            txt_prova = str(m_ref_query.iloc[0]['CONTEUDO'])
                             
-                        st.metric(label=nome_av_curto, value=f"{nota_av:.1f}", delta="Avaliação Escaneada", delta_color=cor)
-            else:
-                st.info("📭 Nenhuma avaliação escaneada para este aluno no período selecionado.")
+                            # Descobre se fez PEI ou Regular
+                            len_reg = len(extrair_gab_local(txt_prova, False))
+                            len_pei = len(extrair_gab_local(txt_prova, True))
+                            if len_pei == 0: len_pei = len_reg
+                            
+                            qtd_marcadas = len(respostas_aluno.split(';'))
+                            fez_pei = False
+                            if len_pei != len_reg and abs(qtd_marcadas - len_pei) < abs(qtd_marcadas - len_reg):
+                                fez_pei = True
+                            elif is_pei_or_gap and "TIPICO" not in perfil_atual:
+                                fez_pei = True # Assume PEI se o aluno é PEI e as provas têm o mesmo tamanho
+                                
+                            gab_oficial = extrair_gab_local(txt_prova, fez_pei)
+                            tag_grade = "GRADE_DE_CORRECAO_PEI" if fez_pei else "GRADE_DE_CORRECAO"
+                            grade_texto = re.sub(r'[*#]', '', ai.extrair_tag(txt_prova, tag_grade) or ai.extrair_tag(txt_prova, "GRADE_DE_CORRECAO"))
+                            
+                            respostas_lista = respostas_aluno.split(';')
+                            
+                            st.markdown("#### 🔍 Correção Detalhada")
+                            for i, letra_marcada in enumerate(respostas_lista):
+                                q_n = i + 1
+                                letra_correta = gab_oficial.get(q_n, "?")
+                                
+                                if letra_marcada == letra_correta:
+                                    st.success(f"**Q{q_n}:** ✅ Acertou (Marcou {letra_marcada})")
+                                else:
+                                    # Busca a justificativa/habilidade do erro
+                                    prefixo_busca = "QUEST[AÃ]O\\s*PEI" if fez_pei else "QUEST[AÃ]O"
+                                    padrao_bloco = rf"(?si){prefixo_busca}\s*0?{q_n}\b.*?(?={prefixo_busca}|$)"
+                                    bloco_q = re.search(padrao_bloco, grade_texto)
+                                    
+                                    txt_erro = "Erro de interpretação."
+                                    if bloco_q:
+                                        texto_bloco = bloco_q.group(0)
+                                        if fez_pei:
+                                            m_lacuna = re.search(r"(?i)(?:ANÁLISE DE LACUNA PEI|LACUNA|ERRO)[\s\:]*(.*)", texto_bloco, re.DOTALL)
+                                            txt_erro = m_lacuna.group(1).replace('\n', ' ').strip() if m_lacuna else "Falha na compreensão."
+                                        else:
+                                            padrao_distrator = rf"\({letra_marcada}\)\s*(.*?)(?=\([A-E]\)|$)"
+                                            match_d = re.search(padrao_distrator, texto_bloco, re.DOTALL)
+                                            if match_d:
+                                                txt_erro = match_d.group(1).replace('\n', ' ').strip()
+                                            else:
+                                                m_peri = re.search(r"(?i)(?:PERÍCIA DE DISTRATORES|PERÍCIA|ANÁLISE)[\s\:]*(.*)", texto_bloco, re.DOTALL)
+                                                txt_erro = m_peri.group(1).replace('\n', ' ').strip() if m_peri else "Erro de interpretação."
+                                                
+                                    if letra_marcada == "?":
+                                        st.warning(f"**Q{q_n}:** ⚪ Em branco (Era {letra_correta}) ➔ {txt_erro}")
+                                    elif letra_marcada == "X":
+                                        st.warning(f"**Q{q_n}:** 🚫 Rasura/Dupla (Era {letra_correta}) ➔ {txt_erro}")
+                                    else:
+                                        st.error(f"**Q{q_n}:** ❌ Marcou {letra_marcada} (Era {letra_correta}) ➔ {txt_erro}")
+                        else:
+                            st.info("Detalhes da prova não encontrados no acervo.")
+        else:
+            st.info("📭 Nenhuma avaliação escaneada para este aluno no período selecionado.")
 
         # --- BLOCO 3: ENGAJAMENTO E COMPORTAMENTO ---
         st.markdown(f"### 📊 3. Perfil de Engajamento e Comportamento ({trim_b})")
@@ -4341,7 +4414,7 @@ elif menu == "👤 Biografia do Estudante":
                         txt_p = str(m_ref['CONTEUDO'])
                         
                         # Verifica se o aluno é PEI para buscar a grade correta
-                        is_pei_alu = perfil_atual not in["NENHUMA", "PENDENTE", "", "NAN", "TÍPICO", "TIPICO"] and "TIPICO" not in perfil_atual
+                        is_pei_alu = is_pei_or_gap and "TIPICO" not in perfil_atual
                         
                         tag_grade = "GRADE_DE_CORRECAO_PEI" if is_pei_alu else "GRADE_DE_CORRECAO"
                         grade = ai.extrair_tag(txt_p, tag_grade) or ai.extrair_tag(txt_p, "GRADE_DE_CORRECAO")
@@ -4353,7 +4426,7 @@ elif menu == "👤 Biografia do Estudante":
                         respostas_aluno = str(reg_av['RESPOSTAS_ALUNO']).split(';')
                         
                         for i, r in enumerate(respostas_aluno):
-                            if i < len(gab_oficial) and r != gab_oficial[i] and r not in["FALTOU", "?", "X"]:
+                            if i < len(gab_oficial) and r != gab_oficial[i] and r not in["FALTOU", "?", "X"] and not r.startswith("QUALITATIVA"):
                                 q_n = i + 1
                                 padrao_h = rf"(?si)QUEST[AÃ]O\s*(?:PEI\s*)?0?{q_n}\b.*?(?:[:\-])\s*(.*?)(?=\.?\s*(?:JUSTIFICATIVA|PERÍCIA|ANÁLISE|DISTRATORES|$))"
                                 m_h = re.search(padrao_h, grade)
@@ -4373,6 +4446,30 @@ elif menu == "👤 Biografia do Estudante":
                     st.success("✅ Domínio total nas habilidades das avaliações realizadas.")
             else:
                 st.info("📭 Aguardando avaliações escaneadas para gerar o mapa de lacunas.")
+
+        # ==============================================================================
+        # 🚨 BLOCO 5: DOSSIÊ CLÍNICO E ADAPTAÇÕES (EXCLUSIVO PARA PEI/DEFASAGEM)
+        # ==============================================================================
+        if is_pei_or_gap:
+            st.markdown(f"### ♿ 5. Dossiê Clínico e Adaptações (PEI)")
+            st.caption("Resumo do Repositório Vivo do aluno. Para editar ou gerar um novo relatório, acesse a aba 'Relatórios PEI / Perfil IA'.")
+            
+            hist_aluno = df_relatorios[df_relatorios['ID_ALUNO'].apply(db.limpar_id) == id_alu]
+            rel_master = hist_aluno[hist_aluno['TIPO'] == 'DOSSIE_MASTER_PEI']
+            
+            if not rel_master.empty:
+                master_text = str(rel_master.iloc[-1]['CONTEUDO'])
+                v_diag = ai.extrair_tag(master_text, "DIAGNOSTICO_GERAL")
+                v_diretrizes = ai.extrair_tag(master_text, "DIRETRIZES_CURRICULARES")
+                
+                with st.container(border=True):
+                    st.markdown("#### 🧠 Diagnóstico Geral (Status de Safra)")
+                    st.info(v_diag if v_diag else "Diagnóstico não preenchido.")
+                    
+                    st.markdown("#### 🎯 Diretrizes Curriculares Sugeridas")
+                    st.warning(v_diretrizes if v_diretrizes else "Diretrizes não preenchidas.")
+            else:
+                st.info("📭 Nenhum Dossiê Master gerado para este aluno ainda.")
 
         st.caption(f"Dossiê atualizado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
 
