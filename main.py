@@ -3374,6 +3374,7 @@ elif menu == "📸 Scanner de Gabaritos":
                         db.limpar_notas_turma_trimestre(t_sel_h, tr_sel_h)
                         if db.salvar_lote("DB_NOTAS", lista_boletim_ext):
                             status_ext.update(label=f"✅ Notas do {origem_ext} integradas com sucesso!", state="complete"); st.balloons(); time.sleep(1); st.rerun()
+
 # --- ABA 4: RAIO-X PEDAGÓGICO ---
     with tab_raiox:
         st.subheader("📊 Raio-X Pedagógico: Diagnóstico Individual de Lacunas")
@@ -3446,6 +3447,9 @@ elif menu == "📸 Scanner de Gabaritos":
 
                 def classificar_prova_realizada(resp):
                     if str(resp) == "FALTOU": return "FALTOU"
+                    # 🚨 VACINA: Se for qualitativa, classifica automaticamente como PEI
+                    if str(resp).upper().startswith("QUALITATIVA"): return "PEI"
+                    
                     qtd = len(str(resp).split(';'))
                     if len_pei != len_reg:
                         if abs(qtd - len_pei) < abs(qtd - len_reg): return "PEI"
@@ -3496,7 +3500,14 @@ elif menu == "📸 Scanner de Gabaritos":
 
                     num_q_total = len(gab_ativo)
                     stats_list =[]
-                    matriz_respostas =[str(r).split(';') for r in df_filtrado['RESPOSTAS_ALUNO']]
+                    
+                    # 🚨 VACINA: Remove Faltas e Avaliações Qualitativas do cálculo do gráfico
+                    respostas_validas = df_filtrado[
+                        (~df_filtrado['RESPOSTAS_ALUNO'].str.upper().str.contains("FALTOU")) & 
+                        (~df_filtrado['RESPOSTAS_ALUNO'].str.upper().str.startswith("QUALITATIVA"))
+                    ]['RESPOSTAS_ALUNO']
+                    
+                    matriz_respostas =[str(r).split(';') for r in respostas_validas]
 
                     for i in range(1, num_q_total + 1):
                         correta = gab_ativo.get(i, "?")
@@ -3506,23 +3517,25 @@ elif menu == "📸 Scanner de Gabaritos":
                         stats_list.append({"Questão": f"Q{i:02d}", "Acerto %": perc, "Gabarito": correta})
 
                     df_stats_global = pd.DataFrame(stats_list)
-                    col_graf, col_item = st.columns([1.2, 1])
-                    with col_graf:
-                        fig_global = px.bar(df_stats_global, x="Questão", y="Acerto %", text_auto='.0f', color="Acerto %", color_continuous_scale="RdYlGn")
-                        fig_global.update_layout(yaxis_range=[0, 110], height=350)
-                        st.plotly_chart(fig_global, use_container_width=True)
-                    with col_item:
-                        with st.container(border=True):
-                            st.markdown("**🔬 Perícia do Item**")
-                            q_sel = st.selectbox("Analisar questão:", df_stats_global["Questão"].tolist(), key=f"q_sel_v90_{is_pei_view}_{is_2a_view}")
-                            info_q = df_stats_global[df_stats_global["Questão"] == q_sel].iloc[0]
-                            idx_num = int(q_sel[1:])
-                            st.write(f"**Gabarito:** :green[{info_q['Gabarito']}] | **Média:** {info_q['Acerto %']:.1f}%")
-                            
-                            prefixo_q = "QUEST[AÃ]O\\s*PEI" if is_pei_view else "QUEST[AÃ]O"
-                            padrao = rf"(?si){prefixo_q}\s*0?{idx_num}\b.*?(?={prefixo_q}\s*0?{idx_num+1}\b|GABARITO|RESPOSTAS|$)"
-                            match = re.search(padrao, grade_pericia_global)
-                            if match: st.info(match.group(0).strip())
+                    
+                    if not df_stats_global.empty:
+                        col_graf, col_item = st.columns([1.2, 1])
+                        with col_graf:
+                            fig_global = px.bar(df_stats_global, x="Questão", y="Acerto %", text_auto='.0f', color="Acerto %", color_continuous_scale="RdYlGn")
+                            fig_global.update_layout(yaxis_range=[0, 110], height=350)
+                            st.plotly_chart(fig_global, use_container_width=True)
+                        with col_item:
+                            with st.container(border=True):
+                                st.markdown("**🔬 Perícia do Item**")
+                                q_sel = st.selectbox("Analisar questão:", df_stats_global["Questão"].tolist(), key=f"q_sel_v90_{is_pei_view}_{is_2a_view}")
+                                info_q = df_stats_global[df_stats_global["Questão"] == q_sel].iloc[0]
+                                idx_num = int(q_sel[1:])
+                                st.write(f"**Gabarito:** :green[{info_q['Gabarito']}] | **Média:** {info_q['Acerto %']:.1f}%")
+                                
+                                prefixo_q = "QUEST[AÃ]O\\s*PEI" if is_pei_view else "QUEST[AÃ]O"
+                                padrao = rf"(?si){prefixo_q}\s*0?{idx_num}\b.*?(?={prefixo_q}\s*0?{idx_num+1}\b|GABARITO|RESPOSTAS|$)"
+                                match = re.search(padrao, grade_pericia_global)
+                                if match: st.info(match.group(0).strip())
 
                 st.markdown("---")
                 st.markdown("#### 👤 2. Perícia Individual: Lacunas e Diagnóstico de Erros")
@@ -3547,8 +3560,15 @@ elif menu == "📸 Scanner de Gabaritos":
                         else:
                             perfil_display = "📝 Regular"
                         
+                        # 🚨 TRATAMENTO DE FALTAS
+                        if str(reg['RESPOSTAS_ALUNO']).upper() == "FALTOU":
+                            dados_indiv.append({"Turma": alu['TURMA'], "Estudante": alu['NOME_ALUNO'], "Perfil": perfil_display, "Nota": 0.00, "Diagnóstico Técnico de Erros": "🔴 Aluno Ausente no dia da aplicação."})
+                            continue
+
+                        # 🚨 TRATAMENTO DE AVALIAÇÃO QUALITATIVA (PEI SEVERO)
                         if str(reg['RESPOSTAS_ALUNO']).upper().startswith("QUALITATIVA"):
-                            dados_indiv.append({"Turma": alu['TURMA'], "Estudante": alu['NOME_ALUNO'], "Perfil": perfil_display, "Nota": nota_alu, "Diagnóstico Técnico de Erros": "🎨 Avaliação Qualitativa (Ver Dossiê/Linha do Tempo)."})
+                            parecer = str(reg['RESPOSTAS_ALUNO']).split('|')[1] if '|' in str(reg['RESPOSTAS_ALUNO']) else "Avaliação Qualitativa."
+                            dados_indiv.append({"Turma": alu['TURMA'], "Estudante": alu['NOME_ALUNO'], "Perfil": perfil_display, "Nota": nota_alu, "Diagnóstico Técnico de Erros": f"🎨 Qualitativa: {parecer}"})
                             continue
 
                         m_ref_query = df_aulas[df_aulas['TIPO_MATERIAL'] == material_aluno]
