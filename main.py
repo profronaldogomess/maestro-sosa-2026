@@ -4256,6 +4256,11 @@ elif menu == "👤 Biografia do Estudante":
                                 fez_pei = True # Assume PEI se o aluno é PEI e as provas têm o mesmo tamanho
                                 
                             gab_oficial = extrair_gab_local(txt_prova, fez_pei)
+                            
+                            # 🚨 EXTRAÇÃO DO ENUNCIADO E DA GRADE
+                            tag_questoes = "PEI" if fez_pei else "QUESTOES"
+                            questoes_raw = ai.extrair_tag(txt_prova, tag_questoes)
+                            
                             tag_grade = "GRADE_DE_CORRECAO_PEI" if fez_pei else "GRADE_DE_CORRECAO"
                             grade_texto = re.sub(r'[*#]', '', ai.extrair_tag(txt_prova, tag_grade) or ai.extrair_tag(txt_prova, "GRADE_DE_CORRECAO"))
                             
@@ -4266,12 +4271,20 @@ elif menu == "👤 Biografia do Estudante":
                                 q_n = i + 1
                                 letra_correta = gab_oficial.get(q_n, "?")
                                 
+                                # 🚨 BUSCA O ENUNCIADO DA QUESTÃO
+                                prefixo_q = "QUEST[AÃ]O\\s*PEI" if fez_pei else "QUEST[AÃ]O"
+                                padrao_q = rf"(?si)({prefixo_q}\s*0?{q_n}\b.*?)(?={prefixo_q}\s*0?{q_n+1}\b|GABARITO|$)"
+                                m_q = re.search(padrao_q, questoes_raw)
+                                enunciado = re.sub(r'\[\s*PROMPT IMAGEM:.*?\]', '🖼️ [IMAGEM DE APOIO]', m_q.group(1)).strip() if m_q else f"Questão {q_n} não localizada."
+                                enunciado = re.sub(r'[*#]', '', enunciado)
+                                
+                                st.markdown(f"**{enunciado}**")
+                                
                                 if letra_marcada == letra_correta:
-                                    st.success(f"**Q{q_n}:** ✅ Acertou (Marcou {letra_marcada})")
+                                    st.success(f"✅ **Acertou** (Marcou {letra_marcada})")
                                 else:
                                     # Busca a justificativa/habilidade do erro
-                                    prefixo_busca = "QUEST[AÃ]O\\s*PEI" if fez_pei else "QUEST[AÃ]O"
-                                    padrao_bloco = rf"(?si){prefixo_busca}\s*0?{q_n}\b.*?(?={prefixo_busca}|$)"
+                                    padrao_bloco = rf"(?si){prefixo_q}\s*0?{q_n}\b.*?(?={prefixo_q}|$)"
                                     bloco_q = re.search(padrao_bloco, grade_texto)
                                     
                                     txt_erro = "Erro de interpretação."
@@ -4290,11 +4303,13 @@ elif menu == "👤 Biografia do Estudante":
                                                 txt_erro = m_peri.group(1).replace('\n', ' ').strip() if m_peri else "Erro de interpretação."
                                                 
                                     if letra_marcada == "?":
-                                        st.warning(f"**Q{q_n}:** ⚪ Em branco (Era {letra_correta}) ➔ {txt_erro}")
+                                        st.warning(f"⚪ **Em branco** (Era {letra_correta}) ➔ {txt_erro}")
                                     elif letra_marcada == "X":
-                                        st.warning(f"**Q{q_n}:** 🚫 Rasura/Dupla (Era {letra_correta}) ➔ {txt_erro}")
+                                        st.warning(f"🚫 **Rasura/Dupla** (Era {letra_correta}) ➔ {txt_erro}")
                                     else:
-                                        st.error(f"**Q{q_n}:** ❌ Marcou {letra_marcada} (Era {letra_correta}) ➔ {txt_erro}")
+                                        st.error(f"❌ **Marcou {letra_marcada}** (Era {letra_correta}) ➔ {txt_erro}")
+                                
+                                st.divider()
                         else:
                             st.info("Detalhes da prova não encontrados no acervo.")
         else:
@@ -4462,7 +4477,7 @@ elif menu == "👤 Biografia do Estudante":
                 v_diag = ai.extrair_tag(master_text, "DIAGNOSTICO_GERAL")
                 v_diretrizes = ai.extrair_tag(master_text, "DIRETRIZES_CURRICULARES")
                 
-                with st.container(border=True):
+                with st.expander("📂 Abrir Dossiê Clínico e Diretrizes", expanded=False):
                     st.markdown("#### 🧠 Diagnóstico Geral (Status de Safra)")
                     st.info(v_diag if v_diag else "Diagnóstico não preenchido.")
                     
