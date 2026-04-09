@@ -10,6 +10,8 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from datetime import datetime
 import ai_engine as ai
+from docx.enum.section import WD_ORIENT
+
 
 # ==============================================================================
 # 1. FUNÇÕES AUXILIARES TÉCNICAS
@@ -732,6 +734,121 @@ def gerar_docx_pei_oficial(nome_arquivo, dados_aluno, habilidades, curriculo_df)
         file_stream = io.BytesIO()
         err_doc = Document()
         err_doc.add_paragraph(f"ERRO AO GERAR PEI OFICIAL: {str(e)}")
+        err_doc.save(file_stream)
+        file_stream.seek(0)
+        return file_stream
+    
+# ==============================================================================
+# 10. EXPORTADOR DE PLANEJAMENTO TRIMESTRAL (MACRO-SOSA)
+# ==============================================================================
+def gerar_docx_planejamento_trimestral(nome_arquivo, info, df_trimestre, config):
+    file_stream = io.BytesIO()
+    try:
+        doc = Document()
+        
+        # 🚨 CONFIGURAÇÃO DE PÁGINA EM PAISAGEM (DEITADA)
+        section = doc.sections[-1]
+        new_width, new_height = section.page_height, section.page_width
+        section.orientation = WD_ORIENT.LANDSCAPE
+        section.page_width = new_width
+        section.page_height = new_height
+        section.left_margin = Inches(0.4)
+        section.right_margin = Inches(0.4)
+        section.top_margin = Inches(0.5)
+        section.bottom_margin = Inches(0.5)
+
+        style = doc.styles['Normal']
+        style.font.name = 'Times New Roman'
+        style.font.size = Pt(10)
+
+        # --- CABEÇALHO OFICIAL ---
+        logo_path = "logo_escola.png" if os.path.exists("logo_escola.png") else "logo.png"
+        if os.path.exists(logo_path):
+            p_logo = doc.add_paragraph()
+            p_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            p_logo.add_run().add_picture(logo_path, width=Inches(0.8))
+
+        p_cab = doc.add_paragraph()
+        p_cab.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run_esc = p_cab.add_run("ESCOLA MUNICIPAL FLÁVIO JOSÉ SIMÕES COSTA\n")
+        run_esc.bold = True
+        run_esc.font.size = Pt(12)
+        
+        run_tit = p_cab.add_run(f"PLANEJAMENTO DO {info['trimestre'].upper()} - 2026\n")
+        run_tit.bold = True
+        run_tit.font.size = Pt(11)
+        
+        run_sub = p_cab.add_run(f"COMPONENTE CURRICULAR: MATEMÁTICA          PROFESSOR: RONALDO GOMES")
+        run_sub.bold = True
+        run_sub.font.size = Pt(11)
+        
+        doc.add_paragraph()
+
+        # --- TABELA DE 7 COLUNAS ---
+        table = doc.add_table(rows=2, cols=7)
+        table.style = 'Table Grid'
+        
+        # Ajuste de larguras aproximadas para Paisagem
+        widths = [Inches(0.8), Inches(1.8), Inches(1.2), Inches(2.0), Inches(1.8), Inches(1.0), Inches(1.4)]
+        for i, w in enumerate(widths): 
+            table.columns[i].width = w
+
+        headers = ['Turma', 'Conteúdos', 'Habilidades', 'Objetivos', 'Metodologia', 'Recurso', 'Avaliação']
+        for i, h in enumerate(headers):
+            cell = table.cell(0, i)
+            cell.text = h
+            cell.paragraphs[0].runs[0].bold = True
+            cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+            
+        # --- PREENCHIMENTO DOS DADOS ---
+        row_cells = table.rows[1].cells
+        
+        # 1. Turma
+        row_cells[0].text = info['turmas']
+        
+        # 2. Conteúdos (Extraídos do Banco)
+        c_cont = row_cells[1]
+        c_cont.text = ""
+        for item in df_trimestre['CONTEUDO_ESPECIFICO'].unique():
+            if str(item).strip():
+                p = c_cont.add_paragraph(f"• {item}")
+                p.paragraph_format.space_after = Pt(2)
+            
+        # 3. Habilidades (Usando o Eixo como referência da BNCC)
+        c_hab = row_cells[2]
+        c_hab.text = ""
+        for item in df_trimestre['EIXO'].unique():
+            if str(item).strip():
+                p = c_hab.add_paragraph(f"• {item}")
+                p.paragraph_format.space_after = Pt(2)
+            
+        # 4. Objetivos (Extraídos do Banco)
+        c_obj = row_cells[3]
+        c_obj.text = ""
+        for item in df_trimestre['OBJETIVOS'].unique():
+            if str(item).strip():
+                p = c_obj.add_paragraph(f"• {item}")
+                p.paragraph_format.space_after = Pt(2)
+            
+        # 5, 6, 7. Textos Fixos Configuráveis
+        row_cells[4].text = config['metodologia']
+        row_cells[5].text = config['recursos']
+        row_cells[6].text = config['avaliacao']
+        
+        # Formatação final da tabela
+        for row in table.rows:
+            for cell in row.cells:
+                for p in cell.paragraphs:
+                    for run in p.runs:
+                        run.font.size = Pt(9)
+                        
+        doc.save(file_stream)
+        file_stream.seek(0)
+        return file_stream
+    except Exception as e:
+        file_stream = io.BytesIO()
+        err_doc = Document()
+        err_doc.add_paragraph(f"ERRO AO GERAR PLANEJAMENTO TRIMESTRAL: {str(e)}")
         err_doc.save(file_stream)
         file_stream.seek(0)
         return file_stream
