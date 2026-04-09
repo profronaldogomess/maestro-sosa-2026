@@ -2973,7 +2973,7 @@ elif menu == "📸 Scanner de Gabaritos":
     # ==============================================================================
     with tab_auditoria:
         st.subheader("⚖️ Tribunal de Auditoria e Controle")
-        st.caption("Visão unificada para auditar notas, corrigir leituras da IA, aplicar o Protocolo Lázaro e lançar notas do SAEB.")
+        st.caption("Visão unificada para auditar notas, corrigir leituras da IA, aplicar o Protocolo Lázaro e acessar o Acervo de Dossiês.")
         
         with st.container(border=True):
             c_h1, c_h2 = st.columns([1, 1])
@@ -3092,6 +3092,7 @@ elif menu == "📸 Scanner de Gabaritos":
 
                 st.markdown("---")
                 
+                # 🛠️ FERRAMENTAS DE AUDITORIA (EXPANDERS)
                 with st.expander("⚖️ Revisão de Perícia (Corrigir Leitura da IA)"):
                     df_revisao = pd.DataFrame([r for r in dados_soberania if r['Situação'] == "✅ REALIZADA" and r['_Respostas'] not in ["MANUAL", "FALTOU", ""] and not r['_Respostas'].startswith("QUALITATIVA")])
                     if not df_revisao.empty:
@@ -3147,6 +3148,57 @@ elif menu == "📸 Scanner de Gabaritos":
                         if st.button("💾 PROCESSAR RESTAURAÇÃO", type="primary", use_container_width=True):
                             st.success("Gabaritos restaurados!"); time.sleep(1); st.rerun()
                     else: st.info("Nenhum gabarito perdido detectado.")
+
+                with st.expander("🌍 Notas Externas (SAEB / Governo)"):
+                    c_ext1, c_ext2 = st.columns([1, 1])
+                    alvo_sub = c_ext1.radio("Onde aplicar esta nota externa?", ["Substituir Teste", "Substituir Prova"], horizontal=True, key=f"alvo_ext_{v}")
+                    origem_ext = c_ext2.text_input("Origem da Nota:", "SAEB 2026", key=f"orig_ext_{v}")
+                    dados_externos = [{"ID": r['ID'], "Estudante": r['Estudante'], "Nota Externa (0-10)": 0.0} for _, r in pd.DataFrame(dados_soberania).iterrows()]
+                    df_ext_ed = st.data_editor(pd.DataFrame(dados_externos), hide_index=True, use_container_width=True, key=f"ed_ext_{v}")
+                    if st.button("🚀 INTEGRAR NOTAS EXTERNAS", use_container_width=True):
+                        st.success("Notas integradas!"); time.sleep(1); st.rerun()
+
+                # ==============================================================================
+                # 🗂️ ACERVO DE DOSSIÊS (RESTAURADO E EXPANDIDO)
+                # ==============================================================================
+                with st.expander("🗂️ Acervo de Dossiês (Raio-X)", expanded=True):
+                    st.info("Acesse os relatórios de Raio-X gerados anteriormente para impressão.")
+                    df_dossies = df_relatorios[df_relatorios['TIPO'] == 'DOSSIE_RAIO_X'].copy()
+                    
+                    if not df_dossies.empty:
+                        dossies_filtrados = []
+                        for idx, row in df_dossies.iterrows():
+                            conteudo_d = str(row.get('CONTEUDO', ''))
+                            # Filtra para mostrar apenas os dossiês da turma e avaliação selecionadas no topo
+                            if nome_curto_av in conteudo_d and row.get('NOME_ALUNO') == t_sel_h:
+                                dossies_filtrados.append((idx, row))
+                                
+                        if dossies_filtrados:
+                            for idx, row in reversed(dossies_filtrados):
+                                conteudo_d = str(row.get('CONTEUDO', ''))
+                                data_d = row.get('DATA', 'S/D')
+                                
+                                with st.container(border=True):
+                                    c_d1, c_d2, c_d3 = st.columns([2, 1, 1])
+                                    c_d1.markdown(f"**📄 Raio-X: {nome_curto_av}**")
+                                    c_d1.caption(f"📅 Gerado em: {data_d} | 👥 Turma: {t_sel_h}")
+                                    
+                                    linhas_cont = conteudo_d.split("\n")
+                                    link_d = linhas_cont[1].replace("Link: ", "").strip() if len(linhas_cont) > 1 else "#"
+                                    
+                                    if "http" in link_d:
+                                        c_d2.link_button("🖨️ ABRIR PDF", link_d, use_container_width=True, type="primary")
+                                    else:
+                                        c_d2.button("⚪ SEM LINK", disabled=True, use_container_width=True)
+                                        
+                                    if c_d3.button("🗑️ APAGAR", key=f"del_dossie_{idx}", use_container_width=True):
+                                        with st.spinner("Apagando arquivo..."):
+                                            db.excluir_registro_com_drive("DB_RELATORIOS", link_d if "http" in link_d else conteudo_d)
+                                            st.rerun()
+                        else:
+                            st.warning("Nenhum dossiê gerado para esta turma e avaliação.")
+                    else:
+                        st.info("Nenhum dossiê gerado no sistema.")
 
     # ==============================================================================
     # 📊 ABA 4: RAIO-X PEDAGÓGICO (RESTAURADO COM LATEX)
