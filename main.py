@@ -3938,9 +3938,15 @@ elif menu == "👤 Biografia do Estudante":
             else: 
                 st.info(f"📭 Aguardando lançamento de notas no Boletim.")
 
-        # --- BLOCO 2: AUTÓPSIA DE AVALIAÇÕES (RAIO-X INDIVIDUAL) ---
+    # --- BLOCO 2: AUTÓPSIA DE AVALIAÇÕES (RAIO-X INDIVIDUAL) ---
         st.markdown(f"### 🎯 2. Autópsia de Avaliações (Raio-X Individual)")
         st.caption("Detalhamento de cada avaliação realizada. Clique para expandir e ver os acertos, erros e habilidades.")
+        
+        def preparar_para_leitura(texto):
+            if not texto: return ""
+            texto = re.sub(r'^```[a-zA-Z]*\n', '', texto, flags=re.MULTILINE | re.IGNORECASE)
+            texto = re.sub(r'```$', '', texto, flags=re.MULTILINE)
+            return re.sub(r'\$\$\s*(.*?)\s*\$\$', r'$\1$', texto)
         
         if not diag_alu_f.empty:
             # Ordena pela data para mostrar a evolução cronológica
@@ -4010,45 +4016,61 @@ elif menu == "👤 Biografia do Estudante":
                                 q_n = i + 1
                                 letra_correta = gab_oficial.get(q_n, "?")
                                 
-                                # 🚨 BUSCA O ENUNCIADO DA QUESTÃO
-                                prefixo_q = "QUEST[AÃ]O\\s*PEI" if fez_pei else "QUEST[AÃ]O"
-                                padrao_q = rf"(?si)({prefixo_q}\s*0?{q_n}\b.*?)(?={prefixo_q}\s*0?{q_n+1}\b|GABARITO|$)"
-                                m_q = re.search(padrao_q, questoes_raw)
-                                enunciado = re.sub(r'\[\s*PROMPT IMAGEM:.*?\]', '🖼️ [IMAGEM DE APOIO]', m_q.group(1)).strip() if m_q else f"Questão {q_n} não localizada."
-                                enunciado = re.sub(r'[*#]', '', enunciado)
-                                
-                                st.markdown(f"**{enunciado}**")
-                                
-                                if letra_marcada == letra_correta:
-                                    st.success(f"✅ **Acertou** (Marcou {letra_marcada})")
-                                else:
-                                    # Busca a justificativa/habilidade do erro
-                                    padrao_bloco = rf"(?si){prefixo_q}\s*0?{q_n}\b.*?(?={prefixo_q}|$)"
-                                    bloco_q = re.search(padrao_bloco, grade_texto)
+                                with st.container(border=True):
+                                    st.markdown(f"**📑 QUESTÃO {q_n:02d}**")
                                     
-                                    txt_erro = "Erro de interpretação."
-                                    if bloco_q:
-                                        texto_bloco = bloco_q.group(0)
-                                        if fez_pei:
-                                            m_lacuna = re.search(r"(?i)(?:ANÁLISE DE LACUNA PEI|LACUNA|ERRO)[\s\:]*(.*)", texto_bloco, re.DOTALL)
-                                            txt_erro = m_lacuna.group(1).replace('\n', ' ').strip() if m_lacuna else "Falha na compreensão."
-                                        else:
-                                            padrao_distrator = rf"\({letra_marcada}\)\s*(.*?)(?=\([A-E]\)|$)"
-                                            match_d = re.search(padrao_distrator, texto_bloco, re.DOTALL)
-                                            if match_d:
-                                                txt_erro = match_d.group(1).replace('\n', ' ').strip()
-                                            else:
-                                                m_peri = re.search(r"(?i)(?:PERÍCIA DE DISTRATORES|PERÍCIA|ANÁLISE)[\s\:]*(.*)", texto_bloco, re.DOTALL)
-                                                txt_erro = m_peri.group(1).replace('\n', ' ').strip() if m_peri else "Erro de interpretação."
-                                                
-                                    if letra_marcada == "?":
-                                        st.warning(f"⚪ **Em branco** (Era {letra_correta}) ➔ {txt_erro}")
-                                    elif letra_marcada == "X":
-                                        st.warning(f"🚫 **Rasura/Dupla** (Era {letra_correta}) ➔ {txt_erro}")
+                                    # 🚨 ENGENHARIA VISUAL DO ENUNCIADO
+                                    prefixo_q = "QUEST[AÃ]O\\s*PEI" if fez_pei else "QUEST[AÃ]O"
+                                    padrao_q = rf"(?si)({prefixo_q}\s*0?{q_n}\b.*?)(?={prefixo_q}\s*0?{q_n+1}\b|GABARITO|$)"
+                                    m_q = re.search(padrao_q, questoes_raw)
+                                    
+                                    if m_q:
+                                        q_completa = m_q.group(1).strip()
+                                        q_completa = re.sub(r'\[\s*PROMPT IMAGEM:.*?\]', '\n\n🖼️ *[IMAGEM DE APOIO]*\n\n', q_completa)
+                                        partes = re.split(r'(?=\n\s*\([A-E]\)|\n\s*[A-E]\))', q_completa, maxsplit=1)
+                                        
+                                        enunciado_texto = partes[0].strip()
+                                        alternativas_texto = partes[1].strip() if len(partes) > 1 else ""
+                                        
+                                        st.info(preparar_para_leitura(enunciado_texto))
+                                        if alternativas_texto:
+                                            alt_formatada = preparar_para_leitura(alternativas_texto).replace('\n', '\n\n')
+                                            st.markdown(alt_formatada)
                                     else:
-                                        st.error(f"❌ **Marcou {letra_marcada}** (Era {letra_correta}) ➔ {txt_erro}")
-                                
-                                st.divider()
+                                        st.error(f"Enunciado da Questão {q_n} não localizado.")
+                                    
+                                    st.divider()
+                                    
+                                    # 🚨 ENGENHARIA VISUAL DA PERÍCIA
+                                    padrao_p = rf"(?si){prefixo_q}\s*0?{q_n}\b.*?(?={prefixo_q}\s*0?{q_n+1}\b|GABARITO|RESPOSTAS|$)"
+                                    match_p = re.search(padrao_p, grade_texto)
+                                    
+                                    habilidade = "BNCC"
+                                    justificativa = ""
+                                    distratores = "Erro de interpretação."
+                                    
+                                    if match_p:
+                                        p_completa = match_p.group(0).strip()
+                                        hab_match = re.search(r"\[(.*?)\]", p_completa)
+                                        habilidade = hab_match.group(1).strip() if hab_match else "BNCC"
+                                        
+                                        just_match = re.search(r"(?i)JUSTIFICATIVA[\s\:]*(.*?)(?=PERÍCIA|ANÁLISE|DISTRATORES|$)", p_completa, re.DOTALL)
+                                        justificativa = just_match.group(1).strip() if just_match else ""
+                                        
+                                        dist_match = re.search(r"(?i)(?:PERÍCIA DE DISTRATORES|ANÁLISE DE LACUNA PEI|PERÍCIA|ANÁLISE|DISTRATORES)[\s\:]*(.*)", p_completa, re.DOTALL)
+                                        distratores = dist_match.group(1).strip() if dist_match else ""
+                                    
+                                    # 🚨 FEEDBACK COLORIDO
+                                    if letra_marcada == letra_correta:
+                                        st.success(f"✅ **Acertou!** (Marcou {letra_marcada})\n\n**Raciocínio:** {preparar_para_leitura(justificativa)}")
+                                    elif letra_marcada == "?":
+                                        st.warning(f"⚪ **Em branco** (Gabarito: {letra_correta})\n\n**Foco ({habilidade}):** {preparar_para_leitura(distratores)}")
+                                    elif letra_marcada == "X":
+                                        st.warning(f"🚫 **Rasura/Dupla** (Gabarito: {letra_correta})\n\n**Foco ({habilidade}):** {preparar_para_leitura(distratores)}")
+                                    else:
+                                        # Formata os distratores para ficarem em linhas separadas se houver (A), (B), etc.
+                                        dist_formatado = re.sub(r'(?=\([A-E]\))', '\n\n', distratores)
+                                        st.error(f"❌ **Errou** (Marcou {letra_marcada} | Gabarito: {letra_correta})\n\n**Análise do Erro:** {preparar_para_leitura(dist_formatado)}")
                         else:
                             st.info("Detalhes da prova não encontrados no acervo.")
         else:
