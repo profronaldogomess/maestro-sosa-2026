@@ -5108,9 +5108,14 @@ elif menu == "👥 Gestão da Turma":
                 ano_num = "".join(filter(str.isdigit, turma_foco))
                 ano_str_ref = f"{ano_num}º"
 
-                df_p_atual = df_planos[df_planos['ANO'] == ano_str_ref].sort_values(by='DATA', ascending=False)
+                # 🚨 VACINA CRONOLÓGICA: Ordenação real de tempo para os Planos
+                df_p_atual = df_planos[df_planos['ANO'] == ano_str_ref].copy()
+                if not df_p_atual.empty:
+                    df_p_atual['DATA_DT'] = pd.to_datetime(df_p_atual['DATA'], format="%d/%m/%Y", errors='coerce')
+                    df_p_atual = df_p_atual.sort_values(by='DATA_DT', ascending=False)
+                
                 df_mats_ano = df_aulas[df_aulas['ANO'].str.contains(ano_num)].iloc[::-1]
-                historico_turma = df_registro_aulas[df_registro_aulas['TURMA'] == turma_foco]
+                historico_turma = df_registro_aulas[df_registro_aulas['TURMA'] == turma_foco].copy()
 
                 col_esq, col_dir = st.columns([1.5, 1.5])
 
@@ -5197,7 +5202,13 @@ elif menu == "👥 Gestão da Turma":
                         st.markdown("#### ✏️ Auditoria de Regência")
                         st.caption("Corrija aulas que foram salvas como 'Registro via Diário' ou altere o material vinculado de aulas passadas.")
                         
-                        aulas_abertas = historico_turma.sort_values(by='DATA', ascending=False).head(5)
+                        # 🚨 VACINA CRONOLÓGICA: Ordenação real de tempo para a Auditoria
+                        if not historico_turma.empty:
+                            historico_turma['DATA_DT'] = pd.to_datetime(historico_turma['DATA'], format="%d/%m/%Y", errors='coerce')
+                            aulas_abertas = historico_turma.sort_values(by='DATA_DT', ascending=False).head(5)
+                        else:
+                            aulas_abertas = pd.DataFrame()
+
                         if aulas_abertas.empty: 
                             st.info("Nenhuma aula registrada para esta turma.")
                         else:
