@@ -3362,6 +3362,96 @@ elif menu == "📸 Scanner de Gabaritos":
                                     if not justificativa and not distratores:
                                         st.info(preparar_para_leitura(p_completa))
 
+                        # ==============================================================================
+                        # 🖨️ MATERIALIZAÇÃO DO DOSSIÊ (DOCX PARA IMPRESSÃO)
+                        # ==============================================================================
+                        st.markdown("---")
+                        st.markdown("### 🖨️ Materialização do Dossiê (Para Impressão)")
+                        st.caption("Gere um documento formatado com a autópsia completa da prova para levar para a sala de aula ou Conselho de Classe.")
+                        
+                        if st.button("🖨️ GERAR DOSSIÊ DE RAIO-X (DOCX)", type="primary", use_container_width=True):
+                            if df_stats_global.empty or not txt_prova_global:
+                                st.error("⚠️ Dados insuficientes para gerar o dossiê. Certifique-se de que a prova foi carregada corretamente.")
+                            else:
+                                with st.spinner("Compilando Dossiê Analítico e renderizando gráficos..."):
+                                    
+                                    grafico_bytes = None
+                                    if fig_global is not None:
+                                        try:
+                                            grafico_bytes = fig_global.to_image(format="png", width=800, height=350)
+                                        except Exception as e:
+                                            st.warning("⚠️ O gráfico não pôde ser exportado. Certifique-se de que a biblioteca 'kaleido' está instalada.")
+                                    
+                                    # Calcula a média da turma apenas com as notas válidas (exclui faltas e qualitativas)
+                                    notas_validas = df_filtrado[
+                                        (~df_filtrado['RESPOSTAS_ALUNO'].str.upper().str.contains("FALTOU")) & 
+                                        (~df_filtrado['RESPOSTAS_ALUNO'].str.upper().str.startswith("QUALITATIVA"))
+                                    ]['NOTA_CALCULADA'].apply(util.sosa_to_float)
+                                    
+                                    media_turma = notas_validas.mean() if not notas_validas.empty else 0.0
+                                    
+                                    top_3 = df_stats_global.sort_values(by="Acerto %").head(3)
+                                    top_3_str = ", ".join([f"{r['Questão']} ({r['Acerto %']:.1f}%)" for _, r in top_3.iterrows()])
+                                    
+                                    stats_gerais = {
+                                        "total_alunos": len(notas_validas),
+                                        "media_turma": f"{media_turma:.1f}",
+                                        "top_3": top_3_str
+                                    }
+                                    
+                                    questoes_detalhes = []
+                                    
+                                    for _, r_stat in df_stats_global.iterrows():
+                                        q_str = r_stat['Questão']
+                                        q_num = int(q_str.replace("Q", ""))
+                                        
+                                        # Extrai o Enunciado
+                                        padrao_q = rf"(?si)({prefixo_q}\s*0?{q_num}\b.*?)(?={prefixo_q}\s*0?{q_num+1}\b|GABARITO|$)"
+                                        m_q = re.search(padrao_q, questoes_raw)
+                                        enunciado = re.sub(r'\[\s*PROMPT IMAGEM:.*?\]', '[IMAGEM DE APOIO]', m_q.group(1)).strip() if m_q else "Enunciado não localizado."
+                                        enunciado = re.sub(r'[*#]', '', enunciado)
+                                        
+                                        # Extrai a Perícia
+                                        padrao_p = rf"(?si)({prefixo_q}\s*0?{q_num}\b.*?)(?={prefixo_q}\s*0?{q_num+1}\b|GABARITO|RESPOSTAS|$)"
+                                        m_p = re.search(padrao_p, grade_pericia_global)
+                                        pericia_txt = m_p.group(1).strip() if m_p else "Perícia não localizada."
+                                        pericia_txt = re.sub(r'[*#]', '', pericia_txt)
+                                        
+                                        questoes_detalhes.append({
+                                            "titulo": q_str,
+                                            "enunciado": enunciado,
+                                            "acerto": f"{r_stat['Acerto %']:.1f}%",
+                                            "gabarito": r_stat['Gabarito'],
+                                            "pericia": pericia_txt
+                                        })
+                                    
+                                    # Identifica alunos críticos (Abaixo de 6.0)
+                                    criticos = df_filtrado[df_filtrado['NOTA_CALCULADA'].apply(util.sosa_to_float) < 6.0].apply(lambda x: f"[{x['TURMA']}] {x['NOME_ALUNO']}", axis=1).tolist()
+                                    
+                                    info_doc = {
+                                        "ano": t_sel_r, 
+                                        "trimestre": tr_sel_r,
+                                        "avaliacao": at_sel_r,
+                                        "data": datetime.now().strftime("%d/%m/%Y")
+                                    }
+                                    
+                                    nome_arquivo_dossie = f"RAIOX_{t_sel_r.replace(' ', '_').replace('(', '').replace(')', '')}_{nome_curto_av}"
+                                    doc_stream = exporter.gerar_docx_raiox_v90(nome_arquivo_dossie, info_doc, stats_gerais, questoes_detalhes, criticos, grafico_bytes)
+                                    link_doc = db.subir_e_converter_para_google_docs(doc_stream, nome_arquivo_dossie, trimestre=tr_sel_r, categoria=t_sel_r, modo="PLANEJAMENTO")
+                                    
+                                    if "https" in link_doc:
+                                        db.salvar_no_banco("DB_RELATORIOS", [
+                                            datetime.now().strftime("%d/%m/%Y"), 
+                                            "TURMA", 
+                                            t_sel_r, 
+                                            "DOSSIE_RAIO_X", 
+                                            f"Avaliação: {at_sel_r}\nLink: {link_doc}"
+                                        ])
+                                        st.success("✅ Dossiê gerado e salvo no Acervo (Aba Tribunal de Auditoria)!")
+                                        st.balloons()
+                                    else:
+                                        st.error(f"Erro ao salvar no Drive: {link_doc}")
+
 
 
 
