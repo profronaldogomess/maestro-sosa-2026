@@ -3287,27 +3287,80 @@ elif menu == "📸 Scanner de Gabaritos":
                             st.plotly_chart(fig_global, use_container_width=True)
                         with col_item:
                             with st.container(border=True):
-                                st.markdown("**🔬 Perícia do Item**")
-                                q_sel = st.selectbox("Analisar questão:", df_stats_global["Questão"].tolist(), key=f"q_sel_v90_{is_pei_view}_{is_2a_view}")
+                                st.markdown("### 🔬 Autópsia do Item")
+                                q_sel = st.selectbox("Selecione a questão para análise:", df_stats_global["Questão"].tolist(), key=f"q_sel_v90_{is_pei_view}_{is_2a_view}")
                                 info_q = df_stats_global[df_stats_global["Questão"] == q_sel].iloc[0]
                                 idx_num = int(q_sel[1:])
-                                st.write(f"**Gabarito:** :green[{info_q['Gabarito']}] | **Média:** {info_q['Acerto %']:.1f}%")
                                 
-                                prefixo_q = "QUEST[AÃ]O\\s*PEI" if is_pei_view else "QUEST[AÃ]O"
-                                
-                                # 🚨 RENDERIZAÇÃO LATEX DO ENUNCIADO
-                                padrao_q = rf"(?si)({prefixo_q}\s*0?{idx_num}\b.*?)(?={prefixo_q}\s*0?{idx_num+1}\b|GABARITO|$)"
-                                m_q = re.search(padrao_q, questoes_raw)
-                                enunciado = re.sub(r'\[\s*PROMPT IMAGEM:.*?\]', '🖼️ [IMAGEM DE APOIO]', m_q.group(1)).strip() if m_q else f"Questão {idx_num} não localizada."
-                                st.markdown(preparar_para_leitura(enunciado))
+                                c_met1, c_met2 = st.columns(2)
+                                c_met1.metric("Gabarito Oficial", info_q['Gabarito'])
+                                c_met2.metric("Média de Acertos", f"{info_q['Acerto %']:.1f}%")
                                 
                                 st.divider()
                                 
-                                # 🚨 RENDERIZAÇÃO LATEX DA PERÍCIA
+                                prefixo_q = "QUEST[AÃ]O\\s*PEI" if is_pei_view else "QUEST[AÃ]O"
+                                
+                                # 🚨 1. ENGENHARIA VISUAL DO ENUNCIADO E ALTERNATIVAS
+                                padrao_q = rf"(?si)({prefixo_q}\s*0?{idx_num}\b.*?)(?={prefixo_q}\s*0?{idx_num+1}\b|GABARITO|$)"
+                                m_q = re.search(padrao_q, questoes_raw)
+                                
+                                if m_q:
+                                    q_completa = m_q.group(1).strip()
+                                    # Destaca o prompt de imagem
+                                    q_completa = re.sub(r'\[\s*PROMPT IMAGEM:.*?\]', '\n\n🖼️ *[IMAGEM DE APOIO]*\n\n', q_completa)
+                                    
+                                    # Separa o enunciado das alternativas (busca por (A) ou A) no início da linha)
+                                    partes = re.split(r'(?=\n\s*\([A-E]\)|\n\s*[A-E]\))', q_completa, maxsplit=1)
+                                    
+                                    enunciado_texto = partes[0].strip()
+                                    alternativas_texto = partes[1].strip() if len(partes) > 1 else ""
+                                    
+                                    st.markdown("**📝 Enunciado:**")
+                                    st.info(preparar_para_leitura(enunciado_texto))
+                                    
+                                    if alternativas_texto:
+                                        st.markdown("**Alternativas:**")
+                                        # Força quebra de linha dupla para o Markdown renderizar como lista espaçada
+                                        alt_formatada = preparar_para_leitura(alternativas_texto).replace('\n', '\n\n')
+                                        st.markdown(alt_formatada)
+                                else:
+                                    st.error(f"Questão {idx_num} não localizada.")
+                                
+                                st.divider()
+                                
+                                # 🚨 2. ENGENHARIA VISUAL DA PERÍCIA (JUSTIFICATIVA E DISTRATORES)
                                 padrao_p = rf"(?si){prefixo_q}\s*0?{idx_num}\b.*?(?={prefixo_q}\s*0?{idx_num+1}\b|GABARITO|RESPOSTAS|$)"
                                 match_p = re.search(padrao_p, grade_pericia_global)
+                                
                                 if match_p: 
-                                    st.info(preparar_para_leitura(match_p.group(0).strip()))
+                                    p_completa = match_p.group(0).strip()
+                                    
+                                    # Extrai a Habilidade (BNCC)
+                                    hab_match = re.search(r"\[(.*?)\]", p_completa)
+                                    habilidade = hab_match.group(1).strip() if hab_match else "Habilidade não especificada"
+                                    
+                                    # Extrai a Justificativa
+                                    just_match = re.search(r"(?i)JUSTIFICATIVA[\s\:]*(.*?)(?=PERÍCIA|ANÁLISE|DISTRATORES|$)", p_completa, re.DOTALL)
+                                    justificativa = just_match.group(1).strip() if just_match else ""
+                                    
+                                    # Extrai os Distratores / Lacuna PEI
+                                    dist_match = re.search(r"(?i)(?:PERÍCIA DE DISTRATORES|ANÁLISE DE LACUNA PEI|PERÍCIA|ANÁLISE|DISTRATORES)[\s\:]*(.*)", p_completa, re.DOTALL)
+                                    distratores = dist_match.group(1).strip() if dist_match else ""
+                                    
+                                    st.markdown("### 🧠 Perícia Pedagógica")
+                                    st.caption(f"**Foco / BNCC:** {habilidade}")
+                                    
+                                    if justificativa:
+                                        st.success(f"**🎯 Raciocínio Correto:**\n\n{preparar_para_leitura(justificativa)}")
+                                        
+                                    if distratores:
+                                        # Formata os distratores para ficarem em linhas separadas se houver (A), (B), etc.
+                                        dist_formatado = re.sub(r'(?=\([A-E]\))', '\n\n', distratores)
+                                        st.warning(f"**⚠️ Análise de Erros (Distratores):**\n\n{preparar_para_leitura(dist_formatado)}")
+                                        
+                                    # Fallback caso a IA tenha gerado fora do padrão
+                                    if not justificativa and not distratores:
+                                        st.info(preparar_para_leitura(p_completa))
 
 
 
