@@ -336,8 +336,9 @@ if menu == "📅 Planejamento (Ponto ID)":
         st.session_state.v_plano = int(time.time())
     v = st.session_state.v_plano 
 
-    tab_gerar, tab_producao, tab_acervo, tab_matriz, tab_auditoria = st.tabs([
-        "🚀 1. Criar Novo Plano", "🏗️ 2. Hub de Produção", "📂 3. Acervo (PIP)", "📖 4. Matriz Curricular", "📈 5. Auditoria"
+    # 🚨 NOVA ABA ADICIONADA: Planejamento Trimestral
+    tab_gerar, tab_producao, tab_acervo, tab_matriz, tab_auditoria, tab_trimestral = st.tabs([
+        "🚀 1. Criar Novo Plano", "🏗️ 2. Hub de Produção", "📂 3. Acervo (PIP)", "📖 4. Matriz Curricular", "📈 5. Auditoria", "📅 6. Planejamento Trimestral"
     ])
     
     with tab_gerar:
@@ -346,14 +347,14 @@ if menu == "📅 Planejamento (Ponto ID)":
             st.markdown("### 🛡️ Passo 1: Natureza do Planejamento")
             
             tipo_planejamento = st.radio(
-                "O que você deseja planejar agora?",["📅 Semana Letiva Regular (Gera Aula 1 e Aula 2)", "🗓️ Sábado Letivo Avulso (Gera apenas 1 Aula Extra)"], 
+                "O que você deseja planejar agora?", ["📅 Semana Letiva Regular (Gera Aula 1 e Aula 2)", "🗓️ Sábado Letivo Avulso (Gera apenas 1 Aula Extra)"], 
                 horizontal=True, key=f"tipo_plan_{v}"
             )
             
             is_sabado_avulso = "Sábado" in tipo_planejamento
             
             cg1, cg2 = st.columns([2, 1])
-            tipo_semana = cg1.selectbox("DNA da Abordagem:",[
+            tipo_semana = cg1.selectbox("DNA da Abordagem:", [
                 "📗 Aula de Safra (Regular)", "📝 Aplicação de Exame", 
                 "🔥 Revisão & Recomposição", "📋 Trabalho Investigativo", "🔍 Sonda de Proficiência",
                 "💡 Aula Aberta (Dinâmicas e Eventos)"
@@ -373,17 +374,16 @@ if menu == "📅 Planejamento (Ponto ID)":
             strat = ""
             
             c1, c2 = st.columns([1, 2])
-            ano_p = c1.selectbox("Série/Ano Alvo:",[6, 7, 8, 9], index=0, key=f"ano_sel_{v}")
+            ano_p = c1.selectbox("Série/Ano Alvo:", [6, 7, 8, 9], index=0, key=f"ano_sel_{v}")
             ano_str_busca = f"{ano_p}º"
 
-            # LÓGICA BLINDADA: FILTRO DE SEMANAS (EXPURGANDO JORNADA PEDAGÓGICA)
             todas_semanas = util.gerar_semanas()
             semanas_planejadas = df_planos[df_planos['ANO'] == ano_str_busca]['SEMANA'].tolist()
             
             if is_sabado_avulso:
-                semanas_disponiveis =[s for s in todas_semanas if "Jornada" not in s]
+                semanas_disponiveis = [s for s in todas_semanas if "Jornada" not in s]
             else:
-                semanas_disponiveis =[s for s in todas_semanas if s.split(" (")[0] not in semanas_planejadas and "Jornada" not in s]
+                semanas_disponiveis = [s for s in todas_semanas if s.split(" (")[0] not in semanas_planejadas and "Jornada" not in s]
 
             if not semanas_disponiveis:
                 st.success(f"🏆 **Soberania Total!** Todas as semanas do ano letivo para o {ano_p}º Ano já foram planejadas.")
@@ -394,13 +394,11 @@ if menu == "📅 Planejamento (Ponto ID)":
             sem_limpa = sem_p.split(" (")[0]
             trim_atual = sem_p.split(" - ")[1] if " - " in sem_p else "I Trimestre"
 
-            # 🚨 RADAR DE CONTINUIDADE (CORRIGIDO O BUG DA DATA)
             st.markdown("#### 🔙 Radar de Continuidade")
             df_hist = df_planos[df_planos['ANO'] == ano_str_busca].copy()
             plano_anterior_txt = "Início de Safra. Não há plano anterior."
             
             if not df_hist.empty:
-                # Converte para datetime real para ordenar cronologicamente de forma correta
                 df_hist['DATA_DT'] = pd.to_datetime(df_hist['DATA'], format="%d/%m/%Y", errors='coerce')
                 df_hist = df_hist.sort_values(by='DATA_DT', ascending=False)
                 
@@ -426,7 +424,6 @@ if menu == "📅 Planejamento (Ponto ID)":
 
                 if opcoes_ativos:
                     if "Exame" in tipo_semana:
-                        # 🚨 PERMITE SELECIONAR A PROVA PADRÃO E AS VARIANTES AO MESMO TEMPO
                         ativos_sel = st.multiselect("Vincular Avaliações (Padrão e Variantes):", opcoes_ativos, help="Selecione a prova e suas variantes que serão aplicadas.", key=f"ativo_match_{v}")
                         if ativos_sel:
                             ctx_ativo_vinculado = "--- AVALIAÇÕES VINCULADAS ---\n"
@@ -439,12 +436,10 @@ if menu == "📅 Planejamento (Ponto ID)":
                             dados_ativo = df_ativos_ano[df_ativos_ano['TIPO_MATERIAL'] == ativo_sel].iloc[0]
                             ctx_ativo_vinculado = f"--- ATIVO VINCULADO: {ativo_sel} ---\nCONTEÚDO: {dados_ativo['CONTEUDO']}"
                             
-                            # MOTOR DE RECOMPOSIÇÃO GUIADA POR DADOS
                             if tipo_semana == "🔥 Revisão & Recomposição":
                                 with st.expander(f"📡 Radar de Diagnóstico Ativo (Série: {ano_p}º Ano)", expanded=True):
                                     st.markdown(f"**Analisando dados de todas as turmas do {ano_p}º Ano para {ativo_sel}...**")
                                     
-                                    # 1. Perfil da Série Inteira
                                     alunos_rad = df_alunos[df_alunos['TURMA'].str.contains(str(ano_p))].copy()
                                     perfil_txt = ""
                                     if not alunos_rad.empty:
@@ -471,7 +466,6 @@ if menu == "📅 Planejamento (Ponto ID)":
                                         else:
                                             st.success("**Perfil Cognitivo da Série:** Maioria Típica/Padrão.")
                                     
-                                    # 2. Lacunas da Prova na Série Inteira
                                     lacunas_txt = ""
                                     nome_curto_av = ativo_sel.split("-")[0].strip().replace(" (2ª CHAMADA)", "")
                                     diag_t = df_diagnosticos[(df_diagnosticos['TURMA'].str.contains(str(ano_p))) & (df_diagnosticos['ID_AVALIACAO'].str.contains(nome_curto_av, case=False, na=False))]
@@ -486,7 +480,6 @@ if menu == "📅 Planejamento (Ponto ID)":
                                             gab_oficial = {int(num): letra for num, letra in matches}
                                             if not gab_oficial:
                                                 letras = re.findall(r"\b[A-E]\b", gab_raw.upper())
-                                                # 🚨 CORREÇÃO APLICADA AQUI: "letra in enumerate"
                                                 gab_oficial = {i+1: letra for i, letra in enumerate(letras)}
                                                 
                                             respostas_alunos = diag_t['RESPOSTAS_ALUNO'].astype(str).tolist()
@@ -525,7 +518,6 @@ if menu == "📅 Planejamento (Ponto ID)":
                                     else:
                                         st.info("Nenhum gabarito escaneado para esta série nesta avaliação.")
                                     
-                                    # 3. Montagem do Strat (Injeção no Prompt)
                                     if lacunas_txt or perfil_txt:
                                         strat = f"--- DADOS DE DIAGNÓSTICO DA SÉRIE ({ano_p}º ANO) ---\n"
                                         if perfil_txt: strat += f"PERFIL COGNITIVO GERAL: {perfil_txt}\n"
@@ -711,7 +703,6 @@ if menu == "📅 Planejamento (Ponto ID)":
                     with st.status("Gerando DOCX e Sincronizando com o Google Drive...") as status:
                         final_ano_str = meta.get('ano')
                         
-                        # Se for sábado, adiciona um sufixo para não sobrescrever o plano da semana regular
                         sufixo_arq = "_SABADO" if is_sabado_avulso else ""
                         nome_arquivo = f"PLANO_{final_ano_str.replace('º','')}_{meta.get('semana').replace(' ', '')}{sufixo_arq}"
                         
@@ -743,7 +734,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                                 f"[SABADO_LETIVO] {ed_a3} \n[AVALIACAO_DE_MERITO] {ed_ava} \n"
                                 f"[ESTRATEGIA_DUA_PEI] {ed_dua} \n--- LINK DRIVE --- {link_drive}"
                             )
-                            db.salvar_no_banco("DB_PLANOS",[datetime.now().strftime("%d/%m/%Y"), meta.get('semana') + sufixo_arq, final_ano_str, meta.get('trimestre'), "HUB_ATIVO", final_txt, link_drive])
+                            db.salvar_no_banco("DB_PLANOS", [datetime.now().strftime("%d/%m/%Y"), meta.get('semana') + sufixo_arq, final_ano_str, meta.get('trimestre'), "HUB_ATIVO", final_txt, link_drive])
                             status.update(label="✅ Plano Sincronizado com Sucesso!", state="complete")
                             st.balloons(); reset_planejamento()
 
@@ -794,7 +785,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                         
                         c_p1.markdown(f"**{sem_ref}**\n`Série: {ano_ref}`")
                         
-                        aulas_que_devem_existir =[]
+                        aulas_que_devem_existir = []
                         
                         if "_SABADO" in sem_ref or "Sábado" in sem_ref:
                             aulas_que_devem_existir.append("Sábado Letivo")
@@ -807,7 +798,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                         aulas_no_banco = df_aulas[(df_aulas['SEMANA_REF'] == sem_ref) & (df_aulas['ANO'] == ano_ref)]
                         lista_materiais_prontos = aulas_no_banco['TIPO_MATERIAL'].astype(str).tolist()
                         
-                        icones_progresso =[]
+                        icones_progresso = []
                         for aula_alvo in aulas_que_devem_existir:
                             foi_feita = any(aula_alvo in mat for mat in lista_materiais_prontos)
                             status_icon = "✅" if foi_feita else "⏳"
@@ -839,7 +830,7 @@ if menu == "📅 Planejamento (Ponto ID)":
         
         if not df_planos.empty:
             c_h1, c_h2 = st.columns([1, 2])
-            f_ano_h = c_h1.selectbox("Filtrar por Série:",["Todos", "1º", "2º", "3º", "4º", "5º", "6º", "7º", "8º", "9º"], key="hist_ano_v40")
+            f_ano_h = c_h1.selectbox("Filtrar por Série:", ["Todos", "1º", "2º", "3º", "4º", "5º", "6º", "7º", "8º", "9º"], key="hist_ano_v40")
             
             df_h = df_planos.copy()
             if f_ano_h != "Todos": 
@@ -933,10 +924,10 @@ if menu == "📅 Planejamento (Ponto ID)":
     with tab_matriz:
         st.subheader("📖 Matriz de Competências e Status de Execução")
         if not df_curriculo.empty:
-            ano_c = st.selectbox("Série para Consulta:",[1, 2, 3, 4, 5, 6, 7, 8, 9], index=5, key="matriz_ano_v35")
+            ano_c = st.selectbox("Série para Consulta:", [1, 2, 3, 4, 5, 6, 7, 8, 9], index=5, key="matriz_ano_v35")
             df_c = df_curriculo[df_curriculo["ANO"].astype(str).str.contains(str(ano_c))].copy()
             planos_feitos = df_planos[df_planos["ANO"].astype(str).str.contains(str(ano_c))]
-            lista_conteudos_oficiais =[ai.extrair_tag(p, "CONTEUDOS_ESPECIFICOS").upper() for p in planos_feitos["PLANO_TEXTO"]]
+            lista_conteudos_oficiais = [ai.extrair_tag(p, "CONTEUDOS_ESPECIFICOS").upper() for p in planos_feitos["PLANO_TEXTO"]]
             texto_soberano_planos = " | ".join(lista_conteudos_oficiais)
 
             def checar_conclusao_cirurgica(conteudo_db):
@@ -945,7 +936,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                 target_limpo = limpar(conteudo_db)
                 soberano_limpo = limpar(texto_soberano_planos)
                 if target_limpo in soberano_limpo: return "✅ CONCLUÍDO"
-                palavras =[p for p in str(conteudo_db).upper().replace(";", "").replace(",", "").split() if len(p) > 4]
+                palavras = [p for p in str(conteudo_db).upper().replace(";", "").replace(",", "").split() if len(p) > 4]
                 if not palavras: return "⏳ PENDENTE"
                 matches = sum(1 for p in palavras if limpar(p) in soberano_limpo)
                 return "✅ CONCLUÍDO" if matches >= 2 else "⏳ PENDENTE"
@@ -957,17 +948,17 @@ if menu == "📅 Planejamento (Ponto ID)":
     with tab_auditoria:
         st.subheader("📈 Analytics de Cobertura Curricular")
         if not df_curriculo.empty:
-            ano_m = st.selectbox("Analisar Série:",[1, 2, 3, 4, 5, 6, 7, 8, 9], index=5, key="auditoria_ano_v35")
+            ano_m = st.selectbox("Analisar Série:", [1, 2, 3, 4, 5, 6, 7, 8, 9], index=5, key="auditoria_ano_v35")
             df_m = df_curriculo[df_curriculo["ANO"].astype(str).str.contains(str(ano_m))].copy()
             planos_m = df_planos[df_planos["ANO"].astype(str).str.contains(str(ano_m))]
-            lista_cont_m =[ai.extrair_tag(t, "CONTEUDOS_ESPECIFICOS").upper() for t in planos_m["PLANO_TEXTO"]]
+            lista_cont_m = [ai.extrair_tag(t, "CONTEUDOS_ESPECIFICOS").upper() for t in planos_m["PLANO_TEXTO"]]
             texto_m_soberano = " | ".join(lista_cont_m)
             
             def concluido_num_cirurgico(x):
                 def limpar(t): return re.sub(r'[^A-Z0-9]', '', str(t).upper())
                 txt = limpar(x)
                 if txt in limpar(texto_m_soberano): return 1
-                palavras =[p for p in str(x).upper().split() if len(p) > 4]
+                palavras = [p for p in str(x).upper().split() if len(p) > 4]
                 return 1 if (palavras and sum(1 for p in palavras if limpar(p) in limpar(texto_m_soberano)) >= 2) else 0
 
             df_m["CONCLUIDO"] = df_m["CONTEUDO_ESPECIFICO"].apply(concluido_num_cirurgico)
@@ -989,6 +980,83 @@ if menu == "📅 Planejamento (Ponto ID)":
                 c3.metric("Progresso II Trimestre", f"{p_ii}%")
 
                 st.plotly_chart(px.bar(progresso_trim, x="TRIMESTRE", y="%", text="%", title=f"Evolução da Cobertura Real - {ano_m}º Ano", color="%", color_continuous_scale="RdYlGn", range_y=[0, 110]), use_container_width=True)
+
+    # ==============================================================================
+    # 🚨 ABA 6: PLANEJAMENTO TRIMESTRAL (MACRO-SOSA)
+    # ==============================================================================
+    with tab_trimestral:
+        st.subheader("📅 Gerador de Planejamento Trimestral (Macro-SOSA)")
+        st.caption("Gere o documento oficial da escola (em formato paisagem) com todos os conteúdos e objetivos do trimestre extraídos automaticamente da Matriz Curricular.")
+        
+        with st.container(border=True):
+            c_t1, c_t2 = st.columns([1, 1])
+            ano_trim = c_t1.selectbox("Série Alvo:", ["6º Ano", "7º Ano", "8º Ano", "9º Ano"], key="trim_ano")
+            trim_alvo = c_t2.selectbox("Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key="trim_trim")
+            
+            # Busca as turmas cadastradas para essa série
+            ano_num_trim = "".join(filter(str.isdigit, ano_trim))
+            turmas_disp = df_turmas[df_turmas['ID_TURMA'].str.contains(ano_num_trim, na=False)]['ID_TURMA'].tolist()
+            
+            turmas_sel = st.multiselect("Turmas (Para o cabeçalho da tabela):", turmas_disp, default=turmas_disp, key="trim_turmas")
+            
+        # Filtra a matriz curricular
+        df_matriz_trim = df_curriculo[(df_curriculo['ANO'].astype(str).str.contains(ano_num_trim)) & (df_curriculo['TRIMESTRE'] == trim_alvo.split(" ")[0])]
+        
+        if df_matriz_trim.empty:
+            st.warning(f"⚠️ Nenhum conteúdo encontrado na Matriz Curricular para o {ano_trim} no {trim_alvo}.")
+        else:
+            st.success(f"✅ Encontrados {len(df_matriz_trim['CONTEUDO_ESPECIFICO'].unique())} conteúdos e {len(df_matriz_trim['OBJETIVOS'].unique())} objetivos na Matriz.")
+            
+            with st.expander("⚙️ Configurar Textos Padrão (Metodologia, Recursos e Avaliação)", expanded=True):
+                st.info("Estes textos preencherão as colunas finais da tabela. Você pode editá-colos conforme a necessidade da sua turma.")
+                
+                texto_metodologia = st.text_area("Metodologia:", 
+                    "Aulas expositivas e dialogadas com exemplos práticos;\nResolução de exercícios em classe/casa;\nAtividades individuais e em grupo;\nAprendizagem Baseada em Problemas (PBL);\nGamificação;\nUso de recursos tecnológicos (quando disponíveis);\nRevisões periódicas contextualizadas/retomada de conceitos;\nRecomposição de aprendizagens.", height=150)
+                
+                texto_recursos = st.text_area("Recursos:", 
+                    "Quadro branco\nPiloto\nLivro didático\nApostilas\nJogos pedagógicos\nMaterial impresso", height=150)
+                
+                texto_avaliacao = st.text_area("Avaliação:", 
+                    "A avaliação é contínua e multifacetada, considerando elementos como:\nParticipação durante as aulas;\nRealização das atividades;\nDesenvolvimento de habilidades escolares e sociais;\nIniciativa para superar dificuldades com o auxílio do professor.", height=150)
+
+            if st.button("🖨️ GERAR PLANEJAMENTO TRIMESTRAL (DOCX)", type="primary", use_container_width=True):
+                if not turmas_sel:
+                    st.error("⚠️ Selecione pelo menos uma turma.")
+                else:
+                    with st.spinner("Compilando dados e gerando documento em paisagem..."):
+                        info_trim = {
+                            "trimestre": trim_alvo,
+                            "turmas": ", ".join(turmas_sel)
+                        }
+                        
+                        config_textos = {
+                            "metodologia": texto_metodologia,
+                            "recursos": texto_recursos,
+                            "avaliacao": texto_avaliacao
+                        }
+                        
+                        nome_arq_trim = f"PLANEJAMENTO_{trim_alvo.replace(' ', '')}_{ano_trim.replace('º ', '')}"
+                        
+                        # Chama o exporter
+                        doc_stream = exporter.gerar_docx_planejamento_trimestral(nome_arq_trim, info_trim, df_matriz_trim, config_textos)
+                        
+                        # Sobe para o Drive
+                        link_doc = db.subir_e_converter_para_google_docs(doc_stream, nome_arq_trim, trimestre=trim_alvo, categoria=ano_trim, modo="PLANEJAMENTO")
+                        
+                        if "https" in link_doc:
+                            # Salva no banco de relatórios para histórico
+                            db.salvar_no_banco("DB_RELATORIOS", [
+                                datetime.now().strftime("%d/%m/%Y"), 
+                                "TURMA", 
+                                ", ".join(turmas_sel), 
+                                "PLANEJAMENTO_TRIMESTRAL", 
+                                f"Série: {ano_trim}\nTrimestre: {trim_alvo}\nLink: {link_doc}"
+                            ])
+                            st.success("✅ Planejamento Trimestral gerado e salvo no Drive!")
+                            st.link_button("📂 ABRIR DOCUMENTO OFICIAL", link_doc, type="primary", use_container_width=True)
+                            st.balloons()
+                        else:
+                            st.error(f"Erro ao salvar no Drive: {link_doc}")
 
 
 
