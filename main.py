@@ -2675,9 +2675,12 @@ elif menu == "📸 Scanner de Gabaritos":
             total_turma = len(df_alunos[df_alunos['TURMA'] == t_sel])
             total_corrigidos = len(escaneados)
             
+            # 📊 DASHBOARD DE PROGRESSO (COM VACINA ANTI-QUEBRA)
             st.markdown("#### 📊 Progresso da Correção")
-            progresso = total_corrigidos / total_turma if total_turma > 0 else 0
-            st.progress(progresso)
+            progresso_bruto = total_corrigidos / total_turma if total_turma > 0 else 0
+            progresso_seguro = min(1.0, max(0.0, progresso_bruto)) # Garante que fique entre 0 e 100%
+            
+            st.progress(progresso_seguro)
             st.caption(f"**{total_corrigidos} de {total_turma}** alunos processados. Restam **{len(pendentes)}** na fila.")
 
             if pendentes.empty:
