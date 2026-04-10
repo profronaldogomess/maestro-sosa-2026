@@ -2669,16 +2669,21 @@ elif menu == "📸 Scanner de Gabaritos":
             st.info("💡 Selecione a Turma e a Avaliação Base para abrir a Mesa de Triagem.")
         else:
             nome_filtro_pendente = at_sel.split("-")[0].strip()
-            escaneados = df_diagnosticos[df_diagnosticos['ID_AVALIACAO'].str.contains(nome_filtro_pendente)]['ID_ALUNO'].astype(str).tolist()
-            pendentes = df_alunos[(df_alunos['TURMA'] == t_sel) & (~df_alunos['ID'].astype(str).isin(escaneados))].sort_values(by="NOME_ALUNO")
+            
+            # 🚨 VACINA DE SOBERANIA: Usa startswith para não confundir com REVISAO_TESTE ou APLICAÇÃO_TESTE
+            # E usa set() para garantir que cada aluno conte apenas 1 vez, mesmo se houver duplicidade no banco
+            escaneados_raw = df_diagnosticos[df_diagnosticos['ID_AVALIACAO'].str.startswith(nome_filtro_pendente, na=False)]['ID_ALUNO'].astype(str).tolist()
+            escaneados_unicos = list(set(escaneados_raw))
+            
+            pendentes = df_alunos[(df_alunos['TURMA'] == t_sel) & (~df_alunos['ID'].astype(str).isin(escaneados_unicos))].sort_values(by="NOME_ALUNO")
             
             total_turma = len(df_alunos[df_alunos['TURMA'] == t_sel])
-            total_corrigidos = len(escaneados)
+            total_corrigidos = len(escaneados_unicos)
             
-            # 📊 DASHBOARD DE PROGRESSO (COM VACINA ANTI-QUEBRA)
+            # 📊 DASHBOARD DE PROGRESSO (BLINDADO)
             st.markdown("#### 📊 Progresso da Correção")
             progresso_bruto = total_corrigidos / total_turma if total_turma > 0 else 0
-            progresso_seguro = min(1.0, max(0.0, progresso_bruto)) # Garante que fique entre 0 e 100%
+            progresso_seguro = min(1.0, max(0.0, progresso_bruto)) # Garante que nunca passe de 100%
             
             st.progress(progresso_seguro)
             st.caption(f"**{total_corrigidos} de {total_turma}** alunos processados. Restam **{len(pendentes)}** na fila.")
