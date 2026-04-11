@@ -3082,10 +3082,19 @@ elif menu == "📸 Scanner de Gabaritos":
                         link_ev = reg.get('LINK_FOTO_DRIVE', '')
                         respostas_salvas = reg.get('RESPOSTAS_ALUNO', 'MANUAL')
                         
-                        if reg['RESPOSTAS_ALUNO'] == "FALTOU": situacao_txt, versao_prova = "❌ FALTOU", "N/A"
-                        elif "2ª" in reg['ID_AVALIACAO'].upper(): situacao_txt, versao_prova = "SEGUNDA CHAMADA", "SEGUNDA CHAMADA"
-                        elif "TIPO" in reg['ID_AVALIACAO'].upper(): situacao_txt, versao_prova = "✅ REALIZADA", "VARIANTE"
-                        else: situacao_txt, versao_prova = "✅ REALIZADA", "PROVA ORIGINAL"
+                        # 🚨 LÓGICA DE IDENTIFICAÇÃO EXATA DA VARIANTE SALVA NO BANCO
+                        id_av_banco = str(reg['ID_AVALIACAO']).upper()
+                        
+                        if reg['RESPOSTAS_ALUNO'] == "FALTOU": 
+                            situacao_txt, versao_prova = "❌ FALTOU", "N/A"
+                        elif "2ª" in id_av_banco or "2CHAMADA" in id_av_banco: 
+                            situacao_txt, versao_prova = "SEGUNDA CHAMADA", "SEGUNDA CHAMADA"
+                        elif "TIPO" in id_av_banco: 
+                            # Extrai exatamente o "TIPO B", "TIPO C", etc.
+                            tipo_exato = id_av_banco.split('-')[-1].strip()
+                            situacao_txt, versao_prova = "✅ REALIZADA", f"VARIANTE ({tipo_exato})"
+                        else: 
+                            situacao_txt, versao_prova = "✅ REALIZADA", "PROVA ORIGINAL"
 
                     nec_str = str(alu['NECESSIDADES']).upper().strip()
                     is_pei_sob = nec_str not in ["NENHUMA", "PENDENTE", "", "NAN", "TÍPICO", "TIPICO"]
@@ -3276,8 +3285,8 @@ elif menu == "📸 Scanner de Gabaritos":
                     else:
                         st.info("Nenhum dossiê gerado no sistema.")
 
-    # ==============================================================================
-    # 📊 ABA 4: RAIO-X PEDAGÓGICO (RESTAURADO COM LATEX)
+# ==============================================================================
+    # 📊 ABA 4: RAIO-X PEDAGÓGICO (RESTAURADO COM LATEX E VARIANTES)
     # ==============================================================================
     with tab_raiox:
         st.subheader("📊 Raio-X Pedagógico: Diagnóstico de Lacunas")
@@ -3361,25 +3370,43 @@ elif menu == "📸 Scanner de Gabaritos":
                 df_analise['TIPO_PROVA_FEITA'] = df_analise['RESPOSTAS_ALUNO'].apply(classificar_prova_realizada)
 
                 st.markdown("### 🎯 Análise de Performance por Item")
-                col_l1, col_l2 = st.columns(2)
-                perfil_visao = col_l1.radio("1. Lente de Correção:", ["📝 Prova Regular", "♿ Prova Adaptada (PEI)"], horizontal=True, key=f"perf_v90_{v}")
-                versao_visao = col_l2.radio("2. Versão da Prova:", ["📄 Prova Original", "🔄 2ª Chamada"], horizontal=True, key=f"vers_v90_{v}")
                 
-                is_pei_view = "PEI" in perfil_visao
-                is_2a_view = "2ª" in versao_visao
+                # 🚨 LEITURA DINÂMICA DE VARIANTES NO BANCO DE DADOS
+                versoes_disponiveis = ["📝 Regular - Padrão", "♿ Adaptada (PEI)"]
                 
-                tipo_filtro = "PEI" if is_pei_view else "REGULAR"
-                df_filtrado = df_analise[(df_analise['TIPO_PROVA_FEITA'] == tipo_filtro) & (df_analise['IS_2A_CHAMADA'] == is_2a_view)]
-
-                if is_2a_view:
+                for av_id in df_analise['ID_AVALIACAO'].dropna().unique():
+                    av_id_upper = str(av_id).upper()
+                    if "TIPO" in av_id_upper:
+                        tipo_nome = av_id_upper.split('-')[-1].strip()
+                        versoes_disponiveis.append(f"📝 Regular - {tipo_nome}")
+                    if "2ª" in av_id_upper or "2CHAMADA" in av_id_upper:
+                        versoes_disponiveis.append("🔄 2ª Chamada")
+                        
+                versoes_disponiveis = sorted(list(set(versoes_disponiveis)))
+                
+                versao_visao = st.selectbox("🔍 Selecione o Caderno de Prova para Análise:", versoes_disponiveis, key=f"caderno_rx_{v}")
+                
+                is_pei_view = "PEI" in versao_visao
+                
+                # 🚨 FILTRAGEM CIRÚRGICA BASEADA NA ESCOLHA
+                if is_pei_view:
+                    df_filtrado = df_analise[df_analise['TIPO_PROVA_FEITA'] == "PEI"]
+                    query_mat = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel_r]
+                elif "2ª Chamada" in versao_visao:
+                    df_filtrado = df_analise[df_analise['IS_2A_CHAMADA'] == True]
                     query_mat = df_aulas[(df_aulas['TIPO_MATERIAL'].str.upper().str.contains("2CHAMADA")) & (df_aulas['TIPO_MATERIAL'].str.upper().str.contains(nome_curto_av.upper()))]
+                elif "TIPO" in versao_visao:
+                    tipo_exato = versao_visao.split('-')[-1].strip()
+                    df_filtrado = df_analise[(df_analise['TIPO_PROVA_FEITA'] == "REGULAR") & (df_analise['ID_AVALIACAO'].str.upper().str.contains(tipo_exato))]
+                    query_mat = df_aulas[(df_aulas['TIPO_MATERIAL'].str.upper().str.contains(nome_curto_av.upper())) & (df_aulas['TIPO_MATERIAL'].str.upper().str.contains(tipo_exato))]
                 else:
+                    df_filtrado = df_analise[(df_analise['TIPO_PROVA_FEITA'] == "REGULAR") & (df_analise['ID_AVALIACAO'] == at_sel_r)]
                     query_mat = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel_r]
 
                 if query_mat.empty:
-                    st.error(f"❌ Gabarito da {versao_visao} não localizado.")
+                    st.error(f"❌ Gabarito do caderno '{versao_visao}' não localizado no acervo.")
                 elif df_filtrado.empty:
-                    st.info(f"📭 Não há dados de alunos que realizaram a {perfil_visao} na {versao_visao}.")
+                    st.info(f"📭 Não há dados de alunos que realizaram o caderno '{versao_visao}'.")
                 else:
                     dados_prova = query_mat.iloc[0]
                     txt_prova_global = str(dados_prova['CONTEUDO'])
@@ -3406,6 +3433,7 @@ elif menu == "📸 Scanner de Gabaritos":
                         stats_list.append({"Questão": f"Q{i:02d}", "Acerto %": perc, "Gabarito": correta})
 
                     df_stats_global = pd.DataFrame(stats_list)
+                    fig_global = None
                     
                     if not df_stats_global.empty:
                         col_graf, col_item = st.columns([1.2, 1])
@@ -3413,10 +3441,11 @@ elif menu == "📸 Scanner de Gabaritos":
                             fig_global = px.bar(df_stats_global, x="Questão", y="Acerto %", text_auto='.0f', color="Acerto %", color_continuous_scale="RdYlGn")
                             fig_global.update_layout(yaxis_range=[0, 110], height=350)
                             st.plotly_chart(fig_global, use_container_width=True)
+                        
                         with col_item:
                             with st.container(border=True):
                                 st.markdown("### 🔬 Autópsia do Item")
-                                q_sel = st.selectbox("Selecione a questão para análise:", df_stats_global["Questão"].tolist(), key=f"q_sel_v90_{is_pei_view}_{is_2a_view}")
+                                q_sel = st.selectbox("Selecione a questão para análise:", df_stats_global["Questão"].tolist(), key=f"q_sel_v90_{v}")
                                 info_q = df_stats_global[df_stats_global["Questão"] == q_sel].iloc[0]
                                 idx_num = int(q_sel[1:])
                                 
@@ -3428,16 +3457,13 @@ elif menu == "📸 Scanner de Gabaritos":
                                 
                                 prefixo_q = "QUEST[AÃ]O\\s*PEI" if is_pei_view else "QUEST[AÃ]O"
                                 
-                                # 🚨 1. ENGENHARIA VISUAL DO ENUNCIADO E ALTERNATIVAS
+                                # 🚨 ENGENHARIA VISUAL DO ENUNCIADO E ALTERNATIVAS
                                 padrao_q = rf"(?si)({prefixo_q}\s*0?{idx_num}\b.*?)(?={prefixo_q}\s*0?{idx_num+1}\b|GABARITO|$)"
                                 m_q = re.search(padrao_q, questoes_raw)
                                 
                                 if m_q:
                                     q_completa = m_q.group(1).strip()
-                                    # Destaca o prompt de imagem
                                     q_completa = re.sub(r'\[\s*PROMPT IMAGEM:.*?\]', '\n\n🖼️ *[IMAGEM DE APOIO]*\n\n', q_completa)
-                                    
-                                    # Separa o enunciado das alternativas (busca por (A) ou A) no início da linha)
                                     partes = re.split(r'(?=\n\s*\([A-E]\)|\n\s*[A-E]\))', q_completa, maxsplit=1)
                                     
                                     enunciado_texto = partes[0].strip()
@@ -3448,7 +3474,6 @@ elif menu == "📸 Scanner de Gabaritos":
                                     
                                     if alternativas_texto:
                                         st.markdown("**Alternativas:**")
-                                        # Força quebra de linha dupla para o Markdown renderizar como lista espaçada
                                         alt_formatada = preparar_para_leitura(alternativas_texto).replace('\n', '\n\n')
                                         st.markdown(alt_formatada)
                                 else:
@@ -3456,22 +3481,18 @@ elif menu == "📸 Scanner de Gabaritos":
                                 
                                 st.divider()
                                 
-                                # 🚨 2. ENGENHARIA VISUAL DA PERÍCIA (JUSTIFICATIVA E DISTRATORES)
+                                # 🚨 ENGENHARIA VISUAL DA PERÍCIA
                                 padrao_p = rf"(?si){prefixo_q}\s*0?{idx_num}\b.*?(?={prefixo_q}\s*0?{idx_num+1}\b|GABARITO|RESPOSTAS|$)"
                                 match_p = re.search(padrao_p, grade_pericia_global)
                                 
                                 if match_p: 
                                     p_completa = match_p.group(0).strip()
-                                    
-                                    # Extrai a Habilidade (BNCC)
                                     hab_match = re.search(r"\[(.*?)\]", p_completa)
                                     habilidade = hab_match.group(1).strip() if hab_match else "Habilidade não especificada"
                                     
-                                    # Extrai a Justificativa
                                     just_match = re.search(r"(?i)JUSTIFICATIVA[\s\:]*(.*?)(?=PERÍCIA|ANÁLISE|DISTRATORES|$)", p_completa, re.DOTALL)
                                     justificativa = just_match.group(1).strip() if just_match else ""
                                     
-                                    # Extrai os Distratores / Lacuna PEI
                                     dist_match = re.search(r"(?i)(?:PERÍCIA DE DISTRATORES|ANÁLISE DE LACUNA PEI|PERÍCIA|ANÁLISE|DISTRATORES)[\s\:]*(.*)", p_completa, re.DOTALL)
                                     distratores = dist_match.group(1).strip() if dist_match else ""
                                     
@@ -3480,105 +3501,97 @@ elif menu == "📸 Scanner de Gabaritos":
                                     
                                     if justificativa:
                                         st.success(f"**🎯 Raciocínio Correto:**\n\n{preparar_para_leitura(justificativa)}")
-                                        
                                     if distratores:
-                                        # Formata os distratores para ficarem em linhas separadas se houver (A), (B), etc.
                                         dist_formatado = re.sub(r'(?=\([A-E]\))', '\n\n', distratores)
                                         st.warning(f"**⚠️ Análise de Erros (Distratores):**\n\n{preparar_para_leitura(dist_formatado)}")
-                                        
-                                    # Fallback caso a IA tenha gerado fora do padrão
                                     if not justificativa and not distratores:
                                         st.info(preparar_para_leitura(p_completa))
 
-                        # ==============================================================================
-                        # 🖨️ MATERIALIZAÇÃO DO DOSSIÊ (DOCX PARA IMPRESSÃO)
-                        # ==============================================================================
-                        st.markdown("---")
-                        st.markdown("### 🖨️ Materialização do Dossiê (Para Impressão)")
-                        st.caption("Gere um documento formatado com a autópsia completa da prova para levar para a sala de aula ou Conselho de Classe.")
-                        
-                        if st.button("🖨️ GERAR DOSSIÊ DE RAIO-X (DOCX)", type="primary", use_container_width=True):
-                            if df_stats_global.empty or not txt_prova_global:
-                                st.error("⚠️ Dados insuficientes para gerar o dossiê. Certifique-se de que a prova foi carregada corretamente.")
-                            else:
-                                with st.spinner("Compilando Dossiê Analítico e renderizando gráficos..."):
+                    # ==============================================================================
+                    # 🖨️ MATERIALIZAÇÃO DO DOSSIÊ (DOCX PARA IMPRESSÃO)
+                    # ==============================================================================
+                    st.markdown("---")
+                    st.markdown("### 🖨️ Materialização do Dossiê (Para Impressão)")
+                    st.caption("Gere um documento formatado com a autópsia completa da prova para levar para a sala de aula ou Conselho de Classe.")
+                    
+                    if st.button("🖨️ GERAR DOSSIÊ DE RAIO-X (DOCX)", type="primary", use_container_width=True):
+                        if df_stats_global.empty or not txt_prova_global:
+                            st.error("⚠️ Dados insuficientes para gerar o dossiê. Certifique-se de que a prova foi carregada corretamente.")
+                        else:
+                            with st.spinner("Compilando Dossiê Analítico e renderizando gráficos..."):
+                                
+                                grafico_bytes = None
+                                if fig_global is not None:
+                                    try:
+                                        grafico_bytes = fig_global.to_image(format="png", width=800, height=350)
+                                    except Exception as e:
+                                        st.warning("⚠️ O gráfico não pôde ser exportado. Certifique-se de que a biblioteca 'kaleido' está instalada.")
+                                
+                                notas_validas = df_filtrado[
+                                    (~df_filtrado['RESPOSTAS_ALUNO'].str.upper().str.contains("FALTOU")) & 
+                                    (~df_filtrado['RESPOSTAS_ALUNO'].str.upper().str.startswith("QUALITATIVA"))
+                                ]['NOTA_CALCULADA'].apply(util.sosa_to_float)
+                                
+                                media_turma = notas_validas.mean() if not notas_validas.empty else 0.0
+                                
+                                top_3 = df_stats_global.sort_values(by="Acerto %").head(3)
+                                top_3_str = ", ".join([f"{r['Questão']} ({r['Acerto %']:.1f}%)" for _, r in top_3.iterrows()])
+                                
+                                stats_gerais = {
+                                    "total_alunos": len(notas_validas),
+                                    "media_turma": f"{media_turma:.1f}",
+                                    "top_3": top_3_str
+                                }
+                                
+                                questoes_detalhes = []
+                                
+                                for _, r_stat in df_stats_global.iterrows():
+                                    q_str = r_stat['Questão']
+                                    q_num = int(q_str.replace("Q", ""))
                                     
-                                    grafico_bytes = None
-                                    if fig_global is not None:
-                                        try:
-                                            grafico_bytes = fig_global.to_image(format="png", width=800, height=350)
-                                        except Exception as e:
-                                            st.warning("⚠️ O gráfico não pôde ser exportado. Certifique-se de que a biblioteca 'kaleido' está instalada.")
+                                    padrao_q = rf"(?si)({prefixo_q}\s*0?{q_num}\b.*?)(?={prefixo_q}\s*0?{q_num+1}\b|GABARITO|$)"
+                                    m_q = re.search(padrao_q, questoes_raw)
+                                    enunciado = re.sub(r'\[\s*PROMPT IMAGEM:.*?\]', '[IMAGEM DE APOIO]', m_q.group(1)).strip() if m_q else "Enunciado não localizado."
+                                    enunciado = re.sub(r'[*#]', '', enunciado)
                                     
-                                    # Calcula a média da turma apenas com as notas válidas (exclui faltas e qualitativas)
-                                    notas_validas = df_filtrado[
-                                        (~df_filtrado['RESPOSTAS_ALUNO'].str.upper().str.contains("FALTOU")) & 
-                                        (~df_filtrado['RESPOSTAS_ALUNO'].str.upper().str.startswith("QUALITATIVA"))
-                                    ]['NOTA_CALCULADA'].apply(util.sosa_to_float)
+                                    padrao_p = rf"(?si)({prefixo_q}\s*0?{q_num}\b.*?)(?={prefixo_q}\s*0?{q_num+1}\b|GABARITO|RESPOSTAS|$)"
+                                    m_p = re.search(padrao_p, grade_pericia_global)
+                                    pericia_txt = m_p.group(1).strip() if m_p else "Perícia não localizada."
+                                    pericia_txt = re.sub(r'[*#]', '', pericia_txt)
                                     
-                                    media_turma = notas_validas.mean() if not notas_validas.empty else 0.0
-                                    
-                                    top_3 = df_stats_global.sort_values(by="Acerto %").head(3)
-                                    top_3_str = ", ".join([f"{r['Questão']} ({r['Acerto %']:.1f}%)" for _, r in top_3.iterrows()])
-                                    
-                                    stats_gerais = {
-                                        "total_alunos": len(notas_validas),
-                                        "media_turma": f"{media_turma:.1f}",
-                                        "top_3": top_3_str
-                                    }
-                                    
-                                    questoes_detalhes = []
-                                    
-                                    for _, r_stat in df_stats_global.iterrows():
-                                        q_str = r_stat['Questão']
-                                        q_num = int(q_str.replace("Q", ""))
-                                        
-                                        # Extrai o Enunciado
-                                        padrao_q = rf"(?si)({prefixo_q}\s*0?{q_num}\b.*?)(?={prefixo_q}\s*0?{q_num+1}\b|GABARITO|$)"
-                                        m_q = re.search(padrao_q, questoes_raw)
-                                        enunciado = re.sub(r'\[\s*PROMPT IMAGEM:.*?\]', '[IMAGEM DE APOIO]', m_q.group(1)).strip() if m_q else "Enunciado não localizado."
-                                        enunciado = re.sub(r'[*#]', '', enunciado)
-                                        
-                                        # Extrai a Perícia
-                                        padrao_p = rf"(?si)({prefixo_q}\s*0?{q_num}\b.*?)(?={prefixo_q}\s*0?{q_num+1}\b|GABARITO|RESPOSTAS|$)"
-                                        m_p = re.search(padrao_p, grade_pericia_global)
-                                        pericia_txt = m_p.group(1).strip() if m_p else "Perícia não localizada."
-                                        pericia_txt = re.sub(r'[*#]', '', pericia_txt)
-                                        
-                                        questoes_detalhes.append({
-                                            "titulo": q_str,
-                                            "enunciado": enunciado,
-                                            "acerto": f"{r_stat['Acerto %']:.1f}%",
-                                            "gabarito": r_stat['Gabarito'],
-                                            "pericia": pericia_txt
-                                        })
-                                    
-                                    # Identifica alunos críticos (Abaixo de 6.0)
-                                    criticos = df_filtrado[df_filtrado['NOTA_CALCULADA'].apply(util.sosa_to_float) < 6.0].apply(lambda x: f"[{x['TURMA']}] {x['NOME_ALUNO']}", axis=1).tolist()
-                                    
-                                    info_doc = {
-                                        "ano": t_sel_r, 
-                                        "trimestre": tr_sel_r,
-                                        "avaliacao": at_sel_r,
-                                        "data": datetime.now().strftime("%d/%m/%Y")
-                                    }
-                                    
-                                    nome_arquivo_dossie = f"RAIOX_{t_sel_r.replace(' ', '_').replace('(', '').replace(')', '')}_{nome_curto_av}"
-                                    doc_stream = exporter.gerar_docx_raiox_v90(nome_arquivo_dossie, info_doc, stats_gerais, questoes_detalhes, criticos, grafico_bytes)
-                                    link_doc = db.subir_e_converter_para_google_docs(doc_stream, nome_arquivo_dossie, trimestre=tr_sel_r, categoria=t_sel_r, modo="PLANEJAMENTO")
-                                    
-                                    if "https" in link_doc:
-                                        db.salvar_no_banco("DB_RELATORIOS", [
-                                            datetime.now().strftime("%d/%m/%Y"), 
-                                            "TURMA", 
-                                            t_sel_r, 
-                                            "DOSSIE_RAIO_X", 
-                                            f"Avaliação: {at_sel_r}\nLink: {link_doc}"
-                                        ])
-                                        st.success("✅ Dossiê gerado e salvo no Acervo (Aba Tribunal de Auditoria)!")
-                                        st.balloons()
-                                    else:
-                                        st.error(f"Erro ao salvar no Drive: {link_doc}")
+                                    questoes_detalhes.append({
+                                        "titulo": q_str,
+                                        "enunciado": enunciado,
+                                        "acerto": f"{r_stat['Acerto %']:.1f}%",
+                                        "gabarito": r_stat['Gabarito'],
+                                        "pericia": pericia_txt
+                                    })
+                                
+                                criticos = df_filtrado[df_filtrado['NOTA_CALCULADA'].apply(util.sosa_to_float) < 6.0].apply(lambda x: f"[{x['TURMA']}] {x['NOME_ALUNO']}", axis=1).tolist()
+                                
+                                info_doc = {
+                                    "ano": t_sel_r, 
+                                    "trimestre": tr_sel_r,
+                                    "avaliacao": at_sel_r,
+                                    "data": datetime.now().strftime("%d/%m/%Y")
+                                }
+                                
+                                nome_arquivo_dossie = f"RAIOX_{t_sel_r.replace(' ', '_').replace('(', '').replace(')', '')}_{nome_curto_av}"
+                                doc_stream = exporter.gerar_docx_raiox_v90(nome_arquivo_dossie, info_doc, stats_gerais, questoes_detalhes, criticos, grafico_bytes)
+                                link_doc = db.subir_e_converter_para_google_docs(doc_stream, nome_arquivo_dossie, trimestre=tr_sel_r, categoria=t_sel_r, modo="PLANEJAMENTO")
+                                
+                                if "https" in link_doc:
+                                    db.salvar_no_banco("DB_RELATORIOS", [
+                                        datetime.now().strftime("%d/%m/%Y"), 
+                                        "TURMA", 
+                                        t_sel_r, 
+                                        "DOSSIE_RAIO_X", 
+                                        f"Avaliação: {at_sel_r}\nLink: {link_doc}"
+                                    ])
+                                    st.success("✅ Dossiê gerado e salvo no Acervo (Aba Tribunal de Auditoria)!")
+                                    st.balloons()
+                                else:
+                                    st.error(f"Erro ao salvar no Drive: {link_doc}")
 
 
 
