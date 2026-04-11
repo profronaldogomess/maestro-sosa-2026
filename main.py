@@ -2096,7 +2096,6 @@ elif menu == "📝 Central de Avaliações":
             if not is_sonda and not is_segunda and soma_q != qtd_q:
                 st.error("⚠️ Ajuste a distribuição de dificuldade antes de gerar.")
             else:
-                # Limpa o histórico do chat ao gerar uma nova avaliação
                 if "chat_history_av" in st.session_state:
                     del st.session_state["chat_history_av"]
                     
@@ -2115,26 +2114,33 @@ elif menu == "📝 Central de Avaliações":
                             f"Formatação INLINE: **QUESTÃO XX ({peso_str} ponto) -** Texto."
                         )
                         persona_alvo = "ARQUITETO_SONDA_DIAGNOSTICA"
+                    elif is_segunda:
+                        # 🚨 PROTOCOLO FÊNIX: Aciona a persona de 2ª Chamada Discursiva
+                        contexto_base = ""
+                        m_row = df_aulas[df_aulas["TIPO_MATERIAL"] == mats_selecionados].iloc[0]
+                        contexto_base += f"MATERIAL: {mats_selecionados}\n{m_row['CONTEUDO']}\n"
+                        
+                        prompt = (
+                            f"TIPO: 2ª Chamada (100% DISCURSIVA). SÉRIE: {ano_av}º. VALOR: {v_total}. QTD: {qtd_q}.\n"
+                            f"DIRETRIZ: Crie questões GÊMEAS da prova abaixo, mas em formato ABERTO (sem alternativas).\n"
+                            f"EXTRAS: {instr_extra}.\n\n"
+                            f"--- PROVA ORIGINAL ---\n{contexto_base}"
+                        )
+                        persona_alvo = "ARQUITETO_2A_CHAMADA_V100"
                     else:
                         contexto_base = ""
                         for m_nome in (mats_selecionados if isinstance(mats_selecionados, list) else [mats_selecionados]):
                             m_row = df_aulas[df_aulas["TIPO_MATERIAL"] == m_nome].iloc[0]
                             contexto_base += f"MATERIAL: {m_nome}\n{m_row['CONTEUDO']}\n"
                         
-                        diretriz = f"DISTRIBUIÇÃO: {q_facil} Fáceis, {q_medio} Médias, {q_dificil} Difíceis." if not is_segunda else "MODO 2ª CHAMADA (QUESTÕES GÊMEAS)."
-                        
-                        # 🚨 INJEÇÃO DOS CONTEÚDOS ESPECÍFICOS NO PROMPT
                         foco_str = ""
-                        if conteudos_foco:
-                            foco_str += f"🎯 CONTEÚDOS ESPECÍFICOS A SEREM COBRADOS (FOCO EXCLUSIVO): {', '.join(conteudos_foco)}\n"
-                        if objetivos_foco:
-                            foco_str += f"🎯 OBJETIVOS DE ENSINO A SEREM AVALIADOS: {', '.join(objetivos_foco)}\n"
-                        if not foco_str:
-                            foco_str = "Conteúdo geral das aulas vinculadas."
+                        if conteudos_foco: foco_str += f"🎯 CONTEÚDOS ESPECÍFICOS A SEREM COBRADOS: {', '.join(conteudos_foco)}\n"
+                        if objetivos_foco: foco_str += f"🎯 OBJETIVOS DE ENSINO A SEREM AVALIADOS: {', '.join(objetivos_foco)}\n"
+                        if not foco_str: foco_str = "Conteúdo geral das aulas vinculadas."
                         
                         prompt = (
                             f"TIPO: {tipo_av}. SÉRIE: {ano_av}º. VALOR: {v_total}. QTD: {qtd_q}.\n"
-                            f"DIRETRIZ DE DIFICULDADE: {diretriz}.\n"
+                            f"DIRETRIZ DE DIFICULDADE: {q_facil} Fáceis, {q_medio} Médias, {q_dificil} Difíceis.\n"
                             f"{foco_str}\n"
                             f"EXTRAS: {instr_extra}.\n\n"
                             f"--- CONTEÚDO HERDADO DAS AULAS (BASE DE CONHECIMENTO) ---\n{contexto_base}"
@@ -2662,6 +2668,7 @@ elif menu == "📸 Scanner de Gabaritos":
             tr_sel = c2.selectbox("📅 Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_p_{v}")
             
             opcoes_p = filtrar_ativos_cir(t_sel, tr_sel, apenas_provas=True)
+            # Filtra para mostrar apenas as provas originais no slot principal
             opcoes_base = [opt for opt in opcoes_p if not re.search(r"2[ªA]|CHAMADA|TIPO [B-Z]", opt, re.IGNORECASE)]
             at_sel = c3.selectbox("📋 Avaliação Base (Slot):", [""] + opcoes_base, key=f"at_p_{v}")
 
@@ -2670,8 +2677,7 @@ elif menu == "📸 Scanner de Gabaritos":
         else:
             nome_filtro_pendente = at_sel.split("-")[0].strip()
             
-            # 🚨 VACINA DE SOBERANIA: Usa startswith para não confundir com REVISAO_TESTE ou APLICAÇÃO_TESTE
-            # E usa set() para garantir que cada aluno conte apenas 1 vez, mesmo se houver duplicidade no banco
+            # 🚨 VACINA DE SOBERANIA: Usa startswith e set() para evitar duplicidade
             escaneados_raw = df_diagnosticos[df_diagnosticos['ID_AVALIACAO'].str.startswith(nome_filtro_pendente, na=False)]['ID_ALUNO'].astype(str).tolist()
             escaneados_unicos = list(set(escaneados_raw))
             
@@ -2680,10 +2686,10 @@ elif menu == "📸 Scanner de Gabaritos":
             total_turma = len(df_alunos[df_alunos['TURMA'] == t_sel])
             total_corrigidos = len(escaneados_unicos)
             
-            # 📊 DASHBOARD DE PROGRESSO (BLINDADO)
+            # 📊 DASHBOARD DE PROGRESSO
             st.markdown("#### 📊 Progresso da Correção")
             progresso_bruto = total_corrigidos / total_turma if total_turma > 0 else 0
-            progresso_seguro = min(1.0, max(0.0, progresso_bruto)) # Garante que nunca passe de 100%
+            progresso_seguro = min(1.0, max(0.0, progresso_bruto))
             
             st.progress(progresso_seguro)
             st.caption(f"**{total_corrigidos} de {total_turma}** alunos processados. Restam **{len(pendentes)}** na fila.")
@@ -2769,7 +2775,7 @@ elif menu == "📸 Scanner de Gabaritos":
                             material_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel].iloc[0]
 
                     # ==========================================================
-                    # MOTOR DE CORREÇÃO (RESTAURADO COM MODO MANUAL)
+                    # MOTOR DE CORREÇÃO
                     # ==========================================================
                     if material_ref is not None:
                         txt_ref = str(material_ref['CONTEUDO'])
@@ -2788,7 +2794,64 @@ elif menu == "📸 Scanner de Gabaritos":
 
                         st.markdown("---")
                         
-                        if lente_corr in ["📝 Regular (Padrão ou Variantes)", "♿ PEI (Gabarito do Sistema)"]:
+                        # 🚨 PROTOCOLO FÊNIX: 2ª Chamada (Discursiva)
+                        if modo_2a:
+                            st.info("✍️ **Modo 2ª Chamada (Discursiva):** Avalie o raciocínio do aluno.")
+                            
+                            q_raw = ai.extrair_tag(txt_ref, "QUESTOES")
+                            qtd_q_2a = len(re.findall(r"(?i)QUEST[AÃ]O\s*0?\d+", q_raw))
+                            if qtd_q_2a == 0: qtd_q_2a = 10
+                            
+                            peso_q = v_total_at / qtd_q_2a if qtd_q_2a > 0 else 0
+                            
+                            col_man1, col_man2 = st.columns([1.5, 1])
+                            with col_man1:
+                                dados_manual = [{"Q": f"{i+1:02d}", "Avaliação do Professor": "⚪ Em Branco"} for i in range(qtd_q_2a)]
+                                df_manual = st.data_editor(
+                                    pd.DataFrame(dados_manual), hide_index=True, use_container_width=True,
+                                    column_config={
+                                        "Q": st.column_config.TextColumn(disabled=True, width="small"),
+                                        "Avaliação do Professor": st.column_config.SelectboxColumn(
+                                            options=["✅ Acerto Integral", "⚠️ Acerto Parcial", "❌ Erro", "⚪ Em Branco"], required=True
+                                        )
+                                    }, key=f"manual_2a_{id_aluno_atual}"
+                                )
+                            
+                            with col_man2:
+                                nota_calc = 0.0
+                                respostas_finais = []
+                                acertos_cheios, acertos_parciais = 0, 0
+                                
+                                for _, row in df_manual.iterrows():
+                                    resp = row["Avaliação do Professor"]
+                                    respostas_finais.append(resp)
+                                    if resp == "✅ Acerto Integral": 
+                                        nota_calc += peso_q
+                                        acertos_cheios += 1
+                                    elif resp == "⚠️ Acerto Parcial": 
+                                        nota_calc += (peso_q / 2)
+                                        acertos_parciais += 1
+                                        
+                                st.metric("Nota Calculada", f"{nota_calc:.2f} / {v_total_at:.2f}")
+                                st.caption(f"✅ {acertos_cheios} Integrais | ⚠️ {acertos_parciais} Parciais")
+                                
+                                evidencia_manual = st.file_uploader("📸 Upload da Prova", type=["jpg", "png", "pdf"], key=f"up_2a_{id_aluno_atual}")
+                                
+                                if st.button("💾 SALVAR CORREÇÃO DISCURSIVA", type="primary", use_container_width=True):
+                                    with st.spinner("Salvando no banco de dados..."):
+                                        link_ev = "N/A"
+                                        id_av_final = material_ref['TIPO_MATERIAL']
+                                        if evidencia_manual:
+                                            link_ev = db.subir_e_converter_para_google_docs(evidencia_manual.getvalue(), al_sel.replace(" ","_")+"_2CHAMADA", trimestre=tr_sel, categoria=t_sel, semana=id_av_final, modo="SCANNER")
+                                        
+                                        db.salvar_no_banco("DB_GABARITOS_ALUNOS",[
+                                            datetime.now().strftime("%d/%m/%Y"), id_aluno_atual, al_sel, t_sel, 
+                                            id_av_final, ";".join(respostas_finais), util.sosa_to_str(nota_calc), link_ev
+                                        ])
+                                        st.success(f"✅ {al_sel} processado!"); time.sleep(0.5); st.rerun()
+
+                        # 🚨 MODO REGULAR OU PEI (Múltipla Escolha)
+                        elif lente_corr in ["📝 Regular (Padrão ou Variantes)", "♿ PEI (Gabarito do Sistema)"]:
                             c_mod1, c_mod2 = st.columns([3, 1])
                             modo_correcao = c_mod1.radio(
                                 "⚙️ Método de Correção:", 
@@ -2823,6 +2886,7 @@ elif menu == "📸 Scanner de Gabaritos":
 
                                 if "current_scan_res" in st.session_state:
                                     res_lidas = st.session_state.current_scan_res
+                                    st.markdown("---")
                                     col_res1, col_res2 = st.columns([1.5, 1])
                                     
                                     with col_res1:
@@ -3418,19 +3482,34 @@ elif menu == "📸 Scanner de Gabaritos":
                     questoes_raw = ai.extrair_tag(txt_prova_global, tag_questoes_global)
                     
                     gab_ativo = extrair_gab_blindado(txt_prova_global, is_pei_view)
-
                     num_q_total = len(gab_ativo)
+
+                    # 🚨 PROTOCOLO FÊNIX: Cálculo estatístico adaptado para 2ª Chamada (Discursiva)
                     stats_list = []
-                    
                     respostas_validas = df_filtrado[(~df_filtrado['RESPOSTAS_ALUNO'].str.upper().str.contains("FALTOU")) & (~df_filtrado['RESPOSTAS_ALUNO'].str.upper().str.startswith("QUALITATIVA"))]['RESPOSTAS_ALUNO']
                     matriz_respostas = [str(r).split(';') for r in respostas_validas]
 
-                    for i in range(1, num_q_total + 1):
-                        correta = gab_ativo.get(i, "?")
-                        votos = [res[i-1] if len(res) >= i else "?" for res in matriz_respostas]
-                        acertos = votos.count(correta)
-                        perc = (acertos / len(votos)) * 100 if len(votos) > 0 else 0
-                        stats_list.append({"Questão": f"Q{i:02d}", "Acerto %": perc, "Gabarito": correta})
+                    if "2ª Chamada" in versao_visao:
+                        q_raw = ai.extrair_tag(txt_prova_global, "QUESTOES")
+                        num_q_total = len(re.findall(r"(?i)QUEST[AÃ]O\s*0?\d+", q_raw))
+                        if num_q_total == 0: num_q_total = 10
+                        
+                        for i in range(1, num_q_total + 1):
+                            votos = [res[i-1] if len(res) >= i else "?" for res in matriz_respostas]
+                            acertos_integrais = votos.count("✅ Acerto Integral")
+                            acertos_parciais = votos.count("⚠️ Acerto Parcial")
+                            
+                            pontos_obtidos = acertos_integrais + (acertos_parciais * 0.5)
+                            perc = (pontos_obtidos / len(votos)) * 100 if len(votos) > 0 else 0
+                            stats_list.append({"Questão": f"Q{i:02d}", "Acerto %": perc, "Gabarito": "Discursiva"})
+                    else:
+                        num_q_total = len(gab_ativo)
+                        for i in range(1, num_q_total + 1):
+                            correta = gab_ativo.get(i, "?")
+                            votos = [res[i-1] if len(res) >= i else "?" for res in matriz_respostas]
+                            acertos = votos.count(correta)
+                            perc = (acertos / len(votos)) * 100 if len(votos) > 0 else 0
+                            stats_list.append({"Questão": f"Q{i:02d}", "Acerto %": perc, "Gabarito": correta})
 
                     df_stats_global = pd.DataFrame(stats_list)
                     fig_global = None
