@@ -332,10 +332,10 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         val_total = info.get('valor', '10,0')
         val_q = info.get('valor_questao', '1,0')
         
-        orient_list =[
+        orient_list = [
             "Leia atentamente cada enunciado.",
             "Resolva os cálculos no espaço em branco.",
-            "Marque apenas uma alternativa por questão.",
+            "Marque apenas uma alternativa por questão." if info.get('tipo_prova') != "2ª Chamada" else "Apresente o raciocínio e os cálculos de todas as questões.",
             f"Valor Total: {val_total} | Cada questão: {val_q}"
         ]
         for txt in orient_list:
@@ -343,15 +343,23 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
             p.add_run(f"• {txt}").font.size = Pt(9)
             p.paragraph_format.space_after = Pt(0)
 
-        c_gab = top_table.cell(0, 1)
-        gab_grid = c_gab.add_table(rows=num_total_q + 1, cols=6)
-        gab_grid.style = 'Table Grid'
-        for i, lab in enumerate(["Q", "A", "B", "C", "D", "E"]):
-            gab_grid.cell(0, i).paragraphs[0].add_run(lab).font.bold = True
-        for r in range(1, num_total_q + 1):
-            gab_grid.cell(r, 0).paragraphs[0].add_run(f"{r:02d}").font.size = Pt(9)
-            for col in range(1, 6): 
-                gab_grid.cell(r, col).paragraphs[0].add_run("○").font.size = Pt(14)
+        # 🚨 PROTOCOLO FÊNIX: Remove o quadro de gabarito se for 2ª Chamada
+        if info.get('tipo_prova') != "2ª Chamada":
+            c_gab = top_table.cell(0, 1)
+            gab_grid = c_gab.add_table(rows=num_total_q + 1, cols=6)
+            gab_grid.style = 'Table Grid'
+            for i, lab in enumerate(["Q", "A", "B", "C", "D", "E"]):
+                gab_grid.cell(0, i).paragraphs[0].add_run(lab).font.bold = True
+            for r in range(1, num_total_q + 1):
+                gab_grid.cell(r, 0).paragraphs[0].add_run(f"{r:02d}").font.size = Pt(9)
+                for col in range(1, 6): 
+                    gab_grid.cell(r, col).paragraphs[0].add_run("○").font.size = Pt(14)
+        else:
+            c_gab = top_table.cell(0, 1)
+            p_gab = c_gab.paragraphs[0]
+            p_gab.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            p_gab.add_run("\nAVALIAÇÃO DISCURSIVA\n").font.bold = True
+            p_gab.add_run("Questões sem demonstração de cálculo poderão ter a nota reduzida ou zerada.").font.size = Pt(9)
         
         doc.add_paragraph()
 
