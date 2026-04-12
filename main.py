@@ -1940,216 +1940,216 @@ elif menu == "📝 Central de Avaliações":
             st.warning(f"🛠️ **MODO REFINO:** Editando {st.session_state.refino_av_ativo.get('tipo')}")
             if st.button("❌ CANCELAR E VOLTAR AO NOVO"): reset_avaliacoes()
 
-        # --- 1. CONFIGURAÇÃO BÁSICA ---
+        st.markdown("### 🏗️ Painel de Comando: Natureza da Avaliação")
+        
+        # 🚨 1. SELETOR DE MODO DE OPERAÇÃO (O CÉREBRO DO ARQUITETO)
+        modo_arq = st.radio(
+            "O que você deseja construir hoje?", 
+            [
+                "🆕 Nova Avaliação (Inédita)", 
+                "🧬 Variante Anti-Fraude (Tipo B, C...)", 
+                "🔄 2ª Chamada (Discursiva)", 
+                "🔍 Sonda Diagnóstica"
+            ], 
+            horizontal=True, 
+            key=f"modo_arq_{v}"
+        )
+        
+        st.markdown("---")
+
+        # 🚨 2. CONFIGURAÇÃO BÁSICA (COMUM A TODOS)
         with st.container(border=True):
-            st.markdown("### ⚙️ Passo 1: Configuração do Exame")
-            c1, c2, c3, c4 = st.columns([1.5, 1, 1, 1])
+            c1, c2, c3, c4 = st.columns([1, 1, 1, 1])
+            ano_av = c1.selectbox("Série Alvo:", [6, 7, 8, 9], index=0, key=f"av_a_{v}")
+            trim_filtro = c2.selectbox("Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"av_trim_{v}")
+            v_total = c3.number_input("Valor Total:", 0.0, 10.0, 10.0 if "Sonda" in modo_arq else 3.0, step=0.5, key=f"av_v_{v}")
+            qtd_q = c4.number_input("Nº de Questões:", 1, 20, 10, key=f"av_q_{v}")
+
+        # Variáveis de controle para o botão de compilação
+        soma_q = qtd_q
+        q_facil, q_medio, q_dificil = 0, 0, 0
+        mats_selecionados = []
+        sel_conts, sel_objs = [], []
+        instr_extra = ""
+        prova_base_sel = ""
+
+        # ==============================================================================
+        # 🟢 MODO 1: NOVA AVALIAÇÃO (INÉDITA)
+        # ==============================================================================
+        if modo_arq == "🆕 Nova Avaliação (Inédita)":
+            tipo_av = st.selectbox("Tipo de Ativo:", ["Teste", "Prova", "Recuperação Paralela", "Recuperação Final"], key=f"tipo_av_nova_{v}")
             
-            tipo_av = c1.selectbox("Tipo de Ativo:",["Teste", "Prova", "Sonda de Proficiência", "Recuperação Paralela", "Recuperação Final", "2ª Chamada"], 
-                help="Sonda: Foca em lacunas do ano anterior. 2ª Chamada: Gera questões gêmeas de uma prova existente.",
-                key=f"av_t_{v}")
-            
-            val_sugerido = 3.0 if "Teste" in tipo_av else 10.0 if "Sonda" in tipo_av else 4.0
-            v_total = c2.number_input("Valor Total:", 0.0, 10.0, val_sugerido, step=0.5, key=f"av_v_{v}")
-            ano_av = c3.selectbox("Série Atual:",[6, 7, 8, 9], index=0, key=f"av_a_{v}")
-            qtd_q = c4.number_input("Nº de Questões:", 1, 20, 10, help="A versão PEI terá automaticamente a mesma quantidade ou metade, dependendo da configuração da IA.", key=f"av_q_{v}")
-
-        is_sonda = "Sonda" in tipo_av
-        is_segunda = "2ª Chamada" in tipo_av
-
-        if is_sonda:
-            # --- MODO 2: ENGENHARIA DE SONDAGEM ---
             with st.container(border=True):
-                st.markdown("#### 🔍 Passo 2: Parâmetros de Sondagem Diagnóstica")
-                st.caption("A Sonda busca identificar defasagens. O sistema buscará automaticamente os conteúdos da série anterior se for o I Trimestre.")
-                
-                instr_extra = "" 
-                
-                trim_filtro = st.selectbox("Trimestre de Referência:",["I Trimestre", "II Trimestre", "III Trimestre"], key=f"s_trim_{v}")
-                
-                ano_busca = int(ano_av) - 1 if trim_filtro == "I Trimestre" else int(ano_av)
-                st.info(f"💡 **Foco Diagnóstico:** Buscando conteúdos do **{ano_busca}º Ano** na Matriz Curricular para mapear lacunas.")
-
-                df_matriz = df_curriculo[df_curriculo["ANO"].astype(str).str.contains(str(ano_busca))].copy()
-                
-                c_s1, c_s2 = st.columns(2)
-                lista_eixos = sorted(df_matriz["EIXO"].unique().tolist()) if not df_matriz.empty else[]
-                sel_eixos = c_s1.multiselect("Selecione o(s) Eixo(s):", lista_eixos, key=f"s_e_m_{v}")
-                
-                sel_conts = []
-                sel_objs =[]
-                
-                if sel_eixos:
-                    df_c_f = df_matriz[df_matriz["EIXO"].isin(sel_eixos)].copy()
-                    lista_conts = sorted(df_c_f["CONTEUDO_ESPECIFICO"].unique().tolist()) if not df_c_f.empty else[]
-                    sel_conts = c_s2.multiselect("Conteúdo(s) Base:", lista_conts, key=f"s_c_m_{v}")
-                    
-                    if sel_conts:
-                        df_o_f = df_c_f[df_c_f["CONTEUDO_ESPECIFICO"].isin(sel_conts)].copy()
-                        lista_objs = sorted(df_o_f["OBJETIVOS"].unique().tolist()) if not df_o_f.empty else[]
-                        sel_objs = st.multiselect("Refine pelos Objetivos (Descritores):", lista_objs, key=f"s_o_m_{v}")
-                
-                instr_extra = st.text_area("📝 Instruções de Sondagem (Ex: Focar em itens do SAEB):", key=f"s_instr_{v}")
-
-        else:
-            # --- MODO 1: ENGENHARIA DE SAFRA (TESTE/PROVA/2ª CHAMADA) ---
-            with st.container(border=True):
-                st.markdown("### 📊 Passo 2: Distribuição de Dificuldade (Taxonomia)")
-                st.caption("A soma das questões fáceis, médias e difíceis deve ser exatamente igual ao número total de questões.")
+                st.markdown("#### 📊 Taxonomia (Distribuição de Dificuldade)")
                 cd1, cd2, cd3 = st.columns(3)
                 q_facil = cd1.number_input("Fáceis (Relembrar):", 0, qtd_q, int(qtd_q*0.3), key=f"q_f_{v}")
                 q_medio = cd2.number_input("Médias (Aplicar):", 0, qtd_q, int(qtd_q*0.5), key=f"q_m_{v}")
                 q_dificil = cd3.number_input("Difíceis (Analisar):", 0, qtd_q, max(0, qtd_q-(q_facil+q_medio)), key=f"q_d_{v}")
                 soma_q = q_facil + q_medio + q_dificil
+                
+                if soma_q != qtd_q:
+                    st.error(f"🚨 Erro: A soma das questões ({soma_q}) deve ser igual ao total ({qtd_q}).")
 
             with st.container(border=True):
-                st.markdown("### 🎯 Passo 3: Matriz de Mérito e Vínculo de Safra")
-                st.caption("Selecione as aulas que você já ministrou e os conteúdos específicos que deseja cobrar. A IA usará isso para gerar a prova com foco cirúrgico.")
+                st.markdown("#### 🎯 Vínculo de Safra (Conteúdos Ministrados)")
+                df_ref = df_aulas[(df_aulas['ANO'].str.contains(str(ano_av))) & (df_aulas['CONTEUDO'].str.contains(trim_filtro, na=False))]
                 
-                c_trim, c_mats = st.columns([1, 2])
-                trim_filtro = c_trim.selectbox("Filtrar Ativos por Trimestre:",["I Trimestre", "II Trimestre", "III Trimestre"], key=f"av_trim_filter_{v}")
+                mats_selecionados = st.multiselect(f"📦 Selecione as Aulas Base ({len(df_ref)} detectadas):", options=df_ref["TIPO_MATERIAL"].tolist(), key=f"av_ref_nova_{v}")
                 
-                df_ref = df_aulas[df_aulas['ANO'].str.contains(str(ano_av))].copy()
-                
-                def validar_pertenca_trimestre(row):
-                    if trim_filtro.upper() in str(row['CONTEUDO']).upper():
-                        return True
-                    try:
-                        data_str = str(row['DATA'])
-                        d, m, y = map(int, data_str.split('/'))
-                        dt_aula = date(y, m, d)
-                        trim_nome, _ = util.obter_info_trimestre(dt_aula)
-                        return trim_nome == trim_filtro
-                    except:
-                        return False
-
-                if not df_ref.empty:
-                    mask = df_ref.apply(validar_pertenca_trimestre, axis=1)
-                    df_ref = df_ref[mask]
-
-                if is_segunda:
-                    df_ref_2a = df_ref[df_ref['SEMANA_REF'] == "AVALIAÇÃO"]
-                    mats_selecionados = c_mats.selectbox(f"📦 Selecione a Prova Original ({len(df_ref_2a)} detectadas):", [""] + df_ref_2a['TIPO_MATERIAL'].tolist(), help="A IA lerá esta prova e criará questões com a mesma estrutura matemática, mas com valores e contextos diferentes.", key=f"av_ref_{v}")
-                    mats_lista =[mats_selecionados] if mats_selecionados else[]
-                else:
-                    mats_selecionados = c_mats.multiselect(f"📦 Ativos de Safra ({len(df_ref)} detectados):", options=df_ref["TIPO_MATERIAL"].tolist(), key=f"av_ref_{v}")
-                    mats_lista = mats_selecionados
-                
-                st.markdown("---")
-                
-                # ==============================================================================
-                # 🚨 EXTRAÇÃO DINÂMICA DE CONTEÚDOS E OBJETIVOS DAS AULAS SELECIONADAS
-                # ==============================================================================
-                conteudos_extraidos = set()
-                objetivos_extraidos = set()
-                
-                if mats_lista:
-                    semanas_selecionadas = df_ref[df_ref['TIPO_MATERIAL'].isin(mats_lista)]['SEMANA_REF'].unique()
+                conteudos_extraidos, objetivos_extraidos = set(), set()
+                if mats_selecionados:
+                    semanas_selecionadas = df_ref[df_ref['TIPO_MATERIAL'].isin(mats_selecionados)]['SEMANA_REF'].unique()
                     planos_relacionados = df_planos[(df_planos['ANO'].str.contains(str(ano_av))) & (df_planos['SEMANA'].isin(semanas_selecionadas))]
-                    
                     for _, row_p in planos_relacionados.iterrows():
-                        txt_plano = str(row_p['PLANO_TEXTO'])
-                        cont = ai.extrair_tag(txt_plano, "CONTEUDOS_ESPECIFICOS")
-                        obj = ai.extrair_tag(txt_plano, "OBJETIVOS_ENSINO")
-                        
+                        cont = ai.extrair_tag(str(row_p['PLANO_TEXTO']), "CONTEUDOS_ESPECIFICOS")
+                        obj = ai.extrair_tag(str(row_p['PLANO_TEXTO']), "OBJETIVOS_ENSINO")
                         if cont and cont.upper() != "N/A":
                             for item in re.split(r'[;\n]', cont):
-                                item_limpo = item.strip().replace("- ", "").replace("• ", "")
-                                if len(item_limpo) > 5: conteudos_extraidos.add(item_limpo)
+                                if len(item.strip()) > 5: conteudos_extraidos.add(item.strip().replace("- ", "").replace("• ", ""))
                         if obj and obj.upper() != "N/A":
                             for item in re.split(r'[;\n]', obj):
-                                item_limpo = item.strip().replace("- ", "").replace("• ", "")
-                                if len(item_limpo) > 5: objetivos_extraidos.add(item_limpo)
-                                
+                                if len(item.strip()) > 5: objetivos_extraidos.add(item.strip().replace("- ", "").replace("• ", ""))
+                
                 lista_conteudos = sorted(list(conteudos_extraidos))
                 lista_objetivos = sorted(list(objetivos_extraidos))
                 
-                # Fallback para a Matriz Curricular se não encontrar nos planos
-                if not lista_conteudos:
-                    df_cur_av = df_curriculo[(df_curriculo['ANO'].astype(str).str.contains(str(ano_av))) & (df_curriculo['TRIMESTRE'] == trim_filtro)]
-                    lista_conteudos = sorted(df_cur_av['CONTEUDO_ESPECIFICO'].unique().tolist()) if not df_cur_av.empty else[]
-                    lista_objetivos = sorted(df_cur_av['OBJETIVOS'].unique().tolist()) if not df_cur_av.empty else[]
-                
                 c_foco1, c_foco2 = st.columns(2)
-                conteudos_foco = c_foco1.multiselect("🎯 Conteúdos Específicos (Extraídos das Aulas):", lista_conteudos, help="Selecione os conteúdos exatos que deseja cobrar. A IA criará as questões baseadas APENAS nestes tópicos.", key=f"cont_foco_av_{v}")
-                objetivos_foco = c_foco2.multiselect("🎯 Objetivos de Ensino (Extraídos das Aulas):", lista_objetivos, help="Selecione as habilidades/objetivos que deseja avaliar.", key=f"obj_foco_av_{v}")
+                conteudos_foco = c_foco1.multiselect("🎯 Conteúdos Específicos:", lista_conteudos, key=f"cont_foco_{v}")
+                objetivos_foco = c_foco2.multiselect("🎯 Objetivos de Ensino:", lista_objetivos, key=f"obj_foco_{v}")
                 
-                instr_extra = st.text_area("📝 Instruções Extras de Composição:", placeholder="Ex: Focar mais em frações do que em decimais...", key=f"av_extra_{v}")
+                instr_extra = st.text_area("📝 Instruções Extras (Ex: Focar em frações):", key=f"av_extra_nova_{v}")
 
-        # --- 4. DIAGNÓSTICO DE CONFIGURAÇÃO ---
-        with st.container(border=True):
-            col_diag1, col_diag2 = st.columns(2)
-            with col_diag1:
-                if is_sonda:
-                    if sel_conts: st.success(f"✅ Sonda configurada: {len(sel_conts)} conteúdos.")
-                    else: st.warning("⚠️ Selecione os conteúdos da matriz.")
-                else:
-                    if soma_q == qtd_q: st.success(f"✅ Taxonomia: {soma_q}/{qtd_q} questões.")
-                    else: st.error(f"🚨 Erro: Soma ({soma_q}) ≠ Total ({qtd_q}). Ajuste a distribuição.")
-            with col_diag2:
-                peso_q = v_total / qtd_q if qtd_q > 0 else 0
-                st.metric("Peso por Questão", f"{peso_q:.2f} pts")
+        # ==============================================================================
+        # 🧬 MODO 2 & 3: VARIANTE OU 2ª CHAMADA (CLONAGEM)
+        # ==============================================================================
+        elif modo_arq in ["🧬 Variante Anti-Fraude (Tipo B, C...)", "🔄 2ª Chamada (Discursiva)"]:
+            st.info("💡 **Modo de Clonagem:** O sistema lerá a prova original e criará questões gêmeas (mesma habilidade, números diferentes).")
+            
+            df_provas = df_aulas[(df_aulas['ANO'].str.contains(str(ano_av))) & (df_aulas['SEMANA_REF'] == "AVALIAÇÃO")]
+            opcoes_provas = [p for p in df_provas['TIPO_MATERIAL'].tolist() if not re.search(r"2[ªA]|CHAMADA|TIPO [B-Z]", p, re.IGNORECASE)]
+            
+            prova_base_sel = st.selectbox("📦 Selecione a Prova Original:", [""] + opcoes_provas, key=f"prova_base_{v}")
+            
+            if prova_base_sel:
+                txt_base = str(df_provas[df_provas['TIPO_MATERIAL'] == prova_base_sel].iloc[0]['CONTEUDO'])
+                q_raw = ai.extrair_tag(txt_base, "QUESTOES")
+                qtd_detectada = len(re.findall(r"(?i)QUEST[AÃ]O\s*0?\d+", q_raw))
+                st.success(f"✅ Prova detectada com {qtd_detectada} questões. A IA manterá a mesma estrutura.")
+                
+                instr_extra = st.text_area("📝 Instruções Extras (Opcional):", key=f"av_extra_clone_{v}")
 
-        # --- 5. BOTÃO DE COMPILAÇÃO UNIFICADO ---
+        # ==============================================================================
+        # 🔍 MODO 4: SONDA DIAGNÓSTICA
+        # ==============================================================================
+        elif modo_arq == "🔍 Sonda Diagnóstica":
+            st.info("💡 **Foco Diagnóstico:** O sistema buscará conteúdos da série anterior para mapear lacunas.")
+            ano_busca = int(ano_av) - 1 if trim_filtro == "I Trimestre" else int(ano_av)
+            
+            df_matriz = df_curriculo[df_curriculo["ANO"].astype(str).str.contains(str(ano_busca))].copy()
+            
+            c_s1, c_s2 = st.columns(2)
+            lista_eixos = sorted(df_matriz["EIXO"].unique().tolist()) if not df_matriz.empty else []
+            sel_eixos = c_s1.multiselect("Selecione o(s) Eixo(s):", lista_eixos, key=f"s_e_m_{v}")
+            
+            if sel_eixos:
+                df_c_f = df_matriz[df_matriz["EIXO"].isin(sel_eixos)].copy()
+                sel_conts = c_s2.multiselect("Conteúdo(s) Base:", sorted(df_c_f["CONTEUDO_ESPECIFICO"].unique().tolist()), key=f"s_c_m_{v}")
+                if sel_conts:
+                    df_o_f = df_c_f[df_c_f["CONTEUDO_ESPECIFICO"].isin(sel_conts)].copy()
+                    sel_objs = st.multiselect("Refine pelos Objetivos (Descritores):", sorted(df_o_f["OBJETIVOS"].unique().tolist()), key=f"s_o_m_{v}")
+            
+            instr_extra = st.text_area("📝 Instruções de Sondagem (Ex: Focar em itens do SAEB):", key=f"s_instr_{v}")
+
+        # ==============================================================================
+        # 🚀 MOTOR DE COMPILAÇÃO UNIFICADO
+        # ==============================================================================
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("🧠 INICIAR MOTOR DE IA: GERAR AVALIAÇÃO", use_container_width=True, type="primary"):
-            if not is_sonda and not is_segunda and soma_q != qtd_q:
-                st.error("⚠️ Ajuste a distribuição de dificuldade antes de gerar.")
+            
+            if modo_arq == "🆕 Nova Avaliação (Inédita)" and soma_q != qtd_q:
+                st.error("⚠️ Ajuste a distribuição de dificuldade (Taxonomia) antes de gerar.")
+            elif modo_arq in ["🧬 Variante Anti-Fraude (Tipo B, C...)", "🔄 2ª Chamada (Discursiva)"] and not prova_base_sel:
+                st.error("⚠️ Selecione a Prova Original para clonagem.")
             else:
-                if "chat_history_av" in st.session_state:
-                    del st.session_state["chat_history_av"]
+                if "chat_history_av" in st.session_state: del st.session_state["chat_history_av"]
                     
                 with st.spinner("Maestro Sosa arquitetando Tratado Pedagógico e Grade de Perícia..."):
-                    peso_str = util.sosa_to_str(peso_q)
-                    nome_tecnico = f"{tipo_av.upper().replace(' ', '_')}_{ano_av}ANO_{trim_filtro.replace(' ', '')}"
+                    peso_str = util.sosa_to_str(v_total / qtd_q if qtd_q > 0 else 0)
                     
-                    if is_sonda:
-                        prompt = (
-                            f"ORDEM DE PERÍCIA V70 - PSICOMETRIA DIAGNÓSTICA\n"
-                            f"SÉRIE ATUAL: {ano_av}º. SÉRIE BASE: {ano_busca}º. VALOR: 10.0. QTD: {qtd_q}.\n"
-                            f"CONTEÚDOS MATRIZ: {sel_conts}. OBJETIVOS: {sel_objs}.\n"
-                            f"EXTRAS: {instr_extra}.\n\n"
-                            f"🚨 MISSÃO: Use o Google Search para encontrar itens de avaliação diagnóstica oficiais (SAEB, Prova Brasil, AAP). "
-                            f"Gere questões de múltipla escolha com erros planejados para mapear lacunas. "
-                            f"Formatação INLINE: **QUESTÃO XX ({peso_str} ponto) -** Texto."
-                        )
-                        persona_alvo = "ARQUITETO_SONDA_DIAGNOSTICA"
-                    elif is_segunda:
-                        # 🚨 PROTOCOLO FÊNIX: Aciona a persona de 2ª Chamada Discursiva
+                    # 1. ROTA: NOVA AVALIAÇÃO
+                    if modo_arq == "🆕 Nova Avaliação (Inédita)":
+                        nome_tecnico = f"{tipo_av.upper().replace(' ', '_')}_{ano_av}ANO_{trim_filtro.replace(' ', '')}"
                         contexto_base = ""
-                        m_row = df_aulas[df_aulas["TIPO_MATERIAL"] == mats_selecionados].iloc[0]
-                        contexto_base += f"MATERIAL: {mats_selecionados}\n{m_row['CONTEUDO']}\n"
-                        
-                        prompt = (
-                            f"TIPO: 2ª Chamada (100% DISCURSIVA). SÉRIE: {ano_av}º. VALOR: {v_total}. QTD: {qtd_q}.\n"
-                            f"DIRETRIZ: Crie questões GÊMEAS da prova abaixo, mas em formato ABERTO (sem alternativas).\n"
-                            f"EXTRAS: {instr_extra}.\n\n"
-                            f"--- PROVA ORIGINAL ---\n{contexto_base}"
-                        )
-                        persona_alvo = "ARQUITETO_2A_CHAMADA_V100"
-                    else:
-                        contexto_base = ""
-                        for m_nome in (mats_selecionados if isinstance(mats_selecionados, list) else [mats_selecionados]):
+                        for m_nome in mats_selecionados:
                             m_row = df_aulas[df_aulas["TIPO_MATERIAL"] == m_nome].iloc[0]
                             contexto_base += f"MATERIAL: {m_nome}\n{m_row['CONTEUDO']}\n"
                         
                         foco_str = ""
-                        if conteudos_foco: foco_str += f"🎯 CONTEÚDOS ESPECÍFICOS A SEREM COBRADOS: {', '.join(conteudos_foco)}\n"
-                        if objetivos_foco: foco_str += f"🎯 OBJETIVOS DE ENSINO A SEREM AVALIADOS: {', '.join(objetivos_foco)}\n"
-                        if not foco_str: foco_str = "Conteúdo geral das aulas vinculadas."
+                        if conteudos_foco: foco_str += f"🎯 CONTEÚDOS ESPECÍFICOS: {', '.join(conteudos_foco)}\n"
+                        if objetivos_foco: foco_str += f"🎯 OBJETIVOS DE ENSINO: {', '.join(objetivos_foco)}\n"
                         
                         prompt = (
                             f"TIPO: {tipo_av}. SÉRIE: {ano_av}º. VALOR: {v_total}. QTD: {qtd_q}.\n"
                             f"DIRETRIZ DE DIFICULDADE: {q_facil} Fáceis, {q_medio} Médias, {q_dificil} Difíceis.\n"
-                            f"{foco_str}\n"
-                            f"EXTRAS: {instr_extra}.\n\n"
-                            f"--- CONTEÚDO HERDADO DAS AULAS (BASE DE CONHECIMENTO) ---\n{contexto_base}"
+                            f"{foco_str}\nEXTRAS: {instr_extra}.\n\n"
+                            f"--- CONTEÚDO HERDADO DAS AULAS ---\n{contexto_base}"
                         )
-                        persona_alvo = "ARQUITETO_EXAMES_V30_ELITE"
+                        resultado_ia = ai.gerar_ia("ARQUITETO_EXAMES_V30_ELITE", prompt, usar_busca=True)
+                    
+                    # 2. ROTA: VARIANTE ANTI-FRAUDE
+                    elif modo_arq == "🧬 Variante Anti-Fraude (Tipo B, C...)":
+                        existentes = df_aulas[df_aulas['TIPO_MATERIAL'].str.startswith(prova_base_sel + " - TIPO", na=False)]
+                        letra = chr(66 + len(existentes)) # 66 = 'B'
+                        nome_tecnico = f"{prova_base_sel} - TIPO {letra}"
+                        
+                        txt_base = str(df_aulas[df_aulas['TIPO_MATERIAL'] == prova_base_sel].iloc[0]['CONTEUDO'])
+                        q_reg = ai.extrair_tag(txt_base, "QUESTOES")
+                        g_reg = ai.extrair_tag(txt_base, "GRADE_DE_CORRECAO")
+                        
+                        prompt = f"PROVA ORIGINAL:\n[QUESTOES]\n{q_reg}\n\n[GRADE_DE_CORRECAO]\n{g_reg}\nEXTRAS: {instr_extra}"
+                        res_hydra = ai.gerar_ia("ARQUITETO_VARIANTES_V100", prompt)
+                        
+                        # Injeta o PEI original na variante
+                        pei_q = ai.extrair_tag(txt_base, "PEI")
+                        pei_gab = ai.extrair_tag(txt_base, "GABARITO_PEI")
+                        pei_grade = ai.extrair_tag(txt_base, "GRADE_DE_CORRECAO_PEI")
+                        
+                        resultado_ia = f"[VALOR: {v_total}]\n\n[QUESTOES]\n{ai.extrair_tag(res_hydra, 'QUESTOES')}\n\n[GABARITO_TEXTO]\n{ai.extrair_tag(res_hydra, 'GABARITO_TEXTO')}\n\n[GRADE_DE_CORRECAO]\n{ai.extrair_tag(res_hydra, 'GRADE_DE_CORRECAO')}\n\n[PEI]\n{pei_q}\n\n[GABARITO_PEI]\n{pei_gab}\n\n[GRADE_DE_CORRECAO_PEI]\n{pei_grade}\n\n"
+                    
+                    # 3. ROTA: 2ª CHAMADA DISCURSIVA
+                    elif modo_arq == "🔄 2ª Chamada (Discursiva)":
+                        nome_tecnico = f"2ª_CHAMADA_{prova_base_sel}"
+                        txt_base = str(df_aulas[df_aulas['TIPO_MATERIAL'] == prova_base_sel].iloc[0]['CONTEUDO'])
+                        q_reg = ai.extrair_tag(txt_base, "QUESTOES")
+                        
+                        prompt = (
+                            f"TIPO: 2ª Chamada (100% DISCURSIVA). SÉRIE: {ano_av}º. VALOR: {v_total}. QTD: {qtd_q}.\n"
+                            f"DIRETRIZ: Crie questões GÊMEAS da prova abaixo, mas em formato ABERTO (sem alternativas).\n"
+                            f"EXTRAS: {instr_extra}.\n\n--- PROVA ORIGINAL ---\n{q_reg}"
+                        )
+                        resultado_ia = ai.gerar_ia("ARQUITETO_2A_CHAMADA_V100", prompt)
+                    
+                    # 4. ROTA: SONDA DIAGNÓSTICA
+                    elif modo_arq == "🔍 Sonda Diagnóstica":
+                        nome_tecnico = f"SONDA_DE_PROFICIÊNCIA_{ano_av}ANO_{trim_filtro.replace(' ', '')}"
+                        prompt = (
+                            f"ORDEM DE PERÍCIA V70 - PSICOMETRIA DIAGNÓSTICA\n"
+                            f"SÉRIE ATUAL: {ano_av}º. SÉRIE BASE: {ano_busca}º. VALOR: {v_total}. QTD: {qtd_q}.\n"
+                            f"CONTEÚDOS MATRIZ: {sel_conts}. OBJETIVOS: {sel_objs}.\n"
+                            f"EXTRAS: {instr_extra}.\n\n"
+                            f"🚨 MISSÃO: Gere questões de múltipla escolha com erros planejados para mapear lacunas. "
+                            f"Formatação INLINE: **QUESTÃO XX ({peso_str} ponto) -** Texto."
+                        )
+                        resultado_ia = ai.gerar_ia("ARQUITETO_SONDA_DIAGNOSTICA", prompt, usar_busca=True)
 
-                    st.session_state.temp_prova = ai.gerar_ia(persona_alvo, prompt, usar_busca=True)
+                    # Salva na memória e avança
+                    st.session_state.temp_prova = resultado_ia
                     st.session_state.av_valor_total = v_total
                     st.session_state.av_nome_fixo = nome_tecnico
+                    
+                    # Salva o tipo de prova para o Exporter saber se tira o quadro de gabarito
+                    st.session_state.av_tipo_export = "2ª Chamada" if modo_arq == "🔄 2ª Chamada (Discursiva)" else "AVALIAÇÃO"
+                    
                     st.rerun()
 
     # ==============================================================================
