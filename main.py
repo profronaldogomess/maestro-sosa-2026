@@ -2450,91 +2450,51 @@ elif menu == "📝 Central de Avaliações":
                         val_ex = re.sub(r'[*#]', '', ai.extrair_tag(txt_f, "VALOR")).strip()
                         st.markdown(f"**💰 Valor:** `{val_ex if val_ex else 'N/A'}` | **🎓 Série:** `{row['ANO']}`")
 
+                    # 🚨 BLINDAGEM VISUAL DO GABARITO NO ACERVO
                     gab_simples = ai.extrair_tag(txt_f, "GABARITO_TEXTO") or ai.extrair_tag(txt_f, "RESPOSTAS_IA")
                     if gab_simples:
-                        gab_limpo = re.sub(r'[*#]', '', gab_simples).replace('QUESTÃO', '').strip()
-                        st.markdown(f"**✅ Gabarito Regular:** `{gab_limpo}`")
+                        # Se for 2ª Chamada ou Revisão (Discursiva), o gabarito é um texto longo.
+                        if "2ª" in identificador.upper() or "2CHAMADA" in identificador.upper() or "REVISAO" in identificador.upper():
+                            st.markdown(f"**✅ Gabarito Regular:** `[ Formato Discursivo - Ver aba 'Perícia' abaixo ]`")
+                        else:
+                            # Tenta extrair apenas as letras para ficar bonito (Ex: 01: A | 02: B)
+                            matches = re.findall(r"(\d+)[\s\.\)\-:]+([A-E])", gab_simples.upper())
+                            if matches:
+                                gab_formatado = " | ".join([f"{n}: {l}" for n, l in matches])
+                                st.markdown(f"**✅ Gabarito Regular:** `{gab_formatado}`")
+                            else:
+                                # Fallback de segurança
+                                gab_limpo = re.sub(r'[*#]', '', gab_simples).replace('QUESTÃO', '').strip()
+                                if len(gab_limpo) > 100:
+                                    st.markdown(f"**✅ Gabarito Regular:** `[ Formato Discursivo - Ver aba 'Perícia' abaixo ]`")
+                                else:
+                                    st.markdown(f"**✅ Gabarito Regular:** `{gab_limpo}`")
 
-                    l_reg = (re.findall(r"Regular\((.*?)\)", txt_f) or[row.get('LINK_DRIVE')])[-1]
+                    l_reg = (re.findall(r"Regular\((.*?)\)", txt_f) or [row.get('LINK_DRIVE')])[-1]
                     l_pei = (re.findall(r"PEI\((.*?)\)", txt_f) or [None])[-1]
                     l_prof = (re.findall(r"Prof\((.*?)\)", txt_f) or [None])[-1]
 
-                    c_b1, c_b2, c_b3 = st.columns(3)
+                    c_b1, c_b2, c_b3, c_b4, c_b5 = st.columns(5)
                     c_b1.link_button("📝 REGULAR", str(l_reg), use_container_width=True, type="primary")
-                    if l_pei and "N/A" not in str(l_pei): c_b2.link_button("♿ PEI", str(l_pei), use_container_width=True)
-                    else: c_b2.button("⚪ SEM PEI", disabled=True, use_container_width=True)
-                    if l_prof and "N/A" not in str(l_prof): c_b3.link_button("🔍 PERÍCIA", str(l_prof), use_container_width=True)
-                    else: c_b3.button("⚪ SEM GRADE", disabled=True, use_container_width=True)
                     
-                    st.markdown("<br>", unsafe_allow_html=True)
-                    c_act1, c_act2, c_act3 = st.columns(3)
+                    # 🚨 Oculta o botão PEI se for 2ª Chamada (pois não geramos PEI novo para ela)
+                    if l_pei and "N/A" not in str(l_pei) and "2ª" not in identificador.upper() and "2CHAMADA" not in identificador.upper(): 
+                        c_b2.link_button("♿ PEI", str(l_pei), use_container_width=True)
+                    else: 
+                        c_b2.button("⚪ SEM PEI", disabled=True, use_container_width=True)
+                        
+                    if l_prof and "N/A" not in str(l_prof): 
+                        c_b3.link_button("🔍 PERÍCIA", str(l_prof), use_container_width=True)
+                    else: 
+                        c_b3.button("⚪ SEM GRADE", disabled=True, use_container_width=True)
                     
-                    if c_act1.button("🔄 REFINAR", key=f"ref_av_h_{row.name}", use_container_width=True):
+                    if c_b4.button("🔄 REFINAR", key=f"ref_av_h_{row.name}", use_container_width=True):
                         st.session_state.temp_prova = txt_f
                         st.session_state.av_nome_fixo = identificador
                         if "chat_history_av" in st.session_state: del st.session_state["chat_history_av"]
                         st.rerun()
                         
-                    # ==============================================================================
-                    # 🚨 PROTOCOLO HYDRA: GERADOR DE VARIANTES (TIPO B, C)
-                    # ==============================================================================
-                    if c_act2.button("🧬 GERAR VARIANTE", key=f"var_av_h_{row.name}", use_container_width=True):
-                        with st.status("Iniciando Protocolo Hydra (Variante Anti-Fraude)...") as status:
-                            txt_original = str(row['CONTEUDO'])
-                            nome_original = row['TIPO_MATERIAL']
-                            ano_original = row['ANO']
-                            
-                            # Descobre qual a próxima letra (B, C, D...)
-                            existentes = df_aulas[df_aulas['TIPO_MATERIAL'].str.startswith(nome_original + " - TIPO", na=False)]
-                            letra = chr(66 + len(existentes)) # 66 é 'B' na tabela ASCII
-                            nome_variante = f"{nome_original} - TIPO {letra}"
-                            
-                            status.write(f"🧠 Analisando {nome_original} e criando questões gêmeas...")
-                            q_reg = ai.extrair_tag(txt_original, "QUESTOES")
-                            g_reg = ai.extrair_tag(txt_original, "GRADE_DE_CORRECAO")
-                            
-                            prompt_hydra = f"PROVA ORIGINAL:\n[QUESTOES]\n{q_reg}\n\n[GRADE_DE_CORRECAO]\n{g_reg}"
-                            res_hydra = ai.gerar_ia("ARQUITETO_VARIANTES_V100", prompt_hydra)
-                            
-                            status.write("🧩 Remontando a prova com o PEI original intacto...")
-                            pei_q = ai.extrair_tag(txt_original, "PEI")
-                            pei_gab = ai.extrair_tag(txt_original, "GABARITO_PEI")
-                            pei_grade = ai.extrair_tag(txt_original, "GRADE_DE_CORRECAO_PEI")
-                            valor_tag = ai.extrair_tag(txt_original, "VALOR")
-                            
-                            novo_conteudo = f"[VALOR: {valor_tag}]\n\n"
-                            novo_conteudo += f"[QUESTOES]\n{ai.extrair_tag(res_hydra, 'QUESTOES')}\n\n"
-                            novo_conteudo += f"[GABARITO_TEXTO]\n{ai.extrair_tag(res_hydra, 'GABARITO_TEXTO')}\n\n"
-                            novo_conteudo += f"[GRADE_DE_CORRECAO]\n{ai.extrair_tag(res_hydra, 'GRADE_DE_CORRECAO')}\n\n"
-                            novo_conteudo += f"[PEI]\n{pei_q}\n\n[GABARITO_PEI]\n{pei_gab}\n\n[GRADE_DE_CORRECAO_PEI]\n{pei_grade}\n\n"
-                            
-                            status.write("📄 Gerando DOCX e Sincronizando no Drive...")
-                            info_reg = {
-                                "ano": ano_original, "tipo_prova": "AVALIAÇÃO", 
-                                "valor": valor_tag if valor_tag else "10,0", 
-                                "valor_questao": "N/A", 
-                                "qtd_questoes": len(re.findall(r'QUESTÃO', ai.extrair_tag(res_hydra, 'QUESTOES').upper())), 
-                                "trimestre": "I Trimestre"
-                            }
-                            
-                            doc_reg = exporter.gerar_docx_prova_v25(nome_variante, novo_conteudo, info_reg)
-                            link_reg = db.subir_e_converter_para_google_docs(doc_reg, nome_variante, modo="AVALIACAO")
-                            
-                            doc_pei = exporter.gerar_docx_prova_v25(f"{nome_variante}_PEI", pei_q, info_reg)
-                            link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_variante}_PEI", modo="AVALIACAO")
-                            
-                            txt_prof_completo = f"GABARITO OFICIAL (REGULAR - {letra}):\n{ai.extrair_tag(res_hydra, 'GABARITO_TEXTO')}\n\nGABARITO OFICIAL (PEI):\n{pei_gab}\n\nDETALHAMENTO POR ITEM (REGULAR):\n{ai.extrair_tag(res_hydra, 'GRADE_DE_CORRECAO')}\n\nDETALHAMENTO POR ITEM (PEI):\n{pei_grade}"
-                            doc_prof = exporter.gerar_docx_professor_v25(f"{nome_variante}_GRADE", txt_prof_completo, {"ano": ano_original, "semana": "AVALIAÇÃO", "trimestre": "I Trimestre"})
-                            link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_variante}_GRADE", modo="AVALIACAO")
-                            
-                            links_footer = f"--- LINKS ---\nRegular({link_reg}) PEI({link_pei}) Prof({link_prof})"
-                            conteudo_final_banco = novo_conteudo + f"\n\n{links_footer}"
-                            
-                            db.salvar_no_banco("DB_AULAS_PRONTAS",[datetime.now().strftime("%d/%m/%Y"), "AVALIAÇÃO", nome_variante, conteudo_final_banco, ano_original, link_reg])
-                            status.update(label=f"✅ Variante {letra} gerada e sincronizada!", state="complete")
-                            st.rerun()
-
-                    if c_act3.button("🗑️ APAGAR", key=f"del_av_h_{row.name}", use_container_width=True):
+                    if c_b5.button("🗑️ APAGAR", key=f"del_av_h_{row.name}", use_container_width=True):
                         if db.excluir_avaliacao_completa(identificador, row['SEMANA_REF']): st.rerun()
 
                     with st.expander("👁️ ANALISAR ESTRUTURA PEDAGÓGICA E ITENS"):
