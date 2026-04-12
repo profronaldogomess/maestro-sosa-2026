@@ -2655,60 +2655,6 @@ elif menu == "📸 Scanner de Gabaritos":
         "📊 4. Raio-X Pedagógico"
     ])
 
-# ==============================================================================
-# MÓDULO: CENTRAL DE INTELIGÊNCIA DE RESULTADOS (CIR / SCANNER) - CLEAN & UX V120
-# ==============================================================================
-elif menu == "📸 Scanner de Gabaritos":
-    st.title("📸 Central de Inteligência de Resultados (CIR)")
-    st.caption("💡 **Guia de Comando:** Escaneie gabaritos, lance notas de trabalhos e audite resultados com soberania total. O sistema adapta a correção ao perfil do aluno.")
-    st.markdown("---")
-
-    if "v_scan" not in st.session_state: st.session_state.v_scan = int(time.time())
-    v = st.session_state.v_scan
-
-    # --- FUNÇÃO AUXILIAR: FILTRO HIERÁRQUICO BLINDADO ---
-    def filtrar_ativos_cir(turma, trimestre_nome, apenas_provas=True):
-        if not turma or not trimestre_nome: return []
-        try:
-            serie_num = str(turma)[0] 
-            df_f = df_aulas[df_aulas['ANO'].astype(str).str.contains(serie_num)].copy()
-            
-            def detectar_trimestre(x):
-                try:
-                    if str(x).replace('.','',1).isdigit():
-                        dt = date(1899, 12, 30) + timedelta(days=int(float(x)))
-                        return util.obter_info_trimestre(dt)[0]
-                    if "/" in str(x):
-                        partes = str(x).split("/")
-                        dt = date(int(partes[2]), int(partes[1]), int(partes[0]))
-                        return util.obter_info_trimestre(dt)[0]
-                except: pass
-                return "Outros"
-
-            df_f['TRIM_DETECTADO'] = df_f['DATA'].apply(detectar_trimestre)
-            
-            if apenas_provas:
-                permitidos = ["TESTE", "PROVA", "SONDA", "DIAGNÓSTICA", "RECUPERAÇÃO", "AVALIAÇÃO"]
-                df_f = df_f[df_f['TIPO_MATERIAL'].str.upper().str.contains('|'.join(permitidos))]
-                mask_trim = (df_f['TRIM_DETECTADO'] == trimestre_nome) | (df_f['CONTEUDO'].str.contains(trimestre_nome, na=False)) | (df_f['TIPO_MATERIAL'].str.upper().str.contains("FINAL"))
-                df_f = df_f[mask_trim]
-            else:
-                permitidos = ["PROJETO", "FIXAÇÃO", "REFORÇO", "ATIVIDADE", "TRABALHO", "AULA"]
-                df_f = df_f[df_f['TIPO_MATERIAL'].str.upper().str.contains('|'.join(permitidos))]
-                df_f = df_f[df_f['TRIM_DETECTADO'] == trimestre_nome]
-            
-            return sorted(df_f['TIPO_MATERIAL'].unique().tolist())
-        except Exception as e: 
-            return []
-
-    # 🚨 ARQUITETURA COM RAIO-X RESTAURADO (4 ABAS)
-    tab_pericia, tab_atividades, tab_auditoria, tab_raiox = st.tabs([
-        "📸 1. Scanner & Triagem", 
-        "✍️ 2. Trabalhos & Projetos", 
-        "⚖️ 3. Tribunal de Auditoria",
-        "📊 4. Raio-X Pedagógico"
-    ])
-
     # ==============================================================================
     # 📸 ABA 1: SCANNER & TRIAGEM INTELIGENTE
     # ==============================================================================
