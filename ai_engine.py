@@ -381,7 +381,12 @@ PERSONAS = {
     - Altere os valores numéricos e o contexto da historinha.
     - É TERMINANTEMENTE PROIBIDO gerar alternativas (A, B, C, D, E). As questões devem ser abertas, exigindo cálculo ou explicação.
 
+    🚨 LEI DA EXCLUSÃO PEI (INEGOCIÁVEL):
+    - É ESTRITAMENTE PROIBIDO gerar questões adaptadas para inclusão nesta etapa.
+    - NÃO GERE as tags [PEI], [GABARITO_PEI] ou [GRADE_DE_CORRECAO_PEI].
+
     🚨 PROTOCOLO DE TAGS OBRIGATÓRIAS:
+    Você deve gerar APENAS a parte regular da prova usando estas tags:
     [QUESTOES] -> Liste as questões abertas.
     [GABARITO_TEXTO] -> Coloque o passo a passo da resolução de cada questão.
     [GRADE_DE_CORRECAO] -> Explique a habilidade avaliada e o que o professor deve considerar para dar "Acerto Parcial" ou "Acerto Integral".
