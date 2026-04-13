@@ -2636,13 +2636,14 @@ elif menu == "📸 Scanner de Gabaritos":
         else:
             nome_filtro_pendente = at_sel.split("-")[0].strip()
             
-            # 🚨 VACINA DE SOBERANIA: Usa startswith e set() para evitar duplicidade
-            escaneados_raw = df_diagnosticos[df_diagnosticos['ID_AVALIACAO'].str.startswith(nome_filtro_pendente, na=False)]['ID_ALUNO'].astype(str).tolist()
+            # 🚨 VACINA DE SOBERANIA: Filtra PRIMEIRO pela turma selecionada antes de contar!
+            df_diag_turma = df_diagnosticos[df_diagnosticos['TURMA'] == t_sel]
             
-            # 🚨 Adiciona também os alunos que fizeram a 2ª Chamada deste trimestre
+            escaneados_raw = df_diag_turma[df_diag_turma['ID_AVALIACAO'].str.startswith(nome_filtro_pendente, na=False)]['ID_ALUNO'].astype(str).tolist()
+            
             trim_limpo = tr_sel.replace(" ", "")
             serie_num = "".join(filter(str.isdigit, t_sel))
-            escaneados_2a = df_diagnosticos[(df_diagnosticos['ID_AVALIACAO'].str.contains("2ª|2CHAMADA", regex=True, case=False)) & (df_diagnosticos['ID_AVALIACAO'].str.contains(trim_limpo, case=False))]['ID_ALUNO'].astype(str).tolist()
+            escaneados_2a = df_diag_turma[(df_diag_turma['ID_AVALIACAO'].str.contains("2ª|2CHAMADA", regex=True, case=False)) & (df_diag_turma['ID_AVALIACAO'].str.contains(trim_limpo, case=False))]['ID_ALUNO'].astype(str).tolist()
             
             escaneados_unicos = list(set(escaneados_raw + escaneados_2a))
             
@@ -3551,55 +3552,55 @@ elif menu == "📸 Scanner de Gabaritos":
                                 
                                 prefixo_q = "QUEST[AÃ]O\\s*PEI" if is_pei_view else "QUEST[AÃ]O"
                                 
-                                # 🚨 ENGENHARIA VISUAL DO ENUNCIADO E ALTERNATIVAS
-                                padrao_q = rf"(?si)({prefixo_q}\s*0?{idx_num}\b.*?)(?={prefixo_q}\s*0?{idx_num+1}\b|GABARITO|$)"
-                                m_q = re.search(padrao_q, questoes_raw)
+                                # 🚨 MOTOR DE MÚLTIPLOS TEXTOS (BASE + VARIANTES)
+                                provas_analisadas = df_filtrado['ID_AVALIACAO'].unique()
                                 
-                                if m_q:
-                                    q_completa = m_q.group(1).strip()
-                                    q_completa = re.sub(r'\[\s*PROMPT IMAGEM:.*?\]', '\n\n🖼️ *[IMAGEM DE APOIO]*\n\n', q_completa)
-                                    partes = re.split(r'(?=\n\s*\([A-E]\)|\n\s*[A-E]\))', q_completa, maxsplit=1)
-                                    
-                                    enunciado_texto = partes[0].strip()
-                                    alternativas_texto = partes[1].strip() if len(partes) > 1 else ""
-                                    
-                                    st.markdown("**📝 Enunciado (Prova Base):**")
-                                    st.info(preparar_para_leitura(enunciado_texto))
-                                    
-                                    if alternativas_texto:
-                                        st.markdown("**Alternativas:**")
-                                        alt_formatada = preparar_para_leitura(alternativas_texto).replace('\n', '\n\n')
-                                        st.markdown(alt_formatada)
-                                else:
-                                    st.error(f"Questão {idx_num} não localizada.")
-                                
-                                st.divider()
-                                
-                                # 🚨 ENGENHARIA VISUAL DA PERÍCIA
-                                padrao_p = rf"(?si){prefixo_q}\s*0?{idx_num}\b.*?(?={prefixo_q}\s*0?{idx_num+1}\b|GABARITO|RESPOSTAS|$)"
-                                match_p = re.search(padrao_p, grade_pericia_global)
-                                
-                                if match_p: 
-                                    p_completa = match_p.group(0).strip()
-                                    hab_match = re.search(r"\[(.*?)\]", p_completa)
-                                    habilidade = hab_match.group(1).strip() if hab_match else "Habilidade não especificada"
-                                    
-                                    just_match = re.search(r"(?i)JUSTIFICATIVA[\s\:]*(.*?)(?=PERÍCIA|ANÁLISE|DISTRATORES|$)", p_completa, re.DOTALL)
-                                    justificativa = just_match.group(1).strip() if just_match else ""
-                                    
-                                    dist_match = re.search(r"(?i)(?:PERÍCIA DE DISTRATORES|ANÁLISE DE LACUNA PEI|PERÍCIA|ANÁLISE|DISTRATORES)[\s\:]*(.*)", p_completa, re.DOTALL)
-                                    distratores = dist_match.group(1).strip() if dist_match else ""
-                                    
-                                    st.markdown("### 🧠 Perícia Pedagógica")
-                                    st.caption(f"**Foco / BNCC:** {habilidade}")
-                                    
-                                    if justificativa:
-                                        st.success(f"**🎯 Raciocínio Correto:**\n\n{preparar_para_leitura(justificativa)}")
-                                    if distratores:
-                                        dist_formatado = re.sub(r'(?=\([A-E]\))', '\n\n', distratores)
-                                        st.warning(f"**⚠️ Análise de Erros (Distratores):**\n\n{preparar_para_leitura(dist_formatado)}")
-                                    if not justificativa and not distratores:
-                                        st.info(preparar_para_leitura(p_completa))
+                                for av_id_loop in provas_analisadas:
+                                    # Busca o texto exato da variante no banco
+                                    if "VARIANTE" in av_id_loop.upper() or "TIPO" in av_id_loop.upper():
+                                        tipo_letra = re.search(r'TIPO\s*([A-Z])', av_id_loop, re.IGNORECASE)
+                                        letra = tipo_letra.group(1) if tipo_letra else "B"
+                                        nome_base = av_id_loop.split('(')[0].strip()
+                                        busca_exata = f"{nome_base} - TIPO {letra}"
+                                        mat_loop = df_aulas[df_aulas['TIPO_MATERIAL'] == busca_exata]
+                                        label_versao = f"VARIANTE TIPO {letra}"
+                                    else:
+                                        mat_loop = df_aulas[df_aulas['TIPO_MATERIAL'] == av_id_loop.replace(" (2ª CHAMADA)", "")]
+                                        label_versao = "PROVA PADRÃO"
+                                        
+                                    if not mat_loop.empty:
+                                        txt_loop = str(mat_loop.iloc[0]['CONTEUDO'])
+                                        q_raw_loop = ai.extrair_tag(txt_loop, tag_questoes_global)
+                                        grade_raw_loop = re.sub(r'[*#]', '', ai.extrair_tag(txt_loop, tag_grade_global) or ai.extrair_tag(txt_loop, "GRADE_DE_CORRECAO"))
+                                        
+                                        padrao_q = rf"(?si)({prefixo_q}\s*0?{idx_num}\b.*?)(?={prefixo_q}\s*0?{idx_num+1}\b|GABARITO|$)"
+                                        m_q = re.search(padrao_q, q_raw_loop)
+                                        
+                                        if m_q:
+                                            st.markdown(f"**📄 {label_versao}**")
+                                            q_completa = m_q.group(1).strip()
+                                            q_completa = re.sub(r'\[\s*PROMPT IMAGEM:.*?\]', '\n\n🖼️ *[IMAGEM DE APOIO]*\n\n', q_completa)
+                                            partes = re.split(r'(?=\n\s*\([A-E]\)|\n\s*[A-E]\))', q_completa, maxsplit=1)
+                                            
+                                            enunciado_texto = partes[0].strip()
+                                            alternativas_texto = partes[1].strip() if len(partes) > 1 else ""
+                                            
+                                            st.info(preparar_para_leitura(enunciado_texto))
+                                            if alternativas_texto:
+                                                alt_formatada = preparar_para_leitura(alternativas_texto).replace('\n', '\n\n')
+                                                st.markdown(alt_formatada)
+                                                
+                                            # Perícia da Variante
+                                            padrao_p = rf"(?si){prefixo_q}\s*0?{idx_num}\b.*?(?={prefixo_q}\s*0?{idx_num+1}\b|GABARITO|RESPOSTAS|$)"
+                                            match_p = re.search(padrao_p, grade_raw_loop)
+                                            if match_p:
+                                                p_completa = match_p.group(0).strip()
+                                                dist_match = re.search(r"(?i)(?:PERÍCIA DE DISTRATORES|ANÁLISE DE LACUNA PEI|PERÍCIA|ANÁLISE|DISTRATORES)[\s\:]*(.*)", p_completa, re.DOTALL)
+                                                distratores = dist_match.group(1).strip() if dist_match else ""
+                                                if distratores:
+                                                    dist_formatado = re.sub(r'(?=\([A-E]\))', '\n\n', distratores)
+                                                    st.warning(f"**⚠️ Distratores ({label_versao}):**\n\n{preparar_para_leitura(dist_formatado)}")
+                                            st.divider()
 
                     # ==============================================================================
                     # 🖨️ MATERIALIZAÇÃO DO DOSSIÊ (DOCX PARA IMPRESSÃO)
@@ -3643,22 +3644,47 @@ elif menu == "📸 Scanner de Gabaritos":
                                     q_str = r_stat['Questão']
                                     q_num = int(q_str.replace("Q", ""))
                                     
-                                    padrao_q = rf"(?si)({prefixo_q}\s*0?{q_num}\b.*?)(?={prefixo_q}\s*0?{q_num+1}\b|GABARITO|$)"
-                                    m_q = re.search(padrao_q, questoes_raw)
-                                    enunciado = re.sub(r'\[\s*PROMPT IMAGEM:.*?\]', '[IMAGEM DE APOIO]', m_q.group(1)).strip() if m_q else "Enunciado não localizado."
-                                    enunciado = re.sub(r'[*#]', '', enunciado)
+                                    # 🚨 MONTA O TEXTO COMBINADO PARA O DOCX
+                                    texto_enunciado_combinado = ""
+                                    texto_pericia_combinado = ""
                                     
-                                    padrao_p = rf"(?si)({prefixo_q}\s*0?{q_num}\b.*?)(?={prefixo_q}\s*0?{q_num+1}\b|GABARITO|RESPOSTAS|$)"
-                                    m_p = re.search(padrao_p, grade_pericia_global)
-                                    pericia_txt = m_p.group(1).strip() if m_p else "Perícia não localizada."
-                                    pericia_txt = re.sub(r'[*#]', '', pericia_txt)
+                                    for av_id_loop in df_filtrado['ID_AVALIACAO'].unique():
+                                        if "VARIANTE" in av_id_loop.upper() or "TIPO" in av_id_loop.upper():
+                                            tipo_letra = re.search(r'TIPO\s*([A-Z])', av_id_loop, re.IGNORECASE)
+                                            letra = tipo_letra.group(1) if tipo_letra else "B"
+                                            nome_base = av_id_loop.split('(')[0].strip()
+                                            busca_exata = f"{nome_base} - TIPO {letra}"
+                                            mat_loop = df_aulas[df_aulas['TIPO_MATERIAL'] == busca_exata]
+                                            label_versao = f"[VARIANTE TIPO {letra}]"
+                                        else:
+                                            mat_loop = df_aulas[df_aulas['TIPO_MATERIAL'] == av_id_loop.replace(" (2ª CHAMADA)", "")]
+                                            label_versao = "[PROVA PADRÃO]"
+                                            
+                                        if not mat_loop.empty:
+                                            txt_loop = str(mat_loop.iloc[0]['CONTEUDO'])
+                                            q_raw_loop = ai.extrair_tag(txt_loop, tag_questoes_global)
+                                            grade_raw_loop = re.sub(r'[*#]', '', ai.extrair_tag(txt_loop, tag_grade_global) or ai.extrair_tag(txt_loop, "GRADE_DE_CORRECAO"))
+                                            
+                                            padrao_q = rf"(?si)({prefixo_q}\s*0?{q_num}\b.*?)(?={prefixo_q}\s*0?{q_num+1}\b|GABARITO|$)"
+                                            m_q = re.search(padrao_q, q_raw_loop)
+                                            if m_q:
+                                                enunciado = re.sub(r'\[\s*PROMPT IMAGEM:.*?\]', '[IMAGEM DE APOIO]', m_q.group(1)).strip()
+                                                enunciado = re.sub(r'[*#]', '', enunciado)
+                                                texto_enunciado_combinado += f"{label_versao}\n{enunciado}\n\n"
+                                                
+                                            padrao_p = rf"(?si)({prefixo_q}\s*0?{q_num}\b.*?)(?={prefixo_q}\s*0?{q_num+1}\b|GABARITO|RESPOSTAS|$)"
+                                            m_p = re.search(padrao_p, grade_raw_loop)
+                                            if m_p:
+                                                pericia_txt = m_p.group(1).strip()
+                                                pericia_txt = re.sub(r'[*#]', '', pericia_txt)
+                                                texto_pericia_combinado += f"{label_versao}\n{pericia_txt}\n\n"
                                     
                                     questoes_detalhes.append({
                                         "titulo": q_str,
-                                        "enunciado": enunciado,
+                                        "enunciado": texto_enunciado_combinado.strip(),
                                         "acerto": f"{r_stat['Acerto %']:.1f}%",
                                         "gabarito": r_stat['Gabarito'],
-                                        "pericia": pericia_txt
+                                        "pericia": texto_pericia_combinado.strip()
                                     })
                                 
                                 criticos = df_filtrado[df_filtrado['NOTA_CALCULADA'].apply(util.sosa_to_float) < 6.0].apply(lambda x: f"[{x['TURMA']}] {x['NOME_ALUNO']}", axis=1).tolist()
@@ -4166,8 +4192,16 @@ elif menu == "👤 Biografia do Estudante":
                         parecer = respostas_aluno.split('|')[1] if '|' in respostas_aluno else "Avaliação Qualitativa."
                         st.info(f"🎨 **Avaliação Qualitativa (PEI Severo):**\n{parecer}")
                     else:
-                        # Busca a prova no acervo para comparar
-                        m_ref_query = df_aulas[df_aulas['TIPO_MATERIAL'] == av_id.replace(" (2ª CHAMADA)", "")]
+                        # 🚨 MOTOR DE BUSCA BLINDADO (Resolve o problema dos parênteses nas Variantes)
+                        if "VARIANTE" in av_id.upper() or "TIPO" in av_id.upper():
+                            tipo_letra = re.search(r'TIPO\s*([A-Z])', av_id, re.IGNORECASE)
+                            letra = tipo_letra.group(1) if tipo_letra else "B"
+                            nome_base = av_id.split('(')[0].strip()
+                            busca_exata = f"{nome_base} - TIPO {letra}"
+                            m_ref_query = df_aulas[df_aulas['TIPO_MATERIAL'] == busca_exata]
+                        else:
+                            m_ref_query = df_aulas[df_aulas['TIPO_MATERIAL'] == av_id.replace(" (2ª CHAMADA)", "")]
+                            
                         if not m_ref_query.empty:
                             txt_prova = str(m_ref_query.iloc[0]['CONTEUDO'])
                             
@@ -4181,7 +4215,7 @@ elif menu == "👤 Biografia do Estudante":
                             if len_pei != len_reg and abs(qtd_marcadas - len_pei) < abs(qtd_marcadas - len_reg):
                                 fez_pei = True
                             elif is_pei_or_gap and "TIPICO" not in perfil_atual:
-                                fez_pei = True # Assume PEI se o aluno é PEI e as provas têm o mesmo tamanho
+                                fez_pei = True 
                                 
                             gab_oficial = extrair_gab_local(txt_prova, fez_pei)
                             
@@ -4251,7 +4285,6 @@ elif menu == "👤 Biografia do Estudante":
                                     elif letra_marcada == "X":
                                         st.warning(f"🚫 **Rasura/Dupla** (Gabarito: {letra_correta})\n\n**Foco ({habilidade}):** {preparar_para_leitura(distratores)}")
                                     else:
-                                        # Formata os distratores para ficarem em linhas separadas se houver (A), (B), etc.
                                         dist_formatado = re.sub(r'(?=\([A-E]\))', '\n\n', distratores)
                                         st.error(f"❌ **Errou** (Marcou {letra_marcada} | Gabarito: {letra_correta})\n\n**Análise do Erro:** {preparar_para_leitura(dist_formatado)}")
                         else:
