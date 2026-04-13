@@ -3224,61 +3224,72 @@ elif menu == "📸 Scanner de Gabaritos":
                             respostas_atuais = str(aluno_rev_data['_Respostas']).split(';')
                             
                             versao_feita = aluno_rev_data['Versão']
+                            mat_ref = None # 🚨 VACINA ANTI-VAZIO INICIALIZADA
+                            
                             if versao_feita == "SEGUNDA CHAMADA":
                                 df_2a = df_aulas[(df_aulas['TIPO_MATERIAL'].str.upper().str.contains("2ª|2CHAMADA", regex=True)) & (df_aulas['TIPO_MATERIAL'].str.contains(trim_limpo, case=False)) & (df_aulas['ANO'].str.contains(serie_num))]
-                                mat_ref = df_2a.iloc[0]
+                                if not df_2a.empty:
+                                    mat_ref = df_2a.iloc[0]
                             elif "VARIANTE" in versao_feita:
                                 reg_diag = gabaritos_lidos[gabaritos_lidos['ID_ALUNO'].apply(db.limpar_id) == id_aluno_rev].iloc[-1]
-                                mat_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == reg_diag['ID_AVALIACAO']].iloc[0]
+                                df_var = df_aulas[df_aulas['TIPO_MATERIAL'] == reg_diag['ID_AVALIACAO']]
+                                if not df_var.empty:
+                                    mat_ref = df_var.iloc[0]
                             else:
-                                mat_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == av_alvo_h].iloc[0]
+                                df_orig = df_aulas[df_aulas['TIPO_MATERIAL'] == av_alvo_h]
+                                if not df_orig.empty:
+                                    mat_ref = df_orig.iloc[0]
                                 
-                            txt_ref = str(mat_ref['CONTEUDO'])
-                            v_total_at = util.sosa_to_float(ai.extrair_tag(txt_ref, "VALOR")) or 10.0
-                            
-                            is_pei_rev = "♿" in aluno_rev_data['Perfil']
-                            tag_alvo = "GABARITO_PEI" if is_pei_rev else "GABARITO_TEXTO"
-                            raw_gab = ai.extrair_tag(txt_ref, tag_alvo) or ai.extrair_tag(txt_ref, "GABARITO")
-                            matches = re.findall(r"(\d+)[\s\.\)\-:]+([A-E])", raw_gab.upper())
-                            gab_alvo_rev = [letra for _, letra in sorted({int(num): letra for num, letra in matches}.items())]
-
-                            c_rev1, c_rev2 = st.columns([1.5, 1])
-                            with c_rev1:
-                                dados_pericia_rev = []
-                                if versao_feita == "SEGUNDA CHAMADA":
-                                    q_raw = ai.extrair_tag(txt_ref, "QUESTOES")
-                                    qtd_q_2a = len(re.findall(r"(?i)QUEST[AÃ]O\s*0?\d+", q_raw))
-                                    if qtd_q_2a == 0: qtd_q_2a = 10
-                                    for i in range(qtd_q_2a):
-                                        lido = respostas_atuais[i] if i < len(respostas_atuais) else "⚪ Em Branco"
-                                        dados_pericia_rev.append({"Q": f"{i+1:02d}", "Lido": lido})
-                                    df_mesa_rev = st.data_editor(pd.DataFrame(dados_pericia_rev), hide_index=True, use_container_width=True,
-                                        column_config={"Lido": st.column_config.SelectboxColumn("Ajustar", options=["✅ Acerto Integral", "⚠️ Acerto Parcial", "❌ Erro", "⚪ Em Branco"], required=True)}, key=f"ed_rev_{v}")
-                                else:
-                                    for i in range(len(gab_alvo_rev)):
-                                        certo = gab_alvo_rev[i]
-                                        lido = respostas_atuais[i] if i < len(respostas_atuais) else "?"
-                                        status = "✅ ACERTO" if lido == certo else ("🚫 DUPLA" if lido == "X" else ("⚪ VAZIA" if lido == "?" else f"❌ (Era {certo})"))
-                                        dados_pericia_rev.append({"Q": f"{i+1:02d}", "Lido": lido, "Status": status})
-                                    df_mesa_rev = st.data_editor(pd.DataFrame(dados_pericia_rev), hide_index=True, use_container_width=True,
-                                        column_config={"Lido": st.column_config.SelectboxColumn("Ajustar", options=["A", "B", "C", "D", "E", "X", "?"], required=True)}, key=f"ed_rev_{v}")
-
-                            with c_rev2:
-                                novas_res_rev = df_mesa_rev["Lido"].tolist()
-                                if versao_feita == "SEGUNDA CHAMADA":
-                                    peso_q = v_total_at / qtd_q_2a if qtd_q_2a > 0 else 0
-                                    acertos_cheios = novas_res_rev.count("✅ Acerto Integral")
-                                    acertos_parciais = novas_res_rev.count("⚠️ Acerto Parcial")
-                                    nota_f_rev = (acertos_cheios * peso_q) + (acertos_parciais * (peso_q / 2))
-                                else:
-                                    acertos_rev = sum(1 for i, r in enumerate(novas_res_rev) if i < len(gab_alvo_rev) and r == gab_alvo_rev[i])
-                                    nota_f_rev = (acertos_rev / len(gab_alvo_rev)) * v_total_at if len(gab_alvo_rev) > 0 else 0
+                            # 🚨 TRAVA DE SOBERANIA: Só prossegue se encontrou a prova no acervo
+                            if mat_ref is None:
+                                st.error("⚠️ Erro de Soberania: O material original desta avaliação não foi encontrado no Acervo. Ele pode ter sido apagado ou renomeado.")
+                            else:
+                                txt_ref = str(mat_ref['CONTEUDO'])
+                                v_total_at = util.sosa_to_float(ai.extrair_tag(txt_ref, "VALOR")) or 10.0
                                 
-                                st.metric("Nova Nota", f"{nota_f_rev:.2f}")
+                                is_pei_rev = "♿" in aluno_rev_data['Perfil']
+                                tag_alvo = "GABARITO_PEI" if is_pei_rev else "GABARITO_TEXTO"
+                                raw_gab = ai.extrair_tag(txt_ref, tag_alvo) or ai.extrair_tag(txt_ref, "GABARITO")
+                                matches = re.findall(r"(\d+)[\s\.\)\-:]+([A-E])", raw_gab.upper())
+                                gab_alvo_rev = [letra for _, letra in sorted({int(num): letra for num, letra in matches}.items())]
 
-                                if st.button("💾 SALVAR REVISÃO", type="primary", use_container_width=True):
-                                    # Lógica de salvamento (similar ao original, atualizando DB_GABARITOS e DB_NOTAS)
-                                    st.success("Revisão salva!"); time.sleep(1); st.rerun()
+                                c_rev1, c_rev2 = st.columns([1.5, 1])
+                                with c_rev1:
+                                    dados_pericia_rev = []
+                                    if versao_feita == "SEGUNDA CHAMADA":
+                                        q_raw = ai.extrair_tag(txt_ref, "QUESTOES")
+                                        qtd_q_2a = len(re.findall(r"(?i)QUEST[AÃ]O\s*0?\d+", q_raw))
+                                        if qtd_q_2a == 0: qtd_q_2a = 10
+                                        for i in range(qtd_q_2a):
+                                            lido = respostas_atuais[i] if i < len(respostas_atuais) else "⚪ Em Branco"
+                                            dados_pericia_rev.append({"Q": f"{i+1:02d}", "Lido": lido})
+                                        df_mesa_rev = st.data_editor(pd.DataFrame(dados_pericia_rev), hide_index=True, use_container_width=True,
+                                            column_config={"Lido": st.column_config.SelectboxColumn("Ajustar", options=["✅ Acerto Integral", "⚠️ Acerto Parcial", "❌ Erro", "⚪ Em Branco"], required=True)}, key=f"ed_rev_{v}")
+                                    else:
+                                        for i in range(len(gab_alvo_rev)):
+                                            certo = gab_alvo_rev[i]
+                                            lido = respostas_atuais[i] if i < len(respostas_atuais) else "?"
+                                            status = "✅ ACERTO" if lido == certo else ("🚫 DUPLA" if lido == "X" else ("⚪ VAZIA" if lido == "?" else f"❌ (Era {certo})"))
+                                            dados_pericia_rev.append({"Q": f"{i+1:02d}", "Lido": lido, "Status": status})
+                                        df_mesa_rev = st.data_editor(pd.DataFrame(dados_pericia_rev), hide_index=True, use_container_width=True,
+                                            column_config={"Lido": st.column_config.SelectboxColumn("Ajustar", options=["A", "B", "C", "D", "E", "X", "?"], required=True)}, key=f"ed_rev_{v}")
+
+                                with c_rev2:
+                                    novas_res_rev = df_mesa_rev["Lido"].tolist()
+                                    if versao_feita == "SEGUNDA CHAMADA":
+                                        peso_q = v_total_at / qtd_q_2a if qtd_q_2a > 0 else 0
+                                        acertos_cheios = novas_res_rev.count("✅ Acerto Integral")
+                                        acertos_parciais = novas_res_rev.count("⚠️ Acerto Parcial")
+                                        nota_f_rev = (acertos_cheios * peso_q) + (acertos_parciais * (peso_q / 2))
+                                    else:
+                                        acertos_rev = sum(1 for i, r in enumerate(novas_res_rev) if i < len(gab_alvo_rev) and r == gab_alvo_rev[i])
+                                        nota_f_rev = (acertos_rev / len(gab_alvo_rev)) * v_total_at if len(gab_alvo_rev) > 0 else 0
+                                    
+                                    st.metric("Nova Nota", f"{nota_f_rev:.2f}")
+
+                                    if st.button("💾 SALVAR REVISÃO", type="primary", use_container_width=True):
+                                        # Lógica de salvamento (similar ao original, atualizando DB_GABARITOS e DB_NOTAS)
+                                        st.success("Revisão salva!"); time.sleep(1); st.rerun()
                     else: st.info("Nenhum gabarito escaneado disponível para revisão.")
 
                 with st.expander("🚑 Protocolo Lázaro (Digitar Gabarito Manualmente)"):
