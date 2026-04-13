@@ -3349,11 +3349,11 @@ elif menu == "📸 Scanner de Gabaritos":
                         st.info("Nenhum dossiê gerado no sistema.")
 
     # ==============================================================================
-    # 📊 ABA 4: RAIO-X PEDAGÓGICO (RESTAURADO COM LATEX E VARIANTES)
+    # 📊 ABA 4: RAIO-X PEDAGÓGICO (RESTAURADO COM FUSÃO DE VARIANTES)
     # ==============================================================================
     with tab_raiox:
         st.subheader("📊 Raio-X Pedagógico: Diagnóstico de Lacunas")
-        st.caption("Analise o desempenho da turma por questão. O sistema renderiza as fórmulas matemáticas (LaTeX) para facilitar a leitura.")
+        st.caption("Analise o desempenho da turma por questão. O sistema unifica automaticamente a Prova Padrão e suas Variantes em um único relatório analítico.")
         
         def preparar_para_leitura(texto):
             if not texto: return ""
@@ -3434,44 +3434,32 @@ elif menu == "📸 Scanner de Gabaritos":
 
                 st.markdown("### 🎯 Análise de Performance por Item")
                 
-                # 🚨 LEITURA DINÂMICA DE VARIANTES NO BANCO DE DADOS
-                versoes_disponiveis = ["📝 Regular - Padrão", "♿ Adaptada (PEI)"]
+                # 🚨 MENU SIMPLIFICADO (FUSÃO DE VARIANTES)
+                versoes_disponiveis = ["📝 Regular (Padrão + Variantes)", "♿ Adaptada (PEI)"]
                 
-                for av_id in df_analise['ID_AVALIACAO'].dropna().unique():
-                    av_id_upper = str(av_id).upper()
-                    if "TIPO" in av_id_upper:
-                        tipo_nome = av_id_upper.split('-')[-1].strip()
-                        versoes_disponiveis.append(f"📝 Regular - {tipo_nome}")
-                
-                # 🚨 FORÇA A 2ª CHAMADA A APARECER SE EXISTIR NO ACERVO
                 trim_limpo = tr_sel_r.replace(" ", "")
                 tem_2a = not df_aulas[(df_aulas['TIPO_MATERIAL'].str.upper().str.contains("2ª|2CHAMADA", regex=True)) & (df_aulas['TIPO_MATERIAL'].str.contains(trim_limpo, case=False)) & (df_aulas['ANO'].str.contains(ano_num_r))].empty
-                if tem_2a and "🔄 2ª Chamada" not in versoes_disponiveis:
-                    versoes_disponiveis.append("🔄 2ª Chamada")
+                if tem_2a:
+                    versoes_disponiveis.append("🔄 2ª Chamada (Discursiva)")
                         
-                versoes_disponiveis = sorted(list(set(versoes_disponiveis)))
-                
                 versao_visao = st.selectbox("🔍 Selecione o Caderno de Prova para Análise:", versoes_disponiveis, key=f"caderno_rx_{v}")
                 
                 is_pei_view = "PEI" in versao_visao
                 
-                # 🚨 FILTRAGEM CIRÚRGICA BASEADA NA ESCOLHA
+                # 🚨 FILTRAGEM CIRÚRGICA
                 if is_pei_view:
                     df_filtrado = df_analise[df_analise['TIPO_PROVA_FEITA'] == "PEI"]
                     query_mat = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel_r]
                 elif "2ª Chamada" in versao_visao:
                     df_filtrado = df_analise[df_analise['IS_2A_CHAMADA'] == True]
                     query_mat = df_aulas[(df_aulas['TIPO_MATERIAL'].str.upper().str.contains("2ª|2CHAMADA", regex=True)) & (df_aulas['TIPO_MATERIAL'].str.contains(trim_limpo, case=False)) & (df_aulas['ANO'].str.contains(ano_num_r))]
-                elif "TIPO" in versao_visao:
-                    tipo_exato = versao_visao.split('-')[-1].strip()
-                    df_filtrado = df_analise[(df_analise['TIPO_PROVA_FEITA'] == "REGULAR") & (df_analise['ID_AVALIACAO'].str.upper().str.contains(tipo_exato))]
-                    query_mat = df_aulas[(df_aulas['TIPO_MATERIAL'].str.upper().str.contains(nome_curto_av.upper())) & (df_aulas['TIPO_MATERIAL'].str.upper().str.contains(tipo_exato))]
                 else:
-                    df_filtrado = df_analise[(df_analise['TIPO_PROVA_FEITA'] == "REGULAR") & (df_analise['ID_AVALIACAO'] == at_sel_r)]
-                    query_mat = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel_r]
+                    # Agrupa Padrão e Variantes
+                    df_filtrado = df_analise[(df_analise['TIPO_PROVA_FEITA'] == "REGULAR") & (~df_analise['IS_2A_CHAMADA'])]
+                    query_mat = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel_r] # Usa a prova base para o texto
 
                 if query_mat.empty:
-                    st.error(f"❌ Gabarito do caderno '{versao_visao}' não localizado no acervo.")
+                    st.error(f"❌ Gabarito base não localizado no acervo.")
                 elif df_filtrado.empty:
                     st.info(f"📭 Não há dados de alunos que realizaram o caderno '{versao_visao}'.")
                 else:
@@ -3486,12 +3474,12 @@ elif menu == "📸 Scanner de Gabaritos":
                     
                     gab_ativo = extrair_gab_blindado(txt_prova_global, is_pei_view)
 
-                    # 🚨 PROTOCOLO FÊNIX: Cálculo estatístico adaptado para 2ª Chamada (Discursiva)
                     stats_list = []
-                    respostas_validas = df_filtrado[(~df_filtrado['RESPOSTAS_ALUNO'].str.upper().str.contains("FALTOU")) & (~df_filtrado['RESPOSTAS_ALUNO'].str.upper().str.startswith("QUALITATIVA"))]['RESPOSTAS_ALUNO']
-                    matriz_respostas = [str(r).split(';') for r in respostas_validas]
-
+                    
+                    # 🚨 CÁLCULO ESTATÍSTICO
                     if "2ª Chamada" in versao_visao:
+                        respostas_validas = df_filtrado[(~df_filtrado['RESPOSTAS_ALUNO'].str.upper().str.contains("FALTOU")) & (~df_filtrado['RESPOSTAS_ALUNO'].str.upper().str.startswith("QUALITATIVA"))]['RESPOSTAS_ALUNO']
+                        matriz_respostas = [str(r).split(';') for r in respostas_validas]
                         q_raw = ai.extrair_tag(txt_prova_global, "QUESTOES")
                         num_q_total = len(re.findall(r"(?i)QUEST[AÃ]O\s*0?\d+", q_raw))
                         if num_q_total == 0: num_q_total = 10
@@ -3505,13 +3493,38 @@ elif menu == "📸 Scanner de Gabaritos":
                             perc = (pontos_obtidos / len(votos)) * 100 if len(votos) > 0 else 0
                             stats_list.append({"Questão": f"Q{i:02d}", "Acerto %": perc, "Gabarito": "Discursiva"})
                     else:
+                        # 🚨 MOTOR DE FUSÃO DE GABARITOS (Padrão + Variantes)
+                        mapa_gabaritos = {}
+                        for av_id in df_filtrado['ID_AVALIACAO'].unique():
+                            mat_var = df_aulas[df_aulas['TIPO_MATERIAL'] == av_id]
+                            if not mat_var.empty:
+                                mapa_gabaritos[av_id] = extrair_gab_blindado(str(mat_var.iloc[0]['CONTEUDO']), is_pei_view)
+                        
                         num_q_total = len(gab_ativo)
                         for i in range(1, num_q_total + 1):
-                            correta = gab_ativo.get(i, "?")
-                            votos = [res[i-1] if len(res) >= i else "?" for res in matriz_respostas]
-                            acertos = votos.count(correta)
-                            perc = (acertos / len(votos)) * 100 if len(votos) > 0 else 0
-                            stats_list.append({"Questão": f"Q{i:02d}", "Acerto %": perc, "Gabarito": correta})
+                            acertos = 0
+                            validos = 0
+                            for _, row_aluno in df_filtrado.iterrows():
+                                resp_str = str(row_aluno['RESPOSTAS_ALUNO']).upper()
+                                if resp_str == "FALTOU" or resp_str.startswith("QUALITATIVA"): continue
+                                
+                                respostas_lista = resp_str.split(';')
+                                av_id_aluno = row_aluno['ID_AVALIACAO']
+                                
+                                # Pega o gabarito exato da prova que o aluno fez
+                                gab_aluno = mapa_gabaritos.get(av_id_aluno, gab_ativo) 
+                                
+                                if len(respostas_lista) >= i:
+                                    validos += 1
+                                    letra_marcada = respostas_lista[i-1]
+                                    letra_certa = gab_aluno.get(i, "?")
+                                    if letra_marcada == letra_certa:
+                                        acertos += 1
+                            
+                            perc = (acertos / validos) * 100 if validos > 0 else 0
+                            correta_base = gab_ativo.get(i, "?")
+                            label_gab = f"{correta_base} (Base)" if not is_pei_view else correta_base
+                            stats_list.append({"Questão": f"Q{i:02d}", "Acerto %": perc, "Gabarito": label_gab})
 
                     df_stats_global = pd.DataFrame(stats_list)
                     fig_global = None
@@ -3550,7 +3563,7 @@ elif menu == "📸 Scanner de Gabaritos":
                                     enunciado_texto = partes[0].strip()
                                     alternativas_texto = partes[1].strip() if len(partes) > 1 else ""
                                     
-                                    st.markdown("**📝 Enunciado:**")
+                                    st.markdown("**📝 Enunciado (Prova Base):**")
                                     st.info(preparar_para_leitura(enunciado_texto))
                                     
                                     if alternativas_texto:
@@ -3593,7 +3606,7 @@ elif menu == "📸 Scanner de Gabaritos":
                     # ==============================================================================
                     st.markdown("---")
                     st.markdown("### 🖨️ Materialização do Dossiê (Para Impressão)")
-                    st.caption("Gere um documento formatado com a autópsia completa da prova para levar para a sala de aula ou Conselho de Classe.")
+                    st.caption("Gere um documento formatado com a autópsia completa da prova para levar para a sala de aula ou Conselho de Classe. O relatório unifica os dados da prova padrão e suas variantes.")
                     
                     if st.button("🖨️ GERAR DOSSIÊ DE RAIO-X (DOCX)", type="primary", use_container_width=True):
                         if df_stats_global.empty or not txt_prova_global:
