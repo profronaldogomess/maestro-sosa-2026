@@ -2619,9 +2619,14 @@ elif menu == "📸 Scanner de Gabaritos":
     # 📸 ABA 1: SCANNER & TRIAGEM INTELIGENTE
     # ==============================================================================
     with tab_pericia:
-        turmas_reais_cir = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
-        lista_turmas_cir = sorted(turmas_reais_cir['ID_TURMA'].unique()) if not turmas_reais_cir.empty else sorted(df_alunos['TURMA'].unique())
-        
+        # 🚨 VACINA ANTI-KEYERROR (BLINDAGEM DE QUEDA DE API DO GOOGLE)
+        lista_turmas_cir = []
+        if not df_turmas.empty and 'ID_TURMA' in df_turmas.columns:
+            turmas_reais_cir = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
+            lista_turmas_cir = sorted(turmas_reais_cir['ID_TURMA'].unique())
+        elif not df_alunos.empty and 'TURMA' in df_alunos.columns:
+            lista_turmas_cir = sorted(df_alunos['TURMA'].unique())
+            
         with st.container(border=True):
             c1, c2, c3 = st.columns([1, 1, 1.5])
             t_sel = c1.selectbox("👥 Turma:", [""] + lista_turmas_cir, key=f"t_p_{v}")
