@@ -4639,7 +4639,7 @@ elif menu == "📊 Painel de Notas & Vistos":
             return f'color: {color}; font-weight: bold'
 
         st.dataframe(
-            df_input[['ESTUDANTE', 'V_PREF', 'T_PREF', 'P_PREF', 'REC_PREF', 'MEDIA_FINAL']].style.applymap(
+            df_input[['ESTUDANTE', 'V_PREF', 'T_PREF', 'P_PREF', 'REC_PREF', 'MEDIA_FINAL']].style.map(
                 style_situacao, subset=['MEDIA_FINAL']
             ).format({
                 "V_PREF": "{:.1f}", "T_PREF": "{:.1f}", "P_PREF": "{:.1f}", "REC_PREF": "{:.1f}", "MEDIA_FINAL": "{:.2f}"
@@ -4809,7 +4809,7 @@ elif menu == "📈 Boletim Anual & Conselho":
                    'MEDIA_FINAL_II Trimestre', 'NOTA_REC_II Trimestre',
                    'MEDIA_FINAL_III Trimestre', 'NOTA_REC_III Trimestre',
                    'Σ', 'RF', 'FALTAS', 'SITUAÇÃO']]
-            .style.applymap(style_status_anual, subset=['SITUAÇÃO'])
+            .style.map(style_status_anual, subset=['SITUAÇÃO'])
             .format("{:.1f}", subset=['MEDIA_FINAL_I Trimestre', 'NOTA_REC_I Trimestre', 
                                       'MEDIA_FINAL_II Trimestre', 'NOTA_REC_II Trimestre', 
                                       'MEDIA_FINAL_III Trimestre', 'NOTA_REC_III Trimestre', 
