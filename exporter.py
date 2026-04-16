@@ -203,7 +203,7 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
     return file_stream
 
 # ==============================================================================
-# 4. GUIA DO PROFESSOR
+# 4. GUIA DO PROFESSOR (ATUALIZADO COM DISTRATORES DETALHADOS)
 # ==============================================================================
 def gerar_docx_professor_v25(titulo_doc, conteudo, info):
     file_stream = io.BytesIO()
@@ -271,14 +271,26 @@ def gerar_docx_professor_v25(titulo_doc, conteudo, info):
             run.font.color.rgb = RGBColor(112, 48, 160)
             continue
 
-        if any(x in l_s.upper() for x in["JUSTIFICATIVA", "PERÍCIA", "LACUNA", "ANÁLISE"]):
+        # 🚨 NOVO MOTOR DE FORMATAÇÃO DE DISTRATORES E RUBRICAS
+        if any(x in l_s.upper() for x in ["JUSTIFICATIVA", "PERÍCIA", "LACUNA", "ANÁLISE", "DISTRATORES", "ACERTO INTEGRAL", "ACERTO PARCIAL"]):
             p.paragraph_format.left_indent = Inches(0.15)
-            icon = "🎯" if "JUST" in l_s.upper() else "🧠"
-            run_label = p.add_run(f"{icon} {l_s.split(':', 1)[0]}:")
-            run_label.font.bold = True
-            if "LACUNA" in l_s.upper() or "PERÍCIA" in l_s.upper():
-                 run_label.font.color.rgb = RGBColor(204, 0, 0)
-            p.add_run(f" {l_s.split(':', 1)[1] if ':' in l_s else ''}").font.size = Pt(9.5)
+            icon = "🎯" if any(x in l_s.upper() for x in ["JUST", "ACERTO"]) else "🧠"
+            
+            if ':' in l_s:
+                label, content = l_s.split(':', 1)
+                run_label = p.add_run(f"{icon} {label}:")
+                run_label.font.bold = True
+                
+                if any(x in label.upper() for x in ["LACUNA", "PERÍCIA", "DISTRATORES"]):
+                     run_label.font.color.rgb = RGBColor(204, 0, 0)
+                elif "ACERTO" in label.upper():
+                     run_label.font.color.rgb = RGBColor(0, 128, 0)
+                
+                # Quebra a linha antes de cada (A), (B), (C) para ficar em formato de lista
+                content_formatted = re.sub(r'(?=\([A-E]\))', '\n\t', content)
+                p.add_run(f" {content_formatted}").font.size = Pt(9.5)
+            else:
+                p.add_run(l_s)
             continue
 
         p.add_run(re.sub(r'[#*]', '', l_s)).font.size = Pt(10)
