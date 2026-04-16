@@ -439,7 +439,18 @@ if menu == "📅 Planejamento (Ponto ID)":
                     if "Exame" in tipo_semana or "Sonda" in tipo_semana: 
                         opcoes_ativos = df_ativos_ano[df_ativos_ano['SEMANA_REF'] == "AVALIAÇÃO"]['TIPO_MATERIAL'].tolist()
                     elif "Revisão" in tipo_semana: 
+                        # Puxa as revisões normais do acervo de aulas
                         opcoes_ativos = df_ativos_ano[df_ativos_ano['SEMANA_REF'] == "REVISÃO"]['TIPO_MATERIAL'].tolist()
+                        
+                        # 🚨 INTEGRAÇÃO DOS DOSSIÊS DE RAIO-X (Puxa do banco de relatórios)
+                        df_dossies_ano = df_relatorios[(df_relatorios['TIPO'] == 'DOSSIE_RAIO_X') & (df_relatorios['NOME_ALUNO'].str.contains(str(ano_p)))]
+                        for _, row_d in df_dossies_ano.iterrows():
+                            cont_d = str(row_d['CONTEUDO'])
+                            nome_av = re.search(r"Avaliação:\s*(.*)", cont_d)
+                            nome_av_str = nome_av.group(1).strip() if nome_av else "Avaliação Desconhecida"
+                            turma_d = row_d['NOME_ALUNO']
+                            opcoes_ativos.append(f"📊 DOSSIÊ RAIO-X: {nome_av_str} ({turma_d})")
+                            
                     elif "Trabalho" in tipo_semana: 
                         opcoes_ativos = df_ativos_ano[df_ativos_ano['TIPO_MATERIAL'].str.contains("PROJETO|TRABALHO", case=False, na=False)]['TIPO_MATERIAL'].tolist()
                     
@@ -3284,20 +3295,28 @@ elif menu == "📸 Scanner de Gabaritos":
                     
                     if not df_dossies.empty:
                         dossies_filtrados = []
+                        
+                        # 🚨 INTELIGÊNCIA DE BUSCA: Procura pela turma específica OU pelo Dossiê Global da Série
+                        ano_num_h = "".join(filter(str.isdigit, t_sel_h))
+                        turma_agrupada = f"{ano_num_h}º Ano (Todas as Turmas)"
+                        
                         for idx, row in df_dossies.iterrows():
                             conteudo_d = str(row.get('CONTEUDO', ''))
-                            if nome_curto_av in conteudo_d and row.get('NOME_ALUNO') == t_sel_h:
+                            turma_dossie = str(row.get('NOME_ALUNO', ''))
+                            
+                            if nome_curto_av in conteudo_d and (turma_dossie == t_sel_h or turma_dossie == turma_agrupada):
                                 dossies_filtrados.append((idx, row))
                                 
                         if dossies_filtrados:
                             for idx, row in reversed(dossies_filtrados):
                                 conteudo_d = str(row.get('CONTEUDO', ''))
                                 data_d = row.get('DATA', 'S/D')
+                                turma_dossie = str(row.get('NOME_ALUNO', ''))
                                 
                                 with st.container(border=True):
                                     c_d1, c_d2, c_d3 = st.columns([2, 1, 1])
                                     c_d1.markdown(f"**📄 Raio-X: {nome_curto_av}**")
-                                    c_d1.caption(f"📅 Gerado em: {data_d} | 👥 Turma: {t_sel_h}")
+                                    c_d1.caption(f"📅 Gerado em: {data_d} | 👥 Alvo: {turma_dossie}")
                                     
                                     linhas_cont = conteudo_d.split("\n")
                                     link_d = linhas_cont[1].replace("Link: ", "").strip() if len(linhas_cont) > 1 else "#"
