@@ -118,12 +118,28 @@ with st.sidebar:
     st.markdown(f"<h2 style='text-align: center; font-size: 22px; margin-top: 10px;'>Ronaldo Gomes</h2>", unsafe_allow_html=True)
     st.markdown(f"<p style='text-align: center; font-size: 12px; color: {BRAND_BLUE}; font-weight: 800; margin-top: -15px; letter-spacing: 1px;'>SOBERANIA PEDAGÓGICA</p>", unsafe_allow_html=True)
 
-    # Relógio Automático (Brasília)
+    # Relógio Automático (Brasília) e Sensor de Feriados
     fuso_br = timezone(timedelta(hours=-3))
-    hora_atual = datetime.now(fuso_br).strftime("%H:%M:%S")
-    data_atual = datetime.now(fuso_br).strftime("%d/%m/%Y")
+    agora_br = datetime.now(fuso_br)
+    hora_atual = agora_br.strftime("%H:%M:%S")
+    data_atual = agora_br.strftime("%d/%m/%Y")
+    data_atual_dt = agora_br.date() # Extrai o objeto 'date' para o sensor
     
     st.markdown(f"""<div class="clock-container">🕒 {hora_atual} | 📅 {data_atual}</div>""", unsafe_allow_html=True)
+    
+    # 🚨 INTEGRAÇÃO COM O SENSOR DE FERIADOS (utils.py)
+    feriado_hoje = util.verificar_feriado_itabuna(data_atual_dt)
+    
+    if feriado_hoje:
+        # Badge vermelho de alerta para feriados
+        st.markdown(f"""<div style="background: linear-gradient(135deg, #FF4B4B, #C0392B); color: white; padding: 6px 10px; border-radius: 8px; text-align: center; font-weight: 800; font-size: 12px; margin-top: -5px; margin-bottom: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">🎉 FERIADO: {feriado_hoje.upper()}</div>""", unsafe_allow_html=True)
+    else:
+        # Indicador de dia da semana e dia letivo
+        dias_semana = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado", "Domingo"]
+        nome_dia = dias_semana[data_atual_dt.weekday()]
+        cor_dia = "#2ECC71" if data_atual_dt.weekday() < 5 else "#F1C40F" # Verde para dias úteis, Amarelo para fim de semana
+        st.markdown(f"""<div style="text-align: center; color: {cor_dia}; font-size: 12px; font-weight: 600; margin-top: -5px; margin-bottom: 10px;">{nome_dia} • Dia Letivo</div>""", unsafe_allow_html=True)
+
     st.markdown("---")
 
     menu = st.radio("Navegação Estratégica:", [
