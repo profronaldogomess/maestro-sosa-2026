@@ -1267,12 +1267,32 @@ elif menu == "🧪 Criador de Aulas":
                             else: st.info("ℹ️ Nenhuma regência anterior registrada.")
 
                         base_herdada = ai.extrair_tag(plano_txt, "BASE_DIDATICA")
+                        obj_geral = ai.extrair_tag(plano_txt, "OBJETO_CONHECIMENTO") or ai.extrair_tag(plano_txt, "CONTEUDO_GERAL")
+                        obj_upper = obj_geral.upper()
                         
-                        metodo_entrega = st.radio("🎯 Método de Entrega:",[
-                            "🚀 Geração Integral (SOSA AI)", 
-                            "📖 Livro Didático + PEI (Híbrido)",
-                            "🎟️ Registro de Evento / Dinâmica (Sem Material Físico)"
-                        ], horizontal=True, help="Integral: A IA cria o texto e as questões. Livro: A IA cria o roteiro baseado nas páginas do livro. Evento: Apenas registra a aula no sistema.", key=f"metodo_{v}")
+                        # 🚨 INTELIGÊNCIA DE DETECÇÃO DE DNA DA AULA
+                        is_exame = "EXAME" in obj_upper or "SONDA" in obj_upper or "AVALIAÇÃO" in obj_upper or "TESTE" in obj_upper
+                        is_revisao = "REVISÃO" in obj_upper or "RECOMPOSIÇÃO" in obj_upper or "CORREÇÃO" in obj_upper
+                        is_projeto = "PROJETO" in obj_upper or "TRABALHO" in obj_upper
+                        is_evento = "EVENTO" in obj_upper or "DINÂMICA" in obj_upper or "AULA ABERTA" in obj_upper
+
+                        opcoes_metodo = []
+                        if is_exame:
+                            opcoes_metodo = ["📝 Oficializar Aplicação de Exame (Vínculo de Acervo)"]
+                        elif is_revisao:
+                            opcoes_metodo = ["🔥 Oficializar Revisão/Correção (Vínculo de Acervo)"]
+                        elif is_projeto:
+                            opcoes_metodo = ["📋 Oficializar Apresentação de Projeto (Vínculo de Acervo)"]
+                        elif is_evento:
+                            opcoes_metodo = ["🎟️ Registro de Evento / Dinâmica (Sem Material Físico)"]
+                        else:
+                            opcoes_metodo = [
+                                "🚀 Geração Integral (SOSA AI)", 
+                                "📖 Livro Didático + PEI (Híbrido)",
+                                "🎟️ Registro de Evento / Dinâmica (Sem Material Físico)"
+                            ]
+                            
+                        metodo_entrega = st.radio("🎯 Método de Entrega (Adaptado ao DNA do Plano):", opcoes_metodo, horizontal=True, key=f"metodo_{v}")
                         
                         aulas_ja_geradas = df_aulas[(df_aulas['ANO'].str.contains(str(ano_lab))) & (df_aulas['SEMANA_REF'] == sem_lab)]['TIPO_MATERIAL'].astype(str).tolist()
                         
@@ -1294,8 +1314,6 @@ elif menu == "🧪 Criador de Aulas":
                             if plano_pede_a2: opcoes_disponiveis.append("Aula 2")
                             if plano_pede_sab: opcoes_disponiveis.append("Sábado Letivo")
 
-                        obj_geral = ai.extrair_tag(plano_txt, "OBJETO_CONHECIMENTO") or ai.extrair_tag(plano_txt, "CONTEUDO_GERAL")
-                        
                         with st.container(border=True):
                             st.markdown(f"#### 🎯 Alvo Curricular: {obj_geral}")
                             
@@ -1305,30 +1323,22 @@ elif menu == "🧪 Criador de Aulas":
                             else:
                                 col_config1, col_config2 = st.columns([1, 1])
                                 with col_config1:
-                                    aula_alvo_prod = st.radio("🚀 Material a Gerar:", opcoes_disponiveis, horizontal=True, key=f"prod_alvo_{v}")
+                                    aula_alvo_prod = st.radio("🚀 Material a Gerar/Oficializar:", opcoes_disponiveis, horizontal=True, key=f"prod_alvo_{v}")
                                 
-                                # 🚨 DETECÇÃO ANTECIPADA DE AVALIAÇÃO/CORREÇÃO
                                 if "1" in aula_alvo_prod: tag_roteiro = "AULA_1"
                                 elif "2" in aula_alvo_prod: tag_roteiro = "AULA_2"
                                 else: tag_roteiro = "SABADO_LETIVO"
                                 
                                 roteiro_especifico = ai.extrair_tag(plano_txt, tag_roteiro)
-                                roteiro_upper = roteiro_especifico.upper()
                                 
-                                termos_av =["LOGÍSTICA DE APLICAÇÃO", "APLICAÇÃO DE AVALIAÇÃO", "APLICAÇÃO DE PROVA", "APLICAÇÃO DE TESTE", "APLICAÇÃO DA SONDA", "APLICAÇÃO DO EXAME"]
-                                termos_cor =["CORREÇÃO COMENTADA", "CLÍNICA PEDAGÓGICA", "CORREÇÃO DE AVALIAÇÃO", "CORREÇÃO DA PROVA", "CORREÇÃO DO TESTE", "CORREÇÃO DA SONDA", "MAPEAMENTO DE DISTRATORES"]
-                                
-                                is_avaliacao = any(t in roteiro_upper for t in termos_av)
-                                is_correcao = any(t in roteiro_upper for t in termos_cor)
+                                is_logistica = "Oficializar" in metodo_entrega or "Evento" in metodo_entrega
 
                                 with col_config2:
-                                    if is_avaliacao or is_correcao:
-                                        st.info("💡 **Modo Logística:** Sem geração de material físico.")
+                                    if is_logistica:
+                                        st.info("💡 **Modo Logística:** Sem geração de material físico pela IA.")
                                         nome_evento = ""
-                                    elif "Evento" not in metodo_entrega:
-                                        qtd_q_prod = st.slider("Nº de Questões (PEI/Regular):", 1, 20, 10, key=f"prod_q_{v}")
                                     else:
-                                        nome_evento = st.text_input("Nome do Evento/Dinâmica:", placeholder="Ex: Palestra sobre a Dengue", key=f"nome_ev_{v}")
+                                        qtd_q_prod = st.slider("Nº de Questões (PEI/Regular):", 1, 20, 10, key=f"prod_q_{v}")
 
                                 paginas_aula = base_herdada
                                 if ";" in base_herdada:
@@ -1340,73 +1350,100 @@ elif menu == "🧪 Criador de Aulas":
                                 with st.expander(f"👁️ Roteiro Herdado para {aula_alvo_prod}", expanded=False):
                                     st.info(f"📍 **Páginas Alvo:** {paginas_aula}\n\n{roteiro_especifico}")
 
-                                conteudo_prova_vinculada = ""
                                 prova_sel = ""
-                                if is_correcao or is_avaliacao:
+                                if is_logistica:
                                     st.markdown("---")
-                                    st.warning("🔍 **Modo de Avaliação/Correção Detectado:** Selecione a prova correspondente para oficializar a aplicação no acervo (Sem gerar novos materiais).")
-                                    
-                                    mask_provas = df_aulas['TIPO_MATERIAL'].str.upper().str.contains("PROVA|TESTE|SONDA|AVALIAÇÃO|EXAME")
-                                    provas_disponiveis = df_aulas[(df_aulas['ANO'].str.contains(str(ano_lab))) & mask_provas]
-                                    
-                                    if not provas_disponiveis.empty:
-                                        prova_sel = st.selectbox("Vincular Avaliação do Acervo:",[""] + provas_disponiveis['TIPO_MATERIAL'].tolist(), key=f"vinc_prova_{v}")
-                                        if prova_sel:
-                                            st.success("✅ Avaliação vinculada! O sistema registrará a logística no acervo.")
-                                    else:
-                                        st.info("Nenhuma avaliação encontrada no acervo para esta série.")
+                                    if is_exame:
+                                        st.warning("🔍 **Aplicação de Exame Detectada:** Selecione a prova correspondente para oficializar a aplicação no acervo.")
+                                        mask_provas = df_aulas['TIPO_MATERIAL'].str.upper().str.contains("PROVA|TESTE|SONDA|AVALIAÇÃO|EXAME")
+                                        provas_disponiveis = df_aulas[(df_aulas['ANO'].str.contains(str(ano_lab))) & mask_provas]
+                                        if not provas_disponiveis.empty:
+                                            prova_sel = st.selectbox("Vincular Avaliação do Acervo:", [""] + provas_disponiveis['TIPO_MATERIAL'].tolist(), key=f"vinc_prova_{v}")
+                                        else:
+                                            st.info("Nenhuma avaliação encontrada no acervo para esta série.")
+                                            
+                                    elif is_revisao:
+                                        st.warning("🔥 **Revisão/Correção Detectada:** Selecione o material de revisão ou o Dossiê Raio-X para oficializar a aula.")
+                                        opcoes_rev = df_aulas[(df_aulas['ANO'].str.contains(str(ano_lab))) & (df_aulas['SEMANA_REF'] == "REVISÃO")]['TIPO_MATERIAL'].tolist()
+                                        
+                                        # Puxa os Dossiês de Raio-X também
+                                        df_dossies_ano = df_relatorios[(df_relatorios['TIPO'] == 'DOSSIE_RAIO_X') & (df_relatorios['NOME_ALUNO'].str.contains(str(ano_lab)))]
+                                        for _, row_d in df_dossies_ano.iterrows():
+                                            cont_d = str(row_d['CONTEUDO'])
+                                            nome_av = re.search(r"Avaliação:\s*(.*)", cont_d)
+                                            nome_av_str = nome_av.group(1).strip() if nome_av else "Avaliação Desconhecida"
+                                            turma_d = row_d['NOME_ALUNO']
+                                            opcoes_rev.append(f"📊 DOSSIÊ RAIO-X: {nome_av_str} ({turma_d})")
+                                            
+                                        if opcoes_rev:
+                                            prova_sel = st.selectbox("Vincular Material de Revisão/Dossiê:", [""] + opcoes_rev, key=f"vinc_rev_{v}")
+                                        else:
+                                            st.info("Nenhum material de revisão ou dossiê encontrado no acervo.")
+                                            
+                                    elif is_projeto:
+                                        st.warning("📋 **Apresentação de Projeto Detectada:** Selecione o projeto correspondente.")
+                                        opcoes_proj = df_aulas[(df_aulas['ANO'].str.contains(str(ano_lab))) & (df_aulas['TIPO_MATERIAL'].str.contains("PROJETO|TRABALHO", case=False, na=False))]['TIPO_MATERIAL'].tolist()
+                                        if opcoes_proj:
+                                            prova_sel = st.selectbox("Vincular Projeto do Acervo:", [""] + opcoes_proj, key=f"vinc_proj_{v}")
+                                        else:
+                                            st.info("Nenhum projeto encontrado no acervo.")
+                                            
+                                    elif is_evento:
+                                        nome_evento = st.text_input("Nome do Evento/Dinâmica:", placeholder="Ex: Palestra sobre a Dengue", key=f"nome_ev_{v}")
 
                         if opcoes_disponiveis:
                             # ==============================================================================
-                            # 🚨 ROTA 1: OFICIALIZAÇÃO DIRETA (EVENTOS E AVALIAÇÕES) - SEM IA
+                            # 🚨 ROTA 1: OFICIALIZAÇÃO DIRETA (EVENTOS, AVALIAÇÕES, REVISÕES) - SEM IA
                             # ==============================================================================
-                            if "Evento" in metodo_entrega or is_avaliacao or is_correcao:
+                            if is_logistica:
                                 if st.button("💾 OFICIALIZAR NO ACERVO (SEM MATERIAL FÍSICO)", use_container_width=True, type="primary"):
-                                    nome_final_evento = nome_evento if "Evento" in metodo_entrega and not (is_avaliacao or is_correcao) else ""
+                                    nome_final_evento = ""
                                     
-                                    if is_avaliacao or is_correcao:
+                                    if is_exame or is_revisao or is_projeto:
                                         if not prova_sel:
-                                            st.error("⚠️ Selecione a avaliação vinculada acima antes de oficializar.")
+                                            st.error("⚠️ Selecione o material vinculado acima antes de oficializar.")
                                             st.stop()
-                                        prefixo = "APLICAÇÃO" if is_avaliacao else "CORREÇÃO"
+                                        prefixo = "APLICAÇÃO" if is_exame else "CORREÇÃO/REVISÃO" if is_revisao else "APRESENTAÇÃO"
                                         nome_final_evento = f"{prefixo} - {prova_sel}"
+                                    elif is_evento:
+                                        nome_final_evento = nome_evento
+                                        if not nome_final_evento:
+                                            st.error("⚠️ Digite o nome do evento para registrar.")
+                                            st.stop()
+                                            
+                                    with st.spinner("Registrando no acervo com rastreabilidade curricular..."):
+                                        hab_herdada = ai.extrair_tag(plano_txt, "HABILIDADE_BNCC")
+                                        cont_herdado = ai.extrair_tag(plano_txt, "CONTEUDOS_ESPECIFICOS")
+                                        obj_herdado = ai.extrair_tag(plano_txt, "OBJETIVOS_ENSINO")
                                         
-                                    if not nome_final_evento:
-                                        st.error("⚠️ Digite o nome do evento para registrar.")
-                                    else:
-                                        with st.spinner("Registrando no acervo com rastreabilidade curricular..."):
-                                            hab_herdada = ai.extrair_tag(plano_txt, "HABILIDADE_BNCC")
-                                            cont_herdado = ai.extrair_tag(plano_txt, "CONTEUDOS_ESPECIFICOS")
-                                            obj_herdado = ai.extrair_tag(plano_txt, "OBJETIVOS_ENSINO")
-                                            
-                                            conteudo_fantasma = (
-                                                f"[PROFESSOR]\n"
-                                                f"🎟️ **REGISTRO DE LOGÍSTICA / EVENTO**\n"
-                                                f"**Tema:** {nome_final_evento}\n"
-                                                f"**Habilidade:** {hab_herdada}\n"
-                                                f"**Conteúdos:** {cont_herdado}\n"
-                                                f"**Objetivos:** {obj_herdado}\n\n"
-                                                f"**Roteiro Executado:**\n{roteiro_especifico}\n\n"
-                                                f"[ALUNO]\nAtividade prática/avaliação. Sem material físico gerado nesta etapa.\n\n"
-                                                f"[GABARITO]\nN/A\n\n"
-                                                f"[PEI]\nParticipação inclusiva garantida via mediação direta ou prova adaptada já impressa.\n\n"
-                                                f"--- LINKS ---\nRegular(N/A)\nPEI(N/A)\nProf(N/A)"
-                                            )
-                                            
-                                            nome_elite = util.gerar_nome_material_elite(ano_lab, aula_alvo_prod, nome_final_evento)
-                                            
-                                            db.salvar_no_banco("DB_AULAS_PRONTAS",[
-                                                datetime.now().strftime("%d/%m/%Y"), 
-                                                sem_lab, 
-                                                nome_elite, 
-                                                conteudo_fantasma, 
-                                                f"{ano_lab}º", 
-                                                "N/A"
-                                            ])
-                                            st.success("✅ Registro oficializado no Acervo! Já disponível no Cockpit para abertura de aula.")
-                                            import time
-                                            time.sleep(1.5)
-                                            st.rerun()
+                                        conteudo_fantasma = (
+                                            f"[PROFESSOR]\n"
+                                            f"🎟️ **REGISTRO DE LOGÍSTICA / EVENTO**\n"
+                                            f"**Tema:** {nome_final_evento}\n"
+                                            f"**Habilidade:** {hab_herdada}\n"
+                                            f"**Conteúdos:** {cont_herdado}\n"
+                                            f"**Objetivos:** {obj_herdado}\n\n"
+                                            f"**Roteiro Executado:**\n{roteiro_especifico}\n\n"
+                                            f"[ALUNO]\nAtividade prática/avaliação. Sem material físico gerado nesta etapa.\n\n"
+                                            f"[GABARITO]\nN/A\n\n"
+                                            f"[PEI]\nParticipação inclusiva garantida via mediação direta ou material já impresso.\n\n"
+                                            f"--- LINKS ---\nRegular(N/A)\nPEI(N/A)\nProf(N/A)"
+                                        )
+                                        
+                                        nome_elite = util.gerar_nome_material_elite(ano_lab, aula_alvo_prod, nome_final_evento)
+                                        
+                                        db.salvar_no_banco("DB_AULAS_PRONTAS",[
+                                            datetime.now().strftime("%d/%m/%Y"), 
+                                            sem_lab, 
+                                            nome_elite, 
+                                            conteudo_fantasma, 
+                                            f"{ano_lab}º", 
+                                            "N/A"
+                                        ])
+                                        st.success("✅ Registro oficializado no Acervo! Já disponível no Cockpit para abertura de aula.")
+                                        import time
+                                        time.sleep(1.5)
+                                        st.rerun()
                             
                             # ==============================================================================
                             # 🚨 ROTA 2: GERAÇÃO DE MATERIAL DIDÁTICO (COM IA)
