@@ -761,7 +761,7 @@ def gerar_docx_pei_oficial(nome_arquivo, dados_aluno, habilidades, curriculo_df)
 # ==============================================================================
 # 10. EXPORTADOR DE PLANEJAMENTO TRIMESTRAL (MACRO-SOSA)
 # ==============================================================================
-def gerar_docx_planejamento_trimestral(nome_arquivo, info, df_trimestre, config):
+def gerar_docx_planejamento_trimestral(nome_arquivo, info, df_trimestre, config, lista_bncc):
     file_stream = io.BytesIO()
     try:
         doc = Document()
@@ -809,7 +809,7 @@ def gerar_docx_planejamento_trimestral(nome_arquivo, info, df_trimestre, config)
         table.style = 'Table Grid'
         
         # Ajuste de larguras aproximadas para Paisagem
-        widths = [Inches(0.8), Inches(1.8), Inches(1.2), Inches(2.0), Inches(1.8), Inches(1.0), Inches(1.4)]
+        widths = [Inches(0.8), Inches(1.8), Inches(1.0), Inches(2.2), Inches(1.8), Inches(1.0), Inches(1.4)]
         for i, w in enumerate(widths): 
             table.columns[i].width = w
 
@@ -834,13 +834,15 @@ def gerar_docx_planejamento_trimestral(nome_arquivo, info, df_trimestre, config)
                 p = c_cont.add_paragraph(f"• {item}")
                 p.paragraph_format.space_after = Pt(2)
             
-        # 3. Habilidades (Usando o Eixo como referência da BNCC)
+        # 3. Habilidades (Códigos BNCC Extraídos via Regex)
         c_hab = row_cells[2]
         c_hab.text = ""
-        for item in df_trimestre['EIXO'].unique():
-            if str(item).strip():
-                p = c_hab.add_paragraph(f"• {item}")
+        if lista_bncc:
+            for code in lista_bncc:
+                p = c_hab.add_paragraph(f"• {code}")
                 p.paragraph_format.space_after = Pt(2)
+        else:
+            c_hab.text = "Códigos BNCC não localizados."
             
         # 4. Objetivos (Extraídos do Banco)
         c_obj = row_cells[3]
