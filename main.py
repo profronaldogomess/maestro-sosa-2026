@@ -978,10 +978,27 @@ if menu == "📅 Planejamento (Ponto ID)":
         if df_matriz_trim.empty:
             st.warning(f"⚠️ Nenhum conteúdo encontrado na Matriz Curricular para o {ano_trim} no {trim_alvo}.")
         else:
-            st.success(f"✅ Encontrados {len(df_matriz_trim['CONTEUDO_ESPECIFICO'].unique())} conteúdos e {len(df_matriz_trim['OBJETIVOS'].unique())} objetivos na Matriz.")
+            # 🚨 MOTOR DE EXTRAÇÃO DE CÓDIGOS BNCC (REGEX)
+            bncc_codes = set()
+            
+            # 1. Busca nos Planos de Aula já gerados no Acervo
+            planos_trim = df_planos[(df_planos['ANO'].str.contains(ano_num_trim)) & (df_planos['TURMA'] == trim_alvo)]
+            for txt in planos_trim['PLANO_TEXTO'].dropna():
+                hab_tag = ai.extrair_tag(str(txt), "HABILIDADE_BNCC")
+                codes = re.findall(r'EF\d{2}MA\d{2}[A-Z]?', hab_tag, re.IGNORECASE)
+                bncc_codes.update([c.upper() for c in codes])
+                
+            # 2. Busca de segurança na própria Matriz Curricular (caso não haja planos gerados)
+            for obj in df_matriz_trim['OBJETIVOS'].dropna():
+                codes = re.findall(r'EF\d{2}MA\d{2}[A-Z]?', str(obj), re.IGNORECASE)
+                bncc_codes.update([c.upper() for c in codes])
+                
+            lista_bncc_final = sorted(list(bncc_codes))
+            
+            st.success(f"✅ Encontrados {len(df_matriz_trim['CONTEUDO_ESPECIFICO'].unique())} conteúdos e {len(lista_bncc_final)} códigos BNCC.")
             
             with st.expander("⚙️ Configurar Textos Padrão (Metodologia, Recursos e Avaliação)", expanded=True):
-                st.info("Estes textos preencherão as colunas finais da tabela. Você pode editá-colos conforme a necessidade da sua turma.")
+                st.info("Estes textos preencherão as colunas finais da tabela. Você pode editá-los conforme a necessidade da sua turma.")
                 
                 texto_metodologia = st.text_area("Metodologia:", 
                     "Aulas expositivas e dialogadas com exemplos práticos;\nResolução de exercícios em classe/casa;\nAtividades individuais e em grupo;\nAprendizagem Baseada em Problemas (PBL);\nGamificação;\nUso de recursos tecnológicos (quando disponíveis);\nRevisões periódicas contextualizadas/retomada de conceitos;\nRecomposição de aprendizagens.", height=150)
@@ -1009,27 +1026,81 @@ if menu == "📅 Planejamento (Ponto ID)":
                         }
                         
                         nome_arq_trim = f"PLANEJAMENTO_{trim_alvo.replace(' ', '')}_{ano_trim.replace('º ', '')}"
+                        tipo_relatorio_banco = f"MACRO_{ano_trim.replace('º ', '')}_{trim_alvo.replace(' ', '')}"
                         
-                        # Chama o exporter
-                        doc_stream = exporter.gerar_docx_planejamento_trimestral(nome_arq_trim, info_trim, df_matriz_trim, config_textos)
+                        # Chama o exporter passando a lista de códigos BNCC
+                        doc_stream = exporter.gerar_docx_planejamento_trimestral(nome_arq_trim, info_trim, df_matriz_trim, config_textos, lista_bncc_final)
                         
                         # Sobe para o Drive
                         link_doc = db.subir_e_converter_para_google_docs(doc_stream, nome_arq_trim, trimestre=trim_alvo, categoria=ano_trim, modo="PLANEJAMENTO")
                         
                         if "https" in link_doc:
-                            # Salva no banco de relatórios para histórico
+                            # 🚨 ENGENHARIA DE DELEÇÃO REVERSA (UPSERT)
+                            try:
+                                wb = db.conectar()
+                                ws = wb.worksheet("DB_RELATORIOS")
+                                dados = ws.get_all_values()
+                                for i in range(len(dados)-1, 0, -1):
+                                    if len(dados[i]) > 3 and dados[i][3] == tipo_relatorio_banco:
+                                        # Apaga o arquivo antigo do Drive para não acumular lixo
+                                        link_antigo = re.search(r"Link:\s*(https?://[^\s]+)", dados[i][4])
+                                        if link_antigo:
+                                            db.excluir_registro_com_drive("DB_RELATORIOS", link_antigo.group(1))
+                                        ws.delete_rows(i+1)
+                            except: pass
+                            
+                            # Salva o novo no banco
                             db.salvar_no_banco("DB_RELATORIOS", [
                                 datetime.now().strftime("%d/%m/%Y"), 
                                 "TURMA", 
                                 ", ".join(turmas_sel), 
-                                "PLANEJAMENTO_TRIMESTRAL", 
+                                tipo_relatorio_banco, 
                                 f"Série: {ano_trim}\nTrimestre: {trim_alvo}\nLink: {link_doc}"
                             ])
-                            st.success("✅ Planejamento Trimestral gerado e salvo no Drive!")
-                            st.link_button("📂 ABRIR DOCUMENTO OFICIAL", link_doc, type="primary", use_container_width=True)
+                            st.success("✅ Planejamento Trimestral gerado e salvo no Acervo!")
                             st.balloons()
+                            time.sleep(1.5)
+                            st.rerun()
                         else:
                             st.error(f"Erro ao salvar no Drive: {link_doc}")
+
+        # ==============================================================================
+        # 🗂️ ACERVO DE PLANEJAMENTOS TRIMESTRAIS
+        # ==============================================================================
+        st.markdown("---")
+        st.subheader("🗂️ Acervo de Planejamentos Trimestrais")
+        st.caption("Acesse os documentos oficiais já gerados. Ao gerar um novo para a mesma série e trimestre, o antigo é substituído automaticamente.")
+        
+        df_macro = df_relatorios[df_relatorios['TIPO'].str.startswith('MACRO_')].copy()
+        
+        if not df_macro.empty:
+            for idx, row in df_macro.iloc[::-1].iterrows():
+                with st.container(border=True):
+                    c_m1, c_m2, c_m3 = st.columns([2, 1, 1])
+                    
+                    conteudo_m = str(row['CONTEUDO'])
+                    serie_m = re.search(r"Série:\s*(.*)", conteudo_m)
+                    trim_m = re.search(r"Trimestre:\s*(.*)", conteudo_m)
+                    link_m = re.search(r"Link:\s*(https?://[^\s]+)", conteudo_m)
+                    
+                    serie_str = serie_m.group(1).strip() if serie_m else "Série N/A"
+                    trim_str = trim_m.group(1).strip() if trim_m else "Trimestre N/A"
+                    link_str = link_m.group(1).strip() if link_m else "#"
+                    
+                    c_m1.markdown(f"**📄 Planejamento Trimestral: {serie_str}**")
+                    c_m1.caption(f"📅 {trim_str} | Gerado em: {row['DATA']}")
+                    
+                    if "http" in link_str:
+                        c_m2.link_button("🖨️ ABRIR DOCX", link_str, use_container_width=True, type="primary")
+                    else:
+                        c_m2.button("⚪ SEM LINK", disabled=True, use_container_width=True)
+                        
+                    if c_m3.button("🗑️ APAGAR", key=f"del_macro_{idx}", use_container_width=True):
+                        with st.spinner("Apagando arquivo..."):
+                            db.excluir_registro_com_drive("DB_RELATORIOS", link_str if "http" in link_str else conteudo_m)
+                            st.rerun()
+        else:
+            st.info("📭 Nenhum Planejamento Trimestral gerado no acervo.")
 
 
 
