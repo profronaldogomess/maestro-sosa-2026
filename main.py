@@ -2015,6 +2015,7 @@ elif menu == "📝 Central de Avaliações":
         "🚀 1. Arquiteto de Exames", "🤖 2. Refinador Copilot", "👁️ 3. Visão 360°", "🔥 4. Recomposição", "💾 5. Finalizar Ativo", "🗂️ 6. Acervo"
     ])
 
+
     # --- ABA 1: ARQUITETO DE EXAMES ---
     with tab_arquiteto_av:
         if is_refinando_av:
@@ -2050,6 +2051,7 @@ elif menu == "📝 Central de Avaliações":
         soma_q = qtd_q
         q_facil, q_medio, q_dificil = 0, 0, 0
         mats_selecionados = []
+        topicos_futuros = []
         sel_conts, sel_objs = [], []
         instr_extra = ""
         prova_base_sel = ""
@@ -2072,12 +2074,24 @@ elif menu == "📝 Central de Avaliações":
                     st.error(f"🚨 Erro: A soma das questões ({soma_q}) deve ser igual ao total ({qtd_q}).")
 
             with st.container(border=True):
-                st.markdown("#### 🎯 Vínculo de Safra (Conteúdos Ministrados)")
-                df_ref = df_aulas[(df_aulas['ANO'].str.contains(str(ano_av))) & (df_aulas['CONTEUDO'].str.contains(trim_filtro, na=False))]
+                st.markdown("#### 🎯 Vínculo de Safra e Antecipação Curricular")
                 
-                mats_selecionados = st.multiselect(f"📦 Selecione as Aulas Base ({len(df_ref)} detectadas):", options=df_ref["TIPO_MATERIAL"].tolist(), key=f"av_ref_nova_{v}")
+                c_safra1, c_safra2 = st.columns(2)
+                
+                # 1. Aulas já ministradas (Acervo)
+                df_ref = df_aulas[(df_aulas['ANO'].str.contains(str(ano_av))) & (df_aulas['CONTEUDO'].str.contains(trim_filtro, na=False))]
+                mats_selecionados = c_safra1.multiselect(f"📦 Aulas Base (Já Ministradas):", options=df_ref["TIPO_MATERIAL"].tolist(), key=f"av_ref_nova_{v}")
+                
+                # 2. Tópicos Futuros (Matriz Curricular)
+                trim_sigla = trim_filtro.split(" ")[0]
+                df_matriz_av = df_curriculo[(df_curriculo['ANO'].astype(str).str.contains(str(ano_av))) & (df_curriculo['TRIMESTRE'] == trim_sigla)]
+                opcoes_futuras = sorted(df_matriz_av['CONTEUDO_ESPECIFICO'].unique().tolist()) if not df_matriz_av.empty else []
+                
+                topicos_futuros = c_safra2.multiselect("🔮 Tópicos Futuros (Matriz Curricular):", options=opcoes_futuras, help="Assuntos exigidos pela coordenação que ainda não possuem aula gerada.", key=f"av_futuro_{v}")
                 
                 conteudos_extraidos, objetivos_extraidos = set(), set()
+                
+                # Extrai das aulas
                 if mats_selecionados:
                     semanas_selecionadas = df_ref[df_ref['TIPO_MATERIAL'].isin(mats_selecionados)]['SEMANA_REF'].unique()
                     planos_relacionados = df_planos[(df_planos['ANO'].str.contains(str(ano_av))) & (df_planos['SEMANA'].isin(semanas_selecionadas))]
@@ -2091,12 +2105,21 @@ elif menu == "📝 Central de Avaliações":
                             for item in re.split(r'[;\n]', obj):
                                 if len(item.strip()) > 5: objetivos_extraidos.add(item.strip().replace("- ", "").replace("• ", ""))
                 
+                # Extrai dos tópicos futuros
+                if topicos_futuros:
+                    for topico in topicos_futuros:
+                        conteudos_extraidos.add(topico)
+                        objs_relacionados = df_matriz_av[df_matriz_av['CONTEUDO_ESPECIFICO'] == topico]['OBJETIVOS'].tolist()
+                        for obj in objs_relacionados:
+                            if str(obj).strip(): objetivos_extraidos.add(str(obj).strip())
+                
                 lista_conteudos = sorted(list(conteudos_extraidos))
                 lista_objetivos = sorted(list(objetivos_extraidos))
                 
+                st.divider()
                 c_foco1, c_foco2 = st.columns(2)
-                conteudos_foco = c_foco1.multiselect("🎯 Conteúdos Específicos:", lista_conteudos, key=f"cont_foco_{v}")
-                objetivos_foco = c_foco2.multiselect("🎯 Objetivos de Ensino:", lista_objetivos, key=f"obj_foco_{v}")
+                conteudos_foco = c_foco1.multiselect("🎯 Conteúdos Específicos (Filtro Final):", lista_conteudos, default=lista_conteudos, key=f"cont_foco_{v}")
+                objetivos_foco = c_foco2.multiselect("🎯 Objetivos de Ensino (Filtro Final):", lista_objetivos, default=lista_objetivos, key=f"obj_foco_{v}")
                 
                 instr_extra = st.text_area("📝 Instruções Extras (Ex: Focar em frações):", key=f"av_extra_nova_{v}")
 
@@ -2113,8 +2136,8 @@ elif menu == "📝 Central de Avaliações":
             
             if prova_base_sel:
                 txt_base = str(df_provas[df_provas['TIPO_MATERIAL'] == prova_base_sel].iloc[0]['CONTEUDO'])
-                q_raw = ai.extrair_tag(txt_base, "QUESTOES")
-                qtd_detectada = len(re.findall(r"(?i)QUEST[AÃ]O\s*0?\d+", q_raw))
+                q_reg = ai.extrair_tag(txt_base, "QUESTOES")
+                qtd_detectada = len(re.findall(r"(?i)QUEST[AÃ]O\s*0?\d+", q_reg))
                 st.success(f"✅ Prova detectada com {qtd_detectada} questões. A IA manterá a mesma estrutura.")
                 
                 instr_extra = st.text_area("📝 Instruções Extras (Opcional):", key=f"av_extra_clone_{v}")
@@ -2149,6 +2172,8 @@ elif menu == "📝 Central de Avaliações":
             
             if modo_arq == "🆕 Nova Avaliação (Inédita)" and soma_q != qtd_q:
                 st.error("⚠️ Ajuste a distribuição de dificuldade (Taxonomia) antes de gerar.")
+            elif modo_arq == "🆕 Nova Avaliação (Inédita)" and not mats_selecionados and not topicos_futuros:
+                st.error("⚠️ Selecione pelo menos uma Aula Base ou um Tópico Futuro para gerar a prova.")
             elif modo_arq in ["🧬 Variante Anti-Fraude (Tipo B, C...)", "🔄 2ª Chamada (Discursiva)"] and not prova_base_sel:
                 st.error("⚠️ Selecione a Prova Original para clonagem.")
             else:
@@ -2173,7 +2198,7 @@ elif menu == "📝 Central de Avaliações":
                             f"TIPO: {tipo_av}. SÉRIE: {ano_av}º. VALOR: {v_total}. QTD: {qtd_q}.\n"
                             f"DIRETRIZ DE DIFICULDADE: {q_facil} Fáceis, {q_medio} Médias, {q_dificil} Difíceis.\n"
                             f"{foco_str}\nEXTRAS: {instr_extra}.\n\n"
-                            f"--- CONTEÚDO HERDADO DAS AULAS ---\n{contexto_base}"
+                            f"--- CONTEÚDO HERDADO DAS AULAS (JÁ MINISTRADAS) ---\n{contexto_base if contexto_base else 'Nenhuma aula base selecionada. Crie as questões baseando-se estritamente nos conteúdos e objetivos acima.'}"
                         )
                         resultado_ia = ai.gerar_ia("ARQUITETO_EXAMES_V30_ELITE", prompt, usar_busca=True)
                     
