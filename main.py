@@ -2079,7 +2079,12 @@ elif menu == "📝 Central de Avaliações":
                 c_safra1, c_safra2 = st.columns(2)
                 
                 # 1. Aulas já ministradas (Acervo)
-                df_ref = df_aulas[(df_aulas['ANO'].str.contains(str(ano_av))) & (df_aulas['CONTEUDO'].str.contains(trim_filtro, na=False))]
+                df_ref = df_aulas[df_aulas['ANO'].str.contains(str(ano_av))].copy()
+                
+                # 🚨 FILTRO DE SOBERANIA: Remove provas, sondas e registros logísticos da lista de aulas base
+                termos_proibidos = ["APLICAÇÃO", "TESTE", "PROVA", "SONDA", "AVALIAÇÃO", "CORREÇÃO", "REVISÃO", "EXAME", "2ª CHAMADA"]
+                df_ref = df_ref[~df_ref['TIPO_MATERIAL'].str.upper().str.contains('|'.join(termos_proibidos))]
+                
                 mats_selecionados = c_safra1.multiselect(f"📦 Aulas Base (Já Ministradas):", options=df_ref["TIPO_MATERIAL"].tolist(), key=f"av_ref_nova_{v}")
                 
                 # 2. Tópicos Futuros (Matriz Curricular)
