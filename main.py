@@ -5287,15 +5287,48 @@ elif menu == "👥 Gestão da Turma":
                     st.subheader("🛠️ Apoio e Auditoria")
                     
                     with st.container(border=True):
-                        st.markdown("**👥 Foco em Inclusão (Alunos PEI)**")
-                        mask_pei = ~alunos_t['NECESSIDADES'].astype(str).str.upper().str.strip().isin(["NENHUMA", "PENDENTE", "", "NAN", "TÍPICO", "TIPICO"])
+                        st.markdown("#### 📊 Perfil Quantitativo da Turma")
+                        
+                        # 🚨 MOTOR DE ESTATÍSTICA RÁPIDA
+                        total_alunos_turma = len(alunos_t)
+                        
+                        def classificar_macro_perfil(nec):
+                            n = str(nec).upper().strip()
+                            if n in ["NENHUMA", "", "NAN", "TÍPICO", "TIPICO"]: return "TIPICO"
+                            if "DEFASAGEM" in n: return "DEFASAGEM"
+                            if "PENDENTE" in n or "SUSPEITA" in n: return "RADAR"
+                            if "ALTA PERFORMANCE" in n: return "ALTA"
+                            return "PEI"
+                            
+                        perfis_macro = alunos_t['NECESSIDADES'].apply(classificar_macro_perfil)
+                        qtd_pei = len(perfis_macro[perfis_macro == "PEI"])
+                        qtd_defasagem = len(perfis_macro[perfis_macro == "DEFASAGEM"])
+                        
+                        # Exibição das métricas
+                        c_m1, c_m2, c_m3 = st.columns(3)
+                        c_m1.metric("👥 Total Alunos", total_alunos_turma)
+                        c_m2.metric("♿ Laudos (PEI)", qtd_pei)
+                        c_m3.metric("🧱 Defasagem", qtd_defasagem)
+                        
+                        st.divider()
+                        
+                        st.markdown("**🔍 Foco em Inclusão (Detalhamento)**")
+                        # Filtra todos que precisam de atenção (ignora Típicos e Alta Performance)
+                        mask_pei = ~alunos_t['NECESSIDADES'].astype(str).str.upper().str.strip().isin(["NENHUMA", "", "NAN", "TÍPICO", "TIPICO", "ALTA PERFORMANCE"])
                         df_pei_turma = alunos_t[mask_pei]
                         
                         if not df_pei_turma.empty:
                             for _, alu in df_pei_turma.iterrows(): 
-                                st.warning(f"♿ **{alu['NOME_ALUNO']}**\n↳ {alu['NECESSIDADES']}")
+                                nec_str = str(alu['NECESSIDADES']).upper()
+                                # 🚨 COLORIZAÇÃO DINÂMICA POR PERFIL
+                                if "DEFASAGEM" in nec_str:
+                                    st.error(f"🧱 **{alu['NOME_ALUNO']}**\n↳ {alu['NECESSIDADES']}")
+                                elif "PENDENTE" in nec_str or "SUSPEITA" in nec_str:
+                                    st.warning(f"🟠 **{alu['NOME_ALUNO']}**\n↳ {alu['NECESSIDADES']}")
+                                else:
+                                    st.info(f"♿ **{alu['NOME_ALUNO']}**\n↳ {alu['NECESSIDADES']}")
                         else: 
-                            st.success("✅ Nenhum aluno PEI nesta turma.")
+                            st.success("✅ Nenhum aluno com necessidade de adaptação nesta turma.")
 
                     with st.container(border=True):
                         st.markdown("#### ✏️ Auditoria de Regência")
