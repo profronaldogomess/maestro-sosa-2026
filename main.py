@@ -5866,8 +5866,9 @@ elif menu == "👥 Gestão da Turma":
                         else:
                             st.info("Nenhum aluno avaliado ainda.")
 
+
     # ==============================================================================
-    # 📅 ABA 4: CONTROLE DE EVASÃO (MANTIDA INTACTA)
+    # 📅 ABA 4: CONTROLE DE EVASÃO E FREQUÊNCIA (BLINDADO ANTI-DUPLICIDADE)
     # ==============================================================================
     with tab_frequencia:
         st.subheader("📅 Controle de Frequência e Evasão")
@@ -5899,9 +5900,17 @@ elif menu == "👥 Gestão da Turma":
                     modo_visao = st.radio("Modo de Visualização:", ["📊 Grade do Trimestre (Tabela)", "📅 Faltosos por Dia", "🚨 Radar de Evasão"], horizontal=True, key=f"modo_freq_{v}")
                     st.markdown("---")
 
-                    # 🚨 LÓGICA DE EXCLUSÃO DE DIAS NÃO LETIVOS
+                    # 🚨 1. IDENTIFICA DIAS NÃO LETIVOS ANTES DA LIMPEZA
+                    dias_nao_letivos = df_d_trim[df_d_trim['TAGS'] == "DIA NÃO LETIVO"]['DATA'].unique()
+                    
+                    # 🚨 2. MOTOR DE LIMPEZA E SOBERANIA DE DADOS
+                    # Remove o registro fantasma "TODOS OS ALUNOS" da visualização
+                    df_d_trim = df_d_trim[df_d_trim['ID_ALUNO'] != "GLOBAL"]
+                    
+                    # Mata qualquer duplicidade (garante apenas 1 registro por aluno por dia)
+                    df_d_trim = df_d_trim.drop_duplicates(subset=['DATA', 'ID_ALUNO'], keep='last')
+
                     def get_status(row):
-                        if row['TAGS'] == "DIA NÃO LETIVO": return "🛑"
                         if row['TAGS'] == "AUSÊNCIA": return "F"
                         return "•"
                         
@@ -5909,7 +5918,6 @@ elif menu == "👥 Gestão da Turma":
                     datas_aulas = sorted(df_d_trim['DATA_DT'].unique())
                     datas_str = [d.strftime("%d/%m/%Y") for d in datas_aulas]
                     
-                    dias_nao_letivos = df_d_trim[df_d_trim['TAGS'] == "DIA NÃO LETIVO"]['DATA'].unique()
                     total_aulas_validas = len([d for d in datas_str if d not in dias_nao_letivos])
 
                     if modo_visao == "📊 Grade do Trimestre (Tabela)":
@@ -5920,7 +5928,6 @@ elif menu == "👥 Gestão da Turma":
                         def color_status(val):
                             if val == 'F': return 'color: #FF4B4B; font-weight: bold;'
                             if val == '•': return 'color: #2ECC71; font-weight: bold;'
-                            if val == '🛑': return 'color: #F1C40F; font-weight: bold;'
                             return 'color: gray;'
                             
                         st.dataframe(pivot_freq.style.map(color_status), use_container_width=True, height=(len(pivot_freq)*35)+40)
@@ -5929,14 +5936,17 @@ elif menu == "👥 Gestão da Turma":
                         st.markdown("#### 📅 Visão Diária de Ausências")
                         data_alvo = st.selectbox("Selecione a Data da Aula:", datas_str, key=f"data_alvo_freq_{v}")
                         
-                        df_dia = df_d_trim[df_d_trim['DATA'] == data_alvo]
-                        
-                        if not df_dia[df_dia['TAGS'] == "DIA NÃO LETIVO"].empty:
-                            motivo = df_dia[df_dia['TAGS'] == "DIA NÃO LETIVO"].iloc[0]['OBSERVACOES']
+                        if data_alvo in dias_nao_letivos:
+                            # Busca o motivo no dataframe original (antes da limpeza do GLOBAL)
+                            motivo = df_d_freq[(df_d_freq['DATA'] == data_alvo) & (df_d_freq['TAGS'] == "DIA NÃO LETIVO")].iloc[0]['OBSERVACOES']
                             st.warning(f"🛑 **DIA NÃO LETIVO:** {motivo}")
+                            st.info("Nenhuma chamada foi realizada nesta data.")
                         else:
-                            faltosos_dia = df_dia[df_dia['STATUS'] == 'F']['NOME_ALUNO'].tolist()
-                            presentes_dia = df_dia[df_dia['STATUS'] == '•']['NOME_ALUNO'].tolist()
+                            df_dia = df_d_trim[df_d_trim['DATA'] == data_alvo]
+                            
+                            # 🚨 EXTRAÇÃO COM ORDEM ALFABÉTICA FORÇADA
+                            faltosos_dia = sorted(df_dia[df_dia['STATUS'] == 'F']['NOME_ALUNO'].tolist())
+                            presentes_dia = sorted(df_dia[df_dia['STATUS'] == '•']['NOME_ALUNO'].tolist())
                             
                             c_dia1, c_dia2 = st.columns([1, 2])
                             c_dia1.metric("Total de Faltas", len(faltosos_dia))
@@ -5951,7 +5961,7 @@ elif menu == "👥 Gestão da Turma":
                         st.markdown("#### 🚨 Inteligência de Evasão Escolar")
                         st.info(f"Total de aulas válidas no {trim_freq}: **{total_aulas_validas} aulas** (Ignorando {len(dias_nao_letivos)} dias não letivos)")
                         
-                        alunos_turma = df_alunos[df_alunos['TURMA'] == t_freq]['NOME_ALUNO'].tolist()
+                        alunos_turma = sorted(df_alunos[df_alunos['TURMA'] == t_freq]['NOME_ALUNO'].tolist())
                         
                         stats_evasao = []
                         for aluno in alunos_turma:
