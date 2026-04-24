@@ -2028,7 +2028,6 @@ elif menu == "📝 Central de Avaliações":
         if f['fase'] == 1:
             st.markdown("### 📍 Fase 1: Natureza e Matriz de Referência")
             
-            # 🚨 RESTAURADO: SELETOR DE NATUREZA DA AVALIAÇÃO
             modo_arq = st.radio(
                 "O que você deseja construir hoje?", 
                 [
@@ -2049,7 +2048,6 @@ elif menu == "📝 Central de Avaliações":
                     v_total = c3.number_input("Valor Total:", 0.0, 10.0, 10.0 if "Sonda" in modo_arq else 3.0, step=0.5)
                     qtd_q = c4.number_input("Nº de Questões:", 1, 20, 10)
 
-                # 🚨 RESTAURADO: SELETOR DE TIPO DE ATIVO
                 if modo_arq == "🆕 Nova Avaliação (Inédita)":
                     tipo_av = st.selectbox("Tipo de Ativo:", ["Teste", "Prova", "Recuperação Paralela", "Recuperação Final"])
                 else:
@@ -2072,14 +2070,22 @@ elif menu == "📝 Central de Avaliações":
                     topicos_futuros = c_safra2.multiselect("🔮 Tópicos Futuros (Matriz Curricular):", options=opcoes_futuras)
                     
                     conteudos_extraidos = set()
+                    contexto_base_texto = "" # 🚨 NOVO: Guarda o texto das aulas para a IA ler
+                    
                     if mats_selecionados:
                         semanas_selecionadas = df_ref[df_ref['TIPO_MATERIAL'].isin(mats_selecionados)]['SEMANA_REF'].unique()
                         planos_relacionados = df_planos[(df_planos['ANO'].str.contains(str(ano_av))) & (df_planos['SEMANA'].isin(semanas_selecionadas))]
+                        
                         for _, row_p in planos_relacionados.iterrows():
                             cont = ai.extrair_tag(str(row_p['PLANO_TEXTO']), "CONTEUDOS_ESPECIFICOS")
                             if cont and cont.upper() != "N/A":
                                 for item in re.split(r'[;\n]', cont):
                                     if len(item.strip()) > 5: conteudos_extraidos.add(item.strip().replace("- ", "").replace("• ", ""))
+                        
+                        # 🚨 NOVO: Extrai o texto completo das aulas selecionadas
+                        for m_nome in mats_selecionados:
+                            m_row = df_aulas[df_aulas["TIPO_MATERIAL"] == m_nome].iloc[0]
+                            contexto_base_texto += f"--- AULA: {m_nome} ---\n{m_row['CONTEUDO']}\n\n"
                     
                     if topicos_futuros:
                         for topico in topicos_futuros: conteudos_extraidos.add(topico)
@@ -2108,8 +2114,8 @@ elif menu == "📝 Central de Avaliações":
                             })
                         
                         f['mapa'] = mapa_inicial
-                        # 🚨 SALVA O TIPO DE PROVA NA MEMÓRIA PARA A FASE 4
                         f['info'] = {'ano': f"{ano_av}º", 'trimestre': trim_filtro, 'valor': v_total, 'qtd': qtd_q, 'tipo_prova': tipo_av}
+                        f['contexto_base'] = contexto_base_texto # 🚨 Salva o texto das aulas na memória
                         f['fase'] = 2
                         st.rerun()
 
@@ -2181,7 +2187,6 @@ elif menu == "📝 Central de Avaliações":
             st.markdown("### ⚙️ Fase 2: Linha de Montagem")
             st.caption("Gere e aprove cada questão individualmente. O gabarito já foi travado pelo sistema para garantir o balanceamento perfeito.")
             
-            # 🚨 ADICIONADO: BOTÃO DE MODO LEITURA (LATEX)
             modo_leitura_forja = st.toggle("👁️ Ativar Modo Leitura (Renderizar Matemática)", value=True, key="tog_forja")
             
             def preparar_para_leitura(texto):
@@ -2190,12 +2195,10 @@ elif menu == "📝 Central de Avaliações":
                 texto = re.sub(r'```$', '', texto, flags=re.MULTILINE)
                 return re.sub(r'\$\$\s*(.*?)\s*\$\$', r'$\1$', texto)
 
-            # 🚨 ADICIONADO: PARSER BLINDADO EXCLUSIVO PARA A FORJA
             def extrair_item_forja(texto_bruto):
                 tags = ['ENUNCIADO', 'ALT_A', 'ALT_B', 'ALT_C', 'ALT_D', 'ALT_E', 'HABILIDADE', 'JUSTIFICATIVA', 'DISTRATORES']
                 res = {}
                 for tag in tags:
-                    # Busca a tag e captura tudo até encontrar a próxima tag da lista ou o fim do texto
                     padrao = rf"\[{tag}\](.*?)(?=\[(?:{'|'.join(tags)})\]|$)"
                     match = re.search(padrao, texto_bruto, re.DOTALL | re.IGNORECASE)
                     res[tag] = match.group(1).strip() if match else ""
@@ -2216,10 +2219,15 @@ elif menu == "📝 Central de Avaliações":
                         
                         if st.button(f"🧠 Gerar Questão {item['q']}", key=f"btn_gen_{i}"):
                             with st.spinner("Forjando item psicométrico..."):
-                                prompt = f"TEMA: {tema_q}. DIFICULDADE: {dif_q}. GABARITO OBRIGATÓRIO: Letra {item['gabarito']}."
+                                # 🚨 NOVO: INJETA O TEXTO DAS AULAS NA MENTE DA IA
+                                contexto_herdado = f.get('contexto_base', '')
+                                prompt = (
+                                    f"TEMA: {tema_q}. DIFICULDADE: {dif_q}. GABARITO OBRIGATÓRIO: Letra {item['gabarito']}.\n\n"
+                                    f"🚨 DIRETRIZ DE ESPELHAMENTO: Baseie o estilo, o contexto e a complexidade desta questão no material de aula abaixo. Crie uma questão 'gêmea' ou similar ao que foi ensinado:\n"
+                                    f"{contexto_herdado if contexto_herdado else 'Crie a questão baseada estritamente no TEMA fornecido.'}"
+                                )
                                 res_item = ai.gerar_ia("FORJA_ITEM_REGULAR", prompt)
                                 
-                                # 🚨 USA O NOVO PARSER BLINDADO
                                 extraido = extrair_item_forja(res_item)
                                 
                                 item['dados'] = {
@@ -2243,7 +2251,6 @@ elif menu == "📝 Central de Avaliações":
                         
                         d = item['dados']
                         
-                        # 🚨 PREVIEW RENDERIZADO (LATEX)
                         if modo_leitura_forja:
                             st.markdown("**👁️ Preview da Questão:**")
                             st.markdown(preparar_para_leitura(d['ENUNCIADO']))
@@ -2302,7 +2309,6 @@ elif menu == "📝 Central de Avaliações":
             if not f['pei_1']:
                 if st.button("🧠 GERAR TRÍADE INCLUSIVA", type="primary", use_container_width=True):
                     with st.spinner("Analisando prova regular e forjando os 3 níveis clínicos..."):
-                        # Monta um texto com as questões regulares para a IA ler
                         texto_base = ""
                         for item in f['mapa']:
                             d = item['dados']
@@ -2335,13 +2341,96 @@ elif menu == "📝 Central de Avaliações":
         elif f['fase'] == 4:
             st.markdown("### 🧬 Fase 4: Compilação e Variantes")
             
-            # 🚨 PUXA O TIPO DE PROVA (TESTE, PROVA, SONDA) PARA O NOME DO ARQUIVO
+            # 🚨 RESTAURADO: NOME DO ARQUIVO E BOTÃO DE COMPILAR
             tipo_nome = f['info'].get('tipo_prova', 'TESTE').upper().replace(' ', '_')
             nome_sugerido = f"{tipo_nome}_{f['info']['ano'].replace('º','')}ANO_{f['info']['trimestre'].replace(' ', '')}"
             
             nome_arq = st.text_input("ID Técnico do Material (Nome no Banco):", value=nome_sugerido)
             
             gerar_variante = st.checkbox("🧬 Gerar Variante Anti-Fraude (Tipo B)", value=True, help="O sistema embaralhará as questões e as alternativas da prova regular automaticamente.")
+            
+            if st.button("💾 COMPILAR, GERAR DOCX E SALVAR NO ACERVO", type="primary", use_container_width=True):
+                with st.status("Forjando Documentos Oficiais...") as status:
+                    
+                    # 1. Monta o Texto da Prova Regular (Padrão)
+                    txt_regular = f"[VALOR: {f['info']['valor']}]\n\n[QUESTOES]\n"
+                    txt_gabarito = "[GABARITO_TEXTO]\n"
+                    txt_grade = "[GRADE_DE_CORRECAO]\n"
+                    
+                    for item in f['mapa']:
+                        d = item['dados']
+                        txt_regular += f"**QUESTÃO {item['q']:02d} -** {d['ENUNCIADO']}\n(A) {d['ALT_A']}\n(B) {d['ALT_B']}\n(C) {d['ALT_C']}\n(D) {d['ALT_D']}\n(E) {d['ALT_E']}\n\n"
+                        txt_gabarito += f"QUESTÃO {item['q']:02d}: {d['GABARITO']}\n"
+                        txt_grade += f"QUESTÃO {item['q']:02d}: [{d['HABILIDADE']}] | JUSTIFICATIVA: {d['JUSTIFICATIVA']} | DISTRATORES: {d['DISTRATORES']}\n"
+                    
+                    texto_final_padrao = txt_regular + txt_gabarito + txt_grade
+                    
+                    # 2. Gera os DOCXs da Prova Padrão e PEIs
+                    status.write("📝 Gerando Prova Regular (Padrão)...")
+                    doc_reg = exporter.gerar_docx_prova_v25(nome_arq, texto_final_padrao, f['info'])
+                    link_reg = db.subir_e_converter_para_google_docs(doc_reg, nome_arq, modo="AVALIACAO")
+                    
+                    status.write("🔵 Gerando PEI Nível 1...")
+                    doc_pei1 = exporter.gerar_docx_pei_v25(f"{nome_arq}_PEI_N1", f['pei_1'], f['info'])
+                    link_pei1 = db.subir_e_converter_para_google_docs(doc_pei1, f"{nome_arq}_PEI_N1", modo="AVALIACAO")
+                    
+                    status.write("🟡 Gerando PEI Nível 2...")
+                    doc_pei2 = exporter.gerar_docx_pei_v25(f"{nome_arq}_PEI_N2", f['pei_2'], f['info'])
+                    link_pei2 = db.subir_e_converter_para_google_docs(doc_pei2, f"{nome_arq}_PEI_N2", modo="AVALIACAO")
+                    
+                    status.write("🔴 Gerando PEI Nível 3 (Qualitativo)...")
+                    doc_pei3 = exporter.gerar_docx_pei_qualitativa(f"{nome_arq}_PEI_N3", f['pei_3'], f['info'])
+                    link_pei3 = db.subir_e_converter_para_google_docs(doc_pei3, f"{nome_arq}_PEI_N3", modo="AVALIACAO")
+                    
+                    # 3. Salva a Prova Padrão no Banco
+                    links_footer = f"--- LINKS ---\nRegular({link_reg}) PEI_N1({link_pei1}) PEI_N2({link_pei2}) PEI_N3({link_pei3})"
+                    db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), "AVALIAÇÃO", nome_arq, texto_final_padrao + f"\n\n[PEI]\n{f['pei_1']}\n\n{links_footer}", f['info']['ano'], link_reg])
+                    
+                    # 4. Lógica da Variante (Embaralhamento Python)
+                    if gerar_variante:
+                        status.write("🧬 Embaralhando Variante Tipo B...")
+                        mapa_variante = f['mapa'].copy()
+                        import random
+                        random.shuffle(mapa_variante) 
+                        
+                        txt_var = f"[VALOR: {f['info']['valor']}]\n\n[QUESTOES]\n"
+                        txt_gab_var = "[GABARITO_TEXTO]\n"
+                        txt_grade_var = "[GRADE_DE_CORRECAO]\n"
+                        
+                        for i, item in enumerate(mapa_variante):
+                            novo_num = i + 1
+                            item_embaralhado = util.embaralhar_item_estruturado(item['dados'])
+                            
+                            txt_var += f"**QUESTÃO {novo_num:02d} -** {item_embaralhado['ENUNCIADO']}\n(A) {item_embaralhado['ALT_A']}\n(B) {item_embaralhado['ALT_B']}\n(C) {item_embaralhado['ALT_C']}\n(D) {item_embaralhado['ALT_D']}\n(E) {item_embaralhado['ALT_E']}\n\n"
+                            txt_gab_var += f"QUESTÃO {novo_num:02d}: {item_embaralhado['GABARITO']}\n"
+                            txt_grade_var += f"QUESTÃO {novo_num:02d}: [{item_embaralhado['HABILIDADE']}] | JUSTIFICATIVA: {item_embaralhado['JUSTIFICATIVA']} | DISTRATORES: {item_embaralhado['DISTRATORES']}\n"
+                            
+                        texto_final_var = txt_var + txt_gab_var + txt_grade_var
+                        nome_var = f"{nome_arq} - TIPO B"
+                        
+                        doc_var = exporter.gerar_docx_prova_v25(nome_var, texto_final_var, f['info'])
+                        link_var = db.subir_e_converter_para_google_docs(doc_var, nome_var, modo="AVALIACAO")
+                        
+                        links_footer_var = f"--- LINKS ---\nRegular({link_var}) PEI_N1({link_pei1}) PEI_N2({link_pei2}) PEI_N3({link_pei3})"
+                        db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), "AVALIAÇÃO", nome_var, texto_final_var + f"\n\n[PEI]\n{f['pei_1']}\n\n{links_footer_var}", f['info']['ano'], link_var])
+
+                    # 5. Gera o Guia do Professor Unificado
+                    status.write("👨‍🏫 Gerando Guia do Professor...")
+                    guia_txt = f"GABARITO PADRÃO:\n{txt_gabarito}\n\nGRADE PADRÃO:\n{txt_grade}"
+                    if gerar_variante:
+                        guia_txt += f"\n\nGABARITO TIPO B:\n{txt_gab_var}\n\nGRADE TIPO B:\n{txt_grade_var}"
+                        
+                    doc_prof = exporter.gerar_docx_professor_v25(f"{nome_arq}_GUIA_PROF", guia_txt, f['info'])
+                    link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_arq}_GUIA_PROF", modo="AVALIACAO")
+                    
+                    f['prova_final_txt'] = texto_final_padrao
+                    f['nome_base'] = nome_arq
+                    
+                    status.update(label="✅ Forja Concluída com Sucesso!", state="complete")
+                    st.balloons()
+                    f['fase'] = 5
+                    time.sleep(1.5)
+                    st.rerun()
 
         # ==============================================================================
         # 📍 FASE 5: AÇÕES PÓS-PROVA (REVISÃO E 2ª CHAMADA)
