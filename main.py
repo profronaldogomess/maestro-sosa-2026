@@ -2100,6 +2100,26 @@ elif menu == "📝 Central de Avaliações":
             st.markdown("### ⚙️ Fase 2: Linha de Montagem")
             st.caption("Gere e aprove cada questão individualmente. O gabarito já foi travado pelo sistema para garantir o balanceamento perfeito.")
             
+            # 🚨 ADICIONADO: BOTÃO DE MODO LEITURA (LATEX)
+            modo_leitura_forja = st.toggle("👁️ Ativar Modo Leitura (Renderizar Matemática)", value=True, key="tog_forja")
+            
+            def preparar_para_leitura(texto):
+                if not texto: return ""
+                texto = re.sub(r'^```[a-zA-Z]*\n', '', texto, flags=re.MULTILINE | re.IGNORECASE)
+                texto = re.sub(r'```$', '', texto, flags=re.MULTILINE)
+                return re.sub(r'\$\$\s*(.*?)\s*\$\$', r'$\1$', texto)
+
+            # 🚨 ADICIONADO: PARSER BLINDADO EXCLUSIVO PARA A FORJA
+            def extrair_item_forja(texto_bruto):
+                tags = ['ENUNCIADO', 'ALT_A', 'ALT_B', 'ALT_C', 'ALT_D', 'ALT_E', 'HABILIDADE', 'JUSTIFICATIVA', 'DISTRATORES']
+                res = {}
+                for tag in tags:
+                    # Busca a tag e captura tudo até encontrar a próxima tag da lista ou o fim do texto
+                    padrao = rf"\[{tag}\](.*?)(?=\[(?:{'|'.join(tags)})\]|$)"
+                    match = re.search(padrao, texto_bruto, re.DOTALL | re.IGNORECASE)
+                    res[tag] = match.group(1).strip() if match else ""
+                return res
+
             todas_aprovadas = True
             
             for i, item in enumerate(f['mapa']):
@@ -2118,17 +2138,19 @@ elif menu == "📝 Central de Avaliações":
                                 prompt = f"TEMA: {tema_q}. DIFICULDADE: {dif_q}. GABARITO OBRIGATÓRIO: Letra {item['gabarito']}."
                                 res_item = ai.gerar_ia("FORJA_ITEM_REGULAR", prompt)
                                 
-                                # Extrai as tags
+                                # 🚨 USA O NOVO PARSER BLINDADO
+                                extraido = extrair_item_forja(res_item)
+                                
                                 item['dados'] = {
-                                    'ENUNCIADO': ai.extrair_tag(res_item, "ENUNCIADO"),
-                                    'ALT_A': ai.extrair_tag(res_item, "ALT_A"),
-                                    'ALT_B': ai.extrair_tag(res_item, "ALT_B"),
-                                    'ALT_C': ai.extrair_tag(res_item, "ALT_C"),
-                                    'ALT_D': ai.extrair_tag(res_item, "ALT_D"),
-                                    'ALT_E': ai.extrair_tag(res_item, "ALT_E"),
-                                    'HABILIDADE': ai.extrair_tag(res_item, "HABILIDADE"),
-                                    'JUSTIFICATIVA': ai.extrair_tag(res_item, "JUSTIFICATIVA"),
-                                    'DISTRATORES': ai.extrair_tag(res_item, "DISTRATORES"),
+                                    'ENUNCIADO': extraido['ENUNCIADO'],
+                                    'ALT_A': extraido['ALT_A'],
+                                    'ALT_B': extraido['ALT_B'],
+                                    'ALT_C': extraido['ALT_C'],
+                                    'ALT_D': extraido['ALT_D'],
+                                    'ALT_E': extraido['ALT_E'],
+                                    'HABILIDADE': extraido['HABILIDADE'],
+                                    'JUSTIFICATIVA': extraido['JUSTIFICATIVA'],
+                                    'DISTRATORES': extraido['DISTRATORES'],
                                     'GABARITO': item['gabarito']
                                 }
                                 item['status'] = 'revisao'
@@ -2139,7 +2161,19 @@ elif menu == "📝 Central de Avaliações":
                         st.info("Edite o texto se necessário e clique em Aprovar.")
                         
                         d = item['dados']
-                        d['ENUNCIADO'] = st.text_area("Enunciado:", value=d['ENUNCIADO'], height=100, key=f"ed_en_{i}")
+                        
+                        # 🚨 PREVIEW RENDERIZADO (LATEX)
+                        if modo_leitura_forja:
+                            st.markdown("**👁️ Preview da Questão:**")
+                            st.markdown(preparar_para_leitura(d['ENUNCIADO']))
+                            st.markdown(f"**(A)** {preparar_para_leitura(d['ALT_A'])}")
+                            st.markdown(f"**(B)** {preparar_para_leitura(d['ALT_B'])}")
+                            st.markdown(f"**(C)** {preparar_para_leitura(d['ALT_C'])}")
+                            st.markdown(f"**(D)** {preparar_para_leitura(d['ALT_D'])}")
+                            st.markdown(f"**(E)** {preparar_para_leitura(d['ALT_E'])}")
+                            st.divider()
+                        
+                        d['ENUNCIADO'] = st.text_area("Enunciado (Edição):", value=d['ENUNCIADO'], height=150, key=f"ed_en_{i}")
                         c_a1, c_a2 = st.columns(2)
                         d['ALT_A'] = c_a1.text_input("(A)", value=d['ALT_A'], key=f"ed_a_{i}")
                         d['ALT_B'] = c_a2.text_input("(B)", value=d['ALT_B'], key=f"ed_b_{i}")
@@ -2147,7 +2181,8 @@ elif menu == "📝 Central de Avaliações":
                         d['ALT_D'] = c_a2.text_input("(D)", value=d['ALT_D'], key=f"ed_d_{i}")
                         d['ALT_E'] = c_a1.text_input("(E)", value=d['ALT_E'], key=f"ed_e_{i}")
                         
-                        st.caption(f"**Habilidade:** {d['HABILIDADE']} | **Justificativa:** {d['JUSTIFICATIVA']}")
+                        st.caption(f"**Habilidade:** {d['HABILIDADE']}")
+                        st.caption(f"**Justificativa:** {d['JUSTIFICATIVA']}")
                         
                         col_b1, col_b2 = st.columns(2)
                         if col_b1.button(f"✅ Aprovar Questão {item['q']}", type="primary", key=f"btn_apr_{i}", use_container_width=True):
@@ -2159,8 +2194,13 @@ elif menu == "📝 Central de Avaliações":
                             
                     elif item['status'] == 'aprovado':
                         d = item['dados']
-                        st.write(f"**Enunciado:** {d['ENUNCIADO']}")
-                        st.write(f"(A) {d['ALT_A']} | (B) {d['ALT_B']} | (C) {d['ALT_C']} | (D) {d['ALT_D']} | (E) {d['ALT_E']}")
+                        if modo_leitura_forja:
+                            st.markdown(preparar_para_leitura(d['ENUNCIADO']))
+                            st.markdown(f"**(A)** {preparar_para_leitura(d['ALT_A'])} | **(B)** {preparar_para_leitura(d['ALT_B'])} | **(C)** {preparar_para_leitura(d['ALT_C'])} | **(D)** {preparar_para_leitura(d['ALT_D'])} | **(E)** {preparar_para_leitura(d['ALT_E'])}")
+                        else:
+                            st.write(f"**Enunciado:** {d['ENUNCIADO']}")
+                            st.write(f"(A) {d['ALT_A']} | (B) {d['ALT_B']} | (C) {d['ALT_C']} | (D) {d['ALT_D']} | (E) {d['ALT_E']}")
+                            
                         if st.button(f"✏️ Editar Questão {item['q']}", key=f"btn_edit_{i}"):
                             item['status'] = 'revisao'
                             st.rerun()
