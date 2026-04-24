@@ -2415,17 +2415,14 @@ elif menu == "📝 Central de Avaliações":
                     # 🚨 BLINDAGEM VISUAL DO GABARITO NO ACERVO
                     gab_simples = ai.extrair_tag(txt_f, "GABARITO_TEXTO") or ai.extrair_tag(txt_f, "RESPOSTAS_IA")
                     if gab_simples:
-                        # Se for 2ª Chamada ou Revisão (Discursiva), o gabarito é um texto longo.
                         if "2ª" in identificador.upper() or "2CHAMADA" in identificador.upper() or "REVISAO" in identificador.upper():
                             st.markdown(f"**✅ Gabarito Regular:** `[ Formato Discursivo - Ver aba 'Perícia' abaixo ]`")
                         else:
-                            # Tenta extrair apenas as letras para ficar bonito (Ex: 01: A | 02: B)
                             matches = re.findall(r"(\d+)[\s\.\)\-:]+([A-E])", gab_simples.upper())
                             if matches:
                                 gab_formatado = " | ".join([f"{n}: {l}" for n, l in matches])
                                 st.markdown(f"**✅ Gabarito Regular:** `{gab_formatado}`")
                             else:
-                                # Fallback de segurança
                                 gab_limpo = re.sub(r'[*#]', '', gab_simples).replace('QUESTÃO', '').strip()
                                 if len(gab_limpo) > 100:
                                     st.markdown(f"**✅ Gabarito Regular:** `[ Formato Discursivo - Ver aba 'Perícia' abaixo ]`")
@@ -2433,22 +2430,22 @@ elif menu == "📝 Central de Avaliações":
                                     st.markdown(f"**✅ Gabarito Regular:** `{gab_limpo}`")
 
                     l_reg = (re.findall(r"Regular\((.*?)\)", txt_f) or [row.get('LINK_DRIVE')])[-1]
-                    l_pei = (re.findall(r"PEI\((.*?)\)", txt_f) or [None])[-1]
+                    l_pei = (re.findall(r"PEI_N1\((.*?)\)", txt_f) or re.findall(r"PEI\((.*?)\)", txt_f) or [None])[-1]
                     l_prof = (re.findall(r"Prof\((.*?)\)", txt_f) or [None])[-1]
 
                     c_b1, c_b2, c_b3, c_b4, c_b5 = st.columns(5)
                     c_b1.link_button("📝 REGULAR", str(l_reg), use_container_width=True, type="primary")
                     
-                    # 🚨 Oculta o botão PEI se for 2ª Chamada (pois não geramos PEI novo para ela)
+                    # 🚨 CORREÇÃO: ADICIONADA A 'KEY' ÚNICA NOS BOTÕES DESATIVADOS
                     if l_pei and "N/A" not in str(l_pei) and "2ª" not in identificador.upper() and "2CHAMADA" not in identificador.upper(): 
                         c_b2.link_button("♿ PEI", str(l_pei), use_container_width=True)
                     else: 
-                        c_b2.button("⚪ SEM PEI", disabled=True, use_container_width=True)
+                        c_b2.button("⚪ SEM PEI", disabled=True, use_container_width=True, key=f"no_pei_{row.name}")
                         
                     if l_prof and "N/A" not in str(l_prof): 
                         c_b3.link_button("🔍 PERÍCIA", str(l_prof), use_container_width=True)
                     else: 
-                        c_b3.button("⚪ SEM GRADE", disabled=True, use_container_width=True)
+                        c_b3.button("⚪ SEM GRADE", disabled=True, use_container_width=True, key=f"no_grade_{row.name}")
                     
                     if c_b4.button("🔄 REFINAR", key=f"ref_av_h_{row.name}", use_container_width=True):
                         st.session_state.temp_prova = txt_f
@@ -2495,7 +2492,7 @@ elif menu == "📝 Central de Avaliações":
 
                         with t_pei_v:
                             st.markdown("##### ♿ Detalhes da Adaptação PEI")
-                            pei_txt = ai.extrair_tag(txt_f, "PEI")
+                            pei_txt = ai.extrair_tag(txt_f, "NIVEL_1") or ai.extrair_tag(txt_f, "PEI")
                             if pei_txt:
                                 st.info(re.sub(r'[*#]', '', pei_txt))
                                 st.divider()
