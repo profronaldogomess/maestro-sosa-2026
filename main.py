@@ -2026,72 +2026,153 @@ elif menu == "📝 Central de Avaliações":
         # 📍 FASE 1: O BRIEFING E A MATRIZ DE PROVA
         # ==============================================================================
         if f['fase'] == 1:
-            st.markdown("### 📍 Fase 1: Matriz de Referência (O Mapa)")
+            st.markdown("### 📍 Fase 1: Natureza e Matriz de Referência")
             
-            with st.container(border=True):
-                c1, c2, c3, c4 = st.columns([1, 1, 1, 1])
-                ano_av = c1.selectbox("Série Alvo:", [6, 7, 8, 9], index=0)
-                trim_filtro = c2.selectbox("Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"])
-                v_total = c3.number_input("Valor Total:", 0.0, 10.0, 3.0, step=0.5)
-                qtd_q = c4.number_input("Nº de Questões:", 1, 20, 10)
+            # 🚨 RESTAURADO: SELETOR DE NATUREZA DA AVALIAÇÃO
+            modo_arq = st.radio(
+                "O que você deseja construir hoje?", 
+                [
+                    "🆕 Nova Avaliação (Inédita)", 
+                    "🔍 Sonda Diagnóstica",
+                    "🧬 Variante Anti-Fraude (Clonagem)", 
+                    "🔄 2ª Chamada Discursiva (Clonagem)"
+                ], 
+                horizontal=True
+            )
+            st.markdown("---")
 
-            with st.container(border=True):
-                st.markdown("#### 🎯 Vínculo Curricular")
-                c_safra1, c_safra2 = st.columns(2)
-                
-                df_ref = df_aulas[df_aulas['ANO'].str.contains(str(ano_av))].copy()
-                termos_proibidos = ["APLICAÇÃO", "TESTE", "PROVA", "SONDA", "AVALIAÇÃO", "CORREÇÃO", "REVISÃO", "EXAME", "2ª CHAMADA"]
-                df_ref = df_ref[~df_ref['TIPO_MATERIAL'].str.upper().str.contains('|'.join(termos_proibidos))]
-                
-                mats_selecionados = c_safra1.multiselect(f"📦 Aulas Base (Já Ministradas):", options=df_ref["TIPO_MATERIAL"].tolist())
-                
-                trim_sigla = trim_filtro.split(" ")[0]
-                df_matriz_av = df_curriculo[(df_curriculo['ANO'].astype(str).str.contains(str(ano_av))) & (df_curriculo['TRIMESTRE'] == trim_sigla)]
-                opcoes_futuras = sorted(df_matriz_av['CONTEUDO_ESPECIFICO'].unique().tolist()) if not df_matriz_av.empty else []
-                
-                topicos_futuros = c_safra2.multiselect("🔮 Tópicos Futuros (Matriz Curricular):", options=opcoes_futuras)
-                
-                conteudos_extraidos = set()
-                if mats_selecionados:
-                    semanas_selecionadas = df_ref[df_ref['TIPO_MATERIAL'].isin(mats_selecionados)]['SEMANA_REF'].unique()
-                    planos_relacionados = df_planos[(df_planos['ANO'].str.contains(str(ano_av))) & (df_planos['SEMANA'].isin(semanas_selecionadas))]
-                    for _, row_p in planos_relacionados.iterrows():
-                        cont = ai.extrair_tag(str(row_p['PLANO_TEXTO']), "CONTEUDOS_ESPECIFICOS")
-                        if cont and cont.upper() != "N/A":
-                            for item in re.split(r'[;\n]', cont):
-                                if len(item.strip()) > 5: conteudos_extraidos.add(item.strip().replace("- ", "").replace("• ", ""))
-                
-                if topicos_futuros:
-                    for topico in topicos_futuros: conteudos_extraidos.add(topico)
-                
-                lista_conteudos = sorted(list(conteudos_extraidos))
-                if not lista_conteudos: lista_conteudos = ["Matemática Geral"]
-                
-            if st.button("🗺️ GERAR MATRIZ DE PROVA (SORTEAR GABARITO)", type="primary", use_container_width=True):
-                if not mats_selecionados and not topicos_futuros:
-                    st.error("Selecione pelo menos uma Aula Base ou Tópico Futuro.")
+            if modo_arq in ["🆕 Nova Avaliação (Inédita)", "🔍 Sonda Diagnóstica"]:
+                with st.container(border=True):
+                    c1, c2, c3, c4 = st.columns([1, 1, 1, 1])
+                    ano_av = c1.selectbox("Série Alvo:", [6, 7, 8, 9], index=0)
+                    trim_filtro = c2.selectbox("Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"])
+                    v_total = c3.number_input("Valor Total:", 0.0, 10.0, 10.0 if "Sonda" in modo_arq else 3.0, step=0.5)
+                    qtd_q = c4.number_input("Nº de Questões:", 1, 20, 10)
+
+                # 🚨 RESTAURADO: SELETOR DE TIPO DE ATIVO
+                if modo_arq == "🆕 Nova Avaliação (Inédita)":
+                    tipo_av = st.selectbox("Tipo de Ativo:", ["Teste", "Prova", "Recuperação Paralela", "Recuperação Final"])
                 else:
-                    gabarito_mestre = util.gerar_gabarito_balanceado(qtd_q)
-                    mapa_inicial = []
+                    tipo_av = "SONDA_DE_PROFICIÊNCIA"
+
+                with st.container(border=True):
+                    st.markdown("#### 🎯 Vínculo Curricular")
+                    c_safra1, c_safra2 = st.columns(2)
                     
-                    # Distribui os conteúdos selecionados entre as questões
-                    for i in range(qtd_q):
-                        tema_sorteado = lista_conteudos[i % len(lista_conteudos)]
-                        dif = "Fácil" if i < (qtd_q*0.3) else "Difícil" if i >= (qtd_q*0.8) else "Média"
+                    df_ref = df_aulas[df_aulas['ANO'].str.contains(str(ano_av))].copy()
+                    termos_proibidos = ["APLICAÇÃO", "TESTE", "PROVA", "SONDA", "AVALIAÇÃO", "CORREÇÃO", "REVISÃO", "EXAME", "2ª CHAMADA"]
+                    df_ref = df_ref[~df_ref['TIPO_MATERIAL'].str.upper().str.contains('|'.join(termos_proibidos))]
+                    
+                    mats_selecionados = c_safra1.multiselect(f"📦 Aulas Base (Já Ministradas):", options=df_ref["TIPO_MATERIAL"].tolist())
+                    
+                    trim_sigla = trim_filtro.split(" ")[0]
+                    df_matriz_av = df_curriculo[(df_curriculo['ANO'].astype(str).str.contains(str(ano_av))) & (df_curriculo['TRIMESTRE'] == trim_sigla)]
+                    opcoes_futuras = sorted(df_matriz_av['CONTEUDO_ESPECIFICO'].unique().tolist()) if not df_matriz_av.empty else []
+                    
+                    topicos_futuros = c_safra2.multiselect("🔮 Tópicos Futuros (Matriz Curricular):", options=opcoes_futuras)
+                    
+                    conteudos_extraidos = set()
+                    if mats_selecionados:
+                        semanas_selecionadas = df_ref[df_ref['TIPO_MATERIAL'].isin(mats_selecionados)]['SEMANA_REF'].unique()
+                        planos_relacionados = df_planos[(df_planos['ANO'].str.contains(str(ano_av))) & (df_planos['SEMANA'].isin(semanas_selecionadas))]
+                        for _, row_p in planos_relacionados.iterrows():
+                            cont = ai.extrair_tag(str(row_p['PLANO_TEXTO']), "CONTEUDOS_ESPECIFICOS")
+                            if cont and cont.upper() != "N/A":
+                                for item in re.split(r'[;\n]', cont):
+                                    if len(item.strip()) > 5: conteudos_extraidos.add(item.strip().replace("- ", "").replace("• ", ""))
+                    
+                    if topicos_futuros:
+                        for topico in topicos_futuros: conteudos_extraidos.add(topico)
+                    
+                    lista_conteudos = sorted(list(conteudos_extraidos))
+                    if not lista_conteudos: lista_conteudos = ["Matemática Geral"]
+                    
+                if st.button("🗺️ GERAR MATRIZ DE PROVA (SORTEAR GABARITO)", type="primary", use_container_width=True):
+                    if not mats_selecionados and not topicos_futuros:
+                        st.error("Selecione pelo menos uma Aula Base ou Tópico Futuro.")
+                    else:
+                        gabarito_mestre = util.gerar_gabarito_balanceado(qtd_q)
+                        mapa_inicial = []
                         
-                        mapa_inicial.append({
-                            'q': i + 1,
-                            'tema': tema_sorteado,
-                            'dificuldade': dif,
-                            'gabarito': gabarito_mestre[i],
-                            'status': 'pendente',
-                            'dados': {} # Vai guardar o ENUNCIADO, ALT_A, etc.
-                        })
+                        for i in range(qtd_q):
+                            tema_sorteado = lista_conteudos[i % len(lista_conteudos)]
+                            dif = "Fácil" if i < (qtd_q*0.3) else "Difícil" if i >= (qtd_q*0.8) else "Média"
+                            
+                            mapa_inicial.append({
+                                'q': i + 1,
+                                'tema': tema_sorteado,
+                                'dificuldade': dif,
+                                'gabarito': gabarito_mestre[i],
+                                'status': 'pendente',
+                                'dados': {} 
+                            })
+                        
+                        f['mapa'] = mapa_inicial
+                        # 🚨 SALVA O TIPO DE PROVA NA MEMÓRIA PARA A FASE 4
+                        f['info'] = {'ano': f"{ano_av}º", 'trimestre': trim_filtro, 'valor': v_total, 'qtd': qtd_q, 'tipo_prova': tipo_av}
+                        f['fase'] = 2
+                        st.rerun()
+
+            else:
+                # ==============================================================================
+                # 🧬 MODO CLONAGEM (VARIANTE OU 2ª CHAMADA DE PROVA ANTIGA)
+                # ==============================================================================
+                st.info("💡 **Modo de Clonagem:** Selecione uma prova do Acervo para gerar a Variante ou 2ª Chamada automaticamente.")
+                
+                c_cl1, c_cl2 = st.columns([1, 2])
+                ano_clone = c_cl1.selectbox("Série Alvo:", [6, 7, 8, 9], index=0, key="ano_clone")
+                
+                df_provas = df_aulas[(df_aulas['ANO'].str.contains(str(ano_clone))) & (df_aulas['SEMANA_REF'] == "AVALIAÇÃO")]
+                opcoes_provas = [p for p in df_provas['TIPO_MATERIAL'].tolist() if not re.search(r"2[ªA]|CHAMADA|TIPO [B-Z]", p, re.IGNORECASE)]
+                
+                prova_base_sel = c_cl2.selectbox("📦 Selecione a Prova Original:", [""] + opcoes_provas)
+                
+                if prova_base_sel:
+                    txt_base = str(df_provas[df_provas['TIPO_MATERIAL'] == prova_base_sel].iloc[0]['CONTEUDO'])
+                    q_reg = ai.extrair_tag(txt_base, "QUESTOES")
+                    qtd_detectada = len(re.findall(r"(?i)QUEST[AÃ]O\s*0?\d+", q_reg))
+                    st.success(f"✅ Prova detectada com {qtd_detectada} questões.")
                     
-                    f['mapa'] = mapa_inicial
-                    f['info'] = {'ano': f"{ano_av}º", 'trimestre': trim_filtro, 'valor': v_total, 'qtd': qtd_q}
-                    f['fase'] = 2
-                    st.rerun()
+                    if st.button(f"🚀 GERAR {modo_arq.split(' ')[1].upper()}", type="primary", use_container_width=True):
+                        with st.status("Clonando e processando...") as status:
+                            info_clone = {'ano': f"{ano_clone}º", 'trimestre': "I Trimestre", 'valor': 3.0, 'qtd': qtd_detectada}
+                            
+                            if "Variante" in modo_arq:
+                                existentes = df_aulas[df_aulas['TIPO_MATERIAL'].str.startswith(prova_base_sel + " - TIPO", na=False)]
+                                letra = chr(66 + len(existentes)) # 66 = 'B'
+                                nome_var = f"{prova_base_sel} - TIPO {letra}"
+                                
+                                g_reg = ai.extrair_tag(txt_base, "GRADE_DE_CORRECAO")
+                                prompt = f"PROVA ORIGINAL:\n[QUESTOES]\n{q_reg}\n\n[GRADE_DE_CORRECAO]\n{g_reg}"
+                                res_hydra = ai.gerar_ia("ARQUITETO_VARIANTES_V100", prompt)
+                                
+                                pei_q = ai.extrair_tag(txt_base, "PEI")
+                                pei_gab = ai.extrair_tag(txt_base, "GABARITO_PEI")
+                                pei_grade = ai.extrair_tag(txt_base, "GRADE_DE_CORRECAO_PEI")
+                                
+                                texto_final_var = f"[VALOR: 3.0]\n\n[QUESTOES]\n{ai.extrair_tag(res_hydra, 'QUESTOES')}\n\n[GABARITO_TEXTO]\n{ai.extrair_tag(res_hydra, 'GABARITO_TEXTO')}\n\n[GRADE_DE_CORRECAO]\n{ai.extrair_tag(res_hydra, 'GRADE_DE_CORRECAO')}\n\n[PEI]\n{pei_q}\n\n[GABARITO_PEI]\n{pei_gab}\n\n[GRADE_DE_CORRECAO_PEI]\n{pei_grade}\n\n"
+                                
+                                doc_var = exporter.gerar_docx_prova_v25(nome_var, texto_final_var, info_clone)
+                                link_var = db.subir_e_converter_para_google_docs(doc_var, nome_var, modo="AVALIACAO")
+                                
+                                db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), "AVALIAÇÃO", nome_var, texto_final_var + f"\n--- LINKS ---\nRegular({link_var})", f"{ano_clone}º", link_var])
+                                status.update(label="✅ Variante gerada e salva no Acervo!", state="complete")
+                                
+                            elif "2ª Chamada" in modo_arq:
+                                nome_2a = f"2ª_CHAMADA_{prova_base_sel}"
+                                prompt_2a = f"TIPO: 2ª Chamada (100% DISCURSIVA). SÉRIE: {ano_clone}º. QTD: {qtd_detectada}.\nDIRETRIZ: Crie questões GÊMEAS da prova abaixo, mas em formato ABERTO (sem alternativas).\n--- PROVA ORIGINAL ---\n{q_reg}"
+                                res_2a = ai.gerar_ia("ARQUITETO_2A_CHAMADA_V100", prompt_2a)
+                                
+                                info_clone['tipo_prova'] = "2ª Chamada"
+                                doc_2a = exporter.gerar_docx_prova_v25(nome_2a, res_2a, info_clone)
+                                link_2a = db.subir_e_converter_para_google_docs(doc_2a, nome_2a, modo="AVALIACAO")
+                                
+                                db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), "AVALIAÇÃO", nome_2a, res_2a + f"\n--- LINKS ---\nRegular({link_2a})", f"{ano_clone}º", link_2a])
+                                status.update(label="✅ 2ª Chamada gerada e salva no Acervo!", state="complete")
+                                
+                        st.balloons()
+                        time.sleep(1.5)
+                        st.rerun()
 
         # ==============================================================================
         # 📍 FASE 2: A LINHA DE MONTAGEM (QUESTÃO POR QUESTÃO)
@@ -2254,94 +2335,13 @@ elif menu == "📝 Central de Avaliações":
         elif f['fase'] == 4:
             st.markdown("### 🧬 Fase 4: Compilação e Variantes")
             
-            nome_sugerido = f"TESTE_{f['info']['ano'].replace('º','')}ANO_{f['info']['trimestre'].replace(' ', '')}"
+            # 🚨 PUXA O TIPO DE PROVA (TESTE, PROVA, SONDA) PARA O NOME DO ARQUIVO
+            tipo_nome = f['info'].get('tipo_prova', 'TESTE').upper().replace(' ', '_')
+            nome_sugerido = f"{tipo_nome}_{f['info']['ano'].replace('º','')}ANO_{f['info']['trimestre'].replace(' ', '')}"
+            
             nome_arq = st.text_input("ID Técnico do Material (Nome no Banco):", value=nome_sugerido)
             
             gerar_variante = st.checkbox("🧬 Gerar Variante Anti-Fraude (Tipo B)", value=True, help="O sistema embaralhará as questões e as alternativas da prova regular automaticamente.")
-            
-            if st.button("💾 COMPILAR, GERAR DOCX E SALVAR NO ACERVO", type="primary", use_container_width=True):
-                with st.status("Forjando Documentos Oficiais...") as status:
-                    
-                    # 1. Monta o Texto da Prova Regular (Padrão)
-                    txt_regular = f"[VALOR: {f['info']['valor']}]\n\n[QUESTOES]\n"
-                    txt_gabarito = "[GABARITO_TEXTO]\n"
-                    txt_grade = "[GRADE_DE_CORRECAO]\n"
-                    
-                    for item in f['mapa']:
-                        d = item['dados']
-                        txt_regular += f"**QUESTÃO {item['q']:02d} -** {d['ENUNCIADO']}\n(A) {d['ALT_A']}\n(B) {d['ALT_B']}\n(C) {d['ALT_C']}\n(D) {d['ALT_D']}\n(E) {d['ALT_E']}\n\n"
-                        txt_gabarito += f"QUESTÃO {item['q']:02d}: {d['GABARITO']}\n"
-                        txt_grade += f"QUESTÃO {item['q']:02d}: [{d['HABILIDADE']}] | JUSTIFICATIVA: {d['JUSTIFICATIVA']} | DISTRATORES: {d['DISTRATORES']}\n"
-                    
-                    texto_final_padrao = txt_regular + txt_gabarito + txt_grade
-                    
-                    # 2. Gera os DOCXs da Prova Padrão e PEIs
-                    status.write("📝 Gerando Prova Regular (Padrão)...")
-                    doc_reg = exporter.gerar_docx_prova_v25(nome_arq, texto_final_padrao, f['info'])
-                    link_reg = db.subir_e_converter_para_google_docs(doc_reg, nome_arq, modo="AVALIACAO")
-                    
-                    status.write("🔵 Gerando PEI Nível 1...")
-                    doc_pei1 = exporter.gerar_docx_pei_v25(f"{nome_arq}_PEI_N1", f['pei_1'], f['info'])
-                    link_pei1 = db.subir_e_converter_para_google_docs(doc_pei1, f"{nome_arq}_PEI_N1", modo="AVALIACAO")
-                    
-                    status.write("🟡 Gerando PEI Nível 2...")
-                    doc_pei2 = exporter.gerar_docx_pei_v25(f"{nome_arq}_PEI_N2", f['pei_2'], f['info'])
-                    link_pei2 = db.subir_e_converter_para_google_docs(doc_pei2, f"{nome_arq}_PEI_N2", modo="AVALIACAO")
-                    
-                    status.write("🔴 Gerando PEI Nível 3 (Qualitativo)...")
-                    doc_pei3 = exporter.gerar_docx_pei_qualitativa(f"{nome_arq}_PEI_N3", f['pei_3'], f['info'])
-                    link_pei3 = db.subir_e_converter_para_google_docs(doc_pei3, f"{nome_arq}_PEI_N3", modo="AVALIACAO")
-                    
-                    # 3. Salva a Prova Padrão no Banco
-                    links_footer = f"--- LINKS ---\nRegular({link_reg}) PEI_N1({link_pei1}) PEI_N2({link_pei2}) PEI_N3({link_pei3})"
-                    db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), "AVALIAÇÃO", nome_arq, texto_final_padrao + f"\n\n[PEI]\n{f['pei_1']}\n\n{links_footer}", f['info']['ano'], link_reg])
-                    
-                    # 4. Lógica da Variante (Embaralhamento Python)
-                    if gerar_variante:
-                        status.write("🧬 Embaralhando Variante Tipo B...")
-                        mapa_variante = f['mapa'].copy()
-                        import random
-                        random.shuffle(mapa_variante) # Embaralha a ordem das questões
-                        
-                        txt_var = f"[VALOR: {f['info']['valor']}]\n\n[QUESTOES]\n"
-                        txt_gab_var = "[GABARITO_TEXTO]\n"
-                        txt_grade_var = "[GRADE_DE_CORRECAO]\n"
-                        
-                        for i, item in enumerate(mapa_variante):
-                            novo_num = i + 1
-                            item_embaralhado = util.embaralhar_item_estruturado(item['dados'])
-                            
-                            txt_var += f"**QUESTÃO {novo_num:02d} -** {item_embaralhado['ENUNCIADO']}\n(A) {item_embaralhado['ALT_A']}\n(B) {item_embaralhado['ALT_B']}\n(C) {item_embaralhado['ALT_C']}\n(D) {item_embaralhado['ALT_D']}\n(E) {item_embaralhado['ALT_E']}\n\n"
-                            txt_gab_var += f"QUESTÃO {novo_num:02d}: {item_embaralhado['GABARITO']}\n"
-                            txt_grade_var += f"QUESTÃO {novo_num:02d}: [{item_embaralhado['HABILIDADE']}] | JUSTIFICATIVA: {item_embaralhado['JUSTIFICATIVA']} | DISTRATORES: {item_embaralhado['DISTRATORES']}\n"
-                            
-                        texto_final_var = txt_var + txt_gab_var + txt_grade_var
-                        nome_var = f"{nome_arq} - TIPO B"
-                        
-                        doc_var = exporter.gerar_docx_prova_v25(nome_var, texto_final_var, f['info'])
-                        link_var = db.subir_e_converter_para_google_docs(doc_var, nome_var, modo="AVALIACAO")
-                        
-                        links_footer_var = f"--- LINKS ---\nRegular({link_var}) PEI_N1({link_pei1}) PEI_N2({link_pei2}) PEI_N3({link_pei3})"
-                        db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), "AVALIAÇÃO", nome_var, texto_final_var + f"\n\n[PEI]\n{f['pei_1']}\n\n{links_footer_var}", f['info']['ano'], link_var])
-
-                    # 5. Gera o Guia do Professor Unificado
-                    status.write("👨‍🏫 Gerando Guia do Professor...")
-                    guia_txt = f"GABARITO PADRÃO:\n{txt_gabarito}\n\nGRADE PADRÃO:\n{txt_grade}"
-                    if gerar_variante:
-                        guia_txt += f"\n\nGABARITO TIPO B:\n{txt_gab_var}\n\nGRADE TIPO B:\n{txt_grade_var}"
-                        
-                    doc_prof = exporter.gerar_docx_professor_v25(f"{nome_arq}_GUIA_PROF", guia_txt, f['info'])
-                    link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_arq}_GUIA_PROF", modo="AVALIACAO")
-                    
-                    # Salva o texto final na sessão para a Fase 5
-                    f['prova_final_txt'] = texto_final_padrao
-                    f['nome_base'] = nome_arq
-                    
-                    status.update(label="✅ Forja Concluída com Sucesso!", state="complete")
-                    st.balloons()
-                    f['fase'] = 5
-                    time.sleep(1.5)
-                    st.rerun()
 
         # ==============================================================================
         # 📍 FASE 5: AÇÕES PÓS-PROVA (REVISÃO E 2ª CHAMADA)
