@@ -1,6 +1,8 @@
 import re
 import uuid
 from datetime import date, timedelta, datetime
+import random
+
 
 # ==============================================================================
 # 1. FUNÇÕES DE LIMPEZA E FORMATAÇÃO DE TEXTO
@@ -129,3 +131,47 @@ def gerar_semanas():
         data_atual += timedelta(days=7)
         contador += 1
     return semanas
+
+# ==============================================================================
+# 4. MOTORES DE PSICOMETRIA E EMBARALHAMENTO (FORJA MASTER)
+# ==============================================================================
+
+def gerar_gabarito_balanceado(qtd_questoes):
+    """Gera um gabarito perfeitamente balanceado sem 3 letras seguidas iguais."""
+    letras = ['A', 'B', 'C', 'D', 'E']
+    base = (letras * ((qtd_questoes // 5) + 1))[:qtd_questoes]
+    
+    while True:
+        random.shuffle(base)
+        valido = True
+        for i in range(len(base) - 2):
+            if base[i] == base[i+1] == base[i+2]:
+                valido = False
+                break
+        if valido:
+            return base
+
+def embaralhar_item_estruturado(item_dict):
+    """Embaralha as alternativas de uma questão e recalcula o gabarito."""
+    alt_keys = ['ALT_A', 'ALT_B', 'ALT_C', 'ALT_D', 'ALT_E']
+    textos_alts = [item_dict[k] for k in alt_keys]
+    
+    # Identifica qual é o texto da resposta correta atual
+    letra_correta_atual = item_dict['GABARITO']
+    idx_correta = ord(letra_correta_atual) - 65 # A=0, B=1...
+    texto_correto = textos_alts[idx_correta]
+    
+    # Embaralha os textos
+    random.shuffle(textos_alts)
+    
+    # Descobre a nova letra correta
+    novo_idx_correta = textos_alts.index(texto_correto)
+    nova_letra_correta = chr(65 + novo_idx_correta)
+    
+    # Atualiza o dicionário
+    novo_item = item_dict.copy()
+    for i, k in enumerate(alt_keys):
+        novo_item[k] = textos_alts[i]
+    novo_item['GABARITO'] = nova_letra_correta
+    
+    return novo_item
