@@ -573,9 +573,9 @@ def analisar_gabarito_vision(imagem_bytes):
     try:
         prompt = (
             "Você é um perito em visão computacional de alta precisão. Analise a imagem do gabarito.\n"
-            "A tabela possui as colunas: Q (Questão), A, B, C, D, E.\n"
+            "A tabela possui as colunas: Q (Questão) e as alternativas (pode ser A, B, C, D, E para provas regulares ou apenas A, B, C para provas adaptadas PEI).\n"
             "MISSÃO DE RACIOCÍNIO:\n"
-            "1. Localize a grade de respostas (linhas 01 a 10).\n"
+            "1. Localize a grade de respostas.\n"
             "2. Analise a densidade de preenchimento de cada círculo.\n"
             "3. Se houver uma marcação única e clara, retorne a letra correspondente.\n"
             "4. Se houver DUAS ou mais marcações (mesmo que uma esteja levemente riscada), retorne 'X' (Dupla Marcação).\n"
