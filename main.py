@@ -1991,7 +1991,7 @@ elif menu == "🧪 Criador de Aulas":
 
 
 # ==============================================================================
-# MÓDULO: CENTRAL DE AVALIAÇÕES - A FORJA MASTER (V130)
+# MÓDULO: CENTRAL DE AVALIAÇÕES - A FORJA MASTER (V140 - OTIMIZADA)
 # ==============================================================================
 elif menu == "📝 Central de Avaliações":
     st.title("📝 Central de Avaliações: A Forja Master")
@@ -2085,9 +2085,14 @@ elif menu == "📝 Central de Avaliações":
                                 for item in re.split(r'[;\n]', cont):
                                     if len(item.strip()) > 5: conteudos_extraidos.add(item.strip().replace("- ", "").replace("• ", ""))
                         
+                        # 🚨 OTIMIZAÇÃO DE TOKENS: Extrai apenas o núcleo da aula em vez do texto inteiro
                         for m_nome in mats_selecionados:
                             m_row = df_aulas[df_aulas["TIPO_MATERIAL"] == m_nome].iloc[0]
-                            contexto_base_texto += f"--- AULA: {m_nome} ---\n{m_row['CONTEUDO']}\n\n"
+                            txt_aula = str(m_row['CONTEUDO'])
+                            hab = ai.extrair_tag(txt_aula, "HABILIDADE_BNCC")
+                            obj = ai.extrair_tag(txt_aula, "OBJETIVOS_ENSINO")
+                            cont = ai.extrair_tag(txt_aula, "CONTEUDOS_ESPECIFICOS")
+                            contexto_base_texto += f"--- AULA: {m_nome} ---\nHabilidade: {hab}\nConteúdos: {cont}\nObjetivos: {obj}\n\n"
                     
                     if topicos_futuros:
                         for topico in topicos_futuros: conteudos_extraidos.add(topico)
@@ -2189,7 +2194,32 @@ elif menu == "📝 Central de Avaliações":
             st.markdown("### ⚙️ Fase 2: Linha de Montagem")
             st.caption("Gere e aprove cada questão individualmente. O gabarito já foi travado pelo sistema para garantir o balanceamento perfeito.")
             
-            modo_leitura_forja = st.toggle("👁️ Ativar Modo Leitura (Renderizar Matemática)", value=True, key="tog_forja")
+            c_tog1, c_add2 = st.columns([3, 1])
+            modo_leitura_forja = c_tog1.toggle("👁️ Ativar Modo Leitura (Renderizar Matemática)", value=True, key="tog_forja")
+            
+            # 🚨 BOTÃO DE EXPANSÃO DINÂMICA
+            with c_add2:
+                if st.button("➕ Adicionar 5 Questões", use_container_width=True):
+                    qtd_atual = len(f['mapa'])
+                    if qtd_atual + 5 <= 20:
+                        gabarito_extra = util.gerar_gabarito_balanceado(5)
+                        lista_conteudos = list(set([item['tema'] for item in f['mapa']]))
+                        if not lista_conteudos: lista_conteudos = ["Matemática Geral"]
+                        
+                        for i in range(5):
+                            tema_sorteado = lista_conteudos[(qtd_atual + i) % len(lista_conteudos)]
+                            f['mapa'].append({
+                                'q': qtd_atual + i + 1,
+                                'tema': tema_sorteado,
+                                'dificuldade': "Média",
+                                'gabarito': gabarito_extra[i],
+                                'status': 'pendente',
+                                'dados': {}
+                            })
+                        f['info']['qtd'] = qtd_atual + 5
+                        st.rerun()
+                    else:
+                        st.error("Limite máximo de 20 questões atingido.")
             
             def preparar_para_leitura(texto):
                 if not texto: return ""
@@ -2223,8 +2253,9 @@ elif menu == "📝 Central de Avaliações":
                             with st.spinner("Forjando item psicométrico..."):
                                 contexto_herdado = f.get('contexto_base', '')
                                 prompt = (
+                                    f"SÉRIE ALVO: {f['info']['ano']}\n"
                                     f"TEMA: {tema_q}. DIFICULDADE: {dif_q}. GABARITO OBRIGATÓRIO: Letra {item['gabarito']}.\n\n"
-                                    f"🚨 DIRETRIZ DE ESPELHAMENTO: Baseie o estilo, o contexto e a complexidade desta questão no material de aula abaixo. Crie uma questão 'gêmea' ou similar ao que foi ensinado:\n"
+                                    f"🚨 DIRETRIZ DE ESPELHAMENTO: Baseie o contexto desta questão nos objetivos abaixo. Crie uma questão alinhada ao que foi ensinado:\n"
                                     f"{contexto_herdado if contexto_herdado else 'Crie a questão baseada estritamente no TEMA fornecido.'}"
                                 )
                                 res_item = ai.gerar_ia("FORJA_ITEM_REGULAR", prompt)
@@ -2659,6 +2690,7 @@ elif menu == "📝 Central de Avaliações":
                             questoes_reg = ai.extrair_tag(txt_f, "QUESTOES")
                             if questoes_reg:
                                 txt_limpo_q = re.sub(r'\[\s*PROMPT IMAGEM:.*?\]', '🖼️ *(Imagem)*', questoes_reg, flags=re.IGNORECASE)
+                                txt_limpo_q = re.sub(r'\[GEOGEBRA\]', '📐 *(Comando GeoGebra)*', txt_limpo_q, flags=re.IGNORECASE)
                                 st.write(re.sub(r'[*#]', '', txt_limpo_q))
 
                         with t_pei_v:
