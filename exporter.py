@@ -203,7 +203,7 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
     return file_stream
 
 # ==============================================================================
-# 4. GUIA DO PROFESSOR (ATUALIZADO COM DISTRATORES DETALHADOS)
+# 4. GUIA DO PROFESSOR (ATUALIZADO PARA LER ATÉ 50 QUESTÕES)
 # ==============================================================================
 def gerar_docx_professor_v25(titulo_doc, conteudo, info):
     file_stream = io.BytesIO()
@@ -251,6 +251,7 @@ def gerar_docx_professor_v25(titulo_doc, conteudo, info):
             run.font.size = Pt(11)
             continue
 
+        # 🚨 LÊ QUALQUER NÚMERO DE QUESTÃO (DE 01 A 99)
         if re.search(r"(?i)QUEST[AÃ]O\s*(?:PEI\s*)?\d+\s*[:\-]\s*[A-E]$|^\d+[\.\s\-]+[A-E]$", l_s):
             run = p.add_run(f"✅ {l_s}")
             run.font.bold, run.font.size = True, Pt(11)
@@ -271,7 +272,6 @@ def gerar_docx_professor_v25(titulo_doc, conteudo, info):
             run.font.color.rgb = RGBColor(112, 48, 160)
             continue
 
-        # 🚨 NOVO MOTOR DE FORMATAÇÃO DE DISTRATORES E RUBRICAS
         if any(x in l_s.upper() for x in ["JUSTIFICATIVA", "PERÍCIA", "LACUNA", "ANÁLISE", "DISTRATORES", "ACERTO INTEGRAL", "ACERTO PARCIAL"]):
             p.paragraph_format.left_indent = Inches(0.15)
             icon = "🎯" if any(x in l_s.upper() for x in ["JUST", "ACERTO"]) else "🧠"
@@ -286,7 +286,6 @@ def gerar_docx_professor_v25(titulo_doc, conteudo, info):
                 elif "ACERTO" in label.upper():
                      run_label.font.color.rgb = RGBColor(0, 128, 0)
                 
-                # Quebra a linha antes de cada (A), (B), (C) para ficar em formato de lista
                 content_formatted = re.sub(r'(?=\([A-E]\))', '\n\t', content)
                 p.add_run(f" {content_formatted}").font.size = Pt(9.5)
             else:
@@ -876,7 +875,7 @@ def gerar_docx_planejamento_trimestral(nome_arquivo, info, df_trimestre, config,
         return file_stream
     
 # ==============================================================================
-# 11. EXPORTADOR PEI NÍVEL 3 (QUALITATIVO / SENSORIAL)
+# 11. EXPORTADOR PEI NÍVEL 3 (QUALITATIVO / SENSORIAL) - BLINDADO
 # ==============================================================================
 def gerar_docx_pei_qualitativa(titulo_doc, conteudo, info):
     file_stream = io.BytesIO()
@@ -887,13 +886,20 @@ def gerar_docx_pei_qualitativa(titulo_doc, conteudo, info):
         section.left_margin, section.right_margin = Inches(0.5), Inches(0.5)
 
         style = doc.styles['Normal']
-        style.font.name = 'Comic Sans MS' # Fonte mais amigável para alfabetização
-        style.font.size = Pt(14) # Fonte grande
+        style.font.name = 'Comic Sans MS' 
+        style.font.size = Pt(14) 
 
         configurar_cabecalho_mestre(doc, info, "AVALIAÇÃO ADAPTADA (NÍVEL 3)", mostrar_nota=False)
         doc.add_paragraph()
 
-        linhas = conteudo.split('\n')
+        # 🚨 BLINDAGEM: Se o conteúdo vier vazio ou der erro na IA, cria um documento genérico
+        if not conteudo or len(str(conteudo).strip()) < 10:
+            p = doc.add_paragraph("Ocorreu um erro na geração do Nível 3. Por favor, refine a questão no painel.")
+            doc.save(file_stream)
+            file_stream.seek(0)
+            return file_stream
+
+        linhas = str(conteudo).split('\n')
         for linha in linhas:
             l_s = linha.strip()
             if not l_s or "GABARITO" in l_s.upper() or "RUBRICA" in l_s.upper(): continue
@@ -908,7 +914,7 @@ def gerar_docx_pei_qualitativa(titulo_doc, conteudo, info):
                 run.font.size = Pt(16)
             elif "[" in l_s and "PROMPT IMAGEM" in l_s.upper():
                 p.paragraph_format.space_before = Pt(10)
-                p.paragraph_format.space_after = Pt(50) # Espaço gigante para o desenho
+                p.paragraph_format.space_after = Pt(50) 
                 txt_img = l_s.replace("[", "").replace("]", "").strip()
                 run = p.add_run(f"🖼️ [ ESPAÇO PARA IMAGEM: {txt_img} ]")
                 run.font.italic = True
@@ -928,6 +934,6 @@ def gerar_docx_pei_qualitativa(titulo_doc, conteudo, info):
         return file_stream
     except Exception as e:
         file_stream = io.BytesIO()
-        err_doc = Document(); err_doc.add_paragraph(f"ERRO: {str(e)}"); err_doc.save(file_stream)
+        err_doc = Document(); err_doc.add_paragraph(f"ERRO NO EXPORTER N3: {str(e)}"); err_doc.save(file_stream)
         file_stream.seek(0)
         return file_stream
