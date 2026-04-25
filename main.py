@@ -2501,7 +2501,6 @@ elif menu == "📝 Central de Avaliações":
                         val_ex = re.sub(r'[*#]', '', ai.extrair_tag(txt_f, "VALOR")).strip()
                         st.markdown(f"**💰 Valor:** `{val_ex if val_ex else 'N/A'}` | **🎓 Série:** `{row['ANO']}`")
 
-                    # 🚨 BLINDAGEM VISUAL DO GABARITO NO ACERVO
                     gab_simples = ai.extrair_tag(txt_f, "GABARITO_TEXTO") or ai.extrair_tag(txt_f, "RESPOSTAS_IA")
                     if gab_simples:
                         if "2ª" in identificador.upper() or "2CHAMADA" in identificador.upper() or "REVISAO" in identificador.upper():
@@ -2518,32 +2517,38 @@ elif menu == "📝 Central de Avaliações":
                                 else:
                                     st.markdown(f"**✅ Gabarito Regular:** `{gab_limpo}`")
 
+                    # 🚨 EXTRAÇÃO DOS LINKS DA TRÍADE INCLUSIVA
                     l_reg = (re.findall(r"Regular\((.*?)\)", txt_f) or [row.get('LINK_DRIVE')])[-1]
-                    l_pei = (re.findall(r"PEI_N1\((.*?)\)", txt_f) or re.findall(r"PEI\((.*?)\)", txt_f) or [None])[-1]
+                    l_pei1 = (re.findall(r"PEI_N1\((.*?)\)", txt_f) or re.findall(r"PEI\((.*?)\)", txt_f) or [None])[-1]
+                    l_pei2 = (re.findall(r"PEI_N2\((.*?)\)", txt_f) or [None])[-1]
+                    l_pei3 = (re.findall(r"PEI_N3\((.*?)\)", txt_f) or [None])[-1]
                     l_prof = (re.findall(r"Prof\((.*?)\)", txt_f) or [None])[-1]
 
-                    c_b1, c_b2, c_b3, c_b4, c_b5 = st.columns(5)
+                    # 🚨 BOTÕES DE DOWNLOAD (AGORA COM OS 3 NÍVEIS)
+                    c_b1, c_b2, c_b3, c_b4 = st.columns(4)
                     c_b1.link_button("📝 REGULAR", str(l_reg), use_container_width=True, type="primary")
                     
-                    # 🚨 CORREÇÃO: ADICIONADA A 'KEY' ÚNICA NOS BOTÕES DESATIVADOS
-                    if l_pei and "N/A" not in str(l_pei) and "2ª" not in identificador.upper() and "2CHAMADA" not in identificador.upper(): 
-                        c_b2.link_button("♿ PEI", str(l_pei), use_container_width=True)
-                    else: 
-                        c_b2.button("⚪ SEM PEI", disabled=True, use_container_width=True, key=f"no_pei_{row.name}")
-                        
                     if l_prof and "N/A" not in str(l_prof): 
-                        c_b3.link_button("🔍 PERÍCIA", str(l_prof), use_container_width=True)
+                        c_b2.link_button("👨‍🏫 GUIA DO PROFESSOR", str(l_prof), use_container_width=True)
                     else: 
-                        c_b3.button("⚪ SEM GRADE", disabled=True, use_container_width=True, key=f"no_grade_{row.name}")
+                        c_b2.button("⚪ SEM GUIA", disabled=True, use_container_width=True, key=f"no_grade_{row.name}")
                     
-                    if c_b4.button("🔄 REFINAR", key=f"ref_av_h_{row.name}", use_container_width=True):
+                    if c_b3.button("🔄 REFINAR", key=f"ref_av_h_{row.name}", use_container_width=True):
                         st.session_state.temp_prova = txt_f
                         st.session_state.av_nome_fixo = identificador
                         if "chat_history_av" in st.session_state: del st.session_state["chat_history_av"]
                         st.rerun()
                         
-                    if c_b5.button("🗑️ APAGAR", key=f"del_av_h_{row.name}", use_container_width=True):
+                    if c_b4.button("🗑️ APAGAR", key=f"del_av_h_{row.name}", use_container_width=True):
                         if db.excluir_avaliacao_completa(identificador, row['SEMANA_REF']): st.rerun()
+
+                    # 🚨 BOTÕES EXCLUSIVOS DO PEI
+                    if l_pei1 and "N/A" not in str(l_pei1) and "2ª" not in identificador.upper() and "2CHAMADA" not in identificador.upper():
+                        st.markdown("**♿ Arquivos de Inclusão (PEI):**")
+                        c_p1, c_p2, c_p3 = st.columns(3)
+                        c_p1.link_button("🔵 PEI Nível 1 (Leve)", str(l_pei1), use_container_width=True)
+                        if l_pei2: c_p2.link_button("🟡 PEI Nível 2 (Moderado)", str(l_pei2), use_container_width=True)
+                        if l_pei3: c_p3.link_button("🔴 PEI Nível 3 (Severo)", str(l_pei3), use_container_width=True)
 
                     with st.expander("👁️ ANALISAR ESTRUTURA PEDAGÓGICA E ITENS"):
                         t_gab, t_ques, t_pei_v, t_peri_pei = st.tabs([
