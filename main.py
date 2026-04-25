@@ -2937,16 +2937,24 @@ elif menu == "📸 Scanner de Gabaritos":
                     with st.container(border=True):
                         st.markdown("#### 🔍 Lente de Correção")
                         
+                        # 🚨 NOVAS LENTES ESPECÍFICAS PARA PEI
                         lente_corr = st.radio(
                             "Qual prova o aluno respondeu?", 
-                            ["📝 Regular (Padrão ou Variantes)", "♿ PEI (Gabarito do Sistema)", "🎨 Qualitativa / Alternativa (Manual)"],
+                            [
+                                "📝 Regular (Padrão ou Variantes)", 
+                                "🔵 PEI Nível 1 (Apoio Leve)", 
+                                "🟡 PEI Nível 2 (Apoio Moderado)", 
+                                "🔴 PEI Nível 3 / Qualitativa (Manual)"
+                            ],
                             index=1 if "PEI" in nec_aluno else 0,
                             horizontal=True,
                             key=f"lente_{id_aluno_atual}"
                         )
                         
                         material_ref = None
-                        is_pei_grading = False
+                        is_pei_grading = "PEI Nível 1" in lente_corr or "PEI Nível 2" in lente_corr
+                        nivel_alvo_pei = "NIVEL_1" if "Nível 1" in lente_corr else "NIVEL_2"
+                        is_qualitativa = "Nível 3" in lente_corr
                         modo_2a = False
                         
                         if lente_corr == "📝 Regular (Padrão ou Variantes)":
@@ -2956,7 +2964,6 @@ elif menu == "📸 Scanner de Gabaritos":
                             tipo_base = at_sel.split("-")[0].strip().upper()
                             
                             if modo_2a:
-                                # 🚨 VÍNCULO SEMÂNTICO: Busca a 2ª Chamada pelo Trimestre e Série
                                 df_2a = df_aulas[(df_aulas['TIPO_MATERIAL'].str.upper().str.contains("2ª|2CHAMADA", regex=True)) & (df_aulas['TIPO_MATERIAL'].str.contains(trim_limpo, case=False)) & (df_aulas['ANO'].str.contains(serie_num))]
                                 opcoes_2a = df_2a['TIPO_MATERIAL'].unique().tolist()
                                 at_segunda = c_reg2.selectbox("Selecione a 2ª Chamada:", [""] + opcoes_2a, key=f"s2a_{id_aluno_atual}")
@@ -2971,10 +2978,9 @@ elif menu == "📸 Scanner de Gabaritos":
                                 else:
                                     material_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel].iloc[0]
                                     
-                        elif lente_corr == "♿ PEI (Gabarito do Sistema)":
-                            is_pei_grading = True
+                        elif is_pei_grading:
                             material_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel].iloc[0]
-                            st.info("O sistema usará o Gabarito PEI da avaliação base.")
+                            st.info(f"O sistema usará o Gabarito do {lente_corr.split('(')[0].strip()}.")
                             
                         else:
                             material_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel].iloc[0]
@@ -2987,15 +2993,24 @@ elif menu == "📸 Scanner de Gabaritos":
                         val_tag = ai.extrair_tag(txt_ref, "VALOR")
                         v_total_at = util.sosa_to_float(val_tag) if val_tag else 10.0
 
-                        def extrair_gab_blindado(texto, is_pei=False):
-                            tag_alvo = "GABARITO_PEI" if is_pei else "GABARITO_TEXTO"
-                            raw = ai.extrair_tag(texto, tag_alvo) or ai.extrair_tag(texto, "GABARITO")
-                            if not raw: return []
-                            matches = re.findall(r"(\d+)[\s\.\)\-:]+([A-E])", raw.upper())
+                        # 🚨 EXTRATOR DE GABARITO BLINDADO PARA PEI
+                        def extrair_gab_blindado(texto, is_pei=False, nivel_pei="NIVEL_1"):
+                            if is_pei:
+                                bloco_pei = ai.extrair_tag(texto, nivel_pei)
+                                if not bloco_pei: return []
+                                # Isola a parte do gabarito no final do bloco
+                                match_gab = re.search(r"(?i)GABARITO.*", bloco_pei, re.DOTALL)
+                                area_busca = match_gab.group(0) if match_gab else bloco_pei
+                                matches = re.findall(r"(\d+)[\s\.\)\-:]+([A-C])", area_busca.upper())
+                            else:
+                                raw = ai.extrair_tag(texto, "GABARITO_TEXTO") or ai.extrair_tag(texto, "GABARITO")
+                                matches = re.findall(r"(\d+)[\s\.\)\-:]+([A-E])", str(raw).upper())
+                                
+                            if not matches: return []
                             mapa = {int(num): letra for num, letra in matches}
                             return [mapa[n] for n in sorted(mapa.keys())]
 
-                        gab_alvo = extrair_gab_blindado(txt_ref, is_pei_grading)
+                        gab_alvo = extrair_gab_blindado(txt_ref, is_pei_grading, nivel_alvo_pei)
 
                         st.markdown("---")
                         
@@ -3054,6 +3069,154 @@ elif menu == "📸 Scanner de Gabaritos":
                                             id_av_final, ";".join(respostas_finais), util.sosa_to_str(nota_calc), link_ev
                                         ])
                                         st.success(f"✅ {al_sel} processado!"); time.sleep(0.5); st.rerun()
+
+                        # 🚨 MODO REGULAR OU PEI (Múltipla Escolha)
+                        elif is_pei_grading or lente_corr == "📝 Regular (Padrão ou Variantes)":
+                            c_mod1, c_mod2 = st.columns([3, 1])
+                            modo_correcao = c_mod1.radio(
+                                "⚙️ Método de Correção:", 
+                                ["📸 Scanner IA (Câmera)", "✍️ Digitação Manual (Com Análise de Cálculo)"], 
+                                horizontal=True, 
+                                key=f"modo_corr_{id_aluno_atual}"
+                            )
+                            
+                            if c_mod2.button("❌ Registrar Falta", use_container_width=True):
+                                db.salvar_no_banco("DB_GABARITOS_ALUNOS", [datetime.now().strftime("%d/%m/%Y"), id_aluno_atual, al_sel, t_sel, at_sel, "FALTOU", "0,00", "N/A"])
+                                st.rerun()
+
+                            st.markdown("---")
+                            
+                            # 🚨 TRAVA DE LETRAS: PEI SÓ TEM A, B, C
+                            opcoes_letras = ["A", "B", "C", "X", "?"] if is_pei_grading else ["A", "B", "C", "D", "E", "X", "?"]
+
+                            if modo_correcao == "📸 Scanner IA (Câmera)":
+                                c_cam, c_man = st.columns([2, 1])
+                                with c_cam:
+                                    st.info("📱 **Scanner IA:** Tire a foto do gabarito.")
+                                    img_file = st.file_uploader("Upload", type=["jpg", "jpeg", "png"], key=f"up_{id_aluno_atual}", label_visibility="collapsed")
+                                    with st.expander("💻 Usar Webcam"):
+                                        img_cam = st.camera_input("Webcam", key=f"cam_{id_aluno_atual}")
+                                    img = img_file if img_file else img_cam
+
+                                if img and "current_scan_res" not in st.session_state:
+                                    with st.spinner("Analisando marcações com Visão Computacional..."):
+                                        res_json = ai.analisar_gabarito_vision(img.getvalue())
+                                        qtd_q = len(gab_alvo)
+                                        st.session_state.current_scan_res = [res_json.get(f"{i+1:02d}", res_json.get(str(i+1), "?")) for i in range(qtd_q)]
+                                        st.session_state.current_scan_img = img.getvalue()
+                                        st.rerun()
+
+                                if "current_scan_res" in st.session_state:
+                                    res_lidas = st.session_state.current_scan_res
+                                    st.markdown("---")
+                                    col_res1, col_res2 = st.columns([1.5, 1])
+                                    
+                                    with col_res1:
+                                        st.subheader("⚖️ Mesa de Perícia")
+                                        dados_pericia = []
+                                        for i, lido in enumerate(res_lidas):
+                                            if i < len(gab_alvo):
+                                                certo = gab_alvo[i]
+                                                status = "✅ ACERTO" if lido == certo else ("🚫 DUPLA" if lido == "X" else ("⚪ VAZIA" if lido == "?" else f"❌ (Era {certo})"))
+                                                dados_pericia.append({"Q": f"{i+1:02d}", "Lido": lido, "Status": status})
+                                        
+                                        df_mesa = st.data_editor(pd.DataFrame(dados_pericia), hide_index=True, use_container_width=True,
+                                            column_config={"Lido": st.column_config.SelectboxColumn("Ajustar", options=opcoes_letras, required=True)},
+                                            key=f"ed_turbo_{id_aluno_atual}")
+                                    
+                                    with col_res2:
+                                        st.subheader("📊 Resultado")
+                                        novas_res = df_mesa["Lido"].tolist()
+                                        acertos = sum(1 for i, r in enumerate(novas_res) if i < len(gab_alvo) and r == gab_alvo[i])
+                                        nota_f = (acertos / len(gab_alvo)) * v_total_at if len(gab_alvo) > 0 else 0
+                                        st.metric("Nota Final", f"{nota_f:.2f}", delta=f"{acertos}/{len(gab_alvo)} acertos")
+                                        
+                                        if st.button("💾 SALVAR CORREÇÃO", type="primary", use_container_width=True):
+                                            with st.spinner("Arquivando no Drive..."):
+                                                id_av_final = material_ref['TIPO_MATERIAL']
+                                                link_pasta = db.subir_e_converter_para_google_docs(st.session_state.current_scan_img, al_sel.replace(" ","_"), trimestre=tr_sel, categoria=t_sel, semana=id_av_final, modo="SCANNER")
+                                                
+                                                db.salvar_no_banco("DB_GABARITOS_ALUNOS", [
+                                                    datetime.now().strftime("%d/%m/%Y"), id_aluno_atual, al_sel, t_sel, 
+                                                    id_av_final, ";".join(novas_res), util.sosa_to_str(nota_f), link_pasta
+                                                ])
+                                                del st.session_state.current_scan_res
+                                                del st.session_state.current_scan_img
+                                                st.success("Salvo!"); time.sleep(0.5); st.rerun()
+
+                                        if st.button("🗑️ DESCARTAR E REFAZER"):
+                                            del st.session_state.current_scan_res
+                                            del st.session_state.current_scan_img
+                                            st.rerun()
+
+                            elif modo_correcao == "✍️ Digitação Manual (Com Análise de Cálculo)":
+                                st.info("💡 **Regra de Ouro:** Digite a resposta do aluno. Se a questão exige cálculo e ele não fez, desmarque a caixa 'Cálculo OK?' para dar apenas 50% do valor da questão.")
+                                
+                                col_man1, col_man2 = st.columns([1.5, 1])
+                                
+                                with col_man1:
+                                    dados_manual = []
+                                    for i in range(len(gab_alvo)):
+                                        dados_manual.append({
+                                            "Q": f"{i+1:02d}",
+                                            "Gabarito": gab_alvo[i],
+                                            "Resposta do Aluno": "?",
+                                            "Cálculo OK?": True
+                                        })
+                                    
+                                    df_manual = st.data_editor(
+                                        pd.DataFrame(dados_manual),
+                                        hide_index=True,
+                                        use_container_width=True,
+                                        column_config={
+                                            "Q": st.column_config.TextColumn(disabled=True, width="small"),
+                                            "Gabarito": st.column_config.TextColumn(disabled=True, width="small"),
+                                            "Resposta do Aluno": st.column_config.SelectboxColumn(options=opcoes_letras, required=True),
+                                            "Cálculo OK?": st.column_config.CheckboxColumn("Cálculo OK?", default=True)
+                                        },
+                                        key=f"manual_grid_{id_aluno_atual}"
+                                    )
+                                
+                                with col_man2:
+                                    peso_q = v_total_at / len(gab_alvo) if len(gab_alvo) > 0 else 0
+                                    nota_calc = 0.0
+                                    respostas_finais = []
+                                    acertos_cheios = 0
+                                    acertos_parciais = 0
+                                    
+                                    for i, row in df_manual.iterrows():
+                                        resp = row["Resposta do Aluno"]
+                                        respostas_finais.append(resp)
+                                        if resp == row["Gabarito"]:
+                                            if row["Cálculo OK?"]:
+                                                nota_calc += peso_q
+                                                acertos_cheios += 1
+                                            else:
+                                                nota_calc += (peso_q / 2)
+                                                acertos_parciais += 1
+                                                
+                                    st.metric("Nota Calculada", f"{nota_calc:.2f} / {v_total_at:.2f}")
+                                    st.caption(f"✅ {acertos_cheios} Acertos Integrais | ⚠️ {acertos_parciais} Acertos Parciais (Sem Cálculo)")
+                                    
+                                    evidencia_manual = st.file_uploader("📸 Upload da Prova (Opcional)", type=["jpg", "png", "pdf"], key=f"up_man_{id_aluno_atual}")
+                                    
+                                    if st.button("💾 SALVAR CORREÇÃO MANUAL", type="primary", use_container_width=True):
+                                        with st.spinner("Salvando no banco de dados..."):
+                                            link_ev = "N/A"
+                                            id_av_final = material_ref['TIPO_MATERIAL']
+                                            
+                                            if evidencia_manual:
+                                                link_ev = db.subir_e_converter_para_google_docs(evidencia_manual.getvalue(), al_sel.replace(" ","_")+"_MANUAL", trimestre=tr_sel, categoria=t_sel, semana=id_av_final, modo="SCANNER")
+                                            
+                                            db.salvar_no_banco("DB_GABARITOS_ALUNOS",[
+                                                datetime.now().strftime("%d/%m/%Y"), 
+                                                id_aluno_atual, al_sel, t_sel, 
+                                                id_av_final, 
+                                                ";".join(respostas_finais), 
+                                                util.sosa_to_str(nota_calc), 
+                                                link_ev
+                                            ])
+                                            st.success(f"✅ {al_sel} processado!"); time.sleep(0.5); st.rerun()
 
                         # 🚨 MODO REGULAR OU PEI (Múltipla Escolha)
                         elif lente_corr in ["📝 Regular (Padrão ou Variantes)", "♿ PEI (Gabarito do Sistema)"]:
