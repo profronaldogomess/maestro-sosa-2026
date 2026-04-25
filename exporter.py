@@ -142,6 +142,14 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
             run = p.add_run(l_s)
             run.font.size, run.font.italic = Pt(8), True
             run.font.color.rgb = RGBColor(120, 120, 120)
+        elif "[GEOGEBRA]" in l_s.upper():
+            p.paragraph_format.space_before = Pt(3)
+            txt_geo = l_s.replace("[GEOGEBRA]", "").replace("[", "").replace("]", "").strip()
+            run = p.add_run(f"📐 [ COMANDO GEOGEBRA: {txt_geo} ]")
+            run.font.italic = True
+            run.font.size = Pt(8.5)
+            run.font.color.rgb = RGBColor(0, 102, 204)
+            p.alignment = WD_ALIGN_PARAGRAPH.LEFT
         else: adicionar_texto_formatado(p, l_s)
 
     doc.save(file_stream)
@@ -196,6 +204,14 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
             run = p.add_run(l_s)
             run.font.size, run.font.italic = Pt(9), True
             run.font.color.rgb = RGBColor(100, 100, 100)
+        elif "[GEOGEBRA]" in l_s.upper():
+            p.paragraph_format.space_before = Pt(3)
+            txt_geo = l_s.replace("[GEOGEBRA]", "").replace("[", "").replace("]", "").strip()
+            run = p.add_run(f"📐 [ COMANDO GEOGEBRA: {txt_geo} ]")
+            run.font.italic = True
+            run.font.size = Pt(8.5)
+            run.font.color.rgb = RGBColor(0, 102, 204)
+            p.alignment = WD_ALIGN_PARAGRAPH.LEFT
         else: adicionar_texto_formatado(p, l_s)
 
     doc.save(file_stream)
@@ -203,7 +219,7 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
     return file_stream
 
 # ==============================================================================
-# 4. GUIA DO PROFESSOR (ATUALIZADO PARA LER ATÉ 50 QUESTÕES)
+# 4. GUIA DO PROFESSOR
 # ==============================================================================
 def gerar_docx_professor_v25(titulo_doc, conteudo, info):
     file_stream = io.BytesIO()
@@ -251,7 +267,6 @@ def gerar_docx_professor_v25(titulo_doc, conteudo, info):
             run.font.size = Pt(11)
             continue
 
-        # 🚨 LÊ QUALQUER NÚMERO DE QUESTÃO (DE 01 A 99)
         if re.search(r"(?i)QUEST[AÃ]O\s*(?:PEI\s*)?\d+\s*[:\-]\s*[A-E]$|^\d+[\.\s\-]+[A-E]$", l_s):
             run = p.add_run(f"✅ {l_s}")
             run.font.bold, run.font.size = True, Pt(11)
@@ -299,7 +314,7 @@ def gerar_docx_professor_v25(titulo_doc, conteudo, info):
     return file_stream
 
 # ==============================================================================
-# 5. PROVA OFICIAL
+# 5. PROVA OFICIAL (ATUALIZADO PARA 20 QUESTÕES)
 # ==============================================================================
 def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
     file_stream = io.BytesIO()
@@ -354,17 +369,40 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
             p.add_run(f"• {txt}").font.size = Pt(9)
             p.paragraph_format.space_after = Pt(0)
 
-        # 🚨 PROTOCOLO FÊNIX: Remove o quadro de gabarito se for 2ª Chamada
+        # 🚨 PROTOCOLO FÊNIX E GABARITO DINÂMICO (ATÉ 20 QUESTÕES)
         if info.get('tipo_prova') != "2ª Chamada":
             c_gab = top_table.cell(0, 1)
-            gab_grid = c_gab.add_table(rows=num_total_q + 1, cols=6)
-            gab_grid.style = 'Table Grid'
-            for i, lab in enumerate(["Q", "A", "B", "C", "D", "E"]):
-                gab_grid.cell(0, i).paragraphs[0].add_run(lab).font.bold = True
-            for r in range(1, num_total_q + 1):
-                gab_grid.cell(r, 0).paragraphs[0].add_run(f"{r:02d}").font.size = Pt(9)
-                for col in range(1, 6): 
-                    gab_grid.cell(r, col).paragraphs[0].add_run("○").font.size = Pt(14)
+            
+            if num_total_q <= 10:
+                # Gabarito em 1 coluna
+                gab_grid = c_gab.add_table(rows=num_total_q + 1, cols=6)
+                gab_grid.style = 'Table Grid'
+                for i, lab in enumerate(["Q", "A", "B", "C", "D", "E"]):
+                    gab_grid.cell(0, i).paragraphs[0].add_run(lab).font.bold = True
+                for r in range(1, num_total_q + 1):
+                    gab_grid.cell(r, 0).paragraphs[0].add_run(f"{r:02d}").font.size = Pt(9)
+                    for col in range(1, 6): 
+                        gab_grid.cell(r, col).paragraphs[0].add_run("○").font.size = Pt(14)
+            else:
+                # Gabarito em 2 colunas (12 colunas no total)
+                half = (num_total_q + 1) // 2
+                gab_grid = c_gab.add_table(rows=half + 1, cols=12)
+                gab_grid.style = 'Table Grid'
+                headers = ["Q", "A", "B", "C", "D", "E", "Q", "A", "B", "C", "D", "E"]
+                for i, lab in enumerate(headers):
+                    gab_grid.cell(0, i).paragraphs[0].add_run(lab).font.bold = True
+                
+                for r in range(1, num_total_q + 1):
+                    if r <= half:
+                        row_idx = r
+                        col_offset = 0
+                    else:
+                        row_idx = r - half
+                        col_offset = 6
+                        
+                    gab_grid.cell(row_idx, col_offset).paragraphs[0].add_run(f"{r:02d}").font.size = Pt(9)
+                    for col in range(1, 6):
+                        gab_grid.cell(row_idx, col_offset + col).paragraphs[0].add_run("○").font.size = Pt(14)
         else:
             c_gab = top_table.cell(0, 1)
             p_gab = c_gab.paragraphs[0]
@@ -415,6 +453,16 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
                 run.font.italic = True
                 run.font.size = Pt(8.5)
                 run.font.color.rgb = RGBColor(100, 100, 100)
+                p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                continue
+                
+            if "[GEOGEBRA]" in l_s.upper():
+                p.paragraph_format.space_before = Pt(3)
+                txt_geo = l_s.replace("[GEOGEBRA]", "").replace("[", "").replace("]", "").strip()
+                run = p.add_run(f"📐 [ COMANDO GEOGEBRA: {txt_geo} ]")
+                run.font.italic = True
+                run.font.size = Pt(8.5)
+                run.font.color.rgb = RGBColor(0, 102, 204)
                 p.alignment = WD_ALIGN_PARAGRAPH.LEFT
                 continue
 
