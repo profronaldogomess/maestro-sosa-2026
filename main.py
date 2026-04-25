@@ -2017,9 +2017,12 @@ elif menu == "📝 Central de Avaliações":
     tab_forja, tab_acervo_av = st.tabs(["🔨 A Forja (Linha de Montagem)", "🗂️ Acervo de Safra"])
 
     with tab_forja:
-        if f['fase'] > 1:
+        if f['fase'] > 1 and f['fase'] < 6:
             st.button("🔄 Cancelar e Voltar ao Início", on_click=reset_forja)
             st.progress(f['fase'] / 5.0, text=f"Fase {f['fase']} de 5")
+            st.markdown("---")
+        elif f['fase'] == 6:
+            st.button("🔄 Cancelar e Voltar ao Início", on_click=reset_forja)
             st.markdown("---")
 
         # ==============================================================================
@@ -2070,7 +2073,7 @@ elif menu == "📝 Central de Avaliações":
                     topicos_futuros = c_safra2.multiselect("🔮 Tópicos Futuros (Matriz Curricular):", options=opcoes_futuras)
                     
                     conteudos_extraidos = set()
-                    contexto_base_texto = "" # 🚨 NOVO: Guarda o texto das aulas para a IA ler
+                    contexto_base_texto = "" 
                     
                     if mats_selecionados:
                         semanas_selecionadas = df_ref[df_ref['TIPO_MATERIAL'].isin(mats_selecionados)]['SEMANA_REF'].unique()
@@ -2082,7 +2085,6 @@ elif menu == "📝 Central de Avaliações":
                                 for item in re.split(r'[;\n]', cont):
                                     if len(item.strip()) > 5: conteudos_extraidos.add(item.strip().replace("- ", "").replace("• ", ""))
                         
-                        # 🚨 NOVO: Extrai o texto completo das aulas selecionadas
                         for m_nome in mats_selecionados:
                             m_row = df_aulas[df_aulas["TIPO_MATERIAL"] == m_nome].iloc[0]
                             contexto_base_texto += f"--- AULA: {m_nome} ---\n{m_row['CONTEUDO']}\n\n"
@@ -2115,7 +2117,7 @@ elif menu == "📝 Central de Avaliações":
                         
                         f['mapa'] = mapa_inicial
                         f['info'] = {'ano': f"{ano_av}º", 'trimestre': trim_filtro, 'valor': v_total, 'qtd': qtd_q, 'tipo_prova': tipo_av}
-                        f['contexto_base'] = contexto_base_texto # 🚨 Salva o texto das aulas na memória
+                        f['contexto_base'] = contexto_base_texto 
                         f['fase'] = 2
                         st.rerun()
 
@@ -2219,7 +2221,6 @@ elif menu == "📝 Central de Avaliações":
                         
                         if st.button(f"🧠 Gerar Questão {item['q']}", key=f"btn_gen_{i}"):
                             with st.spinner("Forjando item psicométrico..."):
-                                # 🚨 NOVO: INJETA O TEXTO DAS AULAS NA MENTE DA IA
                                 contexto_herdado = f.get('contexto_base', '')
                                 prompt = (
                                     f"TEMA: {tema_q}. DIFICULDADE: {dif_q}. GABARITO OBRIGATÓRIO: Letra {item['gabarito']}.\n\n"
@@ -2341,7 +2342,6 @@ elif menu == "📝 Central de Avaliações":
         elif f['fase'] == 4:
             st.markdown("### 🧬 Fase 4: Compilação e Variantes")
             
-            # 🚨 RESTAURADO: NOME DO ARQUIVO E BOTÃO DE COMPILAR
             tipo_nome = f['info'].get('tipo_prova', 'TESTE').upper().replace(' ', '_')
             nome_sugerido = f"{tipo_nome}_{f['info']['ano'].replace('º','')}ANO_{f['info']['trimestre'].replace(' ', '')}"
             
@@ -2352,7 +2352,6 @@ elif menu == "📝 Central de Avaliações":
             if st.button("💾 COMPILAR, GERAR DOCX E SALVAR NO ACERVO", type="primary", use_container_width=True):
                 with st.status("Forjando Documentos Oficiais...") as status:
                     
-                    # 1. Monta o Texto da Prova Regular (Padrão)
                     txt_regular = f"[VALOR: {f['info']['valor']}]\n\n[QUESTOES]\n"
                     txt_gabarito = "[GABARITO_TEXTO]\n"
                     txt_grade = "[GRADE_DE_CORRECAO]\n"
@@ -2365,7 +2364,6 @@ elif menu == "📝 Central de Avaliações":
                     
                     texto_final_padrao = txt_regular + txt_gabarito + txt_grade
                     
-                    # 2. Gera os DOCXs da Prova Padrão e PEIs
                     status.write("📝 Gerando Prova Regular (Padrão)...")
                     doc_reg = exporter.gerar_docx_prova_v25(nome_arq, texto_final_padrao, f['info'])
                     link_reg = db.subir_e_converter_para_google_docs(doc_reg, nome_arq, modo="AVALIACAO")
@@ -2382,11 +2380,9 @@ elif menu == "📝 Central de Avaliações":
                     doc_pei3 = exporter.gerar_docx_pei_qualitativa(f"{nome_arq}_PEI_N3", f['pei_3'], f['info'])
                     link_pei3 = db.subir_e_converter_para_google_docs(doc_pei3, f"{nome_arq}_PEI_N3", modo="AVALIACAO")
                     
-                    # 3. Salva a Prova Padrão no Banco
                     links_footer = f"--- LINKS ---\nRegular({link_reg}) PEI_N1({link_pei1}) PEI_N2({link_pei2}) PEI_N3({link_pei3})"
-                    db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), "AVALIAÇÃO", nome_arq, texto_final_padrao + f"\n\n[PEI]\n{f['pei_1']}\n\n{links_footer}", f['info']['ano'], link_reg])
+                    db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), "AVALIAÇÃO", nome_arq, texto_final_padrao + f"\n\n[NIVEL_1]\n{f['pei_1']}\n\n[NIVEL_2]\n{f['pei_2']}\n\n[NIVEL_3]\n{f['pei_3']}\n\n{links_footer}", f['info']['ano'], link_reg])
                     
-                    # 4. Lógica da Variante (Embaralhamento Python)
                     if gerar_variante:
                         status.write("🧬 Embaralhando Variante Tipo B...")
                         mapa_variante = f['mapa'].copy()
@@ -2412,9 +2408,8 @@ elif menu == "📝 Central de Avaliações":
                         link_var = db.subir_e_converter_para_google_docs(doc_var, nome_var, modo="AVALIACAO")
                         
                         links_footer_var = f"--- LINKS ---\nRegular({link_var}) PEI_N1({link_pei1}) PEI_N2({link_pei2}) PEI_N3({link_pei3})"
-                        db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), "AVALIAÇÃO", nome_var, texto_final_var + f"\n\n[PEI]\n{f['pei_1']}\n\n{links_footer_var}", f['info']['ano'], link_var])
+                        db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), "AVALIAÇÃO", nome_var, texto_final_var + f"\n\n[NIVEL_1]\n{f['pei_1']}\n\n[NIVEL_2]\n{f['pei_2']}\n\n[NIVEL_3]\n{f['pei_3']}\n\n{links_footer_var}", f['info']['ano'], link_var])
 
-                    # 5. Gera o Guia do Professor Unificado
                     status.write("👨‍🏫 Gerando Guia do Professor...")
                     guia_txt = f"GABARITO PADRÃO:\n{txt_gabarito}\n\nGRADE PADRÃO:\n{txt_grade}"
                     if gerar_variante:
@@ -2470,6 +2465,76 @@ elif menu == "📝 Central de Avaliações":
             if st.button("🚪 Concluir e Voltar ao Início", type="primary", use_container_width=True):
                 reset_forja()
 
+        # ==============================================================================
+        # 📍 FASE 6: RE-EXPORTAÇÃO RÁPIDA (REFINO)
+        # ==============================================================================
+        elif f['fase'] == 6:
+            st.markdown("### 🛠️ Fase 6: Re-Exportação Rápida (Refino)")
+            st.caption("Edite o texto bruto da avaliação e re-exporte os documentos. Ideal para corrigir nomes (ex: TESTE para PROVA) ou atualizar para o novo formato de 3 níveis PEI.")
+            
+            novo_nome = st.text_input("ID Técnico do Material (Nome no Banco):", value=f['nome_base'])
+            
+            t_reg, t_p1, t_p2, t_p3 = st.tabs(["📝 Prova Regular", "🔵 PEI Nível 1", "🟡 PEI Nível 2", "🔴 PEI Nível 3"])
+            with t_reg:
+                novo_reg = st.text_area("Texto Regular (Com Gabarito e Grade):", value=f['txt_reg'], height=400)
+            with t_p1:
+                novo_p1 = st.text_area("PEI Nível 1:", value=f['pei_1'], height=300)
+            with t_p2:
+                novo_p2 = st.text_area("PEI Nível 2:", value=f['pei_2'], height=300)
+            with t_p3:
+                novo_p3 = st.text_area("PEI Nível 3:", value=f['pei_3'], height=300)
+                
+            if st.button("💾 RE-COMPILAR E ATUALIZAR ACERVO", type="primary", use_container_width=True):
+                with st.status("Re-forjando Documentos Oficiais...") as status:
+                    db.excluir_avaliacao_completa(f['nome_base'], f['semana_ref'])
+                    
+                    trim_match = re.search(r'(I{1,3}\s*Trimestre)', novo_nome, re.IGNORECASE)
+                    trim_str = trim_match.group(1) if trim_match else "I Trimestre"
+                    info_re = {'ano': f['ano'], 'trimestre': trim_str, 'tipo_prova': "AVALIAÇÃO"}
+                    
+                    status.write("📝 Gerando Prova Regular...")
+                    doc_reg = exporter.gerar_docx_prova_v25(novo_nome, novo_reg, info_re)
+                    link_reg = db.subir_e_converter_para_google_docs(doc_reg, novo_nome, modo="AVALIACAO")
+                    
+                    link_pei1, link_pei2, link_pei3 = "N/A", "N/A", "N/A"
+                    
+                    if novo_p1:
+                        status.write("🔵 Gerando PEI Nível 1...")
+                        doc_pei1 = exporter.gerar_docx_pei_v25(f"{novo_nome}_PEI_N1", novo_p1, info_re)
+                        link_pei1 = db.subir_e_converter_para_google_docs(doc_pei1, f"{novo_nome}_PEI_N1", modo="AVALIACAO")
+                    
+                    if novo_p2:
+                        status.write("🟡 Gerando PEI Nível 2...")
+                        doc_pei2 = exporter.gerar_docx_pei_v25(f"{novo_nome}_PEI_N2", novo_p2, info_re)
+                        link_pei2 = db.subir_e_converter_para_google_docs(doc_pei2, f"{novo_nome}_PEI_N2", modo="AVALIACAO")
+                        
+                    if novo_p3:
+                        status.write("🔴 Gerando PEI Nível 3...")
+                        doc_pei3 = exporter.gerar_docx_pei_qualitativa(f"{novo_nome}_PEI_N3", novo_p3, info_re)
+                        link_pei3 = db.subir_e_converter_para_google_docs(doc_pei3, f"{novo_nome}_PEI_N3", modo="AVALIACAO")
+                        
+                    status.write("👨‍🏫 Gerando Guia do Professor...")
+                    txt_gab = ai.extrair_tag(novo_reg, "GABARITO_TEXTO") or ai.extrair_tag(novo_reg, "GABARITO")
+                    txt_grade = ai.extrair_tag(novo_reg, "GRADE_DE_CORRECAO")
+                    guia_txt = f"GABARITO PADRÃO:\n{txt_gab}\n\nGRADE PADRÃO:\n{txt_grade}"
+                    doc_prof = exporter.gerar_docx_professor_v25(f"{novo_nome}_GUIA_PROF", guia_txt, info_re)
+                    link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{novo_nome}_GUIA_PROF", modo="AVALIACAO")
+                    
+                    links_footer = f"--- LINKS ---\nRegular({link_reg}) PEI_N1({link_pei1}) PEI_N2({link_pei2}) PEI_N3({link_pei3}) Prof({link_prof})"
+                    
+                    texto_final_banco = novo_reg
+                    if novo_p1: texto_final_banco += f"\n\n[NIVEL_1]\n{novo_p1}"
+                    if novo_p2: texto_final_banco += f"\n\n[NIVEL_2]\n{novo_p2}"
+                    if novo_p3: texto_final_banco += f"\n\n[NIVEL_3]\n{novo_p3}"
+                    texto_final_banco += f"\n\n{links_footer}"
+                    
+                    db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), f['semana_ref'], novo_nome, texto_final_banco, f['ano'], link_reg])
+                    
+                    status.update(label="✅ Re-Exportação Concluída!", state="complete")
+                    st.balloons()
+                    time.sleep(1.5)
+                    reset_forja()
+
     # --- ABA 2: ACERVO DE SAFRA ---
     with tab_acervo_av:
         st.subheader("🗂️ Gestão de Acervo de Safra (Provas e Revisões)")
@@ -2517,14 +2582,12 @@ elif menu == "📝 Central de Avaliações":
                                 else:
                                     st.markdown(f"**✅ Gabarito Regular:** `{gab_limpo}`")
 
-                    # 🚨 EXTRAÇÃO DOS LINKS DA TRÍADE INCLUSIVA
                     l_reg = (re.findall(r"Regular\((.*?)\)", txt_f) or [row.get('LINK_DRIVE')])[-1]
                     l_pei1 = (re.findall(r"PEI_N1\((.*?)\)", txt_f) or re.findall(r"PEI\((.*?)\)", txt_f) or [None])[-1]
                     l_pei2 = (re.findall(r"PEI_N2\((.*?)\)", txt_f) or [None])[-1]
                     l_pei3 = (re.findall(r"PEI_N3\((.*?)\)", txt_f) or [None])[-1]
                     l_prof = (re.findall(r"Prof\((.*?)\)", txt_f) or [None])[-1]
 
-                    # 🚨 BOTÕES DE DOWNLOAD (AGORA COM OS 3 NÍVEIS)
                     c_b1, c_b2, c_b3, c_b4 = st.columns(4)
                     c_b1.link_button("📝 REGULAR", str(l_reg), use_container_width=True, type="primary")
                     
@@ -2533,16 +2596,30 @@ elif menu == "📝 Central de Avaliações":
                     else: 
                         c_b2.button("⚪ SEM GUIA", disabled=True, use_container_width=True, key=f"no_grade_{row.name}")
                     
+                    # 🚨 NOVO BOTÃO REFINAR (ACIONA A FASE 6)
                     if c_b3.button("🔄 REFINAR", key=f"ref_av_h_{row.name}", use_container_width=True):
-                        st.session_state.temp_prova = txt_f
-                        st.session_state.av_nome_fixo = identificador
-                        if "chat_history_av" in st.session_state: del st.session_state["chat_history_av"]
+                        pei1 = ai.extrair_tag(txt_f, "NIVEL_1") or ai.extrair_tag(txt_f, "PEI")
+                        pei2 = ai.extrair_tag(txt_f, "NIVEL_2")
+                        pei3 = ai.extrair_tag(txt_f, "NIVEL_3")
+                        
+                        reg_match = re.split(r'\[(?:PEI|NIVEL_1)\]', txt_f, flags=re.IGNORECASE)
+                        txt_reg = reg_match[0].strip() if reg_match else txt_f
+                        
+                        st.session_state.forja = {
+                            'fase': 6,
+                            'nome_base': identificador,
+                            'txt_reg': txt_reg,
+                            'pei_1': pei1,
+                            'pei_2': pei2,
+                            'pei_3': pei3,
+                            'ano': row['ANO'],
+                            'semana_ref': row['SEMANA_REF']
+                        }
                         st.rerun()
                         
                     if c_b4.button("🗑️ APAGAR", key=f"del_av_h_{row.name}", use_container_width=True):
                         if db.excluir_avaliacao_completa(identificador, row['SEMANA_REF']): st.rerun()
 
-                    # 🚨 BOTÕES EXCLUSIVOS DO PEI
                     if l_pei1 and "N/A" not in str(l_pei1) and "2ª" not in identificador.upper() and "2CHAMADA" not in identificador.upper():
                         st.markdown("**♿ Arquivos de Inclusão (PEI):**")
                         c_p1, c_p2, c_p3 = st.columns(3)
