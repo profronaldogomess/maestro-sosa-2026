@@ -3070,6 +3070,9 @@ elif menu == "📸 Scanner de Gabaritos":
                                 st.rerun()
 
                             st.markdown("---")
+                            
+                            # 🚨 DEFINE AS OPÇÕES DE LETRAS BASEADO NA LENTE (PEI SÓ TEM A, B, C)
+                            opcoes_letras = ["A", "B", "C", "X", "?"] if is_pei_grading else ["A", "B", "C", "D", "E", "X", "?"]
 
                             if modo_correcao == "📸 Scanner IA (Câmera)":
                                 c_cam, c_man = st.columns([2, 1])
@@ -3103,7 +3106,7 @@ elif menu == "📸 Scanner de Gabaritos":
                                                 dados_pericia.append({"Q": f"{i+1:02d}", "Lido": lido, "Status": status})
                                         
                                         df_mesa = st.data_editor(pd.DataFrame(dados_pericia), hide_index=True, use_container_width=True,
-                                            column_config={"Lido": st.column_config.SelectboxColumn("Ajustar", options=["A", "B", "C", "D", "E", "X", "?"], required=True)},
+                                            column_config={"Lido": st.column_config.SelectboxColumn("Ajustar", options=opcoes_letras, required=True)},
                                             key=f"ed_turbo_{id_aluno_atual}")
                                     
                                     with col_res2:
@@ -3153,7 +3156,7 @@ elif menu == "📸 Scanner de Gabaritos":
                                         column_config={
                                             "Q": st.column_config.TextColumn(disabled=True, width="small"),
                                             "Gabarito": st.column_config.TextColumn(disabled=True, width="small"),
-                                            "Resposta do Aluno": st.column_config.SelectboxColumn(options=["A", "B", "C", "D", "E", "X", "?"], required=True),
+                                            "Resposta do Aluno": st.column_config.SelectboxColumn(options=opcoes_letras, required=True),
                                             "Cálculo OK?": st.column_config.CheckboxColumn("Cálculo OK?", default=True)
                                         },
                                         key=f"manual_grid_{id_aluno_atual}"
@@ -3199,39 +3202,6 @@ elif menu == "📸 Scanner de Gabaritos":
                                                 link_ev
                                             ])
                                             st.success(f"✅ {al_sel} processado!"); time.sleep(0.5); st.rerun()
-
-                        # --- MODO 3: QUALITATIVA ---
-                        elif lente_corr == "🎨 Qualitativa / Alternativa (Manual)":
-                            st.warning("♿ **Modo de Avaliação Alternativa:** Exclusivo para alunos com suporte nível 3 ou adaptações severas que não realizam provas de múltipla escolha.")
-                            
-                            col_q1, col_q2 = st.columns([1, 1.5])
-                            with col_q1:
-                                nota_qual = st.number_input("Nota Atribuída:", 0.0, v_total_at, v_total_at, step=0.5, key=f"nq_{id_aluno_atual}")
-                                evidencia_qual = st.file_uploader("📸 Upload da Prova/Desenho", type=["jpg", "png", "pdf"], key=f"uq_{id_aluno_atual}")
-                            
-                            with col_q2:
-                                obs_qual = st.text_area("Parecer Qualitativo (O que foi avaliado?):", height=130, placeholder="Ex: O aluno realizou pareamento de cores e formas geométricas...", key=f"oq_{id_aluno_atual}")
-                            
-                            if st.button("💾 SALVAR AVALIAÇÃO QUALITATIVA", type="primary", use_container_width=True):
-                                if not obs_qual.strip(): st.error("⚠️ Preencha o parecer qualitativo.")
-                                else:
-                                    with st.spinner("Salvando avaliação e gerando evidência no Dossiê..."):
-                                        link_ev = "N/A"
-                                        id_av_final = at_sel
-                                        if evidencia_qual:
-                                            link_ev = db.subir_e_converter_para_google_docs(evidencia_qual.getvalue(), al_sel.replace(" ","_")+"_QUAL", trimestre=tr_sel, categoria=t_sel, semana=id_av_final, modo="SCANNER")
-                                        
-                                        db.salvar_no_banco("DB_GABARITOS_ALUNOS", [
-                                            datetime.now().strftime("%d/%m/%Y"), id_aluno_atual, al_sel, t_sel, 
-                                            id_av_final, f"QUALITATIVA|{obs_qual}", util.sosa_to_str(nota_qual), link_ev
-                                        ])
-                                        
-                                        db.salvar_no_banco("DB_RELATORIOS", [
-                                            datetime.now().strftime("%d/%m/%Y"), id_aluno_atual, al_sel, 
-                                            "AVALIACAO_QUALITATIVA", 
-                                            f"Avaliação: {id_av_final}\nNota: {nota_qual}\nParecer: {obs_qual}\nEvidência: {link_ev}"
-                                        ])
-                                        st.success("Salvo!"); time.sleep(0.5); st.rerun()
 
     # ==============================================================================
     # ✍️ ABA 2: TRABALHOS & PROJETOS
