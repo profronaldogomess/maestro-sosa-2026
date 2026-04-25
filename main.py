@@ -2236,6 +2236,45 @@ elif menu == "📝 Central de Avaliações":
                     res[tag] = match.group(1).strip() if match else ""
                 return res
 
+            # 🚨 MOTOR DE GERAÇÃO EM LOTE (ECONOMIA DE TOKENS)
+            pendentes = [item for item in f['mapa'] if item['status'] == 'pendente']
+            if pendentes:
+                st.markdown("<br>", unsafe_allow_html=True)
+                if st.button("🚀 GERAR TODAS AS QUESTÕES PENDENTES (LOTE)", type="primary", use_container_width=True):
+                    with st.spinner(f"Forjando {len(pendentes)} questões em lote... Isso pode levar alguns segundos."):
+                        prompt_lote = f"SÉRIE ALVO: {f['info']['ano']}\n\n"
+                        prompt_lote += "Gere as seguintes questões seguindo ESTRITAMENTE o tema, dificuldade e gabarito de cada uma:\n\n"
+                        for item in pendentes:
+                            prompt_lote += f"QUESTÃO {item['q']}:\n- TEMA: {item['tema']}\n- DIFICULDADE: {item['dificuldade']}\n- GABARITO OBRIGATÓRIO: Letra {item['gabarito']}\n\n"
+                        prompt_lote += f"🚨 DIRETRIZ DE ESPELHAMENTO (Contexto Base):\n{f.get('contexto_base', 'Crie as questões baseadas nos temas fornecidos.')}\n"
+                        
+                        res_lote = ai.gerar_ia("FORJA_LOTE_REGULAR", prompt_lote)
+                        
+                        blocos = re.findall(r"\[ITEM_(\d+)\](.*?)\[/ITEM_\1\]", res_lote, re.DOTALL | re.IGNORECASE)
+                        if not blocos:
+                            st.error("A IA não retornou o formato correto. Tente gerar individualmente ou clique novamente.")
+                        else:
+                            for num_str, conteudo_bloco in blocos:
+                                q_num = int(num_str)
+                                extraido = extrair_item_forja(conteudo_bloco)
+                                for item in f['mapa']:
+                                    if item['q'] == q_num:
+                                        item['dados'] = {
+                                            'ENUNCIADO': extraido.get('ENUNCIADO', ''),
+                                            'ALT_A': extraido.get('ALT_A', ''),
+                                            'ALT_B': extraido.get('ALT_B', ''),
+                                            'ALT_C': extraido.get('ALT_C', ''),
+                                            'ALT_D': extraido.get('ALT_D', ''),
+                                            'ALT_E': extraido.get('ALT_E', ''),
+                                            'HABILIDADE': extraido.get('HABILIDADE', ''),
+                                            'JUSTIFICATIVA': extraido.get('JUSTIFICATIVA', ''),
+                                            'DISTRATORES': extraido.get('DISTRATORES', ''),
+                                            'GABARITO': item['gabarito']
+                                        }
+                                        item['status'] = 'revisao'
+                            st.rerun()
+                st.markdown("---")
+
             todas_aprovadas = True
             
             for i, item in enumerate(f['mapa']):
@@ -2249,7 +2288,7 @@ elif menu == "📝 Central de Avaliações":
                         tema_q = c_t1.text_input("Tema Específico:", value=item['tema'], key=f"tema_{i}")
                         dif_q = c_t2.selectbox("Dificuldade:", ["Fácil", "Média", "Difícil"], index=["Fácil", "Média", "Difícil"].index(item['dificuldade']), key=f"dif_{i}")
                         
-                        if st.button(f"🧠 Gerar Questão {item['q']}", key=f"btn_gen_{i}"):
+                        if st.button(f"🧠 Gerar Questão {item['q']} (Individual)", key=f"btn_gen_{i}"):
                             with st.spinner("Forjando item psicométrico..."):
                                 contexto_herdado = f.get('contexto_base', '')
                                 prompt = (
@@ -2304,13 +2343,41 @@ elif menu == "📝 Central de Avaliações":
                         st.caption(f"**Habilidade:** {d['HABILIDADE']}")
                         st.caption(f"**Justificativa:** {d['JUSTIFICATIVA']}")
                         
+                        # 🚨 CAMPO DE REFINAMENTO CIRÚRGICO
+                        instrucao_refino = st.text_input("Instrução de Refinamento (Opcional):", placeholder="Ex: Mude o contexto para futebol...", key=f"inst_ref_{i}")
+                        
                         col_b1, col_b2 = st.columns(2)
                         if col_b1.button(f"✅ Aprovar Questão {item['q']}", type="primary", key=f"btn_apr_{i}", use_container_width=True):
                             item['status'] = 'aprovado'
                             st.rerun()
                         if col_b2.button(f"🔄 Refazer Questão {item['q']}", key=f"btn_ref_{i}", use_container_width=True):
-                            item['status'] = 'pendente'
-                            st.rerun()
+                            with st.spinner("Reforjando item..."):
+                                prompt = (
+                                    f"SÉRIE ALVO: {f['info']['ano']}\n"
+                                    f"TEMA: {item['tema']}. DIFICULDADE: {item['dificuldade']}. GABARITO OBRIGATÓRIO: Letra {item['gabarito']}.\n\n"
+                                )
+                                if instrucao_refino:
+                                    prompt += f"🚨 INSTRUÇÃO DE REFINAMENTO DO PROFESSOR: {instrucao_refino}\n"
+                                    prompt += f"QUESTÃO ANTERIOR (Para referência do que mudar):\n{item['dados']['ENUNCIADO']}\n\n"
+                                
+                                prompt += f"🚨 DIRETRIZ DE ESPELHAMENTO:\n{f.get('contexto_base', '')}"
+                                
+                                res_item = ai.gerar_ia("FORJA_ITEM_REGULAR", prompt)
+                                extraido = extrair_item_forja(res_item)
+                                
+                                item['dados'] = {
+                                    'ENUNCIADO': extraido.get('ENUNCIADO', item['dados']['ENUNCIADO']),
+                                    'ALT_A': extraido.get('ALT_A', item['dados']['ALT_A']),
+                                    'ALT_B': extraido.get('ALT_B', item['dados']['ALT_B']),
+                                    'ALT_C': extraido.get('ALT_C', item['dados']['ALT_C']),
+                                    'ALT_D': extraido.get('ALT_D', item['dados']['ALT_D']),
+                                    'ALT_E': extraido.get('ALT_E', item['dados']['ALT_E']),
+                                    'HABILIDADE': extraido.get('HABILIDADE', item['dados']['HABILIDADE']),
+                                    'JUSTIFICATIVA': extraido.get('JUSTIFICATIVA', item['dados']['JUSTIFICATIVA']),
+                                    'DISTRATORES': extraido.get('DISTRATORES', item['dados']['DISTRATORES']),
+                                    'GABARITO': item['gabarito']
+                                }
+                                st.rerun()
                             
                     elif item['status'] == 'aprovado':
                         d = item['dados']
@@ -2368,7 +2435,7 @@ elif menu == "📝 Central de Avaliações":
                     st.rerun()
 
         # ==============================================================================
-        # 📍 FASE 4: COMPILAÇÃO E VARIANTES ANTI-FRAUDE
+        # 📍 FASE 4: COMPILAÇÃO E VARIANTES ANTI-FRAUDE (BLINDADA)
         # ==============================================================================
         elif f['fase'] == 4:
             st.markdown("### 🧬 Fase 4: Compilação e Variantes")
@@ -2412,51 +2479,57 @@ elif menu == "📝 Central de Avaliações":
                     link_pei3 = db.subir_e_converter_para_google_docs(doc_pei3, f"{nome_arq}_PEI_N3", modo="AVALIACAO")
                     
                     links_footer = f"--- LINKS ---\nRegular({link_reg}) PEI_N1({link_pei1}) PEI_N2({link_pei2}) PEI_N3({link_pei3})"
-                    db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), "AVALIAÇÃO", nome_arq, texto_final_padrao + f"\n\n[NIVEL_1]\n{f['pei_1']}\n\n[NIVEL_2]\n{f['pei_2']}\n\n[NIVEL_3]\n{f['pei_3']}\n\n{links_footer}", f['info']['ano'], link_reg])
                     
-                    if gerar_variante:
-                        status.write("🧬 Embaralhando Variante Tipo B...")
-                        mapa_variante = f['mapa'].copy()
-                        import random
-                        random.shuffle(mapa_variante) 
-                        
-                        txt_var = f"[VALOR: {f['info']['valor']}]\n\n[QUESTOES]\n"
-                        txt_gab_var = "[GABARITO_TEXTO]\n"
-                        txt_grade_var = "[GRADE_DE_CORRECAO]\n"
-                        
-                        for i, item in enumerate(mapa_variante):
-                            novo_num = i + 1
-                            item_embaralhado = util.embaralhar_item_estruturado(item['dados'])
+                    # 🚨 TRAVA DE SOBERANIA: Só avança se o banco confirmar o salvamento
+                    sucesso_db = db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), "AVALIAÇÃO", nome_arq, texto_final_padrao + f"\n\n[NIVEL_1]\n{f['pei_1']}\n\n[NIVEL_2]\n{f['pei_2']}\n\n[NIVEL_3]\n{f['pei_3']}\n\n{links_footer}", f['info']['ano'], link_reg])
+                    
+                    if sucesso_db:
+                        if gerar_variante:
+                            status.write("🧬 Embaralhando Variante Tipo B...")
+                            mapa_variante = f['mapa'].copy()
+                            import random
+                            random.shuffle(mapa_variante) 
                             
-                            txt_var += f"**QUESTÃO {novo_num:02d} -** {item_embaralhado['ENUNCIADO']}\n(A) {item_embaralhado['ALT_A']}\n(B) {item_embaralhado['ALT_B']}\n(C) {item_embaralhado['ALT_C']}\n(D) {item_embaralhado['ALT_D']}\n(E) {item_embaralhado['ALT_E']}\n\n"
-                            txt_gab_var += f"QUESTÃO {novo_num:02d}: {item_embaralhado['GABARITO']}\n"
-                            txt_grade_var += f"QUESTÃO {novo_num:02d}: [{item_embaralhado['HABILIDADE']}] | JUSTIFICATIVA: {item_embaralhado['JUSTIFICATIVA']} | DISTRATORES: {item_embaralhado['DISTRATORES']}\n"
+                            txt_var = f"[VALOR: {f['info']['valor']}]\n\n[QUESTOES]\n"
+                            txt_gab_var = "[GABARITO_TEXTO]\n"
+                            txt_grade_var = "[GRADE_DE_CORRECAO]\n"
                             
-                        texto_final_var = txt_var + txt_gab_var + txt_grade_var
-                        nome_var = f"{nome_arq} - TIPO B"
-                        
-                        doc_var = exporter.gerar_docx_prova_v25(nome_var, texto_final_var, f['info'])
-                        link_var = db.subir_e_converter_para_google_docs(doc_var, nome_var, modo="AVALIACAO")
-                        
-                        links_footer_var = f"--- LINKS ---\nRegular({link_var}) PEI_N1({link_pei1}) PEI_N2({link_pei2}) PEI_N3({link_pei3})"
-                        db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), "AVALIAÇÃO", nome_var, texto_final_var + f"\n\n[NIVEL_1]\n{f['pei_1']}\n\n[NIVEL_2]\n{f['pei_2']}\n\n[NIVEL_3]\n{f['pei_3']}\n\n{links_footer_var}", f['info']['ano'], link_var])
+                            for i, item in enumerate(mapa_variante):
+                                novo_num = i + 1
+                                item_embaralhado = util.embaralhar_item_estruturado(item['dados'])
+                                
+                                txt_var += f"**QUESTÃO {novo_num:02d} -** {item_embaralhado['ENUNCIADO']}\n(A) {item_embaralhado['ALT_A']}\n(B) {item_embaralhado['ALT_B']}\n(C) {item_embaralhado['ALT_C']}\n(D) {item_embaralhado['ALT_D']}\n(E) {item_embaralhado['ALT_E']}\n\n"
+                                txt_gab_var += f"QUESTÃO {novo_num:02d}: {item_embaralhado['GABARITO']}\n"
+                                txt_grade_var += f"QUESTÃO {novo_num:02d}: [{item_embaralhado['HABILIDADE']}] | JUSTIFICATIVA: {item_embaralhado['JUSTIFICATIVA']} | DISTRATORES: {item_embaralhado['DISTRATORES']}\n"
+                                
+                            texto_final_var = txt_var + txt_gab_var + txt_grade_var
+                            nome_var = f"{nome_arq} - TIPO B"
+                            
+                            doc_var = exporter.gerar_docx_prova_v25(nome_var, texto_final_var, f['info'])
+                            link_var = db.subir_e_converter_para_google_docs(doc_var, nome_var, modo="AVALIACAO")
+                            
+                            links_footer_var = f"--- LINKS ---\nRegular({link_var}) PEI_N1({link_pei1}) PEI_N2({link_pei2}) PEI_N3({link_pei3})"
+                            db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), "AVALIAÇÃO", nome_var, texto_final_var + f"\n\n[NIVEL_1]\n{f['pei_1']}\n\n[NIVEL_2]\n{f['pei_2']}\n\n[NIVEL_3]\n{f['pei_3']}\n\n{links_footer_var}", f['info']['ano'], link_var])
 
-                    status.write("👨‍🏫 Gerando Guia do Professor...")
-                    guia_txt = f"GABARITO PADRÃO:\n{txt_gabarito}\n\nGRADE PADRÃO:\n{txt_grade}"
-                    if gerar_variante:
-                        guia_txt += f"\n\nGABARITO TIPO B:\n{txt_gab_var}\n\nGRADE TIPO B:\n{txt_grade_var}"
+                        status.write("👨‍🏫 Gerando Guia do Professor...")
+                        guia_txt = f"GABARITO PADRÃO:\n{txt_gabarito}\n\nGRADE PADRÃO:\n{txt_grade}"
+                        if gerar_variante:
+                            guia_txt += f"\n\nGABARITO TIPO B:\n{txt_gab_var}\n\nGRADE TIPO B:\n{txt_grade_var}"
+                            
+                        doc_prof = exporter.gerar_docx_professor_v25(f"{nome_arq}_GUIA_PROF", guia_txt, f['info'])
+                        link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_arq}_GUIA_PROF", modo="AVALIACAO")
                         
-                    doc_prof = exporter.gerar_docx_professor_v25(f"{nome_arq}_GUIA_PROF", guia_txt, f['info'])
-                    link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_arq}_GUIA_PROF", modo="AVALIACAO")
-                    
-                    f['prova_final_txt'] = texto_final_padrao
-                    f['nome_base'] = nome_arq
-                    
-                    status.update(label="✅ Forja Concluída com Sucesso!", state="complete")
-                    st.balloons()
-                    f['fase'] = 5
-                    time.sleep(1.5)
-                    st.rerun()
+                        f['prova_final_txt'] = texto_final_padrao
+                        f['nome_base'] = nome_arq
+                        
+                        status.update(label="✅ Forja Concluída com Sucesso!", state="complete")
+                        st.balloons()
+                        f['fase'] = 5
+                        time.sleep(1.5)
+                        st.rerun()
+                    else:
+                        status.update(label="❌ Erro Crítico ao salvar no Banco de Dados.", state="error")
+                        st.error("A prova não foi salva. O texto pode ter excedido o limite do Google Sheets ou houve falha de conexão. Tente novamente.")
 
         # ==============================================================================
         # 📍 FASE 5: AÇÕES PÓS-PROVA (REVISÃO E 2ª CHAMADA)
