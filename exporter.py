@@ -157,7 +157,7 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     return file_stream
 
 # ==============================================================================
-# 3. MATERIAL PEI ADAPTADO
+# 3. MATERIAL PEI ADAPTADO (NÍVEIS 1 E 2)
 # ==============================================================================
 def gerar_docx_pei_v25(titulo_doc, conteudo, info):
     file_stream = io.BytesIO()
@@ -212,11 +212,92 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
             run.font.size = Pt(8.5)
             run.font.color.rgb = RGBColor(0, 102, 204)
             p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        # 🚨 NOVA REGRA: DESTAQUE PARA O GABARITO NO FINAL DO DOCX
+        elif "GABARITO" in l_s.upper():
+            p.paragraph_format.space_before = Pt(15)
+            run = p.add_run(l_s.replace('**', ''))
+            run.bold = True
+            run.font.color.rgb = RGBColor(0, 102, 204)
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
         else: adicionar_texto_formatado(p, l_s)
 
     doc.save(file_stream)
     file_stream.seek(0)
     return file_stream
+
+# ... (Mantenha as outras funções intactas) ...
+
+# ==============================================================================
+# 11. EXPORTADOR PEI NÍVEL 3 (QUALITATIVO / SENSORIAL) - BLINDADO
+# ==============================================================================
+def gerar_docx_pei_qualitativa(titulo_doc, conteudo, info):
+    file_stream = io.BytesIO()
+    try:
+        doc = Document()
+        section = doc.sections[0]
+        section.top_margin, section.bottom_margin = Inches(0.5), Inches(0.5)
+        section.left_margin, section.right_margin = Inches(0.5), Inches(0.5)
+
+        style = doc.styles['Normal']
+        style.font.name = 'Comic Sans MS' 
+        style.font.size = Pt(14) 
+
+        configurar_cabecalho_mestre(doc, info, "AVALIAÇÃO ADAPTADA (NÍVEL 3)", mostrar_nota=False)
+        doc.add_paragraph()
+
+        if not conteudo or len(str(conteudo).strip()) < 10:
+            p = doc.add_paragraph("Ocorreu um erro na geração do Nível 3. Por favor, refine a questão no painel.")
+            doc.save(file_stream)
+            file_stream.seek(0)
+            return file_stream
+
+        linhas = str(conteudo).split('\n')
+        for linha in linhas:
+            l_s = linha.strip()
+            if not l_s: continue
+            
+            p = doc.add_paragraph()
+            p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            p.paragraph_format.space_after = Pt(12)
+
+            # 🚨 NOVA REGRA: IMPRIME A RUBRICA DE OBSERVAÇÃO NO FINAL
+            if "RUBRICA" in l_s.upper() or "GABARITO" in l_s.upper():
+                p.paragraph_format.space_before = Pt(20)
+                run = p.add_run(l_s.replace('**', ''))
+                run.bold = True
+                run.font.size = Pt(12)
+                run.font.color.rgb = RGBColor(112, 48, 160)
+                continue
+
+            if "QUESTÃO" in l_s.upper():
+                run = p.add_run(l_s)
+                run.bold = True
+                run.font.size = Pt(16)
+            elif "[" in l_s and "PROMPT IMAGEM" in l_s.upper():
+                p.paragraph_format.space_before = Pt(10)
+                p.paragraph_format.space_after = Pt(50) 
+                txt_img = l_s.replace("[", "").replace("]", "").strip()
+                run = p.add_run(f"🖼️ [ ESPAÇO PARA IMAGEM: {txt_img} ]")
+                run.font.italic = True
+                run.font.size = Pt(10)
+                run.font.color.rgb = RGBColor(150, 150, 150)
+                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            elif "( ) SIM" in l_s.upper():
+                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                run = p.add_run(l_s)
+                run.bold = True
+                run.font.size = Pt(16)
+            else:
+                adicionar_texto_formatado(p, l_s)
+
+        doc.save(file_stream)
+        file_stream.seek(0)
+        return file_stream
+    except Exception as e:
+        file_stream = io.BytesIO()
+        err_doc = Document(); err_doc.add_paragraph(f"ERRO NO EXPORTER N3: {str(e)}"); err_doc.save(file_stream)
+        file_stream.seek(0)
+        return file_stream
 
 # ==============================================================================
 # 4. GUIA DO PROFESSOR
@@ -940,7 +1021,6 @@ def gerar_docx_pei_qualitativa(titulo_doc, conteudo, info):
         configurar_cabecalho_mestre(doc, info, "AVALIAÇÃO ADAPTADA (NÍVEL 3)", mostrar_nota=False)
         doc.add_paragraph()
 
-        # 🚨 BLINDAGEM: Se o conteúdo vier vazio ou der erro na IA, cria um documento genérico
         if not conteudo or len(str(conteudo).strip()) < 10:
             p = doc.add_paragraph("Ocorreu um erro na geração do Nível 3. Por favor, refine a questão no painel.")
             doc.save(file_stream)
@@ -950,11 +1030,20 @@ def gerar_docx_pei_qualitativa(titulo_doc, conteudo, info):
         linhas = str(conteudo).split('\n')
         for linha in linhas:
             l_s = linha.strip()
-            if not l_s or "GABARITO" in l_s.upper() or "RUBRICA" in l_s.upper(): continue
+            if not l_s: continue
             
             p = doc.add_paragraph()
             p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT
             p.paragraph_format.space_after = Pt(12)
+
+            # 🚨 NOVA REGRA: IMPRIME A RUBRICA DE OBSERVAÇÃO NO FINAL
+            if "RUBRICA" in l_s.upper() or "GABARITO" in l_s.upper():
+                p.paragraph_format.space_before = Pt(20)
+                run = p.add_run(l_s.replace('**', ''))
+                run.bold = True
+                run.font.size = Pt(12)
+                run.font.color.rgb = RGBColor(112, 48, 160)
+                continue
 
             if "QUESTÃO" in l_s.upper():
                 run = p.add_run(l_s)
