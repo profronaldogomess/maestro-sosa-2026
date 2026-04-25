@@ -3218,153 +3218,82 @@ elif menu == "📸 Scanner de Gabaritos":
                                             ])
                                             st.success(f"✅ {al_sel} processado!"); time.sleep(0.5); st.rerun()
 
-                        # 🚨 MODO REGULAR OU PEI (Múltipla Escolha)
-                        elif lente_corr in ["📝 Regular (Padrão ou Variantes)", "♿ PEI (Gabarito do Sistema)"]:
-                            c_mod1, c_mod2 = st.columns([3, 1])
-                            modo_correcao = c_mod1.radio(
-                                "⚙️ Método de Correção:", 
-                                ["📸 Scanner IA (Câmera)", "✍️ Digitação Manual (Com Análise de Cálculo)"], 
-                                horizontal=True, 
-                                key=f"modo_corr_{id_aluno_atual}"
-                            )
+                        # --- MODO 3: QUALITATIVA ---
+                        elif is_qualitativa:
+                            st.warning("♿ **Modo de Avaliação Alternativa:** Exclusivo para alunos com suporte nível 3 ou adaptações severas que não realizam provas de múltipla escolha.")
                             
-                            if c_mod2.button("❌ Registrar Falta", use_container_width=True):
-                                db.salvar_no_banco("DB_GABARITOS_ALUNOS", [datetime.now().strftime("%d/%m/%Y"), id_aluno_atual, al_sel, t_sel, at_sel, "FALTOU", "0,00", "N/A"])
-                                st.rerun()
-
-                            st.markdown("---")
+                            # 🚨 EXTRATOR DINÂMICO DE RUBRICAS DO NÍVEL 3
+                            nivel3_txt = ai.extrair_tag(txt_ref, "NIVEL_3")
+                            rubricas_encontradas = []
                             
-                            # 🚨 DEFINE AS OPÇÕES DE LETRAS BASEADO NA LENTE (PEI SÓ TEM A, B, C)
-                            opcoes_letras = ["A", "B", "C", "X", "?"] if is_pei_grading else ["A", "B", "C", "D", "E", "X", "?"]
-
-                            if modo_correcao == "📸 Scanner IA (Câmera)":
-                                c_cam, c_man = st.columns([2, 1])
-                                with c_cam:
-                                    st.info("📱 **Scanner IA:** Tire a foto do gabarito.")
-                                    img_file = st.file_uploader("Upload", type=["jpg", "jpeg", "png"], key=f"up_{id_aluno_atual}", label_visibility="collapsed")
-                                    with st.expander("💻 Usar Webcam"):
-                                        img_cam = st.camera_input("Webcam", key=f"cam_{id_aluno_atual}")
-                                    img = img_file if img_file else img_cam
-
-                                if img and "current_scan_res" not in st.session_state:
-                                    with st.spinner("Analisando marcações com Visão Computacional..."):
-                                        res_json = ai.analisar_gabarito_vision(img.getvalue())
-                                        qtd_q = len(gab_alvo)
-                                        st.session_state.current_scan_res = [res_json.get(f"{i+1:02d}", res_json.get(str(i+1), "?")) for i in range(qtd_q)]
-                                        st.session_state.current_scan_img = img.getvalue()
-                                        st.rerun()
-
-                                if "current_scan_res" in st.session_state:
-                                    res_lidas = st.session_state.current_scan_res
-                                    st.markdown("---")
-                                    col_res1, col_res2 = st.columns([1.5, 1])
+                            if nivel3_txt:
+                                # Procura a palavra RUBRICA e pega tudo o que vem depois
+                                match_rubrica = re.search(r"(?i)RUBRICA.*?(?:\n)(.*)", nivel3_txt, re.DOTALL)
+                                if match_rubrica:
+                                    linhas_rubrica = match_rubrica.group(1).strip().split('\n')
+                                    for linha in linhas_rubrica:
+                                        # Limpa os marcadores de lista e negritos
+                                        linha_limpa = re.sub(r'^[-*•]\s*', '', linha).replace('**', '').strip()
+                                        if linha_limpa and len(linha_limpa) > 5:
+                                            rubricas_encontradas.append(linha_limpa)
+                            
+                            col_q1, col_q2 = st.columns([1, 1.5])
+                            with col_q1:
+                                nota_qual = st.number_input("Nota Atribuída:", 0.0, v_total_at, v_total_at, step=0.5, key=f"nq_{id_aluno_atual}")
+                                evidencia_qual = st.file_uploader("📸 Upload da Prova/Desenho", type=["jpg", "png", "pdf"], key=f"uq_{id_aluno_atual}")
+                            
+                            with col_q2:
+                                respostas_rubrica = []
+                                obs_extra = ""
+                                obs_qual = ""
+                                
+                                if rubricas_encontradas:
+                                    st.markdown("#### 📋 Rubrica de Observação (Extraída da Prova)")
+                                    for i, rubrica in enumerate(rubricas_encontradas):
+                                        st.markdown(f"**{rubrica}**")
+                                        resp = st.selectbox(
+                                            "Avaliação:", 
+                                            ["✅ Atingiu de forma autônoma", "🤝 Atingiu com apoio físico/verbal", "❌ Não atingiu / Não observável"], 
+                                            key=f"rub_{id_aluno_atual}_{i}", 
+                                            label_visibility="collapsed"
+                                        )
+                                        respostas_rubrica.append(f"- {rubrica.split(':')[0] if ':' in rubrica else 'Critério'}: {resp}")
                                     
-                                    with col_res1:
-                                        st.subheader("⚖️ Mesa de Perícia")
-                                        dados_pericia = []
-                                        for i, lido in enumerate(res_lidas):
-                                            if i < len(gab_alvo):
-                                                certo = gab_alvo[i]
-                                                status = "✅ ACERTO" if lido == certo else ("🚫 DUPLA" if lido == "X" else ("⚪ VAZIA" if lido == "?" else f"❌ (Era {certo})"))
-                                                dados_pericia.append({"Q": f"{i+1:02d}", "Lido": lido, "Status": status})
+                                    st.markdown("<br>", unsafe_allow_html=True)
+                                    obs_extra = st.text_area("Observações Adicionais (Opcional):", height=68, key=f"oq_extra_{id_aluno_atual}")
+                                else:
+                                    st.info("Nenhuma rubrica específica encontrada nesta prova. Use o campo abaixo.")
+                                    obs_qual = st.text_area("Parecer Qualitativo (O que foi avaliado?):", height=130, placeholder="Ex: O aluno realizou pareamento de cores e formas geométricas...", key=f"oq_{id_aluno_atual}")
+                            
+                            if st.button("💾 SALVAR AVALIAÇÃO QUALITATIVA", type="primary", use_container_width=True):
+                                # Monta o parecer final juntando as rubricas
+                                if rubricas_encontradas:
+                                    parecer_final = "\n".join(respostas_rubrica)
+                                    if obs_extra.strip():
+                                        parecer_final += f"\nObs: {obs_extra.strip()}"
+                                else:
+                                    parecer_final = obs_qual.strip()
+                                    
+                                if not parecer_final: 
+                                    st.error("⚠️ Preencha o parecer qualitativo.")
+                                else:
+                                    with st.spinner("Salvando avaliação e gerando evidência no Dossiê..."):
+                                        link_ev = "N/A"
+                                        id_av_final = at_sel
+                                        if evidencia_qual:
+                                            link_ev = db.subir_e_converter_para_google_docs(evidencia_qual.getvalue(), al_sel.replace(" ","_")+"_QUAL", trimestre=tr_sel, categoria=t_sel, semana=id_av_final, modo="SCANNER")
                                         
-                                        df_mesa = st.data_editor(pd.DataFrame(dados_pericia), hide_index=True, use_container_width=True,
-                                            column_config={"Lido": st.column_config.SelectboxColumn("Ajustar", options=opcoes_letras, required=True)},
-                                            key=f"ed_turbo_{id_aluno_atual}")
-                                    
-                                    with col_res2:
-                                        st.subheader("📊 Resultado")
-                                        novas_res = df_mesa["Lido"].tolist()
-                                        acertos = sum(1 for i, r in enumerate(novas_res) if i < len(gab_alvo) and r == gab_alvo[i])
-                                        nota_f = (acertos / len(gab_alvo)) * v_total_at if len(gab_alvo) > 0 else 0
-                                        st.metric("Nota Final", f"{nota_f:.2f}", delta=f"{acertos}/{len(gab_alvo)} acertos")
+                                        db.salvar_no_banco("DB_GABARITOS_ALUNOS", [
+                                            datetime.now().strftime("%d/%m/%Y"), id_aluno_atual, al_sel, t_sel, 
+                                            id_av_final, f"QUALITATIVA|{parecer_final}", util.sosa_to_str(nota_qual), link_ev
+                                        ])
                                         
-                                        if st.button("💾 SALVAR CORREÇÃO", type="primary", use_container_width=True):
-                                            with st.spinner("Arquivando no Drive..."):
-                                                id_av_final = material_ref['TIPO_MATERIAL']
-                                                link_pasta = db.subir_e_converter_para_google_docs(st.session_state.current_scan_img, al_sel.replace(" ","_"), trimestre=tr_sel, categoria=t_sel, semana=id_av_final, modo="SCANNER")
-                                                
-                                                db.salvar_no_banco("DB_GABARITOS_ALUNOS", [
-                                                    datetime.now().strftime("%d/%m/%Y"), id_aluno_atual, al_sel, t_sel, 
-                                                    id_av_final, ";".join(novas_res), util.sosa_to_str(nota_f), link_pasta
-                                                ])
-                                                del st.session_state.current_scan_res
-                                                del st.session_state.current_scan_img
-                                                st.success("Salvo!"); time.sleep(0.5); st.rerun()
-
-                                        if st.button("🗑️ DESCARTAR E REFAZER"):
-                                            del st.session_state.current_scan_res
-                                            del st.session_state.current_scan_img
-                                            st.rerun()
-
-                            elif modo_correcao == "✍️ Digitação Manual (Com Análise de Cálculo)":
-                                st.info("💡 **Regra de Ouro:** Digite a resposta do aluno. Se a questão exige cálculo e ele não fez, desmarque a caixa 'Cálculo OK?' para dar apenas 50% do valor da questão.")
-                                
-                                col_man1, col_man2 = st.columns([1.5, 1])
-                                
-                                with col_man1:
-                                    dados_manual = []
-                                    for i in range(len(gab_alvo)):
-                                        dados_manual.append({
-                                            "Q": f"{i+1:02d}",
-                                            "Gabarito": gab_alvo[i],
-                                            "Resposta do Aluno": "?",
-                                            "Cálculo OK?": True
-                                        })
-                                    
-                                    df_manual = st.data_editor(
-                                        pd.DataFrame(dados_manual),
-                                        hide_index=True,
-                                        use_container_width=True,
-                                        column_config={
-                                            "Q": st.column_config.TextColumn(disabled=True, width="small"),
-                                            "Gabarito": st.column_config.TextColumn(disabled=True, width="small"),
-                                            "Resposta do Aluno": st.column_config.SelectboxColumn(options=opcoes_letras, required=True),
-                                            "Cálculo OK?": st.column_config.CheckboxColumn("Cálculo OK?", default=True)
-                                        },
-                                        key=f"manual_grid_{id_aluno_atual}"
-                                    )
-                                
-                                with col_man2:
-                                    peso_q = v_total_at / len(gab_alvo) if len(gab_alvo) > 0 else 0
-                                    nota_calc = 0.0
-                                    respostas_finais = []
-                                    acertos_cheios = 0
-                                    acertos_parciais = 0
-                                    
-                                    for i, row in df_manual.iterrows():
-                                        resp = row["Resposta do Aluno"]
-                                        respostas_finais.append(resp)
-                                        if resp == row["Gabarito"]:
-                                            if row["Cálculo OK?"]:
-                                                nota_calc += peso_q
-                                                acertos_cheios += 1
-                                            else:
-                                                nota_calc += (peso_q / 2)
-                                                acertos_parciais += 1
-                                                
-                                    st.metric("Nota Calculada", f"{nota_calc:.2f} / {v_total_at:.2f}")
-                                    st.caption(f"✅ {acertos_cheios} Acertos Integrais | ⚠️ {acertos_parciais} Acertos Parciais (Sem Cálculo)")
-                                    
-                                    evidencia_manual = st.file_uploader("📸 Upload da Prova (Opcional)", type=["jpg", "png", "pdf"], key=f"up_man_{id_aluno_atual}")
-                                    
-                                    if st.button("💾 SALVAR CORREÇÃO MANUAL", type="primary", use_container_width=True):
-                                        with st.spinner("Salvando no banco de dados..."):
-                                            link_ev = "N/A"
-                                            id_av_final = material_ref['TIPO_MATERIAL']
-                                            
-                                            if evidencia_manual:
-                                                link_ev = db.subir_e_converter_para_google_docs(evidencia_manual.getvalue(), al_sel.replace(" ","_")+"_MANUAL", trimestre=tr_sel, categoria=t_sel, semana=id_av_final, modo="SCANNER")
-                                            
-                                            db.salvar_no_banco("DB_GABARITOS_ALUNOS",[
-                                                datetime.now().strftime("%d/%m/%Y"), 
-                                                id_aluno_atual, al_sel, t_sel, 
-                                                id_av_final, 
-                                                ";".join(respostas_finais), 
-                                                util.sosa_to_str(nota_calc), 
-                                                link_ev
-                                            ])
-                                            st.success(f"✅ {al_sel} processado!"); time.sleep(0.5); st.rerun()
+                                        db.salvar_no_banco("DB_RELATORIOS", [
+                                            datetime.now().strftime("%d/%m/%Y"), id_aluno_atual, al_sel, 
+                                            "AVALIACAO_QUALITATIVA", 
+                                            f"Avaliação: {id_av_final}\nNota: {nota_qual}\nParecer:\n{parecer_final}\nEvidência: {link_ev}"
+                                        ])
+                                        st.success("Salvo!"); time.sleep(0.5); st.rerun()
 
     # ==============================================================================
     # ✍️ ABA 2: TRABALHOS & PROJETOS
