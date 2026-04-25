@@ -170,12 +170,11 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
     style.font.name = 'Arial'
     style.font.size = Pt(11)
 
-    # 🚨 MOSTRAR NOTA = TRUE PARA GERAR O CABEÇALHO COMPLETO
     configurar_cabecalho_mestre(doc, info, "ATIVIDADE ADAPTADA", mostrar_nota=True)
     doc.add_paragraph()
 
-    # 🚨 CONTAGEM DE QUESTÕES PARA O GABARITO
-    num_total_q = len(re.findall(r'(?i)QUEST[AÃ]O\s+(?:PEI\s+)?\d+', conteudo))
+    # 🚨 NOVA REGRA DE CONTAGEM: Reconhece "QUESTÃO 1", "Q1", "Q01", etc.
+    num_total_q = len(re.findall(r'(?i)(?:QUEST[AÃ]O\s*(?:PEI\s*)?|Q)\s*\d+', conteudo))
     if num_total_q == 0: num_total_q = 5 # Fallback de segurança
 
     top_table = doc.add_table(rows=1, cols=2)
@@ -251,8 +250,8 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
             run = p.add_run(txt_limpo)
             run.bold = True
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        elif "QUESTÃO" in l_s.upper():
-            match = re.match(r"^(QUEST[AÃ]O\s+(?:PEI\s+)?\d+)([\.\s:]+)(.*)", l_s, re.IGNORECASE)
+        elif re.match(r"^(?:QUEST[AÃ]O\s+(?:PEI\s+)?|Q)\d+", l_s, re.IGNORECASE):
+            match = re.match(r"^((?:QUEST[AÃ]O\s+(?:PEI\s+)?|Q)\d+)([\.\s:]+)(.*)", l_s, re.IGNORECASE)
             if match:
                 run_r = p.add_run(f"{match.group(1).upper()}. ")
                 run_r.bold = True
