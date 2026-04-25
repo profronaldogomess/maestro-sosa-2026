@@ -170,7 +170,65 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
     style.font.name = 'Arial'
     style.font.size = Pt(11)
 
-    configurar_cabecalho_mestre(doc, info, "ATIVIDADE ADAPTADA", mostrar_nota=False)
+    # 🚨 MOSTRAR NOTA = TRUE PARA GERAR O CABEÇALHO COMPLETO
+    configurar_cabecalho_mestre(doc, info, "ATIVIDADE ADAPTADA", mostrar_nota=True)
+    doc.add_paragraph()
+
+    # 🚨 CONTAGEM DE QUESTÕES PARA O GABARITO
+    num_total_q = len(re.findall(r'(?i)QUEST[AÃ]O\s+(?:PEI\s+)?\d+', conteudo))
+    if num_total_q == 0: num_total_q = 5 # Fallback de segurança
+
+    top_table = doc.add_table(rows=1, cols=2)
+    top_table.columns[0].width = Inches(3.5)
+    top_table.columns[1].width = Inches(4.0)
+    
+    c_orient = top_table.cell(0, 0)
+    p_tit = c_orient.paragraphs[0]
+    p_tit.add_run("ORIENTAÇÕES:").font.bold = True
+    
+    val_total = info.get('valor', '10,0')
+    
+    orient_list = [
+        "Leia atentamente cada enunciado.",
+        "Marque apenas uma alternativa por questão.",
+        f"Valor Total: {val_total}"
+    ]
+    for txt in orient_list:
+        p = c_orient.add_paragraph()
+        p.add_run(f"• {txt}").font.size = Pt(9)
+        p.paragraph_format.space_after = Pt(0)
+
+    # 🚨 GERAÇÃO DA TABELA DE GABARITO (A, B, C)
+    c_gab = top_table.cell(0, 1)
+    if num_total_q <= 10:
+        gab_grid = c_gab.add_table(rows=num_total_q + 1, cols=4)
+        gab_grid.style = 'Table Grid'
+        for i, lab in enumerate(["Q", "A", "B", "C"]):
+            gab_grid.cell(0, i).paragraphs[0].add_run(lab).font.bold = True
+        for r in range(1, num_total_q + 1):
+            gab_grid.cell(r, 0).paragraphs[0].add_run(f"{r:02d}").font.size = Pt(9)
+            for col in range(1, 4): 
+                gab_grid.cell(r, col).paragraphs[0].add_run("○").font.size = Pt(14)
+    else:
+        half = (num_total_q + 1) // 2
+        gab_grid = c_gab.add_table(rows=half + 1, cols=8)
+        gab_grid.style = 'Table Grid'
+        headers = ["Q", "A", "B", "C", "Q", "A", "B", "C"]
+        for i, lab in enumerate(headers):
+            gab_grid.cell(0, i).paragraphs[0].add_run(lab).font.bold = True
+        
+        for r in range(1, num_total_q + 1):
+            if r <= half:
+                row_idx = r
+                col_offset = 0
+            else:
+                row_idx = r - half
+                col_offset = 4
+                
+            gab_grid.cell(row_idx, col_offset).paragraphs[0].add_run(f"{r:02d}").font.size = Pt(9)
+            for col in range(1, 4):
+                gab_grid.cell(row_idx, col_offset + col).paragraphs[0].add_run("○").font.size = Pt(14)
+
     doc.add_paragraph()
 
     new_section = doc.add_section(WD_SECTION.CONTINUOUS)
@@ -212,7 +270,6 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
             run.font.size = Pt(8.5)
             run.font.color.rgb = RGBColor(0, 102, 204)
             p.alignment = WD_ALIGN_PARAGRAPH.LEFT
-        # 🚨 NOVA REGRA: DESTAQUE PARA O GABARITO NO FINAL DO DOCX
         elif "GABARITO" in l_s.upper():
             p.paragraph_format.space_before = Pt(15)
             run = p.add_run(l_s.replace('**', ''))
@@ -224,8 +281,6 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
     doc.save(file_stream)
     file_stream.seek(0)
     return file_stream
-
-# ... (Mantenha as outras funções intactas) ...
 
 # ==============================================================================
 # 11. EXPORTADOR PEI NÍVEL 3 (QUALITATIVO / SENSORIAL) - BLINDADO
