@@ -1172,17 +1172,30 @@ if menu == "📅 Planejamento (Ponto ID)":
 
 
 # ==============================================================================
-# MÓDULO: LABORATÓRIO DE PRODUÇÃO (CRIADOR DE AULAS) - CLEAN & UX
+# MÓDULO: LABORATÓRIO DE PRODUÇÃO (CRIADOR DE AULAS) - A FORJA SEMIÓTICA V170
 # ==============================================================================
 elif menu == "🧪 Criador de Aulas":
     st.title("🧪 Laboratório de Produção Semiótica")
     st.markdown("---")
-    st.caption("💡 **Guia de Comando:** Transforme seus planejamentos (Ponto ID) em materiais físicos de alta densidade (Folha do Aluno, Guia do Professor e Adaptação PEI) com um clique.")
+    st.caption("💡 **Guia de Comando:** Transforme seus planejamentos em materiais físicos de alta densidade. Aulas regulares usam a Forja em 5 Fases. Projetos e Listas usam a geração direta.")
     
+    # 🚨 INICIALIZAÇÃO DA MÁQUINA DE ESTADOS DA FORJA DE AULAS
+    if "forja_aula" not in st.session_state:
+        st.session_state.forja_aula = {
+            'fase': 1, 'info': {}, 'links_web': '', 'qtd_q': 5,
+            'teoria': '', 'reg_q': '', 'reg_gab': '', 'pei_q': '', 'pei_gab': ''
+        }
+    
+    fa = st.session_state.forja_aula
+
     def reset_laboratorio():
-        keys_to_del =["lab_temp", "lab_pei", "lab_gab_pei", "refino_lab_ativo", "sosa_id_atual", "lab_meta", "hub_origem", "chat_history_lab"]
+        keys_to_del = ["lab_temp", "lab_pei", "lab_gab_pei", "refino_lab_ativo", "sosa_id_atual", "lab_meta", "hub_origem", "chat_history_lab"]
         for k in keys_to_del:
             if k in st.session_state: del st.session_state[k]
+        st.session_state.forja_aula = {
+            'fase': 1, 'info': {}, 'links_web': '', 'qtd_q': 5,
+            'teoria': '', 'reg_q': '', 'reg_gab': '', 'pei_q': '', 'pei_gab': ''
+        }
         st.cache_data.clear() 
         st.session_state.v_lab = int(time.time())
         st.rerun()
@@ -1191,18 +1204,23 @@ elif menu == "🧪 Criador de Aulas":
         st.session_state.v_lab = int(time.time())
     v = st.session_state.v_lab
 
-    meta = st.session_state.get("lab_meta", {})
-    is_hub = meta.get("tipo") == "PRODUÇÃO_HUB"
-    
-    # --- ÁREA DE EXIBIÇÃO E REFINO ---
+    # 🚨 FILTRO DE ILUSÃO DE ÓTICA (RENDERIZAÇÃO LATEX E GEOGEBRA)
+    def preparar_para_leitura(texto):
+        if not texto: return ""
+        texto = re.sub(r'\$\$(.*?)\$\$', r'$\1$', texto, flags=re.DOTALL)
+        texto = re.sub(r'\[GEOGEBRA\](.*?)\[/GEOGEBRA\]', r'📐 *(Comando GeoGebra: \1)*', texto, flags=re.IGNORECASE | re.DOTALL)
+        texto = re.sub(r'\[\s*PROMPT IMAGEM:(.*?)\s*\]', r'🖼️ *(Imagem: \1)*', texto, flags=re.IGNORECASE | re.DOTALL)
+        return texto
+
+    # ==============================================================================
+    # 🖥️ EDITOR CLÁSSICO (PARA PROJETOS, LISTAS E RECOMPOSIÇÃO)
+    # ==============================================================================
     if "lab_temp" in st.session_state:
         txt_base = st.session_state.lab_temp
         s_id = st.session_state.get("sosa_id_atual", "SEM-ID")
+        meta = st.session_state.get("lab_meta", {})
         st.success(f"💎 Material em Edição: **{s_id}**")
 
-        # ==============================================================================
-        # 🤖 MAESTRO COPILOT (CHATBOT DE REFINO)
-        # ==============================================================================
         with st.container(border=True):
             st.subheader("🤖 Maestro Copilot (Coautoria em Tempo Real)")
             st.caption("Converse com a IA para ajustar o material. O editor abaixo será atualizado automaticamente.")
@@ -1250,62 +1268,38 @@ elif menu == "🧪 Criador de Aulas":
         
         st.markdown("---")
         
-        # ==============================================================================
-        # 👁️ MODO LEITURA (RENDERIZAÇÃO LATEX INLINE)
-        # ==============================================================================
         c_tog1, c_tog2 = st.columns([1, 2])
-        modo_leitura = c_tog1.toggle("👁️ Ativar Modo Leitura (Renderizar Matemática)", value=False, help="Ative para ver as equações LaTeX formatadas. Desative para editar o texto.")
+        modo_leitura = c_tog1.toggle("👁️ Ativar Modo Leitura (Renderizar Matemática)", value=False)
         
-        val_prof = ai.extrair_tag(txt_base, "PROFESSOR")
-        val_alu = ai.extrair_tag(txt_base, "ALUNO")
-        val_gab = ai.extrair_tag(txt_base, "GABARITO")
-        val_pei = ai.extrair_tag(txt_base, "PEI")
+        val_prof = ai.extrair_tag(txt_base, "PROFESSOR") or ai.extrair_tag(txt_base, "JUSTIFICATIVA_PHC")
+        val_alu = ai.extrair_tag(txt_base, "ALUNO") or ai.extrair_tag(txt_base, "PASSO_A_PASSO")
+        val_gab = ai.extrair_tag(txt_base, "GABARITO") or ai.extrair_tag(txt_base, "RUBRICA_DE_MERITO")
+        val_pei = ai.extrair_tag(txt_base, "PEI") or ai.extrair_tag(txt_base, "ESTRATEGIA_DUA_PEI")
         val_img = ai.extrair_tag(txt_base, "IMAGENS")
-
-        # 🚨 FILTRO DE ILUSÃO DE ÓTICA: Transforma $$ em $ apenas para o Streamlit desenhar inline
-        def preparar_para_leitura(texto):
-            if not texto: return ""
-            # Usa re.DOTALL para garantir que equações com quebra de linha sejam renderizadas na tela
-            return re.sub(r'\$\$(.*?)\$\$', r'$\1$', texto, flags=re.DOTALL)
 
         t_prof, t_alu, t_gab, t_pei_tab, t_img_tab, t_sync = st.tabs(["👨‍🏫 Professor", "📝 Aluno", "✅ Gabarito", "♿ PEI", "🎨 Imagens", "☁️ SINCRONIA"])
         
         with t_prof: 
-            if modo_leitura:
-                st.markdown(preparar_para_leitura(val_prof))
-                ed_prof = val_prof # Mantém o original com $$ para salvar
-            else:
-                ed_prof = st.text_area("Lousa/Mediação:", val_prof, height=450, key=f"ed_prof_reg_{v}")
+            if modo_leitura: st.markdown(preparar_para_leitura(val_prof))
+            else: ed_prof = st.text_area("Lousa/Mediação:", val_prof, height=450, key=f"ed_prof_reg_{v}")
         
         with t_alu: 
-            if modo_leitura:
-                st.markdown(preparar_para_leitura(val_alu))
-                ed_alu = val_alu
-            else:
-                ed_alu = st.text_area("Folha/Roteiro:", val_alu, height=450, key=f"ed_alu_reg_{v}")
+            if modo_leitura: st.markdown(preparar_para_leitura(val_alu))
+            else: ed_alu = st.text_area("Folha/Roteiro:", val_alu, height=450, key=f"ed_alu_reg_{v}")
         
         with t_gab: 
-            if modo_leitura:
-                st.markdown(preparar_para_leitura(val_gab))
-                ed_gab = val_gab
-            else:
-                ed_gab = st.text_area("Gabarito:", val_gab, height=200, key=f"ed_res_reg_{v}")
+            if modo_leitura: st.markdown(preparar_para_leitura(val_gab))
+            else: ed_gab = st.text_area("Gabarito:", val_gab, height=200, key=f"ed_res_reg_{v}")
         
         with t_pei_tab: 
-            if modo_leitura:
-                st.markdown(preparar_para_leitura(val_pei))
-                ed_pei = val_pei
-            else:
-                ed_pei = st.text_area("PEI (Obrigatório):", val_pei, height=400, key=f"ed_pei_reg_{v}")
+            if modo_leitura: st.markdown(preparar_para_leitura(val_pei))
+            else: ed_pei = st.text_area("PEI (Obrigatório):", val_pei, height=400, key=f"ed_pei_reg_{v}")
         
         with t_img_tab: 
             ed_img = st.text_area("Prompts de Imagem:", val_img, height=200, key=f"ed_img_reg_{v}")
 
-        # --- ☁️ ABA DE SINCRONIA (TRIPLE-SYNC) ---
         with t_sync:
             st.subheader("🚀 Sincronia e Custódia Digital")
-            st.info("Este comando irá gerar os documentos oficiais (DOCX) e salvar os links permanentes no seu banco de dados.")
-            
             if st.button("💾 SALVAR MATERIAL E SINCRONIZAR NO DRIVE", use_container_width=True, type="primary", key=f"btn_triple_{v}"):
                 with st.status("Sincronizando Ativos de Elite...") as status:
                     db.excluir_registro_com_drive("DB_AULAS_PRONTAS", s_id)
@@ -1330,12 +1324,7 @@ elif menu == "🧪 Criador de Aulas":
                     conteudo_final = f"[PROFESSOR]\n{ed_prof}\n\n[ALUNO]\n{ed_alu}\n\n[GABARITO]\n{ed_gab}\n\n[PEI]\n{ed_pei}\n\n[IMAGENS]\n{ed_img}\n\n{links_f}"
                     
                     db.salvar_no_banco("DB_AULAS_PRONTAS",[
-                        datetime.now().strftime("%d/%m/%Y"), 
-                        sem_ref, 
-                        s_id, 
-                        conteudo_final, 
-                        ano_str, 
-                        link_alu
+                        datetime.now().strftime("%d/%m/%Y"), sem_ref, s_id, conteudo_final, ano_str, link_alu
                     ])
                     
                     status.update(label="✅ Sincronizado com Sucesso!", state="complete")
@@ -1344,12 +1333,193 @@ elif menu == "🧪 Criador de Aulas":
                     time.sleep(1)
                     reset_laboratorio()
 
-    # --- SEÇÃO DE ENTRADA (CONFIGURAÇÃO COM INTELIGÊNCIA DE TRILHAS) ---
+    # ==============================================================================
+    # 👨‍🏫 FASE 2: O TRATADO DIDÁTICO (GUIA DO PROFESSOR) - FORJA DE AULAS
+    # ==============================================================================
+    elif fa['fase'] == 2:
+        if st.button("🔄 Cancelar e Voltar ao Início"): reset_laboratorio()
+        st.progress(2 / 5.0, text="Fase 2 de 5")
+        st.markdown("---")
+        
+        st.markdown("### 👨‍🏫 Fase 2: O Tratado Didático (Teoria)")
+        st.caption("A IA gerará a explicação formal, o gancho glocalizado e os comandos do GeoGebra. Revise e aprove antes de gerar os exercícios.")
+        
+        if not fa['teoria']:
+            with st.spinner("Forjando o Tratado Didático..."):
+                prompt_teoria = (
+                    f"SÉRIE ALVO: {fa['info']['ano']}º Ano.\n"
+                    f"AULA: {fa['info']['aula_alvo']}.\n"
+                    f"HABILIDADE: {fa['info']['habilidade']}\n"
+                    f"OBJETIVOS: {fa['info']['objetivos']}\n"
+                    f"ROTEIRO DO PROFESSOR: {fa['info']['roteiro']}\n"
+                )
+                if fa['links_web'].strip():
+                    prompt_teoria += f"\n🚨 USE ESTES LINKS COMO BASE TEÓRICA PRINCIPAL:\n{fa['links_web']}\n"
+                
+                res_teoria = ai.gerar_ia("FORJA_AULA_TEORIA", prompt_teoria, usar_busca=True)
+                fa['teoria'] = ai.extrair_tag(res_teoria, "PROFESSOR") or res_teoria
+                st.rerun()
+        else:
+            modo_leitura = st.toggle("👁️ Ativar Modo Leitura (Renderizar Matemática e GeoGebra)", value=True)
+            
+            if modo_leitura:
+                st.info(preparar_para_leitura(fa['teoria']))
+            else:
+                fa['teoria'] = st.text_area("Edição do Tratado Didático:", value=fa['teoria'], height=400)
+                
+            c_btn1, c_btn2 = st.columns(2)
+            if c_btn1.button("✅ APROVAR TEORIA E AVANÇAR", type="primary", use_container_width=True):
+                fa['fase'] = 3
+                st.rerun()
+            if c_btn2.button("🔄 Refazer Teoria", use_container_width=True):
+                fa['teoria'] = ""
+                st.rerun()
+
+    # ==============================================================================
+    # 📝 FASE 3: A MISSÃO DO ALUNO (EXERCÍCIOS REGULARES)
+    # ==============================================================================
+    elif fa['fase'] == 3:
+        if st.button("🔄 Cancelar e Voltar ao Início"): reset_laboratorio()
+        st.progress(3 / 5.0, text="Fase 3 de 5")
+        st.markdown("---")
+        
+        st.markdown("### 📝 Fase 3: A Missão do Aluno (Exercícios Regulares)")
+        st.caption("A IA criará as questões discursivas baseadas estritamente na teoria que você acabou de aprovar.")
+        
+        if not fa['reg_q']:
+            with st.spinner(f"Forjando {fa['qtd_q']} questões discursivas..."):
+                prompt_exercicios = (
+                    f"SÉRIE ALVO: {fa['info']['ano']}º Ano.\n"
+                    f"QUANTIDADE DE QUESTÕES: {fa['qtd_q']}.\n"
+                    f"Crie os exercícios baseando-se EXCLUSIVAMENTE na teoria abaixo:\n\n"
+                    f"{fa['teoria']}"
+                )
+                res_exercicios = ai.gerar_ia("FORJA_AULA_EXERCICIOS", prompt_exercicios)
+                fa['reg_q'] = ai.extrair_tag(res_exercicios, "ALUNO")
+                fa['reg_gab'] = ai.extrair_tag(res_exercicios, "GABARITO")
+                st.rerun()
+        else:
+            modo_leitura = st.toggle("👁️ Ativar Modo Leitura", value=True)
+            
+            t_alu, t_gab = st.tabs(["📝 Folha do Aluno", "✅ Gabarito"])
+            with t_alu:
+                if modo_leitura: st.info(preparar_para_leitura(fa['reg_q']))
+                else: fa['reg_q'] = st.text_area("Edição do Aluno:", value=fa['reg_q'], height=400)
+            with t_gab:
+                if modo_leitura: st.success(preparar_para_leitura(fa['reg_gab']))
+                else: fa['reg_gab'] = st.text_area("Edição do Gabarito:", value=fa['reg_gab'], height=200)
+                
+            c_btn1, c_btn2 = st.columns(2)
+            if c_btn1.button("✅ APROVAR EXERCÍCIOS E AVANÇAR", type="primary", use_container_width=True):
+                fa['fase'] = 4
+                st.rerun()
+            if c_btn2.button("🔄 Refazer Exercícios", use_container_width=True):
+                fa['reg_q'] = ""
+                st.rerun()
+
+    # ==============================================================================
+    # ♿ FASE 4: O ESCUDO INCLUSIVO (ADAPTAÇÃO PEI)
+    # ==============================================================================
+    elif fa['fase'] == 4:
+        if st.button("🔄 Cancelar e Voltar ao Início"): reset_laboratorio()
+        st.progress(4 / 5.0, text="Fase 4 de 5")
+        st.markdown("---")
+        
+        st.markdown("### ♿ Fase 4: O Escudo Inclusivo (Adaptação PEI)")
+        st.caption("A IA converterá as questões regulares em formato de múltipla escolha com apoios visuais.")
+        
+        if not fa['pei_q']:
+            with st.spinner("Adaptando questões para o formato PEI..."):
+                prompt_pei = (
+                    f"QUANTIDADE DE QUESTÕES: {fa['qtd_q']}.\n"
+                    f"Adapte as seguintes questões regulares para o formato PEI (A, B, C):\n\n"
+                    f"{fa['reg_q']}"
+                )
+                res_pei = ai.gerar_ia("FORJA_AULA_PEI", prompt_pei)
+                fa['pei_q'] = ai.extrair_tag(res_pei, "PEI")
+                fa['pei_gab'] = ai.extrair_tag(res_pei, "GABARITO_PEI")
+                st.rerun()
+        else:
+            modo_leitura = st.toggle("👁️ Ativar Modo Leitura", value=True)
+            
+            t_pei, t_gab_pei = st.tabs(["♿ Folha PEI", "✅ Gabarito PEI"])
+            with t_pei:
+                if modo_leitura: st.warning(preparar_para_leitura(fa['pei_q']))
+                else: fa['pei_q'] = st.text_area("Edição PEI:", value=fa['pei_q'], height=400)
+            with t_gab_pei:
+                if modo_leitura: st.success(preparar_para_leitura(fa['pei_gab']))
+                else: fa['pei_gab'] = st.text_area("Edição Gabarito PEI:", value=fa['pei_gab'], height=200)
+                
+            c_btn1, c_btn2 = st.columns(2)
+            if c_btn1.button("✅ APROVAR PEI E COMPILAR AULA", type="primary", use_container_width=True):
+                fa['fase'] = 5
+                st.rerun()
+            if c_btn2.button("🔄 Refazer PEI", use_container_width=True):
+                fa['pei_q'] = ""
+                st.rerun()
+
+    # ==============================================================================
+    # 💾 FASE 5: COMPILAÇÃO E SINCRONIA
+    # ==============================================================================
+    elif fa['fase'] == 5:
+        if st.button("🔄 Cancelar e Voltar ao Início"): reset_laboratorio()
+        st.progress(5 / 5.0, text="Fase 5 de 5")
+        st.markdown("---")
+        
+        st.markdown("### 💾 Fase 5: Compilação e Sincronia")
+        
+        nome_sugerido = util.gerar_nome_material_elite(fa['info']['ano'], fa['info']['aula_alvo'], fa['info']['semana_ref'])
+        nome_arq = st.text_input("ID Técnico do Material (Nome no Banco):", value=nome_sugerido)
+        
+        if st.button("🚀 SALVAR MATERIAL E SINCRONIZAR NO DRIVE", type="primary", use_container_width=True):
+            with st.status("Sincronizando Ativos de Elite...") as status:
+                import exporter
+                
+                info_doc = {"ano": f"{fa['info']['ano']}º", "trimestre": "I Trimestre", "semana": fa['info']['semana_ref']}
+
+                status.write("📝 Gerando Material do Aluno/Roteiro...")
+                doc_alu = exporter.gerar_docx_aluno_v24(nome_arq, fa['reg_q'], info_doc)
+                link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{nome_arq}_ALUNO", modo="AULA")
+                
+                status.write("♿ Gerando Atividade Adaptada PEI...")
+                doc_pei = exporter.gerar_docx_pei_v25(f"{nome_arq}_PEI", fa['pei_q'], info_doc)
+                link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_arq}_PEI", modo="AULA")
+                
+                status.write("👨‍🏫 Gerando Guia de Mediação do Professor...")
+                guia_prof = f"{fa['teoria']}\n\n[GABARITO]\n{fa['reg_gab']}\n\n[GABARITO_PEI]\n{fa['pei_gab']}"
+                doc_prof = exporter.gerar_docx_professor_v25(nome_arq, guia_prof, info_doc)
+                link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_arq}_PROF", modo="AULA")
+                
+                links_f = f"--- LINKS ---\nRegular({link_alu})\nPEI({link_pei})\nProf({link_prof})"
+                conteudo_final = f"[PROFESSOR]\n{fa['teoria']}\n\n[ALUNO]\n{fa['reg_q']}\n\n[GABARITO]\n{fa['reg_gab']}\n\n[PEI]\n{fa['pei_q']}\n\n[GABARITO_PEI]\n{fa['pei_gab']}\n\n{links_f}"
+                
+                sucesso = db.salvar_no_banco("DB_AULAS_PRONTAS",[
+                    datetime.now().strftime("%d/%m/%Y"), 
+                    fa['info']['semana_ref'], 
+                    nome_arq, 
+                    conteudo_final, 
+                    f"{fa['info']['ano']}º", 
+                    link_alu
+                ])
+                
+                if sucesso:
+                    status.update(label="✅ Sincronizado com Sucesso!", state="complete")
+                    st.balloons()
+                    import time
+                    time.sleep(1.5)
+                    reset_laboratorio()
+                else:
+                    status.update(label="❌ Erro ao salvar no banco.", state="error")
+
+    # ==============================================================================
+    # 📍 FASE 1: MENU PRINCIPAL (PRODUÇÃO, PROJETOS, LISTAS E ACERVO)
+    # ==============================================================================
     else:
         tab_producao, tab_trabalhos, tab_complementar, tab_acervo_lab = st.tabs([
             "🚀 1. Produção de Aulas", "📋 2. Projetos e Trabalhos", "📚 3. Listas e Recomposição", "📂 4. Acervo de Materiais"
         ])
 
+        # --- ABA 1: PRODUÇÃO DE AULAS (FORJA SEMIÓTICA) ---
         with tab_producao:
             st.markdown("### ⚙️ Passo 1: Herança Didática (Ponto ID)")
             
@@ -1363,7 +1533,6 @@ elif menu == "🧪 Criador de Aulas":
                 if planos_ano.empty: 
                     st.error("❌ Nenhum planejamento encontrado para esta série. Vá ao Ponto ID primeiro.")
                 else:
-                    # Lógica de filtragem de semanas concluídas
                     semanas_pendentes = []
                     for sem in planos_ano["SEMANA"].unique().tolist():
                         p_row = planos_ano[planos_ano["SEMANA"] == sem].iloc[0]
@@ -1408,7 +1577,6 @@ elif menu == "🧪 Criador de Aulas":
                         obj_geral = ai.extrair_tag(plano_txt, "OBJETO_CONHECIMENTO") or ai.extrair_tag(plano_txt, "CONTEUDO_GERAL")
                         obj_upper = obj_geral.upper()
                         
-                        # 🚨 INTELIGÊNCIA DE DETECÇÃO DE DNA DA AULA
                         is_exame = "EXAME" in obj_upper or "SONDA" in obj_upper or "AVALIAÇÃO" in obj_upper or "TESTE" in obj_upper
                         is_revisao = "REVISÃO" in obj_upper or "RECOMPOSIÇÃO" in obj_upper or "CORREÇÃO" in obj_upper
                         is_projeto = "PROJETO" in obj_upper or "TRABALHO" in obj_upper
@@ -1476,7 +1644,7 @@ elif menu == "🧪 Criador de Aulas":
                                         st.info("💡 **Modo Logística:** Sem geração de material físico pela IA.")
                                         nome_evento = ""
                                     else:
-                                        qtd_q_prod = st.slider("Nº de Questões (PEI/Regular):", 1, 20, 10, key=f"prod_q_{v}")
+                                        qtd_q_prod = st.slider("Nº de Questões (PEI/Regular):", 1, 20, 5, key=f"prod_q_{v}")
 
                                 paginas_aula = base_herdada
                                 if ";" in base_herdada:
@@ -1486,7 +1654,7 @@ elif menu == "🧪 Criador de Aulas":
                                     else: paginas_aula = partes_pag[-1].strip()
 
                                 with st.expander(f"👁️ Roteiro Herdado para {aula_alvo_prod}", expanded=False):
-                                    st.info(f"📍 **Páginas Alvo:** {paginas_aula}\n\n{roteiro_especifico}")
+                                    st.info(f"📍 **Base Didática:** {paginas_aula}\n\n{roteiro_especifico}")
 
                                 prova_sel = ""
                                 if is_logistica:
@@ -1504,7 +1672,6 @@ elif menu == "🧪 Criador de Aulas":
                                         st.warning("🔥 **Revisão/Correção Detectada:** Selecione o material de revisão ou o Dossiê Raio-X para oficializar a aula.")
                                         opcoes_rev = df_aulas[(df_aulas['ANO'].str.contains(str(ano_lab))) & (df_aulas['SEMANA_REF'] == "REVISÃO")]['TIPO_MATERIAL'].tolist()
                                         
-                                        # Puxa os Dossiês de Raio-X também
                                         df_dossies_ano = df_relatorios[(df_relatorios['TIPO'] == 'DOSSIE_RAIO_X') & (df_relatorios['NOME_ALUNO'].str.contains(str(ano_lab)))]
                                         for _, row_d in df_dossies_ano.iterrows():
                                             cont_d = str(row_d['CONTEUDO'])
@@ -1530,9 +1697,6 @@ elif menu == "🧪 Criador de Aulas":
                                         nome_evento = st.text_input("Nome do Evento/Dinâmica:", placeholder="Ex: Palestra sobre a Dengue", key=f"nome_ev_{v}")
 
                         if opcoes_disponiveis:
-                            # ==============================================================================
-                            # 🚨 ROTA 1: OFICIALIZAÇÃO DIRETA (EVENTOS, AVALIAÇÕES, REVISÕES) - SEM IA
-                            # ==============================================================================
                             if is_logistica:
                                 if st.button("💾 OFICIALIZAR NO ACERVO (SEM MATERIAL FÍSICO)", use_container_width=True, type="primary"):
                                     nome_final_evento = ""
@@ -1583,83 +1747,33 @@ elif menu == "🧪 Criador de Aulas":
                                         time.sleep(1.5)
                                         st.rerun()
                             
-                            # ==============================================================================
-                            # 🚨 ROTA 2: GERAÇÃO DE MATERIAL DIDÁTICO (COM IA)
-                            # ==============================================================================
                             else:
-                                uri_referencia_aula = None
-                                if "Livro" in metodo_entrega:
-                                    nome_livro_limpo = base_herdada.split('|')[0].replace("Livro:", "").strip()
-                                    match_biblioteca = df_materiais[df_materiais['NOME_ARQUIVO'].str.contains(nome_livro_limpo[:10], case=False, na=False)]
-                                    if not match_biblioteca.empty:
-                                        uri_referencia_aula = match_biblioteca.iloc[0]['URI_ARQUIVO']
-                                        st.success(f"📚 **Fonte Vinculada:** {match_biblioteca.iloc[0]['NOME_ARQUIVO']} (Páginas: {paginas_aula})")
-
-                                alunos_foco = df_alunos[(df_alunos['TURMA'].str.contains(str(ano_lab))) & (~df_alunos['NECESSIDADES'].isin(["NENHUMA", "PENDENTE", "", "NAN", "TÍPICO", "TIPICO"]))]
-                                texto_clinico = ", ".join(alunos_foco['NECESSIDADES'].unique().tolist()) if not alunos_foco.empty else "PADRÃO"
-                                if not alunos_foco.empty: st.warning(f"♿ **Sensor PEI Ativo:** {texto_clinico}")
+                                # 🚨 INJEÇÃO DE LINKS DA WEB NO CRIADOR DE AULAS
+                                st.markdown("---")
+                                st.markdown("#### 🌐 Enriquecimento Web (Opcional)")
+                                st.caption("Cole links de artigos ou sites (ex: Brasil Escola) para a IA usar como base teórica desta aula.")
                                 
-                                instr_extra_prod = st.text_area("📝 Contexto Extra / Ajustes Específicos:", placeholder="Ex: Focar mais em frações equivalentes...", key=f"prod_extra_{v}")
+                                links_pre_preenchidos = ""
+                                if "http" in base_herdada:
+                                    links_pre_preenchidos = "\n".join(re.findall(r'(https?://[^\s]+)', base_herdada))
+                                
+                                links_web_aula = st.text_area("Links da Web (um por linha):", value=links_pre_preenchidos, height=100, key=f"links_web_aula_{v}")
 
                                 st.markdown("<br>", unsafe_allow_html=True)
-                                if st.button("🧠 INICIAR MOTOR DE IA: GERAR AULA", use_container_width=True, type="primary"):
-                                    
-                                    if "chat_history_lab" in st.session_state:
-                                        del st.session_state["chat_history_lab"]
-                                        
-                                    with st.spinner("Sosa estudando o roteiro e arquitetando material..."):
-                                        
-                                        nome_elite = util.gerar_nome_material_elite(ano_lab, aula_alvo_prod, sem_lab)
-                                        st.session_state.sosa_id_atual = nome_elite
-                                        st.session_state.lab_meta = {"ano": ano_lab, "semana_ref": sem_lab}
-                                        
-                                        if "Geração Integral" in metodo_entrega:
-                                            regra_livro = "3. MODO MANUAL: Crie o conteúdo do zero com base na BNCC. É TERMINANTEMENTE PROIBIDO citar páginas de livros didáticos."
-                                        else:
-                                            regra_livro = "3. MODO LIVRO: O roteiro deve dizer exatamente: 'Inicie na página X explorando a imagem Y...' baseando-se no PDF."
-
-                                        # 🚨 OTIMIZAÇÃO DE TOKENS: Envia apenas o núcleo da aula, não o plano inteiro
-                                        hab_herdada = ai.extrair_tag(plano_txt, "HABILIDADE_BNCC")
-                                        obj_herdado = ai.extrair_tag(plano_txt, "OBJETIVOS_ENSINO")
-
-                                        missao_especifica = (
-                                            f"🚨 MISSÃO DE ALTA DENSIDADE E RIGOR QUANTITATIVO:\n"
-                                            f"1.[PROFESSOR]: Escreva um TRATADO DIDÁTICO denso. Explique o conceito de {obj_geral} com profundidade técnica (estilo Brasil Escola) antes de dar o roteiro de aula.\n"
-                                            f"2. CONEXÃO GLOCAL: Use o Google Search para trazer dados reais. Comece com um exemplo de Itabuna/BA, expanda para o Brasil e depois para o Mundo/Tecnologia.\n"
-                                            f"{regra_livro}\n"
-                                            f"4.[ALUNO] (REGULAR): É OBRIGATÓRIO gerar EXATAMENTE {qtd_q_prod} questões inéditas e desafiadoras. Formato: **QUESTÃO X.** enunciado.\n"
-                                            f"5.[PEI] (INCLUSÃO): É OBRIGATÓRIO gerar EXATAMENTE {qtd_q_prod} questões adaptadas, cada uma com[PARA LEMBRAR],[PASSO A PASSO] e[ PROMPT IMAGEM ] ou [GEOGEBRA].\n"
-                                            f"6.[GABARITO]: Forneça as respostas detalhadas para as {qtd_q_prod} questões regulares e as {qtd_q_prod} questões PEI.\n"
-                                            f"🚨 FORMATO OBRIGATÓRIO: Você DEVE separar o texto usando EXATAMENTE as tags entre colchetes: [PROFESSOR],[ALUNO], [PEI],[GABARITO],[IMAGENS]."
-                                        )
-
-                                        prompt_manual = (
-                                            f"PERSONA: MAESTRO_SOSA_V28_ELITE. ID: {nome_elite}.\n"
-                                            f"MÉTODO: {metodo_entrega}. REFERÊNCIA: {base_herdada}\n"
-                                            f"SÉRIE: {ano_lab}º Ano. ALVO: {aula_alvo_prod}.\n\n"
-                                            f"{missao_especifica}\n\n"
-                                            f"--- DIRETRIZ ESPECÍFICA DESTA AULA ---\n"
-                                            f"Habilidade: {hab_herdada}\nObjetivos: {obj_herdado}\nRoteiro: {roteiro_especifico}\n"
-                                            f"--- MEMÓRIA DE REGÊNCIA (PONTE PEDAGÓGICA) ---\n{contexto_turmas_ia}\n"
-                                            f"--- SENSOR DE INCLUSÃO ---\nA turma possui alunos com: {texto_clinico}."
-                                        )
-                                        
-                                        resultado_ia = ai.gerar_ia(
-                                            "MAESTRO_SOSA_V28_ELITE", 
-                                            prompt_manual, 
-                                            url_drive=uri_referencia_aula, 
-                                            usar_busca=True
-                                        )
-                                        
-                                        import re
-                                        tags_para_limpar =["PROFESSOR", "ALUNO", "PEI", "GABARITO", "GABARITO_PEI", "IMAGENS"]
-                                        for t in tags_para_limpar:
-                                            resultado_ia = re.sub(rf"\*\*{t}\*\*", f"[{t}]", resultado_ia, flags=re.IGNORECASE)
-                                            resultado_ia = re.sub(rf"\*\*{t}:\*\*", f"[{t}]", resultado_ia, flags=re.IGNORECASE)
-                                            resultado_ia = re.sub(rf"^{t}$", f"[{t}]", resultado_ia, flags=re.IGNORECASE | re.MULTILINE)
-                                            
-                                        st.session_state.lab_temp = resultado_ia
-                                        st.rerun()
+                                if st.button("🧠 INICIAR FORJA SEMIÓTICA (FASE 2)", use_container_width=True, type="primary"):
+                                    fa['info'] = {
+                                        "ano": ano_lab, 
+                                        "semana_ref": sem_lab, 
+                                        "aula_alvo": aula_alvo_prod,
+                                        "roteiro": roteiro_especifico,
+                                        "habilidade": ai.extrair_tag(plano_txt, "HABILIDADE_BNCC"),
+                                        "objetivos": ai.extrair_tag(plano_txt, "OBJETIVOS_ENSINO"),
+                                        "base": base_herdada
+                                    }
+                                    fa['links_web'] = links_web_aula
+                                    fa['qtd_q'] = qtd_q_prod
+                                    fa['fase'] = 2
+                                    st.rerun()
 
         # --- ABA 2: ENGENHARIA DE TRABALHOS ---
         with tab_trabalhos:
@@ -1883,7 +1997,7 @@ elif menu == "🧪 Criador de Aulas":
                                         st.session_state.v_lab = int(time.time())
                                         st.rerun()
 
-# --- ABA 4: ACERVO DE MATERIAIS ---
+        # --- ABA 4: ACERVO DE MATERIAIS ---
         with tab_acervo_lab:
             st.subheader("📂 Gestão de Acervo de Materiais")
             st.caption("Histórico de todas as aulas, projetos e listas geradas.")
