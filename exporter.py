@@ -139,15 +139,21 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
                 adicionar_texto_formatado(p, match.group(3).strip())
             else: adicionar_texto_formatado(p, l_s)
         elif "[" in l_s and "PROMPT IMAGEM" in l_s.upper():
-            run = p.add_run(l_s)
-            run.font.size, run.font.italic = Pt(8), True
+            p.paragraph_format.space_before = Pt(6)
+            p.paragraph_format.space_after = Pt(6)
+            txt_img = l_s.replace("[", "").replace("]", "").strip()
+            run = p.add_run(f"🖼️ [ ESPAÇO PARA IMAGEM: {txt_img} ]")
+            run.font.size, run.font.italic = Pt(9), True
             run.font.color.rgb = RGBColor(120, 120, 120)
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
         elif "[GEOGEBRA]" in l_s.upper():
-            p.paragraph_format.space_before = Pt(3)
+            p.paragraph_format.space_before = Pt(6)
+            p.paragraph_format.space_after = Pt(6)
             txt_geo = l_s.replace("[GEOGEBRA]", "").replace("[", "").replace("]", "").strip()
-            run = p.add_run(f"📐 [ COMANDO GEOGEBRA: {txt_geo} ]")
+            run = p.add_run(f"📐 COMANDO GEOGEBRA: {txt_geo}")
             run.font.italic = True
-            run.font.size = Pt(8.5)
+            run.font.bold = True
+            run.font.size = Pt(9.5)
             run.font.color.rgb = RGBColor(0, 102, 204)
             p.alignment = WD_ALIGN_PARAGRAPH.LEFT
         else: adicionar_texto_formatado(p, l_s)
@@ -173,9 +179,8 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
     configurar_cabecalho_mestre(doc, info, "ATIVIDADE ADAPTADA", mostrar_nota=True)
     doc.add_paragraph()
 
-    # 🚨 NOVA REGRA DE CONTAGEM: Reconhece "QUESTÃO 1", "Q1", "Q01", etc.
     num_total_q = len(re.findall(r'(?i)(?:QUEST[AÃ]O\s*(?:PEI\s*)?|Q)\s*\d+', conteudo))
-    if num_total_q == 0: num_total_q = 5 # Fallback de segurança
+    if num_total_q == 0: num_total_q = 5 
 
     top_table = doc.add_table(rows=1, cols=2)
     top_table.columns[0].width = Inches(3.5)
@@ -197,7 +202,6 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
         p.add_run(f"• {txt}").font.size = Pt(9)
         p.paragraph_format.space_after = Pt(0)
 
-    # 🚨 GERAÇÃO DA TABELA DE GABARITO (A, B, C)
     c_gab = top_table.cell(0, 1)
     if num_total_q <= 10:
         gab_grid = c_gab.add_table(rows=num_total_q + 1, cols=4)
@@ -258,15 +262,21 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
                 adicionar_texto_formatado(p, match.group(3).strip())
             else: adicionar_texto_formatado(p, l_s)
         elif "[" in l_s and "PROMPT IMAGEM" in l_s.upper():
-            run = p.add_run(l_s)
+            p.paragraph_format.space_before = Pt(6)
+            p.paragraph_format.space_after = Pt(6)
+            txt_img = l_s.replace("[", "").replace("]", "").strip()
+            run = p.add_run(f"🖼️ [ ESPAÇO PARA IMAGEM: {txt_img} ]")
             run.font.size, run.font.italic = Pt(9), True
             run.font.color.rgb = RGBColor(100, 100, 100)
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
         elif "[GEOGEBRA]" in l_s.upper():
-            p.paragraph_format.space_before = Pt(3)
+            p.paragraph_format.space_before = Pt(6)
+            p.paragraph_format.space_after = Pt(6)
             txt_geo = l_s.replace("[GEOGEBRA]", "").replace("[", "").replace("]", "").strip()
-            run = p.add_run(f"📐 [ COMANDO GEOGEBRA: {txt_geo} ]")
+            run = p.add_run(f"📐 COMANDO GEOGEBRA: {txt_geo}")
             run.font.italic = True
-            run.font.size = Pt(8.5)
+            run.font.bold = True
+            run.font.size = Pt(9.5)
             run.font.color.rgb = RGBColor(0, 102, 204)
             p.alignment = WD_ALIGN_PARAGRAPH.LEFT
         elif "GABARITO" in l_s.upper():
@@ -371,7 +381,7 @@ def gerar_docx_professor_v25(titulo_doc, conteudo, info):
     header_table = doc.add_table(rows=2, cols=3)
     header_table.style = 'Table Grid'
     c_tit = header_table.cell(0, 0).merge(header_table.cell(0, 2))
-    run_tit = c_tit.paragraphs[0].add_run("GUIA DE CORREÇÃO INTEGRAL E GRADE DE PERÍCIA")
+    run_tit = c_tit.paragraphs[0].add_run("GUIA DE MEDIAÇÃO E GABARITOS")
     run_tit.font.bold, run_tit.font.size = True, Pt(12)
     c_tit.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
 
@@ -420,6 +430,18 @@ def gerar_docx_professor_v25(titulo_doc, conteudo, info):
             run = p.add_run(f"♿ {l_s}")
             run.font.bold = True
             run.font.color.rgb = RGBColor(112, 48, 160)
+            continue
+            
+        if "[GEOGEBRA]" in l_s.upper():
+            p.paragraph_format.space_before = Pt(6)
+            p.paragraph_format.space_after = Pt(6)
+            txt_geo = l_s.replace("[GEOGEBRA]", "").replace("[", "").replace("]", "").strip()
+            run = p.add_run(f"📐 COMANDO GEOGEBRA: {txt_geo}")
+            run.font.italic = True
+            run.font.bold = True
+            run.font.size = Pt(9.5)
+            run.font.color.rgb = RGBColor(0, 102, 204)
+            p.alignment = WD_ALIGN_PARAGRAPH.LEFT
             continue
 
         if any(x in l_s.upper() for x in ["JUSTIFICATIVA", "PERÍCIA", "LACUNA", "ANÁLISE", "DISTRATORES", "ACERTO INTEGRAL", "ACERTO PARCIAL"]):
