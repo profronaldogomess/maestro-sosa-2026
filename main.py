@@ -1172,7 +1172,7 @@ if menu == "📅 Planejamento (Ponto ID)":
 
 
 # ==============================================================================
-# MÓDULO: LABORATÓRIO DE PRODUÇÃO (CRIADOR DE AULAS) - A FORJA SEMIÓTICA V170
+# MÓDULO: LABORATÓRIO DE PRODUÇÃO (CRIADOR DE AULAS) - A FORJA SEMIÓTICA V180
 # ==============================================================================
 elif menu == "🧪 Criador de Aulas":
     st.title("🧪 Laboratório de Produção Semiótica")
@@ -1183,7 +1183,7 @@ elif menu == "🧪 Criador de Aulas":
     if "forja_aula" not in st.session_state:
         st.session_state.forja_aula = {
             'fase': 1, 'info': {}, 'links_web': '', 'qtd_q': 5,
-            'teoria': '', 'reg_q': '', 'reg_gab': '', 'pei_q': '', 'pei_gab': ''
+            'teoria': '', 'reg_q': '', 'reg_gab': '', 'pei_q': '', 'pei_gab': '', 'nome_base': ''
         }
     
     fa = st.session_state.forja_aula
@@ -1194,7 +1194,7 @@ elif menu == "🧪 Criador de Aulas":
             if k in st.session_state: del st.session_state[k]
         st.session_state.forja_aula = {
             'fase': 1, 'info': {}, 'links_web': '', 'qtd_q': 5,
-            'teoria': '', 'reg_q': '', 'reg_gab': '', 'pei_q': '', 'pei_gab': ''
+            'teoria': '', 'reg_q': '', 'reg_gab': '', 'pei_q': '', 'pei_gab': '', 'nome_base': ''
         }
         st.cache_data.clear() 
         st.session_state.v_lab = int(time.time())
@@ -1367,13 +1367,29 @@ elif menu == "🧪 Criador de Aulas":
             else:
                 fa['teoria'] = st.text_area("Edição do Tratado Didático:", value=fa['teoria'], height=400)
                 
+            # 🚨 REFINADOR CIRÚRGICO
+            instrucao_refino_t = st.text_input("Instrução de Refinamento (Opcional):", placeholder="Ex: Adicione um exemplo sobre a praça da cidade...", key="ref_t")
+            
             c_btn1, c_btn2 = st.columns(2)
             if c_btn1.button("✅ APROVAR TEORIA E AVANÇAR", type="primary", use_container_width=True):
                 fa['fase'] = 3
                 st.rerun()
             if c_btn2.button("🔄 Refazer Teoria", use_container_width=True):
-                fa['teoria'] = ""
-                st.rerun()
+                with st.spinner("Reforjando Teoria..."):
+                    prompt_teoria = (
+                        f"SÉRIE ALVO: {fa['info']['ano']}º Ano.\n"
+                        f"AULA: {fa['info']['aula_alvo']}.\n"
+                        f"HABILIDADE: {fa['info']['habilidade']}\n"
+                        f"OBJETIVOS: {fa['info']['objetivos']}\n"
+                        f"ROTEIRO DO PROFESSOR: {fa['info']['roteiro']}\n"
+                    )
+                    if instrucao_refino_t:
+                        prompt_teoria += f"\n🚨 INSTRUÇÃO DE REFINAMENTO DO PROFESSOR: {instrucao_refino_t}\n"
+                        prompt_teoria += f"TEORIA ANTERIOR (Para referência do que mudar):\n{fa['teoria']}\n"
+                    
+                    res_teoria = ai.gerar_ia("FORJA_AULA_TEORIA", prompt_teoria, usar_busca=True)
+                    fa['teoria'] = ai.extrair_tag(res_teoria, "PROFESSOR") or res_teoria
+                    st.rerun()
 
     # ==============================================================================
     # 📝 FASE 3: A MISSÃO DO ALUNO (EXERCÍCIOS REGULARES)
@@ -1409,13 +1425,29 @@ elif menu == "🧪 Criador de Aulas":
                 if modo_leitura: st.success(preparar_para_leitura(fa['reg_gab']))
                 else: fa['reg_gab'] = st.text_area("Edição do Gabarito:", value=fa['reg_gab'], height=200)
                 
+            # 🚨 REFINADOR CIRÚRGICO
+            instrucao_refino_e = st.text_input("Instrução de Refinamento (Opcional):", placeholder="Ex: Troque a questão 2 por uma sobre futebol...", key="ref_e")
+            
             c_btn1, c_btn2 = st.columns(2)
             if c_btn1.button("✅ APROVAR EXERCÍCIOS E AVANÇAR", type="primary", use_container_width=True):
                 fa['fase'] = 4
                 st.rerun()
             if c_btn2.button("🔄 Refazer Exercícios", use_container_width=True):
-                fa['reg_q'] = ""
-                st.rerun()
+                with st.spinner("Reforjando Exercícios..."):
+                    prompt_exercicios = (
+                        f"SÉRIE ALVO: {fa['info']['ano']}º Ano.\n"
+                        f"QUANTIDADE DE QUESTÕES: {fa['qtd_q']}.\n"
+                        f"Crie os exercícios baseando-se EXCLUSIVAMENTE na teoria abaixo:\n\n"
+                        f"{fa['teoria']}\n"
+                    )
+                    if instrucao_refino_e:
+                        prompt_exercicios += f"\n🚨 INSTRUÇÃO DE REFINAMENTO DO PROFESSOR: {instrucao_refino_e}\n"
+                        prompt_exercicios += f"EXERCÍCIOS ANTERIORES (Para referência do que mudar):\n{fa['reg_q']}\n"
+                    
+                    res_exercicios = ai.gerar_ia("FORJA_AULA_EXERCICIOS", prompt_exercicios)
+                    fa['reg_q'] = ai.extrair_tag(res_exercicios, "ALUNO")
+                    fa['reg_gab'] = ai.extrair_tag(res_exercicios, "GABARITO")
+                    st.rerun()
 
     # ==============================================================================
     # ♿ FASE 4: O ESCUDO INCLUSIVO (ADAPTAÇÃO PEI)
@@ -1450,13 +1482,28 @@ elif menu == "🧪 Criador de Aulas":
                 if modo_leitura: st.success(preparar_para_leitura(fa['pei_gab']))
                 else: fa['pei_gab'] = st.text_area("Edição Gabarito PEI:", value=fa['pei_gab'], height=200)
                 
+            # 🚨 REFINADOR CIRÚRGICO
+            instrucao_refino_p = st.text_input("Instrução de Refinamento (Opcional):", placeholder="Ex: Deixe a linguagem ainda mais simples...", key="ref_p")
+            
             c_btn1, c_btn2 = st.columns(2)
             if c_btn1.button("✅ APROVAR PEI E COMPILAR AULA", type="primary", use_container_width=True):
                 fa['fase'] = 5
                 st.rerun()
             if c_btn2.button("🔄 Refazer PEI", use_container_width=True):
-                fa['pei_q'] = ""
-                st.rerun()
+                with st.spinner("Reforjando PEI..."):
+                    prompt_pei = (
+                        f"QUANTIDADE DE QUESTÕES: {fa['qtd_q']}.\n"
+                        f"Adapte as seguintes questões regulares para o formato PEI (A, B, C):\n\n"
+                        f"{fa['reg_q']}\n"
+                    )
+                    if instrucao_refino_p:
+                        prompt_pei += f"\n🚨 INSTRUÇÃO DE REFINAMENTO DO PROFESSOR: {instrucao_refino_p}\n"
+                        prompt_pei += f"PEI ANTERIOR (Para referência do que mudar):\n{fa['pei_q']}\n"
+                    
+                    res_pei = ai.gerar_ia("FORJA_AULA_PEI", prompt_pei)
+                    fa['pei_q'] = ai.extrair_tag(res_pei, "PEI")
+                    fa['pei_gab'] = ai.extrair_tag(res_pei, "GABARITO_PEI")
+                    st.rerun()
 
     # ==============================================================================
     # 💾 FASE 5: COMPILAÇÃO E SINCRONIA
@@ -1510,6 +1557,56 @@ elif menu == "🧪 Criador de Aulas":
                     reset_laboratorio()
                 else:
                     status.update(label="❌ Erro ao salvar no banco.", state="error")
+
+    # ==============================================================================
+    # 🛠️ FASE 6: EDIÇÃO E RE-EXPORTAÇÃO (VEM DO ACERVO)
+    # ==============================================================================
+    elif fa['fase'] == 6:
+        if st.button("🔄 Cancelar e Voltar ao Acervo"): reset_laboratorio()
+        st.markdown("---")
+        
+        st.markdown("### 🛠️ Fase 6: Edição e Re-Exportação Rápida")
+        st.caption("Edite o texto bruto da aula e re-exporte os documentos. Ideal para corrigir pequenos erros ou atualizar a formatação.")
+        
+        novo_nome = st.text_input("ID Técnico do Material (Nome no Banco):", value=fa['nome_base'])
+        
+        t_prof, t_alu, t_gab, t_pei, t_gab_pei = st.tabs(["👨‍🏫 Teoria", "📝 Aluno", "✅ Gabarito", "♿ PEI", "✅ Gabarito PEI"])
+        with t_prof: novo_prof = st.text_area("Teoria do Professor:", value=fa['teoria'], height=300)
+        with t_alu: novo_alu = st.text_area("Exercícios do Aluno:", value=fa['reg_q'], height=300)
+        with t_gab: novo_gab = st.text_area("Gabarito Regular:", value=fa['reg_gab'], height=200)
+        with t_pei: novo_pei = st.text_area("Exercícios PEI:", value=fa['pei_q'], height=300)
+        with t_gab_pei: novo_gab_pei = st.text_area("Gabarito PEI:", value=fa['pei_gab'], height=200)
+            
+        if st.button("💾 RE-COMPILAR E ATUALIZAR ACERVO", type="primary", use_container_width=True):
+            with st.status("Re-forjando Documentos Oficiais...") as status:
+                import exporter
+                db.excluir_registro_com_drive("DB_AULAS_PRONTAS", fa['nome_base'])
+                
+                info_re = {'ano': f"{fa['info']['ano']}º", 'trimestre': "I Trimestre", 'semana': fa['info']['semana_ref']}
+                
+                status.write("📝 Gerando Material do Aluno/Roteiro...")
+                doc_alu = exporter.gerar_docx_aluno_v24(novo_nome, novo_alu, info_re)
+                link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{novo_nome}_ALUNO", modo="AULA")
+                
+                status.write("♿ Gerando Atividade Adaptada PEI...")
+                doc_pei = exporter.gerar_docx_pei_v25(f"{novo_nome}_PEI", novo_pei, info_re)
+                link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{novo_nome}_PEI", modo="AULA")
+                
+                status.write("👨‍🏫 Gerando Guia de Mediação do Professor...")
+                guia_prof = f"{novo_prof}\n\n[GABARITO]\n{novo_gab}\n\n[GABARITO_PEI]\n{novo_gab_pei}"
+                doc_prof = exporter.gerar_docx_professor_v25(novo_nome, guia_prof, info_re)
+                link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{novo_nome}_PROF", modo="AULA")
+                
+                links_f = f"--- LINKS ---\nRegular({link_alu})\nPEI({link_pei})\nProf({link_prof})"
+                texto_final_banco = f"[PROFESSOR]\n{novo_prof}\n\n[ALUNO]\n{novo_alu}\n\n[GABARITO]\n{novo_gab}\n\n[PEI]\n{novo_pei}\n\n[GABARITO_PEI]\n{novo_gab_pei}\n\n{links_f}"
+                
+                db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), fa['info']['semana_ref'], novo_nome, texto_final_banco, f"{fa['info']['ano']}º", link_alu])
+                
+                status.update(label="✅ Re-Exportação Concluída!", state="complete")
+                st.balloons()
+                import time
+                time.sleep(1.5)
+                reset_laboratorio()
 
     # ==============================================================================
     # 📍 FASE 1: MENU PRINCIPAL (PRODUÇÃO, PROJETOS, LISTAS E ACERVO)
