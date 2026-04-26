@@ -546,10 +546,39 @@ if menu == "📅 Planejamento (Ponto ID)":
             # --- 🎯 4. DIRETRIZES SOBERANAS (SEMANAS HÍBRIDAS) ---
             with st.container(border=True):
                 st.markdown("### 🎯 Passo 4: Diretrizes Soberanas (Semanas Híbridas)")
-                st.caption("Defina a natureza exata de cada aula. Você pode ter uma aula de conteúdo e outra de revisão na mesma semana.")
+                st.caption("Defina a natureza exata de cada aula. Você pode vincular materiais já criados no acervo (Provas, Revisões) diretamente ao planejamento.")
                 
+                # 🚨 FUNÇÃO PARA PUXAR MATERIAIS DO ACERVO DINAMICAMENTE
+                def obter_opcoes_acervo(tipo_aula, ano_str):
+                    df_ano = df_aulas[df_aulas['ANO'] == ano_str]
+                    if tipo_aula == "Aplicação de Exame":
+                        return df_ano[df_ano['SEMANA_REF'] == "AVALIAÇÃO"]['TIPO_MATERIAL'].tolist()
+                    elif tipo_aula == "Revisão / Correção":
+                        opcoes = df_ano[df_ano['SEMANA_REF'] == "REVISÃO"]['TIPO_MATERIAL'].tolist()
+                        # Puxa também os Dossiês de Raio-X
+                        df_dossies = df_relatorios[(df_relatorios['TIPO'] == 'DOSSIE_RAIO_X') & (df_relatorios['NOME_ALUNO'].str.contains(str(ano_p)))]
+                        for _, row_d in df_dossies.iterrows():
+                            m = re.search(r"Avaliação:\s*(.*)", str(row_d['CONTEUDO']))
+                            if m: opcoes.append(f"📊 DOSSIÊ RAIO-X: {m.group(1).strip()}")
+                        return opcoes
+                    elif tipo_aula == "Atividade Prática / Projeto":
+                        return df_ano[df_ano['TIPO_MATERIAL'].str.contains("PROJETO|TRABALHO", case=False, na=False)]['TIPO_MATERIAL'].tolist()
+                    return []
+
                 if is_sabado_avulso:
-                    diretriz_sabado = st.text_area("Diretriz para o Sábado Letivo:", placeholder="Ex: Fazer uma oficina prática sobre frações...", height=100, key=f"dir_sab_{v}")
+                    tipo_sab = st.selectbox("Natureza do Sábado:", ["Conteúdo Novo (Teoria e Prática)", "Revisão / Correção", "Aplicação de Exame", "Atividade Prática / Projeto", "Evento / Dinâmica"], key=f"tipo_sab_{v}")
+                    
+                    ativo_sab = ""
+                    if tipo_sab in ["Revisão / Correção", "Aplicação de Exame", "Atividade Prática / Projeto"]:
+                        opcoes_sab = obter_opcoes_acervo(tipo_sab, ano_str_busca)
+                        ativo_sab = st.selectbox("Vincular Material do Acervo:", [""] + opcoes_sab, key=f"ativo_sab_{v}")
+                        
+                    foco_sab = st.text_area("Diretriz para o Sábado Letivo:", placeholder="Ex: Fazer uma oficina prática...", height=100, key=f"dir_sab_{v}")
+                    
+                    diretriz_sabado = f"[{tipo_sab}] "
+                    if ativo_sab: diretriz_sabado += f"Material Vinculado: {ativo_sab}. "
+                    diretriz_sabado += foco_sab
+                    
                     diretriz_a1 = "N/A"
                     diretriz_a2 = "N/A"
                 else:
@@ -558,16 +587,34 @@ if menu == "📅 Planejamento (Ponto ID)":
                     
                     with c_d1:
                         st.markdown("#### 📘 AULA 1")
-                        tipo_a1 = st.selectbox("Natureza da Aula 1:", ["Conteúdo Novo (Teoria e Prática)", "Revisão / Correção", "Atividade Prática / Projeto"], key=f"tipo_a1_{v}")
-                        foco_a1 = st.text_area("Foco Exato da Aula 1:", placeholder="Ex: Explicar perímetro usando o link fornecido. Focar em quadrados e retângulos.", height=100, key=f"dir_a1_{v}")
-                        diretriz_a1 = f"[{tipo_a1}] {foco_a1}"
+                        tipo_a1 = st.selectbox("Natureza da Aula 1:", ["Conteúdo Novo (Teoria e Prática)", "Revisão / Correção", "Aplicação de Exame", "Atividade Prática / Projeto", "Evento / Dinâmica"], key=f"tipo_a1_{v}")
+                        
+                        ativo_a1 = ""
+                        if tipo_a1 in ["Revisão / Correção", "Aplicação de Exame", "Atividade Prática / Projeto"]:
+                            opcoes_a1 = obter_opcoes_acervo(tipo_a1, ano_str_busca)
+                            ativo_a1 = st.selectbox("Vincular Material do Acervo (Aula 1):", [""] + opcoes_a1, key=f"ativo_a1_{v}")
+                            
+                        foco_a1 = st.text_area("Foco Exato da Aula 1:", placeholder="Ex: Explicar perímetro usando o link fornecido...", height=100, key=f"dir_a1_{v}")
+                        
+                        diretriz_a1 = f"[{tipo_a1}] "
+                        if ativo_a1: diretriz_a1 += f"Material Vinculado: {ativo_a1}. "
+                        diretriz_a1 += foco_a1
                         
                     with c_d2:
                         if carga_horaria != "1 Aula":
                             st.markdown("#### 📗 AULA 2")
-                            tipo_a2 = st.selectbox("Natureza da Aula 2:", ["Conteúdo Novo (Teoria e Prática)", "Revisão / Correção", "Atividade Prática / Projeto"], index=1, key=f"tipo_a2_{v}")
-                            foco_a2 = st.text_area("Foco Exato da Aula 2:", placeholder="Ex: Fazer uma revisão geral para a prova da próxima semana.", height=100, key=f"dir_a2_{v}")
-                            diretriz_a2 = f"[{tipo_a2}] {foco_a2}"
+                            tipo_a2 = st.selectbox("Natureza da Aula 2:", ["Conteúdo Novo (Teoria e Prática)", "Revisão / Correção", "Aplicação de Exame", "Atividade Prática / Projeto", "Evento / Dinâmica"], index=1, key=f"tipo_a2_{v}")
+                            
+                            ativo_a2 = ""
+                            if tipo_a2 in ["Revisão / Correção", "Aplicação de Exame", "Atividade Prática / Projeto"]:
+                                opcoes_a2 = obter_opcoes_acervo(tipo_a2, ano_str_busca)
+                                ativo_a2 = st.selectbox("Vincular Material do Acervo (Aula 2):", [""] + opcoes_a2, key=f"ativo_a2_{v}")
+                                
+                            foco_a2 = st.text_area("Foco Exato da Aula 2:", placeholder="Ex: Fazer uma revisão geral para a prova...", height=100, key=f"dir_a2_{v}")
+                            
+                            diretriz_a2 = f"[{tipo_a2}] "
+                            if ativo_a2: diretriz_a2 += f"Material Vinculado: {ativo_a2}. "
+                            diretriz_a2 += foco_a2
                         else:
                             diretriz_a2 = "N/A"
                             st.info("Carga horária de 1 Aula. Diretriz da Aula 2 desativada.")
