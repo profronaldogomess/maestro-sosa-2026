@@ -509,6 +509,7 @@ if menu == "📅 Planejamento (Ponto ID)":
             # --- 📚 3. BASE CURRICULAR E ENRIQUECIMENTO ---
             ctx_ia = ""
             uri_livro_drive = None
+            links_web_texto = ""
             base_didatica_info = "Matriz Curricular de Itabuna"
             
             with st.container(border=True):
@@ -516,7 +517,8 @@ if menu == "📅 Planejamento (Ponto ID)":
                 
                 enriquecimento_elite = st.toggle("🌟 Ativar Enriquecimento de Elite (Busca Externa, OBMEP, ENEM, Contexto Atual)", value=True, help="Se ativado, a IA buscará referências em sites como Toda Matéria, Khan Academy, e criará conexões com o mundo real e avaliações externas.")
                 
-                modo_p = st.radio("Método de Base Didática:", ["📖 Livro Didático", "🎛️ Manual (Matriz)"], horizontal=True, key=f"modo_p_{v}")
+                # 🚨 NOVA OPÇÃO: LINKS DA WEB
+                modo_p = st.radio("Método de Base Didática:", ["📖 Livro Didático", "🎛️ Manual (Matriz)", "🌐 Links da Web (Artigos/Sites)"], horizontal=True, key=f"modo_p_{v}")
                 
                 if modo_p == "🎛️ Manual (Matriz)":
                     df_matriz_ano = df_curriculo[df_curriculo['ANO'].astype(str) == str(ano_p)]
@@ -524,6 +526,12 @@ if menu == "📅 Planejamento (Ponto ID)":
                     sel_cont = st.multiselect("2. Conteúdo (Semana):", sorted(df_matriz_ano[df_matriz_ano['EIXO'].isin(sel_eixo)]['CONTEUDO_ESPECIFICO'].unique().tolist()) if sel_eixo else [], key=f"p_cont_{v}")
                     sel_obj = st.multiselect("3. Objetivos (Semana):", sorted(df_matriz_ano[df_matriz_ano['CONTEUDO_ESPECIFICO'].isin(sel_cont)]['OBJETIVOS'].unique().tolist()) if sel_cont else [], key=f"p_obj_{v}")
                     ctx_ia = f"EIXO: {sel_eixo}, CONTEÚDO: {sel_cont}, OBJETIVOS: {sel_obj}."
+                
+                elif modo_p == "🌐 Links da Web (Artigos/Sites)":
+                    st.info("Cole os links dos sites que você quer que a IA leia para montar a aula (ex: Brasil Escola, Toda Matéria).")
+                    links_web_texto = st.text_area("Cole os Links aqui (um por linha):", placeholder="https://brasilescola.uol.com.br/matematica/perimetro.htm\nhttps://...", key=f"links_web_{v}")
+                    base_didatica_info = "Artigos da Web (Links fornecidos)"
+                
                 else:
                     cx1, cx2 = st.columns([2, 1])
                     livros_disponiveis = df_materiais[df_materiais['TIPO'].str.contains(str(ano_p), na=False)]['NOME_ARQUIVO'].tolist()
@@ -535,23 +543,31 @@ if menu == "📅 Planejamento (Ponto ID)":
                         uri_livro_drive = match_mat['URI_ARQUIVO']
                         base_didatica_info = f"Livro: {sel_mat} | Páginas: {pags}"
 
-            # --- 🎯 4. DIRETRIZES SOBERANAS (MICRO-GESTÃO) ---
+            # --- 🎯 4. DIRETRIZES SOBERANAS (SEMANAS HÍBRIDAS) ---
             with st.container(border=True):
-                st.markdown("### 🎯 Passo 4: Diretrizes Soberanas (Micro-Gestão)")
-                st.caption("Dite exatamente o que a IA deve fazer em cada aula. Você é o Maestro.")
+                st.markdown("### 🎯 Passo 4: Diretrizes Soberanas (Semanas Híbridas)")
+                st.caption("Defina a natureza exata de cada aula. Você pode ter uma aula de conteúdo e outra de revisão na mesma semana.")
                 
                 if is_sabado_avulso:
-                    diretriz_sabado = st.text_area("Diretriz para o Sábado Letivo:", placeholder="Ex: Fazer uma oficina prática sobre frações usando o site O Baricentro da Mente...", height=100, key=f"dir_sab_{v}")
+                    diretriz_sabado = st.text_area("Diretriz para o Sábado Letivo:", placeholder="Ex: Fazer uma oficina prática sobre frações...", height=100, key=f"dir_sab_{v}")
                     diretriz_a1 = "N/A"
                     diretriz_a2 = "N/A"
                 else:
                     diretriz_sabado = "N/A"
                     c_d1, c_d2 = st.columns(2)
+                    
                     with c_d1:
-                        diretriz_a1 = st.text_area("📘 Foco da Aula 1:", placeholder="Ex: Págs 14-16. Focar apenas no conceito de potenciação usando exemplos do cotidiano. Não falar de radiciação ainda.", height=120, key=f"dir_a1_{v}")
+                        st.markdown("#### 📘 AULA 1")
+                        tipo_a1 = st.selectbox("Natureza da Aula 1:", ["Conteúdo Novo (Teoria e Prática)", "Revisão / Correção", "Atividade Prática / Projeto"], key=f"tipo_a1_{v}")
+                        foco_a1 = st.text_area("Foco Exato da Aula 1:", placeholder="Ex: Explicar perímetro usando o link fornecido. Focar em quadrados e retângulos.", height=100, key=f"dir_a1_{v}")
+                        diretriz_a1 = f"[{tipo_a1}] {foco_a1}"
+                        
                     with c_d2:
                         if carga_horaria != "1 Aula":
-                            diretriz_a2 = st.text_area("📗 Foco da Aula 2:", placeholder="Ex: Págs 17-19. Introduzir radiciação como operação inversa. Aplicar questão do ENEM sobre o tema.", height=120, key=f"dir_a2_{v}")
+                            st.markdown("#### 📗 AULA 2")
+                            tipo_a2 = st.selectbox("Natureza da Aula 2:", ["Conteúdo Novo (Teoria e Prática)", "Revisão / Correção", "Atividade Prática / Projeto"], index=1, key=f"tipo_a2_{v}")
+                            foco_a2 = st.text_area("Foco Exato da Aula 2:", placeholder="Ex: Fazer uma revisão geral para a prova da próxima semana.", height=100, key=f"dir_a2_{v}")
+                            diretriz_a2 = f"[{tipo_a2}] {foco_a2}"
                         else:
                             diretriz_a2 = "N/A"
                             st.info("Carga horária de 1 Aula. Diretriz da Aula 2 desativada.")
@@ -562,15 +578,19 @@ if menu == "📅 Planejamento (Ponto ID)":
                 
                 if modo_p == "📖 Livro Didático" and not uri_livro_drive:
                     st.error("❌ Erro: O livro selecionado não possui um link válido no banco de materiais.")
+                elif modo_p == "🌐 Links da Web (Artigos/Sites)" and not links_web_texto.strip():
+                    st.error("❌ Erro: Cole pelo menos um link válido na caixa de texto.")
                 else:
                     with st.spinner("Maestro SOSA analisando a Matriz, buscando referências de elite e arquitetando o Plano..."):
                         
                         if modo_p == "🎛️ Manual (Matriz)":
                             diretriz_base = "MÉTODO MANUAL: Baseie-se EXCLUSIVAMENTE na Matriz Curricular e nas fontes de elite da internet."
+                        elif modo_p == "🌐 Links da Web (Artigos/Sites)":
+                            diretriz_base = f"MÉTODO WEB SCRAPING: Acesse os links a seguir, leia o conteúdo deles e use-os como base principal para a aula:\n{links_web_texto}"
                         else:
                             diretriz_base = f"MÉTODO LIVRO: Use o PDF anexo como base principal. PÁGINAS ALVO: {base_didatica_info}."
 
-                        status_enriquecimento = "ATIVADO (Use sites de referência: Toda Matéria, Brasil Escola, Khan Academy, O Baricentro da Mente. Traga questões OBMEP/ENEM/SAEB e conecte com fatos atuais/tecnologia)." if enriquecimento_elite else "DESATIVADO (Mantenha-se estritamente ao livro ou matriz básica)."
+                        status_enriquecimento = "ATIVADO (Use sites de referência: Toda Matéria, Brasil Escola, Khan Academy. Traga questões OBMEP/ENEM/SAEB e conecte com fatos atuais/tecnologia)." if enriquecimento_elite else "DESATIVADO (Mantenha-se estritamente ao livro ou matriz básica)."
 
                         prompt = (
                             f"NATUREZA DA SEMANA: {tipo_semana}\n"
@@ -581,14 +601,14 @@ if menu == "📅 Planejamento (Ponto ID)":
                             f"ENRIQUECIMENTO DE ELITE: {status_enriquecimento}\n\n"
                             f"🚨 DIRETRIZES SOBERANAS DO PROFESSOR (OBEDEÇA CEGAMENTE):\n"
                             f"- PENDÊNCIAS DA SEMANA ANTERIOR: {pendencias_ant if pendencias_ant else 'Nenhuma.'}\n"
-                            f"- FOCO EXATO DA AULA 1: {diretriz_a1}\n"
-                            f"- FOCO EXATO DA AULA 2: {diretriz_a2}\n"
-                            f"- FOCO EXATO DO SÁBADO: {diretriz_sabado}\n\n"
+                            f"- DIRETRIZ AULA 1: {diretriz_a1}\n"
+                            f"- DIRETRIZ AULA 2: {diretriz_a2}\n"
+                            f"- DIRETRIZ SÁBADO: {diretriz_sabado}\n\n"
                             f"--- PONTE PEDAGÓGICA (MEMÓRIA DA TURMA) ---\nAnalise o plano da semana anterior abaixo para criar o gancho de continuidade:\n{plano_anterior_txt}\n\n"
                             f"--- MATRIZ OFICIAL (ITABUNA) ---\n{ctx_ia}"
                         )
                         
-                        resultado = ai.gerar_ia("PLANE_PEDAGOGICO", prompt, url_drive=uri_livro_drive, usar_busca=enriquecimento_elite)
+                        resultado = ai.gerar_ia("PLANE_PEDAGOGICO", prompt, url_drive=uri_livro_drive, usar_busca=True)
                         
                         st.session_state.p_temp = resultado
                         st.session_state.p_meta = {
@@ -1551,13 +1571,17 @@ elif menu == "🧪 Criador de Aulas":
                                         else:
                                             regra_livro = "3. MODO LIVRO: O roteiro deve dizer exatamente: 'Inicie na página X explorando a imagem Y...' baseando-se no PDF."
 
+                                        # 🚨 OTIMIZAÇÃO DE TOKENS: Envia apenas o núcleo da aula, não o plano inteiro
+                                        hab_herdada = ai.extrair_tag(plano_txt, "HABILIDADE_BNCC")
+                                        obj_herdado = ai.extrair_tag(plano_txt, "OBJETIVOS_ENSINO")
+
                                         missao_especifica = (
                                             f"🚨 MISSÃO DE ALTA DENSIDADE E RIGOR QUANTITATIVO:\n"
-                                            f"1.[PROFESSOR]: Escreva um TRATADO DIDÁTICO denso. Explique o conceito de {obj_geral} com profundidade técnica antes de dar o roteiro de aula.\n"
-                                            f"2. CONEXÃO ALPHA: Use o Google Search para trazer dados científicos reais de 2026 que validem a importância deste tema.\n"
+                                            f"1.[PROFESSOR]: Escreva um TRATADO DIDÁTICO denso. Explique o conceito de {obj_geral} com profundidade técnica (estilo Brasil Escola) antes de dar o roteiro de aula.\n"
+                                            f"2. CONEXÃO GLOCAL: Use o Google Search para trazer dados reais. Comece com um exemplo de Itabuna/BA, expanda para o Brasil e depois para o Mundo/Tecnologia.\n"
                                             f"{regra_livro}\n"
                                             f"4.[ALUNO] (REGULAR): É OBRIGATÓRIO gerar EXATAMENTE {qtd_q_prod} questões inéditas e desafiadoras. Formato: **QUESTÃO X.** enunciado.\n"
-                                            f"5.[PEI] (INCLUSÃO): É OBRIGATÓRIO gerar EXATAMENTE {qtd_q_prod} questões adaptadas, cada uma com[PARA LEMBRAR],[PASSO A PASSO] e[ PROMPT IMAGEM ].\n"
+                                            f"5.[PEI] (INCLUSÃO): É OBRIGATÓRIO gerar EXATAMENTE {qtd_q_prod} questões adaptadas, cada uma com[PARA LEMBRAR],[PASSO A PASSO] e[ PROMPT IMAGEM ] ou [GEOGEBRA].\n"
                                             f"6.[GABARITO]: Forneça as respostas detalhadas para as {qtd_q_prod} questões regulares e as {qtd_q_prod} questões PEI.\n"
                                             f"🚨 FORMATO OBRIGATÓRIO: Você DEVE separar o texto usando EXATAMENTE as tags entre colchetes: [PROFESSOR],[ALUNO], [PEI],[GABARITO],[IMAGENS]."
                                         )
@@ -1567,7 +1591,8 @@ elif menu == "🧪 Criador de Aulas":
                                             f"MÉTODO: {metodo_entrega}. REFERÊNCIA: {base_herdada}\n"
                                             f"SÉRIE: {ano_lab}º Ano. ALVO: {aula_alvo_prod}.\n\n"
                                             f"{missao_especifica}\n\n"
-                                            f"--- HERANÇA DO PLANO ATUAL ---\n{roteiro_especifico}\n"
+                                            f"--- DIRETRIZ ESPECÍFICA DESTA AULA ---\n"
+                                            f"Habilidade: {hab_herdada}\nObjetivos: {obj_herdado}\nRoteiro: {roteiro_especifico}\n"
                                             f"--- MEMÓRIA DE REGÊNCIA (PONTE PEDAGÓGICA) ---\n{contexto_turmas_ia}\n"
                                             f"--- SENSOR DE INCLUSÃO ---\nA turma possui alunos com: {texto_clinico}."
                                         )
@@ -3666,11 +3691,15 @@ elif menu == "📸 Scanner de Gabaritos":
         st.subheader("📊 Raio-X Pedagógico: Diagnóstico de Lacunas")
         st.caption("Analise o desempenho da turma por questão. O sistema unifica automaticamente a Prova Padrão e suas Variantes em um único relatório analítico.")
         
+        # 🚨 FILTRO DE ILUSÃO DE ÓTICA: Transforma $$ em $ apenas para o Streamlit desenhar inline
         def preparar_para_leitura(texto):
             if not texto: return ""
-            texto = re.sub(r'^```[a-zA-Z]*\n', '', texto, flags=re.MULTILINE | re.IGNORECASE)
-            texto = re.sub(r'```$', '', texto, flags=re.MULTILINE)
-            return re.sub(r'\$\$\s*(.*?)\s*\$\$', r'$\1$', texto)
+            # Renderiza LaTeX
+            texto = re.sub(r'\$\$(.*?)\$\$', r'$\1$', texto, flags=re.DOTALL)
+            # Formata GeoGebra e Imagens para ficarem bonitos na tela
+            texto = re.sub(r'\[GEOGEBRA\](.*?)\[/GEOGEBRA\]', r'📐 *(Comando GeoGebra: \1)*', texto, flags=re.IGNORECASE | re.DOTALL)
+            texto = re.sub(r'\[\s*PROMPT IMAGEM:(.*?)\s*\]', r'🖼️ *(Imagem: \1)*', texto, flags=re.IGNORECASE | re.DOTALL)
+            return texto
 
         def is_regular_student(nec_val):
             val = str(nec_val).upper()
