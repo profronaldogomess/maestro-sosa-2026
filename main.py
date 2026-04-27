@@ -3110,16 +3110,46 @@ elif menu == "📸 Scanner de Gabaritos":
                 return "Outros"
 
             df_f['TRIM_DETECTADO'] = df_f['DATA'].apply(detectar_trimestre)
+            trim_limpo = trimestre_nome.replace(" ", "")
             
             if apenas_provas:
                 permitidos = ["TESTE", "PROVA", "SONDA", "DIAGNÓSTICA", "RECUPERAÇÃO", "AVALIAÇÃO"]
-                df_f = df_f[df_f['TIPO_MATERIAL'].str.upper().str.contains('|'.join(permitidos))]
-                mask_trim = (df_f['TRIM_DETECTADO'] == trimestre_nome) | (df_f['CONTEUDO'].str.contains(trimestre_nome, na=False)) | (df_f['TIPO_MATERIAL'].str.upper().str.contains("FINAL"))
+                # 🚨 LISTA NEGRA: Bloqueia logísticas e revisões de aparecerem no Scanner
+                proibidos = ["REVISAO", "REVISÃO", "APLICAÇÃO", "CORREÇÃO", "APRESENTAÇÃO", "DOSSIÊ", "AULA"]
+                
+                mask_permitidos = df_f['TIPO_MATERIAL'].str.upper().str.contains('|'.join(permitidos))
+                df_f = df_f[mask_permitidos]
+                
+                mask_proibidos = df_f['TIPO_MATERIAL'].str.upper().str.contains('|'.join(proibidos))
+                df_f = df_f[~mask_proibidos]
+                
+                mask_trim = (
+                    (df_f['TRIM_DETECTADO'] == trimestre_nome) | 
+                    (df_f['CONTEUDO'].str.contains(trimestre_nome, na=False, case=False)) | 
+                    (df_f['CONTEUDO'].str.contains(trim_limpo, na=False, case=False)) | 
+                    (df_f['TIPO_MATERIAL'].str.contains(trimestre_nome, na=False, case=False)) |
+                    (df_f['TIPO_MATERIAL'].str.contains(trim_limpo, na=False, case=False)) |
+                    (df_f['TIPO_MATERIAL'].str.upper().str.contains("FINAL"))
+                )
                 df_f = df_f[mask_trim]
             else:
                 permitidos = ["PROJETO", "FIXAÇÃO", "REFORÇO", "ATIVIDADE", "TRABALHO", "AULA"]
-                df_f = df_f[df_f['TIPO_MATERIAL'].str.upper().str.contains('|'.join(permitidos))]
-                df_f = df_f[df_f['TRIM_DETECTADO'] == trimestre_nome]
+                proibidos = ["TESTE", "PROVA", "SONDA", "DIAGNÓSTICA", "RECUPERAÇÃO", "AVALIAÇÃO"]
+                
+                mask_permitidos = df_f['TIPO_MATERIAL'].str.upper().str.contains('|'.join(permitidos))
+                df_f = df_f[mask_permitidos]
+                
+                mask_proibidos = df_f['TIPO_MATERIAL'].str.upper().str.contains('|'.join(proibidos))
+                df_f = df_f[~mask_proibidos]
+                
+                mask_trim = (
+                    (df_f['TRIM_DETECTADO'] == trimestre_nome) | 
+                    (df_f['CONTEUDO'].str.contains(trimestre_nome, na=False, case=False)) | 
+                    (df_f['CONTEUDO'].str.contains(trim_limpo, na=False, case=False)) | 
+                    (df_f['TIPO_MATERIAL'].str.contains(trimestre_nome, na=False, case=False)) |
+                    (df_f['TIPO_MATERIAL'].str.contains(trim_limpo, na=False, case=False))
+                )
+                df_f = df_f[mask_trim]
             
             return sorted(df_f['TIPO_MATERIAL'].unique().tolist())
         except Exception as e: 
@@ -3151,8 +3181,19 @@ elif menu == "📸 Scanner de Gabaritos":
             tr_sel = c2.selectbox("📅 Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_p_{v}")
             
             opcoes_p = filtrar_ativos_cir(t_sel, tr_sel, apenas_provas=True)
+            
+            # 🚨 RESGATE DE HISTÓRICO: Puxa testes que já têm nota lançada, mesmo se apagados do acervo
+            if t_sel and tr_sel:
+                trim_limpo = tr_sel.replace(" ", "")
+                mask_diag = (df_diagnosticos['TURMA'] == t_sel) & (
+                    df_diagnosticos['ID_AVALIACAO'].str.contains(tr_sel, case=False, na=False) |
+                    df_diagnosticos['ID_AVALIACAO'].str.contains(trim_limpo, case=False, na=False)
+                )
+                exames_feitos = df_diagnosticos[mask_diag]['ID_AVALIACAO'].unique().tolist()
+                opcoes_p = list(set(opcoes_p + exames_feitos))
+            
             opcoes_base = [opt for opt in opcoes_p if not re.search(r"2[ªA]|CHAMADA|TIPO [B-Z]", opt, re.IGNORECASE)]
-            at_sel = c3.selectbox("📋 Avaliação Base (Slot):", [""] + opcoes_base, key=f"at_p_{v}")
+            at_sel = c3.selectbox("📋 Avaliação Base (Slot):", [""] + sorted(opcoes_base), key=f"at_p_{v}")
 
         if not t_sel or not at_sel:
             st.info("💡 Selecione a Turma e a Avaliação Base para abrir a Mesa de Triagem.")
@@ -3220,7 +3261,6 @@ elif menu == "📸 Scanner de Gabaritos":
                     with st.container(border=True):
                         st.markdown("#### 🔍 Lente de Correção")
                         
-                        # 🚨 NOVAS LENTES ESPECÍFICAS PARA PEI
                         lente_corr = st.radio(
                             "Qual prova o aluno respondeu?", 
                             [
@@ -3250,23 +3290,31 @@ elif menu == "📸 Scanner de Gabaritos":
                                 df_2a = df_aulas[(df_aulas['TIPO_MATERIAL'].str.upper().str.contains("2ª|2CHAMADA", regex=True)) & (df_aulas['TIPO_MATERIAL'].str.contains(trim_limpo, case=False)) & (df_aulas['ANO'].str.contains(serie_num))]
                                 opcoes_2a = df_2a['TIPO_MATERIAL'].unique().tolist()
                                 at_segunda = c_reg2.selectbox("Selecione a 2ª Chamada:", [""] + opcoes_2a, key=f"s2a_{id_aluno_atual}")
-                                if at_segunda: material_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == at_segunda].iloc[0]
+                                if at_segunda: 
+                                    df_busca = df_aulas[df_aulas['TIPO_MATERIAL'] == at_segunda]
+                                    if not df_busca.empty: material_ref = df_busca.iloc[0]
                             else:
                                 df_variantes = df_aulas[(df_aulas['TIPO_MATERIAL'].str.upper().str.contains(tipo_base)) & (df_aulas['TIPO_MATERIAL'].str.upper().str.contains("TIPO")) & (df_aulas['ANO'].str.contains(serie_num))]
                                 opcoes_variantes = ["Padrão (Tipo A)"] + df_variantes['TIPO_MATERIAL'].unique().tolist()
                                 versao_variante = c_reg2.selectbox("🧬 Variante da Prova:", opcoes_variantes, key=f"var_{id_aluno_atual}")
                                 
                                 if versao_variante != "Padrão (Tipo A)":
-                                    material_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == versao_variante].iloc[0]
+                                    df_busca = df_aulas[df_aulas['TIPO_MATERIAL'] == versao_variante]
+                                    if not df_busca.empty: material_ref = df_busca.iloc[0]
                                 else:
-                                    material_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel].iloc[0]
+                                    df_busca = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel]
+                                    if not df_busca.empty: material_ref = df_busca.iloc[0]
                                     
                         elif is_pei_grading:
-                            material_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel].iloc[0]
-                            st.info(f"O sistema usará o Gabarito do {lente_corr.split('(')[0].strip()}.")
+                            df_busca = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel]
+                            if not df_busca.empty: 
+                                material_ref = df_busca.iloc[0]
+                                st.info(f"O sistema usará o Gabarito do {lente_corr.split('(')[0].strip()}.")
                             
                         else:
-                            material_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel].iloc[0]
+                            df_busca = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel]
+                            if not df_busca.empty: material_ref = df_busca.iloc[0]
+
 
                     # ==========================================================
                     # MOTOR DE CORREÇÃO
