@@ -3670,9 +3670,19 @@ elif menu == "📸 Scanner de Gabaritos":
 
         if t_sel_h:
             serie_num = "".join(filter(str.isdigit, t_sel_h))
-            df_oficiais = df_aulas[(df_aulas['SEMANA_REF'] == "AVALIAÇÃO") & (df_aulas['ANO'].str.contains(serie_num))]
-            opcoes_base = [opt for opt in df_oficiais['TIPO_MATERIAL'].unique().tolist() if not re.search(r"2[ªA]|CHAMADA|TIPO [B-Z]", opt, re.IGNORECASE)]
-            av_alvo_h = st.selectbox("📋 Avaliação Base (Slot do Boletim):", [""] + opcoes_base, key=f"av_h_{v}")
+            
+            # 🚨 CORREÇÃO: Usa o filtro universal para puxar TODOS os formatos (antigos e novos)
+            opcoes_auditoria = filtrar_ativos_cir(t_sel_h, tr_sel_h, apenas_provas=True)
+            
+            # 🚨 RESGATE DE HISTÓRICO: Puxa também provas que já foram escaneadas (mesmo se apagadas do acervo)
+            exames_feitos = df_diagnosticos[(df_diagnosticos['TURMA'] == t_sel_h)]['ID_AVALIACAO'].unique().tolist()
+            
+            todas_opcoes = list(set(opcoes_auditoria + exames_feitos))
+            
+            # Filtra as variantes para deixar o menu limpo
+            opcoes_base = [opt for opt in todas_opcoes if not re.search(r"2[ªA]|CHAMADA|TIPO [B-Z]", opt, re.IGNORECASE)]
+            
+            av_alvo_h = st.selectbox("📋 Avaliação Base (Slot do Boletim):", [""] + sorted(opcoes_base), key=f"av_h_{v}")
 
             if av_alvo_h:
                 is_sonda = "SONDA" in av_alvo_h.upper() or "DIAGNÓSTICA" in av_alvo_h.upper()
