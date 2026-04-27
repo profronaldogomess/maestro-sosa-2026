@@ -3806,14 +3806,21 @@ elif menu == "📸 Scanner de Gabaritos":
                         ws_g = wb_s.worksheet("DB_GABARITOS_ALUNOS")
                         d_g = ws_g.get_all_values()
                         
-                        linhas_para_deletar = []
                         ids_na_tabela = df_soberano_ed['ID'].astype(str).tolist()
                         
-                        for i in range(len(d_g)-1, 0, -1):
-                            if len(d_g[i]) > 4 and db.limpar_id(d_g[i][1]) in ids_na_tabela and nome_curto_av in d_g[i][4]:
-                                ws_g.delete_rows(i+1)
+                        # 🚨 1. FILTRO EM MEMÓRIA (Evita o APIError do Google Sheets)
+                        dados_atualizados = [d_g[0]] # Mantém o cabeçalho intacto
+                        for i in range(1, len(d_g)):
+                            row = d_g[i]
+                            if len(row) > 4:
+                                id_banco = db.limpar_id(row[1])
+                                av_banco = row[4]
+                                # Se for o aluno da tabela E a avaliação atual, pula (deleta da memória)
+                                if id_banco in ids_na_tabela and nome_curto_av in av_banco:
+                                    continue
+                            dados_atualizados.append(row)
                         
-                        novos_registros = []
+                        # 🚨 2. PREPARA OS NOVOS REGISTROS
                         lista_boletim = []
                         notas_atuais = df_notas[(df_notas['TURMA'] == t_sel_h) & (df_notas['TRIMESTRE'] == tr_sel_h)]
                         
@@ -3831,9 +3838,12 @@ elif menu == "📸 Scanner de Gabaritos":
                                     id_f = av_alvo_h if r['Versão'] == "PROVA ORIGINAL" else f"{av_alvo_h} ({r['Versão']})"
                                     
                                 resp_final = "MANUAL" if resp_originais == "FALTOU" else resp_originais
-                                novos_registros.append([datetime.now().strftime("%d/%m/%Y"), id_l, nome_limpo, t_sel_h, id_f, resp_final, nota_s, r['Evidência'] if r['Evidência'] else "N/A"])
+                                novo_reg = [datetime.now().strftime("%d/%m/%Y"), id_l, nome_limpo, t_sel_h, id_f, resp_final, nota_s, r['Evidência'] if r['Evidência'] else "N/A"]
+                                dados_atualizados.append(novo_reg)
+                                
                             elif r['Situação'] == "❌ FALTOU":
-                                novos_registros.append([datetime.now().strftime("%d/%m/%Y"), id_l, nome_limpo, t_sel_h, av_alvo_h, "FALTOU", "0,00", "N/A"])
+                                novo_reg = [datetime.now().strftime("%d/%m/%Y"), id_l, nome_limpo, t_sel_h, av_alvo_h, "FALTOU", "0,00", "N/A"]
+                                dados_atualizados.append(novo_reg)
                             
                             if not is_sonda and r['Situação'] != "✍️ PENDENTE":
                                 reg_atual = notas_atuais[notas_atuais['ID_ALUNO'].apply(db.limpar_id) == id_l]
@@ -3849,12 +3859,15 @@ elif menu == "📸 Scanner de Gabaritos":
                                 nova_media = util.sosa_to_str(util.sosa_to_float(v_vistos) + util.sosa_to_float(v_teste) + util.sosa_to_float(v_prova))
                                 lista_boletim.append([id_l, nome_limpo, t_sel_h, tr_sel_h, v_vistos, v_teste, v_prova, v_rec, nova_media])
                         
-                        if novos_registros: ws_g.append_rows(novos_registros, value_input_option="USER_ENTERED")
+                        # 🚨 3. GRAVA TUDO DE UMA VEZ (1 Única Requisição à API)
+                        ws_g.clear()
+                        ws_g.update(values=dados_atualizados, range_name='A1')
+                        
                         if not is_sonda and lista_boletim:
                             db.limpar_notas_turma_trimestre(t_sel_h, tr_sel_h)
                             db.salvar_lote("DB_NOTAS", lista_boletim)
                             
-                        status_h.update(label="✅ Salvo!", state="complete"); time.sleep(1); st.rerun()
+                        status_h.update(label="✅ Salvo com Sucesso!", state="complete"); time.sleep(1); st.rerun()
 
                 st.markdown("---")
                 
