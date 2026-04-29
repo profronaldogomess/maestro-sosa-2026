@@ -5175,6 +5175,7 @@ elif menu == "📊 Painel de Notas & Vistos":
         # --- 2. MOTOR DE CÁLCULO AUTOMÁTICO (DIÁRIO DE BORDO) ---
         vistos_auto_map = {}
         bonus_total_map = {}
+        trabalhos_map = {} # 🚨 NOVO: Mapa para guardar notas de trabalhos
         
         calendario = {
             "I Trimestre": (date(2026, 2, 9), date(2026, 5, 22)),
@@ -5203,12 +5204,22 @@ elif menu == "📊 Painel de Notas & Vistos":
                     vistos_auto_map[id_l] = round((aulas_com_visto / total_aulas_periodo * p_visto), 2) if total_aulas_periodo > 0 else 0.0
                     
                     # O Bônus continua somando de TODAS as aulas (agora aceita negativos)
-                    bonus_total_map[id_l] = d_alu['BONUS'].apply(util.sosa_to_float).sum()
+                    bonus_total_map[id_l] = d_alu[d_alu['TAGS'] != "SISTEMA_NOTA"]['BONUS'].apply(util.sosa_to_float).sum()
+                    
+                    # 🚨 NOVO: Puxa a nota de Trabalho (SISTEMA_NOTA)
+                    trabalhos = d_alu[d_alu['TAGS'] == "SISTEMA_NOTA"]
+                    if not trabalhos.empty:
+                        trabalhos_map[id_l] = util.sosa_to_float(trabalhos.iloc[-1]['BONUS'])
                 else:
-                    vistos_auto_map[id_l], bonus_total_map[id_l] = 0.0, 0.0
+                    vistos_auto_map[id_l], bonus_total_map[id_l], trabalhos_map[id_l] = 0.0, 0.0, 0.0
 
         # --- 3. CONSOLIDAÇÃO DA MESA DE LANÇAMENTO ---
         notas_banco = df_notas[(df_notas['TURMA'] == turma_sel) & (df_notas['TRIMESTRE'] == trimestre_sel)]
+        
+        # 🚨 NOVO: PUXAR DADOS DO SCANNER (DB_GABARITOS_ALUNOS)
+        trim_limpo = trimestre_sel.replace(" ", "")
+        df_diag_turma = df_diagnosticos[(df_diagnosticos['TURMA'] == turma_sel) & 
+                                        (df_diagnosticos['ID_AVALIACAO'].str.contains(trim_limpo, case=False, na=False))]
         
         # 🚨 MOTOR DE ÍCONES MULTIPERFIL
         def definir_icone_status(nec):
@@ -5225,10 +5236,24 @@ elif menu == "📊 Painel de Notas & Vistos":
             id_a = db.limpar_id(alu['ID'])
             reg_b = notas_banco[notas_banco['ID_ALUNO'].apply(db.limpar_id) == id_a]
             
+            # 1. Puxa do DB_NOTAS (Fallback)
             n_teste = util.sosa_to_float(reg_b.iloc[0]['NOTA_TESTE']) if not reg_b.empty else 0.0
             n_prova = util.sosa_to_float(reg_b.iloc[0]['NOTA_PROVA']) if not reg_b.empty else 0.0
             n_rec = util.sosa_to_float(reg_b.iloc[0]['NOTA_REC']) if not reg_b.empty else 0.0
             
+            # 2. Puxa Trabalhos do Diário (SISTEMA_NOTA)
+            if trabalhos_map.get(id_a, 0.0) > 0:
+                n_teste = trabalhos_map[id_a]
+            
+            # 3. Puxa do Scanner (DB_GABARITOS_ALUNOS) - Sobrescreve se houver
+            scanned_teste = df_diag_turma[(df_diag_turma['ID_ALUNO'].apply(db.limpar_id) == id_a) & (df_diag_turma['ID_AVALIACAO'].str.upper().str.contains("TESTE"))]
+            if not scanned_teste.empty:
+                n_teste = util.sosa_to_float(scanned_teste.iloc[-1]['NOTA_CALCULADA'])
+                
+            scanned_prova = df_diag_turma[(df_diag_turma['ID_ALUNO'].apply(db.limpar_id) == id_a) & (df_diag_turma['ID_AVALIACAO'].str.upper().str.contains("PROVA"))]
+            if not scanned_prova.empty:
+                n_prova = util.sosa_to_float(scanned_prova.iloc[-1]['NOTA_CALCULADA'])
+
             icone_perfil = definir_icone_status(alu['NECESSIDADES'])
 
             dados_editor.append({
@@ -5243,7 +5268,7 @@ elif menu == "📊 Painel de Notas & Vistos":
 
         # --- 4. TABELA 1: CONSOLIDAÇÃO E ENTRADA ---
         st.subheader("📝 Passo 2: Lançamento e Consolidação")
-        st.info("💡 **Dica:** Digite as notas do Teste, Prova e Recuperação. O sistema somará os Vistos e o Bônus/Punição automaticamente.")
+        st.info("💡 **Inteligência Ativada:** O sistema puxou automaticamente as notas do Scanner e dos Trabalhos. Você pode editar manualmente se precisar.")
         
         df_input = st.data_editor(
             pd.DataFrame(dados_editor),
@@ -5259,7 +5284,7 @@ elif menu == "📊 Painel de Notas & Vistos":
             hide_index=True, use_container_width=True, key=f"editor_notas_{v}"
         )
 
-        # --- 5. ALGORITMO DE TRANSBORDAMENTO E SUBSTITUIÇÃO (ATUALIZADO PARA PUNIÇÕES) ---
+        # --- 5. ALGORITMO DE TRANSBORDAMENTO E SUBSTITUIÇÃO ---
         def aplicar_transbordamento(row):
             bonus_restante = row['BÔNUS (TOTAL)']
             v_base = row['VISTOS (AUTO)']
