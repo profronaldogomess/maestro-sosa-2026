@@ -4021,18 +4021,19 @@ elif menu == "📸 Scanner de Gabaritos":
                         st.info("Nenhum dossiê gerado no sistema.")
 
     # ==============================================================================
-    # 📊 ABA 4: RAIO-X PEDAGÓGICO (RESTAURADO COM FUSÃO DE VARIANTES)
+    # 📊 ABA 4: RAIO-X PEDAGÓGICO (BLINDADO PARA NÍVEIS PEI E LATEX)
     # ==============================================================================
     with tab_raiox:
         st.subheader("📊 Raio-X Pedagógico: Diagnóstico de Lacunas")
         st.caption("Analise o desempenho da turma por questão. O sistema unifica automaticamente a Prova Padrão e suas Variantes em um único relatório analítico.")
         
-        # 🚨 ATUALIZAÇÃO: NOVA FUNÇÃO DE LEITURA (LATEX, GEOGEBRA E IMAGENS)
+        # 🚨 ATUALIZAÇÃO: NOVA FUNÇÃO DE LEITURA (LATEX NATIVO, GEOGEBRA E IMAGENS)
         def preparar_para_leitura(texto):
             if not texto: return ""
             texto = re.sub(r'^```[a-zA-Z]*\n', '', texto, flags=re.MULTILINE | re.IGNORECASE)
             texto = re.sub(r'```$', '', texto, flags=re.MULTILINE)
             texto = texto.replace("**", "") # Remove negritos residuais
+            # Transforma $$ em $ para o Streamlit renderizar o LaTeX perfeitamente
             texto = re.sub(r'\$\$(.*?)\$\$', r'$\1$', texto, flags=re.DOTALL)
             texto = re.sub(r'\[GEOGEBRA\](.*?)\[/GEOGEBRA\]', r'📐 *(Comando GeoGebra: \1)*', texto, flags=re.IGNORECASE | re.DOTALL)
             texto = re.sub(r'\[\s*PROMPT IMAGEM:(.*?)\s*\]', r'🖼️ *(Imagem: \1)*', texto, flags=re.IGNORECASE | re.DOTALL)
@@ -4044,15 +4045,24 @@ elif menu == "📸 Scanner de Gabaritos":
             if val.strip() in ["", "NAN", "NONE", "NENHUMA", "PENDENTE"]: return True
             return False
 
-        def extrair_gab_blindado(texto, is_pei=False):
-            if not texto: return {}
-            txt_limpo = re.sub(r'[*#]', '', texto).upper()
-            tag_alvo = "GABARITO_PEI" if is_pei else "GABARITO_TEXTO"
-            bloco = ai.extrair_tag(txt_limpo, tag_alvo) or ai.extrair_tag(txt_limpo, "GABARITO")
-            matches = re.findall(r"(?:QUEST[AÃ]O\s*)?0?(\d+)\s*[\s\.\-\:\)]+\s*([A-E])", bloco)
-            if matches: return {int(num): letra for num, letra in matches}
-            letras = re.findall(r"\b[A-E]\b", bloco)
-            return {i+1: letra for i, letra in enumerate(letras)}
+        # 🚨 EXTRATOR DE GABARITO BLINDADO PARA OS 3 NÍVEIS PEI
+        def extrair_gab_blindado(texto, is_pei=False, nivel_pei="NIVEL_1"):
+            if is_pei:
+                bloco_pei = ai.extrair_tag(texto, nivel_pei)
+                if not bloco_pei: return {}
+                match_gab = re.search(r"(?i)GABARITO.*", bloco_pei, re.DOTALL)
+                area_busca = match_gab.group(0) if match_gab else bloco_pei
+                matches = re.findall(r"(\d+)[\s\.\)\-:]+([A-C])", area_busca.upper())
+                if matches: return {int(num): letra for num, letra in matches}
+                letras = re.findall(r"\b[A-C]\b", area_busca.upper())
+                return {i+1: letra for i, letra in enumerate(letras)}
+            else:
+                txt_limpo = re.sub(r'[*#]', '', texto).upper()
+                bloco = ai.extrair_tag(txt_limpo, "GABARITO_TEXTO") or ai.extrair_tag(txt_limpo, "GABARITO")
+                matches = re.findall(r"(?:QUEST[AÃ]O\s*)?0?(\d+)\s*[\s\.\-\:\)]+\s*([A-E])", bloco)
+                if matches: return {int(num): letra for num, letra in matches}
+                letras = re.findall(r"\b[A-E]\b", bloco)
+                return {i+1: letra for i, letra in enumerate(letras)}
 
         series_presentes = sorted(list(set(["".join(filter(str.isdigit, t)) for t in lista_turmas_cir if any(c.isdigit() for c in t)])))
         opcoes_agrupadas = [f"{s}º Ano (Todas as Turmas)" for s in series_presentes if s]
@@ -4085,19 +4095,13 @@ elif menu == "📸 Scanner de Gabaritos":
                 st.warning("⚠️ Nenhuma resposta de aluno encontrada para esta avaliação.")
             else:
                 query_mat_base = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel_r]
-                len_reg, len_pei = 10, 5
-                if not query_mat_base.empty:
-                    txt_base = str(query_mat_base.iloc[0]['CONTEUDO'])
-                    len_reg = len(extrair_gab_blindado(txt_base, False))
-                    len_pei = len(extrair_gab_blindado(txt_base, True))
-                    if len_pei == 0: len_pei = len_reg
-
+                
                 def classificar_prova_realizada(resp):
                     if str(resp) == "FALTOU": return "FALTOU"
-                    if str(resp).upper().startswith("QUALITATIVA"): return "PEI"
+                    if str(resp).upper().startswith("QUALITATIVA"): return "PEI_N3"
+                    # Se tem menos de 15 respostas, assumimos que é PEI (N1 ou N2)
                     qtd = len(str(resp).split(';'))
-                    if len_pei != len_reg:
-                        if abs(qtd - len_pei) < abs(qtd - len_reg): return "PEI"
+                    if qtd <= 10: return "PEI_N1_N2"
                     return "REGULAR"
 
                 df_alunos_min = df_alunos[['ID', 'NECESSIDADES']].copy()
@@ -4111,7 +4115,13 @@ elif menu == "📸 Scanner de Gabaritos":
 
                 st.markdown("### 🎯 Análise de Performance por Item")
                 
-                versoes_disponiveis = ["📝 Regular (Padrão + Variantes)", "♿ Adaptada (PEI)"]
+                # 🚨 NOVO MENU DE LENTES (INCLUINDO OS 3 NÍVEIS PEI)
+                versoes_disponiveis = [
+                    "📝 Regular (Padrão + Variantes)", 
+                    "🔵 PEI Nível 1 (Apoio Leve)",
+                    "🟡 PEI Nível 2 (Apoio Moderado)",
+                    "🔴 PEI Nível 3 (Qualitativa)"
+                ]
                 
                 trim_limpo = tr_sel_r.replace(" ", "")
                 tem_2a = not df_aulas[(df_aulas['TIPO_MATERIAL'].str.upper().str.contains("2ª|2CHAMADA", regex=True)) & (df_aulas['TIPO_MATERIAL'].str.contains(trim_limpo, case=False)) & (df_aulas['ANO'].str.contains(ano_num_r))].empty
@@ -4121,9 +4131,17 @@ elif menu == "📸 Scanner de Gabaritos":
                 versao_visao = st.selectbox("🔍 Selecione o Caderno de Prova para Análise:", versoes_disponiveis, key=f"caderno_rx_{v}")
                 
                 is_pei_view = "PEI" in versao_visao
+                nivel_pei_selecionado = None
+                if "Nível 1" in versao_visao: nivel_pei_selecionado = "NIVEL_1"
+                elif "Nível 2" in versao_visao: nivel_pei_selecionado = "NIVEL_2"
+                elif "Nível 3" in versao_visao: nivel_pei_selecionado = "NIVEL_3"
                 
-                if is_pei_view:
-                    df_filtrado = df_analise[df_analise['TIPO_PROVA_FEITA'] == "PEI"]
+                # 🚨 FILTRAGEM CIRÚRGICA
+                if nivel_pei_selecionado == "NIVEL_3":
+                    df_filtrado = df_analise[df_analise['TIPO_PROVA_FEITA'] == "PEI_N3"]
+                    query_mat = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel_r]
+                elif is_pei_view:
+                    df_filtrado = df_analise[df_analise['TIPO_PROVA_FEITA'] == "PEI_N1_N2"]
                     query_mat = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel_r]
                 elif "2ª Chamada" in versao_visao:
                     df_filtrado = df_analise[df_analise['IS_2A_CHAMADA'] == True]
@@ -4134,252 +4152,281 @@ elif menu == "📸 Scanner de Gabaritos":
 
                 if query_mat.empty:
                     st.error(f"❌ Gabarito base não localizado no acervo.")
-                elif df_filtrado.empty:
+                elif df_filtrado.empty and nivel_pei_selecionado != "NIVEL_3":
                     st.info(f"📭 Não há dados de alunos que realizaram o caderno '{versao_visao}'.")
                 else:
                     dados_prova = query_mat.iloc[0]
                     txt_prova_global = str(dados_prova['CONTEUDO'])
                     
-                    tag_grade_global = "GRADE_DE_CORRECAO_PEI" if is_pei_view else "GRADE_DE_CORRECAO"
-                    grade_pericia_global = re.sub(r'[*#]', '', ai.extrair_tag(txt_prova_global, tag_grade_global) or ai.extrair_tag(txt_prova_global, "GRADE_DE_CORRECAO"))
-                    
-                    tag_questoes_global = "PEI" if is_pei_view else "QUESTOES"
-                    questoes_raw = ai.extrair_tag(txt_prova_global, tag_questoes_global)
-                    
-                    gab_ativo = extrair_gab_blindado(txt_prova_global, is_pei_view)
-
-                    stats_list = []
-                    
-                    if "2ª Chamada" in versao_visao:
-                        respostas_validas = df_filtrado[(~df_filtrado['RESPOSTAS_ALUNO'].str.upper().str.contains("FALTOU")) & (~df_filtrado['RESPOSTAS_ALUNO'].str.upper().str.startswith("QUALITATIVA"))]['RESPOSTAS_ALUNO']
-                        matriz_respostas = [str(r).split(';') for r in respostas_validas]
-                        q_raw = ai.extrair_tag(txt_prova_global, "QUESTOES")
-                        num_q_total = len(re.findall(r"(?i)QUEST[AÃ]O\s*0?\d+", q_raw))
-                        if num_q_total == 0: num_q_total = 10
+                    # 🚨 TRATAMENTO ESPECIAL PARA O NÍVEL 3 (QUALITATIVO)
+                    if nivel_pei_selecionado == "NIVEL_3":
+                        st.info("♿ **Modo Qualitativo:** Esta avaliação não possui alternativas. Abaixo está a estrutura da prova e os pareceres dos alunos.")
+                        bloco_n3 = ai.extrair_tag(txt_prova_global, "NIVEL_3")
                         
-                        for i in range(1, num_q_total + 1):
-                            votos = [res[i-1] if len(res) >= i else "?" for res in matriz_respostas]
-                            acertos_integrais = votos.count("✅ Acerto Integral")
-                            acertos_parciais = votos.count("⚠️ Acerto Parcial")
+                        with st.container(border=True):
+                            st.markdown("### 📄 Estrutura da Prova (Nível 3)")
+                            st.markdown(preparar_para_leitura(bloco_n3))
                             
-                            pontos_obtidos = acertos_integrais + (acertos_parciais * 0.5)
-                            perc = (pontos_obtidos / len(votos)) * 100 if len(votos) > 0 else 0
-                            stats_list.append({"Questão": f"Q{i:02d}", "Acerto %": perc, "Gabarito": "Discursiva"})
-                    else:
-                        mapa_gabaritos = {}
-                        for av_id in df_filtrado['ID_AVALIACAO'].unique():
-                            mat_var = df_aulas[df_aulas['TIPO_MATERIAL'] == av_id]
-                            if not mat_var.empty:
-                                mapa_gabaritos[av_id] = extrair_gab_blindado(str(mat_var.iloc[0]['CONTEUDO']), is_pei_view)
-                        
-                        num_q_total = len(gab_ativo)
-                        for i in range(1, num_q_total + 1):
-                            acertos = 0
-                            validos = 0
-                            for _, row_aluno in df_filtrado.iterrows():
-                                resp_str = str(row_aluno['RESPOSTAS_ALUNO']).upper()
-                                if resp_str == "FALTOU" or resp_str.startswith("QUALITATIVA"): continue
-                                
-                                respostas_lista = resp_str.split(';')
-                                av_id_aluno = row_aluno['ID_AVALIACAO']
-                                
-                                gab_aluno = mapa_gabaritos.get(av_id_aluno, gab_ativo) 
-                                
-                                if len(respostas_lista) >= i:
-                                    validos += 1
-                                    letra_marcada = respostas_lista[i-1]
-                                    letra_certa = gab_aluno.get(i, "?")
-                                    if letra_marcada == letra_certa:
-                                        acertos += 1
-                            
-                            perc = (acertos / validos) * 100 if validos > 0 else 0
-                            correta_base = gab_ativo.get(i, "?")
-                            label_gab = f"{correta_base} (Base)" if not is_pei_view else correta_base
-                            stats_list.append({"Questão": f"Q{i:02d}", "Acerto %": perc, "Gabarito": label_gab})
-
-                    df_stats_global = pd.DataFrame(stats_list)
-                    fig_global = None
-                    
-                    if not df_stats_global.empty:
-                        col_graf, col_item = st.columns([1.2, 1])
-                        with col_graf:
-                            fig_global = px.bar(df_stats_global, x="Questão", y="Acerto %", text_auto='.0f', color="Acerto %", color_continuous_scale="RdYlGn")
-                            fig_global.update_layout(yaxis_range=[0, 110], height=350)
-                            st.plotly_chart(fig_global, use_container_width=True)
-                        
-                        with col_item:
-                            with st.container(border=True):
-                                st.markdown("### 🔬 Autópsia do Item")
-                                q_sel = st.selectbox("Selecione a questão para análise:", df_stats_global["Questão"].tolist(), key=f"q_sel_v90_{v}")
-                                info_q = df_stats_global[df_stats_global["Questão"] == q_sel].iloc[0]
-                                idx_num = int(q_sel[1:])
-                                
-                                c_met1, c_met2 = st.columns(2)
-                                c_met1.metric("Gabarito Oficial", info_q['Gabarito'])
-                                c_met2.metric("Média de Acertos", f"{info_q['Acerto %']:.1f}%")
-                                
-                                st.divider()
-                                
-                                prefixo_q = "QUEST[AÃ]O\\s*PEI" if is_pei_view else "QUEST[AÃ]O"
-                                
-                                provas_analisadas = df_filtrado['ID_AVALIACAO'].unique()
-                                
-                                for av_id_loop in provas_analisadas:
-                                    if "VARIANTE" in av_id_loop.upper() or "TIPO" in av_id_loop.upper():
-                                        tipo_letra = re.search(r'TIPO\s*([A-Z])', av_id_loop, re.IGNORECASE)
-                                        letra = tipo_letra.group(1) if tipo_letra else "B"
-                                        nome_base = av_id_loop.split('(')[0].strip()
-                                        busca_exata = f"{nome_base} - TIPO {letra}"
-                                        mat_loop = df_aulas[df_aulas['TIPO_MATERIAL'] == busca_exata]
-                                        label_versao = f"VARIANTE TIPO {letra}"
-                                    else:
-                                        mat_loop = df_aulas[df_aulas['TIPO_MATERIAL'] == av_id_loop.replace(" (2ª CHAMADA)", "")]
-                                        label_versao = "PROVA PADRÃO"
-                                        
-                                    if not mat_loop.empty:
-                                        txt_loop = str(mat_loop.iloc[0]['CONTEUDO'])
-                                        q_raw_loop = ai.extrair_tag(txt_loop, tag_questoes_global)
-                                        grade_raw_loop = re.sub(r'[*#]', '', ai.extrair_tag(txt_loop, tag_grade_global) or ai.extrair_tag(txt_loop, "GRADE_DE_CORRECAO"))
-                                        
-                                        padrao_q = rf"(?si)({prefixo_q}\s*0?{idx_num}\b.*?)(?={prefixo_q}\s*0?{idx_num+1}\b|GABARITO|$)"
-                                        m_q = re.search(padrao_q, q_raw_loop)
-                                        
-                                        if m_q:
-                                            st.markdown(f"**📄 {label_versao}**")
-                                            q_completa = m_q.group(1).strip()
-                                            
-                                            # 🚨 LIMPEZA BLINDADA
-                                            q_completa = q_completa.replace("**", "")
-                                            
-                                            partes = re.split(r'(?=\n\s*\([A-E]\)|\n\s*[A-E]\))', q_completa, maxsplit=1)
-                                            
-                                            enunciado_texto = partes[0].strip()
-                                            alternativas_texto = partes[1].strip() if len(partes) > 1 else ""
-                                            
-                                            st.info(preparar_para_leitura(enunciado_texto))
-                                            if alternativas_texto:
-                                                alt_formatada = preparar_para_leitura(alternativas_texto).replace('\n', '\n\n')
-                                                st.markdown(alt_formatada)
-                                                
-                                            padrao_p = rf"(?si){prefixo_q}\s*0?{idx_num}\b.*?(?={prefixo_q}\s*0?{idx_num+1}\b|GABARITO|RESPOSTAS|$)"
-                                            match_p = re.search(padrao_p, grade_raw_loop)
-                                            if match_p:
-                                                p_completa = match_p.group(0).strip()
-                                                dist_match = re.search(r"(?i)(?:PERÍCIA DE DISTRATORES|ANÁLISE DE LACUNA PEI|PERÍCIA|ANÁLISE|DISTRATORES)[\s\:]*(.*)", p_completa, re.DOTALL)
-                                                distratores = dist_match.group(1).strip() if dist_match else ""
-                                                if distratores:
-                                                    dist_formatado = re.sub(r'(?=\([A-E]\))', '\n\n', distratores)
-                                                    st.warning(f"**⚠️ Distratores ({label_versao}):**\n\n{preparar_para_leitura(dist_formatado)}")
-                                            st.divider()
-
-                    st.markdown("---")
-                    st.markdown("### 🖨️ Materialização do Dossiê (Para Impressão)")
-                    st.caption("Gere um documento formatado com a autópsia completa da prova para levar para a sala de aula ou Conselho de Classe. O relatório unifica os dados da prova padrão e suas variantes.")
-                    
-                    if st.button("🖨️ GERAR DOSSIÊ DE RAIO-X (DOCX)", type="primary", use_container_width=True):
-                        if df_stats_global.empty or not txt_prova_global:
-                            st.error("⚠️ Dados insuficientes para gerar o dossiê. Certifique-se de que a prova foi carregada corretamente.")
+                        if not df_filtrado.empty:
+                            st.markdown("### 👥 Pareceres dos Alunos")
+                            for _, r in df_filtrado.iterrows():
+                                with st.container(border=True):
+                                    st.markdown(f"**{r['NOME_ALUNO']}** | Nota: {r['NOTA_CALCULADA']}")
+                                    parecer = str(r['RESPOSTAS_ALUNO']).replace('QUALITATIVA|', '')
+                                    st.write(parecer)
                         else:
-                            with st.spinner("Compilando Dossiê Analítico e renderizando gráficos..."):
+                            st.warning("Nenhum aluno foi avaliado com o Nível 3 nesta prova.")
+                            
+                    # 🚨 TRATAMENTO PARA REGULAR, NÍVEL 1 E NÍVEL 2
+                    else:
+                        tag_grade_global = "GRADE_DE_CORRECAO_PEI" if is_pei_view else "GRADE_DE_CORRECAO"
+                        grade_pericia_global = re.sub(r'[*#]', '', ai.extrair_tag(txt_prova_global, tag_grade_global) or ai.extrair_tag(txt_prova_global, "GRADE_DE_CORRECAO"))
+                        
+                        gab_ativo = extrair_gab_blindado(txt_prova_global, is_pei_view, nivel_pei_selecionado)
+
+                        stats_list = []
+                        
+                        if "2ª Chamada" in versao_visao:
+                            respostas_validas = df_filtrado[(~df_filtrado['RESPOSTAS_ALUNO'].str.upper().str.contains("FALTOU")) & (~df_filtrado['RESPOSTAS_ALUNO'].str.upper().str.startswith("QUALITATIVA"))]['RESPOSTAS_ALUNO']
+                            matriz_respostas = [str(r).split(';') for r in respostas_validas]
+                            q_raw = ai.extrair_tag(txt_prova_global, "QUESTOES")
+                            num_q_total = len(re.findall(r"(?i)QUEST[AÃ]O\s*0?\d+", q_raw))
+                            if num_q_total == 0: num_q_total = 10
+                            
+                            for i in range(1, num_q_total + 1):
+                                votos = [res[i-1] if len(res) >= i else "?" for res in matriz_respostas]
+                                acertos_integrais = votos.count("✅ Acerto Integral")
+                                acertos_parciais = votos.count("⚠️ Acerto Parcial")
                                 
-                                grafico_bytes = None
-                                if fig_global is not None:
-                                    try:
-                                        grafico_bytes = fig_global.to_image(format="png", width=800, height=350)
-                                    except Exception as e:
-                                        st.warning("⚠️ O gráfico não pôde ser exportado. Certifique-se de que a biblioteca 'kaleido' está instalada.")
-                                
-                                notas_validas = df_filtrado[
-                                    (~df_filtrado['RESPOSTAS_ALUNO'].str.upper().str.contains("FALTOU")) & 
-                                    (~df_filtrado['RESPOSTAS_ALUNO'].str.upper().str.startswith("QUALITATIVA"))
-                                ]['NOTA_CALCULADA'].apply(util.sosa_to_float)
-                                
-                                media_turma = notas_validas.mean() if not notas_validas.empty else 0.0
-                                
-                                top_3 = df_stats_global.sort_values(by="Acerto %").head(3)
-                                top_3_str = ", ".join([f"{r['Questão']} ({r['Acerto %']:.1f}%)" for _, r in top_3.iterrows()])
-                                
-                                stats_gerais = {
-                                    "total_alunos": len(notas_validas),
-                                    "media_turma": f"{media_turma:.1f}",
-                                    "top_3": top_3_str
-                                }
-                                
-                                questoes_detalhes = []
-                                
-                                for _, r_stat in df_stats_global.iterrows():
-                                    q_str = r_stat['Questão']
-                                    q_num = int(q_str.replace("Q", ""))
+                                pontos_obtidos = acertos_integrais + (acertos_parciais * 0.5)
+                                perc = (pontos_obtidos / len(votos)) * 100 if len(votos) > 0 else 0
+                                stats_list.append({"Questão": f"Q{i:02d}", "Acerto %": perc, "Gabarito": "Discursiva"})
+                        else:
+                            mapa_gabaritos = {}
+                            for av_id in df_filtrado['ID_AVALIACAO'].unique():
+                                mat_var = df_aulas[df_aulas['TIPO_MATERIAL'] == av_id]
+                                if not mat_var.empty:
+                                    mapa_gabaritos[av_id] = extrair_gab_blindado(str(mat_var.iloc[0]['CONTEUDO']), is_pei_view, nivel_pei_selecionado)
+                            
+                            num_q_total = len(gab_ativo)
+                            for i in range(1, num_q_total + 1):
+                                acertos = 0
+                                validos = 0
+                                for _, row_aluno in df_filtrado.iterrows():
+                                    resp_str = str(row_aluno['RESPOSTAS_ALUNO']).upper()
+                                    if resp_str == "FALTOU" or resp_str.startswith("QUALITATIVA"): continue
                                     
-                                    texto_enunciado_combinado = ""
-                                    texto_pericia_combinado = ""
+                                    respostas_lista = resp_str.split(';')
+                                    av_id_aluno = row_aluno['ID_AVALIACAO']
                                     
-                                    for av_id_loop in df_filtrado['ID_AVALIACAO'].unique():
+                                    gab_aluno = mapa_gabaritos.get(av_id_aluno, gab_ativo) 
+                                    
+                                    if len(respostas_lista) >= i:
+                                        validos += 1
+                                        letra_marcada = respostas_lista[i-1]
+                                        letra_certa = gab_aluno.get(i, "?")
+                                        if letra_marcada == letra_certa:
+                                            acertos += 1
+                                
+                                perc = (acertos / validos) * 100 if validos > 0 else 0
+                                correta_base = gab_ativo.get(i, "?")
+                                label_gab = f"{correta_base} (Base)" if not is_pei_view else correta_base
+                                stats_list.append({"Questão": f"Q{i:02d}", "Acerto %": perc, "Gabarito": label_gab})
+
+                        df_stats_global = pd.DataFrame(stats_list)
+                        fig_global = None
+                        
+                        if not df_stats_global.empty:
+                            col_graf, col_item = st.columns([1.2, 1])
+                            with col_graf:
+                                fig_global = px.bar(df_stats_global, x="Questão", y="Acerto %", text_auto='.0f', color="Acerto %", color_continuous_scale="RdYlGn")
+                                fig_global.update_layout(yaxis_range=[0, 110], height=350)
+                                st.plotly_chart(fig_global, use_container_width=True)
+                            
+                            with col_item:
+                                with st.container(border=True):
+                                    st.markdown("### 🔬 Autópsia do Item")
+                                    q_sel = st.selectbox("Selecione a questão para análise:", df_stats_global["Questão"].tolist(), key=f"q_sel_v90_{v}")
+                                    info_q = df_stats_global[df_stats_global["Questão"] == q_sel].iloc[0]
+                                    idx_num = int(q_sel[1:])
+                                    
+                                    c_met1, c_met2 = st.columns(2)
+                                    c_met1.metric("Gabarito Oficial", info_q['Gabarito'])
+                                    c_met2.metric("Média de Acertos", f"{info_q['Acerto %']:.1f}%")
+                                    
+                                    st.divider()
+                                    
+                                    prefixo_q = r"(?:QUEST[AÃ]O\s*(?:PEI\s*)?|Q)"
+                                    
+                                    provas_analisadas = df_filtrado['ID_AVALIACAO'].unique()
+                                    
+                                    for av_id_loop in provas_analisadas:
                                         if "VARIANTE" in av_id_loop.upper() or "TIPO" in av_id_loop.upper():
                                             tipo_letra = re.search(r'TIPO\s*([A-Z])', av_id_loop, re.IGNORECASE)
                                             letra = tipo_letra.group(1) if tipo_letra else "B"
                                             nome_base = av_id_loop.split('(')[0].strip()
                                             busca_exata = f"{nome_base} - TIPO {letra}"
                                             mat_loop = df_aulas[df_aulas['TIPO_MATERIAL'] == busca_exata]
-                                            label_versao = f"[VARIANTE TIPO {letra}]"
+                                            label_versao = f"VARIANTE TIPO {letra}"
                                         else:
                                             mat_loop = df_aulas[df_aulas['TIPO_MATERIAL'] == av_id_loop.replace(" (2ª CHAMADA)", "")]
-                                            label_versao = "[PROVA PADRÃO]"
+                                            label_versao = "PROVA PADRÃO"
                                             
                                         if not mat_loop.empty:
                                             txt_loop = str(mat_loop.iloc[0]['CONTEUDO'])
-                                            q_raw_loop = ai.extrair_tag(txt_loop, tag_questoes_global)
+                                            
+                                            if is_pei_view:
+                                                q_raw_loop = ai.extrair_tag(txt_loop, nivel_pei_selecionado)
+                                            else:
+                                                q_raw_loop = ai.extrair_tag(txt_loop, "QUESTOES")
+                                                
                                             grade_raw_loop = re.sub(r'[*#]', '', ai.extrair_tag(txt_loop, tag_grade_global) or ai.extrair_tag(txt_loop, "GRADE_DE_CORRECAO"))
                                             
-                                            padrao_q = rf"(?si)({prefixo_q}\s*0?{q_num}\b.*?)(?={prefixo_q}\s*0?{q_num+1}\b|GABARITO|$)"
+                                            padrao_q = rf"(?si)({prefixo_q}\s*0?{idx_num}\b.*?)(?={prefixo_q}\s*0?{idx_num+1}\b|GABARITO|RUBRICA|$)"
                                             m_q = re.search(padrao_q, q_raw_loop)
+                                            
                                             if m_q:
-                                                enunciado = m_q.group(1).strip()
-                                                enunciado = re.sub(r'\[\s*PROMPT IMAGEM:.*?\]', '[IMAGEM DE APOIO]', enunciado, flags=re.IGNORECASE | re.DOTALL)
-                                                enunciado = re.sub(r'\[GEOGEBRA\].*?\[/GEOGEBRA\]', '[COMANDO GEOGEBRA]', enunciado, flags=re.IGNORECASE | re.DOTALL)
-                                                enunciado = re.sub(r'[*#]', '', enunciado)
-                                                texto_enunciado_combinado += f"{label_versao}\n{enunciado}\n\n"
+                                                st.markdown(f"**📄 {label_versao}**")
+                                                q_completa = m_q.group(1).strip()
                                                 
-                                            padrao_p = rf"(?si)({prefixo_q}\s*0?{q_num}\b.*?)(?={prefixo_q}\s*0?{q_num+1}\b|GABARITO|RESPOSTAS|$)"
-                                            m_p = re.search(padrao_p, grade_raw_loop)
-                                            if m_p:
-                                                pericia_txt = m_p.group(1).strip()
-                                                pericia_txt = re.sub(r'[*#]', '', pericia_txt)
-                                                texto_pericia_combinado += f"{label_versao}\n{pericia_txt}\n\n"
+                                                partes = re.split(r'(?=\n\s*\([A-E]\)|\n\s*[A-E]\))', q_completa, maxsplit=1)
+                                                
+                                                enunciado_texto = partes[0].strip()
+                                                alternativas_texto = partes[1].strip() if len(partes) > 1 else ""
+                                                
+                                                # 🚨 RENDERIZAÇÃO NATIVA (LATEX PERFEITO)
+                                                with st.container(border=True):
+                                                    st.markdown(preparar_para_leitura(enunciado_texto))
+                                                    if alternativas_texto:
+                                                        st.markdown(preparar_para_leitura(alternativas_texto).replace('\n', '\n\n'))
+                                                    
+                                                padrao_p = rf"(?si){prefixo_q}\s*0?{idx_num}\b.*?(?={prefixo_q}\s*0?{idx_num+1}\b|GABARITO|RESPOSTAS|$)"
+                                                match_p = re.search(padrao_p, grade_raw_loop)
+                                                if match_p:
+                                                    p_completa = match_p.group(0).strip()
+                                                    dist_match = re.search(r"(?i)(?:PERÍCIA DE DISTRATORES|ANÁLISE DE LACUNA PEI|PERÍCIA|ANÁLISE|DISTRATORES)[\s\:]*(.*)", p_completa, re.DOTALL)
+                                                    distratores = dist_match.group(1).strip() if dist_match else ""
+                                                    if distratores:
+                                                        dist_formatado = re.sub(r'(?=\([A-E]\))', '\n\n', distratores)
+                                                        st.warning(f"**⚠️ Distratores ({label_versao}):**\n\n{preparar_para_leitura(dist_formatado)}")
+                                                st.divider()
+
+                        # ==============================================================================
+                        # 🖨️ MATERIALIZAÇÃO DO DOSSIÊ (DOCX PARA IMPRESSÃO)
+                        # ==============================================================================
+                        st.markdown("---")
+                        st.markdown("### 🖨️ Materialização do Dossiê (Para Impressão)")
+                        st.caption("Gere um documento formatado com a autópsia completa da prova para levar para a sala de aula ou Conselho de Classe. O relatório unifica os dados da prova padrão e suas variantes.")
+                        
+                        if st.button("🖨️ GERAR DOSSIÊ DE RAIO-X (DOCX)", type="primary", use_container_width=True):
+                            if df_stats_global.empty or not txt_prova_global:
+                                st.error("⚠️ Dados insuficientes para gerar o dossiê. Certifique-se de que a prova foi carregada corretamente.")
+                            else:
+                                with st.spinner("Compilando Dossiê Analítico e renderizando gráficos..."):
                                     
-                                    questoes_detalhes.append({
-                                        "titulo": q_str,
-                                        "enunciado": texto_enunciado_combinado.strip(),
-                                        "acerto": f"{r_stat['Acerto %']:.1f}%",
-                                        "gabarito": r_stat['Gabarito'],
-                                        "pericia": texto_pericia_combinado.strip()
-                                    })
-                                
-                                criticos = df_filtrado[df_filtrado['NOTA_CALCULADA'].apply(util.sosa_to_float) < 6.0].apply(lambda x: f"[{x['TURMA']}] {x['NOME_ALUNO']}", axis=1).tolist()
-                                
-                                info_doc = {
-                                    "ano": t_sel_r, 
-                                    "trimestre": tr_sel_r,
-                                    "avaliacao": at_sel_r,
-                                    "data": datetime.now().strftime("%d/%m/%Y")
-                                }
-                                
-                                nome_arquivo_dossie = f"RAIOX_{t_sel_r.replace(' ', '_').replace('(', '').replace(')', '')}_{nome_curto_av}"
-                                doc_stream = exporter.gerar_docx_raiox_v90(nome_arquivo_dossie, info_doc, stats_gerais, questoes_detalhes, criticos, grafico_bytes)
-                                link_doc = db.subir_e_converter_para_google_docs(doc_stream, nome_arquivo_dossie, trimestre=tr_sel_r, categoria=t_sel_r, modo="PLANEJAMENTO")
-                                
-                                if "https" in link_doc:
-                                    db.salvar_no_banco("DB_RELATORIOS", [
-                                        datetime.now().strftime("%d/%m/%Y"), 
-                                        "TURMA", 
-                                        t_sel_r, 
-                                        "DOSSIE_RAIO_X", 
-                                        f"Avaliação: {at_sel_r}\nLink: {link_doc}"
-                                    ])
-                                    st.success("✅ Dossiê gerado e salvo no Acervo (Aba Tribunal de Auditoria)!")
-                                    st.balloons()
-                                else:
-                                    st.error(f"Erro ao salvar no Drive: {link_doc}")
+                                    grafico_bytes = None
+                                    if fig_global is not None:
+                                        try:
+                                            grafico_bytes = fig_global.to_image(format="png", width=800, height=350)
+                                        except Exception as e:
+                                            st.warning("⚠️ O gráfico não pôde ser exportado. Certifique-se de que a biblioteca 'kaleido' está instalada.")
+                                    
+                                    notas_validas = df_filtrado[
+                                        (~df_filtrado['RESPOSTAS_ALUNO'].str.upper().str.contains("FALTOU")) & 
+                                        (~df_filtrado['RESPOSTAS_ALUNO'].str.upper().str.startswith("QUALITATIVA"))
+                                    ]['NOTA_CALCULADA'].apply(util.sosa_to_float)
+                                    
+                                    media_turma = notas_validas.mean() if not notas_validas.empty else 0.0
+                                    
+                                    top_3 = df_stats_global.sort_values(by="Acerto %").head(3)
+                                    top_3_str = ", ".join([f"{r['Questão']} ({r['Acerto %']:.1f}%)" for _, r in top_3.iterrows()])
+                                    
+                                    stats_gerais = {
+                                        "total_alunos": len(notas_validas),
+                                        "media_turma": f"{media_turma:.1f}",
+                                        "top_3": top_3_str
+                                    }
+                                    
+                                    questoes_detalhes = []
+                                    
+                                    for _, r_stat in df_stats_global.iterrows():
+                                        q_str = r_stat['Questão']
+                                        q_num = int(q_str.replace("Q", ""))
+                                        
+                                        texto_enunciado_combinado = ""
+                                        texto_pericia_combinado = ""
+                                        
+                                        for av_id_loop in df_filtrado['ID_AVALIACAO'].unique():
+                                            if "VARIANTE" in av_id_loop.upper() or "TIPO" in av_id_loop.upper():
+                                                tipo_letra = re.search(r'TIPO\s*([A-Z])', av_id_loop, re.IGNORECASE)
+                                                letra = tipo_letra.group(1) if tipo_letra else "B"
+                                                nome_base = av_id_loop.split('(')[0].strip()
+                                                busca_exata = f"{nome_base} - TIPO {letra}"
+                                                mat_loop = df_aulas[df_aulas['TIPO_MATERIAL'] == busca_exata]
+                                                label_versao = f"[VARIANTE TIPO {letra}]"
+                                            else:
+                                                mat_loop = df_aulas[df_aulas['TIPO_MATERIAL'] == av_id_loop.replace(" (2ª CHAMADA)", "")]
+                                                label_versao = "[PROVA PADRÃO]"
+                                                
+                                            if not mat_loop.empty:
+                                                txt_loop = str(mat_loop.iloc[0]['CONTEUDO'])
+                                                
+                                                if is_pei_view:
+                                                    q_raw_loop = ai.extrair_tag(txt_loop, nivel_pei_selecionado)
+                                                else:
+                                                    q_raw_loop = ai.extrair_tag(txt_loop, "QUESTOES")
+                                                    
+                                                grade_raw_loop = re.sub(r'[*#]', '', ai.extrair_tag(txt_loop, tag_grade_global) or ai.extrair_tag(txt_loop, "GRADE_DE_CORRECAO"))
+                                                
+                                                padrao_q = rf"(?si)({prefixo_q}\s*0?{q_num}\b.*?)(?={prefixo_q}\s*0?{q_num+1}\b|GABARITO|RUBRICA|$)"
+                                                m_q = re.search(padrao_q, q_raw_loop)
+                                                if m_q:
+                                                    enunciado = m_q.group(1).strip()
+                                                    enunciado = re.sub(r'\[\s*PROMPT IMAGEM:.*?\]', '[IMAGEM DE APOIO]', enunciado, flags=re.IGNORECASE | re.DOTALL)
+                                                    enunciado = re.sub(r'\[GEOGEBRA\].*?\[/GEOGEBRA\]', '[COMANDO GEOGEBRA]', enunciado, flags=re.IGNORECASE | re.DOTALL)
+                                                    enunciado = re.sub(r'[*#]', '', enunciado)
+                                                    texto_enunciado_combinado += f"{label_versao}\n{enunciado}\n\n"
+                                                    
+                                                padrao_p = rf"(?si)({prefixo_q}\s*0?{q_num}\b.*?)(?={prefixo_q}\s*0?{q_num+1}\b|GABARITO|RESPOSTAS|$)"
+                                                m_p = re.search(padrao_p, grade_raw_loop)
+                                                if m_p:
+                                                    pericia_txt = m_p.group(1).strip()
+                                                    pericia_txt = re.sub(r'[*#]', '', pericia_txt)
+                                                    texto_pericia_combinado += f"{label_versao}\n{pericia_txt}\n\n"
+                                        
+                                        questoes_detalhes.append({
+                                            "titulo": q_str,
+                                            "enunciado": texto_enunciado_combinado.strip(),
+                                            "acerto": f"{r_stat['Acerto %']:.1f}%",
+                                            "gabarito": r_stat['Gabarito'],
+                                            "pericia": texto_pericia_combinado.strip()
+                                        })
+                                    
+                                    criticos = df_filtrado[df_filtrado['NOTA_CALCULADA'].apply(util.sosa_to_float) < 6.0].apply(lambda x: f"[{x['TURMA']}] {x['NOME_ALUNO']}", axis=1).tolist()
+                                    
+                                    info_doc = {
+                                        "ano": t_sel_r, 
+                                        "trimestre": tr_sel_r,
+                                        "avaliacao": f"{at_sel_r} ({versao_visao.split('(')[0].strip()})",
+                                        "data": datetime.now().strftime("%d/%m/%Y")
+                                    }
+                                    
+                                    nome_arquivo_dossie = f"RAIOX_{t_sel_r.replace(' ', '_').replace('(', '').replace(')', '')}_{nome_curto_av}"
+                                    doc_stream = exporter.gerar_docx_raiox_v90(nome_arquivo_dossie, info_doc, stats_gerais, questoes_detalhes, criticos, grafico_bytes)
+                                    link_doc = db.subir_e_converter_para_google_docs(doc_stream, nome_arquivo_dossie, trimestre=tr_sel_r, categoria=t_sel_r, modo="PLANEJAMENTO")
+                                    
+                                    if "https" in link_doc:
+                                        db.salvar_no_banco("DB_RELATORIOS", [
+                                            datetime.now().strftime("%d/%m/%Y"), 
+                                            "TURMA", 
+                                            t_sel_r, 
+                                            "DOSSIE_RAIO_X", 
+                                            f"Avaliação: {at_sel_r}\nLink: {link_doc}"
+                                        ])
+                                        st.success("✅ Dossiê gerado e salvo no Acervo (Aba Tribunal de Auditoria)!")
+                                        st.balloons()
+                                    else:
+                                        st.error(f"Erro ao salvar no Drive: {link_doc}")
 
 
 
