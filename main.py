@@ -3555,6 +3555,10 @@ elif menu == "📸 Scanner de Gabaritos":
                             
                             # 🚨 EXTRATOR DINÂMICO DE RUBRICAS DO NÍVEL 3
                             nivel3_txt = ai.extrair_tag(txt_ref, "NIVEL_3")
+                            
+                            # 🚨 VACINA ANTI-LINKS: Remove o rodapé do Drive antes de ler a rubrica
+                            nivel3_txt = util.limpar_links_antigos(nivel3_txt)
+                            
                             rubricas_encontradas = []
                             
                             if nivel3_txt:
@@ -3565,7 +3569,9 @@ elif menu == "📸 Scanner de Gabaritos":
                                     for linha in linhas_rubrica:
                                         # Limpa os marcadores de lista e negritos
                                         linha_limpa = re.sub(r'^[-*•]\s*', '', linha).replace('**', '').strip()
-                                        if linha_limpa and len(linha_limpa) > 5:
+                                        
+                                        # 🚨 DUPLA BLINDAGEM: Ignora linhas vazias e linhas que contenham links
+                                        if linha_limpa and len(linha_limpa) > 5 and "http" not in linha_limpa.lower() and "REGULAR(" not in linha_limpa.upper():
                                             rubricas_encontradas.append(linha_limpa)
                             
                             col_q1, col_q2 = st.columns([1, 1.5])
