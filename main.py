@@ -4115,6 +4115,10 @@ elif menu == "📸 Scanner de Gabaritos":
 
                 st.markdown("### 🎯 Análise de Performance por Item")
                 
+                # 🚨 NOVO BOTÃO DE LEITURA LATEX
+                c_tog_rx, _ = st.columns([1, 2])
+                modo_leitura_rx = c_tog_rx.toggle("👁️ Ativar Modo Leitura (Renderizar Matemática)", value=True, key=f"tog_rx_{v}")
+                
                 # 🚨 NOVO MENU DE LENTES (INCLUINDO OS 3 NÍVEIS PEI)
                 versoes_disponiveis = [
                     "📝 Regular (Padrão + Variantes)", 
@@ -4155,6 +4159,16 @@ elif menu == "📸 Scanner de Gabaritos":
                 elif df_filtrado.empty and nivel_pei_selecionado != "NIVEL_3":
                     st.info(f"📭 Não há dados de alunos que realizaram o caderno '{versao_visao}'.")
                 else:
+                    # 🚨 NOVO: MOSTRAR QUANTIDADE DE ALUNOS E LISTA EXPANSIVA
+                    qtd_alunos_caderno = len(df_filtrado)
+                    st.success(f"👥 **Total de alunos avaliados neste caderno:** {qtd_alunos_caderno}")
+                    with st.expander("👁️ Ver lista de estudantes"):
+                        if qtd_alunos_caderno > 0:
+                            lista_nomes = sorted(df_filtrado['NOME_ALUNO'].tolist())
+                            st.write(" • " + "\n• ".join(lista_nomes))
+                        else:
+                            st.write("Nenhum aluno.")
+
                     dados_prova = query_mat.iloc[0]
                     txt_prova_global = str(dados_prova['CONTEUDO'])
                     
@@ -4165,7 +4179,10 @@ elif menu == "📸 Scanner de Gabaritos":
                         
                         with st.container(border=True):
                             st.markdown("### 📄 Estrutura da Prova (Nível 3)")
-                            st.markdown(preparar_para_leitura(bloco_n3))
+                            if modo_leitura_rx:
+                                st.markdown(preparar_para_leitura(bloco_n3))
+                            else:
+                                st.text(bloco_n3)
                             
                         if not df_filtrado.empty:
                             st.markdown("### 👥 Pareceres dos Alunos")
@@ -4296,9 +4313,14 @@ elif menu == "📸 Scanner de Gabaritos":
                                                 
                                                 # 🚨 RENDERIZAÇÃO NATIVA (LATEX PERFEITO)
                                                 with st.container(border=True):
-                                                    st.markdown(preparar_para_leitura(enunciado_texto))
-                                                    if alternativas_texto:
-                                                        st.markdown(preparar_para_leitura(alternativas_texto).replace('\n', '\n\n'))
+                                                    if modo_leitura_rx:
+                                                        st.markdown(preparar_para_leitura(enunciado_texto))
+                                                        if alternativas_texto:
+                                                            st.markdown(preparar_para_leitura(alternativas_texto).replace('\n', '\n\n'))
+                                                    else:
+                                                        st.text(enunciado_texto)
+                                                        if alternativas_texto:
+                                                            st.text(alternativas_texto)
                                                     
                                                 padrao_p = rf"(?si){prefixo_q}\s*0?{idx_num}\b.*?(?={prefixo_q}\s*0?{idx_num+1}\b|GABARITO|RESPOSTAS|$)"
                                                 match_p = re.search(padrao_p, grade_raw_loop)
@@ -4308,7 +4330,10 @@ elif menu == "📸 Scanner de Gabaritos":
                                                     distratores = dist_match.group(1).strip() if dist_match else ""
                                                     if distratores:
                                                         dist_formatado = re.sub(r'(?=\([A-E]\))', '\n\n', distratores)
-                                                        st.warning(f"**⚠️ Distratores ({label_versao}):**\n\n{preparar_para_leitura(dist_formatado)}")
+                                                        if modo_leitura_rx:
+                                                            st.warning(f"**⚠️ Distratores ({label_versao}):**\n\n{preparar_para_leitura(dist_formatado)}")
+                                                        else:
+                                                            st.warning(f"**⚠️ Distratores ({label_versao}):**\n\n{dist_formatado}")
                                                 st.divider()
 
                         # ==============================================================================
