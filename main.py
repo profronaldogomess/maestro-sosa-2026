@@ -4027,12 +4027,13 @@ elif menu == "📸 Scanner de Gabaritos":
         st.subheader("📊 Raio-X Pedagógico: Diagnóstico de Lacunas")
         st.caption("Analise o desempenho da turma por questão. O sistema unifica automaticamente a Prova Padrão e suas Variantes em um único relatório analítico.")
         
-        # 🚨 FILTRO DE ILUSÃO DE ÓTICA: Transforma $$ em $ apenas para o Streamlit desenhar inline
+        # 🚨 ATUALIZAÇÃO: NOVA FUNÇÃO DE LEITURA (LATEX, GEOGEBRA E IMAGENS)
         def preparar_para_leitura(texto):
             if not texto: return ""
-            # Renderiza LaTeX
+            texto = re.sub(r'^```[a-zA-Z]*\n', '', texto, flags=re.MULTILINE | re.IGNORECASE)
+            texto = re.sub(r'```$', '', texto, flags=re.MULTILINE)
+            texto = texto.replace("**", "") # Remove negritos residuais
             texto = re.sub(r'\$\$(.*?)\$\$', r'$\1$', texto, flags=re.DOTALL)
-            # Formata GeoGebra e Imagens para ficarem bonitos na tela
             texto = re.sub(r'\[GEOGEBRA\](.*?)\[/GEOGEBRA\]', r'📐 *(Comando GeoGebra: \1)*', texto, flags=re.IGNORECASE | re.DOTALL)
             texto = re.sub(r'\[\s*PROMPT IMAGEM:(.*?)\s*\]', r'🖼️ *(Imagem: \1)*', texto, flags=re.IGNORECASE | re.DOTALL)
             return texto
@@ -4110,7 +4111,6 @@ elif menu == "📸 Scanner de Gabaritos":
 
                 st.markdown("### 🎯 Análise de Performance por Item")
                 
-                # 🚨 MENU SIMPLIFICADO (FUSÃO DE VARIANTES)
                 versoes_disponiveis = ["📝 Regular (Padrão + Variantes)", "♿ Adaptada (PEI)"]
                 
                 trim_limpo = tr_sel_r.replace(" ", "")
@@ -4122,7 +4122,6 @@ elif menu == "📸 Scanner de Gabaritos":
                 
                 is_pei_view = "PEI" in versao_visao
                 
-                # 🚨 FILTRAGEM CIRÚRGICA
                 if is_pei_view:
                     df_filtrado = df_analise[df_analise['TIPO_PROVA_FEITA'] == "PEI"]
                     query_mat = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel_r]
@@ -4130,9 +4129,8 @@ elif menu == "📸 Scanner de Gabaritos":
                     df_filtrado = df_analise[df_analise['IS_2A_CHAMADA'] == True]
                     query_mat = df_aulas[(df_aulas['TIPO_MATERIAL'].str.upper().str.contains("2ª|2CHAMADA", regex=True)) & (df_aulas['TIPO_MATERIAL'].str.contains(trim_limpo, case=False)) & (df_aulas['ANO'].str.contains(ano_num_r))]
                 else:
-                    # Agrupa Padrão e Variantes
                     df_filtrado = df_analise[(df_analise['TIPO_PROVA_FEITA'] == "REGULAR") & (~df_analise['IS_2A_CHAMADA'])]
-                    query_mat = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel_r] # Usa a prova base para o texto
+                    query_mat = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel_r]
 
                 if query_mat.empty:
                     st.error(f"❌ Gabarito base não localizado no acervo.")
@@ -4152,7 +4150,6 @@ elif menu == "📸 Scanner de Gabaritos":
 
                     stats_list = []
                     
-                    # 🚨 CÁLCULO ESTATÍSTICO
                     if "2ª Chamada" in versao_visao:
                         respostas_validas = df_filtrado[(~df_filtrado['RESPOSTAS_ALUNO'].str.upper().str.contains("FALTOU")) & (~df_filtrado['RESPOSTAS_ALUNO'].str.upper().str.startswith("QUALITATIVA"))]['RESPOSTAS_ALUNO']
                         matriz_respostas = [str(r).split(';') for r in respostas_validas]
@@ -4169,7 +4166,6 @@ elif menu == "📸 Scanner de Gabaritos":
                             perc = (pontos_obtidos / len(votos)) * 100 if len(votos) > 0 else 0
                             stats_list.append({"Questão": f"Q{i:02d}", "Acerto %": perc, "Gabarito": "Discursiva"})
                     else:
-                        # 🚨 MOTOR DE FUSÃO DE GABARITOS (Padrão + Variantes)
                         mapa_gabaritos = {}
                         for av_id in df_filtrado['ID_AVALIACAO'].unique():
                             mat_var = df_aulas[df_aulas['TIPO_MATERIAL'] == av_id]
@@ -4187,7 +4183,6 @@ elif menu == "📸 Scanner de Gabaritos":
                                 respostas_lista = resp_str.split(';')
                                 av_id_aluno = row_aluno['ID_AVALIACAO']
                                 
-                                # Pega o gabarito exato da prova que o aluno fez
                                 gab_aluno = mapa_gabaritos.get(av_id_aluno, gab_ativo) 
                                 
                                 if len(respostas_lista) >= i:
@@ -4227,11 +4222,9 @@ elif menu == "📸 Scanner de Gabaritos":
                                 
                                 prefixo_q = "QUEST[AÃ]O\\s*PEI" if is_pei_view else "QUEST[AÃ]O"
                                 
-                                # 🚨 MOTOR DE MÚLTIPLOS TEXTOS (BASE + VARIANTES)
                                 provas_analisadas = df_filtrado['ID_AVALIACAO'].unique()
                                 
                                 for av_id_loop in provas_analisadas:
-                                    # Busca o texto exato da variante no banco
                                     if "VARIANTE" in av_id_loop.upper() or "TIPO" in av_id_loop.upper():
                                         tipo_letra = re.search(r'TIPO\s*([A-Z])', av_id_loop, re.IGNORECASE)
                                         letra = tipo_letra.group(1) if tipo_letra else "B"
@@ -4254,7 +4247,10 @@ elif menu == "📸 Scanner de Gabaritos":
                                         if m_q:
                                             st.markdown(f"**📄 {label_versao}**")
                                             q_completa = m_q.group(1).strip()
-                                            q_completa = re.sub(r'\[\s*PROMPT IMAGEM:.*?\]', '\n\n🖼️ *[IMAGEM DE APOIO]*\n\n', q_completa)
+                                            
+                                            # 🚨 LIMPEZA BLINDADA
+                                            q_completa = q_completa.replace("**", "")
+                                            
                                             partes = re.split(r'(?=\n\s*\([A-E]\)|\n\s*[A-E]\))', q_completa, maxsplit=1)
                                             
                                             enunciado_texto = partes[0].strip()
@@ -4265,7 +4261,6 @@ elif menu == "📸 Scanner de Gabaritos":
                                                 alt_formatada = preparar_para_leitura(alternativas_texto).replace('\n', '\n\n')
                                                 st.markdown(alt_formatada)
                                                 
-                                            # Perícia da Variante
                                             padrao_p = rf"(?si){prefixo_q}\s*0?{idx_num}\b.*?(?={prefixo_q}\s*0?{idx_num+1}\b|GABARITO|RESPOSTAS|$)"
                                             match_p = re.search(padrao_p, grade_raw_loop)
                                             if match_p:
@@ -4277,9 +4272,6 @@ elif menu == "📸 Scanner de Gabaritos":
                                                     st.warning(f"**⚠️ Distratores ({label_versao}):**\n\n{preparar_para_leitura(dist_formatado)}")
                                             st.divider()
 
-                    # ==============================================================================
-                    # 🖨️ MATERIALIZAÇÃO DO DOSSIÊ (DOCX PARA IMPRESSÃO)
-                    # ==============================================================================
                     st.markdown("---")
                     st.markdown("### 🖨️ Materialização do Dossiê (Para Impressão)")
                     st.caption("Gere um documento formatado com a autópsia completa da prova para levar para a sala de aula ou Conselho de Classe. O relatório unifica os dados da prova padrão e suas variantes.")
@@ -4319,7 +4311,6 @@ elif menu == "📸 Scanner de Gabaritos":
                                     q_str = r_stat['Questão']
                                     q_num = int(q_str.replace("Q", ""))
                                     
-                                    # 🚨 MONTA O TEXTO COMBINADO PARA O DOCX
                                     texto_enunciado_combinado = ""
                                     texto_pericia_combinado = ""
                                     
@@ -4343,7 +4334,9 @@ elif menu == "📸 Scanner de Gabaritos":
                                             padrao_q = rf"(?si)({prefixo_q}\s*0?{q_num}\b.*?)(?={prefixo_q}\s*0?{q_num+1}\b|GABARITO|$)"
                                             m_q = re.search(padrao_q, q_raw_loop)
                                             if m_q:
-                                                enunciado = re.sub(r'\[\s*PROMPT IMAGEM:.*?\]', '[IMAGEM DE APOIO]', m_q.group(1)).strip()
+                                                enunciado = m_q.group(1).strip()
+                                                enunciado = re.sub(r'\[\s*PROMPT IMAGEM:.*?\]', '[IMAGEM DE APOIO]', enunciado, flags=re.IGNORECASE | re.DOTALL)
+                                                enunciado = re.sub(r'\[GEOGEBRA\].*?\[/GEOGEBRA\]', '[COMANDO GEOGEBRA]', enunciado, flags=re.IGNORECASE | re.DOTALL)
                                                 enunciado = re.sub(r'[*#]', '', enunciado)
                                                 texto_enunciado_combinado += f"{label_versao}\n{enunciado}\n\n"
                                                 
