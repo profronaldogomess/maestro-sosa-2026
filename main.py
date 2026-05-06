@@ -3556,8 +3556,9 @@ elif menu == "📸 Scanner de Gabaritos":
                             # 🚨 EXTRATOR DINÂMICO DE RUBRICAS DO NÍVEL 3
                             nivel3_txt = ai.extrair_tag(txt_ref, "NIVEL_3")
                             
-                            # 🚨 VACINA ANTI-LINKS: Remove o rodapé do Drive antes de ler a rubrica
-                            nivel3_txt = util.limpar_links_antigos(nivel3_txt)
+                            # 🚨 VACINA ANTI-LINKS (CORREÇÃO DO ERRO DE ATRIBUTO)
+                            if nivel3_txt:
+                                nivel3_txt = re.split(r"--- LINKS ---", nivel3_txt, flags=re.IGNORECASE)[0].strip()
                             
                             rubricas_encontradas = []
                             
