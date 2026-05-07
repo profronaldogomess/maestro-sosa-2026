@@ -5229,16 +5229,21 @@ elif menu == "📊 Painel de Notas & Vistos":
             c_f1, c_f2, c_f3 = st.columns([1.5, 1, 1])
             turma_sel = c_f1.selectbox("👥 Selecione a Turma:", lista_turmas_notas, key=f"n_turma_{v}")
             trimestre_sel = c_f2.selectbox("📅 Trimestre Atual:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"n_trim_{v}")
-            
-            # 🚨 O CONGELAMENTO TEMPORAL
-            data_limite = c_f3.date_input("❄️ Data Limite (Congelar Vistos):", date.today(), format="DD/MM/YYYY", help="O sistema só vai somar os vistos e bônus dados ATÉ esta data. Vistos dados depois disso não alterarão a nota fechada.")
+            data_limite = c_f3.date_input("❄️ Data Limite (Congelar Vistos):", date.today(), format="DD/MM/YYYY", help="O sistema só vai somar os vistos e bônus dados ATÉ esta data.")
             
             st.divider()
             
-            c_p1, c_p2, c_p3 = st.columns(3)
+            c_p1, c_p2, c_p3, c_p4 = st.columns([1, 1, 1, 1.5])
             p_visto = c_p1.number_input("Peso Vistos:", 0.0, 10.0, 3.0, step=0.5, key=f"p_v_{v}")
             p_teste = c_p2.number_input("Peso Teste:", 0.0, 10.0, 3.0, step=0.5, key=f"p_t_{v}")
             p_prova = c_p3.number_input("Peso Prova:", 0.0, 10.0, 4.0, step=0.5, key=f"p_p_{v}")
+            
+            # 🚨 NOVA REGRA DE JUSTIÇA PEDAGÓGICA
+            regra_rec = c_p4.selectbox(
+                "⚖️ Regra da Recuperação:", 
+                ["Média Justa (Soma + Rec / 2)", "Substituir apenas a Prova", "Substituir a Média (Tradicional)"],
+                help="Define como a nota da recuperação vai impactar a média final, garantindo justiça para quem estudou o trimestre todo."
+            )
             
             if (p_visto + p_teste + p_prova) != 10.0:
                 st.warning(f"⚠️ A soma dos pesos ({p_visto + p_teste + p_prova}) deve ser exatamente 10.0.")
@@ -5265,7 +5270,6 @@ elif menu == "📊 Painel de Notas & Vistos":
             df_d_t = df_diario[df_diario['TURMA'] == turma_sel].copy()
             df_d_t['DATA_DT'] = pd.to_datetime(df_d_t['DATA'], format="%d/%m/%Y", errors='coerce').dt.date
             
-            # 🚨 APLICA O CONGELAMENTO TEMPORAL AQUI
             df_d_trim = df_d_t[(df_d_t['DATA_DT'] >= dt_ini) & (df_d_t['DATA_DT'] <= data_limite)]
             
             for id_aluno in alunos_turma['ID']:
@@ -5331,7 +5335,7 @@ elif menu == "📊 Painel de Notas & Vistos":
                 "REC. PARALELA": n_rec
             })
 
-        # --- ALGORITMO DE TRANSBORDAMENTO ---
+        # --- ALGORITMO DE TRANSBORDAMENTO E JUSTIÇA PEDAGÓGICA ---
         df_input = pd.DataFrame(dados_editor)
         
         def aplicar_transbordamento(row):
@@ -5350,7 +5354,24 @@ elif menu == "📊 Painel de Notas & Vistos":
             p_final = max(0.0, min(p_prova, p_base + bonus_restante))
             
             soma_notas = v_final + t_final + p_final
-            media_final = min(10.0, max(soma_notas, rec_paralela))
+            
+            # 🚨 APLICAÇÃO DA REGRA DE RECUPERAÇÃO
+            if rec_paralela > 0:
+                if regra_rec == "Média Justa (Soma + Rec / 2)":
+                    if rec_paralela > soma_notas:
+                        media_final = (soma_notas + rec_paralela) / 2
+                    else:
+                        media_final = soma_notas
+                elif regra_rec == "Substituir apenas a Prova":
+                    nota_rec_convertida = (rec_paralela / 10.0) * p_prova
+                    p_final_com_rec = max(p_final, nota_rec_convertida)
+                    media_final = v_final + t_final + p_final_com_rec
+                else: # Tradicional
+                    media_final = max(soma_notas, rec_paralela)
+            else:
+                media_final = soma_notas
+                
+            media_final = min(10.0, media_final)
             
             return pd.Series([v_final, t_final, p_final, rec_paralela, media_final])
 
@@ -5365,16 +5386,24 @@ elif menu == "📊 Painel de Notas & Vistos":
             st.subheader("📝 Lançamento e Consolidação")
             st.info("💡 O sistema puxou automaticamente as notas do Scanner e dos Trabalhos. Edite se necessário.")
             
+            # 🚨 NOVO VISUAL: DASHBOARD DE NOTAS COM BARRA DE PROGRESSO
             df_editado = st.data_editor(
                 df_input,
                 column_config={
-                    "ID": None, "V_PREF": None, "T_PREF": None, "P_PREF": None, "REC_PREF": None, "MEDIA_FINAL": None,
+                    "ID": None, "V_PREF": None, "T_PREF": None, "P_PREF": None, "REC_PREF": None,
                     "ESTUDANTE": st.column_config.TextColumn("Estudante", width="medium", disabled=True),
                     "VISTOS (AUTO)": st.column_config.NumberColumn("Vistos (Sistema)", format="%.1f", disabled=True),
                     "BÔNUS (TOTAL)": st.column_config.NumberColumn("⭐ Bônus/Punição", format="%.1f", disabled=True),
                     "TESTE (LANÇAR)": st.column_config.NumberColumn("Nota Teste", min_value=0.0, max_value=p_teste, format="%.1f"),
                     "PROVA (LANÇAR)": st.column_config.NumberColumn("Nota Prova", min_value=0.0, max_value=p_prova, format="%.1f"),
                     "REC. PARALELA": st.column_config.NumberColumn("🔄 Rec. Paralela", min_value=0.0, max_value=10.0, format="%.1f"),
+                    "MEDIA_FINAL": st.column_config.ProgressColumn(
+                        "📊 Média Final",
+                        help="Média calculada com transbordamento e recuperação",
+                        format="%.1f",
+                        min_value=0.0,
+                        max_value=10.0,
+                    ),
                 },
                 hide_index=True, use_container_width=True, key=f"editor_notas_{v}"
             )
@@ -5382,7 +5411,6 @@ elif menu == "📊 Painel de Notas & Vistos":
             st.markdown("<br>", unsafe_allow_html=True)
             if st.button("💾 SALVAR NOTAS E SINCRONIZAR BOLETIM", type="primary", use_container_width=True):
                 with st.status("Sincronizando registros no Banco de Dados...") as status:
-                    # Recalcula com os dados editados
                     df_editado[['V_PREF', 'T_PREF', 'P_PREF', 'REC_PREF', 'MEDIA_FINAL']] = df_editado.apply(aplicar_transbordamento, axis=1)
                     
                     db.limpar_notas_turma_trimestre(turma_sel, trimestre_sel)
@@ -5404,7 +5432,6 @@ elif menu == "📊 Painel de Notas & Vistos":
             st.subheader("🖨️ Fechamento de Trimestre e Etiquetas")
             st.caption("Visão estratégica das médias finais. Identifique quem precisa de recuperação e gere as etiquetas para colar nas provas.")
             
-            # Categorização
             df_aprovados = df_input[df_input['MEDIA_FINAL'] >= 6.0]
             df_quase = df_input[(df_input['MEDIA_FINAL'] >= 5.5) & (df_input['MEDIA_FINAL'] < 6.0)]
             df_rec = df_input[df_input['MEDIA_FINAL'] < 5.5]
@@ -5416,7 +5443,6 @@ elif menu == "📊 Painel de Notas & Vistos":
             
             st.divider()
             
-            # 🚨 O RADAR "QUASE LÁ"
             if not df_quase.empty:
                 st.warning("🟡 **Radar 'Quase Lá' (Médias entre 5,5 e 5,9):** Estes alunos não precisam fazer a recuperação inteira. Peça para eles refazerem as questões que erraram na prova. Quando entregarem, clique no botão abaixo para injetar os décimos faltantes e fechar a nota em 6,0.")
                 
@@ -5431,7 +5457,6 @@ elif menu == "📊 Painel de Notas & Vistos":
                         for _, r in df_quase.iterrows():
                             falta = 6.0 - r['MEDIA_FINAL']
                             nome_limpo = r['ESTUDANTE'].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
-                            # Injeta o bônus no diário para que a matemática feche perfeitamente
                             linhas_bonus.append([
                                 data_hoje, r['ID'], nome_limpo, turma_sel,
                                 "ISENTO", "SISTEMA_NOTA", "Bônus de Refacção de Prova (Quase Lá)", util.sosa_to_str(falta)
@@ -5444,7 +5469,6 @@ elif menu == "📊 Painel de Notas & Vistos":
                 
             st.divider()
             
-            # 🚨 A FÁBRICA DE ETIQUETAS
             st.markdown("#### 🖨️ Fábrica de Etiquetas (Para colar nas provas)")
             st.info("O sistema gerará um documento Word com retângulos formatados. Basta imprimir, cortar e colar na prova do aluno para que ele e os pais vejam a composição exata da nota.")
             
