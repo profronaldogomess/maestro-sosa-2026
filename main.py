@@ -74,13 +74,7 @@ def check_password():
 if not check_password():
     st.stop()
 
-# --- LÓGICA DE AUTO-ATUALIZAÇÃO ---
-if 'last_sync' not in st.session_state:
-    st.session_state.last_sync = time.time()
 
-if time.time() - st.session_state.last_sync > 600:
-    st.cache_data.clear()
-    st.session_state.last_sync = time.time()
 
 # --- ESTILIZAÇÃO DE LUXO (CSS V40) ---
 BRAND_BLUE = "#2962FF"
