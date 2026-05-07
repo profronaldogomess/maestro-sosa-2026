@@ -5669,12 +5669,16 @@ elif menu == "📈 Boletim Anual & Conselho":
         st.caption(f"📌 **Legenda:** I, II, III (Médias Trimestrais) | R1, R2, R3 (Recuperações Paralelas) | Σ (Soma Anual) | RF (Recuperação Final) | F (Faltas). Limite de faltas atual: **{int(limite_faltas)}**.")
 
 
+
+
+
+
 # ==============================================================================
-# MÓDULO: BOLETIM ANUAL & CONSELHO - CLEAN & UX
+# MÓDULO: BOLETIM ANUAL & CONSELHO - CLEAN & UX (INTELIGÊNCIA TEMPORAL)
 # ==============================================================================
 elif menu == "📈 Boletim Anual & Conselho":
     st.title("📈 Inteligência de Conselho e Resultados")
-    st.caption("💡 **Guia de Comando:** Visão panorâmica do ano letivo. O sistema cruza notas, recuperações e faltas para calcular automaticamente a situação final de cada estudante.")
+    st.caption("💡 **Guia de Comando:** Visão panorâmica do ano letivo. O sistema cruza notas, recuperações e faltas para calcular automaticamente a situação de cada estudante, com barras de progresso visuais.")
     st.markdown("---")
 
     if df_notas.empty:
@@ -5739,11 +5743,20 @@ elif menu == "📈 Boletim Anual & Conselho":
 
         pivot = pivot.fillna(0.0)
 
+        # 🚨 INTELIGÊNCIA TEMPORAL: Descobre quantos trimestres já aconteceram
+        trimestres_ativos = 0
+        if pivot['MEDIA_FINAL_I Trimestre'].sum() > 0: trimestres_ativos += 1
+        if pivot['MEDIA_FINAL_II Trimestre'].sum() > 0: trimestres_ativos += 1
+        if pivot['MEDIA_FINAL_III Trimestre'].sum() > 0: trimestres_ativos += 1
+        if trimestres_ativos == 0: trimestres_ativos = 1 # Evita divisão por zero
+
         # Total de dias letivos registrados para a turma (para calcular o limite de 25%)
         total_dias_letivos = df_diario[df_diario['TURMA'] == turma_sel]['DATA'].nunique()
-        limite_faltas = total_dias_letivos * 0.25 
+        if total_dias_letivos == 0: total_dias_letivos = 1
+        limite_faltas = int(total_dias_letivos * 0.25)
+        if limite_faltas == 0: limite_faltas = 1 # Evita barra de progresso quebrada
 
-        # --- 3. LÓGICA DE STATUS (COM PESO DE FALTAS) ---
+        # --- 3. LÓGICA DE STATUS (COM PESO DE FALTAS E EVASÃO) ---
         def calcular_situacao_anual(row):
             t1 = util.sosa_to_float(row.get("MEDIA_FINAL_I Trimestre", 0))
             t2 = util.sosa_to_float(row.get("MEDIA_FINAL_II Trimestre", 0))
@@ -5761,14 +5774,25 @@ elif menu == "📈 Boletim Anual & Conselho":
             else:
                 pei = "👤"
             
-            # INTELIGÊNCIA DE STATUS: Faltas pesam mais que nota
-            if faltas_aluno > limite_faltas and total_dias_letivos > 20: 
-                status = "🚨 RISCO (FALTAS)"
-            elif soma >= 18.0: status = "✅ APROV"
-            elif rf >= 6.0: status = "🔄 APROV.REC"
-            elif soma > 0 and falta_pts <= 10.0: status = "⚠️ REC.FINAL"
-            elif soma > 0 and falta_pts > 10.0: status = "🚨 RISCO (NOTA)"
-            else: status = "⏳ AGUARD"
+            # 🚨 INTELIGÊNCIA DE STATUS DINÂMICO
+            if faltas_aluno >= (total_dias_letivos * 0.5) and soma == 0: 
+                status = "👻 EVASÃO"
+            elif faltas_aluno > limite_faltas:
+                status = "🚨 REPROV. FALTA"
+            elif soma >= 18.0: 
+                status = "✅ APROVADO"
+            elif rf >= 6.0: 
+                status = "🔄 APROV. REC"
+            elif trimestres_ativos == 3 and soma < 18.0 and rf < 6.0:
+                status = "❌ REPROVADO"
+            elif trimestres_ativos < 3: # O ano ainda está rolando
+                media_parcial = soma / trimestres_ativos
+                if media_parcial >= 6.0:
+                    status = "🟢 NA MÉDIA"
+                else:
+                    status = "🟡 ALERTA (NOTA)"
+            else: 
+                status = "⏳ AGUARDANDO"
             
             return pd.Series([pei, soma, falta_pts, status])
 
@@ -5777,25 +5801,31 @@ elif menu == "📈 Boletim Anual & Conselho":
         # --- 4. KPIs DE TOPO (TERMÔMETRO DA TURMA) ---
         st.markdown("### 📊 Termômetro da Turma")
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Média Geral da Turma", f"{pivot['Σ'].mean()/3:.1f}")
         
-        aprov = len(pivot[pivot['SITUAÇÃO'].str.contains("APROV")])
-        c2.metric("Taxa de Aprovação", f"{(aprov/len(pivot)*100):.0f}%" if len(pivot) > 0 else "0%")
+        # Média real baseada apenas nos trimestres que já aconteceram
+        media_real_turma = pivot['Σ'].sum() / (len(pivot) * trimestres_ativos) if len(pivot) > 0 else 0
+        c1.metric("Média Geral da Turma", f"{media_real_turma:.1f}")
         
-        c3.metric("Em Rec. Final", len(pivot[pivot['SITUAÇÃO'] == "⚠️ REC.FINAL"]))
+        # Alunos na média (>= 6.0)
+        na_media = len(pivot[pivot['SITUAÇÃO'].isin(["✅ APROVADO", "🟢 NA MÉDIA", "🔄 APROV. REC"])])
+        taxa_sucesso = (na_media / len(pivot)) * 100 if len(pivot) > 0 else 0
+        c2.metric("Alunos na Média", f"{taxa_sucesso:.0f}%", f"{na_media} de {len(pivot)} alunos")
         
-        risco_total = len(pivot[pivot['SITUAÇÃO'].str.contains("🚨 RISCO")])
-        c4.metric("Risco Crítico (Nota/Falta)", risco_total, delta_color="inverse", help="Alunos que já estouraram o limite de faltas ou que precisam de mais de 10 pontos para passar.")
+        evasao_total = len(pivot[pivot['SITUAÇÃO'] == "👻 EVASÃO"])
+        c3.metric("Evasão / Abandono", evasao_total, delta_color="inverse")
+        
+        risco_total = len(pivot[pivot['SITUAÇÃO'].isin(["🚨 REPROV. FALTA", "🟡 ALERTA (NOTA)"])])
+        c4.metric("Alerta Crítico (Nota/Falta)", risco_total, delta_color="inverse", help="Alunos que estouraram faltas ou estão com a média parcial abaixo de 6.0.")
 
-        # --- 5. TABELA MOBILE-FIRST ---
+        # --- 5. TABELA VISUAL DE ELITE ---
         st.markdown("---")
         st.markdown("### 📋 Mapa de Desempenho Anual e Assiduidade")
         
         def style_status_anual(v):
-            if "APROV" in str(v): return 'color: #2ECC71; font-weight: bold;'
-            if "RISCO" in str(v): return 'color: #E74C3C; font-weight: bold;'
-            if "REC.FINAL" in str(v): return 'color: #F1C40F; font-weight: bold;'
-            return ''
+            if "APROV" in str(v) or "NA MÉDIA" in str(v): return 'color: #2ECC71; font-weight: bold;'
+            if "EVASÃO" in str(v) or "REPROV" in str(v): return 'color: #E74C3C; font-weight: bold;'
+            if "ALERTA" in str(v): return 'color: #F1C40F; font-weight: bold;'
+            return 'color: gray;'
 
         st.dataframe(
             pivot[['P', 'NOME_ALUNO', 
@@ -5803,11 +5833,11 @@ elif menu == "📈 Boletim Anual & Conselho":
                    'MEDIA_FINAL_II Trimestre', 'NOTA_REC_II Trimestre',
                    'MEDIA_FINAL_III Trimestre', 'NOTA_REC_III Trimestre',
                    'Σ', 'RF', 'FALTAS', 'SITUAÇÃO']]
-            .style.applymap(style_status_anual, subset=['SITUAÇÃO'])
+            .style.map(style_status_anual, subset=['SITUAÇÃO'])
             .format("{:.1f}", subset=['MEDIA_FINAL_I Trimestre', 'NOTA_REC_I Trimestre', 
                                       'MEDIA_FINAL_II Trimestre', 'NOTA_REC_II Trimestre', 
                                       'MEDIA_FINAL_III Trimestre', 'NOTA_REC_III Trimestre', 
-                                      'Σ', 'RF']),
+                                      'RF']),
             use_container_width=True, hide_index=True,
             column_config={
                 "P": st.column_config.TextColumn("P", width="small", help="Perfil: ♿ PEI ou 👤 Regular"),
@@ -5818,14 +5848,16 @@ elif menu == "📈 Boletim Anual & Conselho":
                 "NOTA_REC_II Trimestre": st.column_config.NumberColumn("R2", width="small"),
                 "MEDIA_FINAL_III Trimestre": st.column_config.NumberColumn("III", width="small"),
                 "NOTA_REC_III Trimestre": st.column_config.NumberColumn("R3", width="small"),
-                "Σ": st.column_config.NumberColumn("Σ", width="small", help="Soma Anual (Meta: 18.0)"),
+                "Σ": st.column_config.ProgressColumn("Σ (Soma)", help="Soma Anual (Meta: 18.0)", format="%.1f", min_value=0.0, max_value=18.0),
                 "RF": st.column_config.NumberColumn("RF", width="small", help="Recuperação Final"),
-                "FALTAS": st.column_config.NumberColumn("F", width="small", help=f"Total de Faltas no Ano. Limite atual: {int(limite_faltas)}"),
-                "SITUAÇÃO": st.column_config.TextColumn("Status", width="small")
+                "FALTAS": st.column_config.ProgressColumn("Faltas", help=f"Limite atual: {limite_faltas}", format="%d", min_value=0, max_value=limite_faltas),
+                "SITUAÇÃO": st.column_config.TextColumn("Status", width="medium")
             }
         )
         
-        st.caption(f"📌 **Legenda:** I, II, III (Médias Trimestrais) | R1, R2, R3 (Recuperações Paralelas) | Σ (Soma Anual) | RF (Recuperação Final) | F (Faltas). Limite de faltas atual: **{int(limite_faltas)}**.")
+        st.caption(f"📌 **Legenda:** I, II, III (Médias Trimestrais) | R1, R2, R3 (Recuperações Paralelas) | Σ (Soma Anual) | RF (Recuperação Final). Limite de faltas atual: **{limite_faltas}**.")
+
+
 
 
 
