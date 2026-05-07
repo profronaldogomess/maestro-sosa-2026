@@ -5428,29 +5428,60 @@ elif menu == "📊 Painel de Notas & Vistos":
             st.subheader("🟡 Radar 'Quase Lá' (Médias entre 5,5 e 5,9)")
             st.caption("Estes alunos não precisam fazer a recuperação inteira. Peça para eles refazerem as questões que erraram na prova.")
             
-            df_quase = df_input[(df_input['MEDIA_FINAL'] >= 5.5) & (df_input['MEDIA_FINAL'] < 6.0)]
+            df_quase = df_input[(df_input['MEDIA_FINAL'] >= 5.5) & (df_input['MEDIA_FINAL'] < 6.0)].copy()
             
             if not df_quase.empty:
-                st.warning("Quando os alunos entregarem a refacção, clique no botão abaixo para injetar os décimos faltantes e fechar a nota em 6,0.")
+                st.warning("Marque a caixinha ao lado dos alunos que **entregaram** a refacção e clique no botão abaixo para injetar os décimos faltantes e fechar a nota em 6,0.")
                 
+                # 🚨 NOVA MESA DE OPERAÇÕES: Checkbox individual para cada aluno
+                dados_radar = []
                 for _, r in df_quase.iterrows():
                     falta = 6.0 - r['MEDIA_FINAL']
-                    st.write(f"• **{r['ESTUDANTE']}** (Média: {r['MEDIA_FINAL']:.1f}) -> Precisa de **+{falta:.1f}** pts.")
+                    dados_radar.append({
+                        "ID": r['ID'],
+                        "Estudante": r['ESTUDANTE'],
+                        "Média Atual": r['MEDIA_FINAL'],
+                        "Falta": f"+{falta:.1f} pts",
+                        "Entregou a Refacção?": False
+                    })
                 
-                if st.button("⚡ APLICAR BÔNUS DE REFACÇÃO (SUBIR PARA 6.0)", type="primary"):
-                    with st.spinner("Injetando bônus no Diário de Bordo..."):
-                        linhas_bonus = []
-                        data_hoje = datetime.now().strftime("%d/%m/%Y")
-                        for _, r in df_quase.iterrows():
-                            falta = 6.0 - r['MEDIA_FINAL']
-                            nome_limpo = r['ESTUDANTE'].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
-                            linhas_bonus.append([
-                                data_hoje, r['ID'], nome_limpo, turma_sel,
-                                "ISENTO", "SISTEMA_NOTA", "Bônus de Refacção de Prova (Quase Lá)", util.sosa_to_str(falta)
-                            ])
-                        if db.salvar_lote("DB_DIARIO_BORDO", linhas_bonus):
-                            st.success("✅ Bônus aplicados! As notas foram recalculadas para 6.0.")
-                            time.sleep(1.5); st.rerun()
+                df_radar_ed = st.data_editor(
+                    pd.DataFrame(dados_radar),
+                    hide_index=True,
+                    use_container_width=True,
+                    column_config={
+                        "ID": None,
+                        "Estudante": st.column_config.TextColumn(disabled=True),
+                        "Média Atual": st.column_config.NumberColumn(format="%.1f", disabled=True),
+                        "Falta": st.column_config.TextColumn(disabled=True),
+                        "Entregou a Refacção?": st.column_config.CheckboxColumn(required=True)
+                    },
+                    key=f"ed_radar_{v}"
+                )
+                
+                st.markdown("<br>", unsafe_allow_html=True)
+                if st.button("⚡ APLICAR BÔNUS AOS ALUNOS SELECIONADOS", type="primary"):
+                    alunos_selecionados = df_radar_ed[df_radar_ed["Entregou a Refacção?"] == True]
+                    
+                    if alunos_selecionados.empty:
+                        st.error("⚠️ Nenhum aluno foi selecionado.")
+                    else:
+                        with st.spinner("Injetando bônus no Diário de Bordo..."):
+                            linhas_bonus = []
+                            data_hoje = datetime.now().strftime("%d/%m/%Y")
+                            
+                            for _, r in alunos_selecionados.iterrows():
+                                falta_num = 6.0 - r['Média Atual']
+                                nome_limpo = r['Estudante'].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
+                                
+                                linhas_bonus.append([
+                                    data_hoje, r['ID'], nome_limpo, turma_sel,
+                                    "ISENTO", "SISTEMA_NOTA", "Bônus de Refacção de Prova (Quase Lá)", util.sosa_to_str(falta_num)
+                                ])
+                                
+                            if db.salvar_lote("DB_DIARIO_BORDO", linhas_bonus):
+                                st.success(f"✅ Bônus aplicados para {len(alunos_selecionados)} aluno(s)! As notas foram recalculadas para 6.0.")
+                                time.sleep(1.5); st.rerun()
             else:
                 st.success("✅ Nenhum aluno na zona do 'Quase Lá'.")
 
