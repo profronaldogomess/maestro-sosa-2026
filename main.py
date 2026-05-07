@@ -5238,7 +5238,6 @@ elif menu == "📊 Painel de Notas & Vistos":
             p_teste = c_p2.number_input("Peso Teste:", 0.0, 10.0, 3.0, step=0.5, key=f"p_t_{v}")
             p_prova = c_p3.number_input("Peso Prova:", 0.0, 10.0, 4.0, step=0.5, key=f"p_p_{v}")
             
-            # 🚨 NOVA REGRA DE JUSTIÇA PEDAGÓGICA
             regra_rec = c_p4.selectbox(
                 "⚖️ Regra da Recuperação:", 
                 ["Média Justa (Soma + Rec / 2)", "Substituir apenas a Prova", "Substituir a Média (Tradicional)"],
@@ -5355,7 +5354,6 @@ elif menu == "📊 Painel de Notas & Vistos":
             
             soma_notas = v_final + t_final + p_final
             
-            # 🚨 APLICAÇÃO DA REGRA DE RECUPERAÇÃO
             if rec_paralela > 0:
                 if regra_rec == "Média Justa (Soma + Rec / 2)":
                     if rec_paralela > soma_notas:
@@ -5366,44 +5364,42 @@ elif menu == "📊 Painel de Notas & Vistos":
                     nota_rec_convertida = (rec_paralela / 10.0) * p_prova
                     p_final_com_rec = max(p_final, nota_rec_convertida)
                     media_final = v_final + t_final + p_final_com_rec
-                else: # Tradicional
+                else: 
                     media_final = max(soma_notas, rec_paralela)
             else:
                 media_final = soma_notas
                 
             media_final = min(10.0, media_final)
             
-            return pd.Series([v_final, t_final, p_final, rec_paralela, media_final])
+            return pd.Series([v_final, t_final, p_final, rec_paralela, media_final, soma_notas])
 
-        df_input[['V_PREF', 'T_PREF', 'P_PREF', 'REC_PREF', 'MEDIA_FINAL']] = df_input.apply(aplicar_transbordamento, axis=1)
+        df_input[['V_PREF', 'T_PREF', 'P_PREF', 'REC_PREF', 'MEDIA_FINAL', 'SOMA_BRUTA']] = df_input.apply(aplicar_transbordamento, axis=1)
 
         # ==============================================================================
-        # 🚨 ABAS DE TRABALHO: LANÇAMENTO vs FECHAMENTO
+        # 🚨 ABAS DE TRABALHO: LANÇAMENTO, RADAR, ETIQUETAS E RELATÓRIO
         # ==============================================================================
-        tab_lancamento, tab_fechamento = st.tabs(["📝 Lançamento Contínuo", "🖨️ Fechamento & Etiquetas"])
+        tab_lancamento, tab_radar, tab_fechamento, tab_relatorio = st.tabs([
+            "📝 Lançamento Contínuo", 
+            "🟡 Radar 'Quase Lá'", 
+            "🖨️ Fechamento & Etiquetas", 
+            "📊 Relatório Oficial (Coordenação)"
+        ])
 
+        # --- ABA 1: LANÇAMENTO CONTÍNUO ---
         with tab_lancamento:
             st.subheader("📝 Lançamento e Consolidação")
             st.info("💡 O sistema puxou automaticamente as notas do Scanner e dos Trabalhos. Edite se necessário.")
             
-            # 🚨 NOVO VISUAL: DASHBOARD DE NOTAS COM BARRA DE PROGRESSO
             df_editado = st.data_editor(
                 df_input,
                 column_config={
-                    "ID": None, "V_PREF": None, "T_PREF": None, "P_PREF": None, "REC_PREF": None,
+                    "ID": None, "V_PREF": None, "T_PREF": None, "P_PREF": None, "REC_PREF": None, "MEDIA_FINAL": None, "SOMA_BRUTA": None,
                     "ESTUDANTE": st.column_config.TextColumn("Estudante", width="medium", disabled=True),
                     "VISTOS (AUTO)": st.column_config.NumberColumn("Vistos (Sistema)", format="%.1f", disabled=True),
                     "BÔNUS (TOTAL)": st.column_config.NumberColumn("⭐ Bônus/Punição", format="%.1f", disabled=True),
                     "TESTE (LANÇAR)": st.column_config.NumberColumn("Nota Teste", min_value=0.0, max_value=p_teste, format="%.1f"),
                     "PROVA (LANÇAR)": st.column_config.NumberColumn("Nota Prova", min_value=0.0, max_value=p_prova, format="%.1f"),
                     "REC. PARALELA": st.column_config.NumberColumn("🔄 Rec. Paralela", min_value=0.0, max_value=10.0, format="%.1f"),
-                    "MEDIA_FINAL": st.column_config.ProgressColumn(
-                        "📊 Média Final",
-                        help="Média calculada com transbordamento e recuperação",
-                        format="%.1f",
-                        min_value=0.0,
-                        max_value=10.0,
-                    ),
                 },
                 hide_index=True, use_container_width=True, key=f"editor_notas_{v}"
             )
@@ -5411,7 +5407,7 @@ elif menu == "📊 Painel de Notas & Vistos":
             st.markdown("<br>", unsafe_allow_html=True)
             if st.button("💾 SALVAR NOTAS E SINCRONIZAR BOLETIM", type="primary", use_container_width=True):
                 with st.status("Sincronizando registros no Banco de Dados...") as status:
-                    df_editado[['V_PREF', 'T_PREF', 'P_PREF', 'REC_PREF', 'MEDIA_FINAL']] = df_editado.apply(aplicar_transbordamento, axis=1)
+                    df_editado[['V_PREF', 'T_PREF', 'P_PREF', 'REC_PREF', 'MEDIA_FINAL', 'SOMA_BRUTA']] = df_editado.apply(aplicar_transbordamento, axis=1)
                     
                     db.limpar_notas_turma_trimestre(turma_sel, trimestre_sel)
                     linhas_save =[]
@@ -5427,24 +5423,15 @@ elif menu == "📊 Painel de Notas & Vistos":
                         status.update(label="✅ Boletim Sincronizado com Sucesso!", state="complete")
                         st.balloons(); time.sleep(1); st.rerun()
 
-        # --- 🚨 NOVA ABA: FECHAMENTO E ETIQUETAS ---
-        with tab_fechamento:
-            st.subheader("🖨️ Fechamento de Trimestre e Etiquetas")
-            st.caption("Visão estratégica das médias finais. Identifique quem precisa de recuperação e gere as etiquetas para colar nas provas.")
+        # --- ABA 2: RADAR QUASE LÁ ---
+        with tab_radar:
+            st.subheader("🟡 Radar 'Quase Lá' (Médias entre 5,5 e 5,9)")
+            st.caption("Estes alunos não precisam fazer a recuperação inteira. Peça para eles refazerem as questões que erraram na prova.")
             
-            df_aprovados = df_input[df_input['MEDIA_FINAL'] >= 6.0]
             df_quase = df_input[(df_input['MEDIA_FINAL'] >= 5.5) & (df_input['MEDIA_FINAL'] < 6.0)]
-            df_rec = df_input[df_input['MEDIA_FINAL'] < 5.5]
-            
-            c_met1, c_met2, c_met3 = st.columns(3)
-            c_met1.metric("✅ Aprovados Direto", len(df_aprovados))
-            c_met2.metric("🟡 Quase Lá (Refazer Questões)", len(df_quase))
-            c_met3.metric("🔴 Recuperação Paralela", len(df_rec))
-            
-            st.divider()
             
             if not df_quase.empty:
-                st.warning("🟡 **Radar 'Quase Lá' (Médias entre 5,5 e 5,9):** Estes alunos não precisam fazer a recuperação inteira. Peça para eles refazerem as questões que erraram na prova. Quando entregarem, clique no botão abaixo para injetar os décimos faltantes e fechar a nota em 6,0.")
+                st.warning("Quando os alunos entregarem a refacção, clique no botão abaixo para injetar os décimos faltantes e fechar a nota em 6,0.")
                 
                 for _, r in df_quase.iterrows():
                     falta = 6.0 - r['MEDIA_FINAL']
@@ -5466,7 +5453,21 @@ elif menu == "📊 Painel de Notas & Vistos":
                             time.sleep(1.5); st.rerun()
             else:
                 st.success("✅ Nenhum aluno na zona do 'Quase Lá'.")
-                
+
+        # --- ABA 3: FECHAMENTO E ETIQUETAS ---
+        with tab_fechamento:
+            st.subheader("🖨️ Fechamento de Trimestre e Etiquetas")
+            st.caption("Visão estratégica das médias finais e geração de etiquetas para colar nas provas.")
+            
+            df_aprovados = df_input[df_input['MEDIA_FINAL'] >= 6.0]
+            df_quase = df_input[(df_input['MEDIA_FINAL'] >= 5.5) & (df_input['MEDIA_FINAL'] < 6.0)]
+            df_rec = df_input[df_input['MEDIA_FINAL'] < 5.5]
+            
+            c_met1, c_met2, c_met3 = st.columns(3)
+            c_met1.metric("✅ Aprovados Direto", len(df_aprovados))
+            c_met2.metric("🟡 Quase Lá (Refazer Questões)", len(df_quase))
+            c_met3.metric("🔴 Recuperação Paralela", len(df_rec))
+            
             st.divider()
             
             st.markdown("#### 🖨️ Fábrica de Etiquetas (Para colar nas provas)")
@@ -5503,6 +5504,55 @@ elif menu == "📊 Painel de Notas & Vistos":
                     if "https" in link_doc:
                         st.success("✅ Etiquetas geradas com sucesso!")
                         st.link_button("📂 ABRIR ETIQUETAS PARA IMPRESSÃO", link_doc, type="primary", use_container_width=True)
+                        st.balloons()
+                    else:
+                        st.error(f"Erro ao salvar no Drive: {link_doc}")
+
+        # --- ABA 4: RELATÓRIO OFICIAL (COORDENAÇÃO) ---
+        with tab_relatorio:
+            st.subheader("📊 Relatório Oficial (Coordenação e Sala de Aula)")
+            st.caption("Gera um documento Word com a tabela limpa de notas (sem recuperação) e listas nominais para você ler na sala de aula.")
+            
+            if st.button("🖨️ GERAR RELATÓRIO OFICIAL (DOCX)", type="primary", use_container_width=True):
+                with st.spinner("Compilando relatório oficial..."):
+                    import exporter
+                    
+                    dados_tabela = []
+                    listas_nominais = {
+                        "aprovados": [],
+                        "quase": [],
+                        "recuperacao": []
+                    }
+                    
+                    for _, r in df_input.iterrows():
+                        nome_limpo = r['ESTUDANTE'].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
+                        
+                        # Tabela Limpa (Notas Brutas)
+                        dados_tabela.append({
+                            "nome": nome_limpo,
+                            "vistos": f"{r['V_PREF']:.1f}",
+                            "teste": f"{r['T_PREF']:.1f}",
+                            "prova": f"{r['P_PREF']:.1f}",
+                            "soma": f"{r['SOMA_BRUTA']:.1f}"
+                        })
+                        
+                        # Categorização para as listas
+                        if r['MEDIA_FINAL'] >= 6.0:
+                            listas_nominais['aprovados'].append(nome_limpo)
+                        elif r['MEDIA_FINAL'] >= 5.5:
+                            listas_nominais['quase'].append(nome_limpo)
+                        else:
+                            listas_nominais['recuperacao'].append(nome_limpo)
+                            
+                    info_relatorio = {"turma": turma_sel, "trimestre": trimestre_sel}
+                    nome_arq_rel = f"RELATORIO_NOTAS_{turma_sel.replace(' ', '')}_{trimestre_sel.replace(' ', '')}"
+                    
+                    doc_stream = exporter.gerar_docx_relatorio_notas_oficial(nome_arq_rel, dados_tabela, listas_nominais, info_relatorio)
+                    link_doc = db.subir_e_converter_para_google_docs(doc_stream, nome_arq_rel, trimestre=trimestre_sel, categoria=turma_sel, modo="PLANEJAMENTO")
+                    
+                    if "https" in link_doc:
+                        st.success("✅ Relatório Oficial gerado com sucesso!")
+                        st.link_button("📂 ABRIR RELATÓRIO OFICIAL", link_doc, type="primary", use_container_width=True)
                         st.balloons()
                     else:
                         st.error(f"Erro ao salvar no Drive: {link_doc}")
