@@ -1178,20 +1178,20 @@ def gerar_docx_etiquetas_notas(nome_arquivo, dados_alunos, info):
 
         # Agrupa os alunos de 2 em 2 para preencher as colunas
         for i in range(0, len(dados_alunos), 2):
-            row_cells = table.add_row().cells
+            row = table.add_row() # 🚨 CORREÇÃO: Adiciona a linha primeiro
             
-            # Define uma altura mínima para a etiqueta ficar com bom tamanho para corte
-            tr = row_cells[0]._tr
+            # 🚨 CORREÇÃO: Acessa a altura diretamente pela linha (tr) e não pela célula
+            tr = row._tr
             trPr = tr.get_or_add_trPr()
             trHeight = OxmlElement('w:trHeight')
-            trHeight.set(qn('w:val'), str(int(120 * 20))) # Altura aproximada
+            trHeight.set(qn('w:val'), str(int(130 * 20))) # Altura ajustada
             trHeight.set(qn('w:hRule'), "atLeast")
             trPr.append(trHeight)
 
             for j in range(2):
                 if i + j < len(dados_alunos):
                     aluno = dados_alunos[i+j]
-                    c = row_cells[j]
+                    c = row.cells[j]
                     c.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
                     
                     p = c.paragraphs[0]
