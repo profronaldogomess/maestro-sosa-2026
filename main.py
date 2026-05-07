@@ -5542,43 +5542,99 @@ elif menu == "📊 Painel de Notas & Vistos":
         # --- ABA 4: RELATÓRIO OFICIAL (COORDENAÇÃO) ---
         with tab_relatorio:
             st.subheader("📊 Relatório Oficial (Coordenação e Sala de Aula)")
-            st.caption("Gera um documento Word com a tabela limpa de notas (sem recuperação) e listas nominais para você ler na sala de aula.")
+            st.caption("Visão limpa das notas brutas (sem recuperação) e listas nominais para leitura em sala.")
             
+            # 🚨 PREPARAÇÃO DOS DADOS PARA A TELA E PARA O DOCX
+            dados_tabela = []
+            listas_nominais = {
+                "aprovados": [],
+                "quase": [],
+                "recuperacao": []
+            }
+            
+            for _, r in df_input.iterrows():
+                nome_limpo = r['ESTUDANTE'].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
+                
+                # Tabela Limpa (Notas Brutas)
+                dados_tabela.append({
+                    "Estudante": nome_limpo,
+                    "Atividades": r['V_PREF'],
+                    "Teste": r['T_PREF'],
+                    "Prova": r['P_PREF'],
+                    "Soma Total": r['SOMA_BRUTA']
+                })
+                
+                # Categorização para as listas
+                if r['MEDIA_FINAL'] >= 6.0:
+                    listas_nominais['aprovados'].append(nome_limpo)
+                elif r['MEDIA_FINAL'] >= 5.5:
+                    listas_nominais['quase'].append(nome_limpo)
+                else:
+                    listas_nominais['recuperacao'].append(nome_limpo)
+            
+            # 🚨 RENDERIZAÇÃO VISUAL NA TELA
+            df_relatorio_tela = pd.DataFrame(dados_tabela)
+            
+            def style_soma_bruta(v):
+                color = '#2ECC71' if v >= 6.0 else '#FF4B4B'
+                return f'color: {color}; font-weight: bold'
+                
+            st.markdown("#### 📋 Tabela de Notas Brutas")
+            st.dataframe(
+                df_relatorio_tela.style.map(style_soma_bruta, subset=['Soma Total']).format({
+                    "Atividades": "{:.1f}", "Teste": "{:.1f}", "Prova": "{:.1f}", "Soma Total": "{:.1f}"
+                }),
+                use_container_width=True, hide_index=True
+            )
+            
+            st.markdown("---")
+            st.markdown("#### 🗣️ Listas Nominais (Situação Acadêmica)")
+            
+            col_l1, col_l2, col_l3 = st.columns(3)
+            
+            with col_l1:
+                st.success(f"**✅ Aprovados Direto ({len(listas_nominais['aprovados'])})**")
+                if listas_nominais['aprovados']:
+                    st.write(" • " + "\n• ".join(listas_nominais['aprovados']))
+                else:
+                    st.write("Nenhum aluno.")
+                    
+            with col_l2:
+                st.warning(f"**🟡 Quase Lá ({len(listas_nominais['quase'])})**")
+                if listas_nominais['quase']:
+                    st.write(" • " + "\n• ".join(listas_nominais['quase']))
+                else:
+                    st.write("Nenhum aluno.")
+                    
+            with col_l3:
+                st.error(f"**🔴 Recuperação Paralela ({len(listas_nominais['recuperacao'])})**")
+                if listas_nominais['recuperacao']:
+                    st.write(" • " + "\n• ".join(listas_nominais['recuperacao']))
+                else:
+                    st.write("Nenhum aluno.")
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            
+            # 🚨 BOTÃO DE EXPORTAÇÃO
             if st.button("🖨️ GERAR RELATÓRIO OFICIAL (DOCX)", type="primary", use_container_width=True):
                 with st.spinner("Compilando relatório oficial..."):
                     import exporter
                     
-                    dados_tabela = []
-                    listas_nominais = {
-                        "aprovados": [],
-                        "quase": [],
-                        "recuperacao": []
-                    }
-                    
-                    for _, r in df_input.iterrows():
-                        nome_limpo = r['ESTUDANTE'].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
-                        
-                        # Tabela Limpa (Notas Brutas)
-                        dados_tabela.append({
-                            "nome": nome_limpo,
-                            "vistos": f"{r['V_PREF']:.1f}",
-                            "teste": f"{r['T_PREF']:.1f}",
-                            "prova": f"{r['P_PREF']:.1f}",
-                            "soma": f"{r['SOMA_BRUTA']:.1f}"
+                    # Formata os dados para o exporter (que espera strings)
+                    dados_tabela_docx = []
+                    for r in dados_tabela:
+                        dados_tabela_docx.append({
+                            "nome": r['Estudante'],
+                            "vistos": f"{r['Atividades']:.1f}",
+                            "teste": f"{r['Teste']:.1f}",
+                            "prova": f"{r['Prova']:.1f}",
+                            "soma": f"{r['Soma Total']:.1f}"
                         })
-                        
-                        # Categorização para as listas
-                        if r['MEDIA_FINAL'] >= 6.0:
-                            listas_nominais['aprovados'].append(nome_limpo)
-                        elif r['MEDIA_FINAL'] >= 5.5:
-                            listas_nominais['quase'].append(nome_limpo)
-                        else:
-                            listas_nominais['recuperacao'].append(nome_limpo)
                             
                     info_relatorio = {"turma": turma_sel, "trimestre": trimestre_sel}
                     nome_arq_rel = f"RELATORIO_NOTAS_{turma_sel.replace(' ', '')}_{trimestre_sel.replace(' ', '')}"
                     
-                    doc_stream = exporter.gerar_docx_relatorio_notas_oficial(nome_arq_rel, dados_tabela, listas_nominais, info_relatorio)
+                    doc_stream = exporter.gerar_docx_relatorio_notas_oficial(nome_arq_rel, dados_tabela_docx, listas_nominais, info_relatorio)
                     link_doc = db.subir_e_converter_para_google_docs(doc_stream, nome_arq_rel, trimestre=trimestre_sel, categoria=turma_sel, modo="PLANEJAMENTO")
                     
                     if "https" in link_doc:
