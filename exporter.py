@@ -1150,3 +1150,82 @@ def gerar_docx_pei_qualitativa(titulo_doc, conteudo, info):
         err_doc = Document(); err_doc.add_paragraph(f"ERRO NO EXPORTER N3: {str(e)}"); err_doc.save(file_stream)
         file_stream.seek(0)
         return file_stream
+
+# ==============================================================================
+# 12. EXPORTADOR DE ETIQUETAS DE NOTAS (FECHAMENTO DE TRIMESTRE)
+# ==============================================================================
+def gerar_docx_etiquetas_notas(nome_arquivo, dados_alunos, info):
+    file_stream = io.BytesIO()
+    try:
+        doc = Document()
+        
+        # Configuração de margens estreitas para aproveitar a folha
+        section = doc.sections[0]
+        section.top_margin = Inches(0.4)
+        section.bottom_margin = Inches(0.4)
+        section.left_margin = Inches(0.4)
+        section.right_margin = Inches(0.4)
+
+        style = doc.styles['Normal']
+        style.font.name = 'Arial'
+        style.font.size = Pt(10)
+
+        # Cria uma tabela com 2 colunas para as etiquetas
+        table = doc.add_table(rows=0, cols=2)
+        table.style = 'Table Grid'
+        table.columns[0].width = Inches(3.7)
+        table.columns[1].width = Inches(3.7)
+
+        # Agrupa os alunos de 2 em 2 para preencher as colunas
+        for i in range(0, len(dados_alunos), 2):
+            row_cells = table.add_row().cells
+            
+            # Define uma altura mínima para a etiqueta ficar com bom tamanho para corte
+            tr = row_cells[0]._tr
+            trPr = tr.get_or_add_trPr()
+            trHeight = OxmlElement('w:trHeight')
+            trHeight.set(qn('w:val'), str(int(120 * 20))) # Altura aproximada
+            trHeight.set(qn('w:hRule'), "atLeast")
+            trPr.append(trHeight)
+
+            for j in range(2):
+                if i + j < len(dados_alunos):
+                    aluno = dados_alunos[i+j]
+                    c = row_cells[j]
+                    c.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+                    
+                    p = c.paragraphs[0]
+                    p.paragraph_format.space_after = Pt(2)
+                    
+                    p.add_run("ESCOLA MUNICIPAL FLÁVIO JOSÉ SIMÕES COSTA\n").bold = True
+                    p.add_run(f"Estudante: {aluno['nome']}\n").bold = True
+                    p.add_run(f"Turma: {info['turma']} | {info['trimestre']}\n\n").font.size = Pt(9)
+                    
+                    p.add_run(f"📓 Vistos (Caderno): {aluno['vistos']}\n")
+                    p.add_run(f"📝 Teste/Trabalho: {aluno['teste']}\n")
+                    p.add_run(f"📄 Prova Oficial: {aluno['prova']}\n")
+                    p.add_run(f"⭐ Bônus/Punição: {aluno['bonus']}\n")
+                    
+                    run_media = p.add_run(f"📊 MÉDIA FINAL: {aluno['media']}\n\n")
+                    run_media.bold = True
+                    run_media.font.size = Pt(11)
+                    
+                    run_status = p.add_run(f"STATUS: {aluno['status']}")
+                    run_status.bold = True
+                    if "APROVADO" in aluno['status']:
+                        run_status.font.color.rgb = RGBColor(0, 128, 0)
+                    elif "REFAZER" in aluno['status']:
+                        run_status.font.color.rgb = RGBColor(204, 102, 0)
+                    else:
+                        run_status.font.color.rgb = RGBColor(204, 0, 0)
+
+        doc.save(file_stream)
+        file_stream.seek(0)
+        return file_stream
+    except Exception as e:
+        file_stream = io.BytesIO()
+        err_doc = Document()
+        err_doc.add_paragraph(f"ERRO AO GERAR ETIQUETAS: {str(e)}")
+        err_doc.save(file_stream)
+        file_stream.seek(0)
+        return file_stream
