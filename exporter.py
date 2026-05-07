@@ -1229,3 +1229,116 @@ def gerar_docx_etiquetas_notas(nome_arquivo, dados_alunos, info):
         err_doc.save(file_stream)
         file_stream.seek(0)
         return file_stream
+    
+# ==============================================================================
+# 13. EXPORTADOR DE RELATÓRIO OFICIAL (COORDENAÇÃO E SALA DE AULA)
+# ==============================================================================
+def gerar_docx_relatorio_notas_oficial(nome_arquivo, dados_tabela, listas_nominais, info):
+    file_stream = io.BytesIO()
+    try:
+        doc = Document()
+        
+        # Configuração de margens
+        section = doc.sections[0]
+        section.top_margin = Inches(0.5)
+        section.bottom_margin = Inches(0.5)
+        section.left_margin = Inches(0.5)
+        section.right_margin = Inches(0.5)
+
+        style = doc.styles['Normal']
+        style.font.name = 'Arial'
+        style.font.size = Pt(10)
+
+        # --- PÁGINA 1: CABEÇALHO E TABELA LIMPA ---
+        p_cab = doc.add_paragraph()
+        p_cab.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run_esc = p_cab.add_run("ESCOLA MUNICIPAL FLÁVIO JOSÉ SIMÕES COSTA\n")
+        run_esc.bold = True
+        run_esc.font.size = Pt(12)
+        
+        p_cab.add_run(f"RELATÓRIO DE NOTAS BRUTAS - {info['trimestre'].upper()}\n").bold = True
+        p_cab.add_run(f"COMPONENTE CURRICULAR: MATEMÁTICA | PROFESSOR: RONALDO GOMES | TURMA: {info['turma']}\n")
+        
+        doc.add_paragraph()
+
+        # Tabela de Notas
+        table = doc.add_table(rows=1, cols=5)
+        table.style = 'Table Grid'
+        
+        # Larguras das colunas
+        widths = [Inches(3.5), Inches(1.0), Inches(1.0), Inches(1.0), Inches(1.0)]
+        for i, w in enumerate(widths): table.columns[i].width = w
+
+        # Cabeçalho da Tabela
+        headers = ['NOME DO ESTUDANTE', 'ATIVIDADES', 'TESTE', 'PROVA', 'SOMA TOTAL']
+        for i, h in enumerate(headers):
+            cell = table.cell(0, i)
+            cell.text = h
+            cell.paragraphs[0].runs[0].bold = True
+            cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+            cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+
+        # Preenchimento dos Dados
+        for row_data in dados_tabela:
+            row_cells = table.add_row().cells
+            row_cells[0].text = row_data['nome']
+            
+            row_cells[1].text = row_data['vistos']
+            row_cells[1].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+            
+            row_cells[2].text = row_data['teste']
+            row_cells[2].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+            
+            row_cells[3].text = row_data['prova']
+            row_cells[3].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+            
+            row_cells[4].text = row_data['soma']
+            row_cells[4].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+            row_cells[4].paragraphs[0].runs[0].bold = True
+
+        # --- PÁGINA 2: LISTAS NOMINAIS (PARA LEITURA EM SALA) ---
+        doc.add_page_break()
+        
+        p_tit2 = doc.add_paragraph()
+        p_tit2.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run_tit2 = p_tit2.add_run(f"SITUAÇÃO ACADÊMICA - {info['turma']} ({info['trimestre']})")
+        run_tit2.bold = True
+        run_tit2.font.size = Pt(12)
+        doc.add_paragraph()
+
+        # 1. Aprovados
+        p_ap = doc.add_paragraph()
+        run_ap = p_ap.add_run(f"✅ ALUNOS APROVADOS DIRETO ({len(listas_nominais['aprovados'])}):")
+        run_ap.bold = True
+        run_ap.font.color.rgb = RGBColor(0, 128, 0)
+        for nome in listas_nominais['aprovados']:
+            doc.add_paragraph(f"• {nome}").paragraph_format.left_indent = Inches(0.25)
+        doc.add_paragraph()
+
+        # 2. Quase Lá
+        p_ql = doc.add_paragraph()
+        run_ql = p_ql.add_run(f"🟡 ALUNOS NO RADAR 'QUASE LÁ' - REFAZER QUESTÕES ({len(listas_nominais['quase'])}):")
+        run_ql.bold = True
+        run_ql.font.color.rgb = RGBColor(204, 102, 0)
+        for nome in listas_nominais['quase']:
+            doc.add_paragraph(f"• {nome}").paragraph_format.left_indent = Inches(0.25)
+        doc.add_paragraph()
+
+        # 3. Recuperação
+        p_rec = doc.add_paragraph()
+        run_rec = p_rec.add_run(f"🔴 ALUNOS EM RECUPERAÇÃO PARALELA ({len(listas_nominais['recuperacao'])}):")
+        run_rec.bold = True
+        run_rec.font.color.rgb = RGBColor(204, 0, 0)
+        for nome in listas_nominais['recuperacao']:
+            doc.add_paragraph(f"• {nome}").paragraph_format.left_indent = Inches(0.25)
+
+        doc.save(file_stream)
+        file_stream.seek(0)
+        return file_stream
+    except Exception as e:
+        file_stream = io.BytesIO()
+        err_doc = Document()
+        err_doc.add_paragraph(f"ERRO AO GERAR RELATÓRIO: {str(e)}")
+        err_doc.save(file_stream)
+        file_stream.seek(0)
+        return file_stream
