@@ -5552,38 +5552,71 @@ elif menu == "📊 Painel de Notas & Vistos":
             
             c_met1, c_met2, c_met3 = st.columns(3)
             c_met1.metric("✅ Aprovados Direto", len(df_aprovados))
-            c_met2.metric("🟡 Quase Lá (Refazer Questões)", len(df_quase))
+            c_met2.metric("🟡 Quase Lá (5.5 a 5.9)", len(df_quase))
             c_met3.metric("🔴 Recuperação Paralela", len(df_rec))
             
             st.divider()
             
-            if not df_quase.empty:
-                st.warning("🟡 **Radar 'Quase Lá' (Médias entre 5,5 e 5,9):** Estes alunos não precisam fazer a recuperação inteira. Peça para eles refazerem as questões que erraram na prova. Quando entregarem, clique no botão abaixo para injetar os décimos faltantes e fechar a nota em 6,0.")
+            # ==============================================================================
+            # 🚨 NOVO RADAR DE REFACÇÃO UNIVERSAL (JUSTIÇA PEDAGÓGICA)
+            # ==============================================================================
+            st.warning("⚖️ **Radar de Refacção (Justiça Pedagógica):** Selecione os alunos que refizeram as questões erradas da prova. O bônus será aplicado a todos os marcados, ajudando quem precisa passar e dando um fôlego extra para quem já está na recuperação.")
+            
+            c_ref1, c_ref2 = st.columns([1, 3])
+            valor_bonus_refaccao = c_ref1.number_input("Valor do Bônus (+):", min_value=0.1, max_value=5.0, value=0.5, step=0.1, help="Quantos pontos o aluno ganha por entregar a refacção?")
+            
+            # Filtra alunos que tiraram menos de 10 (pois quem tirou 10 não precisa de bônus)
+            df_elegiveis = df_input[df_input['MEDIA_FINAL'] < 10.0].copy()
+            
+            if not df_elegiveis.empty:
+                dados_refaccao = []
+                for _, r in df_elegiveis.iterrows():
+                    dados_refaccao.append({
+                        "Entregou?": False,
+                        "ID": r['ID'],
+                        "Estudante": r['ESTUDANTE'],
+                        "Média Atual": r['MEDIA_FINAL']
+                    })
                 
-                for _, r in df_quase.iterrows():
-                    falta = 6.0 - r['MEDIA_FINAL']
-                    st.write(f"• **{r['ESTUDANTE']}** (Média: {r['MEDIA_FINAL']:.1f}) -> Precisa de **+{falta:.1f}** pts.")
+                st.markdown("**Lista de Alunos Elegíveis:**")
+                df_refaccao_ed = st.data_editor(
+                    pd.DataFrame(dados_refaccao),
+                    hide_index=True,
+                    use_container_width=True,
+                    column_config={
+                        "Entregou?": st.column_config.CheckboxColumn("Entregou?", help="Marque se o aluno entregou a refacção", default=False),
+                        "ID": None,
+                        "Estudante": st.column_config.TextColumn("Estudante", disabled=True),
+                        "Média Atual": st.column_config.NumberColumn("Média Atual", format="%.1f", disabled=True)
+                    },
+                    key=f"ed_refaccao_{v}"
+                )
                 
-                if st.button("⚡ APLICAR BÔNUS DE REFACÇÃO (SUBIR PARA 6.0)", type="primary"):
-                    with st.spinner("Injetando bônus no Diário de Bordo..."):
-                        linhas_bonus = []
-                        
-                        # Ancoragem Temporal para o Bônus de Refacção
-                        datas_turma = df_diario[(df_diario['TURMA'] == turma_sel) & (~df_diario['TAGS'].isin(['DIA NÃO LETIVO', 'BONUS_CONSELHO', 'SISTEMA_NOTA']))]['DATA_DT'].dropna()
-                        data_ancora_ref = datas_turma.max().strftime("%d/%m/%Y") if not datas_turma.empty else data_limite.strftime("%d/%m/%Y")
-                        
-                        for _, r in df_quase.iterrows():
-                            falta = 6.0 - r['MEDIA_FINAL']
-                            nome_limpo = r['ESTUDANTE'].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
-                            linhas_bonus.append([
-                                data_ancora_ref, r['ID'], nome_limpo, turma_sel,
-                                "ISENTO", "BONUS_CONSELHO", "Bônus de Refacção de Prova (Quase Lá)", util.sosa_to_str(falta)
-                            ])
-                        if db.salvar_lote("DB_DIARIO_BORDO", linhas_bonus):
-                            st.success("✅ Bônus aplicados! As notas foram recalculadas para 6.0.")
-                            time.sleep(1.5); st.rerun()
+                alunos_marcados = df_refaccao_ed[df_refaccao_ed["Entregou?"] == True]
+                
+                if st.button(f"⚡ APLICAR BÔNUS (+{valor_bonus_refaccao}) AOS {len(alunos_marcados)} ALUNOS MARCADOS", type="primary"):
+                    if alunos_marcados.empty:
+                        st.error("⚠️ Marque pelo menos um aluno na tabela acima.")
+                    else:
+                        with st.spinner("Injetando bônus no Diário de Bordo..."):
+                            linhas_bonus = []
+                            
+                            # Ancoragem Temporal Segura (Não gera falta)
+                            datas_turma = df_diario[(df_diario['TURMA'] == turma_sel) & (~df_diario['TAGS'].isin(['DIA NÃO LETIVO', 'BONUS_CONSELHO', 'SISTEMA_NOTA']))]['DATA_DT'].dropna()
+                            data_ancora_ref = datas_turma.max().strftime("%d/%m/%Y") if not datas_turma.empty else data_limite.strftime("%d/%m/%Y")
+                            
+                            for _, r in alunos_marcados.iterrows():
+                                nome_limpo = r['Estudante'].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
+                                linhas_bonus.append([
+                                    data_ancora_ref, r['ID'], nome_limpo, turma_sel,
+                                    "ISENTO", "BONUS_CONSELHO", "Bônus de Refacção de Prova (Justiça Pedagógica)", util.sosa_to_str(valor_bonus_refaccao)
+                                ])
+                                
+                            if db.salvar_lote("DB_DIARIO_BORDO", linhas_bonus):
+                                st.success(f"✅ Bônus de +{valor_bonus_refaccao} aplicado com sucesso! As notas foram recalculadas.")
+                                time.sleep(1.5); st.rerun()
             else:
-                st.success("✅ Nenhum aluno na zona do 'Quase Lá'.")
+                st.success("✅ Todos os alunos já atingiram a nota máxima (10.0).")
                 
             st.divider()
             
