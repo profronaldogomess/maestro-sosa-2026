@@ -5392,11 +5392,15 @@ elif menu == "📊 Painel de Notas & Vistos":
         df_input = pd.DataFrame(dados_editor)
         
         def aplicar_transbordamento(row):
-            bonus_restante = row['BÔNUS (SALA)'] + row['BÔNUS CONSELHO']
-            v_base = row['VISTOS (AUTO)']
-            t_base = row['TESTE (LANÇAR)']
-            p_base = row['PROVA (LANÇAR)']
-            rec_paralela = row['REC. PARALELA']
+            # 🚨 VACINA ANTI-TYPEERROR: Força a conversão para float e transforma None em 0.0
+            b_sala = float(row.get('BÔNUS (SALA)', 0.0) or 0.0)
+            b_cons = float(row.get('BÔNUS CONSELHO', 0.0) or 0.0)
+            bonus_restante = b_sala + b_cons
+            
+            v_base = float(row.get('VISTOS (AUTO)', 0.0) or 0.0)
+            t_base = float(row.get('TESTE (LANÇAR)', 0.0) or 0.0)
+            p_base = float(row.get('PROVA (LANÇAR)', 0.0) or 0.0)
+            rec_paralela = float(row.get('REC. PARALELA', 0.0) or 0.0)
             
             v_final = max(0.0, min(p_visto, v_base + bonus_restante))
             bonus_restante -= (v_final - v_base)
