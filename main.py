@@ -4950,45 +4950,131 @@ elif menu == "👤 Biografia do Estudante":
         else:
             st.info("📭 Nenhuma avaliação escaneada para este aluno no período selecionado.")
 
-        if st.button("🖨️ GERAR ETIQUETAS (DOCX)", use_container_width=True):
-                with st.spinner("Desenhando etiquetas..."):
-                    import exporter
+        # --- BLOCO 3: ENGAJAMENTO E COMPORTAMENTO (BLINDADO + EXTRATO DE AUDITORIA) ---
+        st.markdown(f"### 📊 3. Perfil de Engajamento e Comportamento ({trim_b})")
+        with st.container(border=True):
+            col_v1, col_v2 = st.columns([1.2, 1.8])
+            with col_v1:
+                if not d_alu_f.empty:
+                    # 🚨 BLINDAGEM DE ASSIDUIDADE: Ignora eventos administrativos
+                    d_alu_validas_freq = d_alu_f[~d_alu_f['TAGS'].isin(["DIA NÃO LETIVO", "BONUS_CONSELHO", "SISTEMA_NOTA"])]
+                    total_aulas_presenca = len(d_alu_validas_freq)
+                    faltas = len(d_alu_validas_freq[d_alu_validas_freq['TAGS'] == "AUSÊNCIA"])
+                    presencas = total_aulas_presenca - faltas
+                    perc_presenca = (presencas / total_aulas_presenca) * 100 if total_aulas_presenca > 0 else 0
                     
-                    dados_etiquetas = []
-                    for _, r in df_input.iterrows():
-                        nome_limpo = r['ESTUDANTE'].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
-                        
-                        if r['MEDIA_FINAL'] >= 6.0: status_txt = "✅ APROVADO"
-                        elif r['MEDIA_FINAL'] >= 5.5: status_txt = "⚠️ REFAZER QUESTÕES ERRADAS"
-                        else: status_txt = "🔴 RECUPERAÇÃO PARALELA"
-                        
-                        # 🚨 VACINA ANTI-TYPEERROR: Força a conversão para float na hora de somar para a etiqueta
-                        b_sala = float(r.get('BÔNUS (SALA)', 0.0) or 0.0)
-                        b_cons = float(r.get('BÔNUS CONSELHO', 0.0) or 0.0)
-                        bonus_total_etiq = b_sala + b_cons
-                        
-                        dados_etiquetas.append({
-                            "nome": nome_limpo,
-                            "vistos": f"{float(r.get('V_PREF', 0.0) or 0.0):.1f}",
-                            "teste": f"{float(r.get('T_PREF', 0.0) or 0.0):.1f}",
-                            "prova": f"{float(r.get('P_PREF', 0.0) or 0.0):.1f}",
-                            "bonus": f"{bonus_total_etiq:.1f}",
-                            "media": f"{float(r.get('MEDIA_FINAL', 0.0) or 0.0):.1f}",
-                            "status": status_txt
-                        })
+                    d_alu_vistos = d_alu_validas_freq[d_alu_validas_freq['VISTO_ATIVIDADE'].astype(str).str.upper() != "ISENTO"]
+                    total_aulas_visto = len(d_alu_vistos)
+                    vistos = len(d_alu_vistos[d_alu_vistos['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"])
+                    perc_visto = (vistos / total_aulas_visto) * 100 if total_aulas_visto > 0 else 0
                     
-                    info_etiqueta = {"turma": turma_sel, "trimestre": trimestre_sel}
-                    nome_arq_etiq = f"ETIQUETAS_{turma_sel.replace(' ', '')}_{trimestre_sel.replace(' ', '')}"
+                    total_bonus_periodo = d_alu_f['BONUS'].apply(util.sosa_to_float).sum()
                     
-                    doc_stream = exporter.gerar_docx_etiquetas_notas(nome_arq_etiq, dados_etiquetas, info_etiqueta)
-                    link_doc = db.subir_e_converter_para_google_docs(doc_stream, nome_arq_etiq, trimestre=trimestre_sel, categoria=turma_sel, modo="PLANEJAMENTO")
+                    st.metric("Assiduidade (Presença)", f"{perc_presenca:.0f}%", f"{faltas} faltas registradas", delta_color="inverse" if faltas > 0 else "normal")
+                    st.progress(perc_presenca / 100)
                     
-                    if "https" in link_doc:
-                        st.success("✅ Etiquetas geradas com sucesso!")
-                        st.link_button("📂 ABRIR ETIQUETAS PARA IMPRESSÃO", link_doc, type="primary", use_container_width=True)
-                        st.balloons()
-                    else:
-                        st.error(f"Erro ao salvar no Drive: {link_doc}")
+                    st.metric("Vistos no Caderno", f"{perc_visto:.0f}%", f"{vistos}/{total_aulas_visto} aulas válidas")
+                    
+                    st.metric("Mérito Acumulado (Bônus)", f"{total_bonus_periodo:+.1f} pts", help="Total de pontos extras ou punições conquistados no período.")
+                else: 
+                    st.info(f"📭 Sem registros de diário para o período.")
+
+            with col_v2:
+                st.markdown("**🚩 Ocorrências, Bônus e Observações Recentes:**")
+                if not d_alu_f.empty:
+                    mask_obs = (d_alu_f['TAGS'] != "") | (d_alu_f['OBSERVACOES'] != "") | (d_alu_f['BONUS'].apply(util.sosa_to_float) != 0)
+                    tags_obs = d_alu_f[mask_obs]
+                    
+                    if not tags_obs.empty:
+                        for _, row in tags_obs.tail(6).iterrows():
+                            tag_str = str(row['TAGS']).upper()
+                            obs_str = str(row['OBSERVACOES'])
+                            bonus_val = util.sosa_to_float(row.get('BONUS', 0))
+                            
+                            # 🚨 ÍCONES DE TRANSPARÊNCIA PARA REUNIÃO DE PAIS
+                            if tag_str == "DIA NÃO LETIVO": emoji = "🛑"
+                            elif tag_str == "BONUS_CONSELHO" and "Refacção" in obs_str: emoji = "⚡"
+                            elif tag_str == "BONUS_CONSELHO": emoji = "🎁"
+                            elif "SISTEMA_NOTA" in tag_str or "PROJETO" in obs_str.upper(): emoji = "📘"
+                            elif any(x in tag_str for x in["DORMIU", "CONVERSA", "MATERIAL", "FALTOU", "AUSÊNCIA", "ATRASO", "CELULAR", "INDISCIPLINA", "ARGUIÇÃO"]): emoji = "🔴"
+                            elif bonus_val > 0: emoji = "⭐"
+                            elif bonus_val < 0: emoji = "📉"
+                            else: emoji = "🟢"
+                                
+                            display_tag = tag_str
+                            if tag_str == "SISTEMA_NOTA": display_tag = "TRABALHO"
+                            elif tag_str == "BONUS_CONSELHO": display_tag = "INTERVENÇÃO DO PROFESSOR"
+                            
+                            if bonus_val > 0: bonus_badge = f" **[+{bonus_val} pts]**"
+                            elif bonus_val < 0: bonus_badge = f" **[{bonus_val} pts]**"
+                            else: bonus_badge = ""
+                            
+                            texto_exibicao = f"{emoji} **{row['DATA']}**"
+                            if display_tag: texto_exibicao += f" | {display_tag}"
+                            if bonus_badge: texto_exibicao += bonus_badge
+                            if obs_str: texto_exibicao += f" - *{obs_str}*"
+                            
+                            st.caption(texto_exibicao)
+                            
+                        st.markdown("<br>", unsafe_allow_html=True)
+                        with st.expander("📂 Ver Histórico Completo de Anotações"):
+                            for _, row in tags_obs.iloc[::-1].iterrows():
+                                tag_str = str(row['TAGS']).upper()
+                                obs_str = str(row['OBSERVACOES'])
+                                bonus_val = util.sosa_to_float(row.get('BONUS', 0))
+                                
+                                display_tag = tag_str if tag_str != "SISTEMA_NOTA" else "TRABALHO"
+                                if tag_str == "BONUS_CONSELHO": display_tag = "INTERVENÇÃO DO PROFESSOR"
+                                
+                                if bonus_val > 0: bonus_badge = f" **[+{bonus_val} pts]**"
+                                elif bonus_val < 0: bonus_badge = f" **[{bonus_val} pts]**"
+                                else: bonus_badge = ""
+                                
+                                texto_exibicao = f"**{row['DATA']}**"
+                                if display_tag: texto_exibicao += f" | {display_tag}"
+                                if bonus_badge: texto_exibicao += bonus_badge
+                                if obs_str: texto_exibicao += f" - {obs_str}"
+                                
+                                st.write(texto_exibicao)
+                                st.divider()
+                    else: 
+                        st.success("✅ Nenhuma ocorrência ou anotação registrada.")
+
+            # ==============================================================================
+            # 🚨 NOVO: EXTRATO DETALHADO DE AUDITORIA (PARA ALUNOS QUESTIONADORES)
+            # ==============================================================================
+            st.markdown("---")
+            with st.expander("🧾 Extrato Detalhado de Faltas e Vistos (Auditoria)"):
+                st.info("💡 Use este extrato para responder a alunos questionadores com dados exatos de datas e entregas.")
+                
+                if not d_alu_f.empty:
+                    c_ext1, c_ext2 = st.columns(2)
+                    
+                    with c_ext1:
+                        st.markdown("**📅 Histórico de Faltas**")
+                        faltas_df = d_alu_validas_freq[d_alu_validas_freq['TAGS'] == "AUSÊNCIA"]
+                        if not faltas_df.empty:
+                            for _, r in faltas_df.iterrows():
+                                st.error(f"❌ {r['DATA']} - Ausência registrada")
+                        else:
+                            st.success("✅ Nenhuma falta neste período.")
+                            
+                    with c_ext2:
+                        st.markdown("**📓 Auditoria de Caderno/Atividades**")
+                        if not d_alu_vistos.empty:
+                            for _, r in d_alu_vistos.iterrows():
+                                status_visto = str(r['VISTO_ATIVIDADE']).upper()
+                                if status_visto == "TRUE":
+                                    st.success(f"✅ {r['DATA']} - Atividade Entregue")
+                                elif status_visto == "FALSE":
+                                    if r['TAGS'] == "AUSÊNCIA":
+                                        st.warning(f"⚠️ {r['DATA']} - Não entregou (Faltou no dia)")
+                                    else:
+                                        st.error(f"❌ {r['DATA']} - Estava presente, mas NÃO entregou")
+                        else:
+                            st.info("Nenhuma cobrança de visto neste período.")
+                else:
+                    st.info("Sem dados para gerar o extrato.")
 
         # --- BLOCO 4: GRÁFICO DE EVOLUÇÃO TEMPORAL (NOVO) ---
         st.markdown(f"### 📈 4. Evolução de Desempenho ({trim_b})")
