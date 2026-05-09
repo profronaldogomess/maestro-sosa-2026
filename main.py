@@ -6287,7 +6287,7 @@ elif menu == "👥 Gestão da Turma":
                                                 st.success("Apagado!"); time.sleep(1); st.rerun()
 
     # ==============================================================================
-    # 🧠 ABA 2: RADIOGRAFIA DA TURMA (HUB ANALÍTICO)
+    # 🧠 ABA 2: RADIOGRAFIA DA TURMA (HUB ANALÍTICO V200)
     # ==============================================================================
     with tab_radiografia:
         st.subheader("🧠 Radiografia Cognitiva e Desempenho Global")
@@ -6304,6 +6304,7 @@ elif menu == "👥 Gestão da Turma":
             if alunos_rad.empty:
                 st.info("Nenhum aluno cadastrado nesta turma.")
             else:
+                # --- PREPARAÇÃO DE DADOS ---
                 calendario_saude = {
                     "I Trimestre": (date(2026, 2, 9), date(2026, 5, 22)),
                     "II Trimestre": (date(2026, 5, 25), date(2026, 9, 4)),
@@ -6320,12 +6321,32 @@ elif menu == "👥 Gestão da Turma":
                 if trim_rad != "Todos" and not df_diag_rad.empty:
                     df_diag_rad = df_diag_rad[df_diag_rad['ID_AVALIACAO'].str.contains(trim_rad.replace(" ", ""), case=False, na=False)]
 
-                st.markdown("#### 📊 1. Termômetro Global da Turma")
+                # ==============================================================================
+                # 1. DEMOGRAFIA E PERFIS (O "QUEM")
+                # ==============================================================================
+                st.markdown("#### 👥 1. Demografia e Perfis da Turma")
+                
+                total_alunos = len(alunos_rad)
+                qtd_pei = len(alunos_rad[~alunos_rad['NECESSIDADES'].astype(str).str.upper().str.strip().isin(["NENHUMA", "", "NAN", "TÍPICO", "TIPICO", "ALTA PERFORMANCE", "PENDENTE", "SUSPEITA", "DEFASAGEM LEITURA", "DEFASAGEM MATEMÁTICA"])])
+                qtd_defasagem = len(alunos_rad[alunos_rad['NECESSIDADES'].astype(str).str.upper().str.contains("DEFASAGEM")])
+                qtd_tipicos = total_alunos - qtd_pei - qtd_defasagem
+                
+                c_dem1, c_dem2, c_dem3, c_dem4 = st.columns(4)
+                c_dem1.metric("Total de Alunos", total_alunos)
+                c_dem2.metric("♿ Alunos PEI (Adaptada)", qtd_pei)
+                c_dem3.metric("🧱 Defasagem Base", qtd_defasagem)
+                c_dem4.metric("👤 Típicos / Padrão", qtd_tipicos)
+                
+                st.divider()
+
+                # ==============================================================================
+                # 2. TERMÔMETRO GLOBAL (O "COMO")
+                # ==============================================================================
+                st.markdown("#### 📊 2. Termômetro Global de Engajamento")
                 taxa_assiduidade, taxa_engajamento, media_geral_av = 0.0, 0.0, 0.0
                 
                 if not df_d_rad.empty:
-                    # 🚨 Ignora Dias Não Letivos na Radiografia
-                    df_d_rad_validas = df_d_rad[df_d_rad['TAGS'] != "DIA NÃO LETIVO"]
+                    df_d_rad_validas = df_d_rad[~df_d_rad['TAGS'].isin(["DIA NÃO LETIVO", "BONUS_CONSELHO", "SISTEMA_NOTA"])]
                     total_registros = len(df_d_rad_validas)
                     faltas = len(df_d_rad_validas[df_d_rad_validas['TAGS'] == "AUSÊNCIA"])
                     taxa_assiduidade = ((total_registros - faltas) / total_registros) * 100 if total_registros > 0 else 0
@@ -6341,191 +6362,132 @@ elif menu == "👥 Gestão da Turma":
                 c_k1, c_k2, c_k3 = st.columns(3)
                 c_k1.metric("Assiduidade Média", f"{taxa_assiduidade:.1f}%")
                 c_k2.metric("Engajamento (Vistos)", f"{taxa_engajamento:.1f}%")
-                c_k3.metric("Média em Avaliações", f"{media_geral_av:.1f}")
+                c_k3.metric("Média em Avaliações (Scanner)", f"{media_geral_av:.1f}")
                 
                 st.divider()
 
-                st.markdown("#### 🎯 2. Funil de Performance e Engajamento")
-                col_f1, col_f2 = st.columns(2)
+                # ==============================================================================
+                # 3. FUNIL DE PERFORMANCE 360°
+                # ==============================================================================
+                st.markdown("#### 🎯 3. Funil de Performance (Boletim)")
                 
-                with col_f1:
-                    st.markdown("**📝 Engajamento (Vistos)**")
-                    if not df_d_rad.empty:
-                        alunos_stats = []
-                        for id_aluno in id_alunos_turma:
-                            d_alu = df_vistos[df_vistos['ID_ALUNO'].apply(db.limpar_id) == id_aluno]
-                            if not d_alu.empty:
-                                v_alu = len(d_alu[d_alu['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"])
-                                b_alu = d_alu['BONUS'].apply(util.sosa_to_float).sum()
-                                nome_alu = d_alu.iloc[0]['NOME_ALUNO']
-                                alunos_stats.append({"nome": nome_alu, "vistos": v_alu, "total": len(d_alu), "bonus": b_alu})
-                        
-                        fantasmas = [a['nome'] for a in alunos_stats if a['total'] > 0 and (a['vistos']/a['total']) <= 0.2]
-                        top_alunos = sorted([a for a in alunos_stats if a['total'] > 0 and (a['vistos']/a['total']) >= 0.8], key=lambda x: x['bonus'], reverse=True)[:3]
-                        
-                        if fantasmas: st.error(f"👻 **Baixa Entrega:** {', '.join(fantasmas)}")
-                        else: st.success("✅ Nenhum aluno com entrega crítica.")
-                        
-                        if top_alunos: st.success(f"🌟 **Top Engajamento:** {', '.join([a['nome'] for a in top_alunos])}")
-                    else:
-                        st.info("Sem dados de vistos.")
-
-                with col_f2:
-                    st.markdown("**📊 Notas no Boletim**")
-                    df_n_trim = df_notas[(df_notas['TURMA'] == t_rad) & (df_notas['TRIMESTRE'] == trim_rad)]
-                    if not df_n_trim.empty:
-                        medias_finais = df_n_trim['MEDIA_FINAL'].apply(util.sosa_to_float)
-                        azul = len(medias_finais[medias_finais >= 7.0])
-                        amarelo = len(medias_finais[(medias_finais >= 5.0) & (medias_finais < 7.0)])
-                        vermelho = len(medias_finais[medias_finais < 5.0])
-                        
-                        st.markdown(f"🟢 **Azul:** {azul} | 🟡 **Média:** {amarelo} | 🔴 **Risco:** {vermelho}")
-                        
-                        alunos_vermelho = df_n_trim[df_n_trim['MEDIA_FINAL'].apply(util.sosa_to_float) < 5.0]['NOME_ALUNO'].tolist()
-                        if alunos_vermelho:
-                            with st.expander("🚨 Ver alunos na Zona de Risco"):
-                                st.error(", ".join(alunos_vermelho))
-                    else:
-                        st.info("Notas não consolidadas.")
-
-                st.divider()
-
-                st.markdown("#### 🧠 3. Raio-X Cirúrgico (Última Avaliação)")
-                if not df_diag_rad.empty:
-                    ultima_av = df_diag_rad['ID_AVALIACAO'].unique()[-1]
-                    st.caption(f"Analisando a prova mais recente: **{ultima_av}**")
+                df_n_trim = df_notas[(df_notas['TURMA'] == t_rad) & (df_notas['TRIMESTRE'] == trim_rad)]
+                if not df_n_trim.empty:
+                    df_n_trim['MEDIA_FLOAT'] = df_n_trim['MEDIA_FINAL'].apply(util.sosa_to_float)
                     
-                    nome_curto = ultima_av.split("-")[0].strip().replace(" (2ª CHAMADA)", "")
-                    df_ref = df_aulas[df_aulas['TIPO_MATERIAL'].str.contains(nome_curto, regex=False, na=False)]
+                    excelencia = df_n_trim[df_n_trim['MEDIA_FLOAT'] >= 7.0]
+                    atencao = df_n_trim[(df_n_trim['MEDIA_FLOAT'] >= 5.0) & (df_n_trim['MEDIA_FLOAT'] < 7.0)]
+                    risco = df_n_trim[df_n_trim['MEDIA_FLOAT'] < 5.0]
                     
-                    if not df_ref.empty:
-                        txt_prova = str(df_ref.iloc[0]['CONTEUDO'])
-                        gab_raw = ai.extrair_tag(txt_prova, "GABARITO_TEXTO") or ai.extrair_tag(txt_prova, "GABARITO")
-                        grade_raw = ai.extrair_tag(txt_prova, "GRADE_DE_CORRECAO")
-                        
-                        if gab_raw and grade_raw:
-                            matches = re.findall(r"(\d+)[\s\.\)\-:]+([A-E])", gab_raw.upper())
-                            gab_oficial = {int(num): letra for num, letra in matches}
-                            if not gab_oficial:
-                                letras = re.findall(r"\b[A-E]\b", gab_raw.upper())
-                                gab_oficial = {i+1: letra for i, letra in enumerate(letras)}
-                                
-                            respostas_alunos = df_diag_rad[df_diag_rad['ID_AVALIACAO'] == ultima_av]['RESPOSTAS_ALUNO'].astype(str).tolist()
+                    c_fun1, c_fun2, c_fun3 = st.columns(3)
+                    
+                    with c_fun1:
+                        st.success(f"**🟢 Excelência (>= 7.0): {len(excelencia)} alunos**")
+                        if not excelencia.empty:
+                            st.caption(", ".join(excelencia['NOME_ALUNO'].tolist()[:5]) + ("..." if len(excelencia) > 5 else ""))
                             
-                            lacunas_stats = []
-                            for q_num, letra_certa in gab_oficial.items():
-                                acertos = 0
-                                validos = 0
-                                for resp in respostas_alunos:
-                                    if resp == "FALTOU" or resp.startswith("QUALITATIVA"): continue
-                                    resp_lista = resp.split(";")
-                                    if len(resp_lista) >= q_num:
-                                        validos += 1
-                                        if resp_lista[q_num-1] == letra_certa:
-                                            acertos += 1
-                                
-                                if validos > 0:
-                                    taxa_acerto = acertos / validos
-                                    if taxa_acerto < 0.6: 
-                                        padrao_h = rf"(?si)QUEST[AÃ]O\s*0?{q_num}\b.*?(?:\[)(.*?)(?:\])"
-                                        m_h = re.search(padrao_h, grade_raw)
-                                        habilidade = m_h.group(1).strip() if m_h else f"Revisar conceito da Questão {q_num}"
-                                        lacunas_stats.append({"q": q_num, "taxa": taxa_acerto, "hab": habilidade})
+                    with c_fun2:
+                        st.warning(f"**🟡 Atenção (5.0 a 6.9): {len(atencao)} alunos**")
+                        if not atencao.empty:
+                            st.caption(", ".join(atencao['NOME_ALUNO'].tolist()[:5]) + ("..." if len(atencao) > 5 else ""))
                             
-                            if lacunas_stats:
-                                top_lacunas = sorted(lacunas_stats, key=lambda x: x['taxa'])[:3]
-                                st.error("🚨 **Professor, revise estes conceitos na próxima aula:**")
-                                for lac in top_lacunas:
-                                    st.markdown(f"**Q{lac['q']} ({lac['taxa']*100:.0f}% de acerto):** {lac['hab']}")
-                            else:
-                                st.success("✅ Turma com excelente desempenho! Nenhuma questão com menos de 60% de acerto.")
-                    else:
-                        st.caption("Gabarito oficial não encontrado no acervo.")
+                    with c_fun3:
+                        st.error(f"**🔴 Risco Crítico (< 5.0): {len(risco)} alunos**")
+                        if not risco.empty:
+                            st.caption(", ".join(risco['NOME_ALUNO'].tolist()))
                 else:
-                    st.info("Aguardando dados da primeira avaliação para gerar o Raio-X.")
+                    st.info("Aguardando consolidação de notas no Boletim para gerar o Funil.")
 
                 st.divider()
 
-                col_map1, col_map2 = st.columns([1, 1.5])
+                # ==============================================================================
+                # 4. SENSOR SEMÂNTICO EM LOTE (ANTI-TRAVAMENTO)
+                # ==============================================================================
+                st.markdown("#### 🚨 4. Sensor Semântico (Processamento em Lote)")
+                st.caption("Classifique as anotações do Diário de Bordo. O sistema processará todas de uma vez para evitar travamentos.")
                 
-                with col_map1:
-                    st.markdown("#### 🧩 Mapa de Perfis")
-                    def categorizar_aluno(nec):
-                        n = str(nec).upper().strip()
-                        if "PENDENTE" in n or "SUSPEITA" in n: return "🟠 Radar (Suspeita)"
-                        if "DEFASAGEM LEITURA" in n: return "🧱 Barreira de Leitura"
-                        if "DEFASAGEM MATEMÁTICA" in n or "DEFASAGEM MATEMATICA" in n: return "🧮 Desafio Lógico"
-                        if "ALTA PERFORMANCE" in n: return "🚀 Alta Performance"
-                        if n in ["NENHUMA", "", "NAN", "TÍPICO", "TIPICO"]: return "👤 Típico / Padrão"
-                        return "♿ Inclusão Oficial (PEI)" 
+                if not df_d_rad.empty:
+                    obs_reais = df_d_rad[
+                        (df_d_rad['OBSERVACOES'] != "") & 
+                        (~df_d_rad['OBSERVACOES'].str.contains("Nota de Trabalho", na=False, case=False)) &
+                        (~df_d_rad['OBSERVACOES'].str.contains(r"\[LIDO\]", na=False, case=False))
+                    ]
                     
-                    alunos_rad['PERFIL_COG'] = alunos_rad['NECESSIDADES'].apply(categorizar_aluno)
-                    contagem = alunos_rad['PERFIL_COG'].value_counts().reset_index()
-                    contagem.columns = ['Perfil', 'Quantidade']
-                    
-                    color_map = {
-                        "👤 Típico / Padrão": "#A0AEC0", "♿ Inclusão Oficial (PEI)": "#9F7AEA",
-                        "🟠 Radar (Suspeita)": "#ED8936", "🧱 Barreira de Leitura": "#E53E3E",
-                        "🧮 Desafio Lógico": "#D69E2E", "🚀 Alta Performance": "#38B2AC"
-                    }
-                    
-                    fig = px.pie(contagem, values='Quantidade', names='Perfil', hole=0.4, color='Perfil', color_discrete_map=color_map)
-                    fig.update_traces(textposition='inside', textinfo='percent+label')
-                    fig.update_layout(showlegend=False, margin=dict(t=0, b=0, l=0, r=0), height=250)
-                    st.plotly_chart(fig, use_container_width=True)
-
-                with col_map2:
-                    st.markdown("#### 🚨 Sensor Semântico (Diário)")
-                    st.caption("Classifique os alunos com base nas suas anotações recentes.")
-                    
-                    def ocultar_aviso_diario(data_obs, id_alu, texto_obs):
-                        try:
-                            wb = db.conectar()
-                            ws = wb.worksheet("DB_DIARIO_BORDO")
-                            dados = ws.get_all_values()
-                            for i, row in enumerate(dados):
-                                if i > 0 and row[0] == data_obs and db.limpar_id(row[1]) == db.limpar_id(id_alu) and row[6] == texto_obs:
-                                    ws.update_cell(i + 1, 7, texto_obs + " [LIDO]")
-                                    st.cache_data.clear()
-                                    return True
-                        except: pass
-                        return False
-
-                    if not df_d_rad.empty:
-                        obs_reais = df_d_rad[
-                            (df_d_rad['OBSERVACOES'] != "") & 
-                            (~df_d_rad['OBSERVACOES'].str.contains("Nota de Trabalho", na=False, case=False)) &
-                            (~df_d_rad['OBSERVACOES'].str.contains(r"\[LIDO\]", na=False, case=False))
-                        ]
+                    if not obs_reais.empty:
+                        # Pega as últimas 10 observações não lidas
+                        ultimas_obs = obs_reais.tail(10).iloc[::-1]
                         
-                        if not obs_reais.empty:
-                            ultimas_obs = obs_reais.tail(3).iloc[::-1]
-                            for _, row_obs in ultimas_obs.iterrows():
-                                with st.container(border=True):
-                                    st.markdown(f"🗣️ **{row_obs['NOME_ALUNO']}** ({row_obs['DATA']})")
-                                    st.info(f"*{row_obs['OBSERVACOES']}*")
+                        dados_sensor = []
+                        for _, row_obs in ultimas_obs.iterrows():
+                            dados_sensor.append({
+                                "Data": row_obs['DATA'],
+                                "ID_Aluno": row_obs['ID_ALUNO'],
+                                "Estudante": row_obs['NOME_ALUNO'],
+                                "Anotação (Diário)": row_obs['OBSERVACOES'],
+                                "Ação / Diagnóstico": "⏳ Pendente"
+                            })
+                            
+                        df_sensor_ed = st.data_editor(
+                            pd.DataFrame(dados_sensor),
+                            hide_index=True,
+                            use_container_width=True,
+                            column_config={
+                                "Data": st.column_config.TextColumn(disabled=True, width="small"),
+                                "ID_Aluno": None, # Oculta o ID
+                                "Estudante": st.column_config.TextColumn(disabled=True, width="medium"),
+                                "Anotação (Diário)": st.column_config.TextColumn(disabled=True, width="large"),
+                                "Ação / Diagnóstico": st.column_config.SelectboxColumn(
+                                    "Ação / Diagnóstico",
+                                    options=["⏳ Pendente", "✅ Apenas Ciente (Ocultar)", "🧱 Marcar: Defasagem Leitura", "🧮 Marcar: Defasagem Mat.", "🟠 Marcar: PEI (Suspeita)"],
+                                    required=True,
+                                    width="medium"
+                                )
+                            },
+                            key=f"ed_sensor_{v}"
+                        )
+                        
+                        if st.button("💾 PROCESSAR OBSERVAÇÕES EM LOTE", type="primary"):
+                            with st.status("Processando diagnósticos e atualizando banco de dados...") as status:
+                                wb = db.conectar()
+                                ws_diario = wb.worksheet("DB_DIARIO_BORDO")
+                                dados_diario = ws_diario.get_all_values()
+                                
+                                updates_diario = []
+                                
+                                for _, r in df_sensor_ed.iterrows():
+                                    acao = r["Ação / Diagnóstico"]
+                                    if acao != "⏳ Pendente":
+                                        id_alu = r["ID_Aluno"]
+                                        nome_alu = r["Estudante"]
+                                        data_obs = r["Data"]
+                                        texto_obs = r["Anotação (Diário)"]
+                                        
+                                        # 1. Aplica a cascata de perfil se necessário
+                                        if "Defasagem Leitura" in acao:
+                                            db.atualizar_aluno_cascata(id_alu, nome_alu, t_rad, "DEFASAGEM LEITURA")
+                                        elif "Defasagem Mat." in acao:
+                                            db.atualizar_aluno_cascata(id_alu, nome_alu, t_rad, "DEFASAGEM MATEMÁTICA")
+                                        elif "PEI" in acao:
+                                            db.atualizar_aluno_cascata(id_alu, nome_alu, t_rad, "PEI - PENDENTE")
+                                            
+                                        # 2. Prepara a ocultação no diário [LIDO]
+                                        for i, row_d in enumerate(dados_diario):
+                                            if i > 0 and row_d[0] == data_obs and db.limpar_id(row_d[1]) == db.limpar_id(id_alu) and row_d[6] == texto_obs:
+                                                updates_diario.append(gspread.Cell(row=i+1, col=7, value=texto_obs + " [LIDO]"))
+                                                break
+                                
+                                # Executa todas as atualizações do diário de uma vez só
+                                if updates_diario:
+                                    ws_diario.update_cells(updates_diario)
                                     
-                                    c_b1, c_b2, c_b3, c_b4 = st.columns(4)
-                                    id_aluno_obs = row_obs['ID_ALUNO']
-                                    nome_aluno_obs = row_obs['NOME_ALUNO']
-                                    data_obs = row_obs['DATA']
-                                    texto_obs = row_obs['OBSERVACOES']
-                                    
-                                    if c_b1.button("🧱 Leitura", key=f"btn_leit_{id_aluno_obs}_{row_obs.name}", use_container_width=True):
-                                        db.atualizar_aluno_cascata(id_aluno_obs, nome_aluno_obs, t_rad, "DEFASAGEM LEITURA")
-                                        ocultar_aviso_diario(data_obs, id_aluno_obs, texto_obs); st.rerun()
-                                    if c_b2.button("🧮 Mat.", key=f"btn_mat_{id_aluno_obs}_{row_obs.name}", use_container_width=True):
-                                        db.atualizar_aluno_cascata(id_aluno_obs, nome_aluno_obs, t_rad, "DEFASAGEM MATEMÁTICA")
-                                        ocultar_aviso_diario(data_obs, id_aluno_obs, texto_obs); st.rerun()
-                                    if c_b3.button("🟠 PEI", key=f"btn_pei_{id_aluno_obs}_{row_obs.name}", use_container_width=True):
-                                        db.atualizar_aluno_cascata(id_aluno_obs, nome_aluno_obs, t_rad, "PEI - PENDENTE")
-                                        ocultar_aviso_diario(data_obs, id_aluno_obs, texto_obs); st.rerun()
-                                    if c_b4.button("✅ Ciente", key=f"btn_ok_{id_aluno_obs}_{row_obs.name}", use_container_width=True):
-                                        ocultar_aviso_diario(data_obs, id_aluno_obs, texto_obs); st.rerun()
-                        else:
-                            st.success("✅ Nenhuma observação pendente.")
+                                st.cache_data.clear()
+                                status.update(label="✅ Observações processadas com sucesso!", state="complete")
+                                time.sleep(1.5)
+                                st.rerun()
                     else:
-                        st.info("Sem registros no Diário.")
+                        st.success("✅ Nenhuma observação pendente de análise no Diário de Bordo.")
+                else:
+                    st.info("Sem registros no Diário.")
 
     # ==============================================================================
     # 🎲 ABA 3: ROLETA DE ARGUIÇÃO (MANTIDA INTACTA)
