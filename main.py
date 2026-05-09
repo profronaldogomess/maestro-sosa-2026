@@ -5555,15 +5555,18 @@ elif menu == "📊 Painel de Notas & Vistos":
                         elif r['MEDIA_FINAL'] >= 5.5: status_txt = "⚠️ REFAZER QUESTÕES ERRADAS"
                         else: status_txt = "🔴 RECUPERAÇÃO PARALELA"
                         
-                        bonus_total_etiq = r['BÔNUS (SALA)'] + r['BÔNUS CONSELHO']
+                        # 🚨 VACINA ANTI-TYPEERROR: Força a conversão para float na hora de somar para a etiqueta
+                        b_sala = float(r.get('BÔNUS (SALA)', 0.0) or 0.0)
+                        b_cons = float(r.get('BÔNUS CONSELHO', 0.0) or 0.0)
+                        bonus_total_etiq = b_sala + b_cons
                         
                         dados_etiquetas.append({
                             "nome": nome_limpo,
-                            "vistos": f"{r['V_PREF']:.1f}",
-                            "teste": f"{r['T_PREF']:.1f}",
-                            "prova": f"{r['P_PREF']:.1f}",
+                            "vistos": f"{float(r.get('V_PREF', 0.0) or 0.0):.1f}",
+                            "teste": f"{float(r.get('T_PREF', 0.0) or 0.0):.1f}",
+                            "prova": f"{float(r.get('P_PREF', 0.0) or 0.0):.1f}",
                             "bonus": f"{bonus_total_etiq:.1f}",
-                            "media": f"{r['MEDIA_FINAL']:.1f}",
+                            "media": f"{float(r.get('MEDIA_FINAL', 0.0) or 0.0):.1f}",
                             "status": status_txt
                         })
                     
