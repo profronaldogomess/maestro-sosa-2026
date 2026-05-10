@@ -5465,7 +5465,7 @@ elif menu == "📊 Painel de Notas & Vistos":
                                 st.success(f"✅ Bônus de +{valor_bonus_refaccao} aplicado com sucesso! As notas foram recalculadas.")
                                 time.sleep(1.5); st.rerun()
 
-        # --- ABA: FECHAMENTO E ETIQUETAS ---
+      # --- ABA: FECHAMENTO E ETIQUETAS ---
         with tab_fechamento:
             st.subheader("🖨️ Fechamento de Trimestre e Etiquetas")
             st.caption("Visão estratégica das médias finais. Identifique quem precisa de recuperação e gere as etiquetas para colar nas provas.")
