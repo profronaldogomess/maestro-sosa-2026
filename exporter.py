@@ -1152,7 +1152,7 @@ def gerar_docx_pei_qualitativa(titulo_doc, conteudo, info):
         return file_stream
 
 # ==============================================================================
-# 12. EXPORTADOR DE ETIQUETAS DE NOTAS (FECHAMENTO DE TRIMESTRE)
+# 12. EXPORTADOR DE ETIQUETAS DE NOTAS (FECHAMENTO DE TRIMESTRE) - V200
 # ==============================================================================
 def gerar_docx_etiquetas_notas(nome_arquivo, dados_alunos, info):
     file_stream = io.BytesIO()
@@ -1178,13 +1178,13 @@ def gerar_docx_etiquetas_notas(nome_arquivo, dados_alunos, info):
 
         # Agrupa os alunos de 2 em 2 para preencher as colunas
         for i in range(0, len(dados_alunos), 2):
-            row = table.add_row() # 🚨 CORREÇÃO: Adiciona a linha primeiro
+            row = table.add_row() 
             
-            # 🚨 CORREÇÃO: Acessa a altura diretamente pela linha (tr) e não pela célula
+            # Altura ajustada para caber o novo texto
             tr = row._tr
             trPr = tr.get_or_add_trPr()
             trHeight = OxmlElement('w:trHeight')
-            trHeight.set(qn('w:val'), str(int(130 * 20))) # Altura ajustada
+            trHeight.set(qn('w:val'), str(int(140 * 20))) 
             trHeight.set(qn('w:hRule'), "atLeast")
             trPr.append(trHeight)
 
@@ -1201,12 +1201,19 @@ def gerar_docx_etiquetas_notas(nome_arquivo, dados_alunos, info):
                     p.add_run(f"Estudante: {aluno['nome']}\n").bold = True
                     p.add_run(f"Turma: {info['turma']} | {info['trimestre']}\n\n").font.size = Pt(9)
                     
-                    p.add_run(f"📓 Vistos (Caderno): {aluno['vistos']}\n")
-                    p.add_run(f"📝 Teste/Trabalho: {aluno['teste']}\n")
-                    p.add_run(f"📄 Prova Oficial: {aluno['prova']}\n")
-                    p.add_run(f"⭐ Bônus/Punição: {aluno['bonus']}\n")
+                    # 🚨 NOMENCLATURA OFICIAL (C1, C2, C3)
+                    p.add_run(f"🏛️ C1 (Vistos/Engajamento): {aluno['vistos']}\n")
+                    p.add_run(f"📝 C2 (Testes/Trabalhos): {aluno['teste']}\n")
+                    p.add_run(f"📄 C3 (Prova Oficial): {aluno['prova']}\n")
                     
-                    run_media = p.add_run(f"📊 MÉDIA FINAL: {aluno['media']}\n\n")
+                    # 🚨 DISCLAIMER DE BÔNUS E ARREDONDAMENTO (Letra menor e itálico)
+                    run_obs = p.add_run(f"* Bônus conquistados (+{aluno['bonus']} pts) e arredondamentos da prefeitura já estão embutidos nas notas acima.\n\n")
+                    run_obs.font.size = Pt(8)
+                    run_obs.font.italic = True
+                    run_obs.font.color.rgb = RGBColor(100, 100, 100) # Cor cinza para não chamar tanta atenção
+                    
+                    # 🚨 MÉDIA OFICIAL
+                    run_media = p.add_run(f"📊 MÉDIA OFICIAL (SISTEMA): {aluno['media']}\n\n")
                     run_media.bold = True
                     run_media.font.size = Pt(11)
                     
