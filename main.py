@@ -5397,22 +5397,29 @@ elif menu == "📊 Painel de Notas & Vistos":
 
         with tab_lancamento:
             st.subheader("📝 Lançamento e Consolidação")
-            st.info("💡 O sistema puxou automaticamente as notas do Scanner e dos Trabalhos. Edite se necessário. O Bônus de Conselho será injetado de forma segura sem gerar faltas.")
+            st.info("💡 **Área de Digitação:** Edite as notas brutas. **Área da Prefeitura (C1, C2, C3):** Mostra os 3 créditos finais já calculados com o transbordamento de bônus para você copiar direto para o sistema da prefeitura. *(Clique em Salvar para atualizar os cálculos na tela)*.")
             
-            # 🚨 NOVO VISUAL: DASHBOARD DE NOTAS COM BARRA DE PROGRESSO E SELOS
+            # 🚨 NOVO VISUAL: SEPARAÇÃO CLARA ENTRE DIGITAÇÃO E CRÉDITOS DA PREFEITURA
             df_editado = st.data_editor(
                 df_input,
                 column_config={
-                    "ID": None, "V_PREF": None, "T_PREF": None, "P_PREF": None, "REC_PREF": None, "_ORIGINAL_TESTE": None, "_ORIGINAL_PROVA": None,
+                    "ID": None, "REC_PREF": None, "_ORIGINAL_TESTE": None, "_ORIGINAL_PROVA": None,
+                    "ORIGEM TESTE": None, "ORIGEM PROVA": None, # Ocultados para limpar a tela
                     "ESTUDANTE": st.column_config.TextColumn("Estudante", width="medium", disabled=True),
-                    "VISTOS (AUTO)": st.column_config.NumberColumn("Vistos", format="%.1f", disabled=True),
-                    "BÔNUS (SALA)": st.column_config.NumberColumn("⭐ Sala", format="%.1f", disabled=True),
-                    "BÔNUS CONSELHO": st.column_config.NumberColumn("🎁 Conselho", min_value=0.0, max_value=10.0, format="%.1f", help="Bônus extra injetado sem gerar falta."),
-                    "TESTE (LANÇAR)": st.column_config.NumberColumn("Nota Teste", min_value=0.0, max_value=p_teste, format="%.1f"),
-                    "ORIGEM TESTE": st.column_config.TextColumn("Origem", disabled=True, width="small"),
-                    "PROVA (LANÇAR)": st.column_config.NumberColumn("Nota Prova", min_value=0.0, max_value=p_prova, format="%.1f"),
-                    "ORIGEM PROVA": st.column_config.TextColumn("Origem", disabled=True, width="small"),
-                    "REC. PARALELA": st.column_config.NumberColumn("🔄 Rec.", min_value=0.0, max_value=10.0, format="%.1f"),
+                    
+                    # --- ÁREA DE DIGITAÇÃO (NOTAS BRUTAS) ---
+                    "VISTOS (AUTO)": st.column_config.NumberColumn("📓 Vistos", format="%.1f", disabled=True, width="small"),
+                    "BÔNUS (SALA)": st.column_config.NumberColumn("⭐ Sala", format="%.1f", disabled=True, width="small"),
+                    "BÔNUS CONSELHO": st.column_config.NumberColumn("🎁 Conselho", min_value=0.0, max_value=10.0, format="%.1f", width="small"),
+                    "TESTE (LANÇAR)": st.column_config.NumberColumn("📝 Digitar Teste", min_value=0.0, max_value=p_teste, format="%.1f", width="small"),
+                    "PROVA (LANÇAR)": st.column_config.NumberColumn("📄 Digitar Prova", min_value=0.0, max_value=p_prova, format="%.1f", width="small"),
+                    "REC. PARALELA": st.column_config.NumberColumn("🔄 Rec.", min_value=0.0, max_value=10.0, format="%.1f", width="small"),
+                    
+                    # --- ÁREA DA PREFEITURA (CRÉDITOS FINAIS CASCATEADOS) ---
+                    "V_PREF": st.column_config.NumberColumn("🏛️ C1: Vistos", format="%.1f", disabled=True, help="Crédito 1 Final (Vistos + Bônus)"),
+                    "T_PREF": st.column_config.NumberColumn("🏛️ C2: Teste", format="%.1f", disabled=True, help="Crédito 2 Final (Teste + Transbordamento)"),
+                    "P_PREF": st.column_config.NumberColumn("🏛️ C3: Prova", format="%.1f", disabled=True, help="Crédito 3 Final (Prova + Transbordamento)"),
+                    
                     "MEDIA_FINAL": st.column_config.ProgressColumn(
                         "📊 Média Final",
                         help="Média calculada com transbordamento e recuperação",
@@ -5437,7 +5444,7 @@ elif menu == "📊 Painel de Notas & Vistos":
                     linhas_gabarito_reverso = []
                     linhas_bonus_conselho = []
                     
-                    # 🚨 ANCORAGEM TEMPORAL: Busca a última data válida da turma para não criar dias letivos fantasmas
+                    # Ancoragem Temporal: Busca a última data válida da turma para não criar dias letivos fantasmas
                     datas_turma = df_diario[(df_diario['TURMA'] == turma_sel) & (~df_diario['TAGS'].isin(['DIA NÃO LETIVO', 'BONUS_CONSELHO', 'SISTEMA_NOTA']))]['DATA_DT'].dropna()
                     if not datas_turma.empty:
                         data_ancora = datas_turma.max().strftime("%d/%m/%Y")
@@ -5447,7 +5454,7 @@ elif menu == "📊 Painel de Notas & Vistos":
                     for _, r in df_editado.iterrows():
                         nome_limpo = r['ESTUDANTE'].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
                         
-                        # IDEIA 3: Injeção Reversa (Se a nota foi alterada manualmente)
+                        # Injeção Reversa (Se a nota foi alterada manualmente)
                         if r['TESTE (LANÇAR)'] != r['_ORIGINAL_TESTE']:
                             linhas_gabarito_reverso.append([
                                 datetime.now().strftime("%d/%m/%Y"), r['ID'], nome_limpo, turma_sel, 
@@ -5459,7 +5466,7 @@ elif menu == "📊 Painel de Notas & Vistos":
                                 f"PROVA {trimestre_sel} [LANÇAMENTO MANUAL]", "MANUAL", util.sosa_to_str(r['PROVA (LANÇAR)']), "N/A"
                             ])
                             
-                        # IDEIA 4: Bônus de Conselho (Transação Segura)
+                        # Bônus de Conselho (Transação Segura)
                         if r['BÔNUS CONSELHO'] > 0:
                             linhas_bonus_conselho.append([
                                 data_ancora, r['ID'], nome_limpo, turma_sel,
