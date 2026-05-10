@@ -5173,14 +5173,13 @@ elif menu == "📊 Painel de Notas & Vistos":
             st.warning("⚠️ Nenhuma turma regular cadastrada.")
             st.stop()
 
-        # --- 1. CONFIGURADOR DE PESOS E CONGELAMENTO TEMPORAL ---
+       # --- 1. CONFIGURADOR DE PESOS E CONGELAMENTO TEMPORAL ---
         with st.container(border=True):
             st.markdown("### ⚙️ Passo 1: Critérios e Congelamento Temporal")
             c_f1, c_f2, c_f3, c_f4 = st.columns([1.5, 1, 1, 1])
             turma_sel = c_f1.selectbox("👥 Selecione a Turma:", lista_turmas_notas, key=f"n_turma_{v}")
             trimestre_sel = c_f2.selectbox("📅 Trimestre Atual:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"n_trim_{v}")
             
-            # 🚨 IDEIA 1: MEMÓRIA DE CONGELAMENTO (TRAVA ANTI-AMNÉSIA)
             config_key = f"CONFIG_DATA_{turma_sel}_{trimestre_sel}"
             config_records = df_relatorios[df_relatorios['TIPO'] == config_key]
             if not config_records.empty:
@@ -5207,6 +5206,9 @@ elif menu == "📊 Painel de Notas & Vistos":
                 ["Média Justa (Soma + Rec / 2)", "Substituir apenas a Prova", "Substituir a Média (Tradicional)"],
                 help="Define como a nota da recuperação vai impactar a média final."
             )
+            
+            # 🚨 NOVA TRAVA DE ARREDONDAMENTO DA PREFEITURA
+            arredondar_prefeitura = st.toggle("⚖️ Forçar Arredondamento da Prefeitura (0,5 em 0,5)", value=True, help="Arredonda os créditos finais para bater exatamente com o sistema engessado da prefeitura.")
             
             if (p_visto + p_teste + p_prova) != 10.0:
                 st.warning(f"⚠️ A soma dos pesos ({p_visto + p_teste + p_prova}) deve ser exatamente 10.0.")
@@ -5248,7 +5250,6 @@ elif menu == "📊 Painel de Notas & Vistos":
                     
                     vistos_auto_map[id_l] = round((aulas_com_visto / total_aulas_periodo * p_visto), 2) if total_aulas_periodo > 0 else 0.0
                     
-                    # Separa Bônus de Sala (Comportamento/Arguição) do Bônus de Conselho
                     bonus_sala_map[id_l] = d_alu[(d_alu['TAGS'] != "SISTEMA_NOTA") & (d_alu['TAGS'] != "BONUS_CONSELHO")]['BONUS'].apply(util.sosa_to_float).sum()
                     bonus_conselho_map[id_l] = d_alu[d_alu['TAGS'] == "BONUS_CONSELHO"]['BONUS'].apply(util.sosa_to_float).sum()
                     
@@ -5258,7 +5259,6 @@ elif menu == "📊 Painel de Notas & Vistos":
                 else:
                     vistos_auto_map[id_l], bonus_sala_map[id_l], bonus_conselho_map[id_l], trabalhos_map[id_l] = 0.0, 0.0, 0.0, 0.0
 
-        # --- 🚨 IDEIA 5: HUB DE COMPOSIÇÃO (TRANSPARÊNCIA) ---
         with st.expander("🔍 Hub de Composição (O que forma as notas do Scanner?)", expanded=False):
             st.info("Rastreabilidade dos ativos que compõem as notas de Teste e Prova neste trimestre.")
             trim_limpo = trimestre_sel.replace(" ", "")
@@ -5322,7 +5322,6 @@ elif menu == "📊 Painel de Notas & Vistos":
             if not scanned_prova.empty: 
                 n_prova = util.sosa_to_float(scanned_prova.iloc[-1]['NOTA_CALCULADA'])
                 av_nome = scanned_prova.iloc[-1]['ID_AVALIACAO'].upper()
-                # 🚨 IDEIA 2: SELOS DE RASTREABILIDADE
                 if "2ª" in av_nome or "2CHAMADA" in av_nome: origem_prova = "[2ªC]"
                 elif "TIPO" in av_nome: origem_prova = f"[V-{av_nome.split('TIPO')[-1].strip()}]"
                 else: origem_prova = "[P]"
@@ -5348,7 +5347,6 @@ elif menu == "📊 Painel de Notas & Vistos":
         df_input = pd.DataFrame(dados_editor)
         
         def aplicar_transbordamento(row):
-            # 🚨 VACINA ANTI-TYPEERROR: Força a conversão para float e transforma None em 0.0
             b_sala = float(row.get('BÔNUS (SALA)', 0.0) or 0.0)
             b_cons = float(row.get('BÔNUS CONSELHO', 0.0) or 0.0)
             bonus_restante = b_sala + b_cons
@@ -5366,9 +5364,14 @@ elif menu == "📊 Painel de Notas & Vistos":
             
             p_final = max(0.0, min(p_prova, p_base + bonus_restante))
             
+            # 🚨 APLICAÇÃO DO ARREDONDAMENTO DA PREFEITURA (0.5 em 0.5)
+            if arredondar_prefeitura:
+                v_final = round(v_final * 2) / 2
+                t_final = round(t_final * 2) / 2
+                p_final = round(p_final * 2) / 2
+            
             soma_notas = v_final + t_final + p_final
             
-            # 🚨 APLICAÇÃO DA REGRA DE RECUPERAÇÃO
             if rec_paralela > 0:
                 if regra_rec == "Média Justa (Soma + Rec / 2)":
                     if rec_paralela > soma_notas:
@@ -5379,10 +5382,14 @@ elif menu == "📊 Painel de Notas & Vistos":
                     nota_rec_convertida = (rec_paralela / 10.0) * p_prova
                     p_final_com_rec = max(p_final, nota_rec_convertida)
                     media_final = v_final + t_final + p_final_com_rec
-                else: # Tradicional
+                else: 
                     media_final = max(soma_notas, rec_paralela)
             else:
                 media_final = soma_notas
+                
+            # Se a prefeitura arredonda a média final também, aplicamos aqui
+            if arredondar_prefeitura:
+                media_final = round(media_final * 2) / 2
                 
             media_final = min(10.0, media_final)
             
