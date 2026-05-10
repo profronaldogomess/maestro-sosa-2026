@@ -5439,77 +5439,31 @@ elif menu == "📊 Painel de Notas & Vistos":
             )
 
             st.markdown("<br>", unsafe_allow_html=True)
-            if st.button("💾 SALVAR NOTAS E SINCRONIZAR BOLETIM", type="primary", use_container_width=True):
-                with st.status("Sincronizando registros no Banco de Dados...") as status:
-                    df_editado[['V_PREF', 'T_PREF', 'P_PREF', 'REC_PREF', 'MEDIA_FINAL']] = df_editado.apply(aplicar_transbordamento, axis=1)
-                    
-                    # 1. Salvar Configuração de Data Limite
-                    db.excluir_registro("DB_RELATORIOS", f"{turma_sel}|{trimestre_sel}")
-                    db.salvar_no_banco("DB_RELATORIOS", [datetime.now().strftime("%d/%m/%Y"), "SISTEMA", "CONFIG", config_key, f"{turma_sel}|{trimestre_sel}|{data_limite.strftime('%d/%m/%Y')}"])
-                    
-                    # 2. Preparar Injeção Reversa e Bônus de Conselho
-                    linhas_gabarito_reverso = []
-                    linhas_bonus_conselho = []
-                    
-                    # Ancoragem Temporal: Busca a última data válida da turma para não criar dias letivos fantasmas
-                    datas_turma = df_diario[(df_diario['TURMA'] == turma_sel) & (~df_diario['TAGS'].isin(['DIA NÃO LETIVO', 'BONUS_CONSELHO', 'SISTEMA_NOTA']))]['DATA_DT'].dropna()
-                    if not datas_turma.empty:
-                        data_ancora = datas_turma.max().strftime("%d/%m/%Y")
+            if st.button(f"⚡ APLICAR BÔNUS (+{valor_bonus_refaccao}) AOS {len(alunos_marcados)} ALUNOS MARCADOS", type="primary"):
+                    if alunos_marcados.empty:
+                        st.error("⚠️ Marque pelo menos um aluno na tabela acima.")
                     else:
-                        data_ancora = data_limite.strftime("%d/%m/%Y") # Fallback seguro
-                    
-                    for _, r in df_editado.iterrows():
-                        nome_limpo = r['ESTUDANTE'].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
-                        
-                        # Injeção Reversa (Se a nota foi alterada manualmente)
-                        if r['TESTE (LANÇAR)'] != r['_ORIGINAL_TESTE']:
-                            linhas_gabarito_reverso.append([
-                                datetime.now().strftime("%d/%m/%Y"), r['ID'], nome_limpo, turma_sel, 
-                                f"TESTE {trimestre_sel} [LANÇAMENTO MANUAL]", "MANUAL", util.sosa_to_str(r['TESTE (LANÇAR)']), "N/A"
-                            ])
-                        if r['PROVA (LANÇAR)'] != r['_ORIGINAL_PROVA']:
-                            linhas_gabarito_reverso.append([
-                                datetime.now().strftime("%d/%m/%Y"), r['ID'], nome_limpo, turma_sel, 
-                                f"PROVA {trimestre_sel} [LANÇAMENTO MANUAL]", "MANUAL", util.sosa_to_str(r['PROVA (LANÇAR)']), "N/A"
-                            ])
+                        with st.spinner("Injetando bônus no Diário de Bordo..."):
+                            linhas_bonus = []
                             
-                        # Bônus de Conselho (Transação Segura)
-                        if r['BÔNUS CONSELHO'] > 0:
-                            linhas_bonus_conselho.append([
-                                data_ancora, r['ID'], nome_limpo, turma_sel,
-                                "ISENTO", "BONUS_CONSELHO", "Bônus de Conselho de Classe", util.sosa_to_str(r['BÔNUS CONSELHO'])
-                            ])
-
-                    # Executa as injeções
-                    if linhas_gabarito_reverso:
-                        db.salvar_lote("DB_GABARITOS_ALUNOS", linhas_gabarito_reverso)
-                    
-                    if linhas_bonus_conselho:
-                        # Limpa bônus de conselho antigos para evitar duplicidade (Upsert)
-                        try:
-                            wb = db.conectar()
-                            ws = wb.worksheet("DB_DIARIO_BORDO")
-                            dados_d = ws.get_all_values()
-                            for i in range(len(dados_d)-1, 0, -1):
-                                if len(dados_d[i]) > 5 and dados_d[i][3] == turma_sel and dados_d[i][5] == "BONUS_CONSELHO":
-                                    ws.delete_rows(i+1)
-                        except: pass
-                        db.salvar_lote("DB_DIARIO_BORDO", linhas_bonus_conselho)
-
-                    # 3. Salvar Notas no Boletim
-                    db.limpar_notas_turma_trimestre(turma_sel, trimestre_sel)
-                    linhas_save =[]
-                    for _, r in df_editado.iterrows():
-                        nome_limpo = r['ESTUDANTE'].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
-                        linhas_save.append([
-                            r['ID'], nome_limpo, turma_sel, trimestre_sel,
-                            util.sosa_to_str(r["V_PREF"]), util.sosa_to_str(r["T_PREF"]),
-                            util.sosa_to_str(r["P_PREF"]), util.sosa_to_str(r["REC_PREF"]),
-                            util.sosa_to_str(r['MEDIA_FINAL'])
-                        ])
-                    if db.salvar_lote("DB_NOTAS", linhas_save):
-                        status.update(label="✅ Boletim Sincronizado com Sucesso!", state="complete")
-                        st.balloons(); time.sleep(1.5); st.rerun()
+                            # 🚨 VACINA ANTI-KEYERROR: Cria a coluna DATA_DT temporariamente para achar a âncora
+                            df_diario_turma = df_diario[(df_diario['TURMA'] == turma_sel) & (~df_diario['TAGS'].isin(['DIA NÃO LETIVO', 'BONUS_CONSELHO', 'SISTEMA_NOTA']))].copy()
+                            if not df_diario_turma.empty:
+                                df_diario_turma['DATA_DT'] = pd.to_datetime(df_diario_turma['DATA'], format="%d/%m/%Y", errors='coerce')
+                                data_ancora_ref = df_diario_turma['DATA_DT'].max().strftime("%d/%m/%Y")
+                            else:
+                                data_ancora_ref = data_limite.strftime("%d/%m/%Y")
+                            
+                            for _, r in alunos_marcados.iterrows():
+                                nome_limpo = r['Estudante'].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
+                                linhas_bonus.append([
+                                    data_ancora_ref, r['ID'], nome_limpo, turma_sel,
+                                    "ISENTO", "BONUS_CONSELHO", "Bônus de Refacção de Prova (Justiça Pedagógica)", util.sosa_to_str(valor_bonus_refaccao)
+                                ])
+                                
+                            if db.salvar_lote("DB_DIARIO_BORDO", linhas_bonus):
+                                st.success(f"✅ Bônus de +{valor_bonus_refaccao} aplicado com sucesso! As notas foram recalculadas.")
+                                time.sleep(1.5); st.rerun()
 
         # --- ABA: FECHAMENTO E ETIQUETAS ---
         with tab_fechamento:
@@ -5571,9 +5525,13 @@ elif menu == "📊 Painel de Notas & Vistos":
                         with st.spinner("Injetando bônus no Diário de Bordo..."):
                             linhas_bonus = []
                             
-                            # Ancoragem Temporal Segura (Não gera falta)
-                            datas_turma = df_diario[(df_diario['TURMA'] == turma_sel) & (~df_diario['TAGS'].isin(['DIA NÃO LETIVO', 'BONUS_CONSELHO', 'SISTEMA_NOTA']))]['DATA_DT'].dropna()
-                            data_ancora_ref = datas_turma.max().strftime("%d/%m/%Y") if not datas_turma.empty else data_limite.strftime("%d/%m/%Y")
+                            # 🚨 VACINA ANTI-KEYERROR: Cria a coluna DATA_DT temporariamente para achar a âncora
+                            df_diario_turma = df_diario[(df_diario['TURMA'] == turma_sel) & (~df_diario['TAGS'].isin(['DIA NÃO LETIVO', 'BONUS_CONSELHO', 'SISTEMA_NOTA']))].copy()
+                            if not df_diario_turma.empty:
+                                df_diario_turma['DATA_DT'] = pd.to_datetime(df_diario_turma['DATA'], format="%d/%m/%Y", errors='coerce')
+                                data_ancora_ref = df_diario_turma['DATA_DT'].max().strftime("%d/%m/%Y")
+                            else:
+                                data_ancora_ref = data_limite.strftime("%d/%m/%Y")
                             
                             for _, r in alunos_marcados.iterrows():
                                 nome_limpo = r['Estudante'].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
