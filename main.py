@@ -5459,21 +5459,26 @@ elif menu == "📊 Painel de Notas & Vistos":
                     for _, r in df_editado.iterrows():
                         nome_limpo = r['ESTUDANTE'].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
                         
-                        if r['TESTE (LANÇAR)'] != r['_ORIGINAL_TESTE']:
+                        # 🚨 VACINA ANTI-TYPEERROR: Sanitiza os valores vindos da tabela (transforma None em 0.0)
+                        teste_lancar = float(r.get('TESTE (LANÇAR)', 0.0) or 0.0)
+                        prova_lancar = float(r.get('PROVA (LANÇAR)', 0.0) or 0.0)
+                        bonus_conselho = float(r.get('BÔNUS CONSELHO', 0.0) or 0.0)
+                        
+                        if teste_lancar != r['_ORIGINAL_TESTE']:
                             linhas_gabarito_reverso.append([
                                 datetime.now().strftime("%d/%m/%Y"), r['ID'], nome_limpo, turma_sel, 
-                                f"TESTE {trimestre_sel} [LANÇAMENTO MANUAL]", "MANUAL", util.sosa_to_str(r['TESTE (LANÇAR)']), "N/A"
+                                f"TESTE {trimestre_sel} [LANÇAMENTO MANUAL]", "MANUAL", util.sosa_to_str(teste_lancar), "N/A"
                             ])
-                        if r['PROVA (LANÇAR)'] != r['_ORIGINAL_PROVA']:
+                        if prova_lancar != r['_ORIGINAL_PROVA']:
                             linhas_gabarito_reverso.append([
                                 datetime.now().strftime("%d/%m/%Y"), r['ID'], nome_limpo, turma_sel, 
-                                f"PROVA {trimestre_sel} [LANÇAMENTO MANUAL]", "MANUAL", util.sosa_to_str(r['PROVA (LANÇAR)']), "N/A"
+                                f"PROVA {trimestre_sel} [LANÇAMENTO MANUAL]", "MANUAL", util.sosa_to_str(prova_lancar), "N/A"
                             ])
                             
-                        if r['BÔNUS CONSELHO'] > 0:
+                        if bonus_conselho > 0:
                             linhas_bonus_conselho.append([
                                 data_ancora, r['ID'], nome_limpo, turma_sel,
-                                "ISENTO", "BONUS_CONSELHO", "Bônus de Conselho de Classe", util.sosa_to_str(r['BÔNUS CONSELHO'])
+                                "ISENTO", "BONUS_CONSELHO", "Bônus de Conselho de Classe", util.sosa_to_str(bonus_conselho)
                             ])
 
                     if linhas_gabarito_reverso:
