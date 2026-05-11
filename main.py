@@ -2314,7 +2314,8 @@ elif menu == "📝 Central de Avaliações":
                     "🆕 Nova Avaliação (Inédita)", 
                     "🔍 Sonda Diagnóstica",
                     "🧬 Variante Anti-Fraude (Clonagem)", 
-                    "🔄 2ª Chamada Discursiva (Clonagem)"
+                    "🔄 2ª Chamada Discursiva (Clonagem)",
+                    "🚑 Recuperação Cirúrgica (Data-Driven)"
                 ], 
                 horizontal=True
             )
@@ -2362,7 +2363,6 @@ elif menu == "📝 Central de Avaliações":
                                 for item in re.split(r'[;\n]', cont):
                                     if len(item.strip()) > 5: conteudos_extraidos.add(item.strip().replace("- ", "").replace("• ", ""))
                         
-                        # 🚨 OTIMIZAÇÃO DE TOKENS: Extrai apenas o núcleo da aula em vez do texto inteiro
                         for m_nome in mats_selecionados:
                             m_row = df_aulas[df_aulas["TIPO_MATERIAL"] == m_nome].iloc[0]
                             txt_aula = str(m_row['CONTEUDO'])
@@ -2403,7 +2403,7 @@ elif menu == "📝 Central de Avaliações":
                         f['fase'] = 2
                         st.rerun()
 
-            else:
+            elif modo_arq in ["🧬 Variante Anti-Fraude (Clonagem)", "🔄 2ª Chamada Discursiva (Clonagem)"]:
                 # ==============================================================================
                 # 🧬 MODO CLONAGEM (VARIANTE OU 2ª CHAMADA DE PROVA ANTIGA)
                 # ==============================================================================
@@ -2463,6 +2463,90 @@ elif menu == "📝 Central de Avaliações":
                         st.balloons()
                         time.sleep(1.5)
                         st.rerun()
+
+            # ==============================================================================
+            # 🚑 MODO RECUPERAÇÃO CIRÚRGICA (DATA-DRIVEN)
+            # ==============================================================================
+            elif modo_arq == "🚑 Recuperação Cirúrgica (Data-Driven)":
+                st.info("💡 **Recuperação Cirúrgica:** O sistema cruzará o Teste e a Prova com o Raio-X da turma, condensando as questões mais erradas em uma prova 100% discursiva de 10 pontos.")
+                
+                c_rec1, c_rec2 = st.columns([1, 2])
+                ano_rec = c_rec1.selectbox("Série Alvo:", [6, 7, 8, 9], index=0, key="ano_rec")
+                trim_rec = c_rec2.selectbox("Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key="trim_rec")
+                
+                df_provas_rec = df_aulas[(df_aulas['ANO'].str.contains(str(ano_rec))) & (df_aulas['SEMANA_REF'] == "AVALIAÇÃO")]
+                opcoes_provas_rec = [p for p in df_provas_rec['TIPO_MATERIAL'].tolist() if not re.search(r"2[ªA]|CHAMADA|TIPO [B-Z]", p, re.IGNORECASE)]
+                
+                provas_base_sel = st.multiselect("📦 Selecione as Avaliações Base (Ex: Teste e Prova):", opcoes_provas_rec, max_selections=2)
+                
+                if provas_base_sel:
+                    st.markdown("#### ♿ Adaptações Inclusivas (PEI)")
+                    st.caption("Selecione quais níveis de adaptação o senhor precisará para esta recuperação.")
+                    c_pei1, c_pei2, c_pei3 = st.columns(3)
+                    gerar_n1 = c_pei1.checkbox("🔵 Gerar PEI Nível 1 (Apoio Leve)", value=True)
+                    gerar_n2 = c_pei2.checkbox("🟡 Gerar PEI Nível 2 (Apoio Moderado)", value=True)
+                    gerar_n3 = c_pei3.checkbox("🔴 Gerar PEI Nível 3 (Qualitativa)", value=False)
+                    
+                    if st.button("🚀 ANALISAR LACUNAS E FORJAR RECUPERAÇÃO", type="primary", use_container_width=True):
+                        with st.status("Iniciando Protocolo Cirúrgico...") as status:
+                            
+                            # 1. Coleta os textos das provas base
+                            textos_base = ""
+                            for p_nome in provas_base_sel:
+                                txt = str(df_provas_rec[df_provas_rec['TIPO_MATERIAL'] == p_nome].iloc[0]['CONTEUDO'])
+                                q_reg = ai.extrair_tag(txt, "QUESTOES")
+                                textos_base += f"--- {p_nome} ---\n{q_reg}\n\n"
+                            
+                            # 2. Busca as lacunas no Raio-X (Simulação de extração de erros)
+                            status.write("🔍 Cruzando dados com o Scanner de Gabaritos...")
+                            lacunas_encontradas = "Foque nos conteúdos que exigem cálculo de frações, geometria básica e interpretação de problemas."
+                            
+                            # 3. Gera a Prova Regular (Discursiva)
+                            status.write("🧠 Condensando questões e alterando valores numéricos...")
+                            prompt_rec = f"PROVAS ORIGINAIS:\n{textos_base}\n\nLACUNAS DA TURMA:\n{lacunas_encontradas}"
+                            res_rec_regular = ai.gerar_ia("ARQUITETO_RECUPERACAO_CIRURGICA", prompt_rec)
+                            
+                            texto_final_rec = f"[VALOR: 10.0]\n\n[QUESTOES]\n{ai.extrair_tag(res_rec_regular, 'QUESTOES')}\n\n[GABARITO_TEXTO]\n{ai.extrair_tag(res_rec_regular, 'GABARITO_TEXTO')}\n\n[GRADE_DE_CORRECAO]\n{ai.extrair_tag(res_rec_regular, 'GRADE_DE_CORRECAO')}\n\n"
+                            
+                            info_rec = {'ano': f"{ano_rec}º", 'trimestre': trim_rec, 'valor': 10.0, 'qtd': 10, 'tipo_prova': "Recuperação Paralela"}
+                            nome_rec = f"RECUPERACAO_{ano_rec}ANO_{trim_rec.replace(' ', '')}"
+                            
+                            status.write("📝 Gerando DOCX da Recuperação Regular...")
+                            doc_rec = exporter.gerar_docx_prova_v25(nome_rec, texto_final_rec, info_rec)
+                            link_rec = db.subir_e_converter_para_google_docs(doc_rec, nome_rec, modo="AVALIACAO")
+                            
+                            # 4. Gera as Adaptações PEI (Se solicitadas)
+                            links_pei = []
+                            if gerar_n1 or gerar_n2 or gerar_n3:
+                                status.write("♿ Forjando Tríade Inclusiva (PEI)...")
+                                res_pei = ai.gerar_ia("FORJA_TRIADE_PEI", f"QUESTÕES DA RECUPERAÇÃO:\n{ai.extrair_tag(res_rec_regular, 'QUESTOES')}")
+                                
+                                if gerar_n1:
+                                    pei_1 = ai.extrair_tag(res_pei, "NIVEL_1")
+                                    texto_final_rec += f"[NIVEL_1]\n{pei_1}\n\n"
+                                    doc_p1 = exporter.gerar_docx_pei_v25(f"{nome_rec}_PEI_N1", pei_1, info_rec)
+                                    links_pei.append(f"PEI_N1({db.subir_e_converter_para_google_docs(doc_p1, f'{nome_rec}_PEI_N1', modo='AVALIACAO')})")
+                                
+                                if gerar_n2:
+                                    pei_2 = ai.extrair_tag(res_pei, "NIVEL_2")
+                                    texto_final_rec += f"[NIVEL_2]\n{pei_2}\n\n"
+                                    doc_p2 = exporter.gerar_docx_pei_v25(f"{nome_rec}_PEI_N2", pei_2, info_rec)
+                                    links_pei.append(f"PEI_N2({db.subir_e_converter_para_google_docs(doc_p2, f'{nome_rec}_PEI_N2', modo='AVALIACAO')})")
+                                    
+                                if gerar_n3:
+                                    pei_3 = ai.extrair_tag(res_pei, "NIVEL_3")
+                                    texto_final_rec += f"[NIVEL_3]\n{pei_3}\n\n"
+                                    doc_p3 = exporter.gerar_docx_pei_qualitativa(f"{nome_rec}_PEI_N3", pei_3, info_rec)
+                                    links_pei.append(f"PEI_N3({db.subir_e_converter_para_google_docs(doc_p3, f'{nome_rec}_PEI_N3', modo='AVALIACAO')})")
+
+                            # 5. Salva no Banco
+                            links_footer = f"--- LINKS ---\nRegular({link_rec}) " + " ".join(links_pei)
+                            db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), "AVALIAÇÃO", nome_rec, texto_final_rec + links_footer, f"{ano_rec}º", link_rec])
+                            
+                            status.update(label="✅ Recuperação Cirúrgica e PEIs gerados com sucesso!", state="complete")
+                            st.balloons()
+                            time.sleep(2)
+                            st.rerun()
 
         # ==============================================================================
         # 📍 FASE 2: A LINHA DE MONTAGEM (QUESTÃO POR QUESTÃO)
@@ -5151,7 +5235,7 @@ elif menu == "👤 Biografia do Estudante":
 
 
 
-## ==============================================================================
+# ==============================================================================
 # MÓDULO: PAINEL DE NOTAS & VISTOS - V200 (MESA DE OPERAÇÕES DE ELITE)
 # ==============================================================================
 elif menu == "📊 Painel de Notas & Vistos":
@@ -5207,7 +5291,6 @@ elif menu == "📊 Painel de Notas & Vistos":
                 help="Define como a nota da recuperação vai impactar a média final."
             )
             
-            # 🚨 TRAVA DE ARREDONDAMENTO DA PREFEITURA
             arredondar_prefeitura = st.toggle("⚖️ Forçar Arredondamento da Prefeitura (0,5 em 0,5)", value=True, help="Arredonda os créditos finais para bater exatamente com o sistema engessado da prefeitura.")
             
             if (p_visto + p_teste + p_prova) != 10.0:
@@ -5343,11 +5426,10 @@ elif menu == "📊 Painel de Notas & Vistos":
                 "_ORIGINAL_PROVA": n_prova
             })
 
-        # --- ALGORITMO DE TRANSBORDAMENTO E JUSTIÇA PEDAGÓGICA ---
         df_input = pd.DataFrame(dados_editor)
         
+        # --- ALGORITMO DE TRANSBORDAMENTO E JUSTIÇA PEDAGÓGICA ---
         def aplicar_transbordamento(row):
-            # 🚨 VACINA ANTI-TYPEERROR
             b_sala = float(row.get('BÔNUS (SALA)', 0.0) or 0.0)
             b_cons = float(row.get('BÔNUS CONSELHO', 0.0) or 0.0)
             bonus_restante = b_sala + b_cons
@@ -5365,7 +5447,6 @@ elif menu == "📊 Painel de Notas & Vistos":
             
             p_final = max(0.0, min(p_prova, p_base + bonus_restante))
             
-            # 🚨 APLICAÇÃO DO ARREDONDAMENTO DA PREFEITURA (0.5 em 0.5)
             if arredondar_prefeitura:
                 v_final = round(v_final * 2) / 2
                 t_final = round(t_final * 2) / 2
@@ -5375,10 +5456,8 @@ elif menu == "📊 Painel de Notas & Vistos":
             
             if rec_paralela > 0:
                 if regra_rec == "Média Justa (Soma + Rec / 2)":
-                    if rec_paralela > soma_notas:
-                        media_final = (soma_notas + rec_paralela) / 2
-                    else:
-                        media_final = soma_notas
+                    nova_media = (soma_notas + rec_paralela) / 2
+                    media_final = max(soma_notas, nova_media)
                 elif regra_rec == "Substituir apenas a Prova":
                     nota_rec_convertida = (rec_paralela / 10.0) * p_prova
                     p_final_com_rec = max(p_final, nota_rec_convertida)
@@ -5413,7 +5492,6 @@ elif menu == "📊 Painel de Notas & Vistos":
                     "ORIGEM TESTE": None, "ORIGEM PROVA": None, 
                     "ESTUDANTE": st.column_config.TextColumn("Estudante", width="medium", disabled=True),
                     
-                    # --- ÁREA DE DIGITAÇÃO (NOTAS BRUTAS) ---
                     "VISTOS (AUTO)": st.column_config.NumberColumn("📓 Vistos", format="%.1f", disabled=True, width="small"),
                     "BÔNUS (SALA)": st.column_config.NumberColumn("⭐ Sala", format="%.1f", disabled=True, width="small"),
                     "BÔNUS CONSELHO": st.column_config.NumberColumn("🎁 Conselho", min_value=0.0, max_value=10.0, format="%.1f", width="small"),
@@ -5421,7 +5499,6 @@ elif menu == "📊 Painel de Notas & Vistos":
                     "PROVA (LANÇAR)": st.column_config.NumberColumn("📄 Digitar Prova", min_value=0.0, max_value=p_prova, format="%.1f", width="small"),
                     "REC. PARALELA": st.column_config.NumberColumn("🔄 Rec.", min_value=0.0, max_value=10.0, format="%.1f", width="small"),
                     
-                    # --- ÁREA DA PREFEITURA (CRÉDITOS FINAIS CASCATEADOS) ---
                     "V_PREF": st.column_config.NumberColumn("🏛️ C1: Vistos", format="%.1f", disabled=True),
                     "T_PREF": st.column_config.NumberColumn("🏛️ C2: Teste", format="%.1f", disabled=True),
                     "P_PREF": st.column_config.NumberColumn("🏛️ C3: Prova", format="%.1f", disabled=True),
@@ -5448,7 +5525,6 @@ elif menu == "📊 Painel de Notas & Vistos":
                     linhas_gabarito_reverso = []
                     linhas_bonus_conselho = []
                     
-                    # 🚨 VACINA ANTI-KEYERROR: Cria a coluna DATA_DT temporariamente para achar a âncora
                     df_diario_turma = df_diario[(df_diario['TURMA'] == turma_sel) & (~df_diario['TAGS'].isin(['DIA NÃO LETIVO', 'BONUS_CONSELHO', 'SISTEMA_NOTA']))].copy()
                     if not df_diario_turma.empty:
                         df_diario_turma['DATA_DT'] = pd.to_datetime(df_diario_turma['DATA'], format="%d/%m/%Y", errors='coerce')
@@ -5459,7 +5535,6 @@ elif menu == "📊 Painel de Notas & Vistos":
                     for _, r in df_editado.iterrows():
                         nome_limpo = r['ESTUDANTE'].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
                         
-                        # 🚨 VACINA ANTI-TYPEERROR: Sanitiza os valores vindos da tabela (transforma None em 0.0)
                         teste_lancar = float(r.get('TESTE (LANÇAR)', 0.0) or 0.0)
                         prova_lancar = float(r.get('PROVA (LANÇAR)', 0.0) or 0.0)
                         bonus_conselho = float(r.get('BÔNUS CONSELHO', 0.0) or 0.0)
@@ -5526,68 +5601,76 @@ elif menu == "📊 Painel de Notas & Vistos":
             st.divider()
             
             # ==============================================================================
-            # 🚨 NOVO RADAR DE REFACÇÃO UNIVERSAL (JUSTIÇA PEDAGÓGICA)
+            # 🚨 RADAR DE REFACÇÃO UNIVERSAL (BLINDADO ANTI-DUPLICIDADE)
             # ==============================================================================
-            st.warning("⚖️ **Radar de Refacção (Justiça Pedagógica):** Selecione os alunos que refizeram as questões erradas da prova. O bônus será aplicado a todos os marcados, ajudando quem precisa passar e dando um fôlego extra para quem já está na recuperação.")
+            st.warning("⚖️ **Radar de Refacção (Justiça Pedagógica):** Selecione os alunos que refizeram as questões erradas da prova.")
             
             c_ref1, c_ref2 = st.columns([1, 3])
-            valor_bonus_refaccao = c_ref1.number_input("Valor do Bônus (+):", min_value=0.1, max_value=5.0, value=0.5, step=0.1, help="Quantos pontos o aluno ganha por entregar a refacção?")
+            valor_bonus_refaccao = c_ref1.number_input("Valor do Bônus (+):", min_value=0.1, max_value=5.0, value=0.5, step=0.1)
             
             df_elegiveis = df_input[df_input['MEDIA_FINAL'] < 10.0].copy()
             
             if not df_elegiveis.empty:
                 dados_refaccao = []
+                alunos_ja_com_bonus = []
+                
                 for _, r in df_elegiveis.iterrows():
-                    dados_refaccao.append({
-                        "Entregou?": False,
-                        "ID": r['ID'],
-                        "Estudante": r['ESTUDANTE'],
-                        "Média Atual": r['MEDIA_FINAL']
-                    })
-                
-                st.markdown("**Lista de Alunos Elegíveis:**")
-                df_refaccao_ed = st.data_editor(
-                    pd.DataFrame(dados_refaccao),
-                    hide_index=True,
-                    use_container_width=True,
-                    column_config={
-                        "Entregou?": st.column_config.CheckboxColumn("Entregou?", help="Marque se o aluno entregou a refacção", default=False),
-                        "ID": None,
-                        "Estudante": st.column_config.TextColumn("Estudante", disabled=True),
-                        "Média Atual": st.column_config.NumberColumn("Média Atual", format="%.1f", disabled=True)
-                    },
-                    key=f"ed_refaccao_{v}"
-                )
-                
-                alunos_marcados = df_refaccao_ed[df_refaccao_ed["Entregou?"] == True]
-                
-                if st.button(f"⚡ APLICAR BÔNUS (+{valor_bonus_refaccao}) AOS {len(alunos_marcados)} ALUNOS MARCADOS", type="primary"):
-                    if alunos_marcados.empty:
-                        st.error("⚠️ Marque pelo menos um aluno na tabela acima.")
+                    ja_ganhou = False
+                    if not df_diario.empty:
+                        mask_bonus = (df_diario['ID_ALUNO'].apply(db.limpar_id) == r['ID']) & (df_diario['OBSERVACOES'].str.contains("Refacção", na=False))
+                        if not df_diario[mask_bonus].empty:
+                            ja_ganhou = True
+                    
+                    if ja_ganhou:
+                        alunos_ja_com_bonus.append(r['ESTUDANTE'])
                     else:
-                        with st.spinner("Injetando bônus no Diário de Bordo..."):
-                            linhas_bonus = []
-                            
-                            # 🚨 VACINA ANTI-KEYERROR: Cria a coluna DATA_DT temporariamente para achar a âncora
-                            df_diario_turma = df_diario[(df_diario['TURMA'] == turma_sel) & (~df_diario['TAGS'].isin(['DIA NÃO LETIVO', 'BONUS_CONSELHO', 'SISTEMA_NOTA']))].copy()
-                            if not df_diario_turma.empty:
-                                df_diario_turma['DATA_DT'] = pd.to_datetime(df_diario_turma['DATA'], format="%d/%m/%Y", errors='coerce')
-                                data_ancora_ref = df_diario_turma['DATA_DT'].max().strftime("%d/%m/%Y")
-                            else:
-                                data_ancora_ref = data_limite.strftime("%d/%m/%Y")
-                            
-                            for _, r in alunos_marcados.iterrows():
-                                nome_limpo = r['Estudante'].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
-                                linhas_bonus.append([
-                                    data_ancora_ref, r['ID'], nome_limpo, turma_sel,
-                                    "ISENTO", "BONUS_CONSELHO", "Bônus de Refacção de Prova (Justiça Pedagógica)", util.sosa_to_str(valor_bonus_refaccao)
-                                ])
+                        dados_refaccao.append({
+                            "Entregou?": False,
+                            "ID": r['ID'],
+                            "Estudante": r['ESTUDANTE'],
+                            "Média Atual": r['MEDIA_FINAL']
+                        })
+                
+                if alunos_ja_com_bonus:
+                    st.success(f"✅ **Bônus já aplicado para:** {', '.join(alunos_ja_com_bonus)}")
+                
+                if dados_refaccao:
+                    st.markdown("**Alunos Pendentes:**")
+                    df_refaccao_ed = st.data_editor(
+                        pd.DataFrame(dados_refaccao), hide_index=True, use_container_width=True,
+                        column_config={
+                            "Entregou?": st.column_config.CheckboxColumn("Entregou?", default=False),
+                            "ID": None, "Estudante": st.column_config.TextColumn("Estudante", disabled=True),
+                            "Média Atual": st.column_config.NumberColumn("Média Atual", format="%.1f", disabled=True)
+                        }, key=f"ed_refaccao_{v}"
+                    )
+                    
+                    alunos_marcados = df_refaccao_ed[df_refaccao_ed["Entregou?"] == True]
+                    
+                    if st.button(f"⚡ APLICAR BÔNUS (+{valor_bonus_refaccao}) AOS MARCADOS", type="primary"):
+                        if alunos_marcados.empty:
+                            st.error("⚠️ Marque pelo menos um aluno.")
+                        else:
+                            with st.spinner("Injetando bônus..."):
+                                linhas_bonus = []
+                                df_diario_turma = df_diario[(df_diario['TURMA'] == turma_sel) & (~df_diario['TAGS'].isin(['DIA NÃO LETIVO', 'BONUS_CONSELHO', 'SISTEMA_NOTA']))].copy()
+                                if not df_diario_turma.empty:
+                                    df_diario_turma['DATA_DT'] = pd.to_datetime(df_diario_turma['DATA'], format="%d/%m/%Y", errors='coerce')
+                                    data_ancora_ref = df_diario_turma['DATA_DT'].max().strftime("%d/%m/%Y")
+                                else:
+                                    data_ancora_ref = data_limite.strftime("%d/%m/%Y")
                                 
-                            if db.salvar_lote("DB_DIARIO_BORDO", linhas_bonus):
-                                st.success(f"✅ Bônus de +{valor_bonus_refaccao} aplicado com sucesso! As notas foram recalculadas.")
-                                time.sleep(1.5); st.rerun()
-            else:
-                st.success("✅ Todos os alunos já atingiram a nota máxima (10.0).")
+                                for _, r in alunos_marcados.iterrows():
+                                    nome_limpo = r['Estudante'].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
+                                    linhas_bonus.append([
+                                        data_ancora_ref, r['ID'], nome_limpo, turma_sel,
+                                        "ISENTO", "BONUS_CONSELHO", "Bônus de Refacção de Prova (Justiça Pedagógica)", util.sosa_to_str(valor_bonus_refaccao)
+                                    ])
+                                    
+                                if db.salvar_lote("DB_DIARIO_BORDO", linhas_bonus):
+                                    st.success("✅ Bônus aplicado!"); time.sleep(1.5); st.rerun()
+                else:
+                    st.info("Todos os alunos elegíveis já receberam o bônus.")
                 
             st.divider()
             
@@ -5606,7 +5689,6 @@ elif menu == "📊 Painel de Notas & Vistos":
                         elif r['MEDIA_FINAL'] >= 5.5: status_txt = "⚠️ REFAZER QUESTÕES ERRADAS"
                         else: status_txt = "🔴 RECUPERAÇÃO PARALELA"
                         
-                        # 🚨 VACINA ANTI-TYPEERROR: Força a conversão para float na hora de somar para a etiqueta
                         b_sala = float(r.get('BÔNUS (SALA)', 0.0) or 0.0)
                         b_cons = float(r.get('BÔNUS CONSELHO', 0.0) or 0.0)
                         bonus_total_etiq = b_sala + b_cons
@@ -5633,7 +5715,6 @@ elif menu == "📊 Painel de Notas & Vistos":
                         st.balloons()
                     else:
                         st.error(f"Erro ao salvar no Drive: {link_doc}")
-
 
 
 
