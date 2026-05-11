@@ -4944,27 +4944,17 @@ elif menu == "👤 Biografia do Estudante":
             st.success(f"👤 **Perfil Cognitivo:** Típico / Padrão")
 
         # ==============================================================================
-        # 📱 NOVO: GERADOR DE EXTRATO PARA WHATSAPP
+        # 📱 NOVO: GERADOR DE EXTRATO PARA WHATSAPP (DUPLO MODO)
         # ==============================================================================
-        if trim_b != "Todos":
-            st.markdown("<br>", unsafe_allow_html=True)
-            with st.expander("📱 Compartilhar Extrato via WhatsApp", expanded=False):
-                st.info("💡 **Dica:** Passe o mouse sobre a caixa preta abaixo e clique no ícone de 'Copiar' no canto superior direito. Depois, é só colar no WhatsApp do aluno.")
+        st.markdown("<br>", unsafe_allow_html=True)
+        with st.expander("📱 Compartilhar Extrato via WhatsApp", expanded=False):
+            st.info("💡 **Dica:** Passe o mouse sobre a caixa preta abaixo e clique no ícone de 'Copiar' no canto superior direito. Depois, é só colar no WhatsApp do aluno.")
+            
+            if trim_b == "Todos":
+                # --- MODO 1: RESUMO ANUAL ---
+                soma_anual_zap = n_alu[n_alu['TRIMESTRE'].isin(["I Trimestre", "II Trimestre", "III Trimestre"])]['MEDIA_FINAL'].apply(util.sosa_to_float).sum()
+                status_anual = "✅ APROVADO" if soma_anual_zap >= 18.0 else "⚠️ EM RECUPERAÇÃO / RISCO"
                 
-                # 1. Coleta de Notas
-                if not n_alu_f.empty:
-                    reg_nota = n_alu_f.iloc[0]
-                    v_nota = util.sosa_to_float(reg_nota['NOTA_VISTOS'])
-                    t_nota = util.sosa_to_float(reg_nota['NOTA_TESTE'])
-                    p_nota = util.sosa_to_float(reg_nota['NOTA_PROVA'])
-                    r_nota = util.sosa_to_float(reg_nota['NOTA_REC'])
-                    m_final = util.sosa_to_float(reg_nota['MEDIA_FINAL'])
-                    status_nota = "✅ APROVADO" if m_final >= 6.0 else "⚠️ ABAIXO DA MÉDIA"
-                else:
-                    v_nota = t_nota = p_nota = r_nota = m_final = 0.0
-                    status_nota = "⏳ SEM NOTAS LANÇADAS"
-
-                # 2. Coleta de Engajamento e Faltas
                 faltas_zap = 0
                 perc_presenca_zap = 100
                 perc_visto_zap = 0
@@ -4983,7 +4973,54 @@ elif menu == "👤 Biografia do Estudante":
                     
                     bonus_total_zap = d_alu_f['BONUS'].apply(util.sosa_to_float).sum()
 
-                # 3. Montagem da Mensagem
+                msg_zap = f"""Olá! 🏫 Aqui é o Prof. Ronaldo Gomes.
+Segue o extrato de desempenho ANUAL de Matemática:
+
+👤 Estudante: {nome_limpo}
+📊 SOMA ANUAL: {soma_anual_zap:.1f} pts (Meta: 18.0)
+Situação: {status_anual}
+
+🎯 ENGAJAMENTO E ASSIDUIDADE (Geral):
+✅ Presença: {perc_presenca_zap:.0f}% ({faltas_zap} faltas registradas)
+📓 Vistos no Caderno: {perc_visto_zap:.0f}% de entrega
+⭐ Bônus/Punição Acumulados: {bonus_total_zap:+.1f} pts
+
+*Obs: Para ver as notas detalhadas de C1, C2 e C3, solicite o extrato por trimestre.*
+Qualquer dúvida, estou à disposição! 🚀"""
+                st.code(msg_zap, language=None)
+
+            else:
+                # --- MODO 2: RESUMO TRIMESTRAL ---
+                if not n_alu_f.empty:
+                    reg_nota = n_alu_f.iloc[0]
+                    v_nota = util.sosa_to_float(reg_nota['NOTA_VISTOS'])
+                    t_nota = util.sosa_to_float(reg_nota['NOTA_TESTE'])
+                    p_nota = util.sosa_to_float(reg_nota['NOTA_PROVA'])
+                    r_nota = util.sosa_to_float(reg_nota['NOTA_REC'])
+                    m_final = util.sosa_to_float(reg_nota['MEDIA_FINAL'])
+                    status_nota = "✅ APROVADO" if m_final >= 6.0 else "⚠️ ABAIXO DA MÉDIA"
+                else:
+                    v_nota = t_nota = p_nota = r_nota = m_final = 0.0
+                    status_nota = "⏳ SEM NOTAS LANÇADAS"
+
+                faltas_zap = 0
+                perc_presenca_zap = 100
+                perc_visto_zap = 0
+                bonus_total_zap = 0.0
+                
+                if not d_alu_f.empty:
+                    d_alu_validas_zap = d_alu_f[~d_alu_f['TAGS'].isin(["DIA NÃO LETIVO", "BONUS_CONSELHO", "SISTEMA_NOTA"])]
+                    total_aulas_zap = len(d_alu_validas_zap)
+                    faltas_zap = len(d_alu_validas_zap[d_alu_validas_zap['TAGS'] == "AUSÊNCIA"])
+                    perc_presenca_zap = ((total_aulas_zap - faltas_zap) / total_aulas_zap) * 100 if total_aulas_zap > 0 else 100
+                    
+                    d_vistos_zap = d_alu_validas_zap[d_alu_validas_zap['VISTO_ATIVIDADE'].astype(str).str.upper() != "ISENTO"]
+                    tot_vistos_zap = len(d_vistos_zap)
+                    vistos_ok_zap = len(d_vistos_zap[d_vistos_zap['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"])
+                    perc_visto_zap = (vistos_ok_zap / tot_vistos_zap) * 100 if tot_vistos_zap > 0 else 0
+                    
+                    bonus_total_zap = d_alu_f['BONUS'].apply(util.sosa_to_float).sum()
+
                 msg_zap = f"""Olá! 🏫 Aqui é o Prof. Ronaldo Gomes.
 Segue o extrato de desempenho de Matemática do {trim_b}:
 
@@ -5003,7 +5040,6 @@ Segue o extrato de desempenho de Matemática do {trim_b}:
 
 *Obs: Bônus e arredondamentos já estão embutidos nas notas C1, C2 e C3.*
 Qualquer dúvida, estou à disposição! 🚀"""
-
                 st.code(msg_zap, language=None)
                 
         # --- BLOCO 1: EXTRATO ANALÍTICO DE NOTAS ---
