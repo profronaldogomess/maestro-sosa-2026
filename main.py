@@ -2475,7 +2475,9 @@ elif menu == "📝 Central de Avaliações":
                 trim_rec = c_rec2.selectbox("Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key="trim_rec")
                 
                 df_provas_rec = df_aulas[(df_aulas['ANO'].str.contains(str(ano_rec))) & (df_aulas['SEMANA_REF'] == "AVALIAÇÃO")]
-                opcoes_provas_rec = [p for p in df_provas_rec['TIPO_MATERIAL'].tolist() if not re.search(r"2[ªA]|CHAMADA|TIPO [B-Z]", p, re.IGNORECASE)]
+                
+                # 🚨 CORREÇÃO AQUI: Removido o bloqueio de "TIPO [B-Z]". Agora as variantes aparecem!
+                opcoes_provas_rec = [p for p in df_provas_rec['TIPO_MATERIAL'].tolist() if not re.search(r"2[ªA]|CHAMADA", p, re.IGNORECASE)]
                 
                 provas_base_sel = st.multiselect("📦 Selecione as Avaliações Base (Ex: Teste e Prova):", opcoes_provas_rec, max_selections=2)
                 
