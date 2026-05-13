@@ -3433,7 +3433,7 @@ elif menu == "📸 Scanner de Gabaritos":
                             qtd_q_2a = len(re.findall(r"(?i)QUEST[AÃ]O\s*0?\d+", q_raw))
                             if qtd_q_2a == 0: qtd_q_2a = 10
                             
-                            # 🚨 CORREÇÃO: Lê o valor real da prova em vez de assumir 10.0
+                            # 🚨 CORREÇÃO DEFINITIVA: Lê o valor real da prova e usa na tela
                             val_tag_2a = ai.extrair_tag(txt_ref, "VALOR")
                             v_total_2a = util.sosa_to_float(val_tag_2a) if val_tag_2a else 10.0
                             
@@ -3467,6 +3467,7 @@ elif menu == "📸 Scanner de Gabaritos":
                                         nota_calc += (peso_q / 2)
                                         acertos_parciais += 1
                                         
+                                # 🚨 CORREÇÃO VISUAL: Mostra o valor real da prova na tela
                                 st.metric("Nota Calculada", f"{nota_calc:.2f} / {v_total_2a:.2f}")
                                 st.caption(f"✅ {acertos_cheios} Integrais | ⚠️ {acertos_parciais} Parciais")
                                 
