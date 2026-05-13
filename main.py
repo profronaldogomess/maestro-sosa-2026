@@ -3433,9 +3433,16 @@ elif menu == "📸 Scanner de Gabaritos":
                             qtd_q_2a = len(re.findall(r"(?i)QUEST[AÃ]O\s*0?\d+", q_raw))
                             if qtd_q_2a == 0: qtd_q_2a = 10
                             
-                            # 🚨 CORREÇÃO DEFINITIVA: Lê o valor real da prova e usa na tela
-                            val_tag_2a = ai.extrair_tag(txt_ref, "VALOR")
-                            v_total_2a = util.sosa_to_float(val_tag_2a) if val_tag_2a else 10.0
+                            # 🚨 BLINDAGEM SEMÂNTICA DE VALOR (SOBREPOSIÇÃO DE BANCO)
+                            # O sistema ignora a tag errada do banco e força o valor pelo nome da prova
+                            nome_prova_atual = str(material_ref['TIPO_MATERIAL']).upper()
+                            if "PROVA" in nome_prova_atual:
+                                v_total_2a = 4.0
+                            elif "TESTE" in nome_prova_atual:
+                                v_total_2a = 3.0
+                            else:
+                                val_tag_2a = ai.extrair_tag(txt_ref, "VALOR")
+                                v_total_2a = util.sosa_to_float(val_tag_2a) if val_tag_2a else 10.0
                             
                             peso_q = v_total_2a / qtd_q_2a if qtd_q_2a > 0 else 0
                             
@@ -3467,7 +3474,6 @@ elif menu == "📸 Scanner de Gabaritos":
                                         nota_calc += (peso_q / 2)
                                         acertos_parciais += 1
                                         
-                                # 🚨 CORREÇÃO VISUAL: Mostra o valor real da prova na tela
                                 st.metric("Nota Calculada", f"{nota_calc:.2f} / {v_total_2a:.2f}")
                                 st.caption(f"✅ {acertos_cheios} Integrais | ⚠️ {acertos_parciais} Parciais")
                                 
