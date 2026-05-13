@@ -3433,7 +3433,11 @@ elif menu == "📸 Scanner de Gabaritos":
                             qtd_q_2a = len(re.findall(r"(?i)QUEST[AÃ]O\s*0?\d+", q_raw))
                             if qtd_q_2a == 0: qtd_q_2a = 10
                             
-                            peso_q = v_total_at / qtd_q_2a if qtd_q_2a > 0 else 0
+                            # 🚨 CORREÇÃO: Lê o valor real da prova em vez de assumir 10.0
+                            val_tag_2a = ai.extrair_tag(txt_ref, "VALOR")
+                            v_total_2a = util.sosa_to_float(val_tag_2a) if val_tag_2a else 10.0
+                            
+                            peso_q = v_total_2a / qtd_q_2a if qtd_q_2a > 0 else 0
                             
                             col_man1, col_man2 = st.columns([1.5, 1])
                             with col_man1:
@@ -3463,7 +3467,7 @@ elif menu == "📸 Scanner de Gabaritos":
                                         nota_calc += (peso_q / 2)
                                         acertos_parciais += 1
                                         
-                                st.metric("Nota Calculada", f"{nota_calc:.2f} / {v_total_at:.2f}")
+                                st.metric("Nota Calculada", f"{nota_calc:.2f} / {v_total_2a:.2f}")
                                 st.caption(f"✅ {acertos_cheios} Integrais | ⚠️ {acertos_parciais} Parciais")
                                 
                                 evidencia_manual = st.file_uploader("📸 Upload da Prova", type=["jpg", "png", "pdf"], key=f"up_2a_{id_aluno_atual}")
