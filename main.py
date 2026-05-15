@@ -5617,7 +5617,10 @@ elif menu == "📊 Painel de Notas & Vistos":
             
             n_teste = util.sosa_to_float(reg_b.iloc[0]['NOTA_TESTE']) if not reg_b.empty else 0.0
             n_prova = util.sosa_to_float(reg_b.iloc[0]['NOTA_PROVA']) if not reg_b.empty else 0.0
-            n_rec = util.sosa_to_float(reg_b.iloc[0]['NOTA_REC']) if not reg_b.empty else 0.0
+            
+            # 🚨 PROTOCOLO FANTASMA: Lê -1.0 como Vazio (None) para a tela
+            n_rec_banco = util.sosa_to_float(reg_b.iloc[0]['NOTA_REC']) if not reg_b.empty else -1.0
+            n_rec_display = None if n_rec_banco < 0 else n_rec_banco
             
             origem_prova = "[MANUAL]"
             origem_teste = "[MANUAL]"
@@ -5651,7 +5654,7 @@ elif menu == "📊 Painel de Notas & Vistos":
                 "ORIGEM TESTE": origem_teste,
                 "PROVA (LANÇAR)": n_prova,
                 "ORIGEM PROVA": origem_prova,
-                "REC. PARALELA": n_rec,
+                "REC. PARALELA": n_rec_display, # 🚨 Usa a variável que permite ficar vazia
                 "_ORIGINAL_TESTE": n_teste,
                 "_ORIGINAL_PROVA": n_prova
             })
@@ -5667,7 +5670,6 @@ elif menu == "📊 Painel de Notas & Vistos":
             v_base = float(row.get('VISTOS (AUTO)', 0.0) or 0.0)
             t_base = float(row.get('TESTE (LANÇAR)', 0.0) or 0.0)
             p_base = float(row.get('PROVA (LANÇAR)', 0.0) or 0.0)
-            rec_paralela = float(row.get('REC. PARALELA', 0.0) or 0.0)
             
             v_final = max(0.0, min(p_visto, v_base + bonus_restante))
             bonus_restante -= (v_final - v_base)
@@ -5684,25 +5686,36 @@ elif menu == "📊 Painel de Notas & Vistos":
             
             soma_notas = v_final + t_final + p_final
             
-            if rec_paralela > 0:
+            # 🚨 LÓGICA DE RECUPERAÇÃO (VAZIO vs ZERO)
+            rec_input = row.get('REC. PARALELA')
+            fez_rec = pd.notna(rec_input) and rec_input is not None and str(rec_input).strip() != ""
+            
+            if not fez_rec:
+                rec_final_salvar = -1.0 # Fantasma para o banco de dados
+                media_final = soma_notas
+            else:
+                rec_raw = float(rec_input)
                 if regra_rec == "Média Justa (Soma + Rec / 2)":
-                    nova_media = (soma_notas + rec_paralela) / 2
-                    media_final = max(soma_notas, nova_media)
+                    nota_rec_calculada = (soma_notas + rec_raw) / 2
+                    media_final = max(soma_notas, nota_rec_calculada)
+                    rec_final_salvar = nota_rec_calculada # 🚨 Salva a média calculada na coluna REC!
                 elif regra_rec == "Substituir apenas a Prova":
-                    nota_rec_convertida = (rec_paralela / 10.0) * p_prova
+                    nota_rec_convertida = (rec_raw / 10.0) * p_prova
                     p_final_com_rec = max(p_final, nota_rec_convertida)
                     media_final = v_final + t_final + p_final_com_rec
+                    rec_final_salvar = rec_raw
                 else: 
-                    media_final = max(soma_notas, rec_paralela)
-            else:
-                media_final = soma_notas
+                    media_final = max(soma_notas, rec_raw)
+                    rec_final_salvar = rec_raw
                 
             if arredondar_prefeitura:
                 media_final = round(media_final * 2) / 2
+                if rec_final_salvar > 0:
+                    rec_final_salvar = round(rec_final_salvar * 2) / 2
                 
             media_final = min(10.0, media_final)
             
-            return pd.Series([v_final, t_final, p_final, rec_paralela, media_final])
+            return pd.Series([v_final, t_final, p_final, rec_final_salvar, media_final])
 
         df_input[['V_PREF', 'T_PREF', 'P_PREF', 'REC_PREF', 'MEDIA_FINAL']] = df_input.apply(aplicar_transbordamento, axis=1)
 
@@ -5989,14 +6002,19 @@ elif menu == "📈 Boletim Anual & Conselho":
         trims = ["I Trimestre", "II Trimestre", "III Trimestre"]
         for t in trims:
             if f"MEDIA_FINAL_{t}" not in pivot.columns: pivot[f"MEDIA_FINAL_{t}"] = 0.0
-            if f"NOTA_REC_{t}" not in pivot.columns: pivot[f"NOTA_REC_{t}"] = 0.0
+            # 🚨 PROTOCOLO FANTASMA: Preenche recuperações vazias com -1.0
+            if f"NOTA_REC_{t}" in pivot.columns:
+                pivot[f"NOTA_REC_{t}"] = pivot[f"NOTA_REC_{t}"].fillna(-1.0)
+            else:
+                pivot[f"NOTA_REC_{t}"] = -1.0
 
         rec_f_data = df_t[df_t['TRIMESTRE'].str.contains("REC_FINAL|FINAL", na=False, case=False)]
         if not rec_f_data.empty:
             rec_f_min = rec_f_data[['ID_ALUNO', 'MEDIA_FINAL']].rename(columns={'MEDIA_FINAL': 'RF'})
             pivot = pd.merge(pivot, rec_f_min, on='ID_ALUNO', how='left')
+            pivot['RF'] = pivot['RF'].fillna(-1.0)
         else:
-            pivot['RF'] = 0.0
+            pivot['RF'] = -1.0
         
         # CÁLCULO DE FALTAS TOTAIS DO ANO
         faltas_df = df_diario[(df_diario['TURMA'] == turma_sel) & (df_diario['TAGS'] == "AUSÊNCIA")]
@@ -6018,27 +6036,25 @@ elif menu == "📈 Boletim Anual & Conselho":
 
         pivot = pivot.fillna(0.0)
 
-        # 🚨 INTELIGÊNCIA TEMPORAL: Descobre quantos trimestres já aconteceram
         trimestres_ativos = 0
         if pivot['MEDIA_FINAL_I Trimestre'].sum() > 0: trimestres_ativos += 1
         if pivot['MEDIA_FINAL_II Trimestre'].sum() > 0: trimestres_ativos += 1
         if pivot['MEDIA_FINAL_III Trimestre'].sum() > 0: trimestres_ativos += 1
-        if trimestres_ativos == 0: trimestres_ativos = 1 # Evita divisão por zero
+        if trimestres_ativos == 0: trimestres_ativos = 1 
 
-        # 🚨 BLINDAGEM DO DENOMINADOR: Ignora eventos administrativos para não gerar dias letivos fantasmas
         dias_validos = df_diario[(df_diario['TURMA'] == turma_sel) & (~df_diario['TAGS'].isin(['DIA NÃO LETIVO', 'BONUS_CONSELHO', 'SISTEMA_NOTA']))]
         total_dias_letivos = dias_validos['DATA'].nunique()
         
         if total_dias_letivos == 0: total_dias_letivos = 1
         limite_faltas = int(total_dias_letivos * 0.25)
-        if limite_faltas == 0: limite_faltas = 1 # Evita barra de progresso quebrada
+        if limite_faltas == 0: limite_faltas = 1 
 
-        # --- 3. LÓGICA DE STATUS (COM PESO DE FALTAS E EVASÃO) ---
+        # --- 3. LÓGICA DE STATUS ---
         def calcular_situacao_anual(row):
             t1 = util.sosa_to_float(row.get("MEDIA_FINAL_I Trimestre", 0))
             t2 = util.sosa_to_float(row.get("MEDIA_FINAL_II Trimestre", 0))
             t3 = util.sosa_to_float(row.get("MEDIA_FINAL_III Trimestre", 0))
-            rf = util.sosa_to_float(row.get("RF", 0))
+            rf = util.sosa_to_float(row.get("RF", -1.0))
             faltas_aluno = row.get("FALTAS", 0)
             
             soma = t1 + t2 + t3
@@ -6051,7 +6067,6 @@ elif menu == "📈 Boletim Anual & Conselho":
             else:
                 pei = "👤"
             
-            # 🚨 INTELIGÊNCIA DE STATUS DINÂMICO
             if faltas_aluno >= (total_dias_letivos * 0.5) and soma == 0: 
                 status = "👻 EVASÃO"
             elif faltas_aluno > limite_faltas:
@@ -6062,7 +6077,7 @@ elif menu == "📈 Boletim Anual & Conselho":
                 status = "🔄 APROV. REC"
             elif trimestres_ativos == 3 and soma < 18.0 and rf < 6.0:
                 status = "❌ REPROVADO"
-            elif trimestres_ativos < 3: # O ano ainda está rolando
+            elif trimestres_ativos < 3: 
                 media_parcial = soma / trimestres_ativos
                 if media_parcial >= 6.0:
                     status = "🟢 NA MÉDIA"
@@ -6075,15 +6090,13 @@ elif menu == "📈 Boletim Anual & Conselho":
 
         pivot[['P', 'Σ', 'FALTA_PTS', 'SITUAÇÃO']] = pivot.apply(calcular_situacao_anual, axis=1)
 
-        # --- 4. KPIs DE TOPO (TERMÔMETRO DA TURMA) ---
+        # --- 4. KPIs DE TOPO ---
         st.markdown("### 📊 Termômetro da Turma")
         c1, c2, c3, c4 = st.columns(4)
         
-        # Média real baseada apenas nos trimestres que já aconteceram
         media_real_turma = pivot['Σ'].sum() / (len(pivot) * trimestres_ativos) if len(pivot) > 0 else 0
         c1.metric("Média Geral da Turma", f"{media_real_turma:.1f}")
         
-        # Alunos na média (>= 6.0)
         na_media = len(pivot[pivot['SITUAÇÃO'].isin(["✅ APROVADO", "🟢 NA MÉDIA", "🔄 APROV. REC"])])
         taxa_sucesso = (na_media / len(pivot)) * 100 if len(pivot) > 0 else 0
         c2.metric("Alunos na Média", f"{taxa_sucesso:.0f}%", f"{na_media} de {len(pivot)} alunos")
@@ -6092,7 +6105,7 @@ elif menu == "📈 Boletim Anual & Conselho":
         c3.metric("Evasão / Abandono", evasao_total, delta_color="inverse")
         
         risco_total = len(pivot[pivot['SITUAÇÃO'].isin(["🚨 REPROV. FALTA", "🟡 ALERTA (NOTA)"])])
-        c4.metric("Alerta Crítico (Nota/Falta)", risco_total, delta_color="inverse", help="Alunos que estouraram faltas ou estão com a média parcial abaixo de 6.0.")
+        c4.metric("Alerta Crítico (Nota/Falta)", risco_total, delta_color="inverse")
 
         # --- 5. TABELA VISUAL DE ELITE ---
         st.markdown("---")
@@ -6104,6 +6117,14 @@ elif menu == "📈 Boletim Anual & Conselho":
             if "ALERTA" in str(v): return 'color: #F1C40F; font-weight: bold;'
             return 'color: gray;'
 
+        # 🚨 FORMATADORES CUSTOMIZADOS PARA ESCONDER O FANTASMA (-1.0)
+        def formatar_rec(val):
+            if pd.isna(val) or val < 0: return "-"
+            return f"{val:.1f}"
+
+        def formatar_media(val):
+            return f"{val:.1f}"
+
         st.dataframe(
             pivot[['P', 'NOME_ALUNO', 
                    'MEDIA_FINAL_I Trimestre', 'NOTA_REC_I Trimestre',
@@ -6111,22 +6132,20 @@ elif menu == "📈 Boletim Anual & Conselho":
                    'MEDIA_FINAL_III Trimestre', 'NOTA_REC_III Trimestre',
                    'Σ', 'RF', 'FALTAS', 'SITUAÇÃO']]
             .style.map(style_status_anual, subset=['SITUAÇÃO'])
-            .format("{:.1f}", subset=['MEDIA_FINAL_I Trimestre', 'NOTA_REC_I Trimestre', 
-                                      'MEDIA_FINAL_II Trimestre', 'NOTA_REC_II Trimestre', 
-                                      'MEDIA_FINAL_III Trimestre', 'NOTA_REC_III Trimestre', 
-                                      'RF']),
+            .format(formatar_media, subset=['MEDIA_FINAL_I Trimestre', 'MEDIA_FINAL_II Trimestre', 'MEDIA_FINAL_III Trimestre', 'Σ'])
+            .format(formatar_rec, subset=['NOTA_REC_I Trimestre', 'NOTA_REC_II Trimestre', 'NOTA_REC_III Trimestre', 'RF']),
             use_container_width=True, hide_index=True,
             column_config={
                 "P": st.column_config.TextColumn("P", width="small", help="Perfil: ♿ PEI ou 👤 Regular"),
                 "NOME_ALUNO": st.column_config.TextColumn("Estudante", width="medium"),
                 "MEDIA_FINAL_I Trimestre": st.column_config.NumberColumn("I", width="small"),
-                "NOTA_REC_I Trimestre": st.column_config.NumberColumn("R1", width="small"),
+                "NOTA_REC_I Trimestre": st.column_config.TextColumn("R1", width="small"),
                 "MEDIA_FINAL_II Trimestre": st.column_config.NumberColumn("II", width="small"),
-                "NOTA_REC_II Trimestre": st.column_config.NumberColumn("R2", width="small"),
+                "NOTA_REC_II Trimestre": st.column_config.TextColumn("R2", width="small"),
                 "MEDIA_FINAL_III Trimestre": st.column_config.NumberColumn("III", width="small"),
-                "NOTA_REC_III Trimestre": st.column_config.NumberColumn("R3", width="small"),
+                "NOTA_REC_III Trimestre": st.column_config.TextColumn("R3", width="small"),
                 "Σ": st.column_config.ProgressColumn("Σ (Soma)", help="Soma Anual (Meta: 18.0)", format="%.1f", min_value=0.0, max_value=18.0),
-                "RF": st.column_config.NumberColumn("RF", width="small", help="Recuperação Final"),
+                "RF": st.column_config.TextColumn("RF", width="small", help="Recuperação Final"),
                 "FALTAS": st.column_config.ProgressColumn("Faltas", help=f"Limite atual: {limite_faltas}", format="%d", min_value=0, max_value=limite_faltas),
                 "SITUAÇÃO": st.column_config.TextColumn("Status", width="medium")
             }
