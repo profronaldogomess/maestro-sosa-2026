@@ -365,9 +365,14 @@ if menu == "📅 Planejamento (Ponto ID)":
             
             cg1, cg2 = st.columns([2, 1])
             tipo_semana = cg1.selectbox("DNA da Abordagem:", [
-                "📗 Aula de Safra (Regular)", "📝 Aplicação de Exame", 
-                "🔥 Revisão & Recomposição", "📋 Trabalho Investigativo", "🔍 Sonda de Proficiência",
-                "💡 Aula Aberta (Dinâmicas e Eventos)"
+                "📗 Aula de Safra (Regular)", 
+                "📝 Aplicação de Exame", 
+                "🔥 Revisão & Recomposição", 
+                "📋 Trabalho Investigativo", 
+                "🔍 Sonda de Proficiência",
+                "💡 Aula Aberta (Dinâmicas e Eventos)",
+                "🏛️ Semana de Provas Oficiais (Global)",
+                "🔄 Devolutiva de Resultados & Recuperação"
             ], key=f"gate_tipo_{v}")
             
             if is_sabado_avulso:
@@ -399,7 +404,15 @@ if menu == "📅 Planejamento (Ponto ID)":
 
             sem_p = c2.selectbox("📅 Semana de Referência:", semanas_disponiveis, key=f"sem_sel_{v}")
             sem_limpa = sem_p.split(" (")[0]
-            trim_atual = sem_p.split(" - ")[1] if " - " in sem_p else "I Trimestre"
+            trim_atual_calc = sem_p.split(" - ")[1] if " - " in sem_p else "I Trimestre"
+
+            # 🚨 NOVO: CÂMBIO TEMPORAL (OVERRIDE DE TRIMESTRE)
+            override_trim = st.toggle("⚙️ Forçar Mudança de Trimestre", help="Ative para salvar este plano em um trimestre diferente do calendário oficial (Ex: O calendário diz I Trimestre, mas você já quer lançar no II Trimestre).")
+            if override_trim:
+                idx_trim = ["I Trimestre", "II Trimestre", "III Trimestre"].index(trim_atual_calc) if trim_atual_calc in ["I Trimestre", "II Trimestre", "III Trimestre"] else 0
+                trim_atual = st.selectbox("Selecione o Trimestre Real:", ["I Trimestre", "II Trimestre", "III Trimestre"], index=idx_trim)
+            else:
+                trim_atual = trim_atual_calc
 
             st.markdown("#### 🔙 Radar de Continuidade")
             df_hist = df_planos[df_planos['ANO'] == ano_str_busca].copy()
@@ -433,10 +446,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                     if "Exame" in tipo_semana or "Sonda" in tipo_semana: 
                         opcoes_ativos = df_ativos_ano[df_ativos_ano['SEMANA_REF'] == "AVALIAÇÃO"]['TIPO_MATERIAL'].tolist()
                     elif "Revisão" in tipo_semana: 
-                        # Puxa as revisões normais do acervo de aulas
                         opcoes_ativos = df_ativos_ano[df_ativos_ano['SEMANA_REF'] == "REVISÃO"]['TIPO_MATERIAL'].tolist()
-                        
-                        # 🚨 INTEGRAÇÃO DOS DOSSIÊS DE RAIO-X (Puxa do banco de relatórios)
                         df_dossies_ano = df_relatorios[(df_relatorios['TIPO'] == 'DOSSIE_RAIO_X') & (df_relatorios['NOME_ALUNO'].str.contains(str(ano_p)))]
                         for _, row_d in df_dossies_ano.iterrows():
                             cont_d = str(row_d['CONTEUDO'])
@@ -467,7 +477,6 @@ if menu == "📅 Planejamento (Ponto ID)":
                     
                     db.excluir_plano_completo(sem_limpa + sufixo_arq, ano_str_busca)
                     
-                    # Monta um plano simplificado para o DOCX
                     roteiro_docx = f"AULA DEDICADA A: {tipo_semana}\nMATERIAL/TEMA: {ativo_selecionado}\n\nDIRETRIZES DE EXECUÇÃO:\n{diretriz_logistica}"
                     
                     dados_docx = {
@@ -489,7 +498,6 @@ if menu == "📅 Planejamento (Ponto ID)":
                             f"[AULA_1] {roteiro_docx} \n[AULA_2] N/A \n[SABADO_LETIVO] N/A \n"
                             f"--- LINK DRIVE --- {link_drive}"
                         )
-                        # 🚨 SALVA COMO 'PRODUZIDO' PARA PULAR O HUB DE PRODUÇÃO
                         db.salvar_no_banco("DB_PLANOS", [datetime.now().strftime("%d/%m/%Y"), sem_limpa + sufixo_arq, ano_str_busca, trim_atual, "PRODUZIDO", final_txt, link_drive])
                         status.update(label="✅ Logística Sincronizada! O plano já está no Acervo e no Cockpit.", state="complete")
                         st.balloons()
@@ -497,7 +505,52 @@ if menu == "📅 Planejamento (Ponto ID)":
                         st.rerun()
 
         # ==============================================================================
-        # 🟢 ROTA NORMAL (AULA DE SAFRA INÉDITA)
+        # 🚨 NOVA ROTA: TEMPLATES SOBERANOS (BUROCRACIA)
+        # ==============================================================================
+        elif tipo_semana in ["🏛️ Semana de Provas Oficiais (Global)", "🔄 Devolutiva de Resultados & Recuperação"]:
+            st.markdown("---")
+            st.info(f"⚡ **Protocolo Burocrático Ativado:** O DNA '{tipo_semana}' utilizará um template oficial da Secretaria, poupando tokens de IA e tempo. Você poderá editar o texto no próximo passo antes de gerar o DOCX.")
+            
+            if st.button("⚙️ INJETAR TEMPLATE PADRÃO", use_container_width=True, type="primary"):
+                if "Provas" in tipo_semana:
+                    template = f"""[HABILIDADE_BNCC] Competências socioemocionais e gestão do tempo.
+[COMPETENCIAS_FOCO] Autogestão, foco e resiliência.
+[OBJETO_CONHECIMENTO] Avaliação Trimestral Global.
+[CONTEUDOS_ESPECIFICOS] Todos os conteúdos ministrados no {trim_atual}.
+[OBJETIVOS_ENSINO] Mensurar o nível de proficiência dos estudantes; Desenvolver a capacidade de resolução de problemas sob tempo determinado.
+[BASE_DIDATICA] Instrumento Avaliativo Oficial (Impresso).
+[JUSTIFICATIVA_PEDAGOGICA] A avaliação global é um instrumento fundamental para a auditoria do processo de ensino-aprendizagem, permitindo o mapeamento de lacunas para futuras intervenções.
+[AULA_1] Organização das fileiras. Leitura das instruções gerais. Aplicação do instrumento avaliativo com monitoramento ativo.
+[AULA_2] Continuação da aplicação (se necessário) ou recolhimento dos instrumentos e debriefing sobre as questões mais desafiadoras.
+[SABADO_LETIVO] N/A
+[AVALIACAO_DE_MERITO] Correção via Scanner (CIR) e análise de distratores.
+[ESTRATEGIA_DUA_PEI] Tempo estendido, leitura mediada das questões e ambiente com redução de estímulos visuais/sonoros para alunos laudados."""
+                else:
+                    template = f"""[HABILIDADE_BNCC] Recomposição de Aprendizagem.
+[COMPETENCIAS_FOCO] Pensamento crítico, argumentação e superação de lacunas.
+[OBJETO_CONHECIMENTO] Análise de Erros e Recuperação Paralela.
+[CONTEUDOS_ESPECIFICOS] Tópicos com menor índice de acerto no Raio-X da turma.
+[OBJETIVOS_ENSINO] Proporcionar feedback imediato; Sanar lacunas cognitivas detectadas; Aplicar instrumento de recuperação paralela.
+[BASE_DIDATICA] Dossiê Raio-X e Instrumento de Recuperação.
+[JUSTIFICATIVA_PEDAGOGICA] O erro é tratado como etapa do processo de aprendizagem. A devolutiva e a recuperação garantem a equidade e a justiça pedagógica.
+[AULA_1] Entrega dos resultados da avaliação. Correção comentada no quadro das questões com menor índice de acerto (Mapa de Calor).
+[AULA_2] Aplicação do instrumento de Recuperação Paralela para os alunos elegíveis. Atividade de aprofundamento/leitura para os alunos já aprovados.
+[SABADO_LETIVO] N/A
+[AVALIACAO_DE_MERITO] Correção da Recuperação Paralela e substituição da nota conforme regra do conselho.
+[ESTRATEGIA_DUA_PEI] Prova de recuperação adaptada (Nível 1, 2 ou 3) conforme o Plano Educacional Individualizado do estudante."""
+                
+                st.session_state.p_temp = template
+                st.session_state.p_meta = {
+                    "semana": sem_limpa, "carga": carga_horaria, 
+                    "trimestre": trim_atual, "ano": ano_str_busca,
+                    "base": "Template Oficial",
+                    "is_sabado": is_sabado_avulso
+                }
+                st.session_state.v_plano = int(time.time())
+                st.rerun()
+
+        # ==============================================================================
+        # 🟢 ROTA NORMAL (AULA DE SAFRA INÉDITA - IA)
         # ==============================================================================
         else:
             # --- 📚 3. BASE CURRICULAR E ENRIQUECIMENTO ---
@@ -1669,7 +1722,8 @@ elif menu == "🧪 Criador de Aulas":
                         obj_upper = obj_geral.upper()
                         
                         is_exame = "EXAME" in obj_upper or "SONDA" in obj_upper or "AVALIAÇÃO" in obj_upper or "TESTE" in obj_upper
-                        is_revisao = "REVISÃO" in obj_upper or "RECOMPOSIÇÃO" in obj_upper or "CORREÇÃO" in obj_upper
+                        # 🚨 APRIMORAMENTO: Reconhece Recuperação e Erros como Revisão Logística
+                        is_revisao = "REVISÃO" in obj_upper or "RECOMPOSIÇÃO" in obj_upper or "CORREÇÃO" in obj_upper or "RECUPERAÇÃO" in obj_upper or "ERROS" in obj_upper
                         is_projeto = "PROJETO" in obj_upper or "TRABALHO" in obj_upper
                         is_evento = "EVENTO" in obj_upper or "DINÂMICA" in obj_upper or "AULA ABERTA" in obj_upper
 
@@ -1677,7 +1731,7 @@ elif menu == "🧪 Criador de Aulas":
                         if is_exame:
                             opcoes_metodo = ["📝 Oficializar Aplicação de Exame (Vínculo de Acervo)"]
                         elif is_revisao:
-                            opcoes_metodo = ["🔥 Oficializar Revisão/Correção (Vínculo de Acervo)"]
+                            opcoes_metodo = ["🔥 Oficializar Devolutiva/Recuperação (Vínculo de Acervo)"]
                         elif is_projeto:
                             opcoes_metodo = ["📋 Oficializar Apresentação de Projeto (Vínculo de Acervo)"]
                         elif is_evento:
@@ -1760,8 +1814,11 @@ elif menu == "🧪 Criador de Aulas":
                                             st.info("Nenhuma avaliação encontrada no acervo para esta série.")
                                             
                                     elif is_revisao:
-                                        st.warning("🔥 **Revisão/Correção Detectada:** Selecione o material de revisão ou o Dossiê Raio-X para oficializar a aula.")
-                                        opcoes_rev = df_aulas[(df_aulas['ANO'].str.contains(str(ano_lab))) & (df_aulas['SEMANA_REF'] == "REVISÃO")]['TIPO_MATERIAL'].tolist()
+                                        st.warning("🔥 **Devolutiva/Recuperação Detectada:** Selecione o material de revisão, a prova de recuperação ou o Dossiê Raio-X para oficializar a aula.")
+                                        
+                                        # 🚨 APRIMORAMENTO: Puxa Revisões E Recuperações do Acervo
+                                        df_rev_rec = df_aulas[(df_aulas['ANO'].str.contains(str(ano_lab))) & (df_aulas['SEMANA_REF'].isin(["REVISÃO", "AVALIAÇÃO"]))]
+                                        opcoes_rev = [m for m in df_rev_rec['TIPO_MATERIAL'].tolist() if "REVISÃO" in m.upper() or "RECUPERAÇÃO" in m.upper() or "2ª CHAMADA" in m.upper()]
                                         
                                         df_dossies_ano = df_relatorios[(df_relatorios['TIPO'] == 'DOSSIE_RAIO_X') & (df_relatorios['NOME_ALUNO'].str.contains(str(ano_lab)))]
                                         for _, row_d in df_dossies_ano.iterrows():
@@ -1772,9 +1829,9 @@ elif menu == "🧪 Criador de Aulas":
                                             opcoes_rev.append(f"📊 DOSSIÊ RAIO-X: {nome_av_str} ({turma_d})")
                                             
                                         if opcoes_rev:
-                                            prova_sel = st.selectbox("Vincular Material de Revisão/Dossiê:", [""] + opcoes_rev, key=f"vinc_rev_{v}")
+                                            prova_sel = st.selectbox("Vincular Material/Dossiê:", [""] + opcoes_rev, key=f"vinc_rev_{v}")
                                         else:
-                                            st.info("Nenhum material de revisão ou dossiê encontrado no acervo.")
+                                            st.info("Nenhum material de revisão, recuperação ou dossiê encontrado no acervo.")
                                             
                                     elif is_projeto:
                                         st.warning("📋 **Apresentação de Projeto Detectada:** Selecione o projeto correspondente.")
