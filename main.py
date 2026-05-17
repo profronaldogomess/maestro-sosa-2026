@@ -6439,7 +6439,7 @@ elif menu == "👥 Gestão da Turma":
     ])
 
     # ==============================================================================
-    # 🚀 ABA 1: COCKPIT DE REGÊNCIA (AÇÃO RÁPIDA E AUDITORIA)
+    # 🚀 ABA 1: COCKPIT DE REGÊNCIA (AÇÃO RÁPIDA E AUDITORIA - V200 LAYERED)
     # ==============================================================================
     with tab_cockpit:
         if df_turmas.empty or 'ID_TURMA' not in df_turmas.columns:
@@ -6493,31 +6493,64 @@ elif menu == "👥 Gestão da Turma":
                 df_mats_ano = df_aulas[df_aulas['ANO'].str.contains(ano_num)].iloc[::-1]
                 historico_turma = df_registro_aulas[df_registro_aulas['TURMA'] == turma_foco].copy()
 
-                col_esq, col_dir = st.columns([1.5, 1.5])
-
-                # --- LADO ESQUERDO: ABERTURA DE AULA ---
-                with col_esq:
-                    st.subheader("🕒 Abertura de Aula")
+                # ==============================================================================
+                # CAMADA 1: RADAR DEMOGRÁFICO (TOPO)
+                # ==============================================================================
+                total_alunos_turma = len(alunos_t)
+                def classificar_macro_perfil(nec):
+                    n = str(nec).upper().strip()
+                    if n in ["NENHUMA", "", "NAN", "TÍPICO", "TIPICO"]: return "TIPICO"
+                    if "DEFASAGEM" in n: return "DEFASAGEM"
+                    if "PENDENTE" in n or "SUSPEITA" in n: return "RADAR"
+                    if "ALTA PERFORMANCE" in n: return "ALTA"
+                    return "PEI"
                     
-                    planos_usados = historico_turma['SEMANA'].unique().tolist()
-                    plano_sugerido = "Nenhum"
-                    base_didatica_sugerida = "Matriz Curricular"
-                    ponte_sugerida = "Início de novo ciclo pedagógico."
+                perfis_macro = alunos_t['NECESSIDADES'].apply(classificar_macro_perfil)
+                qtd_pei = len(perfis_macro[perfis_macro == "PEI"])
+                qtd_defasagem = len(perfis_macro[perfis_macro == "DEFASAGEM"])
+                
+                with st.container(border=True):
+                    c_m1, c_m2, c_m3 = st.columns(3)
+                    c_m1.metric("👥 Total Alunos", total_alunos_turma)
+                    c_m2.metric("♿ Laudos (PEI)", qtd_pei)
+                    c_m3.metric("🧱 Defasagem", qtd_defasagem)
                     
-                    df_p_sugestao = df_p_atual[~df_p_atual['SEMANA'].isin(planos_usados)]
-                    df_p_sugestao = df_p_sugestao[df_p_sugestao['EIXO'] == 'HUB_ATIVO']
-                        
-                    if not df_p_sugestao.empty:
-                        row_p = df_p_sugestao.iloc[0]
-                        plano_sugerido = row_p['SEMANA']
-                        txt_p = row_p['PLANO_TEXTO']
-                        base_didatica_sugerida = ai.extrair_tag(txt_p, "BASE_DIDATICA") or "Matriz de Itabuna"
-                        ponte_match = re.search(r"Ponte Pedagógica:(.*?)(?=Início|Meio|Fim|$)", ai.extrair_tag(txt_p, "AULA_1"), re.DOTALL)
-                        if ponte_match: ponte_sugerida = ponte_match.group(1).strip()
+                    mask_pei = ~alunos_t['NECESSIDADES'].astype(str).str.upper().str.strip().isin(["NENHUMA", "", "NAN", "TÍPICO", "TIPICO", "ALTA PERFORMANCE"])
+                    df_pei_turma = alunos_t[mask_pei]
+                    
+                    if not df_pei_turma.empty:
+                        with st.expander("🔍 Ver detalhamento de Inclusão e Defasagem"):
+                            for _, alu in df_pei_turma.iterrows(): 
+                                nec_str = str(alu['NECESSIDADES']).upper()
+                                if "DEFASAGEM" in nec_str: st.error(f"🧱 **{alu['NOME_ALUNO']}** - {alu['NECESSIDADES']}")
+                                elif "PENDENTE" in nec_str or "SUSPEITA" in nec_str: st.warning(f"🟠 **{alu['NOME_ALUNO']}** - {alu['NECESSIDADES']}")
+                                else: st.info(f"♿ **{alu['NOME_ALUNO']}** - {alu['NECESSIDADES']}")
 
-                    with st.container(border=True):
-                        st.markdown("#### 🚀 MISSÃO PLANEJADA PARA HOJE")
-                        
+                # ==============================================================================
+                # CAMADA 2: ABERTURA DE AULA (MEIO)
+                # ==============================================================================
+                st.markdown("### 🕒 Abertura de Aula (Hoje)")
+                
+                planos_usados = historico_turma['SEMANA'].unique().tolist()
+                plano_sugerido = "Nenhum"
+                base_didatica_sugerida = "Matriz Curricular"
+                ponte_sugerida = "Início de novo ciclo pedagógico."
+                
+                df_p_sugestao = df_p_atual[~df_p_atual['SEMANA'].isin(planos_usados)]
+                df_p_sugestao = df_p_sugestao[df_p_sugestao['EIXO'] == 'HUB_ATIVO']
+                    
+                if not df_p_sugestao.empty:
+                    row_p = df_p_sugestao.iloc[0]
+                    plano_sugerido = row_p['SEMANA']
+                    txt_p = row_p['PLANO_TEXTO']
+                    base_didatica_sugerida = ai.extrair_tag(txt_p, "BASE_DIDATICA") or "Matriz de Itabuna"
+                    ponte_match = re.search(r"Ponte Pedagógica:(.*?)(?=Início|Meio|Fim|$)", ai.extrair_tag(txt_p, "AULA_1"), re.DOTALL)
+                    if ponte_match: ponte_sugerida = ponte_match.group(1).strip()
+
+                with st.container(border=True):
+                    col_ab1, col_ab2 = st.columns(2)
+                    
+                    with col_ab1:
                         data_aula = st.date_input("Data da Aula:", date.today(), format="DD/MM/YYYY", key=f"dt_reg_{v}")
                         data_aula_str = data_aula.strftime("%d/%m/%Y")
                         
@@ -6526,23 +6559,24 @@ elif menu == "👥 Gestão da Turma":
                         if not aula_existente.empty:
                             row_ativa = aula_existente.iloc[0]
                             st.success(f"✅ **Aula já registrada para esta data!**")
-                            st.info(f"📦 **Material Vinculado:** {row_ativa['CONTEUDO_MINISTRADO']}\n\n🚦 **Status:** {row_ativa.get('STATUS_EXECUCAO', 'Pendente')}")
-                            st.caption("💡 Para lançar vistos, acesse a aba 'Diário de Bordo Rápido'. Para editar este registro, use a Auditoria ao lado.")
+                            st.info(f"🚦 **Status:** {row_ativa.get('STATUS_EXECUCAO', 'Pendente')}")
                         else:
                             if plano_sugerido != "Nenhum":
                                 st.success(f"**Próxima Semana Inédita:** {plano_sugerido}")
-                                st.info(f"**📖 Base Didática (DNA):**\n{base_didatica_sugerida}")
+                                with st.expander("🔗 Ver Ponte de Continuidade (Onde paramos?)"):
+                                    st.caption(ponte_sugerida)
                             else:
                                 st.success("✅ Todos os planos ativos já foram aplicados nesta turma!")
-                            
-                            with st.expander("🔗 Ver Ponte de Continuidade (Onde paramos?)"):
-                                st.caption(ponte_sugerida)
-                            
-                            st.divider()
-                            
+
+                    with col_ab2:
+                        if not aula_existente.empty:
+                            st.info(f"📦 **Material Vinculado:**\n{row_ativa['CONTEUDO_MINISTRADO']}")
+                            st.caption("💡 Para lançar vistos, acesse a aba 'Diário de Bordo Rápido'. Para editar este registro, use a Auditoria abaixo.")
+                        else:
                             mats_disp_bruto = df_mats_ano['TIPO_MATERIAL'].tolist()
                             mats_sel = st.multiselect("📦 Selecione o Material (Máx 2):", options=mats_disp_bruto, max_selections=2, key=f"mats_reg_{v}")
 
+                            st.markdown("<br>", unsafe_allow_html=True)
                             if st.button("💾 CONFIRMAR ABERTURA DE AULA", use_container_width=True, type="primary"):
                                 if not mats_sel:
                                     st.error("⚠️ Selecione ao menos um material para abrir a aula.")
@@ -6556,137 +6590,99 @@ elif menu == "👥 Gestão da Turma":
                                     ])
                                     st.success("✅ Aula aberta com sucesso! Vá para o Diário de Bordo.")
                                     time.sleep(1); st.rerun()
-                                    
-                    # 🚨 PROTOCOLO DE SUSPENSÃO LETIVA (EVENTO GLOBAL)
-                    st.markdown("---")
-                    with st.expander("🛑 Registrar Dia Não Letivo / Paralisação", expanded=False):
-                        st.caption("Use para registrar paralisações, luto, falta de água, etc. Isso bloqueará faltas neste dia.")
-                        data_nl = st.date_input("Data do Evento:", date.today(), format="DD/MM/YYYY", key=f"dt_nl_{v}")
-                        data_nl_str = data_nl.strftime("%d/%m/%Y")
-                        motivo_nl = st.text_input("Motivo:", placeholder="Ex: Paralisação Sindical", key=f"motivo_nl_{v}")
-                        
-                        if st.button("🛑 CONFIRMAR DIA NÃO LETIVO", type="primary", use_container_width=True):
-                            if not motivo_nl:
-                                st.error("Digite o motivo.")
-                            else:
-                                with st.spinner("Registrando evento global..."):
-                                    db.limpar_diario_data_turma(data_nl_str, turma_foco)
-                                    db.excluir_aula_aberta(data_nl_str, turma_foco)
-                                    
-                                    db.salvar_no_banco("DB_DIARIO_BORDO", [
-                                        data_nl_str, "GLOBAL", "TODOS OS ALUNOS", turma_foco,
-                                        "ISENTO", "DIA NÃO LETIVO", motivo_nl, "0,00"
-                                    ])
-                                    db.salvar_no_banco("DB_REGISTRO_AULAS", [
-                                        data_nl_str, "AVULSA", turma_foco, 
-                                        f"DIA NÃO LETIVO: {motivo_nl}", "N/A", "N/A", "NÃO LETIVO", "", ""
-                                    ])
-                                    st.success("Dia Não Letivo registrado com sucesso!")
-                                    time.sleep(1.5)
-                                    st.rerun()
 
-                # --- LADO DIREITO: APOIO E AUDITORIA ---
-                with col_dir:
-                    st.subheader("🛠️ Apoio e Auditoria")
-                    
-                    with st.container(border=True):
-                        st.markdown("#### 📊 Perfil Quantitativo da Turma")
-                        
-                        # 🚨 MOTOR DE ESTATÍSTICA RÁPIDA
-                        total_alunos_turma = len(alunos_t)
-                        
-                        def classificar_macro_perfil(nec):
-                            n = str(nec).upper().strip()
-                            if n in ["NENHUMA", "", "NAN", "TÍPICO", "TIPICO"]: return "TIPICO"
-                            if "DEFASAGEM" in n: return "DEFASAGEM"
-                            if "PENDENTE" in n or "SUSPEITA" in n: return "RADAR"
-                            if "ALTA PERFORMANCE" in n: return "ALTA"
-                            return "PEI"
+                # ==============================================================================
+                # CAMADA 3: AUDITORIA DE REGÊNCIA (FUNDO)
+                # ==============================================================================
+                st.markdown("### ✏️ Auditoria e Edição de Aulas Passadas")
+                st.caption("Corrija aulas que foram salvas como 'Registro via Diário' ou altere o material vinculado de aulas passadas.")
+                
+                if not historico_turma.empty:
+                    historico_turma['DATA_DT'] = pd.to_datetime(historico_turma['DATA'], format="%d/%m/%Y", errors='coerce')
+                    aulas_abertas = historico_turma.sort_values(by='DATA_DT', ascending=False).head(10) # Aumentei para mostrar as últimas 10
+                else:
+                    aulas_abertas = pd.DataFrame()
+
+                if aulas_abertas.empty: 
+                    st.info("Nenhuma aula registrada para esta turma.")
+                else:
+                    for i, (idx, row_aula) in enumerate(aulas_abertas.iterrows()):
+                        with st.expander(f"📅 {row_aula['DATA']} - {str(row_aula['CONTEUDO_MINISTRADO'])}"):
                             
-                        perfis_macro = alunos_t['NECESSIDADES'].apply(classificar_macro_perfil)
-                        qtd_pei = len(perfis_macro[perfis_macro == "PEI"])
-                        qtd_defasagem = len(perfis_macro[perfis_macro == "DEFASAGEM"])
-                        
-                        # Exibição das métricas
-                        c_m1, c_m2, c_m3 = st.columns(3)
-                        c_m1.metric("👥 Total Alunos", total_alunos_turma)
-                        c_m2.metric("♿ Laudos (PEI)", qtd_pei)
-                        c_m3.metric("🧱 Defasagem", qtd_defasagem)
-                        
-                        st.divider()
-                        
-                        st.markdown("**🔍 Foco em Inclusão (Detalhamento)**")
-                        # Filtra todos que precisam de atenção (ignora Típicos e Alta Performance)
-                        mask_pei = ~alunos_t['NECESSIDADES'].astype(str).str.upper().str.strip().isin(["NENHUMA", "", "NAN", "TÍPICO", "TIPICO", "ALTA PERFORMANCE"])
-                        df_pei_turma = alunos_t[mask_pei]
-                        
-                        if not df_pei_turma.empty:
-                            for _, alu in df_pei_turma.iterrows(): 
-                                nec_str = str(alu['NECESSIDADES']).upper()
-                                # 🚨 COLORIZAÇÃO DINÂMICA POR PERFIL
-                                if "DEFASAGEM" in nec_str:
-                                    st.error(f"🧱 **{alu['NOME_ALUNO']}**\n↳ {alu['NECESSIDADES']}")
-                                elif "PENDENTE" in nec_str or "SUSPEITA" in nec_str:
-                                    st.warning(f"🟠 **{alu['NOME_ALUNO']}**\n↳ {alu['NECESSIDADES']}")
+                            # 🚨 NOVO LAYOUT DA AUDITORIA: Lado a Lado (Full Width)
+                            c_aud_1, c_aud_2, c_aud_3 = st.columns([1, 1, 2])
+                            
+                            novo_status = c_aud_1.selectbox("Status da Execução:", ["🟢 Concluído (100%)", "🟡 Parcial (Pendência)", "🔴 Bloqueado (Crítico)", "ABERTA", "NÃO LETIVO"], index=0 if "Concluído" in str(row_aula.get('STATUS_EXECUCAO', '')) else 3, key=f"aud_stat_{idx}")
+                            
+                            opcoes_semanas = ["AVULSA"] + df_planos[df_planos['ANO'] == ano_str_ref]['SEMANA'].unique().tolist()
+                            idx_sem = opcoes_semanas.index(row_aula['SEMANA']) if row_aula['SEMANA'] in opcoes_semanas else 0
+                            nova_semana = c_aud_2.selectbox("Semana Vinculada:", opcoes_semanas, index=idx_sem, key=f"aud_sem_{idx}")
+                            
+                            mats_disp_bruto = df_mats_ano['TIPO_MATERIAL'].tolist()
+                            mats_atuais = [m.strip() for m in str(row_aula['CONTEUDO_MINISTRADO']).split('+')]
+                            default_mats = [m for m in mats_atuais if m in mats_disp_bruto]
+                            
+                            novo_mat_sel = c_aud_3.multiselect("Material Ministrado:", options=mats_disp_bruto, default=default_mats, key=f"aud_mat_{idx}")
+                            
+                            st.markdown("<br>", unsafe_allow_html=True)
+                            c_btn_save, c_btn_del, _ = st.columns([1, 1, 2])
+                            
+                            if c_btn_save.button("💾 Salvar Alterações", key=f"aud_save_{idx}", use_container_width=True, type="primary"):
+                                if not novo_mat_sel and nova_semana != "AVULSA":
+                                    st.error("Selecione um material.")
                                 else:
-                                    st.info(f"♿ **{alu['NOME_ALUNO']}**\n↳ {alu['NECESSIDADES']}")
-                        else: 
-                            st.success("✅ Nenhum aluno com necessidade de adaptação nesta turma.")
+                                    with st.spinner("Atualizando banco..."):
+                                        novo_conteudo = " + ".join(novo_mat_sel) if novo_mat_sel else "Registro via Diário"
+                                        try:
+                                            wb = db.conectar()
+                                            ws = wb.worksheet("DB_REGISTRO_AULAS")
+                                            dados = ws.get_all_values()
+                                            for j, row in enumerate(dados):
+                                                if j > 0 and len(row) >= 3 and row[0] == row_aula['DATA'] and row[2] == turma_foco:
+                                                    ws.update_cell(j + 1, 2, nova_semana)
+                                                    ws.update_cell(j + 1, 4, novo_conteudo)
+                                                    ws.update_cell(j + 1, 7, novo_status)
+                                                    break
+                                            st.cache_data.clear()
+                                            st.success("Atualizado!"); time.sleep(1); st.rerun()
+                                        except Exception as e:
+                                            st.error(f"Erro: {e}")
+                                            
+                            if c_btn_del.button("🗑️ Apagar Aula", key=f"aud_del_{idx}", use_container_width=True):
+                                with st.spinner("Apagando aula e diário..."):
+                                    if db.excluir_aula_aberta(row_aula['DATA'], turma_foco):
+                                        st.success("Apagado!"); time.sleep(1); st.rerun()
 
-                    with st.container(border=True):
-                        st.markdown("#### ✏️ Auditoria de Regência")
-                        st.caption("Corrija aulas que foram salvas como 'Registro via Diário' ou altere o material vinculado de aulas passadas.")
-                        
-                        if not historico_turma.empty:
-                            historico_turma['DATA_DT'] = pd.to_datetime(historico_turma['DATA'], format="%d/%m/%Y", errors='coerce')
-                            aulas_abertas = historico_turma.sort_values(by='DATA_DT', ascending=False).head(5)
+                # ==============================================================================
+                # CAMADA 4: EVENTOS GLOBAIS (RODAPÉ)
+                # ==============================================================================
+                st.markdown("---")
+                with st.expander("🛑 Registrar Dia Não Letivo / Paralisação", expanded=False):
+                    st.caption("Use para registrar paralisações, luto, falta de água, etc. Isso bloqueará faltas neste dia.")
+                    c_nl1, c_nl2 = st.columns([1, 2])
+                    data_nl = c_nl1.date_input("Data do Evento:", date.today(), format="DD/MM/YYYY", key=f"dt_nl_{v}")
+                    data_nl_str = data_nl.strftime("%d/%m/%Y")
+                    motivo_nl = c_nl2.text_input("Motivo:", placeholder="Ex: Paralisação Sindical", key=f"motivo_nl_{v}")
+                    
+                    if st.button("🛑 CONFIRMAR DIA NÃO LETIVO", type="primary", use_container_width=True):
+                        if not motivo_nl:
+                            st.error("Digite o motivo.")
                         else:
-                            aulas_abertas = pd.DataFrame()
-
-                        if aulas_abertas.empty: 
-                            st.info("Nenhuma aula registrada para esta turma.")
-                        else:
-                            for i, (idx, row_aula) in enumerate(aulas_abertas.iterrows()):
-                                with st.expander(f"📅 {row_aula['DATA']} - {str(row_aula['CONTEUDO_MINISTRADO'])[:30]}..."):
-                                    
-                                    novo_status = st.selectbox("Status:", ["🟢 Concluído (100%)", "🟡 Parcial (Pendência)", "🔴 Bloqueado (Crítico)", "ABERTA", "NÃO LETIVO"], index=0 if "Concluído" in str(row_aula.get('STATUS_EXECUCAO', '')) else 3, key=f"aud_stat_{idx}")
-                                    
-                                    opcoes_semanas = ["AVULSA"] + df_planos[df_planos['ANO'] == ano_str_ref]['SEMANA'].unique().tolist()
-                                    idx_sem = opcoes_semanas.index(row_aula['SEMANA']) if row_aula['SEMANA'] in opcoes_semanas else 0
-                                    nova_semana = st.selectbox("Semana Vinculada:", opcoes_semanas, index=idx_sem, key=f"aud_sem_{idx}")
-                                    
-                                    mats_disp_bruto = df_mats_ano['TIPO_MATERIAL'].tolist()
-                                    mats_atuais = [m.strip() for m in str(row_aula['CONTEUDO_MINISTRADO']).split('+')]
-                                    default_mats = [m for m in mats_atuais if m in mats_disp_bruto]
-                                    
-                                    novo_mat_sel = st.multiselect("Material Ministrado:", options=mats_disp_bruto, default=default_mats, key=f"aud_mat_{idx}")
-                                    
-                                    c_aud1, c_aud2 = st.columns(2)
-                                    if c_aud1.button("💾 Atualizar", key=f"aud_save_{idx}", use_container_width=True, type="primary"):
-                                        if not novo_mat_sel and nova_semana != "AVULSA":
-                                            st.error("Selecione um material.")
-                                        else:
-                                            with st.spinner("Atualizando banco..."):
-                                                novo_conteudo = " + ".join(novo_mat_sel) if novo_mat_sel else "Registro via Diário"
-                                                try:
-                                                    wb = db.conectar()
-                                                    ws = wb.worksheet("DB_REGISTRO_AULAS")
-                                                    dados = ws.get_all_values()
-                                                    for j, row in enumerate(dados):
-                                                        if j > 0 and len(row) >= 3 and row[0] == row_aula['DATA'] and row[2] == turma_foco:
-                                                            ws.update_cell(j + 1, 2, nova_semana)
-                                                            ws.update_cell(j + 1, 4, novo_conteudo)
-                                                            ws.update_cell(j + 1, 7, novo_status)
-                                                            break
-                                                    st.cache_data.clear()
-                                                    st.success("Atualizado!"); time.sleep(1); st.rerun()
-                                                except Exception as e:
-                                                    st.error(f"Erro: {e}")
-                                                    
-                                    if c_aud2.button("🗑️ Apagar Aula", key=f"aud_del_{idx}", use_container_width=True):
-                                        with st.spinner("Apagando aula e diário..."):
-                                            if db.excluir_aula_aberta(row_aula['DATA'], turma_foco):
-                                                st.success("Apagado!"); time.sleep(1); st.rerun()
+                            with st.spinner("Registrando evento global..."):
+                                db.limpar_diario_data_turma(data_nl_str, turma_foco)
+                                db.excluir_aula_aberta(data_nl_str, turma_foco)
+                                
+                                db.salvar_no_banco("DB_DIARIO_BORDO", [
+                                    data_nl_str, "GLOBAL", "TODOS OS ALUNOS", turma_foco,
+                                    "ISENTO", "DIA NÃO LETIVO", motivo_nl, "0,00"
+                                ])
+                                db.salvar_no_banco("DB_REGISTRO_AULAS", [
+                                    data_nl_str, "AVULSA", turma_foco, 
+                                    f"DIA NÃO LETIVO: {motivo_nl}", "N/A", "N/A", "NÃO LETIVO", "", ""
+                                ])
+                                st.success("Dia Não Letivo registrado com sucesso!")
+                                time.sleep(1.5)
+                                st.rerun()
 
     # ==============================================================================
     # 🧠 ABA 2: RADIOGRAFIA DA TURMA (HUB ANALÍTICO V200 - DINÂMICO)
