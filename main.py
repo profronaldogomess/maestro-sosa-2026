@@ -6597,9 +6597,12 @@ elif menu == "👥 Gestão da Turma":
                 st.markdown("### ✏️ Auditoria e Edição de Aulas Passadas")
                 st.caption("Corrija aulas que foram salvas como 'Registro via Diário' ou altere o material vinculado de aulas passadas.")
                 
-                if not historico_turma.empty:
-                    historico_turma['DATA_DT'] = pd.to_datetime(historico_turma['DATA'], format="%d/%m/%Y", errors='coerce')
-                    aulas_abertas = historico_turma.sort_values(by='DATA_DT', ascending=False).head(10) # Aumentei para mostrar as últimas 10
+                # 🚨 CORREÇÃO: Filtra o histórico EXATAMENTE pela turma selecionada no topo
+                historico_turma_auditoria = df_registro_aulas[df_registro_aulas['TURMA'] == turma_foco].copy()
+                
+                if not historico_turma_auditoria.empty:
+                    historico_turma_auditoria['DATA_DT'] = pd.to_datetime(historico_turma_auditoria['DATA'], format="%d/%m/%Y", errors='coerce')
+                    aulas_abertas = historico_turma_auditoria.sort_values(by='DATA_DT', ascending=False).head(10)
                 else:
                     aulas_abertas = pd.DataFrame()
 
@@ -6609,7 +6612,6 @@ elif menu == "👥 Gestão da Turma":
                     for i, (idx, row_aula) in enumerate(aulas_abertas.iterrows()):
                         with st.expander(f"📅 {row_aula['DATA']} - {str(row_aula['CONTEUDO_MINISTRADO'])}"):
                             
-                            # 🚨 NOVO LAYOUT DA AUDITORIA: Lado a Lado (Full Width)
                             c_aud_1, c_aud_2, c_aud_3 = st.columns([1, 1, 2])
                             
                             novo_status = c_aud_1.selectbox("Status da Execução:", ["🟢 Concluído (100%)", "🟡 Parcial (Pendência)", "🔴 Bloqueado (Crítico)", "ABERTA", "NÃO LETIVO"], index=0 if "Concluído" in str(row_aula.get('STATUS_EXECUCAO', '')) else 3, key=f"aud_stat_{idx}")
