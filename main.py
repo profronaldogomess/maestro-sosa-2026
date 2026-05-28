@@ -76,7 +76,15 @@ if not check_password():
 
 
 
-# --- ESTILIZAÇÃO DE LUXO (CSS V40) ---
+# --- MOTOR DE NAVEGAÇÃO ONE-CLICK (GLOBAL) ---
+if "menu_atual" not in st.session_state:
+    st.session_state.menu_atual = "📅 Planejamento (Ponto ID)"
+
+def navegar_para(destino):
+    st.session_state.menu_atual = destino
+    st.rerun()
+
+# --- ESTILIZAÇÃO DE LUXO (CSS V41 - BENTO GRID) ---
 BRAND_BLUE = "#2962FF"
 BRAND_NAVY = "#000B1A"
 
@@ -96,9 +104,13 @@ st.markdown(f"""
         * {{ font-family: 'Plus Jakarta Sans', sans-serif; }}
         .stApp {{ background-color: {cor_fundo} !important; color: {cor_texto} !important; }}
         [data-testid="stSidebar"] {{ background-color: {cor_sidebar} !important; border-right: 1px solid {cor_borda}; }}
-        div[data-testid="stMetric"] {{ background: {cor_card} !important; border: 1px solid {cor_borda} !important; border-radius: 20px !important; }}
-        .stButton button {{ background: linear-gradient(135deg, {BRAND_BLUE}, #0039CB) !important; color: white !important; border-radius: 12px !important; font-weight: 700 !important; width: 100%; }}
+        div[data-testid="stMetric"] {{ background: {cor_card} !important; border: 1px solid {cor_borda} !important; border-radius: 16px !important; padding: 15px !important; box-shadow: 0 4px 6px rgba(0,0,0,0.05) !important; }}
+        .stButton button {{ background: linear-gradient(135deg, {BRAND_BLUE}, #0039CB) !important; color: white !important; border-radius: 12px !important; font-weight: 700 !important; width: 100%; transition: all 0.3s ease; }}
+        .stButton button:hover {{ transform: translateY(-2px); box-shadow: 0 8px 15px rgba(41, 98, 255, 0.3) !important; }}
         .clock-container {{ background: {BRAND_BLUE}15; color: {BRAND_BLUE}; padding: 8px 15px; border-radius: 30px; font-weight: 800; font-size: 14px; text-align: center; margin: 10px 0; border: 1px solid {BRAND_BLUE}33; }}
+        /* BENTO GRID EFFECT PARA CONTAINERS */
+        div[data-testid="stVerticalBlock"] > div[style*="border"] {{ border-radius: 16px !important; box-shadow: 0 4px 10px rgba(0,0,0,0.03) !important; transition: all 0.3s ease; background: {cor_card}; border-color: {cor_borda} !important; }}
+        div[data-testid="stVerticalBlock"] > div[style*="border"]:hover {{ box-shadow: 0 8px 20px rgba(0,0,0,0.08) !important; }}
     </style>
 """, unsafe_allow_html=True)
 
@@ -112,31 +124,26 @@ with st.sidebar:
     st.markdown(f"<h2 style='text-align: center; font-size: 22px; margin-top: 10px;'>Ronaldo Gomes</h2>", unsafe_allow_html=True)
     st.markdown(f"<p style='text-align: center; font-size: 12px; color: {BRAND_BLUE}; font-weight: 800; margin-top: -15px; letter-spacing: 1px;'>SOBERANIA PEDAGÓGICA</p>", unsafe_allow_html=True)
 
-    # Relógio Automático (Brasília) e Sensor de Feriados
     fuso_br = timezone(timedelta(hours=-3))
     agora_br = datetime.now(fuso_br)
     hora_atual = agora_br.strftime("%H:%M:%S")
     data_atual = agora_br.strftime("%d/%m/%Y")
-    data_atual_dt = agora_br.date() # Extrai o objeto 'date' para o sensor
+    data_atual_dt = agora_br.date() 
     
     st.markdown(f"""<div class="clock-container">🕒 {hora_atual} | 📅 {data_atual}</div>""", unsafe_allow_html=True)
     
-    # 🚨 INTEGRAÇÃO COM O SENSOR DE FERIADOS (utils.py)
     feriado_hoje = util.verificar_feriado_itabuna(data_atual_dt)
-    
     if feriado_hoje:
-        # Badge vermelho de alerta para feriados
         st.markdown(f"""<div style="background: linear-gradient(135deg, #FF4B4B, #C0392B); color: white; padding: 6px 10px; border-radius: 8px; text-align: center; font-weight: 800; font-size: 12px; margin-top: -5px; margin-bottom: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">🎉 FERIADO: {feriado_hoje.upper()}</div>""", unsafe_allow_html=True)
     else:
-        # Indicador de dia da semana e dia letivo
         dias_semana = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado", "Domingo"]
         nome_dia = dias_semana[data_atual_dt.weekday()]
-        cor_dia = "#2ECC71" if data_atual_dt.weekday() < 5 else "#F1C40F" # Verde para dias úteis, Amarelo para fim de semana
+        cor_dia = "#2ECC71" if data_atual_dt.weekday() < 5 else "#F1C40F" 
         st.markdown(f"""<div style="text-align: center; color: {cor_dia}; font-size: 12px; font-weight: 600; margin-top: -5px; margin-bottom: 10px;">{nome_dia} • Dia Letivo</div>""", unsafe_allow_html=True)
 
     st.markdown("---")
 
-    menu = st.radio("Navegação Estratégica:", [
+    menu_opcoes = [
         "📅 Planejamento (Ponto ID)",
         "🧪 Criador de Aulas",
         "📝 Central de Avaliações",
@@ -148,12 +155,13 @@ with st.sidebar:
         "👥 Gestão da Turma",
         "📚 Base de Conhecimento",
         "♿ Relatórios PEI / Perfil IA"
-    ])
+    ]
+    
+    menu = st.radio("Navegação Estratégica:", menu_opcoes, key="menu_atual")
 
     st.markdown("<br>" * 2, unsafe_allow_html=True)
     st.markdown("---")
     
-    # BOTÕES DE RODAPÉ (SYNC E SAIR)
     col_sync, col_exit = st.columns(2)
     with col_sync:
         if st.button("🔄 Sync"):
@@ -165,7 +173,6 @@ with st.sidebar:
             st.session_state["login_timestamp"] = None
             st.rerun()
 
-    # Rodapé atualizado conforme ordem soberana
     st.caption("Ronaldo Gomes | © 2026")
 
 # --- CARREGAMENTO DE DADOS ---
@@ -902,7 +909,9 @@ if menu == "📅 Planejamento (Ponto ID)":
                                 "tipo": "PRODUÇÃO_HUB",
                                 "semana_ref": sem_ref
                             }
-                            st.success("Conteúdo enviado! Vá para a aba 'Criador de Aulas'.")
+                            st.success("Conteúdo enviado! Redirecionando para a Forja...")
+                            time.sleep(0.5)
+                            navegar_para("🧪 Criador de Aulas")
 
                         if c_p4.button("✅ MARCAR CONCLUÍDO", help="Remove este plano da fila de pendências.", key=f"fin_hub_{row.name}", use_container_width=True):
                             if db.arquivar_plano_produzido(sem_ref, ano_ref):
@@ -6916,23 +6925,32 @@ elif menu == "👥 Gestão da Turma":
                     st.info("Sem registros no Diário.")
 
     # ==============================================================================
-    # 🎲 ABA 3: ROLETA DE ARGUIÇÃO (MANTIDA INTACTA)
+    # 🎲 ABA 3: ROLETA DE ARGUIÇÃO (MODAL V201)
     # ==============================================================================
     with tab_roleta:
         import random
         st.subheader("🎲 Roleta de Arguição & Diagnóstico Clínico")
-        st.caption("Sorteie alunos, registre o desempenho no quadro e anote lacunas específicas. O sistema resgata faltas e arguições da data selecionada.")
+        st.caption("Sorteie alunos, registre o desempenho no quadro e anote lacunas específicas.")
         
-        c_rol1, c_rol2 = st.columns([1, 1])
-        t_roleta = c_rol1.selectbox("🎯 Selecione a Turma para a Roleta:", lista_turmas_segura, key=f"rol_t_{v}")
-        
-        data_roleta = c_rol2.date_input("📅 Data da Arguição:", date.today(), format="DD/MM/YYYY", key=f"rol_d_{v}")
-        data_roleta_str = data_roleta.strftime("%d/%m/%Y")
-        
-        with st.expander("⚙️ Configurar Pontuação da Arguição"):
+        # 🚨 POP-UP MODAL DA ROLETA
+        @st.dialog("⚙️ Configurar Pontuação da Roleta")
+        def dialog_config_roleta():
             c_pts1, c_pts2 = st.columns(2)
-            pt_acerto = c_pts1.number_input("Pontos por Acertar/Explicar (+):", 0.0, 5.0, 0.5, step=0.1, key=f"pt_acerto_{v}")
-            pt_recusa = c_pts2.number_input("Punição por Recusa (-):", -5.0, 0.0, -0.5, step=0.1, key=f"pt_recusa_{v}")
+            st.session_state.pt_acerto = c_pts1.number_input("Pontos por Acertar (+):", 0.0, 5.0, st.session_state.get('pt_acerto', 0.5), step=0.1)
+            st.session_state.pt_recusa = c_pts2.number_input("Punição por Recusa (-):", -5.0, 0.0, st.session_state.get('pt_recusa', -0.5), step=0.1)
+            if st.button("💾 Salvar", type="primary", use_container_width=True): st.rerun()
+
+        if 'pt_acerto' not in st.session_state: st.session_state.pt_acerto = 0.5
+        if 'pt_recusa' not in st.session_state: st.session_state.pt_recusa = -0.5
+        pt_acerto = st.session_state.pt_acerto
+        pt_recusa = st.session_state.pt_recusa
+
+        with st.container(border=True):
+            c_rol1, c_rol2, c_rol3 = st.columns([2, 2, 1])
+            t_roleta = c_rol1.selectbox("🎯 Turma:", lista_turmas_segura, key=f"rol_t_{v}", label_visibility="collapsed")
+            data_roleta = c_rol2.date_input("📅 Data:", date.today(), format="DD/MM/YYYY", key=f"rol_d_{v}", label_visibility="collapsed")
+            data_roleta_str = data_roleta.strftime("%d/%m/%Y")
+            if c_rol3.button("⚙️ Configurar", use_container_width=True): dialog_config_roleta()
 
         if t_roleta:
             alunos_roleta = df_alunos[df_alunos['TURMA'] == t_roleta].sort_values(by="NOME_ALUNO").copy()
