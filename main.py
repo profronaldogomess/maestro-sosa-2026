@@ -3,6 +3,7 @@ import streamlit as st
 import pandas as pd
 import gspread
 from datetime import date, datetime, timedelta, timezone
+import random  # 🚨 VACINA DE IMPORTAÇÃO: Habilita geradores e embaralhadores psicométricos
 import database as db
 import ai_engine as ai
 import utils as util
