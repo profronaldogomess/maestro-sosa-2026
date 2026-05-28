@@ -749,7 +749,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                                 prompt_refino = (
                                     f"ORDEM SOBERANA: {cmd_refine}\n\n"
                                     f"PLANO ATUAL PARA REFINAR:\n{st.session_state.p_temp}\n\n"
-                                    f"MATRIZ DE REFERÊNCIA:\n{df_curriculo[df_curriculo['ANO'].astype(str)==str(ano_p)].to_string(index=False)}"
+                                    f"CONTEXTO CURRICULAR ALVO:\n{ctx_ia if 'ctx_ia' in locals() and ctx_ia else 'Baseado no Livro/Web.'}"
                                 )
                                 resultado_refino = ai.gerar_ia("REFINADOR_PEDAGOGICO", prompt_refino, url_drive=uri_livro_drive)
                                 st.session_state.p_temp = resultado_refino
@@ -2665,39 +2665,36 @@ elif menu == "📝 Central de Avaliações":
                     res[tag] = match.group(1).strip() if match else ""
                 return res
 
-            # 🚨 MOTOR DE GERAÇÃO EM LOTE (ECONOMIA DE TOKENS)
+            # 🚨 MOTOR DE GERAÇÃO EM LOTE (JSON NATIVO V201)
             pendentes = [item for item in f['mapa'] if item['status'] == 'pendente']
             if pendentes:
                 st.markdown("<br>", unsafe_allow_html=True)
                 if st.button("🚀 GERAR TODAS AS QUESTÕES PENDENTES (LOTE)", type="primary", use_container_width=True):
-                    with st.spinner(f"Forjando {len(pendentes)} questões em lote... Isso pode levar alguns segundos."):
+                    with st.spinner(f"Forjando {len(pendentes)} questões em lote (Modo JSON Nativo)..."):
                         prompt_lote = f"SÉRIE ALVO: {f['info']['ano']}\n\n"
-                        prompt_lote += "Gere as seguintes questões seguindo ESTRITAMENTE o tema, dificuldade e gabarito de cada uma:\n\n"
                         for item in pendentes:
                             prompt_lote += f"QUESTÃO {item['q']}:\n- TEMA: {item['tema']}\n- DIFICULDADE: {item['dificuldade']}\n- GABARITO OBRIGATÓRIO: Letra {item['gabarito']}\n\n"
-                        prompt_lote += f"🚨 DIRETRIZ DE ESPELHAMENTO (Contexto Base):\n{f.get('contexto_base', 'Crie as questões baseadas nos temas fornecidos.')}\n"
+                        prompt_lote += f"CONTEXTO BASE:\n{f.get('contexto_base', 'Crie as questões baseadas nos temas fornecidos.')}\n"
                         
-                        res_lote = ai.gerar_ia("FORJA_LOTE_REGULAR", prompt_lote)
+                        res_json = ai.gerar_ia_json("FORJA_LOTE_JSON", prompt_lote)
                         
-                        blocos = re.findall(r"\[ITEM_(\d+)\](.*?)\[/ITEM_\1\]", res_lote, re.DOTALL | re.IGNORECASE)
-                        if not blocos:
-                            st.error("A IA não retornou o formato correto. Tente gerar individualmente ou clique novamente.")
+                        if "erro" in res_json:
+                            st.error(f"Erro na IA: {res_json['erro']}")
                         else:
-                            for num_str, conteudo_bloco in blocos:
-                                q_num = int(num_str)
-                                extraido = extrair_item_forja(conteudo_bloco)
+                            for q_data in res_json.get("questoes", []):
+                                q_num = int(q_data.get("q", 0))
                                 for item in f['mapa']:
                                     if item['q'] == q_num:
                                         item['dados'] = {
-                                            'ENUNCIADO': extraido.get('ENUNCIADO', ''),
-                                            'ALT_A': extraido.get('ALT_A', ''),
-                                            'ALT_B': extraido.get('ALT_B', ''),
-                                            'ALT_C': extraido.get('ALT_C', ''),
-                                            'ALT_D': extraido.get('ALT_D', ''),
-                                            'ALT_E': extraido.get('ALT_E', ''),
-                                            'HABILIDADE': extraido.get('HABILIDADE', ''),
-                                            'JUSTIFICATIVA': extraido.get('JUSTIFICATIVA', ''),
-                                            'DISTRATORES': extraido.get('DISTRATORES', ''),
+                                            'ENUNCIADO': q_data.get('enunciado', ''),
+                                            'ALT_A': q_data.get('alt_a', ''),
+                                            'ALT_B': q_data.get('alt_b', ''),
+                                            'ALT_C': q_data.get('alt_c', ''),
+                                            'ALT_D': q_data.get('alt_d', ''),
+                                            'ALT_E': q_data.get('alt_e', ''),
+                                            'HABILIDADE': q_data.get('habilidade', ''),
+                                            'JUSTIFICATIVA': q_data.get('justificativa', ''),
+                                            'DISTRATORES': q_data.get('distratores', ''),
                                             'GABARITO': item['gabarito']
                                         }
                                         item['status'] = 'revisao'
