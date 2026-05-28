@@ -84,6 +84,9 @@ def navegar_para(destino):
     st.session_state.menu_atual = destino
     st.rerun()
 
+def atualizar_menu():
+    st.session_state.menu_atual = st.session_state._menu_radio
+
 # --- ESTILIZAÇÃO DE LUXO (CSS V41 - BENTO GRID) ---
 BRAND_BLUE = "#2962FF"
 BRAND_NAVY = "#000B1A"
@@ -145,14 +148,12 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("<p style='font-size: 11px; color: gray; font-weight: bold; letter-spacing: 1px; text-align: center;'>RADAR DE SOBERANIA</p>", unsafe_allow_html=True)
     
-    # 1. Notificação de Planos no Hub
     try:
         planos_pendentes = len(df_planos[df_planos["EIXO"].astype(str).str.contains("HUB_ATIVO", case=False, na=False)])
         if planos_pendentes > 0:
             st.markdown(f"<div style='background: #FFF3CD; color: #B7950B; padding: 8px; border-radius: 8px; font-size: 12px; font-weight: bold; margin-bottom: 5px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05);'>⏳ {planos_pendentes} Plano(s) no Hub</div>", unsafe_allow_html=True)
     except: pass
 
-    # 2. Notificação de UTI Pedagógica (Notas < 6.0)
     try:
         if not df_notas.empty:
             uti_count = len(df_notas[df_notas['MEDIA_FINAL'].apply(util.sosa_to_float) < 6.0])
@@ -176,7 +177,9 @@ with st.sidebar:
         "♿ Relatórios PEI / Perfil IA"
     ]
     
-    menu = st.radio("Navegação Estratégica:", menu_opcoes, key="menu_atual")
+    # 🚨 A MÁGICA ACONTECE AQUI: Desvinculamos a chave direta e usamos o index
+    idx_atual = menu_opcoes.index(st.session_state.menu_atual) if st.session_state.menu_atual in menu_opcoes else 0
+    menu = st.radio("Navegação Estratégica:", menu_opcoes, index=idx_atual, key="_menu_radio", on_change=atualizar_menu)
 
     st.markdown("<br>" * 2, unsafe_allow_html=True)
     st.markdown("---")
