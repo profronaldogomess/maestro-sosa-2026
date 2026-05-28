@@ -2454,7 +2454,7 @@ elif menu == "📸 Scanner de Gabaritos":
 
                 st.markdown("---")
                 
-                # Procura se há dados para habilitar as correções
+                # Procura o gabarito de referência
                 df_prova_trib = df_aulas[df_aulas['TIPO_MATERIAL'] == av_alvo_h]
                 gab_oficial_trib = {}
                 if not df_prova_trib.empty:
@@ -2463,7 +2463,7 @@ elif menu == "📸 Scanner de Gabaritos":
                     matches_base = re.findall(r"(\d+)[\s\.\)\-:]+([A-E])", raw_gab_base.upper())
                     gab_oficial_trib = {int(num): letra for num, letra in matches_base} if matches_base else {}
 
-                # ✏️ REVISÃO DE PERÍCIA (CORRIGIR LEITURA MANUAL DO GABARITO ESCANEADO)
+                # ✏️ REVISÃO DE PERÍCIA REATIVA (PRÉ-PREENCHIDA E INTERATIVA - V201)
                 with st.expander("✏️ Revisão de Perícia (Corrigir Leitura da IA)", expanded=False):
                     df_scanned = pd.DataFrame([r for r in dados_soberania if r['_Respostas'] not in ["MANUAL", "FALTOU"] and not str(r['_Respostas']).startswith("QUALITATIVA")])
                     
@@ -2475,44 +2475,62 @@ elif menu == "📸 Scanner de Gabaritos":
                             id_aluno_rev = al_rev_data['ID']
                             respostas_atuais = str(al_rev_data['_Respostas']).split(';')
                             
+                            # 🚨 VACINA DE COMPATIBILIDADE: Garante que o vetor de respostas tenha o tamanho exato da prova
+                            while len(respostas_atuais) < len(gab_oficial_trib):
+                                respostas_atuais.append("?")
+                            
                             if not df_prova_trib.empty:
                                 val_total_av = util.sosa_to_float(ai.extrair_tag(txt_prova_trib, "VALOR")) or 10.0
                                 grid_data = []
+                                
                                 for idx_q in range(len(gab_oficial_trib)):
-                                    lido_aluno = respostas_atuais[idx_q] if idx_q < len(respostas_atuais) else "?"
+                                    # Puxa o que a IA leu originalmente para pré-preencher a planilha
+                                    lido_aluno = respostas_atuais[idx_q].strip().upper() if idx_q < len(respostas_atuais) else "?"
+                                    if lido_aluno not in ["A", "B", "C", "D", "E", "X", "?"]:
+                                        lido_aluno = "?"
+                                        
                                     correta_q = gab_oficial_trib.get(idx_q+1, "?")
                                     status_q = "✅" if lido_aluno == correta_q else "❌"
+                                    
                                     grid_data.append({
                                         "Questão": f"Q{idx_q+1:02d}",
                                         "Gabarito Oficial": correta_q,
-                                        "Leitura da IA": lido_aluno,
+                                        "Corrigir Resposta": lido_aluno, # Pré-preenchido com o valor lido pela IA!
                                         "Status": status_q
                                     })
                                 
+                                # Renderiza a planilha de correção rápida
                                 df_rev_ed = st.data_editor(
-                                    pd.DataFrame(grid_data), hide_index=True, use_container_width=True,
+                                    pd.DataFrame(grid_data), 
+                                    hide_index=True, 
+                                    use_container_width=True,
                                     column_config={
                                         "Questão": st.column_config.TextColumn(disabled=True),
                                         "Gabarito Oficial": st.column_config.TextColumn(disabled=True),
-                                        "Leitura da IA": st.column_config.SelectboxColumn("Corrigir Resposta", options=["A", "B", "C", "D", "E", "X", "?"], required=True),
+                                        "Corrigir Resposta": st.column_config.SelectboxColumn("Corrigir Resposta", options=["A", "B", "C", "D", "E", "X", "?"], required=True),
                                         "Status": st.column_config.TextColumn(disabled=True)
                                     },
                                     key=f"grid_rev_{id_aluno_rev}"
                                 )
                                 
-                                novas_letras = df_rev_ed["Leitura da IA"].tolist()
+                                # 🚨 CÁLCULO E FEEDBACK EM TEMPO REAL
+                                novas_letras = df_rev_ed["Corrigir Resposta"].tolist()
                                 novos_acertos = sum(1 for i, r in enumerate(novas_letras) if i+1 in gab_oficial_trib and r == gab_oficial_trib[i+1])
                                 nova_nota_calc = (novos_acertos / len(gab_oficial_trib)) * val_total_av if len(gab_oficial_trib) > 0 else 0.0
                                 
-                                st.metric("Nova Nota Recalculada", f"{nova_nota_calc:.1f} / {val_total_av:.1f}")
+                                st.metric("Média Recalculada para este Estudante", f"{nova_nota_calc:.1f} / {val_total_av:.1f}")
                                 
                                 if st.button("💾 Gravar Correções da Perícia", type="primary", use_container_width=True, key=f"btn_save_rev_{id_aluno_rev}"):
-                                    with st.spinner("Atualizando registros..."):
+                                    with st.spinner("Gravando e aplicando cascata de notas..."):
+                                        # 1. Atualiza a folha de gabarito do aluno no banco
                                         db.salvar_no_banco("DB_GABARITOS_ALUNOS", [
                                             datetime.now().strftime("%d/%m/%Y"), id_aluno_rev, aluno_rev_nome, t_sel_h, av_alvo_h, ";".join(novas_letras), util.sosa_to_str(nova_nota_calc), al_rev_data['Evidência'] or "N/A"
                                         ])
+                                        
+                                        # 2. Deleta as notas antigas do boletim da turma no trimestre
                                         db.limpar_notas_turma_trimestre(t_sel_h, tr_sel_h)
                                         
+                                        # 3. Reconstrói o boletim aplicando a nova nota em cascata de forma invisível
                                         lista_boletim_rev = []
                                         notas_atuais_rev = df_notas[(df_notas['TURMA'] == t_sel_h) & (df_notas['TRIMESTRE'] == tr_sel_h)]
                                         
@@ -2525,17 +2543,18 @@ elif menu == "📸 Scanner de Gabaritos":
                                             v_prova = reg_atual.iloc[0]['NOTA_PROVA'] if not reg_atual.empty else "0,0"
                                             v_rec = reg_atual.iloc[0]['NOTA_REC'] if not reg_atual.empty else "0,0"
                                             
+                                            # Se for o aluno editado, injeta a nota nova, senão mantém a do grid
                                             nota_aluno_av = util.sosa_to_str(nova_nota_calc) if id_l == id_aluno_rev else util.sosa_to_str(r_sob['Nota'])
                                             if "TESTE" in av_alvo_h.upper(): v_teste = nota_aluno_av
                                             else: v_prova = nota_aluno_av
                                                 
                                             nova_media = min(10.0, util.sosa_to_float(v_vistos) + util.sosa_to_float(v_teste) + util.sosa_to_float(v_prova))
                                             if util.sosa_to_float(v_rec) > 0: nova_media = max(nova_media, util.sosa_to_float(v_rec))
-                                            lista_boletim_rev.append([id_l, nome_l, t_sel_h, tr_sel_h, v_vistos, v_teste, v_prova, v_rec, util.sosa_to_str(nova_media)])
+                                            lista_boletim_rev.append([id_l, nome_l, t_sel_h, tr_sel_h, util.sosa_to_str(v_vistos), util.sosa_to_str(v_teste), util.sosa_to_str(v_prova), util.sosa_to_str(v_rec), util.sosa_to_str(nova_media)])
                                             
                                         db.salvar_lote("DB_NOTAS", lista_boletim_rev)
                                         st.cache_data.clear()
-                                        st.success("✅ Correção realizada com sucesso!")
+                                        st.success("✅ Correções gravadas e boletins atualizados em cascata!")
                                         time.sleep(0.5); st.rerun()
                     else: st.info("Nenhuma leitura escaneada disponível para revisão nesta avaliação.")
 
@@ -2582,7 +2601,7 @@ elif menu == "📸 Scanner de Gabaritos":
                                     c_d2.link_button("Abrir PDF", link_d, use_container_width=True)
 
     # ==============================================================================
-    # ABA 3: RAIO-X PEDAGÓGICO (AUTÓPSIA PSICOMÉTRICA IMUNE A ERROS)
+    # ABA 3: RAIO-X PEDAGÓGICO (ANALISADO POR INSTRUMENTO ESPECÍFICO - V201)
     # ==============================================================================
     with tab_raiox:
         st.markdown("### Raio-X Pedagógico: Autópsia por Item")
@@ -2591,131 +2610,107 @@ elif menu == "📸 Scanner de Gabaritos":
             t_sel_r = c1.selectbox("Selecione a Turma:", [""] + lista_turmas_cir, key=f"t_r_v90_{v}")
             tr_sel_r = c2.selectbox("Selecione o Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_r_v90_{v}")
             
-            opcoes_r = filtrar_ativos_cir(t_sel_r, tr_sel_r, apenas_provas=True)
-            opcoes_base_r = [opt for opt in opcoes_r if not re.search(r"2[ªA]|CHAMADA|TIPO [B-Z]", opt, re.IGNORECASE)]
-            at_sel_r = c3.selectbox("Selecione a Avaliação:", [""] + opcoes_base_r, key=f"at_r_v90_{v}")
+            # 🚨 AUTO-MAPEAMENTO: Busca apenas as provas REAIS aplicadas para esta turma no trimestre
+            trim_limpo = tr_sel_r.replace(" ", "")
+            opcoes_provas_reais = []
+            if t_sel_r:
+                df_diag_turma = df_diagnosticos[
+                    (df_diagnosticos['TURMA'] == t_sel_r) & 
+                    (df_diagnosticos['ID_AVALIACAO'].str.contains(trim_limpo, case=False, na=False))
+                ]
+                opcoes_provas_reais = sorted(df_diag_turma['ID_AVALIACAO'].unique().tolist())
+                
+            at_sel_r = c3.selectbox("Selecione a Prova/Variante Específica:", [""] + opcoes_provas_reais, key=f"at_r_v90_{v}")
 
         if t_sel_r and at_sel_r:
-            nome_curto_av = at_sel_r.split("-")[0].strip()
-            ano_num_r = "".join(filter(str.isdigit, t_sel_r))
-            is_agrupado = "(Todas as Turmas)" in t_sel_r
+            # Filtra estritamente os alunos que fizeram ESTA versão específica do exame
+            df_filtrado = df_diagnosticos[
+                (df_diagnosticos['TURMA'] == t_sel_r) & 
+                (df_diagnosticos['ID_AVALIACAO'] == at_sel_r)
+            ]
             
-            if is_agrupado:
-                respostas_brutas = df_diagnosticos[(df_diagnosticos['TURMA'].str.contains(ano_num_r)) & (df_diagnosticos['ID_AVALIACAO'].str.contains(nome_curto_av, case=False))].copy()
-            else:
-                respostas_brutas = df_diagnosticos[(df_diagnosticos['TURMA'].str.strip() == t_sel_r.strip()) & (df_diagnosticos['ID_AVALIACAO'].str.contains(nome_curto_av, case=False))].copy()
+            # Reconhece se o caderno selecionado é um PEI para abrir a aba correta
+            base_exam_name = at_sel_r
+            level_prefix = None
+            
+            if "PEI_N1" in at_sel_r or "PEI Nível 1" in at_sel_r:
+                base_exam_name = at_sel_r.split("PEI")[0].strip().rstrip("-").rstrip()
+                level_prefix = "NIVEL_1"
+            elif "PEI_N2" in at_sel_r or "PEI Nível 2" in at_sel_r:
+                base_exam_name = at_sel_r.split("PEI")[0].strip().rstrip("-").rstrip()
+                level_prefix = "NIVEL_2"
+            elif "PEI_N3" in at_sel_r or "PEI Nível 3" in at_sel_r:
+                base_exam_name = at_sel_r.split("PEI")[0].strip().rstrip("-").rstrip()
+                level_prefix = "NIVEL_3"
 
-            if respostas_brutas.empty:
-                st.warning("⚠️ Nenhuma resposta de aluno encontrada para gerar os dados estatísticos do Raio-X.")
-            else:
-                df_alunos_min = df_alunos[['ID', 'NECESSIDADES']].copy()
-                df_alunos_min['ID'] = df_alunos_min['ID'].apply(db.limpar_id)
-                respostas_brutas['ID_ALUNO_L'] = respostas_brutas['ID_ALUNO'].apply(db.limpar_id)
-                df_analise = pd.merge(respostas_brutas, df_alunos_min, left_on='ID_ALUNO_L', right_on='ID', how='left')
-                df_analise['IS_2A_CHAMADA'] = df_analise['ID_AVALIACAO'].str.contains(r"2[ªA]|CHAMADA", case=False, regex=True)
-
-                st.markdown("#### Histograma de Desempenho")
-                query_mat_base = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel_r]
-                if not query_mat_base.empty:
-                    txt_prova_base = str(query_mat_base.iloc[0]['CONTEUDO'])
-                    raw_gab_base = ai.extrair_tag(txt_prova_base, "GABARITO_TEXTO") or ai.extrair_tag(txt_prova_base, "GABARITO")
-                    matches_base = re.findall(r"(\d+)[\s\.\)\-:]+([A-E])", raw_gab_base.upper())
-                    gab_ativo = {int(num): letra for num, letra in matches_base} if matches_base else {}
-                    
-                    stats_list = []
-                    num_q_total = len(gab_ativo) if gab_ativo else 5
-                    
-                    for i in range(1, num_q_total + 1):
-                        acertos = 0
-                        validos = 0
-                        for _, row_aluno in df_analise.iterrows():
-                            resp_str = str(row_aluno['RESPOSTAS_ALUNO']).upper()
-                            if resp_str == "FALTOU" or resp_str.startswith("QUALITATIVA"): continue
-                            
-                            respostas_lista = resp_str.split(';')
-                            if len(respostas_lista) >= i:
-                                validos += 1
-                                if respostas_lista[i-1] == gab_ativo.get(i, "?"): acertos += 1
+            query_mat_base = df_aulas[df_aulas['TIPO_MATERIAL'] == base_exam_name]
+            
+            if not query_mat_base.empty:
+                txt_prova_base = str(query_mat_base.iloc[0]['CONTEUDO'])
+                is_pei_view = level_prefix is not None
+                
+                # Puxa o gabarito correto baseado no tipo de prova selecionado
+                tag_g = "GABARITO_PEI" if is_pei_view else "GABARITO_TEXTO"
+                raw_gab_base = ai.extrair_tag(txt_prova_base, tag_g) or ai.extrair_tag(txt_prova_base, "GABARITO")
+                matches_base = re.findall(r"(\d+)[\s\.\)\-:]+([A-E])", raw_gab_base.upper())
+                gab_ativo = {int(num): letra for num, letra in matches_base} if matches_base else {}
+                
+                st.markdown(f"#### Histograma de Desempenho Real: **{at_sel_r}**")
+                
+                # Calcula a estatística exata apenas para esta prova específica e seus alunos
+                stats_list = []
+                num_q_total = len(gab_ativo) if gab_ativo else 5
+                
+                for i in range(1, num_q_total + 1):
+                    acertos = 0
+                    validos = 0
+                    for _, row_aluno in df_filtrado.iterrows():
+                        resp_str = str(row_aluno['RESPOSTAS_ALUNO']).upper()
+                        if resp_str == "FALTOU" or resp_str.startswith("QUALITATIVA"): continue
                         
-                        perc = (acertos / validos) * 100 if validos > 0 else random.randint(45, 90)
-                        stats_list.append({"Questão": f"Q{i:02d}", "Acerto %": perc, "Gabarito": gab_ativo.get(i, "?")})
-                        
-                    df_stats_global = pd.DataFrame(stats_list)
-                    fig_global = px.bar(df_stats_global, x="Questão", y="Acerto %", text_auto='.0f', color="Acerto %", color_continuous_scale="RdYlGn")
-                    fig_global.update_layout(yaxis_range=[0, 110], height=300)
-                    st.plotly_chart(fig_global, use_container_width=True)
-                else:
-                    st.error("Erro ao carregar gabarito base da prova para gerar o gráfico.")
+                        respostas_lista = resp_str.split(';')
+                        if len(respostas_lista) >= i:
+                            validos += 1
+                            if respostas_lista[i-1] == gab_ativo.get(i, "?"): acertos += 1
+                    
+                    perc = (acertos / validos) * 100 if validos > 0 else 0.0
+                    stats_list.append({"Questão": f"Q{i:02d}", "Acerto %": perc, "Gabarito": gab_ativo.get(i, "?")})
+                    
+                df_stats_global = pd.DataFrame(stats_list)
+                fig_global = px.bar(df_stats_global, x="Questão", y="Acerto %", text_auto='.0f', color="Acerto %", color_continuous_scale="RdYlGn")
+                fig_global.update_layout(yaxis_range=[0, 110], height=300)
+                st.plotly_chart(fig_global, use_container_width=True)
 
                 st.markdown("---")
-                st.markdown("#### Autópsia por Item (Todas as Variantes, 2ª Chamada e PEIs)")
+                st.markdown("#### Autópsia do Item por Prova")
                 
-                # Seletor de Questão
+                # Seletor de Questão baseado nos itens deste caderno específico
                 q_sel = st.selectbox("Selecione a Questão para Autópsia:", df_stats_global["Questão"].tolist(), key=f"q_sel_v90_{v}")
                 idx_num = int(q_sel.replace("Q", ""))
                 
-                provas_analisadas = df_analise['ID_AVALIACAO'].unique()
                 prefixo_q = r"(?:QUEST[AÃ]O\s*(?:PEI\s*)?|Q)"
-
-                for av_id_loop in provas_analisadas:
-                    if "TIPO" in av_id_loop.upper():
-                        tipo_letra = re.search(r'TIPO\s*([A-Z])', av_id_loop, re.IGNORECASE)
-                        letra = tipo_letra.group(1) if tipo_letra else "B"
-                        nome_busca = f"{at_sel_r} - TIPO {letra}"
-                        label_versao = f"🧬 VARIANTE TIPO {letra}"
-                    elif "2ª" in av_id_loop.upper() or "2CHAMADA" in av_id_loop.upper():
-                        nome_busca = f"2ª_CHAMADA_{at_sel_r}"
-                        label_versao = "🔄 2ª CHAMADA (DISCURSIVA)"
-                    else:
-                        nome_busca = at_sel_r
-                        label_versao = "📝 PROVA PADRÃO (TIPO A)"
-
-                    mat_loop = df_aulas[df_aulas['TIPO_MATERIAL'] == nome_busca]
-                    
-                    if not mat_loop.empty:
-                        txt_loop = str(mat_loop.iloc[0]['CONTEUDO'])
-                        
-                        # 🚨 CORREÇÃO DO REGEX: Passamos as flags no comando re.search para evitar o erro de flags globais
-                        q_raw_reg = ai.extrair_tag(txt_loop, "QUESTOES")
-                        padrao_q = rf"({prefixo_q}\s*0?{idx_num}\b.*?)(?={prefixo_q}\s*0?{idx_num+1}\b|GABARITO|RESPOSTAS|GRADE|$)"
-                        
-                        m_q_reg = re.search(padrao_q, q_raw_reg, re.IGNORECASE | re.DOTALL)
-                        
-                        if m_q_reg:
-                            with st.container(border=True):
-                                st.markdown(f"**{label_versao}**")
-                                st.write(preparar_para_leitura(m_q_reg.group(1).strip()))
-                                
-                                # Mostra a Perícia Pedagógica
-                                grade_raw = ai.extrair_tag(txt_loop, "GRADE_DE_CORRECAO")
-                                m_p_reg = re.search(padrao_q, grade_raw, re.IGNORECASE | re.DOTALL)
-                                if m_p_reg:
-                                    p_completa = re.sub(r'[*#]', '', m_p_reg.group(1).strip())
-                                    st.caption(f"🎯 **Justificativa e Análise dos Distratores:**\n{p_completa}")
-
-                        # Renderiza as Adaptações PEIs associadas
-                        for nivel_pei, label_pei in [("NIVEL_1", "♿ ADAPTAÇÃO PEI NÍVEL 1"), ("NIVEL_2", "♿ ADAPTAÇÃO PEI NÍVEL 2"), ("NIVEL_3", "♿ ADAPTAÇÃO PEI NÍVEL 3")]:
-                            q_raw_pei = ai.extrair_tag(txt_loop, nivel_pei)
-                            if q_raw_pei:
-                                m_q_pei = re.search(padrao_q, q_raw_pei, re.IGNORECASE | re.DOTALL)
-                                if m_q_pei:
-                                    with st.container(border=True):
-                                        st.markdown(f"**{label_pei}**")
-                                        st.write(preparar_para_leitura(m_q_pei.group(1).strip()))
-                                        
-                                        # Mostra a Perícia PEI
-                                        grade_pei = ai.extrair_tag(txt_loop, "GRADE_DE_CORRECAO_PEI")
-                                        m_p_pei = re.search(padrao_q, grade_pei, re.IGNORECASE | re.DOTALL)
-                                        if m_p_pei:
-                                            p_pei_txt = re.sub(r'[*#]', '', m_p_pei.group(1).strip())
-                                            st.caption(f"🧠 **Raciocínio Adaptivo PEI:**\n{p_pei_txt}")
+                padrao_q = rf"({prefixo_q}\s*0?{idx_num}\b.*?)(?={prefixo_q}\s*0?{idx_num+1}\b|GABARITO|RESPOSTAS|GRADE|$)"
                 
-                st.markdown("---")
-                st.markdown("##### Gerar Dossiê do Conselho")
-                if st.button("Gerar Dossiê de Autópsia (Raio-X)", type="primary", use_container_width=True):
-                    with st.spinner("Construindo Dossiê..."):
-                        st.success("Dossiê gerado e arquivado na Auditoria com Sucesso!")
-                        st.balloons()
+                tag_questoes = level_prefix if is_pei_view else "QUESTOES"
+                q_raw_reg = ai.extrair_tag(txt_prova_base, tag_questoes)
+                m_q_reg = re.search(padrao_q, q_raw_reg, re.IGNORECASE | re.DOTALL)
+                
+                if m_q_reg:
+                    with st.container(border=True):
+                        st.markdown(f"**📄 Enunciado Oficial da Questão ({at_sel_r}):**")
+                        st.write(preparar_para_leitura(m_q_reg.group(1).strip()))
+                        
+                        # Mostra a Perícia de Distratores da questão correspondente
+                        tag_grade = "GRADE_DE_CORRECAO_PEI" if is_pei_view else "GRADE_DE_CORRECAO"
+                        grade_raw = ai.extrair_tag(txt_prova_base, tag_grade)
+                        m_p_reg = re.search(padrao_q, grade_raw, re.IGNORECASE | re.DOTALL)
+                        if m_p_reg:
+                            p_completa = re.sub(r'[*#]', '', m_p_reg.group(1).strip())
+                            st.caption(f"🎯 **Justificativa e Análise de Erros:**\n{p_completa}")
+                else:
+                    st.error("Enunciado da questão não localizado neste caderno de provas.")
+            else:
+                st.error("Gabarito de referência da prova não localizado no cofre digital.")
 
 
 
