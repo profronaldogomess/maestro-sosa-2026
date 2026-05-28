@@ -1920,6 +1920,14 @@ elif menu == "📸 Scanner de Gabaritos":
     if "v_scan" not in st.session_state: st.session_state.v_scan = int(time.time())
     v = st.session_state.v_scan
 
+    # 🚨 VACINA DE ESCOPO GLOBAL: Define a lista de turmas para todas as abas do Scanner
+    lista_turmas_cir = []
+    if not df_turmas.empty and 'ID_TURMA' in df_turmas.columns:
+        turmas_reais_cir = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
+        lista_turmas_cir = sorted(turmas_reais_cir['ID_TURMA'].unique())
+    elif not df_alunos.empty and 'TURMA' in df_alunos.columns:
+        lista_turmas_cir = sorted(df_alunos['TURMA'].unique())
+
     # FILTRO HIERÁRQUICO DE ATIVOS CIR (Soberano V201)
     def filtrar_ativos_cir(turma, trimestre_nome, apenas_provas=True):
         if not turma or not trimestre_nome: return []
@@ -1998,13 +2006,6 @@ elif menu == "📸 Scanner de Gabaritos":
 
         # ROTA A: PROVAS (SCANNER / MANUAL / QUALITATIVA)
         if "Provas" in modo_lancamento:
-            lista_turmas_cir = []
-            if not df_turmas.empty and 'ID_TURMA' in df_turmas.columns:
-                turmas_reais_cir = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
-                lista_turmas_cir = sorted(turmas_reais_cir['ID_TURMA'].unique())
-            elif not df_alunos.empty and 'TURMA' in df_alunos.columns:
-                lista_turmas_cir = sorted(df_alunos['TURMA'].unique())
-                
             with st.container(border=True):
                 c1, c2, c3 = st.columns([1, 1, 2])
                 t_sel = c1.selectbox("👥 Turma:", [""] + lista_turmas_cir, key=f"t_p_{v}")
