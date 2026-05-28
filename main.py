@@ -887,10 +887,14 @@ elif menu == "🧪 Criador de Aulas":
                 st.markdown("### Painel de Configuração")
                 tipo_criacao = st.radio("Tipo de Material a Desenvolver:", ["Aula de Safra (Teoria e Prática)", "Projeto ou Trabalho Interdisciplinar", "Lista Híbrida ou Recomposição"], horizontal=True, key=f"lab_tipo_c_{v}")
                 
-                # ROTA REGULAR: Aula de Safra
+                # ROTA REGULAR: Aula de Safra (Filtro Inteligente Anti-Duplicidade)
                 if "Aula de Safra" in tipo_criacao:
                     with st.container(border=True):
                         st.markdown("#### Herança de Roteiro")
+                        
+                        # Botão discreto para forçar regravação de aula já feita
+                        mostrar_tudo_lab = st.toggle("Mostrar semanas já concluídas (Sobrescrita)", value=False, key="sobrescrever_lab")
+                        
                         c1, c2 = st.columns([1, 2])
                         ano_lab = c1.selectbox("Série:", [6, 7, 8, 9], key=f"prod_ano_{v}")
                         planos_ano = df_planos[df_planos["ANO"].astype(str).str.contains(str(ano_lab))]
@@ -898,46 +902,91 @@ elif menu == "🧪 Criador de Aulas":
                         if planos_ano.empty:
                             st.error("Nenhum planejamento encontrado. Crie o plano no Ponto ID primeiro.")
                         else:
-                            semanas_pendentes = [s for s in planos_ano["SEMANA"].unique().tolist()]
-                            sem_lab = c2.selectbox("Semana Base (Ponto ID):", semanas_pendentes, key=f"prod_sem_{v}")
-                            plano_row = planos_ano[planos_ano["SEMANA"] == sem_lab].iloc[0]
-                            plano_txt = str(plano_row['PLANO_TEXTO'])
-
-                            with st.expander("Ver Radar de Regência (Onde as turmas pararam?)"):
-                                reg_ano = df_registro_aulas[df_registro_aulas['TURMA'].str.contains(str(ano_lab))]
-                                if not reg_ano.empty:
-                                    for t_nome in sorted(reg_ano['TURMA'].unique()):
-                                        dados_t = reg_ano[reg_ano['TURMA'] == t_nome].iloc[-1]
-                                        st.write(f"• **{t_nome}:** {dados_t.get('STATUS_EXECUCAO', 'Pendente')} | *{dados_t.get('PONTE_PEDAGOGICA', 'N/A')}*")
-                                else: st.info("Sem regência anterior registrada.")
-
-                            base_herdada = ai.extrair_tag(plano_txt, "BASE_DIDATICA")
-                            obj_geral = ai.extrair_tag(plano_txt, "OBJETO_CONHECIMENTO") or ai.extrair_tag(plano_txt, "CONTEUDO_GERAL")
-
-                            c_c1, c_c2 = st.columns([1, 1])
-                            opcoes_aulas = ["Aula 1", "Aula 2", "Sábado Letivo"]
-                            aula_alvo_prod = c_c1.radio("Material Alvo:", opcoes_aulas, horizontal=True)
-                            qtd_q_prod = c_c2.slider("Nº de Exercícios:", 1, 15, 5)
-
-                            if "1" in aula_alvo_prod: tag_roteiro = "AULA_1"
-                            elif "2" in aula_alvo_prod: tag_roteiro = "AULA_2"
-                            else: tag_roteiro = "SABADO_LETIVO"
+                            # 🚨 MOTOR DE RASTREABILIDADE: Filtra apenas semanas com materiais pendentes
+                            semanas_pendentes = []
+                            for sem in planos_ano["SEMANA"].unique().tolist():
+                                p_row = planos_ano[planos_ano["SEMANA"] == sem].iloc[0]
+                                p_txt = str(p_row['PLANO_TEXTO'])
+                                
+                                pede_a2 = len(ai.extrair_tag(p_txt, "AULA_2")) > 30 and "N/A" not in ai.extrair_tag(p_txt, "AULA_2").upper()
+                                t_sab = ai.extrair_tag(p_txt, "SABADO_LETIVO")
+                                pede_sab = len(t_sab) > 10 and "N/A" not in t_sab.upper() and "NÃO PROGRAMADA" not in t_sab.upper()
+                                
+                                a_geradas = df_aulas[(df_aulas['ANO'].str.contains(str(ano_lab))) & (df_aulas['SEMANA_REF'] == sem)]['TIPO_MATERIAL'].astype(str).tolist()
+                                t_a1 = any("Aula 1" in mat for mat in a_geradas)
+                                t_a2 = any("Aula 2" in mat for mat in a_geradas)
+                                t_sab_gen = any("Sábado" in mat or "Sabado" in mat for mat in a_geradas)
+                                
+                                if (not t_a1) or (pede_a2 and not t_a2) or (pede_sab and not t_sab_gen):
+                                    semanas_pendentes.append(sem)
                             
-                            roteiro_especifico = ai.extrair_tag(plano_txt, tag_roteiro)
-                            st.info(f"Roteiro Ativo: {roteiro_especifico}")
+                            semanas_opcoes = planos_ano["SEMANA"].unique().tolist() if mostrar_tudo_lab else semanas_pendentes
+                            
+                            if not semanas_opcoes:
+                                st.success("🏆 **Soberania Total!** Todas as semanas planejadas para esta série já possuem seus materiais produzidos no acervo.")
+                                if st.button("🔄 Atualizar Painel", use_container_width=True): st.rerun()
+                            else:
+                                sem_lab = c2.selectbox("Semana Base (Ponto ID):", semanas_opcoes, key=f"prod_sem_{v}")
+                                plano_row = planos_ano[planos_ano["SEMANA"] == sem_lab].iloc[0]
+                                plano_txt = str(plano_row['PLANO_TEXTO'])
 
-                            links_web_aula = st.text_area("Enriquecimento por Links (Opcional, um por linha):")
+                                with st.expander("Ver Radar de Regência (Onde as turmas pararam?)"):
+                                    reg_ano = df_registro_aulas[df_registro_aulas['TURMA'].str.contains(str(ano_lab))]
+                                    if not reg_ano.empty:
+                                        for t_nome in sorted(reg_ano['TURMA'].unique()):
+                                            dados_t = reg_ano[reg_ano['TURMA'] == t_nome].iloc[-1]
+                                            st.write(f"• **{t_nome}:** {dados_t.get('STATUS_EXECUCAO', 'Pendente')} | *{dados_t.get('PONTE_PEDAGOGICA', 'N/A')}*")
+                                    else: st.info("Sem regência anterior registrada.")
 
-                            if st.button("Iniciar Forja Semiótica", use_container_width=True, type="primary"):
-                                fa['info'] = {
-                                    "ano": ano_lab, "semana_ref": sem_lab, "aula_alvo": aula_alvo_prod,
-                                    "roteiro": roteiro_especifico, "habilidade": ai.extrair_tag(plano_txt, "HABILIDADE_BNCC"),
-                                    "objetivos": ai.extrair_tag(plano_txt, "OBJETIVOS_ENSINO"), "base": base_herdada
-                                }
-                                fa['links_web'] = links_web_aula
-                                fa['qtd_q'] = qtd_q_prod
-                                fa['fase'] = 2
-                                st.rerun()
+                                base_herdada = ai.extrair_tag(plano_txt, "BASE_DIDATICA")
+                                obj_geral = ai.extrair_tag(plano_txt, "OBJETO_CONHECIMENTO") or ai.extrair_tag(plano_txt, "CONTEUDO_GERAL")
+
+                                # 🚨 INTEGRAÇÃO CIRÚRGICA: Filtra quais aulas especificamente estão pendentes na semana
+                                a_geradas_sem = df_aulas[(df_aulas['ANO'].str.contains(str(ano_lab))) & (df_aulas['SEMANA_REF'] == sem_lab)]['TIPO_MATERIAL'].astype(str).tolist()
+                                tem_aula1 = any("Aula 1" in mat for mat in a_geradas_sem)
+                                tem_aula2 = any("Aula 2" in mat for mat in a_geradas_sem)
+                                tem_sabado = any("Sábado" in mat or "Sabado" in mat for mat in a_geradas_sem)
+
+                                plano_pede_a2 = len(ai.extrair_tag(plano_txt, "AULA_2")) > 30 and "N/A" not in ai.extrair_tag(plano_txt, "AULA_2").upper()
+                                txt_sabado = ai.extrair_tag(plano_txt, "SABADO_LETIVO")
+                                plano_pede_sab = len(txt_sabado) > 10 and "N/A" not in txt_sabado.upper() and "NÃO PROGRAMADA" not in txt_sabado.upper()
+
+                                opcoes_disponiveis = []
+                                if not tem_aula1: opcoes_disponiveis.append("Aula 1")
+                                if plano_pede_a2 and not tem_aula2: opcoes_disponiveis.append("Aula 2")
+                                if plano_pede_sab and not tem_sabado: opcoes_disponiveis.append("Sábado Letivo")
+
+                                if mostrar_tudo_lab:
+                                    opcoes_disponiveis = ["Aula 1"]
+                                    if plano_pede_a2: opcoes_disponiveis.append("Aula 2")
+                                    if plano_pede_sab: opcoes_disponiveis.append("Sábado Letivo")
+
+                                if not opcoes_disponiveis:
+                                    st.success("🎉 Todas as aulas previstas para esta semana já foram produzidas!")
+                                else:
+                                    c_c1, c_c2 = st.columns([1, 1])
+                                    aula_alvo_prod = c_c1.radio("Material Alvo:", opcoes_disponiveis, horizontal=True)
+                                    qtd_q_prod = c_c2.slider("Nº de Exercícios:", 1, 15, 5)
+
+                                    if "1" in aula_alvo_prod: tag_roteiro = "AULA_1"
+                                    elif "2" in aula_alvo_prod: tag_roteiro = "AULA_2"
+                                    else: tag_roteiro = "SABADO_LETIVO"
+                                    
+                                    roteiro_especifico = ai.extrair_tag(plano_txt, tag_roteiro)
+                                    st.info(f"Roteiro Ativo: {roteiro_especifico}")
+
+                                    links_web_aula = st.text_area("Enriquecimento por Links (Opcional, um por linha):")
+
+                                    if st.button("Iniciar Forja Semiótica", use_container_width=True, type="primary"):
+                                        fa['info'] = {
+                                            "ano": ano_lab, "semana_ref": sem_lab, "aula_alvo": aula_alvo_prod,
+                                            "roteiro": roteiro_especifico, "habilidade": ai.extrair_tag(plano_txt, "HABILIDADE_BNCC"),
+                                            "objetivos": ai.extrair_tag(plano_txt, "OBJETIVOS_ENSINO"), "base": base_herdada
+                                        }
+                                        fa['links_web'] = links_web_aula
+                                        fa['qtd_q'] = qtd_q_prod
+                                        fa['fase'] = 2
+                                        st.rerun()
 
                 # ROTA INTERDISCIPLINAR: Projetos e Trabalhos
                 elif "Projeto" in tipo_criacao:
