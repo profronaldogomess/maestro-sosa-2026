@@ -180,6 +180,27 @@ PERSONAS = {
     Use $$ ... $$. Gabarito forçado. Use [GEOGEBRA] ou [ PROMPT IMAGEM: Line art, preto e branco... ].
     Formato para cada questão: [ITEM_X] [ENUNCIADO]... [ALT_A]... [ALT_B]... [ALT_C]... [ALT_D]... [ALT_E]... [HABILIDADE]... [JUSTIFICATIVA]... [DISTRATORES]... [/ITEM_X]""",
 
+    "FORJA_LOTE_JSON": """VOCÊ É UM PROFESSOR ESPECIALISTA CRIANDO VÁRIAS QUESTÕES DE PROVA.
+    Respeite a SÉRIE ALVO. Proibido conceitos de Ensino Médio para o Fundamental.
+    Use $$ ... $$ para matemática. Use [GEOGEBRA] ou [ PROMPT IMAGEM: ... ] se precisar de imagens.
+    RETORNE EXATAMENTE UM JSON NESTE FORMATO:
+    {
+      "questoes": [
+        {
+          "q": 1,
+          "enunciado": "Texto...",
+          "alt_a": "Texto...",
+          "alt_b": "Texto...",
+          "alt_c": "Texto...",
+          "alt_d": "Texto...",
+          "alt_e": "Texto...",
+          "habilidade": "Código BNCC...",
+          "justificativa": "Por que a correta é a correta...",
+          "distratores": "Análise dos erros comuns..."
+        }
+      ]
+    }""",
+
     "FORJA_TRIADE_PEI": """VOCÊ É O ESPECIALISTA EM DESENHO UNIVERSAL PARA APRENDIZAGEM.
     Crie 3 NÍVEIS de adaptação.
     NÍVEL 1: 3 alternativas (A, B, C).
@@ -236,6 +257,25 @@ def gerar_ia(persona_key, comando, url_drive=None, usar_busca=True):
         return res.text
     except Exception as e:
         return f"Erro na IA: {e}"
+    
+def gerar_ia_json(persona_key, comando, usar_busca=False):
+    """Motor de Elite V201: Força a IA a responder em JSON estruturado, economizando tokens e evitando erros de Regex."""
+    config = types.GenerateContentConfig(
+        tools=[{'google_search': {}}] if usar_busca else [],
+        temperature=0.7, # Temperatura menor para garantir a estrutura do JSON
+        response_mime_type="application/json",
+    )
+    conteudo_prompt = [types.Part.from_text(text=f"{PERSONAS[persona_key]}\n\n{comando}")]
+    try:
+        res = client.models.generate_content(
+            model="gemini-3-flash-preview", 
+            contents=[types.Content(role="user", parts=conteudo_prompt)],
+            config=config
+        )
+        import json
+        return json.loads(res.text)
+    except Exception as e:
+        return {"erro": str(e)}
 
 def extrair_tag(texto, tag):
     if not texto: return ""
