@@ -141,6 +141,25 @@ with st.sidebar:
         cor_dia = "#2ECC71" if data_atual_dt.weekday() < 5 else "#F1C40F" 
         st.markdown(f"""<div style="text-align: center; color: {cor_dia}; font-size: 12px; font-weight: 600; margin-top: -5px; margin-bottom: 10px;">{nome_dia} • Dia Letivo</div>""", unsafe_allow_html=True)
 
+    # 🚨 RADAR DE SOBERANIA (NOTIFICAÇÕES INTELIGENTES V201)
+    st.markdown("---")
+    st.markdown("<p style='font-size: 11px; color: gray; font-weight: bold; letter-spacing: 1px; text-align: center;'>RADAR DE SOBERANIA</p>", unsafe_allow_html=True)
+    
+    # 1. Notificação de Planos no Hub
+    try:
+        planos_pendentes = len(df_planos[df_planos["EIXO"].astype(str).str.contains("HUB_ATIVO", case=False, na=False)])
+        if planos_pendentes > 0:
+            st.markdown(f"<div style='background: #FFF3CD; color: #B7950B; padding: 8px; border-radius: 8px; font-size: 12px; font-weight: bold; margin-bottom: 5px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05);'>⏳ {planos_pendentes} Plano(s) no Hub</div>", unsafe_allow_html=True)
+    except: pass
+
+    # 2. Notificação de UTI Pedagógica (Notas < 6.0)
+    try:
+        if not df_notas.empty:
+            uti_count = len(df_notas[df_notas['MEDIA_FINAL'].apply(util.sosa_to_float) < 6.0])
+            if uti_count > 0:
+                st.markdown(f"<div style='background: #FADBD8; color: #943126; padding: 8px; border-radius: 8px; font-size: 12px; font-weight: bold; margin-bottom: 10px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05);'>🚑 {uti_count} Aluno(s) na UTI</div>", unsafe_allow_html=True)
+    except: pass
+
     st.markdown("---")
 
     menu_opcoes = [
@@ -3401,6 +3420,25 @@ elif menu == "📸 Scanner de Gabaritos":
                     if is_adapted_candidate:
                         st.warning(f"⚠️ **Atenção:** Aluno com perfil **{nec_aluno}**. Verifique qual prova foi aplicada e selecione a lente correta abaixo.")
                     
+                    # 🚨 NOVO: MINI-CARD DE CONTEXTO (CRUZAMENTO DIÁRIO X SCANNER)
+                    with st.expander("📊 Contexto do Aluno (Engajamento Recente)", expanded=False):
+                        if not df_diario.empty:
+                            d_alu_scan = df_diario[df_diario['ID_ALUNO'].apply(db.limpar_id) == id_aluno_atual]
+                            faltas_scan = len(d_alu_scan[d_alu_scan['TAGS'] == "AUSÊNCIA"])
+                            bonus_scan = d_alu_scan['BONUS'].apply(util.sosa_to_float).sum()
+                            
+                            c_ctx1, c_ctx2 = st.columns(2)
+                            c_ctx1.metric("Faltas Acumuladas", faltas_scan)
+                            c_ctx2.metric("Bônus de Participação", f"{bonus_scan:+.1f} pts")
+                            
+                            obs_recentes = d_alu_scan[(d_alu_scan['OBSERVACOES'] != "") & (~d_alu_scan['TAGS'].isin(["SISTEMA_NOTA", "BONUS_CONSELHO", "DIA NÃO LETIVO"]))]
+                            if not obs_recentes.empty:
+                                st.caption("**Últimas anotações no Diário:**")
+                                for _, r_obs in obs_recentes.tail(2).iterrows():
+                                    st.write(f"- {r_obs['DATA']}: {r_obs['OBSERVACOES']}")
+                        else:
+                            st.info("Sem dados de diário para este aluno.")
+
                     with st.container(border=True):
                         st.markdown("#### 🔍 Lente de Correção")
                         
