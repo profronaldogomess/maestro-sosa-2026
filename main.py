@@ -1852,7 +1852,7 @@ elif menu == "📝 Central de Avaliações":
                     c_b1.link_button("Download DOCX", str(l_reg), use_container_width=True, type="primary")
                     
                     if l_prof and "N/A" not in str(l_prof): c_b2.link_button("Guia Professor", str(l_prof), use_container_width=True)
-                    else: c_b2.button("Sem Guia", disabled=True, use_container_width=True)
+                    else: c_b2.button("Sem Guia", disabled=True, use_container_width=True, key=f"no_guide_{row.name}")
                     
                     if c_b3.button("Refinar", key=f"ref_av_h_{row.name}", use_container_width=True):
                         pei1 = ai.extrair_tag(txt_f, "NIVEL_1") or ai.extrair_tag(txt_f, "PEI")
