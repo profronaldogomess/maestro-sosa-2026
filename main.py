@@ -2716,7 +2716,7 @@ elif menu == "📸 Scanner de Gabaritos":
 
 
 # ==============================================================================
-# MÓDULO: DIÁRIO DE BORDO RÁPIDO - V201 (BENTO METRICS & AUTO-SYNC)
+# MÓDULO: DIÁRIO DE BORDO RÁPIDO - V201 (VACINA DE DATAS E INTEGRALIDADE)
 # ==============================================================================
 elif menu == "📝 Diário de Bordo Rápido":
     st.title("Diário de Bordo")
@@ -2725,6 +2725,26 @@ elif menu == "📝 Diário de Bordo Rápido":
     
     if "v_diario" not in st.session_state: st.session_state.v_diario = int(time.time())
     v = st.session_state.v_diario
+
+    # 🚨 VACINA DE DATA E ID SOBERANA (Garante carregamento retroativo sem falhas)
+    def padronizar_data_comparacao(dt_str):
+        try:
+            partes = str(dt_str).strip().split('/')
+            if len(partes) == 3:
+                d = int(partes[0])
+                m = int(partes[1])
+                y = int(partes[2])
+                if y < 100: y += 2000
+                return f"{d:02d}/{m:02d}/{y:04d}"
+        except: pass
+        return str(dt_str).strip()
+
+    def clean_id_comparison(val):
+        try:
+            val_str = str(val).split('.')[0].strip()
+            return val_str
+        except:
+            return str(val).strip()
 
     if df_alunos.empty:
         st.warning("⚠️ Base de alunos vazia. Cadastre as turmas e os alunos na aba 'Gestão da Turma'.")
@@ -2745,7 +2765,7 @@ elif menu == "📝 Diário de Bordo Rápido":
             key_suffix = f"{turma_sel}_{data_str.replace('/','')}_{v}"
 
             # Trava de Dia Não Letivo
-            dia_nao_letivo = df_diario[(df_diario['DATA'] == data_str) & (df_diario['TURMA'] == turma_sel) & (df_diario['TAGS'] == "DIA NÃO LETIVO")]
+            dia_nao_letivo = df_diario[(df_diario['DATA'].apply(padronizar_data_comparacao) == padronizar_data_comparacao(data_str)) & (df_diario['TURMA'] == turma_sel) & (df_diario['TAGS'] == "DIA NÃO LETIVO")]
             
             if not dia_nao_letivo.empty:
                 motivo_nl = dia_nao_letivo.iloc[0]['OBSERVACOES']
@@ -2757,10 +2777,20 @@ elif menu == "📝 Diário de Bordo Rápido":
                     db.excluir_aula_aberta(data_str, turma_sel)
                     st.success("Trava removida!"); time.sleep(0.5); st.rerun()
             else:
-                # Carrega dados salvos para edição/preenchimento
+                # Carrega dados salvos para edição/preenchimento aplicando as vacinas de data e id
                 tags_protegidas = ["SISTEMA_NOTA", "ARGUIÇÃO", "NOTA_EXTERNA"]
-                registros_atuais = df_diario[(df_diario['DATA'] == data_str) & (df_diario['TURMA'] == turma_sel) & (~df_diario['TAGS'].isin(tags_protegidas))]
-                aula_ativa = df_registro_aulas[(df_registro_aulas['TURMA'] == turma_sel) & (df_registro_aulas['DATA'] == data_str)]
+                target_dt_clean = padronizar_data_comparacao(data_str)
+                
+                registros_atuais = df_diario[
+                    (df_diario['DATA'].apply(padronizar_data_comparacao) == target_dt_clean) & 
+                    (df_diario['TURMA'].str.strip() == turma_sel.strip()) & 
+                    (~df_diario['TAGS'].isin(tags_protegidas))
+                ]
+                
+                aula_ativa = df_registro_aulas[
+                    (df_registro_aulas['TURMA'] == turma_sel) & 
+                    (df_registro_aulas['DATA'].apply(padronizar_data_comparacao) == target_dt_clean)
+                ]
                 
                 saved_status = "🟢 Concluído (100%)"
                 saved_ponte = ""
@@ -2796,7 +2826,6 @@ elif menu == "📝 Diário de Bordo Rápido":
                 # --- 3. BENTO CARDS: ESTATÍSTICAS DO DIA (Real-Time V201) ---
                 total_alunos_t = len(df_alunos[df_alunos['TURMA'] == turma_sel])
                 
-                # Contagens baseadas nos registros atuais ou zeradas se novo lançamento
                 faltas_dia = len(registros_atuais[registros_atuais['TAGS'] == "AUSÊNCIA"]) if not registros_atuais.empty else 0
                 vistos_dia = len(registros_atuais[registros_atuais['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"]) if not registros_atuais.empty else 0
                 bonus_dia = registros_atuais['BONUS'].apply(util.sosa_to_float).sum() if not registros_atuais.empty else 0.0
@@ -2858,7 +2887,10 @@ elif menu == "📝 Diário de Bordo Rápido":
                 for _, alu in alunos_turma.iterrows():
                     id_a = db.limpar_id(alu['ID'])
                     icone_perfil = definir_icone_status(alu['NECESSIDADES'])
-                    reg_existente = registros_atuais[registros_atuais['ID_ALUNO'].apply(db.limpar_id) == id_a]
+                    
+                    # 🚨 A MÁGICA DA CORREÇÃO RETROATIVA: Filtra aplicando as vacinas de ID limpo
+                    id_a_clean = clean_id_comparison(id_a)
+                    reg_existente = registros_atuais[registros_atuais['ID_ALUNO'].apply(clean_id_comparison) == id_a_clean]
                     
                     if not reg_existente.empty:
                         visto_val = str(reg_existente.iloc[0]['VISTO_ATIVIDADE']).upper() == "TRUE"
@@ -2890,13 +2922,12 @@ elif menu == "📝 Diário de Bordo Rápido":
                         "V": st.column_config.CheckboxColumn("V", help="Visto na Atividade", disabled=("Sem Visto" in natureza_registro or "Surpresa" in natureza_registro)),
                         "⭐": st.column_config.SelectboxColumn("⭐", options=[-1.0, -0.5, -0.3, -0.2, -0.1, 0.0, 0.1, 0.2, 0.3, 0.5, 1.0], width="small"),
                         "Vetor": st.column_config.SelectboxColumn("Vetor de Comportamento", options=["", "Fardamento", "Postura", "Atraso", "Celular", "Indisciplina", "Comunicação", "Elogio", "Destaque", "Dormiu", "PEI CONCLUÍDO"], width="small"),
-                        "Obs (🎙️)": st.column_config.TextColumn("Observações do Professor (Livre)", width="large") # Totalmente livre e manual!
+                        "Obs (🎙️)": st.column_config.TextColumn("Observações do Professor (Livre)", width="large")
                     },
                     hide_index=True, use_container_width=True, key=f"ed_diario_{turma_sel}_{data_str.replace('/','')}"
                 )
 
                 # --- 6. AUTO-SYNC INTELIGENTE: VETOR ➡️ ESTRELA (Preenchimento Reativo) ---
-                # Sincroniza punições e bônus baseados no comportamento de forma invisível
                 vetores_valores = {
                     "Celular": -0.2, "Indisciplina": -0.5, "Atraso": -0.2, "Dormiu": -0.2, "Fardamento": -0.2,
                     "Elogio": 0.2, "Destaque": 0.5, "PEI CONCLUÍDO": 0.0, "Comunicação": 0.0, "Postura": 0.0, "": 0.0
@@ -2908,7 +2939,6 @@ elif menu == "📝 Diário de Bordo Rápido":
                         vetor_alvo = r['Vetor']
                         estrela_atual = float(r['⭐'] or 0.0)
                         
-                        # Se o vetor foi preenchido mas a estrela continua neutra (0.0), aplica o padrão do vetor
                         if vetor_alvo in vetores_valores and estrela_atual == 0.0:
                             estrela_final = vetores_valores[vetor_alvo]
                         else:
@@ -2917,7 +2947,6 @@ elif menu == "📝 Diário de Bordo Rápido":
                         tag_f = "AUSÊNCIA" if r['F'] else vetor_alvo
                         visto_db = "ISENTO" if ("Sem Visto" in natureza_registro or "Surpresa" in natureza_registro) else str(r['V'])
                         
-                        # Auto-marcação PEI
                         if "♿" in r['Estudante'] and r['V'] and not tag_f and "Visto" in natureza_registro:
                             tag_f = "PEI CONCLUÍDO"
                         
