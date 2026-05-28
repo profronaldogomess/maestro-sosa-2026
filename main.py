@@ -87,6 +87,14 @@ def navegar_para(destino):
 def atualizar_menu():
     st.session_state.menu_atual = st.session_state._menu_radio
 
+# 🔬 FILTRO DE LEITURA GLOBAL (LATEX, IMAGENS E GEOGEBRA V201)
+def preparar_para_leitura(texto):
+    if not texto: return ""
+    texto = re.sub(r'\$\$(.*?)\$\$', r'$\1$', texto, flags=re.DOTALL)
+    texto = re.sub(r'\[GEOGEBRA\](.*?)\[/GEOGEBRA\]', r'📐 *(Comando GeoGebra: \1)*', texto, flags=re.IGNORECASE | re.DOTALL)
+    texto = re.sub(r'\[\s*PROMPT IMAGEM:(.*?)\s*\]', r'🖼️ *(Imagem: \1)*', texto, flags=re.IGNORECASE | re.DOTALL)
+    return texto
+
 # --- ESTILIZAÇÃO DE LUXO (CSS V41 - BENTO GRID) ---
 BRAND_BLUE = "#2962FF"
 BRAND_NAVY = "#000B1A"
