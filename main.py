@@ -2601,195 +2601,244 @@ elif menu == "📸 Scanner de Gabaritos":
                                     c_d2.link_button("Abrir PDF", link_d, use_container_width=True)
 
     # ==============================================================================
-    # ABA 3: RAIO-X PEDAGÓGICO (DASHBOARD EXECUTIVO V201)
+    # ABA 3: RAIO-X PEDAGÓGICO (SINCRONIA DE VARIANTES E PEI - V201.5)
     # ==============================================================================
     with tab_raiox:
         st.markdown("### Raio-X Pedagógico: Autópsia por Item")
+        
         with st.container(border=True):
-            c1, c2, c3 = st.columns([1.5, 1.5, 2])
+            c1, c2, c3 = st.columns([1, 1, 2])
             t_sel_r = c1.selectbox("Selecione a Turma:", [""] + lista_turmas_cir, key=f"t_r_v90_{v}")
             tr_sel_r = c2.selectbox("Selecione o Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_r_v90_{v}")
             
-            # AUTO-MAPEAMENTO: Busca apenas as provas REAIS aplicadas para esta turma no trimestre
-            trim_limpo = tr_sel_r.replace(" ", "")
-            opcoes_provas_reais = []
-            if t_sel_r:
-                df_diag_turma = df_diagnosticos[
-                    (df_diagnosticos['TURMA'] == t_sel_r) & 
-                    (df_diagnosticos['ID_AVALIACAO'].str.contains(trim_limpo, case=False, na=False))
-                ]
-                opcoes_provas_reais = sorted(df_diag_turma['ID_AVALIACAO'].unique().tolist())
-                
-            at_sel_r = c3.selectbox("Selecione a Prova/Variante Específica:", [""] + opcoes_provas_reais, key=f"at_r_v90_{v}")
+            # 1. Busca apenas as Avaliações Base (Ignora Variantes e 2ª Chamada no primeiro filtro)
+            opcoes_r = filtrar_ativos_cir(t_sel_r, tr_sel_r, apenas_provas=True)
+            opcoes_base_r = [opt for opt in opcoes_r if not re.search(r"2[ªA]|CHAMADA|TIPO [B-Z]", opt, re.IGNORECASE)]
+            
+            at_sel_r = c3.selectbox("Selecione a Avaliação Base:", [""] + opcoes_base_r, key=f"at_r_v90_{v}")
 
         if t_sel_r and at_sel_r:
-            # Filtra estritamente os alunos que fizeram ESTA versão específica do exame
-            df_filtrado = df_diagnosticos[
-                (df_diagnosticos['TURMA'] == t_sel_r) & 
-                (df_diagnosticos['ID_AVALIACAO'] == at_sel_r)
-            ]
+            nome_curto_av = at_sel_r.split("-")[0].strip()
+            trim_limpo = tr_sel_r.replace(" ", "")
             
-            # Reconhece se o caderno selecionado é um PEI para abrir a aba correta
-            base_exam_name = at_sel_r
-            level_prefix = None
-            
-            if "PEI_N1" in at_sel_r or "PEI Nível 1" in at_sel_r:
-                base_exam_name = at_sel_r.split("PEI")[0].strip().rstrip("-").rstrip()
-                level_prefix = "NIVEL_1"
-            elif "PEI_N2" in at_sel_r or "PEI Nível 2" in at_sel_r:
-                base_exam_name = at_sel_r.split("PEI")[0].strip().rstrip("-").rstrip()
-                level_prefix = "NIVEL_2"
-            elif "PEI_N3" in at_sel_r or "PEI Nível 3" in at_sel_r:
-                base_exam_name = at_sel_r.split("PEI")[0].strip().rstrip("-").rstrip()
-                level_prefix = "NIVEL_3"
+            # 2. Puxa todos os gabaritos escaneados para esta turma relacionados a esta prova base
+            mask_diag = (df_diagnosticos['TURMA'] == t_sel_r) & (
+                df_diagnosticos['ID_AVALIACAO'].str.contains(nome_curto_av, case=False, na=False) |
+                (df_diagnosticos['ID_AVALIACAO'].str.contains("2ª|2CHAMADA", regex=True, case=False) & df_diagnosticos['ID_AVALIACAO'].str.contains(trim_limpo, case=False))
+            )
+            respostas_brutas = df_diagnosticos[mask_diag].copy()
 
-            query_mat_base = df_aulas[df_aulas['TIPO_MATERIAL'] == base_exam_name]
-            
-            if not query_mat_base.empty:
-                txt_prova_base = str(query_mat_base.iloc[0]['CONTEUDO'])
-                is_pei_view = level_prefix is not None
-                
-                # Puxa o gabarito correto baseado no tipo de prova selecionado
-                tag_g = "GABARITO_PEI" if is_pei_view else "GABARITO_TEXTO"
-                raw_gab_base = ai.extrair_tag(txt_prova_base, tag_g) or ai.extrair_tag(txt_prova_base, "GABARITO")
-                matches_base = re.findall(r"(\d+)[\s\.\)\-:]+([A-E])", raw_gab_base.upper())
-                gab_ativo = {int(num): letra for num, letra in matches_base} if matches_base else {}
-                
-                # Calcula a estatística exata apenas para esta prova específica e seus alunos
-                stats_list = []
-                num_q_total = len(gab_ativo) if gab_ativo else 5
-                
-                for i in range(1, num_q_total + 1):
-                    acertos = 0
-                    validos = 0
-                    for _, row_aluno in df_filtrado.iterrows():
-                        resp_str = str(row_aluno['RESPOSTAS_ALUNO']).upper()
-                        if resp_str == "FALTOU" or resp_str.startswith("QUALITATIVA"): continue
-                        
-                        respostas_lista = resp_str.split(';')
-                        if len(respostas_lista) >= i:
-                            validos += 1
-                            if respostas_lista[i-1] == gab_ativo.get(i, "?"): acertos += 1
-                    
-                    perc = (acertos / validos) * 100 if validos > 0 else 0.0
-                    stats_list.append({"Questão": f"Q{i:02d}", "Acerto %": perc, "Gabarito": gab_ativo.get(i, "?")})
-                    
-                df_stats_global = pd.DataFrame(stats_list)
-                
-                # 🚨 1. PAINEL DE SINAIS VITAIS (BENTO CARDS)
-                if not df_stats_global.empty:
-                    worst_q = df_stats_global.loc[df_stats_global['Acerto %'].idxmin()]
-                    best_q = df_stats_global.loc[df_stats_global['Acerto %'].idxmax()]
-                    avg_ret = df_stats_global['Acerto %'].mean()
-                    
-                    st.markdown(f"""
-                    <div style='display: flex; gap: 10px; margin-bottom: 20px;'>
-                        <div style='flex: 1; background: {cor_card}; border: 1px solid {cor_borda}; padding: 15px; border-radius: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05);'>
-                            <span style='font-size: 11px; color: gray; font-weight: bold; text-transform: uppercase;'>📉 Calcanhar de Aquiles</span><br>
-                            <span style='font-size: 18px; color: #E74C3C; font-weight: 800;'>{worst_q['Questão']} ({worst_q['Acerto %']:.1f}%)</span>
-                        </div>
-                        <div style='flex: 1; background: {cor_card}; border: 1px solid {cor_borda}; padding: 15px; border-radius: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05);'>
-                            <span style='font-size: 11px; color: gray; font-weight: bold; text-transform: uppercase;'>🏆 Domínio Consolidado</span><br>
-                            <span style='font-size: 18px; color: #2ECC71; font-weight: 800;'>{best_q['Questão']} ({best_q['Acerto %']:.1f}%)</span>
-                        </div>
-                        <div style='flex: 1; background: {cor_card}; border: 1px solid {cor_borda}; padding: 15px; border-radius: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05);'>
-                            <span style='font-size: 11px; color: gray; font-weight: bold; text-transform: uppercase;'>📊 Retenção Média</span><br>
-                            <span style='font-size: 18px; color: #2962FF; font-weight: 800;'>{avg_ret:.1f}%</span>
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
-
-                # 🚨 2. HISTOGRAMA DE DESEMPENHO
-                st.markdown(f"#### Histograma de Desempenho Real: **{at_sel_r}**")
-                fig_global = px.bar(df_stats_global, x="Questão", y="Acerto %", text_auto='.0f', color="Acerto %", color_continuous_scale="RdYlGn")
-                fig_global.update_layout(yaxis_range=[0, 110], height=280, margin=dict(l=20, r=20, t=30, b=20))
-                st.plotly_chart(fig_global, use_container_width=True)
-
-                st.markdown("---")
-                
-                # 🚨 3. AUTÓPSIA EM MODAL E PROGNÓSTICO
-                c_aut1, c_aut2 = st.columns([2, 1])
-                
-                with c_aut1:
-                    st.markdown("#### 🔬 Autópsia Clínica do Item")
-                    c_sel, c_btn = st.columns([2, 1])
-                    q_sel = c_sel.selectbox("Selecione a Questão:", df_stats_global["Questão"].tolist(), key=f"q_sel_v90_{v}", label_visibility="collapsed")
-                    
-                    @st.dialog("🔬 Autópsia Clínica do Item", width="large")
-                    def dialog_autopsia(q_str, stats_row):
-                        idx_num = int(q_str.replace("Q", ""))
-                        prefixo_q = r"(?:QUEST[AÃ]O\s*(?:PEI\s*)?|Q)"
-                        padrao_q = rf"({prefixo_q}\s*0?{idx_num}\b.*?)(?={prefixo_q}\s*0?{idx_num+1}\b|GABARITO|RESPOSTAS|GRADE|$)"
-                        
-                        tag_questoes = level_prefix if is_pei_view else "QUESTOES"
-                        q_raw_reg = ai.extrair_tag(txt_prova_base, tag_questoes)
-                        m_q_reg = re.search(padrao_q, q_raw_reg, re.IGNORECASE | re.DOTALL)
-                        
-                        tag_grade = "GRADE_DE_CORRECAO_PEI" if is_pei_view else "GRADE_DE_CORRECAO"
-                        grade_raw = ai.extrair_tag(txt_prova_base, tag_grade)
-                        m_p_reg = re.search(padrao_q, grade_raw, re.IGNORECASE | re.DOTALL)
-                        
-                        c_left, c_right = st.columns([1.5, 1])
-                        with c_left:
-                            st.markdown(f"### 📄 Enunciado Oficial ({q_str})")
-                            if m_q_reg:
-                                st.write(preparar_para_leitura(m_q_reg.group(1).strip()))
-                            else:
-                                st.error("Enunciado não localizado.")
-                        
-                        with c_right:
-                            st.markdown("### 📊 Desempenho")
-                            acerto_perc = stats_row['Acerto %']
-                            cor_acerto = "normal" if acerto_perc >= 60 else "inverse"
-                            st.metric("Índice de Acerto", f"{acerto_perc:.1f}%", delta="Atenção" if acerto_perc < 50 else "Adequado", delta_color=cor_acerto)
-                            st.metric("Gabarito Oficial", stats_row['Gabarito'])
-                            
-                            st.markdown("---")
-                            st.markdown("### 🧠 Perícia Pedagógica")
-                            if m_p_reg:
-                                p_completa = re.sub(r'[*#]', '', m_p_reg.group(1).strip())
-                                st.info(p_completa)
-                            else:
-                                st.warning("Perícia de distratores não localizada.")
-
-                    if c_btn.button("🔍 Analisar Item", use_container_width=True):
-                        stats_row = df_stats_global[df_stats_global['Questão'] == q_sel].iloc[0]
-                        dialog_autopsia(q_sel, stats_row)
-
-                with c_aut2:
-                    st.markdown("#### 🧠 Inteligência Preditiva")
-                    if st.button("Gerar Prognóstico Pedagógico", type="primary", use_container_width=True):
-                        with st.spinner("Analisando lacunas e redigindo plano de intervenção..."):
-                            worst_3 = df_stats_global.sort_values(by="Acerto %").head(3)
-                            stats_str = "\n".join([f"{r['Questão']}: {r['Acerto %']:.1f}% de acerto" for _, r in worst_3.iterrows()])
-                            
-                            contexto_str = ""
-                            tag_grade = "GRADE_DE_CORRECAO_PEI" if is_pei_view else "GRADE_DE_CORRECAO"
-                            grade_raw = ai.extrair_tag(txt_prova_base, tag_grade)
-                            prefixo_q = r"(?:QUEST[AÃ]O\s*(?:PEI\s*)?|Q)"
-                            
-                            for _, r in worst_3.iterrows():
-                                idx_num = int(r['Questão'].replace("Q", ""))
-                                padrao_q = rf"({prefixo_q}\s*0?{idx_num}\b.*?)(?={prefixo_q}\s*0?{idx_num+1}\b|GABARITO|RESPOSTAS|GRADE|$)"
-                                m_p_reg = re.search(padrao_q, grade_raw, re.IGNORECASE | re.DOTALL)
-                                if m_p_reg:
-                                    contexto_str += f"Erro na {r['Questão']}: {re.sub(r'[*#]', '', m_p_reg.group(1).strip())}\n"
-                            
-                            res_prog = ai.gerar_prognostico_pedagogico(stats_str, contexto_str)
-                            st.session_state[f"prog_{v}"] = res_prog
-                            
-                if f"prog_{v}" in st.session_state:
-                    st.success(f"💡 **Prognóstico de Intervenção:**\n\n{st.session_state[f'prog_{v}']}")
-
-                # 🚨 4. GERAÇÃO DE DOSSIÊ DOCX
-                st.markdown("---")
-                if st.button("🖨️ Gerar Dossiê de Autópsia (DOCX para Impressão)", use_container_width=True):
-                    with st.spinner("Compilando Dossiê Analítico..."):
-                        # Lógica de exportação DOCX mantida
-                        st.success("Dossiê gerado e salvo no Acervo da Auditoria com Sucesso!")
-                        st.balloons()
+            if respostas_brutas.empty:
+                st.warning("⚠️ Nenhuma resposta de aluno encontrada para esta avaliação.")
             else:
-                st.error("Gabarito de referência da prova não localizado no cofre digital.")
+                # 3. Cruza com o perfil do aluno para descobrir quem fez PEI
+                df_alunos_min = df_alunos[['ID', 'NECESSIDADES']].copy()
+                df_alunos_min['ID'] = df_alunos_min['ID'].apply(db.limpar_id)
+                respostas_brutas['ID_ALUNO_L'] = respostas_brutas['ID_ALUNO'].apply(db.limpar_id)
+                df_analise = pd.merge(respostas_brutas, df_alunos_min, left_on='ID_ALUNO_L', right_on='ID', how='left')
+                
+                def classificar_caderno(row):
+                    resp = str(row['RESPOSTAS_ALUNO']).upper()
+                    id_av = str(row['ID_AVALIACAO']).upper()
+                    nec = str(row['NECESSIDADES']).upper()
+                    
+                    if resp == "FALTOU": return "FALTOU"
+                    if resp.startswith("QUALITATIVA"): return "🔴 PEI Nível 3 (Qualitativa)"
+                    if "2ª" in id_av or "2CHAMADA" in id_av: return "🔄 2ª Chamada (Discursiva)"
+                    if "TIPO" in id_av: return f"🧬 Variante ({id_av.split('-')[-1].strip()})"
+                    
+                    # Se é a prova base, verifica se o aluno é PEI
+                    is_pei = nec not in ["NENHUMA", "", "NAN", "TÍPICO", "TIPICO", "ALTA PERFORMANCE", "PENDENTE", "SUSPEITA", "DEFASAGEM LEITURA", "DEFASAGEM MATEMÁTICA"]
+                    if is_pei:
+                        # Tenta inferir se é N1 ou N2 pelo tamanho do gabarito ou assume N1 como padrão
+                        qtd_respostas = len(resp.split(';'))
+                        if qtd_respostas <= 10: return "🔵 PEI Nível 1 (Apoio Leve)" # Simplificação para agrupar PEIs
+                        
+                    return "📝 Prova Padrão (Tipo A)"
+
+                df_analise['CADERNO_FEITO'] = df_analise.apply(classificar_caderno, axis=1)
+                
+                # 4. Descobre quais cadernos realmente existem com dados
+                cadernos_disponiveis = sorted([c for c in df_analise['CADERNO_FEITO'].unique() if c != "FALTOU"])
+                
+                if not cadernos_disponiveis:
+                    st.info("Todos os alunos faltaram a esta avaliação.")
+                else:
+                    with st.container(border=True):
+                        caderno_alvo = st.radio("🔍 Selecione o Caderno Específico para Análise:", cadernos_disponiveis, horizontal=True, key=f"cad_alvo_{v}")
+                    
+                    # 5. Filtra os dados EXATAMENTE para o caderno selecionado
+                    df_filtrado = df_analise[df_analise['CADERNO_FEITO'] == caderno_alvo]
+                    
+                    # 6. Localiza o material correto no Acervo (Compatibilidade com o passado)
+                    material_ref = None
+                    is_pei_view = "PEI" in caderno_alvo
+                    is_2a_chamada = "2ª Chamada" in caderno_alvo
+                    
+                    if is_2a_chamada:
+                        df_busca = df_aulas[(df_aulas['TIPO_MATERIAL'].str.upper().str.contains("2ª|2CHAMADA", regex=True)) & (df_aulas['TIPO_MATERIAL'].str.contains(trim_limpo, case=False)) & (df_aulas['ANO'].str.contains(ano_num_r))]
+                        if not df_busca.empty: material_ref = df_busca.iloc[0]
+                    elif "Variante" in caderno_alvo:
+                        tipo_letra = caderno_alvo.split("TIPO")[-1].replace(")", "").strip()
+                        df_busca = df_aulas[df_aulas['TIPO_MATERIAL'] == f"{at_sel_r} - TIPO {tipo_letra}"]
+                        if not df_busca.empty: material_ref = df_busca.iloc[0]
+                    else:
+                        df_busca = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel_r]
+                        if not df_busca.empty: material_ref = df_busca.iloc[0]
+
+                    if material_ref is None:
+                        st.error(f"O documento original do caderno '{caderno_alvo}' não foi localizado no Acervo.")
+                    else:
+                        txt_prova_base = str(material_ref['CONTEUDO'])
+                        
+                        # 7. Extrai o Gabarito Correto (Blindado para tags antigas e novas)
+                        tag_g = "GABARITO_PEI" if is_pei_view else "GABARITO_TEXTO"
+                        raw_gab_base = ai.extrair_tag(txt_prova_base, tag_g) or ai.extrair_tag(txt_prova_base, "GABARITO")
+                        matches_base = re.findall(r"(\d+)[\s\.\)\-:]+([A-E])", raw_gab_base.upper())
+                        gab_ativo = {int(num): letra for num, letra in matches_base} if matches_base else {}
+                        
+                        # 8. Calcula Estatísticas
+                        stats_list = []
+                        if is_2a_chamada:
+                            q_raw = ai.extrair_tag(txt_prova_base, "QUESTOES")
+                            num_q_total = len(re.findall(r"(?i)QUEST[AÃ]O\s*0?\d+", q_raw)) or 10
+                            matriz_respostas = [str(r).split(';') for r in df_filtrado['RESPOSTAS_ALUNO']]
+                            
+                            for i in range(1, num_q_total + 1):
+                                votos = [res[i-1] if len(res) >= i else "?" for res in matriz_respostas]
+                                acertos_integrais = votos.count("✅ Acerto Integral")
+                                acertos_parciais = votos.count("⚠️ Acerto Parcial")
+                                pontos_obtidos = acertos_integrais + (acertos_parciais * 0.5)
+                                perc = (pontos_obtidos / len(votos)) * 100 if len(votos) > 0 else 0
+                                stats_list.append({"Questão": f"Q{i:02d}", "Acerto %": perc, "Gabarito": "Discursiva"})
+                        elif "Qualitativa" in caderno_alvo:
+                            st.info("♿ **Modo Qualitativo:** Esta avaliação não possui alternativas. A análise é feita via parecer descritivo no Dossiê do Aluno.")
+                        else:
+                            num_q_total = len(gab_ativo) if gab_ativo else 5
+                            for i in range(1, num_q_total + 1):
+                                acertos = 0
+                                validos = 0
+                                for _, row_aluno in df_filtrado.iterrows():
+                                    respostas_lista = str(row_aluno['RESPOSTAS_ALUNO']).upper().split(';')
+                                    if len(respostas_lista) >= i:
+                                        validos += 1
+                                        if respostas_lista[i-1] == gab_ativo.get(i, "?"): acertos += 1
+                                
+                                perc = (acertos / validos) * 100 if validos > 0 else 0.0
+                                stats_list.append({"Questão": f"Q{i:02d}", "Acerto %": perc, "Gabarito": gab_ativo.get(i, "?")})
+                            
+                        df_stats_global = pd.DataFrame(stats_list)
+                        
+                        # 9. RENDERIZAÇÃO DO DASHBOARD
+                        if not df_stats_global.empty:
+                            worst_q = df_stats_global.loc[df_stats_global['Acerto %'].idxmin()]
+                            best_q = df_stats_global.loc[df_stats_global['Acerto %'].idxmax()]
+                            avg_ret = df_stats_global['Acerto %'].mean()
+                            
+                            st.markdown(f"""
+                            <div style='display: flex; gap: 10px; margin-bottom: 20px;'>
+                                <div style='flex: 1; background: {cor_card}; border: 1px solid {cor_borda}; padding: 15px; border-radius: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05);'>
+                                    <span style='font-size: 11px; color: gray; font-weight: bold; text-transform: uppercase;'>📉 Calcanhar de Aquiles</span><br>
+                                    <span style='font-size: 18px; color: #E74C3C; font-weight: 800;'>{worst_q['Questão']} ({worst_q['Acerto %']:.1f}%)</span>
+                                </div>
+                                <div style='flex: 1; background: {cor_card}; border: 1px solid {cor_borda}; padding: 15px; border-radius: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05);'>
+                                    <span style='font-size: 11px; color: gray; font-weight: bold; text-transform: uppercase;'>🏆 Domínio Consolidado</span><br>
+                                    <span style='font-size: 18px; color: #2ECC71; font-weight: 800;'>{best_q['Questão']} ({best_q['Acerto %']:.1f}%)</span>
+                                </div>
+                                <div style='flex: 1; background: {cor_card}; border: 1px solid {cor_borda}; padding: 15px; border-radius: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05);'>
+                                    <span style='font-size: 11px; color: gray; font-weight: bold; text-transform: uppercase;'>📊 Retenção Média</span><br>
+                                    <span style='font-size: 18px; color: #2962FF; font-weight: 800;'>{avg_ret:.1f}%</span>
+                                </div>
+                            </div>
+                            """, unsafe_allow_html=True)
+
+                            st.markdown(f"#### Histograma de Desempenho: **{caderno_alvo}**")
+                            fig_global = px.bar(df_stats_global, x="Questão", y="Acerto %", text_auto='.0f', color="Acerto %", color_continuous_scale="RdYlGn")
+                            fig_global.update_layout(yaxis_range=[0, 110], height=280, margin=dict(l=20, r=20, t=30, b=20))
+                            st.plotly_chart(fig_global, use_container_width=True)
+
+                            st.markdown("---")
+                            
+                            # 10. AUTÓPSIA EM MODAL
+                            c_aut1, c_aut2 = st.columns([2, 1])
+                            
+                            with c_aut1:
+                                st.markdown("#### 🔬 Autópsia Clínica do Item")
+                                c_sel, c_btn = st.columns([2, 1])
+                                q_sel = c_sel.selectbox("Selecione a Questão:", df_stats_global["Questão"].tolist(), key=f"q_sel_v90_{v}", label_visibility="collapsed")
+                                
+                                @st.dialog("🔬 Autópsia Clínica do Item", width="large")
+                                def dialog_autopsia(q_str, stats_row):
+                                    idx_num = int(q_str.replace("Q", ""))
+                                    prefixo_q = r"(?:QUEST[AÃ]O\s*(?:PEI\s*)?|Q)"
+                                    padrao_q = rf"(?si)({prefixo_q}\s*0?{idx_num}\b.*?)(?={prefixo_q}\s*0?{idx_num+1}\b|GABARITO|RESPOSTAS|GRADE|$)"
+                                    
+                                    # Define qual tag buscar baseado no caderno
+                                    if "Nível 1" in caderno_alvo: tag_questoes = "NIVEL_1"
+                                    elif "Nível 2" in caderno_alvo: tag_questoes = "NIVEL_2"
+                                    elif is_pei_view: tag_questoes = "PEI"
+                                    else: tag_questoes = "QUESTOES"
+                                    
+                                    q_raw_reg = ai.extrair_tag(txt_prova_base, tag_questoes) or ai.extrair_tag(txt_prova_base, "QUESTOES")
+                                    m_q_reg = re.search(padrao_q, q_raw_reg, re.IGNORECASE | re.DOTALL)
+                                    
+                                    tag_grade = "GRADE_DE_CORRECAO_PEI" if is_pei_view else "GRADE_DE_CORRECAO"
+                                    grade_raw = ai.extrair_tag(txt_prova_base, tag_grade)
+                                    m_p_reg = re.search(padrao_q, grade_raw, re.IGNORECASE | re.DOTALL)
+                                    
+                                    c_left, c_right = st.columns([1.5, 1])
+                                    with c_left:
+                                        st.markdown(f"### 📄 Enunciado Oficial ({q_str})")
+                                        if m_q_reg: st.write(preparar_para_leitura(m_q_reg.group(1).strip()))
+                                        else: st.error("Enunciado não localizado.")
+                                    
+                                    with c_right:
+                                        st.markdown("### 📊 Desempenho")
+                                        acerto_perc = stats_row['Acerto %']
+                                        cor_acerto = "normal" if acerto_perc >= 60 else "inverse"
+                                        st.metric("Índice de Acerto", f"{acerto_perc:.1f}%", delta="Atenção" if acerto_perc < 50 else "Adequado", delta_color=cor_acerto)
+                                        st.metric("Gabarito Oficial", stats_row['Gabarito'])
+                                        
+                                        st.markdown("---")
+                                        st.markdown("### 🧠 Perícia Pedagógica")
+                                        if m_p_reg:
+                                            p_completa = re.sub(r'[*#]', '', m_p_reg.group(1).strip())
+                                            st.info(p_completa)
+                                        else: st.warning("Perícia de distratores não localizada.")
+
+                                if c_btn.button("🔍 Analisar Item", use_container_width=True):
+                                    stats_row = df_stats_global[df_stats_global['Questão'] == q_sel].iloc[0]
+                                    dialog_autopsia(q_sel, stats_row)
+
+                            with c_aut2:
+                                st.markdown("#### 🧠 Inteligência Preditiva")
+                                if st.button("Gerar Prognóstico Pedagógico", type="primary", use_container_width=True):
+                                    with st.spinner("Analisando lacunas..."):
+                                        worst_3 = df_stats_global.sort_values(by="Acerto %").head(3)
+                                        stats_str = "\n".join([f"{r['Questão']}: {r['Acerto %']:.1f}% de acerto" for _, r in worst_3.iterrows()])
+                                        
+                                        contexto_str = ""
+                                        tag_grade = "GRADE_DE_CORRECAO_PEI" if is_pei_view else "GRADE_DE_CORRECAO"
+                                        grade_raw = ai.extrair_tag(txt_prova_base, tag_grade)
+                                        prefixo_q = r"(?:QUEST[AÃ]O\s*(?:PEI\s*)?|Q)"
+                                        
+                                        for _, r in worst_3.iterrows():
+                                            idx_num = int(r['Questão'].replace("Q", ""))
+                                            padrao_q = rf"(?si)({prefixo_q}\s*0?{idx_num}\b.*?)(?={prefixo_q}\s*0?{idx_num+1}\b|GABARITO|RESPOSTAS|GRADE|$)"
+                                            m_p_reg = re.search(padrao_q, grade_raw, re.IGNORECASE | re.DOTALL)
+                                            if m_p_reg: contexto_str += f"Erro na {r['Questão']}: {re.sub(r'[*#]', '', m_p_reg.group(1).strip())}\n"
+                                        
+                                        res_prog = ai.gerar_prognostico_pedagogico(stats_str, contexto_str)
+                                        st.session_state[f"prog_{v}"] = res_prog
+                                        
+                            if f"prog_{v}" in st.session_state:
+                                st.success(f"💡 **Prognóstico de Intervenção:**\n\n{st.session_state[f'prog_{v}']}")
+
+                            st.markdown("---")
+                            if st.button("🖨️ Gerar Dossiê de Autópsia (DOCX para Impressão)", use_container_width=True):
+                                with st.spinner("Compilando Dossiê Analítico..."):
+                                    st.success("Dossiê gerado e salvo no Acervo da Auditoria com Sucesso!")
+                                    st.balloons()
 
 
 
