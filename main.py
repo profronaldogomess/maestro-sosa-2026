@@ -3864,6 +3864,289 @@ elif menu == "📊 Painel de Notas & Vistos":
             v_base = float(row.get('VISTOS (AUTO)', 0.0) or 0.0)
             t_base = float(row.get('TESTE (LANÇAR)', 0.0) or 0.0)
             p_base = float(row.get('PROVA (LANÇAR)', 0.0) or 0.0)
+            
+            v_final = max(0.0, min(p_visto, v_base + bonus_restante))
+            bonus_restante -= (v_final - v_base)
+            
+            t_final = max(0.0, min(p_teste, t_base + bonus_restante))
+            bonus_restante -= (t_final - t_base)
+            
+            p_final = max(0.0, min(p_prova, p_base + bonus_restante))
+            
+            if arredondar_prefeitura:
+                v_final = round(v_final * 2) / 2
+                t_final = round(t_final * 2) / 2
+                p_final = round(p_final * 2) / 2
+            
+            soma_notas = v_final + t_final + p_final
+            
+            rec_input = row.get('REC. PARALELA')
+            fez_rec = pd.notna(rec_input) and rec_input is not None and str(rec_input).strip() != ""
+            
+            if not fez_rec:
+                rec_final_salvar = -1.0 
+                media_final = soma_notas
+            else:
+                rec_raw = float(rec_input)
+                if regra_rec == "Média Justa (Soma + Rec / 2)":
+                    nota_rec_calculada = (soma_notas + rec_raw) / 2
+                    media_final = max(soma_notas, nota_rec_calculada)
+                    rec_final_salvar = nota_rec_calculada 
+                elif regra_rec == "Substituir apenas a Prova":
+                    nota_rec_convertida = (rec_raw / 10.0) * p_prova
+                    p_final_com_rec = max(p_final, nota_rec_convertida)
+                    media_final = v_final + t_final + p_final_com_rec
+                    rec_final_salvar = rec_raw
+                else: 
+                    media_final = max(soma_notas, rec_raw)
+                    rec_final_salvar = rec_raw
+                
+            if arredondar_prefeitura:
+                media_final = round(media_final * 2) / 2
+                if rec_final_salvar > 0: rec_final_salvar = round(rec_final_salvar * 2) / 2
+                
+            media_final = min(10.0, media_final)
+            return pd.Series([v_final, t_final, p_final, rec_final_salvar, media_final])
+
+        df_input[['V_PREF', 'T_PREF', 'P_PREF', 'REC_PREF', 'MEDIA_FINAL']] = df_input.apply(aplicar_transbordamento, axis=1)
+
+        # ==============================================================================
+        # 🚨 POP-UP MODAL: RADAR DE REFACÇÃO (JUSTIÇA PEDAGÓGICA)
+        # ==============================================================================
+        @st.dialog("⚡ Radar de Refacção (Justiça Pedagógica)", width="large")
+        def dialog_refaccao():
+            st.info("Selecione os alunos que refizeram as questões erradas da prova para aplicar o bônus.")
+            valor_bonus_refaccao = st.number_input("Valor do Bônus (+):", min_value=0.1, max_value=5.0, value=0.5, step=0.1)
+            
+            df_elegiveis = df_input[df_input['MEDIA_FINAL'] < 10.0].copy()
+            if not df_elegiveis.empty:
+                dados_refaccao = []
+                alunos_ja_com_bonus = []
+                
+                for _, r in df_elegiveis.iterrows():
+                    ja_ganhou = False
+                    if not df_diario.empty:
+                        mask_bonus = (df_diario['ID_ALUNO'].apply(db.limpar_id) == r['ID']) & (df_diario['OBSERVACOES'].str.contains("Refacção", na=False))
+                        if not df_diario[mask_bonus].empty: ja_ganhou = True
+                    
+                    if ja_ganhou: alunos_ja_com_bonus.append(r['ESTUDANTE'])
+                    else:
+                        dados_refaccao.append({
+                            "Entregou?": False, "ID": r['ID'], "Estudante": r['ESTUDANTE'], "Média Atual": r['MEDIA_FINAL']
+                        })
+                
+                if alunos_ja_com_bonus:
+                    st.success(f"✅ **Bônus já aplicado para:** {', '.join(alunos_ja_com_bonus)}")
+                
+                if dados_refaccao:
+                    df_refaccao_ed = st.data_editor(
+                        pd.DataFrame(dados_refaccao), hide_index=True, use_container_width=True,
+                        column_config={
+                            "Entregou?": st.column_config.CheckboxColumn("Entregou?", default=False),
+                            "ID": None, "Estudante": st.column_config.TextColumn("Estudante", disabled=True),
+                            "Média Atual": st.column_config.NumberColumn("Média Atual", format="%.1f", disabled=True)
+                        }, key=f"ed_refaccao_{v}"
+                    )
+                    
+                    alunos_marcados = df_refaccao_ed[df_refaccao_ed["Entregou?"] == True]
+                    
+                    if st.button(f"💾 APLICAR BÔNUS (+{valor_bonus_refaccao}) AOS MARCADOS", type="primary", use_container_width=True):
+                        if alunos_marcados.empty: st.error("⚠️ Marque pelo menos um aluno.")
+                        else:
+                            with st.spinner("Injetando bônus..."):
+                                linhas_bonus = []
+                                df_diario_turma = df_diario[(df_diario['TURMA'] == turma_sel) & (~df_diario['TAGS'].isin(['DIA NÃO LETIVO', 'BONUS_CONSELHO', 'SISTEMA_NOTA']))].copy()
+                                if not df_diario_turma.empty:
+                                    df_diario_turma['DATA_DT'] = pd.to_datetime(df_diario_turma['DATA'], format="%d/%m/%Y", errors='coerce')
+                                    data_ancora_ref = df_diario_turma['DATA_DT'].max().strftime("%d/%m/%Y")
+                                else: data_ancora_ref = data_limite.strftime("%d/%m/%Y")
+                                
+                                for _, r in alunos_marcados.iterrows():
+                                    nome_limpo = r['Estudante'].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
+                                    linhas_bonus.append([
+                                        data_ancora_ref, r['ID'], nome_limpo, turma_sel,
+                                        "ISENTO", "BONUS_CONSELHO", "Bônus de Refacção de Prova (Justiça Pedagógica)", util.sosa_to_str(valor_bonus_refaccao)
+                                    ])
+                                    
+                                if db.salvar_lote("DB_DIARIO_BORDO", linhas_bonus):
+                                    st.success("✅ Bônus aplicado!"); time.sleep(1); st.rerun()
+                else: st.info("Todos os alunos elegíveis já receberam o bônus.")
+
+        # ==============================================================================
+        # 🚨 ABAS DE TRABALHO: LANÇAMENTO vs FECHAMENTO
+        # ==============================================================================
+        tab_lancamento, tab_fechamento = st.tabs(["📝 Mesa de Lançamento", "🖨️ Relatório de Fechamento"])
+
+        with tab_lancamento:
+            c_btn_ref, _ = st.columns([1, 3])
+            if c_btn_ref.button("⚡ Aplicar Bônus de Refacção", type="secondary"):
+                dialog_refaccao()
+                
+            st.caption("💡 **Zonas Visuais:** As colunas azuis são automáticas. As amarelas são para digitação. As verdes são o resultado final para a prefeitura.")
+            
+            df_editado = st.data_editor(
+                df_input,
+                column_config={
+                    "ID": None, "REC_PREF": None, "_ORIGINAL_TESTE": None, "_ORIGINAL_PROVA": None,
+                    "ORIGEM TESTE": None, "ORIGEM PROVA": None, 
+                    "ESTUDANTE": st.column_config.TextColumn("Estudante", width="medium", disabled=True),
+                    
+                    # ZONA AZUL (Automática)
+                    "VISTOS (AUTO)": st.column_config.NumberColumn("🔵 Vistos", format="%.1f", disabled=True, width="small"),
+                    "BÔNUS (SALA)": st.column_config.NumberColumn("🔵 Bônus Sala", format="%.1f", disabled=True, width="small"),
+                    
+                    # ZONA AMARELA (Editável)
+                    "BÔNUS CONSELHO": st.column_config.NumberColumn("🟡 Bônus Extra", min_value=0.0, max_value=10.0, format="%.1f", width="small"),
+                    "TESTE (LANÇAR)": st.column_config.NumberColumn("🟡 Teste", min_value=0.0, max_value=p_teste, format="%.1f", width="small"),
+                    "PROVA (LANÇAR)": st.column_config.NumberColumn("🟡 Prova", min_value=0.0, max_value=p_prova, format="%.1f", width="small"),
+                    "REC. PARALELA": st.column_config.NumberColumn("🟡 Rec. Paralela", min_value=0.0, max_value=10.0, format="%.1f", width="small"),
+                    
+                    # ZONA VERDE (Prefeitura)
+                    "V_PREF": st.column_config.NumberColumn("🟢 C1 (Vistos)", format="%.1f", disabled=True),
+                    "T_PREF": st.column_config.NumberColumn("🟢 C2 (Teste)", format="%.1f", disabled=True),
+                    "P_PREF": st.column_config.NumberColumn("🟢 C3 (Prova)", format="%.1f", disabled=True),
+                    
+                    "MEDIA_FINAL": st.column_config.ProgressColumn(
+                        "📊 Média Final", help="Média calculada com transbordamento e recuperação", format="%.1f", min_value=0.0, max_value=10.0,
+                    ),
+                },
+                hide_index=True, use_container_width=True, key=f"editor_notas_{v}"
+            )
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("💾 SALVAR NOTAS E SINCRONIZAR BOLETIM", type="primary", use_container_width=True):
+                with st.status("Sincronizando registros no Banco de Dados...") as status:
+                    df_editado[['V_PREF', 'T_PREF', 'P_PREF', 'REC_PREF', 'MEDIA_FINAL']] = df_editado.apply(aplicar_transbordamento, axis=1)
+                    
+                    status.write("Salvando configurações de data...")
+                    db.excluir_registro("DB_RELATORIOS", f"{turma_sel}|{trimestre_sel}")
+                    db.salvar_no_banco("DB_RELATORIOS", [datetime.now().strftime("%d/%m/%Y"), "SISTEMA", "CONFIG", config_key, f"{turma_sel}|{trimestre_sel}|{data_limite.strftime('%d/%m/%Y')}"])
+                    
+                    linhas_gabarito_reverso = []
+                    linhas_bonus_conselho = []
+                    
+                    df_diario_turma = df_diario[(df_diario['TURMA'] == turma_sel) & (~df_diario['TAGS'].isin(['DIA NÃO LETIVO', 'BONUS_CONSELHO', 'SISTEMA_NOTA']))].copy()
+                    if not df_diario_turma.empty:
+                        df_diario_turma['DATA_DT'] = pd.to_datetime(df_diario_turma['DATA'], format="%d/%m/%Y", errors='coerce')
+                        data_ancora = df_diario_turma['DATA_DT'].max().strftime("%d/%m/%Y")
+                    else: data_ancora = data_limite.strftime("%d/%m/%Y")
+                    
+                    status.write("Processando lançamentos manuais e bônus...")
+                    for _, r in df_editado.iterrows():
+                        nome_limpo = r['ESTUDANTE'].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
+                        
+                        teste_lancar = float(r.get('TESTE (LANÇAR)', 0.0) or 0.0)
+                        prova_lancar = float(r.get('PROVA (LANÇAR)', 0.0) or 0.0)
+                        bonus_conselho = float(r.get('BÔNUS CONSELHO', 0.0) or 0.0)
+                        
+                        if teste_lancar != r['_ORIGINAL_TESTE']:
+                            linhas_gabarito_reverso.append([datetime.now().strftime("%d/%m/%Y"), r['ID'], nome_limpo, turma_sel, f"TESTE {trimestre_sel} [LANÇAMENTO MANUAL]", "MANUAL", util.sosa_to_str(teste_lancar), "N/A"])
+                        if prova_lancar != r['_ORIGINAL_PROVA']:
+                            linhas_gabarito_reverso.append([datetime.now().strftime("%d/%m/%Y"), r['ID'], nome_limpo, turma_sel, f"PROVA {trimestre_sel} [LANÇAMENTO MANUAL]", "MANUAL", util.sosa_to_str(prova_lancar), "N/A"])
+                            
+                        if bonus_conselho > 0:
+                            linhas_bonus_conselho.append([data_ancora, r['ID'], nome_limpo, turma_sel, "ISENTO", "BONUS_CONSELHO", "Bônus de Conselho de Classe", util.sosa_to_str(bonus_conselho)])
+
+                    if linhas_gabarito_reverso: db.salvar_lote("DB_GABARITOS_ALUNOS", linhas_gabarito_reverso)
+                    
+                    if linhas_bonus_conselho:
+                        try:
+                            wb = db.conectar()
+                            ws = wb.worksheet("DB_DIARIO_BORDO")
+                            dados_d = ws.get_all_values()
+                            for i in range(len(dados_d)-1, 0, -1):
+                                if len(dados_d[i]) > 5 and dados_d[i][3] == turma_sel and dados_d[i][5] == "BONUS_CONSELHO":
+                                    ws.delete_rows(i+1)
+                        except: pass
+                        db.salvar_lote("DB_DIARIO_BORDO", linhas_bonus_conselho)
+
+                    status.write("Consolidando Boletim Oficial...")
+                    db.limpar_notas_turma_trimestre(turma_sel, trimestre_sel)
+                    linhas_save =[]
+                    for _, r in df_editado.iterrows():
+                        nome_limpo = r['ESTUDANTE'].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
+                        linhas_save.append([
+                            r['ID'], nome_limpo, turma_sel, trimestre_sel,
+                            util.sosa_to_str(r["V_PREF"]), util.sosa_to_str(r["T_PREF"]),
+                            util.sosa_to_str(r["P_PREF"]), util.sosa_to_str(r["REC_PREF"]),
+                            util.sosa_to_str(r['MEDIA_FINAL'])
+                        ])
+                    if db.salvar_lote("DB_NOTAS", linhas_save):
+                        status.update(label="✅ Boletim Sincronizado com Sucesso!", state="complete")
+                        st.balloons(); time.sleep(1.5); st.rerun()
+
+        # --- ABA: RELATÓRIO DE FECHAMENTO (WIZARD EXECUTIVO) ---
+        with tab_fechamento:
+            st.markdown("### 🖨️ Relatório Executivo de Fechamento")
+            
+            df_aprovados = df_input[df_input['MEDIA_FINAL'] >= 6.0]
+            df_quase = df_input[(df_input['MEDIA_FINAL'] >= 5.5) & (df_input['MEDIA_FINAL'] < 6.0)]
+            df_rec = df_input[df_input['MEDIA_FINAL'] < 5.5]
+            
+            c_met1, c_met2, c_met3 = st.columns(3)
+            c_met1.metric("✅ Aprovados Direto", len(df_aprovados))
+            c_met2.metric("🟡 Quase Lá (5.5 a 5.9)", len(df_quase))
+            c_met3.metric("🔴 Recuperação Paralela", len(df_rec))
+            
+            st.markdown("---")
+            
+            c_list1, c_list2 = st.columns(2)
+            with c_list1:
+                st.markdown("#### 🟡 Radar: Quase Lá")
+                if not df_quase.empty:
+                    for _, r in df_quase.iterrows():
+                        st.warning(f"**{r['ESTUDANTE']}** - Média: {r['MEDIA_FINAL']:.1f}")
+                else: st.success("Nenhum aluno nesta faixa.")
+                
+            with c_list2:
+                st.markdown("#### 🔴 UTI: Recuperação Paralela")
+                if not df_rec.empty:
+                    for _, r in df_rec.iterrows():
+                        st.error(f"**{r['ESTUDANTE']}** - Média: {r['MEDIA_FINAL']:.1f}")
+                else: st.success("Nenhum aluno em recuperação!")
+            
+            st.markdown("---")
+            st.markdown("#### 🖨️ Fábrica de Etiquetas (Para colar nas provas)")
+            st.info("O sistema gerará um documento Word com retângulos formatados. Basta imprimir, cortar e colar na prova do aluno para que ele e os pais vejam a composição exata da nota.")
+            
+            if st.button("🖨️ GERAR ETIQUETAS (DOCX)", use_container_width=True, type="primary"):
+                with st.spinner("Desenhando etiquetas..."):
+                    import exporter
+                    
+                    dados_etiquetas = []
+                    for _, r in df_input.iterrows():
+                        nome_limpo = r['ESTUDANTE'].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
+                        
+                        if r['MEDIA_FINAL'] >= 6.0: status_txt = "✅ APROVADO"
+                        elif r['MEDIA_FINAL'] >= 5.5: status_txt = "⚠️ REFAZER QUESTÕES ERRADAS"
+                        else: status_txt = "🔴 RECUPERAÇÃO PARALELA"
+                        
+                        b_sala = float(r.get('BÔNUS (SALA)', 0.0) or 0.0)
+                        b_cons = float(r.get('BÔNUS CONSELHO', 0.0) or 0.0)
+                        bonus_total_etiq = b_sala + b_cons
+                        
+                        dados_etiquetas.append({
+                            "nome": nome_limpo,
+                            "vistos": f"{float(r.get('V_PREF', 0.0) or 0.0):.1f}",
+                            "teste": f"{float(r.get('T_PREF', 0.0) or 0.0):.1f}",
+                            "prova": f"{float(r.get('P_PREF', 0.0) or 0.0):.1f}",
+                            "bonus": f"{bonus_total_etiq:.1f}",
+                            "media": f"{float(r.get('MEDIA_FINAL', 0.0) or 0.0):.1f}",
+                            "status": status_txt
+                        })
+                    
+                    info_etiqueta = {"turma": turma_sel, "trimestre": trimestre_sel}
+                    nome_arq_etiq = f"ETIQUETAS_{turma_sel.replace(' ', '')}_{trimestre_sel.replace(' ', '')}"
+                    
+                    doc_stream = exporter.gerar_docx_etiquetas_notas(nome_arq_etiq, dados_etiquetas, info_etiqueta)
+                    link_doc = db.subir_e_converter_para_google_docs(doc_stream, nome_arq_etiq, trimestre=trimestre_sel, categoria=turma_sel, modo="PLANEJAMENTO")
+                    
+                    if "https" in link_doc:
+                        st.success("✅ Etiquetas geradas com sucesso!")
+                        st.link_button("📂 ABRIR ETIQUETAS PARA IMPRESSÃO", link_doc, type="primary", use_container_width=True)
+                        st.balloons()
+                    else:
+                        st.error(f"Erro ao salvar no Drive: {link_doc}")
 
 
 
