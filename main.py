@@ -2620,6 +2620,7 @@ elif menu == "📸 Scanner de Gabaritos":
         if t_sel_r and at_sel_r:
             nome_curto_av = at_sel_r.split("-")[0].strip()
             trim_limpo = tr_sel_r.replace(" ", "")
+            ano_num_r = "".join(filter(str.isdigit, t_sel_r)) # 🚨 CORREÇÃO: Variável restaurada
             
             # 2. Puxa todos os gabaritos escaneados para esta turma relacionados a esta prova base
             mask_diag = (df_diagnosticos['TURMA'] == t_sel_r) & (
