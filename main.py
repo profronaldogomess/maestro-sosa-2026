@@ -2983,14 +2983,13 @@ elif menu == "📝 Diário de Bordo Rápido":
 
 
 # ==============================================================================
-# MÓDULO: BIOGRAFIA DO ESTUDANTE - DOSSIÊ DE EVOLUÇÃO (REUNIÃO DE PAIS V200)
+# MÓDULO: BIOGRAFIA DO ESTUDANTE - V201 (DASHBOARD EXECUTIVO & MODAIS)
 # ==============================================================================
 elif menu == "👤 Biografia do Estudante":
     st.title("👤 Biografia do Estudante: Dossiê de Evolução")
     st.caption("💡 **Guia de Comando:** Dashboard executivo para reuniões de pais. Navegue pelas abas para apresentar os resultados de forma limpa e organizada.")
     st.markdown("---")
 
-    # 🚨 VACINA ANTI-ERRO: Função de formatação de texto
     def preparar_para_leitura(texto):
         if not texto: return ""
         texto = re.sub(r'^```[a-zA-Z]*\n', '', texto, flags=re.MULTILINE | re.IGNORECASE)
@@ -3011,7 +3010,7 @@ elif menu == "👤 Biografia do Estudante":
             turmas_reais_bio = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
             lista_turmas_bio = sorted(turmas_reais_bio['ID_TURMA'].unique()) if not turmas_reais_bio.empty else sorted(df_alunos['TURMA'].unique())
             
-            turma_b = c1.selectbox("👥 Turma:", lista_turmas_bio, key="bio_t")
+            turma_b = c1.selectbox("👥 Turma:", lista_turmas_bio, key="bio_t", label_visibility="collapsed")
             lista_alunos = df_alunos[df_alunos['TURMA'] == turma_b].sort_values(by="NOME_ALUNO").copy()
             
             if lista_alunos.empty:
@@ -3030,8 +3029,8 @@ elif menu == "👤 Biografia do Estudante":
             lista_alunos['STATUS_ICON'] = lista_alunos['NECESSIDADES'].apply(definir_icone_status)
             lista_alunos['LABEL'] = lista_alunos.apply(lambda x: f"{x['STATUS_ICON']} {x['NOME_ALUNO']}", axis=1)
                 
-            aluno_b_label = c2.selectbox("🎓 Estudante:", lista_alunos['LABEL'].tolist(), key="bio_a")
-            trim_b = c3.selectbox("📅 Período de Análise:",["Todos", "I Trimestre", "II Trimestre", "III Trimestre"], key="bio_trim")
+            aluno_b_label = c2.selectbox("🎓 Estudante:", lista_alunos['LABEL'].tolist(), key="bio_a", label_visibility="collapsed")
+            trim_b = c3.selectbox("📅 Período de Análise:",["Todos", "I Trimestre", "II Trimestre", "III Trimestre"], key="bio_trim", label_visibility="collapsed")
 
         # --- PREPARAÇÃO DE DADOS GLOBAIS ---
         if trim_b == "I Trimestre": dt_ini, dt_fim = date(2026, 2, 9), date(2026, 5, 22)
@@ -3063,67 +3062,69 @@ elif menu == "👤 Biografia do Estudante":
             else:
                 diag_alu_f = diag_alu.copy()
 
-        # --- CABEÇALHO DO ALUNO ---
-        c_h1, c_h2 = st.columns([2, 1])
-        with c_h1:
-            st.subheader(f"🎓 {nome_limpo}")
-            st.caption(f"**ID do Sistema:** {id_alu}")
-        with c_h2:
-            if not n_alu.empty:
-                soma_anual = n_alu[n_alu['TRIMESTRE'].isin(["I Trimestre", "II Trimestre", "III Trimestre"])]['MEDIA_FINAL'].apply(util.sosa_to_float).sum()
-                st.metric("Soma Anual (Meta 18.0)", f"{soma_anual:.1f}", delta=f"{soma_anual - 18.0:.1f}")
-
-        if "PENDENTE" in perfil_atual or "SUSPEITA" in perfil_atual: st.warning(f"🟠 **Radar de Investigação:** {perfil_atual}")
-        elif "DEFASAGEM" in perfil_atual: st.error(f"🧱 **Barreira de Aprendizagem:** {perfil_atual}")
-        elif "ALTA PERFORMANCE" in perfil_atual: st.info(f"🚀 **Destaque Cognitivo:** {perfil_atual}")
-        elif is_pei_or_gap: st.warning(f"♿ **Condição Clínica (PEI):** {perfil_atual}")
-        else: st.success(f"👤 **Perfil Cognitivo:** Típico / Padrão")
+        # --- CÁLCULO DE MÉTRICAS PARA O HERO CARD ---
+        soma_anual = n_alu[n_alu['TRIMESTRE'].isin(["I Trimestre", "II Trimestre", "III Trimestre"])]['MEDIA_FINAL'].apply(util.sosa_to_float).sum() if not n_alu.empty else 0.0
+        
+        faltas_hero, perc_presenca_hero, perc_visto_hero, bonus_total_hero = 0, 100, 0, 0.0
+        if not d_alu_f.empty:
+            d_alu_validas_hero = d_alu_f[~d_alu_f['TAGS'].isin(["DIA NÃO LETIVO", "BONUS_CONSELHO", "SISTEMA_NOTA"])]
+            total_aulas_hero = len(d_alu_validas_hero)
+            faltas_hero = len(d_alu_validas_hero[d_alu_validas_hero['TAGS'] == "AUSÊNCIA"])
+            perc_presenca_hero = ((total_aulas_hero - faltas_hero) / total_aulas_hero) * 100 if total_aulas_hero > 0 else 100
+            d_vistos_hero = d_alu_validas_hero[d_alu_validas_hero['VISTO_ATIVIDADE'].astype(str).str.upper() != "ISENTO"]
+            tot_vistos_hero = len(d_vistos_hero)
+            vistos_ok_hero = len(d_vistos_hero[d_vistos_hero['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"])
+            perc_visto_hero = (vistos_ok_hero / tot_vistos_hero) * 100 if tot_vistos_hero > 0 else 0
+            bonus_total_hero = d_alu_f['BONUS'].apply(util.sosa_to_float).sum()
 
         # ==============================================================================
-        # 📱 GERADOR DE EXTRATO PARA WHATSAPP (COMPACTO NO TOPO)
+        # 🌟 HERO CARD (CABEÇALHO EXECUTIVO V201)
         # ==============================================================================
-        with st.expander("📱 Compartilhar Extrato via WhatsApp", expanded=False):
-            st.info("💡 **Dica:** Passe o mouse sobre a caixa preta abaixo e clique no ícone de 'Copiar' no canto superior direito.")
+        with st.container(border=True):
+            c_h1, c_h2, c_h3, c_h4 = st.columns([2, 1, 1, 1])
             
+            with c_h1:
+                st.markdown(f"<h3 style='margin-bottom: 0px;'>{nome_limpo}</h3>", unsafe_allow_html=True)
+                st.caption(f"**ID:** {id_alu}")
+                if "PENDENTE" in perfil_atual or "SUSPEITA" in perfil_atual: st.markdown(f"<span style='color: #F39C12; font-weight: bold;'>🟠 Radar de Investigação: {perfil_atual}</span>", unsafe_allow_html=True)
+                elif "DEFASAGEM" in perfil_atual: st.markdown(f"<span style='color: #E74C3C; font-weight: bold;'>🧱 Barreira de Aprendizagem: {perfil_atual}</span>", unsafe_allow_html=True)
+                elif "ALTA PERFORMANCE" in perfil_atual: st.markdown(f"<span style='color: #3498DB; font-weight: bold;'>🚀 Destaque Cognitivo: {perfil_atual}</span>", unsafe_allow_html=True)
+                elif is_pei_or_gap: st.markdown(f"<span style='color: #9B59B6; font-weight: bold;'>♿ Condição Clínica (PEI): {perfil_atual}</span>", unsafe_allow_html=True)
+                else: st.markdown(f"<span style='color: #2ECC71; font-weight: bold;'>👤 Perfil Cognitivo: Típico / Padrão</span>", unsafe_allow_html=True)
+                
+            c_h2.metric("Soma Anual (Meta 18.0)", f"{soma_anual:.1f}", delta=f"{soma_anual - 18.0:.1f}")
+            c_h3.metric("Assiduidade", f"{perc_presenca_hero:.0f}%", f"{faltas_hero} faltas", delta_color="inverse" if faltas_hero > 0 else "normal")
+            c_h4.metric("Engajamento (Caderno)", f"{perc_visto_hero:.0f}%", f"{bonus_total_hero:+.1f} pts bônus")
+
+        # ==============================================================================
+        # 📱 WHATSAPP MODAL (V201)
+        # ==============================================================================
+        @st.dialog("📱 Extrato para WhatsApp")
+        def dialog_whatsapp():
+            st.info("Copie o texto abaixo e envie para o responsável.")
             if trim_b == "Todos":
                 notas_trimestres_str = ""
-                soma_anual_zap = 0.0
                 for t in ["I Trimestre", "II Trimestre", "III Trimestre"]:
                     reg_t = n_alu[n_alu['TRIMESTRE'] == t]
                     if not reg_t.empty:
                         nota_t = util.sosa_to_float(reg_t.iloc[0]['MEDIA_FINAL'])
-                        soma_anual_zap += nota_t
                         notas_trimestres_str += f"• {t}: {nota_t:.1f}\n"
                     else:
                         notas_trimestres_str += f"• {t}: (Ainda não fechado)\n"
                 
-                faltas_zap, perc_presenca_zap, perc_visto_zap, bonus_total_zap = 0, 100, 0, 0.0
-                if not d_alu_f.empty:
-                    d_alu_validas_zap = d_alu_f[~d_alu_f['TAGS'].isin(["DIA NÃO LETIVO", "BONUS_CONSELHO", "SISTEMA_NOTA"])]
-                    total_aulas_zap = len(d_alu_validas_zap)
-                    faltas_zap = len(d_alu_validas_zap[d_alu_validas_zap['TAGS'] == "AUSÊNCIA"])
-                    perc_presenca_zap = ((total_aulas_zap - faltas_zap) / total_aulas_zap) * 100 if total_aulas_zap > 0 else 100
-                    d_vistos_zap = d_alu_validas_zap[d_alu_validas_zap['VISTO_ATIVIDADE'].astype(str).str.upper() != "ISENTO"]
-                    tot_vistos_zap = len(d_vistos_zap)
-                    vistos_ok_zap = len(d_vistos_zap[d_vistos_zap['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"])
-                    perc_visto_zap = (vistos_ok_zap / tot_vistos_zap) * 100 if tot_vistos_zap > 0 else 0
-                    bonus_total_zap = d_alu_f['BONUS'].apply(util.sosa_to_float).sum()
-
                 msg_zap = f"""Olá! Tudo bem? Aqui é o professor Ronaldo Gomes. 🏫
 Estou passando para compartilhar um resumo de como o(a) {nome_limpo} está se saindo nas aulas de Matemática neste ano.
 
 📊 NOTAS POR TRIMESTRE:
 {notas_trimestres_str.strip()}
-(Soma atual: {soma_anual_zap:.1f} pts. Lembrando que a meta para passar direto é somar 18.0 no ano).
+(Soma atual: {soma_anual:.1f} pts. Lembrando que a meta para passar direto é somar 18.0 no ano).
 
 🎯 COMPORTAMENTO E PARTICIPAÇÃO:
-• Presença: {perc_presenca_zap:.0f}% ({faltas_zap} falta(s) até agora).
-• Caderno e Atividades: Fez {perc_visto_zap:.0f}% do que foi pedido em sala.
-• Pontos Extras/Bônus: {bonus_total_zap:+.1f} pontinhos garantidos pelo esforço!
+• Presença: {perc_presenca_hero:.0f}% ({faltas_hero} falta(s) até agora).
+• Caderno e Atividades: Fez {perc_visto_hero:.0f}% do que foi pedido em sala.
+• Pontos Extras/Bônus: {bonus_total_hero:+.1f} pontinhos garantidos pelo esforço!
 
 Qualquer dúvida, é só me chamar. Um abraço! 🚀"""
-                st.code(msg_zap, language=None)
-
             else:
                 if not n_alu_f.empty:
                     reg_nota = n_alu_f.iloc[0]
@@ -3136,18 +3137,6 @@ Qualquer dúvida, é só me chamar. Um abraço! 🚀"""
                 else:
                     v_nota = t_nota = p_nota = r_nota = m_final = 0.0
                     status_nota = "Sem notas lançadas ⏳"
-
-                faltas_zap, perc_presenca_zap, perc_visto_zap, bonus_total_zap = 0, 100, 0, 0.0
-                if not d_alu_f.empty:
-                    d_alu_validas_zap = d_alu_f[~d_alu_f['TAGS'].isin(["DIA NÃO LETIVO", "BONUS_CONSELHO", "SISTEMA_NOTA"])]
-                    total_aulas_zap = len(d_alu_validas_zap)
-                    faltas_zap = len(d_alu_validas_zap[d_alu_validas_zap['TAGS'] == "AUSÊNCIA"])
-                    perc_presenca_zap = ((total_aulas_zap - faltas_zap) / total_aulas_zap) * 100 if total_aulas_zap > 0 else 100
-                    d_vistos_zap = d_alu_validas_zap[d_alu_validas_zap['VISTO_ATIVIDADE'].astype(str).str.upper() != "ISENTO"]
-                    tot_vistos_zap = len(d_vistos_zap)
-                    vistos_ok_zap = len(d_vistos_zap[d_vistos_zap['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"])
-                    perc_visto_zap = (vistos_ok_zap / tot_vistos_zap) * 100 if tot_vistos_zap > 0 else 0
-                    bonus_total_zap = d_alu_f['BONUS'].apply(util.sosa_to_float).sum()
 
                 linha_rec = f"• 🔄 Rec. Paralela: {r_nota:.1f}\n" if r_nota > 0 else ""
 
@@ -3162,13 +3151,17 @@ Estou enviando o boletim detalhado do(a) {nome_limpo} referente ao {trim_b} em M
 • C3 (Prova Oficial): {p_nota:.1f}
 {linha_rec}
 🎯 COMPORTAMENTO NA SALA:
-• Presença: {perc_presenca_zap:.0f}% ({faltas_zap} falta(s)).
-• Caderno: Entregou {perc_visto_zap:.0f}% das atividades.
-• Bônus/Punição: {bonus_total_zap:+.1f} pts.
+• Presença: {perc_presenca_hero:.0f}% ({faltas_hero} falta(s)).
+• Caderno: Entregou {perc_visto_hero:.0f}% das atividades.
+• Bônus/Punição: {bonus_total_hero:+.1f} pts.
 
 *Lembrando que os bônus e arredondamentos já estão misturados nas notas C1, C2 e C3, tá bom?*
 Qualquer dúvida, estou à disposição! Um abraço! 🚀"""
-                st.code(msg_zap, language=None)
+            
+            st.code(msg_zap, language=None)
+
+        if st.button("📱 Gerar Extrato para WhatsApp", use_container_width=True):
+            dialog_whatsapp()
 
         st.markdown("---")
 
@@ -3180,63 +3173,43 @@ Qualquer dúvida, estou à disposição! Um abraço! 🚀"""
         
         tabs = st.tabs(abas_bio)
 
-        # --- ABA 1: VISÃO GERAL & ENGAJAMENTO ---
+        # --- ABA 1: VISÃO GERAL & ENGAJAMENTO (SPLIT-SCREEN V201) ---
         with tabs[0]:
-            st.markdown(f"### 🧾 Extrato Analítico de Notas ({trim_b})")
-            with st.container(border=True):
-                if not n_alu_f.empty:
-                    dados_notas =[]
-                    trims_para_exibir =["I Trimestre", "II Trimestre", "III Trimestre"] if trim_b == "Todos" else [trim_b]
-                    for t in trims_para_exibir:
-                        reg = n_alu[n_alu['TRIMESTRE'] == t]
-                        if not reg.empty:
-                            media_f = util.sosa_to_float(reg.iloc[0]['MEDIA_FINAL'])
-                            dados_notas.append({
-                                "Trimestre": t,
-                                "Vistos (Caderno)": util.sosa_to_float(reg.iloc[0]['NOTA_VISTOS']),
-                                "Teste/Trabalho": util.sosa_to_float(reg.iloc[0]['NOTA_TESTE']),
-                                "Prova Oficial": util.sosa_to_float(reg.iloc[0]['NOTA_PROVA']),
-                                "Rec. Paralela": util.sosa_to_float(reg.iloc[0]['NOTA_REC']),
-                                "Média Final": media_f,
-                                "Status": "✅ APROVADO" if media_f >= 6.0 else "⚠️ ABAIXO"
-                            })
-                    if dados_notas:
-                        def style_status_bio(v):
-                            if "APROVADO" in str(v): return 'color: #2ECC71; font-weight: bold;'
-                            return 'color: #E74C3C; font-weight: bold;'
-                        st.dataframe(
-                            pd.DataFrame(dados_notas).style.map(style_status_bio, subset=['Status']).format("{:.1f}", subset=['Vistos (Caderno)', 'Teste/Trabalho', 'Prova Oficial', 'Rec. Paralela', 'Média Final']), 
-                            use_container_width=True, hide_index=True
-                        )
-                    else: st.info(f"📭 Sem notas lançadas para o {trim_b}.")
-                else: st.info(f"📭 Aguardando lançamento de notas no Boletim.")
+            col_v1, col_v2 = st.columns([1.2, 1])
+            
+            with col_v1:
+                st.markdown(f"#### 🧾 Extrato Analítico de Notas")
+                with st.container(border=True):
+                    if not n_alu_f.empty:
+                        dados_notas =[]
+                        trims_para_exibir =["I Trimestre", "II Trimestre", "III Trimestre"] if trim_b == "Todos" else [trim_b]
+                        for t in trims_para_exibir:
+                            reg = n_alu[n_alu['TRIMESTRE'] == t]
+                            if not reg.empty:
+                                media_f = util.sosa_to_float(reg.iloc[0]['MEDIA_FINAL'])
+                                dados_notas.append({
+                                    "Trimestre": t,
+                                    "Vistos": util.sosa_to_float(reg.iloc[0]['NOTA_VISTOS']),
+                                    "Teste": util.sosa_to_float(reg.iloc[0]['NOTA_TESTE']),
+                                    "Prova": util.sosa_to_float(reg.iloc[0]['NOTA_PROVA']),
+                                    "Rec.": util.sosa_to_float(reg.iloc[0]['NOTA_REC']),
+                                    "Média": media_f,
+                                    "Status": "✅ APROVADO" if media_f >= 6.0 else "⚠️ ABAIXO"
+                                })
+                        if dados_notas:
+                            def style_status_bio(v):
+                                if "APROVADO" in str(v): return 'color: #2ECC71; font-weight: bold;'
+                                return 'color: #E74C3C; font-weight: bold;'
+                            st.dataframe(
+                                pd.DataFrame(dados_notas).style.map(style_status_bio, subset=['Status']).format("{:.1f}", subset=['Vistos', 'Teste', 'Prova', 'Rec.', 'Média']), 
+                                use_container_width=True, hide_index=True
+                            )
+                        else: st.info(f"📭 Sem notas lançadas para o {trim_b}.")
+                    else: st.info(f"📭 Aguardando lançamento de notas no Boletim.")
 
-            st.markdown(f"### 📊 Perfil de Engajamento e Comportamento ({trim_b})")
-            with st.container(border=True):
-                col_v1, col_v2 = st.columns([1.2, 1.8])
-                with col_v1:
-                    if not d_alu_f.empty:
-                        d_alu_validas_freq = d_alu_f[~d_alu_f['TAGS'].isin(["DIA NÃO LETIVO", "BONUS_CONSELHO", "SISTEMA_NOTA"])]
-                        total_aulas_presenca = len(d_alu_validas_freq)
-                        faltas = len(d_alu_validas_freq[d_alu_validas_freq['TAGS'] == "AUSÊNCIA"])
-                        presencas = total_aulas_presenca - faltas
-                        perc_presenca = (presencas / total_aulas_presenca) * 100 if total_aulas_presenca > 0 else 0
-                        
-                        d_alu_vistos = d_alu_validas_freq[d_alu_validas_freq['VISTO_ATIVIDADE'].astype(str).str.upper() != "ISENTO"]
-                        total_aulas_visto = len(d_alu_vistos)
-                        vistos = len(d_alu_vistos[d_alu_vistos['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"])
-                        perc_visto = (vistos / total_aulas_visto) * 100 if total_aulas_visto > 0 else 0
-                        
-                        total_bonus_periodo = d_alu_f['BONUS'].apply(util.sosa_to_float).sum()
-                        
-                        st.metric("Assiduidade (Presença)", f"{perc_presenca:.0f}%", f"{faltas} faltas registradas", delta_color="inverse" if faltas > 0 else "normal")
-                        st.progress(perc_presenca / 100)
-                        st.metric("Vistos no Caderno", f"{perc_visto:.0f}%", f"{vistos}/{total_aulas_visto} aulas válidas")
-                        st.metric("Mérito Acumulado (Bônus)", f"{total_bonus_periodo:+.1f} pts")
-                    else: st.info(f"📭 Sem registros de diário para o período.")
-
-                with col_v2:
-                    st.markdown("**🚩 Ocorrências, Bônus e Observações Recentes:**")
+            with col_v2:
+                st.markdown("#### 🚩 Ocorrências e Bônus")
+                with st.container(border=True):
                     if not d_alu_f.empty:
                         mask_obs = (d_alu_f['TAGS'] != "") | (d_alu_f['OBSERVACOES'] != "") | (d_alu_f['BONUS'].apply(util.sosa_to_float) != 0)
                         tags_obs = d_alu_f[mask_obs]
@@ -3264,42 +3237,30 @@ Qualquer dúvida, estou à disposição! Um abraço! 🚀"""
                                 texto_exibicao = f"{emoji} **{row['DATA']}** | {display_tag}{bonus_badge}"
                                 if obs_str: texto_exibicao += f" - *{obs_str}*"
                                 st.caption(texto_exibicao)
-                                
-                            with st.expander("📂 Ver Histórico Completo de Anotações"):
-                                for _, row in tags_obs.iloc[::-1].iterrows():
-                                    tag_str = str(row['TAGS']).upper()
-                                    obs_str = str(row['OBSERVACOES'])
-                                    bonus_val = util.sosa_to_float(row.get('BONUS', 0))
-                                    display_tag = "TRABALHO" if tag_str == "SISTEMA_NOTA" else "INTERVENÇÃO DO PROFESSOR" if tag_str == "BONUS_CONSELHO" else tag_str
-                                    bonus_badge = f" **[{bonus_val:+.1f} pts]**" if bonus_val != 0 else ""
-                                    texto_exibicao = f"**{row['DATA']}** | {display_tag}{bonus_badge}"
-                                    if obs_str: texto_exibicao += f" - {obs_str}"
-                                    st.write(texto_exibicao)
-                                    st.divider()
-                        else: st.success("✅ Nenhuma ocorrência ou anotação registrada.")
+                        else: st.success("✅ Nenhuma ocorrência registrada.")
+                    else: st.info("📭 Sem registros no diário.")
 
-                st.markdown("---")
-                with st.expander("🧾 Extrato Detalhado de Faltas e Vistos (Auditoria)"):
-                    st.info("💡 Use este extrato para responder a alunos questionadores com dados exatos de datas e entregas.")
-                    if not d_alu_f.empty:
-                        c_ext1, c_ext2 = st.columns(2)
-                        with c_ext1:
-                            st.markdown("**📅 Histórico de Faltas**")
-                            faltas_df = d_alu_validas_freq[d_alu_validas_freq['TAGS'] == "AUSÊNCIA"]
-                            if not faltas_df.empty:
-                                for _, r in faltas_df.iterrows(): st.error(f"❌ {r['DATA']} - Ausência registrada")
-                            else: st.success("✅ Nenhuma falta neste período.")
-                        with c_ext2:
-                            st.markdown("**📓 Auditoria de Caderno/Atividades**")
-                            if not d_alu_vistos.empty:
-                                for _, r in d_alu_vistos.iterrows():
-                                    status_visto = str(r['VISTO_ATIVIDADE']).upper()
-                                    if status_visto == "TRUE": st.success(f"✅ {r['DATA']} - Atividade Entregue")
-                                    elif status_visto == "FALSE":
-                                        if r['TAGS'] == "AUSÊNCIA": st.warning(f"⚠️ {r['DATA']} - Não entregou (Faltou no dia)")
-                                        else: st.error(f"❌ {r['DATA']} - Estava presente, mas NÃO entregou")
-                            else: st.info("Nenhuma cobrança de visto neste período.")
-                    else: st.info("Sem dados para gerar o extrato.")
+            with st.expander("🧾 Extrato Detalhado de Faltas e Vistos (Auditoria)"):
+                st.info("💡 Use este extrato para responder a alunos questionadores com dados exatos de datas e entregas.")
+                if not d_alu_f.empty:
+                    c_ext1, c_ext2 = st.columns(2)
+                    with c_ext1:
+                        st.markdown("**📅 Histórico de Faltas**")
+                        faltas_df = d_alu_validas_hero[d_alu_validas_hero['TAGS'] == "AUSÊNCIA"]
+                        if not faltas_df.empty:
+                            for _, r in faltas_df.iterrows(): st.error(f"❌ {r['DATA']} - Ausência registrada")
+                        else: st.success("✅ Nenhuma falta neste período.")
+                    with c_ext2:
+                        st.markdown("**📓 Auditoria de Caderno/Atividades**")
+                        if not d_vistos_hero.empty:
+                            for _, r in d_vistos_hero.iterrows():
+                                status_visto = str(r['VISTO_ATIVIDADE']).upper()
+                                if status_visto == "TRUE": st.success(f"✅ {r['DATA']} - Atividade Entregue")
+                                elif status_visto == "FALSE":
+                                    if r['TAGS'] == "AUSÊNCIA": st.warning(f"⚠️ {r['DATA']} - Não entregou (Faltou no dia)")
+                                    else: st.error(f"❌ {r['DATA']} - Estava presente, mas NÃO entregou")
+                        else: st.info("Nenhuma cobrança de visto neste período.")
+                else: st.info("Sem dados para gerar o extrato.")
 
         # --- ABA 2: EVOLUÇÃO & LACUNAS ---
         with tabs[1]:
@@ -3366,10 +3327,158 @@ Qualquer dúvida, estou à disposição! Um abraço! 🚀"""
                     else: st.success("✅ Domínio total nas habilidades das avaliações realizadas.")
                 else: st.info("📭 Aguardando avaliações escaneadas para gerar o mapa de lacunas.")
 
-        # --- ABA 3: AUDITORIA & TRIBUNAL ---
+        # --- ABA 3: AUDITORIA & TRIBUNAL (MODAL V201) ---
         with tabs[2]:
             st.markdown(f"### 🎯 Histórico de Avaliações (Scanner)")
+            
+            # ⚖️ TRIBUNAL DE RECURSOS MODAL
+            @st.dialog("⚖️ Tribunal de Recursos", width="large")
+            def dialog_tribunal():
+                opcoes_av_tribunal = diag_alu_f['ID_AVALIACAO'].tolist()
+                av_contestada = st.selectbox("1️⃣ Selecione a Avaliação Questionada:", opcoes_av_tribunal, key="trib_av")
+                
+                if av_contestada:
+                    reg_av_trib = diag_alu_f[diag_alu_f['ID_AVALIACAO'] == av_contestada].iloc[0]
+                    respostas_aluno_trib = str(reg_av_trib['RESPOSTAS_ALUNO']).split(';')
+                    link_foto_trib = reg_av_trib.get('LINK_FOTO_DRIVE', '')
+                    
+                    nome_base_av = av_contestada.replace(" (2ª CHAMADA)", "")
+                    if "VARIANTE" in nome_base_av.upper() or "TIPO" in nome_base_av.upper():
+                        tipo_letra = re.search(r'TIPO\s*([A-Z])', nome_base_av, re.IGNORECASE)
+                        letra = tipo_letra.group(1) if tipo_letra else "B"
+                        nome_busca = f"{nome_base_av.split('(')[0].strip()} - TIPO {letra}"
+                    else: nome_busca = nome_base_av
+                        
+                    df_prova_trib = df_aulas[df_aulas['TIPO_MATERIAL'] == nome_busca]
+                    
+                    if not df_prova_trib.empty:
+                        txt_prova_trib = str(df_prova_trib.iloc[0]['CONTEUDO'])
+                        is_pei_trib = is_pei_or_gap and "TIPICO" not in perfil_atual
+                        tag_gab_trib = "GABARITO_PEI" if is_pei_trib else "GABARITO_TEXTO"
+                        tag_grade_trib = "GRADE_DE_CORRECAO_PEI" if is_pei_trib else "GRADE_DE_CORRECAO"
+                        tag_questoes_trib = "PEI" if is_pei_trib else "QUESTOES"
+                        
+                        gab_raw_trib = ai.extrair_tag(txt_prova_trib, tag_gab_trib) or ai.extrair_tag(txt_prova_trib, "GABARITO")
+                        grade_raw_trib = re.sub(r'[*#]', '', ai.extrair_tag(txt_prova_trib, tag_grade_trib) or ai.extrair_tag(txt_prova_trib, "GRADE_DE_CORRECAO"))
+                        questoes_raw_trib = ai.extrair_tag(txt_prova_trib, tag_questoes_trib)
+                        
+                        matches_gab = re.findall(r"(\d+)[\s\.\)\-:]+([A-E])", gab_raw_trib.upper())
+                        if matches_gab: gab_oficial_trib = {int(num): letra for num, letra in matches_gab}
+                        else:
+                            letras = re.findall(r"\b[A-E]\b", gab_raw_trib.upper())
+                            gab_oficial_trib = {i+1: letra for i, letra in enumerate(letras)}
+                            
+                        qtd_questoes_trib = len(gab_oficial_trib)
+                        
+                        q_contestada = st.selectbox("2️⃣ Selecione a Questão:", [f"Questão {i}" for i in range(1, qtd_questoes_trib + 1)], key="trib_q")
+                        q_num_trib = int(q_contestada.split(" ")[1])
+                        
+                        letra_marcada_trib = respostas_aluno_trib[q_num_trib - 1] if q_num_trib <= len(respostas_aluno_trib) else "?"
+                        letra_correta_trib = gab_oficial_trib.get(q_num_trib, "?")
+                        
+                        prefixo_q_trib = "QUEST[AÃ]O\\s*PEI" if is_pei_trib else "QUEST[AÃ]O"
+                        padrao_q_trib = rf"(?si)({prefixo_q_trib}\s*0?{q_num_trib}\b.*?)(?={prefixo_q_trib}\s*0?{q_num_trib+1}\b|GABARITO|$)"
+                        m_q_trib = re.search(padrao_q_trib, questoes_raw_trib)
+                        enunciado_trib = m_q_trib.group(1).strip() if m_q_trib else "Enunciado não localizado."
+                        
+                        padrao_p_trib = rf"(?si){prefixo_q_trib}\s*0?{q_num_trib}\b.*?(?={prefixo_q_trib}\s*0?{q_num_trib+1}\b|GABARITO|RESPOSTAS|$)"
+                        m_p_trib = re.search(padrao_p_trib, grade_raw_trib)
+                        pericia_trib = m_p_trib.group(0).strip() if m_p_trib else "Perícia não localizada."
+                        
+                        st.markdown("#### 📸 Card de Evidências (Para Print)")
+                        with st.container(border=True):
+                            c_ev1, c_ev2 = st.columns([3, 1])
+                            c_ev1.markdown(f"**Estudante:** {nome_limpo} | **Avaliação:** {nome_base_av}")
+                            if "http" in link_foto_trib: c_ev2.link_button("📸 Ver Foto do Gabarito", link_foto_trib, use_container_width=True)
+                            
+                            st.divider()
+                            st.info(preparar_para_leitura(enunciado_trib).replace('\n', '\n\n'))
+                            
+                            c_res1, c_res2 = st.columns(2)
+                            c_res1.error(f"**❌ O aluno marcou:** {letra_marcada_trib}")
+                            c_res2.success(f"**✅ Gabarito Oficial:** {letra_correta_trib}")
+                            
+                            st.warning(f"**🔬 Análise do Erro (Perícia):**\n{preparar_para_leitura(pericia_trib)}")
+                            
+                        st.markdown("#### ⚖️ O Veredito")
+                        c_ver1, c_ver2 = st.columns(2)
+                        
+                        if c_ver1.button("🔴 A Nota Fica (Gerar Defesa Pedagógica)", use_container_width=True):
+                            with st.spinner("Redigindo defesa pedagógica..."):
+                                prompt_defesa = f"VEREDITO: MANTER NOTA.\nALUNO: {nome_limpo}.\nQUESTÃO: {q_num_trib}.\nMARCOU: {letra_marcada_trib}. CORRETA: {letra_correta_trib}.\nPERÍCIA/ERRO: {pericia_trib}.\nENUNCIADO: {enunciado_trib}."
+                                st.session_state.msg_tribunal = ai.gerar_ia("DEFENSOR_PEDAGOGICO", prompt_defesa)
+                                
+                        if c_ver2.button("🟢 O Pai Tem Razão (Corrigir Nota)", use_container_width=True):
+                            st.session_state.modo_correcao_tribunal = True
+                            
+                        if st.session_state.get("modo_correcao_tribunal", False):
+                            with st.container(border=True):
+                                st.success("🛠️ **Modo de Correção Ativado**")
+                                nova_letra = st.selectbox("Qual letra o aluno realmente marcou?", ["A", "B", "C", "D", "E"], index=["A", "B", "C", "D", "E"].index(letra_correta_trib) if letra_correta_trib in ["A", "B", "C", "D", "E"] else 0)
+                                
+                                if st.button("💾 Confirmar Correção e Recalcular Média", type="primary"):
+                                    with st.spinner("Corrigindo gabarito e recalculando boletim..."):
+                                        novas_respostas = respostas_aluno_trib.copy()
+                                        if q_num_trib - 1 < len(novas_respostas): novas_respostas[q_num_trib - 1] = nova_letra
+                                        else: novas_respostas.append(nova_letra)
+                                            
+                                        acertos_novos = sum(1 for i, r in enumerate(novas_respostas) if i+1 in gab_oficial_trib and r == gab_oficial_trib[i+1])
+                                        val_total_prova = util.sosa_to_float(ai.extrair_tag(txt_prova_trib, "VALOR")) or 10.0
+                                        nova_nota_prova = (acertos_novos / qtd_questoes_trib) * val_total_prova if qtd_questoes_trib > 0 else 0.0
+                                        
+                                        try:
+                                            wb = db.conectar()
+                                            ws_gab = wb.worksheet("DB_GABARITOS_ALUNOS")
+                                            dados_gab = ws_gab.get_all_values()
+                                            for i, row in enumerate(dados_gab):
+                                                if i > 0 and db.limpar_id(row[1]) == id_alu and row[4] == av_contestada:
+                                                    ws_gab.update_cell(i+1, 6, ";".join(novas_respostas))
+                                                    ws_gab.update_cell(i+1, 7, util.sosa_to_str(nova_nota_prova))
+                                                    break
+                                        except Exception as e: st.error(f"Erro ao atualizar gabarito: {e}")
+                                            
+                                        try:
+                                            ws_notas = wb.worksheet("DB_NOTAS")
+                                            dados_notas = ws_notas.get_all_values()
+                                            for i, row in enumerate(dados_notas):
+                                                if i > 0 and db.limpar_id(row[0]) == id_alu and row[3] == trim_b:
+                                                    v_n = util.sosa_to_float(row[4])
+                                                    t_n = util.sosa_to_float(row[5])
+                                                    p_n = util.sosa_to_float(row[6])
+                                                    r_n = util.sosa_to_float(row[7])
+                                                    
+                                                    if "TESTE" in av_contestada.upper():
+                                                        t_n = nova_nota_prova
+                                                        ws_notas.update_cell(i+1, 6, util.sosa_to_str(t_n))
+                                                    else:
+                                                        p_n = nova_nota_prova
+                                                        ws_notas.update_cell(i+1, 7, util.sosa_to_str(p_n))
+                                                        
+                                                    nova_media_final = min(10.0, v_n + t_n + p_n)
+                                                    if r_n > 0: nova_media_final = max(nova_media_final, r_n)
+                                                        
+                                                    ws_notas.update_cell(i+1, 9, util.sosa_to_str(nova_media_final))
+                                                    break
+                                        except Exception as e: st.error(f"Erro ao atualizar boletim: {e}")
+                                            
+                                        st.cache_data.clear()
+                                        prompt_retratacao = f"VEREDITO: CORRIGIR NOTA.\nALUNO: {nome_limpo}.\nQUESTÃO: {q_num_trib}.\nNOVA NOTA DA AVALIAÇÃO: {nova_nota_prova:.1f}."
+                                        st.session_state.msg_tribunal = ai.gerar_ia("DEFENSOR_PEDAGOGICO", prompt_retratacao)
+                                        st.session_state.modo_correcao_tribunal = False
+                                        st.rerun()
+                                        
+                        if "msg_tribunal" in st.session_state:
+                            st.markdown("#### 📱 Resposta para o WhatsApp")
+                            st.info("Copie o texto abaixo e envie para o responsável junto com o print do Card de Evidências.")
+                            st.code(st.session_state.msg_tribunal, language=None)
+                    else: st.warning("A prova original não foi encontrada no acervo para realizar a perícia.")
+
             if not diag_alu_f.empty:
+                if st.button("⚖️ Abrir Tribunal de Recursos", type="primary", use_container_width=True):
+                    dialog_tribunal()
+                
+                st.markdown("<br>", unsafe_allow_html=True)
+                
                 diag_alu_f['DATA_DT'] = pd.to_datetime(diag_alu_f['DATA'], format="%d/%m/%Y", errors='coerce')
                 diag_ordenado = diag_alu_f.sort_values(by='DATA_DT', ascending=False)
                 
@@ -3411,150 +3520,6 @@ Qualquer dúvida, estou à disposição! Um abraço! 🚀"""
                     }
                 )
             else: st.info("📭 Nenhuma avaliação escaneada para este aluno no período selecionado.")
-
-            st.markdown("---")
-            st.markdown(f"### ⚖️ Tribunal de Recursos (Atendimento aos Pais)")
-            with st.container(border=True):
-                if not diag_alu_f.empty:
-                    opcoes_av_tribunal = diag_alu_f['ID_AVALIACAO'].tolist()
-                    av_contestada = st.selectbox("1️⃣ Selecione a Avaliação Questionada:", opcoes_av_tribunal, key="trib_av")
-                    
-                    if av_contestada:
-                        reg_av_trib = diag_alu_f[diag_alu_f['ID_AVALIACAO'] == av_contestada].iloc[0]
-                        respostas_aluno_trib = str(reg_av_trib['RESPOSTAS_ALUNO']).split(';')
-                        link_foto_trib = reg_av_trib.get('LINK_FOTO_DRIVE', '')
-                        
-                        nome_base_av = av_contestada.replace(" (2ª CHAMADA)", "")
-                        if "VARIANTE" in nome_base_av.upper() or "TIPO" in nome_base_av.upper():
-                            tipo_letra = re.search(r'TIPO\s*([A-Z])', nome_base_av, re.IGNORECASE)
-                            letra = tipo_letra.group(1) if tipo_letra else "B"
-                            nome_busca = f"{nome_base_av.split('(')[0].strip()} - TIPO {letra}"
-                        else: nome_busca = nome_base_av
-                            
-                        df_prova_trib = df_aulas[df_aulas['TIPO_MATERIAL'] == nome_busca]
-                        
-                        if not df_prova_trib.empty:
-                            txt_prova_trib = str(df_prova_trib.iloc[0]['CONTEUDO'])
-                            is_pei_trib = is_pei_or_gap and "TIPICO" not in perfil_atual
-                            tag_gab_trib = "GABARITO_PEI" if is_pei_trib else "GABARITO_TEXTO"
-                            tag_grade_trib = "GRADE_DE_CORRECAO_PEI" if is_pei_trib else "GRADE_DE_CORRECAO"
-                            tag_questoes_trib = "PEI" if is_pei_trib else "QUESTOES"
-                            
-                            gab_raw_trib = ai.extrair_tag(txt_prova_trib, tag_gab_trib) or ai.extrair_tag(txt_prova_trib, "GABARITO")
-                            grade_raw_trib = re.sub(r'[*#]', '', ai.extrair_tag(txt_prova_trib, tag_grade_trib) or ai.extrair_tag(txt_prova_trib, "GRADE_DE_CORRECAO"))
-                            questoes_raw_trib = ai.extrair_tag(txt_prova_trib, tag_questoes_trib)
-                            
-                            matches_gab = re.findall(r"(\d+)[\s\.\)\-:]+([A-E])", gab_raw_trib.upper())
-                            if matches_gab: gab_oficial_trib = {int(num): letra for num, letra in matches_gab}
-                            else:
-                                letras = re.findall(r"\b[A-E]\b", gab_raw_trib.upper())
-                                gab_oficial_trib = {i+1: letra for i, letra in enumerate(letras)}
-                                
-                            qtd_questoes_trib = len(gab_oficial_trib)
-                            
-                            q_contestada = st.selectbox("2️⃣ Selecione a Questão:", [f"Questão {i}" for i in range(1, qtd_questoes_trib + 1)], key="trib_q")
-                            q_num_trib = int(q_contestada.split(" ")[1])
-                            
-                            letra_marcada_trib = respostas_aluno_trib[q_num_trib - 1] if q_num_trib <= len(respostas_aluno_trib) else "?"
-                            letra_correta_trib = gab_oficial_trib.get(q_num_trib, "?")
-                            
-                            prefixo_q_trib = "QUEST[AÃ]O\\s*PEI" if is_pei_trib else "QUEST[AÃ]O"
-                            padrao_q_trib = rf"(?si)({prefixo_q_trib}\s*0?{q_num_trib}\b.*?)(?={prefixo_q_trib}\s*0?{q_num_trib+1}\b|GABARITO|$)"
-                            m_q_trib = re.search(padrao_q_trib, questoes_raw_trib)
-                            enunciado_trib = m_q_trib.group(1).strip() if m_q_trib else "Enunciado não localizado."
-                            
-                            padrao_p_trib = rf"(?si){prefixo_q_trib}\s*0?{q_num_trib}\b.*?(?={prefixo_q_trib}\s*0?{q_num_trib+1}\b|GABARITO|RESPOSTAS|$)"
-                            m_p_trib = re.search(padrao_p_trib, grade_raw_trib)
-                            pericia_trib = m_p_trib.group(0).strip() if m_p_trib else "Perícia não localizada."
-                            
-                            st.markdown("#### 📸 Card de Evidências (Para Print)")
-                            with st.container(border=True):
-                                c_ev1, c_ev2 = st.columns([3, 1])
-                                c_ev1.markdown(f"**Estudante:** {nome_limpo} | **Avaliação:** {nome_base_av}")
-                                if "http" in link_foto_trib: c_ev2.link_button("📸 Ver Foto do Gabarito", link_foto_trib, use_container_width=True)
-                                
-                                st.divider()
-                                st.info(preparar_para_leitura(enunciado_trib).replace('\n', '\n\n'))
-                                
-                                c_res1, c_res2 = st.columns(2)
-                                c_res1.error(f"**❌ O aluno marcou:** {letra_marcada_trib}")
-                                c_res2.success(f"**✅ Gabarito Oficial:** {letra_correta_trib}")
-                                
-                                st.warning(f"**🔬 Análise do Erro (Perícia):**\n{preparar_para_leitura(pericia_trib)}")
-                                
-                            st.markdown("#### ⚖️ O Veredito")
-                            c_ver1, c_ver2 = st.columns(2)
-                            
-                            if c_ver1.button("🔴 A Nota Fica (Gerar Defesa Pedagógica)", use_container_width=True):
-                                with st.spinner("Redigindo defesa pedagógica..."):
-                                    prompt_defesa = f"VEREDITO: MANTER NOTA.\nALUNO: {nome_limpo}.\nQUESTÃO: {q_num_trib}.\nMARCOU: {letra_marcada_trib}. CORRETA: {letra_correta_trib}.\nPERÍCIA/ERRO: {pericia_trib}.\nENUNCIADO: {enunciado_trib}."
-                                    st.session_state.msg_tribunal = ai.gerar_ia("DEFENSOR_PEDAGOGICO", prompt_defesa)
-                                    
-                            if c_ver2.button("🟢 O Pai Tem Razão (Corrigir Nota)", use_container_width=True):
-                                st.session_state.modo_correcao_tribunal = True
-                                
-                            if st.session_state.get("modo_correcao_tribunal", False):
-                                with st.container(border=True):
-                                    st.success("🛠️ **Modo de Correção Ativado**")
-                                    nova_letra = st.selectbox("Qual letra o aluno realmente marcou?", ["A", "B", "C", "D", "E"], index=["A", "B", "C", "D", "E"].index(letra_correta_trib) if letra_correta_trib in ["A", "B", "C", "D", "E"] else 0)
-                                    
-                                    if st.button("💾 Confirmar Correção e Recalcular Média", type="primary"):
-                                        with st.spinner("Corrigindo gabarito e recalculando boletim..."):
-                                            novas_respostas = respostas_aluno_trib.copy()
-                                            if q_num_trib - 1 < len(novas_respostas): novas_respostas[q_num_trib - 1] = nova_letra
-                                            else: novas_respostas.append(nova_letra)
-                                                
-                                            acertos_novos = sum(1 for i, r in enumerate(novas_respostas) if i+1 in gab_oficial_trib and r == gab_oficial_trib[i+1])
-                                            val_total_prova = util.sosa_to_float(ai.extrair_tag(txt_prova_trib, "VALOR")) or 10.0
-                                            nova_nota_prova = (acertos_novos / qtd_questoes_trib) * val_total_prova if qtd_questoes_trib > 0 else 0.0
-                                            
-                                            try:
-                                                wb = db.conectar()
-                                                ws_gab = wb.worksheet("DB_GABARITOS_ALUNOS")
-                                                dados_gab = ws_gab.get_all_values()
-                                                for i, row in enumerate(dados_gab):
-                                                    if i > 0 and db.limpar_id(row[1]) == id_alu and row[4] == av_contestada:
-                                                        ws_gab.update_cell(i+1, 6, ";".join(novas_respostas))
-                                                        ws_gab.update_cell(i+1, 7, util.sosa_to_str(nova_nota_prova))
-                                                        break
-                                            except Exception as e: st.error(f"Erro ao atualizar gabarito: {e}")
-                                                
-                                            try:
-                                                ws_notas = wb.worksheet("DB_NOTAS")
-                                                dados_notas = ws_notas.get_all_values()
-                                                for i, row in enumerate(dados_notas):
-                                                    if i > 0 and db.limpar_id(row[0]) == id_alu and row[3] == trim_b:
-                                                        v_n = util.sosa_to_float(row[4])
-                                                        t_n = util.sosa_to_float(row[5])
-                                                        p_n = util.sosa_to_float(row[6])
-                                                        r_n = util.sosa_to_float(row[7])
-                                                        
-                                                        if "TESTE" in av_contestada.upper():
-                                                            t_n = nova_nota_prova
-                                                            ws_notas.update_cell(i+1, 6, util.sosa_to_str(t_n))
-                                                        else:
-                                                            p_n = nova_nota_prova
-                                                            ws_notas.update_cell(i+1, 7, util.sosa_to_str(p_n))
-                                                            
-                                                        nova_media_final = min(10.0, v_n + t_n + p_n)
-                                                        if r_n > 0: nova_media_final = max(nova_media_final, r_n)
-                                                            
-                                                        ws_notas.update_cell(i+1, 9, util.sosa_to_str(nova_media_final))
-                                                        break
-                                            except Exception as e: st.error(f"Erro ao atualizar boletim: {e}")
-                                                
-                                            st.cache_data.clear()
-                                            prompt_retratacao = f"VEREDITO: CORRIGIR NOTA.\nALUNO: {nome_limpo}.\nQUESTÃO: {q_num_trib}.\nNOVA NOTA DA AVALIAÇÃO: {nova_nota_prova:.1f}."
-                                            st.session_state.msg_tribunal = ai.gerar_ia("DEFENSOR_PEDAGOGICO", prompt_retratacao)
-                                            st.session_state.modo_correcao_tribunal = False
-                                            st.rerun()
-                                            
-                            if "msg_tribunal" in st.session_state:
-                                st.markdown("#### 📱 Resposta para o WhatsApp")
-                                st.info("Copie o texto abaixo e envie para o responsável junto com o print do Card de Evidências.")
-                                st.code(st.session_state.msg_tribunal, language=None)
-                        else: st.warning("A prova original não foi encontrada no acervo para realizar a perícia.")
-                else: pass 
 
         # --- ABA 4: DOSSIÊ PEI (SÓ APARECE SE FOR PEI) ---
         if is_pei_or_gap:
