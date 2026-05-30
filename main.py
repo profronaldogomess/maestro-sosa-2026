@@ -577,11 +577,22 @@ if menu == "📅 Planejamento (Ponto ID)":
                     foco_a2 = c_d2.text_area("Foco da Aula 2:", placeholder="Ex: Fazer exercícios...", height=80)
                     foco_sab = c_d3.text_area("Foco do Sábado Letivo:", placeholder="Ex: Oficina prática...", height=80)
 
-            if st.button("Gerar Planejamento com IA", use_container_width=True, type="primary"):
-                with st.spinner("Analisando matriz e arquitetando o plano..."):
-                    if modo_p == "Manual (Matriz)": diretriz_base = "MÉTODO MANUAL: Baseie-se na Matriz Curricular."
-                    elif modo_p == "Links da Web": diretriz_base = f"MÉTODO WEB: Use estes links:\n{links_web_texto}"
-                    else: diretriz_base = f"MÉTODO LIVRO: Use o PDF anexo. PÁGINAS: {base_didatica_info}."
+            if st.button("🧠 Iniciar Motor de IA: Gerar Planejamento", use_container_width=True, type="primary"):
+                # 🚨 UX DE ELITE: Substitui o spinner cego por um status passo a passo
+                with st.status("🚀 Iniciando Protocolo de Planejamento...", expanded=True) as status:
+                    
+                    status.write("📚 Coletando base didática e diretrizes...")
+                    
+                    # 🚨 OTIMIZAÇÃO DE TOKENS: Só liga a internet se for estritamente necessário
+                    precisa_de_internet = False
+                    
+                    if modo_p == "Manual (Matriz)": 
+                        diretriz_base = "MÉTODO MANUAL: Baseie-se na Matriz Curricular."
+                    elif modo_p == "Links da Web": 
+                        diretriz_base = f"MÉTODO WEB: Use estes links:\n{links_web_texto}"
+                        precisa_de_internet = True
+                    else: 
+                        diretriz_base = f"MÉTODO LIVRO: Use o PDF anexo. PÁGINAS: {base_didatica_info}."
 
                     prompt = (
                         f"TIPO: {tipo_semana}\n{diretriz_base}\n"
@@ -591,9 +602,22 @@ if menu == "📅 Planejamento (Ponto ID)":
                         f"MATRIZ OFICIAL:\n{ctx_ia}"
                     )
                     
-                    st.session_state.p_temp = ai.gerar_ia("PLANE_PEDAGOGICO", prompt, url_drive=uri_livro_drive, usar_busca=True)
-                    st.session_state.p_meta = {"semana": sem_limpa, "trimestre": trim_atual, "ano": ano_str_busca, "base": base_didatica_info}
-                    st.rerun()
+                    status.write("🧠 Maestro Sosa está redigindo o plano (Isso leva cerca de 10 segundos)...")
+                    
+                    # Chama a IA com a trava de internet ativada/desativada
+                    resultado_ia = ai.gerar_ia("PLANE_PEDAGOGICO", prompt, url_drive=uri_livro_drive, usar_busca=precisa_de_internet)
+                    
+                    if "Erro" in resultado_ia or "⚠️" in resultado_ia:
+                        status.update(label="❌ Falha na comunicação com a IA.", state="error")
+                        st.error(resultado_ia)
+                    else:
+                        status.write("✅ Plano arquitetado com sucesso! Montando interface de revisão...")
+                        st.session_state.p_temp = resultado_ia
+                        st.session_state.p_meta = {"semana": sem_limpa, "trimestre": trim_atual, "ano": ano_str_busca, "base": base_didatica_info}
+                        
+                        status.update(label="🎉 Planejamento Concluído!", state="complete")
+                        time.sleep(1) # Dá 1 segundo para o usuário ler que deu certo antes de recarregar
+                        st.rerun()
 
             # --- EDITOR DO PLANO GERADO ---
             if "p_temp" in st.session_state:
