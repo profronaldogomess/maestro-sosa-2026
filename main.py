@@ -390,7 +390,7 @@ if menu == "📅 Planejamento (Ponto ID)":
     ])
     
     # ==============================================================================
-    # ABA 1: NOVO PLANO (REVELAÇÃO PROGRESSIVA)
+    # ABA 1: NOVO PLANO (REVELAÇÃO PROGRESSIVA E CARGA HORÁRIA)
     # ==============================================================================
     with tab_gerar:
         with st.container(border=True):
@@ -422,6 +422,14 @@ if menu == "📅 Planejamento (Ponto ID)":
                 "Sonda de Proficiência",
                 "Aula Aberta (Dinâmicas e Eventos)"
             ], key=f"gate_tipo_{v}")
+            
+            st.markdown("---")
+            # 🚨 RESTAURAÇÃO: SELETOR DE CARGA HORÁRIA
+            carga_horaria = st.radio(
+                "Carga Horária da Semana:", 
+                ["1 Aula (Feriado/Evento)", "2 Aulas (Semana Normal)", "3 Aulas (+ Sábado Letivo)"], 
+                index=1, horizontal=True, key=f"carga_{v}"
+            )
 
         # ------------------------------------------------------------------------------
         # ROTA 1: BUROCRACIA PADRONIZADA (SEM GASTO DE IA)
@@ -434,11 +442,13 @@ if menu == "📅 Planejamento (Ponto ID)":
                 if "Provas" in tipo_semana:
                     texto_padrao = f"Avaliação Global. Ocorrerão provas de diversas disciplinas conforme calendário da coordenação. Foco em gestão de tempo e inteligência emocional."
                     aula_1_txt = "Organização das fileiras. Leitura das instruções gerais. Aplicação do instrumento avaliativo com monitoramento ativo."
-                    aula_2_txt = "Continuação da aplicação (se necessário) ou recolhimento dos instrumentos."
+                    aula_2_txt = "Continuação da aplicação (se necessário) ou recolhimento dos instrumentos." if "1 Aula" not in carga_horaria else "N/A"
+                    aula_sab_txt = "Plantão tira-dúvidas ou aplicação de exames pendentes." if "3 Aulas" in carga_horaria else "N/A"
                 else:
                     texto_padrao = f"Análise de Erros e Recuperação Paralela. Foco nos tópicos com menor índice de acerto no Raio-X da turma."
                     aula_1_txt = "Entrega dos resultados da avaliação. Correção comentada no quadro das questões com menor índice de acerto (Mapa de Calor)."
-                    aula_2_txt = "Aplicação do instrumento de Recuperação Paralela para os alunos elegíveis. Atividade de aprofundamento para os alunos já aprovados."
+                    aula_2_txt = "Aplicação do instrumento de Recuperação Paralela para os alunos elegíveis. Atividade de aprofundamento para os alunos já aprovados." if "1 Aula" not in carga_horaria else "N/A"
+                    aula_sab_txt = "Continuação da recuperação paralela ou nivelamento de base." if "3 Aulas" in carga_horaria else "N/A"
 
                 st.text_area("Resumo do Plano:", texto_padrao, disabled=True)
                 
@@ -447,11 +457,15 @@ if menu == "📅 Planejamento (Ponto ID)":
                         nome_arquivo = f"PLANO_{ano_str_busca.replace('º','')}_{sem_limpa.replace(' ', '')}"
                         db.excluir_plano_completo(sem_limpa, ano_str_busca)
                         
+                        metodologia_docx = f"AULA 1:\n{aula_1_txt}"
+                        if aula_2_txt != "N/A": metodologia_docx += f"\n\nAULA 2:\n{aula_2_txt}"
+                        if aula_sab_txt != "N/A": metodologia_docx += f"\n\nSÁBADO LETIVO:\n{aula_sab_txt}"
+                        
                         dados_docx = {
                             "geral": tipo_semana.upper(), "especificos": texto_padrao, 
                             "objetivos": "Cumprimento do calendário letivo oficial.", 
                             "recursos": "Instrumentos Avaliativos", 
-                            "metodologia": f"AULA 1:\n{aula_1_txt}\n\nAULA 2:\n{aula_2_txt}",
+                            "metodologia": metodologia_docx,
                             "avaliacao": "Correção e análise de resultados.", 
                             "pei": "Acompanhamento individualizado e tempo estendido conforme necessidade."
                         }
@@ -459,7 +473,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                         doc_io = exporter.gerar_docx_plano_pedagogico_ELITE(nome_arquivo, dados_docx, {"ano": ano_str_busca, "semana": sem_limpa, "trimestre": trim_atual})
                         link_drive = db.subir_e_converter_para_google_docs(doc_io, nome_arquivo, trimestre=trim_atual, categoria=ano_str_busca, semana=sem_limpa, modo="PLANEJAMENTO")
                         
-                        final_txt = f"[OBJETO_CONHECIMENTO] {tipo_semana.upper()} \n[CONTEUDOS_ESPECIFICOS] {texto_padrao} \n[AULA_1] {aula_1_txt} \n[AULA_2] {aula_2_txt} \n--- LINK DRIVE --- {link_drive}"
+                        final_txt = f"[OBJETO_CONHECIMENTO] {tipo_semana.upper()} \n[CONTEUDOS_ESPECIFICOS] {texto_padrao} \n[AULA_1] {aula_1_txt} \n[AULA_2] {aula_2_txt} \n[SABADO_LETIVO] {aula_sab_txt} \n--- LINK DRIVE --- {link_drive}"
                         db.salvar_no_banco("DB_PLANOS", [datetime.now().strftime("%d/%m/%Y"), sem_limpa, ano_str_busca, trim_atual, "PRODUZIDO", final_txt, link_drive])
                         st.success("Plano salvo com sucesso!"); time.sleep(1); st.rerun()
 
@@ -510,7 +524,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                             doc_io = exporter.gerar_docx_plano_pedagogico_ELITE(nome_arquivo, dados_docx, {"ano": ano_str_busca, "semana": sem_limpa, "trimestre": trim_atual})
                             link_drive = db.subir_e_converter_para_google_docs(doc_io, nome_arquivo, trimestre=trim_atual, categoria=ano_str_busca, semana=sem_limpa, modo="PLANEJAMENTO")
                             
-                            final_txt = f"[OBJETO_CONHECIMENTO] {tipo_semana.upper()} \n[CONTEUDOS_ESPECIFICOS] {ativo_selecionado} \n[AULA_1] {roteiro_docx} \n[AULA_2] N/A \n--- LINK DRIVE --- {link_drive}"
+                            final_txt = f"[OBJETO_CONHECIMENTO] {tipo_semana.upper()} \n[CONTEUDOS_ESPECIFICOS] {ativo_selecionado} \n[AULA_1] {roteiro_docx} \n[AULA_2] N/A \n[SABADO_LETIVO] N/A \n--- LINK DRIVE --- {link_drive}"
                             db.salvar_no_banco("DB_PLANOS", [datetime.now().strftime("%d/%m/%Y"), sem_limpa, ano_str_busca, trim_atual, "PRODUZIDO", final_txt, link_drive])
                             st.success("Logística salva!"); time.sleep(1); st.rerun()
 
@@ -547,9 +561,21 @@ if menu == "📅 Planejamento (Ponto ID)":
 
             with st.container(border=True):
                 st.markdown("#### 3. Diretrizes de Aula")
-                c_d1, c_d2 = st.columns(2)
-                foco_a1 = c_d1.text_area("Foco da Aula 1:", placeholder="Ex: Explicar perímetro...", height=80)
-                foco_a2 = c_d2.text_area("Foco da Aula 2:", placeholder="Ex: Fazer exercícios da página 15...", height=80)
+                
+                foco_a1, foco_a2, foco_sab = "N/A", "N/A", "N/A"
+                
+                # 🚨 CAIXAS DINÂMICAS BASEADAS NA CARGA HORÁRIA
+                if "1 Aula" in carga_horaria:
+                    foco_a1 = st.text_area("Foco da Aula 1:", placeholder="Ex: Explicar perímetro...", height=80)
+                elif "2 Aulas" in carga_horaria:
+                    c_d1, c_d2 = st.columns(2)
+                    foco_a1 = c_d1.text_area("Foco da Aula 1:", placeholder="Ex: Explicar perímetro...", height=80)
+                    foco_a2 = c_d2.text_area("Foco da Aula 2:", placeholder="Ex: Fazer exercícios da página 15...", height=80)
+                else:
+                    c_d1, c_d2, c_d3 = st.columns(3)
+                    foco_a1 = c_d1.text_area("Foco da Aula 1:", placeholder="Ex: Explicar perímetro...", height=80)
+                    foco_a2 = c_d2.text_area("Foco da Aula 2:", placeholder="Ex: Fazer exercícios...", height=80)
+                    foco_sab = c_d3.text_area("Foco do Sábado Letivo:", placeholder="Ex: Oficina prática...", height=80)
 
             if st.button("Gerar Planejamento com IA", use_container_width=True, type="primary"):
                 with st.spinner("Analisando matriz e arquitetando o plano..."):
@@ -560,7 +586,8 @@ if menu == "📅 Planejamento (Ponto ID)":
                     prompt = (
                         f"TIPO: {tipo_semana}\n{diretriz_base}\n"
                         f"SÉRIE: {ano_p}º Ano. SEMANA: {sem_limpa}. TRIMESTRE: {trim_atual}.\n"
-                        f"DIRETRIZ AULA 1: {foco_a1}\nDIRETRIZ AULA 2: {foco_a2}\n"
+                        f"CARGA HORÁRIA: {carga_horaria}.\n"
+                        f"DIRETRIZ AULA 1: {foco_a1}\nDIRETRIZ AULA 2: {foco_a2}\nDIRETRIZ SÁBADO: {foco_sab}\n"
                         f"MATRIZ OFICIAL:\n{ctx_ia}"
                     )
                     
@@ -589,19 +616,25 @@ if menu == "📅 Planejamento (Ponto ID)":
                 ed_espec = st.text_area("Conteúdos Específicos:", ai.extrair_tag(txt_bruto, "CONTEUDOS_ESPECIFICOS"))
                 ed_objs = st.text_area("Objetivos de Aprendizagem:", ai.extrair_tag(txt_bruto, "OBJETIVOS_ENSINO"))
                 
-                c_a1, c_a2 = st.columns(2)
+                # 🚨 EDITOR DINÂMICO BASEADO NA CARGA HORÁRIA
+                c_a1, c_a2, c_a3 = st.columns(3)
                 ed_a1 = c_a1.text_area("AULA 1:", ai.extrair_tag(txt_bruto, "AULA_1"), height=150)
                 ed_a2 = c_a2.text_area("AULA 2:", ai.extrair_tag(txt_bruto, "AULA_2"), height=150)
+                ed_sab = c_a3.text_area("SÁBADO LETIVO:", ai.extrair_tag(txt_bruto, "SABADO_LETIVO"), height=150)
                 
                 if st.button("Salvar e Enviar para Produção", use_container_width=True, type="primary"):
                     with st.status("Gerando DOCX e Sincronizando...") as status:
                         nome_arquivo = f"PLANO_{meta.get('ano').replace('º','')}_{meta.get('semana').replace(' ', '')}"
                         db.excluir_plano_completo(meta.get('semana'), meta.get('ano'))
                         
+                        metodologia_docx = f"AULA 01:\n{ed_a1}"
+                        if "N/A" not in ed_a2.upper() and len(ed_a2) > 5: metodologia_docx += f"\n\nAULA 02:\n{ed_a2}"
+                        if "N/A" not in ed_sab.upper() and len(ed_sab) > 5: metodologia_docx += f"\n\nSÁBADO LETIVO:\n{ed_sab}"
+                        
                         dados_docx = {
                             "geral": ed_geral, "especificos": ed_espec, "objetivos": ed_objs, 
                             "recursos": meta.get('base'), 
-                            "metodologia": f"AULA 01:\n{ed_a1}\n\nAULA 02:\n{ed_a2}",
+                            "metodologia": metodologia_docx,
                             "avaliacao": ai.extrair_tag(txt_bruto, "AVALIACAO_DE_MERITO"), 
                             "pei": ai.extrair_tag(txt_bruto, "ESTRATEGIA_DUA_PEI")
                         }
@@ -609,7 +642,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                         doc_io = exporter.gerar_docx_plano_pedagogico_ELITE(nome_arquivo, dados_docx, {"ano": meta.get('ano'), "semana": meta.get('semana'), "trimestre": meta.get('trimestre')})
                         link_drive = db.subir_e_converter_para_google_docs(doc_io, nome_arquivo, trimestre=meta.get('trimestre'), categoria=meta.get('ano'), semana=meta.get('semana'), modo="PLANEJAMENTO")
                         
-                        final_txt = f"[HABILIDADE_BNCC] {ed_hab} \n[OBJETO_CONHECIMENTO] {ed_geral} \n[CONTEUDOS_ESPECIFICOS] {ed_espec} \n[AULA_1] {ed_a1} \n[AULA_2] {ed_a2} \n--- LINK DRIVE --- {link_drive}"
+                        final_txt = f"[HABILIDADE_BNCC] {ed_hab} \n[OBJETO_CONHECIMENTO] {ed_geral} \n[CONTEUDOS_ESPECIFICOS] {ed_espec} \n[AULA_1] {ed_a1} \n[AULA_2] {ed_a2} \n[SABADO_LETIVO] {ed_sab} \n--- LINK DRIVE --- {link_drive}"
                         db.salvar_no_banco("DB_PLANOS", [datetime.now().strftime("%d/%m/%Y"), meta.get('semana'), meta.get('ano'), meta.get('trimestre'), "HUB_ATIVO", final_txt, link_drive])
                         
                         status.update(label="Plano Sincronizado!", state="complete")
