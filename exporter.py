@@ -963,9 +963,9 @@ def gerar_docx_pei_oficial(nome_arquivo, dados_aluno, habilidades, curriculo_df)
         return file_stream
     
 # ==============================================================================
-# 10. EXPORTADOR DE PLANEJAMENTO TRIMESTRAL (MACRO-SOSA)
+# 10. EXPORTADOR DE PLANEJAMENTO TRIMESTRAL (MACRO-SOSA V201)
 # ==============================================================================
-def gerar_docx_planejamento_trimestral(nome_arquivo, info, df_trimestre, config, lista_bncc):
+def gerar_docx_planejamento_trimestral(nome_arquivo, info, dados_tabela):
     file_stream = io.BytesIO()
     try:
         doc = Document()
@@ -982,42 +982,33 @@ def gerar_docx_planejamento_trimestral(nome_arquivo, info, df_trimestre, config,
         section.bottom_margin = Inches(0.5)
 
         style = doc.styles['Normal']
-        style.font.name = 'Times New Roman'
-        style.font.size = Pt(10)
+        style.font.name = 'Arial'
+        style.font.size = Pt(9)
 
         # --- CABEÇALHO OFICIAL ---
-        logo_path = "logo_escola.png" if os.path.exists("logo_escola.png") else "logo.png"
-        if os.path.exists(logo_path):
-            p_logo = doc.add_paragraph()
-            p_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            p_logo.add_run().add_picture(logo_path, width=Inches(0.8))
-
         p_cab = doc.add_paragraph()
         p_cab.alignment = WD_ALIGN_PARAGRAPH.CENTER
         run_esc = p_cab.add_run("ESCOLA MUNICIPAL FLÁVIO JOSÉ SIMÕES COSTA\n")
         run_esc.bold = True
         run_esc.font.size = Pt(12)
         
-        run_tit = p_cab.add_run(f"PLANEJAMENTO DO {info['trimestre'].upper()} - 2026\n")
+        run_tit = p_cab.add_run(f"PLANEJAMENTO TRIMESTRAL - {info['trimestre'].upper()} / 2026\n")
         run_tit.bold = True
         run_tit.font.size = Pt(11)
         
-        run_sub = p_cab.add_run(f"COMPONENTE CURRICULAR: MATEMÁTICA          PROFESSOR: RONALDO GOMES")
+        run_sub = p_cab.add_run(f"COMPONENTE CURRICULAR: MATEMÁTICA   |   SÉRIE: {info['ano']}   |   PROFESSOR: RONALDO GOMES")
         run_sub.bold = True
-        run_sub.font.size = Pt(11)
         
         doc.add_paragraph()
 
-        # --- TABELA DE 7 COLUNAS ---
-        table = doc.add_table(rows=2, cols=7)
+        # --- TABELA OFICIAL ---
+        table = doc.add_table(rows=1, cols=4)
         table.style = 'Table Grid'
         
-        # Ajuste de larguras aproximadas para Paisagem
-        widths = [Inches(0.8), Inches(1.8), Inches(1.0), Inches(2.2), Inches(1.8), Inches(1.0), Inches(1.4)]
-        for i, w in enumerate(widths): 
-            table.columns[i].width = w
+        widths = [Inches(1.5), Inches(3.5), Inches(2.0), Inches(3.0)]
+        for i, w in enumerate(widths): table.columns[i].width = w
 
-        headers = ['Turma', 'Conteúdos', 'Habilidades', 'Objetivos', 'Metodologia', 'Recurso', 'Avaliação']
+        headers = ['EIXO TEMÁTICO', 'CONTEÚDOS PROGRAMÁTICOS', 'HABILIDADES (BNCC)', 'METODOLOGIA APLICADA']
         for i, h in enumerate(headers):
             cell = table.cell(0, i)
             cell.text = h
@@ -1025,49 +1016,17 @@ def gerar_docx_planejamento_trimestral(nome_arquivo, info, df_trimestre, config,
             cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
             
         # --- PREENCHIMENTO DOS DADOS ---
-        row_cells = table.rows[1].cells
-        
-        # 1. Turma
-        row_cells[0].text = info['turmas']
-        
-        # 2. Conteúdos (Extraídos do Banco)
-        c_cont = row_cells[1]
-        c_cont.text = ""
-        for item in df_trimestre['CONTEUDO_ESPECIFICO'].unique():
-            if str(item).strip():
-                p = c_cont.add_paragraph(f"• {item}")
-                p.paragraph_format.space_after = Pt(2)
+        for row_data in dados_tabela:
+            row_cells = table.add_row().cells
+            row_cells[0].text = row_data['eixo']
+            row_cells[1].text = row_data['conteudos']
+            row_cells[2].text = row_data['habilidades']
+            row_cells[3].text = row_data['metodologia']
             
-        # 3. Habilidades (Códigos BNCC Extraídos via Regex)
-        c_hab = row_cells[2]
-        c_hab.text = ""
-        if lista_bncc:
-            for code in lista_bncc:
-                p = c_hab.add_paragraph(f"• {code}")
-                p.paragraph_format.space_after = Pt(2)
-        else:
-            c_hab.text = "Códigos BNCC não localizados."
-            
-        # 4. Objetivos (Extraídos do Banco)
-        c_obj = row_cells[3]
-        c_obj.text = ""
-        for item in df_trimestre['OBJETIVOS'].unique():
-            if str(item).strip():
-                p = c_obj.add_paragraph(f"• {item}")
-                p.paragraph_format.space_after = Pt(2)
-            
-        # 5, 6, 7. Textos Fixos Configuráveis
-        row_cells[4].text = config['metodologia']
-        row_cells[5].text = config['recursos']
-        row_cells[6].text = config['avaliacao']
-        
-        # Formatação final da tabela
-        for row in table.rows:
-            for cell in row.cells:
+            for cell in row_cells:
                 for p in cell.paragraphs:
-                    for run in p.runs:
-                        run.font.size = Pt(9)
-                        
+                    p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+                    
         doc.save(file_stream)
         file_stream.seek(0)
         return file_stream
