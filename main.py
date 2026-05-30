@@ -4844,7 +4844,7 @@ elif menu == "👥 Gestão da Turma":
                     else: st.info("Nenhuma aula registrada.")
 
     # ==============================================================================
-    # 🧠 ABA 2: INTELIGÊNCIA DA TURMA (RADIOGRAFIA + EVASÃO + SENSOR)
+    # 🧠 ABA 2: INTELIGÊNCIA DA TURMA (DASHBOARD COMPACTO E FEED DE AÇÕES)
     # ==============================================================================
     with tab_inteligencia:
         st.markdown("### 🧠 Radiografia Cognitiva e Saúde da Turma")
@@ -4894,7 +4894,7 @@ elif menu == "👥 Gestão da Turma":
                     c_k2.metric("📓 Engajamento", f"{taxa_engajamento:.1f}%")
                     c_k3.metric("📈 Média Provas", f"{media_geral_av:.1f}")
 
-                # 2. SPLIT-SCREEN: UTI PEDAGÓGICA vs RADAR DE EVASÃO
+                # 2. SPLIT-SCREEN: UTI PEDAGÓGICA vs RADAR DE EVASÃO (Tabelas Compactas)
                 st.markdown("---")
                 col_uti, col_evasao = st.columns(2)
                 
@@ -4905,10 +4905,18 @@ elif menu == "👥 Gestão da Turma":
                         alunos_uti = []
                         for _, r in df_n_trim.iterrows():
                             media_f = util.sosa_to_float(r['MEDIA_FINAL'])
-                            if media_f < 6.0: alunos_uti.append({"Nome": r['NOME_ALUNO'], "Média": media_f, "Falta": 6.0 - media_f})
+                            if media_f < 6.0: alunos_uti.append({"Estudante": r['NOME_ALUNO'], "Média": media_f, "Falta": 6.0 - media_f})
                         
                         if alunos_uti:
-                            for u in alunos_uti: st.error(f"**{u['Nome']}** - Média: {u['Média']:.1f} (Precisa de +{u['Falta']:.1f})")
+                            df_uti = pd.DataFrame(alunos_uti).sort_values(by="Média")
+                            st.dataframe(
+                                df_uti, hide_index=True, use_container_width=True, height=250,
+                                column_config={
+                                    "Estudante": st.column_config.TextColumn(width="medium"),
+                                    "Média": st.column_config.NumberColumn(format="%.1f"),
+                                    "Falta": st.column_config.ProgressColumn("Precisa de", format="%.1f", min_value=0.0, max_value=6.0)
+                                }
+                            )
                         else: st.success("🎉 Nenhum aluno em recuperação!")
                     else: st.info("Aguardando consolidação de notas.")
 
@@ -4923,56 +4931,78 @@ elif menu == "👥 Gestão da Turma":
                         stats_evasao = []
                         for aluno in alunos_rad['NOME_ALUNO'].tolist():
                             df_aluno = df_d_clean[(df_d_clean['NOME_ALUNO'] == aluno) & (~df_d_clean['DATA'].isin(dias_nao_letivos))]
-                            faltas_a = len(df_aluno[df_aluno['TAGS'] == "AUSÊNCIA"])
+                            faltas_a = len(df_aluno[df_aluno['STATUS'] == 'F']) if 'STATUS' in df_aluno.columns else len(df_aluno[df_aluno['TAGS'] == 'AUSÊNCIA'])
                             perc_falta = (faltas_a / total_aulas_validas) * 100 if total_aulas_validas > 0 else 0
-                            if perc_falta >= 25: stats_evasao.append({"Nome": aluno, "Faltas": faltas_a, "Perc": perc_falta})
+                            if perc_falta >= 25: stats_evasao.append({"Estudante": aluno, "Faltas": faltas_a, "Ausência": perc_falta})
                                 
                         if stats_evasao:
-                            for e in sorted(stats_evasao, key=lambda x: x['Perc'], reverse=True):
-                                if e['Perc'] == 100: st.error(f"👻 **{e['Nome']}** - Fantasma (Nunca Veio)")
-                                else: st.warning(f"⚠️ **{e['Nome']}** - {e['Faltas']} faltas ({e['Perc']:.0f}%)")
+                            df_evasao = pd.DataFrame(stats_evasao).sort_values(by="Ausência", ascending=False)
+                            st.dataframe(
+                                df_evasao, hide_index=True, use_container_width=True, height=250,
+                                column_config={
+                                    "Estudante": st.column_config.TextColumn(width="medium"),
+                                    "Faltas": st.column_config.NumberColumn(),
+                                    "Ausência": st.column_config.ProgressColumn("% Ausência", format="%.0f%%", min_value=0, max_value=100)
+                                }
+                            )
                         else: st.success("✅ Nenhum aluno em risco de evasão.")
                     else: st.info("Aguardando registros de chamada.")
 
-                # 3. SENSOR SEMÂNTICO EM LOTE
+                # 3. FEED SEMÂNTICO (AÇÕES RÁPIDAS EM 1 CLIQUE)
                 st.markdown("---")
-                st.markdown("#### 🚨 Sensor Semântico (Processamento em Lote)")
-                st.caption("Classifique as anotações do Diário de Bordo. O sistema processará todas de uma vez.")
+                st.markdown("#### 🧠 Feed Semântico (Ações Rápidas)")
+                st.caption("Leia as anotações recentes do Diário e atualize o perfil do aluno com apenas um clique.")
                 
                 if not df_d_rad.empty:
                     obs_reais = df_d_rad[(df_d_rad['OBSERVACOES'] != "") & (~df_d_rad['TAGS'].isin(["SISTEMA_NOTA", "BONUS_CONSELHO", "DIA NÃO LETIVO"])) & (~df_d_rad['OBSERVACOES'].str.contains(r"\[LIDO\]", na=False, case=False))]
+                    
                     if not obs_reais.empty:
-                        ultimas_obs = obs_reais.tail(10).iloc[::-1]
-                        dados_sensor = [{"Data": r['DATA'], "ID_Aluno": r['ID_ALUNO'], "Estudante": r['NOME_ALUNO'], "Anotação": r['OBSERVACOES'], "Ação": "⏳ Pendente"} for _, r in ultimas_obs.iterrows()]
-                            
-                        df_sensor_ed = st.data_editor(
-                            pd.DataFrame(dados_sensor), hide_index=True, use_container_width=True,
-                            column_config={"Data": st.column_config.TextColumn(disabled=True, width="small"), "ID_Aluno": None, "Estudante": st.column_config.TextColumn(disabled=True, width="medium"), "Anotação": st.column_config.TextColumn(disabled=True, width="large"), "Ação": st.column_config.SelectboxColumn("Ação / Diagnóstico", options=["⏳ Pendente", "✅ Apenas Ciente (Ocultar)", "🧱 Marcar: Defasagem Leitura", "🧮 Marcar: Defasagem Mat.", "🟠 Marcar: PEI (Suspeita)"], required=True, width="medium")},
-                            key=f"ed_sensor_{v}"
-                        )
+                        ultimas_obs = obs_reais.tail(5).iloc[::-1] # Mostra as 5 mais recentes para não poluir
                         
-                        if st.button("💾 PROCESSAR OBSERVAÇÕES EM LOTE", type="primary"):
-                            with st.status("Processando diagnósticos...") as status:
-                                wb = db.conectar()
-                                ws_diario = wb.worksheet("DB_DIARIO_BORDO")
-                                dados_diario = ws_diario.get_all_values()
-                                updates_diario = []
+                        for idx, row_obs in ultimas_obs.iterrows():
+                            id_alu_obs = row_obs['ID_ALUNO']
+                            nome_alu_obs = row_obs['NOME_ALUNO']
+                            data_obs = row_obs['DATA']
+                            texto_obs = row_obs['OBSERVACOES']
+                            
+                            with st.container(border=True):
+                                st.markdown(f"**{nome_alu_obs}** | 📅 {data_obs}")
+                                st.info(f"🎙️ *{texto_obs}*")
                                 
-                                for _, r in df_sensor_ed.iterrows():
-                                    acao = r["Ação"]
-                                    if acao != "⏳ Pendente":
-                                        if "Defasagem Leitura" in acao: db.atualizar_aluno_cascata(r["ID_Aluno"], r["Estudante"], t_rad, "DEFASAGEM LEITURA")
-                                        elif "Defasagem Mat." in acao: db.atualizar_aluno_cascata(r["ID_Aluno"], r["Estudante"], t_rad, "DEFASAGEM MATEMÁTICA")
-                                        elif "PEI" in acao: db.atualizar_aluno_cascata(r["ID_Aluno"], r["Estudante"], t_rad, "PEI - PENDENTE")
-                                            
-                                        for i, row_d in enumerate(dados_diario):
-                                            if i > 0 and row_d[0] == r["Data"] and db.limpar_id(row_d[1]) == db.limpar_id(r["ID_Aluno"]) and row_d[6].strip() == r["Anotação"].strip():
-                                                updates_diario.append(gspread.Cell(row=i+1, col=7, value=r["Anotação"] + " [LIDO]"))
-                                                break
+                                c_btn1, c_btn2, c_btn3, c_btn4, c_btn5 = st.columns(5)
                                 
-                                if updates_diario: ws_diario.update_cells(updates_diario)
-                                st.cache_data.clear(); status.update(label="✅ Observações processadas!", state="complete"); time.sleep(1); st.rerun()
-                    else: st.success("✅ Nenhuma observação pendente de análise no Diário de Bordo.")
+                                def processar_acao_feed(acao_nome, perfil_novo=None):
+                                    with st.spinner("Atualizando..."):
+                                        if perfil_novo:
+                                            db.atualizar_aluno_cascata(id_alu_obs, nome_alu_obs, t_rad, perfil_novo)
+                                        
+                                        # Marca como lido no banco
+                                        try:
+                                            wb = db.conectar()
+                                            ws_diario = wb.worksheet("DB_DIARIO_BORDO")
+                                            dados_diario = ws_diario.get_all_values()
+                                            for i, row_d in enumerate(dados_diario):
+                                                if i > 0 and row_d[0] == data_obs and db.limpar_id(row_d[1]) == db.limpar_id(id_alu_obs) and row_d[6].strip() == texto_obs.strip():
+                                                    ws_diario.update_cell(i+1, 7, texto_obs + " [LIDO]")
+                                                    break
+                                            st.cache_data.clear()
+                                        except: pass
+                                        st.rerun()
+
+                                if c_btn1.button("✅ Ciente (Ocultar)", key=f"feed_ok_{idx}", use_container_width=True):
+                                    processar_acao_feed("Ciente")
+                                if c_btn2.button("🧱 Defasagem Leitura", key=f"feed_dl_{idx}", use_container_width=True):
+                                    processar_acao_feed("Defasagem Leitura", "DEFASAGEM LEITURA")
+                                if c_btn3.button("🧮 Defasagem Mat.", key=f"feed_dm_{idx}", use_container_width=True):
+                                    processar_acao_feed("Defasagem Mat.", "DEFASAGEM MATEMÁTICA")
+                                if c_btn4.button("🟠 Suspeita PEI", key=f"feed_pei_{idx}", use_container_width=True):
+                                    processar_acao_feed("Suspeita PEI", "PEI - PENDENTE")
+                                if c_btn5.button("🚀 Alta Performance", key=f"feed_alta_{idx}", use_container_width=True):
+                                    processar_acao_feed("Alta Performance", "ALTA PERFORMANCE")
+                    else:
+                        st.success("🎉 Caixa de entrada limpa! Nenhuma observação pendente de análise.")
+                else:
+                    st.info("Sem registros no Diário.")
 
     # ==============================================================================
     # ⚙️ ABA 3: SECRETARIA & MATRÍCULAS
