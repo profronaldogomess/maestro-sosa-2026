@@ -660,80 +660,149 @@ if menu == "📅 Planejamento (Ponto ID)":
             else: st.info("Nenhum plano encontrado.")
 
     # ==============================================================================
-    # ABA 4: INTELIGÊNCIA CURRICULAR (MATRIZ + AUDITORIA + TRIMESTRAL)
+    # ABA 4: INTELIGÊNCIA CURRICULAR (CHECKLIST EXATO E GERADOR TRIMESTRAL V201)
     # ==============================================================================
     with tab_inteligencia:
-        modo_inteligencia = st.radio("Selecione a Visão:", ["Matriz de Execução", "Auditoria de Cobertura", "Gerador Trimestral (Macro)"], horizontal=True)
+        st.markdown("### 🧠 Inteligência Curricular e Planejamento")
+        modo_inteligencia = st.radio("Selecione a Visão:", ["📊 Status de Execução (Checklist)", "🖨️ Gerador de Plano Trimestral"], horizontal=True)
         st.markdown("---")
-        
-        if modo_inteligencia == "Matriz de Execução":
-            st.markdown("#### Status de Execução da Matriz")
-            ano_c = st.selectbox("Série:", [6, 7, 8, 9], key="matriz_ano")
-            df_c = df_curriculo[df_curriculo["ANO"].astype(str).str.contains(str(ano_c))].copy()
+
+        # Função para limpar as tags [cite: X] do seu CSV
+        def limpar_tags_cite(texto):
+            if not isinstance(texto, str): return ""
+            return re.sub(r'\[cite:.*?\]', '', texto).strip()
+
+        if modo_inteligencia == "📊 Status de Execução (Checklist)":
+            st.caption("O sistema cruza os conteúdos exatos do seu CSV com os planos gerados no Ponto ID.")
+            c1, c2 = st.columns(2)
+            ano_c = c1.selectbox("Série:", [6, 7, 8, 9], key="matriz_ano")
+            trim_c = c2.selectbox("Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key="matriz_trim")
             
-            if not df_c.empty:
-                planos_feitos = df_planos[df_planos["ANO"].astype(str).str.contains(str(ano_c))]
-                texto_soberano = " | ".join([ai.extrair_tag(p, "CONTEUDOS_ESPECIFICOS").upper() for p in planos_feitos["PLANO_TEXTO"]])
+            # Identifica as colunas do seu CSV dinamicamente
+            col_ano = next((c for c in df_curriculo.columns if 'ANO' in c.upper()), None)
+            col_eixo = next((c for c in df_curriculo.columns if 'GERAIS' in c.upper() or 'EIXO' in c.upper()), None)
+            col_trim = next((c for c in df_curriculo.columns if trim_c.upper() in c.upper()), None)
+
+            if col_ano and col_eixo and col_trim:
+                df_c = df_curriculo[df_curriculo[col_ano].astype(str).str.contains(str(ano_c))].copy()
                 
-                def checar_conclusao(conteudo_db):
-                    if not texto_soberano: return "⏳ PENDENTE"
-                    target = re.sub(r'[^A-Z0-9]', '', str(conteudo_db).upper())
-                    soberano = re.sub(r'[^A-Z0-9]', '', texto_soberano)
-                    return "✅ CONCLUÍDO" if target in soberano else "⏳ PENDENTE"
+                if not df_c.empty:
+                    dados_checklist = []
+                    planos_feitos = df_planos[(df_planos["ANO"].astype(str).str.contains(str(ano_c))) & (df_planos["TURMA"] == trim_c)]
+                    texto_soberano = " | ".join([ai.extrair_tag(p, "CONTEUDOS_ESPECIFICOS").upper() for p in planos_feitos["PLANO_TEXTO"]])
+                    texto_soberano_limpo = re.sub(r'[^A-Z0-9]', '', texto_soberano)
 
-                df_c["STATUS"] = df_c["CONTEUDO_ESPECIFICO"].apply(checar_conclusao)
-                st.dataframe(df_c[["TRIMESTRE", "CONTEUDO_ESPECIFICO", "STATUS"]], use_container_width=True, hide_index=True)
+                    for _, row in df_c.iterrows():
+                        eixo = row[col_eixo]
+                        conteudos_brutos = limpar_tags_cite(row[col_trim])
+                        topicos = [t.strip() for t in conteudos_brutos.split(';') if t.strip()]
+                        
+                        for topico in topicos:
+                            target = re.sub(r'[^A-Z0-9]', '', topico.upper())
+                            # Se o tópico exato estiver dentro dos planos gerados, marca como concluído
+                            status = "✅ CONCLUÍDO" if target in texto_soberano_limpo and len(target) > 5 else "⏳ PENDENTE"
+                            dados_checklist.append({"Eixo": eixo, "Conteúdo Específico": topico, "Status": status})
+                    
+                    if dados_checklist:
+                        df_check = pd.DataFrame(dados_checklist)
+                        concluidos = len(df_check[df_check['Status'] == "✅ CONCLUÍDO"])
+                        total = len(df_check)
+                        progresso = (concluidos / total) * 100 if total > 0 else 0
+                        
+                        st.progress(progresso / 100)
+                        st.caption(f"**Progresso do Trimestre:** {concluidos} de {total} tópicos concluídos ({progresso:.1f}%)")
+                        
+                        def colorir_status(val):
+                            if "CONCLUÍDO" in str(val): return 'color: #2ECC71; font-weight: bold;'
+                            return 'color: #F1C40F; font-weight: bold;'
+                            
+                        st.dataframe(df_check.style.map(colorir_status, subset=['Status']), use_container_width=True, hide_index=True)
+                    else:
+                        st.info("Nenhum conteúdo cadastrado para este trimestre no CSV.")
+            else:
+                st.error("As colunas do currículo não correspondem ao formato esperado do CSV (Ano, Conteúdos Gerais, I Trimestre...).")
 
-        elif modo_inteligencia == "Auditoria de Cobertura":
-            st.markdown("#### Analytics de Cobertura Curricular")
-            ano_m = st.selectbox("Série:", [6, 7, 8, 9], key="auditoria_ano")
-            df_m = df_curriculo[df_curriculo["ANO"].astype(str).str.contains(str(ano_m))].copy()
+        elif modo_inteligencia == "🖨️ Gerador de Plano Trimestral":
+            st.markdown("#### Gerador Automático de Plano Trimestral (DOCX)")
+            st.caption("O sistema extrairá as Habilidades BNCC e as Metodologias diretamente dos planos que o senhor já gerou neste trimestre.")
             
-            if not df_m.empty:
-                planos_m = df_planos[df_planos["ANO"].astype(str).str.contains(str(ano_m))]
-                texto_m = " | ".join([ai.extrair_tag(t, "CONTEUDOS_ESPECIFICOS").upper() for t in planos_m["PLANO_TEXTO"]])
-                
-                def concluido_num(x):
-                    target = re.sub(r'[^A-Z0-9]', '', str(x).upper())
-                    soberano = re.sub(r'[^A-Z0-9]', '', texto_m)
-                    return 1 if target in soberano else 0
-
-                df_m["CONCLUIDO"] = df_m["CONTEUDO_ESPECIFICO"].apply(concluido_num)
-                progresso = df_m.groupby("TRIMESTRE")["CONCLUIDO"].agg(["sum", "count"]).reset_index()
-                progresso["%"] = (progresso["sum"] / progresso["count"] * 100).round(1)
-                
-                st.plotly_chart(px.bar(progresso, x="TRIMESTRE", y="%", text="%", title=f"Cobertura - {ano_m}º Ano", color="%", color_continuous_scale="RdYlGn", range_y=[0, 110]), use_container_width=True)
-
-        elif modo_inteligencia == "Gerador Trimestral (Macro)":
-            st.markdown("#### Gerador de Planejamento Trimestral (Macro-SOSA)")
             c_t1, c_t2 = st.columns(2)
             ano_trim = c_t1.selectbox("Série Alvo:", ["6º Ano", "7º Ano", "8º Ano", "9º Ano"])
             trim_alvo = c_t2.selectbox("Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"])
             
             ano_num_trim = "".join(filter(str.isdigit, ano_trim))
-            turmas_disp = df_turmas[df_turmas['ID_TURMA'].str.contains(ano_num_trim, na=False)]['ID_TURMA'].tolist()
-            turmas_sel = st.multiselect("Turmas:", turmas_disp, default=turmas_disp)
             
-            df_matriz_trim = df_curriculo[(df_curriculo['ANO'].astype(str).str.contains(ano_num_trim)) & (df_curriculo['TRIMESTRE'] == trim_alvo.split(" ")[0])]
-            
-            if st.button("Gerar Documento Oficial (DOCX)", type="primary", use_container_width=True):
-                if not turmas_sel or df_matriz_trim.empty:
-                    st.error("Selecione as turmas e garanta que há dados na matriz.")
-                else:
-                    with st.spinner("Gerando..."):
-                        info_trim = {"trimestre": trim_alvo, "turmas": ", ".join(turmas_sel)}
-                        config_textos = {
-                            "metodologia": "Aulas expositivas e dialogadas; Resolução de exercícios.",
-                            "recursos": "Quadro branco, Livro didático, Material impresso.",
-                            "avaliacao": "Avaliação contínua, participação e testes."
-                        }
-                        nome_arq = f"PLANEJAMENTO_{trim_alvo.replace(' ', '')}_{ano_trim.replace('º ', '')}"
-                        doc_stream = exporter.gerar_docx_planejamento_trimestral(nome_arq, info_trim, df_matriz_trim, config_textos, [])
+            if st.button("🖨️ Extrair Dados e Gerar Documento Oficial", type="primary", use_container_width=True):
+                with st.spinner("Minerando planos de aula e compilando documento..."):
+                    
+                    col_ano = next((c for c in df_curriculo.columns if 'ANO' in c.upper()), None)
+                    col_eixo = next((c for c in df_curriculo.columns if 'GERAIS' in c.upper() or 'EIXO' in c.upper()), None)
+                    col_trim = next((c for c in df_curriculo.columns if trim_alvo.upper() in c.upper()), None)
+                    
+                    if not col_ano or not col_eixo or not col_trim:
+                        st.error("Erro na leitura das colunas do CSV.")
+                        st.stop()
+                        
+                    df_matriz_trim = df_curriculo[df_curriculo[col_ano].astype(str).str.contains(ano_num_trim)].copy()
+                    
+                    if df_matriz_trim.empty:
+                        st.error("Nenhum dado encontrado na matriz para esta série.")
+                    else:
+                        # 1. Busca todos os planos feitos no trimestre
+                        planos_trim = df_planos[(df_planos['ANO'].str.contains(ano_num_trim)) & (df_planos['TURMA'] == trim_alvo)]
+                        
+                        # 2. Extrai Códigos BNCC e Metodologias Reais
+                        bncc_codes = set()
+                        metodologias = set()
+                        
+                        for txt in planos_trim['PLANO_TEXTO'].dropna():
+                            # Extrai BNCC
+                            hab = ai.extrair_tag(str(txt), "HABILIDADE_BNCC")
+                            codes = re.findall(r'EF\d{2}MA\d{2}[A-Z]?', hab, re.IGNORECASE)
+                            bncc_codes.update([c.upper() for c in codes])
+                            
+                            # Extrai Metodologias baseadas no texto da Aula 1
+                            aula1 = ai.extrair_tag(str(txt), "AULA_1").lower()
+                            if "dobradura" in aula1 or "prática" in aula1: metodologias.add("Atividades práticas e material concreto")
+                            if "livro" in aula1 or "página" in aula1: metodologias.add("Leitura e resolução do livro didático")
+                            if "quadro" in aula1 or "lousa" in aula1: metodologias.add("Exposição dialogada no quadro")
+                            if "tecnologia" in aula1 or "geogebra" in aula1: metodologias.add("Uso de recursos tecnológicos (GeoGebra)")
+                            if "jogo" in aula1 or "lúdico" in aula1: metodologias.add("Atividades lúdicas e jogos matemáticos")
+                            if "revisão" in aula1 or "correção" in aula1: metodologias.add("Revisão e recomposição de aprendizagem")
+                        
+                        if not metodologias:
+                            metodologias = {"Aulas expositivas e dialogadas", "Resolução de exercícios de fixação", "Uso do livro didático"}
+                            
+                        hab_str = ", ".join(sorted(list(bncc_codes))) if bncc_codes else "Habilidades trabalhadas conforme planos semanais."
+                        met_str = "• " + "\n• ".join(sorted(list(metodologias)))
+                        
+                        # 3. Monta os dados para a tabela do DOCX
+                        dados_tabela = []
+                        for _, row in df_matriz_trim.iterrows():
+                            eixo = str(row[col_eixo]).strip()
+                            conteudos = limpar_tags_cite(row[col_trim]).replace(";", ";\n")
+                            
+                            if conteudos and conteudos.upper() != "NAN":
+                                dados_tabela.append({
+                                    "eixo": eixo,
+                                    "conteudos": conteudos,
+                                    "habilidades": hab_str,
+                                    "metodologia": met_str
+                                })
+                        
+                        # 4. Gera o DOCX e sobe pro Drive
+                        info_trim = {"trimestre": trim_alvo, "ano": ano_trim}
+                        nome_arq = f"PLANEJAMENTO_TRIMESTRAL_{trim_alvo.replace(' ', '')}_{ano_trim.replace('º ', '')}"
+                        
+                        doc_stream = exporter.gerar_docx_planejamento_trimestral(nome_arq, info_trim, dados_tabela)
                         link_doc = db.subir_e_converter_para_google_docs(doc_stream, nome_arq, trimestre=trim_alvo, categoria=ano_trim, modo="PLANEJAMENTO")
                         
                         if "https" in link_doc:
-                            st.success("Gerado com sucesso!")
-                            st.link_button("Abrir Documento", link_doc)
+                            st.success("✅ Plano Trimestral gerado com sucesso!")
+                            st.link_button("📂 ABRIR DOCUMENTO OFICIAL", link_doc, type="primary", use_container_width=True)
+                            st.balloons()
+                        else:
+                            st.error(f"Erro ao salvar no Drive: {link_doc}")
 
 
 
