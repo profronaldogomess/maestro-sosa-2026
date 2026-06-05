@@ -588,21 +588,21 @@ if menu == "📅 Planejamento (Ponto ID)":
                         diretriz_base = f"MÉTODO WEB: Use estes links:\n{links_web_texto}"
                         precisa_de_internet = True
                     else: 
-                        diretriz_base = f"MÉTODO LIVRO: Use o PDF anexo. PÁGINAS: {base_didatica_info}."
+                        # 🚨 VACINA ANTI-BLOQUEIO: Não baixa o PDF gigante, apenas usa o título e as páginas como contexto
+                        diretriz_base = f"MÉTODO LIVRO: O professor utilizará o livro '{base_didatica_info}'. Deduza os conceitos abordados nestas páginas e crie o plano."
 
-                    # 🚨 VACINA DE FORMATAÇÃO: Força a IA a usar as tags mesmo sem a matriz
                     template_forcado = (
-                        "[HABILIDADE_BNCC] (Deduza se não fornecido)\n"
-                        "[COMPETENCIAS_FOCO] \n"
-                        "[OBJETO_CONHECIMENTO] \n"
-                        "[CONTEUDOS_ESPECIFICOS] \n"
-                        "[OBJETIVOS_ENSINO] \n"
-                        "[JUSTIFICATIVA_PEDAGOGICA] \n"
-                        "[AULA_1] \n"
-                        "[AULA_2] \n"
-                        "[SABADO_LETIVO] \n"
-                        "[AVALIACAO_DE_MERITO] \n"
-                        "[ESTRATEGIA_DUA_PEI] \n"
+                        "[HABILIDADE_BNCC] (Código BNCC)\n"
+                        "[COMPETENCIAS_FOCO] (Competências)\n"
+                        "[OBJETO_CONHECIMENTO] (Tema principal)\n"
+                        "[CONTEUDOS_ESPECIFICOS] (Tópicos)\n"
+                        "[OBJETIVOS_ENSINO] (Objetivos)\n"
+                        "[JUSTIFICATIVA_PEDAGOGICA] (Justificativa)\n"
+                        "[AULA_1] (Roteiro da Aula 1)\n"
+                        "[AULA_2] (Roteiro da Aula 2)\n"
+                        "[SABADO_LETIVO] (Roteiro do Sábado)\n"
+                        "[AVALIACAO_DE_MERITO] (Como avaliar)\n"
+                        "[ESTRATEGIA_DUA_PEI] (Adaptação PEI)\n"
                     )
 
                     prompt = (
@@ -611,14 +611,16 @@ if menu == "📅 Planejamento (Ponto ID)":
                         f"CARGA HORÁRIA: {carga_horaria}.\n"
                         f"DIRETRIZ AULA 1: {foco_a1}\nDIRETRIZ AULA 2: {foco_a2}\nDIRETRIZ SÁBADO: {foco_sab}\n"
                         f"MATRIZ OFICIAL:\n{ctx_ia if ctx_ia else 'Não fornecida. Deduza com base no tema do livro/links.'}\n\n"
-                        f"🚨 PREENCHA OBRIGATORIAMENTE ESTE TEMPLATE EXATO:\n{template_forcado}"
+                        f"🚨 PREENCHA OBRIGATORIAMENTE ESTE TEMPLATE EXATO (Use as tags com colchetes):\n{template_forcado}"
                     )
                     
-                    status.write("🧠 Maestro Sosa está redigindo o plano (Isso leva cerca de 10 a 15 segundos)...")
+                    status.write("🧠 Maestro Sosa está redigindo o plano...")
                     
-                    resultado_ia = ai.gerar_ia("PLANE_PEDAGOGICO", prompt, url_drive=uri_livro_drive, usar_busca=precisa_de_internet)
+                    # 🚨 CORREÇÃO: url_drive=None para evitar o bloqueio do Google Drive
+                    resultado_ia = ai.gerar_ia("PLANE_PEDAGOGICO", prompt, url_drive=None, usar_busca=precisa_de_internet)
                     
-                    if "Erro" in resultado_ia or "⚠️" in resultado_ia:
+                    # 🚨 CORREÇÃO: Verificação de erro case-insensitive
+                    if "ERRO" in resultado_ia.upper() or "⚠️" in resultado_ia:
                         status.update(label="❌ Falha na comunicação com a IA.", state="error")
                         st.error(resultado_ia)
                     else:
@@ -638,7 +640,6 @@ if menu == "📅 Planejamento (Ponto ID)":
                 st.markdown("---")
                 st.markdown(f"### Revisão do Plano: {meta.get('semana')}")
                 
-                # 🚨 REDE DE SEGURANÇA: Mostra o texto bruto se a IA falhar nas tags
                 with st.expander("👁️ Ver Texto Bruto da IA (Caso os campos abaixo estejam vazios)"):
                     st.text(txt_bruto)
                 
@@ -650,12 +651,12 @@ if menu == "📅 Planejamento (Ponto ID)":
                             st.session_state.p_temp = ai.gerar_ia("REFINADOR_PEDAGOGICO", prompt_refino)
                             st.rerun()
 
+                # 🚨 FALLBACK DE SEGURANÇA: Se a IA não gerar as tags, joga o texto todo na caixa de Conteúdos
                 ed_hab = st.text_input("Habilidade/Competência:", ai.extrair_tag(txt_bruto, "HABILIDADE_BNCC") or ai.extrair_tag(txt_bruto, "COMPETENCIA_GERAL"))
                 ed_geral = st.text_input("Objeto de Conhecimento:", ai.extrair_tag(txt_bruto, "OBJETO_CONHECIMENTO") or ai.extrair_tag(txt_bruto, "CONTEUDO_GERAL"))
-                ed_espec = st.text_area("Conteúdos Específicos:", ai.extrair_tag(txt_bruto, "CONTEUDOS_ESPECIFICOS"))
+                ed_espec = st.text_area("Conteúdos Específicos:", ai.extrair_tag(txt_bruto, "CONTEUDOS_ESPECIFICOS") or txt_bruto, height=150)
                 ed_objs = st.text_area("Objetivos de Aprendizagem:", ai.extrair_tag(txt_bruto, "OBJETIVOS_ENSINO"))
                 
-                # 🚨 EDITOR DINÂMICO BASEADO NA CARGA HORÁRIA
                 c_a1, c_a2, c_a3 = st.columns(3)
                 ed_a1 = c_a1.text_area("AULA 1:", ai.extrair_tag(txt_bruto, "AULA_1"), height=150)
                 ed_a2 = c_a2.text_area("AULA 2:", ai.extrair_tag(txt_bruto, "AULA_2"), height=150)
