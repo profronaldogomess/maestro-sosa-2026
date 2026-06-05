@@ -1205,11 +1205,17 @@ elif menu == "🧪 Criador de Aulas":
                 
                 if not fa['teoria']:
                     with st.spinner("Gerando explicação didática..."):
-                        prompt_teoria = f"SÉRIE: {fa['info']['ano']}º Ano.\nASSUNTO: {fa['info']['aula_alvo']}.\nHABILIDADE: {fa['info']['habilidade']}\nROTEIRO DO PROFESSOR: {fa['info']['roteiro']}"
+                        prompt_teoria = f"SÉRIE: {fa['info']['ano']}º Ano.\nASSUNTO: {fa['info']['aula_alvo']}.\nHABILIDADE: {fa['info']['habilidade']}\nROTEIRO DO PROFESSOR: {fa['info']['roteiro']}\n🚨 RESPONDA OBRIGATORIAMENTE DENTRO DA TAG [PROFESSOR]"
                         if fa['links_web'].strip(): prompt_teoria += f"\nFONTES ADICIONAIS:\n{fa['links_web']}"
                         
-                        fa['teoria'] = ai.gerar_ia("FORJA_AULA_TEORIA", prompt_teoria, usar_busca=True)
-                        st.rerun()
+                        res_teoria = ai.gerar_ia("FORJA_AULA_TEORIA", prompt_teoria, usar_busca=False) # Busca desligada para economizar tokens e evitar erros
+                        
+                        if "ERRO" in res_teoria.upper() or "⚠️" in res_teoria:
+                            st.error(f"Falha na IA: {res_teoria}")
+                            if st.button("Tentar Novamente"): st.rerun()
+                        else:
+                            fa['teoria'] = ai.extrair_tag(res_teoria, "PROFESSOR") or res_teoria # Fallback de segurança
+                            st.rerun()
                 else:
                     with st.container(border=True):
                         modo_leitura = st.toggle("👁️ Visualização Real (Renderizar Matemática)", value=True)
@@ -1223,8 +1229,9 @@ elif menu == "🧪 Criador de Aulas":
                         fa['fase'] = 3; st.rerun()
                     if c_b2.button("Regerar Teoria", use_container_width=True):
                         with st.spinner("Ajustando teoria..."):
-                            prompt_teoria = f"SÉRIE: {fa['info']['ano']}º Ano.\nASSUNTO: {fa['info']['aula_alvo']}.\nAJUSTE: {inst_t}\nTEORIA ANTERIOR:\n{fa['teoria']}"
-                            fa['teoria'] = ai.gerar_ia("FORJA_AULA_TEORIA", prompt_teoria, usar_busca=True)
+                            prompt_teoria = f"SÉRIE: {fa['info']['ano']}º Ano.\nASSUNTO: {fa['info']['aula_alvo']}.\nAJUSTE: {inst_t}\nTEORIA ANTERIOR:\n{fa['teoria']}\n🚨 RESPONDA OBRIGATORIAMENTE DENTRO DA TAG [PROFESSOR]"
+                            res_teoria = ai.gerar_ia("FORJA_AULA_TEORIA", prompt_teoria, usar_busca=False)
+                            fa['teoria'] = ai.extrair_tag(res_teoria, "PROFESSOR") or res_teoria
                             st.rerun()
 
             # --- FASE 3: EXERCÍCIOS REGULARES (INTEGRAÇÃO COM LIVRO) ---
@@ -1233,15 +1240,19 @@ elif menu == "🧪 Criador de Aulas":
                 
                 if not fa['reg_q']:
                     with st.spinner("Gerando folha de exercícios..."):
-                        # 🚨 CORREÇÃO: Informa à IA se a base é um livro para ela não inventar questões
                         base_didatica = fa['info'].get('base', '')
                         tipo_base = "LIVRO DIDÁTICO" if "Livro" in base_didatica else "MATRIZ/WEB"
                         
-                        prompt_ex = f"SÉRIE: {fa['info']['ano']}º Ano. QUANTIDADE: {fa['qtd_q']}.\nBASE DIDÁTICA: {tipo_base} ({base_didatica}).\nBASEIE-SE NA TEORIA:\n{fa['teoria']}"
+                        prompt_ex = f"SÉRIE: {fa['info']['ano']}º Ano. QUANTIDADE: {fa['qtd_q']}.\nBASE DIDÁTICA: {tipo_base} ({base_didatica}).\nBASEIE-SE NA TEORIA:\n{fa['teoria']}\n🚨 USE OBRIGATORIAMENTE AS TAGS [ALUNO] e [GABARITO]"
                         res_ex = ai.gerar_ia("FORJA_AULA_EXERCICIOS", prompt_ex)
-                        fa['reg_q'] = ai.extrair_tag(res_ex, "ALUNO")
-                        fa['reg_gab'] = ai.extrair_tag(res_ex, "GABARITO")
-                        st.rerun()
+                        
+                        if "ERRO" in res_ex.upper() or "⚠️" in res_ex:
+                            st.error(f"Falha na IA: {res_ex}")
+                            if st.button("Tentar Novamente"): st.rerun()
+                        else:
+                            fa['reg_q'] = ai.extrair_tag(res_ex, "ALUNO") or res_ex # Fallback
+                            fa['reg_gab'] = ai.extrair_tag(res_ex, "GABARITO") or "Gabarito não formatado pela IA. Verifique o texto do aluno."
+                            st.rerun()
                 else:
                     modo_leitura_ex = st.toggle("👁️ Visualização Real (Renderizar Matemática)", value=True, key="tog_ex")
                     t_q, t_g = st.tabs(["Folha do Aluno", "Gabarito"])
@@ -1261,10 +1272,10 @@ elif menu == "🧪 Criador de Aulas":
                         with st.spinner("Refazendo folha..."):
                             base_didatica = fa['info'].get('base', '')
                             tipo_base = "LIVRO DIDÁTICO" if "Livro" in base_didatica else "MATRIZ/WEB"
-                            prompt_ex = f"SÉRIE: {fa['info']['ano']}º Ano. QUANTIDADE: {fa['qtd_q']}.\nBASE DIDÁTICA: {tipo_base} ({base_didatica}).\nAJUSTE: {inst_e}\nTEORIA:\n{fa['teoria']}\nEXERCÍCIOS ANTERIORES:\n{fa['reg_q']}"
+                            prompt_ex = f"SÉRIE: {fa['info']['ano']}º Ano. QUANTIDADE: {fa['qtd_q']}.\nBASE DIDÁTICA: {tipo_base} ({base_didatica}).\nAJUSTE: {inst_e}\nTEORIA:\n{fa['teoria']}\nEXERCÍCIOS ANTERIORES:\n{fa['reg_q']}\n🚨 USE OBRIGATORIAMENTE AS TAGS [ALUNO] e [GABARITO]"
                             res_ex = ai.gerar_ia("FORJA_AULA_EXERCICIOS", prompt_ex)
-                            fa['reg_q'] = ai.extrair_tag(res_ex, "ALUNO")
-                            fa['reg_gab'] = ai.extrair_tag(res_ex, "GABARITO")
+                            fa['reg_q'] = ai.extrair_tag(res_ex, "ALUNO") or res_ex
+                            fa['reg_gab'] = ai.extrair_tag(res_ex, "GABARITO") or "Gabarito não formatado."
                             st.rerun()
 
             # --- FASE 4: ADAPTAÇÃO PEI (NÍVEL 1 E NÍVEL 3 LÚDICO) ---
@@ -1273,12 +1284,17 @@ elif menu == "🧪 Criador de Aulas":
                 
                 if not fa['pei_1']:
                     with st.spinner("Adaptando para o formato inclusivo (Leve e Sensorial)..."):
-                        prompt_pei = f"Adapte as questões regulares abaixo para PEI Nível 1 (Múltipla Escolha) e PEI Nível 3 (Lúdico/Sensorial com Prompts de Imagem):\n{fa['reg_q']}"
+                        prompt_pei = f"Adapte as questões regulares abaixo para PEI Nível 1 (Múltipla Escolha) e PEI Nível 3 (Lúdico/Sensorial com Prompts de Imagem):\n{fa['reg_q']}\n🚨 USE OBRIGATORIAMENTE AS TAGS [PEI_NIVEL_1], [PEI_NIVEL_3] e [GABARITO_PEI]"
                         res_pei = ai.gerar_ia("FORJA_AULA_PEI", prompt_pei)
-                        fa['pei_1'] = ai.extrair_tag(res_pei, "PEI_NIVEL_1")
-                        fa['pei_3'] = ai.extrair_tag(res_pei, "PEI_NIVEL_3")
-                        fa['pei_gab'] = ai.extrair_tag(res_pei, "GABARITO_PEI")
-                        st.rerun()
+                        
+                        if "ERRO" in res_pei.upper() or "⚠️" in res_pei:
+                            st.error(f"Falha na IA: {res_pei}")
+                            if st.button("Tentar Novamente"): st.rerun()
+                        else:
+                            fa['pei_1'] = ai.extrair_tag(res_pei, "PEI_NIVEL_1") or res_pei
+                            fa['pei_3'] = ai.extrair_tag(res_pei, "PEI_NIVEL_3") or "Nível 3 não formatado."
+                            fa['pei_gab'] = ai.extrair_tag(res_pei, "GABARITO_PEI") or "Gabarito não formatado."
+                            st.rerun()
                 else:
                     modo_leitura_pei = st.toggle("👁️ Visualização Real (Renderizar Matemática)", value=True, key="tog_pei")
                     t_p1, t_p3, t_g_p = st.tabs(["🔵 PEI Nível 1 (Leve)", "🔴 PEI Nível 3 (Lúdico)", "✅ Gabarito PEI"])
@@ -1300,11 +1316,11 @@ elif menu == "🧪 Criador de Aulas":
                         fa['fase'] = 5; st.rerun()
                     if c_b2.button("Regerar Adaptação PEI", use_container_width=True):
                         with st.spinner("Ajustando PEI..."):
-                            prompt_pei = f"Ajuste a adaptação conforme solicitado: {inst_p}\nEXERCÍCIOS ORIGINAIS:\n{fa['reg_q']}\nPEI N1 ANTERIOR:\n{fa['pei_1']}\nPEI N3 ANTERIOR:\n{fa['pei_3']}"
+                            prompt_pei = f"Ajuste a adaptação conforme solicitado: {inst_p}\nEXERCÍCIOS ORIGINAIS:\n{fa['reg_q']}\nPEI N1 ANTERIOR:\n{fa['pei_1']}\nPEI N3 ANTERIOR:\n{fa['pei_3']}\n🚨 USE OBRIGATORIAMENTE AS TAGS [PEI_NIVEL_1], [PEI_NIVEL_3] e [GABARITO_PEI]"
                             res_pei = ai.gerar_ia("FORJA_AULA_PEI", prompt_pei)
-                            fa['pei_1'] = ai.extrair_tag(res_pei, "PEI_NIVEL_1")
-                            fa['pei_3'] = ai.extrair_tag(res_pei, "PEI_NIVEL_3")
-                            fa['pei_gab'] = ai.extrair_tag(res_pei, "GABARITO_PEI")
+                            fa['pei_1'] = ai.extrair_tag(res_pei, "PEI_NIVEL_1") or res_pei
+                            fa['pei_3'] = ai.extrair_tag(res_pei, "PEI_NIVEL_3") or "Nível 3 não formatado."
+                            fa['pei_gab'] = ai.extrair_tag(res_pei, "GABARITO_PEI") or "Gabarito não formatado."
                             st.rerun()
 
             # --- FASE 5: COMPILAÇÃO FINAL ---
