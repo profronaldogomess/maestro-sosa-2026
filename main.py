@@ -578,14 +578,10 @@ if menu == "📅 Planejamento (Ponto ID)":
                     foco_sab = c_d3.text_area("Foco do Sábado Letivo:", placeholder="Ex: Oficina prática...", height=80)
 
             if st.button("🧠 Iniciar Motor de IA: Gerar Planejamento", use_container_width=True, type="primary"):
-                # 🚨 UX DE ELITE: Substitui o spinner cego por um status passo a passo
                 with st.status("🚀 Iniciando Protocolo de Planejamento...", expanded=True) as status:
-                    
                     status.write("📚 Coletando base didática e diretrizes...")
                     
-                    # 🚨 OTIMIZAÇÃO DE TOKENS: Só liga a internet se for estritamente necessário
                     precisa_de_internet = False
-                    
                     if modo_p == "Manual (Matriz)": 
                         diretriz_base = "MÉTODO MANUAL: Baseie-se na Matriz Curricular."
                     elif modo_p == "Links da Web": 
@@ -594,17 +590,32 @@ if menu == "📅 Planejamento (Ponto ID)":
                     else: 
                         diretriz_base = f"MÉTODO LIVRO: Use o PDF anexo. PÁGINAS: {base_didatica_info}."
 
+                    # 🚨 VACINA DE FORMATAÇÃO: Força a IA a usar as tags mesmo sem a matriz
+                    template_forcado = (
+                        "[HABILIDADE_BNCC] (Deduza se não fornecido)\n"
+                        "[COMPETENCIAS_FOCO] \n"
+                        "[OBJETO_CONHECIMENTO] \n"
+                        "[CONTEUDOS_ESPECIFICOS] \n"
+                        "[OBJETIVOS_ENSINO] \n"
+                        "[JUSTIFICATIVA_PEDAGOGICA] \n"
+                        "[AULA_1] \n"
+                        "[AULA_2] \n"
+                        "[SABADO_LETIVO] \n"
+                        "[AVALIACAO_DE_MERITO] \n"
+                        "[ESTRATEGIA_DUA_PEI] \n"
+                    )
+
                     prompt = (
                         f"TIPO: {tipo_semana}\n{diretriz_base}\n"
                         f"SÉRIE: {ano_p}º Ano. SEMANA: {sem_limpa}. TRIMESTRE: {trim_atual}.\n"
                         f"CARGA HORÁRIA: {carga_horaria}.\n"
                         f"DIRETRIZ AULA 1: {foco_a1}\nDIRETRIZ AULA 2: {foco_a2}\nDIRETRIZ SÁBADO: {foco_sab}\n"
-                        f"MATRIZ OFICIAL:\n{ctx_ia}"
+                        f"MATRIZ OFICIAL:\n{ctx_ia if ctx_ia else 'Não fornecida. Deduza com base no tema do livro/links.'}\n\n"
+                        f"🚨 PREENCHA OBRIGATORIAMENTE ESTE TEMPLATE EXATO:\n{template_forcado}"
                     )
                     
-                    status.write("🧠 Maestro Sosa está redigindo o plano (Isso leva cerca de 10 segundos)...")
+                    status.write("🧠 Maestro Sosa está redigindo o plano (Isso leva cerca de 10 a 15 segundos)...")
                     
-                    # Chama a IA com a trava de internet ativada/desativada
                     resultado_ia = ai.gerar_ia("PLANE_PEDAGOGICO", prompt, url_drive=uri_livro_drive, usar_busca=precisa_de_internet)
                     
                     if "Erro" in resultado_ia or "⚠️" in resultado_ia:
@@ -616,7 +627,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                         st.session_state.p_meta = {"semana": sem_limpa, "trimestre": trim_atual, "ano": ano_str_busca, "base": base_didatica_info}
                         
                         status.update(label="🎉 Planejamento Concluído!", state="complete")
-                        time.sleep(1) # Dá 1 segundo para o usuário ler que deu certo antes de recarregar
+                        time.sleep(1)
                         st.rerun()
 
             # --- EDITOR DO PLANO GERADO ---
@@ -626,6 +637,10 @@ if menu == "📅 Planejamento (Ponto ID)":
                 
                 st.markdown("---")
                 st.markdown(f"### Revisão do Plano: {meta.get('semana')}")
+                
+                # 🚨 REDE DE SEGURANÇA: Mostra o texto bruto se a IA falhar nas tags
+                with st.expander("👁️ Ver Texto Bruto da IA (Caso os campos abaixo estejam vazios)"):
+                    st.text(txt_bruto)
                 
                 with st.container(border=True):
                     cmd_refine = st.chat_input("Refinador IA (Ex: 'Deixe a Aula 1 mais lúdica')")
