@@ -499,15 +499,15 @@ def excluir_avaliacao_completa(identificador, tipo_prova_nome):
         return False
 
 # ==============================================================================
-# 5. INTEGRAÇÃO NATIVA COM GOOGLE DRIVE (SOSA BRIDGE V45.2)
+# 5. INTEGRAÇÃO NATIVA COM GOOGLE DRIVE (SOSA BRIDGE V45.3 - AUTO-HEALING)
 # ==============================================================================
 from googleapiclient.http import MediaIoBaseUpload
 import io
 
 def subir_e_converter_para_google_docs(file_stream, nome_arquivo, trimestre="I Trimestre", categoria="6º Ano", semana="Semana Geral", modo="AULA"):
     """
-    SOSA BRIDGE V45.2 (NATIVA): Bypassa o Apps Script instável e utiliza a API oficial
-    do Google Drive via Conta de Serviço para fazer o upload e conversão nativa do DOCX.
+    SOSA BRIDGE V45.3 (AUTO-HEALING): Se a cota do Drive do robô estourar, a função 
+    captura o erro, esvazia a lixeira da conta de serviço na hora e refaz o upload com sucesso.
     """
     try:
         creds = obter_creds_drive()
@@ -516,7 +516,7 @@ def subir_e_converter_para_google_docs(file_stream, nome_arquivo, trimestre="I T
         # 1. Configura os metadados para forçar a conversão automática para Google Docs
         file_metadata = {
             'name': nome_arquivo,
-            'mimeType': 'application/vnd.google-apps.document' # Força conversão para Google Docs
+            'mimeType': 'application/vnd.google-apps.document'
         }
         
         # 2. Processa os bytes do arquivo na memória
@@ -532,12 +532,31 @@ def subir_e_converter_para_google_docs(file_stream, nome_arquivo, trimestre="I T
             resumable=True
         )
         
-        # 3. Realiza o upload e a conversão nativa de forma ultrarrápida
-        file = service.files().create(
-            body=file_metadata, 
-            media_body=media_body, 
-            fields='id'
-        ).execute()
+        # 3. Tenta realizar o upload nativo
+        try:
+            file = service.files().create(
+                body=file_metadata, 
+                media_body=media_body, 
+                fields='id'
+            ).execute()
+        except Exception as e:
+            # 🚨 AUTO-RECUPERAÇÃO DE COTA: Se estourar o limite, limpa a lixeira e tenta de novo!
+            error_msg = str(e).lower()
+            if "quota" in error_msg or "storage" in error_msg or "exceeded" in error_msg or "403" in error_msg:
+                try:
+                    # Esvazia a lixeira da conta de serviço para liberar gigabytes de lixo
+                    service.files().emptyTrash().execute()
+                    
+                    # Tenta fazer o upload novamente
+                    file = service.files().create(
+                        body=file_metadata, 
+                        media_body=media_body, 
+                        fields='id'
+                    ).execute()
+                except Exception as retry_error:
+                    raise Exception(f"Lixeira limpa, mas o Drive continua sem espaço físico: {str(retry_error)}")
+            else:
+                raise e
         
         file_id = file.get('id')
         
