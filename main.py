@@ -1323,36 +1323,37 @@ elif menu == "🧪 Criador de Aulas":
                             fa['pei_gab'] = ai.extrair_tag(res_pei, "GABARITO_PEI") or "Gabarito não formatado."
                             st.rerun()
 
-            # --- FASE 5: COMPILAÇÃO FINAL (INTEGRAÇÃO DE PASTAS DO DRIVE) ---
+            # --- FASE 5: COMPILAÇÃO FINAL (PRESERVAÇÃO DE ESTADO E AUDITORIA DO DRIVE) ---
             elif fa['fase'] == 5:
                 st.markdown("### Fase 5: Compilação e Custódia")
                 nome_sugerido = util.gerar_nome_material_elite(fa['info']['ano'], fa['info']['aula_alvo'], fa['info']['semana_ref'])
                 nome_arq = st.text_input("Nome do Material (Cofre Digital):", value=nome_sugerido)
                 
                 if st.button("Finalizar e Sincronizar no Drive", type="primary", use_container_width=True):
-                    with st.status("Gerando Documentos Oficiais...") as status:
-                        # 🚨 Puxa o trimestre real que foi salvo na memória do planejamento
+                    with st.status("Gerando Documentos Oficiais...", expanded=True) as status:
+                        # Puxa o trimestre real que foi salvo na memória do planejamento
                         trim_real = fa['info'].get('trimestre', 'I Trimestre')
                         info_doc = {"ano": f"{fa['info']['ano']}º", "trimestre": trim_real, "semana": fa['info']['semana_ref']}
 
-                        # 🚨 VACINA ANTI-HTML: Sanitizador de Links Ultra-Robusto (V201.6)
-                        # Só aceita links limpos do Google, rejeitando páginas de erro HTML
-                        def sanitizar_link(link_bruto):
+                        # 🚨 AUDITORIA DE LINKS: Mostra o erro exato do Google em vermelho na tela
+                        def sanitizar_link(link_bruto, nome_arquivo_etapa):
                             l_str = str(link_bruto).strip()
                             if "google.com" in l_str and "https://" in l_str and len(l_str) < 250 and not "<html" in l_str.lower():
                                 return l_str
+                            
+                            # Se falhar, cospe o erro exato na tela para o professor auditar
+                            st.error(f"❌ Falha no envio de '{nome_arquivo_etapa}': {l_str[:250]}")
                             return "N/A"
 
                         status.write("Construindo Folha do Aluno...")
                         doc_alu = exporter.gerar_docx_aluno_v24(nome_arq, fa['reg_q'], info_doc)
-                        # 🚨 CORREÇÃO: Passa explicitamente o trimestre, a série (categoria) e a semana para o roteamento de pastas no Drive
                         link_alu = sanitizar_link(db.subir_e_converter_para_google_docs(
                             doc_alu, f"{nome_arq}_ALUNO", 
                             trimestre=trim_real, 
                             categoria=f"{fa['info']['ano']}º Ano", 
                             semana=fa['info']['semana_ref'], 
                             modo="AULA"
-                        ))
+                        ), f"{nome_arq}_ALUNO")
                         
                         status.write("Construindo PEI Nível 1...")
                         doc_pei1 = exporter.gerar_docx_pei_v25(f"{nome_arq}_PEI_N1", fa['pei_1'], info_doc)
@@ -1362,7 +1363,7 @@ elif menu == "🧪 Criador de Aulas":
                             categoria=f"{fa['info']['ano']}º Ano", 
                             semana=fa['info']['semana_ref'], 
                             modo="AULA"
-                        ))
+                        ), f"{nome_arq}_PEI_N1")
                         
                         status.write("Construindo PEI Nível 3 (Qualitativo)...")
                         doc_pei3 = exporter.gerar_docx_pei_qualitativa(f"{nome_arq}_PEI_N3", fa['pei_3'], info_doc)
@@ -1372,7 +1373,7 @@ elif menu == "🧪 Criador de Aulas":
                             categoria=f"{fa['info']['ano']}º Ano", 
                             semana=fa['info']['semana_ref'], 
                             modo="AULA"
-                        ))
+                        ), f"{nome_arq}_PEI_N3")
                         
                         status.write("Construindo Guia do Professor...")
                         guia_prof = f"{fa['teoria']}\n\n[GABARITO]\n{fa['reg_gab']}\n\n[GABARITO_PEI]\n{fa['pei_gab']}"
@@ -1383,17 +1384,24 @@ elif menu == "🧪 Criador de Aulas":
                             categoria=f"{fa['info']['ano']}º Ano", 
                             semana=fa['info']['semana_ref'], 
                             modo="AULA"
-                        ))
+                        ), f"{nome_arq}_PROF")
                         
-                        links_f = f"--- LINKS ---\nRegular({link_alu})\nPEI_N1({link_pei1})\nPEI_N3({link_pei3})\nProf({link_prof})"
-                        conteudo_final = f"[PROFESSOR]\n{fa['teoria']}\n\n[ALUNO]\n{fa['reg_q']}\n\n[GABARITO]\n{fa['reg_gab']}\n\n[PEI_NIVEL_1]\n{fa['pei_1']}\n\n[PEI_NIVEL_3]\n{fa['pei_3']}\n\n[GABARITO_PEI]\n{fa['pei_gab']}\n\n{links_f}"
-                        
-                        db.salvar_no_banco("DB_AULAS_PRONTAS",[
-                            datetime.now().strftime("%d/%m/%Y"), fa['info']['semana_ref'], nome_arq, conteudo_final, f"{fa['info']['ano']}º", link_alu
-                        ])
-                        
-                        status.update(label="Sincronizado com Sucesso!", state="complete")
-                        st.balloons(); time.sleep(1.5); reset_laboratorio()
+                        # 🚨 TRAVA DE SEGURANÇA: Se algum upload falhar, interrompe o processo sem apagar a tela!
+                        if link_alu == "N/A" or link_prof == "N/A":
+                            status.update(label="❌ Falha no envio para o Google Drive. Os textos foram preservados acima.", state="error")
+                            st.warning("⚠️ O SOSA bloqueou a limpeza da tela para evitar perda de tokens. Verifique as caixas vermelhas de erro acima e tente novamente.")
+                        else:
+                            links_f = f"--- LINKS ---\nRegular({link_alu})\nPEI_N1({link_pei1})\nPEI_N3({link_pei3})\nProf({link_prof})"
+                            conteudo_final = f"[PROFESSOR]\n{fa['teoria']}\n\n[ALUNO]\n{fa['reg_q']}\n\n[GABARITO]\n{fa['reg_gab']}\n\n[PEI_NIVEL_1]\n{fa['pei_1']}\n\n[PEI_NIVEL_3]\n{fa['pei_3']}\n\n[GABARITO_PEI]\n{fa['pei_gab']}\n\n{links_f}"
+                            
+                            db.salvar_no_banco("DB_AULAS_PRONTAS",[
+                                datetime.now().strftime("%d/%m/%Y"), fa['info']['semana_ref'], nome_arq, conteudo_final, f"{fa['info']['ano']}º", link_alu
+                            ])
+                            
+                            status.update(label="Sincronizado com Sucesso!", state="complete")
+                            st.balloons()
+                            time.sleep(1.5)
+                            reset_laboratorio()
 
     # ==============================================================================
     # ABA 2: ACERVO DIGITAL
