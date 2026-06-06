@@ -508,7 +508,7 @@ def subir_e_converter_para_google_docs(file_stream, nome_arquivo, trimestre="I T
     """
     try:
         # 🚨 ATENÇÃO: Se o senhor gerou um novo link de script, substitua nesta linha abaixo:
-        URL_DA_PONTE = "https://script.google.com/macros/s/AKfycby6JpIPHk6vlCfQSms-wxLcRmUNNw6yVOf6qkBnEuTrco2bVFw8Apl9m0wqTIlOcw01_w/exec" 
+        URL_DA_PONTE = "https://script.google.com/macros/s/AKfycbzOhaXXJM4GuUDBXWKnFtmNnGtfPq3z5FSJZVeEsMKDeq7OVoBSPNY1e8xths9YRAr9hg/exec" 
         
         if isinstance(file_stream, bytes):
             file_b64 = base64.b64encode(file_stream).decode('utf-8')
