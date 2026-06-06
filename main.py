@@ -1509,7 +1509,8 @@ elif menu == "🧪 Criador de Aulas":
                         l_pei3 = extrair_link_seguro(txt_f, "PEI_N3", "N/A")
                         l_prof = extrair_link_seguro(txt_f, "Prof", "N/A")
 
-                        c_b1, c_b2, c_b3, c_b4, c_b5 = st.columns(5)
+                        # 🚨 EXPANSÃO: 6 Colunas para garantir que nenhum botão seja ocultado (V201.6)
+                        c_b1, c_b2, c_b3, c_b4, c_b5, c_b6 = st.columns(6)
                         
                         if l_alu and "http" in str(l_alu): c_b1.link_button("Aluno", str(l_alu), use_container_width=True)
                         else: c_b1.button("Sem Link", disabled=True, use_container_width=True, key=f"no_alu_{row.name}")
@@ -1518,16 +1519,18 @@ elif menu == "🧪 Criador de Aulas":
                         else: c_b2.button("Sem PEI N1", disabled=True, use_container_width=True, key=f"no_p1_{row.name}")
                         
                         if l_pei3 and "http" in str(l_pei3): c_b3.link_button("PEI N3", str(l_pei3), use_container_width=True)
-                        elif l_prof and "http" in str(l_prof): c_b3.link_button("Guia Prof.", str(l_prof), use_container_width=True)
-                        else: c_b3.button("Sem Guia", disabled=True, use_container_width=True, key=f"no_prof_{row.name}")
+                        else: c_b3.button("Sem PEI N3", disabled=True, use_container_width=True, key=f"no_p3_{row.name}")
                         
-                        if c_b4.button("Refinar", key=f"ref_ac_{row.name}", use_container_width=True):
+                        if l_prof and "http" in str(l_prof): c_b4.link_button("Guia Prof.", str(l_prof), use_container_width=True)
+                        else: c_b4.button("Sem Guia", disabled=True, use_container_width=True, key=f"no_prof_{row.name}")
+                        
+                        if c_b5.button("Refinar", key=f"ref_ac_{row.name}", use_container_width=True):
                             st.session_state.lab_temp = txt_f
                             st.session_state.sosa_id_atual = identificador
                             st.session_state.lab_meta = {"ano": str(row["ANO"]).replace("º",""), "semana_ref": row['SEMANA_REF']}
                             st.rerun()
                             
-                        if c_b5.button("Apagar", key=f"del_ac_{row.name}", use_container_width=True):
+                        if c_b6.button("Apagar", key=f"del_ac_{row.name}", use_container_width=True):
                             if db.excluir_registro_com_drive("DB_AULAS_PRONTAS", identificador): st.rerun()
 
 
