@@ -1331,26 +1331,33 @@ elif menu == "🧪 Criador de Aulas":
                 
                 if st.button("Finalizar e Sincronizar no Drive", type="primary", use_container_width=True):
                     with st.status("Gerando Documentos Oficiais...") as status:
-                        # 🚨 CORREÇÃO: Puxa o trimestre real que foi salvo na memória da Fase 1
                         trim_real = fa['info'].get('trimestre', 'I Trimestre')
                         info_doc = {"ano": f"{fa['info']['ano']}º", "trimestre": trim_real, "semana": fa['info']['semana_ref']}
 
+                        # 🚨 VACINA ANTI-HTML: Sanitizador de Links
+                        def sanitizar_link(link_bruto):
+                            l_str = str(link_bruto)
+                            if "https://docs.google.com/document/d/" in l_str:
+                                m = re.search(r"(https://docs\.google\.com/document/d/[a-zA-Z0-9-_]+)", l_str)
+                                return m.group(1) if m else "N/A"
+                            return "N/A"
+
                         status.write("Construindo Folha do Aluno...")
                         doc_alu = exporter.gerar_docx_aluno_v24(nome_arq, fa['reg_q'], info_doc)
-                        link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{nome_arq}_ALUNO", modo="AULA")
+                        link_alu = sanitizar_link(db.subir_e_converter_para_google_docs(doc_alu, f"{nome_arq}_ALUNO", modo="AULA"))
                         
                         status.write("Construindo PEI Nível 1...")
                         doc_pei1 = exporter.gerar_docx_pei_v25(f"{nome_arq}_PEI_N1", fa['pei_1'], info_doc)
-                        link_pei1 = db.subir_e_converter_para_google_docs(doc_pei1, f"{nome_arq}_PEI_N1", modo="AULA")
+                        link_pei1 = sanitizar_link(db.subir_e_converter_para_google_docs(doc_pei1, f"{nome_arq}_PEI_N1", modo="AULA"))
                         
                         status.write("Construindo PEI Nível 3 (Qualitativo)...")
                         doc_pei3 = exporter.gerar_docx_pei_qualitativa(f"{nome_arq}_PEI_N3", fa['pei_3'], info_doc)
-                        link_pei3 = db.subir_e_converter_para_google_docs(doc_pei3, f"{nome_arq}_PEI_N3", modo="AULA")
+                        link_pei3 = sanitizar_link(db.subir_e_converter_para_google_docs(doc_pei3, f"{nome_arq}_PEI_N3", modo="AULA"))
                         
                         status.write("Construindo Guia do Professor...")
                         guia_prof = f"{fa['teoria']}\n\n[GABARITO]\n{fa['reg_gab']}\n\n[GABARITO_PEI]\n{fa['pei_gab']}"
                         doc_prof = exporter.gerar_docx_professor_v25(nome_arq, guia_prof, info_doc)
-                        link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_arq}_PROF", modo="AULA")
+                        link_prof = sanitizar_link(db.subir_e_converter_para_google_docs(doc_prof, f"{nome_arq}_PROF", modo="AULA"))
                         
                         links_f = f"--- LINKS ---\nRegular({link_alu})\nPEI_N1({link_pei1})\nPEI_N3({link_pei3})\nProf({link_prof})"
                         conteudo_final = f"[PROFESSOR]\n{fa['teoria']}\n\n[ALUNO]\n{fa['reg_q']}\n\n[GABARITO]\n{fa['reg_gab']}\n\n[PEI_NIVEL_1]\n{fa['pei_1']}\n\n[PEI_NIVEL_3]\n{fa['pei_3']}\n\n[GABARITO_PEI]\n{fa['pei_gab']}\n\n{links_f}"
@@ -1361,6 +1368,126 @@ elif menu == "🧪 Criador de Aulas":
                         
                         status.update(label="Sincronizado com Sucesso!", state="complete")
                         st.balloons(); time.sleep(1.5); reset_laboratorio()
+
+    # ==============================================================================
+    # ABA 2: ACERVO DIGITAL
+    # ==============================================================================
+    with tab_acervo_lab:
+        st.markdown("### Acervo de Materiais Didáticos")
+        
+        if not df_aulas.empty:
+            df_m_acervo = df_aulas[~df_aulas['SEMANA_REF'].isin(["AVALIAÇÃO", "REVISÃO"])].copy()
+            termos_proibidos = ["TESTE", "PROVA", "SONDA", "RECUPERAÇÃO", "2ª CHAMADA"]
+            df_m_acervo = df_m_acervo[~df_m_acervo['TIPO_MATERIAL'].str.upper().str.contains('|'.join(termos_proibidos), na=False)]
+            
+            with st.container(border=True):
+                st.markdown("##### 📦 Envio Semanal para a Coordenação (Exportador em Lote PEI)")
+                st.caption("Gere um arquivo ZIP contendo todas as atividades PEI adaptadas de uma única vez em formato PDF pronto para impressão.")
+                
+                if st.button("Gerar Pacote de Atividades PEI (ZIP)", type="primary", use_container_width=True):
+                    with st.status("Convertendo e compactando arquivos...") as status_zip:
+                        import zipfile
+                        from googleapiclient.discovery import build
+                        try:
+                            creds = db.obter_creds_drive()
+                            service = build('drive', 'v3', credentials=creds)
+                            zip_buffer = io.BytesIO()
+                            count = 0
+                            
+                            with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+                                for _, row in df_m_acervo.iterrows():
+                                    txt_f = str(row['CONTEUDO'])
+                                    nome_mat = str(row['TIPO_MATERIAL']).replace("/", "-").replace(":", "").strip()
+                                    
+                                    # 🚨 VACINA ANTI-HTML NO ZIP
+                                    links_pei = re.findall(r"PEI_N[13]\s*\(\s*(https://docs\.google\.com/document/d/[^\s\)]+)\s*\)", txt_f, re.IGNORECASE)
+                                    if not links_pei: 
+                                        links_pei = re.findall(r"PEI\s*\(\s*(https://docs\.google\.com/document/d/[^\s\)]+)\s*\)", txt_f, re.IGNORECASE)
+                                        
+                                    for i, link_pei in enumerate(links_pei):
+                                        if "N/A" not in link_pei and "http" in link_pei:
+                                            id_match = re.search(r"/d/([a-zA-Z0-9-_]+)", link_pei)
+                                            if id_match:
+                                                file_id = id_match.group(1)
+                                                try:
+                                                    request = service.files().export_media(fileId=file_id, mimeType='application/pdf')
+                                                    pdf_bytes = request.execute()
+                                                    sufixo = f"_N{i*2+1}" if len(links_pei) > 1 else ""
+                                                    zip_file.writestr(f"{nome_mat}_PEI{sufixo}.pdf", pdf_bytes)
+                                                    count += 1
+                                                except: pass
+                            
+                            if count > 0:
+                                status_zip.update(label=f"Pacote com {count} arquivos gerado!", state="complete")
+                                st.session_state.zip_pei_ready = zip_buffer.getvalue()
+                                st.session_state.zip_pei_count = count
+                            else: status_zip.update(label="Nenhum arquivo PEI válido localizado no acervo.", state="error")
+                        except Exception as e: status_zip.update(label=f"Erro de conexão: {e}", state="error")
+                
+                if "zip_pei_ready" in st.session_state:
+                    st.download_button(
+                        label="📥 BAIXAR PACOTE PEI COMPACTADO (ZIP)",
+                        data=st.session_state.zip_pei_ready,
+                        file_name=f"SOSA_PEI_{datetime.now().strftime('%d%m%Y')}.zip",
+                        mime="application/zip",
+                        use_container_width=True
+                    )
+
+            st.markdown("---")
+            
+            c_m1, c_m2 = st.columns(2)
+            f_ano_m = c_m1.selectbox("Filtrar Série:", ["Todos", "6º", "7º", "8º", "9º"], key="ac_ano_fil")
+            f_tipo_m = c_m2.selectbox("Filtrar Tipo:", ["Todos", "Aula", "PROJETO", "Lista"], key="ac_tipo_fil")
+
+            if f_ano_m != "Todos": df_m_acervo = df_m_acervo[df_m_acervo['ANO'] == f_ano_m]
+            if f_tipo_m != "Todos": df_m_acervo = df_m_acervo[df_m_acervo['TIPO_MATERIAL'].str.upper().str.contains(f_tipo_m.upper())]
+
+            df_m_acervo = df_m_acervo.iloc[::-1]
+
+            if df_m_acervo.empty:
+                st.info("Nenhum material localizado no acervo.")
+            else:
+                for _, row in df_m_acervo.iterrows():
+                    with st.container(border=True):
+                        txt_f = str(row['CONTEUDO'])
+                        identificador = row['TIPO_MATERIAL']
+                        
+                        st.markdown(f"##### {identificador}")
+                        st.caption(f"Série: {row['ANO']} | Data de Sincronia: {row['DATA']}")
+                        
+                        # 🚨 VACINA ANTI-HTML NO ACERVO: Busca estritamente por links do Google Docs
+                        def extrair_link_seguro(t, k, res):
+                            m = re.search(rf"{k}\s*\(\s*(https://docs\.google\.com/document/d/[^\s\)]+)\s*\)", t, re.IGNORECASE)
+                            return m.group(1).strip() if m else res
+
+                        l_alu = extrair_link_seguro(txt_f, "Regular", "N/A")
+                        if l_alu == "N/A" and "https://docs.google.com" in str(row.get('LINK_DRIVE', '')):
+                            l_alu = str(row.get('LINK_DRIVE'))
+                            
+                        l_pei1 = extrair_link_seguro(txt_f, "PEI_N1", extrair_link_seguro(txt_f, "PEI", "N/A"))
+                        l_pei3 = extrair_link_seguro(txt_f, "PEI_N3", "N/A")
+                        l_prof = extrair_link_seguro(txt_f, "Prof", "N/A")
+
+                        c_b1, c_b2, c_b3, c_b4, c_b5 = st.columns(5)
+                        
+                        if l_alu and "http" in str(l_alu): c_b1.link_button("Aluno", str(l_alu), use_container_width=True)
+                        else: c_b1.button("Sem Link", disabled=True, use_container_width=True, key=f"no_alu_{row.name}")
+                        
+                        if l_pei1 and "http" in str(l_pei1): c_b2.link_button("PEI N1", str(l_pei1), use_container_width=True)
+                        else: c_b2.button("Sem PEI N1", disabled=True, use_container_width=True, key=f"no_p1_{row.name}")
+                        
+                        if l_pei3 and "http" in str(l_pei3): c_b3.link_button("PEI N3", str(l_pei3), use_container_width=True)
+                        elif l_prof and "http" in str(l_prof): c_b3.link_button("Guia Prof.", str(l_prof), use_container_width=True)
+                        else: c_b3.button("Sem Guia", disabled=True, use_container_width=True, key=f"no_prof_{row.name}")
+                        
+                        if c_b4.button("Refinar", key=f"ref_ac_{row.name}", use_container_width=True):
+                            st.session_state.lab_temp = txt_f
+                            st.session_state.sosa_id_atual = identificador
+                            st.session_state.lab_meta = {"ano": str(row["ANO"]).replace("º",""), "semana_ref": row['SEMANA_REF']}
+                            st.rerun()
+                            
+                        if c_b5.button("Apagar", key=f"del_ac_{row.name}", use_container_width=True):
+                            if db.excluir_registro_com_drive("DB_AULAS_PRONTAS", identificador): st.rerun()
 
     # ==============================================================================
     # ABA 2: ACERVO DIGITAL
