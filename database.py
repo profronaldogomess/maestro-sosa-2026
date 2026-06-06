@@ -499,51 +499,60 @@ def excluir_avaliacao_completa(identificador, tipo_prova_nome):
         return False
 
 # ==============================================================================
-# 5. INTEGRAÇÃO COM GOOGLE DRIVE (PONTE SOSA)
+# 5. INTEGRAÇÃO NATIVA COM GOOGLE DRIVE (SOSA BRIDGE V45.2)
 # ==============================================================================
+from googleapiclient.http import MediaIoBaseUpload
+import io
 
 def subir_e_converter_para_google_docs(file_stream, nome_arquivo, trimestre="I Trimestre", categoria="6º Ano", semana="Semana Geral", modo="AULA"):
-    """PONTE UNIVERSAL SOSA V27 - Envia Docs ou Imagens via GAS Bridge"""
-    try:
-        URL_DA_PONTE = "https://script.google.com/macros/s/AKfycby6JpIPHk6vlCfQSms-wxLcRmUNNw6yVOf6qkBnEuTrco2bVFw8Apl9m0wqTIlOcw01_w/exec" 
-        
-        if isinstance(file_stream, bytes):
-            file_b64 = base64.b64encode(file_stream).decode('utf-8')
-        else:
-            file_stream.seek(0)
-            file_b64 = base64.b64encode(file_stream.read()).decode('utf-8')
-        
-        payload = {
-            "fileName": nome_arquivo, 
-            "trimestre": trimestre, 
-            "categoria": categoria, 
-            "semanaRef": semana, 
-            "modo": modo, 
-            "fileB64": file_b64
-        }
-        
-        response = requests.post(URL_DA_PONTE, json=payload, timeout=60)
-        resposta_texto = response.text.strip()
-        
-        if "google.com" in resposta_texto and "https" in resposta_texto:
-            return resposta_texto
-        else:
-            return f"ERRO_NO_UPLOAD: {resposta_texto[:50]}"
-    except Exception as e: 
-        return f"Erro na Ponte: {e}"
-
-def limpar_todo_drive_da_conta_servico():
+    """
+    SOSA BRIDGE V45.2 (NATIVA): Bypassa o Apps Script instável e utiliza a API oficial
+    do Google Drive via Conta de Serviço para fazer o upload e conversão nativa do DOCX.
+    """
     try:
         creds = obter_creds_drive()
         service = build('drive', 'v3', credentials=creds)
-        results = service.files().list(q="'me' in owners", fields="files(id, name)").execute()
-        items = results.get('files',[])
-        if not items: return "A conta de serviço já está vazia."
-        for item in items: service.files().delete(fileId=item['id']).execute()
-        service.files().emptyTrash().execute()
-        return f"Sucesso! {len(items)} arquivos apagados."
-    except Exception as e: return f"Erro na limpeza: {e}"
-
-def extrair_id_da_url(url):
-    match = re.search(r"/d/(.*?)/", url)
-    return match.group(1) if match else None
+        
+        # 1. Configura os metadados para forçar a conversão automática para Google Docs
+        file_metadata = {
+            'name': nome_arquivo,
+            'mimeType': 'application/vnd.google-apps.document' # Força conversão para Google Docs
+        }
+        
+        # 2. Processa os bytes do arquivo na memória
+        if isinstance(file_stream, bytes):
+            bytes_io = io.BytesIO(file_stream)
+        else:
+            file_stream.seek(0)
+            bytes_io = io.BytesIO(file_stream.read())
+            
+        media_body = MediaIoBaseUpload(
+            bytes_io, 
+            mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document', 
+            resumable=True
+        )
+        
+        # 3. Realiza o upload e a conversão nativa de forma ultrarrápida
+        file = service.files().create(
+            body=file_metadata, 
+            media_body=media_body, 
+            fields='id'
+        ).execute()
+        
+        file_id = file.get('id')
+        
+        # 4. Libera permissão de escrita (Quem tiver o link pode editar no Docs)
+        permission = {
+            'type': 'anyone',
+            'role': 'writer'
+        }
+        service.permissions().create(
+            fileId=file_id, 
+            body=permission
+        ).execute()
+        
+        # 5. Retorna a URL oficial e limpa do Google Docs para o acervo
+        return f"https://docs.google.com/document/d/{file_id}/edit"
+        
+    except Exception as e:
+        return f"ERRO_NATIVO_DRIVE: {str(e)}"
