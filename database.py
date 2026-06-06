@@ -499,79 +499,41 @@ def excluir_avaliacao_completa(identificador, tipo_prova_nome):
         return False
 
 # ==============================================================================
-# 5. INTEGRAÇÃO NATIVA COM GOOGLE DRIVE (SOSA BRIDGE V45.3 - AUTO-HEALING)
+# 5. INTEGRAÇÃO COM GOOGLE DRIVE (SOSA BRIDGE V45.4 - PERSONAL DRIVE)
 # ==============================================================================
-from googleapiclient.http import MediaIoBaseUpload
-import io
-
 def subir_e_converter_para_google_docs(file_stream, nome_arquivo, trimestre="I Trimestre", categoria="6º Ano", semana="Semana Geral", modo="AULA"):
     """
-    SOSA BRIDGE V45.3 (AUTO-HEALING): Se a cota do Drive do robô estourar, a função 
-    captura o erro, esvazia a lixeira da conta de serviço na hora e refaz o upload com sucesso.
+    SOSA BRIDGE V45.4 (RESTORED): Retorna ao método original do Google Apps Script
+    para gravar os arquivos diretamente no seu Drive Pessoal, usando a sua cota de espaço enorme.
     """
     try:
-        creds = obter_creds_drive()
-        service = build('drive', 'v3', credentials=creds)
+        # 🚨 ATENÇÃO: Se o senhor gerou um novo link de script, substitua nesta linha abaixo:
+        URL_DA_PONTE = "https://script.google.com/macros/s/AKfycby6JpIPHk6vlCfQSms-wxLcRmUNNw6yVOf6qkBnEuTrco2bVFw8Apl9m0wqTIlOcw01_w/exec" 
         
-        # 1. Configura os metadados para forçar a conversão automática para Google Docs
-        file_metadata = {
-            'name': nome_arquivo,
-            'mimeType': 'application/vnd.google-apps.document'
-        }
-        
-        # 2. Processa os bytes do arquivo na memória
         if isinstance(file_stream, bytes):
-            bytes_io = io.BytesIO(file_stream)
+            file_b64 = base64.b64encode(file_stream).decode('utf-8')
         else:
             file_stream.seek(0)
-            bytes_io = io.BytesIO(file_stream.read())
-            
-        media_body = MediaIoBaseUpload(
-            bytes_io, 
-            mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document', 
-            resumable=True
-        )
+            file_b64 = base64.b64encode(file_stream.read()).decode('utf-8')
         
-        # 3. Tenta realizar o upload nativo
-        try:
-            file = service.files().create(
-                body=file_metadata, 
-                media_body=media_body, 
-                fields='id'
-            ).execute()
-        except Exception as e:
-            # 🚨 AUTO-RECUPERAÇÃO DE COTA: Se estourar o limite, limpa a lixeira e tenta de novo!
-            error_msg = str(e).lower()
-            if "quota" in error_msg or "storage" in error_msg or "exceeded" in error_msg or "403" in error_msg:
-                try:
-                    # Esvazia a lixeira da conta de serviço para liberar gigabytes de lixo
-                    service.files().emptyTrash().execute()
-                    
-                    # Tenta fazer o upload novamente
-                    file = service.files().create(
-                        body=file_metadata, 
-                        media_body=media_body, 
-                        fields='id'
-                    ).execute()
-                except Exception as retry_error:
-                    raise Exception(f"Lixeira limpa, mas o Drive continua sem espaço físico: {str(retry_error)}")
-            else:
-                raise e
-        
-        file_id = file.get('id')
-        
-        # 4. Libera permissão de escrita (Quem tiver o link pode editar no Docs)
-        permission = {
-            'type': 'anyone',
-            'role': 'writer'
+        payload = {
+            "fileName": nome_arquivo, 
+            "trimestre": trimestre, 
+            "categoria": categoria, 
+            "semanaRef": semana, 
+            "modo": modo, 
+            "fileB64": file_b64
         }
-        service.permissions().create(
-            fileId=file_id, 
-            body=permission
-        ).execute()
         
-        # 5. Retorna a URL oficial e limpa do Google Docs para o acervo
-        return f"https://docs.google.com/document/d/{file_id}/edit"
+        response = requests.post(URL_DA_PONTE, json=payload, timeout=60)
+        resposta_texto = response.text.strip()
         
+        # Se o Google Apps Script responder com a URL oficial do Docs, salva com sucesso
+        if "google.com" in resposta_texto and "https://" in resposta_texto and len(resposta_texto) < 250:
+            return resposta_texto
+        else:
+            # Se o script falhar ou retornar uma página de erro, repassa o erro para o main.py exibir
+            return f"ERRO_PONTE_GOOGLE: {resposta_texto[:250]}"
+            
     except Exception as e:
-        return f"ERRO_NATIVO_DRIVE: {str(e)}"
+        return f"ERRO_CONEXAO_PONTE: {str(e)}"
