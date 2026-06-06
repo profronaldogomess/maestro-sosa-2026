@@ -508,7 +508,7 @@ def subir_e_converter_para_google_docs(file_stream, nome_arquivo, trimestre="I T
     """
     try:
         # Se o senhor gerou um link novo no Apps Script, cole-o aqui dentro das aspas:
-        URL_DA_PONTE = "https://script.google.com/macros/s/AKfycbwLQBCd_rcrPQSiho_UnfC6OAkgJy5xq03AA7Ha8ayT_Nf7rIqC5LcPINiNfoyxNsQ9dg/exec" 
+        URL_DA_PONTE = "https://script.google.com/macros/s/AKfycbzt_bKwdI6zPMntMS0wQF3--HLUoDv9ViBNNvllt4iCf3bFTZMtcZsw1QK_bWXEsnSSSA/exec" 
         
         if isinstance(file_stream, bytes):
             file_b64 = base64.b64encode(file_stream).decode('utf-8')
