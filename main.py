@@ -1323,7 +1323,7 @@ elif menu == "🧪 Criador de Aulas":
                             fa['pei_gab'] = ai.extrair_tag(res_pei, "GABARITO_PEI") or "Gabarito não formatado."
                             st.rerun()
 
-            # --- FASE 5: COMPILAÇÃO FINAL (PRESERVAÇÃO DE ESTADO E AUDITORIA DO DRIVE) ---
+            # --- FASE 5: COMPILAÇÃO FINAL (COM PLANO DE EMERGÊNCIA LOCAL) ---
             elif fa['fase'] == 5:
                 st.markdown("### Fase 5: Compilação e Custódia")
                 nome_sugerido = util.gerar_nome_material_elite(fa['info']['ano'], fa['info']['aula_alvo'], fa['info']['semana_ref'])
@@ -1335,13 +1335,11 @@ elif menu == "🧪 Criador de Aulas":
                         trim_real = fa['info'].get('trimestre', 'I Trimestre')
                         info_doc = {"ano": f"{fa['info']['ano']}º", "trimestre": trim_real, "semana": fa['info']['semana_ref']}
 
-                        # 🚨 AUDITORIA DE LINKS: Mostra o erro exato do Google em vermelho na tela
+                        # AUDITORIA DE LINKS: Mostra o erro exato do Google
                         def sanitizar_link(link_bruto, nome_arquivo_etapa):
                             l_str = str(link_bruto).strip()
                             if "google.com" in l_str and "https://" in l_str and len(l_str) < 250 and not "<html" in l_str.lower():
                                 return l_str
-                            
-                            # Se falhar, cospe o erro exato na tela para o professor auditar
                             st.error(f"❌ Falha no envio de '{nome_arquivo_etapa}': {l_str[:250]}")
                             return "N/A"
 
@@ -1386,10 +1384,17 @@ elif menu == "🧪 Criador de Aulas":
                             modo="AULA"
                         ), f"{nome_arq}_PROF")
                         
-                        # 🚨 TRAVA DE SEGURANÇA: Se algum upload falhar, interrompe o processo sem apagar a tela!
+                        # 🚨 TRAVA DE SEGURANÇA E PLANO DE EMERGÊNCIA LOCAL (V201.7)
                         if link_alu == "N/A" or link_prof == "N/A":
                             status.update(label="❌ Falha no envio para o Google Drive. Os textos foram preservados acima.", state="error")
-                            st.warning("⚠️ O SOSA bloqueou a limpeza da tela para evitar perda de tokens. Verifique as caixas vermelhas de erro acima e tente novamente.")
+                            st.warning("⚠️ O SOSA bloqueou a limpeza da tela. Baixe os arquivos diretamente abaixo para não perder o trabalho:")
+                            
+                            # Botões de download de emergência em DOCX
+                            c_dl1, c_dl2, c_dl3, c_dl4 = st.columns(4)
+                            c_dl1.download_button("📥 Aluno (DOCX)", data=doc_alu.getvalue(), file_name=f"{nome_arq}_ALUNO.docx", use_container_width=True)
+                            c_dl2.download_button("📥 PEI N1 (DOCX)", data=doc_pei1.getvalue(), file_name=f"{nome_arq}_PEI_N1.docx", use_container_width=True)
+                            c_dl3.download_button("📥 PEI N3 (DOCX)", data=doc_pei3.getvalue(), file_name=f"{nome_arq}_PEI_N3.docx", use_container_width=True)
+                            c_dl4.download_button("📥 Guia Prof (DOCX)", data=doc_prof.getvalue(), file_name=f"{nome_arq}_PROF.docx", use_container_width=True)
                         else:
                             links_f = f"--- LINKS ---\nRegular({link_alu})\nPEI_N1({link_pei1})\nPEI_N3({link_pei3})\nProf({link_prof})"
                             conteudo_final = f"[PROFESSOR]\n{fa['teoria']}\n\n[ALUNO]\n{fa['reg_q']}\n\n[GABARITO]\n{fa['reg_gab']}\n\n[PEI_NIVEL_1]\n{fa['pei_1']}\n\n[PEI_NIVEL_3]\n{fa['pei_3']}\n\n[GABARITO_PEI]\n{fa['pei_gab']}\n\n{links_f}"
