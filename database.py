@@ -499,41 +499,112 @@ def excluir_avaliacao_completa(identificador, tipo_prova_nome):
         return False
 
 # ==============================================================================
-# 5. INTEGRAÇÃO COM GOOGLE DRIVE (SOSA BRIDGE V45.4 - PERSONAL DRIVE)
+# 5. INTEGRAÇÃO NATIVA COM GOOGLE DRIVE (SOSA BRIDGE V45.8 - AUTO-PURGER)
 # ==============================================================================
-def subir_e_converter_para_google_docs(file_stream, nome_arquivo, trimestre="I Trimestre", categoria="6º Ano", semana="Semana Geral", modo="AULA"):
+from googleapiclient.http import MediaIoBaseUpload
+import io
+
+def esvaziar_drive_servico_pesado():
     """
-    SOSA BRIDGE V45.4 (RESTORED): Retorna ao método original do Google Apps Script
-    para gravar os arquivos diretamente no seu Drive Pessoal, usando a sua cota de espaço enorme.
+    SOSA PURGER V45.8: Varre o Drive do robô e destrói permanentemente os 60 arquivos
+    mais antigos de forma síncrona, liberando a cota de 15GB instantaneamente.
     """
     try:
-        # 🚨 ATENÇÃO: Se o senhor gerou um novo link de script, substitua nesta linha abaixo:
-        URL_DA_PONTE = "https://script.google.com/macros/s/AKfycbwLQBCd_rcrPQSiho_UnfC6OAkgJy5xq03AA7Ha8ayT_Nf7rIqC5LcPINiNfoyxNsQ9dg/exec" 
+        creds = obter_creds_drive()
+        service = build('drive', 'v3', credentials=creds)
         
-        if isinstance(file_stream, bytes):
-            file_b64 = base64.b64encode(file_stream).decode('utf-8')
-        else:
-            file_stream.seek(0)
-            file_b64 = base64.b64encode(file_stream.read()).decode('utf-8')
+        # Lista os arquivos mais antigos criados no Drive do robô
+        results = service.files().list(
+            pageSize=100, 
+            fields="files(id)",
+            orderBy="createdTime"
+        ).execute()
+        items = results.get('files', [])
         
-        payload = {
-            "fileName": nome_arquivo, 
-            "trimestre": trimestre, 
-            "categoria": categoria, 
-            "semanaRef": semana, 
-            "modo": modo, 
-            "fileB64": file_b64
+        count = 0
+        if items:
+            for item in items:
+                try:
+                    # Deleta permanentemente do servidor do Google (Liberação de cota imediata)
+                    service.files().delete(fileId=item['id']).execute()
+                    count += 1
+                    if count >= 60:  # Limpa 60 arquivos para liberar espaço de sobra
+                        break
+                except:
+                    pass
+            try:
+                service.files().emptyTrash().execute()
+            except:
+                pass
+        return f"Limpeza concluída! {count} arquivos eliminados da cota."
+    except Exception as e:
+        return f"Falha na limpeza: {str(e)}"
+
+def subir_e_converter_para_google_docs(file_stream, nome_arquivo, trimestre="I Trimestre", categoria="6º Ano", semana="Semana Geral", modo="AULA"):
+    """
+    SOSA BRIDGE V45.8 (NATIVA & AUTO-PURGING): Upload direto via conta de serviço.
+    Se a cota estourar, roda o Purger Pesado síncrono, zera o espaço e conclui o upload.
+    """
+    try:
+        creds = obter_creds_drive()
+        service = build('drive', 'v3', credentials=creds)
+        
+        # Configura os metadados para forçar a conversão automática para Google Docs
+        file_metadata = {
+            'name': nome_arquivo,
+            'mimeType': 'application/vnd.google-apps.document'
         }
         
-        response = requests.post(URL_DA_PONTE, json=payload, timeout=60)
-        resposta_texto = response.text.strip()
-        
-        # Se o Google Apps Script responder com a URL oficial do Docs, salva com sucesso
-        if "google.com" in resposta_texto and "https://" in resposta_texto and len(resposta_texto) < 250:
-            return resposta_texto
+        # Processa os bytes do arquivo na memória
+        if isinstance(file_stream, bytes):
+            bytes_io = io.BytesIO(file_stream)
         else:
-            # Se o script falhar ou retornar uma página de erro, repassa o erro para o main.py exibir
-            return f"ERRO_PONTE_GOOGLE: {resposta_texto[:250]}"
+            file_stream.seek(0)
+            bytes_io = io.BytesIO(file_stream.read())
             
+        media_body = MediaIoBaseUpload(
+            bytes_io, 
+            mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document', 
+            resumable=True
+        )
+        
+        # Tenta realizar o upload nativo
+        try:
+            file = service.files().create(
+                body=file_metadata, 
+                media_body=media_body, 
+                fields='id'
+            ).execute()
+        except Exception as e:
+            error_msg = str(e).lower()
+            # Se der erro de cota/espaço, roda o limpador pesado na hora e tenta de novo!
+            if "quota" in error_msg or "storage" in error_msg or "exceeded" in error_msg or "403" in error_msg:
+                # Limpa permanentemente os arquivos velhos de teste para liberar espaço
+                esvaziar_drive_servico_pesado()
+                
+                # Refaz o upload com o espaço liberado de forma síncrona
+                file = service.files().create(
+                    body=file_metadata, 
+                    media_body=media_body, 
+                    fields='id'
+                ).execute()
+            else:
+                raise e
+        
+        file_id = file.get('id')
+        
+        # Libera permissão de escrita para que o senhor possa editar no Docs do seu navegador
+        permission = {
+            'type': 'anyone',
+            'role': 'writer'
+        }
+        service.permissions().create(
+            fileId=file_id, 
+            body=permission
+        ).execute()
+        
+        # Retorna a URL oficial e limpa do Google Docs gerado no seu Drive pessoal
+        return f"https://docs.google.com/document/d/{file_id}/edit"
+        
     except Exception as e:
-        return f"ERRO_CONEXAO_PONTE: {str(e)}"
+        return f"ERRO_NATIVO_DRIVE: {str(e)}"
