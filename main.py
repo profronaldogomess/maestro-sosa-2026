@@ -1323,7 +1323,7 @@ elif menu == "🧪 Criador de Aulas":
                             fa['pei_gab'] = ai.extrair_tag(res_pei, "GABARITO_PEI") or "Gabarito não formatado."
                             st.rerun()
 
-            # --- FASE 5: COMPILAÇÃO FINAL ---
+            # --- FASE 5: COMPILAÇÃO FINAL (INTEGRAÇÃO DE PASTAS DO DRIVE) ---
             elif fa['fase'] == 5:
                 st.markdown("### Fase 5: Compilação e Custódia")
                 nome_sugerido = util.gerar_nome_material_elite(fa['info']['ano'], fa['info']['aula_alvo'], fa['info']['semana_ref'])
@@ -1331,33 +1331,59 @@ elif menu == "🧪 Criador de Aulas":
                 
                 if st.button("Finalizar e Sincronizar no Drive", type="primary", use_container_width=True):
                     with st.status("Gerando Documentos Oficiais...") as status:
+                        # 🚨 Puxa o trimestre real que foi salvo na memória do planejamento
                         trim_real = fa['info'].get('trimestre', 'I Trimestre')
                         info_doc = {"ano": f"{fa['info']['ano']}º", "trimestre": trim_real, "semana": fa['info']['semana_ref']}
 
-                        # 🚨 VACINA ANTI-HTML: Sanitizador de Links
+                        # 🚨 VACINA ANTI-HTML: Sanitizador de Links Ultra-Robusto (V201.6)
+                        # Só aceita links limpos do Google, rejeitando páginas de erro HTML
                         def sanitizar_link(link_bruto):
-                            l_str = str(link_bruto)
-                            if "https://docs.google.com/document/d/" in l_str:
-                                m = re.search(r"(https://docs\.google\.com/document/d/[a-zA-Z0-9-_]+)", l_str)
-                                return m.group(1) if m else "N/A"
+                            l_str = str(link_bruto).strip()
+                            if "google.com" in l_str and "https://" in l_str and len(l_str) < 250 and not "<html" in l_str.lower():
+                                return l_str
                             return "N/A"
 
                         status.write("Construindo Folha do Aluno...")
                         doc_alu = exporter.gerar_docx_aluno_v24(nome_arq, fa['reg_q'], info_doc)
-                        link_alu = sanitizar_link(db.subir_e_converter_para_google_docs(doc_alu, f"{nome_arq}_ALUNO", modo="AULA"))
+                        # 🚨 CORREÇÃO: Passa explicitamente o trimestre, a série (categoria) e a semana para o roteamento de pastas no Drive
+                        link_alu = sanitizar_link(db.subir_e_converter_para_google_docs(
+                            doc_alu, f"{nome_arq}_ALUNO", 
+                            trimestre=trim_real, 
+                            categoria=f"{fa['info']['ano']}º Ano", 
+                            semana=fa['info']['semana_ref'], 
+                            modo="AULA"
+                        ))
                         
                         status.write("Construindo PEI Nível 1...")
                         doc_pei1 = exporter.gerar_docx_pei_v25(f"{nome_arq}_PEI_N1", fa['pei_1'], info_doc)
-                        link_pei1 = sanitizar_link(db.subir_e_converter_para_google_docs(doc_pei1, f"{nome_arq}_PEI_N1", modo="AULA"))
+                        link_pei1 = sanitizar_link(db.subir_e_converter_para_google_docs(
+                            doc_pei1, f"{nome_arq}_PEI_N1", 
+                            trimestre=trim_real, 
+                            categoria=f"{fa['info']['ano']}º Ano", 
+                            semana=fa['info']['semana_ref'], 
+                            modo="AULA"
+                        ))
                         
                         status.write("Construindo PEI Nível 3 (Qualitativo)...")
                         doc_pei3 = exporter.gerar_docx_pei_qualitativa(f"{nome_arq}_PEI_N3", fa['pei_3'], info_doc)
-                        link_pei3 = sanitizar_link(db.subir_e_converter_para_google_docs(doc_pei3, f"{nome_arq}_PEI_N3", modo="AULA"))
+                        link_pei3 = sanitizar_link(db.subir_e_converter_para_google_docs(
+                            doc_pei3, f"{nome_arq}_PEI_N3", 
+                            trimestre=trim_real, 
+                            categoria=f"{fa['info']['ano']}º Ano", 
+                            semana=fa['info']['semana_ref'], 
+                            modo="AULA"
+                        ))
                         
                         status.write("Construindo Guia do Professor...")
                         guia_prof = f"{fa['teoria']}\n\n[GABARITO]\n{fa['reg_gab']}\n\n[GABARITO_PEI]\n{fa['pei_gab']}"
                         doc_prof = exporter.gerar_docx_professor_v25(nome_arq, guia_prof, info_doc)
-                        link_prof = sanitizar_link(db.subir_e_converter_para_google_docs(doc_prof, f"{nome_arq}_PROF", modo="AULA"))
+                        link_prof = sanitizar_link(db.subir_e_converter_para_google_docs(
+                            doc_prof, f"{nome_arq}_PROF", 
+                            trimestre=trim_real, 
+                            categoria=f"{fa['info']['ano']}º Ano", 
+                            semana=fa['info']['semana_ref'], 
+                            modo="AULA"
+                        ))
                         
                         links_f = f"--- LINKS ---\nRegular({link_alu})\nPEI_N1({link_pei1})\nPEI_N3({link_pei3})\nProf({link_prof})"
                         conteudo_final = f"[PROFESSOR]\n{fa['teoria']}\n\n[ALUNO]\n{fa['reg_q']}\n\n[GABARITO]\n{fa['reg_gab']}\n\n[PEI_NIVEL_1]\n{fa['pei_1']}\n\n[PEI_NIVEL_3]\n{fa['pei_3']}\n\n[GABARITO_PEI]\n{fa['pei_gab']}\n\n{links_f}"
