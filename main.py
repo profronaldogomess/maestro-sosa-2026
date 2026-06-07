@@ -714,7 +714,7 @@ if menu == "📅 Planejamento (Ponto ID)":
             else: st.success("Nenhum plano pendente de produção.")
 
     # ==============================================================================
-    # ABA 3: ACERVO
+    # ABA 3: ACERVO (COM AUTO-CURA DE LINKS SOBERANA V201)
     # ==============================================================================
     with tab_acervo:
         st.markdown("#### Acervo de Planos Estratégicos")
@@ -726,10 +726,80 @@ if menu == "📅 Planejamento (Ponto ID)":
                 sel_h = st.selectbox("Selecionar Plano:", df_h["SEMANA"].tolist()[::-1], key="hist_sem")
                 dados_h = df_h[df_h["SEMANA"] == sel_h].iloc[0]
                 
-                c_btn1, c_btn2 = st.columns(2)
-                c_btn1.link_button("Abrir DOCX no Drive", str(dados_h.get("LINK_DRIVE", "#")), use_container_width=True)
-                if c_btn2.button("Apagar Plano", use_container_width=True):
-                    if db.excluir_plano_completo(sel_h, dados_h["ANO"]): st.rerun()
+                # Sensor de Integridade: Detecta se o link antigo está corrompido com HTML do Drive
+                link_atual = str(dados_h.get("LINK_DRIVE", ""))
+                is_corrupted = "html" in link_atual.lower() or "Page Not Found" in link_atual or not link_atual.startswith("http")
+                
+                if is_corrupted:
+                    st.error("⚠️ **Detector de Falhas:** Este arquivo no seu Drive foi gerado durante o bloqueio de cota anterior do Google e o link está corrompido.")
+                    
+                    # BOTÃO MÁGICO DE AUTO-CURA (0% custo de tokens)
+                    if st.button("🔄 RECONSTRUIR DOCUMENTO E RECUPERAR LINK NO DRIVE", type="primary", use_container_width=True, key=f"heal_btn_{sel_h.replace(' ','')}"):
+                        with st.status("Reconstruindo e enviando arquivo corrigido...", expanded=True) as status:
+                            plano_txt_bruto = str(dados_h['PLANO_TEXTO'])
+                            
+                            # Extrai os dados que já existem na planilha
+                            ed_geral = ai.extrair_tag(plano_txt_bruto, "OBJETO_CONHECIMENTO") or ai.extrair_tag(plano_txt_bruto, "CONTEUDO_GERAL") or "Planejamento Semanal"
+                            ed_espec = ai.extrair_tag(plano_txt_bruto, "CONTEUDOS_ESPECIFICOS")
+                            ed_objs = ai.extrair_tag(plano_txt_bruto, "OBJETIVOS_ENSINO")
+                            ed_a1 = ai.extrair_tag(plano_txt_bruto, "AULA_1")
+                            ed_a2 = ai.extrair_tag(plano_txt_bruto, "AULA_2")
+                            ed_sab = ai.extrair_tag(plano_txt_bruto, "SABADO_LETIVO")
+                            
+                            # Reconstrói a metodologia do arquivo
+                            metodologia_docx = f"AULA 01:\n{ed_a1}"
+                            if "N/A" not in ed_a2.upper() and len(ed_a2) > 5: metodologia_docx += f"\n\nAULA 02:\n{ed_a2}"
+                            if "N/A" not in ed_sab.upper() and len(ed_sab) > 5: metodologia_docx += f"\n\nSÁBADO LETIVO:\n{ed_sab}"
+                            
+                            dados_docx = {
+                                "geral": ed_geral, "especificos": ed_espec, "objetivos": ed_objs, 
+                                "recursos": "Livro Didático", 
+                                "metodologia": metodologia_docx,
+                                "avaliacao": ai.extrair_tag(plano_txt_bruto, "AVALIACAO_DE_MERITO"), 
+                                "pei": ai.extrair_tag(plano_txt_bruto, "ESTRATEGIA_DUA_PEI")
+                            }
+                            
+                            # Gera o novo DOCX limpo na memória
+                            nome_arquivo = f"PLANO_{dados_h['ANO'].replace('º','')}_{sel_h.replace(' ', '')}"
+                            doc_io = exporter.gerar_docx_plano_pedagogico_ELITE(nome_arquivo, dados_docx, {"ano": dados_h['ANO'], "semana": sel_h, "trimestre": dados_h['TURMA']})
+                            
+                            # Faz o upload usando a nossa nova ponte ativa 100% funcionando!
+                            status.write("Enviando arquivo e registrando no seu Docs pessoal...")
+                            link_novo = db.subir_e_converter_para_google_docs(doc_io, nome_arquivo, trimestre=dados_h['TURMA'], categoria=dados_h['ANO'], semana=sel_h, modo="PLANEJAMENTO")
+                            
+                            if "https" in link_novo and len(link_novo) < 250:
+                                # Altera a planilha do Google Sheets sobrescrevendo o link quebrado
+                                try:
+                                    wb = db.conectar()
+                                    ws = wb.worksheet("DB_PLANOS")
+                                    dados_sheet = ws.get_all_values()
+                                    
+                                    # Procura a linha correspondente no banco
+                                    for row_idx, row in enumerate(dados_sheet):
+                                        if row_idx > 0 and row[1] == sel_h and row[2] == dados_h['ANO']:
+                                            # Atualiza o Link na coluna G
+                                            ws.update_cell(row_idx+1, 7, link_novo)
+                                            
+                                            # Limpa o HTML do campo de texto plano (Coluna F)
+                                            novo_plano_texto = plano_txt_bruto.split("--- LINK DRIVE ---")[0] + f"--- LINK DRIVE --- {link_novo}"
+                                            ws.update_cell(row_idx+1, 6, novo_plano_texto)
+                                            break
+                                    
+                                    status.update(label="✅ Documento e Link Recuperados com Sucesso!", state="complete")
+                                    st.balloons()
+                                    st.cache_data.clear()
+                                    time.sleep(1.5)
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"Erro ao salvar no banco: {e}")
+                            else:
+                                status.update(label="❌ Falha na recuperação. O Google rejeitou o arquivo.", state="error")
+                                st.error(link_novo)
+                else:
+                    c_btn1, c_btn2 = st.columns(2)
+                    c_btn1.button("Abrir DOCX no Drive", disabled=True, use_container_width=True, key=f"no_plan_{row.name}")
+                    if c_btn2.button("Apagar Plano", use_container_width=True, key=f"del_plan_{row.name}"):
+                        if db.excluir_plano_completo(sel_h, dados_h["ANO"]): st.rerun()
             else: st.info("Nenhum plano encontrado.")
 
     # ==============================================================================
