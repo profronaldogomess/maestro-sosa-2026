@@ -797,8 +797,8 @@ if menu == "📅 Planejamento (Ponto ID)":
                                 st.error(link_novo)
                 else:
                     c_btn1, c_btn2 = st.columns(2)
-                    # 🚨 CORREÇÃO: Chaves únicas corrigidas para evitar o erro de NameError
-                    c_btn1.button("Abrir DOCX no Drive", disabled=True, use_container_width=True, key=f"no_plan_h_{sel_h.replace(' ', '')}")
+                    # 🚨 CORREÇÃO: Transformado em link_button clicável para abrir o Google Docs
+                    c_btn1.link_button("Abrir DOCX no Drive", link_atual, use_container_width=True)
                     if c_btn2.button("Apagar Plano", use_container_width=True, key=f"del_plan_h_{sel_h.replace(' ', '')}"):
                         if db.excluir_plano_completo(sel_h, dados_h["ANO"]): st.rerun()
             else: st.info("Nenhum plano encontrado.")
