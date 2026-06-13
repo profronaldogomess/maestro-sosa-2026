@@ -577,7 +577,11 @@ if menu == "📅 Planejamento (Ponto ID)":
                     foco_a2 = c_d2.text_area("Foco da Aula 2:", placeholder="Ex: Fazer exercícios...", height=80)
                     foco_sab = c_d3.text_area("Foco do Sábado Letivo:", placeholder="Ex: Oficina prática...", height=80)
 
-            if st.button("🧠 Iniciar Motor de IA: Gerar Planejamento", use_container_width=True, type="primary"):
+            # 🚨 CANAL DUPLO DE CRIAÇÃO (Soberania de Escolha V201)
+            c_g1, c_g2 = st.columns(2)
+
+            # CANAL 1: GERAÇÃO COM IA (Rápida e Otimizada)
+            if c_g1.button("🧠 Iniciar Motor de IA: Gerar Planejamento", use_container_width=True, type="primary"):
                 with st.status("🚀 Iniciando Protocolo de Planejamento...", expanded=True) as status:
                     status.write("📚 Coletando base didática e diretrizes...")
                     
@@ -588,8 +592,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                         diretriz_base = f"MÉTODO WEB: Use estes links:\n{links_web_texto}"
                         precisa_de_internet = True
                     else: 
-                        # 🚨 VACINA ANTI-BLOQUEIO: Não baixa o PDF gigante, apenas usa o título e as páginas como contexto
-                        diretriz_base = f"MÉTODO LIVRO: O professor utilizará o livro '{base_didatica_info}'. Deduza os conceitos abordados nestas páginas e crie o plano."
+                        diretriz_base = f"MÉTODO LIVRO: O professor utilizará o livro '{base_didatica_info}'."
 
                     template_forcado = (
                         "[HABILIDADE_BNCC] (Código BNCC)\n"
@@ -615,11 +618,8 @@ if menu == "📅 Planejamento (Ponto ID)":
                     )
                     
                     status.write("🧠 Maestro Sosa está redigindo o plano...")
-                    
-                    # 🚨 CORREÇÃO: url_drive=None para evitar o bloqueio do Google Drive
                     resultado_ia = ai.gerar_ia("PLANE_PEDAGOGICO", prompt, url_drive=None, usar_busca=precisa_de_internet)
                     
-                    # 🚨 CORREÇÃO: Verificação de erro case-insensitive
                     if "ERRO" in resultado_ia.upper() or "⚠️" in resultado_ia:
                         status.update(label="❌ Falha na comunicação com a IA.", state="error")
                         st.error(resultado_ia)
@@ -631,6 +631,29 @@ if menu == "📅 Planejamento (Ponto ID)":
                         status.update(label="🎉 Planejamento Concluído!", state="complete")
                         time.sleep(1)
                         st.rerun()
+
+            # CANAL 2: ESCRITA 100% MANUAL (Zero Custo de IA e Tempo Instantâneo)
+            if c_g2.button("✍️ Elaborar Manualmente (Sem IA)", use_container_width=True):
+                # Pré-carrega conteúdos e objetivos da matriz na memória se o professor tiver selecionado
+                espec_pre = ", ".join(sel_cont) if 'sel_cont' in locals() and sel_cont else ""
+                objs_pre = "\n".join(sel_obj) if 'sel_obj' in locals() and sel_obj else ""
+                
+                # Monta as tags vazias ou pré-preenchidas para abrir o editor diretamente
+                texto_manual_template = (
+                    f"[HABILIDADE_BNCC]\n"
+                    f"[OBJETO_CONHECIMENTO] {obj_geral if 'obj_geral' in locals() and obj_geral else ''}\n"
+                    f"[CONTEUDOS_ESPECIFICOS] {espec_pre}\n"
+                    f"[OBJETIVOS_ENSINO] {objs_pre}\n"
+                    f"[AULA_1] (Escreva o roteiro da Aula 1 aqui...)\n"
+                    f"[AULA_2] (Escreva o roteiro da Aula 2 aqui...)\n"
+                    f"[SABADO_LETIVO] (Escreva o roteiro do Sábado aqui se houver...)\n"
+                    f"[AVALIACAO_DE_MERITO]\n"
+                    f"[ESTRATEGIA_DUA_PEI]"
+                )
+                
+                st.session_state.p_temp = texto_manual_template
+                st.session_state.p_meta = {"semana": sem_limpa, "trimestre": trim_atual, "ano": ano_str_busca, "base": base_didatica_info}
+                st.rerun()
 
             # --- EDITOR DO PLANO GERADO ---
             if "p_temp" in st.session_state:
