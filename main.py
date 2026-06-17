@@ -1955,9 +1955,24 @@ elif menu == "📝 Central de Avaliações":
                     df_ref = df_ref[~df_ref['TIPO_MATERIAL'].str.upper().str.contains('|'.join(termos_proibidos))]
                     mats_selecionados = c_safra1.multiselect("Aulas Base (Acervo):", options=df_ref["TIPO_MATERIAL"].tolist())
                     
-                    trim_sigla = trim_filtro.split(" ")[0]
-                    df_matriz_av = df_curriculo[(df_curriculo['ANO'].astype(str).str.contains(str(ano_av))) & (df_curriculo['TRIMESTRE'] == trim_sigla)]
-                    topicos_futuros = c_safra2.multiselect("Tópicos Futuros (Matriz):", options=sorted(df_matriz_av['CONTEUDO_ESPECIFICO'].unique().tolist()) if not df_matriz_av.empty else [])
+                    # 🚨 NOVA VACINA DE ADAPTAÇÃO DE ESQUEMA: Evita o KeyError no novo CSV
+                    col_ano = next((c for c in df_curriculo.columns if 'ANO' in c.upper()), None)
+                    col_trim = next((c for c in df_curriculo.columns if trim_filtro.upper() in c.upper()), None)
+                    
+                    topicos_disponiveis = []
+                    
+                    if col_ano and col_trim:
+                        df_matriz_filtrada = df_curriculo[df_curriculo[col_ano].astype(str).str.contains(str(ano_av))]
+                        for _, row_cur in df_matriz_filtrada.iterrows():
+                            texto_eixo = row_cur[col_trim]
+                            if pd.notna(texto_eixo) and str(texto_eixo).strip() != "":
+                                # Limpa os [cite: x] e separa por ponto-e-vírgula
+                                texto_limpo = re.sub(r'\[cite:.*?\]', '', str(texto_eixo)).strip()
+                                for t_p in [x.strip() for x in texto_limpo.split(';') if x.strip()]:
+                                    if t_p not in topicos_disponiveis:
+                                        topicos_disponiveis.append(t_p)
+                                        
+                    topicos_futuros = c_safra2.multiselect("Tópicos Futuros (Matriz):", options=sorted(topicos_disponiveis))
                     
                     conteudos_extraidos = set()
                     contexto_base_texto = "" 
