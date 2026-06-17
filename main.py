@@ -3699,14 +3699,27 @@ elif menu == "👤 Biografia do Estudante":
     st.caption("💡 **Guia de Comando:** Dashboard executivo para reuniões de pais. Navegue pelas abas para apresentar os resultados de forma limpa e organizada.")
     st.markdown("---")
 
+    # 🔬 FILTRO DE LEITURA GLOBAL (LATEX AUTÔNOMO E CAIXA DE CÓPIA DE IMAGEM V201.8)
     def preparar_para_leitura(texto):
         if not texto: return ""
-        texto = re.sub(r'^```[a-zA-Z]*\n', '', texto, flags=re.MULTILINE | re.IGNORECASE)
-        texto = re.sub(r'```$', '', texto, flags=re.MULTILINE)
-        texto = texto.replace("**", "") 
+        
+        # 1. VACINA DO LATEX AUTÔNOMO: Detecta frações \frac{}{} ou símbolos soltos que a IA gerou sem o '$' e os envolve de forma automática para renderizar bonito
+        texto = re.sub(r'(?<!\$)\\\w+\{[^\}]*?\}(?:\{[^\}]*?\})?(?!\$)', r'$\g<0>$', texto)
+        texto = re.sub(r'(?<!\$)\^\\(circ|deg|cdot|times)(?!\$)', r'$\g<0>$', texto)
+        
+        # 2. Converte as potências $$...$$ de bloco em $...$ de linha para melhor alinhamento no Streamlit
         texto = re.sub(r'\$\$(.*?)\$\$', r'$\1$', texto, flags=re.DOTALL)
-        texto = re.sub(r'\[GEOGEBRA\](.*?)\[/GEOGEBRA\]', r'📐 *(Comando GeoGebra: \1)*', texto, flags=re.IGNORECASE | re.DOTALL)
-        texto = re.sub(r'\[\s*PROMPT IMAGEM:(.*?)\s*\]', r'🖼️ *(Imagem: \1)*', texto, flags=re.IGNORECASE | re.DOTALL)
+        
+        # 3. VACINA DO GEOGEBRA OBSOLETO: Se houver algum resquício antigo no banco de dados, limpa
+        texto = re.sub(r'\[GEOGEBRA\](.*?)\[/GEOGEBRA\]', '', texto, flags=re.IGNORECASE | re.DOTALL)
+        
+        # 4. 🚀 A CAIXA DE CÓPIA RÁPIDA (UX DE ELITE): Transforma as tags [PROMPT IMAGEM: ...] em blocos de código copiáveis com 1 clique!
+        texto = re.sub(
+            r'\[\s*PROMPT IMAGEM:(.*?)\s*\]', 
+            r'\n\n🎨 **[PROMPT GERADOR DE IMAGEM - COPIE NO BOTÃO ABAIXO]**\n```english\n\1\n```\n\n', 
+            texto, 
+            flags=re.IGNORECASE | re.DOTALL
+        )
         return texto
 
     if df_alunos.empty:
