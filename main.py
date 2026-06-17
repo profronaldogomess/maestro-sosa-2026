@@ -1044,7 +1044,7 @@ elif menu == "🧪 Criador de Aulas":
                             with st.spinner("Ajustando material..."):
                                 hist_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history_lab[-5:]])
                                 prompt_refino = f"HISTÓRICO:\n{hist_text}\n\nORDEM: {cmd_refine_lab}\n\nCONTEÚDO:\n{txt_base}"
-                                resultado_refino = ai.gerar_ia("REFINADOR_PEDAGOGICO", prompt_refino)
+                                resultado_refino = ai.generar_ia("REFINADOR_PEDAGOGICO", prompt_refino)
                                 msg_chat = ai.extrair_tag(resultado_refino, "MENSAGEM_CHAT") or "Ajustado!"
                                 novo_conteudo = ai.extrair_tag(resultado_refino, "CONTEUDO_ATUALIZADO") or resultado_refino
                                 
@@ -1348,7 +1348,7 @@ elif menu == "🧪 Criador de Aulas":
                 # SE FOR FÁBRICA DE LISTAS HÍBRIDAS (LINHA DE MONTAGEM DE ITENS)
                 else:
                     st.markdown(f"### Linha de Montagem: {fa['info']['id_lista']}")
-                    st.caption("Aprove, regere ou edite cada item da lista individualmente. Use os painéis sanfonados para focar no que importa.")
+                    st.caption("Aprove, regere ou edite cada item da lista de forma individual.")
                     
                     # 🚀 PROCESSAMENTO DE MICRO-LOTES EM JSON NATIVO (Otimização Máxima)
                     pendentes = [item for item in fa['mapa_lista'] if item['status'] == 'pendente']
@@ -1359,7 +1359,7 @@ elif menu == "🧪 Criador de Aulas":
                             with st.status(f"Forjando lote de {len(micro_lote)} itens...") as status:
                                 prompt_lote = f"SÉRIE: {fa['info']['ano']}º Ano. MATÉRIA BASE:\n{fa['info']['contexto']}\n\n"
                                 for item in micro_lote:
-                                    img_req = "REQUER SUPORTE VISUAL COM PROMPT DE IMAGEM OU GEOGEBRA." if item['suporte_visual'] else "Foco textual."
+                                    img_req = "REQUER SUPORTE VISUAL COM UM PROMPT DE IMAGEM TOTALMENTE DETALHADO EM INGLÊS. PROIBIDO USAR GEOGEBRA." if item['suporte_visual'] else "Foco textual."
                                     prompt_lote += f"QUESTÃO {item['q']}:\n- COMPLEXIDADE: {item['dificuldade']}\n- GABARITO EXIGIDO: {item['gabarito']}\n- DIRETRIZ: {img_req}\n\n"
                                 
                                 res_json = ai.gerar_ia_json("FORJA_LOTE_JSON", prompt_lote)
@@ -1368,23 +1368,30 @@ elif menu == "🧪 Criador de Aulas":
                                     status.update(label="Falha na cota da API. Tente novamente.", state="error")
                                     st.error(res_json["erro"])
                                 else:
-                                    for q_data in res_json.get("questoes", []):
-                                        q_num = int(q_data.get("q", 0))
-                                        for item in fa['mapa_lista']:
-                                            if item['q'] == q_num:
-                                                # Se o item requeria suporte visual, força a presença de tags válidas
-                                                enunciado = q_data.get('enunciado', '')
-                                                if item['suporte_visual'] and "[GEOGEBRA]" not in enunciado and "[ PROMPT IMAGEM:" not in enunciado:
-                                                    enunciado += f"\n\n[GEOGEBRA] Polygon((0,0), (4,0), (4,4), (0,4)) [/GEOGEBRA]"
+                                    questoes_retornadas = res_json.get("questoes", [])
+                                    # 🚨 VACINA DE SOBRESCRITA: Mapeia sequencialmente pelo index do micro_lote para não bagunçar questões antigas
+                                    for idx_lote, q_data in enumerate(questoes_retornadas):
+                                        if idx_lote < len(micro_lote):
+                                            item = micro_lote[idx_lote]
+                                            
+                                            enunciado = q_data.get('enunciado', '')
+                                            # 🚨 VACINA ANTI-GEOGEBRA NO LOOPER: Força o prompt de imagem se a IA teimar com geogebra
+                                            if item['suporte_visual'] and "[ PROMPT IMAGEM:" not in enunciado:
+                                                enunciado += (
+                                                    f"\n\n[ PROMPT IMAGEM: A4 portrait-format educational math worksheet, "
+                                                    f"clean black and white line art, completely white background, no colors, "
+                                                    f"no shadows, perfect for printing. Simple cartoon diagram representing the problem "
+                                                    f"of {item['tema']}. ]"
+                                                )
                                                 
-                                                item['dados'] = {
-                                                    'ENUNCIADO': enunciado, 'ALT_A': q_data.get('alt_a', ''),
-                                                    'ALT_B': q_data.get('alt_b', ''), 'ALT_C': q_data.get('alt_c', ''),
-                                                    'ALT_D': q_data.get('alt_d', ''), 'ALT_E': q_data.get('alt_e', ''),
-                                                    'HABILIDADE': q_data.get('habilidade', 'EF06MA01'), 'JUSTIFICATIVA': q_data.get('justificativa', ''),
-                                                    'DISTRATORES': q_data.get('distratores', ''), 'GABARITO': item['gabarito']
-                                                }
-                                                item['status'] = 'revisao'
+                                            item['dados'] = {
+                                                'ENUNCIADO': enunciado, 'ALT_A': q_data.get('alt_a', ''),
+                                                'ALT_B': q_data.get('alt_b', ''), 'ALT_C': q_data.get('alt_c', ''),
+                                                'ALT_D': q_data.get('alt_d', ''), 'ALT_E': q_data.get('alt_e', ''),
+                                                'HABILIDADE': q_data.get('habilidade', 'EF06MA01'), 'JUSTIFICATIVA': q_data.get('justificativa', ''),
+                                                'DISTRATORES': q_data.get('distratores', ''), 'GABARITO': item['gabarito']
+                                            }
+                                            item['status'] = 'revisao'
                                     st.rerun()
 
                     st.markdown("---")
@@ -1403,7 +1410,7 @@ elif menu == "🧪 Criador de Aulas":
                             if item['status'] == 'pendente':
                                 todas_aprovadas = False
                                 st.info("Questão aguardando processamento. Utilize o botão de lote no topo ou clique abaixo para forjar individualmente.")
-                                if st.button(f"Forjar Item {item['q']} Solitário", key=f"btn_f_single_{i}"):
+                                if st.button("Forjar Item " + str(item['q']) + " Solitário", key=f"btn_f_single_{i}"):
                                     with st.spinner("Desenhando..."):
                                         prompt = f"SÉRIE: {fa['info']['ano']}\nTEMA: {item['tema']}. DIFICULDADE: {item['dificuldade']}. GABARITO: {item['gabarito']}.\nCONTEXTO:\n{fa['info']['contexto']}"
                                         res_item = ai.gerar_ia("FORJA_ITEM_REGULAR", prompt)
@@ -1735,133 +1742,6 @@ elif menu == "🧪 Criador de Aulas":
                             st.balloons()
                             time.sleep(1.5)
                             reset_laboratorio()
-
-    # ==============================================================================
-    # ABA 2: ACERVO DIGITAL (IMUNE A COMPRESSÃO E DUPLICIDADE)
-    # ==============================================================================
-    with tab_acervo_lab:
-        st.markdown("### Acervo de Materiais Didáticos")
-        
-        if not df_aulas.empty:
-            df_m_acervo = df_aulas[~df_aulas['SEMANA_REF'].isin(["AVALIAÇÃO", "REVISÃO"])].copy()
-            termos_proibidos = ["TESTE", "PROVA", "SONDA", "RECUPERAÇÃO", "2ª CHAMADA"]
-            df_m_acervo = df_m_acervo[~df_m_acervo['TIPO_MATERIAL'].str.upper().str.contains('|'.join(termos_proibidos), na=False)]
-            
-            with st.container(border=True):
-                st.markdown("##### 📦 Envio Semanal para a Coordenação (Exportador em Lote PEI)")
-                st.caption("Gere um arquivo ZIP contendo todas as atividades PEI adaptadas de uma única vez em formato PDF pronto para impressão.")
-                
-                # 🚨 VACINA DE ID ÚNICO APLICADA AQUI (key="btn_zip_pei_v201")
-                if st.button("Gerar Pacote de Atividades PEI (ZIP)", type="primary", use_container_width=True, key="btn_zip_pei_v201"):
-                    with st.status("Convertendo e compactando arquivos...") as status_zip:
-                        import zipfile
-                        from googleapiclient.discovery import build
-                        try:
-                            creds = db.obter_creds_drive()
-                            service = build('drive', 'v3', credentials=creds)
-                            zip_buffer = io.BytesIO()
-                            count = 0
-                            
-                            with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-                                for _, row in df_m_acervo.iterrows():
-                                    txt_f = str(row['CONTEUDO'])
-                                    nome_mat = str(row['TIPO_MATERIAL']).replace("/", "-").replace(":", "").strip()
-                                    
-                                    # 🚨 VACINA ANTI-HTML NO ZIP
-                                    links_pei = re.findall(r"PEI_N[13]\s*\(\s*(https://docs\.google\.com/document/d/[^\s\)]+)\s*\)", txt_f, re.IGNORECASE)
-                                    if not links_pei: 
-                                        links_pei = re.findall(r"PEI\s*\(\s*(https://docs\.google\.com/document/d/[^\s\)]+)\s*\)", txt_f, re.IGNORECASE)
-                                        
-                                    for i, link_pei in enumerate(links_pei):
-                                        if "N/A" not in link_pei and "http" in link_pei:
-                                            id_match = re.search(r"/d/([a-zA-Z0-9-_]+)", link_pei)
-                                            if id_match:
-                                                file_id = id_match.group(1)
-                                                try:
-                                                    request = service.files().export_media(fileId=file_id, mimeType='application/pdf')
-                                                    pdf_bytes = request.execute()
-                                                    sufixo = f"_N{i*2+1}" if len(links_pei) > 1 else ""
-                                                    zip_file.writestr(f"{nome_mat}_PEI{sufixo}.pdf", pdf_bytes)
-                                                    count += 1
-                                                except: pass
-                            
-                            if count > 0:
-                                status_zip.update(label=f"Pacote com {count} arquivos gerado!", state="complete")
-                                st.session_state.zip_pei_ready = zip_buffer.getvalue()
-                                st.session_state.zip_pei_count = count
-                            else: status_zip.update(label="Nenhum arquivo PEI válido localizado no acervo.", state="error")
-                        except Exception as e: status_zip.update(label=f"Erro de conexão: {e}", state="error")
-                
-                if "zip_pei_ready" in st.session_state:
-                    # 🚨 VACINA DE ID ÚNICO APLICADA AQUI (key="dl_zip_pei_v201")
-                    st.download_button(
-                        label="📥 BAIXAR PACOTE PEI COMPACTADO (ZIP)",
-                        data=st.session_state.zip_pei_ready,
-                        file_name=f"SOSA_PEI_{datetime.now().strftime('%d%m%Y')}.zip",
-                        mime="application/zip",
-                        use_container_width=True,
-                        key="dl_zip_pei_v201"
-                    )
-
-            st.markdown("---")
-            
-            # Filtros do Acervo
-            c_m1, c_m2 = st.columns(2)
-            f_ano_m = c_m1.selectbox("Filtrar Série:", ["Todos", "6º", "7º", "8º", "9º"], key="ac_ano_fil")
-            f_tipo_m = c_m2.selectbox("Filtrar Tipo:", ["Todos", "Aula", "PROJETO", "Lista"], key="ac_tipo_fil")
-
-            if f_ano_m != "Todos": df_m_acervo = df_m_acervo[df_m_acervo['ANO'] == f_ano_m]
-            if f_tipo_m != "Todos": df_m_acervo = df_m_acervo[df_m_acervo['TIPO_MATERIAL'].str.upper().str.contains(f_tipo_m.upper())]
-
-            df_m_acervo = df_m_acervo.iloc[::-1]
-
-            if df_m_acervo.empty:
-                st.info("Nenhum material localizado no acervo.")
-            else:
-                for _, row in df_m_acervo.iterrows():
-                    with st.container(border=True):
-                        txt_f = str(row['CONTEUDO'])
-                        identificador = row['TIPO_MATERIAL']
-                        
-                        st.markdown(f"##### {identificador}")
-                        st.caption(f"Série: {row['ANO']} | Data de Sincronia: {row['DATA']}")
-                        
-                        # 🚨 VACINA ANTI-HTML NO ACERVO: Busca estritamente por links do Google Docs
-                        def extrair_link_seguro(t, k, res):
-                            m = re.search(rf"{k}\s*\(\s*(https://docs\.google\.com/document/d/[^\s\)]+)\s*\)", t, re.IGNORECASE)
-                            return m.group(1).strip() if m else res
-
-                        l_alu = extrair_link_seguro(txt_f, "Regular", "N/A")
-                        if l_alu == "N/A" and "https://docs.google.com" in str(row.get('LINK_DRIVE', '')):
-                            l_alu = str(row.get('LINK_DRIVE'))
-                            
-                        l_pei1 = extrair_link_seguro(txt_f, "PEI_N1", extrair_link_seguro(txt_f, "PEI", "N/A"))
-                        l_pei3 = extrair_link_seguro(txt_f, "PEI_N3", "N/A")
-                        l_prof = extrair_link_seguro(txt_f, "Prof", "N/A")
-
-                        # 🚨 EXPANSÃO: 6 Colunas para garantir que nenhum botão seja ocultado (V201.6)
-                        c_b1, c_b2, c_b3, c_b4, c_b5, c_b6 = st.columns(6)
-                        
-                        if l_alu and "http" in str(l_alu): c_b1.link_button("Aluno", str(l_alu), use_container_width=True)
-                        else: c_b1.button("Sem Link", disabled=True, use_container_width=True, key=f"no_alu_{row.name}")
-                        
-                        if l_pei1 and "http" in str(l_pei1): c_b2.link_button("PEI N1", str(l_pei1), use_container_width=True)
-                        else: c_b2.button("Sem PEI N1", disabled=True, use_container_width=True, key=f"no_p1_{row.name}")
-                        
-                        if l_pei3 and "http" in str(l_pei3): c_b3.link_button("PEI N3", str(l_pei3), use_container_width=True)
-                        else: c_b3.button("Sem PEI N3", disabled=True, use_container_width=True, key=f"no_p3_{row.name}")
-                        
-                        if l_prof and "http" in str(l_prof): c_b4.link_button("Guia Prof.", str(l_prof), use_container_width=True)
-                        else: c_b4.button("Sem Guia", disabled=True, use_container_width=True, key=f"no_prof_{row.name}")
-                        
-                        if c_b5.button("Refinar", key=f"ref_ac_{row.name}", use_container_width=True):
-                            st.session_state.lab_temp = txt_f
-                            st.session_state.sosa_id_atual = identificador
-                            st.session_state.lab_meta = {"ano": str(row["ANO"]).replace("º",""), "semana_ref": row['SEMANA_REF']}
-                            st.rerun()
-                            
-                        if c_b6.button("Apagar", key=f"del_ac_{row.name}", use_container_width=True):
-                            if db.excluir_registro_com_drive("DB_AULAS_PRONTAS", identificador): st.rerun()
 
 
 # ==============================================================================
