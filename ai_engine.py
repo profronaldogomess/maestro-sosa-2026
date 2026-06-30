@@ -11,7 +11,7 @@ load_dotenv()
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 # ==============================================================================
-# DICIONÁRIO DE PERSONAS DE ELITE (V170 - FORJA SEMIÓTICA FATIADA)
+# DICIONÁRIO DE PERSONAS DE ELITE (V202 - FORJA SEMIÓTICA E ANTI-REPETIÇÃO)
 # ==============================================================================
 
 PERSONAS = {
@@ -93,8 +93,9 @@ PERSONAS = {
 
     [PEI_NIVEL_3]
     - Foco: Apoio Severo (Lúdico e Sensorial). Gere exatamente 10 ITENS sequenciais divididos por BOX 1 a BOX 10.
+    - Formato do Título: BOX 1 "TÍTULO DA ATIVIDADE EM MAIÚSCULAS"
     - Aplique as 6 REGRAS DE OURO de imagem da prefeitura:
-      * Idioma: Prompt de imagem inteiro em INGLÊS. Título e rótulos da folha em PORTUGUÊS entre aspas (ex: labeled with the title "NOME:________").
+      * Idioma: Prompt de imagem inteiro em INGLÊS. MAS ADICIONE A ORDEM: "All text labels and numbers inside the image MUST BE IN PORTUGUESE. No english words allowed in the drawing."
       * Estilo: Comece com "A4 portrait-format educational math worksheet, clean black and white line art, completely white background, no colors, no shadows, high contrast, perfect for printing".
       * Use a palavra "exactly" para qualquer quantidade de objetos (ex: "draw exactly 3 identical cartoon apples").
       * Adicione comandos de interação como caixas de marcação "[ ]" ou linhas pontilhadas de ligação.
@@ -106,7 +107,16 @@ PERSONAS = {
     "FORJA_LOTE_JSON": """VOCÊ É UM PROFESSOR ESPECIALISTA CRIANDO VÁRIAS QUESTÕES DE PROVA.
     Respeite a SÉRIE ALVO. Proibido conceitos de Ensino Médio para o Fundamental.
     Use $$ ... $$ para matemática. 
-    🚨 PROIBIDO GERAR QUALQUER COMANDO [GEOGEBRA]. Se precisar de gráfico ou figura, descreva como um [ PROMPT IMAGEM: ... ] de forma detalhada dentro do enunciado.
+    
+    🚨 REGRAS DE ANTI-REPETIÇÃO E GLOCALIZAÇÃO:
+    - Rotacione os contextos: Use Itabuna (Cacau, comércio local), Brasil (IBGE, cultura), Mundo (Tecnologia, Games) e Abstrato.
+    - NUNCA repita o mesmo contexto ou a mesma historinha em questões diferentes. Leia o histórico fornecido e crie algo NOVO.
+    
+    🚨 REGRAS DE SUPORTE VISUAL (PROMPT IMAGEM):
+    - PROIBIDO GERAR COMANDO [GEOGEBRA].
+    - Se a questão exigir suporte visual, crie um [ PROMPT IMAGEM: ... ] detalhado.
+    - O prompt da imagem DEVE ser em INGLÊS, MAS você DEVE adicionar a seguinte ordem no final do prompt: "All text labels, titles, and numbers inside the image MUST BE IN PORTUGUESE. No english words allowed in the drawing."
+    
     RETORNE EXATAMENTE UM JSON NESTE FORMATO:
     {
       "questoes": [
@@ -216,27 +226,6 @@ PERSONAS = {
     Respeite a SÉRIE ALVO. Proibido conceitos de Ensino Médio para o Fundamental.
     Use $$ ... $$. Gabarito forçado. Use [GEOGEBRA] ou [ PROMPT IMAGEM: Line art, preto e branco... ].
     Formato para cada questão: [ITEM_X] [ENUNCIADO]... [ALT_A]... [ALT_B]... [ALT_C]... [ALT_D]... [ALT_E]... [HABILIDADE]... [JUSTIFICATIVA]... [DISTRATORES]... [/ITEM_X]""",
-
-    "FORJA_LOTE_JSON": """VOCÊ É UM PROFESSOR ESPECIALISTA CRIANDO VÁRIAS QUESTÕES DE PROVA.
-    Respeite a SÉRIE ALVO. Proibido conceitos de Ensino Médio para o Fundamental.
-    Use $$ ... $$ para matemática. Use [GEOGEBRA] ou [ PROMPT IMAGEM: ... ] se precisar de imagens.
-    RETORNE EXATAMENTE UM JSON NESTE FORMATO:
-    {
-      "questoes": [
-        {
-          "q": 1,
-          "enunciado": "Texto...",
-          "alt_a": "Texto...",
-          "alt_b": "Texto...",
-          "alt_c": "Texto...",
-          "alt_d": "Texto...",
-          "alt_e": "Texto...",
-          "habilidade": "Código BNCC...",
-          "justificativa": "Por que a correta é a correta...",
-          "distratores": "Análise dos erros comuns..."
-        }
-      ]
-    }""",
 
     "FORJA_TRIADE_PEI": """VOCÊ É O ESPECIALISTA EM DESENHO UNIVERSAL PARA APRENDIZAGEM.
     Crie 3 NÍVEIS de adaptação.
