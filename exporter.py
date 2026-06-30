@@ -250,10 +250,11 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
 
         secoes_pei =["PARA LEMBRAR", "OBJETIVO", "INSTRUÇÕES", "ATIVIDADE", "PASSO A PASSO", "DICA MESTRA"]
         if any(x in l_s.upper() for x in secoes_pei):
+            p.paragraph_format.space_before = Pt(10)
             txt_limpo = l_s.replace("[", "").replace("]", "").replace(":", "")
             run = p.add_run(txt_limpo)
             run.bold = True
-            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            p.alignment = WD_ALIGN_PARAGRAPH.LEFT
         elif re.match(r"^(?:QUEST[AÃ]O\s+(?:PEI\s+)?|Q)\d+", l_s, re.IGNORECASE):
             match = re.match(r"^((?:QUEST[AÃ]O\s+(?:PEI\s+)?|Q)\d+)([\.\s:]+)(.*)", l_s, re.IGNORECASE)
             if match:
@@ -286,6 +287,123 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
             run.font.color.rgb = RGBColor(0, 102, 204)
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER
         else: adicionar_texto_formatado(p, l_s)
+
+    doc.save(file_stream)
+    file_stream.seek(0)
+    return file_stream
+
+# ==============================================================================
+# 4. GUIA DO PROFESSOR (REESTRUTURADO PARA O PADRÃO OURO)
+# ==============================================================================
+def gerar_docx_professor_v25(titulo_doc, conteudo, info):
+    file_stream = io.BytesIO()
+    doc = Document()
+    
+    style = doc.styles['Normal']
+    style.font.name = 'Arial'
+    style.font.size = Pt(10.5)
+
+    section = doc.sections[0]
+    section.top_margin, section.bottom_margin = Inches(0.4), Inches(0.4)
+    section.left_margin, section.right_margin = Inches(0.4), Inches(0.4)
+
+    header_table = doc.add_table(rows=2, cols=3)
+    header_table.style = 'Table Grid'
+    c_tit = header_table.cell(0, 0).merge(header_table.cell(0, 2))
+    run_tit = c_tit.paragraphs[0].add_run("GUIA DE MEDIAÇÃO E GABARITOS")
+    run_tit.font.bold, run_tit.font.size = True, Pt(12)
+    c_tit.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    header_table.cell(1, 0).paragraphs[0].add_run(f"ANO: {info.get('ano', '')}").font.size = Pt(9)
+    header_table.cell(1, 1).paragraphs[0].add_run(f"SEMANA: {info.get('semana', '')}").font.size = Pt(9)
+    header_table.cell(1, 2).paragraphs[0].add_run(f"TRIMESTRE: {info.get('trimestre', 'I')}").font.size = Pt(9)
+    for row in header_table.rows: set_row_height(row, 20)
+    doc.add_paragraph()
+
+    new_section = doc.add_section(WD_SECTION.CONTINUOUS)
+    sectPr = new_section._sectPr
+    cols = sectPr.xpath('./w:cols')[0]
+    cols.set(qn('w:num'), '2')
+    cols.set(qn('w:space'), '500')
+
+    linhas = conteudo.split('\n')
+    for linha in linhas:
+        l_s = linha.strip()
+        if not l_s: continue
+        p = doc.add_paragraph()
+        p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+        p.paragraph_format.line_spacing = 1.0
+
+        # 🚨 FORMATAÇÃO EXATA DO PDF: QUESTÃO 01: D | Justificativa: ...
+        match_gabarito = re.match(r"^(QUEST[AÃ]O\s*\d+)\s*[:\-]\s*([A-E])\s*\|\s*(JUSTIFICATIVA.*)", l_s, re.IGNORECASE)
+        if match_gabarito:
+            p.paragraph_format.space_before = Pt(8)
+            run_q = p.add_run(f"{match_gabarito.group(1).upper()}: {match_gabarito.group(2).upper()} | ")
+            run_q.font.bold = True
+            run_q.font.color.rgb = RGBColor(0, 51, 153)
+            adicionar_texto_formatado(p, match_gabarito.group(3))
+            continue
+
+        if l_s.endswith(":") and len(l_s) < 40:
+            p.paragraph_format.space_before = Pt(10)
+            run = p.add_run(l_s)
+            run.font.bold = True
+            run.font.size = Pt(11)
+            continue
+
+        if re.search(r"(?i)QUEST[AÃ]O\s*(?:PEI\s*)?\d+\s*[:\-]\s*[A-E]$|^\d+[\.\s\-]+[A-E]$", l_s):
+            run = p.add_run(f"✅ {l_s}")
+            run.font.bold, run.font.size = True, Pt(11)
+            run.font.color.rgb = RGBColor(0, 128, 0)
+            continue
+
+        if "QUESTÃO" in l_s.upper() and "PEI" not in l_s.upper() and (":" in l_s or "[" in l_s):
+            p.paragraph_format.space_before = Pt(8)
+            run = p.add_run(l_s)
+            run.font.bold = True
+            run.font.color.rgb = RGBColor(0, 51, 153)
+            continue
+
+        if "QUESTÃO PEI" in l_s.upper() or "PEI GABARITO" in l_s.upper():
+            p.paragraph_format.space_before = Pt(8)
+            run = p.add_run(f"♿ {l_s}")
+            run.font.bold = True
+            run.font.color.rgb = RGBColor(112, 48, 160)
+            continue
+            
+        if "[GEOGEBRA]" in l_s.upper():
+            p.paragraph_format.space_before = Pt(6)
+            p.paragraph_format.space_after = Pt(6)
+            txt_geo = l_s.replace("[GEOGEBRA]", "").replace("[", "").replace("]", "").strip()
+            run = p.add_run(f"📐 COMANDO GEOGEBRA: {txt_geo}")
+            run.font.italic = True
+            run.font.bold = True
+            run.font.size = Pt(9.5)
+            run.font.color.rgb = RGBColor(0, 102, 204)
+            p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            continue
+
+        if any(x in l_s.upper() for x in ["JUSTIFICATIVA", "PERÍCIA", "LACUNA", "ANÁLISE", "DISTRATORES", "ACERTO INTEGRAL", "ACERTO PARCIAL"]):
+            p.paragraph_format.left_indent = Inches(0.15)
+            icon = "🎯" if any(x in l_s.upper() for x in ["JUST", "ACERTO"]) else "🧠"
+            
+            if ':' in l_s:
+                label, content = l_s.split(':', 1)
+                run_label = p.add_run(f"{icon} {label}:")
+                run_label.font.bold = True
+                
+                if any(x in label.upper() for x in ["LACUNA", "PERÍCIA", "DISTRATORES"]):
+                     run_label.font.color.rgb = RGBColor(204, 0, 0)
+                elif "ACERTO" in label.upper():
+                     run_label.font.color.rgb = RGBColor(0, 128, 0)
+                
+                content_formatted = re.sub(r'(?=\([A-E]\))', '\n\t', content)
+                adicionar_texto_formatado(p, f" {content_formatted}")
+            else:
+                adicionar_texto_formatado(p, l_s)
+            continue
+
+        adicionar_texto_formatado(p, re.sub(r'[#*]', '', l_s))
 
     doc.save(file_stream)
     file_stream.seek(0)
@@ -333,19 +451,35 @@ def gerar_docx_pei_qualitativa(titulo_doc, conteudo, info):
                 run.font.color.rgb = RGBColor(112, 48, 160)
                 continue
 
-            if "QUESTÃO" in l_s.upper():
+            # 🚨 DETECÇÃO DO FORMATO "BOX"
+            if "BOX" in l_s.upper():
+                p.paragraph_format.space_before = Pt(20)
+                run = p.add_run(l_s.replace('**', ''))
+                run.bold = True
+                run.font.size = Pt(16)
+            elif "QUESTÃO" in l_s.upper():
                 run = p.add_run(l_s)
                 run.bold = True
                 run.font.size = Pt(16)
             elif "[" in l_s and "PROMPT IMAGEM" in l_s.upper():
-                p.paragraph_format.space_before = Pt(10)
-                p.paragraph_format.space_after = Pt(50) 
+                # 🚨 CRIA UM QUADRADO VAZIO PARA O PROFESSOR COLAR A IMAGEM
+                p.paragraph_format.space_before = Pt(5)
+                p.paragraph_format.space_after = Pt(5) 
                 txt_img = l_s.replace("[", "").replace("]", "").strip()
-                run = p.add_run(f"🖼️ [ ESPAÇO PARA IMAGEM: {txt_img} ]")
-                run.font.italic = True
-                run.font.size = Pt(10)
-                run.font.color.rgb = RGBColor(150, 150, 150)
-                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                
+                # Adiciona a tabela vazia como placeholder
+                table = doc.add_table(rows=1, cols=1)
+                table.style = 'Table Grid'
+                table.rows[0].height = Inches(2.5)
+                
+                # Adiciona o prompt em cinza claro embaixo da tabela para referência
+                p_prompt = doc.add_paragraph()
+                p_prompt.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                run_prompt = p_prompt.add_run(f"🖼️ [ {txt_img} ]")
+                run_prompt.font.italic = True
+                run_prompt.font.size = Pt(8)
+                run_prompt.font.color.rgb = RGBColor(180, 180, 180)
+                
             elif "( ) SIM" in l_s.upper():
                 p.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 run = p.add_run(l_s)
@@ -362,113 +496,6 @@ def gerar_docx_pei_qualitativa(titulo_doc, conteudo, info):
         err_doc = Document(); err_doc.add_paragraph(f"ERRO NO EXPORTER N3: {str(e)}"); err_doc.save(file_stream)
         file_stream.seek(0)
         return file_stream
-
-# ==============================================================================
-# 4. GUIA DO PROFESSOR
-# ==============================================================================
-def gerar_docx_professor_v25(titulo_doc, conteudo, info):
-    file_stream = io.BytesIO()
-    doc = Document()
-    
-    style = doc.styles['Normal']
-    style.font.name = 'Arial'
-    style.font.size = Pt(10.5)
-
-    section = doc.sections[0]
-    section.top_margin, section.bottom_margin = Inches(0.4), Inches(0.4)
-    section.left_margin, section.right_margin = Inches(0.4), Inches(0.4)
-
-    header_table = doc.add_table(rows=2, cols=3)
-    header_table.style = 'Table Grid'
-    c_tit = header_table.cell(0, 0).merge(header_table.cell(0, 2))
-    run_tit = c_tit.paragraphs[0].add_run("GUIA DE MEDIAÇÃO E GABARITOS")
-    run_tit.font.bold, run_tit.font.size = True, Pt(12)
-    c_tit.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
-
-    header_table.cell(1, 0).paragraphs[0].add_run(f"ANO: {info.get('ano', '')}").font.size = Pt(9)
-    header_table.cell(1, 1).paragraphs[0].add_run(f"SEMANA: {info.get('semana', '')}").font.size = Pt(9)
-    header_table.cell(1, 2).paragraphs[0].add_run(f"TRIMESTRE: {info.get('trimestre', 'I')}").font.size = Pt(9)
-    for row in header_table.rows: set_row_height(row, 20)
-    doc.add_paragraph()
-
-    new_section = doc.add_section(WD_SECTION.CONTINUOUS)
-    sectPr = new_section._sectPr
-    cols = sectPr.xpath('./w:cols')[0]
-    cols.set(qn('w:num'), '2')
-    cols.set(qn('w:space'), '500')
-
-    linhas = conteudo.split('\n')
-    for linha in linhas:
-        l_s = linha.strip()
-        if not l_s: continue
-        p = doc.add_paragraph()
-        p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-        p.paragraph_format.line_spacing = 1.0
-
-        if l_s.endswith(":") and len(l_s) < 40:
-            p.paragraph_format.space_before = Pt(10)
-            run = p.add_run(l_s)
-            run.font.bold = True
-            run.font.size = Pt(11)
-            continue
-
-        if re.search(r"(?i)QUEST[AÃ]O\s*(?:PEI\s*)?\d+\s*[:\-]\s*[A-E]$|^\d+[\.\s\-]+[A-E]$", l_s):
-            run = p.add_run(f"✅ {l_s}")
-            run.font.bold, run.font.size = True, Pt(11)
-            run.font.color.rgb = RGBColor(0, 128, 0)
-            continue
-
-        if "QUESTÃO" in l_s.upper() and "PEI" not in l_s.upper() and (":" in l_s or "[" in l_s):
-            p.paragraph_format.space_before = Pt(8)
-            run = p.add_run(l_s)
-            run.font.bold = True
-            run.font.color.rgb = RGBColor(0, 51, 153)
-            continue
-
-        if "QUESTÃO PEI" in l_s.upper():
-            p.paragraph_format.space_before = Pt(8)
-            run = p.add_run(f"♿ {l_s}")
-            run.font.bold = True
-            run.font.color.rgb = RGBColor(112, 48, 160)
-            continue
-            
-        if "[GEOGEBRA]" in l_s.upper():
-            p.paragraph_format.space_before = Pt(6)
-            p.paragraph_format.space_after = Pt(6)
-            txt_geo = l_s.replace("[GEOGEBRA]", "").replace("[", "").replace("]", "").strip()
-            run = p.add_run(f"📐 COMANDO GEOGEBRA: {txt_geo}")
-            run.font.italic = True
-            run.font.bold = True
-            run.font.size = Pt(9.5)
-            run.font.color.rgb = RGBColor(0, 102, 204)
-            p.alignment = WD_ALIGN_PARAGRAPH.LEFT
-            continue
-
-        if any(x in l_s.upper() for x in ["JUSTIFICATIVA", "PERÍCIA", "LACUNA", "ANÁLISE", "DISTRATORES", "ACERTO INTEGRAL", "ACERTO PARCIAL"]):
-            p.paragraph_format.left_indent = Inches(0.15)
-            icon = "🎯" if any(x in l_s.upper() for x in ["JUST", "ACERTO"]) else "🧠"
-            
-            if ':' in l_s:
-                label, content = l_s.split(':', 1)
-                run_label = p.add_run(f"{icon} {label}:")
-                run_label.font.bold = True
-                
-                if any(x in label.upper() for x in ["LACUNA", "PERÍCIA", "DISTRATORES"]):
-                     run_label.font.color.rgb = RGBColor(204, 0, 0)
-                elif "ACERTO" in label.upper():
-                     run_label.font.color.rgb = RGBColor(0, 128, 0)
-                
-                content_formatted = re.sub(r'(?=\([A-E]\))', '\n\t', content)
-                p.add_run(f" {content_formatted}").font.size = Pt(9.5)
-            else:
-                p.add_run(l_s)
-            continue
-
-        p.add_run(re.sub(r'[#*]', '', l_s)).font.size = Pt(10)
-
-    doc.save(file_stream)
-    file_stream.seek(0)
-    return file_stream
 
 # ==============================================================================
 # 5. PROVA OFICIAL (ATUALIZADO PARA 20 QUESTÕES)
