@@ -1273,13 +1273,14 @@ elif menu == "🧪 Criador de Aulas":
                                     st.session_state.lab_temp = ai.gerar_ia("ARQUITETO_CIENTIFICO_V33", prompt_t, usar_busca=True)
                                     st.rerun()
 
-                # ROTA COMPLEMENTAR: FÁBRICA DE LISTAS DE ELITE (Até 30 Questões + Suporte Visual)
+# ROTA COMPLEMENTAR: FÁBRICA DE LISTAS DE ELITE (Até 30 Questões + Suporte Visual)
                 else:
                     fa['tipo_material'] = 'LISTA'
                     with st.container(border=True):
                         st.markdown("#### ⚙️ Configuração da Fábrica de Listas Híbridas")
                         c1, c2 = st.columns([1, 2])
                         ano_alvo = c1.selectbox("Série Alvo:", [6, 7, 8, 9])
+                        trim_lista = c2.selectbox("Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"])
                         
                         df_aulas_ano = df_aulas[df_aulas['ANO'].str.contains(str(ano_alvo))]
                         aulas_opcoes = df_aulas_ano['TIPO_MATERIAL'].tolist() if not df_aulas_ano.empty else []
@@ -1289,7 +1290,7 @@ elif menu == "🧪 Criador de Aulas":
                         qtd_total_list = c_q1.slider("Quantidade Total de Questões (Escala Industrial):", 5, 30, 10, step=5)
                         exigir_graficos = c_q2.checkbox("Forçar pelo menos 10 questões com suporte visual/imagens?", value=True)
                         
-                        if st.button("🚀 INICIALIZAR LINHA DE MONTAGEM DE LISTA", use_container_width=True, key="btn_init_lista_v2", type="primary"):
+                        if st.button("🚀 INICIALIZAR LINHA DE MONTAGEM DE LISTA", use_container_width=True, type="primary"):
                             if not aulas_sel:
                                 st.error("⚠️ Selecione pelo menos um tema de aula anterior.")
                             else:
@@ -1300,7 +1301,7 @@ elif menu == "🧪 Criador de Aulas":
                                         contexto_aulas += df_aulas_ano[df_aulas_ano['TIPO_MATERIAL'] == a_n].iloc[0]['CONTEUDO']
                                     
                                     # Monta o esqueleto inicial da lista na máquina de estados
-                                    s_id_l = util.gerar_sosa_id("LISTA", ano_alvo, "I")
+                                    s_id_l = util.gerar_sosa_id("LISTA", ano_alvo, trim_lista.split()[0])
                                     nome_elite_c = f"{ano_alvo}º Ano - Lista Híbrida - {s_id_l}"
                                     
                                     gabarito_mapa = util.gerar_gabarito_balanceado(qtd_total_list)
@@ -1320,7 +1321,7 @@ elif menu == "🧪 Criador de Aulas":
                                     
                                     fa['mapa_lista'] = mapa_itens
                                     fa['info'] = {
-                                        'ano': ano_alvo, 'trimestre': 'I Trimestre', 'tipo': 'LISTA_HIBRIDA', 
+                                        'ano': ano_alvo, 'trimestre': trim_lista, 'tipo': 'LISTA_HIBRIDA', 
                                         'semana_ref': 'CONSOLIDAÇÃO', 'id_lista': nome_elite_c, 'contexto': contexto_aulas,
                                         'qtd': qtd_total_list
                                     }
@@ -1367,82 +1368,20 @@ elif menu == "🧪 Criador de Aulas":
                     st.markdown(f"### Linha de Montagem: {fa['info']['id_lista']}")
                     st.caption("Aprove, regere ou edite cada item da lista de forma individual.")
                     
-                    # 🚀 BOTOES DE CONTROLE MESTRES (TURBO & MASSA V201.9)
-                    c_ctl1, c_ctl2 = st.columns(2)
-                    
-                    # 1. MOTOR TURBO (GERAR TODOS EM UM CLIQUE)
-                    if c_ctl1.button("🚀 GERAR TODOS OS ITENS PENDENTES (MÉTODO TURBO)", type="primary", use_container_width=True, key="btn_turbo_generator"):
-                        with st.status("Forjando lista completa em escala industrial...", expanded=True) as status_turbo:
-                            while True:
-                                pendentes = [item for item in fa['mapa_lista'] if item['status'] == 'pendente']
-                                if not pendentes:
-                                    break
-                                
-                                # Processa em fatias de no máximo 10 para evitar estouro da API
-                                micro_lote = pendentes[:10]
-                                status_turbo.write(f"Forjando lote de {len(micro_lote)} itens...")
-                                
-                                prompt_lote = f"SÉRIE: {fa['info']['ano']}º Ano. MATÉRIA BASE:\n{fa['info']['contexto']}\n\n"
-                                for item in micro_lote:
-                                    img_req = "REQUER SUPORTE VISUAL COM UM PROMPT DE IMAGEM TOTALMENTE DETALHADO EM INGLÊS. PROIBIDO USAR GEOGEBRA." if item['suporte_visual'] else "Foco textual."
-                                    prompt_lote += f"QUESTÃO {item['q']}:\n- COMPLEXIDADE: {item['dificuldade']}\n- GABARITO EXIGIDO: {item['gabarito']}\n- DIRETRIZ: {img_req}\n\n"
-                                
-                                res_json = ai.gerar_ia_json("FORJA_LOTE_JSON", prompt_lote)
-                                
-                                if "erro" in res_json:
-                                    status_turbo.update(label="Falha na cota da API. Tente novamente.", state="error")
-                                    st.error(res_json["erro"])
-                                    st.stop()
-                                else:
-                                    questoes_retornadas = res_json.get("questoes", [])
-                                    # 🚨 VACINA DE SOBRESCRITA: Mapeia sequencialmente pelo index do micro_lote
-                                    for idx_lote, q_data in enumerate(questoes_retornadas):
-                                        if idx_lote < len(micro_lote):
-                                            item = micro_lote[idx_lote]
-                                            
-                                            enunciado = q_data.get('enunciado', '')
-                                            # 🚨 VACINA ANTI-GEOGEBRA: Força o prompt de imagem se a IA teimar
-                                            if item['suporte_visual'] and "[ PROMPT IMAGEM:" not in enunciado:
-                                                enunciado += (
-                                                    f"\n\n[ PROMPT IMAGEM: A4 portrait-format educational math worksheet, "
-                                                    f"clean black and white line art, completely white background, no colors, "
-                                                    f"no shadows, perfect for printing. Simple cartoon diagram representing the problem "
-                                                    f"of {item['tema']}. ]"
-                                                )
-                                                
-                                            item['dados'] = {
-                                                'ENUNCIADO': enunciado, 'ALT_A': q_data.get('alt_a', ''),
-                                                'ALT_B': q_data.get('alt_b', ''), 'ALT_C': q_data.get('alt_c', ''),
-                                                'ALT_D': q_data.get('alt_d', ''), 'ALT_E': q_data.get('alt_e', ''),
-                                                'HABILIDADE': q_data.get('habilidade', 'EF06MA01'), 'JUSTIFICATIVA': q_data.get('justificativa', ''),
-                                                'DISTRATORES': q_data.get('distratores', ''), 'GABARITO': item['gabarito']
-                                            }
-                                            item['status'] = 'revisao'
-                            
-                            status_turbo.update(label="🎉 Todos os itens foram forjados com sucesso!", state="complete")
-                            st.rerun()
-
-                    # 2. APROVAÇÃO EM MASSA (1 CLIQUE PARA APROVAR TUDO)
-                    if c_ctl2.button("✅ APROVAR TODOS OS ITENS EM MASSA", use_container_width=True, key="btn_aprove_massa"):
-                        count_apr = 0
-                        for item in fa['mapa_lista']:
-                            if item['status'] == 'revisao':
-                                item['status'] = 'aprovado'
-                                count_apr += 1
-                        st.success(f"✅ {count_apr} itens aprovados em massa!")
-                        time.sleep(0.5)
-                        st.rerun()
-
-                    st.markdown("---")
-                    
-                    # PROCESSAMENTO INDIVIDUAL DE PENDENTES
+                    # 🚀 PROCESSAMENTO DE MICRO-LOTES EM JSON NATIVO (Otimização Máxima)
                     pendentes = [item for item in fa['mapa_lista'] if item['status'] == 'pendente']
                     if pendentes:
                         micro_lote = pendentes[:10] # Processa em fatias de no máximo 10 para evitar estouro da API
                         
-                        if st.button(f"🚀 GERAR PRÓXIMO LOTE EM MASSA ({len(micro_lote)} ITENS PENDENTES)", type="secondary", use_container_width=True, key="btn_lote_manual_rx"):
+                        if st.button(f"🚀 GERAR PRÓXIMO LOTE EM MASSA ({len(micro_lote)} ITENS PENDENTES)", type="primary", use_container_width=True):
                             with st.status(f"Forjando lote de {len(micro_lote)} itens...") as status:
+                                # 🚨 INJEÇÃO DE MEMÓRIA (ANTI-REPETIÇÃO)
+                                historico_temas = [item['dados'].get('ENUNCIADO', '')[:150] for item in fa['mapa_lista'] if item['status'] in ['aprovado', 'revisao']]
+                                resumo_hist = "\n".join(historico_temas) if historico_temas else "Nenhum item gerado ainda."
+                                
                                 prompt_lote = f"SÉRIE: {fa['info']['ano']}º Ano. MATÉRIA BASE:\n{fa['info']['contexto']}\n\n"
+                                prompt_lote += f"🚨 HISTÓRICO DE QUESTÕES JÁ GERADAS (NÃO REPITA ESTES CONTEXTOS):\n{resumo_hist}\n\n"
+                                
                                 for item in micro_lote:
                                     img_req = "REQUER SUPORTE VISUAL COM UM PROMPT DE IMAGEM TOTALMENTE DETALHADO EM INGLÊS. PROIBIDO USAR GEOGEBRA." if item['suporte_visual'] else "Foco textual."
                                     prompt_lote += f"QUESTÃO {item['q']}:\n- COMPLEXIDADE: {item['dificuldade']}\n- GABARITO EXIGIDO: {item['gabarito']}\n- DIRETRIZ: {img_req}\n\n"
@@ -1454,19 +1393,19 @@ elif menu == "🧪 Criador de Aulas":
                                     st.error(res_json["erro"])
                                 else:
                                     questoes_retornadas = res_json.get("questoes", [])
-                                    # 🚨 VACINA DE SOBRESCRITA: Mapeia sequencialmente pelo index do micro_lote
+                                    # 🚨 VACINA DE SOBRESCRITA: Mapeia sequencialmente pelo index do micro_lote para não bagunçar questões antigas
                                     for idx_lote, q_data in enumerate(questoes_retornadas):
                                         if idx_lote < len(micro_lote):
                                             item = micro_lote[idx_lote]
                                             
                                             enunciado = q_data.get('enunciado', '')
-                                            # 🚨 VACINA ANTI-GEOGEBRA NO LOOPER: Força o prompt de imagem se a IA teimar
+                                            # 🚨 VACINA ANTI-GEOGEBRA NO LOOPER: Força o prompt de imagem se a IA teimar com geogebra
                                             if item['suporte_visual'] and "[ PROMPT IMAGEM:" not in enunciado:
                                                 enunciado += (
                                                     f"\n\n[ PROMPT IMAGEM: A4 portrait-format educational math worksheet, "
                                                     f"clean black and white line art, completely white background, no colors, "
                                                     f"no shadows, perfect for printing. Simple cartoon diagram representing the problem "
-                                                    f"of {item['tema']}. ]"
+                                                    f"of {item['tema']}. All text labels inside the image MUST BE IN PORTUGUESE. ]"
                                                 )
                                                 
                                             item['dados'] = {
