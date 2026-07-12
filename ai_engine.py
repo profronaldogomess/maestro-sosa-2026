@@ -241,7 +241,6 @@ PERSONAS = {
 
 def gerar_ia(persona_key, comando, url_drive=None, usar_busca=True):
     # 🧠 ROTEAMENTO HÍBRIDO SOSA (CÉREBRO DUPLO)
-    # Tarefas de alto raciocínio pedagógico usam o modelo Thinking (Mais caro, porém genial)
     personas_premium = [
         "PLANE_PEDAGOGICO", 
         "ESPECIALISTA_INCLUSAO", 
@@ -251,11 +250,12 @@ def gerar_ia(persona_key, comando, url_drive=None, usar_busca=True):
         "ARQUITETO_RECUPERACAO_CIRURGICA"
     ]
     
-    modelo_alvo = "gemini-3.1-pro" if persona_key in personas_premium else "gemini-3-flash-preview"
+    # 🚨 NOMECLATURA OFICIAL DA API
+    modelo_alvo = "gemini-3.1-pro-preview" if persona_key in personas_premium else "gemini-3-flash-preview"
     
     config = types.GenerateContentConfig(
         tools=[{'google_search': {}}] if usar_busca else [],
-        temperature=0.7 if persona_key in personas_premium else 1.0, # Modelos Thinking exigem temperatura menor
+        temperature=0.7 if persona_key in personas_premium else 1.0, 
         max_output_tokens=8192,
     )
     
@@ -294,26 +294,20 @@ def gerar_ia(persona_key, comando, url_drive=None, usar_busca=True):
         if not res.text: return "⚠️ A IA não retornou dados."
         return res.text
     except Exception as e:
-        return f"Erro na IA ({modelo_alvo}): {e}"
-    
-def gerar_ia_json(persona_key, comando, usar_busca=False):
-    """Motor de Lote: Usa SEMPRE o Flash para economizar tokens e garantir velocidade."""
-    config = types.GenerateContentConfig(
-        tools=[{'google_search': {}}] if usar_busca else [],
-        temperature=0.7, 
-        response_mime_type="application/json",
-    )
-    conteudo_prompt = [types.Part.from_text(text=f"{PERSONAS[persona_key]}\n\n{comando}")]
-    try:
-        res = client.models.generate_content(
-            model="gemini-3-flash-preview", 
-            contents=[types.Content(role="user", parts=conteudo_prompt)],
-            config=config
-        )
-        import json
-        return json.loads(res.text)
-    except Exception as e:
-        return {"erro": str(e)}
+        # 🚨 FALLBACK DE SEGURANÇA: Se o 3.1 Pro ainda não estiver liberado na sua chave, usa o 2.5 Pro
+        if "404" in str(e) and "3.1" in modelo_alvo:
+            try:
+                st.toast("⚠️ Gemini 3.1 Pro não liberado na chave. Acionando Fallback para 2.5 Pro...", icon="🔄")
+                res_fallback = client.models.generate_content(
+                    model="gemini-2.5-pro", 
+                    contents=[types.Content(role="user", parts=conteudo_prompt)],
+                    config=config
+                )
+                return res_fallback.text
+            except Exception as e_fallback:
+                return f"Erro no Fallback da IA: {e_fallback}"
+        else:
+            return f"Erro na IA ({modelo_alvo}): {e}"
 
 def extrair_tag(texto, tag):
     if not texto: return ""
