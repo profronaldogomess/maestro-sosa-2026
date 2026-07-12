@@ -661,7 +661,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                 meta = st.session_state.get("p_meta", {})
                 
                 st.markdown("---")
-                st.markdown(f"### Revisão do Plano: {meta.get('semana')}")
+                st.markdown(f"### 🛠️ Mesa de Lapidação: Semana {meta.get('semana')}")
                 
                 with st.expander("👁️ Ver Texto Bruto da IA (Caso os campos abaixo estejam vazios)"):
                     st.text(txt_bruto)
@@ -669,23 +669,33 @@ if menu == "📅 Planejamento (Ponto ID)":
                 with st.container(border=True):
                     cmd_refine = st.chat_input("Refinador IA (Ex: 'Deixe a Aula 1 mais lúdica')")
                     if cmd_refine:
-                        with st.spinner("Reescrevendo..."):
+                        with st.spinner("Reescrevendo com Gemini 3.1 Pro..."):
                             prompt_refino = f"ORDEM: {cmd_refine}\n\nPLANO ATUAL:\n{st.session_state.p_temp}"
                             st.session_state.p_temp = ai.gerar_ia("REFINADOR_PEDAGOGICO", prompt_refino)
                             st.rerun()
 
-                # 🚨 FALLBACK DE SEGURANÇA: Se a IA não gerar as tags, joga o texto todo na caixa de Conteúdos
-                ed_hab = st.text_input("Habilidade/Competência:", ai.extrair_tag(txt_bruto, "HABILIDADE_BNCC") or ai.extrair_tag(txt_bruto, "COMPETENCIA_GERAL"))
-                ed_geral = st.text_input("Objeto de Conhecimento:", ai.extrair_tag(txt_bruto, "OBJETO_CONHECIMENTO") or ai.extrair_tag(txt_bruto, "CONTEUDO_GERAL"))
-                ed_espec = st.text_area("Conteúdos Específicos:", ai.extrair_tag(txt_bruto, "CONTEUDOS_ESPECIFICOS") or txt_bruto, height=150)
-                ed_objs = st.text_area("Objetivos de Aprendizagem:", ai.extrair_tag(txt_bruto, "OBJETIVOS_ENSINO"))
+                # 🚨 UX DE ELITE: Separação em Abas e Caixas Gigantes (Fim do Arrasta-Arrasta)
+                tab_curriculo, tab_roteiro, tab_inclusao = st.tabs(["📚 1. Base Curricular", "📝 2. Roteiro das Aulas", "♿ 3. Avaliação & PEI"])
                 
-                c_a1, c_a2, c_a3 = st.columns(3)
-                ed_a1 = c_a1.text_area("AULA 1:", ai.extrair_tag(txt_bruto, "AULA_1"), height=150)
-                ed_a2 = c_a2.text_area("AULA 2:", ai.extrair_tag(txt_bruto, "AULA_2"), height=150)
-                ed_sab = c_a3.text_area("SÁBADO LETIVO:", ai.extrair_tag(txt_bruto, "SABADO_LETIVO"), height=150)
+                with tab_curriculo:
+                    ed_hab = st.text_input("Habilidade/Competência:", ai.extrair_tag(txt_bruto, "HABILIDADE_BNCC") or ai.extrair_tag(txt_bruto, "COMPETENCIA_GERAL"))
+                    ed_geral = st.text_input("Objeto de Conhecimento:", ai.extrair_tag(txt_bruto, "OBJETO_CONHECIMENTO") or ai.extrair_tag(txt_bruto, "CONTEUDO_GERAL"))
+                    ed_espec = st.text_area("Conteúdos Específicos:", ai.extrair_tag(txt_bruto, "CONTEUDOS_ESPECIFICOS") or txt_bruto, height=150)
+                    ed_objs = st.text_area("Objetivos de Aprendizagem:", ai.extrair_tag(txt_bruto, "OBJETIVOS_ENSINO"), height=150)
                 
-                if st.button("Salvar e Enviar para Produção", use_container_width=True, type="primary"):
+                with tab_roteiro:
+                    st.info("💡 Dica de UX: As caixas agora possuem altura expandida. O senhor pode ler e editar o roteiro inteiro sem precisar arrastar a barra lateral.")
+                    c_a1, c_a2, c_a3 = st.columns(3)
+                    ed_a1 = c_a1.text_area("AULA 1:", ai.extrair_tag(txt_bruto, "AULA_1"), height=400)
+                    ed_a2 = c_a2.text_area("AULA 2:", ai.extrair_tag(txt_bruto, "AULA_2"), height=400)
+                    ed_sab = c_a3.text_area("SÁBADO LETIVO:", ai.extrair_tag(txt_bruto, "SABADO_LETIVO"), height=400)
+                    
+                with tab_inclusao:
+                    ed_ava = st.text_area("Avaliação de Mérito:", ai.extrair_tag(txt_bruto, "AVALIACAO_DE_MERITO"), height=150)
+                    ed_pei = st.text_area("Estratégia DUA/PEI:", ai.extrair_tag(txt_bruto, "ESTRATEGIA_DUA_PEI"), height=150)
+                
+                st.markdown("<br>", unsafe_allow_html=True)
+                if st.button("💾 Salvar e Enviar para Produção", use_container_width=True, type="primary"):
                     with st.status("Gerando DOCX e Sincronizando...") as status:
                         nome_arquivo = f"PLANO_{meta.get('ano').replace('º','')}_{meta.get('semana').replace(' ', '')}"
                         db.excluir_plano_completo(meta.get('semana'), meta.get('ano'))
@@ -698,8 +708,8 @@ if menu == "📅 Planejamento (Ponto ID)":
                             "geral": ed_geral, "especificos": ed_espec, "objetivos": ed_objs, 
                             "recursos": meta.get('base'), 
                             "metodologia": metodologia_docx,
-                            "avaliacao": ai.extrair_tag(txt_bruto, "AVALIACAO_DE_MERITO"), 
-                            "pei": ai.extrair_tag(txt_bruto, "ESTRATEGIA_DUA_PEI")
+                            "avaliacao": ed_ava, 
+                            "pei": ed_pei
                         }
                         
                         doc_io = exporter.gerar_docx_plano_pedagogico_ELITE(nome_arquivo, dados_docx, {"ano": meta.get('ano'), "semana": meta.get('semana'), "trimestre": meta.get('trimestre')})
