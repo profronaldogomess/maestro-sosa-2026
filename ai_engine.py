@@ -236,18 +236,30 @@ PERSONAS = {
 }
 
 # ==============================================================================
-# MOTORES DE INTELIGÊNCIA E EXTRAÇÃO
+# MOTORES DE INTELIGÊNCIA E EXTRAÇÃO (CÉREBRO DUPLO SOSA V202)
 # ==============================================================================
 
 def gerar_ia(persona_key, comando, url_drive=None, usar_busca=True):
+    # 🧠 ROTEAMENTO HÍBRIDO SOSA (CÉREBRO DUPLO)
+    # Tarefas de alto raciocínio pedagógico usam o modelo Thinking (Mais caro, porém genial)
+    personas_premium = [
+        "PLANE_PEDAGOGICO", 
+        "ESPECIALISTA_INCLUSAO", 
+        "FORJA_AULA_TEORIA", 
+        "FORJA_TRIADE_PEI", 
+        "ARQUITETO_CIENTIFICO_V33",
+        "ARQUITETO_RECUPERACAO_CIRURGICA"
+    ]
+    
+    modelo_alvo = "gemini-3.1-pro" if persona_key in personas_premium else "gemini-3-flash-preview"
+    
     config = types.GenerateContentConfig(
-        tools=[{'google_search': {}}] if usar_busca else[],
-        temperature=1.0,
+        tools=[{'google_search': {}}] if usar_busca else [],
+        temperature=0.7 if persona_key in personas_premium else 1.0, # Modelos Thinking exigem temperatura menor
         max_output_tokens=8192,
-        media_resolution="media_resolution_high" 
     )
     
-    conteudo_prompt =[]
+    conteudo_prompt = []
     
     if url_drive and "drive.google.com" in url_drive:
         try:
@@ -265,7 +277,7 @@ def gerar_ia(persona_key, comando, url_drive=None, usar_busca=True):
                     file_uri=arquivo_temp.uri, 
                     mime_type="application/pdf"
                 ))
-                st.toast("📖 Documento anexo lido com sucesso. Iniciando extração fiel...", icon="✅")
+                st.toast(f"📖 Documento lido. Iniciando extração com {modelo_alvo}...", icon="✅")
             else:
                 return "❌ ERRO DE SOBERANIA: O arquivo do Drive não pôde ser lido ou não é um PDF válido."
         except Exception as e:
@@ -275,20 +287,20 @@ def gerar_ia(persona_key, comando, url_drive=None, usar_busca=True):
 
     try:
         res = client.models.generate_content(
-            model="gemini-3-flash-preview", 
+            model=modelo_alvo, 
             contents=[types.Content(role="user", parts=conteudo_prompt)],
             config=config
         )
         if not res.text: return "⚠️ A IA não retornou dados."
         return res.text
     except Exception as e:
-        return f"Erro na IA: {e}"
+        return f"Erro na IA ({modelo_alvo}): {e}"
     
 def gerar_ia_json(persona_key, comando, usar_busca=False):
-    """Motor de Elite V201: Força a IA a responder em JSON estruturado, economizando tokens e evitando erros de Regex."""
+    """Motor de Lote: Usa SEMPRE o Flash para economizar tokens e garantir velocidade."""
     config = types.GenerateContentConfig(
         tools=[{'google_search': {}}] if usar_busca else [],
-        temperature=0.7, # Temperatura menor para garantir a estrutura do JSON
+        temperature=0.7, 
         response_mime_type="application/json",
     )
     conteudo_prompt = [types.Part.from_text(text=f"{PERSONAS[persona_key]}\n\n{comando}")]
