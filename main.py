@@ -5301,19 +5301,19 @@ elif menu == "👥 Gestão da Turma":
                             tags_bonus = "".join([f"<span style='display: inline-block; background: #FEF3C7; color: #F59E0B; padding: 4px 10px; border-radius: 15px; font-size: 12px; font-weight: bold; margin: 4px;'>{row['NOME_ALUNO']} (+{row['BONUS']})</span>" for _, row in bonus_df.iterrows()])
                             st.markdown(f"<div>{tags_bonus}</div>", unsafe_allow_html=True)
 
-                    # --- 4. OBSERVAÇÕES DA AULA ---
+                    # --- 4. OBSERVAÇÕES DA AULA (CAIXA EXPANSIVA) ---
                     if not obs_df.empty:
                         st.markdown("---")
-                        st.markdown("#### 🎙️ Ocorrências e Observações")
-                        for _, r_obs in obs_df.iterrows():
-                            st.warning(f"**{r_obs['NOME_ALUNO']}**: {r_obs['OBSERVACOES']}")
+                        with st.expander(f"🎙️ Ver Ocorrências e Observações da Aula ({len(obs_df)})", expanded=False):
+                            for _, r_obs in obs_df.iterrows():
+                                st.info(f"**{r_obs['NOME_ALUNO']}**: {r_obs['OBSERVACOES']}")
 
                     st.markdown("---")
                     
                     # --- 5. JANELA FLUTUANTE (MODAL) PARA VISTOS DE EXCEÇÃO ---
-                    @st.dialog("⚖️ Aplicar Visto de Exceção", width="large")
+                    @st.dialog("⚖️ Justificar Falta e Atribuir Visto", width="large")
                     def dialog_visto_excecao():
-                        st.markdown("Selecione o aluno que justificou a falta ou entregou a atividade com atraso justificado.")
+                        st.markdown("Use este painel para **atribuir o Visto de Atividade** a um aluno que faltou (com atestado/justificativa) ou que entregou a tarefa com atraso autorizado. O sistema garantirá a nota dele.")
                         
                         # Filtra alunos que NÃO têm visto TRUE
                         elegiveis = df_dia[df_dia['VISTO_ATIVIDADE'].astype(str).str.upper() != "TRUE"].sort_values(by="NOME_ALUNO")
@@ -5322,9 +5322,9 @@ elif menu == "👥 Gestão da Turma":
                             st.success("Todos os alunos desta aula já possuem visto!")
                         else:
                             aluno_alvo = st.selectbox("Estudante:", elegiveis['NOME_ALUNO'].tolist())
-                            motivo_excecao = st.selectbox("Motivo da Exceção:", ["Atestado Médico", "Luto", "Problema Familiar", "Atraso Justificado", "Entrega Tardia Autorizada"])
+                            motivo_excecao = st.selectbox("Motivo da Justificativa (Ficará salvo no Diário):", ["Atestado Médico", "Luto", "Problema Familiar", "Atraso Justificado", "Entrega Tardia Autorizada"])
                             
-                            if st.button("💾 Confirmar Visto Retroativo", type="primary", use_container_width=True):
+                            if st.button("💾 Atribuir Visto e Salvar Justificativa", type="primary", use_container_width=True):
                                 id_aluno_alvo = elegiveis[elegiveis['NOME_ALUNO'] == aluno_alvo].iloc[0]['ID_ALUNO']
                                 try:
                                     wb = db.conectar()
@@ -5334,18 +5334,18 @@ elif menu == "👥 Gestão da Turma":
                                         if i > 0 and row[0] == data_maq and db.limpar_id(row[1]) == db.limpar_id(id_aluno_alvo) and row[3] == t_maq:
                                             ws.update_cell(i+1, 5, "TRUE") # Muda o VISTO_ATIVIDADE para TRUE
                                             obs_atual = row[6]
-                                            nova_obs = f"{obs_atual} [VISTO TARDIO: {motivo_excecao}]".strip()
+                                            nova_obs = f"{obs_atual} [VISTO ATRIBUÍDO: {motivo_excecao}]".strip()
                                             ws.update_cell(i+1, 7, nova_obs)
                                             st.cache_data.clear()
-                                            st.toast(f"✅ Visto aplicado para {aluno_alvo}!")
+                                            st.toast(f"✅ Visto atribuído para {aluno_alvo}!")
                                             time.sleep(1)
                                             st.rerun()
                                 except Exception as e:
                                     st.error(f"Erro ao aplicar visto: {e}")
 
                     # Botão principal que chama a janela flutuante
-                    st.info("💡 **Ação Corretiva:** Um aluno trouxe atestado ou justificou a ausência/falta de visto?")
-                    if st.button("⚖️ ABRIR PAINEL DE VISTOS DE EXCEÇÃO", type="primary", use_container_width=True):
+                    st.info("💡 **Ação Corretiva:** Um aluno trouxe atestado ou entregou a atividade atrasada com justificativa?")
+                    if st.button("⚖️ JUSTIFICAR AUSÊNCIA E ATRIBUIR VISTO", type="primary", use_container_width=True):
                         dialog_visto_excecao()
 
     # ==============================================================================
