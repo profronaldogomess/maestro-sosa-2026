@@ -3790,8 +3790,13 @@ elif menu == "👤 Biografia do Estudante":
         with st.container(border=True):
             c1, c2, c3 = st.columns([1, 1.5, 1])
             
-            turmas_reais_bio = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
-            lista_turmas_bio = sorted(turmas_reais_bio['ID_TURMA'].unique()) if not turmas_reais_bio.empty else sorted(df_alunos['TURMA'].unique())
+            # 🚨 VACINA ANTI-KEYERROR: Verifica se a coluna existe antes de filtrar
+            lista_turmas_bio = []
+            if not df_turmas.empty and 'ID_TURMA' in df_turmas.columns:
+                turmas_reais_bio = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
+                lista_turmas_bio = sorted(turmas_reais_bio['ID_TURMA'].unique())
+            elif not df_alunos.empty and 'TURMA' in df_alunos.columns:
+                lista_turmas_bio = sorted(df_alunos['TURMA'].unique())
             
             turma_b = c1.selectbox("👥 Turma:", lista_turmas_bio, key="bio_t", label_visibility="collapsed")
             lista_alunos = df_alunos[df_alunos['TURMA'] == turma_b].sort_values(by="NOME_ALUNO").copy()
