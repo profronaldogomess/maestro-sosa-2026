@@ -5248,17 +5248,36 @@ elif menu == "👥 Gestão da Turma":
                     st.markdown("---")
                     
                     # --- DADOS DA AULA ---
-                    df_dia = df_d_maq[df_d_maq['DATA'] == data_maq]
+                    df_dia = df_d_maq[df_d_maq['DATA'] == data_maq].copy()
+                    df_dia['ID_ALUNO_CLEAN'] = df_dia['ID_ALUNO'].apply(db.limpar_id)
+                    
                     aula_info = df_registro_aulas[(df_registro_aulas['DATA'] == data_maq) & (df_registro_aulas['TURMA'] == t_maq)]
                     
                     conteudo_aula = aula_info.iloc[0]['CONTEUDO_MINISTRADO'] if not aula_info.empty else "Registro via Diário Rápido"
                     clima_aula = aula_info.iloc[0]['CLIMA_TURMA'] if not aula_info.empty else "Não registrado"
                     status_aula = aula_info.iloc[0]['STATUS_EXECUCAO'] if not aula_info.empty else "Concluído"
                     
-                    ausentes = df_dia[df_dia['TAGS'] == "AUSÊNCIA"]
-                    presentes = df_dia[df_dia['TAGS'] != "AUSÊNCIA"]
-                    vistos_ok = df_dia[df_dia['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"]
-                    bonus_df = df_dia[df_dia['BONUS'].apply(util.sosa_to_float) > 0]
+                    # 🚨 LÓGICA DE AGREGAÇÃO CORRETA (EVENT LOG)
+                    alunos_da_turma = df_alunos[df_alunos['TURMA'] == t_maq]
+                    total_alunos_turma = len(alunos_da_turma)
+                    
+                    # 1. Ausentes (IDs únicos que possuem a tag AUSÊNCIA)
+                    ids_ausentes = df_dia[df_dia['TAGS'] == "AUSÊNCIA"]['ID_ALUNO_CLEAN'].unique()
+                    qtd_ausentes = len(ids_ausentes)
+                    
+                    # 2. Presentes (Total da turma - Ausentes)
+                    qtd_presentes = total_alunos_turma - qtd_ausentes
+                    
+                    # 3. Vistos (IDs únicos que possuem VISTO_ATIVIDADE == TRUE)
+                    ids_vistos = df_dia[df_dia['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"]['ID_ALUNO_CLEAN'].unique()
+                    qtd_vistos = len(ids_vistos)
+                    
+                    # 4. Bônus (Soma agrupada por aluno)
+                    df_dia['BONUS_FLOAT'] = df_dia['BONUS'].apply(util.sosa_to_float)
+                    df_bonus = df_dia[df_dia['BONUS_FLOAT'] > 0].groupby('NOME_ALUNO')['BONUS_FLOAT'].sum().reset_index()
+                    qtd_bonus_aplicados = len(df_bonus)
+                    
+                    # Observações
                     obs_df = df_dia[(df_dia['OBSERVACOES'] != "") & (~df_dia['TAGS'].isin(["SISTEMA_NOTA", "BONUS_CONSELHO"]))]
                     
                     # --- 1. BENTO GRID: RESUMO DA AULA ---
@@ -5275,10 +5294,10 @@ elif menu == "👥 Gestão da Turma":
                     
                     # --- 2. KPIs ---
                     c_k1, c_k2, c_k3, c_k4 = st.columns(4)
-                    c_k1.metric("🟢 Presentes", len(presentes))
-                    c_k2.metric("🔴 Ausentes", len(ausentes))
-                    c_k3.metric("📘 Vistos Dados", len(vistos_ok))
-                    c_k4.metric("⭐ Bônus Aplicados", len(bonus_df))
+                    c_k1.metric("🟢 Presentes", qtd_presentes)
+                    c_k2.metric("🔴 Ausentes", qtd_ausentes)
+                    c_k3.metric("📘 Vistos Dados", qtd_vistos)
+                    c_k4.metric("⭐ Alunos Bonificados", qtd_bonus_aplicados)
                     
                     st.markdown("<br>", unsafe_allow_html=True)
                     
@@ -5287,18 +5306,19 @@ elif menu == "👥 Gestão da Turma":
                     
                     with col_aus:
                         st.markdown("#### 🔴 Radar de Faltosos")
-                        if ausentes.empty:
+                        if qtd_ausentes == 0:
                             st.success("100% de Presença nesta aula!")
                         else:
-                            tags_ausentes = "".join([f"<span style='display: inline-block; background: #FEE2E2; color: #EF4444; padding: 4px 10px; border-radius: 15px; font-size: 12px; font-weight: bold; margin: 4px;'>{row['NOME_ALUNO']}</span>" for _, row in ausentes.iterrows()])
+                            nomes_ausentes = alunos_da_turma[alunos_da_turma['ID'].apply(db.limpar_id).isin(ids_ausentes)]['NOME_ALUNO'].tolist()
+                            tags_ausentes = "".join([f"<span style='display: inline-block; background: #FEE2E2; color: #EF4444; padding: 4px 10px; border-radius: 15px; font-size: 12px; font-weight: bold; margin: 4px;'>{nome}</span>" for nome in nomes_ausentes])
                             st.markdown(f"<div>{tags_ausentes}</div>", unsafe_allow_html=True)
                             
                     with col_bon:
                         st.markdown("#### ⭐ Destaques (Bônus)")
-                        if bonus_df.empty:
+                        if df_bonus.empty:
                             st.info("Nenhum bônus extra aplicado.")
                         else:
-                            tags_bonus = "".join([f"<span style='display: inline-block; background: #FEF3C7; color: #F59E0B; padding: 4px 10px; border-radius: 15px; font-size: 12px; font-weight: bold; margin: 4px;'>{row['NOME_ALUNO']} (+{row['BONUS']})</span>" for _, row in bonus_df.iterrows()])
+                            tags_bonus = "".join([f"<span style='display: inline-block; background: #FEF3C7; color: #F59E0B; padding: 4px 10px; border-radius: 15px; font-size: 12px; font-weight: bold; margin: 4px;'>{row['NOME_ALUNO']} (+{row['BONUS_FLOAT']:.1f})</span>" for _, row in df_bonus.iterrows()])
                             st.markdown(f"<div>{tags_bonus}</div>", unsafe_allow_html=True)
 
                     # --- 4. OBSERVAÇÕES DA AULA (CAIXA EXPANSIVA) ---
@@ -5316,7 +5336,7 @@ elif menu == "👥 Gestão da Turma":
                         st.markdown("Use este painel para **atribuir o Visto de Atividade** a um aluno que faltou (com atestado/justificativa) ou que entregou a tarefa com atraso autorizado. O sistema garantirá a nota dele.")
                         
                         # Filtra alunos que NÃO têm visto TRUE
-                        elegiveis = df_dia[df_dia['VISTO_ATIVIDADE'].astype(str).str.upper() != "TRUE"].sort_values(by="NOME_ALUNO")
+                        elegiveis = alunos_da_turma[~alunos_da_turma['ID'].apply(db.limpar_id).isin(ids_vistos)].sort_values(by="NOME_ALUNO")
                         
                         if elegiveis.empty:
                             st.success("Todos os alunos desta aula já possuem visto!")
@@ -5325,23 +5345,29 @@ elif menu == "👥 Gestão da Turma":
                             motivo_excecao = st.selectbox("Motivo da Justificativa (Ficará salvo no Diário):", ["Atestado Médico", "Luto", "Problema Familiar", "Atraso Justificado", "Entrega Tardia Autorizada"])
                             
                             if st.button("💾 Atribuir Visto e Salvar Justificativa", type="primary", use_container_width=True):
-                                id_aluno_alvo = elegiveis[elegiveis['NOME_ALUNO'] == aluno_alvo].iloc[0]['ID_ALUNO']
-                                try:
-                                    wb = db.conectar()
-                                    ws = wb.worksheet("DB_DIARIO_BORDO")
-                                    dados = ws.get_all_values()
-                                    for i, row in enumerate(dados):
-                                        if i > 0 and row[0] == data_maq and db.limpar_id(row[1]) == db.limpar_id(id_aluno_alvo) and row[3] == t_maq:
-                                            ws.update_cell(i+1, 5, "TRUE") # Muda o VISTO_ATIVIDADE para TRUE
-                                            obs_atual = row[6]
-                                            nova_obs = f"{obs_atual} [VISTO ATRIBUÍDO: {motivo_excecao}]".strip()
-                                            ws.update_cell(i+1, 7, nova_obs)
-                                            st.cache_data.clear()
-                                            st.toast(f"✅ Visto atribuído para {aluno_alvo}!")
-                                            time.sleep(1)
-                                            st.rerun()
-                                except Exception as e:
-                                    st.error(f"Erro ao aplicar visto: {e}")
+                                id_aluno_alvo = elegiveis[elegiveis['NOME_ALUNO'] == aluno_alvo].iloc[0]['ID']
+                                
+                                with st.spinner("Registrando visto de exceção no Supabase..."):
+                                    nome_limpo = aluno_alvo.replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
+                                    
+                                    # Injeta um novo evento no diário concedendo o visto (Preserva a falta original)
+                                    sucesso = db.salvar_no_banco("DB_DIARIO_BORDO", [
+                                        data_maq, 
+                                        id_aluno_alvo, 
+                                        nome_limpo, 
+                                        t_maq, 
+                                        "TRUE", 
+                                        "", 
+                                        f"[VISTO TARDIO: {motivo_excecao}]", 
+                                        "0,00"
+                                    ])
+                                    
+                                    if sucesso:
+                                        st.toast(f"✅ Visto atribuído para {aluno_alvo}!")
+                                        time.sleep(1)
+                                        st.rerun()
+                                    else:
+                                        st.error("Erro ao salvar no banco de dados.")
 
                     # Botão principal que chama a janela flutuante
                     st.info("💡 **Ação Corretiva:** Um aluno trouxe atestado ou entregou a atividade atrasada com justificativa?")
