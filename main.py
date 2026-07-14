@@ -5228,7 +5228,7 @@ elif menu == "👥 Gestão da Turma":
     # ==============================================================================
     with tab_maquina:
         st.markdown("### 🕰️ Máquina do Tempo (Auditoria de Aulas Passadas)")
-        st.caption("Consulte aulas anteriores e aplique Vistos de Exceção (Atestados, Luto, etc.) sem fraudar a assiduidade.")
+        st.caption("Dashboard analítico da aula. Revise o que aconteceu e aplique justificativas em janela flutuante.")
         
         if not lista_turmas_segura:
             st.info("Nenhuma turma cadastrada.")
@@ -5242,75 +5242,111 @@ elif menu == "👥 Gestão da Turma":
                 if df_d_maq.empty:
                     st.info("Nenhum registro de aula encontrado para esta turma.")
                 else:
-                    # Pega as datas únicas e ordena da mais recente para a mais antiga
                     datas_disponiveis = sorted(df_d_maq['DATA'].unique(), key=lambda x: datetime.strptime(x, "%d/%m/%Y"), reverse=True)
                     data_maq = c_maq2.selectbox("Selecione a Data da Aula:", datas_disponiveis, key=f"maq_d_{v}")
                     
                     st.markdown("---")
                     
-                    def aplicar_visto_excecao(data_alvo, id_aluno, turma_alvo, motivo_excecao):
-                        try:
-                            wb = db.conectar()
-                            ws = wb.worksheet("DB_DIARIO_BORDO")
-                            dados = ws.get_all_values()
-                            for i, row in enumerate(dados):
-                                if i > 0 and row[0] == data_alvo and db.limpar_id(row[1]) == db.limpar_id(id_aluno) and row[3] == turma_alvo:
-                                    ws.update_cell(i+1, 5, "TRUE") # Muda o VISTO_ATIVIDADE para TRUE
-                                    obs_atual = row[6]
-                                    nova_obs = f"{obs_atual} [VISTO TARDIO: {motivo_excecao}]".strip()
-                                    ws.update_cell(i+1, 7, nova_obs)
-                                    st.cache_data.clear()
-                                    st.toast("✅ Visto de Exceção aplicado com sucesso!")
-                                    time.sleep(1)
-                                    st.rerun()
-                        except Exception as e:
-                            st.error(f"Erro ao aplicar visto: {e}")
-
+                    # --- DADOS DA AULA ---
                     df_dia = df_d_maq[df_d_maq['DATA'] == data_maq]
+                    aula_info = df_registro_aulas[(df_registro_aulas['DATA'] == data_maq) & (df_registro_aulas['TURMA'] == t_maq)]
                     
-                    col_pres, col_aus = st.columns(2)
+                    conteudo_aula = aula_info.iloc[0]['CONTEUDO_MINISTRADO'] if not aula_info.empty else "Registro via Diário Rápido"
+                    clima_aula = aula_info.iloc[0]['CLIMA_TURMA'] if not aula_info.empty else "Não registrado"
+                    status_aula = aula_info.iloc[0]['STATUS_EXECUCAO'] if not aula_info.empty else "Concluído"
                     
-                    with col_pres:
-                        st.markdown("#### 🟢 Presentes na Aula")
-                        presentes = df_dia[df_dia['TAGS'] != "AUSÊNCIA"].sort_values(by="NOME_ALUNO")
-                        
-                        if presentes.empty:
-                            st.info("Nenhum aluno presente.")
-                        else:
-                            for _, r in presentes.iterrows():
-                                visto = str(r['VISTO_ATIVIDADE']).upper()
-                                if visto == "TRUE":
-                                    st.success(f"✅ **{r['NOME_ALUNO']}** (Visto OK)")
-                                elif visto == "ISENTO":
-                                    st.info(f"➖ **{r['NOME_ALUNO']}** (Isento)")
-                                else:
-                                    with st.container(border=True):
-                                        st.warning(f"⚠️ **{r['NOME_ALUNO']}** (Estava presente, mas sem visto)")
-                                        c_mot, c_btn = st.columns([2, 1])
-                                        motivo = c_mot.selectbox("Motivo:", ["", "Atestado Médico", "Luto", "Problema Familiar", "Atraso Justificado", "Entrega Tardia"], key=f"mot_p_{r['ID_ALUNO']}_{v}", label_visibility="collapsed")
-                                        if c_btn.button("⚖️ Aplicar Visto", key=f"btn_p_{r['ID_ALUNO']}_{v}", use_container_width=True):
-                                            if motivo: aplicar_visto_excecao(data_maq, r['ID_ALUNO'], t_maq, motivo)
-                                            else: st.error("Selecione um motivo.")
-                                            
+                    ausentes = df_dia[df_dia['TAGS'] == "AUSÊNCIA"]
+                    presentes = df_dia[df_dia['TAGS'] != "AUSÊNCIA"]
+                    vistos_ok = df_dia[df_dia['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"]
+                    bonus_df = df_dia[df_dia['BONUS'].apply(util.sosa_to_float) > 0]
+                    obs_df = df_dia[(df_dia['OBSERVACOES'] != "") & (~df_dia['TAGS'].isin(["SISTEMA_NOTA", "BONUS_CONSELHO"]))]
+                    
+                    # --- 1. BENTO GRID: RESUMO DA AULA ---
+                    st.markdown(f"""
+                    <div style='background: {cor_card}; border: 1px solid {cor_borda}; padding: 20px; border-radius: 16px; margin-bottom: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.05);'>
+                        <h4 style='margin-top: 0; color: {BRAND_BLUE};'>📚 Conteúdo Ministrado</h4>
+                        <p style='font-size: 16px; font-weight: 500;'>{conteudo_aula}</p>
+                        <div style='display: flex; gap: 15px; margin-top: 10px;'>
+                            <span style='background: #F1F5F9; padding: 5px 10px; border-radius: 8px; font-size: 12px; color: #475569;'><strong>Status:</strong> {status_aula}</span>
+                            <span style='background: #F1F5F9; padding: 5px 10px; border-radius: 8px; font-size: 12px; color: #475569;'><strong>Clima:</strong> {clima_aula}</span>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    # --- 2. KPIs ---
+                    c_k1, c_k2, c_k3, c_k4 = st.columns(4)
+                    c_k1.metric("🟢 Presentes", len(presentes))
+                    c_k2.metric("🔴 Ausentes", len(ausentes))
+                    c_k3.metric("📘 Vistos Dados", len(vistos_ok))
+                    c_k4.metric("⭐ Bônus Aplicados", len(bonus_df))
+                    
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    
+                    # --- 3. INSIGHTS VISUAIS (FALTOSOS E DESTAQUES) ---
+                    col_aus, col_bon = st.columns(2)
+                    
                     with col_aus:
-                        st.markdown("#### 🔴 Ausentes na Aula")
-                        ausentes = df_dia[df_dia['TAGS'] == "AUSÊNCIA"].sort_values(by="NOME_ALUNO")
-                        
+                        st.markdown("#### 🔴 Radar de Faltosos")
                         if ausentes.empty:
-                            st.success("Nenhuma falta registrada neste dia!")
+                            st.success("100% de Presença nesta aula!")
                         else:
-                            for _, r in ausentes.iterrows():
-                                visto = str(r['VISTO_ATIVIDADE']).upper()
-                                if visto == "TRUE":
-                                    st.success(f"✅ **{r['NOME_ALUNO']}** (Faltou, mas justificou e ganhou visto)")
-                                else:
-                                    with st.container(border=True):
-                                        st.error(f"❌ **{r['NOME_ALUNO']}** (Faltou e está sem visto)")
-                                        c_mot, c_btn = st.columns([2, 1])
-                                        motivo = c_mot.selectbox("Motivo:", ["", "Atestado Médico", "Luto", "Problema Familiar", "Atividade Entregue Depois"], key=f"mot_a_{r['ID_ALUNO']}_{v}", label_visibility="collapsed")
-                                        if c_btn.button("⚖️ Aplicar Visto", key=f"btn_a_{r['ID_ALUNO']}_{v}", use_container_width=True):
-                                            if motivo: aplicar_visto_excecao(data_maq, r['ID_ALUNO'], t_maq, motivo)
-                                            else: st.error("Selecione um motivo.")
+                            tags_ausentes = "".join([f"<span style='display: inline-block; background: #FEE2E2; color: #EF4444; padding: 4px 10px; border-radius: 15px; font-size: 12px; font-weight: bold; margin: 4px;'>{row['NOME_ALUNO']}</span>" for _, row in ausentes.iterrows()])
+                            st.markdown(f"<div>{tags_ausentes}</div>", unsafe_allow_html=True)
+                            
+                    with col_bon:
+                        st.markdown("#### ⭐ Destaques (Bônus)")
+                        if bonus_df.empty:
+                            st.info("Nenhum bônus extra aplicado.")
+                        else:
+                            tags_bonus = "".join([f"<span style='display: inline-block; background: #FEF3C7; color: #F59E0B; padding: 4px 10px; border-radius: 15px; font-size: 12px; font-weight: bold; margin: 4px;'>{row['NOME_ALUNO']} (+{row['BONUS']})</span>" for _, row in bonus_df.iterrows()])
+                            st.markdown(f"<div>{tags_bonus}</div>", unsafe_allow_html=True)
+
+                    # --- 4. OBSERVAÇÕES DA AULA ---
+                    if not obs_df.empty:
+                        st.markdown("---")
+                        st.markdown("#### 🎙️ Ocorrências e Observações")
+                        for _, r_obs in obs_df.iterrows():
+                            st.warning(f"**{r_obs['NOME_ALUNO']}**: {r_obs['OBSERVACOES']}")
+
+                    st.markdown("---")
+                    
+                    # --- 5. JANELA FLUTUANTE (MODAL) PARA VISTOS DE EXCEÇÃO ---
+                    @st.dialog("⚖️ Aplicar Visto de Exceção", width="large")
+                    def dialog_visto_excecao():
+                        st.markdown("Selecione o aluno que justificou a falta ou entregou a atividade com atraso justificado.")
+                        
+                        # Filtra alunos que NÃO têm visto TRUE
+                        elegiveis = df_dia[df_dia['VISTO_ATIVIDADE'].astype(str).str.upper() != "TRUE"].sort_values(by="NOME_ALUNO")
+                        
+                        if elegiveis.empty:
+                            st.success("Todos os alunos desta aula já possuem visto!")
+                        else:
+                            aluno_alvo = st.selectbox("Estudante:", elegiveis['NOME_ALUNO'].tolist())
+                            motivo_excecao = st.selectbox("Motivo da Exceção:", ["Atestado Médico", "Luto", "Problema Familiar", "Atraso Justificado", "Entrega Tardia Autorizada"])
+                            
+                            if st.button("💾 Confirmar Visto Retroativo", type="primary", use_container_width=True):
+                                id_aluno_alvo = elegiveis[elegiveis['NOME_ALUNO'] == aluno_alvo].iloc[0]['ID_ALUNO']
+                                try:
+                                    wb = db.conectar()
+                                    ws = wb.worksheet("DB_DIARIO_BORDO")
+                                    dados = ws.get_all_values()
+                                    for i, row in enumerate(dados):
+                                        if i > 0 and row[0] == data_maq and db.limpar_id(row[1]) == db.limpar_id(id_aluno_alvo) and row[3] == t_maq:
+                                            ws.update_cell(i+1, 5, "TRUE") # Muda o VISTO_ATIVIDADE para TRUE
+                                            obs_atual = row[6]
+                                            nova_obs = f"{obs_atual} [VISTO TARDIO: {motivo_excecao}]".strip()
+                                            ws.update_cell(i+1, 7, nova_obs)
+                                            st.cache_data.clear()
+                                            st.toast(f"✅ Visto aplicado para {aluno_alvo}!")
+                                            time.sleep(1)
+                                            st.rerun()
+                                except Exception as e:
+                                    st.error(f"Erro ao aplicar visto: {e}")
+
+                    # Botão principal que chama a janela flutuante
+                    st.info("💡 **Ação Corretiva:** Um aluno trouxe atestado ou justificou a ausência/falta de visto?")
+                    if st.button("⚖️ ABRIR PAINEL DE VISTOS DE EXCEÇÃO", type="primary", use_container_width=True):
+                        dialog_visto_excecao()
 
     # ==============================================================================
     # 🚀 ABA 1: COCKPIT DE REGÊNCIA (AÇÃO RÁPIDA E MODAIS)
