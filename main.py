@@ -3519,15 +3519,21 @@ elif menu == "📝 Diário de Bordo Rápido":
     if df_alunos.empty:
         st.warning("⚠️ Base de alunos vazia. Cadastre as turmas e os alunos na aba 'Gestão da Turma'.")
     else:
-        turmas_reais_db = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
+        # 🚨 VACINA ANTI-KEYERROR
+        lista_turmas_db = []
+        if not df_turmas.empty and 'ID_TURMA' in df_turmas.columns:
+            turmas_reais_db = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
+            lista_turmas_db = sorted(turmas_reais_db['ID_TURMA'].unique())
+        elif not df_alunos.empty and 'TURMA' in df_alunos.columns:
+            lista_turmas_db = sorted(df_alunos['TURMA'].unique())
         
-        if turmas_reais_db.empty:
+        if not lista_turmas_db:
             st.warning("⚠️ Nenhuma turma regular cadastrada para o Diário.")
         else:
             # --- 1. BARRA DE CONTROLE LIMPA (Bento Layout) ---
             with st.container(border=True):
                 c1, c2 = st.columns(2)
-                turma_sel = c1.selectbox("Selecione a Turma:", sorted(turmas_reais_db['ID_TURMA'].unique()), key=f"db_t_{v}", label_visibility="collapsed")
+                turma_sel = c1.selectbox("Selecione a Turma:", lista_turmas_db, key=f"db_t_{v}", label_visibility="collapsed")
                 data_sel = c2.date_input("Selecione a Data:", date.today(), format="DD/MM/YYYY", key=f"db_d_{v}", label_visibility="collapsed")
                 data_str = data_sel.strftime("%d/%m/%Y")
                 ano_num = "".join(filter(str.isdigit, str(turma_sel)))
@@ -4385,8 +4391,13 @@ elif menu == "📊 Painel de Notas & Vistos":
     if df_alunos.empty:
         st.warning("⚠️ Cadastre alunos primeiro na aba 'Gestão da Turma'.")
     else:
-        turmas_reais_notas = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
-        lista_turmas_notas = sorted(turmas_reais_notas['ID_TURMA'].unique()) if not turmas_reais_notas.empty else sorted(df_alunos['TURMA'].unique())
+        # 🚨 VACINA ANTI-KEYERROR
+        lista_turmas_notas = []
+        if not df_turmas.empty and 'ID_TURMA' in df_turmas.columns:
+            turmas_reais_notas = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
+            lista_turmas_notas = sorted(turmas_reais_notas['ID_TURMA'].unique())
+        elif not df_alunos.empty and 'TURMA' in df_alunos.columns:
+            lista_turmas_notas = sorted(df_alunos['TURMA'].unique())
 
         if not lista_turmas_notas:
             st.warning("⚠️ Nenhuma turma regular cadastrada.")
@@ -4821,8 +4832,13 @@ elif menu == "📈 Boletim Anual & Conselho":
         st.warning("⚠️ Sem notas lançadas no sistema. O Boletim Anual será gerado assim que houver dados.")
     else:
         # --- 1. FILTRO DE TURMA ---
-        turmas_reais_bol = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
-        lista_turmas_bol = sorted(turmas_reais_bol['ID_TURMA'].unique()) if not turmas_reais_bol.empty else sorted(df_alunos['TURMA'].unique())
+        # 🚨 VACINA ANTI-KEYERROR
+        lista_turmas_bol = []
+        if not df_turmas.empty and 'ID_TURMA' in df_turmas.columns:
+            turmas_reais_bol = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
+            lista_turmas_bol = sorted(turmas_reais_bol['ID_TURMA'].unique())
+        elif not df_alunos.empty and 'TURMA' in df_alunos.columns:
+            lista_turmas_bol = sorted(df_alunos['TURMA'].unique())
         
         if not lista_turmas_bol:
             st.warning("Nenhuma turma cadastrada.")
