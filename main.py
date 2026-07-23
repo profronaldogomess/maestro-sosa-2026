@@ -2489,7 +2489,7 @@ elif menu == "📝 Central de Avaliações":
         if df_exames.empty:
             st.info("Nenhum instrumento avaliativo localizado no acervo.")
         else:
-            for _, row in df_exames.iterrows():
+            for idx_av, (_, row) in enumerate(df_exames.iterrows()):
                 with st.container(border=True):
                     txt_f = str(row['CONTEUDO'])
                     identificador = row['TIPO_MATERIAL']
@@ -2498,18 +2498,36 @@ elif menu == "📝 Central de Avaliações":
                     st.markdown(f"##### {identificador}")
                     st.caption(f"Série: {row['ANO']} | Valor: {val_ex if val_ex else '10.0'}")
                     
-                    l_reg = (re.findall(r"Regular\((.*?)\)", txt_f) or [row.get('LINK_DRIVE')])[-1]
-                    l_pei1 = (re.findall(r"PEI_N1\((.*?)\)", txt_f) or re.findall(r"PEI\((.*?)\)", txt_f) or [None])[-1]
-                    l_pei2 = (re.findall(r"PEI_N2\((.*?)\)", txt_f) or [None])[-1]
-                    l_prof = (re.findall(r"Prof\((.*?)\)", txt_f) or [None])[-1]
+                    # Extração cirúrgica de todos os links salvos
+                    def extrair_link_acervo(t, tag):
+                        m = re.search(rf"{tag}\((https://docs\.google\.com/document/d/[^\s\)]+)\)", t, re.IGNORECASE)
+                        return m.group(1).strip() if m else None
 
-                    c_b1, c_b2, c_b3, c_b4 = st.columns(4)
-                    c_b1.link_button("Download DOCX", str(l_reg), use_container_width=True, type="primary")
+                    l_reg = extrair_link_acervo(txt_f, "Regular") or row.get('LINK_DRIVE')
+                    l_pei1 = extrair_link_acervo(txt_f, "PEI_N1") or extrair_link_acervo(txt_f, "PEI")
+                    l_pei2 = extrair_link_acervo(txt_f, "PEI_N2")
+                    l_pei3 = extrair_link_acervo(txt_f, "PEI_N3")
+                    l_prof = extrair_link_acervo(txt_f, "Prof")
+
+                    # 🚨 PAINEL COMPLETO DE 7 BOTÕES
+                    c_b1, c_b2, c_b3, c_b4, c_b5, c_b6, c_b7 = st.columns(7)
                     
-                    if l_prof and "N/A" not in str(l_prof): c_b2.link_button("Guia Professor", str(l_prof), use_container_width=True)
-                    else: c_b2.button("Sem Guia", disabled=True, use_container_width=True, key=f"no_guide_{row.name}")
+                    if l_reg and "http" in str(l_reg): c_b1.link_button("📄 Regular", str(l_reg), use_container_width=True, type="primary")
+                    else: c_b1.button("Sem Doc", disabled=True, use_container_width=True, key=f"no_reg_{row.name}_{idx_av}")
                     
-                    if c_b3.button("Refinar", key=f"ref_av_h_{row.name}", use_container_width=True):
+                    if l_pei1 and "http" in str(l_pei1): c_b2.link_button("🔵 PEI N1", str(l_pei1), use_container_width=True)
+                    else: c_b2.button("Sem N1", disabled=True, use_container_width=True, key=f"no_p1_{row.name}_{idx_av}")
+                    
+                    if l_pei2 and "http" in str(l_pei2): c_b3.link_button("🟡 PEI N2", str(l_pei2), use_container_width=True)
+                    else: c_b3.button("Sem N2", disabled=True, use_container_width=True, key=f"no_p2_{row.name}_{idx_av}")
+                    
+                    if l_pei3 and "http" in str(l_pei3): c_b4.link_button("🔴 PEI N3", str(l_pei3), use_container_width=True)
+                    else: c_b4.button("Sem N3", disabled=True, use_container_width=True, key=f"no_p3_{row.name}_{idx_av}")
+                    
+                    if l_prof and "http" in str(l_prof): c_b5.link_button("👨‍🏫 Guia Prof", str(l_prof), use_container_width=True)
+                    else: c_b5.button("Sem Guia", disabled=True, use_container_width=True, key=f"no_prof_{row.name}_{idx_av}")
+                    
+                    if c_b6.button("✏️ Refinar", key=f"ref_av_h_{row.name}_{idx_av}", use_container_width=True):
                         pei1 = ai.extrair_tag(txt_f, "NIVEL_1") or ai.extrair_tag(txt_f, "PEI")
                         pei2 = ai.extrair_tag(txt_f, "NIVEL_2")
                         reg_match = re.split(r'\[(?:PEI|NIVEL_1)\]', txt_f, flags=re.IGNORECASE)
@@ -2522,7 +2540,7 @@ elif menu == "📝 Central de Avaliações":
                         }
                         st.rerun()
                         
-                    if c_b4.button("Apagar", key=f"del_av_h_{row.name}", use_container_width=True):
+                    if c_b7.button("🗑️ Apagar", key=f"del_av_h_{row.name}_{idx_av}", use_container_width=True):
                         if db.excluir_avaliacao_completa(identificador, row['SEMANA_REF']): st.rerun()
 
                     # 🚨 DOSSIÊ PSICOMÉTRICO E ANÁLISE DE ITENS (Clean visual)
