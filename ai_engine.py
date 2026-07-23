@@ -329,6 +329,33 @@ def gerar_ia(persona_key, comando, url_drive=None, usar_busca=True):
         else:
             return f"Erro na IA ({modelo_alvo}): {e}"
 
+def gerar_ia_json(persona_key, comando, usar_busca=False):
+    """Motor de Lote V202: Força a IA a responder em JSON estruturado de forma ultra-segura."""
+    config = types.GenerateContentConfig(
+        tools=[{'google_search': {}}] if usar_busca else [],
+        temperature=0.7, 
+        response_mime_type="application/json",
+    )
+    conteudo_prompt = [types.Part.from_text(text=f"{PERSONAS[persona_key]}\n\n{comando}")]
+    try:
+        # Usa o modelo flash padrão para lote por ser rápido e aceitar JSON mode perfeitamente
+        res = client.models.generate_content(
+            model="gemini-2.5-flash", 
+            contents=[types.Content(role="user", parts=conteudo_prompt)],
+            config=config
+        )
+        if not res.text: return {"erro": "A IA retornou uma resposta vazia."}
+        
+        import json
+        # Limpa eventuais blocos de código markdown que a IA ouse colocar por cima do JSON
+        texto_limpo = res.text.strip()
+        texto_limpo = re.sub(r'^```[a-zA-Z]*\n', '', texto_limpo, flags=re.IGNORECASE)
+        texto_limpo = re.sub(r'\n```$', '', texto_limpo)
+        
+        return json.loads(texto_limpo)
+    except Exception as e:
+        return {"erro": str(e)}
+
 def extrair_tag(texto, tag):
     if not texto: return ""
     tag_busca = tag.upper().strip()
