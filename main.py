@@ -2288,31 +2288,39 @@ elif menu == "📝 Central de Avaliações":
                 if st.button("Avançar para Adaptações PEI", type="primary", use_container_width=True):
                     f['fase'] = 3; st.rerun()
 
-        # --- FASE 3: TRÍADE INCLUSIVA (PEI) ---
+        # --- FASE 3: TRÍADE INCLUSIVA (PEI DESMEMBRADA) ---
         elif f['fase'] == 3:
             st.markdown("### Tríade Inclusiva (Adaptação PEI)")
+            st.caption("A IA vai gerar cada nível em sequência para garantir máxima qualidade e zero cortes de texto.")
             
-            if not f['pei_1']:
-                if st.button("Gerar Tríade Inclusiva", type="primary", use_container_width=True):
-                    with st.spinner("Analisando itens e gerando os 3 níveis clínicos..."):
+            if not f.get('pei_1'):
+                if st.button("🧠 FORJAR TRÍADE INCLUSIVA (N1, N2 e N3)", type="primary", use_container_width=True):
+                    with st.status("Processando Inclusão com Cérebro Triplo...", expanded=True) as status:
                         texto_base = ""
                         for item in f['mapa']:
                             texto_base += f"Q{item['q']}: {item['dados']['ENUNCIADO']} | Gabarito: {item['dados']['GABARITO']}\n"
-                        res_pei = ai.gerar_ia("FORJA_TRIADE_PEI", f"REGULARES:\n{texto_base}")
-                        f['pei_1'] = ai.extrair_tag(res_pei, "NIVEL_1")
-                        f['pei_2'] = ai.extrair_tag(res_pei, "NIVEL_2")
-                        f['pei_3'] = ai.extrair_tag(res_pei, "NIVEL_3")
+                        
+                        status.write("🔵 Forjando Nível 1 (Apoio Leve - 3 Alternativas)...")
+                        f['pei_1'] = ai.gerar_ia("FORJA_PEI_N1", f"SÉRIE: {f['info']['ano']}\nREGULARES:\n{texto_base}")
+                        
+                        status.write("🟡 Forjando Nível 2 (Apoio Moderado - Com Apoio Visual)...")
+                        f['pei_2'] = ai.gerar_ia("FORJA_PEI_N2", f"SÉRIE: {f['info']['ano']}\nREGULARES:\n{texto_base}")
+                        
+                        status.write("🔴 Forjando Nível 3 (Apoio Severo - Atividades Motores/BOX)...")
+                        f['pei_3'] = ai.gerar_ia("FORJA_PEI_N3", f"SÉRIE: {f['info']['ano']}\nREGULARES:\n{texto_base}")
+                        
+                        status.update(label="✅ Tríade PEI concluída com sucesso!", state="complete")
                         st.rerun()
             else:
-                t_p1, t_p2, t_p3 = st.tabs(["Nível 1 (Leve)", "Nível 2 (Moderado)", "Nível 3 (Qualitativo)"])
-                with t_p1: f['pei_1'] = st.text_area("Capa PEI N1:", value=f['pei_1'], height=300)
-                with t_p2: f['pei_2'] = st.text_area("Capa PEI N2:", value=f['pei_2'], height=300)
-                with t_p3: f['pei_3'] = st.text_area("Capa PEI N3:", value=f['pei_3'], height=300)
+                t_p1, t_p2, t_p3 = st.tabs(["🔵 Nível 1 (Leve)", "🟡 Nível 2 (Moderado)", "🔴 Nível 3 (Qualitativo/BOX)"])
+                with t_p1: f['pei_1'] = st.text_area("Capa PEI N1:", value=f['pei_1'], height=350)
+                with t_p2: f['pei_2'] = st.text_area("Capa PEI N2:", value=f['pei_2'], height=350)
+                with t_p3: f['pei_3'] = st.text_area("Capa PEI N3:", value=f['pei_3'], height=350)
                     
                 if st.button("Avançar para Compilação Final", type="primary", use_container_width=True):
                     f['fase'] = 4; st.rerun()
 
-        # --- FASE 4: COMPILAÇÃO E VARIANTES ---
+        # --- FASE 4: COMPILAÇÃO E FINALIZAÇÃO ---
         elif f['fase'] == 4:
             st.markdown("### Custódia e Finalização")
             
@@ -2323,7 +2331,9 @@ elif menu == "📝 Central de Avaliações":
             tipo_nome = f['info'].get('tipo_prova', 'TESTE').upper().replace(' ', '_')
             nome_sugerido = f"{tipo_nome}_{f['info']['ano'].replace('º','')}ANO_{f['info']['trimestre'].replace(' ', '')}{rigor_tag}"
             nome_arq = st.text_input("Identificador Técnico (Cofre Digital):", value=nome_sugerido)
-            gerar_variante = st.checkbox("Gerar Variante Tipo B (Embaralhada)", value=True)
+            
+            # 🚨 DESMARCADO POR PADRÃO: Evita criar "Tipo B" sem o professor pedir
+            gerar_variante = st.checkbox("Gerar Variante Tipo B (Embaralhada)", value=False)
             
             if st.button("Finalizar e Gravar Ativos", type="primary", use_container_width=True):
                 with st.status("Processando documentos finais...") as status:
@@ -2353,47 +2363,47 @@ elif menu == "📝 Central de Avaliações":
                     
                     links_f = f"--- LINKS ---\nRegular({link_reg}) PEI_N1({link_p1}) PEI_N2({link_p2}) PEI_N3({link_p3})"
                     
-                    # Salva no Banco de Dados
+                    # Salva APENAS a prova oficial no Banco
                     sucesso_db = db.salvar_no_banco("DB_AULAS_PRONTAS", [
                         datetime.now().strftime("%d/%m/%Y"), "AVALIAÇÃO", nome_arq, 
                         texto_final_padrao + f"\n\n[NIVEL_1]\n{f['pei_1']}\n\n[NIVEL_2]\n{f['pei_2']}\n\n[NIVEL_3]\n{f['pei_3']}\n\n{links_f}", 
                         f['info']['ano'], link_reg
                     ])
                     
-                    if sucesso_db:
-                        if gerar_variante:
-                            status.write("Embaralhando Variante Tipo B...")
-                            mapa_var = f['mapa'].copy()
-                            random.shuffle(mapa_var)
-                            
-                            txt_var = f"[VALOR: {f['info']['valor']}]\n\n[QUESTOES]\n"
-                            txt_gab_var = "[GABARITO_TEXTO]\n"
-                            txt_grade_var = "[GRADE_DE_CORRECAO]\n"
-                            
-                            for i, item in enumerate(mapa_var):
-                                d_v = util.embaralhar_item_estruturado(item['dados'])
-                                txt_var += f"**QUESTÃO {i+1:02d} -** {d_v['ENUNCIADO']}\n(A) {d_v['ALT_A']}\n(B) {d_v['ALT_B']}\n(C) {d_v['ALT_C']}\n(D) {d_v['ALT_D']}\n(E) {d_v['ALT_E']}\n\n"
-                                txt_gab_var += f"QUESTÃO {i+1:02d}: {d_v['GABARITO']}\n"
-                                txt_grade_var += f"QUESTÃO {i+1:02d}: [{d_v['HABILIDADE']}] | JUSTIFICATIVA: {d_v['JUSTIFICATIVA']}\n"
-                                
-                            texto_final_var = txt_var + txt_gab_var + txt_grade_var
-                            doc_var = exporter.gerar_docx_prova_v25(f"{nome_arq}_TIPO_B", texto_final_var, f['info'])
-                            link_var = db.subir_e_converter_para_google_docs(doc_var, f"{nome_arq}_TIPO_B", modo="AVALIACAO")
-                            db.salvar_no_banco("DB_AULAS_PRONTAS", [
-                                datetime.now().strftime("%d/%m/%Y"), "AVALIAÇÃO", f"{nome_arq} - TIPO B", 
-                                texto_final_var + f"\n\n[NIVEL_1]\n{f['pei_1']}\n\n[NIVEL_2]\n{f['pei_2']}\n\n[NIVEL_3]\n{f['pei_3']}\n\n" + f"--- LINKS ---\nRegular({link_var}) PEI_N1({link_p1})", 
-                                f['info']['ano'], link_var
-                            ])
-
-                        status.write("Construindo Guia Professor...")
-                        guia_txt = f"GABARITO:\n{txt_gabarito}\n\nGRADE:\n{txt_grade}"
-                        doc_prof = exporter.gerar_docx_professor_v25(f"{nome_arq}_GUIA", guia_txt, f['info'])
-                        db.subir_e_converter_para_google_docs(doc_prof, f"{nome_arq}_GUIA", modo="AVALIACAO")
+                    # Só gera Tipo B se o professor marcar a caixinha de propósito
+                    if sucesso_db and gerar_variante:
+                        status.write("Embaralhando Variante Tipo B...")
+                        mapa_var = f['mapa'].copy()
+                        random.shuffle(mapa_var)
                         
-                        f['prova_final_txt'] = texto_final_padrao
-                        f['nome_base'] = nome_arq
-                        status.update(label="Homologado com Sucesso!", state="complete")
-                        st.balloons(); f['fase'] = 5; time.sleep(1); st.rerun()
+                        txt_var = f"[VALOR: {f['info']['valor']}]\n\n[QUESTOES]\n"
+                        txt_gab_var = "[GABARITO_TEXTO]\n"
+                        txt_grade_var = "[GRADE_DE_CORRECAO]\n"
+                        
+                        for i, item in enumerate(mapa_var):
+                            d_v = util.embaralhar_item_estruturado(item['dados'])
+                            txt_var += f"**QUESTÃO {i+1:02d} -** {d_v['ENUNCIADO']}\n(A) {d_v['ALT_A']}\n(B) {d_v['ALT_B']}\n(C) {d_v['ALT_C']}\n(D) {d_v['ALT_D']}\n(E) {d_v['ALT_E']}\n\n"
+                            txt_gab_var += f"QUESTÃO {i+1:02d}: {d_v['GABARITO']}\n"
+                            txt_grade_var += f"QUESTÃO {i+1:02d}: [{d_v['HABILIDADE']}] | JUSTIFICATIVA: {d_v['JUSTIFICATIVA']}\n"
+                            
+                        texto_final_var = txt_var + txt_gab_var + txt_grade_var
+                        doc_var = exporter.gerar_docx_prova_v25(f"{nome_arq}_TIPO_B", texto_final_var, f['info'])
+                        link_var = db.subir_e_converter_para_google_docs(doc_var, f"{nome_arq}_TIPO_B", modo="AVALIACAO")
+                        db.salvar_no_banco("DB_AULAS_PRONTAS", [
+                            datetime.now().strftime("%d/%m/%Y"), "AVALIAÇÃO", f"{nome_arq} - TIPO B", 
+                            texto_final_var + f"\n\n[NIVEL_1]\n{f['pei_1']}\n\n[NIVEL_2]\n{f['pei_2']}\n\n[NIVEL_3]\n{f['pei_3']}\n\n" + f"--- LINKS ---\nRegular({link_var}) PEI_N1({link_p1})", 
+                            f['info']['ano'], link_var
+                        ])
+
+                    status.write("Construindo Guia Professor...")
+                    guia_txt = f"GABARITO:\n{txt_gabarito}\n\nGRADE:\n{txt_grade}"
+                    doc_prof = exporter.gerar_docx_professor_v25(f"{nome_arq}_GUIA", guia_txt, f['info'])
+                    db.subir_e_converter_para_google_docs(doc_prof, f"{nome_arq}_GUIA", modo="AVALIACAO")
+                    
+                    f['prova_final_txt'] = texto_final_padrao
+                    f['nome_base'] = nome_arq
+                    status.update(label="Homologado com Sucesso!", state="complete")
+                    st.balloons(); f['fase'] = 5; time.sleep(1); st.rerun()
 
         # --- FASE 5: AÇÕES PÓS-PROVA ---
         elif f['fase'] == 5:
