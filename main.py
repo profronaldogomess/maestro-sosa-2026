@@ -1981,7 +1981,9 @@ elif menu == "📝 Central de Avaliações":
                     v_total = c3.number_input("Valor:", 0.0, 10.0, 3.0 if "Inédita" in modo_arq else 10.0)
                     qtd_q = c4.number_input("Quantidade de Questões:", 1, 20, 5)
 
-                tipo_av = "SONDA_DE_PROFICIÊNCIA" if "Sonda" in modo_arq else st.selectbox("Tipo de Instrumento:", ["Teste", "Prova", "Recuperação Paralela", "Recuperação Final"])
+                c_tipo, c_rigor = st.columns(2)
+                tipo_av = "SONDA_DE_PROFICIÊNCIA" if "Sonda" in modo_arq else c_tipo.selectbox("Tipo de Instrumento:", ["Teste", "Prova", "Recuperação Paralela", "Recuperação Final"])
+                perfil_rigor = c_rigor.selectbox("Perfil de Rigor Cognitivo:", ["⚖️ Padrão (Balanceado)", "🚀 Alta Performance (Avançado)", "🧱 Foco em Fixação (Acessível)"])
 
                 with st.container(border=True):
                     st.markdown("#### Seleção de Matérias Base")
@@ -2314,8 +2316,12 @@ elif menu == "📝 Central de Avaliações":
         elif f['fase'] == 4:
             st.markdown("### Custódia e Finalização")
             
+            rigor_tag = ""
+            if "Alta Performance" in f['info'].get('rigor', ''): rigor_tag = "_AVANCADO"
+            elif "Fixação" in f['info'].get('rigor', ''): rigor_tag = "_ACESSIVEL"
+            
             tipo_nome = f['info'].get('tipo_prova', 'TESTE').upper().replace(' ', '_')
-            nome_sugerido = f"{tipo_nome}_{f['info']['ano'].replace('º','')}ANO_{f['info']['trimestre'].replace(' ', '')}"
+            nome_sugerido = f"{tipo_nome}_{f['info']['ano'].replace('º','')}ANO_{f['info']['trimestre'].replace(' ', '')}{rigor_tag}"
             nome_arq = st.text_input("Identificador Técnico (Cofre Digital):", value=nome_sugerido)
             gerar_variante = st.checkbox("Gerar Variante Tipo B (Embaralhada)", value=True)
             
@@ -2852,22 +2858,42 @@ elif menu == "📸 Scanner de Gabaritos":
                                         for i, lido in enumerate(res_lidas):
                                             if i < len(gab_alvo):
                                                 status = "✅ ACERTO" if lido == gab_alvo[i] else ("🚫 DUPLA" if lido == "X" else "❌ ERRO")
-                                                dados_pericia.append({"Q": f"{i+1:02d}", "Lido": lido, "Status": status})
+                                                dados_pericia.append({"Q": f"{i+1:02d}", "Lido": lido, "Status": status, "🧮 Cálculo OK?": True})
                                         
                                         df_mesa = st.data_editor(pd.DataFrame(dados_pericia), hide_index=True, use_container_width=True,
-                                            column_config={"Q": st.column_config.TextColumn(disabled=True), "Lido": st.column_config.SelectboxColumn("Ajustar", options=["A", "B", "C", "D", "E", "X", "?"], required=True), "Status": st.column_config.TextColumn(disabled=True)},
+                                            column_config={
+                                                "Q": st.column_config.TextColumn(disabled=True), 
+                                                "Lido": st.column_config.SelectboxColumn("Ajustar", options=["A", "B", "C", "D", "E", "X", "?"], required=True), 
+                                                "Status": st.column_config.TextColumn(disabled=True),
+                                                "🧮 Cálculo OK?": st.column_config.CheckboxColumn("Cálculo OK?", default=True)
+                                            },
                                             key=f"ed_turbo_{id_aluno_atual}")
                                         
                                         novas_res = df_mesa["Lido"].tolist()
-                                        acertos = sum(1 for i, r in enumerate(novas_res) if i < len(gab_alvo) and r == gab_alvo[i])
-                                        nota_f = (acertos / len(gab_alvo)) * v_total_at
-                                        st.metric("Nota Final Calculada", f"{nota_f:.1f}", delta=f"{acertos}/{len(gab_alvo)} acertos")
+                                        calculos_ok = df_mesa["🧮 Cálculo OK?"].tolist()
+                                        
+                                        peso_q = v_total_at / len(gab_alvo) if len(gab_alvo) > 0 else 0
+                                        nota_f = 0.0
+                                        acertos = 0
+                                        for i, r in enumerate(novas_res):
+                                            if i < len(gab_alvo) and r == gab_alvo[i]:
+                                                acertos += 1
+                                                nota_f += peso_q if calculos_ok[i] else (peso_q / 2)
+                                                
+                                        st.metric("Nota Final Calculada", f"{nota_f:.1f}", delta=f"{acertos}/{len(gab_alvo)} acertos (Penalidade de chute aplicada se sem cálculo)")
                                         
                                         col_s1, col_s2 = st.columns(2)
                                         if col_s1.button("Gravar Correção", type="primary", use_container_width=True):
                                             with st.spinner("Gravando..."):
-                                                link_pasta = db.subir_e_converter_para_google_docs(st.session_state.current_scan_img, al_sel.replace(" ","_"), trimestre=tr_sel, categoria=t_sel, semana=material_ref['TIPO_MATERIAL'], modo="SCANNER")
-                                                db.salvar_no_banco("DB_GABARITOS_ALUNOS", [datetime.now().strftime("%d/%m/%Y"), id_aluno_atual, al_sel, t_sel, material_ref['TIPO_MATERIAL'], ";".join(novas_res), util.sosa_to_str(nota_f), link_pasta])
+                                                link_pasta = db.subir_e_converter_para_google_docs(st.session_state.current_scan_img, al_sel[0].replace(" ","_"), trimestre=tr_sel, categoria=t_sel, semana=material_ref['TIPO_MATERIAL'], modo="SCANNER")
+                                                
+                                                grupo_str = f"|GRUPO:{','.join(al_sel)}" if len(al_sel) > 1 else ""
+                                                respostas_salvar = ";".join(novas_res) + grupo_str
+                                                
+                                                for aluno_nome in al_sel:
+                                                    id_al = pendentes[pendentes['NOME_ALUNO'] == aluno_nome].iloc[0]['ID']
+                                                    db.salvar_no_banco("DB_GABARITOS_ALUNOS", [datetime.now().strftime("%d/%m/%Y"), id_al, aluno_nome, t_sel, material_ref['TIPO_MATERIAL'], respostas_salvar, util.sosa_to_str(nota_f), link_pasta])
+                                                
                                                 del st.session_state.current_scan_res; del st.session_state.current_scan_img
                                                 st.success("Gravado!"); time.sleep(0.5); st.rerun()
                                         if col_s2.button("Descartar", use_container_width=True):
@@ -3032,6 +3058,12 @@ elif menu == "📸 Scanner de Gabaritos":
                         respostas_salvas = reg.get('RESPOSTAS_ALUNO', 'MANUAL')
                         id_av_banco = str(reg['ID_AVALIACAO']).upper()
                         
+                        grupo_info = ""
+                        if "|GRUPO:" in respostas_salvas:
+                            partes = respostas_salvas.split("|GRUPO:")
+                            respostas_salvas = partes[0]
+                            grupo_info = partes[1]
+                        
                         if reg['RESPOSTAS_ALUNO'] == "FALTOU": situacao_txt, versao_prova = "❌ FALTOU", "N/A"
                         elif "2ª" in id_av_banco or "2CHAMADA" in id_av_banco: situacao_txt, versao_prova = "SEGUNDA CHAMADA", "SEGUNDA CHAMADA"
                         elif "TIPO" in id_av_banco: situacao_txt, versao_prova = "✅ REALIZADA", f"VARIANTE ({id_av_banco.split('-')[-1].strip()})"
@@ -3115,6 +3147,11 @@ elif menu == "📸 Scanner de Gabaritos":
                             al_rev_data = df_scanned[df_scanned['Estudante'] == aluno_rev_nome].iloc[0]
                             id_aluno_rev = al_rev_data['ID']
                             respostas_atuais = str(al_rev_data['_Respostas']).split(';')
+                            
+                            # 🚨 AVISO DE DUPLA/TRIO
+                            grupo_atual = al_rev_data.get('_Grupo', '')
+                            if grupo_atual:
+                                st.info(f"👥 **Atenção:** Esta prova foi feita em grupo com: {grupo_atual}")
                             
                             # 🚨 VACINA DE COMPATIBILIDADE: Garante que o vetor de respostas tenha o tamanho exato da prova
                             while len(respostas_atuais) < len(gab_oficial_trib):
