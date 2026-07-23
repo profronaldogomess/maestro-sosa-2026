@@ -338,9 +338,9 @@ def gerar_ia_json(persona_key, comando, usar_busca=False):
     )
     conteudo_prompt = [types.Part.from_text(text=f"{PERSONAS[persona_key]}\n\n{comando}")]
     try:
-        # Usa o modelo flash padrão para lote por ser rápido e aceitar JSON mode perfeitamente
+        # 🚨 ATUALIZADO 2026: Usa o modelo flash da Geração 3
         res = client.models.generate_content(
-            model="gemini-2.5-flash", 
+            model="gemini-3-flash-preview", 
             contents=[types.Content(role="user", parts=conteudo_prompt)],
             config=config
         )
