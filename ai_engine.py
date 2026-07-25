@@ -457,11 +457,18 @@ def realizar_diagnostico_v25(plano_raw, df_curriculo, ano_sel):
         "objetivo_literal": extrair_tag(plano_raw, "OBJETIVOS_ENSINO")
     }
 
+# ==============================================================================
+# MOTOR DE VISÃO COMPUTACIONAL ECONÔMICO (SOSA V202.1 - FLASH ENGINE)
+# ==============================================================================
 def analisar_gabarito_vision(imagem_bytes):
+    """
+    Leitura ultra-rápida e ultra-barata de gabaritos via Gemini Flash.
+    Custo quase nulo / Elegível ao Free Tier do Google AI Studio.
+    """
     try:
         prompt = (
             "Você é um perito em visão computacional de alta precisão. Analise a imagem do gabarito.\n"
-            "A tabela possui as colunas: Q (Questão) e as alternativas (pode ser A, B, C, D, E para provas regulares ou apenas A, B, C para provas adaptadas PEI).\n"
+            "A tabela possui as colunas: Q (Questão) e as alternativas (A, B, C, D, E para provas regulares ou apenas A, B, C para provas PEI).\n"
             "MISSÃO DE RACIOCÍNIO:\n"
             "1. Localize a grade de respostas.\n"
             "2. Analise a densidade de preenchimento de cada círculo.\n"
@@ -472,23 +479,36 @@ def analisar_gabarito_vision(imagem_bytes):
             "Retorne APENAS um JSON puro no formato: {'01': 'A', '02': 'C', ...}"
         )
         
-        conteudo_prompt =[
+        conteudo_prompt = [
             types.Part.from_bytes(data=imagem_bytes, mime_type="image/jpeg"),
             types.Part.from_text(text=prompt)
         ]
         
+        # 🚀 MODELO FLASH: 100% Otimizado para custo e velocidade visual
         res = client.models.generate_content(
-            model="gemini-2.5-pro", 
+            model="gemini-3-flash-preview", 
             contents=[types.Content(role="user", parts=conteudo_prompt)],
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
+                temperature=0.1 # Temperatura baixa para máxima precisão determinística
             )
         )
         
         import json
         return json.loads(res.text)
+        
     except Exception as e:
-        return {"erro": str(e)}
+        # Fallback para o modelo Flash da geração anterior caso a chave esteja em transição
+        try:
+            res_fb = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=[types.Content(role="user", parts=conteudo_prompt)],
+                config=types.GenerateContentConfig(response_mime_type="application/json")
+            )
+            import json
+            return json.loads(res_fb.text)
+        except Exception as e_fb:
+            return {"erro": f"Falha na leitura da imagem: {e_fb}"}
     
 def gerar_prognostico_pedagogico(dados_stats, contexto_prova):
     try:
