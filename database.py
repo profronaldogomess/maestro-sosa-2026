@@ -1,13 +1,15 @@
 import os
 import re
+import io
 import base64
 import requests
 import gspread
 import pandas as pd
 import streamlit as st
-from datetime import datetime
+from datetime import datetime, date, timedelta
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload
 import utils as util
 
 # ==============================================================================
@@ -501,13 +503,51 @@ def excluir_avaliacao_completa(identificador, tipo_prova_nome):
 # ==============================================================================
 # 5. INTEGRAÇÃO COM GOOGLE DRIVE (SOSA BRIDGE V45.8 - DETECTOR DE FALHAS)
 # ==============================================================================
-def subir_e_converter_para_google_docs(file_stream, nome_arquivo, trimestre="I Trimestre", categoria="6º Ano", semana="Semana Geral", modo="AULA"):
+def salvar_foto_gabarito_drive(imagem_bytes, nome_aluno, turma, avaliacao_nome):
     """
-    SOSA BRIDGE V45.8 (DETECTOR DE FALHAS): Retorna ao método do Google Apps Script
-    e atua como um scanner de rede, capturando códigos HTTP, redirecionamentos e cookies.
+    SOSA V202.6: Envia a foto do gabarito como arquivo NATIVO DE IMAGEM (.jpg) no Google Drive.
     """
     try:
-        # Se o senhor gerou um link novo no Apps Script, cole-o aqui dentro das aspas:
+        creds = obter_creds_drive()
+        service = build('drive', 'v3', credentials=creds)
+        
+        nome_limpo = re.sub(r'[^a-zA-Z0-9_]', '_', str(nome_aluno))
+        data_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        nome_arquivo = f"SCAN_{turma}_{nome_limpo}_{data_str}.jpg"
+        
+        file_metadata = {
+            'name': nome_arquivo,
+            'mimeType': 'image/jpeg'
+        }
+        
+        media = MediaIoBaseUpload(io.BytesIO(imagem_bytes), mimetype='image/jpeg', resumable=True)
+        file_drive = service.files().create(body=file_metadata, media_body=media, fields='id, webViewLink').execute()
+        
+        file_id = file_drive.get('id')
+        try:
+            service.permissions().create(
+                fileId=file_id,
+                body={'type': 'anyone', 'role': 'reader'}
+            ).execute()
+        except: pass
+        
+        return file_drive.get('webViewLink', f"https://drive.google.com/file/d/{file_id}/view")
+    except Exception as e:
+        return f"N/A (Erro Foto Drive: {e})"
+
+def subir_e_converter_para_google_docs(file_stream, nome_arquivo, trimestre="I Trimestre", categoria="6º Ano", semana="Semana Geral", modo="AULA"):
+    """
+    SOSA BRIDGE V45.9: Redireciona fotos do Scanner diretamente para salvar em formato JPG de imagem.
+    """
+    if modo == "SCANNER":
+        if isinstance(file_stream, bytes):
+            img_bytes = file_stream
+        else:
+            file_stream.seek(0)
+            img_bytes = file_stream.read()
+        return salvar_foto_gabarito_drive(img_bytes, nome_arquivo, categoria, semana)
+
+    try:
         URL_DA_PONTE = "https://script.google.com/macros/s/AKfycbzbvOfX3KCgVg7yIrVxqLvsbSRa6TFHv564bdzgVsQt2tE8DiM_XcW-IM2ehNMoonWpmQ/exec" 
         
         if isinstance(file_stream, bytes):
@@ -525,18 +565,15 @@ def subir_e_converter_para_google_docs(file_stream, nome_arquivo, trimestre="I T
             "fileB64": file_b64
         }
         
-        # Realiza a requisição post
         response = requests.post(URL_DA_PONTE, json=payload, timeout=60)
         resposta_texto = response.text.strip()
         
-        # 🚨 ANÁLISE DE SEGURANÇA DE REDE DO GOOGLE
         if response.status_code != 200:
-            return f"ERRO_HTTP_{response.status_code}: O servidor do Google rejeitou a conexão com código de erro."
+            return f"ERRO_HTTP_{response.status_code}: Servidor do Google rejeitou a conexão."
             
         if not resposta_texto:
-            # Captura se o Google enviou cookies conflitantes (Bug de Multi-login)
-            cookie_info = response.headers.get('Set-Cookie', 'Nenhum cookie detectado')
-            return f"ERRO_RESPOSTA_VAZIA: O script respondeu com sucesso, mas o corpo veio em branco. Cookie de segurança: {cookie_info[:100]}"
+            cookie_info = response.headers.get('Set-Cookie', 'Nenhum cookie')
+            return f"ERRO_RESPOSTA_VAZIA: Corpo em branco. Cookie: {cookie_info[:100]}"
         
         if "google.com" in resposta_texto and "https://" in resposta_texto and len(resposta_texto) < 250:
             return resposta_texto
