@@ -2583,7 +2583,7 @@ elif menu == "📝 Central de Avaliações":
 
 
 # ==============================================================================
-# MÓDULO: CENTRAL DE INTELIGÊNCIA DE RESULTADOS (CIR) - V202.5 (FOTO JPG & FALTOSOS)
+# MÓDULO: CENTRAL DE INTELIGÊNCIA DE RESULTADOS (CIR) - V202.6 (ESCOPO CORRIGIDO)
 # ==============================================================================
 elif menu == "📸 Scanner de Gabaritos":
     st.title("Central de Inteligência de Resultados (CIR)")
@@ -2613,7 +2613,7 @@ elif menu == "📸 Scanner de Gabaritos":
         else:
             return r"(?<!I)I(?![I])"
 
-    # FILTRO HIERÁRQUICO DE ATIVOS CIR (Soberano V202.5)
+    # FILTRO HIERÁRQUICO DE ATIVOS CIR (Soberano V202.6)
     def filtrar_ativos_cir(turma, trimestre_nome, apenas_provas=True):
         if not turma or not trimestre_nome: return []
         try:
@@ -2709,14 +2709,17 @@ elif menu == "📸 Scanner de Gabaritos":
                 nome_filtro_pendente = at_sel.split("-")[0].strip()
                 df_diag_turma = df_diagnosticos[df_diagnosticos['TURMA'] == t_sel]
                 
-                # 🚨 FIX FALTOSOS: Considera como "corrigidos de fato" apenas quem NÃO tem resposta "FALTOU"
+                # 🚨 DECLARAÇÃO GLOBAL DE ESCOPO PARA EVITAR NAMEERROR
+                padrao_trim = obter_regex_trimestre(tr_sel)
+                tipo_base = at_sel.split("-")[0].strip().upper()
+                serie_num = "".join(filter(str.isdigit, t_sel))
+
                 diag_reais = df_diag_turma[
                     (df_diag_turma['ID_AVALIACAO'].str.startswith(nome_filtro_pendente, na=False)) & 
                     (df_diag_turma['RESPOSTAS_ALUNO'] != "FALTOU")
                 ]
                 escaneados_unicos = diag_reais['ID_ALUNO'].astype(str).tolist()
                 
-                # Identifica quem foi marcado como FALTOU para dar destaque visual
                 faltosos_ids = df_diag_turma[
                     (df_diag_turma['ID_AVALIACAO'].str.startswith(nome_filtro_pendente, na=False)) & 
                     (df_diag_turma['RESPOSTAS_ALUNO'] == "FALTOU")
@@ -2726,7 +2729,6 @@ elif menu == "📸 Scanner de Gabaritos":
                 total_turma = len(df_alunos[df_alunos['TURMA'] == t_sel])
                 total_corrigidos = len(escaneados_unicos)
 
-                # Monta lista de opcoes do selectbox destacando alunos ausentes
                 opcoes_triagem = []
                 mapa_rotulo_nome = {}
                 for _, r_p in pendentes_df.iterrows():
@@ -2833,7 +2835,6 @@ elif menu == "📸 Scanner de Gabaritos":
                             c_reg1, c_reg2 = st.columns(2)
                             modo_2a = c_reg1.toggle("2ª Chamada Discursiva", key=f"t2a_{v}")
                             
-                            tipo_base = at_sel.split("-")[0].strip().upper()
                             if modo_2a:
                                 df_2a = df_aulas[(df_aulas['TIPO_MATERIAL'].str.upper().str.contains("2ª|2CHAMADA", regex=True)) & (df_aulas['TIPO_MATERIAL'].str.contains(padrao_trim, regex=True, case=False)) & (df_aulas['ANO'].str.contains(serie_num))]
                                 at_segunda = c_reg2.selectbox("Caderno de 2ª Chamada:", [""] + df_2a['TIPO_MATERIAL'].unique().tolist(), key=f"s2a_{v}")
@@ -2841,7 +2842,7 @@ elif menu == "📸 Scanner de Gabaritos":
                                     df_busca = df_aulas[df_aulas['TIPO_MATERIAL'] == at_segunda]
                                     if not df_busca.empty: material_ref = df_busca.iloc[0]
                             else:
-                                df_variantes = df_aulas[(df_aulas['TIPO_MATERIAL'].str.upper().str.contains(tipo_base)) & (df_aulas['TIPO_MATERIAL'].str.upper().str.contains("TIPO")) & (df_aulas['ANO'].str.contains(serie_num))]
+                                df_variantes = df_aulas[(df_aulas['TIPO_MATERIAL'].str.upper().str.contains(tipo_base, regex=False)) & (df_aulas['TIPO_MATERIAL'].str.upper().str.contains("TIPO")) & (df_aulas['ANO'].str.contains(serie_num))]
                                 versao_variante = c_reg2.selectbox("Caderno/Variante:", ["Padrão (Tipo A)"] + df_variantes['TIPO_MATERIAL'].unique().tolist(), key=f"var_{v}")
                                 df_busca = df_aulas[df_aulas['TIPO_MATERIAL'] == (at_sel if versao_variante == "Padrão (Tipo A)" else versao_variante)]
                                 if not df_busca.empty: material_ref = df_busca.iloc[0]
@@ -2941,7 +2942,7 @@ elif menu == "📸 Scanner de Gabaritos":
                                     
                                     for aluno_nome in alunos_alvo:
                                         id_al = pendentes_df[pendentes_df['NOME_ALUNO'] == aluno_nome].iloc[0]['ID']
-                                        db.excluir_registro("DB_GABARITOS_ALUNOS", id_al) # Limpa registro antigo se era FALTOU
+                                        db.excluir_registro("DB_GABARITOS_ALUNOS", id_al)
                                         db.salvar_no_banco("DB_GABARITOS_ALUNOS", [datetime.now().strftime("%d/%m/%Y"), id_al, aluno_nome, t_sel, material_ref['TIPO_MATERIAL'], respostas_salvar, util.sosa_to_str(nota_calc), "N/A"])
                                     st.success("Salvo para todos os integrantes!"); time.sleep(0.5); st.rerun()
 
@@ -3005,7 +3006,6 @@ elif menu == "📸 Scanner de Gabaritos":
                                         col_s1, col_s2 = st.columns(2)
                                         if col_s1.button("Gravar Correção", type="primary", use_container_width=True):
                                             with st.spinner("Gravando foto JPG nativa no Drive e atualizando notas..."):
-                                                # 🚨 ENVIA COMO FOTO NATIVA .JPG PARA O GOOGLE DRIVE
                                                 link_foto_jpg = db.subir_e_converter_para_google_docs(
                                                     st.session_state.current_scan_img, 
                                                     alunos_alvo[0].replace(" ","_"), 
@@ -3020,7 +3020,7 @@ elif menu == "📸 Scanner de Gabaritos":
                                                 
                                                 for aluno_nome in alunos_alvo:
                                                     id_al = pendentes_df[pendentes_df['NOME_ALUNO'] == aluno_nome].iloc[0]['ID']
-                                                    db.excluir_registro("DB_GABARITOS_ALUNOS", id_al) # Limpa registro de falta anterior se houver
+                                                    db.excluir_registro("DB_GABARITOS_ALUNOS", id_al)
                                                     db.salvar_no_banco("DB_GABARITOS_ALUNOS", [datetime.now().strftime("%d/%m/%Y"), id_al, aluno_nome, t_sel, material_ref['TIPO_MATERIAL'], respostas_salvar, util.sosa_to_str(nota_f), link_foto_jpg])
                                                 
                                                 del st.session_state.current_scan_res; del st.session_state.current_scan_img
@@ -3432,7 +3432,7 @@ elif menu == "📸 Scanner de Gabaritos":
                             grupo_membros = al_data['Dupla / Grupo']
                             
                             if grupo_membros != "Individual":
-                                st.info(f"👥 **Prova em Dupla/Grupo:** {grupo_membros}. A alteração será aplicada a todos os parceiros!")
+                                st.info(f"👥 **Prova em Dupla/Grupo:** {grupo_membros}. A alteração será applied a todos os parceiros!")
 
                             resp_limpa = resp_raw.split('|GRUPO:')[0] if '|GRUPO:' in resp_raw else resp_raw
                             respostas_lista = resp_limpa.split(';')
