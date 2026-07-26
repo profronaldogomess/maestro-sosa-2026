@@ -2835,30 +2835,48 @@ elif menu == "📸 Scanner de Gabaritos":
                             v_total_at = util.sosa_to_float(val_tag) if val_tag else 10.0
 
                             def extrair_gab_blindado(texto, is_pei=False, nivel_pei="NIVEL_1"):
+                                matches = []
                                 if is_pei:
                                     bloco_pei = ai.extrair_tag(texto, nivel_pei)
-                                    if not bloco_pei: return []
-                                    match_gab = re.search(r"(?i)GABARITO.*", bloco_pei, re.DOTALL)
-                                    area_busca = match_gab.group(0) if match_gab else bloco_pei
-                                    matches = re.findall(r"(\d+)[\s\.\)\-:]+([A-C])", area_busca.upper())
+                                    if not bloco_pei:
+                                        bloco_pei = ai.extrair_tag(texto, "PEI") or ai.extrair_tag(texto, "GABARITO_PEI")
+                                    
+                                    area_busca = bloco_pei if bloco_pei else texto
+                                    match_gab = re.search(r"(?i)GABARITO.*", area_busca, re.DOTALL)
+                                    if match_gab: area_busca = match_gab.group(0)
+                                    
+                                    matches = re.findall(r"(\d+)[\s\.\)\-:]+([A-E])", area_busca.upper())
                                 else:
                                     raw = ai.extrair_tag(texto, "GABARITO_TEXTO") or ai.extrair_tag(texto, "GABARITO")
                                     matches = re.findall(r"(\d+)[\s\.\)\-:]+([A-E])", str(raw).upper())
+                                    
+                                if not matches:
+                                    raw_fallback = ai.extrair_tag(texto, "GABARITO_PEI") or ai.extrair_tag(texto, "GABARITO_TEXTO") or ai.extrair_tag(texto, "GABARITO") or texto
+                                    matches = re.findall(r"(\d+)[\s\.\)\-:]+([A-E])", str(raw_fallback).upper())
+                                    
                                 if not matches: return []
                                 mapa = {int(num): letra for num, letra in matches}
                                 return [mapa[n] for n in sorted(mapa.keys())]
 
                             gab_alvo = extrair_gab_blindado(txt_ref, is_pei_grading, nivel_alvo_pei)
 
-                            with st.expander("⚙️ Conferir/Editar Gabarito Base da Prova", expanded=False):
+                            # 🚨 VACINA ANTI-KEYERROR E FALLBACK SE GABARITO PEI ESTIVER VAZIO
+                            if not gab_alvo:
+                                q_raw_check = ai.extrair_tag(txt_ref, "QUESTOES") or txt_ref
+                                qtd_q_estimada = len(re.findall(r"(?i)QUEST[AÃ]O\s*0?\d+", q_raw_check)) or 5
+                                gab_alvo = ["A"] * qtd_q_estimada
+                                st.warning("⚠️ O gabarito específico para esta versão PEI não foi localizado automaticamente no texto. Defina as letras corretas na tabela abaixo:")
+
+                            with st.expander("⚙️ Conferir/Editar Gabarito Base da Prova", expanded=(len(gab_alvo) == 0)):
                                 st.caption("Se notar algum erro no gabarito oficial gerado pela IA, ajuste abaixo antes de digitalizar as provas.")
                                 grid_gab_pre = [{"Q": f"{i+1:02d}", "Letra": gab_alvo[i] if i < len(gab_alvo) else "A"} for i in range(len(gab_alvo))]
                                 df_gab_pre = st.data_editor(
                                     pd.DataFrame(grid_gab_pre), hide_index=True, use_container_width=True,
                                     column_config={"Q": st.column_config.TextColumn(disabled=True), "Letra": st.column_config.SelectboxColumn("Gabarito Oficial", options=["A", "B", "C", "D", "E"], required=True)},
-                                    key=f"ed_pre_gab_{v}"
+                                    key=f"ed_pre_gab_{v}_{nivel_alvo_pei}"
                                 )
-                                gab_alvo = df_gab_pre["Letra"].tolist()
+                                if not df_gab_pre.empty and "Letra" in df_gab_pre.columns:
+                                    gab_alvo = df_gab_pre["Letra"].tolist()
 
                             if modo_2a:
                                 q_raw = ai.extrair_tag(txt_ref, "QUESTOES")
