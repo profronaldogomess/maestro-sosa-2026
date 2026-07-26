@@ -2583,11 +2583,11 @@ elif menu == "📝 Central de Avaliações":
 
 
 # ==============================================================================
-# MÓDULO: CENTRAL DE INTELIGÊNCIA DE RESULTADOS (CIR) - V202.4 (COMPLETO & BLINDADO)
+# MÓDULO: CENTRAL DE INTELIGÊNCIA DE RESULTADOS (CIR) - V202.5 (FOTO JPG & FALTOSOS)
 # ==============================================================================
 elif menu == "📸 Scanner de Gabaritos":
     st.title("Central de Inteligência de Resultados (CIR)")
-    st.caption("Mesa de triagem de exames, suporte a Provas em Dupla, perícia individual, recalibração retroativa e auditoria por trimestre.")
+    st.caption("Mesa de triagem de exames, fotos em formato JPG nativo, aplicação tardia de provas em faltosos e auditoria por trimestre.")
     st.markdown("---")
 
     if "v_scan" not in st.session_state: 
@@ -2613,7 +2613,7 @@ elif menu == "📸 Scanner de Gabaritos":
         else:
             return r"(?<!I)I(?![I])"
 
-    # FILTRO HIERÁRQUICO DE ATIVOS CIR (Soberano V202.4)
+    # FILTRO HIERÁRQUICO DE ATIVOS CIR (Soberano V202.5)
     def filtrar_ativos_cir(turma, trimestre_nome, apenas_provas=True):
         if not turma or not trimestre_nome: return []
         try:
@@ -2679,7 +2679,7 @@ elif menu == "📸 Scanner de Gabaritos":
     ])
 
     # ==============================================================================
-    # ABA 1: MESA DE CORREÇÃO (PROVAS & TRABALHOS UNIFICADOS)
+    # ABA 1: MESA DE CORREÇÃO (CORREÇÃO DE FALTOSOS COM PROVA ORIGINAL & DUPLAS)
     # ==============================================================================
     with tab_correcao:
         modo_lancamento = st.radio("Selecione a Atividade para Lançar:", ["📸 Provas (Scanner/Manual)", "✍️ Trabalhos & Projetos (Lote)"], horizontal=True, key=f"cir_modo_l_{v}")
@@ -2708,16 +2708,36 @@ elif menu == "📸 Scanner de Gabaritos":
             else:
                 nome_filtro_pendente = at_sel.split("-")[0].strip()
                 df_diag_turma = df_diagnosticos[df_diagnosticos['TURMA'] == t_sel]
-                escaneados_raw = df_diag_turma[df_diag_turma['ID_AVALIACAO'].str.startswith(nome_filtro_pendente, na=False)]['ID_ALUNO'].astype(str).tolist()
                 
-                padrao_trim = obter_regex_trimestre(tr_sel)
-                serie_num = "".join(filter(str.isdigit, t_sel))
-                escaneados_2a = df_diag_turma[(df_diag_turma['ID_AVALIACAO'].str.contains("2ª|2CHAMADA", regex=True, case=False)) & (df_diag_turma['ID_AVALIACAO'].str.contains(padrao_trim, regex=True, case=False))]['ID_ALUNO'].astype(str).tolist()
-                escaneados_unicos = list(set(escaneados_raw + escaneados_2a))
+                # 🚨 FIX FALTOSOS: Considera como "corrigidos de fato" apenas quem NÃO tem resposta "FALTOU"
+                diag_reais = df_diag_turma[
+                    (df_diag_turma['ID_AVALIACAO'].str.startswith(nome_filtro_pendente, na=False)) & 
+                    (df_diag_turma['RESPOSTAS_ALUNO'] != "FALTOU")
+                ]
+                escaneados_unicos = diag_reais['ID_ALUNO'].astype(str).tolist()
                 
-                pendentes = df_alunos[(df_alunos['TURMA'] == t_sel) & (~df_alunos['ID'].astype(str).isin(escaneados_unicos))].sort_values(by="NOME_ALUNO")
+                # Identifica quem foi marcado como FALTOU para dar destaque visual
+                faltosos_ids = df_diag_turma[
+                    (df_diag_turma['ID_AVALIACAO'].str.startswith(nome_filtro_pendente, na=False)) & 
+                    (df_diag_turma['RESPOSTAS_ALUNO'] == "FALTOU")
+                ]['ID_ALUNO'].astype(str).tolist()
+                
+                pendentes_df = df_alunos[(df_alunos['TURMA'] == t_sel) & (~df_alunos['ID'].astype(str).isin(escaneados_unicos))].sort_values(by="NOME_ALUNO")
                 total_turma = len(df_alunos[df_alunos['TURMA'] == t_sel])
                 total_corrigidos = len(escaneados_unicos)
+
+                # Monta lista de opcoes do selectbox destacando alunos ausentes
+                opcoes_triagem = []
+                mapa_rotulo_nome = {}
+                for _, r_p in pendentes_df.iterrows():
+                    id_p_str = str(r_p['ID'])
+                    nome_real = r_p['NOME_ALUNO']
+                    if id_p_str in faltosos_ids:
+                        rotulo = f"⚠️ {nome_real} (Ausente na 1ª Aplicação)"
+                    else:
+                        rotulo = nome_real
+                    opcoes_triagem.append(rotulo)
+                    mapa_rotulo_nome[rotulo] = nome_real
 
                 col_fila, col_mesa = st.columns([1.2, 1.8])
 
@@ -2728,7 +2748,7 @@ elif menu == "📸 Scanner de Gabaritos":
                         st.progress(min(1.0, max(0.0, progresso)))
                         st.caption(f"{total_corrigidos} de {total_turma} alunos processados.")
                         
-                        if pendentes.empty:
+                        if not opcoes_triagem:
                             st.success("Soberania Total: Todos os alunos corrigidos!")
                             st.stop()
                         
@@ -2736,28 +2756,29 @@ elif menu == "📸 Scanner de Gabaritos":
                         
                         alunos_alvo = []
                         if modo_dupla:
-                            alunos_alvo = st.multiselect(
+                            rotulos_sel = st.multiselect(
                                 "Selecione os Integrantes da Dupla (Máx 3):", 
-                                options=pendentes['NOME_ALUNO'].tolist(), 
+                                options=opcoes_triagem, 
                                 max_selections=3,
                                 key=f"pilha_dupla_{v}"
                             )
+                            alunos_alvo = [mapa_rotulo_nome[r] for r in rotulos_sel]
                         else:
-                            al_sel_single = st.selectbox("Selecione o Estudante:", [""] + pendentes['NOME_ALUNO'].tolist(), key=f"pilha_single_{v}", label_visibility="collapsed")
-                            if al_sel_single:
-                                alunos_alvo = [al_sel_single]
+                            rotulo_sel_single = st.selectbox("Selecione o Estudante:", [""] + opcoes_triagem, key=f"pilha_single_{v}", label_visibility="collapsed")
+                            if rotulo_sel_single:
+                                alunos_alvo = [mapa_rotulo_nome[rotulo_sel_single]]
                         
                         st.markdown("<br>", unsafe_allow_html=True)
                         if st.button("Ausências em Lote", use_container_width=True):
                             st.session_state.show_faltas_lote = not st.session_state.get("show_faltas_lote", False)
                         
                         if st.session_state.get("show_faltas_lote", False):
-                            faltosos = st.multiselect("Marcar faltosos:", pendentes['NOME_ALUNO'].tolist())
+                            faltosos = st.multiselect("Marcar faltosos:", pendentes_df['NOME_ALUNO'].tolist())
                             if st.button("Confirmar Ausências", type="primary", use_container_width=True):
                                 linhas_faltas = []
                                 data_hoje = datetime.now().strftime("%d/%m/%Y")
                                 for f_nome in faltosos:
-                                    f_id = pendentes[pendentes['NOME_ALUNO'] == f_nome].iloc[0]['ID']
+                                    f_id = pendentes_df[pendentes_df['NOME_ALUNO'] == f_nome].iloc[0]['ID']
                                     linhas_faltas.append([data_hoje, f_id, f_nome, t_sel, at_sel, "FALTOU", "0,00", "N/A"])
                                 if db.salvar_lote("DB_GABARITOS_ALUNOS", linhas_faltas):
                                     st.success("Faltas registradas!"); time.sleep(0.5); st.rerun()
@@ -2773,7 +2794,7 @@ elif menu == "📸 Scanner de Gabaritos":
                             tem_pei_na_dupla = False
                             perfis_dupla = []
                             for nome_a in alunos_alvo:
-                                al_info = pendentes[pendentes['NOME_ALUNO'] == nome_a].iloc[0]
+                                al_info = pendentes_df[pendentes_df['NOME_ALUNO'] == nome_a].iloc[0]
                                 id_aluno_atual = al_info['ID']
                                 nec_aluno = str(al_info['NECESSIDADES']).upper().strip()
                                 perfis_dupla.append((nome_a, id_aluno_atual, nec_aluno))
@@ -2836,8 +2857,6 @@ elif menu == "📸 Scanner de Gabaritos":
 
                             def extrair_gab_blindado(texto, is_pei=False, nivel_pei="NIVEL_1"):
                                 mapa = {}
-                                
-                                # 1. Identifica o gabarito oficial regular para saber a quantidade exata de questões (ex: 10)
                                 raw_reg = ai.extrair_tag(texto, "GABARITO_TEXTO") or ai.extrair_tag(texto, "GABARITO")
                                 matches_reg = re.findall(r"(?:QUEST[AÃ]O\s*|Q)?0?(\d+)[\s\.\)\-:]+([A-E])", str(raw_reg).upper())
                                 qtd_oficial = max([int(m[0]) for m in matches_reg]) if matches_reg else 10
@@ -2846,7 +2865,6 @@ elif menu == "📸 Scanner de Gabaritos":
                                     bloco_pei = ai.extrair_tag(texto, nivel_pei) or ai.extrair_tag(texto, "PEI") or ai.extrair_tag(texto, "GABARITO_PEI")
                                     area_busca = bloco_pei if bloco_pei else texto
                                     
-                                    # 🚨 ESTRATÉGIA 1: Varre questão por questão no texto PEI procurando 'Gabarito: X'
                                     blocos_q = re.split(r"(?i)(?:QUEST[AÃ]O\s*|Q)0?(\d+)", area_busca)
                                     if len(blocos_q) > 2:
                                         for idx in range(1, len(blocos_q), 2):
@@ -2856,7 +2874,6 @@ elif menu == "📸 Scanner de Gabaritos":
                                             if m_gab:
                                                 mapa[q_num] = m_gab.group(1).upper()
                                     
-                                    # 🚨 ESTRATÉGIA 2: Complementa com busca direta caso a formatação varie
                                     if len(mapa) < qtd_oficial:
                                         matches_direct = re.findall(r"(?:QUEST[AÃ]O\s*|Q)?0?(\d+)[\s\.\)\-:]+([A-E])", area_busca.upper())
                                         for q_num_str, letra in matches_direct:
@@ -2864,7 +2881,6 @@ elif menu == "📸 Scanner de Gabaritos":
                                             if q_num not in mapa and q_num <= qtd_oficial:
                                                 mapa[q_num] = letra
                                                 
-                                    # 🚨 ESTRATÉGIA 3 (Fallback de Proteção): Preenche questões faltantes com o gabarito oficial regular
                                     if len(mapa) < qtd_oficial and matches_reg:
                                         for q_num_str, letra in matches_reg:
                                             q_num = int(q_num_str)
@@ -2875,9 +2891,7 @@ elif menu == "📸 Scanner de Gabaritos":
                                         for q_num_str, letra in matches_reg:
                                             mapa[int(q_num_str)] = letra
 
-                                if not mapa:
-                                    return ["A"] * qtd_oficial
-
+                                if not mapa: return ["A"] * qtd_oficial
                                 max_q = max(max(mapa.keys()), qtd_oficial)
                                 return [mapa.get(n, "A") for n in range(1, max_q + 1)]
 
@@ -2926,7 +2940,8 @@ elif menu == "📸 Scanner de Gabaritos":
                                     respostas_salvar = ";".join(respostas_finais) + grupo_str
                                     
                                     for aluno_nome in alunos_alvo:
-                                        id_al = pendentes[pendentes['NOME_ALUNO'] == aluno_nome].iloc[0]['ID']
+                                        id_al = pendentes_df[pendentes_df['NOME_ALUNO'] == aluno_nome].iloc[0]['ID']
+                                        db.excluir_registro("DB_GABARITOS_ALUNOS", id_al) # Limpa registro antigo se era FALTOU
                                         db.salvar_no_banco("DB_GABARITOS_ALUNOS", [datetime.now().strftime("%d/%m/%Y"), id_al, aluno_nome, t_sel, material_ref['TIPO_MATERIAL'], respostas_salvar, util.sosa_to_str(nota_calc), "N/A"])
                                     st.success("Salvo para todos os integrantes!"); time.sleep(0.5); st.rerun()
 
@@ -2935,7 +2950,8 @@ elif menu == "📸 Scanner de Gabaritos":
                                 modo_correcao = c_m1.radio("Método de Correção:", ["📸 Scanner Câmera", "✍️ Digitação Manual (Speed Grader)"], horizontal=True, key=f"mc_{v}")
                                 if c_m2.button("Ausência", use_container_width=True):
                                     for aluno_nome in alunos_alvo:
-                                        id_al = pendentes[pendentes['NOME_ALUNO'] == aluno_nome].iloc[0]['ID']
+                                        id_al = pendentes_df[pendentes_df['NOME_ALUNO'] == aluno_nome].iloc[0]['ID']
+                                        db.excluir_registro("DB_GABARITOS_ALUNOS", id_al)
                                         db.salvar_no_banco("DB_GABARITOS_ALUNOS", [datetime.now().strftime("%d/%m/%Y"), id_al, aluno_nome, t_sel, at_sel, "FALTOU", "0,00", "N/A"])
                                     st.rerun()
 
@@ -2981,7 +2997,6 @@ elif menu == "📸 Scanner de Gabaritos":
                                                 acertos += 1
                                                 nota_f += peso_q if has_calc else (peso_q / 2)
                                             
-                                            # 🚨 MARCADOR DE CÁLCULO (* para sem cálculo)
                                             flag_letra = f"{r}*" if (not has_calc and r in ["A","B","C","D","E"]) else r
                                             respostas_com_flag.append(flag_letra)
                                                 
@@ -2989,18 +3004,27 @@ elif menu == "📸 Scanner de Gabaritos":
                                         
                                         col_s1, col_s2 = st.columns(2)
                                         if col_s1.button("Gravar Correção", type="primary", use_container_width=True):
-                                            with st.spinner("Gravando e vinculando integrantes da dupla..."):
-                                                link_pasta = db.subir_e_converter_para_google_docs(st.session_state.current_scan_img, alunos_alvo[0].replace(" ","_"), trimestre=tr_sel, categoria=t_sel, semana=material_ref['TIPO_MATERIAL'], modo="SCANNER")
+                                            with st.spinner("Gravando foto JPG nativa no Drive e atualizando notas..."):
+                                                # 🚨 ENVIA COMO FOTO NATIVA .JPG PARA O GOOGLE DRIVE
+                                                link_foto_jpg = db.subir_e_converter_para_google_docs(
+                                                    st.session_state.current_scan_img, 
+                                                    alunos_alvo[0].replace(" ","_"), 
+                                                    trimestre=tr_sel, 
+                                                    categoria=t_sel, 
+                                                    semana=material_ref['TIPO_MATERIAL'], 
+                                                    modo="SCANNER"
+                                                )
                                                 
                                                 grupo_str = f"|GRUPO:{','.join(alunos_alvo)}" if len(alunos_alvo) > 1 else ""
                                                 respostas_salvar = ";".join(respostas_com_flag) + grupo_str
                                                 
                                                 for aluno_nome in alunos_alvo:
-                                                    id_al = pendentes[pendentes['NOME_ALUNO'] == aluno_nome].iloc[0]['ID']
-                                                    db.salvar_no_banco("DB_GABARITOS_ALUNOS", [datetime.now().strftime("%d/%m/%Y"), id_al, aluno_nome, t_sel, material_ref['TIPO_MATERIAL'], respostas_salvar, util.sosa_to_str(nota_f), link_pasta])
+                                                    id_al = pendentes_df[pendentes_df['NOME_ALUNO'] == aluno_nome].iloc[0]['ID']
+                                                    db.excluir_registro("DB_GABARITOS_ALUNOS", id_al) # Limpa registro de falta anterior se houver
+                                                    db.salvar_no_banco("DB_GABARITOS_ALUNOS", [datetime.now().strftime("%d/%m/%Y"), id_al, aluno_nome, t_sel, material_ref['TIPO_MATERIAL'], respostas_salvar, util.sosa_to_str(nota_f), link_foto_jpg])
                                                 
                                                 del st.session_state.current_scan_res; del st.session_state.current_scan_img
-                                                st.success("✅ Prova e nota gravadas com sucesso!"); time.sleep(0.5); st.rerun()
+                                                st.success("✅ Prova JPG gravada e nota computada com sucesso!"); time.sleep(0.5); st.rerun()
                                         if col_s2.button("Descartar", use_container_width=True):
                                             del st.session_state.current_scan_res; del st.session_state.current_scan_img; st.rerun()
 
@@ -3029,7 +3053,8 @@ elif menu == "📸 Scanner de Gabaritos":
                                         respostas_salvar = ";".join(respostas_finais) + grupo_str
                                         
                                         for aluno_nome in alunos_alvo:
-                                            id_al = pendentes[pendentes['NOME_ALUNO'] == aluno_nome].iloc[0]['ID']
+                                            id_al = pendentes_df[pendentes_df['NOME_ALUNO'] == aluno_nome].iloc[0]['ID']
+                                            db.excluir_registro("DB_GABARITOS_ALUNOS", id_al)
                                             db.salvar_no_banco("DB_GABARITOS_ALUNOS", [datetime.now().strftime("%d/%m/%Y"), id_al, aluno_nome, t_sel, material_ref['TIPO_MATERIAL'], respostas_salvar, util.sosa_to_str(nota_calc), "N/A"])
                                         st.success("✅ Salvo com sucesso!"); time.sleep(0.5); st.rerun()
 
@@ -3066,7 +3091,8 @@ elif menu == "📸 Scanner de Gabaritos":
                                 else:
                                     grupo_str = f"|GRUPO:{','.join(alunos_alvo)}" if len(alunos_alvo) > 1 else ""
                                     for aluno_nome in alunos_alvo:
-                                        id_al = pendentes[pendentes['NOME_ALUNO'] == aluno_nome].iloc[0]['ID']
+                                        id_al = pendentes_df[pendentes_df['NOME_ALUNO'] == aluno_nome].iloc[0]['ID']
+                                        db.excluir_registro("DB_GABARITOS_ALUNOS", id_al)
                                         db.salvar_no_banco("DB_GABARITOS_ALUNOS", [datetime.now().strftime("%d/%m/%Y"), id_al, aluno_nome, t_sel, at_sel, f"QUALITATIVA|{parecer_final}{grupo_str}", util.sosa_to_str(nota_qual), "N/A"])
                                         db.salvar_no_banco("DB_RELATORIOS", [datetime.now().strftime("%d/%m/%Y"), id_al, aluno_nome, "AVALIACAO_QUALITATIVA", f"Avaliação: {at_sel}\nNota: {nota_qual}\nParecer:\n{parecer_final}"])
                                     st.success("✅ Avaliação salva com sucesso!"); time.sleep(0.5); st.rerun()
@@ -3137,10 +3163,7 @@ elif menu == "📸 Scanner de Gabaritos":
             padrao_regex_trim = obter_regex_trimestre(tr_sel_h)
             serie_num = "".join(filter(str.isdigit, t_sel_h))
             
-            # 1. Filtra provas do acervo no trimestre exato
             opcoes_auditoria = filtrar_ativos_cir(t_sel_h, tr_sel_h, apenas_provas=True)
-            
-            # 2. 🚨 FIX REGEX HD: Filtra df_diagnosticos ESTRITAMENTE pela Turma E pelo Trimestre exato!
             mask_diag_h = (df_diagnosticos['TURMA'] == t_sel_h) & (
                 df_diagnosticos['ID_AVALIACAO'].str.contains(padrao_regex_trim, regex=True, case=False, na=False)
             )
@@ -3186,7 +3209,6 @@ elif menu == "📸 Scanner de Gabaritos":
                         "Situação": situacao_txt, "Versão": versao_prova, "Nota": nota_atual, "Dupla / Grupo": grupo_parceiros if grupo_parceiros else "Individual", "Evidência": link_ev, "_Respostas": respostas_salvas
                     })
 
-                # LOCALIZA A PROVA DE REFERÊNCIA NO ACERVO
                 df_prova_trib = df_aulas[df_aulas['TIPO_MATERIAL'] == av_alvo_h]
                 gab_oficial_trib = {}
                 v_total_av = 10.0
@@ -3264,7 +3286,6 @@ elif menu == "📸 Scanner de Gabaritos":
                                                 letra_correta = novos_gabaritos.get(q_num)
                                                 item_aluno = respostas_letras[q_idx].strip().upper() if q_idx < len(respostas_letras) else "?"
 
-                                                # 🚨 LEITURA DA PENALIDADE DE CÁLCULO
                                                 letra_aluno = item_aluno.replace("*", "")
                                                 tem_calculo = "*" not in item_aluno
 
@@ -3420,7 +3441,6 @@ elif menu == "📸 Scanner de Gabaritos":
                             for idx_q in range(len(gab_oficial_trib)):
                                 item_str = respostas_lista[idx_q].strip().upper() if idx_q < len(respostas_lista) else "?"
                                 
-                                # Extrai a letra e a presença de cálculo (*)
                                 letra_aluno = item_str.replace("*", "")
                                 if letra_aluno not in ["A", "B", "C", "D", "E", "X", "?"]:
                                     letra_aluno = "?"
@@ -3579,7 +3599,6 @@ elif menu == "📸 Scanner de Gabaritos":
             padrao_regex_trim = obter_regex_trimestre(tr_sel_r)
             ano_num_r = "".join(filter(str.isdigit, t_sel_r))
             
-            # 🚨 FIX REGEX HD: Filtra df_diagnosticos ESTRITAMENTE pela Turma E pelo Trimestre exato!
             mask_diag = (df_diagnosticos['TURMA'] == t_sel_r) & (
                 df_diagnosticos['ID_AVALIACAO'].str.contains(nome_curto_av, case=False, na=False) &
                 df_diagnosticos['ID_AVALIACAO'].str.contains(padrao_regex_trim, regex=True, case=False, na=False)
@@ -3674,7 +3693,6 @@ elif menu == "📸 Scanner de Gabaritos":
                                     respostas_lista = resp_limpa.upper().split(';')
                                     if len(respostas_lista) >= i:
                                         validos += 1
-                                        # Remove o asterisco se presente para comparar apenas a letra
                                         letra_aluno_clean = respostas_lista[i-1].replace("*", "")
                                         if letra_aluno_clean == gab_ativo.get(i, "?"): acertos += 1
                                 
