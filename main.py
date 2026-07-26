@@ -2932,10 +2932,17 @@ elif menu == "📸 Scanner de Gabaritos":
                                         peso_q = v_total_at / len(gab_alvo) if len(gab_alvo) > 0 else 0
                                         nota_f = 0.0
                                         acertos = 0
+                                        respostas_com_flag = []
+                                        
                                         for i, r in enumerate(novas_res):
+                                            has_calc = calculos_ok[i] if i < len(calculos_ok) else True
                                             if i < len(gab_alvo) and r == gab_alvo[i]:
                                                 acertos += 1
-                                                nota_f += peso_q if calculos_ok[i] else (peso_q / 2)
+                                                nota_f += peso_q if has_calc else (peso_q / 2)
+                                            
+                                            # 🚨 MARCADOR DE CÁLCULO (* para sem cálculo)
+                                            flag_letra = f"{r}*" if (not has_calc and r in ["A","B","C","D","E"]) else r
+                                            respostas_com_flag.append(flag_letra)
                                                 
                                         st.metric("Nota Final Calculada", f"{nota_f:.1f}", delta=f"{acertos}/{len(gab_alvo)} acertos (Dupla: {len(alunos_alvo)} alunos)")
                                         
@@ -2945,7 +2952,7 @@ elif menu == "📸 Scanner de Gabaritos":
                                                 link_pasta = db.subir_e_converter_para_google_docs(st.session_state.current_scan_img, alunos_alvo[0].replace(" ","_"), trimestre=tr_sel, categoria=t_sel, semana=material_ref['TIPO_MATERIAL'], modo="SCANNER")
                                                 
                                                 grupo_str = f"|GRUPO:{','.join(alunos_alvo)}" if len(alunos_alvo) > 1 else ""
-                                                respostas_salvar = ";".join(novas_res) + grupo_str
+                                                respostas_salvar = ";".join(respostas_com_flag) + grupo_str
                                                 
                                                 for aluno_nome in alunos_alvo:
                                                     id_al = pendentes[pendentes['NOME_ALUNO'] == aluno_nome].iloc[0]['ID']
@@ -3214,12 +3221,17 @@ elif menu == "📸 Scanner de Gabaritos":
                                             for q_idx in range(num_total_q):
                                                 q_num = q_idx + 1
                                                 letra_correta = novos_gabaritos.get(q_num)
-                                                letra_aluno = respostas_letras[q_idx].strip().upper() if q_idx < len(respostas_letras) else "?"
+                                                item_aluno = respostas_letras[q_idx].strip().upper() if q_idx < len(respostas_letras) else "?"
+
+                                                # 🚨 LEITURA DA PENALIDADE DE CÁLCULO
+                                                letra_aluno = item_aluno.replace("*", "")
+                                                tem_calculo = "*" not in item_aluno
 
                                                 if letra_correta == "🚫 ANULADA":
-                                                    nova_nota_aluno += peso_q
+                                                    nova_nota_aluno += peso_q # Anulação dá ponto cheio
                                                 elif letra_aluno == letra_correta:
-                                                    nova_nota_aluno += peso_q
+                                                    # Se acertou com cálculo = peso_q | Se acertou sem cálculo = peso_q / 2
+                                                    nova_nota_aluno += peso_q if tem_calculo else (peso_q / 2)
 
                                             nova_nota_aluno = min(v_total_av, nova_nota_aluno)
                                             ws_g.update_cell(idx_row + 1, 7, util.sosa_to_str(nova_nota_aluno))
