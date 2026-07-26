@@ -2835,28 +2835,51 @@ elif menu == "📸 Scanner de Gabaritos":
                             v_total_at = util.sosa_to_float(val_tag) if val_tag else 10.0
 
                             def extrair_gab_blindado(texto, is_pei=False, nivel_pei="NIVEL_1"):
-                                matches = []
+                                mapa = {}
+                                
+                                # 1. Identifica o gabarito oficial regular para saber a quantidade exata de questões (ex: 10)
+                                raw_reg = ai.extrair_tag(texto, "GABARITO_TEXTO") or ai.extrair_tag(texto, "GABARITO")
+                                matches_reg = re.findall(r"(?:QUEST[AÃ]O\s*|Q)?0?(\d+)[\s\.\)\-:]+([A-E])", str(raw_reg).upper())
+                                qtd_oficial = max([int(m[0]) for m in matches_reg]) if matches_reg else 10
+                                
                                 if is_pei:
-                                    bloco_pei = ai.extrair_tag(texto, nivel_pei)
-                                    if not bloco_pei:
-                                        bloco_pei = ai.extrair_tag(texto, "PEI") or ai.extrair_tag(texto, "GABARITO_PEI")
-                                    
+                                    bloco_pei = ai.extrair_tag(texto, nivel_pei) or ai.extrair_tag(texto, "PEI") or ai.extrair_tag(texto, "GABARITO_PEI")
                                     area_busca = bloco_pei if bloco_pei else texto
-                                    match_gab = re.search(r"(?i)GABARITO.*", area_busca, re.DOTALL)
-                                    if match_gab: area_busca = match_gab.group(0)
                                     
-                                    matches = re.findall(r"(\d+)[\s\.\)\-:]+([A-E])", area_busca.upper())
+                                    # 🚨 ESTRATÉGIA 1: Varre questão por questão no texto PEI procurando 'Gabarito: X'
+                                    blocos_q = re.split(r"(?i)(?:QUEST[AÃ]O\s*|Q)0?(\d+)", area_busca)
+                                    if len(blocos_q) > 2:
+                                        for idx in range(1, len(blocos_q), 2):
+                                            q_num = int(blocos_q[idx])
+                                            q_conteudo = blocos_q[idx+1]
+                                            m_gab = re.search(r"(?i)GABARITO\s*[:\-]?\s*([A-E])", q_conteudo)
+                                            if m_gab:
+                                                mapa[q_num] = m_gab.group(1).upper()
+                                    
+                                    # 🚨 ESTRATÉGIA 2: Complementa com busca direta caso a formatação varie
+                                    if len(mapa) < qtd_oficial:
+                                        matches_direct = re.findall(r"(?:QUEST[AÃ]O\s*|Q)?0?(\d+)[\s\.\)\-:]+([A-E])", area_busca.upper())
+                                        for q_num_str, letra in matches_direct:
+                                            q_num = int(q_num_str)
+                                            if q_num not in mapa and q_num <= qtd_oficial:
+                                                mapa[q_num] = letra
+                                                
+                                    # 🚨 ESTRATÉGIA 3 (Fallback de Proteção): Preenche questões faltantes com o gabarito oficial regular
+                                    if len(mapa) < qtd_oficial and matches_reg:
+                                        for q_num_str, letra in matches_reg:
+                                            q_num = int(q_num_str)
+                                            if q_num not in mapa:
+                                                mapa[q_num] = letra
                                 else:
-                                    raw = ai.extrair_tag(texto, "GABARITO_TEXTO") or ai.extrair_tag(texto, "GABARITO")
-                                    matches = re.findall(r"(\d+)[\s\.\)\-:]+([A-E])", str(raw).upper())
-                                    
-                                if not matches:
-                                    raw_fallback = ai.extrair_tag(texto, "GABARITO_PEI") or ai.extrair_tag(texto, "GABARITO_TEXTO") or ai.extrair_tag(texto, "GABARITO") or texto
-                                    matches = re.findall(r"(\d+)[\s\.\)\-:]+([A-E])", str(raw_fallback).upper())
-                                    
-                                if not matches: return []
-                                mapa = {int(num): letra for num, letra in matches}
-                                return [mapa[n] for n in sorted(mapa.keys())]
+                                    if matches_reg:
+                                        for q_num_str, letra in matches_reg:
+                                            mapa[int(q_num_str)] = letra
+
+                                if not mapa:
+                                    return ["A"] * qtd_oficial
+
+                                max_q = max(max(mapa.keys()), qtd_oficial)
+                                return [mapa.get(n, "A") for n in range(1, max_q + 1)]
 
                             gab_alvo = extrair_gab_blindado(txt_ref, is_pei_grading, nivel_alvo_pei)
 
