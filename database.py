@@ -637,3 +637,63 @@ def relocador_plano_semana(semana_antiga, ano, nova_semana, link_drive):
     except Exception as e:
         print(f"Erro no Relocador Temporal: {e}")
         return False
+
+# ==============================================================================
+# MOTOR DE RELOCAÇÃO TEMPORAL EM CASCATA (SOSA V202.6 - PRESERVAÇÃO DE DOCS)
+# ==============================================================================
+def renomear_arquivo_drive(link_drive, novo_nome):
+    """
+    Renomeia um arquivo no Google Drive preservando seu ID e link original.
+    """
+    try:
+        creds = obter_creds_drive()
+        service = build('drive', 'v3', credentials=creds)
+        
+        padrao_id = r"(?:/d/|id=)([a-zA-Z0-9-_]{25,})"
+        match = re.search(padrao_id, str(link_drive))
+        if match:
+            file_id = match.group(1)
+            file_metadata = {'name': novo_nome}
+            service.files().update(fileId=file_id, body=file_metadata).execute()
+            return True
+        return False
+    except Exception as e:
+        print(f"Erro ao renomear arquivo no Drive: {e}")
+        return False
+
+def relocador_plano_semana(semana_antiga, ano, nova_semana, link_drive):
+    """
+    SOSA V202.6: Muda a semana de um plano e de TODAS as suas aulas vinculadas em CASCATA,
+    renomeando os títulos no Google Drive e PRESERVANDO 100% os arquivos Google Docs originais.
+    """
+    try:
+        wb = conectar()
+        
+        # 1. Atualiza a semana do Plano de Ensino em DB_PLANOS
+        ws_planos = wb.worksheet("DB_PLANOS")
+        dados_p = ws_planos.get_all_values()
+        for i, row in enumerate(dados_p):
+            if i > 0 and len(row) > 2 and row[1].strip() == semana_antiga.strip() and row[2].strip() == ano.strip():
+                ws_planos.update_cell(i + 1, 2, nova_semana.strip())
+                break
+        
+        # 2. 🚨 MIGRAÇÃO EM CASCATA: Atualiza a referência de TODAS as Aulas em DB_AULAS_PRONTAS
+        try:
+            ws_aulas = wb.worksheet("DB_AULAS_PRONTAS")
+            dados_a = ws_aulas.get_all_values()
+            ano_num = "".join(filter(str.isdigit, str(ano)))
+            for j, row_a in enumerate(dados_a):
+                if j > 0 and len(row_a) > 4 and row_a[1].strip() == semana_antiga.strip() and ano_num in row_a[4]:
+                    ws_aulas.update_cell(j + 1, 2, nova_semana.strip())
+        except Exception as e_a:
+            print(f"Aviso na cascata de aulas: {e_a}")
+                
+        # 3. Renomeia o título do arquivo no Google Drive sem alterar seu ID
+        novo_nome_docs = f"PLANO_{ano.replace('º','')}_{nova_semana.split(' (')[0].replace(' ', '')}"
+        renomear_arquivo_drive(link_drive, novo_nome_docs)
+        
+        st.cache_data.clear()
+        return True
+    except Exception as e:
+        print(f"Erro no Relocador em Cascata: {e}")
+        return False
