@@ -582,3 +582,58 @@ def subir_e_converter_para_google_docs(file_stream, nome_arquivo, trimestre="I T
             
     except Exception as e:
         return f"ERRO_CONEXAO_PONTE: {str(e)}"
+
+# ==============================================================================
+# MOTOR DE RELOCAÇÃO TEMPORAL (PRESERVAÇÃO DE DOCS NO DRIVE)
+# ==============================================================================
+def renomear_arquivo_drive(link_drive, novo_nome):
+    """
+    Renomeia um arquivo no Google Drive preservando seu ID e link original.
+    """
+    try:
+        creds = obter_creds_drive()
+        service = build('drive', 'v3', credentials=creds)
+        
+        padrao_id = r"(?:/d/|id=)([a-zA-Z0-9-_]{25,})"
+        match = re.search(padrao_id, str(link_drive))
+        if match:
+            file_id = match.group(1)
+            file_metadata = {'name': novo_nome}
+            service.files().update(fileId=file_id, body=file_metadata).execute()
+            return True
+        return False
+    except Exception as e:
+        print(f"Erro ao renomear arquivo no Drive: {e}")
+        return False
+
+def relocador_plano_semana(semana_antiga, ano, nova_semana, link_drive):
+    """
+    Muda a semana de um plano no banco de dados e renomeia o arquivo no Drive,
+    PRESERVANDO 100% o documento Google Docs original com todas as suas edições manuais.
+    """
+    try:
+        wb = conectar()
+        ws = wb.worksheet("DB_PLANOS")
+        dados = ws.get_all_values()
+        
+        # 1. Atualiza a semana na planilha sem apagar a linha ou o link
+        for i, row in enumerate(dados):
+            if i > 0 and len(row) > 2 and row[1].strip() == semana_antiga.strip() and row[2].strip() == ano.strip():
+                ws.update_cell(i + 1, 2, nova_semana.strip()) # Atualiza Coluna B (SEMANA)
+                
+                # Se houver o texto do plano, atualiza a tag interna
+                txt_plano = str(row[5])
+                if "--- LINK DRIVE ---" in txt_plano:
+                    novo_txt = re.sub(rf"SEMANA:\s*{re.escape(semana_antiga)}", f"SEMANA: {nova_semana}", txt_plano)
+                    ws.update_cell(i + 1, 6, novo_txt)
+                break
+                
+        # 2. Renomeia o título do arquivo no Google Drive
+        novo_nome_docs = f"PLANO_{ano.replace('º','')}_{nova_semana.split(' (')[0].replace(' ', '')}"
+        renomear_arquivo_drive(link_drive, novo_nome_docs)
+        
+        st.cache_data.clear()
+        return True
+    except Exception as e:
+        print(f"Erro no Relocador Temporal: {e}")
+        return False
