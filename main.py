@@ -366,11 +366,11 @@ def exibir_material_estruturado(texto_raw, key_prefix, dados_plano=None, info_au
                        
 
 # ==============================================================================
-# MÓDULO: PLANEJAMENTO ESTRATÉGICO (PONTO ID) - V201 (CLEAN & UX)
+# MÓDULO: PLANEJAMENTO ESTRATÉGICO (PONTO ID) - V202.6 (BLINDADO & RELOCADOR)
 # ==============================================================================
 if menu == "📅 Planejamento (Ponto ID)":
     st.title("Engenharia de Planejamento")
-    st.caption("Defina a rota da semana. O sistema automatiza a burocracia e alimenta o Criador de Aulas.")
+    st.caption("Defina a rota da semana. O sistema automatiza a burocracia, gerencia a matriz e alimenta o Criador de Aulas.")
     st.markdown("---")
 
     def reset_planejamento():
@@ -384,7 +384,6 @@ if menu == "📅 Planejamento (Ponto ID)":
         st.session_state.v_plano = int(time.time())
     v = st.session_state.v_plano 
 
-    # 🚨 REDUÇÃO DE ABAS (De 6 para 4)
     tab_gerar, tab_producao, tab_acervo, tab_inteligencia = st.tabs([
         "Novo Plano", "Hub de Produção", "Acervo", "Inteligência Curricular"
     ])
@@ -424,7 +423,6 @@ if menu == "📅 Planejamento (Ponto ID)":
             ], key=f"gate_tipo_{v}")
             
             st.markdown("---")
-            # 🚨 RESTAURAÇÃO: SELETOR DE CARGA HORÁRIA
             carga_horaria = st.radio(
                 "Carga Horária da Semana:", 
                 ["1 Aula (Feriado/Evento)", "2 Aulas (Semana Normal)", "3 Aulas (+ Sábado Letivo)"], 
@@ -529,7 +527,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                             st.success("Logística salva!"); time.sleep(1); st.rerun()
 
         # ------------------------------------------------------------------------------
-        # ROTA 3: AULA REGULAR (GERAÇÃO COM IA)
+        # ROTA 3: AULA REGULAR (GERAÇÃO COM IA - COM VACINA ANTI-KEYERROR NO EIXO)
         # ------------------------------------------------------------------------------
         else:
             with st.container(border=True):
@@ -540,11 +538,29 @@ if menu == "📅 Planejamento (Ponto ID)":
                 ctx_ia, uri_livro_drive, links_web_texto, base_didatica_info = "", None, "", "Matriz Curricular"
                 
                 if modo_p == "Manual (Matriz)":
-                    df_matriz_ano = df_curriculo[df_curriculo['ANO'].astype(str) == str(ano_p)]
-                    sel_eixo = st.multiselect("Eixo:", sorted(df_matriz_ano['EIXO'].unique().tolist()))
-                    sel_cont = st.multiselect("Conteúdo:", sorted(df_matriz_ano[df_matriz_ano['EIXO'].isin(sel_eixo)]['CONTEUDO_ESPECIFICO'].unique().tolist()) if sel_eixo else [])
-                    sel_obj = st.multiselect("Objetivos:", sorted(df_matriz_ano[df_matriz_ano['CONTEUDO_ESPECIFICO'].isin(sel_cont)]['OBJETIVOS'].unique().tolist()) if sel_cont else [])
-                    ctx_ia = f"EIXO: {sel_eixo}, CONTEÚDO: {sel_cont}, OBJETIVOS: {sel_obj}."
+                    df_matriz_ano = df_curriculo[df_curriculo['ANO'].astype(str) == str(ano_p)].copy()
+                    
+                    # 🚨 VACINA ANTI-KEYERROR: Busca flexível do nome da coluna de EIXO
+                    col_eixo_matriz = next((c for c in df_matriz_ano.columns if any(x in c.upper() for x in ['EIXO', 'GERAIS', 'EIXO TEMÁTICO', 'DOMÍNIO'])), None)
+                    col_cont_matriz = next((c for c in df_matriz_ano.columns if any(x in c.upper() for x in ['CONTEUDO', 'ESPECÍFICO', 'TÓPICO', 'PROGRAMÁTICO'])), None)
+                    col_obj_matriz = next((c for c in df_matriz_ano.columns if any(x in c.upper() for x in ['OBJETIVO', 'HABILIDADE'])), None)
+
+                    sel_eixo, sel_cont, sel_obj = [], [], []
+                    if col_eixo_matriz and not df_matriz_ano.empty:
+                        eixos_opcoes = sorted(df_matriz_ano[col_eixo_matriz].dropna().unique().tolist())
+                        sel_eixo = st.multiselect("Eixo Temático:", eixos_opcoes)
+                        
+                        if col_cont_matriz and sel_eixo:
+                            conts_opcoes = sorted(df_matriz_ano[df_matriz_ano[col_eixo_matriz].isin(sel_eixo)][col_cont_matriz].dropna().unique().tolist())
+                            sel_cont = st.multiselect("Conteúdo Específico:", conts_opcoes)
+                            
+                        if col_obj_matriz and sel_cont:
+                            objs_opcoes = sorted(df_matriz_ano[df_matriz_ano[col_cont_matriz].isin(sel_cont)][col_obj_matriz].dropna().unique().tolist())
+                            sel_obj = st.multiselect("Objetivos de Aprendizagem:", objs_opcoes)
+                            
+                        ctx_ia = f"EIXO: {sel_eixo}, CONTEÚDO: {sel_cont}, OBJETIVOS: {sel_obj}."
+                    else:
+                        st.warning("⚠️ Não foi possível identificar as colunas de Eixo/Conteúdo na matriz carregada.")
                 
                 elif modo_p == "Links da Web":
                     links_web_texto = st.text_area("Cole os Links (um por linha):", placeholder="https://...")
@@ -564,7 +580,6 @@ if menu == "📅 Planejamento (Ponto ID)":
                 
                 foco_a1, foco_a2, foco_sab = "N/A", "N/A", "N/A"
                 
-                # 🚨 CAIXAS DINÂMICAS BASEADAS NA CARGA HORÁRIA
                 if "1 Aula" in carga_horaria:
                     foco_a1 = st.text_area("Foco da Aula 1:", placeholder="Ex: Explicar perímetro...", height=80)
                 elif "2 Aulas" in carga_horaria:
@@ -577,10 +592,8 @@ if menu == "📅 Planejamento (Ponto ID)":
                     foco_a2 = c_d2.text_area("Foco da Aula 2:", placeholder="Ex: Fazer exercícios...", height=80)
                     foco_sab = c_d3.text_area("Foco do Sábado Letivo:", placeholder="Ex: Oficina prática...", height=80)
 
-            # 🚨 CANAL DUPLO DE CRIAÇÃO (Soberania de Escolha V201)
             c_g1, c_g2 = st.columns(2)
 
-            # CANAL 1: GERAÇÃO COM IA (Rápida e Otimizada)
             if c_g1.button("🧠 Iniciar Motor de IA: Gerar Planejamento", use_container_width=True, type="primary"):
                 with st.status("🚀 Iniciando Protocolo de Planejamento...", expanded=True) as status:
                     status.write("📚 Coletando base didática e diretrizes...")
@@ -632,16 +645,13 @@ if menu == "📅 Planejamento (Ponto ID)":
                         time.sleep(1)
                         st.rerun()
 
-            # CANAL 2: ESCRITA 100% MANUAL (Zero Custo de IA e Tempo Instantâneo)
             if c_g2.button("✍️ Elaborar Manualmente (Sem IA)", use_container_width=True):
-                # Pré-carrega conteúdos e objetivos da matriz na memória se o professor tiver selecionado
                 espec_pre = ", ".join(sel_cont) if 'sel_cont' in locals() and sel_cont else ""
                 objs_pre = "\n".join(sel_obj) if 'sel_obj' in locals() and sel_obj else ""
                 
-                # Monta as tags vazias ou pré-preenchidas para abrir o editor diretamente
                 texto_manual_template = (
                     f"[HABILIDADE_BNCC]\n"
-                    f"[OBJETO_CONHECIMENTO] {obj_geral if 'obj_geral' in locals() and obj_geral else ''}\n"
+                    f"[OBJETO_CONHECIMENTO]\n"
                     f"[CONTEUDOS_ESPECIFICOS] {espec_pre}\n"
                     f"[OBJETIVOS_ENSINO] {objs_pre}\n"
                     f"[AULA_1] (Escreva o roteiro da Aula 1 aqui...)\n"
@@ -674,7 +684,6 @@ if menu == "📅 Planejamento (Ponto ID)":
                             st.session_state.p_temp = ai.gerar_ia("REFINADOR_PEDAGOGICO", prompt_refino)
                             st.rerun()
 
-                # 🚨 UX DE ELITE: Separação em Abas e Caixas Gigantes (Fim do Arrasta-Arrasta)
                 tab_curriculo, tab_roteiro, tab_inclusao = st.tabs(["📚 1. Base Curricular", "📝 2. Roteiro das Aulas", "♿ 3. Avaliação & PEI"])
                 
                 with tab_curriculo:
@@ -684,7 +693,6 @@ if menu == "📅 Planejamento (Ponto ID)":
                     ed_objs = st.text_area("Objetivos de Aprendizagem:", ai.extrair_tag(txt_bruto, "OBJETIVOS_ENSINO"), height=150)
                 
                 with tab_roteiro:
-                    st.info("💡 Dica de UX: As caixas agora possuem altura expandida. O senhor pode ler e editar o roteiro inteiro sem precisar arrastar a barra lateral.")
                     c_a1, c_a2, c_a3 = st.columns(3)
                     ed_a1 = c_a1.text_area("AULA 1:", ai.extrair_tag(txt_bruto, "AULA_1"), height=400)
                     ed_a2 = c_a2.text_area("AULA 2:", ai.extrair_tag(txt_bruto, "AULA_2"), height=400)
@@ -747,7 +755,7 @@ if menu == "📅 Planejamento (Ponto ID)":
             else: st.success("Nenhum plano pendente de produção.")
 
     # ==============================================================================
-    # ABA 3: ACERVO (COM AUTO-CURA DE LINKS SOBERANA V201)
+    # ABA 3: ACERVO (COM FERRAMENTA MOVER DE SEMANA & PRESERVAÇÃO DE DOCS)
     # ==============================================================================
     with tab_acervo:
         st.markdown("#### Acervo de Planos Estratégicos")
@@ -759,19 +767,15 @@ if menu == "📅 Planejamento (Ponto ID)":
                 sel_h = st.selectbox("Selecionar Plano:", df_h["SEMANA"].tolist()[::-1], key="hist_sem")
                 dados_h = df_h[df_h["SEMANA"] == sel_h].iloc[0]
                 
-                # Sensor de Integridade: Detecta se o link antigo está corrompido com HTML do Drive
                 link_atual = str(dados_h.get("LINK_DRIVE", ""))
                 is_corrupted = "html" in link_atual.lower() or "Page Not Found" in link_atual or not link_atual.startswith("http")
                 
                 if is_corrupted:
-                    st.error("⚠️ **Detector de Falhas:** Este arquivo no seu Drive foi gerado durante o bloqueio de cota anterior do Google e o link está corrompido.")
-                    
-                    # BOTÃO MÁGICO DE AUTO-CURA (0% custo de tokens)
+                    st.error("⚠️ **Detector de Falhas:** O link deste arquivo precisa de recuperação.")
                     if st.button("🔄 RECONSTRUIR DOCUMENTO E RECUPERAR LINK NO DRIVE", type="primary", use_container_width=True, key=f"heal_btn_{sel_h.replace(' ','')}"):
                         with st.status("Reconstruindo e enviando arquivo corrigido...", expanded=True) as status:
                             plano_txt_bruto = str(dados_h['PLANO_TEXTO'])
                             
-                            # Extrai os dados que já existem na planilha
                             ed_geral = ai.extrair_tag(plano_txt_bruto, "OBJETO_CONHECIMENTO") or ai.extrair_tag(plano_txt_bruto, "CONTEUDO_GERAL") or "Planejamento Semanal"
                             ed_espec = ai.extrair_tag(plano_txt_bruto, "CONTEUDOS_ESPECIFICOS")
                             ed_objs = ai.extrair_tag(plano_txt_bruto, "OBJETIVOS_ENSINO")
@@ -779,7 +783,6 @@ if menu == "📅 Planejamento (Ponto ID)":
                             ed_a2 = ai.extrair_tag(plano_txt_bruto, "AULA_2")
                             ed_sab = ai.extrair_tag(plano_txt_bruto, "SABADO_LETIVO")
                             
-                            # Reconstrói a metodologia do arquivo
                             metodologia_docx = f"AULA 01:\n{ed_a1}"
                             if "N/A" not in ed_a2.upper() and len(ed_a2) > 5: metodologia_docx += f"\n\nAULA 02:\n{ed_a2}"
                             if "N/A" not in ed_sab.upper() and len(ed_sab) > 5: metodologia_docx += f"\n\nSÁBADO LETIVO:\n{ed_sab}"
@@ -792,48 +795,65 @@ if menu == "📅 Planejamento (Ponto ID)":
                                 "pei": ai.extrair_tag(plano_txt_bruto, "ESTRATEGIA_DUA_PEI")
                             }
                             
-                            # Gera o novo DOCX limpo na memória
                             nome_arquivo = f"PLANO_{dados_h['ANO'].replace('º','')}_{sel_h.replace(' ', '')}"
                             doc_io = exporter.gerar_docx_plano_pedagogico_ELITE(nome_arquivo, dados_docx, {"ano": dados_h['ANO'], "semana": sel_h, "trimestre": dados_h['TURMA']})
                             
-                            # Faz o upload usando a nossa nova ponte ativa 100% funcionando!
-                            status.write("Enviando arquivo e registrando no seu Docs pessoal...")
                             link_novo = db.subir_e_converter_para_google_docs(doc_io, nome_arquivo, trimestre=dados_h['TURMA'], categoria=dados_h['ANO'], semana=sel_h, modo="PLANEJAMENTO")
                             
                             if "https" in link_novo and len(link_novo) < 250:
-                                # Altera a planilha do Google Sheets sobrescrevendo o link quebrado
                                 try:
                                     wb = db.conectar()
                                     ws = wb.worksheet("DB_PLANOS")
                                     dados_sheet = ws.get_all_values()
                                     
-                                    # Procura a linha correspondente no banco
                                     for row_idx, row in enumerate(dados_sheet):
                                         if row_idx > 0 and row[1] == sel_h and row[2] == dados_h['ANO']:
-                                            # Atualiza o Link na coluna G
                                             ws.update_cell(row_idx+1, 7, link_novo)
-                                            
-                                            # Limpa o HTML do campo de texto plano (Coluna F)
                                             novo_plano_texto = plano_txt_bruto.split("--- LINK DRIVE ---")[0] + f"--- LINK DRIVE --- {link_novo}"
                                             ws.update_cell(row_idx+1, 6, novo_plano_texto)
                                             break
                                     
                                     status.update(label="✅ Documento e Link Recuperados com Sucesso!", state="complete")
-                                    st.balloons()
-                                    st.cache_data.clear()
-                                    time.sleep(1.5)
-                                    st.rerun()
-                                except Exception as e:
-                                    st.error(f"Erro ao salvar no banco: {e}")
+                                    st.balloons(); st.cache_data.clear(); time.sleep(1.5); st.rerun()
+                                except Exception as e: st.error(f"Erro ao salvar no banco: {e}")
                             else:
-                                status.update(label="❌ Falha na recuperação. O Google rejeitou o arquivo.", state="error")
+                                status.update(label="❌ Falha na recuperação.", state="error")
                                 st.error(link_novo)
                 else:
                     c_btn1, c_btn2 = st.columns(2)
-                    # 🚨 CORREÇÃO: Transformado em link_button clicável para abrir o Google Docs
-                    c_btn1.link_button("Abrir DOCX no Drive", link_atual, use_container_width=True)
-                    if c_btn2.button("Apagar Plano", use_container_width=True, key=f"del_plan_h_{sel_h.replace(' ', '')}"):
+                    c_btn1.link_button("📂 Abrir DOCX no Drive", link_atual, use_container_width=True)
+                    if c_btn2.button("🗑️ Apagar Plano", use_container_width=True, key=f"del_plan_h_{sel_h.replace(' ', '')}"):
                         if db.excluir_plano_completo(sel_h, dados_h["ANO"]): st.rerun()
+
+                    # 🚨 MOTOR DE RELOCAÇÃO DE SEMANA (PRESERVA O GOOGLE DOCS EDITADO)
+                    with st.expander("🔄 Mover este Plano para Outra Semana (Preservar Docs)", expanded=False):
+                        st.info("💡 **Garantia de Preservação:** Esta ferramenta altera a semana do plano na planilha e renomeia o título no Google Drive **sem apagar seu arquivo**. Todas as suas edições manuais feitas no Google Docs serão 100% mantidas.")
+                        
+                        todas_semanas_reloc = util.gerar_semanas()
+                        semanas_ocupadas_ano = df_planos[df_planos['ANO'] == dados_h['ANO']]['SEMANA'].tolist()
+                        semanas_livres_reloc = [s.split(" (")[0] for s in todas_semanas_reloc if s.split(" (")[0] not in semanas_ocupadas_ano and "Jornada" not in s]
+                        
+                        if not semanas_livres_reloc:
+                            st.warning("Todas as semanas deste ano letivo já possuem planos cadastrados.")
+                        else:
+                            nova_semana_dest = st.selectbox("Selecione a Semana de Destino:", semanas_livres_reloc, key=f"reloc_sem_{v}")
+                            
+                            if st.button("🚀 CONFIRMAR MUDANÇA DE SEMANA", type="primary", use_container_width=True, key=f"btn_reloc_exe_{v}"):
+                                with st.spinner("Transferindo plano e atualizando referências..."):
+                                    sucesso_reloc = db.relocador_plano_semana(
+                                        semana_antiga=sel_h, 
+                                        ano=dados_h['ANO'], 
+                                        nova_semana=nova_semana_dest, 
+                                        link_drive=link_atual
+                                    )
+                                    if sucesso_reloc:
+                                        st.success(f"✅ Plano transferido da {sel_h} para a {nova_semana_dest} com sucesso! O Google Docs foi preservado.")
+                                        st.balloons()
+                                        time.sleep(1.5)
+                                        st.rerun()
+                                    else:
+                                        st.error("Erro ao transferir a semana no banco de dados.")
+
             else: st.info("Nenhum plano encontrado.")
 
     # ==============================================================================
@@ -844,7 +864,6 @@ if menu == "📅 Planejamento (Ponto ID)":
         modo_inteligencia = st.radio("Selecione a Visão:", ["📊 Status de Execução (Checklist)", "🖨️ Gerador de Plano Trimestral"], horizontal=True)
         st.markdown("---")
 
-        # Função para limpar as tags [cite: X] do seu CSV
         def limpar_tags_cite(texto):
             if not isinstance(texto, str): return ""
             return re.sub(r'\[cite:.*?\]', '', texto).strip()
@@ -855,9 +874,8 @@ if menu == "📅 Planejamento (Ponto ID)":
             ano_c = c1.selectbox("Série:", [6, 7, 8, 9], key="matriz_ano")
             trim_c = c2.selectbox("Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key="matriz_trim")
             
-            # Identifica as colunas do seu CSV dinamicamente
             col_ano = next((c for c in df_curriculo.columns if 'ANO' in c.upper()), None)
-            col_eixo = next((c for c in df_curriculo.columns if 'GERAIS' in c.upper() or 'EIXO' in c.upper()), None)
+            col_eixo = next((c for c in df_curriculo.columns if any(x in c.upper() for x in ['GERAIS', 'EIXO', 'DOMÍNIO'])), None)
             col_trim = next((c for c in df_curriculo.columns if trim_c.upper() in c.upper()), None)
 
             if col_ano and col_eixo and col_trim:
@@ -876,7 +894,6 @@ if menu == "📅 Planejamento (Ponto ID)":
                         
                         for topico in topicos:
                             target = re.sub(r'[^A-Z0-9]', '', topico.upper())
-                            # Se o tópico exato estiver dentro dos planos gerados, marca como concluído
                             status = "✅ CONCLUÍDO" if target in texto_soberano_limpo and len(target) > 5 else "⏳ PENDENTE"
                             dados_checklist.append({"Eixo": eixo, "Conteúdo Específico": topico, "Status": status})
                     
@@ -895,9 +912,9 @@ if menu == "📅 Planejamento (Ponto ID)":
                             
                         st.dataframe(df_check.style.map(colorir_status, subset=['Status']), use_container_width=True, hide_index=True)
                     else:
-                        st.info("Nenhum conteúdo cadastrado para este trimestre no CSV.")
+                        st.info("Nenum conteúdo cadastrado para este trimestre no CSV.")
             else:
-                st.error("As colunas do currículo não correspondem ao formato esperado do CSV (Ano, Conteúdos Gerais, I Trimestre...).")
+                st.error("As colunas do currículo não correspondem ao formato esperado.")
 
         elif modo_inteligencia == "🖨️ Gerador de Plano Trimestral":
             st.markdown("#### Gerador Automático de Plano Trimestral (DOCX)")
@@ -913,7 +930,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                 with st.spinner("Minerando planos de aula e compilando documento..."):
                     
                     col_ano = next((c for c in df_curriculo.columns if 'ANO' in c.upper()), None)
-                    col_eixo = next((c for c in df_curriculo.columns if 'GERAIS' in c.upper() or 'EIXO' in c.upper()), None)
+                    col_eixo = next((c for c in df_curriculo.columns if any(x in c.upper() for x in ['GERAIS', 'EIXO', 'DOMÍNIO'])), None)
                     col_trim = next((c for c in df_curriculo.columns if trim_alvo.upper() in c.upper()), None)
                     
                     if not col_ano or not col_eixo or not col_trim:
@@ -925,20 +942,16 @@ if menu == "📅 Planejamento (Ponto ID)":
                     if df_matriz_trim.empty:
                         st.error("Nenhum dado encontrado na matriz para esta série.")
                     else:
-                        # 1. Busca todos os planos feitos no trimestre
                         planos_trim = df_planos[(df_planos['ANO'].str.contains(ano_num_trim)) & (df_planos['TURMA'] == trim_alvo)]
                         
-                        # 2. Extrai Códigos BNCC e Metodologias Reais
                         bncc_codes = set()
                         metodologias = set()
                         
                         for txt in planos_trim['PLANO_TEXTO'].dropna():
-                            # Extrai BNCC
                             hab = ai.extrair_tag(str(txt), "HABILIDADE_BNCC")
                             codes = re.findall(r'EF\d{2}MA\d{2}[A-Z]?', hab, re.IGNORECASE)
                             bncc_codes.update([c.upper() for c in codes])
                             
-                            # Extrai Metodologias baseadas no texto da Aula 1
                             aula1 = ai.extrair_tag(str(txt), "AULA_1").lower()
                             if "dobradura" in aula1 or "prática" in aula1: metodologias.add("Atividades práticas e material concreto")
                             if "livro" in aula1 or "página" in aula1: metodologias.add("Leitura e resolução do livro didático")
@@ -953,7 +966,6 @@ if menu == "📅 Planejamento (Ponto ID)":
                         hab_str = ", ".join(sorted(list(bncc_codes))) if bncc_codes else "Habilidades trabalhadas conforme planos semanais."
                         met_str = "• " + "\n• ".join(sorted(list(metodologias)))
                         
-                        # 3. Monta os dados para a tabela do DOCX
                         dados_tabela = []
                         for _, row in df_matriz_trim.iterrows():
                             eixo = str(row[col_eixo]).strip()
@@ -967,7 +979,6 @@ if menu == "📅 Planejamento (Ponto ID)":
                                     "metodologia": met_str
                                 })
                         
-                        # 4. Gera o DOCX e sobe pro Drive
                         info_trim = {"trimestre": trim_alvo, "ano": ano_trim}
                         nome_arq = f"PLANEJAMENTO_TRIMESTRAL_{trim_alvo.replace(' ', '')}_{ano_trim.replace('º ', '')}"
                         
