@@ -3430,10 +3430,10 @@ elif menu == "📸 Scanner de Gabaritos":
                         status_h.update(label="Notas e gabaritos auditados!", state="complete"); time.sleep(0.5); st.rerun()
 
                 # ==============================================================================
-                # ✏️ PERÍCIA INDIVIDUAL: CORRIGIR GABARITO E CÁLCULO DE ALUNO JÁ CORRIGIDO
+                # ✏️ PERÍCIA INDIVIDUAL: COM SUPORTE A TROCA/ANEXO DE FOTO JPG
                 # ==============================================================================
-                with st.expander("✏️ Perícia Individual: Ajustar Gabarito / Marcação de Cálculo do Aluno", expanded=True):
-                    st.caption("Acesse a folha de respostas de qualquer aluno já corrigido para alterar a letra marcada ou indicar se teve/não teve cálculo (penalidade de 50%).")
+                with st.expander("✏️ Perícia Individual: Ajustar Gabarito / Marcação de Cálculo / Foto do Aluno", expanded=True):
+                    st.caption("Acesse a folha de respostas de qualquer aluno já corrigido para alterar a letra marcada, marcar se teve cálculo ou trocar/anexar a foto da prova.")
                     
                     df_realizados = pd.DataFrame([r for r in dados_soberania if r['Situação'] == "✅ REALIZADA"])
                     
@@ -3447,10 +3447,22 @@ elif menu == "📸 Scanner de Gabaritos":
                             id_al_pericia = al_data['ID']
                             resp_raw = str(al_data['_Respostas'])
                             grupo_membros = al_data['Dupla / Grupo']
+                            foto_atual_link = al_data['Evidência']
                             
                             if grupo_membros != "Individual":
-                                st.info(f"👥 **Prova em Dupla/Grupo:** {grupo_membros}. A alteração será applied a todos os parceiros!")
+                                st.info(f"👥 **Prova em Dupla/Grupo:** {grupo_membros}. As alterações serão aplicadas aos dois!")
 
+                            # 📷 ANEXAR / SUBSTITUIR FOTO JPG DA PROVA
+                            st.markdown("#### 📷 Evidência Fotográfica (.jpg)")
+                            c_f1, c_f2 = st.columns([1, 2])
+                            if "http" in foto_atual_link:
+                                c_f1.link_button("🔗 Ver Foto Atual no Drive", foto_atual_link, use_container_width=True)
+                            else:
+                                c_f1.warning("Sem foto anexada.")
+                                
+                            nova_foto_pericia = c_f2.file_uploader("Substituir / Anexar Foto JPG da Prova:", type=["jpg", "jpeg", "png"], key=f"up_pericia_foto_{id_al_pericia}_{v}")
+
+                            st.markdown("---")
                             resp_limpa = resp_raw.split('|GRUPO:')[0] if '|GRUPO:' in resp_raw else resp_raw
                             respostas_lista = resp_limpa.split(';')
                             
@@ -3501,11 +3513,22 @@ elif menu == "📸 Scanner de Gabaritos":
                                 novas_res_pericia.append(flag_letra_p)
                                 
                             nota_pericia_calc = min(v_total_av, nota_pericia_calc)
-                            
                             st.metric("Nota Recalculada para o Aluno", f"{nota_pericia_calc:.1f} / {v_total_av:.1f}")
                             
-                            if st.button("💾 SALVAR PERÍCIA DO ALUNO E ATUALIZAR BOLETIM", type="primary", use_container_width=True, key=f"btn_save_ind_{id_al_pericia}"):
-                                with st.spinner("Salvando folha de respostas e atualizando notas..."):
+                            if st.button("💾 SALVAR PERÍCIA E ATUALIZAR BOLETIM", type="primary", use_container_width=True, key=f"btn_save_ind_{id_al_pericia}"):
+                                with st.spinner("Salvando pericia e foto no Drive..."):
+                                    # Se enviou nova foto JPG, realiza o upload nativo
+                                    link_foto_final = foto_atual_link
+                                    if nova_foto_pericia is not None:
+                                        link_foto_final = db.subir_e_converter_para_google_docs(
+                                            nova_foto_pericia.getvalue(), 
+                                            aluno_pericia_nome.replace(" ","_"), 
+                                            trimestre=tr_sel_h, 
+                                            categoria=t_sel_h, 
+                                            semana=av_alvo_h, 
+                                            modo="SCANNER"
+                                        )
+
                                     alvos_a = [aluno_pericia_nome]
                                     if grupo_membros != "Individual":
                                         alvos_a = [n.strip() for n in grupo_membros.split(',')]
@@ -3523,6 +3546,8 @@ elif menu == "📸 Scanner de Gabaritos":
                                             if row_p[2] in alvos_a:
                                                 ws_p.update_cell(idx_row_p + 1, 6, respostas_salvar_ind)
                                                 ws_p.update_cell(idx_row_p + 1, 7, util.sosa_to_str(nota_pericia_calc))
+                                                if link_foto_final != "N/A":
+                                                    ws_p.update_cell(idx_row_p + 1, 8, link_foto_final)
 
                                     db.limpar_notas_turma_trimestre(t_sel_h, tr_sel_h)
                                     st.cache_data.clear()
@@ -3552,9 +3577,9 @@ elif menu == "📸 Scanner de Gabaritos":
                                         lista_boletim_novas.append([id_l, nome_l, t_sel_h, tr_sel_h, util.sosa_to_str(v_vistos), util.sosa_to_str(v_teste), util.sosa_to_str(v_prova), util.sosa_to_str(v_rec), util.sosa_to_str(nova_media)])
 
                                     db.salvar_lote("DB_NOTAS", lista_boletim_novas)
-                                    st.success("✅ Perícia salva e nota atualizada no boletim!")
+                                    st.success("✅ Perícia salva e foto atualizada no Drive com sucesso!")
                                     time.sleep(0.5); st.rerun()
-
+                                    
                 # PROTOCOLO LÁZARO
                 with st.expander("🚑 Protocolo Lázaro (Digitação Manual Global)", expanded=False):
                     df_perdidos = pd.DataFrame([r for r in dados_soberania if r['_Respostas'] == "MANUAL" and r['Situação'] == "✅ REALIZADA"])
