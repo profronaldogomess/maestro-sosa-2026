@@ -88,12 +88,25 @@ def navegar_para(destino):
 def atualizar_menu():
     st.session_state.menu_atual = st.session_state._menu_radio
 
-# 🔬 FILTRO DE LEITURA GLOBAL (LATEX, IMAGENS E GEOGEBRA V201)
+# 🔬 FILTRO DE LEITURA GLOBAL (LATEX, IMAGENS E FORM FEED V2026.MASTER)
 def preparar_para_leitura(texto):
-    if not texto: return ""
+    if not texto or not isinstance(texto, str): return ""
+    # Vacina de escape do Form Feed (\x0c -> \\f)
+    texto = texto.replace('\x0c', '\\f')
+    # LaTeX de fração solto sem $
+    texto = re.sub(r'(?<!\$)\\\w+\{[^\}]*?\}(?:\{[^\}]*?\})?(?!\$)', r'$\g<0>$', texto)
+    texto = re.sub(r'(?<!\$)\^\\(circ|deg|cdot|times)(?!\$)', r'$\g<0>$', texto)
+    # Potências e expressões de bloco
     texto = re.sub(r'\$\$(.*?)\$\$', r'$\1$', texto, flags=re.DOTALL)
-    texto = re.sub(r'\[GEOGEBRA\](.*?)\[/GEOGEBRA\]', r'📐 *(Comando GeoGebra: \1)*', texto, flags=re.IGNORECASE | re.DOTALL)
-    texto = re.sub(r'\[\s*PROMPT IMAGEM:(.*?)\s*\]', r'🖼️ *(Imagem: \1)*', texto, flags=re.IGNORECASE | re.DOTALL)
+    # Limpa tags obsoletas do GeoGebra
+    texto = re.sub(r'\[GEOGEBRA\](.*?)\[/GEOGEBRA\]', '', texto, flags=re.IGNORECASE | re.DOTALL)
+    # Prompts de Imagem transformados em caixas copiáveis com 1 clique
+    texto = re.sub(
+        r'\[\s*PROMPT IMAGEM:(.*?)\s*\]', 
+        r'\n\n🎨 **[PROMPT GERADOR DE IMAGEM - COPIE NO BOTÃO ABAIXO]**\n```english\n\1\n```\n\n', 
+        texto, 
+        flags=re.IGNORECASE | re.DOTALL
+    )
     return texto
 
 # --- ESTILIZAÇÃO DE LUXO (CSS V41 - BENTO GRID) ---
