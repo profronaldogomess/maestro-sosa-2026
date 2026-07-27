@@ -6,9 +6,23 @@ import streamlit as st
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
 
 load_dotenv()
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+
+# ==============================================================================
+# FUNÇÃO AUXILIAR DE CREDENCIAIS DRIVE
+# ==============================================================================
+def obter_creds_drive_ai():
+    """Retorna as credenciais do Google Drive para leitura nativa de livros PDF"""
+    scope = ["https://www.googleapis.com/auth/drive"]
+    if os.path.exists("credentials.json"):
+        return service_account.Credentials.from_service_account_file("credentials.json", scopes=scope)
+    elif "gcp_service_account" in st.secrets:
+        return service_account.Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
+    return None
 
 # ==============================================================================
 # DICIONÁRIO DE PERSONAS DE ELITE (V203 - PADRÃO CAEd/ENEM & AGE LOCK)
@@ -290,7 +304,6 @@ PERSONAS = {
 # ==============================================================================
 
 def gerar_ia(persona_key, comando, url_drive=None, usar_busca=True):
-    # 🧠 ROTEAMENTO HÍBRIDO SOSA (CÉREBRO DUPLO)
     personas_premium = [
         "PLANE_PEDAGOGICO", 
         "ESPECIALISTA_INCLUSAO", 
@@ -300,7 +313,6 @@ def gerar_ia(persona_key, comando, url_drive=None, usar_busca=True):
         "ARQUITETO_RECUPERACAO_CIRURGICA"
     ]
     
-    # 🚨 NOMECLATURA OFICIAL DA API
     modelo_alvo = "gemini-3.1-pro-preview" if persona_key in personas_premium else "gemini-3-flash-preview"
     
     config = types.GenerateContentConfig(
@@ -311,27 +323,45 @@ def gerar_ia(persona_key, comando, url_drive=None, usar_busca=True):
     
     conteudo_prompt = []
     
-    if url_drive and "drive.google.com" in url_drive:
+    # 🚀 LEITOR INFALÍVEL DE LIVROS E PDFS VIA GOOGLE DRIVE API NATIVA
+    if url_drive and ("drive.google.com" in url_drive or len(url_drive) > 20):
         try:
-            file_id = re.search(r"(?:id=|[dD]/)([\w-]+)", url_drive).group(1)
-            download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+            file_id_match = re.search(r"(?:id=|[dD]/)([\w-]+)", url_drive)
+            file_id = file_id_match.group(1) if file_id_match else url_drive.strip()
             
-            response = requests.get(download_url, timeout=60) 
-            
-            if response.status_code == 200 and b"%PDF" in response.content[:10]:
+            creds = obter_creds_drive_ai()
+            if creds:
+                service = build('drive', 'v3', credentials=creds)
+                request_media = service.files().get_media(fileId=file_id)
+                pdf_content = request_media.execute()
+            else:
+                download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+                response = requests.get(download_url, timeout=60)
+                pdf_content = response.content
+
+            if b"%PDF" in pdf_content[:20]:
                 arquivo_temp = client.files.upload(
-                    file=io.BytesIO(response.content),
+                    file=io.BytesIO(pdf_content),
                     config=types.UploadFileConfig(mime_type="application/pdf")
                 )
                 conteudo_prompt.append(types.Part.from_uri(
                     file_uri=arquivo_temp.uri, 
                     mime_type="application/pdf"
                 ))
-                st.toast(f"📖 Documento lido. Iniciando extração com {modelo_alvo}...", icon="✅")
+                
+                # Injeta a instrução rígida de Ancoragem no Livro Didático
+                comando = (
+                    "🚨 ANCORAGEM OBRIGATÓRIA NO DOCUMENTO/LIVRO ANEXADO:\n"
+                    "Você DEVE ler o arquivo PDF do Livro Didático anexado a esta mensagem. "
+                    "É ESTRITAMENTE PROIBIDO inventar conceitos ou exercícios genéricos de fora. "
+                    "Baseie todo o conteúdo das aulas, explicações e exercícios DIRETAMENTE no texto e nas páginas do livro fornecido.\n\n"
+                    f"{comando}"
+                )
+                st.toast(f"📖 Livro Didático lido via Drive API com Sucesso!", icon="✅")
             else:
-                return "❌ ERRO DE SOBERANIA: O arquivo do Drive não pôde ser lido ou não é um PDF válido."
+                st.toast("⚠️ O arquivo do Drive não é um PDF válido.", icon="⚠️")
         except Exception as e:
-            return f"❌ ERRO TÉCNICO NO DRIVE: {e}."
+            st.toast(f"⚠️ Aviso na leitura do livro no Drive: {e}", icon="⚠️")
 
     conteudo_prompt.append(types.Part.from_text(text=f"{PERSONAS[persona_key]}\n\n{comando}"))
 
@@ -344,10 +374,8 @@ def gerar_ia(persona_key, comando, url_drive=None, usar_busca=True):
         if not res.text: return "⚠️ A IA não retornou dados."
         return res.text
     except Exception as e:
-        # 🚨 FALLBACK DE SEGURANÇA: Se o 3.1 Pro ainda não estiver liberado na sua chave, usa o 2.5 Pro
         if "404" in str(e) and "3.1" in modelo_alvo:
             try:
-                st.toast("⚠️ Gemini 3.1 Pro não liberado na chave. Acionando Fallback para 2.5 Pro...", icon="🔄")
                 res_fallback = client.models.generate_content(
                     model="gemini-2.5-pro", 
                     contents=[types.Content(role="user", parts=conteudo_prompt)],
