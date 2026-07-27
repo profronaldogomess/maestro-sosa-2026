@@ -414,34 +414,41 @@ def gerar_ia_json(persona_key, comando, usar_busca=False):
     except Exception as e:
         return {"erro": str(e)}
 
+# ==============================================================================
+# CONTRATO MESTRE DE TAGS E EXTRAÇÃO MULTI-PADRÃO (SOSA V2026.MASTER)
+# ==============================================================================
 def extrair_tag(texto, tag):
-    if not texto: return ""
-    tag_busca = tag.upper().strip()
+    """
+    Extrator Universal Imune a Falhas de Formatação, Markdown e Variações de Brackets.
+    """
+    if not texto or not isinstance(texto, str): return ""
+    tag_busca = tag.upper().strip().replace("[", "").replace("]", "")
     
-    tags_mestras =[
+    tags_mestras = [
         "SOSA_ID", "VALOR", "ORIENTACOES", "QUESTOES", "GABARITO_TEXTO", "GRADE_DE_CORRECAO", 
         "GABARITO", "RESPOSTAS_IA", "PEI", "GABARITO_PEI", "GRADE_DE_CORRECAO_PEI", "RESPOSTAS_PEI_IA", 
         "PROFESSOR", "ALUNO", "IMAGENS", "AULA_ALVO", "HABILIDADE_BNCC", "COMPETENCIAS_FOCO", 
-        "COMPETENCIA_GERAL", "OBJETO_CONHECIMENTO", "CONTEUDOS_ESPECIFICOS", "OBJETIVOS_ENSINO",
+        "COMPETENCIA_GERAL", "OBJETO_CONHECIMENTO", "CONTEUDO_GERAL", "CONTEUDOS_ESPECIFICOS", "OBJETIVOS_ENSINO",
         "JUSTIFICATIVA_PEDAGOGICA", "JUSTIFICATIVA_PHC", "RUBRICA_DE_MERITO", "CONTEXTO_INVESTIGATIVO", 
         "MISSÃO_DE_PESQUISA", "PASSO_A_PASSO", "PRODUTO_ESPERADO", "CONTEXTO_GLOCAL",
         "AULA_1", "AULA_2", "SABADO_LETIVO", "AVALIACAO_DE_MERITO", "ESTRATEGIA_DUA_PEI",
         "MAPA_DE_RECOMPOSICAO", "RESPOSTAS_PEDAGOGICAS", "BASE_DIDATICA",
         "MENSAGEM_CHAT", "CONTEUDO_ATUALIZADO", "SOCIAIS", "COMUNICATIVAS", "EMOCIONAIS", "FUNCIONAIS",
         "OBJETIVO", "ESTRATEGIA", "RECURSO", "DIAGNOSTICO_GERAL", "DIRETRIZES_CURRICULARES", "CHECKLIST",
-        "NIVEL_1", "NIVEL_2", "NIVEL_3"
+        "NIVEL_1", "NIVEL_2", "NIVEL_3", "PEI_NIVEL_1", "PEI_NIVEL_3"
     ]
     
-    parada =[t for t in tags_mestras if t != tag_busca]
+    parada = [t for t in tags_mestras if t != tag_busca]
     lista_parada = "|".join(parada)
 
-    padrao_interno = rf"\[[^\]]*?{tag_busca}[^\]]*?[:\-]\s*(.*?)\]"
+    # 1. Padrão Em Linha Curta: [TAG]: Valor
+    padrao_interno = rf"\[\s*[*#]*\s*{tag_busca}\s*[*#]*\s*\]\s*[:\-]*\s*(.*?)(?=\n|$)"
     match_int = re.search(padrao_interno, texto, re.IGNORECASE)
-    if match_int:
-        res_int = match_int.group(1).strip()
-        if 0 < len(res_int) < 100: return res_int
+    if match_int and 0 < len(match_int.group(1).strip()) < 120 and "\n" not in match_int.group(1).strip():
+        return match_int.group(1).strip()
 
-    padrao_bloco = rf"\[[^\]]*?{tag_busca}[^\]]*?\]\s*[:\-]*\s*(.*?)(?=\s*\[[^\]]*?(?:{lista_parada})[^\]]*?\]|$)"
+    # 2. Padrão Bloco Multilinhas: [TAG] ... [PRÓXIMA_TAG]
+    padrao_bloco = rf"\[\s*[*#]*\s*{tag_busca}\s*[*#]*\s*\]\s*[:\-]*\s*(.*?)(?=\s*\[\s*[*#]*\s*(?:{lista_parada})\s*[*#]*\s*\]|--- LINKS ---|$)"
     match_bloco = re.search(padrao_bloco, texto, re.DOTALL | re.IGNORECASE)
     
     if match_bloco:
