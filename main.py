@@ -413,7 +413,11 @@ if menu == "📅 Planejamento (Ponto ID)":
             ano_str_busca = f"{ano_p}º"
 
             todas_semanas = util.gerar_semanas()
-            semanas_planejadas = df_planos[df_planos['ANO'] == ano_str_busca]['SEMANA'].tolist()
+            # 🚨 VACINA ANTI-INSTABILIDADE GOOGLE 503
+            if not df_planos.empty and 'ANO' in df_planos.columns and 'SEMANA' in df_planos.columns:
+                semanas_planejadas = df_planos[df_planos['ANO'] == ano_str_busca]['SEMANA'].tolist()
+            else:
+                semanas_planejadas = []
             semanas_disponiveis = [s for s in todas_semanas if s.split(" (")[0] not in semanas_planejadas and "Jornada" not in s]
 
             if not semanas_disponiveis:
