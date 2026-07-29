@@ -2617,17 +2617,18 @@ elif menu == "📝 Central de Avaliações":
 
 
 # ==============================================================================
-# MÓDULO: CENTRAL DE INTELIGÊNCIA DE RESULTADOS (CIR) - V2026.1 (HOMOLOGAÇÃO & DUPLAS)
+# MÓDULO: CENTRAL DE INTELIGÊNCIA DE RESULTADOS (CIR) - V2026.2 (HERANÇA PEI & UX CLEAN)
 # ==============================================================================
 elif menu == "📸 Scanner de Gabaritos":
     st.title("Central de Inteligência de Resultados (CIR)")
-    st.caption("Mesa de triagem de exames, fotos em JPG nativo, homologação de atestados/justificativas e auditoria estrita por trimestre.")
+    st.caption("Mesa de triagem de exames, suporte a Provas em Dupla, herança de gabarito PEI e autópsia por trimestre.")
     st.markdown("---")
 
     if "v_scan" not in st.session_state: 
         st.session_state.v_scan = int(time.time())
     v = st.session_state.v_scan
 
+    # 🚨 VACINA DE ESCOPO GLOBAL: Lista de turmas regulares
     lista_turmas_cir = []
     if not df_turmas.empty and 'ID_TURMA' in df_turmas.columns:
         turmas_reais_cir = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
@@ -2635,6 +2636,7 @@ elif menu == "📸 Scanner de Gabaritos":
     elif not df_alunos.empty and 'TURMA' in df_alunos.columns:
         lista_turmas_cir = sorted(df_alunos['TURMA'].unique())
 
+    # 🚨 REGEX HD: ANTI-SOBREPOSIÇÃO DE TRIMESTRES ROMANOS
     def obter_regex_trimestre(trimestre_str):
         if not trimestre_str: return r".*"
         t_upper = str(trimestre_str).upper()
@@ -2645,6 +2647,7 @@ elif menu == "📸 Scanner de Gabaritos":
         else:
             return r"(?<!I)I(?![I])"
 
+    # FILTRO HIERÁRQUICO DE ATIVOS CIR
     def filtrar_ativos_cir(turma, trimestre_nome, apenas_provas=True):
         if not turma or not trimestre_nome: return []
         try:
@@ -2704,12 +2707,13 @@ elif menu == "📸 Scanner de Gabaritos":
         except Exception as e: 
             return []
 
+    # CONSOLIDAÇÃO DE ABAS
     tab_correcao, tab_auditoria, tab_raiox = st.tabs([
         "Mesa de Correção", "Tribunal de Auditoria", "Raio-X Pedagógico"
     ])
 
     # ==============================================================================
-    # ABA 1: MESA DE CORREÇÃO (PROVAS & TRABALHOS UNIFICADOS)
+    # ABA 1: MESA DE CORREÇÃO (HERANÇA DE GABARITO PEI PARSER)
     # ==============================================================================
     with tab_correcao:
         modo_lancamento = st.radio("Selecione a Atividade para Lançar:", ["📸 Provas (Scanner/Manual)", "✍️ Trabalhos & Projetos (Lote)"], horizontal=True, key=f"cir_modo_l_{v}")
@@ -2743,14 +2747,12 @@ elif menu == "📸 Scanner de Gabaritos":
                 tipo_base = at_sel.split("-")[0].strip().upper()
                 serie_num = "".join(filter(str.isdigit, t_sel))
 
-                # Considera como concluídos apenas quem já tem nota real (não falta nem pendência de 2ª chamada)
                 diag_reais = df_diag_turma[
                     (df_diag_turma['ID_AVALIACAO'].str.startswith(nome_filtro_pendente, na=False)) & 
                     (~df_diag_turma['RESPOSTAS_ALUNO'].astype(str).str.startswith("FALTOU"))
                 ]
                 escaneados_unicos = diag_reais['ID_ALUNO'].astype(str).tolist()
                 
-                # Mapeia os estados de falta
                 df_faltosos = df_diag_turma[
                     (df_diag_turma['ID_AVALIACAO'].str.startswith(nome_filtro_pendente, na=False)) & 
                     (df_diag_turma['RESPOSTAS_ALUNO'].astype(str).str.startswith("FALTOU"))
@@ -2896,45 +2898,51 @@ elif menu == "📸 Scanner de Gabaritos":
                             val_tag = ai.extrair_tag(txt_ref, "VALOR")
                             v_total_at = util.sosa_to_float(val_tag) if val_tag else 10.0
 
+                            # 🚨 MOTOR DE HERANÇA DE GABARITO PEI (SOSA V2026.2)
                             def extrair_gab_blindado(texto, is_pei=False, nivel_pei="NIVEL_1"):
-                                mapa = {}
+                                mapa_regular = {}
                                 raw_reg = ai.extrair_tag(texto, "GABARITO_TEXTO") or ai.extrair_tag(texto, "GABARITO")
                                 matches_reg = re.findall(r"(?:QUEST[AÃ]O\s*|Q)?0?(\d+)[\s\.\)\-:]+([A-E])", str(raw_reg).upper())
-                                qtd_oficial = max([int(m[0]) for m in matches_reg]) if matches_reg else 10
-                                
-                                if is_pei:
-                                    bloco_pei = ai.extrair_tag(texto, nivel_pei) or ai.extrair_tag(texto, "PEI") or ai.extrair_tag(texto, "GABARITO_PEI")
-                                    area_busca = bloco_pei if bloco_pei else texto
+                                for q_num_str, letra in matches_reg:
+                                    mapa_regular[int(q_num_str)] = letra
                                     
-                                    blocos_q = re.split(r"(?i)(?:QUEST[AÃ]O\s*|Q)0?(\d+)", area_busca)
+                                qtd_oficial = max(mapa_regular.keys()) if mapa_regular else 10
+                                
+                                if not is_pei:
+                                    return [mapa_regular.get(n, "A") for n in range(1, qtd_oficial + 1)]
+                                    
+                                mapa_pei = {}
+                                bloco_pei = ai.extrair_tag(texto, nivel_pei) or ai.extrair_tag(texto, "PEI") or ai.extrair_tag(texto, "GABARITO_PEI")
+                                
+                                if bloco_pei:
+                                    blocos_q = re.split(r"(?i)(?:QUEST[AÃ]O\s*|Q)0?(\d+)", bloco_pei)
                                     if len(blocos_q) > 2:
                                         for idx in range(1, len(blocos_q), 2):
                                             q_num = int(blocos_q[idx])
                                             q_conteudo = blocos_q[idx+1]
                                             m_gab = re.search(r"(?i)GABARITO\s*[:\-]?\s*([A-E])", q_conteudo)
                                             if m_gab:
-                                                mapa[q_num] = m_gab.group(1).upper()
-                                    
-                                    if len(mapa) < qtd_oficial:
-                                        matches_direct = re.findall(r"(?:QUEST[AÃ]O\s*|Q)?0?(\d+)[\s\.\)\-:]+([A-E])", area_busca.upper())
-                                        for q_num_str, letra in matches_direct:
-                                            q_num = int(q_num_str)
-                                            if q_num not in mapa and q_num <= qtd_oficial:
-                                                mapa[q_num] = letra
-                                                
-                                    if len(mapa) < qtd_oficial and matches_reg:
-                                        for q_num_str, letra in matches_reg:
-                                            q_num = int(q_num_str)
-                                            if q_num not in mapa:
-                                                mapa[q_num] = letra
-                                else:
-                                    if matches_reg:
-                                        for q_num_str, letra in matches_reg:
-                                            mapa[int(q_num_str)] = letra
+                                                mapa_pei[q_num] = m_gab.group(1).upper()
+                                
+                                # Herança para PEI N2 (Busca no Nível 1 se N2 não tiver texto de gabarito)
+                                if len(mapa_pei) < qtd_oficial and nivel_pei != "NIVEL_1":
+                                    bloco_n1 = ai.extrair_tag(texto, "NIVEL_1")
+                                    if bloco_n1:
+                                        blocos_q1 = re.split(r"(?i)(?:QUEST[AÃ]O\s*|Q)0?(\d+)", bloco_n1)
+                                        if len(blocos_q1) > 2:
+                                            for idx in range(1, len(blocos_q1), 2):
+                                                q_num = int(blocos_q1[idx])
+                                                q_conteudo = blocos_q1[idx+1]
+                                                m_gab = re.search(r"(?i)GABARITO\s*[:\-]?\s*([A-E])", q_conteudo)
+                                                if m_gab and q_num not in mapa_pei:
+                                                    mapa_pei[q_num] = m_gab.group(1).upper()
 
-                                if not mapa: return ["A"] * qtd_oficial
-                                max_q = max(max(mapa.keys()), qtd_oficial)
-                                return [mapa.get(n, "A") for n in range(1, max_q + 1)]
+                                # Complementa qualquer questão pendente com a chave regular
+                                for q_n in range(1, qtd_oficial + 1):
+                                    if q_n not in mapa_pei:
+                                        mapa_pei[q_n] = mapa_regular.get(q_n, "A")
+                                        
+                                return [mapa_pei.get(n, "A") for n in range(1, qtd_oficial + 1)]
 
                             gab_alvo = extrair_gab_blindado(txt_ref, is_pei_grading, nivel_alvo_pei)
 
@@ -2942,10 +2950,9 @@ elif menu == "📸 Scanner de Gabaritos":
                                 q_raw_check = ai.extrair_tag(txt_ref, "QUESTOES") or txt_ref
                                 qtd_q_estimada = len(re.findall(r"(?i)QUEST[AÃ]O\s*0?\d+", q_raw_check)) or 5
                                 gab_alvo = ["A"] * qtd_q_estimada
-                                st.warning("⚠️ Gabarito não localizado automaticamente. Ajuste na tabela abaixo:")
 
-                            with st.expander("⚙️ Conferir/Editar Gabarito Base da Prova", expanded=(len(gab_alvo) == 0)):
-                                st.caption("Ajuste o gabarito oficial se necessário antes de digitalizar as provas.")
+                            with st.expander("⚙️ Conferir/Editar Gabarito Base da Prova", expanded=False):
+                                st.caption("Se notar algum erro no gabarito oficial gerado pela IA, ajuste abaixo antes de digitalizar as provas.")
                                 grid_gab_pre = [{"Q": f"{i+1:02d}", "Letra": gab_alvo[i] if i < len(gab_alvo) else "A"} for i in range(len(gab_alvo))]
                                 df_gab_pre = st.data_editor(
                                     pd.DataFrame(grid_gab_pre), hide_index=True, use_container_width=True,
@@ -3200,7 +3207,7 @@ elif menu == "📸 Scanner de Gabaritos":
                             time.sleep(0.5); st.rerun()
 
     # ==============================================================================
-    # ABA 2: TRIBUNAL DE AUDITORIA (HOMOLOGAÇÃO DE ATESTADOS, JUSTIFICATIVAS & DUPLAS)
+    # ABA 2: TRIBUNAL DE AUDITORIA (HOMOLOGAÇÃO CLEAN & EXPANDERS ORGANIZADOS)
     # ==============================================================================
     with tab_auditoria:
         st.markdown("### Tribunal de Auditoria de Resultados")
@@ -3280,11 +3287,9 @@ elif menu == "📸 Scanner de Gabaritos":
                     val_tag = ai.extrair_tag(txt_prova_trib, "VALOR")
                     if val_tag: v_total_av = util.sosa_to_float(val_tag)
 
-                # ==============================================================================
-                # ⚖️ NOVO PAINEL: HOMOLOGAÇÃO DE ATESTADOS, JUSTIFICATIVAS E REVERSÃO (100% EDITÁVEL)
-                # ==============================================================================
-                with st.expander("⚖️ Homologação de Atestados, Justificativas e 2ª Chamada (Totalmente Editável)", expanded=True):
-                    st.info("💡 **Reversibilidade Total:** Se o aluno entregou atestado depois ou se houve erro ao dar falta, ajuste o status abaixo. O sistema recalculará o boletim e atualizará a biografia do aluno instantaneamente.")
+                # PAINEL RECOLHIDO POR PADRÃO PARA NÃO POLUIR A TELA (expanded=False)
+                with st.expander("⚖️ Homologação de Atestados, Justificativas e 2ª Chamada", expanded=False):
+                    st.info("💡 **Reversibilidade Total:** Se o aluno entregou atestado depois ou se houve erro ao dar falta, ajuste o status abaixo.")
                     
                     aluno_homolog_nome = st.selectbox("Selecione o Estudante para Homologar Ausência/Justificativa:", alunos_turma_h['NOME_ALUNO'].tolist(), key=f"homolog_select_{v}")
                     
@@ -3339,7 +3344,6 @@ elif menu == "📸 Scanner de Gabaritos":
                                         f"Avaliação: {av_alvo_h} | Status: INJUSTIFICADO (ZERO) | Motivo: {motivo_save}"
                                     ])
 
-                                # Recalcula as notas no boletim em cascata
                                 db.limpar_notas_turma_trimestre(t_sel_h, tr_sel_h)
                                 st.cache_data.clear()
                                 
@@ -3370,9 +3374,9 @@ elif menu == "📸 Scanner de Gabaritos":
                                 db.salvar_lote("DB_NOTAS", lista_boletim_novas)
                                 st.success("✅ Status homologado e boletim recalculado!"); time.sleep(0.5); st.rerun()
 
-                # MOTOR FÊNIX: RECALIBRAÇÃO RETROATIVA E ANULAÇÃO EM LOTE
+                # PAINEL RECOLHIDO POR PADRÃO (expanded=False)
                 with st.expander("🔄 Recalibração Retroativa em Lote (Gabarito Errado / Anulação)", expanded=False):
-                    st.warning("⚡ **Atenção:** Se a IA gerou uma chave errada ou uma questão foi anulada, ajuste a tabela abaixo. Ao clicar no botão, o sistema recalculará a nota de TODOS os alunos da turma sem necessidade de tirar novas fotos.")
+                    st.warning("⚡ **Atenção:** Se a IA gerou uma chave errada ou uma questão foi anulada, ajuste a tabela abaixo.")
                     
                     if not gab_oficial_trib:
                         st.error("Gabarito de referência não localizado no Acervo.")
@@ -3534,7 +3538,7 @@ elif menu == "📸 Scanner de Gabaritos":
                             
                             if r['Situação'] == "✅ REALIZADA":
                                 id_f = av_alvo_h if r['Versão'] == "PROVA ORIGINAL" else f"{av_alvo_h} ({r['Versão']})"
-                                dados_atualizados.append([datetime.now().strftime("%d/%m/%Y"), id_l, nome_limpo, t_sel_h, id_f, "MANUAL" if resp_originais == "FALTOU" else resp_final_gravar, nota_s, r['Evidência'] or "N/A"])
+                                dados_atualizados.append([datetime.now().strftime("%d/%m/%Y"), id_l, nome_limpo, t_sel_h, id_f, "MANUAL" if resp_originais.startswith("FALTOU") else resp_final_gravar, nota_s, r['Evidência'] or "N/A"])
                             elif r['Situação'] == "❌ FALTOU":
                                 dados_atualizados.append([datetime.now().strftime("%d/%m/%Y"), id_l, nome_limpo, t_sel_h, av_alvo_h, "FALTOU", "0,00", "N/A"])
                             
@@ -3559,7 +3563,7 @@ elif menu == "📸 Scanner de Gabaritos":
                             db.salvar_lote("DB_NOTAS", lista_boletim)
                         status_h.update(label="Notas e gabaritos auditados!", state="complete"); time.sleep(0.5); st.rerun()
 
-                # PERÍCIA INDIVIDUAL DE ALUNO JÁ CORRIGIDO
+                # PAINEL RECOLHIDO POR PADRÃO (expanded=False)
                 with st.expander("✏️ Perícia Individual: Ajustar Gabarito / Marcação de Cálculo do Aluno", expanded=False):
                     st.caption("Acesse a folha de respostas de qualquer aluno já corrigido para alterar a letra marcada, indicar se teve cálculo ou trocar/anexar a foto da prova.")
                     
@@ -3642,8 +3646,8 @@ elif menu == "📸 Scanner de Gabaritos":
                             nota_pericia_calc = min(v_total_av, nota_pericia_calc)
                             st.metric("Nota Recalculada para o Aluno", f"{nota_pericia_calc:.1f} / {v_total_av:.1f}")
                             
-                            if st.button("💾 SALVAR PERÍCIA E ATUALIZAR BOLETIM", type="primary", use_container_width=True, key=f"btn_save_ind_{id_al_pericia}"):
-                                with st.spinner("Salvando pericia e foto no Drive..."):
+                            if st.button("💾 SALVAR PERÍCIA DO ALUNO E ATUALIZAR BOLETIM", type="primary", use_container_width=True, key=f"btn_save_ind_{id_al_pericia}"):
+                                with st.spinner("Salvando folha de respostas e atualizando notas..."):
                                     link_foto_final = foto_atual_link
                                     if nova_foto_pericia is not None:
                                         link_foto_final = db.subir_e_converter_para_google_docs(
@@ -3735,7 +3739,7 @@ elif menu == "📸 Scanner de Gabaritos":
                                     time.sleep(0.5); st.rerun()
                     else: st.success("🎉 Nenhum registro de Lázaro pendente.")
 
-                with st.expander("🗂️ Histórico de Dossiês Raio-X Emitidos", expanded=True):
+                with st.expander("🗂️ Histórico de Dossiês Raio-X Emitidos", expanded=False):
                     df_dossies = df_relatorios[df_relatorios['TIPO'] == 'DOSSIE_RAIO_X'].copy()
                     if not df_dossies.empty:
                         for idx, row in df_dossies.iterrows():
@@ -3976,7 +3980,6 @@ elif menu == "📸 Scanner de Gabaritos":
                                 with st.spinner("Compilando Dossiê Analítico..."):
                                     st.success("Dossiê gerado e salvo no Acervo da Auditoria com Sucesso!")
                                     st.balloons()
-
 
 
 
