@@ -2707,6 +2707,115 @@ elif menu == "📸 Scanner de Gabaritos":
         except Exception as e: 
             return []
 
+    # 🚨 MOTOR DE HERANÇA DE GABARITO BLINDADO (ESCOPO GLOBAL DA CIR)
+    def extrair_gab_blindado(texto, is_pei=False, nivel_pei="NIVEL_1"):
+        if not texto or not isinstance(texto, str):
+            return ["A"] * 10
+
+        def extrair_mapa_respostas(bloco_txt):
+            mapa = {}
+            if not bloco_txt or not isinstance(bloco_txt, str): return mapa
+            
+            # Padrão 1: QUESTÃO 01: C, Q01 - B, Q1: C, 1. C, 01) A, 1-A, 1:A, 1. (C)
+            matches = re.findall(
+                r"(?i)(?:QUEST[AÃ]O\s*(?:PEI\s*)?|Q)?\s*0?(\d+)[\s\.\)\-:]+\(?(?:LETRA\s*)?([A-E])\)?\b", 
+                bloco_txt
+            )
+            for q_str, letra in matches:
+                try:
+                    q_num = int(q_str)
+                    if q_num > 0 and q_num not in mapa:
+                        mapa[q_num] = letra.upper()
+                except: pass
+                
+            # Padrão 2: Disperso no corpo (ex: **Gabarito: C**, Gabarito: Letra C, Resposta: B)
+            blocos_q = re.split(r"(?i)(?:QUEST[AÃ]O\s*(?:PEI\s*)?|Q)\s*0?(\d+)", bloco_txt)
+            if len(blocos_q) > 2:
+                for idx in range(1, len(blocos_q), 2):
+                    try:
+                        q_num = int(blocos_q[idx])
+                        q_conteudo = blocos_q[idx+1]
+                        m_gab = re.search(r"(?i)(?:GABARITO|RESPOSTA|CORRETA)\s*[:\-]?\s*\*?\*?\s*(?:LETRA\s*)?\(?([A-E])\)?\b", q_conteudo)
+                        if m_gab and q_num > 0:
+                            mapa[q_num] = m_gab.group(1).upper()
+                    except: pass
+
+            # Padrão 3: Lista resumida inline "1. B | 2. C | 3. A" ou "1 - B, 2 - C"
+            if not mapa:
+                matches_inline = re.findall(r"(?:^|[\s|,;])(\d+)[\s\.\-:]+([A-E])\b", bloco_txt, re.IGNORECASE)
+                for q_str, letra in matches_inline:
+                    try:
+                        q_num = int(q_str)
+                        if q_num > 0 and q_num not in mapa:
+                            mapa[q_num] = letra.upper()
+                    except: pass
+
+            return mapa
+
+        # 1. EXTRAI MAPA REGULAR
+        bloco_reg = (
+            ai.extrair_tag(texto, "GABARITO_TEXTO") or 
+            ai.extrair_tag(texto, "GABARITO") or 
+            ai.extrair_tag(texto, "RESPOSTAS_IA")
+        )
+        
+        mapa_regular = extrair_mapa_respostas(bloco_reg)
+        
+        # Se o bloco de gabarito não trouxe todas as questões, escaneia a prova inteira
+        if not mapa_regular or len(mapa_regular) < 3:
+            bloco_q_reg = ai.extrair_tag(texto, "QUESTOES") or texto
+            mapa_regular_questoes = extrair_mapa_respostas(bloco_q_reg)
+            mapa_regular.update(mapa_regular_questoes)
+
+        # Determina a quantidade oficial de questões da prova
+        txt_questoes = ai.extrair_tag(texto, "QUESTOES") or texto
+        qtd_q_questoes = len(re.findall(r"(?i)(?:QUEST[AÃ]O\s*|Q)\s*0?\d+", txt_questoes))
+        max_q_mapa = max(mapa_regular.keys()) if mapa_regular else 0
+        
+        qtd_oficial = max(qtd_q_questoes, max_q_mapa)
+        if qtd_oficial == 0: qtd_oficial = 10
+
+        if not is_pei:
+            return [mapa_regular.get(n, "A") for n in range(1, qtd_oficial + 1)]
+
+        # 2. EXTRAI MAPA PEI
+        bloco_pei_especifico = ai.extrair_tag(texto, nivel_pei)
+        bloco_pei_geral = (
+            ai.extrair_tag(texto, "GABARITO_PEI") or 
+            ai.extrair_tag(texto, "RESPOSTAS_PEI_IA") or 
+            ai.extrair_tag(texto, "PEI") or
+            ai.extrair_tag(texto, "PEI_NIVEL_1") or
+            ai.extrair_tag(texto, "NIVEL_1")
+        )
+
+        mapa_pei = extrair_mapa_respostas(bloco_pei_especifico)
+        if not mapa_pei:
+            mapa_pei = extrair_mapa_respostas(bloco_pei_geral)
+
+        # Se for N2/N3 e não tiver mapa PEI, tenta buscar no N1
+        if not mapa_pei and nivel_pei in ["NIVEL_2", "PEI_NIVEL_2", "NIVEL_3", "PEI_NIVEL_3"]:
+            bloco_n1 = ai.extrair_tag(texto, "PEI_NIVEL_1") or ai.extrair_tag(texto, "NIVEL_1")
+            mapa_pei = extrair_mapa_respostas(bloco_n1)
+
+        # Determina quantidade de questões PEI
+        txt_pei = bloco_pei_especifico or bloco_pei_geral or ai.extrair_tag(texto, "PEI")
+        qtd_pei_questoes = len(re.findall(r"(?i)(?:QUEST[AÃ]O\s*(?:PEI\s*)?|Q)\s*0?\d+", txt_pei))
+        max_pei_mapa = max(mapa_pei.keys()) if mapa_pei else 0
+        
+        qtd_pei_oficial = max(qtd_pei_questoes, max_pei_mapa, 3 if is_pei else qtd_oficial)
+
+        # Preenche com herança: mapa_pei -> mapa_regular -> 'A'
+        resultado_pei = []
+        for n in range(1, qtd_pei_oficial + 1):
+            if n in mapa_pei:
+                resultado_pei.append(mapa_pei[n])
+            elif n in mapa_regular:
+                resultado_pei.append(mapa_regular[n])
+            else:
+                resultado_pei.append("A")
+                
+        return resultado_pei
+
     # CONSOLIDAÇÃO DE ABAS
     tab_correcao, tab_auditoria, tab_raiox = st.tabs([
         "Mesa de Correção", "Tribunal de Auditoria", "Raio-X Pedagógico"
@@ -2896,53 +3005,8 @@ elif menu == "📸 Scanner de Gabaritos":
                         if material_ref is not None:
                             txt_ref = str(material_ref['CONTEUDO'])
                             val_tag = ai.extrair_tag(txt_ref, "VALOR")
-                            v_total_at = util.sosa_to_float(val_tag) if val_tag else 10.0
-
-                            # 🚨 MOTOR DE HERANÇA DE GABARITO PEI
-                            def extrair_gab_blindado(texto, is_pei=False, nivel_pei="NIVEL_1"):
-                                mapa_regular = {}
-                                raw_reg = ai.extrair_tag(texto, "GABARITO_TEXTO") or ai.extrair_tag(texto, "GABARITO")
-                                matches_reg = re.findall(r"(?:QUEST[AÃ]O\s*|Q)?0?(\d+)[\s\.\)\-:]+([A-E])", str(raw_reg).upper())
-                                for q_num_str, letra in matches_reg:
-                                    mapa_regular[int(q_num_str)] = letra
-                                    
-                                qtd_oficial = max(mapa_regular.keys()) if mapa_regular else 10
-                                
-                                if not is_pei:
-                                    return [mapa_regular.get(n, "A") for n in range(1, qtd_oficial + 1)]
-                                    
-                                mapa_pei = {}
-                                bloco_pei = ai.extrair_tag(texto, nivel_pei) or ai.extrair_tag(texto, "PEI") or ai.extrair_tag(texto, "GABARITO_PEI")
-                                
-                                if bloco_pei:
-                                    blocos_q = re.split(r"(?i)(?:QUEST[AÃ]O\s*|Q)0?(\d+)", bloco_pei)
-                                    if len(blocos_q) > 2:
-                                        for idx in range(1, len(blocos_q), 2):
-                                            q_num = int(blocos_q[idx])
-                                            q_conteudo = blocos_q[idx+1]
-                                            m_gab = re.search(r"(?i)GABARITO\s*[:\-]?\s*([A-E])", q_conteudo)
-                                            if m_gab:
-                                                mapa_pei[q_num] = m_gab.group(1).upper()
-                                
-                                # Herança para PEI N2 (Busca no Nível 1 se N2 não tiver texto de gabarito)
-                                if len(mapa_pei) < qtd_oficial and nivel_pei != "NIVEL_1":
-                                    bloco_n1 = ai.extrair_tag(texto, "NIVEL_1")
-                                    if bloco_n1:
-                                        blocos_q1 = re.split(r"(?i)(?:QUEST[AÃ]O\s*|Q)0?(\d+)", bloco_n1)
-                                        if len(blocos_q1) > 2:
-                                            for idx in range(1, len(blocos_q1), 2):
-                                                q_num = int(blocos_q1[idx])
-                                                q_conteudo = blocos_q1[idx+1]
-                                                m_gab = re.search(r"(?i)GABARITO\s*[:\-]?\s*([A-E])", q_conteudo)
-                                                if m_gab and q_num not in mapa_pei:
-                                                    mapa_pei[q_num] = m_gab.group(1).upper()
-
-                                # Complementa com a chave regular se faltar alguma questão
-                                for q_n in range(1, qtd_oficial + 1):
-                                    if q_n not in mapa_pei:
-                                        mapa_pei[q_n] = mapa_regular.get(q_n, "A")
-                                        
-                                return [mapa_pei.get(n, "A") for n in range(1, qtd_oficial + 1)]
+                            val_float = util.sosa_to_float(val_tag)
+                            v_total_at = val_float if val_float > 0 else 10.0
 
                             gab_alvo = extrair_gab_blindado(txt_ref, is_pei_grading, nivel_alvo_pei)
 
@@ -3047,7 +3111,7 @@ elif menu == "📸 Scanner de Gabaritos":
                                             flag_letra = f"{r}*" if (not has_calc and r in ["A","B","C","D","E"]) else r
                                             respostas_com_flag.append(flag_letra)
                                                 
-                                        st.metric("Nota Final Calculada", f"{nota_f:.1f}", delta=f"{acertos}/{len(gab_alvo)} acertos (Dupla: {len(alunos_alvo)} alunos)")
+                                        st.metric("Nota Final Calculada", f"{nota_f:.1f} / {v_total_at:.1f}", delta=f"{acertos}/{len(gab_alvo)} acertos (Dupla: {len(alunos_alvo)} alunos)")
                                         
                                         col_s1, col_s2 = st.columns(2)
                                         if col_s1.button("Gravar Correção", type="primary", use_container_width=True):
@@ -3167,7 +3231,8 @@ elif menu == "📸 Scanner de Gabaritos":
             if t_sel_a and at_sel_a:
                 dados_at = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel_a].iloc[0]
                 val_tag = ai.extrair_tag(str(dados_at['CONTEUDO']), "VALOR")
-                v_max_padrao = util.sosa_to_float(val_tag) if val_tag else 2.0
+                val_float = util.sosa_to_float(val_tag)
+                v_max_padrao = val_float if val_float > 0 else 2.0
                 v_max_ativ = st.number_input("Valor de Referência (Máximo):", 0.0, 10.0, v_max_padrao, step=0.5, key=f"v_max_{v}")
 
                 alunos_a = df_alunos[df_alunos['TURMA'] == t_sel_a].sort_values(by="NOME_ALUNO")
@@ -3220,7 +3285,6 @@ elif menu == "📸 Scanner de Gabaritos":
             padrao_regex_trim = obter_regex_trimestre(tr_sel_h)
             serie_num = "".join(filter(str.isdigit, t_sel_h))
             
-            # 🚨 DECLARAÇÃO DE ESCOPO NO TOPO PARA EVITAR NAMEERROR NO PYLANCE
             df_prova_trib = pd.DataFrame()
             gab_oficial_trib = {}
             v_total_av = 10.0
@@ -3248,7 +3312,8 @@ elif menu == "📸 Scanner de Gabaritos":
                     matches_base = re.findall(r"(\d+)[\s\.\)\-:]+([A-E])", raw_gab_base.upper())
                     gab_oficial_trib = {int(num): letra for num, letra in matches_base} if matches_base else {}
                     val_tag = ai.extrair_tag(txt_prova_trib, "VALOR")
-                    if val_tag: v_total_av = util.sosa_to_float(val_tag)
+                    val_float = util.sosa_to_float(val_tag)
+                    v_total_av = val_float if val_float > 0 else 10.0
 
                 gabaritos_lidos = df_diagnosticos[mask_diag_h]
                 alunos_turma_h = df_alunos[df_alunos['TURMA'] == t_sel_h].sort_values(by="NOME_ALUNO")
