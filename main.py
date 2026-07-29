@@ -3413,7 +3413,8 @@ elif menu == "📸 Scanner de Gabaritos":
                     st.caption("Acesse a folha de respostas de qualquer aluno já corrigido para alterar a letra marcada, marcar se teve cálculo ou trocar/anexar a foto da prova.")
                     df_realizados = pd.DataFrame([r for r in dados_soberania if r['Situação'] == "✅ REALIZADA"])
                     
-                    if df_realizados.empty: st.info("Nenhum aluno com prova realizada.")
+                    if df_realizados.empty: 
+                        st.info("Nenhum aluno com prova realizada nesta avaliação.")
                     else:
                         aluno_pericia_nome = st.selectbox("Selecione o Estudante:", df_realizados['Estudante'].tolist(), key=f"pericia_modal_sel_{v}")
                         if aluno_pericia_nome:
@@ -3421,13 +3422,23 @@ elif menu == "📸 Scanner de Gabaritos":
                             id_al_pericia = al_data['ID']
                             resp_raw = str(al_data['_Respostas'])
                             grupo_membros = al_data['Dupla / Grupo']
-                            foto_atual_link = al_data['Evidência']
+                            foto_atual_link = str(al_data['Evidência'])
                             
-                            c_f1, c_f2 = st.columns([1, 2])
-                            if "http" in foto_atual_link: c_f1.link_button("🔗 Ver Foto no Drive", foto_atual_link, use_container_width=True)
-                            else: c_f1.warning("Sem foto anexada.")
-                            
-                            nova_foto_pericia = c_f2.file_uploader("Substituir Foto JPG:", type=["jpg", "jpeg", "png"], key=f"up_modal_foto_{id_al_pericia}_{v}")
+                            c_f1, c_f2 = st.columns([1.2, 1.8])
+                            with c_f1:
+                                if foto_atual_link and foto_atual_link != "N/A" and "HttpError" not in foto_atual_link:
+                                    if foto_atual_link.startswith("data:image"):
+                                        st.image(foto_atual_link, caption="📷 Prova Digitalizada", use_container_width=True)
+                                    elif "http" in foto_atual_link:
+                                        st.image(foto_atual_link, caption="📷 Prova Digitalizada", use_container_width=True)
+                                        st.link_button("🔗 Abrir no Drive", foto_atual_link, use_container_width=True)
+                                    else:
+                                        st.warning("Sem foto anexada.")
+                                else:
+                                    st.warning("Sem foto anexada.")
+                                    
+                            with c_f2:
+                                nova_foto_pericia = st.file_uploader("Substituir / Anexar Foto JPG:", type=["jpg", "jpeg", "png"], key=f"up_modal_foto_{id_al_pericia}_{v}")
 
                             resp_limpa = resp_raw.split('|GRUPO:')[0] if '|GRUPO:' in resp_raw else resp_raw
                             respostas_lista = resp_limpa.split(';')
@@ -3443,7 +3454,12 @@ elif menu == "📸 Scanner de Gabaritos":
                             
                             df_pericia_ed = st.data_editor(
                                 pd.DataFrame(grid_pericia), hide_index=True, use_container_width=True,
-                                column_config={"Questão": st.column_config.TextColumn(disabled=True), "Gabarito Oficial": st.column_config.TextColumn(disabled=True), "Letra do Aluno": st.column_config.SelectboxColumn("Letra Marcada", options=["A", "B", "C", "D", "E", "X", "?"], required=True), "🧮 Tem Cálculo?": st.column_config.CheckboxColumn("Cálculo OK?")},
+                                column_config={
+                                    "Questão": st.column_config.TextColumn(disabled=True), 
+                                    "Gabarito Oficial": st.column_config.TextColumn(disabled=True), 
+                                    "Letra do Aluno": st.column_config.SelectboxColumn("Letra Marcada", options=["A", "B", "C", "D", "E", "X", "?"], required=True), 
+                                    "🧮 Tem Cálculo?": st.column_config.CheckboxColumn("Cálculo OK?")
+                                },
                                 key=f"grid_modal_ind_{id_al_pericia}_{v}"
                             )
                             
@@ -3461,10 +3477,17 @@ elif menu == "📸 Scanner de Gabaritos":
                             st.metric("Nota Recalculada", f"{min(v_total_av, nota_pericia_calc):.1f} / {v_total_av:.1f}")
                             
                             if st.button("💾 SALVAR PERÍCIA DO ALUNO", type="primary", use_container_width=True):
-                                with st.spinner("Salvando..."):
+                                with st.spinner("Gravando alterações e atualizando foto..."):
                                     link_foto_final = foto_atual_link
                                     if nova_foto_pericia is not None:
-                                        link_foto_final = db.subir_e_converter_para_google_docs(nova_foto_pericia.getvalue(), aluno_pericia_nome.replace(" ","_"), trimestre=tr_sel_h, categoria=t_sel_h, semana=av_alvo_h, modo="SCANNER")
+                                        link_foto_final = db.subir_e_converter_para_google_docs(
+                                            nova_foto_pericia.getvalue(), 
+                                            aluno_pericia_nome.replace(" ","_"), 
+                                            trimestre=tr_sel_h, 
+                                            categoria=t_sel_h, 
+                                            semana=av_alvo_h, 
+                                            modo="SCANNER"
+                                        )
 
                                     alvos_a = [aluno_pericia_nome] if grupo_membros == "Individual" else [n.strip() for n in grupo_membros.split(',')]
                                     grupo_tag = f"|GRUPO:{grupo_membros}" if grupo_membros != "Individual" else ""
@@ -3482,7 +3505,8 @@ elif menu == "📸 Scanner de Gabaritos":
                                                 if link_foto_final != "N/A": ws_p.update_cell(idx_row_p + 1, 8, link_foto_final)
 
                                     db.limpar_notas_turma_trimestre(t_sel_h, tr_sel_h)
-                                    st.cache_data.clear(); st.success("✅ Salvo com sucesso!"); time.sleep(0.5); st.rerun()
+                                    st.cache_data.clear()
+                                    st.success("✅ Perícia salva e foto atualizada com sucesso!"); time.sleep(0.5); st.rerun()
 
                 @st.dialog("🚑 Digitação Manual Global (Lázaro)", width="large")
                 def dialog_lazaro_modal():
