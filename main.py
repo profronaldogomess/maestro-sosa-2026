@@ -2617,18 +2617,17 @@ elif menu == "📝 Central de Avaliações":
 
 
 # ==============================================================================
-# MÓDULO: CENTRAL DE INTELIGÊNCIA DE RESULTADOS (CIR) - V202.6 (ESCOPO CORRIGIDO)
+# MÓDULO: CENTRAL DE INTELIGÊNCIA DE RESULTADOS (CIR) - V2026.1 (HOMOLOGAÇÃO & DUPLAS)
 # ==============================================================================
 elif menu == "📸 Scanner de Gabaritos":
     st.title("Central de Inteligência de Resultados (CIR)")
-    st.caption("Mesa de triagem de exames, fotos em formato JPG nativo, aplicação tardia de provas em faltosos e auditoria por trimestre.")
+    st.caption("Mesa de triagem de exames, fotos em JPG nativo, homologação de atestados/justificativas e auditoria estrita por trimestre.")
     st.markdown("---")
 
     if "v_scan" not in st.session_state: 
         st.session_state.v_scan = int(time.time())
     v = st.session_state.v_scan
 
-    # 🚨 VACINA DE ESCOPO GLOBAL: Lista de turmas regulares
     lista_turmas_cir = []
     if not df_turmas.empty and 'ID_TURMA' in df_turmas.columns:
         turmas_reais_cir = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
@@ -2636,7 +2635,6 @@ elif menu == "📸 Scanner de Gabaritos":
     elif not df_alunos.empty and 'TURMA' in df_alunos.columns:
         lista_turmas_cir = sorted(df_alunos['TURMA'].unique())
 
-    # 🚨 FUNÇÃO AUXILIAR DE REGEX HD (ANTI-SOBREPOSIÇÃO DE NÚMEROS ROMANOS)
     def obter_regex_trimestre(trimestre_str):
         if not trimestre_str: return r".*"
         t_upper = str(trimestre_str).upper()
@@ -2647,7 +2645,6 @@ elif menu == "📸 Scanner de Gabaritos":
         else:
             return r"(?<!I)I(?![I])"
 
-    # FILTRO HIERÁRQUICO DE ATIVOS CIR (Soberano V202.6)
     def filtrar_ativos_cir(turma, trimestre_nome, apenas_provas=True):
         if not turma or not trimestre_nome: return []
         try:
@@ -2707,13 +2704,12 @@ elif menu == "📸 Scanner de Gabaritos":
         except Exception as e: 
             return []
 
-    # CONSOLIDAÇÃO DE ABAS
     tab_correcao, tab_auditoria, tab_raiox = st.tabs([
         "Mesa de Correção", "Tribunal de Auditoria", "Raio-X Pedagógico"
     ])
 
     # ==============================================================================
-    # ABA 1: MESA DE CORREÇÃO (CORREÇÃO DE FALTOSOS COM PROVA ORIGINAL & DUPLAS)
+    # ABA 1: MESA DE CORREÇÃO (PROVAS & TRABALHOS UNIFICADOS)
     # ==============================================================================
     with tab_correcao:
         modo_lancamento = st.radio("Selecione a Atividade para Lançar:", ["📸 Provas (Scanner/Manual)", "✍️ Trabalhos & Projetos (Lote)"], horizontal=True, key=f"cir_modo_l_{v}")
@@ -2743,21 +2739,22 @@ elif menu == "📸 Scanner de Gabaritos":
                 nome_filtro_pendente = at_sel.split("-")[0].strip()
                 df_diag_turma = df_diagnosticos[df_diagnosticos['TURMA'] == t_sel]
                 
-                # 🚨 DECLARAÇÃO GLOBAL DE ESCOPO PARA EVITAR NAMEERROR
                 padrao_trim = obter_regex_trimestre(tr_sel)
                 tipo_base = at_sel.split("-")[0].strip().upper()
                 serie_num = "".join(filter(str.isdigit, t_sel))
 
+                # Considera como concluídos apenas quem já tem nota real (não falta nem pendência de 2ª chamada)
                 diag_reais = df_diag_turma[
                     (df_diag_turma['ID_AVALIACAO'].str.startswith(nome_filtro_pendente, na=False)) & 
-                    (df_diag_turma['RESPOSTAS_ALUNO'] != "FALTOU")
+                    (~df_diag_turma['RESPOSTAS_ALUNO'].astype(str).str.startswith("FALTOU"))
                 ]
                 escaneados_unicos = diag_reais['ID_ALUNO'].astype(str).tolist()
                 
-                faltosos_ids = df_diag_turma[
+                # Mapeia os estados de falta
+                df_faltosos = df_diag_turma[
                     (df_diag_turma['ID_AVALIACAO'].str.startswith(nome_filtro_pendente, na=False)) & 
-                    (df_diag_turma['RESPOSTAS_ALUNO'] == "FALTOU")
-                ]['ID_ALUNO'].astype(str).tolist()
+                    (df_diag_turma['RESPOSTAS_ALUNO'].astype(str).str.startswith("FALTOU"))
+                ]
                 
                 pendentes_df = df_alunos[(df_alunos['TURMA'] == t_sel) & (~df_alunos['ID'].astype(str).isin(escaneados_unicos))].sort_values(by="NOME_ALUNO")
                 total_turma = len(df_alunos[df_alunos['TURMA'] == t_sel])
@@ -2768,10 +2765,19 @@ elif menu == "📸 Scanner de Gabaritos":
                 for _, r_p in pendentes_df.iterrows():
                     id_p_str = str(r_p['ID'])
                     nome_real = r_p['NOME_ALUNO']
-                    if id_p_str in faltosos_ids:
-                        rotulo = f"⚠️ {nome_real} (Ausente na 1ª Aplicação)"
+                    
+                    match_falta = df_faltosos[df_faltosos['ID_ALUNO'].astype(str) == id_p_str]
+                    if not match_falta.empty:
+                        resp_falta = str(match_falta.iloc[-1]['RESPOSTAS_ALUNO'])
+                        if "JUSTIFICADO" in resp_falta:
+                            rotulo = f"📑 {nome_real} (2ª Chamada Autorizada / Atestado)"
+                        elif "INJUSTIFICADO" in resp_falta:
+                            rotulo = f"❌ {nome_real} (Falta Injustificada / Zero)"
+                        else:
+                            rotulo = f"⚠️ {nome_real} (Ausente na 1ª Aplicação)"
                     else:
                         rotulo = nome_real
+                        
                     opcoes_triagem.append(rotulo)
                     mapa_rotulo_nome[rotulo] = nome_real
 
@@ -2932,15 +2938,14 @@ elif menu == "📸 Scanner de Gabaritos":
 
                             gab_alvo = extrair_gab_blindado(txt_ref, is_pei_grading, nivel_alvo_pei)
 
-                            # 🚨 VACINA ANTI-KEYERROR E FALLBACK SE GABARITO PEI ESTIVER VAZIO
                             if not gab_alvo:
                                 q_raw_check = ai.extrair_tag(txt_ref, "QUESTOES") or txt_ref
                                 qtd_q_estimada = len(re.findall(r"(?i)QUEST[AÃ]O\s*0?\d+", q_raw_check)) or 5
                                 gab_alvo = ["A"] * qtd_q_estimada
-                                st.warning("⚠️ O gabarito específico para esta versão PEI não foi localizado automaticamente no texto. Defina as letras corretas na tabela abaixo:")
+                                st.warning("⚠️ Gabarito não localizado automaticamente. Ajuste na tabela abaixo:")
 
                             with st.expander("⚙️ Conferir/Editar Gabarito Base da Prova", expanded=(len(gab_alvo) == 0)):
-                                st.caption("Se notar algum erro no gabarito oficial gerado pela IA, ajuste abaixo antes de digitalizar as provas.")
+                                st.caption("Ajuste o gabarito oficial se necessário antes de digitalizar as provas.")
                                 grid_gab_pre = [{"Q": f"{i+1:02d}", "Letra": gab_alvo[i] if i < len(gab_alvo) else "A"} for i in range(len(gab_alvo))]
                                 df_gab_pre = st.data_editor(
                                     pd.DataFrame(grid_gab_pre), hide_index=True, use_container_width=True,
@@ -3066,6 +3071,8 @@ elif menu == "📸 Scanner de Gabaritos":
                                     opcoes_letras = ["A", "B", "C", "X", "?"] if is_pei_grading else ["A", "B", "C", "D", "E", "X", "?"]
                                     dados_manual = [{"Q": f"{i+1:02d}", "Gabarito": gab_alvo[i], "Resposta": "?", "Cálculo": True} for i in range(len(gab_alvo))]
                                     
+                                    img_manual_file = st.file_uploader("📷 Anexar Foto da Prova (.jpg) - Opcional:", type=["jpg", "jpeg", "png"], key=f"up_man_{v}")
+                                    
                                     df_manual = st.data_editor(
                                         pd.DataFrame(dados_manual), hide_index=True, use_container_width=True,
                                         column_config={"Q": st.column_config.TextColumn(disabled=True), "Gabarito": st.column_config.TextColumn(disabled=True), "Resposta": st.column_config.SelectboxColumn(options=opcoes_letras, required=True), "Cálculo": st.column_config.CheckboxColumn("Cálculo OK", default=True)},
@@ -3083,13 +3090,22 @@ elif menu == "📸 Scanner de Gabaritos":
                                             
                                     st.metric("Nota Calculada", f"{nota_calc:.1f} / {v_total_at:.1f}")
                                     if st.button("Gravar Correção Manual", type="primary", use_container_width=True):
+                                        link_foto_man = "N/A"
+                                        if img_manual_file is not None:
+                                            with st.spinner("Enviando foto JPG da prova para o Drive..."):
+                                                link_foto_man = db.subir_e_converter_para_google_docs(
+                                                    img_manual_file.getvalue(), 
+                                                    alunos_alvo[0].replace(" ","_"), 
+                                                    trimestre=tr_sel, categoria=t_sel, semana=material_ref['TIPO_MATERIAL'], modo="SCANNER"
+                                                )
+
                                         grupo_str = f"|GRUPO:{','.join(alunos_alvo)}" if len(alunos_alvo) > 1 else ""
                                         respostas_salvar = ";".join(respostas_finais) + grupo_str
                                         
                                         for aluno_nome in alunos_alvo:
                                             id_al = pendentes_df[pendentes_df['NOME_ALUNO'] == aluno_nome].iloc[0]['ID']
                                             db.excluir_registro("DB_GABARITOS_ALUNOS", id_al)
-                                            db.salvar_no_banco("DB_GABARITOS_ALUNOS", [datetime.now().strftime("%d/%m/%Y"), id_al, aluno_nome, t_sel, material_ref['TIPO_MATERIAL'], respostas_salvar, util.sosa_to_str(nota_calc), "N/A"])
+                                            db.salvar_no_banco("DB_GABARITOS_ALUNOS", [datetime.now().strftime("%d/%m/%Y"), id_al, aluno_nome, t_sel, material_ref['TIPO_MATERIAL'], respostas_salvar, util.sosa_to_str(nota_calc), link_foto_man])
                                         st.success("✅ Salvo com sucesso!"); time.sleep(0.5); st.rerun()
 
                         elif is_qualitativa:
@@ -3184,7 +3200,7 @@ elif menu == "📸 Scanner de Gabaritos":
                             time.sleep(0.5); st.rerun()
 
     # ==============================================================================
-    # ABA 2: TRIBUNAL DE AUDITORIA (RECALIBRAÇÃO E PERÍCIA INDIVIDUAL DE ALUNOS)
+    # ABA 2: TRIBUNAL DE AUDITORIA (HOMOLOGAÇÃO DE ATESTADOS, JUSTIFICATIVAS & DUPLAS)
     # ==============================================================================
     with tab_auditoria:
         st.markdown("### Tribunal de Auditoria de Resultados")
@@ -3233,10 +3249,19 @@ elif menu == "📸 Scanner de Gabaritos":
                             respostas_salvas = partes[0]
                             grupo_parceiros = partes[1]
                         
-                        if reg['RESPOSTAS_ALUNO'] == "FALTOU": situacao_txt, versao_prova = "❌ FALTOU", "N/A"
-                        elif "2ª" in id_av_banco or "2CHAMADA" in id_av_banco: situacao_txt, versao_prova = "SEGUNDA CHAMADA", "SEGUNDA CHAMADA"
-                        elif "TIPO" in id_av_banco: situacao_txt, versao_prova = "✅ REALIZADA", f"VARIANTE ({id_av_banco.split('-')[-1].strip()})"
-                        else: situacao_txt, versao_prova = "✅ REALIZADA", "PROVA ORIGINAL"
+                        if respostas_salvas.startswith("FALTOU_JUSTIFICADO"):
+                            motivo_j = respostas_salvas.split("|")[1] if "|" in respostas_salvas else "Atestado Médico"
+                            situacao_txt, versao_prova = f"📑 JUSTIFICADO ({motivo_j})", "2ª CHAMADA PENDENTE"
+                        elif respostas_salvas.startswith("FALTOU_INJUSTIFICADO"):
+                            situacao_txt, versao_prova = "❌ FALTA INJUSTIFICADA", "ZERO REGIMENTAL"
+                        elif respostas_salvas == "FALTOU":
+                            situacao_txt, versao_prova = "❌ FALTOU", "N/A"
+                        elif "2ª" in id_av_banco or "2CHAMADA" in id_av_banco:
+                            situacao_txt, versao_prova = "✅ REALIZADA", "SEGUNDA CHAMADA"
+                        elif "TIPO" in id_av_banco:
+                            situacao_txt, versao_prova = "✅ REALIZADA", f"VARIANTE ({id_av_banco.split('-')[-1].strip()})"
+                        else:
+                            situacao_txt, versao_prova = "✅ REALIZADA", "PROVA ORIGINAL"
 
                     dados_soberania.append({
                         "ID": id_a, "Estudante": alu['NOME_ALUNO'], "Perfil": "♿ PEI" if str(alu['NECESSIDADES']).upper().strip() not in ["NENHUMA", "PENDENTE", "", "NAN", "TÍPICO", "TIPICO"] else "📝 REGULAR",
@@ -3256,8 +3281,96 @@ elif menu == "📸 Scanner de Gabaritos":
                     if val_tag: v_total_av = util.sosa_to_float(val_tag)
 
                 # ==============================================================================
-                # MOTOR FÊNIX: RECALIBRAÇÃO RETROATIVA E ANULAÇÃO EM LOTE
+                # ⚖️ NOVO PAINEL: HOMOLOGAÇÃO DE ATESTADOS, JUSTIFICATIVAS E REVERSÃO (100% EDITÁVEL)
                 # ==============================================================================
+                with st.expander("⚖️ Homologação de Atestados, Justificativas e 2ª Chamada (Totalmente Editável)", expanded=True):
+                    st.info("💡 **Reversibilidade Total:** Se o aluno entregou atestado depois ou se houve erro ao dar falta, ajuste o status abaixo. O sistema recalculará o boletim e atualizará a biografia do aluno instantaneamente.")
+                    
+                    aluno_homolog_nome = st.selectbox("Selecione o Estudante para Homologar Ausência/Justificativa:", alunos_turma_h['NOME_ALUNO'].tolist(), key=f"homolog_select_{v}")
+                    
+                    if aluno_homolog_nome:
+                        id_homolog = db.limpar_id(alunos_turma_h[alunos_turma_h['NOME_ALUNO'] == aluno_homolog_nome].iloc[0]['ID'])
+                        reg_homolog = next((item for item in dados_soberania if item['ID'] == id_homolog), None)
+                        
+                        sit_atual_txt = reg_homolog['Situação'] if reg_homolog else "✍️ PENDENTE"
+                        st.caption(f"Status Atual: **{sit_atual_txt}** | Nota Atual: **{reg_homolog['Nota'] if reg_homolog else 0.0:.1f}**")
+                        
+                        c_hom1, c_hom2 = st.columns([1.5, 1])
+                        novo_status_ausencia = c_hom1.radio(
+                            "Definir Novo Status do Aluno:",
+                            [
+                                "📑 Falta Justificada (Atestado / Licença - Liberado para 2ª Chamada)",
+                                "❌ Falta Injustificada (Zero Definitivo - Prazo Expirado)",
+                                "🔄 Restaurar para Fila do Scanner (Remover Registros de Falta)"
+                            ],
+                            key=f"rad_homolog_{id_homolog}_{v}"
+                        )
+                        
+                        motivo_detalhado = c_hom2.text_input(
+                            "Motivo / Observação (Ficará salvo no Dossiê do Aluno):", 
+                            placeholder="Ex: Atestado Médico entregue em 15/04",
+                            key=f"txt_mot_homolog_{id_homolog}_{v}"
+                        )
+
+                        if st.button("💾 CONFIRMAR HOMOLOGAÇÃO / APLICAR REVERSÃO", type="primary", use_container_width=True, key=f"btn_homolog_save_{id_homolog}"):
+                            with st.spinner("Atualizando registros de ausência e recalculando boletim..."):
+                                db.excluir_registro("DB_GABARITOS_ALUNOS", id_homolog)
+                                data_hoje = datetime.now().strftime("%d/%m/%Y")
+                                
+                                if "Justificada" in novo_status_ausencia:
+                                    motivo_save = motivo_detalhado if motivo_detalhado.strip() else "Atestado Médico / Licença"
+                                    db.salvar_no_banco("DB_GABARITOS_ALUNOS", [
+                                        data_hoje, id_homolog, aluno_homolog_nome, t_sel_h, av_alvo_h, 
+                                        f"FALTOU_JUSTIFICADO|{motivo_save}", "0,00", "N/A"
+                                    ])
+                                    db.salvar_no_banco("DB_RELATORIOS", [
+                                        data_hoje, id_homolog, aluno_homolog_nome, "JUSTIFICATIVA_AUSENCIA",
+                                        f"Avaliação: {av_alvo_h} | Status: JUSTIFICADO | Motivo: {motivo_save}"
+                                    ])
+                                    
+                                elif "Injustificada" in novo_status_ausencia:
+                                    motivo_save = motivo_detalhado if motivo_detalhado.strip() else "Prazo Regimental Expirado"
+                                    db.salvar_no_banco("DB_GABARITOS_ALUNOS", [
+                                        data_hoje, id_homolog, aluno_homolog_nome, t_sel_h, av_alvo_h, 
+                                        f"FALTOU_INJUSTIFICADO|{motivo_save}", "0,00", "N/A"
+                                    ])
+                                    db.salvar_no_banco("DB_RELATORIOS", [
+                                        data_hoje, id_homolog, aluno_homolog_nome, "JUSTIFICATIVA_AUSENCIA",
+                                        f"Avaliação: {av_alvo_h} | Status: INJUSTIFICADO (ZERO) | Motivo: {motivo_save}"
+                                    ])
+
+                                # Recalcula as notas no boletim em cascata
+                                db.limpar_notas_turma_trimestre(t_sel_h, tr_sel_h)
+                                st.cache_data.clear()
+                                
+                                wb_f = db.conectar()
+                                d_g_fresh = wb_f.worksheet("DB_GABARITOS_ALUNOS").get_all_values()
+                                map_novas = {db.limpar_id(r[1]): util.sosa_to_float(r[6]) for r in d_g_fresh[1:] if len(r) > 6 and r[3] == t_sel_h and nome_curto_av in r[4]}
+                                
+                                lista_boletim_novas = []
+                                for _, alu in alunos_turma_h.iterrows():
+                                    id_l = db.limpar_id(alu['ID'])
+                                    nome_l = alu['NOME_ALUNO']
+                                    reg_atual = df_notas[(df_notas['TURMA'] == t_sel_h) & (df_notas['TRIMESTRE'] == tr_sel_h) & (df_notas['ID_ALUNO'].apply(db.limpar_id) == id_l)]
+                                    
+                                    v_vistos = reg_atual.iloc[0]['NOTA_VISTOS'] if not reg_atual.empty else "0,0"
+                                    v_teste = reg_atual.iloc[0]['NOTA_TESTE'] if not reg_atual.empty else "0,0"
+                                    v_prova = reg_atual.iloc[0]['NOTA_PROVA'] if not reg_atual.empty else "0,0"
+                                    v_rec = reg_atual.iloc[0]['NOTA_REC'] if not reg_atual.empty else "0,0"
+                                    
+                                    if id_l in map_novas:
+                                        nota_recalculada_str = util.sosa_to_str(map_novas[id_l])
+                                        if "TESTE" in av_alvo_h.upper(): v_teste = nota_recalculada_str
+                                        else: v_prova = nota_recalculada_str
+
+                                    nova_media = min(10.0, util.sosa_to_float(v_vistos) + util.sosa_to_float(v_teste) + util.sosa_to_float(v_prova))
+                                    if util.sosa_to_float(v_rec) > 0: nova_media = max(nova_media, util.sosa_to_float(v_rec))
+                                    lista_boletim_novas.append([id_l, nome_l, t_sel_h, tr_sel_h, util.sosa_to_str(v_vistos), util.sosa_to_str(v_teste), util.sosa_to_str(v_prova), util.sosa_to_str(v_rec), util.sosa_to_str(nova_media)])
+
+                                db.salvar_lote("DB_NOTAS", lista_boletim_novas)
+                                st.success("✅ Status homologado e boletim recalculado!"); time.sleep(0.5); st.rerun()
+
+                # MOTOR FÊNIX: RECALIBRAÇÃO RETROATIVA E ANULAÇÃO EM LOTE
                 with st.expander("🔄 Recalibração Retroativa em Lote (Gabarito Errado / Anulação)", expanded=False):
                     st.warning("⚡ **Atenção:** Se a IA gerou uma chave errada ou uma questão foi anulada, ajuste a tabela abaixo. Ao clicar no botão, o sistema recalculará a nota de TODOS os alunos da turma sem necessidade de tirar novas fotos.")
                     
@@ -3305,7 +3418,7 @@ elif menu == "📸 Scanner de Gabaritos":
                                     row_banco = d_g[idx_row]
                                     if len(row_banco) > 4 and row_banco[3] == t_sel_h and nome_curto_av in row_banco[4]:
                                         resp_bruta = str(row_banco[5])
-                                        if resp_bruta not in ["FALTOU", "MANUAL"] and not resp_bruta.startswith("QUALITATIVA"):
+                                        if not resp_bruta.startswith("FALTOU") and not resp_bruta.startswith("QUALITATIVA") and resp_bruta != "MANUAL":
                                             grupo_tag = ""
                                             if "|GRUPO:" in resp_bruta:
                                                 partes = resp_bruta.split("|GRUPO:")
@@ -3446,11 +3559,9 @@ elif menu == "📸 Scanner de Gabaritos":
                             db.salvar_lote("DB_NOTAS", lista_boletim)
                         status_h.update(label="Notas e gabaritos auditados!", state="complete"); time.sleep(0.5); st.rerun()
 
-                # ==============================================================================
-                # ✏️ PERÍCIA INDIVIDUAL: COM SUPORTE A TROCA/ANEXO DE FOTO JPG
-                # ==============================================================================
-                with st.expander("✏️ Perícia Individual: Ajustar Gabarito / Marcação de Cálculo / Foto do Aluno", expanded=True):
-                    st.caption("Acesse a folha de respostas de qualquer aluno já corrigido para alterar a letra marcada, marcar se teve cálculo ou trocar/anexar a foto da prova.")
+                # PERÍCIA INDIVIDUAL DE ALUNO JÁ CORRIGIDO
+                with st.expander("✏️ Perícia Individual: Ajustar Gabarito / Marcação de Cálculo do Aluno", expanded=False):
+                    st.caption("Acesse a folha de respostas de qualquer aluno já corrigido para alterar a letra marcada, indicar se teve cálculo ou trocar/anexar a foto da prova.")
                     
                     df_realizados = pd.DataFrame([r for r in dados_soberania if r['Situação'] == "✅ REALIZADA"])
                     
@@ -3467,9 +3578,8 @@ elif menu == "📸 Scanner de Gabaritos":
                             foto_atual_link = al_data['Evidência']
                             
                             if grupo_membros != "Individual":
-                                st.info(f"👥 **Prova em Dupla/Grupo:** {grupo_membros}. As alterações serão aplicadas aos dois!")
+                                st.info(f"👥 **Prova em Dupla/Grupo:** {grupo_membros}. A alteração será aplicada a todos os parceiros!")
 
-                            # 📷 ANEXAR / SUBSTITUIR FOTO JPG DA PROVA
                             st.markdown("#### 📷 Evidência Fotográfica (.jpg)")
                             c_f1, c_f2 = st.columns([1, 2])
                             if "http" in foto_atual_link:
@@ -3534,7 +3644,6 @@ elif menu == "📸 Scanner de Gabaritos":
                             
                             if st.button("💾 SALVAR PERÍCIA E ATUALIZAR BOLETIM", type="primary", use_container_width=True, key=f"btn_save_ind_{id_al_pericia}"):
                                 with st.spinner("Salvando pericia e foto no Drive..."):
-                                    # Se enviou nova foto JPG, realiza o upload nativo
                                     link_foto_final = foto_atual_link
                                     if nova_foto_pericia is not None:
                                         link_foto_final = db.subir_e_converter_para_google_docs(
@@ -3596,7 +3705,7 @@ elif menu == "📸 Scanner de Gabaritos":
                                     db.salvar_lote("DB_NOTAS", lista_boletim_novas)
                                     st.success("✅ Perícia salva e foto atualizada no Drive com sucesso!")
                                     time.sleep(0.5); st.rerun()
-                                    
+
                 # PROTOCOLO LÁZARO
                 with st.expander("🚑 Protocolo Lázaro (Digitação Manual Global)", expanded=False):
                     df_perdidos = pd.DataFrame([r for r in dados_soberania if r['_Respostas'] == "MANUAL" and r['Situação'] == "✅ REALIZADA"])
@@ -3679,7 +3788,7 @@ elif menu == "📸 Scanner de Gabaritos":
                     id_av = str(row['ID_AVALIACAO']).upper()
                     nec = str(row['NECESSIDADES']).upper()
                     
-                    if resp == "FALTOU": return "FALTOU"
+                    if resp.startswith("FALTOU"): return "FALTOU"
                     if resp.startswith("QUALITATIVA"): return "🔴 PEI Nível 3 (Qualitativa)"
                     if "2ª" in id_av or "2CHAMADA" in id_av: return "🔄 2ª Chamada (Discursiva)"
                     if "TIPO" in id_av: return f"🧬 Variante ({id_av.split('-')[-1].strip()})"
@@ -4145,28 +4254,20 @@ elif menu == "📝 Diário de Bordo Rápido":
 
 
 # ==============================================================================
-# MÓDULO: BIOGRAFIA DO ESTUDANTE - V201 (DASHBOARD EXECUTIVO & MODAIS)
+# MÓDULO: BIOGRAFIA DO ESTUDANTE - V2026.1 (EXIBIÇÃO DE ATESTADOS & WHATSAPP)
 # ==============================================================================
 elif menu == "👤 Biografia do Estudante":
     st.title("👤 Biografia do Estudante: Dossiê de Evolução")
-    st.caption("💡 **Guia de Comando:** Dashboard executivo para reuniões de pais. Navegue pelas abas para apresentar os resultados de forma limpa e organizada.")
+    st.caption("💡 Dashboard executivo para reuniões de pais. Exibe o histórico de avaliações, atestados e evolução comportamental.")
     st.markdown("---")
 
-    # 🔬 FILTRO DE LEITURA GLOBAL (LATEX AUTÔNOMO E CAIXA DE CÓPIA DE IMAGEM V201.8)
     def preparar_para_leitura(texto):
-        if not texto: return ""
-        
-        # 1. VACINA DO LATEX AUTÔNOMO: Detecta frações \frac{}{} ou símbolos soltos que a IA gerou sem o '$' e os envolve de forma automática para renderizar bonito
+        if not texto or not isinstance(texto, str): return ""
+        texto = texto.replace('\x0c', '\\f')
         texto = re.sub(r'(?<!\$)\\\w+\{[^\}]*?\}(?:\{[^\}]*?\})?(?!\$)', r'$\g<0>$', texto)
         texto = re.sub(r'(?<!\$)\^\\(circ|deg|cdot|times)(?!\$)', r'$\g<0>$', texto)
-        
-        # 2. Converte as potências $$...$$ de bloco em $...$ de linha para melhor alinhamento no Streamlit
         texto = re.sub(r'\$\$(.*?)\$\$', r'$\1$', texto, flags=re.DOTALL)
-        
-        # 3. VACINA DO GEOGEBRA OBSOLETO: Se houver algum resquício antigo no banco de dados, limpa
         texto = re.sub(r'\[GEOGEBRA\](.*?)\[/GEOGEBRA\]', '', texto, flags=re.IGNORECASE | re.DOTALL)
-        
-        # 4. 🚀 A CAIXA DE CÓPIA RÁPIDA (UX DE ELITE): Transforma as tags [PROMPT IMAGEM: ...] em blocos de código copiáveis com 1 clique!
         texto = re.sub(
             r'\[\s*PROMPT IMAGEM:(.*?)\s*\]', 
             r'\n\n🎨 **[PROMPT GERADOR DE IMAGEM - COPIE NO BOTÃO ABAIXO]**\n```english\n\1\n```\n\n', 
@@ -4178,11 +4279,9 @@ elif menu == "👤 Biografia do Estudante":
     if df_alunos.empty:
         st.warning("⚠️ Base de alunos vazia. Cadastre as turmas primeiro.")
     else:
-        # --- 1. FILTROS DE ACESSO RÁPIDO ---
         with st.container(border=True):
             c1, c2, c3 = st.columns([1, 1.5, 1])
             
-            # 🚨 VACINA ANTI-KEYERROR: Verifica se a coluna existe antes de filtrar
             lista_turmas_bio = []
             if not df_turmas.empty and 'ID_TURMA' in df_turmas.columns:
                 turmas_reais_bio = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
@@ -4212,7 +4311,6 @@ elif menu == "👤 Biografia do Estudante":
             aluno_b_label = c2.selectbox("🎓 Estudante:", lista_alunos['LABEL'].tolist(), key="bio_a", label_visibility="collapsed")
             trim_b = c3.selectbox("📅 Período de Análise:",["Todos", "I Trimestre", "II Trimestre", "III Trimestre"], key="bio_trim", label_visibility="collapsed")
 
-        # --- PREPARAÇÃO DE DADOS GLOBAIS ---
         if trim_b == "I Trimestre": dt_ini, dt_fim = date(2026, 2, 9), date(2026, 5, 22)
         elif trim_b == "II Trimestre": dt_ini, dt_fim = date(2026, 5, 25), date(2026, 9, 4)
         elif trim_b == "III Trimestre": dt_ini, dt_fim = date(2026, 9, 8), date(2026, 12, 17)
@@ -4242,7 +4340,6 @@ elif menu == "👤 Biografia do Estudante":
             else:
                 diag_alu_f = diag_alu.copy()
 
-        # --- CÁLCULO DE MÉTRICAS PARA O HERO CARD ---
         soma_anual = n_alu[n_alu['TRIMESTRE'].isin(["I Trimestre", "II Trimestre", "III Trimestre"])]['MEDIA_FINAL'].apply(util.sosa_to_float).sum() if not n_alu.empty else 0.0
         
         faltas_hero, perc_presenca_hero, perc_visto_hero, bonus_total_hero = 0, 100, 0, 0.0
@@ -4257,9 +4354,6 @@ elif menu == "👤 Biografia do Estudante":
             perc_visto_hero = (vistos_ok_hero / tot_vistos_hero) * 100 if tot_vistos_hero > 0 else 0
             bonus_total_hero = d_alu_f['BONUS'].apply(util.sosa_to_float).sum()
 
-        # ==============================================================================
-        # 🌟 HERO CARD (CABEÇALHO EXECUTIVO V201)
-        # ==============================================================================
         with st.container(border=True):
             c_h1, c_h2, c_h3, c_h4 = st.columns([2, 1, 1, 1])
             
@@ -4276,12 +4370,19 @@ elif menu == "👤 Biografia do Estudante":
             c_h3.metric("Assiduidade", f"{perc_presenca_hero:.0f}%", f"{faltas_hero} faltas", delta_color="inverse" if faltas_hero > 0 else "normal")
             c_h4.metric("Engajamento (Caderno)", f"{perc_visto_hero:.0f}%", f"{bonus_total_hero:+.1f} pts bônus")
 
-        # ==============================================================================
-        # 📱 WHATSAPP MODAL (V201)
-        # ==============================================================================
+        # 📱 WHATSAPP MODAL (COM HOMOLOGAÇÃO DE ATESTADOS)
         @st.dialog("📱 Extrato para WhatsApp")
         def dialog_whatsapp():
             st.info("Copie o texto abaixo e envie para o responsável.")
+            
+            # Coleta justificativas de atestados gravadas no banco
+            atestados_info = ""
+            hist_atestados = df_relatorios[(df_relatorios['ID_ALUNO'].apply(db.limpar_id) == id_alu) & (df_relatorios['TIPO'] == 'JUSTIFICATIVA_AUSENCIA')]
+            if not hist_atestados.empty:
+                atestados_info = "\n📌 ATESTADOS / JUSTIFICATIVAS:\n"
+                for _, r_at in hist_atestados.iterrows():
+                    atestados_info += f"• {r_at['DATA']}: {r_at['CONTEUDO']}\n"
+
             if trim_b == "Todos":
                 notas_trimestres_str = ""
                 for t in ["I Trimestre", "II Trimestre", "III Trimestre"]:
@@ -4298,7 +4399,7 @@ Estou passando para compartilhar um resumo de como o(a) {nome_limpo} está se sa
 📊 NOTAS POR TRIMESTRE:
 {notas_trimestres_str.strip()}
 (Soma atual: {soma_anual:.1f} pts. Lembrando que a meta para passar direto é somar 18.0 no ano).
-
+{atestados_info}
 🎯 COMPORTAMENTO E PARTICIPAÇÃO:
 • Presença: {perc_presenca_hero:.0f}% ({faltas_hero} falta(s) até agora).
 • Caderno e Atividades: Fez {perc_visto_hero:.0f}% do que foi pedido em sala.
@@ -4329,7 +4430,7 @@ Estou enviando o boletim detalhado do(a) {nome_limpo} referente ao {trim_b} em M
 • C1 (Vistos e Participação): {v_nota:.1f}
 • C2 (Testes e Trabalhos): {t_nota:.1f}
 • C3 (Prova Oficial): {p_nota:.1f}
-{linha_rec}
+{linha_rec}{atestados_info}
 🎯 COMPORTAMENTO NA SALA:
 • Presença: {perc_presenca_hero:.0f}% ({faltas_hero} falta(s)).
 • Caderno: Entregou {perc_visto_hero:.0f}% das atividades.
@@ -4345,15 +4446,11 @@ Qualquer dúvida, estou à disposição! Um abraço! 🚀"""
 
         st.markdown("---")
 
-        # ==============================================================================
-        # 🗂️ ORGANIZAÇÃO EM ABAS (O DASHBOARD DE REUNIÃO)
-        # ==============================================================================
         abas_bio = ["📊 Visão Geral & Engajamento", "📈 Evolução & Lacunas", "⚖️ Auditoria & Tribunal"]
         if is_pei_or_gap: abas_bio.append("♿ Dossiê Clínico (PEI)")
         
         tabs = st.tabs(abas_bio)
 
-        # --- ABA 1: VISÃO GERAL & ENGAJAMENTO (SPLIT-SCREEN V201) ---
         with tabs[0]:
             col_v1, col_v2 = st.columns([1.2, 1])
             
@@ -4442,7 +4539,6 @@ Qualquer dúvida, estou à disposição! Um abraço! 🚀"""
                         else: st.info("Nenhuma cobrança de visto neste período.")
                 else: st.info("Sem dados para gerar o extrato.")
 
-        # --- ABA 2: EVOLUÇÃO & LACUNAS ---
         with tabs[1]:
             st.markdown(f"### 📈 Evolução de Desempenho ({trim_b})")
             with st.container(border=True):
@@ -4458,7 +4554,7 @@ Qualquer dúvida, estou à disposição! Um abraço! 🚀"""
                         nome_limpo_av = re.sub(r'(_\d+ANO_I{1,3}TRIMESTRE)', '', av_id_bruto).strip()
                         nome_limpo_av = nome_limpo_av.replace("VARIANTE", "").replace("(", "").replace(")", "").strip()
                         
-                        if str(row_av['RESPOSTAS_ALUNO']).upper() != "FALTOU":
+                        if not str(row_av['RESPOSTAS_ALUNO']).upper().startswith("FALTOU"):
                             dados_grafico.append({"Data": data_av, "Avaliação": nome_limpo_av, "Nota": nota_av})
                     
                     if dados_grafico:
@@ -4468,7 +4564,7 @@ Qualquer dúvida, estou à disposição! Um abraço! 🚀"""
                         fig.update_layout(yaxis_range=[0, 10.5], height=350, xaxis_title="", yaxis_title="Nota Obtida")
                         fig.add_hline(y=6.0, line_dash="dash", line_color="red", annotation_text="Média (6.0)", annotation_position="bottom right")
                         st.plotly_chart(fig, use_container_width=True)
-                    else: st.info("O aluno faltou a todas as avaliações deste período.")
+                    else: st.info("O aluno esteve ausente ou possui atestado registrado nas avaliações deste período.")
                 else: st.info("📭 Aguardando avaliações escaneadas para gerar o gráfico de evolução.")
 
             st.markdown(f"### 🧠 Mapa de Lacunas e Dificuldades ({trim_b})")
@@ -4491,7 +4587,7 @@ Qualquer dúvida, estou à disposição! Um abraço! 🚀"""
                             respostas_aluno = str(reg_av['RESPOSTAS_ALUNO']).split(';')
                             
                             for i, r in enumerate(respostas_aluno):
-                                if i < len(gab_oficial) and r != gab_oficial[i] and r not in["FALTOU", "?", "X"] and not r.startswith("QUALITATIVA"):
+                                if i < len(gab_oficial) and r != gab_oficial[i] and not r.startswith("FALTOU") and r not in["?", "X"] and not r.startswith("QUALITATIVA"):
                                     q_n = i + 1
                                     padrao_h = rf"(?si)QUEST[AÃ]O\s*(?:PEI\s*)?0?{q_n}\b.*?(?:[:\-])\s*(.*?)(?=\.?\s*(?:JUSTIFICATIVA|PERÍCIA|ANÁLISE|DISTRATORES|$))"
                                     m_h = re.search(padrao_h, grade)
@@ -4507,11 +4603,10 @@ Qualquer dúvida, estou à disposição! Um abraço! 🚀"""
                     else: st.success("✅ Domínio total nas habilidades das avaliações realizadas.")
                 else: st.info("📭 Aguardando avaliações escaneadas para gerar o mapa de lacunas.")
 
-        # --- ABA 3: AUDITORIA & TRIBUNAL (MODAL V201) ---
         with tabs[2]:
-            st.markdown(f"### 🎯 Histórico de Avaliações (Scanner)")
+            st.markdown(f"### 🎯 Histórico de Avaliações & Atestados")
             
-            # ⚖️ TRIBUNAL DE RECURSOS MODAL
+            # TRIBUNAL DE RECURSOS MODAL
             @st.dialog("⚖️ Tribunal de Recursos", width="large")
             def dialog_tribunal():
                 opcoes_av_tribunal = diag_alu_f['ID_AVALIACAO'].tolist()
@@ -4678,10 +4773,19 @@ Qualquer dúvida, estou à disposição! Um abraço! 🚀"""
                     elif "PROVA" in nome_limpo_av: icone = "📄"
                     else: icone = "📋"
                     
-                    if respostas_aluno.upper() == "FALTOU": status_av, nota_av = "❌ FALTOU", 0.0
-                    elif respostas_aluno.upper().startswith("QUALITATIVA"): status_av = "🎨 QUALITATIVA (PEI)"
-                    elif "MANUAL" in respostas_aluno.upper(): status_av = "✍️ LANÇAMENTO MANUAL"
-                    else: status_av = "✅ ESCANEADA"
+                    if respostas_aluno.startswith("FALTOU_JUSTIFICADO"):
+                        motivo_j = respostas_aluno.split("|")[1] if "|" in respostas_aluno else "Atestado Médicol"
+                        status_av = f"📑 JUSTIFICADO ({motivo_j})"
+                    elif respostas_aluno.startswith("FALTOU_INJUSTIFICADO"):
+                        status_av = "❌ FALTA INJUSTIFICADA"
+                    elif respostas_aluno.upper() == "FALTOU":
+                        status_av, nota_av = "❌ FALTOU", 0.0
+                    elif respostas_aluno.upper().startswith("QUALITATIVA"):
+                        status_av = "🎨 QUALITATIVA (PEI)"
+                    elif "MANUAL" in respostas_aluno.upper():
+                        status_av = "✍️ LANÇAMENTO MANUAL"
+                    else:
+                        status_av = "✅ ESCANEADA"
                         
                     dados_av.append({
                         "Tipo": icone, "Avaliação": nome_limpo_av, "Data": data_av,
@@ -4701,7 +4805,6 @@ Qualquer dúvida, estou à disposição! Um abraço! 🚀"""
                 )
             else: st.info("📭 Nenhuma avaliação escaneada para este aluno no período selecionado.")
 
-        # --- ABA 4: DOSSIÊ PEI (SÓ APARECE SE FOR PEI) ---
         if is_pei_or_gap:
             with tabs[3]:
                 st.markdown(f"### ♿ Dossiê Clínico e Adaptações (PEI)")
@@ -4724,6 +4827,8 @@ Qualquer dúvida, estou à disposição! Um abraço! 🚀"""
                     st.info("📭 Nenhum Dossiê Master gerado para este aluno ainda.")
 
         st.caption(f"Dossiê atualizado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+
+
 
 
 
