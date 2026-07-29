@@ -505,7 +505,7 @@ def excluir_avaliacao_completa(identificador, tipo_prova_nome):
 # ==============================================================================
 def salvar_foto_gabarito_drive(imagem_bytes, nome_aluno, turma, avaliacao_nome):
     """
-    SOSA V202.6: Envia a foto do gabarito como arquivo NATIVO DE IMAGEM (.jpg) no Google Drive.
+    SOSA V2026.MASTER: Envia a foto do gabarito como arquivo NATIVO DE IMAGEM (.jpg) no Google Drive.
     """
     try:
         creds = obter_creds_drive()
@@ -533,20 +533,13 @@ def salvar_foto_gabarito_drive(imagem_bytes, nome_aluno, turma, avaliacao_nome):
         
         return file_drive.get('webViewLink', f"https://drive.google.com/file/d/{file_id}/view")
     except Exception as e:
-        return f"N/A (Erro Foto Drive: {e})"
+        print(f"Aviso no upload direto do Drive: {e}")
+        return "N/A"
 
 def subir_e_converter_para_google_docs(file_stream, nome_arquivo, trimestre="I Trimestre", categoria="6º Ano", semana="Semana Geral", modo="AULA"):
     """
-    SOSA BRIDGE V45.9: Redireciona fotos do Scanner diretamente para salvar em formato JPG de imagem.
+    SOSA BRIDGE V45.9: Envia arquivos (incluindo SCANNER/JPG) através da Ponte Apps Script para a conta pessoal do Prof. Ronaldo.
     """
-    if modo == "SCANNER":
-        if isinstance(file_stream, bytes):
-            img_bytes = file_stream
-        else:
-            file_stream.seek(0)
-            img_bytes = file_stream.read()
-        return salvar_foto_gabarito_drive(img_bytes, nome_arquivo, categoria, semana)
-
     try:
         URL_DA_PONTE = "https://script.google.com/macros/s/AKfycbzbvOfX3KCgVg7yIrVxqLvsbSRa6TFHv564bdzgVsQt2tE8DiM_XcW-IM2ehNMoonWpmQ/exec" 
         
@@ -556,8 +549,10 @@ def subir_e_converter_para_google_docs(file_stream, nome_arquivo, trimestre="I T
             file_stream.seek(0)
             file_b64 = base64.b64encode(file_stream.read()).decode('utf-8')
         
+        nome_envio = nome_arquivo if nome_arquivo.endswith((".jpg", ".png", ".docx")) else f"{nome_arquivo}.jpg"
+        
         payload = {
-            "fileName": nome_arquivo, 
+            "fileName": nome_envio, 
             "trimestre": trimestre, 
             "categoria": categoria, 
             "semanaRef": semana, 
@@ -568,20 +563,18 @@ def subir_e_converter_para_google_docs(file_stream, nome_arquivo, trimestre="I T
         response = requests.post(URL_DA_PONTE, json=payload, timeout=60)
         resposta_texto = response.text.strip()
         
-        if response.status_code != 200:
-            return f"ERRO_HTTP_{response.status_code}: Servidor do Google rejeitou a conexão."
-            
-        if not resposta_texto:
-            cookie_info = response.headers.get('Set-Cookie', 'Nenhum cookie')
-            return f"ERRO_RESPOSTA_VAZIA: Corpo em branco. Cookie: {cookie_info[:100]}"
-        
-        if "google.com" in resposta_texto and "https://" in resposta_texto and len(resposta_texto) < 250:
+        if response.status_code == 200 and "google.com" in resposta_texto and "https://" in resposta_texto and len(resposta_texto) < 250:
             return resposta_texto
-        else:
-            return f"ERRO_FORMATO_RESPOSTA: {resposta_texto[:250]}"
             
+        # Fallback seguro para foto se a ponte oscilar
+        if modo == "SCANNER":
+            img_data = file_stream if isinstance(file_stream, bytes) else file_stream.getvalue()
+            return salvar_foto_gabarito_drive(img_data, nome_arquivo, categoria, semana)
+            
+        return "N/A"
     except Exception as e:
-        return f"ERRO_CONEXAO_PONTE: {str(e)}"
+        print(f"Aviso na Ponte Drive: {e}")
+        return "N/A"
 
 # ==============================================================================
 # MOTOR DE RELOCAÇÃO TEMPORAL (PRESERVAÇÃO DE DOCS NO DRIVE)
