@@ -420,9 +420,26 @@ def gerar_ia_json(persona_key, comando, usar_busca=False):
 def extrair_tag(texto, tag):
     """
     Extrator Universal Imune a Falhas de Formatação, Markdown e Variações de Brackets.
+    SOSA V2026.MASTER - Blindado contra truncamento de blocos multilinhas.
     """
     if not texto or not isinstance(texto, str): return ""
     tag_busca = tag.upper().strip().replace("[", "").replace("]", "")
+    
+    # Mapeamento de Aliases para busca flexível e resiliente
+    aliases = {
+        "GABARITO_TEXTO": ["GABARITO_TEXTO", "GABARITO", "RESPOSTAS_IA"],
+        "GABARITO": ["GABARITO", "GABARITO_TEXTO", "RESPOSTAS_IA"],
+        "GABARITO_PEI": ["GABARITO_PEI", "RESPOSTAS_PEI_IA"],
+        "PEI": ["PEI", "PEI_NIVEL_1", "NIVEL_1"],
+        "NIVEL_1": ["NIVEL_1", "PEI_NIVEL_1", "PEI"],
+        "NIVEL_2": ["NIVEL_2", "PEI_NIVEL_2"],
+        "NIVEL_3": ["NIVEL_3", "PEI_NIVEL_3"],
+        "QUESTOES": ["QUESTOES", "QUESTÕES"],
+        "GRADE_DE_CORRECAO": ["GRADE_DE_CORRECAO", "GRADE_DE_CORREÇÃO"],
+        "GRADE_DE_CORRECAO_PEI": ["GRADE_DE_CORRECAO_PEI", "GRADE_DE_CORREÇÃO_PEI"]
+    }
+    
+    tags_para_testar = aliases.get(tag_busca, [tag_busca])
     
     tags_mestras = [
         "SOSA_ID", "VALOR", "ORIENTACOES", "QUESTOES", "GABARITO_TEXTO", "GRADE_DE_CORRECAO", 
@@ -437,28 +454,33 @@ def extrair_tag(texto, tag):
         "OBJETIVO", "ESTRATEGIA", "RECURSO", "DIAGNOSTICO_GERAL", "DIRETRIZES_CURRICULARES", "CHECKLIST",
         "NIVEL_1", "NIVEL_2", "NIVEL_3", "PEI_NIVEL_1", "PEI_NIVEL_3"
     ]
-    
-    parada = [t for t in tags_mestras if t != tag_busca]
-    lista_parada = "|".join(parada)
 
-    # 1. Padrão Em Linha Curta: [TAG]: Valor
-    padrao_interno = rf"\[\s*[*#]*\s*{tag_busca}\s*[*#]*\s*\]\s*[:\-]*\s*(.*?)(?=\n|$)"
-    match_int = re.search(padrao_interno, texto, re.IGNORECASE)
-    if match_int and 0 < len(match_int.group(1).strip()) < 120 and "\n" not in match_int.group(1).strip():
-        return match_int.group(1).strip()
+    tags_scalares = ["SOSA_ID", "VALOR", "AULA_ALVO", "MODALIDADE", "TRIMESTRE", "ANO", "SEMANA"]
 
-    # 2. Padrão Bloco Multilinhas: [TAG] ... [PRÓXIMA_TAG]
-    padrao_bloco = rf"\[\s*[*#]*\s*{tag_busca}\s*[*#]*\s*\]\s*[:\-]*\s*(.*?)(?=\s*\[\s*[*#]*\s*(?:{lista_parada})\s*[*#]*\s*\]|--- LINKS ---|$)"
-    match_bloco = re.search(padrao_bloco, texto, re.DOTALL | re.IGNORECASE)
-    
-    if match_bloco:
-        res = match_bloco.group(1).strip()
-        res = re.sub(r'^```[a-zA-Z]*\n', '', res, flags=re.IGNORECASE)
-        res = re.sub(r'\n```$', '', res)
-        res_limpo = re.sub(r'[░▒▓█]', '', res)
-        res_limpo = re.sub(r'-{3,}', '', res_limpo)
-        return res_limpo.strip()
-    
+    for t_alvo in tags_para_testar:
+        parada = [t for t in tags_mestras if t != t_alvo and not t_alvo.startswith(t)]
+        lista_parada = "|".join(parada)
+
+        # 1. Padrão Em Linha Curta: Apenas para tags estritamente escalares de valor único
+        if t_alvo in tags_scalares:
+            padrao_interno = rf"\[\s*[*#]*\s*{t_alvo}\s*[*#]*\s*\]\s*[:\-]*\s*(.*?)(?=\n|$)"
+            match_int = re.search(padrao_interno, texto, re.IGNORECASE)
+            if match_int and 0 < len(match_int.group(1).strip()) < 120 and "\n" not in match_int.group(1).strip():
+                return match_int.group(1).strip()
+
+        # 2. Padrão Bloco Multilinhas: [TAG] ... [PRÓXIMA_TAG]
+        padrao_bloco = rf"\[\s*[*#]*\s*{t_alvo}\s*[*#]*\s*\]\s*[:\-]*\s*(.*?)(?=\s*\[\s*[*#]*\s*(?:{lista_parada})\b\s*[*#]*\s*\]|--- LINKS ---|$)"
+        match_bloco = re.search(padrao_bloco, texto, re.DOTALL | re.IGNORECASE)
+        
+        if match_bloco:
+            res = match_bloco.group(1).strip()
+            res = re.sub(r'^```[a-zA-Z]*\n', '', res, flags=re.IGNORECASE)
+            res = re.sub(r'\n```$', '', res)
+            res_limpo = re.sub(r'[░▒▓█]', '', res)
+            res_limpo = re.sub(r'-{3,}', '', res_limpo)
+            if res_limpo.strip():
+                return res_limpo.strip()
+
     return ""
 
 def subir_para_google(caminho_arquivo, nome_exibicao):
