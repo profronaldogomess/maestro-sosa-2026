@@ -552,47 +552,23 @@ def salvar_foto_gabarito_drive(imagem_bytes, nome_aluno, turma, avaliacao_nome):
 
 def subir_e_converter_para_google_docs(file_stream, nome_arquivo, trimestre="I Trimestre", categoria="6º Ano", semana="Semana Geral", modo="AULA"):
     """
-    SOSA BRIDGE V45.9: 
-    - Para SCANNER: Salva com backup duplo (Drive + Data URI). A foto NUNCA se perde.
+    SOSA BRIDGE V45.9: Envia arquivos para o Apps Script com rota de imagem JPG para o Scanner.
     """
     try:
+        URL_DA_PONTE = "https://script.google.com/macros/s/AKfycbzbvOfX3KCgVg7yIrVxqLvsbSRa6TFHv564bdzgVsQt2tE8DiM_XcW-IM2ehNMoonWpmQ/exec" 
+        
         if isinstance(file_stream, bytes):
-            img_bytes = file_stream
+            file_b64 = base64.b64encode(file_stream).decode('utf-8')
         else:
             file_stream.seek(0)
-            img_bytes = file_stream.read()
-
-        file_b64 = base64.b64encode(img_bytes).decode('utf-8')
+            file_b64 = base64.b64encode(file_stream.read()).decode('utf-8')
+        
+        nome_limpo_arq = re.sub(r'[^a-zA-Z0-9_\-]', '_', str(nome_arquivo))
         
         if modo == "SCANNER":
-            URL_DA_PONTE = "https://script.google.com/macros/s/AKfycbzbvOfX3KCgVg7yIrVxqLvsbSRa6TFHv564bdzgVsQt2tE8DiM_XcW-IM2ehNMoonWpmQ/exec" 
-            nome_limpo_arq = re.sub(r'[^a-zA-Z0-9_\-]', '_', str(nome_arquivo))
             nome_envio = f"GABARITO_{nome_limpo_arq}.jpg"
-
-            payload = {
-                "fileName": nome_envio, 
-                "trimestre": trimestre, 
-                "categoria": categoria, 
-                "semanaRef": semana, 
-                "modo": modo, 
-                "fileB64": file_b64
-            }
-            
-            try:
-                response = requests.post(URL_DA_PONTE, json=payload, timeout=20)
-                resposta_texto = response.text.strip()
-                if response.status_code == 200 and "google.com" in resposta_texto and "https://" in resposta_texto and len(resposta_texto) < 250:
-                    return resposta_texto
-            except Exception as e_p:
-                print(f"Ponte em timeout, acionando backup Data URI: {e_p}")
-
-            # VACINA INFALÍVEL: Se o Drive falhar, retorna a imagem como Data URI para exibição direta!
-            return f"data:image/jpeg;base64,{file_b64}"
-
-        # Modo AULA / PLANEJAMENTO / AVALIACAO (DOCX)
-        URL_DA_PONTE = "https://script.google.com/macros/s/AKfycbzbvOfX3KCgVg7yIrVxqLvsbSRa6TFHv564bdzgVsQt2tE8DiM_XcW-IM2ehNMoonWpmQ/exec" 
-        nome_limpo_arq = re.sub(r'[^a-zA-Z0-9_\-]', '_', str(nome_arquivo))
-        nome_envio = f"{nome_limpo_arq}.docx" if not nome_limpo_arq.endswith((".docx", ".pdf")) else nome_limpo_arq
+        else:
+            nome_envio = f"{nome_limpo_arq}.docx" if not nome_limpo_arq.endswith((".docx", ".pdf")) else nome_limpo_arq
 
         payload = {
             "fileName": nome_envio, 
@@ -608,6 +584,9 @@ def subir_e_converter_para_google_docs(file_stream, nome_arquivo, trimestre="I T
         
         if response.status_code == 200 and "google.com" in resposta_texto and "https://" in resposta_texto and len(resposta_texto) < 250:
             return resposta_texto
+            
+        if modo == "SCANNER":
+            return f"data:image/jpeg;base64,{file_b64}"
             
         return "N/A"
     except Exception as e:
