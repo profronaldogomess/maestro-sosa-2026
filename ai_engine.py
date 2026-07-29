@@ -420,11 +420,17 @@ def gerar_ia_json(persona_key, comando, usar_busca=False):
 def extrair_tag(texto, tag):
     """
     Extrator Universal Imune a Falhas de Formatação, Markdown e Variações de Brackets.
-    SOSA V2026.MASTER - Blindado contra truncamento de blocos multilinhas.
+    SOSA V2026.MASTER - Captura pontuações em formatos [VALOR: 3.0], [VALOR] 3.0 ou **VALOR:** 3,0.
     """
     if not texto or not isinstance(texto, str): return ""
     tag_busca = tag.upper().strip().replace("[", "").replace("]", "")
     
+    # 🚨 CAPTURA DEDICADA DE VALOR (Resiliente a [VALOR: 3.0], **VALOR:** 3,0, etc.)
+    if tag_busca == "VALOR":
+        m_val = re.search(r"(?:\[\s*VALOR\s*[:\-]?\s*|VALOR\s*[:\-]\s*\*?\*?\s*)([\d\.,]+)", texto, re.IGNORECASE)
+        if m_val:
+            return m_val.group(1).strip()
+
     # Mapeamento de Aliases para busca flexível e resiliente
     aliases = {
         "GABARITO_TEXTO": ["GABARITO_TEXTO", "GABARITO", "RESPOSTAS_IA"],
@@ -461,7 +467,7 @@ def extrair_tag(texto, tag):
         parada = [t for t in tags_mestras if t != t_alvo and not t_alvo.startswith(t)]
         lista_parada = "|".join(parada)
 
-        # 1. Padrão Em Linha Curta: Apenas para tags estritamente escalares de valor único
+        # 1. Padrão Em Linha Curta: Apenas para tags estritamente escalares
         if t_alvo in tags_scalares:
             padrao_interno = rf"\[\s*[*#]*\s*{t_alvo}\s*[*#]*\s*\]\s*[:\-]*\s*(.*?)(?=\n|$)"
             match_int = re.search(padrao_interno, texto, re.IGNORECASE)
