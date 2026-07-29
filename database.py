@@ -538,7 +538,7 @@ def salvar_foto_gabarito_drive(imagem_bytes, nome_aluno, turma, avaliacao_nome):
 
 def subir_e_converter_para_google_docs(file_stream, nome_arquivo, trimestre="I Trimestre", categoria="6º Ano", semana="Semana Geral", modo="AULA"):
     """
-    SOSA BRIDGE V45.9: Envia arquivos (incluindo SCANNER/JPG) através da Ponte Apps Script para a conta pessoal do Prof. Ronaldo.
+    SOSA BRIDGE V45.9: Salva fotos do scanner como IMAGEM JPG PURA (.jpg) no Google Drive.
     """
     try:
         URL_DA_PONTE = "https://script.google.com/macros/s/AKfycbzbvOfX3KCgVg7yIrVxqLvsbSRa6TFHv564bdzgVsQt2tE8DiM_XcW-IM2ehNMoonWpmQ/exec" 
@@ -549,8 +549,13 @@ def subir_e_converter_para_google_docs(file_stream, nome_arquivo, trimestre="I T
             file_stream.seek(0)
             file_b64 = base64.b64encode(file_stream.read()).decode('utf-8')
         
-        nome_envio = nome_arquivo if nome_arquivo.endswith((".jpg", ".png", ".docx")) else f"{nome_arquivo}.jpg"
-        
+        # Garante que imagens do scanner tenham extensão .jpg pura
+        nome_limpo_arq = re.sub(r'[^a-zA-Z0-9_\-]', '_', str(nome_arquivo))
+        if modo == "SCANNER":
+            nome_envio = f"GABARITO_{nome_limpo_arq}.jpg" if not nome_limpo_arq.endswith(".jpg") else nome_limpo_arq
+        else:
+            nome_envio = f"{nome_limpo_arq}.docx" if not nome_limpo_arq.endswith((".docx", ".pdf")) else nome_limpo_arq
+
         payload = {
             "fileName": nome_envio, 
             "trimestre": trimestre, 
@@ -566,14 +571,14 @@ def subir_e_converter_para_google_docs(file_stream, nome_arquivo, trimestre="I T
         if response.status_code == 200 and "google.com" in resposta_texto and "https://" in resposta_texto and len(resposta_texto) < 250:
             return resposta_texto
             
-        # Fallback seguro para foto se a ponte oscilar
+        # Fallback seguro de salvamento de foto
         if modo == "SCANNER":
             img_data = file_stream if isinstance(file_stream, bytes) else file_stream.getvalue()
             return salvar_foto_gabarito_drive(img_data, nome_arquivo, categoria, semana)
             
         return "N/A"
     except Exception as e:
-        print(f"Aviso na Ponte Drive: {e}")
+        print(f"Aviso no envio do arquivo: {e}")
         return "N/A"
 
 # ==============================================================================
