@@ -505,7 +505,8 @@ def excluir_avaliacao_completa(identificador, tipo_prova_nome):
 # ==============================================================================
 def salvar_foto_gabarito_drive(imagem_bytes, nome_aluno, turma, avaliacao_nome):
     """
-    SOSA V2026.MASTER: Envia a foto do gabarito como arquivo NATIVO DE IMAGEM (.jpg) no Google Drive.
+    SOSA V2026.MASTER: Envia a foto do gabarito como IMAGEM JPG PURA (.jpg) para o Google Drive.
+    Garante que NÃO cria arquivo .docx nem Documento do Google, salvando apenas a foto limpa.
     """
     try:
         creds = obter_creds_drive()
@@ -513,13 +514,26 @@ def salvar_foto_gabarito_drive(imagem_bytes, nome_aluno, turma, avaliacao_nome):
         
         nome_limpo = re.sub(r'[^a-zA-Z0-9_]', '_', str(nome_aluno))
         data_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-        nome_arquivo = f"SCAN_{turma}_{nome_limpo}_{data_str}.jpg"
+        nome_arquivo = f"GABARITO_{turma}_{nome_limpo}_{data_str}.jpg"
         
+        # Localiza a pasta da turma no Drive para salvar a foto direto nela
+        folder_id = None
+        try:
+            q_folder = f"mimeType='application/vnd.google-apps.folder' and name contains '{turma}' and trashed=false"
+            res_f = service.files().list(q=q_folder, fields="files(id, name)").execute()
+            folders = res_f.get('files', [])
+            if folders:
+                folder_id = folders[0]['id']
+        except Exception as e_f:
+            print(f"Busca de pasta: {e_f}")
+
         file_metadata = {
             'name': nome_arquivo,
             'mimeType': 'image/jpeg'
         }
-        
+        if folder_id:
+            file_metadata['parents'] = [folder_id]
+
         media = MediaIoBaseUpload(io.BytesIO(imagem_bytes), mimetype='image/jpeg', resumable=True)
         file_drive = service.files().create(body=file_metadata, media_body=media, fields='id, webViewLink').execute()
         
@@ -533,13 +547,23 @@ def salvar_foto_gabarito_drive(imagem_bytes, nome_aluno, turma, avaliacao_nome):
         
         return file_drive.get('webViewLink', f"https://drive.google.com/file/d/{file_id}/view")
     except Exception as e:
-        print(f"Aviso no upload direto do Drive: {e}")
+        print(f"Erro no salvamento da foto JPG: {e}")
         return "N/A"
 
 def subir_e_converter_para_google_docs(file_stream, nome_arquivo, trimestre="I Trimestre", categoria="6º Ano", semana="Semana Geral", modo="AULA"):
     """
-    SOSA BRIDGE V45.9: Salva fotos do scanner como IMAGEM JPG PURA (.jpg) no Google Drive.
+    SOSA BRIDGE V45.9:
+    - Para 'SCANNER': Salva ESTRITAMENTE a foto JPG limpa no Google Drive (sem converter para DOCX/Docs).
+    - Para 'AULA' / 'PLANEJAMENTO' / 'AVALIACAO': Converte o arquivo Word para Google Docs.
     """
+    if modo == "SCANNER":
+        if isinstance(file_stream, bytes):
+            img_bytes = file_stream
+        else:
+            file_stream.seek(0)
+            img_bytes = file_stream.read()
+        return salvar_foto_gabarito_drive(img_bytes, nome_arquivo, categoria, semana)
+
     try:
         URL_DA_PONTE = "https://script.google.com/macros/s/AKfycbzbvOfX3KCgVg7yIrVxqLvsbSRa6TFHv564bdzgVsQt2tE8DiM_XcW-IM2ehNMoonWpmQ/exec" 
         
@@ -549,12 +573,8 @@ def subir_e_converter_para_google_docs(file_stream, nome_arquivo, trimestre="I T
             file_stream.seek(0)
             file_b64 = base64.b64encode(file_stream.read()).decode('utf-8')
         
-        # Garante que imagens do scanner tenham extensão .jpg pura
         nome_limpo_arq = re.sub(r'[^a-zA-Z0-9_\-]', '_', str(nome_arquivo))
-        if modo == "SCANNER":
-            nome_envio = f"GABARITO_{nome_limpo_arq}.jpg" if not nome_limpo_arq.endswith(".jpg") else nome_limpo_arq
-        else:
-            nome_envio = f"{nome_limpo_arq}.docx" if not nome_limpo_arq.endswith((".docx", ".pdf")) else nome_limpo_arq
+        nome_envio = f"{nome_limpo_arq}.docx" if not nome_limpo_arq.endswith((".docx", ".pdf")) else nome_limpo_arq
 
         payload = {
             "fileName": nome_envio, 
@@ -571,14 +591,9 @@ def subir_e_converter_para_google_docs(file_stream, nome_arquivo, trimestre="I T
         if response.status_code == 200 and "google.com" in resposta_texto and "https://" in resposta_texto and len(resposta_texto) < 250:
             return resposta_texto
             
-        # Fallback seguro de salvamento de foto
-        if modo == "SCANNER":
-            img_data = file_stream if isinstance(file_stream, bytes) else file_stream.getvalue()
-            return salvar_foto_gabarito_drive(img_data, nome_arquivo, categoria, semana)
-            
         return "N/A"
     except Exception as e:
-        print(f"Aviso no envio do arquivo: {e}")
+        print(f"Aviso na Ponte Drive: {e}")
         return "N/A"
 
 # ==============================================================================
