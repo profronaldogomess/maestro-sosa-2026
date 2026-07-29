@@ -3315,7 +3315,12 @@ elif menu == "📸 Scanner de Gabaritos":
                     val_float = util.sosa_to_float(val_tag)
                     v_total_av = val_float if val_float > 0 else 10.0
 
-                gabaritos_lidos = df_diagnosticos[mask_diag_h]
+                # 🚨 FILTRAGEM ESTRITA DA AVALIAÇÃO SELECIONADA
+                gabaritos_lidos = df_diagnosticos[
+                    (df_diagnosticos['TURMA'] == t_sel_h) & 
+                    (df_diagnosticos['ID_AVALIACAO'].str.startswith(nome_curto_av, na=False))
+                ]
+                
                 alunos_turma_h = df_alunos[df_alunos['TURMA'] == t_sel_h].sort_values(by="NOME_ALUNO")
                 
                 dados_soberania = []
@@ -3327,8 +3332,12 @@ elif menu == "📸 Scanner de Gabaritos":
                     if not leitura.empty:
                         reg = leitura.iloc[-1]
                         nota_atual = util.sosa_to_float(reg['NOTA_CALCULADA'])
-                        link_ev = reg.get('LINK_FOTO_DRIVE', '')
-                        respostas_salvas = reg.get('RESPOSTAS_ALUNO', 'MANUAL')
+                        
+                        # Limpeza de links corrompidos do Drive
+                        link_raw = str(reg.get('LINK_FOTO_DRIVE', ''))
+                        link_ev = link_raw if ("http" in link_raw and "HttpError" not in link_raw and "N/A" not in link_raw) else ""
+                        
+                        respostas_salvas = str(reg.get('RESPOSTAS_ALUNO', 'MANUAL'))
                         id_av_banco = str(reg['ID_AVALIACAO']).upper()
                         
                         if "|GRUPO:" in respostas_salvas:
@@ -3659,8 +3668,12 @@ elif menu == "📸 Scanner de Gabaritos":
                     if not leitura.empty:
                         reg = leitura.iloc[-1]
                         nota_atual = util.sosa_to_float(reg['NOTA_CALCULADA'])
-                        link_ev = reg.get('LINK_FOTO_DRIVE', '')
-                        respostas_salvas = reg.get('RESPOSTAS_ALUNO', 'MANUAL')
+                        
+                        # Limpeza de links corrompidos do Drive
+                        link_raw = str(reg.get('LINK_FOTO_DRIVE', ''))
+                        link_ev = link_raw if ("http" in link_raw and "HttpError" not in link_raw and "N/A" not in link_raw) else ""
+                        
+                        respostas_salvas = str(reg.get('RESPOSTAS_ALUNO', 'MANUAL'))
                         id_av_banco = str(reg['ID_AVALIACAO']).upper()
                         
                         if "|GRUPO:" in respostas_salvas:
