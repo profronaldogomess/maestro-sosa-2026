@@ -2647,62 +2647,63 @@ elif menu == "📸 Scanner de Gabaritos":
         else:
             return r"(?<!I)I(?![I])"
 
-    # FILTRO HIERÁRQUICO DE ATIVOS CIR
+    # FILTRO HIERÁRQUICO E ISOLAMENTO RÍGIDO DE TRIMESTRES (SOSA V2026.MASTER)
     def filtrar_ativos_cir(turma, trimestre_nome, apenas_provas=True):
         if not turma or not trimestre_nome: return []
         try:
             serie_num = str(turma)[0] 
             df_f = df_aulas[df_aulas['ANO'].astype(str).str.contains(serie_num)].copy()
             
-            def detectar_trimestre(x):
-                try:
-                    if str(x).replace('.','',1).isdigit():
-                        dt = date(1899, 12, 30) + timedelta(days=int(float(x)))
-                        return util.obter_info_trimestre(dt)[0]
-                    if "/" in str(x):
-                        partes = str(x).split("/")
-                        dt = date(int(partes[2]), int(partes[1]), int(partes[0]))
-                        return util.obter_info_trimestre(dt)[0]
-                except: pass
-                return "Outros"
+            # Identifica rigorosamente a sigla do trimestre selecionado (I, II ou III)
+            t_upper = str(trimestre_nome).upper()
+            if "III" in t_upper or "3" in t_upper:
+                sigla_alvo = "III"
+            elif "II" in t_upper or "2" in t_upper:
+                sigla_alvo = "II"
+            else:
+                sigla_alvo = "I"
 
-            df_f['TRIM_DETECTADO'] = df_f['DATA'].apply(detectar_trimestre)
-            padrao_regex_trim = obter_regex_trimestre(trimestre_nome)
-            
+            def pertence_estritamente_ao_trimestre(row):
+                mat_nome = str(row.get('TIPO_MATERIAL', '')).upper()
+                conteudo_txt = str(row.get('CONTEUDO', '')).upper()
+                
+                # 1. BLOQUEIO DE INVASÃO: Se a avaliação tem nome explícito de outro trimestre, rejeita
+                if sigla_alvo == "II":
+                    if ("ITRIMESTRE" in mat_nome or "I_TRIMESTRE" in mat_nome or "1º TRIMESTRE" in mat_nome) and "IITRIMESTRE" not in mat_nome:
+                        return False
+                    if "IIITRIMESTRE" in mat_nome or "III_TRIMESTRE" in mat_nome or "3º TRIMESTRE" in mat_nome:
+                        return False
+                elif sigla_alvo == "I":
+                    if "IITRIMESTRE" in mat_nome or "IIITRIMESTRE" in mat_nome or "2º TRIMESTRE" in mat_nome or "3º TRIMESTRE" in mat_nome:
+                        return False
+                elif sigla_alvo == "III":
+                    if ("ITRIMESTRE" in mat_nome or "IITRIMESTRE" in mat_nome) and "IIITRIMESTRE" not in mat_nome:
+                        return False
+
+                # 2. VALIDAÇÃO DE PERTENCIMENTO
+                if f"{sigla_alvo}TRIMESTRE" in mat_nome or f"{sigla_alvo}_TRIMESTRE" in mat_nome or f"{sigla_alvo} TRIMESTRE" in mat_nome:
+                    return True
+                
+                padrao_regex = obter_regex_trimestre(trimestre_nome)
+                if re.search(padrao_regex, mat_nome, re.IGNORECASE) or re.search(padrao_regex, conteudo_txt, re.IGNORECASE):
+                    return True
+                    
+                return False
+
+            # Aplica o filtro estrito de trimestre
+            df_f = df_f[df_f.apply(pertence_estritamente_ao_trimestre, axis=1)]
+
             if apenas_provas:
                 permitidos = ["TESTE", "PROVA", "SONDA", "DIAGNÓSTICA", "RECUPERAÇÃO", "AVALIAÇÃO"]
                 proibidos = ["REVISAO", "REVISÃO", "APLICAÇÃO", "CORREÇÃO", "APRESENTAÇÃO", "DOSSIÊ", "AULA"]
-                
-                mask_permitidos = df_f['TIPO_MATERIAL'].str.upper().str.contains('|'.join(permitidos))
-                df_f = df_f[mask_permitidos]
-                
-                mask_proibidos = df_f['TIPO_MATERIAL'].str.upper().str.contains('|'.join(proibidos))
-                df_f = df_f[~mask_proibidos]
-                
-                mask_trim = (
-                    (df_f['TRIM_DETECTADO'] == trimestre_nome) | 
-                    (df_f['CONTEUDO'].str.contains(padrao_regex_trim, regex=True, na=False, case=False)) | 
-                    (df_f['TIPO_MATERIAL'].str.contains(padrao_regex_trim, regex=True, na=False, case=False)) |
-                    (df_f['TIPO_MATERIAL'].str.upper().str.contains("FINAL"))
-                )
-                df_f = df_f[mask_trim]
             else:
                 permitidos = ["PROJETO", "FIXAÇÃO", "REFORÇO", "ATIVIDADE", "TRABALHO", "AULA"]
                 proibidos = ["TESTE", "PROVA", "SONDA", "DIAGNÓSTICA", "RECUPERAÇÃO", "AVALIAÇÃO"]
-                
-                mask_permitidos = df_f['TIPO_MATERIAL'].str.upper().str.contains('|'.join(permitidos))
-                df_f = df_f[mask_permitidos]
-                
-                mask_proibidos = df_f['TIPO_MATERIAL'].str.upper().str.contains('|'.join(proibidos))
-                df_f = df_f[~mask_proibidos]
-                
-                mask_trim = (
-                    (df_f['TRIM_DETECTADO'] == trimestre_nome) | 
-                    (df_f['CONTEUDO'].str.contains(padrao_regex_trim, regex=True, na=False, case=False)) | 
-                    (df_f['TIPO_MATERIAL'].str.contains(padrao_regex_trim, regex=True, na=False, case=False))
-                )
-                df_f = df_f[mask_trim]
-            
+
+            mask_p = df_f['TIPO_MATERIAL'].str.upper().str.contains('|'.join(permitidos)) & \
+                    (~df_f['TIPO_MATERIAL'].str.upper().str.contains('|'.join(proibidos)))
+            df_f = df_f[mask_p]
+
             return sorted(df_f['TIPO_MATERIAL'].unique().tolist())
         except Exception as e: 
             return []
