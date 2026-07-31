@@ -294,14 +294,24 @@ def gerar_ia_json(persona_key, comando, usar_busca=False):
         return {"erro": str(e)}
 
 # ==============================================================================
-# EXTRATOR UNIVERSAL DE TAGS (MULTIMODO V2026.MASTER)
+# EXTRATOR UNIVERSAL DE TAGS (MULTIMODO V2026.MASTER - ISOLAMENTO DE FRONTEIRA)
 # ==============================================================================
 def extrair_tag(texto, tag):
     """
     Extrator Universal Imune a Falhas de Formatação, Markdown e Variações de Brackets.
+    Garante a extração de blocos inteiros sem truncar a primeira linha.
     """
     if not texto or not isinstance(texto, str): return ""
     tag_busca = tag.upper().strip().replace("[", "").replace("]", "")
+    
+    # 🚨 TAGS QUE DEVEM SER EXTRAÍDAS COMO BLOCOS MULTILINHAS COMPLETOS
+    tags_bloco = [
+        "GABARITO_TEXTO", "GABARITO", "GRADE_DE_CORRECAO", "QUESTOES", "PEI", "GABARITO_PEI", 
+        "GRADE_DE_CORRECAO_PEI", "PROFESSOR", "ALUNO", "NIVEL_1", "NIVEL_2", "NIVEL_3",
+        "PEI_NIVEL_1", "PEI_NIVEL_2", "PEI_NIVEL_3", "AULA_1", "AULA_2", "SABADO_LETIVO", 
+        "IMAGENS", "RESPOSTAS_IA", "RESPOSTAS_PEI_IA", "RUBRICA_DE_MERITO", "JUSTIFICATIVA_PEDAGOGICA",
+        "JUSTIFICATIVA_PHC", "DIAGNOSTICO_GERAL", "DIRETRIZES_CURRICULARES"
+    ]
     
     tags_mestras = [
         "SOSA_ID", "VALOR", "ORIENTACOES", "QUESTOES", "GABARITO_TEXTO", "GRADE_DE_CORRECAO", 
@@ -314,20 +324,22 @@ def extrair_tag(texto, tag):
         "MAPA_DE_RECOMPOSICAO", "RESPOSTAS_PEDAGOGICAS", "BASE_DIDATICA",
         "MENSAGEM_CHAT", "CONTEUDO_ATUALIZADO", "SOCIAIS", "COMUNICATIVAS", "EMOCIONAIS", "FUNCIONAIS",
         "OBJETIVO", "ESTRATEGIA", "RECURSO", "DIAGNOSTICO_GERAL", "DIRETRIZES_CURRICULARES", "CHECKLIST",
-        "NIVEL_1", "NIVEL_2", "NIVEL_3", "PEI_NIVEL_1", "PEI_NIVEL_3"
+        "NIVEL_1", "NIVEL_2", "NIVEL_3", "PEI_NIVEL_1", "PEI_NIVEL_2", "PEI_NIVEL_3"
     ]
     
-    parada = [t for t in tags_mestras if t != tag_busca]
+    # 🚨 PARADA DE FRONTEIRA ESTREITA: Evita que "GABARITO" pare em "GABARITO_TEXTO"
+    parada = [rf"\b{re.escape(t)}\b" for t in tags_mestras if t != tag_busca]
     lista_parada = "|".join(parada)
 
-    # 1. Padrão Em Linha Curta: [TAG]: Valor
-    padrao_interno = rf"\[\s*[*#]*\s*{tag_busca}\s*[*#]*\s*\]\s*[:\-]*\s*(.*?)(?=\n|$)"
-    match_int = re.search(padrao_interno, texto, re.IGNORECASE)
-    if match_int and 0 < len(match_int.group(1).strip()) < 120 and "\n" not in match_int.group(1).strip():
-        return match_int.group(1).strip()
+    # 1. Padrão Em Linha Curta APENAS para tags de metadados simples (VALOR, SOSA_ID...)
+    if tag_busca not in tags_bloco:
+        padrao_interno = rf"\[\s*[*#]*\s*{re.escape(tag_busca)}\s*[*#]*\s*\]\s*[:\-]*\s*(.*?)(?=\n|$)"
+        match_int = re.search(padrao_interno, texto, re.IGNORECASE)
+        if match_int and 0 < len(match_int.group(1).strip()) < 120 and "\n" not in match_int.group(1).strip():
+            return match_int.group(1).strip()
 
-    # 2. Padrão Bloco Multilinhas: [TAG] ... [PRÓXIMA_TAG]
-    padrao_bloco = rf"\[\s*[*#]*\s*{tag_busca}\s*[*#]*\s*\]\s*[:\-]*\s*(.*?)(?=\s*\[\s*[*#]*\s*(?:{lista_parada})\s*[*#]*\s*\]|--- LINKS ---|$)"
+    # 2. Padrão Bloco Multilinhas: Pega desde o colchete até o início da próxima tag oficial
+    padrao_bloco = rf"\[\s*[*#]*\s*{re.escape(tag_busca)}\s*[*#]*\s*\]\s*[:\-]*\s*(.*?)(?=\s*\[\s*[*#]*\s*(?:{lista_parada})\s*[*#]*\s*\]|--- LINKS ---|$)"
     match_bloco = re.search(padrao_bloco, texto, re.DOTALL | re.IGNORECASE)
     
     if match_bloco:
@@ -345,36 +357,45 @@ def extrair_tag(texto, tag):
 # ==============================================================================
 def extrair_gab_universal_com_fallback(texto, is_pei=False, nivel_pei="NIVEL_1"):
     """
-    EXTRAÍDOR UNIVERSAL DE GABARITOS V2026 (RETROCOMPATÍVEL):
-    Lê gabaritos de exames novos (padrão ENEM/SAEB) e exames antigos (legacy de 2025/2026)
-    garantindo 100% de preservação de dados e herança PEI automática.
+    EXTRAÍDOR UNIVERSAL DE GABARITOS V2026 (RETROCOMPATÍVEL E ROBUSTO):
+    Varre 100% do bloco de gabarito extraindo todas as questões (Q01 a Q20).
     """
     if not texto or not isinstance(texto, str): return []
     
     mapa_regular = {}
     
-    # 1. Tenta extrair o gabarito regular master de [GABARITO_TEXTO] ou [GABARITO]
+    # 1. Tenta extrair primeiro do bloco específico de gabarito
     raw_reg = extrair_tag(texto, "GABARITO_TEXTO") or extrair_tag(texto, "GABARITO")
-    matches_reg = re.findall(r"(?:QUEST[AÃ]O\s*|Q)?0?(\d+)[\s\.\)\-:]+([A-E])", str(raw_reg).upper())
-    for q_num_str, letra in matches_reg:
-        mapa_regular[int(q_num_str)] = letra
-        
-    qtd_oficial = max(mapa_regular.keys()) if mapa_regular else 10
     
-    # Se for prova regular, retorna o mapa regular ordenado
+    # Padrões de captura flexíveis para linhas de gabarito ("QUESTÃO 01: C", "Q1: C", "1. C", "1 - C", "1: C")
+    if raw_reg:
+        matches_reg = re.findall(r"(?:QUEST[AÃ]O\s*|Q)?\s*0?(\d+)[\s\.\)\-:]+([A-E])\b", str(raw_reg).upper())
+        for q_num_str, letra in matches_reg:
+            mapa_regular[int(q_num_str)] = letra
+            
+    # 2. Se não encontrou no bloco isolado, varre o texto buscando a seção de gabarito
+    if not mapa_regular:
+        bloco_gab_match = re.search(r"\[\s*GABARITO.*?\].*?$", texto, re.DOTALL | re.IGNORECASE)
+        texto_busca = bloco_gab_match.group(0) if bloco_gab_match else texto
+        
+        matches_brutos = re.findall(r"(?:QUEST[AÃ]O\s*|Q)?\s*0?(\d+)[\s\.\)\-:]+([A-E])\b", texto_busca.upper())
+        for q_num_str, letra in matches_brutos:
+            q_num = int(q_num_str)
+            if q_num not in mapa_regular and 1 <= q_num <= 30:
+                mapa_regular[q_num] = letra
+
+    # Determina a quantidade real de questões no documento observando os enunciados
+    qtd_enunciados = len(re.findall(r"(?i)(?:QUEST[AÃ]O\s*|Q)\s*0?(\d+)", extrair_tag(texto, "QUESTOES") or texto))
+    
+    max_q = max(mapa_regular.keys()) if mapa_regular else 0
+    qtd_oficial = max(max_q, qtd_enunciados, 10)
+    
     if not is_pei:
-        if not mapa_regular:
-            matches_brutos = re.findall(r"(?:QUEST[AÃ]O\s*|Q)?0?(\d+)[\s\.\)\-:]+([A-E])", texto.upper())
-            for q_num_str, letra in matches_brutos:
-                q_num = int(q_num_str)
-                if q_num not in mapa_regular and q_num <= 20:
-                    mapa_regular[q_num] = letra
-        qtd_oficial = max(mapa_regular.keys()) if mapa_regular else 10
         return [mapa_regular.get(n, "A") for n in range(1, qtd_oficial + 1)]
 
-    # 2. Se for prova PEI (Inclusiva)
+    # 3. Se for prova PEI (Inclusiva)
     mapa_pei = {}
-    bloco_pei = extrair_tag(texto, nivel_pei) or extrair_tag(texto, "PEI") or extrair_tag(texto, "GABARITO_PEI")
+    bloco_pei = extrair_tag(texto, nivel_pei) or extrair_tag(texto, "PEI_NIVEL_1") or extrair_tag(texto, "PEI") or extrair_tag(texto, "GABARITO_PEI")
     
     if bloco_pei:
         blocos_q = re.split(r"(?i)(?:QUEST[AÃ]O\s*|Q)0?(\d+)", bloco_pei)
@@ -387,13 +408,13 @@ def extrair_gab_universal_com_fallback(texto, is_pei=False, nivel_pei="NIVEL_1")
                     mapa_pei[q_num] = m_gab.group(1).upper()
 
         if len(mapa_pei) < qtd_oficial:
-            matches_direct = re.findall(r"(?:QUEST[AÃ]O\s*|Q)?0?(\d+)[\s\.\)\-:]+([A-E])", bloco_pei.upper())
+            matches_direct = re.findall(r"(?:QUEST[AÃ]O\s*|Q)?\s*0?(\d+)[\s\.\)\-:]+([A-E])\b", bloco_pei.upper())
             for q_num_str, letra in matches_direct:
                 q_num = int(q_num_str)
                 if q_num not in mapa_pei and q_num <= qtd_oficial:
                     mapa_pei[q_num] = letra
 
-    # 3. Herança PEI Inteligente: Se for Nível 2 e não encontrou gabarito próprio, herda de Nível 1
+    # 4. Herança PEI Inteligente (Nível 2 herda do Nível 1 se N2 não tiver texto de gabarito)
     if len(mapa_pei) < qtd_oficial and nivel_pei != "NIVEL_1":
         bloco_n1 = extrair_tag(texto, "NIVEL_1") or extrair_tag(texto, "PEI_NIVEL_1")
         if bloco_n1:
@@ -406,7 +427,7 @@ def extrair_gab_universal_com_fallback(texto, is_pei=False, nivel_pei="NIVEL_1")
                     if m_gab and q_num not in mapa_pei:
                         mapa_pei[q_num] = m_gab.group(1).upper()
 
-    # 4. Complementação por Herança Regular
+    # 5. Complementação por Herança Regular
     for q_n in range(1, qtd_oficial + 1):
         if q_n not in mapa_pei:
             mapa_pei[q_n] = mapa_regular.get(q_n, "A")
