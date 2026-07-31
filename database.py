@@ -18,7 +18,7 @@ import utils as util
 
 def conectar():
     try:
-        scope =["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
         if os.path.exists("credentials.json"):
             creds = service_account.Credentials.from_service_account_file("credentials.json", scopes=scope)
         else:
@@ -33,7 +33,7 @@ def conectar():
 
 def obter_creds_drive():
     """Retorna as credenciais para uso direto com a API do Google Drive."""
-    scope =["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     if os.path.exists("credentials.json"):
         return service_account.Credentials.from_service_account_file("credentials.json", scopes=scope)
     else:
@@ -63,7 +63,7 @@ def carregar_tudo():
                 return pd.DataFrame(columns=colunas_padrao)
             
             df = pd.DataFrame(dados[1:], columns=dados[0])
-            df.columns =[str(c).strip().upper() for c in df.columns]
+            df.columns = [str(c).strip().upper() for c in df.columns]
             
             # VACINA DE NORMALIZAÇÃO SOSA (ANTI-ESPAÇO INVISÍVEL)
             for col in df.columns:
@@ -78,14 +78,14 @@ def carregar_tudo():
             print(f"Erro ao carregar {nome}: {e}")
             return pd.DataFrame(columns=colunas_padrao)
 
-    cols_planos =["DATA", "SEMANA", "ANO", "TURMA", "EIXO", "PLANO_TEXTO", "LINK_DRIVE"]
-    cols_aulas =["DATA", "SEMANA_REF", "TIPO_MATERIAL", "CONTEUDO", "ANO", "LINK_DRIVE"]
-    cols_alunos =["ID", "NOME_ALUNO", "TURMA", "STATUS", "NECESSIDADES", "ORIGEM"]
-    cols_relatorios =["DATA", "ID_ALUNO", "NOME_ALUNO", "TIPO", "CONTEUDO"]
-    cols_diario =["DATA", "ID_ALUNO", "NOME_ALUNO", "TURMA", "VISTO_ATIVIDADE", "TAGS", "OBSERVACOES", "BONUS"]
-    cols_registro =["DATA", "SEMANA", "TURMA", "CONTEUDO_MINISTRADO", "ADAPTACAO_PEI", "STATUS_CURRICULO"]
-    cols_notas =["ID_ALUNO", "NOME_ALUNO", "TURMA", "TRIMESTRE", "NOTA_VISTOS", "NOTA_TESTE", "NOTA_PROVA", "NOTA_REC", "MEDIA_FINAL"]
-    cols_diagnosticos =["DATA", "ID_ALUNO", "NOME_ALUNO", "TURMA", "ID_AVALIACAO", "RESPOSTAS_ALUNO", "NOTA_CALCULADA", "LINK_FOTO_DRIVE"]
+    cols_planos = ["DATA", "SEMANA", "ANO", "TURMA", "EIXO", "PLANO_TEXTO", "LINK_DRIVE"]
+    cols_aulas = ["DATA", "SEMANA_REF", "TIPO_MATERIAL", "CONTEUDO", "ANO", "LINK_DRIVE"]
+    cols_alunos = ["ID", "NOME_ALUNO", "TURMA", "STATUS", "NECESSIDADES", "ORIGEM"]
+    cols_relatorios = ["DATA", "ID_ALUNO", "NOME_ALUNO", "TIPO", "CONTEUDO"]
+    cols_diario = ["DATA", "ID_ALUNO", "NOME_ALUNO", "TURMA", "VISTO_ATIVIDADE", "TAGS", "OBSERVACOES", "BONUS"]
+    cols_registro = ["DATA", "SEMANA", "TURMA", "CONTEUDO_MINISTRADO", "ADAPTACAO_PEI", "STATUS_CURRICULO"]
+    cols_notas = ["ID_ALUNO", "NOME_ALUNO", "TURMA", "TRIMESTRE", "NOTA_VISTOS", "NOTA_TESTE", "NOTA_PROVA", "NOTA_REC", "MEDIA_FINAL"]
+    cols_diagnosticos = ["DATA", "ID_ALUNO", "NOME_ALUNO", "TURMA", "ID_AVALIACAO", "RESPOSTAS_ALUNO", "NOTA_CALCULADA", "LINK_FOTO_DRIVE"]
 
     return wb_internal, (
         safe_get(wb_internal, "DB_ALUNOS", cols_alunos), 
@@ -122,11 +122,15 @@ def salvar_no_banco(aba_nome, linha):
 def salvar_lote(aba_nome, lista_de_linhas):
     try:
         wb = conectar()
+        if not wb: return False
         ws = wb.worksheet(aba_nome)
-        ws.append_rows(lista_de_linhas, value_input_option="USER_ENTERED")
+        linhas_str = [[str(x).strip() for x in linha] for linha in lista_de_linhas]
+        ws.append_rows(linhas_str, value_input_option="USER_ENTERED")
         st.cache_data.clear()
         return True
-    except: return False
+    except Exception as e:
+        print(f"Erro ao salvar lote em {aba_nome}: {e}")
+        return False
 
 def gerar_proximo_id(df_alunos):
     if df_alunos.empty or 'ID' not in df_alunos.columns: return 2601001
@@ -166,7 +170,7 @@ def atualizar_aluno_cascata(id_aluno, novo_nome, nova_turma, nova_nec):
             try:
                 ws = wb.worksheet(aba)
                 dados = ws.get_all_values()
-                updates =[]
+                updates = []
                 for i, row in enumerate(dados):
                     if i > 0 and len(row) > col_id and limpar_id(row[col_id]) == id_str:
                         updates.append(gspread.Cell(row=i+1, col=col_nome+1, value=novo_nome))
@@ -202,7 +206,7 @@ def atualizar_fechamento_aula(data, turma, status, ponte, clima):
                 st.cache_data.clear()
                 return True
         
-        nova_linha =[data, "AVULSA", turma, "Registro via Diário", "N/A", "N/A", status, ponte, clima]
+        nova_linha = [data, "AVULSA", turma, "Registro via Diário", "N/A", "N/A", status, ponte, clima]
         ws.append_row(nova_linha, value_input_option="USER_ENTERED")
         st.cache_data.clear()
         return True
@@ -326,7 +330,7 @@ def excluir_registro(aba_nome, valor_conteudo):
         ws = wb.worksheet(aba_nome)
         dados = ws.get_all_values()
         for i, row in enumerate(dados):
-            if len(row) > 3 and row[3] == valor_conteudo:
+            if len(row) > 3 and valor_conteudo in " ".join(row):
                 ws.delete_rows(i + 1)
                 st.cache_data.clear()
                 return True
@@ -340,13 +344,11 @@ def limpar_diario_data_turma(data, turma):
         ws = wb.worksheet("DB_DIARIO_BORDO")
         dados = ws.get_all_values()
         
-        # 🚨 LEI DAS TAGS PROTEGIDAS: Estes registros NUNCA serão apagados pelo Diário Rápido
-        tags_protegidas =["SISTEMA_NOTA", "ARGUIÇÃO", "NOTA_EXTERNA"]
+        tags_protegidas = ["SISTEMA_NOTA", "ARGUIÇÃO", "NOTA_EXTERNA"]
         
-        indices =[]
+        indices = []
         for i, row in enumerate(dados):
             if i > 0 and len(row) > 5:
-                # Se for a mesma data, mesma turma, e NÃO for uma tag protegida, marca para deletar
                 if row[0] == data and row[3] == turma and row[5] not in tags_protegidas:
                     indices.append(i + 1)
                     
@@ -362,7 +364,7 @@ def limpar_notas_turma_trimestre(turma, trimestre):
         wb = conectar()
         ws = wb.worksheet("DB_NOTAS")
         dados = ws.get_all_values()
-        indices =[i + 1 for i, row in enumerate(dados) if i > 0 and len(row) > 3 and row[2] == turma and row[3] == trimestre]
+        indices = [i + 1 for i, row in enumerate(dados) if i > 0 and len(row) > 3 and row[2] == turma and row[3] == trimestre]
         for idx in reversed(indices): ws.delete_rows(idx)
         return True
     except: return False
@@ -489,7 +491,7 @@ def excluir_avaliacao_completa(identificador, tipo_prova_nome):
         
         ws_cron = wb.worksheet("DB_REGISTRO_AULAS")
         dados_cron = ws_cron.get_all_values()
-        indices_para_deletar =[i + 1 for i, row in enumerate(dados_cron) if i > 0 and tipo_prova_nome in row[3]]
+        indices_para_deletar = [i + 1 for i, row in enumerate(dados_cron) if i > 0 and tipo_prova_nome in row[3]]
         
         for idx in reversed(indices_para_deletar):
             ws_cron.delete_rows(idx)
@@ -501,14 +503,27 @@ def excluir_avaliacao_completa(identificador, tipo_prova_nome):
         return False
 
 # ==============================================================================
-# 5. INTEGRAÇÃO COM GOOGLE DRIVE (SOSA BRIDGE V45.8 - DETECTOR DE FALHAS)
+# 5. INTEGRAÇÃO COM GOOGLE DRIVE (SOSA BRIDGE V45.9 - VACINA ANTI-QUOTA)
 # ==============================================================================
 def salvar_foto_gabarito_drive(imagem_bytes, nome_aluno, turma, avaliacao_nome):
     """
-    SOSA V2026.MASTER: Envia a foto do gabarito como IMAGEM JPG PURA (.jpg) para o Google Drive.
-    Garante que NÃO cria arquivo .docx nem Documento do Google, salvando apenas a foto limpa.
+    SOSA V2026.MASTER: Envia a foto do gabarito como IMAGEM JPG PURA (.jpg) para o Google Drive
+    prioritariamente via Apps Script Bridge que possui cota de usuário, evitando o erro 403.
     """
     try:
+        # Tenta envio prioritário via Ponte Apps Script para utilizar a cota do usuário
+        link_ponte = subir_e_converter_para_google_docs(
+            imagem_bytes, 
+            f"GABARITO_{turma}_{nome_aluno.replace(' ', '_')}", 
+            trimestre="I Trimestre", 
+            categoria=turma, 
+            semana=avaliacao_nome, 
+            modo="SCANNER"
+        )
+        if "http" in str(link_ponte):
+            return link_ponte
+
+        # Fallback via Drive API Nativa com verificação de pasta
         creds = obter_creds_drive()
         service = build('drive', 'v3', credentials=creds)
         
@@ -516,7 +531,6 @@ def salvar_foto_gabarito_drive(imagem_bytes, nome_aluno, turma, avaliacao_nome):
         data_str = datetime.now().strftime("%Y%m%d_%H%M%S")
         nome_arquivo = f"GABARITO_{turma}_{nome_limpo}_{data_str}.jpg"
         
-        # Localiza a pasta da turma no Drive para salvar a foto direto nela
         folder_id = None
         try:
             q_folder = f"mimeType='application/vnd.google-apps.folder' and name contains '{turma}' and trashed=false"
@@ -527,10 +541,7 @@ def salvar_foto_gabarito_drive(imagem_bytes, nome_aluno, turma, avaliacao_nome):
         except Exception as e_f:
             print(f"Busca de pasta: {e_f}")
 
-        file_metadata = {
-            'name': nome_arquivo,
-            'mimeType': 'image/jpeg'
-        }
+        file_metadata = {'name': nome_arquivo, 'mimeType': 'image/jpeg'}
         if folder_id:
             file_metadata['parents'] = [folder_id]
 
@@ -547,7 +558,7 @@ def salvar_foto_gabarito_drive(imagem_bytes, nome_aluno, turma, avaliacao_nome):
         
         return file_drive.get('webViewLink', f"https://drive.google.com/file/d/{file_id}/view")
     except Exception as e:
-        print(f"Erro no salvamento da foto JPG: {e}")
+        print(f"Aviso no salvamento da foto JPG: {e}")
         return "N/A"
 
 def subir_e_converter_para_google_docs(file_stream, nome_arquivo, trimestre="I Trimestre", categoria="6º Ano", semana="Semana Geral", modo="AULA"):
@@ -596,67 +607,10 @@ def subir_e_converter_para_google_docs(file_stream, nome_arquivo, trimestre="I T
         return "N/A"
 
 # ==============================================================================
-# MOTOR DE RELOCAÇÃO TEMPORAL (PRESERVAÇÃO DE DOCS NO DRIVE)
-# ==============================================================================
-def renomear_arquivo_drive(link_drive, novo_nome):
-    """
-    Renomeia um arquivo no Google Drive preservando seu ID e link original.
-    """
-    try:
-        creds = obter_creds_drive()
-        service = build('drive', 'v3', credentials=creds)
-        
-        padrao_id = r"(?:/d/|id=)([a-zA-Z0-9-_]{25,})"
-        match = re.search(padrao_id, str(link_drive))
-        if match:
-            file_id = match.group(1)
-            file_metadata = {'name': novo_nome}
-            service.files().update(fileId=file_id, body=file_metadata).execute()
-            return True
-        return False
-    except Exception as e:
-        print(f"Erro ao renomear arquivo no Drive: {e}")
-        return False
-
-def relocador_plano_semana(semana_antiga, ano, nova_semana, link_drive):
-    """
-    Muda a semana de um plano no banco de dados e renomeia o arquivo no Drive,
-    PRESERVANDO 100% o documento Google Docs original com todas as suas edições manuais.
-    """
-    try:
-        wb = conectar()
-        ws = wb.worksheet("DB_PLANOS")
-        dados = ws.get_all_values()
-        
-        # 1. Atualiza a semana na planilha sem apagar a linha ou o link
-        for i, row in enumerate(dados):
-            if i > 0 and len(row) > 2 and row[1].strip() == semana_antiga.strip() and row[2].strip() == ano.strip():
-                ws.update_cell(i + 1, 2, nova_semana.strip()) # Atualiza Coluna B (SEMANA)
-                
-                # Se houver o texto do plano, atualiza a tag interna
-                txt_plano = str(row[5])
-                if "--- LINK DRIVE ---" in txt_plano:
-                    novo_txt = re.sub(rf"SEMANA:\s*{re.escape(semana_antiga)}", f"SEMANA: {nova_semana}", txt_plano)
-                    ws.update_cell(i + 1, 6, novo_txt)
-                break
-                
-        # 2. Renomeia o título do arquivo no Google Drive
-        novo_nome_docs = f"PLANO_{ano.replace('º','')}_{nova_semana.split(' (')[0].replace(' ', '')}"
-        renomear_arquivo_drive(link_drive, novo_nome_docs)
-        
-        st.cache_data.clear()
-        return True
-    except Exception as e:
-        print(f"Erro no Relocador Temporal: {e}")
-        return False
-
-# ==============================================================================
 # MOTOR DE RELOCAÇÃO TEMPORAL EM CASCATA (SOSA V202.6 - PRESERVAÇÃO DE DOCS)
 # ==============================================================================
 def renomear_arquivo_drive(link_drive, novo_nome):
-    """
-    Renomeia um arquivo no Google Drive preservando seu ID e link original.
-    """
+    """Renomeia um arquivo no Google Drive preservando seu ID e link original."""
     try:
         creds = obter_creds_drive()
         service = build('drive', 'v3', credentials=creds)
@@ -689,7 +643,7 @@ def relocador_plano_semana(semana_antiga, ano, nova_semana, link_drive):
                 ws_planos.update_cell(i + 1, 2, nova_semana.strip())
                 break
         
-        # 2. 🚨 MIGRAÇÃO EM CASCATA: Atualiza a referência de TODAS as Aulas em DB_AULAS_PRONTAS
+        # 2. MIGRAÇÃO EM CASCATA: Atualiza a referência de TODAS as Aulas em DB_AULAS_PRONTAS
         try:
             ws_aulas = wb.worksheet("DB_AULAS_PRONTAS")
             dados_a = ws_aulas.get_all_values()
