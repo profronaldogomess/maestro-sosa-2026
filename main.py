@@ -1017,7 +1017,7 @@ if menu == "📅 Planejamento (Ponto ID)":
 
 
 # ==============================================================================
-# MÓDULO: LABORATÓRIO DE PRODUÇÃO DIDÁTICA - V2026.FASE3 (RESTAURAÇÃO COMPLETA)
+# MÓDULO: LABORATÓRIO DE PRODUÇÃO DIDÁTICA - V2026.MASTER (6 BOTÕES RESTAURADOS)
 # ==============================================================================
 elif menu == "🧪 Criador de Aulas":
     st.title("Laboratório de Produção Didática")
@@ -1662,8 +1662,6 @@ elif menu == "🧪 Criador de Aulas":
                     if c_b6.button("🗑️ Apagar", key=f"del_ac_{row.name}", use_container_width=True):
                         if db.excluir_registro_com_drive("DB_AULAS_PRONTAS", identificador): st.rerun()
 
-                        
-
 
 # ==============================================================================
 # MÓDULO: CENTRAL DE AVALIAÇÕES - V2026.FASE2 (MEMÓRIA DAS AULAS & LIVRO DIDÁTICO)
@@ -1672,6 +1670,10 @@ elif menu == "📝 Central de Avaliações":
     st.title("Central de Avaliações")
     st.caption("Arquitetura psicométrica de elite para desenvolvimento de itens ENEM/SAEB, ancorados no livro didático e nas aulas ministradas.")
     st.markdown("---")
+
+    if "v_forja" not in st.session_state: 
+        st.session_state.v_forja = int(time.time())
+    v = st.session_state.v_forja
 
     if "forja" not in st.session_state:
         st.session_state.forja = {
