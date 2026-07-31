@@ -1017,13 +1017,17 @@ if menu == "📅 Planejamento (Ponto ID)":
 
 
 # ==============================================================================
-# MÓDULO: LABORATÓRIO DE PRODUÇÃO - V2026.FASE2 (COM MEMÓRIA DO LIVRO & DIÁRIO)
+# MÓDULO: LABORATÓRIO DE PRODUÇÃO DIDÁTICA - V2026.FASE3 (RESTAURAÇÃO COMPLETA)
 # ==============================================================================
 elif menu == "🧪 Criador de Aulas":
     st.title("Laboratório de Produção Didática")
     st.caption("Desenvolva aulas de safra, projetos interdisciplinares, cadernos de exercícios ancorados no Livro Didático e listas híbridas.")
     st.markdown("---")
     
+    if "v_lab" not in st.session_state: 
+        st.session_state.v_lab = int(time.time())
+    v = st.session_state.v_lab
+
     if "forja_aula" not in st.session_state:
         st.session_state.forja_aula = {
             'fase': 1, 'info': {}, 'links_web': '', 'qtd_q': 5, 'tipo_material': 'AULA',
@@ -1044,10 +1048,6 @@ elif menu == "🧪 Criador de Aulas":
         st.session_state.v_lab = int(time.time())
         st.rerun()
 
-    if "v_lab" not in st.session_state: 
-        st.session_state.v_lab = int(time.time())
-    v = st.session_state.v_lab
-
     def preparar_para_leitura(texto):
         if not texto: return ""
         texto = str(texto).replace('\x0c', '\\f').replace('\n', '\n\n')
@@ -1063,10 +1063,8 @@ elif menu == "🧪 Criador de Aulas":
         )
         return texto
 
-    # 🚨 FASE 2: FUNÇÃO RESGATE DE MEMÓRIA DAS AULAS E PÁGINAS DO LIVRO DIDÁTICO
     def extrair_memoria_aulas_trimestre(turma_ou_ano, trimestre):
         if df_registro_aulas.empty: return "", []
-        
         ano_num = "".join(filter(str.isdigit, str(turma_ou_ano)))
         if not ano_num: return "", []
         
@@ -1337,7 +1335,6 @@ elif menu == "🧪 Criador de Aulas":
                         ano_alvo = c1.selectbox("Série Alvo:", [6, 7, 8, 9])
                         trim_lista = c2.selectbox("Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"])
                         
-                        # 🚀 FASE 2: AUTO-LEITURA DAS PÁGINAS DO LIVRO E AULAS
                         puxar_memoria_lista = st.toggle("🧠 Autocarregar Aulas & Páginas do Livro (Diário de Bordo)", value=True, key=f"tog_mem_list_{v}")
                         contexto_aulas = ""
                         
@@ -1570,7 +1567,7 @@ elif menu == "🧪 Criador de Aulas":
                         st.balloons(); time.sleep(1.5); reset_laboratorio()
 
     # ==============================================================================
-    # ABA 2: ACERVO DIGITAL & HUB DE PRODUÇÃO (COM BYPASS OFFLINE/MANUAL)
+    # ABA 2: ACERVO DIGITAL & HUB DE PRODUÇÃO (COM OS 6 BOTÕES RESTAURADOS)
     # ==============================================================================
     with tab_acervo_lab:
         st.markdown("### Hub de Produção & Acervo de Aulas")
@@ -1627,17 +1624,45 @@ elif menu == "🧪 Criador de Aulas":
                     st.markdown(f"##### {identificador}")
                     st.caption(f"Série: {row['ANO']} | Data: {row['DATA']}")
                     
+                    # 🚨 RESTAURAÇÃO DE TODOS OS 6 BOTÕES DO ACERVO
                     def extrair_link_seguro(t, k):
                         m = re.search(rf"{k}\s*\(\s*(https://docs\.google\.com/document/d/[^\s\)]+)\s*\)", t, re.IGNORECASE)
                         return m.group(1).strip() if m else "N/A"
 
                     l_alu = extrair_link_seguro(txt_f, "Regular")
-                    c_b1, c_b2 = st.columns(2)
-                    if "http" in str(l_alu): c_b1.link_button("Aluno", str(l_alu), use_container_width=True)
-                    else: c_b1.info("Material Offline/Livro")
+                    if l_alu == "N/A" and "https://docs.google.com" in str(row.get('LINK_DRIVE', '')):
+                        l_alu = str(row.get('LINK_DRIVE'))
+                        
+                    l_pei1 = extrair_link_seguro(txt_f, "PEI_N1")
+                    if l_pei1 == "N/A": l_pei1 = extrair_link_seguro(txt_f, "PEI")
                     
-                    if c_b2.button("Apagar", key=f"del_ac_{row.name}", use_container_width=True):
+                    l_pei3 = extrair_link_seguro(txt_f, "PEI_N3")
+                    l_prof = extrair_link_seguro(txt_f, "Prof")
+
+                    c_b1, c_b2, c_b3, c_b4, c_b5, c_b6 = st.columns(6)
+                    
+                    if l_alu and "http" in str(l_alu): c_b1.link_button("📄 Aluno", str(l_alu), use_container_width=True)
+                    else: c_b1.caption("Offline/Livro")
+                    
+                    if l_pei1 and "http" in str(l_pei1): c_b2.link_button("🔵 PEI N1", str(l_pei1), use_container_width=True)
+                    else: c_b2.caption("Sem N1")
+                    
+                    if l_pei3 and "http" in str(l_pei3): c_b3.link_button("🔴 PEI N3", str(l_pei3), use_container_width=True)
+                    else: c_b3.caption("Sem N3")
+                    
+                    if l_prof and "http" in str(l_prof): c_b4.link_button("👨‍🏫 Guia Prof", str(l_prof), use_container_width=True)
+                    else: c_b4.caption("Sem Guia")
+                    
+                    if c_b5.button("✏️ Refinar", key=f"ref_ac_{row.name}", use_container_width=True):
+                        st.session_state.lab_temp = txt_f
+                        st.session_state.sosa_id_atual = identificador
+                        st.session_state.lab_meta = {"ano": str(row["ANO"]).replace("º",""), "semana_ref": row['SEMANA_REF']}
+                        st.rerun()
+                        
+                    if c_b6.button("🗑️ Apagar", key=f"del_ac_{row.name}", use_container_width=True):
                         if db.excluir_registro_com_drive("DB_AULAS_PRONTAS", identificador): st.rerun()
+
+                        
 
 
 # ==============================================================================
