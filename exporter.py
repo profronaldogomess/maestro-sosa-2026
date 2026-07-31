@@ -75,9 +75,8 @@ def adicionar_box_imagem_word(doc, legenda_prompt="ESPAÇO PARA ILUSTRAÇÃO / D
     cell = table.cell(0, 0)
     cell.width = Inches(5.5)
     
-    # Fundo cinza bem claro para o espaço da imagem
     set_cell_background(cell, "F8FAFC")
-    set_row_height(table.rows[0], 110) # Altura proporcional para desenho/colagem
+    set_row_height(table.rows[0], 110)
     
     p = cell.paragraphs[0]
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -90,7 +89,7 @@ def adicionar_box_imagem_word(doc, legenda_prompt="ESPAÇO PARA ILUSTRAÇÃO / D
     run.font.bold = True
     run.font.size = Pt(9.5)
     run.font.color.rgb = RGBColor(100, 116, 139)
-    doc.add_paragraph() # Espaçamento após o box
+    doc.add_paragraph()
 
 def configurar_cabecalho_mestre(doc, info, tipo_label, mostrar_nota=False):
     """Gera o cabeçalho executivo oficial da Prefeitura de Itabuna"""
@@ -332,7 +331,7 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
     return file_stream
 
 # ==============================================================================
-# 4. GUIA DO PROFESSOR E MEDIAÇÃO
+# 4. GUIA DO PROFESSOR (COM DESCRITORES SAEB E DISTRATORES CIENTÍFICOS)
 # ==============================================================================
 def gerar_docx_professor_v25(titulo_doc, conteudo, info):
     file_stream = io.BytesIO()
@@ -350,7 +349,7 @@ def gerar_docx_professor_v25(titulo_doc, conteudo, info):
     header_table.style = 'Table Grid'
     c_tit = header_table.cell(0, 0).merge(header_table.cell(0, 2))
     set_cell_background(c_tit, "003366")
-    run_tit = c_tit.paragraphs[0].add_run("GUIA DE MEDIAÇÃO E GABARITO COMENTADO")
+    run_tit = c_tit.paragraphs[0].add_run("GUIA DE MEDIAÇÃO, DESCRITORES SAEB E DISTRATORES")
     run_tit.font.bold, run_tit.font.size = True, Pt(11)
     run_tit.font.color.rgb = RGBColor(255, 255, 255)
     c_tit.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -375,8 +374,14 @@ def gerar_docx_professor_v25(titulo_doc, conteudo, info):
             run.font.color.rgb = RGBColor(0, 128, 0)
             continue
 
-        if any(x in l_s.upper() for x in ["JUSTIFICATIVA", "PERÍCIA", "LACUNA", "DISTRATORES"]):
+        if any(x in l_s.upper() for x in ["JUSTIFICATIVA", "PERÍCIA", "LACUNA", "DISTRATORES", "DESCRITOR"]):
             p.paragraph_format.left_indent = Inches(0.15)
+            if "DESCRITOR" in l_s.upper() or "SAEB" in l_s.upper():
+                run_d = p.add_run("🆔 ")
+                run_d.font.size = Pt(10)
+            elif "DISTRATORES" in l_s.upper():
+                run_d = p.add_run("🧠 ")
+                run_d.font.size = Pt(10)
             adicionar_texto_formatado(p, l_s)
             continue
 
@@ -387,7 +392,7 @@ def gerar_docx_professor_v25(titulo_doc, conteudo, info):
     return file_stream
 
 # ==============================================================================
-# 5. PROVA OFICIAL (COM SUPORTE DE ATÉ 20 QUESTÕES E GABARITO LIMPO)
+# 5. PROVA OFICIAL (PADRÃO ENEM / SAEB / OBMEP)
 # ==============================================================================
 def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
     file_stream = io.BytesIO()
@@ -412,7 +417,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         num_total_q = len(re.findall(r'(?i)QUESTÃO\s+\d+', corpo_bruto))
         if num_total_q == 0: num_total_q = int(info.get('qtd_questoes', 5))
         
-        label_prova = "AVALIAÇÃO ADAPTADA" if is_pei_doc else "AVALIAÇÃO DE MATEMÁTICA"
+        label_prova = "AVALIAÇÃO ADAPTADA" if is_pei_doc else "AVALIAÇÃO DE MATEMÁTICA (ENEM/SAEB)"
         if "SONDA" in titulo_doc.upper(): label_prova = "SONDA DE PROFICIÊNCIA"
 
         configurar_cabecalho_mestre(doc, info, label_prova, mostrar_nota=True)
@@ -424,15 +429,15 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         
         c_orient = top_table.cell(0, 0)
         p_tit = c_orient.paragraphs[0]
-        p_tit.add_run("ORIENTAÇÕES:").font.bold = True
+        p_tit.add_run("ORIENTAÇÕES OFICIAIS:").font.bold = True
         
         val_total = info.get('valor', '3,0')
         val_q = info.get('valor_questao', '0,3')
         
         orient_list = [
-            "Leia atentamente cada enunciado.",
-            "Resolva os cálculos no espaço da folha.",
-            "Marque apenas uma alternativa por questão." if info.get('tipo_prova') != "2ª Chamada" else "Apresente o raciocínio de todas as questões.",
+            "Leia atentamente os enunciados contextualizados.",
+            "Apresente os cálculos no espaço do papel.",
+            "Marque apenas uma alternativa na folha de respostas." if info.get('tipo_prova') != "2ª Chamada" else "Apresente o raciocínio completo em todas as questões.",
             f"Valor Total: {val_total} | Cada questão: {val_q}"
         ]
         for txt in orient_list:
@@ -440,7 +445,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
             p.add_run(f"• {txt}").font.size = Pt(8.5)
             p.paragraph_format.space_after = Pt(0)
 
-        # GRADE DE GABARITO OFICIAL
+        # GRADE DE GABARITO OFICIAL (ATÉ 20 QUESTÕES)
         if info.get('tipo_prova') != "2ª Chamada":
             c_gab = top_table.cell(0, 1)
             if num_total_q <= 10:
@@ -484,7 +489,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
             if not l_s: continue
 
             if "[" in l_s and "PROMPT IMAGEM" in l_s.upper():
-                adicionar_box_imagem_word(doc, "ESPAÇO ILUSTRATIVO")
+                adicionar_box_imagem_word(doc, "ESPAÇO PARA ILUSTRAÇÃO DA QUESTÃO")
                 continue
 
             p = doc.add_paragraph()
@@ -499,6 +504,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
                     run_r = p.add_run(rotulo)
                     run_r.bold = True
                     run_r.font.size = Pt(10.5)
+                    run_r.font.color.rgb = RGBColor(0, 51, 102)
                     adicionar_texto_formatado(p, match.group(4).strip())
                     continue
 
@@ -554,7 +560,7 @@ def gerar_docx_plano_pedagogico_ELITE(titulo_arquivo, dados, info):
         set_cell_background(c_tit, "2962FF")
         p_t = c_tit.paragraphs[0]
         p_t.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        r_t = p_t.add_run("PLANO DE ENSINO")
+        r_t = p_t.add_run("PLANO DE ENSINO SEMANAL")
         r_t.font.bold = True
         r_t.font.color.rgb = RGBColor(255, 255, 255)
 
