@@ -74,7 +74,13 @@ PERSONAS = {
     (Adaptação Apoio Moderado em 3 Alternativas A, B, C com [PARA LEMBRAR] + [PASSO A PASSO] + [ PROMPT IMAGEM: Line art, black and white... ])
 
     [NIVEL_3]
-    (Atividades Lúdicas/Sensoriais divididas por BOX 1 a BOX 10 com comandos motores e [ PROMPT IMAGEM: ... ])
+    (Atividades Lúdicas/Sensoriais divididas por BOX 1 a BOX 10 com comandos motores)
+
+    [RUBRICA_DE_OBSERVACAO]
+    - Autonomia Executiva: ✅ Autônomo | 🤝 Com Apoio | ❌ Não Realizou
+    - Compreensão de Comandos: ✅ Autônomo | 🤝 Com Apoio | ❌ Não Realizou
+    - Percepção Visual e Espacial: ✅ Autônomo | 🤝 Com Apoio | ❌ Não Realizou
+    - Raciocínio Lógico-Proporcional: ✅ Autônomo | 🤝 Com Apoio | ❌ Não Realizou
 
     [GABARITO_PEI]
     QUESTÃO 01: X
@@ -116,6 +122,7 @@ PERSONAS = {
     Crie duas adaptações de exercícios baseadas no material regular.
     [PEI_NIVEL_1]: Apoio Leve, 3 Alternativas (A, B, C).
     [PEI_NIVEL_3]: Apoio Severo (Lúdico/Sensorial) em 10 BOXES sequenciais.
+    [RUBRICA_DE_OBSERVACAO]
     [GABARITO_PEI]""",
 
     "FORJA_LOTE_JSON": """VOCÊ É UM ELABORADOR DE ITENS DO INEP/CAEd CRIANDO QUESTÕES DE PROVA EM JSON.
@@ -294,12 +301,12 @@ def gerar_ia_json(persona_key, comando, usar_busca=False):
         return {"erro": str(e)}
 
 # ==============================================================================
-# EXTRATOR UNIVERSAL DE TAGS (MULTIMODO V2026.MASTER - ISOLAMENTO DE FRONTEIRA)
+# EXTRATOR UNIVERSAL DE TAGS (MULTIMODO V2026.MASTER - FLEXÍVEL E PROPORCIONAL)
 # ==============================================================================
 def extrair_tag(texto, tag):
     """
     Extrator Universal Imune a Falhas de Formatação, Markdown e Variações de Brackets.
-    Garante a extração de blocos inteiros sem truncar a primeira linha.
+    Suporta variações de metadados como [VALOR: 3.0], [VALOR]: 3.0, [VALOR] 3.0.
     """
     if not texto or not isinstance(texto, str): return ""
     tag_busca = tag.upper().strip().replace("[", "").replace("]", "")
@@ -310,7 +317,7 @@ def extrair_tag(texto, tag):
         "GRADE_DE_CORRECAO_PEI", "PROFESSOR", "ALUNO", "NIVEL_1", "NIVEL_2", "NIVEL_3",
         "PEI_NIVEL_1", "PEI_NIVEL_2", "PEI_NIVEL_3", "AULA_1", "AULA_2", "SABADO_LETIVO", 
         "IMAGENS", "RESPOSTAS_IA", "RESPOSTAS_PEI_IA", "RUBRICA_DE_MERITO", "JUSTIFICATIVA_PEDAGOGICA",
-        "JUSTIFICATIVA_PHC", "DIAGNOSTICO_GERAL", "DIRETRIZES_CURRICULARES"
+        "JUSTIFICATIVA_PHC", "DIAGNOSTICO_GERAL", "DIRETRIZES_CURRICULARES", "RUBRICA_DE_OBSERVACAO"
     ]
     
     tags_mestras = [
@@ -324,22 +331,22 @@ def extrair_tag(texto, tag):
         "MAPA_DE_RECOMPOSICAO", "RESPOSTAS_PEDAGOGICAS", "BASE_DIDATICA",
         "MENSAGEM_CHAT", "CONTEUDO_ATUALIZADO", "SOCIAIS", "COMUNICATIVAS", "EMOCIONAIS", "FUNCIONAIS",
         "OBJETIVO", "ESTRATEGIA", "RECURSO", "DIAGNOSTICO_GERAL", "DIRETRIZES_CURRICULARES", "CHECKLIST",
-        "NIVEL_1", "NIVEL_2", "NIVEL_3", "PEI_NIVEL_1", "PEI_NIVEL_2", "PEI_NIVEL_3"
+        "NIVEL_1", "NIVEL_2", "NIVEL_3", "PEI_NIVEL_1", "PEI_NIVEL_2", "PEI_NIVEL_3", "RUBRICA_DE_OBSERVACAO"
     ]
     
-    # 🚨 PARADA DE FRONTEIRA ESTREITA: Evita que "GABARITO" pare em "GABARITO_TEXTO"
-    parada = [rf"\b{re.escape(t)}\b" for t in tags_mestras if t != tag_busca]
-    lista_parada = "|".join(parada)
-
-    # 1. Padrão Em Linha Curta APENAS para tags de metadados simples (VALOR, SOSA_ID...)
+    # 1. Padrão Flexível para tags de metadados simples (VALOR, SOSA_ID...)
     if tag_busca not in tags_bloco:
-        padrao_interno = rf"\[\s*[*#]*\s*{re.escape(tag_busca)}\s*[*#]*\s*\]\s*[:\-]*\s*(.*?)(?=\n|$)"
+        padrao_interno = rf"\[\s*[*#]*\s*{re.escape(tag_busca)}\b(?:\s*[:\-]\s*|\s*\]\s*[:\-]*\s*)(.*?)(?=\]|\n|$)"
         match_int = re.search(padrao_interno, texto, re.IGNORECASE)
-        if match_int and 0 < len(match_int.group(1).strip()) < 120 and "\n" not in match_int.group(1).strip():
-            return match_int.group(1).strip()
+        if match_int:
+            val_res = match_int.group(1).strip()
+            if 0 < len(val_res) < 120 and "\n" not in val_res:
+                return val_res
 
     # 2. Padrão Bloco Multilinhas: Pega desde o colchete até o início da próxima tag oficial
-    padrao_bloco = rf"\[\s*[*#]*\s*{re.escape(tag_busca)}\s*[*#]*\s*\]\s*[:\-]*\s*(.*?)(?=\s*\[\s*[*#]*\s*(?:{lista_parada})\s*[*#]*\s*\]|--- LINKS ---|$)"
+    parada = [rf"\b{re.escape(t)}\b" for t in tags_mestras if t != tag_busca]
+    lista_parada = "|".join(parada)
+    padrao_bloco = rf"\[\s*[*#]*\s*{re.escape(tag_busca)}\b.*?\s*\]\s*[:\-]*\s*(.*?)(?=\s*\[\s*[*#]*\s*(?:{lista_parada})\s*[*#]*\s*\]|--- LINKS ---|$)"
     match_bloco = re.search(padrao_bloco, texto, re.DOTALL | re.IGNORECASE)
     
     if match_bloco:
@@ -367,7 +374,6 @@ def extrair_gab_universal_com_fallback(texto, is_pei=False, nivel_pei="NIVEL_1")
     # 1. Tenta extrair primeiro do bloco específico de gabarito
     raw_reg = extrair_tag(texto, "GABARITO_TEXTO") or extrair_tag(texto, "GABARITO")
     
-    # Padrões de captura flexíveis para linhas de gabarito ("QUESTÃO 01: C", "Q1: C", "1. C", "1 - C", "1: C")
     if raw_reg:
         matches_reg = re.findall(r"(?:QUEST[AÃ]O\s*|Q)?\s*0?(\d+)[\s\.\)\-:]+([A-E])\b", str(raw_reg).upper())
         for q_num_str, letra in matches_reg:
@@ -414,7 +420,7 @@ def extrair_gab_universal_com_fallback(texto, is_pei=False, nivel_pei="NIVEL_1")
                 if q_num not in mapa_pei and q_num <= qtd_oficial:
                     mapa_pei[q_num] = letra
 
-    # 4. Herança PEI Inteligente (Nível 2 herda do Nível 1 se N2 não tiver texto de gabarito)
+    # 4. Herança PEI Inteligente
     if len(mapa_pei) < qtd_oficial and nivel_pei != "NIVEL_1":
         bloco_n1 = extrair_tag(texto, "NIVEL_1") or extrair_tag(texto, "PEI_NIVEL_1")
         if bloco_n1:
