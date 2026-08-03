@@ -544,20 +544,19 @@ if menu == "📅 Planejamento (Ponto ID)":
                             st.success("Logística salva!"); time.sleep(1); st.rerun()
 
         # ------------------------------------------------------------------------------
-        # ROTA 3: AULA REGULAR (PARSER PERFEITO DO SEU CSV REAL - 0 WARNS / 0 BUGS)
+        # ROTA 3: AULA REGULAR (PARSER PERFEITO DO SEU CSV REAL - COM RECORTE DO LIVRO)
         # ------------------------------------------------------------------------------
         else:
             with st.container(border=True):
-                st.markdown("#### 2. Base Curricular")
+                st.markdown("#### 2. Base Curricular & Ancoragem no Livro Didático")
                 
                 modo_p = st.radio("Fonte de Dados:", ["Livro Didático", "Manual (Matriz)", "Links da Web"], horizontal=True)
                 
-                ctx_ia, uri_livro_drive, links_web_texto, base_didatica_info = "", None, "", "Matriz Curricular"
+                ctx_ia, uri_livro_drive, links_web_texto, base_didatica_info, recorte_livro_texto = "", None, "", "Matriz Curricular", ""
                 
                 if modo_p == "Manual (Matriz)":
                     df_matriz_ano = df_curriculo[df_curriculo['ANO'].astype(str).str.contains(str(ano_p))].copy()
                     
-                    # 🚨 LOCALIZAÇÃO DAS COLUNAS DO SEU CSV REAL
                     col_eixo_real = next((c for c in df_matriz_ano.columns if any(x in c.upper() for x in ['GERAIS', 'EIXO', 'DOMÍNIO'])), None)
                     col_trim_real = next((c for c in df_matriz_ano.columns if trim_atual.upper() in c.upper()), None)
 
@@ -567,13 +566,11 @@ if menu == "📅 Planejamento (Ponto ID)":
                         sel_eixo = st.multiselect("Eixo Temático (Conteúdos Gerais):", eixos_disponiveis)
                         
                         if col_trim_real and sel_eixo:
-                            # Filtra as linhas correspondentes aos Eixos selecionados
                             df_eixos_sel = df_matriz_ano[df_matriz_ano[col_eixo_real].isin(sel_eixo)]
                             
                             topicos_fatiados = set()
                             for _, r_eixo in df_eixos_sel.iterrows():
                                 texto_trim = str(r_eixo.get(col_trim_real, ''))
-                                # Limpa citações como [cite: 8] e fatia por ';'
                                 texto_limpo = re.sub(r'\[cite:.*?\]', '', texto_trim).strip()
                                 for t_item in texto_limpo.split(';'):
                                     t_clean = t_item.strip()
@@ -587,17 +584,25 @@ if menu == "📅 Planejamento (Ponto ID)":
                         st.warning("⚠️ Não foi possível ler as colunas da matriz carregada.")
                 
                 elif modo_p == "Links da Web":
-                    links_web_texto = st.text_area("Cole os Links (um por linha):", placeholder="https://...")
+                    links_web_texto = st.text_area("Cole os Links da Web (um por linha):", placeholder="https://...")
                     base_didatica_info = "Artigos da Web"
                 
-                else:
+                else: # Livro Didático
                     cx1, cx2 = st.columns([2, 1])
                     livros_disponiveis = df_materiais[df_materiais['TIPO'].str.contains(str(ano_p), na=False)]['NOME_ARQUIVO'].tolist()
                     sel_mat = cx1.selectbox("Livro do Cofre Digital:", [""] + livros_disponiveis)
-                    pags = cx2.text_input("Páginas Alvo:", placeholder="Ex: 14-23")
+                    pags = cx2.text_input("Páginas Alvo do Livro:", placeholder="Ex: Páginas 184 a 191")
+                    
                     if sel_mat:
                         uri_livro_drive = df_materiais[df_materiais['NOME_ARQUIVO'] == sel_mat].iloc[0]['URI_ARQUIVO']
                         base_didatica_info = f"Livro: {sel_mat} | Páginas: {pags}"
+
+                    recorte_livro_texto = st.text_area(
+                        "📖 Recorte do Livro / Exercícios das Páginas (Opcional, para a IA não alucinar):",
+                        placeholder="Cole aqui o texto ou os exercícios exatos das páginas do livro para a IA usar como base e criar o plano e as questões...",
+                        height=120,
+                        key=f"recorte_ponto_id_{v}"
+                    )
 
             with st.container(border=True):
                 st.markdown("#### 3. Diretrizes de Aula")
@@ -605,22 +610,22 @@ if menu == "📅 Planejamento (Ponto ID)":
                 foco_a1, foco_a2, foco_sab = "N/A", "N/A", "N/A"
                 
                 if "1 Aula" in carga_horaria:
-                    foco_a1 = st.text_area("Foco da Aula 1:", placeholder="Ex: Explicar perímetro...", height=80)
+                    foco_a1 = st.text_area("Foco da Aula 1:", placeholder="Ex: Explicar divisão de decimais com base na página 184...", height=80)
                 elif "2 Aulas" in carga_horaria:
                     c_d1, c_d2 = st.columns(2)
-                    foco_a1 = c_d1.text_area("Foco da Aula 1:", placeholder="Ex: Explicar perímetro...", height=80)
-                    foco_a2 = c_d2.text_area("Foco da Aula 2:", placeholder="Ex: Fazer exercícios da página 15...", height=80)
+                    foco_a1 = c_d1.text_area("Foco da Aula 1:", placeholder="Ex: Explicar teoria do livro...", height=80)
+                    foco_a2 = c_d2.text_area("Foco da Aula 2:", placeholder="Ex: Resolver exercícios das páginas 188 a 190...", height=80)
                 else:
                     c_d1, c_d2, c_d3 = st.columns(3)
-                    foco_a1 = c_d1.text_area("Foco da Aula 1:", placeholder="Ex: Explicar perímetro...", height=80)
-                    foco_a2 = c_d2.text_area("Foco da Aula 2:", placeholder="Ex: Fazer exercícios...", height=80)
+                    foco_a1 = c_d1.text_area("Foco da Aula 1:", placeholder="Ex: Explicar teoria...", height=80)
+                    foco_a2 = c_d2.text_area("Foco da Aula 2:", placeholder="Ex: Resolver exercícios...", height=80)
                     foco_sab = c_d3.text_area("Foco do Sábado Letivo:", placeholder="Ex: Oficina prática...", height=80)
 
             c_g1, c_g2 = st.columns(2)
 
-            if c_g1.button("🧠 Iniciar Motor de IA: Gerar Planejamento", use_container_width=True, type="primary"):
+            if c_g1.button("🧠 Iniciar Motor de IA: Gerar Planejamento Ancorado", use_container_width=True, type="primary"):
                 with st.status("🚀 Iniciando Protocolo de Planejamento...", expanded=True) as status:
-                    status.write("📚 Coletando base didática e diretrizes...")
+                    status.write("📚 Coletando base didática e diretrizes do livro...")
                     
                     precisa_de_internet = False
                     if modo_p == "Manual (Matriz)": 
@@ -638,8 +643,8 @@ if menu == "📅 Planejamento (Ponto ID)":
                         "[CONTEUDOS_ESPECIFICOS] (Tópicos)\n"
                         "[OBJETIVOS_ENSINO] (Objetivos)\n"
                         "[JUSTIFICATIVA_PEDAGOGICA] (Justificativa)\n"
-                        "[AULA_1] (Roteiro da Aula 1)\n"
-                        "[AULA_2] (Roteiro da Aula 2)\n"
+                        "[AULA_1] (Roteiro da Aula 1 com referência ao livro)\n"
+                        "[AULA_2] (Roteiro da Aula 2 com referência ao livro)\n"
                         "[SABADO_LETIVO] (Roteiro do Sábado)\n"
                         "[AVALIACAO_DE_MERITO] (Como avaliar)\n"
                         "[ESTRATEGIA_DUA_PEI] (Adaptação PEI)\n"
@@ -649,13 +654,15 @@ if menu == "📅 Planejamento (Ponto ID)":
                         f"TIPO: {tipo_semana}\n{diretriz_base}\n"
                         f"SÉRIE: {ano_p}º Ano. SEMANA: {sem_limpa}. TRIMESTRE: {trim_atual}.\n"
                         f"CARGA HORÁRIA: {carga_horaria}.\n"
+                        f"BASE DIDÁTICA: {base_didatica_info}\n"
                         f"DIRETRIZ AULA 1: {foco_a1}\nDIRETRIZ AULA 2: {foco_a2}\nDIRETRIZ SÁBADO: {foco_sab}\n"
-                        f"MATRIZ OFICIAL:\n{ctx_ia if ctx_ia else 'Não fornecida. Deduza com base no tema do livro/links.'}\n\n"
+                        f"MATRIZ OFICIAL:\n{ctx_ia if ctx_ia else 'Baseada na página do Livro Didático.'}\n\n"
                         f"🚨 PREENCHA OBRIGATORIAMENTE ESTE TEMPLATE EXATO (Use as tags com colchetes):\n{template_forcado}"
                     )
                     
-                    status.write("🧠 Maestro Sosa está redigindo o plano...")
-                    resultado_ia = ai.gerar_ia("PLANE_PEDAGOGICO", prompt, url_drive=None, usar_busca=precisa_de_internet)
+                    status.write("🧠 Maestro Sosa está redigindo o plano ancorado...")
+                    # 🚨 ENVIA O RECORTE DO LIVRO DIDÁTICO PARA A IA
+                    resultado_ia = ai.gerar_ia("PLANE_PEDAGOGICO", prompt, url_drive=uri_livro_drive, usar_busca=precisa_de_internet, recorte_livro=recorte_livro_texto)
                     
                     if "ERRO" in resultado_ia.upper() or "⚠️" in resultado_ia:
                         status.update(label="❌ Falha na comunicação com a IA.", state="error")
@@ -1285,14 +1292,23 @@ elif menu == "🧪 Criador de Aulas":
                                     roteiro_especifico = ai.extrair_tag(plano_txt, tag_roteiro)
                                     st.info(f"Roteiro Ativo: {roteiro_especifico}")
 
-                                    links_web_aula = st.text_area("Enriquecimento por Links / Livro no Drive (Cole a URL):", value=base_herdada if "https" in base_herdada else "")
+                                    # 🚨 CAPTURA E ANCORAGEM NO LIVRO DIDÁTICO
+                                    st.markdown("##### 📖 Ancoragem no Livro Didático")
+                                    recorte_exercicios_livro = st.text_area(
+                                        "Cole os Exercícios / Texto das Páginas do Livro Didático:",
+                                        placeholder="Exemplo: Cole aqui as questões da página 188 a 190 do livro para a IA criar o Tratado Didático e gerar QUESTÕES ESPELHO fiéis para a folha do aluno...",
+                                        height=140,
+                                        key=f"recorte_aula_lab_{v}"
+                                    )
 
-                                    if st.button("Iniciar Forja Semiótica", use_container_width=True, type="primary"):
+                                    links_web_aula = st.text_area("Enriquecimento por Links da Web / URL do Livro no Drive:", value=base_herdada if "https" in base_herdada else "")
+
+                                    if st.button("Iniciar Forja Semiótica Ancorada", use_container_width=True, type="primary"):
                                         fa['info'] = {
                                             "ano": ano_lab, "semana_ref": sem_lab, "aula_alvo": aula_alvo_prod,
                                             "roteiro": roteiro_especifico, "habilidade": ai.extrair_tag(plano_txt, "HABILIDADE_BNCC"),
                                             "objetivos": ai.extrair_tag(plano_txt, "OBJETIVOS_ENSINO"), "base": base_herdada,
-                                            "trimestre": trim_real
+                                            "trimestre": trim_real, "recorte_livro": recorte_exercicios_livro
                                         }
                                         fa['links_web'] = links_web_aula
                                         fa['qtd_q'] = qtd_q_prod
@@ -1390,13 +1406,19 @@ elif menu == "🧪 Criador de Aulas":
 
             elif fa['fase'] == 2:
                 if fa.get('tipo_material') == 'AULA':
-                    st.markdown("### Fase 2: Tratado Didático (Teoria)")
+                    st.markdown("### Fase 2: Tratado Didático (Teoria Ancorada no Livro)")
                     if not fa['teoria']:
-                        with st.spinner("Gerando explicação didática com leitura do Livro/Drive..."):
-                            prompt_teoria = f"SÉRIE: {fa['info']['ano']}º Ano.\nASSUNTO: {fa['info']['aula_alvo']}.\nHABILIDADE: {fa['info']['habilidade']}\nROTEIRO DO PROFESSOR: {fa['info']['roteiro']}\n🚨 RESPONDA OBRIGATORIAMENTE DENTRO DA TAG [PROFESSOR]"
+                        with st.spinner("Gerando explicação didática com leitura das páginas do Livro..."):
+                            prompt_teoria = (
+                                f"SÉRIE: {fa['info']['ano']}º Ano.\nASSUNTO: {fa['info']['aula_alvo']}.\n"
+                                f"HABILIDADE: {fa['info']['habilidade']}\nROTEIRO DO PROFESSOR: {fa['info']['roteiro']}\n"
+                                f"BASE DO LIVRO: {fa['info'].get('base', '')}\n"
+                                f"🚨 RESPONDA OBRIGATORIAMENTE DENTRO DA TAG [PROFESSOR]"
+                            )
                             url_livro = fa['links_web'].strip() if "http" in fa['links_web'] else None
+                            recorte_txt = fa['info'].get('recorte_livro', '')
                             
-                            res_teoria = ai.gerar_ia("FORJA_AULA_TEORIA", prompt_teoria, url_drive=url_livro, usar_busca=False)
+                            res_teoria = ai.gerar_ia("FORJA_AULA_TEORIA", prompt_teoria, url_drive=url_livro, usar_busca=False, recorte_livro=recorte_txt)
                             if "ERRO" in res_teoria.upper() or "⚠️" in res_teoria:
                                 st.error(f"Falha na IA: {res_teoria}")
                                 if st.button("Tentar Novamente"): st.rerun()
@@ -1736,13 +1758,13 @@ elif menu == "📝 Central de Avaliações":
                 perfil_rigor = c_rigor.selectbox("Perfil de Rigor Cognitivo (TRI):", ["⚖️ Padrão (Balanceado ENEM)", "🚀 Alta Performance (OBMEP/Avançado)", "🧱 Foco em Fixação (Acessível)"])
 
                 with st.container(border=True):
-                    st.markdown("#### Seleção de Matérias Base (Aulas Ministradas)")
+                    st.markdown("#### Seleção de Matérias e Questões Espelho do Livro/Lousa")
                     c_safra1, c_safra2 = st.columns(2)
                     
                     df_ref = df_aulas[df_aulas['ANO'].str.contains(str(ano_av))].copy()
                     termos_proibidos = ["APLICAÇÃO", "TESTE", "PROVA", "SONDA", "AVALIAÇÃO", "CORREÇÃO", "REVISÃO", "EXAME", "2ª CHAMADA"]
                     df_ref = df_ref[~df_ref['TIPO_MATERIAL'].str.upper().str.contains('|'.join(termos_proibidos))]
-                    mats_selecionados = c_safra1.multiselect("Aulas Base (Acervo do Trimestre):", options=df_ref["TIPO_MATERIAL"].tolist())
+                    mats_selecionados = c_safra1.multiselect("Aulas Ministradas para Minerar Exercícios:", options=df_ref["TIPO_MATERIAL"].tolist())
                     
                     col_ano = next((c for c in df_curriculo.columns if 'ANO' in c.upper()), None)
                     col_trim = next((c for c in df_curriculo.columns if trim_filtro.upper() in c.upper()), None)
@@ -1758,8 +1780,16 @@ elif menu == "📝 Central de Avaliações":
                                     if t_p not in topicos_disponiveis:
                                         topicos_disponiveis.append(t_p)
                                         
-                    topicos_futuros = c_safra2.multiselect("Tópicos da Matriz SAEB:", options=sorted(topicos_disponiveis))
+                    topicos_futuros = c_safra2.multiselect("Tópicos da Matriz SAEB/BNCC:", options=sorted(topicos_disponiveis))
                     
+                    # 🚨 CAIXA DE ANCORAGEM DE EXERCÍCIOS REAIS DO LIVRO PARA CRIAÇÃO DE QUESTÕES ESPELHO
+                    recorte_provas_livro = st.text_area(
+                        "📖 Cole Exercícios Reais do Livro Didático / Lousa para Virarem Questões Espelho na Prova:",
+                        placeholder="Cole aqui as questões que os alunos resolveram no livro/caderno em sala. A IA criará questões espelho idênticas em estrutura, alterando apenas os dados/contexto local...",
+                        height=120,
+                        key=f"recorte_provas_{v}"
+                    )
+
                     conteudos_extraidos = set()
                     contexto_base_texto = "" 
                     
@@ -1775,15 +1805,19 @@ elif menu == "📝 Central de Avaliações":
                         for m_nome in mats_selecionados:
                             m_row = df_aulas[df_aulas["TIPO_MATERIAL"] == m_nome].iloc[0]
                             txt_aula = str(m_row['CONTEUDO'])
-                            contexto_base_texto += f"--- AULA: {m_nome} ---\nHabilidade: {ai.extrair_tag(txt_aula, 'HABILIDADE_BNCC')}\nConteúdos: {ai.extrair_tag(txt_aula, 'CONTEUDOS_ESPECIFICOS')}\n\n"
+                            contexto_base_texto += f"--- MEMÓRIA DE EXERCÍCIOS DA AULA: {m_nome} ---\n{ai.extrair_tag(txt_aula, 'ALUNO')}\n\n"
                     
+                    if recorte_provas_livro.strip():
+                        contexto_base_texto += f"--- EXERCÍCIOS FOCALIZADOS DO LIVRO DIDÁTICO ---\n{recorte_provas_livro}\n\n"
+
                     if topicos_futuros:
                         for topico in topicos_futuros: conteudos_extraidos.add(topico)
                     
                     lista_conteudos = sorted(list(conteudos_extraidos)) if conteudos_extraidos else ["Matemática Geral ENEM/SAEB"]
                     
-                if st.button("Gerar Matriz de Questões ENEM/SAEB", type="primary", use_container_width=True):
-                    if not mats_selecionados and not topicos_futuros: st.error("Selecione pelo menos uma matéria.")
+                if st.button("Gerar Matriz de Questões Ancoradas no Livro/Lousa", type="primary", use_container_width=True):
+                    if not mats_selecionados and not topicos_futuros and not recorte_provas_livro.strip():
+                        st.error("Selecione pelo menos uma matéria ou cole exercícios do livro.")
                     else:
                         gabarito_mestre = util.gerar_gabarito_balanceado(qtd_q)
                         mapa_inicial = []
