@@ -428,6 +428,19 @@ if menu == "📅 Planejamento (Ponto ID)":
             sem_limpa = sem_p.split(" (")[0]
             trim_atual = sem_p.split(" - ")[1] if " - " in sem_p else "I Trimestre"
 
+            # 🚨 PILAR 3: VERIFICAÇÃO AUTOMÁTICA DE STATUS DE RECESSO / FERIADO NO CALENDÁRIO
+            status_especial_sem = ""
+            motivo_especial_sem = ""
+            if not df_relatorios.empty:
+                config_sem_rec = df_relatorios[df_relatorios['TIPO'] == f"CONFIG_SEMANA_{sem_limpa}"]
+                if not config_sem_rec.empty:
+                    partes_c = str(config_sem_rec.iloc[-1]['CONTEUDO']).split('|')
+                    status_especial_sem = partes_c[0]
+                    motivo_especial_sem = partes_c[1] if len(partes_c) > 1 else ""
+
+            if status_especial_sem and "Normal" not in status_especial_sem:
+                st.warning(f"📌 **Status Especial Detectado no Calendário para esta Semana:** {status_especial_sem} " + (f"(*{motivo_especial_sem}*)" if motivo_especial_sem else ""))
+
             tipo_semana = c3.selectbox("DNA da Abordagem:", [
                 "Aula de Safra (Regular)", 
                 "Aplicação de Exame", 
@@ -785,7 +798,7 @@ if menu == "📅 Planejamento (Ponto ID)":
             else: st.success("Nenhum plano pendente de produção.")
 
     # ==============================================================================
-    # ABA 3: ACERVO (COM FERRAMENTA MOVER DE SEMANA EM CASCATA & PRESERVAÇÃO DE DOCS)
+    # ABA 3: ACERVO (COM RELOCADOR EM CASCATA & RECONSTRUTOR V2026)
     # ==============================================================================
     with tab_acervo:
         st.markdown("#### Acervo de Planos Estratégicos")
@@ -855,7 +868,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                     if c_btn2.button("🗑️ Apagar Plano", use_container_width=True, key=f"del_plan_h_{sel_h.replace(' ', '')}"):
                         if db.excluir_plano_completo(sel_h, dados_h["ANO"]): st.rerun()
 
-                    # 🚨 MOTOR DE RELOCAÇÃO DE SEMANA EM CASCATA
+                    # 🚨 PILAR 1: MOTOR DE RELOCAÇÃO DE SEMANA EM CASCATA
                     with st.expander("🔄 Mover este Plano e Aulas para Outra Semana (Preservar Docs)", expanded=False):
                         st.info("💡 **Garantia de Preservação:** Esta ferramenta altera a semana do plano e de todas as suas aulas geradas no banco de dados e renomeia o título no Google Drive **sem apagar seus arquivos**. Suas edições no Docs continuam 100% preservadas.")
                         
@@ -866,9 +879,9 @@ if menu == "📅 Planejamento (Ponto ID)":
                         if not semanas_livres_reloc:
                             st.warning("Todas as semanas deste ano letivo já possuem planos cadastrados.")
                         else:
-                            nova_semana_dest = st.selectbox("Selecione a Semana de Destino:", semanas_livres_reloc, key=f"reloc_sem_{v}")
+                            nova_semana_dest = st.selectbox("Selecione a Semana de Destino:", semanas_livres_reloc, key=f"reloc_sem_{sel_h.replace(' ','')}")
                             
-                            if st.button("🚀 CONFIRMAR MUDANÇA DE SEMANA EM CASCATA", type="primary", use_container_width=True, key=f"btn_reloc_exe_{v}"):
+                            if st.button("🚀 CONFIRMAR MUDANÇA DE SEMANA EM CASCATA", type="primary", use_container_width=True, key=f"btn_reloc_exe_{sel_h.replace(' ','')}"):
                                 with st.spinner("Transferindo plano e aulas associadas..."):
                                     sucesso_reloc = db.relocador_plano_semana(
                                         semana_antiga=sel_h, 
