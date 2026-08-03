@@ -604,51 +604,205 @@ def gerar_docx_plano_pedagogico_ELITE(titulo_arquivo, dados, info):
         return file_stream
 
 # ==============================================================================
-# 7. EXPORTADOR PEI NÍVEL 3 (SENSORIAL / MOTOR)
+# 7. EXPORTADOR PEI NÍVEL 3 (SENSORIAL / MOTOR / BENTO CARDS INTERATIVOS)
 # ==============================================================================
 def gerar_docx_pei_qualitativa(titulo_doc, conteudo, info):
     file_stream = io.BytesIO()
     try:
         doc = Document()
         section = doc.sections[0]
-        section.top_margin, section.bottom_margin = Inches(0.5), Inches(0.5)
-        section.left_margin, section.right_margin = Inches(0.5), Inches(0.5)
+        section.top_margin, section.bottom_margin = Inches(0.4), Inches(0.4)
+        section.left_margin, section.right_margin = Inches(0.4), Inches(0.4)
 
         style = doc.styles['Normal']
         style.font.name = 'Arial'
-        style.font.size = Pt(12)
+        style.font.size = Pt(10.5)
 
+        # Cabeçalho Oficial de Itabuna
         configurar_cabecalho_mestre(doc, info, "AVALIAÇÃO ADAPTADA (NÍVEL 3)", mostrar_nota=False)
         doc.add_paragraph()
 
+        # Painel de Instruções para o Mediador Pedagógico
+        panel_info = doc.add_table(rows=1, cols=1)
+        panel_info.style = 'Table Grid'
+        cell_info = panel_info.cell(0, 0)
+        set_cell_background(cell_info, "F1F5F9")
+        p_info = cell_info.paragraphs[0]
+        p_info.paragraph_format.space_after = Pt(2)
+        r_info_title = p_info.add_run("📋 ORIENTAÇÕES DE MEDIAÇÃO PEDAGÓGICA (PEI NÍVEL 3):\n")
+        r_info_title.bold = True
+        r_info_title.font.size = Pt(9.5)
+        r_info_title.font.color.rgb = RGBColor(0, 51, 102)
+        
+        orientacoes = [
+            "Atividades de suporte severo (sensorial, motor e lúdico). Realize a mediação passo a passo.",
+            "Utilize recursos concretos (massa de modelar, objetos reais, cartões, material estruturado).",
+            "Assinale o nível de autonomia do estudante nas caixas de registro de cada BOX e na Rubrica Final."
+        ]
+        for o_txt in orientacoes:
+            p_o = cell_info.add_paragraph()
+            p_o.paragraph_format.space_after = Pt(1)
+            p_o.add_run(f"• {o_txt}").font.size = Pt(8.5)
+
+        doc.add_paragraph()
+
+        # Processamento das Linhas e renderização em CARDS DE BOX
         linhas = str(conteudo).split('\n')
-        for linha in linhas:
-            l_s = linha.strip()
-            if not l_s: continue
-            
-            if "[" in l_s and "PROMPT IMAGEM" in l_s.upper():
-                adicionar_box_imagem_word(doc, "ESPAÇO PARA ATIVIDADE MOTOR/VISUAL")
+        
+        i = 0
+        while i < len(linhas):
+            linha = linhas[i].strip()
+            if not linha:
+                i += 1
                 continue
 
-            p = doc.add_paragraph()
-            p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT
-            p.paragraph_format.space_after = Pt(8)
+            # Se for título de Atividade ou Seção Principal
+            if any(x in linha.upper() for x in ["ATIVIDADE", "TEMA:", "JORNADA", "AVALIAÇÃO ADAPTADA"]) and "BOX" not in linha.upper():
+                if "RUBRICA" in linha.upper():
+                    break # Interrompe loop para renderizar a tabela formal no final
+                p_act = doc.add_paragraph()
+                p_act.paragraph_format.space_before = Pt(12)
+                p_act.paragraph_format.space_after = Pt(4)
+                r_act = p_act.add_run(linha.replace('**', ''))
+                r_act.bold = True
+                r_act.font.size = Pt(12)
+                r_act.font.color.rgb = RGBColor(0, 51, 102)
+                i += 1
+                continue
 
-            if "BOX" in l_s.upper() or "QUESTÃO" in l_s.upper():
-                p.paragraph_format.space_before = Pt(12)
-                run = p.add_run(l_s.replace('**', ''))
-                run.bold = True
-                run.font.size = Pt(13)
-                run.font.color.rgb = RGBColor(0, 51, 102)
-            else:
-                adicionar_texto_formatado(p, l_s)
+            # Se for um Prompt de Imagem isolado
+            if "[" in linha and "PROMPT IMAGEM" in linha.upper():
+                adicionar_box_imagem_word(doc, "ESPAÇO PARA MATERIAL CONCRETO / ILUSTRAÇÃO SENSORIAL")
+                i += 1
+                continue
+
+            # Se for um BOX (ex: "1. [BOX 1] ...", "[BOX 1] ...", "BOX 01: ...")
+            if "BOX" in linha.upper():
+                # Cria uma tabela estilo CARD / BENTO BOX
+                card_table = doc.add_table(rows=2, cols=1)
+                card_table.style = 'Table Grid'
+                card_table.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                card_table.columns[0].width = Inches(7.5)
+
+                # Cabeçalho do Card
+                cell_head = card_table.cell(0, 0)
+                set_cell_background(cell_head, "2962FF")
+                set_row_height(card_table.rows[0], 20)
+                p_head = cell_head.paragraphs[0]
+                p_head.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                
+                # Extrai o rótulo e o comando do BOX
+                m_box_title = re.search(r"(\[?BOX\s*\d+\]?.*?)(?:[:\-]\s*|\s+)(.*)", linha, re.IGNORECASE)
+                if m_box_title:
+                    rotulo_box = m_box_title.group(1).upper().replace("[", "").replace("]", "").strip()
+                    desc_box = m_box_title.group(2).strip()
+                else:
+                    rotulo_box = "BOX DE ATIVIDADE SENSORIAL"
+                    desc_box = linha.strip()
+
+                r_head = p_head.add_run(f"📦 {rotulo_box}")
+                r_head.bold = True
+                r_head.font.size = Pt(10)
+                r_head.font.color.rgb = RGBColor(255, 255, 255)
+
+                # Corpo do Card
+                cell_body = card_table.cell(1, 0)
+                set_cell_background(cell_body, "F8FAFC")
+                p_body = cell_body.paragraphs[0]
+                p_body.paragraph_format.space_after = Pt(4)
+                
+                adicionar_texto_formatado(p_body, desc_box)
+
+                # Caixas de Registro de Autonomia do Mediador
+                p_check = cell_body.add_paragraph()
+                p_check.paragraph_format.space_before = Pt(4)
+                p_check.paragraph_format.space_after = Pt(2)
+                
+                r_check_label = p_check.add_run("Registro do Mediador: ")
+                r_check_label.bold = True
+                r_check_label.font.size = Pt(8.5)
+                r_check_label.font.color.rgb = RGBColor(100, 116, 139)
+
+                r_opts = p_check.add_run("[   ] Autônomo   |   [   ] Com Apoio   |   [   ] Não Realizou")
+                r_opts.font.size = Pt(8.5)
+                r_opts.font.bold = True
+                r_opts.font.color.rgb = RGBColor(30, 41, 59)
+
+                p_space = doc.add_paragraph()
+                p_space.paragraph_format.space_after = Pt(2)
+                i += 1
+                continue
+
+            # Texto informativo comum
+            p_norm = doc.add_paragraph()
+            p_norm.paragraph_format.space_after = Pt(4)
+            adicionar_texto_formatado(p_norm, linha)
+            i += 1
+
+        # ==============================================================================
+        # 🚨 TABELA DA RUBRICA OFICIAL DE OBSERVAÇÃO PEDAGÓGICA (LEI SOBERANA PEI N3)
+        # ==============================================================================
+        doc.add_paragraph()
+        p_rub_title = doc.add_paragraph()
+        p_rub_title.paragraph_format.space_before = Pt(10)
+        p_rub_title.paragraph_format.space_after = Pt(4)
+        r_rub = p_rub_title.add_run("📋 RUBRICA OFICIAL DE OBSERVAÇÃO PEDAGÓGICA (PARECER QUALITATIVO)")
+        r_rub.bold = True
+        r_rub.font.size = Pt(11)
+        r_rub.font.color.rgb = RGBColor(0, 51, 102)
+
+        rubrica_table = doc.add_table(rows=5, cols=5)
+        rubrica_table.style = 'Table Grid'
+        
+        col_widths = [Inches(2.5), Inches(1.1), Inches(1.1), Inches(1.2), Inches(1.6)]
+        for row in rubrica_table.rows:
+            set_row_height(row, 22)
+            for idx_c, w in enumerate(col_widths):
+                row.cells[idx_c].width = w
+
+        headers_rub = ["DIMENSÃO COGNITIVA / MOTORA", "AUTÔNOMO ✅", "COM APOIO 🤝", "NÃO REALIZOU ❌", "OBSERVAÇÕES"]
+        for idx_c, h_text in enumerate(headers_rub):
+            c_h = rubrica_table.cell(0, idx_c)
+            set_cell_background(c_h, "003366")
+            p_h = c_h.paragraphs[0]
+            p_h.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            r_h = p_h.add_run(h_text)
+            r_h.bold = True
+            r_h.font.size = Pt(8.5)
+            r_h.font.color.rgb = RGBColor(255, 255, 255)
+
+        dimensoes_pei = [
+            ("Autonomia Executiva", "Iniciativa, foco e condução motora nas tarefas"),
+            ("Compreensão de Comandos", "Atendimento e resposta às instruções diretas"),
+            ("Percepção Visual e Espacial", "Pareamento, seriação, identificação e encaixe"),
+            ("Raciocínio Lógico-Proporcional", "Associação de quantidades, contagem e uso de materiais")
+        ]
+
+        for idx_d, (dim_nome, dim_desc) in enumerate(dimensoes_pei, start=1):
+            row_cells = rubrica_table.rows[idx_d].cells
+            
+            p_dim = row_cells[0].paragraphs[0]
+            r_dn = p_dim.add_run(f"{dim_nome}\n")
+            r_dn.bold = True
+            r_dn.font.size = Pt(9)
+            r_dd = p_dim.add_run(dim_desc)
+            r_dd.font.size = Pt(7.5)
+            r_dd.font.italic = True
+            r_dd.font.color.rgb = RGBColor(100, 116, 139)
+
+            for c_idx in range(1, 4):
+                p_chk = row_cells[c_idx].paragraphs[0]
+                p_chk.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                p_chk.add_run("○").font.size = Pt(14)
+
+            row_cells[4].paragraphs[0].add_run("____________________").font.size = Pt(8)
 
         doc.save(file_stream)
         file_stream.seek(0)
         return file_stream
     except Exception as e:
         file_stream = io.BytesIO()
-        err_doc = Document(); err_doc.add_paragraph(f"ERRO NO PEI N3: {str(e)}"); err_doc.save(file_stream)
+        err_doc = Document(); err_doc.add_paragraph(f"ERRO NO EXPORTER PEI N3: {str(e)}"); err_doc.save(file_stream)
         file_stream.seek(0)
         return file_stream
 
