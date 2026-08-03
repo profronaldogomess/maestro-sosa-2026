@@ -49,7 +49,7 @@ def converter_latex_para_texto_word(texto):
     # 3. Potências simples
     t = t.replace('^2', '²').replace('^3', '³')
     
-    # 4. Limpa cifrões do LaTeX
+    # 4. Limpa cifrões do LaTeX e marcas de formatação crua
     t = t.replace('$$', '').replace('$', '')
     return t.strip()
 
@@ -618,11 +618,11 @@ def gerar_docx_pei_qualitativa(titulo_doc, conteudo, info):
         style.font.name = 'Arial'
         style.font.size = Pt(10.5)
 
-        # Cabeçalho Oficial de Itabuna
+        # Cabeçalho Oficial da Escola e Prefeitura de Itabuna
         configurar_cabecalho_mestre(doc, info, "AVALIAÇÃO ADAPTADA (NÍVEL 3)", mostrar_nota=False)
         doc.add_paragraph()
 
-        # Painel de Instruções para o Mediador Pedagógico
+        # Painel de Instruções de Mediação
         panel_info = doc.add_table(rows=1, cols=1)
         panel_info.style = 'Table Grid'
         cell_info = panel_info.cell(0, 0)
@@ -646,7 +646,7 @@ def gerar_docx_pei_qualitativa(titulo_doc, conteudo, info):
 
         doc.add_paragraph()
 
-        # Processamento das Linhas e renderização em CARDS DE BOX
+        # Processamento das Linhas e renderização dos CARDS DE BOX (BENTO GRID)
         linhas = str(conteudo).split('\n')
         
         i = 0
@@ -713,7 +713,7 @@ def gerar_docx_pei_qualitativa(titulo_doc, conteudo, info):
                 
                 adicionar_texto_formatado(p_body, desc_box)
 
-                # Caixas de Registro de Autonomia do Mediador
+                # Caixas de Registro do Mediador dentro do Card
                 p_check = cell_body.add_paragraph()
                 p_check.paragraph_format.space_before = Pt(4)
                 p_check.paragraph_format.space_after = Pt(2)
