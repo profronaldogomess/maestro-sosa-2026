@@ -1693,6 +1693,10 @@ elif menu == "📝 Central de Avaliações":
     st.caption("Arquitetura psicométrica de elite para desenvolvimento de itens ENEM/SAEB, balanceamento TRI e custódia de instrumentos.")
     st.markdown("---")
 
+    if "v_av" not in st.session_state: 
+        st.session_state.v_av = int(time.time())
+    v = st.session_state.v_av
+
     if "forja" not in st.session_state:
         st.session_state.forja = {
             'fase': 1, 'mapa': [], 'info': {}, 'pei_1': '', 'pei_2': '', 'pei_3': '', 'prova_final_txt': ''
@@ -1787,7 +1791,7 @@ elif menu == "📝 Central de Avaliações":
                         "📖 Cole Exercícios Reais do Livro Didático / Lousa para Virarem Questões Espelho na Prova:",
                         placeholder="Cole aqui as questões que os alunos resolveram no livro/caderno em sala. A IA criará questões espelho idênticas em estrutura, alterando apenas os dados/contexto local...",
                         height=120,
-                        key=f"recorte_provas_{v}"
+                        key="recorte_provas_livro_input"
                     )
 
                     conteudos_extraidos = set()
