@@ -1659,7 +1659,6 @@ elif menu == "🧪 Criador de Aulas":
                     st.markdown(f"##### {identificador}")
                     st.caption(f"Série: {row['ANO']} | Data: {row['DATA']}")
                     
-                    # 🚨 RESTAURAÇÃO DE TODOS OS 6 BOTÕES DO ACERVO
                     def extrair_link_seguro(t, k):
                         m = re.search(rf"{k}\s*\(\s*(https://docs\.google\.com/document/d/[^\s\)]+)\s*\)", t, re.IGNORECASE)
                         return m.group(1).strip() if m else "N/A"
@@ -1696,6 +1695,56 @@ elif menu == "🧪 Criador de Aulas":
                         
                     if c_b6.button("🗑️ Apagar", key=f"del_ac_{row.name}", use_container_width=True):
                         if db.excluir_registro_com_drive("DB_AULAS_PRONTAS", identificador): st.rerun()
+
+                    # 🚨 PILAR 2: BOTÃO DE RE-COMPILAÇÃO E ADEQUAÇÃO AO EXPORTER V2026
+                    with st.expander("🎨 Re-compilar e Adequar ao Padrão Exporter V2026", expanded=False):
+                        st.info("💡 **Adequação Automática:** Esta ferramenta pega o texto bruto desta aula e gera novos arquivos DOCX aplicando a limpeza de LaTeX (`$$`), os Bento Cards e a Tabela Oficial de Rubricas para o PEI N3 no Google Drive.")
+                        
+                        if st.button("🚀 EXECUTAR RE-COMPILAÇÃO COMPLETA NO EXPORTER V2026", type="primary", use_container_width=True, key=f"btn_recompila_{row.name}"):
+                            with st.status("Re-compilando materiais no padrão Exporter V2026...", expanded=True) as status_rec:
+                                ano_str_rec = str(row['ANO'])
+                                sem_ref_rec = str(row['SEMANA_REF'])
+                                info_doc_rec = {"ano": ano_str_rec, "trimestre": "I Trimestre", "semana": sem_ref_rec}
+                                
+                                ed_prof_r = ai.extrair_tag(txt_f, "PROFESSOR")
+                                ed_alu_r = ai.extrair_tag(txt_f, "ALUNO")
+                                ed_pei1_r = ai.extrair_tag(txt_f, "PEI_NIVEL_1") or ai.extrair_tag(txt_f, "PEI")
+                                ed_pei3_r = ai.extrair_tag(txt_f, "PEI_NIVEL_3")
+                                ed_gab_r = ai.extrair_tag(txt_f, "GABARITO")
+                                ed_gab_pei_r = ai.extrair_tag(txt_f, "GABARITO_PEI")
+                                ed_img_r = ai.extrair_tag(txt_f, "IMAGENS")
+
+                                status_rec.write("📄 Re-gerando Folha do Aluno...")
+                                doc_alu_r = exporter.gerar_docx_aluno_v24(identificador, ed_alu_r, info_doc_rec)
+                                link_alu_r = db.subir_e_converter_para_google_docs(doc_alu_r, f"{identificador}_ALUNO", modo="AULA")
+                                
+                                link_pei1_r = "N/A"
+                                if ed_pei1_r:
+                                    status_rec.write("🔵 Re-gerando PEI Nível 1...")
+                                    doc_pei1_r = exporter.gerar_docx_pei_v25(f"{identificador}_PEI_N1", ed_pei1_r, info_doc_rec)
+                                    link_pei1_r = db.subir_e_converter_para_google_docs(doc_pei1_r, f"{identificador}_PEI_N1", modo="AULA")
+                                
+                                link_pei3_r = "N/A"
+                                if ed_pei3_r:
+                                    status_rec.write("🔴 Re-gerando PEI Nível 3 (Bento Cards + Rubricas)...")
+                                    doc_pei3_r = exporter.gerar_docx_pei_qualitativa(f"{identificador}_PEI_N3", ed_pei3_r, info_doc_rec)
+                                    link_pei3_r = db.subir_e_converter_para_google_docs(doc_pei3_r, f"{identificador}_PEI_N3", modo="AULA")
+
+                                status_rec.write("👨‍🏫 Re-gerando Guia do Professor...")
+                                guia_prof_r = f"{ed_prof_r}\n\n[GABARITO]\n{ed_gab_r}\n\n[GABARITO_PEI]\n{ed_gab_pei_r}"
+                                doc_prof_r = exporter.gerar_docx_professor_v25(identificador, guia_prof_r, info_doc_rec)
+                                link_prof_r = db.subir_e_converter_para_google_docs(doc_prof_r, f"{identificador}_PROF", modo="AULA")
+                                
+                                links_f_r = f"--- LINKS ---\nRegular({link_alu_r})\nPEI_N1({link_pei1_r})\nPEI_N3({link_pei3_r})\nProf({link_prof_r})"
+                                conteudo_final_r = f"[PROFESSOR]\n{ed_prof_r}\n\n[ALUNO]\n{ed_alu_r}\n\n[GABARITO]\n{ed_gab_r}\n\n[PEI_NIVEL_1]\n{ed_pei1_r}\n\n[PEI_NIVEL_3]\n{ed_pei3_r}\n\n[GABARITO_PEI]\n{ed_gab_pei_r}\n\n{links_f_r}"
+                                
+                                db.excluir_registro("DB_AULAS_PRONTAS", identificador)
+                                db.salvar_no_banco("DB_AULAS_PRONTAS", [
+                                    row['DATA'], sem_ref_rec, identificador, conteudo_final_r, ano_str_rec, link_alu_r
+                                ])
+                                
+                                status_rec.update(label="✅ Materiais re-compilados e atualizados no Drive!", state="complete")
+                                st.balloons(); time.sleep(1.5); st.rerun()
 
 
 # ==============================================================================
