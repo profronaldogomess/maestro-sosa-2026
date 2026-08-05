@@ -6523,29 +6523,31 @@ elif menu == "👥 Gestão da Turma":
 
 
 
-# ==============================================================================
-# MÓDULO: BASE DE CONHECIMENTO (V45 - COFRE DIGITAL NO GOOGLE DRIVE)
-# ==============================================================================
 elif menu == "📚 Base de Conhecimento":
-    st.title("📚 Biblioteca Digital de Soberania")
+    st.title("📚 Biblioteca Digital de Soberania (Cofre Digital)")
+    st.caption("Repositório central de livros didáticos, referenciais curriculares e diretrizes PEI sincronizados no Google Drive.")
     st.markdown("---")
     
+    # 🚨 INICIALIZAÇÃO SEGURA DA VARIÁVEL V
+    if "v_bib" not in st.session_state: 
+        st.session_state.v_bib = int(time.time())
+    v = st.session_state.v_bib
+
     tab_upload, tab_acervo_lib = st.tabs(["📤 Novo Upload (Drive)", "📖 Acervo Permanente"])
     
     with tab_upload:
         with st.form("form_upload_drive", clear_on_submit=True):
-            st.markdown("#### 📤 Armazenar Material no Cofre")
+            st.markdown("#### 📤 Armazenar Material no Cofre Digital")
             c1, c2 = st.columns(2)
-            tipo_doc = c1.selectbox("Categoria:", ["Livro Didático", "Referencial Curricular", "Documento PEI", "Outros"])
-            ano_doc = c2.selectbox("Série Alvo:", ["6º Ano", "7º Ano", "8º Ano", "9º Ano", "Geral"])
+            tipo_doc = c1.selectbox("Categoria:", ["Livro Didático", "Referencial Curricular", "Documento PEI", "Outros"], key=f"up_cat_{v}")
+            ano_doc = c2.selectbox("Série Alvo:", ["6º Ano", "7º Ano", "8º Ano", "9º Ano", "Geral"], key=f"up_ano_{v}")
             
-            nome_arq = st.text_input("Nome de Exibição do Material:", placeholder="Ex: Livro do 6 ano Flavio Simoes")
-            uploaded_file = st.file_uploader("Selecione o arquivo PDF:", type=["pdf"])
+            nome_arq = st.text_input("Nome de Exibição do Material:", placeholder="Ex: Livro A Conquista da Matemática 6º Ano", key=f"up_nome_{v}")
+            uploaded_file = st.file_uploader("Selecione o arquivo PDF:", type=["pdf"], key=f"up_pdf_{v}")
             
             if st.form_submit_button("🚀 SALVAR NO GOOGLE DRIVE"):
                 if uploaded_file and nome_arq:
-                    with st.spinner("Enviando para o seu Cofre Digital..."):
-                        # Usa a sua ponte para salvar no Drive
+                    with st.spinner("Enviando para o seu Cofre Digital via SOSA Bridge..."):
                         link_drive = db.subir_e_converter_para_google_docs(
                             uploaded_file, 
                             nome_arq, 
@@ -6553,8 +6555,7 @@ elif menu == "📚 Base de Conhecimento":
                             modo="BIBLIOTECA"
                         )
                         
-                        if "drive.google.com" in link_drive:
-                            # Salva no CSV do Banco de Dados
+                        if "http" in link_drive:
                             db.salvar_no_banco("DB_MATERIAIS", [
                                 datetime.now().strftime("%d/%m/%Y"), 
                                 nome_arq, 
@@ -6562,24 +6563,57 @@ elif menu == "📚 Base de Conhecimento":
                                 f"{tipo_doc} - {ano_doc}"
                             ])
                             st.success(f"✅ '{nome_arq}' guardado com segurança no Drive!")
-                            st.balloons()
-                            time.sleep(1)
-                            st.rerun()
+                            st.balloons(); time.sleep(1); st.rerun()
                         else:
                             st.error(f"Erro no upload: {link_drive}")
+                else:
+                    st.warning("Preencha o nome do material e selecione o arquivo PDF.")
 
     with tab_acervo_lib:
-        if not df_materiais.empty:
-            st.markdown(f"**📚 Materiais no Cofre:** {len(df_materiais)}")
-            for _, row in df_materiais.iterrows():
-                with st.container(border=True):
-                    col_icon, col_txt, col_btn = st.columns([0.5, 3, 1])
-                    col_icon.markdown("# 📕")
-                    col_txt.markdown(f"**{row['NOME_ARQUIVO']}**")
-                    col_txt.caption(f"📅 Upload: {row['DATA_UPLOAD']} | 🏷️ {row['TIPO']}")
-                    col_btn.link_button("👁️ Ver no Drive", row['URI_ARQUIVO'], use_container_width=True)
-        else:
-            st.info("📭 Sua biblioteca está vazia.")
+        # 🚨 ACERVO DA BIBLIOTECA ISOLADO EM FRAGMENTO (FILTRAGEM RÁPIDA)
+        @st.fragment
+        def renderizar_acervo_biblioteca_fragmento():
+            st.markdown("#### 📖 Acervo de Obras Guardadas")
+            
+            if not df_materiais.empty:
+                # 🚨 UI NOVA GERAÇÃO: ST.PILLS PARA FILTRO DE CATEGORIAS
+                filtro_cat_lib = st.pills(
+                    "Filtrar por Categoria:", 
+                    ["Todos", "Livro Didático", "Referencial Curricular", "Documento PEI", "Outros"], 
+                    default="Todos",
+                    key=f"pills_lib_cat_{v}"
+                )
+                
+                df_lib_filtrado = df_materiais.copy()
+                if filtro_cat_lib != "Todos":
+                    df_lib_filtrado = df_lib_filtrado[df_lib_filtrado['TIPO'].str.contains(filtro_cat_lib, case=False, na=False)]
+                
+                st.caption(f"**{len(df_lib_filtrado)} de {len(df_materiais)}** obras exibidas no Cofre Digital.")
+                st.markdown("---")
+                
+                if df_lib_filtrado.empty:
+                    st.info("Nenhum material encontrado para a categoria selecionada.")
+                else:
+                    for _, row in df_lib_filtrado.iloc[::-1].iterrows():
+                        with st.container(border=True):
+                            c_icon, c_txt, c_btn1, c_btn2 = st.columns([0.5, 2.5, 1, 1])
+                            c_icon.markdown("# 📕")
+                            
+                            nome_m = row['NOME_ARQUIVO']
+                            tipo_m = str(row['TIPO'])
+                            
+                            c_txt.markdown(f"**{nome_m}**")
+                            c_txt.caption(f"📅 Upload: {row.get('DATA_UPLOAD', 'N/A')} | Categoria: {tipo_m}")
+                            
+                            c_btn1.link_button("👁️ Ver no Drive", row['URI_ARQUIVO'], use_container_width=True)
+                            
+                            if c_btn2.button("🗑️ Apagar", key=f"del_mat_{row.name}_{v}", use_container_width=True):
+                                if db.excluir_registro_com_drive("DB_MATERIAIS", nome_m):
+                                    st.success("Material removido!"); time.sleep(0.5); st.rerun()
+            else:
+                st.info("📭 Sua biblioteca está vazia. Faça o upload de livros didáticos no formulário ao lado.")
+
+        renderizar_acervo_biblioteca_fragmento()
 
 
 
