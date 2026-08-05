@@ -23,7 +23,7 @@ st.set_page_config(
 
 # --- SISTEMA DE BLINDAGEM E PERSISTÊNCIA (6 HORAS) ---
 def check_password():
-    """Gerencia o acesso com botão de entrada explícito e persistência de 6h."""
+    """Gerencia o acesso com card Glassmorphism executivo e persistência de 6h."""
     
     if "password_correct" not in st.session_state:
         st.session_state["password_correct"] = False
@@ -39,36 +39,41 @@ def check_password():
             st.session_state["password_correct"] = False
             st.warning("Sessão expirada. Por favor, entre novamente.")
 
-    # INTERFACE DE LOGIN (Design Responsivo e Limpo)
+    # INTERFACE DE LOGIN EXECUTIVA (Glassmorphism Bento Card)
     _, col_login, _ = st.columns([1, 2, 1]) 
     
     with col_login:
         st.markdown("<br><br>", unsafe_allow_html=True)
-        try: 
-            st.image("logo.png", width=180) 
-        except: 
-            st.markdown("<h1 style='text-align: center;'>Ronaldo Gomes</h1>", unsafe_allow_html=True)
-        
-        st.markdown("<h3 style='text-align: center; margin-bottom: 20px;'>🔐 Portal de Soberania</h3>", unsafe_allow_html=True)
-        
-        # FORMULÁRIO DE LOGIN
-        with st.form("login_portal"):
-            input_password = st.text_input("Chave de Acesso:", type="password", placeholder="Digite sua chave...")
-            st.checkbox("Manter conectado por 6 horas", value=True, disabled=True)
+        with st.container(border=True):
+            col_l1, col_l2, col_l3 = st.columns([1, 2, 1])
+            with col_l2:
+                try: st.image("logo.png", width=140) 
+                except: st.markdown("<h2 style='text-align: center;'>Ronaldo Gomes</h2>", unsafe_allow_html=True)
             
-            btn_entrar = st.form_submit_button("ENTRAR NO PAINEL", use_container_width=True)
+            st.markdown("<h3 style='text-align: center; margin-top: 5px; margin-bottom: 0px;'>🔐 Portal de Soberania</h3>", unsafe_allow_html=True)
+            st.caption("Sistema de Alta Performance Pedagógica & Gestão 360°")
+            st.markdown("---")
             
-            if btn_entrar:
-                if input_password == "2496":
-                    st.session_state["password_correct"] = True
-                    st.session_state["login_timestamp"] = time.time()
-                    st.success("Acesso Autorizado!")
-                    time.sleep(0.5)
-                    st.rerun()
-                else:
-                    st.error("❌ Chave incorreta. Acesso negado.")
-        
-        st.markdown("<p style='text-align: center; font-size: 12px; color: gray;'>Sistema restrito ao Prof. Ronaldo Gomes (Itabuna/BA)</p>", unsafe_allow_html=True)
+            st.pills("Perfil de Acesso:", ["👑 Prof. Ronaldo Gomes (Proprietário)"], default="👑 Prof. Ronaldo Gomes (Proprietário)", key="pills_login_profile")
+            
+            # FORMULÁRIO DE LOGIN
+            with st.form("login_portal_form"):
+                input_password = st.text_input("Chave de Acesso de Elite:", type="password", placeholder="Digite sua chave de segurança...")
+                st.checkbox("Manter conectado por 6 horas", value=True, disabled=True)
+                
+                btn_entrar = st.form_submit_button("🚀 ENTRAR NO PAINEL", use_container_width=True, type="primary")
+                
+                if btn_entrar:
+                    if input_password == "2496":
+                        st.session_state["password_correct"] = True
+                        st.session_state["login_timestamp"] = time.time()
+                        st.toast("Acesso Autorizado! Carregando Soberania...", icon="✅")
+                        time.sleep(0.5)
+                        st.rerun()
+                    else:
+                        st.error("❌ Chave incorreta. Acesso negado.")
+            
+            st.caption("🛡️ SOSA Bridge V45.9 • Servidor Online • Criptografia Ativa • Itabuna/BA")
     
     return False
 
@@ -109,14 +114,14 @@ def preparar_para_leitura(texto):
     )
     return texto
 
-# --- ESTILIZAÇÃO DE LUXO (CSS V41 - BENTO GRID) ---
+# --- ESTILIZAÇÃO DE LUXO E DEFINIÇÃO DE TEMAS (GLOBAL SOBERANO) ---
 BRAND_BLUE = "#2962FF"
 BRAND_NAVY = "#000B1A"
 
-with st.sidebar:
-    tema_selecionado = st.radio("Visual do Sistema:", ["🌙 Dark Mode", "🌞 Light Mode"], horizontal=True)
+if "tema_sistema" not in st.session_state:
+    st.session_state.tema_sistema = "🌙 Dark"
 
-if tema_selecionado == "🌙 Dark Mode":
+if st.session_state.tema_sistema == "🌙 Dark":
     cor_fundo, cor_texto, cor_sidebar, cor_card = BRAND_NAVY, "#FFFFFF", "#001226", "#001E3C"
     cor_borda = "#003366"
 else:
@@ -139,85 +144,146 @@ st.markdown(f"""
     </style>
 """, unsafe_allow_html=True)
 
-# --- SIDEBAR: IDENTIDADE E NAVEGAÇÃO ---
+# --- SIDEBAR: IDENTIDADE, RELÓGIO E NAVEGAÇÃO ESTRATÉGICA AGRUPADA ---
 with st.sidebar:
+    try: st.logo("logo.png", icon_image="logo.png")
+    except: pass
+    
     col_l1, col_l2, col_l3 = st.columns([1, 2, 1])
     with col_l2:
-        try: st.image("logo.png", width=120)
+        try: st.image("logo.png", width=110)
         except: pass
     
-    st.markdown(f"<h2 style='text-align: center; font-size: 22px; margin-top: 10px;'>Ronaldo Gomes</h2>", unsafe_allow_html=True)
-    st.markdown(f"<p style='text-align: center; font-size: 12px; color: {BRAND_BLUE}; font-weight: 800; margin-top: -15px; letter-spacing: 1px;'>SOBERANIA PEDAGÓGICA</p>", unsafe_allow_html=True)
+    st.markdown("<h2 style='text-align: center; font-size: 20px; margin-top: 5px; margin-bottom: 0px;'>Ronaldo Gomes</h2>", unsafe_allow_html=True)
+    st.markdown(f"<p style='text-align: center; font-size: 11px; color: {BRAND_BLUE}; font-weight: 800; letter-spacing: 1px;'>SOBERANIA PEDAGÓGICA</p>", unsafe_allow_html=True)
 
+    # 🚨 SELETOR DE TEMA COM PERSISTÊNCIA SOBERANA
+    tema_sel_pills = st.segmented_control("Visual do Sistema:", ["🌙 Dark", "🌞 Light"], default=st.session_state.tema_sistema, key="seg_tema_sidebar")
+    if tema_sel_pills and tema_sel_pills != st.session_state.tema_sistema:
+        st.session_state.tema_sistema = tema_sel_pills
+        st.rerun()
+
+    # RELÓGIO DIGITAL & DIA LETIVO
     fuso_br = timezone(timedelta(hours=-3))
     agora_br = datetime.now(fuso_br)
     hora_atual = agora_br.strftime("%H:%M:%S")
     data_atual = agora_br.strftime("%d/%m/%Y")
     data_atual_dt = agora_br.date() 
     
-    st.markdown(f"""<div class="clock-container">🕒 {hora_atual} | 📅 {data_atual}</div>""", unsafe_allow_html=True)
-    
-    feriado_hoje = util.verificar_feriado_itabuna(data_atual_dt)
-    if feriado_hoje:
-        st.markdown(f"""<div style="background: linear-gradient(135deg, #FF4B4B, #C0392B); color: white; padding: 6px 10px; border-radius: 8px; text-align: center; font-weight: 800; font-size: 12px; margin-top: -5px; margin-bottom: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">🎉 FERIADO: {feriado_hoje.upper()}</div>""", unsafe_allow_html=True)
-    else:
-        dias_semana = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado", "Domingo"]
-        nome_dia = dias_semana[data_atual_dt.weekday()]
-        cor_dia = "#2ECC71" if data_atual_dt.weekday() < 5 else "#F1C40F" 
-        st.markdown(f"""<div style="text-align: center; color: {cor_dia}; font-size: 12px; font-weight: 600; margin-top: -5px; margin-bottom: 10px;">{nome_dia} • Dia Letivo</div>""", unsafe_allow_html=True)
+    with st.container(border=True):
+        st.markdown(f"<div style='text-align: center; font-weight: 800; font-size: 13px; color: {BRAND_BLUE};'>🕒 {hora_atual} | 📅 {data_atual}</div>", unsafe_allow_html=True)
+        
+        feriado_hoje = util.verificar_feriado_itabuna(data_atual_dt)
+        if feriado_hoje:
+            st.caption(f"🎉 FERIADO: {feriado_hoje.upper()}")
+        else:
+            dias_semana = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"]
+            nome_dia = dias_semana[data_atual_dt.weekday()]
+            st.caption(f"🟢 {nome_dia}-feira • Dia Letivo")
 
-    # 🚨 RADAR DE SOBERANIA (NOTIFICAÇÕES INTELIGENTES V201)
+    # RADAR DE SOBERANIA
+    with st.expander("🔔 Radar de Notificações", expanded=False):
+        try:
+            planos_pendentes = len(df_planos[df_planos["EIXO"].astype(str).str.contains("HUB_ATIVO", case=False, na=False)]) if not df_planos.empty else 0
+            if planos_pendentes > 0:
+                st.warning(f"⏳ {planos_pendentes} Plano(s) no Hub de Produção")
+            else: st.success("✅ Nenhum plano pendente")
+        except: pass
+
+        try:
+            if not df_notas.empty:
+                uti_count = len(df_notas[df_notas['MEDIA_FINAL'].apply(util.sosa_to_float) < 6.0])
+                if uti_count > 0:
+                    st.error(f"🚑 {uti_count} Aluno(s) na UTI Pedagógica")
+                else: st.success("✅ Nenhum aluno na UTI")
+        except: pass
+
     st.markdown("---")
-    st.markdown("<p style='font-size: 11px; color: gray; font-weight: bold; letter-spacing: 1px; text-align: center;'>RADAR DE SOBERANIA</p>", unsafe_allow_html=True)
+
+    # NAVEGAÇÃO ESTRATÉGICA AGRUPADA EM 3 MÓDULOS PRINCIPAIS
+    st.markdown("<p style='font-size: 11px; color: gray; font-weight: bold; letter-spacing: 1px;'>ÁREA DE ATUAÇÃO:</p>", unsafe_allow_html=True)
     
-    try:
-        planos_pendentes = len(df_planos[df_planos["EIXO"].astype(str).str.contains("HUB_ATIVO", case=False, na=False)])
-        if planos_pendentes > 0:
-            st.markdown(f"<div style='background: #FFF3CD; color: #B7950B; padding: 8px; border-radius: 8px; font-size: 12px; font-weight: bold; margin-bottom: 5px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05);'>⏳ {planos_pendentes} Plano(s) no Hub</div>", unsafe_allow_html=True)
-    except: pass
+    modulos_map = {
+        "📅 Planejamento (Ponto ID)": "📚 Aulas",
+        "🧪 Criador de Aulas": "📚 Aulas",
+        "📚 Base de Conhecimento": "📚 Aulas",
+        
+        "📝 Central de Avaliações": "📝 Provas",
+        "📸 Scanner de Gabaritos": "📝 Provas",
+        "📊 Painel de Notas & Vistos": "📝 Provas",
+        "📈 Boletim Anual & Conselho": "📝 Provas",
+        
+        "📝 Diário de Bordo Rápido": "👥 Regência",
+        "👤 Biografia do Estudante": "👥 Regência",
+        "👥 Gestão da Turma": "👥 Regência",
+        "♿ Relatórios PEI / Perfil IA": "👥 Regência"
+    }
+    
+    modulo_default = modulos_map.get(st.session_state.menu_atual, "📚 Aulas")
+    
+    modulo_ativo = st.segmented_control(
+        "Módulo:", 
+        ["📚 Aulas", "📝 Provas", "👥 Regência"], 
+        default=modulo_default,
+        key="seg_modulo_sidebar"
+    )
 
-    try:
-        if not df_notas.empty:
-            uti_count = len(df_notas[df_notas['MEDIA_FINAL'].apply(util.sosa_to_float) < 6.0])
-            if uti_count > 0:
-                st.markdown(f"<div style='background: #FADBD8; color: #943126; padding: 8px; border-radius: 8px; font-size: 12px; font-weight: bold; margin-bottom: 10px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05);'>🚑 {uti_count} Aluno(s) na UTI</div>", unsafe_allow_html=True)
-    except: pass
+    paginas_por_modulo = {
+        "📚 Aulas": [
+            "📅 Planejamento (Ponto ID)",
+            "🧪 Criador de Aulas",
+            "📚 Base de Conhecimento"
+        ],
+        "📝 Provas": [
+            "📝 Central de Avaliações",
+            "📸 Scanner de Gabaritos",
+            "📊 Painel de Notas & Vistos",
+            "📈 Boletim Anual & Conselho"
+        ],
+        "👥 Regência": [
+            "📝 Diário de Bordo Rápido",
+            "👤 Biografia do Estudante",
+            "👥 Gestão da Turma",
+            "♿ Relatórios PEI / Perfil IA"
+        ]
+    }
 
+    paginas_disponiveis = paginas_por_modulo.get(modulo_ativo, paginas_por_modulo["📚 Aulas"])
+    
+    idx_pag = paginas_disponiveis.index(st.session_state.menu_atual) if st.session_state.menu_atual in paginas_disponiveis else 0
+    
+    pagina_selecionada = st.pills(
+        "Selecione o Painel:", 
+        paginas_disponiveis, 
+        default=paginas_disponiveis[idx_pag],
+        key="pills_pagina_sidebar"
+    )
+
+    if pagina_selecionada and pagina_selecionada != st.session_state.menu_atual:
+        st.session_state.menu_atual = pagina_selecionada
+        st.rerun()
+
+    menu = st.session_state.menu_atual
+
+    st.markdown("<br>", unsafe_allow_html=True)
     st.markdown("---")
-
-    menu_opcoes = [
-        "📅 Planejamento (Ponto ID)",
-        "🧪 Criador de Aulas",
-        "📝 Central de Avaliações",
-        "📸 Scanner de Gabaritos",
-        "📝 Diário de Bordo Rápido",
-        "👤 Biografia do Estudante",
-        "📊 Painel de Notas & Vistos",
-        "📈 Boletim Anual & Conselho",
-        "👥 Gestão da Turma",
-        "📚 Base de Conhecimento",
-        "♿ Relatórios PEI / Perfil IA"
-    ]
     
-    # 🚨 A MÁGICA ACONTECE AQUI: Desvinculamos a chave direta e usamos o index
-    idx_atual = menu_opcoes.index(st.session_state.menu_atual) if st.session_state.menu_atual in menu_opcoes else 0
-    menu = st.radio("Navegação Estratégica:", menu_opcoes, index=idx_atual, key="_menu_radio", on_change=atualizar_menu)
-
-    st.markdown("<br>" * 2, unsafe_allow_html=True)
-    st.markdown("---")
-    
-    col_sync, col_exit = st.columns(2)
-    with col_sync:
-        if st.button("🔄 Sync"):
+    with st.popover("⚙️ Conta & Sessão", use_container_width=True):
+        st.caption("👑 **Prof. Ronaldo Gomes**")
+        st.caption("Licença Ativa • SOSA 2026")
+        st.markdown("---")
+        
+        c_pop1, c_pop2 = st.columns(2)
+        if c_pop1.button("🔄 Sync", use_container_width=True, key="btn_pop_sync"):
             st.cache_data.clear()
             st.rerun()
-    with col_exit:
-        if st.button("🚪 Sair"):
+            
+        if c_pop2.button("🚪 Sair", use_container_width=True, key="btn_pop_sair"):
             st.session_state["password_correct"] = False
             st.session_state["login_timestamp"] = None
             st.rerun()
 
-    st.caption("Ronaldo Gomes | © 2026")
+    st.caption("Itabuna/BA • © 2026")
 
 # --- CARREGAMENTO DE DADOS ---
 wb, (df_alunos, df_curriculo, df_materiais, df_planos, df_aulas, df_notas, df_diario, df_turmas, df_relatorios, df_horarios, df_registro_aulas, df_diagnosticos) = db.carregar_tudo()
