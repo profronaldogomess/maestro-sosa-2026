@@ -3814,12 +3814,11 @@ elif menu == "📊 Painel de Notas & Vistos":
     st.caption("💡 **Guia de Comando:** Defina a data de congelamento para fechar as notas. O sistema calcula o transbordamento, separa quem está 'Quase Lá' e gera as etiquetas.")
     st.markdown("---")
 
-    # 🚨 INICIALIZAÇÃO SEGURA DA VARIÁVEL V
+    # 🚨 INICIALIZAÇÃO SEGURA DA VARIÁVEL V E PESOS DE NOTA
     if "v_notas" not in st.session_state: 
         st.session_state.v_notas = int(time.time())
     v = st.session_state.v_notas
 
-    # INICIALIZAÇÃO DE VARIÁVEIS DE CONFIGURAÇÃO DE PESOS
     if 'p_visto' not in st.session_state: st.session_state.p_visto = 3.0
     if 'p_teste' not in st.session_state: st.session_state.p_teste = 3.0
     if 'p_prova' not in st.session_state: st.session_state.p_prova = 4.0
@@ -3846,7 +3845,7 @@ elif menu == "📊 Painel de Notas & Vistos":
                 trimestre_sel = c_f2.selectbox("📅 Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"n_trim_{v}", label_visibility="collapsed")
                 
                 config_key = f"CONFIG_DATA_{turma_sel}_{trimestre_sel}"
-                config_records = df_relatorios[df_relatorios['TIPO'] == config_key]
+                config_records = df_relatorios[df_relatorios['TIPO'] == config_key] if not df_relatorios.empty else pd.DataFrame()
                 if not config_records.empty:
                     saved_date_str = config_records.iloc[-1]['CONTEUDO'].split('|')[-1]
                     try: default_date = datetime.strptime(saved_date_str, "%d/%m/%Y").date()
@@ -3881,72 +3880,73 @@ elif menu == "📊 Painel de Notas & Vistos":
             regra_rec = st.session_state.regra_rec
             arredondar_prefeitura = st.session_state.arredondar_prefeitura
 
-            # 🚨 MODAL: RADAR DE REFACÇÃO DE PROVAS
-            @st.dialog("⚡ Radar de Refacção (Justiça Pedagógica)", width="large")
-            def dialog_refaccao():
-                st.info("Selecione os alunos que refizeram as questões erradas da prova para aplicar o bônus.")
-                valor_bonus_refaccao = st.number_input("Valor do Bônus (+):", min_value=0.1, max_value=5.0, value=0.5, step=0.1, key=f"v_ref_{v}")
-                
-                if 'df_input_ref' in st.session_state:
-                    df_elegiveis = st.session_state.df_input_ref[st.session_state.df_input_ref['MEDIA_FINAL'] < 10.0].copy()
-                    if not df_elegiveis.empty:
-                        dados_refaccao = []
-                        alunos_ja_com_bonus = []
-                        
-                        for _, r in df_elegiveis.iterrows():
-                            ja_ganhou = False
-                            if not df_diario.empty:
-                                mask_bonus = (df_diario['ID_ALUNO'].apply(db.limpar_id) == r['ID']) & (df_diario['OBSERVACOES'].str.contains("Refacção", na=False))
-                                if not df_diario[mask_bonus].empty: ja_ganhou = True
-                            
-                            if ja_ganhou: alunos_ja_com_bonus.append(r['ESTUDANTE'])
-                            else:
-                                dados_refaccao.append({
-                                    "Entregou?": False, "ID": r['ID'], "Estudante": r['ESTUDANTE'], "Média Atual": r['MEDIA_FINAL']
-                                })
-                        
-                        if alunos_ja_com_bonus:
-                            st.success(f"✅ **Bônus já aplicado para:** {', '.join(alunos_ja_com_bonus)}")
-                        
-                        if dados_refaccao:
-                            df_refaccao_ed = st.data_editor(
-                                pd.DataFrame(dados_refaccao), hide_index=True, use_container_width=True,
-                                column_config={
-                                    "Entregou?": st.column_config.CheckboxColumn("Entregou?", default=False),
-                                    "ID": None, "Estudante": st.column_config.TextColumn("Estudante", disabled=True),
-                                    "Média Atual": st.column_config.NumberColumn("Média Atual", format="%.1f", disabled=True)
-                                }, key=f"ed_refaccao_{v}"
-                            )
-                            
-                            alunos_marcados = df_refaccao_ed[df_refaccao_ed["Entregou?"] == True]
-                            
-                            if st.button(f"💾 APLICAR BÔNUS (+{valor_bonus_refaccao}) AOS MARCADOS", type="primary", use_container_width=True, key=f"btn_ref_conf_{v}"):
-                                if alunos_marcados.empty: st.error("⚠️ Marque pelo menos um aluno.")
-                                else:
-                                    with st.spinner("Injetando bônus..."):
-                                        linhas_bonus = []
-                                        df_diario_turma = df_diario[(df_diario['TURMA'] == turma_sel) & (~df_diario['TAGS'].isin(['DIA NÃO LETIVO', 'BONUS_CONSELHO', 'SISTEMA_NOTA']))].copy()
-                                        if not df_diario_turma.empty:
-                                            df_diario_turma['DATA_DT'] = pd.to_datetime(df_diario_turma['DATA'], format="%d/%m/%Y", errors='coerce')
-                                            data_ancora_ref = df_diario_turma['DATA_DT'].max().strftime("%d/%m/%Y")
-                                        else: data_ancora_ref = data_limite.strftime("%d/%m/%Y")
-                                        
-                                        for _, r in alunos_marcados.iterrows():
-                                            nome_limpo = r['Estudante'].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
-                                            linhas_bonus.append([
-                                                data_ancora_ref, r['ID'], nome_limpo, turma_sel,
-                                                "ISENTO", "BONUS_CONSELHO", "Bônus de Refacção de Prova (Justiça Pedagógica)", util.sosa_to_str(valor_bonus_refaccao)
-                                            ])
-                                            
-                                        if db.salvar_lote("DB_DIARIO_BORDO", linhas_bonus):
-                                            st.success("✅ Bônus aplicado!"); time.sleep(1); st.rerun()
-                        else: st.info("Todos os alunos elegíveis já receberam o bônus.")
+            # 🚨 DEFINIÇÃO SEGURA DE ALUNOS_TURMA ANTES DE QUALQUER USO
+            alunos_turma = df_alunos[df_alunos['TURMA'] == turma_sel].sort_values(by="NOME_ALUNO") if not df_alunos.empty else pd.DataFrame()
 
-                    alunos_turma = df_alunos[df_alunos['TURMA'] == turma_sel].sort_values(by="NOME_ALUNO")
-            
             if alunos_turma.empty:
                 st.warning(f"⚠️ Nenhum aluno cadastrado na turma {turma_sel}.")
             else:
+                # 🚨 MODAL: RADAR DE REFACÇÃO DE PROVAS
+                @st.dialog("⚡ Radar de Refacção (Justiça Pedagógica)", width="large")
+                def dialog_refaccao():
+                    st.info("Selecione os alunos que refizeram as questões erradas da prova para aplicar o bônus.")
+                    valor_bonus_refaccao = st.number_input("Valor do Bônus (+):", min_value=0.1, max_value=5.0, value=0.5, step=0.1, key=f"v_ref_{v}")
+                    
+                    if 'df_input_ref' in st.session_state:
+                        df_elegiveis = st.session_state.df_input_ref[st.session_state.df_input_ref['MEDIA_FINAL'] < 10.0].copy()
+                        if not df_elegiveis.empty:
+                            dados_refaccao = []
+                            alunos_ja_com_bonus = []
+                            
+                            for _, r in df_elegiveis.iterrows():
+                                ja_ganhou = False
+                                if not df_diario.empty:
+                                    mask_bonus = (df_diario['ID_ALUNO'].apply(db.limpar_id) == r['ID']) & (df_diario['OBSERVACOES'].str.contains("Refacção", na=False))
+                                    if not df_diario[mask_bonus].empty: ja_ganhou = True
+                                
+                                if ja_ganhou: alunos_ja_com_bonus.append(r['ESTUDANTE'])
+                                else:
+                                    dados_refaccao.append({
+                                        "Entregou?": False, "ID": r['ID'], "Estudante": r['ESTUDANTE'], "Média Atual": r['MEDIA_FINAL']
+                                    })
+                            
+                            if alunos_ja_com_bonus:
+                                st.success(f"✅ **Bônus já aplicado para:** {', '.join(alunos_ja_com_bonus)}")
+                            
+                            if dados_refaccao:
+                                df_refaccao_ed = st.data_editor(
+                                    pd.DataFrame(dados_refaccao), hide_index=True, use_container_width=True,
+                                    column_config={
+                                        "Entregou?": st.column_config.CheckboxColumn("Entregou?", default=False),
+                                        "ID": None, "Estudante": st.column_config.TextColumn("Estudante", disabled=True),
+                                        "Média Atual": st.column_config.NumberColumn("Média Atual", format="%.1f", disabled=True)
+                                    }, key=f"ed_refaccao_{v}"
+                                )
+                                
+                                alunos_marcados = df_refaccao_ed[df_refaccao_ed["Entregou?"] == True]
+                                
+                                if st.button(f"💾 APLICAR BÔNUS (+{valor_bonus_refaccao}) AOS MARCADOS", type="primary", use_container_width=True, key=f"btn_ref_conf_{v}"):
+                                    if alunos_marcados.empty: st.error("⚠️ Marque pelo menos um aluno.")
+                                    else:
+                                        with st.spinner("Injetando bônus..."):
+                                            linhas_bonus = []
+                                            df_diario_turma = df_diario[(df_diario['TURMA'] == turma_sel) & (~df_diario['TAGS'].isin(['DIA NÃO LETIVO', 'BONUS_CONSELHO', 'SISTEMA_NOTA']))].copy() if not df_diario.empty else pd.DataFrame()
+                                            if not df_diario_turma.empty:
+                                                df_diario_turma['DATA_DT'] = pd.to_datetime(df_diario_turma['DATA'], format="%d/%m/%Y", errors='coerce')
+                                                data_ancora_ref = df_diario_turma['DATA_DT'].max().strftime("%d/%m/%Y")
+                                            else: data_ancora_ref = data_limite.strftime("%d/%m/%Y")
+                                            
+                                            for _, r in alunos_marcados.iterrows():
+                                                nome_limpo = r['Estudante'].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
+                                                linhas_bonus.append([
+                                                    data_ancora_ref, r['ID'], nome_limpo, turma_sel,
+                                                    "ISENTO", "BONUS_CONSELHO", "Bônus de Refacção de Prova (Justiça Pedagógica)", util.sosa_to_str(valor_bonus_refaccao)
+                                                ])
+                                                
+                                            if db.salvar_lote("DB_DIARIO_BORDO", linhas_bonus):
+                                                st.success("✅ Bônus aplicado!"); time.sleep(1); st.rerun()
+                            else: st.info("Todos os alunos elegíveis já receberam o bônus.")
+
                 # --- 2. MOTOR DE CÁLCULO AUTOMÁTICO (COM CONGELAMENTO TEMPORAL) ---
                 vistos_auto_map, bonus_sala_map, bonus_conselho_map, trabalhos_map = {}, {}, {}, {}
                 
@@ -3982,9 +3982,9 @@ elif menu == "📊 Painel de Notas & Vistos":
                             vistos_auto_map[id_l], bonus_sala_map[id_l], bonus_conselho_map[id_l], trabalhos_map[id_l] = 0.0, 0.0, 0.0, 0.0
 
                 # --- 3. CONSOLIDAÇÃO DA MESA DE LANÇAMENTO ---
-                notas_banco = df_notas[(df_notas['TURMA'] == turma_sel) & (df_notas['TRIMESTRE'] == trimestre_sel)]
+                notas_banco = df_notas[(df_notas['TURMA'] == turma_sel) & (df_notas['TRIMESTRE'] == trimestre_sel)] if not df_notas.empty else pd.DataFrame()
                 trim_limpo = trimestre_sel.replace(" ", "")
-                df_diag_turma = df_diagnosticos[(df_diagnosticos['TURMA'] == turma_sel) & (df_diagnosticos['ID_AVALIACAO'].str.contains(trim_limpo, case=False, na=False))]
+                df_diag_turma = df_diagnosticos[(df_diagnosticos['TURMA'] == turma_sel) & (df_diagnosticos['ID_AVALIACAO'].str.contains(trim_limpo, case=False, na=False))] if not df_diagnosticos.empty else pd.DataFrame()
                 
                 def definir_icone_status(nec):
                     n = str(nec).upper().strip()
@@ -3998,7 +3998,7 @@ elif menu == "📊 Painel de Notas & Vistos":
                 dados_editor = []
                 for _, alu in alunos_turma.iterrows():
                     id_a = db.limpar_id(alu['ID'])
-                    reg_b = notas_banco[notas_banco['ID_ALUNO'].apply(db.limpar_id) == id_a]
+                    reg_b = notas_banco[notas_banco['ID_ALUNO'].apply(db.limpar_id) == id_a] if not notas_banco.empty else pd.DataFrame()
                     
                     n_teste = util.sosa_to_float(reg_b.iloc[0]['NOTA_TESTE']) if not reg_b.empty else 0.0
                     n_prova = util.sosa_to_float(reg_b.iloc[0]['NOTA_PROVA']) if not reg_b.empty else 0.0
@@ -4011,18 +4011,19 @@ elif menu == "📊 Painel de Notas & Vistos":
                         n_teste = trabalhos_map[id_a]
                         origem_teste = "[TRABALHO]"
                     
-                    scanned_teste = df_diag_turma[(df_diag_turma['ID_ALUNO'].apply(db.limpar_id) == id_a) & (df_diag_turma['ID_AVALIACAO'].str.upper().str.contains("TESTE"))]
-                    if not scanned_teste.empty: 
-                        n_teste = util.sosa_to_float(scanned_teste.iloc[-1]['NOTA_CALCULADA'])
-                        origem_teste = "[SCANNER]"
-                        
-                    scanned_prova = df_diag_turma[(df_diag_turma['ID_ALUNO'].apply(db.limpar_id) == id_a) & (df_diag_turma['ID_AVALIACAO'].str.upper().str.contains("PROVA"))]
-                    if not scanned_prova.empty: 
-                        n_prova = util.sosa_to_float(scanned_prova.iloc[-1]['NOTA_CALCULADA'])
-                        av_nome = scanned_prova.iloc[-1]['ID_AVALIACAO'].upper()
-                        if "2ª" in av_nome or "2CHAMADA" in av_nome: origem_prova = "[2ªC]"
-                        elif "TIPO" in av_nome: origem_prova = f"[V-{av_nome.split('TIPO')[-1].strip()}]"
-                        else: origem_prova = "[P]"
+                    if not df_diag_turma.empty:
+                        scanned_teste = df_diag_turma[(df_diag_turma['ID_ALUNO'].apply(db.limpar_id) == id_a) & (df_diag_turma['ID_AVALIACAO'].str.upper().str.contains("TESTE"))]
+                        if not scanned_teste.empty: 
+                            n_teste = util.sosa_to_float(scanned_teste.iloc[-1]['NOTA_CALCULADA'])
+                            origem_teste = "[SCANNER]"
+                            
+                        scanned_prova = df_diag_turma[(df_diag_turma['ID_ALUNO'].apply(db.limpar_id) == id_a) & (df_diag_turma['ID_AVALIACAO'].str.upper().str.contains("PROVA"))]
+                        if not scanned_prova.empty: 
+                            n_prova = util.sosa_to_float(scanned_prova.iloc[-1]['NOTA_CALCULADA'])
+                            av_nome = scanned_prova.iloc[-1]['ID_AVALIACAO'].upper()
+                            if "2ª" in av_nome or "2CHAMADA" in av_nome: origem_prova = "[2ªC]"
+                            elif "TIPO" in av_nome: origem_prova = f"[V-{av_nome.split('TIPO')[-1].strip()}]"
+                            else: origem_prova = "[P]"
 
                     icone_perfil = definir_icone_status(alu['NECESSIDADES'])
 
@@ -4154,7 +4155,7 @@ elif menu == "📊 Painel de Notas & Vistos":
                                 linhas_gabarito_reverso = []
                                 linhas_bonus_conselho = []
                                 
-                                df_diario_turma = df_diario[(df_diario['TURMA'] == turma_sel) & (~df_diario['TAGS'].isin(['DIA NÃO LETIVO', 'BONUS_CONSELHO', 'SISTEMA_NOTA']))].copy()
+                                df_diario_turma = df_diario[(df_diario['TURMA'] == turma_sel) & (~df_diario['TAGS'].isin(['DIA NÃO LETIVO', 'BONUS_CONSELHO', 'SISTEMA_NOTA']))].copy() if not df_diario.empty else pd.DataFrame()
                                 if not df_diario_turma.empty:
                                     df_diario_turma['DATA_DT'] = pd.to_datetime(df_diario_turma['DATA'], format="%d/%m/%Y", errors='coerce')
                                     data_ancora = df_diario_turma['DATA_DT'].max().strftime("%d/%m/%Y")
