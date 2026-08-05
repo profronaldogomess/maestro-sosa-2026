@@ -2835,7 +2835,7 @@ elif menu == "📸 Scanner de Gabaritos":
                                         
                                         col_s1, col_s2 = st.columns(2)
                                         if col_s1.button("Gravar Correção", type="primary", use_container_width=True):
-                                            with st.spinner("Gravando foto JPG nativa no Drive e atualizando notas..."):
+                                            with st.spinner("Gravando foto JPG no Drive e salvando nota no banco..."):
                                                 link_foto_jpg = db.subir_e_converter_para_google_docs(
                                                     st.session_state.current_scan_img, 
                                                     alunos_alvo[0].replace(" ","_"), 
@@ -2845,33 +2845,50 @@ elif menu == "📸 Scanner de Gabaritos":
                                                     modo="SCANNER"
                                                 )
                                                 
+                                                # 🚨 GERA A STRING DE RESPOSTAS E GRUPO ANTES DE SALVAR NO BANCO
                                                 grupo_str = f"|GRUPO:{','.join(alunos_alvo)}" if len(alunos_alvo) > 1 else ""
                                                 respostas_salvar = ";".join(respostas_com_flag) + grupo_str
                                                 
-                                                # 🚨 LIMPEZA EM CASCATA: BUSCA ID NA TURMA COMPLETA E APAGA REGISTROS DE FALTA
-                                        df_turma_completa = df_alunos[df_alunos['TURMA'] == t_sel]
-                                        for aluno_nome in alunos_alvo:
-                                            match_al = df_turma_completa[df_turma_completa['NOME_ALUNO'] == aluno_nome]
-                                            if not match_al.empty:
-                                                id_al = db.limpar_id(match_al.iloc[0]['ID'])
+                                                df_turma_completa = df_alunos[df_alunos['TURMA'] == t_sel]
+                                                for aluno_nome in alunos_alvo:
+                                                    match_al = df_turma_completa[df_turma_completa['NOME_ALUNO'] == aluno_nome]
+                                                    if not match_al.empty:
+                                                        id_al = db.limpar_id(match_al.iloc[0]['ID'])
+                                                        
+                                                        # Apaga registros antigos de Falta ou Atestado para esse mesmo slot
+                                                        try:
+                                                            wb_del = db.conectar()
+                                                            ws_del = wb_del.worksheet("DB_GABARITOS_ALUNOS")
+                                                            dados_del = ws_del.get_all_values()
+                                                            for idx_d in range(len(dados_del) - 1, 0, -1):
+                                                                row_d = dados_del[idx_d]
+                                                                if len(row_d) > 4 and db.limpar_id(row_d[1]) == id_al and at_sel.split('-')[0].strip() in row_d[4]:
+                                                                    ws_del.delete_rows(idx_d + 1)
+                                                        except: pass
+                                                        
+                                                        db.salvar_no_banco("DB_GABARITOS_ALUNOS", [
+                                                            datetime.now().strftime("%d/%m/%Y"), 
+                                                            id_al, 
+                                                            aluno_nome, 
+                                                            t_sel, 
+                                                            material_ref['TIPO_MATERIAL'], 
+                                                            respostas_salvar, 
+                                                            util.sosa_to_str(nota_f), 
+                                                            link_foto_jpg
+                                                        ])
                                                 
-                                                # Apaga registros antigos de Falta ou Atestado para essa avaliação
-                                                try:
-                                                    wb_del = db.conectar()
-                                                    ws_del = wb_del.worksheet("DB_GABARITOS_ALUNOS")
-                                                    dados_del = ws_del.get_all_values()
-                                                    for idx_d in range(len(dados_del) - 1, 0, -1):
-                                                        row_d = dados_del[idx_d]
-                                                        if len(row_d) > 4 and db.limpar_id(row_d[1]) == id_al and at_sel.split('-')[0].strip() in row_d[4]:
-                                                            ws_del.delete_rows(idx_d + 1)
-                                                except: pass
+                                                # Limpa notas antigas da turma para forçar o recálculo atualizado no boletim
+                                                db.limpar_notas_turma_trimestre(t_sel, tr_sel)
                                                 
-                                                db.salvar_no_banco("DB_GABARITOS_ALUNOS", [datetime.now().strftime("%d/%m/%Y"), id_al, aluno_nome, t_sel, material_ref['TIPO_MATERIAL'], respostas_salvar, util.sosa_to_str(nota_f), link_foto_jpg])
-                                                
-                                                del st.session_state.current_scan_res; del st.session_state.current_scan_img
-                                                st.success("✅ Prova JPG gravada e nota computada com sucesso!"); time.sleep(0.5); st.rerun()
+                                                del st.session_state.current_scan_res
+                                                del st.session_state.current_scan_img
+                                                st.success("✅ Prova gravada e nota computada com sucesso!")
+                                                time.sleep(0.5)
+                                                st.rerun()
                                         if col_s2.button("Descartar", use_container_width=True):
-                                            del st.session_state.current_scan_res; del st.session_state.current_scan_img; st.rerun()
+                                            del st.session_state.current_scan_res
+                                            del st.session_state.current_scan_img
+                                            st.rerun()
 
                                 else:
                                     opcoes_letras = ["A", "B", "C", "X", "?"] if is_pei_grading else ["A", "B", "C", "D", "E", "X", "?"]
