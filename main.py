@@ -4089,24 +4089,14 @@ elif menu == "📝 Diário de Bordo Rápido":
 # MÓDULO: BIOGRAFIA DO ESTUDANTE - V2026.1 (EXIBIÇÃO DE ATESTADOS & WHATSAPP)
 # ==============================================================================
 elif menu == "👤 Biografia do Estudante":
-    st.title("👤 Biografia do Estudante: Dossiê de Evolução")
+    st.title("👤 Biografia do Estudante: Dossiê 360°")
     st.caption("💡 Dashboard executivo para reuniões de pais. Exibe o histórico de avaliações, atestados e evolução comportamental.")
     st.markdown("---")
 
-    def preparar_para_leitura(texto):
-        if not texto or not isinstance(texto, str): return ""
-        texto = texto.replace('\x0c', '\\f')
-        texto = re.sub(r'(?<!\$)\\\w+\{[^\}]*?\}(?:\{[^\}]*?\})?(?!\$)', r'$\g<0>$', texto)
-        texto = re.sub(r'(?<!\$)\^\\(circ|deg|cdot|times)(?!\$)', r'$\g<0>$', texto)
-        texto = re.sub(r'\$\$(.*?)\$\$', r'$\1$', texto, flags=re.DOTALL)
-        texto = re.sub(r'\[GEOGEBRA\](.*?)\[/GEOGEBRA\]', '', texto, flags=re.IGNORECASE | re.DOTALL)
-        texto = re.sub(
-            r'\[\s*PROMPT IMAGEM:(.*?)\s*\]', 
-            r'\n\n🎨 **[PROMPT GERADOR DE IMAGEM - COPIE NO BOTÃO ABAIXO]**\n```english\n\1\n```\n\n', 
-            texto, 
-            flags=re.IGNORECASE | re.DOTALL
-        )
-        return texto
+    # 🚨 INICIALIZAÇÃO SEGURA DA VARIÁVEL V
+    if "v_bio" not in st.session_state: 
+        st.session_state.v_bio = int(time.time())
+    v = st.session_state.v_bio
 
     if df_alunos.empty:
         st.warning("⚠️ Base de alunos vazia. Cadastre as turmas primeiro.")
@@ -4121,7 +4111,7 @@ elif menu == "👤 Biografia do Estudante":
             elif not df_alunos.empty and 'TURMA' in df_alunos.columns:
                 lista_turmas_bio = sorted(df_alunos['TURMA'].unique())
             
-            turma_b = c1.selectbox("👥 Turma:", lista_turmas_bio, key="bio_t", label_visibility="collapsed")
+            turma_b = c1.selectbox("👥 Turma:", lista_turmas_bio, key=f"bio_t_{v}", label_visibility="collapsed")
             lista_alunos = df_alunos[df_alunos['TURMA'] == turma_b].sort_values(by="NOME_ALUNO").copy()
             
             if lista_alunos.empty:
@@ -4134,14 +4124,14 @@ elif menu == "👤 Biografia do Estudante":
                 if "DEFASAGEM LEITURA" in n: return "🧱"
                 if "DEFASAGEM MATEMÁTICA" in n or "DEFASAGEM MATEMATICA" in n: return "🧮"
                 if "ALTA PERFORMANCE" in n: return "🚀"
-                if n in["NENHUMA", "", "NAN", "TÍPICO", "TIPICO"]: return "👤"
+                if n in ["NENHUMA", "", "NAN", "TÍPICO", "TIPICO"]: return "👤"
                 return "♿"
 
             lista_alunos['STATUS_ICON'] = lista_alunos['NECESSIDADES'].apply(definir_icone_status)
             lista_alunos['LABEL'] = lista_alunos.apply(lambda x: f"{x['STATUS_ICON']} {x['NOME_ALUNO']}", axis=1)
                 
-            aluno_b_label = c2.selectbox("🎓 Estudante:", lista_alunos['LABEL'].tolist(), key="bio_a", label_visibility="collapsed")
-            trim_b = c3.selectbox("📅 Período de Análise:",["Todos", "I Trimestre", "II Trimestre", "III Trimestre"], key="bio_trim", label_visibility="collapsed")
+            aluno_b_label = c2.selectbox("🎓 Estudante:", lista_alunos['LABEL'].tolist(), key=f"bio_a_{v}", label_visibility="collapsed")
+            trim_b = c3.selectbox("📅 Período de Análise:", ["Todos", "I Trimestre", "II Trimestre", "III Trimestre"], key=f"bio_trim_{v}", label_visibility="collapsed")
 
         if trim_b == "I Trimestre": dt_ini, dt_fim = date(2026, 2, 9), date(2026, 5, 22)
         elif trim_b == "II Trimestre": dt_ini, dt_fim = date(2026, 5, 25), date(2026, 9, 4)
@@ -4192,22 +4182,23 @@ elif menu == "👤 Biografia do Estudante":
             with c_h1:
                 st.markdown(f"<h3 style='margin-bottom: 0px;'>{nome_limpo}</h3>", unsafe_allow_html=True)
                 st.caption(f"**ID:** {id_alu}")
-                if "PENDENTE" in perfil_atual or "SUSPEITA" in perfil_atual: st.markdown(f"<span style='color: #F39C12; font-weight: bold;'>🟠 Radar de Investigação: {perfil_atual}</span>", unsafe_allow_html=True)
-                elif "DEFASAGEM" in perfil_atual: st.markdown(f"<span style='color: #E74C3C; font-weight: bold;'>🧱 Barreira de Aprendizagem: {perfil_atual}</span>", unsafe_allow_html=True)
-                elif "ALTA PERFORMANCE" in perfil_atual: st.markdown(f"<span style='color: #3498DB; font-weight: bold;'>🚀 Destaque Cognitivo: {perfil_atual}</span>", unsafe_allow_html=True)
-                elif is_pei_or_gap: st.markdown(f"<span style='color: #9B59B6; font-weight: bold;'>♿ Condição Clínica (PEI): {perfil_atual}</span>", unsafe_allow_html=True)
-                else: st.markdown(f"<span style='color: #2ECC71; font-weight: bold;'>👤 Perfil Cognitivo: Típico / Padrão</span>", unsafe_allow_html=True)
+                
+                # 🚨 BADGES NATIVAS DE PERFIL CLINICO / COGNITIVO
+                if "PENDENTE" in perfil_atual or "SUSPEITA" in perfil_atual: st.caption(f"Status: 🟠 RADAR DE INVESTIGAÇÃO ({perfil_atual})")
+                elif "DEFASAGEM" in perfil_atual: st.caption(f"Status: 🧱 BARREIRA DE APRENDIZAGEM ({perfil_atual})")
+                elif "ALTA PERFORMANCE" in perfil_atual: st.caption(f"Status: 🚀 DESTAQUE COGNITIVO ({perfil_atual})")
+                elif is_pei_or_gap: st.caption(f"Status: ♿ CONDIÇÃO CLÍNICA PEI ({perfil_atual})")
+                else: st.caption("Status: 👤 PERFIL TÍPICO / PADRÃO")
                 
             c_h2.metric("Soma Anual (Meta 18.0)", f"{soma_anual:.1f}", delta=f"{soma_anual - 18.0:.1f}")
             c_h3.metric("Assiduidade", f"{perc_presenca_hero:.0f}%", f"{faltas_hero} faltas", delta_color="inverse" if faltas_hero > 0 else "normal")
             c_h4.metric("Engajamento (Caderno)", f"{perc_visto_hero:.0f}%", f"{bonus_total_hero:+.1f} pts bônus")
 
-        # 📱 WHATSAPP MODAL (COM HOMOLOGAÇÃO DE ATESTADOS)
+        # 📱 WHATSAPP MODAL (COM HOMOLOGAÇÃO DE ATESTADOS DETALHADA)
         @st.dialog("📱 Extrato para WhatsApp")
         def dialog_whatsapp():
             st.info("Copie o texto abaixo e envie para o responsável.")
             
-            # Coleta justificativas de atestados gravadas no banco
             atestados_info = ""
             hist_atestados = df_relatorios[(df_relatorios['ID_ALUNO'].apply(db.limpar_id) == id_alu) & (df_relatorios['TIPO'] == 'JUSTIFICATIVA_AUSENCIA')]
             if not hist_atestados.empty:
@@ -4273,393 +4264,395 @@ Qualquer dúvida, estou à disposição! Um abraço! 🚀"""
             
             st.code(msg_zap, language=None)
 
-        if st.button("📱 Gerar Extrato para WhatsApp", use_container_width=True):
+        if st.button("📱 Gerar Extrato para WhatsApp", use_container_width=True, key=f"btn_zap_bio_{v}"):
             dialog_whatsapp()
 
         st.markdown("---")
 
-        abas_bio = ["📊 Visão Geral & Engajamento", "📈 Evolução & Lacunas", "⚖️ Auditoria & Tribunal"]
-        if is_pei_or_gap: abas_bio.append("♿ Dossiê Clínico (PEI)")
-        
-        tabs = st.tabs(abas_bio)
-
-        with tabs[0]:
-            col_v1, col_v2 = st.columns([1.2, 1])
+        # 🚨 DOSSIÊ 360° ISOLADO EM FRAGMENTO (NAVEGAÇÃO RÁPIDA)
+        @st.fragment
+        def renderizar_dossie_bio_fragmento():
+            abas_bio = ["📊 Visão Geral & Engajamento", "📈 Evolução & Lacunas", "⚖️ Auditoria & Tribunal"]
+            if is_pei_or_gap: abas_bio.append("♿ Dossiê Clínico (PEI)")
             
-            with col_v1:
-                st.markdown(f"#### 🧾 Extrato Analítico de Notas")
-                with st.container(border=True):
-                    if not n_alu_f.empty:
-                        dados_notas =[]
-                        trims_para_exibir =["I Trimestre", "II Trimestre", "III Trimestre"] if trim_b == "Todos" else [trim_b]
-                        for t in trims_para_exibir:
-                            reg = n_alu[n_alu['TRIMESTRE'] == t]
-                            if not reg.empty:
-                                media_f = util.sosa_to_float(reg.iloc[0]['MEDIA_FINAL'])
-                                dados_notas.append({
-                                    "Trimestre": t,
-                                    "Vistos": util.sosa_to_float(reg.iloc[0]['NOTA_VISTOS']),
-                                    "Teste": util.sosa_to_float(reg.iloc[0]['NOTA_TESTE']),
-                                    "Prova": util.sosa_to_float(reg.iloc[0]['NOTA_PROVA']),
-                                    "Rec.": util.sosa_to_float(reg.iloc[0]['NOTA_REC']),
-                                    "Média": media_f,
-                                    "Status": "✅ APROVADO" if media_f >= 6.0 else "⚠️ ABAIXO"
-                                })
-                        if dados_notas:
-                            def style_status_bio(v):
-                                if "APROVADO" in str(v): return 'color: #2ECC71; font-weight: bold;'
-                                return 'color: #E74C3C; font-weight: bold;'
-                            st.dataframe(
-                                pd.DataFrame(dados_notas).style.map(style_status_bio, subset=['Status']).format("{:.1f}", subset=['Vistos', 'Teste', 'Prova', 'Rec.', 'Média']), 
-                                use_container_width=True, hide_index=True
-                            )
-                        else: st.info(f"📭 Sem notas lançadas para o {trim_b}.")
-                    else: st.info(f"📭 Aguardando lançamento de notas no Boletim.")
+            tabs = st.tabs(abas_bio)
 
-            with col_v2:
-                st.markdown("#### 🚩 Ocorrências e Bônus")
-                with st.container(border=True):
-                    if not d_alu_f.empty:
-                        mask_obs = (d_alu_f['TAGS'] != "") | (d_alu_f['OBSERVACOES'] != "") | (d_alu_f['BONUS'].apply(util.sosa_to_float) != 0)
-                        tags_obs = d_alu_f[mask_obs]
-                        
-                        if not tags_obs.empty:
-                            for _, row in tags_obs.tail(6).iterrows():
-                                tag_str = str(row['TAGS']).upper()
-                                obs_str = str(row['OBSERVACOES'])
-                                bonus_val = util.sosa_to_float(row.get('BONUS', 0))
-                                
-                                if tag_str == "DIA NÃO LETIVO": emoji = "🛑"
-                                elif tag_str == "BONUS_CONSELHO" and "Refacção" in obs_str: emoji = "⚡"
-                                elif tag_str == "BONUS_CONSELHO": emoji = "🎁"
-                                elif "SISTEMA_NOTA" in tag_str or "PROJETO" in obs_str.upper(): emoji = "📘"
-                                elif any(x in tag_str for x in["DORMIU", "CONVERSA", "MATERIAL", "FALTOU", "AUSÊNCIA", "ATRASO", "CELULAR", "INDISCIPLINA", "ARGUIÇÃO"]): emoji = "🔴"
-                                elif bonus_val > 0: emoji = "⭐"
-                                elif bonus_val < 0: emoji = "📉"
-                                else: emoji = "🟢"
+            with tabs[0]:
+                col_v1, col_v2 = st.columns([1.2, 1])
+                
+                with col_v1:
+                    st.markdown(f"#### 🧾 Extrato Analítico de Notas")
+                    with st.container(border=True):
+                        if not n_alu_f.empty:
+                            dados_notas = []
+                            trims_para_exibir = ["I Trimestre", "II Trimestre", "III Trimestre"] if trim_b == "Todos" else [trim_b]
+                            for t in trims_para_exibir:
+                                reg = n_alu[n_alu['TRIMESTRE'] == t]
+                                if not reg.empty:
+                                    media_f = util.sosa_to_float(reg.iloc[0]['MEDIA_FINAL'])
+                                    dados_notas.append({
+                                        "Trimestre": t,
+                                        "Vistos": util.sosa_to_float(reg.iloc[0]['NOTA_VISTOS']),
+                                        "Teste": util.sosa_to_float(reg.iloc[0]['NOTA_TESTE']),
+                                        "Prova": util.sosa_to_float(reg.iloc[0]['NOTA_PROVA']),
+                                        "Rec.": util.sosa_to_float(reg.iloc[0]['NOTA_REC']),
+                                        "Média": media_f,
+                                        "Status": "✅ APROVADO" if media_f >= 6.0 else "⚠️ ABAIXO"
+                                    })
+                            if dados_notas:
+                                def style_status_bio(v):
+                                    if "APROVADO" in str(v): return 'color: #2ECC71; font-weight: bold;'
+                                    return 'color: #E74C3C; font-weight: bold;'
+                                st.dataframe(
+                                    pd.DataFrame(dados_notas).style.map(style_status_bio, subset=['Status']).format("{:.1f}", subset=['Vistos', 'Teste', 'Prova', 'Rec.', 'Média']), 
+                                    use_container_width=True, hide_index=True
+                                )
+                            else: st.info(f"📭 Sem notas lançadas para o {trim_b}.")
+                        else: st.info(f"📭 Aguardando lançamento de notas no Boletim.")
+
+                with col_v2:
+                    st.markdown("#### 🚩 Ocorrências e Bônus")
+                    with st.container(border=True):
+                        if not d_alu_f.empty:
+                            mask_obs = (d_alu_f['TAGS'] != "") | (d_alu_f['OBSERVACOES'] != "") | (d_alu_f['BONUS'].apply(util.sosa_to_float) != 0)
+                            tags_obs = d_alu_f[mask_obs]
+                            
+                            if not tags_obs.empty:
+                                for _, row in tags_obs.tail(6).iterrows():
+                                    tag_str = str(row['TAGS']).upper()
+                                    obs_str = str(row['OBSERVACOES'])
+                                    bonus_val = util.sosa_to_float(row.get('BONUS', 0))
                                     
-                                display_tag = tag_str
-                                if tag_str == "SISTEMA_NOTA": display_tag = "TRABALHO"
-                                elif tag_str == "BONUS_CONSELHO": display_tag = "INTERVENÇÃO DO PROFESSOR"
+                                    if tag_str == "DIA NÃO LETIVO": emoji = "🛑"
+                                    elif tag_str == "BONUS_CONSELHO" and "Refacção" in obs_str: emoji = "⚡"
+                                    elif tag_str == "BONUS_CONSELHO": emoji = "🎁"
+                                    elif "SISTEMA_NOTA" in tag_str or "PROJETO" in obs_str.upper(): emoji = "📘"
+                                    elif any(x in tag_str for x in ["DORMIU", "CONVERSA", "MATERIAL", "FALTOU", "AUSÊNCIA", "ATRASO", "CELULAR", "INDISCIPLINA", "ARGUIÇÃO"]): emoji = "🔴"
+                                    elif bonus_val > 0: emoji = "⭐"
+                                    elif bonus_val < 0: emoji = "📉"
+                                    else: emoji = "🟢"
+                                        
+                                    display_tag = tag_str
+                                    if tag_str == "SISTEMA_NOTA": display_tag = "TRABALHO"
+                                    elif tag_str == "BONUS_CONSELHO": display_tag = "INTERVENÇÃO DO PROFESSOR"
+                                    
+                                    bonus_badge = f" **[{bonus_val:+.1f} pts]**" if bonus_val != 0 else ""
+                                    texto_exibicao = f"{emoji} **{row['DATA']}** | {display_tag}{bonus_badge}"
+                                    if obs_str: texto_exibicao += f" - *{obs_str}*"
+                                    st.caption(texto_exibicao)
+                            else: st.success("✅ Nenhuma ocorrência registrada.")
+                        else: st.info("📭 Sem registros no diário.")
+
+                with st.expander("🧾 Extrato Detalhado de Faltas e Vistos (Auditoria)"):
+                    st.info("💡 Use este extrato para responder a alunos questionadores com dados exatos de datas e entregas.")
+                    if not d_alu_f.empty:
+                        c_ext1, c_ext2 = st.columns(2)
+                        with c_ext1:
+                            st.markdown("**📅 Histórico de Faltas**")
+                            faltas_df = d_alu_validas_hero[d_alu_validas_hero['TAGS'] == "AUSÊNCIA"]
+                            if not faltas_df.empty:
+                                for _, r in faltas_df.iterrows(): st.error(f"❌ {r['DATA']} - Ausência registrada")
+                            else: st.success("✅ Nenhuma falta neste período.")
+                        with c_ext2:
+                            st.markdown("**📓 Auditoria de Caderno/Atividades**")
+                            if not d_vistos_hero.empty:
+                                for _, r in d_vistos_hero.iterrows():
+                                    status_visto = str(r['VISTO_ATIVIDADE']).upper()
+                                    if status_visto == "TRUE": st.success(f"✅ {r['DATA']} - Atividade Entregue")
+                                    elif status_visto == "FALSE":
+                                        if r['TAGS'] == "AUSÊNCIA": st.warning(f"⚠️ {r['DATA']} - Não entregou (Faltou no dia)")
+                                        else: st.error(f"❌ {r['DATA']} - Estava presente, mas NÃO entregou")
+                            else: st.info("Nenhuma cobrança de visto neste período.")
+                    else: st.info("Sem dados para gerar o extrato.")
+
+            with tabs[1]:
+                st.markdown(f"### 📈 Evolução de Desempenho ({trim_b})")
+                with st.container(border=True):
+                    if not diag_alu_f.empty:
+                        diag_alu_f['DATA_DT'] = pd.to_datetime(diag_alu_f['DATA'], format="%d/%m/%Y", errors='coerce')
+                        diag_ordenado = diag_alu_f.sort_values(by='DATA_DT', ascending=False)
+                        
+                        dados_grafico = []
+                        for _, row_av in diag_ordenado.iloc[::-1].iterrows(): 
+                            av_id_bruto = row_av['ID_AVALIACAO']
+                            nota_av = util.sosa_to_float(row_av['NOTA_CALCULADA'])
+                            data_av = row_av['DATA']
+                            nome_limpo_av = re.sub(r'(_\d+ANO_I{1,3}TRIMESTRE)', '', av_id_bruto).strip()
+                            nome_limpo_av = nome_limpo_av.replace("VARIANTE", "").replace("(", "").replace(")", "").strip()
+                            
+                            if not str(row_av['RESPOSTAS_ALUNO']).upper().startswith("FALTOU"):
+                                dados_grafico.append({"Data": data_av, "Avaliação": nome_limpo_av, "Nota": nota_av})
+                        
+                        if dados_grafico:
+                            df_grafico = pd.DataFrame(dados_grafico)
+                            fig = px.line(df_grafico, x="Avaliação", y="Nota", text="Nota", markers=True, title="Curva de Aprendizagem (Notas em Avaliações)", hover_data=["Data"])
+                            fig.update_traces(textposition="bottom right", line=dict(color="#2962FF", width=3), marker=dict(size=10))
+                            fig.update_layout(yaxis_range=[0, 10.5], height=350, xaxis_title="", yaxis_title="Nota Obtida")
+                            fig.add_hline(y=6.0, line_dash="dash", line_color="red", annotation_text="Média (6.0)", annotation_position="bottom right")
+                            st.plotly_chart(fig, use_container_width=True)
+                        else: st.info("O aluno esteve ausente ou possui atestado registrado nas avaliações deste período.")
+                    else: st.info("📭 Aguardando avaliações escaneadas para gerar o gráfico de evolução.")
+
+                st.markdown(f"### 🧠 Mapa de Lacunas e Dificuldades ({trim_b})")
+                with st.container(border=True):
+                    if not diag_alu_f.empty:
+                        todas_as_lacunas = []
+                        for _, reg_av in diag_alu_f.iterrows():
+                            nome_av_real = reg_av['ID_AVALIACAO']
+                            m_ref_query = df_aulas[df_aulas['TIPO_MATERIAL'] == nome_av_real.replace(" (2ª CHAMADA)", "")]
+                            
+                            if not m_ref_query.empty:
+                                m_ref = m_ref_query.iloc[0]
+                                txt_p = str(m_ref['CONTEUDO'])
+                                is_pei_alu = is_pei_or_gap and "TIPICO" not in perfil_atual
+                                tag_grade = "GRADE_DE_CORRECAO_PEI" if is_pei_alu else "GRADE_DE_CORRECAO"
+                                grade = ai.extrair_tag(txt_p, tag_grade) or ai.extrair_tag(txt_p, "GRADE_DE_CORRECAO")
+                                tag_g = "GABARITO_PEI" if is_pei_alu else "GABARITO_TEXTO"
+                                gab_raw = ai.extrair_tag(txt_p, tag_g) or ai.extrair_tag(txt_p, "GABARITO")
+                                gab_oficial = re.findall(r"\b[A-E]\b", gab_raw.upper())
+                                respostas_aluno = str(reg_av['RESPOSTAS_ALUNO']).split(';')
                                 
-                                bonus_badge = f" **[{bonus_val:+.1f} pts]**" if bonus_val != 0 else ""
-                                texto_exibicao = f"{emoji} **{row['DATA']}** | {display_tag}{bonus_badge}"
-                                if obs_str: texto_exibicao += f" - *{obs_str}*"
-                                st.caption(texto_exibicao)
-                        else: st.success("✅ Nenhuma ocorrência registrada.")
-                    else: st.info("📭 Sem registros no diário.")
+                                for i, r in enumerate(respostas_aluno):
+                                    if i < len(gab_oficial) and r != gab_oficial[i] and not r.startswith("FALTOU") and r not in ["?", "X"] and not r.startswith("QUALITATIVA"):
+                                        q_n = i + 1
+                                        padrao_h = rf"(?si)QUEST[AÃ]O\s*(?:PEI\s*)?0?{q_n}\b.*?(?:[:\-])\s*(.*?)(?=\.?\s*(?:JUSTIFICATIVA|PERÍCIA|ANÁLISE|DISTRATORES|$))"
+                                        m_h = re.search(padrao_h, grade)
+                                        if m_h:
+                                            txt_limpo = re.sub(r'[*#\[\]]', '', m_h.group(1)).strip()
+                                            todas_as_lacunas.append(txt_limpo)
+                        
+                        if todas_as_lacunas:
+                            lacunas_unicas = list(dict.fromkeys(todas_as_lacunas))
+                            st.warning(f"⚠️ **{len(lacunas_unicas)} habilidades** identificadas com defasagem nas avaliações recentes.")
+                            with st.expander("🔍 Ver Detalhamento das Lacunas", expanded=False):
+                                for l in lacunas_unicas: st.error(f"❌ {l}")
+                        else: st.success("✅ Domínio total nas habilidades das avaliações realizadas.")
+                    else: st.info("📭 Aguardando avaliações escaneadas para gerar o mapa de lacunas.")
 
-            with st.expander("🧾 Extrato Detalhado de Faltas e Vistos (Auditoria)"):
-                st.info("💡 Use este extrato para responder a alunos questionadores com dados exatos de datas e entregas.")
-                if not d_alu_f.empty:
-                    c_ext1, c_ext2 = st.columns(2)
-                    with c_ext1:
-                        st.markdown("**📅 Histórico de Faltas**")
-                        faltas_df = d_alu_validas_hero[d_alu_validas_hero['TAGS'] == "AUSÊNCIA"]
-                        if not faltas_df.empty:
-                            for _, r in faltas_df.iterrows(): st.error(f"❌ {r['DATA']} - Ausência registrada")
-                        else: st.success("✅ Nenhuma falta neste período.")
-                    with c_ext2:
-                        st.markdown("**📓 Auditoria de Caderno/Atividades**")
-                        if not d_vistos_hero.empty:
-                            for _, r in d_vistos_hero.iterrows():
-                                status_visto = str(r['VISTO_ATIVIDADE']).upper()
-                                if status_visto == "TRUE": st.success(f"✅ {r['DATA']} - Atividade Entregue")
-                                elif status_visto == "FALSE":
-                                    if r['TAGS'] == "AUSÊNCIA": st.warning(f"⚠️ {r['DATA']} - Não entregou (Faltou no dia)")
-                                    else: st.error(f"❌ {r['DATA']} - Estava presente, mas NÃO entregou")
-                        else: st.info("Nenhuma cobrança de visto neste período.")
-                else: st.info("Sem dados para gerar o extrato.")
+            with tabs[2]:
+                st.markdown(f"### 🎯 Histórico de Avaliações & Atestados")
+                
+                @st.dialog("⚖️ Tribunal de Recursos", width="large")
+                def dialog_tribunal():
+                    opcoes_av_tribunal = diag_alu_f['ID_AVALIACAO'].tolist()
+                    av_contestada = st.selectbox("1️⃣ Selecione a Avaliação Questionada:", opcoes_av_tribunal, key=f"trib_av_{v}")
+                    
+                    if av_contestada:
+                        reg_av_trib = diag_alu_f[diag_alu_f['ID_AVALIACAO'] == av_contestada].iloc[0]
+                        respostas_aluno_trib = str(reg_av_trib['RESPOSTAS_ALUNO']).split(';')
+                        link_foto_trib = reg_av_trib.get('LINK_FOTO_DRIVE', '')
+                        
+                        nome_base_av = av_contestada.replace(" (2ª CHAMADA)", "")
+                        if "VARIANTE" in nome_base_av.upper() or "TIPO" in nome_base_av.upper():
+                            tipo_letra = re.search(r'TIPO\s*([A-Z])', nome_base_av, re.IGNORECASE)
+                            letra = tipo_letra.group(1) if tipo_letra else "B"
+                            nome_busca = f"{nome_base_av.split('(')[0].strip()} - TIPO {letra}"
+                        else: nome_busca = nome_base_av
+                            
+                        df_prova_trib = df_aulas[df_aulas['TIPO_MATERIAL'] == nome_busca]
+                        
+                        if not df_prova_trib.empty:
+                            txt_prova_trib = str(df_prova_trib.iloc[0]['CONTEUDO'])
+                            is_pei_trib = is_pei_or_gap and "TIPICO" not in perfil_atual
+                            tag_gab_trib = "GABARITO_PEI" if is_pei_trib else "GABARITO_TEXTO"
+                            tag_grade_trib = "GRADE_DE_CORRECAO_PEI" if is_pei_trib else "GRADE_DE_CORRECAO"
+                            tag_questoes_trib = "PEI" if is_pei_trib else "QUESTOES"
+                            
+                            gab_raw_trib = ai.extrair_tag(txt_prova_trib, tag_gab_trib) or ai.extrair_tag(txt_prova_trib, "GABARITO")
+                            grade_raw_trib = re.sub(r'[*#]', '', ai.extrair_tag(txt_prova_trib, tag_grade_trib) or ai.extrair_tag(txt_prova_trib, "GRADE_DE_CORRECAO"))
+                            questoes_raw_trib = ai.extrair_tag(txt_prova_trib, tag_questoes_trib)
+                            
+                            matches_gab = re.findall(r"(\d+)[\s\.\)\-:]+([A-E])", gab_raw_trib.upper())
+                            if matches_gab: gab_oficial_trib = {int(num): letra for num, letra in matches_gab}
+                            else:
+                                letras = re.findall(r"\b[A-E]\b", gab_raw_trib.upper())
+                                gab_oficial_trib = {i+1: letra for i, letra in enumerate(letras)}
+                                
+                            qtd_questoes_trib = len(gab_oficial_trib)
+                            
+                            q_contestada = st.selectbox("2️⃣ Selecione a Questão:", [f"Questão {i}" for i in range(1, qtd_questoes_trib + 1)], key=f"trib_q_{v}")
+                            q_num_trib = int(q_contestada.split(" ")[1])
+                            
+                            letra_marcada_trib = respostas_aluno_trib[q_num_trib - 1] if q_num_trib <= len(respostas_aluno_trib) else "?"
+                            letra_correta_trib = gab_oficial_trib.get(q_num_trib, "?")
+                            
+                            prefixo_q_trib = "QUEST[AÃ]O\\s*PEI" if is_pei_trib else "QUEST[AÃ]O"
+                            padrao_q_trib = rf"(?si)({prefixo_q_trib}\s*0?{q_num_trib}\b.*?)(?={prefixo_q_trib}\s*0?{q_num_trib+1}\b|GABARITO|$)"
+                            m_q_trib = re.search(padrao_q_trib, questoes_raw_trib)
+                            enunciado_trib = m_q_trib.group(1).strip() if m_q_trib else "Enunciado não localizado."
+                            
+                            padrao_p_trib = rf"(?si){prefixo_q_trib}\s*0?{q_num_trib}\b.*?(?={prefixo_q_trib}\s*0?{q_num_trib+1}\b|GABARITO|RESPOSTAS|$)"
+                            m_p_trib = re.search(padrao_p_trib, grade_raw_trib)
+                            pericia_trib = m_p_trib.group(0).strip() if m_p_trib else "Perícia não localizada."
+                            
+                            st.markdown("#### 📸 Card de Evidências (Para Print)")
+                            with st.container(border=True):
+                                c_ev1, c_ev2 = st.columns([3, 1])
+                                c_ev1.markdown(f"**Estudante:** {nome_limpo} | **Avaliação:** {nome_base_av}")
+                                if "http" in link_foto_trib: c_ev2.link_button("📸 Ver Foto do Gabarito", link_foto_trib, use_container_width=True)
+                                
+                                st.divider()
+                                st.info(preparar_para_leitura(enunciado_trib).replace('\n', '\n\n'))
+                                
+                                c_res1, c_res2 = st.columns(2)
+                                c_res1.error(f"**❌ O aluno marcou:** {letra_marcada_trib}")
+                                c_res2.success(f"**✅ Gabarito Oficial:** {letra_correta_trib}")
+                                
+                                st.warning(f"**🔬 Análise do Erro (Perícia):**\n{preparar_para_leitura(pericia_trib)}")
+                                
+                            st.markdown("#### ⚖️ O Veredito")
+                            c_ver1, c_ver2 = st.columns(2)
+                            
+                            if c_ver1.button("🔴 A Nota Fica (Gerar Defesa Pedagógica)", use_container_width=True, key=f"btn_def_trib_{v}"):
+                                with st.spinner("Redigindo defesa pedagógica..."):
+                                    prompt_defesa = f"VEREDITO: MANTER NOTA.\nALUNO: {nome_limpo}.\nQUESTÃO: {q_num_trib}.\nMARCOU: {letra_marcada_trib}. CORRETA: {letra_correta_trib}.\nPERÍCIA/ERRO: {pericia_trib}.\nENUNCIADO: {enunciado_trib}."
+                                    st.session_state.msg_tribunal = ai.gerar_ia("DEFENSOR_PEDAGOGICO", prompt_defesa)
+                                    
+                            if c_ver2.button("🟢 O Pai Tem Razão (Corrigir Nota)", use_container_width=True, key=f"btn_corr_trib_{v}"):
+                                st.session_state.modo_correcao_tribunal = True
+                                
+                            if st.session_state.get("modo_correcao_tribunal", False):
+                                with st.container(border=True):
+                                    st.success("🛠️ **Modo de Correção Ativado**")
+                                    nova_letra = st.selectbox("Qual letra o aluno realmente marcou?", ["A", "B", "C", "D", "E"], index=["A", "B", "C", "D", "E"].index(letra_correta_trib) if letra_correta_trib in ["A", "B", "C", "D", "E"] else 0, key=f"sel_letra_trib_{v}")
+                                    
+                                    if st.button("💾 Confirmar Correção e Recalcular Média", type="primary", key=f"btn_conf_trib_{v}"):
+                                        with st.spinner("Corrigindo gabarito e recalculando boletim..."):
+                                            novas_respostas = respostas_aluno_trib.copy()
+                                            if q_num_trib - 1 < len(novas_respostas): novas_respostas[q_num_trib - 1] = nova_letra
+                                            else: novas_respostas.append(nova_letra)
+                                                
+                                            acertos_novos = sum(1 for i, r in enumerate(novas_respostas) if i+1 in gab_oficial_trib and r == gab_oficial_trib[i+1])
+                                            val_total_prova = util.sosa_to_float(ai.extrair_tag(txt_prova_trib, "VALOR")) or 10.0
+                                            nova_nota_prova = (acertos_novos / qtd_questoes_trib) * val_total_prova if qtd_questoes_trib > 0 else 0.0
+                                            
+                                            try:
+                                                wb = db.conectar()
+                                                ws_gab = wb.worksheet("DB_GABARITOS_ALUNOS")
+                                                dados_gab = ws_gab.get_all_values()
+                                                for i, row in enumerate(dados_gab):
+                                                    if i > 0 and db.limpar_id(row[1]) == id_alu and row[4] == av_contestada:
+                                                        ws_gab.update_cell(i+1, 6, ";".join(novas_respostas))
+                                                        ws_gab.update_cell(i+1, 7, util.sosa_to_str(nova_nota_prova))
+                                                        break
+                                            except Exception as e: st.error(f"Erro ao atualizar gabarito: {e}")
+                                                
+                                            try:
+                                                ws_notas = wb.worksheet("DB_NOTAS")
+                                                dados_notas = ws_notas.get_all_values()
+                                                for i, row in enumerate(dados_notas):
+                                                    if i > 0 and db.limpar_id(row[0]) == id_alu and row[3] == trim_b:
+                                                        v_n = util.sosa_to_float(row[4])
+                                                        t_n = util.sosa_to_float(row[5])
+                                                        p_n = util.sosa_to_float(row[6])
+                                                        r_n = util.sosa_to_float(row[7])
+                                                        
+                                                        if "TESTE" in av_contestada.upper():
+                                                            t_n = nova_nota_prova
+                                                            ws_notas.update_cell(i+1, 6, util.sosa_to_str(t_n))
+                                                        else:
+                                                            p_n = nova_nota_prova
+                                                            ws_notas.update_cell(i+1, 7, util.sosa_to_str(p_n))
+                                                            
+                                                        nova_media_final = min(10.0, v_n + t_n + p_n)
+                                                        if r_n > 0: nova_media_final = max(nova_media_final, r_n)
+                                                            
+                                                        ws_notas.update_cell(i+1, 9, util.sosa_to_str(nova_media_final))
+                                                        break
+                                            except Exception as e: st.error(f"Erro ao atualizar boletim: {e}")
+                                                
+                                            st.cache_data.clear()
+                                            prompt_retratacao = f"VEREDITO: CORRIGIR NOTA.\nALUNO: {nome_limpo}.\nQUESTÃO: {q_num_trib}.\nNOVA NOTA DA AVALIAÇÃO: {nova_nota_prova:.1f}."
+                                            st.session_state.msg_tribunal = ai.gerar_ia("DEFENSOR_PEDAGOGICO", prompt_retratacao)
+                                            st.session_state.modo_correcao_tribunal = False
+                                            st.rerun()
+                                            
+                            if "msg_tribunal" in st.session_state:
+                                st.markdown("#### 📱 Resposta para o WhatsApp")
+                                st.info("Copie o texto abaixo e envie para o responsável junto com o print do Card de Evidências.")
+                                st.code(st.session_state.msg_tribunal, language=None)
+                        else: st.warning("A prova original não foi encontrada no acervo para realizar a perícia.")
 
-        with tabs[1]:
-            st.markdown(f"### 📈 Evolução de Desempenho ({trim_b})")
-            with st.container(border=True):
                 if not diag_alu_f.empty:
+                    if st.button("⚖️ Abrir Tribunal de Recursos", type="primary", use_container_width=True, key=f"btn_trib_open_{v}"):
+                        dialog_tribunal()
+                    
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    
                     diag_alu_f['DATA_DT'] = pd.to_datetime(diag_alu_f['DATA'], format="%d/%m/%Y", errors='coerce')
                     diag_ordenado = diag_alu_f.sort_values(by='DATA_DT', ascending=False)
                     
-                    dados_grafico = []
-                    for _, row_av in diag_ordenado.iloc[::-1].iterrows(): 
+                    dados_av = []
+                    for _, row_av in diag_ordenado.iterrows():
                         av_id_bruto = row_av['ID_AVALIACAO']
                         nota_av = util.sosa_to_float(row_av['NOTA_CALCULADA'])
+                        respostas_aluno = str(row_av['RESPOSTAS_ALUNO'])
+                        link_foto = row_av.get('LINK_FOTO_DRIVE', '')
                         data_av = row_av['DATA']
+                        
                         nome_limpo_av = re.sub(r'(_\d+ANO_I{1,3}TRIMESTRE)', '', av_id_bruto).strip()
                         nome_limpo_av = nome_limpo_av.replace("VARIANTE", "").replace("(", "").replace(")", "").strip()
                         
-                        if not str(row_av['RESPOSTAS_ALUNO']).upper().startswith("FALTOU"):
-                            dados_grafico.append({"Data": data_av, "Avaliação": nome_limpo_av, "Nota": nota_av})
-                    
-                    if dados_grafico:
-                        df_grafico = pd.DataFrame(dados_grafico)
-                        fig = px.line(df_grafico, x="Avaliação", y="Nota", text="Nota", markers=True, title="Curva de Aprendizagem (Notas em Avaliações)", hover_data=["Data"])
-                        fig.update_traces(textposition="bottom right", line=dict(color="#2962FF", width=3), marker=dict(size=10))
-                        fig.update_layout(yaxis_range=[0, 10.5], height=350, xaxis_title="", yaxis_title="Nota Obtida")
-                        fig.add_hline(y=6.0, line_dash="dash", line_color="red", annotation_text="Média (6.0)", annotation_position="bottom right")
-                        st.plotly_chart(fig, use_container_width=True)
-                    else: st.info("O aluno esteve ausente ou possui atestado registrado nas avaliações deste período.")
-                else: st.info("📭 Aguardando avaliações escaneadas para gerar o gráfico de evolução.")
-
-            st.markdown(f"### 🧠 Mapa de Lacunas e Dificuldades ({trim_b})")
-            with st.container(border=True):
-                if not diag_alu_f.empty:
-                    todas_as_lacunas =[]
-                    for _, reg_av in diag_alu_f.iterrows():
-                        nome_av_real = reg_av['ID_AVALIACAO']
-                        m_ref_query = df_aulas[df_aulas['TIPO_MATERIAL'] == nome_av_real.replace(" (2ª CHAMADA)", "")]
+                        if "SONDA" in nome_limpo_av: icone = "🔍"
+                        elif "TESTE" in nome_limpo_av: icone = "📝"
+                        elif "PROVA" in nome_limpo_av: icone = "📄"
+                        else: icone = "📋"
                         
-                        if not m_ref_query.empty:
-                            m_ref = m_ref_query.iloc[0]
-                            txt_p = str(m_ref['CONTEUDO'])
-                            is_pei_alu = is_pei_or_gap and "TIPICO" not in perfil_atual
-                            tag_grade = "GRADE_DE_CORRECAO_PEI" if is_pei_alu else "GRADE_DE_CORRECAO"
-                            grade = ai.extrair_tag(txt_p, tag_grade) or ai.extrair_tag(txt_p, "GRADE_DE_CORRECAO")
-                            tag_g = "GABARITO_PEI" if is_pei_alu else "GABARITO_TEXTO"
-                            gab_raw = ai.extrair_tag(txt_p, tag_g) or ai.extrair_tag(txt_p, "GABARITO")
-                            gab_oficial = re.findall(r"\b[A-E]\b", gab_raw.upper())
-                            respostas_aluno = str(reg_av['RESPOSTAS_ALUNO']).split(';')
-                            
-                            for i, r in enumerate(respostas_aluno):
-                                if i < len(gab_oficial) and r != gab_oficial[i] and not r.startswith("FALTOU") and r not in["?", "X"] and not r.startswith("QUALITATIVA"):
-                                    q_n = i + 1
-                                    padrao_h = rf"(?si)QUEST[AÃ]O\s*(?:PEI\s*)?0?{q_n}\b.*?(?:[:\-])\s*(.*?)(?=\.?\s*(?:JUSTIFICATIVA|PERÍCIA|ANÁLISE|DISTRATORES|$))"
-                                    m_h = re.search(padrao_h, grade)
-                                    if m_h:
-                                        txt_limpo = re.sub(r'[*#\[\]]', '', m_h.group(1)).strip()
-                                        todas_as_lacunas.append(txt_limpo)
-                    
-                    if todas_as_lacunas:
-                        lacunas_unicas = list(dict.fromkeys(todas_as_lacunas))
-                        st.warning(f"⚠️ **{len(lacunas_unicas)} habilidades** identificadas com defasagem nas avaliações recentes.")
-                        with st.expander("🔍 Ver Detalhamento das Lacunas", expanded=False):
-                            for l in lacunas_unicas: st.error(f"❌ {l}")
-                    else: st.success("✅ Domínio total nas habilidades das avaliações realizadas.")
-                else: st.info("📭 Aguardando avaliações escaneadas para gerar o mapa de lacunas.")
-
-        with tabs[2]:
-            st.markdown(f"### 🎯 Histórico de Avaliações & Atestados")
-            
-            # TRIBUNAL DE RECURSOS MODAL
-            @st.dialog("⚖️ Tribunal de Recursos", width="large")
-            def dialog_tribunal():
-                opcoes_av_tribunal = diag_alu_f['ID_AVALIACAO'].tolist()
-                av_contestada = st.selectbox("1️⃣ Selecione a Avaliação Questionada:", opcoes_av_tribunal, key="trib_av")
-                
-                if av_contestada:
-                    reg_av_trib = diag_alu_f[diag_alu_f['ID_AVALIACAO'] == av_contestada].iloc[0]
-                    respostas_aluno_trib = str(reg_av_trib['RESPOSTAS_ALUNO']).split(';')
-                    link_foto_trib = reg_av_trib.get('LINK_FOTO_DRIVE', '')
-                    
-                    nome_base_av = av_contestada.replace(" (2ª CHAMADA)", "")
-                    if "VARIANTE" in nome_base_av.upper() or "TIPO" in nome_base_av.upper():
-                        tipo_letra = re.search(r'TIPO\s*([A-Z])', nome_base_av, re.IGNORECASE)
-                        letra = tipo_letra.group(1) if tipo_letra else "B"
-                        nome_busca = f"{nome_base_av.split('(')[0].strip()} - TIPO {letra}"
-                    else: nome_busca = nome_base_av
-                        
-                    df_prova_trib = df_aulas[df_aulas['TIPO_MATERIAL'] == nome_busca]
-                    
-                    if not df_prova_trib.empty:
-                        txt_prova_trib = str(df_prova_trib.iloc[0]['CONTEUDO'])
-                        is_pei_trib = is_pei_or_gap and "TIPICO" not in perfil_atual
-                        tag_gab_trib = "GABARITO_PEI" if is_pei_trib else "GABARITO_TEXTO"
-                        tag_grade_trib = "GRADE_DE_CORRECAO_PEI" if is_pei_trib else "GRADE_DE_CORRECAO"
-                        tag_questoes_trib = "PEI" if is_pei_trib else "QUESTOES"
-                        
-                        gab_raw_trib = ai.extrair_tag(txt_prova_trib, tag_gab_trib) or ai.extrair_tag(txt_prova_trib, "GABARITO")
-                        grade_raw_trib = re.sub(r'[*#]', '', ai.extrair_tag(txt_prova_trib, tag_grade_trib) or ai.extrair_tag(txt_prova_trib, "GRADE_DE_CORRECAO"))
-                        questoes_raw_trib = ai.extrair_tag(txt_prova_trib, tag_questoes_trib)
-                        
-                        matches_gab = re.findall(r"(\d+)[\s\.\)\-:]+([A-E])", gab_raw_trib.upper())
-                        if matches_gab: gab_oficial_trib = {int(num): letra for num, letra in matches_gab}
+                        if respostas_aluno.startswith("FALTOU_JUSTIFICADO"):
+                            motivo_j = respostas_aluno.split("|")[1] if "|" in respostas_aluno else "Atestado Médico"
+                            status_av = f"📑 JUSTIFICADO ({motivo_j})"
+                        elif respostas_aluno.startswith("FALTOU_INJUSTIFICADO"):
+                            status_av = "❌ FALTA INJUSTIFICADA"
+                        elif respostas_aluno.upper() == "FALTOU":
+                            status_av, nota_av = "❌ FALTOU", 0.0
+                        elif respostas_aluno.upper().startswith("QUALITATIVA"):
+                            status_av = "🎨 QUALITATIVA (PEI)"
+                        elif "MANUAL" in respostas_aluno.upper():
+                            status_av = "✍️ LANÇAMENTO MANUAL"
                         else:
-                            letras = re.findall(r"\b[A-E]\b", gab_raw_trib.upper())
-                            gab_oficial_trib = {i+1: letra for i, letra in enumerate(letras)}
+                            status_av = "✅ ESCANEADA"
                             
-                        qtd_questoes_trib = len(gab_oficial_trib)
+                        dados_av.append({
+                            "Tipo": icone, "Avaliação": nome_limpo_av, "Data": data_av,
+                            "Nota": nota_av, "Status": status_av, "Evidência": link_foto if "http" in link_foto else None
+                        })
                         
-                        q_contestada = st.selectbox("2️⃣ Selecione a Questão:", [f"Questão {i}" for i in range(1, qtd_questoes_trib + 1)], key="trib_q")
-                        q_num_trib = int(q_contestada.split(" ")[1])
-                        
-                        letra_marcada_trib = respostas_aluno_trib[q_num_trib - 1] if q_num_trib <= len(respostas_aluno_trib) else "?"
-                        letra_correta_trib = gab_oficial_trib.get(q_num_trib, "?")
-                        
-                        prefixo_q_trib = "QUEST[AÃ]O\\s*PEI" if is_pei_trib else "QUEST[AÃ]O"
-                        padrao_q_trib = rf"(?si)({prefixo_q_trib}\s*0?{q_num_trib}\b.*?)(?={prefixo_q_trib}\s*0?{q_num_trib+1}\b|GABARITO|$)"
-                        m_q_trib = re.search(padrao_q_trib, questoes_raw_trib)
-                        enunciado_trib = m_q_trib.group(1).strip() if m_q_trib else "Enunciado não localizado."
-                        
-                        padrao_p_trib = rf"(?si){prefixo_q_trib}\s*0?{q_num_trib}\b.*?(?={prefixo_q_trib}\s*0?{q_num_trib+1}\b|GABARITO|RESPOSTAS|$)"
-                        m_p_trib = re.search(padrao_p_trib, grade_raw_trib)
-                        pericia_trib = m_p_trib.group(0).strip() if m_p_trib else "Perícia não localizada."
-                        
-                        st.markdown("#### 📸 Card de Evidências (Para Print)")
-                        with st.container(border=True):
-                            c_ev1, c_ev2 = st.columns([3, 1])
-                            c_ev1.markdown(f"**Estudante:** {nome_limpo} | **Avaliação:** {nome_base_av}")
-                            if "http" in link_foto_trib: c_ev2.link_button("📸 Ver Foto do Gabarito", link_foto_trib, use_container_width=True)
-                            
-                            st.divider()
-                            st.info(preparar_para_leitura(enunciado_trib).replace('\n', '\n\n'))
-                            
-                            c_res1, c_res2 = st.columns(2)
-                            c_res1.error(f"**❌ O aluno marcou:** {letra_marcada_trib}")
-                            c_res2.success(f"**✅ Gabarito Oficial:** {letra_correta_trib}")
-                            
-                            st.warning(f"**🔬 Análise do Erro (Perícia):**\n{preparar_para_leitura(pericia_trib)}")
-                            
-                        st.markdown("#### ⚖️ O Veredito")
-                        c_ver1, c_ver2 = st.columns(2)
-                        
-                        if c_ver1.button("🔴 A Nota Fica (Gerar Defesa Pedagógica)", use_container_width=True):
-                            with st.spinner("Redigindo defesa pedagógica..."):
-                                prompt_defesa = f"VEREDITO: MANTER NOTA.\nALUNO: {nome_limpo}.\nQUESTÃO: {q_num_trib}.\nMARCOU: {letra_marcada_trib}. CORRETA: {letra_correta_trib}.\nPERÍCIA/ERRO: {pericia_trib}.\nENUNCIADO: {enunciado_trib}."
-                                st.session_state.msg_tribunal = ai.gerar_ia("DEFENSOR_PEDAGOGICO", prompt_defesa)
-                                
-                        if c_ver2.button("🟢 O Pai Tem Razão (Corrigir Nota)", use_container_width=True):
-                            st.session_state.modo_correcao_tribunal = True
-                            
-                        if st.session_state.get("modo_correcao_tribunal", False):
-                            with st.container(border=True):
-                                st.success("🛠️ **Modo de Correção Ativado**")
-                                nova_letra = st.selectbox("Qual letra o aluno realmente marcou?", ["A", "B", "C", "D", "E"], index=["A", "B", "C", "D", "E"].index(letra_correta_trib) if letra_correta_trib in ["A", "B", "C", "D", "E"] else 0)
-                                
-                                if st.button("💾 Confirmar Correção e Recalcular Média", type="primary"):
-                                    with st.spinner("Corrigindo gabarito e recalculando boletim..."):
-                                        novas_respostas = respostas_aluno_trib.copy()
-                                        if q_num_trib - 1 < len(novas_respostas): novas_respostas[q_num_trib - 1] = nova_letra
-                                        else: novas_respostas.append(nova_letra)
-                                            
-                                        acertos_novos = sum(1 for i, r in enumerate(novas_respostas) if i+1 in gab_oficial_trib and r == gab_oficial_trib[i+1])
-                                        val_total_prova = util.sosa_to_float(ai.extrair_tag(txt_prova_trib, "VALOR")) or 10.0
-                                        nova_nota_prova = (acertos_novos / qtd_questoes_trib) * val_total_prova if qtd_questoes_trib > 0 else 0.0
-                                        
-                                        try:
-                                            wb = db.conectar()
-                                            ws_gab = wb.worksheet("DB_GABARITOS_ALUNOS")
-                                            dados_gab = ws_gab.get_all_values()
-                                            for i, row in enumerate(dados_gab):
-                                                if i > 0 and db.limpar_id(row[1]) == id_alu and row[4] == av_contestada:
-                                                    ws_gab.update_cell(i+1, 6, ";".join(novas_respostas))
-                                                    ws_gab.update_cell(i+1, 7, util.sosa_to_str(nova_nota_prova))
-                                                    break
-                                        except Exception as e: st.error(f"Erro ao atualizar gabarito: {e}")
-                                            
-                                        try:
-                                            ws_notas = wb.worksheet("DB_NOTAS")
-                                            dados_notas = ws_notas.get_all_values()
-                                            for i, row in enumerate(dados_notas):
-                                                if i > 0 and db.limpar_id(row[0]) == id_alu and row[3] == trim_b:
-                                                    v_n = util.sosa_to_float(row[4])
-                                                    t_n = util.sosa_to_float(row[5])
-                                                    p_n = util.sosa_to_float(row[6])
-                                                    r_n = util.sosa_to_float(row[7])
-                                                    
-                                                    if "TESTE" in av_contestada.upper():
-                                                        t_n = nova_nota_prova
-                                                        ws_notas.update_cell(i+1, 6, util.sosa_to_str(t_n))
-                                                    else:
-                                                        p_n = nova_nota_prova
-                                                        ws_notas.update_cell(i+1, 7, util.sosa_to_str(p_n))
-                                                        
-                                                    nova_media_final = min(10.0, v_n + t_n + p_n)
-                                                    if r_n > 0: nova_media_final = max(nova_media_final, r_n)
-                                                        
-                                                    ws_notas.update_cell(i+1, 9, util.sosa_to_str(nova_media_final))
-                                                    break
-                                        except Exception as e: st.error(f"Erro ao atualizar boletim: {e}")
-                                            
-                                        st.cache_data.clear()
-                                        prompt_retratacao = f"VEREDITO: CORRIGIR NOTA.\nALUNO: {nome_limpo}.\nQUESTÃO: {q_num_trib}.\nNOVA NOTA DA AVALIAÇÃO: {nova_nota_prova:.1f}."
-                                        st.session_state.msg_tribunal = ai.gerar_ia("DEFENSOR_PEDAGOGICO", prompt_retratacao)
-                                        st.session_state.modo_correcao_tribunal = False
-                                        st.rerun()
-                                        
-                        if "msg_tribunal" in st.session_state:
-                            st.markdown("#### 📱 Resposta para o WhatsApp")
-                            st.info("Copie o texto abaixo e envie para o responsável junto com o print do Card de Evidências.")
-                            st.code(st.session_state.msg_tribunal, language=None)
-                    else: st.warning("A prova original não foi encontrada no acervo para realizar a perícia.")
+                    st.dataframe(
+                        pd.DataFrame(dados_av), use_container_width=True, hide_index=True,
+                        column_config={
+                            "Tipo": st.column_config.TextColumn("", width="small"),
+                            "Avaliação": st.column_config.TextColumn("Avaliação", width="medium"),
+                            "Data": st.column_config.TextColumn("Data", width="small"),
+                            "Nota": st.column_config.NumberColumn("Nota", format="%.1f", width="small"),
+                            "Status": st.column_config.TextColumn("Status", width="medium"),
+                            "Evidência": st.column_config.LinkColumn("🔗 Ver Prova", width="small")
+                        }
+                    )
+                else: st.info("📭 Nenhuma avaliação escaneada para este aluno no período selecionado.")
 
-            if not diag_alu_f.empty:
-                if st.button("⚖️ Abrir Tribunal de Recursos", type="primary", use_container_width=True):
-                    dialog_tribunal()
-                
-                st.markdown("<br>", unsafe_allow_html=True)
-                
-                diag_alu_f['DATA_DT'] = pd.to_datetime(diag_alu_f['DATA'], format="%d/%m/%Y", errors='coerce')
-                diag_ordenado = diag_alu_f.sort_values(by='DATA_DT', ascending=False)
-                
-                dados_av = []
-                for _, row_av in diag_ordenado.iterrows():
-                    av_id_bruto = row_av['ID_AVALIACAO']
-                    nota_av = util.sosa_to_float(row_av['NOTA_CALCULADA'])
-                    respostas_aluno = str(row_av['RESPOSTAS_ALUNO'])
-                    link_foto = row_av.get('LINK_FOTO_DRIVE', '')
-                    data_av = row_av['DATA']
+            if is_pei_or_gap:
+                with tabs[3]:
+                    st.markdown(f"### ♿ Dossiê Clínico e Adaptações (PEI)")
+                    st.caption("Resumo do Repositório Vivo do aluno. Para editar ou gerar um novo relatório, acesse a aba 'Relatórios PEI / Perfil IA'.")
                     
-                    nome_limpo_av = re.sub(r'(_\d+ANO_I{1,3}TRIMESTRE)', '', av_id_bruto).strip()
-                    nome_limpo_av = nome_limpo_av.replace("VARIANTE", "").replace("(", "").replace(")", "").strip()
+                    hist_aluno = df_relatorios[df_relatorios['ID_ALUNO'].apply(db.limpar_id) == id_alu]
+                    rel_master = hist_aluno[hist_aluno['TIPO'] == 'DOSSIE_MASTER_PEI']
                     
-                    if "SONDA" in nome_limpo_av: icone = "🔍"
-                    elif "TESTE" in nome_limpo_av: icone = "📝"
-                    elif "PROVA" in nome_limpo_av: icone = "📄"
-                    else: icone = "📋"
-                    
-                    if respostas_aluno.startswith("FALTOU_JUSTIFICADO"):
-                        motivo_j = respostas_aluno.split("|")[1] if "|" in respostas_aluno else "Atestado Médicol"
-                        status_av = f"📑 JUSTIFICADO ({motivo_j})"
-                    elif respostas_aluno.startswith("FALTOU_INJUSTIFICADO"):
-                        status_av = "❌ FALTA INJUSTIFICADA"
-                    elif respostas_aluno.upper() == "FALTOU":
-                        status_av, nota_av = "❌ FALTOU", 0.0
-                    elif respostas_aluno.upper().startswith("QUALITATIVA"):
-                        status_av = "🎨 QUALITATIVA (PEI)"
-                    elif "MANUAL" in respostas_aluno.upper():
-                        status_av = "✍️ LANÇAMENTO MANUAL"
+                    if not rel_master.empty:
+                        master_text = str(rel_master.iloc[-1]['CONTEUDO'])
+                        v_diag = ai.extrair_tag(master_text, "DIAGNOSTICO_GERAL")
+                        v_diretrizes = ai.extrair_tag(master_text, "DIRETRIZES_CURRICULARES")
+                        
+                        st.markdown("#### 🧠 Diagnóstico Geral (Status de Safra)")
+                        st.info(v_diag if v_diag else "Diagnóstico não preenchido.")
+                        
+                        st.markdown("#### 🎯 Diretrizes Curriculares Sugeridas")
+                        st.warning(v_diretrizes if v_diretrizes else "Diretrizes não preenchidas.")
                     else:
-                        status_av = "✅ ESCANEADA"
-                        
-                    dados_av.append({
-                        "Tipo": icone, "Avaliação": nome_limpo_av, "Data": data_av,
-                        "Nota": nota_av, "Status": status_av, "Evidência": link_foto if "http" in link_foto else None
-                    })
-                    
-                st.dataframe(
-                    pd.DataFrame(dados_av), use_container_width=True, hide_index=True,
-                    column_config={
-                        "Tipo": st.column_config.TextColumn("", width="small"),
-                        "Avaliação": st.column_config.TextColumn("Avaliação", width="medium"),
-                        "Data": st.column_config.TextColumn("Data", width="small"),
-                        "Nota": st.column_config.NumberColumn("Nota", format="%.1f", width="small"),
-                        "Status": st.column_config.TextColumn("Status", width="medium"),
-                        "Evidência": st.column_config.LinkColumn("🔗 Ver Prova", width="small")
-                    }
-                )
-            else: st.info("📭 Nenhuma avaliação escaneada para este aluno no período selecionado.")
+                        st.info("📭 Nenhum Dossiê Master gerado para este aluno ainda.")
 
-        if is_pei_or_gap:
-            with tabs[3]:
-                st.markdown(f"### ♿ Dossiê Clínico e Adaptações (PEI)")
-                st.caption("Resumo do Repositório Vivo do aluno. Para editar ou gerar um novo relatório, acesse a aba 'Relatórios PEI / Perfil IA'.")
-                
-                hist_aluno = df_relatorios[df_relatorios['ID_ALUNO'].apply(db.limpar_id) == id_alu]
-                rel_master = hist_aluno[hist_aluno['TIPO'] == 'DOSSIE_MASTER_PEI']
-                
-                if not rel_master.empty:
-                    master_text = str(rel_master.iloc[-1]['CONTEUDO'])
-                    v_diag = ai.extrair_tag(master_text, "DIAGNOSTICO_GERAL")
-                    v_diretrizes = ai.extrair_tag(master_text, "DIRETRIZES_CURRICULARES")
-                    
-                    st.markdown("#### 🧠 Diagnóstico Geral (Status de Safra)")
-                    st.info(v_diag if v_diag else "Diagnóstico não preenchido.")
-                    
-                    st.markdown("#### 🎯 Diretrizes Curriculares Sugeridas")
-                    st.warning(v_diretrizes if v_diretrizes else "Diretrizes não preenchidas.")
-                else:
-                    st.info("📭 Nenhum Dossiê Master gerado para este aluno ainda.")
-
+        renderizar_dossie_bio_fragmento()
         st.caption(f"Dossiê atualizado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
-
 
 
 
