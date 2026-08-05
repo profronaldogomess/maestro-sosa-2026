@@ -2590,10 +2590,17 @@ elif menu == "📸 Scanner de Gabaritos":
                         st.markdown("##### Fila de Triagem")
                         
                         # 🚨 OTIMIZAÇÃO: TOGGLE PARA OCULTAR ATESTADOS/FALTAS JÁ HOMOLOGADAS DA FILA
-                        ocultar_homologados = st.toggle("Ocultar Faltas/Atestados já Registrados", value=True, key=f"ocult_hom_{v}")
+                        # 🚨 SELETOR DE FILTRO DE TRIAGEM - PERMITE SELECIONAR ATESTADOS/2ª CHAMADA
+                        filtro_fila = st.selectbox(
+                            "📋 Filtrar Fila de Correção:",
+                            ["Pendentes Nativos", "📑 Incluir Atestados (2ª Chamada)", "🌐 Mostrar Todos da Turma"],
+                            key=f"flt_fila_cir_{v}"
+                        )
                         
-                        if ocultar_homologados:
+                        if filtro_fila == "Pendentes Nativos":
                             opcoes_triagem_exibir = [r for r in opcoes_triagem if not r.startswith("📑") and not r.startswith("❌")]
+                        elif filtro_fila == "📑 Incluir Atestados (2ª Chamada)":
+                            opcoes_triagem_exibir = [r for r in opcoes_triagem if r.startswith("📑") or (not r.startswith("❌") and not r.startswith("📑"))]
                         else:
                             opcoes_triagem_exibir = opcoes_triagem
 
@@ -2602,7 +2609,7 @@ elif menu == "📸 Scanner de Gabaritos":
                         st.caption(f"{total_corrigidos} de {total_turma} alunos processados.")
                         
                         if not opcoes_triagem_exibir:
-                            st.success("Soberania Total: Todos os alunos pendentes foram processados!")
+                            st.info("Nenhum aluno nesta categoria. Mude o filtro acima para 'Incluir Atestados' ou 'Mostrar Todos'.")
                             st.stop()
                         
                         modo_dupla = st.toggle("👥 Prova Realizada em Dupla / Grupo", value=False, key=f"dupla_tog_{v}")
@@ -2841,10 +2848,25 @@ elif menu == "📸 Scanner de Gabaritos":
                                                 grupo_str = f"|GRUPO:{','.join(alunos_alvo)}" if len(alunos_alvo) > 1 else ""
                                                 respostas_salvar = ";".join(respostas_com_flag) + grupo_str
                                                 
-                                                for aluno_nome in alunos_alvo:
-                                                    id_al = pendentes_df[pendentes_df['NOME_ALUNO'] == aluno_nome].iloc[0]['ID']
-                                                    db.excluir_registro("DB_GABARITOS_ALUNOS", id_al)
-                                                    db.salvar_no_banco("DB_GABARITOS_ALUNOS", [datetime.now().strftime("%d/%m/%Y"), id_al, aluno_nome, t_sel, material_ref['TIPO_MATERIAL'], respostas_salvar, util.sosa_to_str(nota_f), link_foto_jpg])
+                                                # 🚨 LIMPEZA EM CASCATA: BUSCA ID NA TURMA COMPLETA E APAGA REGISTROS DE FALTA
+                                        df_turma_completa = df_alunos[df_alunos['TURMA'] == t_sel]
+                                        for aluno_nome in alunos_alvo:
+                                            match_al = df_turma_completa[df_turma_completa['NOME_ALUNO'] == aluno_nome]
+                                            if not match_al.empty:
+                                                id_al = db.limpar_id(match_al.iloc[0]['ID'])
+                                                
+                                                # Apaga registros antigos de Falta ou Atestado para essa avaliação
+                                                try:
+                                                    wb_del = db.conectar()
+                                                    ws_del = wb_del.worksheet("DB_GABARITOS_ALUNOS")
+                                                    dados_del = ws_del.get_all_values()
+                                                    for idx_d in range(len(dados_del) - 1, 0, -1):
+                                                        row_d = dados_del[idx_d]
+                                                        if len(row_d) > 4 and db.limpar_id(row_d[1]) == id_al and at_sel.split('-')[0].strip() in row_d[4]:
+                                                            ws_del.delete_rows(idx_d + 1)
+                                                except: pass
+                                                
+                                                db.salvar_no_banco("DB_GABARITOS_ALUNOS", [datetime.now().strftime("%d/%m/%Y"), id_al, aluno_nome, t_sel, material_ref['TIPO_MATERIAL'], respostas_salvar, util.sosa_to_str(nota_f), link_foto_jpg])
                                                 
                                                 del st.session_state.current_scan_res; del st.session_state.current_scan_img
                                                 st.success("✅ Prova JPG gravada e nota computada com sucesso!"); time.sleep(0.5); st.rerun()
@@ -3110,29 +3132,36 @@ elif menu == "📸 Scanner de Gabaritos":
                                 st.cache_data.clear()
                                 st.success("✅ Status homologado e boletim recalculado!"); time.sleep(0.5); st.rerun()
 
-                @st.dialog("👤 Perícia Individual por Estudante", width="large")
+                @st.dialog("👤 Perícia & Lançamento de 2ª Chamada por Estudante", width="large")
                 def dialog_pericia_modal():
-                    st.caption("Acesse a folha de respostas de qualquer aluno já corrigido para alterar a letra marcada, marcar se teve cálculo ou trocar/anexar a foto da prova.")
-                    df_realizados = pd.DataFrame([r for r in dados_soberania if r['Situação'] == "✅ REALIZADA"])
+                    st.caption("Acesse a folha de respostas ou lance a nota de 2ª Chamada para qualquer estudante da turma.")
                     
-                    if df_realizados.empty: st.info("Nenhum aluno com prova realizada.")
+                    # Permite selecionar QUALQUER aluno da turma
+                    todos_estudantes_nomes = [r['Estudante'] for r in dados_soberania]
+                    
+                    if not todos_estudantes_nomes: 
+                        st.info("Nenhum aluno cadastrado nesta turma.")
                     else:
-                        aluno_pericia_nome = st.selectbox("Selecione o Estudante:", df_realizados['Estudante'].tolist(), key=f"pericia_modal_sel_{v}")
+                        aluno_pericia_nome = st.selectbox("Selecione o Estudante:", todos_estudantes_nomes, key=f"pericia_modal_sel_{v}")
                         if aluno_pericia_nome:
-                            al_data = df_realizados[df_realizados['Estudante'] == aluno_pericia_nome].iloc[0]
+                            al_data = next(r for r in dados_soberania if r['Estudante'] == aluno_pericia_nome)
                             id_al_pericia = al_data['ID']
                             resp_raw = str(al_data['_Respostas'])
                             grupo_membros = al_data['Dupla / Grupo']
                             foto_atual_link = al_data['Evidência']
+                            sit_atual = al_data['Situação']
+                            
+                            if "JUSTIFICADO" in sit_atual or "FALTOU" in sit_atual or sit_atual == "✍️ PENDENTE":
+                                st.warning(f"📌 Status Atual do Aluno: **{sit_atual}**. Ao salvar abaixo, a ausência será convertida em **Nota Real de 2ª Chamada**.")
                             
                             c_f1, c_f2 = st.columns([1, 2])
                             if "http" in foto_atual_link: c_f1.link_button("🔗 Ver Foto no Drive", foto_atual_link, use_container_width=True)
-                            else: c_f1.warning("Sem foto anexada.")
+                            else: c_f1.caption("Sem foto anexada.")
                             
-                            nova_foto_pericia = c_f2.file_uploader("Substituir Foto JPG:", type=["jpg", "jpeg", "png"], key=f"up_modal_foto_{id_al_pericia}_{v}")
+                            nova_foto_pericia = c_f2.file_uploader("Substituir / Anexar Foto JPG:", type=["jpg", "jpeg", "png"], key=f"up_modal_foto_{id_al_pericia}_{v}")
 
                             resp_limpa = resp_raw.split('|GRUPO:')[0] if '|GRUPO:' in resp_raw else resp_raw
-                            respostas_lista = resp_limpa.split(';')
+                            respostas_lista = resp_limpa.split(';') if (not resp_limpa.startswith("FALTOU") and not resp_limpa.startswith("QUALITATIVA") and resp_limpa != "MANUAL") else []
                             
                             grid_pericia = []
                             for idx_q in range(len(gab_oficial_trib)):
@@ -3162,8 +3191,8 @@ elif menu == "📸 Scanner de Gabaritos":
                                 
                             st.metric("Nota Recalculada", f"{min(v_total_av, nota_pericia_calc):.1f} / {v_total_av:.1f}")
                             
-                            if st.button("💾 SALVAR PERÍCIA DO ALUNO", type="primary", use_container_width=True):
-                                with st.spinner("Salvando..."):
+                            if st.button("💾 SALVAR PROVA / 2ª CHAMADA DO ESTUDANTE", type="primary", use_container_width=True):
+                                with st.spinner("Apagando registros de falta antigos e salvando nota real..."):
                                     link_foto_final = foto_atual_link
                                     if nova_foto_pericia is not None:
                                         link_foto_final = db.subir_e_converter_para_google_docs(nova_foto_pericia.getvalue(), aluno_pericia_nome.replace(" ","_"), trimestre=tr_sel_h, categoria=t_sel_h, semana=av_alvo_h, modo="SCANNER")
@@ -3175,16 +3204,23 @@ elif menu == "📸 Scanner de Gabaritos":
                                     wb_p = db.conectar()
                                     ws_p = wb_p.worksheet("DB_GABARITOS_ALUNOS")
                                     dados_p = ws_p.get_all_values()
-                                    for idx_row_p in range(1, len(dados_p)):
+                                    
+                                    # APAGA REGISTROS ANTIGOS (FALTAS E ATESTADOS)
+                                    for idx_row_p in range(len(dados_p) - 1, 0, -1):
                                         row_p = dados_p[idx_row_p]
                                         if len(row_p) > 4 and row_p[3] == t_sel_h and nome_curto_av in row_p[4]:
                                             if row_p[2] in alvos_a:
-                                                ws_p.update_cell(idx_row_p + 1, 6, respostas_salvar_ind)
-                                                ws_p.update_cell(idx_row_p + 1, 7, util.sosa_to_str(nota_pericia_calc))
-                                                if link_foto_final != "N/A": ws_p.update_cell(idx_row_p + 1, 8, link_foto_final)
+                                                ws_p.delete_rows(idx_row_p + 1)
+
+                                    # SALVA A NOVA PROVA REALIZADA
+                                    for al_nome_item in alvos_a:
+                                        match_al_item = df_alunos[df_alunos['NOME_ALUNO'] == al_nome_item]
+                                        if not match_al_item.empty:
+                                            id_item = db.limpar_id(match_al_item.iloc[0]['ID'])
+                                            db.salvar_no_banco("DB_GABARITOS_ALUNOS", [datetime.now().strftime("%d/%m/%Y"), id_item, al_nome_item, t_sel_h, av_alvo_h, respostas_salvar_ind, util.sosa_to_str(nota_pericia_calc), link_foto_final])
 
                                     db.limpar_notas_turma_trimestre(t_sel_h, tr_sel_h)
-                                    st.cache_data.clear(); st.success("✅ Salvo com sucesso!"); time.sleep(0.5); st.rerun()
+                                    st.cache_data.clear(); st.success("✅ Prova de 2ª Chamada homologada com sucesso!"); time.sleep(0.5); st.rerun()
 
                 @st.dialog("🚑 Digitação Manual Global (Lázaro)", width="large")
                 def dialog_lazaro_modal():
