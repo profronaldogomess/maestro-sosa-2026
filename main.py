@@ -2589,59 +2589,154 @@ elif menu == "📸 Scanner de Gabaritos":
                     with st.container(border=True):
                         st.markdown("##### Fila de Triagem")
                         
-                        # 🚨 OTIMIZAÇÃO: TOGGLE PARA OCULTAR ATESTADOS/FALTAS JÁ HOMOLOGADAS DA FILA
-                        # 🚨 SELETOR DE FILTRO DE TRIAGEM - PERMITE SELECIONAR ATESTADOS/2ª CHAMADA
+                        # 1. Carrega todos os alunos da turma selecionada
+                        alunos_turma_df = df_alunos[df_alunos['TURMA'] == t_sel].sort_values(by="NOME_ALUNO")
+                        total_turma = len(alunos_turma_df)
+                        
+                        # 2. Mapeia todos os registros já gravados no banco para esta avaliação
+                        nome_filtro_pendente = at_sel.split("-")[0].strip()
+                        df_diag_turma = df_diagnosticos[df_diagnosticos['TURMA'] == t_sel]
+                        diag_slot = df_diag_turma[df_diag_turma['ID_AVALIACAO'].str.startswith(nome_filtro_pendente, na=False)]
+                        
+                        mapa_status_aluno = {}
+                        if not diag_slot.empty:
+                            for id_al_raw, group in diag_slot.groupby('ID_ALUNO'):
+                                id_al_clean = db.limpar_id(id_al_raw)
+                                ultimo_registro = str(group.iloc[-1]['RESPOSTAS_ALUNO'])
+                                mapa_status_aluno[id_al_clean] = ultimo_registro
+
+                        # 3. Categorização Inteligente dos Alunos
+                        opcoes_pendentes_puros = []
+                        opcoes_atestados = []
+                        opcoes_faltas = []
+                        opcoes_todos = []
+                        mapa_rotulo_nome = {}
+
+                        for _, r_p in alunos_turma_df.iterrows():
+                            id_p_str = db.limpar_id(r_p['ID'])
+                            nome_real = r_p['NOME_ALUNO']
+                            status_banco = mapa_status_aluno.get(id_p_str, None)
+                            
+                            if status_banco is None:
+                                rotulo = nome_real
+                                opcoes_pendentes_puros.append(rotulo)
+                                opcoes_todos.append(rotulo)
+                            elif status_banco.startswith("FALTOU_JUSTIFICADO"):
+                                rotulo = f"📑 {nome_real} (2ª Chamada Autorizada / Atestado)"
+                                opcoes_atestados.append(rotulo)
+                                opcoes_todos.append(rotulo)
+                            elif status_banco.startswith("FALTOU"):
+                                rotulo = f"❌ {nome_real} (Ausência Registrada)"
+                                opcoes_faltas.append(rotulo)
+                                opcoes_todos.append(rotulo)
+                            else:
+                                rotulo = f"✅ {nome_real} (Prova Corrigida)"
+                                opcoes_todos.append(rotulo)
+                                
+                            mapa_rotulo_nome[rotulo] = nome_real
+
+                        # Total real de processados (Provas + Faltas + Atestados)
+                        total_processados = total_turma - len(opcoes_pendentes_puros)
+
+                        # Filtro da Fila
+                        c_flt1, c_flt2 = st.columns([1, 1])
                         filtro_fila = st.selectbox(
-                            "📋 Filtrar Fila de Correção:",
-                            ["Pendentes Nativos", "📑 Incluir Atestados (2ª Chamada)", "🌐 Mostrar Todos da Turma"],
+                            "📋 Filtrar Fila:",
+                            ["Pendentes Nativos", "📑 Atestados (2ª Chamada)", "❌ Faltas Registradas", "🌐 Todos da Turma"],
                             key=f"flt_fila_cir_{v}"
                         )
                         
                         if filtro_fila == "Pendentes Nativos":
-                            opcoes_triagem_exibir = [r for r in opcoes_triagem if not r.startswith("📑") and not r.startswith("❌")]
-                        elif filtro_fila == "📑 Incluir Atestados (2ª Chamada)":
-                            opcoes_triagem_exibir = [r for r in opcoes_triagem if r.startswith("📑") or (not r.startswith("❌") and not r.startswith("📑"))]
+                            opcoes_triagem_exibir = opcoes_pendentes_puros
+                        elif filtro_fila == "📑 Atestados (2ª Chamada)":
+                            opcoes_triagem_exibir = opcoes_atestados
+                        elif filtro_fila == "❌ Faltas Registradas":
+                            opcoes_triagem_exibir = opcoes_faltas
                         else:
-                            opcoes_triagem_exibir = opcoes_triagem
+                            opcoes_triagem_exibir = opcoes_todos
 
-                        progresso = total_corrigidos / total_turma if total_turma > 0 else 0
+                        # Barra de Progresso Real (Considera Faltas e Provas)
+                        progresso = total_processados / total_turma if total_turma > 0 else 0.0
                         st.progress(min(1.0, max(0.0, progresso)))
-                        st.caption(f"{total_corrigidos} de {total_turma} alunos processados.")
+                        st.caption(f"**{total_processados} de {total_turma}** alunos processados na turma.")
                         
-                        if not opcoes_triagem_exibir:
-                            st.info("Nenhum aluno nesta categoria. Mude o filtro acima para 'Incluir Atestados' ou 'Mostrar Todos'.")
-                            st.stop()
+                        if total_processados == total_turma and filtro_fila == "Pendentes Nativos":
+                            st.success(f"🎉 **Soberania Total:** Todos os {total_turma} alunos desta turma foram processados!")
+                        elif not opcoes_triagem_exibir:
+                            st.info("Nenhum aluno localizado nesta categoria.")
+                            
+                        st.markdown("---")
                         
+                        # Seleção Individual / Dupla
                         modo_dupla = st.toggle("👥 Prova Realizada em Dupla / Grupo", value=False, key=f"dupla_tog_{v}")
                         
                         alunos_alvo = []
-                        if modo_dupla:
-                            rotulos_sel = st.multiselect(
-                                "Selecione os Integrantes da Dupla (Máx 3):", 
-                                options=opcoes_triagem_exibir, 
-                                max_selections=3,
-                                key=f"pilha_dupla_{v}"
-                            )
-                            alunos_alvo = [mapa_rotulo_nome[r] for r in rotulos_sel]
-                        else:
-                            rotulo_sel_single = st.selectbox("Selecione o Estudante:", [""] + opcoes_triagem_exibir, key=f"pilha_single_{v}", label_visibility="collapsed")
-                            if rotulo_sel_single:
-                                alunos_alvo = [mapa_rotulo_nome[rotulo_sel_single]]
+                        if opcoes_triagem_exibir:
+                            if modo_dupla:
+                                rotulos_sel = st.multiselect(
+                                    "Selecione os Integrantes da Dupla (Máx 3):", 
+                                    options=opcoes_triagem_exibir, 
+                                    max_selections=3,
+                                    key=f"pilha_dupla_{v}"
+                                )
+                                alunos_alvo = [mapa_rotulo_nome[r] for r in rotulos_sel if r in mapa_rotulo_nome]
+                            else:
+                                rotulo_sel_single = st.selectbox(
+                                    "Selecione o Estudante para Corrigir:", 
+                                    [""] + opcoes_triagem_exibir, 
+                                    key=f"pilha_single_{v}"
+                                )
+                                if rotulo_sel_single and rotulo_sel_single in mapa_rotulo_nome:
+                                    alunos_alvo = [mapa_rotulo_nome[rotulo_sel_single]]
                         
+                        # Lançamento de Faltas em Lote com UPSERT Limpo (Anti-Duplicidade)
                         st.markdown("<br>", unsafe_allow_html=True)
-                        if st.button("Ausências em Lote", use_container_width=True):
+                        if st.button("Ausências em Lote (Marcar Faltosos)", use_container_width=True):
                             st.session_state.show_faltas_lote = not st.session_state.get("show_faltas_lote", False)
                         
                         if st.session_state.get("show_faltas_lote", False):
-                            faltosos = st.multiselect("Marcar faltosos:", pendentes_df['NOME_ALUNO'].tolist())
-                            if st.button("Confirmar Ausências", type="primary", use_container_width=True):
-                                linhas_faltas = []
-                                data_hoje = datetime.now().strftime("%d/%m/%Y")
-                                for f_nome in faltosos:
-                                    f_id = pendentes_df[pendentes_df['NOME_ALUNO'] == f_nome].iloc[0]['ID']
-                                    linhas_faltas.append([data_hoje, f_id, f_nome, t_sel, at_sel, "FALTOU", "0,00", "N/A"])
-                                if db.salvar_lote("DB_GABARITOS_ALUNOS", linhas_faltas):
-                                    st.success("Faltas registradas!"); time.sleep(0.5); st.rerun()
+                            with st.container(border=True):
+                                st.caption("Selecione os alunos que faltaram para registrar a ausência de uma só vez:")
+                                faltosos = st.multiselect(
+                                    "Marcar Faltosos:", 
+                                    options=opcoes_pendentes_puros,
+                                    key=f"sel_faltosos_lote_{v}"
+                                )
+                                
+                                if st.button("Confirmar Ausências em Lote", type="primary", use_container_width=True):
+                                    if not faltosos:
+                                        st.warning("Selecione pelo menos um aluno na lista.")
+                                    else:
+                                        with st.spinner("Gravando ausências e atualizando progresso..."):
+                                            data_hoje = datetime.now().strftime("%d/%m/%Y")
+                                            linhas_faltas = []
+                                            
+                                            for f_rotulo in faltosos:
+                                                f_nome = mapa_rotulo_nome.get(f_rotulo, f_rotulo)
+                                                match_al = alunos_turma_df[alunos_turma_df['NOME_ALUNO'] == f_nome]
+                                                if not match_al.empty:
+                                                    f_id = db.limpar_id(match_al.iloc[0]['ID'])
+                                                    
+                                                    # 🚨 APAGA REGISTRO ANTIGO ANTES DE SALVAR (ANTI-DUPLICIDADE)
+                                                    try:
+                                                        wb_del = db.conectar()
+                                                        ws_del = wb_del.worksheet("DB_GABARITOS_ALUNOS")
+                                                        dados_del = ws_del.get_all_values()
+                                                        for idx_d in range(len(dados_del) - 1, 0, -1):
+                                                            row_d = dados_del[idx_d]
+                                                            if len(row_d) > 4 and db.limpar_id(row_d[1]) == f_id and nome_filtro_pendente in row_d[4]:
+                                                                ws_del.delete_rows(idx_d + 1)
+                                                    except: pass
+                                                    
+                                                    linhas_faltas.append([data_hoje, f_id, f_nome, t_sel, at_sel, "FALTOU", "0,00", "N/A"])
+                                            
+                                            if linhas_faltas:
+                                                db.salvar_lote("DB_GABARITOS_ALUNOS", linhas_faltas)
+                                                db.limpar_notas_turma_trimestre(t_sel, tr_sel)
+                                                st.cache_data.clear()
+                                                st.success("✅ Ausências registradas com sucesso!")
+                                                time.sleep(0.5)
+                                                st.rerun()
 
                 with col_mesa:
                     if alunos_alvo:
