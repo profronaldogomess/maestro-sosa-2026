@@ -253,3 +253,17 @@ def extrair_texto_pdf_por_paginas(pdf_bytes, paginas_list):
             return "\n\n".join(texto_fatiado)
         except Exception as ex:
             return f"⚠️ Não foi possível extrair o texto diretamente do PDF em memória: {ex}"
+
+def obter_regex_trimestre(trimestre_str):
+    """
+    Retorna uma expressão regular que busca exatamente o trimestre (I, II ou III)
+    evitando falsos positivos (ex: III contendo II ou I).
+    """
+    if not trimestre_str or trimestre_str == "Todos": return r".*"
+    t_upper = str(trimestre_str).upper()
+    if "III" in t_upper or "TERCEIRO" in t_upper:
+        return r"(?<!I)III(?![I])"
+    elif "II" in t_upper or "SEGUNDO" in t_upper:
+        return r"(?<!I)II(?![I])"
+    else:
+        return r"(?<!I)I(?![I])"
