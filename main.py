@@ -625,12 +625,12 @@ if menu == "📅 Planejamento (Ponto ID)":
                             st.success("Logística salva!"); time.sleep(1); st.rerun()
 
         # ------------------------------------------------------------------------------
-        # ROTA 3: AULA REGULAR (PILLS, FATIAMENTO MULTI-INTERVALO E MESA DE INSPEÇÃO)
+        # ROTA 3: AULA REGULAR (RÓTULOS FLEXÍVEIS E INTELIGÊNCIA DE CARGA HORÁRIA)
         # ------------------------------------------------------------------------------
         else:
             with st.container(border=True):
                 st.markdown("#### 2. Base Curricular, Fatiamento do Livro & Autonomia Docente")
-                st.caption("ℹ️ **Diretriz de Alta Performance:** Escolha a fonte de dados, especifique as páginas de Teoria e Exercícios ou insira seu texto auxiliar.")
+                st.caption(f"ℹ️ **Carga Horária Selecionada:** {carga_horaria}. A IA distribuirá a Teoria e os Exercícios dinamicamente conforme a sua carga horária.")
                 
                 modo_p = st.pills(
                     "Selecione a Fonte de Dados:", 
@@ -678,14 +678,13 @@ if menu == "📅 Planejamento (Ponto ID)":
                     livros_disponiveis = df_materiais[df_materiais['TIPO'].str.contains(str(ano_p), na=False)]['NOME_ARQUIVO'].tolist()
                     sel_mat = cx1.selectbox("Livro do Cofre Digital:", [""] + livros_disponiveis, key=f"sel_livro_ponto_{v}")
                     
-                    pags_teoria_input = cx2.text_input("📘 Páginas de Teoria (Aula 1):", placeholder="Ex: 184-186, 189", key=f"pags_teo_ponto_{v}", help="Aceita intervalos e páginas avulsas (ex: 184-186, 189)")
-                    pags_ex_input = cx3.text_input("📝 Páginas de Exercícios (Aula 2):", placeholder="Ex: 187-188, 190-192", key=f"pags_ex_ponto_{v}", help="Aceita intervalos e páginas avulsas (ex: 187-188, 190-192)")
+                    pags_teoria_input = cx2.text_input("📘 Páginas de Teoria / Leitura:", placeholder="Ex: 184-186, 189", key=f"pags_teo_ponto_{v}", help="Aceita intervalos e páginas avulsas (ex: 184-186, 189)")
+                    pags_ex_input = cx3.text_input("📝 Páginas de Exercícios / Fixação:", placeholder="Ex: 187-188, 190-192", key=f"pags_ex_ponto_{v}", help="Aceita intervalos e páginas avulsas (ex: 187-188, 190-192)")
 
                     if sel_mat:
                         uri_livro_drive = df_materiais[df_materiais['NOME_ARQUIVO'] == sel_mat].iloc[0]['URI_ARQUIVO']
                         base_didatica_info = f"Livro: {sel_mat} | Teoria: {pags_teoria_input if pags_teoria_input else 'Geral'} | Exercícios: {pags_ex_input if pags_ex_input else 'Geral'}"
 
-                        # Processa e fatia os intervalos informados
                         list_pags_teo = util.processar_intervalos_paginas(pags_teoria_input)
                         list_pags_ex = util.processar_intervalos_paginas(pags_ex_input)
 
@@ -706,15 +705,15 @@ if menu == "📅 Planejamento (Ponto ID)":
                         key=f"recorte_ponto_id_{v}"
                     )
 
-                    # 🚨 MESA DE INSPEÇÃO VISUAL (TRANSPARÊNCIA TOTAL)
+                    # 🚨 MESA DE INSPEÇÃO VISUAL (NEUTRA)
                     if texto_teoria_extraido or texto_exercicios_extraido or recorte_livro_texto.strip():
-                        with st.expander("👁️ MESA DE INSPEÇÃO DA IA (CONFERIR O QUE O GEMINI VAI LER)", expanded=True):
-                            t_insp1, t_insp2, t_insp3 = st.tabs(["📘 Teoria Extraída", "📝 Exercícios Extraídos", "✍️ Texto Auxiliar do Professor"])
+                        with st.expander("👁️ MESA DE INSPEÇÃO DA IA (PRÉVIA DO CONTEÚDO LIDO)", expanded=True):
+                            t_insp1, t_insp2, t_insp3 = st.tabs(["📘 Teoria (Livro)", "📝 Exercícios (Livro)", "✍️ Texto Auxiliar"])
                             with t_insp1:
-                                if texto_teoria_extraido: st.text_area("Texto de Teoria (Aula 1):", texto_teoria_extraido, height=180, disabled=True)
+                                if texto_teoria_extraido: st.text_area("Teoria Lida:", texto_teoria_extraido, height=180, disabled=True)
                                 else: st.info("Nenhuma página de teoria fatiada.")
                             with t_insp2:
-                                if texto_exercicios_extraido: st.text_area("Texto de Exercícios (Aula 2):", texto_exercicios_extraido, height=180, disabled=True)
+                                if texto_exercicios_extraido: st.text_area("Exercícios Lidos:", texto_exercicios_extraido, height=180, disabled=True)
                                 else: st.info("Nenhuma página de exercício fatiada.")
                             with t_insp3:
                                 if recorte_livro_texto.strip(): st.text_area("Texto Auxiliar Autorizado:", recorte_livro_texto, height=180, disabled=True)
@@ -725,7 +724,7 @@ if menu == "📅 Planejamento (Ponto ID)":
             with st.popover("⚙️ Ajustes Finos e Diretrizes de Aula (Opcional)", use_container_width=True):
                 st.caption("Especifique o que deseja em cada aula para direcionar a IA com precisão.")
                 if "1 Aula" in carga_horaria:
-                    foco_a1 = st.text_area("Foco da Aula 1:", placeholder="Ex: Explicar divisão de decimais...", height=80)
+                    foco_a1 = st.text_area("Foco da Única Aula:", placeholder="Ex: Explicar conceito e resolver exercícios 1 a 4...", height=80)
                 elif "2 Aulas" in carga_horaria:
                     foco_a1 = st.text_area("Foco da Aula 1:", placeholder="Ex: Explicar teoria das páginas selecionadas...", height=80)
                     foco_a2 = st.text_area("Foco da Aula 2:", placeholder="Ex: Resolver exercícios das páginas fatiadas...", height=80)
@@ -749,6 +748,25 @@ if menu == "📅 Planejamento (Ponto ID)":
                     else: 
                         diretriz_base = f"MÉTODO LIVRO DIDÁTICO: O professor utilizará o livro '{base_didatica_info}'."
 
+                    # 🚨 INTELIGÊNCIA DE CARGA HORÁRIA NO PROMPT
+                    if "1 Aula" in carga_horaria:
+                        diretriz_carga_promp = (
+                            "🚨 ATENÇÃO: CARGA HORÁRIA DE APENAS 1 AULA NA SEMANA (Feriado/Evento).\n"
+                            "- Concentre TODA a explicação da teoria e a resolução dos exercícios na AULA 1.\n"
+                            "- As tags [AULA_2] e [SABADO_LETIVO] DEVEM ser preenchidas estritamente com 'N/A (Carga horária de 1 Aula nesta semana)'."
+                        )
+                    elif "2 Aulas" in carga_horaria:
+                        diretriz_carga_promp = (
+                            "CARGA HORÁRIA: 2 AULAS NA SEMANA.\n"
+                            "- Distribua a explicação da teoria e a resolução de exercícios entre a AULA 1 e a AULA 2 conforme a melhor dinâmica.\n"
+                            "- A tag [SABADO_LETIVO] deve ser 'N/A'."
+                        )
+                    else:
+                        diretriz_carga_promp = (
+                            "CARGA HORÁRIA: 3 AULAS NA SEMANA (Inclui Sábado Letivo).\n"
+                            "- Distribua o conteúdo ao longo da AULA 1, AULA 2 e SÁBADO LETIVO."
+                        )
+
                     template_forcado = (
                         "[HABILIDADE_BNCC] (Código BNCC)\n"
                         "[COMPETENCIAS_FOCO] (Competências)\n"
@@ -756,29 +774,28 @@ if menu == "📅 Planejamento (Ponto ID)":
                         "[CONTEUDOS_ESPECIFICOS] (Tópicos)\n"
                         "[OBJETIVOS_ENSINO] (Objetivos)\n"
                         "[JUSTIFICATIVA_PEDAGOGICA] (Justificativa)\n"
-                        "[AULA_1] (Roteiro da Aula 1 focando na explicação das páginas de teoria)\n"
-                        "[AULA_2] (Roteiro da Aula 2 focando na resolução orientada das páginas de exercícios)\n"
-                        "[SABADO_LETIVO] (Roteiro do Sábado)\n"
+                        "[AULA_1] (Roteiro da Aula 1)\n"
+                        "[AULA_2] (Roteiro da Aula 2 ou N/A se for 1 aula)\n"
+                        "[SABADO_LETIVO] (Roteiro do Sábado ou N/A)\n"
                         "[AVALIACAO_DE_MERITO] (Como avaliar)\n"
                         "[ESTRATEGIA_DUA_PEI] (Adaptação PEI)\n"
                     )
 
-                    # Consolida todo o fatiamento no pacote de recorte do livro
                     pacote_recorte_completo = ""
                     if texto_teoria_extraido:
-                        pacote_recorte_completo += f"--- PÁGINAS DE TEORIA / EXPLICAÇÃO ---\n{texto_teoria_extraido}\n\n"
+                        pacote_recorte_completo += f"--- PÁGINAS DE TEORIA / LEITURA DO LIVRO ---\n{texto_teoria_extraido}\n\n"
                     if texto_exercicios_extraido:
-                        pacote_recorte_completo += f"--- PÁGINAS DE EXERCÍCIOS / APLICAÇÃO ---\n{texto_exercicios_extraido}\n\n"
+                        pacote_recorte_completo += f"--- PÁGINAS DE EXERCÍCIOS / FIXAÇÃO DO LIVRO ---\n{texto_exercicios_extraido}\n\n"
                     if recorte_livro_texto.strip():
                         pacote_recorte_completo += f"--- TEXTO AUXILIAR DO PROFESSOR ---\n{recorte_livro_texto.strip()}\n\n"
 
                     prompt = (
                         f"TIPO: {tipo_semana}\n{diretriz_base}\n"
                         f"SÉRIE: {ano_p}º Ano. SEMANA: {sem_limpa}. TRIMESTRE: {trim_atual}.\n"
-                        f"CARGA HORÁRIA: {carga_horaria}.\n"
+                        f"{diretriz_carga_promp}\n"
                         f"BASE DIDÁTICA: {base_didatica_info}\n"
                         f"DIRETRIZ AULA 1: {foco_a1}\nDIRETRIZ AULA 2: {foco_a2}\nDIRETRIZ SÁBADO: {foco_sab}\n"
-                        f"MATRIZ OFICIAL:\n{ctx_ia if ctx_ia else 'Baseada na leitura direta das páginas selecionadas do Livro Didático.'}\n\n"
+                        f"MATRIZ OFICIAL:\n{ctx_ia if ctx_ia else 'Baseada na leitura direta das páginas do Livro Didático.'}\n\n"
                         f"🚨 PREENCHA OBRIGATORIAMENTE ESTE TEMPLATE EXATO (Use as tags com colchetes):\n{template_forcado}"
                     )
                     
