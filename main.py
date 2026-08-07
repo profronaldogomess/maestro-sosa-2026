@@ -2132,7 +2132,7 @@ elif menu == "🧪 Criador de Aulas":
 
 
 # ==============================================================================
-# MÓDULO: CENTRAL DE AVALIAÇÕES - V2026.ULTIMATE (PADRÃO ENEM/SAEB & FIDUCIAL)
+# MÓDULO: CENTRAL DE AVALIAÇÕES - V2026.ULTIMATE (PIPELINE UNIFICADO FASES 1 A 6)
 # ==============================================================================
 elif menu == "📝 Central de Avaliações":
     st.title("Central de Avaliações")
@@ -2431,7 +2431,7 @@ elif menu == "📝 Central de Avaliações":
                         
                         st.balloons(); time.sleep(1); st.rerun()
 
-        # --- FASE 2: LINHA DE MONTAGEM ISOLADA EM FRAGMENTO ---
+        # --- FASE 2: LINHA DE MONTAGEM ISOLADA EM FRAGMENTO (BENTO CARDS) ---
         elif f['fase'] == 2:
             @st.fragment
             def renderizar_mesa_revisao_itens_av():
@@ -2443,7 +2443,6 @@ elif menu == "📝 Central de Avaliações":
                 media_c = sum(1 for item in f['mapa'] if item['dificuldade'] == "Média")
                 dificil_c = sum(1 for item in f['mapa'] if item['dificuldade'] == "Difícil")
                 
-                # 🚨 RÉGUA PSICOMÉTRICA TRI NO TOPO
                 perc_facil = (facil_c / total_q) * 100 if total_q > 0 else 0
                 perc_media = (media_c / total_q) * 100 if total_q > 0 else 0
                 perc_dificil = (dificil_c / total_q) * 100 if total_q > 0 else 0
@@ -2469,7 +2468,8 @@ elif menu == "📝 Central de Avaliações":
                             prompt_lote += f"CONTEXTO DAS AULAS, LIVRO DIDÁTICO E NOTÍCIAS:\n{f.get('contexto_base', '')}\n"
                             
                             res_json = ai.gerar_ia_json("FORJA_LOTE_JSON", prompt_lote)
-                            if "erro" in res_json: st.error(res_json["erro"])
+                            if "erro" in res_json: 
+                                st.error(f"⚠️ Erro ao processar o lote: {res_json['erro']}")
                             else:
                                 for q_data in res_json.get("questoes", []):
                                     q_num = int(q_data.get("q", 0))
@@ -2488,7 +2488,7 @@ elif menu == "📝 Central de Avaliações":
                 st.markdown("---")
                 todas_aprovadas = True
                 
-                # 🚨 RENDERIZAÇÃO DE QUESTÕES ESTILO BENTO CARD ENEM/SAEB
+                # RENDERIZAÇÃO DE QUESTÕES ESTILO BENTO CARD ENEM/SAEB
                 for i, item in enumerate(f['mapa']):
                     label_status = "✅ Aprovado" if item['status'] == 'aprovado' else ("🔍 Em Revisão" if item['status'] == 'revisao' else "⏳ Pendente")
                     
@@ -2570,21 +2570,21 @@ elif menu == "📝 Central de Avaliações":
                                         }
                                         st.rerun()
 
-                            elif item['status'] == 'aprovado':
-                                if st.button("✏️ Reabrir para Revisão", key=f"btn_edit_{i}_{v}", use_container_width=True):
-                                    item['status'] = 'revisao'; st.rerun()
+                        elif item['status'] == 'aprovado':
+                            if st.button("✏️ Reabrir para Revisão", key=f"btn_edit_{i}_{v}", use_container_width=True):
+                                item['status'] = 'revisao'; st.rerun()
 
-                if todas_aprovadas:
-                    st.success("🎉 Todos os itens do caderno foram homologados no padrão ENEM/SAEB!")
-                    if st.button("Avançar para Adaptações PEI", type="primary", use_container_width=True, key=f"btn_adv_pei_f2_{v}"):
-                        f['fase'] = 3; st.rerun()
+            if todas_aprovadas:
+                st.success("🎉 Todos os itens do caderno foram homologados no padrão ENEM/SAEB!")
+                if st.button("Avançar para Adaptações PEI", type="primary", use_container_width=True, key=f"btn_adv_pei_f2_{v}"):
+                    f['fase'] = 3; st.rerun()
 
             renderizar_mesa_revisao_itens_av()
 
-        # --- FASE 3: TRÍADE INCLUSIVA ---
+        # --- FASE 3: TRÍADE INCLUSIVA (PEI N1, N2 e N3 BENTO CARDS) ---
         elif f['fase'] == 3:
             st.markdown("### Tríade Inclusiva (Adaptação PEI)")
-            st.caption("A IA gera cada nível em sequência para garantir máxima qualidade.")
+            st.caption("A IA gera cada nível em sequência com cartões interativos de alta performance.")
             
             if not f.get('pei_1'):
                 if st.button("🧠 FORJAR TRÍADE INCLUSIVA (N1, N2 e N3)", type="primary", use_container_width=True, key=f"btn_triade_exe_{v}"):
@@ -2605,17 +2605,37 @@ elif menu == "📝 Central de Avaliações":
                         status.update(label="✅ Tríade PEI concluída com sucesso!", state="complete")
                         st.rerun()
             else:
-                t_p1, t_p2, t_p3 = st.tabs(["🔵 Nível 1 (Leve)", "🟡 Nível 2 (Moderado)", "🔴 Nível 3 (Qualitativo/BOX)"])
-                with t_p1: f['pei_1'] = st.text_area("Capa PEI N1:", value=f['pei_1'], height=350, key=f"ed_p1_f3_{v}")
-                with t_p2: f['pei_2'] = st.text_area("Capa PEI N2:", value=f['pei_2'], height=350, key=f"ed_p2_f3_{v}")
-                with t_p3: f['pei_3'] = st.text_area("Capa PEI N3:", value=f['pei_3'], height=350, key=f"ed_p3_f3_{v}")
+                modo_leitura_pei = st.toggle("👁️ Visualização Real PEI (Renderizar Matemática e Imagens)", value=True, key=f"read_pei_tog_{v}")
+                
+                t_p1, t_p2, t_p3 = st.tabs(["🔵 Nível 1 (Apoio Leve)", "🟡 Nível 2 (Apoio Moderado)", "🔴 Nível 3 (Qualitativo / 10 BOXES)"])
+                
+                with t_p1:
+                    if modo_leitura_pei:
+                        with st.container(border=True):
+                            st.markdown(preparar_para_leitura(f['pei_1']))
+                    f['pei_1'] = st.text_area("Capa & Questões PEI N1 (3 Alternativas A, B, C):", value=f['pei_1'], height=300, key=f"ed_p1_f3_{v}")
+                
+                with t_p2:
+                    if modo_leitura_pei:
+                        with st.container(border=True):
+                            st.markdown(preparar_para_leitura(f['pei_2']))
+                    f['pei_2'] = st.text_area("Capa & Questões PEI N2 (Com Dica Visual + 3 Alternativas):", value=f['pei_2'], height=300, key=f"ed_p2_f3_{v}")
+                
+                with t_p3:
+                    if modo_leitura_pei:
+                        with st.container(border=True):
+                            st.markdown("#### 📦 Estrutura dos 10 Bento Boxes (Lúdico-Sensorial)")
+                            st.markdown(preparar_para_leitura(f['pei_3']))
+                    f['pei_3'] = st.text_area("Capa & 10 BOXES PEI N3 (Sem Gabarito de Marcar):", value=f['pei_3'], height=300, key=f"ed_p3_f3_{v}")
                     
-                if st.button("Avançar para Compilação Final", type="primary", use_container_width=True, key=f"btn_adv_f4_av_{v}"):
+                st.markdown("<br>", unsafe_allow_html=True)
+                if st.button("Avançar para Compilação e Custódia Final", type="primary", use_container_width=True, key=f"btn_adv_f4_av_{v}"):
                     f['fase'] = 4; st.rerun()
 
         # --- FASE 4: CUSTÓDIA E FINALIZAÇÃO ---
         elif f['fase'] == 4:
             st.markdown("### Custódia e Finalização")
+            st.caption("Homologação dos arquivos oficiais em Word/Drive com Capa ENEM/SAEB e Cartão-Resposta Fiducial.")
             
             tipo_nome = f['info'].get('tipo_prova', 'TESTE').upper().replace(' ', '_')
             nome_sugerido = f"{tipo_nome}_{f['info']['ano'].replace('º','')}ANO_{f['info']['trimestre'].replace(' ', '')}"
@@ -2848,7 +2868,7 @@ elif menu == "📝 Central de Avaliações":
                                             st.markdown(f"**Item {q_num}**")
                                             if m_hab: st.caption(f"🆔 **Descritor SAEB/BNCC:** {m_hab.group(1).strip()}")
                                             if m_just: st.write(f"🎯 **Gabarito Justificado:** {m_just.group(1).strip()}")
-                                            if m_peri: st.warning(f"🧠 **Distratores Científicos (Erros Mapeados):** {m_peri.group(1).strip()}")
+                                            if m_peri: st.warning(f"🧠 **Distratores Científicos:** {m_peri.group(1).strip()}")
                                 else: st.text(grade_raw)
                             else: st.warning("Perícia indisponível.")
 
