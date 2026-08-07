@@ -1,7 +1,9 @@
+import importlib
+import io
+import random
 import re
 import uuid
 from datetime import date, timedelta, datetime
-import random
 
 
 # ==============================================================================
@@ -175,3 +177,79 @@ def embaralhar_item_estruturado(item_dict):
     novo_item['GABARITO'] = nova_letra_correta
     
     return novo_item
+
+# ==============================================================================
+# 5. MOTOR DE RECORTE E PROCESSAMENTO MULTI-INTERVALO DE PDF (SOSA V2026)
+# ==============================================================================
+
+def processar_intervalos_paginas(texto_paginas):
+    """
+    SOSA V2026: Converte strings como "184-186, 189, 192-195" em uma lista ordenada
+    de números de páginas inteiras sem duplicatas.
+    """
+    if not texto_paginas or not isinstance(texto_paginas, str):
+        return []
+    
+    paginas = set()
+    partes = texto_paginas.replace(" e ", ",").replace(";", ",").split(",")
+    for parte in partes:
+        p = parte.strip()
+        if not p:
+            continue
+        if "-" in p or "a" in p.lower():
+            p_intervalo = re.split(r'[\-aA]', p)
+            if len(p_intervalo) == 2:
+                try:
+                    p_inicio = int(re.sub(r'\D', '', p_intervalo[0]))
+                    p_fim = int(re.sub(r'\D', '', p_intervalo[1]))
+                    if p_inicio <= p_fim:
+                        for pag in range(p_inicio, p_fim + 1):
+                            paginas.add(pag)
+                    else:
+                        for pag in range(p_fim, p_inicio + 1):
+                            paginas.add(pag)
+                except ValueError:
+                    pass
+        else:
+            try:
+                p_num = int(re.sub(r'\D', '', p))
+                paginas.add(p_num)
+            except ValueError:
+                pass
+    return sorted(list(paginas))
+
+def extrair_texto_pdf_por_paginas(pdf_bytes, paginas_list):
+    """
+    Extrai o texto apenas das páginas solicitadas a partir dos bytes de um arquivo PDF.
+    """
+    if not pdf_bytes or not paginas_list:
+        return ""
+
+    try:
+        pypdf = importlib.import_module("pypdf")
+        reader = pypdf.PdfReader(io.BytesIO(pdf_bytes))
+        total_pags = len(reader.pages)
+
+        texto_fatiado = []
+        for pag_num in paginas_list:
+            idx = pag_num - 1
+            if 0 <= idx < total_pags:
+                text_p = reader.pages[idx].extract_text() or ""
+                if text_p.strip():
+                    texto_fatiado.append(f"--- [PÁGINA {pag_num}] ---\n{text_p.strip()}")
+        return "\n\n".join(texto_fatiado)
+    except Exception as e:
+        try:
+            PyPDF2 = importlib.import_module("PyPDF2")
+            reader = PyPDF2.PdfReader(io.BytesIO(pdf_bytes))
+            total_pags = len(reader.pages)
+            texto_fatiado = []
+            for pag_num in paginas_list:
+                idx = pag_num - 1
+                if 0 <= idx < total_pags:
+                    text_p = reader.pages[idx].extract_text() or ""
+                    if text_p.strip():
+                        texto_fatiado.append(f"--- [PÁGINA {pag_num}] ---\n{text_p.strip()}")
+            return "\n\n".join(texto_fatiado)
+        except Exception as ex:
+            return f"⚠️ Não foi possível extrair o texto diretamente do PDF em memória: {ex}"
