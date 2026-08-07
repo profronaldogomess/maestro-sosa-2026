@@ -4727,12 +4727,19 @@ elif menu == "📊 Painel de Notas & Vistos":
 
 
 # ==============================================================================
-# MÓDULO: BIOGRAFIA DO ESTUDANTE - V2026.ULTIMATE (UNIFICADO & LIVE SYNC)
+# MÓDULO: BIOGRAFIA DO ESTUDANTE - V2026.ULTIMATE (UNIFICADO & IMPERMEÁVEL)
 # ==============================================================================
 elif menu == "👤 Biografia do Estudante":
     st.title("👤 Biografia do Estudante: Dossiê 360°")
     st.caption("Dashboard executivo para reuniões de pais com inteligência temporal, linha do tempo e sincronia ao vivo.")
     st.markdown("---")
+
+    def obter_regex_trimestre_local(trimestre_str):
+        if not trimestre_str or trimestre_str == "Todos": return r".*"
+        t_upper = str(trimestre_str).upper()
+        if "III" in t_upper or "TERCEIRO" in t_upper: return r"(?<!I)III(?![I])"
+        elif "II" in t_upper or "SEGUNDO" in t_upper: return r"(?<!I)II(?![I])"
+        else: return r"(?<!I)I(?![I])"
 
     if "v_bio" not in st.session_state: 
         st.session_state.v_bio = int(time.time())
@@ -4800,12 +4807,12 @@ elif menu == "👤 Biografia do Estudante":
                 d_alu['DATA_DT'] = pd.to_datetime(d_alu['DATA'], format="%d/%m/%Y", errors='coerce').dt.date
                 d_alu_f = d_alu[(d_alu['DATA_DT'] >= dt_ini) & (d_alu['DATA_DT'] <= dt_fim)]
 
-        # 🚨 BUSCA DE AVALIAÇÕES ESCANEADAS COM REGEX FLEXÍVEL
+        # 🚨 BUSCA DE AVALIAÇÕES ESCANEADAS COM REGEX LOCAL SEGURO
         diag_alu_f = pd.DataFrame()
         if not df_diagnosticos.empty:
             diag_alu = df_diagnosticos[df_diagnosticos['ID_ALUNO'].apply(db.limpar_id) == id_alu].copy()
             if trim_b != "Todos" and not diag_alu.empty:
-                padrao_trim_regex = util.obter_regex_trimestre(trim_b)
+                padrao_trim_regex = obter_regex_trimestre_local(trim_b)
                 diag_alu_f = diag_alu[diag_alu['ID_AVALIACAO'].str.contains(padrao_trim_regex, regex=True, case=False, na=False)]
             else:
                 diag_alu_f = diag_alu.copy()
@@ -4850,21 +4857,20 @@ elif menu == "👤 Biografia do Estudante":
                 bonus_total_hero = d_alu_f['BONUS'].apply(util.sosa_to_float).sum()
 
         # CÁLCULO DE MÉDIA PARCIAL RECALCULADA AO VIVO
-        trims_analisados = ["I Trimestre", "II Trimestre", "III Trimestre"] if trim_b == "Todos" else [trim_b]
         soma_anual_live = 0.0
         trims_ativos_cnt = 0
 
         for t_k in ["I Trimestre", "II Trimestre", "III Trimestre"]:
             reg_t = n_alu[n_alu['TRIMESTRE'] == t_k] if not n_alu.empty else pd.DataFrame()
             v_c1 = vistos_live_by_trim.get(t_k, 0.0)
-            if not reg_t.empty and v_c1 == 0: v_c1 = util.sosa_to_float(reg_t.iloc[0]['NOTA_VISTOS'])
+            if v_c1 == 0 and not reg_t.empty: v_c1 = util.sosa_to_float(reg_t.iloc[0]['NOTA_VISTOS'])
             
             v_c2 = util.sosa_to_float(reg_t.iloc[0]['NOTA_TESTE']) if not reg_t.empty else 0.0
             v_c3 = util.sosa_to_float(reg_t.iloc[0]['NOTA_PROVA']) if not reg_t.empty else 0.0
             
             # Puxa notas do Scanner ao vivo se não estiverem salvas em df_notas
             if not df_diagnosticos.empty:
-                padrao_t_reg = util.obter_regex_trimestre(t_k)
+                padrao_t_reg = obter_regex_trimestre_local(t_k)
                 scanned_t = df_diagnosticos[(df_diagnosticos['ID_ALUNO'].apply(db.limpar_id) == id_alu) & (df_diagnosticos['TURMA'] == turma_b) & (df_diagnosticos['ID_AVALIACAO'].str.contains(padrao_t_reg, regex=True, case=False, na=False))]
                 if not scanned_t.empty:
                     st_teste = scanned_t[scanned_t['ID_AVALIACAO'].str.upper().str.contains("TESTE")]
@@ -4874,7 +4880,6 @@ elif menu == "👤 Biografia do Estudante":
 
             b_diario_t = bonus_live_by_trim.get(t_k, 0.0)
             
-            # Aplica transbordamento
             c1_fin = min(3.0, v_c1 + b_diario_t)
             rem_b = b_diario_t - (c1_fin - v_c1)
             c2_fin = min(3.0, v_c2 + max(0.0, rem_b))
@@ -4983,9 +4988,8 @@ Qualquer dúvida, estou à disposição! Um abraço! 🚀"""
                         v_c3 = util.sosa_to_float(reg_e.iloc[0]['NOTA_PROVA']) if not reg_e.empty else 0.0
                         v_rec = util.sosa_to_float(reg_e.iloc[0]['NOTA_REC']) if not reg_e.empty else -1.0
                         
-                        # Puxa notas do Scanner ao vivo
                         if not df_diagnosticos.empty:
-                            padrao_t_e = util.obter_regex_trimestre(t_e)
+                            padrao_t_e = obter_regex_trimestre_local(t_e)
                             scanned_e = df_diagnosticos[(df_diagnosticos['ID_ALUNO'].apply(db.limpar_id) == id_alu) & (df_diagnosticos['TURMA'] == turma_b) & (df_diagnosticos['ID_AVALIACAO'].str.contains(padrao_t_e, regex=True, case=False, na=False))]
                             if not scanned_e.empty:
                                 st_t = scanned_e[scanned_e['ID_AVALIACAO'].str.upper().str.contains("TESTE")]
