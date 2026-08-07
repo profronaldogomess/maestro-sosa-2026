@@ -1236,6 +1236,8 @@ elif menu == "📝 Diário de Bordo Rápido":
                         if n in ["NENHUMA", "", "NAN", "TÍPICO", "TIPICO"]: return "👤"
                         return "♿"
 
+                    options_tags_mob = ["⭐ +0.5", "💬 Conversa", "📱 Celular", "🧱 Def. Leitura", "🧮 Def. Mat.", "📉 -0.5"]
+
                     for _, alu in alunos_dr.iterrows():
                         id_l = db.limpar_id(alu['ID'])
                         nome_a = alu['NOME_ALUNO']
@@ -1261,10 +1263,13 @@ elif menu == "📝 Diário de Bordo Rápido":
                                 st.rerun()
 
                             if is_pres:
+                                val_tag_atual = st.session_state[key_tags].get(id_l, None)
+                                default_tag_mob = val_tag_atual if val_tag_atual in options_tags_mob else None
+
                                 tag_sel_mob = st.segmented_control(
                                     "Ocorrência / Bônus:",
-                                    ["⭐ +0.5", "💬 Conversa", "📱 Celular", "🧱 Def. Leitura", "🧮 Def. Mat.", "📉 -0.5"],
-                                    default=st.session_state[key_tags].get(id_l, ""),
+                                    options_tags_mob,
+                                    default=default_tag_mob,
                                     key=f"seg_tag_mob_{id_l}_{v_dr}"
                                 )
                                 st.session_state[key_tags][id_l] = tag_sel_mob if tag_sel_mob else ""
