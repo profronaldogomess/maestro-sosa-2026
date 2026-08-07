@@ -5608,11 +5608,11 @@ elif menu == "📈 Boletim Anual & Conselho":
 
 
 # ==============================================================================
-# MÓDULO: GESTÃO DA TURMA - V2026.ULTIMATE (COCKPIT 360° TOTALMENTE EDITÁVEL)
+# MÓDULO: GESTÃO DA TURMA - V2026.ULTIMATE (NAVEGAÇÃO LIVRE & RADAR MOBILE)
 # ==============================================================================
 elif menu == "👥 Gestão da Turma":
     st.title("👥 Cockpit de Regência: Gestão 360°")
-    st.caption("Central de comando operacional: métricas de safra, abertura rápida, máquina do tempo editável e inteligência da turma.")
+    st.caption("Central de comando operacional: métricas de safra, navegação de trimestres, máquina do tempo editável e radar de ausentes.")
     st.markdown("---")
 
     if "v_gestao" not in st.session_state: 
@@ -5629,22 +5629,32 @@ elif menu == "👥 Gestão da Turma":
     if not lista_turmas_segura:
         st.warning("⚠️ Nenhuma turma regular cadastrada. Cadastre as turmas na aba Secretaria.")
     else:
+        # Inteligência Temporal com Seleção Livre de Trimestres
+        hoje_dt = date.today()
+        if hoje_dt <= date(2026, 5, 22): trim_detectado = "I Trimestre"
+        elif hoje_dt <= date(2026, 9, 4): trim_detectado = "II Trimestre"
+        else: trim_detectado = "III Trimestre"
+
         with st.container(border=True):
-            c_head1, c_head2 = st.columns([2, 1])
-            turma_foco = c_head1.selectbox("🎯 Selecione a Turma para Comando:", lista_turmas_segura, key=f"foco_t_{v}")
+            c_head1, c_head2 = st.columns([1.5, 2])
+            turma_foco = c_head1.selectbox("🎯 Selecione a Turma:", lista_turmas_segura, key=f"foco_t_{v}")
             
-            # Inteligência Temporal de Trimestre Ativo
-            hoje_dt = date.today()
-            if hoje_dt <= date(2026, 5, 22): trim_ativo_gestao = "I Trimestre"
-            elif hoje_dt <= date(2026, 9, 4): trim_ativo_gestao = "II Trimestre"
-            else: trim_ativo_gestao = "III Trimestre"
-            
+            # 🚨 SELETOR LIVRE DE TRIMESTRES COM AUTO-SELECT
+            trim_ativo_gestao = c_head2.segmented_control(
+                "📅 Navegar Trimestres (I, II, III):",
+                ["I Trimestre", "II Trimestre", "III Trimestre"],
+                default=trim_detectado,
+                key=f"seg_trim_gestao_{v}",
+                help="Clique para visualizar ou editar trimestres passados ou futuros!"
+            )
+            if not trim_ativo_gestao: trim_ativo_gestao = trim_detectado
+
             # Cálculo da Métrica de Safra
             aulas_dadas_trim = df_registro_aulas[(df_registro_aulas['TURMA'] == turma_foco) & (df_registro_aulas['STATUS_CURRICULO'] != "NÃO LETIVO")]['DATA'].nunique() if not df_registro_aulas.empty else 0
-            aulas_meta_trim = 32 # Meta padrão do trimestre em Itabuna
+            aulas_meta_trim = 32
             perc_safra = min(100.0, (aulas_dadas_trim / aulas_meta_trim) * 100) if aulas_meta_trim > 0 else 0
             
-            c_head2.markdown(f"<div style='text-align: right; padding-top: 5px;'><span style='font-size: 12px; color: gray;'>Safra do Trimestre ({trim_ativo_gestao}):</span><br><strong style='font-size: 18px; color: #2962FF;'>{aulas_dadas_trim} de {aulas_meta_trim} Aulas ({perc_safra:.0f}%)</strong></div>", unsafe_allow_html=True)
+            st.caption(f"📊 **Safra do {trim_ativo_gestao}:** {aulas_dadas_trim} de {aulas_meta_trim} Aulas Cumpridas ({perc_safra:.0f}%)")
 
         alunos_t = df_alunos[df_alunos['TURMA'] == turma_foco].sort_values(by="NOME_ALUNO") if not df_alunos.empty else pd.DataFrame()
         ano_num = "".join(filter(str.isdigit, turma_foco))
@@ -5904,13 +5914,13 @@ elif menu == "👥 Gestão da Turma":
             renderizar_cockpit_fragmento()
 
         # ==============================================================================
-        # SUB-ABA 2: SUPER MÁQUINA DO TEMPO 2.0 (EDIÇÃO TOTAL IN-PLACE)
+        # SUB-ABA 2: SUPER MÁQUINA DO TEMPO 2.0 (RADAR DEDICADO DE FALTOSOS PARA A ESCOLA)
         # ==============================================================================
         with tab_maquina:
             @st.fragment
             def renderizar_maquina_tempo_fragmento():
                 st.markdown("### 🕰️ Super Máquina do Tempo 2.0 (Edição Total)")
-                st.caption("Inspecione, edite e corrija qualquer aula do passado. Altera conteúdo, chamadas e vistos com cascata imune a bugs (UPSERT).")
+                st.caption("Inspecione, edite e corrija qualquer aula do passado. Radar de faltosos em cartões de alto contraste para passar para o sistema da escola.")
                 
                 df_d_maq = df_diario[(df_diario['TURMA'] == turma_foco) & (~df_diario['TAGS'].isin(["DIA NÃO LETIVO", "BONUS_CONSELHO", "SISTEMA_NOTA"]))] if not df_diario.empty else pd.DataFrame()
                 
@@ -5918,7 +5928,7 @@ elif menu == "👥 Gestão da Turma":
                     st.info(f"📭 Nenhum registro de aula encontrado para a turma {turma_foco}.")
                 else:
                     datas_disponiveis = sorted(df_d_maq['DATA'].unique(), key=lambda x: datetime.strptime(x, "%d/%m/%Y"), reverse=True)
-                    data_maq = st.selectbox("📅 Selecione a Data da Aula para Editar:", datas_disponiveis, key=f"maq_d_{v}")
+                    data_maq = st.selectbox("📅 Selecione a Data da Aula para Editar / Lançar Faltas:", datas_disponiveis, key=f"maq_d_{v}")
                     
                     st.markdown("---")
                     df_dia = df_d_maq[df_d_maq['DATA'] == data_maq].copy()
@@ -5941,7 +5951,7 @@ elif menu == "👥 Gestão da Turma":
                     df_dia['BONUS_FLOAT'] = df_dia['BONUS'].apply(util.sosa_to_float)
                     df_bonus = df_dia[df_dia['BONUS_FLOAT'] > 0].groupby('NOME_ALUNO')['BONUS_FLOAT'].sum().reset_index()
                     
-                    # EDITAR AULA PASSADA IN-PLACE
+                    # EDITAR CONTEÚDO DA AULA PASSADA IN-PLACE
                     with st.container(border=True):
                         st.markdown("#### ✏️ Edição do Registro da Aula")
                         c_m_edit1, c_m_edit2 = st.columns([2, 1])
@@ -5964,14 +5974,49 @@ elif menu == "👥 Gestão da Turma":
                     # KPIs DA MÁQUINA DO TEMPO
                     c_k1, c_k2, c_k3, c_k4 = st.columns(4)
                     c_k1.metric("🟢 Presentes", qtd_presentes)
-                    c_k2.metric("🔴 Ausentes", qtd_ausentes)
+                    c_k2.metric("🔴 Ausentes (Faltosos)", qtd_ausentes)
                     c_k3.metric("📘 Vistos Dados", qtd_vistos)
                     c_k4.metric("⭐ Alunos Bonificados", len(df_bonus))
                     
                     st.markdown("<br>", unsafe_allow_html=True)
                     
+                    # 🚨 SUPER RADAR DEDICADO DE FALTOSOS PARA PASSAR PARA A ESCOLA (MOBILE FIRST)
+                    with st.container(border=True):
+                        st.markdown(f"#### 🔴 Ausentes no Dia {data_maq} ({qtd_ausentes} faltosos de {total_alunos_turma} alunos)")
+                        st.caption("ℹ️ Use este bloco no celular para lançar facilmente as faltas no sistema da prefeitura/escola:")
+                        
+                        if qtd_ausentes == 0:
+                            st.success("🎉 **100% DE PRESENÇA NESTA AULA!** Nenhum aluno faltou.")
+                        else:
+                            alunos_faltosos_df = alunos_t[alunos_t['ID'].apply(db.limpar_id).isin(ids_ausentes)]
+                            
+                            for idx_f, (_, r_faltoso) in enumerate(alunos_faltosos_df.iterrows()):
+                                id_f_al = db.limpar_id(r_faltoso['ID'])
+                                nome_f_al = r_faltoso['NOME_ALUNO']
+                                
+                                with st.container(border=True):
+                                    c_m_f1, c_m_f2 = st.columns([2.5, 1])
+                                    c_m_f1.markdown(f"**🔴 {nome_f_al}**")
+                                    c_m_f1.caption(f"ID: {id_f_al} | Perfil: {r_faltoso['NECESSIDADES']}")
+                                    
+                                    if c_m_f2.button("🟢 Dar Presença", key=f"btn_pres_fal_{id_f_al}_{data_maq}_{v}", use_container_width=True):
+                                        db.salvar_no_banco("DB_DIARIO_BORDO", [
+                                            data_maq, id_f_al, nome_f_al, turma_foco, "TRUE", "", "[PRESENÇA RETIFICADA]", "0,00"
+                                        ])
+                                        st.toast(f"Presença atribuída a {nome_f_al}!")
+                                        st.cache_data.clear(); time.sleep(0.5); st.rerun()
+
+                            # Bloco de cópia rápida para o sistema oficial ou WhatsApp
+                            lista_nomes_faltantes = [f"• {r['NOME_ALUNO']}" for _, r in alunos_faltosos_df.iterrows()]
+                            texto_copia_faltas = f"📌 FALTAS - {turma_foco} - AULA DO DIA {data_maq}:\n" + "\n".join(lista_nomes_faltantes)
+                            
+                            with st.expander("📋 Ver Lista de Faltas Formatada para Copiar / WhatsApp"):
+                                st.code(texto_copia_faltas, language=None)
+
+                    st.markdown("---")
+
                     # EDIÇÃO TÁTIL DE PRESENÇA E VISTOS DA AULA PASSADA
-                    st.markdown("#### 📱 Edição Tátil da Chamada desta Aula")
+                    st.markdown("#### 📱 Edição Tátil Completa da Chamada desta Aula")
                     st.caption("Ajuste presenças, vistos ou atestados referentes a este dia no passado:")
                     
                     grid_maq_dados = []
