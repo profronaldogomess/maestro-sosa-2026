@@ -11,3 +11,5 @@ google-api-python-client
 google-auth-httplib2
 google-auth-oauthlib
 python-pptx
+kaleido==0.1.0.post1
+pypdf
