@@ -624,7 +624,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                             db.salvar_no_banco("DB_PLANOS", [datetime.now().strftime("%d/%m/%Y"), sem_limpa, ano_str_busca, trim_atual, "PRODUZIDO", final_txt, link_drive])
                             st.success("Logística salva!"); time.sleep(1); st.rerun()
 
-        # ==============================================================================
+# ==============================================================================
 # MÓDULO: DIÁRIO DE BORDO RÁPIDO - V2026.MASTER (TEMPO REAL & BENTO GRID)
 # ==============================================================================
 elif menu == "📝 Diário de Bordo Rápido":
