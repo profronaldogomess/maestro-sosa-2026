@@ -392,8 +392,117 @@ def gerar_docx_professor_v25(titulo_doc, conteudo, info):
     return file_stream
 
 # ==============================================================================
-# 5. PROVA OFICIAL (PADRÃO ENEM / SAEB / OBMEP)
+# 5. PROVA OFICIAL (PADRÃO ENEM / SAEB / OBMEP COM CARTÃO-RESPOSTA FIDUCIAL)
 # ==============================================================================
+
+def adicionar_cartao_resposta_fiducial_word(doc, num_total_q, is_pei=False):
+    """
+    SOSA V2026: Desenha o Cartão-Resposta Oficial com 4 Marcadores Fiduciais Pretos (■)
+    nos 4 cantos para alinhamento geométrico local (OpenCV) e zero gasto de tokens.
+    """
+    container_table = doc.add_table(rows=3, cols=3)
+    container_table.style = 'Table Grid'
+    container_table.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    
+    container_table.columns[0].width = Inches(0.4)
+    container_table.columns[1].width = Inches(6.2)
+    container_table.columns[2].width = Inches(0.4)
+
+    set_row_height(container_table.rows[0], 25)
+    set_row_height(container_table.rows[2], 25)
+
+    # 4 Quadrados Pretos Fiduciais nos Cantos (■)
+    for r_idx, c_idx in [(0, 0), (0, 2), (2, 0), (2, 2)]:
+        c = container_table.cell(r_idx, c_idx)
+        set_cell_background(c, "000000")
+        p = c.paragraphs[0]
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = p.add_run("■")
+        run.font.color.rgb = RGBColor(0, 0, 0)
+        run.font.size = Pt(14)
+
+    # Título do Cartão (Topo)
+    c_title = container_table.cell(0, 1)
+    set_cell_background(c_title, "F1F5F9")
+    p_t = c_title.paragraphs[0]
+    p_t.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    r_t = p_t.add_run("CARTÃO-RESPOSTA OFICIAL (FOLHA DE RESPOSTAS)")
+    r_t.font.bold = True
+    r_t.font.size = Pt(9.5)
+
+    # Rodapé do Cartão
+    c_foot = container_table.cell(2, 1)
+    set_cell_background(c_foot, "F8FAFC")
+    p_f = c_foot.paragraphs[0]
+    p_f.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    r_f = p_f.add_run("▲ MANTENHA O PAPEL RETO • PREENCHA TOTALMENTE OS CÍRCULOS COM CANETA PRETA OU AZUL ▲")
+    r_f.font.size = Pt(7.5)
+    r_f.font.bold = True
+    r_f.font.color.rgb = RGBColor(100, 116, 139)
+
+    # Grade de Bolinhas (Centro)
+    c_grid = container_table.cell(1, 1)
+    col_count = 4 if is_pei else 6
+    headers = ["Q", "A", "B", "C"] if is_pei else ["Q", "A", "B", "C", "D", "E"]
+    
+    if num_total_q <= 10:
+        gab_grid = c_grid.add_table(rows=num_total_q + 1, cols=col_count)
+        gab_grid.style = 'Table Grid'
+        for i, lab in enumerate(headers):
+            c = gab_grid.cell(0, i)
+            set_cell_background(c, "E2E8F0")
+            p = c.paragraphs[0]
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            r_h = p.add_run(lab)
+            r_h.font.bold = True
+            r_h.font.size = Pt(8.5)
+            
+        for r in range(1, num_total_q + 1):
+            set_row_height(gab_grid.rows[r], 18)
+            c_q = gab_grid.cell(r, 0)
+            set_cell_background(c_q, "F8FAFC")
+            p_q = c_q.paragraphs[0]
+            p_q.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            p_q.add_run(f"{r:02d}").font.size = Pt(8.5)
+            
+            for col in range(1, col_count):
+                c_b = gab_grid.cell(r, col)
+                p_b = c_b.paragraphs[0]
+                p_b.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                p_b.add_run("○").font.size = Pt(11)
+    else:
+        half = (num_total_q + 1) // 2
+        double_cols = col_count * 2
+        gab_grid = c_grid.add_table(rows=half + 1, cols=double_cols)
+        gab_grid.style = 'Table Grid'
+        
+        headers_double = headers + headers
+        for i, lab in enumerate(headers_double):
+            c = gab_grid.cell(0, i)
+            set_cell_background(c, "E2E8F0")
+            p = c.paragraphs[0]
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            r_h = p.add_run(lab)
+            r_h.font.bold = True
+            r_h.font.size = Pt(8.0)
+
+        for r in range(1, num_total_q + 1):
+            row_idx = r if r <= half else r - half
+            col_offset = 0 if r <= half else col_count
+            
+            set_row_height(gab_grid.rows[row_idx], 16)
+            c_q = gab_grid.cell(row_idx, col_offset)
+            set_cell_background(c_q, "F8FAFC")
+            p_q = c_q.paragraphs[0]
+            p_q.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            p_q.add_run(f"{r:02d}").font.size = Pt(8.0)
+            
+            for col in range(1, col_count):
+                c_b = gab_grid.cell(row_idx, col_offset + col)
+                p_b = c_b.paragraphs[0]
+                p_b.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                p_b.add_run("○").font.size = Pt(10)
+
 def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
     file_stream = io.BytesIO()
     try:
@@ -415,69 +524,51 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
             corpo_bruto = conteudo_ia[match_primeira_q.start():].strip() if match_primeira_q else conteudo_ia.strip()
 
         num_total_q = len(re.findall(r'(?i)QUESTÃO\s+\d+', corpo_bruto))
-        if num_total_q == 0: num_total_q = int(info.get('qtd_questoes', 5))
+        if num_total_q == 0: num_total_q = int(info.get('qtd_questoes', info.get('qtd', 5)))
         
         label_prova = "AVALIAÇÃO ADAPTADA" if is_pei_doc else "AVALIAÇÃO DE MATEMÁTICA (ENEM/SAEB)"
         if "SONDA" in titulo_doc.upper(): label_prova = "SONDA DE PROFICIÊNCIA"
 
+        # 1. CABEÇALHO MESTRE DA ESCOLA
         configurar_cabecalho_mestre(doc, info, label_prova, mostrar_nota=True)
         doc.add_paragraph()
 
-        top_table = doc.add_table(rows=1, cols=2)
-        top_table.columns[0].width = Inches(3.5)
-        top_table.columns[1].width = Inches(4.0)
-        
+        # 2. CAPA DE INSTRUÇÕES OFICIAIS & REGRA DO CÁLCULO 50%
+        top_table = doc.add_table(rows=1, cols=1)
+        top_table.style = 'Table Grid'
+        top_table.columns[0].width = Inches(7.0)
         c_orient = top_table.cell(0, 0)
-        p_tit = c_orient.paragraphs[0]
-        p_tit.add_run("ORIENTAÇÕES OFICIAIS:").font.bold = True
+        set_cell_background(c_orient, "F8FAFC")
         
-        val_total = info.get('valor', '3,0')
-        val_q = info.get('valor_questao', '0,3')
+        p_tit = c_orient.paragraphs[0]
+        r_tit_inst = p_tit.add_run("📋 ORIENTAÇÕES OFICIAIS DE EXAME (PADRÃO ENEM/SAEB):")
+        r_tit_inst.bold = True
+        r_tit_inst.font.size = Pt(9.5)
+        r_tit_inst.font.color.rgb = RGBColor(0, 51, 102)
+        
+        val_total = info.get('valor', '3.0')
+        val_q = info.get('valor_questao', '0.3')
         
         orient_list = [
-            "Leia atentamente os enunciados contextualizados.",
-            "Apresente os cálculos no espaço do papel.",
-            "Marque apenas uma alternativa na folha de respostas." if info.get('tipo_prova') != "2ª Chamada" else "Apresente o raciocínio completo em todas as questões.",
-            f"Valor Total: {val_total} | Cada questão: {val_q}"
+            f"Valor Total do Exame: {val_total} pts | Valor por Questão: {val_q} pts.",
+            "Preencha o Cartão-Resposta abaixo com caneta esferográfica preta ou azul transparente.",
+            "🚨 REGRA DO CÁLCULO OBRIGATÓRIO (MEIO CERTO - 50%): Nas questões objetivas que exigem resolução matemática, o cálculo DEVE ser apresentado no papel da prova. Questão acertada no Cartão-Resposta sem a memória de cálculo receberá 50% do valor (sinalizado com *).",
+            "Mantenha os 4 marcadores pretos (■) dos cantos limpos e sem rasuras para leitura óptica."
         ]
         for txt in orient_list:
             p = c_orient.add_paragraph()
             p.add_run(f"• {txt}").font.size = Pt(8.5)
-            p.paragraph_format.space_after = Pt(0)
-
-        # GRADE DE GABARITO OFICIAL (ATÉ 20 QUESTÕES)
-        if info.get('tipo_prova') != "2ª Chamada":
-            c_gab = top_table.cell(0, 1)
-            if num_total_q <= 10:
-                gab_grid = c_gab.add_table(rows=num_total_q + 1, cols=6)
-                gab_grid.style = 'Table Grid'
-                for i, lab in enumerate(["Q", "A", "B", "C", "D", "E"]):
-                    c = gab_grid.cell(0, i)
-                    set_cell_background(c, "F1F5F9")
-                    c.paragraphs[0].add_run(lab).font.bold = True
-                for r in range(1, num_total_q + 1):
-                    gab_grid.cell(r, 0).paragraphs[0].add_run(f"{r:02d}").font.size = Pt(8.5)
-                    for col in range(1, 6): 
-                        gab_grid.cell(r, col).paragraphs[0].add_run("○").font.size = Pt(12)
-            else:
-                half = (num_total_q + 1) // 2
-                gab_grid = c_gab.add_table(rows=half + 1, cols=12)
-                gab_grid.style = 'Table Grid'
-                headers = ["Q", "A", "B", "C", "D", "E", "Q", "A", "B", "C", "D", "E"]
-                for i, lab in enumerate(headers):
-                    c = gab_grid.cell(0, i)
-                    set_cell_background(c, "F1F5F9")
-                    c.paragraphs[0].add_run(lab).font.bold = True
-                
-                for r in range(1, num_total_q + 1):
-                    row_idx = r if r <= half else r - half
-                    col_offset = 0 if r <= half else 6
-                    gab_grid.cell(row_idx, col_offset).paragraphs[0].add_run(f"{r:02d}").font.size = Pt(8.5)
-                    for col in range(1, 6):
-                        gab_grid.cell(row_idx, col_offset + col).paragraphs[0].add_run("○").font.size = Pt(12)
+            p.paragraph_format.space_after = Pt(1)
 
         doc.add_paragraph()
 
+        # 3. CARTÃO-RESPOSTA PADRONIZADO COM MARCADORES FIDUCIAIS
+        if info.get('tipo_prova') != "2ª Chamada":
+            adicionar_cartao_resposta_fiducial_word(doc, num_total_q, is_pei_doc)
+
+        doc.add_paragraph()
+
+        # 4. ENUNCIADOS DAS QUESTÕES
         new_section = doc.add_section(WD_SECTION.CONTINUOUS)
         sectPr = new_section._sectPr
         cols = sectPr.xpath('./w:cols')[0]
@@ -524,9 +615,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         return file_stream
     except Exception as e:
         file_stream = io.BytesIO()
-        err_doc = Document()
-        err_doc.add_paragraph(f"ERRO NO EXPORTER DE PROVA: {str(e)}")
-        err_doc.save(file_stream)
+        err_doc = Document(); err_doc.add_paragraph(f"ERRO NO EXPORTER DE PROVA: {str(e)}"); err_doc.save(file_stream)
         file_stream.seek(0)
         return file_stream
 
