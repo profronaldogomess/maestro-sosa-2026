@@ -445,7 +445,7 @@ def exibir_material_estruturado(texto_raw, key_prefix, dados_plano=None, info_au
                        
 
 # ==============================================================================
-# MÓDULO: PLANEJAMENTO ESTRATÉGICO (PONTO ID) - V202.6 (CSV PARSER & CASCATA)
+# MÓDULO: PLANEJAMENTO ESTRATÉGICO (PONTO ID) - V2026.MASTER
 # ==============================================================================
 if menu == "📅 Planejamento (Ponto ID)":
     st.title("Engenharia de Planejamento (Ponto ID)")
@@ -468,7 +468,7 @@ if menu == "📅 Planejamento (Ponto ID)":
     ])
     
     # ==============================================================================
-    # ABA 1: NOVO PLANO (PILLS & POPOVER DE NOVA GERAÇÃO)
+    # ABA 1: NOVO PLANO
     # ==============================================================================
     with tab_gerar:
         with st.container(border=True):
@@ -493,7 +493,6 @@ if menu == "📅 Planejamento (Ponto ID)":
             sem_limpa = sem_p.split(" (")[0]
             trim_atual = sem_p.split(" - ")[1] if " - " in sem_p else "I Trimestre"
 
-            # 🚨 VERIFICAÇÃO AUTOMÁTICA DE STATUS DE RECESSO / FERIADO NO CALENDÁRIO
             status_especial_sem = ""
             motivo_especial_sem = ""
             if not df_relatorios.empty:
@@ -519,7 +518,6 @@ if menu == "📅 Planejamento (Ponto ID)":
             
             st.markdown("---")
             
-            # 🚨 UI NOVA GERAÇÃO: ST.PILLS PARA CARGA HORÁRIA
             carga_horaria = st.pills(
                 "⏱️ Carga Horária da Semana:", 
                 ["1 Aula (Feriado/Evento)", "2 Aulas (Semana Normal)", "3 Aulas (+ Sábado Letivo)"], 
@@ -527,24 +525,21 @@ if menu == "📅 Planejamento (Ponto ID)":
                 key=f"carga_pills_{v}"
             )
 
-        # ------------------------------------------------------------------------------
-        # ROTA 1: BUROCRACIA PADRONIZADA (SEM GASTO DE IA)
-        # ------------------------------------------------------------------------------
         if tipo_semana in ["Semana de Provas Oficiais (Global)", "Devolutiva de Resultados & Recuperação"]:
             with st.container(border=True):
                 st.markdown("#### 2. Homologação Burocrática")
-                st.info("O sistema identificou uma semana de rotina administrativa. O texto padrão já foi gerado para poupar tempo e tokens.")
+                st.info("O sistema identificou uma semana de rotina administrativa. O texto padrão já foi gerado.")
                 
                 if "Provas" in tipo_semana:
-                    texto_padrao = f"Avaliação Global. Ocorrerão provas de diversas disciplinas conforme calendário da coordenação. Foco em gestão de tempo e inteligência emocional."
-                    aula_1_txt = "Organização das fileiras. Leitura das instruções gerais. Aplicação do instrumento avaliativo com monitoramento ativo."
-                    aula_2_txt = "Continuação da aplicação (se necessário) ou recolhimento dos instrumentos." if "1 Aula" not in carga_horaria else "N/A"
-                    aula_sab_txt = "Plantão tira-dúvidas ou aplicação de exames pendentes." if "3 Aulas" in carga_horaria else "N/A"
+                    texto_padrao = f"Avaliação Global. Ocorrerão provas de diversas disciplinas conforme calendário da coordenação."
+                    aula_1_txt = "Organização das fileiras. Leitura das instruções gerais. Aplicação do instrumento avaliativo."
+                    aula_2_txt = "Continuação da aplicação ou recolhimento dos instrumentos." if "1 Aula" not in carga_horaria else "N/A"
+                    aula_sab_txt = "Plantão tira-dúvidas ou exames pendentes." if "3 Aulas" in carga_horaria else "N/A"
                 else:
-                    texto_padrao = f"Análise de Erros e Recuperação Paralela. Foco nos tópicos com menor índice de acerto no Raio-X da turma."
-                    aula_1_txt = "Entrega dos resultados da avaliação. Correção comentada no quadro das questões com menor índice de acerto (Mapa de Calor)."
-                    aula_2_txt = "Aplicação do instrumento de Recuperação Paralela para os alunos elegíveis. Atividade de aprofundamento para os alunos já aprovados." if "1 Aula" not in carga_horaria else "N/A"
-                    aula_sab_txt = "Continuação da recuperação paralela ou nivelamento de base." if "3 Aulas" in carga_horaria else "N/A"
+                    texto_padrao = f"Análise de Erros e Recuperação Paralela. Foco nos tópicos com menor índice de acerto."
+                    aula_1_txt = "Entrega dos resultados. Correção comentada no quadro das questões com menor acerto."
+                    aula_2_txt = "Aplicação da Recuperação Paralela para elegíveis." if "1 Aula" not in carga_horaria else "N/A"
+                    aula_sab_txt = "Continuação da recuperação ou nivelamento." if "3 Aulas" in carga_horaria else "N/A"
 
                 st.text_area("Resumo do Plano:", texto_padrao, disabled=True)
                 
@@ -573,18 +568,13 @@ if menu == "📅 Planejamento (Ponto ID)":
                         db.salvar_no_banco("DB_PLANOS", [datetime.now().strftime("%d/%m/%Y"), sem_limpa, ano_str_busca, trim_atual, "PRODUZIDO", final_txt, link_drive])
                         st.success("Plano salvo com sucesso!"); time.sleep(1); st.rerun()
 
-        # ------------------------------------------------------------------------------
-        # ROTA 2: VÍNCULO DE ACERVO (EXAMES E REVISÕES)
-        # ------------------------------------------------------------------------------
         elif tipo_semana in ["Aplicação de Exame", "Revisão & Recomposição", "Sonda de Proficiência", "Trabalho Investigativo", "Aula Aberta (Dinâmicas e Eventos)"]:
             with st.container(border=True):
                 st.markdown("#### 2. Vínculo de Material")
-                
                 ativo_selecionado = ""
                 if tipo_semana != "Aula Aberta (Dinâmicas e Eventos)":
                     df_ativos_ano = df_aulas[df_aulas['ANO'] == ano_str_busca]
                     opcoes_ativos = []
-                    
                     if "Exame" in tipo_semana or "Sonda" in tipo_semana: 
                         opcoes_ativos = df_ativos_ano[df_ativos_ano['SEMANA_REF'] == "AVALIAÇÃO"]['TIPO_MATERIAL'].tolist()
                     elif "Revisão" in tipo_semana: 
@@ -592,14 +582,12 @@ if menu == "📅 Planejamento (Ponto ID)":
                     elif "Trabalho" in tipo_semana: 
                         opcoes_ativos = df_ativos_ano[df_ativos_ano['TIPO_MATERIAL'].str.contains("PROJETO|TRABALHO", case=False, na=False)]['TIPO_MATERIAL'].tolist()
                     
-                    if opcoes_ativos:
-                        ativo_selecionado = st.selectbox("Selecione o material do Acervo:", opcoes_ativos)
-                    else:
-                        st.warning(f"Nenhum material do tipo '{tipo_semana}' encontrado no acervo para o {ano_p}º Ano.")
+                    if opcoes_ativos: ativo_selecionado = st.selectbox("Selecione o material do Acervo:", opcoes_ativos)
+                    else: st.warning(f"Nenhum material encontrado no acervo.")
                 else:
                     ativo_selecionado = st.text_input("Nome do Evento/Dinâmica:", placeholder="Ex: Palestra sobre Educação Financeira")
 
-                diretriz_logistica = st.text_area("Diretriz Logística (O que vai acontecer na aula?):", placeholder="Ex: Os alunos terão 50 minutos para realizar a prova em silêncio...")
+                diretriz_logistica = st.text_area("Diretriz Logística:", placeholder="Ex: Os alunos terão 50 minutos para realizar a prova...")
 
                 if st.button("💾 Salvar Logística no Acervo", type="primary", use_container_width=True):
                     if ativo_selecionado:
@@ -624,183 +612,193 @@ if menu == "📅 Planejamento (Ponto ID)":
                             db.salvar_no_banco("DB_PLANOS", [datetime.now().strftime("%d/%m/%Y"), sem_limpa, ano_str_busca, trim_atual, "PRODUZIDO", final_txt, link_drive])
                             st.success("Logística salva!"); time.sleep(1); st.rerun()
 
-# ==============================================================================
-# MÓDULO: DIÁRIO DE BORDO RÁPIDO - V2026.MASTER (TEMPO REAL & BENTO GRID)
-# ==============================================================================
-elif menu == "📝 Diário de Bordo Rápido":
-    st.title("📝 Diário de Bordo Rápido")
-    st.caption("Lançamento em tempo real de assiduidade, vistos de caderno e ocorrências comportamentais com alta performance.")
-    st.markdown("---")
-
-    if "v_diario_rapido" not in st.session_state:
-        st.session_state.v_diario_rapido = int(time.time())
-    v_dr = st.session_state.v_diario_rapido
-
-    lista_turmas_diario = []
-    if not df_turmas.empty and 'ID_TURMA' in df_turmas.columns:
-        turmas_reais = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
-        lista_turmas_diario = sorted(turmas_reais['ID_TURMA'].unique())
-    elif not df_alunos.empty and 'TURMA' in df_alunos.columns:
-        lista_turmas_diario = sorted(df_alunos['TURMA'].unique())
-
-    if not lista_turmas_diario:
-        st.warning("⚠️ Nenhuma turma cadastrada no sistema. Cadastre as turmas no cockpit de Gestão da Turma.")
-    else:
-        with st.container(border=True):
-            c_d1, c_d2 = st.columns([1.5, 1])
-            turma_dr = c_d1.selectbox("👥 Selecione a Turma:", lista_turmas_diario, key=f"dr_turma_{v_dr}")
-            data_dr = c_d2.date_input("📅 Data da Aula:", date.today(), format="DD/MM/YYYY", key=f"dr_data_{v_dr}")
-            data_dr_str = data_dr.strftime("%d/%m/%Y")
-
-        alunos_dr = df_alunos[df_alunos['TURMA'] == turma_dr].sort_values(by="NOME_ALUNO") if not df_alunos.empty else pd.DataFrame()
-
-        if alunos_dr.empty:
-            st.warning(f"⚠️ Nenhum aluno encontrado na turma {turma_dr}.")
         else:
-            # Busca aula registrada para este dia/turma
-            aula_registro = df_registro_aulas[(df_registro_aulas['DATA'] == data_dr_str) & (df_registro_aulas['TURMA'] == turma_dr)] if not df_registro_aulas.empty else pd.DataFrame()
-            conteudo_aula_hoje = aula_registro.iloc[0]['CONTEUDO_MINISTRADO'] if not aula_registro.empty else "Registro Rápido de Sala"
-
-            st.info(f"📌 **Aula Registrada ({data_dr_str}):** {conteudo_aula_hoje}")
-
-            # Busca lançamentos anteriores do dia no banco
-            diario_dia_atual = df_diario[(df_diario['DATA'] == data_dr_str) & (df_diario['TURMA'] == turma_dr)] if not df_diario.empty else pd.DataFrame()
-
-            @st.fragment
-            def renderizar_diario_rapido_fragmento():
-                # Ações em Massa (Batch Actions)
-                c_m1, c_m2, c_m3 = st.columns(3)
+            with st.container(border=True):
+                st.markdown("#### 2. Base Curricular, Fatiamento do Livro & Autonomia Docente")
+                st.caption(f"ℹ️ **Carga Horária Selecionada:** {carga_horaria}. A IA distribuirá a Teoria e os Exercícios dinamicamente.")
                 
-                key_presenca = f"dr_presencas_{turma_dr}_{data_dr_str}"
-                key_vistos = f"dr_vistos_{turma_dr}_{data_dr_str}"
-                key_tags = f"dr_tags_{turma_dr}_{data_dr_str}"
-                key_obs = f"dr_obs_{turma_dr}_{data_dr_str}"
-
-                # Inicialização de estado local do fragmento
-                if key_presenca not in st.session_state:
-                    st.session_state[key_presenca] = {}
-                    st.session_state[key_vistos] = {}
-                    st.session_state[key_tags] = {}
-                    st.session_state[key_obs] = {}
-
-                    for _, alu in alunos_dr.iterrows():
-                        id_l = db.limpar_id(alu['ID'])
-                        reg_existente = diario_dia_atual[diario_dia_atual['ID_ALUNO'].apply(db.limpar_id) == id_l] if not diario_dia_atual.empty else pd.DataFrame()
-                        
-                        if not reg_existente.empty:
-                            tag_exist = str(reg_existente.iloc[-1].get('TAGS', ''))
-                            visto_exist = str(reg_existente.iloc[-1].get('VISTO_ATIVIDADE', '')).upper()
-                            obs_exist = str(reg_existente.iloc[-1].get('OBSERVACOES', ''))
-
-                            st.session_state[key_presenca][id_l] = False if tag_exist == "AUSÊNCIA" else True
-                            st.session_state[key_vistos][id_l] = True if visto_exist == "TRUE" else False
-                            st.session_state[key_tags][id_l] = tag_exist if tag_exist != "AUSÊNCIA" else ""
-                            st.session_state[key_obs][id_l] = obs_exist
-                        else:
-                            st.session_state[key_presenca][id_l] = True
-                            st.session_state[key_vistos][id_l] = False
-                            st.session_state[key_tags][id_l] = ""
-                            st.session_state[key_obs][id_l] = ""
-
-                if c_m1.button("🟢 Todos Presentes", use_container_width=True, key=f"btn_all_p_{v_dr}"):
-                    for al_id in st.session_state[key_presenca]:
-                        st.session_state[key_presenca][al_id] = True
-                    st.rerun()
-
-                if c_m2.button("📘 Todos com Visto", use_container_width=True, key=f"btn_all_v_{v_dr}"):
-                    for al_id in st.session_state[key_vistos]:
-                        st.session_state[key_vistos][al_id] = True
-                    st.rerun()
-
-                if c_m3.button("🔄 Resetar Formulário", use_container_width=True, key=f"btn_res_dr_{v_dr}"):
-                    del st.session_state[key_presenca]
-                    del st.session_state[key_vistos]
-                    del st.session_state[key_tags]
-                    del st.session_state[key_obs]
-                    st.rerun()
-
-                st.markdown("---")
-                st.markdown(f"#### 📋 Lista da Turma ({len(alunos_dr)} estudantes)")
-
-                dados_grid = []
-                for _, alu in alunos_dr.iterrows():
-                    id_l = db.limpar_id(alu['ID'])
-                    
-                    def icone_perfil(nec):
-                        n = str(nec).upper().strip()
-                        if "PENDENTE" in n or "SUSPEITA" in n: return "🟠"
-                        if "DEFASAGEM LEITURA" in n: return "🧱"
-                        if "DEFASAGEM MATEMÁTICA" in n or "DEFASAGEM MATEMATICA" in n: return "🧮"
-                        if "ALTA PERFORMANCE" in n: return "🚀"
-                        if n in ["NENHUMA", "", "NAN", "TÍPICO", "TIPICO"]: return "👤"
-                        return "♿"
-
-                    dados_grid.append({
-                        "ID": id_l,
-                        "Estudante": f"{icone_perfil(alu['NECESSIDADES'])} {alu['NOME_ALUNO']}",
-                        "Presente?": st.session_state[key_presenca].get(id_l, True),
-                        "Visto OK?": st.session_state[key_vistos].get(id_l, False),
-                        "Ocorrência / Tag": st.session_state[key_tags].get(id_l, ""),
-                        "Observação Individual": st.session_state[key_obs].get(id_l, "")
-                    })
-
-                df_grid_ed = st.data_editor(
-                    pd.DataFrame(dados_grid),
-                    hide_index=True, use_container_width=True, height=450,
-                    column_config={
-                        "ID": None,
-                        "Estudante": st.column_config.TextColumn("Estudante", disabled=True, width="medium"),
-                        "Presente?": st.column_config.CheckboxColumn("Presente?", default=True, width="small"),
-                        "Visto OK?": st.column_config.CheckboxColumn("Visto OK?", default=False, width="small"),
-                        "Ocorrência / Tag": st.column_config.SelectboxColumn("Ocorrência / Bônus", options=["", "⭐ DESTAQUE (+0.5)", "💬 CONVERSA/DESATENTO", "📱 USO DE CELULAR", "🧱 DEFASAGEM LEITURA", "🧮 DEFASAGEM MATEMÁTICA", "📉 INDISCIPLINA (-0.5)", "🕒 ATRASO"], width="medium"),
-                        "Observação Individual": st.column_config.TextColumn("Observação Rápida", width="large")
-                    },
-                    key=f"ed_grid_dr_{v_dr}"
+                modo_p = st.pills(
+                    "Selecione a Fonte de Dados:", 
+                    ["Livro Didático (Cofre Digital)", "Manual (Matriz)", "Links da Web"], 
+                    default="Livro Didático (Cofre Digital)",
+                    key=f"pills_fonte_{v}"
                 )
+                
+                ctx_ia, uri_livro_drive, links_web_texto, base_didatica_info = "", None, "", "Matriz Curricular"
+                texto_teoria_extraido, texto_exercicios_extraido = "", ""
+                
+                if modo_p == "Manual (Matriz)":
+                    df_matriz_ano = df_curriculo[df_curriculo['ANO'].astype(str).str.contains(str(ano_p))].copy()
+                    col_eixo_real = next((c for c in df_matriz_ano.columns if any(x in c.upper() for x in ['GERAIS', 'EIXO', 'DOMÍNIO'])), None)
+                    col_trim_real = next((c for c in df_matriz_ano.columns if trim_atual.upper() in c.upper()), None)
 
-                st.markdown("<br>", unsafe_allow_html=True)
-                if st.button("💾 CONSOLIDAR E SALVAR DIÁRIO DO DIA", type="primary", use_container_width=True, key=f"btn_save_dr_{v_dr}"):
-                    with st.spinner("Gravando presença, vistos e ocorrências em lote..."):
-                        linhas_salvar = []
-                        data_hoje_save = data_dr_str
+                    sel_eixo, sel_cont = [], []
+                    if col_eixo_real and not df_matriz_ano.empty:
+                        eixos_disponiveis = sorted(df_matriz_ano[col_eixo_real].dropna().unique().tolist())
+                        sel_eixo = st.multiselect("Eixo Temático (Conteúdos Gerais):", eixos_disponiveis)
+                        
+                        if col_trim_real and sel_eixo:
+                            df_eixos_sel = df_matriz_ano[df_matriz_ano[col_eixo_real].isin(sel_eixo)]
+                            topicos_fatiados = set()
+                            for _, r_eixo in df_eixos_sel.iterrows():
+                                texto_trim = str(r_eixo.get(col_trim_real, ''))
+                                texto_limpo = re.sub(r'\[cite:.*?\]', '', texto_trim).strip()
+                                for t_item in texto_limpo.split(';'):
+                                    t_clean = t_item.strip()
+                                    if t_clean and len(t_clean) > 3:
+                                        topicos_fatiados.add(t_clean)
+                                        
+                            sel_cont = st.multiselect("Conteúdos Específicos do Trimestre:", sorted(list(topicos_fatiados)))
+                            
+                        ctx_ia = f"EIXO: {sel_eixo}, CONTEÚDOS ESPECÍFICOS: {sel_cont}."
+                    else: st.warning("⚠️ Não foi possível ler as colunas da matriz carregada.")
+                
+                elif modo_p == "Links da Web":
+                    links_web_texto = st.text_area("Cole os Links da Web (um por linha):", placeholder="https://...")
+                    base_didatica_info = "Artigos da Web"
+                
+                else: # Livro Didático
+                    cx1, cx2, cx3 = st.columns([2, 1.5, 1.5])
+                    livros_disponiveis = df_materiais[df_materiais['TIPO'].str.contains(str(ano_p), na=False)]['NOME_ARQUIVO'].tolist()
+                    sel_mat = cx1.selectbox("Livro do Cofre Digital:", [""] + livros_disponiveis, key=f"sel_livro_ponto_{v}")
+                    
+                    pags_teoria_input = cx2.text_input("📘 Páginas de Teoria / Leitura:", placeholder="Ex: 184-186, 189", key=f"pags_teo_ponto_{v}")
+                    pags_ex_input = cx3.text_input("📝 Páginas de Exercícios / Fixação:", placeholder="Ex: 187-188, 190-192", key=f"pags_ex_ponto_{v}")
 
-                        for _, r_ed in df_grid_ed.iterrows():
-                            al_id = r_ed['ID']
-                            nome_limpo = r_ed['Estudante'].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
-                            is_presente = r_ed['Presente?']
-                            is_visto = "TRUE" if r_ed['Visto OK?'] else "FALSE"
-                            tag_sel = str(r_ed['Ocorrência / Tag']).strip()
-                            obs_text = str(r_ed['Observação Individual']).strip()
+                    if sel_mat:
+                        uri_livro_drive = df_materiais[df_materiais['NOME_ARQUIVO'] == sel_mat].iloc[0]['URI_ARQUIVO']
+                        base_didatica_info = f"Livro: {sel_mat} | Teoria: {pags_teoria_input if pags_teoria_input else 'Geral'} | Exercícios: {pags_ex_input if pags_ex_input else 'Geral'}"
 
-                            bônus_val = "0,00"
-                            if "DESTAQUE" in tag_sel or "+0.5" in tag_sel: bônus_val = "0,50"
-                            elif "INDISCIPLINA" in tag_sel or "-0.5" in tag_sel: bônus_val = "-0,50"
+                        list_pags_teo = util.processar_intervalos_paginas(pags_teoria_input)
+                        list_pags_ex = util.processar_intervalos_paginas(pags_ex_input)
 
-                            if not is_presente:
-                                tag_final = "AUSÊNCIA"
-                                visto_final = "FALSE"
-                            else:
-                                tag_final = tag_sel
-                                visto_final = is_visto
+                        if list_pags_teo or list_pags_ex:
+                            with st.spinner("🔍 Fatiando páginas selecionadas do Drive..."):
+                                bytes_pdf = db.baixar_bytes_arquivo_drive(uri_livro_drive)
+                                if bytes_pdf:
+                                    if list_pags_teo: texto_teoria_extraido = util.extrair_texto_pdf_por_paginas(bytes_pdf, list_pags_teo)
+                                    if list_pags_ex: texto_exercicios_extraido = util.extrair_texto_pdf_por_paginas(bytes_pdf, list_pags_ex)
 
-                            linhas_salvar.append([
-                                data_hoje_save, al_id, nome_limpo, turma_dr,
-                                visto_final, tag_final, obs_text, bônus_val
-                            ])
+                    st.markdown("##### ✍️ Injeção Auxiliar / Autonomia Docente (Opcional)")
+                    recorte_livro_texto = st.text_area(
+                        "Cole anotações extras ou exercícios autorais:",
+                        placeholder="Cole aqui textos ou exercícios extras do seu caderno...",
+                        height=100,
+                        key=f"recorte_ponto_id_{v}"
+                    )
 
-                        if linhas_salvar:
-                            db.limpar_diario_data_turma(data_hoje_save, turma_dr)
-                            db.salvar_lote("DB_DIARIO_BORDO", linhas_salvar)
-                            st.toast("✅ Diário de Bordo do Dia Consolidado com Sucesso!", icon="✅")
-                            st.balloons()
-                            time.sleep(1)
-                            st.rerun()
+                    if texto_teoria_extraido or texto_exercicios_extraido or recorte_livro_texto.strip():
+                        with st.expander("👁️ MESA DE INSPEÇÃO DA IA (PRÉVIA DO CONTEÚDO LIDO)", expanded=True):
+                            t_insp1, t_insp2, t_insp3 = st.tabs(["📘 Teoria (Livro)", "📝 Exercícios (Livro)", "✍️ Texto Auxiliar"])
+                            with t_insp1:
+                                if texto_teoria_extraido: st.text_area("Teoria Lida:", texto_teoria_extraido, height=180, disabled=True)
+                                else: st.info("Nenhuma página de teoria fatiada.")
+                            with t_insp2:
+                                if texto_exercicios_extraido: st.text_area("Exercícios Lidos:", texto_exercicios_extraido, height=180, disabled=True)
+                                else: st.info("Nenhuma página de exercício fatiada.")
+                            with t_insp3:
+                                if recorte_livro_texto.strip(): st.text_area("Texto Auxiliar Autorizado:", recorte_livro_texto, height=180, disabled=True)
+                                else: st.info("Nenhum texto auxiliar digitado.")
 
-            renderizar_diario_rapido_fragmento()
+            foco_a1, foco_a2, foco_sab = "N/A", "N/A", "N/A"
+            with st.popover("⚙️ Ajustes Finos e Diretrizes de Aula (Opcional)", use_container_width=True):
+                st.caption("Especifique o que deseja em cada aula para direcionar a IA.")
+                if "1 Aula" in carga_horaria:
+                    foco_a1 = st.text_area("Foco da Única Aula:", placeholder="Ex: Explicar conceito e resolver exercícios...", height=80)
+                elif "2 Aulas" in carga_horaria:
+                    foco_a1 = st.text_area("Foco da Aula 1:", placeholder="Ex: Explicar teoria...", height=80)
+                    foco_a2 = st.text_area("Foco da Aula 2:", placeholder="Ex: Resolver exercícios...", height=80)
+                else:
+                    foco_a1 = st.text_area("Foco da Aula 1:", placeholder="Ex: Explicar teoria...", height=80)
+                    foco_a2 = st.text_area("Foco da Aula 2:", placeholder="Ex: Resolver exercícios...", height=80)
+                    foco_sab = st.text_area("Foco do Sábado Letivo:", placeholder="Ex: Oficina prática...", height=80)
 
-    # ==============================================================================
-    # MESA DE LAPIDAÇÃO ISOLADA EM FRAGMENTO (DESEMPENHO MÁXIMO)
-    # ==============================================================================
+            c_g1, c_g2 = st.columns(2)
+
+            if c_g1.button("🧠 Iniciar Motor de IA: Gerar Planejamento Ancorado", use_container_width=True, type="primary"):
+                with st.status("🚀 Iniciando Protocolo de Planejamento...", expanded=True) as status:
+                    status.write("📚 Consolidadando recortes do livro e diretrizes...")
+                    
+                    precisa_de_internet = False
+                    if modo_p == "Manual (Matriz)": diretriz_base = "MÉTODO MANUAL: Baseie-se na Matriz Curricular."
+                    elif modo_p == "Links da Web": diretriz_base = f"MÉTODO WEB: Use estes links:\n{links_web_texto}"; precisa_de_internet = True
+                    else: diretriz_base = f"MÉTODO LIVRO DIDÁTICO: O professor utilizará o livro '{base_didatica_info}'."
+
+                    if "1 Aula" in carga_horaria:
+                        diretriz_carga_promp = (
+                            "🚨 ATENÇÃO: CARGA HORÁRIA DE APENAS 1 AULA NA SEMANA.\n"
+                            "- Concentre TODA a explicação da teoria e os exercícios na AULA 1.\n"
+                            "- As tags [AULA_2] e [SABADO_LETIVO] DEVEM ser 'N/A (Carga horária de 1 Aula)'."
+                        )
+                    elif "2 Aulas" in carga_horaria:
+                        diretriz_carga_promp = "CARGA HORÁRIA: 2 AULAS NA SEMANA. Distribua teoria e exercícios nas duas aulas.\n- Tag [SABADO_LETIVO] deve ser 'N/A'."
+                    else:
+                        diretriz_carga_promp = "CARGA HORÁRIA: 3 AULAS NA SEMANA. Distribua o conteúdo na AULA 1, AULA 2 e SÁBADO LETIVO."
+
+                    template_forcado = (
+                        "[HABILIDADE_BNCC] (Código BNCC)\n"
+                        "[COMPETENCIAS_FOCO] (Competências)\n"
+                        "[OBJETO_CONHECIMENTO] (Tema principal)\n"
+                        "[CONTEUDOS_ESPECIFICOS] (Tópicos)\n"
+                        "[OBJETIVOS_ENSINO] (Objetivos)\n"
+                        "[JUSTIFICATIVA_PEDAGOGICA] (Justificativa)\n"
+                        "[AULA_1] (Roteiro da Aula 1)\n"
+                        "[AULA_2] (Roteiro da Aula 2 ou N/A se for 1 aula)\n"
+                        "[SABADO_LETIVO] (Roteiro do Sábado ou N/A)\n"
+                        "[AVALIACAO_DE_MERITO] (Como avaliar)\n"
+                        "[ESTRATEGIA_DUA_PEI] (Adaptação PEI)\n"
+                    )
+
+                    pacote_recorte_completo = ""
+                    if texto_teoria_extraido: pacote_recorte_completo += f"--- PÁGINAS DE TEORIA ---\n{texto_teoria_extraido}\n\n"
+                    if texto_exercicios_extraido: pacote_recorte_completo += f"--- PÁGINAS DE EXERCÍCIOS ---\n{texto_exercicios_extraido}\n\n"
+                    if recorte_livro_texto.strip(): pacote_recorte_completo += f"--- TEXTO AUXILIAR DO PROFESSOR ---\n{recorte_livro_texto.strip()}\n\n"
+
+                    prompt = (
+                        f"TIPO: {tipo_semana}\n{diretriz_base}\n"
+                        f"SÉRIE: {ano_p}º Ano. SEMANA: {sem_limpa}. TRIMESTRE: {trim_atual}.\n"
+                        f"{diretriz_carga_promp}\n"
+                        f"BASE DIDÁTICA: {base_didatica_info}\n"
+                        f"DIRETRIZ AULA 1: {foco_a1}\nDIRETRIZ AULA 2: {foco_a2}\nDIRETRIZ SÁBADO: {foco_sab}\n"
+                        f"MATRIZ OFICIAL:\n{ctx_ia if ctx_ia else 'Baseada na leitura direta das páginas do Livro Didático.'}\n\n"
+                        f"🚨 PREENCHA OBRIGATORIAMENTE ESTE TEMPLATE EXATO (Use as tags com colchetes):\n{template_forcado}"
+                    )
+                    
+                    status.write("🧠 Maestro Sosa está redigindo o plano ancorado...")
+                    resultado_ia = ai.gerar_ia("PLANE_PEDAGOGICO", prompt, url_drive=uri_livro_drive, usar_busca=precisa_de_internet, recorte_livro=pacote_recorte_completo)
+                    
+                    if "ERRO" in resultado_ia.upper() or "⚠️" in resultado_ia:
+                        status.update(label="❌ Falha na comunicação com a IA.", state="error")
+                        st.error(resultado_ia)
+                    else:
+                        status.write("✅ Plano arquitetado com sucesso!")
+                        st.session_state.p_temp = resultado_ia
+                        st.session_state.p_meta = {"semana": sem_limpa, "trimestre": trim_atual, "ano": ano_str_busca, "base": base_didatica_info}
+                        
+                        status.update(label="🎉 Planejamento Concluído!", state="complete")
+                        time.sleep(1)
+                        st.rerun()
+
+            if c_g2.button("✍️ Elaborar Manualmente (Sem IA)", use_container_width=True):
+                espec_pre = ", ".join(sel_cont) if 'sel_cont' in locals() and sel_cont else ""
+                
+                texto_manual_template = (
+                    f"[HABILIDADE_BNCC]\n"
+                    f"[OBJETO_CONHECIMENTO]\n"
+                    f"[CONTEUDOS_ESPECIFICOS] {espec_pre}\n"
+                    f"[OBJETIVOS_ENSINO]\n"
+                    f"[AULA_1] (Escreva o roteiro da Aula 1 aqui...)\n"
+                    f"[AULA_2] (Escreva o roteiro da Aula 2 aqui...)\n"
+                    f"[SABADO_LETIVO] (Escreva o roteiro do Sábado aqui se houver...)\n"
+                    f"[AVALIACAO_DE_MERITO]\n"
+                    f"[ESTRATEGIA_DUA_PEI]"
+                )
+                
+                st.session_state.p_temp = texto_manual_template
+                st.session_state.p_meta = {"semana": sem_limpa, "trimestre": trim_atual, "ano": ano_str_busca, "base": base_didatica_info}
+                st.rerun()
+
+    # MESA DE LAPIDAÇÃO
     @st.fragment
     def renderizar_mesa_lapidacao_plano():
         if "p_temp" in st.session_state:
@@ -810,13 +808,12 @@ elif menu == "📝 Diário de Bordo Rápido":
             st.markdown("---")
             st.markdown(f"### 🛠️ Mesa de Lapidação: Semana {meta.get('semana')}")
             
-            with st.expander("👁️ Ver Texto Bruto da IA (Caso os campos abaixo estejam vazios)"):
-                st.text(txt_bruto)
+            with st.expander("👁️ Ver Texto Bruto da IA"): st.text(txt_bruto)
             
             with st.container(border=True):
                 cmd_refine = st.chat_input("Refinador IA (Ex: 'Deixe a Aula 1 mais lúdica')")
                 if cmd_refine:
-                    with st.spinner("Reescrevendo com Gemini 3.1 Pro..."):
+                    with st.spinner("Reescrevendo..."):
                         prompt_refino = f"ORDEM: {cmd_refine}\n\nPLANO ATUAL:\n{st.session_state.p_temp}"
                         st.session_state.p_temp = ai.gerar_ia("REFINADOR_PEDAGOGICO", prompt_refino)
                         st.rerun()
@@ -866,15 +863,14 @@ elif menu == "📝 Diário de Bordo Rápido":
                     status.update(label="Plano Sincronizado!", state="complete")
                     st.balloons(); time.sleep(1); reset_planejamento()
 
-    # Executa a Mesa de Lapidacao em Fragmento
     renderizar_mesa_lapidacao_plano()
 
     # ==============================================================================
-    # ABA 2: HUB DE PRODUÇÃO (COM ST.BADGE)
+    # ABA 2: HUB DE PRODUÇÃO
     # ==============================================================================
     with tab_producao:
         st.markdown("#### Hub de Produção de Materiais")
-        st.caption("Planos aprovados aguardando a geração dos materiais físicos (Folha do Aluno, Guia do Professor).")
+        st.caption("Planos aprovados aguardando a geração dos materiais físicos.")
         
         if not df_planos.empty:
             planos_ativos = df_planos[df_planos["EIXO"].astype(str).str.contains("HUB_ATIVO", case=False, na=False)].iloc[::-1]
@@ -896,7 +892,7 @@ elif menu == "📝 Diário de Bordo Rápido":
             else: st.success("🎉 Nenhum plano pendente de produção.")
 
     # ==============================================================================
-    # ABA 3: ACERVO (COM RELOCADOR ISOLADO EM FRAGMENTO)
+    # ABA 3: ACERVO
     # ==============================================================================
     with tab_acervo:
         st.markdown("#### Acervo de Planos Estratégicos")
@@ -914,7 +910,7 @@ elif menu == "📝 Diário de Bordo Rápido":
                 if is_corrupted:
                     st.error("⚠️ **Detector de Falhas:** O link deste arquivo precisa de recuperação.")
                     if st.button("🔄 RECONSTRUIR DOCUMENTO E RECUPERAR LINK NO DRIVE", type="primary", use_container_width=True, key=f"heal_btn_{sel_h.replace(' ','')}"):
-                        with st.status("Reconstruindo e enviando arquivo corrigido...", expanded=True) as status:
+                        with st.status("Reconstruindo...", expanded=True) as status:
                             plano_txt_bruto = str(dados_h['PLANO_TEXTO'])
                             
                             ed_geral = ai.extrair_tag(plano_txt_bruto, "OBJETO_CONHECIMENTO") or ai.extrair_tag(plano_txt_bruto, "CONTEUDO_GERAL") or "Planejamento Semanal"
@@ -954,7 +950,7 @@ elif menu == "📝 Diário de Bordo Rápido":
                                             ws.update_cell(row_idx+1, 6, novo_plano_texto)
                                             break
                                     
-                                    status.update(label="✅ Documento e Link Recuperados com Sucesso!", state="complete")
+                                    status.update(label="✅ Documento Recuperado!", state="complete")
                                     st.balloons(); st.cache_data.clear(); time.sleep(1.5); st.rerun()
                                 except Exception as e: st.error(f"Erro ao salvar no banco: {e}")
                             else:
@@ -966,11 +962,10 @@ elif menu == "📝 Diário de Bordo Rápido":
                     if c_btn2.button("🗑️ Apagar Plano", use_container_width=True, key=f"del_plan_h_{sel_h.replace(' ', '')}"):
                         if db.excluir_plano_completo(sel_h, dados_h["ANO"]): st.rerun()
 
-                    # 🚨 PILAR 1: MOTOR DE RELOCAÇÃO DE SEMANA ISOLADO EM FRAGMENTO
                     @st.fragment
                     def renderizar_relocador_fragmento():
-                        with st.expander("🔄 Mover este Plano e Aulas para Outra Semana (Preservar Docs)", expanded=False):
-                            st.info("💡 **Garantia de Preservação:** Esta ferramenta altera a semana do plano e de todas as suas aulas geradas no banco de dados e renomeia o título no Google Drive **sem apagar seus arquivos**. Suas edições no Docs continuam 100% preservadas.")
+                        with st.expander("🔄 Mover este Plano e Aulas para Outra Semana", expanded=False):
+                            st.info("💡 Altera a semana do plano e das aulas sem apagar os arquivos no Drive.")
                             
                             todas_semanas_reloc = util.gerar_semanas()
                             semanas_ocupadas_ano = df_planos[df_planos['ANO'] == dados_h['ANO']]['SEMANA'].tolist()
@@ -982,7 +977,7 @@ elif menu == "📝 Diário de Bordo Rápido":
                                 nova_semana_dest = st.selectbox("Selecione a Semana de Destino:", semanas_livres_reloc, key=f"reloc_sem_{sel_h.replace(' ','')}")
                                 
                                 if st.button("🚀 CONFIRMAR MUDANÇA DE SEMANA EM CASCATA", type="primary", use_container_width=True, key=f"btn_reloc_exe_{sel_h.replace(' ','')}"):
-                                    with st.spinner("Transferindo plano e aulas associadas..."):
+                                    with st.spinner("Transferindo plano e aulas..."):
                                         sucesso_reloc = db.relocador_plano_semana(
                                             semana_antiga=sel_h, 
                                             ano=dados_h['ANO'], 
@@ -990,24 +985,19 @@ elif menu == "📝 Diário de Bordo Rápido":
                                             link_drive=link_atual
                                         )
                                         if sucesso_reloc:
-                                            st.success(f"✅ Plano e Aulas transferidos da {sel_h} para a {nova_semana_dest} com sucesso!")
-                                            st.balloons()
-                                            time.sleep(1.5)
-                                            st.rerun()
-                                        else:
-                                            st.error("Erro ao transferir a semana no banco de dados.")
+                                            st.success(f"✅ Plano transferido para {nova_semana_dest}!")
+                                            st.balloons(); time.sleep(1.5); st.rerun()
+                                        else: st.error("Erro ao transferir a semana.")
 
                     renderizar_relocador_fragmento()
-
             else: st.info("Nenhum plano encontrado.")
 
     # ==============================================================================
-    # ABA 4: INTELIGÊNCIA CURRICULAR (COM ST.SEGMENTED_CONTROL)
+    # ABA 4: INTELIGÊNCIA CURRICULAR
     # ==============================================================================
     with tab_inteligencia:
         st.markdown("### 🧠 Inteligência Curricular e Planejamento")
         
-        # 🚨 UI NOVA GERAÇÃO: ST.SEGMENTED_CONTROL PARA NAVEGAÇÃO DE MODOS
         modo_inteligencia = st.segmented_control(
             "Selecione a Visão:", 
             ["📊 Status de Execução (Checklist)", "🖨️ Gerador de Plano Trimestral"], 
@@ -1021,7 +1011,7 @@ elif menu == "📝 Diário de Bordo Rápido":
             return re.sub(r'\[cite:.*?\]', '', texto).strip()
 
         if modo_inteligencia == "📊 Status de Execução (Checklist)":
-            st.caption("O sistema cruza os conteúdos exatos do seu CSV com os planos gerados no Ponto ID.")
+            st.caption("O sistema cruza os conteúdos do CSV com os planos gerados no Ponto ID.")
             c1, c2 = st.columns(2)
             ano_c = c1.selectbox("Série:", [6, 7, 8, 9], key="matriz_ano")
             trim_c = c2.selectbox("Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key="matriz_trim")
@@ -1063,23 +1053,18 @@ elif menu == "📝 Diário de Bordo Rápido":
                             return 'color: #F1C40F; font-weight: bold;'
                             
                         st.dataframe(df_check.style.map(colorir_status, subset=['Status']), use_container_width=True, hide_index=True)
-                    else:
-                        st.info("Nenhum conteúdo cadastrado para este trimestre no CSV.")
-            else:
-                st.error("As colunas do currículo não correspondem ao formato esperado.")
+                    else: st.info("Nenhum conteúdo cadastrado para este trimestre no CSV.")
+            else: st.error("As colunas do currículo não correspondem ao formato esperado.")
 
         elif modo_inteligencia == "🖨️ Gerador de Plano Trimestral":
             st.markdown("#### Gerador Automático de Plano Trimestral (DOCX)")
-            st.caption("O sistema extrairá as Habilidades BNCC e as Metodologias diretamente dos planos que o senhor já gerou neste trimestre.")
-            
             c_t1, c_t2 = st.columns(2)
             ano_trim = c_t1.selectbox("Série Alvo:", ["6º Ano", "7º Ano", "8º Ano", "9º Ano"])
             trim_alvo = c_t2.selectbox("Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"])
-            
             ano_num_trim = "".join(filter(str.isdigit, ano_trim))
             
             if st.button("🖨️ Extrair Dados e Gerar Documento Oficial", type="primary", use_container_width=True):
-                with st.spinner("Minerando planos de aula e compilando documento..."):
+                with st.spinner("Minerando planos e compilando documento..."):
                     col_ano = next((c for c in df_curriculo.columns if 'ANO' in c.upper()), None)
                     col_eixo = next((c for c in df_curriculo.columns if any(x in c.upper() for x in ['GERAIS', 'EIXO', 'DOMÍNIO'])), None)
                     col_trim = next((c for c in df_curriculo.columns if trim_alvo.upper() in c.upper()), None)
@@ -1107,7 +1092,7 @@ elif menu == "📝 Diário de Bordo Rápido":
                             if "dobradura" in aula1 or "prática" in aula1: metodologias.add("Atividades práticas e material concreto")
                             if "livro" in aula1 or "página" in aula1: metodologias.add("Leitura e resolução do livro didático")
                             if "quadro" in aula1 or "lousa" in aula1: metodologias.add("Exposição dialogada no quadro")
-                            if "tecnologia" in aula1 or "geogebra" in aula1: metodologias.add("Uso de recursos tecnológicos (GeoGebra)")
+                            if "tecnologia" in aula1 or "geogebra" in aula1: metodologias.add("Uso de recursos tecnológicos")
                             if "jogo" in aula1 or "lúdico" in aula1: metodologias.add("Atividades lúdicas e jogos matemáticos")
                             if "revisão" in aula1 or "correção" in aula1: metodologias.add("Revisão e recomposição de aprendizagem")
                         
@@ -1124,10 +1109,8 @@ elif menu == "📝 Diário de Bordo Rápido":
                             
                             if conteudos and conteudos.upper() != "NAN":
                                 dados_tabela.append({
-                                    "eixo": eixo,
-                                    "conteudos": conteudos,
-                                    "habilidades": hab_str,
-                                    "metodologia": met_str
+                                    "eixo": eixo, "conteudos": conteudos,
+                                    "habilidades": hab_str, "metodologia": met_str
                                 })
                         
                         info_trim = {"trimestre": trim_alvo, "ano": ano_trim}
@@ -1140,8 +1123,243 @@ elif menu == "📝 Diário de Bordo Rápido":
                             st.success("✅ Plano Trimestral gerado com sucesso!")
                             st.link_button("📂 ABRIR DOCUMENTO OFICIAL", link_doc, type="primary", use_container_width=True)
                             st.balloons()
+                        else: st.error(f"Erro ao salvar no Drive: {link_doc}")
+
+# ==============================================================================
+# MÓDULO: DIÁRIO DE BORDO RÁPIDO - V2026.MOBILE_TOUCH (MÁXIMA PERFORMANCE)
+# ==============================================================================
+elif menu == "📝 Diário de Bordo Rápido":
+    st.title("📝 Diário de Bordo Rápido")
+    st.caption("Lançamento em tempo real adaptado para Smartphone (Touch) e Desktop.")
+    st.markdown("---")
+
+    if "v_diario_rapido" not in st.session_state:
+        st.session_state.v_diario_rapido = int(time.time())
+    v_dr = st.session_state.v_diario_rapido
+
+    lista_turmas_diario = []
+    if not df_turmas.empty and 'ID_TURMA' in df_turmas.columns:
+        turmas_reais = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
+        lista_turmas_diario = sorted(turmas_reais['ID_TURMA'].unique())
+    elif not df_alunos.empty and 'TURMA' in df_alunos.columns:
+        lista_turmas_diario = sorted(df_alunos['TURMA'].unique())
+
+    if not lista_turmas_diario:
+        st.warning("⚠️ Nenhuma turma cadastrada no sistema. Cadastre as turmas no cockpit de Gestão da Turma.")
+    else:
+        with st.container(border=True):
+            c_d1, c_d2 = st.columns([1.5, 1])
+            turma_dr = c_d1.selectbox("👥 Selecione a Turma:", lista_turmas_diario, key=f"dr_turma_{v_dr}")
+            data_dr = c_d2.date_input("📅 Data da Aula:", date.today(), format="DD/MM/YYYY", key=f"dr_data_{v_dr}")
+            data_dr_str = data_dr.strftime("%d/%m/%Y")
+
+        alunos_dr = df_alunos[df_alunos['TURMA'] == turma_dr].sort_values(by="NOME_ALUNO") if not df_alunos.empty else pd.DataFrame()
+
+        if alunos_dr.empty:
+            st.warning(f"⚠️ Nenhum aluno encontrado na turma {turma_dr}.")
+        else:
+            aula_registro = df_registro_aulas[(df_registro_aulas['DATA'] == data_dr_str) & (df_registro_aulas['TURMA'] == turma_dr)] if not df_registro_aulas.empty else pd.DataFrame()
+            conteudo_aula_hoje = aula_registro.iloc[0]['CONTEUDO_MINISTRADO'] if not aula_registro.empty else "Registro Rápido de Sala"
+
+            st.info(f"📌 **Aula Registrada ({data_dr_str}):** {conteudo_aula_hoje}")
+            diario_dia_atual = df_diario[(df_diario['DATA'] == data_dr_str) & (df_diario['TURMA'] == turma_dr)] if not df_diario.empty else pd.DataFrame()
+
+            @st.fragment
+            def renderizar_diario_rapido_fragmento():
+                key_presenca = f"dr_presencas_{turma_dr}_{data_dr_str}"
+                key_vistos = f"dr_vistos_{turma_dr}_{data_dr_str}"
+                key_tags = f"dr_tags_{turma_dr}_{data_dr_str}"
+                key_obs = f"dr_obs_{turma_dr}_{data_dr_str}"
+
+                if key_presenca not in st.session_state:
+                    st.session_state[key_presenca] = {}
+                    st.session_state[key_vistos] = {}
+                    st.session_state[key_tags] = {}
+                    st.session_state[key_obs] = {}
+
+                    for _, alu in alunos_dr.iterrows():
+                        id_l = db.limpar_id(alu['ID'])
+                        reg_existente = diario_dia_atual[diario_dia_atual['ID_ALUNO'].apply(db.limpar_id) == id_l] if not diario_dia_atual.empty else pd.DataFrame()
+                        
+                        if not reg_existente.empty:
+                            tag_exist = str(reg_existente.iloc[-1].get('TAGS', ''))
+                            visto_exist = str(reg_existente.iloc[-1].get('VISTO_ATIVIDADE', '')).upper()
+                            obs_exist = str(reg_existente.iloc[-1].get('OBSERVACOES', ''))
+
+                            st.session_state[key_presenca][id_l] = False if tag_exist == "AUSÊNCIA" else True
+                            st.session_state[key_vistos][id_l] = True if visto_exist == "TRUE" else False
+                            st.session_state[key_tags][id_l] = tag_exist if tag_exist != "AUSÊNCIA" else ""
+                            st.session_state[key_obs][id_l] = obs_exist
                         else:
-                            st.error(f"Erro ao salvar no Drive: {link_doc}")
+                            st.session_state[key_presenca][id_l] = True
+                            st.session_state[key_vistos][id_l] = False
+                            st.session_state[key_tags][id_l] = ""
+                            st.session_state[key_obs][id_l] = ""
+
+                modo_view_dr = st.segmented_control(
+                    "Visualização da Classe:",
+                    ["📱 Smartphone (Cards Touch)", "💻 Desktop (Tabela Tátil)"],
+                    default="📱 Smartphone (Cards Touch)",
+                    key=f"dr_view_mode_{v_dr}"
+                )
+
+                c_m1, c_m2, c_m3 = st.columns(3)
+                if c_m1.button("🟢 Todos Presentes", use_container_width=True, key=f"btn_all_p_{v_dr}"):
+                    for al_id in st.session_state[key_presenca]: st.session_state[key_presenca][al_id] = True
+                    st.rerun()
+
+                if c_m2.button("📘 Todos com Visto", use_container_width=True, key=f"btn_all_v_{v_dr}"):
+                    for al_id in st.session_state[key_vistos]: st.session_state[key_vistos][al_id] = True
+                    st.rerun()
+
+                if c_m3.button("🔄 Resetar Formulário", use_container_width=True, key=f"btn_res_dr_{v_dr}"):
+                    del st.session_state[key_presenca]; del st.session_state[key_vistos]
+                    del st.session_state[key_tags]; del st.session_state[key_obs]
+                    st.rerun()
+
+                st.markdown("---")
+
+                if "Smartphone" in modo_view_dr:
+                    filtro_mob = st.pills(
+                        "Filtro de Exibição:", 
+                        ["Todos", "🔴 Faltosos", "📘 Com Visto", "⚪ Sem Visto"], 
+                        default="Todos",
+                        key=f"flt_mob_pills_{v_dr}"
+                    )
+
+                    def icone_perfil(nec):
+                        n = str(nec).upper().strip()
+                        if "PENDENTE" in n or "SUSPEITA" in n: return "🟠"
+                        if "DEFASAGEM LEITURA" in n: return "🧱"
+                        if "DEFASAGEM MATEMÁTICA" in n or "DEFASAGEM MATEMATICA" in n: return "🧮"
+                        if "ALTA PERFORMANCE" in n: return "🚀"
+                        if n in ["NENHUMA", "", "NAN", "TÍPICO", "TIPICO"]: return "👤"
+                        return "♿"
+
+                    for _, alu in alunos_dr.iterrows():
+                        id_l = db.limpar_id(alu['ID'])
+                        nome_a = alu['NOME_ALUNO']
+                        is_pres = st.session_state[key_presenca].get(id_l, True)
+                        is_visto = st.session_state[key_vistos].get(id_l, False)
+
+                        if filtro_mob == "🔴 Faltosos" and is_pres: continue
+                        if filtro_mob == "📘 Com Visto" and not is_visto: continue
+                        if filtro_mob == "⚪ Sem Visto" and is_visto: continue
+
+                        with st.container(border=True):
+                            c_card1, c_card2, c_card3 = st.columns([2, 1, 1])
+                            c_card1.markdown(f"**{icone_perfil(alu['NECESSIDADES'])} {nome_a}**")
+                            
+                            lbl_pres = "🟢 PRESENTE" if is_pres else "🔴 FALTOU"
+                            if c_card2.button(lbl_pres, key=f"btn_p_mob_{id_l}_{v_dr}", use_container_width=True):
+                                st.session_state[key_presenca][id_l] = not is_pres
+                                st.rerun()
+
+                            lbl_visto = "📘 VISTO OK" if is_visto else "⚪ SEM VISTO"
+                            if c_card3.button(lbl_visto, key=f"btn_v_mob_{id_l}_{v_dr}", use_container_width=True):
+                                st.session_state[key_vistos][id_l] = not is_visto
+                                st.rerun()
+
+                            if is_pres:
+                                tag_sel_mob = st.segmented_control(
+                                    "Ocorrência / Bônus:",
+                                    ["⭐ +0.5", "💬 Conversa", "📱 Celular", "🧱 Def. Leitura", "🧮 Def. Mat.", "📉 -0.5"],
+                                    default=st.session_state[key_tags].get(id_l, ""),
+                                    key=f"seg_tag_mob_{id_l}_{v_dr}"
+                                )
+                                st.session_state[key_tags][id_l] = tag_sel_mob if tag_sel_mob else ""
+
+                            obs_mob = st.text_input(
+                                "Observação (Use o Ditado por Voz do celular):",
+                                value=st.session_state[key_obs].get(id_l, ""),
+                                key=f"inp_obs_mob_{id_l}_{v_dr}",
+                                placeholder="Digite ou dite uma anotação..."
+                            )
+                            st.session_state[key_obs][id_l] = obs_mob
+
+                else:
+                    dados_grid = []
+                    for _, alu in alunos_dr.iterrows():
+                        id_l = db.limpar_id(alu['ID'])
+                        def icone_perfil(nec):
+                            n = str(nec).upper().strip()
+                            if "PENDENTE" in n or "SUSPEITA" in n: return "🟠"
+                            if "DEFASAGEM LEITURA" in n: return "🧱"
+                            if "DEFASAGEM MATEMÁTICA" in n or "DEFASAGEM MATEMATICA" in n: return "🧮"
+                            if "ALTA PERFORMANCE" in n: return "🚀"
+                            if n in ["NENHUMA", "", "NAN", "TÍPICO", "TIPICO"]: return "👤"
+                            return "♿"
+
+                        dados_grid.append({
+                            "ID": id_l,
+                            "Estudante": f"{icone_perfil(alu['NECESSIDADES'])} {alu['NOME_ALUNO']}",
+                            "Presente?": st.session_state[key_presenca].get(id_l, True),
+                            "Visto OK?": st.session_state[key_vistos].get(id_l, False),
+                            "Ocorrência / Tag": st.session_state[key_tags].get(id_l, ""),
+                            "Observação Individual": st.session_state[key_obs].get(id_l, "")
+                        })
+
+                    df_grid_ed = st.data_editor(
+                        pd.DataFrame(dados_grid),
+                        hide_index=True, use_container_width=True, height=450,
+                        column_config={
+                            "ID": None,
+                            "Estudante": st.column_config.TextColumn("Estudante", disabled=True, width="medium"),
+                            "Presente?": st.column_config.CheckboxColumn("Presente?", default=True, width="small"),
+                            "Visto OK?": st.column_config.CheckboxColumn("Visto OK?", default=False, width="small"),
+                            "Ocorrência / Tag": st.column_config.SelectboxColumn("Ocorrência / Bônus", options=["", "⭐ DESTAQUE (+0.5)", "💬 CONVERSA/DESATENTO", "📱 USO DE CELULAR", "🧱 DEFASAGEM LEITURA", "🧮 DEFASAGEM MATEMÁTICA", "📉 INDISCIPLINA (-0.5)", "🕒 ATRASO"], width="medium"),
+                            "Observação Individual": st.column_config.TextColumn("Observação Rápida", width="large")
+                        },
+                        key=f"ed_grid_dr_{v_dr}"
+                    )
+
+                    for _, r_ed in df_grid_ed.iterrows():
+                        al_id = r_ed['ID']
+                        st.session_state[key_presenca][al_id] = r_ed['Presente?']
+                        st.session_state[key_vistos][al_id] = r_ed['Visto OK?']
+                        st.session_state[key_tags][al_id] = str(r_ed['Ocorrência / Tag'])
+                        st.session_state[key_obs][al_id] = str(r_ed['Observação Individual'])
+
+                st.markdown("<br>", unsafe_allow_html=True)
+                if st.button("💾 CONSOLIDAR E SALVAR DIÁRIO DO DIA", type="primary", use_container_width=True, key=f"btn_save_dr_{v_dr}"):
+                    with st.spinner("Gravando presença, vistos e ocorrências em lote..."):
+                        linhas_salvar = []
+                        data_hoje_save = data_dr_str
+
+                        for _, alu in alunos_dr.iterrows():
+                            al_id = db.limpar_id(alu['ID'])
+                            nome_limpo = alu['NOME_ALUNO'].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
+                            
+                            is_presente = st.session_state[key_presenca].get(al_id, True)
+                            is_visto = "TRUE" if st.session_state[key_vistos].get(al_id, False) else "FALSE"
+                            tag_sel = str(st.session_state[key_tags].get(al_id, "")).strip()
+                            obs_text = str(st.session_state[key_obs].get(al_id, "")).strip()
+
+                            bônus_val = "0,00"
+                            if "DESTAQUE" in tag_sel or "+0.5" in tag_sel: bônus_val = "0,50"
+                            elif "INDISCIPLINA" in tag_sel or "-0.5" in tag_sel: bônus_val = "-0,50"
+
+                            if not is_presente:
+                                tag_final = "AUSÊNCIA"
+                                visto_final = "FALSE"
+                            else:
+                                tag_final = tag_sel
+                                visto_final = is_visto
+
+                            linhas_salvar.append([
+                                data_hoje_save, al_id, nome_limpo, turma_dr,
+                                visto_final, tag_final, obs_text, bônus_val
+                            ])
+
+                        if linhas_salvar:
+                            db.limpar_diario_data_turma(data_hoje_save, turma_dr)
+                            db.salvar_lote("DB_DIARIO_BORDO", linhas_salvar)
+                            st.toast("✅ Diário de Bordo Consolidado com Sucesso!", icon="✅")
+                            st.balloons()
+                            time.sleep(1)
+                            st.rerun()
+
+            renderizar_diario_rapido_fragmento()
 
 
 # ==============================================================================
