@@ -5560,6 +5560,10 @@ elif menu == "📈 Boletim Anual & Conselho":
                             if "https" in link_doc:
                                 st.success("✅ Ata do Conselho gerada com sucesso!")
                                 st.link_button("📂 ABRIR ATA OFICIAL NO DRIVE", link_doc, type="primary", use_container_width=True)
+                                st.balloons()
+                            else: st.error(f"Erro ao salvar no Drive: {link_doc}")
+
+            renderizar_boletim_anual_fragmento()
 
 
 
