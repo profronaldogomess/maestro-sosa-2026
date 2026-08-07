@@ -4209,7 +4209,7 @@ elif menu == "📸 Scanner de Gabaritos":
 
 
 # ==============================================================================
-# MÓDULO: PAINEL DE NOTAS & VISTOS - V2026.ULTIMATE (AUTO-SYNC & BÔNUS VISÍVEL)
+# MÓDULO: PAINEL DE NOTAS & VISTOS - V2026.ULTIMATE (BLINDAGEM TEMPORAL)
 # ==============================================================================
 elif menu == "📊 Painel de Notas & Vistos":
     st.title("📊 Torre de Comando: Gestão de Notas")
@@ -4283,7 +4283,14 @@ elif menu == "📊 Painel de Notas & Vistos":
                 key=f"n_trim_{v}",
                 help="O trimestre ativo foi selecionado automaticamente com base na data de hoje!"
             )
-            
+
+            calendario = {
+                "I Trimestre": (date(2026, 2, 9), date(2026, 5, 22)),
+                "II Trimestre": (date(2026, 5, 25), date(2026, 9, 4)),
+                "III Trimestre": (date(2026, 9, 8), date(2026, 12, 17))
+            }
+            dt_ini, dt_fim = calendario.get(trimestre_sel, (date(2026, 1, 1), date(2026, 12, 31)))
+
             config_key = f"CONFIG_DATA_{turma_sel}_{trimestre_sel}"
             config_records = df_relatorios[df_relatorios['TIPO'] == config_key] if not df_relatorios.empty else pd.DataFrame()
             if not config_records.empty:
@@ -4292,8 +4299,19 @@ elif menu == "📊 Painel de Notas & Vistos":
                 except: default_date = hoje_dt
             else: default_date = hoje_dt
 
+            # 🚨 VACINA TEMPORAL: Garante que a data limite de vistos pertença ao trimestre selecionado!
+            if default_date < dt_ini or default_date > dt_fim:
+                if dt_ini <= hoje_dt <= dt_fim:
+                    default_date = hoje_dt
+                else:
+                    default_date = dt_fim
+
             data_limite = c_f3.date_input("❄️ Congelar Vistos em:", default_date, format="DD/MM/YYYY", key=f"dt_lim_{v}")
             
+            # Segunda trava de segurança se o usuário escolher uma data manual fora do trimestre
+            if data_limite < dt_ini:
+                data_limite = dt_fim
+
             if c_f4.button("⚙️ Regras", use_container_width=True, key=f"btn_rules_open_{v}"):
                 dialog_config_pesos_modal()
 
@@ -4310,13 +4328,6 @@ elif menu == "📊 Painel de Notas & Vistos":
         else:
             # 🚨 3. MOTOR DE AUTO-SINCRONIZAÇÃO EM TEMPO REAL & BÔNUS DO DIÁRIO
             vistos_auto_map, bonus_sala_map, bonus_conselho_map, trabalhos_map = {}, {}, {}, {}
-            
-            calendario = {
-                "I Trimestre": (date(2026, 2, 9), date(2026, 5, 22)),
-                "II Trimestre": (date(2026, 5, 25), date(2026, 9, 4)),
-                "III Trimestre": (date(2026, 9, 8), date(2026, 12, 17))
-            }
-            dt_ini, dt_fim = calendario.get(trimestre_sel, (date(2026, 1, 1), date(2026, 12, 31)))
 
             aulas_com_visto_count = 0
             if not df_diario.empty:
@@ -4338,7 +4349,6 @@ elif menu == "📊 Painel de Notas & Vistos":
                         
                         vistos_auto_map[id_l] = round((aulas_com_visto / total_aulas_periodo * p_visto), 2) if total_aulas_periodo > 0 else 0.0
                         
-                        # 🚨 MINERAÇÃO SOBERANA DE TODOS OS BÔNUS/PUNIÇÕES DO DIÁRIO
                         b_sala_tot = d_alu[(d_alu['TAGS'] != "SISTEMA_NOTA") & (d_alu['TAGS'] != "BONUS_CONSELHO")]['BONUS'].apply(util.sosa_to_float).sum()
                         bonus_sala_map[id_l] = b_sala_tot
                         
@@ -4399,7 +4409,7 @@ elif menu == "📊 Painel de Notas & Vistos":
                     "ESTUDANTE": f"{icone_perfil} {alu['NOME_ALUNO']}",
                     "ORIGEM": origem_tag,
                     "🔵 Vistos (Base)": vistos_auto_map.get(id_a, 0.0),
-                    "⭐ Bônus Diário": bonus_sala_map.get(id_a, 0.0), # 🚨 COLUNA VISÍVEL DO BÔNUS
+                    "⭐ Bônus Diário": bonus_sala_map.get(id_a, 0.0),
                     "BÔNUS CONSELHO": bonus_conselho_map.get(id_a, 0.0),
                     "TESTE (LANÇAR)": n_teste,
                     "PROVA (LANÇAR)": n_prova,
@@ -4714,7 +4724,6 @@ elif menu == "📊 Painel de Notas & Vistos":
                             else: st.error(f"Erro ao salvar no Drive: {link_doc}")
 
             renderizar_mesa_notas_fragmento()
-
 
 
 # ==============================================================================
