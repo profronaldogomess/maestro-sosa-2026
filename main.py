@@ -4209,11 +4209,11 @@ elif menu == "📸 Scanner de Gabaritos":
 
 
 # ==============================================================================
-# MÓDULO: PAINEL DE NOTAS & VISTOS - V2026.ULTIMATE (TEMPORAL & AUTO-SYNC)
+# MÓDULO: PAINEL DE NOTAS & VISTOS - V2026.ULTIMATE (AUTO-SYNC & BÔNUS VISÍVEL)
 # ==============================================================================
 elif menu == "📊 Painel de Notas & Vistos":
     st.title("📊 Torre de Comando: Gestão de Notas")
-    st.caption("Sincronização automática em tempo real dos Vistos do Diário de Bordo e das notas do Scanner de Gabaritos.")
+    st.caption("Sincronização automática em tempo real dos Vistos, Bônus do Diário e notas do Scanner de Gabaritos.")
     st.markdown("---")
 
     if "v_notas" not in st.session_state: 
@@ -4308,7 +4308,7 @@ elif menu == "📊 Painel de Notas & Vistos":
         if alunos_turma.empty:
             st.warning(f"⚠️ Nenhum aluno cadastrado na turma {turma_sel}.")
         else:
-            # 🚨 3. MOTOR DE AUTO-SINCRONIZAÇÃO EM TEMPO REAL
+            # 🚨 3. MOTOR DE AUTO-SINCRONIZAÇÃO EM TEMPO REAL & BÔNUS DO DIÁRIO
             vistos_auto_map, bonus_sala_map, bonus_conselho_map, trabalhos_map = {}, {}, {}, {}
             
             calendario = {
@@ -4337,7 +4337,11 @@ elif menu == "📊 Painel de Notas & Vistos":
                         total_aulas_periodo = len(d_alu_validas)
                         
                         vistos_auto_map[id_l] = round((aulas_com_visto / total_aulas_periodo * p_visto), 2) if total_aulas_periodo > 0 else 0.0
-                        bonus_sala_map[id_l] = d_alu[(d_alu['TAGS'] != "SISTEMA_NOTA") & (d_alu['TAGS'] != "BONUS_CONSELHO")]['BONUS'].apply(util.sosa_to_float).sum()
+                        
+                        # 🚨 MINERAÇÃO SOBERANA DE TODOS OS BÔNUS/PUNIÇÕES DO DIÁRIO
+                        b_sala_tot = d_alu[(d_alu['TAGS'] != "SISTEMA_NOTA") & (d_alu['TAGS'] != "BONUS_CONSELHO")]['BONUS'].apply(util.sosa_to_float).sum()
+                        bonus_sala_map[id_l] = b_sala_tot
+                        
                         bonus_conselho_map[id_l] = d_alu[d_alu['TAGS'] == "BONUS_CONSELHO"]['BONUS'].apply(util.sosa_to_float).sum()
                         
                         trabalhos = d_alu[d_alu['TAGS'] == "SISTEMA_NOTA"]
@@ -4394,8 +4398,8 @@ elif menu == "📊 Painel de Notas & Vistos":
                     "ID": id_a,
                     "ESTUDANTE": f"{icone_perfil} {alu['NOME_ALUNO']}",
                     "ORIGEM": origem_tag,
-                    "VISTOS (AUTO)": vistos_auto_map.get(id_a, 0.0),
-                    "BÔNUS (SALA)": bonus_sala_map.get(id_a, 0.0),
+                    "🔵 Vistos (Base)": vistos_auto_map.get(id_a, 0.0),
+                    "⭐ Bônus Diário": bonus_sala_map.get(id_a, 0.0), # 🚨 COLUNA VISÍVEL DO BÔNUS
                     "BÔNUS CONSELHO": bonus_conselho_map.get(id_a, 0.0),
                     "TESTE (LANÇAR)": n_teste,
                     "PROVA (LANÇAR)": n_prova,
@@ -4408,11 +4412,11 @@ elif menu == "📊 Painel de Notas & Vistos":
             
             # --- TRANSBORDAMENTO & PREFEITURA ---
             def aplicar_transbordamento(row):
-                b_sala = float(row.get('BÔNUS (SALA)', 0.0) or 0.0)
+                b_diario = float(row.get('⭐ Bônus Diário', 0.0) or 0.0)
                 b_cons = float(row.get('BÔNUS CONSELHO', 0.0) or 0.0)
-                bonus_restante = b_sala + b_cons
+                bonus_restante = b_diario + b_cons
                 
-                v_base = float(row.get('VISTOS (AUTO)', 0.0) or 0.0)
+                v_base = float(row.get('🔵 Vistos (Base)', 0.0) or 0.0)
                 t_base = float(row.get('TESTE (LANÇAR)', 0.0) or 0.0)
                 p_base = float(row.get('PROVA (LANÇAR)', 0.0) or 0.0)
                 
@@ -4549,23 +4553,25 @@ elif menu == "📊 Painel de Notas & Vistos":
                     if c_btn_ref.button("⚡ Aplicar Bônus de Refacção", type="secondary", key=f"btn_refac_open_{v}"):
                         dialog_refaccao()
                         
-                    st.caption("💡 **Auto-Sincronização:** `⚡ Scanner` indica nota puxada da foto da prova. `📘 Trabalho` veio do Diário. As colunas verdes são o cálculo final oficial.")
+                    st.caption("💡 **Auto-Sincronização:** A coluna `⭐ Bônus Diário` reflete automaticamente todos os pontos de arguição, tabuada e atitude do Diário!")
                     
                     df_editado = st.data_editor(
                         df_input,
                         column_config={
                             "ID": None, "REC_PREF": None, "_ORIGINAL_TESTE": None, "_ORIGINAL_PROVA": None,
-                            "VISTOS (AUTO)": None, "BÔNUS (SALA)": None,
                             
                             "ESTUDANTE": st.column_config.TextColumn("Estudante", width="medium", disabled=True),
                             "ORIGEM": st.column_config.TextColumn("Origem Nota", width="small", disabled=True),
+                            
+                            "🔵 Vistos (Base)": st.column_config.NumberColumn("🔵 Vistos (Base)", format="%.1f", disabled=True, width="small"),
+                            "⭐ Bônus Diário": st.column_config.NumberColumn("⭐ Bônus Diário", format="%+.1f", disabled=True, width="small", help="Soma automática de bônus/punições acumuladas no Diário de Bordo"),
                             
                             "BÔNUS CONSELHO": st.column_config.NumberColumn("🟡 Bônus Extra", min_value=0.0, max_value=10.0, format="%.1f", width="small"),
                             "TESTE (LANÇAR)": st.column_config.NumberColumn("🟡 Teste (C2)", min_value=0.0, max_value=p_teste, format="%.1f", width="small"),
                             "PROVA (LANÇAR)": st.column_config.NumberColumn("🟡 Prova (C3)", min_value=0.0, max_value=p_prova, format="%.1f", width="small"),
                             "REC. PARALELA": st.column_config.NumberColumn("🟡 Rec. Paralela", min_value=0.0, max_value=10.0, format="%.1f", width="small"),
                             
-                            "V_PREF": st.column_config.NumberColumn("🟢 C1 (Vistos)", format="%.1f", disabled=True),
+                            "V_PREF": st.column_config.NumberColumn("🟢 C1 (Vistos Total)", format="%.1f", disabled=True, help="Nota Vistos C1 com bônus aplicado até o limite do peso"),
                             "T_PREF": st.column_config.NumberColumn("🟢 C2 (Teste)", format="%.1f", disabled=True),
                             "P_PREF": st.column_config.NumberColumn("🟢 C3 (Prova)", format="%.1f", disabled=True),
                             
@@ -4681,7 +4687,7 @@ elif menu == "📊 Painel de Notas & Vistos":
                                 elif r['MEDIA_FINAL'] >= 5.5: status_txt = "⚠️ REFAZER QUESTÕES ERRADAS"
                                 else: status_txt = "🔴 RECUPERAÇÃO PARALELA"
                                 
-                                b_sala = float(r.get('BÔNUS (SALA)', 0.0) or 0.0)
+                                b_sala = float(r.get('⭐ Bônus Diário', 0.0) or 0.0)
                                 b_cons = float(r.get('BÔNUS CONSELHO', 0.0) or 0.0)
                                 bonus_total_etiq = b_sala + b_cons
                                 
@@ -4690,7 +4696,7 @@ elif menu == "📊 Painel de Notas & Vistos":
                                     "vistos": f"{float(r.get('V_PREF', 0.0) or 0.0):.1f}",
                                     "teste": f"{float(r.get('T_PREF', 0.0) or 0.0):.1f}",
                                     "prova": f"{float(r.get('P_PREF', 0.0) or 0.0):.1f}",
-                                    "bonus": f"{bonus_total_etiq:.1f}",
+                                    "bonus": f"{bonus_total_etiq:+.1f}",
                                     "media": f"{float(r.get('MEDIA_FINAL', 0.0) or 0.0):.1f}",
                                     "status": status_txt
                                 })
