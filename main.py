@@ -2435,44 +2435,38 @@ elif menu == "📝 Central de Avaliações":
         elif f['fase'] == 2:
             @st.fragment
             def renderizar_mesa_revisao_itens_av():
-                st.markdown("### Forja de Questões (Padrão ENEM / SAEB)")
+                st.markdown("### 🔬 Mesa de Forja & Revisão de Itens (Padrão ENEM / SAEB)")
+                st.caption("ℹ️ **Diretriz de Elite:** Mapeamento de descritores, distratores científicos, notícias reais e ilustrações técnicas em preto e branco.")
                 
                 total_q = len(f['mapa'])
                 facil_c = sum(1 for item in f['mapa'] if item['dificuldade'] == "Fácil")
                 media_c = sum(1 for item in f['mapa'] if item['dificuldade'] == "Média")
                 dificil_c = sum(1 for item in f['mapa'] if item['dificuldade'] == "Difícil")
                 
-                st.markdown(f"""
-                <div style='display: flex; gap: 10px; margin-bottom: 25px;'>
-                    <div style='flex: 1; background: {cor_card}; border: 1px solid {cor_borda}; padding: 12px; border-radius: 12px; text-align: center;'>
-                        <span style='font-size: 10px; color: gray; font-weight: bold;'>MATRIZ DE TRI</span><br>
-                        <span style='font-size: 14px; color: #2ECC71; font-weight: bold;'>ENEM/SAEB V2026</span>
-                    </div>
-                    <div style='flex: 1; background: {cor_card}; border: 1px solid {cor_borda}; padding: 12px; border-radius: 12px; text-align: center;'>
-                        <span style='font-size: 10px; color: gray; font-weight: bold;'>ITENS FÁCEIS</span><br>
-                        <span style='font-size: 14px; color: #2962FF; font-weight: bold;'>{facil_c}</span>
-                    </div>
-                    <div style='flex: 1; background: {cor_card}; border: 1px solid {cor_borda}; padding: 12px; border-radius: 12px; text-align: center;'>
-                        <span style='font-size: 10px; color: gray; font-weight: bold;'>ITENS MÉDIOS</span><br>
-                        <span style='font-size: 14px; color: #F1C40F; font-weight: bold;'>{media_c}</span>
-                    </div>
-                    <div style='flex: 1; background: {cor_card}; border: 1px solid {cor_borda}; padding: 12px; border-radius: 12px; text-align: center;'>
-                        <span style='font-size: 10px; color: gray; font-weight: bold;'>ITENS DIFÍCEIS</span><br>
-                        <span style='font-size: 14px; color: #E74C3C; font-weight: bold;'>{dificil_c}</span>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
+                # 🚨 RÉGUA PSICOMÉTRICA TRI NO TOPO
+                perc_facil = (facil_c / total_q) * 100 if total_q > 0 else 0
+                perc_media = (media_c / total_q) * 100 if total_q > 0 else 0
+                perc_dificil = (dificil_c / total_q) * 100 if total_q > 0 else 0
 
-                modo_leitura_forja = st.toggle("Visualização Real (Renderizar Matemática)", value=True, key=f"tog_read_forja_{v}")
+                with st.container(border=True):
+                    st.markdown("##### 📊 Régua de Equilíbrio Psicométrico (TRI)")
+                    col_tri1, col_tri2, col_tri3, col_tri4 = st.columns(4)
+                    col_tri1.metric("Total de Itens", total_q)
+                    col_tri2.metric("🔵 Fáceis (30%)", f"{facil_c} ({perc_facil:.0f}%)")
+                    col_tri3.metric("🟡 Médias (50%)", f"{media_c} ({perc_media:.0f}%)")
+                    col_tri4.metric("🔴 Difíceis (20%)", f"{dificil_c} ({perc_dificil:.0f}%)")
+
+                st.markdown("<br>", unsafe_allow_html=True)
+                modo_leitura_forja = st.toggle("👁️ Visualização Real (Renderizar Matemática e Imagens)", value=True, key=f"tog_read_forja_{v}")
 
                 pendentes = [item for item in f['mapa'] if item['status'] == 'pendente']
                 if pendentes:
-                    if st.button("🚀 Gerar Todas as Questões em Lote ENEM/SAEB", type="primary", use_container_width=True, key=f"btn_lote_av_{v}"):
-                        with st.spinner(f"Processando {len(pendentes)} itens no padrão ENEM/SAEB com Distratores Mapeados..."):
+                    if st.button(f"🚀 Gerar Todos os {len(pendentes)} Itens Pendentes em Lote (ENEM/SAEB)", type="primary", use_container_width=True, key=f"btn_lote_av_{v}"):
+                        with st.spinner(f"Forjando {len(pendentes)} itens no padrão ENEM/SAEB com contexto real e distratores TRI..."):
                             prompt_lote = f"SÉRIE: {f['info']['ano']}\nRIGOR: {f['info'].get('rigor', 'Padrão ENEM')}\n\n"
                             for item in pendentes:
                                 prompt_lote += f"QUESTÃO {item['q']}:\n- TEMA: {item['tema']}\n- COMPLEXIDADE: {item['dificuldade']}\n- GABARITO EXIGIDO: Letra {item['gabarito']}\n\n"
-                            prompt_lote += f"CONTEXTO DAS AULAS E LIVRO:\n{f.get('contexto_base', '')}\n"
+                            prompt_lote += f"CONTEXTO DAS AULAS, LIVRO DIDÁTICO E NOTÍCIAS:\n{f.get('contexto_base', '')}\n"
                             
                             res_json = ai.gerar_ia_json("FORJA_LOTE_JSON", prompt_lote)
                             if "erro" in res_json: st.error(res_json["erro"])
@@ -2494,18 +2488,20 @@ elif menu == "📝 Central de Avaliações":
                 st.markdown("---")
                 todas_aprovadas = True
                 
+                # 🚨 RENDERIZAÇÃO DE QUESTÕES ESTILO BENTO CARD ENEM/SAEB
                 for i, item in enumerate(f['mapa']):
-                    cor_status_border = "#2ECC71" if item['status'] == 'aprovado' else ("#2962FF" if item['status'] == 'revisao' else "#F1C40F")
-                    label_status = "Aprovado" if item['status'] == 'aprovado' else ("Revisão" if item['status'] == 'revisao' else "Pendente")
+                    label_status = "✅ Aprovado" if item['status'] == 'aprovado' else ("🔍 Em Revisão" if item['status'] == 'revisao' else "⏳ Pendente")
                     
                     with st.container(border=True):
-                        st.markdown(f"<div style='border-left: 4px solid {cor_status_border}; padding-left: 10px; margin-bottom: 10px;'><strong>Item {item['q']:02d} | Gabarito: {item['gabarito']} ({label_status})</strong></div>", unsafe_allow_html=True)
+                        c_card_head1, c_card_head2 = st.columns([3, 1])
+                        c_card_head1.markdown(f"**📌 ITEM {item['q']:02d} | Complexidade: {item['dificuldade']}**")
+                        c_card_head2.caption(f"Status: **{label_status}** | Gabarito: **({item['gabarito']})**")
                         
                         if item['status'] == 'pendente':
                             todas_aprovadas = False
                             c_t1, c_t2 = st.columns([3, 1])
-                            tema_q = c_t1.text_input("Assunto Específico:", value=item['tema'], key=f"t_{i}_{v}")
-                            dif_q = c_t2.selectbox("Complexidade:", ["Fácil", "Média", "Difícil"], index=["Fácil", "Média", "Difícil"].index(item['dificuldade']), key=f"d_{i}_{v}")
+                            tema_q = c_t1.text_input("Assunto / Contexto:", value=item['tema'], key=f"t_{i}_{v}")
+                            dif_q = c_t2.selectbox("Complexidade TRI:", ["Fácil", "Média", "Difícil"], index=["Fácil", "Média", "Difícil"].index(item['dificuldade']), key=f"d_{i}_{v}")
                             
                             if st.button(f"Forjar Item {item['q']}", key=f"btn_gen_{i}_{v}", use_container_width=True):
                                 with st.spinner("Desenhando item no padrão ENEM..."):
@@ -2520,51 +2516,66 @@ elif menu == "📝 Central de Avaliações":
                                     }
                                     item['status'] = 'revisao'; st.rerun()
                                     
-                        elif item['status'] == 'revisao':
-                            todas_aprovadas = False
+                        elif item['status'] in ['revisao', 'aprovado']:
+                            if item['status'] == 'revisao': todas_aprovadas = False
                             d = item['dados']
                             
                             if modo_leitura_forja:
-                                st.markdown(preparar_para_leitura(d['ENUNCIADO']))
-                                st.markdown(f"**(A)** {preparar_para_leitura(d['ALT_A'])} | **(B)** {preparar_para_leitura(d['ALT_B'])} | **(C)** {preparar_para_leitura(d['ALT_C'])} | **(D)** {preparar_para_leitura(d['ALT_D'])} | **(E)** {preparar_para_leitura(d['ALT_E'])}")
-                                st.divider()
-                            
-                            d['ENUNCIADO'] = st.text_area("Enunciado:", value=d['ENUNCIADO'], height=100, key=f"ed_en_{i}_{v}")
-                            c_a1, c_a2 = st.columns(2)
-                            d['ALT_A'] = c_a1.text_input("(A)", value=d['ALT_A'], key=f"ed_a_{i}_{v}")
-                            d['ALT_B'] = c_a2.text_input("(B)", value=d['ALT_B'], key=f"ed_b_{i}_{v}")
-                            d['ALT_C'] = c_a1.text_input("(C)", value=d['ALT_C'], key=f"ed_c_{i}_{v}")
-                            d['ALT_D'] = c_a2.text_input("(D)", value=d['ALT_D'], key=f"ed_d_{i}_{v}")
-                            d['ALT_E'] = c_a1.text_input("(E)", value=d['ALT_E'], key=f"ed_e_{i}_{v}")
-                            
-                            inst_ref = st.text_input("Ajuste (IA):", key=f"inst_ref_{i}_{v}")
-                            col_b1, col_b2 = st.columns(2)
-                            
-                            if col_b1.button(f"Aprovar Item {item['q']}", type="primary", key=f"btn_apr_{i}_{v}", use_container_width=True):
-                                item['status'] = 'aprovado'; st.rerun()
-                            if col_b2.button(f"Regerar Item {item['q']}", key=f"btn_ref_{i}_{v}", use_container_width=True):
-                                with st.spinner("Reestruturando..."):
-                                    prompt = f"SÉRIE: {f['info']['ano']}\nTEMA: {item['tema']}. GABARITO: {item['gabarito']}.\nAJUSTE: {inst_ref}\nENUNCIADO ANTERIOR:\n{d['ENUNCIADO']}"
-                                    res_item = ai.gerar_ia("FORJA_ITEM_REGULAR", prompt)
-                                    ext = {tag: ai.extrair_tag(res_item, tag) for tag in ['ENUNCIADO', 'ALT_A', 'ALT_B', 'ALT_C', 'ALT_D', 'ALT_E', 'HABILIDADE', 'JUSTIFICATIVA', 'DISTRATORES']}
-                                    item['dados'] = {
-                                        'ENUNCIADO': ext['ENUNCIADO'], 'ALT_A': ext['ALT_A'], 'ALT_B': ext['ALT_B'], 'ALT_C': ext['ALT_C'],
-                                        'ALT_D': ext['ALT_D'], 'ALT_E': ext['ALT_E'], 'HABILIDADE': ext['HABILIDADE'], 'JUSTIFICATIVA': ext['JUSTIFICATIVA'],
-                                        'DISTRATORES': ext['DISTRATORES'], 'GABARITO': item['gabarito']
-                                    }
-                                    st.rerun()
+                                with st.container(border=True):
+                                    st.markdown(preparar_para_leitura(d['ENUNCIADO']))
+                                    
+                                    col_alt_a, col_alt_b = st.columns(2)
+                                    mark_a = "✅ " if d['GABARITO'] == 'A' else ""
+                                    mark_b = "✅ " if d['GABARITO'] == 'B' else ""
+                                    mark_c = "✅ " if d['GABARITO'] == 'C' else ""
+                                    mark_d = "✅ " if d['GABARITO'] == 'D' else ""
+                                    mark_e = "✅ " if d['GABARITO'] == 'E' else ""
+
+                                    col_alt_a.markdown(f"**(A)** {mark_a}{preparar_para_leitura(d['ALT_A'])}")
+                                    col_alt_b.markdown(f"**(B)** {mark_b}{preparar_para_leitura(d['ALT_B'])}")
+                                    col_alt_a.markdown(f"**(C)** {mark_c}{preparar_para_leitura(d['ALT_C'])}")
+                                    col_alt_b.markdown(f"**(D)** {mark_d}{preparar_para_leitura(d['ALT_D'])}")
+                                    if d.get('ALT_E'): st.markdown(f"**(E)** {mark_e}{preparar_para_leitura(d['ALT_E'])}")
+
+                                if d.get('HABILIDADE') or d.get('JUSTIFICATIVA'):
+                                    with st.expander("🔬 Ver Perícia TRI e Análise de Distratores"):
+                                        if d.get('HABILIDADE'): st.caption(f"🆔 **Descritor SAEB:** {d['HABILIDADE']}")
+                                        if d.get('JUSTIFICATIVA'): st.write(f"🎯 **Gabarito Justificado:** {d['JUSTIFICATIVA']}")
+                                        if d.get('DISTRATORES'): st.warning(f"🧠 **Distratores Científicos:** {d['DISTRATORES']}")
+
+                            if item['status'] == 'revisao':
+                                with st.expander("✏️ Editar Enunciado e Alternativas Manuais", expanded=False):
+                                    d['ENUNCIADO'] = st.text_area("Enunciado:", value=d['ENUNCIADO'], height=100, key=f"ed_en_{i}_{v}")
+                                    c_a1, c_a2 = st.columns(2)
+                                    d['ALT_A'] = c_a1.text_input("(A)", value=d['ALT_A'], key=f"ed_a_{i}_{v}")
+                                    d['ALT_B'] = c_a2.text_input("(B)", value=d['ALT_B'], key=f"ed_b_{i}_{v}")
+                                    d['ALT_C'] = c_a1.text_input("(C)", value=d['ALT_C'], key=f"ed_c_{i}_{v}")
+                                    d['ALT_D'] = c_a2.text_input("(D)", value=d['ALT_D'], key=f"ed_d_{i}_{v}")
+                                    d['ALT_E'] = c_a1.text_input("(E)", value=d['ALT_E'], key=f"ed_e_{i}_{v}")
                                 
-                        elif item['status'] == 'aprovado':
-                            d = item['dados']
-                            if modo_leitura_forja:
-                                st.markdown(preparar_para_leitura(d['ENUNCIADO']))
-                                st.markdown(f"**(A)** {preparar_para_leitura(d['ALT_A'])} | **(B)** {preparar_para_leitura(d['ALT_B'])} | **(C)** {preparar_para_leitura(d['ALT_C'])} | **(D)** {preparar_para_leitura(d['ALT_D'])} | **(E)** {preparar_para_leitura(d['ALT_E'])}")
-                            else: st.text(d['ENUNCIADO'])
-                            if st.button("Revisar Item", key=f"btn_edit_{i}_{v}", use_container_width=True):
-                                item['status'] = 'revisao'; st.rerun()
+                                inst_ref = st.text_input("Refinar com IA (Ex: 'Incorpore uma notícia sobre cacau em Itabuna'):", key=f"inst_ref_{i}_{v}")
+                                col_b1, col_b2 = st.columns(2)
+                                
+                                if col_b1.button(f"✅ Aprovar Item {item['q']}", type="primary", key=f"btn_apr_{i}_{v}", use_container_width=True):
+                                    item['status'] = 'aprovado'; st.rerun()
+                                if col_b2.button(f"🔄 Regerar Item {item['q']}", key=f"btn_ref_{i}_{v}", use_container_width=True):
+                                    with st.spinner("Reestruturando item com novos dados..."):
+                                        prompt = f"SÉRIE: {f['info']['ano']}\nTEMA: {item['tema']}. GABARITO: {item['gabarito']}.\nAJUSTE: {inst_ref}\nENUNCIADO ANTERIOR:\n{d['ENUNCIADO']}"
+                                        res_item = ai.gerar_ia("FORJA_ITEM_REGULAR", prompt)
+                                        ext = {tag: ai.extrair_tag(res_item, tag) for tag in ['ENUNCIADO', 'ALT_A', 'ALT_B', 'ALT_C', 'ALT_D', 'ALT_E', 'HABILIDADE', 'JUSTIFICATIVA', 'DISTRATORES']}
+                                        item['dados'] = {
+                                            'ENUNCIADO': ext['ENUNCIADO'], 'ALT_A': ext['ALT_A'], 'ALT_B': ext['ALT_B'], 'ALT_C': ext['ALT_C'],
+                                            'ALT_D': ext['ALT_D'], 'ALT_E': ext['ALT_E'], 'HABILIDADE': ext['HABILIDADE'], 'JUSTIFICATIVA': ext['JUSTIFICATIVA'],
+                                            'DISTRATORES': ext['DISTRATORES'], 'GABARITO': item['gabarito']
+                                        }
+                                        st.rerun()
+
+                            elif item['status'] == 'aprovado':
+                                if st.button("✏️ Reabrir para Revisão", key=f"btn_edit_{i}_{v}", use_container_width=True):
+                                    item['status'] = 'revisao'; st.rerun()
 
                 if todas_aprovadas:
-                    st.success("Todos os itens foram homologados!")
+                    st.success("🎉 Todos os itens do caderno foram homologados no padrão ENEM/SAEB!")
                     if st.button("Avançar para Adaptações PEI", type="primary", use_container_width=True, key=f"btn_adv_pei_f2_{v}"):
                         f['fase'] = 3; st.rerun()
 
