@@ -371,6 +371,21 @@ def gerar_ia_json(persona_key, comando, usar_busca=False):
         texto_limpo = res.text.strip()
         texto_limpo = re.sub(r'^```[a-zA-Z]*\n', '', texto_limpo, flags=re.IGNORECASE)
         texto_limpo = re.sub(r'\n```$', '', texto_limpo)
+        
+        # 🚨 VACINA ANTI-EXTRA DATA (JSON RAW DECODE)
+        match = re.search(r'\{.*\}', texto_limpo, re.DOTALL)
+        if match:
+            json_str = match.group(0)
+            try:
+                return json.loads(json_str)
+            except json.JSONDecodeError:
+                try:
+                    decoder = json.JSONDecoder()
+                    obj, _ = decoder.raw_decode(json_str)
+                    return obj
+                except:
+                    pass
+        
         return json.loads(texto_limpo)
     except Exception as e:
         return {"erro": str(e)}
