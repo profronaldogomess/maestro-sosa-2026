@@ -4727,11 +4727,11 @@ elif menu == "📊 Painel de Notas & Vistos":
 
 
 # ==============================================================================
-# MÓDULO: BIOGRAFIA DO ESTUDANTE - V2026.ULTIMATE (AUTO-TRIMESTRE & DECIMAIS)
+# MÓDULO: BIOGRAFIA DO ESTUDANTE - V2026.ULTIMATE (UNIFICADO & LIVE SYNC)
 # ==============================================================================
 elif menu == "👤 Biografia do Estudante":
     st.title("👤 Biografia do Estudante: Dossiê 360°")
-    st.caption("Dashboard executivo para reuniões de pais com inteligência temporal, linha do tempo e geração de ficha oficial.")
+    st.caption("Dashboard executivo para reuniões de pais com inteligência temporal, linha do tempo e sincronia ao vivo.")
     st.markdown("---")
 
     if "v_bio" not in st.session_state: 
@@ -4741,14 +4741,10 @@ elif menu == "👤 Biografia do Estudante":
     if df_alunos.empty:
         st.warning("⚠️ Base de alunos vazia. Cadastre as turmas na Gestão da Turma.")
     else:
-        # 🚨 1. INTELIGÊNCIA TEMPORAL AUTOMÁTICA (AUTO-DETECÇÃO DE TRIMESTRE)
         hoje_dt = date.today()
-        if hoje_dt <= date(2026, 5, 22):
-            idx_trim_bio_default = 1 # I Trimestre
-        elif hoje_dt <= date(2026, 9, 4):
-            idx_trim_bio_default = 2 # II Trimestre (Detectado para Agosto!)
-        else:
-            idx_trim_bio_default = 3 # III Trimestre
+        if hoje_dt <= date(2026, 5, 22): idx_trim_bio_default = 1
+        elif hoje_dt <= date(2026, 9, 4): idx_trim_bio_default = 2
+        else: idx_trim_bio_default = 3
 
         opcoes_periodo_bio = ["Todos", "I Trimestre", "II Trimestre", "III Trimestre"]
 
@@ -4782,15 +4778,7 @@ elif menu == "👤 Biografia do Estudante":
             lista_alunos['LABEL'] = lista_alunos.apply(lambda x: f"{x['STATUS_ICON']} {x['NOME_ALUNO']}", axis=1)
                 
             aluno_b_label = c2.selectbox("🎓 Estudante:", lista_alunos['LABEL'].tolist(), key=f"bio_a_{v}")
-            
-            # 🚨 AUTO-SELECT DO TRIMESTRE ATIVO
-            trim_b = c3.selectbox(
-                "📅 Período de Análise (Auto):", 
-                opcoes_periodo_bio, 
-                index=idx_trim_bio_default, 
-                key=f"bio_trim_{v}",
-                help="O trimestre ativo foi selecionado automaticamente com base na data de hoje!"
-            )
+            trim_b = c3.selectbox("📅 Período de Análise (Auto):", opcoes_periodo_bio, index=idx_trim_bio_default, key=f"bio_trim_{v}")
 
         if trim_b == "I Trimestre": dt_ini, dt_fim = date(2026, 2, 9), date(2026, 5, 22)
         elif trim_b == "II Trimestre": dt_ini, dt_fim = date(2026, 5, 25), date(2026, 9, 4)
@@ -4804,7 +4792,6 @@ elif menu == "👤 Biografia do Estudante":
         is_pei_or_gap = perfil_atual not in ["NENHUMA", "", "NAN", "TÍPICO", "TIPICO"]
         
         n_alu = df_notas[df_notas['ID_ALUNO'].apply(db.limpar_id) == id_alu] if not df_notas.empty else pd.DataFrame()
-        n_alu_f = n_alu[n_alu['TRIMESTRE'] == trim_b] if (trim_b != "Todos" and not n_alu.empty) else n_alu.copy()
 
         d_alu_f = pd.DataFrame()
         if not df_diario.empty:
@@ -4813,36 +4800,93 @@ elif menu == "👤 Biografia do Estudante":
                 d_alu['DATA_DT'] = pd.to_datetime(d_alu['DATA'], format="%d/%m/%Y", errors='coerce').dt.date
                 d_alu_f = d_alu[(d_alu['DATA_DT'] >= dt_ini) & (d_alu['DATA_DT'] <= dt_fim)]
 
+        # 🚨 BUSCA DE AVALIAÇÕES ESCANEADAS COM REGEX FLEXÍVEL
         diag_alu_f = pd.DataFrame()
         if not df_diagnosticos.empty:
-            diag_alu = df_diagnosticos[df_diagnosticos['ID_ALUNO'].apply(db.limpar_id) == id_alu]
-            if trim_b != "Todos":
-                diag_alu_f = diag_alu[diag_alu['ID_AVALIACAO'].str.replace(" ","").str.upper().str.contains(trim_b.replace(" ","").upper(), na=False)]
+            diag_alu = df_diagnosticos[df_diagnosticos['ID_ALUNO'].apply(db.limpar_id) == id_alu].copy()
+            if trim_b != "Todos" and not diag_alu.empty:
+                padrao_trim_regex = util.obter_regex_trimestre(trim_b)
+                diag_alu_f = diag_alu[diag_alu['ID_AVALIACAO'].str.contains(padrao_trim_regex, regex=True, case=False, na=False)]
             else:
                 diag_alu_f = diag_alu.copy()
 
-        # INTELIGÊNCIA TEMPORAL PONDERADA DO TOPO
-        has_t1 = not n_alu[n_alu['TRIMESTRE'] == 'I Trimestre'].empty if not n_alu.empty else False
-        has_t2 = not n_alu[n_alu['TRIMESTRE'] == 'II Trimestre'].empty if not n_alu.empty else False
-        has_t3 = not n_alu[n_alu['TRIMESTRE'] == 'III Trimestre'].empty if not n_alu.empty else False
+        # CÁLCULO AO VIVO DE VISTOS E BÔNUS (IGUAL À TORRE DE NOTAS)
+        aulas_com_visto_hero, perc_visto_hero, bonus_total_hero = 0, 0, 0.0
+        faltas_hero, perc_presenca_hero = 0, 100
         
-        trims_ativos_alu = sum([has_t1, has_t2, has_t3]) or 1
-        meta_parcial_top = trims_ativos_alu * 6.0
+        vistos_live_by_trim = {}
+        bonus_live_by_trim = {}
+        
+        calendario_trims = {
+            "I Trimestre": (date(2026, 2, 9), date(2026, 5, 22)),
+            "II Trimestre": (date(2026, 5, 25), date(2026, 9, 4)),
+            "III Trimestre": (date(2026, 9, 8), date(2026, 12, 17))
+        }
 
-        soma_anual = n_alu[n_alu['TRIMESTRE'].isin(["I Trimestre", "II Trimestre", "III Trimestre"])]['MEDIA_FINAL'].apply(util.sosa_to_float).sum() if not n_alu.empty else 0.0
+        if not df_diario.empty:
+            df_d_aluno_all = df_diario[(df_diario['ID_ALUNO'].apply(db.limpar_id) == id_alu) & (df_diario['TURMA'] == turma_b)].copy()
+            if not df_d_aluno_all.empty:
+                df_d_aluno_all['DATA_DT'] = pd.to_datetime(df_d_aluno_all['DATA'], format="%d/%m/%Y", errors='coerce').dt.date
+                
+                for t_nome, (t_i, t_f) in calendario_trims.items():
+                    df_d_t_sub = df_d_aluno_all[(df_d_aluno_all['DATA_DT'] >= t_i) & (df_d_aluno_all['DATA_DT'] <= t_f)]
+                    if not df_d_t_sub.empty:
+                        d_validas = df_d_t_sub[df_d_t_sub['VISTO_ATIVIDADE'].astype(str).str.upper() != "ISENTO"]
+                        v_ok = len(d_validas[d_validas['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"])
+                        tot_v = len(d_validas)
+                        vistos_live_by_trim[t_nome] = round((v_ok / tot_v * 3.0), 2) if tot_v > 0 else 0.0
+                        bonus_live_by_trim[t_nome] = df_d_t_sub['BONUS'].apply(util.sosa_to_float).sum()
 
-        faltas_hero, perc_presenca_hero, perc_visto_hero, bonus_total_hero = 0, 100, 0, 0.0
-        if not d_alu_f.empty:
-            d_alu_validas_hero = d_alu_f[~d_alu_f['TAGS'].isin(["DIA NÃO LETIVO", "BONUS_CONSELHO", "SISTEMA_NOTA"])]
-            total_aulas_hero = len(d_alu_validas_hero)
-            faltas_hero = len(d_alu_validas_hero[d_alu_validas_hero['TAGS'] == "AUSÊNCIA"])
-            perc_presenca_hero = ((total_aulas_hero - faltas_hero) / total_aulas_hero) * 100 if total_aulas_hero > 0 else 100
+            if not d_alu_f.empty:
+                d_alu_validas_hero = d_alu_f[~d_alu_f['TAGS'].isin(["DIA NÃO LETIVO", "BONUS_CONSELHO", "SISTEMA_NOTA"])]
+                total_aulas_hero = len(d_alu_validas_hero)
+                faltas_hero = len(d_alu_validas_hero[d_alu_validas_hero['TAGS'] == "AUSÊNCIA"])
+                perc_presenca_hero = ((total_aulas_hero - faltas_hero) / total_aulas_hero) * 100 if total_aulas_hero > 0 else 100
+                
+                d_vistos_hero = d_alu_validas_hero[d_alu_validas_hero['VISTO_ATIVIDADE'].astype(str).str.upper() != "ISENTO"]
+                tot_vistos_hero = len(d_vistos_hero)
+                vistos_ok_hero = len(d_vistos_hero[d_vistos_hero['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"])
+                perc_visto_hero = (vistos_ok_hero / tot_vistos_hero) * 100 if tot_vistos_hero > 0 else 0
+                bonus_total_hero = d_alu_f['BONUS'].apply(util.sosa_to_float).sum()
+
+        # CÁLCULO DE MÉDIA PARCIAL RECALCULADA AO VIVO
+        trims_analisados = ["I Trimestre", "II Trimestre", "III Trimestre"] if trim_b == "Todos" else [trim_b]
+        soma_anual_live = 0.0
+        trims_ativos_cnt = 0
+
+        for t_k in ["I Trimestre", "II Trimestre", "III Trimestre"]:
+            reg_t = n_alu[n_alu['TRIMESTRE'] == t_k] if not n_alu.empty else pd.DataFrame()
+            v_c1 = vistos_live_by_trim.get(t_k, 0.0)
+            if not reg_t.empty and v_c1 == 0: v_c1 = util.sosa_to_float(reg_t.iloc[0]['NOTA_VISTOS'])
             
-            d_vistos_hero = d_alu_validas_hero[d_alu_validas_hero['VISTO_ATIVIDADE'].astype(str).str.upper() != "ISENTO"]
-            tot_vistos_hero = len(d_vistos_hero)
-            vistos_ok_hero = len(d_vistos_hero[d_vistos_hero['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"])
-            perc_visto_hero = (vistos_ok_hero / tot_vistos_hero) * 100 if tot_vistos_hero > 0 else 0
-            bonus_total_hero = d_alu_f['BONUS'].apply(util.sosa_to_float).sum()
+            v_c2 = util.sosa_to_float(reg_t.iloc[0]['NOTA_TESTE']) if not reg_t.empty else 0.0
+            v_c3 = util.sosa_to_float(reg_t.iloc[0]['NOTA_PROVA']) if not reg_t.empty else 0.0
+            
+            # Puxa notas do Scanner ao vivo se não estiverem salvas em df_notas
+            if not df_diagnosticos.empty:
+                padrao_t_reg = util.obter_regex_trimestre(t_k)
+                scanned_t = df_diagnosticos[(df_diagnosticos['ID_ALUNO'].apply(db.limpar_id) == id_alu) & (df_diagnosticos['TURMA'] == turma_b) & (df_diagnosticos['ID_AVALIACAO'].str.contains(padrao_t_reg, regex=True, case=False, na=False))]
+                if not scanned_t.empty:
+                    st_teste = scanned_t[scanned_t['ID_AVALIACAO'].str.upper().str.contains("TESTE")]
+                    if not st_teste.empty and v_c2 == 0: v_c2 = util.sosa_to_float(st_teste.iloc[-1]['NOTA_CALCULADA'])
+                    st_prova = scanned_t[scanned_t['ID_AVALIACAO'].str.upper().str.contains("PROVA")]
+                    if not st_prova.empty and v_c3 == 0: v_c3 = util.sosa_to_float(st_prova.iloc[-1]['NOTA_CALCULADA'])
+
+            b_diario_t = bonus_live_by_trim.get(t_k, 0.0)
+            
+            # Aplica transbordamento
+            c1_fin = min(3.0, v_c1 + b_diario_t)
+            rem_b = b_diario_t - (c1_fin - v_c1)
+            c2_fin = min(3.0, v_c2 + max(0.0, rem_b))
+            rem_b -= (c2_fin - v_c2)
+            c3_fin = min(4.0, v_c3 + max(0.0, rem_b))
+
+            m_live_t = min(10.0, round((c1_fin + c2_fin + c3_fin) * 2) / 2)
+            if m_live_t > 0 or not reg_t.empty:
+                trims_ativos_cnt += 1
+                soma_anual_live += m_live_t
+
+        meta_parcial_top = (trims_ativos_cnt or 1) * 6.0
 
         # CARTÃO BENTO DE TOPO
         with st.container(border=True):
@@ -4858,7 +4902,7 @@ elif menu == "👤 Biografia do Estudante":
                 elif is_pei_or_gap: st.caption(f"Status: ♿ CONDIÇÃO CLÍNICA PEI ({perfil_atual})")
                 else: st.caption("Status: 👤 PERFIL TÍPICO / PADRÃO")
                 
-            c_h2.metric("Soma Parcial", f"{soma_anual:.1f}", f"Meta Parcial: {meta_parcial_top:.1f} pts")
+            c_h2.metric("Soma Parcial", f"{soma_anual_live:.1f}", f"Meta Parcial: {meta_parcial_top:.1f} pts")
             c_h3.metric("Assiduidade", f"{perc_presenca_hero:.0f}%", f"{faltas_hero} falta(s)", delta_color="inverse" if faltas_hero > 0 else "normal")
             c_h4.metric("Engajamento Caderno", f"{perc_visto_hero:.0f}%", f"{bonus_total_hero:+.1f} pts bônus")
 
@@ -4873,61 +4917,17 @@ elif menu == "👤 Biografia do Estudante":
                 for _, r_at in hist_atestados.iterrows():
                     atestados_info += f"• {r_at['DATA']}: {r_at['CONTEUDO']}\n"
 
-            if trim_b == "Todos":
-                notas_trimestres_str = ""
-                for t in ["I Trimestre", "II Trimestre", "III Trimestre"]:
-                    reg_t = n_alu[n_alu['TRIMESTRE'] == t] if not n_alu.empty else pd.DataFrame()
-                    if not reg_t.empty:
-                        nota_t = util.sosa_to_float(reg_t.iloc[0]['MEDIA_FINAL'])
-                        notas_trimestres_str += f"• {t}: {nota_t:.1f}\n"
-                    else:
-                        notas_trimestres_str += f"• {t}: (Em andamento)\n"
-                
-                msg_zap = f"""Olá! Tudo bem? Aqui é o professor Ronaldo Gomes. 🏫
-Estou passando para compartilhar um resumo de como o(a) {nome_limpo} está se saindo nas aulas de Matemática neste ano.
+            msg_zap = f"""Olá! Tudo bem? Aqui é o professor Ronaldo Gomes. 🏫
+Estou passando para compartilhar o extrato do(a) {nome_limpo} em Matemática ({trim_b}).
 
-📊 NOTAS POR TRIMESTRE:
-{notas_trimestres_str.strip()}
-(Soma parcial atual: {soma_anual:.1f} pts).
+📊 SOMA PARCIAL ACUMULADA: {soma_anual_live:.1f} pts (Meta parcial do período: {meta_parcial_top:.1f} pts)
 {atestados_info}
 🎯 COMPORTAMENTO E PARTICIPAÇÃO:
 • Presença: {perc_presenca_hero:.0f}% ({faltas_hero} falta(s) registradas).
 • Caderno e Atividades: Entregou {perc_visto_hero:.0f}% das tarefas cobradas em sala.
-• Pontos Extras/Bônus: {bonus_total_hero:+.1f} pts conquistados pelo esforço!
+• Bônus Conquistados em Sala: {bonus_total_hero:+.1f} pts!
 
 Qualquer dúvida, estou à disposição! Um abraço! 🚀"""
-            else:
-                if not n_alu_f.empty:
-                    reg_nota = n_alu_f.iloc[0]
-                    v_nota = util.sosa_to_float(reg_nota['NOTA_VISTOS'])
-                    t_nota = util.sosa_to_float(reg_nota['NOTA_TESTE'])
-                    p_nota = util.sosa_to_float(reg_nota['NOTA_PROVA'])
-                    r_nota = util.sosa_to_float(reg_nota['NOTA_REC'])
-                    m_final = util.sosa_to_float(reg_nota['MEDIA_FINAL'])
-                    status_nota = "Aprovado(a) ✅" if m_final >= 6.0 else "Abaixo da média ⚠️"
-                else:
-                    v_nota = t_nota = p_nota = r_nota = m_final = 0.0
-                    status_nota = "Sem notas lançadas ⏳"
-
-                linha_rec = f"• 🔄 Rec. Paralela: {r_nota:.1f}\n" if r_nota > 0 else ""
-
-                msg_zap = f"""Olá! Tudo bem? Aqui é o professor Ronaldo Gomes. 🏫
-Estou enviando o boletim detalhado do(a) {nome_limpo} referente ao {trim_b} em Matemática.
-
-📊 MÉDIA DO TRIMESTRE: {m_final:.1f} ({status_nota})
-
-📝 DE ONDE SAIU ESSA NOTA?
-• C1 (Vistos e Participação): {v_nota:.1f}
-• C2 (Testes e Trabalhos): {t_nota:.1f}
-• C3 (Prova Oficial): {p_nota:.1f}
-{linha_rec}{atestados_info}
-🎯 COMPORTAMENTO NA SALA:
-• Presença: {perc_presenca_hero:.0f}% ({faltas_hero} falta(s)).
-• Caderno: Entregou {perc_visto_hero:.0f}% das atividades.
-• Bônus/Punição: {bonus_total_hero:+.1f} pts.
-
-Qualquer dúvida, estou à disposição! Um abraço! 🚀"""
-            
             st.code(msg_zap, language=None)
 
         c_act_b1, c_act_b2 = st.columns(2)
@@ -4942,7 +4942,7 @@ Qualquer dúvida, estou à disposição! Um abraço! 🚀"""
                     "teste": "Sincronizado",
                     "prova": "Sincronizado",
                     "bonus": f"{bonus_total_hero:+.1f}",
-                    "media": f"{soma_anual:.1f}",
+                    "media": f"{soma_anual_live:.1f}",
                     "status": f"Assiduidade: {perc_presenca_hero:.0f}% ({faltas_hero} faltas)"
                 }]
                 info_ficha = {"turma": turma_b, "trimestre": trim_b}
@@ -4959,7 +4959,7 @@ Qualquer dúvida, estou à disposição! Um abraço! 🚀"""
 
         st.markdown("---")
 
-        # 🚨 DOSSIÊ 360° EM FRAGMENTO
+        # 🚨 DOSSIÊ 360° EM FRAGMENTO COM CÁLCULO AO VIVO UNIFICADO
         @st.fragment
         def renderizar_dossie_bio_fragmento():
             abas_bio = ["📊 Visão Geral & Boletim", "🕰️ Linha do Tempo (Atitude)", "📈 Evolução & Lacunas", "⚖️ Auditoria & Tribunal"]
@@ -4968,50 +4968,71 @@ Qualquer dúvida, estou à disposição! Um abraço! 🚀"""
             tabs = st.tabs(abas_bio)
 
             with tabs[0]:
-                st.markdown(f"#### 🧾 Extrato Analítico de Notas")
+                st.markdown(f"#### 🧾 Extrato Analítico de Notas (Ao Vivo)")
                 with st.container(border=True):
-                    if not n_alu.empty:
-                        dados_notas = []
-                        trims_para_exibir = ["I Trimestre", "II Trimestre", "III Trimestre"] if trim_b == "Todos" else [trim_b]
-                        for t in trims_para_exibir:
-                            reg = n_alu[n_alu['TRIMESTRE'] == t]
-                            if not reg.empty:
-                                media_f = util.sosa_to_float(reg.iloc[0]['MEDIA_FINAL'])
-                                v_c1 = util.sosa_to_float(reg.iloc[0]['NOTA_VISTOS'])
-                                v_c2 = util.sosa_to_float(reg.iloc[0]['NOTA_TESTE'])
-                                v_c3 = util.sosa_to_float(reg.iloc[0]['NOTA_PROVA'])
-                                v_rec = util.sosa_to_float(reg.iloc[0]['NOTA_REC'])
-                                
-                                dados_notas.append({
-                                    "Trimestre": t,
-                                    "C1 (Vistos)": v_c1,
-                                    "C2 (Teste)": v_c2,
-                                    "C3 (Prova)": v_c3,
-                                    "Rec.": v_rec if v_rec > 0 else "-",
-                                    "Média Final": media_f,
-                                    "Status": "✅ DENTRO DA META" if media_f >= 6.0 else "⚠️ RECOMPOSIÇÃO"
-                                })
-                        if dados_notas:
-                            def style_status_bio(v):
-                                if "DENTRO" in str(v): return 'color: #2ECC71; font-weight: bold;'
-                                return 'color: #E74C3C; font-weight: bold;'
-                            
-                            # 🚨 FORMATAÇÃO RÍGIDA DE 1 CASA DECIMAL (EX: 3.0 em vez de 3.000000)
-                            st.dataframe(
-                                pd.DataFrame(dados_notas).style.map(style_status_bio, subset=['Status']), 
-                                use_container_width=True, hide_index=True,
-                                column_config={
-                                    "Trimestre": st.column_config.TextColumn("Trimestre", width="medium"),
-                                    "C1 (Vistos)": st.column_config.NumberColumn("C1 (Vistos)", format="%.1f", width="small"),
-                                    "C2 (Teste)": st.column_config.NumberColumn("C2 (Teste)", format="%.1f", width="small"),
-                                    "C3 (Prova)": st.column_config.NumberColumn("C3 (Prova)", format="%.1f", width="small"),
-                                    "Rec.": st.column_config.TextColumn("Rec.", width="small"),
-                                    "Média Final": st.column_config.NumberColumn("Média Final", format="%.1f", width="small"),
-                                    "Status": st.column_config.TextColumn("Status", width="medium")
-                                }
-                            )
-                        else: st.info(f"📭 Sem notas lançadas para o {trim_b}.")
-                    else: st.info(f"📭 Aguardando lançamento de notas no Boletim.")
+                    dados_notas = []
+                    trims_para_exibir = ["I Trimestre", "II Trimestre", "III Trimestre"] if trim_b == "Todos" else [trim_b]
+                    
+                    for t_e in trims_para_exibir:
+                        reg_e = n_alu[n_alu['TRIMESTRE'] == t_e] if not n_alu.empty else pd.DataFrame()
+                        
+                        v_c1 = vistos_live_by_trim.get(t_e, 0.0)
+                        if v_c1 == 0 and not reg_e.empty: v_c1 = util.sosa_to_float(reg_e.iloc[0]['NOTA_VISTOS'])
+                        
+                        v_c2 = util.sosa_to_float(reg_e.iloc[0]['NOTA_TESTE']) if not reg_e.empty else 0.0
+                        v_c3 = util.sosa_to_float(reg_e.iloc[0]['NOTA_PROVA']) if not reg_e.empty else 0.0
+                        v_rec = util.sosa_to_float(reg_e.iloc[0]['NOTA_REC']) if not reg_e.empty else -1.0
+                        
+                        # Puxa notas do Scanner ao vivo
+                        if not df_diagnosticos.empty:
+                            padrao_t_e = util.obter_regex_trimestre(t_e)
+                            scanned_e = df_diagnosticos[(df_diagnosticos['ID_ALUNO'].apply(db.limpar_id) == id_alu) & (df_diagnosticos['TURMA'] == turma_b) & (df_diagnosticos['ID_AVALIACAO'].str.contains(padrao_t_e, regex=True, case=False, na=False))]
+                            if not scanned_e.empty:
+                                st_t = scanned_e[scanned_e['ID_AVALIACAO'].str.upper().str.contains("TESTE")]
+                                if not st_t.empty and v_c2 == 0: v_c2 = util.sosa_to_float(st_t.iloc[-1]['NOTA_CALCULADA'])
+                                st_p = scanned_e[scanned_e['ID_AVALIACAO'].str.upper().str.contains("PROVA")]
+                                if not st_p.empty and v_c3 == 0: v_c3 = util.sosa_to_float(st_p.iloc[-1]['NOTA_CALCULADA'])
+
+                        b_diario_e = bonus_live_by_trim.get(t_e, 0.0)
+                        
+                        c1_f = min(3.0, v_c1 + b_diario_e)
+                        rem_e = b_diario_e - (c1_f - v_c1)
+                        c2_f = min(3.0, v_c2 + max(0.0, rem_e))
+                        rem_e -= (c2_f - v_c2)
+                        c3_f = min(4.0, v_c3 + max(0.0, rem_e))
+
+                        media_f_e = min(10.0, round((c1_f + c2_f + c3_f) * 2) / 2)
+                        if v_rec > 0: media_f_e = max(media_f_e, (media_f_e + v_rec) / 2)
+
+                        dados_notas.append({
+                            "Trimestre": t_e,
+                            "C1 (Vistos)": c1_f,
+                            "C2 (Teste)": c2_f,
+                            "C3 (Prova)": c3_f,
+                            "Rec.": f"{v_rec:.1f}" if v_rec > 0 else "-",
+                            "Média Final": media_f_e,
+                            "Status": "✅ DENTRO DA META" if media_f_e >= 6.0 else "⚠️ RECOMPOSIÇÃO"
+                        })
+                        
+                    if dados_notas:
+                        def style_status_bio(v):
+                            if "DENTRO" in str(v): return 'color: #2ECC71; font-weight: bold;'
+                            return 'color: #E74C3C; font-weight: bold;'
+                        
+                        st.dataframe(
+                            pd.DataFrame(dados_notas).style.map(style_status_bio, subset=['Status']), 
+                            use_container_width=True, hide_index=True,
+                            column_config={
+                                "Trimestre": st.column_config.TextColumn("Trimestre", width="medium"),
+                                "C1 (Vistos)": st.column_config.NumberColumn("C1 (Vistos)", format="%.1f", width="small"),
+                                "C2 (Teste)": st.column_config.NumberColumn("C2 (Teste)", format="%.1f", width="small"),
+                                "C3 (Prova)": st.column_config.NumberColumn("C3 (Prova)", format="%.1f", width="small"),
+                                "Rec.": st.column_config.TextColumn("Rec.", width="small"),
+                                "Média Final": st.column_config.NumberColumn("Média Final", format="%.1f", width="small"),
+                                "Status": st.column_config.TextColumn("Status", width="medium")
+                            }
+                        )
+                    else: st.info(f"📭 Sem registros para o {trim_b}.")
 
             with tabs[1]:
                 st.markdown("#### 🕰️ Linha do Tempo da Vida Escolar (Histórico de Atitude)")
@@ -5075,8 +5096,8 @@ Qualquer dúvida, estou à disposição! Um abraço! 🚀"""
                     if not diag_alu_f.empty:
                         todas_as_lacunas = []
                         for _, reg_av in diag_alu_f.iterrows():
-                            nome_av_real = reg_av['ID_AVALIACAO']
-                            m_ref_query = df_aulas[df_aulas['TIPO_MATERIAL'] == nome_av_real.replace(" (2ª CHAMADA)", "")] if not df_aulas.empty else pd.DataFrame()
+                            nome_av_real = str(reg_av['ID_AVALIACAO']).replace(" (2ª CHAMADA)", "").strip()
+                            m_ref_query = df_aulas[df_aulas['TIPO_MATERIAL'].str.contains(nome_av_real.split('_')[0], case=False, na=False)] if not df_aulas.empty else pd.DataFrame()
                             
                             if not m_ref_query.empty:
                                 m_ref = m_ref_query.iloc[0]
@@ -5096,18 +5117,18 @@ Qualquer dúvida, estou à disposição! Um abraço! 🚀"""
                                         m_h = re.search(padrao_h, grade)
                                         if m_h:
                                             txt_limpo = re.sub(r'[*#\[\]]', '', m_h.group(1)).strip()
-                                            todas_as_lacunas.append(txt_limpo)
+                                            todas_as_lacunas.append(f"Questão {q_n:02d}: {txt_limpo}")
                         
                         if todas_as_lacunas:
                             lacunas_unicas = list(dict.fromkeys(todas_as_lacunas))
-                            st.warning(f"⚠️ **{len(lacunas_unicas)} habilidades** identificadas com defasagem nas avaliações recentes.")
-                            with st.expander("🔍 Ver Detalhamento das Lacunas", expanded=False):
+                            st.warning(f"⚠️ **{len(lacunas_unicas)} questão(ões)** com resposta incorreta nesta avaliação.")
+                            with st.expander("🔍 Ver Detalhamento das Lacunas por Questão", expanded=True):
                                 for l in lacunas_unicas: st.error(f"❌ {l}")
-                        else: st.success("✅ Domínio total nas habilidades das avaliações realizadas.")
+                        else: st.success("✅ Excelente desempenho nas questões realizadas.")
                     else: st.info("📭 Aguardando avaliações escaneadas para gerar o mapa de lacunas.")
 
             with tabs[3]:
-                st.markdown(f"### 🎯 Histórico de Avaliações & Atestados")
+                st.markdown(f"### 🎯 Histórico de Avaliações & Atestados (Sincronizado)")
                 
                 @st.dialog("⚖️ Tribunal de Recursos", width="large")
                 def dialog_tribunal():
