@@ -1130,7 +1130,7 @@ if menu == "📅 Planejamento (Ponto ID)":
 # ==============================================================================
 elif menu == "📝 Diário de Bordo Rápido":
     st.title("📝 Diário de Bordo Rápido")
-    st.caption("Lançamento em tempo real adaptado para Smartphone (Touch) e Desktop.")
+    st.caption("Lançamento em tempo real adaptado para Smartphone (Touch) e Desktop com Auto-Isenção de Vistos.")
     st.markdown("---")
 
     if "v_diario_rapido" not in st.session_state:
@@ -1325,18 +1325,23 @@ elif menu == "📝 Diário de Bordo Rápido":
                         st.session_state[key_tags][al_id] = str(r_ed['Ocorrência / Tag'])
                         st.session_state[key_obs][al_id] = str(r_ed['Observação Individual'])
 
+                # BOTÃO FLUTUANTE DE SALVAMENTO COM LÓGICA DE AUTO-ISENÇÃO
                 st.markdown("<br>", unsafe_allow_html=True)
                 if st.button("💾 CONSOLIDAR E SALVAR DIÁRIO DO DIA", type="primary", use_container_width=True, key=f"btn_save_dr_{v_dr}"):
                     with st.spinner("Gravando presença, vistos e ocorrências em lote..."):
                         linhas_salvar = []
                         data_hoje_save = data_dr_str
 
+                        # 🚨 REGRA DA INTELIGÊNCIA COLETIVA DE VISTOS:
+                        # Conta quantos alunos da turma receberam visto de fato hoje
+                        total_vistos_dados_hoje = sum(1 for alu in alunos_dr if st.session_state[key_vistos].get(db.limpar_id(alu['ID']), False) and st.session_state[key_presenca].get(db.limpar_id(alu['ID']), True))
+
                         for _, alu in alunos_dr.iterrows():
                             al_id = db.limpar_id(alu['ID'])
                             nome_limpo = alu['NOME_ALUNO'].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
                             
                             is_presente = st.session_state[key_presenca].get(al_id, True)
-                            is_visto = "TRUE" if st.session_state[key_vistos].get(al_id, False) else "FALSE"
+                            is_visto_check = st.session_state[key_vistos].get(al_id, False)
                             tag_sel = str(st.session_state[key_tags].get(al_id, "")).strip()
                             obs_text = str(st.session_state[key_obs].get(al_id, "")).strip()
 
@@ -1349,7 +1354,11 @@ elif menu == "📝 Diário de Bordo Rápido":
                                 visto_final = "FALSE"
                             else:
                                 tag_final = tag_sel
-                                visto_final = is_visto
+                                # 💡 AUTO-DETECÇÃO: Se ninguém ganhou visto na turma hoje, grava ISENTO (Protege a média do aluno)!
+                                if total_vistos_dados_hoje == 0:
+                                    visto_final = "ISENTO"
+                                else:
+                                    visto_final = "TRUE" if is_visto_check else "FALSE"
 
                             linhas_salvar.append([
                                 data_hoje_save, al_id, nome_limpo, turma_dr,
@@ -1359,7 +1368,12 @@ elif menu == "📝 Diário de Bordo Rápido":
                         if linhas_salvar:
                             db.limpar_diario_data_turma(data_hoje_save, turma_dr)
                             db.salvar_lote("DB_DIARIO_BORDO", linhas_salvar)
-                            st.toast("✅ Diário de Bordo Consolidado com Sucesso!", icon="✅")
+                            
+                            if total_vistos_dados_hoje == 0:
+                                st.toast("✅ Aula sem vistos registrada! Vistos marcados como ISENTO para não diminuir notas.", icon="🛡️")
+                            else:
+                                st.toast("✅ Diário de Bordo Consolidado com Sucesso!", icon="✅")
+                                
                             st.balloons()
                             time.sleep(1)
                             st.rerun()
