@@ -4727,7 +4727,7 @@ elif menu == "📊 Painel de Notas & Vistos":
 
 
 # ==============================================================================
-# MÓDULO: BIOGRAFIA DO ESTUDANTE - V2026.ULTIMATE (DOSSIÊ 360° REUNIÃO DE PAIS)
+# MÓDULO: BIOGRAFIA DO ESTUDANTE - V2026.ULTIMATE (AUTO-TRIMESTRE & DECIMAIS)
 # ==============================================================================
 elif menu == "👤 Biografia do Estudante":
     st.title("👤 Biografia do Estudante: Dossiê 360°")
@@ -4741,6 +4741,17 @@ elif menu == "👤 Biografia do Estudante":
     if df_alunos.empty:
         st.warning("⚠️ Base de alunos vazia. Cadastre as turmas na Gestão da Turma.")
     else:
+        # 🚨 1. INTELIGÊNCIA TEMPORAL AUTOMÁTICA (AUTO-DETECÇÃO DE TRIMESTRE)
+        hoje_dt = date.today()
+        if hoje_dt <= date(2026, 5, 22):
+            idx_trim_bio_default = 1 # I Trimestre
+        elif hoje_dt <= date(2026, 9, 4):
+            idx_trim_bio_default = 2 # II Trimestre (Detectado para Agosto!)
+        else:
+            idx_trim_bio_default = 3 # III Trimestre
+
+        opcoes_periodo_bio = ["Todos", "I Trimestre", "II Trimestre", "III Trimestre"]
+
         with st.container(border=True):
             c1, c2, c3 = st.columns([1, 1.5, 1])
             
@@ -4771,7 +4782,15 @@ elif menu == "👤 Biografia do Estudante":
             lista_alunos['LABEL'] = lista_alunos.apply(lambda x: f"{x['STATUS_ICON']} {x['NOME_ALUNO']}", axis=1)
                 
             aluno_b_label = c2.selectbox("🎓 Estudante:", lista_alunos['LABEL'].tolist(), key=f"bio_a_{v}")
-            trim_b = c3.selectbox("📅 Período de Análise:", ["Todos", "I Trimestre", "II Trimestre", "III Trimestre"], key=f"bio_trim_{v}")
+            
+            # 🚨 AUTO-SELECT DO TRIMESTRE ATIVO
+            trim_b = c3.selectbox(
+                "📅 Período de Análise (Auto):", 
+                opcoes_periodo_bio, 
+                index=idx_trim_bio_default, 
+                key=f"bio_trim_{v}",
+                help="O trimestre ativo foi selecionado automaticamente com base na data de hoje!"
+            )
 
         if trim_b == "I Trimestre": dt_ini, dt_fim = date(2026, 2, 9), date(2026, 5, 22)
         elif trim_b == "II Trimestre": dt_ini, dt_fim = date(2026, 5, 25), date(2026, 9, 4)
@@ -4977,9 +4996,19 @@ Qualquer dúvida, estou à disposição! Um abraço! 🚀"""
                                 if "DENTRO" in str(v): return 'color: #2ECC71; font-weight: bold;'
                                 return 'color: #E74C3C; font-weight: bold;'
                             
+                            # 🚨 FORMATAÇÃO RÍGIDA DE 1 CASA DECIMAL (EX: 3.0 em vez de 3.000000)
                             st.dataframe(
                                 pd.DataFrame(dados_notas).style.map(style_status_bio, subset=['Status']), 
-                                use_container_width=True, hide_index=True
+                                use_container_width=True, hide_index=True,
+                                column_config={
+                                    "Trimestre": st.column_config.TextColumn("Trimestre", width="medium"),
+                                    "C1 (Vistos)": st.column_config.NumberColumn("C1 (Vistos)", format="%.1f", width="small"),
+                                    "C2 (Teste)": st.column_config.NumberColumn("C2 (Teste)", format="%.1f", width="small"),
+                                    "C3 (Prova)": st.column_config.NumberColumn("C3 (Prova)", format="%.1f", width="small"),
+                                    "Rec.": st.column_config.TextColumn("Rec.", width="small"),
+                                    "Média Final": st.column_config.NumberColumn("Média Final", format="%.1f", width="small"),
+                                    "Status": st.column_config.TextColumn("Status", width="medium")
+                                }
                             )
                         else: st.info(f"📭 Sem notas lançadas para o {trim_b}.")
                     else: st.info(f"📭 Aguardando lançamento de notas no Boletim.")
@@ -5221,62 +5250,62 @@ Qualquer dúvida, estou à disposição! Um abraço! 🚀"""
                                 st.code(st.session_state.msg_tribunal, language=None)
                         else: st.warning("A prova original não foi encontrada no acervo para realizar a perícia.")
 
-                if not diag_alu_f.empty:
-                    if st.button("⚖️ Abrir Tribunal de Recursos", type="primary", use_container_width=True, key=f"btn_trib_open_{v}"):
-                        dialog_tribunal()
-                    
-                    st.markdown("<br>", unsafe_allow_html=True)
-                    
-                    diag_alu_f['DATA_DT'] = pd.to_datetime(diag_alu_f['DATA'], format="%d/%m/%Y", errors='coerce')
-                    diag_ordenado = diag_alu_f.sort_values(by='DATA_DT', ascending=False)
-                    
-                    dados_av = []
-                    for _, row_av in diag_ordenado.iterrows():
-                        av_id_bruto = row_av['ID_AVALIACAO']
-                        nota_av = util.sosa_to_float(row_av['NOTA_CALCULADA'])
-                        respostas_aluno = str(row_av['RESPOSTAS_ALUNO'])
-                        link_foto = row_av.get('LINK_FOTO_DRIVE', '')
-                        data_av = row_av['DATA']
+                    if not diag_alu_f.empty:
+                        if st.button("⚖️ Abrir Tribunal de Recursos", type="primary", use_container_width=True, key=f"btn_trib_open_{v}"):
+                            dialog_tribunal()
                         
-                        nome_limpo_av = re.sub(r'(_\d+ANO_I{1,3}TRIMESTRE)', '', av_id_bruto).strip()
-                        nome_limpo_av = nome_limpo_av.replace("VARIANTE", "").replace("(", "").replace(")", "").strip()
+                        st.markdown("<br>", unsafe_allow_html=True)
                         
-                        if "SONDA" in nome_limpo_av: icone = "🔍"
-                        elif "TESTE" in nome_limpo_av: icone = "📝"
-                        elif "PROVA" in nome_limpo_av: icone = "📄"
-                        else: icone = "📋"
+                        diag_alu_f['DATA_DT'] = pd.to_datetime(diag_alu_f['DATA'], format="%d/%m/%Y", errors='coerce')
+                        diag_ordenado = diag_alu_f.sort_values(by='DATA_DT', ascending=False)
                         
-                        if respostas_aluno.startswith("FALTOU_JUSTIFICADO"):
-                            motivo_j = respostas_aluno.split("|")[1] if "|" in respostas_aluno else "Atestado Médico"
-                            status_av = f"📑 JUSTIFICADO ({motivo_j})"
-                        elif respostas_aluno.startswith("FALTOU_INJUSTIFICADO"):
-                            status_av = "❌ FALTA INJUSTIFICADA"
-                        elif respostas_aluno.upper() == "FALTOU":
-                            status_av, nota_av = "❌ FALTOU", 0.0
-                        elif respostas_aluno.upper().startswith("QUALITATIVA"):
-                            status_av = "🎨 QUALITATIVA (PEI)"
-                        elif "MANUAL" in respostas_aluno.upper():
-                            status_av = "✍️ LANÇAMENTO MANUAL"
-                        else:
-                            status_av = "✅ ESCANEADA"
+                        dados_av = []
+                        for _, row_av in diag_ordenado.iterrows():
+                            av_id_bruto = row_av['ID_AVALIACAO']
+                            nota_av = util.sosa_to_float(row_av['NOTA_CALCULADA'])
+                            respostas_aluno = str(row_av['RESPOSTAS_ALUNO'])
+                            link_foto = row_av.get('LINK_FOTO_DRIVE', '')
+                            data_av = row_av['DATA']
                             
-                        dados_av.append({
-                            "Tipo": icone, "Avaliação": nome_limpo_av, "Data": data_av,
-                            "Nota": nota_av, "Status": status_av, "Evidência": link_foto if "http" in link_foto else None
-                        })
-                        
-                    st.dataframe(
-                        pd.DataFrame(dados_av), use_container_width=True, hide_index=True,
-                        column_config={
-                            "Tipo": st.column_config.TextColumn("", width="small"),
-                            "Avaliação": st.column_config.TextColumn("Avaliação", width="medium"),
-                            "Data": st.column_config.TextColumn("Data", width="small"),
-                            "Nota": st.column_config.NumberColumn("Nota", format="%.1f", width="small"),
-                            "Status": st.column_config.TextColumn("Status", width="medium"),
-                            "Evidência": st.column_config.LinkColumn("🔗 Ver Prova", width="small")
-                        }
-                    )
-                else: st.info("📭 Nenhuma avaliação escaneada para este aluno no período selecionado.")
+                            nome_limpo_av = re.sub(r'(_\d+ANO_I{1,3}TRIMESTRE)', '', av_id_bruto).strip()
+                            nome_limpo_av = nome_limpo_av.replace("VARIANTE", "").replace("(", "").replace(")", "").strip()
+                            
+                            if "SONDA" in nome_limpo_av: icone = "🔍"
+                            elif "TESTE" in nome_limpo_av: icone = "📝"
+                            elif "PROVA" in nome_limpo_av: icone = "📄"
+                            else: icone = "📋"
+                            
+                            if respostas_aluno.startswith("FALTOU_JUSTIFICADO"):
+                                motivo_j = respostas_aluno.split("|")[1] if "|" in respostas_aluno else "Atestado Médico"
+                                status_av = f"📑 JUSTIFICADO ({motivo_j})"
+                            elif respostas_aluno.startswith("FALTOU_INJUSTIFICADO"):
+                                status_av = "❌ FALTA INJUSTIFICADA"
+                            elif respostas_aluno.upper() == "FALTOU":
+                                status_av, nota_av = "❌ FALTOU", 0.0
+                            elif respostas_aluno.upper().startswith("QUALITATIVA"):
+                                status_av = "🎨 QUALITATIVA (PEI)"
+                            elif "MANUAL" in respostas_aluno.upper():
+                                status_av = "✍️ LANÇAMENTO MANUAL"
+                            else:
+                                status_av = "✅ ESCANEADA"
+                                
+                            dados_av.append({
+                                "Tipo": icone, "Avaliação": nome_limpo_av, "Data": data_av,
+                                "Nota": nota_av, "Status": status_av, "Evidência": link_foto if "http" in link_foto else None
+                            })
+                            
+                        st.dataframe(
+                            pd.DataFrame(dados_av), use_container_width=True, hide_index=True,
+                            column_config={
+                                "Tipo": st.column_config.TextColumn("", width="small"),
+                                "Avaliação": st.column_config.TextColumn("Avaliação", width="medium"),
+                                "Data": st.column_config.TextColumn("Data", width="small"),
+                                "Nota": st.column_config.NumberColumn("Nota", format="%.1f", width="small"),
+                                "Status": st.column_config.TextColumn("Status", width="medium"),
+                                "Evidência": st.column_config.LinkColumn("🔗 Ver Prova", width="small")
+                            }
+                        )
+                    else: st.info("📭 Nenhuma avaliação escaneada para este aluno no período selecionado.")
 
             if is_pei_or_gap:
                 with tabs[4]:
