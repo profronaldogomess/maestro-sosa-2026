@@ -2132,7 +2132,7 @@ elif menu == "🧪 Criador de Aulas":
 
 
 # ==============================================================================
-# MÓDULO: CENTRAL DE AVALIAÇÕES - V2026.ULTIMATE (PIPELINE UNIFICADO FASES 1 A 6)
+# MÓDULO: CENTRAL DE AVALIAÇÕES - V2026.ULTIMATE (INDENTAÇÃO CORRIGIDA)
 # ==============================================================================
 elif menu == "📝 Central de Avaliações":
     st.title("Central de Avaliações")
@@ -2238,7 +2238,6 @@ elif menu == "📝 Central de Avaliações":
 
                     c_safra1, c_safra2 = st.columns(2)
 
-                    # FONTE 1: ACERVO SOSA
                     if "📚 Acervo de Aulas SOSA" in fontes_ativas:
                         df_ref = df_aulas[df_aulas['ANO'].str.contains(str(ano_av))].copy() if not df_aulas.empty else pd.DataFrame()
                         termos_proibidos = ["APLICAÇÃO", "TESTE", "PROVA", "SONDA", "AVALIAÇÃO", "CORREÇÃO", "REVISÃO", "EXAME", "2ª CHAMADA"]
@@ -2246,7 +2245,6 @@ elif menu == "📝 Central de Avaliações":
                             df_ref = df_ref[~df_ref['TIPO_MATERIAL'].str.upper().str.contains('|'.join(termos_proibidos))]
                             mats_selecionados = c_safra1.multiselect("Aulas Ministradas do Acervo:", options=df_ref["TIPO_MATERIAL"].tolist(), key=f"mats_sel_av_{v}")
 
-                    # FONTE 2: LIVRO DIDÁTICO FATIADO (MULTI-INTERVALO)
                     if "📖 Recorte do Livro (PDF)" in fontes_ativas:
                         livros_av_disp = df_materiais[df_materiais['TIPO'].str.contains(str(ano_av), na=False)]['NOME_ARQUIVO'].tolist() if not df_materiais.empty else []
                         sel_livro_av = c_safra2.selectbox("Livro do Cofre Digital:", [""] + livros_av_disp, key=f"sel_livro_av_{v}")
@@ -2267,16 +2265,14 @@ elif menu == "📝 Central de Avaliações":
                                         if list_p_av_teo: txt_av_teo_ext = util.extrair_texto_pdf_por_paginas(bytes_pdf_av, list_p_av_teo)
                                         if list_p_av_ex: txt_av_ex_ext = util.extrair_texto_pdf_por_paginas(bytes_pdf_av, list_p_av_ex)
 
-                    # FONTE 3: INJEÇÃO AUXILIAR MANUAL
                     if "✍️ Injeção Auxiliar (Professor)" in fontes_ativas:
                         recorte_provas_livro = st.text_area(
                             "📖 Cole Exercícios Autorais ou Provas Antigas para Virarem Questões Espelho:",
-                            placeholder="Cole aqui as questões do caderno/prova que os alunos resolveram. A IA criará questões espelho idênticas em estrutura...",
+                            placeholder="Cole aqui as questões do caderno/prova que os alunos resolveram...",
                             height=120,
                             key="recorte_provas_livro_input"
                         )
 
-                    # MESA DE INSPEÇÃO VISUAL DA PROVA
                     if txt_av_teo_ext or txt_av_ex_ext or recorte_provas_livro.strip():
                         with st.expander("👁️ MESA DE INSPEÇÃO DA PROVA (CONFERIR BASE DA IA)", expanded=True):
                             t_av_i1, t_av_i2, t_av_i3 = st.tabs(["📘 Teoria Fatiada", "📝 Exercícios Fatiados", "✍️ Texto Auxiliar do Professor"])
@@ -2308,12 +2304,9 @@ elif menu == "📝 Central de Avaliações":
                             txt_aula = str(m_row['CONTEUDO'])
                             contexto_base_texto += f"--- MEMÓRIA DE EXERCÍCIOS DA AULA: {m_nome} ---\n{ai.extrair_tag(txt_aula, 'ALUNO')}\n\n"
                     
-                    if txt_av_teo_ext:
-                        contexto_base_texto += f"--- PÁGINAS DE TEORIA DO LIVRO DIDÁTICO ---\n{txt_av_teo_ext}\n\n"
-                    if txt_av_ex_ext:
-                        contexto_base_texto += f"--- PÁGINAS DE EXERCÍCIOS DO LIVRO DIDÁTICO ---\n{txt_av_ex_ext}\n\n"
-                    if recorte_provas_livro.strip():
-                        contexto_base_texto += f"--- EXERCÍCIOS AUXILIARES DO PROFESSOR ---\n{recorte_provas_livro.strip()}\n\n"
+                    if txt_av_teo_ext: contexto_base_texto += f"--- PÁGINAS DE TEORIA DO LIVRO DIDÁTICO ---\n{txt_av_teo_ext}\n\n"
+                    if txt_av_ex_ext: contexto_base_texto += f"--- PÁGINAS DE EXERCÍCIOS DO LIVRO DIDÁTICO ---\n{txt_av_ex_ext}\n\n"
+                    if recorte_provas_livro.strip(): contexto_base_texto += f"--- EXERCÍCIOS AUXILIARES DO PROFESSOR ---\n{recorte_provas_livro.strip()}\n\n"
 
                     lista_conteudos = sorted(list(conteudos_extraidos)) if conteudos_extraidos else ["Matemática Geral ENEM/SAEB"]
 
@@ -2574,10 +2567,11 @@ elif menu == "📝 Central de Avaliações":
                             if st.button("✏️ Reabrir para Revisão", key=f"btn_edit_{i}_{v}", use_container_width=True):
                                 item['status'] = 'revisao'; st.rerun()
 
-            if todas_aprovadas:
-                st.success("🎉 Todos os itens do caderno foram homologados no padrão ENEM/SAEB!")
-                if st.button("Avançar para Adaptações PEI", type="primary", use_container_width=True, key=f"btn_adv_pei_f2_{v}"):
-                    f['fase'] = 3; st.rerun()
+                # 🚨 CHECAGEM INDENTADA E SEGURA DENTRO DO FRAGMENTO
+                if todas_aprovadas:
+                    st.success("🎉 Todos os itens do caderno foram homologados no padrão ENEM/SAEB!")
+                    if st.button("Avançar para Adaptações PEI", type="primary", use_container_width=True, key=f"btn_adv_pei_f2_{v}"):
+                        f['fase'] = 3; st.rerun()
 
             renderizar_mesa_revisao_itens_av()
 
@@ -2844,7 +2838,7 @@ elif menu == "📝 Central de Avaliações":
                         }
                         st.rerun()
                         
-                    if c_b7.button("🗑️ Apagar", key=f"del_av_h_{row.name}_{idx_av}_{v}", use_container_width=True):
+                    if c_b7.button("🗑️ Apagar", key=f"del_ac_{row.name}_{idx_av}_{v}", use_container_width=True):
                         if db.excluir_avaliacao_completa(identificador, row['SEMANA_REF']): st.rerun()
 
                     with st.expander("👁️ Analisar Estrutura Psicométrica e Distratores"):
