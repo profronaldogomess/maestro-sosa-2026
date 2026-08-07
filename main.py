@@ -4209,475 +4209,505 @@ elif menu == "📸 Scanner de Gabaritos":
 
 
 # ==============================================================================
-# MÓDULO: DIÁRIO DE BORDO RÁPIDO - V201 (VACINA DE DATAS E INTEGRALIDADE)
+# MÓDULO: PAINEL DE NOTAS & VISTOS - V2026.ULTIMATE (TEMPORAL & AUTO-SYNC)
 # ==============================================================================
 elif menu == "📊 Painel de Notas & Vistos":
     st.title("📊 Torre de Comando: Gestão de Notas")
-    st.caption("💡 **Guia de Comando:** Defina a data de congelamento para fechar as notas. O sistema calcula o transbordamento, separa quem está 'Quase Lá' e gera as etiquetas.")
+    st.caption("Sincronização automática em tempo real dos Vistos do Diário de Bordo e das notas do Scanner de Gabaritos.")
     st.markdown("---")
 
-    # 🚨 INICIALIZAÇÃO SEGURA DA VARIÁVEL V E PESOS DE NOTA
     if "v_notas" not in st.session_state: 
         st.session_state.v_notas = int(time.time())
     v = st.session_state.v_notas
 
+    # 🚨 CONFIGURAÇÃO DE PESOS E REGRAS DA MÉDIA
     if 'p_visto' not in st.session_state: st.session_state.p_visto = 3.0
     if 'p_teste' not in st.session_state: st.session_state.p_teste = 3.0
     if 'p_prova' not in st.session_state: st.session_state.p_prova = 4.0
     if 'regra_rec' not in st.session_state: st.session_state.regra_rec = "Média Justa (Soma + Rec / 2)"
     if 'arredondar_prefeitura' not in st.session_state: st.session_state.arredondar_prefeitura = True
 
-    if df_alunos.empty:
-        st.warning("⚠️ Cadastre alunos primeiro na aba 'Gestão da Turma'.")
+    lista_turmas_notas = []
+    if not df_turmas.empty and 'ID_TURMA' in df_turmas.columns:
+        turmas_reais_notas = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
+        lista_turmas_notas = sorted(turmas_reais_notas['ID_TURMA'].unique())
+    elif not df_alunos.empty and 'TURMA' in df_alunos.columns:
+        lista_turmas_notas = sorted(df_alunos['TURMA'].unique())
+
+    if not lista_turmas_notas:
+        st.warning("⚠️ Nenhuma turma regular cadastrada no sistema.")
     else:
-        lista_turmas_notas = []
-        if not df_turmas.empty and 'ID_TURMA' in df_turmas.columns:
-            turmas_reais_notas = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
-            lista_turmas_notas = sorted(turmas_reais_notas['ID_TURMA'].unique())
-        elif not df_alunos.empty and 'TURMA' in df_alunos.columns:
-            lista_turmas_notas = sorted(df_alunos['TURMA'].unique())
-
-        if not lista_turmas_notas:
-            st.warning("⚠️ Nenhuma turma regular cadastrada.")
+        # 🚨 1. INTELIGÊNCIA TEMPORAL AUTOMÁTICA (AUTO-DETECÇÃO DE TRIMESTRE)
+        hoje_dt = date.today()
+        if hoje_dt <= date(2026, 5, 22):
+            idx_trim_default = 0 # I Trimestre
+        elif hoje_dt <= date(2026, 9, 4):
+            idx_trim_default = 1 # II Trimestre (Detectado para Agosto!)
         else:
-            # --- 1. BARRA DE CONTROLE LIMPA (BENTO GRID) ---
-            with st.container(border=True):
-                c_f1, c_f2, c_f3, c_f4 = st.columns([1.5, 1.5, 1.5, 1.5])
-                turma_sel = c_f1.selectbox("👥 Turma:", lista_turmas_notas, key=f"n_turma_{v}", label_visibility="collapsed")
-                trimestre_sel = c_f2.selectbox("📅 Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"n_trim_{v}", label_visibility="collapsed")
-                
-                config_key = f"CONFIG_DATA_{turma_sel}_{trimestre_sel}"
-                config_records = df_relatorios[df_relatorios['TIPO'] == config_key] if not df_relatorios.empty else pd.DataFrame()
-                if not config_records.empty:
-                    saved_date_str = config_records.iloc[-1]['CONTEUDO'].split('|')[-1]
-                    try: default_date = datetime.strptime(saved_date_str, "%d/%m/%Y").date()
-                    except: default_date = date.today()
-                else: default_date = date.today()
+            idx_trim_default = 2 # III Trimestre
 
-                data_limite = c_f3.date_input("❄️ Congelar Vistos em:", default_date, format="DD/MM/YYYY", key=f"dt_lim_{v}", label_visibility="collapsed")
+        # MODAL DE CONFIGURAÇÃO DE PESOS
+        @st.dialog("⚙️ Pesos & Regras da Média", width="medium")
+        def dialog_config_pesos_modal():
+            st.caption("Ajuste a composição da Média Final (A soma dos pesos deve dar 10.0).")
+            c_p1, c_p2, c_p3 = st.columns(3)
+            st.session_state.p_visto = c_p1.number_input("C1 (Vistos):", 0.0, 10.0, st.session_state.p_visto, step=0.5)
+            st.session_state.p_teste = c_p2.number_input("C2 (Teste):", 0.0, 10.0, st.session_state.p_teste, step=0.5)
+            st.session_state.p_prova = c_p3.number_input("C3 (Prova):", 0.0, 10.0, st.session_state.p_prova, step=0.5)
+            
+            st.markdown("---")
+            st.session_state.regra_rec = st.selectbox(
+                "⚖️ Regra da Recuperação Paralela:", 
+                ["Média Justa (Soma + Rec / 2)", "Substituir apenas a Prova", "Substituir a Média (Tradicional)"],
+                index=["Média Justa (Soma + Rec / 2)", "Substituir apenas a Prova", "Substituir a Média (Tradicional)"].index(st.session_state.regra_rec)
+            )
+            st.session_state.arredondar_prefeitura = st.toggle("⚖️ Arredondamento da Prefeitura (0,5 em 0,5)", value=st.session_state.arredondar_prefeitura)
+            
+            soma_p = st.session_state.p_visto + st.session_state.p_teste + st.session_state.p_prova
+            if soma_p != 10.0:
+                st.error(f"⚠️ A soma dos pesos ({soma_p:.1f}) deve ser exatamente 10.0.")
+            else:
+                if st.button("💾 Salvar Regras", type="primary", use_container_width=True):
+                    st.rerun()
+
+        # --- 2. BARRA SUPERIOR DE COMANDO BENTO GRID ---
+        with st.container(border=True):
+            c_f1, c_f2, c_f3, c_f4 = st.columns([1.5, 1.5, 1.5, 1])
+            turma_sel = c_f1.selectbox("👥 Turma:", lista_turmas_notas, key=f"n_turma_{v}")
+            
+            opcoes_trimestres = ["I Trimestre", "II Trimestre", "III Trimestre"]
+            trimestre_sel = c_f2.selectbox(
+                "📅 Trimestre (Auto-Select):", 
+                opcoes_trimestres, 
+                index=idx_trim_default, 
+                key=f"n_trim_{v}",
+                help="O trimestre ativo foi selecionado automaticamente com base na data de hoje!"
+            )
+            
+            config_key = f"CONFIG_DATA_{turma_sel}_{trimestre_sel}"
+            config_records = df_relatorios[df_relatorios['TIPO'] == config_key] if not df_relatorios.empty else pd.DataFrame()
+            if not config_records.empty:
+                saved_date_str = config_records.iloc[-1]['CONTEUDO'].split('|')[-1]
+                try: default_date = datetime.strptime(saved_date_str, "%d/%m/%Y").date()
+                except: default_date = hoje_dt
+            else: default_date = hoje_dt
+
+            data_limite = c_f3.date_input("❄️ Congelar Vistos em:", default_date, format="DD/MM/YYYY", key=f"dt_lim_{v}")
+            
+            if c_f4.button("⚙️ Regras", use_container_width=True, key=f"btn_rules_open_{v}"):
+                dialog_config_pesos_modal()
+
+        p_visto = st.session_state.p_visto
+        p_teste = st.session_state.p_teste
+        p_prova = st.session_state.p_prova
+        regra_rec = st.session_state.regra_rec
+        arredondar_prefeitura = st.session_state.arredondar_prefeitura
+
+        alunos_turma = df_alunos[df_alunos['TURMA'] == turma_sel].sort_values(by="NOME_ALUNO") if not df_alunos.empty else pd.DataFrame()
+
+        if alunos_turma.empty:
+            st.warning(f"⚠️ Nenhum aluno cadastrado na turma {turma_sel}.")
+        else:
+            # 🚨 3. MOTOR DE AUTO-SINCRONIZAÇÃO EM TEMPO REAL
+            vistos_auto_map, bonus_sala_map, bonus_conselho_map, trabalhos_map = {}, {}, {}, {}
+            
+            calendario = {
+                "I Trimestre": (date(2026, 2, 9), date(2026, 5, 22)),
+                "II Trimestre": (date(2026, 5, 25), date(2026, 9, 4)),
+                "III Trimestre": (date(2026, 9, 8), date(2026, 12, 17))
+            }
+            dt_ini, dt_fim = calendario.get(trimestre_sel, (date(2026, 1, 1), date(2026, 12, 31)))
+
+            aulas_com_visto_count = 0
+            if not df_diario.empty:
+                df_d_t = df_diario[df_diario['TURMA'] == turma_sel].copy()
+                df_d_t['DATA_DT'] = pd.to_datetime(df_d_t['DATA'], format="%d/%m/%Y", errors='coerce').dt.date
+                df_d_trim = df_d_t[(df_d_t['DATA_DT'] >= dt_ini) & (df_d_t['DATA_DT'] <= data_limite)]
                 
-                # 🚨 UI NOVA GERAÇÃO: ST.POPOVER PARA CONFIGURAÇÃO DE PESOS
-                with c_f4.popover("⚙️ Pesos & Regras", use_container_width=True):
-                    st.caption("Ajuste a composição da média de 10.0 pts.")
-                    st.session_state.p_visto = st.number_input("Peso C1 (Vistos):", 0.0, 10.0, st.session_state.p_visto, step=0.5, key=f"pop_pv_{v}")
-                    st.session_state.p_teste = st.number_input("Peso C2 (Teste):", 0.0, 10.0, st.session_state.p_teste, step=0.5, key=f"pop_pt_{v}")
-                    st.session_state.p_prova = st.number_input("Peso C3 (Prova):", 0.0, 10.0, st.session_state.p_prova, step=0.5, key=f"pop_pp_{v}")
+                aulas_com_visto_count = df_d_trim[df_d_trim['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"]['DATA'].nunique()
+
+                for id_aluno in alunos_turma['ID']:
+                    id_l = db.limpar_id(id_aluno)
+                    d_alu = df_d_trim[df_d_trim['ID_ALUNO'].apply(db.limpar_id) == id_l]
+                    
+                    if not d_alu.empty:
+                        d_alu_validas = d_alu[d_alu['VISTO_ATIVIDADE'].astype(str).str.upper() != "ISENTO"]
+                        vistos_validos = d_alu_validas[d_alu_validas['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"]
+                        aulas_com_visto = len(vistos_validos)
+                        total_aulas_periodo = len(d_alu_validas)
+                        
+                        vistos_auto_map[id_l] = round((aulas_com_visto / total_aulas_periodo * p_visto), 2) if total_aulas_periodo > 0 else 0.0
+                        bonus_sala_map[id_l] = d_alu[(d_alu['TAGS'] != "SISTEMA_NOTA") & (d_alu['TAGS'] != "BONUS_CONSELHO")]['BONUS'].apply(util.sosa_to_float).sum()
+                        bonus_conselho_map[id_l] = d_alu[d_alu['TAGS'] == "BONUS_CONSELHO"]['BONUS'].apply(util.sosa_to_float).sum()
+                        
+                        trabalhos = d_alu[d_alu['TAGS'] == "SISTEMA_NOTA"]
+                        if not trabalhos.empty: trabalhos_map[id_l] = util.sosa_to_float(trabalhos.iloc[-1]['BONUS'])
+                    else:
+                        vistos_auto_map[id_l], bonus_sala_map[id_l], bonus_conselho_map[id_l], trabalhos_map[id_l] = 0.0, 0.0, 0.0, 0.0
+
+            notas_banco = df_notas[(df_notas['TURMA'] == turma_sel) & (df_notas['TRIMESTRE'] == trimestre_sel)] if not df_notas.empty else pd.DataFrame()
+            trim_limpo = trimestre_sel.replace(" ", "")
+            df_diag_turma = df_diagnosticos[(df_diagnosticos['TURMA'] == turma_sel) & (df_diagnosticos['ID_AVALIACAO'].str.contains(trim_limpo, case=False, na=False))] if not df_diagnosticos.empty else pd.DataFrame()
+            
+            def definir_icone_status(nec):
+                n = str(nec).upper().strip()
+                if "PENDENTE" in n or "SUSPEITA" in n: return "🟠"
+                if "DEFASAGEM LEITURA" in n: return "🧱"
+                if "DEFASAGEM MATEMÁTICA" in n or "DEFASAGEM MATEMATICA" in n: return "🧮"
+                if "ALTA PERFORMANCE" in n: return "🚀"
+                if n in ["NENHUMA", "", "NAN", "TÍPICO", "TIPICO"]: return "👤"
+                return "♿"
+
+            dados_editor = []
+            for _, alu in alunos_turma.iterrows():
+                id_a = db.limpar_id(alu['ID'])
+                reg_b = notas_banco[notas_banco['ID_ALUNO'].apply(db.limpar_id) == id_a] if not notas_banco.empty else pd.DataFrame()
+                
+                n_teste = util.sosa_to_float(reg_b.iloc[0]['NOTA_TESTE']) if not reg_b.empty else 0.0
+                n_prova = util.sosa_to_float(reg_b.iloc[0]['NOTA_PROVA']) if not reg_b.empty else 0.0
+                n_rec_banco = util.sosa_to_float(reg_b.iloc[0]['NOTA_REC']) if not reg_b.empty else -1.0
+                n_rec_display = None if n_rec_banco < 0 else n_rec_banco
+                
+                origem_tag = "✍️ Manual"
+                
+                if trabalhos_map.get(id_a, 0.0) > 0: 
+                    n_teste = trabalhos_map[id_a]
+                    origem_tag = "📘 Trabalho"
+                
+                if not df_diag_turma.empty:
+                    scanned_teste = df_diag_turma[(df_diag_turma['ID_ALUNO'].apply(db.limpar_id) == id_a) & (df_diag_turma['ID_AVALIACAO'].str.upper().str.contains("TESTE"))]
+                    if not scanned_teste.empty: 
+                        n_teste = util.sosa_to_float(scanned_teste.iloc[-1]['NOTA_CALCULADA'])
+                        origem_tag = "⚡ Scanner"
+                        
+                    scanned_prova = df_diag_turma[(df_diag_turma['ID_ALUNO'].apply(db.limpar_id) == id_a) & (df_diag_turma['ID_AVALIACAO'].str.upper().str.contains("PROVA"))]
+                    if not scanned_prova.empty: 
+                        n_prova = util.sosa_to_float(scanned_prova.iloc[-1]['NOTA_CALCULADA'])
+                        av_nome = scanned_prova.iloc[-1]['ID_AVALIACAO'].upper()
+                        if "2ª" in av_nome or "2CHAMADA" in av_nome: origem_tag = "2ªC Chamada"
+                        elif "TIPO" in av_nome: origem_tag = f"🧬 Var.{av_nome.split('TIPO')[-1].strip()}"
+                        else: origem_tag = "⚡ Scanner"
+
+                icone_perfil = definir_icone_status(alu['NECESSIDADES'])
+
+                dados_editor.append({
+                    "ID": id_a,
+                    "ESTUDANTE": f"{icone_perfil} {alu['NOME_ALUNO']}",
+                    "ORIGEM": origem_tag,
+                    "VISTOS (AUTO)": vistos_auto_map.get(id_a, 0.0),
+                    "BÔNUS (SALA)": bonus_sala_map.get(id_a, 0.0),
+                    "BÔNUS CONSELHO": bonus_conselho_map.get(id_a, 0.0),
+                    "TESTE (LANÇAR)": n_teste,
+                    "PROVA (LANÇAR)": n_prova,
+                    "REC. PARALELA": n_rec_display,
+                    "_ORIGINAL_TESTE": n_teste,
+                    "_ORIGINAL_PROVA": n_prova
+                })
+
+            df_input = pd.DataFrame(dados_editor)
+            
+            # --- TRANSBORDAMENTO & PREFEITURA ---
+            def aplicar_transbordamento(row):
+                b_sala = float(row.get('BÔNUS (SALA)', 0.0) or 0.0)
+                b_cons = float(row.get('BÔNUS CONSELHO', 0.0) or 0.0)
+                bonus_restante = b_sala + b_cons
+                
+                v_base = float(row.get('VISTOS (AUTO)', 0.0) or 0.0)
+                t_base = float(row.get('TESTE (LANÇAR)', 0.0) or 0.0)
+                p_base = float(row.get('PROVA (LANÇAR)', 0.0) or 0.0)
+                
+                v_final = max(0.0, min(p_visto, v_base + bonus_restante))
+                bonus_restante -= (v_final - v_base)
+                
+                t_final = max(0.0, min(p_teste, t_base + bonus_restante))
+                bonus_restante -= (t_final - t_base)
+                
+                p_final = max(0.0, min(p_prova, p_base + bonus_restante))
+                
+                if arredondar_prefeitura:
+                    v_final = round(v_final * 2) / 2
+                    t_final = round(t_final * 2) / 2
+                    p_final = round(p_final * 2) / 2
+                
+                soma_notas = v_final + t_final + p_final
+                
+                rec_input = row.get('REC. PARALELA')
+                fez_rec = pd.notna(rec_input) and rec_input is not None and str(rec_input).strip() != ""
+                
+                if not fez_rec:
+                    rec_final_salvar = -1.0 
+                    media_final = soma_notas
+                else:
+                    rec_raw = float(rec_input)
+                    if regra_rec == "Média Justa (Soma + Rec / 2)":
+                        nota_rec_calculada = (soma_notas + rec_raw) / 2
+                        media_final = max(soma_notas, nota_rec_calculada)
+                        rec_final_salvar = nota_rec_calculada 
+                    elif regra_rec == "Substituir apenas a Prova":
+                        nota_rec_convertida = (rec_raw / 10.0) * p_prova
+                        p_final_com_rec = max(p_final, nota_rec_convertida)
+                        media_final = v_final + t_final + p_final_com_rec
+                        rec_final_salvar = rec_raw
+                    else: 
+                        media_final = max(soma_notas, rec_raw)
+                        rec_final_salvar = rec_raw
+                    
+                if arredondar_prefeitura:
+                    media_final = round(media_final * 2) / 2
+                    if rec_final_salvar > 0: rec_final_salvar = round(rec_final_salvar * 2) / 2
+                    
+                media_final = min(10.0, media_final)
+                return pd.Series([v_final, t_final, p_final, rec_final_salvar, media_final])
+
+            df_input[['V_PREF', 'T_PREF', 'P_PREF', 'REC_PREF', 'MEDIA_FINAL']] = df_input.apply(aplicar_transbordamento, axis=1)
+            st.session_state.df_input_ref = df_input.copy()
+
+            # 🚨 4. TERMÔMETRO DA TURMA (KPI BENTO CARDS NO TOPO)
+            st.markdown("#### 📊 Termômetro da Turma (Auto-Sincronizado)")
+            
+            total_alunos = len(df_input)
+            aprovados_count = len(df_input[df_input['MEDIA_FINAL'] >= 6.0])
+            perc_aprovados = (aprovados_count / total_alunos) * 100 if total_alunos > 0 else 0
+            uti_count = len(df_input[df_input['MEDIA_FINAL'] < 5.5])
+            media_geral_turma = df_input['MEDIA_FINAL'].mean() if total_alunos > 0 else 0.0
+
+            with st.container(border=True):
+                k1, k2, k3, k4 = st.columns(4)
+                k1.metric("📊 Média da Turma", f"{media_geral_turma:.1f}")
+                k2.metric("🟢 Aprovados Direto", f"{aprovados_count} ({perc_aprovados:.0f}%)", f"{total_alunos} alunos")
+                k3.metric("🚑 Risco / UTI (< 5.5)", uti_count, delta_color="inverse" if uti_count > 0 else "normal")
+                k4.metric("📓 Aulas com Vistos", aulas_com_visto_count)
+
+            # 🚨 5. MODAL DE REFACÇÃO
+            @st.dialog("⚡ Radar de Refacção (Justiça Pedagógica)", width="large")
+            def dialog_refaccao():
+                st.info("Selecione os alunos que refizeram as questões erradas da prova para aplicar o bônus.")
+                valor_bonus_refaccao = st.number_input("Valor do Bônus (+):", min_value=0.1, max_value=5.0, value=0.5, step=0.1, key=f"v_ref_{v}")
+                
+                if 'df_input_ref' in st.session_state:
+                    df_elegiveis = st.session_state.df_input_ref[st.session_state.df_input_ref['MEDIA_FINAL'] < 10.0].copy()
+                    if not df_elegiveis.empty:
+                        dados_refaccao = []
+                        alunos_ja_com_bonus = []
+                        
+                        for _, r in df_elegiveis.iterrows():
+                            ja_ganhou = False
+                            if not df_diario.empty:
+                                mask_bonus = (df_diario['ID_ALUNO'].apply(db.limpar_id) == r['ID']) & (df_diario['OBSERVACOES'].str.contains("Refacção", na=False))
+                                if not df_diario[mask_bonus].empty: ja_ganhou = True
+                            
+                            if ja_ganhou: alunos_ja_com_bonus.append(r['ESTUDANTE'])
+                            else:
+                                dados_refaccao.append({
+                                    "Entregou?": False, "ID": r['ID'], "Estudante": r['ESTUDANTE'], "Média Atual": r['MEDIA_FINAL']
+                                })
+                        
+                        if alunos_ja_com_bonus:
+                            st.success(f"✅ **Bônus já aplicado para:** {', '.join(alunos_ja_com_bonus)}")
+                        
+                        if dados_refaccao:
+                            df_refaccao_ed = st.data_editor(
+                                pd.DataFrame(dados_refaccao), hide_index=True, use_container_width=True,
+                                column_config={
+                                    "Entregou?": st.column_config.CheckboxColumn("Entregou?", default=False),
+                                    "ID": None, "Estudante": st.column_config.TextColumn("Estudante", disabled=True),
+                                    "Média Atual": st.column_config.NumberColumn("Média Atual", format="%.1f", disabled=True)
+                                }, key=f"ed_refaccao_{v}"
+                            )
+                            
+                            alunos_marcados = df_refaccao_ed[df_refaccao_ed["Entregou?"] == True]
+                            
+                            if st.button(f"💾 APLICAR BÔNUS (+{valor_bonus_refaccao}) AOS MARCADOS", type="primary", use_container_width=True, key=f"btn_ref_conf_{v}"):
+                                if alunos_marcados.empty: st.error("⚠️ Marque pelo menos um aluno.")
+                                else:
+                                    with st.spinner("Injetando bônus..."):
+                                        linhas_bonus = []
+                                        df_diario_turma = df_diario[(df_diario['TURMA'] == turma_sel) & (~df_diario['TAGS'].isin(['DIA NÃO LETIVO', 'BONUS_CONSELHO', 'SISTEMA_NOTA']))].copy() if not df_diario.empty else pd.DataFrame()
+                                        if not df_diario_turma.empty:
+                                            df_diario_turma['DATA_DT'] = pd.to_datetime(df_diario_turma['DATA'], format="%d/%m/%Y", errors='coerce')
+                                            data_ancora_ref = df_diario_turma['DATA_DT'].max().strftime("%d/%m/%Y")
+                                        else: data_ancora_ref = data_limite.strftime("%d/%m/%Y")
+                                        
+                                        for _, r in alunos_marcados.iterrows():
+                                            nome_limpo = r['Estudante'].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
+                                            linhas_bonus.append([
+                                                data_ancora_ref, r['ID'], nome_limpo, turma_sel,
+                                                "ISENTO", "BONUS_CONSELHO", "Bônus de Refacção de Prova (Justiça Pedagógica)", util.sosa_to_str(valor_bonus_refaccao)
+                                            ])
+                                            
+                                        if db.salvar_lote("DB_DIARIO_BORDO", linhas_bonus):
+                                            st.success("✅ Bônus aplicado!"); time.sleep(1); st.rerun()
+                        else: st.info("Todos os alunos elegíveis já receberam o bônus.")
+
+            # 🚨 6. MESA DE OPERAÇÕES EM FRAGMENTO
+            @st.fragment
+            def renderizar_mesa_notas_fragmento():
+                tab_lancamento, tab_fechamento = st.tabs(["📝 Mesa de Lançamento (Auto-Sync)", "🖨️ Relatório de Fechamento"])
+
+                with tab_lancamento:
+                    c_btn_ref, _ = st.columns([1, 3])
+                    if c_btn_ref.button("⚡ Aplicar Bônus de Refacção", type="secondary", key=f"btn_refac_open_{v}"):
+                        dialog_refaccao()
+                        
+                    st.caption("💡 **Auto-Sincronização:** `⚡ Scanner` indica nota puxada da foto da prova. `📘 Trabalho` veio do Diário. As colunas verdes são o cálculo final oficial.")
+                    
+                    df_editado = st.data_editor(
+                        df_input,
+                        column_config={
+                            "ID": None, "REC_PREF": None, "_ORIGINAL_TESTE": None, "_ORIGINAL_PROVA": None,
+                            "VISTOS (AUTO)": None, "BÔNUS (SALA)": None,
+                            
+                            "ESTUDANTE": st.column_config.TextColumn("Estudante", width="medium", disabled=True),
+                            "ORIGEM": st.column_config.TextColumn("Origem Nota", width="small", disabled=True),
+                            
+                            "BÔNUS CONSELHO": st.column_config.NumberColumn("🟡 Bônus Extra", min_value=0.0, max_value=10.0, format="%.1f", width="small"),
+                            "TESTE (LANÇAR)": st.column_config.NumberColumn("🟡 Teste (C2)", min_value=0.0, max_value=p_teste, format="%.1f", width="small"),
+                            "PROVA (LANÇAR)": st.column_config.NumberColumn("🟡 Prova (C3)", min_value=0.0, max_value=p_prova, format="%.1f", width="small"),
+                            "REC. PARALELA": st.column_config.NumberColumn("🟡 Rec. Paralela", min_value=0.0, max_value=10.0, format="%.1f", width="small"),
+                            
+                            "V_PREF": st.column_config.NumberColumn("🟢 C1 (Vistos)", format="%.1f", disabled=True),
+                            "T_PREF": st.column_config.NumberColumn("🟢 C2 (Teste)", format="%.1f", disabled=True),
+                            "P_PREF": st.column_config.NumberColumn("🟢 C3 (Prova)", format="%.1f", disabled=True),
+                            
+                            "MEDIA_FINAL": st.column_config.ProgressColumn(
+                                "📊 Média Final", help="Média calculada com transbordamento e recuperação", format="%.1f", min_value=0.0, max_value=10.0,
+                            ),
+                        },
+                        hide_index=True, use_container_width=True, key=f"editor_notas_frag_{v}"
+                    )
+
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    if st.button("💾 SALVAR NOTAS E SINCRONIZAR BOLETIM", type="primary", use_container_width=True, key=f"btn_save_boletim_{v}"):
+                        with st.status("Sincronizando registros no Banco de Dados...") as status:
+                            df_editado[['V_PREF', 'T_PREF', 'P_PREF', 'REC_PREF', 'MEDIA_FINAL']] = df_editado.apply(aplicar_transbordamento, axis=1)
+                            
+                            status.write("Salvando configurações de data...")
+                            db.excluir_registro("DB_RELATORIOS", f"{turma_sel}|{trimestre_sel}")
+                            db.salvar_no_banco("DB_RELATORIOS", [datetime.now().strftime("%d/%m/%Y"), "SISTEMA", "CONFIG", config_key, f"{turma_sel}|{trimestre_sel}|{data_limite.strftime('%d/%m/%Y')}"])
+                            
+                            linhas_gabarito_reverso = []
+                            linhas_bonus_conselho = []
+                            
+                            df_diario_turma = df_diario[(df_diario['TURMA'] == turma_sel) & (~df_diario['TAGS'].isin(['DIA NÃO LETIVO', 'BONUS_CONSELHO', 'SISTEMA_NOTA']))].copy() if not df_diario.empty else pd.DataFrame()
+                            if not df_diario_turma.empty:
+                                df_diario_turma['DATA_DT'] = pd.to_datetime(df_diario_turma['DATA'], format="%d/%m/%Y", errors='coerce')
+                                data_ancora = df_diario_turma['DATA_DT'].max().strftime("%d/%m/%Y")
+                            else: data_ancora = data_limite.strftime("%d/%m/%Y")
+                            
+                            status.write("Processando lançamentos manuais e bônus...")
+                            for _, r in df_editado.iterrows():
+                                nome_limpo = r['ESTUDANTE'].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
+                                
+                                teste_lancar = float(r.get('TESTE (LANÇAR)', 0.0) or 0.0)
+                                prova_lancar = float(r.get('PROVA (LANÇAR)', 0.0) or 0.0)
+                                bonus_conselho = float(r.get('BÔNUS CONSELHO', 0.0) or 0.0)
+                                
+                                if teste_lancar != r['_ORIGINAL_TESTE']:
+                                    linhas_gabarito_reverso.append([datetime.now().strftime("%d/%m/%Y"), r['ID'], nome_limpo, turma_sel, f"TESTE {trimestre_sel} [LANÇAMENTO MANUAL]", "MANUAL", util.sosa_to_str(teste_lancar), "N/A"])
+                                if prova_lancar != r['_ORIGINAL_PROVA']:
+                                    linhas_gabarito_reverso.append([datetime.now().strftime("%d/%m/%Y"), r['ID'], nome_limpo, turma_sel, f"PROVA {trimestre_sel} [LANÇAMENTO MANUAL]", "MANUAL", util.sosa_to_str(prova_lancar), "N/A"])
+                                    
+                                if bonus_conselho > 0:
+                                    linhas_bonus_conselho.append([data_ancora, r['ID'], nome_limpo, turma_sel, "ISENTO", "BONUS_CONSELHO", "Bônus de Conselho de Classe", util.sosa_to_str(bonus_conselho)])
+
+                            if linhas_gabarito_reverso: db.salvar_lote("DB_GABARITOS_ALUNOS", linhas_gabarito_reverso)
+                            
+                            if linhas_bonus_conselho:
+                                try:
+                                    wb = db.conectar()
+                                    ws = wb.worksheet("DB_DIARIO_BORDO")
+                                    dados_d = ws.get_all_values()
+                                    for i in range(len(dados_d)-1, 0, -1):
+                                        if len(dados_d[i]) > 5 and dados_d[i][3] == turma_sel and dados_d[i][5] == "BONUS_CONSELHO":
+                                            ws.delete_rows(i+1)
+                                except: pass
+                                db.salvar_lote("DB_DIARIO_BORDO", linhas_bonus_conselho)
+
+                            status.write("Consolidando Boletim Oficial...")
+                            db.limpar_notas_turma_trimestre(turma_sel, trimestre_sel)
+                            linhas_save = []
+                            for _, r in df_editado.iterrows():
+                                nome_limpo = r['ESTUDANTE'].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
+                                linhas_save.append([
+                                    r['ID'], nome_limpo, turma_sel, trimestre_sel,
+                                    util.sosa_to_str(r["V_PREF"]), util.sosa_to_str(r["T_PREF"]),
+                                    util.sosa_to_str(r["P_PREF"]), util.sosa_to_str(r["REC_PREF"]),
+                                    util.sosa_to_str(r['MEDIA_FINAL'])
+                                ])
+                            if db.salvar_lote("DB_NOTAS", linhas_save):
+                                status.update(label="✅ Boletim Sincronizado com Sucesso!", state="complete")
+                                st.balloons(); time.sleep(1.5); st.rerun()
+
+                with tab_fechamento:
+                    st.markdown("### 🖨️ Relatório Executivo de Fechamento")
+                    
+                    df_aprovados = df_input[df_input['MEDIA_FINAL'] >= 6.0]
+                    df_quase = df_input[(df_input['MEDIA_FINAL'] >= 5.5) & (df_input['MEDIA_FINAL'] < 6.0)]
+                    df_rec = df_input[df_input['MEDIA_FINAL'] < 5.5]
+                    
+                    c_met1, c_met2, c_met3 = st.columns(3)
+                    c_met1.caption(f"Status: ✅ APROVADOS DIRETO ({len(df_aprovados)})")
+                    c_met2.caption(f"Status: 🟡 QUASE LÁ ({len(df_quase)})")
+                    c_met3.caption(f"Status: 🔴 RECUPERAÇÃO ({len(df_rec)})")
                     
                     st.markdown("---")
-                    st.session_state.regra_rec = st.selectbox(
-                        "⚖️ Regra da Recuperação:", 
-                        ["Média Justa (Soma + Rec / 2)", "Substituir apenas a Prova", "Substituir a Média (Tradicional)"],
-                        index=["Média Justa (Soma + Rec / 2)", "Substituir apenas a Prova", "Substituir a Média (Tradicional)"].index(st.session_state.regra_rec),
-                        key=f"pop_rrec_{v}"
-                    )
-                    st.session_state.arredondar_prefeitura = st.toggle("⚖️ Arredondamento da Prefeitura (0,5 em 0,5)", value=st.session_state.arredondar_prefeitura, key=f"pop_arr_{v}")
                     
-                    soma_pesos = st.session_state.p_visto + st.session_state.p_teste + st.session_state.p_prova
-                    if soma_pesos != 10.0:
-                        st.error(f"⚠️ A soma dos pesos ({soma_pesos:.1f}) deve ser exatamente 10.0.")
-
-            p_visto = st.session_state.p_visto
-            p_teste = st.session_state.p_teste
-            p_prova = st.session_state.p_prova
-            regra_rec = st.session_state.regra_rec
-            arredondar_prefeitura = st.session_state.arredondar_prefeitura
-
-            # 🚨 DEFINIÇÃO SEGURA DE ALUNOS_TURMA ANTES DE QUALQUER USO
-            alunos_turma = df_alunos[df_alunos['TURMA'] == turma_sel].sort_values(by="NOME_ALUNO") if not df_alunos.empty else pd.DataFrame()
-
-            if alunos_turma.empty:
-                st.warning(f"⚠️ Nenhum aluno cadastrado na turma {turma_sel}.")
-            else:
-                # 🚨 MODAL: RADAR DE REFACÇÃO DE PROVAS
-                @st.dialog("⚡ Radar de Refacção (Justiça Pedagógica)", width="large")
-                def dialog_refaccao():
-                    st.info("Selecione os alunos que refizeram as questões erradas da prova para aplicar o bônus.")
-                    valor_bonus_refaccao = st.number_input("Valor do Bônus (+):", min_value=0.1, max_value=5.0, value=0.5, step=0.1, key=f"v_ref_{v}")
+                    c_list1, c_list2 = st.columns(2)
+                    with c_list1:
+                        st.markdown("#### 🟡 Radar: Quase Lá (5.5 a 5.9)")
+                        if not df_quase.empty:
+                            for _, r in df_quase.iterrows():
+                                st.warning(f"**{r['ESTUDANTE']}** - Média: {r['MEDIA_FINAL']:.1f}")
+                        else: st.success("Nenhum aluno nesta faixa.")
+                        
+                    with c_list2:
+                        st.markdown("#### 🔴 UTI: Recuperação Paralela (< 5.5)")
+                        if not df_rec.empty:
+                            for _, r in df_rec.iterrows():
+                                st.error(f"**{r['ESTUDANTE']}** - Média: {r['MEDIA_FINAL']:.1f}")
+                        else: st.success("Nenhum aluno em recuperação!")
                     
-                    if 'df_input_ref' in st.session_state:
-                        df_elegiveis = st.session_state.df_input_ref[st.session_state.df_input_ref['MEDIA_FINAL'] < 10.0].copy()
-                        if not df_elegiveis.empty:
-                            dados_refaccao = []
-                            alunos_ja_com_bonus = []
+                    st.markdown("---")
+                    st.markdown("#### 🖨️ Fábrica de Etiquetas Word")
+                    st.info("O sistema gerará um documento Word com retângulos formatados para colar na prova.")
+                    
+                    if st.button("🖨️ GERAR ETIQUETAS (DOCX)", use_container_width=True, type="primary", key=f"btn_etiq_docx_{v}"):
+                        with st.spinner("Desenhando etiquetas..."):
+                            dados_etiquetas = []
+                            for _, r in df_input.iterrows():
+                                nome_limpo = r['ESTUDANTE'].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
+                                
+                                if r['MEDIA_FINAL'] >= 6.0: status_txt = "✅ APROVADO"
+                                elif r['MEDIA_FINAL'] >= 5.5: status_txt = "⚠️ REFAZER QUESTÕES ERRADAS"
+                                else: status_txt = "🔴 RECUPERAÇÃO PARALELA"
+                                
+                                b_sala = float(r.get('BÔNUS (SALA)', 0.0) or 0.0)
+                                b_cons = float(r.get('BÔNUS CONSELHO', 0.0) or 0.0)
+                                bonus_total_etiq = b_sala + b_cons
+                                
+                                dados_etiquetas.append({
+                                    "nome": nome_limpo,
+                                    "vistos": f"{float(r.get('V_PREF', 0.0) or 0.0):.1f}",
+                                    "teste": f"{float(r.get('T_PREF', 0.0) or 0.0):.1f}",
+                                    "prova": f"{float(r.get('P_PREF', 0.0) or 0.0):.1f}",
+                                    "bonus": f"{bonus_total_etiq:.1f}",
+                                    "media": f"{float(r.get('MEDIA_FINAL', 0.0) or 0.0):.1f}",
+                                    "status": status_txt
+                                })
                             
-                            for _, r in df_elegiveis.iterrows():
-                                ja_ganhou = False
-                                if not df_diario.empty:
-                                    mask_bonus = (df_diario['ID_ALUNO'].apply(db.limpar_id) == r['ID']) & (df_diario['OBSERVACOES'].str.contains("Refacção", na=False))
-                                    if not df_diario[mask_bonus].empty: ja_ganhou = True
-                                
-                                if ja_ganhou: alunos_ja_com_bonus.append(r['ESTUDANTE'])
-                                else:
-                                    dados_refaccao.append({
-                                        "Entregou?": False, "ID": r['ID'], "Estudante": r['ESTUDANTE'], "Média Atual": r['MEDIA_FINAL']
-                                    })
+                            info_etiqueta = {"turma": turma_sel, "trimestre": trimestre_sel}
+                            nome_arq_etiq = f"ETIQUETAS_{turma_sel.replace(' ', '')}_{trimestre_sel.replace(' ', '')}"
                             
-                            if alunos_ja_com_bonus:
-                                st.success(f"✅ **Bônus já aplicado para:** {', '.join(alunos_ja_com_bonus)}")
+                            doc_stream = exporter.gerar_docx_etiquetas_notas(nome_arq_etiq, dados_etiquetas, info_etiqueta)
+                            link_doc = db.subir_e_converter_para_google_docs(doc_stream, nome_arq_etiq, trimestre=trimestre_sel, categoria=turma_sel, modo="PLANEJAMENTO")
                             
-                            if dados_refaccao:
-                                df_refaccao_ed = st.data_editor(
-                                    pd.DataFrame(dados_refaccao), hide_index=True, use_container_width=True,
-                                    column_config={
-                                        "Entregou?": st.column_config.CheckboxColumn("Entregou?", default=False),
-                                        "ID": None, "Estudante": st.column_config.TextColumn("Estudante", disabled=True),
-                                        "Média Atual": st.column_config.NumberColumn("Média Atual", format="%.1f", disabled=True)
-                                    }, key=f"ed_refaccao_{v}"
-                                )
-                                
-                                alunos_marcados = df_refaccao_ed[df_refaccao_ed["Entregou?"] == True]
-                                
-                                if st.button(f"💾 APLICAR BÔNUS (+{valor_bonus_refaccao}) AOS MARCADOS", type="primary", use_container_width=True, key=f"btn_ref_conf_{v}"):
-                                    if alunos_marcados.empty: st.error("⚠️ Marque pelo menos um aluno.")
-                                    else:
-                                        with st.spinner("Injetando bônus..."):
-                                            linhas_bonus = []
-                                            df_diario_turma = df_diario[(df_diario['TURMA'] == turma_sel) & (~df_diario['TAGS'].isin(['DIA NÃO LETIVO', 'BONUS_CONSELHO', 'SISTEMA_NOTA']))].copy() if not df_diario.empty else pd.DataFrame()
-                                            if not df_diario_turma.empty:
-                                                df_diario_turma['DATA_DT'] = pd.to_datetime(df_diario_turma['DATA'], format="%d/%m/%Y", errors='coerce')
-                                                data_ancora_ref = df_diario_turma['DATA_DT'].max().strftime("%d/%m/%Y")
-                                            else: data_ancora_ref = data_limite.strftime("%d/%m/%Y")
-                                            
-                                            for _, r in alunos_marcados.iterrows():
-                                                nome_limpo = r['Estudante'].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
-                                                linhas_bonus.append([
-                                                    data_ancora_ref, r['ID'], nome_limpo, turma_sel,
-                                                    "ISENTO", "BONUS_CONSELHO", "Bônus de Refacção de Prova (Justiça Pedagógica)", util.sosa_to_str(valor_bonus_refaccao)
-                                                ])
-                                                
-                                            if db.salvar_lote("DB_DIARIO_BORDO", linhas_bonus):
-                                                st.success("✅ Bônus aplicado!"); time.sleep(1); st.rerun()
-                            else: st.info("Todos os alunos elegíveis já receberam o bônus.")
+                            if "https" in link_doc:
+                                st.success("✅ Etiquetas geradas com sucesso!")
+                                st.link_button("📂 ABRIR ETIQUETAS PARA IMPRESSÃO", link_doc, type="primary", use_container_width=True)
+                                st.balloons()
+                            else: st.error(f"Erro ao salvar no Drive: {link_doc}")
 
-                # --- 2. MOTOR DE CÁLCULO AUTOMÁTICO (COM CONGELAMENTO TEMPORAL) ---
-                vistos_auto_map, bonus_sala_map, bonus_conselho_map, trabalhos_map = {}, {}, {}, {}
-                
-                calendario = {
-                    "I Trimestre": (date(2026, 2, 9), date(2026, 5, 22)),
-                    "II Trimestre": (date(2026, 5, 25), date(2026, 9, 4)),
-                    "III Trimestre": (date(2026, 9, 8), date(2026, 12, 17))
-                }
-                dt_ini, dt_fim = calendario.get(trimestre_sel, (date(2026, 1, 1), date(2026, 12, 31)))
-
-                if not df_diario.empty:
-                    df_d_t = df_diario[df_diario['TURMA'] == turma_sel].copy()
-                    df_d_t['DATA_DT'] = pd.to_datetime(df_d_t['DATA'], format="%d/%m/%Y", errors='coerce').dt.date
-                    df_d_trim = df_d_t[(df_d_t['DATA_DT'] >= dt_ini) & (df_d_t['DATA_DT'] <= data_limite)]
-                    
-                    for id_aluno in alunos_turma['ID']:
-                        id_l = db.limpar_id(id_aluno)
-                        d_alu = df_d_trim[df_d_trim['ID_ALUNO'].apply(db.limpar_id) == id_l]
-                        
-                        if not d_alu.empty:
-                            d_alu_validas = d_alu[d_alu['VISTO_ATIVIDADE'].astype(str).str.upper() != "ISENTO"]
-                            vistos_validos = d_alu_validas[d_alu_validas['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"]
-                            aulas_com_visto = len(vistos_validos)
-                            total_aulas_periodo = len(d_alu_validas)
-                            
-                            vistos_auto_map[id_l] = round((aulas_com_visto / total_aulas_periodo * p_visto), 2) if total_aulas_periodo > 0 else 0.0
-                            bonus_sala_map[id_l] = d_alu[(d_alu['TAGS'] != "SISTEMA_NOTA") & (d_alu['TAGS'] != "BONUS_CONSELHO")]['BONUS'].apply(util.sosa_to_float).sum()
-                            bonus_conselho_map[id_l] = d_alu[d_alu['TAGS'] == "BONUS_CONSELHO"]['BONUS'].apply(util.sosa_to_float).sum()
-                            
-                            trabalhos = d_alu[d_alu['TAGS'] == "SISTEMA_NOTA"]
-                            if not trabalhos.empty: trabalhos_map[id_l] = util.sosa_to_float(trabalhos.iloc[-1]['BONUS'])
-                        else:
-                            vistos_auto_map[id_l], bonus_sala_map[id_l], bonus_conselho_map[id_l], trabalhos_map[id_l] = 0.0, 0.0, 0.0, 0.0
-
-                # --- 3. CONSOLIDAÇÃO DA MESA DE LANÇAMENTO ---
-                notas_banco = df_notas[(df_notas['TURMA'] == turma_sel) & (df_notas['TRIMESTRE'] == trimestre_sel)] if not df_notas.empty else pd.DataFrame()
-                trim_limpo = trimestre_sel.replace(" ", "")
-                df_diag_turma = df_diagnosticos[(df_diagnosticos['TURMA'] == turma_sel) & (df_diagnosticos['ID_AVALIACAO'].str.contains(trim_limpo, case=False, na=False))] if not df_diagnosticos.empty else pd.DataFrame()
-                
-                def definir_icone_status(nec):
-                    n = str(nec).upper().strip()
-                    if "PENDENTE" in n or "SUSPEITA" in n: return "🟠"
-                    if "DEFASAGEM LEITURA" in n: return "🧱"
-                    if "DEFASAGEM MATEMÁTICA" in n: return "🧮"
-                    if "ALTA PERFORMANCE" in n: return "🚀"
-                    if n in ["NENHUMA", "", "NAN", "TÍPICO", "TIPICO"]: return "👤"
-                    return "♿"
-
-                dados_editor = []
-                for _, alu in alunos_turma.iterrows():
-                    id_a = db.limpar_id(alu['ID'])
-                    reg_b = notas_banco[notas_banco['ID_ALUNO'].apply(db.limpar_id) == id_a] if not notas_banco.empty else pd.DataFrame()
-                    
-                    n_teste = util.sosa_to_float(reg_b.iloc[0]['NOTA_TESTE']) if not reg_b.empty else 0.0
-                    n_prova = util.sosa_to_float(reg_b.iloc[0]['NOTA_PROVA']) if not reg_b.empty else 0.0
-                    n_rec_banco = util.sosa_to_float(reg_b.iloc[0]['NOTA_REC']) if not reg_b.empty else -1.0
-                    n_rec_display = None if n_rec_banco < 0 else n_rec_banco
-                    
-                    origem_prova, origem_teste = "[MANUAL]", "[MANUAL]"
-                    
-                    if trabalhos_map.get(id_a, 0.0) > 0: 
-                        n_teste = trabalhos_map[id_a]
-                        origem_teste = "[TRABALHO]"
-                    
-                    if not df_diag_turma.empty:
-                        scanned_teste = df_diag_turma[(df_diag_turma['ID_ALUNO'].apply(db.limpar_id) == id_a) & (df_diag_turma['ID_AVALIACAO'].str.upper().str.contains("TESTE"))]
-                        if not scanned_teste.empty: 
-                            n_teste = util.sosa_to_float(scanned_teste.iloc[-1]['NOTA_CALCULADA'])
-                            origem_teste = "[SCANNER]"
-                            
-                        scanned_prova = df_diag_turma[(df_diag_turma['ID_ALUNO'].apply(db.limpar_id) == id_a) & (df_diag_turma['ID_AVALIACAO'].str.upper().str.contains("PROVA"))]
-                        if not scanned_prova.empty: 
-                            n_prova = util.sosa_to_float(scanned_prova.iloc[-1]['NOTA_CALCULADA'])
-                            av_nome = scanned_prova.iloc[-1]['ID_AVALIACAO'].upper()
-                            if "2ª" in av_nome or "2CHAMADA" in av_nome: origem_prova = "[2ªC]"
-                            elif "TIPO" in av_nome: origem_prova = f"[V-{av_nome.split('TIPO')[-1].strip()}]"
-                            else: origem_prova = "[P]"
-
-                    icone_perfil = definir_icone_status(alu['NECESSIDADES'])
-
-                    dados_editor.append({
-                        "ID": id_a,
-                        "ESTUDANTE": f"{icone_perfil} {alu['NOME_ALUNO']}",
-                        "VISTOS (AUTO)": vistos_auto_map.get(id_a, 0.0),
-                        "BÔNUS (SALA)": bonus_sala_map.get(id_a, 0.0),
-                        "BÔNUS CONSELHO": bonus_conselho_map.get(id_a, 0.0),
-                        "TESTE (LANÇAR)": n_teste,
-                        "ORIGEM TESTE": origem_teste,
-                        "PROVA (LANÇAR)": n_prova,
-                        "ORIGEM PROVA": origem_prova,
-                        "REC. PARALELA": n_rec_display,
-                        "_ORIGINAL_TESTE": n_teste,
-                        "_ORIGINAL_PROVA": n_prova
-                    })
-
-                df_input = pd.DataFrame(dados_editor)
-                
-                # --- ALGORITMO DE TRANSBORDAMENTO E ARREDONDAMENTO MUNICIPAL ---
-                def aplicar_transbordamento(row):
-                    b_sala = float(row.get('BÔNUS (SALA)', 0.0) or 0.0)
-                    b_cons = float(row.get('BÔNUS CONSELHO', 0.0) or 0.0)
-                    bonus_restante = b_sala + b_cons
-                    
-                    v_base = float(row.get('VISTOS (AUTO)', 0.0) or 0.0)
-                    t_base = float(row.get('TESTE (LANÇAR)', 0.0) or 0.0)
-                    p_base = float(row.get('PROVA (LANÇAR)', 0.0) or 0.0)
-                    
-                    v_final = max(0.0, min(p_visto, v_base + bonus_restante))
-                    bonus_restante -= (v_final - v_base)
-                    
-                    t_final = max(0.0, min(p_teste, t_base + bonus_restante))
-                    bonus_restante -= (t_final - t_base)
-                    
-                    p_final = max(0.0, min(p_prova, p_base + bonus_restante))
-                    
-                    if arredondar_prefeitura:
-                        v_final = round(v_final * 2) / 2
-                        t_final = round(t_final * 2) / 2
-                        p_final = round(p_final * 2) / 2
-                    
-                    soma_notas = v_final + t_final + p_final
-                    
-                    rec_input = row.get('REC. PARALELA')
-                    fez_rec = pd.notna(rec_input) and rec_input is not None and str(rec_input).strip() != ""
-                    
-                    if not fez_rec:
-                        rec_final_salvar = -1.0 
-                        media_final = soma_notas
-                    else:
-                        rec_raw = float(rec_input)
-                        if regra_rec == "Média Justa (Soma + Rec / 2)":
-                            nota_rec_calculada = (soma_notas + rec_raw) / 2
-                            media_final = max(soma_notas, nota_rec_calculada)
-                            rec_final_salvar = nota_rec_calculada 
-                        elif regra_rec == "Substituir apenas a Prova":
-                            nota_rec_convertida = (rec_raw / 10.0) * p_prova
-                            p_final_com_rec = max(p_final, nota_rec_convertida)
-                            media_final = v_final + t_final + p_final_com_rec
-                            rec_final_salvar = rec_raw
-                        else: 
-                            media_final = max(soma_notas, rec_raw)
-                            rec_final_salvar = rec_raw
-                        
-                    if arredondar_prefeitura:
-                        media_final = round(media_final * 2) / 2
-                        if rec_final_salvar > 0: rec_final_salvar = round(rec_final_salvar * 2) / 2
-                        
-                    media_final = min(10.0, media_final)
-                    return pd.Series([v_final, t_final, p_final, rec_final_salvar, media_final])
-
-                df_input[['V_PREF', 'T_PREF', 'P_PREF', 'REC_PREF', 'MEDIA_FINAL']] = df_input.apply(aplicar_transbordamento, axis=1)
-                st.session_state.df_input_ref = df_input.copy()
-
-                # ==============================================================================
-                # 🚨 MESA DE LANÇAMENTO E FECHAMENTO EM FRAGMENTO (DESEMPENHO 10X MAIOR)
-                # ==============================================================================
-                @st.fragment
-                def renderizar_mesa_notas_fragmento():
-                    tab_lancamento, tab_fechamento = st.tabs(["📝 Mesa de Lançamento", "🖨️ Relatório de Fechamento"])
-
-                    with tab_lancamento:
-                        c_btn_ref, _ = st.columns([1, 3])
-                        if c_btn_ref.button("⚡ Aplicar Bônus de Refacção", type="secondary", key=f"btn_refac_open_{v}"):
-                            dialog_refaccao()
-                            
-                        st.caption("💡 **Zonas Visuais:** As colunas azuis são automáticas. As amarelas são para digitação. As verdes são o resultado final para a prefeitura.")
-                        
-                        df_editado = st.data_editor(
-                            df_input,
-                            column_config={
-                                "ID": None, "REC_PREF": None, "_ORIGINAL_TESTE": None, "_ORIGINAL_PROVA": None,
-                                "ORIGEM TESTE": None, "ORIGEM PROVA": None, 
-                                "ESTUDANTE": st.column_config.TextColumn("Estudante", width="medium", disabled=True),
-                                
-                                # ZONA AZUL (Automática)
-                                "VISTOS (AUTO)": st.column_config.NumberColumn("🔵 Vistos", format="%.1f", disabled=True, width="small"),
-                                "BÔNUS (SALA)": st.column_config.NumberColumn("🔵 Bônus Sala", format="%.1f", disabled=True, width="small"),
-                                
-                                # ZONA AMARELA (Editável)
-                                "BÔNUS CONSELHO": st.column_config.NumberColumn("🟡 Bônus Extra", min_value=0.0, max_value=10.0, format="%.1f", width="small"),
-                                "TESTE (LANÇAR)": st.column_config.NumberColumn("🟡 Teste", min_value=0.0, max_value=p_teste, format="%.1f", width="small"),
-                                "PROVA (LANÇAR)": st.column_config.NumberColumn("🟡 Prova", min_value=0.0, max_value=p_prova, format="%.1f", width="small"),
-                                "REC. PARALELA": st.column_config.NumberColumn("🟡 Rec. Paralela", min_value=0.0, max_value=10.0, format="%.1f", width="small"),
-                                
-                                # ZONA VERDE (Prefeitura)
-                                "V_PREF": st.column_config.NumberColumn("🟢 C1 (Vistos)", format="%.1f", disabled=True),
-                                "T_PREF": st.column_config.NumberColumn("🟢 C2 (Teste)", format="%.1f", disabled=True),
-                                "P_PREF": st.column_config.NumberColumn("🟢 C3 (Prova)", format="%.1f", disabled=True),
-                                
-                                "MEDIA_FINAL": st.column_config.ProgressColumn(
-                                    "📊 Média Final", help="Média calculada com transbordamento e recuperação", format="%.1f", min_value=0.0, max_value=10.0,
-                                ),
-                            },
-                            hide_index=True, use_container_width=True, key=f"editor_notas_frag_{v}"
-                        )
-
-                        st.markdown("<br>", unsafe_allow_html=True)
-                        if st.button("💾 SALVAR NOTAS E SINCRONIZAR BOLETIM", type="primary", use_container_width=True, key=f"btn_save_boletim_{v}"):
-                            with st.status("Sincronizando registros no Banco de Dados...") as status:
-                                df_editado[['V_PREF', 'T_PREF', 'P_PREF', 'REC_PREF', 'MEDIA_FINAL']] = df_editado.apply(aplicar_transbordamento, axis=1)
-                                
-                                status.write("Salvando configurações de data...")
-                                db.excluir_registro("DB_RELATORIOS", f"{turma_sel}|{trimestre_sel}")
-                                db.salvar_no_banco("DB_RELATORIOS", [datetime.now().strftime("%d/%m/%Y"), "SISTEMA", "CONFIG", config_key, f"{turma_sel}|{trimestre_sel}|{data_limite.strftime('%d/%m/%Y')}"])
-                                
-                                linhas_gabarito_reverso = []
-                                linhas_bonus_conselho = []
-                                
-                                df_diario_turma = df_diario[(df_diario['TURMA'] == turma_sel) & (~df_diario['TAGS'].isin(['DIA NÃO LETIVO', 'BONUS_CONSELHO', 'SISTEMA_NOTA']))].copy() if not df_diario.empty else pd.DataFrame()
-                                if not df_diario_turma.empty:
-                                    df_diario_turma['DATA_DT'] = pd.to_datetime(df_diario_turma['DATA'], format="%d/%m/%Y", errors='coerce')
-                                    data_ancora = df_diario_turma['DATA_DT'].max().strftime("%d/%m/%Y")
-                                else: data_ancora = data_limite.strftime("%d/%m/%Y")
-                                
-                                status.write("Processando lançamentos manuais e bônus...")
-                                for _, r in df_editado.iterrows():
-                                    nome_limpo = r['ESTUDANTE'].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
-                                    
-                                    teste_lancar = float(r.get('TESTE (LANÇAR)', 0.0) or 0.0)
-                                    prova_lancar = float(r.get('PROVA (LANÇAR)', 0.0) or 0.0)
-                                    bonus_conselho = float(r.get('BÔNUS CONSELHO', 0.0) or 0.0)
-                                    
-                                    if teste_lancar != r['_ORIGINAL_TESTE']:
-                                        linhas_gabarito_reverso.append([datetime.now().strftime("%d/%m/%Y"), r['ID'], nome_limpo, turma_sel, f"TESTE {trimestre_sel} [LANÇAMENTO MANUAL]", "MANUAL", util.sosa_to_str(teste_lancar), "N/A"])
-                                    if prova_lancar != r['_ORIGINAL_PROVA']:
-                                        linhas_gabarito_reverso.append([datetime.now().strftime("%d/%m/%Y"), r['ID'], nome_limpo, turma_sel, f"PROVA {trimestre_sel} [LANÇAMENTO MANUAL]", "MANUAL", util.sosa_to_str(prova_lancar), "N/A"])
-                                        
-                                    if bonus_conselho > 0:
-                                        linhas_bonus_conselho.append([data_ancora, r['ID'], nome_limpo, turma_sel, "ISENTO", "BONUS_CONSELHO", "Bônus de Conselho de Classe", util.sosa_to_str(bonus_conselho)])
-
-                                if linhas_gabarito_reverso: db.salvar_lote("DB_GABARITOS_ALUNOS", linhas_gabarito_reverso)
-                                
-                                if linhas_bonus_conselho:
-                                    try:
-                                        wb = db.conectar()
-                                        ws = wb.worksheet("DB_DIARIO_BORDO")
-                                        dados_d = ws.get_all_values()
-                                        for i in range(len(dados_d)-1, 0, -1):
-                                            if len(dados_d[i]) > 5 and dados_d[i][3] == turma_sel and dados_d[i][5] == "BONUS_CONSELHO":
-                                                ws.delete_rows(i+1)
-                                    except: pass
-                                    db.salvar_lote("DB_DIARIO_BORDO", linhas_bonus_conselho)
-
-                                status.write("Consolidando Boletim Oficial...")
-                                db.limpar_notas_turma_trimestre(turma_sel, trimestre_sel)
-                                linhas_save = []
-                                for _, r in df_editado.iterrows():
-                                    nome_limpo = r['ESTUDANTE'].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
-                                    linhas_save.append([
-                                        r['ID'], nome_limpo, turma_sel, trimestre_sel,
-                                        util.sosa_to_str(r["V_PREF"]), util.sosa_to_str(r["T_PREF"]),
-                                        util.sosa_to_str(r["P_PREF"]), util.sosa_to_str(r["REC_PREF"]),
-                                        util.sosa_to_str(r['MEDIA_FINAL'])
-                                    ])
-                                if db.salvar_lote("DB_NOTAS", linhas_save):
-                                    status.update(label="✅ Boletim Sincronizado com Sucesso!", state="complete")
-                                    st.balloons(); time.sleep(1.5); st.rerun()
-
-                    with tab_fechamento:
-                        st.markdown("### 🖨️ Relatório Executivo de Fechamento")
-                        
-                        df_aprovados = df_input[df_input['MEDIA_FINAL'] >= 6.0]
-                        df_quase = df_input[(df_input['MEDIA_FINAL'] >= 5.5) & (df_input['MEDIA_FINAL'] < 6.0)]
-                        df_rec = df_input[df_input['MEDIA_FINAL'] < 5.5]
-                        
-                        c_met1, c_met2, c_met3 = st.columns(3)
-                        c_met1.caption(f"Status: ✅ APROVADOS DIRETO ({len(df_aprovados)})")
-                        c_met2.caption(f"Status: 🟡 QUASE LÁ ({len(df_quase)})")
-                        c_met3.caption(f"Status: 🔴 RECUPERAÇÃO ({len(df_rec)})")
-                        
-                        st.markdown("---")
-                        
-                        c_list1, c_list2 = st.columns(2)
-                        with c_list1:
-                            st.markdown("#### 🟡 Radar: Quase Lá (5.5 a 5.9)")
-                            if not df_quase.empty:
-                                for _, r in df_quase.iterrows():
-                                    st.warning(f"**{r['ESTUDANTE']}** - Média: {r['MEDIA_FINAL']:.1f}")
-                            else: st.success("Nenhum aluno nesta faixa.")
-                            
-                        with c_list2:
-                            st.markdown("#### 🔴 UTI: Recuperação Paralela (< 5.5)")
-                            if not df_rec.empty:
-                                for _, r in df_rec.iterrows():
-                                    st.error(f"**{r['ESTUDANTE']}** - Média: {r['MEDIA_FINAL']:.1f}")
-                            else: st.success("Nenhum aluno em recuperação!")
-                        
-                        st.markdown("---")
-                        st.markdown("#### 🖨️ Fábrica de Etiquetas Word (Para colar nas provas)")
-                        st.info("O sistema gerará um documento Word com retângulos formatados. Basta imprimir, cortar e colar na prova do aluno.")
-                        
-                        if st.button("🖨️ GERAR ETIQUETAS (DOCX)", use_container_width=True, type="primary", key=f"btn_etiq_docx_{v}"):
-                            with st.spinner("Desenhando etiquetas..."):
-                                dados_etiquetas = []
-                                for _, r in df_input.iterrows():
-                                    nome_limpo = r['ESTUDANTE'].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
-                                    
-                                    if r['MEDIA_FINAL'] >= 6.0: status_txt = "✅ APROVADO"
-                                    elif r['MEDIA_FINAL'] >= 5.5: status_txt = "⚠️ REFAZER QUESTÕES ERRADAS"
-                                    else: status_txt = "🔴 RECUPERAÇÃO PARALELA"
-                                    
-                                    b_sala = float(r.get('BÔNUS (SALA)', 0.0) or 0.0)
-                                    b_cons = float(r.get('BÔNUS CONSELHO', 0.0) or 0.0)
-                                    bonus_total_etiq = b_sala + b_cons
-                                    
-                                    dados_etiquetas.append({
-                                        "nome": nome_limpo,
-                                        "vistos": f"{float(r.get('V_PREF', 0.0) or 0.0):.1f}",
-                                        "teste": f"{float(r.get('T_PREF', 0.0) or 0.0):.1f}",
-                                        "prova": f"{float(r.get('P_PREF', 0.0) or 0.0):.1f}",
-                                        "bonus": f"{bonus_total_etiq:.1f}",
-                                        "media": f"{float(r.get('MEDIA_FINAL', 0.0) or 0.0):.1f}",
-                                        "status": status_txt
-                                    })
-                                
-                                info_etiqueta = {"turma": turma_sel, "trimestre": trimestre_sel}
-                                nome_arq_etiq = f"ETIQUETAS_{turma_sel.replace(' ', '')}_{trimestre_sel.replace(' ', '')}"
-                                
-                                doc_stream = exporter.gerar_docx_etiquetas_notas(nome_arq_etiq, dados_etiquetas, info_etiqueta)
-                                link_doc = db.subir_e_converter_para_google_docs(doc_stream, nome_arq_etiq, trimestre=trimestre_sel, categoria=turma_sel, modo="PLANEJAMENTO")
-                                
-                                if "https" in link_doc:
-                                    st.success("✅ Etiquetas geradas com sucesso!")
-                                    st.link_button("📂 ABRIR ETIQUETAS PARA IMPRESSÃO", link_doc, type="primary", use_container_width=True)
-                                    st.balloons()
-                                else:
-                                    st.error(f"Erro ao salvar no Drive: {link_doc}")
-
-                renderizar_mesa_notas_fragmento()
+            renderizar_mesa_notas_fragmento()
 
 
 
@@ -5249,486 +5279,6 @@ Qualquer dúvida, estou à disposição! Um abraço! 🚀"""
 
         renderizar_dossie_bio_fragmento()
         st.caption(f"Dossiê atualizado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
-
-
-
-
-# ==============================================================================
-# MÓDULO: PAINEL DE NOTAS & VISTOS - V201 (MESA DE OPERAÇÕES & MODAIS)
-# ==============================================================================
-elif menu == "📊 Painel de Notas & Vistos":
-    st.title("📊 Torre de Comando: Gestão de Notas")
-    st.caption("💡 **Guia de Comando:** Defina a data de congelamento para fechar as notas. O sistema calcula o transbordamento, separa quem está 'Quase Lá' e gera as etiquetas.")
-    st.markdown("---")
-
-    if "v_notas" not in st.session_state: st.session_state.v_notas = int(time.time())
-    v = st.session_state.v_notas
-
-    # 🚨 INICIALIZAÇÃO DE VARIÁVEIS DE CONFIGURAÇÃO NO ESTADO
-    if 'p_visto' not in st.session_state: st.session_state.p_visto = 3.0
-    if 'p_teste' not in st.session_state: st.session_state.p_teste = 3.0
-    if 'p_prova' not in st.session_state: st.session_state.p_prova = 4.0
-    if 'regra_rec' not in st.session_state: st.session_state.regra_rec = "Média Justa (Soma + Rec / 2)"
-    if 'arredondar_prefeitura' not in st.session_state: st.session_state.arredondar_prefeitura = True
-
-    # 🚨 POP-UP MODAL DE CONFIGURAÇÃO (ST.DIALOG)
-    @st.dialog("⚙️ Configurações de Fechamento e Pesos")
-    def dialog_config_notas():
-        st.markdown("Ajuste os pesos que compõem a média final (Soma deve ser 10.0).")
-        c_p1, c_p2, c_p3 = st.columns(3)
-        st.session_state.p_visto = c_p1.number_input("Peso Vistos:", 0.0, 10.0, st.session_state.p_visto, step=0.5)
-        st.session_state.p_teste = c_p2.number_input("Peso Teste:", 0.0, 10.0, st.session_state.p_teste, step=0.5)
-        st.session_state.p_prova = c_p3.number_input("Peso Prova:", 0.0, 10.0, st.session_state.p_prova, step=0.5)
-        
-        st.markdown("---")
-        st.session_state.regra_rec = st.selectbox(
-            "⚖️ Regra da Recuperação:", 
-            ["Média Justa (Soma + Rec / 2)", "Substituir apenas a Prova", "Substituir a Média (Tradicional)"],
-            index=["Média Justa (Soma + Rec / 2)", "Substituir apenas a Prova", "Substituir a Média (Tradicional)"].index(st.session_state.regra_rec)
-        )
-        st.session_state.arredondar_prefeitura = st.toggle("⚖️ Forçar Arredondamento da Prefeitura (0,5 em 0,5)", value=st.session_state.arredondar_prefeitura)
-        
-        if (st.session_state.p_visto + st.session_state.p_teste + st.session_state.p_prova) != 10.0:
-            st.error(f"⚠️ A soma dos pesos ({st.session_state.p_visto + st.session_state.p_teste + st.session_state.p_prova}) deve ser exatamente 10.0.")
-        
-        if st.button("💾 Salvar Configurações", type="primary", use_container_width=True):
-            st.rerun()
-
-    p_visto = st.session_state.p_visto
-    p_teste = st.session_state.p_teste
-    p_prova = st.session_state.p_prova
-    regra_rec = st.session_state.regra_rec
-    arredondar_prefeitura = st.session_state.arredondar_prefeitura
-
-    if df_alunos.empty:
-        st.warning("⚠️ Cadastre alunos primeiro na aba 'Gestão da Turma'.")
-    else:
-        # 🚨 VACINA ANTI-KEYERROR
-        lista_turmas_notas = []
-        if not df_turmas.empty and 'ID_TURMA' in df_turmas.columns:
-            turmas_reais_notas = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
-            lista_turmas_notas = sorted(turmas_reais_notas['ID_TURMA'].unique())
-        elif not df_alunos.empty and 'TURMA' in df_alunos.columns:
-            lista_turmas_notas = sorted(df_alunos['TURMA'].unique())
-
-        if not lista_turmas_notas:
-            st.warning("⚠️ Nenhuma turma regular cadastrada.")
-            st.stop()
-
-        # --- 1. BARRA DE CONTROLE LIMPA (BENTO GRID) ---
-        with st.container(border=True):
-            c_f1, c_f2, c_f3, c_f4 = st.columns([1.5, 1.5, 1.5, 1])
-            turma_sel = c_f1.selectbox("👥 Turma:", lista_turmas_notas, key=f"n_turma_{v}", label_visibility="collapsed")
-            trimestre_sel = c_f2.selectbox("📅 Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"n_trim_{v}", label_visibility="collapsed")
-            
-            config_key = f"CONFIG_DATA_{turma_sel}_{trimestre_sel}"
-            config_records = df_relatorios[df_relatorios['TIPO'] == config_key]
-            if not config_records.empty:
-                saved_date_str = config_records.iloc[-1]['CONTEUDO'].split('|')[-1]
-                try: default_date = datetime.strptime(saved_date_str, "%d/%m/%Y").date()
-                except: default_date = date.today()
-            else: default_date = date.today()
-
-            data_limite = c_f3.date_input("❄️ Congelar Vistos em:", default_date, format="DD/MM/YYYY", label_visibility="collapsed")
-            
-            if c_f4.button("⚙️ Ajustar Pesos", use_container_width=True):
-                dialog_config_notas()
-
-        alunos_turma = df_alunos[df_alunos['TURMA'] == turma_sel].sort_values(by="NOME_ALUNO")
-        
-        if alunos_turma.empty:
-            st.warning(f"⚠️ Nenhum aluno cadastrado na turma {turma_sel}.")
-            st.stop()
-
-        # --- 2. MOTOR DE CÁLCULO AUTOMÁTICO (COM CONGELAMENTO) ---
-        vistos_auto_map, bonus_sala_map, bonus_conselho_map, trabalhos_map = {}, {}, {}, {}
-        
-        calendario = {
-            "I Trimestre": (date(2026, 2, 9), date(2026, 5, 22)),
-            "II Trimestre": (date(2026, 5, 25), date(2026, 9, 4)),
-            "III Trimestre": (date(2026, 9, 8), date(2026, 12, 17))
-        }
-        dt_ini, dt_fim = calendario.get(trimestre_sel, (date(2026, 1, 1), date(2026, 12, 31)))
-
-        if not df_diario.empty:
-            df_d_t = df_diario[df_diario['TURMA'] == turma_sel].copy()
-            df_d_t['DATA_DT'] = pd.to_datetime(df_d_t['DATA'], format="%d/%m/%Y", errors='coerce').dt.date
-            df_d_trim = df_d_t[(df_d_t['DATA_DT'] >= dt_ini) & (df_d_t['DATA_DT'] <= data_limite)]
-            
-            for id_aluno in alunos_turma['ID']:
-                id_l = db.limpar_id(id_aluno)
-                d_alu = df_d_trim[df_d_trim['ID_ALUNO'].apply(db.limpar_id) == id_l]
-                
-                if not d_alu.empty:
-                    d_alu_validas = d_alu[d_alu['VISTO_ATIVIDADE'].astype(str).str.upper() != "ISENTO"]
-                    vistos_validos = d_alu_validas[d_alu_validas['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"]
-                    aulas_com_visto = len(vistos_validos)
-                    total_aulas_periodo = len(d_alu_validas)
-                    
-                    vistos_auto_map[id_l] = round((aulas_com_visto / total_aulas_periodo * p_visto), 2) if total_aulas_periodo > 0 else 0.0
-                    bonus_sala_map[id_l] = d_alu[(d_alu['TAGS'] != "SISTEMA_NOTA") & (d_alu['TAGS'] != "BONUS_CONSELHO")]['BONUS'].apply(util.sosa_to_float).sum()
-                    bonus_conselho_map[id_l] = d_alu[d_alu['TAGS'] == "BONUS_CONSELHO"]['BONUS'].apply(util.sosa_to_float).sum()
-                    
-                    trabalhos = d_alu[d_alu['TAGS'] == "SISTEMA_NOTA"]
-                    if not trabalhos.empty: trabalhos_map[id_l] = util.sosa_to_float(trabalhos.iloc[-1]['BONUS'])
-                else:
-                    vistos_auto_map[id_l], bonus_sala_map[id_l], bonus_conselho_map[id_l], trabalhos_map[id_l] = 0.0, 0.0, 0.0, 0.0
-
-        # --- 3. CONSOLIDAÇÃO DA MESA DE LANÇAMENTO ---
-        notas_banco = df_notas[(df_notas['TURMA'] == turma_sel) & (df_notas['TRIMESTRE'] == trimestre_sel)]
-        
-        trim_limpo = trimestre_sel.replace(" ", "")
-        df_diag_turma = df_diagnosticos[(df_diagnosticos['TURMA'] == turma_sel) & (df_diagnosticos['ID_AVALIACAO'].str.contains(trim_limpo, case=False, na=False))]
-        
-        def definir_icone_status(nec):
-            n = str(nec).upper().strip()
-            if "PENDENTE" in n or "SUSPEITA" in n: return "🟠"
-            if "DEFASAGEM LEITURA" in n: return "🧱"
-            if "DEFASAGEM MATEMÁTICA" in n: return "🧮"
-            if "ALTA PERFORMANCE" in n: return "🚀"
-            if n in["NENHUMA", "", "NAN", "TÍPICO", "TIPICO"]: return "👤"
-            return "♿"
-
-        dados_editor =[]
-        for _, alu in alunos_turma.iterrows():
-            id_a = db.limpar_id(alu['ID'])
-            reg_b = notas_banco[notas_banco['ID_ALUNO'].apply(db.limpar_id) == id_a]
-            
-            n_teste = util.sosa_to_float(reg_b.iloc[0]['NOTA_TESTE']) if not reg_b.empty else 0.0
-            n_prova = util.sosa_to_float(reg_b.iloc[0]['NOTA_PROVA']) if not reg_b.empty else 0.0
-            n_rec_banco = util.sosa_to_float(reg_b.iloc[0]['NOTA_REC']) if not reg_b.empty else -1.0
-            n_rec_display = None if n_rec_banco < 0 else n_rec_banco
-            
-            origem_prova, origem_teste = "[MANUAL]", "[MANUAL]"
-            
-            if trabalhos_map.get(id_a, 0.0) > 0: 
-                n_teste = trabalhos_map[id_a]
-                origem_teste = "[TRABALHO]"
-            
-            scanned_teste = df_diag_turma[(df_diag_turma['ID_ALUNO'].apply(db.limpar_id) == id_a) & (df_diag_turma['ID_AVALIACAO'].str.upper().str.contains("TESTE"))]
-            if not scanned_teste.empty: 
-                n_teste = util.sosa_to_float(scanned_teste.iloc[-1]['NOTA_CALCULADA'])
-                origem_teste = "[SCANNER]"
-                
-            scanned_prova = df_diag_turma[(df_diag_turma['ID_ALUNO'].apply(db.limpar_id) == id_a) & (df_diag_turma['ID_AVALIACAO'].str.upper().str.contains("PROVA"))]
-            if not scanned_prova.empty: 
-                n_prova = util.sosa_to_float(scanned_prova.iloc[-1]['NOTA_CALCULADA'])
-                av_nome = scanned_prova.iloc[-1]['ID_AVALIACAO'].upper()
-                if "2ª" in av_nome or "2CHAMADA" in av_nome: origem_prova = "[2ªC]"
-                elif "TIPO" in av_nome: origem_prova = f"[V-{av_nome.split('TIPO')[-1].strip()}]"
-                else: origem_prova = "[P]"
-
-            icone_perfil = definir_icone_status(alu['NECESSIDADES'])
-
-            dados_editor.append({
-                "ID": id_a,
-                "ESTUDANTE": f"{icone_perfil} {alu['NOME_ALUNO']}",
-                "VISTOS (AUTO)": vistos_auto_map.get(id_a, 0.0),
-                "BÔNUS (SALA)": bonus_sala_map.get(id_a, 0.0),
-                "BÔNUS CONSELHO": bonus_conselho_map.get(id_a, 0.0),
-                "TESTE (LANÇAR)": n_teste,
-                "ORIGEM TESTE": origem_teste,
-                "PROVA (LANÇAR)": n_prova,
-                "ORIGEM PROVA": origem_prova,
-                "REC. PARALELA": n_rec_display,
-                "_ORIGINAL_TESTE": n_teste,
-                "_ORIGINAL_PROVA": n_prova
-            })
-
-        df_input = pd.DataFrame(dados_editor)
-        
-        # --- ALGORITMO DE TRANSBORDAMENTO E JUSTIÇA PEDAGÓGICA ---
-        def aplicar_transbordamento(row):
-            b_sala = float(row.get('BÔNUS (SALA)', 0.0) or 0.0)
-            b_cons = float(row.get('BÔNUS CONSELHO', 0.0) or 0.0)
-            bonus_restante = b_sala + b_cons
-            
-            v_base = float(row.get('VISTOS (AUTO)', 0.0) or 0.0)
-            t_base = float(row.get('TESTE (LANÇAR)', 0.0) or 0.0)
-            p_base = float(row.get('PROVA (LANÇAR)', 0.0) or 0.0)
-            
-            v_final = max(0.0, min(p_visto, v_base + bonus_restante))
-            bonus_restante -= (v_final - v_base)
-            
-            t_final = max(0.0, min(p_teste, t_base + bonus_restante))
-            bonus_restante -= (t_final - t_base)
-            
-            p_final = max(0.0, min(p_prova, p_base + bonus_restante))
-            
-            if arredondar_prefeitura:
-                v_final = round(v_final * 2) / 2
-                t_final = round(t_final * 2) / 2
-                p_final = round(p_final * 2) / 2
-            
-            soma_notas = v_final + t_final + p_final
-            
-            rec_input = row.get('REC. PARALELA')
-            fez_rec = pd.notna(rec_input) and rec_input is not None and str(rec_input).strip() != ""
-            
-            if not fez_rec:
-                rec_final_salvar = -1.0 
-                media_final = soma_notas
-            else:
-                rec_raw = float(rec_input)
-                if regra_rec == "Média Justa (Soma + Rec / 2)":
-                    nota_rec_calculada = (soma_notas + rec_raw) / 2
-                    media_final = max(soma_notas, nota_rec_calculada)
-                    rec_final_salvar = nota_rec_calculada 
-                elif regra_rec == "Substituir apenas a Prova":
-                    nota_rec_convertida = (rec_raw / 10.0) * p_prova
-                    p_final_com_rec = max(p_final, nota_rec_convertida)
-                    media_final = v_final + t_final + p_final_com_rec
-                    rec_final_salvar = rec_raw
-                else: 
-                    media_final = max(soma_notas, rec_raw)
-                    rec_final_salvar = rec_raw
-                
-            if arredondar_prefeitura:
-                media_final = round(media_final * 2) / 2
-                if rec_final_salvar > 0: rec_final_salvar = round(rec_final_salvar * 2) / 2
-                
-            media_final = min(10.0, media_final)
-            return pd.Series([v_final, t_final, p_final, rec_final_salvar, media_final])
-
-        df_input[['V_PREF', 'T_PREF', 'P_PREF', 'REC_PREF', 'MEDIA_FINAL']] = df_input.apply(aplicar_transbordamento, axis=1)
-
-        # ==============================================================================
-        # 🚨 POP-UP MODAL: RADAR DE REFACÇÃO (JUSTIÇA PEDAGÓGICA)
-        # ==============================================================================
-        @st.dialog("⚡ Radar de Refacção (Justiça Pedagógica)", width="large")
-        def dialog_refaccao():
-            st.info("Selecione os alunos que refizeram as questões erradas da prova para aplicar o bônus.")
-            valor_bonus_refaccao = st.number_input("Valor do Bônus (+):", min_value=0.1, max_value=5.0, value=0.5, step=0.1)
-            
-            df_elegiveis = df_input[df_input['MEDIA_FINAL'] < 10.0].copy()
-            if not df_elegiveis.empty:
-                dados_refaccao = []
-                alunos_ja_com_bonus = []
-                
-                for _, r in df_elegiveis.iterrows():
-                    ja_ganhou = False
-                    if not df_diario.empty:
-                        mask_bonus = (df_diario['ID_ALUNO'].apply(db.limpar_id) == r['ID']) & (df_diario['OBSERVACOES'].str.contains("Refacção", na=False))
-                        if not df_diario[mask_bonus].empty: ja_ganhou = True
-                    
-                    if ja_ganhou: alunos_ja_com_bonus.append(r['ESTUDANTE'])
-                    else:
-                        dados_refaccao.append({
-                            "Entregou?": False, "ID": r['ID'], "Estudante": r['ESTUDANTE'], "Média Atual": r['MEDIA_FINAL']
-                        })
-                
-                if alunos_ja_com_bonus:
-                    st.success(f"✅ **Bônus já aplicado para:** {', '.join(alunos_ja_com_bonus)}")
-                
-                if dados_refaccao:
-                    df_refaccao_ed = st.data_editor(
-                        pd.DataFrame(dados_refaccao), hide_index=True, use_container_width=True,
-                        column_config={
-                            "Entregou?": st.column_config.CheckboxColumn("Entregou?", default=False),
-                            "ID": None, "Estudante": st.column_config.TextColumn("Estudante", disabled=True),
-                            "Média Atual": st.column_config.NumberColumn("Média Atual", format="%.1f", disabled=True)
-                        }, key=f"ed_refaccao_{v}"
-                    )
-                    
-                    alunos_marcados = df_refaccao_ed[df_refaccao_ed["Entregou?"] == True]
-                    
-                    if st.button(f"💾 APLICAR BÔNUS (+{valor_bonus_refaccao}) AOS MARCADOS", type="primary", use_container_width=True):
-                        if alunos_marcados.empty: st.error("⚠️ Marque pelo menos um aluno.")
-                        else:
-                            with st.spinner("Injetando bônus..."):
-                                linhas_bonus = []
-                                df_diario_turma = df_diario[(df_diario['TURMA'] == turma_sel) & (~df_diario['TAGS'].isin(['DIA NÃO LETIVO', 'BONUS_CONSELHO', 'SISTEMA_NOTA']))].copy()
-                                if not df_diario_turma.empty:
-                                    df_diario_turma['DATA_DT'] = pd.to_datetime(df_diario_turma['DATA'], format="%d/%m/%Y", errors='coerce')
-                                    data_ancora_ref = df_diario_turma['DATA_DT'].max().strftime("%d/%m/%Y")
-                                else: data_ancora_ref = data_limite.strftime("%d/%m/%Y")
-                                
-                                for _, r in alunos_marcados.iterrows():
-                                    nome_limpo = r['Estudante'].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
-                                    linhas_bonus.append([
-                                        data_ancora_ref, r['ID'], nome_limpo, turma_sel,
-                                        "ISENTO", "BONUS_CONSELHO", "Bônus de Refacção de Prova (Justiça Pedagógica)", util.sosa_to_str(valor_bonus_refaccao)
-                                    ])
-                                    
-                                if db.salvar_lote("DB_DIARIO_BORDO", linhas_bonus):
-                                    st.success("✅ Bônus aplicado!"); time.sleep(1); st.rerun()
-                else: st.info("Todos os alunos elegíveis já receberam o bônus.")
-
-        # ==============================================================================
-        # 🚨 ABAS DE TRABALHO: LANÇAMENTO vs FECHAMENTO
-        # ==============================================================================
-        tab_lancamento, tab_fechamento = st.tabs(["📝 Mesa de Lançamento", "🖨️ Relatório de Fechamento"])
-
-        with tab_lancamento:
-            c_btn_ref, _ = st.columns([1, 3])
-            if c_btn_ref.button("⚡ Aplicar Bônus de Refacção", type="secondary"):
-                dialog_refaccao()
-                
-            st.caption("💡 **Zonas Visuais:** As colunas azuis são automáticas. As amarelas são para digitação. As verdes são o resultado final para a prefeitura.")
-            
-            df_editado = st.data_editor(
-                df_input,
-                column_config={
-                    "ID": None, "REC_PREF": None, "_ORIGINAL_TESTE": None, "_ORIGINAL_PROVA": None,
-                    "ORIGEM TESTE": None, "ORIGEM PROVA": None, 
-                    "ESTUDANTE": st.column_config.TextColumn("Estudante", width="medium", disabled=True),
-                    
-                    # ZONA AZUL (Automática)
-                    "VISTOS (AUTO)": st.column_config.NumberColumn("🔵 Vistos", format="%.1f", disabled=True, width="small"),
-                    "BÔNUS (SALA)": st.column_config.NumberColumn("🔵 Bônus Sala", format="%.1f", disabled=True, width="small"),
-                    
-                    # ZONA AMARELA (Editável)
-                    "BÔNUS CONSELHO": st.column_config.NumberColumn("🟡 Bônus Extra", min_value=0.0, max_value=10.0, format="%.1f", width="small"),
-                    "TESTE (LANÇAR)": st.column_config.NumberColumn("🟡 Teste", min_value=0.0, max_value=p_teste, format="%.1f", width="small"),
-                    "PROVA (LANÇAR)": st.column_config.NumberColumn("🟡 Prova", min_value=0.0, max_value=p_prova, format="%.1f", width="small"),
-                    "REC. PARALELA": st.column_config.NumberColumn("🟡 Rec. Paralela", min_value=0.0, max_value=10.0, format="%.1f", width="small"),
-                    
-                    # ZONA VERDE (Prefeitura)
-                    "V_PREF": st.column_config.NumberColumn("🟢 C1 (Vistos)", format="%.1f", disabled=True),
-                    "T_PREF": st.column_config.NumberColumn("🟢 C2 (Teste)", format="%.1f", disabled=True),
-                    "P_PREF": st.column_config.NumberColumn("🟢 C3 (Prova)", format="%.1f", disabled=True),
-                    
-                    "MEDIA_FINAL": st.column_config.ProgressColumn(
-                        "📊 Média Final", help="Média calculada com transbordamento e recuperação", format="%.1f", min_value=0.0, max_value=10.0,
-                    ),
-                },
-                hide_index=True, use_container_width=True, key=f"editor_notas_{v}"
-            )
-
-            st.markdown("<br>", unsafe_allow_html=True)
-            if st.button("💾 SALVAR NOTAS E SINCRONIZAR BOLETIM", type="primary", use_container_width=True):
-                with st.status("Sincronizando registros no Banco de Dados...") as status:
-                    df_editado[['V_PREF', 'T_PREF', 'P_PREF', 'REC_PREF', 'MEDIA_FINAL']] = df_editado.apply(aplicar_transbordamento, axis=1)
-                    
-                    status.write("Salvando configurações de data...")
-                    db.excluir_registro("DB_RELATORIOS", f"{turma_sel}|{trimestre_sel}")
-                    db.salvar_no_banco("DB_RELATORIOS", [datetime.now().strftime("%d/%m/%Y"), "SISTEMA", "CONFIG", config_key, f"{turma_sel}|{trimestre_sel}|{data_limite.strftime('%d/%m/%Y')}"])
-                    
-                    linhas_gabarito_reverso = []
-                    linhas_bonus_conselho = []
-                    
-                    df_diario_turma = df_diario[(df_diario['TURMA'] == turma_sel) & (~df_diario['TAGS'].isin(['DIA NÃO LETIVO', 'BONUS_CONSELHO', 'SISTEMA_NOTA']))].copy()
-                    if not df_diario_turma.empty:
-                        df_diario_turma['DATA_DT'] = pd.to_datetime(df_diario_turma['DATA'], format="%d/%m/%Y", errors='coerce')
-                        data_ancora = df_diario_turma['DATA_DT'].max().strftime("%d/%m/%Y")
-                    else: data_ancora = data_limite.strftime("%d/%m/%Y")
-                    
-                    status.write("Processando lançamentos manuais e bônus...")
-                    for _, r in df_editado.iterrows():
-                        nome_limpo = r['ESTUDANTE'].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
-                        
-                        teste_lancar = float(r.get('TESTE (LANÇAR)', 0.0) or 0.0)
-                        prova_lancar = float(r.get('PROVA (LANÇAR)', 0.0) or 0.0)
-                        bonus_conselho = float(r.get('BÔNUS CONSELHO', 0.0) or 0.0)
-                        
-                        if teste_lancar != r['_ORIGINAL_TESTE']:
-                            linhas_gabarito_reverso.append([datetime.now().strftime("%d/%m/%Y"), r['ID'], nome_limpo, turma_sel, f"TESTE {trimestre_sel} [LANÇAMENTO MANUAL]", "MANUAL", util.sosa_to_str(teste_lancar), "N/A"])
-                        if prova_lancar != r['_ORIGINAL_PROVA']:
-                            linhas_gabarito_reverso.append([datetime.now().strftime("%d/%m/%Y"), r['ID'], nome_limpo, turma_sel, f"PROVA {trimestre_sel} [LANÇAMENTO MANUAL]", "MANUAL", util.sosa_to_str(prova_lancar), "N/A"])
-                            
-                        if bonus_conselho > 0:
-                            linhas_bonus_conselho.append([data_ancora, r['ID'], nome_limpo, turma_sel, "ISENTO", "BONUS_CONSELHO", "Bônus de Conselho de Classe", util.sosa_to_str(bonus_conselho)])
-
-                    if linhas_gabarito_reverso: db.salvar_lote("DB_GABARITOS_ALUNOS", linhas_gabarito_reverso)
-                    
-                    if linhas_bonus_conselho:
-                        try:
-                            wb = db.conectar()
-                            ws = wb.worksheet("DB_DIARIO_BORDO")
-                            dados_d = ws.get_all_values()
-                            for i in range(len(dados_d)-1, 0, -1):
-                                if len(dados_d[i]) > 5 and dados_d[i][3] == turma_sel and dados_d[i][5] == "BONUS_CONSELHO":
-                                    ws.delete_rows(i+1)
-                        except: pass
-                        db.salvar_lote("DB_DIARIO_BORDO", linhas_bonus_conselho)
-
-                    status.write("Consolidando Boletim Oficial...")
-                    db.limpar_notas_turma_trimestre(turma_sel, trimestre_sel)
-                    linhas_save =[]
-                    for _, r in df_editado.iterrows():
-                        nome_limpo = r['ESTUDANTE'].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
-                        linhas_save.append([
-                            r['ID'], nome_limpo, turma_sel, trimestre_sel,
-                            util.sosa_to_str(r["V_PREF"]), util.sosa_to_str(r["T_PREF"]),
-                            util.sosa_to_str(r["P_PREF"]), util.sosa_to_str(r["REC_PREF"]),
-                            util.sosa_to_str(r['MEDIA_FINAL'])
-                        ])
-                    if db.salvar_lote("DB_NOTAS", linhas_save):
-                        status.update(label="✅ Boletim Sincronizado com Sucesso!", state="complete")
-                        st.balloons(); time.sleep(1.5); st.rerun()
-
-        # --- ABA: RELATÓRIO DE FECHAMENTO (WIZARD EXECUTIVO) ---
-        with tab_fechamento:
-            st.markdown("### 🖨️ Relatório Executivo de Fechamento")
-            
-            df_aprovados = df_input[df_input['MEDIA_FINAL'] >= 6.0]
-            df_quase = df_input[(df_input['MEDIA_FINAL'] >= 5.5) & (df_input['MEDIA_FINAL'] < 6.0)]
-            df_rec = df_input[df_input['MEDIA_FINAL'] < 5.5]
-            
-            c_met1, c_met2, c_met3 = st.columns(3)
-            c_met1.metric("✅ Aprovados Direto", len(df_aprovados))
-            c_met2.metric("🟡 Quase Lá (5.5 a 5.9)", len(df_quase))
-            c_met3.metric("🔴 Recuperação Paralela", len(df_rec))
-            
-            st.markdown("---")
-            
-            c_list1, c_list2 = st.columns(2)
-            with c_list1:
-                st.markdown("#### 🟡 Radar: Quase Lá")
-                if not df_quase.empty:
-                    for _, r in df_quase.iterrows():
-                        st.warning(f"**{r['ESTUDANTE']}** - Média: {r['MEDIA_FINAL']:.1f}")
-                else: st.success("Nenhum aluno nesta faixa.")
-                
-            with c_list2:
-                st.markdown("#### 🔴 UTI: Recuperação Paralela")
-                if not df_rec.empty:
-                    for _, r in df_rec.iterrows():
-                        st.error(f"**{r['ESTUDANTE']}** - Média: {r['MEDIA_FINAL']:.1f}")
-                else: st.success("Nenhum aluno em recuperação!")
-            
-            st.markdown("---")
-            st.markdown("#### 🖨️ Fábrica de Etiquetas (Para colar nas provas)")
-            st.info("O sistema gerará um documento Word com retângulos formatados. Basta imprimir, cortar e colar na prova do aluno para que ele e os pais vejam a composição exata da nota.")
-            
-            if st.button("🖨️ GERAR ETIQUETAS (DOCX)", use_container_width=True, type="primary"):
-                with st.spinner("Desenhando etiquetas..."):
-                    import exporter
-                    
-                    dados_etiquetas = []
-                    for _, r in df_input.iterrows():
-                        nome_limpo = r['ESTUDANTE'].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
-                        
-                        if r['MEDIA_FINAL'] >= 6.0: status_txt = "✅ APROVADO"
-                        elif r['MEDIA_FINAL'] >= 5.5: status_txt = "⚠️ REFAZER QUESTÕES ERRADAS"
-                        else: status_txt = "🔴 RECUPERAÇÃO PARALELA"
-                        
-                        b_sala = float(r.get('BÔNUS (SALA)', 0.0) or 0.0)
-                        b_cons = float(r.get('BÔNUS CONSELHO', 0.0) or 0.0)
-                        bonus_total_etiq = b_sala + b_cons
-                        
-                        dados_etiquetas.append({
-                            "nome": nome_limpo,
-                            "vistos": f"{float(r.get('V_PREF', 0.0) or 0.0):.1f}",
-                            "teste": f"{float(r.get('T_PREF', 0.0) or 0.0):.1f}",
-                            "prova": f"{float(r.get('P_PREF', 0.0) or 0.0):.1f}",
-                            "bonus": f"{bonus_total_etiq:.1f}",
-                            "media": f"{float(r.get('MEDIA_FINAL', 0.0) or 0.0):.1f}",
-                            "status": status_txt
-                        })
-                    
-                    info_etiqueta = {"turma": turma_sel, "trimestre": trimestre_sel}
-                    nome_arq_etiq = f"ETIQUETAS_{turma_sel.replace(' ', '')}_{trimestre_sel.replace(' ', '')}"
-                    
-                    doc_stream = exporter.gerar_docx_etiquetas_notas(nome_arq_etiq, dados_etiquetas, info_etiqueta)
-                    link_doc = db.subir_e_converter_para_google_docs(doc_stream, nome_arq_etiq, trimestre=trimestre_sel, categoria=turma_sel, modo="PLANEJAMENTO")
-                    
-                    if "https" in link_doc:
-                        st.success("✅ Etiquetas geradas com sucesso!")
-                        st.link_button("📂 ABRIR ETIQUETAS PARA IMPRESSÃO", link_doc, type="primary", use_container_width=True)
-                        st.balloons()
-                    else:
-                        st.error(f"Erro ao salvar no Drive: {link_doc}")
 
 
 
