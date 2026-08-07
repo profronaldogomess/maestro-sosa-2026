@@ -663,3 +663,28 @@ def relocador_plano_semana(semana_antiga, ano, nova_semana, link_drive):
     except Exception as e:
         print(f"Erro no Relocador em Cascata: {e}")
         return False
+
+# ==============================================================================
+# 6. DOWNLOAD DE BYTES PARA RECORTE DE PDF (SOSA BRIDGE V45.9)
+# ==============================================================================
+
+def baixar_bytes_arquivo_drive(url_ou_id):
+    """Baixa os bytes brutos de um arquivo PDF no Google Drive para fatiamento em memória."""
+    if not url_ou_id: return None
+    try:
+        match = re.search(r"(?:id=|[dD]/)([\w-]+)", str(url_ou_id))
+        file_id = match.group(1) if match else str(url_ou_id).strip()
+        
+        creds = obter_creds_drive()
+        if creds:
+            service = build('drive', 'v3', credentials=creds)
+            request_media = service.files().get_media(fileId=file_id)
+            return request_media.execute()
+        else:
+            download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+            res = requests.get(download_url, timeout=30)
+            if res.status_code == 200:
+                return res.content
+    except Exception as e:
+        print(f"Erro ao baixar PDF do Drive: {e}")
+    return None
