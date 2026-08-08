@@ -9,6 +9,8 @@ from docx.enum.section import WD_SECTION, WD_ORIENT
 from docx.oxml import OxmlElement, parse_xml
 from docx.oxml.ns import qn, nsdecls
 from datetime import datetime
+from docx.shared import Inches, Pt, RGBColor, Cm
+
 
 from pandas import util
 import ai_engine as ai
@@ -36,24 +38,295 @@ def set_cell_background(cell, fill_hex):
     except: pass
 
 def converter_latex_para_texto_word(texto):
-    """Converte expressões matemáticas do LaTeX para texto legível de impressão no Word"""
+    """
+    SOSA V2026: Preserva os cifrões $$ para compatibilidade total com o Google Docs Apps Script
+    e limpa apenas barras de escape indevidas (R\$ -> R$, \% -> %).
+    """
     if not texto or not isinstance(texto, str): return ""
     t = texto
     
-    # 1. Converte frações \frac{a}{b} -> a/b
-    t = re.sub(r'\\frac\{([^}]+)\}\{([^}]+)\}', r'\1/\2', t)
-    
-    # 2. Símbolos matemáticos
-    t = t.replace(r'\times', '×').replace(r'\div', '÷').replace(r'\cdot', '·')
-    t = t.replace(r'\geq', '≥').replace(r'\leq', '≤').replace(r'\neq', '≠').replace(r'\approx', '≈')
-    t = t.replace(r'\sqrt', '√').replace(r'\degree', '°').replace(r'^\circ', '°')
-    
-    # 3. Potências simples
-    t = t.replace('^2', '²').replace('^3', '³')
-    
-    # 4. Limpa cifrões do LaTeX e marcas de formatação crua
-    t = t.replace('$$', '').replace('$', '')
+    # Limpa barras de escape do LaTeX sem remover os cifrões $$
+    t = t.replace(r'\%', '%').replace(r'\$', '$')
     return t.strip()
+
+def adicionar_texto_formatado(paragraph, texto):
+    """Converte padrões **texto** em negrito real preservando expressões matematicas $$"""
+    if not texto: return
+    texto_limpo = converter_latex_para_texto_word(texto)
+    texto_limpo = texto_limpo.replace("➔", "").replace("->", "→").strip()
+    
+    partes = re.split(r'(\*\*.*?\*\*)', texto_limpo)
+    for parte in partes:
+        if parte.startswith('**') and parte.endswith('**'):
+            run = paragraph.add_run(parte.replace('**', ''))
+            run.bold = True
+        else:
+            paragraph.add_run(parte)
+
+# ==============================================================================
+# 5. PROVA OFICIAL (PADRÃO ENEM / SAEB COM CARTÃO 1 CM E PRESERVAÇÃO DE $$)
+# ==============================================================================
+
+def adicionar_cartao_resposta_fiducial_word(doc, num_total_q, is_pei=False):
+    """
+    SOSA V2026: Cartão-Resposta com Colunas de 1 cm (Cm(1.0)) e 4 Marcadores Fiduciais (■).
+    """
+    container_table = doc.add_table(rows=3, cols=3)
+    container_table.style = 'Table Grid'
+    container_table.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    
+    container_table.columns[0].width = Inches(0.45)
+    container_table.columns[1].width = Inches(6.5)
+    container_table.columns[2].width = Inches(0.45)
+
+    set_row_height(container_table.rows[0], 28)
+    set_row_height(container_table.rows[2], 28)
+
+    # 4 Quadrados Pretos Fiduciais nos Cantos (■)
+    for r_idx, c_idx in [(0, 0), (0, 2), (2, 0), (2, 2)]:
+        c = container_table.cell(r_idx, c_idx)
+        set_cell_background(c, "000000")
+        p = c.paragraphs[0]
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = p.add_run("■")
+        run.font.color.rgb = RGBColor(0, 0, 0)
+        run.font.size = Pt(16)
+
+    # Título do Cartão (Topo)
+    c_title = container_table.cell(0, 1)
+    set_cell_background(c_title, "F1F5F9")
+    p_t = c_title.paragraphs[0]
+    p_t.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    r_t = p_t.add_run("CARTÃO-RESPOSTA OFICIAL (FOLHA DE RESPOSTAS)")
+    r_t.font.bold = True
+    r_t.font.size = Pt(10.5)
+
+    # Rodapé do Cartão
+    c_foot = container_table.cell(2, 1)
+    set_cell_background(c_foot, "F8FAFC")
+    p_f = c_foot.paragraphs[0]
+    p_f.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    r_f = p_f.add_run("▲ MANTENHA O PAPEL RETO • PREENCHA TOTALMENTE OS CÍRCULOS COM CANETA PRETA OU AZUL ▲")
+    r_f.font.size = Pt(8.0)
+    r_f.font.bold = True
+    r_f.font.color.rgb = RGBColor(100, 116, 139)
+
+    # Célula Central - Grade de Bolinhas com Colunas de 1 cm
+    c_grid = container_table.cell(1, 1)
+    col_count = 4 if is_pei else 6
+    headers = ["Q", "A", "B", "C"] if is_pei else ["Q", "A", "B", "C", "D", "E"]
+    
+    if num_total_q <= 10:
+        gab_grid = c_grid.add_table(rows=num_total_q + 1, cols=col_count)
+        gab_grid.style = 'Table Grid'
+        gab_grid.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        
+        # 🚨 DEFINE A LARGURA EXATA DE 1 CM POR COLUNA DE ALTERNATIVA
+        for i, col in enumerate(gab_grid.columns):
+            if i == 0: col.width = Cm(0.8) # Coluna Q
+            else: col.width = Cm(1.0) # Colunas A, B, C, D, E = 1 cm
+        
+        for i, lab in enumerate(headers):
+            c = gab_grid.cell(0, i)
+            set_cell_background(c, "2962FF" if i==0 else "E2E8F0")
+            p = c.paragraphs[0]
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            r_h = p.add_run(lab)
+            r_h.font.bold = True
+            r_h.font.size = Pt(9.5)
+            if i == 0: r_h.font.color.rgb = RGBColor(255, 255, 255)
+            
+        for r in range(1, num_total_q + 1):
+            set_row_height(gab_grid.rows[r], 22)
+            c_q = gab_grid.cell(r, 0)
+            set_cell_background(c_q, "F1F5F9")
+            p_q = c_q.paragraphs[0]
+            p_q.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            r_q_num = p_q.add_run(f"{r:02d}")
+            r_q_num.font.size = Pt(9.5)
+            r_q_num.font.bold = True
+            
+            for col in range(1, col_count):
+                c_b = gab_grid.cell(r, col)
+                p_b = c_b.paragraphs[0]
+                p_b.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                p_b.add_run("○").font.size = Pt(13)
+    else:
+        half = (num_total_q + 1) // 2
+        double_cols = col_count * 2
+        gab_grid = c_grid.add_table(rows=half + 1, cols=double_cols)
+        gab_grid.style = 'Table Grid'
+        gab_grid.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        
+        # 🚨 DEFINE A LARGURA EXATA DE 1 CM POR COLUNA
+        for i, col in enumerate(gab_grid.columns):
+            if i % col_count == 0: col.width = Cm(0.8) # Coluna Q
+            else: col.width = Cm(1.0) # Colunas A, B, C, D, E = 1 cm
+        
+        headers_double = headers + headers
+        for i, lab in enumerate(headers_double):
+            c = gab_grid.cell(0, i)
+            is_q_col = (i % col_count == 0)
+            set_cell_background(c, "2962FF" if is_q_col else "E2E8F0")
+            p = c.paragraphs[0]
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            r_h = p.add_run(lab)
+            r_h.font.bold = True
+            r_h.font.size = Pt(9.0)
+            if is_q_col: r_h.font.color.rgb = RGBColor(255, 255, 255)
+
+        for r in range(1, num_total_q + 1):
+            row_idx = r if r <= half else r - half
+            col_offset = 0 if r <= half else col_count
+            
+            set_row_height(gab_grid.rows[row_idx], 20)
+            c_q = gab_grid.cell(row_idx, col_offset)
+            set_cell_background(c_q, "F1F5F9")
+            p_q = c_q.paragraphs[0]
+            p_q.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            r_q = p_q.add_run(f"{r:02d}")
+            r_q.font.size = Pt(9.0)
+            r_q.font.bold = True
+            
+            for col in range(1, col_count):
+                c_b = gab_grid.cell(row_idx, col_offset + col)
+                p_b = c_b.paragraphs[0]
+                p_b.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                p_b.add_run("○").font.size = Pt(12)
+
+def helper_sosa_float(v):
+    if not v or str(v).strip() == "" or str(v).lower() == "nan": return 0.0
+    try:
+        return float(str(v).replace(" ", "").replace(",", "."))
+    except: return 0.0
+
+def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
+    file_stream = io.BytesIO()
+    try:
+        doc = Document()
+        style = doc.styles['Normal']
+        style.font.name = 'Arial'
+        style.font.size = Pt(10)
+
+        section = doc.sections[0]
+        section.top_margin = section.bottom_margin = Inches(0.35)
+        section.left_margin = section.right_margin = Inches(0.4)
+        
+        is_pei_doc = "PEI" in titulo_doc.upper() or "ADAPTADA" in titulo_doc.upper()
+        tag_alvo = "PEI" if is_pei_doc else "QUESTOES"
+        
+        corpo_bruto = ai.extrair_tag(conteudo_ia, tag_alvo)
+        if not corpo_bruto:
+            match_primeira_q = re.search(r"(?i)QUESTÃO\s*\d+", conteudo_ia)
+            corpo_bruto = conteudo_ia[match_primeira_q.start():].strip() if match_primeira_q else conteudo_ia.strip()
+
+        num_total_q = len(re.findall(r'(?i)QUESTÃO\s+\d+', corpo_bruto))
+        if num_total_q == 0: num_total_q = int(helper_sosa_float(info.get('qtd_questoes', info.get('qtd', 5))))
+        
+        label_prova = "AVALIAÇÃO ADAPTADA" if is_pei_doc else "AVALIAÇÃO DE MATEMÁTICA (ENEM/SAEB)"
+        if "SONDA" in titulo_doc.upper(): label_prova = "SONDA DE PROFICIÊNCIA"
+
+        val_total_num = helper_sosa_float(info.get('valor', 3.0))
+        if val_total_num == 0: val_total_num = 3.0
+
+        num_q_num = int(helper_sosa_float(info.get('qtd', info.get('qtd_questoes', num_total_q))))
+        if num_q_num == 0: num_q_num = num_total_q or 10
+
+        val_q_calc = val_total_num / num_q_num if num_q_num > 0 else 0.3
+        
+        val_total_str = f"{val_total_num:.1f}"
+        val_q_str = f"{val_q_calc:.2f}".replace(".", ",")
+        
+        info_cabecalho = info.copy()
+        info_cabecalho['valor'] = val_total_str
+        info_cabecalho['valor_questao'] = val_q_str
+
+        # 1. CABEÇALHO MESTRE DA ESCOLA
+        configurar_cabecalho_mestre(doc, info_cabecalho, label_prova, mostrar_nota=True)
+        doc.add_paragraph()
+
+        # 2. CAPA DE INSTRUÇÕES OFICIAIS & REGRA DO CÁLCULO 50%
+        top_table = doc.add_table(rows=1, cols=1)
+        top_table.style = 'Table Grid'
+        top_table.columns[0].width = Inches(7.0)
+        c_orient = top_table.cell(0, 0)
+        set_cell_background(c_orient, "F8FAFC")
+        
+        p_tit = c_orient.paragraphs[0]
+        r_tit_inst = p_tit.add_run("📋 ORIENTAÇÕES OFICIAIS DE EXAME (PADRÃO ENEM/SAEB):")
+        r_tit_inst.bold = True
+        r_tit_inst.font.size = Pt(9.5)
+        r_tit_inst.font.color.rgb = RGBColor(0, 51, 102)
+        
+        orient_list = [
+            f"Valor Total do Exame: {val_total_str} pts | Valor por Questão: {val_q_str} pts.",
+            "Preencha o Cartão-Resposta abaixo com caneta esferográfica preta ou azul transparente.",
+            "🚨 REGRA DO CÁLCULO OBRIGATÓRIO (MEIO CERTO - 50%): Nas questões objetivas que exigem resolução matemática, o cálculo DEVE ser apresentado no papel da prova. Questão acertada no Cartão-Resposta sem a memória de cálculo receberá 50% do valor (sinalizado com *).",
+            "Mantenha os 4 marcadores pretos (■) dos cantos limpos e sem rasuras para leitura óptica."
+        ]
+        for txt in orient_list:
+            p = c_orient.add_paragraph()
+            p.add_run(f"• {txt}").font.size = Pt(8.5)
+            p.paragraph_format.space_after = Pt(1)
+
+        doc.add_paragraph()
+
+        # 3. CARTÃO-RESPOSTA PADRONIZADO (LARGURA 1 CM POR COLUNA)
+        if info.get('tipo_prova') != "2ª Chamada":
+            adicionar_cartao_resposta_fiducial_word(doc, num_total_q, is_pei_doc)
+
+        doc.add_paragraph()
+
+        # 4. ENUNCIADOS DAS QUESTÕES
+        new_section = doc.add_section(WD_SECTION.CONTINUOUS)
+        sectPr = new_section._sectPr
+        cols = sectPr.xpath('./w:cols')[0]
+        cols.set(qn('w:num'), '2')
+        cols.set(qn('w:space'), '450')
+
+        for linha in corpo_bruto.split('\n'):
+            l_s = linha.strip()
+            if not l_s: continue
+
+            if "[" in l_s and "PROMPT IMAGEM" in l_s.upper():
+                adicionar_box_imagem_word(doc, "ESPAÇO PARA ILUSTRAÇÃO DA QUESTÃO")
+                continue
+
+            p = doc.add_paragraph()
+            p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+            p.paragraph_format.space_after = Pt(4)
+            p.paragraph_format.line_spacing = 1.15
+            
+            if l_s.upper().startswith("QUESTÃO"):
+                match = re.match(r"^(QUEST[AÃ]O\s*\d+)(\s*\(.*?\))?([\s\.\-\:]+)(.*)", l_s, re.IGNORECASE)
+                if match:
+                    rotulo = f"{match.group(1).upper()}{match.group(2) if match.group(2) else ''}{match.group(3)}"
+                    run_r = p.add_run(rotulo)
+                    run_r.bold = True
+                    run_r.font.size = Pt(10.5)
+                    run_r.font.color.rgb = RGBColor(0, 51, 102)
+                    adicionar_texto_formatado(p, match.group(4).strip())
+                    continue
+
+            if re.match(r'^[A-E][\)\.]', l_s):
+                p.paragraph_format.left_indent = Inches(0.15)
+                letra_match = re.match(r'^([A-E][\)\.])(.*)', l_s)
+                if letra_match:
+                    run_letra = p.add_run(letra_match.group(1))
+                    run_letra.bold = True
+                    adicionar_texto_formatado(p, letra_match.group(2))
+                    continue
+            
+            adicionar_texto_formatado(p, l_s)
+
+        doc.save(file_stream)
+        file_stream.seek(0)
+        return file_stream
+    except Exception as e:
+        file_stream = io.BytesIO()
+        err_doc = Document(); err_doc.add_paragraph(f"ERRO NO EXPORTER DE PROVA: {str(e)}"); err_doc.save(file_stream)
+        file_stream.seek(0)
+        return file_stream
 
 def adicionar_texto_formatado(paragraph, texto):
     """Converte padrões **texto** em negrito real e limpa marcas matemáticas"""
