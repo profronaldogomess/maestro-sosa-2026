@@ -395,21 +395,25 @@ def gerar_docx_professor_v25(titulo_doc, conteudo, info):
 # 5. PROVA OFICIAL (PADRÃO ENEM / SAEB / OBMEP COM CARTÃO-RESPOSTA FIDUCIAL)
 # ==============================================================================
 
+# ==============================================================================
+# 5. PROVA OFICIAL (PADRÃO ENEM / SAEB COM CARTÃO-RESPOSTA EXPANDIDO V2026)
+# ==============================================================================
+
 def adicionar_cartao_resposta_fiducial_word(doc, num_total_q, is_pei=False):
     """
-    SOSA V2026: Desenha o Cartão-Resposta Oficial com 4 Marcadores Fiduciais Pretos (■)
-    nos 4 cantos para alinhamento geométrico local (OpenCV) e zero gasto de tokens.
+    SOSA V2026: Cartão-Resposta Ampliado e Expandido (Padrão Oficial CAEd/SAEB).
+    Células ampliadas, altura de linha de 22pt, bolinhas de 13pt e 4 Marcadores Fiduciais (■).
     """
     container_table = doc.add_table(rows=3, cols=3)
     container_table.style = 'Table Grid'
     container_table.alignment = WD_ALIGN_PARAGRAPH.CENTER
     
-    container_table.columns[0].width = Inches(0.4)
-    container_table.columns[1].width = Inches(6.2)
-    container_table.columns[2].width = Inches(0.4)
+    container_table.columns[0].width = Inches(0.45)
+    container_table.columns[1].width = Inches(6.5)
+    container_table.columns[2].width = Inches(0.45)
 
-    set_row_height(container_table.rows[0], 25)
-    set_row_height(container_table.rows[2], 25)
+    set_row_height(container_table.rows[0], 28)
+    set_row_height(container_table.rows[2], 28)
 
     # 4 Quadrados Pretos Fiduciais nos Cantos (■)
     for r_idx, c_idx in [(0, 0), (0, 2), (2, 0), (2, 2)]:
@@ -419,7 +423,7 @@ def adicionar_cartao_resposta_fiducial_word(doc, num_total_q, is_pei=False):
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
         run = p.add_run("■")
         run.font.color.rgb = RGBColor(0, 0, 0)
-        run.font.size = Pt(14)
+        run.font.size = Pt(16)
 
     # Título do Cartão (Topo)
     c_title = container_table.cell(0, 1)
@@ -428,7 +432,7 @@ def adicionar_cartao_resposta_fiducial_word(doc, num_total_q, is_pei=False):
     p_t.alignment = WD_ALIGN_PARAGRAPH.CENTER
     r_t = p_t.add_run("CARTÃO-RESPOSTA OFICIAL (FOLHA DE RESPOSTAS)")
     r_t.font.bold = True
-    r_t.font.size = Pt(9.5)
+    r_t.font.size = Pt(10.5)
 
     # Rodapé do Cartão
     c_foot = container_table.cell(2, 1)
@@ -436,11 +440,11 @@ def adicionar_cartao_resposta_fiducial_word(doc, num_total_q, is_pei=False):
     p_f = c_foot.paragraphs[0]
     p_f.alignment = WD_ALIGN_PARAGRAPH.CENTER
     r_f = p_f.add_run("▲ MANTENHA O PAPEL RETO • PREENCHA TOTALMENTE OS CÍRCULOS COM CANETA PRETA OU AZUL ▲")
-    r_f.font.size = Pt(7.5)
+    r_f.font.size = Pt(8.0)
     r_f.font.bold = True
     r_f.font.color.rgb = RGBColor(100, 116, 139)
 
-    # Grade de Bolinhas (Centro)
+    # Célula Central - Grade de Bolinhas Ampliada
     c_grid = container_table.cell(1, 1)
     col_count = 4 if is_pei else 6
     headers = ["Q", "A", "B", "C"] if is_pei else ["Q", "A", "B", "C", "D", "E"]
@@ -448,60 +452,70 @@ def adicionar_cartao_resposta_fiducial_word(doc, num_total_q, is_pei=False):
     if num_total_q <= 10:
         gab_grid = c_grid.add_table(rows=num_total_q + 1, cols=col_count)
         gab_grid.style = 'Table Grid'
+        gab_grid.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        
         for i, lab in enumerate(headers):
             c = gab_grid.cell(0, i)
-            set_cell_background(c, "E2E8F0")
+            set_cell_background(c, "2962FF" if i==0 else "E2E8F0")
             p = c.paragraphs[0]
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER
             r_h = p.add_run(lab)
             r_h.font.bold = True
-            r_h.font.size = Pt(8.5)
+            r_h.font.size = Pt(9.5)
+            if i == 0: r_h.font.color.rgb = RGBColor(255, 255, 255)
             
         for r in range(1, num_total_q + 1):
-            set_row_height(gab_grid.rows[r], 18)
+            set_row_height(gab_grid.rows[r], 22)
             c_q = gab_grid.cell(r, 0)
-            set_cell_background(c_q, "F8FAFC")
+            set_cell_background(c_q, "F1F5F9")
             p_q = c_q.paragraphs[0]
             p_q.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            p_q.add_run(f"{r:02d}").font.size = Pt(8.5)
+            r_q_num = p_q.add_run(f"{r:02d}")
+            r_q_num.font.size = Pt(9.5)
+            r_q_num.font.bold = True
             
             for col in range(1, col_count):
                 c_b = gab_grid.cell(r, col)
                 p_b = c_b.paragraphs[0]
                 p_b.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                p_b.add_run("○").font.size = Pt(11)
+                p_b.add_run("○").font.size = Pt(13)
     else:
         half = (num_total_q + 1) // 2
         double_cols = col_count * 2
         gab_grid = c_grid.add_table(rows=half + 1, cols=double_cols)
         gab_grid.style = 'Table Grid'
+        gab_grid.alignment = WD_ALIGN_PARAGRAPH.CENTER
         
         headers_double = headers + headers
         for i, lab in enumerate(headers_double):
             c = gab_grid.cell(0, i)
-            set_cell_background(c, "E2E8F0")
+            is_q_col = (i % col_count == 0)
+            set_cell_background(c, "2962FF" if is_q_col else "E2E8F0")
             p = c.paragraphs[0]
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER
             r_h = p.add_run(lab)
             r_h.font.bold = True
-            r_h.font.size = Pt(8.0)
+            r_h.font.size = Pt(9.0)
+            if is_q_col: r_h.font.color.rgb = RGBColor(255, 255, 255)
 
         for r in range(1, num_total_q + 1):
             row_idx = r if r <= half else r - half
             col_offset = 0 if r <= half else col_count
             
-            set_row_height(gab_grid.rows[row_idx], 16)
+            set_row_height(gab_grid.rows[row_idx], 20)
             c_q = gab_grid.cell(row_idx, col_offset)
-            set_cell_background(c_q, "F8FAFC")
+            set_cell_background(c_q, "F1F5F9")
             p_q = c_q.paragraphs[0]
             p_q.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            p_q.add_run(f"{r:02d}").font.size = Pt(8.0)
+            r_q = p_q.add_run(f"{r:02d}")
+            r_q.font.size = Pt(9.0)
+            r_q.font.bold = True
             
             for col in range(1, col_count):
                 c_b = gab_grid.cell(row_idx, col_offset + col)
                 p_b = c_b.paragraphs[0]
                 p_b.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                p_b.add_run("○").font.size = Pt(10)
+                p_b.add_run("○").font.size = Pt(12)
 
 def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
     file_stream = io.BytesIO()
@@ -562,7 +576,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
 
         doc.add_paragraph()
 
-        # 3. CARTÃO-RESPOSTA PADRONIZADO COM MARCADORES FIDUCIAIS
+        # 3. CARTÃO-RESPOSTA PADRONIZADO E AMPLIADO
         if info.get('tipo_prova') != "2ª Chamada":
             adicionar_cartao_resposta_fiducial_word(doc, num_total_q, is_pei_doc)
 
