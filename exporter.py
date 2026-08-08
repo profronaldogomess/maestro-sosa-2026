@@ -13,8 +13,20 @@ import ai_engine as ai
 import utils as util
 
 # ==============================================================================
-# 1. FUNÇÕES AUXILIARES TÉCNICAS E SANITIZAÇÃO
+# 1. FUNÇÕES AUXILIARES TÉCNICAS E SANITIZAÇÃO XML SOBERANA
 # ==============================================================================
+
+def sanitizar_xml_str(texto):
+    """
+    SOSA V2026 - VACINA ANTI-ERRO LXML/WORD:
+    Remove caracteres de controle nulos e invisíveis do XML (padrão W3C XML 1.0).
+    Preserva tabulações (\t), quebras de linha (\n), retornos (\r) e todos os
+    caracteres imprimíveis Unicode/ASCII (acentos, emojis e LaTeX $$).
+    """
+    if not texto or not isinstance(texto, str):
+        return ""
+    # Elimina \x00-\x08, \x0B, \x0C (Form Feed de PDFs), \x0E-\x1F e \x7F-\x9F
+    return re.sub(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]', '', texto)
 
 def set_row_height(row, height_pt):
     """Define a altura mínima da linha da tabela para o cabeçalho não achatar"""
@@ -42,13 +54,14 @@ def helper_sosa_float(v):
 
 def converter_latex_para_texto_word(texto):
     """
-    SOSA V2026 - VACINA INVIOLÁVEL DO CIFRÃO:
-    1. Preserva 100% dos marcadores $$ para compatibilidade com o Google Docs Apps Script.
-    2. Corrige R\$ para R$ (dinheiro) e \% para %.
-    3. NUNCA remove cifrões $$.
+    SOSA V2026 - VACINA INVIOLÁVEL DO CIFRÃO E DO CONTROL CHAR:
+    1. Higieniza o texto contra caracteres de controle XML inválidos.
+    2. Preserva 100% dos marcadores $$ para compatibilidade com o Google Docs Apps Script.
+    3. Corrige R\$ para R$ (dinheiro) e \% para %.
+    4. NUNCA remove cifrões $$.
     """
     if not texto or not isinstance(texto, str): return ""
-    t = texto
+    t = sanitizar_xml_str(texto)
     t = t.replace(r'R\$', 'R$').replace(r'R \$', 'R$')
     t = t.replace(r'\$', '$').replace(r'\%', '%')
     return t.strip()
@@ -88,7 +101,7 @@ def adicionar_box_imagem_word(doc, legenda_prompt="ESPAÇO PARA ILUSTRAÇÃO / D
     run_icon.font.size = Pt(9.0)
     run_icon.font.color.rgb = RGBColor(41, 98, 255)
     
-    run_desc = p.add_run(f"{legenda_prompt.strip()}")
+    run_desc = p.add_run(f"{sanitizar_xml_str(str(legenda_prompt)).strip()}")
     run_desc.font.size = Pt(8.5)
     run_desc.font.italic = True
     run_desc.font.color.rgb = RGBColor(71, 85, 105)
@@ -121,7 +134,7 @@ def configurar_cabecalho_mestre(doc, info, tipo_label, mostrar_nota=False):
     set_cell_background(c_trim, "F1F5F9")
     p_tr = c_trim.paragraphs[0]
     p_tr.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run_tr = p_tr.add_run(info.get('trimestre', 'I Trimestre'))
+    run_tr = p_tr.add_run(sanitizar_xml_str(str(info.get('trimestre', 'I Trimestre'))))
     run_tr.font.bold = True
     run_tr.font.size = Pt(9.5)
 
@@ -144,7 +157,7 @@ def configurar_cabecalho_mestre(doc, info, tipo_label, mostrar_nota=False):
 
     # LINHA 2: PROFESSOR, TURMA, DATA E TIPO
     table.cell(2, 1).paragraphs[0].add_run("PROF: Ronaldo Gomes").font.size = Pt(9)
-    table.cell(2, 2).paragraphs[0].add_run(f"TURMA: {info.get('ano', '6º')}").font.size = Pt(9)
+    table.cell(2, 2).paragraphs[0].add_run(f"TURMA: {sanitizar_xml_str(str(info.get('ano', '6º')))}").font.size = Pt(9)
     table.cell(2, 3).paragraphs[0].add_run("DATA:    /    /").font.size = Pt(9)
     
     c_tipo = table.cell(2, 4)
@@ -152,7 +165,7 @@ def configurar_cabecalho_mestre(doc, info, tipo_label, mostrar_nota=False):
     set_cell_background(c_tipo, "2962FF")
     p_tipo = c_tipo.paragraphs[0]
     p_tipo.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run_tipo = p_tipo.add_run(tipo_label)
+    run_tipo = p_tipo.add_run(sanitizar_xml_str(str(tipo_label)))
     run_tipo.font.bold = True
     run_tipo.font.size = Pt(9)
     run_tipo.font.color.rgb = RGBColor(255, 255, 255)
@@ -189,7 +202,7 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     cols.set(qn('w:num'), '2')
     cols.set(qn('w:space'), '420')
 
-    linhas = str(conteudo).split('\n')
+    linhas = sanitizar_xml_str(str(conteudo)).split('\n')
     for linha in linhas:
         l_s = linha.strip()
         if not l_s: continue
@@ -224,7 +237,7 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     return file_stream
 
 # ==============================================================================
-# 3. MATERIAL PEI ADAPTADO (NÍVEIS 1 E 2 - LIMPO E ESTRUTURADO)
+# 3. MATERIAL PEI ADAPTADO (NÍVEIS 1 E 2)
 # ==============================================================================
 def gerar_docx_pei_v25(titulo_doc, conteudo, info):
     file_stream = io.BytesIO()
@@ -238,21 +251,21 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
         style.font.name = 'Arial'
         style.font.size = Pt(10)
 
-        # 1. Sanitização do Conteúdo (Elimina saudações/bate-papo da IA)
-        conteudo_limpo = str(conteudo).strip()
+        # 1. Sanitização de Caracteres de Controle e Saudações
+        conteudo_limpo = sanitizar_xml_str(str(conteudo)).strip()
         conteudo_limpo = re.sub(r'^(?:Olá|Como especialista|Como profissional|Prezado|Segue).*?\n\n', '', conteudo_limpo, flags=re.IGNORECASE | re.DOTALL).strip()
 
-        # 2. Cabeçalho Mestre Oficial da Escola
+        # 2. Cabeçalho Mestre Oficial
         label_pei = "AVALIAÇÃO ADAPTADA (PEI NÍVEL 1)" if "N1" in titulo_doc.upper() or "NIVEL_1" in titulo_doc.upper() else "AVALIAÇÃO ADAPTADA (PEI NÍVEL 2)"
         configurar_cabecalho_mestre(doc, info, label_pei, mostrar_nota=True)
         doc.add_paragraph()
 
-        # 3. Contagem das Questões para o Cartão-Resposta
+        # 3. Contagem das Questões
         num_total_q = len(re.findall(r'(?i)(?:QUEST[AÃ]O\s*(?:PEI\s*)?|Q)\s*\d+', conteudo_limpo))
         if num_total_q == 0: 
             num_total_q = int(helper_sosa_float(info.get('qtd', 10)))
 
-        # 4. Cartão-Resposta Fiducial de 3 Colunas (A, B, C) com Largura de 1,0 cm
+        # 4. Cartão-Resposta Fiducial de 3 Colunas (A, B, C)
         adicionar_cartao_resposta_fiducial_word(doc, num_total_q, is_pei=True)
         doc.add_paragraph()
 
@@ -315,13 +328,13 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
     except Exception as e:
         file_stream = io.BytesIO()
         err_doc = Document()
-        err_doc.add_paragraph(f"ERRO NO EXPORTER PEI: {str(e)}")
+        err_doc.add_paragraph(f"ERRO NO EXPORTER PEI: {sanitizar_xml_str(str(e))}")
         err_doc.save(file_stream)
         file_stream.seek(0)
         return file_stream
 
 # ==============================================================================
-# 4. GUIA DO PROFESSOR (COM DESCRITORES SAEB E DISTRATORES CIENTÍFICOS)
+# 4. GUIA DO PROFESSOR
 # ==============================================================================
 def gerar_docx_professor_v25(titulo_doc, conteudo, info):
     file_stream = io.BytesIO()
@@ -344,13 +357,13 @@ def gerar_docx_professor_v25(titulo_doc, conteudo, info):
     run_tit.font.color.rgb = RGBColor(255, 255, 255)
     c_tit.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-    header_table.cell(1, 0).paragraphs[0].add_run(f"ANO: {info.get('ano', '')}").font.size = Pt(9)
-    header_table.cell(1, 1).paragraphs[0].add_run(f"SEMANA: {info.get('semana', '')}").font.size = Pt(9)
-    header_table.cell(1, 2).paragraphs[0].add_run(f"TRIMESTRE: {info.get('trimestre', 'I')}").font.size = Pt(9)
+    header_table.cell(1, 0).paragraphs[0].add_run(f"ANO: {sanitizar_xml_str(str(info.get('ano', '')))}").font.size = Pt(9)
+    header_table.cell(1, 1).paragraphs[0].add_run(f"SEMANA: {sanitizar_xml_str(str(info.get('semana', '')))}").font.size = Pt(9)
+    header_table.cell(1, 2).paragraphs[0].add_run(f"TRIMESTRE: {sanitizar_xml_str(str(info.get('trimestre', 'I')))}").font.size = Pt(9)
     for row in header_table.rows: set_row_height(row, 20)
     doc.add_paragraph()
 
-    linhas = str(conteudo).split('\n')
+    linhas = sanitizar_xml_str(str(conteudo)).split('\n')
     for linha in linhas:
         l_s = linha.strip()
         if not l_s: continue
@@ -382,7 +395,7 @@ def gerar_docx_professor_v25(titulo_doc, conteudo, info):
     return file_stream
 
 # ==============================================================================
-# 5. PROVA OFICIAL (PADRÃO ENEM / SAEB COM CARTÃO 1 CM E DADOS BLINDADOS)
+# 5. PROVA OFICIAL (PADRÃO ENEM / SAEB)
 # ==============================================================================
 
 def adicionar_cartao_resposta_fiducial_word(doc, num_total_q, is_pei=False):
@@ -429,7 +442,7 @@ def adicionar_cartao_resposta_fiducial_word(doc, num_total_q, is_pei=False):
     r_f.font.bold = True
     r_f.font.color.rgb = RGBColor(100, 116, 139)
 
-    # Célula Central - Grade de Bolinhas com Colunas Travadas em 1,0 cm
+    # Célula Central - Grade de Bolinhas
     c_grid = container_table.cell(1, 1)
     col_count = 4 if is_pei else 6
     headers = ["Q", "A", "B", "C"] if is_pei else ["Q", "A", "B", "C", "D", "E"]
@@ -511,6 +524,9 @@ def adicionar_cartao_resposta_fiducial_word(doc, num_total_q, is_pei=False):
                 p_b.add_run("○").font.size = Pt(12)
 
 def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
+    """
+    GERADOR DE PROVAS OFICIAIS COM VACINA ANTI-ERRO LXML DE CONTROLE.
+    """
     file_stream = io.BytesIO()
     try:
         doc = Document()
@@ -522,13 +538,18 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         section.top_margin = section.bottom_margin = Inches(0.35)
         section.left_margin = section.right_margin = Inches(0.4)
         
+        # Sanitização profunda do texto de entrada contra caracteres invisíveis
+        conteudo_ia_limpo = sanitizar_xml_str(str(conteudo_ia))
+        
         is_pei_doc = "PEI" in titulo_doc.upper() or "ADAPTADA" in titulo_doc.upper()
         tag_alvo = "PEI" if is_pei_doc else "QUESTOES"
         
-        corpo_bruto = ai.extrair_tag(conteudo_ia, tag_alvo)
+        corpo_bruto = ai.extrair_tag(conteudo_ia_limpo, tag_alvo)
         if not corpo_bruto:
-            match_primeira_q = re.search(r"(?i)QUESTÃO\s*\d+", conteudo_ia)
-            corpo_bruto = conteudo_ia[match_primeira_q.start():].strip() if match_primeira_q else conteudo_ia.strip()
+            match_primeira_q = re.search(r"(?i)QUESTÃO\s*\d+", conteudo_ia_limpo)
+            corpo_bruto = conteudo_ia_limpo[match_primeira_q.start():].strip() if match_primeira_q else conteudo_ia_limpo.strip()
+
+        corpo_bruto = sanitizar_xml_str(corpo_bruto)
 
         num_total_q = len(re.findall(r'(?i)QUESTÃO\s+\d+', corpo_bruto))
         if num_total_q == 0: num_total_q = int(helper_sosa_float(info.get('qtd_questoes', info.get('qtd', 5))))
@@ -578,7 +599,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
 
         for txt in orient_list:
             p = c_orient.add_paragraph()
-            p.add_run(f"• {txt}").font.size = Pt(8.5)
+            p.add_run(f"• {sanitizar_xml_str(txt)}").font.size = Pt(8.5)
             p.paragraph_format.space_after = Pt(1)
 
         doc.add_paragraph()
@@ -637,7 +658,9 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         return file_stream
     except Exception as e:
         file_stream = io.BytesIO()
-        err_doc = Document(); err_doc.add_paragraph(f"ERRO NO EXPORTER DE PROVA: {str(e)}"); err_doc.save(file_stream)
+        err_doc = Document()
+        err_doc.add_paragraph(f"ERRO NO EXPORTER DE PROVA: {sanitizar_xml_str(str(e))}")
+        err_doc.save(file_stream)
         file_stream.seek(0)
         return file_stream
 
@@ -675,10 +698,10 @@ def gerar_docx_plano_pedagogico_ELITE(titulo_arquivo, dados, info):
         r_t.font.bold = True
         r_t.font.color.rgb = RGBColor(255, 255, 255)
 
-        table.cell(1, 1).paragraphs[0].add_run(f"Professor: Ronaldo Gomes").font.size = Pt(9.5)
-        table.cell(1, 2).paragraphs[0].add_run(f"Série: {info.get('ano', '')}").font.size = Pt(9.5)
-        table.cell(2, 1).paragraphs[0].add_run(f"Semana: {info.get('semana', '')}").font.size = Pt(9.5)
-        table.cell(2, 2).paragraphs[0].add_run(f"Trimestre: {info.get('trimestre', 'I')}").font.bold = True
+        table.cell(1, 1).paragraphs[0].add_run("Professor: Ronaldo Gomes").font.size = Pt(9.5)
+        table.cell(1, 2).paragraphs[0].add_run(f"Série: {sanitizar_xml_str(str(info.get('ano', '')))}").font.size = Pt(9.5)
+        table.cell(2, 1).paragraphs[0].add_run(f"Semana: {sanitizar_xml_str(str(info.get('semana', '')))}").font.size = Pt(9.5)
+        table.cell(2, 2).paragraphs[0].add_run(f"Trimestre: {sanitizar_xml_str(str(info.get('trimestre', 'I')))}").font.bold = True
 
         doc.add_paragraph()
 
@@ -702,7 +725,7 @@ def gerar_docx_plano_pedagogico_ELITE(titulo_arquivo, dados, info):
             run_label.font.size = Pt(10.5)
             run_label.font.color.rgb = RGBColor(0, 51, 102)
             
-            texto_limpo = str(dados.get(chave, "")).replace("**", "").replace("#", "").strip()
+            texto_limpo = sanitizar_xml_str(str(dados.get(chave, ""))).replace("**", "").replace("#", "").strip()
             adicionar_texto_formatado(p, texto_limpo)
 
         doc.save(file_stream)
@@ -710,7 +733,7 @@ def gerar_docx_plano_pedagogico_ELITE(titulo_arquivo, dados, info):
         return file_stream
     except Exception as e:
         file_stream = io.BytesIO()
-        err_doc = Document(); err_doc.add_paragraph(f"ERRO NO PLANO: {str(e)}"); err_doc.save(file_stream)
+        err_doc = Document(); err_doc.add_paragraph(f"ERRO NO PLANO: {sanitizar_xml_str(str(e))}"); err_doc.save(file_stream)
         file_stream.seek(0)
         return file_stream
 
@@ -729,7 +752,7 @@ def gerar_docx_pei_qualitativa(titulo_doc, conteudo, info):
         style.font.name = 'Arial'
         style.font.size = Pt(10.5)
 
-        # Cabeçalho Oficial da Escola e Prefeitura de Itabuna
+        # Cabeçalho Oficial
         configurar_cabecalho_mestre(doc, info, "AVALIAÇÃO ADAPTADA (NÍVEL 3)", mostrar_nota=False)
         doc.add_paragraph()
 
@@ -758,7 +781,7 @@ def gerar_docx_pei_qualitativa(titulo_doc, conteudo, info):
         doc.add_paragraph()
 
         # Processamento das Linhas e renderização dos CARDS DE BOX (BENTO GRID)
-        linhas = str(conteudo).split('\n')
+        linhas = sanitizar_xml_str(str(conteudo)).split('\n')
         
         i = 0
         while i < len(linhas):
@@ -780,14 +803,12 @@ def gerar_docx_pei_qualitativa(titulo_doc, conteudo, info):
                 i += 1
                 continue
 
-            # Se for um Prompt de Imagem isolado
             if "[" in linha and "PROMPT IMAGEM" in linha.upper():
                 desc_p = re.sub(r'\[\s*PROMPT IMAGEM:\s*|\s*\]', '', linha, flags=re.IGNORECASE)
                 adicionar_box_imagem_word(doc, desc_p)
                 i += 1
                 continue
 
-            # Se for um BOX (ex: "1. [BOX 1] ...", "[BOX 1] ...")
             if "BOX" in linha.upper():
                 card_table = doc.add_table(rows=2, cols=1)
                 card_table.style = 'Table Grid'
@@ -905,12 +926,12 @@ def gerar_docx_pei_qualitativa(titulo_doc, conteudo, info):
         return file_stream
     except Exception as e:
         file_stream = io.BytesIO()
-        err_doc = Document(); err_doc.add_paragraph(f"ERRO NO EXPORTER PEI N3: {str(e)}"); err_doc.save(file_stream)
+        err_doc = Document(); err_doc.add_paragraph(f"ERRO NO EXPORTER PEI N3: {sanitizar_xml_str(str(e))}"); err_doc.save(file_stream)
         file_stream.seek(0)
         return file_stream
 
 # ==============================================================================
-# 8. ETIQUETAS DE NOTAS (FECHAMENTO TRIMESTRAL)
+# 8. ETIQUETAS DE NOTAS
 # ==============================================================================
 def gerar_docx_etiquetas_notas(nome_arquivo, dados_alunos, info):
     file_stream = io.BytesIO()
@@ -943,23 +964,23 @@ def gerar_docx_etiquetas_notas(nome_arquivo, dados_alunos, info):
                     p.paragraph_format.space_after = Pt(2)
                     
                     p.add_run("ESCOLA MUNICIPAL FLÁVIO JOSÉ SIMÕES COSTA\n").bold = True
-                    p.add_run(f"Estudante: {aluno['nome']}\n").bold = True
-                    p.add_run(f"Turma: {info['turma']} | {info['trimestre']}\n\n").font.size = Pt(8.5)
+                    p.add_run(f"Estudante: {sanitizar_xml_str(str(aluno['nome']))}\n").bold = True
+                    p.add_run(f"Turma: {sanitizar_xml_str(str(info['turma']))} | {sanitizar_xml_str(str(info['trimestre']))}\n\n").font.size = Pt(8.5)
                     
-                    p.add_run(f"🏛️ C1 (Vistos/Caderno): {aluno['vistos']}\n")
-                    p.add_run(f"📝 C2 (Testes/Trabalhos): {aluno['teste']}\n")
-                    p.add_run(f"📄 C3 (Prova Oficial): {aluno['prova']}\n")
+                    p.add_run(f"🏛️ C1 (Vistos/Caderno): {sanitizar_xml_str(str(aluno['vistos']))}\n")
+                    p.add_run(f"📝 C2 (Testes/Trabalhos): {sanitizar_xml_str(str(aluno['teste']))}\n")
+                    p.add_run(f"📄 C3 (Prova Oficial): {sanitizar_xml_str(str(aluno['prova']))}\n")
                     
                     run_obs = p.add_run(f"* Bônus conquistados (+{aluno['bonus']} pts) embutidos acima.\n\n")
                     run_obs.font.size = Pt(8)
                     run_obs.font.italic = True
                     run_obs.font.color.rgb = RGBColor(100, 116, 139)
                     
-                    run_media = p.add_run(f"📊 MÉDIA FINAL: {aluno['media']}\n")
+                    run_media = p.add_run(f"📊 MÉDIA FINAL: {sanitizar_xml_str(str(aluno['media']))}\n")
                     run_media.bold = True
                     run_media.font.size = Pt(11)
                     
-                    run_status = p.add_run(f"SITUAÇÃO: {aluno['status']}")
+                    run_status = p.add_run(f"SITUAÇÃO: {sanitizar_xml_str(str(aluno['status']))}")
                     run_status.bold = True
                     if "APROVADO" in aluno['status']: run_status.font.color.rgb = RGBColor(0, 128, 0)
                     else: run_status.font.color.rgb = RGBColor(204, 0, 0)
@@ -969,7 +990,7 @@ def gerar_docx_etiquetas_notas(nome_arquivo, dados_alunos, info):
         return file_stream
     except Exception as e:
         file_stream = io.BytesIO()
-        err_doc = Document(); err_doc.add_paragraph(f"ERRO NAS ETIQUETAS: {str(e)}"); err_doc.save(file_stream)
+        err_doc = Document(); err_doc.add_paragraph(f"ERRO NAS ETIQUETAS: {sanitizar_xml_str(str(e))}"); err_doc.save(file_stream)
         file_stream.seek(0)
         return file_stream
 
@@ -998,10 +1019,10 @@ def gerar_docx_planejamento_trimestral(nome_arquivo, info, dados_tabela):
         run_esc.bold = True
         run_esc.font.size = Pt(11)
         
-        run_tit = p_cab.add_run(f"PLANEJAMENTO TRIMESTRAL DE MATEMÁTICA - {info['trimestre'].upper()} / 2026\n")
+        run_tit = p_cab.add_run(f"PLANEJAMENTO TRIMESTRAL DE MATEMÁTICA - {sanitizar_xml_str(str(info['trimestre'])).upper()} / 2026\n")
         run_tit.bold = True
         run_tit.font.size = Pt(10)
-        run_sub = p_cab.add_run(f"SÉRIE: {info['ano']}   |   PROFESSOR: RONALDO GOMES")
+        run_sub = p_cab.add_run(f"SÉRIE: {sanitizar_xml_str(str(info['ano']))}   |   PROFESSOR: RONALDO GOMES")
         run_sub.font.size = Pt(9)
         
         doc.add_paragraph()
@@ -1024,10 +1045,10 @@ def gerar_docx_planejamento_trimestral(nome_arquivo, info, dados_tabela):
             
         for row_data in dados_tabela:
             row_cells = table.add_row().cells
-            row_cells[0].text = row_data['eixo']
-            row_cells[1].text = row_data['conteudos']
-            row_cells[2].text = row_data['habilidades']
-            row_cells[3].text = row_data['metodologia']
+            row_cells[0].text = sanitizar_xml_str(str(row_data['eixo']))
+            row_cells[1].text = sanitizar_xml_str(str(row_data['conteudos']))
+            row_cells[2].text = sanitizar_xml_str(str(row_data['habilidades']))
+            row_cells[3].text = sanitizar_xml_str(str(row_data['metodologia']))
             
             for cell in row_cells:
                 for p in cell.paragraphs:
@@ -1038,7 +1059,7 @@ def gerar_docx_planejamento_trimestral(nome_arquivo, info, dados_tabela):
         return file_stream
     except Exception as e:
         file_stream = io.BytesIO()
-        err_doc = Document(); err_doc.add_paragraph(f"ERRO NO PLANO TRIMESTRAL: {str(e)}"); err_doc.save(file_stream)
+        err_doc = Document(); err_doc.add_paragraph(f"ERRO NO PLANO TRIMESTRAL: {sanitizar_xml_str(str(e))}"); err_doc.save(file_stream)
         file_stream.seek(0)
         return file_stream
 
@@ -1079,21 +1100,21 @@ def gerar_docx_pei_oficial(nome_arquivo, dados_aluno, habilidades, curriculo_df)
         
         p_d2 = doc.add_paragraph()
         p_d2.add_run("NOME: ").bold = True
-        p_d2.add_run(f"{dados_aluno.get('nome', '')}\t\t")
+        p_d2.add_run(f"{sanitizar_xml_str(str(dados_aluno.get('nome', '')))}\t\t")
         p_d2.add_run("TURMA: ").bold = True
-        p_d2.add_run(f"{dados_aluno.get('turma', '')}")
+        p_d2.add_run(f"{sanitizar_xml_str(str(dados_aluno.get('turma', '')))}")
         
         p_d4 = doc.add_paragraph()
         p_d4.add_run("DEFICIÊNCIA(S)/CID: ").bold = True
-        p_d4.add_run(f"{dados_aluno.get('cid', '')}")
+        p_d4.add_run(f"{sanitizar_xml_str(str(dados_aluno.get('cid', '')))}")
         
         doc.add_paragraph()
         doc.add_paragraph("1. PLANO DE ACESSIBILIDADE CURRICULAR").runs[0].bold = True
         
         for hab_name, hab_text in habilidades.items():
             p_h = doc.add_paragraph()
-            p_h.add_run(f"• {hab_name}: ").bold = True
-            p_h.add_run(str(hab_text))
+            p_h.add_run(f"• {sanitizar_xml_str(str(hab_name))}: ").bold = True
+            p_h.add_run(sanitizar_xml_str(str(hab_text)))
         
         doc.add_paragraph()
         doc.add_paragraph("2. PLANEJAMENTO POR COMPONENTE CURRICULAR").runs[0].bold = True
@@ -1115,15 +1136,15 @@ def gerar_docx_pei_oficial(nome_arquivo, dados_aluno, habilidades, curriculo_df)
             for _, row in curriculo_df.iterrows():
                 row_cells = table.add_row().cells
                 row_cells[0].text = "MATEMÁTICA"
-                row_cells[1].text = str(row.get('Objetivos de Aprendizagem', ''))
-                row_cells[2].text = str(row.get('Estratégias Metodológicas', ''))
-                row_cells[3].text = str(row.get('Recursos Materiais', ''))
+                row_cells[1].text = sanitizar_xml_str(str(row.get('Objetivos de Aprendizagem', '')))
+                row_cells[2].text = sanitizar_xml_str(str(row.get('Estratégias Metodológicas', '')))
+                row_cells[3].text = sanitizar_xml_str(str(row.get('Recursos Materiais', '')))
         
         doc.save(file_stream)
         file_stream.seek(0)
         return file_stream
     except Exception as e:
         file_stream = io.BytesIO()
-        err_doc = Document(); err_doc.add_paragraph(f"ERRO NO PEI OFICIAL: {str(e)}"); err_doc.save(file_stream)
+        err_doc = Document(); err_doc.add_paragraph(f"ERRO NO PEI OFICIAL: {sanitizar_xml_str(str(e))}"); err_doc.save(file_stream)
         file_stream.seek(0)
         return file_stream
