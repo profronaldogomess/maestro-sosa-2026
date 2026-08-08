@@ -2367,7 +2367,7 @@ elif menu == "📝 Central de Avaliações":
                         st.balloons(); time.sleep(1); st.rerun()
 
         # --------------------------------------------------------------------------
-        # FASE 2: FORJA, REVISÃO DETALHADA E PERÍCIA TRI DO CADERNO REGULAR
+        # FASE 2: FORJA, REVISÃO DETALHADA E PERÍCIA TRI (BLINDADA CONTRA ALUCINAÇÃO)
         # --------------------------------------------------------------------------
         elif f['fase'] == 2:
             st.markdown("### 🔬 Fase 2: Forja, Perícia & Lapidação dos Itens Regulares")
@@ -2397,12 +2397,19 @@ elif menu == "📝 Central de Avaliações":
             pendentes = [item for item in f['mapa'] if item['status'] == 'pendente']
 
             if pendentes:
-                if st.button(f"🚀 GERAR LOTE DE {len(pendentes)} QUESTÕES REGULARES COM IA", type="primary", use_container_width=True, key=f"btn_lote_av_{v}"):
-                    with st.spinner("Forjando itens no padrão ENEM/SAEB com contexto real e distratores TRI..."):
-                        prompt_lote = f"SÉRIE: {f['info']['ano']}\nVALOR TOTAL DA PROVA: {f['info']['valor']}\n\n"
+                if st.button(f"🚀 GERAR LOTE DE {len(pendentes)} QUESTÕES REGULARES (ZERO-ALUCINAÇÃO)", type="primary", use_container_width=True, key=f"btn_lote_av_{v}"):
+                    with st.spinner("Forjando itens ancorados estritamente no seu contexto..."):
+                        prompt_lote = (
+                            f"SÉRIE: {f['info']['ano']}\n"
+                            f"VALOR TOTAL DA PROVA: {f['info']['valor']}\n\n"
+                            f"🚨 REGRAS INQUEBRÁVEIS DE CONTEXTO E REALIDADE:\n"
+                            f"- É PROIBIDO inventar contextos de ficção, jogos, SpaceX ou paisagens genéricas fora do fornecido.\n"
+                            f"- Use como base EXCLUSIVA o texto do livro/aulas e/ou a realidade local de Itabuna/BA abaixo.\n\n"
+                        )
                         for item in pendentes:
-                            prompt_lote += f"QUESTÃO {item['q']}:\n- TEMA ESPECÍFICO: {item['tema']}\n- COMPLEXIDADE: {item['dificuldade']}\n- GABARITO EXIGIDO: Letra {item['gabarito']}\n\n"
-                        prompt_lote += f"CONTEXTO DO LIVRO DIDÁTICO E SALA DE AULA:\n{f.get('contexto_base', '')}\n"
+                            prompt_lote += f"QUESTÃO {item['q']}:\n- TEMA ESPECÍFICO EXIGIDO: {item['tema']}\n- COMPLEXIDADE: {item['dificuldade']}\n- GABARITO EXIGIDO: Letra {item['gabarito']}\n\n"
+                        
+                        prompt_lote += f"--- TEXTO BASE DO LIVRO / AULAS DO PROFESSOR (OBRIGATÓRIO USAR) ---\n{f.get('contexto_base', 'Usar a matriz do ' + str(f['info']['ano']) + ' Ano e o contexto de Itabuna/BA.')}\n"
                         
                         res_json = ai.gerar_ia_json("FORJA_LOTE_JSON", prompt_lote)
                         if "erro" in res_json:
@@ -2413,7 +2420,6 @@ elif menu == "📝 Central de Avaliações":
                                 for item in f['mapa']:
                                     if item['q'] == q_num:
                                         descritor_real = q_data.get('habilidade', 'EF06MA01')
-                                        # Atualiza o assunto do card com a Habilidade/Descritor real!
                                         item['tema'] = descritor_real if descritor_real else item['tema']
                                         item['dados'] = {
                                             'ENUNCIADO': q_data.get('enunciado', ''),
@@ -2446,12 +2452,12 @@ elif menu == "📝 Central de Avaliações":
                         todas_aprovadas = False
                         c_t1, c_t2 = st.columns([3, 1])
                         tema_q = c_t1.text_input("Assunto / Contexto Específico do Item:", value=item['tema'], key=f"t_{i}_{v}")
-                        item['tema'] = tema_q # Salva a edição do assunto
+                        item['tema'] = tema_q
                         dif_q = c_t2.selectbox("Complexidade TRI:", ["Fácil", "Média", "Difícil"], index=["Fácil", "Média", "Difícil"].index(item['dificuldade']), key=f"d_{i}_{v}")
                         
                         if st.button(f"Forjar Item {item['q']} Individualmente", key=f"btn_gen_ind_{i}_{v}", use_container_width=True):
-                            with st.spinner("Desenhando item regular..."):
-                                prompt = f"SÉRIE: {f['info']['ano']}\nTEMA ESPECÍFICO: {tema_q}. DIFICULDADE: {dif_q}. GABARITO: {item['gabarito']}.\nCONTEXTO:\n{f.get('contexto_base', '')}"
+                            with st.spinner("Desenhando item ancorado no seu contexto..."):
+                                prompt = f"SÉRIE: {f['info']['ano']}\nTEMA ESPECÍFICO: {tema_q}. DIFICULDADE: {dif_q}. GABARITO: {item['gabarito']}.\n🚨 USE EXCLUSIVAMENTE ESTE CONTEXTO FORNECIDO (SEM ALUCINAR TEMAS FORA):\n{f.get('contexto_base', '')}"
                                 res_item = ai.gerar_ia("FORJA_ITEM_REGULAR", prompt)
                                 ext = {tag: ai.extrair_tag(res_item, tag) for tag in ['ENUNCIADO', 'ALT_A', 'ALT_B', 'ALT_C', 'ALT_D', 'ALT_E', 'HABILIDADE', 'JUSTIFICATIVA', 'DISTRATORES']}
                                 
@@ -2488,7 +2494,7 @@ elif menu == "📝 Central de Avaliações":
                                 col_alt_b.markdown(f"**(D)** {mark_d}{preparar_para_leitura(d['ALT_D'])}")
                                 if d.get('ALT_E'): st.markdown(f"**(E)** {mark_e}{preparar_para_leitura(d['ALT_E'])}")
 
-                        # 🔬 DETALHAMENTO DA PERÍCIA TRI E DISTRATORES (EXPANDER EXPANDIDO)
+                        # 🔬 DETALHAMENTO DA PERÍCIA TRI E DISTRATORES
                         with st.expander("🔬 Ver Perícia TRI e Análise Científica de Distratores", expanded=False):
                             st.caption(f"🆔 **Descritor SAEB/BNCC:** {d.get('HABILIDADE', 'Não especificado')}")
                             st.write(f"🎯 **Gabarito Justificado:** {d.get('JUSTIFICATIVA', 'Não especificada')}")
@@ -2524,8 +2530,8 @@ elif menu == "📝 Central de Avaliações":
                                 st.rerun()
 
                         if col_b2.button(f"🔄 Regerar Item {item['q']} com IA", key=f"btn_ref_{i}_{v}", use_container_width=True):
-                            with st.spinner("Reestruturando item..."):
-                                prompt = f"SÉRIE: {f['info']['ano']}\nTEMA ESPECÍFICO: {item['tema']}. GABARITO: {item['gabarito']}.\nAJUSTE SOLICITADO: {inst_ref}\nENUNCIADO ANTERIOR:\n{d['ENUNCIADO']}"
+                            with st.spinner("Reestruturando item sem alucinação..."):
+                                prompt = f"SÉRIE: {f['info']['ano']}\nTEMA ESPECÍFICO: {item['tema']}. GABARITO: {item['gabarito']}.\nAJUSTE SOLICITADO: {inst_ref}\nENUNCIADO ANTERIOR:\n{d['ENUNCIADO']}\n\n🚨 CONTEXTO OBRIGATÓRIO:\n{f.get('contexto_base', '')}"
                                 res_item = ai.gerar_ia("FORJA_ITEM_REGULAR", prompt)
                                 ext = {tag: ai.extrair_tag(res_item, tag) for tag in ['ENUNCIADO', 'ALT_A', 'ALT_B', 'ALT_C', 'ALT_D', 'ALT_E', 'HABILIDADE', 'JUSTIFICATIVA', 'DISTRATORES']}
                                 item['dados'] = {
