@@ -2132,11 +2132,11 @@ elif menu == "🧪 Criador de Aulas":
 
 
 # ==============================================================================
-# MÓDULO: CENTRAL DE AVALIAÇÕES - V2026.ULTIMATE (LINHA DE MONTAGEM COM APROVAÇÃO)
+# MÓDULO: CENTRAL DE AVALIAÇÕES - V2026.MASTER (DESCRITIVO DE ALTA PRECISÃO)
 # ==============================================================================
 elif menu == "📝 Central de Avaliações":
-    st.title("Central de Avaliações (Padrão ENEM / SAEB)")
-    st.caption("Arquitetura psicométrica de elite: elaboração por etapas, tríade inclusiva PEI, cartões OMR fiduciais e pericia TRI.")
+    st.title("📝 Central de Avaliações (Padrão ENEM / SAEB)")
+    st.caption("Arquitetura psicométrica de elite: elaboração por etapas, pericia TRI de distratores, tríade inclusiva PEI e custódia digital.")
     st.markdown("---")
 
     if "v_av" not in st.session_state: 
@@ -2158,10 +2158,10 @@ elif menu == "📝 Central de Avaliações":
     def render_indicador_fases(fase_atual):
         etapas = [
             ("1. Briefing & Matriz", 1),
-            ("2. Forja Regular", 2),
-            ("3. Tríade PEI", 3),
+            ("2. Forja & Perícia Regular", 2),
+            ("3. Tríade Inclusiva PEI", 3),
             ("4. Custódia & Drive", 4),
-            ("5. Revisão & Acervo", 5)
+            ("5. Pós-Prova & Acervo", 5)
         ]
         html_steps = []
         for nome, f_num in etapas:
@@ -2174,24 +2174,26 @@ elif menu == "📝 Central de Avaliações":
             html_steps.append(f"<div style='flex: 1; text-align: center; padding-bottom: 8px; color: {color}; font-weight: {f_weight}; {border}'>{nome}</div>")
         st.markdown(f"<div style='display: flex; justify-content: space-between; margin-bottom: 25px;'>{''.join(html_steps)}</div>", unsafe_allow_html=True)
 
-    tab_forja, tab_acervo_av = st.tabs(["Linha de Montagem de Provas", "Acervo de Provas"])
+    tab_forja, tab_acervo_av = st.tabs(["Linha de Montagem de Provas", "Acervo de Provas & Perícia"])
 
     # ==============================================================================
-    # ABA 1: LINHA DE MONTAGEM (5 FASES COM APROVAÇÃO POR ETAPA)
+    # ABA 1: LINHA DE MONTAGEM DE PROVAS (ETAPAS + MÁXIMO DETALHAMENTO)
     # ==============================================================================
     with tab_forja:
         if 1 < f['fase'] <= 5:
             render_indicador_fases(f['fase'])
-            if st.button("🗑️ Descartar Edição e Voltar ao Início", use_container_width=True, key=f"btn_disc_av_{v}"): 
+            if st.button("🗑️ Descartar Edição Atual e Voltar ao Início", use_container_width=True, key=f"btn_disc_av_{v}"): 
                 reset_forja()
             st.markdown("---")
 
-        # --- FASE 1: BRIEFING & MATRIZ DE PROVA ---
+        # --------------------------------------------------------------------------
+        # FASE 1: BRIEFING, PARÂMETROS E FONTE DE DADOS
+        # --------------------------------------------------------------------------
         if f['fase'] == 1:
-            st.markdown("### Fase 1: Briefing & Matriz de Prova")
+            st.markdown("### 📋 Fase 1: Briefing, Matriz & Fontes Didáticas")
             
             modo_arq = st.pills(
-                "Selecione o Tipo de Instrumento:", 
+                "Selecione o Abordagem do Instrumento:", 
                 ["Nova Avaliação (Inédita ENEM/SAEB)", "Sonda Diagnóstica", "Variante Anti-Fraude (Clonagem)", "Recuperação Cirúrgica (Data-Driven)"], 
                 default="Nova Avaliação (Inédita ENEM/SAEB)",
                 key=f"pills_modo_av_{v}"
@@ -2200,17 +2202,25 @@ elif menu == "📝 Central de Avaliações":
 
             if "Inédita" in modo_arq or "Sonda" in modo_arq:
                 with st.container(border=True):
-                    st.markdown("#### 1. Parâmetros Gerais")
+                    st.markdown("#### 1. Matriz e Parâmetros Gerais")
                     c1, c2, c3, c4 = st.columns(4)
                     ano_av = c1.selectbox("Série Alvo:", [6, 7, 8, 9], key=f"ano_av_sel_{v}")
                     trim_filtro = c2.selectbox("Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"trim_av_sel_{v}")
-                    v_total = c3.number_input("Valor Total (pts):", 0.0, 10.0, 4.0 if "Inédita" in modo_arq else 10.0, step=0.5, key=f"v_tot_input_{v}")
-                    qtd_q = c4.number_input("Qtd. de Questões:", 1, 20, 10, key=f"qtd_q_input_{v}")
+                    v_total = c3.number_input("Valor Total da Prova (pts):", 0.0, 10.0, 4.0 if "Inédita" in modo_arq else 10.0, step=0.5, key=f"v_tot_input_{v}")
+                    qtd_q = c4.number_input("Quantidade de Questões:", 1, 20, 10, key=f"qtd_q_input_{v}")
+
+                    perfil_rigor = st.selectbox(
+                        "Rigor Cognitivo & Equilíbrio TRI:", 
+                        ["⚖️ Padrão (30% Fácil | 50% Média | 20% Difícil)", "🚀 Alta Performance (OBMEP / Avançado)", "🧱 Foco em Recomposição (Fixação Acessível)"], 
+                        key=f"rigor_pop_{v}"
+                    )
 
                 with st.container(border=True):
-                    st.markdown("#### 2. Seleção de Fontes & Questões Espelho do Livro")
+                    st.markdown("#### 2. Seleção Híbrida de Fontes para Ancoragem Direta")
+                    st.caption("ℹ️ Combine o Acervo de Aulas, o PDF do Livro Didático e Exercícios Autorais para gerar Questões Espelho fiéis à sala de aula.")
+                    
                     fontes_ativas = st.pills(
-                        "Fontes de Dados para Ancoragem:", 
+                        "Fontes de Dados Selecionadas:", 
                         ["📚 Acervo de Aulas SOSA", "📖 Recorte do Livro Didático (PDF)", "✍️ Injeção Auxiliar do Professor"], 
                         default=["📖 Recorte do Livro Didático (PDF)"],
                         selection_mode="multi",
@@ -2228,7 +2238,7 @@ elif menu == "📝 Central de Avaliações":
                         if not df_ref.empty:
                             termos_proibidos = ["APLICAÇÃO", "TESTE", "PROVA", "SONDA", "AVALIAÇÃO", "REVISÃO", "2ª CHAMADA"]
                             df_ref = df_ref[~df_ref['TIPO_MATERIAL'].str.upper().str.contains('|'.join(termos_proibidos))]
-                            mats_selecionados = c_safra1.multiselect("Aulas do Acervo:", options=df_ref["TIPO_MATERIAL"].tolist(), key=f"mats_sel_av_{v}")
+                            mats_selecionados = c_safra1.multiselect("Aulas Ministradas do Acervo:", options=df_ref["TIPO_MATERIAL"].tolist(), key=f"mats_sel_av_{v}")
 
                     if "📖 Recorte do Livro Didático (PDF)" in fontes_ativas:
                         livros_av_disp = df_materiais[df_materiais['TIPO'].str.contains(str(ano_av), na=False)]['NOME_ARQUIVO'].tolist() if not df_materiais.empty else []
@@ -2237,14 +2247,14 @@ elif menu == "📝 Central de Avaliações":
                         if sel_livro_av:
                             uri_livro_av = df_materiais[df_materiais['NOME_ARQUIVO'] == sel_livro_av].iloc[0]['URI_ARQUIVO']
                             c_p_av1, c_p_av2 = st.columns(2)
-                            pags_teo_av = c_p_av1.text_input("📘 Páginas Teoria:", placeholder="Ex: 184-186, 189", key=f"pags_teo_av_{v}")
-                            pags_ex_av = c_p_av2.text_input("📝 Páginas Exercícios:", placeholder="Ex: 187-188, 190-192", key=f"pags_ex_av_{v}")
+                            pags_teo_av = c_p_av1.text_input("📘 Páginas de Teoria (Leitura):", placeholder="Ex: 184-186, 189", key=f"pags_teo_av_{v}")
+                            pags_ex_av = c_p_av2.text_input("📝 Páginas de Exercícios (Fixação):", placeholder="Ex: 187-188, 190-192", key=f"pags_ex_av_{v}")
                             
                             list_p_av_teo = util.processar_intervalos_paginas(pags_teo_av)
                             list_p_av_ex = util.processar_intervalos_paginas(pags_ex_av)
                             
                             if list_p_av_teo or list_p_av_ex:
-                                with st.spinner("🔍 Fatiando páginas do livro para a prova..."):
+                                with st.spinner("🔍 Fatiando páginas do livro no Drive..."):
                                     bytes_pdf_av = db.baixar_bytes_arquivo_drive(uri_livro_av)
                                     if bytes_pdf_av:
                                         if list_p_av_teo: txt_av_teo_ext = util.extrair_texto_pdf_por_paginas(bytes_pdf_av, list_p_av_teo)
@@ -2252,20 +2262,34 @@ elif menu == "📝 Central de Avaliações":
 
                     if "✍️ Injeção Auxiliar do Professor" in fontes_ativas:
                         recorte_provas_livro = st.text_area(
-                            "📖 Exercícios Autorais para Criar Questões Espelho:",
-                            placeholder="Cole aqui exercícios resolvidos em sala para a IA espelhar...",
+                            "📖 Exercícios Autorais ou do Caderno para Criar Questões Espelho:",
+                            placeholder="Cole aqui questões trabalhadas em sala para a IA espelhar na prova...",
                             height=100, key=f"recorte_provas_input_{v}"
                         )
 
+                    # Mesa de Inspeção de Conteúdo Lido
+                    if txt_av_teo_ext or txt_av_ex_ext or recorte_provas_livro.strip():
+                        with st.expander("👁️ MESA DE INSPEÇÃO DA PROVA (PRÉVIA DO CONTEÚDO EXTRAÍDO)", expanded=True):
+                            t_av_i1, t_av_i2, t_av_i3 = st.tabs(["📘 Teoria Fatiada", "📝 Exercícios Fatiados", "✍️ Texto Auxiliar do Professor"])
+                            with t_av_i1:
+                                if txt_av_teo_ext: st.text_area("Teoria Lida:", txt_av_teo_ext, height=150, disabled=True)
+                                else: st.info("Nenhuma página de teoria informada.")
+                            with t_av_i2:
+                                if txt_av_ex_ext: st.text_area("Exercícios Lidos:", txt_av_ex_ext, height=150, disabled=True)
+                                else: st.info("Nenhuma página de exercício informada.")
+                            with t_av_i3:
+                                if recorte_provas_livro.strip(): st.text_area("Texto Auxiliar Autorizado:", recorte_provas_livro, height=150, disabled=True)
+                                else: st.info("Nenhum texto auxiliar informado.")
+
                     contexto_base_texto = ""
-                    if txt_av_teo_ext: contexto_base_texto += f"--- PÁGINAS DE TEORIA DO LIVRO ---\n{txt_av_teo_ext}\n\n"
-                    if txt_av_ex_ext: contexto_base_texto += f"--- PÁGINAS DE EXERCÍCIOS DO LIVRO ---\n{txt_av_ex_ext}\n\n"
+                    if txt_av_teo_ext: contexto_base_texto += f"--- PÁGINAS DE TEORIA DO LIVRO DIDÁTICO ---\n{txt_av_teo_ext}\n\n"
+                    if txt_av_ex_ext: contexto_base_texto += f"--- PÁGINAS DE EXERCÍCIOS DO LIVRO DIDÁTICO ---\n{txt_av_ex_ext}\n\n"
                     if recorte_provas_livro.strip(): contexto_base_texto += f"--- EXERCÍCIOS DO PROFESSOR ---\n{recorte_provas_livro.strip()}\n\n"
 
                 st.markdown("<br>", unsafe_allow_html=True)
-                if st.button("🚀 Iniciar Linha de Montagem (Avançar para Fase 2)", type="primary", use_container_width=True, key=f"btn_fase1_av_{v}"):
+                if st.button("🚀 Iniciar Linha de Montagem de Itens (Avançar para Fase 2)", type="primary", use_container_width=True, key=f"btn_fase1_av_{v}"):
                     if not mats_selecionados and not txt_av_ex_ext and not recorte_provas_livro.strip():
-                        st.error("⚠️ Selecione ao menos uma fonte de dados (Acervo, Livro ou Texto Auxiliar).")
+                        st.error("⚠️ Selecione ao menos uma fonte de dados (Acervo, Páginas do Livro ou Texto Auxiliar).")
                     else:
                         gabarito_mestre = util.gerar_gabarito_balanceado(qtd_q)
                         mapa_inicial = []
@@ -2276,30 +2300,85 @@ elif menu == "📝 Central de Avaliações":
                                 'gabarito': gabarito_mestre[i], 'status': 'pendente', 'dados': {} 
                             })
                         f['mapa'] = mapa_inicial
-                        f['info'] = {'ano': f"{ano_av}º", 'trimestre': trim_filtro, 'valor': v_total, 'qtd': qtd_q, 'tipo_prova': "AVALIAÇÃO"}
+                        f['info'] = {'ano': f"{ano_av}º", 'trimestre': trim_filtro, 'valor': v_total, 'qtd': qtd_q, 'tipo_prova': "AVALIAÇÃO", 'rigor': perfil_rigor}
                         f['contexto_base'] = contexto_base_texto 
                         f['fase'] = 2
                         st.rerun()
 
-        # --- FASE 2: FORJA & APROVAÇÃO DO CADERNO REGULAR ---
+            elif "Variante" in modo_arq:
+                with st.container(border=True):
+                    st.markdown("#### Parâmetros de Clonagem (Variante Anti-Fraude)")
+                    c_cl1, c_cl2 = st.columns([1, 2])
+                    ano_clone = c_cl1.selectbox("Série:", [6, 7, 8, 9], key=f"ano_clone_sel_{v}")
+                    df_provas = df_aulas[(df_aulas['ANO'].str.contains(str(ano_clone))) & (df_aulas['SEMANA_REF'] == "AVALIAÇÃO")] if not df_aulas.empty else pd.DataFrame()
+                    opcoes_provas = [p for p in df_provas['TIPO_MATERIAL'].tolist() if not re.search(r"2[ªA]|CHAMADA|TIPO [B-Z]", p, re.IGNORECASE)] if not df_provas.empty else []
+                    prova_base_sel = c_cl2.selectbox("Selecione a Prova de Origem:", [""] + opcoes_provas, key=f"p_base_sel_{v}")
+                
+                if prova_base_sel:
+                    txt_base = str(df_provas[df_provas['TIPO_MATERIAL'] == prova_base_sel].iloc[0]['CONTEUDO'])
+                    q_reg = ai.extrair_tag(txt_base, "QUESTOES")
+                    qtd_detectada = len(re.findall(r"(?i)QUEST[AÃ]O\s*0?\d+", q_reg))
+                    st.success(f"Prova localizada com {qtd_detectada} questões.")
+                    
+                    if st.button("🚀 Forjar Variante Tipo B (Embaralhada)", type="primary", use_container_width=True, key=f"btn_clone_exe_{v}"):
+                        with st.status("Forjando caderno variante...") as status:
+                            info_clone = {'ano': f"{ano_clone}º", 'trimestre': "I Trimestre", 'valor': 4.0, 'qtd': qtd_detectada}
+                            existentes = df_aulas[df_aulas['TIPO_MATERIAL'].str.startswith(prova_base_sel + " - TIPO", na=False)] if not df_aulas.empty else pd.DataFrame()
+                            letra = chr(66 + len(existentes))
+                            nome_var = f"{prova_base_sel} - TIPO {letra}"
+                            
+                            prompt = f"PROVA ORIGINAL:\n[QUESTOES]\n{q_reg}\n\n[GRADE_DE_CORRECAO]\n{ai.extrair_tag(txt_base, 'GRADE_DE_CORRECAO')}"
+                            res_hydra = ai.gerar_ia("ARQUITETO_VARIANTES_V100", prompt)
+                            
+                            texto_final_var = f"[VALOR: 4.0]\n\n[QUESTOES]\n{ai.extrair_tag(res_hydra, 'QUESTOES')}\n\n[GABARITO_TEXTO]\n{ai.extrair_tag(res_hydra, 'GABARITO_TEXTO')}\n\n[GRADE_DE_CORRECAO]\n{ai.extrair_tag(res_hydra, 'GRADE_DE_CORRECAO')}\n\n[PEI_NIVEL_1]\n{ai.extrair_tag(txt_base, 'PEI_NIVEL_1')}\n\n[PEI_NIVEL_2]\n{ai.extrair_tag(txt_base, 'PEI_NIVEL_2')}\n\n[PEI_NIVEL_3]\n{ai.extrair_tag(txt_base, 'PEI_NIVEL_3')}\n\n"
+                            doc_var = exporter.gerar_docx_prova_v25(nome_var, texto_final_var, info_clone)
+                            link_var = db.subir_e_converter_para_google_docs(doc_var, nome_var, modo="AVALIACAO")
+                            
+                            db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), "AVALIAÇÃO", nome_var, texto_final_var + f"\n--- LINKS ---\nRegular({link_var})", f"{ano_clone}º", link_var])
+                            status.update(label="Variante homologada e salva no Drive!", state="complete")
+                        st.balloons(); time.sleep(1); st.rerun()
+
+        # --------------------------------------------------------------------------
+        # FASE 2: FORJA, REVISÃO DETALHADA E PERÍCIA TRI DO CADERNO REGULAR
+        # --------------------------------------------------------------------------
         elif f['fase'] == 2:
-            st.markdown("### Fase 2: Forja & Aprovação do Caderno Regular")
-            st.caption("Revise, edite e aprove cada item regular ANTES de gerar a Tríade PEI.")
+            st.markdown("### 🔬 Fase 2: Forja, Perícia & Lapidação dos Itens Regulares")
+            st.caption("Revise, edite a perícia de distratores e aprove cada item regular ANTES de avançar para a Tríade PEI.")
 
             total_q = len(f['mapa'])
+            facil_c = sum(1 for item in f['mapa'] if item['dificuldade'] == "Fácil")
+            media_c = sum(1 for item in f['mapa'] if item['dificuldade'] == "Média")
+            dificil_c = sum(1 for item in f['mapa'] if item['dificuldade'] == "Difícil")
+            
+            perc_facil = (facil_c / total_q) * 100 if total_q > 0 else 0
+            perc_media = (media_c / total_q) * 100 if total_q > 0 else 0
+            perc_dificil = (dificil_c / total_q) * 100 if total_q > 0 else 0
+
+            # 📊 RÉGUA DE EQUILÍBRIO PSICOMÉTRICO (TRI)
+            with st.container(border=True):
+                st.markdown("##### 📊 Régua de Equilíbrio Psicométrico da Prova (TRI)")
+                col_tri1, col_tri2, col_tri3, col_tri4 = st.columns(4)
+                col_tri1.metric("Total de Itens", total_q)
+                col_tri2.metric("🔵 Fáceis (30%)", f"{facil_c} ({perc_facil:.0f}%)")
+                col_tri3.metric("🟡 Médias (50%)", f"{media_c} ({perc_media:.0f}%)")
+                col_tri4.metric("🔴 Difíceis (20%)", f"{dificil_c} ({perc_dificil:.0f}%)")
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            modo_leitura_forja = st.toggle("👁️ Modo Leitura Real (Renderizar Matemática LaTeX e Prompts)", value=True, key=f"tog_read_forja_{v}")
+
             pendentes = [item for item in f['mapa'] if item['status'] == 'pendente']
 
             if pendentes:
-                if st.button(f"🚀 Gerar Lote de {len(pendentes)} Questões Regulares com IA", type="primary", use_container_width=True, key=f"btn_lote_av_{v}"):
-                    with st.spinner("Forjando itens regulares no padrão ENEM/SAEB..."):
-                        prompt_lote = f"SÉRIE: {f['info']['ano']}\nVALOR TOTAL: {f['info']['valor']}\n\n"
+                if st.button(f"🚀 GERAR LOTE DE {len(pendentes)} QUESTÕES REGULARES COM IA", type="primary", use_container_width=True, key=f"btn_lote_av_{v}"):
+                    with st.spinner("Forjando itens no padrão ENEM/SAEB com contexto real e distratores TRI..."):
+                        prompt_lote = f"SÉRIE: {f['info']['ano']}\nVALOR TOTAL DA PROVA: {f['info']['valor']}\n\n"
                         for item in pendentes:
                             prompt_lote += f"QUESTÃO {item['q']}:\n- COMPLEXIDADE: {item['dificuldade']}\n- GABARITO EXIGIDO: Letra {item['gabarito']}\n\n"
-                        prompt_lote += f"CONTEXTO E LIVRO DIDÁTICO:\n{f.get('contexto_base', '')}\n"
+                        prompt_lote += f"CONTEXTO DO LIVRO DIDÁTICO E SALA DE AULA:\n{f.get('contexto_base', '')}\n"
                         
                         res_json = ai.gerar_ia_json("FORJA_LOTE_JSON", prompt_lote)
                         if "erro" in res_json:
-                            st.error(f"Erro no processamento: {res_json['erro']}")
+                            st.error(f"⚠️ Erro ao processar o lote: {res_json['erro']}")
                         else:
                             for q_data in res_json.get("questoes", []):
                                 q_num = int(q_data.get("q", 0))
@@ -2323,86 +2402,179 @@ elif menu == "📝 Central de Avaliações":
             st.markdown("---")
             todas_aprovadas = True
 
+            # EXIBIÇÃO ULTRA-DETALHADA DE CADA ITEM REGULAR
             for i, item in enumerate(f['mapa']):
-                label_st = "✅ Aprovado" if item['status'] == 'aprovado' else ("🔍 Em Revisão" if item['status'] == 'revisao' else "⏳ Pendente")
-                with st.expander(f"Item {item['q']:02d} | Gabarito: ({item['gabarito']}) | Status: {label_st}", expanded=(item['status'] != 'aprovado')):
+                label_status = "✅ Aprovado" if item['status'] == 'aprovado' else ("🔍 Em Revisão" if item['status'] == 'revisao' else "⏳ Pendente")
+                
+                with st.container(border=True):
+                    c_card_head1, c_card_head2 = st.columns([3, 1])
+                    c_card_head1.markdown(f"**📌 ITEM {item['q']:02d} | Nível: {item['dificuldade']}**")
+                    c_card_head2.caption(f"Status: **{label_status}** | Gabarito: **({item['gabarito']})**")
+
                     if item['status'] == 'pendente':
                         todas_aprovadas = False
-                        st.info("Aguardando geração do lote.")
-                    else:
-                        d = item['dados']
-                        if item['status'] == 'revisao': todas_aprovadas = False
+                        c_t1, c_t2 = st.columns([3, 1])
+                        tema_q = c_t1.text_input("Assunto / Contexto do Item:", value=item['tema'], key=f"t_{i}_{v}")
+                        dif_q = c_t2.selectbox("Complexidade TRI:", ["Fácil", "Média", "Difícil"], index=["Fácil", "Média", "Difícil"].index(item['dificuldade']), key=f"d_{i}_{v}")
                         
-                        st.markdown(f"**QUESTÃO {item['q']:02d} -** {d['ENUNCIADO']}")
-                        st.markdown(f"(A) {d['ALT_A']}\n\n(B) {d['ALT_B']}\n\n(C) {d['ALT_C']}\n\n(D) {d['ALT_D']}\n\n(E) {d['ALT_E']}")
-                        st.caption(f"🆔 **Descritor:** {d['HABILIDADE']} | **Gabarito:** {d['GABARITO']}")
+                        if st.button(f"Forjar Item {item['q']} Individualmente", key=f"btn_gen_ind_{i}_{v}", use_container_width=True):
+                            with st.spinner("Desenhando item regular..."):
+                                prompt = f"SÉRIE: {f['info']['ano']}\nTEMA: {tema_q}. DIFICULDADE: {dif_q}. GABARITO: {item['gabarito']}.\nCONTEXTO:\n{f.get('contexto_base', '')}"
+                                res_item = ai.gerar_ia("FORJA_ITEM_REGULAR", prompt)
+                                ext = {tag: ai.extrair_tag(res_item, tag) for tag in ['ENUNCIADO', 'ALT_A', 'ALT_B', 'ALT_C', 'ALT_D', 'ALT_E', 'HABILIDADE', 'JUSTIFICATIVA', 'DISTRATORES']}
+                                
+                                item['dados'] = {
+                                    'ENUNCIADO': ext['ENUNCIADO'], 'ALT_A': ext['ALT_A'], 'ALT_B': ext['ALT_B'], 'ALT_C': ext['ALT_C'],
+                                    'ALT_D': ext['ALT_D'], 'ALT_E': ext['ALT_E'], 'HABILIDADE': ext['HABILIDADE'], 'JUSTIFICATIVA': ext['JUSTIFICATIVA'],
+                                    'DISTRATORES': ext['DISTRATORES'], 'GABARITO': item['gabarito']
+                                }
+                                item['status'] = 'revisao'
+                                st.rerun()
 
+                    elif item['status'] in ['revisao', 'aprovado']:
+                        if item['status'] == 'revisao': todas_aprovadas = False
+                        d = item['dados']
+
+                        # Renderização Visual
+                        if modo_leitura_forja:
+                            with st.container(border=True):
+                                st.markdown(preparar_para_leitura(f"**QUESTÃO {item['q']:02d} -** {d['ENUNCIADO']}"))
+                                
+                                mark_a = "✅ " if d['GABARITO'] == 'A' else ""
+                                mark_b = "✅ " if d['GABARITO'] == 'B' else ""
+                                mark_c = "✅ " if d['GABARITO'] == 'C' else ""
+                                mark_d = "✅ " if d['GABARITO'] == 'D' else ""
+                                mark_e = "✅ " if d['GABARITO'] == 'E' else ""
+
+                                col_alt_a, col_alt_b = st.columns(2)
+                                col_alt_a.markdown(f"**(A)** {mark_a}{preparar_para_leitura(d['ALT_A'])}")
+                                col_alt_b.markdown(f"**(B)** {mark_b}{preparar_para_leitura(d['ALT_B'])}")
+                                col_alt_a.markdown(f"**(C)** {mark_c}{preparar_para_leitura(d['ALT_C'])}")
+                                col_alt_b.markdown(f"**(D)** {mark_d}{preparar_para_leitura(d['ALT_D'])}")
+                                if d.get('ALT_E'): st.markdown(f"**(E)** {mark_e}{preparar_para_leitura(d['ALT_E'])}")
+
+                        # 🔬 DETALHAMENTO DA PERÍCIA TRI E DISTRATORES
+                        with st.expander("🔬 Ver Perícia TRI e Análise Científica de Distratores", expanded=False):
+                            st.caption(f"🆔 **Descritor SAEB/BNCC:** {d.get('HABILIDADE', 'Não especificado')}")
+                            st.write(f"🎯 **Gabarito Justificado:** {d.get('JUSTIFICATIVA', 'Não especificada')}")
+                            st.warning(f"🧠 **Distratores Científicos (Erros Mapeados):**\n{d.get('DISTRATORES', 'Não especificados')}")
+
+                        # ✏️ EDIÇÃO MANUAL COMPLETA DOS CAMPOS DO ITEM
+                        with st.expander("✏️ Editar Enunciado, Alternativas, Descritor e Gabarito", expanded=False):
+                            d['ENUNCIADO'] = st.text_area("Enunciado:", value=d['ENUNCIADO'], height=100, key=f"ed_en_{i}_{v}")
+                            
+                            c_a1, c_a2 = st.columns(2)
+                            d['ALT_A'] = c_a1.text_input("(A):", value=d['ALT_A'], key=f"ed_a_{i}_{v}")
+                            d['ALT_B'] = c_a2.text_input("(B):", value=d['ALT_B'], key=f"ed_b_{i}_{v}")
+                            d['ALT_C'] = c_a1.text_input("(C):", value=d['ALT_C'], key=f"ed_c_{i}_{v}")
+                            d['ALT_D'] = c_a2.text_input("(D):", value=d['ALT_D'], key=f"ed_d_{i}_{v}")
+                            d['ALT_E'] = c_a1.text_input("(E):", value=d['ALT_E'], key=f"ed_e_{i}_{v}")
+                            
+                            d['GABARITO'] = st.selectbox("Gabarito Oficial:", ["A", "B", "C", "D", "E"], index=["A", "B", "C", "D", "E"].index(d['GABARITO']), key=f"ed_gab_sel_{i}_{v}")
+                            d['HABILIDADE'] = st.text_input("Descritor SAEB/BNCC:", value=d['HABILIDADE'], key=f"ed_hab_{i}_{v}")
+                            d['JUSTIFICATIVA'] = st.text_area("Justificativa do Gabarito:", value=d['JUSTIFICATIVA'], height=60, key=f"ed_just_{i}_{v}")
+
+                        # 🤖 REFINADOR INDIVIDUAL POR ITEM VIA IA
+                        inst_ref = st.text_input("Refinar esta questão com IA (Ex: 'Incorpore o cacau de Itabuna'):", key=f"inst_ref_{i}_{v}")
+                        col_b1, col_b2 = st.columns(2)
+                        
                         if item['status'] == 'revisao':
-                            col_ap1, col_ap2 = st.columns(2)
-                            if col_ap1.button(f"✅ Aprovar Item {item['q']}", type="primary", key=f"apr_q_{i}_{v}", use_container_width=True):
+                            if col_b1.button(f"✅ Aprovar Item {item['q']}", type="primary", key=f"btn_apr_{i}_{v}", use_container_width=True):
                                 item['status'] = 'aprovado'
                                 st.rerun()
-                            if col_ap2.button(f"✏️ Editar Item {item['q']}", key=f"ed_q_{i}_{v}", use_container_width=True):
-                                item['status'] = 'editando'
+                        else:
+                            if col_b1.button(f"✏️ Reabrir Item {item['q']} para Revisão", key=f"btn_reabrir_{i}_{v}", use_container_width=True):
+                                item['status'] = 'revisao'
+                                st.rerun()
+
+                        if col_b2.button(f"🔄 Regerar Item {item['q']} com IA", key=f"btn_ref_{i}_{v}", use_container_width=True):
+                            with st.spinner("Reestruturando item..."):
+                                prompt = f"SÉRIE: {f['info']['ano']}\nTEMA: {item['tema']}. GABARITO: {item['gabarito']}.\nAJUSTE SOLICITADO: {inst_ref}\nENUNCIADO ANTERIOR:\n{d['ENUNCIADO']}"
+                                res_item = ai.gerar_ia("FORJA_ITEM_REGULAR", prompt)
+                                ext = {tag: ai.extrair_tag(res_item, tag) for tag in ['ENUNCIADO', 'ALT_A', 'ALT_B', 'ALT_C', 'ALT_D', 'ALT_E', 'HABILIDADE', 'JUSTIFICATIVA', 'DISTRATORES']}
+                                item['dados'] = {
+                                    'ENUNCIADO': ext['ENUNCIADO'], 'ALT_A': ext['ALT_A'], 'ALT_B': ext['ALT_B'], 'ALT_C': ext['ALT_C'],
+                                    'ALT_D': ext['ALT_D'], 'ALT_E': ext['ALT_E'], 'HABILIDADE': ext['HABILIDADE'], 'JUSTIFICATIVA': ext['JUSTIFICATIVA'],
+                                    'DISTRATORES': ext['DISTRATORES'], 'GABARITO': item['gabarito']
+                                }
+                                item['status'] = 'revisao'
                                 st.rerun()
 
             if todas_aprovadas and len(f['mapa']) > 0:
                 st.markdown("<br>", unsafe_allow_html=True)
-                st.success("🎉 **Caderno Regular 100% Aprovado!** Clique abaixo para forjar a Tríade PEI com base nestas questões.")
-                if st.button("🚀 Aprovar Prova Regular e Avançar para Fase 3 (Tríade PEI)", type="primary", use_container_width=True, key=f"btn_fase2_next_{v}"):
+                st.success("🎉 **Caderno Regular 100% Homologado!** Clique abaixo para forjar a Tríade PEI alinhada a este caderno.")
+                if st.button("🚀 APROVAR CADERNO REGULAR COMPLETO E AVANÇAR PARA FASE 3 (TRÍADE PEI)", type="primary", use_container_width=True, key=f"btn_fase2_next_{v}"):
                     f['fase'] = 3
                     st.rerun()
 
-        # --- FASE 3: FORJA & APROVAÇÃO DA TRÍADE PEI (N1, N2 e N3) ---
+        # --------------------------------------------------------------------------
+        # FASE 3: FORJA & REVISÃO DETALHADA DA TRÍADE INCLUSIVA PEI
+        # --------------------------------------------------------------------------
         elif f['fase'] == 3:
-            st.markdown("### Fase 3: Tríade Inclusiva (PEI N1, N2 e N3)")
-            st.caption("Gerada diretamente a partir do Caderno Regular já aprovado por você.")
+            st.markdown("### ♿ Fase 3: Tríade Inclusiva PEI (N1, N2 e N3)")
+            st.caption("A IA adapta as questões do Caderno Regular recém-aprovado por você para os 3 níveis de suporte pedagógico.")
 
             if not f.get('pei_1'):
                 if st.button("🧠 FORJAR TRÍADE INCLUSIVA (N1, N2 e N3)", type="primary", use_container_width=True, key=f"btn_gen_triade_f3_{v}"):
-                    with st.status("Construindo materiais de inclusão sem poluição...", expanded=True) as status:
+                    with st.status("Construindo materiais de inclusão alinhados...", expanded=True) as status:
                         texto_base_reg = f"[VALOR: {f['info']['valor']}]\n\n"
                         for item in f['mapa']:
                             d = item['dados']
                             texto_base_reg += f"**QUESTÃO {item['q']:02d} -** {d['ENUNCIADO']}\n(A) {d['ALT_A']}\n(B) {d['ALT_B']}\n(C) {d['ALT_C']}\n(D) {d['ALT_D']}\n(E) {d['ALT_E']}\n\n"
 
-                        status.write("🔵 Forjando PEI Nível 1 (Apoio Leve - 3 Alternativas)...")
+                        status.write("🔵 Forjando PEI Nível 1 (Apoio Leve - 3 Alternativas A, B, C)...")
                         f['pei_1'] = ai.gerar_ia("FORJA_PEI_N1", f"REGULAR:\n{texto_base_reg}")
 
                         status.write("🟡 Forjando PEI Nível 2 (Apoio Moderado - Passo a Passo)...")
                         f['pei_2'] = ai.gerar_ia("FORJA_PEI_N2", f"REGULAR:\n{texto_base_reg}")
 
-                        status.write("🔴 Forjando PEI Nível 3 (10 Bento Boxes Lúdicos)...")
+                        status.write("🔴 Forjando PEI Nível 3 (10 Bento Boxes Lúdico-Sensoriais)...")
                         f['pei_3'] = ai.gerar_ia("FORJA_PEI_N3", f"REGULAR:\n{texto_base_reg}")
 
-                        status.update(label="✅ Tríade PEI forjada!", state="complete")
+                        status.update(label="✅ Tríade PEI concluída!", state="complete")
                         st.rerun()
             else:
-                t_p1, t_p2, t_p3 = st.tabs(["🔵 PEI Nível 1 (Apoio Leve)", "🟡 PEI Nível 2 (Apoio Moderado)", "🔴 PEI Nível 3 (Bento Cards 10 Boxes)"])
+                modo_leitura_pei = st.toggle("👁️ Visualização Real PEI (Renderizar LaTeX)", value=True, key=f"read_pei_tog_{v}")
+                
+                t_p1, t_p2, t_p3 = st.tabs(["🔵 PEI Nível 1 (Apoio Leve)", "🟡 PEI Nível 2 (Apoio Moderado)", "🔴 PEI Nível 3 (Qualitativo / 10 Bento Boxes)"])
                 
                 with t_p1:
-                    f['pei_1'] = st.text_area("Revisão PEI N1 (3 Alternativas A, B, C):", value=f['pei_1'], height=300, key=f"ed_p1_area_{v}")
+                    if modo_leitura_pei:
+                        with st.container(border=True):
+                            st.markdown(preparar_para_leitura(f['pei_1']))
+                    f['pei_1'] = st.text_area("Edição Manual PEI N1 (3 Alternativas A, B, C):", value=f['pei_1'], height=300, key=f"ed_p1_area_{v}")
+                
                 with t_p2:
-                    f['pei_2'] = st.text_area("Revisão PEI N2 (Passo a Passo + Dica):", value=f['pei_2'], height=300, key=f"ed_p2_area_{v}")
+                    if modo_leitura_pei:
+                        with st.container(border=True):
+                            st.markdown(preparar_para_leitura(f['pei_2']))
+                    f['pei_2'] = st.text_area("Edição Manual PEI N2 (Com Dica + Passo a Passo):", value=f['pei_2'], height=300, key=f"ed_p2_area_{v}")
+                
                 with t_p3:
-                    f['pei_3'] = st.text_area("Revisão PEI N3 (10 Bento Boxes + Rubrica):", value=f['pei_3'], height=300, key=f"ed_p3_area_{v}")
+                    if modo_leitura_pei:
+                        with st.container(border=True):
+                            st.markdown("#### 📦 Estrutura dos 10 Bento Boxes Lúdico-Sensoriais")
+                            st.markdown(preparar_para_leitura(f['pei_3']))
+                    f['pei_3'] = st.text_area("Edição Manual PEI N3 (10 BOXES + Rubrica de Observação):", value=f['pei_3'], height=300, key=f"ed_p3_area_{v}")
 
                 st.markdown("<br>", unsafe_allow_html=True)
-                if st.button("✅ Aprovar Tríade PEI e Avançar para Fase 4 (Custódia & Drive)", type="primary", use_container_width=True, key=f"btn_fase3_next_{v}"):
+                if st.button("✅ APROVAR TRÍADE PEI COMPLETA E AVANÇAR PARA FASE 4 (CUSTÓDIA & DRIVE)", type="primary", use_container_width=True, key=f"btn_fase3_next_{v}"):
                     f['fase'] = 4
                     st.rerun()
 
-        # --- FASE 4: CUSTÓDIA & SINCRONIA GOOGLE DRIVE ---
+        # --------------------------------------------------------------------------
+        # FASE 4: CUSTÓDIA, EXPEDIÇÃO DOCX E SINCRONIA GOOGLE DRIVE
+        # --------------------------------------------------------------------------
         elif f['fase'] == 4:
-            st.markdown("### Fase 4: Custódia & Sincronia Google Drive")
-            st.caption("Homologação dos arquivos oficiais no Word com OMR Fiducial e Bento Cards.")
+            st.markdown("### 💾 Fase 4: Custódia & Sincronia Google Drive")
+            st.caption("Geração de arquivos oficiais no Word com Cartão OMR Fiducial, Bento Cards e links de acesso direto.")
 
             tipo_nome = f['info'].get('tipo_prova', 'AVALIAÇÃO').upper().replace(' ', '_')
             nome_sugerido = f"{tipo_nome}_{f['info']['ano'].replace('º','')}ANO_{f['info']['trimestre'].replace(' ', '')}"
             nome_arq = st.text_input("Identificador Técnico no Cofre Digital:", value=nome_sugerido, key=f"nome_arq_f4_{v}")
 
-            if st.button("💾 Finalizar e Sincronizar Tudo no Google Drive", type="primary", use_container_width=True, key=f"btn_fase4_sync_{v}"):
-                with st.status("Gerando Documentos Word Oficiais...", expanded=True) as status:
+            if st.button("💾 FINALIZAR E SINCRONIZAR TUDO NO GOOGLE DRIVE", type="primary", use_container_width=True, key=f"btn_fase4_sync_{v}"):
+                with st.status("Gerando Documentos Word e Envia para o Drive...", expanded=True) as status:
                     txt_regular = f"[VALOR: {f['info']['valor']}]\n\n[QUESTOES]\n"
                     txt_gabarito = "[GABARITO_TEXTO]\n"
                     txt_grade = "[GRADE_DE_CORRECAO]\n"
@@ -2415,19 +2587,19 @@ elif menu == "📝 Central de Avaliações":
 
                     texto_final_padrao = txt_regular + txt_gabarito + txt_grade
 
-                    status.write("📄 Gerando Prova Regular (OMR Fiducial)...")
+                    status.write("📄 Gerando Caderno Regular Word (OMR Fiducial)...")
                     doc_reg = exporter.gerar_docx_prova_v25(nome_arq, texto_final_padrao, f['info'])
                     link_reg = db.subir_e_converter_para_google_docs(doc_reg, nome_arq, modo="AVALIACAO")
 
-                    status.write("🔵 Gerando PEI Nível 1 Word...")
+                    status.write("🔵 Gerando Caderno PEI Nível 1 Word...")
                     doc_p1 = exporter.gerar_docx_pei_v25(f"{nome_arq}_PEI_N1", f['pei_1'], f['info'])
                     link_p1 = db.subir_e_converter_para_google_docs(doc_p1, f"{nome_arq}_PEI_N1", modo="AVALIACAO")
 
-                    status.write("🟡 Gerando PEI Nível 2 Word...")
+                    status.write("🟡 Gerando Caderno PEI Nível 2 Word...")
                     doc_p2 = exporter.gerar_docx_pei_v25(f"{nome_arq}_PEI_N2", f['pei_2'], f['info'])
                     link_p2 = db.subir_e_converter_para_google_docs(doc_p2, f"{nome_arq}_PEI_N2", modo="AVALIACAO")
 
-                    status.write("🔴 Gerando PEI Nível 3 Word (Bento Cards + Rubrica)...")
+                    status.write("🔴 Gerando Caderno PEI Nível 3 Word (Bento Cards + Rubrica)...")
                     doc_p3 = exporter.gerar_docx_pei_qualitativa(f"{nome_arq}_PEI_N3", f['pei_3'], f['info'])
                     link_p3 = db.subir_e_converter_para_google_docs(doc_p3, f"{nome_arq}_PEI_N3", modo="AVALIACAO")
 
@@ -2451,10 +2623,12 @@ elif menu == "📝 Central de Avaliações":
                     status.update(label="✅ Avaliação homologada e sincronizada no Drive!", state="complete")
                     st.balloons(); f['fase'] = 5; time.sleep(1); st.rerun()
 
-        # --- FASE 5: REVISÃO & POS-PROVA ---
+        # --------------------------------------------------------------------------
+        # FASE 5: REVISÃO PRÉ-PROVA & MATERIAIS DERIVADOS
+        # --------------------------------------------------------------------------
         elif f['fase'] == 5:
             st.success(f"🏆 Avaliação **{f.get('nome_base', '')}** homologada com sucesso no Acervo!")
-            st.markdown("### Fase 5: Materiais Derivados de Recomposição & Revisão")
+            st.markdown("### 🔄 Fase 5: Ações Pós-Prova & Material de Recomposição")
 
             c_p1, c_p2 = st.columns(2)
             if c_p1.button("📝 Gerar Caderno de Revisão Pré-Prova (Aluno + Prof)", type="primary", use_container_width=True, key=f"btn_gen_rev_f5_{v}"):
@@ -2470,14 +2644,14 @@ elif menu == "📝 Central de Avaliações":
                     ])
                     st.success("✅ Caderno de Revisão gerado e salvo no Acervo!")
 
-            if c_p2.button("🔄 Concluir Processo", use_container_width=True, key=f"btn_fin_f5_{v}"):
+            if c_p2.button("🎉 Concluir e Voltar ao Início", use_container_width=True, key=f"btn_fin_f5_{v}"):
                 reset_forja()
 
     # ==============================================================================
-    # ABA 2: ACERVO DE PROVAS
+    # ABA 2: ACERVO DE PROVAS & AUTÓPSIA DE DISTRATORES
     # ==============================================================================
     with tab_acervo_av:
-        st.markdown("### Acervo de Instrumentos Avaliativos")
+        st.markdown("### 📖 Acervo de Instrumentos Avaliativos & Perícia")
         
         with st.container(border=True):
             c_h1, c_h2, c_h3 = st.columns(3)
@@ -2501,8 +2675,8 @@ elif menu == "📝 Central de Avaliações":
                     identificador = row['TIPO_MATERIAL']
                     val_ex = re.sub(r'[*#]', '', ai.extrair_tag(txt_f, "VALOR")).strip()
                     
-                    st.markdown(f"##### {identificador}")
-                    st.caption(f"Série: {row['ANO']} | Valor: {val_ex if val_ex else '4.0'} pts | Status: 🔒 COFRE DIGITAL DRIVE")
+                    st.markdown(f"##### 📋 {identificador}")
+                    st.caption(f"Série: {row['ANO']} | Valor: {val_ex if val_ex else '4.0'} pts | Status: 🔒 COFRE DIGITAL DRIVE SINCRONIZADO")
                     
                     def extrair_link_acervo(t, tag):
                         m = re.search(rf"{tag}\((https://docs\.google\.com/document/d/[^\s\)]+)\)", t, re.IGNORECASE)
@@ -2530,6 +2704,43 @@ elif menu == "📝 Central de Avaliações":
                     if c_b5.button("🗑️ Apagar", key=f"del_ac_{row.name}_{idx_av}_{v}", use_container_width=True):
                         if db.excluir_avaliacao_completa(identificador, row['SEMANA_REF']): st.rerun()
 
+                    # PERÍCIA E AUTÓPSIA DE DISTRATORES INTEGRADA
+                    with st.expander("👁️ Analisar Estrutura Psicométrica & Análise de Distratores (TRI)", expanded=False):
+                        t_gab, t_ques, t_pei_v = st.tabs(["Perícia Regular", "Caderno Regular", "Inclusão PEI"])
+                        
+                        with t_gab:
+                            st.markdown("**🔬 Grade de Perícia e Análise de Distratores (TRI)**")
+                            grade_raw = ai.extrair_tag(txt_f, "GRADE_DE_CORRECAO")
+                            if grade_raw:
+                                questoes_grade = re.split(r"(?i)QUEST[AÃ]O\s*0?(\d+)", grade_raw)
+                                if len(questoes_grade) > 1:
+                                    for idx_g in range(1, len(questoes_grade), 2):
+                                        q_num, q_txt = questoes_grade[idx_g], questoes_grade[idx_g+1]
+                                        q_txt_limpo = re.sub(r'[*#]', '', q_txt).strip()
+                                        
+                                        m_hab = re.search(r"(?i)(?:DESCRITOR_SAEB|HABILIDADE|BNCC|DESCRITOR).*?[:\-]\s*(.*?)(?=JUSTIFICATIVA|DISTRATORES|$)", q_txt_limpo, re.DOTALL)
+                                        m_just = re.search(r"(?i)(?:JUSTIFICATIVA).*?[:\-]\s*(.*?)(?=DISTRATORES|$)", q_txt_limpo, re.DOTALL)
+                                        m_peri = re.search(r"(?i)(?:DISTRATORES_CIENTIFICOS|DISTRATORES).*?[:\-]\s*(.*)", q_txt_limpo, re.DOTALL)
+                                        
+                                        with st.container(border=True):
+                                            st.markdown(f"**Item {q_num}**")
+                                            if m_hab: st.caption(f"🆔 **Descritor SAEB/BNCC:** {m_hab.group(1).strip()}")
+                                            if m_just: st.write(f"🎯 **Gabarito Justificado:** {m_just.group(1).strip()}")
+                                            if m_peri: st.warning(f"🧠 **Distratores Científicos:** {m_peri.group(1).strip()}")
+                                else: st.text(grade_raw)
+                            else: st.warning("Perícia indisponível.")
+
+                        with t_ques:
+                            st.markdown("**📋 Enunciados do Caderno de Prova**")
+                            questoes_reg = ai.extrair_tag(txt_f, "QUESTOES")
+                            if questoes_reg:
+                                st.write(preparar_para_leitura(questoes_reg))
+
+                        with t_pei_v:
+                            st.markdown("**♿ Estrutura PEI Adaptada**")
+                            pei_txt = ai.extrair_tag(txt_f, "PEI_NIVEL_1") or ai.extrair_tag(txt_f, "NIVEL_1") or ai.extrair_tag(txt_f, "PEI")
+                            if pei_txt:
+                                st.write(preparar_para_leitura(pei_txt))
 
 # ==============================================================================
 # MÓDULO: CENTRAL DE INTELIGÊNCIA DE RESULTADOS (CIR / SCANNER) - V2026.ULTIMATE
