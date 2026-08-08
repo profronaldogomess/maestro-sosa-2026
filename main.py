@@ -6064,19 +6064,19 @@ elif menu == "📚 Base de Conhecimento":
 
 
 # ==============================================================================
-# MÓDULO: RELATÓRIOS PEI / PERFIL IA - V201 (GHOSTWRITER & MATRIZ DE INCLUSÃO)
+# MÓDULO: CENTRO DE COMANDO DA INCLUSÃO (RELATÓRIOS PEI / PERFIL IA)
+# (V2026.ULTIMATE - MINERAÇÃO 360°, RAIO-X DE PROVAS PEI, PARECER DOS PAIS DOCX/ZAP E DASHBOARD BENTO)
 # ==============================================================================
 elif menu == "♿ Relatórios PEI / Perfil IA":
     st.title("🧠 Centro de Comando da Inclusão (PEI / Perfil IA)")
-    st.caption("Gestão de níveis de suporte, redação orgânica de dossiês e adaptação curricular.")
+    st.caption("Gestão de níveis de suporte, mineração automática de diários/provas, pareceres descritivos para pais e matriz curricular adaptada.")
     st.markdown("---")
 
-    # 🚨 INICIALIZAÇÃO SEGURA DA VARIÁVEL V
     if "v_pei" not in st.session_state: 
         st.session_state.v_pei = int(time.time())
     v = st.session_state.v_pei
 
-    # MOTOR ANTI-DUPLICIDADE (UPSERT SOBERANO)
+    # FUNÇÃO DE SALVAMENTO SEM DUPLICIDADE
     def salvar_relatorio_pei_sem_duplicidade(id_aluno, nome_aluno, tipo_rel, conteudo_rel):
         try:
             wb = db.conectar()
@@ -6099,34 +6099,76 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
         lista_turmas = sorted(turmas_reais_pei['ID_TURMA'].unique()) if not turmas_reais_pei.empty else sorted(df_alunos['TURMA'].unique())
         
         with st.container(border=True):
-            turma_pei = st.selectbox("🎯 Selecione a Turma:", lista_turmas, key=f"pei_t_clean_{v}")
+            c_top1, c_top2 = st.columns([1, 2])
+            turma_pei = c_top1.selectbox("🎯 Selecione a Turma:", lista_turmas, key=f"pei_t_clean_{v}")
             df_turma_foco = df_alunos[df_alunos['TURMA'] == turma_pei].copy()
+
+            # FILTRO DE ALUNOS COM ATENDIMENTO DIVERSIFICADO
+            mask_pei = ~df_turma_foco['NECESSIDADES'].astype(str).str.upper().str.strip().isin(["NENHUMA", "", "NAN", "TÍPICO", "TIPICO"])
+            df_inclusao = df_turma_foco[mask_pei].copy()
+
+            def classificar_perfil_bento(nec):
+                n = str(nec).upper().strip()
+                if "(PEI N1)" in n: return "🔵 PEI N1 (Leve)"
+                if "(PEI N2)" in n: return "🟡 PEI N2 (Moderado)"
+                if "(PEI N3)" in n: return "🔴 PEI N3 (Qualitativo)"
+                if "DEFASAGEM" in n: return "🧱 Defasagem"
+                if "ALTA PERFORMANCE" in n: return "🚀 Alta Perf."
+                return "🟠 Radar / Laudo"
+
+            if not df_inclusao.empty:
+                df_inclusao['PERFIL_BENTO'] = df_inclusao['NECESSIDADES'].apply(classificar_perfil_bento)
+                
+                def icone_rotulo(r):
+                    return f"{r['PERFIL_BENTO'][:2]} {r['NOME_ALUNO']}"
+                
+                df_inclusao['ROTULO'] = df_inclusao.apply(icone_rotulo, axis=1)
+                aluno_pei_sel_rotulo = c_top2.selectbox("🎓 Selecione o Estudante de Inclusão:", df_inclusao['ROTULO'].tolist(), key=f"sel_al_pei_top_{v}")
+                aluno_foco = df_inclusao[df_inclusao['ROTULO'] == aluno_pei_sel_rotulo].iloc[0]['NOME_ALUNO']
+            else:
+                aluno_foco = ""
 
         if df_turma_foco.empty:
             st.warning(f"⚠️ Nenhum aluno cadastrado na turma {turma_pei}.")
             st.stop()
 
-        # Filtra apenas alunos que não são típicos
-        mask_pei = ~df_turma_foco['NECESSIDADES'].astype(str).str.upper().str.strip().isin(["NENHUMA", "", "NAN", "TÍPICO", "TIPICO", "ALTA PERFORMANCE"])
-        df_inclusao = df_turma_foco[mask_pei].copy()
+        # DASHBOARD TERMÔMETRO DE INCLUSÃO DA TURMA (BENTO CARDS)
+        st.markdown("#### 📊 Termômetro de Inclusão & Suporte da Turma")
+        
+        qtd_total_inc = len(df_inclusao)
+        qtd_n1 = len(df_inclusao[df_inclusao['NECESSIDADES'].astype(str).str.contains("PEI N1", case=False, na=False)])
+        qtd_n2 = len(df_inclusao[df_inclusao['NECESSIDADES'].astype(str).str.contains("PEI N2", case=False, na=False)])
+        qtd_n3 = len(df_inclusao[df_inclusao['NECESSIDADES'].astype(str).str.contains("PEI N3", case=False, na=False)])
+        qtd_defasagem = len(df_inclusao[df_inclusao['NECESSIDADES'].astype(str).str.contains("DEFASAGEM", case=False, na=False)])
 
-        tab_matriz, tab_forja, tab_curriculo = st.tabs([
-            "📊 1. Matriz de Inclusão (Níveis)", 
-            "✍️ 2. Forja do Dossiê (Ghostwriter)", 
-            "📖 3. Currículo & Exportação"
+        with st.container(border=True):
+            k1, k2, k3, k4, k5 = st.columns(5)
+            k1.metric("👥 Inclusão Total", qtd_total_inc, f"Turma: {len(df_turma_foco)}")
+            k2.metric("🔵 PEI N1 (Leve)", qtd_n1)
+            k3.metric("🟡 PEI N2 (Moderado)", qtd_n2)
+            k4.metric("🔴 PEI N3 (Qualitativo)", qtd_n3)
+            k5.metric("🧱 Barreiras / Defasagem", qtd_defasagem)
+
+        st.markdown("---")
+
+        tab_matriz, tab_forja, tab_provas_pei, tab_curriculo = st.tabs([
+            "📊 1. Matriz de Níveis & Suporte", 
+            "✍️ 2. Forja do Dossiê (Mineração 360°)", 
+            "🎯 3. Raio-X de Provas PEI",
+            "📖 4. Currículo & PEI Oficial"
         ])
 
         # ==============================================================================
-        # ABA 1: MATRIZ DE INCLUSÃO (ISOLADA EM FRAGMENTO)
+        # ABA 1: MATRIZ DE INCLUSÃO & NÍVEIS
         # ==============================================================================
         with tab_matriz:
             @st.fragment
             def renderizar_matriz_inclusao_fragmento():
-                st.markdown("### 📊 Mapeamento de Suporte da Turma")
-                st.caption("Defina o nível de prova de cada aluno. O Scanner de Gabaritos lerá essa configuração automaticamente.")
+                st.markdown("### 📊 Mapeamento do Nível de Suporte (Scanner & Provas)")
+                st.caption("Ajuste o nível de prova do aluno. O Scanner CIR e a Central de Avaliações respeitarão essa escolha.")
                 
                 if df_inclusao.empty:
-                    st.success("🎉 Nenhum aluno com laudo ou defasagem cadastrado nesta turma.")
+                    st.success("🎉 Nenhum aluno com necessidades específicas cadastrado nesta turma.")
                 else:
                     def extrair_nivel(nec):
                         if "(PEI N1)" in nec: return "Nível 1 (Apoio Leve)"
@@ -6140,24 +6182,13 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                     df_inclusao['NIVEL_ATUAL'] = df_inclusao['NECESSIDADES'].apply(extrair_nivel)
                     df_inclusao['PERFIL_BASE'] = df_inclusao['NECESSIDADES'].apply(limpar_nec)
 
-                    qtd_n1 = len(df_inclusao[df_inclusao['NIVEL_ATUAL'] == "Nível 1 (Apoio Leve)"])
-                    qtd_n2 = len(df_inclusao[df_inclusao['NIVEL_ATUAL'] == "Nível 2 (Apoio Moderado)"])
-                    qtd_n3 = len(df_inclusao[df_inclusao['NIVEL_ATUAL'] == "Nível 3 (Qualitativa)"])
-                    
-                    with st.container(border=True):
-                        c_m1, c_m2, c_m3, c_m4 = st.columns(4)
-                        c_m1.caption(f"Status: 👥 TOTAL ({len(df_inclusao)})")
-                        c_m2.caption(f"Status: 🔵 NÍVEL 1 ({qtd_n1})")
-                        c_m3.caption(f"Status: 🟡 NÍVEL 2 ({qtd_n2})")
-                        c_m4.caption(f"Status: 🔴 NÍVEL 3 ({qtd_n3})")
-
                     dados_matriz = []
                     for _, r in df_inclusao.iterrows():
                         dados_matriz.append({
                             "ID": r['ID'],
                             "Estudante": r['NOME_ALUNO'],
-                            "Perfil Clínico": r['PERFIL_BASE'],
-                            "Nível de Suporte (Prova)": r['NIVEL_ATUAL']
+                            "Perfil Clínico / Barreiras": r['PERFIL_BASE'],
+                            "Nível de Prova (Lente)": r['NIVEL_ATUAL']
                         })
                     
                     df_matriz_ed = st.data_editor(
@@ -6165,84 +6196,114 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                         column_config={
                             "ID": None,
                             "Estudante": st.column_config.TextColumn(disabled=True),
-                            "Perfil Clínico": st.column_config.TextColumn(disabled=True),
-                            "Nível de Suporte (Prova)": st.column_config.SelectboxColumn(
+                            "Perfil Clínico / Barreiras": st.column_config.TextColumn(disabled=True),
+                            "Nível de Prova (Lente)": st.column_config.SelectboxColumn(
                                 options=["Pendente (Definir)", "Nível 1 (Apoio Leve)", "Nível 2 (Apoio Moderado)", "Nível 3 (Qualitativa)"],
                                 required=True
                             )
                         }, key=f"matriz_pei_ed_{v}"
                     )
 
-                    if st.button("💾 Salvar Mapeamento e Sincronizar Scanner", type="primary", use_container_width=True, key=f"btn_save_matriz_pei_{v}"):
-                        with st.spinner("Atualizando perfis em cascata..."):
+                    if st.button("💾 Salvar Níveis e Sincronizar Scanner CIR", type="primary", use_container_width=True, key=f"btn_save_matriz_pei_{v}"):
+                        with st.spinner("Atualizando perfis em cascata no banco..."):
                             for _, r in df_matriz_ed.iterrows():
-                                nivel_sel = r["Nível de Suporte (Prova)"]
+                                nivel_sel = r["Nível de Prova (Lente)"]
                                 tag_nivel = ""
                                 if "Nível 1" in nivel_sel: tag_nivel = " (PEI N1)"
                                 elif "Nível 2" in nivel_sel: tag_nivel = " (PEI N2)"
                                 elif "Nível 3" in nivel_sel: tag_nivel = " (PEI N3)"
                                 
-                                nova_nec = f"{r['Perfil Clínico']}{tag_nivel}"
+                                nova_nec = f"{r['Perfil Clínico / Barreiras']}{tag_nivel}"
                                 db.atualizar_aluno_cascata(r['ID'], r['Estudante'], turma_pei, nova_nec)
                             
-                            st.success("✅ Mapeamento salvo! O Scanner agora reconhecerá os níveis automaticamente.")
+                            st.success("✅ Mapeamento salvo! O Scanner CIR reconhecerá os níveis automaticamente.")
                             time.sleep(1); st.rerun()
 
             renderizar_matriz_inclusao_fragmento()
 
         # ==============================================================================
-        # ABA 2: FORJA DO DOSSIÊ GHOSTWRITER (ISOLADO EM FRAGMENTO)
+        # ABA 2: FORJA DO DOSSIÊ GHOSTWRITER (MINERAÇÃO AUTOMÁTICA 360°)
         # ==============================================================================
         with tab_forja:
             @st.fragment
             def renderizar_forja_dossie_fragmento():
-                st.markdown("### ✍️ Forja do Dossiê (Ghostwriter IA)")
-                st.caption("A IA unirá as notas do boletim com as suas anotações brutas para redigir um relatório humano e empático.")
+                st.markdown("### ✍️ Forja do Dossiê Inclusivo (Mineração 360° IA)")
+                st.caption("A IA analisa notas, faltas, ocorrências do diário e análises de erros do Scanner CIR para redigir o parecer descritivo.")
                 
-                if df_inclusao.empty:
-                    st.info("Nenhum aluno de inclusão para gerar dossiê.")
+                if not aluno_foco:
+                    st.info("Selecione um estudante no topo do painel para abrir a forja.")
                 else:
-                    aluno_foco = st.selectbox("Selecione o Estudante:", df_inclusao['NOME_ALUNO'].tolist(), key=f"foco_pei_sel_{v}")
                     dados_a = df_inclusao[df_inclusao['NOME_ALUNO'] == aluno_foco].iloc[0]
                     id_a = db.limpar_id(dados_a['ID'])
                     perfil_atual = str(dados_a['NECESSIDADES']).upper().strip()
 
+                    # 1. MINERAÇÃO DE NOTAS
                     n_alu = df_notas[df_notas['ID_ALUNO'].apply(db.limpar_id) == id_a] if not df_notas.empty else pd.DataFrame()
                     notas_str = ""
                     for t in ["I Trimestre", "II Trimestre", "III Trimestre"]:
                         reg_t = n_alu[n_alu['TRIMESTRE'] == t] if not n_alu.empty else pd.DataFrame()
-                        if not reg_t.empty: notas_str += f"- {t}: {util.sosa_to_float(reg_t.iloc[0]['MEDIA_FINAL']):.1f} pts\n"
-                    if not notas_str: notas_str = "Nenhuma nota lançada no boletim ainda."
+                        if not reg_t.empty: notas_str += f"• {t}: {util.sosa_to_float(reg_t.iloc[0]['MEDIA_FINAL']):.1f} pts\n"
+                    if not notas_str: notas_str = "Nenhuma nota lançada no boletim."
 
-                    faltas = 0
+                    # 2. MINERAÇÃO DO DIÁRIO DE BORDO (BÔNUS, ATITUDES E OCORRÊNCIAS)
+                    ocorrencias_diario = []
+                    faltas_cnt = 0
                     if not df_diario.empty:
                         d_alu = df_diario[((df_diario['ID_ALUNO'].apply(db.limpar_id) == id_a) | (df_diario['ID_ALUNO'] == "GLOBAL")) & (df_diario['TURMA'] == turma_pei)]
-                        faltas = len(d_alu[d_alu['TAGS'] == "AUSÊNCIA"])
+                        faltas_cnt = len(d_alu[d_alu['TAGS'] == "AUSÊNCIA"])
+                        
+                        mask_oc = (d_alu['TAGS'] != "") & (~d_alu['TAGS'].isin(["DIA NÃO LETIVO", "SISTEMA_NOTA", "AUSÊNCIA"]))
+                        df_oc = d_alu[mask_oc]
+                        for _, r_d in df_oc.tail(8).iterrows():
+                            ocorrencias_diario.append(f"• {r_d['DATA']}: {r_d['TAGS']} ({r_d['OBSERVACOES']})")
+
+                    oc_str = "\n".join(ocorrencias_diario) if ocorrencias_diario else "Nenhuma ocorrência atitudinal registrada."
+
+                    # 3. MINERAÇÃO DE ERROS DO SCANNER CIR (ERROS DE DISTRATORES)
+                    erros_scanner = []
+                    if not df_diagnosticos.empty:
+                        diag_aluno = df_diagnosticos[df_diagnosticos['ID_ALUNO'].apply(db.limpar_id) == id_a]
+                        for _, r_diag in diag_aluno.tail(5).iterrows():
+                            erros_scanner.append(f"• Prova: {r_diag['ID_AVALIACAO']} | Nota: {util.sosa_to_float(r_diag['NOTA_CALCULADA']):.1f} pts")
+
+                    erros_scan_str = "\n".join(erros_scanner) if erros_scanner else "Nenhuma avaliação recente escaneada."
 
                     with st.container(border=True):
-                        c_ctx1, c_ctx2 = st.columns([1, 2])
+                        st.markdown(f"##### 📊 Evidências Mineradas em Tempo Real: **{aluno_foco}**")
+                        c_ctx1, c_ctx2, c_ctx3 = st.columns(3)
                         with c_ctx1:
-                            st.markdown("**📊 Dados Oficiais do Sistema:**")
-                            st.info(f"**Notas:**\n{notas_str}\n**Faltas Acumuladas:** {faltas}")
+                            st.info(f"**Boletim & Faltas:**\n{notas_str}\nFaltas: {faltas_cnt}")
                         with c_ctx2:
-                            st.markdown("**✍️ Suas Anotações Brutas:**")
-                            relato_bruto = st.text_area("Digite como se estivesse conversando (A IA vai formatar):", placeholder="Ex: Ele melhorou muito em soma, mas a nota do 2º tri caiu porque faltou muito...", height=120, key=f"relato_bruto_area_{v}")
+                            st.warning(f"**Diário de Bordo (Atitudes):**\n{oc_str}")
+                        with c_ctx3:
+                            st.success(f"**Scanner CIR (Provas):**\n{erros_scan_str}")
 
-                    if st.button("🧠 Redigir Dossiê Orgânico (Ghostwriter)", type="primary", use_container_width=True, key=f"btn_ghost_exe_{v}"):
-                        with st.spinner("A IA está redigindo o relatório com base nas suas notas e relatos..."):
+                    st.markdown("##### ✍️ Anotações Complementares do Professor (Opcional)")
+                    relato_bruto = st.text_area(
+                        "Adicione observações extras do dia a dia:",
+                        placeholder="Ex: Apresentou excelente evolução com material concreto de frações. Concentração aumentou na segunda aula.",
+                        height=90, key=f"relato_bruto_area_{v}"
+                    )
+
+                    c_g1, c_g2 = st.columns(2)
+
+                    if c_g1.button("🧠 REDIGIR DOSSIÊ ORGÂNICO (MINERAÇÃO 360° IA)", type="primary", use_container_width=True, key=f"btn_ghost_exe_{v}"):
+                        with st.spinner("A IA está analisando todas as evidências do diário, notas e provas para redigir o parecer..."):
                             prompt_ghost = (
-                                f"Aja como um Ghostwriter educacional de elite. Vou te passar os dados de um aluno de inclusão e minhas anotações brutas. "
-                                f"Sua missão é redigir um relatório humano, empático e profissional, justificando as notas com base no meu relato.\n\n"
-                                f"ALUNO: {aluno_foco}\nPERFIL CLÍNICO: {perfil_atual}\n"
-                                f"NOTAS OFICIAIS:\n{notas_str}\nFALTAS: {faltas}\n"
-                                f"MEU RELATO BRUTO: {relato_bruto if relato_bruto else 'O aluno tem participado das aulas adaptadas.'}\n\n"
-                                f"Gere o relatório usando ESTRITAMENTE as seguintes tags para o sistema ler:\n"
-                                f"[DIAGNOSTICO_GERAL] (Aqui entra o texto orgânico e humano unindo as notas e o meu relato)\n"
-                                f"[SOCIAIS] (Como ele interage)\n"
-                                f"[COMUNICATIVAS] (Como ele se expressa)\n"
-                                f"[EMOCIONAIS] (Como ele lida com frustrações)\n"
-                                f"[FUNCIONAIS] (Autonomia motora/rotina)\n"
-                                f"[DIRETRIZES_CURRICULARES] (Sugestões práticas para as próximas aulas)"
+                                f"Aja como um Psicopedagogo e Especialista em Inclusão de Elite. Redija um parecer descritivo empático, técnico e acolhedor para o estudante abaixo.\n\n"
+                                f"ESTUDANTE: {aluno_foco}\nPERFIL CLÍNICO / BARREIRAS: {perfil_atual}\n"
+                                f"EVIDÊNCIAS DE SALA DE AULA:\n"
+                                f"1. NOTAS NO BOLETIM:\n{notas_str}\nFALTAS: {faltas_cnt}\n"
+                                f"2. HISTÓRICO ATITUDINAL NO DIÁRIO:\n{oc_str}\n"
+                                f"3. HISTÓRICO DE AVALIAÇÕES ESCANEADAS:\n{erros_scan_str}\n"
+                                f"4. ANOTAÇÕES COMPLEMENTARES DO PROFESSOR:\n{relato_bruto if relato_bruto else 'Sem observações extras.'}\n\n"
+                                f"🚨 REDIJA UTILIZANDO ESTRITAMENTE AS TAGS COM COLCHETES:\n"
+                                f"[DIAGNOSTICO_GERAL] (Relatório descritivo orgânico unindo evidências e evolução)\n"
+                                f"[SOCIAIS] (Interação e vínculo)\n"
+                                f"[COMUNICATIVAS] (Expressão verbal e escrita)\n"
+                                f"[EMOCIONAIS] (Autorregulação)\n"
+                                f"[FUNCIONAIS] (Autonomia motora e rotina)\n"
+                                f"[DIRETRIZES_CURRICULARES] (Recomendações práticas)"
                             )
                             res_master = ai.gerar_ia("ESPECIALISTA_INCLUSAO", prompt_ghost)
                             salvar_relatorio_pei_sem_duplicidade(id_a, aluno_foco, "DOSSIE_MASTER_PEI", res_master)
@@ -6253,45 +6314,132 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                     
                     if not rel_master.empty:
                         st.markdown("---")
-                        st.markdown("#### 📄 Dossiê Atual (Editável)")
+                        st.markdown("#### 📄 Dossiê Descritivo Atual (Editável)")
                         master_text = str(rel_master.iloc[-1]['CONTEUDO'])
                         
-                        ed_diag = st.text_area("Diagnóstico Geral (Texto Orgânico):", ai.extrair_tag(master_text, "DIAGNOSTICO_GERAL"), height=200, key=f"ed_diag_ghost_{v}")
+                        ed_diag = st.text_area("Diagnóstico Geral (Texto Orgânico):", ai.extrair_tag(master_text, "DIAGNOSTICO_GERAL"), height=180, key=f"ed_diag_ghost_{v}")
                         
                         c_h1, c_h2 = st.columns(2)
-                        ed_soc = c_h1.text_area("Habilidades Sociais:", ai.extrair_tag(master_text, "SOCIAIS"), height=100, key=f"ed_soc_ghost_{v}")
-                        ed_com = c_h2.text_area("Habilidades Comunicativas:", ai.extrair_tag(master_text, "COMUNICATIVAS"), height=100, key=f"ed_com_ghost_{v}")
-                        ed_emo = c_h1.text_area("Habilidades Emocionais:", ai.extrair_tag(master_text, "EMOCIONAIS"), height=100, key=f"ed_emo_ghost_{v}")
-                        ed_fun = c_h2.text_area("Habilidades Funcionais:", ai.extrair_tag(master_text, "FUNCIONAIS"), height=100, key=f"ed_fun_ghost_{v}")
+                        ed_soc = c_h1.text_area("Habilidades Sociais:", ai.extrair_tag(master_text, "SOCIAIS"), height=90, key=f"ed_soc_ghost_{v}")
+                        ed_com = c_h2.text_area("Habilidades Comunicativas:", ai.extrair_tag(master_text, "COMUNICATIVAS"), height=90, key=f"ed_com_ghost_{v}")
+                        ed_emo = c_h1.text_area("Habilidades Emocionais:", ai.extrair_tag(master_text, "EMOCIONAIS"), height=90, key=f"ed_emo_ghost_{v}")
+                        ed_fun = c_h2.text_area("Habilidades Funcionais:", ai.extrair_tag(master_text, "FUNCIONAIS"), height=90, key=f"ed_fun_ghost_{v}")
                         
-                        ed_dir = st.text_area("Diretrizes Curriculares:", ai.extrair_tag(master_text, "DIRETRIZES_CURRICULARES"), height=150, key=f"ed_dir_ghost_{v}")
+                        ed_dir = st.text_area("Diretrizes Curriculares:", ai.extrair_tag(master_text, "DIRETRIZES_CURRICULARES"), height=120, key=f"ed_dir_ghost_{v}")
                         
-                        if st.button("💾 Salvar Edições Manuais do Dossiê", use_container_width=True, key=f"btn_save_man_dossie_{v}"):
+                        # MODAL PARA PARECER DO WHATSAPP DOS PAIS
+                        @st.dialog("📱 Parecer Acolhedor para o WhatsApp dos Pais")
+                        def dialog_zap_parecer():
+                            st.info("Copie o texto acolhedor abaixo e envie para a família na Reunião de Pais.")
+                            msg_zap_pei = f"""Olá! Tudo bem? Aqui é o professor Ronaldo Gomes. 🏫
+Gostaria de compartilhar o acompanhamento pedagógico inclusivo do(a) {aluno_foco}.
+
+📌 RESUMO DO ACOMPANHAMENTO:
+{ed_diag}
+
+🎯 RECOMENDAÇÕES PARA CASA E SALA:
+{ed_dir}
+
+Qualquer dúvida ou necessidade, estou totalmente à disposição! Um abraço! 🚀"""
+                            st.code(msg_zap_pei, language=None)
+
+                        c_act1, c_act2, c_act3 = st.columns(3)
+                        
+                        if c_act1.button("💾 Salvar Edições Manuais", use_container_width=True, key=f"btn_save_man_dossie_{v}"):
                             texto_consolidado = f"[DIAGNOSTICO_GERAL]\n{ed_diag}\n\n[SOCIAIS]\n{ed_soc}\n\n[COMUNICATIVAS]\n{ed_com}\n\n[EMOCIONAIS]\n{ed_emo}\n\n[FUNCIONAIS]\n{ed_fun}\n\n[DIRETRIZES_CURRICULARES]\n{ed_dir}"
                             salvar_relatorio_pei_sem_duplicidade(id_a, aluno_foco, "DOSSIE_MASTER_PEI", texto_consolidado)
                             st.success("✅ Edições salvas com sucesso!"); time.sleep(0.5); st.rerun()
 
+                        if c_act2.button("📱 Parecer para WhatsApp", use_container_width=True, key=f"btn_zap_parecer_{v}"):
+                            dialog_zap_parecer()
+
+                        if c_act3.button("🖨️ Exportar Parecer A4 (DOCX)", type="primary", use_container_width=True, key=f"btn_docx_parecer_{v}"):
+                            with st.spinner("Compilando Parecer Descritivo A4 para Reunião de Pais..."):
+                                texto_parecer_docx = (
+                                    f"PARECER DESCRITIVO DE ACOMPANHAMENTO PEDAGÓGICO INCLUSIVO\n\n"
+                                    f"Estudante: {aluno_foco} | Turma: {turma_pei} | Perfil: {perfil_atual}\n\n"
+                                    f"1. DIAGNÓSTICO E EVOLUÇÃO GERAL:\n{ed_diag}\n\n"
+                                    f"2. HABILIDADES SOCIOEMOCIONAIS E FUNCIONAIS:\n"
+                                    f"• Sociais: {ed_soc}\n• Comunicativas: {ed_com}\n• Emocionais: {ed_emo}\n• Funcionais: {ed_fun}\n\n"
+                                    f"3. DIRETRIZES CURRICULARES E RECOMENDAÇÕES:\n{ed_dir}"
+                                )
+                                nome_arq_parecer = f"PARECER_DESCRITIVO_{aluno_foco.replace(' ','_')}_{turma_pei}"
+                                doc_p = exporter.gerar_docx_aluno_v24(nome_arq_parecer, texto_parecer_docx, {"ano": turma_pei, "trimestre": "I Trimestre"})
+                                link_p = db.subir_e_converter_para_google_docs(doc_p, nome_arq_parecer, modo="AULA")
+                                
+                                if "https" in link_p:
+                                    st.success("✅ Parecer Descritivo A4 gerado no Drive!")
+                                    st.link_button("📂 ABRIR PARECER NO DRIVE", link_p, type="primary", use_container_width=True)
+                                    st.balloons()
+
             renderizar_forja_dossie_fragmento()
 
         # ==============================================================================
-        # ABA 3: CURRÍCULO ADAPTADO & EXPORTAÇÃO (ISOLADO EM FRAGMENTO)
+        # ABA 3: RAIO-X DE PROVAS PEI (SCANNER ➔ PEI HUB)
+        # ==============================================================================
+        with tab_provas_pei:
+            @st.fragment
+            def renderizar_raiox_provas_pei_fragmento():
+                st.markdown("### 🎯 Histórico de Provas PEI Escaneadas")
+                st.caption("Acompanhe o desempenho do aluno nas avaliações adaptadas (N1, N2) e pareceres qualitativos no papel (N3).")
+                
+                if not aluno_foco:
+                    st.info("Selecione um estudante no topo do painel.")
+                else:
+                    id_a_provas = db.limpar_id(df_inclusao[df_inclusao['NOME_ALUNO'] == aluno_foco].iloc[0]['ID'])
+                    provas_aluno = df_diagnosticos[df_diagnosticos['ID_ALUNO'].apply(db.limpar_id) == id_a_provas] if not df_diagnosticos.empty else pd.DataFrame()
+                    
+                    if provas_aluno.empty:
+                        st.info("📭 Nenhuma avaliação escaneada para este aluno ainda.")
+                    else:
+                        dados_provas_view = []
+                        for _, r_p in provas_aluno.iloc[::-1].iterrows():
+                            resp_p = str(r_p['RESPOSTAS_ALUNO'])
+                            nota_p = util.sosa_to_float(r_p['NOTA_CALCULADA'])
+                            link_f = r_p.get('LINK_FOTO_DRIVE', '')
+                            
+                            tipo_p = "🎨 Qualitativa (N3)" if resp_p.startswith("QUALITATIVA") else "📝 Objetiva Adaptada"
+                            
+                            dados_provas_view.append({
+                                "Data": r_p['DATA'],
+                                "Avaliação": r_p['ID_AVALIACAO'],
+                                "Tipo": tipo_p,
+                                "Nota": nota_p,
+                                "Evidência": link_f if "http" in link_f else None,
+                                "_Respostas": resp_p
+                            })
+                            
+                        st.dataframe(
+                            pd.DataFrame(dados_provas_view), use_container_width=True, hide_index=True,
+                            column_config={
+                                "Data": st.column_config.TextColumn(width="small"),
+                                "Avaliação": st.column_config.TextColumn(width="medium"),
+                                "Tipo": st.column_config.TextColumn(width="small"),
+                                "Nota": st.column_config.NumberColumn(format="%.1f", width="small"),
+                                "Evidência": st.column_config.LinkColumn("🔗 Foto Drive", width="small"),
+                                "_Respostas": None
+                            }
+                        )
+
+            renderizar_raiox_provas_pei_fragmento()
+
+        # ==============================================================================
+        # ABA 4: CURRÍCULO ADAPTADO & PEI OFICIAL DA PREFEITURA
         # ==============================================================================
         with tab_curriculo:
             @st.fragment
             def renderizar_curriculo_exportacao_fragmento():
-                st.markdown("### 📖 Adaptação Curricular e Exportação Oficial")
+                st.markdown("### 📖 Adaptação Curricular & PEI Oficial (Prefeitura)")
+                st.caption("Planejamento de acessibilidade por componente e exportação da ficha oficial da Secretaria.")
                 
-                if df_inclusao.empty:
-                    st.info("Nenhum aluno de inclusão selecionado.")
+                if not aluno_foco:
+                    st.info("Selecione um estudante no topo do painel.")
                 else:
                     c_exp1, c_exp2 = st.columns([1, 2])
-                    
-                    # 🚨 UI NOVA GERAÇÃO: ST.PILLS PARA TRIMESTRE
                     trim_destino = c_exp1.pills("Trimestre Alvo:", ["I Trimestre", "II Trimestre", "III Trimestre"], default="I Trimestre", key=f"pills_trim_exp_{v}")
-                    aluno_exp = c_exp2.selectbox("Estudante:", df_inclusao['NOME_ALUNO'].tolist(), key=f"exp_alu_sel_{v}")
                     
-                    id_exp = db.limpar_id(df_inclusao[df_inclusao['NOME_ALUNO'] == aluno_exp].iloc[0]['ID'])
-                    perfil_exp = str(df_inclusao[df_inclusao['NOME_ALUNO'] == aluno_exp].iloc[0]['NECESSIDADES']).upper()
+                    id_exp = db.limpar_id(df_inclusao[df_inclusao['NOME_ALUNO'] == aluno_foco].iloc[0]['ID'])
+                    perfil_exp = str(df_inclusao[df_inclusao['NOME_ALUNO'] == aluno_foco].iloc[0]['NECESSIDADES']).upper()
                     
                     hist_exp = df_relatorios[df_relatorios['ID_ALUNO'].apply(db.limpar_id) == id_exp] if not df_relatorios.empty else pd.DataFrame()
                     rel_master_exp = hist_exp[hist_exp['TIPO'] == 'DOSSIE_MASTER_PEI'] if not hist_exp.empty else pd.DataFrame()
@@ -6303,7 +6451,6 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                         except: df_curr_atual = pd.DataFrame(columns=["Objetivos de Aprendizagem", "Estratégias Metodológicas", "Recursos Materiais"])
                     else: df_curr_atual = pd.DataFrame(columns=["Objetivos de Aprendizagem", "Estratégias Metodológicas", "Recursos Materiais"])
 
-                    # 🚨 UI NOVA GERAÇÃO: ST.POPOVER PARA TRADUTOR CURRICULAR
                     with st.popover("⚙️ Adaptar Matriz Curricular da Prefeitura (IA)", use_container_width=True):
                         st.caption("Selecione os conteúdos do município para traduzir para o perfil do aluno.")
                         ano_aluno = "".join(filter(str.isdigit, turma_pei))
@@ -6328,7 +6475,7 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                             if st.button("🚀 Gerar Adaptação Curricular", type="primary", use_container_width=True, key=f"btn_gen_curr_pop_{v}"):
                                 if selecionados:
                                     with st.spinner("Adaptando matriz para o perfil do aluno..."):
-                                        prompt_curr = f"ESTUDANTE: {aluno_exp}. PERFIL: {perfil_exp}.\nDIRETRIZES: {v_diretrizes_exp}\nCONTEÚDOS ESCOLHIDOS: {', '.join(selecionados)}.\nGere os itens adaptados focando em superar as barreiras do perfil."
+                                        prompt_curr = f"ESTUDANTE: {aluno_foco}. PERFIL: {perfil_exp}.\nDIRETRIZES: {v_diretrizes_exp}\nCONTEÚDOS ESCOLHIDOS: {', '.join(selecionados)}.\nGere os itens adaptados focando em superar as barreiras do perfil."
                                         res_ia = ai.gerar_ia("TRADUTOR_CURRICULAR_V39", prompt_curr)
                                         
                                         blocos = re.findall(r"\[ITEM\](.*?)\[/ITEM\]", res_ia, re.DOTALL)
@@ -6336,7 +6483,7 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                                         
                                         if novas_linhas:
                                             df_curr_atual = pd.concat([df_curr_atual, pd.DataFrame(novas_linhas)], ignore_index=True)
-                                            salvar_relatorio_pei_sem_duplicidade(id_exp, aluno_exp, f"CURRICULO_ADAPTADO_{trim_destino}", df_curr_atual.to_json(orient='records'))
+                                            salvar_relatorio_pei_sem_duplicidade(id_exp, aluno_foco, f"CURRICULO_ADAPTADO_{trim_destino}", df_curr_atual.to_json(orient='records'))
                                             st.rerun()
 
                     st.markdown("**Tabela de Planejamento Adaptado (Editável)**")
@@ -6349,12 +6496,12 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                     c_btn_save, c_btn_exp = st.columns(2)
                     
                     if c_btn_save.button("💾 Salvar Tabela de Planejamento", use_container_width=True, key=f"btn_save_tab_curr_{v}"):
-                        salvar_relatorio_pei_sem_duplicidade(id_exp, aluno_exp, f"CURRICULO_ADAPTADO_{trim_destino}", df_editado_curr.to_json(orient='records'))
+                        salvar_relatorio_pei_sem_duplicidade(id_exp, aluno_foco, f"CURRICULO_ADAPTADO_{trim_destino}", df_editado_curr.to_json(orient='records'))
                         st.success("Tabela salva com sucesso!"); time.sleep(0.5); st.rerun()
                         
                     if c_btn_exp.button("🖨️ GERAR PEI OFICIAL DA PREFEITURA (DOCX)", type="primary", use_container_width=True, key=f"btn_gen_pei_docx_{v}"):
                         with st.spinner("Compilando Dossiê Oficial no padrão da Secretaria..."):
-                            dados_aluno = {"nome": aluno_exp, "turma": turma_pei, "cid": perfil_exp}
+                            dados_aluno = {"nome": aluno_foco, "turma": turma_pei, "cid": perfil_exp}
                             
                             if not rel_master_exp.empty:
                                 m_txt = str(rel_master_exp.iloc[-1]['CONTEUDO'])
@@ -6362,14 +6509,14 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                             else:
                                 habilidades = {"Habilidades Sociais": "", "Habilidades Comunicativas": "", "Habilidades Emocionais": "", "Habilidades Funcionais": ""}
                             
-                            nome_arq_pei = f"PEI_OFICIAL_{aluno_exp.replace(' ', '_')}_{trim_destino.replace(' ', '')}"
+                            nome_arq_pei = f"PEI_OFICIAL_{aluno_foco.replace(' ', '_')}_{trim_destino.replace(' ', '')}"
                             doc_stream = exporter.gerar_docx_pei_oficial(nome_arq_pei, dados_aluno, habilidades, df_editado_curr)
                             link_doc = db.subir_e_converter_para_google_docs(doc_stream, nome_arq_pei, trimestre=trim_destino, categoria=turma_pei, modo="PLANEJAMENTO")
                             
                             if "https" in link_doc:
-                                salvar_relatorio_pei_sem_duplicidade(id_exp, aluno_exp, "PEI_EXPORTADO", f"Link: {link_doc}")
+                                salvar_relatorio_pei_sem_duplicidade(id_exp, aluno_foco, "PEI_EXPORTADO", f"Link: {link_doc}")
                                 st.success("✅ PEI Oficial gerado e salvo no Drive!")
-                                st.link_button("📂 ABRIR PEI OFICIAL", link_doc, type="primary", use_container_width=True)
+                                st.link_button("📂 ABRIR PEI OFICIAL NO DRIVE", link_doc, type="primary", use_container_width=True)
                                 st.balloons()
                             else: st.error(f"Erro ao salvar no Drive: {link_doc}")
 
