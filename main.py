@@ -93,25 +93,31 @@ def navegar_para(destino):
 def atualizar_menu():
     st.session_state.menu_atual = st.session_state._menu_radio
 
-# 🔬 FILTRO DE LEITURA GLOBAL (LATEX, IMAGENS E FORM FEED V2026.MASTER)
+# 🔬 FILTRO DE LEITURA GLOBAL (LATEX, TABELAS NATIVAS E IMAGENS V2026.MASTER)
 def preparar_para_leitura(texto):
     if not texto or not isinstance(texto, str): return ""
-    # Vacina de escape do Form Feed (\x0c -> \\f)
+    
+    # Vacina de escape do Form Feed
     texto = texto.replace('\x0c', '\\f')
-    # LaTeX de fração solto sem $
-    texto = re.sub(r'(?<!\$)\\\w+\{[^\}]*?\}(?:\{[^\}]*?\})?(?!\$)', r'$\g<0>$', texto)
-    texto = re.sub(r'(?<!\$)\^\\(circ|deg|cdot|times)(?!\$)', r'$\g<0>$', texto)
-    # Potências e expressões de bloco
-    texto = re.sub(r'\$\$(.*?)\$\$', r'$\1$', texto, flags=re.DOTALL)
-    # Limpa tags obsoletas do GeoGebra
+    
+    # 🚨 AUTO-ENCAPSULADOR LATEX: Transforma \frac{a}{b} solto em $$ \frac{a}{b} $$
+    texto = re.sub(r'(?<!\$)\\\bfrac\{([^}]+)\}\{([^}]+)\}(?!\$)', r'$$ \\frac{\1}{\2} $$', texto)
+    texto = re.sub(r'(?<!\$)\\\b(times|div|sqrt|circ|degree)\b(?!\$)', r'$$ \\\1 $$', texto)
+    
+    # Corrige cifrões duplos repetidos
+    texto = re.sub(r'\$\$\s*\$\$', '$$', texto)
+    
+    # Limpa tags obsoletas do GeoGebra se houver
     texto = re.sub(r'\[GEOGEBRA\](.*?)\[/GEOGEBRA\]', '', texto, flags=re.IGNORECASE | re.DOTALL)
-    # Prompts de Imagem transformados em caixas copiáveis com 1 clique
+    
+    # Prompts de Imagem transformados em caixas elegantes e compactas
     texto = re.sub(
         r'\[\s*PROMPT IMAGEM:(.*?)\s*\]', 
-        r'\n\n🎨 **[PROMPT GERADOR DE IMAGEM - COPIE NO BOTÃO ABAIXO]**\n```english\n\1\n```\n\n', 
+        r'\n\n🖼️ **[ILUSTRAÇÃO TÉCNICA SUGERIDA]**\n```english\n\1\n```\n\n', 
         texto, 
         flags=re.IGNORECASE | re.DOTALL
     )
+    
     return texto
 
 # --- ESTILIZAÇÃO DE LUXO E DEFINIÇÃO DE TEMAS (GLOBAL SOBERANO) ---
