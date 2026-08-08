@@ -264,7 +264,7 @@ PERSONAS = {
 }
 
 # ==============================================================================
-# MOTOR DE INTELIGÊNCIA COM LEITOR INFALÍVEL DE LIVROS (SOSA V2026.MASTER)
+# MOTOR DE INTELIGÊNCIA BARRAGEM ANTI-ALUCINAÇÃO (SOSA V2026.GROUNDING)
 # ==============================================================================
 def gerar_ia(persona_key, comando, url_drive=None, usar_busca=True, recorte_livro=None):
     personas_premium = [
@@ -279,28 +279,32 @@ def gerar_ia(persona_key, comando, url_drive=None, usar_busca=True, recorte_livr
     
     modelo_alvo = "gemini-3.1-pro-preview" if persona_key in personas_premium else "gemini-3-flash-preview"
     
+    # 🚨 VACINA ANTI-ALUCINAÇÃO: Temperatura reduzida para 0.2 (Modo Factual / Deterministico)
     config = types.GenerateContentConfig(
         tools=[{'google_search': {}}] if usar_busca else [],
-        temperature=0.5 if persona_key in personas_premium else 0.8,
+        temperature=0.2,
         max_output_tokens=8192,
     )
     
     conteudo_prompt = []
     
-    # 🚨 PROTOCOLO DE ANCORAGEM DIRETA NO RECORTE DO LIVRO DIDÁTICO / EXERCÍCIOS
+    # 🚨 TRAVA DE REALIDADE E ANCORAGEM INQUEBRÁVEL
+    trava_realidade = (
+        "\n\n🚨 ================= CLÁUSULA INQUEBRÁVEL DE ZERO-ALUCINAÇÃO =================\n"
+        "1. É ESTRITAMENTE PROIBIDO inventar contextos aleatórios de ficção, jogos (RPG, Roblox, etc.), "
+        "fatos internacionais genéricos ou temas não fornecidos (como SpaceX/Marte), A MENOS QUE o professor tenha escrito isso expressamente.\n"
+        "2. Se forem fornecidos textos do Livro Didático, itens do CSV, ou dados regionais de Itabuna/Bahia, "
+        "SUA OBRIGAÇÃO É EXTRAIR OU ESPELHAR 100% DAS QUESTÕES E EXPLICAÇÕES DIRETA E EXCLUSIVAMENTE DESSES DADOS.\n"
+        "3. Não adicione fatos não checados. Mantenha fiel ancoragem à realidade do professor.\n"
+        "=================================================================================\n\n"
+    )
+
     instrucao_livro = ""
     if recorte_livro and len(str(recorte_livro).strip()) > 5:
         instrucao_livro = (
-            "\n\n📖 ================= OBRIGAÇÃO DE ANCORAGEM NO LIVRO DIDÁTICO =================\n"
-            f"O professor forneceu o seguinte RECORTE EXATO / EXERCÍCIOS do Livro Didático:\n"
-            f"\"\"\"\n{recorte_livro}\n\"\"\"\n"
-            "SUA OBRIGAÇÃO INEGOCIÁVEL:\n"
-            "1. Baseie toda a teoria, explicações e exercícios DIRETAMENTE nas páginas e questões acima.\n"
-            "2. Crie QUESTÕES ESPELHO (mesma estrutura e raciocínio do livro, apenas adaptando valores/contexto local).\n"
-            "3. Cite explicitamente as seções e números de páginas do livro no roteiro do professor.\n"
-            "=================================================================================\n\n"
+            f"\n📖 CONTEXTO REAL FORNECIDO PELO PROFESSOR:\n\"\"\"\n{recorte_livro}\n\"\"\"\n"
         )
-    
+
     if url_drive and ("drive.google.com" in url_drive or len(url_drive) > 20):
         try:
             file_id_match = re.search(r"(?:id=|[dD]/)([\w-]+)", url_drive)
@@ -327,19 +331,18 @@ def gerar_ia(persona_key, comando, url_drive=None, usar_busca=True, recorte_livr
                 ))
                 
                 comando = (
-                    "🚨 ANCORAGEM OBRIGATÓRIA NO DOCUMENTO/LIVRO ANEXADO:\n"
-                    "Você DEVE ler o arquivo PDF do Livro Didático anexado a esta mensagem. "
-                    "É ESTRITAMENTE PROIBIDO inventar conceitos ou exercícios genéricos de fora. "
-                    "Baseie todo o conteúdo das aulas, explicações e exercícios DIRETAMENTE no texto e nas páginas do livro fornecido.\n\n"
+                    "🚨 ANCORAGEM EXCLUSIVA NO LIVRO PDF ANEXADO:\n"
+                    "Leia o arquivo PDF e crie as questões/explicações BASEADAS ESTRITAMENTE NELE. "
+                    "É proibido usar exemplos genéricos fora do livro.\n\n"
                     f"{comando}"
                 )
-                st.toast(f"📖 Livro Didático lido via Drive API com Sucesso!", icon="✅")
+                st.toast(f"📖 Livro Didático lido e blindado contra alucinação!", icon="✅")
             else:
                 st.toast("⚠️ O arquivo do Drive não é um PDF válido.", icon="⚠️")
         except Exception as e:
             st.toast(f"⚠️ Aviso na leitura do livro no Drive: {e}", icon="⚠️")
 
-    prompt_final = f"{PERSONAS.get(persona_key, PERSONAS['ARQUITETO_EXAMES_ENEM_V2026'])}{instrucao_livro}\n\n{comando}"
+    prompt_final = f"{PERSONAS.get(persona_key, PERSONAS['ARQUITETO_EXAMES_ENEM_V2026'])}{trava_realidade}{instrucao_livro}\n\n{comando}"
     conteudo_prompt.append(types.Part.from_text(text=prompt_final))
 
     try:
@@ -365,12 +368,21 @@ def gerar_ia(persona_key, comando, url_drive=None, usar_busca=True, recorte_livr
             return f"Erro na IA ({modelo_alvo}): {e}"
 
 def gerar_ia_json(persona_key, comando, usar_busca=False):
+    # 🚨 VACINA ANTI-ALUCINAÇÃO: Temperatura reduzida para 0.2
     config = types.GenerateContentConfig(
         tools=[{'google_search': {}}] if usar_busca else [],
-        temperature=0.7, 
+        temperature=0.2, 
         response_mime_type="application/json",
     )
-    conteudo_prompt = [types.Part.from_text(text=f"{PERSONAS[persona_key]}\n\n{comando}")]
+    
+    trava_realidade_json = (
+        "\n\n🚨 REGRAS RIGIDAS DE GROUNDING (ZERO ALUCINAÇÃO):\n"
+        "1. É PROIBIDO inventar contextos fictícios fora do fornecido (como SpaceX, RPG, games, etc.).\n"
+        "2. Se houver contexto de Itabuna/Bahia ou trecho de Livro Didático abaixo, 100% DAS QUESTÕES DEVEM SER EXTRAÍDAS OU ESPELHADAS DELE.\n"
+        "3. Mantenha fidelidade absoluta ao tema de cada item enviado.\n\n"
+    )
+    
+    conteudo_prompt = [types.Part.from_text(text=f"{PERSONAS[persona_key]}\n{trava_realidade_json}\n\n{comando}")]
     try:
         res = client.models.generate_content(
             model="gemini-3-flash-preview", 
@@ -384,7 +396,6 @@ def gerar_ia_json(persona_key, comando, usar_busca=False):
         texto_limpo = re.sub(r'^```[a-zA-Z]*\n', '', texto_limpo, flags=re.IGNORECASE)
         texto_limpo = re.sub(r'\n```$', '', texto_limpo)
         
-        # 🚨 VACINA ANTI-EXTRA DATA (JSON RAW DECODE)
         match = re.search(r'\{.*\}', texto_limpo, re.DOTALL)
         if match:
             json_str = match.group(0)
