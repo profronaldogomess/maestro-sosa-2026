@@ -96,7 +96,7 @@ def adicionar_box_imagem_word(doc, legenda_prompt="ESPAÇO PARA ILUSTRAÇÃO / D
     doc.add_paragraph()
 
 def configurar_cabecalho_mestre(doc, info, tipo_label, mostrar_nota=False):
-    """Gera o cabeçalho executivo oficial da Escola e Prefeitura de Itabuna"""
+    """Gera o cabeçalho executivo oficial da Prefeitura e Escola de Itabuna"""
     table = doc.add_table(rows=3, cols=5)
     table.style = 'Table Grid'
     
@@ -165,6 +165,554 @@ def configurar_cabecalho_mestre(doc, info, tipo_label, mostrar_nota=False):
         try: p.add_run().add_picture(logo_path, width=Inches(0.65))
         except: pass
     return table
+
+# ==============================================================================
+# 2. MATERIAL DO ALUNO REGULAR
+# ==============================================================================
+def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
+    file_stream = io.BytesIO()
+    doc = Document()
+    section = doc.sections[0]
+    section.top_margin, section.bottom_margin = Inches(0.4), Inches(0.4)
+    section.left_margin, section.right_margin = Inches(0.4), Inches(0.4)
+
+    style = doc.styles['Normal']
+    style.font.name = 'Arial'
+    style.font.size = Pt(10)
+
+    configurar_cabecalho_mestre(doc, info, "ATIVIDADE DE SALA", mostrar_nota=False)
+    doc.add_paragraph()
+
+    new_section = doc.add_section(WD_SECTION.CONTINUOUS)
+    sectPr = new_section._sectPr
+    cols = sectPr.xpath('./w:cols')[0]
+    cols.set(qn('w:num'), '2')
+    cols.set(qn('w:space'), '420')
+
+    linhas = str(conteudo).split('\n')
+    for linha in linhas:
+        l_s = linha.strip()
+        if not l_s: continue
+        
+        if "[" in l_s and "PROMPT IMAGEM" in l_s.upper():
+            desc_p = re.sub(r'\[\s*PROMPT IMAGEM:\s*|\s*\]', '', l_s, flags=re.IGNORECASE)
+            adicionar_box_imagem_word(doc, desc_p)
+            continue
+            
+        p = doc.add_paragraph()
+        p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+        p.paragraph_format.space_after = Pt(4)
+        p.paragraph_format.line_spacing = 1.15
+
+        if any(x in l_s.upper() for x in ["ATIVIDADE DE", "JORNADA", "HISTÓRIA", "MATEMÁTICA", "AULA"]):
+            run = p.add_run(l_s.replace('**', ''))
+            run.bold = True
+            run.font.color.rgb = RGBColor(0, 51, 102)
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        elif "QUESTÃO" in l_s.upper():
+            match = re.match(r"^(QUEST[AÃ]O\s*\d+)([\.\s:]+)(.*)", l_s, re.IGNORECASE)
+            if match:
+                run_r = p.add_run(f"{match.group(1).upper()}. ")
+                run_r.bold = True
+                adicionar_texto_formatado(p, match.group(3).strip())
+            else: adicionar_texto_formatado(p, l_s)
+        else:
+            adicionar_texto_formatado(p, l_s)
+
+    doc.save(file_stream)
+    file_stream.seek(0)
+    return file_stream
+
+# ==============================================================================
+# 3. MATERIAL PEI ADAPTADO (NÍVEIS 1 E 2 - LIMPO E ESTRUTURADO)
+# ==============================================================================
+def gerar_docx_pei_v25(titulo_doc, conteudo, info):
+    file_stream = io.BytesIO()
+    try:
+        doc = Document()
+        section = doc.sections[0]
+        section.top_margin, section.bottom_margin = Inches(0.4), Inches(0.4)
+        section.left_margin, section.right_margin = Inches(0.4), Inches(0.4)
+
+        style = doc.styles['Normal']
+        style.font.name = 'Arial'
+        style.font.size = Pt(10)
+
+        # 1. Sanitização do Conteúdo (Elimina saudações/bate-papo da IA)
+        conteudo_limpo = str(conteudo).strip()
+        conteudo_limpo = re.sub(r'^(?:Olá|Como especialista|Como profissional|Prezado|Segue).*?\n\n', '', conteudo_limpo, flags=re.IGNORECASE | re.DOTALL).strip()
+
+        # 2. Cabeçalho Mestre Oficial da Escola
+        label_pei = "AVALIAÇÃO ADAPTADA (PEI NÍVEL 1)" if "N1" in titulo_doc.upper() or "NIVEL_1" in titulo_doc.upper() else "AVALIAÇÃO ADAPTADA (PEI NÍVEL 2)"
+        configurar_cabecalho_mestre(doc, info, label_pei, mostrar_nota=True)
+        doc.add_paragraph()
+
+        # 3. Contagem das Questões para o Cartão-Resposta
+        num_total_q = len(re.findall(r'(?i)(?:QUEST[AÃ]O\s*(?:PEI\s*)?|Q)\s*\d+', conteudo_limpo))
+        if num_total_q == 0: 
+            num_total_q = int(helper_sosa_float(info.get('qtd', 10)))
+
+        # 4. Cartão-Resposta Fiducial de 3 Colunas (A, B, C) com Largura de 1,0 cm
+        adicionar_cartao_resposta_fiducial_word(doc, num_total_q, is_pei=True)
+        doc.add_paragraph()
+
+        # 5. Enunciados das Questões em Coluna Dupla
+        new_section = doc.add_section(WD_SECTION.CONTINUOUS)
+        sectPr = new_section._sectPr
+        cols = sectPr.xpath('./w:cols')[0]
+        cols.set(qn('w:num'), '2')
+        cols.set(qn('w:space'), '420')
+
+        linhas = conteudo_limpo.split('\n')
+        for linha in linhas:
+            l_s = linha.strip()
+            if not l_s: continue
+
+            if "[" in l_s and "PROMPT IMAGEM" in l_s.upper():
+                desc_p = re.sub(r'\[\s*PROMPT IMAGEM:\s*|\s*\]', '', l_s, flags=re.IGNORECASE)
+                adicionar_box_imagem_word(doc, desc_p)
+                continue
+
+            p = doc.add_paragraph()
+            p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+            p.paragraph_format.space_after = Pt(4)
+            p.paragraph_format.line_spacing = 1.15
+
+            secoes_pei = ["PARA LEMBRAR", "OBJETIVO", "INSTRUÇÕES", "PASSO A PASSO", "DICA MESTRA"]
+            if any(x in l_s.upper() for x in secoes_pei):
+                p.paragraph_format.space_before = Pt(4)
+                txt_limpo = l_s.replace("[", "").replace("]", "").replace(":", "")
+                run = p.add_run(f"📌 {txt_limpo}")
+                run.bold = True
+                run.font.size = Pt(9.5)
+                run.font.color.rgb = RGBColor(41, 98, 255)
+                p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            elif re.match(r"^(?:QUEST[AÃ]O\s*(?:PEI\s*)?|Q)\s*\d+", l_s, re.IGNORECASE):
+                match = re.match(r"^((?:QUEST[AÃ]O\s*(?:PEI\s*)?|Q)\s*\d+)([\.\s:\-]+)(.*)", l_s, re.IGNORECASE)
+                if match:
+                    q_num_str = re.sub(r'\D', '', match.group(1))
+                    run_r = p.add_run(f"QUESTÃO {int(q_num_str):02d} - ")
+                    run_r.bold = True
+                    run_r.font.size = Pt(10)
+                    run_r.font.color.rgb = RGBColor(0, 51, 102)
+                    adicionar_texto_formatado(p, match.group(3).strip())
+                else: 
+                    adicionar_texto_formatado(p, l_s)
+            elif re.match(r'^[A-C][\)\.]', l_s):
+                p.paragraph_format.left_indent = Inches(0.15)
+                letra_match = re.match(r'^([A-C][\)\.])(.*)', l_s)
+                if letra_match:
+                    run_letra = p.add_run(letra_match.group(1))
+                    run_letra.bold = True
+                    adicionar_texto_formatado(p, letra_match.group(2))
+                    continue
+            else:
+                adicionar_texto_formatado(p, l_s)
+
+        doc.save(file_stream)
+        file_stream.seek(0)
+        return file_stream
+    except Exception as e:
+        file_stream = io.BytesIO()
+        err_doc = Document()
+        err_doc.add_paragraph(f"ERRO NO EXPORTER PEI: {str(e)}")
+        err_doc.save(file_stream)
+        file_stream.seek(0)
+        return file_stream
+
+# ==============================================================================
+# 4. GUIA DO PROFESSOR (COM DESCRITORES SAEB E DISTRATORES CIENTÍFICOS)
+# ==============================================================================
+def gerar_docx_professor_v25(titulo_doc, conteudo, info):
+    file_stream = io.BytesIO()
+    doc = Document()
+    
+    style = doc.styles['Normal']
+    style.font.name = 'Arial'
+    style.font.size = Pt(10)
+
+    section = doc.sections[0]
+    section.top_margin, section.bottom_margin = Inches(0.4), Inches(0.4)
+    section.left_margin, section.right_margin = Inches(0.4), Inches(0.4)
+
+    header_table = doc.add_table(rows=2, cols=3)
+    header_table.style = 'Table Grid'
+    c_tit = header_table.cell(0, 0).merge(header_table.cell(0, 2))
+    set_cell_background(c_tit, "003366")
+    run_tit = c_tit.paragraphs[0].add_run("GUIA DE MEDIAÇÃO, DESCRITORES SAEB E DISTRATORES")
+    run_tit.font.bold, run_tit.font.size = True, Pt(11)
+    run_tit.font.color.rgb = RGBColor(255, 255, 255)
+    c_tit.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    header_table.cell(1, 0).paragraphs[0].add_run(f"ANO: {info.get('ano', '')}").font.size = Pt(9)
+    header_table.cell(1, 1).paragraphs[0].add_run(f"SEMANA: {info.get('semana', '')}").font.size = Pt(9)
+    header_table.cell(1, 2).paragraphs[0].add_run(f"TRIMESTRE: {info.get('trimestre', 'I')}").font.size = Pt(9)
+    for row in header_table.rows: set_row_height(row, 20)
+    doc.add_paragraph()
+
+    linhas = str(conteudo).split('\n')
+    for linha in linhas:
+        l_s = linha.strip()
+        if not l_s: continue
+        p = doc.add_paragraph()
+        p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+        p.paragraph_format.space_after = Pt(3)
+
+        if re.search(r"(?i)QUEST[AÃ]O\s*(?:PEI\s*)?\d+\s*[:\-]\s*[A-E]$|^\d+[\.\s\-]+[A-E]$", l_s):
+            run = p.add_run(f"✅ {l_s}")
+            run.font.bold, run.font.size = True, Pt(10.5)
+            run.font.color.rgb = RGBColor(0, 128, 0)
+            continue
+
+        if any(x in l_s.upper() for x in ["JUSTIFICATIVA", "PERÍCIA", "LACUNA", "DISTRATORES", "DESCRITOR"]):
+            p.paragraph_format.left_indent = Inches(0.15)
+            if "DESCRITOR" in l_s.upper() or "SAEB" in l_s.upper():
+                run_d = p.add_run("🆔 ")
+                run_d.font.size = Pt(10)
+            elif "DISTRATORES" in l_s.upper():
+                run_d = p.add_run("🧠 ")
+                run_d.font.size = Pt(10)
+            adicionar_texto_formatado(p, l_s)
+            continue
+
+        adicionar_texto_formatado(p, l_s)
+
+    doc.save(file_stream)
+    file_stream.seek(0)
+    return file_stream
+
+# ==============================================================================
+# 5. PROVA OFICIAL (PADRÃO ENEM / SAEB COM CARTÃO 1 CM E DADOS BLINDADOS)
+# ==============================================================================
+
+def adicionar_cartao_resposta_fiducial_word(doc, num_total_q, is_pei=False):
+    """
+    SOSA V2026: Cartão-Resposta com Colunas Travadas em 1,0 cm (Cm(1.0)) e 4 Marcadores Fiduciais (■).
+    """
+    container_table = doc.add_table(rows=3, cols=3)
+    container_table.style = 'Table Grid'
+    container_table.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    
+    container_table.columns[0].width = Inches(0.45)
+    container_table.columns[1].width = Inches(6.5)
+    container_table.columns[2].width = Inches(0.45)
+
+    set_row_height(container_table.rows[0], 28)
+    set_row_height(container_table.rows[2], 28)
+
+    # 4 Quadrados Pretos Fiduciais nos Cantos (■)
+    for r_idx, c_idx in [(0, 0), (0, 2), (2, 0), (2, 2)]:
+        c = container_table.cell(r_idx, c_idx)
+        set_cell_background(c, "000000")
+        p = c.paragraphs[0]
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = p.add_run("■")
+        run.font.color.rgb = RGBColor(0, 0, 0)
+        run.font.size = Pt(16)
+
+    # Título do Cartão (Topo)
+    c_title = container_table.cell(0, 1)
+    set_cell_background(c_title, "F1F5F9")
+    p_t = c_title.paragraphs[0]
+    p_t.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    r_t = p_t.add_run("CARTÃO-RESPOSTA OFICIAL (FOLHA DE RESPOSTAS)")
+    r_t.font.bold = True
+    r_t.font.size = Pt(10.5)
+
+    # Rodapé do Cartão
+    c_foot = container_table.cell(2, 1)
+    set_cell_background(c_foot, "F8FAFC")
+    p_f = c_foot.paragraphs[0]
+    p_f.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    r_f = p_f.add_run("▲ MANTENHA O PAPEL RETO • PREENCHA TOTALMENTE OS CÍRCULOS COM CANETA PRETA OU AZUL ▲")
+    r_f.font.size = Pt(8.0)
+    r_f.font.bold = True
+    r_f.font.color.rgb = RGBColor(100, 116, 139)
+
+    # Célula Central - Grade de Bolinhas com Colunas Travadas em 1,0 cm
+    c_grid = container_table.cell(1, 1)
+    col_count = 4 if is_pei else 6
+    headers = ["Q", "A", "B", "C"] if is_pei else ["Q", "A", "B", "C", "D", "E"]
+    
+    if num_total_q <= 10:
+        gab_grid = c_grid.add_table(rows=num_total_q + 1, cols=col_count)
+        gab_grid.style = 'Table Grid'
+        gab_grid.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        
+        for i, col in enumerate(gab_grid.columns):
+            if i == 0: col.width = Cm(0.8)
+            else: col.width = Cm(1.0)
+        
+        for i, lab in enumerate(headers):
+            c = gab_grid.cell(0, i)
+            set_cell_background(c, "2962FF" if i==0 else "E2E8F0")
+            p = c.paragraphs[0]
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            r_h = p.add_run(lab)
+            r_h.font.bold = True
+            r_h.font.size = Pt(9.5)
+            if i == 0: r_h.font.color.rgb = RGBColor(255, 255, 255)
+            
+        for r in range(1, num_total_q + 1):
+            set_row_height(gab_grid.rows[r], 22)
+            c_q = gab_grid.cell(r, 0)
+            set_cell_background(c_q, "F1F5F9")
+            p_q = c_q.paragraphs[0]
+            p_q.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            r_q_num = p_q.add_run(f"{r:02d}")
+            r_q_num.font.size = Pt(9.5)
+            r_q_num.font.bold = True
+            
+            for col in range(1, col_count):
+                c_b = gab_grid.cell(r, col)
+                p_b = c_b.paragraphs[0]
+                p_b.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                p_b.add_run("○").font.size = Pt(13)
+    else:
+        half = (num_total_q + 1) // 2
+        double_cols = col_count * 2
+        gab_grid = c_grid.add_table(rows=half + 1, cols=double_cols)
+        gab_grid.style = 'Table Grid'
+        gab_grid.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        
+        for i, col in enumerate(gab_grid.columns):
+            if i % col_count == 0: col.width = Cm(0.8)
+            else: col.width = Cm(1.0)
+        
+        headers_double = headers + headers
+        for i, lab in enumerate(headers_double):
+            c = gab_grid.cell(0, i)
+            is_q_col = (i % col_count == 0)
+            set_cell_background(c, "2962FF" if is_q_col else "E2E8F0")
+            p = c.paragraphs[0]
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            r_h = p.add_run(lab)
+            r_h.font.bold = True
+            r_h.font.size = Pt(9.0)
+            if is_q_col: r_h.font.color.rgb = RGBColor(255, 255, 255)
+
+        for r in range(1, num_total_q + 1):
+            row_idx = r if r <= half else r - half
+            col_offset = 0 if r <= half else col_count
+            
+            set_row_height(gab_grid.rows[row_idx], 20)
+            c_q = gab_grid.cell(row_idx, col_offset)
+            set_cell_background(c_q, "F1F5F9")
+            p_q = c_q.paragraphs[0]
+            p_q.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            r_q = p_q.add_run(f"{r:02d}")
+            r_q.font.size = Pt(9.0)
+            r_q.font.bold = True
+            
+            for col in range(1, col_count):
+                c_b = gab_grid.cell(row_idx, col_offset + col)
+                p_b = c_b.paragraphs[0]
+                p_b.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                p_b.add_run("○").font.size = Pt(12)
+
+def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
+    file_stream = io.BytesIO()
+    try:
+        doc = Document()
+        style = doc.styles['Normal']
+        style.font.name = 'Arial'
+        style.font.size = Pt(10)
+
+        section = doc.sections[0]
+        section.top_margin = section.bottom_margin = Inches(0.35)
+        section.left_margin = section.right_margin = Inches(0.4)
+        
+        is_pei_doc = "PEI" in titulo_doc.upper() or "ADAPTADA" in titulo_doc.upper()
+        tag_alvo = "PEI" if is_pei_doc else "QUESTOES"
+        
+        corpo_bruto = ai.extrair_tag(conteudo_ia, tag_alvo)
+        if not corpo_bruto:
+            match_primeira_q = re.search(r"(?i)QUESTÃO\s*\d+", conteudo_ia)
+            corpo_bruto = conteudo_ia[match_primeira_q.start():].strip() if match_primeira_q else conteudo_ia.strip()
+
+        num_total_q = len(re.findall(r'(?i)QUESTÃO\s+\d+', corpo_bruto))
+        if num_total_q == 0: num_total_q = int(helper_sosa_float(info.get('qtd_questoes', info.get('qtd', 5))))
+        
+        label_prova = "AVALIAÇÃO ADAPTADA" if is_pei_doc else "AVALIAÇÃO DE MATEMÁTICA (ENEM/SAEB)"
+        if "SONDA" in titulo_doc.upper(): label_prova = "SONDA DE PROFICIÊNCIA"
+
+        val_total_num = helper_sosa_float(info.get('valor', 3.0))
+        if val_total_num == 0: val_total_num = 3.0
+
+        num_q_num = int(helper_sosa_float(info.get('qtd', info.get('qtd_questoes', num_total_q))))
+        if num_q_num == 0: num_q_num = num_total_q or 10
+
+        val_q_calc = val_total_num / num_q_num if num_q_num > 0 else 0.3
+        
+        val_total_str = f"{val_total_num:.1f}"
+        val_q_str = f"{val_q_calc:.2f}".replace(".", ",")
+        
+        info_cabecalho = info.copy()
+        info_cabecalho['valor'] = val_total_str
+        info_cabecalho['valor_questao'] = val_q_str
+
+        # 1. CABEÇALHO MESTRE DA ESCOLA
+        configurar_cabecalho_mestre(doc, info_cabecalho, label_prova, mostrar_nota=True)
+        doc.add_paragraph()
+
+        # 2. CAPA DE INSTRUÇÕES SELECIONÁVEIS DEDICADAS
+        top_table = doc.add_table(rows=1, cols=1)
+        top_table.style = 'Table Grid'
+        top_table.columns[0].width = Inches(7.0)
+        c_orient = top_table.cell(0, 0)
+        set_cell_background(c_orient, "F8FAFC")
+        
+        p_tit = c_orient.paragraphs[0]
+        r_tit_inst = p_tit.add_run("📋 ORIENTAÇÕES OFICIAIS DE EXAME (PADRÃO ENEM/SAEB):")
+        r_tit_inst.bold = True
+        r_tit_inst.font.size = Pt(9.5)
+        r_tit_inst.font.color.rgb = RGBColor(0, 51, 102)
+        
+        orient_list = [
+            f"Valor Total do Exame: {val_total_str} pts | Valor por Questão: {val_q_str} pts.",
+            "Preencha o Cartão-Resposta abaixo com caneta esferográfica preta ou azul de material transparente.",
+            "🚨 REGRA DO CÁLCULO OBRIGATÓRIO (MEIO CERTO - 50%): Nas questões objetivas que exigem resolução matemática, o cálculo DEVE ser apresentado no papel da prova. Questão acertada no Cartão-Resposta sem a memória de cálculo receberá 50% do valor (sinalizado com *).",
+            "É estritamente proibido o uso de celulares, relógios inteligentes ou qualquer material de consulta não autorizado.",
+            "Mantenha os 4 marcadores pretos (■) dos cantos limpos e sem rasuras para leitura óptica."
+        ]
+
+        for txt in orient_list:
+            p = c_orient.add_paragraph()
+            p.add_run(f"• {txt}").font.size = Pt(8.5)
+            p.paragraph_format.space_after = Pt(1)
+
+        doc.add_paragraph()
+
+        # 3. CARTÃO-RESPOSTA PADRONIZADO (LARGURA 1,0 CM POR COLUNA)
+        if info.get('tipo_prova') != "2ª Chamada":
+            adicionar_cartao_resposta_fiducial_word(doc, num_total_q, is_pei_doc)
+
+        doc.add_paragraph()
+
+        # 4. ENUNCIADOS DAS QUESTÕES
+        new_section = doc.add_section(WD_SECTION.CONTINUOUS)
+        sectPr = new_section._sectPr
+        cols = sectPr.xpath('./w:cols')[0]
+        cols.set(qn('w:num'), '2')
+        cols.set(qn('w:space'), '450')
+
+        for linha in corpo_bruto.split('\n'):
+            l_s = linha.strip()
+            if not l_s: continue
+
+            if "[" in l_s and "PROMPT IMAGEM" in l_s.upper():
+                desc_p = re.sub(r'\[\s*PROMPT IMAGEM:\s*|\s*\]', '', l_s, flags=re.IGNORECASE)
+                adicionar_box_imagem_word(doc, desc_p)
+                continue
+
+            p = doc.add_paragraph()
+            p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+            p.paragraph_format.space_after = Pt(4)
+            p.paragraph_format.line_spacing = 1.15
+            
+            if l_s.upper().startswith("QUESTÃO"):
+                match = re.match(r"^(QUEST[AÃ]O\s*\d+)(\s*\(.*?\))?([\s\.\-\:]+)(.*)", l_s, re.IGNORECASE)
+                if match:
+                    rotulo = f"{match.group(1).upper()}{match.group(2) if match.group(2) else ''}{match.group(3)}"
+                    run_r = p.add_run(rotulo)
+                    run_r.bold = True
+                    run_r.font.size = Pt(10.5)
+                    run_r.font.color.rgb = RGBColor(0, 51, 102)
+                    adicionar_texto_formatado(p, match.group(4).strip())
+                    continue
+
+            if re.match(r'^[A-E][\)\.]', l_s):
+                p.paragraph_format.left_indent = Inches(0.15)
+                letra_match = re.match(r'^([A-E][\)\.])(.*)', l_s)
+                if letra_match:
+                    run_letra = p.add_run(letra_match.group(1))
+                    run_letra.bold = True
+                    adicionar_texto_formatado(p, letra_match.group(2))
+                    continue
+            
+            adicionar_texto_formatado(p, l_s)
+
+        doc.save(file_stream)
+        file_stream.seek(0)
+        return file_stream
+    except Exception as e:
+        file_stream = io.BytesIO()
+        err_doc = Document(); err_doc.add_paragraph(f"ERRO NO EXPORTER DE PROVA: {str(e)}"); err_doc.save(file_stream)
+        file_stream.seek(0)
+        return file_stream
+
+# ==============================================================================
+# 6. PLANO PEDAGÓGICO SEMANAL
+# ==============================================================================
+def gerar_docx_plano_pedagogico_ELITE(titulo_arquivo, dados, info):
+    file_stream = io.BytesIO()
+    try:
+        doc = Document()
+        section = doc.sections[0]
+        section.top_margin, section.bottom_margin = Inches(0.4), Inches(0.4)
+        section.left_margin, section.right_margin = Inches(0.5), Inches(0.5)
+
+        table = doc.add_table(rows=3, cols=3)
+        table.style = 'Table Grid'
+        widths = [Inches(1.1), Inches(3.6), Inches(2.0)]
+        for i, w in enumerate(widths): table.columns[i].width = w
+
+        logo_path = "logo_escola.png" if os.path.exists("logo_escola.png") else "logo.png"
+        if os.path.exists(logo_path):
+            cell_logo = table.cell(0, 0).merge(table.cell(2, 0))
+            cell_logo.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+            p_logo = cell_logo.paragraphs[0]
+            p_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            p_logo.add_run().add_picture(logo_path, width=Inches(0.85))
+        
+        table.cell(0, 1).paragraphs[0].add_run("ESCOLA MUNICIPAL FLAVIO JOSE SIMOES COSTA").font.bold = True
+        
+        c_tit = table.cell(0, 2)
+        set_cell_background(c_tit, "2962FF")
+        p_t = c_tit.paragraphs[0]
+        p_t.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        r_t = p_t.add_run("PLANO DE ENSINO SEMANAL")
+        r_t.font.bold = True
+        r_t.font.color.rgb = RGBColor(255, 255, 255)
+
+        table.cell(1, 1).paragraphs[0].add_run(f"Professor: Ronaldo Gomes").font.size = Pt(9.5)
+        table.cell(1, 2).paragraphs[0].add_run(f"Série: {info.get('ano', '')}").font.size = Pt(9.5)
+        table.cell(2, 1).paragraphs[0].add_run(f"Semana: {info.get('semana', '')}").font.size = Pt(9.5)
+        table.cell(2, 2).paragraphs[0].add_run(f"Trimestre: {info.get('trimestre', 'I')}").font.bold = True
+
+        doc.add_paragraph()
+
+        campos = [
+            ("OBJETO DE CONHECIMENTO (EIXO):", "geral"), 
+            ("CONTEÚDOS ESPECÍFICOS:", "especificos"), 
+            ("OBJETIVOS DE APRENDIZAGEM:", "objetivos"), 
+            ("RECURSOS DIDÁTICOS:", "recursos"),
+            ("PROCEDIMENTOS METODOLÓGICOS:", "metodologia"), 
+            ("AVALIAÇÃO E ACOMPANHAMENTO:", "avaliacao"), 
+            ("ESTRATÉGIAS DE ACESSIBILIDADE (DUA/PEI):", "pei")
+        ]
+
+        for label, chave in campos:
+            p = doc.add_paragraph()
+            p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+            p.paragraph_format.space_after = Pt(6)
+            
+            run_label = p.add_run(f"{label}\n")
+            run_label.bold = True
+            run_label.font.size = Pt(10.5)
+            run_label.font.color.rgb = RGBColor(0, 51, 102)
+            
+            texto_limpo = str(dados.get(chave, "")).replace("**", "").replace("#", "").strip()
+            adicionar_texto_formatado(p, texto_limpo)
+
+        doc.save(file_stream)
+        file_stream.seek(0)
+        return file_stream
+    except Exception as e:
+        file_stream = io.BytesIO()
+        err_doc = Document(); err_doc.add_paragraph(f"ERRO NO PLANO: {str(e)}"); err_doc.save(file_stream)
+        file_stream.seek(0)
+        return file_stream
 
 # ==============================================================================
 # 7. EXPORTADOR PEI NÍVEL 3 (SENSORIAL / MOTOR / BENTO CARDS NO PAPEL)
