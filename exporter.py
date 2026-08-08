@@ -519,6 +519,13 @@ def adicionar_cartao_resposta_fiducial_word(doc, num_total_q, is_pei=False):
                 p_b.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 p_b.add_run("○").font.size = Pt(12)
 
+def helper_sosa_float(v):
+    """Converte qualquer valor para float de forma imune a erros"""
+    if not v or str(v).strip() == "" or str(v).lower() == "nan": return 0.0
+    try:
+        return float(str(v).replace(" ", "").replace(",", "."))
+    except: return 0.0
+
 def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
     file_stream = io.BytesIO()
     try:
@@ -540,16 +547,16 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
             corpo_bruto = conteudo_ia[match_primeira_q.start():].strip() if match_primeira_q else conteudo_ia.strip()
 
         num_total_q = len(re.findall(r'(?i)QUESTÃO\s+\d+', corpo_bruto))
-        if num_total_q == 0: num_total_q = int(info.get('qtd_questoes', info.get('qtd', 5)))
+        if num_total_q == 0: num_total_q = int(helper_sosa_float(info.get('qtd_questoes', info.get('qtd', 5))))
         
         label_prova = "AVALIAÇÃO ADAPTADA" if is_pei_doc else "AVALIAÇÃO DE MATEMÁTICA (ENEM/SAEB)"
         if "SONDA" in titulo_doc.upper(): label_prova = "SONDA DE PROFICIÊNCIA"
 
-        # 🚨 CÁLCULO MATEMÁTICO PRECISO DO VALOR DA QUESTÃO (EX: 4.0 / 20 = 0.20 pts)
-        val_total_num = util.sosa_to_float(info.get('valor', 3.0))
+        # 🚨 CÁLCULO MATEMÁTICO PRECISO (IMUNE A ERROS)
+        val_total_num = helper_sosa_float(info.get('valor', 3.0))
         if val_total_num == 0: val_total_num = 3.0
 
-        num_q_num = int(info.get('qtd', info.get('qtd_questoes', num_total_q)))
+        num_q_num = int(helper_sosa_float(info.get('qtd', info.get('qtd_questoes', num_total_q))))
         if num_q_num == 0: num_q_num = num_total_q or 10
 
         val_q_calc = val_total_num / num_q_num if num_q_num > 0 else 0.3
