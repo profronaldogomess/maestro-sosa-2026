@@ -2132,7 +2132,7 @@ elif menu == "🧪 Criador de Aulas":
 
 
 # ==============================================================================
-# MÓDULO: CENTRAL DE AVALIAÇÕES - V2026.MASTER (MINERADOR ANTI-LIXO & PRÁTICA REAL)
+# MÓDULO: CENTRAL DE AVALIAÇÕES - V2026.MASTER (PLAN-TAG ENGINE & PEI ON-DEMAND)
 # ==============================================================================
 elif menu == "📝 Central de Avaliações":
     st.title("📝 Central de Avaliações (Padrão ENEM / SAEB)")
@@ -2177,7 +2177,7 @@ elif menu == "📝 Central de Avaliações":
     tab_forja, tab_acervo_av, tab_recomposicao = st.tabs(["📝 Linha de Montagem de Provas", "📖 Acervo de Provas & Perícia TRI", "🔄 Recomposição & Cadernos de Revisão"])
 
     # ==============================================================================
-    # ABA 1: LINHA DE MONTAGEM DE PROVAS (MINERADOR ANTI-LIXO ADMINISTRATIVO)
+    # ABA 1: LINHA DE MONTAGEM DE PROVAS (ETAPAS + PINÇAMENTO + PEI ON-DEMAND)
     # ==============================================================================
     with tab_forja:
         if 1 < f['fase'] <= 5:
@@ -2275,11 +2275,11 @@ elif menu == "📝 Central de Avaliações":
                             height=80, key=f"recorte_provas_input_{v}"
                         )
 
-                    # 🚨 MINERADOR SOBERANO COM BLACKLIST ANTI-LIXO ADMINISTRATIVO
+                    # 🚨 MINERADOR SOSA PLAN-TAG ENGINE V2026 (LEITURA EXCLUSIVA DE TAGS DO DB_PLANOS + BLACKLIST)
                     topicos_reais_minerados = []
                     TERMOS_PROIBIDOS_ASSUNTO = r"(?i)(?:REVIS[AÃ]O|PROVA|TESTE|SONDA|DOSSI[EÊ]|RAIO-X|AVALIA[CÇ][AÃ]O|APLICA[CÇ][AÃ]O|2[ªA]\s*CHAMADA|RECUPERA[CÇ][AÃ]O|GABARITO|AULA\s*\d+|SEMANA\s*\d+)"
 
-                    # 1. Prioridade Máxima: O que o professor digitou no Pinçamento da Prática Real
+                    # 1. Prioridade Absoluta: Anotações da Lousa do Professor no Pinçamento
                     if pincamento_pratica.strip():
                         partes_lousa = re.split(r'[;\n•,]', pincamento_pratica)
                         for p_l in partes_lousa:
@@ -2287,25 +2287,7 @@ elif menu == "📝 Central de Avaliações":
                             if len(p_l_clean) > 3 and not re.search(TERMOS_PROIBIDOS_ASSUNTO, p_l_clean):
                                 topicos_reais_minerados.append(p_l_clean)
 
-                    # 2. Aulas Selecionadas do Acervo (Apenas se for conteúdo real)
-                    if mats_selecionados:
-                        for m_nome in mats_selecionados:
-                            m_rows = df_aulas[df_aulas['TIPO_MATERIAL'] == m_nome]
-                            if not m_rows.empty:
-                                txt_aula_bruto = str(m_rows.iloc[0]['CONTEUDO'])
-                                c_espec_a = (
-                                    ai.extrair_tag(txt_aula_bruto, "CONTEUDOS_ESPECIFICOS") or 
-                                    ai.extrair_tag(txt_aula_bruto, "OBJETO_CONHECIMENTO") or
-                                    ai.extrair_tag(txt_aula_bruto, "PROFESSOR")
-                                )
-                                if c_espec_a:
-                                    partes_a = re.split(r'[;\n•,]', c_espec_a)
-                                    for p_a in partes_a:
-                                        p_a_clean = re.sub(r'\[cite:.*?\]|[*#\[\]]', '', p_a).strip()
-                                        if len(p_a_clean) > 3 and not re.search(TERMOS_PROIBIDOS_ASSUNTO, p_a_clean):
-                                            topicos_reais_minerados.append(p_a_clean)
-
-                    # 3. Planos de Ensino do Trimestre (DB_PLANOS.csv)
+                    # 2. Leitura Direta e Exclusiva das Tags do DB_PLANOS.csv
                     if not df_planos.empty:
                         planos_trim = df_planos[
                             (df_planos['ANO'].astype(str).str.contains(str(ano_av))) & 
@@ -2319,13 +2301,13 @@ elif menu == "📝 Central de Avaliações":
                                 ai.extrair_tag(txt_p, "HABILIDADE_BNCC")
                             )
                             if c_espec:
-                                partes = re.split(r'[;\n•,]', c_espec)
+                                partes = re.split(r'[;\n•]', c_espec)
                                 for p in partes:
                                     p_clean = re.sub(r'\[cite:.*?\]|[*#\[\]]', '', p).strip()
                                     if len(p_clean) > 3 and not re.search(TERMOS_PROIBIDOS_ASSUNTO, p_clean):
                                         topicos_reais_minerados.append(p_clean)
 
-                    # 4. Complemento na Matriz Curricular (DB_CURRICULO.csv)
+                    # 3. Leitura Complementar do DB_CURRICULO.csv
                     if len(topicos_reais_minerados) < qtd_q and not df_curriculo.empty:
                         col_ano_c = next((c for c in df_curriculo.columns if 'ANO' in c.upper()), None)
                         col_trim_c = next((c for c in df_curriculo.columns if trim_filtro.upper() in c.upper()), None)
@@ -2341,7 +2323,7 @@ elif menu == "📝 Central de Avaliações":
                                         if len(p_c_clean) > 3 and not re.search(TERMOS_PROIBIDOS_ASSUNTO, p_c_clean):
                                             topicos_reais_minerados.append(p_c_clean)
 
-                    # Limpeza de duplicatas mantendo ordem
+                    # Limpeza de duplicatas mantendo a ordem de prioridade
                     topicos_finais_ordenados = []
                     for t_item in topicos_reais_minerados:
                         if t_item not in topicos_finais_ordenados and not re.search(TERMOS_PROIBIDOS_ASSUNTO, t_item):
@@ -2759,7 +2741,7 @@ elif menu == "📝 Central de Avaliações":
             st.markdown("### 🔄 Processo Concluído com Sucesso!")
             st.info("💡 Para gerar o Caderno de Recomposição/Revisão para os alunos, acesse a **Aba 3 (Recomposição & Cadernos de Revisão)** no topo da página quando achar necessário.")
 
-            if st.button("🎉 Concluir e Voltar ao Início", type="primary", use_container_width=True, key=f"btn_fin_f5_{v}"):
+            if st.button("🎉 Concluir e Voltar ao Início", use_container_width=True, key=f"btn_fin_f5_{v}"):
                 reset_forja()
 
     # ==============================================================================
