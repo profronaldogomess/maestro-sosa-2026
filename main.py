@@ -2132,7 +2132,7 @@ elif menu == "🧪 Criador de Aulas":
 
 
 # ==============================================================================
-# MÓDULO: CENTRAL DE AVALIAÇÕES - V2026.MASTER (DESCRITIVO DE ALTA PRECISÃO)
+# MÓDULO: CENTRAL DE AVALIAÇÕES - V2026.MASTER (ASSUNTOS REAIS & EXTRAÇÃO)
 # ==============================================================================
 elif menu == "📝 Central de Avaliações":
     st.title("📝 Central de Avaliações (Padrão ENEM / SAEB)")
@@ -2177,7 +2177,7 @@ elif menu == "📝 Central de Avaliações":
     tab_forja, tab_acervo_av = st.tabs(["Linha de Montagem de Provas", "Acervo de Provas & Perícia"])
 
     # ==============================================================================
-    # ABA 1: LINHA DE MONTAGEM DE PROVAS (ETAPAS + MÁXIMO DETALHAMENTO)
+    # ABA 1: LINHA DE MONTAGEM DE PROVAS (ETAPAS + ASSUNTOS ESPECÍFICOS)
     # ==============================================================================
     with tab_forja:
         if 1 < f['fase'] <= 5:
@@ -2187,7 +2187,7 @@ elif menu == "📝 Central de Avaliações":
             st.markdown("---")
 
         # --------------------------------------------------------------------------
-        # FASE 1: BRIEFING, PARÂMETROS E FONTE DE DADOS
+        # FASE 1: BRIEFING, PARÂMETROS E EXTRAÇÃO REAL DE ASSUNTOS
         # --------------------------------------------------------------------------
         if f['fase'] == 1:
             st.markdown("### 📋 Fase 1: Briefing, Matriz & Fontes Didáticas")
@@ -2207,7 +2207,7 @@ elif menu == "📝 Central de Avaliações":
                     ano_av = c1.selectbox("Série Alvo:", [6, 7, 8, 9], key=f"ano_av_sel_{v}")
                     trim_filtro = c2.selectbox("Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"trim_av_sel_{v}")
                     v_total = c3.number_input("Valor Total da Prova (pts):", 0.0, 10.0, 4.0 if "Inédita" in modo_arq else 10.0, step=0.5, key=f"v_tot_input_{v}")
-                    qtd_q = c4.number_input("Quantidade de Questões:", 1, 20, 10, key=f"qtd_q_input_{v}")
+                    qtd_q = c4.number_input("Quantidade de Questões:", 1, 30, 10, key=f"qtd_q_input_{v}")
 
                     perfil_rigor = st.selectbox(
                         "Rigor Cognitivo & Equilíbrio TRI:", 
@@ -2267,6 +2267,24 @@ elif menu == "📝 Central de Avaliações":
                             height=100, key=f"recorte_provas_input_{v}"
                         )
 
+                    # 🚨 MINERAÇÃO AUTOMÁTICA DE ASSUNTOS REAIS DOS MATERIAIS SELECIONADOS
+                    topicos_reais_minerados = []
+                    
+                    if mats_selecionados:
+                        for m_nome in mats_selecionados:
+                            topicos_reais_minerados.append(f"Conteúdo da Aula: {m_nome}")
+                    
+                    if txt_av_ex_ext or txt_av_teo_ext:
+                        # Extrai títulos de capítulos ou linhas marcantes das páginas lidas do livro
+                        linhas_livro = (txt_av_ex_ext + "\n" + txt_av_teo_ext).split("\n")
+                        for l_l in linhas_livro:
+                            l_str = l_l.strip()
+                            if any(w in l_str.upper() for w in ["UNIDADE", "CAPÍTULO", "CAPITULO", "TEMA", "CONCEITO", "FRAÇÃO", "DECIMAL", "OPERAÇÕES", "PORCENTAGEM", "GEOMETRIA"]) and len(l_str) < 80:
+                                topicos_reais_minerados.append(re.sub(r'[*#]', '', l_str).strip())
+                    
+                    # Elimina duplicatas mantendo ordem
+                    topicos_reais_minerados = list(dict.fromkeys(topicos_reais_minerados))
+
                     # Mesa de Inspeção de Conteúdo Lido
                     if txt_av_teo_ext or txt_av_ex_ext or recorte_provas_livro.strip():
                         with st.expander("👁️ MESA DE INSPEÇÃO DA PROVA (PRÉVIA DO CONTEÚDO EXTRAÍDO)", expanded=True):
@@ -2293,11 +2311,21 @@ elif menu == "📝 Central de Avaliações":
                     else:
                         gabarito_mestre = util.gerar_gabarito_balanceado(qtd_q)
                         mapa_inicial = []
+                        
+                        # Lista de assuntos reais extraídos do livro/acervo ou assuntos padrão do ano
+                        assuntos_base = topicos_reais_minerados if topicos_reais_minerados else [
+                            f"Conteúdo Curricular {ano_av}º Ano - Item {i+1}" for i in range(qtd_q)
+                        ]
+                        
                         for i in range(qtd_q):
+                            assunto_item = assuntos_base[i % len(assuntos_base)]
                             mapa_inicial.append({
-                                'q': i + 1, 'tema': f"Tópico da Matriz/Livro (Item {i+1})",
+                                'q': i + 1, 
+                                'tema': assunto_item,
                                 'dificuldade': "Fácil" if i < (qtd_q*0.3) else ("Difícil" if i >= (qtd_q*0.8) else "Média"),
-                                'gabarito': gabarito_mestre[i], 'status': 'pendente', 'dados': {} 
+                                'gabarito': gabarito_mestre[i], 
+                                'status': 'pendente', 
+                                'dados': {} 
                             })
                         f['mapa'] = mapa_inicial
                         f['info'] = {'ano': f"{ano_av}º", 'trimestre': trim_filtro, 'valor': v_total, 'qtd': qtd_q, 'tipo_prova': "AVALIAÇÃO", 'rigor': perfil_rigor}
@@ -2373,7 +2401,7 @@ elif menu == "📝 Central de Avaliações":
                     with st.spinner("Forjando itens no padrão ENEM/SAEB com contexto real e distratores TRI..."):
                         prompt_lote = f"SÉRIE: {f['info']['ano']}\nVALOR TOTAL DA PROVA: {f['info']['valor']}\n\n"
                         for item in pendentes:
-                            prompt_lote += f"QUESTÃO {item['q']}:\n- COMPLEXIDADE: {item['dificuldade']}\n- GABARITO EXIGIDO: Letra {item['gabarito']}\n\n"
+                            prompt_lote += f"QUESTÃO {item['q']}:\n- TEMA ESPECÍFICO: {item['tema']}\n- COMPLEXIDADE: {item['dificuldade']}\n- GABARITO EXIGIDO: Letra {item['gabarito']}\n\n"
                         prompt_lote += f"CONTEXTO DO LIVRO DIDÁTICO E SALA DE AULA:\n{f.get('contexto_base', '')}\n"
                         
                         res_json = ai.gerar_ia_json("FORJA_LOTE_JSON", prompt_lote)
@@ -2384,6 +2412,9 @@ elif menu == "📝 Central de Avaliações":
                                 q_num = int(q_data.get("q", 0))
                                 for item in f['mapa']:
                                     if item['q'] == q_num:
+                                        descritor_real = q_data.get('habilidade', 'EF06MA01')
+                                        # Atualiza o assunto do card com a Habilidade/Descritor real!
+                                        item['tema'] = descritor_real if descritor_real else item['tema']
                                         item['dados'] = {
                                             'ENUNCIADO': q_data.get('enunciado', ''),
                                             'ALT_A': q_data.get('alt_a', ''),
@@ -2391,7 +2422,7 @@ elif menu == "📝 Central de Avaliações":
                                             'ALT_C': q_data.get('alt_c', ''),
                                             'ALT_D': q_data.get('alt_d', ''),
                                             'ALT_E': q_data.get('alt_e', ''),
-                                            'HABILIDADE': q_data.get('habilidade', 'EF06MA01'),
+                                            'HABILIDADE': descritor_real,
                                             'JUSTIFICATIVA': q_data.get('justificativa', ''),
                                             'DISTRATORES': q_data.get('distratores', ''),
                                             'GABARITO': item['gabarito']
@@ -2402,7 +2433,7 @@ elif menu == "📝 Central de Avaliações":
             st.markdown("---")
             todas_aprovadas = True
 
-            # EXIBIÇÃO ULTRA-DETALHADA DE CADA ITEM REGULAR
+            # EXIBIÇÃO ULTRA-DETALHADA DE CADA ITEM REGULAR (SEM COMPRESSÃO)
             for i, item in enumerate(f['mapa']):
                 label_status = "✅ Aprovado" if item['status'] == 'aprovado' else ("🔍 Em Revisão" if item['status'] == 'revisao' else "⏳ Pendente")
                 
@@ -2414,18 +2445,21 @@ elif menu == "📝 Central de Avaliações":
                     if item['status'] == 'pendente':
                         todas_aprovadas = False
                         c_t1, c_t2 = st.columns([3, 1])
-                        tema_q = c_t1.text_input("Assunto / Contexto do Item:", value=item['tema'], key=f"t_{i}_{v}")
+                        tema_q = c_t1.text_input("Assunto / Contexto Específico do Item:", value=item['tema'], key=f"t_{i}_{v}")
+                        item['tema'] = tema_q # Salva a edição do assunto
                         dif_q = c_t2.selectbox("Complexidade TRI:", ["Fácil", "Média", "Difícil"], index=["Fácil", "Média", "Difícil"].index(item['dificuldade']), key=f"d_{i}_{v}")
                         
                         if st.button(f"Forjar Item {item['q']} Individualmente", key=f"btn_gen_ind_{i}_{v}", use_container_width=True):
                             with st.spinner("Desenhando item regular..."):
-                                prompt = f"SÉRIE: {f['info']['ano']}\nTEMA: {tema_q}. DIFICULDADE: {dif_q}. GABARITO: {item['gabarito']}.\nCONTEXTO:\n{f.get('contexto_base', '')}"
+                                prompt = f"SÉRIE: {f['info']['ano']}\nTEMA ESPECÍFICO: {tema_q}. DIFICULDADE: {dif_q}. GABARITO: {item['gabarito']}.\nCONTEXTO:\n{f.get('contexto_base', '')}"
                                 res_item = ai.gerar_ia("FORJA_ITEM_REGULAR", prompt)
                                 ext = {tag: ai.extrair_tag(res_item, tag) for tag in ['ENUNCIADO', 'ALT_A', 'ALT_B', 'ALT_C', 'ALT_D', 'ALT_E', 'HABILIDADE', 'JUSTIFICATIVA', 'DISTRATORES']}
                                 
+                                descritor_ind = ext['HABILIDADE'] if ext['HABILIDADE'] else tema_q
+                                item['tema'] = descritor_ind
                                 item['dados'] = {
                                     'ENUNCIADO': ext['ENUNCIADO'], 'ALT_A': ext['ALT_A'], 'ALT_B': ext['ALT_B'], 'ALT_C': ext['ALT_C'],
-                                    'ALT_D': ext['ALT_D'], 'ALT_E': ext['ALT_E'], 'HABILIDADE': ext['HABILIDADE'], 'JUSTIFICATIVA': ext['JUSTIFICATIVA'],
+                                    'ALT_D': ext['ALT_D'], 'ALT_E': ext['ALT_E'], 'HABILIDADE': descritor_ind, 'JUSTIFICATIVA': ext['JUSTIFICATIVA'],
                                     'DISTRATORES': ext['DISTRATORES'], 'GABARITO': item['gabarito']
                                 }
                                 item['status'] = 'revisao'
@@ -2435,9 +2469,10 @@ elif menu == "📝 Central de Avaliações":
                         if item['status'] == 'revisao': todas_aprovadas = False
                         d = item['dados']
 
-                        # Renderização Visual
+                        # Renderização Visual Completa
                         if modo_leitura_forja:
                             with st.container(border=True):
+                                st.markdown(f"**Assunto:** `{item['tema']}`")
                                 st.markdown(preparar_para_leitura(f"**QUESTÃO {item['q']:02d} -** {d['ENUNCIADO']}"))
                                 
                                 mark_a = "✅ " if d['GABARITO'] == 'A' else ""
@@ -2453,7 +2488,7 @@ elif menu == "📝 Central de Avaliações":
                                 col_alt_b.markdown(f"**(D)** {mark_d}{preparar_para_leitura(d['ALT_D'])}")
                                 if d.get('ALT_E'): st.markdown(f"**(E)** {mark_e}{preparar_para_leitura(d['ALT_E'])}")
 
-                        # 🔬 DETALHAMENTO DA PERÍCIA TRI E DISTRATORES
+                        # 🔬 DETALHAMENTO DA PERÍCIA TRI E DISTRATORES (EXPANDER EXPANDIDO)
                         with st.expander("🔬 Ver Perícia TRI e Análise Científica de Distratores", expanded=False):
                             st.caption(f"🆔 **Descritor SAEB/BNCC:** {d.get('HABILIDADE', 'Não especificado')}")
                             st.write(f"🎯 **Gabarito Justificado:** {d.get('JUSTIFICATIVA', 'Não especificada')}")
@@ -2461,6 +2496,7 @@ elif menu == "📝 Central de Avaliações":
 
                         # ✏️ EDIÇÃO MANUAL COMPLETA DOS CAMPOS DO ITEM
                         with st.expander("✏️ Editar Enunciado, Alternativas, Descritor e Gabarito", expanded=False):
+                            item['tema'] = st.text_input("Assunto do Card:", value=item['tema'], key=f"ed_tema_inp_{i}_{v}")
                             d['ENUNCIADO'] = st.text_area("Enunciado:", value=d['ENUNCIADO'], height=100, key=f"ed_en_{i}_{v}")
                             
                             c_a1, c_a2 = st.columns(2)
@@ -2489,7 +2525,7 @@ elif menu == "📝 Central de Avaliações":
 
                         if col_b2.button(f"🔄 Regerar Item {item['q']} com IA", key=f"btn_ref_{i}_{v}", use_container_width=True):
                             with st.spinner("Reestruturando item..."):
-                                prompt = f"SÉRIE: {f['info']['ano']}\nTEMA: {item['tema']}. GABARITO: {item['gabarito']}.\nAJUSTE SOLICITADO: {inst_ref}\nENUNCIADO ANTERIOR:\n{d['ENUNCIADO']}"
+                                prompt = f"SÉRIE: {f['info']['ano']}\nTEMA ESPECÍFICO: {item['tema']}. GABARITO: {item['gabarito']}.\nAJUSTE SOLICITADO: {inst_ref}\nENUNCIADO ANTERIOR:\n{d['ENUNCIADO']}"
                                 res_item = ai.gerar_ia("FORJA_ITEM_REGULAR", prompt)
                                 ext = {tag: ai.extrair_tag(res_item, tag) for tag in ['ENUNCIADO', 'ALT_A', 'ALT_B', 'ALT_C', 'ALT_D', 'ALT_E', 'HABILIDADE', 'JUSTIFICATIVA', 'DISTRATORES']}
                                 item['dados'] = {
@@ -2574,7 +2610,7 @@ elif menu == "📝 Central de Avaliações":
             nome_arq = st.text_input("Identificador Técnico no Cofre Digital:", value=nome_sugerido, key=f"nome_arq_f4_{v}")
 
             if st.button("💾 FINALIZAR E SINCRONIZAR TUDO NO GOOGLE DRIVE", type="primary", use_container_width=True, key=f"btn_fase4_sync_{v}"):
-                with st.status("Gerando Documentos Word e Envia para o Drive...", expanded=True) as status:
+                with st.status("Gerando Documentos Word e Enviando para o Drive...", expanded=True) as status:
                     txt_regular = f"[VALOR: {f['info']['valor']}]\n\n[QUESTOES]\n"
                     txt_gabarito = "[GABARITO_TEXTO]\n"
                     txt_grade = "[GRADE_DE_CORRECAO]\n"
