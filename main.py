@@ -2132,7 +2132,7 @@ elif menu == "🧪 Criador de Aulas":
 
 
 # ==============================================================================
-# MÓDULO: CENTRAL DE AVALIAÇÕES - V2026.MASTER (ASSUNTOS REAIS & EXTRAÇÃO)
+# MÓDULO: CENTRAL DE AVALIAÇÕES - V2026.MASTER (MINERAÇÃO DE ASSUNTOS REAIS)
 # ==============================================================================
 elif menu == "📝 Central de Avaliações":
     st.title("📝 Central de Avaliações (Padrão ENEM / SAEB)")
@@ -2177,7 +2177,7 @@ elif menu == "📝 Central de Avaliações":
     tab_forja, tab_acervo_av = st.tabs(["Linha de Montagem de Provas", "Acervo de Provas & Perícia"])
 
     # ==============================================================================
-    # ABA 1: LINHA DE MONTAGEM DE PROVAS (ETAPAS + ASSUNTOS ESPECÍFICOS)
+    # ABA 1: LINHA DE MONTAGEM DE PROVAS (MINERAÇÃO DE ASSUNTOS REAIS)
     # ==============================================================================
     with tab_forja:
         if 1 < f['fase'] <= 5:
@@ -2187,13 +2187,13 @@ elif menu == "📝 Central de Avaliações":
             st.markdown("---")
 
         # --------------------------------------------------------------------------
-        # FASE 1: BRIEFING, PARÂMETROS E EXTRAÇÃO REAL DE ASSUNTOS
+        # FASE 1: BRIEFING, PARÂMETROS E EXTRAÇÃO DE ASSUNTOS REAIS
         # --------------------------------------------------------------------------
         if f['fase'] == 1:
             st.markdown("### 📋 Fase 1: Briefing, Matriz & Fontes Didáticas")
             
             modo_arq = st.pills(
-                "Selecione o Abordagem do Instrumento:", 
+                "Selecione a Abordagem do Instrumento:", 
                 ["Nova Avaliação (Inédita ENEM/SAEB)", "Sonda Diagnóstica", "Variante Anti-Fraude (Clonagem)", "Recuperação Cirúrgica (Data-Driven)"], 
                 default="Nova Avaliação (Inédita ENEM/SAEB)",
                 key=f"pills_modo_av_{v}"
@@ -2217,7 +2217,7 @@ elif menu == "📝 Central de Avaliações":
 
                 with st.container(border=True):
                     st.markdown("#### 2. Seleção Híbrida de Fontes para Ancoragem Direta")
-                    st.caption("ℹ️ Combine o Acervo de Aulas, o PDF do Livro Didático e Exercícios Autorais para gerar Questões Espelho fiéis à sala de aula.")
+                    st.caption("ℹ️ Combine o Acervo de Aulas, o PDF do Livro Didático e Exercícios Autorais. A IA extrairá os conteúdos matemáticos reais ministrados em sala.")
                     
                     fontes_ativas = st.pills(
                         "Fontes de Dados Selecionadas:", 
@@ -2267,22 +2267,45 @@ elif menu == "📝 Central de Avaliações":
                             height=100, key=f"recorte_provas_input_{v}"
                         )
 
-                    # 🚨 MINERAÇÃO AUTOMÁTICA DE ASSUNTOS REAIS DOS MATERIAIS SELECIONADOS
+                    # 🚨 MINERADOR PROFUNDO DE ASSUNTOS REAIS (ELIMINA O NOME DO ARQUIVO/SEMANA)
                     topicos_reais_minerados = []
                     
                     if mats_selecionados:
                         for m_nome in mats_selecionados:
-                            topicos_reais_minerados.append(f"Conteúdo da Aula: {m_nome}")
+                            m_rows = df_aulas[df_aulas['TIPO_MATERIAL'] == m_nome]
+                            if not m_rows.empty:
+                                txt_aula_bruto = str(m_rows.iloc[0]['CONTEUDO'])
+                                
+                                # Extrai de tags formais do plano/aula
+                                c_espec = (
+                                    ai.extrair_tag(txt_aula_bruto, "CONTEUDOS_ESPECIFICOS") or 
+                                    ai.extrair_tag(txt_aula_bruto, "OBJETO_CONHECIMENTO") or 
+                                    ai.extrair_tag(txt_aula_bruto, "HABILIDADE_BNCC")
+                                )
+                                
+                                # Fallback para rótulos como **Conteúdos:** ou **Tema:**
+                                if not c_espec:
+                                    m_cont = re.search(r"(?i)\*\*(?:Conteúdos|Conteúdo|Tema|Habilidade)\*\*[:\s]*(.*?)(?=\n\*\*|\n\n|$)", txt_aula_bruto, re.DOTALL)
+                                    if m_cont:
+                                        c_espec = m_cont.group(1).strip()
+                                
+                                if c_espec:
+                                    partes = re.split(r'[;\n•]', c_espec)
+                                    for p in partes:
+                                        p_clean = re.sub(r'[*#\[\]]', '', p).strip()
+                                        # Filtra para evitar nomes de arquivo genéricos
+                                        if len(p_clean) > 3 and not re.search(r"(?i)^(?:6º|7º|8º|9º|Aula|Semana)", p_clean):
+                                            topicos_reais_minerados.append(p_clean)
                     
                     if txt_av_ex_ext or txt_av_teo_ext:
-                        # Extrai títulos de capítulos ou linhas marcantes das páginas lidas do livro
                         linhas_livro = (txt_av_ex_ext + "\n" + txt_av_teo_ext).split("\n")
                         for l_l in linhas_livro:
-                            l_str = l_l.strip()
-                            if any(w in l_str.upper() for w in ["UNIDADE", "CAPÍTULO", "CAPITULO", "TEMA", "CONCEITO", "FRAÇÃO", "DECIMAL", "OPERAÇÕES", "PORCENTAGEM", "GEOMETRIA"]) and len(l_str) < 80:
-                                topicos_reais_minerados.append(re.sub(r'[*#]', '', l_str).strip())
+                            l_str = re.sub(r'[*#\[\]]', '', l_l).strip()
+                            if any(w in l_str.upper() for w in ["CAPÍTULO", "TEMA", "FRAÇÃO", "DECIMAL", "OPERAÇÕES", "PORCENTAGEM", "GEOMETRIA", "PERÍMETRO", "ÁREA", "DIVISIBILIDADE"]) and len(l_str) < 80:
+                                if not re.search(r"(?i)^(?:PÁGINA|PAGE|---)", l_str):
+                                    topicos_reais_minerados.append(l_str)
                     
-                    # Elimina duplicatas mantendo ordem
+                    # Limpeza de duplicatas
                     topicos_reais_minerados = list(dict.fromkeys(topicos_reais_minerados))
 
                     # Mesa de Inspeção de Conteúdo Lido
@@ -2312,9 +2335,9 @@ elif menu == "📝 Central de Avaliações":
                         gabarito_mestre = util.gerar_gabarito_balanceado(qtd_q)
                         mapa_inicial = []
                         
-                        # Lista de assuntos reais extraídos do livro/acervo ou assuntos padrão do ano
+                        # Atribuição de assuntos matemáticos reais extraídos
                         assuntos_base = topicos_reais_minerados if topicos_reais_minerados else [
-                            f"Conteúdo Curricular {ano_av}º Ano - Item {i+1}" for i in range(qtd_q)
+                            f"Conteúdo Curricular de Matemática - Item {i+1}" for i in range(qtd_q)
                         ]
                         
                         for i in range(qtd_q):
@@ -2367,7 +2390,7 @@ elif menu == "📝 Central de Avaliações":
                         st.balloons(); time.sleep(1); st.rerun()
 
         # --------------------------------------------------------------------------
-        # FASE 2: FORJA, REVISÃO DETALHADA E PERÍCIA TRI (BLINDADA CONTRA ALUCINAÇÃO)
+        # FASE 2: FORJA, REVISÃO DETALHADA E PERÍCIA TRI DO CADERNO REGULAR
         # --------------------------------------------------------------------------
         elif f['fase'] == 2:
             st.markdown("### 🔬 Fase 2: Forja, Perícia & Lapidação dos Itens Regulares")
@@ -2398,18 +2421,18 @@ elif menu == "📝 Central de Avaliações":
 
             if pendentes:
                 if st.button(f"🚀 GERAR LOTE DE {len(pendentes)} QUESTÕES REGULARES (ZERO-ALUCINAÇÃO)", type="primary", use_container_width=True, key=f"btn_lote_av_{v}"):
-                    with st.spinner("Forjando itens ancorados estritamente no seu contexto..."):
+                    with st.spinner("Forjando itens ancorados estritamente nas aulas/livro selecionados..."):
                         prompt_lote = (
                             f"SÉRIE: {f['info']['ano']}\n"
                             f"VALOR TOTAL DA PROVA: {f['info']['valor']}\n\n"
-                            f"🚨 REGRAS INQUEBRÁVEIS DE CONTEXTO E REALIDADE:\n"
-                            f"- É PROIBIDO inventar contextos de ficção, jogos, SpaceX ou paisagens genéricas fora do fornecido.\n"
-                            f"- Use como base EXCLUSIVA o texto do livro/aulas e/ou a realidade local de Itabuna/BA abaixo.\n\n"
+                            f"🚨 REGRAS INQUEBRÁVEIS DE ANCORAGEM:\n"
+                            f"- É PROIBIDO inventar assuntos fora das aulas/livro fornecidos.\n"
+                            f"- Crie questões espelho e itens reais cobrindo os tópicos exatos indicados em cada item.\n\n"
                         )
                         for item in pendentes:
-                            prompt_lote += f"QUESTÃO {item['q']}:\n- TEMA ESPECÍFICO EXIGIDO: {item['tema']}\n- COMPLEXIDADE: {item['dificuldade']}\n- GABARITO EXIGIDO: Letra {item['gabarito']}\n\n"
+                            prompt_lote += f"QUESTÃO {item['q']}:\n- ASSUNTO/TEMA EXIGIDO: {item['tema']}\n- COMPLEXIDADE: {item['dificuldade']}\n- GABARITO EXIGIDO: Letra {item['gabarito']}\n\n"
                         
-                        prompt_lote += f"--- TEXTO BASE DO LIVRO / AULAS DO PROFESSOR (OBRIGATÓRIO USAR) ---\n{f.get('contexto_base', 'Usar a matriz do ' + str(f['info']['ano']) + ' Ano e o contexto de Itabuna/BA.')}\n"
+                        prompt_lote += f"--- CONTEXTO DAS AULAS E LIVRO (OBRIGATÓRIO USAR) ---\n{f.get('contexto_base', 'Usar a matriz do ' + str(f['info']['ano']) + ' Ano e o contexto de Itabuna/BA.')}\n"
                         
                         res_json = ai.gerar_ia_json("FORJA_LOTE_JSON", prompt_lote)
                         if "erro" in res_json:
@@ -2419,8 +2442,11 @@ elif menu == "📝 Central de Avaliações":
                                 q_num = int(q_data.get("q", 0))
                                 for item in f['mapa']:
                                     if item['q'] == q_num:
-                                        descritor_real = q_data.get('habilidade', 'EF06MA01')
-                                        item['tema'] = descritor_real if descritor_real else item['tema']
+                                        descritor_real = q_data.get('habilidade', '')
+                                        # Preserva o assunto ou concatena o descritor sem deixar em branco!
+                                        if descritor_real and len(descritor_real) > 2:
+                                            item['tema'] = f"{descritor_real} - {item['tema']}" if item['tema'] and "Conteúdo" not in item['tema'] else descritor_real
+                                        
                                         item['dados'] = {
                                             'ENUNCIADO': q_data.get('enunciado', ''),
                                             'ALT_A': q_data.get('alt_a', ''),
@@ -2428,7 +2454,7 @@ elif menu == "📝 Central de Avaliações":
                                             'ALT_C': q_data.get('alt_c', ''),
                                             'ALT_D': q_data.get('alt_d', ''),
                                             'ALT_E': q_data.get('alt_e', ''),
-                                            'HABILIDADE': descritor_real,
+                                            'HABILIDADE': descritor_real if descritor_real else item['tema'],
                                             'JUSTIFICATIVA': q_data.get('justificativa', ''),
                                             'DISTRATORES': q_data.get('distratores', ''),
                                             'GABARITO': item['gabarito']
@@ -2439,10 +2465,13 @@ elif menu == "📝 Central de Avaliações":
             st.markdown("---")
             todas_aprovadas = True
 
-            # EXIBIÇÃO ULTRA-DETALHADA DE CADA ITEM REGULAR (SEM COMPRESSÃO)
+            # EXIBIÇÃO ULTRA-DETALHADA DE CADA ITEM REGULAR (TRAVA ANTI-VAZIO DE ASSUNTO)
             for i, item in enumerate(f['mapa']):
                 label_status = "✅ Aprovado" if item['status'] == 'aprovado' else ("🔍 Em Revisão" if item['status'] == 'revisao' else "⏳ Pendente")
                 
+                # Trava de segurança para garantir que o assunto nunca fique em branco
+                assunto_exibicao = item['tema'] if item['tema'] and item['tema'].strip() != "**" else f"Tópico Curricular - Item {item['q']:02d}"
+
                 with st.container(border=True):
                     c_card_head1, c_card_head2 = st.columns([3, 1])
                     c_card_head1.markdown(f"**📌 ITEM {item['q']:02d} | Nível: {item['dificuldade']}**")
@@ -2451,13 +2480,13 @@ elif menu == "📝 Central de Avaliações":
                     if item['status'] == 'pendente':
                         todas_aprovadas = False
                         c_t1, c_t2 = st.columns([3, 1])
-                        tema_q = c_t1.text_input("Assunto / Contexto Específico do Item:", value=item['tema'], key=f"t_{i}_{v}")
+                        tema_q = c_t1.text_input("Assunto / Contexto Específico do Item:", value=assunto_exibicao, key=f"t_{i}_{v}")
                         item['tema'] = tema_q
                         dif_q = c_t2.selectbox("Complexidade TRI:", ["Fácil", "Média", "Difícil"], index=["Fácil", "Média", "Difícil"].index(item['dificuldade']), key=f"d_{i}_{v}")
                         
                         if st.button(f"Forjar Item {item['q']} Individualmente", key=f"btn_gen_ind_{i}_{v}", use_container_width=True):
                             with st.spinner("Desenhando item ancorado no seu contexto..."):
-                                prompt = f"SÉRIE: {f['info']['ano']}\nTEMA ESPECÍFICO: {tema_q}. DIFICULDADE: {dif_q}. GABARITO: {item['gabarito']}.\n🚨 USE EXCLUSIVAMENTE ESTE CONTEXTO FORNECIDO (SEM ALUCINAR TEMAS FORA):\n{f.get('contexto_base', '')}"
+                                prompt = f"SÉRIE: {f['info']['ano']}\nTEMA ESPECÍFICO: {tema_q}. DIFICULDADE: {dif_q}. GABARITO: {item['gabarito']}.\n🚨 USE EXCLUSIVAMENTE O CONTEXTO FORNECIDO (SEM CRIAR TEMAS FORA):\n{f.get('contexto_base', '')}"
                                 res_item = ai.gerar_ia("FORJA_ITEM_REGULAR", prompt)
                                 ext = {tag: ai.extrair_tag(res_item, tag) for tag in ['ENUNCIADO', 'ALT_A', 'ALT_B', 'ALT_C', 'ALT_D', 'ALT_E', 'HABILIDADE', 'JUSTIFICATIVA', 'DISTRATORES']}
                                 
@@ -2475,10 +2504,10 @@ elif menu == "📝 Central de Avaliações":
                         if item['status'] == 'revisao': todas_aprovadas = False
                         d = item['dados']
 
-                        # Renderização Visual Completa
+                        # Renderização Visual Completa com Assunto em Destaque
                         if modo_leitura_forja:
                             with st.container(border=True):
-                                st.markdown(f"**Assunto:** `{item['tema']}`")
+                                st.markdown(f"**Assunto:** `{assunto_exibicao}`")
                                 st.markdown(preparar_para_leitura(f"**QUESTÃO {item['q']:02d} -** {d['ENUNCIADO']}"))
                                 
                                 mark_a = "✅ " if d['GABARITO'] == 'A' else ""
@@ -2496,13 +2525,13 @@ elif menu == "📝 Central de Avaliações":
 
                         # 🔬 DETALHAMENTO DA PERÍCIA TRI E DISTRATORES
                         with st.expander("🔬 Ver Perícia TRI e Análise Científica de Distratores", expanded=False):
-                            st.caption(f"🆔 **Descritor SAEB/BNCC:** {d.get('HABILIDADE', 'Não especificado')}")
+                            st.caption(f"🆔 **Descritor SAEB/BNCC:** {d.get('HABILIDADE', assunto_exibicao)}")
                             st.write(f"🎯 **Gabarito Justificado:** {d.get('JUSTIFICATIVA', 'Não especificada')}")
                             st.warning(f"🧠 **Distratores Científicos (Erros Mapeados):**\n{d.get('DISTRATORES', 'Não especificados')}")
 
                         # ✏️ EDIÇÃO MANUAL COMPLETA DOS CAMPOS DO ITEM
                         with st.expander("✏️ Editar Enunciado, Alternativas, Descritor e Gabarito", expanded=False):
-                            item['tema'] = st.text_input("Assunto do Card:", value=item['tema'], key=f"ed_tema_inp_{i}_{v}")
+                            item['tema'] = st.text_input("Assunto do Card:", value=assunto_exibicao, key=f"ed_tema_inp_{i}_{v}")
                             d['ENUNCIADO'] = st.text_area("Enunciado:", value=d['ENUNCIADO'], height=100, key=f"ed_en_{i}_{v}")
                             
                             c_a1, c_a2 = st.columns(2)
@@ -2513,8 +2542,8 @@ elif menu == "📝 Central de Avaliações":
                             d['ALT_E'] = c_a1.text_input("(E):", value=d['ALT_E'], key=f"ed_e_{i}_{v}")
                             
                             d['GABARITO'] = st.selectbox("Gabarito Oficial:", ["A", "B", "C", "D", "E"], index=["A", "B", "C", "D", "E"].index(d['GABARITO']), key=f"ed_gab_sel_{i}_{v}")
-                            d['HABILIDADE'] = st.text_input("Descritor SAEB/BNCC:", value=d['HABILIDADE'], key=f"ed_hab_{i}_{v}")
-                            d['JUSTIFICATIVA'] = st.text_area("Justificativa do Gabarito:", value=d['JUSTIFICATIVA'], height=60, key=f"ed_just_{i}_{v}")
+                            d['HABILIDADE'] = st.text_input("Descritor SAEB/BNCC:", value=d.get('HABILIDADE', assunto_exibicao), key=f"ed_hab_{i}_{v}")
+                            d['JUSTIFICATIVA'] = st.text_area("Justificativa do Gabarito:", value=d.get('JUSTIFICATIVA', ''), height=60, key=f"ed_just_{i}_{v}")
 
                         # 🤖 REFINADOR INDIVIDUAL POR ITEM VIA IA
                         inst_ref = st.text_input("Refinar esta questão com IA (Ex: 'Incorpore o cacau de Itabuna'):", key=f"inst_ref_{i}_{v}")
@@ -2531,7 +2560,7 @@ elif menu == "📝 Central de Avaliações":
 
                         if col_b2.button(f"🔄 Regerar Item {item['q']} com IA", key=f"btn_ref_{i}_{v}", use_container_width=True):
                             with st.spinner("Reestruturando item sem alucinação..."):
-                                prompt = f"SÉRIE: {f['info']['ano']}\nTEMA ESPECÍFICO: {item['tema']}. GABARITO: {item['gabarito']}.\nAJUSTE SOLICITADO: {inst_ref}\nENUNCIADO ANTERIOR:\n{d['ENUNCIADO']}\n\n🚨 CONTEXTO OBRIGATÓRIO:\n{f.get('contexto_base', '')}"
+                                prompt = f"SÉRIE: {f['info']['ano']}\nTEMA ESPECÍFICO: {assunto_exibicao}. GABARITO: {item['gabarito']}.\nAJUSTE SOLICITADO: {inst_ref}\nENUNCIADO ANTERIOR:\n{d['ENUNCIADO']}\n\n🚨 CONTEXTO OBRIGATÓRIO:\n{f.get('contexto_base', '')}"
                                 res_item = ai.gerar_ia("FORJA_ITEM_REGULAR", prompt)
                                 ext = {tag: ai.extrair_tag(res_item, tag) for tag in ['ENUNCIADO', 'ALT_A', 'ALT_B', 'ALT_C', 'ALT_D', 'ALT_E', 'HABILIDADE', 'JUSTIFICATIVA', 'DISTRATORES']}
                                 item['dados'] = {
@@ -2783,6 +2812,11 @@ elif menu == "📝 Central de Avaliações":
                             pei_txt = ai.extrair_tag(txt_f, "PEI_NIVEL_1") or ai.extrair_tag(txt_f, "NIVEL_1") or ai.extrair_tag(txt_f, "PEI")
                             if pei_txt:
                                 st.write(preparar_para_leitura(pei_txt))
+
+
+
+
+                                
 
 # ==============================================================================
 # MÓDULO: CENTRAL DE INTELIGÊNCIA DE RESULTADOS (CIR / SCANNER) - V2026.ULTIMATE
