@@ -2137,6 +2137,12 @@ elif menu == "🧪 Criador de Aulas":
                                 st.balloons(); time.sleep(1.5); st.rerun()
 
 
+
+
+
+
+
+
 # ==============================================================================
 # MÓDULO: CENTRAL DE AVALIAÇÕES - V2026.MASTER_ULTIMATE
 # (COM BOTÃO DE RE-EXPORTAÇÃO EM 1 CLIQUE NO ACERVO DA ABA 2)
@@ -2968,12 +2974,18 @@ elif menu == "📝 Central de Avaliações":
 
 
 
+
+
+
+
+
 # ==============================================================================
-# MÓDULO: CENTRAL DE INTELIGÊNCIA DE RESULTADOS (CIR / SCANNER) - V2026.ULTIMATE
+# MÓDULO: CENTRAL DE INTELIGÊNCIA DE RESULTADOS (CIR / SCANNER DE GABARITOS)
+# (V2026.ULTIMATE - PYLANCE FIX: SERIE_NUM_R DEFINIDO E MapeaDO 100%)
 # ==============================================================================
 elif menu == "📸 Scanner de Gabaritos":
     st.title("Central de Inteligência de Resultados (CIR)")
-    st.caption("Mesa de triagem de exames, leitor fiducial, regra do cálculo 50% (*), espelho split-screen e perícia de distratores TRI.")
+    st.caption("Mesa de triagem de exames, leitor fiducial, regra do cálculo 50% (*), espelho split-screen, perícia de distratores TRI e ponte de recomposição.")
     st.markdown("---")
 
     if "v_scan" not in st.session_state: 
@@ -3059,7 +3071,7 @@ elif menu == "📸 Scanner de Gabaritos":
     ])
 
     # ==============================================================================
-    # ABA 1: MESA DE CORREÇÃO (COM FIDUCIAL E REGRA DO CÁLCULO 50%)
+    # ABA 1: MESA DE CORREÇÃO
     # ==============================================================================
     with tab_correcao:
         modo_lancamento = st.pills(
@@ -3194,7 +3206,7 @@ elif menu == "📸 Scanner de Gabaritos":
                                         st.warning(f"⚠️ Perfil Clínico ({nome_a}): {nec_aluno}")
                                     else: st.caption("Status: 📝 PERFIL REGULAR / TÍPICO")
 
-                            # 🚨 LEI Nº 6: TRAVA ESTRITA DE PERFIL CLÍNICO NO CIR
+                            # LEI Nº 6: SELETOR MANUAL DE LENTES COM SUGESTÃO CLÍNICA
                             primeira_nec = perfis_dupla[0][2] if perfis_dupla else ""
                             if "(PEI N3)" in primeira_nec or "NÍVEL 3" in primeira_nec: idx_lente_default = 3
                             elif "(PEI N2)" in primeira_nec or "NÍVEL 2" in primeira_nec: idx_lente_default = 2
@@ -3206,7 +3218,7 @@ elif menu == "📸 Scanner de Gabaritos":
                             
                             with st.container(border=True):
                                 lente_corr = st.segmented_control(
-                                    "Lente de Correção:", 
+                                    "Lente de Correção (Controle Manual Total):", 
                                     opcoes_lentes,
                                     default=opcoes_lentes[idx_lente_default],
                                     key=f"lente_seg_{'_'.join([str(p[1]) for p in perfis_dupla])}_{v}"
@@ -3250,8 +3262,12 @@ elif menu == "📸 Scanner de Gabaritos":
                                 gab_alvo = ai.extrair_gab_universal_com_fallback(txt_ref, is_pei_grading, nivel_alvo_pei)
                                 if not gab_alvo:
                                     q_raw_check = ai.extrair_tag(txt_ref, "QUESTOES") or txt_ref
-                                    qtd_q_estimada = len(re.findall(r"(?i)QUEST[AÃ]O\s*0?\d+", q_raw_check)) or 10
+                                    qtd_q_estimada = len(re.findall(r"(?i)QUESTÃO\s*0?\d+", q_raw_check)) or 10
                                     gab_alvo = ["A"] * qtd_q_estimada
+
+                                # Extração da Perícia TRI de Distratores da Prova
+                                tag_grade_ref = "GRADE_DE_CORRECAO_PEI" if is_pei_grading else "GRADE_DE_CORRECAO"
+                                grade_raw_ref = ai.extrair_tag(txt_ref, tag_grade_ref) or ai.extrair_tag(txt_ref, "GRADE_DE_CORRECAO")
 
                                 with st.popover("⚙️ Conferir / Editar Gabarito Base da Prova", use_container_width=True):
                                     st.caption(f"Gabarito oficial ({len(gab_alvo)} questões | Valor Total: {v_total_at:.1f} pts).")
@@ -3278,17 +3294,21 @@ elif menu == "📸 Scanner de Gabaritos":
                                         st.rerun()
 
                                     if "Scanner" in str(modo_correcao):
-                                        img_file = st.file_uploader("Carregar foto do gabarito (Formatos .jpg, .png):", type=["jpg", "jpeg", "png"], key=f"up_{v}")
+                                        img_file = st.file_uploader("Carregar foto do gabarito (.jpg/.png):", type=["jpg", "jpeg", "png"], key=f"up_{v}")
                                         img_cam = st.camera_input("Capturar via Câmera:", key=f"cam_{v}")
                                         img = img_file if img_file else img_cam
 
                                         if img and "current_scan_res" not in st.session_state:
-                                            with st.spinner("Analisando marcações via Visão Computacional..."):
+                                            with st.spinner("Analisando marcações via Visão Computacional Gemini..."):
                                                 res_json = ai.analisar_gabarito_vision(img.getvalue())
                                                 st.session_state.current_scan_res = [res_json.get(f"{i+1:02d}", "?") for i in range(len(gab_alvo))]
                                                 st.session_state.current_scan_img = img.getvalue(); st.rerun()
 
                                         if "current_scan_res" in st.session_state:
+                                            # LENTE DE AUMENTO / ZOOM DEDICADO NA FOTO DO GABARITO
+                                            with st.popover("🔍 Lente Ampliadora de Zoom (Conferir Foto)"):
+                                                st.image(st.session_state.current_scan_img, caption="Gabarito Original Capturado", use_container_width=True)
+
                                             res_lidas = st.session_state.current_scan_res
                                             dados_pericia = []
                                             for i, lido in enumerate(res_lidas):
@@ -3302,7 +3322,7 @@ elif menu == "📸 Scanner de Gabaritos":
                                                     "Q": st.column_config.TextColumn(disabled=True), 
                                                     "Lido": st.column_config.SelectboxColumn("Ajustar", options=["A", "B", "C", "D", "E", "X", "?"], required=True), 
                                                     "Status": st.column_config.TextColumn(disabled=True),
-                                                    "🧮 Cálculo OK?": st.column_config.CheckboxColumn("Cálculo OK?", default=True, help="Desmarque caso o aluno não tenha apresentado o cálculo no papel (Aplica 50% de nota)")
+                                                    "🧮 Cálculo OK?": st.column_config.CheckboxColumn("Cálculo OK?", default=True, help="Desmarque caso o aluno não tenha apresentado o cálculo no papel (Aplica 50% da nota na questão)")
                                                 },
                                                 key=f"ed_turbo_{v}"
                                             )
@@ -3314,23 +3334,36 @@ elif menu == "📸 Scanner de Gabaritos":
                                             nota_f = 0.0
                                             acertos = 0
                                             respostas_com_flag = []
+                                            erros_detalhados_tri = []
                                             
-                                            # 🚨 APLICAÇÃO DA REGRA DO CÁLCULO OBRIGATÓRIO (MEIO CERTO - 50%)
+                                            # APLICAÇÃO DA REGRA DO CÁLCULO OBRIGATÓRIO (MEIO CERTO - 50%)
                                             for i, r in enumerate(novas_res):
                                                 has_calc = calculos_ok[i] if i < len(calculos_ok) else True
                                                 if i < len(gab_alvo) and r == gab_alvo[i]:
                                                     acertos += 1
                                                     nota_f += peso_q if has_calc else (peso_q / 2)
+                                                else:
+                                                    # Extração da perícia do distrator marcado para diagnóstico na tela
+                                                    q_idx_n = i + 1
+                                                    padrao_q_p = rf"(?si)QUEST[AÃ]O\s*0?{q_idx_n}\b.*?(?=\n\s*QUEST[AÃ]O|$)"
+                                                    m_p_item = re.search(padrao_q_p, grade_raw_ref)
+                                                    desc_dist = m_p_item.group(0).strip() if m_p_item else f"Erro no item Q{q_idx_n:02d}."
+                                                    erros_detalhados_tri.append(f"**Q{q_idx_n:02d} (Marcou {r} | Certo {gab_alvo[i]}):** {desc_dist}")
                                                 
                                                 flag_letra = f"{r}*" if (not has_calc and r in ["A","B","C","D","E"]) else r
                                                 respostas_com_flag.append(flag_letra)
                                                     
                                             st.metric("Nota Final Calculada (Proporcional)", f"{nota_f:.1f} / {v_total_at:.1f}", delta=f"{acertos}/{len(gab_alvo)} acertos (Dupla: {len(alunos_alvo)} alunos)")
                                             
+                                            # DIAGNÓSTICO TRI DE ERROS EM TEMPO REAL NA MESA
+                                            if erros_detalhados_tri:
+                                                with st.expander("🧠 Diagnóstico TRI de Erros Encontrados na Correção", expanded=False):
+                                                    for err_txt in erros_detalhados_tri:
+                                                        st.warning(preparar_para_leitura(err_txt))
+
                                             col_s1, col_s2 = st.columns(2)
                                             if col_s1.button("Gravar Correção", type="primary", use_container_width=True, key=f"btn_save_corr_{v}"):
                                                 with st.spinner("Enviando foto JPG para o Drive e salvando nota no banco..."):
-                                                    # Envio de foto JPG imune a erros 403 via SOSA Bridge
                                                     link_foto_jpg = db.subir_e_converter_para_google_docs(
                                                         st.session_state.current_scan_img, 
                                                         alunos_alvo[0].replace(" ","_"), 
@@ -3383,7 +3416,7 @@ elif menu == "📸 Scanner de Gabaritos":
                                         
                                         df_manual = st.data_editor(
                                             pd.DataFrame(dados_manual), hide_index=True, use_container_width=True,
-                                            column_config={"Q": st.column_config.TextColumn(disabled=True), "Gabarito": st.column_config.TextColumn(disabled=True), "Resposta": st.column_config.SelectboxColumn(options=opcoes_letras, required=True), "Cálculo": st.column_config.CheckboxColumn("Cálculo OK", default=True)},
+                                            column_config={"Q": st.column_config.TextColumn(disabled=True), "Gabarito": st.column_config.TextColumn(disabled=True), "Resposta": st.column_config.SelectboxColumn(options=opcoes_letras, required=True), "Cálculo": st.column_config.CheckboxColumn("Cálculo OK")},
                                             key=f"manual_grid_{v}"
                                         )
                                         
@@ -3556,6 +3589,7 @@ elif menu == "📸 Scanner de Gabaritos":
                     st.markdown("#### ⚡ Ações Rápidas de Auditoria")
                     c_act1, c_act2, c_act3 = st.columns(3)
 
+                    # LEI Nº 25: DIALOGS DECLARADOS NO NÍVEL SUPERIOR
                     @st.dialog("⚖️ Homologação de Atestados & Justificativas", width="large")
                     def dialog_atestados_modal():
                         st.info("💡 Se o aluno entregou atestado depois ou se houve erro ao dar falta, ajuste o status abaixo.")
@@ -3918,10 +3952,10 @@ elif menu == "📸 Scanner de Gabaritos":
                             status_h.update(label="Notas e gabaritos auditados!", state="complete"); time.sleep(0.5); st.rerun()
 
         # ==============================================================================
-        # ABA 3: RAIO-X PEDAGÓGICO
+        # ABA 3: RAIO-X PEDAGÓGICO & PONTE DE RECOMPOSIÇÃO PÓS-PROVA (1-CLIQUE)
         # ==============================================================================
         with tab_raiox:
-            st.markdown("### Raio-X Pedagógico: Autópsia por Item")
+            st.markdown("### Raio-X Pedagógico: Autópsia por Item & Recomposição")
             
             with st.container(border=True):
                 c1, c2, c3 = st.columns([1, 1, 2])
@@ -3938,7 +3972,7 @@ elif menu == "📸 Scanner de Gabaritos":
             else:
                 nome_curto_av = at_sel_r.split("-")[0].strip()
                 padrao_regex_trim = obter_regex_trimestre(tr_sel_r)
-                ano_num_r = "".join(filter(str.isdigit, t_sel_r))
+                serie_num_r = "".join(filter(str.isdigit, t_sel_r))
                 
                 mask_diag = (df_diagnosticos['TURMA'] == t_sel_r) & (
                     df_diagnosticos['ID_AVALIACAO'].str.contains(nome_curto_av, case=False, na=False) &
@@ -3991,7 +4025,7 @@ elif menu == "📸 Scanner de Gabaritos":
                         is_2a_chamada = "2ª Chamada" in str(caderno_alvo)
                         
                         if is_2a_chamada:
-                            df_busca = df_aulas[(df_aulas['TIPO_MATERIAL'].str.upper().str.contains("2ª|2CHAMADA", regex=True)) & (df_aulas['TIPO_MATERIAL'].str.contains(padrao_regex_trim, regex=True, case=False)) & (df_aulas['ANO'].str.contains(serie_num))] if not df_aulas.empty else pd.DataFrame()
+                            df_busca = df_aulas[(df_aulas['TIPO_MATERIAL'].str.upper().str.contains("2ª|2CHAMADA", regex=True)) & (df_aulas['TIPO_MATERIAL'].str.contains(padrao_regex_trim, regex=True, case=False)) & (df_aulas['ANO'].str.contains(serie_num_r))] if not df_aulas.empty else pd.DataFrame()
                             if not df_busca.empty: material_ref = df_busca.iloc[0]
                         elif "Variante" in str(caderno_alvo):
                             tipo_letra = str(caderno_alvo).split("TIPO")[-1].replace(")", "").strip()
@@ -4011,7 +4045,7 @@ elif menu == "📸 Scanner de Gabaritos":
                             stats_list = []
                             if is_2a_chamada:
                                 q_raw = ai.extrair_tag(txt_prova_base, "QUESTOES")
-                                num_q_total = len(re.findall(r"(?i)QUEST[AÃ]O\s*0?\d+", q_raw)) or 10
+                                num_q_total = len(re.findall(r"(?i)QUESTÃO\s*0?\d+", q_raw)) or 10
                                 matriz_respostas = [str(r).split('|GRUPO:')[0].split(';') for r in df_filtrado['RESPOSTAS_ALUNO']]
                                 
                                 for i in range(1, num_q_total + 1):
@@ -4070,13 +4104,14 @@ elif menu == "📸 Scanner de Gabaritos":
 
                                 st.markdown("---")
                                 
-                                c_aut1, c_aut2 = st.columns([2, 1])
+                                c_aut1, c_aut2 = st.columns([1.5, 1.5])
                                 
                                 with c_aut1:
                                     st.markdown("#### 🔬 Autópsia Clínica do Item")
                                     c_sel, c_btn = st.columns([2, 1])
                                     q_sel = c_sel.selectbox("Selecione a Questão:", df_stats_global["Questão"].tolist(), key=f"q_sel_v90_{v}", label_visibility="collapsed")
                                     
+                                    # LEI 25: DIALOG DECLARADO FORA DO FRAGMENT
                                     @st.dialog("🔬 Autópsia Clínica do Item", width="large")
                                     def dialog_autopsia(q_str, stats_row):
                                         idx_num = int(q_str.replace("Q", ""))
@@ -4120,8 +4155,10 @@ elif menu == "📸 Scanner de Gabaritos":
                                         dialog_autopsia(q_sel, stats_row)
 
                                 with c_aut2:
-                                    st.markdown("#### 🧠 Inteligência Preditiva")
-                                    if st.button("Gerar Prognóstico Pedagógico", type="primary", use_container_width=True, key=f"btn_gen_prog_{v}"):
+                                    st.markdown("#### 🧠 Inteligência Preditiva & Recomposição")
+                                    c_pr1, c_pr2 = st.columns(2)
+                                    
+                                    if c_pr1.button("Diagnóstico Preditivo", use_container_width=True, key=f"btn_gen_prog_{v}"):
                                         with st.spinner("Analisando lacunas..."):
                                             worst_3 = df_stats_global.sort_values(by="Acerto %").head(3)
                                             stats_str = "\n".join([f"{r['Questão']}: {r['Acerto %']:.1f}% de acerto" for _, r in worst_3.iterrows()])
@@ -4139,9 +4176,53 @@ elif menu == "📸 Scanner de Gabaritos":
                                             
                                             res_prog = ai.gerar_prognostico_pedagogico(stats_str, contexto_str)
                                             st.session_state[f"prog_{v}"] = res_prog
+
+                                    # MELHORIA 5: PONTE DE RECOMPOSIÇÃO EM 1 CLIQUE (CORRIGIDO V49)
+                                    if c_pr2.button("🚀 Forjar Recomposição (3 Itens Mais Errados)", type="primary", use_container_width=True, key=f"btn_ponte_recomp_{v}"):
+                                        with st.status("Extraindo os 3 itens com menor índice de acerto e gerando caderno de recomposição...", expanded=True) as status_rec_auto:
+                                            worst_3 = df_stats_global.sort_values(by="Acerto %").head(3)
+                                            itens_criticos_str = ", ".join(worst_3['Questão'].tolist())
                                             
+                                            prompt_recomp_auto = (
+                                                f"PROVA ORIGINAL:\n{txt_prova_base}\n\n"
+                                                f"ITENS CRÍTICOS COM MAIOR ÍNDICE DE ERRO NA TURMA {t_sel_r}: {itens_criticos_str}.\n"
+                                                f"SÉRIE: {t_sel_r}.\n"
+                                                f"MISSÃO: Crie o Caderno de Recomposição FOCADO ESTRITAMENTE nesses 3 itens críticos, gerando Roteiro do Professor e Exercícios Espelho para os alunos."
+                                            )
+                                            res_recomp_auto = ai.gerar_ia("ARQUITETO_REVISAO_V29", prompt_recomp_auto)
+                                            
+                                            nome_recomp_auto = f"RECOMPO_{at_sel_r}_LACUNAS"
+                                            info_recomp_auto = {"ano": f"{serie_num_r}º", "trimestre": tr_sel_r, "semana": "RECOMPOSIÇÃO"}
+
+                                            status_rec_auto.write("📄 Gerando Caderno de Exercícios do Aluno...")
+                                            doc_alu_rec = exporter.gerar_docx_aluno_v24(nome_recomp_auto, ai.extrair_tag(res_recomp_auto, "ALUNO"), info_recomp_auto)
+                                            link_alu_rec = db.subir_e_converter_para_google_docs(doc_alu_rec, f"{nome_recomp_auto}_ALUNO", modo="AULA")
+
+                                            status_rec_auto.write("👨‍🏫 Gerando Guia do Professor...")
+                                            doc_prof_rec = exporter.gerar_docx_professor_v25(nome_recomp_auto, ai.extrair_tag(res_recomp_auto, "PROFESSOR"), info_recomp_auto)
+                                            link_prof_rec = db.subir_e_converter_para_google_docs(doc_prof_rec, f"{nome_recomp_auto}_PROF", modo="AULA")
+
+                                            conteudo_final_rec = f"{res_recomp_auto}\n\n--- LINKS ---\nRegular({link_alu_rec}) Prof({link_prof_rec})"
+
+                                            db.salvar_no_banco("DB_AULAS_PRONTAS", [
+                                                datetime.now().strftime("%d/%m/%Y"), "REVISÃO", nome_recomp_auto,
+                                                conteudo_final_rec, f"{serie_num_r}º", link_alu_rec
+                                            ])
+
+                                            status_rec_auto.update(label="✅ Caderno de Recomposição Forjado e Sincronizado no Drive!", state="complete")
+                                            st.balloons()
+                                            st.link_button("📂 ABRIR CADERNO DE RECOMPOSIÇÃO NO DRIVE", link_alu_rec, type="primary", use_container_width=True)
+
                                 if f"prog_{v}" in st.session_state:
                                     st.success(f"💡 **Prognóstico de Intervenção:**\n\n{st.session_state[f'prog_{v}']}")
+
+
+
+
+
+
+
+
 
 
 # ==============================================================================
@@ -4749,6 +4830,9 @@ Qualquer dúvida, estou à disposição! Um abraço! 🚀"""
 
         renderizar_dossie_bio_fragmento()
         st.caption(f"Dossiê 360° atualizado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+
+
+
 
 
 
