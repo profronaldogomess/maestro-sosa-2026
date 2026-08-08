@@ -381,7 +381,8 @@ def gerar_ia_json(persona_key, comando, usar_busca=False):
         "\n\n🚨 REGRAS RIGIDAS DE GROUNDING (ZERO ALUCINAÇÃO):\n"
         "1. É PROIBIDO inventar contextos fictícios fora do fornecido (como SpaceX, RPG, games, etc.).\n"
         "2. Se houver contexto de Itabuna/Bahia ou trecho de Livro Didático abaixo, 100% DAS QUESTÕES DEVEM SER EXTRAÍDAS OU ESPELHADAS DELE.\n"
-        "3. Mantenha fidelidade absoluta ao tema de cada item enviado.\n\n"
+        "3. Mantenha fidelidade absoluta ao tema de cada item enviado.\n"
+        "4. ATENÇÃO COM LATEX EM JSON: Sempre use barra dupla para comandos LaTeX no JSON (exemplo: \\\\frac{1}{2}, \\\\times, \\\\div, \\\\circ).\n\n"
     )
     
     conteudo_prompt = [types.Part.from_text(text=f"{PERSONAS[persona_key]}\n{trava_realidade_json}\n\n{comando}")]
@@ -401,19 +402,23 @@ def gerar_ia_json(persona_key, comando, usar_busca=False):
         match = re.search(r'\{.*\}', texto_limpo, re.DOTALL)
         if match:
             json_str = match.group(0)
+            
+            # 🚨 VACINA ANTI-ESCAPE DE BARRA LATEX EM JSON (\frac -> \\frac)
+            json_str_reparado = re.sub(r'\\(?![/"bfnrtu\\])', r'\\\\', json_str)
+            
             try:
-                return json.loads(json_str)
+                return json.loads(json_str_reparado)
             except json.JSONDecodeError:
                 try:
-                    decoder = json.JSONDecoder()
-                    obj, _ = decoder.raw_decode(json_str)
-                    return obj
-                except:
-                    pass
+                    return json.loads(json_str)
+                except json.JSONDecodeError:
+                    # Tratamento de emergência para caracteres ocultos
+                    json_str_clean = re.sub(r'[\x00-\x1F\x7F-\x9F]', '', json_str_reparado)
+                    return json.loads(json_str_clean)
         
         return json.loads(texto_limpo)
     except Exception as e:
-        return {"erro": str(e)}
+        return {"erro": f"Erro no parsing do lote: {str(e)}"}
 
 # ==============================================================================
 # EXTRATOR UNIVERSAL DE TAGS (MULTIMODO V2026.MASTER - FLEXÍVEL E PROPORCIONAL)
