@@ -2139,7 +2139,7 @@ elif menu == "🧪 Criador de Aulas":
 
 # ==============================================================================
 # MÓDULO: CENTRAL DE AVALIAÇÕES - V2026.MASTER_ULTIMATE
-# (ANCRAGEM ESTRITA BNCC/SAEB, SELETOR DE CONTEÚDOS, TRI & ECONOMIA DE TOKENS)
+# (COM BOTÃO DE RE-EXPORTAÇÃO EM 1 CLIQUE NO ACERVO DA ABA 2)
 # ==============================================================================
 elif menu == "📝 Central de Avaliações":
     st.title("📝 Central de Avaliações (Padrão ENEM / SAEB / BNCC)")
@@ -2775,7 +2775,7 @@ elif menu == "📝 Central de Avaliações":
                 reset_forja()
 
     # ==============================================================================
-    # ABA 2: ACERVO DE PROVAS & AUTÓPSIA DE DISTRATORES (TRI)
+    # ABA 2: ACERVO DE PROVAS & RE-EXPORTAÇÃO EM 1 CLIQUE (SOSA V2026)
     # ==============================================================================
     with tab_acervo_av:
         st.markdown("### 📖 Acervo de Instrumentos Avaliativos & Perícia TRI")
@@ -2830,6 +2830,49 @@ elif menu == "📝 Central de Avaliações":
                     
                     if c_b5.button("🗑️ Apagar", key=f"del_ac_{row.name}_{idx_av}_{v}", use_container_width=True):
                         if db.excluir_avaliacao_completa(identificador, row['SEMANA_REF']): st.rerun()
+
+                    # 🚨 RE-EXPORTAÇÃO EM 1 CLIQUE COM A VACINA ANTI-ERRO LXML
+                    with st.expander("🔄 Re-gerar / Re-exportar Documentos (DOCX) no Drive", expanded=False):
+                        st.info("💡 **Re-exportação Direta:** Clique abaixo para re-gerar os arquivos DOCX no Google Drive utilizando o texto preservado no banco de dados com a nova engine do Exporter.")
+                        
+                        if st.button("🚀 EXECUTAR RE-EXPORTAÇÃO COMPLETA NO DRIVE", type="primary", use_container_width=True, key=f"btn_reexp_{row.name}_{idx_av}_{v}"):
+                            with st.status("Re-gerando documentos Word com a vacina no Drive...", expanded=True) as status_reexp:
+                                info_reexp = {
+                                    'ano': str(row['ANO']), 
+                                    'trimestre': 'I Trimestre', 
+                                    'valor': val_ex if val_ex else '4.0',
+                                    'qtd': len(re.findall(r'(?i)QUESTÃO\s+\d+', txt_f)) or 10
+                                }
+                                
+                                status_reexp.write("📄 Re-gerando Caderno Regular Word...")
+                                doc_reg_r = exporter.gerar_docx_prova_v25(identificador, txt_f, info_reexp)
+                                link_reg_r = db.subir_e_converter_para_google_docs(doc_reg_r, identificador, modo="AVALIACAO")
+                                
+                                pei1_txt_r = ai.extrair_tag(txt_f, "PEI_NIVEL_1") or ai.extrair_tag(txt_f, "NIVEL_1") or ai.extrair_tag(txt_f, "PEI")
+                                link_p1_r = "N/A"
+                                if pei1_txt_r:
+                                    status_reexp.write("🔵 Re-gerando Caderno PEI Nível 1 Word...")
+                                    doc_p1_r = exporter.gerar_docx_pei_v25(f"{identificador}_PEI_N1", pei1_txt_r, info_reexp)
+                                    link_p1_r = db.subir_e_converter_para_google_docs(doc_p1_r, f"{identificador}_PEI_N1", modo="AVALIACAO")
+                                
+                                pei3_txt_r = ai.extrair_tag(txt_f, "PEI_NIVEL_3")
+                                link_p3_r = "N/A"
+                                if pei3_txt_r:
+                                    status_reexp.write("🔴 Re-gerando Caderno PEI Nível 3 Word (Bento Cards)...")
+                                    doc_p3_r = exporter.gerar_docx_pei_qualitativa(f"{identificador}_PEI_N3", pei3_txt_r, info_reexp)
+                                    link_p3_r = db.subir_e_converter_para_google_docs(doc_p3_r, f"{identificador}_PEI_N3", modo="AVALIACAO")
+                                
+                                links_f_r = f"--- LINKS ---\nRegular({link_reg_r}) PEI_N1({link_p1_r}) PEI_N3({link_p3_r})"
+                                txt_sem_links = txt_f.split("--- LINKS ---")[0].strip()
+                                novo_conteudo_banco = f"{txt_sem_links}\n\n{links_f_r}"
+                                
+                                db.excluir_registro("DB_AULAS_PRONTAS", identificador)
+                                db.salvar_no_banco("DB_AULAS_PRONTAS", [
+                                    row['DATA'], row['SEMANA_REF'], identificador, novo_conteudo_banco, row['ANO'], link_reg_r
+                                ])
+                                
+                                status_reexp.update(label="✅ Prova re-exportada e link atualizado!", state="complete")
+                                st.balloons(); time.sleep(1.5); st.rerun()
 
                     with st.expander("👁️ Analisar Estrutura Psicométrica & Análise de Distratores (TRI)", expanded=False):
                         t_gab, t_ques, t_pei_v = st.tabs(["Perícia Regular", "Caderno Regular", "Inclusão PEI"])
@@ -2920,7 +2963,6 @@ elif menu == "📝 Central de Avaliações":
                         status_rec.update(label="✅ Caderno de Recomposição gerado e sincronizado no Drive!", state="complete")
                         st.balloons()
                         st.link_button("📂 ABRIR CADERNO DO ALUNO NO DRIVE", link_alu_rev, type="primary", use_container_width=True)
-
 
 
 
