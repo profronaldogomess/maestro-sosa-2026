@@ -2732,40 +2732,64 @@ elif menu == "📝 Central de Avaliações":
             st.markdown("<br>", unsafe_allow_html=True)
             if st.button("Concluir Processo", type="primary", use_container_width=True, key=f"btn_concluir_f5_{v}"): reset_forja()
 
-        # --- FASE 6: RE-EXPORTAÇÃO RÁPIDA ---
+        # --- FASE 6: REFINAMENTO E RE-COMPILAÇÃO DE PROVA GERADA ---
         elif f['fase'] == 6:
-            st.markdown("### Ajuste Rápido de Caderno")
-            novo_nome = st.text_input("Identificador:", value=f['nome_base'], key=f"novo_nome_f6_{v}")
+            st.markdown("### ✏️ Painel de Refinamento e Recalibração de Prova")
+            st.caption("ℹ️ **Preservação de Conteúdo:** Altere o cabeçalho, trimestre ou valor da prova sem perder nenhuma questão já forjada!")
             
+            with st.container(border=True):
+                st.markdown("#### 1. Ajuste de Parâmetros de Cabeçalho")
+                c_f6_1, c_f6_2, c_f6_3, c_f6_4 = st.columns(4)
+                novo_nome = c_f6_1.text_input("Identificador:", value=f['nome_base'], key=f"novo_nome_f6_{v}")
+                novo_ano = c_f6_2.selectbox("Série/Ano:", ["6º", "7º", "8º", "9º"], index=["6º", "7º", "8º", "9º"].index(f.get('ano', '6º')) if f.get('ano') in ["6º", "7º", "8º", "9º"] else 0, key=f"novo_ano_f6_{v}")
+                novo_trim = c_f6_3.selectbox("Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], index=["I Trimestre", "II Trimestre", "III Trimestre"].index(f.get('info', {}).get('trimestre', 'II Trimestre')) if f.get('info', {}).get('trimestre') in ["I Trimestre", "II Trimestre", "III Trimestre"] else 1, key=f"novo_trim_f6_{v}")
+                novo_valor = c_f6_4.number_input("Valor Total (pts):", 0.0, 10.0, float(f.get('info', {}).get('valor', 4.0)), step=0.5, key=f"novo_val_f6_{v}")
+
+            st.markdown("---")
+            st.markdown("#### 2. Edição de Conteúdo (Garantia de Não Perda)")
             t_reg, t_p1, t_p2 = st.tabs(["Caderno Regular", "PEI Nível 1", "PEI Nível 2"])
-            with t_reg: novo_reg = st.text_area("Texto Regular:", value=f['txt_reg'], height=300, key=f"ed_reg_f6_{v}")
-            with t_p1: novo_p1 = st.text_area("PEI N1:", value=f['pei_1'], height=200, key=f"ed_p1_f6_{v}")
-            with t_p2: novo_p2 = st.text_area("PEI N2:", value=f['pei_2'], height=200, key=f"ed_p2_f6_{v}")
+            with t_reg: novo_reg = st.text_area("Texto Regular (Enunciados e Alternativas):", value=f['txt_reg'], height=350, key=f"ed_reg_f6_{v}")
+            with t_p1: novo_p1 = st.text_area("PEI N1 (Apoio Leve):", value=f['pei_1'], height=250, key=f"ed_p1_f6_{v}")
+            with t_p2: novo_p2 = st.text_area("PEI N2 (Apoio Moderado):", value=f['pei_2'], height=250, key=f"ed_p2_f6_{v}")
                 
-            if st.button("Re-compilar e Substituir", type="primary", use_container_width=True, key=f"btn_recomp_f6_{v}"):
-                with st.status("Reescrevendo arquivos...") as status:
+            num_q_detectadas = len(re.findall(r"(?i)QUEST[AÃ]O\s*0?\d+", novo_reg)) or 10
+            v_q_calc = novo_valor / num_q_detectadas if num_q_detectadas > 0 else 0.2
+            st.info(f"📊 **Recalculado:** {num_q_detectadas} questões | Valor por Questão: **{v_q_calc:.2f} pts** | Trimestre: **{novo_trim}**")
+
+            if st.button("💾 RE-COMPILAR E ATUALIZAR ARQUIVOS NO DRIVE", type="primary", use_container_width=True, key=f"btn_recomp_f6_{v}"):
+                with st.status("Reescrevendo arquivos no Drive com novo cabeçalho...", expanded=True) as status:
                     db.excluir_avaliacao_completa(f['nome_base'], f['semana_ref'])
-                    info_re = {'ano': f['ano'], 'trimestre': "I Trimestre", 'tipo_prova': "AVALIAÇÃO"}
+                    info_re = {
+                        'ano': novo_ano, 
+                        'trimestre': novo_trim, 
+                        'valor': novo_valor,
+                        'qtd': num_q_detectadas,
+                        'tipo_prova': "AVALIAÇÃO"
+                    }
                     
-                    status.write("Construindo Prova Regular...")
+                    status.write("Construindo Prova Regular (Novo Cabeçalho + OMR Fiducial)...")
                     doc_reg = exporter.gerar_docx_prova_v25(novo_nome, novo_reg, info_re)
-                    link_reg = db.subir_e_converter_para_google_docs(doc_reg, novo_nome, modo="AVALIACAO")
+                    link_reg = db.subir_e_converter_para_google_docs(doc_reg, novo_nome, trimestre=novo_trim, categoria=f"{novo_ano} Ano", modo="AVALIACAO")
                     
                     link_p1, link_p2 = "N/A", "N/A"
                     if novo_p1:
                         status.write("Construindo PEI N1...")
                         doc_pei1 = exporter.gerar_docx_pei_v25(f"{novo_nome}_PEI_N1", novo_p1, info_re)
-                        link_p1 = db.subir_e_converter_para_google_docs(doc_pei1, f"{novo_nome}_PEI_N1", modo="AVALIACAO")
+                        link_p1 = db.subir_e_converter_para_google_docs(doc_pei1, f"{novo_nome}_PEI_N1", trimestre=novo_trim, categoria=f"{novo_ano} Ano", modo="AVALIACAO")
                     if novo_p2:
                         status.write("Construindo PEI N2...")
                         doc_pei2 = exporter.gerar_docx_pei_v25(f"{novo_nome}_PEI_N2", novo_p2, info_re)
-                        link_p2 = db.subir_e_converter_para_google_docs(doc_pei2, f"{novo_nome}_PEI_N2", modo="AVALIACAO")
+                        link_p2 = db.subir_e_converter_para_google_docs(doc_pei2, f"{novo_nome}_PEI_N2", trimestre=novo_trim, categoria=f"{novo_ano} Ano", modo="AVALIACAO")
                         
                     links_f = f"--- LINKS ---\nRegular({link_reg}) PEI_N1({link_p1}) PEI_N2({link_p2})"
-                    db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), f['semana_ref'], novo_nome, novo_reg + f"\n\n[NIVEL_1]\n{novo_p1}\n\n[NIVEL_2]\n{novo_p2}\n\n{links_f}", f['ano'], link_reg])
+                    db.salvar_no_banco("DB_AULAS_PRONTAS", [
+                        datetime.now().strftime("%d/%m/%Y"), f['semana_ref'], novo_nome, 
+                        novo_reg + f"\n\n[NIVEL_1]\n{novo_p1}\n\n[NIVEL_2]\n{novo_p2}\n\n{links_f}", 
+                        novo_ano, link_reg
+                    ])
                     
-                    status.update(label="Caderno re-compilado!", state="complete")
-                    st.balloons(); time.sleep(1); reset_forja()
+                    status.update(label="✅ Prova re-compilada e atualizada no Drive com sucesso!", state="complete")
+                    st.balloons(); time.sleep(1.5); reset_forja()
 
     # ==============================================================================
     # ABA 2: ACERVO DE PROVAS
