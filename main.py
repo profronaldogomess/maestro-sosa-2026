@@ -2132,7 +2132,7 @@ elif menu == "🧪 Criador de Aulas":
 
 
 # ==============================================================================
-# MÓDULO: CENTRAL DE AVALIAÇÕES - V2026.MASTER (ASSUNTOS REALÍSTICOS SAEB/BNCC)
+# MÓDULO: CENTRAL DE AVALIAÇÕES - V2026.MASTER (MINERAÇÃO REAL DE PLANOS E CURRÍCULO)
 # ==============================================================================
 elif menu == "📝 Central de Avaliações":
     st.title("📝 Central de Avaliações (Padrão ENEM / SAEB)")
@@ -2177,7 +2177,7 @@ elif menu == "📝 Central de Avaliações":
     tab_forja, tab_acervo_av = st.tabs(["Linha de Montagem de Provas", "Acervo de Provas & Perícia"])
 
     # ==============================================================================
-    # ABA 1: LINHA DE MONTAGEM DE PROVAS (MINERAÇÃO REAL DE ASSUNTOS SAEB/BNCC)
+    # ABA 1: LINHA DE MONTAGEM DE PROVAS (MINERAÇÃO REAL DE PLANOS E CURRÍCULO)
     # ==============================================================================
     with tab_forja:
         if 1 < f['fase'] <= 5:
@@ -2187,7 +2187,7 @@ elif menu == "📝 Central de Avaliações":
             st.markdown("---")
 
         # --------------------------------------------------------------------------
-        # FASE 1: BRIEFING, PARÂMETROS E EXTRAÇÃO DE ASSUNTOS MATEMÁTICOS
+        # FASE 1: BRIEFING, PARÂMETROS E EXTRAÇÃO REAL DOS CSVs (PLANOS E CURRÍCULO)
         # --------------------------------------------------------------------------
         if f['fase'] == 1:
             st.markdown("### 📋 Fase 1: Briefing, Matriz & Fontes Didáticas")
@@ -2217,7 +2217,7 @@ elif menu == "📝 Central de Avaliações":
 
                 with st.container(border=True):
                     st.markdown("#### 2. Seleção Híbrida de Fontes para Ancoragem Direta")
-                    st.caption("ℹ️ Combine o Acervo de Aulas, o PDF do Livro Didático e Exercícios Autorais. O sistema mapeará os descritores matemáticos específicos.")
+                    st.caption("ℹ️ O sistema minerará os dados reais do seu DB_PLANOS e DB_CURRICULO do trimestre selecionado.")
                     
                     fontes_ativas = st.pills(
                         "Fontes de Dados Selecionadas:", 
@@ -2267,112 +2267,67 @@ elif menu == "📝 Central de Avaliações":
                             height=100, key=f"recorte_provas_input_{v}"
                         )
 
-                    # 🚨 MINERAÇÃO AVANÇADA DE TÓPICOS REALÍSTICOS SAEB / BNCC
+                    # 🚨 MINERADOR SOBERANO: CRUZA DB_PLANOS E DB_CURRICULO REAL
                     topicos_reais_minerados = []
-                    
+
+                    # 1. Busca nos Planos de Ensino da Semana (DB_PLANOS.csv)
+                    if not df_planos.empty:
+                        planos_trim = df_planos[
+                            (df_planos['ANO'].astype(str).str.contains(str(ano_av))) & 
+                            (df_planos['TURMA'].astype(str).str.upper().str.contains(trim_filtro.upper()))
+                        ]
+                        for _, r_plano in planos_trim.iterrows():
+                            txt_p = str(r_plano['PLANO_TEXTO'])
+                            c_espec = (
+                                ai.extrair_tag(txt_p, "CONTEUDOS_ESPECIFICOS") or 
+                                ai.extrair_tag(txt_p, "OBJETO_CONHECIMENTO") or 
+                                ai.extrair_tag(txt_p, "HABILIDADE_BNCC")
+                            )
+                            if c_espec:
+                                partes = re.split(r'[;\n•]', c_espec)
+                                for p in partes:
+                                    p_clean = re.sub(r'\[cite:.*?\]|[*#\[\]]', '', p).strip()
+                                    if len(p_clean) > 3 and not re.search(r"(?i)^(?:6º|7º|8º|9º|Aula|Semana|Conteúdo|EF)", p_clean):
+                                        topicos_reais_minerados.append(p_clean)
+
+                    # 2. Busca na Matriz Curricular Oficial (DB_CURRICULO.csv)
+                    if not df_curriculo.empty:
+                        col_ano_c = next((c for c in df_curriculo.columns if 'ANO' in c.upper()), None)
+                        col_trim_c = next((c for c in df_curriculo.columns if trim_filtro.upper() in c.upper()), None)
+                        
+                        if col_ano_c and col_trim_c:
+                            df_curr_trim = df_curriculo[df_curriculo[col_ano_c].astype(str).str.contains(str(ano_av))].copy()
+                            for _, r_curr in df_curr_trim.iterrows():
+                                txt_c = str(r_curr[col_trim_c])
+                                if txt_c and txt_c.upper() != "NAN":
+                                    partes_c = re.split(r'[;\n•]', txt_c)
+                                    for p_c in partes_c:
+                                        p_c_clean = re.sub(r'\[cite:.*?\]|[*#\[\]]', '', p_c).strip()
+                                        if len(p_c_clean) > 3 and p_c_clean not in topicos_reais_minerados:
+                                            topicos_reais_minerados.append(p_c_clean)
+
+                    # 3. Busca nas Aulas do Acervo Selecionadas
                     if mats_selecionados:
                         for m_nome in mats_selecionados:
                             m_rows = df_aulas[df_aulas['TIPO_MATERIAL'] == m_nome]
                             if not m_rows.empty:
                                 txt_aula_bruto = str(m_rows.iloc[0]['CONTEUDO'])
-                                c_espec = (
+                                c_espec_a = (
                                     ai.extrair_tag(txt_aula_bruto, "CONTEUDOS_ESPECIFICOS") or 
-                                    ai.extrair_tag(txt_aula_bruto, "OBJETO_CONHECIMENTO") or 
-                                    ai.extrair_tag(txt_aula_bruto, "HABILIDADE_BNCC")
+                                    ai.extrair_tag(txt_aula_bruto, "OBJETO_CONHECIMENTO")
                                 )
-                                if not c_espec:
-                                    m_cont = re.search(r"(?i)\*\*(?:Conteúdos|Conteúdo|Tema|Habilidade)\*\*[:\s]*(.*?)(?=\n\*\*|\n\n|$)", txt_aula_bruto, re.DOTALL)
-                                    if m_cont: c_espec = m_cont.group(1).strip()
-                                
-                                if c_espec:
-                                    partes = re.split(r'[;\n•,]', c_espec)
-                                    for p in partes:
-                                        p_clean = re.sub(r'[*#\[\]]', '', p).strip()
-                                        if len(p_clean) > 3 and not re.search(r"(?i)^(?:6º|7º|8º|9º|Aula|Semana|Conteúdo)", p_clean):
-                                            topicos_reais_minerados.append(p_clean)
-                    
-                    if txt_av_ex_ext or txt_av_teo_ext or recorte_provas_livro.strip():
-                        linhas_livro = (txt_av_ex_ext + "\n" + txt_av_teo_ext + "\n" + recorte_provas_livro).split("\n")
-                        for l_l in linhas_livro:
-                            l_str = re.sub(r'[*#\[\]]', '', l_l).strip()
-                            if any(w in l_str.upper() for w in ["CAPÍTULO", "TEMA", "FRAÇÃO", "DECIMAL", "OPERAÇÕES", "PORCENTAGEM", "GEOMETRIA", "PERÍMETRO", "ÁREA", "DIVISIBILIDADE", "POTÊNCIA", "IGUALDADE", "EQUAÇÃO", "MÚLTIPLO", "DIVISOR"]) and len(l_str) < 90:
-                                if not re.search(r"(?i)^(?:PÁGINA|PAGE|---|CÓDIGO|PROMPT)", l_str):
-                                    topicos_reais_minerados.append(l_str)
+                                if c_espec_a:
+                                    partes_a = re.split(r'[;\n•]', c_espec_a)
+                                    for p_a in partes_a:
+                                        p_a_clean = re.sub(r'\[cite:.*?\]|[*#\[\]]', '', p_a).strip()
+                                        if len(p_a_clean) > 3 and p_a_clean not in topicos_reais_minerados:
+                                            topicos_reais_minerados.insert(0, p_a_clean)
 
-                    # Busca complementar na Tabela Curricular da Prefeitura (`df_curriculo`)
-                    if len(topicos_reais_minerados) < qtd_q and not df_curriculo.empty:
-                        col_ano_c = next((c for c in df_curriculo.columns if 'ANO' in c.upper()), None)
-                        col_trim_c = next((c for c in df_curriculo.columns if trim_filtro.upper() in c.upper() or 'CONTEUDO' in c.upper()), None)
-                        if col_ano_c and col_trim_c:
-                            df_curr_ano = df_curriculo[df_curriculo[col_ano_c].astype(str).str.contains(str(ano_av))].copy()
-                            for _, r_curr in df_curr_ano.iterrows():
-                                txt_c = str(r_curr[col_trim_c])
-                                partes_c = re.split(r'[;\n•]', txt_c)
-                                for p_c in partes_c:
-                                    p_c_clean = re.sub(r'\[cite:.*?\]', '', p_c).strip()
-                                    if len(p_c_clean) > 3 and p_c_clean not in topicos_reais_minerados:
-                                        topicos_reais_minerados.append(p_c_clean)
-
-                    # MATRIZ NATIVA DE DESCRITORES SAEB DE EMERGÊNCIA (Garante que nunca fique genérico!)
-                    matrizes_nativas_ano = {
-                        6: [
-                            "D12 - Perímetro de figuras planas em malhas quadriculadas",
-                            "D13 - Área de superfícies planas em malhas quadriculadas",
-                            "D20 - Leitura, escrita e representação de números decimais",
-                            "D21 - Posição de números racionais na reta numérica",
-                            "D24 - Adição e subtração com números racionais decimais",
-                            "D25 - Multiplicação e divisão com números racionais decimais",
-                            "EF06MA07 - Frações equivalentes e simplificação",
-                            "EF06MA08 - Comparação e ordenação de frações racionais",
-                            "EF06MA10 - Adição e subtração de frações com denominadores diferentes",
-                            "EF06MA11 - Multiplicação e divisão de frações no cotidiano",
-                            "EF06MA13 - Porcentagens usuais (10%, 25%, 50%, 75%)",
-                            "D14 - Resolução de problemas envolvendo múltiplos e divisores",
-                            "EF06MA05 - Critérios de divisibilidade por 2, 3, 4, 5, 6, 8, 9, 10",
-                            "EF06MA03 - Potenciação de números naturais e potências de base 10",
-                            "EF06MA01 - Sistema de Numeração Decimal e valor posicional",
-                            "EF06MA16 - Plano cartesiano no 1º quadrante e pares ordenados",
-                            "EF06MA25 - Ângulos retos, agudos e obtusos em relógios e polígonos",
-                            "D15 - Resolução de problemas com números racionais em contexto financeiro",
-                            "EF06MA12 - Problemas de partilha desigual de uma quantidade",
-                            "EF06MA24 - Unidades de medida de comprimento, área e capacidade"
-                        ],
-                        7: [
-                            "D16 - Operações com números inteiros e regra de sinais",
-                            "D17 - Resolução de problemas envolvendo números racionais",
-                            "D18 - Equações do 1º grau e conceito de incógnita",
-                            "D19 - Razão, proporção e regra de três simples",
-                            "D22 - Porcentagens e cálculos de acréscimo e desconto",
-                            "D01 - Ângulos complementares, suplementares e opostos pelo vértice",
-                            "D02 - Área de triângulos, paralelogramos e trapézios",
-                            "D03 - Volume de blocos retangulares e cubos"
-                        ],
-                        8: [
-                            "D26 - Expressões algébricas, monômios e polinômios",
-                            "D27 - Produtos notáveis e fatoração de expressões",
-                            "D28 - Sistemas de equações do 1º grau com duas incógnitas",
-                            "D04 - Congruência e semelhança de triângulos",
-                            "D05 - Soma dos ângulos internos de polígonos convexos",
-                            "D06 - Área do círculo e comprimento da circunferência"
-                        ],
-                        9: [
-                            "D29 - Conjunto dos números reais e números irracionais",
-                            "D30 - Equações do 2º grau e fórmula de Bhaskara",
-                            "D31 - Funções do 1º e 2º grau e gráficos parabólicos",
-                            "D07 - Teorema de Tales e proporcionalidade em feixes paralelos",
-                            "D08 - Teorema de Pitágoras e relações métricas no triângulo retângulo",
-                            "D09 - Trigonometria no triângulo retângulo (Seno, Cosseno, Tangente)"
-                        ]
-                    }
-
-                    # Se faltarem tópicos para a quantidade de questões solicitada, completa com a matriz nativa do ano!
-                    if len(topicos_reais_minerados) < qtd_q:
-                        nativos = matrizes_nativas_ano.get(int(ano_av), matrizes_nativas_ano[6])
-                        for nat in nativos:
-                            if nat not in topicos_reais_minerados:
-                                topicos_reais_minerados.append(nat)
-
-                    topicos_finais_ordenados = list(dict.fromkeys(topicos_reais_minerados))
+                    # 4. Limpeza e Filtro de Títulos Genéricos
+                    topicos_finais_ordenados = []
+                    for t_item in topicos_reais_minerados:
+                        if not re.search(r"(?i)^(?:Conteúdo|6º|7º|8º|9º|Semana)", t_item) and t_item not in topicos_finais_ordenados:
+                            topicos_finais_ordenados.append(t_item)
 
                     # Mesa de Inspeção de Conteúdo Lido
                     if txt_av_teo_ext or txt_av_ex_ext or recorte_provas_livro.strip():
@@ -2395,14 +2350,19 @@ elif menu == "📝 Central de Avaliações":
 
                 st.markdown("<br>", unsafe_allow_html=True)
                 if st.button("🚀 Iniciar Linha de Montagem de Itens (Avançar para Fase 2)", type="primary", use_container_width=True, key=f"btn_fase1_av_{v}"):
-                    if not mats_selecionados and not txt_av_ex_ext and not recorte_provas_livro.strip():
+                    if not mats_selecionados and not txt_av_ex_ext and not recorte_provas_livro.strip() and not topicos_finais_ordenados:
                         st.error("⚠️ Selecione ao menos uma fonte de dados (Acervo, Páginas do Livro ou Texto Auxiliar).")
                     else:
                         gabarito_mestre = util.gerar_gabarito_balanceado(qtd_q)
                         mapa_inicial = []
                         
+                        # Atribuição dos tópicos matemáticos reais minerados do seu DB_PLANOS e DB_CURRICULO
+                        assuntos_base = topicos_finais_ordenados if topicos_finais_ordenados else [
+                            f"Matemática {ano_av}º Ano ({trim_filtro}) - Tópico {i+1}" for i in range(qtd_q)
+                        ]
+                        
                         for i in range(qtd_q):
-                            assunto_item = topicos_finais_ordenados[i % len(topicos_finais_ordenados)]
+                            assunto_item = assuntos_base[i % len(assuntos_base)]
                             mapa_inicial.append({
                                 'q': i + 1, 
                                 'tema': assunto_item,
@@ -2482,18 +2442,18 @@ elif menu == "📝 Central de Avaliações":
 
             if pendentes:
                 if st.button(f"🚀 GERAR LOTE DE {len(pendentes)} QUESTÕES REGULARES (ZERO-ALUCINAÇÃO)", type="primary", use_container_width=True, key=f"btn_lote_av_{v}"):
-                    with st.spinner("Forjando itens ancorados estritamente nos assuntos mapeados..."):
+                    with st.spinner("Forjando itens ancorados estritamente nos assuntos do seu plano e currículo..."):
                         prompt_lote = (
                             f"SÉRIE: {f['info']['ano']}\n"
                             f"VALOR TOTAL DA PROVA: {f['info']['valor']}\n\n"
                             f"🚨 REGRAS INQUEBRÁVEIS DE ANCORAGEM:\n"
-                            f"- Crie cada questão estritamente focada no TEMA ESPECÍFICO atribuído a ela.\n"
-                            f"- É PROIBIDO inventar temas fora da matriz fornecida.\n\n"
+                            f"- Crie cada questão estritamente focada no TEMA ESPECÍFICO atribuído a ela abaixo.\n"
+                            f"- É PROIBIDO inventar assuntos fora da matriz do plano fornecido.\n\n"
                         )
                         for item in pendentes:
                             prompt_lote += f"QUESTÃO {item['q']}:\n- TEMA ESPECÍFICO EXIGIDO: {item['tema']}\n- COMPLEXIDADE: {item['dificuldade']}\n- GABARITO EXIGIDO: Letra {item['gabarito']}\n\n"
                         
-                        prompt_lote += f"--- CONTEXTO DAS AULAS E LIVRO (OBRIGATÓRIO USAR) ---\n{f.get('contexto_base', 'Usar a matriz do ' + str(f['info']['ano']) + ' Ano e o contexto de Itabuna/BA.')}\n"
+                        prompt_lote += f"--- CONTEXTO DOS PLANOS E LIVRO (OBRIGATÓRIO USAR) ---\n{f.get('contexto_base', 'Usar a matriz do ' + str(f['info']['ano']) + ' Ano e o contexto de Itabuna/BA.')}\n"
                         
                         res_json = ai.gerar_ia_json("FORJA_LOTE_JSON", prompt_lote)
                         if "erro" in res_json:
@@ -2504,9 +2464,9 @@ elif menu == "📝 Central de Avaliações":
                                 for item in f['mapa']:
                                     if item['q'] == q_num:
                                         descritor_real = q_data.get('habilidade', '')
-                                        # Atualiza o tema do card combinando o descritor e o tema real
-                                        if descritor_real and len(descritor_real) > 2:
-                                            item['tema'] = f"{descritor_real} - {item['tema']}" if "D" not in item['tema'][:3] else item['tema']
+                                        # Preserva o tema real minerado e adiciona o descritor
+                                        if descritor_real and len(descritor_real) > 2 and "D" in descritor_real[:3]:
+                                            item['tema'] = f"{descritor_real} - {item['tema']}"
                                         
                                         item['dados'] = {
                                             'ENUNCIADO': q_data.get('enunciado', ''),
@@ -2526,12 +2486,12 @@ elif menu == "📝 Central de Avaliações":
             st.markdown("---")
             todas_aprovadas = True
 
-            # EXIBIÇÃO ULTRA-DETALHADA DE CADA ITEM REGULAR (COM ASSUNTO REAL)
+            # EXIBIÇÃO ULTRA-DETALHADA DE CADA ITEM REGULAR (COM TÓPICO REAL)
             for i, item in enumerate(f['mapa']):
                 label_status = "✅ Aprovado" if item['status'] == 'aprovado' else ("🔍 Em Revisão" if item['status'] == 'revisao' else "⏳ Pendente")
                 
-                # Exibição do Assunto Matematicamente Correto
-                assunto_exibicao = item['tema'] if item['tema'] and item['tema'].strip() != "**" else f"Habilidade Curricular - Item {item['q']:02d}"
+                # Exibição limpa do Tópico Matematicamente Correto
+                assunto_exibicao = item['tema'] if item['tema'] and item['tema'].strip() != "**" else f"Tópico Curricular - Item {item['q']:02d}"
 
                 with st.container(border=True):
                     c_card_head1, c_card_head2 = st.columns([3, 1])
