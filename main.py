@@ -2132,7 +2132,7 @@ elif menu == "🧪 Criador de Aulas":
 
 
 # ==============================================================================
-# MÓDULO: CENTRAL DE AVALIAÇÕES - V2026.MASTER (CONFERÊNCIA FASE 1 + REPARO JSON)
+# MÓDULO: CENTRAL DE AVALIAÇÕES - V2026.MASTER (SELETOR CLICÁVEL DE CONTEÚDOS)
 # ==============================================================================
 elif menu == "📝 Central de Avaliações":
     st.title("📝 Central de Avaliações (Padrão ENEM / SAEB)")
@@ -2157,7 +2157,7 @@ elif menu == "📝 Central de Avaliações":
 
     def render_indicador_fases(fase_atual):
         etapas = [
-            ("1. Briefing & Prática Real", 1),
+            ("1. Briefing & Seleção", 1),
             ("2. Forja Regular", 2),
             ("3. PEI On-Demand", 3),
             ("4. Custódia & Drive", 4),
@@ -2177,7 +2177,7 @@ elif menu == "📝 Central de Avaliações":
     tab_forja, tab_acervo_av, tab_recomposicao = st.tabs(["📝 Linha de Montagem de Provas", "📖 Acervo de Provas & Perícia TRI", "🔄 Recomposição & Cadernos de Revisão"])
 
     # ==============================================================================
-    # ABA 1: LINHA DE MONTAGEM DE PROVAS (COM MESA DE CONFERÊNCIA NA FASE 1)
+    # ABA 1: LINHA DE MONTAGEM DE PROVAS (COM SELETOR CLICÁVEL DE TÓPICOS)
     # ==============================================================================
     with tab_forja:
         if 1 < f['fase'] <= 5:
@@ -2187,10 +2187,10 @@ elif menu == "📝 Central de Avaliações":
             st.markdown("---")
 
         # --------------------------------------------------------------------------
-        # FASE 1: BRIEFING, PARÂMETROS, PINÇAMENTO E CONFERÊNCIA DE ASSUNTOS
+        # FASE 1: BRIEFING, PARÂMETROS E SELETOR CLICÁVEL DE CONTEÚDOS
         # --------------------------------------------------------------------------
         if f['fase'] == 1:
-            st.markdown("### 📋 Fase 1: Briefing, Prática Real & Conferência de Assuntos")
+            st.markdown("### 📋 Fase 1: Briefing & Seleção de Conteúdos da Turma")
             
             modo_arq = st.pills(
                 "Selecione a Abordagem do Instrumento:", 
@@ -2216,11 +2216,11 @@ elif menu == "📝 Central de Avaliações":
                     )
 
                 with st.container(border=True):
-                    st.markdown("#### 2. Seleção de Fontes & Pinçamento da Prática Real")
-                    st.caption("ℹ️ Mapeie exatamente o que foi trabalhado em sala de aula para evitar que a IA crie questões sobre tópicos não resolvidos.")
+                    st.markdown("#### 2. Mineração de Fontes do Trimestre")
+                    st.caption("ℹ️ O sistema mapeará os conteúdos do trimestre selecionado. Você marcará no seletor abaixo exatamente o que lecionou.")
                     
                     fontes_ativas = st.pills(
-                        "Fontes de Dados Selecionadas:", 
+                        "Fontes de Dados para Sugestão:", 
                         ["📚 Acervo de Aulas SOSA", "📖 Recorte do Livro Didático (PDF)", "✍️ Injeção Auxiliar do Professor"], 
                         default=["📖 Recorte do Livro Didático (PDF)"],
                         selection_mode="multi",
@@ -2261,31 +2261,33 @@ elif menu == "📝 Central de Avaliações":
                                         if list_p_av_ex: txt_av_ex_ext = util.extrair_texto_pdf_por_paginas(bytes_pdf_av, list_p_av_ex)
 
                     # MÓDULO PINÇAMENTO DA PRÁTICA REAL
-                    st.markdown("##### 📌 Pinçamento da Prática Real (O que foi realmente feito no quadro?)")
+                    st.markdown("##### 📌 Pinçamento da Prática Real (O que foi resolvido no quadro/caderno?)")
                     pincamento_pratica = st.text_area(
                         "Especifique os exercícios ou exemplos que os alunos resolveram no quadro/caderno:",
                         placeholder="Ex: Pág. 185: Apenas os exercícios 2, 4 e 5. Exemplo do quadro sobre desconto de 20%.",
-                        height=80, key=f"pincamento_pratica_input_{v}"
+                        height=70, key=f"pincamento_pratica_input_{v}"
                     )
 
                     if "✍️ Injeção Auxiliar do Professor" in fontes_ativas:
                         recorte_provas_livro = st.text_area(
                             "📖 Exercícios Autorais Extras:",
                             placeholder="Cole aqui outras questões do seu caderno...",
-                            height=80, key=f"recorte_provas_input_{v}"
+                            height=70, key=f"recorte_provas_input_{v}"
                         )
 
-                    # MINERADOR SOSA PLAN-TAG ENGINE
-                    topicos_reais_minerados = []
+                    # 🚨 MINERAÇÃO ESTRITA POR TRIMESTRE (CANDIDATOS PARA O MULTISELECT)
+                    topicos_candidatos = []
                     TERMOS_PROIBIDOS_ASSUNTO = r"(?i)(?:REVIS[AÃ]O|PROVA|TESTE|SONDA|DOSSI[EÊ]|RAIO-X|AVALIA[CÇ][AÃ]O|APLICA[CÇ][AÃ]O|2[ªA]\s*CHAMADA|RECUPERA[CÇ][AÃ]O|GABARITO|AULA\s*\d+|SEMANA\s*\d+)"
 
+                    # 1. Tópicos do Pinçamento da Lousa
                     if pincamento_pratica.strip():
                         partes_lousa = re.split(r'[;\n•,]', pincamento_pratica)
                         for p_l in partes_lousa:
                             p_l_clean = re.sub(r'[*#\[\]]', '', p_l).strip()
                             if len(p_l_clean) > 3 and not re.search(TERMOS_PROIBIDOS_ASSUNTO, p_l_clean):
-                                topicos_reais_minerados.append(p_l_clean)
+                                topicos_candidatos.append(p_l_clean)
 
+                    # 2. Tópicos do DB_PLANOS.csv do Trimestre Selecionado
                     if not df_planos.empty:
                         planos_trim = df_planos[
                             (df_planos['ANO'].astype(str).str.contains(str(ano_av))) & 
@@ -2303,9 +2305,10 @@ elif menu == "📝 Central de Avaliações":
                                 for p in partes:
                                     p_clean = re.sub(r'\[cite:.*?\]|[*#\[\]]', '', p).strip()
                                     if len(p_clean) > 3 and not re.search(TERMOS_PROIBIDOS_ASSUNTO, p_clean):
-                                        topicos_reais_minerados.append(p_clean)
+                                        topicos_candidatos.append(p_clean)
 
-                    if len(topicos_reais_minerados) < qtd_q and not df_curriculo.empty:
+                    # 3. Tópicos do DB_CURRICULO.csv do Trimestre Selecionado
+                    if not df_curriculo.empty:
                         col_ano_c = next((c for c in df_curriculo.columns if 'ANO' in c.upper()), None)
                         col_trim_c = next((c for c in df_curriculo.columns if trim_filtro.upper() in c.upper()), None)
                         
@@ -2318,12 +2321,16 @@ elif menu == "📝 Central de Avaliações":
                                     for p_c in partes_c:
                                         p_c_clean = re.sub(r'\[cite:.*?\]|[*#\[\]]', '', p_c).strip()
                                         if len(p_c_clean) > 3 and not re.search(TERMOS_PROIBIDOS_ASSUNTO, p_c_clean):
-                                            topicos_reais_minerados.append(p_c_clean)
+                                            topicos_candidatos.append(p_c_clean)
 
-                    topicos_finais_ordenados = []
-                    for t_item in topicos_reais_minerados:
-                        if t_item not in topicos_finais_ordenados and not re.search(TERMOS_PROIBIDOS_ASSUNTO, t_item):
-                            topicos_finais_ordenados.append(t_item)
+                    # Limpeza de duplicatas
+                    topicos_candidatos_unicos = []
+                    for t_item in topicos_candidatos:
+                        if t_item not in topicos_candidatos_unicos and not re.search(TERMOS_PROIBIDOS_ASSUNTO, t_item):
+                            topicos_candidatos_unicos.append(t_item)
+
+                    if not topicos_candidatos_unicos:
+                        topicos_candidatos_unicos = [f"Conteúdo Curricular de Matemática {ano_av}º Ano - {trim_filtro}"]
 
                     contexto_base_texto = ""
                     if pincamento_pratica.strip(): contexto_base_texto += f"--- PINÇAMENTO DA PRÁTICA REAL (RESOLVIDO EM SALA) ---\n{pincamento_pratica.strip()}\n\n"
@@ -2331,45 +2338,52 @@ elif menu == "📝 Central de Avaliações":
                     if txt_av_ex_ext: contexto_base_texto += f"--- PÁGINAS DE EXERCÍCIOS DO LIVRO DIDÁTICO ---\n{txt_av_ex_ext}\n\n"
                     if recorte_provas_livro.strip(): contexto_base_texto += f"--- EXERCÍCIOS DO PROFESSOR ---\n{recorte_provas_livro.strip()}\n\n"
 
-                # 🚨 3. MESA DE CONFERÊNCIA DOS ASSUNTOS AINDA NA FASE 1
-                if topicos_finais_ordenados:
-                    with st.container(border=True):
-                        st.markdown("#### 👁️ Mesa de Conferência dos Assuntos Mapeados (Fase 1)")
-                        st.caption("ℹ️ Estes são os conteúdos extraídos das suas aulas/planos. Você pode editar, adicionar ou apagar linhas antes de forjar a prova:")
-                        
-                        texto_topicos_area = st.text_area("Lista de Assuntos da Prova (um por linha):", value="\n".join(topicos_finais_ordenados), height=150, key=f"area_conf_topicos_{v}")
-                        
-                        if texto_topicos_area.strip():
-                            topicos_finais_ordenados = [line.strip() for line in texto_topicos_area.split("\n") if line.strip()]
+            # 🚨 3. O SELETOR CLICÁVEL INTERATIVO DE ASSUNTOS (ST.MULTISELECT)
+            with st.container(border=True):
+                st.markdown(f"#### 3. 📋 Seletor Interativo de Conteúdos ({ano_av}º Ano - {trim_filtro})")
+                st.caption("ℹ️ Clique e selecione exclusivamente os tópicos que você EFETIVAMENTE LECIONOU em sala:")
+                
+                assuntos_marcados_prof = st.multiselect(
+                    "Selecione os Conteúdos Ministrados:",
+                    options=topicos_candidatos_unicos,
+                    default=topicos_candidatos_unicos[:min(qtd_q, len(topicos_candidatos_unicos))],
+                    key=f"ms_topicos_prof_{v}"
+                )
 
-                st.markdown("<br>", unsafe_allow_html=True)
-                if st.button("🚀 Iniciar Linha de Montagem de Itens (Avançar para Fase 2)", type="primary", use_container_width=True, key=f"btn_fase1_av_{v}"):
-                    if not mats_selecionados and not txt_av_ex_ext and not recorte_provas_livro.strip() and not topicos_finais_ordenados:
-                        st.error("⚠️ Selecione ao menos uma fonte de dados (Acervo, Páginas do Livro ou Texto Auxiliar).")
-                    else:
-                        gabarito_mestre = util.gerar_gabarito_balanceado(qtd_q)
-                        mapa_inicial = []
-                        
-                        assuntos_base = topicos_finais_ordenados if topicos_finais_ordenados else [
-                            f"Matemática {ano_av}º Ano ({trim_filtro}) - Tópico {i+1}" for i in range(qtd_q)
-                        ]
-                        
-                        for i in range(qtd_q):
-                            assunto_item = assuntos_base[i % len(assuntos_base)]
-                            mapa_inicial.append({
-                                'q': i + 1, 
-                                'tema': assunto_item,
-                                'dificuldade': "Fácil" if i < (qtd_q*0.3) else ("Difícil" if i >= (qtd_q*0.8) else "Média"),
-                                'gabarito': gabarito_mestre[i], 
-                                'status': 'pendente', 
-                                'dados': {} 
-                            })
-                        f['mapa'] = mapa_inicial
-                        f['info'] = {'ano': f"{ano_av}º", 'trimestre': trim_filtro, 'valor': v_total, 'qtd': qtd_q, 'tipo_prova': "AVALIAÇÃO", 'rigor': perfil_rigor}
-                        f['contexto_base'] = contexto_base_texto 
-                        f['pincamento_lousa'] = pincamento_pratica
-                        f['fase'] = 2
-                        st.rerun()
+                topico_autoral_extra = st.text_input(
+                    "✍️ Adicionar outro conteúdo trabalhado não listado acima (Opcional):",
+                    placeholder="Ex: Leitura e interpretação de gráficos da Campanha Maio Laranja",
+                    key=f"topico_extra_input_{v}"
+                )
+
+                if topico_autoral_extra.strip():
+                    if topico_autoral_extra.strip() not in assuntos_marcados_prof:
+                        assuntos_marcados_prof.insert(0, topico_autoral_extra.strip())
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("🚀 Iniciar Linha de Montagem de Itens (Avançar para Fase 2)", type="primary", use_container_width=True, key=f"btn_fase1_av_{v}"):
+                if not assuntos_marcados_prof:
+                    st.error("⚠️ Marque ao menos um conteúdo no seletor acima para forjar a prova.")
+                else:
+                    gabarito_mestre = util.gerar_gabarito_balanceado(qtd_q)
+                    mapa_inicial = []
+                    
+                    for i in range(qtd_q):
+                        assunto_item = assuntos_marcados_prof[i % len(assuntos_marcados_prof)]
+                        mapa_inicial.append({
+                            'q': i + 1, 
+                            'tema': assunto_item,
+                            'dificuldade': "Fácil" if i < (qtd_q*0.3) else ("Difícil" if i >= (qtd_q*0.8) else "Média"),
+                            'gabarito': gabarito_mestre[i], 
+                            'status': 'pendente', 
+                            'dados': {} 
+                        })
+                    f['mapa'] = mapa_inicial
+                    f['info'] = {'ano': f"{ano_av}º", 'trimestre': trim_filtro, 'valor': v_total, 'qtd': qtd_q, 'tipo_prova': "AVALIAÇÃO", 'rigor': perfil_rigor}
+                    f['contexto_base'] = contexto_base_texto 
+                    f['pincamento_lousa'] = pincamento_pratica
+                    f['fase'] = 2
+                    st.rerun()
 
             elif "Variante" in modo_arq:
                 with st.container(border=True):
