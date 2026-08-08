@@ -2752,8 +2752,11 @@ elif menu == "📝 Central de Avaliações":
             with t_p1: novo_p1 = st.text_area("PEI N1 (Apoio Leve):", value=f['pei_1'], height=250, key=f"ed_p1_f6_{v}")
             with t_p2: novo_p2 = st.text_area("PEI N2 (Apoio Moderado):", value=f['pei_2'], height=250, key=f"ed_p2_f6_{v}")
                 
-            num_q_detectadas = len(re.findall(r"(?i)QUEST[AÃ]O\s*0?\d+", novo_reg)) or 10
+            # 🚨 EXTRAÇÃO ISOLADA DO BLOCO DE QUESTÕES (EVITA MULTIPLICAÇÃO DE CONTAGEM)
+            corpo_questoes_cnt = ai.extrair_tag(novo_reg, "QUESTOES") or novo_reg
+            num_q_detectadas = len(re.findall(r"(?i)QUEST[AÃ]O\s*0?\d+", corpo_questoes_cnt)) or 10
             v_q_calc = novo_valor / num_q_detectadas if num_q_detectadas > 0 else 0.2
+            
             st.info(f"📊 **Recalculado:** {num_q_detectadas} questões | Valor por Questão: **{v_q_calc:.2f} pts** | Trimestre: **{novo_trim}**")
 
             if st.button("💾 RE-COMPILAR E ATUALIZAR ARQUIVOS NO DRIVE", type="primary", use_container_width=True, key=f"btn_recomp_f6_{v}"):
