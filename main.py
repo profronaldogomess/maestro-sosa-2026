@@ -2132,7 +2132,7 @@ elif menu == "🧪 Criador de Aulas":
 
 
 # ==============================================================================
-# MÓDULO: CENTRAL DE AVALIAÇÕES - V2026.ULTIMATE (3 ABAS + PEI ON-DEMAND + PRÁTICA REAL)
+# MÓDULO: CENTRAL DE AVALIAÇÕES - V2026.MASTER (MINERADOR ANTI-LIXO & PRÁTICA REAL)
 # ==============================================================================
 elif menu == "📝 Central de Avaliações":
     st.title("📝 Central de Avaliações (Padrão ENEM / SAEB)")
@@ -2177,7 +2177,7 @@ elif menu == "📝 Central de Avaliações":
     tab_forja, tab_acervo_av, tab_recomposicao = st.tabs(["📝 Linha de Montagem de Provas", "📖 Acervo de Provas & Perícia TRI", "🔄 Recomposição & Cadernos de Revisão"])
 
     # ==============================================================================
-    # ABA 1: LINHA DE MONTAGEM DE PROVAS (ETAPAS + PINÇAMENTO + PEI ON-DEMAND)
+    # ABA 1: LINHA DE MONTAGEM DE PROVAS (MINERADOR ANTI-LIXO ADMINISTRATIVO)
     # ==============================================================================
     with tab_forja:
         if 1 < f['fase'] <= 5:
@@ -2275,9 +2275,37 @@ elif menu == "📝 Central de Avaliações":
                             height=80, key=f"recorte_provas_input_{v}"
                         )
 
-                    # MINERAÇÃO DE ASSUNTOS REAIS (DB_PLANOS + DB_CURRICULO)
+                    # 🚨 MINERADOR SOBERANO COM BLACKLIST ANTI-LIXO ADMINISTRATIVO
                     topicos_reais_minerados = []
+                    TERMOS_PROIBIDOS_ASSUNTO = r"(?i)(?:REVIS[AÃ]O|PROVA|TESTE|SONDA|DOSSI[EÊ]|RAIO-X|AVALIA[CÇ][AÃ]O|APLICA[CÇ][AÃ]O|2[ªA]\s*CHAMADA|RECUPERA[CÇ][AÃ]O|GABARITO|AULA\s*\d+|SEMANA\s*\d+)"
 
+                    # 1. Prioridade Máxima: O que o professor digitou no Pinçamento da Prática Real
+                    if pincamento_pratica.strip():
+                        partes_lousa = re.split(r'[;\n•,]', pincamento_pratica)
+                        for p_l in partes_lousa:
+                            p_l_clean = re.sub(r'[*#\[\]]', '', p_l).strip()
+                            if len(p_l_clean) > 3 and not re.search(TERMOS_PROIBIDOS_ASSUNTO, p_l_clean):
+                                topicos_reais_minerados.append(p_l_clean)
+
+                    # 2. Aulas Selecionadas do Acervo (Apenas se for conteúdo real)
+                    if mats_selecionados:
+                        for m_nome in mats_selecionados:
+                            m_rows = df_aulas[df_aulas['TIPO_MATERIAL'] == m_nome]
+                            if not m_rows.empty:
+                                txt_aula_bruto = str(m_rows.iloc[0]['CONTEUDO'])
+                                c_espec_a = (
+                                    ai.extrair_tag(txt_aula_bruto, "CONTEUDOS_ESPECIFICOS") or 
+                                    ai.extrair_tag(txt_aula_bruto, "OBJETO_CONHECIMENTO") or
+                                    ai.extrair_tag(txt_aula_bruto, "PROFESSOR")
+                                )
+                                if c_espec_a:
+                                    partes_a = re.split(r'[;\n•,]', c_espec_a)
+                                    for p_a in partes_a:
+                                        p_a_clean = re.sub(r'\[cite:.*?\]|[*#\[\]]', '', p_a).strip()
+                                        if len(p_a_clean) > 3 and not re.search(TERMOS_PROIBIDOS_ASSUNTO, p_a_clean):
+                                            topicos_reais_minerados.append(p_a_clean)
+
+                    # 3. Planos de Ensino do Trimestre (DB_PLANOS.csv)
                     if not df_planos.empty:
                         planos_trim = df_planos[
                             (df_planos['ANO'].astype(str).str.contains(str(ano_av))) & 
@@ -2291,15 +2319,17 @@ elif menu == "📝 Central de Avaliações":
                                 ai.extrair_tag(txt_p, "HABILIDADE_BNCC")
                             )
                             if c_espec:
-                                partes = re.split(r'[;\n•]', c_espec)
+                                partes = re.split(r'[;\n•,]', c_espec)
                                 for p in partes:
                                     p_clean = re.sub(r'\[cite:.*?\]|[*#\[\]]', '', p).strip()
-                                    if len(p_clean) > 3 and not re.search(r"(?i)^(?:6º|7º|8º|9º|Aula|Semana|Conteúdo|EF)", p_clean):
+                                    if len(p_clean) > 3 and not re.search(TERMOS_PROIBIDOS_ASSUNTO, p_clean):
                                         topicos_reais_minerados.append(p_clean)
 
-                    if not df_curriculo.empty:
+                    # 4. Complemento na Matriz Curricular (DB_CURRICULO.csv)
+                    if len(topicos_reais_minerados) < qtd_q and not df_curriculo.empty:
                         col_ano_c = next((c for c in df_curriculo.columns if 'ANO' in c.upper()), None)
                         col_trim_c = next((c for c in df_curriculo.columns if trim_filtro.upper() in c.upper()), None)
+                        
                         if col_ano_c and col_trim_c:
                             df_curr_trim = df_curriculo[df_curriculo[col_ano_c].astype(str).str.contains(str(ano_av))].copy()
                             for _, r_curr in df_curr_trim.iterrows():
@@ -2308,10 +2338,14 @@ elif menu == "📝 Central de Avaliações":
                                     partes_c = re.split(r'[;\n•]', txt_c)
                                     for p_c in partes_c:
                                         p_c_clean = re.sub(r'\[cite:.*?\]|[*#\[\]]', '', p_c).strip()
-                                        if len(p_c_clean) > 3 and p_c_clean not in topicos_reais_minerados:
+                                        if len(p_c_clean) > 3 and not re.search(TERMOS_PROIBIDOS_ASSUNTO, p_c_clean):
                                             topicos_reais_minerados.append(p_c_clean)
 
-                    topicos_finais_ordenados = list(dict.fromkeys(topicos_reais_minerados))
+                    # Limpeza de duplicatas mantendo ordem
+                    topicos_finais_ordenados = []
+                    for t_item in topicos_reais_minerados:
+                        if t_item not in topicos_finais_ordenados and not re.search(TERMOS_PROIBIDOS_ASSUNTO, t_item):
+                            topicos_finais_ordenados.append(t_item)
 
                     contexto_base_texto = ""
                     if pincamento_pratica.strip(): contexto_base_texto += f"--- PINÇAMENTO DA PRÁTICA REAL (RESOLVIDO EM SALA) ---\n{pincamento_pratica.strip()}\n\n"
@@ -2429,13 +2463,14 @@ elif menu == "📝 Central de Avaliações":
                         if "erro" in res_json:
                             st.error(f"⚠️ Erro ao processar o lote: {res_json['erro']}")
                         else:
+                            TERMOS_PROIBIDOS_ASSUNTO = r"(?i)(?:REVIS[AÃ]O|PROVA|TESTE|SONDA|DOSSI[EÊ]|RAIO-X|AVALIA[CÇ][AÃ]O|APLICA[CÇ][AÃ]O|2[ªA]\s*CHAMADA|RECUPERA[CÇ][AÃ]O|GABARITO|AULA\s*\d+|SEMANA\s*\d+)"
                             for q_data in res_json.get("questoes", []):
                                 q_num = int(q_data.get("q", 0))
                                 for item in f['mapa']:
                                     if item['q'] == q_num:
                                         descritor_real = q_data.get('habilidade', '')
-                                        if descritor_real and len(descritor_real) > 2 and "D" in descritor_real[:3]:
-                                            item['tema'] = f"{descritor_real} - {item['tema']}"
+                                        if descritor_real and len(descritor_real) > 2 and not re.search(TERMOS_PROIBIDOS_ASSUNTO, descritor_real):
+                                            item['tema'] = f"{descritor_real} - {item['tema']}" if "D" in descritor_real[:3] or "EF" in descritor_real[:3] else descritor_real
                                         
                                         item['dados'] = {
                                             'ENUNCIADO': q_data.get('enunciado', ''),
@@ -2457,7 +2492,9 @@ elif menu == "📝 Central de Avaliações":
 
             for i, item in enumerate(f['mapa']):
                 label_status = "✅ Aprovado" if item['status'] == 'aprovado' else ("🔍 Em Revisão" if item['status'] == 'revisao' else "⏳ Pendente")
-                assunto_exibicao = item['tema'] if item['tema'] and item['tema'].strip() != "**" else f"Tópico Curricular - Item {item['q']:02d}"
+                
+                # Validador de Assunto Válido (Elimina lixo e textos entre asteriscos)
+                assunto_exibicao = item['tema'] if item['tema'] and item['tema'].strip() not in ["**", ""] and not re.search(r"(?i)^(?:REVIS[AÃ]O|PROVA|TESTE|DOSSI[EÊ])", item['tema']) else f"Tópico Curricular de Matemática - Item {item['q']:02d}"
 
                 with st.container(border=True):
                     c_card_head1, c_card_head2 = st.columns([3, 1])
