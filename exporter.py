@@ -219,116 +219,102 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     return file_stream
 
 # ==============================================================================
-# 3. MATERIAL PEI ADAPTADO (NÍVEIS 1 E 2)
+# 3. MATERIAL PEI ADAPTADO (NÍVEIS 1 E 2 - LIMPO E ESTRUTURADO)
 # ==============================================================================
 def gerar_docx_pei_v25(titulo_doc, conteudo, info):
     file_stream = io.BytesIO()
-    doc = Document()
-    section = doc.sections[0]
-    section.top_margin, section.bottom_margin = Inches(0.4), Inches(0.4)
-    section.left_margin, section.right_margin = Inches(0.4), Inches(0.4)
+    try:
+        doc = Document()
+        section = doc.sections[0]
+        section.top_margin, section.bottom_margin = Inches(0.4), Inches(0.4)
+        section.left_margin, section.right_margin = Inches(0.4), Inches(0.4)
 
-    style = doc.styles['Normal']
-    style.font.name = 'Arial'
-    style.font.size = Pt(10.5)
+        style = doc.styles['Normal']
+        style.font.name = 'Arial'
+        style.font.size = Pt(10)
 
-    configurar_cabecalho_mestre(doc, info, "ATIVIDADE ADAPTADA", mostrar_nota=True)
-    doc.add_paragraph()
+        # 1. Sanitização do Conteúdo (Elimina saudações/bate-papo da IA)
+        conteudo_limpo = str(conteudo).strip()
+        conteudo_limpo = re.sub(r'^(?:Olá|Como especialista|Como profissional|Prezado|Segue).*?\n\n', '', conteudo_limpo, flags=re.IGNORECASE | re.DOTALL).strip()
 
-    num_total_q = len(re.findall(r'(?i)(?:QUEST[AÃ]O\s*(?:PEI\s*)?|Q)\s*\d+', str(conteudo)))
-    if num_total_q == 0: num_total_q = 5 
+        # 2. Cabeçalho Mestre Oficial da Escola
+        label_pei = "AVALIAÇÃO ADAPTADA (PEI NÍVEL 1)" if "N1" in titulo_doc.upper() or "NIVEL_1" in titulo_doc.upper() else "AVALIAÇÃO ADAPTADA (PEI NÍVEL 2)"
+        configurar_cabecalho_mestre(doc, info, label_pei, mostrar_nota=True)
+        doc.add_paragraph()
 
-    top_table = doc.add_table(rows=1, cols=2)
-    top_table.columns[0].width = Inches(3.5)
-    top_table.columns[1].width = Inches(4.0)
-    
-    c_orient = top_table.cell(0, 0)
-    p_tit = c_orient.paragraphs[0]
-    p_tit.add_run("ORIENTAÇÕES PEI:").font.bold = True
-    
-    val_total = info.get('valor', '3,0')
-    orient_list = [
-        "Leia atentamente cada enunciado.",
-        "Marque apenas uma alternativa por questão.",
-        f"Valor Total: {val_total}"
-    ]
-    for txt in orient_list:
-        p = c_orient.add_paragraph()
-        p.add_run(f"• {txt}").font.size = Pt(9)
-        p.paragraph_format.space_after = Pt(1)
+        # 3. Contagem das Questões para o Cartão-Resposta
+        num_total_q = len(re.findall(r'(?i)(?:QUEST[AÃ]O\s*(?:PEI\s*)?|Q)\s*\d+', conteudo_limpo))
+        if num_total_q == 0: 
+            num_total_q = int(helper_sosa_float(info.get('qtd', 10)))
 
-    c_gab = top_table.cell(0, 1)
-    if num_total_q <= 10:
-        gab_grid = c_gab.add_table(rows=num_total_q + 1, cols=4)
-        gab_grid.style = 'Table Grid'
-        for i, lab in enumerate(["Q", "A", "B", "C"]):
-            c = gab_grid.cell(0, i)
-            set_cell_background(c, "F1F5F9")
-            c.paragraphs[0].add_run(lab).font.bold = True
-        for r in range(1, num_total_q + 1):
-            gab_grid.cell(r, 0).paragraphs[0].add_run(f"{r:02d}").font.size = Pt(9)
-            for col in range(1, 4): 
-                gab_grid.cell(r, col).paragraphs[0].add_run("○").font.size = Pt(13)
-    else:
-        half = (num_total_q + 1) // 2
-        gab_grid = c_gab.add_table(rows=half + 1, cols=8)
-        gab_grid.style = 'Table Grid'
-        headers = ["Q", "A", "B", "C", "Q", "A", "B", "C"]
-        for i, lab in enumerate(headers):
-            c = gab_grid.cell(0, i)
-            set_cell_background(c, "F1F5F9")
-            c.paragraphs[0].add_run(lab).font.bold = True
-        
-        for r in range(1, num_total_q + 1):
-            row_idx = r if r <= half else r - half
-            col_offset = 0 if r <= half else 4
-            gab_grid.cell(row_idx, col_offset).paragraphs[0].add_run(f"{r:02d}").font.size = Pt(9)
-            for col in range(1, 4):
-                gab_grid.cell(row_idx, col_offset + col).paragraphs[0].add_run("○").font.size = Pt(13)
+        # 4. Cartão-Resposta Fiducial de 3 Colunas (A, B, C) com Largura de 1,0 cm
+        adicionar_cartao_resposta_fiducial_word(doc, num_total_q, is_pei=True)
+        doc.add_paragraph()
 
-    doc.add_paragraph()
+        # 5. Enunciados das Questões em Coluna Dupla
+        new_section = doc.add_section(WD_SECTION.CONTINUOUS)
+        sectPr = new_section._sectPr
+        cols = sectPr.xpath('./w:cols')[0]
+        cols.set(qn('w:num'), '2')
+        cols.set(qn('w:space'), '420')
 
-    new_section = doc.add_section(WD_SECTION.CONTINUOUS)
-    sectPr = new_section._sectPr
-    cols = sectPr.xpath('./w:cols')[0]
-    cols.set(qn('w:num'), '2')
-    cols.set(qn('w:space'), '420')
+        linhas = conteudo_limpo.split('\n')
+        for linha in linhas:
+            l_s = linha.strip()
+            if not l_s: continue
 
-    linhas = str(conteudo).split('\n')
-    for linha in linhas:
-        l_s = linha.strip()
-        if not l_s: continue
+            # Ilustração / Prompt Imagem
+            if "[" in l_s and "PROMPT IMAGEM" in l_s.upper():
+                adicionar_box_imagem_word(doc, "ESPAÇO PARA ILUSTRAÇÃO DA QUESTÃO")
+                continue
 
-        if "[" in l_s and "PROMPT IMAGEM" in l_s.upper():
-            adicionar_box_imagem_word(doc, "ESPAÇO PARA ILUSTRAÇÃO DA QUESTÃO")
-            continue
+            p = doc.add_paragraph()
+            p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+            p.paragraph_format.space_after = Pt(4)
+            p.paragraph_format.line_spacing = 1.15
 
-        p = doc.add_paragraph()
-        p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-        p.paragraph_format.space_after = Pt(4)
-        p.paragraph_format.line_spacing = 1.15
+            # Seções especiais de suporte PEI
+            secoes_pei = ["PARA LEMBRAR", "OBJETIVO", "INSTRUÇÕES", "PASSO A PASSO", "DICA MESTRA"]
+            if any(x in l_s.upper() for x in secoes_pei):
+                p.paragraph_format.space_before = Pt(4)
+                txt_limpo = l_s.replace("[", "").replace("]", "").replace(":", "")
+                run = p.add_run(f"📌 {txt_limpo}")
+                run.bold = True
+                run.font.size = Pt(9.5)
+                run.font.color.rgb = RGBColor(41, 98, 255)
+                p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            elif re.match(r"^(?:QUEST[AÃ]O\s*(?:PEI\s*)?|Q)\s*\d+", l_s, re.IGNORECASE):
+                match = re.match(r"^((?:QUEST[AÃ]O\s*(?:PEI\s*)?|Q)\s*\d+)([\.\s:\-]+)(.*)", l_s, re.IGNORECASE)
+                if match:
+                    q_num_str = re.sub(r'\D', '', match.group(1))
+                    run_r = p.add_run(f"QUESTÃO {int(q_num_str):02d} - ")
+                    run_r.bold = True
+                    run_r.font.size = Pt(10)
+                    run_r.font.color.rgb = RGBColor(0, 51, 102)
+                    adicionar_texto_formatado(p, match.group(3).strip())
+                else: 
+                    adicionar_texto_formatado(p, l_s)
+            elif re.match(r'^[A-C][\)\.]', l_s):
+                p.paragraph_format.left_indent = Inches(0.15)
+                letra_match = re.match(r'^([A-C][\)\.])(.*)', l_s)
+                if letra_match:
+                    run_letra = p.add_run(letra_match.group(1))
+                    run_letra.bold = True
+                    adicionar_texto_formatado(p, letra_match.group(2))
+                    continue
+            else:
+                adicionar_texto_formatado(p, l_s)
 
-        secoes_pei = ["PARA LEMBRAR", "OBJETIVO", "INSTRUÇÕES", "ATIVIDADE", "PASSO A PASSO", "DICA MESTRA"]
-        if any(x in l_s.upper() for x in secoes_pei):
-            p.paragraph_format.space_before = Pt(6)
-            txt_limpo = l_s.replace("[", "").replace("]", "").replace(":", "")
-            run = p.add_run(f"📌 {txt_limpo}")
-            run.bold = True
-            run.font.color.rgb = RGBColor(41, 98, 255)
-            p.alignment = WD_ALIGN_PARAGRAPH.LEFT
-        elif re.match(r"^(?:QUEST[AÃ]O\s*(?:PEI\s*)?|Q)\d+", l_s, re.IGNORECASE):
-            match = re.match(r"^((?:QUEST[AÃ]O\s*(?:PEI\s*)?|Q)\d+)([\.\s:]+)(.*)", l_s, re.IGNORECASE)
-            if match:
-                run_r = p.add_run(f"{match.group(1).upper()}. ")
-                run_r.bold = True
-                adicionar_texto_formatado(p, match.group(3).strip())
-            else: adicionar_texto_formatado(p, l_s)
-        else:
-            adicionar_texto_formatado(p, l_s)
-
-    doc.save(file_stream)
-    file_stream.seek(0)
-    return file_stream
+        doc.save(file_stream)
+        file_stream.seek(0)
+        return file_stream
+    except Exception as e:
+        file_stream = io.BytesIO()
+        err_doc = Document()
+        err_doc.add_paragraph(f"ERRO NO EXPORTER PEI: {str(e)}")
+        err_doc.save(file_stream)
+        file_stream.seek(0)
+        return file_stream
 
 # ==============================================================================
 # 4. GUIA DO PROFESSOR (COM DESCRITORES SAEB E DISTRATORES CIENTÍFICOS)
