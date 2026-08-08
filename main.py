@@ -1441,12 +1441,17 @@ elif menu == "📝 Diário de Bordo Rápido":
             renderizar_diario_rapido_fragmento()
 
 
+
+
+
+
 # ==============================================================================
-# MÓDULO: LABORATÓRIO DE PRODUÇÃO DIDÁTICA - V2026.MASTER (6 BOTÕES RESTAURADOS)
+# MÓDULO: LABORATÓRIO DE PRODUÇÃO DIDÁTICA (CRIADOR DE AULAS) - V2026.ULTIMATE
+# (INÍCIO/MEIO/FIM, LETRAMENTO BNCC, PEI ON-DEMAND COM PEI 3 ANCORADO E MODO TURBO 1-CLIQUE)
 # ==============================================================================
 elif menu == "🧪 Criador de Aulas":
     st.title("Laboratório de Produção Didática")
-    st.caption("Desenvolva aulas de safra, projetos interdisciplinares, cadernos de exercícios ancorados no Livro Didático e listas híbridas.")
+    st.caption("Desenvolva aulas de safra (Início ➔ Meio ➔ Fim), projetos interdisciplinares, listas de exercícios ancoradas no Livro Didático e adaptações PEI On-Demand.")
     st.markdown("---")
     
     if "v_lab" not in st.session_state: 
@@ -1456,7 +1461,7 @@ elif menu == "🧪 Criador de Aulas":
     if "forja_aula" not in st.session_state:
         st.session_state.forja_aula = {
             'fase': 1, 'info': {}, 'links_web': '', 'qtd_q': 5, 'tipo_material': 'AULA',
-            'teoria': '', 'reg_q': '', 'reg_gab': '', 'pei_1': '', 'pei_3': '', 'pei_gab': '', 'nome_base': ''
+            'teoria': '', 'reg_q': '', 'reg_gab': '', 'pei_1': '', 'pei_2': '', 'pei_3': '', 'pei_gab': '', 'nome_base': ''
         }
     
     fa = st.session_state.forja_aula
@@ -1467,7 +1472,7 @@ elif menu == "🧪 Criador de Aulas":
             if k in st.session_state: del st.session_state[k]
         st.session_state.forja_aula = {
             'fase': 1, 'info': {}, 'links_web': '', 'qtd_q': 5, 'tipo_material': 'AULA',
-            'teoria': '', 'reg_q': '', 'reg_gab': '', 'pei_1': '', 'pei_3': '', 'pei_gab': '', 'nome_base': ''
+            'teoria': '', 'reg_q': '', 'reg_gab': '', 'pei_1': '', 'pei_2': '', 'pei_3': '', 'pei_gab': '', 'nome_base': ''
         }
         st.cache_data.clear() 
         st.session_state.v_lab = int(time.time())
@@ -1508,14 +1513,13 @@ elif menu == "🧪 Criador de Aulas":
         
         return memoria_txt, conteudos_usados
 
-    tab_forja, tab_acervo_lab = st.tabs(["Forja de Materiais", "Acervo Digital"])
+    tab_forja, tab_acervo_lab = st.tabs(["Forja de Materiais", "Acervo Digital & Hub de Produção"])
 
     # ==============================================================================
     # ABA 1: FORJA DE MATERIAIS
     # ==============================================================================
     with tab_forja:
         if "lab_temp" in st.session_state:
-            # 🚨 MESA DE LAPIDAÇÃO E REFINO ISOLADA EM FRAGMENTO
             @st.fragment
             def renderizar_mesa_lapidacao_lab():
                 txt_base = st.session_state.lab_temp
@@ -1560,7 +1564,8 @@ elif menu == "🧪 Criador de Aulas":
                 val_prof = ai.extrair_tag(txt_base, "PROFESSOR") or ai.extrair_tag(txt_base, "JUSTIFICATIVA_PHC")
                 val_alu = ai.extrair_tag(txt_base, "ALUNO") or ai.extrair_tag(txt_base, "PASSO_A_PASSO")
                 val_gab = ai.extrair_tag(txt_base, "GABARITO") or ai.extrair_tag(txt_base, "RUBRICA_DE_MERITO")
-                val_pei = ai.extrair_tag(txt_base, "PEI") or ai.extrair_tag(txt_base, "ESTRATEGIA_DUA_PEI")
+                val_pei1 = ai.extrair_tag(txt_base, "PEI_NIVEL_1") or ai.extrair_tag(txt_base, "NIVEL_1") or ai.extrair_tag(txt_base, "PEI")
+                val_pei3 = ai.extrair_tag(txt_base, "PEI_NIVEL_3") or ai.extrair_tag(txt_base, "NIVEL_3")
                 val_img = ai.extrair_tag(txt_base, "IMAGENS")
 
                 t_prof, t_alu, t_gab, t_pei_tab, t_img_tab, t_sync = st.tabs(["Guia Professor", "Folha Aluno", "Gabarito", "Adaptação PEI", "Imagens", "Sincronia"])
@@ -1578,8 +1583,10 @@ elif menu == "🧪 Criador de Aulas":
                     else: ed_gab = st.text_area("Gabarito:", val_gab, height=200, key=f"ed_res_reg_{v}")
                 
                 with t_pei_tab: 
-                    if modo_leitura: st.markdown(preparar_para_leitura(val_pei))
-                    else: ed_pei = st.text_area("PEI (Obrigatório):", val_pei, height=350, key=f"ed_pei_reg_{v}")
+                    st.markdown("**🔵 PEI Nível 1 / Nível 2:**")
+                    ed_pei1 = st.text_area("Nível 1/2:", val_pei1, height=200, key=f"ed_pei1_reg_{v}")
+                    st.markdown("**🔴 PEI Nível 3 (Bento Cards + Rubrica):**")
+                    ed_pei3 = st.text_area("Nível 3:", val_pei3, height=200, key=f"ed_pei3_reg_{v}")
                 
                 with t_img_tab: 
                     ed_img = st.text_area("Prompts de Imagem:", val_img, height=150, key=f"ed_img_reg_{v}")
@@ -1599,16 +1606,24 @@ elif menu == "🧪 Criador de Aulas":
                             doc_alu = exporter.gerar_docx_aluno_v24(s_id, ed_alu, info_doc)
                             link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{s_id}_ALUNO", modo="AULA")
                             
-                            status.write("Gerando Material PEI...")
-                            doc_pei = exporter.gerar_docx_pei_v25(f"{s_id}_PEI", ed_pei, info_doc)
-                            link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{s_id}_PEI", modo="AULA")
+                            link_pei1 = "N/A"
+                            if ed_pei1:
+                                status.write("Gerando Material PEI N1...")
+                                doc_pei1 = exporter.gerar_docx_pei_v25(f"{s_id}_PEI_N1", ed_pei1, info_doc)
+                                link_pei1 = db.subir_e_converter_para_google_docs(doc_pei1, f"{s_id}_PEI_N1", modo="AULA")
                             
+                            link_pei3 = "N/A"
+                            if ed_pei3:
+                                status.write("Gerando Material PEI N3 (Bento Cards)...")
+                                doc_pei3 = exporter.gerar_docx_pei_qualitativa(f"{s_id}_PEI_N3", ed_pei3, info_doc)
+                                link_pei3 = db.subir_e_converter_para_google_docs(doc_pei3, f"{s_id}_PEI_N3", modo="AULA")
+
                             status.write("Gerando Guia do Professor...")
                             doc_prof = exporter.gerar_docx_professor_v25(s_id, ed_prof, info_doc)
                             link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{s_id}_PROF", modo="AULA")
                             
-                            links_f = f"--- LINKS ---\nRegular({link_alu})\nPEI({link_pei})\nProf({link_prof})"
-                            conteudo_final = f"[PROFESSOR]\n{ed_prof}\n\n[ALUNO]\n{ed_alu}\n\n[GABARITO]\n{ed_gab}\n\n[PEI]\n{ed_pei}\n\n[IMAGENS]\n{ed_img}\n\n{links_f}"
+                            links_f = f"--- LINKS ---\nRegular({link_alu})\nPEI_N1({link_pei1})\nPEI_N3({link_pei3})\nProf({link_prof})"
+                            conteudo_final = f"[PROFESSOR]\n{ed_prof}\n\n[ALUNO]\n{ed_alu}\n\n[GABARITO]\n{ed_gab}\n\n[PEI_NIVEL_1]\n{ed_pei1}\n\n[PEI_NIVEL_3]\n{ed_pei3}\n\n[IMAGENS]\n{ed_img}\n\n{links_f}"
                             
                             db.salvar_no_banco("DB_AULAS_PRONTAS",[
                                 datetime.now().strftime("%d/%m/%Y"), sem_ref, s_id, conteudo_final, ano_str, link_alu
@@ -1623,7 +1638,6 @@ elif menu == "🧪 Criador de Aulas":
             if fa['fase'] == 1:
                 st.markdown("### Painel de Configuração")
                 
-                # 🚨 UI NOVA GERAÇÃO: ST.PILLS PARA TIPO DE MATERIAL
                 tipo_criacao = st.pills(
                     "Tipo de Material a Desenvolver:", 
                     ["Aula de Safra (Teoria e Prática)", "Projeto ou Trabalho Interdisciplinar", "Lista Híbrida ou Recomposição de Elite"], 
@@ -1639,7 +1653,7 @@ elif menu == "🧪 Criador de Aulas":
                         
                         c1, c2 = st.columns([1, 2])
                         ano_lab = c1.selectbox("Série:", [6, 7, 8, 9], key=f"prod_ano_{v}")
-                        planos_ano = df_planos[df_planos["ANO"].astype(str).str.contains(str(ano_lab))]
+                        planos_ano = df_planos[df_planos["ANO"].astype(str).str.contains(str(ano_lab))] if not df_planos.empty else pd.DataFrame()
                         
                         if planos_ano.empty:
                             st.error("Nenhum planejamento encontrado. Crie o plano no Ponto ID primeiro.")
@@ -1653,7 +1667,7 @@ elif menu == "🧪 Criador de Aulas":
                                 t_sab = ai.extrair_tag(p_txt, "SABADO_LETIVO")
                                 pede_sab = len(t_sab) > 10 and "N/A" not in t_sab.upper() and "NÃO PROGRAMADA" not in t_sab.upper()
                                 
-                                a_geradas = df_aulas[(df_aulas['ANO'].str.contains(str(ano_lab))) & (df_aulas['SEMANA_REF'] == sem)]['TIPO_MATERIAL'].astype(str).tolist()
+                                a_geradas = df_aulas[(df_aulas['ANO'].astype(str).str.contains(str(ano_lab))) & (df_aulas['SEMANA_REF'] == sem)]['TIPO_MATERIAL'].astype(str).tolist() if not df_aulas.empty else []
                                 t_a1 = any("Aula 1" in mat for mat in a_geradas)
                                 t_a2 = any("Aula 2" in mat for mat in a_geradas)
                                 t_sab_gen = any("Sábado" in mat or "Sabado" in mat for mat in a_geradas)
@@ -1675,7 +1689,7 @@ elif menu == "🧪 Criador de Aulas":
                                 base_herdada = ai.extrair_tag(plano_txt, "BASE_DIDATICA")
                                 obj_geral = ai.extrair_tag(plano_txt, "OBJETO_CONHECIMENTO") or ai.extrair_tag(plano_txt, "CONTEUDO_GERAL")
 
-                                a_geradas_sem = df_aulas[(df_aulas['ANO'].str.contains(str(ano_lab))) & (df_aulas['SEMANA_REF'] == sem_lab)]['TIPO_MATERIAL'].astype(str).tolist()
+                                a_geradas_sem = df_aulas[(df_aulas['ANO'].astype(str).str.contains(str(ano_lab))) & (df_aulas['SEMANA_REF'] == sem_lab)]['TIPO_MATERIAL'].astype(str).tolist() if not df_aulas.empty else []
                                 tem_aula1 = any("Aula 1" in mat for mat in a_geradas_sem)
                                 tem_aula2 = any("Aula 2" in mat for mat in a_geradas_sem)
                                 tem_sabado = any("Sábado" in mat or "Sabado" in mat for mat in a_geradas_sem)
@@ -1699,9 +1713,8 @@ elif menu == "🧪 Criador de Aulas":
                                 else:
                                     c_c1, c_c2 = st.columns([1, 1])
                                     
-                                    # 🚨 UI NOVA GERAÇÃO: ST.PILLS PARA AULA ALVO
                                     aula_alvo_prod = c_c1.pills("Material Alvo:", opcoes_disponiveis, default=opcoes_disponiveis[0], key=f"pills_aula_alvo_{v}")
-                                    qtd_q_prod = c_c2.slider("Nº de Exercícios:", 1, 15, 5, key=f"sld_qtd_q_{v}")
+                                    qtd_q_prod = c_c2.slider("Nº de Exercícios na Folha:", 1, 15, 5, key=f"sld_qtd_q_{v}")
 
                                     if "1" in str(aula_alvo_prod): tag_roteiro = "AULA_1"
                                     elif "2" in str(aula_alvo_prod): tag_roteiro = "AULA_2"
@@ -1710,12 +1723,12 @@ elif menu == "🧪 Criador de Aulas":
                                     roteiro_especifico = ai.extrair_tag(plano_txt, tag_roteiro)
                                     st.info(f"Roteiro Ativo do Plano: {roteiro_especifico}")
 
-                                    # 🚨 CAIXA DE RECORTE DO LIVRO DIDÁTICO / ANCORAGEM REFORÇADA MULTI-INTERVALO
+                                    # ANCORAGEM NO LIVRO DIDÁTICO MULTI-INTERVALO
                                     st.markdown("##### 📖 Ancoragem no Livro Didático & Autonomia Docente")
                                     
                                     col_p1, col_p2 = st.columns(2)
-                                    pags_teo_lab = col_p1.text_input("📘 Páginas de Teoria (Aula 1):", placeholder="Ex: 184-186, 189", key=f"pags_teo_lab_{v}", help="Aceita intervalos e páginas avulsas (ex: 184-186, 189)")
-                                    pags_ex_lab = col_p2.text_input("📝 Páginas de Exercícios (Aula 2):", placeholder="Ex: 187-188, 190-192", key=f"pags_ex_lab_{v}", help="Aceita intervalos e páginas avulsas (ex: 187-188, 190-192)")
+                                    pags_teo_lab = col_p1.text_input("📘 Páginas de Teoria (Aula 1):", placeholder="Ex: 184-186, 189", key=f"pags_teo_lab_{v}")
+                                    pags_ex_lab = col_p2.text_input("📝 Páginas de Exercícios (Aula 2):", placeholder="Ex: 187-188, 190-192", key=f"pags_ex_lab_{v}")
 
                                     txt_lab_teo_ext, txt_lab_ex_ext = "", ""
                                     
@@ -1732,12 +1745,11 @@ elif menu == "🧪 Criador de Aulas":
 
                                     recorte_exercicios_livro = st.text_area(
                                         "✍️ Injeção Auxiliar / Texto do Professor (Opcional):",
-                                        placeholder="Cole aqui exercícios ou textos do seu caderno/provas para somar com o livro didático...",
-                                        height=100,
+                                        placeholder="Cole aqui exercícios ou notícias extras...",
+                                        height=90,
                                         key=f"recorte_aula_lab_{v}"
                                     )
 
-                                    # 🚨 MESA DE INSPEÇÃO DA IA
                                     if txt_lab_teo_ext or txt_lab_ex_ext or recorte_exercicios_livro.strip():
                                         with st.expander("👁️ MESA DE INSPEÇÃO DA IA (PRÉVIA DO CONTEÚDO LIDO)", expanded=True):
                                             t_lab_i1, t_lab_i2, t_lab_i3 = st.tabs(["📘 Teoria Fatiada", "📝 Exercícios Fatiados", "✍️ Texto Auxiliar"])
@@ -1751,15 +1763,16 @@ elif menu == "🧪 Criador de Aulas":
                                                 if recorte_exercicios_livro.strip(): st.text_area("Texto Auxiliar:", recorte_exercicios_livro, height=150, disabled=True)
                                                 else: st.info("Nenhum texto auxiliar informado.")
 
-                                    # Consolidação do pacote completo para enviar à IA
                                     pacote_recorte_aula = ""
                                     if txt_lab_teo_ext: pacote_recorte_aula += f"--- PÁGINAS DE TEORIA ---\n{txt_lab_teo_ext}\n\n"
                                     if txt_lab_ex_ext: pacote_recorte_aula += f"--- PÁGINAS DE EXERCÍCIOS ---\n{txt_lab_ex_ext}\n\n"
                                     if recorte_exercicios_livro.strip(): pacote_recorte_aula += f"--- TEXTO AUXILIAR DO PROFESSOR ---\n{recorte_exercicios_livro.strip()}\n\n"
 
-                                    links_web_aula = st.text_area("Enriquecimento por Links da Web / URL do Livro no Drive:", value=base_herdada if "https" in base_herdada else "")
+                                    links_web_aula = st.text_area("Enriquecimento por Links da Web / URL no Drive:", value=base_herdada if "https" in base_herdada else "")
 
-                                    if st.button("🚀 Iniciar Forja Semiótica Ancorada", use_container_width=True, type="primary"):
+                                    c_f_btn1, c_f_btn2 = st.columns(2)
+
+                                    if c_f_btn1.button("🚀 Iniciar Forja Guiada por Etapas", use_container_width=True, type="primary"):
                                         fa['info'] = {
                                             "ano": ano_lab, "semana_ref": sem_lab, "aula_alvo": aula_alvo_prod,
                                             "roteiro": roteiro_especifico, "habilidade": ai.extrair_tag(plano_txt, "HABILIDADE_BNCC"),
@@ -1771,24 +1784,56 @@ elif menu == "🧪 Criador de Aulas":
                                         fa['fase'] = 2
                                         st.rerun()
 
+                                    # MELHORIA 4: MODO TURBO 1-CLIQUE
+                                    if c_f_btn2.button("⚡ FORJA TURBO COMPLETA (1-CLIQUE)", use_container_width=True):
+                                        with st.status("⚡ Executando Forja Turbo Completa...", expanded=True) as status_turbo:
+                                            info_turbo = {
+                                                "ano": ano_lab, "semana_ref": sem_lab, "aula_alvo": aula_alvo_prod,
+                                                "roteiro": roteiro_especifico, "habilidade": ai.extrair_tag(plano_txt, "HABILIDADE_BNCC"),
+                                                "objetivos": ai.extrair_tag(plano_txt, "OBJETIVOS_ENSINO"), "base": base_herdada,
+                                                "trimestre": trim_real, "recorte_livro": pacote_recorte_aula
+                                            }
+                                            
+                                            status_turbo.write("👨‍🏫 1/3 Gerando Guia do Professor (Início ➔ Meio ➔ Fim)...")
+                                            prompt_teoria = f"SÉRIE: {ano_lab}º Ano. ASSUNTO: {aula_alvo_prod}.\nHABILIDADE: {info_turbo['habilidade']}\nROTEIRO: {roteiro_especifico}\nBASE LIVRO: {base_herdada}"
+                                            res_teoria = ai.gerar_ia("FORJA_AULA_TEORIA", prompt_teoria, url_drive=base_herdada if "http" in base_herdada else None, recorte_livro=pacote_recorte_aula)
+                                            fa['teoria'] = ai.extrair_tag(res_teoria, "PROFESSOR") or res_teoria
+
+                                            status_turbo.write("📝 2/3 Gerando Folha do Aluno e Gabarito (BNCC/SAEB)...")
+                                            prompt_ex = f"SÉRIE: {ano_lab}º Ano. QUANTIDADE: {qtd_q_prod}.\nTEORIA:\n{fa['teoria']}"
+                                            res_ex = ai.gerar_ia("FORJA_AULA_EXERCICIOS", prompt_ex)
+                                            fa['reg_q'] = ai.extrair_tag(res_ex, "ALUNO") or res_ex
+                                            fa['reg_gab'] = ai.extrair_tag(res_ex, "GABARITO") or "Gabarito não formatado."
+
+                                            status_turbo.write("♿ 3/3 Gerando Adaptações PEI Ancoradas no Tema...")
+                                            prompt_pei = f"Adapte para PEI N1 e PEI N3 (Ancorado no Tema):\n{fa['reg_q']}"
+                                            res_pei = ai.gerar_ia("FORJA_AULA_PEI", prompt_pei)
+                                            fa['pei_1'] = ai.extrair_tag(res_pei, "PEI_NIVEL_1") or res_pei
+                                            fa['pei_3'] = ai.extrair_tag(res_pei, "PEI_NIVEL_3") or "PEI N3 não formatado."
+
+                                            fa['info'] = info_turbo
+                                            fa['fase'] = 5
+                                            status_turbo.update(label="✅ Forja Turbo Concluída! Avance para finalizar.", state="complete")
+                                            st.balloons(); time.sleep(1); st.rerun()
+
                 elif "Projeto" in tipo_criacao:
                     fa['tipo_material'] = 'PROJETO'
                     with st.container(border=True):
-                        st.markdown("#### Parâmetros de Pesquisa")
+                        st.markdown("#### Parâmetros de Pesquisa Interdisciplinar")
                         c1, c2, c3 = st.columns([2, 1, 1])
                         natureza_p = c1.selectbox("Abordagem:", ["Semanário Temático", "Projeto de Identidade (Itabuna)", "Investigação Científica"])
                         ano_t = c2.selectbox("Série Alvo:", [6, 7, 8, 9])
                         modo_t = c3.selectbox("Modo:", ["Individual", "Equipes"])
 
-                        tema_t = st.text_input("Tema do Projeto:", placeholder="Ex: Matemática do Cacau")
+                        tema_t = st.text_input("Tema do Projeto:", placeholder="Ex: Matemática do Cacau e da Sustentabilidade")
                         valor_t = st.number_input("Valor (0 a 10.0):", 0.0, 10.0, 2.0)
                         
-                        df_cur_t = df_curriculo[df_curriculo["ANO"].astype(str).str.contains(str(ano_t))]
-                        conts_t = st.multiselect("Conteúdos da Matriz para Integrar:", sorted(df_cur_t["CONTEUDO_ESPECIFICO"].unique().tolist()) if not df_cur_t.empty else [])
+                        df_cur_t = df_curriculo[df_curriculo["ANO"].astype(str).str.contains(str(ano_t))] if not df_curriculo.empty else pd.DataFrame()
+                        conts_t = st.multiselect("Conteúdos da Matriz para Integrar:", sorted(df_cur_t["CONTEUDO_ESPECIFICO"].unique().tolist()) if not df_cur_t.empty and "CONTEUDO_ESPECIFICO" in df_cur_t.columns else [])
                         instr_extra_p = st.text_area("Instruções Adicionais de Pesquisa:")
 
                         if st.button("Gerar Projeto de Pesquisa", use_container_width=True, type="primary"):
-                            if not tema_t or not conts_t: st.error("Preencha o tema e os conteúdos.")
+                            if not tema_t: st.error("Preencha o tema do projeto.")
                             else:
                                 with st.spinner("Forjando Roteiro de Investigação..."):
                                     nome_legivel = util.gerar_nome_material_elite(ano_t, "Projeto", tema_t)
@@ -1816,9 +1861,9 @@ elif menu == "🧪 Criador de Aulas":
                                 st.success("✅ Memória de Aulas e Páginas do Livro resgatada com sucesso do Diário!")
                                 contexto_aulas = memoria_lista_txt
                             else:
-                                st.warning("Ainda não há aulas concluídas no Diário para este trimestre. Selecione as aulas manualmente abaixo:")
+                                st.warning("Ainda não há aulas concluídas no Diário para este trimestre.")
 
-                        df_aulas_ano = df_aulas[df_aulas['ANO'].str.contains(str(ano_alvo))]
+                        df_aulas_ano = df_aulas[df_aulas['ANO'].str.contains(str(ano_alvo))] if not df_aulas.empty else pd.DataFrame()
                         aulas_opcoes = df_aulas_ano['TIPO_MATERIAL'].tolist() if not df_aulas_ano.empty else []
                         aulas_sel = st.multiselect("Selecione temas adicionais de aulas passadas:", aulas_opcoes)
                         
@@ -1831,7 +1876,7 @@ elif menu == "🧪 Criador de Aulas":
                         
                         if st.button("🚀 INICIALIZAR LINHA DE MONTAGEM DE LISTA", use_container_width=True, type="primary"):
                             if not contexto_aulas.strip() and not aulas_sel:
-                                st.error("⚠️ Selecione pelo menos um tema de aula ou ative o resgate automático de memória.")
+                                st.error("⚠️ Selecione pelo menos um tema de aula ou ative o resgate de memória.")
                             else:
                                 with st.spinner("Estruturando mapa lógico do caderno ancorado no livro..."):
                                     s_id_l = util.gerar_sosa_id("LISTA", ano_alvo, trim_lista.split()[0])
@@ -1862,7 +1907,7 @@ elif menu == "🧪 Criador de Aulas":
 
             elif fa['fase'] == 2:
                 if fa.get('tipo_material') == 'AULA':
-                    st.markdown("### Fase 2: Tratado Didático (Teoria Ancorada no Livro)")
+                    st.markdown("### Fase 2: Tratado Didático & Roteiro de Lousa (Início ➔ Meio ➔ Fim)")
                     if not fa['teoria']:
                         with st.spinner("Gerando explicação didática com leitura das páginas do Livro..."):
                             prompt_teoria = (
@@ -1887,7 +1932,7 @@ elif menu == "🧪 Criador de Aulas":
                             if modo_leitura: st.markdown(preparar_para_leitura(fa['teoria']))
                             else: fa['teoria'] = st.text_area("Edição Manual da Teoria:", value=fa['teoria'], height=350)
                         
-                        inst_t = st.text_input("Ajuste da IA (Ex: 'Simplifique o exemplo'):", key="inst_t")
+                        inst_t = st.text_input("Ajuste da IA (Ex: 'Incorpore um gancho de notícia sobre tecnologia no Início'):", key="inst_t")
                         c_b1, c_b2 = st.columns(2)
                         
                         if c_b1.button("Aprovar Teoria e Avançar", type="primary", use_container_width=True):
@@ -1919,7 +1964,7 @@ elif menu == "🧪 Criador de Aulas":
                                 res_json = ai.gerar_ia_json("FORJA_LOTE_JSON", prompt_lote)
                                 
                                 if "erro" in res_json:
-                                    status.update(label="Falha na cota da API. Tente novamente.", state="error")
+                                    status.update(label="Falha no lote. Tente novamente.", state="error")
                                     st.error(res_json["erro"])
                                 else:
                                     questoes_retornadas = res_json.get("questoes", [])
@@ -1972,17 +2017,17 @@ elif menu == "🧪 Criador de Aulas":
                             fa['fase'] = 3; st.rerun()
 
             elif fa['fase'] == 3:
-                st.markdown("### Fase 3: Exercícios Regulares")
+                st.markdown("### Fase 3: Exercícios Regulares (Letramento Matemático BNCC/SAEB)")
                 if not fa['reg_q']:
-                    with st.spinner("Gerando folha de exercícios..."):
-                        prompt_ex = f"SÉRIE: {fa['info']['ano']}º Ano. QUANTIDADE: {fa['qtd_q']}.\nTEORIA:\n{fa['teoria']}\n🚨 USE AS TAGS [ALUNO] e [GABARITO]"
+                    with st.spinner("Gerando folha de exercícios com contextos reais e tabelas Markdown..."):
+                        prompt_ex = f"SÉRIE: {fa['info']['ano']}º Ano. QUANTIDADE: {fa['qtd_q']}.\nTEORIA DA AULA:\n{fa['teoria']}\n🚨 USE AS TAGS [ALUNO] e [GABARITO]"
                         res_ex = ai.gerar_ia("FORJA_AULA_EXERCICIOS", prompt_ex)
                         fa['reg_q'] = ai.extrair_tag(res_ex, "ALUNO") or res_ex
                         fa['reg_gab'] = ai.extrair_tag(res_ex, "GABARITO") or "Gabarito não formatado."
                         st.rerun()
                 else:
                     modo_leitura_ex = st.toggle("👁️ Visualização Real", value=True, key="tog_ex")
-                    t_q, t_g = st.tabs(["Folha do Aluno", "Gabarito"])
+                    t_q, t_g = st.tabs(["Folha do Aluno", "Gabarito & Resoluções"])
                     with t_q:
                         if modo_leitura_ex: st.markdown(preparar_para_leitura(fa['reg_q']))
                         else: fa['reg_q'] = st.text_area("Exercícios (Aluno):", value=fa['reg_q'], height=300)
@@ -1990,62 +2035,97 @@ elif menu == "🧪 Criador de Aulas":
                         if modo_leitura_ex: st.markdown(preparar_para_leitura(fa['reg_gab']))
                         else: fa['reg_gab'] = st.text_area("Resoluções comentadas:", value=fa['reg_gab'], height=200)
                     
-                    if st.button("Aprovar Exercícios e Avançar", type="primary", use_container_width=True):
+                    if st.button("Aprovar Exercícios e Avançar para Adaptação PEI", type="primary", use_container_width=True):
                         fa['fase'] = 4; st.rerun()
 
             elif fa['fase'] == 4:
-                st.markdown("### Fase 4: Adaptação PEI")
-                if not fa['pei_1']:
-                    with st.spinner("Adaptando para o formato inclusivo..."):
-                        prompt_pei = f"Adapte as questões abaixo para PEI N1 e PEI N3:\n{fa['reg_q']}\n🚨 USE AS TAGS [PEI_NIVEL_1], [PEI_NIVEL_3] e [GABARITO_PEI]"
+                st.markdown("### Fase 4: Adaptação PEI On-Demand (Ancorada no Tema da Aula)")
+                st.caption("Selecione EXCLUSIVAMENTE os níveis PEI necessários para esta turma para economizar tokens e arquivos:")
+
+                with st.container(border=True):
+                    niveis_lab_sel = st.pills(
+                        "Níveis PEI Desejados:",
+                        ["🔵 PEI Nível 1 (Apoio Leve - 3 Opções)", "🔴 PEI Nível 3 (Suporte Severo - 100% no Papel Ancorado)"],
+                        default=["🔵 PEI Nível 1 (Apoio Leve - 3 Opções)", "🔴 PEI Nível 3 (Suporte Severo - 100% no Papel Ancorado)"],
+                        selection_mode="multi",
+                        key=f"pills_pei_lab_{v}"
+                    )
+
+                pede_lab_n1 = any("Nível 1" in n for n in niveis_lab_sel)
+                pede_lab_n3 = any("Nível 3" in n for n in niveis_lab_sel)
+
+                if st.button("🧠 FORJAR APENAS NÍVEIS PEI SELECIONADOS", type="primary", use_container_width=True, key=f"btn_gen_pei_f4_{v}"):
+                    with st.spinner("Adaptando exercícios para os níveis selecionados com estrita ancoragem no tema da aula..."):
+                        prompt_pei = f"Adapte as questões abaixo para PEI N1 e PEI N3 (Ancorado 100% no Tema da Aula):\n{fa['reg_q']}\n\nTEORIA DA AULA:\n{fa['teoria']}\n🚨 USE AS TAGS [PEI_NIVEL_1], [PEI_NIVEL_3] e [GABARITO_PEI]"
                         res_pei = ai.gerar_ia("FORJA_AULA_PEI", prompt_pei)
-                        fa['pei_1'] = ai.extrair_tag(res_pei, "PEI_NIVEL_1") or res_pei
-                        fa['pei_3'] = ai.extrair_tag(res_pei, "PEI_NIVEL_3") or "Nível 3 não formatado."
+                        
+                        if pede_lab_n1: fa['pei_1'] = ai.extrair_tag(res_pei, "PEI_NIVEL_1") or res_pei
+                        else: fa['pei_1'] = ""
+                        
+                        if pede_lab_n3: fa['pei_3'] = ai.extrair_tag(res_pei, "PEI_NIVEL_3") or "PEI N3 não formatado."
+                        else: fa['pei_3'] = ""
+                        
                         fa['pei_gab'] = ai.extrair_tag(res_pei, "GABARITO_PEI") or "Gabarito não formatado."
                         st.rerun()
-                else:
-                    t_p1, t_p3 = st.tabs(["🔵 PEI Nível 1", "🔴 PEI Nível 3"])
-                    with t_p1: fa['pei_1'] = st.text_area("Nível 1:", value=fa['pei_1'], height=300)
-                    with t_p3: fa['pei_3'] = st.text_area("Nível 3:", value=fa['pei_3'], height=300)
+
+                if fa.get('pei_1') or fa.get('pei_3'):
+                    modo_leitura_pei = st.toggle("👁️ Visualização Real PEI", value=True, key="tog_pei_view_lab")
+                    t_p1, t_p3 = st.tabs(["🔵 PEI Nível 1 (Apoio Leve)", "🔴 PEI Nível 3 (10 Bento Boxes no Papel)"])
                     
-                    if st.button("Aprovar PEI e Avançar", type="primary", use_container_width=True):
+                    with t_p1: 
+                        if modo_leitura_pei: st.markdown(preparar_para_leitura(fa['pei_1']))
+                        else: fa['pei_1'] = st.text_area("Nível 1:", value=fa['pei_1'], height=250)
+                        
+                    with t_p3: 
+                        if modo_leitura_pei: st.markdown(preparar_para_leitura(fa['pei_3']))
+                        else: fa['pei_3'] = st.text_area("Nível 3 (Ancorado no Tema):", value=fa['pei_3'], height=250)
+                    
+                    if st.button("Aprovar PEI e Avançar para Compilação", type="primary", use_container_width=True):
                         fa['fase'] = 5; st.rerun()
 
             elif fa['fase'] == 5:
-                st.markdown("### Fase 5: Compilação e Custódia")
+                st.markdown("### Fase 5: Compilação e Custódia no Google Drive")
                 nome_sugerido = util.gerar_nome_material_elite(fa['info']['ano'], fa['info']['aula_alvo'], fa['info']['semana_ref'])
-                nome_arq = st.text_input("Nome do Material:", value=nome_sugerido)
+                nome_arq = st.text_input("Nome do Material no Cofre Digital:", value=nome_sugerido)
                 
-                if st.button("Finalizar e Sincronizar no Drive", type="primary", use_container_width=True):
+                if st.button("Finalizar e Sincronizar Tudo no Google Drive", type="primary", use_container_width=True):
                     with st.status("Gerando Documentos Oficiais...", expanded=True) as status:
                         trim_real = fa['info'].get('trimestre', 'I Trimestre')
                         info_doc = {"ano": f"{fa['info']['ano']}º", "trimestre": trim_real, "semana": fa['info']['semana_ref']}
 
+                        status.write("📄 Gerando Folha de Exercícios do Aluno Word...")
                         doc_alu = exporter.gerar_docx_aluno_v24(nome_arq, fa['reg_q'], info_doc)
                         link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{nome_arq}_ALUNO", modo="AULA")
                         
-                        doc_pei1 = exporter.gerar_docx_pei_v25(f"{nome_arq}_PEI_N1", fa['pei_1'], info_doc)
-                        link_pei1 = db.subir_e_converter_para_google_docs(doc_pei1, f"{nome_arq}_PEI_N1", modo="AULA")
+                        link_pei1 = "N/A"
+                        if fa.get('pei_1'):
+                            status.write("🔵 Gerando Caderno PEI Nível 1 Word...")
+                            doc_pei1 = exporter.gerar_docx_pei_v25(f"{nome_arq}_PEI_N1", fa['pei_1'], info_doc)
+                            link_pei1 = db.subir_e_converter_para_google_docs(doc_pei1, f"{nome_arq}_PEI_N1", modo="AULA")
                         
-                        doc_pei3 = exporter.gerar_docx_pei_qualitativa(f"{nome_arq}_PEI_N3", fa['pei_3'], info_doc)
-                        link_pei3 = db.subir_e_converter_para_google_docs(doc_pei3, f"{nome_arq}_PEI_N3", modo="AULA")
+                        link_pei3 = "N/A"
+                        if fa.get('pei_3'):
+                            status.write("🔴 Gerando Caderno PEI Nível 3 Word (Bento Cards + Rubrica)...")
+                            doc_pei3 = exporter.gerar_docx_pei_qualitativa(f"{nome_arq}_PEI_N3", fa['pei_3'], info_doc)
+                            link_pei3 = db.subir_e_converter_para_google_docs(doc_pei3, f"{nome_arq}_PEI_N3", modo="AULA")
                         
+                        status.write("👨‍🏫 Gerando Guia do Professor Word...")
                         guia_prof = f"{fa['teoria']}\n\n[GABARITO]\n{fa['reg_gab']}\n\n[GABARITO_PEI]\n{fa['pei_gab']}"
                         doc_prof = exporter.gerar_docx_professor_v25(nome_arq, guia_prof, info_doc)
                         link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_arq}_PROF", modo="AULA")
                         
                         links_f = f"--- LINKS ---\nRegular({link_alu})\nPEI_N1({link_pei1})\nPEI_N3({link_pei3})\nProf({link_prof})"
-                        conteudo_final = f"[PROFESSOR]\n{fa['teoria']}\n\n[ALUNO]\n{fa['reg_q']}\n\n[GABARITO]\n{fa['reg_gab']}\n\n[PEI_NIVEL_1]\n{fa['pei_1']}\n\n[PEI_NIVEL_3]\n{fa['pei_3']}\n\n[GABARITO_PEI]\n{fa['pei_gab']}\n\n{links_f}"
+                        conteudo_final = f"[PROFESSOR]\n{fa['teoria']}\n\n[ALUNO]\n{fa['reg_q']}\n\n[GABARITO]\n{fa['reg_gab']}\n\n[PEI_NIVEL_1]\n{fa.get('pei_1','')}\n\n[PEI_NIVEL_3]\n{fa.get('pei_3','')}\n\n[GABARITO_PEI]\n{fa.get('pei_gab','')}\n\n{links_f}"
                         
                         db.salvar_no_banco("DB_AULAS_PRONTAS",[
                             datetime.now().strftime("%d/%m/%Y"), fa['info']['semana_ref'], nome_arq, conteudo_final, f"{fa['info']['ano']}º", link_alu
                         ])
                         
-                        status.update(label="Sincronizado com Sucesso!", state="complete")
+                        status.update(label="✅ Materiais sincronizados com sucesso no Drive!", state="complete")
                         st.balloons(); time.sleep(1.5); reset_laboratorio()
 
     # ==============================================================================
-    # ABA 2: ACERVO DIGITAL & HUB DE PRODUÇÃO (COM ST.BADGE E ST.POPOVER)
+    # ABA 2: ACERVO DIGITAL & HUB DE PRODUÇÃO
     # ==============================================================================
     with tab_acervo_lab:
         st.markdown("### Hub de Produção & Acervo de Aulas")
@@ -2066,7 +2146,6 @@ elif menu == "🧪 Criador de Aulas":
                             st.session_state.lab_meta = {"ano": str(r_hub['ANO']).replace("º",""), "trimestre": r_hub["TURMA"], "tipo": "PRODUÇÃO_HUB", "semana_ref": r_hub['SEMANA']}
                             st.rerun()
 
-                        # 🚨 UI NOVA GERAÇÃO: POPOVER PARA BYPASS OFFLINE (ZERO GASTO DE TOKENS)
                         with c_h3.popover("📦 Registro Offline / Livro"):
                             st.info("💡 **Conclusão sem uso de IA:** Registre os detalhes da aula ministrada com o Livro Didático ou Atividade Manual.")
                             txt_obs_manual = st.text_input("Detalhes (Ex: Livro Didático - Págs. 45 a 48):", key=f"txt_man_obs_{r_hub.name}")
@@ -2137,9 +2216,8 @@ elif menu == "🧪 Criador de Aulas":
                     if c_b6.button("🗑️ Apagar", key=f"del_ac_{row.name}", use_container_width=True):
                         if db.excluir_registro_com_drive("DB_AULAS_PRONTAS", identificador): st.rerun()
 
-                    # 🚨 PILAR 2: BOTÃO DE RE-COMPILAÇÃO E ADEQUAÇÃO AO EXPORTER V2026
                     with st.expander("🎨 Re-compilar e Adequar ao Padrão Exporter V2026", expanded=False):
-                        st.info("💡 **Adequação Automática:** Esta ferramenta pega o texto bruto desta aula e gera novos arquivos DOCX aplicando a limpeza de LaTeX (`$$`), os Bento Cards e a Tabela Oficial de Rubricas para o PEI N3 no Google Drive.")
+                        st.info("💡 **Adequação Automática:** Esta ferramenta gera novos arquivos DOCX aplicando a limpeza de LaTeX (`$$`), os Bento Cards e a Tabela Oficial de Rubricas para o PEI N3 no Google Drive.")
                         
                         if st.button("🚀 EXECUTAR RE-COMPILAÇÃO COMPLETA NO EXPORTER V2026", type="primary", use_container_width=True, key=f"btn_recompila_{row.name}"):
                             with st.status("Re-compilando materiais no padrão Exporter V2026...", expanded=True) as status_rec:
