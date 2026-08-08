@@ -2132,7 +2132,7 @@ elif menu == "🧪 Criador de Aulas":
 
 
 # ==============================================================================
-# MÓDULO: CENTRAL DE AVALIAÇÕES - V2026.ULTIMATE (3 ABAS + PEI ON-DEMAND + PRÁTICA REAL)
+# MÓDULO: CENTRAL DE AVALIAÇÕES - V2026.MASTER (CONFERÊNCIA FASE 1 + REPARO JSON)
 # ==============================================================================
 elif menu == "📝 Central de Avaliações":
     st.title("📝 Central de Avaliações (Padrão ENEM / SAEB)")
@@ -2177,7 +2177,7 @@ elif menu == "📝 Central de Avaliações":
     tab_forja, tab_acervo_av, tab_recomposicao = st.tabs(["📝 Linha de Montagem de Provas", "📖 Acervo de Provas & Perícia TRI", "🔄 Recomposição & Cadernos de Revisão"])
 
     # ==============================================================================
-    # ABA 1: LINHA DE MONTAGEM DE PROVAS (ETAPAS + PINÇAMENTO + PEI ON-DEMAND)
+    # ABA 1: LINHA DE MONTAGEM DE PROVAS (COM MESA DE CONFERÊNCIA NA FASE 1)
     # ==============================================================================
     with tab_forja:
         if 1 < f['fase'] <= 5:
@@ -2187,10 +2187,10 @@ elif menu == "📝 Central de Avaliações":
             st.markdown("---")
 
         # --------------------------------------------------------------------------
-        # FASE 1: BRIEFING, PARÂMETROS E PINÇAMENTO DA PRÁTICA REAL
+        # FASE 1: BRIEFING, PARÂMETROS, PINÇAMENTO E CONFERÊNCIA DE ASSUNTOS
         # --------------------------------------------------------------------------
         if f['fase'] == 1:
-            st.markdown("### 📋 Fase 1: Briefing & Pinçamento da Prática Real")
+            st.markdown("### 📋 Fase 1: Briefing, Prática Real & Conferência de Assuntos")
             
             modo_arq = st.pills(
                 "Selecione a Abordagem do Instrumento:", 
@@ -2260,7 +2260,7 @@ elif menu == "📝 Central de Avaliações":
                                         if list_p_av_teo: txt_av_teo_ext = util.extrair_texto_pdf_por_paginas(bytes_pdf_av, list_p_av_teo)
                                         if list_p_av_ex: txt_av_ex_ext = util.extrair_texto_pdf_por_paginas(bytes_pdf_av, list_p_av_ex)
 
-                    # 🚨 MÓDULO PINÇAMENTO DA PRÁTICA REAL (LOUSA / EXERCÍCIOS ESPECÍFICOS)
+                    # MÓDULO PINÇAMENTO DA PRÁTICA REAL
                     st.markdown("##### 📌 Pinçamento da Prática Real (O que foi realmente feito no quadro?)")
                     pincamento_pratica = st.text_area(
                         "Especifique os exercícios ou exemplos que os alunos resolveram no quadro/caderno:",
@@ -2275,11 +2275,10 @@ elif menu == "📝 Central de Avaliações":
                             height=80, key=f"recorte_provas_input_{v}"
                         )
 
-                    # 🚨 MINERADOR SOSA PLAN-TAG ENGINE V2026 (LEITURA EXCLUSIVA DE TAGS DO DB_PLANOS + BLACKLIST)
+                    # MINERADOR SOSA PLAN-TAG ENGINE
                     topicos_reais_minerados = []
                     TERMOS_PROIBIDOS_ASSUNTO = r"(?i)(?:REVIS[AÃ]O|PROVA|TESTE|SONDA|DOSSI[EÊ]|RAIO-X|AVALIA[CÇ][AÃ]O|APLICA[CÇ][AÃ]O|2[ªA]\s*CHAMADA|RECUPERA[CÇ][AÃ]O|GABARITO|AULA\s*\d+|SEMANA\s*\d+)"
 
-                    # 1. Prioridade Absoluta: Anotações da Lousa do Professor no Pinçamento
                     if pincamento_pratica.strip():
                         partes_lousa = re.split(r'[;\n•,]', pincamento_pratica)
                         for p_l in partes_lousa:
@@ -2287,7 +2286,6 @@ elif menu == "📝 Central de Avaliações":
                             if len(p_l_clean) > 3 and not re.search(TERMOS_PROIBIDOS_ASSUNTO, p_l_clean):
                                 topicos_reais_minerados.append(p_l_clean)
 
-                    # 2. Leitura Direta e Exclusiva das Tags do DB_PLANOS.csv
                     if not df_planos.empty:
                         planos_trim = df_planos[
                             (df_planos['ANO'].astype(str).str.contains(str(ano_av))) & 
@@ -2307,7 +2305,6 @@ elif menu == "📝 Central de Avaliações":
                                     if len(p_clean) > 3 and not re.search(TERMOS_PROIBIDOS_ASSUNTO, p_clean):
                                         topicos_reais_minerados.append(p_clean)
 
-                    # 3. Leitura Complementar do DB_CURRICULO.csv
                     if len(topicos_reais_minerados) < qtd_q and not df_curriculo.empty:
                         col_ano_c = next((c for c in df_curriculo.columns if 'ANO' in c.upper()), None)
                         col_trim_c = next((c for c in df_curriculo.columns if trim_filtro.upper() in c.upper()), None)
@@ -2323,7 +2320,6 @@ elif menu == "📝 Central de Avaliações":
                                         if len(p_c_clean) > 3 and not re.search(TERMOS_PROIBIDOS_ASSUNTO, p_c_clean):
                                             topicos_reais_minerados.append(p_c_clean)
 
-                    # Limpeza de duplicatas mantendo a ordem de prioridade
                     topicos_finais_ordenados = []
                     for t_item in topicos_reais_minerados:
                         if t_item not in topicos_finais_ordenados and not re.search(TERMOS_PROIBIDOS_ASSUNTO, t_item):
@@ -2334,6 +2330,17 @@ elif menu == "📝 Central de Avaliações":
                     if txt_av_teo_ext: contexto_base_texto += f"--- PÁGINAS DE TEORIA DO LIVRO DIDÁTICO ---\n{txt_av_teo_ext}\n\n"
                     if txt_av_ex_ext: contexto_base_texto += f"--- PÁGINAS DE EXERCÍCIOS DO LIVRO DIDÁTICO ---\n{txt_av_ex_ext}\n\n"
                     if recorte_provas_livro.strip(): contexto_base_texto += f"--- EXERCÍCIOS DO PROFESSOR ---\n{recorte_provas_livro.strip()}\n\n"
+
+                # 🚨 3. MESA DE CONFERÊNCIA DOS ASSUNTOS AINDA NA FASE 1
+                if topicos_finais_ordenados:
+                    with st.container(border=True):
+                        st.markdown("#### 👁️ Mesa de Conferência dos Assuntos Mapeados (Fase 1)")
+                        st.caption("ℹ️ Estes são os conteúdos extraídos das suas aulas/planos. Você pode editar, adicionar ou apagar linhas antes de forjar a prova:")
+                        
+                        texto_topicos_area = st.text_area("Lista de Assuntos da Prova (um por linha):", value="\n".join(topicos_finais_ordenados), height=150, key=f"area_conf_topicos_{v}")
+                        
+                        if texto_topicos_area.strip():
+                            topicos_finais_ordenados = [line.strip() for line in texto_topicos_area.split("\n") if line.strip()]
 
                 st.markdown("<br>", unsafe_allow_html=True)
                 if st.button("🚀 Iniciar Linha de Montagem de Itens (Avançar para Fase 2)", type="primary", use_container_width=True, key=f"btn_fase1_av_{v}"):
