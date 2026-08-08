@@ -9,6 +9,8 @@ from docx.enum.section import WD_SECTION, WD_ORIENT
 from docx.oxml import OxmlElement, parse_xml
 from docx.oxml.ns import qn, nsdecls
 from datetime import datetime
+
+from pandas import util
 import ai_engine as ai
 
 
@@ -543,8 +545,24 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         label_prova = "AVALIAÇÃO ADAPTADA" if is_pei_doc else "AVALIAÇÃO DE MATEMÁTICA (ENEM/SAEB)"
         if "SONDA" in titulo_doc.upper(): label_prova = "SONDA DE PROFICIÊNCIA"
 
+        # 🚨 CÁLCULO MATEMÁTICO PRECISO DO VALOR DA QUESTÃO (EX: 4.0 / 20 = 0.20 pts)
+        val_total_num = util.sosa_to_float(info.get('valor', 3.0))
+        if val_total_num == 0: val_total_num = 3.0
+
+        num_q_num = int(info.get('qtd', info.get('qtd_questoes', num_total_q)))
+        if num_q_num == 0: num_q_num = num_total_q or 10
+
+        val_q_calc = val_total_num / num_q_num if num_q_num > 0 else 0.3
+        
+        val_total_str = f"{val_total_num:.1f}"
+        val_q_str = f"{val_q_calc:.2f}".replace(".", ",")
+        
+        info_cabecalho = info.copy()
+        info_cabecalho['valor'] = val_total_str
+        info_cabecalho['valor_questao'] = val_q_str
+
         # 1. CABEÇALHO MESTRE DA ESCOLA
-        configurar_cabecalho_mestre(doc, info, label_prova, mostrar_nota=True)
+        configurar_cabecalho_mestre(doc, info_cabecalho, label_prova, mostrar_nota=True)
         doc.add_paragraph()
 
         # 2. CAPA DE INSTRUÇÕES OFICIAIS & REGRA DO CÁLCULO 50%
@@ -560,11 +578,8 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         r_tit_inst.font.size = Pt(9.5)
         r_tit_inst.font.color.rgb = RGBColor(0, 51, 102)
         
-        val_total = info.get('valor', '3.0')
-        val_q = info.get('valor_questao', '0.3')
-        
         orient_list = [
-            f"Valor Total do Exame: {val_total} pts | Valor por Questão: {val_q} pts.",
+            f"Valor Total do Exame: {val_total_str} pts | Valor por Questão: {val_q_str} pts.",
             "Preencha o Cartão-Resposta abaixo com caneta esferográfica preta ou azul transparente.",
             "🚨 REGRA DO CÁLCULO OBRIGATÓRIO (MEIO CERTO - 50%): Nas questões objetivas que exigem resolução matemática, o cálculo DEVE ser apresentado no papel da prova. Questão acertada no Cartão-Resposta sem a memória de cálculo receberá 50% do valor (sinalizado com *).",
             "Mantenha os 4 marcadores pretos (■) dos cantos limpos e sem rasuras para leitura óptica."
