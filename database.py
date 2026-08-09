@@ -688,3 +688,71 @@ def baixar_bytes_arquivo_drive(url_ou_id):
     except Exception as e:
         print(f"Erro ao baixar PDF do Drive: {e}")
     return None
+
+# ==============================================================================
+# 6. CONCILIADOR CRONOLÓGICO SOBERANO DE PLANOS E REGISTROS DE AULA (V2026)
+# ==============================================================================
+def conciliar_calendario_e_planos_cronologicos(ano_alvo="6º"):
+    """
+    SOSA V2026: CONCILIADOR CRONOLÓGICO SOBERANO.
+    Re-indexa as semanas de DB_PLANOS em ordem cronológica de data,
+    corrige saltos/inversões e re-vincula os registros 'AVULSA / Registro via Diário'
+    da tabela DB_REGISTRO_AULAS.
+    """
+    try:
+        wb = conectar()
+        if not wb: return False
+        
+        ano_num = "".join(filter(str.isdigit, str(ano_alvo)))
+        
+        # 1. RECONCILIAR E RE-INDEXAR DB_PLANOS
+        ws_planos = wb.worksheet("DB_PLANOS")
+        dados_p = ws_planos.get_all_values()
+        if len(dados_p) <= 1: return False
+        
+        rows_p = dados_p[1:]
+        
+        # Filtra e ordena planos do ano alvo por data real (strptime)
+        planos_ano = []
+        for idx_r, r in enumerate(rows_p):
+            if len(r) > 2 and ano_num in str(r[2]):
+                try:
+                    dt_obj = datetime.strptime(r[0].strip(), "%d/%m/%Y")
+                    planos_ano.append((dt_obj, idx_r + 2, r))
+                except: pass
+        
+        # Ordena estritamente por data cronológica crescente
+        planos_ano.sort(key=lambda x: x[0])
+        
+        mapa_datas_semana = {}
+        
+        for seq_idx, (dt_obj, row_num, row_data) in enumerate(planos_ano, start=1):
+            nova_sem_label = f"Semana {seq_idx:02d}"
+            ws_planos.update_cell(row_num, 2, nova_sem_label) # Atualiza Coluna SEMANA
+            
+            dt_str = dt_obj.strftime("%d/%m/%Y")
+            mapa_datas_semana[dt_str] = nova_sem_label
+
+        # 2. RECONCILIAR E RE-VINCULAR DB_REGISTRO_AULAS (TIRA O STATUS DE 'AVULSA')
+        ws_reg = wb.worksheet("DB_REGISTRO_AULAS")
+        dados_r = ws_reg.get_all_values()
+        if len(dados_r) > 1:
+            for idx_r, r in enumerate(dados_r[1:], start=2):
+                if len(r) >= 4 and ano_num in str(r[2]):
+                    dt_r = r[0].strip()
+                    sem_r = r[1].strip()
+                    cont_r = r[3].strip()
+                    
+                    if sem_r == "AVULSA" or "Registro via Diário" in cont_r or "PENDENTE" in str(r[4]):
+                        if dt_r in mapa_datas_semana:
+                            sem_mapeada = mapa_datas_semana[dt_r]
+                            ws_reg.update_cell(idx_r, 2, sem_mapeada) # Atualiza coluna SEMANA
+                            if "Registro via Diário" in cont_r or cont_r == "":
+                                novo_cont = f"{ano_alvo} Ano - Aula - {sem_mapeada}"
+                                ws_reg.update_cell(idx_r, 4, novo_cont) # Atualiza CONTEUDO
+
+        st.cache_data.clear()
+        return True
+    except Exception as e:
+        print(f"Erro no Conciliador Cronológico: {e}")
+        return False
