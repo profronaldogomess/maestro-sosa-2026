@@ -2274,7 +2274,7 @@ elif menu == "🧪 Criador de Aulas":
 
 # ==============================================================================
 # MÓDULO: CENTRAL DE AVALIAÇÕES - V2026.ULTIMATE
-# (LINHA DE MONTAGEM, PERÍCIA TRI, RECOMPOSIÇÃO E GERADOR DE E-MAIL/PDF PARA XEROX)
+# (LINHA DE MONTAGEM, PERÍCIA TRI, RECOMPOSIÇÃO E EXPEDIÇÃO CORRIGIDA COM UTIL.OBTER_REGEX_TRIMESTRE)
 # ==============================================================================
 elif menu == "📝 Central de Avaliações":
     st.title("📝 Central de Avaliações (Padrão ENEM / SAEB / BNCC)")
@@ -3099,7 +3099,7 @@ elif menu == "📝 Central de Avaliações":
                         st.link_button("📂 ABRIR CADERNO DO ALUNO NO DRIVE", link_alu_rev, type="primary", use_container_width=True)
 
     # ==============================================================================
-    # ABA 4: EXPEDIÇÃO DE E-MAIL, PDFS & ACERVO TRIMESTRAL (NOVO V2026)
+    # ABA 4: EXPEDIÇÃO DE E-MAIL, PDFS & ACERVO TRIMESTRAL (VACINA UTIL.OBTER_REGEX_TRIMESTRE)
     # ==============================================================================
     with tab_expedicao:
         @st.fragment
@@ -3136,14 +3136,15 @@ elif menu == "📝 Central de Avaliações":
                     p3_names = []
 
                     for _, al_r in df_t_alu.iterrows():
-                        nec_raw = str(al_r['NECESSIDADES']).upper().strip()
+                        nec_raw = str(al_r.get('NECESSIDADES', '')).upper().strip()
                         nome_a = al_r['NOME_ALUNO']
                         
-                        if "(PEI N1)" in nec_raw:
+                        # Vacina de Leitura PEI super flexível
+                        if any(x in nec_raw for x in ["PEI N1", "PEI 1", "NÍVEL 1", "NIVEL 1", "(PEI N1)"]):
                             p1_names.append(nome_a)
-                        elif "(PEI N2)" in nec_raw:
+                        elif any(x in nec_raw for x in ["PEI N2", "PEI 2", "NÍVEL 2", "NIVEL 2", "(PEI N2)"]):
                             p2_names.append(nome_a)
-                        elif "(PEI N3)" in nec_raw:
+                        elif any(x in nec_raw for x in ["PEI N3", "PEI 3", "NÍVEL 3", "NIVEL 3", "(PEI N3)"]):
                             p3_names.append(nome_a)
                         else:
                             reg_count += 1
@@ -3204,7 +3205,12 @@ Escola Municipal Flávio José Simões Costa
                 st.markdown(f"#### 🔒 Acervo Trimestral de Segurança ({trim_exp_sel})")
                 st.caption("Arquivos em DOCX e PDF armazenados no Drive para acesso permanente sem risco de perda.")
 
-                df_provas_trim_acervo = df_aulas[(df_aulas['SEMANA_REF'] == "AVALIAÇÃO") & (df_aulas['CONTEUDO'].str.contains(obter_regex_trimestre(trim_exp_sel), regex=True, case=False, na=False))] if not df_aulas.empty else pd.DataFrame()
+                # VACINA TÉCNICA: USO CORRETO DE UTIL.OBTER_REGEX_TRIMESTRE
+                if not df_aulas.empty and 'SEMANA_REF' in df_aulas.columns and 'CONTEUDO' in df_aulas.columns:
+                    padrao_regex_trim_exp = util.obter_regex_trimestre(trim_exp_sel)
+                    df_provas_trim_acervo = df_aulas[(df_aulas['SEMANA_REF'] == "AVALIAÇÃO") & (df_aulas['CONTEUDO'].str.contains(padrao_regex_trim_exp, regex=True, case=False, na=False))]
+                else:
+                    df_provas_trim_acervo = pd.DataFrame()
 
                 if df_provas_trim_acervo.empty:
                     st.info(f"Nenhum exame cadastrado no acervo do {trim_exp_sel} ainda.")
