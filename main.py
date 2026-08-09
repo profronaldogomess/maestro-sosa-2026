@@ -456,12 +456,12 @@ def exibir_material_estruturado(texto_raw, key_prefix, dados_plano=None, info_au
 
 
 # ==============================================================================
-# MÓDULO: PLANEJAMENTO ESTRATÉGICO (PONTO ID) - V2026.MASTER_ULTIMATE
-# (AULAS EXPOSITIVAS OBJETIVAS, GATILHOS NEWS/TECH, COMPETÊNCIAS BNCC PÁG. 267 E BYPASS OFFLINE)
+# MÓDULO: PLANEJAMENTO ESTRATÉGICO (PONTO ID) - V2026.ULTIMATE
+# (AULAS EXPOSITIVAS OBJETIVAS, GATILHOS NEWS/TECH E ASSISTENTE DE CONCILIAÇÃO CRONOLÓGICA)
 # ==============================================================================
 if menu == "📅 Planejamento (Ponto ID)":
     st.title("Engenharia de Planejamento (Ponto ID)")
-    st.caption("Arquitetura estratégica da semana: Aulas expositivas objetivas, sensibilização com Notícias/Tech, alinhamento BNCC/SAEB e alimentação do Criador de Aulas.")
+    st.caption("Arquitetura estratégica da semana: Aulas expositivas objetivas, sensibilização com Notícias/Tech, alinhamento BNCC/SAEB e Conciliador Cronológico.")
     st.markdown("---")
 
     def reset_planejamento():
@@ -476,7 +476,7 @@ if menu == "📅 Planejamento (Ponto ID)":
     v = st.session_state.v_plano 
 
     tab_gerar, tab_producao, tab_acervo, tab_inteligencia = st.tabs([
-        "Novo Plano", "Hub de Produção", "Acervo de Planos", "Inteligência Curricular"
+        "Novo Plano", "Hub de Produção", "Acervo de Planos", "Inteligência Curricular & Conciliação"
     ])
     
     # ==============================================================================
@@ -921,7 +921,6 @@ if menu == "📅 Planejamento (Ponto ID)":
                             st.session_state.lab_meta = {"ano": str(row['ANO']).replace("º",""), "trimestre": row["TURMA"], "tipo": "PRODUÇÃO_HUB", "semana_ref": row['SEMANA']}
                             navegar_para("🧪 Criador de Aulas")
 
-                        # BYPASS OFFLINE / REGISTRO DIRETO DO LIVRO DIDÁTICO
                         with c_p3.popover("📦 Registro Offline / Livro"):
                             st.info("💡 **Conclusão sem uso de IA:** Registre os detalhes da aula ministrada com o Livro Didático ou Atividade Manual.")
                             txt_obs_manual = st.text_input("Detalhes (Ex: Livro A Conquista da Matemática - Págs. 184 a 187):", key=f"txt_man_obs_hub_{row.name}")
@@ -1043,14 +1042,14 @@ if menu == "📅 Planejamento (Ponto ID)":
             else: st.info("Nenhum plano encontrado.")
 
     # ==============================================================================
-    # ABA 4: INTELIGÊNCIA CURRICULAR & GERADOR TRIMESTRAL
+    # ABA 4: INTELIGÊNCIA CURRICULAR & ASSISTENTE DE CONCILIAÇÃO CRONOLÓGICA
     # ==============================================================================
     with tab_inteligencia:
         st.markdown("### 🧠 Inteligência Curricular e Planejamento Trimestral")
         
         modo_inteligencia = st.segmented_control(
             "Selecione a Visão:", 
-            ["📊 Status de Execução (Checklist)", "🖨️ Gerador de Plano Trimestral"], 
+            ["📊 Status de Execução (Checklist)", "🖨️ Gerador de Plano Trimestral", "⚡ Conciliador Cronológico"], 
             default="📊 Status de Execução (Checklist)",
             key=f"seg_intel_{v}"
         )
@@ -1174,6 +1173,25 @@ if menu == "📅 Planejamento (Ponto ID)":
                             st.link_button("📂 ABRIR DOCUMENTO OFICIAL", link_doc, type="primary", use_container_width=True)
                             st.balloons()
                         else: st.error(f"Erro ao salvar no Drive: {link_doc}")
+
+        elif modo_inteligencia == "⚡ Conciliador Cronológico":
+            with st.container(border=True):
+                st.markdown("#### ⚡ Assistente de Conciliação e Re-indexação de Semanas")
+                st.caption("Reorganiza cronologicamente as semanas invertidas ou saltadas do DB_PLANOS e vincula automaticamente as aulas avulsas do diário.")
+                
+                c_conc1, c_conc2 = st.columns([1, 1])
+                ano_conc_sel = c_conc1.selectbox("Série para Conciliar:", ["6º", "7º", "8º", "9º"], key=f"sel_ano_conc_{v}")
+                
+                if c_conc2.button("🚀 EXECUTAR CONCILIAÇÃO E RE-INDEXAÇÃO CRONOLÓGICA", type="primary", use_container_width=True, key=f"btn_run_conc_{v}"):
+                    with st.status(f"Reconciliando semanas do {ano_conc_sel} Ano no banco de dados...", expanded=True) as status_conc:
+                        status_conc.write("🔍 Analisando datas de criação e ordenando cronologicamente...")
+                        sucesso_c = db.conciliar_calendario_e_planos_cronologicos(ano_conc_sel)
+                        
+                        if sucesso_c:
+                            status_conc.update(label="✅ Semanas re-indexadas e aulas avulsas vinculadas com sucesso!", state="complete")
+                            st.balloons(); time.sleep(1.5); st.rerun()
+                        else:
+                            status_conc.update(label="⚠️ Erro ao conciliar dados ou nenhum registro encontrado.", state="error")
 
 
 
