@@ -256,14 +256,17 @@ def extrair_texto_pdf_por_paginas(pdf_bytes, paginas_list):
 
 def obter_regex_trimestre(trimestre_str):
     """
-    Retorna uma expressão regular que busca exatamente o trimestre (I, II ou III)
-    evitando falsos positivos (ex: III contendo II ou I).
+    SOSA V2026.MASTER - DETECTOR REGEX HD DE TRIMESTRE
+    Identifica automaticamente 'SEGUNDO TRIMESTRE', 'II TRIMESTRE', '2º TRIMESTRE', etc.
     """
-    if not trimestre_str or trimestre_str == "Todos": return r".*"
-    t_upper = str(trimestre_str).upper()
-    if "III" in t_upper or "TERCEIRO" in t_upper:
-        return r"(?<!I)III(?![I])"
-    elif "II" in t_upper or "SEGUNDO" in t_upper:
-        return r"(?<!I)II(?![I])"
+    if not trimestre_str or str(trimestre_str).strip() in ["", "Todos"]:
+        return r".*"
+    
+    t_upper = str(trimestre_str).upper().strip()
+    
+    if any(x in t_upper for x in ["III", "TERCEIRO", "3º", "3"]):
+        return r"(?<!I)III(?![I])|TERCEIRO|3º|\b3\b"
+    elif any(x in t_upper for x in ["II", "SEGUNDO", "2º", "2"]):
+        return r"(?<!I)II(?![I])|SEGUNDO|2º|\b2\b"
     else:
-        return r"(?<!I)I(?![I])"
+        return r"(?<!I)I(?![I])|PRIMEIRO|1º|\b1\b"
