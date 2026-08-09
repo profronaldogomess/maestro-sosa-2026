@@ -6418,7 +6418,7 @@ elif menu == "📚 Base de Conhecimento":
 
 # ==============================================================================
 # MÓDULO: CENTRO DE COMANDO DA INCLUSÃO (RELATÓRIOS PEI / PERFIL IA)
-# (V2026.ULTIMATE - REDESIGN COMPLETO: GRUPOS SEPARADOS, TRIMESTRALIZAÇÃO E ZERO TOKEN)
+# (V2026.ULTIMATE - READEQUAÇÃO LEGAL: GARANTIA DE PROVA ADAPTADA PARA LAUDADOS E SUSPEITOS/PENDENTES)
 # ==============================================================================
 elif menu == "♿ Relatórios PEI / Perfil IA":
     st.title("🧠 Centro de Comando da Inclusão (PEI / Perfil IA)")
@@ -6448,7 +6448,7 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
     if df_alunos.empty:
         st.warning("⚠️ Base de alunos vazia. Cadastre alunos na Gestão da Turma.")
     else:
-        # INTELIGÊNCIA TEMPORAL DE TRIMESTRE (IGUAL À BIOGRAFIA)
+        # INTELIGÊNCIA TEMPORAL DE TRIMESTRE
         hoje_dt = date.today()
         if hoje_dt <= date(2026, 5, 22): trim_detectado = "I Trimestre"
         elif hoje_dt <= date(2026, 9, 4): trim_detectado = "II Trimestre"
@@ -6475,32 +6475,44 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
             st.warning(f"⚠️ Nenhum aluno cadastrado na turma {turma_pei}.")
             st.stop()
 
-        # CLASSIFICAÇÃO RÍGIDA DE ESTUDANTES EM 2 GRUPOS (LAUDADOS X DEFASAGEM)
-        def e_laudado_pei(nec_str):
+        # CLASSIFICAÇÃO LEGAL: LAUDADOS + SUSPEITOS/PENDENTES = GRUPO 1 (PROVA ADAPTADA)
+        def elegivel_prova_adaptada(nec_str):
             n = str(nec_str).upper().strip()
             if n in ["NENHUMA", "", "NAN", "TÍPICO", "TIPICO"]: return False
-            # Palavras-chave de laudo clínico / inclusão oficial
-            termo_laudo = any(x in n for x in ["LAUDO", "TEA", "TDAH", "DISLEXIA", "DEF.", "SURDEZ", "CEGUEIRA", "TOD", "SÍNDROME", "PEI N"])
-            if termo_laudo: return True
-            return False
+            
+            # Palavras-chave de laudo OU suspeita/pendência garantidas por lei
+            termo_elegivel = any(x in n for x in [
+                "LAUDO", "TEA", "TDAH", "DISLEXIA", "DEF", "SURDEZ", "CEGUEIRA", 
+                "TOD", "SÍNDROME", "SINDROME", "DOWN", "PEI", "PENDENTE", "SUSPEITA", 
+                "INVESTIGAÇÃO", "INVESTIGACAO", "ANÁLISE", "ANALISE"
+            ])
+            
+            # Se for puramente defasagem sem qualquer menção a suspeita ou PEI, não entra
+            if ("DEFASAGEM" in n) and not termo_elegivel:
+                return False
+                
+            return termo_elegivel
 
-        df_turma_foco['EH_LAUDADO'] = df_turma_foco['NECESSIDADES'].apply(e_laudado_pei)
+        df_turma_foco['ELEGIVEL_PEI'] = df_turma_foco['NECESSIDADES'].apply(elegivel_prova_adaptada)
         
-        df_laudados = df_turma_foco[df_turma_foco['EH_LAUDADO']].copy()
+        # Grupo 1: Laudados + Suspeitos/Pendentes (Elegíveis para Prova Adaptada N1, N2, N3)
+        df_laudados = df_turma_foco[df_turma_foco['ELEGIVEL_PEI']].copy()
         
-        mask_defasagem = (~df_turma_foco['EH_LAUDADO']) & (df_turma_foco['NECESSIDADES'].astype(str).str.upper().str.contains("DEFASAGEM|DIFICULDADE|RADAR|PENDENTE", regex=True, na=False))
-        df_defasagem = df_turma_foco[mask_defasagem].copy()
+        # Grupo 2: Apenas Defasagem Pedagógica Simples (Prova Regular)
+        df_defasagem = df_turma_foco[~df_turma_foco['ELEGIVEL_PEI']].copy()
+        df_defasagem = df_defasagem[df_defasagem['NECESSIDADES'].astype(str).str.upper().str.contains("DEFASAGEM|DIFICULDADE", regex=True, na=False)]
 
         # DASHBOARD TERMÔMETRO DE SUPORTE
         qtd_n1 = len(df_laudados[df_laudados['NECESSIDADES'].astype(str).str.contains("PEI N1", case=False, na=False)])
         qtd_n2 = len(df_laudados[df_laudados['NECESSIDADES'].astype(str).str.contains("PEI N2", case=False, na=False)])
         qtd_n3 = len(df_laudados[df_laudados['NECESSIDADES'].astype(str).str.contains("PEI N3", case=False, na=False)])
+        qtd_pendentes_suspeitos = len(df_laudados[df_laudados['NECESSIDADES'].astype(str).str.contains("PENDENTE|SUSPEITA|INVESTIG", case=False, na=False)])
 
         with st.container(border=True):
             st.markdown(f"##### 📊 Termômetro de Inclusão da Turma {turma_pei} ({trim_ativo_pei})")
             k1, k2, k3, k4, k5 = st.columns(5)
             k1.metric("👥 Total Turma", len(df_turma_foco))
-            k2.metric("🩺 Laudados PEI", len(df_laudados), help="Alunos elegíveis para Provas Adaptadas N1, N2 ou N3")
+            k2.metric("🩺 Laudados / Suspeitos", len(df_laudados), f"{qtd_pendentes_suspeitos} sob suspeita")
             k3.metric("🔵 PEI N1", qtd_n1)
             k4.metric("🟡 PEI N2", qtd_n2)
             k5.metric("🔴 PEI N3", qtd_n3)
@@ -6523,13 +6535,13 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                 st.markdown("### 🎛️ Triagem de Níveis PEI & Barreiras (Zero Token)")
                 st.caption("Altere os níveis das provas adaptadas em 1 clique sem gastar IA. O Scanner e a Central de Provas lerão este painel.")
                 
-                # CARTÃO 1: ALUNOS LAUDADOS (PROVA ADAPTADA)
+                # CARTÃO 1: ALUNOS LAUDADOS OU SOB SUSPEITA (PROVA ADAPTADA GARANTIDA POR LEI)
                 with st.container(border=True):
-                    st.markdown("#### 🩺 Grupo 1: Estudantes com Laudo Médico (Elegíveis para Prova Adaptada)")
+                    st.markdown("#### 🩺 Grupo 1: Estudantes Laudados ou Sob Suspeita/Investigação (Prova Adaptada Garantida)")
                     st.caption("Defina o nível do caderno adaptado. Salva instantaneamente no banco de dados.")
                     
                     if df_laudados.empty:
-                        st.info("Nenhum aluno com laudo médico cadastrado nesta turma.")
+                        st.info("Nenhum aluno com laudo médico ou suspeita pendente cadastrado nesta turma.")
                     else:
                         def extrair_nivel(nec):
                             if "(PEI N1)" in nec: return "Nível 1 (Apoio Leve)"
@@ -6548,7 +6560,7 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                             dados_matriz_laudo.append({
                                 "ID": r['ID'],
                                 "Estudante": r['NOME_ALUNO'],
-                                "Laudo / CID": r['PERFIL_BASE'],
+                                "Laudo / CID / Suspeita": r['PERFIL_BASE'],
                                 "Nível de Prova Adaptada": r['NIVEL_ATUAL']
                             })
                         
@@ -6557,7 +6569,7 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                             column_config={
                                 "ID": None,
                                 "Estudante": st.column_config.TextColumn(disabled=True, width="medium"),
-                                "Laudo / CID": st.column_config.TextColumn(disabled=True, width="medium"),
+                                "Laudo / CID / Suspeita": st.column_config.TextColumn(disabled=True, width="medium"),
                                 "Nível de Prova Adaptada": st.column_config.SelectboxColumn(
                                     "Nível da Prova Adaptada",
                                     options=["Pendente (Definir)", "Nível 1 (Apoio Leve)", "Nível 2 (Apoio Moderado)", "Nível 3 (Qualitativa)"],
@@ -6575,7 +6587,7 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                                     elif "Nível 2" in nivel_sel: tag_nivel = " (PEI N2)"
                                     elif "Nível 3" in nivel_sel: tag_nivel = " (PEI N3)"
                                     
-                                    nova_nec = f"{r['Laudo / CID']}{tag_nivel}"
+                                    nova_nec = f"{r['Laudo / CID / Suspeita']}{tag_nivel}"
                                     db.atualizar_aluno_cascata(r['ID'], r['Estudante'], turma_pei, nova_nec)
                                 
                                 st.success("✅ Níveis salvos com sucesso! O Scanner CIR e a Central de Provas foram sincronizados.")
@@ -6583,13 +6595,13 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
 
                 st.markdown("<br>", unsafe_allow_html=True)
 
-                # CARTÃO 2: ALUNOS COM DEFASAGEM (PROVA REGULAR - TRAVA LEGAL)
+                # CARTÃO 2: ALUNOS APENAS COM DEFASAGEM SIMPLES (PROVA REGULAR)
                 with st.container(border=True):
-                    st.markdown("#### 🧱 Grupo 2: Estudantes com Defasagem de Aprendizagem (Prova Regular / Sem Adaptação)")
-                    st.caption("ℹ️ **Regra Legal:** Alunos sem laudo médico NÃO recebem prova adaptada. Eles realizam a Prova Regular com acompanhamento pedagógico de sala.")
+                    st.markdown("#### 🧱 Grupo 2: Estudantes Apenas com Defasagem Pedagógica (Prova Regular / Sem Suspeita Médica)")
+                    st.caption("ℹ️ **Regra Legal:** Alunos sem suspeita médica ou laudo realizam a Prova Regular com acompanhamento pedagógico simples de sala.")
                     
                     if df_defasagem.empty:
-                        st.info("Nenhum aluno apenas com defasagem mapeado nesta turma.")
+                        st.info("Nenhum aluno apenas com defasagem pedagógica mapeado nesta turma.")
                     else:
                         dados_matriz_def = []
                         for _, r_d in df_defasagem.iterrows():
@@ -6619,7 +6631,6 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                 st.markdown(f"### ✍️ Dossiê Descritivo — {trim_ativo_pei}")
                 st.caption("Edite ou redija o relatório descritivo do trimestre ativo. Os dados são salvos separadamente por período.")
                 
-                # Seleção de Estudantes (Apenas Laudados ou Defasagem)
                 df_todos_relatorio = pd.concat([df_laudados, df_defasagem]).drop_duplicates(subset=['ID']) if not df_laudados.empty or not df_defasagem.empty else pd.DataFrame()
                 
                 if df_todos_relatorio.empty:
@@ -6746,7 +6757,7 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                     # MODAL WHATSAPP
                     @st.dialog(f"📱 Parecer Acolhedor - {trim_ativo_pei}")
                     def dialog_zap_parecer():
-                        st.info("Copie o texto abaixo e envie para a família no WhatsApp na Reunião de Pais.")
+                        st.info("Copie o texto acolhedor abaixo e envie para a família no WhatsApp na Reunião de Pais.")
                         msg_zap_pei = f"""Olá! Tudo bem? Aqui é o professor Ronaldo Gomes. 🏫
 Compartilho o Parecer Descritivo do(a) estudante {aluno_p_sel} referente ao {trim_ativo_pei}.
 
@@ -6795,9 +6806,9 @@ Qualquer dúvida, estou à disposição na escola! Um abraço! 🚀"""
                 df_laudados_secao = df_laudados if not df_laudados.empty else pd.DataFrame()
                 
                 if df_laudados_secao.empty:
-                    st.info("Nenhum aluno com laudo médico cadastrado nesta turma para receber o PEI Oficial da Prefeitura.")
+                    st.info("Nenhum aluno com laudo médico ou suspeita cadastrado nesta turma para receber o PEI Oficial da Prefeitura.")
                 else:
-                    aluno_exp = st.selectbox("Selecione o Estudante Laudado:", df_laudados_secao['NOME_ALUNO'].tolist(), key=f"exp_alu_sel_{v}")
+                    aluno_exp = st.selectbox("Selecione o Estudante Laudado / Suspeito:", df_laudados_secao['NOME_ALUNO'].tolist(), key=f"exp_alu_sel_{v}")
                     
                     id_exp = db.limpar_id(df_laudados_secao[df_laudados_secao['NOME_ALUNO'] == aluno_exp].iloc[0]['ID'])
                     perfil_exp = str(df_laudados_secao[df_laudados_secao['NOME_ALUNO'] == aluno_exp].iloc[0]['NECESSIDADES']).upper()
