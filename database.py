@@ -690,14 +690,13 @@ def baixar_bytes_arquivo_drive(url_ou_id):
     return None
 
 # ==============================================================================
-# 6. CONCILIADOR CRONOLÓGICO SOBERANO DE PLANOS E REGISTROS DE AULA (V2026)
+# 6. CONCILIADOR CRONOLÓGICO SOBERANO POR JANELA SEMANAL (SOSA V2026)
 # ==============================================================================
 def conciliar_calendario_e_planos_cronologicos(ano_alvo="6º"):
     """
-    SOSA V2026: CONCILIADOR CRONOLÓGICO SOBERANO.
-    Re-indexa as semanas de DB_PLANOS em ordem cronológica de data,
-    corrige saltos/inversões e re-vincula os registros 'AVULSA / Registro via Diário'
-    da tabela DB_REGISTRO_AULAS.
+    SOSA V2026: CONCILIADOR CRONOLÓGICO POR JANELA DE 7 DIAS.
+    Re-indexa as semanas de DB_PLANOS em ordem cronológica e vincula
+    automaticamente as aulas 'AVULSA / Registro via Diário' do DB_REGISTRO_AULAS.
     """
     try:
         wb = conectar()
@@ -705,14 +704,14 @@ def conciliar_calendario_e_planos_cronologicos(ano_alvo="6º"):
         
         ano_num = "".join(filter(str.isdigit, str(ano_alvo)))
         
-        # 1. RECONCILIAR E RE-INDEXAR DB_PLANOS
+        # 1. ORDENAR E RE-INDEXAR DB_PLANOS POR DATA CRONOLÓGICA
         ws_planos = wb.worksheet("DB_PLANOS")
         dados_p = ws_planos.get_all_values()
         if len(dados_p) <= 1: return False
         
         rows_p = dados_p[1:]
         
-        # Filtra e ordena planos do ano alvo por data real (strptime)
+        # Filtra e ordena planos do ano alvo por data real
         planos_ano = []
         for idx_r, r in enumerate(rows_p):
             if len(r) > 2 and ano_num in str(r[2]):
@@ -721,38 +720,57 @@ def conciliar_calendario_e_planos_cronologicos(ano_alvo="6º"):
                     planos_ano.append((dt_obj, idx_r + 2, r))
                 except: pass
         
-        # Ordena estritamente por data cronológica crescente
+        # Ordena por data cronológica crescente
         planos_ano.sort(key=lambda x: x[0])
         
-        mapa_datas_semana = {}
+        # Cria janelas de 7 dias para cada semana
+        intervalos_semanas = []
         
         for seq_idx, (dt_obj, row_num, row_data) in enumerate(planos_ano, start=1):
             nova_sem_label = f"Semana {seq_idx:02d}"
-            ws_planos.update_cell(row_num, 2, nova_sem_label) # Atualiza Coluna SEMANA
+            ws_planos.update_cell(row_num, 2, nova_sem_label) # Atualiza Coluna SEMANA em DB_PLANOS
             
-            dt_str = dt_obj.strftime("%d/%m/%Y")
-            mapa_datas_semana[dt_str] = nova_sem_label
+            dt_inicio = dt_obj.date() if isinstance(dt_obj, datetime) else dt_obj
+            dt_fim = dt_inicio + timedelta(days=6) # Janela de 7 dias (Segunda a Domingo)
+            
+            plano_txt = row_data[5] if len(row_data) > 5 else ""
+            obj_c = util.extrair_tag(plano_txt, "OBJETO_CONHECIMENTO") or util.extrair_tag(plano_txt, "CONTEUDOS_ESPECIFICOS") or "Conteúdo Programático"
+            
+            intervalos_semanas.append({
+                "semana": nova_sem_label,
+                "inicio": dt_inicio,
+                "fim": dt_fim,
+                "conteudo": obj_c
+            })
 
-        # 2. RECONCILIAR E RE-VINCULAR DB_REGISTRO_AULAS (TIRA O STATUS DE 'AVULSA')
+        # 2. RECONCILIAR E VINCULAR DB_REGISTRO_AULAS PELA JANELA DE 7 DIAS
         ws_reg = wb.worksheet("DB_REGISTRO_AULAS")
         dados_r = ws_reg.get_all_values()
         if len(dados_r) > 1:
             for idx_r, r in enumerate(dados_r[1:], start=2):
                 if len(r) >= 4 and ano_num in str(r[2]):
-                    dt_r = r[0].strip()
-                    sem_r = r[1].strip()
-                    cont_r = r[3].strip()
-                    
-                    if sem_r == "AVULSA" or "Registro via Diário" in cont_r or "PENDENTE" in str(r[4]):
-                        if dt_r in mapa_datas_semana:
-                            sem_mapeada = mapa_datas_semana[dt_r]
-                            ws_reg.update_cell(idx_r, 2, sem_mapeada) # Atualiza coluna SEMANA
-                            if "Registro via Diário" in cont_r or cont_r == "":
-                                novo_cont = f"{ano_alvo} Ano - Aula - {sem_mapeada}"
-                                ws_reg.update_cell(idx_r, 4, novo_cont) # Atualiza CONTEUDO
+                    try:
+                        dt_aula = datetime.strptime(r[0].strip(), "%d/%m/%Y").date()
+                        sem_r = r[1].strip()
+                        cont_r = r[3].strip()
+                        
+                        # Procura qual janela semanal de 7 dias engloba a data desta aula
+                        semana_encontrada = None
+                        for window in intervalos_semanas:
+                            if window["inicio"] <= dt_aula <= window["fim"]:
+                                semana_encontrada = window["semana"]
+                                break
+                        
+                        if semana_encontrada:
+                            ws_reg.update_cell(idx_r, 2, semana_encontrada) # Atualiza coluna SEMANA
+                            if sem_r == "AVULSA" or "Registro via Diário" in cont_r or cont_r == "":
+                                novo_titulo = f"{ano_alvo} Ano - Aula - {semana_encontrada}"
+                                ws_reg.update_cell(idx_r, 4, novo_titulo) # Atualiza CONTEUDO
+                    except Exception as e_row:
+                        print(f"Erro linha {idx_r}: {e_row}")
 
         st.cache_data.clear()
         return True
     except Exception as e:
-        print(f"Erro no Conciliador Cronológico: {e}")
+        print(f"Erro no conciliador: {e}")
         return False
