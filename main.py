@@ -900,7 +900,7 @@ if menu == "📅 Planejamento (Ponto ID)":
     renderizar_mesa_lapidacao_plano()
 
     # ==============================================================================
-    # ABA 2: HUB DE PRODUÇÃO & BYPASS OFFLINE LIVRO
+    # ABA 2: HUB DE PRODUÇÃO & BYPASS OFFLINE LIVRO (LÓGICA SOBERANA V2026)
     # ==============================================================================
     with tab_producao:
         st.markdown("#### Hub de Produção de Materiais")
@@ -915,11 +915,38 @@ if menu == "📅 Planejamento (Ponto ID)":
                         c_p1.markdown(f"**{row['SEMANA']}** | Série: {row['ANO']}")
                         c_p1.caption("Status: ⏳ HUB ATIVO (Aguardando Material)")
                         
+                        # 🏛️ VISUALIZAÇÃO E CÓPIA RÁPIDA DO PLANO PARA A PREFEITURA
+                        with st.expander("📋 Ver / Copiar Texto do Plano de Aula (para o site da Prefeitura)", expanded=False):
+                            st.caption("💡 Clique no ícone de cópia no canto superior direito da caixa abaixo para colar no sistema da Prefeitura:")
+                            st.code(str(row.get('PLANO_TEXTO', '')), language="text")
+
+                        # 🚀 BOTÃO DE GERAR MATERIAL (COM ISENÇÃO DE IA PARA REVISÃO)
                         if c_p2.button("🚀 Gerar Material IA", key=f"gen_hub_{row.name}", use_container_width=True):
-                            st.session_state.lab_temp = str(row["PLANO_TEXTO"])
-                            st.session_state.sosa_id_atual = util.gerar_sosa_id("AULA", row['ANO'], row["TURMA"])
-                            st.session_state.lab_meta = {"ano": str(row['ANO']).replace("º",""), "trimestre": row["TURMA"], "tipo": "PRODUÇÃO_HUB", "semana_ref": row['SEMANA']}
-                            navegar_para("🧪 Criador de Aulas")
+                            txt_plano_analise = str(row.get('PLANO_TEXTO', '')).upper()
+                            eixo_analise = str(row.get('EIXO', '')).upper()
+                            
+                            # Detecta se a semana é de Revisão/Recomposição
+                            e_revisao = any(x in eixo_analise or x in txt_plano_analise for x in ["REVISÃO", "REVISAO", "RECOMPOSIÇÃO", "RECOMPOSICAO", "RAIO-X", "AVALIAÇÃO", "AVALIACAO", "SONDA"])
+                            
+                            if e_revisao:
+                                # 🎯 MODO RECOMPOSIÇÃO/REVISÃO: ZERO CONSUMO DE IA (Bypass de Tokens)
+                                nome_aula_rev = f"{row['ANO']} - Aula de Revisão ({row['SEMANA']})"
+                                txt_conteudo_rev = f"[PROFESSOR]\nAULA DE REVISÃO E RECOMPOSIÇÃO\nOs alunos utilizam o Caderno de Recomposição/Provas da Central de Avaliações.\n\n[ALUNO]\nResolução dos exercícios do Caderno de Recomposição.\n\n--- LINKS ---\nRegular(N/A)"
+                                
+                                db.salvar_no_banco("DB_AULAS_PRONTAS", [
+                                    datetime.now().strftime("%d/%m/%Y"), row['SEMANA'], nome_aula_rev, txt_conteudo_rev, str(row['ANO']), "N/A"
+                                ])
+                                db.arquivar_plano_produzido(row['SEMANA'], row['ANO'])
+                                st.toast(f"✅ Aula de Revisão da {row['SEMANA']} registrada com sucesso! (Isenção de IA ativada - 0 tokens)", icon="🛡️")
+                                st.success(f"✅ {row['SEMANA']} registrada com sucesso! As atividades utilizadas em sala são as da Central de Avaliações.")
+                                time.sleep(1.5)
+                                st.rerun()
+                            else:
+                                # 🧱 MODO AULA REGULAR: Encaminha para o Criador de Aulas normalmente
+                                st.session_state.lab_temp = str(row["PLANO_TEXTO"])
+                                st.session_state.sosa_id_atual = util.gerar_sosa_id("AULA", row['ANO'], row["TURMA"])
+                                st.session_state.lab_meta = {"ano": str(row['ANO']).replace("º",""), "trimestre": row["TURMA"], "tipo": "PRODUÇÃO_HUB", "semana_ref": row['SEMANA']}
+                                navegar_para("🧪 Criador de Aulas")
 
                         with c_p3.popover("📦 Registro Offline / Livro"):
                             st.info("💡 **Conclusão sem uso de IA:** Registre os detalhes da aula ministrada com o Livro Didático ou Atividade Manual.")
