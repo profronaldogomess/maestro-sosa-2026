@@ -1148,3 +1148,146 @@ def gerar_docx_pei_oficial(nome_arquivo, dados_aluno, habilidades, curriculo_df)
         err_doc = Document(); err_doc.add_paragraph(f"ERRO NO PEI OFICIAL: {sanitizar_xml_str(str(e))}"); err_doc.save(file_stream)
         file_stream.seek(0)
         return file_stream
+
+# ==============================================================================
+# 11. CERTIDÃO OFICIAL DE PRODUÇÃO E RENDIMENTO (ALUNOS TRANSFERIDOS/INATIVOS)
+# ==============================================================================
+def gerar_docx_certidao_producao(nome_arquivo, dados_aluno, notas_trimestres, info_escola):
+    """
+    SOSA V2026: CERTIDÃO OFICIAL DE PRODUÇÃO E RENDIMENTO DO ESTUDANTE INATIVO/TRANSFERIDO.
+    Gera um documento Word A4 assinado e formatado para a Direção/Coordenação.
+    """
+    file_stream = io.BytesIO()
+    try:
+        doc = Document()
+        section = doc.sections[0]
+        section.top_margin = section.bottom_margin = Inches(0.5)
+        section.left_margin = section.right_margin = Inches(0.5)
+
+        style = doc.styles['Normal']
+        style.font.name = 'Arial'
+        style.font.size = Pt(10)
+
+        # Cabeçalho Mestre da Escola
+        configurar_cabecalho_mestre(doc, info_escola, "CERTIDÃO DE RENDIMENTO E PRODUÇÃO", mostrar_nota=False)
+        doc.add_paragraph()
+
+        # Título da Certidão
+        p_tit = doc.add_paragraph()
+        p_tit.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run_t = p_tit.add_run("CERTIDÃO OFICIAL DE RENDIMENTO E PRODUÇÃO PEDAGÓGICA")
+        run_t.bold = True
+        run_t.font.size = Pt(11)
+        run_t.font.color.rgb = RGBColor(0, 51, 102)
+
+        doc.add_paragraph()
+
+        # Dados Identificadores do Aluno
+        p_d = doc.add_paragraph()
+        p_d.paragraph_format.space_after = Pt(4)
+        p_d.add_run("ESTUDANTE: ").bold = True
+        p_d.add_run(f"{sanitizar_xml_str(str(dados_aluno.get('nome', '')))}\t\t")
+        p_d.add_run("MATRÍCULA/ID: ").bold = True
+        p_d.add_run(f"{sanitizar_xml_str(str(dados_aluno.get('id', '')))}\n")
+        
+        p_d2 = doc.add_paragraph()
+        p_d2.paragraph_format.space_after = Pt(6)
+        p_d2.add_run("TURMA: ").bold = True
+        p_d2.add_run(f"{sanitizar_xml_str(str(dados_aluno.get('turma', '')))}\t\t")
+        p_d2.add_run("STATUS REGIMENTAL: ").bold = True
+        
+        status_txt = sanitizar_xml_str(str(dados_aluno.get('status', 'TRANSFERIDO'))).upper()
+        r_st = p_d2.add_run(status_txt)
+        r_st.bold = True
+        if "ATIVO" in status_txt: r_st.font.color.rgb = RGBColor(0, 128, 0)
+        else: r_st.font.color.rgb = RGBColor(204, 0, 0)
+
+        p_d2.add_run(f"\t\tPERFIL/CID: {sanitizar_xml_str(str(dados_aluno.get('perfil', 'TÍPICO')))}")
+
+        doc.add_paragraph()
+
+        # Tabela de Desempenho por Trimestre
+        p_tb_t = doc.add_paragraph()
+        p_tb_t.add_run("1. HISTÓRICO DE NOTAS E AVALIAÇÕES ACUMULADAS:").bold = True
+        p_tb_t.runs[0].font.color.rgb = RGBColor(0, 51, 102)
+
+        table_n = doc.add_table(rows=1, cols=6)
+        table_n.style = 'Table Grid'
+        hdr_cells = table_n.rows[0].cells
+        hdr_titles = ["PERÍODO", "C1 (VISTOS)", "C2 (TESTES)", "C3 (PROVA)", "REC.", "MÉDIA"]
+        col_w = [Inches(1.5), Inches(1.2), Inches(1.2), Inches(1.2), Inches(1.0), Inches(1.2)]
+        
+        set_row_height(table_n.rows[0], 20)
+        for idx_h, h_t in enumerate(hdr_titles):
+            c = hdr_cells[idx_h]
+            c.width = col_w[idx_h]
+            set_cell_background(c, "003366")
+            p = c.paragraphs[0]
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            r = p.add_run(h_t)
+            r.bold = True
+            r.font.size = Pt(8.5)
+            r.font.color.rgb = RGBColor(255, 255, 255)
+
+        for reg_trim in notas_trimestres:
+            row_cells = table_n.add_row().cells
+            set_row_height(table_n.rows[-1], 18)
+            vals = [
+                reg_trim.get('periodo', ''),
+                f"{reg_trim.get('c1', 0.0):.1f}",
+                f"{reg_trim.get('c2', 0.0):.1f}",
+                f"{reg_trim.get('c3', 0.0):.1f}",
+                reg_trim.get('rec', '-'),
+                f"{reg_trim.get('media', 0.0):.1f}"
+            ]
+            for idx_v, val in enumerate(vals):
+                c = row_cells[idx_v]
+                c.width = col_w[idx_v]
+                p = c.paragraphs[0]
+                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                p.add_run(sanitizar_xml_str(str(val))).font.size = Pt(9)
+
+        doc.add_paragraph()
+
+        # Resumo de Assiduidade e Caderno
+        p_ass = doc.add_paragraph()
+        p_ass.add_run("2. REGISTRO DE FREQUÊNCIA E ENGAJAMENTO EM SALA:\n").bold = True
+        p_ass.runs[0].font.color.rgb = RGBColor(0, 51, 102)
+        
+        p_ass.add_run(f"• Percentual de Assiduidade: {dados_aluno.get('assiduidade', '100%')}\n")
+        p_ass.add_run(f"• Total de Ausências Registradas: {dados_aluno.get('faltas', 0)} falta(s)\n")
+        p_ass.add_run(f"• Engajamento em Tarefas de Caderno (Vistos C1): {dados_aluno.get('vistos_perc', '0%')}\n")
+        p_ass.add_run(f"• Bônus Atitudinais Conquistados: {dados_aluno.get('bonus', '0.0')} pts\n")
+
+        doc.add_paragraph()
+
+        # Parecer Final do Professor
+        p_par = doc.add_paragraph()
+        p_par.add_run("3. PARECER DESCRITIVO DE REGÊNCIA:\n").bold = True
+        p_par.runs[0].font.color.rgb = RGBColor(0, 51, 102)
+        p_par.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+        
+        parecer_txt = dados_aluno.get('parecer', 'O estudante cumpriu as atividades regulares durante o período em que esteve vinculado à turma.')
+        adicionar_texto_formatado(p_par, parecer_txt)
+
+        doc.add_paragraph()
+        doc.add_paragraph()
+
+        # Assinaturas
+        p_sig = doc.add_paragraph()
+        p_sig.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p_sig.add_run("_________________________________________\n").bold = True
+        p_sig.add_run("Prof. Ronaldo Gomes\n").bold = True
+        p_sig.add_run("Componente Curricular de Matemática\n").font.size = Pt(8.5)
+        p_sig.add_run(f"Emitido em: {datetime.now().strftime('%d/%m/%Y às %H:%M')}").font.size = Pt(8.5)
+
+        doc.save(file_stream)
+        file_stream.seek(0)
+        return file_stream
+    except Exception as e:
+        file_stream = io.BytesIO()
+        err_doc = Document()
+        err_doc.add_paragraph(f"ERRO NA CERTIDÃO: {sanitizar_xml_str(str(e))}")
+        err_doc.save(file_stream)
+        file_stream.seek(0)
+        return file_stream
