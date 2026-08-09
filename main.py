@@ -2273,12 +2273,12 @@ elif menu == "🧪 Criador de Aulas":
 
 
 # ==============================================================================
-# MÓDULO: CENTRAL DE AVALIAÇÕES - V2026.MASTER_ULTIMATE
-# (COM BOTÃO DE RE-EXPORTAÇÃO EM 1 CLIQUE NO ACERVO DA ABA 2)
+# MÓDULO: CENTRAL DE AVALIAÇÕES - V2026.ULTIMATE
+# (LINHA DE MONTAGEM, PERÍCIA TRI, RECOMPOSIÇÃO E GERADOR DE E-MAIL/PDF PARA XEROX)
 # ==============================================================================
 elif menu == "📝 Central de Avaliações":
     st.title("📝 Central de Avaliações (Padrão ENEM / SAEB / BNCC)")
-    st.caption("Arquitetura de Avaliação de Alta Performance: Ancoragem no Livro/Lousa, Perícia TRI de Distratores, Tríade Inclusiva PEI On-Demand e Custódia Digital.")
+    st.caption("Arquitetura de Avaliação de Alta Performance: Ancoragem no Livro/Lousa, Perícia TRI de Distratores, Tríade PEI On-Demand, Expedição de E-mail para Xerox e Acervo Trimestral.")
     st.markdown("---")
 
     if "v_av" not in st.session_state: 
@@ -2320,10 +2320,11 @@ elif menu == "📝 Central de Avaliações":
             html_steps.append(f"<div style='flex: 1; text-align: center; padding-bottom: 8px; color: {color}; font-weight: {f_weight}; {border}'>{nome}</div>")
         st.markdown(f"<div style='display: flex; justify-content: space-between; margin-bottom: 25px;'>{''.join(html_steps)}</div>", unsafe_allow_html=True)
 
-    tab_forja, tab_acervo_av, tab_recomposicao = st.tabs([
+    tab_forja, tab_acervo_av, tab_recomposicao, tab_expedicao = st.tabs([
         "📝 Linha de Montagem de Provas", 
         "📖 Acervo de Provas & Perícia TRI", 
-        "🔄 Recomposição & Cadernos de Revisão"
+        "🔄 Recomposição & Cadernos de Revisão",
+        "📧 Expedição de E-mail, PDFs & Acervo Trimestral"
     ])
 
     # ==============================================================================
@@ -2425,7 +2426,6 @@ elif menu == "📝 Central de Avaliações":
                             height=75, key=f"recorte_provas_input_{v}"
                         )
 
-                    # MINERAÇÃO INTELIGENTE DE CONTEÚDOS (DB_PLANOS + DB_CURRICULO)
                     topicos_candidatos = []
                     TERMOS_PROIBIDOS_ASSUNTO = r"(?i)(?:REVIS[AÃ]O|PROVA|TESTE|SONDA|DOSSI[EÊ]|RAIO-X|AVALIA[CÇ][AÃ]O|APLICA[CÇ][AÃ]O|2[ªA]\s*CHAMADA|RECUPERA[CÇ][AÃ]O|GABARITO|AULA\s*\d+|SEMANA\s*\d+)"
 
@@ -2484,7 +2484,7 @@ elif menu == "📝 Central de Avaliações":
                     if txt_av_ex_ext: contexto_base_texto += f"--- PÁGINAS DE EXERCÍCIOS DO LIVRO DIDÁTICO ---\n{txt_av_ex_ext}\n\n"
                     if recorte_provas_livro.strip(): contexto_base_texto += f"--- EXERCÍCIOS DO PROFESSOR ---\n{recorte_provas_livro.strip()}\n\n"
 
-            # 3. SELETOR INTERATIVO MULTISELECT DE CONTEÚDOS
+            # SELETOR INTERATIVO MULTISELECT DE CONTEÚDOS
             with st.container(border=True):
                 st.markdown(f"#### 3. 📋 Seletor Interativo de Conteúdos ({ano_av}º Ano - {trim_filtro})")
                 st.caption("Marque exclusivamente os tópicos que você EFETIVAMENTE LECIONOU em sala para a IA gerar questões fiéis:")
@@ -2904,13 +2904,13 @@ elif menu == "📝 Central de Avaliações":
         elif f['fase'] == 5:
             st.success(f"🏆 Avaliação **{f.get('nome_base', '')}** homologada com sucesso no Acervo!")
             st.markdown("### 🔄 Processo Concluído com Sucesso!")
-            st.info("💡 Para gerar o Caderno de Recomposição/Revisão para os alunos, acesse a **Aba 3 (Recomposição & Cadernos de Revisão)** no topo da página quando achar necessário.")
+            st.info("💡 Para gerar o Caderno de Recomposição/Revisão para os alunos, acesse a **Aba 3 (Recomposição & Cadernos de Revisão)** ou vá na **Aba 4 (Expedição)** para gerar o e-mail de remessa para a xerox.")
 
             if st.button("🎉 Concluir e Voltar ao Início", use_container_width=True, key=f"btn_fin_f5_{v}"):
                 reset_forja()
 
     # ==============================================================================
-    # ABA 2: ACERVO DE PROVAS & RE-EXPORTAÇÃO EM 1 CLIQUE (SOSA V2026)
+    # ABA 2: ACERVO DE PROVAS & RE-EXPORTAÇÃO EM 1 CLIQUE
     # ==============================================================================
     with tab_acervo_av:
         st.markdown("### 📖 Acervo de Instrumentos Avaliativos & Perícia TRI")
@@ -2966,7 +2966,6 @@ elif menu == "📝 Central de Avaliações":
                     if c_b5.button("🗑️ Apagar", key=f"del_ac_{row.name}_{idx_av}_{v}", use_container_width=True):
                         if db.excluir_avaliacao_completa(identificador, row['SEMANA_REF']): st.rerun()
 
-                    # 🚨 RE-EXPORTAÇÃO EM 1 CLIQUE COM A VACINA ANTI-ERRO LXML
                     with st.expander("🔄 Re-gerar / Re-exportar Documentos (DOCX) no Drive", expanded=False):
                         st.info("💡 **Re-exportação Direta:** Clique abaixo para re-gerar os arquivos DOCX no Google Drive utilizando o texto preservado no banco de dados com a nova engine do Exporter.")
                         
@@ -3098,6 +3097,138 @@ elif menu == "📝 Central de Avaliações":
                         status_rec.update(label="✅ Caderno de Recomposição gerado e sincronizado no Drive!", state="complete")
                         st.balloons()
                         st.link_button("📂 ABRIR CADERNO DO ALUNO NO DRIVE", link_alu_rev, type="primary", use_container_width=True)
+
+    # ==============================================================================
+    # ABA 4: EXPEDIÇÃO DE E-MAIL, PDFS & ACERVO TRIMESTRAL (NOVO V2026)
+    # ==============================================================================
+    with tab_expedicao:
+        @st.fragment
+        def renderizar_expedicao_fragmento():
+            st.markdown("### 📧 Expedição de E-mail, PDFs & Acervo Trimestral")
+            st.caption("Gerador automático do e-mail oficial de remessa para a escola/xerox com discriminação por turma, alunos PEI nomeados e congelamento de PDFs por trimestre.")
+
+            c_exp1, c_exp2 = st.columns([1, 2])
+            trim_exp_sel = c_exp1.selectbox("📅 Selecione o Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"exp_trim_sel_{v}")
+
+            turmas_disp_exp = sorted(df_alunos['TURMA'].unique().tolist()) if not df_alunos.empty else []
+            turmas_sel_exp = c_exp2.multiselect("👥 Selecione as Turmas para Envio:", options=turmas_disp_exp, default=turmas_disp_exp[:min(3, len(turmas_disp_exp))], key=f"exp_turmas_sel_{v}")
+
+            if not turmas_sel_exp:
+                st.info("Selecione ao menos uma turma para compor a remessa de e-mail e xerox.")
+            else:
+                df_provas_exp = df_aulas[df_aulas['SEMANA_REF'] == "AVALIAÇÃO"] if not df_aulas.empty else pd.DataFrame()
+                opcoes_provas_exp = sorted(df_provas_exp['TIPO_MATERIAL'].unique().tolist()) if not df_provas_exp.empty else []
+                nome_exame_email = st.selectbox("📋 Nome da Avaliação a Enviar:", options=["AVALIAÇÃO TRIMESTRAL DE MATEMÁTICA"] + opcoes_provas_exp, key=f"exp_exame_nome_{v}")
+
+                tot_reg_geral = 0
+                tot_p1_geral = 0
+                tot_p2_geral = 0
+                tot_p3_geral = 0
+
+                linhas_email_turmas = []
+
+                for t_item in turmas_sel_exp:
+                    df_t_alu = df_alunos[df_alunos['TURMA'] == t_item].sort_values(by="NOME_ALUNO") if not df_alunos.empty else pd.DataFrame()
+                    
+                    reg_count = 0
+                    p1_names = []
+                    p2_names = []
+                    p3_names = []
+
+                    for _, al_r in df_t_alu.iterrows():
+                        nec_raw = str(al_r['NECESSIDADES']).upper().strip()
+                        nome_a = al_r['NOME_ALUNO']
+                        
+                        if "(PEI N1)" in nec_raw:
+                            p1_names.append(nome_a)
+                        elif "(PEI N2)" in nec_raw:
+                            p2_names.append(nome_a)
+                        elif "(PEI N3)" in nec_raw:
+                            p3_names.append(nome_a)
+                        else:
+                            reg_count += 1
+
+                    tot_reg_geral += reg_count
+                    tot_p1_geral += len(p1_names)
+                    tot_p2_geral += len(p2_names)
+                    tot_p3_geral += len(p3_names)
+
+                    bloco_t = f"📍 TURMA {t_item.upper()}:\n"
+                    bloco_t += f"• Provas Regulares: {reg_count:02d} cópias\n"
+                    if p1_names:
+                        bloco_t += f"• Prova PEI Nível 1: {len(p1_names):02d} cópia(s) (Aluno(s): {', '.join(p1_names)})\n"
+                    if p2_names:
+                        bloco_t += f"• Prova PEI Nível 2: {len(p2_names):02d} cópia(s) (Aluno(s): {', '.join(p2_names)})\n"
+                    if p3_names:
+                        bloco_t += f"• Prova PEI Nível 3 (Qualitativa): {len(p3_names):02d} cópia(s) (Aluno(s): {', '.join(p3_names)})\n"
+
+                    linhas_email_turmas.append(bloco_t)
+
+                tot_geral_copias = tot_reg_geral + tot_p1_geral + tot_p2_geral + tot_p3_geral
+
+                corpo_email_oficial = f"""Prezados(as) da Direção, Coordenação e Setor de Impressão (Xerox),
+
+Espero que estejam bem.
+
+Segue em anexo o arquivo em PDF das avaliações do {trim_exp_sel} ({nome_exame_email}) para impressão.
+
+Solicito a gentileza de providenciar as impressões conforme o detalhamento por turma abaixo:
+
+""" + "\n".join(linhas_email_turmas) + f"""
+==================================================
+📊 RESUMO CONSOLIDADO DE IMPRESSÃO (TOTAL GERAL):
+• Total de Provas Regulares: {tot_reg_geral:02d}
+• Total de Provas PEI Nível 1: {tot_p1_geral:02d}
+• Total de Provas PEI Nível 2: {tot_p2_geral:02d}
+• Total de Provas PEI Nível 3: {tot_p3_geral:02d}
+• TOTAL GERAL DE CÓPIAS A IMPRIMIR: {tot_geral_copias:02d} cópias
+
+Atenciosamente,
+Prof. Ronaldo Gomes — Componente Curricular de Matemática
+Escola Municipal Flávio José Simões Costa
+"""
+
+                st.markdown("#### 📧 E-mail Oficial de Remessa (Pronto para Copiar & Enviar)")
+                st.code(corpo_email_oficial, language=None)
+
+                with st.container(border=True):
+                    st.markdown("##### 📊 Resumo de Carga de Impressão")
+                    c_k1, c_k2, c_k3, c_k4, c_k5 = st.columns(5)
+                    c_k1.metric("📄 Regulares", tot_reg_geral)
+                    c_k2.metric("🔵 PEI N1", tot_p1_geral)
+                    c_k3.metric("🟡 PEI N2", tot_p2_geral)
+                    c_k4.metric("🔴 PEI N3", tot_p3_geral)
+                    c_k5.metric("🖨️ TOTAL CÓPIAS", tot_geral_copias)
+
+                st.markdown("---")
+                st.markdown(f"#### 🔒 Acervo Trimestral de Segurança ({trim_exp_sel})")
+                st.caption("Arquivos em DOCX e PDF armazenados no Drive para acesso permanente sem risco de perda.")
+
+                df_provas_trim_acervo = df_aulas[(df_aulas['SEMANA_REF'] == "AVALIAÇÃO") & (df_aulas['CONTEUDO'].str.contains(obter_regex_trimestre(trim_exp_sel), regex=True, case=False, na=False))] if not df_aulas.empty else pd.DataFrame()
+
+                if df_provas_trim_acervo.empty:
+                    st.info(f"Nenhum exame cadastrado no acervo do {trim_exp_sel} ainda.")
+                else:
+                    for _, row_ac in df_provas_trim_acervo.iterrows():
+                        with st.container(border=True):
+                            c_a1, c_a2, c_a3 = st.columns([2, 1, 1])
+                            c_a1.markdown(f"**📋 {row_ac['TIPO_MATERIAL']}**")
+                            c_a1.caption(f"Série: {row_ac['ANO']} | Data: {row_ac['DATA']}")
+                            
+                            l_docx = row_ac.get('LINK_DRIVE', '#')
+                            if l_docx and "http" in str(l_docx):
+                                c_a2.link_button("📝 Abrir DOCX Editável", str(l_docx), use_container_width=True)
+                            else:
+                                c_a2.caption("DOCX Indisponível")
+
+                            if c_a3.button("📄 Congelar PDF no Drive", key=f"btn_pdf_freeze_{row_ac.name}_{v}", use_container_width=True):
+                                with st.spinner("Gerando PDF congelado e salvando no Drive..."):
+                                    doc_stream_p = exporter.gerar_docx_prova_v25(row_ac['TIPO_MATERIAL'], row_ac['CONTEUDO'], {"ano": row_ac['ANO'], "trimestre": trim_exp_sel})
+                                    link_pdf = db.subir_e_converter_para_google_docs(doc_stream_p, f"{row_ac['TIPO_MATERIAL']}_CONGELADO", trimestre=trim_exp_sel, categoria=row_ac['ANO'], modo="SCANNER")
+                                    st.success("✅ PDF Congelado no Drive!")
+                                    st.link_button("📂 ABRIR PDF NO DRIVE", link_pdf, type="primary", use_container_width=True)
+
+        renderizar_expedicao_fragmento()
 
 
 
