@@ -1951,7 +1951,22 @@ elif menu == "🧪 Criador de Aulas":
                                     st.rerun()
 
             elif fa['fase'] == 2:
-                if fa.get('tipo_material') == 'AULA':
+                # 🚨 BLOQUEIO SOBERANO DE REVISÃO (Bypass de Lote)
+                if fa.get('info', {}).get('tipo') == 'LISTA_HIBRIDA' and any(x in str(fa.get('info', {}).get('id_lista', '')).upper() for x in ["REVISAO", "REVISÃO", "RECOMPOSICAO", "RECOMPOSIÇÃO", "RAIO-X"]):
+                    st.success("✅ **Material de Revisão Herdado da Central de Avaliações!**")
+                    st.info("💡 Este material utiliza as questões espelho já forjadas. Não há necessidade de gerar novos itens por lote.")
+                    
+                    if st.button("💾 CONFIRMAR E REGISTRAR AULA NO ACERVO", type="primary", use_container_width=True, key=f"btn_bypass_rev_f2_{v}"):
+                        nome_rev_salvar = fa['info']['id_lista']
+                        db.salvar_no_banco("DB_AULAS_PRONTAS", [
+                            datetime.now().strftime("%d/%m/%Y"), "REVISÃO", nome_rev_salvar,
+                            fa['info']['contexto'], f"{fa['info']['ano']}º", "N/A"
+                        ])
+                        db.arquivar_plano_produzido("CONSOLIDAÇÃO", f"{fa['info']['ano']}º")
+                        st.success("✅ Registro de Revisão concluído com sucesso!")
+                        st.balloons(); time.sleep(1); reset_laboratorio()
+                
+                elif fa.get('tipo_material') == 'AULA':
                     st.markdown("### Fase 2: Tratado Didático & Roteiro de Lousa (Início ➔ Meio ➔ Fim)")
                     if not fa['teoria']:
                         with st.spinner("Gerando explicação didática com leitura das páginas do Livro..."):
@@ -2980,10 +2995,12 @@ elif menu == "📝 Central de Avaliações":
                 with st.container(border=True):
                     txt_f = str(row['CONTEUDO'])
                     identificador = row['TIPO_MATERIAL']
-                    val_ex = re.sub(r'[*#]', '', ai.extrair_tag(txt_f, "VALOR")).strip()
+                    val_raw = ai.extrair_tag(txt_f, "VALOR")
+                    val_num = util.sosa_to_float(val_raw)
+                    val_ex = f"{val_num:.1f} pts" if val_num > 0 else "4.0 pts"
                     
                     st.markdown(f"##### 📋 {identificador}")
-                    st.caption(f"Série: {row['ANO']} | Valor: {val_ex if val_ex else '4.0'} pts | Status: 🔒 COFRE DIGITAL DRIVE SINCRONIZADO")
+                    st.caption(f"Série: {row['ANO']} | Valor: {val_ex} | Status: 🔒 COFRE DIGITAL DRIVE SINCRONIZADO")
                     
                     def extrair_link_acervo(t, tag):
                         m = re.search(rf"{tag}\((https://docs\.google\.com/document/d/[^\s\)]+)\)", t, re.IGNORECASE)
