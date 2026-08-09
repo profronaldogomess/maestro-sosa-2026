@@ -539,7 +539,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         section.top_margin = section.bottom_margin = Inches(0.35)
         section.left_margin = section.right_margin = Inches(0.4)
         
-        # 1. Sanitização profunda do texto de entrada
+        # 1. Sanitização profunda do texto de entrada contra caracteres invisíveis
         conteudo_ia_limpo = sanitizar_xml_str(str(conteudo_ia))
         
         is_pei_doc = "PEI" in titulo_doc.upper() or "ADAPTADA" in titulo_doc.upper()
@@ -571,9 +571,9 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         if num_total_q == 0: 
             num_total_q = int(helper_sosa_float(info.get('qtd_questoes', info.get('qtd', 5))))
         
-        # Rotulagem
+        # Rotulagem Executiva
         label_prova = "AVALIAÇÃO ADAPTADA" if is_pei_doc else "AVALIAÇÃO DE MATEMÁTICA (ENEM/SAEB)"
-        if "REVISAO" in titulo_doc.upper() or "RECOMPOSICAO" in titulo_doc.upper() or "RAIO-X" in titulo_doc.upper():
+        if any(x in titulo_doc.upper() for x in ["REVISAO", "RECOMPOSICAO", "RAIO-X"]):
             label_prova = "CADERNO DE RECOMPOSIÇÃO E REVISÃO"
         elif "SONDA" in titulo_doc.upper():
             label_prova = "SONDA DE PROFICIÊNCIA"
@@ -612,9 +612,9 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         
         orient_list = [
             f"Valor Total: {val_total_str} pts | Valor por Questão: {val_q_str} pts.",
-            "Preencha o Cartão-Resposta com caneta esferográfica preta ou azul.",
-            "🚨 REGRA DA MEMÓRIA DE CÁLCULO: Apresente o rascunho dos cálculos nas questões de resolução matemática.",
-            "Mantenha os 4 marcadores pretos (■) dos cantos limpos e sem rasuras."
+            "Preencha o Cartão-Resposta abaixo com caneta esferográfica preta ou azul.",
+            "🚨 REGRA DA MEMÓRIA DE CÁLCULO: Apresente a resolução matemática no papel para validação do item.",
+            "Mantenha os 4 marcadores pretos (■) dos cantos limpos para leitura óptica."
         ]
 
         for txt in orient_list:
@@ -624,7 +624,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
 
         doc.add_paragraph()
 
-        # 5. CARTÃO-RESPOSTA FIDUCIAL
+        # 5. CARTÃO-RESPOSTA PADRONIZADO
         if info.get('tipo_prova') != "2ª Chamada":
             adicionar_cartao_resposta_fiducial_word(doc, num_total_q, is_pei_doc)
 
