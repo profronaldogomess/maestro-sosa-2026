@@ -4492,11 +4492,12 @@ elif menu == "📸 Scanner de Gabaritos":
 
 
 # ==============================================================================
-# MÓDULO: BIOGRAFIA DO ESTUDANTE - V2026.ULTIMATE (DOSSIÊ 360° SOBERANO)
+# MÓDULO: BIOGRAFIA DO ESTUDANTE - V2026.ULTIMATE
+# (DOSSIÊ 360°, FILTRO ATIVOS X INATIVOS/TRANSFERIDOS, CERTIDÃO DE PRODUÇÃO DOCX)
 # ==============================================================================
 elif menu == "👤 Biografia do Estudante":
     st.title("👤 Biografia do Estudante: Dossiê 360°")
-    st.caption("Dashboard executivo para reuniões de pais com inteligência temporal, linha do tempo e sincronia ao vivo.")
+    st.caption("Dashboard executivo para reuniões de pais, certidão de transferência/inativos, linha do tempo e sincronia ao vivo.")
     st.markdown("---")
 
     def obter_regex_trimestre_local(trimestre_str):
@@ -4510,7 +4511,7 @@ elif menu == "👤 Biografia do Estudante":
         st.session_state.v_bio = int(time.time())
     v = st.session_state.v_bio
 
-    # 🚨 DIALOG DO TRIBUNAL DECLARADO NO NÍVEL SUPERIOR (PREVINE CRASH SILENCIOSO)
+    # LEI 25: DIALOGS DECLARADOS NO NÍVEL SUPERIOR
     @st.dialog("⚖️ Tribunal de Recursos", width="large")
     def dialog_tribunal(id_aluno_dialog, nome_aluno_dialog, is_pei_dialog, df_diag_dialog):
         opcoes_av_tribunal = df_diag_dialog['ID_AVALIACAO'].tolist() if not df_diag_dialog.empty else []
@@ -4640,7 +4641,7 @@ elif menu == "👤 Biografia do Estudante":
         opcoes_periodo_bio = ["Todos", "I Trimestre", "II Trimestre", "III Trimestre"]
 
         with st.container(border=True):
-            c1, c2, c3 = st.columns([1, 1.5, 1])
+            c1, c2, c3, c4 = st.columns([1, 1.2, 1.5, 1])
             
             lista_turmas_bio = []
             if not df_turmas.empty and 'ID_TURMA' in df_turmas.columns:
@@ -4650,10 +4651,20 @@ elif menu == "👤 Biografia do Estudante":
                 lista_turmas_bio = sorted(df_alunos['TURMA'].unique())
             
             turma_b = c1.selectbox("👥 Turma:", lista_turmas_bio, key=f"bio_t_{v}")
-            lista_alunos = df_alunos[df_alunos['TURMA'] == turma_b].sort_values(by="NOME_ALUNO").copy()
             
+            # FILTRO NOVO: ATIVOS X TRANSFERIDOS / EVADIDOS
+            flt_status_bio = c2.pills("Filtro de Status:", ["🟢 Ativos", "👻 Inativos/Transferidos"], default="🟢 Ativos", key=f"pills_flt_status_{v}")
+            
+            df_alunos_turma_raw = df_alunos[df_alunos['TURMA'] == turma_b].copy()
+            if 'STATUS' not in df_alunos_turma_raw.columns: df_alunos_turma_raw['STATUS'] = "ATIVO"
+            
+            if flt_status_bio == "🟢 Ativos":
+                lista_alunos = df_alunos_turma_raw[~df_alunos_turma_raw['STATUS'].astype(str).str.upper().isin(["TRANSFERIDO", "EVADIDO", "INATIVO", "DESISTENTE"])].sort_values(by="NOME_ALUNO")
+            else:
+                lista_alunos = df_alunos_turma_raw[df_alunos_turma_raw['STATUS'].astype(str).str.upper().isin(["TRANSFERIDO", "EVADIDO", "INATIVO", "DESISTENTE"])].sort_values(by="NOME_ALUNO")
+
             if lista_alunos.empty:
-                st.warning("Nenhum aluno cadastrado nesta turma.")
+                st.warning("Nenhum aluno encontrado para esse filtro nesta turma.")
                 st.stop()
             
             def definir_icone_status(nec):
@@ -4668,8 +4679,8 @@ elif menu == "👤 Biografia do Estudante":
             lista_alunos['STATUS_ICON'] = lista_alunos['NECESSIDADES'].apply(definir_icone_status)
             lista_alunos['LABEL'] = lista_alunos.apply(lambda x: f"{x['STATUS_ICON']} {x['NOME_ALUNO']}", axis=1)
                 
-            aluno_b_label = c2.selectbox("🎓 Estudante:", lista_alunos['LABEL'].tolist(), key=f"bio_a_{v}")
-            trim_b = c3.selectbox("📅 Período de Análise (Auto):", opcoes_periodo_bio, index=idx_trim_bio_default, key=f"bio_trim_{v}")
+            aluno_b_label = c3.selectbox("🎓 Estudante:", lista_alunos['LABEL'].tolist(), key=f"bio_a_{v}")
+            trim_b = c4.selectbox("📅 Período (Auto):", opcoes_periodo_bio, index=idx_trim_bio_default, key=f"bio_trim_{v}")
 
         if trim_b == "I Trimestre": dt_ini, dt_fim = date(2026, 2, 9), date(2026, 5, 22)
         elif trim_b == "II Trimestre": dt_ini, dt_fim = date(2026, 5, 25), date(2026, 9, 4)
@@ -4680,6 +4691,7 @@ elif menu == "👤 Biografia do Estudante":
         info_alu = lista_alunos[lista_alunos['NOME_ALUNO'] == nome_limpo].iloc[0]
         id_alu = db.limpar_id(info_alu['ID'])
         perfil_atual = str(info_alu['NECESSIDADES']).upper().strip()
+        status_atual_aluno = str(info_alu.get('STATUS', 'ATIVO')).upper().strip()
         is_pei_or_gap = perfil_atual not in ["NENHUMA", "", "NAN", "TÍPICO", "TIPICO"]
         
         n_alu = df_notas[df_notas['ID_ALUNO'].apply(db.limpar_id) == id_alu] if not df_notas.empty else pd.DataFrame()
@@ -4780,22 +4792,23 @@ elif menu == "👤 Biografia do Estudante":
             
             with c_h1:
                 st.markdown(f"<h3 style='margin-bottom: 0px;'>{nome_limpo}</h3>", unsafe_allow_html=True)
-                st.caption(f"**ID:** {id_alu} | **Turma:** {turma_b}")
+                st.caption(f"**ID:** {id_alu} | **Turma:** {turma_b} | **Status:** `{status_atual_aluno}`")
                 
-                if "PENDENTE" in perfil_atual or "SUSPEITA" in perfil_atual: st.caption(f"Status: 🟠 RADAR DE INVESTIGAÇÃO ({perfil_atual})")
-                elif "DEFASAGEM" in perfil_atual: st.caption(f"Status: 🧱 BARREIRA DE APRENDIZAGEM ({perfil_atual})")
-                elif "ALTA PERFORMANCE" in perfil_atual: st.caption(f"Status: 🚀 DESTAQUE COGNITIVO ({perfil_atual})")
-                elif is_pei_or_gap: st.caption(f"Status: ♿ CONDIÇÃO CLÍNICA PEI ({perfil_atual})")
-                else: st.caption("Status: 👤 PERFIL TÍPICO / PADRÃO")
+                if "PENDENTE" in perfil_atual or "SUSPEITA" in perfil_atual: st.caption(f"Perfil: 🟠 RADAR DE INVESTIGAÇÃO ({perfil_atual})")
+                elif "DEFASAGEM" in perfil_atual: st.caption(f"Perfil: 🧱 BARREIRA DE APRENDIZAGEM ({perfil_atual})")
+                elif "ALTA PERFORMANCE" in perfil_atual: st.caption(f"Perfil: 🚀 DESTAQUE COGNITIVO ({perfil_atual})")
+                elif is_pei_or_gap: st.caption(f"Perfil: ♿ CONDIÇÃO CLÍNICA PEI ({perfil_atual})")
+                else: st.caption("Perfil: 👤 PERFIL TÍPICO / PADRÃO")
                 
             c_h2.metric("Soma Parcial", f"{soma_anual_live:.1f}", f"Meta Parcial: {meta_parcial_top:.1f} pts")
             c_h3.metric("Assiduidade", f"{perc_presenca_hero:.0f}%", f"{faltas_hero} falta(s)", delta_color="inverse" if faltas_hero > 0 else "normal")
             c_h4.metric("Engajamento Caderno", f"{perc_visto_hero:.0f}%", f"{bonus_total_hero:+.1f} pts bônus")
 
-        # 📱 MODAL WHATSAPP & FICHA DOCX
-        @st.dialog("📱 Extrato para WhatsApp")
+        # MODAIS
+        @st.dialog("📱 Extrato para WhatsApp (Pais ou Direção)")
         def dialog_whatsapp():
-            st.info("Copie o texto abaixo e envie para o responsável.")
+            st.info("Copie o texto abaixo e envie para o responsável ou para a Direção/Coordenação.")
+            
             atestados_info = ""
             hist_atestados = df_relatorios[(df_relatorios['ID_ALUNO'].apply(db.limpar_id) == id_alu) & (df_relatorios['TIPO'] == 'JUSTIFICATIVA_AUSENCIA')] if not df_relatorios.empty else pd.DataFrame()
             if not hist_atestados.empty:
@@ -4804,24 +4817,26 @@ elif menu == "👤 Biografia do Estudante":
                     atestados_info += f"• {r_at['DATA']}: {r_at['CONTEUDO']}\n"
 
             msg_zap = f"""Olá! Tudo bem? Aqui é o professor Ronaldo Gomes. 🏫
-Estou passando para compartilhar o extrato do(a) {nome_limpo} em Matemática ({trim_b}).
+Compartilho o Extrato Oficial de Produção do(a) estudante {nome_limpo} ({turma_b}).
 
-📊 SOMA PARCIAL ACUMULADA: {soma_anual_live:.1f} pts (Meta parcial do período: {meta_parcial_top:.1f} pts)
+📌 STATUS REGIMENTAL: {status_atual_aluno}
+📊 SOMA PARCIAL ACUMULADA: {soma_anual_live:.1f} pts (Meta parcial: {meta_parcial_top:.1f} pts)
 {atestados_info}
-🎯 COMPORTAMENTO E PARTICIPAÇÃO:
-• Presença: {perc_presenca_hero:.0f}% ({faltas_hero} falta(s) registradas).
-• Caderno e Atividades: Entregou {perc_visto_hero:.0f}% das tarefas cobradas em sala.
-• Bônus Conquistados em Sala: {bonus_total_hero:+.1f} pts!
+🎯 FREQUÊNCIA E ENGAJAMENTO:
+• Assiduidade: {perc_presenca_hero:.0f}% ({faltas_hero} faltas registradas).
+• Vistos de Caderno (C1): {perc_visto_hero:.0f}% das tarefas concluídas.
+• Bônus Atitudinais Conquistados: {bonus_total_hero:+.1f} pts!
 
-Qualquer dúvida, estou à disposição! Um abraço! 🚀"""
+Documento mantido sob guarda do Componente Curricular de Matemática. 🚀"""
             st.code(msg_zap, language=None)
 
-        c_act_b1, c_act_b2 = st.columns(2)
+        c_act_b1, c_act_b2, c_act_b3 = st.columns(3)
+        
         if c_act_b1.button("📱 Gerar Extrato para WhatsApp", use_container_width=True, key=f"btn_zap_bio_{v}"):
             dialog_whatsapp()
 
-        if c_act_b2.button("🖨️ Imprimir Ficha do Estudante (DOCX)", type="primary", use_container_width=True, key=f"btn_docx_bio_{v}"):
-            with st.spinner("Compilando Ficha de Rendimento A4 para Reunião de Pais..."):
+        if c_act_b2.button("🖨️ Imprimir Ficha de Rendimento A4", use_container_width=True, key=f"btn_docx_bio_{v}"):
+            with st.spinner("Compilando Ficha de Rendimento..."):
                 dados_ficha = [{
                     "nome": nome_limpo,
                     "vistos": f"{perc_visto_hero:.0f}%",
@@ -4838,14 +4853,51 @@ Qualquer dúvida, estou à disposição! Um abraço! 🚀"""
                 link_doc = db.subir_e_converter_para_google_docs(doc_stream, nome_arq_ficha, trimestre=trim_b, categoria=turma_b, modo="PLANEJAMENTO")
                 
                 if "https" in link_doc:
-                    st.success("✅ Ficha do Estudante gerada para impressão!")
-                    st.link_button("📂 ABRIR FICHA NO DRIVE (DOCX)", link_doc, type="primary", use_container_width=True)
+                    st.success("✅ Ficha gerada com sucesso!")
+                    st.link_button("📂 ABRIR FICHA NO DRIVE", link_doc, type="primary", use_container_width=True)
                     st.balloons()
                 else: st.error(f"Erro ao salvar no Drive: {link_doc}")
 
+        # RECURSO NOVO: CERTIDÃO OFICIAL DE PRODUÇÃO (DOCX A4) PARA ALUNOS TRANSFERIDOS/EVADIDOS
+        if c_act_b3.button("📜 CERTIDÃO DE PRODUÇÃO (TRANSFERÊNCIA)", type="primary", use_container_width=True, key=f"btn_certidao_transf_{v}"):
+            with st.spinner("Compilando Certidão Oficial de Produção e Rendimento A4 para a Direção..."):
+                lista_notas_trimestres = []
+                for t_k in ["I Trimestre", "II Trimestre", "III Trimestre"]:
+                    reg_t = n_alu[n_alu['TRIMESTRE'] == t_k] if not n_alu.empty else pd.DataFrame()
+                    c1_v = vistos_live_by_trim.get(t_k, 0.0)
+                    if c1_v == 0 and not reg_t.empty: c1_v = util.sosa_to_float(reg_t.iloc[0]['NOTA_VISTOS'])
+                    c2_v = util.sosa_to_float(reg_t.iloc[0]['NOTA_TESTE']) if not reg_t.empty else 0.0
+                    c3_v = util.sosa_to_float(reg_t.iloc[0]['NOTA_PROVA']) if not reg_t.empty else 0.0
+                    rec_v = util.sosa_to_float(reg_t.iloc[0]['NOTA_REC']) if not reg_t.empty else -1.0
+                    m_f = min(10.0, c1_v + c2_v + c3_v)
+                    if rec_v > 0: m_f = max(m_f, (m_f + rec_v)/2)
+                    
+                    lista_notas_trimestres.append({
+                        "periodo": t_k, "c1": c1_v, "c2": c2_v, "c3": c3_v,
+                        "rec": f"{rec_v:.1f}" if rec_v > 0 else "-", "media": m_f
+                    })
+
+                dados_aluno_certidao = {
+                    "nome": nome_limpo, "id": id_alu, "turma": turma_b,
+                    "status": status_atual_aluno, "perfil": perfil_atual,
+                    "assiduidade": f"{perc_presenca_hero:.0f}%", "faltas": faltas_hero,
+                    "vistos_perc": f"{perc_visto_hero:.0f}%", "bonus": f"{bonus_total_hero:+.1f}",
+                    "parecer": f"Certificamos que o(a) estudante esteve matriculado(a) na turma {turma_b} sob regência do Prof. Ronaldo Gomes. Registrou-se uma soma acumulada de {soma_anual_live:.1f} pontos no período em que esteve ativo no componente de Matemática."
+                }
+                
+                info_escola_certidao = {"ano": turma_b, "trimestre": "Conselho/Regência"}
+                nome_arq_certidao = f"CERTIDAO_PRODUCAO_{nome_limpo.replace(' ','_')}_{turma_b}"
+                
+                doc_cert_stream = exporter.gerar_docx_certidao_producao(nome_arq_certidao, dados_aluno_certidao, lista_notas_trimestres, info_escola_certidao)
+                link_cert_doc = db.subir_e_converter_para_google_docs(doc_cert_stream, nome_arq_certidao, trimestre="Conselho", categoria=turma_b, modo="PLANEJAMENTO")
+                
+                if "https" in link_cert_doc:
+                    st.success("✅ Certidão Oficial de Produção gerada no Drive!")
+                    st.link_button("📂 ABRIR CERTIDÃO OFICIAL (DOCX A4)", link_cert_doc, type="primary", use_container_width=True)
+                    st.balloons()
+
         st.markdown("---")
 
-        # 🚨 DOSSIÊ 360° EM FRAGMENTO
         @st.fragment
         def renderizar_dossie_bio_fragmento():
             abas_bio = ["📊 Visão Geral & Boletim", "🕰️ Linha do Tempo (Atitude)", "📈 Evolução & Lacunas", "⚖️ Auditoria & Tribunal"]
@@ -5012,7 +5064,6 @@ Qualquer dúvida, estou à disposição! Um abraço! 🚀"""
                         else: st.success("✅ Excelente desempenho nas questões realizadas.")
                     else: st.info("📭 Aguardando avaliações escaneadas para gerar o mapa de lacunas.")
 
-            # 🚨 ABA 4: HISTÓRICO DE AVALIAÇÕES E TRIBUNAL DE RECURSOS (COM DIALOG CONECTADO)
             with tabs[3]:
                 st.markdown(f"### 🎯 Histórico de Avaliações & Atestados (Sincronizado)")
                 
@@ -6186,11 +6237,27 @@ elif menu == "👥 Gestão da Turma":
                     with st.form("form_edicao"):
                         novo_nome = st.text_input("Nome Completo:", value=dados_atuais['NOME_ALUNO']).upper()
                         nova_turma = st.selectbox("Turma de Destino (Transferência):", lista_turmas_segura, index=lista_turmas_segura.index(t_origem) if t_origem in lista_turmas_segura else 0)
-                        nova_nec = st.text_input("Necessidades / CIDs:", value=dados_atuais['NECESSIDADES']).upper()
+                        nova_nec = st.text_input("Necessidades / CIDs / PEI:", value=dados_atuais['NECESSIDADES']).upper()
+                        
+                        # CAMPO NOVO: STATUS DO ALUNO
+                        status_opcoes = ["ATIVO", "TRANSFERIDO", "EVADIDO", "INATIVO"]
+                        status_atual_val = str(dados_atuais.get('STATUS', 'ATIVO')).upper()
+                        idx_status = status_opcoes.index(status_atual_val) if status_atual_val in status_opcoes else 0
+                        novo_status = st.selectbox("Status Regimental do Estudante:", status_opcoes, index=idx_status)
+
                         if st.form_submit_button("💾 SALVAR E ATUALIZAR HISTÓRICO EM CASCATA"):
-                            with st.spinner("Atualizando histórico do aluno..."):
+                            with st.spinner("Atualizando cadastro e histórico do aluno..."):
+                                # Atualiza status no banco
+                                try:
+                                    wb = db.conectar()
+                                    ws = wb.worksheet("DB_ALUNOS")
+                                    cell = ws.find(str(dados_atuais['ID']))
+                                    if cell:
+                                        ws.update_cell(cell.row, 4, novo_status) # Coluna STATUS
+                                except: pass
+
                                 if db.atualizar_aluno_cascata(dados_atuais['ID'], novo_nome, nova_turma, nova_nec):
-                                    st.success("✅ Cadastro atualizado com sucesso!"); time.sleep(1); st.rerun()
+                                    st.success("✅ Cadastro e Status atualizados!"); time.sleep(1); st.rerun()
 
             elif modo_sec == "📅 Gestor de Semanas & Recessos":
                 st.markdown("#### 📅 Configuração Dinâmica de Semanas & Recessos")
