@@ -2274,11 +2274,11 @@ elif menu == "🧪 Criador de Aulas":
 
 # ==============================================================================
 # MÓDULO: CENTRAL DE AVALIAÇÕES - V2026.ULTIMATE
-# (LINHA DE MONTAGEM, PERÍCIA TRI, RECOMPOSIÇÃO E EXPEDIÇÃO CORRIGIDA COM UTIL.OBTER_REGEX_TRIMESTRE)
+# (LINHA DE MONTAGEM, PERÍCIA TRI, ESTEIRA FLUIDA DE RECOMPOSIÇÃO E EXPEDIÇÃO XEROX)
 # ==============================================================================
 elif menu == "📝 Central de Avaliações":
     st.title("📝 Central de Avaliações (Padrão ENEM / SAEB / BNCC)")
-    st.caption("Arquitetura de Avaliação de Alta Performance: Ancoragem no Livro/Lousa, Perícia TRI de Distratores, Tríade PEI On-Demand, Expedição de E-mail para Xerox e Acervo Trimestral.")
+    st.caption("Arquitetura de Avaliação de Alta Performance: Ancoragem no Livro/Lousa, Perícia TRI de Distratores, Tríade PEI On-Demand, Esteira Fluida de Recomposição e Expedição de E-mail para Xerox.")
     st.markdown("---")
 
     if "v_av" not in st.session_state: 
@@ -3066,17 +3066,41 @@ elif menu == "📝 Central de Avaliações":
                 row_prova_orig = df_provas_para_revisao[df_provas_para_revisao['TIPO_MATERIAL'] == prova_sel_recomposicao].iloc[0]
                 txt_prova_orig = str(row_prova_orig['CONTEUDO'])
 
+                # PAINEL DE AUTONOMIA DE REVISÃO
+                with st.container(border=True):
+                    st.markdown("#### ⚙️ Painel de Autonomia da Recomposição")
+                    c_aut_r1, c_aut_r2 = st.columns([1, 1])
+                    
+                    qtd_q_recomp = c_aut_r1.pills(
+                        "Nº de Questões Espelho Desejado:",
+                        ["3 Questões (Rápida)", "5 Questões (Padrão)", "8 Questões (Aprofundada)", "10 Questões (Completa)"],
+                        default="5 Questões (Padrão)",
+                        key=f"pills_qtd_recomp_{v}"
+                    )
+                    
+                    estrat_recomp = c_aut_r2.pills(
+                        "Estratégia Pedagógica:",
+                        ["Exercícios Espelho Diretos (SAEB)", "Clínica de Erros Comentada", "Guia de Estudo Dirigido"],
+                        default="Exercícios Espelho Diretos (SAEB)",
+                        key=f"pills_estrat_recomp_{v}"
+                    )
+
                 st.markdown("---")
-                if st.button("🚀 GERAR CADERNO DE RECOMPOSIÇÃO & REVISÃO COMPLETO (DOCX)", type="primary", use_container_width=True, key=f"btn_exe_recomp_{v}"):
+                
+                if st.button("🚀 GERAR CADERNO DE RECOMPOSIÇÃO PERSONALIZADO", type="primary", use_container_width=True, key=f"btn_exe_recomp_{v}"):
                     with st.status("Analisando descritores e forjando material de recomposição...", expanded=True) as status_rec:
+                        num_q_num = int(re.search(r'\d+', qtd_q_recomp).group(0)) if re.search(r'\d+', qtd_q_recomp) else 5
+                        
                         prompt_recomposicao = (
                             f"PROVA BASE DE ORIGEM:\n{txt_prova_orig}\n\n"
                             f"SÉRIE: {ano_rev_sel}.\n"
-                            f"MISSÃO: Crie o Caderno de Recomposição de Aprendizagem com Roteiro do Professor, Guia de Estudo do Aluno e Exercícios Espelho."
+                            f"QUANTIDADE EXIGIDA DE QUESTÕES ESPELHO: {num_q_num} questões.\n"
+                            f"ESTRATÉGIA SELECIONADA: {estrat_recomp}.\n\n"
+                            f"MISSÃO: Crie o Caderno de Recomposição de Aprendizagem com Roteiro do Professor (Início ➔ Meio ➔ Fim), Guia de Estudo do Aluno e Exercícios Espelho baseados estritamente nos descritores SAEB da prova de origem."
                         )
                         res_recomposicao = ai.gerar_ia("ARQUITETO_REVISAO_V29", prompt_recomposicao)
                         
-                        nome_recomposicao_arq = f"REVISAO_{prova_sel_recomposicao}"
+                        nome_recomposicao_arq = f"REVISAO_{prova_sel_recomposicao}_{num_q_num}Q"
                         info_recomp = {"ano": ano_rev_sel, "trimestre": "I Trimestre", "semana": "RECOMPOSIÇÃO"}
 
                         status_rec.write("📄 Gerando Material do Aluno...")
@@ -3094,12 +3118,61 @@ elif menu == "📝 Central de Avaliações":
                             conteudo_final_recomp, ano_rev_sel, link_alu_rev
                         ])
 
+                        st.session_state[f"recomp_gerada_{v}"] = {
+                            'texto': res_recomposicao, 'link_alu': link_alu_rev, 
+                            'nome': nome_recomposicao_arq, 'ano': ano_rev_sel
+                        }
                         status_rec.update(label="✅ Caderno de Recomposição gerado e sincronizado no Drive!", state="complete")
-                        st.balloons()
-                        st.link_button("📂 ABRIR CADERNO DO ALUNO NO DRIVE", link_alu_rev, type="primary", use_container_width=True)
+                        st.balloons(); st.rerun()
+
+                if f"recomp_gerada_{v}" in st.session_state:
+                    rec_data = st.session_state[f"recomp_gerada_{v}"]
+                    st.success(f"🏆 Caderno **{rec_data['nome']}** gerado e pronto!")
+                    
+                    c_link1, c_link2 = st.columns(2)
+                    c_link1.link_button("📂 ABRIR CADERNO DO ALUNO NO DRIVE", rec_data['link_alu'], type="primary", use_container_width=True)
+                    
+                    # 🚀 BOTÃO PONTE SOBERANA DA ESTEIRA: INJETAR NO PONTO ID
+                    with c_link2.popover("🚀 INJETAR REVISÃO NO PONTO ID (PLANO DA SEMANA)"):
+                        st.caption("Crie automaticamente o Plano Semanal de Revisão no Ponto ID para aplicar na próxima semana.")
+                        
+                        todas_semanas_inj = util.gerar_semanas()
+                        sem_destino_inj = st.selectbox("Selecione a Semana do Plano no Ponto ID:", [s.split(" (")[0] for s in todas_semanas_inj if "Jornada" not in s], key=f"sel_sem_inj_{v}")
+                        trim_destino_inj = st.selectbox("Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"sel_trim_inj_{v}")
+                        
+                        if st.button("💾 CONFIRMAR INJEÇÃO NO PONTO ID", type="primary", use_container_width=True, key=f"btn_conf_inj_{v}"):
+                            with st.spinner("Injetando plano semanal de revisão no Ponto ID..."):
+                                txt_prof_rec = ai.extrair_tag(rec_data['texto'], "PROFESSOR")
+                                txt_alu_rec = ai.extrair_tag(rec_data['texto'], "ALUNO")
+                                
+                                roteiro_a1 = f"INÍCIO (Sensibilização): Análise dos resultados da prova {prova_sel_recomposicao} e devolução pedagógica.\nMEIO (Fundamentação): Exposição no quadro das soluções comentadas dos itens críticos.\nFIM (Fixação): Resolução guiada da primeira parte do Caderno de Recomposição."
+                                roteiro_a2 = f"INÍCIO: Acolhimento e esclarecimento de dúvidas pontuais.\nMEIO: Prática autônoma dos alunos na resolução dos exercícios espelho do Caderno de Recomposição.\nFIM: Síntese e correção coletiva no quadro."
+
+                                plano_texto_inj = (
+                                    f"[HABILIDADE_BNCC] Habilidades dos itens críticos de {prova_sel_recomposicao}\n"
+                                    f"[COMPETENCIAS_FOCO] Competência Específica 2 (Raciocínio Lógico) e 6 (Enfrentar Situações-Problema)\n"
+                                    f"[OBJETO_CONHECIMENTO] Recomposição de Aprendizagem & Análise de Lacunas\n"
+                                    f"[CONTEUDOS_ESPECIFICOS] Revisão e Recomposição baseada na prova {prova_sel_recomposicao}\n"
+                                    f"[OBJETIVOS_ENSINO] Superar as lacunas cognitivas e consolidar os descritores SAEB com menor índice de acerto.\n"
+                                    f"[JUSTIFICATIVA_PEDAGOGICA] Recomposição direcionada a partir dos dados do Raio-X do Scanner CIR.\n"
+                                    f"[AULA_1] {roteiro_a1}\n"
+                                    f"[AULA_2] {roteiro_a2}\n"
+                                    f"[SABADO_LETIVO] N/A\n"
+                                    f"[AVALIACAO_DE_MERITO] Observação do desempenho na resolução dos exercícios espelho.\n"
+                                    f"[ESTRATEGIA_DUA_PEI] Acompanhamento individualizado e suporte visual nos itens espelho adaptados.\n"
+                                    f"--- LINK DRIVE --- {rec_data['link_alu']}"
+                                )
+
+                                db.excluir_plano_completo(sem_destino_inj, rec_data['ano'])
+                                db.salvar_no_banco("DB_PLANOS", [
+                                    datetime.now().strftime("%d/%m/%Y"), sem_destino_inj, rec_data['ano'], 
+                                    trim_destino_inj, "HUB_ATIVO", plano_texto_inj, rec_data['link_alu']
+                                ])
+                                st.success(f"✅ Plano Semanal de Revisão injetado em {sem_destino_inj} no Ponto ID e enviado ao Hub!")
+                                st.balloons(); time.sleep(1.5); st.rerun()
 
     # ==============================================================================
-    # ABA 4: EXPEDIÇÃO DE E-MAIL, PDFS & ACERVO TRIMESTRAL (VACINA UTIL.OBTER_REGEX_TRIMESTRE)
+    # ABA 4: EXPEDIÇÃO DE E-MAIL, PDFS & ACERVO TRIMESTRAL
     # ==============================================================================
     with tab_expedicao:
         @st.fragment
@@ -3139,7 +3212,6 @@ elif menu == "📝 Central de Avaliações":
                         nec_raw = str(al_r.get('NECESSIDADES', '')).upper().strip()
                         nome_a = al_r['NOME_ALUNO']
                         
-                        # Vacina de Leitura PEI super flexível
                         if any(x in nec_raw for x in ["PEI N1", "PEI 1", "NÍVEL 1", "NIVEL 1", "(PEI N1)"]):
                             p1_names.append(nome_a)
                         elif any(x in nec_raw for x in ["PEI N2", "PEI 2", "NÍVEL 2", "NIVEL 2", "(PEI N2)"]):
@@ -3205,7 +3277,6 @@ Escola Municipal Flávio José Simões Costa
                 st.markdown(f"#### 🔒 Acervo Trimestral de Segurança ({trim_exp_sel})")
                 st.caption("Arquivos em DOCX e PDF armazenados no Drive para acesso permanente sem risco de perda.")
 
-                # VACINA TÉCNICA: USO CORRETO DE UTIL.OBTER_REGEX_TRIMESTRE
                 if not df_aulas.empty and 'SEMANA_REF' in df_aulas.columns and 'CONTEUDO' in df_aulas.columns:
                     padrao_regex_trim_exp = util.obter_regex_trimestre(trim_exp_sel)
                     df_provas_trim_acervo = df_aulas[(df_aulas['SEMANA_REF'] == "AVALIAÇÃO") & (df_aulas['CONTEUDO'].str.contains(padrao_regex_trim_exp, regex=True, case=False, na=False))]
