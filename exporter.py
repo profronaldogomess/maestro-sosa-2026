@@ -526,7 +526,7 @@ def adicionar_cartao_resposta_fiducial_word(doc, num_total_q, is_pei=False):
 def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
     """
     SOSA V2026.MASTER - GERADOR DE PROVAS E CADERNOS DE RECOMPOSIÇÃO / REVISÃO
-    Possui Blindagem Anti-Vazio em 3 Camadas para materiais da Central de Avaliações.
+    Unifica automaticamente Guia de Estudo e Questões para garantir folha completa.
     """
     file_stream = io.BytesIO()
     try:
@@ -539,25 +539,19 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         section.top_margin = section.bottom_margin = Inches(0.35)
         section.left_margin = section.right_margin = Inches(0.4)
         
-        # 1. Sanitização profunda do texto de entrada contra caracteres invisíveis
         conteudo_ia_limpo = sanitizar_xml_str(str(conteudo_ia))
-        
         is_pei_doc = "PEI" in titulo_doc.upper() or "ADAPTADA" in titulo_doc.upper()
         
-        # 2. BUSCA MULTI-TAG COM FALLBACK ANTI-VAZIO
+        # 🚨 EXTRAÇÃO COM JUNÇÃO OBRIGATÓRIA DE GUIA DE ESTUDO + QUESTÕES
         corpo_bruto = ""
         if is_pei_doc:
             corpo_bruto = (ai.extrair_tag(conteudo_ia_limpo, "PEI_NIVEL_1") or 
                            ai.extrair_tag(conteudo_ia_limpo, "PEI") or 
                            ai.extrair_tag(conteudo_ia_limpo, "PEI_NIVEL_2"))
         else:
-            corpo_bruto = (ai.extrair_tag(conteudo_ia_limpo, "QUESTOES") or 
-                           ai.extrair_tag(conteudo_ia_limpo, "ALUNO") or 
-                           ai.extrair_tag(conteudo_ia_limpo, "GUIA_DE_ESTUDO_ALUNO") or
-                           ai.extrair_tag(conteudo_ia_limpo, "QUESTOES_ESPELHO") or
-                           ai.extrair_tag(conteudo_ia_limpo, "CADERNO_DE_REVISAO"))
+            corpo_bruto = ai.extrair_tag(conteudo_ia_limpo, "ALUNO")
 
-        # Fallback de emergência caso nenhuma tag seja encontrada
+        # Fallback de emergência caso nada seja extraído
         if not corpo_bruto or len(corpo_bruto.strip()) < 10:
             match_primeira_q = re.search(r"(?i)QUESTÃO\s*\d+", conteudo_ia_limpo)
             if match_primeira_q:
@@ -569,22 +563,16 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
 
         num_total_q = len(re.findall(r'(?i)QUESTÃO\s+\d+', corpo_bruto))
         if num_total_q == 0: 
-            num_total_q = int(helper_sosa_float(info.get('qtd_questoes', info.get('qtd', 5))))
+            num_total_q = int(helper_sosa_float(info.get('qtd_questoes', info.get('qtd', 10))))
         
-        # Rotulagem Executiva
         label_prova = "AVALIAÇÃO ADAPTADA" if is_pei_doc else "AVALIAÇÃO DE MATEMÁTICA (ENEM/SAEB)"
         if any(x in titulo_doc.upper() for x in ["REVISAO", "RECOMPOSICAO", "RAIO-X"]):
             label_prova = "CADERNO DE RECOMPOSIÇÃO E REVISÃO"
-        elif "SONDA" in titulo_doc.upper():
-            label_prova = "SONDA DE PROFICIÊNCIA"
 
         val_total_num = helper_sosa_float(info.get('valor', 3.0))
         if val_total_num == 0: val_total_num = 3.0
 
-        num_q_num = int(helper_sosa_float(info.get('qtd', info.get('qtd_questoes', num_total_q))))
-        if num_q_num == 0: num_q_num = num_total_q or 10
-
-        val_q_calc = val_total_num / num_q_num if num_q_num > 0 else 0.3
+        val_q_calc = val_total_num / num_total_q if num_total_q > 0 else 0.3
         
         val_total_str = f"{val_total_num:.1f}"
         val_q_str = f"{val_q_calc:.2f}".replace(".", ",")
@@ -593,11 +581,11 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         info_cabecalho['valor'] = val_total_str
         info_cabecalho['valor_questao'] = val_q_str
 
-        # 3. CABEÇALHO MESTRE DA ESCOLA
+        # 1. CABEÇALHO MESTRE DA ESCOLA
         configurar_cabecalho_mestre(doc, info_cabecalho, label_prova, mostrar_nota=True)
         doc.add_paragraph()
 
-        # 4. ORIENTAÇÕES DE EXECUÇÃO
+        # 2. ORIENTAÇÕES DE EXECUÇÃO
         top_table = doc.add_table(rows=1, cols=1)
         top_table.style = 'Table Grid'
         top_table.columns[0].width = Inches(7.0)
@@ -612,7 +600,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         
         orient_list = [
             f"Valor Total: {val_total_str} pts | Valor por Questão: {val_q_str} pts.",
-            "Preencha o Cartão-Resposta abaixo com caneta esferográfica preta ou azul.",
+            "Preencha o Cartão-Resposta com caneta esferográfica preta ou azul.",
             "🚨 REGRA DA MEMÓRIA DE CÁLCULO: Apresente a resolução matemática no papel para validação do item.",
             "Mantenha os 4 marcadores pretos (■) dos cantos limpos para leitura óptica."
         ]
@@ -624,13 +612,13 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
 
         doc.add_paragraph()
 
-        # 5. CARTÃO-RESPOSTA PADRONIZADO
+        # 3. CARTÃO-RESPOSTA PADRONIZADO
         if info.get('tipo_prova') != "2ª Chamada":
             adicionar_cartao_resposta_fiducial_word(doc, num_total_q, is_pei_doc)
 
         doc.add_paragraph()
 
-        # 6. ENUNCIADOS DAS QUESTÕES EM COLUNA DUPLA
+        # 4. ENUNCIADOS E CONCEITOS DAS QUESTÕES EM COLUNA DUPLA
         new_section = doc.add_section(WD_SECTION.CONTINUOUS)
         sectPr = new_section._sectPr
         cols = sectPr.xpath('./w:cols')[0]
@@ -651,6 +639,13 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
             p.paragraph_format.space_after = Pt(4)
             p.paragraph_format.line_spacing = 1.15
             
+            if l_s.upper().startswith("CONCEITOS CHAVE"):
+                run_c = p.add_run("📌 " + l_s)
+                run_c.bold = True
+                run_c.font.size = Pt(10)
+                run_c.font.color.rgb = RGBColor(0, 51, 102)
+                continue
+
             if l_s.upper().startswith("QUESTÃO") or l_s.upper().startswith("ITEM"):
                 match = re.match(r"^(QUEST[AÃ]O\s*\d+|ITEM\s*\d+)(\s*\(.*?\))?([\s\.\-\:]+)(.*)", l_s, re.IGNORECASE)
                 if match:
@@ -679,7 +674,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
     except Exception as e:
         file_stream = io.BytesIO()
         err_doc = Document()
-        err_doc.add_paragraph(f"ERRO NO EXPORTER DE REVISÃO/PROVA: {sanitizar_xml_str(str(e))}")
+        err_doc.add_paragraph(f"ERRO NO EXPORTER DE REVISÃO: {sanitizar_xml_str(str(e))}")
         err_doc.save(file_stream)
         file_stream.seek(0)
         return file_stream
