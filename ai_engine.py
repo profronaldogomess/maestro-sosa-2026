@@ -451,62 +451,51 @@ def gerar_ia_json(persona_key, comando, usar_busca=False):
 def extrair_tag(texto, tag):
     """
     EXTRATOR UNIVERSAL SOSA V2026.MASTER
-    Possui Mapa Estendido de Sinônimos para Revisão, Recomposição e Provas da Central de Avaliações.
-    Garante que nenhuma tag da revisão seja perdida.
+    Possui junção automática de [GUIA_DE_ESTUDO_ALUNO] + [QUESTOES] para materiais de revisão.
     """
     if not texto or not isinstance(texto, str): return ""
     tag_busca = tag.upper().strip().replace("[", "").replace("]", "")
     
-    # 🚨 MAPA EXTENDIDO DE SINÔNIMOS DE REVISÃO E AVALIAÇÃO
+    # 🚨 TRATAMENTO ESPECIAL PARA REVISÃO: UNIR GUIA DE ESTUDO + QUESTÕES
+    if tag_busca in ["ALUNO", "QUESTOES", "CADERNO_DE_REVISAO"]:
+        guia = extrair_tag_simples(texto, "GUIA_DE_ESTUDO_ALUNO")
+        questoes = extrair_tag_simples(texto, "QUESTOES")
+        
+        if guia and questoes:
+            return f"{guia}\n\n{questoes}"
+        elif questoes:
+            return questoes
+        elif guia:
+            return guia
+
+    return extrair_tag_simples(texto, tag_busca)
+
+def extrair_tag_simples(texto, tag_busca):
+    """Extrator de bloco individual seguro."""
     alias_map = {
         "PROFESSOR": ["PROFESSOR", "ROTEIRO_DO_PROFESSOR", "GUIA_PROFESSOR", "ROTEIRO_DE_MEDIACAO", "BASE_DIDATICA"],
-        "ALUNO": ["ALUNO", "GUIA_DE_ESTUDO_ALUNO", "QUESTOES", "QUESTOES_ESPELHO", "CADERNO_DE_REVISAO", "CADERNO_DE_RECOMPOSICAO"],
-        "QUESTOES": ["QUESTOES", "ALUNO", "GUIA_DE_ESTUDO_ALUNO", "QUESTOES_ESPELHO", "CADERNO_DE_REVISAO", "CADERNO_DE_RECOMPOSICAO"],
-        "GABARITO": ["GABARITO_TEXTO", "GABARITO", "GABARITO_REGULAR", "RESPOSTAS_IA", "GABARITO_OFICIAL"],
+        "ALUNO": ["ALUNO", "GUIA_DE_ESTUDO_ALUNO", "QUESTOES", "QUESTOES_ESPELHO", "CADERNO_DE_REVISAO"],
+        "QUESTOES": ["QUESTOES", "QUESTOES_ESPELHO", "CADERNO_DE_REVISAO"],
+        "GABARITO": ["GABARITO_TEXTO", "GABARITO", "GABARITO_REGULAR", "RESPOSTAS_IA"],
         "GABARITO_TEXTO": ["GABARITO_TEXTO", "GABARITO", "GABARITO_REGULAR", "RESPOSTAS_IA"],
-        "PEI_NIVEL_1": ["PEI_NIVEL_1", "NIVEL_1", "PEI_1", "PEI", "QUESTOES_PEI_N1", "PEI_LEVE"],
-        "PEI_NIVEL_2": ["PEI_NIVEL_2", "NIVEL_2", "PEI_2", "QUESTOES_PEI_N2", "PEI_MODERADO"],
-        "PEI_NIVEL_3": ["PEI_NIVEL_3", "NIVEL_3", "PEI_3", "QUESTOES_PEI_N3", "PEI_QUALITATIVA", "BENTO_BOXES"],
-        "RUBRICA_DE_OBSERVACAO": ["RUBRICA_DE_OBSERVACAO", "RUBRICA_DE_MERITO", "RUBRICA", "GRADE_DE_OBSERVACAO"],
-        "GABARITO_PEI": ["GABARITO_PEI", "RESPOSTAS_PEI_IA", "GABARITO_ADAPTADO"]
+        "PEI_NIVEL_1": ["PEI_NIVEL_1", "NIVEL_1", "PEI_1", "PEI", "QUESTOES_PEI_N1"],
+        "PEI_NIVEL_2": ["PEI_NIVEL_2", "NIVEL_2", "PEI_2", "QUESTOES_PEI_N2"],
+        "PEI_NIVEL_3": ["PEI_NIVEL_3", "NIVEL_3", "PEI_3", "QUESTOES_PEI_N3", "PEI_QUALITATIVA"],
+        "RUBRICA_DE_OBSERVACAO": ["RUBRICA_DE_OBSERVACAO", "RUBRICA_DE_MERITO", "RUBRICA"],
+        "GABARITO_PEI": ["GABARITO_PEI", "RESPOSTAS_PEI_IA"]
     }
     
     tags_para_testar = alias_map.get(tag_busca, [tag_busca])
     
-    tags_bloco = [
-        "GABARITO_TEXTO", "GABARITO", "GRADE_DE_CORRECAO", "QUESTOES", "PEI", "GABARITO_PEI", 
-        "GRADE_DE_CORRECAO_PEI", "PROFESSOR", "ALUNO", "NIVEL_1", "NIVEL_2", "NIVEL_3",
-        "PEI_NIVEL_1", "PEI_NIVEL_2", "PEI_NIVEL_3", "AULA_1", "AULA_2", "SABADO_LETIVO", 
-        "IMAGENS", "RESPOSTAS_IA", "RESPOSTAS_PEI_IA", "RUBRICA_DE_MERITO", "JUSTIFICATIVA_PEDAGOGICA",
-        "JUSTIFICATIVA_PHC", "DIAGNOSTICO_GERAL", "DIRETRIZES_CURRICULARES", "RUBRICA_DE_OBSERVACAO",
-        "ROTEIRO_DO_PROFESSOR", "GUIA_DE_ESTUDO_ALUNO", "QUESTOES_ESPELHO", "CADERNO_DE_REVISAO"
-    ]
-    
     tags_mestras = [
         "SOSA_ID", "VALOR", "ORIENTACOES", "QUESTOES", "GABARITO_TEXTO", "GRADE_DE_CORRECAO", 
         "GABARITO", "RESPOSTAS_IA", "PEI", "GABARITO_PEI", "GRADE_DE_CORRECAO_PEI", "RESPOSTAS_PEI_IA", 
-        "PROFESSOR", "ALUNO", "IMAGENS", "AULA_ALVO", "HABILIDADE_BNCC", "COMPETENCIAS_FOCO", 
-        "COMPETENCIA_GERAL", "OBJETO_CONHECIMENTO", "CONTEUDO_GERAL", "CONTEUDOS_ESPECIFICOS", "OBJETIVOS_ENSINO",
-        "JUSTIFICATIVA_PEDAGOGICA", "JUSTIFICATIVA_PHC", "RUBRICA_DE_MERITO", "CONTEXTO_INVESTIGATIVO", 
-        "MISSÃO_DE_PESQUISA", "PASSO_A_PASSO", "PRODUTO_ESPERADO", "CONTEXTO_GLOCAL",
-        "AULA_1", "AULA_2", "SABADO_LETIVO", "AVALIACAO_DE_MERITO", "ESTRATEGIA_DUA_PEI",
-        "MAPA_DE_RECOMPOSICAO", "RESPOSTAS_PEDAGOGICAS", "BASE_DIDATICA",
-        "MENSAGEM_CHAT", "CONTEUDO_ATUALIZADO", "SOCIAIS", "COMUNICATIVAS", "EMOCIONAIS", "FUNCIONAIS",
-        "OBJETIVO", "ESTRATEGIA", "RECURSO", "DIAGNOSTICO_GERAL", "DIRETRIZES_CURRICULARES", "CHECKLIST",
-        "NIVEL_1", "NIVEL_2", "NIVEL_3", "PEI_NIVEL_1", "PEI_NIVEL_2", "PEI_NIVEL_3", "RUBRICA_DE_OBSERVACAO",
-        "ROTEIRO_DO_PROFESSOR", "GUIA_DE_ESTUDO_ALUNO", "QUESTOES_ESPELHO", "CADERNO_DE_REVISAO"
+        "PROFESSOR", "ALUNO", "IMAGENS", "HABILIDADE_BNCC", "COMPETENCIAS_FOCO", 
+        "OBJETO_CONHECIMENTO", "CONTEUDOS_ESPECIFICOS", "OBJETIVOS_ENSINO",
+        "JUSTIFICATIVA_PEDAGOGICA", "AULA_1", "AULA_2", "SABADO_LETIVO", "AVALIACAO_DE_MERITO", "ESTRATEGIA_DUA_PEI",
+        "ROTEIRO_DO_PROFESSOR", "GUIA_DE_ESTUDO_ALUNO", "RUBRICA_DE_OBSERVACAO"
     ]
 
-    # 1. Padrão Flexível para tags de metadados simples
-    if tag_busca not in tags_bloco:
-        padrao_interno = rf"\[\s*[*#]*\s*{re.escape(tag_busca)}\b(?:\s*[:\-]\s*|\s*\]\s*[:\-]*\s*)(.*?)(?=\]|\n|$)"
-        match_int = re.search(padrao_interno, texto, re.IGNORECASE)
-        if match_int:
-            val_res = match_int.group(1).strip()
-            if 0 < len(val_res) < 120 and "\n" not in val_res:
-                return val_res
-
-    # 2. Padrão Bloco Multilinhas com Fallback de Tags e Sinônimos
     for t_alvo in tags_para_testar:
         parada = [rf"\b{re.escape(t)}\b" for t in tags_mestras if t != t_alvo]
         lista_parada = "|".join(parada)
@@ -519,7 +508,7 @@ def extrair_tag(texto, tag):
             res = re.sub(r'\n```$', '', res)
             res_limpo = re.sub(r'[░▒▓█]', '', res)
             res_limpo = re.sub(r'-{3,}', '', res_limpo)
-            res_limpo = re.sub(r'^(?:Olá|Como especialista|Como profissional|Prezado|Segue).*?\n\n', '', res_limpo, flags=re.IGNORECASE | re.DOTALL).strip()
+            res_limpo = re.sub(r'^(?:Olá|Como especialista|Prezado|Segue).*?\n\n', '', res_limpo, flags=re.IGNORECASE | re.DOTALL).strip()
             if len(res_limpo) > 0:
                 return res_limpo.strip()
     
