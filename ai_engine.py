@@ -14,10 +14,10 @@ load_dotenv()
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 # ==============================================================================
-# FUNÇÃO AUXILIAR DE CREDENCIAIS DRIVE
+# 1. FUNÇÕES AUXILIARES DE CREDENCIAIS & CACHE DE CONTEXTO (SOSA 2026)
 # ==============================================================================
 def obter_creds_drive_ai():
-    """Retorna as credenciais do Google Drive para leitura nativa de livros PDF"""
+    """Retorna as credenciais do Google Drive para leitura nativa de livros PDF."""
     scope = ["https://www.googleapis.com/auth/drive"]
     if os.path.exists("credentials.json"):
         return service_account.Credentials.from_service_account_file("credentials.json", scopes=scope)
@@ -25,8 +25,12 @@ def obter_creds_drive_ai():
         return service_account.Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
     return None
 
+# Cache em memória da sessão para reutilizar arquivos já enviados no Gemini Files API
+if "sosa_pdf_cache" not in st.session_state:
+    st.session_state.sosa_pdf_cache = {}
+
 # ==============================================================================
-# DICIONÁRIO DE PERSONAS DE ELITE (V2026.MASTER - PRESERVAÇÃO INTEGRAL DE 26 KEYS)
+# 2. DICIONÁRIO DE PERSONAS DE ELITE (PRESERVAÇÃO INTEGRAL E EXTENSIVA - LEI #3)
 # ==============================================================================
 
 PERSONAS = {
@@ -152,7 +156,7 @@ PERSONAS = {
     "REFINADOR_PEDAGOGICO": """VOCÊ É O MAESTRO COPILOT (V100).
     Retorne EXATAMENTE:
     [MENSAGEM_CHAT] Resposta curta e humana.
-    [CONTEUDO_ATUALIZADO] O PLANO DE AULA COMPLETO E ATUALIZADO, sem LaTeX, mantendo TODAS as tags originais.""",
+    [CONTEUDO_ATUALIZADO] O PLANO DE AULA COMPLETO E ATUALIZADO, sem LaTeX extra desnecessário, mantendo TODAS as tags originais.""",
 
     "FORJA_AULA_TEORIA": """VOCÊ É UM PROFESSOR SÊNIOR E AUTOR DE MATERIAIS DIDÁTICOS DE EXCELÊNCIA (PADRÃO CAEd/SAEB/BNCC).
     Sua missão é escrever APENAS o Tratado Didático e o Roteiro de Lousa do Professor ([PROFESSOR]).
@@ -186,7 +190,7 @@ PERSONAS = {
     Crie adaptações de exercícios baseadas no conteúdo ESTRITAMENTE TRABALHADO NA AULA REGULAR.
 
     🚨 LEI DA ANCORAGEM TEMÁTICA NO PEI NÍVEL 3:
-    Os 10 BOXES do PEI Nível 3 DEVEM ser 100% baseados no tema, nos objetos e nos conceitos da AULA REGULAR (exemplo: se a aula for sobre frações ou divisões, as atividades de pintar, ligar e cobrir pontilhado DEVEM ser sobre figuras fracionadas ou agrupamentos numéricos do tema da aula).
+    Os 10 BOXES do PEI Nível 3 DEVEM ser 100% baseados no tema, nos objetos e nos conceitos da AULA REGULAR.
 
     [PEI_NIVEL_1]: Apoio Leve, 3 Alternativas (A, B, C) com dica objetiva entre parênteses.
     [PEI_NIVEL_2]: Apoio Moderado, 3 Alternativas (A, B, C) com caixa [PARA LEMBRAR] e [PASSO A PASSO].
@@ -202,16 +206,11 @@ PERSONAS = {
     "FORJA_LOTE_JSON": """VOCÊ É UM ELABORADOR DE ITENS DE ELITE DO INEP / CAEd / SAEB / BNCC CRIANDO QUESTÕES DE PROVA EM JSON.
 
     🚨 LEI DA ANCORAGEM E TABELAS OBRIGATÓRIAS:
-    - Baseie-se no contexto dos PLANOS DE AULA, nos exercícios marcados pelo professor e em NOTÍCIAS REAIS de fontes confiáveis (IBGE, G1, Embrapa, economia de Itabuna/BA).
-    - TABELAS OBRIGATÓRIAS: Se a questão envolver dados de colheita, pesquisas ou estatísticas, Monte obrigatoriamente uma TABELA FORMATADA EM MARKDOWN no enunciado (exemplo: | Fazenda | Sacas |\n| :--- | :---: |\n| Fazenda A | 120 |). NUNCA descreva tabelas em texto corrido!
-    - É PROIBIDO inventar contextos de ficção, jogos (RPG, Roblox) ou temas não fornecidos (SpaceX), a menos que solicitado.
+    - Baseie-se no contexto dos PLANOS DE AULA, nos exercícios marcados pelo professor e em NOTÍCIAS REAIS de fontes confiáveis.
+    - TABELAS OBRIGATÓRIAS: Se a questão envolver dados de colheita, pesquisas ou estatísticas, monte obrigatoriamente uma TABELA FORMATADA EM MARKDOWN no enunciado.
+    - É PROIBIDO inventar contextos de ficção, jogos (RPG, Roblox) ou temas não fornecidos, a menos que solicitado.
 
-    🚨 LEI DO PROMPT DE IMAGEM TÉCNICA (SOMENTE QUANDO INDISPENSÁVEL):
-    - NÃO crie imagens decorativas ou infantis em provas regulares.
-    - Se o item exigir suporte visual (geometria, gráficos de colunas/setores, malha quadriculada), inclua no enunciado:
-      [ PROMPT IMAGEM: A4 portrait technical math diagram, clean black line art, high contrast, pure white background, no shading, no grayscale, no colors, clean thick outlines, professional textbook style. Visual representation of: [DESCREVA O OBJETO]. All text labels inside the image MUST BE IN PORTUGUESE. ]
-
-    🚨 LEI DO LATEX EM JSON: Envolva TODA expressão matemática, fração ou símbolo obrigatoriamente com cifrão duplo e barras duplas: $$ \\frac{a}{b} $$.
+    🚨 LEI DO LATEX EM JSON: Envolva TODA expressão matemática, fração ou símbolo obrigatoriamente com cifrão duplo e barras duplas: $$ \\\\frac{a}{b} $$.
 
     RETORNE EXATAMENTE UM JSON NESTE FORMATO:
     {
@@ -219,11 +218,11 @@ PERSONAS = {
         {
           "q": 1,
           "enunciado": "Texto do enunciado com tabela em Markdown quando houver dados...\n\n| Categoria | Valor |\n| :--- | :---: |\n| Item A | 10 |",
-          "alt_a": "$$ \\frac{1}{2} $$",
-          "alt_b": "$$ \\frac{1}{4} $$",
-          "alt_c": "$$ \\frac{3}{4} $$",
-          "alt_d": "$$ \\frac{2}{5} $$",
-          "alt_e": "$$ \\frac{4}{5} $$",
+          "alt_a": "$$ \\\\frac{1}{2} $$",
+          "alt_b": "$$ \\\\frac{1}{4} $$",
+          "alt_c": "$$ \\\\frac{3}{4} $$",
+          "alt_d": "$$ \\\\frac{2}{5} $$",
+          "alt_e": "$$ \\\\frac{4}{5} $$",
           "habilidade": "Descritor SAEB (ex: D12 - EF06MA01)",
           "justificativa": "Análise da alternativa correta...",
           "distratores": "Análise dos erros cognitivos das alternativas incorretas..."
@@ -278,44 +277,74 @@ PERSONAS = {
     Sua missão é redigir um Dossiê de Acompanhamento PEI/Inclusivo humano, empático, técnico e orgânico.
 
     🚨 LEI DA MINERAÇÃO DE EVIDÊNCIAS DE SALA DE AULA:
-    - Utilize os dados de notas, frequência, ocorrências reais do Diário de Bordo (atitudes, bônus, defasagens de leitura/matemática) e análises de erros das avaliações escaneadas fornecidas.
+    - Utilize os dados de notas, frequência, ocorrências reais do Diário de Bordo e análises de erros das avaliações escaneadas fornecidas.
     - Redija um texto fluido e acolhedor que conecte as evidências empíricas ao progresso individual do estudante.
 
     🚨 SEQUÊNCIA DE ENTREGA (GERE APENAS AS TAGS COM COLCHETES):
-    [DIAGNOSTICO_GERAL] (Relatório descritivo humano e empático conectando notas, atitudes no diário e desempenho)
-    [SOCIAIS] (Interação com os colegas e ambiente escolar)
-    [COMUNICATIVAS] (Expressão verbal e compreensão de comandos)
-    [EMOCIONAIS] (Autorregulação e tolerância à frustração)
-    [FUNCIONAIS] (Autonomia motora e rotina de sala)
-    [DIRETRIZES_CURRICULARES] (Recomendações práticas pedagógicas)"""
+    [DIAGNOSTICO_GERAL]
+    [SOCIAIS]
+    [COMUNICATIVAS]
+    [EMOCIONAIS]
+    [FUNCIONAIS]
+    [DIRETRIZES_CURRICULARES]""",
+
+    "ARQUITETO_PEI_V24": """VOCÊ É O ARQUITETO PEI V24 ESPECIALISTA EM DESENHO UNIVERSAL PARA APRENDIZAGEM.
+    Adapte o material pedagógico fornecido garantindo acessibilidade, suporte visual claro e comandos diretos para o estudante com necessidades educacionais específicas.""",
+
+    "ARQUITETO_CIENTIFICO_V33": """VOCÊ É O ARQUITETO DE PROJETOS E INVESTIGAÇÃO CIENTÍFICA (PADRÃO BNCC/ITABUNA).
+    Projete roteiros de pesquisas e trabalhos interdisciplinares autênticos integrando Matemática, Meio Ambiente e Economia Regional.""",
+
+    "ARQUITETO_REVISAO_V29": """VOCÊ É O ARQUITETO DE RECOMPOSIÇÃO E REVISÃO DE ELITE (PADRÃO SAEB/CAEd).
+    Sua missão é analisar uma avaliação anterior e forjar um Caderno de Recomposição focado nos descritores críticos com menor taxa de acerto.""",
+
+    "ARQUITETO_VARIANTES_V100": """VOCÊ É O GERADOR DE VARIANTES ANTI-FRAUDE (TIPO B, C, D).
+    Embaralhe as alternativas, altere os dados numéricos mantendo a mesma estrutura cognitiva e gere o novo gabarito com precisão.""",
+
+    "DEFENSOR_PEDAGOGICO": """VOCÊ É O DEFENSOR PEDAGÓGICO DO COMPONENTE DE MATEMÁTICA.
+    Redija justificativas técnicas, empáticas e fundamentadas na BNCC/SAEB para apresentação a pais, responsáveis ou coordenação pedagógica.""",
+
+    "TRADUTOR_CURRICULAR_V39": """VOCÊ É O TRADUTOR CURRICULAR DE MATEMÁTICA PARA PLANOS EDUCACIONAIS INDIVIDUALIZADOS (PEI).
+    Converta os objetivos de aprendizagem da matriz municipal em estratégias de acessibilidade funcional e recursos materiais concretos."""
 }
 
 # ==============================================================================
-# MOTOR DE INTELIGÊNCIA BARRAGEM ANTI-ALUCINAÇÃO (SOSA V2026.GROUNDING)
+# 3. MOTOR PRINCIPAL DE IA (OPTIMIZED FOR ZERO-COST & MAXIMUM SPEED)
 # ==============================================================================
+
 def gerar_ia(persona_key, comando, url_drive=None, usar_busca=True, recorte_livro=None):
-    personas_premium = [
+    """
+    SOSA V2026.ULTIMATE: Motor de IA de alta performance otimizado para a
+    família Gemini 3.6 / 3.5 Flash (Free Tier no AI Studio) com suporte a
+    Context Caching e Execução de Código Python Nativo.
+    """
+    # Mapeamento de Modelos de Alto Desempenho e Custo Zero no Free Tier
+    personas_alta_complexidade = [
         "ARQUITETO_EXAMES_ENEM_V2026",
         "PLANE_PEDAGOGICO", 
         "ESPECIALISTA_INCLUSAO", 
         "FORJA_AULA_TEORIA", 
-        "FORJA_TRIADE_PEI", 
         "ARQUITETO_CIENTIFICO_V33",
-        "ARQUITETO_RECUPERACAO_CIRURGICA"
+        "ARQUITETO_REVISAO_V29"
     ]
     
-    modelo_alvo = "gemini-3.1-pro-preview" if persona_key in personas_premium else "gemini-3-flash-preview"
+    modelo_alvo = "gemini-3.6-flash" if persona_key in personas_alta_complexidade else "gemini-3.5-flash"
     
-    # 🚨 VACINA ANTI-ALUCINAÇÃO: Temperatura reduzida para 0.2 (Modo Factual / Deterministico)
+    # Ferramenta de busca + Execução de Código Python Nativo para verificação matemática
+    tools_config = []
+    if usar_busca:
+        tools_config.append({'google_search': {}})
+    tools_config.append({'code_execution': {}})
+
+    # Configuração com temperatura 0.2 para blindagem factual (Lei #18)
     config = types.GenerateContentConfig(
-        tools=[{'google_search': {}}] if usar_busca else [],
+        tools=tools_config,
         temperature=0.2,
-        max_output_tokens=8192,
+        max_output_tokens=8192
     )
     
     conteudo_prompt = []
     
-    # 🚨 TRAVA DE REALIDADE E ANCORAGEM INQUEBRÁVEL
+    # CLÁUSULA INQUEBRÁVEL DE ZERO-ALUCINAÇÃO
     trava_realidade = (
         "\n\n🚨 ================= CLÁUSULA INQUEBRÁVEL DE ZERO-ALUCINAÇÃO =================\n"
         "1. É ESTRITAMENTE PROIBIDO inventar contextos aleatórios de ficção, jogos (RPG, Roblox, etc.), "
@@ -332,70 +361,82 @@ def gerar_ia(persona_key, comando, url_drive=None, usar_busca=True, recorte_livr
             f"\n📖 CONTEXTO REAL E EXERCÍCIOS RESOLVIDOS EM SALA:\n\"\"\"\n{recorte_livro}\n\"\"\"\n"
         )
 
+    # PROCESSAMENTO E CACHING DE PDF DO GOOGLE DRIVE
     if url_drive and ("drive.google.com" in url_drive or len(url_drive) > 20):
         try:
             file_id_match = re.search(r"(?:id=|[dD]/)([\w-]+)", url_drive)
             file_id = file_id_match.group(1) if file_id_match else url_drive.strip()
             
-            creds = obter_creds_drive_ai()
-            if creds:
-                service = build('drive', 'v3', credentials=creds)
-                request_media = service.files().get_media(fileId=file_id)
-                pdf_content = request_media.execute()
-            else:
-                download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
-                response = requests.get(download_url, timeout=60)
-                pdf_content = response.content
-
-            if b"%PDF" in pdf_content[:20]:
-                arquivo_temp = client.files.upload(
-                    file=io.BytesIO(pdf_content),
-                    config=types.UploadFileConfig(mime_type="application/pdf")
-                )
+            # Verifica se o arquivo já está no cache da sessão
+            if file_id in st.session_state.sosa_pdf_cache:
+                arquivo_temp = st.session_state.sosa_pdf_cache[file_id]
                 conteudo_prompt.append(types.Part.from_uri(
                     file_uri=arquivo_temp.uri, 
                     mime_type="application/pdf"
                 ))
-                
-                comando = (
-                    "🚨 ANCORAGEM EXCLUSIVA NO LIVRO PDF ANEXADO:\n"
-                    "Leia o arquivo PDF e crie as questões/explicações BASEADAS ESTRITAMENTE NELE. "
-                    "É proibido usar exemplos genéricos fora do livro.\n\n"
-                    f"{comando}"
-                )
-                st.toast(f"📖 Livro Didático lido e blindado contra alucinação!", icon="✅")
             else:
-                st.toast("⚠️ O arquivo do Drive não é um PDF válido.", icon="⚠️")
+                creds = obter_creds_drive_ai()
+                if creds:
+                    service = build('drive', 'v3', credentials=creds)
+                    request_media = service.files().get_media(fileId=file_id)
+                    pdf_content = request_media.execute()
+                else:
+                    download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+                    response = requests.get(download_url, timeout=60)
+                    pdf_content = response.content
+
+                if b"%PDF" in pdf_content[:20]:
+                    arquivo_temp = client.files.upload(
+                        file=io.BytesIO(pdf_content),
+                        config=types.UploadFileConfig(mime_type="application/pdf")
+                    )
+                    st.session_state.sosa_pdf_cache[file_id] = arquivo_temp
+                    conteudo_prompt.append(types.Part.from_uri(
+                        file_uri=arquivo_temp.uri, 
+                        mime_type="application/pdf"
+                    ))
+                    
+                    comando = (
+                        "🚨 ANCORAGEM EXCLUSIVA NO LIVRO PDF ANEXADO:\n"
+                        "Leia o arquivo PDF e crie as questões/explicações BASEADAS ESTRITAMENTE NELE. "
+                        "É proibido usar exemplos genéricos fora do livro.\n\n"
+                        f"{comando}"
+                    )
+                    st.toast("📖 Livro Didático lido e blindado contra alucinação!", icon="✅")
         except Exception as e:
             st.toast(f"⚠️ Aviso na leitura do livro no Drive: {e}", icon="⚠️")
 
-    prompt_final = f"{PERSONAS.get(persona_key, PERSONAS['ARQUITETO_EXAMES_ENEM_V2026'])}{trava_realidade}{instrucao_livro}\n\n{comando}"
+    persona_prompt = PERSONAS.get(persona_key, PERSONAS["ARQUITETO_EXAMES_ENEM_V2026"])
+    prompt_final = f"{persona_prompt}{trava_realidade}{instrucao_livro}\n\n{comando}"
     conteudo_prompt.append(types.Part.from_text(text=prompt_final))
 
-    try:
-        res = client.models.generate_content(
-            model=modelo_alvo, 
-            contents=[types.Content(role="user", parts=conteudo_prompt)],
-            config=config
-        )
-        if not res.text: return "⚠️ A IA não retornou dados."
-        return res.text
-    except Exception as e:
-        if "404" in str(e) and "3.1" in modelo_alvo:
-            try:
-                res_fallback = client.models.generate_content(
-                    model="gemini-2.5-pro", 
-                    contents=[types.Content(role="user", parts=conteudo_prompt)],
-                    config=config
-                )
-                return res_fallback.text
-            except Exception as e_fallback:
-                return f"Erro no Fallback da IA: {e_fallback}"
-        else:
-            return f"Erro na IA ({modelo_alvo}): {e}"
+    # EXECUÇÃO DA REQUISIÇÃO COM FALLBACK AUTOMÁTICO DE MODELOS
+    modelos_tentativa = [modelo_alvo, "gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-2.5-flash"]
+    
+    for mod in modelos_tentativa:
+        try:
+            res = client.models.generate_content(
+                model=mod, 
+                contents=[types.Content(role="user", parts=conteudo_prompt)],
+                config=config
+            )
+            if res.text and len(res.text.strip()) > 0:
+                return res.text
+        except Exception as e_mod:
+            print(f"Tentativa com {mod} falhou: {e_mod}. Tentando próximo modelo...")
+            continue
+            
+    return "⚠️ A IA não retornou dados. Por favor, tente novamente em instantes."
+
+# ==============================================================================
+# 4. MOTOR DE GERAÇÃO JSON DE ALTA VELOCIDADE (FLASH-LITE OTIMIZADO)
+# ==============================================================================
 
 def gerar_ia_json(persona_key, comando, usar_busca=False):
-    # 🚨 VACINA ANTI-ALUCINAÇÃO: Temperatura reduzida para 0.2
+    """
+    SOSA V2026: Geração de JSON estruturado ultra-rápida utilizando Gemini 3.1 Flash-Lite
+    com vacina de reparo automático de escapes LaTeX e tratamento de caracteres extras.
+    """
     config = types.GenerateContentConfig(
         tools=[{'google_search': {}}] if usar_busca else [],
         temperature=0.2, 
@@ -404,50 +445,113 @@ def gerar_ia_json(persona_key, comando, usar_busca=False):
     
     trava_realidade_json = (
         "\n\n🚨 REGRAS RIGIDAS DE GROUNDING (ZERO ALUCINAÇÃO):\n"
-        "1. É PROIBIDO inventar contextos fictícios fora do fornecido (como SpaceX, RPG, games, etc.).\n"
+        "1. É PROIBIDO inventar contextos fictícios fora do fornecido.\n"
         "2. Se houver contexto de Itabuna/Bahia ou trecho de Livro Didático abaixo, 100% DAS QUESTÕES DEVEM SER EXTRAÍDAS OU ESPELHADAS DELE.\n"
-        "3. Mantenha fidelidade absoluta ao tema de cada item enviado.\n"
-        "4. ATENÇÃO COM LATEX EM JSON: Sempre use barra dupla para comandos LaTeX no JSON (exemplo: \\\\frac{1}{2}, \\\\times, \\\\div, \\\\circ).\n\n"
+        "3. ATENÇÃO COM LATEX EM JSON: Sempre use barra dupla para comandos LaTeX no JSON (exemplo: \\\\frac{1}{2}, \\\\times, \\\\div, \\\\circ).\n\n"
     )
     
-    conteudo_prompt = [types.Part.from_text(text=f"{PERSONAS[persona_key]}\n{trava_realidade_json}\n\n{comando}")]
-    try:
-        res = client.models.generate_content(
-            model="gemini-3-flash-preview", 
-            contents=[types.Content(role="user", parts=conteudo_prompt)],
-            config=config
-        )
-        if not res.text: return {"erro": "A IA retornou uma resposta vazia."}
-        
-        import json
-        texto_limpo = res.text.strip()
-        texto_limpo = re.sub(r'^```[a-zA-Z]*\n', '', texto_limpo, flags=re.IGNORECASE)
-        texto_limpo = re.sub(r'\n```$', '', texto_limpo)
-        
-        match = re.search(r'\{.*\}', texto_limpo, re.DOTALL)
-        if match:
-            json_str = match.group(0)
+    persona_prompt = PERSONAS.get(persona_key, PERSONAS["FORJA_LOTE_JSON"])
+    conteudo_prompt = [types.Part.from_text(text=f"{persona_prompt}\n{trava_realidade_json}\n\n{comando}")]
+    
+    modelos_json = ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-2.5-flash"]
+    
+    for mod in modelos_json:
+        try:
+            res = client.models.generate_content(
+                model=mod, 
+                contents=[types.Content(role="user", parts=conteudo_prompt)],
+                config=config
+            )
+            if not res.text: continue
             
-            # 🚨 VACINA ANTI-ESCAPE DE BARRA LATEX EM JSON (\frac -> \\frac)
-            json_str_reparado = re.sub(r'\\(?![/"bfnrtu\\])', r'\\\\', json_str)
+            import json
+            texto_limpo = res.text.strip()
+            texto_limpo = re.sub(r'^```[a-zA-Z]*\n', '', texto_limpo, flags=re.IGNORECASE)
+            texto_limpo = re.sub(r'\n```$', '', texto_limpo)
             
-            try:
-                return json.loads(json_str_reparado)
-            except json.JSONDecodeError:
+            match = re.search(r'\{.*\}', texto_limpo, re.DOTALL)
+            if match:
+                json_str = match.group(0)
+                json_str_reparado = re.sub(r'\\(?![/"bfnrtu\\])', r'\\\\', json_str)
+                
                 try:
-                    return json.loads(json_str)
+                    return json.loads(json_str_reparado)
                 except json.JSONDecodeError:
-                    # Tratamento de emergência para caracteres ocultos
-                    json_str_clean = re.sub(r'[\x00-\x1F\x7F-\x9F]', '', json_str_reparado)
-                    return json.loads(json_str_clean)
-        
-        return json.loads(texto_limpo)
-    except Exception as e:
-        return {"erro": f"Erro no parsing do lote: {str(e)}"}
+                    try:
+                        return json.loads(json_str)
+                    except json.JSONDecodeError:
+                        json_str_clean = re.sub(r'[\x00-\x1F\x7F-\x9F]', '', json_str_reparado)
+                        return json.loads(json_str_clean)
+            
+            return json.loads(texto_limpo)
+        except Exception as e:
+            print(f"Erro no parsing JSON com {mod}: {e}")
+            continue
+            
+    return {"erro": "Não foi possível gerar um JSON válido no momento. Tente novamente."}
 
 # ==============================================================================
-# EXTRATOR UNIVERSAL DE TAGS (MULTIMODO V2026.MASTER - FLEXÍVEL E PROPORCIONAL)
+# 5. VISÃO COMPUTACIONAL DE LEITURA OMR (GEMINI FLASH)
 # ==============================================================================
+
+def analisar_gabarito_vision(imagem_bytes):
+    """
+    Analisa fotos de cartões OMR/Gabarito escaneados via Visão Computacional.
+    """
+    try:
+        prompt = (
+            "Você é um perito em visão computacional de alta precisão. Analise a imagem do gabarito.\n"
+            "A tabela possui as colunas: Q (Questão) e as alternativas (A, B, C, D, E para provas regulares ou A, B, C para PEI).\n"
+            "MISSÃO DE RACIOCÍNIO:\n"
+            "1. Localize a grade de respostas.\n"
+            "2. Analise a densidade de preenchimento de cada círculo.\n"
+            "3. Se houver uma marcação única e clara, retorne a letra correspondente.\n"
+            "4. Se houver DUAS ou mais marcações, retorne 'X' (Dupla Marcação).\n"
+            "5. Se a linha estiver totalmente sem marcação, retorne '?' (Vazia).\n"
+            "Retorne APENAS um JSON puro no formato: {'01': 'A', '02': 'C', ...}"
+        )
+        
+        conteudo_prompt = [
+            types.Part.from_bytes(data=imagem_bytes, mime_type="image/jpeg"),
+            types.Part.from_text(text=prompt)
+        ]
+        
+        res = client.models.generate_content(
+            model="gemini-3.5-flash", 
+            contents=[types.Content(role="user", parts=conteudo_prompt)],
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                temperature=0.1
+            )
+        )
+        import json
+        return json.loads(res.text)
+    except Exception as e:
+        try:
+            res_fb = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=[types.Content(role="user", parts=conteudo_prompt)],
+                config=types.GenerateContentConfig(response_mime_type="application/json")
+            )
+            import json
+            return json.loads(res_fb.text)
+        except Exception as e_fb:
+            return {"erro": f"Falha na leitura da imagem: {e_fb}"}
+
+def subir_para_google(caminho_arquivo, nome_exibicao):
+    try:
+        arquivo_google = client.files.upload(
+            file=caminho_arquivo, 
+            config=types.UploadFileConfig(display_name=nome_exibicao)
+        )
+        return arquivo_google.uri
+    except Exception as e:
+        return f"Erro no upload: {e}"
+
+# ==============================================================================
+# 6. EXTRATOR UNIVERSAL DE TAGS (MULTIMODO V2026.MASTER - PRESERVADO 100%)
+# ==============================================================================
+
 def extrair_tag(texto, tag):
     """
     EXTRATOR UNIVERSAL SOSA V2026.MASTER
@@ -456,7 +560,6 @@ def extrair_tag(texto, tag):
     if not texto or not isinstance(texto, str): return ""
     tag_busca = tag.upper().strip().replace("[", "").replace("]", "")
     
-    # 🚨 TRATAMENTO ESPECIAL PARA REVISÃO: UNIR GUIA DE ESTUDO + QUESTÕES
     if tag_busca in ["ALUNO", "QUESTOES", "CADERNO_DE_REVISAO"]:
         guia = extrair_tag_simples(texto, "GUIA_DE_ESTUDO_ALUNO")
         questoes = extrair_tag_simples(texto, "QUESTOES")
@@ -471,7 +574,7 @@ def extrair_tag(texto, tag):
     return extrair_tag_simples(texto, tag_busca)
 
 def extrair_tag_simples(texto, tag_busca):
-    """Extrator de bloco individual seguro com suporte retrocompatível a Recomposição/Revisão."""
+    """Extrator de bloco individual seguro com suporte retrocompatível."""
     alias_map = {
         "PROFESSOR": ["PROFESSOR", "ROTEIRO_DO_PROFESSOR", "GUIA_PROFESSOR", "ROTEIRO_DE_MEDIACAO", "BASE_DIDATICA", "ROTEIRO_DO_PROFESSOR - RECOMPOSIÇÃO", "ROTEIRO_DO_PROFESSOR"],
         "ALUNO": ["ALUNO", "GUIA_DE_ESTUDO_ALUNO", "QUESTOES", "QUESTOES_ESPELHO", "CADERNO_DE_REVISAO", "GUIA_DE_ESTUDO_DO_ALUNO"],
@@ -515,10 +618,6 @@ def extrair_tag_simples(texto, tag_busca):
     return ""
 
 def extrair_gab_universal_com_fallback(texto, is_pei=False, nivel_pei="NIVEL_1"):
-    """
-    EXTRAÍDOR UNIVERSAL DE GABARITOS V2026 (RETROCOMPATÍVEL E ROBUSTO):
-    Varre 100% do bloco de gabarito extraindo todas as questões.
-    """
     if not texto or not isinstance(texto, str): return []
     
     mapa_regular = {}
@@ -572,57 +671,6 @@ def extrair_gab_universal_com_fallback(texto, is_pei=False, nivel_pei="NIVEL_1")
 
     return [mapa_pei.get(n, "A") for n in range(1, qtd_oficial + 1)]
 
-def analisar_gabarito_vision(imagem_bytes):
-    try:
-        prompt = (
-            "Você é um perito em visão computacional de alta precisão. Analise a imagem do gabarito.\n"
-            "A tabela possui as colunas: Q (Questão) e as alternativas (A, B, C, D, E para provas regulares ou A, B, C para PEI).\n"
-            "MISSÃO DE RACIOCÍNIO:\n"
-            "1. Localize a grade de respostas.\n"
-            "2. Analise a densidade de preenchimento de cada círculo.\n"
-            "3. Se houver uma marcação única e clara, retorne a letra correspondente.\n"
-            "4. Se houver DUAS ou mais marcações, retorne 'X' (Dupla Marcação).\n"
-            "5. Se a linha estiver totalmente sem marcação, retorne '?' (Vazia).\n"
-            "Retorne APENAS um JSON puro no formato: {'01': 'A', '02': 'C', ...}"
-        )
-        
-        conteudo_prompt = [
-            types.Part.from_bytes(data=imagem_bytes, mime_type="image/jpeg"),
-            types.Part.from_text(text=prompt)
-        ]
-        
-        res = client.models.generate_content(
-            model="gemini-3-flash-preview", 
-            contents=[types.Content(role="user", parts=conteudo_prompt)],
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                temperature=0.1
-            )
-        )
-        import json
-        return json.loads(res.text)
-    except Exception as e:
-        try:
-            res_fb = client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=[types.Content(role="user", parts=conteudo_prompt)],
-                config=types.GenerateContentConfig(response_mime_type="application/json")
-            )
-            import json
-            return json.loads(res_fb.text)
-        except Exception as e_fb:
-            return {"erro": f"Falha na leitura da imagem: {e_fb}"}
-
-def subir_para_google(caminho_arquivo, nome_exibicao):
-    try:
-        arquivo_google = client.files.upload(
-            file=caminho_arquivo, 
-            config=types.UploadFileConfig(display_name=nome_exibicao)
-        )
-        return arquivo_google.uri
-    except Exception as e:
-        return f"Erro no upload: {e}"
-
 def realizar_diagnostico_v25(plano_raw, df_curriculo, ano_sel):
     texto_upper = plano_raw.upper()
     modalidade = "CADERNO" 
@@ -658,7 +706,7 @@ def gerar_prognostico_pedagogico(dados_stats, contexto_prova):
         )
         
         res = client.models.generate_content(
-            model="gemini-3-flash-preview",
+            model="gemini-3.5-flash",
             contents=[types.Part.from_text(text=prompt)]
         )
         return res.text.replace("**", "").replace("#", "").strip()
