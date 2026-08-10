@@ -3074,7 +3074,7 @@ elif menu == "📝 Central de Avaliações":
                 reset_forja()
 
     # ==============================================================================
-    # ABA 2: ACERVO DE PROVAS & RE-EXPORTAÇÃO EM 1 CLIQUE (COM PONTE PARA PONTO ID)
+    # ABA 2: ACERVO DE PROVAS & PERÍCIA TRI (BLINDAGEM ANTI-KEYERROR V2026)
     # ==============================================================================
     with tab_acervo_av:
         st.markdown("### 📖 Acervo de Instrumentos Avaliativos & Perícia TRI")
@@ -3085,26 +3085,39 @@ elif menu == "📝 Central de Avaliações":
             f_ano_h = c_h2.selectbox("Série:", ["Todos", "6º", "7º", "8º", "9º"], key=f"h_ano_av_{v}")
             f_tipo_h = c_h3.selectbox("Tipo:", ["Todos", "AVALIAÇÃO", "REVISÃO"], key=f"h_tipo_av_{v}")
 
-        df_exames = df_aulas[df_aulas['SEMANA_REF'].isin(["AVALIAÇÃO", "REVISÃO"])].copy() if not df_aulas.empty else pd.DataFrame()
-        if f_trim_h != "Todos" and not df_exames.empty: df_exames = df_exames[df_exames['CONTEUDO'].str.contains(f_trim_h, na=False)]
-        if f_ano_h != "Todos" and not df_exames.empty: df_exames = df_exames[df_exames['ANO'] == f_ano_h]
-        if f_tipo_h != "Todos" and not df_exames.empty: df_exames = df_exames[df_exames['SEMANA_REF'] == f_tipo_h]
+        # VACINA ANTI-KEYERROR: Verificação de existência das colunas
+        df_exames = pd.DataFrame()
+        if not df_aulas.empty and 'SEMANA_REF' in df_aulas.columns:
+            df_exames = df_aulas[df_aulas['SEMANA_REF'].astype(str).str.upper().isin(["AVALIAÇÃO", "REVISÃO"])].copy()
 
-        if not df_exames.empty: df_exames = df_exames.iloc[::-1]
+        if not df_exames.empty:
+            if f_trim_h != "Todos" and 'CONTEUDO' in df_exames.columns:
+                df_exames = df_exames[df_exames['CONTEUDO'].astype(str).str.contains(f_trim_h, na=False)]
+            if f_ano_h != "Todos" and 'ANO' in df_exames.columns:
+                df_exames = df_exames[df_exames['ANO'].astype(str) == f_ano_h]
+            if f_tipo_h != "Todos" and 'SEMANA_REF' in df_exames.columns:
+                df_exames = df_exames[df_exames['SEMANA_REF'].astype(str).str.upper() == f_tipo_h.upper()]
+
+            df_exames = df_exames.iloc[::-1]
 
         if df_exames.empty:
             st.info("Nenhum instrumento avaliativo localizado no acervo.")
         else:
             for idx_av, (_, row) in enumerate(df_exames.iterrows()):
                 with st.container(border=True):
-                    txt_f = str(row['CONTEUDO'])
-                    identificador = row['TIPO_MATERIAL']
+                    # LEI 11: Leitura 100% segura via .get()
+                    txt_f = str(row.get('CONTEUDO', ''))
+                    identificador = str(row.get('TIPO_MATERIAL', 'AVALIAÇÃO'))
+                    ano_exibicao = str(row.get('ANO', '6º'))
+                    data_exibicao = str(row.get('DATA', 'N/A'))
+                    semana_ref_exibicao = str(row.get('SEMANA_REF', 'AVALIAÇÃO'))
+
                     val_raw = ai.extrair_tag(txt_f, "VALOR")
                     val_num = util.sosa_to_float(val_raw)
                     val_ex = f"{val_num:.1f} pts" if val_num > 0 else "4.0 pts"
                     
                     st.markdown(f"##### 📋 {identificador}")
-                    st.caption(f"Série: {row['ANO']} | Data: {row['DATA']} | Status: 🔒 COFRE DIGITAL DRIVE SINCRONIZADO")
+                    st.caption(f"Série: {ano_exibicao} | Data: {data_exibicao} | Status: 🔒 COFRE DIGITAL DRIVE SINCRONIZADO")
                     
                     def extrair_link_acervo(t, tag):
                         m = re.search(rf"{tag}\((https://docs\.google\.com/document/d/[^\s\)]+)\)", t, re.IGNORECASE)
@@ -3130,24 +3143,22 @@ elif menu == "📝 Central de Avaliações":
                     else: c_b4.button("Sem N3", disabled=True, use_container_width=True, key=f"no_p3_{row.name}_{idx_av}_{v}")
                     
                     if c_b5.button("🗑️ Apagar", key=f"del_ac_{row.name}_{idx_av}_{v}", use_container_width=True):
-                        if db.excluir_avaliacao_completa(identificador, row['SEMANA_REF']): st.rerun()
+                        if db.excluir_avaliacao_completa(identificador, semana_ref_exibicao): st.rerun()
 
-                    # 🚀 NOVO RECURSO SOBERANO: INJETAR REVISÃO/EXAME JÁ EXISTENTE NO PONTO ID
+                    # 🚀 INJETAR REVISÃO/EXAME NO PONTO ID (PLANO DA SEMANA)
                     with st.popover("🚀 Injetar no Ponto ID (Gerar Plano de Aula da Semana)"):
                         st.caption("Gere automaticamente o Plano de Aula desta revisão para o Ponto ID e vincule este material à semana sem gastar IA.")
                         
                         todas_semanas_inj_a2 = util.gerar_semanas()
                         sem_dest_a2 = st.selectbox("Selecione a Semana da Aula:", [s.split(" (")[0] for s in todas_semanas_inj_a2 if "Jornada" not in s], key=f"sel_sem_inj_a2_{row.name}_{v}")
-                        trim_dest_a2 = st.selectbox("Trimestre Alvo:", ["I Trimestre", "II Trimestre", "III Trimestre"], index=1 if "II" in str(row.get('CONTEUDO','')) or "IITrimestre" in identificador else 0, key=f"sel_trim_inj_a2_{row.name}_{v}")
+                        trim_dest_a2 = st.selectbox("Trimestre Alvo:", ["I Trimestre", "II Trimestre", "III Trimestre"], index=1 if "II" in txt_f or "IITrimestre" in identificador else 0, key=f"sel_trim_inj_a2_{row.name}_{v}")
                         
                         if st.button("🚀 CONFIRMAR E ENVIAR PLANO PARA O PONTO ID", type="primary", use_container_width=True, key=f"btn_inj_acervo_{row.name}_{v}"):
-                            # 1. Extrai habilidades/conteúdos da revisão criada
                             habs_rev = ai.extrair_tag(txt_f, "HABILIDADE_BNCC") or "Habilidades e descritores do material " + identificador
                             espec_rev = ai.extrair_tag(txt_f, "CONTEUDOS_ESPECIFICOS") or ai.extrair_tag(txt_f, "OBJETO_CONHECIMENTO") or identificador
                             
-                            # 2. Monta o plano semanal oficial no padrão SOSA
-                            roteiro_a1 = f"AULA 01 - REVISÃO E DEVOLUTIVA PEDAGÓGICA:\nINÍCIO (10 min): Acolhimento da turma, apresentação dos objetivos e orientação sobre o Caderno de Revisão ({identificador}).\nMEIO (35 min): Resolução comentada no quadro das questões e tiragem de dúvidas com foco nos descritores SAEB.\nFIM (5 min): Síntese das estratégias e verificação dos cadernos."
-                            roteiro_a2 = f"AULA 02 - PRÁTICA GUIADA E ATENDIMENTO INDIVIDUAL:\nINÍCIO (10 min): Orientação para resolução autônoma do Caderno de Revisão.\nMEIO (35 min): Acompanhamento e suporte mediado aos estudantes do Grupo 1 (PEI N1, N2 e N3).\nFIM (5 min): Visto nos cadernos e consolidação do roteiro."
+                            roteiro_a1 = f"AULA 01 - REVISÃO E DEVOLUTIVA PEDAGÓGICA:\nINÍCIO (10 min): Acolhimento da turma, apresentação dos objetivos e orientação sobre a revisão {identificador}.\nMEIO (35 min): Resolução comentada no quadro das questões e dúvidas do material.\nFIM (5 min): Síntese das estratégias e verificação das dúvidas."
+                            roteiro_a2 = f"AULA 02 - PRÁTICA GUIADA E ATENDIMENTO INDIVIDUAL:\nINÍCIO (10 min): Orientação para resolução autônoma do Caderno de Revisão.\nMEIO (35 min): Acompanhamento e suporte mediado aos estudantes do Grupo 1 (PEI N1, N2 e N3).\nFIM (5 min): Visto nos cadernos e consolidação dos tópicos."
 
                             plano_inj_txt = (
                                 f"[HABILIDADE_BNCC] {habs_rev}\n"
@@ -3163,26 +3174,24 @@ elif menu == "📝 Central de Avaliações":
                                 f"[ESTRATEGIA_DUA_PEI] Utilização de cadernos adaptados (PEI N1, N2 e N3) com suporte visual e mediação individualizada."
                             )
 
-                            # 3. Atualiza a referência de semana no DB_AULAS_PRONTAS para vincular a aula à semana escolhida
                             try:
                                 wb_inj = db.conectar()
                                 ws_aulas_inj = wb_inj.worksheet("DB_AULAS_PRONTAS")
                                 dados_aulas_inj = ws_aulas_inj.get_all_values()
                                 for idx_a_inj, row_a_inj in enumerate(dados_aulas_inj):
                                     if idx_a_inj > 0 and row_a_inj[2] == identificador:
-                                        ws_aulas_inj.update_cell(idx_a_inj + 1, 2, sem_dest_a2) # Atualiza SEMANA_REF
+                                        ws_aulas_inj.update_cell(idx_a_inj + 1, 2, sem_dest_a2)
                                         break
                             except Exception as e_inj:
                                 print(f"Aviso no vinculo da semana: {e_inj}")
 
-                            # 4. Envia o plano para o Ponto ID com status = PRODUZIDO (Isenta o Criador de Aulas)
                             st.session_state.p_temp = plano_inj_txt
                             st.session_state.p_meta = {
                                 "semana": sem_dest_a2,
                                 "trimestre": trim_dest_a2,
-                                "ano": str(row['ANO']),
+                                "ano": ano_exibicao,
                                 "base": f"Material de Revisão: {identificador}",
-                                "status_final": "PRODUZIDO" # 🚨 ISENTA O CRIADOR DE AULAS!
+                                "status_final": "PRODUZIDO"
                             }
                             
                             st.toast("✅ Plano gerado e vinculado à semana! Redirecionando para o Ponto ID...", icon="🚀")
@@ -3191,13 +3200,13 @@ elif menu == "📝 Central de Avaliações":
                             navegar_para("📅 Planejamento (Ponto ID)")
 
                     with st.expander("🔄 Re-gerar / Re-exportar Documentos (DOCX) no Drive", expanded=False):
-                        st.info("💡 **Re-exportação Direta:** Clique abaixo para re-gerar os arquivos DOCX no Google Drive utilizando o texto preservado no banco de dados com a nova engine do Exporter.")
+                        st.info("💡 **Re-exportação Direta:** Clique abaixo para re-gerar os arquivos DOCX no Google Drive utilizando o texto preservado no banco de dados.")
                         
                         if st.button("🚀 EXECUTAR RE-EXPORTAÇÃO COMPLETA NO DRIVE", type="primary", use_container_width=True, key=f"btn_reexp_{row.name}_{idx_av}_{v}"):
                             with st.status("Re-gerando documentos Word com a vacina no Drive...", expanded=True) as status_reexp:
                                 info_reexp = {
-                                    'ano': str(row['ANO']), 
-                                    'trimestre': 'I Trimestre', 
+                                    'ano': ano_exibicao, 
+                                    'trimestre': f_trim_h if f_trim_h != "Todos" else 'I Trimestre', 
                                     'valor': val_ex if val_ex else '4.0',
                                     'qtd': len(re.findall(r'(?i)QUESTÃO\s+\d+', txt_f)) or 10
                                 }
@@ -3226,7 +3235,7 @@ elif menu == "📝 Central de Avaliações":
                                 
                                 db.excluir_registro("DB_AULAS_PRONTAS", identificador)
                                 db.salvar_no_banco("DB_AULAS_PRONTAS", [
-                                    row['DATA'], row['SEMANA_REF'], identificador, novo_conteudo_banco, row['ANO'], link_reg_r
+                                    data_exibicao, semana_ref_exibicao, identificador, novo_conteudo_banco, ano_exibicao, link_reg_r
                                 ])
                                 
                                 status_reexp.update(label="✅ Prova re-exportada e link atualizado!", state="complete")
