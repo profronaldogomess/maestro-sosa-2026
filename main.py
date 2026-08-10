@@ -918,10 +918,13 @@ if menu == "📅 Planejamento (Ponto ID)":
             st.markdown("---")
             st.markdown(f"### 🛠️ Mesa de Lapidação: Semana {meta.get('semana')}")
             
-            with st.expander("👁️ Ver Texto Bruto da IA"): st.text(txt_bruto)
-            
+            # 🚨 BLOCO DE CÓPIA DIRETA E PRÁTICA PARA O PROFESSOR
+            with st.expander("📋 COPIAR TEXTO FORMATADO DO PLANO (ÁREA DE TRANSFERÊNCIA)", expanded=True):
+                st.caption("Clique no ícone de cópia no canto superior direito do bloco abaixo para copiar o texto formatado:")
+                st.code(txt_bruto, language=None)
+
             with st.container(border=True):
-                cmd_refine = st.chat_input("Refinador IA (Ex: 'Adicione um gancho sobre exploração espacial na Aula 1')")
+                cmd_refine = st.chat_input("Refinador IA (Ex: 'Ajuste os horários da Aula 1')")
                 if cmd_refine:
                     with st.spinner("Reescrevendo..."):
                         prompt_refino = f"ORDEM: {cmd_refine}\n\nPLANO ATUAL:\n{st.session_state.p_temp}"
@@ -931,7 +934,7 @@ if menu == "📅 Planejamento (Ponto ID)":
             tab_curriculo, tab_roteiro, tab_inclusao = st.tabs(["📚 1. Base Curricular & BNCC", "📝 2. Roteiro das Aulas", "♿ 3. Avaliação & PEI"])
             
             with tab_curriculo:
-                ed_hab = st.text_input("Habilidade BNCC:", ai.extrair_tag(txt_bruto, "HABILIDADE_BNCC") or "EF06MA01", key=f"frag_hab_{v}")
+                ed_hab = st.text_input("Habilidade BNCC / Descritores:", ai.extrair_tag(txt_bruto, "HABILIDADE_BNCC") or "EF06MA01", key=f"frag_hab_{v}")
                 ed_comp = st.text_input("Competências Específicas BNCC (Pág. 267):", ai.extrair_tag(txt_bruto, "COMPETENCIAS_FOCO") or "Competência Específica 2", key=f"frag_comp_{v}")
                 ed_geral = st.text_input("Objeto de Conhecimento:", ai.extrair_tag(txt_bruto, "OBJETO_CONHECIMENTO") or ai.extrair_tag(txt_bruto, "CONTEUDO_GERAL"), key=f"frag_geral_{v}")
                 ed_espec = st.text_area("Conteúdos Específicos:", ai.extrair_tag(txt_bruto, "CONTEUDOS_ESPECIFICOS") or txt_bruto, height=130, key=f"frag_espec_{v}")
@@ -948,7 +951,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                 ed_pei = st.text_area("Estratégia DUA/PEI:", ai.extrair_tag(txt_bruto, "ESTRATEGIA_DUA_PEI"), height=150, key=f"frag_pei_{v}")
             
             st.markdown("<br>", unsafe_allow_html=True)
-            if st.button("💾 Salvar e Enviar para Produção", use_container_width=True, type="primary", key=f"frag_btn_save_{v}"):
+            if st.button("💾 Salvar Plano no Banco e no Drive", use_container_width=True, type="primary", key=f"frag_btn_save_{v}"):
                 with st.status("Gerando DOCX e Sincronizando...") as status:
                     nome_arquivo = f"PLANO_{meta.get('ano').replace('º','')}_{meta.get('semana').replace(' ', '')}"
                     db.excluir_plano_completo(meta.get('semana'), meta.get('ano'))
@@ -968,6 +971,9 @@ if menu == "📅 Planejamento (Ponto ID)":
                     doc_io = exporter.gerar_docx_plano_pedagogico_ELITE(nome_arquivo, dados_docx, {"ano": meta.get('ano'), "semana": meta.get('semana'), "trimestre": meta.get('trimestre')})
                     link_drive = db.subir_e_converter_para_google_docs(doc_io, nome_arquivo, trimestre=meta.get('trimestre'), categoria=meta.get('ano'), semana=meta.get('semana'), modo="PLANEJAMENTO")
                     
+                    # 🚨 STATUS DINÂMICO: Se for plano de exame, salva como PRODUZIDO (isento de Criador de Aulas)
+                    status_banco = meta.get("status_final", "HUB_ATIVO")
+
                     final_txt = (
                         f"[HABILIDADE_BNCC] {ed_hab} \n"
                         f"[COMPETENCIAS_FOCO] {ed_comp} \n"
@@ -978,7 +984,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                         f"[SABADO_LETIVO] {ed_sab} \n"
                         f"--- LINK DRIVE --- {link_drive}"
                     )
-                    db.salvar_no_banco("DB_PLANOS", [datetime.now().strftime("%d/%m/%Y"), meta.get('semana'), meta.get('ano'), meta.get('trimestre'), "HUB_ATIVO", final_txt, link_drive])
+                    db.salvar_no_banco("DB_PLANOS", [datetime.now().strftime("%d/%m/%Y"), meta.get('semana'), meta.get('ano'), meta.get('trimestre'), status_banco, final_txt, link_drive])
                     
                     status.update(label="Plano Sincronizado!", state="complete")
                     st.balloons(); time.sleep(1); reset_planejamento()
