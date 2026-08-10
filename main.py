@@ -570,76 +570,152 @@ if menu == "📅 Planejamento (Ponto ID)":
                         st.success(f"✅ Semana {sem_limpa} registrada como Recesso/Feriado com sucesso!")
                         st.balloons(); time.sleep(1); st.rerun()
 
-        elif tipo_semana in ["Semana de Provas Oficiais (Global)", "Devolutiva de Resultados & Recuperação"]:
+        elif tipo_semana in ["Aplicação de Exame", "Semana de Provas Oficiais (Global)", "Sonda de Proficiência", "Devolutiva de Resultados & Recuperação"]:
             with st.container(border=True):
-                st.markdown("#### 2. Vínculo de Material e Diretrizes")
-                ativo_selecionado = ""
-                if tipo_semana != "Aula Aberta (Dinâmicas e Eventos)":
-                    df_ativos_ano = df_aulas[df_aulas['ANO'].astype(str).str.contains(str(ano_p))] if not df_aulas.empty else pd.DataFrame()
-                    opcoes_ativos = []
-                    if not df_ativos_ano.empty:
-                        if "Exame" in tipo_semana or "Sonda" in tipo_semana: 
-                            mask_ex = (df_ativos_ano['SEMANA_REF'] == "AVALIAÇÃO") | (df_ativos_ano['TIPO_MATERIAL'].str.contains("PROVA|TESTE|SONDA|AVALIAÇÃO|AVALIACAO", case=False, na=False))
-                            opcoes_ativos = df_ativos_ano[mask_ex]['TIPO_MATERIAL'].unique().tolist()
-                        elif "Revisão" in tipo_semana: 
-                            mask_rev = (df_ativos_ano['SEMANA_REF'] == "REVISÃO") | (df_ativos_ano['TIPO_MATERIAL'].str.contains("REVISAO|REVISÃO|RECOMPOSICAO|RECOMPOSIÇÃO|RAIO-X|AULA DE REVISÃO|AULA DE REVISAO", case=False, na=False))
-                            opcoes_ativos = df_ativos_ano[mask_rev]['TIPO_MATERIAL'].unique().tolist()
-                        elif "Trabalho" in tipo_semana: 
-                            opcoes_ativos = df_ativos_ano[df_ativos_ano['TIPO_MATERIAL'].str.contains("PROJETO|TRABALHO", case=False, na=False)]['TIPO_MATERIAL'].unique().tolist()
-                    
-                    if opcoes_ativos: 
-                        ativo_selecionado = st.selectbox("Selecione o material do Acervo:", sorted(opcoes_ativos), key=f"sel_mat_vinculo_{v}")
-                    else: 
-                        st.warning("Nenhum material correspondente encontrado no acervo para esta série.")
-                else:
-                    ativo_selecionado = st.text_input("Nome do Evento/Dinâmica:", placeholder="Ex: Palestra e Oficina sobre Educação Financeira", key=f"inp_dinamica_nome_{v}")
+                st.markdown("#### 2. Vínculo de Prova do Acervo & Extração de Habilidades")
+                st.caption("Selecione o exame já forjado no acervo para que o sistema extraia automaticamente os conteúdos, descritores SAEB e habilidades BNCC para o Plano Padronizado SOSA.")
 
-                # 🚨 AUTO-PREENCHIMENTO DO ROTEIRO DO PROFESSOR A PARTIR DO MATERIAL SELECIONADO
-                roteiro_autofill = ""
-                if ativo_selecionado and not df_aulas.empty:
-                    match_mat = df_aulas[df_aulas['TIPO_MATERIAL'] == ativo_selecionado]
-                    if not match_mat.empty:
-                        txt_m_conteudo = str(match_mat.iloc[0]['CONTEUDO'])
-                        roteiro_autofill = (
-                            ai.extrair_tag(txt_m_conteudo, "PROFESSOR") or 
-                            ai.extrair_tag(txt_m_conteudo, "AULA_1") or 
-                            ai.extrair_tag(txt_m_conteudo, "ROTEIRO_DO_PROFESSOR") or
-                            ai.extrair_tag(txt_m_conteudo, "BASE_DIDATICA")
-                        )
-                        roteiro_autofill = re.split(r"--- LINKS ---", roteiro_autofill, flags=re.IGNORECASE)[0].strip()
-
-                # Usa chave dinâmica baseada no material para atualizar o texto do campo instantaneamente
-                key_dinamica_rot = f"txt_rot_exec_{v}_{hash(ativo_selecionado)}"
+                df_ativos_ano = df_aulas[df_aulas['ANO'].astype(str).str.contains(str(ano_p))] if not df_aulas.empty else pd.DataFrame()
                 
+                opcoes_ativos = []
+                if not df_ativos_ano.empty:
+                    mask_ex = (df_ativos_ano['SEMANA_REF'] == "AVALIAÇÃO") | (df_ativos_ano['TIPO_MATERIAL'].str.contains("PROVA|TESTE|SONDA|AVALIAÇÃO|AVALIACAO|EXAME", case=False, na=False))
+                    opcoes_ativos = sorted(df_ativos_ano[mask_ex]['TIPO_MATERIAL'].unique().tolist())
+                
+                c_ex1, c_ex2 = st.columns([2, 1])
+                exame_selecionado = c_ex1.selectbox("📋 Selecione a Prova/Exame do Acervo (Opcional):", [""] + opcoes_ativos, key=f"sel_mat_vinculo_{v}")
+                
+                pincamento_exame_manual = c_ex2.text_input("ou Digite o Nome/Assunto da Prova:", placeholder="Ex: Prova Trimestral de Operações com Decimais", key=f"inp_exame_manual_{v}")
+
+                # Extração automática de metadados da prova selecionada
+                habilidades_extraidas = ""
+                conteudos_extraidos = ""
+                texto_prova_completo = ""
+
+                if exame_selecionado and not df_ativos_ano.empty:
+                    match_ex = df_ativos_ano[df_ativos_ano['TIPO_MATERIAL'] == exame_selecionado]
+                    if not match_ex.empty:
+                        texto_prova_completo = str(match_ex.iloc[0]['CONTEUDO'])
+                        
+                        # Extrai Habilidades / Descritores da grade de correção ou do texto da prova
+                        grade = ai.extrair_tag(texto_prova_completo, "GRADE_DE_CORRECAO") or ai.extrair_tag(texto_prova_completo, "GRADE_DE_CORRECAO_PEI")
+                        if grade:
+                            descritores = re.findall(r'(?i)(?:DESCRITOR_SAEB|HABILIDADE|BNCC|DESCRITOR)\s*:\s*([^|\]\n]+)', grade)
+                            if descritores:
+                                habilidades_extraidas = ", ".join(list(dict.fromkeys([d.strip() for d in descritores])))
+                        
+                        if not habilidades_extraidas:
+                            codes = re.findall(r'EF\d{2}MA\d{2}[A-Z]?', texto_prova_completo, re.IGNORECASE)
+                            if codes:
+                                habilidades_extraidas = ", ".join(list(set([c.upper() for c in codes])))
+                        
+                        conteudos_extraidos = ai.extrair_tag(texto_prova_completo, "CONTEUDOS_ESPECIFICOS") or ai.extrair_tag(texto_prova_completo, "OBJETO_CONHECIMENTO") or exame_selecionado
+
+                if not conteudos_extraidos:
+                    conteudos_extraidos = pincamento_exame_manual if pincamento_exame_manual.strip() else (exame_selecionado if exame_selecionado else f"Aplicação da Avaliação de Matemática - {sem_limpa}")
+
+                if not habilidades_extraidas:
+                    habilidades_extraidas = f"EF0{ano_p}MA01 - Habilidades do {ano_p}º Ano avaliadas no exame regimental."
+
                 diretriz_logistica = st.text_area(
-                    "Roteiro de Execução da Aula (Auto-Preenchido do Acervo):", 
-                    value=roteiro_autofill,
-                    placeholder="INÍCIO: Acolhimento...\nMEIO: Exposição do tema...\nFIM: Atividade prática...", 
-                    height=160, 
-                    key=key_dinamica_rot
+                    "📋 Orientações Logísticas e Roteiro da Aplicação (Editável):",
+                    value=(
+                        f"INÍCIO (10 min): Acolhimento dos estudantes, organização do ambiente da sala de aula e leitura orientada das instruções e critérios de pontuação da prova.\n"
+                        f"MEIO (35 min): Aplicação supervisionada do exame ({exame_selecionado if exame_selecionado else conteudos_extraidos}). Acompanhamento e suporte mediado aos estudantes do Grupo 1 (PEI Nível 1, 2 e 3).\n"
+                        f"FIM (5 min): Recolhimento organizado dos cadernos de questões e cartões de resposta OMR para posterior escaneamento no Scanner CIR."
+                    ),
+                    height=140,
+                    key=f"txt_rot_exec_{v}_{hash(exame_selecionado or pincamento_exame_manual)}"
                 )
 
-                if st.button("💾 Salvar Logística no Acervo", type="primary", use_container_width=True, key=f"btn_save_logist_{v}"):
-                    if ativo_selecionado:
-                        with st.spinner("Salvando no Acervo e Sincronizando..."):
-                            nome_arquivo = f"PLANO_{ano_str_busca.replace('º','')}_{sem_limpa.replace(' ', '')}"
-                            db.excluir_plano_completo(sem_limpa, ano_str_busca)
-                            
-                            dados_docx = {
-                                "geral": tipo_semana.upper(), "especificos": ativo_selecionado, 
-                                "objetivos": "Mensurar proficiência e consolidar habilidades.", 
-                                "recursos": "Material Impresso do Acervo SOSA", 
-                                "metodologia": diretriz_logistica,
-                                "avaliacao": "Observação direta e/ou correção do instrumento.", 
-                                "pei": "Acompanhamento individualizado e suporte mediado."
-                            }
-                            
-                            doc_io = exporter.gerar_docx_plano_pedagogico_ELITE(nome_arquivo, dados_docx, {"ano": ano_str_busca, "semana": sem_limpa, "trimestre": trim_atual})
-                            link_drive = db.subir_e_converter_para_google_docs(doc_io, nome_arquivo, trimestre=trim_atual, categoria=ano_str_busca, semana=sem_limpa, modo="PLANEJAMENTO")
-                            
-                            final_txt = f"[OBJETO_CONHECIMENTO] {tipo_semana.upper()} \n[CONTEUDOS_ESPECIFICOS] {ativo_selecionado} \n[AULA_1] {diretriz_logistica} \n[AULA_2] N/A \n[SABADO_LETIVO] N/A \n--- LINK DRIVE --- {link_drive}"
-                            db.salvar_no_banco("DB_PLANOS", [datetime.now().strftime("%d/%m/%Y"), sem_limpa, ano_str_busca, trim_atual, "PRODUZIDO", final_txt, link_drive])
-                            st.success("Logística salva com sucesso!"); time.sleep(1); st.rerun()
+                st.info("💡 **Geração Automática do Plano Padronizado:** Ao clicar em 'Gerar Plano Padronizado', o texto completo será montado com todas as tags SOSA (`[HABILIDADE_BNCC]`, `[OBJETO_CONHECIMENTO]`, `[AULA_1]`, etc.) pronto para você **Copiar e Colar**. Além disso, a semana será gravada como **PRODUZIDA/ISENTA**, dispensando a geração no Criador de Aulas.")
+
+                c_save_ex1, c_save_ex2 = st.columns(2)
+
+                if c_save_ex1.button("🧠 Gerar Plano Padronizado SOSA (Para Copiar / Lapidar)", type="primary", use_container_width=True, key=f"btn_gen_exame_plan_{v}"):
+                    nome_exame_tit = exame_selecionado if exame_selecionado else conteudos_extraidos
+                    
+                    if "1 Aula" in carga_horaria:
+                        roteiro_a1 = diretriz_logistica
+                        roteiro_a2 = "N/A (Carga horária de 1 Aula)"
+                        roteiro_sab = "N/A"
+                    elif "2 Aulas" in carga_horaria:
+                        roteiro_a1 = f"AULA 01 - APLICAÇÃO DO EXAME:\n{diretriz_logistica}"
+                        roteiro_a2 = f"AULA 02 - SEGUNDA CHAMADA / DEVOLUTIVA:\nINÍCIO: Acolhimento e atendimento aos estudantes ausentes.\nMEIO: Aplicação de 2ª chamada regimental / Correção comentada dos itens mais errados e vistos nos cadernos.\nFIM: Síntese dos resultados."
+                        roteiro_sab = "N/A"
+                    else:
+                        roteiro_a1 = f"AULA 01 - APLICAÇÃO DO EXAME:\n{diretriz_logistica}"
+                        roteiro_a2 = "AULA 02 - CONTINUIDADE / SEGUNDA CHAMADA REGIMENTAL"
+                        roteiro_sab = "SÁBADO LETIVO - OFICINA / RECOMPOSIÇÃO"
+
+                    plano_formatado_exame = (
+                        f"[HABILIDADE_BNCC] {habilidades_extraidas}\n"
+                        f"[COMPETENCIAS_FOCO] Competência Específica 2 (Raciocínio Lógico) e 6 (Enfrentar Situações-Problema)\n"
+                        f"[OBJETO_CONHECIMENTO] {tipo_semana.upper()} - {nome_exame_tit}\n"
+                        f"[CONTEUDOS_ESPECIFICOS] {conteudos_extraidos}\n"
+                        f"[OBJETIVOS_ENSINO] Mensurar a proficiência e o nível de consolidação dos objetos de conhecimento do {ano_p}º Ano.\n"
+                        f"[JUSTIFICATIVA_PEDAGOGICA] Verificação de aprendizagem regimental do {trim_atual} conforme calendário escolar.\n"
+                        f"[AULA_1] {roteiro_a1}\n"
+                        f"[AULA_2] {roteiro_a2}\n"
+                        f"[SABADO_LETIVO] {roteiro_sab}\n"
+                        f"[AVALIACAO_DE_MERITO] Correção automatizada via Scanner de Gabaritos (CIR) com análise TRI de distratores.\n"
+                        f"[ESTRATEGIA_DUA_PEI] Garantia de provas adaptadas (PEI N1, N2 e N3) para os estudantes do Grupo 1 com tempo adicional conforme legislação."
+                    )
+
+                    st.session_state.p_temp = plano_formatado_exame
+                    st.session_state.p_meta = {
+                        "semana": sem_limpa, 
+                        "trimestre": trim_atual, 
+                        "ano": ano_str_busca, 
+                        "base": f"Exame: {nome_exame_tit}",
+                        "status_final": "PRODUZIDO"  # 🚨 MARCA COMO PRODUZIDO (ISENTO DO CRIADOR DE AULAS)
+                    }
+                    st.toast("✅ Plano de Exame gerado no formato padronizado! Veja e copie na Mesa de Lapidação abaixo.", icon="🎯")
+                    st.rerun()
+
+                if c_save_ex2.button("💾 Salvar Diretamente e Arquivar no Hub", use_container_width=True, key=f"btn_direct_save_ex_{v}"):
+                    with st.spinner("Salvando e sincronizando Plano de Exame no Drive..."):
+                        nome_exame_tit = exame_selecionado if exame_selecionado else conteudos_extraidos
+                        nome_arquivo = f"PLANO_{ano_str_busca.replace('º','')}_{sem_limpa.replace(' ', '')}"
+                        
+                        db.excluir_plano_completo(sem_limpa, ano_str_busca)
+                        
+                        dados_docx = {
+                            "geral": f"{tipo_semana.upper()} - {nome_exame_tit}",
+                            "especificos": conteudos_extraidos,
+                            "objetivos": "Mensurar proficiência e consolidação de habilidades.",
+                            "recursos": f"Material Impresso / Exame: {nome_exame_tit}",
+                            "metodologia": diretriz_logistica,
+                            "avaliacao": "Scanner CIR (TRI) e observação da aplicação.",
+                            "pei": "Provas adaptadas (PEI N1, N2 e N3) conforme perfil dos estudantes."
+                        }
+                        
+                        doc_io = exporter.gerar_docx_plano_pedagogico_ELITE(
+                            nome_arquivo, dados_docx, {"ano": ano_str_busca, "semana": sem_limpa, "trimestre": trim_atual}
+                        )
+                        link_drive = db.subir_e_converter_para_google_docs(
+                            doc_io, nome_arquivo, trimestre=trim_atual, categoria=ano_str_busca, semana=sem_limpa, modo="PLANEJAMENTO"
+                        )
+                        
+                        final_txt = (
+                            f"[HABILIDADE_BNCC] {habilidades_extraidas} \n"
+                            f"[OBJETO_CONHECIMENTO] {tipo_semana.upper()} - {nome_exame_tit} \n"
+                            f"[CONTEUDOS_ESPECIFICOS] {conteudos_extraidos} \n"
+                            f"[AULA_1] {diretriz_logistica} \n"
+                            f"[AULA_2] N/A (Aplicação de Exame) \n"
+                            f"[SABADO_LETIVO] N/A \n"
+                            f"--- LINK DRIVE --- {link_drive}"
+                        )
+                        
+                        # 🚨 EIXO/STATUS = 'PRODUZIDO' (ISENTA O CRIADOR DE AULAS DE GERAR MATERIAL)
+                        db.salvar_no_banco("DB_PLANOS", [
+                            datetime.now().strftime("%d/%m/%Y"), sem_limpa, ano_str_busca, trim_atual, "PRODUZIDO", final_txt, link_drive
+                        ])
+                        
+                        st.success(f"✅ Plano para {sem_limpa} salvo como PRODUZIDO com sucesso! Isento de geração no Criador de Aulas.")
+                        st.balloons()
+                        time.sleep(1)
+                        st.rerun()
 
         else:
             with st.container(border=True):
