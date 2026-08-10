@@ -918,76 +918,31 @@ if menu == "📅 Planejamento (Ponto ID)":
             st.markdown("---")
             st.markdown(f"### 🛠️ Mesa de Lapidação: Semana {meta.get('semana')}")
             
-            # 🚨 BLOCO DE CÓPIA DIRETA E PRÁTICA PARA O PROFESSOR
-            with st.expander("📋 COPIAR TEXTO FORMATADO DO PLANO (ÁREA DE TRANSFERÊNCIA)", expanded=True):
+            # BOTÃO SOBERANO DE HARMONIZAÇÃO RÁPIDA COM IA
+            if st.button("🧠 Harmonizar e Enriquecer Plano com IA (Corrigir Tópicos Brutos)", use_container_width=True, key=f"btn_harm_plan_{v}"):
+                with st.spinner("Analisando o plano e refinando os tópicos brutos para linguagem pedagógica oficial..."):
+                    prompt_harm = (
+                        f"REESCREVA O PLANO ABAIXO EM LINGUAGEM PEDAGÓGICA OFICIAL DA BNCC/SAEB.\n"
+                        f"Se houver nomes de arquivos brutos (ex: 'REVISAO_AVALIAÇÃO_6ANO...'), substitua por tópicos matemáticos reais e formais (ex: 'Recomposição de Frações, Divisibilidade, Operações e Perímetro').\n"
+                        f"Mantenha todas as tags [HABILIDADE_BNCC], [COMPETENCIAS_FOCO], [OBJETO_CONHECIMENTO], [CONTEUDOS_ESPECIFICOS], [OBJETIVOS_ENSINO], [AULA_1], [AULA_2], [SABADO_LETIVO], [AVALIACAO_DE_MERITO] e [ESTRATEGIA_DUA_PEI].\n\n"
+                        f"PLANO ATUAL:\n{txt_bruto}"
+                    )
+                    st.session_state.p_temp = ai.gerar_ia("PLANE_PEDAGOGICO", prompt_harm, usar_busca=False)
+                    st.toast("✅ Plano harmonizado com sucesso!", icon="✨")
+                    st.rerun()
+
+            # BLOCO DE CÓPIA DIRETA PARA O PROFESSOR
+            with st.expander("📋 COPIAR TEXTO FORMATADO DO PLANO (ÁREA DE TRANSFERÊNCIA)", expanded=False):
                 st.caption("Clique no ícone de cópia no canto superior direito do bloco abaixo para copiar o texto formatado:")
-                st.code(txt_bruto, language=None)
+                st.code(st.session_state.p_temp, language=None)
 
             with st.container(border=True):
-                cmd_refine = st.chat_input("Refinador IA (Ex: 'Ajuste os horários da Aula 1')")
+                cmd_refine = st.chat_input("Refinador IA (Ex: 'Detalhe melhor os conteúdos específicos')")
                 if cmd_refine:
                     with st.spinner("Reescrevendo..."):
                         prompt_refino = f"ORDEM: {cmd_refine}\n\nPLANO ATUAL:\n{st.session_state.p_temp}"
                         st.session_state.p_temp = ai.gerar_ia("REFINADOR_PEDAGOGICO", prompt_refino)
                         st.rerun()
-
-            tab_curriculo, tab_roteiro, tab_inclusao = st.tabs(["📚 1. Base Curricular & BNCC", "📝 2. Roteiro das Aulas", "♿ 3. Avaliação & PEI"])
-            
-            with tab_curriculo:
-                ed_hab = st.text_input("Habilidade BNCC / Descritores:", ai.extrair_tag(txt_bruto, "HABILIDADE_BNCC") or "EF06MA01", key=f"frag_hab_{v}")
-                ed_comp = st.text_input("Competências Específicas BNCC (Pág. 267):", ai.extrair_tag(txt_bruto, "COMPETENCIAS_FOCO") or "Competência Específica 2", key=f"frag_comp_{v}")
-                ed_geral = st.text_input("Objeto de Conhecimento:", ai.extrair_tag(txt_bruto, "OBJETO_CONHECIMENTO") or ai.extrair_tag(txt_bruto, "CONTEUDO_GERAL"), key=f"frag_geral_{v}")
-                ed_espec = st.text_area("Conteúdos Específicos:", ai.extrair_tag(txt_bruto, "CONTEUDOS_ESPECIFICOS") or txt_bruto, height=130, key=f"frag_espec_{v}")
-                ed_objs = st.text_area("Objetivos de Aprendizagem:", ai.extrair_tag(txt_bruto, "OBJETIVOS_ENSINO"), height=130, key=f"frag_objs_{v}")
-            
-            with tab_roteiro:
-                c_a1, c_a2, c_a3 = st.columns(3)
-                ed_a1 = c_a1.text_area("AULA 1 (Início ➔ Meio ➔ Fim):", ai.extrair_tag(txt_bruto, "AULA_1"), height=380, key=f"frag_a1_{v}")
-                ed_a2 = c_a2.text_area("AULA 2 (Início ➔ Meio ➔ Fim):", ai.extrair_tag(txt_bruto, "AULA_2"), height=380, key=f"frag_a2_{v}")
-                ed_sab = c_a3.text_area("SÁBADO LETIVO:", ai.extrair_tag(txt_bruto, "SABADO_LETIVO"), height=380, key=f"frag_sab_{v}")
-                
-            with tab_inclusao:
-                ed_ava = st.text_area("Avaliação de Mérito:", ai.extrair_tag(txt_bruto, "AVALIACAO_DE_MERITO"), height=150, key=f"frag_ava_{v}")
-                ed_pei = st.text_area("Estratégia DUA/PEI:", ai.extrair_tag(txt_bruto, "ESTRATEGIA_DUA_PEI"), height=150, key=f"frag_pei_{v}")
-            
-            st.markdown("<br>", unsafe_allow_html=True)
-            if st.button("💾 Salvar Plano no Banco e no Drive", use_container_width=True, type="primary", key=f"frag_btn_save_{v}"):
-                with st.status("Gerando DOCX e Sincronizando...") as status:
-                    nome_arquivo = f"PLANO_{meta.get('ano').replace('º','')}_{meta.get('semana').replace(' ', '')}"
-                    db.excluir_plano_completo(meta.get('semana'), meta.get('ano'))
-                    
-                    metodologia_docx = f"AULA 01:\n{ed_a1}"
-                    if "N/A" not in ed_a2.upper() and len(ed_a2) > 5: metodologia_docx += f"\n\nAULA 02:\n{ed_a2}"
-                    if "N/A" not in ed_sab.upper() and len(ed_sab) > 5: metodologia_docx += f"\n\nSÁBADO LETIVO:\n{ed_sab}"
-                    
-                    dados_docx = {
-                        "geral": ed_geral, "especificos": ed_espec, "objetivos": ed_objs, 
-                        "recursos": meta.get('base'), 
-                        "metodologia": metodologia_docx,
-                        "avaliacao": ed_ava, 
-                        "pei": ed_pei
-                    }
-                    
-                    doc_io = exporter.gerar_docx_plano_pedagogico_ELITE(nome_arquivo, dados_docx, {"ano": meta.get('ano'), "semana": meta.get('semana'), "trimestre": meta.get('trimestre')})
-                    link_drive = db.subir_e_converter_para_google_docs(doc_io, nome_arquivo, trimestre=meta.get('trimestre'), categoria=meta.get('ano'), semana=meta.get('semana'), modo="PLANEJAMENTO")
-                    
-                    # 🚨 STATUS DINÂMICO: Se for plano de exame, salva como PRODUZIDO (isento de Criador de Aulas)
-                    status_banco = meta.get("status_final", "HUB_ATIVO")
-
-                    final_txt = (
-                        f"[HABILIDADE_BNCC] {ed_hab} \n"
-                        f"[COMPETENCIAS_FOCO] {ed_comp} \n"
-                        f"[OBJETO_CONHECIMENTO] {ed_geral} \n"
-                        f"[CONTEUDOS_ESPECIFICOS] {ed_espec} \n"
-                        f"[AULA_1] {ed_a1} \n"
-                        f"[AULA_2] {ed_a2} \n"
-                        f"[SABADO_LETIVO] {ed_sab} \n"
-                        f"--- LINK DRIVE --- {link_drive}"
-                    )
-                    db.salvar_no_banco("DB_PLANOS", [datetime.now().strftime("%d/%m/%Y"), meta.get('semana'), meta.get('ano'), meta.get('trimestre'), status_banco, final_txt, link_drive])
-                    
-                    status.update(label="Plano Sincronizado!", state="complete")
-                    st.balloons(); time.sleep(1); reset_planejamento()
 
     renderizar_mesa_lapidacao_plano()
 
@@ -3145,59 +3100,63 @@ elif menu == "📝 Central de Avaliações":
                     if c_b5.button("🗑️ Apagar", key=f"del_ac_{row.name}_{idx_av}_{v}", use_container_width=True):
                         if db.excluir_avaliacao_completa(identificador, semana_ref_exibicao): st.rerun()
 
-                    # 🚀 INJETAR REVISÃO/EXAME NO PONTO ID (PLANO DA SEMANA)
+                    # 🚀 NOVO RECURSO SOBERANO: INJETAR REVISÃO/EXAME JÁ EXISTENTE NO PONTO ID COM IA
                     with st.popover("🚀 Injetar no Ponto ID (Gerar Plano de Aula da Semana)"):
-                        st.caption("Gere automaticamente o Plano de Aula desta revisão para o Ponto ID e vincule este material à semana sem gastar IA.")
+                        st.caption("A IA analisará as questões deste material para gerar um Plano de Aula Semanal 100% coerente, rico e padronizado no Ponto ID.")
                         
                         todas_semanas_inj_a2 = util.gerar_semanas()
                         sem_dest_a2 = st.selectbox("Selecione a Semana da Aula:", [s.split(" (")[0] for s in todas_semanas_inj_a2 if "Jornada" not in s], key=f"sel_sem_inj_a2_{row.name}_{v}")
                         trim_dest_a2 = st.selectbox("Trimestre Alvo:", ["I Trimestre", "II Trimestre", "III Trimestre"], index=1 if "II" in txt_f or "IITrimestre" in identificador else 0, key=f"sel_trim_inj_a2_{row.name}_{v}")
                         
-                        if st.button("🚀 CONFIRMAR E ENVIAR PLANO PARA O PONTO ID", type="primary", use_container_width=True, key=f"btn_inj_acervo_{row.name}_{v}"):
-                            habs_rev = ai.extrair_tag(txt_f, "HABILIDADE_BNCC") or "Habilidades e descritores do material " + identificador
-                            espec_rev = ai.extrair_tag(txt_f, "CONTEUDOS_ESPECIFICOS") or ai.extrair_tag(txt_f, "OBJETO_CONHECIMENTO") or identificador
-                            
-                            roteiro_a1 = f"AULA 01 - REVISÃO E DEVOLUTIVA PEDAGÓGICA:\nINÍCIO (10 min): Acolhimento da turma, apresentação dos objetivos e orientação sobre a revisão {identificador}.\nMEIO (35 min): Resolução comentada no quadro das questões e dúvidas do material.\nFIM (5 min): Síntese das estratégias e verificação das dúvidas."
-                            roteiro_a2 = f"AULA 02 - PRÁTICA GUIADA E ATENDIMENTO INDIVIDUAL:\nINÍCIO (10 min): Orientação para resolução autônoma do Caderno de Revisão.\nMEIO (35 min): Acompanhamento e suporte mediado aos estudantes do Grupo 1 (PEI N1, N2 e N3).\nFIM (5 min): Visto nos cadernos e consolidação dos tópicos."
+                        if st.button("🚀 CONFIRMAR E GERAR PLANO COERENTE NO PONTO ID", type="primary", use_container_width=True, key=f"btn_inj_acervo_{row.name}_{v}"):
+                            with st.spinner("Analisando as questões do material e redigindo o Plano de Aula Padronizado..."):
+                                prompt_plano_revisao = (
+                                    f"SÉRIE: {ano_exibicao} Ano.\n"
+                                    f"SEMANA: {sem_dest_a2}. TRIMESTRE: {trim_dest_a2}.\n"
+                                    f"IDENTIFICADOR DO MATERIAL: {identificador}.\n\n"
+                                    f"SITUAÇÃO: O professor já criou o Caderno de Revisão e está aplicando em sala. Analise o texto do material abaixo e extraia os descritores SAEB reais, tópicos de matemática e elabore um Plano de Aula Semanal COERENTE, TÉCNICO E PADRONIZADO.\n\n"
+                                    f"TEXTO DO MATERIAL DE REVISÃO:\n{txt_f[:3500]}\n\n"
+                                    f"🚨 REDIJA UTILIZANDO ESTRITAMENTE AS TAGS COM COLCHETES:\n"
+                                    f"[HABILIDADE_BNCC] (Liste as Habilidades BNCC e Descritores SAEB reais extraídos das questões do material)\n"
+                                    f"[COMPETENCIAS_FOCO] Competência Específica 2 (Raciocínio Lógico) e 6 (Enfrentar Situações-Problema)\n"
+                                    f"[OBJETO_CONHECIMENTO] RECOMPOSIÇÃO DE APRENDIZAGEM & REVISÃO DE MATEMÁTICA\n"
+                                    f"[CONTEUDOS_ESPECIFICOS] (Liste de forma clara os tópicos matemáticos reais abordados nas questões: ex: Divisibilidade, Frações, Porcentagem, Perímetro, etc.)\n"
+                                    f"[OBJETIVOS_ENSINO] Consolidar os objetos de conhecimento e superar as lacunas observadas nas avaliações do trimestre.\n"
+                                    f"[JUSTIFICATIVA_PEDAGOGICA] Recomposição e revisão contínua de aprendizagem regimental.\n"
+                                    f"[AULA_1] INÍCIO (Sensibilização - 10 min): Acolhimento da turma, apresentação dos objetivos e orientação sobre o Caderno de Revisão.\nMEIO (Fundamentação - 25 min): Resolução comentada no quadro das questões do Caderno de Revisão com foco nos descritores críticos.\nFIM (Fixação - 15 min): Síntese das estratégias e verificação das dúvidas.\n"
+                                    f"[AULA_2] INÍCIO (10 min): Orientações para resolução autônoma do Caderno de Revisão.\nMEIO (35 min): Acompanhamento e suporte mediado aos estudantes (incluindo cadernos adaptados PEI N1, N2 e N3).\nFIM (5 min): Visto nos cadernos e consolidação do roteiro.\n"
+                                    f"[SABADO_LETIVO] N/A\n"
+                                    f"[AVALIACAO_DE_MERITO] Observação direta do engajamento e visto na resolução das questões do caderno de revisão.\n"
+                                    f"[ESTRATEGIA_DUA_PEI] Utilização de cadernos adaptados (PEI N1, N2 e N3) com suporte visual e mediação individualizada."
+                                )
 
-                            plano_inj_txt = (
-                                f"[HABILIDADE_BNCC] {habs_rev}\n"
-                                f"[COMPETENCIAS_FOCO] Competência Específica 2 (Raciocínio Lógico) e 6 (Enfrentar Situações-Problema)\n"
-                                f"[OBJETO_CONHECIMENTO] RECOMPOSIÇÃO DE APRENDIZAGEM & REVISÃO - {identificador}\n"
-                                f"[CONTEUDOS_ESPECIFICOS] {espec_rev}\n"
-                                f"[OBJETIVOS_ENSINO] Consolidar os objetos de conhecimento e superar as lacunas observadas nas avaliações do trimestre.\n"
-                                f"[JUSTIFICATIVA_PEDAGOGICA] Recomposição e revisão contínua de aprendizagem regimental.\n"
-                                f"[AULA_1] {roteiro_a1}\n"
-                                f"[AULA_2] {roteiro_a2}\n"
-                                f"[SABADO_LETIVO] N/A\n"
-                                f"[AVALIACAO_DE_MERITO] Observação direta do engajamento e visto na resolução das questões da revisão.\n"
-                                f"[ESTRATEGIA_DUA_PEI] Utilização de cadernos adaptados (PEI N1, N2 e N3) com suporte visual e mediação individualizada."
-                            )
+                                plano_inj_txt = ai.gerar_ia("PLANE_PEDAGOGICO", prompt_plano_revisao, usar_busca=False)
 
-                            try:
-                                wb_inj = db.conectar()
-                                ws_aulas_inj = wb_inj.worksheet("DB_AULAS_PRONTAS")
-                                dados_aulas_inj = ws_aulas_inj.get_all_values()
-                                for idx_a_inj, row_a_inj in enumerate(dados_aulas_inj):
-                                    if idx_a_inj > 0 and row_a_inj[2] == identificador:
-                                        ws_aulas_inj.update_cell(idx_a_inj + 1, 2, sem_dest_a2)
-                                        break
-                            except Exception as e_inj:
-                                print(f"Aviso no vinculo da semana: {e_inj}")
+                                # Atualiza o vínculo da semana em DB_AULAS_PRONTAS
+                                try:
+                                    wb_inj = db.conectar()
+                                    ws_aulas_inj = wb_inj.worksheet("DB_AULAS_PRONTAS")
+                                    dados_aulas_inj = ws_aulas_inj.get_all_values()
+                                    for idx_a_inj, row_a_inj in enumerate(dados_aulas_inj):
+                                        if idx_a_inj > 0 and row_a_inj[2] == identificador:
+                                            ws_aulas_inj.update_cell(idx_a_inj + 1, 2, sem_dest_a2)
+                                            break
+                                except Exception as e_inj:
+                                    print(f"Aviso no vinculo da semana: {e_inj}")
 
-                            st.session_state.p_temp = plano_inj_txt
-                            st.session_state.p_meta = {
-                                "semana": sem_dest_a2,
-                                "trimestre": trim_dest_a2,
-                                "ano": ano_exibicao,
-                                "base": f"Material de Revisão: {identificador}",
-                                "status_final": "PRODUZIDO"
-                            }
-                            
-                            st.toast("✅ Plano gerado e vinculado à semana! Redirecionando para o Ponto ID...", icon="🚀")
-                            st.cache_data.clear()
-                            time.sleep(0.8)
-                            navegar_para("📅 Planejamento (Ponto ID)")
+                                st.session_state.p_temp = plano_inj_txt
+                                st.session_state.p_meta = {
+                                    "semana": sem_dest_a2,
+                                    "trimestre": trim_dest_a2,
+                                    "ano": ano_exibicao,
+                                    "base": f"Material de Revisão: {identificador}",
+                                    "status_final": "PRODUZIDO" # 🚨 ISENTA O CRIADOR DE AULAS DE GERAR NOVOS MATERIAIS
+                                }
+                                
+                                st.toast("✅ Plano de Aula coerente gerado e vinculado à semana!", icon="🚀")
+                                st.cache_data.clear()
+                                time.sleep(0.8)
+                                navegar_para("📅 Planejamento (Ponto ID)")
 
                     with st.expander("🔄 Re-gerar / Re-exportar Documentos (DOCX) no Drive", expanded=False):
                         st.info("💡 **Re-exportação Direta:** Clique abaixo para re-gerar os arquivos DOCX no Google Drive utilizando o texto preservado no banco de dados.")
