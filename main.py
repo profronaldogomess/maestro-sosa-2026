@@ -1919,10 +1919,13 @@ elif menu == "🧪 Criador de Aulas":
                 else:
                     fa['tipo_material'] = 'LISTA'
                     with st.container(border=True):
+                        else:
+                    fa['tipo_material'] = 'LISTA'
+                    with st.container(border=True):
                         st.markdown("#### ⚙️ Configuração da Fábrica de Listas Híbridas (com Memória do Livro)")
                         c1, c2 = st.columns([1, 2])
-                        ano_alvo = c1.selectbox("Série Alvo:", [6, 7, 8, 9])
-                        trim_lista = c2.selectbox("Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"])
+                        ano_alvo = c1.selectbox("Série Alvo:", [6, 7, 8, 9], key=f"lab_list_ano_{v}")
+                        trim_lista = c2.selectbox("Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"lab_list_trim_{v}")
                         
                         puxar_memoria_lista = st.toggle("🧠 Autocarregar Aulas & Páginas do Livro (Diário de Bordo)", value=True, key=f"tog_mem_list_{v}")
                         contexto_aulas = ""
@@ -1937,20 +1940,47 @@ elif menu == "🧪 Criador de Aulas":
 
                         df_aulas_ano = df_aulas[df_aulas['ANO'].str.contains(str(ano_alvo))] if not df_aulas.empty else pd.DataFrame()
                         aulas_opcoes = df_aulas_ano['TIPO_MATERIAL'].tolist() if not df_aulas_ano.empty else []
-                        aulas_sel = st.multiselect("Selecione temas adicionais de aulas passadas:", aulas_opcoes)
+                        aulas_sel = st.multiselect("Selecione temas adicionais de aulas passadas:", aulas_opcoes, key=f"ms_aulas_lab_{v}")
                         
                         for a_n in aulas_sel:
-                            contexto_aulas += df_aulas_ano[df_aulas_ano['TIPO_MATERIAL'] == a_n].iloc[0]['CONTEUDO'] + "\n"
+                            match_sel = df_aulas_ano[df_aulas_ano['TIPO_MATERIAL'] == a_n]
+                            if not match_sel.empty:
+                                contexto_aulas += str(match_sel.iloc[0]['CONTEUDO']) + "\n"
+
+                        # 🚨 DETECTOR DE MATERIAL JÁ FORJADO NA CENTRAL DE AVALIAÇÕES
+                        tem_revisao_central = any(x in str(aulas_sel).upper() for x in ["REVISAO", "REVISÃO", "RECOMPOSICAO", "RECOMPOSIÇÃO", "RAIO-X", "AVALIAÇÃO", "AVALIACAO"])
+
+                        if tem_revisao_central:
+                            st.success("🎯 **Detectado Material Já Forjado na Central de Avaliações!**")
+                            st.info("💡 Como você selecionou a Revisão/Avaliação da Central, não há necessidade de gerar nenhum PDF novo ou novas questões.")
 
                         c_q1, c_q2 = st.columns(2)
-                        qtd_total_list = c_q1.slider("Quantidade Total de Questões:", 5, 30, 10, step=5)
-                        exigir_graficos = c_q2.checkbox("Forçar suporte visual em questões elegíveis?", value=True)
+                        qtd_total_list = c_q1.slider("Quantidade Total de Questões:", 5, 30, 10, step=5, key=f"sld_qtd_list_{v}")
+                        exigir_graficos = c_q2.checkbox("Forçar suporte visual em questões elegíveis?", value=True, key=f"chk_graf_list_{v}")
                         
-                        if st.button("🚀 INICIALIZAR LINHA DE MONTAGEM DE LISTA", use_container_width=True, type="primary"):
+                        c_btn_l1, c_btn_l2 = st.columns(2)
+
+                        # BOTÃO 1: ISENÇÃO DIRETA (SE HOUVER REVISÃO DA CENTRAL)
+                        if tem_revisao_central:
+                            if c_btn_l1.button("🛑 REGISTRAR SEM GERAR PDF (ISENÇÃO DE IA)", type="primary", use_container_width=True, key=f"btn_isencao_direct_{v}"):
+                                nome_revisao_sel = [a for a in aulas_sel if any(x in a.upper() for x in ["REVISAO", "REVISÃO", "RECOMPOSICAO", "AVALIAÇÃO"])][0]
+                                db.salvar_no_banco("DB_AULAS_PRONTAS", [
+                                    datetime.now().strftime("%d/%m/%Y"), "CONSOLIDAÇÃO", f"{ano_alvo}º Ano - Registro de Revisão ({nome_revisao_sel})",
+                                    f"[PROFESSOR]\nAULA DE REVISÃO REGISTRADA\nMaterial Utilizado: {nome_revisao_sel}\n\n[ALUNO]\nResolução do Caderno de Recomposição da Central de Avaliações.\n\n--- LINKS ---\nRegular(N/A)",
+                                    f"{ano_alvo}º", "N/A"
+                                ])
+                                db.arquivar_plano_produzido("CONSOLIDAÇÃO", f"{ano_alvo}º")
+                                st.toast("✅ Registro concluído com sucesso! Nenhum PDF novo foi gerado.", icon="🛡️")
+                                st.balloons(); time.sleep(1); reset_laboratorio()
+
+                        # BOTÃO 2: GERAR LINHA DE MONTAGEM (NOVA LISTA)
+                        label_btn_montagem = "🚀 INICIALIZAR LINHA DE MONTAGEM (FORJAR NOVA LISTA)" if tem_revisao_central else "🚀 INICIALIZAR LINHA DE MONTAGEM DE LISTA"
+                        
+                        if c_btn_l2.button(label_btn_montagem, use_container_width=True, key=f"btn_init_list_{v}"):
                             if not contexto_aulas.strip() and not aulas_sel:
                                 st.error("⚠️ Selecione pelo menos um tema de aula ou ative o resgate de memória.")
                             else:
-                                with st.spinner("Estruturando mapa lógico do caderno ancorado no livro..."):
+                                with st.spinner("Estruturando mapa lógico do caderno..."):
                                     s_id_l = util.gerar_sosa_id("LISTA", ano_alvo, trim_lista.split()[0])
                                     nome_elite_c = f"{ano_alvo}º Ano - Lista Híbrida - {s_id_l}"
                                     
