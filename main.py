@@ -927,11 +927,11 @@ if menu == "📅 Planejamento (Ponto ID)":
     renderizar_mesa_lapidacao_plano()
 
     # ==============================================================================
-    # ABA 2: HUB DE PRODUÇÃO & BYPASS OFFLINE LIVRO (LÓGICA SOBERANA V2026)
+    # ABA 2: HUB DE PRODUÇÃO & BAIXA LIMPA OFFLINE
     # ==============================================================================
     with tab_producao:
-        st.markdown("#### Hub de Produção de Materiais")
-        st.caption("Planos aprovados aguardando a geração dos materiais físicos ou confirmação de aula via livro didático.")
+        st.markdown("#### Hub de Produção de Materiais & Baixa Limpa")
+        st.caption("Planos aprovados aguardando a geração dos materiais com IA ou a baixa por aula com Livro Didático / Evento.")
         
         if not df_planos.empty:
             planos_ativos = df_planos[df_planos["EIXO"].astype(str).str.contains("HUB_ATIVO", case=False, na=False)].iloc[::-1]
@@ -939,59 +939,52 @@ if menu == "📅 Planejamento (Ponto ID)":
                 for _, row in planos_ativos.iterrows():
                     with st.container(border=True):
                         c_p1, c_p2, c_p3, c_p4 = st.columns([2, 1, 1.2, 1])
-                        c_p1.markdown(f"**{row['SEMANA']}** | Série: {row['ANO']}")
-                        c_p1.caption("Status: ⏳ HUB ATIVO (Aguardando Material)")
+                        c_p1.markdown(f"**{row['SEMANA']}** | Série: {row['ANO']} ({row['TURMA']})")
+                        c_p1.caption("Status: ⏳ HUB ATIVO (Aguardando Produção / Execução)")
                         
-                        # 🏛️ VISUALIZAÇÃO E CÓPIA RÁPIDA DO PLANO PARA A PREFEITURA
-                        with st.expander("📋 Ver / Copiar Texto do Plano de Aula (para o site da Prefeitura)", expanded=False):
-                            st.caption("💡 Clique no ícone de cópia no canto superior direito da caixa abaixo para colar no sistema da Prefeitura:")
-                            st.code(str(row.get('PLANO_TEXTO', '')), language="text")
-
-                        # 🚀 BOTÃO DE GERAR MATERIAL (COM ISENÇÃO DE IA PARA REVISÃO)
+                        # AÇÃO 1: GERAR COM IA NO CRIADOR DE AULAS
                         if c_p2.button("🚀 Gerar Material IA", key=f"gen_hub_{row.name}", use_container_width=True):
-                            txt_plano_analise = str(row.get('PLANO_TEXTO', '')).upper()
-                            eixo_analise = str(row.get('EIXO', '')).upper()
-                            
-                            # Detecta se a semana é de Revisão/Recomposição
-                            e_revisao = any(x in eixo_analise or x in txt_plano_analise for x in ["REVISÃO", "REVISAO", "RECOMPOSIÇÃO", "RECOMPOSICAO", "RAIO-X", "AVALIAÇÃO", "AVALIACAO", "SONDA"])
-                            
-                            if e_revisao:
-                                # 🎯 MODO RECOMPOSIÇÃO/REVISÃO: ZERO CONSUMO DE IA (Bypass de Tokens)
-                                nome_aula_rev = f"{row['ANO']} - Aula de Revisão ({row['SEMANA']})"
-                                txt_conteudo_rev = f"[PROFESSOR]\nAULA DE REVISÃO E RECOMPOSIÇÃO\nOs alunos utilizam o Caderno de Recomposição/Provas da Central de Avaliações.\n\n[ALUNO]\nResolução dos exercícios do Caderno de Recomposição.\n\n--- LINKS ---\nRegular(N/A)"
-                                
-                                db.salvar_no_banco("DB_AULAS_PRONTAS", [
-                                    datetime.now().strftime("%d/%m/%Y"), row['SEMANA'], nome_aula_rev, txt_conteudo_rev, str(row['ANO']), "N/A"
-                                ])
-                                db.arquivar_plano_produzido(row['SEMANA'], row['ANO'])
-                                st.toast(f"✅ Aula de Revisão da {row['SEMANA']} registrada com sucesso! (Isenção de IA ativada - 0 tokens)", icon="🛡️")
-                                st.success(f"✅ {row['SEMANA']} registrada com sucesso! As atividades utilizadas em sala são as da Central de Avaliações.")
-                                time.sleep(1.5)
-                                st.rerun()
-                            else:
-                                # 🧱 MODO AULA REGULAR: Encaminha para o Criador de Aulas normalmente
-                                st.session_state.lab_temp = str(row["PLANO_TEXTO"])
-                                st.session_state.sosa_id_atual = util.gerar_sosa_id("AULA", row['ANO'], row["TURMA"])
-                                st.session_state.lab_meta = {"ano": str(row['ANO']).replace("º",""), "trimestre": row["TURMA"], "tipo": "PRODUÇÃO_HUB", "semana_ref": row['SEMANA']}
-                                navegar_para("🧪 Criador de Aulas")
+                            st.session_state.lab_temp = str(row["PLANO_TEXTO"])
+                            st.session_state.sosa_id_atual = util.gerar_sosa_id("AULA", row['ANO'], row["TURMA"])
+                            st.session_state.lab_meta = {
+                                "ano": str(row['ANO']).replace("º",""), 
+                                "trimestre": row["TURMA"], 
+                                "tipo": "PRODUÇÃO_HUB", 
+                                "semana_ref": row['SEMANA']
+                            }
+                            navegar_para("🧪 Criador de Aulas")
 
-                        with c_p3.popover("📦 Registro Offline / Livro"):
-                            st.info("💡 **Conclusão sem uso de IA:** Registre os detalhes da aula ministrada com o Livro Didático ou Atividade Manual.")
-                            txt_obs_manual = st.text_input("Detalhes (Ex: Livro A Conquista da Matemática - Págs. 184 a 187):", key=f"txt_man_obs_hub_{row.name}")
+                        # AÇÃO 2: BAIXA LIMPA VIA LIVRO DIDÁTICO / LOUSA (SEM GERAR IA)
+                        with c_p3.popover("📖 Baixa: Livro Didático"):
+                            st.info("💡 **Baixa Limpa sem IA:** Registre os detalhes da aula ministrada pelo livro sem poluir o banco de arquivos.")
+                            txt_obs_manual = st.text_input("Detalhes (Ex: Livro A Conquista - Págs. 184 a 187):", key=f"txt_man_obs_hub_{row.name}")
+                            data_exec_livro = st.date_input("Data da Execução:", date.today(), format="DD/MM/YYYY", key=f"dt_livro_hub_{row.name}")
                             
-                            if st.button("💾 CONFIRMAR CONCLUSÃO MANUAL", type="primary", key=f"btn_conf_man_hub_{row.name}"):
-                                nome_aula_man = f"{row['ANO']} - Aula Livro ({row['SEMANA']})"
-                                txt_conteudo_man = f"[PROFESSOR]\nAULA OFFLINE / LIVRO DIDÁTICO\nDetalhamento: {txt_obs_manual}\n\n[ALUNO]\nResolução dos exercícios do Livro Didático conforme orientação do professor.\n\n--- LINKS ---\nRegular(N/A)"
-                                
-                                db.salvar_no_banco("DB_AULAS_PRONTAS", [
-                                    datetime.now().strftime("%d/%m/%Y"), row['SEMANA'], nome_aula_man, txt_conteudo_man, str(row['ANO']), "N/A"
-                                ])
-                                db.arquivar_plano_produzido(row['SEMANA'], row['ANO'])
-                                st.success("✅ Aula offline arquivada com sucesso sem uso de IA!")
+                            if st.button("💾 CONFIRMAR BAIXA POR LIVRO", type="primary", key=f"btn_conf_man_hub_{row.name}"):
+                                dt_str_livro = data_exec_livro.strftime("%d/%m/%Y")
+                                db.dar_baixa_aula_livro_offline(
+                                    semana=row['SEMANA'], 
+                                    ano=row['ANO'], 
+                                    turma=row['TURMA'], 
+                                    data_str=dt_str_livro, 
+                                    detalhes_livro=txt_obs_manual
+                                )
+                                st.success("✅ Plano concluído por Livro Didático e registrado no Diário com sucesso!")
                                 st.balloons(); time.sleep(1); st.rerun()
 
-                        if c_p4.button("Concluir", key=f"fin_hub_{row.name}", use_container_width=True):
-                            if db.arquivar_plano_produzido(row['SEMANA'], row['ANO']): st.rerun()
+                        # AÇÃO 3: BAIXA POR EVENTO / FERIADO / PROVA
+                        with c_p4.popover("🛑 Baixa: Evento/Feriado"):
+                            st.info("💡 **Conclusão por Calendário:** Arquive esta semana devido a feriado, evento ou aplicação de exames.")
+                            motivo_evento = st.selectbox("Motivo:", ["Feriado / Recesso", "Semana de Provas Globais", "Conselho de Classe / Evento"], key=f"mot_ev_hub_{row.name}")
+                            
+                            if st.button("🛑 ARQUIVAR SEMANA", key=f"fin_hub_ev_{row.name}", use_container_width=True):
+                                db.dar_baixa_plano_evento(
+                                    semana=row['SEMANA'], 
+                                    ano=row['ANO'], 
+                                    motivo_ou_status=motivo_evento
+                                )
+                                st.success("✅ Semana arquivada no planejamento!")
+                                time.sleep(1); st.rerun()
             else: st.success("🎉 Nenhum plano pendente de produção no Hub.")
 
     # ==============================================================================
@@ -1664,45 +1657,49 @@ elif menu == "🧪 Criador de Aulas":
                     ed_img = st.text_area("Prompts de Imagem:", val_img, height=150, key=f"ed_img_reg_{v}")
 
                 with t_sync:
-                    st.markdown("#### Sincronia e Custódia Digital")
-                    if st.button("Sincronizar Ativos e Enviar para o Drive", use_container_width=True, type="primary", key=f"btn_triple_{v}"):
-                        with st.status("Sincronizando Ativos...") as status:
-                            db.excluir_registro_com_drive("DB_AULAS_PRONTAS", s_id)
-                            
-                            ano_str = f"{meta.get('ano', '6')}º"
-                            sem_ref = meta.get('semana_ref', 'Geral')
-                            trim_ref = meta.get('trimestre', 'I Trimestre')
-                            info_doc = {"ano": ano_str, "trimestre": trim_ref, "semana": sem_ref}
+                        st.markdown("#### Sincronia e Custódia Digital Canônica")
+                        if st.button("Sincronizar Ativos e Enviar para o Drive", use_container_width=True, type="primary", key=f"btn_triple_{v}"):
+                            with st.status("Sincronizando Ativos Canônicos...") as status:
+                                ano_str = f"{meta.get('ano', '6')}º" if "º" not in str(meta.get('ano', '6')) else str(meta.get('ano', '6'))
+                                sem_ref = meta.get('semana_ref', 'Geral')
+                                trim_ref = meta.get('trimestre', 'I Trimestre')
+                                info_doc = {"ano": ano_str, "trimestre": trim_ref, "semana": sem_ref}
 
-                            status.write("Gerando Material do Aluno...")
-                            doc_alu = exporter.gerar_docx_aluno_v24(s_id, ed_alu, info_doc)
-                            link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{s_id}_ALUNO", modo="AULA")
-                            
-                            link_pei1 = "N/A"
-                            if ed_pei1:
-                                status.write("Gerando Material PEI N1...")
-                                doc_pei1 = exporter.gerar_docx_pei_v25(f"{s_id}_PEI_N1", ed_pei1, info_doc)
-                                link_pei1 = db.subir_e_converter_para_google_docs(doc_pei1, f"{s_id}_PEI_N1", modo="AULA")
-                            
-                            link_pei3 = "N/A"
-                            if ed_pei3:
-                                status.write("Gerando Material PEI N3 (Bento Cards)...")
-                                doc_pei3 = exporter.gerar_docx_pei_qualitativa(f"{s_id}_PEI_N3", ed_pei3, info_doc)
-                                link_pei3 = db.subir_e_converter_para_google_docs(doc_pei3, f"{s_id}_PEI_N3", modo="AULA")
+                                # 🚨 ELIMINAÇÃO DE DUPLICATAS CANÔNICA
+                                db.excluir_aula_pronta_canonica(semana_ref=sem_ref, tipo_material=s_id, ano=ano_str)
 
-                            status.write("Gerando Guia do Professor...")
-                            doc_prof = exporter.gerar_docx_professor_v25(s_id, ed_prof, info_doc)
-                            link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{s_id}_PROF", modo="AULA")
-                            
-                            links_f = f"--- LINKS ---\nRegular({link_alu})\nPEI_N1({link_pei1})\nPEI_N3({link_pei3})\nProf({link_prof})"
-                            conteudo_final = f"[PROFESSOR]\n{ed_prof}\n\n[ALUNO]\n{ed_alu}\n\n[GABARITO]\n{ed_gab}\n\n[PEI_NIVEL_1]\n{ed_pei1}\n\n[PEI_NIVEL_3]\n{ed_pei3}\n\n[IMAGENS]\n{ed_img}\n\n{links_f}"
-                            
-                            db.salvar_no_banco("DB_AULAS_PRONTAS",[
-                                datetime.now().strftime("%d/%m/%Y"), sem_ref, s_id, conteudo_final, ano_str, link_alu
-                            ])
-                            
-                            status.update(label="Sincronizado com Sucesso!", state="complete")
-                            st.balloons(); time.sleep(1); reset_laboratorio()
+                                status.write("Gerando Material do Aluno...")
+                                doc_alu = exporter.gerar_docx_aluno_v24(s_id, ed_alu, info_doc)
+                                link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{s_id}_ALUNO", modo="AULA")
+                                
+                                link_pei1 = "N/A"
+                                if ed_pei1:
+                                    status.write("🔵 Gerando Material PEI N1...")
+                                    doc_pei1 = exporter.gerar_docx_pei_v25(f"{s_id}_PEI_N1", ed_pei1, info_doc)
+                                    link_pei1 = db.subir_e_converter_para_google_docs(doc_pei1, f"{s_id}_PEI_N1", modo="AULA")
+                                
+                                link_pei3 = "N/A"
+                                if ed_pei3:
+                                    status.write("🔴 Gerando Material PEI N3 (Bento Cards)...")
+                                    doc_pei3 = exporter.gerar_docx_pei_qualitativa(f"{s_id}_PEI_N3", ed_pei3, info_doc)
+                                    link_pei3 = db.subir_e_converter_para_google_docs(doc_pei3, f"{s_id}_PEI_N3", modo="AULA")
+
+                                status.write("👨‍🏫 Gerando Guia do Professor...")
+                                doc_prof = exporter.gerar_docx_professor_v25(s_id, ed_prof, info_doc)
+                                link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{s_id}_PROF", modo="AULA")
+                                
+                                links_f = f"--- LINKS ---\nRegular({link_alu})\nPEI_N1({link_pei1})\nPEI_N3({link_pei3})\nProf({link_prof})"
+                                conteudo_final = f"[PROFESSOR]\n{ed_prof}\n\n[ALUNO]\n{ed_alu}\n\n[GABARITO]\n{ed_gab}\n\n[PEI_NIVEL_1]\n{ed_pei1}\n\n[PEI_NIVEL_3]\n{ed_pei3}\n\n[IMAGENS]\n{ed_img}\n\n{links_f}"
+                                
+                                db.salvar_no_banco("DB_AULAS_PRONTAS",[
+                                    datetime.now().strftime("%d/%m/%Y"), sem_ref, s_id, conteudo_final, ano_str, link_alu
+                                ])
+                                
+                                # Dá baixa automática no Hub de Planejamento se esta aula veio de um plano
+                                db.dar_baixa_aula_livro_offline(semana=sem_ref, ano=ano_str, turma=trim_ref, data_str=datetime.now().strftime("%d/%m/%Y"), detalhes_livro=s_id)
+
+                                status.update(label="Sincronizado com Sucesso!", state="complete")
+                                st.balloons(); time.sleep(1); reset_laboratorio()
 
             renderizar_mesa_lapidacao_lab()
 
@@ -3248,44 +3245,47 @@ elif menu == "📝 Central de Avaliações":
                     c_link1, c_link2 = st.columns(2)
                     c_link1.link_button("📂 ABRIR CADERNO DO ALUNO NO DRIVE", rec_data['link_alu'], type="primary", use_container_width=True)
                     
-                    # 🚀 BOTÃO PONTE SOBERANA DA ESTEIRA: INJETAR NO PONTO ID
+                    # 🚀 BOTÃO PONTE SOBERANA DA ESTEIRA: INJETAR NO PONTO ID (MESA DE LAPIDAÇÃO)
                     with c_link2.popover("🚀 INJETAR REVISÃO NO PONTO ID (PLANO DA SEMANA)"):
-                        st.caption("Crie automaticamente o Plano Semanal de Revisão no Ponto ID para aplicar na próxima semana.")
+                        st.caption("Envie este Caderno de Recomposição como Rascunho de Plano para a Mesa de Lapidação do Ponto ID.")
                         
                         todas_semanas_inj = util.gerar_semanas()
-                        sem_destino_inj = st.selectbox("Selecione a Semana do Plano no Ponto ID:", [s.split(" (")[0] for s in todas_semanas_inj if "Jornada" not in s], key=f"sel_sem_inj_{v}")
-                        trim_destino_inj = st.selectbox("Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"sel_trim_inj_{v}")
+                        sem_destino_inj = st.selectbox("Selecione a Semana de Destino do Plano:", [s.split(" (")[0] for s in todas_semanas_inj if "Jornada" not in s], key=f"sel_sem_inj_{v}")
+                        trim_destino_inj = st.selectbox("Trimestre Alvo:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"sel_trim_inj_{v}")
                         
-                        if st.button("💾 CONFIRMAR INJEÇÃO NO PONTO ID", type="primary", use_container_width=True, key=f"btn_conf_inj_{v}"):
-                            with st.spinner("Injetando plano semanal de revisão no Ponto ID..."):
-                                txt_prof_rec = ai.extrair_tag(rec_data['texto'], "PROFESSOR")
-                                txt_alu_rec = ai.extrair_tag(rec_data['texto'], "ALUNO")
-                                
-                                roteiro_a1 = f"INÍCIO (Sensibilização): Análise dos resultados da prova {prova_sel_recomposicao} e devolução pedagógica.\nMEIO (Fundamentação): Exposição no quadro das soluções comentadas dos itens críticos.\nFIM (Fixação): Resolução guiada da primeira parte do Caderno de Recomposição."
-                                roteiro_a2 = f"INÍCIO: Acolhimento e esclarecimento de dúvidas pontuais.\nMEIO: Prática autônoma dos alunos na resolução dos exercícios espelho do Caderno de Recomposição.\nFIM: Síntese e correção coletiva no quadro."
+                        if st.button("🚀 ENVIAR RASCUNHO PARA O PONTO ID", type="primary", use_container_width=True, key=f"btn_conf_inj_{v}"):
+                            txt_prof_rec = ai.extrair_tag(rec_data['texto'], "PROFESSOR")
+                            txt_alu_rec = ai.extrair_tag(rec_data['texto'], "ALUNO")
+                            
+                            roteiro_a1 = f"INÍCIO (Sensibilização): Análise dos resultados da prova {prova_sel_recomposicao} e devolução pedagógica.\nMEIO (Fundamentação): Exposição no quadro das soluções comentadas dos itens críticos.\nFIM (Fixação): Resolução guiada da primeira parte do Caderno de Recomposição."
+                            roteiro_a2 = f"INÍCIO: Acolhimento e esclarecimento de dúvidas pontuais.\nMEIO: Prática autônoma dos alunos na resolução dos exercícios espelho do Caderno de Recomposição.\nFIM: Síntese e correção coletiva no quadro."
 
-                                plano_texto_inj = (
-                                    f"[HABILIDADE_BNCC] Habilidades dos itens críticos de {prova_sel_recomposicao}\n"
-                                    f"[COMPETENCIAS_FOCO] Competência Específica 2 (Raciocínio Lógico) e 6 (Enfrentar Situações-Problema)\n"
-                                    f"[OBJETO_CONHECIMENTO] Recomposição de Aprendizagem & Análise de Lacunas\n"
-                                    f"[CONTEUDOS_ESPECIFICOS] Revisão e Recomposição baseada na prova {prova_sel_recomposicao}\n"
-                                    f"[OBJETIVOS_ENSINO] Superar as lacunas cognitivas e consolidar os descritores SAEB com menor índice de acerto.\n"
-                                    f"[JUSTIFICATIVA_PEDAGOGICA] Recomposição direcionada a partir dos dados do Raio-X do Scanner CIR.\n"
-                                    f"[AULA_1] {roteiro_a1}\n"
-                                    f"[AULA_2] {roteiro_a2}\n"
-                                    f"[SABADO_LETIVO] N/A\n"
-                                    f"[AVALIACAO_DE_MERITO] Observação do desempenho na resolução dos exercícios espelho.\n"
-                                    f"[ESTRATEGIA_DUA_PEI] Acompanhamento individualizado e suporte visual nos itens espelho adaptados.\n"
-                                    f"--- LINK DRIVE --- {rec_data['link_alu']}"
-                                )
+                            plano_texto_rascunho = (
+                                f"[HABILIDADE_BNCC] Habilidades dos itens críticos da prova {prova_sel_recomposicao}\n"
+                                f"[COMPETENCIAS_FOCO] Competência Específica 2 (Raciocínio Lógico) e 6 (Enfrentar Situações-Problema)\n"
+                                f"[OBJETO_CONHECIMENTO] RECOMPOSIÇÃO DE APRENDIZAGEM & ANÁLISE DE LACUNAS\n"
+                                f"[CONTEUDOS_ESPECIFICOS] Revisão e Recomposição baseada no Caderno {rec_data['nome']}\n"
+                                f"[OBJETIVOS_ENSINO] Superar as lacunas cognitivas e consolidar os descritores SAEB com menor índice de acerto.\n"
+                                f"[JUSTIFICATIVA_PEDAGOGICA] Recomposição direcionada a partir dos dados do Raio-X do Scanner CIR.\n"
+                                f"[AULA_1] {roteiro_a1}\n"
+                                f"[AULA_2] {roteiro_a2}\n"
+                                f"[SABADO_LETIVO] N/A\n"
+                                f"[AVALIACAO_DE_MERITO] Observação do desempenho na resolução dos exercícios espelho.\n"
+                                f"[ESTRATEGIA_DUA_PEI] Acompanhamento individualizado e suporte visual nos itens espelho adaptados."
+                            )
 
-                                db.excluir_plano_completo(sem_destino_inj, rec_data['ano'])
-                                db.salvar_no_banco("DB_PLANOS", [
-                                    datetime.now().strftime("%d/%m/%Y"), sem_destino_inj, rec_data['ano'], 
-                                    trim_destino_inj, "HUB_ATIVO", plano_texto_inj, rec_data['link_alu']
-                                ])
-                                st.success(f"✅ Plano Semanal de Revisão injetado em {sem_destino_inj} no Ponto ID e enviado ao Hub!")
-                                st.balloons(); time.sleep(1.5); st.rerun()
+                            # Envia o rascunho para a Mesa de Lapidação do Ponto ID sem gravar prematuramente no banco
+                            st.session_state.p_temp = plano_texto_rascunho
+                            st.session_state.p_meta = {
+                                "semana": sem_destino_inj, 
+                                "trimestre": trim_destino_inj, 
+                                "ano": f"{rec_data['ano']}º" if "º" not in str(rec_data['ano']) else str(rec_data['ano']), 
+                                "base": f"Caderno de Recomposição: {rec_data['nome']}"
+                            }
+                            
+                            st.toast("✅ Caderno injetado no Ponto ID! Direcionando para a Mesa de Lapidação...", icon="🚀")
+                            time.sleep(0.8)
+                            navegar_para("📅 Planejamento (Ponto ID)")
 
     # ==============================================================================
     # ABA 4: EXPEDIÇÃO DE E-MAIL, PDFS & ACERVO TRIMESTRAL
