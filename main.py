@@ -599,8 +599,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                             mask_ex = (df_ativos_ano['SEMANA_REF'] == "AVALIAÇÃO") | (df_ativos_ano['TIPO_MATERIAL'].str.contains("PROVA|TESTE|SONDA|AVALIAÇÃO|AVALIACAO", case=False, na=False))
                             opcoes_ativos = df_ativos_ano[mask_ex]['TIPO_MATERIAL'].unique().tolist()
                         elif "Revisão" in tipo_semana: 
-                            # 🚨 BUSCA AMPLA SOBERANA: Captura todas as revisões do 1º, 2º e 3º Trimestres
-                            mask_rev = (df_ativos_ano['SEMANA_REF'] == "REVISÃO") | (df_ativos_ano['TIPO_MATERIAL'].str.contains("REVISAO|REVISÃO|RECOMPOSICAO|RECOMPOSIÇÃO|RAIO-X", case=False, na=False))
+                            mask_rev = (df_ativos_ano['SEMANA_REF'] == "REVISÃO") | (df_ativos_ano['TIPO_MATERIAL'].str.contains("REVISAO|REVISÃO|RECOMPOSICAO|RECOMPOSIÇÃO|RAIO-X|AULA DE REVISÃO|AULA DE REVISAO", case=False, na=False))
                             opcoes_ativos = df_ativos_ano[mask_rev]['TIPO_MATERIAL'].unique().tolist()
                         elif "Trabalho" in tipo_semana: 
                             opcoes_ativos = df_ativos_ano[df_ativos_ano['TIPO_MATERIAL'].str.contains("PROJETO|TRABALHO", case=False, na=False)]['TIPO_MATERIAL'].unique().tolist()
@@ -612,11 +611,34 @@ if menu == "📅 Planejamento (Ponto ID)":
                 else:
                     ativo_selecionado = st.text_input("Nome do Evento/Dinâmica:", placeholder="Ex: Palestra e Oficina sobre Educação Financeira", key=f"inp_dinamica_nome_{v}")
 
-                diretriz_logistica = st.text_area("Roteiro de Execução da Aula:", placeholder="INÍCIO: Acolhimento...\nMEIO: Exposição do tema...\nFIM: Atividade prática...", height=100, key=f"txt_rot_exec_{v}")
+                # 🚨 AUTO-PREENCHIMENTO DO ROTEIRO DO PROFESSOR A PARTIR DO MATERIAL SELECIONADO
+                roteiro_autofill = ""
+                if ativo_selecionado and not df_aulas.empty:
+                    match_mat = df_aulas[df_aulas['TIPO_MATERIAL'] == ativo_selecionado]
+                    if not match_mat.empty:
+                        txt_m_conteudo = str(match_mat.iloc[0]['CONTEUDO'])
+                        roteiro_autofill = (
+                            ai.extrair_tag(txt_m_conteudo, "PROFESSOR") or 
+                            ai.extrair_tag(txt_m_conteudo, "AULA_1") or 
+                            ai.extrair_tag(txt_m_conteudo, "ROTEIRO_DO_PROFESSOR") or
+                            ai.extrair_tag(txt_m_conteudo, "BASE_DIDATICA")
+                        )
+                        roteiro_autofill = re.split(r"--- LINKS ---", roteiro_autofill, flags=re.IGNORECASE)[0].strip()
+
+                # Usa chave dinâmica baseada no material para atualizar o texto do campo instantaneamente
+                key_dinamica_rot = f"txt_rot_exec_{v}_{hash(ativo_selecionado)}"
+                
+                diretriz_logistica = st.text_area(
+                    "Roteiro de Execução da Aula (Auto-Preenchido do Acervo):", 
+                    value=roteiro_autofill,
+                    placeholder="INÍCIO: Acolhimento...\nMEIO: Exposição do tema...\nFIM: Atividade prática...", 
+                    height=160, 
+                    key=key_dinamica_rot
+                )
 
                 if st.button("💾 Salvar Logística no Acervo", type="primary", use_container_width=True, key=f"btn_save_logist_{v}"):
                     if ativo_selecionado:
-                        with st.spinner("Salvando..."):
+                        with st.spinner("Salvando no Acervo e Sincronizando..."):
                             nome_arquivo = f"PLANO_{ano_str_busca.replace('º','')}_{sem_limpa.replace(' ', '')}"
                             db.excluir_plano_completo(sem_limpa, ano_str_busca)
                             
