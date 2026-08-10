@@ -873,19 +873,19 @@ if menu == "📅 Planejamento (Ponto ID)":
                         f"🚨 PREENCHA OBRIGATORIAMENTE ESTE TEMPLATE EXATO:\n{template_forcado}"
                     )
                     
-                    status.write("🧠 Maestro Sosa está redigindo o plano expositivo alinhado...")
+                    status.write("⚡ Maestro Sosa (Gemini 3.6 Flash) está arquitetando o plano expositivo alinhado...")
                     resultado_ia = ai.gerar_ia("PLANE_PEDAGOGICO", prompt, url_drive=uri_livro_drive, usar_busca=precisa_de_internet, recorte_livro=pacote_recorte_completo)
                     
                     if "ERRO" in resultado_ia.upper() or "⚠️" in resultado_ia:
                         status.update(label="❌ Falha na comunicação com a IA.", state="error")
                         st.error(resultado_ia)
                     else:
-                        status.write("✅ Plano arquitetado com sucesso!")
+                        status.write("✅ Plano arquitetado com sucesso e custo R$ 0,00 (Free Tier)!")
                         st.session_state.p_temp = resultado_ia
                         st.session_state.p_meta = {"semana": sem_limpa, "trimestre": trim_atual, "ano": ano_str_busca, "base": base_didatica_info}
                         
-                        status.update(label="🎉 Planejamento Concluído!", state="complete")
-                        time.sleep(1)
+                        status.update(label="🎉 Planejamento Concluído com Sucesso!", state="complete")
+                        time.sleep(0.8)
                         st.rerun()
 
             if c_g2.button("✍️ Elaborar Manualmente (Sem IA)", use_container_width=True):
