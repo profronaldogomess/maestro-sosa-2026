@@ -592,24 +592,29 @@ if menu == "📅 Planejamento (Ponto ID)":
                 st.markdown("#### 2. Vínculo de Material e Diretrizes")
                 ativo_selecionado = ""
                 if tipo_semana != "Aula Aberta (Dinâmicas e Eventos)":
-                    df_ativos_ano = df_aulas[df_aulas['ANO'] == ano_str_busca] if not df_aulas.empty else pd.DataFrame()
+                    df_ativos_ano = df_aulas[df_aulas['ANO'].astype(str).str.contains(str(ano_p))] if not df_aulas.empty else pd.DataFrame()
                     opcoes_ativos = []
                     if not df_ativos_ano.empty:
                         if "Exame" in tipo_semana or "Sonda" in tipo_semana: 
-                            opcoes_ativos = df_ativos_ano[df_ativos_ano['SEMANA_REF'] == "AVALIAÇÃO"]['TIPO_MATERIAL'].tolist()
+                            mask_ex = (df_ativos_ano['SEMANA_REF'] == "AVALIAÇÃO") | (df_ativos_ano['TIPO_MATERIAL'].str.contains("PROVA|TESTE|SONDA|AVALIAÇÃO|AVALIACAO", case=False, na=False))
+                            opcoes_ativos = df_ativos_ano[mask_ex]['TIPO_MATERIAL'].unique().tolist()
                         elif "Revisão" in tipo_semana: 
-                            opcoes_ativos = df_ativos_ano[df_ativos_ano['SEMANA_REF'] == "REVISÃO"]['TIPO_MATERIAL'].tolist()
+                            # 🚨 BUSCA AMPLA SOBERANA: Captura todas as revisões do 1º, 2º e 3º Trimestres
+                            mask_rev = (df_ativos_ano['SEMANA_REF'] == "REVISÃO") | (df_ativos_ano['TIPO_MATERIAL'].str.contains("REVISAO|REVISÃO|RECOMPOSICAO|RECOMPOSIÇÃO|RAIO-X", case=False, na=False))
+                            opcoes_ativos = df_ativos_ano[mask_rev]['TIPO_MATERIAL'].unique().tolist()
                         elif "Trabalho" in tipo_semana: 
-                            opcoes_ativos = df_ativos_ano[df_ativos_ano['TIPO_MATERIAL'].str.contains("PROJETO|TRABALHO", case=False, na=False)]['TIPO_MATERIAL'].tolist()
+                            opcoes_ativos = df_ativos_ano[df_ativos_ano['TIPO_MATERIAL'].str.contains("PROJETO|TRABALHO", case=False, na=False)]['TIPO_MATERIAL'].unique().tolist()
                     
-                    if opcoes_ativos: ativo_selecionado = st.selectbox("Selecione o material do Acervo:", opcoes_ativos)
-                    else: st.warning("Nenhum material correspondente encontrado no acervo.")
+                    if opcoes_ativos: 
+                        ativo_selecionado = st.selectbox("Selecione o material do Acervo:", sorted(opcoes_ativos), key=f"sel_mat_vinculo_{v}")
+                    else: 
+                        st.warning("Nenhum material correspondente encontrado no acervo para esta série.")
                 else:
-                    ativo_selecionado = st.text_input("Nome do Evento/Dinâmica:", placeholder="Ex: Palestra e Oficina sobre Educação Financeira")
+                    ativo_selecionado = st.text_input("Nome do Evento/Dinâmica:", placeholder="Ex: Palestra e Oficina sobre Educação Financeira", key=f"inp_dinamica_nome_{v}")
 
-                diretriz_logistica = st.text_area("Roteiro de Execução da Aula:", placeholder="INÍCIO: Acolhimento...\nMEIO: Exposição do tema...\nFIM: Atividade prática...", height=100)
+                diretriz_logistica = st.text_area("Roteiro de Execução da Aula:", placeholder="INÍCIO: Acolhimento...\nMEIO: Exposição do tema...\nFIM: Atividade prática...", height=100, key=f"txt_rot_exec_{v}")
 
-                if st.button("💾 Salvar Logística no Acervo", type="primary", use_container_width=True):
+                if st.button("💾 Salvar Logística no Acervo", type="primary", use_container_width=True, key=f"btn_save_logist_{v}"):
                     if ativo_selecionado:
                         with st.spinner("Salvando..."):
                             nome_arquivo = f"PLANO_{ano_str_busca.replace('º','')}_{sem_limpa.replace(' ', '')}"
