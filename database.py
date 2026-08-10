@@ -774,3 +774,208 @@ def conciliar_calendario_e_planos_cronologicos(ano_alvo="6º"):
     except Exception as e:
         print(f"Erro no conciliador: {e}")
         return False
+
+# ==============================================================================
+# MOTOR CANÔNICO DE ANTI-DUPLICIDADE E BAIXAS LIMPAS (SOSA V2026.MASTER)
+# ==============================================================================
+
+def normalizar_semana_chave(semana):
+    """Extrai com segurança o rótulo da semana (ex: 'Semana 20') sem quebrar a tela."""
+    if not semana or pd.isna(semana): return ""
+    s_str = str(semana).strip()
+    if " (" in s_str: return s_str.split(" (")[0].strip()
+    if " - " in s_str: return s_str.split(" - ")[0].strip()
+    return s_str
+
+def excluir_plano_completo_canonico(semana, ano):
+    """
+    SOSA V2026: Apaga qualquer plano existente para a mesma SEMANA e ANO com correspondência canônica exata.
+    """
+    try:
+        wb = conectar()
+        if not wb: return False
+        ws = wb.worksheet("DB_PLANOS")
+        dados = ws.get_all_values()
+        if len(dados) <= 1: return True
+
+        creds = obter_creds_drive()
+        service = build('drive', 'v3', credentials=creds) if creds else None
+        padrao_id = r"(?:/d/|id=)([a-zA-Z0-9-_]{25,})"
+
+        sem_alvo = normalizar_semana_chave(semana).upper()
+        ano_alvo = "".join(filter(str.isdigit, str(ano)))
+
+        linhas_para_deletar = []
+        for i, row in enumerate(dados[1:], start=2):
+            if len(row) > 2:
+                sem_row = normalizar_semana_chave(row[1]).upper()
+                ano_row = "".join(filter(str.isdigit, str(row[2])))
+                
+                if sem_row == sem_alvo and ano_row == ano_alvo:
+                    if service:
+                        linha_txt = " ".join(map(str, row))
+                        ids_encontrados = re.findall(padrao_id, linha_txt)
+                        for file_id in ids_encontrados:
+                            try: service.files().delete(fileId=file_id).execute()
+                            except: pass
+                    linhas_para_deletar.append(i)
+
+        for idx in reversed(linhas_para_deletar):
+            ws.delete_rows(idx)
+
+        st.cache_data.clear()
+        return True
+    except Exception as e:
+        print(f"Erro na exclusão canônica de plano: {e}")
+        return False
+
+def excluir_aula_pronta_canonica(semana_ref, tipo_material, ano):
+    """
+    SOSA V2026: Remove registros e arquivos duplicados de aulas e materiais em DB_AULAS_PRONTAS.
+    """
+    try:
+        wb = conectar()
+        if not wb: return False
+        ws = wb.worksheet("DB_AULAS_PRONTAS")
+        dados = ws.get_all_values()
+        if len(dados) <= 1: return True
+
+        creds = obter_creds_drive()
+        service = build('drive', 'v3', credentials=creds) if creds else None
+        padrao_id = r"(?:/d/|id=)([a-zA-Z0-9-_]{25,})"
+
+        sem_alvo = normalizar_semana_chave(semana_ref).upper()
+        tipo_alvo = str(tipo_material).strip().upper()
+        ano_alvo = "".join(filter(str.isdigit, str(ano)))
+
+        linhas_para_deletar = []
+        for i, row in enumerate(dados[1:], start=2):
+            if len(row) > 4:
+                sem_row = normalizar_semana_chave(row[1]).upper()
+                tipo_row = str(row[2]).strip().upper()
+                ano_row = "".join(filter(str.isdigit, str(row[4])))
+
+                if (sem_row == sem_alvo or sem_alvo in sem_row) and (tipo_row == tipo_alvo or tipo_alvo in tipo_row) and ano_row == ano_alvo:
+                    if service:
+                        linha_txt = " ".join(map(str, row))
+                        ids_encontrados = re.findall(padrao_id, linha_txt)
+                        for file_id in ids_encontrados:
+                            try: service.files().delete(fileId=file_id).execute()
+                            except: pass
+                    linhas_para_deletar.append(i)
+
+        for idx in reversed(linhas_para_deletar):
+            ws.delete_rows(idx)
+
+        st.cache_data.clear()
+        return True
+    except Exception as e:
+        print(f"Erro na exclusão canônica de aula: {e}")
+        return False
+
+def dar_baixa_plano_evento(semana, ano, motivo_ou_status="RECESSO", data_str="N/A", turma="GLOBAL"):
+    """
+    SOSA V2026: Dá baixa limpa em uma semana de recesso, feriado ou evento,
+    marcando o status em DB_PLANOS como CONCLUIDO_RECESSO/EVENTO sem gerar arquivos.
+    """
+    try:
+        wb = conectar()
+        if not wb: return False
+        
+        sem_limpa = normalizar_semana_chave(semana)
+        ano_num = "".join(filter(str.isdigit, str(ano)))
+        ano_fmt = f"{ano_num}º" if ano_num else str(ano)
+        status_chave = f"CONCLUIDO_{str(motivo_ou_status).upper().replace(' ', '_')}"
+
+        ws_planos = wb.worksheet("DB_PLANOS")
+        dados_p = ws_planos.get_all_values()
+        
+        encontrado = False
+        for i, row in enumerate(dados_p[1:], start=2):
+            if len(row) > 2:
+                if normalizar_semana_chave(row[1]).upper() == sem_limpa.upper() and "".join(filter(str.isdigit, str(row[2]))) == ano_num:
+                    ws_planos.update_cell(i, 5, status_chave) # Atualiza coluna EIXO / Status
+                    encontrado = True
+                    break
+        
+        if not encontrado:
+            txt_plano_evento = f"[OBJETO_CONHECIMENTO] {str(motivo_ou_status).upper()} \n[CONTEUDOS_ESPECIFICOS] {motivo_ou_status} \n[AULA_1] N/A (Recesso / Evento / Feriado) \n[AULA_2] N/A \n--- LINK DRIVE --- N/A"
+            ws_planos.append_row([
+                data_str if data_str != "N/A" else datetime.now().strftime("%d/%m/%Y"), 
+                sem_limpa, 
+                ano_fmt, 
+                "II Trimestre" if "20" in sem_limpa or "21" in sem_limpa else "I Trimestre", 
+                status_chave, 
+                txt_plano_evento, 
+                "N/A"
+            ], value_input_option="USER_ENTERED")
+
+        # Registra no diário de registro de aulas se houver turma e data especificadas
+        if turma != "GLOBAL" and data_str != "N/A":
+            limpar_diario_data_turma(data_str, turma)
+            salvar_no_banco("DB_DIARIO_BORDO", [data_str, "GLOBAL", "TODOS OS ALUNOS", turma, "ISENTO", "DIA NÃO LETIVO", str(motivo_ou_status), "0,00"])
+            salvar_no_banco("DB_REGISTRO_AULAS", [data_str, sem_limpa, turma, f"EVENTO/RECESSO: {motivo_ou_status}", "N/A", "N/A", "NÃO LETIVO", "", ""])
+
+        st.cache_data.clear()
+        return True
+    except Exception as e:
+        print(f"Erro ao dar baixa em evento/recesso: {e}")
+        return False
+
+def dar_baixa_aula_livro_offline(semana, ano, turma="GLOBAL", data_str="N/A", detalhes_livro="Conteúdo aplicado via Livro/Lousa"):
+    """
+    SOSA V2026: Registra a aula ministrada via Livro/Lousa no Diário de Bordo (DB_REGISTRO_AULAS)
+    e arquiva o plano em DB_PLANOS como CONCLUIDO_LIVRO, fazendo a semana sumir do Criador de Aulas.
+    """
+    try:
+        wb = conectar()
+        if not wb: return False
+        
+        sem_limpa = normalizar_semana_chave(semana)
+        ano_num = "".join(filter(str.isdigit, str(ano)))
+        ano_fmt = f"{ano_num}º" if ano_num else str(ano)
+
+        # 1. Arquiva o plano em DB_PLANOS com o status CONCLUIDO_LIVRO
+        ws_planos = wb.worksheet("DB_PLANOS")
+        dados_p = ws_planos.get_all_values()
+        
+        encontrado = False
+        for i, row in enumerate(dados_p[1:], start=2):
+            if len(row) > 2:
+                if normalizar_semana_chave(row[1]).upper() == sem_limpa.upper() and "".join(filter(str.isdigit, str(row[2]))) == ano_num:
+                    ws_planos.update_cell(i, 5, "CONCLUIDO_LIVRO")
+                    encontrado = True
+                    break
+
+        if not encontrado:
+            txt_plano_offline = f"[OBJETO_CONHECIMENTO] AULA CUMPRIDA VIA LIVRO DIDÁTICO \n[CONTEUDOS_ESPECIFICOS] {detalhes_livro} \n[AULA_1] Ministrada via Livro Didático / Lousa \n[AULA_2] Exercícios do Livro \n--- LINK DRIVE --- N/A"
+            ws_planos.append_row([
+                data_str if data_str != "N/A" else datetime.now().strftime("%d/%m/%Y"), 
+                sem_limpa, 
+                ano_fmt, 
+                "I Trimestre", 
+                "CONCLUIDO_LIVRO", 
+                txt_plano_offline, 
+                "N/A"
+            ], value_input_option="USER_ENTERED")
+
+        # 2. Registra no Diário Oficial de Registro de Aulas para a burocracia
+        ws_reg = wb.worksheet("DB_REGISTRO_AULAS")
+        conteudo_reg = f"Livro Didático / Lousa ({detalhes_livro})"
+        ws_reg.append_row([
+            data_str if data_str != "N/A" else datetime.now().strftime("%d/%m/%Y"),
+            sem_limpa,
+            turma if turma and turma != "GLOBAL" else f"{ano_num}º Ano",
+            conteudo_reg,
+            "Acompanhamento em Sala",
+            "N/A",
+            "🟢 Concluído (Livro)",
+            "CONCLUIDO_OFFLINE",
+            "Normal"
+        ], value_input_option="USER_ENTERED")
+
+        st.cache_data.clear()
+        return True
+    except Exception as e:
+        print(f"Erro ao dar baixa burocrática em aula de livro: {e}")
+        return False
