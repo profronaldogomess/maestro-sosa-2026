@@ -3212,20 +3212,22 @@ elif menu == "📝 Central de Avaliações":
                                 st.write(preparar_para_leitura(pei_txt))
 
     # ==============================================================================
-    # ABA 3: RECOMPOSIÇÃO & CADERNOS DE REVISÃO DO ACERVO
+    # ABA 3: RECOMPOSIÇÃO & CADERNOS DE REVISÃO DO ACERVO (BLINDAGEM V2026.ULTIMATE)
     # ==============================================================================
     with tab_recomposicao:
         st.markdown("### 🔄 Módulo Dedicado de Recomposição & Cadernos de Revisão")
-        st.caption("Selecione qualquer avaliação da sua biblioteca para forjar o Caderno de Recomposição alinhado aos descritores do SAEB/BNCC.")
+        st.caption("Selecione qualquer avaliação da sua biblioteca para forjar o Caderno de Recomposição Padronizado (Regular + PEI N1, N2 e N3).")
 
-        df_provas_para_revisao = df_aulas[df_aulas['SEMANA_REF'] == "AVALIAÇÃO"].copy() if not df_aulas.empty else pd.DataFrame()
+        # Seleciona todas as avaliações ou exames do acervo
+        df_provas_para_revisao = df_aulas[df_aulas['SEMANA_REF'].isin(["AVALIAÇÃO", "REVISÃO"])].copy() if not df_aulas.empty else pd.DataFrame()
 
         if df_provas_para_revisao.empty:
             st.info("Nenhuma avaliação cadastrada no acervo para gerar caderno de recomposição.")
         else:
             with st.container(border=True):
                 c_rev1, c_rev2 = st.columns([2, 1])
-                prova_sel_recomposicao = c_rev1.selectbox("Selecione a Avaliação de Origem:", df_provas_para_revisao['TIPO_MATERIAL'].unique().tolist(), key=f"sel_p_recomp_{v}")
+                opcoes_provas_origem = sorted(df_provas_para_revisao['TIPO_MATERIAL'].unique().tolist())
+                prova_sel_recomposicao = c_rev1.selectbox("📋 Selecione a Avaliação de Origem no Acervo:", opcoes_provas_origem, key=f"sel_p_recomp_{v}")
                 ano_rev_sel = c_rev2.selectbox("Série/Ano do Material:", ["6º Ano", "7º Ano", "8º Ano", "9º Ano"], key=f"sel_ano_recomp_{v}")
 
             if prova_sel_recomposicao:
@@ -3234,13 +3236,13 @@ elif menu == "📝 Central de Avaliações":
 
                 # PAINEL DE AUTONOMIA DE REVISÃO
                 with st.container(border=True):
-                    st.markdown("#### ⚙️ Painel de Autonomia da Recomposição")
+                    st.markdown("#### ⚙️ Parâmetros do Caderno de Recomposição Padronizado")
                     c_aut_r1, c_aut_r2 = st.columns([1, 1])
                     
                     qtd_q_recomp = c_aut_r1.pills(
                         "Nº de Questões Espelho Desejado:",
-                        ["3 Questões (Rápida)", "5 Questões (Padrão)", "8 Questões (Aprofundada)", "10 Questões (Completa)"],
-                        default="5 Questões (Padrão)",
+                        ["3 Questões (Rápida)", "5 Questões (Padrão)", "10 Questões (Completa)"],
+                        default="10 Questões (Completa)",
                         key=f"pills_qtd_recomp_{v}"
                     )
                     
@@ -3253,90 +3255,111 @@ elif menu == "📝 Central de Avaliações":
 
                 st.markdown("---")
                 
-                if st.button("🚀 GERAR CADERNO DE RECOMPOSIÇÃO PERSONALIZADO", type="primary", use_container_width=True, key=f"btn_exe_recomp_{v}"):
-                    with st.status("Analisando descritores e forjando material de recomposição...", expanded=True) as status_rec:
-                        num_q_num = int(re.search(r'\d+', qtd_q_recomp).group(0)) if re.search(r'\d+', qtd_q_recomp) else 5
+                if st.button("🚀 FORJAR CADERNO DE RECOMPOSIÇÃO COMPLETO (REGULAR + PEI)", type="primary", use_container_width=True, key=f"btn_exe_recomp_{v}"):
+                    with st.status("Analisando descritores e forjando material de recomposição completo...", expanded=True) as status_rec:
+                        num_q_num = int(re.search(r'\d+', qtd_q_recomp).group(0)) if re.search(r'\d+', qtd_q_recomp) else 10
                         
+                        nome_limpo_origem = prova_sel_recomposicao.replace("REVISAO_", "").replace("AVALIAÇÃO_", "").replace("PROVA_", "")
+                        nome_recomposicao_arq = f"REVISAO_{nome_limpo_origem}_{num_q_num}Q"
+                        info_recomp = {"ano": ano_rev_sel, "trimestre": "II Trimestre" if "IITrimestre" in prova_sel_recomposicao else "I Trimestre", "semana": "RECOMPOSIÇÃO", "valor": "4.0"}
+
+                        status_rec.write("🧠 1/4 Forjando Caderno Regular e Guia do Professor...")
                         prompt_recomposicao = (
                             f"PROVA BASE DE ORIGEM:\n{txt_prova_orig}\n\n"
                             f"SÉRIE: {ano_rev_sel}.\n"
                             f"QUANTIDADE EXIGIDA DE QUESTÕES ESPELHO: {num_q_num} questões.\n"
                             f"ESTRATÉGIA SELECIONADA: {estrat_recomp}.\n\n"
-                            f"MISSÃO: Crie o Caderno de Recomposição de Aprendizagem com Roteiro do Professor (Início ➔ Meio ➔ Fim), Guia de Estudo do Aluno e Exercícios Espelho baseados estritamente nos descritores SAEB da prova de origem."
+                            f"MISSÃO: Crie o Caderno de Recomposição com Roteiro do Professor ([PROFESSOR]), Exercícios Espelho para os Alunos ([ALUNO]), Gabarito ([GABARITO_TEXTO]), Perícia TRI ([GRADE_DE_CORRECAO]), PEI N1 ([PEI_NIVEL_1]), PEI N2 ([PEI_NIVEL_2]) e PEI N3 em 10 Bento Boxes ([PEI_NIVEL_3])."
                         )
                         res_recomposicao = ai.gerar_ia("ARQUITETO_REVISAO_V29", prompt_recomposicao)
                         
-                        nome_recomposicao_arq = f"REVISAO_{prova_sel_recomposicao}_{num_q_num}Q"
-                        info_recomp = {"ano": ano_rev_sel, "trimestre": "I Trimestre", "semana": "RECOMPOSIÇÃO"}
+                        txt_prof = ai.extrair_tag(res_recomposicao, "PROFESSOR") or ai.extrair_tag(res_recomposicao, "ROTEIRO_DO_PROFESSOR") or "Guia do Professor."
+                        txt_alu = ai.extrair_tag(res_recomposicao, "ALUNO") or ai.extrair_tag(res_recomposicao, "QUESTOES") or "Exercícios da Recomposição."
+                        txt_gab = ai.extrair_tag(res_recomposicao, "GABARITO_TEXTO") or ai.extrair_tag(res_recomposicao, "GABARITO") or "Gabarito."
+                        txt_grade = ai.extrair_tag(res_recomposicao, "GRADE_DE_CORRECAO") or "Grade."
+                        txt_pei1 = ai.extrair_tag(res_recomposicao, "PEI_NIVEL_1") or "PEI N1."
+                        txt_pei2 = ai.extrair_tag(res_recomposicao, "PEI_NIVEL_2") or "PEI N2."
+                        txt_pei3 = ai.extrair_tag(res_recomposicao, "PEI_NIVEL_3") or "PEI N3."
 
-                        status_rec.write("📄 Gerando Material do Aluno...")
-                        doc_alu_rev = exporter.gerar_docx_aluno_v24(nome_recomposicao_arq, ai.extrair_tag(res_recomposicao, "ALUNO"), info_recomp)
-                        link_alu_rev = db.subir_e_converter_para_google_docs(doc_alu_rev, f"{nome_recomposicao_arq}_ALUNO", modo="AULA")
+                        status_rec.write("📄 2/4 Gerando Caderno Regular Word (OMR Fiducial)...")
+                        txt_prova_completo_reg = f"[VALOR: 4.0]\n\n[QUESTOES]\n{txt_alu}\n\n[GABARITO_TEXTO]\n{txt_gab}\n\n[GRADE_DE_CORRECAO]\n{txt_grade}"
+                        doc_alu_rev = exporter.gerar_docx_prova_v25(nome_recomposicao_arq, txt_prova_completo_reg, info_recomp)
+                        link_alu_rev = db.subir_e_converter_para_google_docs(doc_alu_rev, nome_recomposicao_arq, modo="AVALIACAO")
 
-                        status_rec.write("👨‍🏫 Gerando Guia do Professor...")
-                        doc_prof_rev = exporter.gerar_docx_professor_v25(nome_recomposicao_arq, ai.extrair_tag(res_recomposicao, "PROFESSOR"), info_recomp)
-                        link_prof_rev = db.subir_e_converter_para_google_docs(doc_prof_rev, f"{nome_recomposicao_arq}_PROF", modo="AULA")
+                        status_rec.write("🔵 3/4 Gerando Cadernos PEI Adaptados (N1, N2 e N3)...")
+                        doc_p1 = exporter.gerar_docx_pei_v25(f"{nome_recomposicao_arq}_PEI_N1", txt_pei1, info_recomp)
+                        link_p1 = db.subir_e_converter_para_google_docs(doc_p1, f"{nome_recomposicao_arq}_PEI_N1", modo="AVALIACAO")
 
-                        conteudo_final_recomp = f"{res_recomposicao}\n\n--- LINKS ---\nRegular({link_alu_rev}) Prof({link_prof_rev})"
+                        doc_p3 = exporter.gerar_docx_pei_qualitativa(f"{nome_recomposicao_arq}_PEI_N3", txt_pei3, info_recomp)
+                        link_p3 = db.subir_e_converter_para_google_docs(doc_p3, f"{nome_recomposicao_arq}_PEI_N3", modo="AVALIACAO")
 
+                        status_rec.write("👨‍🏫 4/4 Gerando Guia do Professor Word...")
+                        doc_prof_rev = exporter.gerar_docx_professor_v25(nome_recomposicao_arq, txt_prof, info_recomp)
+                        link_prof_rev = db.subir_e_converter_para_google_docs(doc_prof_rev, f"{nome_recomposicao_arq}_PROF", modo="AVALIACAO")
+
+                        links_f = f"--- LINKS ---\nRegular({link_alu_rev}) PEI_N1({link_p1}) PEI_N3({link_p3}) Prof({link_prof_rev})"
+                        conteudo_final_recomp = f"{txt_prova_completo_reg}\n\n[PROFESSOR]\n{txt_prof}\n\n[PEI_NIVEL_1]\n{txt_pei1}\n\n[PEI_NIVEL_2]\n{txt_pei2}\n\n[PEI_NIVEL_3]\n{txt_pei3}\n\n{links_f}"
+
+                        db.excluir_registro("DB_AULAS_PRONTAS", nome_recomposicao_arq)
                         db.salvar_no_banco("DB_AULAS_PRONTAS", [
                             datetime.now().strftime("%d/%m/%Y"), "REVISÃO", nome_recomposicao_arq,
                             conteudo_final_recomp, ano_rev_sel, link_alu_rev
                         ])
 
                         st.session_state[f"recomp_gerada_{v}"] = {
-                            'texto': res_recomposicao, 'link_alu': link_alu_rev, 
-                            'nome': nome_recomposicao_arq, 'ano': ano_rev_sel
+                            'texto': conteudo_final_recomp, 'link_alu': link_alu_rev, 
+                            'nome': nome_recomposicao_arq, 'ano': ano_rev_sel,
+                            'trimestre': info_recomp['trimestre']
                         }
                         status_rec.update(label="✅ Caderno de Recomposição gerado e sincronizado no Drive!", state="complete")
                         st.balloons(); st.rerun()
 
                 if f"recomp_gerada_{v}" in st.session_state:
                     rec_data = st.session_state[f"recomp_gerada_{v}"]
-                    st.success(f"🏆 Caderno **{rec_data['nome']}** gerado e pronto!")
+                    st.success(f"🏆 Caderno **{rec_data['nome']}** homologado com sucesso no acervo!")
                     
                     c_link1, c_link2 = st.columns(2)
                     c_link1.link_button("📂 ABRIR CADERNO DO ALUNO NO DRIVE", rec_data['link_alu'], type="primary", use_container_width=True)
                     
-                    # 🚀 BOTÃO PONTE SOBERANA DA ESTEIRA: INJETAR NO PONTO ID (MESA DE LAPIDAÇÃO)
+                    # 🚀 PONTE SOBERANA: INJETAR NO PONTO ID COM STATUS = PRODUZIDO (ISENTO DE IA)
                     with c_link2.popover("🚀 INJETAR REVISÃO NO PONTO ID (PLANO DA SEMANA)"):
-                        st.caption("Envie este Caderno de Recomposição como Rascunho de Plano para a Mesa de Lapidação do Ponto ID.")
+                        st.caption("Envie este Caderno de Recomposição como Plano para a Semana Selecionada no Ponto ID. Ele será gravado como PRODUZIDO, isentando a semana no Criador de Aulas.")
                         
                         todas_semanas_inj = util.gerar_semanas()
                         sem_destino_inj = st.selectbox("Selecione a Semana de Destino do Plano:", [s.split(" (")[0] for s in todas_semanas_inj if "Jornada" not in s], key=f"sel_sem_inj_{v}")
-                        trim_destino_inj = st.selectbox("Trimestre Alvo:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"sel_trim_inj_{v}")
+                        trim_destino_inj = st.selectbox("Trimestre Alvo:", ["I Trimestre", "II Trimestre", "III Trimestre"], index=["I Trimestre", "II Trimestre", "III Trimestre"].index(rec_data['trimestre']) if rec_data['trimestre'] in ["I Trimestre", "II Trimestre", "III Trimestre"] else 0, key=f"sel_trim_inj_{v}")
                         
-                        if st.button("🚀 ENVIAR RASCUNHO PARA O PONTO ID", type="primary", use_container_width=True, key=f"btn_conf_inj_{v}"):
-                            txt_prof_rec = ai.extrair_tag(rec_data['texto'], "PROFESSOR")
-                            txt_alu_rec = ai.extrair_tag(rec_data['texto'], "ALUNO")
+                        if st.button("🚀 ENVIAR PLANO PARA O PONTO ID E CONCLUIR", type="primary", use_container_width=True, key=f"btn_conf_inj_{v}"):
+                            txt_prof_rec = ai.extrair_tag(rec_data['texto'], "PROFESSOR") or "Orientação pedagógica de recomposição."
+                            txt_alu_rec = ai.extrair_tag(rec_data['texto'], "ALUNO") or ai.extrair_tag(rec_data['texto'], "QUESTOES") or "Exercícios da recomposição."
                             
-                            roteiro_a1 = f"INÍCIO (Sensibilização): Análise dos resultados da prova {prova_sel_recomposicao} e devolução pedagógica.\nMEIO (Fundamentação): Exposição no quadro das soluções comentadas dos itens críticos.\nFIM (Fixação): Resolução guiada da primeira parte do Caderno de Recomposição."
-                            roteiro_a2 = f"INÍCIO: Acolhimento e esclarecimento de dúvidas pontuais.\nMEIO: Prática autônoma dos alunos na resolução dos exercícios espelho do Caderno de Recomposição.\nFIM: Síntese e correção coletiva no quadro."
+                            roteiro_a1 = f"AULA 01 - DEVOLUTIVA PEDAGÓGICA E RECOMPOSIÇÃO:\nINÍCIO: Análise dos descritores críticos da avaliação e devolutiva dos resultados aos estudantes.\nMEIO: Resolução comentada no quadro dos exercícios do Caderno de Recomposição ({rec_data['nome']}).\nFIM: Síntese e tiragem de dúvidas."
+                            roteiro_a2 = f"AULA 02 - FIXAÇÃO DOS DESCRITORES CRÍTICOS:\nINÍCIO: Orientação para resolução autônoma do Caderno de Recomposição.\nMEIO: Acompanhamento individual e mediação para os estudantes do Grupo 1 (PEI N1, N2 e N3).\nFIM: Encerramento com verificação dos vistos nos cadernos."
 
                             plano_texto_rascunho = (
-                                f"[HABILIDADE_BNCC] Habilidades dos itens críticos da prova {prova_sel_recomposicao}\n"
+                                f"[HABILIDADE_BNCC] Habilidades e Descritores SAEB do Caderno {rec_data['nome']}\n"
                                 f"[COMPETENCIAS_FOCO] Competência Específica 2 (Raciocínio Lógico) e 6 (Enfrentar Situações-Problema)\n"
-                                f"[OBJETO_CONHECIMENTO] RECOMPOSIÇÃO DE APRENDIZAGEM & ANÁLISE DE LACUNAS\n"
-                                f"[CONTEUDOS_ESPECIFICOS] Revisão e Recomposição baseada no Caderno {rec_data['nome']}\n"
-                                f"[OBJETIVOS_ENSINO] Superar as lacunas cognitivas e consolidar os descritores SAEB com menor índice de acerto.\n"
-                                f"[JUSTIFICATIVA_PEDAGOGICA] Recomposição direcionada a partir dos dados do Raio-X do Scanner CIR.\n"
+                                f"[OBJETO_CONHECIMENTO] RECOMPOSIÇÃO DE APRENDIZAGEM - {rec_data['nome']}\n"
+                                f"[CONTEUDOS_ESPECIFICOS] Consolidação dos conteúdos e descritores com menor índice de acerto na avaliação.\n"
+                                f"[OBJETIVOS_ENSINO] Superar as lacunas cognitivas identificadas e consolidar as habilidades do {rec_data['ano']}.\n"
+                                f"[JUSTIFICATIVA_PEDAGOGICA] Recomposição contínua de aprendizagem orientada por dados.\n"
                                 f"[AULA_1] {roteiro_a1}\n"
                                 f"[AULA_2] {roteiro_a2}\n"
                                 f"[SABADO_LETIVO] N/A\n"
-                                f"[AVALIACAO_DE_MERITO] Observação do desempenho na resolução dos exercícios espelho.\n"
-                                f"[ESTRATEGIA_DUA_PEI] Acompanhamento individualizado e suporte visual nos itens espelho adaptados."
+                                f"[AVALIACAO_DE_MERITO] Observação direta do desempenho na resolução do Caderno de Recomposição.\n"
+                                f"[ESTRATEGIA_DUA_PEI] Provas e cadernos adaptados (PEI N1, N2 e N3) com suporte visual e mediação individualizada."
                             )
 
-                            # Envia o rascunho para a Mesa de Lapidação do Ponto ID sem gravar prematuramente no banco
                             st.session_state.p_temp = plano_texto_rascunho
                             st.session_state.p_meta = {
                                 "semana": sem_destino_inj, 
                                 "trimestre": trim_destino_inj, 
                                 "ano": f"{rec_data['ano']}º" if "º" not in str(rec_data['ano']) else str(rec_data['ano']), 
-                                "base": f"Caderno de Recomposição: {rec_data['nome']}"
+                                "base": f"Caderno de Recomposição: {rec_data['nome']}",
+                                "status_final": "PRODUZIDO"  # 🚨 MARCA O PLANO COMO PRODUZIDO (ISENTO DE IA NO CRIADOR DE AULAS)
                             }
                             
-                            st.toast("✅ Caderno injetado no Ponto ID! Direcionando para a Mesa de Lapidação...", icon="🚀")
+                            st.toast("✅ Caderno injetado no Ponto ID e marcado como PRODUZIDO!", icon="🚀")
                             time.sleep(0.8)
                             navegar_para("📅 Planejamento (Ponto ID)")
 
