@@ -2387,10 +2387,14 @@ elif menu == "🧪 Criador de Aulas":
 
             for _, row in df_m_acervo.iterrows():
                 with st.container(border=True):
-                    txt_f = str(row['CONTEUDO'])
-                    identificador = row['TIPO_MATERIAL']
+                    txt_f = str(row.get('CONTEUDO', ''))
+                    identificador = str(row.get('TIPO_MATERIAL', 'Material Didático'))
+                    ano_exib = str(row.get('ANO', '6º'))
+                    data_exib = str(row.get('DATA', 'N/A'))
+                    sem_ref_exib = str(row.get('SEMANA_REF', 'Geral'))
+                    
                     st.markdown(f"##### {identificador}")
-                    st.caption(f"Série: {row['ANO']} | Data: {row['DATA']} | Status: ✅ DOCX DRIVE SINCRONIZADO")
+                    st.caption(f"Série: {ano_exib} | Data: {data_exib} | Status: ✅ DOCX DRIVE SINCRONIZADO")
                     
                     def extrair_link_seguro(t, k):
                         m = re.search(rf"{k}\s*\(\s*(https://docs\.google\.com/document/d/[^\s\)]+)\s*\)", t, re.IGNORECASE)
