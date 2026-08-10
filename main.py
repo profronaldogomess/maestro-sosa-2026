@@ -908,17 +908,18 @@ if menu == "📅 Planejamento (Ponto ID)":
                 st.session_state.p_meta = {"semana": sem_limpa, "trimestre": trim_atual, "ano": ano_str_busca, "base": base_didatica_info}
                 st.rerun()
 
-    # MESA DE LAPIDAÇÃO
+    # MESA DE LAPIDAÇÃO (VERSÃO INTEGRAL V2026.MASTER)
     @st.fragment
     def renderizar_mesa_lapidacao_plano():
         if "p_temp" in st.session_state:
             txt_bruto = st.session_state.p_temp
             meta = st.session_state.get("p_meta", {})
+            semana_nome = meta.get('semana', 'Atual')
             
             st.markdown("---")
-            st.markdown(f"### 🛠️ Mesa de Lapidação: Semana {meta.get('semana')}")
+            st.markdown(f"### 🛠️ Mesa de Lapidação: {semana_nome}")
             
-            # BOTÃO SOBERANO DE HARMONIZAÇÃO RÁPIDA COM IA
+            # 1. BOTÃO SOBERANO DE HARMONIZAÇÃO RÁPIDA COM IA
             if st.button("🧠 Harmonizar e Enriquecer Plano com IA (Corrigir Tópicos Brutos)", use_container_width=True, key=f"btn_harm_plan_{v}"):
                 with st.spinner("Analisando o plano e refinando os tópicos brutos para linguagem pedagógica oficial..."):
                     prompt_harm = (
@@ -931,18 +932,106 @@ if menu == "📅 Planejamento (Ponto ID)":
                     st.toast("✅ Plano harmonizado com sucesso!", icon="✨")
                     st.rerun()
 
-            # BLOCO DE CÓPIA DIRETA PARA O PROFESSOR
+            # 2. BLOCO DE CÓPIA DIRETA PARA O PROFESSOR
             with st.expander("📋 COPIAR TEXTO FORMATADO DO PLANO (ÁREA DE TRANSFERÊNCIA)", expanded=False):
                 st.caption("Clique no ícone de cópia no canto superior direito do bloco abaixo para copiar o texto formatado:")
                 st.code(st.session_state.p_temp, language=None)
 
+            # 3. REFINADOR DE COAUTORIA
             with st.container(border=True):
-                cmd_refine = st.chat_input("Refinador IA (Ex: 'Detalhe melhor os conteúdos específicos')")
+                cmd_refine = st.chat_input("Refinador IA (Ex: 'Detalhe melhor os conteúdos específicos')", key=f"chat_refine_ponto_{v}")
                 if cmd_refine:
-                    with st.spinner("Reescrevendo..."):
-                        prompt_refino = f"ORDEM: {cmd_refine}\n\nPLANO ATUAL:\n{st.session_state.p_temp}"
-                        st.session_state.p_temp = ai.gerar_ia("REFINADOR_PEDAGOGICO", prompt_refino)
+                    with st.spinner("Reescrevendo plano..."):
+                        prompt_refino = f"ORDEM DE AJUSTE: {cmd_refine}\n\nPLANO ATUAL:\n{st.session_state.p_temp}"
+                        st.session_state.p_temp = ai.gerar_ia("REFINADOR_PEDAGOGICO", prompt_refino, usar_busca=False)
                         st.rerun()
+
+            # 4. ABAS DE EDIÇÃO DOS CAMPOS PADRONIZADOS
+            tab_curriculo, tab_roteiro, tab_inclusao = st.tabs([
+                "📚 1. Base Curricular & BNCC", 
+                "📝 2. Roteiro das Aulas", 
+                "♿ 3. Avaliação & PEI"
+            ])
+            
+            with tab_curriculo:
+                ed_hab = st.text_input("Habilidade BNCC / Descritores:", ai.extrair_tag(txt_bruto, "HABILIDADE_BNCC") or "EF06MA01", key=f"frag_hab_{v}")
+                ed_comp = st.text_input("Competências Específicas BNCC (Pág. 267):", ai.extrair_tag(txt_bruto, "COMPETENCIAS_FOCO") or "Competência Específica 2 (Raciocínio Lógico) e 6 (Enfrentar Situações-Problema)", key=f"frag_comp_{v}")
+                ed_geral = st.text_input("Objeto de Conhecimento:", ai.extrair_tag(txt_bruto, "OBJETO_CONHECIMENTO") or ai.extrair_tag(txt_bruto, "CONTEUDO_GERAL") or "RECOMPOSIÇÃO DE APRENDIZAGEM & REVISÃO", key=f"frag_geral_{v}")
+                ed_espec = st.text_area("Conteúdos Específicos:", ai.extrair_tag(txt_bruto, "CONTEUDOS_ESPECIFICOS") or txt_bruto, height=130, key=f"frag_espec_{v}")
+                ed_objs = st.text_area("Objetivos de Aprendizagem:", ai.extrair_tag(txt_bruto, "OBJETIVOS_ENSINO") or "Consolidar os objetos de conhecimento e superar as lacunas observadas nas avaliações.", height=130, key=f"frag_objs_{v}")
+            
+            with tab_roteiro:
+                c_a1, c_a2, c_a3 = st.columns(3)
+                ed_a1 = c_a1.text_area("AULA 1 (Início ➔ Meio ➔ Fim):", ai.extrair_tag(txt_bruto, "AULA_1"), height=380, key=f"frag_a1_{v}")
+                ed_a2 = c_a2.text_area("AULA 2 (Início ➔ Meio ➔ Fim):", ai.extrair_tag(txt_bruto, "AULA_2"), height=380, key=f"frag_a2_{v}")
+                ed_sab = c_a3.text_area("SÁBADO LETIVO:", ai.extrair_tag(txt_bruto, "SABADO_LETIVO") or "N/A", height=380, key=f"frag_sab_{v}")
+                
+            with tab_inclusao:
+                ed_ava = st.text_area("Avaliação de Mérito:", ai.extrair_tag(txt_bruto, "AVALIACAO_DE_MERITO") or "Observação direta do engajamento e correção das atividades do caderno.", height=150, key=f"frag_ava_{v}")
+                ed_pei = st.text_area("Estratégia DUA/PEI:", ai.extrair_tag(txt_bruto, "ESTRATEGIA_DUA_PEI") or "Utilização de cadernos adaptados (PEI N1, N2 e N3) com suporte visual e mediação individualizada.", height=150, key=f"frag_pei_{v}")
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            
+            # 5. BOTÃO DE SALVAMENTO FINAL NO BANCO DE DADOS E DRIVE
+            if st.button("💾 SALVAR PLANO NO BANCO DE DADOS E NO DRIVE", use_container_width=True, type="primary", key=f"frag_btn_save_{v}"):
+                with st.status("Gerando DOCX e Sincronizando com o Google Drive...", expanded=True) as status:
+                    ano_fmt_s = meta.get('ano', '6º')
+                    sem_fmt_s = meta.get('semana', 'Semana Geral')
+                    trim_fmt_s = meta.get('trimestre', 'I Trimestre')
+                    
+                    nome_arquivo = f"PLANO_{str(ano_fmt_s).replace('º','')}_{str(sem_fmt_s).replace(' ', '')}"
+                    db.excluir_plano_completo(sem_fmt_s, ano_fmt_s)
+                    
+                    metodologia_docx = f"AULA 01:\n{ed_a1}"
+                    if "N/A" not in ed_a2.upper() and len(ed_a2) > 5: 
+                        metodologia_docx += f"\n\nAULA 02:\n{ed_a2}"
+                    if "N/A" not in ed_sab.upper() and len(ed_sab) > 5: 
+                        metodologia_docx += f"\n\nSÁBADO LETIVO:\n{ed_sab}"
+                    
+                    dados_docx = {
+                        "geral": ed_geral, 
+                        "especificos": ed_espec, 
+                        "objetivos": ed_objs, 
+                        "recursos": meta.get('base', 'Acervo Didático SOSA'), 
+                        "metodologia": metodologia_docx,
+                        "avaliacao": ed_ava, 
+                        "pei": ed_pei
+                    }
+                    
+                    status.write("📄 Gerando arquivo Word DOCX Oficial...")
+                    doc_io = exporter.gerar_docx_plano_pedagogico_ELITE(
+                        nome_arquivo, dados_docx, {"ano": ano_fmt_s, "semana": sem_fmt_s, "trimestre": trim_fmt_s}
+                    )
+                    
+                    status.write("📤 Enviando para a Pasta de Planos no Google Drive...")
+                    link_drive = db.subir_e_converter_para_google_docs(
+                        doc_io, nome_arquivo, trimestre=trim_fmt_s, categoria=ano_fmt_s, semana=sem_fmt_s, modo="PLANEJAMENTO"
+                    )
+                    
+                    status_banco = meta.get("status_final", "PRODUZIDO")
+
+                    final_txt = (
+                        f"[HABILIDADE_BNCC] {ed_hab} \n"
+                        f"[COMPETENCIAS_FOCO] {ed_comp} \n"
+                        f"[OBJETO_CONHECIMENTO] {ed_geral} \n"
+                        f"[CONTEUDOS_ESPECIFICOS] {ed_espec} \n"
+                        f"[OBJETIVOS_ENSINO] {ed_objs} \n"
+                        f"[AULA_1] {ed_a1} \n"
+                        f"[AULA_2] {ed_a2} \n"
+                        f"[SABADO_LETIVO] {ed_sab} \n"
+                        f"[AVALIACAO_DE_MERITO] {ed_ava} \n"
+                        f"[ESTRATEGIA_DUA_PEI] {ed_pei} \n"
+                        f"--- LINK DRIVE --- {link_drive}"
+                    )
+                    
+                    db.salvar_no_banco("DB_PLANOS", [
+                        datetime.now().strftime("%d/%m/%Y"), sem_fmt_s, ano_fmt_s, trim_fmt_s, status_banco, final_txt, link_drive
+                    ])
+                    
+                    status.update(label="✅ Plano Sincronizado no Banco de Dados e Google Drive!", state="complete")
+                    st.balloons()
+                    time.sleep(1.5)
+                    reset_planejamento()
 
     renderizar_mesa_lapidacao_plano()
 
