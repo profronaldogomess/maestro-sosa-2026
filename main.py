@@ -457,11 +457,11 @@ def exibir_material_estruturado(texto_raw, key_prefix, dados_plano=None, info_au
 
 # ==============================================================================
 # MÓDULO: PLANEJAMENTO ESTRATÉGICO (PONTO ID) - V2026.ULTIMATE
-# (AULAS EXPOSITIVAS OBJETIVAS, GATILHOS NEWS/TECH E ASSISTENTE DE CONCILIAÇÃO CRONOLÓGICA)
+# (AULAS EXPOSITIVAS OBJETIVAS, GATILHOS NEWS/TECH, UNIDADES TEMÁTICAS BNCC E CONCILIADOR)
 # ==============================================================================
 if menu == "📅 Planejamento (Ponto ID)":
     st.title("Engenharia de Planejamento (Ponto ID)")
-    st.caption("Arquitetura estratégica da semana: Aulas expositivas objetivas, sensibilização com Notícias/Tech, alinhamento BNCC/SAEB e Conciliador Cronológico.")
+    st.caption("Arquitetura estratégica da semana: Aulas expositivas objetivas, sensibilização com Notícias/Tech, alinhamento BNCC de Matemática e Conciliador Cronológico.")
     st.markdown("---")
 
     def reset_planejamento():
@@ -484,7 +484,7 @@ if menu == "📅 Planejamento (Ponto ID)":
     # ==============================================================================
     with tab_gerar:
         with st.container(border=True):
-            st.markdown("#### 1. Parâmetros da Semana & Carga Horária")
+            st.markdown("#### 📦 1. Parâmetros da Semana & Carga Horária")
             
             c1, c2, c3 = st.columns([1, 2, 2])
             ano_p = c1.selectbox("Série Alvo:", [6, 7, 8, 9], index=0, key=f"ano_sel_{v}")
@@ -509,8 +509,6 @@ if menu == "📅 Planejamento (Ponto ID)":
                 st.stop()
 
             sem_p = c2.selectbox("Semana de Referência:", semanas_disponiveis, key=f"sem_sel_{v}")
-            
-            # TRAVA DE SEGURANÇA SOSA: Extração imune a erros de formato
             sem_limpa = db.normalizar_semana_chave(sem_p) if hasattr(db, 'normalizar_semana_chave') else sem_p.split(" (")[0].strip()
             
             trim_atual = "I Trimestre"
@@ -552,7 +550,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                 key=f"carga_pills_{v}"
             )
 
-        # 🚨 CAMINHO DIRETO: BAIXA LIMPA EM RECESSO / FÉRIAS / FERIADO (SEM GERAR ARQUIVOS)
+        # BAIXA LIMPA EM RECESSO / FÉRIAS / FERIADO (SEM GERAR ARQUIVOS)
         if "Recesso" in tipo_semana or "Férias" in tipo_semana or "Feriado" in tipo_semana:
             with st.container(border=True):
                 st.markdown("#### 🏖️ Conclusão Burocrática de Recesso / Férias")
@@ -572,7 +570,7 @@ if menu == "📅 Planejamento (Ponto ID)":
 
         elif tipo_semana in ["Aplicação de Exame", "Semana de Provas Oficiais (Global)", "Sonda de Proficiência", "Devolutiva de Resultados & Recuperação"]:
             with st.container(border=True):
-                st.markdown("#### 2. Vínculo de Prova do Acervo & Extração de Habilidades")
+                st.markdown("#### 📋 2. Vínculo de Prova do Acervo & Extração de Habilidades")
                 st.caption("Selecione o exame já forjado no acervo para que o sistema extraia automaticamente os conteúdos, descritores SAEB e habilidades BNCC para o Plano Padronizado SOSA.")
 
                 df_ativos_ano = df_aulas[df_aulas['ANO'].astype(str).str.contains(str(ano_p))] if not df_aulas.empty else pd.DataFrame()
@@ -584,10 +582,8 @@ if menu == "📅 Planejamento (Ponto ID)":
                 
                 c_ex1, c_ex2 = st.columns([2, 1])
                 exame_selecionado = c_ex1.selectbox("📋 Selecione a Prova/Exame do Acervo (Opcional):", [""] + opcoes_ativos, key=f"sel_mat_vinculo_{v}")
-                
                 pincamento_exame_manual = c_ex2.text_input("ou Digite o Nome/Assunto da Prova:", placeholder="Ex: Prova Trimestral de Operações com Decimais", key=f"inp_exame_manual_{v}")
 
-                # Extração automática de metadados da prova selecionada
                 habilidades_extraidas = ""
                 conteudos_extraidos = ""
                 texto_prova_completo = ""
@@ -596,8 +592,6 @@ if menu == "📅 Planejamento (Ponto ID)":
                     match_ex = df_ativos_ano[df_ativos_ano['TIPO_MATERIAL'] == exame_selecionado]
                     if not match_ex.empty:
                         texto_prova_completo = str(match_ex.iloc[0]['CONTEUDO'])
-                        
-                        # Extrai Habilidades / Descritores da grade de correção ou do texto da prova
                         grade = ai.extrair_tag(texto_prova_completo, "GRADE_DE_CORRECAO") or ai.extrair_tag(texto_prova_completo, "GRADE_DE_CORRECAO_PEI")
                         if grade:
                             descritores = re.findall(r'(?i)(?:DESCRITOR_SAEB|HABILIDADE|BNCC|DESCRITOR)\s*:\s*([^|\]\n]+)', grade)
@@ -628,7 +622,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                     key=f"txt_rot_exec_{v}_{hash(exame_selecionado or pincamento_exame_manual)}"
                 )
 
-                st.info("💡 **Geração Automática do Plano Padronizado:** Ao clicar em 'Gerar Plano Padronizado', o texto completo será montado com todas as tags SOSA (`[HABILIDADE_BNCC]`, `[OBJETO_CONHECIMENTO]`, `[AULA_1]`, etc.) pronto para você **Copiar e Colar**. Além disso, a semana será gravada como **PRODUZIDA/ISENTA**, dispensando a geração no Criador de Aulas.")
+                st.info("💡 **Geração Automática do Plano Padronizado:** Ao clicar em 'Gerar Plano Padronizado', o texto completo será montado com todas as tags SOSA pronto para você **Copiar e Colar**. A semana será gravada como **PRODUZIDA/ISENTA**, dispensando a geração no Criador de Aulas.")
 
                 c_save_ex1, c_save_ex2 = st.columns(2)
 
@@ -668,9 +662,9 @@ if menu == "📅 Planejamento (Ponto ID)":
                         "trimestre": trim_atual, 
                         "ano": ano_str_busca, 
                         "base": f"Exame: {nome_exame_tit}",
-                        "status_final": "PRODUZIDO"  # 🚨 MARCA COMO PRODUZIDO (ISENTO DO CRIADOR DE AULAS)
+                        "status_final": "PRODUZIDO"
                     }
-                    st.toast("✅ Plano de Exame gerado no formato padronizado! Veja e copie na Mesa de Lapidação abaixo.", icon="🎯")
+                    st.toast("✅ Plano de Exame gerado no formato padronizado!", icon="🎯")
                     st.rerun()
 
                 if c_save_ex2.button("💾 Salvar Diretamente e Arquivar no Hub", use_container_width=True, key=f"btn_direct_save_ex_{v}"):
@@ -707,19 +701,16 @@ if menu == "📅 Planejamento (Ponto ID)":
                             f"--- LINK DRIVE --- {link_drive}"
                         )
                         
-                        # 🚨 EIXO/STATUS = 'PRODUZIDO' (ISENTA O CRIADOR DE AULAS DE GERAR MATERIAL)
                         db.salvar_no_banco("DB_PLANOS", [
                             datetime.now().strftime("%d/%m/%Y"), sem_limpa, ano_str_busca, trim_atual, "PRODUZIDO", final_txt, link_drive
                         ])
                         
-                        st.success(f"✅ Plano para {sem_limpa} salvo como PRODUZIDO com sucesso! Isento de geração no Criador de Aulas.")
-                        st.balloons()
-                        time.sleep(1)
-                        st.rerun()
+                        st.success(f"✅ Plano para {sem_limpa} salvo como PRODUZIDO com sucesso!")
+                        st.balloons(); time.sleep(1); st.rerun()
 
         else:
             with st.container(border=True):
-                st.markdown("#### 2. Base Curricular, Fatiamento do Livro & Sensibilização News/Tech")
+                st.markdown("#### 📖 2. Base Curricular, Fatiamento do Livro & Sensibilização News/Tech")
                 st.caption(f"ℹ️ **Carga Horária Selecionada:** {carga_horaria}. A IA distribuirá o conteúdo nas aulas conforme o número real de aulas.")
                 
                 modo_p = st.pills(
@@ -740,7 +731,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                     sel_eixo, sel_cont = [], []
                     if col_eixo_real and not df_matriz_ano.empty:
                         eixos_disponiveis = sorted(df_matriz_ano[col_eixo_real].dropna().unique().tolist())
-                        sel_eixo = st.multiselect("Eixo Temático (Conteúdos Gerais):", eixos_disponiveis)
+                        sel_eixo = st.multiselect("Unidade Temática BNCC (Eixo):", eixos_disponiveis, key=f"ms_eixo_matriz_{v}")
                         
                         if col_trim_real and sel_eixo:
                             df_eixos_sel = df_matriz_ano[df_matriz_ano[col_eixo_real].isin(sel_eixo)]
@@ -753,13 +744,13 @@ if menu == "📅 Planejamento (Ponto ID)":
                                     if t_clean and len(t_clean) > 3:
                                         topicos_fatiados.add(t_clean)
                                         
-                            sel_cont = st.multiselect("Conteúdos Específicos do Trimestre:", sorted(list(topicos_fatiados)))
+                            sel_cont = st.multiselect("Objetos de Conhecimento Específicos:", sorted(list(topicos_fatiados)), key=f"ms_cont_matriz_{v}")
                             
-                        ctx_ia = f"EIXO: {sel_eixo}, CONTEÚDOS ESPECÍFICOS: {sel_cont}."
+                        ctx_ia = f"UNIDADE TEMÁTICA BNCC: {sel_eixo}, OBJETOS DE CONHECIMENTO: {sel_cont}."
                     else: st.warning("⚠️ Não foi possível ler as colunas da matriz carregada.")
                 
                 elif modo_p == "Links da Web":
-                    links_web_texto = st.text_area("Cole os Links da Web ou Notícias (um por linha):", placeholder="https://...")
+                    links_web_texto = st.text_area("Cole os Links da Web ou Notícias (um por linha):", placeholder="https://...", key=f"ta_links_web_{v}")
                     base_didatica_info = "Artigos / Notícias da Web"
                 
                 else: # Livro Didático
@@ -793,34 +784,34 @@ if menu == "📅 Planejamento (Ponto ID)":
                     )
 
                     if texto_teoria_extraido or texto_exercicios_extraido or recorte_livro_texto.strip():
-                        with st.expander("👁️ MESA DE INSPEÇÃO DA IA (PRÉVIA DO CONTEÚDO LIDO)", expanded=True):
+                        with st.expander("👁️ MESA DE INSPEÇÃO DA IA (PRÉVIA DO CONTEÚDO LIDO DO LIVRO)", expanded=True):
                             t_insp1, t_insp2, t_insp3 = st.tabs(["📘 Teoria (Livro)", "📝 Exercícios (Livro)", "✍️ Texto Auxiliar"])
                             with t_insp1:
-                                if texto_teoria_extraido: st.text_area("Teoria Lida:", texto_teoria_extraido, height=150, disabled=True)
+                                if texto_teoria_extraido: st.text_area("Teoria Lida:", texto_teoria_extraido, height=150, disabled=True, key=f"ta_insp_teo_{v}")
                                 else: st.info("Nenhuma página de teoria fatiada.")
                             with t_insp2:
-                                if texto_exercicios_extraido: st.text_area("Exercícios Lidos:", texto_exercicios_extraido, height=150, disabled=True)
+                                if texto_exercicios_extraido: st.text_area("Exercícios Lidos:", texto_exercicios_extraido, height=150, disabled=True, key=f"ta_insp_ex_{v}")
                                 else: st.info("Nenhuma página de exercício fatiada.")
                             with t_insp3:
-                                if recorte_livro_texto.strip(): st.text_area("Texto Auxiliar Autorizado:", recorte_livro_texto, height=150, disabled=True)
+                                if recorte_livro_texto.strip(): st.text_area("Texto Auxiliar Autorizado:", recorte_livro_texto, height=150, disabled=True, key=f"ta_insp_aux_{v}")
                                 else: st.info("Nenhum texto auxiliar digitado.")
 
             foco_a1, foco_a2, foco_sab = "N/A", "N/A", "N/A"
-            with st.popover("⚙️ Ajustes Finos e Diretrizes de Aula (Opcional)", use_container_width=True):
+            with st.popover("⚙️ Ajustes Finos & Foco Específico das Aulas (Opcional)", use_container_width=True):
                 st.caption("Especifique o tema ou gancho de notícia/tecnologia para cada aula.")
                 if "1 Aula" in carga_horaria:
-                    foco_a1 = st.text_area("Foco da Única Aula:", placeholder="Ex: Pergunta sobre inflação e exercícios de soma de decimais...", height=80)
+                    foco_a1 = st.text_area("Foco da Única Aula:", placeholder="Ex: Pergunta sobre inflação e exercícios de soma de decimais...", height=80, key=f"foco_a1_p1_{v}")
                 elif "2 Aulas" in carga_horaria:
-                    foco_a1 = st.text_area("Foco da Aula 1 (Conceito):", placeholder="Ex: Explicar algoritmo e conectar com notícias de tecnologia...", height=80)
-                    foco_a2 = st.text_area("Foco da Aula 2 (Fixação):", placeholder="Ex: Resolver exercícios da pág. 185...", height=80)
+                    foco_a1 = st.text_area("Foco da Aula 1 (Conceito/Sensibilização):", placeholder="Ex: Explicar algoritmo e conectar com notícias de tecnologia...", height=80, key=f"foco_a1_p2_{v}")
+                    foco_a2 = st.text_area("Foco da Aula 2 (Fixação):", placeholder="Ex: Resolver exercícios da pág. 185...", height=80, key=f"foco_a2_p2_{v}")
                 else:
-                    foco_a1 = st.text_area("Foco da Aula 1:", placeholder="Ex: Explicar conceito...", height=80)
-                    foco_a2 = st.text_area("Foco da Aula 2:", placeholder="Ex: Resolver exercícios...", height=80)
-                    foco_sab = st.text_area("Foco do Sábado Letivo:", placeholder="Ex: Oficina prática...", height=80)
+                    foco_a1 = st.text_area("Foco da Aula 1:", placeholder="Ex: Explicar conceito...", height=80, key=f"foco_a1_p3_{v}")
+                    foco_a2 = st.text_area("Foco da Aula 2:", placeholder="Ex: Resolver exercícios...", height=80, key=f"foco_a2_p3_{v}")
+                    foco_sab = st.text_area("Foco do Sábado Letivo:", placeholder="Ex: Oficina prática...", height=80, key=f"foco_sab_p3_{v}")
 
             c_g1, c_g2 = st.columns(2)
 
-            if c_g1.button("🧠 Iniciar Motor de IA: Gerar Planejamento Ancorado", use_container_width=True, type="primary"):
+            if c_g1.button("🧠 Iniciar Motor de IA: Gerar Planejamento Ancorado (Custo Zero)", use_container_width=True, type="primary", key=f"btn_gen_ia_ponto_{v}"):
                 with st.status("🚀 Iniciando Protocolo de Planejamento Expositivo...", expanded=True) as status:
                     status.write("📚 Consolidando recortes do livro, diretrizes e ganchos News/Tech...")
                     
@@ -845,11 +836,11 @@ if menu == "📅 Planejamento (Ponto ID)":
                         diretriz_carga_promp = "CARGA HORÁRIA: 3 AULAS NA SEMANA. Distribua o conteúdo na AULA 1, AULA 2 e SÁBADO LETIVO no formato INÍCIO ➔ MEIO ➔ FIM."
 
                     template_forcado = (
-                        "[HABILIDADE_BNCC] (Código BNCC)\n"
+                        "[HABILIDADE_BNCC] (Código BNCC alfanumérico ex: EF06MA01)\n"
                         "[COMPETENCIAS_FOCO] (Competências Específicas de Matemática 1 a 8 da Pág. 267 da BNCC)\n"
-                        "[OBJETO_CONHECIMENTO] (Tema principal)\n"
-                        "[CONTEUDOS_ESPECIFICOS] (Tópicos)\n"
-                        "[OBJETIVOS_ENSINO] (Objetivos)\n"
+                        "[OBJETO_CONHECIMENTO] (Tema principal e Unidade Temática BNCC)\n"
+                        "[CONTEUDOS_ESPECIFICOS] (Tópicos matemáticos)\n"
+                        "[OBJETIVOS_ENSINO] (Objetivos pedagógicos)\n"
                         "[JUSTIFICATIVA_PEDAGOGICA] (Justificativa)\n"
                         "[AULA_1] INÍCIO (Sensibilização/News/Tech - 10 min): ...\nMEIO (Fundamentação/Quadro - 25 min): ...\nFIM (Fixação/Exercícios - 15 min): ...\n"
                         "[AULA_2] (AULA 2 no mesmo formato ou N/A se for 1 aula)\n"
@@ -880,21 +871,21 @@ if menu == "📅 Planejamento (Ponto ID)":
                         status.update(label="❌ Falha na comunicação com a IA.", state="error")
                         st.error(resultado_ia)
                     else:
-                        status.write("✅ Plano arquitetado com sucesso e custo R$ 0,00 (Free Tier)!")
+                        status.write("✅ Plano arquitetado com sucesso!")
                         st.session_state.p_temp = resultado_ia
                         st.session_state.p_meta = {"semana": sem_limpa, "trimestre": trim_atual, "ano": ano_str_busca, "base": base_didatica_info}
                         
-                        status.update(label="🎉 Planejamento Concluído com Sucesso!", state="complete")
+                        status.update(label="🎉 Planejamento Concluído!", state="complete")
                         time.sleep(0.8)
                         st.rerun()
 
-            if c_g2.button("✍️ Elaborar Manualmente (Sem IA)", use_container_width=True):
+            if c_g2.button("✍️ Elaborar Manualmente (Sem IA)", use_container_width=True, key=f"btn_manual_ponto_{v}"):
                 espec_pre = ", ".join(sel_cont) if 'sel_cont' in locals() and sel_cont else ""
                 
                 texto_manual_template = (
-                    f"[HABILIDADE_BNCC]\n"
-                    f"[COMPETENCIAS_FOCO] Competência Específica 2 (Raciocínio lógico e argumentação)\n"
-                    f"[OBJETO_CONHECIMENTO]\n"
+                    f"[HABILIDADE_BNCC] EF0{ano_p}MA01\n"
+                    f"[COMPETENCIAS_FOCO] Competência Específica 2 (Raciocínio Lógico e Argumentação)\n"
+                    f"[OBJETO_CONHECIMENTO] Unidade Temática: Números / Álgebra\n"
                     f"[CONTEUDOS_ESPECIFICOS] {espec_pre}\n"
                     f"[OBJETIVOS_ENSINO]\n"
                     f"[AULA_1] INÍCIO (Sensibilização - 10 min):\nMEIO (Fundamentação/Quadro - 25 min):\nFIM (Fixação/Exercícios - 15 min):\n"
@@ -908,7 +899,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                 st.session_state.p_meta = {"semana": sem_limpa, "trimestre": trim_atual, "ano": ano_str_busca, "base": base_didatica_info}
                 st.rerun()
 
-    # MESA DE LAPIDAÇÃO (VERSÃO INTEGRAL V2026.MASTER)
+    # MESA DE LAPIDAÇÃO (VERSÃO BENTO GRID + SELO VISUAL BNCC MATEMÁTICA)
     @st.fragment
     def renderizar_mesa_lapidacao_plano():
         if "p_temp" in st.session_state:
@@ -916,32 +907,52 @@ if menu == "📅 Planejamento (Ponto ID)":
             meta = st.session_state.get("p_meta", {})
             semana_nome = meta.get('semana', 'Atual')
             
+            # DETECÇÃO VISUAL DA UNIDADE TEMÁTICA BNCC
+            unidade_bncc = "🔢 NÚMEROS"
+            if any(x in txt_bruto.upper() for x in ["ÁLGEBRA", "ALGEBRA", "EQUAÇÃO", "VARIÁVEL", "FUNÇÃO"]):
+                unidade_bncc = "🧮 ÁLGEBRA"
+            elif any(x in txt_bruto.upper() for x in ["GEOMETRIA", "ÂNGULO", "TRIÂNGULO", "POLÍGONO", "PLANO CARTESIANO"]):
+                unidade_bncc = "📐 GEOMETRIA"
+            elif any(x in txt_bruto.upper() for x in ["GRANDEZAS", "MEDIDAS", "PERÍMETRO", "ÁREA", "VOLUME", "CAPACIDADE"]):
+                unidade_bncc = "📏 GRANDEZAS E MEDIDAS"
+            elif any(x in txt_bruto.upper() for x in ["PROBABILIDADE", "ESTATÍSTICA", "GRÁFICO", "TABELA", "AMOSTRA"]):
+                unidade_bncc = "📊 PROBABILIDADE E ESTATÍSTICA"
+
             st.markdown("---")
-            st.markdown(f"### 🛠️ Mesa de Lapidação: {semana_nome}")
             
-            # 1. BOTÃO SOBERANO DE HARMONIZAÇÃO RÁPIDA COM IA
-            if st.button("🧠 Harmonizar e Enriquecer Plano com IA (Corrigir Tópicos Brutos)", use_container_width=True, key=f"btn_harm_plan_{v}"):
-                with st.spinner("Analisando o plano e refinando os tópicos brutos para linguagem pedagógica oficial..."):
-                    prompt_harm = (
-                        f"REESCREVA O PLANO ABAIXO EM LINGUAGEM PEDAGÓGICA OFICIAL DA BNCC/SAEB.\n"
-                        f"Se houver nomes de arquivos brutos (ex: 'REVISAO_AVALIAÇÃO_6ANO...'), substitua por tópicos matemáticos reais e formais (ex: 'Recomposição de Frações, Divisibilidade, Operações e Perímetro').\n"
-                        f"Mantenha todas as tags [HABILIDADE_BNCC], [COMPETENCIAS_FOCO], [OBJETO_CONHECIMENTO], [CONTEUDOS_ESPECIFICOS], [OBJETIVOS_ENSINO], [AULA_1], [AULA_2], [SABADO_LETIVO], [AVALIACAO_DE_MERITO] e [ESTRATEGIA_DUA_PEI].\n\n"
-                        f"PLANO ATUAL:\n{txt_bruto}"
-                    )
-                    st.session_state.p_temp = ai.gerar_ia("PLANE_PEDAGOGICO", prompt_harm, usar_busca=False)
-                    st.toast("✅ Plano harmonizado com sucesso!", icon="✨")
-                    st.rerun()
-
-            # 2. BLOCO DE CÓPIA DIRETA PARA O PROFESSOR
-            with st.expander("📋 COPIAR TEXTO FORMATADO DO PLANO (ÁREA DE TRANSFERÊNCIA)", expanded=False):
-                st.caption("Clique no ícone de cópia no canto superior direito do bloco abaixo para copiar o texto formatado:")
-                st.code(st.session_state.p_temp, language=None)
-
-            # 3. REFINADOR DE COAUTORIA
             with st.container(border=True):
-                cmd_refine = st.chat_input("Refinador IA (Ex: 'Detalhe melhor os conteúdos específicos')", key=f"chat_refine_ponto_{v}")
+                st.markdown(f"### 🛠️ Mesa de Lapidação do Plano: **{semana_nome}**")
+                
+                # BADGES VISUAIS BNCC
+                c_bad1, c_bad2 = st.columns([1.5, 2.5])
+                c_bad1.markdown(f"**Unidade Temática BNCC:** `{unidade_bncc}`")
+                comp_foco_txt = ai.extrair_tag(txt_bruto, "COMPETENCIAS_FOCO") or "Competência Específica 2 (Raciocínio Lógico)"
+                c_bad2.markdown(f"**Competência Específica:** `{comp_foco_txt[:55]}...`")
+                
+                st.markdown("<br>", unsafe_allow_html=True)
+                
+                # 1. BOTÃO DE HARMONIZAÇÃO RÁPIDA COM IA
+                if st.button("🧠 Harmonizar e Enriquecer Plano com IA (Linguagem Oficial BNCC)", use_container_width=True, key=f"btn_harm_plan_{v}"):
+                    with st.spinner("Analisando o plano e refinando os tópicos brutos para linguagem pedagógica oficial..."):
+                        prompt_harm = (
+                            f"REESCREVA O PLANO ABAIXO EM LINGUAGEM PEDAGÓGICA OFICIAL DA BNCC/SAEB.\n"
+                            f"Se houver nomes de arquivos brutos (ex: 'REVISAO_AVALIAÇÃO_6ANO...'), substitua por tópicos matemáticos reais e formais (ex: 'Recomposição de Frações, Divisibilidade, Operações e Perímetro').\n"
+                            f"Mantenha todas as tags [HABILIDADE_BNCC], [COMPETENCIAS_FOCO], [OBJETO_CONHECIMENTO], [CONTEUDOS_ESPECIFICOS], [OBJETIVOS_ENSINO], [AULA_1], [AULA_2], [SABADO_LETIVO], [AVALIACAO_DE_MERITO] e [ESTRATEGIA_DUA_PEI].\n\n"
+                            f"PLANO ATUAL:\n{txt_bruto}"
+                        )
+                        st.session_state.p_temp = ai.gerar_ia("PLANE_PEDAGOGICO", prompt_harm, usar_busca=False)
+                        st.toast("✅ Plano harmonizado com sucesso!", icon="✨")
+                        st.rerun()
+
+                # 2. BLOCO DE CÓPIA DIRETA PARA O PROFESSOR
+                with st.expander("📋 COPIAR TEXTO FORMATADO DO PLANO (ÁREA DE TRANSFERÊNCIA)", expanded=False):
+                    st.caption("Clique no ícone de cópia no canto superior direito do bloco abaixo para copiar o texto formatado:")
+                    st.code(st.session_state.p_temp, language=None)
+
+                # 3. REFINADOR DE COAUTORIA
+                cmd_refine = st.chat_input("Refinador IA (Ex: 'Detalhe melhor a explicação da Aula 1')", key=f"chat_refine_ponto_{v}")
                 if cmd_refine:
-                    with st.spinner("Reescrevendo plano..."):
+                    with st.spinner("Reescrevendo plano com suas instruções..."):
                         prompt_refino = f"ORDEM DE AJUSTE: {cmd_refine}\n\nPLANO ATUAL:\n{st.session_state.p_temp}"
                         st.session_state.p_temp = ai.gerar_ia("REFINADOR_PEDAGOGICO", prompt_refino, usar_busca=False)
                         st.rerun()
@@ -956,7 +967,7 @@ if menu == "📅 Planejamento (Ponto ID)":
             with tab_curriculo:
                 ed_hab = st.text_input("Habilidade BNCC / Descritores:", ai.extrair_tag(txt_bruto, "HABILIDADE_BNCC") or "EF06MA01", key=f"frag_hab_{v}")
                 ed_comp = st.text_input("Competências Específicas BNCC (Pág. 267):", ai.extrair_tag(txt_bruto, "COMPETENCIAS_FOCO") or "Competência Específica 2 (Raciocínio Lógico) e 6 (Enfrentar Situações-Problema)", key=f"frag_comp_{v}")
-                ed_geral = st.text_input("Objeto de Conhecimento:", ai.extrair_tag(txt_bruto, "OBJETO_CONHECIMENTO") or ai.extrair_tag(txt_bruto, "CONTEUDO_GERAL") or "RECOMPOSIÇÃO DE APRENDIZAGEM & REVISÃO", key=f"frag_geral_{v}")
+                ed_geral = st.text_input("Objeto de Conhecimento / Unidade Temática:", ai.extrair_tag(txt_bruto, "OBJETO_CONHECIMENTO") or ai.extrair_tag(txt_bruto, "CONTEUDO_GERAL") or "RECOMPOSIÇÃO DE APRENDIZAGEM & REVISÃO", key=f"frag_geral_{v}")
                 ed_espec = st.text_area("Conteúdos Específicos:", ai.extrair_tag(txt_bruto, "CONTEUDOS_ESPECIFICOS") or txt_bruto, height=130, key=f"frag_espec_{v}")
                 ed_objs = st.text_area("Objetivos de Aprendizagem:", ai.extrair_tag(txt_bruto, "OBJETIVOS_ENSINO") or "Consolidar os objetos de conhecimento e superar as lacunas observadas nas avaliações.", height=130, key=f"frag_objs_{v}")
             
@@ -1030,7 +1041,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                     
                     status.update(label="✅ Plano Sincronizado no Banco de Dados e Google Drive!", state="complete")
                     st.balloons()
-                    time.sleep(1.5)
+                    time.sleep(1.2)
                     reset_planejamento()
 
     renderizar_mesa_lapidacao_plano()
@@ -1051,7 +1062,6 @@ if menu == "📅 Planejamento (Ponto ID)":
                         c_p1.markdown(f"**{row['SEMANA']}** | Série: {row['ANO']} ({row['TURMA']})")
                         c_p1.caption("Status: ⏳ HUB ATIVO (Aguardando Produção / Execução)")
                         
-                        # AÇÃO 1: GERAR COM IA NO CRIADOR DE AULAS
                         if c_p2.button("🚀 Gerar Material IA", key=f"gen_hub_{row.name}", use_container_width=True):
                             st.session_state.lab_temp = str(row["PLANO_TEXTO"])
                             st.session_state.sosa_id_atual = util.gerar_sosa_id("AULA", row['ANO'], row["TURMA"])
@@ -1063,7 +1073,6 @@ if menu == "📅 Planejamento (Ponto ID)":
                             }
                             navegar_para("🧪 Criador de Aulas")
 
-                        # AÇÃO 2: BAIXA LIMPA VIA LIVRO DIDÁTICO / LOUSA (SEM GERAR IA)
                         with c_p3.popover("📖 Baixa: Livro Didático"):
                             st.info("💡 **Baixa Limpa sem IA:** Registre os detalhes da aula ministrada pelo livro sem poluir o banco de arquivos.")
                             txt_obs_manual = st.text_input("Detalhes (Ex: Livro A Conquista - Págs. 184 a 187):", key=f"txt_man_obs_hub_{row.name}")
@@ -1081,7 +1090,6 @@ if menu == "📅 Planejamento (Ponto ID)":
                                 st.success("✅ Plano concluído por Livro Didático e registrado no Diário com sucesso!")
                                 st.balloons(); time.sleep(1); st.rerun()
 
-                        # AÇÃO 3: BAIXA POR EVENTO / FERIADO / PROVA
                         with c_p4.popover("🛑 Baixa: Evento/Feriado"):
                             st.info("💡 **Conclusão por Calendário:** Arquive esta semana devido a feriado, evento ou aplicação de exames.")
                             motivo_evento = st.selectbox("Motivo:", ["Feriado / Recesso", "Semana de Provas Globais", "Conselho de Classe / Evento"], key=f"mot_ev_hub_{row.name}")
@@ -1156,7 +1164,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                                             break
                                     
                                     status.update(label="✅ Documento Recuperado!", state="complete")
-                                    st.balloons(); st.cache_data.clear(); time.sleep(1.5); st.rerun()
+                                    st.balloons(); st.cache_data.clear(); time.sleep(1.2); st.rerun()
                                 except Exception as e: st.error(f"Erro ao salvar no banco: {e}")
                             else:
                                 status.update(label="❌ Falha na recuperação.", state="error")
@@ -1191,7 +1199,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                                         )
                                         if sucesso_reloc:
                                             st.success(f"✅ Plano transferido para {nova_semana_dest}!")
-                                            st.balloons(); time.sleep(1.5); st.rerun()
+                                            st.balloons(); time.sleep(1.2); st.rerun()
                                         else: st.error("Erro ao transferir a semana.")
 
                     renderizar_relocador_fragmento()
@@ -1242,7 +1250,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                         for topico in topicos:
                             target = re.sub(r'[^A-Z0-9]', '', topico.upper())
                             status = "✅ CONCLUÍDO" if target in texto_soberano_limpo and len(target) > 5 else "⏳ PENDENTE"
-                            dados_checklist.append({"Eixo": eixo, "Conteúdo Específico": topico, "Status": status})
+                            dados_checklist.append({"Unidade Temática (Eixo)": eixo, "Conteúdo Específico": topico, "Status": status})
                     
                     if dados_checklist:
                         df_check = pd.DataFrame(dados_checklist)
@@ -1345,7 +1353,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                         
                         if sucesso_c:
                             status_conc.update(label="✅ Semanas re-indexadas e aulas avulsas vinculadas com sucesso!", state="complete")
-                            st.balloons(); time.sleep(1.5); st.rerun()
+                            st.balloons(); time.sleep(1.2); st.rerun()
                         else:
                             status_conc.update(label="⚠️ Erro ao conciliar dados ou nenhum registro encontrado.", state="error")
 
