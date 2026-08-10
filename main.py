@@ -3074,7 +3074,7 @@ elif menu == "📝 Central de Avaliações":
                 reset_forja()
 
     # ==============================================================================
-    # ABA 2: ACERVO DE PROVAS & RE-EXPORTAÇÃO EM 1 CLIQUE
+    # ABA 2: ACERVO DE PROVAS & RE-EXPORTAÇÃO EM 1 CLIQUE (COM PONTE PARA PONTO ID)
     # ==============================================================================
     with tab_acervo_av:
         st.markdown("### 📖 Acervo de Instrumentos Avaliativos & Perícia TRI")
@@ -3104,7 +3104,7 @@ elif menu == "📝 Central de Avaliações":
                     val_ex = f"{val_num:.1f} pts" if val_num > 0 else "4.0 pts"
                     
                     st.markdown(f"##### 📋 {identificador}")
-                    st.caption(f"Série: {row['ANO']} | Valor: {val_ex} | Status: 🔒 COFRE DIGITAL DRIVE SINCRONIZADO")
+                    st.caption(f"Série: {row['ANO']} | Data: {row['DATA']} | Status: 🔒 COFRE DIGITAL DRIVE SINCRONIZADO")
                     
                     def extrair_link_acervo(t, tag):
                         m = re.search(rf"{tag}\((https://docs\.google\.com/document/d/[^\s\)]+)\)", t, re.IGNORECASE)
@@ -3131,6 +3131,64 @@ elif menu == "📝 Central de Avaliações":
                     
                     if c_b5.button("🗑️ Apagar", key=f"del_ac_{row.name}_{idx_av}_{v}", use_container_width=True):
                         if db.excluir_avaliacao_completa(identificador, row['SEMANA_REF']): st.rerun()
+
+                    # 🚀 NOVO RECURSO SOBERANO: INJETAR REVISÃO/EXAME JÁ EXISTENTE NO PONTO ID
+                    with st.popover("🚀 Injetar no Ponto ID (Gerar Plano de Aula da Semana)"):
+                        st.caption("Gere automaticamente o Plano de Aula desta revisão para o Ponto ID e vincule este material à semana sem gastar IA.")
+                        
+                        todas_semanas_inj_a2 = util.gerar_semanas()
+                        sem_dest_a2 = st.selectbox("Selecione a Semana da Aula:", [s.split(" (")[0] for s in todas_semanas_inj_a2 if "Jornada" not in s], key=f"sel_sem_inj_a2_{row.name}_{v}")
+                        trim_dest_a2 = st.selectbox("Trimestre Alvo:", ["I Trimestre", "II Trimestre", "III Trimestre"], index=1 if "II" in str(row.get('CONTEUDO','')) or "IITrimestre" in identificador else 0, key=f"sel_trim_inj_a2_{row.name}_{v}")
+                        
+                        if st.button("🚀 CONFIRMAR E ENVIAR PLANO PARA O PONTO ID", type="primary", use_container_width=True, key=f"btn_inj_acervo_{row.name}_{v}"):
+                            # 1. Extrai habilidades/conteúdos da revisão criada
+                            habs_rev = ai.extrair_tag(txt_f, "HABILIDADE_BNCC") or "Habilidades e descritores do material " + identificador
+                            espec_rev = ai.extrair_tag(txt_f, "CONTEUDOS_ESPECIFICOS") or ai.extrair_tag(txt_f, "OBJETO_CONHECIMENTO") or identificador
+                            
+                            # 2. Monta o plano semanal oficial no padrão SOSA
+                            roteiro_a1 = f"AULA 01 - REVISÃO E DEVOLUTIVA PEDAGÓGICA:\nINÍCIO (10 min): Acolhimento da turma, apresentação dos objetivos e orientação sobre o Caderno de Revisão ({identificador}).\nMEIO (35 min): Resolução comentada no quadro das questões e tiragem de dúvidas com foco nos descritores SAEB.\nFIM (5 min): Síntese das estratégias e verificação dos cadernos."
+                            roteiro_a2 = f"AULA 02 - PRÁTICA GUIADA E ATENDIMENTO INDIVIDUAL:\nINÍCIO (10 min): Orientação para resolução autônoma do Caderno de Revisão.\nMEIO (35 min): Acompanhamento e suporte mediado aos estudantes do Grupo 1 (PEI N1, N2 e N3).\nFIM (5 min): Visto nos cadernos e consolidação do roteiro."
+
+                            plano_inj_txt = (
+                                f"[HABILIDADE_BNCC] {habs_rev}\n"
+                                f"[COMPETENCIAS_FOCO] Competência Específica 2 (Raciocínio Lógico) e 6 (Enfrentar Situações-Problema)\n"
+                                f"[OBJETO_CONHECIMENTO] RECOMPOSIÇÃO DE APRENDIZAGEM & REVISÃO - {identificador}\n"
+                                f"[CONTEUDOS_ESPECIFICOS] {espec_rev}\n"
+                                f"[OBJETIVOS_ENSINO] Consolidar os objetos de conhecimento e superar as lacunas observadas nas avaliações do trimestre.\n"
+                                f"[JUSTIFICATIVA_PEDAGOGICA] Recomposição e revisão contínua de aprendizagem regimental.\n"
+                                f"[AULA_1] {roteiro_a1}\n"
+                                f"[AULA_2] {roteiro_a2}\n"
+                                f"[SABADO_LETIVO] N/A\n"
+                                f"[AVALIACAO_DE_MERITO] Observação direta do engajamento e visto na resolução das questões da revisão.\n"
+                                f"[ESTRATEGIA_DUA_PEI] Utilização de cadernos adaptados (PEI N1, N2 e N3) com suporte visual e mediação individualizada."
+                            )
+
+                            # 3. Atualiza a referência de semana no DB_AULAS_PRONTAS para vincular a aula à semana escolhida
+                            try:
+                                wb_inj = db.conectar()
+                                ws_aulas_inj = wb_inj.worksheet("DB_AULAS_PRONTAS")
+                                dados_aulas_inj = ws_aulas_inj.get_all_values()
+                                for idx_a_inj, row_a_inj in enumerate(dados_aulas_inj):
+                                    if idx_a_inj > 0 and row_a_inj[2] == identificador:
+                                        ws_aulas_inj.update_cell(idx_a_inj + 1, 2, sem_dest_a2) # Atualiza SEMANA_REF
+                                        break
+                            except Exception as e_inj:
+                                print(f"Aviso no vinculo da semana: {e_inj}")
+
+                            # 4. Envia o plano para o Ponto ID com status = PRODUZIDO (Isenta o Criador de Aulas)
+                            st.session_state.p_temp = plano_inj_txt
+                            st.session_state.p_meta = {
+                                "semana": sem_dest_a2,
+                                "trimestre": trim_dest_a2,
+                                "ano": str(row['ANO']),
+                                "base": f"Material de Revisão: {identificador}",
+                                "status_final": "PRODUZIDO" # 🚨 ISENTA O CRIADOR DE AULAS!
+                            }
+                            
+                            st.toast("✅ Plano gerado e vinculado à semana! Redirecionando para o Ponto ID...", icon="🚀")
+                            st.cache_data.clear()
+                            time.sleep(0.8)
+                            navegar_para("📅 Planejamento (Ponto ID)")
 
                     with st.expander("🔄 Re-gerar / Re-exportar Documentos (DOCX) no Drive", expanded=False):
                         st.info("💡 **Re-exportação Direta:** Clique abaixo para re-gerar os arquivos DOCX no Google Drive utilizando o texto preservado no banco de dados com a nova engine do Exporter.")
