@@ -1919,9 +1919,6 @@ elif menu == "🧪 Criador de Aulas":
                 else:
                     fa['tipo_material'] = 'LISTA'
                     with st.container(border=True):
-                        else:
-                    fa['tipo_material'] = 'LISTA'
-                    with st.container(border=True):
                         st.markdown("#### ⚙️ Configuração da Fábrica de Listas Híbridas (com Memória do Livro)")
                         c1, c2 = st.columns([1, 2])
                         ano_alvo = c1.selectbox("Série Alvo:", [6, 7, 8, 9], key=f"lab_list_ano_{v}")
