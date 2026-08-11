@@ -3619,7 +3619,7 @@ Escola Municipal Flávio José Simões Costa
 
 # ==============================================================================
 # MÓDULO: CENTRAL DE INTELIGÊNCIA DE RESULTADOS (CIR / SCANNER DE GABARITOS)
-# (V2026.ULTIMATE - UNIFICAÇÃO DE ACERVO REAL & VACINA ANTI-KEYERROR)
+# (V2026.ULTIMATE - UNIFICAÇÃO DE ACERVO REAL & CHAVES ÚNICAS)
 # ==============================================================================
 elif menu == "📸 Scanner de Gabaritos":
     st.title("Central de Inteligência de Resultados (CIR)")
@@ -3652,7 +3652,6 @@ elif menu == "📸 Scanner de Gabaritos":
         
         opcoes_encontradas = set()
 
-        # 1. Busca no Banco de Gabaritos dos Alunos (DB_GABARITOS_ALUNOS)
         if not df_diagnosticos.empty and 'TURMA' in df_diagnosticos.columns and 'ID_AVALIACAO' in df_diagnosticos.columns:
             mask_diag = (df_diagnosticos['TURMA'] == turma) & (
                 df_diagnosticos['ID_AVALIACAO'].astype(str).str.contains(padrao_regex_trim, regex=True, case=False, na=False) |
@@ -3663,7 +3662,6 @@ elif menu == "📸 Scanner de Gabaritos":
                 if av_clean and not re.search(r"2[ªA]|CHAMADA", av_clean, re.IGNORECASE):
                     opcoes_encontradas.add(av_clean)
 
-        # 2. Busca no Acervo de Aulas e Provas Prontas (DB_AULAS_PRONTAS)
         if not df_aulas.empty and 'ANO' in df_aulas.columns and 'TIPO_MATERIAL' in df_aulas.columns:
             df_f = df_aulas[df_aulas['ANO'].astype(str).str.contains(serie_num)].copy()
             permitidos = ["TESTE", "PROVA", "SONDA", "DIAGNÓSTICA", "RECUPERAÇÃO", "AVALIAÇÃO"]
@@ -3730,7 +3728,7 @@ elif menu == "📸 Scanner de Gabaritos":
         todos_estudantes_nomes = [r.get('Estudante', '') for r in dados_soberania_dialog]
         
         if not todos_estudantes_nomes: 
-            st.info("Nenhum aluno cadastrado nesta turma.")
+            st.info("Nenum aluno cadastrado nesta turma.")
         else:
             aluno_pericia_nome = st.selectbox("Selecione o Estudante:", todos_estudantes_nomes, key=f"pericia_modal_sel_{v}")
             if aluno_pericia_nome:
@@ -4361,7 +4359,7 @@ elif menu == "📸 Scanner de Gabaritos":
                         st.markdown("#### 🔍 Inspeção de Espelho de Gabarito & Raio-X de Itens")
                         
                         opcoes_cadernos_visuais = ["📝 Regular (Tipo A)", "🧬 Variante (Tipo B)", "🔵 PEI Nível 1 (Apoio Leve)", "🟡 PEI Nível 2 (Apoio Moderado)"]
-                        caderno_sel_tab = st.pills("Selecione o Caderno para Auditar:", opcoes_cadernos_visuais, default="📝 Regular (Tipo A)", key=f"pills_caderno_inspect_{v}")
+                        caderno_sel_tab = st.pills("Selecione o Caderno para Auditar:", opcoes_cadernos_visuais, default="📝 Regular (Tipo A)", key=f"pills_caderno_inspect_audit_{v}")
                         
                         is_pei_cad = "PEI" in str(caderno_sel_tab)
                         nivel_pei_tag = "NIVEL_1" if "Nível 1" in str(caderno_sel_tab) else "NIVEL_2"
@@ -4398,13 +4396,13 @@ elif menu == "📸 Scanner de Gabaritos":
                                         "Gabarito Atual": st.column_config.TextColumn(disabled=True, width="small"),
                                         "Novo Gabarito / Ação": st.column_config.SelectboxColumn("Ajustar Resposta", options=["A", "B", "C", "D", "E", "🚫 ANULADA"], required=True)
                                     },
-                                    key=f"ed_espelho_split_{str(caderno_sel_tab).replace(' ','_')}_{v}"
+                                    key=f"ed_espelho_split_audit_{str(caderno_sel_tab).replace(' ','_')}_{v}"
                                 )
 
                                 peso_q_espelho = v_total_av / len(gab_caderno_ativo) if len(gab_caderno_ativo) > 0 else 0
                                 st.caption(f"• **Total de Questões:** {len(gab_caderno_ativo)} | **Valor por Item:** {peso_q_espelho:.2f} pts")
 
-                                if st.button("⚡ SALVAR NOVO ESPELHO E RECALCULAR TURMA", type="primary", use_container_width=True, key=f"btn_save_espelho_{v}"):
+                                if st.button("⚡ SALVAR NOVO ESPELHO E RECALCULAR TURMA", type="primary", use_container_width=True, key=f"btn_save_espelho_audit_{v}"):
                                     with st.status("Recalculando notas para este caderno...", expanded=True) as status_rec:
                                         novos_gabs_map = {}
                                         for _, r_e in df_espelho_ed.iterrows():
@@ -4474,7 +4472,7 @@ elif menu == "📸 Scanner de Gabaritos":
                                 if not gab_caderno_ativo:
                                     st.info("Selecione uma avaliação para carregar o Raio-X.")
                                 else:
-                                    num_q_inspect = st.selectbox("Selecione o Item para Leitura Clínica:", [f"Questão {i+1:02d}" for i in range(len(gab_caderno_ativo))], key=f"sel_q_inspect_{v}")
+                                    num_q_inspect = st.selectbox("Selecione o Item para Leitura Clínica:", [f"Questão {i+1:02d}" for i in range(len(gab_caderno_ativo))], key=f"sel_q_inspect_audit_{v}")
                                     q_idx_inspect = int(num_q_inspect.replace("Questão ", ""))
                                     
                                     tag_questoes_cad = nivel_pei_tag if is_pei_cad else "QUESTOES"
@@ -4567,7 +4565,7 @@ elif menu == "📸 Scanner de Gabaritos":
                             status_h.update(label="Notas e gabaritos auditados!", state="complete"); time.sleep(0.5); st.rerun()
 
         # ==============================================================================
-        # ABA 3: RAIO-X PEDAGÓGICO & PONTE DE RECOMPOSIÇÃO PÓS-PROVA (UNIFICADO)
+        # ABA 3: RAIO-X PEDAGÓGICO & PONTE DE RECOMPOSIÇÃO PÓS-PROVA (UNIFICADO & CHAVES ÚNICAS)
         # ==============================================================================
         with tab_raiox:
             st.markdown("### Raio-X Pedagógico: Autópsia por Item & Recomposição")
@@ -4629,7 +4627,7 @@ elif menu == "📸 Scanner de Gabaritos":
                         st.info("Todos os alunos faltaram a esta avaliação.")
                     else:
                         with st.container(border=True):
-                            caderno_alvo = st.pills("🔍 Selecione o Caderno Específico para Análise:", cadernos_disponiveis, default=cadernos_disponiveis[0], key=f"cad_alvo_pills_{v}")
+                            caderno_alvo = st.pills("🔍 Selecione o Caderno Específico para Análise:", cadernos_disponiveis, default=cadernos_disponiveis[0], key=f"cad_alvo_pills_raiox_{v}")
                         
                         df_filtrado = df_analise[df_analise['CADERNO_FEITO'] == caderno_alvo]
                         
@@ -4648,14 +4646,9 @@ elif menu == "📸 Scanner de Gabaritos":
                             df_busca = df_aulas[df_aulas['TIPO_MATERIAL'] == at_sel_r] if not df_aulas.empty else pd.DataFrame()
                             if not df_busca.empty: material_ref = df_busca.iloc[0]
 
-                        if material_ref is None:
-                            st.error(f"O documento original do caderno '{caderno_alvo}' não foi localizado no Acervo de Aulas, mas a análise dos gabaritos continuará ativa.")
-                            txt_prova_base = ""
-                            gab_ativo = {}
-                        else:
-                            txt_prova_base = str(material_ref.get('CONTEUDO', ''))
-                            gab_ativo_list = ai.extrair_gab_universal_com_fallback(txt_prova_base, is_pei_view)
-                            gab_ativo = {i+1: letra for i, letra in enumerate(gab_ativo_list)}
+                        txt_prova_base = str(material_ref.get('CONTEUDO', '')) if material_ref is not None else ""
+                        gab_ativo_list = ai.extrair_gab_universal_com_fallback(txt_prova_base, is_pei_view) if txt_prova_base else []
+                        gab_ativo = {i+1: letra for i, letra in enumerate(gab_ativo_list)}
                             
                         stats_list = []
                         if is_2a_chamada:
@@ -4724,7 +4717,7 @@ elif menu == "📸 Scanner de Gabaritos":
                             with c_aut1:
                                 st.markdown("#### 🔬 Autópsia Clínica do Item")
                                 c_sel, c_btn = st.columns([2, 1])
-                                q_sel = c_sel.selectbox("Selecione a Questão:", df_stats_global["Questão"].tolist(), key=f"sel_q_inspect_{v}", label_visibility="collapsed")
+                                q_sel = c_sel.selectbox("Selecione a Questão:", df_stats_global["Questão"].tolist(), key=f"sel_q_inspect_raiox_{v}", label_visibility="collapsed")
                                 
                                 @st.dialog("🔬 Autópsia Clínica do Item", width="large")
                                 def dialog_autopsia(q_str, stats_row):
@@ -4764,7 +4757,7 @@ elif menu == "📸 Scanner de Gabaritos":
                                             st.info(preparar_para_leitura(p_completa))
                                         else: st.caption("Perícia de distratores não localizada.")
 
-                                if c_btn.button("🔍 Analisar Item", use_container_width=True, key=f"btn_autopsia_item_{v}"):
+                                if c_btn.button("🔍 Analisar Item", use_container_width=True, key=f"btn_autopsia_item_raiox_{v}"):
                                     stats_row = df_stats_global[df_stats_global['Questão'] == q_sel].iloc[0]
                                     dialog_autopsia(q_sel, stats_row)
 
@@ -4772,7 +4765,7 @@ elif menu == "📸 Scanner de Gabaritos":
                                 st.markdown("#### 🧠 Inteligência Preditiva & Recomposição")
                                 c_pr1, c_pr2 = st.columns(2)
                                 
-                                if c_pr1.button("Diagnóstico Preditivo", use_container_width=True, key=f"btn_gen_prog_{v}"):
+                                if c_pr1.button("Diagnóstico Preditivo", use_container_width=True, key=f"btn_gen_prog_raiox_{v}"):
                                     with st.spinner("Analisando lacunas..."):
                                         worst_3 = df_stats_global.sort_values(by="Acerto %").head(3)
                                         stats_str = "\n".join([f"{r['Questão']}: {r['Acerto %']:.1f}% de acerto" for _, r in worst_3.iterrows()])
@@ -4791,7 +4784,7 @@ elif menu == "📸 Scanner de Gabaritos":
                                         res_prog = ai.gerar_prognostico_pedagogico(stats_str, contexto_str)
                                         st.session_state[f"prog_{v}"] = res_prog
 
-                                if c_pr2.button("🚀 Forjar Recomposição (3 Itens Mais Errados)", type="primary", use_container_width=True, key=f"btn_ponte_recomp_{v}"):
+                                if c_pr2.button("🚀 Forjar Recomposição (3 Itens Mais Errados)", type="primary", use_container_width=True, key=f"btn_ponte_recomp_raiox_{v}"):
                                     with st.status("Extraindo os 3 itens com menor índice de acerto e gerando caderno de recomposição...", expanded=True) as status_rec_auto:
                                         worst_3 = df_stats_global.sort_values(by="Acerto %").head(3)
                                         itens_criticos_str = ", ".join(worst_3['Questão'].tolist())
