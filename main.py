@@ -3619,7 +3619,7 @@ Escola Municipal Flávio José Simões Costa
 
 # ==============================================================================
 # MÓDULO: CENTRAL DE INTELIGÊNCIA DE RESULTADOS (CIR / SCANNER DE GABARITOS)
-# (V2026.ULTIMATE - VACINA ANTI-KEYERROR & GROUNDING BNCC)
+# (V2026.ULTIMATE - UNIFICAÇÃO DE ACERVO REAL & VACINA ANTI-KEYERROR)
 # ==============================================================================
 elif menu == "📸 Scanner de Gabaritos":
     st.title("Central de Inteligência de Resultados (CIR)")
@@ -3644,65 +3644,44 @@ elif menu == "📸 Scanner de Gabaritos":
         elif "II" in t_upper or "SEGUNDO" in t_upper: return r"(?<!I)II(?![I])"
         else: return r"(?<!I)I(?![I])"
 
-    def filtrar_ativos_cir(turma, trimestre_nome, apenas_provas=True):
+    # MOTOR UNIFICADO DE BUSCA DE AVALIAÇÕES (AULAS + GABARITOS REAIS DO BANCO)
+    def obter_avaliacoes_unificadas_cir(turma, trimestre_nome):
         if not turma or not trimestre_nome: return []
-        try:
-            serie_num = str(turma)[0] 
-            df_f = df_aulas[df_aulas['ANO'].astype(str).str.contains(serie_num)].copy() if not df_aulas.empty else pd.DataFrame()
-            if df_f.empty: return []
+        padrao_regex_trim = obter_regex_trimestre(trimestre_nome)
+        serie_num = "".join(filter(str.isdigit, str(turma)))
+        
+        opcoes_encontradas = set()
 
-            def detectar_trimestre(x):
-                try:
-                    if str(x).replace('.','',1).isdigit():
-                        dt = date(1899, 12, 30) + timedelta(days=int(float(x)))
-                        return util.obter_info_trimestre(dt)[0]
-                    if "/" in str(x):
-                        partes = str(x).split("/")
-                        dt = date(int(partes[2]), int(partes[1]), int(partes[0]))
-                        return util.obter_info_trimestre(dt)[0]
-                except: pass
-                return "Outros"
+        # 1. Busca no Banco de Gabaritos dos Alunos (DB_GABARITOS_ALUNOS)
+        if not df_diagnosticos.empty and 'TURMA' in df_diagnosticos.columns and 'ID_AVALIACAO' in df_diagnosticos.columns:
+            mask_diag = (df_diagnosticos['TURMA'] == turma) & (
+                df_diagnosticos['ID_AVALIACAO'].astype(str).str.contains(padrao_regex_trim, regex=True, case=False, na=False) |
+                (trimestre_nome == "Todos")
+            )
+            for av_id in df_diagnosticos[mask_diag]['ID_AVALIACAO'].dropna().unique():
+                av_clean = re.sub(r'\s*\(\s*VARIANTE.*?\)', '', str(av_id), flags=re.IGNORECASE).strip()
+                if av_clean and not re.search(r"2[ªA]|CHAMADA", av_clean, re.IGNORECASE):
+                    opcoes_encontradas.add(av_clean)
 
-            df_f['TRIM_DETECTADO'] = df_f['DATA'].apply(detectar_trimestre)
-            padrao_regex_trim = obter_regex_trimestre(trimestre_nome)
+        # 2. Busca no Acervo de Aulas e Provas Prontas (DB_AULAS_PRONTAS)
+        if not df_aulas.empty and 'ANO' in df_aulas.columns and 'TIPO_MATERIAL' in df_aulas.columns:
+            df_f = df_aulas[df_aulas['ANO'].astype(str).str.contains(serie_num)].copy()
+            permitidos = ["TESTE", "PROVA", "SONDA", "DIAGNÓSTICA", "RECUPERAÇÃO", "AVALIAÇÃO"]
+            proibidos = ["REVISAO", "REVISÃO", "APLICAÇÃO", "CORREÇÃO", "DOSSIÊ", "AULA"]
             
-            if apenas_provas:
-                permitidos = ["TESTE", "PROVA", "SONDA", "DIAGNÓSTICA", "RECUPERAÇÃO", "AVALIAÇÃO"]
-                proibidos = ["REVISAO", "REVISÃO", "APLICAÇÃO", "CORREÇÃO", "APRESENTAÇÃO", "DOSSIÊ", "AULA"]
-                
-                mask_permitidos = df_f['TIPO_MATERIAL'].str.upper().str.contains('|'.join(permitidos))
-                df_f = df_f[mask_permitidos]
-                
-                mask_proibidos = df_f['TIPO_MATERIAL'].str.upper().str.contains('|'.join(proibidos))
-                df_f = df_f[~mask_proibidos]
-                
-                mask_trim = (
-                    (df_f['TRIM_DETECTADO'] == trimestre_nome) | 
-                    (df_f['CONTEUDO'].str.contains(padrao_regex_trim, regex=True, na=False, case=False)) | 
-                    (df_f['TIPO_MATERIAL'].str.contains(padrao_regex_trim, regex=True, na=False, case=False)) |
-                    (df_f['TIPO_MATERIAL'].str.upper().str.contains("FINAL"))
-                )
-                df_f = df_f[mask_trim]
-            else:
-                permitidos = ["PROJETO", "FIXAÇÃO", "REFORÇO", "ATIVIDADE", "TRABALHO", "AULA"]
-                proibidos = ["TESTE", "PROVA", "SONDA", "DIAGNÓSTICA", "RECUPERAÇÃO", "AVALIAÇÃO"]
-                
-                mask_permitidos = df_f['TIPO_MATERIAL'].str.upper().str.contains('|'.join(permitidos))
-                df_f = df_f[mask_permitidos]
-                
-                mask_proibidos = df_f['TIPO_MATERIAL'].str.upper().str.contains('|'.join(proibidos))
-                df_f = df_f[~mask_proibidos]
-                
-                mask_trim = (
-                    (df_f['TRIM_DETECTADO'] == trimestre_nome) | 
-                    (df_f['CONTEUDO'].str.contains(padrao_regex_trim, regex=True, na=False, case=False)) | 
-                    (df_f['TIPO_MATERIAL'].str.contains(padrao_regex_trim, regex=True, na=False, case=False))
-                )
-                df_f = df_f[mask_trim]
+            mask_p = df_f['TIPO_MATERIAL'].astype(str).str.upper().str.contains('|'.join(permitidos)) & \
+                     (~df_f['TIPO_MATERIAL'].astype(str).str.upper().str.contains('|'.join(proibidos)))
             
-            return sorted(df_f['TIPO_MATERIAL'].unique().tolist())
-        except Exception as e: 
-            return []
+            df_f = df_f[mask_p]
+            mask_t = df_f['CONTEUDO'].astype(str).str.contains(padrao_regex_trim, regex=True, na=False, case=False) | \
+                     df_f['TIPO_MATERIAL'].astype(str).str.contains(padrao_regex_trim, regex=True, na=False, case=False)
+            
+            for av_mat in df_f[mask_t]['TIPO_MATERIAL'].dropna().unique():
+                av_clean = re.sub(r'\s*\(\s*VARIANTE.*?\)', '', str(av_mat), flags=re.IGNORECASE).strip()
+                if av_clean and not re.search(r"2[ªA]|CHAMADA", av_clean, re.IGNORECASE):
+                    opcoes_encontradas.add(av_clean)
+
+        return sorted(list(opcoes_encontradas))
 
     # DIALOGS DECLARADOS FORA DE FRAGMENTS (LEI #25)
     @st.dialog("⚖️ Homologação de Atestados & Justificativas", width="large")
@@ -3874,17 +3853,8 @@ elif menu == "📸 Scanner de Gabaritos":
                 t_sel = c1.selectbox("👥 Turma:", [""] + lista_turmas_cir, key=f"t_p_{v}")
                 tr_sel = c2.selectbox("📅 Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_p_{v}")
                 
-                opcoes_p = filtrar_ativos_cir(t_sel, tr_sel, apenas_provas=True)
-                if t_sel and tr_sel and not df_diagnosticos.empty:
-                    padrao_trim = obter_regex_trimestre(tr_sel)
-                    mask_diag = (df_diagnosticos['TURMA'] == t_sel) & (
-                        df_diagnosticos['ID_AVALIACAO'].str.contains(padrao_trim, regex=True, case=False, na=False)
-                    )
-                    exames_feitos = df_diagnosticos[mask_diag]['ID_AVALIACAO'].unique().tolist()
-                    opcoes_p = list(set(opcoes_p + exames_feitos))
-                
-                opcoes_base = [opt for opt in opcoes_p if not re.search(r"2[ªA]|CHAMADA|TIPO [B-Z]", str(opt), re.IGNORECASE)]
-                at_sel = c3.selectbox("📋 Avaliação Base (Slot):", [""] + sorted(opcoes_base), key=f"at_p_{v}")
+                opcoes_base = obter_avaliacoes_unificadas_cir(t_sel, tr_sel)
+                at_sel = c3.selectbox("📋 Avaliação Base (Slot):", [""] + opcoes_base, key=f"at_p_{v}")
 
             if not t_sel or not at_sel:
                 st.info("Selecione a Turma e a Avaliação Base para abrir a Mesa de Correção.")
@@ -4288,7 +4258,7 @@ elif menu == "📸 Scanner de Gabaritos":
                         renderizar_mesa_correcao_fragmento()
 
         # ==============================================================================
-        # ABA 2: TRIBUNAL DE AUDITORIA (VACINA ANTI-KEYERROR V2026)
+        # ABA 2: TRIBUNAL DE AUDITORIA (UNIFICADO COM BANCO REAL DO ALUNO)
         # ==============================================================================
         with tab_auditoria:
             st.markdown("### Tribunal de Auditoria de Resultados")
@@ -4305,19 +4275,8 @@ elif menu == "📸 Scanner de Gabaritos":
                 gab_oficial_trib = {}
                 v_total_av = 10.0
                 
-                opcoes_auditoria = filtrar_ativos_cir(t_sel_h, tr_sel_h, apenas_provas=True)
-                
-                mask_diag_h = pd.Series()
-                if not df_diagnosticos.empty and 'TURMA' in df_diagnosticos.columns and 'ID_AVALIACAO' in df_diagnosticos.columns:
-                    mask_diag_h = (df_diagnosticos['TURMA'] == t_sel_h) & (
-                        df_diagnosticos['ID_AVALIACAO'].astype(str).str.contains(padrao_regex_trim, regex=True, case=False, na=False)
-                    )
-                
-                exames_feitos = df_diagnosticos[mask_diag_h]['ID_AVALIACAO'].unique().tolist() if not df_diagnosticos.empty and not mask_diag_h.empty else []
-                todas_opcoes = list(set(opcoes_auditoria + exames_feitos))
-                opcoes_base = [opt for opt in todas_opcoes if not re.search(r"2[ªA]|CHAMADA|TIPO [B-Z]", str(opt), re.IGNORECASE)]
-                
-                av_alvo_h = st.selectbox("📋 Avaliação Alvo:", [""] + sorted(opcoes_base), key=f"av_h_{v}")
+                opcoes_base = obter_avaliacoes_unificadas_cir(t_sel_h, tr_sel_h)
+                av_alvo_h = st.selectbox("📋 Avaliação Alvo:", [""] + opcoes_base, key=f"av_h_{v}")
 
                 if av_alvo_h:
                     is_sonda = "SONDA" in av_alvo_h.upper() or "DIAGNÓSTICA" in av_alvo_h.upper()
@@ -4331,7 +4290,13 @@ elif menu == "📸 Scanner de Gabaritos":
                         val_tag = ai.extrair_tag(txt_prova_trib, "VALOR")
                         if val_tag: v_total_av = util.sosa_to_float(val_tag)
 
-                    gabaritos_lidos = df_diagnosticos[mask_diag_h] if not df_diagnosticos.empty and not mask_diag_h.empty else pd.DataFrame()
+                    gabaritos_lidos = pd.DataFrame()
+                    if not df_diagnosticos.empty and 'TURMA' in df_diagnosticos.columns and 'ID_AVALIACAO' in df_diagnosticos.columns:
+                        mask_diag_h = (df_diagnosticos['TURMA'] == t_sel_h) & (
+                            df_diagnosticos['ID_AVALIACAO'].astype(str).str.contains(nome_curto_av, case=False, na=False)
+                        )
+                        gabaritos_lidos = df_diagnosticos[mask_diag_h]
+
                     alunos_turma_h = df_alunos[df_alunos['TURMA'] == t_sel_h].sort_values(by="NOME_ALUNO") if not df_alunos.empty else pd.DataFrame()
                     
                     dados_soberania = []
@@ -4602,7 +4567,7 @@ elif menu == "📸 Scanner de Gabaritos":
                             status_h.update(label="Notas e gabaritos auditados!", state="complete"); time.sleep(0.5); st.rerun()
 
         # ==============================================================================
-        # ABA 3: RAIO-X PEDAGÓGICO & PONTE DE RECOMPOSIÇÃO PÓS-PROVA (1-CLIQUE)
+        # ABA 3: RAIO-X PEDAGÓGICO & PONTE DE RECOMPOSIÇÃO PÓS-PROVA (UNIFICADO)
         # ==============================================================================
         with tab_raiox:
             st.markdown("### Raio-X Pedagógico: Autópsia por Item & Recomposição")
@@ -4612,9 +4577,7 @@ elif menu == "📸 Scanner de Gabaritos":
                 t_sel_r = c1.selectbox("Selecione a Turma:", [""] + lista_turmas_cir, key=f"t_r_v90_{v}")
                 tr_sel_r = c2.selectbox("Selecione o Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_r_v90_{v}")
                 
-                opcoes_r = filtrar_ativos_cir(t_sel_r, tr_sel_r, apenas_provas=True)
-                opcoes_base_r = [opt for opt in opcoes_r if not re.search(r"2[ªA]|CHAMADA|TIPO [B-Z]", str(opt), re.IGNORECASE)]
-                
+                opcoes_base_r = obter_avaliacoes_unificadas_cir(t_sel_r, tr_sel_r)
                 at_sel_r = c3.selectbox("Selecione a Avaliação Base:", [""] + opcoes_base_r, key=f"at_r_v90_{v}")
 
             if not t_sel_r or not at_sel_r:
@@ -4625,8 +4588,7 @@ elif menu == "📸 Scanner de Gabaritos":
                 serie_num_r = "".join(filter(str.isdigit, t_sel_r))
                 
                 mask_diag = (df_diagnosticos['TURMA'] == t_sel_r) & (
-                    df_diagnosticos['ID_AVALIACAO'].astype(str).str.contains(nome_curto_av, case=False, na=False) &
-                    df_diagnosticos['ID_AVALIACAO'].astype(str).str.contains(padrao_regex_trim, regex=True, case=False, na=False)
+                    df_diagnosticos['ID_AVALIACAO'].astype(str).str.contains(nome_curto_av, case=False, na=False)
                 ) if not df_diagnosticos.empty and 'TURMA' in df_diagnosticos.columns and 'ID_AVALIACAO' in df_diagnosticos.columns else pd.Series()
                 
                 respostas_brutas = df_diagnosticos[mask_diag].copy() if not df_diagnosticos.empty and not mask_diag.empty else pd.DataFrame()
@@ -4687,183 +4649,185 @@ elif menu == "📸 Scanner de Gabaritos":
                             if not df_busca.empty: material_ref = df_busca.iloc[0]
 
                         if material_ref is None:
-                            st.error(f"O documento original do caderno '{caderno_alvo}' não foi localizado no Acervo.")
+                            st.error(f"O documento original do caderno '{caderno_alvo}' não foi localizado no Acervo de Aulas, mas a análise dos gabaritos continuará ativa.")
+                            txt_prova_base = ""
+                            gab_ativo = {}
                         else:
                             txt_prova_base = str(material_ref.get('CONTEUDO', ''))
                             gab_ativo_list = ai.extrair_gab_universal_com_fallback(txt_prova_base, is_pei_view)
                             gab_ativo = {i+1: letra for i, letra in enumerate(gab_ativo_list)}
                             
-                            stats_list = []
-                            if is_2a_chamada:
-                                q_raw = ai.extrair_tag(txt_prova_base, "QUESTOES")
-                                num_q_total = len(re.findall(r"(?i)QUESTÃO\s*0?\d+", q_raw)) or 10
-                                matriz_respostas = [str(r.get('RESPOSTAS_ALUNO', '')).split('|GRUPO:')[0].split(';') for _, r in df_filtrado.iterrows()]
-                                
-                                for i in range(1, num_q_total + 1):
-                                    votos = [res[i-1] if len(res) >= i else "?" for res in matriz_respostas]
-                                    acertos_integrais = votos.count("✅ Acerto Integral")
-                                    acertos_parciais = votos.count("⚠️ Acerto Parcial")
-                                    pontos_obtidos = acertos_integrais + (acertos_parciais * 0.5)
-                                    perc = (pontos_obtidos / len(votos)) * 100 if len(votos) > 0 else 0
-                                    stats_list.append({"Questão": f"Q{i:02d}", "Acerto %": perc, "Gabarito": "Discursiva"})
-                            elif "Qualitativa" in str(caderno_alvo):
-                                st.info("♿ **Modo Qualitativo:** Avaliação baseada em parecer descritivo no Dossiê do Aluno.")
-                            else:
-                                num_q_total = len(gab_ativo) if gab_ativo else 10
-                                for i in range(1, num_q_total + 1):
-                                    acertos = 0
-                                    validos = 0
-                                    for _, row_aluno in df_filtrado.iterrows():
-                                        resp_limpa = str(row_aluno.get('RESPOSTAS_ALUNO', '')).split('|GRUPO:')[0]
-                                        respostas_lista = resp_limpa.upper().split(';')
-                                        if len(respostas_lista) >= i:
-                                            validos += 1
-                                            letra_aluno_clean = respostas_lista[i-1].replace("*", "")
-                                            if letra_aluno_clean == gab_ativo.get(i, "?"): acertos += 1
-                                    
-                                    perc = (acertos / validos) * 100 if validos > 0 else 0.0
-                                    stats_list.append({"Questão": f"Q{i:02d}", "Acerto %": perc, "Gabarito": gab_ativo.get(i, "?")})
-                                
-                            df_stats_global = pd.DataFrame(stats_list)
+                        stats_list = []
+                        if is_2a_chamada:
+                            q_raw = ai.extrair_tag(txt_prova_base, "QUESTOES")
+                            num_q_total = len(re.findall(r"(?i)QUESTÃO\s*0?\d+", q_raw)) or 10
+                            matriz_respostas = [str(r.get('RESPOSTAS_ALUNO', '')).split('|GRUPO:')[0].split(';') for _, r in df_filtrado.iterrows()]
                             
-                            if not df_stats_global.empty:
-                                worst_q = df_stats_global.loc[df_stats_global['Acerto %'].idxmin()]
-                                best_q = df_stats_global.loc[df_stats_global['Acerto %'].idxmax()]
-                                avg_ret = df_stats_global['Acerto %'].mean()
+                            for i in range(1, num_q_total + 1):
+                                votos = [res[i-1] if len(res) >= i else "?" for res in matriz_respostas]
+                                acertos_integrais = votos.count("✅ Acerto Integral")
+                                acertos_parciais = votos.count("⚠️ Acerto Parcial")
+                                pontos_obtidos = acertos_integrais + (acertos_parciais * 0.5)
+                                perc = (pontos_obtidos / len(votos)) * 100 if len(votos) > 0 else 0
+                                stats_list.append({"Questão": f"Q{i:02d}", "Acerto %": perc, "Gabarito": "Discursiva"})
+                        elif "Qualitativa" in str(caderno_alvo):
+                            st.info("♿ **Modo Qualitativo:** Avaliação baseada em parecer descritivo no Dossiê do Aluno.")
+                        else:
+                            num_q_total = len(gab_ativo) if gab_ativo else 10
+                            for i in range(1, num_q_total + 1):
+                                acertos = 0
+                                validos = 0
+                                for _, row_aluno in df_filtrado.iterrows():
+                                    resp_limpa = str(row_aluno.get('RESPOSTAS_ALUNO', '')).split('|GRUPO:')[0]
+                                    respostas_lista = resp_limpa.upper().split(';')
+                                    if len(respostas_lista) >= i:
+                                        validos += 1
+                                        letra_aluno_clean = respostas_lista[i-1].replace("*", "")
+                                        if gab_ativo and letra_aluno_clean == gab_ativo.get(i, "?"): acertos += 1
                                 
-                                st.markdown(f"""
-                                <div style='display: flex; gap: 10px; margin-bottom: 20px;'>
-                                    <div style='flex: 1; background: {cor_card}; border: 1px solid {cor_borda}; padding: 15px; border-radius: 12px; text-align: center;'>
-                                        <span style='font-size: 11px; color: gray; font-weight: bold; text-transform: uppercase;'>📉 Calcanhar de Aquiles</span><br>
-                                        <span style='font-size: 18px; color: #E74C3C; font-weight: 800;'>{worst_q['Questão']} ({worst_q['Acerto %']:.1f}%)</span>
-                                    </div>
-                                    <div style='flex: 1; background: {cor_card}; border: 1px solid {cor_borda}; padding: 15px; border-radius: 12px; text-align: center;'>
-                                        <span style='font-size: 11px; color: gray; font-weight: bold; text-transform: uppercase;'>🏆 Domínio Consolidado</span><br>
-                                        <span style='font-size: 18px; color: #2ECC71; font-weight: 800;'>{best_q['Questão']} ({best_q['Acerto %']:.1f}%)</span>
-                                    </div>
-                                    <div style='flex: 1; background: {cor_card}; border: 1px solid {cor_borda}; padding: 15px; border-radius: 12px; text-align: center;'>
-                                        <span style='font-size: 11px; color: gray; font-weight: bold; text-transform: uppercase;'>📊 Retenção Média</span><br>
-                                        <span style='font-size: 18px; color: #2962FF; font-weight: 800;'>{avg_ret:.1f}%</span>
-                                    </div>
+                                perc = (acertos / validos) * 100 if validos > 0 else 0.0
+                                stats_list.append({"Questão": f"Q{i:02d}", "Acerto %": perc, "Gabarito": gab_ativo.get(i, "?") if gab_ativo else "?"})
+                            
+                        df_stats_global = pd.DataFrame(stats_list)
+                        
+                        if not df_stats_global.empty:
+                            worst_q = df_stats_global.loc[df_stats_global['Acerto %'].idxmin()]
+                            best_q = df_stats_global.loc[df_stats_global['Acerto %'].idxmax()]
+                            avg_ret = df_stats_global['Acerto %'].mean()
+                            
+                            st.markdown(f"""
+                            <div style='display: flex; gap: 10px; margin-bottom: 20px;'>
+                                <div style='flex: 1; background: {cor_card}; border: 1px solid {cor_borda}; padding: 15px; border-radius: 12px; text-align: center;'>
+                                    <span style='font-size: 11px; color: gray; font-weight: bold; text-transform: uppercase;'>📉 Calcanhar de Aquiles</span><br>
+                                    <span style='font-size: 18px; color: #E74C3C; font-weight: 800;'>{worst_q['Questão']} ({worst_q['Acerto %']:.1f}%)</span>
                                 </div>
-                                """, unsafe_allow_html=True)
+                                <div style='flex: 1; background: {cor_card}; border: 1px solid {cor_borda}; padding: 15px; border-radius: 12px; text-align: center;'>
+                                    <span style='font-size: 11px; color: gray; font-weight: bold; text-transform: uppercase;'>🏆 Domínio Consolidado</span><br>
+                                    <span style='font-size: 18px; color: #2ECC71; font-weight: 800;'>{best_q['Questão']} ({best_q['Acerto %']:.1f}%)</span>
+                                </div>
+                                <div style='flex: 1; background: {cor_card}; border: 1px solid {cor_borda}; padding: 15px; border-radius: 12px; text-align: center;'>
+                                    <span style='font-size: 11px; color: gray; font-weight: bold; text-transform: uppercase;'>📊 Retenção Média</span><br>
+                                    <span style='font-size: 18px; color: #2962FF; font-weight: 800;'>{avg_ret:.1f}%</span>
+                                </div>
+                            </div>
+                            """, unsafe_allow_html=True)
 
-                                st.markdown(f"#### Histograma de Desempenho: **{caderno_alvo}**")
-                                fig_global = px.bar(df_stats_global, x="Questão", y="Acerto %", text_auto='.0f', color="Acerto %", color_continuous_scale="RdYlGn")
-                                fig_global.update_layout(yaxis_range=[0, 110], height=280, margin=dict(l=20, r=20, t=30, b=20))
-                                st.plotly_chart(fig_global, use_container_width=True)
+                            st.markdown(f"#### Histograma de Desempenho: **{caderno_alvo}**")
+                            fig_global = px.bar(df_stats_global, x="Questão", y="Acerto %", text_auto='.0f', color="Acerto %", color_continuous_scale="RdYlGn")
+                            fig_global.update_layout(yaxis_range=[0, 110], height=280, margin=dict(l=20, r=20, t=30, b=20))
+                            st.plotly_chart(fig_global, use_container_width=True)
 
-                                st.markdown("---")
+                            st.markdown("---")
+                            
+                            c_aut1, c_aut2 = st.columns([1.5, 1.5])
+                            
+                            with c_aut1:
+                                st.markdown("#### 🔬 Autópsia Clínica do Item")
+                                c_sel, c_btn = st.columns([2, 1])
+                                q_sel = c_sel.selectbox("Selecione a Questão:", df_stats_global["Questão"].tolist(), key=f"sel_q_inspect_{v}", label_visibility="collapsed")
                                 
-                                c_aut1, c_aut2 = st.columns([1.5, 1.5])
-                                
-                                with c_aut1:
-                                    st.markdown("#### 🔬 Autópsia Clínica do Item")
-                                    c_sel, c_btn = st.columns([2, 1])
-                                    q_sel = c_sel.selectbox("Selecione a Questão:", df_stats_global["Questão"].tolist(), key=f"sel_q_inspect_{v}", label_visibility="collapsed")
+                                @st.dialog("🔬 Autópsia Clínica do Item", width="large")
+                                def dialog_autopsia(q_str, stats_row):
+                                    idx_num = int(q_str.replace("Q", ""))
+                                    prefixo_q = r"(?:QUEST[AÃ]O\s*(?:PEI\s*)?|Q)"
+                                    padrao_q = rf"(?si)({prefixo_q}\s*0?{idx_num}\b.*?)(?={prefixo_q}\s*0?{idx_num+1}\b|GABARITO|RESPOSTAS|GRADE|$)"
                                     
-                                    @st.dialog("🔬 Autópsia Clínica do Item", width="large")
-                                    def dialog_autopsia(q_str, stats_row):
-                                        idx_num = int(q_str.replace("Q", ""))
-                                        prefixo_q = r"(?:QUEST[AÃ]O\s*(?:PEI\s*)?|Q)"
-                                        padrao_q = rf"(?si)({prefixo_q}\s*0?{idx_num}\b.*?)(?={prefixo_q}\s*0?{idx_num+1}\b|GABARITO|RESPOSTAS|GRADE|$)"
+                                    if "Nível 1" in str(caderno_alvo): tag_questoes = "NIVEL_1"
+                                    elif "Nível 2" in str(caderno_alvo): tag_questoes = "NIVEL_2"
+                                    elif is_pei_view: tag_questoes = "PEI"
+                                    else: tag_questoes = "QUESTOES"
+                                    
+                                    q_raw_reg = ai.extrair_tag(txt_prova_base, tag_questoes) or ai.extrair_tag(txt_prova_base, "QUESTOES")
+                                    m_q_reg = re.search(padrao_q, q_raw_reg, re.IGNORECASE | re.DOTALL)
+                                    
+                                    tag_grade = "GRADE_DE_CORRECAO_PEI" if is_pei_view else "GRADE_DE_CORRECAO"
+                                    grade_raw = ai.extrair_tag(txt_prova_base, tag_grade)
+                                    m_p_reg = re.search(padrao_q, grade_raw, re.IGNORECASE | re.DOTALL)
+                                    
+                                    c_left, c_right = st.columns([1.5, 1])
+                                    with c_left:
+                                        st.markdown(f"### 📄 Enunciado Oficial ({q_str})")
+                                        if m_q_reg: st.write(preparar_para_leitura(m_q_reg.group(1).strip()))
+                                        else: st.info("Enunciado da questão disponível na impressão oficial.")
+                                    
+                                    with c_right:
+                                        st.markdown("### 📊 Desempenho")
+                                        acerto_perc = stats_row['Acerto %']
+                                        cor_acerto = "normal" if acerto_perc >= 60 else "inverse"
+                                        st.metric("Índice de Acerto", f"{acerto_perc:.1f}%", delta="Atenção" if acerto_perc < 50 else "Adequado", delta_color=cor_acerto)
+                                        st.metric("Gabarito Oficial", stats_row['Gabarito'])
                                         
-                                        if "Nível 1" in str(caderno_alvo): tag_questoes = "NIVEL_1"
-                                        elif "Nível 2" in str(caderno_alvo): tag_questoes = "NIVEL_2"
-                                        elif is_pei_view: tag_questoes = "PEI"
-                                        else: tag_questoes = "QUESTOES"
+                                        st.markdown("---")
+                                        st.markdown("### 🧠 Perícia Pedagógica (Descritor SAEB & Distratores)")
+                                        if m_p_reg:
+                                            p_completa = re.sub(r'[*#]', '', m_p_reg.group(1).strip())
+                                            st.info(preparar_para_leitura(p_completa))
+                                        else: st.caption("Perícia de distratores não localizada.")
+
+                                if c_btn.button("🔍 Analisar Item", use_container_width=True, key=f"btn_autopsia_item_{v}"):
+                                    stats_row = df_stats_global[df_stats_global['Questão'] == q_sel].iloc[0]
+                                    dialog_autopsia(q_sel, stats_row)
+
+                            with c_aut2:
+                                st.markdown("#### 🧠 Inteligência Preditiva & Recomposição")
+                                c_pr1, c_pr2 = st.columns(2)
+                                
+                                if c_pr1.button("Diagnóstico Preditivo", use_container_width=True, key=f"btn_gen_prog_{v}"):
+                                    with st.spinner("Analisando lacunas..."):
+                                        worst_3 = df_stats_global.sort_values(by="Acerto %").head(3)
+                                        stats_str = "\n".join([f"{r['Questão']}: {r['Acerto %']:.1f}% de acerto" for _, r in worst_3.iterrows()])
                                         
-                                        q_raw_reg = ai.extrair_tag(txt_prova_base, tag_questoes) or ai.extrair_tag(txt_prova_base, "QUESTOES")
-                                        m_q_reg = re.search(padrao_q, q_raw_reg, re.IGNORECASE | re.DOTALL)
-                                        
+                                        contexto_str = ""
                                         tag_grade = "GRADE_DE_CORRECAO_PEI" if is_pei_view else "GRADE_DE_CORRECAO"
                                         grade_raw = ai.extrair_tag(txt_prova_base, tag_grade)
-                                        m_p_reg = re.search(padrao_q, grade_raw, re.IGNORECASE | re.DOTALL)
+                                        prefixo_q = r"(?:QUEST[AÃ]O\s*(?:PEI\s*)?|Q)"
                                         
-                                        c_left, c_right = st.columns([1.5, 1])
-                                        with c_left:
-                                            st.markdown(f"### 📄 Enunciado Oficial ({q_str})")
-                                            if m_q_reg: st.write(preparar_para_leitura(m_q_reg.group(1).strip()))
-                                            else: st.error("Enunciado não localizado.")
+                                        for _, r in worst_3.iterrows():
+                                            idx_num = int(r['Questão'].replace("Q", ""))
+                                            padrao_q = rf"(?si)({prefixo_q}\s*0?{idx_num}\b.*?)(?={prefixo_q}\s*0?{idx_num+1}\b|GABARITO|RESPOSTAS|GRADE|$)"
+                                            m_p_reg = re.search(padrao_q, grade_raw, re.IGNORECASE | re.DOTALL)
+                                            if m_p_reg: contexto_str += f"Erro na {r['Questão']}: {re.sub(r'[*#]', '', m_p_reg.group(1).strip())}\n"
                                         
-                                        with c_right:
-                                            st.markdown("### 📊 Desempenho")
-                                            acerto_perc = stats_row['Acerto %']
-                                            cor_acerto = "normal" if acerto_perc >= 60 else "inverse"
-                                            st.metric("Índice de Acerto", f"{acerto_perc:.1f}%", delta="Atenção" if acerto_perc < 50 else "Adequado", delta_color=cor_acerto)
-                                            st.metric("Gabarito Oficial", stats_row['Gabarito'])
-                                            
-                                            st.markdown("---")
-                                            st.markdown("### 🧠 Perícia Pedagógica (Descritor SAEB & Distratores)")
-                                            if m_p_reg:
-                                                p_completa = re.sub(r'[*#]', '', m_p_reg.group(1).strip())
-                                                st.info(preparar_para_leitura(p_completa))
-                                            else: st.caption("Perícia de distratores não localizada.")
+                                        res_prog = ai.gerar_prognostico_pedagogico(stats_str, contexto_str)
+                                        st.session_state[f"prog_{v}"] = res_prog
 
-                                    if c_btn.button("🔍 Analisar Item", use_container_width=True, key=f"btn_autopsia_item_{v}"):
-                                        stats_row = df_stats_global[df_stats_global['Questão'] == q_sel].iloc[0]
-                                        dialog_autopsia(q_sel, stats_row)
+                                if c_pr2.button("🚀 Forjar Recomposição (3 Itens Mais Errados)", type="primary", use_container_width=True, key=f"btn_ponte_recomp_{v}"):
+                                    with st.status("Extraindo os 3 itens com menor índice de acerto e gerando caderno de recomposição...", expanded=True) as status_rec_auto:
+                                        worst_3 = df_stats_global.sort_values(by="Acerto %").head(3)
+                                        itens_criticos_str = ", ".join(worst_3['Questão'].tolist())
+                                        
+                                        prompt_recomp_auto = (
+                                            f"PROVA ORIGINAL:\n{txt_prova_base}\n\n"
+                                            f"ITENS CRÍTICOS COM MAIOR ÍNDICE DE ERRO NA TURMA {t_sel_r}: {itens_criticos_str}.\n"
+                                            f"SÉRIE: {t_sel_r}.\n"
+                                            f"MISSÃO: Crie o Caderno de Recomposição FOCADO ESTRITAMENTE nesses 3 itens críticos, gerando Roteiro do Professor e Exercícios Espelho para os alunos."
+                                        )
+                                        res_recomp_auto = ai.gerar_ia("ARQUITETO_REVISAO_V29", prompt_recomp_auto)
+                                        
+                                        nome_recomp_auto = f"RECOMPO_{at_sel_r}_LACUNAS"
+                                        info_recomp_auto = {"ano": f"{serie_num_r}º", "trimestre": tr_sel_r, "semana": "RECOMPOSIÇÃO"}
 
-                                with c_aut2:
-                                    st.markdown("#### 🧠 Inteligência Preditiva & Recomposição")
-                                    c_pr1, c_pr2 = st.columns(2)
-                                    
-                                    if c_pr1.button("Diagnóstico Preditivo", use_container_width=True, key=f"btn_gen_prog_{v}"):
-                                        with st.spinner("Analisando lacunas..."):
-                                            worst_3 = df_stats_global.sort_values(by="Acerto %").head(3)
-                                            stats_str = "\n".join([f"{r['Questão']}: {r['Acerto %']:.1f}% de acerto" for _, r in worst_3.iterrows()])
-                                            
-                                            contexto_str = ""
-                                            tag_grade = "GRADE_DE_CORRECAO_PEI" if is_pei_view else "GRADE_DE_CORRECAO"
-                                            grade_raw = ai.extrair_tag(txt_prova_base, tag_grade)
-                                            prefixo_q = r"(?:QUEST[AÃ]O\s*(?:PEI\s*)?|Q)"
-                                            
-                                            for _, r in worst_3.iterrows():
-                                                idx_num = int(r['Questão'].replace("Q", ""))
-                                                padrao_q = rf"(?si)({prefixo_q}\s*0?{idx_num}\b.*?)(?={prefixo_q}\s*0?{idx_num+1}\b|GABARITO|RESPOSTAS|GRADE|$)"
-                                                m_p_reg = re.search(padrao_q, grade_raw, re.IGNORECASE | re.DOTALL)
-                                                if m_p_reg: contexto_str += f"Erro na {r['Questão']}: {re.sub(r'[*#]', '', m_p_reg.group(1).strip())}\n"
-                                            
-                                            res_prog = ai.gerar_prognostico_pedagogico(stats_str, contexto_str)
-                                            st.session_state[f"prog_{v}"] = res_prog
+                                        status_rec_auto.write("📄 Gerando Caderno de Exercícios do Aluno...")
+                                        doc_alu_rec = exporter.gerar_docx_aluno_v24(nome_recomp_auto, ai.extrair_tag(res_recomp_auto, "ALUNO"), info_recomp_auto)
+                                        link_alu_rec = db.subir_e_converter_para_google_docs(doc_alu_rec, f"{nome_recomp_auto}_ALUNO", modo="AULA")
 
-                                    if c_pr2.button("🚀 Forjar Recomposição (3 Itens Mais Errados)", type="primary", use_container_width=True, key=f"btn_ponte_recomp_{v}"):
-                                        with st.status("Extraindo os 3 itens com menor índice de acerto e gerando caderno de recomposição...", expanded=True) as status_rec_auto:
-                                            worst_3 = df_stats_global.sort_values(by="Acerto %").head(3)
-                                            itens_criticos_str = ", ".join(worst_3['Questão'].tolist())
-                                            
-                                            prompt_recomp_auto = (
-                                                f"PROVA ORIGINAL:\n{txt_prova_base}\n\n"
-                                                f"ITENS CRÍTICOS COM MAIOR ÍNDICE DE ERRO NA TURMA {t_sel_r}: {itens_criticos_str}.\n"
-                                                f"SÉRIE: {t_sel_r}.\n"
-                                                f"MISSÃO: Crie o Caderno de Recomposição FOCADO ESTRITAMENTE nesses 3 itens críticos, gerando Roteiro do Professor e Exercícios Espelho para os alunos."
-                                            )
-                                            res_recomp_auto = ai.gerar_ia("ARQUITETO_REVISAO_V29", prompt_recomp_auto)
-                                            
-                                            nome_recomp_auto = f"RECOMPO_{at_sel_r}_LACUNAS"
-                                            info_recomp_auto = {"ano": f"{serie_num_r}º", "trimestre": tr_sel_r, "semana": "RECOMPOSIÇÃO"}
+                                        status_rec_auto.write("👨‍🏫 Gerando Guia do Professor...")
+                                        doc_prof_rec = exporter.gerar_docx_professor_v25(nome_recomp_auto, ai.extrair_tag(res_recomp_auto, "PROFESSOR"), info_recomp_auto)
+                                        link_prof_rec = db.subir_e_converter_para_google_docs(doc_prof_rec, f"{nome_recomp_auto}_PROF", modo="AULA")
 
-                                            status_rec_auto.write("📄 Gerando Caderno de Exercícios do Aluno...")
-                                            doc_alu_rec = exporter.gerar_docx_aluno_v24(nome_recomp_auto, ai.extrair_tag(res_recomp_auto, "ALUNO"), info_recomp_auto)
-                                            link_alu_rec = db.subir_e_converter_para_google_docs(doc_alu_rec, f"{nome_recomp_auto}_ALUNO", modo="AULA")
+                                        conteudo_final_rec = f"{res_recomp_auto}\n\n--- LINKS ---\nRegular({link_alu_rec}) Prof({link_prof_rec})"
 
-                                            status_rec_auto.write("👨‍🏫 Gerando Guia do Professor...")
-                                            doc_prof_rec = exporter.gerar_docx_professor_v25(nome_recomp_auto, ai.extrair_tag(res_recomp_auto, "PROFESSOR"), info_recomp_auto)
-                                            link_prof_rec = db.subir_e_converter_para_google_docs(doc_prof_rec, f"{nome_recomp_auto}_PROF", modo="AULA")
+                                        db.salvar_no_banco("DB_AULAS_PRONTAS", [
+                                            datetime.now().strftime("%d/%m/%Y"), "REVISÃO", nome_recomp_auto,
+                                            conteudo_final_rec, f"{serie_num_r}º", link_alu_rec
+                                        ])
 
-                                            conteudo_final_rec = f"{res_recomp_auto}\n\n--- LINKS ---\nRegular({link_alu_rec}) Prof({link_prof_rec})"
+                                        status_rec_auto.update(label="✅ Caderno de Recomposição Forjado e Sincronizado no Drive!", state="complete")
+                                        st.balloons()
+                                        st.link_button("📂 ABRIR CADERNO DE RECOMPOSIÇÃO NO DRIVE", link_alu_rec, type="primary", use_container_width=True)
 
-                                            db.salvar_no_banco("DB_AULAS_PRONTAS", [
-                                                datetime.now().strftime("%d/%m/%Y"), "REVISÃO", nome_recomp_auto,
-                                                conteudo_final_rec, f"{serie_num_r}º", link_alu_rec
-                                            ])
-
-                                            status_rec_auto.update(label="✅ Caderno de Recomposição Forjado e Sincronizado no Drive!", state="complete")
-                                            st.balloons()
-                                            st.link_button("📂 ABRIR CADERNO DE RECOMPOSIÇÃO NO DRIVE", link_alu_rec, type="primary", use_container_width=True)
-
-                                if f"prog_{v}" in st.session_state:
-                                    st.success(f"💡 **Prognóstico de Intervenção:**\n\n{st.session_state[f'prog_{v}']}")
+                            if f"prog_{v}" in st.session_state:
+                                st.success(f"💡 **Prognóstico de Intervenção:**\n\n{st.session_state[f'prog_{v}']}")
 
 
 
