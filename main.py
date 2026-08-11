@@ -5496,6 +5496,239 @@ Documento mantido sob guarda do Componente Curricular de Matemática. 🚀"""
 
 
 
+
+# ==============================================================================
+# MÓDULO: PAINEL DE NOTAS & VISTOS - V2026.ULTIMATE
+# (SINCRONIZAÇÃO EM TEMPO REAL, TRANSBORDO DE BÔNUS E FÁBRICA DE ETIQUETAS)
+# ==============================================================================
+elif menu == "📊 Painel de Notas & Vistos":
+    st.title("📊 Painel de Notas & Vistos")
+    st.caption("Central de consolidação de médias: sincronização em tempo real de vistos (C1), testes (C2), provas (C3), transbordamento de bônus e fábrica de etiquetas.")
+    st.markdown("---")
+
+    if "v_notas" not in st.session_state:
+        st.session_state.v_notas = int(time.time())
+    v = st.session_state.v_notas
+
+    lista_turmas_notas = []
+    if not df_turmas.empty and 'ID_TURMA' in df_turmas.columns:
+        turmas_reais_n = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
+        lista_turmas_notas = sorted(turmas_reais_n['ID_TURMA'].unique())
+    elif not df_alunos.empty and 'TURMA' in df_alunos.columns:
+        lista_turmas_notas = sorted(df_alunos['TURMA'].unique())
+
+    if not lista_turmas_notas:
+        st.warning("⚠️ Nenhuma turma cadastrada. Cadastre as turmas no cockpit de Gestão da Turma.")
+    else:
+        hoje_dt = date.today()
+        if hoje_dt <= date(2026, 5, 22): trim_detectado_n = "I Trimestre"
+        elif hoje_dt <= date(2026, 9, 4): trim_detectado_n = "II Trimestre"
+        else: trim_detectado_n = "III Trimestre"
+
+        with st.container(border=True):
+            c_n1, c_n2 = st.columns([1.5, 2])
+            turma_notas = c_n1.selectbox("🎯 Selecione a Turma:", lista_turmas_notas, key=f"sel_t_notas_{v}")
+            
+            trim_ativo_notas = c_n2.segmented_control(
+                "📅 Trimestre Ativo:",
+                ["I Trimestre", "II Trimestre", "III Trimestre"],
+                default=trim_detectado_n,
+                key=f"seg_trim_notas_{v}"
+            )
+            if not trim_ativo_notas: trim_ativo_notas = trim_detectado_n
+
+        alunos_notas_df = df_alunos[df_alunos['TURMA'] == turma_notas].sort_values(by="NOME_ALUNO") if not df_alunos.empty else pd.DataFrame()
+
+        if alunos_notas_df.empty:
+            st.info(f"📭 Nenhum aluno cadastrado na turma {turma_notas}.")
+        else:
+            @st.fragment
+            def renderizar_painel_notas_fragmento():
+                st.markdown(f"### 📋 Consolidado de Notas ({turma_notas} — {trim_ativo_notas})")
+                
+                df_notas_trim = df_notas[(df_notas['TURMA'] == turma_notas) & (df_notas['TRIMESTRE'] == trim_ativo_notas)] if not df_notas.empty and 'TURMA' in df_notas.columns and 'TRIMESTRE' in df_notas.columns else pd.DataFrame()
+                df_diario_trim = df_diario[(df_diario['TURMA'] == turma_notas)] if not df_diario.empty and 'TURMA' in df_diario.columns else pd.DataFrame()
+                df_diag_trim = df_diagnosticos[(df_diagnosticos['TURMA'] == turma_notas)] if not df_diagnosticos.empty and 'TURMA' in df_diagnosticos.columns else pd.DataFrame()
+
+                if trim_ativo_notas == "I Trimestre": dt_i_n, dt_f_n = date(2026, 2, 9), date(2026, 5, 22)
+                elif trim_ativo_notas == "II Trimestre": dt_i_n, dt_f_n = date(2026, 5, 25), date(2026, 9, 4)
+                else: dt_i_n, dt_f_n = date(2026, 9, 8), date(2026, 12, 17)
+
+                padrao_trim_regex = util.obter_regex_trimestre(trim_ativo_notas)
+
+                dados_grid_notas = []
+                
+                for _, al_n in alunos_notas_df.iterrows():
+                    id_al_n = db.limpar_id(al_n.get('ID', ''))
+                    nome_al_n = str(al_n.get('NOME_ALUNO', 'Estudante'))
+                    nec_al_n = str(al_n.get('NECESSIDADES', 'TÍPICO'))
+
+                    reg_n = df_notas_trim[df_notas_trim['ID_ALUNO'].apply(db.limpar_id) == id_al_n] if not df_notas_trim.empty and 'ID_ALUNO' in df_notas_trim.columns else pd.DataFrame()
+                    
+                    v_c1_banco = util.sosa_to_float(reg_n.iloc[0].get('NOTA_VISTOS', 0.0)) if not reg_n.empty else 0.0
+                    v_c2_banco = util.sosa_to_float(reg_n.iloc[0].get('NOTA_TESTE', 0.0)) if not reg_n.empty else 0.0
+                    v_c3_banco = util.sosa_to_float(reg_n.iloc[0].get('NOTA_PROVA', 0.0)) if not reg_n.empty else 0.0
+                    v_rec_banco = util.sosa_to_float(reg_n.iloc[0].get('NOTA_REC', -1.0)) if not reg_n.empty else -1.0
+
+                    vistos_c1_calc = 0.0
+                    bonus_diario_calc = 0.0
+                    if not df_diario_trim.empty and 'ID_ALUNO' in df_diario_trim.columns:
+                        df_d_al = df_diario_trim[df_diario_trim['ID_ALUNO'].apply(db.limpar_id) == id_al_n].copy()
+                        if not df_d_al.empty and 'DATA' in df_d_al.columns:
+                            df_d_al['DATA_DT'] = pd.to_datetime(df_d_al['DATA'], format="%d/%m/%Y", errors='coerce').dt.date
+                            df_d_al_sub = df_d_al[(df_d_al['DATA_DT'] >= dt_i_n) & (df_d_al['DATA_DT'] <= dt_f_n)]
+                            
+                            if not df_d_al_sub.empty:
+                                d_validas = df_d_al_sub[df_d_al_sub.get('VISTO_ATIVIDADE', '').astype(str).str.upper() != "ISENTO"]
+                                tot_v_d = len(d_validas)
+                                ok_v_d = len(d_validas[d_validas.get('VISTO_ATIVIDADE', '').astype(str).str.upper() == "TRUE"])
+                                vistos_c1_calc = round((ok_v_d / tot_v_d * 3.0), 2) if tot_v_d > 0 else 0.0
+                                bonus_diario_calc = df_d_al_sub.get('BONUS', pd.Series()).apply(util.sosa_to_float).sum()
+
+                    c1_val = max(v_c1_banco, vistos_c1_calc)
+                    c2_val = v_c2_banco
+                    c3_val = v_c3_banco
+
+                    if not df_diag_trim.empty and 'ID_ALUNO' in df_diag_trim.columns and 'ID_AVALIACAO' in df_diag_trim.columns:
+                        scanned_al = df_diag_trim[(df_diag_trim['ID_ALUNO'].apply(db.limpar_id) == id_al_n) & (df_diag_trim['ID_AVALIACAO'].astype(str).str.contains(padrao_trim_regex, regex=True, case=False, na=False))]
+                        if not scanned_al.empty:
+                            st_teste = scanned_al[scanned_al['ID_AVALIACAO'].astype(str).str.upper().str.contains("TESTE")]
+                            if not st_teste.empty and c2_val == 0:
+                                c2_val = util.sosa_to_float(st_teste.iloc[-1].get('NOTA_CALCULADA', 0.0))
+                            
+                            st_prova = scanned_al[scanned_al['ID_AVALIACAO'].astype(str).str.upper().str.contains("PROVA")]
+                            if not st_prova.empty and c3_val == 0:
+                                c3_val = util.sosa_to_float(st_prova.iloc[-1].get('NOTA_CALCULADA', 0.0))
+
+                    # ALGORITMO DE TRANSBORDAMENTO DE BÔNUS (C1 ➔ C2 ➔ C3)
+                    c1_final = min(3.0, c1_val + bonus_diario_calc)
+                    rem_bonus = bonus_diario_calc - (c1_final - c1_val)
+                    c2_final = min(3.0, c2_val + max(0.0, rem_bonus))
+                    rem_bonus -= (c2_final - c2_val)
+                    c3_final = min(4.0, c3_val + max(0.0, rem_bonus))
+
+                    media_sem_rec = min(10.0, c1_final + c2_final + c3_final)
+                    
+                    # Arredondamento Regimental da Prefeitura (0.5 em 0.5)
+                    media_arredondada = round(media_sem_rec * 2) / 2
+                    
+                    if v_rec_banco > 0:
+                        media_arredondada = max(media_arredondada, util.sosa_to_float(v_rec_banco))
+
+                    sit_txt = "✅ DENTRO DA META" if media_arredondada >= 6.0 else "⚠️ RECOMPOSIÇÃO"
+
+                    def icone_perfil_n(nec):
+                        n = str(nec).upper().strip()
+                        if "PENDENTE" in n or "SUSPEITA" in n: return "🟠"
+                        if "DEFASAGEM LEITURA" in n: return "🧱"
+                        if "DEFASAGEM MATEMÁTICA" in n: return "🧮"
+                        if "ALTA PERFORMANCE" in n: return "🚀"
+                        if n in ["NENHUMA", "", "NAN", "TÍPICO", "TIPICO"]: return "👤"
+                        return "♿"
+
+                    dados_grid_notas.append({
+                        "ID": id_al_n,
+                        "Estudante": f"{icone_perfil_n(nec_al_n)} {nome_al_n}",
+                        "C1 (Vistos - Teto 3.0)": c1_val,
+                        "C2 (Testes - Teto 3.0)": c2_val,
+                        "C3 (Prova - Teto 4.0)": c3_val,
+                        "⭐ Bônus": bonus_diario_calc,
+                        "REC": v_rec_banco if v_rec_banco > 0 else 0.0,
+                        "Média Final": media_arredondada,
+                        "Situação": sit_txt
+                    })
+
+                df_grid_ed_notas = st.data_editor(
+                    pd.DataFrame(dados_grid_notas), hide_index=True, use_container_width=True, height=400,
+                    column_config={
+                        "ID": None,
+                        "Estudante": st.column_config.TextColumn(disabled=True, width="medium"),
+                        "C1 (Vistos - Teto 3.0)": st.column_config.NumberColumn(format="%.1f", min_value=0.0, max_value=3.0),
+                        "C2 (Testes - Teto 3.0)": st.column_config.NumberColumn(format="%.1f", min_value=0.0, max_value=3.0),
+                        "C3 (Prova - Teto 4.0)": st.column_config.NumberColumn(format="%.1f", min_value=0.0, max_value=4.0),
+                        "⭐ Bônus": st.column_config.NumberColumn("⭐ Bônus", format="%.1f", disabled=True),
+                        "REC": st.column_config.NumberColumn("REC", format="%.1f", min_value=0.0, max_value=10.0),
+                        "Média Final": st.column_config.NumberColumn("Média Final", format="%.1f", disabled=True),
+                        "Situação": st.column_config.TextColumn(disabled=True)
+                    },
+                    key=f"ed_grid_notas_main_{turma_notas}_{trim_ativo_notas}_{v}"
+                )
+
+                st.markdown("<br>", unsafe_allow_html=True)
+                
+                c_n_btn1, c_n_btn2 = st.columns(2)
+
+                if c_n_btn1.button("💾 CONSOLIDAR NOTAS NO BOLETIM OFICIAL", type="primary", use_container_width=True, key=f"btn_save_boletim_{v}"):
+                    with st.spinner("Gravando notas consolidadas na planilha DB_NOTAS..."):
+                        linhas_boletim_save = []
+                        for _, r_ed in df_grid_ed_notas.iterrows():
+                            id_l_s = r_ed['ID']
+                            nome_l_s = r_ed['Estudante'].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
+                            c1_s = util.sosa_to_float(r_ed['C1 (Vistos - Teto 3.0)'])
+                            c2_s = util.sosa_to_float(r_ed['C2 (Testes - Teto 3.0)'])
+                            c3_s = util.sosa_to_float(r_ed['C3 (Prova - Teto 4.0)'])
+                            bonus_s = util.sosa_to_float(r_ed['⭐ Bônus'])
+                            rec_s = util.sosa_to_float(r_ed['REC'])
+                            
+                            c1_f = min(3.0, c1_s + bonus_s)
+                            rem_b = bonus_s - (c1_f - c1_s)
+                            c2_f = min(3.0, c2_s + max(0.0, rem_b))
+                            rem_b -= (c2_f - c2_s)
+                            c3_f = min(4.0, c3_s + max(0.0, rem_b))
+
+                            media_s = min(10.0, round((c1_f + c2_f + c3_f) * 2) / 2)
+                            if rec_s > 0: media_s = max(media_s, rec_s)
+
+                            linhas_boletim_save.append([
+                                id_l_s, nome_l_s, turma_notas, trim_ativo_notas,
+                                util.sosa_to_str(c1_s), util.sosa_to_str(c2_s), util.sosa_to_str(c3_s),
+                                util.sosa_to_str(rec_s) if rec_s > 0 else "0,0",
+                                util.sosa_to_str(media_s)
+                            ])
+
+                        if linhas_boletim_save:
+                            db.limpar_notas_turma_trimestre(turma_notas, trim_ativo_notas)
+                            db.salvar_lote("DB_NOTAS", linhas_boletim_save)
+                            st.success("✅ Boletim Trimestral Consolidado com Sucesso!")
+                            st.balloons(); time.sleep(1); st.rerun()
+
+                if c_n_btn2.button("🖨️ FÁBRICA DE ETIQUETAS DE NOTAS PARA CADERNO (DOCX)", use_container_width=True, key=f"btn_etiq_docx_{v}"):
+                    with st.spinner("Gerando etiquetas Word A4 para a turma..."):
+                        dados_etiq = []
+                        for _, r_ed in df_grid_ed_notas.iterrows():
+                            dados_etiq.append({
+                                "nome": r_ed['Estudante'],
+                                "vistos": f"{r_ed['C1 (Vistos - Teto 3.0)']:.1f}",
+                                "teste": f"{r_ed['C2 (Testes - Teto 3.0)']:.1f}",
+                                "prova": f"{r_ed['C3 (Prova - Teto 4.0)']:.1f}",
+                                "bonus": f"{r_ed['⭐ Bônus']:+.1f}",
+                                "media": f"{r_ed['Média Final']:.1f}",
+                                "status": r_ed['Situação']
+                            })
+                        
+                        info_etiq = {"turma": turma_notas, "trimestre": trim_ativo_notas}
+                        nome_arq_etiq = f"ETIQUETAS_NOTAS_{turma_notas.replace(' ','_')}_{trim_ativo_notas.replace(' ','')}"
+                        
+                        doc_etiq_stream = exporter.gerar_docx_etiquetas_notas(nome_arq_etiq, dados_etiq, info_etiq)
+                        link_etiq = db.subir_e_converter_para_google_docs(doc_etiq_stream, nome_arq_etiq, trimestre=trim_ativo_notas, categoria=turma_notas, modo="PLANEJAMENTO")
+                        
+                        if "https" in link_etiq:
+                            st.success("✅ Etiquetas de Notas geradas para impressão!")
+                            st.link_button("📂 ABRIR ETIQUETAS NO DRIVE (DOCX)", link_etiq, type="primary", use_container_width=True)
+                            st.balloons()
+
+            renderizar_painel_notas_fragmento()
+
+
+
+
+
+
+
+
+
+
+
 # ==============================================================================
 # MÓDULO: BOLETIM ANUAL & CONSELHO - V2026.ULTIMATE (INTELIGÊNCIA TEMPORAL)
 # ==============================================================================
