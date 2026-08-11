@@ -5484,7 +5484,10 @@ Documento mantido sob custódia oficial da Escola Municipal Flávio José Simõe
                     st.caption("Resumo do Repositório Vivo do aluno.")
                     
                     hist_aluno = df_relatorios[df_relatorios['ID_ALUNO'].apply(db.limpar_id) == id_alu] if not df_relatorios.empty and 'ID_ALUNO' in df_relatorios.columns else pd.DataFrame()
-                    rel_master = hist_aluno[hist_aluno['TIPO'] == f"DOSSIE_PEI_{trim_ativo_pei.replace(' ', '_').upper()}"] if not hist_aluno.empty and 'TIPO' in hist_aluno.columns else pd.DataFrame()
+                    
+                    # FIX: Usando trim_b com acesso seguro
+                    tipo_dossie_key = f"DOSSIE_PEI_{trim_b.replace(' ', '_').upper()}"
+                    rel_master = hist_aluno[hist_aluno['TIPO'] == tipo_dossie_key] if not hist_aluno.empty and 'TIPO' in hist_aluno.columns else pd.DataFrame()
                     
                     if not rel_master.empty:
                         master_text = str(rel_master.iloc[-1].get('CONTEUDO', ''))
@@ -5496,7 +5499,7 @@ Documento mantido sob custódia oficial da Escola Municipal Flávio José Simõe
                         
                         st.markdown("#### 🎯 Diretrizes Curriculares Sugeridas")
                         st.warning(v_diretrizes if v_diretrizes else "Diretrizes não preenchidas.")
-                    else: st.info(f"📭 Nenhum Dossiê PEI salvo para o {trim_ativo_pei} ainda.")
+                    else: st.info(f"📭 Nenhum Dossiê PEI salvo para o {trim_b} ainda.")
 
         renderizar_dossie_bio_fragmento()
         st.caption(f"Dossiê 360° atualizado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
