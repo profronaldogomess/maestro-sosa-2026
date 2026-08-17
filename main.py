@@ -1666,7 +1666,7 @@ elif menu == "📝 Diário de Bordo Rápido":
 
 # ==============================================================================
 # MÓDULO: LABORATÓRIO DE PRODUÇÃO DIDÁTICA (CRIADOR DE AULAS) - V2026.ULTIMATE
-# (INÍCIO/MEIO/FIM, LETRAMENTO BNCC, PEI ON-DEMAND COM PEI 3 ANCORADO E MODO TURBO 1-CLIQUE)
+# (INÍCIO/MEIO/FIM, LETRAMENTO BNCC, PONTE DE INTELIGÊNCIA PONTO ID E PEI ON-DEMAND)
 # ==============================================================================
 elif menu == "🧪 Criador de Aulas":
     st.title("Laboratório de Produção Didática")
@@ -1720,7 +1720,7 @@ elif menu == "🧪 Criador de Aulas":
         if not df_planos.empty:
             planos_rel = df_planos[(df_planos['ANO'].astype(str).str.contains(ano_num)) & (df_planos['SEMANA'].isin(semanas_usadas))]
             for _, r_p in planos_rel.iterrows():
-                base_txt = ai.extrair_tag(str(r_p['PLANO_TEXTO']), "BASE_DIDATICA")
+                base_txt = ai.extrair_tag(str(r_p.get('PLANO_TEXTO', '')), "BASE_DIDATICA")
                 if base_txt and "Livro" in base_txt:
                     paginas_livro.add(base_txt)
                     
@@ -1879,7 +1879,6 @@ elif menu == "🧪 Criador de Aulas":
                             if sobrescrever_lab_flag:
                                 planos_ano = df_planos[df_planos["ANO"].astype(str).str.contains(str(ano_lab))].copy()
                             else:
-                                # Captura planos com HUB_ATIVO, PADRÃO, NOVO ou PENDENTE que ainda não tenham sido marcados como CONCLUÍDOS/RECESSO
                                 eixo_str = df_planos["EIXO"].astype(str).str.upper()
                                 mask_pendente = (eixo_str.str.contains("HUB_ATIVO|PADRÃO|PADRAO|PENDENTE|NOVO", regex=True, na=False)) & (~eixo_str.str.contains("CONCLUIDO|RECESSO|FERIADO", regex=True, na=False))
                                 planos_ano = df_planos[(df_planos["ANO"].astype(str).str.contains(str(ano_lab))) & mask_pendente].copy()
@@ -1888,19 +1887,25 @@ elif menu == "🧪 Criador de Aulas":
                         
                         if planos_ano.empty:
                             st.success(f"🏆 **Soberania Total!** Nenhuma semana pendente de material no Criador de Aulas para o {ano_lab}º Ano.")
-                            st.info("💡 As semanas que foram marcadas como Recesso, Feriado ou ministradas pelo Livro já foram arquivadas.")
+                            st.info("💡 As semanas que foram marcadas como Recesso, Feriado ou ministradas pelo Livro já foram arquivadas. Se quiser re-gerar, ative a opção 'Permitir Sobrescrita' acima.")
                         else:
                             semanas_opcoes = planos_ano["SEMANA"].unique().tolist()
                             
                             sem_lab = c2.selectbox("Semana Pendente no Hub:", semanas_opcoes, key=f"prod_sem_{v}")
                             plano_row = planos_ano[planos_ano["SEMANA"] == sem_lab].iloc[0]
-                            plano_txt = str(plano_row['PLANO_TEXTO'])
-                            trim_real = str(plano_row['TURMA'])
+                            plano_txt = str(plano_row.get('PLANO_TEXTO', ''))
+                            trim_real = str(plano_row.get('TURMA', 'I Trimestre'))
 
+                            # EXTRAÇÃO DAS 11 TAGS DO PONTO ID (PONTE DE INTELIGÊNCIA INTEGRAL)
+                            hab_bncc = ai.extrair_tag(plano_txt, "HABILIDADE_BNCC")
+                            comp_foco = ai.extrair_tag(plano_txt, "COMPETENCIAS_FOCO")
+                            obj_conhecimento = ai.extrair_tag(plano_txt, "OBJETO_CONHECIMENTO") or ai.extrair_tag(plano_txt, "CONTEUDO_GERAL")
+                            conteudos_espec = ai.extrair_tag(plano_txt, "CONTEUDOS_ESPECIFICOS")
+                            objetivos_ensino = ai.extrair_tag(plano_txt, "OBJETIVOS_ENSINO")
+                            estrategia_pei_plano = ai.extrair_tag(plano_txt, "ESTRATEGIA_DUA_PEI")
                             base_herdada = ai.extrair_tag(plano_txt, "BASE_DIDATICA")
-                            obj_geral = ai.extrair_tag(plano_txt, "OBJETO_CONHECIMENTO") or ai.extrair_tag(plano_txt, "CONTEUDO_GERAL")
 
-                            a_geradas_sem = df_aulas[(df_aulas['ANO'].astype(str).str.contains(str(ano_lab))) & (df_aulas['SEMANA_REF'] == sem_lab)]['TIPO_MATERIAL'].astype(str).tolist() if not df_aulas.empty else []
+                            a_geradas_sem = df_aulas[(df_aulas['ANO'].astype(str).str.contains(str(ano_lab))) & (df_aulas['SEMANA_REF'] == sem_lab)]['TIPO_MATERIAL'].astype(str).tolist() if not df_aulas.empty and 'ANO' in df_aulas.columns and 'SEMANA_REF' in df_aulas.columns else []
                             tem_aula1 = any("Aula 1" in mat for mat in a_geradas_sem)
                             tem_aula2 = any("Aula 2" in mat for mat in a_geradas_sem)
                             tem_sabado = any("Sábado" in mat or "Sabado" in mat for mat in a_geradas_sem)
@@ -1927,13 +1932,30 @@ elif menu == "🧪 Criador de Aulas":
                             else: tag_roteiro = "SABADO_LETIVO"
                             
                             roteiro_especifico = ai.extrair_tag(plano_txt, tag_roteiro)
-                            st.info(f"📌 **Roteiro Ativo do Plano:** {roteiro_especifico}")
+
+                            # DETECÇÃO AUTOMÁTICA DE PÁGINAS DO LIVRO DIDÁTICO NO TEXTO DO PLANO
+                            pags_detectadas = re.findall(r'(?:pág[s]?\.|página[s]?)\s*(\d+(?:\s*a\s*\d+|\s*e\s*\d+|\s*-\s*\d+|,\s*\d+)*)', plano_txt, re.IGNORECASE)
+                            sugestao_pags_teo = ", ".join(pags_detectadas[:2]) if pags_detectadas else ""
+                            sugestao_pags_ex = ", ".join(pags_detectadas[2:]) if len(pags_detectadas) > 2 else (sugestao_pags_teo if sugestao_pags_teo else "")
+
+                            # BENTO DASHBOARD DE CONTEXTO PEDAGÓGICO COMPLETO
+                            with st.container(border=True):
+                                st.markdown(f"##### 📌 DNA Pedagógico do Plano Ponto ID ({sem_lab} — {ano_lab}º Ano)")
+                                c_dna1, c_dna2 = st.columns(2)
+                                c_dna1.markdown(f"**Objeto de Conhecimento:** `{obj_conhecimento if obj_conhecimento else 'Não especificado'}`")
+                                c_dna1.markdown(f"**Habilidades BNCC:** `{hab_bncc if hab_bncc else 'EF06MA01'}`")
+                                c_dna2.markdown(f"**Conteúdos Específicos:**\n*{conteudos_espec[:120] if conteudos_espec else 'Tópicos do plano'}...*")
+                                c_dna2.markdown(f"**Objetivo:** *{objetivos_ensino[:100] if objetivos_ensino else 'Desenvolvimento de competências'}...*")
+                                
+                                st.divider()
+                                st.markdown(f"**Roteiro de Sala Selecionado ({aula_alvo_prod}):**")
+                                st.info(roteiro_especifico if roteiro_especifico else "Roteiro não especificado.")
 
                             st.markdown("##### 📖 Ancoragem no Livro Didático & Autonomia Docente")
                             
                             col_p1, col_p2 = st.columns(2)
-                            pags_teo_lab = col_p1.text_input("📘 Páginas de Teoria (Aula 1):", placeholder="Ex: 184-186, 189", key=f"pags_teo_lab_{v}")
-                            pags_ex_lab = col_p2.text_input("📝 Páginas de Exercícios (Aula 2):", placeholder="Ex: 187-188, 190-192", key=f"pags_ex_lab_{v}")
+                            pags_teo_lab = col_p1.text_input("📘 Páginas de Teoria (Aula 1):", value=sugestao_pags_teo, placeholder="Ex: 198, 199, 201", key=f"pags_teo_lab_{v}")
+                            pags_ex_lab = col_p2.text_input("📝 Páginas de Exercícios (Aula 2):", value=sugestao_pags_ex, placeholder="Ex: 202", key=f"pags_ex_lab_{v}")
 
                             txt_lab_teo_ext, txt_lab_ex_ext = "", ""
                             
@@ -1955,9 +1977,20 @@ elif menu == "🧪 Criador de Aulas":
                                 key=f"recorte_aula_lab_{v}"
                             )
 
-                            pacote_recorte_aula = ""
-                            if txt_lab_teo_ext: pacote_recorte_aula += f"--- PÁGINAS DE TEORIA ---\n{txt_lab_teo_ext}\n\n"
-                            if txt_lab_ex_ext: pacote_recorte_aula += f"--- PÁGINAS DE EXERCÍCIOS ---\n{txt_lab_ex_ext}\n\n"
+                            # MONTAGEM DO PACOTE COMPLETO DE CONTEXTO INTEGRAL PONTO ID ➔ IA
+                            pacote_recorte_aula = (
+                                f"--- CONTEXTO CURRICULAR INTEGRAL DO PONTO ID ---\n"
+                                f"OBJETO DE CONHECIMENTO: {obj_conhecimento}\n"
+                                f"CONTEÚDOS ESPECÍFICOS: {conteudos_espec}\n"
+                                f"HABILIDADES BNCC: {hab_bncc}\n"
+                                f"COMPETÊNCIAS ESPECÍFICAS: {comp_foco}\n"
+                                f"OBJETIVOS DE APRENDIZAGEM: {objetivos_ensino}\n"
+                                f"ESTRATÉGIA DUA/PEI DO PLANO: {estrategia_pei_plano}\n\n"
+                                f"--- ROTEIRO EXATO DE SALA ({aula_alvo_prod}) ---\n{roteiro_especifico}\n\n"
+                            )
+                            
+                            if txt_lab_teo_ext: pacote_recorte_aula += f"--- PÁGINAS DE TEORIA LIDAS DO LIVRO ---\n{txt_lab_teo_ext}\n\n"
+                            if txt_lab_ex_ext: pacote_recorte_aula += f"--- PÁGINAS DE EXERCÍCIOS LIDAS DO LIVRO ---\n{txt_lab_ex_ext}\n\n"
                             if recorte_exercicios_livro.strip(): pacote_recorte_aula += f"--- TEXTO AUXILIAR DO PROFESSOR ---\n{recorte_exercicios_livro.strip()}\n\n"
 
                             links_web_aula = st.text_area("Enriquecimento por Links da Web / URL no Drive:", value=base_herdada if "https" in base_herdada else "", key=f"links_web_lab_{v}")
@@ -1967,8 +2000,8 @@ elif menu == "🧪 Criador de Aulas":
                             if c_f_btn1.button("🚀 Iniciar Forja Guiada por Etapas", use_container_width=True, type="primary", key=f"btn_guiada_lab_{v}"):
                                 fa['info'] = {
                                     "ano": ano_lab, "semana_ref": sem_lab, "aula_alvo": aula_alvo_prod,
-                                    "roteiro": roteiro_especifico, "habilidade": ai.extrair_tag(plano_txt, "HABILIDADE_BNCC"),
-                                    "objetivos": ai.extrair_tag(plano_txt, "OBJETIVOS_ENSINO"), "base": base_herdada,
+                                    "roteiro": roteiro_especifico, "habilidade": hab_bncc,
+                                    "objetivos": objetivos_ensino, "base": base_herdada,
                                     "trimestre": trim_real, "recorte_livro": pacote_recorte_aula
                                 }
                                 fa['links_web'] = links_web_aula
@@ -1977,21 +2010,21 @@ elif menu == "🧪 Criador de Aulas":
                                 st.rerun()
 
                             if c_f_btn2.button("⚡ FORJA TURBO COMPLETA (1-CLIQUE)", use_container_width=True, key=f"btn_turbo_lab_{v}"):
-                                with st.status("⚡ Executando Forja Turbo Completa...", expanded=True) as status_turbo:
+                                with st.status("⚡ Executando Forja Turbo Completa com Gemini 3.6 Flash...", expanded=True) as status_turbo:
                                     info_turbo = {
                                         "ano": ano_lab, "semana_ref": sem_lab, "aula_alvo": aula_alvo_prod,
-                                        "roteiro": roteiro_especifico, "habilidade": ai.extrair_tag(plano_txt, "HABILIDADE_BNCC"),
-                                        "objetivos": ai.extrair_tag(plano_txt, "OBJETIVOS_ENSINO"), "base": base_herdada,
+                                        "roteiro": roteiro_especifico, "habilidade": hab_bncc,
+                                        "objetivos": objetivos_ensino, "base": base_herdada,
                                         "trimestre": trim_real, "recorte_livro": pacote_recorte_aula
                                     }
                                     
                                     status_turbo.write("👨‍🏫 1/3 Gerando Guia do Professor (Início ➔ Meio ➔ Fim)...")
-                                    prompt_teoria = f"SÉRIE: {ano_lab}º Ano. ASSUNTO: {aula_alvo_prod}.\nHABILIDADE: {info_turbo['habilidade']}\nROTEIRO: {roteiro_especifico}\nBASE LIVRO: {base_herdada}"
+                                    prompt_teoria = f"SÉRIE: {ano_lab}º Ano. ASSUNTO: {aula_alvo_prod}.\nHABILIDADE: {hab_bncc}\nROTEIRO: {roteiro_especifico}\nCONTEÚDOS: {conteudos_espec}"
                                     res_teoria = ai.gerar_ia("FORJA_AULA_TEORIA", prompt_teoria, url_drive=base_herdada if "http" in base_herdada else None, recorte_livro=pacote_recorte_aula)
                                     fa['teoria'] = ai.extrair_tag(res_teoria, "PROFESSOR") or res_teoria
 
                                     status_turbo.write("📝 2/3 Gerando Folha do Aluno e Gabarito (BNCC/SAEB)...")
-                                    prompt_ex = f"SÉRIE: {ano_lab}º Ano. QUANTIDADE: {qtd_q_prod}.\nTEORIA:\n{fa['teoria']}"
+                                    prompt_ex = f"SÉRIE: {ano_lab}º Ano. QUANTIDADE: {qtd_q_prod}.\nCONTEÚDOS: {conteudos_espec}\nTEORIA:\n{fa['teoria']}"
                                     res_ex = ai.gerar_ia("FORJA_AULA_EXERCICIOS", prompt_ex)
                                     fa['reg_q'] = ai.extrair_tag(res_ex, "ALUNO") or res_ex
                                     fa['reg_gab'] = ai.extrair_tag(res_ex, "GABARITO") or "Gabarito não formatado."
@@ -2009,7 +2042,7 @@ elif menu == "🧪 Criador de Aulas":
 
                             with c_f_btn3.popover("📖 Baixa Burocrática (Livro/Lousa)"):
                                 st.caption("Gaste 0 tokens: Registre que a aula desta semana foi ministrada pelo Livro Didático/Lousa.")
-                                det_livro_input = st.text_input("Detalhes (Ex: Livro Págs. 184 a 188):", key=f"inp_baixa_lab_{v}")
+                                det_livro_input = st.text_input("Detalhes (Ex: Livro Págs. 198 a 202):", key=f"inp_baixa_lab_{v}")
                                 dt_baixa_lab = st.date_input("Data:", date.today(), format="DD/MM/YYYY", key=f"dt_baixa_lab_{v}")
                                 
                                 if st.button("💾 DAR BAIXA E SUMIR COM ESTA SEMANA", type="primary", use_container_width=True, key=f"btn_baixa_direct_lab_{v}"):
@@ -2078,7 +2111,7 @@ elif menu == "🧪 Criador de Aulas":
                         for a_n in aulas_sel:
                             match_sel = df_aulas_ano[df_aulas_ano['TIPO_MATERIAL'] == a_n]
                             if not match_sel.empty:
-                                contexto_aulas += str(match_sel.iloc[0]['CONTEUDO']) + "\n"
+                                contexto_aulas += str(match_sel.iloc[0].get('CONTEUDO', '')) + "\n"
 
                         tem_revisao_central = any(x in str(aulas_sel).upper() for x in ["REVISAO", "REVISÃO", "RECOMPOSICAO", "RECOMPOSIÇÃO", "RAIO-X", "AVALIAÇÃO", "AVALIACAO"])
 
@@ -2265,7 +2298,6 @@ elif menu == "🧪 Criador de Aulas":
             elif fa['fase'] == 3:
                 st.markdown("### Fase 3: Exercícios Regulares (Letramento Matemático BNCC/SAEB)")
                 
-                # BADGE VISUAL DE LETRAMENTO MATEMÁTICO
                 st.markdown("Selo BNCC: `[🧠 FORMULAR CONCEITOS]` | `[⚙️ EMPREGAR ALGORITMOS]` | `[💬 INTERPRETAR DADOS]`")
                 
                 if not fa['reg_q']:
@@ -2428,7 +2460,6 @@ elif menu == "🧪 Criador de Aulas":
                     identificador = str(row.get('TIPO_MATERIAL', 'Material Didático'))
                     ano_exib = str(row.get('ANO', '6º'))
                     data_exib = str(row.get('DATA', 'N/A'))
-                    sem_ref_exib = str(row.get('SEMANA_REF', 'Geral'))
                     
                     st.markdown(f"##### {identificador}")
                     st.caption(f"Série: {ano_exib} | Data: {data_exib} | Status: ✅ DOCX DRIVE SINCRONIZADO")
@@ -2464,7 +2495,7 @@ elif menu == "🧪 Criador de Aulas":
                     if c_b5.button("✏️ Refinar", key=f"ref_ac_{row.name}", use_container_width=True):
                         st.session_state.lab_temp = txt_f
                         st.session_state.sosa_id_atual = identificador
-                        st.session_state.lab_meta = {"ano": str(row["ANO"]).replace("º",""), "semana_ref": row['SEMANA_REF']}
+                        st.session_state.lab_meta = {"ano": ano_exib.replace("º",""), "semana_ref": str(row.get('SEMANA_REF', 'Geral'))}
                         st.rerun()
                         
                     if c_b6.button("🗑️ Apagar", key=f"del_ac_{row.name}", use_container_width=True):
@@ -2475,9 +2506,7 @@ elif menu == "🧪 Criador de Aulas":
                         
                         if st.button("🚀 EXECUTAR RE-COMPILAÇÃO COMPLETA NO EXPORTER V2026", type="primary", use_container_width=True, key=f"btn_recompila_{row.name}"):
                             with st.status("Re-compilando materiais no padrão Exporter V2026...", expanded=True) as status_rec:
-                                ano_str_rec = str(row['ANO'])
-                                sem_ref_rec = str(row['SEMANA_REF'])
-                                info_doc_rec = {"ano": ano_str_rec, "trimestre": "I Trimestre", "semana": sem_ref_rec}
+                                info_doc_rec = {"ano": ano_exib, "trimestre": "I Trimestre", "semana": str(row.get('SEMANA_REF', 'Geral'))}
                                 
                                 ed_prof_r = ai.extrair_tag(txt_f, "PROFESSOR")
                                 ed_alu_r = ai.extrair_tag(txt_f, "ALUNO")
@@ -2513,7 +2542,7 @@ elif menu == "🧪 Criador de Aulas":
                                 
                                 db.excluir_registro("DB_AULAS_PRONTAS", identificador)
                                 db.salvar_no_banco("DB_AULAS_PRONTAS", [
-                                    row['DATA'], sem_ref_rec, identificador, conteudo_final_r, ano_str_rec, link_alu_r
+                                    data_exib, str(row.get('SEMANA_REF', 'Geral')), identificador, conteudo_final_r, ano_exib, link_alu_r
                                 ])
                                 
                                 status_rec.update(label="✅ Materiais re-compilados e atualizados no Drive!", state="complete")
