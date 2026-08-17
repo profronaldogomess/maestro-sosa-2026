@@ -1896,7 +1896,6 @@ elif menu == "🧪 Criador de Aulas":
                             plano_txt = str(plano_row.get('PLANO_TEXTO', ''))
                             trim_real = str(plano_row.get('TURMA', 'I Trimestre'))
 
-                            # EXTRAÇÃO DAS 11 TAGS DO PONTO ID (PONTE DE INTELIGÊNCIA INTEGRAL)
                             hab_bncc = ai.extrair_tag(plano_txt, "HABILIDADE_BNCC")
                             comp_foco = ai.extrair_tag(plano_txt, "COMPETENCIAS_FOCO")
                             obj_conhecimento = ai.extrair_tag(plano_txt, "OBJETO_CONHECIMENTO") or ai.extrair_tag(plano_txt, "CONTEUDO_GERAL")
@@ -1933,12 +1932,10 @@ elif menu == "🧪 Criador de Aulas":
                             
                             roteiro_especifico = ai.extrair_tag(plano_txt, tag_roteiro)
 
-                            # DETECÇÃO AUTOMÁTICA DE PÁGINAS DO LIVRO DIDÁTICO NO TEXTO DO PLANO
                             pags_detectadas = re.findall(r'(?:pág[s]?\.|página[s]?)\s*(\d+(?:\s*a\s*\d+|\s*e\s*\d+|\s*-\s*\d+|,\s*\d+)*)', plano_txt, re.IGNORECASE)
                             sugestao_pags_teo = ", ".join(pags_detectadas[:2]) if pags_detectadas else ""
                             sugestao_pags_ex = ", ".join(pags_detectadas[2:]) if len(pags_detectadas) > 2 else (sugestao_pags_teo if sugestao_pags_teo else "")
 
-                            # BENTO DASHBOARD DE CONTEXTO PEDAGÓGICO COMPLETO
                             with st.container(border=True):
                                 st.markdown(f"##### 📌 DNA Pedagógico do Plano Ponto ID ({sem_lab} — {ano_lab}º Ano)")
                                 c_dna1, c_dna2 = st.columns(2)
@@ -1977,7 +1974,6 @@ elif menu == "🧪 Criador de Aulas":
                                 key=f"recorte_aula_lab_{v}"
                             )
 
-                            # MONTAGEM DO PACOTE COMPLETO DE CONTEXTO INTEGRAL PONTO ID ➔ IA
                             pacote_recorte_aula = (
                                 f"--- CONTEXTO CURRICULAR INTEGRAL DO PONTO ID ---\n"
                                 f"OBJETO DE CONHECIMENTO: {obj_conhecimento}\n"
@@ -2021,7 +2017,9 @@ elif menu == "🧪 Criador de Aulas":
                                     status_turbo.write("👨‍🏫 1/3 Gerando Guia do Professor (Início ➔ Meio ➔ Fim)...")
                                     prompt_teoria = f"SÉRIE: {ano_lab}º Ano. ASSUNTO: {aula_alvo_prod}.\nHABILIDADE: {hab_bncc}\nROTEIRO: {roteiro_especifico}\nCONTEÚDOS: {conteudos_espec}"
                                     res_teoria = ai.gerar_ia("FORJA_AULA_TEORIA", prompt_teoria, url_drive=base_herdada if "http" in base_herdada else None, recorte_livro=pacote_recorte_aula)
-                                    fa['teoria'] = ai.extrair_tag(res_teoria, "PROFESSOR") or res_teoria
+                                    
+                                    teoria_limpa_t = ai.extrair_tag(res_teoria, "PROFESSOR") or res_teoria
+                                    fa['teoria'] = teoria_limpa_t.replace("[PROFESSOR]", "").replace("[/PROFESSOR]", "").strip()
 
                                     status_turbo.write("📝 2/3 Gerando Folha do Aluno e Gabarito (BNCC/SAEB)...")
                                     prompt_ex = f"SÉRIE: {ano_lab}º Ano. QUANTIDADE: {qtd_q_prod}.\nCONTEÚDOS: {conteudos_espec}\nTEORIA:\n{fa['teoria']}"
@@ -2187,7 +2185,9 @@ elif menu == "🧪 Criador de Aulas":
                 
                 elif fa.get('tipo_material') == 'AULA':
                     st.markdown("### Fase 2: Tratado Didático & Roteiro de Lousa (Início ➔ Meio ➔ Fim)")
-                    if not fa['teoria']:
+                    
+                    # SE A TEORIA AINDA NÃO FOI GERADA OU ESTÁ VAZIA
+                    if not fa.get('teoria') or len(str(fa.get('teoria')).strip()) < 20:
                         with st.spinner("Gerando explicação didática com leitura das páginas do Livro..."):
                             prompt_teoria = (
                                 f"SÉRIE: {fa['info']['ano']}º Ano.\nASSUNTO: {fa['info']['aula_alvo']}.\n"
@@ -2199,28 +2199,40 @@ elif menu == "🧪 Criador de Aulas":
                             recorte_txt = fa['info'].get('recorte_livro', '')
                             
                             res_teoria = ai.gerar_ia("FORJA_AULA_TEORIA", prompt_teoria, url_drive=url_livro, usar_busca=False, recorte_livro=recorte_txt)
-                            if "ERRO" in res_teoria.upper() or "⚠️" in res_teoria:
-                                st.error(f"Falha na IA: {res_teoria}")
-                                if st.button("Tentar Novamente", key=f"btn_retry_teo_{v}"): st.rerun()
-                            else:
-                                fa['teoria'] = ai.extrair_tag(res_teoria, "PROFESSOR") or res_teoria
+                            
+                            # LIMPEZA RIGOROSA DA TAG [PROFESSOR]
+                            teoria_extraida = ai.extrair_tag(res_teoria, "PROFESSOR") or res_teoria
+                            teoria_limpa = teoria_extraida.replace("[PROFESSOR]", "").replace("[/PROFESSOR]", "").strip()
+                            
+                            if len(teoria_limpa) > 30:
+                                fa['teoria'] = teoria_limpa
                                 st.rerun()
+                            else:
+                                st.error("⚠️ A IA não retornou o texto completo. Clique no botão abaixo para tentar novamente.")
+                                if st.button("🔄 Tentar Novamente", key=f"btn_retry_teo_f2_{v}", type="primary"):
+                                    st.rerun()
                     else:
+                        # TEORIA GERADA E DISPONÍVEL NA TELA PARA REVISÃO E APROVAÇÃO
                         with st.container(border=True):
                             modo_leitura = st.toggle("👁️ Visualização Real (Renderizar Matemática)", value=True, key=f"read_mode_f2_{v}")
-                            if modo_leitura: st.markdown(preparar_para_leitura(fa['teoria']))
-                            else: fa['teoria'] = st.text_area("Edição Manual da Teoria:", value=fa['teoria'], height=350, key=f"ed_teo_manual_{v}")
+                            if modo_leitura: 
+                                st.markdown(preparar_para_leitura(fa['teoria']))
+                            else: 
+                                fa['teoria'] = st.text_area("Edição Manual da Teoria:", value=fa['teoria'], height=350, key=f"ed_teo_manual_{v}")
                         
                         inst_t = st.text_input("Ajuste da IA (Ex: 'Incorpore um gancho de notícia sobre tecnologia no Início'):", key=f"inst_t_{v}")
-                        c_b1, c_b2 = st.columns(2)
+                        c_b1, c_b2 = st.columns([2, 1])
                         
-                        if c_b1.button("Aprovar Teoria e Avançar", type="primary", use_container_width=True, key=f"btn_apr_teo_{v}"):
-                            fa['fase'] = 3; st.rerun()
-                        if c_b2.button("Regerar Teoria", use_container_width=True, key=f"btn_regerar_teo_{v}"):
-                            with st.spinner("Ajustando teoria..."):
+                        if c_b1.button("✅ APROVAR TEORIA E AVANÇAR PARA OS EXERCÍCIOS (FASE 3)", type="primary", use_container_width=True, key=f"btn_apr_teo_f2_{v}"):
+                            fa['fase'] = 3
+                            st.rerun()
+                            
+                        if c_b2.button("🔄 Regerar Teoria", use_container_width=True, key=f"btn_regerar_teo_f2_{v}"):
+                            with st.spinner("Ajustando teoria com suas instruções..."):
                                 prompt_teoria = f"SÉRIE: {fa['info']['ano']}º Ano.\nASSUNTO: {fa['info']['aula_alvo']}.\nAJUSTE: {inst_t}\nTEORIA ANTERIOR:\n{fa['teoria']}\n🚨 RESPONDA OBRIGATORIAMENTE DENTRO DA TAG [PROFESSOR]"
                                 res_teoria = ai.gerar_ia("FORJA_AULA_TEORIA", prompt_teoria, usar_busca=False)
-                                fa['teoria'] = ai.extrair_tag(res_teoria, "PROFESSOR") or res_teoria
+                                teoria_extraida = ai.extrair_tag(res_teoria, "PROFESSOR") or res_teoria
+                                fa['teoria'] = teoria_extraida.replace("[PROFESSOR]", "").replace("[/PROFESSOR]", "").strip()
                                 st.rerun()
 
                 else:
