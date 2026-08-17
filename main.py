@@ -898,7 +898,8 @@ if menu == "📅 Planejamento (Ponto ID)":
                     else:
                         status.write("✅ Plano arquitetado com sucesso!")
                         st.session_state.p_temp = resultado_ia
-                        st.session_state.p_meta = {"semana": sem_limpa, "trimestre": trim_atual, "ano": ano_str_busca, "base": base_didatica_info}
+                        # 🚨 FIX: MARCA COMO HUB_ATIVO PARA APARECER DIRETO NO CRIADOR DE AULAS!
+                        st.session_state.p_meta = {"semana": sem_limpa, "trimestre": trim_atual, "ano": ano_str_busca, "base": base_didatica_info, "status_final": "HUB_ATIVO"}
                         
                         status.update(label="🎉 Planejamento Concluído!", state="complete")
                         time.sleep(0.8)
@@ -921,7 +922,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                 )
                 
                 st.session_state.p_temp = texto_manual_template
-                st.session_state.p_meta = {"semana": sem_limpa, "trimestre": trim_atual, "ano": ano_str_busca, "base": base_didatica_info}
+                st.session_state.p_meta = {"semana": sem_limpa, "trimestre": trim_atual, "ano": ano_str_busca, "base": base_didatica_info, "status_final": "HUB_ATIVO"}
                 st.rerun()
 
     # MESA DE LAPIDAÇÃO
@@ -1037,7 +1038,8 @@ if menu == "📅 Planejamento (Ponto ID)":
                         doc_io, nome_arquivo, trimestre=trim_fmt_s, categoria=ano_fmt_s, semana=sem_fmt_s, modo="PLANEJAMENTO"
                     )
                     
-                    status_banco = meta.get("status_final", "PRODUZIDO")
+                    # 🚨 GARANTE STATUS HUB_ATIVO PARA ABRIR DIRETO NO CRIADOR DE AULAS!
+                    status_banco = meta.get("status_final", "HUB_ATIVO")
 
                     final_txt = (
                         f"[HABILIDADE_BNCC] {ed_hab} \n"
@@ -1065,7 +1067,7 @@ if menu == "📅 Planejamento (Ponto ID)":
     renderizar_mesa_lapidacao_plano()
 
     # ==============================================================================
-    # ABA 2: HUB DE PRODUÇÃO & BAIXA LIMPA OFFLINE (VACINA DE TELAS SEMPRE ATIVAS)
+    # ABA 2: HUB DE PRODUÇÃO & BAIXA LIMPA OFFLINE
     # ==============================================================================
     with tab_producao:
         st.markdown("#### Hub de Produção de Materiais & Baixa Limpa")
@@ -1126,7 +1128,6 @@ if menu == "📅 Planejamento (Ponto ID)":
             st.success("🎉 **TODOS OS PLANOS ESTÃO 100% EM DIA!** Nenhum material pendente no Hub de Produção.")
             st.caption("ℹ️ Quando você criar um novo plano na aba 'Novo Plano' com status de produção ativado, ele aparecerá aqui automaticamente.")
             
-            # Exibe histórico de planos concluídos para consulta rápida
             if not df_planos.empty and 'SEMANA' in df_planos.columns:
                 with st.expander("📋 Ver Histórico Geral de Planos Cadastrados na Planilha DB_PLANOS", expanded=False):
                     df_planos_exibicao = df_planos[['DATA', 'SEMANA', 'ANO', 'TURMA', 'EIXO']].copy()
@@ -1874,14 +1875,14 @@ elif menu == "🧪 Criador de Aulas":
                         c1, c2 = st.columns([1, 2])
                         ano_lab = c1.selectbox("Série:", [6, 7, 8, 9], key=f"prod_ano_{v}")
                         
-                        if not df_planos.empty:
+                        if not df_planos.empty and 'ANO' in df_planos.columns and 'SEMANA' in df_planos.columns:
                             if sobrescrever_lab_flag:
                                 planos_ano = df_planos[df_planos["ANO"].astype(str).str.contains(str(ano_lab))].copy()
                             else:
-                                planos_ano = df_planos[
-                                    (df_planos["ANO"].astype(str).str.contains(str(ano_lab))) & 
-                                    (df_planos["EIXO"].astype(str).str.contains("HUB_ATIVO", case=False, na=False))
-                                ].copy()
+                                # Captura planos com HUB_ATIVO, PADRÃO, NOVO ou PENDENTE que ainda não tenham sido marcados como CONCLUÍDOS/RECESSO
+                                eixo_str = df_planos["EIXO"].astype(str).str.upper()
+                                mask_pendente = (eixo_str.str.contains("HUB_ATIVO|PADRÃO|PADRAO|PENDENTE|NOVO", regex=True, na=False)) & (~eixo_str.str.contains("CONCLUIDO|RECESSO|FERIADO", regex=True, na=False))
+                                planos_ano = df_planos[(df_planos["ANO"].astype(str).str.contains(str(ano_lab))) & mask_pendente].copy()
                         else:
                             planos_ano = pd.DataFrame()
                         
