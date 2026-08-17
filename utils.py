@@ -1,4 +1,5 @@
 import importlib
+import streamlit as st
 import io
 import random
 import re
@@ -270,3 +271,36 @@ def obter_regex_trimestre(trimestre_str):
         return r"(?<!I)II(?![I])|SEGUNDO|2º|\b2\b"
     else:
         return r"(?<!I)I(?![I])|PRIMEIRO|1º|\b1\b"
+
+# ==============================================================================
+# FATIADOR E LEITOR VISUAL DE PDF (SOSA 2026)
+# ==============================================================================
+def fatiar_pdf_bytes_por_paginas(pdf_bytes, paginas_list):
+    """Fatia um PDF mantendo apenas as páginas selecionadas e retorna os novos bytes do PDF visual."""
+    if not pdf_bytes or not paginas_list:
+        return None
+    try:
+        import pypdf
+        reader = pypdf.PdfReader(io.BytesIO(pdf_bytes))
+        writer = pypdf.PdfWriter()
+        total_pags = len(reader.pages)
+        for p in paginas_list:
+            idx = p - 1
+            if 0 <= idx < total_pags:
+                writer.add_page(reader.pages[idx])
+        output_stream = io.BytesIO()
+        writer.write(output_stream)
+        output_stream.seek(0)
+        return output_stream.getvalue()
+    except Exception as e:
+        print(f"Erro ao fatiar PDF visual: {e}")
+        return None
+
+def renderizar_pdf_iframe(pdf_bytes, altura=500):
+    """Renderiza a página exata do PDF do livro com layout, imagens e cores originais."""
+    if not pdf_bytes:
+        return
+    import base64
+    base64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
+    pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="{altura}px" type="application/pdf" style="border: 1px solid #2962FF; border-radius: 12px;"></iframe>'
+    st.markdown(pdf_display, unsafe_allow_html=True)
