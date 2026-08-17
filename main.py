@@ -519,7 +519,7 @@ if menu == "📅 Planejamento (Ponto ID)":
 
             status_especial_sem = ""
             motivo_especial_sem = ""
-            if not df_relatorios.empty:
+            if not df_relatorios.empty and 'TIPO' in df_relatorios.columns and 'CONTEUDO' in df_relatorios.columns:
                 config_sem_rec = df_relatorios[df_relatorios['TIPO'] == f"CONFIG_SEMANA_{sem_limpa}"]
                 if not config_sem_rec.empty:
                     partes_c = str(config_sem_rec.iloc[-1]['CONTEUDO']).split('|')
@@ -573,10 +573,10 @@ if menu == "📅 Planejamento (Ponto ID)":
                 st.markdown("#### 📋 2. Vínculo de Prova do Acervo & Extração de Habilidades")
                 st.caption("Selecione o exame já forjado no acervo para que o sistema extraia automaticamente os conteúdos, descritores SAEB e habilidades BNCC para o Plano Padronizado SOSA.")
 
-                df_ativos_ano = df_aulas[df_aulas['ANO'].astype(str).str.contains(str(ano_p))] if not df_aulas.empty else pd.DataFrame()
+                df_ativos_ano = df_aulas[df_aulas['ANO'].astype(str).str.contains(str(ano_p))] if not df_aulas.empty and 'ANO' in df_aulas.columns else pd.DataFrame()
                 
                 opcoes_ativos = []
-                if not df_ativos_ano.empty:
+                if not df_ativos_ano.empty and 'SEMANA_REF' in df_ativos_ano.columns and 'TIPO_MATERIAL' in df_ativos_ano.columns:
                     mask_ex = (df_ativos_ano['SEMANA_REF'] == "AVALIAÇÃO") | (df_ativos_ano['TIPO_MATERIAL'].str.contains("PROVA|TESTE|SONDA|AVALIAÇÃO|AVALIACAO|EXAME", case=False, na=False))
                     opcoes_ativos = sorted(df_ativos_ano[mask_ex]['TIPO_MATERIAL'].unique().tolist())
                 
@@ -588,10 +588,10 @@ if menu == "📅 Planejamento (Ponto ID)":
                 conteudos_extraidos = ""
                 texto_prova_completo = ""
 
-                if exame_selecionado and not df_ativos_ano.empty:
+                if exame_selecionado and not df_ativos_ano.empty and 'TIPO_MATERIAL' in df_ativos_ano.columns:
                     match_ex = df_ativos_ano[df_ativos_ano['TIPO_MATERIAL'] == exame_selecionado]
                     if not match_ex.empty:
-                        texto_prova_completo = str(match_ex.iloc[0]['CONTEUDO'])
+                        texto_prova_completo = str(match_ex.iloc[0].get('CONTEUDO', ''))
                         grade = ai.extrair_tag(texto_prova_completo, "GRADE_DE_CORRECAO") or ai.extrair_tag(texto_prova_completo, "GRADE_DE_CORRECAO_PEI")
                         if grade:
                             descritores = re.findall(r'(?i)(?:DESCRITOR_SAEB|HABILIDADE|BNCC|DESCRITOR)\s*:\s*([^|\]\n]+)', grade)
@@ -770,7 +770,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                         list_pags_ex = util.processar_intervalos_paginas(pags_ex_input)
 
                         if list_pags_teo or list_pags_ex:
-                            with st.spinner("🔍 Fatiando páginas do livro no Drive..."):
+                            with st.spinner("🔍 Fatiando páginas selecionadas do Drive..."):
                                 bytes_pdf = db.baixar_bytes_arquivo_drive(uri_livro_drive)
                                 if bytes_pdf:
                                     if list_pags_teo:
@@ -788,7 +788,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                         key=f"recorte_ponto_id_{v}"
                     )
 
-                    # MESA DE INSPEÇÃO COM LEITOR DE PDF VISUAL INTEGRADO
+                    # MESA DE INSPEÇÃO DA IA
                     if texto_teoria_extraido or texto_exercicios_extraido or recorte_livro_texto.strip() or bytes_pdf_fatiado_teo:
                         with st.expander("👁️ MESA DE INSPEÇÃO DA IA (PRÉVIA DO CONTEÚDO LIDO DO LIVRO)", expanded=True):
                             t_insp1, t_insp2, t_insp3 = st.tabs(["📘 Teoria (Livro)", "📝 Exercícios (Livro)", "✍️ Texto Auxiliar"])
@@ -924,7 +924,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                 st.session_state.p_meta = {"semana": sem_limpa, "trimestre": trim_atual, "ano": ano_str_busca, "base": base_didatica_info}
                 st.rerun()
 
-    # MESA DE LAPIDAÇÃO (VERSÃO BENTO GRID + SELO VISUAL BNCC MATEMÁTICA)
+    # MESA DE LAPIDAÇÃO
     @st.fragment
     def renderizar_mesa_lapidacao_plano():
         if "p_temp" in st.session_state:
@@ -1063,6 +1063,335 @@ if menu == "📅 Planejamento (Ponto ID)":
                     reset_planejamento()
 
     renderizar_mesa_lapidacao_plano()
+
+    # ==============================================================================
+    # ABA 2: HUB DE PRODUÇÃO & BAIXA LIMPA OFFLINE (VACINA DE TELAS SEMPRE ATIVAS)
+    # ==============================================================================
+    with tab_producao:
+        st.markdown("#### Hub de Produção de Materiais & Baixa Limpa")
+        st.caption("Planos aprovados aguardando a geração dos materiais com IA ou a baixa por aula com Livro Didático / Evento.")
+        
+        planos_ativos = pd.DataFrame()
+        if not df_planos.empty and 'EIXO' in df_planos.columns:
+            planos_ativos = df_planos[df_planos["EIXO"].astype(str).str.contains("HUB_ATIVO", case=False, na=False)].iloc[::-1]
+
+        if not planos_ativos.empty:
+            for _, row in planos_ativos.iterrows():
+                with st.container(border=True):
+                    c_p1, c_p2, c_p3, c_p4 = st.columns([2, 1, 1.2, 1])
+                    c_p1.markdown(f"**{row.get('SEMANA', 'Semana')}** | Série: {row.get('ANO', '6º')} ({row.get('TURMA', 'I Trimestre')})")
+                    c_p1.caption("Status: ⏳ HUB ATIVO (Aguardando Produção / Execução)")
+                    
+                    if c_p2.button("🚀 Gerar Material IA", key=f"gen_hub_{row.name}", use_container_width=True):
+                        st.session_state.lab_temp = str(row.get("PLANO_TEXTO", ""))
+                        st.session_state.sosa_id_atual = util.gerar_sosa_id("AULA", row.get('ANO', '6º'), row.get("TURMA", "I Trimestre"))
+                        st.session_state.lab_meta = {
+                            "ano": str(row.get('ANO', '6')).replace("º",""), 
+                            "trimestre": str(row.get("TURMA", "I Trimestre")), 
+                            "tipo": "PRODUÇÃO_HUB", 
+                            "semana_ref": str(row.get('SEMANA', 'Semana'))
+                        }
+                        navegar_para("🧪 Criador de Aulas")
+
+                    with c_p3.popover("📖 Baixa: Livro Didático"):
+                        st.info("💡 **Baixa Limpa sem IA:** Registre os detalhes da aula ministrada pelo livro sem poluir o banco de arquivos.")
+                        txt_obs_manual = st.text_input("Detalhes (Ex: Livro A Conquista - Págs. 184 a 187):", key=f"txt_man_obs_hub_{row.name}")
+                        data_exec_livro = st.date_input("Data da Execução:", date.today(), format="DD/MM/YYYY", key=f"dt_livro_hub_{row.name}")
+                        
+                        if st.button("💾 CONFIRMAR BAIXA POR LIVRO", type="primary", key=f"btn_conf_man_hub_{row.name}"):
+                            dt_str_livro = data_exec_livro.strftime("%d/%m/%Y")
+                            db.dar_baixa_aula_livro_offline(
+                                semana=str(row.get('SEMANA', 'Semana')), 
+                                ano=str(row.get('ANO', '6º')), 
+                                turma=str(row.get('TURMA', 'I Trimestre')), 
+                                data_str=dt_str_livro, 
+                                detalhes_livro=txt_obs_manual
+                            )
+                            st.success("✅ Plano concluído por Livro Didático e registrado no Diário com sucesso!")
+                            st.balloons(); time.sleep(1); st.rerun()
+
+                    with c_p4.popover("🛑 Baixa: Evento/Feriado"):
+                        st.info("💡 **Conclusão por Calendário:** Arquive esta semana devido a feriado, evento ou aplicação de exames.")
+                        motivo_evento = st.selectbox("Motivo:", ["Feriado / Recesso", "Semana de Provas Globais", "Conselho de Classe / Evento"], key=f"mot_ev_hub_{row.name}")
+                        
+                        if st.button("🛑 ARQUIVAR SEMANA", key=f"fin_hub_ev_{row.name}", use_container_width=True):
+                            db.dar_baixa_plano_evento(
+                                semana=str(row.get('SEMANA', 'Semana')), 
+                                ano=str(row.get('ANO', '6º')), 
+                                motivo_ou_status=motivo_evento
+                            )
+                            st.success("✅ Semana arquivada no planejamento!")
+                            time.sleep(1); st.rerun()
+        else:
+            st.success("🎉 **TODOS OS PLANOS ESTÃO 100% EM DIA!** Nenhum material pendente no Hub de Produção.")
+            st.caption("ℹ️ Quando você criar um novo plano na aba 'Novo Plano' com status de produção ativado, ele aparecerá aqui automaticamente.")
+            
+            # Exibe histórico de planos concluídos para consulta rápida
+            if not df_planos.empty and 'SEMANA' in df_planos.columns:
+                with st.expander("📋 Ver Histórico Geral de Planos Cadastrados na Planilha DB_PLANOS", expanded=False):
+                    df_planos_exibicao = df_planos[['DATA', 'SEMANA', 'ANO', 'TURMA', 'EIXO']].copy()
+                    st.dataframe(df_planos_exibicao, use_container_width=True, hide_index=True)
+
+    # ==============================================================================
+    # ABA 3: ACERVO DE PLANOS & RELOCADOR DE SEMANAS EM CASCATA
+    # ==============================================================================
+    with tab_acervo:
+        st.markdown("#### Acervo de Planos Estratégicos")
+        st.caption("Consulte, edite ou altere a semana dos planos armazenados na sua biblioteca.")
+        
+        if not df_planos.empty and 'ANO' in df_planos.columns and 'SEMANA' in df_planos.columns:
+            f_ano_h = st.selectbox("Filtrar por Série:", ["Todos", "6º", "7º", "8º", "9º"], key=f"hist_ano_{v}")
+            df_h = df_planos[df_planos["ANO"] == f"{f_ano_h}º"] if f_ano_h != "Todos" else df_planos.copy()
+            
+            if not df_h.empty:
+                semanas_lista_ac = df_h["SEMANA"].dropna().unique().tolist()[::-1]
+                sel_h = st.selectbox("Selecionar Plano:", semanas_lista_ac, key=f"hist_sem_{v}")
+                match_h = df_h[df_h["SEMANA"] == sel_h]
+                
+                if not match_h.empty:
+                    dados_h = match_h.iloc[0]
+                    link_atual = str(dados_h.get("LINK_DRIVE", ""))
+                    is_corrupted = "html" in link_atual.lower() or "Page Not Found" in link_atual or not link_atual.startswith("http")
+                    
+                    if is_corrupted:
+                        st.error("⚠️ **Detector de Falhas:** O link deste arquivo precisa de recuperação.")
+                        if st.button("🔄 RECONSTRUIR DOCUMENTO E RECUPERAR LINK NO DRIVE", type="primary", use_container_width=True, key=f"heal_btn_{sel_h.replace(' ','')}_{v}"):
+                            with st.status("Reconstruindo...", expanded=True) as status:
+                                plano_txt_bruto = str(dados_h.get('PLANO_TEXTO', ''))
+                                
+                                ed_geral = ai.extrair_tag(plano_txt_bruto, "OBJETO_CONHECIMENTO") or ai.extrair_tag(plano_txt_bruto, "CONTEUDO_GERAL") or "Planejamento Semanal"
+                                ed_espec = ai.extrair_tag(plano_txt_bruto, "CONTEUDOS_ESPECIFICOS")
+                                ed_objs = ai.extrair_tag(plano_txt_bruto, "OBJETIVOS_ENSINO")
+                                ed_a1 = ai.extrair_tag(plano_txt_bruto, "AULA_1")
+                                ed_a2 = ai.extrair_tag(plano_txt_bruto, "AULA_2")
+                                ed_sab = ai.extrair_tag(plano_txt_bruto, "SABADO_LETIVO")
+                                
+                                metodologia_docx = f"AULA 01:\n{ed_a1}"
+                                if "N/A" not in ed_a2.upper() and len(ed_a2) > 5: metodologia_docx += f"\n\nAULA 02:\n{ed_a2}"
+                                if "N/A" not in ed_sab.upper() and len(ed_sab) > 5: metodologia_docx += f"\n\nSÁBADO LETIVO:\n{ed_sab}"
+                                
+                                dados_docx = {
+                                    "geral": ed_geral, "especificos": ed_espec, "objetivos": ed_objs, 
+                                    "recursos": "Livro Didático", 
+                                    "metodologia": metodologia_docx,
+                                    "avaliacao": ai.extrair_tag(plano_txt_bruto, "AVALIACAO_DE_MERITO"), 
+                                    "pei": ai.extrair_tag(plano_txt_bruto, "ESTRATEGIA_DUA_PEI")
+                                }
+                                
+                                nome_arquivo = f"PLANO_{str(dados_h.get('ANO','6')).replace('º','')}_{sel_h.replace(' ', '')}"
+                                doc_io = exporter.gerar_docx_plano_pedagogico_ELITE(nome_arquivo, dados_docx, {"ano": str(dados_h.get('ANO','6º')), "semana": sel_h, "trimestre": str(dados_h.get('TURMA','I Trimestre'))})
+                                
+                                link_novo = db.subir_e_converter_para_google_docs(doc_io, nome_arquivo, trimestre=str(dados_h.get('TURMA','I Trimestre')), categoria=str(dados_h.get('ANO','6º')), semana=sel_h, modo="PLANEJAMENTO")
+                                
+                                if "https" in link_novo and len(link_novo) < 250:
+                                    try:
+                                        wb = db.conectar()
+                                        ws = wb.worksheet("DB_PLANOS")
+                                        dados_sheet = ws.get_all_values()
+                                        
+                                        for row_idx, row in enumerate(dados_sheet):
+                                            if row_idx > 0 and row[1] == sel_h and row[2] == str(dados_h.get('ANO','')):
+                                                ws.update_cell(row_idx+1, 7, link_novo)
+                                                novo_plano_texto = plano_txt_bruto.split("--- LINK DRIVE ---")[0] + f"--- LINK DRIVE --- {link_novo}"
+                                                ws.update_cell(row_idx+1, 6, novo_plano_texto)
+                                                break
+                                        
+                                        status.update(label="✅ Documento Recuperado!", state="complete")
+                                        st.balloons(); st.cache_data.clear(); time.sleep(1.2); st.rerun()
+                                    except Exception as e: st.error(f"Erro ao salvar no banco: {e}")
+                                else:
+                                    status.update(label="❌ Falha na recuperação.", state="error")
+                                    st.error(link_novo)
+                    else:
+                        c_btn1, c_btn2 = st.columns(2)
+                        c_btn1.link_button("📂 Abrir DOCX no Drive", link_atual, use_container_width=True)
+                        if c_btn2.button("🗑️ Apagar Plano", use_container_width=True, key=f"del_plan_h_{sel_h.replace(' ', '')}_{v}"):
+                            if db.excluir_plano_completo(sel_h, str(dados_h.get("ANO", ""))): st.rerun()
+
+                        @st.fragment
+                        def renderizar_relocador_fragmento():
+                            with st.expander("🔄 Mover este Plano e Aulas para Outra Semana", expanded=False):
+                                st.info("💡 Altera a semana do plano e de todas as suas aulas no banco sem apagar os arquivos no Drive.")
+                                
+                                todas_semanas_reloc = util.gerar_semanas()
+                                semanas_ocupadas_ano = df_planos[df_planos['ANO'] == str(dados_h.get('ANO',''))]['SEMANA'].tolist() if 'ANO' in df_planos.columns else []
+                                semanas_livres_reloc = [s.split(" (")[0] for s in todas_semanas_reloc if s.split(" (")[0] not in semanas_ocupadas_ano and "Jornada" not in s]
+                                
+                                if not semanas_livres_reloc:
+                                    st.warning("Todas as semanas deste ano letivo já possuem planos cadastrados.")
+                                else:
+                                    nova_semana_dest = st.selectbox("Selecione a Semana de Destino:", semanas_livres_reloc, key=f"reloc_sem_{sel_h.replace(' ','')}_{v}")
+                                    
+                                    if st.button("🚀 CONFIRMAR MUDANÇA DE SEMANA EM CASCATA", type="primary", use_container_width=True, key=f"btn_reloc_exe_{sel_h.replace(' ','')}_{v}"):
+                                        with st.spinner("Transferindo plano e aulas em cascata..."):
+                                            sucesso_reloc = db.relocador_plano_semana(
+                                                semana_antiga=sel_h, 
+                                                ano=str(dados_h.get('ANO','')), 
+                                                nova_semana=nova_semana_dest, 
+                                                link_drive=link_atual
+                                            )
+                                            if sucesso_reloc:
+                                                st.success(f"✅ Plano transferido para {nova_semana_dest}!")
+                                                st.balloons(); time.sleep(1.2); st.rerun()
+                                            else: st.error("Erro ao transferir a semana.")
+
+                        renderizar_relocador_fragmento()
+            else:
+                st.info(f"📭 Nenhum plano encontrado para o {f_ano_h}º Ano no acervo.")
+        else:
+            st.info("📭 Nenhum plano cadastrado no acervo ainda. Crie o primeiro plano na aba 'Novo Plano'!")
+
+    # ==============================================================================
+    # ABA 4: INTELIGÊNCIA CURRICULAR & ASSISTENTE DE CONCILIAÇÃO CRONOLÓGICA
+    # ==============================================================================
+    with tab_inteligencia:
+        st.markdown("### 🧠 Inteligência Curricular e Planejamento Trimestral")
+        
+        modo_inteligencia = st.segmented_control(
+            "Selecione a Visão:", 
+            ["📊 Status de Execução (Checklist)", "🖨️ Gerador de Plano Trimestral", "⚡ Conciliador Cronológico"], 
+            default="📊 Status de Execução (Checklist)",
+            key=f"seg_intel_{v}"
+        )
+        st.markdown("---")
+
+        def limpar_tags_cite(texto):
+            if not isinstance(texto, str): return ""
+            return re.sub(r'\[cite:.*?\]', '', texto).strip()
+
+        if modo_inteligencia == "📊 Status de Execução (Checklist)":
+            st.caption("O sistema cruza os conteúdos do CSV com os planos gerados no Ponto ID.")
+            c1, c2 = st.columns(2)
+            ano_c = c1.selectbox("Série:", [6, 7, 8, 9], key=f"matriz_ano_{v}")
+            trim_c = c2.selectbox("Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"matriz_trim_{v}")
+            
+            col_ano = next((c for c in df_curriculo.columns if 'ANO' in c.upper()), None) if not df_curriculo.empty else None
+            col_eixo = next((c for c in df_curriculo.columns if any(x in c.upper() for x in ['GERAIS', 'EIXO', 'DOMÍNIO'])), None) if not df_curriculo.empty else None
+            col_trim = next((c for c in df_curriculo.columns if trim_c.upper() in c.upper()), None) if not df_curriculo.empty else None
+
+            if col_ano and col_eixo and col_trim:
+                df_c = df_curriculo[df_curriculo[col_ano].astype(str).str.contains(str(ano_c))].copy()
+                
+                if not df_c.empty:
+                    dados_checklist = []
+                    planos_feitos = df_planos[(df_planos["ANO"].astype(str).str.contains(str(ano_c))) & (df_planos["TURMA"] == trim_c)] if not df_planos.empty and 'ANO' in df_planos.columns and 'TURMA' in df_planos.columns else pd.DataFrame()
+                    texto_soberano = " | ".join([ai.extrair_tag(p, "CONTEUDOS_ESPECIFICOS").upper() for p in planos_feitos.get("PLANO_TEXTO", pd.Series())]) if not planos_feitos.empty else ""
+                    texto_soberano_limpo = re.sub(r'[^A-Z0-9]', '', texto_soberano)
+
+                    for _, row in df_c.iterrows():
+                        eixo = row.get(col_eixo, 'Geral')
+                        conteudos_brutos = limpar_tags_cite(row.get(col_trim, ''))
+                        topicos = [t.strip() for t in conteudos_brutos.split(';') if t.strip()]
+                        
+                        for topico in topicos:
+                            target = re.sub(r'[^A-Z0-9]', '', topico.upper())
+                            status = "✅ CONCLUÍDO" if target in texto_soberano_limpo and len(target) > 5 else "⏳ PENDENTE"
+                            dados_checklist.append({"Unidade Temática (Eixo)": eixo, "Conteúdo Específico": topico, "Status": status})
+                    
+                    if dados_checklist:
+                        df_check = pd.DataFrame(dados_checklist)
+                        concluidos = len(df_check[df_check['Status'] == "✅ CONCLUÍDO"])
+                        total = len(df_check)
+                        progresso = (concluidos / total) * 100 if total > 0 else 0
+                        
+                        st.progress(progresso / 100)
+                        st.caption(f"**Progresso do Trimestre:** {concluidos} de {total} tópicos concluídos ({progresso:.1f}%)")
+                        
+                        def colorir_status(val):
+                            if "CONCLUÍDO" in str(val): return 'color: #2ECC71; font-weight: bold;'
+                            return 'color: #F1C40F; font-weight: bold;'
+                            
+                        st.dataframe(df_check.style.map(colorir_status, subset=['Status']), use_container_width=True, hide_index=True)
+                    else: st.info("Nenhum conteúdo cadastrado para este trimestre no CSV.")
+            else: st.error("As colunas do currículo não correspondem ao formato esperado.")
+
+        elif modo_inteligencia == "🖨️ Gerador de Plano Trimestral":
+            st.markdown("#### Gerador Automático de Plano Trimestral (DOCX)")
+            c_t1, c_t2 = st.columns(2)
+            ano_trim = c_t1.selectbox("Série Alvo:", ["6º Ano", "7º Ano", "8º Ano", "9º Ano"], key=f"sel_ano_trim_{v}")
+            trim_alvo = c_t2.selectbox("Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"sel_trim_alvo_{v}")
+            ano_num_trim = "".join(filter(str.isdigit, ano_trim))
+            
+            if st.button("🖨️ Extrair Dados e Gerar Documento Oficial", type="primary", use_container_width=True, key=f"btn_gen_plan_trim_{v}"):
+                with st.spinner("Minerando planos e compilando documento..."):
+                    col_ano = next((c for c in df_curriculo.columns if 'ANO' in c.upper()), None) if not df_curriculo.empty else None
+                    col_eixo = next((c for c in df_curriculo.columns if any(x in c.upper() for x in ['GERAIS', 'EIXO', 'DOMÍNIO'])), None) if not df_curriculo.empty else None
+                    col_trim = next((c for c in df_curriculo.columns if trim_alvo.upper() in c.upper()), None) if not df_curriculo.empty else None
+                    
+                    if not col_ano or not col_eixo or not col_trim:
+                        st.error("Erro na leitura das colunas do CSV.")
+                        st.stop()
+                        
+                    df_matriz_trim = df_curriculo[df_curriculo[col_ano].astype(str).str.contains(ano_num_trim)].copy()
+                    
+                    if df_matriz_trim.empty:
+                        st.error("Nenhum dado encontrado na matriz para esta série.")
+                    else:
+                        planos_trim = df_planos[(df_planos['ANO'].astype(str).str.contains(ano_num_trim)) & (df_planos['TURMA'] == trim_alvo)] if not df_planos.empty and 'ANO' in df_planos.columns and 'TURMA' in df_planos.columns else pd.DataFrame()
+                        
+                        bncc_codes = set()
+                        metodologias = set()
+                        
+                        if not planos_trim.empty and 'PLANO_TEXTO' in planos_trim.columns:
+                            for txt in planos_trim['PLANO_TEXTO'].dropna():
+                                hab = ai.extrair_tag(str(txt), "HABILIDADE_BNCC")
+                                codes = re.findall(r'EF\d{2}MA\d{2}[A-Z]?', hab, re.IGNORECASE)
+                                bncc_codes.update([c.upper() for c in codes])
+                                
+                                aula1 = ai.extrair_tag(str(txt), "AULA_1").lower()
+                                if "prática" in aula1 or "quadro" in aula1: metodologias.add("Exposição dialogada e resolução no quadro")
+                                if "livro" in aula1 or "página" in aula1: metodologias.add("Leitura e fixação no livro didático")
+                                if "tecnologia" in aula1 or "news" in aula1: metodologias.add("Sensibilização com notícias e tecnologia")
+                                if "jogo" in aula1 or "lúdico" in aula1: metodologias.add("Atividades lúdicas e desafios")
+                                if "revisão" in aula1 or "correção" in aula1: metodologias.add("Revisão e recomposição de aprendizagem")
+                        
+                        if not metodologias:
+                            metodologias = {"Aulas expositivas e dialogadas", "Resolução de exercícios de fixação", "Uso do livro didático"}
+                            
+                        hab_str = ", ".join(sorted(list(bncc_codes))) if bncc_codes else "Habilidades trabalhadas conforme planos semanais."
+                        met_str = "• " + "\n• ".join(sorted(list(metodologias)))
+                        
+                        dados_tabela = []
+                        for _, row in df_matriz_trim.iterrows():
+                            eixo = str(row.get(col_eixo, 'Geral')).strip()
+                            conteudos = limpar_tags_cite(row.get(col_trim, '')).replace(";", ";\n")
+                            
+                            if conteudos and conteudos.upper() != "NAN":
+                                dados_tabela.append({
+                                    "eixo": eixo, "conteudos": conteudos,
+                                    "habilidades": hab_str, "metodologia": met_str
+                                })
+                        
+                        info_trim = {"trimestre": trim_alvo, "ano": ano_trim}
+                        nome_arq = f"PLANEJAMENTO_TRIMESTRAL_{trim_alvo.replace(' ', '')}_{ano_trim.replace('º ', '')}"
+                        
+                        doc_stream = exporter.gerar_docx_planejamento_trimestral(nome_arq, info_trim, dados_tabela)
+                        link_doc = db.subir_e_converter_para_google_docs(doc_stream, nome_arq, trimestre=trim_alvo, categoria=ano_trim, modo="PLANEJAMENTO")
+                        
+                        if "https" in link_doc:
+                            st.success("✅ Plano Trimestral gerado com sucesso!")
+                            st.link_button("📂 ABRIR DOCUMENTO OFICIAL", link_doc, type="primary", use_container_width=True)
+                            st.balloons()
+                        else: st.error(f"Erro ao salvar no Drive: {link_doc}")
+
+        elif modo_inteligencia == "⚡ Conciliador Cronológico":
+            with st.container(border=True):
+                st.markdown("#### ⚡ Assistente de Conciliação e Re-indexação de Semanas")
+                st.caption("Reorganiza cronologicamente as semanas invertidas ou saltadas do DB_PLANOS e vincula automaticamente as aulas avulsas do diário.")
+                
+                c_conc1, c_conc2 = st.columns([1, 1])
+                ano_conc_sel = c_conc1.selectbox("Série para Conciliar:", ["6º", "7º", "8º", "9º"], key=f"sel_ano_conc_{v}")
+                
+                if c_conc2.button("🚀 EXECUTAR CONCILIAÇÃO E RE-INDEXAÇÃO CRONOLÓGICA", type="primary", use_container_width=True, key=f"btn_run_conc_{v}"):
+                    with st.status(f"Reconciliando semanas do {ano_conc_sel} Ano no banco de dados...", expanded=True) as status_conc:
+                        status_conc.write("🔍 Analisando datas de criação e ordenando cronologicamente...")
+                        sucesso_c = db.conciliar_calendario_e_planos_cronologicos(ano_conc_sel)
+                        
+                        if sucesso_c:
+                            status_conc.update(label="✅ Semanas re-indexadas e aulas avulsas vinculadas com sucesso!", state="complete")
+                            st.balloons(); time.sleep(1.2); st.rerun()
+                        else:
+                            status_conc.update(label="⚠️ Erro ao conciliar dados ou nenhum registro encontrado.", state="error")
 
 
 
