@@ -273,7 +273,7 @@ def obter_regex_trimestre(trimestre_str):
         return r"(?<!I)I(?![I])|PRIMEIRO|1º|\b1\b"
 
 # ==============================================================================
-# FATIADOR E LEITOR VISUAL DE PDF (SOSA 2026)
+# FATIADOR E LEITOR VISUAL DE PDF (SOSA 2026 - MOTOR HTML5 CANVAS / PDF.JS)
 # ==============================================================================
 def fatiar_pdf_bytes_por_paginas(pdf_bytes, paginas_list):
     """Fatia um PDF mantendo apenas as páginas selecionadas e retorna os novos bytes do PDF visual."""
@@ -296,11 +296,75 @@ def fatiar_pdf_bytes_por_paginas(pdf_bytes, paginas_list):
         print(f"Erro ao fatiar PDF visual: {e}")
         return None
 
-def renderizar_pdf_iframe(pdf_bytes, altura=500):
-    """Renderiza a página exata do PDF do livro com layout, imagens e cores originais."""
+def renderizar_pdf_iframe(pdf_bytes, altura=550):
+    """Renderiza a página exata do PDF usando Canvas HTML5 (PDF.js), imune a bloqueios de navegadores."""
     if not pdf_bytes:
         return
     import base64
+    import streamlit.components.v1 as components
+    
     base64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
-    pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="{altura}px" type="application/pdf" style="border: 1px solid #2962FF; border-radius: 12px;"></iframe>'
-    st.markdown(pdf_display, unsafe_allow_html=True)
+    
+    html_code = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+        <style>
+            #pdf-container {{
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                background-color: #000B1A;
+                padding: 15px;
+                border-radius: 12px;
+                border: 1px solid #2962FF;
+            }}
+            canvas {{
+                margin-bottom: 20px;
+                box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+                border-radius: 8px;
+                max-width: 100%;
+                height: auto !important;
+            }}
+        </style>
+    </head>
+    <body style="margin:0; padding:0; background-color: #000B1A;">
+        <div id="pdf-container"></div>
+
+        <script>
+            const pdfData = atob("{base64_pdf}");
+            const pdfjsLib = window['pdfjs-dist/build/pdf'];
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+
+            const loadingTask = pdfjsLib.getDocument({{data: pdfData}});
+            loadingTask.promise.then(function(pdf) {{
+                const container = document.getElementById('pdf-container');
+                
+                for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {{
+                    pdf.getPage(pageNum).then(function(page) {{
+                        const scale = 1.5; // Alta definição
+                        const viewport = page.getViewport({{scale: scale}});
+
+                        const canvas = document.createElement('canvas');
+                        const context = canvas.getContext('2d');
+                        canvas.height = viewport.height;
+                        canvas.width = viewport.width;
+
+                        container.appendChild(canvas);
+
+                        const renderContext = {{
+                            canvasContext: context,
+                            viewport: viewport
+                        }};
+                        page.render(renderContext);
+                    }});
+                }}
+            }}).catch(function(error) {{
+                console.error('Erro ao renderizar PDF:', error);
+            }});
+        </script>
+    </body>
+    </html>
+    """
+    components.html(html_code, height=altura, scrolling=True)
