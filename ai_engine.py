@@ -14,7 +14,7 @@ load_dotenv()
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 # ==============================================================================
-# 1. FUNÇÕES AUXILIARES DE CREDENCIAIS & CACHE DE CONTEXTO (SOSA 2026)
+# 1. FUNÇÕES AUXILIARES DE CREDENCIAIS & CACHE DE CONTEXTO
 # ==============================================================================
 def obter_creds_drive_ai():
     """Retorna as credenciais do Google Drive para leitura nativa de livros PDF."""
@@ -25,12 +25,11 @@ def obter_creds_drive_ai():
         return service_account.Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
     return None
 
-# Cache em memória da sessão para reutilizar arquivos já enviados no Gemini Files API
 if "sosa_pdf_cache" not in st.session_state:
     st.session_state.sosa_pdf_cache = {}
 
 # ==============================================================================
-# 2. DICIONÁRIO DE PERSONAS DE ELITE (PRESERVAÇÃO INTEGRAL E EXTENSIVA - LEI #3)
+# 2. DICIONÁRIO DE PERSONAS DE ELITE (PRESERVAÇÃO INTEGRAL DE 100% DAS PERSONAS)
 # ==============================================================================
 
 PERSONAS = {
@@ -308,16 +307,14 @@ PERSONAS = {
 }
 
 # ==============================================================================
-# 3. MOTOR PRINCIPAL DE IA (OPTIMIZED FOR ZERO-COST & MAXIMUM SPEED)
+# 3. MOTOR PRINCIPAL DE IA (ADEQUADO À API GEMINI 2026 - SEM TEMPERATURE)
 # ==============================================================================
 
 def gerar_ia(persona_key, comando, url_drive=None, usar_busca=True, recorte_livro=None):
     """
-    SOSA V2026.ULTIMATE: Motor de IA de alta performance otimizado para a
-    família Gemini 3.6 / 3.5 Flash (Free Tier no AI Studio) com suporte a
-    Context Caching e Execução de Código Python Nativo.
+    SOSA V2026.ULTIMATE: Motor de IA de alta performance adequado à documentação
+    oficial da API Gemini 2026 (Sem o parâmetro descontinuado 'temperature', evitando HTTP 400).
     """
-    # Mapeamento de Modelos de Alto Desempenho e Custo Zero no Free Tier
     personas_alta_complexidade = [
         "ARQUITETO_EXAMES_ENEM_V2026",
         "PLANE_PEDAGOGICO", 
@@ -328,23 +325,26 @@ def gerar_ia(persona_key, comando, url_drive=None, usar_busca=True, recorte_livr
     ]
     
     modelo_alvo = "gemini-3.6-flash" if persona_key in personas_alta_complexidade else "gemini-3.5-flash"
-    
-    # Ferramenta de busca + Execução de Código Python Nativo para verificação matemática
+
+    # Ferramentas: Busca Nativa do Google (Pág. 1 da sua Doc)
     tools_config = []
     if usar_busca:
-        tools_config.append({'google_search': {}})
-    tools_config.append({'code_execution': {}})
+        try:
+            tools_config.append(types.Tool(google_search=types.GoogleSearch()))
+        except:
+            tools_config.append({'google_search': {}})
 
-    # Configuração com temperatura 0.2 para blindagem factual (Lei #18)
+    # 🚨 REGRA CRUCIAL DA PÁG. 1 DO SEU PDF:
+    # O parâmetro 'temperature' foi descontinuado nos modelos Gemini 3.6/3.5 e causa ERRO HTTP 400!
+    # A configuração DEVE ir sem o 'temperature'.
     config = types.GenerateContentConfig(
-        tools=tools_config,
-        temperature=0.2,
+        tools=tools_config if tools_config else None,
         max_output_tokens=8192
     )
     
     conteudo_prompt = []
     
-    # CLÁUSULA INQUEBRÁVEL DE ZERO-ALUCINAÇÃO
+    # Cláusula Inquebrável de Zero-Alucinação
     trava_realidade = (
         "\n\n🚨 ================= CLÁUSULA INQUEBRÁVEL DE ZERO-ALUCINAÇÃO =================\n"
         "1. É ESTRITAMENTE PROIBIDO inventar contextos aleatórios de ficção, jogos (RPG, Roblox, etc.), "
@@ -358,17 +358,16 @@ def gerar_ia(persona_key, comando, url_drive=None, usar_busca=True, recorte_livr
     instrucao_livro = ""
     if recorte_livro and len(str(recorte_livro).strip()) > 5:
         instrucao_livro = (
-            f"\n📖 CONTEXTO REAL E EXERCÍCIOS RESOLVIDOS EM SALA:\n\"\"\"\n{recorte_livro}\n\"\"\"\n"
+            f"\n📖 CONTEXTO REAL E EXERCÍCIOS LIDOS DO LIVRO DIDÁTICO / LOUSA:\n\"\"\"\n{recorte_livro}\n\"\"\"\n"
         )
 
-    # PROCESSAMENTO E CACHING DE PDF DO GOOGLE DRIVE
+    # Processamento de PDF do Drive com Caching
     if url_drive and ("drive.google.com" in url_drive or len(url_drive) > 20):
         try:
             file_id_match = re.search(r"(?:id=|[dD]/)([\w-]+)", url_drive)
             file_id = file_id_match.group(1) if file_id_match else url_drive.strip()
             
-            # Verifica se o arquivo já está no cache da sessão
-            if file_id in st.session_state.sosa_pdf_cache:
+            if hasattr(st.session_state, "sosa_pdf_cache") and file_id in st.session_state.sosa_pdf_cache:
                 arquivo_temp = st.session_state.sosa_pdf_cache[file_id]
                 conteudo_prompt.append(types.Part.from_uri(
                     file_uri=arquivo_temp.uri, 
@@ -390,29 +389,23 @@ def gerar_ia(persona_key, comando, url_drive=None, usar_busca=True, recorte_livr
                         file=io.BytesIO(pdf_content),
                         config=types.UploadFileConfig(mime_type="application/pdf")
                     )
-                    st.session_state.sosa_pdf_cache[file_id] = arquivo_temp
+                    if hasattr(st.session_state, "sosa_pdf_cache"):
+                        st.session_state.sosa_pdf_cache[file_id] = arquivo_temp
                     conteudo_prompt.append(types.Part.from_uri(
                         file_uri=arquivo_temp.uri, 
                         mime_type="application/pdf"
                     ))
-                    
-                    comando = (
-                        "🚨 ANCORAGEM EXCLUSIVA NO LIVRO PDF ANEXADO:\n"
-                        "Leia o arquivo PDF e crie as questões/explicações BASEADAS ESTRITAMENTE NELE. "
-                        "É proibido usar exemplos genéricos fora do livro.\n\n"
-                        f"{comando}"
-                    )
-                    st.toast("📖 Livro Didático lido e blindado contra alucinação!", icon="✅")
         except Exception as e:
-            st.toast(f"⚠️ Aviso na leitura do livro no Drive: {e}", icon="⚠️")
+            print(f"Aviso leitura Drive PDF: {e}")
 
     persona_prompt = PERSONAS.get(persona_key, PERSONAS["ARQUITETO_EXAMES_ENEM_V2026"])
     prompt_final = f"{persona_prompt}{trava_realidade}{instrucao_livro}\n\n{comando}"
     conteudo_prompt.append(types.Part.from_text(text=prompt_final))
 
-    # EXECUÇÃO DA REQUISIÇÃO COM FALLBACK AUTOMÁTICO DE MODELOS
-    modelos_tentativa = [modelo_alvo, "gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-2.5-flash"]
+    # Cascata de Modelos Estáveis de 2026
+    modelos_tentativa = [modelo_alvo, "gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-2.5-flash"]
     
+    erros_log = []
     for mod in modelos_tentativa:
         try:
             res = client.models.generate_content(
@@ -420,27 +413,45 @@ def gerar_ia(persona_key, comando, url_drive=None, usar_busca=True, recorte_livr
                 contents=[types.Content(role="user", parts=conteudo_prompt)],
                 config=config
             )
-            if res.text and len(res.text.strip()) > 0:
-                return res.text
-        except Exception as e_mod:
-            print(f"Tentativa com {mod} falhou: {e_mod}. Tentando próximo modelo...")
-            continue
             
-    return "⚠️ A IA não retornou dados. Por favor, tente novamente em instantes."
+            texto_retornado = ""
+            if hasattr(res, "text") and res.text and len(res.text.strip()) > 0:
+                texto_retornado = res.text.strip()
+            elif hasattr(res, "candidates") and res.candidates:
+                for cand in res.candidates:
+                    if hasattr(cand, "content") and hasattr(cand.content, "parts"):
+                        for part in cand.content.parts:
+                            if hasattr(part, "text") and part.text:
+                                texto_retornado += part.text + "\n"
+            
+            if texto_retornado.strip():
+                return texto_retornado.strip()
+        except Exception as e_mod:
+            erros_log.append(f"{mod}: {str(e_mod)}")
+            continue
+
+    return f"⚠️ Erro ao consultar a IA nos modelos ({', '.join(modelos_tentativa)}). Detalhes técnicos: {'; '.join(erros_log)}"
 
 # ==============================================================================
-# 4. MOTOR DE GERAÇÃO JSON DE ALTA VELOCIDADE (FLASH-LITE OTIMIZADO)
+# 4. MOTOR DE GERAÇÃO JSON DE ALTA VELOCIDADE (SEM TEMPERATURE)
 # ==============================================================================
 
 def gerar_ia_json(persona_key, comando, usar_busca=False):
     """
-    SOSA V2026: Geração de JSON estruturado ultra-rápida utilizando Gemini 3.1 Flash-Lite
-    com vacina de reparo automático de escapes LaTeX e tratamento de caracteres extras.
+    SOSA V2026: Geração de JSON estruturado ultra-rápida sem parâmetro 'temperature'
+    para prevenir o erro HTTP 400.
     """
+    tools_config = []
+    if usar_busca:
+        try:
+            tools_config.append(types.Tool(google_search=types.GoogleSearch()))
+        except:
+            tools_config.append({'google_search': {}})
+
     config = types.GenerateContentConfig(
-        tools=[{'google_search': {}}] if usar_busca else [],
-        temperature=0.2, 
+        tools=tools_config if tools_config else None,
         response_mime_type="application/json",
+        max_output_tokens=8192
     )
     
     trava_realidade_json = (
@@ -453,7 +464,7 @@ def gerar_ia_json(persona_key, comando, usar_busca=False):
     persona_prompt = PERSONAS.get(persona_key, PERSONAS["FORJA_LOTE_JSON"])
     conteudo_prompt = [types.Part.from_text(text=f"{persona_prompt}\n{trava_realidade_json}\n\n{comando}")]
     
-    modelos_json = ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-2.5-flash"]
+    modelos_json = ["gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-2.5-flash"]
     
     for mod in modelos_json:
         try:
@@ -495,9 +506,6 @@ def gerar_ia_json(persona_key, comando, usar_busca=False):
 # ==============================================================================
 
 def analisar_gabarito_vision(imagem_bytes):
-    """
-    Analisa fotos de cartões OMR/Gabarito escaneados via Visão Computacional.
-    """
     try:
         prompt = (
             "Você é um perito em visão computacional de alta precisão. Analise a imagem do gabarito.\n"
@@ -520,8 +528,7 @@ def analisar_gabarito_vision(imagem_bytes):
             model="gemini-3.5-flash", 
             contents=[types.Content(role="user", parts=conteudo_prompt)],
             config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                temperature=0.1
+                response_mime_type="application/json"
             )
         )
         import json
@@ -549,14 +556,10 @@ def subir_para_google(caminho_arquivo, nome_exibicao):
         return f"Erro no upload: {e}"
 
 # ==============================================================================
-# 6. EXTRATOR UNIVERSAL DE TAGS (MULTIMODO V2026.MASTER - PRESERVADO 100%)
+# 6. EXTRATOR UNIVERSAL DE TAGS (PRESERVADO 100%)
 # ==============================================================================
 
 def extrair_tag(texto, tag):
-    """
-    EXTRATOR UNIVERSAL SOSA V2026.MASTER
-    Possui junção automática de [GUIA_DE_ESTUDO_ALUNO] + [QUESTOES] para materiais de revisão.
-    """
     if not texto or not isinstance(texto, str): return ""
     tag_busca = tag.upper().strip().replace("[", "").replace("]", "")
     
@@ -574,7 +577,6 @@ def extrair_tag(texto, tag):
     return extrair_tag_simples(texto, tag_busca)
 
 def extrair_tag_simples(texto, tag_busca):
-    """Extrator de bloco individual seguro com suporte retrocompatível."""
     alias_map = {
         "PROFESSOR": ["PROFESSOR", "ROTEIRO_DO_PROFESSOR", "GUIA_PROFESSOR", "ROTEIRO_DE_MEDIACAO", "BASE_DIDATICA", "ROTEIRO_DO_PROFESSOR - RECOMPOSIÇÃO", "ROTEIRO_DO_PROFESSOR"],
         "ALUNO": ["ALUNO", "GUIA_DE_ESTUDO_ALUNO", "QUESTOES", "QUESTOES_ESPELHO", "CADERNO_DE_REVISAO", "GUIA_DE_ESTUDO_DO_ALUNO"],
