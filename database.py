@@ -62,16 +62,23 @@ def carregar_tudo():
             if not dados or len(dados) < 1:
                 return pd.DataFrame(columns=colunas_padrao)
             
-            df = pd.DataFrame(dados[1:], columns=dados[0])
+            # Filtra linhas completamente vazias do Sheets
+            linhas_validas = [r for r in dados[1:] if any(str(c).strip() for c in r)]
+            if not linhas_validas:
+                return pd.DataFrame(columns=colunas_padrao)
+                
+            df = pd.DataFrame(linhas_validas, columns=dados[0])
             df.columns = [str(c).strip().upper() for c in df.columns]
             
-            # VACINA DE NORMALIZAÇÃO SOSA (ANTI-ESPAÇO INVISÍVEL)
+            # VACINA DE NORMALIZAÇÃO SOSA (ANTI-ESPAÇO INVISÍVEL E ANTI-SERIAL)
             for col in df.columns:
                 df[col] = df[col].astype(str).str.strip()
                 if any(x in col for x in ["NOTA", "MEDIA", "VALOR", "SOMA"]):
                     df[col] = df[col].apply(util.sosa_to_float)
-                if col == "DATA":
+                if col == "DATA" or "DATA" in col:
                     df[col] = df[col].apply(util.formatar_data_br)
+                if col == "ID_AVALIACAO":
+                    df[col] = df[col].apply(util.sanitizar_nome_variante_soberana)
 
             return df
         except Exception as e: 
