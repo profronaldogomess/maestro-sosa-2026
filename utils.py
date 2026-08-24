@@ -69,30 +69,51 @@ def sosa_to_str(valor, casas=2):
 
 def formatar_data_br(valor):
     """
-    CONVERSOR CRONOLÓGICO SOSA (ANTI-SERIAL)
-    Converte números seriais (46060) ou datas ISO para DD/MM/YYYY.
+    CONVERSOR CRONOLÓGICO SOBERANO SOSA (ANTI-SERIAL EXCEL / ISO)
+    Converte números seriais (46149, 46233), datas ISO ou nulas para DD/MM/YYYY.
     """
     if not valor or str(valor).strip() == "" or str(valor).lower() == "nan":
         return ""
     
-    # Caso 1: É um número serial do Excel/Sheets (ex: 46060)
     val_str = str(valor).strip()
-    if val_str.replace('.','',1).isdigit():
+    
+    # Caso 1: Número serial do Excel/Google Sheets (ex: 46149)
+    if val_str.replace('.', '', 1).isdigit():
         try:
-            # Data base do Google Sheets é 30/12/1899
-            dt = date(1899, 12, 30) + timedelta(days=int(float(val_str)))
-            return dt.strftime("%d/%m/%Y")
-        except: pass
+            num = int(float(val_str))
+            if 40000 <= num <= 50000:
+                dt = date(1899, 12, 30) + timedelta(days=num)
+                return dt.strftime("%d/%m/%Y")
+        except:
+            pass
     
-    # Caso 2: Já é uma string de data (YYYY-MM-DD ou DD/MM/YYYY)
-    try:
-        if "-" in val_str: # Formato ISO
+    # Caso 2: Formato ISO (YYYY-MM-DD)
+    if "-" in val_str and len(val_str) >= 10:
+        try:
             return datetime.strptime(val_str[:10], "%Y-%m-%d").strftime("%d/%m/%Y")
-        if "/" in val_str: # Já está no formato BR
-            return val_str
-    except: pass
-    
+        except:
+            pass
+            
+    # Caso 3: Formato BR já válido
+    if "/" in val_str:
+        return val_str
+        
     return val_str
+
+def sanitizar_nome_variante_soberana(nome_av):
+    """
+    VACINA ANTI-ANINHAMENTO RECURSIVO:
+    Remove repetições de (VARIANTE (VARIANTE...)) mantendo o nome canônico do caderno.
+    """
+    if not nome_av or not isinstance(nome_av, str):
+        return ""
+    nome = str(nome_av).strip()
+    if "VARIANTE" in nome.upper() or "TIPO" in nome.upper():
+        match_tipo = re.search(r'TIPO\s*([A-Z])', nome, re.IGNORECASE)
+        letra = match_tipo.group(1).upper() if match_tipo else "B"
+        nome_base = nome.split('(')[0].split('-')[0].strip()
+        return f"{nome_base} - TIPO {letra}"
+    return nome
 
 def obter_info_trimestre(dt):
     # Datas exatas do PDF da Prefeitura de Itabuna 2026
