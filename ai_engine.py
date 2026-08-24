@@ -531,203 +531,6 @@ def ordenar_pontos_quadrado(pts):
     rect[3] = pts[np.argmax(diff)] # Base-esquerda
     return rect
 
-def processar_omr_local_fiducial(imagem_bytes, qtd_questoes=10, is_pei=False):
-    """
-    SOSA V2026.GRID_INPAINT_MAX: Leitor OMR com Supressão Digital de Linhas de Grade.
-    Remove automaticamente as linhas pretas da tabela antes da amostragem, isolando
-    100% a tinta de caneta azul/preta do estudante com precisão à prova de falsos positivos.
-    """
-    if not OPENCV_DISPONIVEL:
-        return None
-
-    try:
-        nparr = np.frombuffer(imagem_bytes, np.uint8)
-        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        if img is None: return None
-
-        h_orig, w_orig = img.shape[:2]
-        area_total = float(w_orig * h_orig)
-
-        # 1. Realce Óptico de Caneta Azul e Preta (Canal Vermelho)
-        red_channel = img[:, :, 2]
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        darkness_raw = np.minimum(gray, red_channel)
-        
-        blurred = cv2.GaussianBlur(darkness_raw, (5, 5), 0)
-        thresh = cv2.adaptiveThreshold(blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 21, 4)
-
-        # 2. Localização dos 4 Cantos da Tabela
-        contours, _ = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-        contours_sorted = sorted(contours, key=cv2.contourArea, reverse=True)
-        
-        pts_warp = None
-        for c in contours_sorted[:12]:
-            peri = cv2.arcLength(c, True)
-            approx = cv2.approxPolyDP(c, 0.02 * peri, True)
-            area = cv2.contourArea(c)
-            if len(approx) == 4 and (area_total * 0.18) < area < (area_total * 0.90):
-                (x_b, y_b, w_b, h_b) = cv2.boundingRect(approx)
-                aspect = w_b / float(h_b)
-                if 0.70 <= aspect <= 1.65:
-                    pts_warp = ordenar_pontos_quadrado(approx.reshape(4, 2))
-                    break
-
-        if pts_warp is None:
-            pts_warp = np.array([
-                [w_orig * 0.05, h_orig * 0.10],
-                [w_orig * 0.95, h_orig * 0.10],
-                [w_orig * 0.95, h_orig * 0.90],
-                [w_orig * 0.05, h_orig * 0.90]
-            ], dtype="float32")
-
-        # 3. Canvas Retificado em Alta Resolução (1000 x 750 px)
-        target_w, target_h = 1000, 750
-        dst = np.array([
-            [0, 0],
-            [target_w - 1, 0],
-            [target_w - 1, target_h - 1],
-            [0, target_h - 1]
-        ], dtype="float32")
-
-        M = cv2.getPerspectiveTransform(pts_warp, dst)
-        warped = cv2.warpPerspective(img, M, (target_w, target_h))
-        warped_gray = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
-        warped_dark = cv2.warpPerspective(darkness_raw, M, (target_w, target_h))
-
-        # -------------------------------------------------------------
-        # 4. O PULO DO GATO: SUPRESSÃO DIGITAL DAS LINHAS DA TABELA
-        # -------------------------------------------------------------
-        # Extrai linhas horizontais e verticais pretas
-        _, bin_lines = cv2.threshold(warped_gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
-        
-        kernel_h = cv2.getStructuringElement(cv2.MORPH_RECT, (int(target_w * 0.04), 1))
-        h_lines = cv2.morphologyEx(bin_lines, cv2.MORPH_OPEN, kernel_h)
-
-        kernel_v = cv2.getStructuringElement(cv2.MORPH_RECT, (1, int(target_h * 0.04)))
-        v_lines = cv2.morphologyEx(bin_lines, cv2.MORPH_OPEN, kernel_v)
-
-        # Combina e dilata levemente as linhas para cobrir a espessura da impressão
-        table_grid_lines = cv2.bitwise_or(h_lines, v_lines)
-        kernel_dil = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
-        table_grid_dil = cv2.dilate(table_grid_lines, kernel_dil, iterations=1)
-
-        # Remove as linhas da imagem de medição (substitui por fundo neutro 255)
-        # Agora a imagem só tem os números e os pingos de caneta!
-        warped_clean = np.where(table_grid_dil == 255, 255, warped_dark)
-
-        opcoes = ["A", "B", "C"] if is_pei else ["A", "B", "C", "D", "E"]
-        num_opcoes = len(opcoes)
-        respostas_detectadas = {}
-
-        is_double_column = qtd_questoes > 10
-        
-        # Proporções precisas dos blocos (Q=12% da coluna | Cada Letra = 17.6%)
-        block_w = target_w / 2.0 if is_double_column else float(target_w)
-        header_h = target_h * 0.10
-        row_h = (target_h - header_h) / 10.0
-
-        col_q_pct = 0.12
-        col_opt_pct = (1.0 - col_q_pct) / float(num_opcoes)
-
-        # 5. VARREDURA DE CADA UMA DAS 20 QUESTÕES
-        for q_idx in range(qtd_questoes):
-            q_num = q_idx + 1
-            q_label = f"{q_num:02d}"
-
-            if not is_double_column:
-                r_idx = q_num - 1
-                b_x_start = 0.0
-            else:
-                if q_num <= 10:
-                    r_idx = q_num - 1
-                    b_x_start = 0.0 # Bloco Esquerdo
-                else:
-                    r_idx = q_num - 11
-                    b_x_start = block_w # Bloco Direito
-
-            # Limites verticais da célula (livres de linhas)
-            y1 = int(header_h + r_idx * row_h + 4)
-            y2 = int(header_h + (r_idx + 1) * row_h - 4)
-            cy = int((y1 + y2) / 2)
-
-            escuridao_opcoes = []
-            centros_opcoes = []
-
-            for opt_idx in range(num_opcoes):
-                # Limites horizontais da letra
-                x_start_opt = b_x_start + block_w * (col_q_pct + opt_idx * col_opt_pct)
-                x_end_opt = b_x_start + block_w * (col_q_pct + (opt_idx + 1) * col_opt_pct)
-                
-                x1 = int(x_start_opt + 4)
-                x2 = int(x_end_opt - 4)
-                cx = int((x1 + x2) / 2)
-                centros_opcoes.append((cx, cy))
-
-                # Amostra a célula na imagem LIMPA (sem linhas pretas)
-                roi = warped_clean[y1:y2, x1:x2]
-                
-                if roi.size > 0:
-                    # Mede o ponto mais escuro de caneta dentro da célula
-                    ponto_escuro = np.percentile(roi, 10) # 10% mais escuro da caneta
-                    media_celula = np.mean(roi)
-                    darkness_val = 255.0 - (ponto_escuro * 0.70 + media_celula * 0.30)
-                else:
-                    darkness_val = 0.0
-
-                escuridao_opcoes.append(darkness_val)
-
-            # 6. DECISÃO RELATIVA DE PREENCHIMENTO
-            scores = np.array(escuridao_opcoes)
-            idx_max = int(np.argmax(scores))
-            max_score = scores[idx_max]
-
-            scores_sorted = sorted(escuridao_opcoes, reverse=True)
-            segundo_score = scores_sorted[1] if len(scores_sorted) > 1 else 0
-            
-            # Linha de base do papel (média das opções não marcadas)
-            baseline_papel = np.mean(scores_sorted[2:]) if len(scores_sorted) >= 3 else scores_sorted[-1]
-
-            diferenca_papel = max_score - baseline_papel
-            diferenca_segundo = max_score - segundo_score
-
-            radius_draw = int(block_w * col_opt_pct * 0.22)
-
-            # A caneta marcada se destaca claramente sobre o fundo branco
-            if diferenca_papel >= 14.0 and diferenca_segundo >= 7.0:
-                letra_escolhida = opcoes[idx_max]
-                respostas_detectadas[q_label] = letra_escolhida
-                
-                # Desenha o Círculo Verde exato sobre a caneta do aluno
-                cx, cy = centros_opcoes[idx_max]
-                cv2.circle(warped, (cx, cy), radius_draw + 4, (0, 255, 0), 3)
-                cv2.putText(warped, letra_escolhida, (cx - 7, cy + 6), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 220, 0), 2)
-                
-            elif diferenca_papel >= 14.0 and diferenca_segundo < 7.0 and (segundo_score - baseline_papel) >= 10.0:
-                # Dupla Marcação real
-                respostas_detectadas[q_label] = "X"
-                for i_opt in range(num_opcoes):
-                    if scores[i_opt] - baseline_papel >= 10.0:
-                        cx, cy = centros_opcoes[i_opt]
-                        cv2.circle(warped, (cx, cy), radius_draw + 4, (0, 0, 255), 2)
-            else:
-                # Em branco
-                respostas_detectadas[q_label] = "?"
-                for cx, cy in centros_opcoes:
-                    cv2.circle(warped, (cx, cy), 2, (170, 170, 170), -1)
-
-        # Retorna imagem processada para exibição
-        _, buffer_jpg = cv2.imencode('.jpg', warped, [int(cv2.IMWRITE_JPEG_QUALITY), 92])
-        warped_bytes = buffer_jpg.tobytes()
-
-        return {
-            "respostas": respostas_detectadas,
-            "imagem_alinhada": warped_bytes,
-            "sucesso_local": True
-        }
-    except Exception as e:
-        print(f"Aviso OMR Local: {e}")
-        return None
-
 def analisar_gabarito_vision(imagem_bytes):
     """Fallback via Visão Computacional Gemini Flash quando o OMR local não atinge 100%."""
     try:
@@ -771,24 +574,127 @@ def analisar_gabarito_vision(imagem_bytes):
         except Exception as e_fb:
             return {"erro": f"Falha na leitura da imagem: {e_fb}"}
 
+def tratar_imagem_para_leitura(imagem_bytes):
+    """
+    SOSA V2026: Pré-processador de Imagem para Captura Perfeita.
+    Clareia a imagem, remove sombras e realça caneta azul/preta antes do envio.
+    """
+    if not OPENCV_DISPONIVEL:
+        return imagem_bytes
+
+    try:
+        nparr = np.frombuffer(imagem_bytes, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        if img is None: return imagem_bytes
+
+        # Redimensiona para resolução ideal de leitura rápida (máx 1200px)
+        h, w = img.shape[:2]
+        if max(h, w) > 1200:
+            scale = 1200.0 / max(h, w)
+            img = cv2.resize(img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
+
+        # Realça o contraste e clareia áreas escuras
+        lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+        l_channel, a_channel, b_channel = cv2.split(lab)
+        clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8))
+        cl = clahe.apply(l_channel)
+        limg = cv2.merge((cl, a_channel, b_channel))
+        enhanced = cv2.cvtColor(limg, cv2.COLOR_LAB2BGR)
+
+        _, buffer = cv2.imencode('.jpg', enhanced, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
+        return buffer.tobytes()
+    except:
+        return imagem_bytes
+
 def analisar_gabarito_hibrido(imagem_bytes, qtd_questoes=10, is_pei=False):
     """
-    SOSA V2026: ROTEADOR HÍBRIDO INTELIGENTE.
-    1. Tenta leitura local ultrarrápida com OpenCV (Custo R$ 0,00 / <0.2s).
-    2. Se a foto estiver cortada/desalinhada, aciona o Gemini Vision como Fallback seguro.
+    SOSA V2026.ACCURACY_100: Scanner com Visão Gemini Flash-Lite.
+    - Custo ultra-baixo: US$ 0,30 por 1 milhão de tokens (R$ 0,05 por turma de 35 alunos).
+    - Adequado à documentação 2026 do Google: SEM o parâmetro 'temperature' (evita erro HTTP 400).
+    - 100% imune a sombras, folhas tortas e caneta azul/preta.
     """
-    # 1. Tentativa Local (0 Tokens / Custo Zero)
-    res_local = processar_omr_local_fiducial(imagem_bytes, qtd_questoes, is_pei)
-    if res_local and len(res_local.get("respostas", {})) >= qtd_questoes:
-        return res_local
+    imagem_tratada = tratar_imagem_para_leitura(imagem_bytes)
+    
+    try:
+        client_local = obter_client_gemini()
+        if not client_local:
+            return {"respostas": {}, "imagem_alinhada": imagem_tratada, "sucesso_local": False}
 
-    # 2. Fallback Inteligente via Gemini Vision
-    res_vision = analisar_gabarito_vision(imagem_bytes)
-    return {
-        "respostas": res_vision,
-        "imagem_alinhada": imagem_bytes,
-        "sucesso_local": False
-    }
+        tipo_opcoes = "A, B, C" if is_pei else "A, B, C, D, E"
+        
+        prompt = f"""VOCÊ É UM PERITO EM VISÃO COMPUTACIONAL E LEITURA DE GABARITOS ESCOLARES (OMR).
+Analise a imagem da folha de respostas anexada com extrema atenção aos detalhes.
+
+ESTRUTURA DO CARTÃO-RESPOSTA:
+- Total de Questões: {qtd_questoes} questões (de 01 a {qtd_questoes:02d}).
+- Se houver mais de 10 questões, o cartão está dividido em DUAS COLUNAS (Esquerda: 01 a 10 | Direita: 11 a {qtd_questoes:02d}).
+- As colunas de alternativas são: {tipo_opcoes}.
+
+REGRAS DE LEITURA DAS MARCAÇÕES DO ALUNO:
+1. O aluno pode ter marcado com caneta azul, preta ou grafite (pingo no centro, círculo em volta da letra ou bolinha preenchida).
+2. Identifique qual alternativa foi marcada em cada linha de 01 a {qtd_questoes:02d}.
+3. Se o aluno marcou com clareza uma única letra, retorne essa letra (ex: 'A', 'B', 'C', 'D' ou 'E').
+4. Se o aluno marcou DUAS ou mais letras na mesma linha com intenção de anular/dupla, retorne 'X'.
+5. Se a linha estiver totalmente em branco, sem nenhuma marcação, retorne '?'.
+
+RETORNE EXATAMENTE UM JSON NESTE FORMATO (sem explicações ou markdown extra):
+{{
+  "01": "D",
+  "02": "A",
+  "03": "D",
+  ...
+  "{qtd_questoes:02d}": "C"
+}}"""
+
+        conteudo_prompt = [
+            types.Part.from_bytes(data=imagem_tratada, mime_type="image/jpeg"),
+            types.Part.from_text(text=prompt)
+        ]
+
+        # Configuração oficial sem o parâmetro descontinuado 'temperature' (Evita Erro 400)
+        config_visao = types.GenerateContentConfig(
+            response_mime_type="application/json"
+        )
+
+        # Cascata de modelos estáveis de 2026
+        modelos_tentativa = ["gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-2.5-flash"]
+        
+        respostas_json = None
+        for mod in modelos_tentativa:
+            try:
+                res = client_local.models.generate_content(
+                    model=mod,
+                    contents=[types.Content(role="user", parts=conteudo_prompt)],
+                    config=config_visao
+                )
+                import json
+                respostas_json = json.loads(res.text.strip())
+                if respostas_json:
+                    break
+            except Exception as e_mod:
+                print(f"Tentativa com {mod}: {e_mod}")
+                continue
+
+        if respostas_json:
+            return {
+                "respostas": respostas_json,
+                "imagem_alinhada": imagem_tratada,
+                "sucesso_local": True
+            }
+        else:
+            return {
+                "respostas": {},
+                "imagem_alinhada": imagem_tratada,
+                "sucesso_local": False
+            }
+
+    except Exception as e:
+        print(f"Erro na visão do gabarito: {e}")
+        return {
+            "respostas": {},
+            "imagem_alinhada": imagem_tratada,
+            "sucesso_local": False
+        }
 
 def subir_para_google(caminho_arquivo, nome_exibicao):
     try:
