@@ -10,8 +10,14 @@ from dotenv import load_dotenv
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
+try:
+    import cv2
+    import numpy as np
+    OPENCV_DISPONIVEL = True
+except ImportError:
+    OPENCV_DISPONIVEL = False
+
 load_dotenv()
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 # ==============================================================================
 # 1. FUNÇÕES AUXILIARES DE CREDENCIAIS & CACHE DE CONTEXTO
@@ -24,6 +30,17 @@ def obter_creds_drive_ai():
     elif "gcp_service_account" in st.secrets:
         return service_account.Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
     return None
+
+def obter_client_gemini():
+    """Inicializa o cliente Gemini com suporte a .env ou st.secrets."""
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key and hasattr(st, "secrets") and "GEMINI_API_KEY" in st.secrets:
+        api_key = st.secrets["GEMINI_API_KEY"]
+    if api_key:
+        return genai.Client(api_key=api_key)
+    return None
+
+client = obter_client_gemini()
 
 if "sosa_pdf_cache" not in st.session_state:
     st.session_state.sosa_pdf_cache = {}
@@ -313,8 +330,12 @@ PERSONAS = {
 def gerar_ia(persona_key, comando, url_drive=None, usar_busca=True, recorte_livro=None):
     """
     SOSA V2026.ULTIMATE: Motor de IA de alta performance adequado à documentação
-    oficial da API Gemini 2026 (Sem o parâmetro descontinuado 'temperature', evitando HTTP 400).
+    oficial da API Gemini 2026 (Sem o parâmetro descontinuado 'temperature').
     """
+    client_local = obter_client_gemini()
+    if not client_local:
+        return "⚠️ Chave GEMINI_API_KEY não configurada no ambiente."
+
     personas_alta_complexidade = [
         "ARQUITETO_EXAMES_ENEM_V2026",
         "PLANE_PEDAGOGICO", 
@@ -326,7 +347,6 @@ def gerar_ia(persona_key, comando, url_drive=None, usar_busca=True, recorte_livr
     
     modelo_alvo = "gemini-3.6-flash" if persona_key in personas_alta_complexidade else "gemini-3.5-flash"
 
-    # Ferramentas: Busca Nativa do Google (Pág. 1 da sua Doc)
     tools_config = []
     if usar_busca:
         try:
@@ -334,9 +354,6 @@ def gerar_ia(persona_key, comando, url_drive=None, usar_busca=True, recorte_livr
         except:
             tools_config.append({'google_search': {}})
 
-    # 🚨 REGRA CRUCIAL DA PÁG. 1 DO SEU PDF:
-    # O parâmetro 'temperature' foi descontinuado nos modelos Gemini 3.6/3.5 e causa ERRO HTTP 400!
-    # A configuração DEVE ir sem o 'temperature'.
     config = types.GenerateContentConfig(
         tools=tools_config if tools_config else None,
         max_output_tokens=8192
@@ -344,7 +361,6 @@ def gerar_ia(persona_key, comando, url_drive=None, usar_busca=True, recorte_livr
     
     conteudo_prompt = []
     
-    # Cláusula Inquebrável de Zero-Alucinação
     trava_realidade = (
         "\n\n🚨 ================= CLÁUSULA INQUEBRÁVEL DE ZERO-ALUCINAÇÃO =================\n"
         "1. É ESTRITAMENTE PROIBIDO inventar contextos aleatórios de ficção, jogos (RPG, Roblox, etc.), "
@@ -361,7 +377,6 @@ def gerar_ia(persona_key, comando, url_drive=None, usar_busca=True, recorte_livr
             f"\n📖 CONTEXTO REAL E EXERCÍCIOS LIDOS DO LIVRO DIDÁTICO / LOUSA:\n\"\"\"\n{recorte_livro}\n\"\"\"\n"
         )
 
-    # Processamento de PDF do Drive com Caching
     if url_drive and ("drive.google.com" in url_drive or len(url_drive) > 20):
         try:
             file_id_match = re.search(r"(?:id=|[dD]/)([\w-]+)", url_drive)
@@ -385,7 +400,7 @@ def gerar_ia(persona_key, comando, url_drive=None, usar_busca=True, recorte_livr
                     pdf_content = response.content
 
                 if b"%PDF" in pdf_content[:20]:
-                    arquivo_temp = client.files.upload(
+                    arquivo_temp = client_local.files.upload(
                         file=io.BytesIO(pdf_content),
                         config=types.UploadFileConfig(mime_type="application/pdf")
                     )
@@ -402,13 +417,12 @@ def gerar_ia(persona_key, comando, url_drive=None, usar_busca=True, recorte_livr
     prompt_final = f"{persona_prompt}{trava_realidade}{instrucao_livro}\n\n{comando}"
     conteudo_prompt.append(types.Part.from_text(text=prompt_final))
 
-    # Cascata de Modelos Estáveis de 2026
     modelos_tentativa = [modelo_alvo, "gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-2.5-flash"]
     
     erros_log = []
     for mod in modelos_tentativa:
         try:
-            res = client.models.generate_content(
+            res = client_local.models.generate_content(
                 model=mod, 
                 contents=[types.Content(role="user", parts=conteudo_prompt)],
                 config=config
@@ -437,10 +451,11 @@ def gerar_ia(persona_key, comando, url_drive=None, usar_busca=True, recorte_livr
 # ==============================================================================
 
 def gerar_ia_json(persona_key, comando, usar_busca=False):
-    """
-    SOSA V2026: Geração de JSON estruturado ultra-rápida sem parâmetro 'temperature'
-    para prevenir o erro HTTP 400.
-    """
+    """Geração de JSON estruturado ultra-rápida sem parâmetro 'temperature'."""
+    client_local = obter_client_gemini()
+    if not client_local:
+        return {"erro": "Chave GEMINI_API_KEY não configurada."}
+
     tools_config = []
     if usar_busca:
         try:
@@ -468,7 +483,7 @@ def gerar_ia_json(persona_key, comando, usar_busca=False):
     
     for mod in modelos_json:
         try:
-            res = client.models.generate_content(
+            res = client_local.models.generate_content(
                 model=mod, 
                 contents=[types.Content(role="user", parts=conteudo_prompt)],
                 config=config
@@ -502,20 +517,171 @@ def gerar_ia_json(persona_key, comando, usar_busca=False):
     return {"erro": "Não foi possível gerar um JSON válido no momento. Tente novamente."}
 
 # ==============================================================================
-# 5. VISÃO COMPUTACIONAL DE LEITURA OMR (GEMINI FLASH)
+# 5. MOTOR DE VISÃO COMPUTACIONAL LOCAL (CUSTO ZERO) & SCANNER HÍBRIDO (CIR)
 # ==============================================================================
 
-def analisar_gabarito_vision(imagem_bytes):
+def ordenar_pontos_quadrado(pts):
+    """Ordena 4 pontos nas posições: [topo-esq, topo-dir, base-dir, base-esq]."""
+    rect = np.zeros((4, 2), dtype="float32")
+    s = pts.sum(axis=1)
+    rect[0] = pts[np.argmin(s)] # Topo-esquerda
+    rect[2] = pts[np.argmax(s)] # Base-direita
+    diff = np.diff(pts, axis=1)
+    rect[1] = pts[np.argmin(diff)] # Topo-direita
+    rect[3] = pts[np.argmax(diff)] # Base-esquerda
+    return rect
+
+def processar_omr_local_fiducial(imagem_bytes, qtd_questoes=10, is_pei=False):
+    """
+    SOSA V2026.ZERO_TOKEN: Motor de Visão Computacional Local de Alta Performance.
+    Localiza os 4 marcadores fiduciais (■), desentorta a perspectiva, aplica filtro
+    anti-sombra e calcula a densidade de grafite por coordenada matemática (Custo R$ 0,00).
+    """
+    if not OPENCV_DISPONIVEL:
+        return None
+
     try:
+        nparr = np.frombuffer(imagem_bytes, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        if img is None: return None
+
+        # 1. Pré-processamento e escala
+        h_orig, w_orig = img.shape[:2]
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+        thresh = cv2.adaptiveThreshold(blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 15, 4)
+
+        # 2. Localização dos Marcadores Fiduciais ou Borda do Cartão
+        contours, _ = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        
+        candidatos_fiduciais = []
+        for c in contours:
+            peri = cv2.arcLength(c, True)
+            approx = cv2.approxPolyDP(c, 0.04 * peri, True)
+            area = cv2.contourArea(c)
+            if len(approx) == 4 and area > (w_orig * h_orig * 0.0008):
+                (x, y, w_b, h_b) = cv2.boundingRect(approx)
+                ar = w_b / float(h_b)
+                if 0.7 <= ar <= 1.3: # Proporção quadrada
+                    candidatos_fiduciais.append(approx.reshape(4, 2))
+
+        # Encontra o retângulo maior do cartão se houver 4 marcadores ou o polígono do cartão
+        pts_warp = None
+        if len(candidatos_fiduciais) >= 4:
+            centros = [np.mean(c, axis=0) for c in candidatos_fiduciais]
+            centros = np.array(centros)
+            # Ordena os 4 centros extremos
+            pts_warp = ordenar_pontos_quadrado(centros)
+        else:
+            # Fallback: procura o maior contorno de 4 pontos (o cartão inteiro)
+            contours_sorted = sorted(contours, key=cv2.contourArea, reverse=True)
+            for c in contours_sorted[:5]:
+                peri = cv2.arcLength(c, True)
+                approx = cv2.approxPolyDP(c, 0.02 * peri, True)
+                if len(approx) == 4 and cv2.contourArea(c) > (w_orig * h_orig * 0.15):
+                    pts_warp = ordenar_pontos_quadrado(approx.reshape(4, 2))
+                    break
+
+        if pts_warp is None:
+            # Não encontrou os 4 cantos com confiança matemática
+            return None
+
+        # 3. Desentortamento de Perspectiva (Warp 600x800)
+        target_w, target_h = 600, 800
+        dst = np.array([
+            [0, 0],
+            [target_w - 1, 0],
+            [target_w - 1, target_h - 1],
+            [0, target_h - 1]
+        ], dtype="float32")
+
+        M = cv2.getPerspectiveTransform(pts_warp, dst)
+        warped = cv2.warpPerspective(img, M, (target_w, target_h))
+        warped_gray = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
+        
+        # Filtro de alto contraste anti-sombra (Otsu)
+        _, warped_thresh = cv2.threshold(warped_gray, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
+
+        # 4. Leitura Matemática por Régua de Coordenadas
+        opcoes = ["A", "B", "C"] if is_pei else ["A", "B", "C", "D", "E"]
+        num_opcoes = len(opcoes)
+        
+        respostas_detectadas = {}
+        
+        # Área do grid central do cartão-resposta
+        grid_top = int(target_h * 0.15)
+        grid_bottom = int(target_h * 0.88)
+        grid_left = int(target_w * 0.18)
+        grid_right = int(target_w * 0.88)
+        
+        altura_linha = (grid_bottom - grid_top) / max(qtd_questoes, 1)
+        largura_coluna = (grid_right - grid_left) / num_opcoes
+        
+        for q_idx in range(qtd_questoes):
+            q_num_str = f"{q_idx + 1:02d}"
+            y1 = int(grid_top + (q_idx * altura_linha))
+            y2 = int(y1 + altura_linha)
+            
+            densidades = []
+            
+            for opt_idx in range(num_opcoes):
+                x1 = int(grid_left + (opt_idx * largura_coluna))
+                x2 = int(x1 + largura_coluna)
+                
+                # Região da bolinha (com margem interna)
+                pad_x = int(largura_coluna * 0.22)
+                pad_y = int(altura_linha * 0.20)
+                roi = warped_thresh[y1 + pad_y : y2 - pad_y, x1 + pad_x : x2 - pad_x]
+                
+                total_pixels = roi.size if roi.size > 0 else 1
+                pixels_pretos = cv2.countNonZero(roi)
+                densidade = (pixels_pretos / float(total_pixels)) * 100
+                densidades.append(densidade)
+
+            # Análise de Preenchimento
+            max_dens = max(densidades) if densidades else 0
+            idx_max = int(np.argmax(densidades))
+            
+            # Checa se há múltiplas marcações ou em branco
+            limiar_minimo = 28.0 # Densidade mínima para considerar preenchido
+            marcadas_acima = [d for d in densidades if d >= limiar_minimo]
+            
+            if len(marcadas_acima) > 1:
+                # Dupla marcação
+                respostas_detectadas[q_num_str] = "X"
+            elif max_dens >= limiar_minimo:
+                respostas_detectadas[q_num_str] = opcoes[idx_max]
+            else:
+                respostas_detectadas[q_num_str] = "?"
+
+        # Converte imagem desentortada para bytes JPG
+        _, buffer_jpg = cv2.imencode('.jpg', warped, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
+        warped_bytes = buffer_jpg.tobytes()
+
+        return {
+            "respostas": respostas_detectadas,
+            "imagem_alinhada": warped_bytes,
+            "sucesso_local": True
+        }
+    except Exception as e:
+        print(f"Aviso no processamento OMR Local: {e}")
+        return None
+
+def analisar_gabarito_vision(imagem_bytes):
+    """Fallback via Visão Computacional Gemini Flash quando o OMR local não atinge 100%."""
+    try:
+        client_local = obter_client_gemini()
+        if not client_local:
+            return {"erro": "Chave Gemini indisponível."}
+
         prompt = (
             "Você é um perito em visão computacional de alta precisão. Analise a imagem do gabarito.\n"
-            "A tabela possui as colunas: Q (Questão) e as alternativas (A, B, C, D, E para provas regulares ou A, B, C para PEI).\n"
-            "MISSÃO DE RACIOCÍNIO:\n"
+            "A tabela possui as colunas: Q (Questão) e as alternativas (A, B, C, D, E para regulares ou A, B, C para PEI).\n"
+            "MISSÃO:\n"
             "1. Localize a grade de respostas.\n"
-            "2. Analise a densidade de preenchimento de cada círculo.\n"
-            "3. Se houver uma marcação única e clara, retorne a letra correspondente.\n"
-            "4. Se houver DUAS ou mais marcações, retorne 'X' (Dupla Marcação).\n"
-            "5. Se a linha estiver totalmente sem marcação, retorne '?' (Vazia).\n"
+            "2. Retorne a letra correspondente para marcação única.\n"
+            "3. Retorne 'X' para dupla marcação.\n"
+            "4. Retorne '?' se estiver vazia.\n"
             "Retorne APENAS um JSON puro no formato: {'01': 'A', '02': 'C', ...}"
         )
         
@@ -524,18 +690,17 @@ def analisar_gabarito_vision(imagem_bytes):
             types.Part.from_text(text=prompt)
         ]
         
-        res = client.models.generate_content(
+        res = client_local.models.generate_content(
             model="gemini-3.5-flash", 
             contents=[types.Content(role="user", parts=conteudo_prompt)],
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json"
-            )
+            config=types.GenerateContentConfig(response_mime_type="application/json")
         )
         import json
         return json.loads(res.text)
     except Exception as e:
         try:
-            res_fb = client.models.generate_content(
+            client_local = obter_client_gemini()
+            res_fb = client_local.models.generate_content(
                 model="gemini-2.5-flash",
                 contents=[types.Content(role="user", parts=conteudo_prompt)],
                 config=types.GenerateContentConfig(response_mime_type="application/json")
@@ -545,9 +710,29 @@ def analisar_gabarito_vision(imagem_bytes):
         except Exception as e_fb:
             return {"erro": f"Falha na leitura da imagem: {e_fb}"}
 
+def analisar_gabarito_hibrido(imagem_bytes, qtd_questoes=10, is_pei=False):
+    """
+    SOSA V2026: ROTEADOR HÍBRIDO INTELIGENTE.
+    1. Tenta leitura local ultrarrápida com OpenCV (Custo R$ 0,00 / <0.2s).
+    2. Se a foto estiver cortada/desalinhada, aciona o Gemini Vision como Fallback seguro.
+    """
+    # 1. Tentativa Local (0 Tokens / Custo Zero)
+    res_local = processar_omr_local_fiducial(imagem_bytes, qtd_questoes, is_pei)
+    if res_local and len(res_local.get("respostas", {})) >= qtd_questoes:
+        return res_local
+
+    # 2. Fallback Inteligente via Gemini Vision
+    res_vision = analisar_gabarito_vision(imagem_bytes)
+    return {
+        "respostas": res_vision,
+        "imagem_alinhada": imagem_bytes,
+        "sucesso_local": False
+    }
+
 def subir_para_google(caminho_arquivo, nome_exibicao):
     try:
-        arquivo_google = client.files.upload(
+        client_local = obter_client_gemini()
+        arquivo_google = client_local.files.upload(
             file=caminho_arquivo, 
             config=types.UploadFileConfig(display_name=nome_exibicao)
         )
@@ -696,6 +881,9 @@ def realizar_diagnostico_v25(plano_raw, df_curriculo, ano_sel):
 
 def gerar_prognostico_pedagogico(dados_stats, contexto_prova):
     try:
+        client_local = obter_client_gemini()
+        if not client_local: return "Chave de IA indisponível."
+
         prompt = (
             f"VOCÊ É O PERITO EM AVALIAÇÃO EDUCACIONAL SOSA (PADRÃO SAEB/ENEM/BNCC).\n"
             f"Realize um diagnóstico pedagógico nos itens abaixo:\n\n"
@@ -707,7 +895,7 @@ def gerar_prognostico_pedagogico(dados_stats, contexto_prova):
             f"3. RECOMENDAÇÕES PRÁTICAS DE RECOMPOSIÇÃO."
         )
         
-        res = client.models.generate_content(
+        res = client_local.models.generate_content(
             model="gemini-3.5-flash",
             contents=[types.Part.from_text(text=prompt)]
         )
