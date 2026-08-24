@@ -979,3 +979,83 @@ def dar_baixa_aula_livro_offline(semana, ano, turma="GLOBAL", data_str="N/A", de
     except Exception as e:
         print(f"Erro ao dar baixa burocrática em aula de livro: {e}")
         return False
+
+# ==============================================================================
+# 7. MOTOR DE SOBERANIA REGIMENTAL (VISTOS, CADEADO & CONTROLE ATITUDINAL)
+# ==============================================================================
+
+def isentar_vistos_data_turma(data_str, turma):
+    """
+    SOSA V2026: Transforma todas as chamadas de visto de uma data específica em 'ISENTO'
+    para a turma inteira, recalculando a média C1 sem penalizar nenhum estudante.
+    """
+    try:
+        wb = conectar()
+        if not wb: return False
+        ws = wb.worksheet("DB_DIARIO_BORDO")
+        dados = ws.get_all_values()
+        
+        updates = []
+        for i, row in enumerate(dados):
+            if i > 0 and len(row) > 4:
+                if row[0].strip() == data_str.strip() and row[3].strip() == turma.strip():
+                    # Coluna E (índice 5 no Sheets) = VISTO_ATIVIDADE
+                    updates.append(gspread.Cell(row=i + 1, col=5, value="ISENTO"))
+        
+        if updates:
+            ws.update_cells(updates)
+            st.cache_data.clear()
+            return True
+        return False
+    except Exception as e:
+        print(f"Erro ao isentar visto da data {data_str}: {e}")
+        return False
+
+def ajustar_bonus_punicao_diario(data_str, id_aluno, turma, novo_bonus_str, nova_obs_sufixo=""):
+    """
+    SOSA V2026: Permite ao professor perdoar punições (-0.5 -> 0.0) ou revogar bônus (+0.5 -> 0.0)
+    com registro auditável na coluna de observações do Diário de Bordo.
+    """
+    try:
+        wb = conectar()
+        if not wb: return False
+        ws = wb.worksheet("DB_DIARIO_BORDO")
+        dados = ws.get_all_values()
+        id_busca = str(limpar_id(id_aluno))
+        
+        for i, row in enumerate(dados):
+            if i > 0 and len(row) > 7:
+                if row[0].strip() == data_str.strip() and limpar_id(row[1]) == id_busca and row[3].strip() == turma.strip():
+                    obs_antiga = row[6]
+                    obs_final = f"{obs_antiga} | {nova_obs_sufixo}".strip(" | ") if nova_obs_sufixo else obs_antiga
+                    
+                    ws.update_cell(i + 1, 7, obs_final)          # Coluna OBSERVACOES
+                    ws.update_cell(i + 1, 8, novo_bonus_str)     # Coluna BONUS
+                    st.cache_data.clear()
+                    return True
+        return False
+    except Exception as e:
+        print(f"Erro ao ajustar bônus/punição: {e}")
+        return False
+
+def salvar_config_corte_trimestre(turma, trimestre, data_corte_str):
+    """Salva a data de corte personalizada do professor para transição de trimestre."""
+    tipo_chave = f"CORTE_TRIMESTRE_{turma}_{trimestre.replace(' ', '_').upper()}"
+    return salvar_ata_conselho(datetime.now().strftime("%d/%m/%Y"), turma, tipo_chave, data_corte_str)
+
+def obter_config_corte_trimestre(turma, trimestre):
+    """Recupera a data de corte personalizada salva pelo professor."""
+    try:
+        wb = conectar()
+        if not wb: return None
+        ws = wb.worksheet("DB_RELATORIOS")
+        dados = ws.get_all_values()
+        tipo_chave = f"CORTE_TRIMESTRE_{turma}_{trimestre.replace(' ', '_').upper()}"
+        
+        for i in range(len(dados) - 1, 0, -1):
+            row = dados[i]
+            if len(row) > 4 and row[2] == turma and row[3] == tipo_chave:
+                return row[4].strip()
+        return None
+    except:
+        return None
