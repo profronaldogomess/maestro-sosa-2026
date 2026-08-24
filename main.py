@@ -3196,33 +3196,92 @@ elif menu == "📝 Central de Avaliações":
                 reset_forja()
 
     # ==============================================================================
-    # ABA 2: ACERVO DE PROVAS & PERÍCIA TRI (VACINA ANTI-KEYERROR V2026)
+    # ABA 2: ACERVO DE PROVAS & PERÍCIA TRI (PADRÃO EXECUTIVO SOSA 2026)
     # ==============================================================================
     with tab_acervo_av:
         st.markdown("### 📖 Acervo de Instrumentos Avaliativos & Perícia TRI")
-        
-        with st.container(border=True):
-            c_h1, c_h2, c_h3 = st.columns(3)
-            f_trim_h = c_h1.selectbox("Trimestre:", ["Todos", "I Trimestre", "II Trimestre", "III Trimestre"], key=f"h_trim_av_{v}")
-            f_ano_h = c_h2.selectbox("Série:", ["Todos", "6º", "7º", "8º", "9º"], key=f"h_ano_av_{v}")
-            f_tipo_h = c_h3.selectbox("Tipo:", ["Todos", "AVALIAÇÃO", "REVISÃO"], key=f"h_tipo_av_{v}")
+        st.caption("Repositório inteligente: busca multi-camada que nunca oculta avaliações, filtros de nova geração e custódia digital no Drive.")
 
-        df_exames = pd.DataFrame()
-        if not df_aulas.empty and 'SEMANA_REF' in df_aulas.columns:
-            df_exames = df_aulas[df_aulas['SEMANA_REF'].astype(str).str.upper().isin(["AVALIAÇÃO", "REVISÃO"])].copy()
+        # -------------------------------------------------------------
+        # 1. FILTROS DE NOVA GERAÇÃO (STREAMLIT 2026 / PILLS & SEGMENTS)
+        # -------------------------------------------------------------
+        with st.container(border=True):
+            c_f_tri, c_f_ano = st.columns([2, 1.5])
+            
+            f_trim_sel = c_f_tri.segmented_control(
+                "📅 Filtrar por Trimestre:",
+                ["Todos", "I Trimestre", "II Trimestre", "III Trimestre"],
+                default="Todos",
+                key=f"acervo_seg_trim_{v}"
+            )
+            
+            f_ano_sel = c_f_ano.segmented_control(
+                "🎓 Série / Ano:",
+                ["Todas", "6º", "7º", "8º", "9º"],
+                default="Todas",
+                key=f"acervo_seg_ano_{v}"
+            )
+            
+            f_tipo_pills = st.pills(
+                "🏷️ Categoria da Avaliação:",
+                ["Todos", "📝 Provas", "📋 Testes", "🔄 Revisões", "📑 2ª Chamada", "🔍 Sondas"],
+                default="Todos",
+                key=f"acervo_pills_tipo_{v}"
+            )
+
+        # -------------------------------------------------------------
+        # 2. BUSCA MULTI-CAMADA (NUNCA MAIS PERDE AVALIAÇÃO DO II TRIMESTRE)
+        # -------------------------------------------------------------
+        termos_avaliativos = [
+            "AVALIAÇÃO", "AVALIACAO", "PROVA", "TESTE", "SONDA", 
+            "RECUPERACAO", "RECUPERAÇÃO", "REVISAO", "REVISÃO", 
+            "DIAGNÓSTICA", "DIAGNOSTICA"
+        ]
+        
+        df_exames_todos = pd.DataFrame()
+        if not df_aulas.empty and 'TIPO_MATERIAL' in df_aulas.columns:
+            mask_todos_exames = (
+                df_aulas['SEMANA_REF'].astype(str).str.upper().isin(["AVALIAÇÃO", "AVALIACAO", "REVISÃO", "REVISAO"]) |
+                df_aulas['TIPO_MATERIAL'].astype(str).str.upper().str.contains('|'.join(termos_avaliativos), na=False)
+            )
+            df_exames_todos = df_aulas[mask_todos_exames].copy()
+
+        df_exames = df_exames_todos.copy()
 
         if not df_exames.empty:
-            if f_trim_h != "Todos" and 'CONTEUDO' in df_exames.columns:
-                df_exames = df_exames[df_exames['CONTEUDO'].astype(str).str.contains(f_trim_h, na=False)]
-            if f_ano_h != "Todos" and 'ANO' in df_exames.columns:
-                df_exames = df_exames[df_exames['ANO'].astype(str) == f_ano_h]
-            if f_tipo_h != "Todos" and 'SEMANA_REF' in df_exames.columns:
-                df_exames = df_exames[df_exames['SEMANA_REF'].astype(str).str.upper() == f_tipo_h.upper()]
+            # 1. Filtro Inteligente de Trimestre (Regex HD: acha I, II, III, IITrimestre, etc.)
+            if f_trim_sel != "Todos":
+                padrao_regex_t = util.obter_regex_trimestre(f_trim_sel)
+                mask_t = (
+                    df_exames['TIPO_MATERIAL'].astype(str).str.contains(padrao_regex_t, regex=True, case=False, na=False) |
+                    df_exames['CONTEUDO'].astype(str).str.contains(padrao_regex_t, regex=True, case=False, na=False) |
+                    df_exames['SEMANA_REF'].astype(str).str.contains(padrao_regex_t, regex=True, case=False, na=False)
+                )
+                df_exames = df_exames[mask_t]
+
+            # 2. Filtro de Série / Ano
+            if f_ano_sel != "Todas":
+                ano_num_sel = "".join(filter(str.isdigit, f_ano_sel))
+                df_exames = df_exames[df_exames['ANO'].astype(str).str.contains(ano_num_sel, na=False)]
+
+            # 3. Filtro de Categoria por Pills
+            if f_tipo_pills == "📝 Provas":
+                df_exames = df_exames[df_exames['TIPO_MATERIAL'].astype(str).str.upper().str.contains("PROVA") & ~df_exames['TIPO_MATERIAL'].astype(str).str.upper().str.contains("REVISAO|REVISÃO|2ª|2A|CHAMADA")]
+            elif f_tipo_pills == "📋 Testes":
+                df_exames = df_exames[df_exames['TIPO_MATERIAL'].astype(str).str.upper().str.contains("TESTE") & ~df_exames['TIPO_MATERIAL'].astype(str).str.upper().str.contains("REVISAO|REVISÃO|2ª|2A|CHAMADA")]
+            elif f_tipo_pills == "🔄 Revisões":
+                df_exames = df_exames[df_exames['TIPO_MATERIAL'].astype(str).str.upper().str.contains("REVISAO|REVISÃO|RECOMPOSICAO|RECOMPOSIÇÃO")]
+            elif f_tipo_pills == "📑 2ª Chamada":
+                df_exames = df_exames[df_exames['TIPO_MATERIAL'].astype(str).str.upper().str.contains("2ª|2A|CHAMADA")]
+            elif f_tipo_pills == "🔍 Sondas":
+                df_exames = df_exames[df_exames['TIPO_MATERIAL'].astype(str).str.upper().str.contains("SONDA|DIAGNÓSTICA|DIAGNOSTICA")]
 
             df_exames = df_exames.iloc[::-1]
 
+        st.caption(f"Exibindo **{len(df_exames)} de {len(df_exames_todos)}** instrumentos avaliativos cadastrados.")
+
         if df_exames.empty:
-            st.info("Nenhum instrumento avaliativo localizado no acervo.")
+            st.info("Nenhum instrumento avaliativo localizado para os filtros selecionados.")
         else:
             for idx_av, (_, row) in enumerate(df_exames.iterrows()):
                 with st.container(border=True):
@@ -3232,103 +3291,132 @@ elif menu == "📝 Central de Avaliações":
                     data_exibicao = str(row.get('DATA', 'N/A'))
                     semana_ref_exibicao = str(row.get('SEMANA_REF', 'AVALIAÇÃO'))
 
+                    # Extração segura do valor da prova
                     val_raw = ai.extrair_tag(txt_f, "VALOR")
                     val_num = util.sosa_to_float(val_raw)
-                    val_ex = f"{val_num:.1f} pts" if val_num > 0 else "4.0 pts"
-                    
-                    st.markdown(f"##### 📋 {identificador}")
-                    st.caption(f"Série: {ano_exibicao} | Data: {data_exibicao} | Status: 🔒 COFRE DIGITAL DRIVE SINCRONIZADO")
-                    
-                    def extrair_link_acervo(t, tag):
-                        m = re.search(rf"{tag}\((https://docs\.google\.com/document/d/[^\s\)]+)\)", t, re.IGNORECASE)
+                    if val_num == 0:
+                        m_v = re.search(r"VALOR\s*[:\-]*\s*([\d\.,]+)", txt_f, re.IGNORECASE)
+                        val_num = util.sosa_to_float(m_v.group(1)) if m_v else 4.0
+                    val_ex = f"{val_num:.1f} pts"
+
+                    # Detecção inteligente do Trimestre para o Badge visual
+                    trim_badge = "🔵 I Trimestre"
+                    id_upper = identificador.upper()
+                    txt_upper = txt_f.upper()
+                    if any(x in id_upper or x in txt_upper for x in ["IITRIMESTRE", "II TRIMESTRE", "2º TRIMESTRE", "SEMANA 27", "SEMANA 26", "SEMANA 20"]):
+                        trim_badge = "🟡 II Trimestre"
+                    elif any(x in id_upper or x in txt_upper for x in ["IIITRIMESTRE", "III TRIMESTRE", "3º TRIMESTRE"]):
+                        trim_badge = "🟢 III Trimestre"
+
+                    # Detecção da Categoria para o Badge
+                    cat_badge = "📝 Prova Oficial"
+                    if "TESTE" in id_upper: cat_badge = "📋 Teste Oficial"
+                    elif "REVISAO" in id_upper or "REVISÃO" in id_upper or "RECOMPOSICAO" in id_upper: cat_badge = "🔄 Caderno de Revisão"
+                    elif "2ª" in id_upper or "2A" in id_upper or "CHAMADA" in id_upper: cat_badge = "📑 2ª Chamada"
+                    elif "SONDA" in id_upper or "DIAGNÓSTICA" in id_upper: cat_badge = "🔍 Sonda de Proficiência"
+                    elif "RECUPERACAO" in id_upper or "RECUPERAÇÃO" in id_upper: cat_badge = "📑 Prova de Recuperação"
+
+                    # Cabeçalho Executivo do Bento Card
+                    c_card_h1, c_card_h2 = st.columns([3, 2])
+                    c_card_h1.markdown(f"#### 📋 {identificador}")
+                    c_card_h1.caption(f"Série: **{ano_exibicao}** | Data: **{data_exibicao}** | Valor: **{val_ex}** | Origem: *{semana_ref_exibicao}*")
+                    c_card_h2.markdown(f"<div style='text-align: right;'><span style='background: #2962FF22; color: #2962FF; padding: 4px 10px; border-radius: 12px; font-weight: bold; font-size: 12px;'>{trim_badge}</span> <span style='background: #00E67622; color: #00E676; padding: 4px 10px; border-radius: 12px; font-weight: bold; font-size: 12px;'>{cat_badge}</span></div>", unsafe_allow_html=True)
+
+                    st.markdown("---")
+
+                    # Extração dos links reais salvos
+                    def extrair_link_acervo_real(t, tag):
+                        m = re.search(rf"{tag}\s*\(\s*(https://docs\.google\.com/document/d/[^\s\)]+)\s*\)", t, re.IGNORECASE)
                         return m.group(1).strip() if m else None
 
-                    l_reg = extrair_link_acervo(txt_f, "Regular") or row.get('LINK_DRIVE')
-                    l_pei1 = extrair_link_acervo(txt_f, "PEI_N1") or extrair_link_acervo(txt_f, "PEI")
-                    l_pei2 = extrair_link_acervo(txt_f, "PEI_N2")
-                    l_pei3 = extrair_link_acervo(txt_f, "PEI_N3")
+                    l_reg = extrair_link_acervo_real(txt_f, "Regular") or (row.get('LINK_DRIVE') if "https://docs.google.com" in str(row.get('LINK_DRIVE')) else None)
+                    l_p1 = extrair_link_acervo_real(txt_f, "PEI_N1") or extrair_link_acervo_real(txt_f, "PEI")
+                    l_p2 = extrair_link_acervo_real(txt_f, "PEI_N2")
+                    l_p3 = extrair_link_acervo_real(txt_f, "PEI_N3")
+                    l_prof = extrair_link_acervo_real(txt_f, "Prof")
 
-                    c_b1, c_b2, c_b3, c_b4, c_b5 = st.columns(5)
+                    # BOTÕES DE ABERTURA DIRETA: APENAS OS QUE EXISTEM DE VERDADE (ZERO BOTÃO CINZA FALSO)
+                    st.markdown("**📂 Cadernos Oficiais no Google Drive:**")
+                    cols_links = st.columns(5)
                     
-                    if l_reg and "http" in str(l_reg): c_b1.link_button("📄 Regular", str(l_reg), use_container_width=True, type="primary")
-                    else: c_b1.button("Sem Doc", disabled=True, use_container_width=True, key=f"no_reg_{row.name}_{idx_av}_{v}")
-                    
-                    if l_pei1 and "http" in str(l_pei1): c_b2.link_button("🔵 PEI N1", str(l_pei1), use_container_width=True)
-                    else: c_b2.button("Sem N1", disabled=True, use_container_width=True, key=f"no_p1_{row.name}_{idx_av}_{v}")
-                    
-                    if l_pei2 and "http" in str(l_pei2): c_b3.link_button("🟡 PEI N2", str(l_pei2), use_container_width=True)
-                    else: c_b3.button("Sem N2", disabled=True, use_container_width=True, key=f"no_p2_{row.name}_{idx_av}_{v}")
-                    
-                    if l_pei3 and "http" in str(l_pei3): c_b4.link_button("🔴 PEI N3", str(l_pei3), use_container_width=True)
-                    else: c_b4.button("Sem N3", disabled=True, use_container_width=True, key=f"no_p3_{row.name}_{idx_av}_{v}")
-                    
-                    if c_b5.button("🗑️ Apagar", key=f"del_ac_{row.name}_{idx_av}_{v}", use_container_width=True):
-                        if db.excluir_avaliacao_completa(identificador, semana_ref_exibicao): st.rerun()
+                    tem_algum_link = False
+                    col_idx = 0
+                    if l_reg and "http" in str(l_reg):
+                        cols_links[col_idx].link_button("📄 Caderno Regular", str(l_reg), type="primary", use_container_width=True)
+                        col_idx += 1; tem_algum_link = True
+                    if l_p1 and "http" in str(l_p1):
+                        cols_links[col_idx].link_button("🔵 PEI Nível 1", str(l_p1), use_container_width=True)
+                        col_idx += 1; tem_algum_link = True
+                    if l_p2 and "http" in str(l_p2):
+                        cols_links[col_idx].link_button("🟡 PEI Nível 2", str(l_p2), use_container_width=True)
+                        col_idx += 1; tem_algum_link = True
+                    if l_p3 and "http" in str(l_p3):
+                        cols_links[col_idx].link_button("🔴 PEI Nível 3", str(l_p3), use_container_width=True)
+                        col_idx += 1; tem_algum_link = True
+                    if l_prof and "http" in str(l_prof):
+                        cols_links[col_idx].link_button("👨‍🏫 Guia do Professor", str(l_prof), use_container_width=True)
+                        col_idx += 1; tem_algum_link = True
 
-                    with st.popover("🚀 Injetar no Ponto ID (Gerar Plano de Aula da Semana)"):
-                        st.caption("A IA analisará as questões deste material para gerar um Plano de Aula Semanal 100% coerente, rico e padronizado no Ponto ID.")
+                    if not tem_algum_link:
+                        st.info("💡 Documentos salvos no banco. Use o botão de Re-exportação abaixo para gerar os links do Drive em 1 clique.")
+
+                    st.markdown("<br>", unsafe_allow_html=True)
+
+                    # AÇÕES AVANÇADAS ORGANIZADAS EM POPOVERS E BOTÕES LIMPOS
+                    c_act1, c_act2, c_act3 = st.columns([2, 2, 1])
+
+                    with c_act1.popover("🚀 Injetar no Ponto ID (Gerar Plano de Aula)", use_container_width=True):
+                        st.caption("A IA analisará as questões desta avaliação para redigir um Plano de Aula Semanal alinhado e marcá-lo como PRODUZIDO no Ponto ID.")
                         
                         todas_semanas_inj_a2 = util.gerar_semanas()
-                        sem_dest_a2 = st.selectbox("Selecione a Semana da Aula:", [s.split(" (")[0] for s in todas_semanas_inj_a2 if "Jornada" not in s], key=f"sel_sem_inj_a2_{row.name}_{v}")
-                        trim_dest_a2 = st.selectbox("Trimestre Alvo:", ["I Trimestre", "II Trimestre", "III Trimestre"], index=1 if "II" in txt_f or "IITrimestre" in identificador else 0, key=f"sel_trim_inj_a2_{row.name}_{v}")
+                        sem_dest_a2 = st.selectbox("Selecione a Semana da Aula:", [s.split(" (")[0] for s in todas_semanas_inj_a2 if "Jornada" not in s], key=f"sel_sem_inj_a2_{row.name}_{idx_av}_{v}")
+                        trim_dest_a2 = st.selectbox("Trimestre Alvo:", ["I Trimestre", "II Trimestre", "III Trimestre"], index=1 if "II" in trim_badge else 0, key=f"sel_trim_inj_a2_{row.name}_{idx_av}_{v}")
                         
-                        if st.button("🚀 CONFIRMAR E GERAR PLANO COERENTE NO PONTO ID", type="primary", use_container_width=True, key=f"btn_inj_acervo_{row.name}_{v}"):
-                            with st.spinner("Analisando as questões do material e redigindo o Plano de Aula Padronizado..."):
+                        if st.button("🚀 CONFIRMAR E GERAR PLANO NO PONTO ID", type="primary", use_container_width=True, key=f"btn_inj_acervo_{row.name}_{idx_av}_{v}"):
+                            with st.spinner("Analisando questões e redigindo Plano de Aula Semanal..."):
                                 prompt_plano_revisao = (
                                     f"SÉRIE: {ano_exibicao} Ano.\n"
                                     f"SEMANA: {sem_dest_a2}. TRIMESTRE: {trim_dest_a2}.\n"
-                                    f"IDENTIFICADOR DO MATERIAL: {identificador}.\n\n"
-                                    f"SITUAÇÃO: O professor já criou o Caderno de Revisão e está aplicando em sala. Analise o texto do material abaixo e extraia os descritores SAEB reais, tópicos de matemática e elabore um Plano de Aula Semanal COERENTE, TÉCNICO E PADRONIZADO.\n\n"
-                                    f"TEXTO DO MATERIAL DE REVISÃO:\n{txt_f[:3500]}\n\n"
-                                    f"🚨 REDIJA UTILIZANDO ESTRITAMENTE AS TAGS COM COLCHETES:\n"
-                                    f"[HABILIDADE_BNCC] (Liste as Habilidades BNCC e Descritores SAEB reais extraídos das questões do material)\n"
-                                    f"[COMPETENCIAS_FOCO] Competência Específica 2 (Raciocínio Lógico) e 6 (Enfrentar Situações-Problema)\n"
-                                    f"[OBJETO_CONHECIMENTO] RECOMPOSIÇÃO DE APRENDIZAGEM & REVISÃO DE MATEMÁTICA\n"
-                                    f"[CONTEUDOS_ESPECIFICOS] (Liste de forma clara os tópicos matemáticos reais abordados nas questões: ex: Divisibilidade, Frações, Porcentagem, Perímetro, etc.)\n"
-                                    f"[OBJETIVOS_ENSINO] Consolidar os objetos de conhecimento e superar as lacunas observadas nas avaliações do trimestre.\n"
-                                    f"[JUSTIFICATIVA_PEDAGOGICA] Recomposição e revisão contínua de aprendizagem regimental.\n"
-                                    f"[AULA_1] INÍCIO (Sensibilização - 10 min): Acolhimento da turma, apresentação dos objetivos e orientação sobre o Caderno de Revisão.\nMEIO (Fundamentação - 25 min): Resolução comentada no quadro das questões do Caderno de Revisão com foco nos descritores críticos.\nFIM (Fixação - 15 min): Síntese das estratégias e verificação das dúvidas.\n"
-                                    f"[AULA_2] INÍCIO (10 min): Orientações para resolução autônoma do Caderno de Revisão.\nMEIO (35 min): Acompanhamento e suporte mediado aos estudantes (incluindo cadernos adaptados PEI N1, N2 e N3).\nFIM (5 min): Visto nos cadernos e consolidação do roteiro.\n"
+                                    f"INSTRUMENTO: {identificador}.\n\n"
+                                    f"SITUAÇÃO: O professor está aplicando/revisando este material em sala de aula. Analise o texto do material e extraia descritores SAEB reais e tópicos matemáticos para montar o Plano Semanal Padronizado.\n\n"
+                                    f"TEXTO DO MATERIAL:\n{txt_f[:3500]}\n\n"
+                                    f"🚨 USE AS TAGS OFICIAIS:\n"
+                                    f"[HABILIDADE_BNCC] ...\n"
+                                    f"[COMPETENCIAS_FOCO] Competência Específica 2 e 6 da BNCC\n"
+                                    f"[OBJETO_CONHECIMENTO] {cat_badge.upper()} - {identificador}\n"
+                                    f"[CONTEUDOS_ESPECIFICOS] ...\n"
+                                    f"[OBJETIVOS_ENSINO] ...\n"
+                                    f"[AULA_1] ...\n"
+                                    f"[AULA_2] ...\n"
                                     f"[SABADO_LETIVO] N/A\n"
-                                    f"[AVALIACAO_DE_MERITO] Observação direta do engajamento e visto na resolução das questões do caderno de revisão.\n"
-                                    f"[ESTRATEGIA_DUA_PEI] Utilização de cadernos adaptados (PEI N1, N2 e N3) com suporte visual e mediação individualizada."
+                                    f"[AVALIACAO_DE_MERITO] Aplicação e acompanhamento das resoluções.\n"
+                                    f"[ESTRATEGIA_DUA_PEI] Adaptações PEI N1, N2 e N3 garantidas."
                                 )
 
                                 plano_inj_txt = ai.gerar_ia("PLANE_PEDAGOGICO", prompt_plano_revisao, usar_busca=False)
-
-                                try:
-                                    wb_inj = db.conectar()
-                                    ws_aulas_inj = wb_inj.worksheet("DB_AULAS_PRONTAS")
-                                    dados_aulas_inj = ws_aulas_inj.get_all_values()
-                                    for idx_a_inj, row_a_inj in enumerate(dados_aulas_inj):
-                                        if idx_a_inj > 0 and len(row_a_inj) > 2 and row_a_inj[2] == identificador:
-                                            ws_aulas_inj.update_cell(idx_a_inj + 1, 2, sem_dest_a2)
-                                            break
-                                except Exception as e_inj:
-                                    print(f"Aviso no vinculo da semana: {e_inj}")
 
                                 st.session_state.p_temp = plano_inj_txt
                                 st.session_state.p_meta = {
                                     "semana": sem_dest_a2,
                                     "trimestre": trim_dest_a2,
                                     "ano": ano_exibicao,
-                                    "base": f"Material de Revisão: {identificador}",
+                                    "base": f"Material: {identificador}",
                                     "status_final": "PRODUZIDO"
                                 }
                                 
-                                st.toast("✅ Plano de Aula coerente gerado e vinculado à semana!", icon="🚀")
+                                st.toast("✅ Plano gerado com sucesso no Ponto ID!", icon="🚀")
                                 st.cache_data.clear()
                                 time.sleep(0.8)
                                 navegar_para("📅 Planejamento (Ponto ID)")
 
-                    with st.expander("🔄 Re-gerar / Re-exportar Documentos (DOCX) no Drive", expanded=False):
-                        st.info("💡 **Re-exportação Direta:** Clique abaixo para re-gerar os arquivos DOCX no Google Drive utilizando o texto preservado no banco de dados.")
+                    with c_act2.popover("🔄 Re-exportar DOCX no Drive", use_container_width=True):
+                        st.caption("Re-gera os arquivos Word oficiais no Google Drive utilizando o texto preservado no banco.")
                         
-                        if st.button("🚀 EXECUTAR RE-EXPORTAÇÃO COMPLETA NO DRIVE", type="primary", use_container_width=True, key=f"btn_reexp_{row.name}_{idx_av}_{v}"):
-                            with st.status("Re-gerando documentos Word com a vacina no Drive...", expanded=True) as status_reexp:
+                        if st.button("🚀 EXECUTAR RE-EXPORTAÇÃO DOCX", type="primary", use_container_width=True, key=f"btn_reexp_{row.name}_{idx_av}_{v}"):
+                            with st.status("Re-gerando documentos Word...", expanded=True) as status_reexp:
                                 info_reexp = {
                                     'ano': ano_exibicao, 
-                                    'trimestre': f_trim_h if f_trim_h != "Todos" else 'I Trimestre', 
+                                    'trimestre': f_trim_sel if f_trim_sel != "Todos" else ('II Trimestre' if "II" in trim_badge else 'I Trimestre'), 
                                     'valor': val_ex if val_ex else '4.0',
                                     'qtd': len(re.findall(r'(?i)QUESTÃO\s+\d+', txt_f)) or 10
                                 }
@@ -3347,7 +3435,7 @@ elif menu == "📝 Central de Avaliações":
                                 pei3_txt_r = ai.extrair_tag(txt_f, "PEI_NIVEL_3")
                                 link_p3_r = "N/A"
                                 if pei3_txt_r:
-                                    status_reexp.write("🔴 Re-gerando Caderno PEI Nível 3 Word (Bento Cards)...")
+                                    status_reexp.write("🔴 Re-gerando Caderno PEI Nível 3 Word...")
                                     doc_p3_r = exporter.gerar_docx_pei_qualitativa(f"{identificador}_PEI_N3", pei3_txt_r, info_reexp)
                                     link_p3_r = db.subir_e_converter_para_google_docs(doc_p3_r, f"{identificador}_PEI_N3", modo="AVALIACAO")
                                 
@@ -3360,14 +3448,19 @@ elif menu == "📝 Central de Avaliações":
                                     data_exibicao, semana_ref_exibicao, identificador, novo_conteudo_banco, ano_exibicao, link_reg_r
                                 ])
                                 
-                                status_reexp.update(label="✅ Prova re-exportada e link atualizado!", state="complete")
-                                st.balloons(); time.sleep(1.2); st.rerun()
+                                status_reexp.update(label="✅ Documentos DOCX re-exportados!", state="complete")
+                                st.balloons(); time.sleep(1); st.rerun()
 
-                    with st.expander("👁️ Analisar Estrutura Psicométrica & Análise de Distratores (TRI)", expanded=False):
-                        t_gab, t_ques, t_pei_v = st.tabs(["Perícia Regular", "Caderno Regular", "Inclusão PEI"])
+                    if c_act3.button("🗑️ Apagar", key=f"del_ac_{row.name}_{idx_av}_{v}", use_container_width=True):
+                        if db.excluir_avaliacao_completa(identificador, semana_ref_exibicao):
+                            st.success(f"{identificador} removido com sucesso!")
+                            time.sleep(0.5); st.rerun()
+
+                    # PERÍCIA TRI & ESTRUTURA EXPANSÍVEL NO RODAPÉ DO CARD
+                    with st.expander("🔬 Analisar Estrutura Psicométrica & Perícia TRI de Distratores", expanded=False):
+                        t_pericia, t_caderno, t_inclusao = st.tabs(["🧠 Perícia de Distratores (TRI)", "📋 Caderno Regular", "♿ Inclusão PEI"])
                         
-                        with t_gab:
-                            st.markdown("**🔬 Grade de Perícia e Análise de Distratores (TRI)**")
+                        with t_pericia:
                             grade_raw = ai.extrair_tag(txt_f, "GRADE_DE_CORRECAO")
                             if grade_raw:
                                 questoes_grade = re.split(r"(?i)QUEST[AÃ]O\s*0?(\d+)", grade_raw)
@@ -3382,23 +3475,21 @@ elif menu == "📝 Central de Avaliações":
                                         
                                         with st.container(border=True):
                                             st.markdown(f"**Item {q_num}**")
-                                            if m_hab: st.caption(f"🆔 **Descritor SAEB/BNCC:** {m_hab.group(1).strip()}")
-                                            if m_just: st.write(f"🎯 **Gabarito Justificado:** {m_just.group(1).strip()}")
-                                            if m_peri: st.warning(f"🧠 **Distratores Científicos:** {m_peri.group(1).strip()}")
+                                            if m_hab: st.caption(f"🆔 **Descritor:** {m_hab.group(1).strip()}")
+                                            if m_just: st.write(f"🎯 **Gabarito:** {m_just.group(1).strip()}")
+                                            if m_peri: st.warning(f"🧠 **Distratores:** {m_peri.group(1).strip()}")
                                 else: st.text(grade_raw)
-                            else: st.warning("Perícia indisponível.")
+                            else: st.info("Perícia não anexada a este registro.")
 
-                        with t_ques:
-                            st.markdown("**📋 Enunciados do Caderno de Prova**")
+                        with t_caderno:
                             questoes_reg = ai.extrair_tag(txt_f, "QUESTOES")
-                            if questoes_reg:
-                                st.write(preparar_para_leitura(questoes_reg))
+                            if questoes_reg: st.write(preparar_para_leitura(questoes_reg))
+                            else: st.info("Enunciados preservados nos arquivos oficiais.")
 
-                        with t_pei_v:
-                            st.markdown("**♿ Estrutura PEI Adaptada**")
+                        with t_inclusao:
                             pei_txt = ai.extrair_tag(txt_f, "PEI_NIVEL_1") or ai.extrair_tag(txt_f, "NIVEL_1") or ai.extrair_tag(txt_f, "PEI")
-                            if pei_txt:
-                                st.write(preparar_para_leitura(pei_txt))
+                            if pei_txt: st.write(preparar_para_leitura(pei_txt))
+                            else: st.info("Adaptações inclusivas disponíveis no arquivo PEI do Drive.")
 
     # ==============================================================================
     # ABA 3: RECOMPOSIÇÃO & CADERNOS DE REVISÃO DO ACERVO
