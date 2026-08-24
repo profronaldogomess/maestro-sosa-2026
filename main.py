@@ -483,6 +483,22 @@ if menu == "📅 Planejamento (Ponto ID)":
     # ABA 1: NOVO PLANO
     # ==============================================================================
     with tab_gerar:
+        # -------------------------------------------------------------
+        # RADAR DE SAFRA DO PONTO ID: PROGRESSO DE SEMANAS PLANEJADAS
+        # -------------------------------------------------------------
+        todas_semanas_geral = [s for s in util.gerar_semanas() if "Jornada" not in s]
+        total_semanas_ano = len(todas_semanas_geral)
+        
+        planos_ano_atuais = df_planos[df_planos['ANO'] == f"{ano_p}º"]['SEMANA'].tolist() if not df_planos.empty and 'ANO' in df_planos.columns and 'SEMANA' in df_planos.columns else []
+        planos_concluidos_cnt = len(set([s.split(" (")[0] for s in planos_ano_atuais]))
+        perc_safra_planos = min(100, int((planos_concluidos_cnt / max(total_semanas_ano, 1)) * 100))
+        
+        with st.container(border=True):
+            c_sf1, c_sf2 = st.columns([2, 1])
+            c_sf1.markdown(f"##### 🎯 Progresso da Safra Pedagógica ({ano_p}º Ano)")
+            c_sf1.progress(perc_safra_planos / 100.0, text=f"**{planos_concluidos_cnt} de {total_semanas_ano} Semanas Planejadas** ({perc_safra_planos}%)")
+            c_sf2.metric("Semanas Restantes", total_semanas_ano - planos_concluidos_cnt)
+
         with st.container(border=True):
             st.markdown("#### 📦 1. Parâmetros da Semana & Carga Horária")
             
@@ -2422,11 +2438,12 @@ elif menu == "🧪 Criador de Aulas":
                         st.balloons(); time.sleep(1.2); reset_laboratorio()
 
     # ==============================================================================
-    # ABA 2: ACERVO DIGITAL & HUB DE PRODUÇÃO
+    # ABA 2: ACERVO DIGITAL & HUB DE PRODUÇÃO (FILTROS DE 2026)
     # ==============================================================================
     with tab_acervo_lab:
         st.markdown("### Hub de Produção & Acervo de Aulas")
-        
+        st.caption("Acesse materiais produzidos, re-compile no padrão Exporter V2026 e conclua pendências do Hub.")
+
         if not df_planos.empty:
             planos_ativos_hub = df_planos[df_planos["EIXO"].astype(str).str.contains("HUB_ATIVO", case=False, na=False)].iloc[::-1]
             if not planos_ativos_hub.empty:
@@ -2464,10 +2481,37 @@ elif menu == "🧪 Criador de Aulas":
         st.markdown("---")
         st.markdown("#### 📖 Acervo de Materiais Didáticos Salvos")
         
+        # Filtros de Nova Geração no Acervo de Aulas
+        with st.container(border=True):
+            c_fl1, c_fl2 = st.columns(2)
+            f_tri_aula = c_fl1.segmented_control("📅 Filtrar Trimestre:", ["Todos", "I Trimestre", "II Trimestre", "III Trimestre"], default="Todos", key=f"f_tri_aulas_lab_{v}")
+            f_ano_aula = c_fl2.segmented_control("🎓 Filtrar Série:", ["Todas", "6º", "7º", "8º", "9º"], default="Todas", key=f"f_ano_aulas_lab_{v}")
+
         if not df_aulas.empty:
-            df_m_acervo = df_aulas[~df_aulas['SEMANA_REF'].isin(["AVALIAÇÃO", "REVISÃO"])].copy()
-            termos_proibidos = ["TESTE", "PROVA", "SONDA", "RECUPERAÇÃO", "2ª CHAMADA"]
-            df_m_acervo = df_m_acervo[~df_m_acervo['TIPO_MATERIAL'].str.upper().str.contains('|'.join(termos_proibidos), na=False)].iloc[::-1]
+            df_m_acervo = df_aulas.copy()
+            
+            # Remove avaliações e testes para deixar apenas aulas e listas didáticas
+            termos_proibidos_aulas = ["TESTE", "PROVA", "SONDA", "RECUPERAÇÃO", "RECUPERACAO", "2ª CHAMADA", "2A CHAMADA"]
+            df_m_acervo = df_m_acervo[~df_m_acervo['TIPO_MATERIAL'].str.upper().str.contains('|'.join(termos_proibidos_aulas), na=False)]
+            df_m_acervo = df_m_acervo[~df_m_acervo['SEMANA_REF'].str.upper().isin(["AVALIAÇÃO", "AVALIACAO"])]
+
+            # Filtro Inteligente com Regex HD
+            if f_tri_aula != "Todos":
+                padrao_tri_reg = util.obter_regex_trimestre(f_tri_aula)
+                mask_tri_a = (
+                    df_m_acervo['TIPO_MATERIAL'].astype(str).str.contains(padrao_tri_reg, regex=True, case=False, na=False) |
+                    df_m_acervo['CONTEUDO'].astype(str).str.contains(padrao_tri_reg, regex=True, case=False, na=False) |
+                    df_m_acervo['SEMANA_REF'].astype(str).str.contains(padrao_tri_reg, regex=True, case=False, na=False)
+                )
+                df_m_acervo = df_m_acervo[mask_tri_a]
+
+            if f_ano_aula != "Todas":
+                ano_num_f = "".join(filter(str.isdigit, f_ano_aula))
+                df_m_acervo = df_m_acervo[df_m_acervo['ANO'].astype(str).str.contains(ano_num_f, na=False)]
+
+            df_m_acervo = df_m_acervo.iloc[::-1]
+
+            st.caption(f"Exibindo **{len(df_m_acervo)}** materiais de aula no acervo.")
 
             for _, row in df_m_acervo.iterrows():
                 with st.container(border=True):
@@ -2475,9 +2519,10 @@ elif menu == "🧪 Criador de Aulas":
                     identificador = str(row.get('TIPO_MATERIAL', 'Material Didático'))
                     ano_exib = str(row.get('ANO', '6º'))
                     data_exib = str(row.get('DATA', 'N/A'))
+                    sem_ref_exib = str(row.get('SEMANA_REF', 'Geral'))
                     
-                    st.markdown(f"##### {identificador}")
-                    st.caption(f"Série: {ano_exib} | Data: {data_exib} | Status: ✅ DOCX DRIVE SINCRONIZADO")
+                    st.markdown(f"##### 📚 {identificador}")
+                    st.caption(f"Série: **{ano_exib}** | Data: **{data_exib}** | Semana de Ref: **{sem_ref_exib}**")
                     
                     def extrair_link_seguro(t, k):
                         m = re.search(rf"{k}\s*\(\s*(https://docs\.google\.com/document/d/[^\s\)]+)\s*\)", t, re.IGNORECASE)
@@ -2507,21 +2552,23 @@ elif menu == "🧪 Criador de Aulas":
                     if l_prof and "http" in str(l_prof): c_b4.link_button("👨‍🏫 Guia Prof", str(l_prof), use_container_width=True)
                     else: c_b4.caption("Sem Guia")
                     
-                    if c_b5.button("✏️ Refinar", key=f"ref_ac_{row.name}", use_container_width=True):
+                    if c_b5.button("✏️ Refinar", key=f"ref_ac_{row.name}_{v}", use_container_width=True):
                         st.session_state.lab_temp = txt_f
                         st.session_state.sosa_id_atual = identificador
-                        st.session_state.lab_meta = {"ano": ano_exib.replace("º",""), "semana_ref": str(row.get('SEMANA_REF', 'Geral'))}
+                        st.session_state.lab_meta = {"ano": str(row["ANO"]).replace("º",""), "semana_ref": row['SEMANA_REF']}
                         st.rerun()
                         
-                    if c_b6.button("🗑️ Apagar", key=f"del_ac_{row.name}", use_container_width=True):
+                    if c_b6.button("🗑️ Apagar", key=f"del_ac_{row.name}_{v}", use_container_width=True):
                         if db.excluir_registro_com_drive("DB_AULAS_PRONTAS", identificador): st.rerun()
 
                     with st.expander("🎨 Re-compilar e Adequar ao Padrão Exporter V2026", expanded=False):
                         st.info("💡 **Adequação Automática:** Esta ferramenta gera novos arquivos DOCX aplicando a limpeza de LaTeX (`$$`), os Bento Cards e a Tabela Oficial de Rubricas para o PEI N3 no Google Drive.")
                         
-                        if st.button("🚀 EXECUTAR RE-COMPILAÇÃO COMPLETA NO EXPORTER V2026", type="primary", use_container_width=True, key=f"btn_recompila_{row.name}"):
+                        if st.button("🚀 EXECUTAR RE-COMPILAÇÃO COMPLETA NO EXPORTER V2026", type="primary", use_container_width=True, key=f"btn_recompila_{row.name}_{v}"):
                             with st.status("Re-compilando materiais no padrão Exporter V2026...", expanded=True) as status_rec:
-                                info_doc_rec = {"ano": ano_exib, "trimestre": "I Trimestre", "semana": str(row.get('SEMANA_REF', 'Geral'))}
+                                ano_str_rec = str(row['ANO'])
+                                sem_ref_rec = str(row['SEMANA_REF'])
+                                info_doc_rec = {"ano": ano_str_rec, "trimestre": "I Trimestre", "semana": sem_ref_rec}
                                 
                                 ed_prof_r = ai.extrair_tag(txt_f, "PROFESSOR")
                                 ed_alu_r = ai.extrair_tag(txt_f, "ALUNO")
@@ -2557,7 +2604,7 @@ elif menu == "🧪 Criador de Aulas":
                                 
                                 db.excluir_registro("DB_AULAS_PRONTAS", identificador)
                                 db.salvar_no_banco("DB_AULAS_PRONTAS", [
-                                    data_exib, str(row.get('SEMANA_REF', 'Geral')), identificador, conteudo_final_r, ano_exib, link_alu_r
+                                    row['DATA'], sem_ref_rec, identificador, conteudo_final_r, ano_str_rec, link_alu_r
                                 ])
                                 
                                 status_rec.update(label="✅ Materiais re-compilados e atualizados no Drive!", state="complete")
@@ -5172,6 +5219,35 @@ elif menu == "👤 Biografia do Estudante":
 
     @st.dialog("📱 Extrato Transparente para WhatsApp (Reunião de Pais)")
     def dialog_whatsapp(nome_limpo_dialog, turma_dialog, status_aluno_dialog, soma_parcial_dialog, meta_parcial_dialog, assiduidade_dialog, faltas_dialog, engajamento_dialog, bonus_dialog, regra_arredondamento_text):
+        st.info("Copie o texto acolhedor e transparente abaixo para enviar aos pais no WhatsApp:")
+        
+        # Formatação estrita com 1 casa decimal limpa (sem dízimas)
+        soma_fmt = f"{util.sosa_to_float(soma_parcial_dialog):.1f}"
+        meta_fmt = f"{util.sosa_to_float(meta_parcial_dialog):.1f}"
+        assid_fmt = f"{util.sosa_to_float(assiduidade_dialog):.0f}"
+        engaj_fmt = f"{util.sosa_to_float(engajamento_dialog):.0f}"
+        bonus_fmt = f"{util.sosa_to_float(bonus_dialog):+.1f}"
+        
+        msg_zap = f"""Olá! Tudo bem? Aqui é o Prof. Ronaldo Gomes (Componente Curricular de Matemática). 🏫
+Compartilho com a família o Dossiê de Rendimento e Participação do(a) estudante {nome_limpo_dialog} ({turma_dialog}).
+
+📌 SITUAÇÃO REGIMENTAL: {status_aluno_dialog}
+📊 DESEMPENHO ACUMULADO:
+• Pontuação Total Conquistada: {soma_fmt} pts (Meta Parcial: {meta_fmt} pts)
+• Média Regimental Oficial (Prefeitura de Itabuna): {soma_fmt} pts
+
+ℹ️ NOTA EXPLICATIVA SOBRE O ARREDONDAMENTO:
+{regra_arredondamento_text}
+
+🎯 ASSIDUIDADE E COMPROMISSO COM O CADERNO:
+• Frequência em Sala de Aula: {assid_fmt}% ({faltas_dialog} ausência(s) registrada(s)).
+• Cumprimento de Tarefas de Caderno (Vistos C1): {engaj_fmt}% das atividades realizadas.
+• Bônus Pedagógico de Mérito/Atitude: {bonus_fmt} pts conquistados!
+
+Seguimos à disposição para acompanhar o desenvolvimento do estudante. Um abraço! 🚀
+Escola Municipal Flávio José Simões Costa"""
+        st.code(msg_zap, language=None)
+    def dialog_whatsapp(nome_limpo_dialog, turma_dialog, status_aluno_dialog, soma_parcial_dialog, meta_parcial_dialog, assiduidade_dialog, faltas_dialog, engajamento_dialog, bonus_dialog, regra_arredondamento_text):
         st.info("Copie o texto transparente abaixo para enviar aos pais no WhatsApp:")
         
         msg_zap = f"""Olá! Tudo bem? Aqui é o Prof. Ronaldo Gomes (Componente de Matemática). 🏫
@@ -7058,7 +7134,20 @@ elif menu == "👥 Gestão da Turma":
 
                 taxa_assiduidade, taxa_engajamento, media_geral_av = 0.0, 0.0, 0.0
                 if not df_d_rad.empty and 'TAGS' in df_d_rad.columns:
-                    df_d_rad_validas = df_d_rad[~df_d_rad['TAGS'].isin(["DIA NÃO LETIVO", "BONUS_CONSELHO", "SISTEMA_NOTA"])]
+                    # Blindagem formal: Isola 100% dos dias não letivos, feriados e recessos da base de cálculo
+                    tags_bloqueadas_assid = [
+                        "DIA NÃO LETIVO", "BONUS_CONSELHO", "SISTEMA_NOTA", 
+                        "RECESSO", "FERIADO", "EVENTO", "PARALISAÇÃO"
+                    ]
+                    df_d_rad_validas = df_d_rad[~df_d_rad['TAGS'].isin(tags_bloqueadas_assid)]
+                    total_registros = len(df_d_rad_validas)
+                    faltas = len(df_d_rad_validas[df_d_rad_validas['TAGS'] == "AUSÊNCIA"])
+                    taxa_assiduidade = ((total_registros - faltas) / total_registros) * 100 if total_registros > 0 else 100
+                    
+                    df_vistos = df_d_rad_validas[df_d_rad_validas['VISTO_ATIVIDADE'].astype(str).str.upper() != "ISENTO"]
+                    vistos_possiveis = len(df_vistos)
+                    vistos_dados = len(df_vistos[df_vistos['VISTO_ATIVIDADE'].astype(str).str.upper() == "TRUE"])
+                    taxa_engajamento = (vistos_dados / vistos_possiveis) * 100 if vistos_possiveis > 0 else 100
                     total_registros = len(df_d_rad_validas)
                     faltas = len(df_d_rad_validas[df_d_rad_validas['TAGS'] == "AUSÊNCIA"])
                     taxa_assiduidade = ((total_registros - faltas) / total_registros) * 100 if total_registros > 0 else 0
