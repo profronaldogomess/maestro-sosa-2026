@@ -533,9 +533,9 @@ def ordenar_pontos_quadrado(pts):
 
 def processar_omr_local_fiducial(imagem_bytes, qtd_questoes=10, is_pei=False):
     """
-    SOSA V2026.ZERO_TOKEN: Motor de Visão Computacional Local de Alta Performance.
-    Localiza os 4 marcadores fiduciais (■), desentorta a perspectiva, aplica filtro
-    anti-sombra e calcula a densidade de grafite por coordenada matemática (Custo R$ 0,00).
+    SOSA V2026.PRECISION_MAX: Motor OMR Local com Calibração Geométrica Bicolunar.
+    Suporta gabaritos de 1 Coluna (<=10Q) e 2 Colunas (11 a 30Q), com filtro anti-transparência
+    de verso e mira visual colorida sobre as bolinhas marcadas (Custo R$ 0,00).
     """
     if not OPENCV_DISPONIVEL:
         return None
@@ -545,49 +545,40 @@ def processar_omr_local_fiducial(imagem_bytes, qtd_questoes=10, is_pei=False):
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         if img is None: return None
 
-        # 1. Pré-processamento e escala
         h_orig, w_orig = img.shape[:2]
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-        thresh = cv2.adaptiveThreshold(blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 15, 4)
+        
+        # Binarização adaptativa para encontrar os contornos do cartão
+        thresh = cv2.adaptiveThreshold(blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 15, 3)
 
-        # 2. Localização dos Marcadores Fiduciais ou Borda do Cartão
         contours, _ = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
         
-        candidatos_fiduciais = []
-        for c in contours:
-            peri = cv2.arcLength(c, True)
-            approx = cv2.approxPolyDP(c, 0.04 * peri, True)
-            area = cv2.contourArea(c)
-            if len(approx) == 4 and area > (w_orig * h_orig * 0.0008):
-                (x, y, w_b, h_b) = cv2.boundingRect(approx)
-                ar = w_b / float(h_b)
-                if 0.7 <= ar <= 1.3: # Proporção quadrada
-                    candidatos_fiduciais.append(approx.reshape(4, 2))
-
-        # Encontra o retângulo maior do cartão se houver 4 marcadores ou o polígono do cartão
+        # Localiza o retângulo externo do cartão-resposta
         pts_warp = None
-        if len(candidatos_fiduciais) >= 4:
-            centros = [np.mean(c, axis=0) for c in candidatos_fiduciais]
-            centros = np.array(centros)
-            # Ordena os 4 centros extremos
-            pts_warp = ordenar_pontos_quadrado(centros)
-        else:
-            # Fallback: procura o maior contorno de 4 pontos (o cartão inteiro)
-            contours_sorted = sorted(contours, key=cv2.contourArea, reverse=True)
-            for c in contours_sorted[:5]:
-                peri = cv2.arcLength(c, True)
-                approx = cv2.approxPolyDP(c, 0.02 * peri, True)
-                if len(approx) == 4 and cv2.contourArea(c) > (w_orig * h_orig * 0.15):
-                    pts_warp = ordenar_pontos_quadrado(approx.reshape(4, 2))
-                    break
+        contours_sorted = sorted(contours, key=cv2.contourArea, reverse=True)
+        
+        for c in contours_sorted[:10]:
+            peri = cv2.arcLength(c, True)
+            approx = cv2.approxPolyDP(c, 0.02 * peri, True)
+            area = cv2.contourArea(c)
+            
+            # Procura um polígono de 4 cantos que ocupe ao menos 20% da foto
+            if len(approx) == 4 and area > (w_orig * h_orig * 0.20):
+                pts_warp = ordenar_pontos_quadrado(approx.reshape(4, 2))
+                break
 
+        # Se a câmera estiver muito perto, usa as bordas da imagem com margem de segurança
         if pts_warp is None:
-            # Não encontrou os 4 cantos com confiança matemática
-            return None
+            pts_warp = np.array([
+                [w_orig * 0.05, h_orig * 0.05],
+                [w_orig * 0.95, h_orig * 0.05],
+                [w_orig * 0.95, h_orig * 0.95],
+                [w_orig * 0.05, h_orig * 0.95]
+            ], dtype="float32")
 
-        # 3. Desentortamento de Perspectiva (Warp 600x800)
-        target_w, target_h = 600, 800
+        # Desentortamento para uma matriz de alta definição (800 x 1000 px)
+        target_w, target_h = 800, 1000
         dst = np.array([
             [0, 0],
             [target_w - 1, 0],
@@ -599,62 +590,116 @@ def processar_omr_local_fiducial(imagem_bytes, qtd_questoes=10, is_pei=False):
         warped = cv2.warpPerspective(img, M, (target_w, target_h))
         warped_gray = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
         
-        # Filtro de alto contraste anti-sombra (Otsu)
+        # Filtro OTSU para isolar grafite/caneta de marcas do verso
         _, warped_thresh = cv2.threshold(warped_gray, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
 
-        # 4. Leitura Matemática por Régua de Coordenadas
         opcoes = ["A", "B", "C"] if is_pei else ["A", "B", "C", "D", "E"]
         num_opcoes = len(opcoes)
-        
         respostas_detectadas = {}
+
+        # -------------------------------------------------------------
+        # ARQUITETURA BICOLUNAR (LEITURA EM BLOCOS DE 10 QUESTÕES)
+        # -------------------------------------------------------------
+        is_double_column = qtd_questoes > 10
+        num_linhas_bloco = 10 if is_double_column else qtd_questoes
         
-        # Área do grid central do cartão-resposta
-        grid_top = int(target_h * 0.15)
+        # Coordenadas da Tabela dentro do Cartão
+        grid_top = int(target_h * 0.16)
         grid_bottom = int(target_h * 0.88)
-        grid_left = int(target_w * 0.18)
-        grid_right = int(target_w * 0.88)
-        
-        altura_linha = (grid_bottom - grid_top) / max(qtd_questoes, 1)
-        largura_coluna = (grid_right - grid_left) / num_opcoes
-        
-        for q_idx in range(qtd_questoes):
-            q_num_str = f"{q_idx + 1:02d}"
-            y1 = int(grid_top + (q_idx * altura_linha))
-            y2 = int(y1 + altura_linha)
-            
-            densidades = []
-            
-            for opt_idx in range(num_opcoes):
-                x1 = int(grid_left + (opt_idx * largura_coluna))
-                x2 = int(x1 + largura_coluna)
-                
-                # Região da bolinha (com margem interna)
-                pad_x = int(largura_coluna * 0.22)
-                pad_y = int(altura_linha * 0.20)
-                roi = warped_thresh[y1 + pad_y : y2 - pad_y, x1 + pad_x : x2 - pad_x]
-                
-                total_pixels = roi.size if roi.size > 0 else 1
-                pixels_pretos = cv2.countNonZero(roi)
-                densidade = (pixels_pretos / float(total_pixels)) * 100
-                densidades.append(densidade)
+        row_height = (grid_bottom - grid_top) / (num_linhas_bloco + 1) # +1 para o cabeçalho Q, A, B...
 
-            # Análise de Preenchimento
-            max_dens = max(densidades) if densidades else 0
-            idx_max = int(np.argmax(densidades))
-            
-            # Checa se há múltiplas marcações ou em branco
-            limiar_minimo = 28.0 # Densidade mínima para considerar preenchido
-            marcadas_acima = [d for d in densidades if d >= limiar_minimo]
-            
-            if len(marcadas_acima) > 1:
-                # Dupla marcação
-                respostas_detectadas[q_num_str] = "X"
-            elif max_dens >= limiar_minimo:
-                respostas_detectadas[q_num_str] = opcoes[idx_max]
-            else:
-                respostas_detectadas[q_num_str] = "?"
+        if not is_double_column:
+            # Layout de 1 Coluna (<= 10 Questões)
+            blocos_config = [
+                {
+                    "q_start": 1,
+                    "q_end": qtd_questoes,
+                    "x_left": int(target_w * 0.10),
+                    "x_right": int(target_w * 0.90)
+                }
+            ]
+        else:
+            # Layout de 2 Colunas (> 10 Questões, ex: 20 Questões)
+            half = (qtd_questoes + 1) // 2
+            blocos_config = [
+                {
+                    "q_start": 1,
+                    "q_end": half,
+                    "x_left": int(target_w * 0.05),
+                    "x_right": int(target_w * 0.49)
+                },
+                {
+                    "q_start": half + 1,
+                    "q_end": qtd_questoes,
+                    "x_left": int(target_w * 0.51),
+                    "x_right": int(target_w * 0.95)
+                }
+            ]
 
-        # Converte imagem desentortada para bytes JPG
+        # Varredura precisa dos blocos
+        for bloco in blocos_config:
+            b_left = bloco["x_left"]
+            b_right = bloco["x_right"]
+            col_width = (b_right - b_left) / (1 + num_opcoes) # 1 coluna para o número Q + colunas das letras
+
+            for q_num in range(bloco["q_start"], bloco["q_end"] + 1):
+                idx_linha = (q_num - bloco["q_start"]) + 1 # +1 pula a linha de cabeçalho
+                
+                center_y = int(grid_top + (idx_linha * row_height) + (row_height / 2))
+                radius = int(min(col_width, row_height) * 0.28)
+
+                densidades = []
+                centros_opcoes = []
+
+                for opt_idx in range(num_opcoes):
+                    # Posição X da letra (pula a primeira coluna que é o número da questão)
+                    center_x = int(b_left + ((opt_idx + 1) * col_width) + (col_width / 2))
+                    centros_opcoes.append((center_x, center_y))
+
+                    # Cria máscara circular para contar apenas o interior da bolinha
+                    mask = np.zeros(warped_thresh.shape, dtype="uint8")
+                    cv2.circle(mask, (center_x, center_y), radius, 255, -1)
+
+                    # Conta pixels pretos dentro da bolinha
+                    total_circle_pixels = cv2.countNonZero(mask)
+                    filled_pixels = cv2.countNonZero(cv2.bitwise_and(warped_thresh, warped_thresh, mask=mask))
+                    
+                    fill_percentage = (filled_pixels / float(total_circle_pixels)) * 100 if total_circle_pixels > 0 else 0
+                    densidades.append(fill_percentage)
+
+                # Análise Relativa de Preenchimento (Anti-Ruído / Anti-Verso)
+                max_dens = max(densidades) if densidades else 0
+                idx_max = int(np.argmax(densidades))
+                
+                # Média das outras opções da mesma linha (linha de base de ruído)
+                outras_dens = [d for i_d, d in enumerate(densidades) if i_d != idx_max]
+                media_ruido = np.mean(outras_dens) if outras_dens else 0
+                
+                q_label = f"{q_num:02d}"
+
+                # Regra de decisão robusta:
+                # A bolinha marcada deve ter densidade mínima de 22% E ser ao menos 12% mais escura que as outras
+                if max_dens >= 22.0 and (max_dens - media_ruido) >= 12.0:
+                    letra_escolhida = opcoes[idx_max]
+                    respostas_detectadas[q_label] = letra_escolhida
+                    
+                    # Desenha mira verde sobre a bolinha detectada
+                    cx, cy = centros_opcoes[idx_max]
+                    cv2.circle(warped, (cx, cy), radius + 4, (0, 255, 0), 3)
+                    cv2.putText(warped, letra_escolhida, (cx - 7, cy + 6), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 200, 0), 2)
+                    
+                elif len([d for d in densidades if d >= 22.0]) > 1:
+                    # Dupla marcação
+                    respostas_detectadas[q_label] = "X"
+                    for i_d, d in enumerate(densidades):
+                        if d >= 22.0:
+                            cx, cy = centros_opcoes[i_d]
+                            cv2.circle(warped, (cx, cy), radius + 4, (0, 0, 255), 2)
+                else:
+                    # Em branco
+                    respostas_detectadas[q_label] = "?"
+
+        # Converte a imagem com a mira verde desenhada para exibir na tela
         _, buffer_jpg = cv2.imencode('.jpg', warped, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
         warped_bytes = buffer_jpg.tobytes()
 
@@ -664,7 +709,7 @@ def processar_omr_local_fiducial(imagem_bytes, qtd_questoes=10, is_pei=False):
             "sucesso_local": True
         }
     except Exception as e:
-        print(f"Aviso no processamento OMR Local: {e}")
+        print(f"Aviso OMR Local: {e}")
         return None
 
 def analisar_gabarito_vision(imagem_bytes):
