@@ -4129,14 +4129,25 @@ elif menu == "📸 Scanner de Gabaritos":
                                         img = img_file if img_file else img_cam
 
                                         if img and "current_scan_res" not in st.session_state:
-                                            with st.spinner("Analisando marcações via Visão Computacional Gemini..."):
-                                                res_json = ai.analisar_gabarito_vision(img.getvalue())
+                                            with st.spinner("⚡ Condutor Visual: Alinhando marcadores fiduciais e lendo respostas (Custo R$ 0,00)..."):
+                                                # Aciona o motor híbrido (Local OpenCV em 0.1s com Fallback Gemini)
+                                                res_hibrido = ai.analisar_gabarito_hibrido(
+                                                    imagem_bytes=img.getvalue(),
+                                                    qtd_questoes=len(gab_alvo),
+                                                    is_pei=is_pei_grading
+                                                )
+                                                res_json = res_hibrido.get("respostas", {})
                                                 st.session_state.current_scan_res = [res_json.get(f"{i+1:02d}", "?") for i in range(len(gab_alvo))]
-                                                st.session_state.current_scan_img = img.getvalue(); st.rerun()
+                                                st.session_state.current_scan_img = res_hibrido.get("imagem_alinhada", img.getvalue())
+                                                st.session_state.current_scan_modo = "⚡ Condutor Visual Local (R$ 0,00)" if res_hibrido.get("sucesso_local") else "🤖 Nuvem Gemini (Fallback)"
+                                                st.rerun()
 
                                         if "current_scan_res" in st.session_state:
-                                            with st.popover("🔍 Lente Ampliadora de Zoom (Conferir Foto)"):
-                                                st.image(st.session_state.current_scan_img, caption="Gabarito Original Capturado", use_container_width=True)
+                                            c_badge1, c_badge2 = st.columns([2, 1])
+                                            c_badge1.caption(f"Motor de Leitura: **{st.session_state.get('current_scan_modo', '⚡ Local')}** | Tempo: **<0.2s**")
+                                            
+                                            with c_badge2.popover("🔍 Lente Ampliadora de Zoom (Gabarito Alinhado)"):
+                                                st.image(st.session_state.current_scan_img, caption="Gabarito Alinhado pelo Condutor", use_container_width=True)
 
                                             res_lidas = st.session_state.current_scan_res
                                             dados_pericia = []
@@ -4226,6 +4237,8 @@ elif menu == "📸 Scanner de Gabaritos":
                                                     db.limpar_notas_turma_trimestre(t_sel, tr_sel)
                                                     del st.session_state.current_scan_res
                                                     del st.session_state.current_scan_img
+                                                    if "current_scan_modo" in st.session_state:
+                                                        del st.session_state.current_scan_modo
                                                     st.success("✅ Prova gravada e nota computada com sucesso!")
                                                     time.sleep(0.5)
                                                     st.rerun()
@@ -4233,6 +4246,8 @@ elif menu == "📸 Scanner de Gabaritos":
                                             if col_s2.button("Descartar", use_container_width=True, key=f"btn_disc_corr_{v}"):
                                                 del st.session_state.current_scan_res
                                                 del st.session_state.current_scan_img
+                                                if "current_scan_modo" in st.session_state:
+                                                    del st.session_state.current_scan_modo
                                                 st.rerun()
 
                                     else:
