@@ -533,9 +533,9 @@ def ordenar_pontos_quadrado(pts):
 
 def processar_omr_local_fiducial(imagem_bytes, qtd_questoes=10, is_pei=False):
     """
-    SOSA V2026.LASER_PRECISION: Motor OMR com Detecção Dinâmica da Grade da Tabela.
-    Alinha a mira com precisão milimétrica dentro de cada célula da tabela, evitando
-    leituras falsas sobre os números das questões, linhas de borda ou verso da folha.
+    SOSA V2026.BLUE_INK_MAX: Motor OMR com Detecção de Caneta Azul/Preta e Leitura de Miolo.
+    Utiliza o canal óptico vermelho para realçar caneta azul esferográfica e faz a leitura
+    por contraste relativo da bolinha marcada, capturando pingos, círculos e preenchimentos.
     """
     if not OPENCV_DISPONIVEL:
         return None
@@ -546,15 +546,20 @@ def processar_omr_local_fiducial(imagem_bytes, qtd_questoes=10, is_pei=False):
         if img is None: return None
 
         h_orig, w_orig = img.shape[:2]
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
         
-        # Binarização adaptativa
+        # 1. Mapa de Escuridão Realçado (Canal Vermelho faz a caneta azul virar preto absoluto)
+        red_channel = img[:, :, 2]
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        
+        # Combina para capturar tanto caneta preta/grafite quanto caneta azul esferográfica
+        darkness_raw = np.minimum(gray, red_channel)
+        
+        blurred = cv2.GaussianBlur(darkness_raw, (5, 5), 0)
         thresh = cv2.adaptiveThreshold(blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 15, 3)
 
         contours, _ = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
         
-        # 1. Localiza os 4 cantos do cartão-resposta (Marcadores pretos externos)
+        # 2. Localização dos 4 cantos da folha/cartão
         pts_warp = None
         contours_sorted = sorted(contours, key=cv2.contourArea, reverse=True)
         
@@ -574,7 +579,7 @@ def processar_omr_local_fiducial(imagem_bytes, qtd_questoes=10, is_pei=False):
                 [w_orig * 0.02, h_orig * 0.98]
             ], dtype="float32")
 
-        # 2. Desentorta a folha para uma matriz padrão de 800 x 1000 px
+        # 3. Desentortamento de Perspectiva (800 x 1000 px)
         target_w, target_h = 800, 1000
         dst = np.array([
             [0, 0],
@@ -585,31 +590,15 @@ def processar_omr_local_fiducial(imagem_bytes, qtd_questoes=10, is_pei=False):
 
         M = cv2.getPerspectiveTransform(pts_warp, dst)
         warped = cv2.warpPerspective(img, M, (target_w, target_h))
-        warped_gray = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
-        
-        # Filtro de alto contraste OTSU
-        _, warped_thresh = cv2.threshold(warped_gray, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
+        warped_red = cv2.warpPerspective(darkness_raw, M, (target_w, target_h))
 
-        # 3. Localização Dinâmica da Tabela Interna (Grade das Bolinhas)
-        # Na folha padrão Word: a tabela ocupa do topo 13% à base 86%, e das laterais 18% a 82%
+        # 4. Enquadramento Dinâmico da Tabela (Confirmado exato pelo seu print)
         table_x = int(target_w * 0.185)
         table_y = int(target_h * 0.130)
         table_w = int(target_w * 0.630)
         table_h = int(target_h * 0.740)
 
-        # Refinamento por detecção de contorno da grade da tabela (se visível)
-        table_roi_thresh = warped_thresh[table_y:table_y+table_h, table_x:table_x+table_w]
-        grid_contours, _ = cv2.findContours(table_roi_thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        if grid_contours:
-            c_max = max(grid_contours, key=cv2.contourArea)
-            if cv2.contourArea(c_max) > (table_w * table_h * 0.40):
-                gx, gy, gw, gh = cv2.boundingRect(c_max)
-                table_x += gx
-                table_y += gy
-                table_w = gw
-                table_h = gh
-
-        # Desenha uma borda azul sutil indicando a área exata da tabela
+        # Desenha a moldura azul da tabela
         cv2.rectangle(warped, (table_x, table_y), (table_x + table_w, table_y + table_h), (255, 120, 0), 2)
 
         opcoes = ["A", "B", "C"] if is_pei else ["A", "B", "C", "D", "E"]
@@ -618,84 +607,91 @@ def processar_omr_local_fiducial(imagem_bytes, qtd_questoes=10, is_pei=False):
 
         is_double_column = qtd_questoes > 10
         total_cols = (1 + num_opcoes) * 2 if is_double_column else (1 + num_opcoes)
-        num_rows = 11 if is_double_column else (qtd_questoes + 1) # 1 linha de cabeçalho + 10 linhas
+        num_rows = 11 if is_double_column else (qtd_questoes + 1)
 
         col_w = table_w / float(total_cols)
         row_h = table_h / float(num_rows)
-        radius = int(min(col_w, row_h) * 0.22) # Raio calibrado para o interior do círculo
+        radius = int(min(col_w, row_h) * 0.24) # Raio central da bolinha
 
-        # Varredura de Questões
+        # 5. Varredura e Leitura de Cada Questão
         for q_idx in range(qtd_questoes):
             q_num = q_idx + 1
             q_label = f"{q_num:02d}"
 
-            # Determina linha e coluna base (Esquerda vs Direita)
             if not is_double_column:
-                r_idx = q_num # Linha 1 a 10
-                c_offset = 0  # Começa na coluna 0
+                r_idx = q_num
+                c_offset = 0
             else:
                 if q_num <= 10:
                     r_idx = q_num
-                    c_offset = 0 # Bloco esquerdo
+                    c_offset = 0
                 else:
                     r_idx = q_num - 10
-                    c_offset = 1 + num_opcoes # Bloco direito (pula as 6 colunas da esquerda)
+                    c_offset = 1 + num_opcoes
 
-            # Centro Y da linha
             cy = int(table_y + (r_idx + 0.5) * row_h)
 
-            densidades = []
+            escuridao_opcoes = []
             centros_opcoes = []
 
             for opt_idx in range(num_opcoes):
-                # Pula a coluna 'Q' do bloco (+1)
                 col_real = c_offset + 1 + opt_idx
                 cx = int(table_x + (col_real + 0.5) * col_w)
                 centros_opcoes.append((cx, cy))
 
-                # Máscara circular restrita ao miolo da bolinha
-                mask = np.zeros(warped_thresh.shape, dtype="uint8")
-                cv2.circle(mask, (cx, cy), radius, 255, -1)
+                # Extrai apenas o miolo interno da bolinha (evita bordas da tabela)
+                mask = np.zeros(warped_red.shape, dtype="uint8")
+                cv2.circle(mask, (cx, cy), int(radius * 0.85), 255, -1)
 
-                total_pixels = cv2.countNonZero(mask)
-                filled_pixels = cv2.countNonZero(cv2.bitwise_and(warped_thresh, warped_thresh, mask=mask))
-                fill_perc = (filled_pixels / float(total_pixels)) * 100 if total_pixels > 0 else 0
-                densidades.append(fill_perc)
+                # Mede o valor médio de escuridão no miolo
+                mean_val = cv2.mean(warped_red, mask=mask)[0]
+                
+                # Inverte para que TINTA ESCURA = VALOR ALTO (0 a 255)
+                # Papel branco = ~30 | Caneta azul/preta = ~100 a 180
+                darkness_score = 255.0 - mean_val
+                escuridao_opcoes.append(darkness_score)
 
-            # Análise Relativa de Preenchimento (Anti-Ruído / Anti-Verso)
-            max_dens = max(densidades) if densidades else 0
-            idx_max = int(np.argmax(densidades))
+            # 6. Decisão Inteligente por Contraste Relativo da Linha
+            escuridao_np = np.array(escuridao_opcoes)
+            idx_max = int(np.argmax(escuridao_np))
+            max_score = escuridao_np[idx_max]
             
-            # Ordena densidades para comparar a maior com a segunda maior
-            densidades_sorted = sorted(densidades, reverse=True)
-            segunda_maior = densidades_sorted[1] if len(densidades_sorted) > 1 else 0
+            # Ordena para comparar a mais escura com a segunda colocada
+            scores_sorted = sorted(escuridao_opcoes, reverse=True)
+            segundo_score = scores_sorted[1] if len(scores_sorted) > 1 else 0
+            
+            # Linha de base do papel branco (média das 3 opções mais claras da linha)
+            baseline_papel = np.mean(scores_sorted[2:]) if len(scores_sorted) >= 3 else scores_sorted[-1]
 
-            # Regra de Decisão com Margem de Contraste Relativo:
-            # A bolinha marcada deve ter ao menos 20% de tinta E superar a segunda em 10%
-            if max_dens >= 20.0 and (max_dens - segunda_maior) >= 10.0:
+            # REGRA DE DECISÃO INFALÍVEL:
+            # 1. A bolinha marcada deve ser ao menos 15 tons mais escura que o papel branco
+            # 2. Deve superar a segunda colocada por ao menos 8 tons de contraste
+            diferenca_papel = max_score - baseline_papel
+            diferenca_segundo = max_score - segundo_score
+
+            if diferenca_papel >= 15.0 and diferenca_segundo >= 8.0:
                 letra_escolhida = opcoes[idx_max]
                 respostas_detectadas[q_label] = letra_escolhida
                 
-                # Mira Verde Brilhante sobre a bolinha correta
+                # Desenha Círculo Verde no ponto exato da bolinha
                 cx, cy = centros_opcoes[idx_max]
-                cv2.circle(warped, (cx, cy), radius + 4, (0, 255, 0), 3)
-                cv2.putText(warped, letra_escolhida, (cx - 7, cy + 6), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 220, 0), 2)
+                cv2.circle(warped, (cx, cy), radius + 5, (0, 255, 0), 3)
+                cv2.putText(warped, letra_escolhida, (cx - 6, cy + 6), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 220, 0), 2)
                 
-            elif len([d for d in densidades if d >= 20.0]) > 1 and (max_dens - segunda_maior) < 10.0:
-                # Dupla marcação evidente
+            elif diferenca_papel >= 15.0 and diferenca_segundo < 8.0 and segundo_score - baseline_papel >= 12.0:
+                # Dupla Marcação detectada
                 respostas_detectadas[q_label] = "X"
-                for i_d, d in enumerate(densidades):
-                    if d >= 20.0:
-                        cx, cy = centros_opcoes[i_d]
-                        cv2.circle(warped, (cx, cy), radius + 4, (0, 0, 255), 2)
+                for i_opt in range(num_opcoes):
+                    if escuridao_opcoes[i_opt] - baseline_papel >= 12.0:
+                        cx, cy = centros_opcoes[i_opt]
+                        cv2.circle(warped, (cx, cy), radius + 5, (0, 0, 255), 2)
             else:
-                # Vazia / Em Branco
+                # Em branco / não preenchida
                 respostas_detectadas[q_label] = "?"
-                # Desenha pequeno ponto cinza no centro para indicar que foi checado
                 for cx, cy in centros_opcoes:
                     cv2.circle(warped, (cx, cy), 2, (180, 180, 180), -1)
 
-        # Converte para imagem JPG para exibição no aplicativo
+        # Converte para imagem JPG para visualização
         _, buffer_jpg = cv2.imencode('.jpg', warped, [int(cv2.IMWRITE_JPEG_QUALITY), 92])
         warped_bytes = buffer_jpg.tobytes()
 
