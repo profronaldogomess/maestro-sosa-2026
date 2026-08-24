@@ -6271,17 +6271,53 @@ elif menu == "📊 Painel de Notas & Vistos":
 
 
 # ==============================================================================
-# MÓDULO: BOLETIM ANUAL & CONSELHO DE CLASSE - V2026.ULTIMATE
-# (VISÃO PANORÂMICA PONDERADA, PÍLULAS DO CONSELHO E GERADOR DE ATA DOCX)
+# MÓDULO: BOLETIM ANUAL & CONSELHO DE CLASSE - V2026.PRO_PREDICTIVE
+# (VISÃO PANORÂMICA PONDERADA, SIMULADOR PREDITIVO III TRI E GERADOR DE ATA DOCX)
 # ==============================================================================
 elif menu == "📈 Boletim Anual & Conselho":
-    st.title("📈 Inteligência de Conselho e Resultados")
-    st.caption("Visão panorâmica e ponderada do ano letivo para decisões estratégicas no Conselho de Classe.")
+    st.title("📈 Inteligência de Conselho & Simulador Preditivo")
+    st.caption("Visão panorâmica anual, simulador preditivo de metas para o III Trimestre, termômetro ponderado e ata oficial do Conselho de Classe.")
     st.markdown("---")
 
     if "v_bol" not in st.session_state: 
         st.session_state.v_bol = int(time.time())
     v = st.session_state.v_bol
+
+    # DIALOG PADRONIZADO DENTRO DO MÓDULO (FORA DO FRAGMENT - LEI #25)
+    @st.dialog("📱 Alerta Preditivo de Metas para WhatsApp (III Tri)", width="large")
+    def dialog_zap_metas_iii(nome_aluno, turma, soma_1_2, meta_iii, status_meta, faltas_aluno):
+        st.info(f"Copie a mensagem oficial abaixo e envie para os responsáveis de **{nome_aluno}** antes do início do III Trimestre:")
+        
+        if meta_iii == 0.0:
+            situacao_msg = "🏆 SITUAÇÃO EXCELENTE: O(A) estudante já atingiu os 18,0 pontos regimentais somando o I e II Trimestres e está APROVADO(A) POR ANTECIPAÇÃO no componente de Matemática!"
+        elif meta_iii <= 4.0:
+            situacao_msg = f"🟢 SITUAÇÃO CONFORTÁVEL: Para garantir a aprovação sem necessidade de recuperação final, o(a) estudante precisa de apenas {meta_iii:.1f} pontos no III Trimestre."
+        elif meta_iii <= 6.5:
+            situacao_msg = f"🟡 SITUAÇÃO DE ATENÇÃO: Para fechar a média anual (18,0 pontos), o(a) estudante precisa atingir a meta de {meta_iii:.1f} pontos no III Trimestre."
+        elif meta_iii <= 9.9:
+            situacao_msg = f"🟠 SITUAÇÃO DE ALERTA: O(A) estudante precisa de {meta_iii:.1f} pontos no III Trimestre. Recomendamos foco total nas tarefas de caderno e presença regular."
+        else:
+            situacao_msg = f"🔴 SITUAÇÃO CRÍTICA (RISCO DE RECUPERAÇÃO FINAL): O estudante acumulou {soma_1_2:.1f} pontos nos dois primeiros trimestres e precisará de pontuação máxima no III Trimestre e/ou Recuperação Final para atingir a meta anual de 18,0 pontos."
+
+        msg_zap_meta = f"""Olá! Tudo bem? Aqui é o Prof. Ronaldo Gomes (Componente de Matemática). 🏫
+Compartilho com a família o Relatório Preditivo de Metas para o encerramento do ano letivo de 2026 do(a) estudante {nome_aluno} ({turma}).
+
+📊 RENDIMENTO ACUMULADO (I e II TRIMESTRES):
+• Soma dos Pontos Conquistados (I Tri + II Tri): {soma_1_2:.1f} pontos.
+• Meta Anual Regimental para Aprovação: 18,0 pontos (Média 6,0 x 3 trimestres).
+• Total de Faltas Acumuladas no Ano: {faltas_aluno} ausência(s).
+
+🎯 META PROJETADA PARA O III TRIMESTRE:
+• Pontuação Necessária no III Tri: {meta_iii:.1f} pontos.
+• Status Preditivo: {status_meta}
+
+📌 PARECER PEDAGÓGICO:
+{situacao_msg}
+
+Contamos com a parceria da família no acompanhamento diário das tarefas do caderno e na assiduidade às aulas. Seguimos à disposição! 🚀
+Escola Municipal Flávio José Simões Costa"""
+
+        st.code(msg_zap_meta, language=None)
 
     if df_notas.empty:
         st.warning("⚠️ Sem notas lançadas no sistema. O Boletim Anual será ativado assim que houver dados.")
@@ -6300,10 +6336,10 @@ elif menu == "📈 Boletim Anual & Conselho":
                 c_bol1, c_bol2 = st.columns([2, 1])
                 turma_sel = c_bol1.selectbox("🎯 Selecione a Turma para Análise:", lista_turmas_bol, key=f"bol_turma_clean_{v}")
                 
-                with c_bol2.popover("📜 Registrar Ata do Conselho de Classe"):
+                with c_bol2.popover("📜 Registrar Ata do Conselho de Classe", use_container_width=True):
                     st.caption("Registre deliberações e pareceres do Conselho de Classe.")
                     tipo_ata = st.selectbox("Tipo de Conselho:", ["Conselho Parcial (I Tri)", "Conselho Parcial (II Tri)", "Conselho Final (III Tri)"], key=f"pop_ata_tipo_{v}")
-                    texto_ata = st.text_area("Texto da Ata / Parecer da Turma:", placeholder="Ex: A turma demonstrou evolução satisfatória. Alunos em recuperação foram orientados...", height=120, key=f"pop_ata_txt_{v}")
+                    texto_ata = st.text_area("Texto da Ata / Parecer da Turma:", placeholder="Ex: A turma demonstrou evolução satisfatória no II Trimestre. Alunos em recuperação foram convocados...", height=120, key=f"pop_ata_txt_{v}")
                     
                     if st.button("💾 Salvar Ata no Banco", type="primary", use_container_width=True, key=f"btn_save_ata_{v}"):
                         if texto_ata.strip():
@@ -6320,6 +6356,25 @@ elif menu == "📈 Boletim Anual & Conselho":
                 if df_t.empty:
                     st.info(f"📭 Nenhuma nota lançada para a turma {turma_sel} ainda.")
                 else:
+                    # Filtro Global de Alunos Ativos (Lei #28)
+                    df_alunos_turma = df_alunos[df_alunos['TURMA'] == turma_sel].copy() if not df_alunos.empty and 'TURMA' in df_alunos.columns else pd.DataFrame()
+                    if 'STATUS' not in df_alunos_turma.columns: df_alunos_turma['STATUS'] = "ATIVO"
+
+                    c_flt1, c_flt2 = st.columns([2, 1])
+                    flt_status_alunos = c_flt1.pills("Exibição de Estudantes:", ["🟢 Apenas Ativos", "🌐 Todos (Incluir Inativos/Transferidos)"], default="🟢 Apenas Ativos", key=f"pills_flt_ativos_bol_{v}")
+
+                    visao_conselho_ativa = c_flt2.segmented_control(
+                        "Visão do Módulo:",
+                        ["📊 1. Termômetro & Boletim", "🔮 2. Simulador Preditivo (III Tri)"],
+                        default="📊 1. Termômetro & Boletim",
+                        key=f"seg_visao_conselho_{v}"
+                    )
+                    st.markdown("<br>", unsafe_allow_html=True)
+
+                    if flt_status_alunos == "🟢 Apenas Ativos":
+                        ids_ativos = df_alunos_turma[~df_alunos_turma['STATUS'].astype(str).str.upper().isin(["INATIVO", "TRANSFERIDO", "EVADIDO", "DESISTENTE"])]['ID'].apply(db.limpar_id).tolist()
+                        df_t = df_t[df_t['ID_ALUNO'].apply(db.limpar_id).isin(ids_ativos)]
+
                     pivot = df_t.pivot_table(
                         index=["ID_ALUNO", "NOME_ALUNO"], 
                         columns="TRIMESTRE", 
@@ -6422,110 +6477,297 @@ elif menu == "📈 Boletim Anual & Conselho":
 
                     pivot[['P', 'Σ', 'MÉDIA_PARCIAL', 'SITUAÇÃO']] = pivot.apply(calcular_situacao_anual, axis=1)
 
-                    st.markdown(f"#### 📊 Termômetro do Conselho (Ponderado: {trimestres_ativos} Trimestre(s) Ativo(s))")
-                    
-                    media_geral_parcial = pivot['MÉDIA_PARCIAL'].mean() if len(pivot) > 0 else 0.0
-                    na_media_count = len(pivot[pivot['SITUAÇÃO'].isin(["✅ APROVADO", "🟢 NA MÉDIA", "🔄 APROV. REC"])])
-                    taxa_sucesso = (na_media_count / len(pivot)) * 100 if len(pivot) > 0 else 0
-                    risco_nota_count = len(pivot[pivot['SITUAÇÃO'].isin(["🟡 RISCO DE NOTA", "🔴 RISCO CRÍTICO"])])
-                    risco_faltas_count = len(pivot[pivot['SITUAÇÃO'] == "🚨 REPROV. FALTA"])
-                    evasao_count = len(pivot[pivot['SITUAÇÃO'] == "👻 EVASÃO"])
+                    # ==============================================================
+                    # VISÃO 1: TERMÔMETRO & BOLETIM ANUAL CONSOLIDADO
+                    # ==============================================================
+                    if visao_conselho_ativa == "📊 1. Termômetro & Boletim":
+                        st.markdown(f"#### 📊 Termômetro do Conselho (Ponderado: {trimestres_ativos} Trimestre(s) Ativo(s))")
+                        
+                        media_geral_parcial = pivot['MÉDIA_PARCIAL'].mean() if len(pivot) > 0 else 0.0
+                        na_media_count = len(pivot[pivot['SITUAÇÃO'].isin(["✅ APROVADO", "🟢 NA MÉDIA", "🔄 APROV. REC"])])
+                        taxa_sucesso = (na_media_count / len(pivot)) * 100 if len(pivot) > 0 else 0
+                        risco_nota_count = len(pivot[pivot['SITUAÇÃO'].isin(["🟡 RISCO DE NOTA", "🔴 RISCO CRÍTICO"])])
+                        risco_faltas_count = len(pivot[pivot['SITUAÇÃO'] == "🚨 REPROV. FALTA"])
+                        evasao_count = len(pivot[pivot['SITUAÇÃO'] == "👻 EVASÃO"])
 
-                    with st.container(border=True):
-                        k1, k2, k3, k4 = st.columns(4)
-                        k1.metric("📊 Média Parcial Turma", f"{media_geral_parcial:.1f}")
-                        k2.metric("🟢 Na Média / Aprovados", f"{na_media_count} ({taxa_sucesso:.0f}%)", f"{len(pivot)} alunos")
-                        k3.metric("🟡 Risco de Nota", risco_nota_count, delta_color="inverse" if risco_nota_count > 0 else "normal")
-                        k4.metric("🚨 Risco de Faltas", risco_faltas_count, delta_color="inverse" if risco_faltas_count > 0 else "normal")
+                        with st.container(border=True):
+                            k1, k2, k3, k4 = st.columns(4)
+                            k1.metric("📊 Média Parcial Turma", f"{media_geral_parcial:.1f}")
+                            k2.metric("🟢 Na Média / Aprovados", f"{na_media_count} ({taxa_sucesso:.0f}%)", f"{len(pivot)} alunos")
+                            k3.metric("🟡 Risco de Nota", risco_nota_count, delta_color="inverse" if risco_nota_count > 0 else "normal")
+                            k4.metric("🚨 Risco de Faltas", risco_faltas_count, delta_color="inverse" if risco_faltas_count > 0 else "normal")
 
-                    st.markdown("---")
+                        st.markdown("---")
 
-                    filtro_conselho = st.pills(
-                        "🔍 Filtrar Classe para a Reunião de Conselho:",
-                        ["Todos os Estudantes", "🟢 Na Média", "🟡 Risco de Nota", "🚨 Risco de Faltas", "👻 Evasão / Abandono"],
-                        default="Todos os Estudantes",
-                        key=f"pills_cons_flt_{v}"
-                    )
+                        filtro_conselho = st.pills(
+                            "🔍 Filtrar Classe para a Reunião de Conselho:",
+                            ["Todos os Estudantes", "🟢 Na Média", "🟡 Risco de Nota", "🚨 Risco de Faltas", "👻 Evasão / Abandono"],
+                            default="Todos os Estudantes",
+                            key=f"pills_cons_flt_{v}"
+                        )
 
-                    pivot_exibir = pivot.copy()
-                    if filtro_conselho == "🟢 Na Média":
-                        pivot_exibir = pivot_exibir[pivot_exibir['SITUAÇÃO'].isin(["✅ APROVADO", "🟢 NA MÉDIA", "🔄 APROV. REC"])]
-                    elif filtro_conselho == "🟡 Risco de Nota":
-                        pivot_exibir = pivot_exibir[pivot_exibir['SITUAÇÃO'].isin(["🟡 RISCO DE NOTA", "🔴 RISCO CRÍTICO"])]
-                    elif filtro_conselho == "🚨 Risco de Faltas":
-                        pivot_exibir = pivot_exibir[pivot_exibir['SITUAÇÃO'] == "🚨 REPROV. FALTA"]
-                    elif filtro_conselho == "👻 Evasão / Abandono":
-                        pivot_exibir = pivot_exibir[pivot_exibir['SITUAÇÃO'] == "👻 EVASÃO"]
+                        pivot_exibir = pivot.copy()
+                        if filtro_conselho == "🟢 Na Média":
+                            pivot_exibir = pivot_exibir[pivot_exibir['SITUAÇÃO'].isin(["✅ APROVADO", "🟢 NA MÉDIA", "🔄 APROV. REC"])]
+                        elif filtro_conselho == "🟡 Risco de Nota":
+                            pivot_exibir = pivot_exibir[pivot_exibir['SITUAÇÃO'].isin(["🟡 RISCO DE NOTA", "🔴 RISCO CRÍTICO"])]
+                        elif filtro_conselho == "🚨 Risco de Faltas":
+                            pivot_exibir = pivot_exibir[pivot_exibir['SITUAÇÃO'] == "🚨 REPROV. FALTA"]
+                        elif filtro_conselho == "👻 Evasão / Abandono":
+                            pivot_exibir = pivot_exibir[pivot_exibir['SITUAÇÃO'] == "👻 EVASÃO"]
 
-                    st.caption(f"Exibindo **{len(pivot_exibir)} de {len(pivot)}** estudantes.")
+                        st.caption(f"Exibindo **{len(pivot_exibir)} de {len(pivot)}** estudantes.")
 
-                    def style_status_anual(v):
-                        if "APROV" in str(v) or "NA MÉDIA" in str(v): return 'color: #2ECC71; font-weight: bold;'
-                        if "EVASÃO" in str(v) or "REPROV" in str(v) or "CRÍTICO" in str(v): return 'color: #E74C3C; font-weight: bold;'
-                        if "RISCO DE NOTA" in str(v): return 'color: #F1C40F; font-weight: bold;'
-                        return 'color: gray;'
+                        def style_status_anual(val):
+                            if "APROV" in str(val) or "NA MÉDIA" in str(val): return 'color: #2ECC71; font-weight: bold;'
+                            if "EVASÃO" in str(val) or "REPROV" in str(val) or "CRÍTICO" in str(val): return 'color: #E74C3C; font-weight: bold;'
+                            if "RISCO DE NOTA" in str(val): return 'color: #F1C40F; font-weight: bold;'
+                            return 'color: gray;'
 
-                    def formatar_rec(val):
-                        if pd.isna(val) or val < 0 or val == 0: return "-"
-                        return f"{val:.1f}"
+                        def formatar_rec(val):
+                            if pd.isna(val) or val < 0 or val == 0: return "-"
+                            return f"{val:.1f}"
 
-                    def formatar_media(val):
-                        if pd.isna(val) or val == 0: return "-"
-                        return f"{val:.1f}"
+                        def formatar_media(val):
+                            if pd.isna(val) or val == 0: return "-"
+                            return f"{val:.1f}"
 
-                    st.dataframe(
-                        pivot_exibir[['P', 'NOME_ALUNO', 
-                               'MEDIA_FINAL_I Trimestre', 'NOTA_REC_I Trimestre',
-                               'MEDIA_FINAL_II Trimestre', 'NOTA_REC_II Trimestre',
-                               'MEDIA_FINAL_III Trimestre', 'NOTA_REC_III Trimestre',
-                               'Σ', 'RF', 'FALTAS', 'SITUAÇÃO']]
-                        .style.map(style_status_anual, subset=['SITUAÇÃO'])
-                        .format(formatar_media, subset=['MEDIA_FINAL_I Trimestre', 'MEDIA_FINAL_II Trimestre', 'MEDIA_FINAL_III Trimestre'])
-                        .format(formatar_rec, subset=['NOTA_REC_I Trimestre', 'NOTA_REC_II Trimestre', 'NOTA_REC_III Trimestre', 'RF']),
-                        use_container_width=True, hide_index=True,
-                        column_config={
-                            "P": st.column_config.TextColumn("P", width="small", help="Perfil do Aluno"),
-                            "NOME_ALUNO": st.column_config.TextColumn("Estudante", width="medium"),
-                            "MEDIA_FINAL_I Trimestre": st.column_config.TextColumn("I", width="small"),
-                            "NOTA_REC_I Trimestre": st.column_config.TextColumn("R1", width="small"),
-                            "MEDIA_FINAL_II Trimestre": st.column_config.TextColumn("II", width="small"),
-                            "NOTA_REC_II Trimestre": st.column_config.TextColumn("R2", width="small"),
-                            "MEDIA_FINAL_III Trimestre": st.column_config.TextColumn("III", width="small"),
-                            "NOTA_REC_III Trimestre": st.column_config.TextColumn("R3", width="small"),
-                            "Σ": st.column_config.ProgressColumn("Σ (Soma)", help=f"Soma acumulada (Meta parcial: {meta_acumulada_parcial:.1f} pts)", format="%.1f", min_value=0.0, max_value=meta_acumulada_parcial if meta_acumulada_parcial > 0 else 18.0),
-                            "RF": st.column_config.TextColumn("RF", width="small", help="Recuperação Final"),
-                            "FALTAS": st.column_config.ProgressColumn("Faltas", help=f"Limite máximo: {limite_faltas}", format="%d", min_value=0, max_value=max(limite_faltas, 1)),
-                            "SITUAÇÃO": st.column_config.TextColumn("Status", width="medium")
-                        }
-                    )
-                    
-                    st.caption(f"📌 **Legenda:** I, II, III (Médias) | R1, R2, R3 (Recuperações) | Σ (Soma Parcial / Meta: **{meta_acumulada_parcial:.1f}** pts) | Limite Faltas: **{limite_faltas}**.")
+                        st.dataframe(
+                            pivot_exibir[['P', 'NOME_ALUNO', 
+                                   'MEDIA_FINAL_I Trimestre', 'NOTA_REC_I Trimestre',
+                                   'MEDIA_FINAL_II Trimestre', 'NOTA_REC_II Trimestre',
+                                   'MEDIA_FINAL_III Trimestre', 'NOTA_REC_III Trimestre',
+                                   'Σ', 'RF', 'FALTAS', 'SITUAÇÃO']]
+                            .style.map(style_status_anual, subset=['SITUAÇÃO'])
+                            .format(formatar_media, subset=['MEDIA_FINAL_I Trimestre', 'MEDIA_FINAL_II Trimestre', 'MEDIA_FINAL_III Trimestre'])
+                            .format(formatar_rec, subset=['NOTA_REC_I Trimestre', 'NOTA_REC_II Trimestre', 'NOTA_REC_III Trimestre', 'RF']),
+                            use_container_width=True, hide_index=True,
+                            column_config={
+                                "P": st.column_config.TextColumn("P", width="small", help="Perfil do Aluno"),
+                                "NOME_ALUNO": st.column_config.TextColumn("Estudante", width="medium"),
+                                "MEDIA_FINAL_I Trimestre": st.column_config.TextColumn("I", width="small"),
+                                "NOTA_REC_I Trimestre": st.column_config.TextColumn("R1", width="small"),
+                                "MEDIA_FINAL_II Trimestre": st.column_config.TextColumn("II", width="small"),
+                                "NOTA_REC_II Trimestre": st.column_config.TextColumn("R2", width="small"),
+                                "MEDIA_FINAL_III Trimestre": st.column_config.TextColumn("III", width="small"),
+                                "NOTA_REC_III Trimestre": st.column_config.TextColumn("R3", width="small"),
+                                "Σ": st.column_config.ProgressColumn("Σ (Soma)", help=f"Soma acumulada (Meta parcial: {meta_acumulada_parcial:.1f} pts)", format="%.1f", min_value=0.0, max_value=meta_acumulada_parcial if meta_acumulada_parcial > 0 else 18.0),
+                                "RF": st.column_config.TextColumn("RF", width="small", help="Recuperação Final"),
+                                "FALTAS": st.column_config.ProgressColumn("Faltas", help=f"Limite máximo: {limite_faltas}", format="%d", min_value=0, max_value=max(limite_faltas, 1)),
+                                "SITUAÇÃO": st.column_config.TextColumn("Status", width="medium")
+                            }
+                        )
+                        
+                        st.caption(f"📌 **Legenda:** I, II, III (Médias) | R1, R2, R3 (Recuperações) | Σ (Soma Parcial / Meta: **{meta_acumulada_parcial:.1f}** pts) | Limite Faltas: **{limite_faltas}**.")
 
-                    st.markdown("---")
-                    
-                    if st.button("🖨️ GERAR ATA OFICIAL DO CONSELHO DE CLASSE (DOCX)", type="primary", use_container_width=True, key=f"btn_gen_ata_docx_{v}"):
-                        with st.spinner("Compilando documento oficial da Ata..."):
-                            dados_ata_export = []
-                            for _, r_p in pivot.iterrows():
-                                dados_ata_export.append({
-                                    "nome": r_p.get('NOME_ALUNO', 'Estudante'),
-                                    "soma": f"{util.sosa_to_float(r_p.get('Σ', 0)):.1f}",
-                                    "media_parcial": f"{util.sosa_to_float(r_p.get('MÉDIA_PARCIAL', 0)):.1f}",
-                                    "faltas": str(r_p.get('FALTAS', 0)),
-                                    "status": str(r_p.get('SITUAÇÃO', 'N/A'))
-                                })
+                        st.markdown("---")
+                        
+                        if st.button("🖨️ GERAR ATA OFICIAL DO CONSELHO DE CLASSE (DOCX)", type="primary", use_container_width=True, key=f"btn_gen_ata_docx_{v}"):
+                            with st.spinner("Compilando documento oficial da Ata..."):
+                                dados_ata_export = []
+                                for _, r_p in pivot.iterrows():
+                                    dados_ata_export.append({
+                                        "nome": r_p.get('NOME_ALUNO', 'Estudante'),
+                                        "soma": f"{util.sosa_to_float(r_p.get('Σ', 0)):.1f}",
+                                        "media_parcial": f"{util.sosa_to_float(r_p.get('MÉDIA_PARCIAL', 0)):.1f}",
+                                        "faltas": str(r_p.get('FALTAS', 0)),
+                                        "status": str(r_p.get('SITUAÇÃO', 'N/A'))
+                                    })
+                                
+                                info_ata = {"turma": turma_sel, "trimestres_ativos": trimestres_ativos}
+                                nome_arq_ata = f"ATA_CONSELHO_{turma_sel.replace(' ', '')}_2026"
+                                
+                                doc_stream = exporter.gerar_docx_etiquetas_notas(nome_arq_ata, dados_ata_export, info_ata)
+                                link_doc = db.subir_e_converter_para_google_docs(doc_stream, nome_arq_ata, trimestre="Conselho", categoria=turma_sel, modo="PLANEJAMENTO")
+                                
+                                if "https" in link_doc:
+                                    st.success("✅ Ata do Conselho gerada com sucesso!")
+                                    st.link_button("📂 ABRIR ATA OFICIAL NO DRIVE", link_doc, type="primary", use_container_width=True)
+                                    st.balloons()
+                                else: st.error(f"Erro ao salvar no Drive: {link_doc}")
+
+                    # ==============================================================
+                    # VISÃO 2: SIMULADOR PREDITIVO DE METAS PARA O III TRIMESTRE
+                    # ==============================================================
+                    else:
+                        st.markdown("### 🔮 Cockpit Preditivo de Metas para o III Trimestre")
+                        st.caption(f"Projeção individual e coletiva para a aprovação regimental de **18,0 pontos** (Média 6,0 x 3 trimestres).")
+
+                        # Painel de Simulação de Cenários Interativos
+                        with st.container(border=True):
+                            c_sim1, c_sim2 = st.columns([1.5, 2])
                             
-                            info_ata = {"turma": turma_sel, "trimestres_ativos": trimestres_ativos}
-                            nome_arq_ata = f"ATA_CONSELHO_{turma_sel.replace(' ', '')}_2026"
+                            cenario_bonus_sim = c_sim1.segmented_control(
+                                "⭐ Simular Bônus Atitudinal / Refacção no III Tri:",
+                                ["0,0 pts (Padrão)", "+0,5 pts (Refacção/Atitude)", "+1,0 pt (Engajamento Máximo)"],
+                                default="0,0 pts (Padrão)",
+                                key=f"seg_bonus_sim_{v}"
+                            )
+                            bonus_sim_val = 0.0
+                            if "+0,5" in str(cenario_bonus_sim): bonus_sim_val = 0.5
+                            elif "+1,0" in str(cenario_bonus_sim): bonus_sim_val = 1.0
+
+                            c_sim2.info(f"💡 **Simulação Ativa:** Com o bônus projetado de **+{bonus_sim_val:.1f} pts**, a nota exigida na avaliação principal do III Tri diminui proporcionalmente.")
+
+                        # Cálculo de Metas Preditivas
+                        dados_preditivos = []
+                        cnt_aprov_antecipado = 0
+                        cnt_meta_tranquila = 0
+                        cnt_meta_moderada = 0
+                        cnt_meta_alta = 0
+                        cnt_risco_rec_final = 0
+
+                        for _, r_al in pivot.iterrows():
+                            id_al_p = db.limpar_id(r_al.get('ID_ALUNO', ''))
+                            nome_al_p = str(r_al.get('NOME_ALUNO', 'Estudante'))
+                            perfil_icon_p = str(r_al.get('P', '👤'))
+                            faltas_al_p = int(r_al.get('FALTAS', 0))
+
+                            t1_val = util.sosa_to_float(r_al.get("MEDIA_FINAL_I Trimestre", 0.0))
+                            t2_val = util.sosa_to_float(r_al.get("MEDIA_FINAL_II Trimestre", 0.0))
+                            soma_1_2 = t1_val + t2_val
+
+                            # Meta exata para atingir 18.0 pontos no total do ano
+                            meta_bruta_iii = max(0.0, 18.0 - soma_1_2)
+                            meta_ajustada_sim = max(0.0, meta_bruta_iii - bonus_sim_val)
+                            meta_ajustada_arred = round(meta_ajustada_sim * 2) / 2
+
+                            if soma_1_2 >= 18.0:
+                                status_pred = "🟢 APROVADO ANTECIPADO"
+                                cnt_aprov_antecipado += 1
+                                precisa_exib = "0,0 pts (Garantido)"
+                            elif meta_ajustada_arred <= 4.0:
+                                status_pred = "🟢 META TRANQUILA (≤ 4.0)"
+                                cnt_meta_tranquila += 1
+                                precisa_exib = f"{meta_ajustada_arred:.1f} pts"
+                            elif meta_ajustada_arred <= 6.5:
+                                status_pred = "🟡 META MODERADA (4.1 a 6.5)"
+                                cnt_meta_moderada += 1
+                                precisa_exib = f"{meta_ajustada_arred:.1f} pts"
+                            elif meta_ajustada_arred <= 9.9:
+                                status_pred = "🟠 META ALTA (6.6 a 9.9)"
+                                cnt_meta_alta += 1
+                                precisa_exib = f"{meta_ajustada_arred:.1f} pts"
+                            else:
+                                status_pred = "🔴 RISCO DE REC. FINAL (≥ 10.0)"
+                                cnt_risco_rec_final += 1
+                                precisa_exib = f"{meta_ajustada_arred:.1f} pts (Crítico)"
+
+                            dados_preditivos.append({
+                                "ID": id_al_p,
+                                "P": perfil_icon_p,
+                                "Estudante": nome_al_p,
+                                "I Tri": t1_val,
+                                "II Tri": t2_val,
+                                "Σ (I + II Tri)": soma_1_2,
+                                "🎯 Precisa no III Tri": meta_ajustada_arred,
+                                "Meta Exibição": precisa_exib,
+                                "Status Preditivo": status_pred,
+                                "Faltas": faltas_al_p
+                            })
+
+                        # Métricas do Cockpit Preditivo
+                        with st.container(border=True):
+                            st.markdown("##### 📊 Panorama Preditivo da Classe para o III Trimestre")
+                            k_p1, k_p2, k_p3, k_p4, k_p5 = st.columns(5)
+                            k_p1.metric("🟢 Aprovados Antecipados", cnt_aprov_antecipado, f"Soma I+II ≥ 18.0")
+                            k_p2.metric("🟢 Meta Tranquila", cnt_meta_tranquila, f"Precisa ≤ 4.0")
+                            k_p3.metric("🟡 Meta Moderada", cnt_meta_moderada, f"Precisa 4.1 a 6.5")
+                            k_p4.metric("🟠 Meta Alta", cnt_meta_alta, f"Precisa 6.6 a 9.9")
+                            k_p5.metric("🔴 Risco Rec. Final", cnt_risco_rec_final, f"Precisa ≥ 10.0", delta_color="inverse" if cnt_risco_rec_final > 0 else "normal")
+
+                        st.markdown("---")
+
+                        # Filtro de Situação Preditiva
+                        flt_pred = st.pills(
+                            "🔍 Filtrar por Meta do III Tri:",
+                            ["Todos", "🟢 Aprovados Antecipados", "🟢 Meta Tranquila (≤ 4.0)", "🟡 Meta Moderada (4.1 a 6.5)", "🟠 Meta Alta (6.6 a 9.9)", "🔴 Risco de Rec. Final (≥ 10.0)"],
+                            default="Todos",
+                            key=f"pills_flt_pred_{v}"
+                        )
+
+                        df_pred_exibir = pd.DataFrame(dados_preditivos)
+                        if flt_pred == "🟢 Aprovados Antecipados":
+                            df_pred_exibir = df_pred_exibir[df_pred_exibir['Status Preditivo'].str.contains("ANTECIPADO")]
+                        elif flt_pred == "🟢 Meta Tranquila (≤ 4.0)":
+                            df_pred_exibir = df_pred_exibir[df_pred_exibir['Status Preditivo'].str.contains("TRANQUILA")]
+                        elif flt_pred == "🟡 Meta Moderada (4.1 a 6.5)":
+                            df_pred_exibir = df_pred_exibir[df_pred_exibir['Status Preditivo'].str.contains("MODERADA")]
+                        elif flt_pred == "🟠 Meta Alta (6.6 a 9.9)":
+                            df_pred_exibir = df_pred_exibir[df_pred_exibir['Status Preditivo'].str.contains("ALTA")]
+                        elif flt_pred == "🔴 Risco de Rec. Final (≥ 10.0)":
+                            df_pred_exibir = df_pred_exibir[df_pred_exibir['Status Preditivo'].str.contains("RISCO")]
+
+                        def style_status_preditivo(val):
+                            if "ANTECIPADO" in str(val) or "TRANQUILA" in str(val): return 'color: #2ECC71; font-weight: bold;'
+                            if "MODERADA" in str(val): return 'color: #F1C40F; font-weight: bold;'
+                            if "ALTA" in str(val): return 'color: #E67E22; font-weight: bold;'
+                            if "RISCO" in str(val): return 'color: #E74C3C; font-weight: bold;'
+                            return 'color: gray;'
+
+                        st.dataframe(
+                            df_pred_exibir[['P', 'Estudante', 'I Tri', 'II Tri', 'Σ (I + II Tri)', '🎯 Precisa no III Tri', 'Status Preditivo', 'Faltas']]
+                            .style.map(style_status_preditivo, subset=['Status Preditivo'])
+                            .format({'I Tri': '{:.1f}', 'II Tri': '{:.1f}', 'Σ (I + II Tri)': '{:.1f}', '🎯 Precisa no III Tri': '{:.1f}'}),
+                            use_container_width=True, hide_index=True,
+                            column_config={
+                                "P": st.column_config.TextColumn("P", width="small"),
+                                "Estudante": st.column_config.TextColumn("Estudante", width="medium"),
+                                "I Tri": st.column_config.NumberColumn("I Tri", format="%.1f", width="small"),
+                                "II Tri": st.column_config.NumberColumn("II Tri", format="%.1f", width="small"),
+                                "Σ (I + II Tri)": st.column_config.ProgressColumn("Soma I+II", format="%.1f", min_value=0.0, max_value=20.0, help="Soma dos dois primeiros trimestres (Meta anual: 18.0)"),
+                                "🎯 Precisa no III Tri": st.column_config.NumberColumn("🎯 Meta III Tri", format="%.1f", help="Nota mínima exigida no III Trimestre para atingir 18.0"),
+                                "Status Preditivo": st.column_config.TextColumn("Situação Projetada", width="medium"),
+                                "Faltas": st.column_config.NumberColumn("Faltas", width="small")
+                            }
+                        )
+
+                        st.markdown("---")
+
+                        # Ações Rápidas do Simulador Preditivo
+                        c_act_pred1, c_act_pred2 = st.columns([1.5, 1.5])
+
+                        with c_act_pred1.popover("📱 Disparar Alerta de Metas para Pais (WhatsApp)", use_container_width=True):
+                            st.caption("Selecione o estudante para abrir o extrato preditivo pronto para cópia:")
+                            aluno_zap_sel = st.selectbox("Selecione o Estudante:", [r['Estudante'] for r in dados_preditivos], key=f"sel_al_zap_meta_{v}")
                             
-                            doc_stream = exporter.gerar_docx_etiquetas_notas(nome_arq_ata, dados_ata_export, info_ata)
-                            link_doc = db.subir_e_converter_para_google_docs(doc_stream, nome_arq_ata, trimestre="Conselho", categoria=turma_sel, modo="PLANEJAMENTO")
-                            
-                            if "https" in link_doc:
-                                st.success("✅ Ata do Conselho gerada com sucesso!")
-                                st.link_button("📂 ABRIR ATA OFICIAL NO DRIVE", link_doc, type="primary", use_container_width=True)
-                                st.balloons()
-                            else: st.error(f"Erro ao salvar no Drive: {link_doc}")
+                            if aluno_zap_sel:
+                                r_zap_data = next(r for r in dados_preditivos if r['Estudante'] == aluno_zap_sel)
+                                if st.button("📱 ABRIR TEXTO PARA WHATSAPP", type="primary", use_container_width=True, key=f"btn_open_zap_meta_dialog_{v}"):
+                                    dialog_zap_metas_iii(
+                                        nome_aluno=r_zap_data['Estudante'],
+                                        turma=turma_sel,
+                                        soma_1_2=r_zap_data['Σ (I + II Tri)'],
+                                        meta_iii=r_zap_data['🎯 Precisa no III Tri'],
+                                        status_meta=r_zap_data['Status Preditivo'],
+                                        faltas_aluno=r_zap_data['Faltas']
+                                    )
+
+                        if c_act_pred2.button("🖨️ EXPORTAR RELATÓRIO PREDITIVO DE METAS (DOCX)", type="primary", use_container_width=True, key=f"btn_docx_pred_metas_{v}"):
+                            with st.spinner("Compilando Relatório Preditivo de Metas para o Conselho..."):
+                                dados_docx_pred = []
+                                for r_pred in dados_preditivos:
+                                    dados_docx_pred.append({
+                                        "nome": r_pred['Estudante'],
+                                        "vistos": f"I Tri: {r_pred['I Tri']:.1f}",
+                                        "teste": f"II Tri: {r_pred['II Tri']:.1f}",
+                                        "prova": f"Soma: {r_pred['Σ (I + II Tri)']:.1f}",
+                                        "bonus": f"{bonus_sim_val:+.1f}",
+                                        "media": f"Meta: {r_pred['🎯 Precisa no III Tri']:.1f}",
+                                        "status": f"{r_pred['Status Preditivo']} ({r_pred['Faltas']} faltas)"
+                                    })
+                                
+                                info_doc_pred = {"turma": turma_sel, "trimestre": "PROJEÇÃO III TRIMESTRE - CONSELHO"}
+                                nome_arq_pred = f"RELATORIO_PREDITIVO_METAS_{turma_sel.replace(' ','_')}_2026"
+                                
+                                doc_stream_pred = exporter.gerar_docx_etiquetas_notas(nome_arq_pred, dados_docx_pred, info_doc_pred)
+                                link_doc_pred = db.subir_e_converter_para_google_docs(doc_stream_pred, nome_arq_pred, trimestre="Conselho", categoria=turma_sel, modo="PLANEJAMENTO")
+                                
+                                if "https" in link_doc_pred:
+                                    st.success("✅ Relatório Preditivo de Metas gerado no Drive!")
+                                    st.link_button("📂 ABRIR RELATÓRIO PREDITIVO NO DRIVE", link_doc_pred, type="primary", use_container_width=True)
+                                    st.balloons()
+                                else: st.error(f"Erro ao salvar no Drive: {link_doc_pred}")
 
             renderizar_boletim_anual_fragmento()
 
