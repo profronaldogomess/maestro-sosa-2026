@@ -108,6 +108,122 @@ def adicionar_box_imagem_word(doc, legenda_prompt="ESPAÇO PARA ILUSTRAÇÃO / D
     
     doc.add_paragraph()
 
+def renderizar_tabela_markdown_no_word(doc, linhas_tabela):
+    """
+    SOSA V2026: Converte linhas brutas de tabela Markdown (| Coluna 1 | Coluna 2 |)
+    em uma tabela nativa oficial do Word com cabeçalho azul e bordas limpas.
+    """
+    if not linhas_tabela: return
+    
+    linhas_processadas = []
+    for linha in linhas_tabela:
+        linha_limpa = linha.strip()
+        if not linha_limpa: continue
+        # Ignora linhas divisórias como | :--- | :---: |
+        if re.match(r'^\|?\s*:?-+:?\s*(\|?\s*:?-+:?\s*)*\|?$', linha_limpa):
+            continue
+        celulas = [c.strip() for c in linha_limpa.strip('|').split('|')]
+        if any(c for c in celulas):
+            linhas_processadas.append(celulas)
+            
+    if not linhas_processadas: return
+    
+    num_cols = max(len(r) for r in linhas_processadas)
+    num_rows = len(linhas_processadas)
+    
+    table_word = doc.add_table(rows=num_rows, cols=num_cols)
+    table_word.style = 'Table Grid'
+    table_word.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    
+    for r_idx, row_data in enumerate(linhas_processadas):
+        set_row_height(table_word.rows[r_idx], 18)
+        for c_idx, cell_text in enumerate(row_data):
+            if c_idx < num_cols:
+                cell = table_word.cell(r_idx, c_idx)
+                cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+                p = cell.paragraphs[0]
+                p.paragraph_format.space_before = Pt(2)
+                p.paragraph_format.space_after = Pt(2)
+                
+                if r_idx == 0:
+                    set_cell_background(cell, "003366")
+                    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    run = p.add_run(sanitizar_xml_str(cell_text))
+                    run.bold = True
+                    run.font.size = Pt(8.5)
+                    run.font.color.rgb = RGBColor(255, 255, 255)
+                else:
+                    if r_idx % 2 == 0:
+                        set_cell_background(cell, "F8FAFC")
+                    p.alignment = WD_ALIGN_PARAGRAPH.LEFT if c_idx == 0 else WD_ALIGN_PARAGRAPH.CENTER
+                    run = p.add_run(sanitizar_xml_str(cell_text))
+                    run.font.size = Pt(8.5)
+    doc.add_paragraph()
+
+def renderizar_conteudo_com_tabelas(doc, texto_bruto):
+    """Processa o texto alternando entre parágrafos normais e tabelas Markdown nativas."""
+    linhas = sanitizar_xml_str(str(texto_bruto)).split('\n')
+    buffer_tabela = []
+    em_tabela = False
+    
+    for linha in linhas:
+        l_s = linha.strip()
+        
+        # Verifica se a linha faz parte de uma tabela Markdown
+        if l_s.startswith('|') and l_s.endswith('|'):
+            em_tabela = True
+            buffer_tabela.append(l_s)
+            continue
+        else:
+            if em_tabela:
+                renderizar_tabela_markdown_no_word(doc, buffer_tabela)
+                buffer_tabela = []
+                em_tabela = False
+                
+        if not l_s: continue
+        
+        if "[" in l_s and "PROMPT IMAGEM" in l_s.upper():
+            desc_p = re.sub(r'\[\s*PROMPT IMAGEM:\s*|\s*\]', '', l_s, flags=re.IGNORECASE)
+            adicionar_box_imagem_word(doc, desc_p)
+            continue
+            
+        p = doc.add_paragraph()
+        p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+        p.paragraph_format.space_after = Pt(4)
+        p.paragraph_format.line_spacing = 1.15
+
+        if l_s.upper().startswith("CONCEITOS CHAVE") or l_s.upper().startswith("DICA"):
+            run_c = p.add_run("📌 " + l_s)
+            run_c.bold = True
+            run_c.font.size = Pt(9.5)
+            run_c.font.color.rgb = RGBColor(0, 51, 102)
+            continue
+
+        if l_s.upper().startswith("QUESTÃO") or l_s.upper().startswith("ITEM"):
+            match = re.match(r"^(QUEST[AÃ]O\s*\d+|ITEM\s*\d+)(\s*\(.*?\))?([\s\.\-\:]+)(.*)", l_s, re.IGNORECASE)
+            if match:
+                rotulo = f"{match.group(1).upper()}{match.group(2) if match.group(2) else ''}{match.group(3)}"
+                run_r = p.add_run(rotulo)
+                run_r.bold = True
+                run_r.font.size = Pt(10.0)
+                run_r.font.color.rgb = RGBColor(0, 51, 102)
+                adicionar_texto_formatado(p, match.group(4).strip())
+                continue
+
+        if re.match(r'^[A-E][\)\.]', l_s):
+            p.paragraph_format.left_indent = Inches(0.15)
+            letra_match = re.match(r'^([A-E][\)\.])(.*)', l_s)
+            if letra_match:
+                run_letra = p.add_run(letra_match.group(1))
+                run_letra.bold = True
+                adicionar_texto_formatado(p, letra_match.group(2))
+                continue
+        
+        adicionar_texto_formatado(p, l_s)
+        
+    if em_tabela and buffer_tabela:
+        renderizar_tabela_markdown_no_word(doc, buffer_tabela)
+
 def configurar_cabecalho_mestre(doc, info, tipo_label, mostrar_nota=False):
     """Gera o cabeçalho executivo oficial da Prefeitura e Escola de Itabuna"""
     table = doc.add_table(rows=3, cols=5)
@@ -180,7 +296,7 @@ def configurar_cabecalho_mestre(doc, info, tipo_label, mostrar_nota=False):
     return table
 
 # ==============================================================================
-# 2. MATERIAL DO ALUNO REGULAR
+# 2. MATERIAL DO ALUNO REGULAR (COM PARSER DE TABELAS)
 # ==============================================================================
 def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     file_stream = io.BytesIO()
@@ -202,35 +318,7 @@ def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     cols.set(qn('w:num'), '2')
     cols.set(qn('w:space'), '420')
 
-    linhas = sanitizar_xml_str(str(conteudo)).split('\n')
-    for linha in linhas:
-        l_s = linha.strip()
-        if not l_s: continue
-        
-        if "[" in l_s and "PROMPT IMAGEM" in l_s.upper():
-            desc_p = re.sub(r'\[\s*PROMPT IMAGEM:\s*|\s*\]', '', l_s, flags=re.IGNORECASE)
-            adicionar_box_imagem_word(doc, desc_p)
-            continue
-            
-        p = doc.add_paragraph()
-        p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-        p.paragraph_format.space_after = Pt(4)
-        p.paragraph_format.line_spacing = 1.15
-
-        if any(x in l_s.upper() for x in ["ATIVIDADE DE", "JORNADA", "HISTÓRIA", "MATEMÁTICA", "AULA"]):
-            run = p.add_run(l_s.replace('**', ''))
-            run.bold = True
-            run.font.color.rgb = RGBColor(0, 51, 102)
-            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        elif "QUESTÃO" in l_s.upper():
-            match = re.match(r"^(QUEST[AÃ]O\s*\d+)([\.\s:]+)(.*)", l_s, re.IGNORECASE)
-            if match:
-                run_r = p.add_run(f"{match.group(1).upper()}. ")
-                run_r.bold = True
-                adicionar_texto_formatado(p, match.group(3).strip())
-            else: adicionar_texto_formatado(p, l_s)
-        else:
-            adicionar_texto_formatado(p, l_s)
+    renderizar_conteudo_com_tabelas(doc, conteudo)
 
     doc.save(file_stream)
     file_stream.seek(0)
@@ -251,76 +339,27 @@ def gerar_docx_pei_v25(titulo_doc, conteudo, info):
         style.font.name = 'Arial'
         style.font.size = Pt(10)
 
-        # 1. Sanitização de Caracteres de Controle e Saudações
         conteudo_limpo = sanitizar_xml_str(str(conteudo)).strip()
         conteudo_limpo = re.sub(r'^(?:Olá|Como especialista|Como profissional|Prezado|Segue).*?\n\n', '', conteudo_limpo, flags=re.IGNORECASE | re.DOTALL).strip()
 
-        # 2. Cabeçalho Mestre Oficial
         label_pei = "AVALIAÇÃO ADAPTADA (PEI NÍVEL 1)" if "N1" in titulo_doc.upper() or "NIVEL_1" in titulo_doc.upper() else "AVALIAÇÃO ADAPTADA (PEI NÍVEL 2)"
         configurar_cabecalho_mestre(doc, info, label_pei, mostrar_nota=True)
         doc.add_paragraph()
 
-        # 3. Contagem das Questões
         num_total_q = len(re.findall(r'(?i)(?:QUEST[AÃ]O\s*(?:PEI\s*)?|Q)\s*\d+', conteudo_limpo))
         if num_total_q == 0: 
             num_total_q = int(helper_sosa_float(info.get('qtd', 10)))
 
-        # 4. Cartão-Resposta Fiducial de 3 Colunas (A, B, C)
         adicionar_cartao_resposta_fiducial_word(doc, num_total_q, is_pei=True)
         doc.add_paragraph()
 
-        # 5. Enunciados das Questões em Coluna Dupla
         new_section = doc.add_section(WD_SECTION.CONTINUOUS)
         sectPr = new_section._sectPr
         cols = sectPr.xpath('./w:cols')[0]
         cols.set(qn('w:num'), '2')
         cols.set(qn('w:space'), '420')
 
-        linhas = conteudo_limpo.split('\n')
-        for linha in linhas:
-            l_s = linha.strip()
-            if not l_s: continue
-
-            if "[" in l_s and "PROMPT IMAGEM" in l_s.upper():
-                desc_p = re.sub(r'\[\s*PROMPT IMAGEM:\s*|\s*\]', '', l_s, flags=re.IGNORECASE)
-                adicionar_box_imagem_word(doc, desc_p)
-                continue
-
-            p = doc.add_paragraph()
-            p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-            p.paragraph_format.space_after = Pt(4)
-            p.paragraph_format.line_spacing = 1.15
-
-            secoes_pei = ["PARA LEMBRAR", "OBJETIVO", "INSTRUÇÕES", "PASSO A PASSO", "DICA MESTRA"]
-            if any(x in l_s.upper() for x in secoes_pei):
-                p.paragraph_format.space_before = Pt(4)
-                txt_limpo = l_s.replace("[", "").replace("]", "").replace(":", "")
-                run = p.add_run(f"📌 {txt_limpo}")
-                run.bold = True
-                run.font.size = Pt(9.5)
-                run.font.color.rgb = RGBColor(41, 98, 255)
-                p.alignment = WD_ALIGN_PARAGRAPH.LEFT
-            elif re.match(r"^(?:QUEST[AÃ]O\s*(?:PEI\s*)?|Q)\s*\d+", l_s, re.IGNORECASE):
-                match = re.match(r"^((?:QUEST[AÃ]O\s*(?:PEI\s*)?|Q)\s*\d+)([\.\s:\-]+)(.*)", l_s, re.IGNORECASE)
-                if match:
-                    q_num_str = re.sub(r'\D', '', match.group(1))
-                    run_r = p.add_run(f"QUESTÃO {int(q_num_str):02d} - ")
-                    run_r.bold = True
-                    run_r.font.size = Pt(10)
-                    run_r.font.color.rgb = RGBColor(0, 51, 102)
-                    adicionar_texto_formatado(p, match.group(3).strip())
-                else: 
-                    adicionar_texto_formatado(p, l_s)
-            elif re.match(r'^[A-C][\)\.]', l_s):
-                p.paragraph_format.left_indent = Inches(0.15)
-                letra_match = re.match(r'^([A-C][\)\.])(.*)', l_s)
-                if letra_match:
-                    run_letra = p.add_run(letra_match.group(1))
-                    run_letra.bold = True
-                    adicionar_texto_formatado(p, letra_match.group(2))
-                    continue
-            else:
-                adicionar_texto_formatado(p, l_s)
+        renderizar_conteudo_com_tabelas(doc, conteudo_limpo)
 
         doc.save(file_stream)
         file_stream.seek(0)
@@ -363,45 +402,18 @@ def gerar_docx_professor_v25(titulo_doc, conteudo, info):
     for row in header_table.rows: set_row_height(row, 20)
     doc.add_paragraph()
 
-    linhas = sanitizar_xml_str(str(conteudo)).split('\n')
-    for linha in linhas:
-        l_s = linha.strip()
-        if not l_s: continue
-        p = doc.add_paragraph()
-        p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-        p.paragraph_format.space_after = Pt(3)
-
-        if re.search(r"(?i)QUEST[AÃ]O\s*(?:PEI\s*)?\d+\s*[:\-]\s*[A-E]$|^\d+[\.\s\-]+[A-E]$", l_s):
-            run = p.add_run(f"✅ {l_s}")
-            run.font.bold, run.font.size = True, Pt(10.5)
-            run.font.color.rgb = RGBColor(0, 128, 0)
-            continue
-
-        if any(x in l_s.upper() for x in ["JUSTIFICATIVA", "PERÍCIA", "LACUNA", "DISTRATORES", "DESCRITOR"]):
-            p.paragraph_format.left_indent = Inches(0.15)
-            if "DESCRITOR" in l_s.upper() or "SAEB" in l_s.upper():
-                run_d = p.add_run("🆔 ")
-                run_d.font.size = Pt(10)
-            elif "DISTRATORES" in l_s.upper():
-                run_d = p.add_run("🧠 ")
-                run_d.font.size = Pt(10)
-            adicionar_texto_formatado(p, l_s)
-            continue
-
-        adicionar_texto_formatado(p, l_s)
+    renderizar_conteudo_com_tabelas(doc, conteudo)
 
     doc.save(file_stream)
     file_stream.seek(0)
     return file_stream
 
 # ==============================================================================
-# 5. PROVA OFICIAL (PADRÃO ENEM / SAEB)
+# 5. PROVA OFICIAL (PADRÃO ENEM / SAEB COM PARSER DE TABELAS)
 # ==============================================================================
 
 def adicionar_cartao_resposta_fiducial_word(doc, num_total_q, is_pei=False):
-    """
-    SOSA V2026: Cartão-Resposta com Colunas Travadas em 1,0 cm (Cm(1.0)) e 4 Marcadores Fiduciais (■).
-    """
+    """Cartão-Resposta com Colunas Travadas em 1,0 cm (Cm(1.0)) e 4 Marcadores Fiduciais (■)."""
     container_table = doc.add_table(rows=3, cols=3)
     container_table.style = 'Table Grid'
     container_table.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -413,7 +425,6 @@ def adicionar_cartao_resposta_fiducial_word(doc, num_total_q, is_pei=False):
     set_row_height(container_table.rows[0], 28)
     set_row_height(container_table.rows[2], 28)
 
-    # 4 Quadrados Pretos Fiduciais nos Cantos (■)
     for r_idx, c_idx in [(0, 0), (0, 2), (2, 0), (2, 2)]:
         c = container_table.cell(r_idx, c_idx)
         set_cell_background(c, "000000")
@@ -423,7 +434,6 @@ def adicionar_cartao_resposta_fiducial_word(doc, num_total_q, is_pei=False):
         run.font.color.rgb = RGBColor(0, 0, 0)
         run.font.size = Pt(16)
 
-    # Título do Cartão (Topo)
     c_title = container_table.cell(0, 1)
     set_cell_background(c_title, "F1F5F9")
     p_t = c_title.paragraphs[0]
@@ -432,7 +442,6 @@ def adicionar_cartao_resposta_fiducial_word(doc, num_total_q, is_pei=False):
     r_t.font.bold = True
     r_t.font.size = Pt(10.5)
 
-    # Rodapé do Cartão
     c_foot = container_table.cell(2, 1)
     set_cell_background(c_foot, "F8FAFC")
     p_f = c_foot.paragraphs[0]
@@ -442,7 +451,6 @@ def adicionar_cartao_resposta_fiducial_word(doc, num_total_q, is_pei=False):
     r_f.font.bold = True
     r_f.font.color.rgb = RGBColor(100, 116, 139)
 
-    # Célula Central - Grade de Bolinhas
     c_grid = container_table.cell(1, 1)
     col_count = 4 if is_pei else 6
     headers = ["Q", "A", "B", "C"] if is_pei else ["Q", "A", "B", "C", "D", "E"]
@@ -525,8 +533,8 @@ def adicionar_cartao_resposta_fiducial_word(doc, num_total_q, is_pei=False):
 
 def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
     """
-    SOSA V2026.MASTER - GERADOR DE PROVAS E CADERNOS DE RECOMPOSIÇÃO / REVISÃO
-    Unifica automaticamente Guia de Estudo e Questões para garantir folha completa.
+    SOSA V2026.MASTER - GERADOR DE PROVAS COM SUPORTE A TABELAS REAIS DO WORD
+    Converte tabelas Markdown em tabelas oficiais com cabeçalho azul.
     """
     file_stream = io.BytesIO()
     try:
@@ -542,7 +550,6 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         conteudo_ia_limpo = sanitizar_xml_str(str(conteudo_ia))
         is_pei_doc = "PEI" in titulo_doc.upper() or "ADAPTADA" in titulo_doc.upper()
         
-        # 🚨 EXTRAÇÃO COM JUNÇÃO OBRIGATÓRIA DE GUIA DE ESTUDO + QUESTÕES
         corpo_bruto = ""
         if is_pei_doc:
             corpo_bruto = (ai.extrair_tag(conteudo_ia_limpo, "PEI_NIVEL_1") or 
@@ -551,7 +558,6 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         else:
             corpo_bruto = ai.extrair_tag(conteudo_ia_limpo, "ALUNO")
 
-        # Fallback de emergência caso nada seja extraído
         if not corpo_bruto or len(corpo_bruto.strip()) < 10:
             match_primeira_q = re.search(r"(?i)QUESTÃO\s*\d+", conteudo_ia_limpo)
             if match_primeira_q:
@@ -581,7 +587,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         info_cabecalho['valor'] = val_total_str
         info_cabecalho['valor_questao'] = val_q_str
 
-        # 1. CABEÇALHO MESTRE DA ESCOLA
+        # 1. CABEÇALHO MESTRE
         configurar_cabecalho_mestre(doc, info_cabecalho, label_prova, mostrar_nota=True)
         doc.add_paragraph()
 
@@ -618,55 +624,14 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
 
         doc.add_paragraph()
 
-        # 4. ENUNCIADOS E CONCEITOS DAS QUESTÕES EM COLUNA DUPLA
+        # 4. ENUNCIADOS COM PARSER DE TABELAS EM COLUNA DUPLA
         new_section = doc.add_section(WD_SECTION.CONTINUOUS)
         sectPr = new_section._sectPr
         cols = sectPr.xpath('./w:cols')[0]
         cols.set(qn('w:num'), '2')
         cols.set(qn('w:space'), '450')
 
-        for linha in corpo_bruto.split('\n'):
-            l_s = linha.strip()
-            if not l_s: continue
-
-            if "[" in l_s and "PROMPT IMAGEM" in l_s.upper():
-                desc_p = re.sub(r'\[\s*PROMPT IMAGEM:\s*|\s*\]', '', l_s, flags=re.IGNORECASE)
-                adicionar_box_imagem_word(doc, desc_p)
-                continue
-
-            p = doc.add_paragraph()
-            p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-            p.paragraph_format.space_after = Pt(4)
-            p.paragraph_format.line_spacing = 1.15
-            
-            if l_s.upper().startswith("CONCEITOS CHAVE"):
-                run_c = p.add_run("📌 " + l_s)
-                run_c.bold = True
-                run_c.font.size = Pt(10)
-                run_c.font.color.rgb = RGBColor(0, 51, 102)
-                continue
-
-            if l_s.upper().startswith("QUESTÃO") or l_s.upper().startswith("ITEM"):
-                match = re.match(r"^(QUEST[AÃ]O\s*\d+|ITEM\s*\d+)(\s*\(.*?\))?([\s\.\-\:]+)(.*)", l_s, re.IGNORECASE)
-                if match:
-                    rotulo = f"{match.group(1).upper()}{match.group(2) if match.group(2) else ''}{match.group(3)}"
-                    run_r = p.add_run(rotulo)
-                    run_r.bold = True
-                    run_r.font.size = Pt(10.5)
-                    run_r.font.color.rgb = RGBColor(0, 51, 102)
-                    adicionar_texto_formatado(p, match.group(4).strip())
-                    continue
-
-            if re.match(r'^[A-E][\)\.]', l_s):
-                p.paragraph_format.left_indent = Inches(0.15)
-                letra_match = re.match(r'^([A-E][\)\.])(.*)', l_s)
-                if letra_match:
-                    run_letra = p.add_run(letra_match.group(1))
-                    run_letra.bold = True
-                    adicionar_texto_formatado(p, letra_match.group(2))
-                    continue
-            
-            adicionar_texto_formatado(p, l_s)
+        renderizar_conteudo_com_tabelas(doc, corpo_bruto)
 
         doc.save(file_stream)
         file_stream.seek(0)
@@ -674,7 +639,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
     except Exception as e:
         file_stream = io.BytesIO()
         err_doc = Document()
-        err_doc.add_paragraph(f"ERRO NO EXPORTER DE REVISÃO: {sanitizar_xml_str(str(e))}")
+        err_doc.add_paragraph(f"ERRO NO EXPORTER DE PROVA: {sanitizar_xml_str(str(e))}")
         err_doc.save(file_stream)
         file_stream.seek(0)
         return file_stream
