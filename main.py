@@ -4144,7 +4144,7 @@ elif menu == "📸 Scanner de Gabaritos":
 
                                         if "current_scan_res" in st.session_state:
                                             c_badge1, c_badge2 = st.columns([2, 1])
-                                            c_badge1.caption(f"Motor de Leitura: **{st.session_state.get('current_scan_modo', '⚡ Local')}** | Tempo: **<0.2s**")
+                                            c_badge1.caption(f"Motor de Leitura: **🤖 Visão Inteligente Gemini Flash (<1s)** | Custo: **~R$ 0,001**")
                                             
                                             with c_badge2.popover("🔍 Lente Ampliadora de Zoom (Gabarito Alinhado)"):
                                                 st.image(st.session_state.current_scan_img, caption="Gabarito Alinhado pelo Condutor", use_container_width=True)
@@ -4153,16 +4153,30 @@ elif menu == "📸 Scanner de Gabaritos":
                                             dados_pericia = []
                                             for i, lido in enumerate(res_lidas):
                                                 if i < len(gab_alvo):
-                                                    status = "✅ ACERTO" if lido == gab_alvo[i] else ("🚫 DUPLA" if lido == "X" else "❌ ERRO")
-                                                    dados_pericia.append({"Q": f"{i+1:02d}", "Lido": lido, "Status": status, "🧮 Cálculo OK?": True})
+                                                    correta = gab_alvo[i]
+                                                    if lido == correta:
+                                                        status = "✅ ACERTO"
+                                                    elif lido == "X":
+                                                        status = f"🚫 DUPLA (Certo: {correta})"
+                                                    elif lido == "?":
+                                                        status = f"⚪ EM BRANCO (Certo: {correta})"
+                                                    else:
+                                                        status = f"❌ ERRO (Certo: {correta})"
+                                                        
+                                                    dados_pericia.append({
+                                                        "Q": f"{i+1:02d}", 
+                                                        "Lido": lido, 
+                                                        "Status": status, 
+                                                        "🧮 Cálculo OK?": True
+                                                    })
                                             
                                             df_mesa = st.data_editor(
                                                 pd.DataFrame(dados_pericia), hide_index=True, use_container_width=True,
                                                 column_config={
-                                                    "Q": st.column_config.TextColumn(disabled=True), 
-                                                    "Lido": st.column_config.SelectboxColumn("Ajustar", options=["A", "B", "C", "D", "E", "X", "?"], required=True), 
-                                                    "Status": st.column_config.TextColumn(disabled=True),
-                                                    "🧮 Cálculo OK?": st.column_config.CheckboxColumn("Cálculo OK?", default=True, help="Desmarque caso o aluno não tenha apresentado o cálculo no papel (Aplica 50% da nota na questão)")
+                                                    "Q": st.column_config.TextColumn(disabled=True, width="small"), 
+                                                    "Lido": st.column_config.SelectboxColumn("Ajustar", options=["A", "B", "C", "D", "E", "X", "?"], required=True, width="small"), 
+                                                    "Status": st.column_config.TextColumn("Status / Gabarito", disabled=True, width="medium"),
+                                                    "🧮 Cálculo OK?": st.column_config.CheckboxColumn("Cálculo OK?", default=True, help="Desmarque caso o aluno não tenha apresentado o cálculo no papel (Aplica 50% da nota na questão)", width="small")
                                                 },
                                                 key=f"ed_turbo_{v}"
                                             )
@@ -4249,7 +4263,6 @@ elif menu == "📸 Scanner de Gabaritos":
                                                 if "current_scan_modo" in st.session_state:
                                                     del st.session_state.current_scan_modo
                                                 st.rerun()
-
                                     else:
                                         opcoes_letras = ["A", "B", "C", "X", "?"] if is_pei_grading else ["A", "B", "C", "D", "E", "X", "?"]
                                         dados_manual = [{"Q": f"{i+1:02d}", "Gabarito": gab_alvo[i], "Resposta": "?", "Cálculo": True} for i in range(len(gab_alvo))]
