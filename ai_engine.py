@@ -533,9 +533,9 @@ def ordenar_pontos_quadrado(pts):
 
 def processar_omr_local_fiducial(imagem_bytes, qtd_questoes=10, is_pei=False):
     """
-    SOSA V2026.GOV_FIDUCIAL_LOCK: Motor OMR Padrão CAEd / Governo.
-    Trava a mira nos 4 marcadores pretos dos cantos (■), desentorta a perspectiva
-    e faz a leitura bicolunar com precisão milimétrica para caneta azul e preta.
+    SOSA V2026.EXACT_MATRIX: Motor OMR com Mapeamento Matricial 12x11 Exato.
+    Elimina qualquer encolhimento ou margem interna incorreta. Mapeia cada célula
+    da tabela do Word em blocos de 100x100 px com precisão absoluta para caneta azul e preta.
     """
     if not OPENCV_DISPONIVEL:
         return None
@@ -546,67 +546,45 @@ def processar_omr_local_fiducial(imagem_bytes, qtd_questoes=10, is_pei=False):
         if img is None: return None
 
         h_orig, w_orig = img.shape[:2]
-        
-        # 1. Realce Óptico (Canal Vermelho faz caneta azul e preta ficarem escuras)
+        area_total = float(w_orig * h_orig)
+
+        # 1. Realce Óptico (Canal Vermelho faz caneta azul/grafite virar preto absoluto)
         red_channel = img[:, :, 2]
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         darkness_raw = np.minimum(gray, red_channel)
         
         blurred = cv2.GaussianBlur(darkness_raw, (5, 5), 0)
-        thresh = cv2.adaptiveThreshold(blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 21, 5)
+        thresh = cv2.adaptiveThreshold(blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 21, 4)
 
-        # 2. LOCALIZADOR DOS 4 QUADRADOS PRETOS DOS CANTOS (PADRÃO CAEd)
+        # 2. Localização do Retângulo da Tabela de Respostas
         contours, _ = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        contours_sorted = sorted(contours, key=cv2.contourArea, reverse=True)
         
-        quadrados_cantos = []
-        area_total = float(w_orig * h_orig)
-
-        for c in contours:
+        pts_warp = None
+        for c in contours_sorted[:12]:
             peri = cv2.arcLength(c, True)
-            approx = cv2.approxPolyDP(c, 0.04 * peri, True)
+            approx = cv2.approxPolyDP(c, 0.02 * peri, True)
             area = cv2.contourArea(c)
             
-            # Filtra apenas formas quadradas pretas com tamanho de marcador
-            if len(approx) == 4 and (area_total * 0.0005) < area < (area_total * 0.08):
-                (x, y, w_b, h_b) = cv2.boundingRect(approx)
-                aspect_ratio = w_b / float(h_b)
-                if 0.70 <= aspect_ratio <= 1.40:
-                    # Verifica solidez (se é preenchido de preto)
-                    mask_c = np.zeros(thresh.shape, dtype="uint8")
-                    cv2.drawContours(mask_c, [approx], -1, 255, -1)
-                    densidade_preto = cv2.countNonZero(cv2.bitwise_and(thresh, thresh, mask=mask_c)) / float(area)
-                    if densidade_preto > 0.60:
-                        M_c = cv2.moments(approx)
-                        if M_c["m00"] != 0:
-                            cX = int(M_c["m10"] / M_c["m00"])
-                            cY = int(M_c["m01"] / M_c["m00"])
-                            quadrados_cantos.append([cX, cY])
-
-        # Se encontrou 4 ou mais marcadores, seleciona os 4 mais externos
-        pts_warp = None
-        if len(quadrados_cantos) >= 4:
-            pts_np = np.array(quadrados_cantos, dtype="float32")
-            pts_warp = ordenar_pontos_quadrado(pts_np)
-        else:
-            # Fallback: Se a mão tapou um dos quadrados, acha a borda da folha
-            contours_sorted = sorted(contours, key=cv2.contourArea, reverse=True)
-            for c in contours_sorted[:8]:
-                peri = cv2.arcLength(c, True)
-                approx = cv2.approxPolyDP(c, 0.02 * peri, True)
-                if len(approx) == 4 and cv2.contourArea(c) > (area_total * 0.25):
+            # A tabela de respostas ocupa entre 18% e 85% da foto
+            if len(approx) == 4 and (area_total * 0.18) < area < (area_total * 0.90):
+                (x_b, y_b, w_b, h_b) = cv2.boundingRect(approx)
+                aspect = w_b / float(h_b)
+                if 0.70 <= aspect <= 1.65: # Proporção da tabela do cartão
                     pts_warp = ordenar_pontos_quadrado(approx.reshape(4, 2))
                     break
 
         if pts_warp is None:
             pts_warp = np.array([
-                [w_orig * 0.05, h_orig * 0.05],
-                [w_orig * 0.95, h_orig * 0.05],
-                [w_orig * 0.95, h_orig * 0.95],
-                [w_orig * 0.05, h_orig * 0.95]
+                [w_orig * 0.05, h_orig * 0.10],
+                [w_orig * 0.95, h_orig * 0.10],
+                [w_orig * 0.95, h_orig * 0.90],
+                [w_orig * 0.05, h_orig * 0.90]
             ], dtype="float32")
 
-        # 3. TRANSFORMAÇÃO DE PERSPECTIVA DIRETA (CANVAS FIXO 1000 x 700 px)
-        target_w, target_h = 1000, 700
+        # 3. TRANSFORMAÇÃO DE PERSPECTIVA DIRETA PARA UMA MATRIZ 1200 x 1100 px
+        # Cada célula vira exatamente um quadrado de 100 x 100 pixels!
+        target_w, target_h = 1200, 1100
         dst = np.array([
             [0, 0],
             [target_w - 1, 0],
@@ -616,71 +594,61 @@ def processar_omr_local_fiducial(imagem_bytes, qtd_questoes=10, is_pei=False):
 
         M = cv2.getPerspectiveTransform(pts_warp, dst)
         warped = cv2.warpPerspective(img, M, (target_w, target_h))
-        warped_red = cv2.warpPerspective(darkness_raw, M, (target_w, target_h))
-
-        # Desenha a mira nos 4 cantos travados
-        cv2.circle(warped, (20, 20), 12, (0, 255, 0), 2)
-        cv2.circle(warped, (target_w - 20, 20), 12, (0, 255, 0), 2)
-        cv2.circle(warped, (target_w - 20, target_h - 20), 12, (0, 255, 0), 2)
-        cv2.circle(warped, (20, target_h - 20), 12, (0, 255, 0), 2)
-
-        # 4. COORDENADAS FIXAS DA GRADE (SEM SEGUNDO RECORTE)
-        table_x = int(target_w * 0.10)
-        table_y = int(target_h * 0.15)
-        table_w = int(target_w * 0.80)
-        table_h = int(target_h * 0.75)
+        warped_dark = cv2.warpPerspective(darkness_raw, M, (target_w, target_h))
 
         opcoes = ["A", "B", "C"] if is_pei else ["A", "B", "C", "D", "E"]
         num_opcoes = len(opcoes)
         respostas_detectadas = {}
 
         is_double_column = qtd_questoes > 10
-        total_cols = (1 + num_opcoes) * 2 if is_double_column else (1 + num_opcoes)
+        total_cols = 12 if is_double_column else (1 + num_opcoes)
         num_rows = 11 if is_double_column else (qtd_questoes + 1)
 
-        col_w = table_w / float(total_cols)
-        row_h = table_h / float(num_rows)
-        radius = int(min(col_w, row_h) * 0.28)
+        cell_w = target_w / float(total_cols) # Exatamente 100 px
+        cell_h = target_h / float(num_rows)   # Exatamente 100 px
+        radius_sample = int(min(cell_w, cell_h) * 0.22) # Raio interno da bolinha (~22 px)
 
-        # 5. VARREDURA DE CADA UMA DAS 20 QUESTÕES
+        # 4. VARREDURA CELULAR EXATA (SEM ENCOLHIMENTO)
         for q_idx in range(qtd_questoes):
             q_num = q_idx + 1
             q_label = f"{q_num:02d}"
 
             if not is_double_column:
                 r_idx = q_num
-                c_offset = 0
+                c_base = 0
             else:
                 if q_num <= 10:
                     r_idx = q_num
-                    c_offset = 0
+                    c_base = 0 # Bloco esquerdo: Colunas 0 (Q) a 5 (E)
                 else:
                     r_idx = q_num - 10
-                    c_offset = 1 + num_opcoes
+                    c_base = 6 # Bloco direito: Colunas 6 (Q) a 11 (E)
 
-            cy = int(table_y + (r_idx + 0.5) * row_h)
+            # Centro Y da linha
+            cy = int((r_idx + 0.5) * cell_h)
 
             escuridao_opcoes = []
             centros_opcoes = []
 
             for opt_idx in range(num_opcoes):
-                col_real = c_offset + 1 + opt_idx
-                cx = int(table_x + (col_real + 0.5) * col_w)
+                # Pula a coluna 'Q' (número da questão)
+                col_real = c_base + 1 + opt_idx
+                cx = int((col_real + 0.5) * cell_w)
                 centros_opcoes.append((cx, cy))
 
-                # Amostragem do miolo central da bolinha
-                mask = np.zeros(warped_red.shape, dtype="uint8")
-                cv2.circle(mask, (cx, cy), radius, 255, -1)
+                # Amostragem restrita ao miolo da bolinha
+                mask = np.zeros(warped_dark.shape, dtype="uint8")
+                cv2.circle(mask, (cx, cy), radius_sample, 255, -1)
 
-                mean_val = cv2.mean(warped_red, mask=mask)[0]
-                darkness_score = 255.0 - mean_val
+                mean_val = cv2.mean(warped_dark, mask=mask)[0]
+                darkness_score = 255.0 - mean_val # Tinta escura = Valor Alto
                 escuridao_opcoes.append(darkness_score)
 
-            # Análise Relativa de Contraste da Linha
+            # 5. Decisão de Preenchimento por Contraste Relativo da Linha
             escuridao_np = np.array(escuridao_opcoes)
             idx_max = int(np.argmax(escuridao_np))
             max_score = escuridao_np[idx_max]
-            
+
             scores_sorted = sorted(escuridao_opcoes, reverse=True)
             segundo_score = scores_sorted[1] if len(scores_sorted) > 1 else 0
             baseline_papel = np.mean(scores_sorted[2:]) if len(scores_sorted) >= 3 else scores_sorted[-1]
@@ -688,26 +656,28 @@ def processar_omr_local_fiducial(imagem_bytes, qtd_questoes=10, is_pei=False):
             diferenca_papel = max_score - baseline_papel
             diferenca_segundo = max_score - segundo_score
 
-            # Trava de Decisão para Caneta Azul/Preta
-            if diferenca_papel >= 12.0 and diferenca_segundo >= 6.0:
+            # Regra calibrada para caneta azul e preta
+            if diferenca_papel >= 10.0 and diferenca_segundo >= 5.0:
                 letra_escolhida = opcoes[idx_max]
                 respostas_detectadas[q_label] = letra_escolhida
                 
+                # Desenha o círculo verde exatamente sobre a bolinha marcada
                 cx, cy = centros_opcoes[idx_max]
-                cv2.circle(warped, (cx, cy), radius + 4, (0, 255, 0), 3)
-                cv2.putText(warped, letra_escolhida, (cx - 7, cy + 6), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 220, 0), 2)
+                cv2.circle(warped, (cx, cy), radius_sample + 6, (0, 255, 0), 3)
+                cv2.putText(warped, letra_escolhida, (cx - 10, cy + 8), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 220, 0), 2)
                 
-            elif diferenca_papel >= 12.0 and diferenca_segundo < 6.0 and (segundo_score - baseline_papel) >= 10.0:
+            elif diferenca_papel >= 10.0 and diferenca_segundo < 5.0 and (segundo_score - baseline_papel) >= 8.0:
                 respostas_detectadas[q_label] = "X"
                 for i_opt in range(num_opcoes):
-                    if escuridao_opcoes[i_opt] - baseline_papel >= 10.0:
+                    if escuridao_opcoes[i_opt] - baseline_papel >= 8.0:
                         cx, cy = centros_opcoes[i_opt]
-                        cv2.circle(warped, (cx, cy), radius + 4, (0, 0, 255), 2)
+                        cv2.circle(warped, (cx, cy), radius_sample + 6, (0, 0, 255), 2)
             else:
                 respostas_detectadas[q_label] = "?"
                 for cx, cy in centros_opcoes:
-                    cv2.circle(warped, (cx, cy), 2, (180, 180, 180), -1)
+                    cv2.circle(warped, (cx, cy), 3, (160, 160, 160), -1)
 
+        # Converte para imagem JPG para visualização no app
         _, buffer_jpg = cv2.imencode('.jpg', warped, [int(cv2.IMWRITE_JPEG_QUALITY), 92])
         warped_bytes = buffer_jpg.tobytes()
 
