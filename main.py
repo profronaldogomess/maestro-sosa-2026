@@ -480,31 +480,25 @@ if menu == "📅 Planejamento (Ponto ID)":
     ])
     
     # ==============================================================================
-    # ABA 1: NOVO PLANO
+    # ABA 1: NOVO PLANO (PONTO ID)
     # ==============================================================================
     with tab_gerar:
-        # -------------------------------------------------------------
-        # RADAR DE SAFRA DO PONTO ID: PROGRESSO DE SEMANAS PLANEJADAS
-        # -------------------------------------------------------------
-        todas_semanas_geral = [s for s in util.gerar_semanas() if "Jornada" not in s]
-        total_semanas_ano = len(todas_semanas_geral)
-        
-        planos_ano_atuais = df_planos[df_planos['ANO'] == f"{ano_p}º"]['SEMANA'].tolist() if not df_planos.empty and 'ANO' in df_planos.columns and 'SEMANA' in df_planos.columns else []
-        planos_concluidos_cnt = len(set([s.split(" (")[0] for s in planos_ano_atuais]))
-        perc_safra_planos = min(100, int((planos_concluidos_cnt / max(total_semanas_ano, 1)) * 100))
-        
-        with st.container(border=True):
-            c_sf1, c_sf2 = st.columns([2, 1])
-            c_sf1.markdown(f"##### 🎯 Progresso da Safra Pedagógica ({ano_p}º Ano)")
-            c_sf1.progress(perc_safra_planos / 100.0, text=f"**{planos_concluidos_cnt} de {total_semanas_ano} Semanas Planejadas** ({perc_safra_planos}%)")
-            c_sf2.metric("Semanas Restantes", total_semanas_ano - planos_concluidos_cnt)
-
         with st.container(border=True):
             st.markdown("#### 📦 1. Parâmetros da Semana & Carga Horária")
             
             c1, c2, c3 = st.columns([1, 2, 2])
             ano_p = c1.selectbox("Série Alvo:", [6, 7, 8, 9], index=0, key=f"ano_sel_{v}")
             ano_str_busca = f"{ano_p}º"
+
+            # -------------------------------------------------------------
+            # RADAR DE SAFRA: CALCULADO COM SEGURANÇA APÓS A ESCOLHA DA SÉRIE
+            # -------------------------------------------------------------
+            todas_semanas_geral = [s for s in util.gerar_semanas() if "Jornada" not in s]
+            total_semanas_ano = len(todas_semanas_geral)
+            
+            planos_ano_atuais = df_planos[df_planos['ANO'] == ano_str_busca]['SEMANA'].tolist() if not df_planos.empty and 'ANO' in df_planos.columns and 'SEMANA' in df_planos.columns else []
+            planos_concluidos_cnt = len(set([s.split(" (")[0] for s in planos_ano_atuais]))
+            perc_safra_planos = min(100, int((planos_concluidos_cnt / max(total_semanas_ano, 1)) * 100))
 
             todas_semanas = util.gerar_semanas()
             sobrescrever_planos = st.toggle("Mostrar semanas já planejadas (Permitir Sobrescrita)", value=False, key=f"tog_sobrescrever_{v}")
@@ -535,7 +529,7 @@ if menu == "📅 Planejamento (Ponto ID)":
 
             status_especial_sem = ""
             motivo_especial_sem = ""
-            if not df_relatorios.empty and 'TIPO' in df_relatorios.columns and 'CONTEUDO' in df_relatorios.columns:
+            if not df_relatorios.empty:
                 config_sem_rec = df_relatorios[df_relatorios['TIPO'] == f"CONFIG_SEMANA_{sem_limpa}"]
                 if not config_sem_rec.empty:
                     partes_c = str(config_sem_rec.iloc[-1]['CONTEUDO']).split('|')
@@ -558,6 +552,13 @@ if menu == "📅 Planejamento (Ponto ID)":
             ], key=f"gate_tipo_{v}")
             
             st.markdown("---")
+            
+            # BARRA DE PROGRESSO DA SAFRA EM TEMPO REAL
+            c_sf1, c_sf2 = st.columns([3, 1])
+            c_sf1.progress(perc_safra_planos / 100.0, text=f"**Safra Pedagógica ({ano_p}º Ano): {planos_concluidos_cnt} de {total_semanas_ano} Semanas Planejadas** ({perc_safra_planos}%)")
+            c_sf2.metric("Semanas Restantes", total_semanas_ano - planos_concluidos_cnt)
+            
+            st.markdown("<br>", unsafe_allow_html=True)
             
             carga_horaria = st.pills(
                 "⏱️ Carga Horária da Semana:", 
