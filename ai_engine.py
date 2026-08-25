@@ -595,56 +595,46 @@ def tratar_imagem_para_leitura(imagem_bytes):
 
 def analisar_gabarito_hibrido(imagem_bytes, qtd_questoes=10, is_pei=False):
     """
-    SOSA V2026.DIRECT_VISION: Leitura Direta por Visão Computacional Gemini Flash.
-    Elimina qualquer adivinhação manual por pixels e lê 100% das marcações com precisão humana.
-    Custo: R$ 0,001 por prova (R$ 0,05 por turma de 35 alunos).
+    SOSA V2026.DIRECT_VISION_ANTI_TROCA: Leitura Direta por Visão Computacional Gemini Flash.
+    Lê as respostas marcadas e detecta o nome manuscrito no cabeçalho para evitar trocas acidentais de aluno.
     """
     imagem_pronta = tratar_imagem_para_leitura(imagem_bytes)
     
     try:
         client_local = obter_client_gemini()
         if not client_local:
-            return {"respostas": {}, "imagem_alinhada": imagem_pronta, "sucesso_local": False}
+            return {"respostas": {}, "nome_lido_folha": "", "imagem_alinhada": imagem_pronta, "sucesso_local": False}
 
         tipo_opcoes = "A, B, C" if is_pei else "A, B, C, D, E"
         
         prompt = f"""Você é um perito em visão computacional e leitura de gabaritos escolares.
-Analise a imagem da folha de respostas anexada com extrema atenção às marcações feitas pelo estudante.
+Analise a imagem da folha de respostas anexada com extrema atenção às marcações e ao cabeçalho.
 
 ESTRUTURA DO CARTÃO:
-- Total de Questões: {qtd_questoes} questões (de 01 a {qtd_questoes:02d}).
-- Há DUAS COLUNAS de questões:
-  * Coluna da Esquerda: Questões 01 a 10 (com colunas Q, A, B, C, D, E).
-  * Coluna da Direita: Questões 11 a 20 (com colunas Q, A, B, C, D, E).
+1. CABEÇALHO:
+   - No topo, no campo 'ESTUDANTE:', identifique o nome do aluno escrito à caneta ou lápis.
+
+2. CARTÃO DE RESPOSTAS:
+   - Total de Questões: {qtd_questoes} questões (de 01 a {qtd_questoes:02d}).
+   - Se houver mais de 10 questões, há duas colunas (Esquerda: 01 a 10 | Direita: 11 a {qtd_questoes:02d}).
+   - Alternativas: {tipo_opcoes}.
 
 REGRAS DE LEITURA:
-1. O aluno marcou com caneta azul/preta (pode ser um ponto no centro, círculo em volta da letra ou preenchimento completo).
-2. Identifique qual letra ({tipo_opcoes}) foi marcada em cada uma das questões de 01 a {qtd_questoes:02d}.
-3. Se houver dupla marcação na mesma questão, retorne 'X'.
-4. Se a questão estiver em branco, retorne '?'.
+1. Identifique qual letra ({tipo_opcoes}) foi marcada em cada questão de 01 a {qtd_questoes:02d}.
+2. Se houver dupla marcação na mesma questão, retorne 'X'.
+3. Se a questão estiver em branco, retorne '?'.
+4. No campo 'nome_estudante', retorne o nome do aluno escrito no cabeçalho (ou 'NÃO_IDENTIFICADO' se estiver ilegível/vazio).
 
 RETORNE APENAS UM JSON PURO NO FORMATO:
 {{
-  "01": "D",
-  "02": "A",
-  "03": "D",
-  "04": "A",
-  "05": "E",
-  "06": "C",
-  "07": "E",
-  "08": "D",
-  "09": "E",
-  "10": "B",
-  "11": "C",
-  "12": "B",
-  "13": "A",
-  "14": "E",
-  "15": "D",
-  "16": "C",
-  "17": "C",
-  "18": "B",
-  "19": "B",
-  "20": "C"
+  "nome_estudante": "DAVI LUIS SILVA",
+  "respostas": {{
+    "01": "D",
+    "02": "A",
+    "03": "D",
+    ...
+    "{qtd_questoes:02d}": "C"
+  }}
 }}"""
 
         conteudo_prompt = [
@@ -652,7 +642,6 @@ RETORNE APENAS UM JSON PURO NO FORMATO:
             types.Part.from_text(text=prompt)
         ]
 
-        # Configuração oficial 2026 sem o parâmetro descontinuado 'temperature' (Evita Erro 400)
         config_visao = types.GenerateContentConfig(
             response_mime_type="application/json"
         )
@@ -681,14 +670,24 @@ RETORNE APENAS UM JSON PURO NO FORMATO:
                 continue
 
         if respostas_json:
+            respostas_dict = {}
+            nome_detectado_cabecalho = ""
+            if "respostas" in respostas_json and isinstance(respostas_json["respostas"], dict):
+                respostas_dict = respostas_json["respostas"]
+                nome_detectado_cabecalho = str(respostas_json.get("nome_estudante", "")).strip()
+            else:
+                respostas_dict = respostas_json
+
             return {
-                "respostas": respostas_json,
+                "respostas": respostas_dict,
+                "nome_lido_folha": nome_detectado_cabecalho,
                 "imagem_alinhada": imagem_pronta,
                 "sucesso_local": True
             }
         else:
             return {
                 "respostas": {},
+                "nome_lido_folha": "",
                 "imagem_alinhada": imagem_pronta,
                 "sucesso_local": False
             }
@@ -697,110 +696,10 @@ RETORNE APENAS UM JSON PURO NO FORMATO:
         print(f"Erro geral no scanner: {e}")
         return {
             "respostas": {},
+            "nome_lido_folha": "",
             "imagem_alinhada": imagem_pronta,
             "sucesso_local": False
         }
-
-def analisar_gabarito_hibrido(imagem_bytes, qtd_questoes=10, is_pei=False):
-    """
-    SOSA V2026.ACCURACY_100: Scanner com Visão Gemini Flash-Lite.
-    - Custo ultra-baixo: US$ 0,30 por 1 milhão de tokens (R$ 0,05 por turma de 35 alunos).
-    - Adequado à documentação 2026 do Google: SEM o parâmetro 'temperature' (evita erro HTTP 400).
-    - 100% imune a sombras, folhas tortas e caneta azul/preta.
-    """
-    imagem_tratada = tratar_imagem_para_leitura(imagem_bytes)
-    
-    try:
-        client_local = obter_client_gemini()
-        if not client_local:
-            return {"respostas": {}, "imagem_alinhada": imagem_tratada, "sucesso_local": False}
-
-        tipo_opcoes = "A, B, C" if is_pei else "A, B, C, D, E"
-        
-        prompt = f"""VOCÊ É UM PERITO EM VISÃO COMPUTACIONAL E LEITURA DE GABARITOS ESCOLARES (OMR).
-Analise a imagem da folha de respostas anexada com extrema atenção aos detalhes.
-
-ESTRUTURA DO CARTÃO-RESPOSTA:
-- Total de Questões: {qtd_questoes} questões (de 01 a {qtd_questoes:02d}).
-- Se houver mais de 10 questões, o cartão está dividido em DUAS COLUNAS (Esquerda: 01 a 10 | Direita: 11 a {qtd_questoes:02d}).
-- As colunas de alternativas são: {tipo_opcoes}.
-
-REGRAS DE LEITURA DAS MARCAÇÕES DO ALUNO:
-1. O aluno pode ter marcado com caneta azul, preta ou grafite (pingo no centro, círculo em volta da letra ou bolinha preenchida).
-2. Identifique qual alternativa foi marcada em cada linha de 01 a {qtd_questoes:02d}.
-3. Se o aluno marcou com clareza uma única letra, retorne essa letra (ex: 'A', 'B', 'C', 'D' ou 'E').
-4. Se o aluno marcou DUAS ou mais letras na mesma linha com intenção de anular/dupla, retorne 'X'.
-5. Se a linha estiver totalmente em branco, sem nenhuma marcação, retorne '?'.
-
-RETORNE EXATAMENTE UM JSON NESTE FORMATO (sem explicações ou markdown extra):
-{{
-  "01": "D",
-  "02": "A",
-  "03": "D",
-  ...
-  "{qtd_questoes:02d}": "C"
-}}"""
-
-        conteudo_prompt = [
-            types.Part.from_bytes(data=imagem_tratada, mime_type="image/jpeg"),
-            types.Part.from_text(text=prompt)
-        ]
-
-        # Configuração oficial sem o parâmetro descontinuado 'temperature' (Evita Erro 400)
-        config_visao = types.GenerateContentConfig(
-            response_mime_type="application/json"
-        )
-
-        # Cascata de modelos estáveis de 2026
-        modelos_tentativa = ["gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-2.5-flash"]
-        
-        respostas_json = None
-        for mod in modelos_tentativa:
-            try:
-                res = client_local.models.generate_content(
-                    model=mod,
-                    contents=[types.Content(role="user", parts=conteudo_prompt)],
-                    config=config_visao
-                )
-                import json
-                respostas_json = json.loads(res.text.strip())
-                if respostas_json:
-                    break
-            except Exception as e_mod:
-                print(f"Tentativa com {mod}: {e_mod}")
-                continue
-
-        if respostas_json:
-            return {
-                "respostas": respostas_json,
-                "imagem_alinhada": imagem_tratada,
-                "sucesso_local": True
-            }
-        else:
-            return {
-                "respostas": {},
-                "imagem_alinhada": imagem_tratada,
-                "sucesso_local": False
-            }
-
-    except Exception as e:
-        print(f"Erro na visão do gabarito: {e}")
-        return {
-            "respostas": {},
-            "imagem_alinhada": imagem_tratada,
-            "sucesso_local": False
-        }
-
-def subir_para_google(caminho_arquivo, nome_exibicao):
-    try:
-        client_local = obter_client_gemini()
-        arquivo_google = client_local.files.upload(
-            file=caminho_arquivo, 
-            config=types.UploadFileConfig(display_name=nome_exibicao)
-        )
-        return arquivo_google.uri
-    except Exception as e:
-        return f"Erro no upload: {e}"
 
 # ==============================================================================
 # 6. EXTRATOR UNIVERSAL DE TAGS (PRESERVADO 100%)
