@@ -3839,11 +3839,11 @@ Escola Municipal Flávio José Simões Costa
 
 # ==============================================================================
 # MÓDULO: CENTRAL DE INTELIGÊNCIA DE RESULTADOS (CIR / SCANNER DE GABARITOS)
-# (V2026.ULTIMATE - UNIFICAÇÃO DE ACERVO REAL & CHAVES ÚNICAS)
+# (V2026.ULTIMATE - COM VALIDADOR ANTI-TROCA E TRANSFERÊNCIA DE TITULARIDADE)
 # ==============================================================================
 elif menu == "📸 Scanner de Gabaritos":
     st.title("Central de Inteligência de Resultados (CIR)")
-    st.caption("Mesa de triagem de exames, leitor fiducial, regra do cálculo 50% (*), espelho split-screen, perícia de distratores TRI e ponte de recomposição.")
+    st.caption("Mesa de triagem de exames, validador anti-troca de nome por IA, leitor fiducial, regra do cálculo 50% (*), espelho split-screen, perícia de distratores TRI e transferência de titularidade.")
     st.markdown("---")
 
     if "v_scan" not in st.session_state: 
@@ -3901,7 +3901,7 @@ elif menu == "📸 Scanner de Gabaritos":
 
         return sorted(list(opcoes_encontradas))
 
-    # DIALOGS DECLARADOS FORA DE FRAGMENTS (LEI #25)
+    # DIALOGS DECLARADOS NO TOPO DO MÓDULO (FORA DO FRAGMENT - LEI #25)
     @st.dialog("⚖️ Homologação de Atestados & Justificativas", width="large")
     def dialog_atestados_modal(alunos_turma_dialog, t_sel_dialog, tr_sel_dialog, av_alvo_dialog):
         st.info("💡 Se o aluno entregou atestado depois ou se houve erro ao dar falta, ajuste o status abaixo.")
@@ -3941,6 +3941,71 @@ elif menu == "📸 Scanner de Gabaritos":
                     st.cache_data.clear()
                     st.success("✅ Status homologado e boletim recalculado!"); time.sleep(0.5); st.rerun()
 
+    @st.dialog("🔄 Trocar Titularidade da Prova (Aluno Trocado por Engano)", width="large")
+    def dialog_trocar_titularidade_modal(dados_soberania_dialog, alunos_turma_dialog, t_sel_dialog, tr_sel_dialog, av_alvo_dialog):
+        st.info("💡 **Retificação Rápida:** Transfere as respostas, a nota e a foto da prova de quem recebeu por engano para o verdadeiro estudante dono da avaliação.")
+        
+        # Alunos que têm prova realizada no momento
+        alunos_com_prova = [r.get('Estudante', '') for r in dados_soberania_dialog if r.get('Situação') == "✅ REALIZADA"]
+        todos_alunos_turma = alunos_turma_dialog['NOME_ALUNO'].tolist() if not alunos_turma_dialog.empty else []
+
+        if not alunos_com_prova:
+            st.warning("Nenhum aluno com prova corrigida nesta avaliação para realizar a transferência.")
+        else:
+            c_tr1, c_tr2 = st.columns(2)
+            aluno_origem_sel = c_tr1.selectbox("1️⃣ Quem recebeu a prova por engano (Origem)?", alunos_com_prova, key=f"tr_orig_{v}")
+            
+            # Opções de destino: Todos da turma exceto quem já está selecionado como origem
+            opcoes_dest = [a for a in todos_alunos_turma if a != aluno_origem_sel]
+            aluno_destino_sel = c_tr2.selectbox("2️⃣ Quem é o VERDADEIRO dono da prova (Destino)?", opcoes_dest, key=f"tr_dest_{v}")
+
+            dados_origem = next((r for r in dados_soberania_dialog if r.get('Estudante') == aluno_origem_sel), {})
+            nota_origem = dados_origem.get('Nota', 0.0)
+            foto_origem = dados_origem.get('Evidência', 'N/A')
+
+            with st.container(border=True):
+                st.markdown(f"**📋 Dados da Prova a Transferir:**")
+                c_inf1, c_inf2 = st.columns(2)
+                c_inf1.metric("Nota da Prova", f"{nota_origem:.1f} pts")
+                if "http" in str(foto_origem): c_inf2.link_button("📸 Ver Foto do Gabarito", foto_origem, use_container_width=True)
+                else: c_inf2.caption("Sem foto anexada")
+
+            novo_status_origem = st.selectbox(
+                "3️⃣ Como deve ficar a situação de quem entregou a prova (Origem)?",
+                ["✍️ Deixar como PENDENTE (Aguardando escaneamento da prova real)", "❌ Marcar como FALTOU (Ausência Injustificada)", "📑 Marcar como ATESTADO (Falta Justificada / 2ª Chamada)"],
+                key=f"tr_stat_orig_{v}"
+            )
+
+            status_param = "PENDENTE"
+            if "FALTOU" in novo_status_origem: status_param = "FALTOU"
+            elif "ATESTADO" in novo_status_origem: status_param = "FALTOU_JUSTIFICADO|Atestado Médico"
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("🚀 CONFIRMAR TRANSFERÊNCIA DE PROVA E RECALCULAR NOTAS", type="primary", use_container_width=True, key=f"btn_exec_transf_{v}"):
+                with st.spinner("Transferindo respostas e recalculando médias..."):
+                    match_orig = alunos_turma_dialog[alunos_turma_dialog['NOME_ALUNO'] == aluno_origem_sel]
+                    match_dest = alunos_turma_dialog[alunos_turma_dialog['NOME_ALUNO'] == aluno_destino_sel]
+                    
+                    id_orig = db.limpar_id(match_orig.iloc[0]['ID']) if not match_orig.empty else ""
+                    id_dest = db.limpar_id(match_dest.iloc[0]['ID']) if not match_dest.empty else ""
+
+                    sucesso_tr = db.transferir_titularidade_gabarito(
+                        id_origem=id_orig,
+                        nome_origem=aluno_origem_sel,
+                        id_destino=id_dest,
+                        nome_destino=aluno_destino_sel,
+                        turma=t_sel_dialog,
+                        trimestre=tr_sel_dialog,
+                        id_avaliacao=av_alvo_dialog,
+                        status_origem_apos=status_param
+                    )
+
+                    if sucesso_tr:
+                        st.success(f"✅ Prova transferida com sucesso para {aluno_destino_sel}!")
+                        st.balloons(); time.sleep(1); st.rerun()
+                    else:
+                        st.error("Erro ao transferir a titularidade.")
+
     @st.dialog("👤 Perícia & Lançamento de 2ª Chamada por Estudante", width="large")
     def dialog_pericia_modal(dados_soberania_dialog, alunos_turma_dialog, t_sel_dialog, tr_sel_dialog, av_alvo_dialog, gab_oficial_dialog, v_total_dialog, nome_curto_av_dialog):
         st.caption("Acesse a folha de respostas ou lance a nota de 2ª Chamada para qualquer estudante da turma.")
@@ -3948,7 +4013,7 @@ elif menu == "📸 Scanner de Gabaritos":
         todos_estudantes_nomes = [r.get('Estudante', '') for r in dados_soberania_dialog]
         
         if not todos_estudantes_nomes: 
-            st.info("Nenum aluno cadastrado nesta turma.")
+            st.info("Nenhum aluno cadastrado nesta turma.")
         else:
             aluno_pericia_nome = st.selectbox("Selecione o Estudante:", todos_estudantes_nomes, key=f"pericia_modal_sel_{v}")
             if aluno_pericia_nome:
@@ -4054,7 +4119,7 @@ elif menu == "📸 Scanner de Gabaritos":
     ])
 
     # ==============================================================================
-    # ABA 1: MESA DE CORREÇÃO
+    # ABA 1: MESA DE CORREÇÃO (COM DETECTOR ANTI-TROCA DE NOME POR IA)
     # ==============================================================================
     with tab_correcao:
         modo_lancamento = st.pills(
@@ -4162,7 +4227,7 @@ elif menu == "📸 Scanner de Gabaritos":
                         def renderizar_mesa_correcao_fragmento():
                             with st.container(border=True):
                                 if len(alunos_alvo) > 1: st.markdown(f"##### 👥 Correção em Dupla: {', '.join(alunos_alvo)}")
-                                else: st.markdown(f"##### 👤 Estudante: {alunos_alvo[0]}")
+                                else: st.markdown(f"##### 👤 Estudante Selecionado: {alunos_alvo[0]}")
                                 
                                 tem_pei_na_dupla = False
                                 perfis_dupla = []
@@ -4271,8 +4336,7 @@ elif menu == "📸 Scanner de Gabaritos":
                                         img = img_file if img_file else img_cam
 
                                         if img and "current_scan_res" not in st.session_state:
-                                            with st.spinner("⚡ Condutor Visual: Alinhando marcadores fiduciais e lendo respostas (Custo R$ 0,00)..."):
-                                                # Aciona o motor híbrido (Local OpenCV em 0.1s com Fallback Gemini)
+                                            with st.spinner("⚡ Condutor Visual: Alinhando gabarito e verificando nome do estudante..."):
                                                 res_hibrido = ai.analisar_gabarito_hibrido(
                                                     imagem_bytes=img.getvalue(),
                                                     qtd_questoes=len(gab_alvo),
@@ -4281,10 +4345,34 @@ elif menu == "📸 Scanner de Gabaritos":
                                                 res_json = res_hibrido.get("respostas", {})
                                                 st.session_state.current_scan_res = [res_json.get(f"{i+1:02d}", "?") for i in range(len(gab_alvo))]
                                                 st.session_state.current_scan_img = res_hibrido.get("imagem_alinhada", img.getvalue())
-                                                st.session_state.current_scan_modo = "⚡ Condutor Visual Local (R$ 0,00)" if res_hibrido.get("sucesso_local") else "🤖 Nuvem Gemini (Fallback)"
+                                                st.session_state.current_scan_nome_det = res_hibrido.get("nome_lido_folha", "")
                                                 st.rerun()
 
                                         if "current_scan_res" in st.session_state:
+                                            # 🚨 VALIDADOR VISUAL ANTI-TROCA DE NOME (ARMADURA 2)
+                                            nome_det_cabecalho = str(st.session_state.get("current_scan_nome_det", "")).upper().strip()
+                                            aluno_selecionado_upper = str(alunos_alvo[0]).upper().strip()
+
+                                            if nome_det_cabecalho and nome_det_cabecalho not in ["NÃO_IDENTIFICADO", "N/A", ""] and len(nome_det_cabecalho) > 2:
+                                                primeiro_nome_det = nome_det_cabecalho.split()[0]
+                                                primeiro_nome_sel = aluno_selecionado_upper.split()[0]
+                                                
+                                                # Detecta se há divergência evidente (ex: DAVI x DAVID ou nomes diferentes)
+                                                is_divergente = False
+                                                if primeiro_nome_det in ["DAVI", "DAVID"] and primeiro_nome_sel in ["DAVI", "DAVID"] and primeiro_nome_det != primeiro_nome_sel:
+                                                    is_divergente = True
+                                                elif primeiro_nome_det not in aluno_selecionado_upper:
+                                                    is_divergente = True
+
+                                                if is_divergente:
+                                                    with st.container(border=True):
+                                                        st.warning(
+                                                            f"⚠️ **ALERTA DE DIVERGÊNCIA DE TITULARIDADE (ANTI-TROCA)!**\n\n"
+                                                            f"• **Aluno Selecionado no Menu:** `{aluno_selecionado_upper}`\n"
+                                                            f"• **Nome Lido no Cabeçalho da Prova:** `{nome_det_cabecalho}`\n\n"
+                                                            f"Confira a prova física antes de salvar para evitar atribuir a nota ao aluno errado!"
+                                                        )
+
                                             c_badge1, c_badge2 = st.columns([2, 1])
                                             c_badge1.caption(f"Motor de Leitura: **🤖 Visão Inteligente Gemini Flash (<1s)** | Custo: **~R$ 0,001**")
                                             
@@ -4393,8 +4481,8 @@ elif menu == "📸 Scanner de Gabaritos":
                                                     db.limpar_notas_turma_trimestre(t_sel, tr_sel)
                                                     del st.session_state.current_scan_res
                                                     del st.session_state.current_scan_img
-                                                    if "current_scan_modo" in st.session_state:
-                                                        del st.session_state.current_scan_modo
+                                                    if "current_scan_nome_det" in st.session_state:
+                                                        del st.session_state.current_scan_nome_det
                                                     st.success("✅ Prova gravada e nota computada com sucesso!")
                                                     time.sleep(0.5)
                                                     st.rerun()
@@ -4402,8 +4490,8 @@ elif menu == "📸 Scanner de Gabaritos":
                                             if col_s2.button("Descartar", use_container_width=True, key=f"btn_disc_corr_{v}"):
                                                 del st.session_state.current_scan_res
                                                 del st.session_state.current_scan_img
-                                                if "current_scan_modo" in st.session_state:
-                                                    del st.session_state.current_scan_modo
+                                                if "current_scan_nome_det" in st.session_state:
+                                                    del st.session_state.current_scan_nome_det
                                                 st.rerun()
                                     else:
                                         opcoes_letras = ["A", "B", "C", "X", "?"] if is_pei_grading else ["A", "B", "C", "D", "E", "X", "?"]
@@ -4504,7 +4592,7 @@ elif menu == "📸 Scanner de Gabaritos":
                         renderizar_mesa_correcao_fragmento()
 
         # ==============================================================================
-        # ABA 2: TRIBUNAL DE AUDITORIA (UNIFICADO COM BANCO REAL DO ALUNO)
+        # ABA 2: TRIBUNAL DE AUDITORIA (COM BOTÃO DE TROCA DE TITULARIDADE)
         # ==============================================================================
         with tab_auditoria:
             st.markdown("### Tribunal de Auditoria de Resultados")
@@ -4589,7 +4677,7 @@ elif menu == "📸 Scanner de Gabaritos":
                         })
 
                     st.markdown("#### ⚡ Ações Rápidas de Auditoria")
-                    c_act1, c_act2, c_act3 = st.columns(3)
+                    c_act1, c_act2, c_act3, c_act4 = st.columns(4)
 
                     if c_act1.button("⚖️ Atestados & Justificativas", use_container_width=True, key=f"btn_act_atest_{v}"):
                         dialog_atestados_modal(alunos_turma_h, t_sel_h, tr_sel_h, av_alvo_h)
@@ -4599,6 +4687,10 @@ elif menu == "📸 Scanner de Gabaritos":
                         
                     if c_act3.button("🚑 Digitação Manual (Lázaro)", use_container_width=True, key=f"btn_act_laz_{v}"):
                         dialog_lazaro_modal(dados_soberania, gab_oficial_trib, v_total_av, t_sel_h, tr_sel_h, av_alvo_h)
+
+                    # 🚨 ARMADURA 1: BOTÃO DE TRANSFERIR TITULARIDADE EM 1-CLIQUE
+                    if c_act4.button("🔄 Trocar Titularidade", type="primary", use_container_width=True, key=f"btn_act_troca_tit_{v}"):
+                        dialog_trocar_titularidade_modal(dados_soberania, alunos_turma_h, t_sel_h, tr_sel_h, av_alvo_h)
 
                     st.markdown("---")
 
@@ -4813,7 +4905,7 @@ elif menu == "📸 Scanner de Gabaritos":
                             status_h.update(label="Notas e gabaritos auditados!", state="complete"); time.sleep(0.5); st.rerun()
 
         # ==============================================================================
-        # ABA 3: RAIO-X PEDAGÓGICO & PONTE DE RECOMPOSIÇÃO PÓS-PROVA (UNIFICADO & CHAVES ÚNICAS)
+        # ABA 3: RAIO-X PEDAGÓGICO & PONTE DE RECOMPOSIÇÃO PÓS-PROVA
         # ==============================================================================
         with tab_raiox:
             st.markdown("### Raio-X Pedagógico: Autópsia por Item & Recomposição")
