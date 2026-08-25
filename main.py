@@ -5883,12 +5883,12 @@ Documento mantido sob custódia oficial da Escola Municipal Flávio José Simõe
 
 
 # ==============================================================================
-# MÓDULO: PAINEL DE NOTAS & VISTOS - V2026.EXECUTIVE_CLEAN
-# (DESIGN EXECUTIVO EM 3 VISÕES: CONSOLIDADOR, VISTOS/ATITUDE E RECUPERAÇÃO/REFACÇÃO)
+# MÓDULO: PAINEL DE NOTAS & VISTOS - V2026.LIVE_DYNAMIC (SOSA SOBERANO)
+# (SINCRONIZAÇÃO INSTANTÂNEA DO SCANNER CIR, VISTOS AO VIVO E ARREDONDAMENTO 0.5)
 # ==============================================================================
 elif menu == "📊 Painel de Notas & Vistos":
     st.title("📊 Painel de Notas, Vistos & Ciclos")
-    st.caption("Central de Soberania Docente: Consolidação C1/C2/C3, Gestão Atitudinal, Extrato de Vistos e Recuperação Blindada.")
+    st.caption("Central de Soberania Docente: Sincronização Dinâmica ao Vivo do Scanner CIR, Consolidação C1/C2/C3, Gestão Atitudinal e Recuperação Blindada.")
     st.markdown("---")
 
     if "v_notas" not in st.session_state:
@@ -5922,7 +5922,7 @@ elif menu == "📊 Painel de Notas & Vistos":
             )
             if not trim_ativo_notas: trim_ativo_notas = trim_detectado_n
 
-        # TRAVA GLOBAL: APENAS ALUNOS ATIVOS NO PAINEL DE NOTAS
+        # TRAVA GLOBAL: APENAS ALUNOS ATIVOS NO PAINEL DE NOTAS (LEI #28)
         df_alunos_base_n = df_alunos[df_alunos['TURMA'] == turma_notas].copy() if not df_alunos.empty else pd.DataFrame()
         if 'STATUS' not in df_alunos_base_n.columns: df_alunos_base_n['STATUS'] = "ATIVO"
         alunos_notas_df = df_alunos_base_n[~df_alunos_base_n['STATUS'].astype(str).str.upper().isin(["INATIVO", "TRANSFERIDO", "EVADIDO", "DESISTENTE"])].sort_values(by="NOME_ALUNO")
@@ -5933,7 +5933,7 @@ elif menu == "📊 Painel de Notas & Vistos":
             @st.fragment
             def renderizar_painel_notas_fragmento():
                 # -------------------------------------------------------------
-                # 1. GESTÃO SEGURA DE DATAS DE CORTE (COM FALLBACK ANTI-ERRO)
+                # 1. GESTÃO DE DATAS DE CORTE DO TRIMESTRE
                 # -------------------------------------------------------------
                 data_corte_salva = None
                 if hasattr(db, 'obter_config_corte_trimestre'):
@@ -5942,9 +5942,9 @@ elif menu == "📊 Painel de Notas & Vistos":
                 if trim_ativo_notas == "I Trimestre":
                     dt_i_default, dt_f_default = date(2026, 2, 9), date(2026, 5, 22)
                 elif trim_ativo_notas == "II Trimestre":
-                    dt_i_default, dt_f_default = date(2026, 5, 25), date(2026, 8, 21)
+                    dt_i_default, dt_f_default = date(2026, 5, 25), date(2026, 9, 4)
                 else:
-                    dt_i_default, dt_f_default = date(2026, 8, 24), date(2026, 12, 17)
+                    dt_i_default, dt_f_default = date(2026, 9, 8), date(2026, 12, 17)
 
                 if data_corte_salva:
                     try:
@@ -5953,11 +5953,68 @@ elif menu == "📊 Painel de Notas & Vistos":
 
                 dt_i_n, dt_f_n = dt_i_default, dt_f_default
 
-                df_notas_trim = df_notas[(df_notas['TURMA'] == turma_notas) & (df_notas['TRIMESTRE'] == trim_ativo_notas)] if not df_notas.empty else pd.DataFrame()
-                df_diario_trim = df_diario[(df_diario['TURMA'] == turma_notas)] if not df_diario.empty else pd.DataFrame()
-                df_diag_trim = df_diagnosticos[(df_diagnosticos['TURMA'] == turma_notas)] if not df_diagnosticos.empty else pd.DataFrame()
+                # -------------------------------------------------------------
+                # 2. MOTOR DINÂMICO AO VIVO: CAPTURA DO SCANNER CIR EM TEMPO REAL
+                # -------------------------------------------------------------
                 padrao_trim_regex = util.obter_regex_trimestre(trim_ativo_notas)
 
+                # Tabelas brutas
+                df_notas_trim = df_notas[(df_notas['TURMA'] == turma_notas) & (df_notas['TRIMESTRE'] == trim_ativo_notas)] if not df_notas.empty else pd.DataFrame()
+                df_diario_trim = df_diario[(df_diario['TURMA'] == turma_notas)] if not df_diario.empty else pd.DataFrame()
+
+                # Mineração Instantânea de DB_GABARITOS_ALUNOS (Scanner CIR)
+                mapa_live_teste = {}
+                mapa_live_prova = {}
+                mapa_live_rec = {}
+
+                if not df_diagnosticos.empty and 'TURMA' in df_diagnosticos.columns and 'ID_AVALIACAO' in df_diagnosticos.columns:
+                    mask_diag_t = (df_diagnosticos['TURMA'] == turma_notas) & (
+                        df_diagnosticos['ID_AVALIACAO'].astype(str).str.contains(padrao_trim_regex, regex=True, case=False, na=False)
+                    )
+                    df_diag_filtrado = df_diagnosticos[mask_diag_t].copy()
+
+                    for _, r_dg in df_diag_filtrado.iterrows():
+                        id_al_dg = db.limpar_id(r_dg.get('ID_ALUNO', ''))
+                        id_av_str = str(r_dg.get('ID_AVALIACAO', '')).upper()
+                        resp_al_str = str(r_dg.get('RESPOSTAS_ALUNO', '')).upper()
+                        
+                        if resp_al_str.startswith("FALTOU_INJUSTIFICADO") or resp_al_str == "FALTOU":
+                            nota_dg = 0.0
+                        else:
+                            nota_dg = util.sosa_to_float(r_dg.get('NOTA_CALCULADA', 0.0))
+
+                        # Classificação robusta: Recuperação vs Teste (C2) vs Prova/Avaliação (C3)
+                        if any(x in id_av_str for x in ["RECUPERAÇÃO", "RECUPERACAO", "REC_"]):
+                            mapa_live_rec[id_al_dg] = nota_dg
+                        elif any(x in id_av_str for x in ["TESTE", "SONDA", "SIMULADO", "TRABALHO", "DIAGNÓSTICA", "DIAGNOSTICA"]):
+                            mapa_live_teste[id_al_dg] = max(mapa_live_teste.get(id_al_dg, 0.0), nota_dg)
+                        elif any(x in id_av_str for x in ["PROVA", "AVALIAÇÃO", "AVALIACAO", "EXAME", "AVALIACAO_"]):
+                            mapa_live_prova[id_al_dg] = max(mapa_live_prova.get(id_al_dg, 0.0), nota_dg)
+
+                # Mineração Instantânea de Vistos e Bônus de DB_DIARIO_BORDO
+                vistos_live_dict = {}
+                bonus_live_dict = {}
+
+                if not df_diario_trim.empty and 'ID_ALUNO' in df_diario_trim.columns and 'DATA' in df_diario_trim.columns:
+                    df_d_range = df_diario_trim.copy()
+                    df_d_range['DATA_DT'] = pd.to_datetime(df_d_range['DATA'], format="%d/%m/%Y", errors='coerce').dt.date
+                    df_d_sub = df_d_range[(df_d_range['DATA_DT'] >= dt_i_n) & (df_d_range['DATA_DT'] <= dt_f_n)]
+
+                    if not df_d_sub.empty:
+                        d_validas = df_d_sub[df_d_sub.get('VISTO_ATIVIDADE', '').astype(str).str.upper() != "ISENTO"]
+                        tot_v_d = len(d_validas['DATA'].unique()) if not d_validas.empty else 1
+                        if tot_v_d == 0: tot_v_d = 1
+
+                        for id_al_raw, grp in df_d_sub.groupby('ID_ALUNO'):
+                            id_c = db.limpar_id(id_al_raw)
+                            grp_val = grp[grp.get('VISTO_ATIVIDADE', '').astype(str).str.upper() != "ISENTO"]
+                            ok_v = len(grp_val[grp_val.get('VISTO_ATIVIDADE', '').astype(str).str.upper() == "TRUE"])
+                            vistos_live_dict[id_c] = round((ok_v / tot_v_d * 3.0), 2) if tot_v_d > 0 else 0.0
+                            bonus_live_dict[id_c] = grp.get('BONUS', pd.Series()).apply(util.sosa_to_float).sum()
+
+                # -------------------------------------------------------------
+                # 3. MONTAGEM DINÂMICA DA GRADE CONSOLIDADA
+                # -------------------------------------------------------------
                 dados_grid_notas = []
                 convocados_recuperacao = []
                 alunos_liberados_refaccao = []
@@ -5974,36 +6031,17 @@ elif menu == "📊 Painel de Notas & Vistos":
                     v_c3_banco = util.sosa_to_float(reg_n.iloc[0].get('NOTA_PROVA', 0.0)) if not reg_n.empty else 0.0
                     v_rec_banco = util.sosa_to_float(reg_n.iloc[0].get('NOTA_REC', -1.0)) if not reg_n.empty else -1.0
 
-                    vistos_c1_calc = 0.0
-                    bonus_diario_calc = 0.0
+                    # Fusão Inteligente: Dá prioridade ao escaneamento ao vivo do Scanner CIR
+                    v_c1_live = vistos_live_dict.get(id_al_n, 0.0)
+                    v_c2_live = mapa_live_teste.get(id_al_n, 0.0)
+                    v_c3_live = mapa_live_prova.get(id_al_n, 0.0)
+                    v_rec_live = mapa_live_rec.get(id_al_n, -1.0)
+                    bonus_diario_calc = bonus_live_dict.get(id_al_n, 0.0)
 
-                    if not df_diario_trim.empty and 'ID_ALUNO' in df_diario_trim.columns:
-                        df_d_al = df_diario_trim[df_diario_trim['ID_ALUNO'].apply(db.limpar_id) == id_al_n].copy()
-                        if not df_d_al.empty and 'DATA' in df_d_al.columns:
-                            df_d_al['DATA_DT'] = pd.to_datetime(df_d_al['DATA'], format="%d/%m/%Y", errors='coerce').dt.date
-                            df_d_al_sub = df_d_al[(df_d_al['DATA_DT'] >= dt_i_n) & (df_d_al['DATA_DT'] <= dt_f_n)]
-                            
-                            if not df_d_al_sub.empty:
-                                d_validas = df_d_al_sub[df_d_al_sub.get('VISTO_ATIVIDADE', '').astype(str).str.upper() != "ISENTO"]
-                                tot_v_d = len(d_validas)
-                                ok_v_d = len(d_validas[d_validas.get('VISTO_ATIVIDADE', '').astype(str).str.upper() == "TRUE"])
-                                vistos_c1_calc = round((ok_v_d / tot_v_d * 3.0), 2) if tot_v_d > 0 else 0.0
-                                bonus_diario_calc = df_d_al_sub.get('BONUS', pd.Series()).apply(util.sosa_to_float).sum()
-
-                    c1_val = max(v_c1_banco, vistos_c1_calc)
-                    c2_val = v_c2_banco
-                    c3_val = v_c3_banco
-
-                    if not df_diag_trim.empty and 'ID_ALUNO' in df_diag_trim.columns and 'ID_AVALIACAO' in df_diag_trim.columns:
-                        scanned_al = df_diag_trim[(df_diag_trim['ID_ALUNO'].apply(db.limpar_id) == id_al_n) & (df_diag_trim['ID_AVALIACAO'].astype(str).str.contains(padrao_trim_regex, regex=True, case=False, na=False))]
-                        if not scanned_al.empty:
-                            st_teste = scanned_al[scanned_al['ID_AVALIACAO'].astype(str).str.upper().str.contains("TESTE")]
-                            if not st_teste.empty and c2_val == 0:
-                                c2_val = util.sosa_to_float(st_teste.iloc[-1].get('NOTA_CALCULADA', 0.0))
-                            
-                            st_prova = scanned_al[scanned_al['ID_AVALIACAO'].astype(str).str.upper().str.contains("PROVA")]
-                            if not st_prova.empty and c3_val == 0:
-                                c3_val = util.sosa_to_float(st_prova.iloc[-1].get('NOTA_CALCULADA', 0.0))
+                    c1_val = max(v_c1_banco, v_c1_live)
+                    c2_val = max(v_c2_banco, v_c2_live)
+                    c3_val = max(v_c3_banco, v_c3_live)
+                    rec_val = max(v_rec_banco, v_rec_live)
 
                     # Transbordamento positivo de Bônus (C1 ➔ C2 ➔ C3)
                     c1_final = min(3.0, c1_val + max(0.0, bonus_diario_calc))
@@ -6012,13 +6050,13 @@ elif menu == "📊 Painel de Notas & Vistos":
                     rem_bonus -= (c2_final - c2_val)
                     c3_final = min(4.0, c3_val + max(0.0, rem_bonus))
 
-                    media_sem_rec = min(10.0, c1_final + c2_final + c3_final)
-                    media_arredondada = round(media_sem_rec * 2) / 2
+                    soma_sem_rec = c1_final + c2_final + c3_final
+                    media_arredondada = min(10.0, round(soma_sem_rec * 2) / 2)
                     
-                    if v_rec_banco > 0:
-                        media_arredondada = max(media_arredondada, v_rec_banco)
+                    if rec_val > 0:
+                        media_arredondada = max(media_arredondada, rec_val)
 
-                    is_isento_refaccao = (media_sem_rec < 6.0 and media_arredondada >= 6.0)
+                    is_isento_refaccao = (soma_sem_rec < 6.0 and media_arredondada >= 6.0)
                     
                     if media_arredondada >= 6.0:
                         sit_txt = "🟢 ISENTO REC" if is_isento_refaccao else "✅ NA MÉDIA"
@@ -6046,7 +6084,7 @@ elif menu == "📊 Painel de Notas & Vistos":
                         "C2 (Testes - Teto 3.0)": c2_val,
                         "C3 (Prova - Teto 4.0)": c3_val,
                         "⭐ Bônus/Punição Líquido": bonus_diario_calc,
-                        "REC": v_rec_banco if v_rec_banco > 0 else 0.0,
+                        "REC": rec_val if rec_val > 0 else 0.0,
                         "Média Final": media_arredondada,
                         "Situação": sit_txt
                     })
@@ -6054,7 +6092,7 @@ elif menu == "📊 Painel de Notas & Vistos":
                 df_grid_ed_notas = pd.DataFrame(dados_grid_notas)
 
                 # -------------------------------------------------------------
-                # 2. NAVEGAÇÃO EXECUTIVA EM 3 VISÕES (ZERO POLUIÇÃO VISUAL)
+                # 4. NAVEGAÇÃO EM 3 VISÕES EXECUTIVAS LIMPAS
                 # -------------------------------------------------------------
                 visao_selecionada = st.segmented_control(
                     "Selecione a Visão:",
@@ -6070,7 +6108,7 @@ elif menu == "📊 Painel de Notas & Vistos":
                 if visao_selecionada == "📋 1. Consolidador de Notas":
                     with st.container(border=True):
                         c_head_c1, c_head_c2 = st.columns([3, 1])
-                        c_head_c1.caption(f"📅 **Período de Vistos do {trim_ativo_notas}:** {dt_i_n.strftime('%d/%m/%Y')} até {dt_f_n.strftime('%d/%m/%Y')}")
+                        c_head_c1.caption(f"📅 **Período Ativo de Vistos ({trim_ativo_notas}):** {dt_i_n.strftime('%d/%m/%Y')} até {dt_f_n.strftime('%d/%m/%Y')} • *Notas escaneadas sincronizadas dinamicamente ao vivo.*")
                         
                         with c_head_c2.popover("⚙️ Configurar Período / Cadeado", use_container_width=True):
                             st.markdown("#### 🔒 Cadeado de Vistos & Data de Corte")
@@ -6092,17 +6130,17 @@ elif menu == "📊 Painel de Notas & Vistos":
                                 st.rerun()
 
                     df_notas_editado = st.data_editor(
-                        df_grid_ed_notas, hide_index=True, use_container_width=True, height=380,
+                        df_grid_ed_notas, hide_index=True, use_container_width=True, height=420,
                         column_config={
                             "ID": None,
-                            "Estudante": st.column_config.TextColumn(disabled=True, width="medium"),
-                            "C1 (Vistos - Teto 3.0)": st.column_config.NumberColumn(format="%.1f", min_value=0.0, max_value=3.0),
-                            "C2 (Testes - Teto 3.0)": st.column_config.NumberColumn(format="%.1f", min_value=0.0, max_value=3.0),
-                            "C3 (Prova - Teto 4.0)": st.column_config.NumberColumn(format="%.1f", min_value=0.0, max_value=4.0),
-                            "⭐ Bônus/Punição Líquido": st.column_config.NumberColumn("⭐ Bônus Líquido", format="%.1f", disabled=True),
-                            "REC": st.column_config.NumberColumn("REC", format="%.1f", min_value=0.0, max_value=10.0),
-                            "Média Final": st.column_config.NumberColumn("Média Final", format="%.1f", disabled=True),
-                            "Situação": st.column_config.TextColumn(disabled=True)
+                            "Estudante": st.column_config.TextColumn("Estudante", disabled=True, width="medium"),
+                            "C1 (Vistos - Teto 3.0)": st.column_config.NumberColumn("C1 (Vistos)", format="%.1f", min_value=0.0, max_value=3.0, width="small"),
+                            "C2 (Testes - Teto 3.0)": st.column_config.NumberColumn("C2 (Testes)", format="%.1f", min_value=0.0, max_value=3.0, width="small"),
+                            "C3 (Prova - Teto 4.0)": st.column_config.NumberColumn("C3 (Prova)", format="%.1f", min_value=0.0, max_value=4.0, width="small"),
+                            "⭐ Bônus/Punição Líquido": st.column_config.NumberColumn("⭐ Bônus Líquido", format="%.1f", disabled=True, width="small"),
+                            "REC": st.column_config.NumberColumn("REC", format="%.1f", min_value=0.0, max_value=10.0, width="small"),
+                            "Média Final": st.column_config.NumberColumn("Média Final", format="%.1f", disabled=True, width="small"),
+                            "Situação": st.column_config.TextColumn("Situação", disabled=True, width="medium")
                         },
                         key=f"ed_grid_notas_main_{turma_notas}_{trim_ativo_notas}_{v}"
                     )
