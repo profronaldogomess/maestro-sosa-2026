@@ -1052,3 +1052,70 @@ def obter_config_corte_trimestre(turma, trimestre):
         return None
     except:
         return None
+
+def transferir_titularidade_gabarito(id_origem, nome_origem, id_destino, nome_destino, turma, trimestre, id_avaliacao, status_origem_apos="PENDENTE"):
+    """
+    SOSA V2026.MASTER - TROCA DE TITULARIDADE SOBERANA:
+    Transfere o gabarito, nota e evidência da prova de um aluno (trocado por engano)
+    para o aluno verdadeiro, recalculando o boletim de ambos em DB_NOTAS.
+    """
+    try:
+        wb = conectar()
+        if not wb: return False
+        
+        id_origem_clean = str(limpar_id(id_origem))
+        id_destino_clean = str(limpar_id(id_destino))
+        nome_curto_av = id_avaliacao.split("-")[0].strip()
+        
+        ws_gab = wb.worksheet("DB_GABARITOS_ALUNOS")
+        dados_gab = ws_gab.get_all_values()
+        
+        registro_origem = None
+        for i in range(1, len(dados_gab)):
+            row = dados_gab[i]
+            if len(row) > 4 and row[3] == turma and nome_curto_av in row[4]:
+                if str(limpar_id(row[1])) == id_origem_clean:
+                    registro_origem = row
+                    break
+                    
+        if not registro_origem:
+            return False
+            
+        data_prova = registro_origem[0]
+        id_av_real = registro_origem[4]
+        respostas_aluno = registro_origem[5]
+        nota_calc = registro_origem[6]
+        link_foto = registro_origem[7] if len(registro_origem) > 7 else "N/A"
+        
+        # 1. Remove qualquer registro anterior do aluno de destino para essa mesma prova (UPSERT)
+        for i in range(len(dados_gab) - 1, 0, -1):
+            row = dados_gab[i]
+            if len(row) > 4 and row[3] == turma and nome_curto_av in row[4]:
+                if str(limpar_id(row[1])) == id_destino_clean:
+                    ws_gab.delete_rows(i + 1)
+        
+        # 2. Salva o registro para o aluno de destino (verdadeiro dono)
+        salvar_no_banco("DB_GABARITOS_ALUNOS", [
+            data_prova, id_destino_clean, nome_destino, turma, id_av_real, respostas_aluno, nota_calc, link_foto
+        ])
+        
+        # 3. Trata o aluno de origem (quem estava com a prova por engano)
+        dados_gab_atual = ws_gab.get_all_values()
+        for i in range(len(dados_gab_atual) - 1, 0, -1):
+            row = dados_gab_atual[i]
+            if len(row) > 4 and row[3] == turma and nome_curto_av in row[4]:
+                if str(limpar_id(row[1])) == id_origem_clean:
+                    if "PENDENTE" in status_origem_apos.upper():
+                        ws_gab.delete_rows(i + 1)
+                    elif "FALTOU" in status_origem_apos.upper() or "JUSTIFICADO" in status_origem_apos.upper():
+                        ws_gab.update_cell(i + 1, 6, status_origem_apos)
+                        ws_gab.update_cell(i + 1, 7, "0,00")
+                        ws_gab.update_cell(i + 1, 8, "N/A")
+                        
+        # 4. Limpa e recalcula notas do trimestre
+        limpar_notas_turma_trimestre(turma, trimestre)
+        st.cache_data.clear()
+        return True
+    except Exception as e:
+        print(f"Erro ao transferir titularidade: {e}")
+        return False
