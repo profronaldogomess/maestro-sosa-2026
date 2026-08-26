@@ -5803,7 +5803,8 @@ Escola Municipal Flávio José Simões Costa"""
                                     padrao_h = rf"(?si)QUEST[AÃ]O\s*(?:PEI\s*)?0?{q_num}\b.*?(?:[:\-])\s*(.*?)(?=\.?\s*(?:JUSTIFICATIVA|PERÍCIA|ANÁLISE|DISTRATORES|$))"
                                     m_h = re.search(padrao_h, grade_txt)
                                     desc_item = m_h.group(1).strip() if m_h else "Habilidade matemática do item."
-                                    lacunas_detectadas.append(f"• **{nome_av_limpo} (Q{q_num:02d}):** {re.sub(r'[*#\[\]]', '', desc_item)}")
+                                    desc_item_limpo = re.sub(r'[*#\[\]]', '', desc_item).strip()
+                                    lacunas_detectadas.append(f"• **{nome_av_limpo} (Q{q_num:02d}):** {desc_item_limpo}")
 
                     if lacunas_detectadas:
                         with st.container(border=True):
