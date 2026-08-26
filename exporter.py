@@ -914,63 +914,112 @@ def gerar_docx_pei_qualitativa(titulo_doc, conteudo, info):
 # 8. ETIQUETAS DE NOTAS
 # ==============================================================================
 def gerar_docx_etiquetas_notas(nome_arquivo, dados_alunos, info):
+    """
+    SOSA V2026.PRO_INFINITY - ETIQUETAS OFICIAIS DE NOTAS & RECUPERAÇÃO (A4)
+    Design executivo, limpo, sem poluição de emojis, com fórmula oficial de recuperação
+    (Média + Prova)/2 e mensagens claras para alunos e responsáveis.
+    """
     file_stream = io.BytesIO()
     try:
         doc = Document()
         section = doc.sections[0]
-        section.top_margin = section.bottom_margin = Inches(0.4)
-        section.left_margin = section.right_margin = Inches(0.4)
+        section.top_margin = section.bottom_margin = Inches(0.35)
+        section.left_margin = section.right_margin = Inches(0.35)
 
         style = doc.styles['Normal']
         style.font.name = 'Arial'
-        style.font.size = Pt(9.5)
+        style.font.size = Pt(9)
 
         table = doc.add_table(rows=0, cols=2)
         table.style = 'Table Grid'
-        table.columns[0].width = Inches(3.7)
-        table.columns[1].width = Inches(3.7)
+        table.columns[0].width = Inches(3.8)
+        table.columns[1].width = Inches(3.8)
+
+        turma_label = sanitizar_xml_str(str(info.get('turma', '6º Ano')))
+        trim_label = sanitizar_xml_str(str(info.get('trimestre', 'II Trimestre')))
 
         for i in range(0, len(dados_alunos), 2):
-            row = table.add_row() 
-            set_row_height(row, 130)
+            row = table.add_row()
+            set_row_height(row, 125)
 
             for j in range(2):
                 if i + j < len(dados_alunos):
-                    aluno = dados_alunos[i+j]
+                    aluno = dados_alunos[i + j]
                     c = row.cells[j]
                     c.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+                    set_cell_background(c, "FAFAFA")
                     
                     p = c.paragraphs[0]
+                    p.paragraph_format.space_before = Pt(3)
                     p.paragraph_format.space_after = Pt(2)
+                    p.paragraph_format.line_spacing = 1.1
                     
-                    p.add_run("ESCOLA MUNICIPAL FLÁVIO JOSÉ SIMÕES COSTA\n").bold = True
-                    p.add_run(f"Estudante: {sanitizar_xml_str(str(aluno['nome']))}\n").bold = True
-                    p.add_run(f"Turma: {sanitizar_xml_str(str(info['turma']))} | {sanitizar_xml_str(str(info['trimestre']))}\n\n").font.size = Pt(8.5)
+                    # Cabeçalho da Etiqueta
+                    r_esc = p.add_run("ESCOLA MUNICIPAL FLÁVIO JOSÉ SIMÕES COSTA\n")
+                    r_esc.bold = True
+                    r_esc.font.size = Pt(8.5)
+                    r_esc.font.color.rgb = RGBColor(0, 51, 102)
                     
-                    p.add_run(f"🏛️ C1 (Vistos/Caderno): {sanitizar_xml_str(str(aluno['vistos']))}\n")
-                    p.add_run(f"📝 C2 (Testes/Trabalhos): {sanitizar_xml_str(str(aluno['teste']))}\n")
-                    p.add_run(f"📄 C3 (Prova Oficial): {sanitizar_xml_str(str(aluno['prova']))}\n")
+                    nome_al_limpo = sanitizar_xml_str(str(aluno.get('nome', 'Estudante'))).replace("👤 ", "").replace("♿ ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
+                    p.add_run(f"Estudante: {nome_al_limpo}\n").bold = True
+                    p.add_run(f"Turma: {turma_label} | Período: {trim_label}\n").font.size = Pt(8.0)
                     
-                    run_obs = p.add_run(f"* Bônus conquistados (+{aluno['bonus']} pts) embutidos acima.\n\n")
-                    run_obs.font.size = Pt(8)
-                    run_obs.font.italic = True
-                    run_obs.font.color.rgb = RGBColor(100, 116, 139)
+                    # Linha de Pontuação Detalhada
+                    c1_v = sanitizar_xml_str(str(aluno.get('c1', aluno.get('vistos', '0.0'))))
+                    c2_v = sanitizar_xml_str(str(aluno.get('c2', aluno.get('teste', '0.0'))))
+                    c3_v = sanitizar_xml_str(str(aluno.get('c3', aluno.get('prova', '0.0'))))
+                    bonus_v = sanitizar_xml_str(str(aluno.get('bonus', '0.0')))
+                    media_v = sanitizar_xml_str(str(aluno.get('media', '0.0')))
+
+                    # Se vier formato composto, extrai somente números limpos
+                    p_comp = p.add_run(f"Caderno (C1): {c1_v} | Teste (C2): {c2_v} | Prova (C3): {c3_v} | Bônus: {bonus_v}\n")
+                    p_comp.font.size = Pt(8.0)
+                    p_comp.font.color.rgb = RGBColor(71, 85, 105)
                     
-                    run_media = p.add_run(f"📊 MÉDIA FINAL: {sanitizar_xml_str(str(aluno['media']))}\n")
-                    run_media.bold = True
-                    run_media.font.size = Pt(11)
+                    r_med = p.add_run(f"MÉDIA DO TRIMESTRE: {media_v} pts\n")
+                    r_med.bold = True
+                    r_med.font.size = Pt(10.0)
                     
-                    run_status = p.add_run(f"SITUAÇÃO: {sanitizar_xml_str(str(aluno['status']))}")
-                    run_status.bold = True
-                    if "APROVADO" in aluno['status']: run_status.font.color.rgb = RGBColor(0, 128, 0)
-                    else: run_status.font.color.rgb = RGBColor(204, 0, 0)
+                    status_raw = str(aluno.get('status', 'APROVADO')).upper()
+                    precisa_rec_val = aluno.get('precisa_rec', None)
+
+                    # Se o aluno precisa de recuperação (< 6.0)
+                    if "CONVOCADO" in status_raw or "RECUPERAÇÃO" in status_raw or helper_sosa_float(media_v) < 6.0:
+                        r_st = p.add_run("SITUAÇÃO: CONVOCADO PARA RECUPERAÇÃO TRIMESTRAL\n")
+                        r_st.bold = True
+                        r_st.font.size = Pt(8.5)
+                        r_st.font.color.rgb = RGBColor(192, 0, 0)
+                        
+                        media_num = helper_sosa_float(media_v)
+                        nota_necessaria_rec = max(0.0, 12.0 - media_num)
+                        
+                        if nota_necessaria_rec <= 10.0:
+                            p.add_run(f"• Meta na Prova de Recuperação (0 a 10): Tirar no mínimo {nota_necessaria_rec:.1f}\n").bold = True
+                        else:
+                            p.add_run(f"• Meta na Prova de Recuperação: Tirar 10.0 (Necessita de Conselho Final)\n").bold = True
+                            
+                        r_regra = p.add_run("• Regra Oficial: (Média do Trimestre + Prova de Rec.) ÷ 2 ≥ 6.0\n")
+                        r_regra.font.size = Pt(7.5)
+                        r_regra.font.italic = True
+                    else:
+                        r_st = p.add_run("SITUAÇÃO: APROVADO NO TRIMESTRE\n")
+                        r_st.bold = True
+                        r_st.font.size = Pt(8.5)
+                        r_st.font.color.rgb = RGBColor(0, 128, 0)
+                        p.add_run("Parabéns! Você atingiu a média e está dispensado da recuperação.\n").font.size = Pt(8.0)
+
+                    r_prof = p.add_run("Prof. Ronaldo Gomes • Componente Curricular de Matemática")
+                    r_prof.font.size = Pt(7.5)
+                    r_prof.font.color.rgb = RGBColor(100, 116, 139)
 
         doc.save(file_stream)
         file_stream.seek(0)
         return file_stream
     except Exception as e:
         file_stream = io.BytesIO()
-        err_doc = Document(); err_doc.add_paragraph(f"ERRO NAS ETIQUETAS: {sanitizar_xml_str(str(e))}"); err_doc.save(file_stream)
+        err_doc = Document()
+        err_doc.add_paragraph(f"ERRO NAS ETIQUETAS: {sanitizar_xml_str(str(e))}")
+        err_doc.save(file_stream)
         file_stream.seek(0)
         return file_stream
 
