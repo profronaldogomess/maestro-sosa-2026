@@ -4317,7 +4317,68 @@ elif menu == "📸 Scanner de Gabaritos":
                                     if not df_gab_pre.empty and "Letra" in df_gab_pre.columns:
                                         gab_alvo = df_gab_pre["Letra"].tolist()
 
-                                if is_pei_grading or "REGULAR" in lente_upper:
+                                # DETECTOR DE AVALIAÇÃO DISCURSIVA / ABERTA (RECUPERAÇÃO OU 2ª CHAMADA)
+                                is_av_discursiva = any(x in str(at_sel).upper() for x in [
+                                    "RECUPERAÇÃO", "RECUPERACAO", "2ª CHAMADA", "2A CHAMADA", "2ª_CHAMADA", "DISCURSIVA", "ABERTA"
+                                ]) and "FINAL" not in str(at_sel).upper()
+
+                                if is_av_discursiva:
+                                    st.info(f"📝 **Mesa de Lançamento Discursivo Aberto:** Avaliação discursiva valendo de **0,0 a {v_total_at:.1f} pontos**.")
+                                    
+                                    c_disc1, c_disc2 = st.columns([1.2, 1.8])
+                                    nota_discursiva_inp = c_disc1.number_input(
+                                        f"Nota Obtida pelo Estudante (0.0 a {v_total_at:.1f}):",
+                                        min_value=0.0, max_value=float(v_total_at), value=float(min(v_total_at, 6.0)), step=0.5,
+                                        key=f"inp_nota_disc_{v}"
+                                    )
+                                    
+                                    img_disc_file = c_disc2.file_uploader("📷 Anexar Foto da Prova Aberta (Evidência no Drive) - Opcional:", type=["jpg", "jpeg", "png"], key=f"up_disc_ev_{v}")
+
+                                    # Pré-visualização do impacto no Boletim
+                                    if "RECUPERAÇÃO" in str(at_sel).upper() or "RECUPERACAO" in str(at_sel).upper():
+                                        st.caption("ℹ️ **Aplicação da Regra Oficial:** Esta nota alimentará a coluna `REC` e recalculará a média do trimestre por `(Média Inicial + REC) ÷ 2`.")
+
+                                    c_b_disc1, c_b_disc2 = st.columns(2)
+                                    if c_b_disc1.button("💾 GRAVAR NOTA DISCURSIVA NO BOLETIM", type="primary", use_container_width=True, key=f"btn_save_disc_{v}"):
+                                        with st.spinner("Gravando nota discursiva e recalculando boletim..."):
+                                            link_evidencia_disc = "N/A"
+                                            if img_disc_file is not None:
+                                                link_evidencia_disc = db.subir_e_converter_para_google_docs(
+                                                    img_disc_file.getvalue(), 
+                                                    alunos_alvo[0].replace(" ", "_"), 
+                                                    trimestre=tr_sel, categoria=t_sel, semana=str(at_sel), modo="SCANNER"
+                                                )
+
+                                            df_turma_completa = df_alunos[df_alunos['TURMA'] == t_sel] if not df_alunos.empty else pd.DataFrame()
+                                            for aluno_nome in alunos_alvo:
+                                                match_al_d = df_turma_completa[df_turma_completa['NOME_ALUNO'] == aluno_nome]
+                                                if not match_al_d.empty:
+                                                    id_al_d = db.limpar_id(match_al_d.iloc[0].get('ID', ''))
+                                                    db.excluir_registro("DB_GABARITOS_ALUNOS", id_al_d)
+                                                    
+                                                    respostas_salvar_disc = f"DISCURSIVA|NOTA:{nota_discursiva_inp:.2f}"
+                                                    db.salvar_no_banco("DB_GABARITOS_ALUNOS", [
+                                                        datetime.now().strftime("%d/%m/%Y"), id_al_d, aluno_nome, t_sel, str(at_sel),
+                                                        respostas_salvar_disc, util.sosa_to_str(nota_discursiva_inp), link_evidencia_disc
+                                                    ])
+                                            
+                                            db.limpar_notas_turma_trimestre(t_sel, tr_sel)
+                                            st.success(f"✅ Nota de {alunos_alvo[0]} ({nota_discursiva_inp:.1f} pts) gravada e recalculada com sucesso!")
+                                            time.sleep(0.8); st.rerun()
+
+                                    if c_b_disc2.button("❌ Marcar Ausência (Faltou)", use_container_width=True, key=f"btn_aus_disc_{v}"):
+                                        for aluno_nome in alunos_alvo:
+                                            match_al_aus = alunos_turma_df[alunos_turma_df['NOME_ALUNO'] == aluno_nome]
+                                            if not match_al_aus.empty:
+                                                id_al = db.limpar_id(match_al_aus.iloc[0].get('ID', ''))
+                                                db.excluir_registro("DB_GABARITOS_ALUNOS", id_al)
+                                                db.salvar_no_banco("DB_GABARITOS_ALUNOS", [
+                                                    datetime.now().strftime("%d/%m/%Y"), id_al, aluno_nome, t_sel, at_sel, "FALTOU_INJUSTIFICADO|Ausente na Recuperação", "0,00", "N/A"
+                                                ])
+                                        db.limpar_notas_turma_trimestre(t_sel, tr_sel)
+                                        st.rerun()
+
+                                elif is_pei_grading or "REGULAR" in lente_upper:
                                     c_m1, c_m2 = st.columns([2, 1])
                                     modo_correcao = c_m1.pills("Método de Correção:", ["📸 Scanner Câmera", "✍️ Digitação Manual (Speed Grader)"], default="📸 Scanner Câmera", key=f"mc_pills_{v}")
                                     
@@ -4349,7 +4410,7 @@ elif menu == "📸 Scanner de Gabaritos":
                                                 st.rerun()
 
                                         if "current_scan_res" in st.session_state:
-                                            # 🚨 VALIDADOR VISUAL ANTI-TROCA DE NOME (ARMADURA 2)
+                                            # VALIDADOR VISUAL ANTI-TROCA DE NOME
                                             nome_det_cabecalho = str(st.session_state.get("current_scan_nome_det", "")).upper().strip()
                                             aluno_selecionado_upper = str(alunos_alvo[0]).upper().strip()
 
@@ -4357,7 +4418,6 @@ elif menu == "📸 Scanner de Gabaritos":
                                                 primeiro_nome_det = nome_det_cabecalho.split()[0]
                                                 primeiro_nome_sel = aluno_selecionado_upper.split()[0]
                                                 
-                                                # Detecta se há divergência evidente (ex: DAVI x DAVID ou nomes diferentes)
                                                 is_divergente = False
                                                 if primeiro_nome_det in ["DAVI", "DAVID"] and primeiro_nome_sel in ["DAVI", "DAVID"] and primeiro_nome_det != primeiro_nome_sel:
                                                     is_divergente = True
