@@ -531,10 +531,84 @@ def adicionar_cartao_resposta_fiducial_word(doc, num_total_q, is_pei=False):
                 p_b.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 p_b.add_run("○").font.size = Pt(12)
 
+def adicionar_box_calculo_discursivo_word(doc):
+    """Cria uma caixa pautada oficial para resolução de cálculo e resposta final do aluno."""
+    table = doc.add_table(rows=1, cols=1)
+    table.style = 'Table Grid'
+    table.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    cell = table.cell(0, 0)
+    cell.width = Inches(7.2)
+    
+    set_cell_background(cell, "FAFAFA")
+    set_row_height(table.rows[0], 90) # Altura ampla para cálculos
+    
+    p = cell.paragraphs[0]
+    p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    p.paragraph_format.space_before = Pt(4)
+    p.paragraph_format.space_after = Pt(4)
+    
+    run_icon = p.add_run("✍️ MEMÓRIA DE CÁLCULO E RESPOSTA FINAL DO ESTUDANTE:\n")
+    run_icon.font.bold = True
+    run_icon.font.size = Pt(8.5)
+    run_icon.font.color.rgb = RGBColor(100, 116, 139)
+    
+    doc.add_paragraph()
+
+def renderizar_conteudo_discursivo_com_caixas(doc, texto_bruto):
+    """Renderiza questões abertas com caixas pautadas de resolução para cada item."""
+    linhas = sanitizar_xml_str(str(texto_bruto)).split('\n')
+    buffer_tabela = []
+    em_tabela = False
+    
+    for linha in linhas:
+        l_s = linha.strip()
+        
+        if l_s.startswith('|') and l_s.endswith('|'):
+            em_tabela = True
+            buffer_tabela.append(l_s)
+            continue
+        else:
+            if em_tabela:
+                renderizar_tabela_markdown_no_word(doc, buffer_tabela)
+                buffer_tabela = []
+                em_tabela = False
+                
+        if not l_s: continue
+        
+        if "[" in l_s and "PROMPT IMAGEM" in l_s.upper():
+            desc_p = re.sub(r'\[\s*PROMPT IMAGEM:\s*|\s*\]', '', l_s, flags=re.IGNORECASE)
+            adicionar_box_imagem_word(doc, desc_p)
+            continue
+            
+        p = doc.add_paragraph()
+        p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+        p.paragraph_format.space_after = Pt(4)
+        p.paragraph_format.line_spacing = 1.15
+
+        if l_s.upper().startswith("QUESTÃO") or l_s.upper().startswith("ITEM"):
+            match = re.match(r"^(QUEST[AÃ]O\s*\d+|ITEM\s*\d+)(\s*\(.*?\))?([\s\.\-\:]+)(.*)", l_s, re.IGNORECASE)
+            if match:
+                rotulo = f"{match.group(1).upper()}{match.group(2) if match.group(2) else ''}{match.group(3)}"
+                run_r = p.add_run(rotulo)
+                run_r.bold = True
+                run_r.font.size = Pt(10.5)
+                run_r.font.color.rgb = RGBColor(0, 51, 102)
+                adicionar_texto_formatado(p, match.group(4).strip())
+                # Adiciona caixa de cálculo para a questão
+                adicionar_box_calculo_discursivo_word(doc)
+                continue
+
+        adicionar_texto_formatado(p, l_s)
+        
+    if em_tabela and buffer_tabela:
+        renderizar_tabela_markdown_no_word(doc, buffer_tabela)
+
 def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
     """
-    SOSA V2026.MASTER - GERADOR DE PROVAS COM SUPORTE A TABELAS REAIS DO WORD
-    Converte tabelas Markdown em tabelas oficiais com cabeçalho azul.
+    SOSA V2026.PRO_INFINITY - GERADOR HÍBRIDO DE AVALIAÇÕES (OBJETIVAS COM OMR OU DISCURSIVAS COM PAUTAS)
+    Identifica automaticamente a natureza da prova e aplica o layout apropriado:
+    - Provas Regulares / Testes: 2 colunas com Cartão OMR Fiducial (■ e ○).
+    - Recuperação Paralela / 2ª Chamada: 1 coluna com caixas amplas de memória de cálculo.
     """
     file_stream = io.BytesIO()
     try:
@@ -550,13 +624,20 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         conteudo_ia_limpo = sanitizar_xml_str(str(conteudo_ia))
         is_pei_doc = "PEI" in titulo_doc.upper() or "ADAPTADA" in titulo_doc.upper()
         
+        # Detector de Natureza Discursiva (Recuperação Paralela ou 2ª Chamada Aberta)
+        tipo_prova_info = str(info.get('tipo_prova', '')).upper()
+        titulo_upper = str(titulo_doc).upper()
+        is_discursiva = any(x in titulo_upper or x in tipo_prova_info for x in [
+            "RECUPERAÇÃO", "RECUPERACAO", "2ª CHAMADA", "2A CHAMADA", "2ª_CHAMADA", "DISCURSIVA", "ABERTA"
+        ]) and "FINAL" not in titulo_upper
+
         corpo_bruto = ""
         if is_pei_doc:
             corpo_bruto = (ai.extrair_tag(conteudo_ia_limpo, "PEI_NIVEL_1") or 
                            ai.extrair_tag(conteudo_ia_limpo, "PEI") or 
                            ai.extrair_tag(conteudo_ia_limpo, "PEI_NIVEL_2"))
         else:
-            corpo_bruto = ai.extrair_tag(conteudo_ia_limpo, "ALUNO")
+            corpo_bruto = ai.extrair_tag(conteudo_ia_limpo, "ALUNO") or ai.extrair_tag(conteudo_ia_limpo, "QUESTOES")
 
         if not corpo_bruto or len(corpo_bruto.strip()) < 10:
             match_primeira_q = re.search(r"(?i)QUESTÃO\s*\d+", conteudo_ia_limpo)
@@ -571,15 +652,19 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         if num_total_q == 0: 
             num_total_q = int(helper_sosa_float(info.get('qtd_questoes', info.get('qtd', 10))))
         
-        label_prova = "AVALIAÇÃO ADAPTADA" if is_pei_doc else "AVALIAÇÃO DE MATEMÁTICA (ENEM/SAEB)"
-        if any(x in titulo_doc.upper() for x in ["REVISAO", "RECOMPOSICAO", "RAIO-X"]):
-            label_prova = "CADERNO DE RECOMPOSIÇÃO E REVISÃO"
+        # Rótulo de Cabeçalho
+        if is_discursiva:
+            if "RECUPERAÇÃO" in titulo_upper or "RECUPERACAO" in titulo_upper:
+                label_prova = "RECUPERAÇÃO PARALELA (AVALIAÇÃO DISCURSIVA)"
+            else:
+                label_prova = "AVALIAÇÃO DE SEGUNDA CHAMADA (DISCURSIVA)"
+        else:
+            label_prova = "AVALIAÇÃO ADAPTADA" if is_pei_doc else "AVALIAÇÃO DE MATEMÁTICA (ENEM/SAEB)"
 
-        val_total_num = helper_sosa_float(info.get('valor', 3.0))
-        if val_total_num == 0: val_total_num = 3.0
+        val_total_num = helper_sosa_float(info.get('valor', 10.0 if is_discursiva else 4.0))
+        if val_total_num == 0: val_total_num = 10.0 if is_discursiva else 4.0
 
-        val_q_calc = val_total_num / num_total_q if num_total_q > 0 else 0.3
-        
+        val_q_calc = val_total_num / num_total_q if num_total_q > 0 else (10.0 / max(num_total_q, 1))
         val_total_str = f"{val_total_num:.1f}"
         val_q_str = f"{val_q_calc:.2f}".replace(".", ",")
         
@@ -599,17 +684,25 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         set_cell_background(c_orient, "F8FAFC")
         
         p_tit = c_orient.paragraphs[0]
-        r_tit_inst = p_tit.add_run("📋 ORIENTAÇÕES DE EXECUÇÃO E RECOMPOSIÇÃO:")
+        r_tit_inst = p_tit.add_run("📋 ORIENTAÇÕES DE EXECUÇÃO:")
         r_tit_inst.bold = True
         r_tit_inst.font.size = Pt(9.5)
         r_tit_inst.font.color.rgb = RGBColor(0, 51, 102)
         
-        orient_list = [
-            f"Valor Total: {val_total_str} pts | Valor por Questão: {val_q_str} pts.",
-            "Preencha o Cartão-Resposta com caneta esferográfica preta ou azul.",
-            "🚨 REGRA DA MEMÓRIA DE CÁLCULO: Apresente a resolução matemática no papel para validação do item.",
-            "Mantenha os 4 marcadores pretos (■) dos cantos limpos para leitura óptica."
-        ]
+        if is_discursiva:
+            orient_list = [
+                f"Valor Total: {val_total_str} pontos | Avaliação Discursiva Aberta.",
+                "Apresente de forma clara a memória de cálculo em cada questão no espaço reservado.",
+                "Respostas sem a devida demonstração matemática do cálculo não receberão pontuação integral.",
+                "Utilize caneta esferográfica preta ou azul para a declaração da resposta final."
+            ]
+        else:
+            orient_list = [
+                f"Valor Total: {val_total_str} pts | Valor por Questão: {val_q_str} pts.",
+                "Preencha o Cartão-Resposta com caneta esferográfica preta ou azul.",
+                "🚨 REGRA DA MEMÓRIA DE CÁLCULO: Apresente a resolução matemática no papel para validação do item.",
+                "Mantenha os 4 marcadores pretos (■) dos cantos limpos para leitura óptica."
+            ]
 
         for txt in orient_list:
             p = c_orient.add_paragraph()
@@ -618,20 +711,22 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
 
         doc.add_paragraph()
 
-        # 3. CARTÃO-RESPOSTA PADRONIZADO
-        if info.get('tipo_prova') != "2ª Chamada":
+        # 3. CARTÃO OMR OU TRANSIÇÃO DISCURSIVA
+        if not is_discursiva:
+            # Insere Cartão OMR Fiducial apenas para provas objetivas
             adicionar_cartao_resposta_fiducial_word(doc, num_total_q, is_pei_doc)
-
-        doc.add_paragraph()
-
-        # 4. ENUNCIADOS COM PARSER DE TABELAS EM COLUNA DUPLA
-        new_section = doc.add_section(WD_SECTION.CONTINUOUS)
-        sectPr = new_section._sectPr
-        cols = sectPr.xpath('./w:cols')[0]
-        cols.set(qn('w:num'), '2')
-        cols.set(qn('w:space'), '450')
-
-        renderizar_conteudo_com_tabelas(doc, corpo_bruto)
+            doc.add_paragraph()
+            
+            # 2 Colunas para Provas Objetivas
+            new_section = doc.add_section(WD_SECTION.CONTINUOUS)
+            sectPr = new_section._sectPr
+            cols = sectPr.xpath('./w:cols')[0]
+            cols.set(qn('w:num'), '2')
+            cols.set(qn('w:space'), '450')
+            renderizar_conteudo_com_tabelas(doc, corpo_bruto)
+        else:
+            # 1 Coluna Larga com Caixas de Cálculo para Provas Discursivas
+            renderizar_conteudo_discursivo_com_caixas(doc, corpo_bruto)
 
         doc.save(file_stream)
         file_stream.seek(0)
