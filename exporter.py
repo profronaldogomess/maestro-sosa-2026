@@ -915,9 +915,11 @@ def gerar_docx_pei_qualitativa(titulo_doc, conteudo, info):
 # ==============================================================================
 def gerar_docx_etiquetas_notas(nome_arquivo, dados_alunos, info):
     """
-    SOSA V2026.PRO_INFINITY - ETIQUETAS OFICIAIS DE NOTAS & RECUPERAÇÃO (A4)
-    Design executivo, limpo, sem poluição de emojis, com fórmula oficial de recuperação
-    (Média + Prova)/2 e mensagens claras para alunos e responsáveis.
+    SOSA V2026.PRO_INFINITY - ETIQUETAS OFICIAIS DE NOTAS, REFACÇÃO (+0.5) E RECUPERAÇÃO
+    Design executivo A4 em 2 colunas, limpo, sem emojis excessivos, contemplando:
+    1. Aprovados (>= 6.0) com opção de refacção para elevar a nota (+0.5).
+    2. Estudantes com 5.5 (Refacção no caderno para fechar 6.0 e isentar prova).
+    3. Convocados (< 5.5) com cálculo da Prova de Recuperação (0 a 10) pela regra (Média+Prova)/2.
     """
     file_stream = io.BytesIO()
     try:
@@ -940,7 +942,7 @@ def gerar_docx_etiquetas_notas(nome_arquivo, dados_alunos, info):
 
         for i in range(0, len(dados_alunos), 2):
             row = table.add_row()
-            set_row_height(row, 125)
+            set_row_height(row, 130)
 
             for j in range(2):
                 if i + j < len(dados_alunos):
@@ -954,7 +956,7 @@ def gerar_docx_etiquetas_notas(nome_arquivo, dados_alunos, info):
                     p.paragraph_format.space_after = Pt(2)
                     p.paragraph_format.line_spacing = 1.1
                     
-                    # Cabeçalho da Etiqueta
+                    # 1. Cabeçalho Oficial
                     r_esc = p.add_run("ESCOLA MUNICIPAL FLÁVIO JOSÉ SIMÕES COSTA\n")
                     r_esc.bold = True
                     r_esc.font.size = Pt(8.5)
@@ -964,50 +966,66 @@ def gerar_docx_etiquetas_notas(nome_arquivo, dados_alunos, info):
                     p.add_run(f"Estudante: {nome_al_limpo}\n").bold = True
                     p.add_run(f"Turma: {turma_label} | Período: {trim_label}\n").font.size = Pt(8.0)
                     
-                    # Linha de Pontuação Detalhada
+                    # 2. Discriminação dos Pontos
                     c1_v = sanitizar_xml_str(str(aluno.get('c1', aluno.get('vistos', '0.0'))))
                     c2_v = sanitizar_xml_str(str(aluno.get('c2', aluno.get('teste', '0.0'))))
                     c3_v = sanitizar_xml_str(str(aluno.get('c3', aluno.get('prova', '0.0'))))
                     bonus_v = sanitizar_xml_str(str(aluno.get('bonus', '0.0')))
                     media_v = sanitizar_xml_str(str(aluno.get('media', '0.0')))
+                    media_num = helper_sosa_float(media_v)
 
-                    # Se vier formato composto, extrai somente números limpos
                     p_comp = p.add_run(f"Caderno (C1): {c1_v} | Teste (C2): {c2_v} | Prova (C3): {c3_v} | Bônus: {bonus_v}\n")
                     p_comp.font.size = Pt(8.0)
                     p_comp.font.color.rgb = RGBColor(71, 85, 105)
                     
-                    r_med = p.add_run(f"MÉDIA DO TRIMESTRE: {media_v} pts\n")
+                    r_med = p.add_run(f"MÉDIA DO TRIMESTRE: {media_num:.1f} pontos\n")
                     r_med.bold = True
-                    r_med.font.size = Pt(10.0)
+                    r_med.font.size = Pt(9.5)
                     
-                    status_raw = str(aluno.get('status', 'APROVADO')).upper()
-                    precisa_rec_val = aluno.get('precisa_rec', None)
-
-                    # Se o aluno precisa de recuperação (< 6.0)
-                    if "CONVOCADO" in status_raw or "RECUPERAÇÃO" in status_raw or helper_sosa_float(media_v) < 6.0:
-                        r_st = p.add_run("SITUAÇÃO: CONVOCADO PARA RECUPERAÇÃO TRIMESTRAL\n")
-                        r_st.bold = True
-                        r_st.font.size = Pt(8.5)
-                        r_st.font.color.rgb = RGBColor(192, 0, 0)
-                        
-                        media_num = helper_sosa_float(media_v)
-                        nota_necessaria_rec = max(0.0, 12.0 - media_num)
-                        
-                        if nota_necessaria_rec <= 10.0:
-                            p.add_run(f"• Meta na Prova de Recuperação (0 a 10): Tirar no mínimo {nota_necessaria_rec:.1f}\n").bold = True
-                        else:
-                            p.add_run(f"• Meta na Prova de Recuperação: Tirar 10.0 (Necessita de Conselho Final)\n").bold = True
-                            
-                        r_regra = p.add_run("• Regra Oficial: (Média do Trimestre + Prova de Rec.) ÷ 2 ≥ 6.0\n")
-                        r_regra.font.size = Pt(7.5)
-                        r_regra.font.italic = True
-                    else:
+                    # 3. Os 3 Caminhos Claros da Práxis Pedagógica
+                    if media_num >= 6.0:
+                        # CASO 1: APROVADO NO TRIMESTRE
                         r_st = p.add_run("SITUAÇÃO: APROVADO NO TRIMESTRE\n")
                         r_st.bold = True
                         r_st.font.size = Pt(8.5)
                         r_st.font.color.rgb = RGBColor(0, 128, 0)
-                        p.add_run("Parabéns! Você atingiu a média e está dispensado da recuperação.\n").font.size = Pt(8.0)
+                        
+                        p.add_run("• Parabéns! Você atingiu a média e está dispensado da recuperação.\n").font.size = Pt(8.0)
+                        r_ref = p.add_run("• Oportunidade de Refacção: Entregue a prova corrigida no caderno para somar +0.5 pts e elevar sua média!\n")
+                        r_ref.font.size = Pt(7.5)
+                        r_ref.font.italic = True
+                        
+                    elif media_num == 5.5:
+                        # CASO 2: ALUNO COM 5.5 (REFACÇÃO SOLIDÁRIA PARA FECHAR 6.0)
+                        r_st = p.add_run("SITUAÇÃO: OPORTUNIDADE DE REFACÇÃO SOLIDÁRIA (+0.5)\n")
+                        r_st.bold = True
+                        r_st.font.size = Pt(8.5)
+                        r_st.font.color.rgb = RGBColor(204, 102, 0) # Laranja Alerta
+                        
+                        p.add_run("• Refacção no Caderno: Refaça as questões que errou no caderno para somar +0.5 pts, atingir a MÉDIA 6.0 e ser dispensado da prova!\n").bold = True
+                        r_rec_info = p.add_run("• Prova de Recuperação (Opcional): Caso prefira fazer a prova (0 a 10), precisará de 6.5. Regra: (Média + Prova) ÷ 2 ≥ 6.0\n")
+                        r_rec_info.font.size = Pt(7.5)
+                        r_rec_info.font.italic = True
+                        
+                    else:
+                        # CASO 3: CONVOCADO PARA RECUPERAÇÃO PARALELA (< 5.5)
+                        r_st = p.add_run("SITUAÇÃO: CONVOCADO PARA RECUPERAÇÃO PARALELA\n")
+                        r_st.bold = True
+                        r_st.font.size = Pt(8.5)
+                        r_st.font.color.rgb = RGBColor(192, 0, 0) # Vermelho
+                        
+                        nota_necessaria_rec = max(0.0, 12.0 - media_num)
+                        if nota_necessaria_rec <= 10.0:
+                            p.add_run(f"• Meta na Prova de Recuperação (0 a 10): Tirar no mínimo {nota_necessaria_rec:.1f} pontos\n").bold = True
+                        else:
+                            p.add_run("• Meta na Prova de Recuperação: Tirar 10.0 pontos (Necessita de Conselho Final)\n").bold = True
+                            
+                        p.add_run("• Refacção Solidária: Entregue a prova corrigida no caderno para somar +0.5 pts na sua base!\n").font.size = Pt(7.5)
+                        r_regra = p.add_run("• Regra Oficial: (Média do Trimestre + Prova de Recuperação) ÷ 2 ≥ 6.0\n")
+                        r_regra.font.size = Pt(7.5)
+                        r_regra.font.italic = True
 
+                    # Rodapé da Etiqueta
                     r_prof = p.add_run("Prof. Ronaldo Gomes • Componente Curricular de Matemática")
                     r_prof.font.size = Pt(7.5)
                     r_prof.font.color.rgb = RGBColor(100, 116, 139)
