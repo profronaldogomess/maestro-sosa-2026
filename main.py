@@ -6192,6 +6192,31 @@ elif menu == "📊 Painel de Notas & Vistos":
                                 st.balloons(); time.sleep(1); st.rerun()
 
                     if c_sav_b2.button("🖨️ GERAR ETIQUETAS DE CADERNO EM WORD (DOCX)", use_container_width=True, key=f"btn_etiq_docx_clean_{v}"):
+                        with st.spinner("Gerando etiquetas Word A4 com regras de Refacção e Recuperação..."):
+                            dados_etiq = []
+                            for _, r_ed in df_grid_ed_notas.iterrows():
+                                media_al_val = util.sosa_to_float(r_ed['Média Final'])
+                                
+                                dados_etiq.append({
+                                    "nome": r_ed['Estudante'],
+                                    "c1": f"{util.sosa_to_float(r_ed['C1 (Vistos - Teto 3.0)']):.1f}",
+                                    "c2": f"{util.sosa_to_float(r_ed['C2 (Testes - Teto 3.0)']):.1f}",
+                                    "c3": f"{util.sosa_to_float(r_ed['C3 (Prova - Teto 4.0)']):.1f}",
+                                    "bonus": f"{util.sosa_to_float(r_ed['⭐ Bônus/Punição Líquido']):+.1f}",
+                                    "media": f"{media_al_val:.1f}",
+                                    "status": r_ed['Situação']
+                                })
+                            
+                            info_etiq = {"turma": turma_notas, "trimestre": trim_ativo_notas}
+                            nome_arq_etiq = f"ETIQUETAS_NOTAS_{turma_notas.replace(' ','_')}_{trim_ativo_notas.replace(' ','')}"
+                            
+                            doc_etiq_stream = exporter.gerar_docx_etiquetas_notas(nome_arq_etiq, dados_etiq, info_etiq)
+                            link_etiq = db.subir_e_converter_para_google_docs(doc_etiq_stream, nome_arq_etiq, trimestre=trim_ativo_notas, categoria=turma_notas, modo="PLANEJAMENTO")
+                            
+                            if "https" in link_etiq:
+                                st.success("✅ Etiquetas de Notas e Refacção geradas com sucesso!")
+                                st.link_button("📂 ABRIR ETIQUETAS NO DRIVE (DOCX)", link_etiq, type="primary", use_container_width=True)
+                                st.balloons()
                         with st.spinner("Gerando etiquetas Word A4 para a turma..."):
                             dados_etiq = []
                             for _, r_ed in df_grid_ed_notas.iterrows():
