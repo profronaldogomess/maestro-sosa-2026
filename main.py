@@ -5986,8 +5986,10 @@ elif menu == "📊 Painel de Notas & Vistos":
                         # Classificação robusta: Recuperação vs Teste (C2) vs Prova/Avaliação (C3)
                         if any(x in id_av_str for x in ["RECUPERAÇÃO", "RECUPERACAO", "REC_"]):
                             mapa_live_rec[id_al_dg] = nota_dg
-                        elif any(x in id_av_str for x in ["TESTE", "SONDA", "SIMULADO", "TRABALHO", "DIAGNÓSTICA", "DIAGNOSTICA"]):
-                            mapa_live_teste[id_al_dg] = max(mapa_live_teste.get(id_al_dg, 0.0), nota_dg)
+                        elif any(x in id_av_str for x in ["TESTE", "SIMULADO", "TRABALHO"]):
+                            # Sonda Diagnóstica não entra no somatório de C2
+                            if "SONDA" not in id_av_str:
+                                mapa_live_teste[id_al_dg] = max(mapa_live_teste.get(id_al_dg, 0.0), nota_dg)
                         elif any(x in id_av_str for x in ["PROVA", "AVALIAÇÃO", "AVALIACAO", "EXAME", "AVALIACAO_"]):
                             mapa_live_prova[id_al_dg] = max(mapa_live_prova.get(id_al_dg, 0.0), nota_dg)
 
@@ -6051,10 +6053,14 @@ elif menu == "📊 Painel de Notas & Vistos":
                     c3_final = min(4.0, c3_val + max(0.0, rem_bonus))
 
                     soma_sem_rec = c1_final + c2_final + c3_final
-                    media_arredondada = min(10.0, round(soma_sem_rec * 2) / 2)
+                    media_inicial = min(10.0, round(soma_sem_rec * 2) / 2)
                     
-                    if rec_val > 0:
-                        media_arredondada = max(media_arredondada, rec_val)
+                    if rec_val > 0 and media_inicial < 6.0:
+                        # Regra da Prefeitura: Média da Recuperação é a média aritmética entre a nota inicial e a REC
+                        media_com_rec = (media_inicial + rec_val) / 2.0
+                        media_arredondada = min(10.0, max(media_inicial, round(media_com_rec * 2) / 2))
+                    else:
+                        media_arredondada = media_inicial
 
                     is_isento_refaccao = (soma_sem_rec < 6.0 and media_arredondada >= 6.0)
                     
