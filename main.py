@@ -6207,15 +6207,18 @@ elif menu == "📊 Painel de Notas & Vistos":
                                 st.balloons()
 
                 # ==============================================================
-                # VISÃO 2: VISTOS & GESTÃO ATITUDINAL (EXTRATOS ABERTOS)
+                # VISÃO 2: VISTOS & GESTÃO ATITUDINAL (COCKPIT EXECUTIVO COMPACTO)
                 # ==============================================================
                 elif visao_selecionada == "⚖️ 2. Vistos & Atitude (Controle de Sala)":
-                    col_vis_vistos, col_vis_atitude = st.columns(2)
+                    col_vis_vistos, col_vis_atitude = st.columns([1.1, 1.4])
 
+                    # ---------------------------------------------------------
+                    # SUB-PAINEL A: AUDITORIA DE AULAS DE VISTO (C1)
+                    # ---------------------------------------------------------
                     with col_vis_vistos:
                         with st.container(border=True):
-                            st.markdown("#### 📋 Aulas Contabilizadas para Visto (C1)")
-                            st.caption("Clique em **'Tornar ISENTO'** em qualquer dia (ex: 02/08) para anular a cobrança daquela data.")
+                            st.markdown("#### 📋 Aulas de Visto (C1)")
+                            st.caption(f"Controle de cobrança do caderno ({trim_ativo_notas}).")
 
                             if df_diario_trim.empty:
                                 st.info("Nenhuma aula encontrada no diário.")
@@ -6227,8 +6230,12 @@ elif menu == "📊 Painel de Notas & Vistos":
                                 datas_aulas_extrato = sorted(df_d_range['DATA'].unique(), key=lambda x: datetime.strptime(x, "%d/%m/%Y"), reverse=True)
                                 
                                 if not datas_aulas_extrato:
-                                    st.info(f"Nenhuma aula registrada no intervalo ativo.")
+                                    st.info("Nenhuma aula registrada no intervalo ativo.")
                                 else:
+                                    dados_resumo_aulas = []
+                                    tot_cobradas = 0
+                                    tot_isentas = 0
+
                                     for d_item_str in datas_aulas_extrato:
                                         df_d_dia_item = df_d_range[df_d_range['DATA'] == d_item_str]
                                         tot_alunos_dia = len(df_d_dia_item)
@@ -6238,25 +6245,65 @@ elif menu == "📊 Painel de Notas & Vistos":
                                         reg_aula_info = df_registro_aulas[(df_registro_aulas['DATA'] == d_item_str) & (df_registro_aulas['TURMA'] == turma_notas)] if not df_registro_aulas.empty else pd.DataFrame()
                                         conteudo_dia = str(reg_aula_info.iloc[0].get('CONTEUDO_MINISTRADO', 'Registro de Sala')) if not reg_aula_info.empty else "Registro de Sala"
 
-                                        with st.container(border=True):
-                                            st.markdown(f"**📅 {d_item_str}** — *{conteudo_dia}*")
-                                            c_sub1, c_sub2 = st.columns([2, 1])
-                                            
-                                            if is_isento_dia:
-                                                c_sub1.info("🛡️ DIA ISENTO (0% impacto)")
-                                                c_sub2.caption("Isento")
-                                            else:
-                                                c_sub1.success(f"📘 {vistos_ok_dia} de {tot_alunos_dia} com Visto")
-                                                if c_sub2.button("Tornar ISENTO", key=f"btn_isentar_{d_item_str}_{v}", use_container_width=True):
-                                                    if hasattr(db, 'isentar_vistos_data_turma'):
-                                                        db.isentar_vistos_data_turma(d_item_str, turma_notas)
-                                                    st.toast(f"Aula do dia {d_item_str} marcada como ISENTO!", icon="🛡️")
-                                                    time.sleep(0.5); st.rerun()
+                                        if is_isento_dia:
+                                            status_label = "🛡️ ISENTO (0%)"
+                                            tot_isentas += 1
+                                        else:
+                                            status_label = "📘 COBRADO"
+                                            tot_cobradas += 1
 
+                                        dados_resumo_aulas.append({
+                                            "Data": d_item_str,
+                                            "Conteúdo / Registro": conteudo_dia[:38] + "..." if len(conteudo_dia) > 38 else conteudo_dia,
+                                            "Vistos": f"{vistos_ok_dia:02d}/{tot_alunos_dia:02d}",
+                                            "Status": status_label
+                                        })
+
+                                    # Métricas compactas
+                                    c_k_v1, c_k_v2, c_k_v3 = st.columns(3)
+                                    c_k_v1.metric("Total Aulas", len(datas_aulas_extrato))
+                                    c_k_v2.metric("📘 Cobradas", tot_cobradas)
+                                    c_k_v3.metric("🛡️ Isentas", tot_isentas)
+
+                                    st.markdown("---")
+
+                                    def style_status_visto(val):
+                                        if "COBRADO" in str(val): return 'color: #2962FF; font-weight: bold;'
+                                        return 'color: #2ECC71; font-weight: bold;'
+
+                                    st.dataframe(
+                                        pd.DataFrame(dados_resumo_aulas).style.map(style_status_visto, subset=['Status']),
+                                        hide_index=True, use_container_width=True, height=310,
+                                        column_config={
+                                            "Data": st.column_config.TextColumn("Data", width="small"),
+                                            "Conteúdo / Registro": st.column_config.TextColumn("Conteúdo da Aula", width="medium"),
+                                            "Vistos": st.column_config.TextColumn("Vistos OK", width="small"),
+                                            "Status": st.column_config.TextColumn("Cobrança", width="small")
+                                        }
+                                    )
+
+                                    # Ação Rápida de Isenção em 1-Toque
+                                    with st.popover("🛡️ Alternar Isenção de Data (Anular Cobrança)", use_container_width=True):
+                                        st.caption("Selecione a data para transformar em ISENTO (não prejudica a média da turma) ou reativar cobrança:")
+                                        data_isentar_sel = st.selectbox("Selecione a Data:", datas_aulas_extrato, key=f"sel_dt_isentar_{v}")
+                                        
+                                        c_is1, c_is2 = st.columns(2)
+                                        if c_is1.button("🛡️ Tornar ISENTO", type="primary", use_container_width=True, key=f"btn_isentar_pop_{v}"):
+                                            if hasattr(db, 'isentar_vistos_data_turma'):
+                                                db.isentar_vistos_data_turma(data_isentar_sel, turma_notas)
+                                            st.toast(f"Aula do dia {data_isentar_sel} marcada como ISENTO!", icon="🛡️")
+                                            time.sleep(0.5); st.rerun()
+
+                                        if c_is2.button("🔄 Reativar Visto", use_container_width=True, key=f"btn_reativar_visto_pop_{v}"):
+                                            st.info("Para reativar a cobrança, faça o lançamento normal na Chamada Express.")
+
+                    # ---------------------------------------------------------
+                    # SUB-PAINEL B: RAIO-X EXECUTIVO DE BÔNUS & PUNIÇÕES
+                    # ---------------------------------------------------------
                     with col_vis_atitude:
                         with st.container(border=True):
-                            st.markdown("#### ⚖️ Raio-X de Bônus & Punições")
-                            st.caption("Dominância total: veja o motivo de cada ponto e perdoe punições ou revogue bônus.")
+                            st.markdown("#### ⚖️ Gestão Atitudinal & Ocorrências")
+                            st.caption(f"Painel consolidado de mérito e disciplina ({trim_ativo_notas}).")
 
                             if df_diario_trim.empty:
                                 st.info("Nenhum registro atitudinal.")
@@ -6272,42 +6319,101 @@ elif menu == "📊 Painel de Notas & Vistos":
                                 tot_bonus_turma = df_d_range_at[df_d_range_at['BONUS_FLOAT'] > 0]['BONUS_FLOAT'].sum()
                                 tot_punicoes_turma = df_d_range_at[df_d_range_at['BONUS_FLOAT'] < 0]['BONUS_FLOAT'].sum()
 
-                                c_k_at1, c_k_at2 = st.columns(2)
-                                c_k_at1.metric("⭐ Bônus Ativos", f"+{tot_bonus_turma:.1f} pts")
-                                c_k_at2.metric("⚠️ Punições Ativas", f"{tot_punicoes_turma:.1f} pts", delta_color="inverse")
+                                c_k_at1, c_k_at2, c_k_at3 = st.columns(3)
+                                c_k_at1.metric("⭐ Total Bônus", f"+{tot_bonus_turma:.1f} pts")
+                                c_k_at2.metric("⚠️ Total Punições", f"{tot_punicoes_turma:.1f} pts", delta_color="inverse")
+                                c_k_at3.metric("📋 Total Eventos", len(df_ocorrencias_at))
 
                                 st.markdown("---")
 
-                                if df_ocorrencias_at.empty:
-                                    st.success("🎉 Nenhuma ocorrência atitudinal no período.")
+                                # Filtro Pills de Navegação Rápida
+                                flt_tipo_atitude = st.pills(
+                                    "Filtrar Registros:",
+                                    ["Todos", "⭐ Bônus (+)", "⚠️ Punições (-)", "🎲 Arguições"],
+                                    default="Todos",
+                                    key=f"pills_flt_atitude_{v}"
+                                )
+
+                                df_at_view = df_ocorrencias_at.copy()
+                                if flt_tipo_atitude == "⭐ Bônus (+)":
+                                    df_at_view = df_at_view[df_at_view['BONUS_FLOAT'] > 0]
+                                elif flt_tipo_atitude == "⚠️ Punições (-)":
+                                    df_at_view = df_at_view[df_at_view['BONUS_FLOAT'] < 0]
+                                elif flt_tipo_atitude == "🎲 Arguições":
+                                    df_at_view = df_at_view[df_at_view['TAGS'] == "ARGUIÇÃO"]
+
+                                if df_at_view.empty:
+                                    st.success("🎉 Nenhum registro atitudinal encontrado para este filtro.")
                                 else:
-                                    for idx_oc, (_, r_oc) in enumerate(df_ocorrencias_at.iterrows()):
+                                    dados_at_tabela = []
+                                    for idx_oc, (_, r_oc) in enumerate(df_at_view.iterrows()):
                                         dt_oc = str(r_oc.get('DATA', 'N/A'))
                                         id_al_oc = db.limpar_id(r_oc.get('ID_ALUNO', ''))
                                         nome_al_oc = str(r_oc.get('NOME_ALUNO', 'Estudante'))
                                         tag_oc = str(r_oc.get('TAGS', 'OCORRÊNCIA'))
-                                        obs_oc = str(r_oc.get('OBSERVACOES', ''))
+                                        obs_oc = str(r_oc.get('OBSERVACOES', '')).replace("Quadro Negro: ", "").strip()
                                         val_bonus_num = util.sosa_to_float(r_oc.get('BONUS', 0))
 
-                                        with st.container(border=True):
-                                            st.markdown(f"**📅 {dt_oc} — {nome_al_oc}**")
-                                            st.caption(f"*{tag_oc}: {obs_oc}*")
+                                        impacto_txt = f"+{val_bonus_num:.1f} pts" if val_bonus_num > 0 else (f"{val_bonus_num:.1f} pts" if val_bonus_num < 0 else "0.0 pts")
+
+                                        dados_at_tabela.append({
+                                            "Data": dt_oc,
+                                            "Estudante": nome_al_oc,
+                                            "Tipo": tag_oc,
+                                            "Diagnóstico / Motivo": obs_oc if obs_oc else "Participação em sala",
+                                            "Impacto": impacto_txt,
+                                            "_ID": id_al_oc,
+                                            "_RAW_VAL": val_bonus_num
+                                        })
+
+                                    df_at_display = pd.DataFrame(dados_at_tabela)
+
+                                    def style_impacto_at(val):
+                                        if "+" in str(val): return 'color: #2ECC71; font-weight: bold;'
+                                        if "-" in str(val): return 'color: #E74C3C; font-weight: bold;'
+                                        return 'color: gray;'
+
+                                    st.dataframe(
+                                        df_at_display[['Data', 'Estudante', 'Tipo', 'Diagnóstico / Motivo', 'Impacto']].style.map(style_impacto_at, subset=['Impacto']),
+                                        hide_index=True, use_container_width=True, height=270,
+                                        column_config={
+                                            "Data": st.column_config.TextColumn("Data", width="small"),
+                                            "Estudante": st.column_config.TextColumn("Estudante", width="medium"),
+                                            "Tipo": st.column_config.TextColumn("Tipo", width="small"),
+                                            "Diagnóstico / Motivo": st.column_config.TextColumn("Descrição da Ocorrência", width="large"),
+                                            "Impacto": st.column_config.TextColumn("Pontos", width="small")
+                                        }
+                                    )
+
+                                    # Ação Centralizada para Perdoar/Revogar em 1 Popover
+                                    with st.popover("⚙️ Central de Gestão: Perdoar Punição ou Revogar Bônus", use_container_width=True):
+                                        st.caption("Selecione o estudante e a data para ajustar a ocorrência com soberania:")
+                                        
+                                        opcoes_ocorrencias = [f"{r['Data']} — {r['Estudante']} ({r['Impacto']})" for r in dados_at_tabela]
+                                        oc_selecionada = st.selectbox("Selecione o Evento:", opcoes_ocorrencias, key=f"sel_oc_pop_{v}")
+                                        
+                                        if oc_selecionada:
+                                            idx_sel_oc = opcoes_ocorrencias.index(oc_selecionada)
+                                            item_oc_data = dados_at_tabela[idx_sel_oc]
                                             
-                                            c_act1, c_act2 = st.columns([1, 1])
-                                            if val_bonus_num > 0:
-                                                c_act1.success(f"⭐ +{val_bonus_num:.1f} pts")
-                                                if c_act2.button("🛑 Revogar Bônus", key=f"btn_revogar_{id_al_oc}_{dt_oc}_{idx_oc}_{v}", use_container_width=True):
+                                            c_pop_act1, c_pop_act2 = st.columns(2)
+                                            
+                                            if item_oc_data["_RAW_VAL"] > 0:
+                                                st.info(f"O estudante **{item_oc_data['Estudante']}** possui **+{item_oc_data['_RAW_VAL']:.1f} pts** registrados em **{item_oc_data['Data']}**.")
+                                                if st.button("🛑 REVOGAR ESTE BÔNUS", type="primary", use_container_width=True, key=f"btn_revogar_central_{v}"):
                                                     if hasattr(db, 'ajustar_bonus_punicao_diario'):
-                                                        db.ajustar_bonus_punicao_diario(dt_oc, id_al_oc, turma_notas, "0,00", "[Bônus revogado]")
-                                                    st.toast(f"Bônus de {nome_al_oc} revogado!")
+                                                        db.ajustar_bonus_punicao_diario(item_oc_data['Data'], item_oc_data['_ID'], turma_notas, "0,00", "[Bônus revogado pelo docente]")
+                                                    st.toast("Bônus revogado com sucesso!")
                                                     time.sleep(0.5); st.rerun()
-                                            elif val_bonus_num < 0:
-                                                c_act1.error(f"⚠️ {val_bonus_num:.1f} pts")
-                                                if c_act2.button("🛡️ Perdoar Punição", key=f"btn_perdoar_{id_al_oc}_{dt_oc}_{idx_oc}_{v}", use_container_width=True, type="primary"):
+                                            elif item_oc_data["_RAW_VAL"] < 0:
+                                                st.warning(f"O estudante **{item_oc_data['Estudante']}** possui punição de **{item_oc_data['_RAW_VAL']:.1f} pts** registrada em **{item_oc_data['Data']}**.")
+                                                if st.button("🛡️ PERDOAR ESTA PUNIÇÃO", type="primary", use_container_width=True, key=f"btn_perdoar_central_{v}"):
                                                     if hasattr(db, 'ajustar_bonus_punicao_diario'):
-                                                        db.ajustar_bonus_punicao_diario(dt_oc, id_al_oc, turma_notas, "0,00", "[Punição perdoada]")
-                                                    st.toast(f"Punição de {nome_al_oc} perdoada!")
+                                                        db.ajustar_bonus_punicao_diario(item_oc_data['Data'], item_oc_data['_ID'], turma_notas, "0,00", "[Punição perdoada pelo docente]")
+                                                    st.toast("Punição perdoada com sucesso!")
                                                     time.sleep(0.5); st.rerun()
+                                            else:
+                                                st.caption("Registro de participação sem impacto de pontuação.")
 
                 # ==============================================================
                 # VISÃO 3: RECUPERAÇÃO BLINDADA & REFACÇÃO (+0.5)
