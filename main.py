@@ -6453,6 +6453,34 @@ elif menu == "📊 Painel de Notas & Vistos":
                                 )
 
                                 if st.button("🖨️ GERAR LISTA DE RECUPERAÇÃO (DOCX)", type="primary", use_container_width=True, key=f"btn_docx_conv_clean_{v}"):
+                                    with st.spinner("Gerando convocatórias e etiquetas de recuperação em Word A4..."):
+                                        dados_convocatoria = []
+                                        for _, r_conv in df_grid_ed_notas.iterrows():
+                                            m_atual_conv = util.sosa_to_float(r_conv['Média Final'])
+                                            if m_atual_conv < 6.0:
+                                                # Cálculo Oficial: (Média + Prova_Rec)/2 >= 6.0 => Prova_Rec >= 12.0 - Média
+                                                nota_exigida_rec = max(0.0, 12.0 - m_atual_conv)
+                                                dados_convocatoria.append({
+                                                    "nome": r_conv['Estudante'],
+                                                    "c1": f"{r_conv['C1 (Vistos - Teto 3.0)']:.1f}",
+                                                    "c2": f"{r_conv['C2 (Testes - Teto 3.0)']:.1f}",
+                                                    "c3": f"{r_conv['C3 (Prova - Teto 4.0)']:.1f}",
+                                                    "bonus": f"{r_conv['⭐ Bônus/Punição Líquido']:+.1f}",
+                                                    "media": f"{m_atual_conv:.1f}",
+                                                    "precisa_rec": nota_exigida_rec,
+                                                    "status": f"CONVOCADO PARA RECUPERAÇÃO ({trim_destino_rec})"
+                                                })
+                                        
+                                        info_conv_rec = {"turma": turma_notas, "trimestre": f"RECUPERAÇÃO - {trim_destino_rec}"}
+                                        nome_arq_conv = f"CONVOCATORIA_RECUPERACAO_{turma_notas.replace(' ','_')}_{trim_destino_rec.replace(' ','')}"
+                                        
+                                        doc_conv_stream = exporter.gerar_docx_etiquetas_notas(nome_arq_conv, dados_convocatoria, info_conv_rec)
+                                        link_conv_doc = db.subir_e_converter_para_google_docs(doc_conv_stream, nome_arq_conv, trimestre=trim_destino_rec, categoria=turma_notas, modo="PLANEJAMENTO")
+                                        
+                                        if "https" in link_conv_doc:
+                                            st.success("✅ Convocatória Oficial de Recuperação gerada no Drive!")
+                                            st.link_button("📂 ABRIR CONVOCATÓRIA NO DRIVE", link_conv_doc, type="primary", use_container_width=True)
+                                            st.balloons()
                                     with st.spinner("Gerando convocatória em Word A4..."):
                                         dados_convocatoria = [{
                                             "nome": r_c['Estudante'], "vistos": f"Média: {r_c['Média Atual']:.1f}",
