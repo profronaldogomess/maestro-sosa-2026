@@ -6012,7 +6012,11 @@ elif menu == "📊 Painel de Notas & Vistos":
                             grp_val = grp[grp.get('VISTO_ATIVIDADE', '').astype(str).str.upper() != "ISENTO"]
                             ok_v = len(grp_val[grp_val.get('VISTO_ATIVIDADE', '').astype(str).str.upper() == "TRUE"])
                             vistos_live_dict[id_c] = round((ok_v / tot_v_d * 3.0), 2) if tot_v_d > 0 else 0.0
-                            bonus_live_dict[id_c] = grp.get('BONUS', pd.Series()).apply(util.sosa_to_float).sum()
+                            # Captura robusta de todos os bônus e punições do período
+                            if 'BONUS' in grp.columns:
+                                bonus_live_dict[id_c] = grp['BONUS'].apply(util.sosa_to_float).sum()
+                            else:
+                                bonus_live_dict[id_c] = 0.0
 
                 # -------------------------------------------------------------
                 # 3. MONTAGEM DINÂMICA DA GRADE CONSOLIDADA
