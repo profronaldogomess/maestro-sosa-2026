@@ -11,6 +11,7 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 import utils as util
+import ai_engine as ai
 
 # ==============================================================================
 # 1. CONEXÃO E CREDENCIAIS
@@ -741,7 +742,7 @@ def conciliar_calendario_e_planos_cronologicos(ano_alvo="6º"):
             dt_fim = dt_inicio + timedelta(days=6) # Janela de 7 dias (Segunda a Domingo)
             
             plano_txt = row_data[5] if len(row_data) > 5 else ""
-            obj_c = util.extrair_tag(plano_txt, "OBJETO_CONHECIMENTO") or util.extrair_tag(plano_txt, "CONTEUDOS_ESPECIFICOS") or "Conteúdo Programático"
+            obj_c = ai.extrair_tag(plano_txt, "OBJETO_CONHECIMENTO") or ai.extrair_tag(plano_txt, "CONTEUDOS_ESPECIFICOS") or "Conteúdo Programático"
             
             intervalos_semanas.append({
                 "semana": nova_sem_label,
