@@ -3901,6 +3901,98 @@ elif menu == "📸 Scanner de Gabaritos":
 
         return sorted(list(opcoes_encontradas))
 
+    # ==============================================================================
+    # DIALOGS DECLARADOS NO TOPO DO MÓDULO SCANNER (LEI #25)
+    # ==============================================================================
+    @st.dialog("🔬 Autópsia Clínica do Item", width="large")
+    def dialog_autopsia_modal(q_str, stats_row, txt_prova_base, is_pei_view, caderno_alvo):
+        idx_num = int(q_str.replace("Q", ""))
+        prefixo_q = r"(?:QUEST[AÃ]O\s*(?:PEI\s*)?|Q)"
+        padrao_q = rf"(?si)({prefixo_q}\s*0?{idx_num}\b.*?)(?={prefixo_q}\s*0?{idx_num+1}\b|GABARITO|RESPOSTAS|GRADE|$)"
+        
+        if "Nível 1" in str(caderno_alvo): tag_questoes = "NIVEL_1"
+        elif "Nível 2" in str(caderno_alvo): tag_questoes = "NIVEL_2"
+        elif is_pei_view: tag_questoes = "PEI"
+        else: tag_questoes = "QUESTOES"
+        
+        q_raw_reg = ai.extrair_tag(txt_prova_base, tag_questoes) or ai.extrair_tag(txt_prova_base, "QUESTOES")
+        m_q_reg = re.search(padrao_q, q_raw_reg, re.IGNORECASE | re.DOTALL)
+        
+        tag_grade = "GRADE_DE_CORRECAO_PEI" if is_pei_view else "GRADE_DE_CORRECAO"
+        grade_raw = ai.extrair_tag(txt_prova_base, tag_grade)
+        m_p_reg = re.search(padrao_q, grade_raw, re.IGNORECASE | re.DOTALL)
+        
+        c_left, c_right = st.columns([1.5, 1])
+        with c_left:
+            st.markdown(f"### 📄 Enunciado Oficial ({q_str})")
+            if m_q_reg: st.write(preparar_para_leitura(m_q_reg.group(1).strip()))
+            else: st.info("Enunciado da questão disponível na impressão oficial.")
+        
+        with c_right:
+            st.markdown("### 📊 Desempenho")
+            acerto_perc = stats_row['Acerto %']
+            cor_acerto = "normal" if acerto_perc >= 60 else "inverse"
+            st.metric("Índice de Acerto", f"{acerto_perc:.1f}%", delta="Atenção" if acerto_perc < 50 else "Adequado", delta_color=cor_acerto)
+            st.metric("Gabarito Oficial", stats_row['Gabarito'])
+            
+            st.markdown("---")
+            st.markdown("### 🧠 Perícia Pedagógica (Descritor SAEB & Distratores)")
+            if m_p_reg:
+                p_completa = re.sub(r'[*#]', '', m_p_reg.group(1).strip())
+                st.info(preparar_para_leitura(p_completa))
+            else: st.caption("Perícia de distratores não localizada.")
+
+    lista_turmas_cir = []
+    if not df_turmas.empty and 'ID_TURMA' in df_turmas.columns:
+        turmas_reais_cir = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
+        lista_turmas_cir = sorted(turmas_reais_cir['ID_TURMA'].unique())
+    elif not df_alunos.empty and 'TURMA' in df_alunos.columns:
+        lista_turmas_cir = sorted(df_alunos['TURMA'].unique())
+
+    def obter_regex_trimestre(trimestre_str):
+        if not trimestre_str or trimestre_str == "Todos": return r".*"
+        t_upper = str(trimestre_str).upper()
+        if "III" in t_upper or "TERCEIRO" in t_upper: return r"(?<!I)III(?![I])"
+        elif "II" in t_upper or "SEGUNDO" in t_upper: return r"(?<!I)II(?![I])"
+        else: return r"(?<!I)I(?![I])"
+
+    # MOTOR UNIFICADO DE BUSCA DE AVALIAÇÕES (AULAS + GABARITOS REAIS DO BANCO)
+    def obter_avaliacoes_unificadas_cir(turma, trimestre_nome):
+        if not turma or not trimestre_nome: return []
+        padrao_regex_trim = obter_regex_trimestre(trimestre_nome)
+        serie_num = "".join(filter(str.isdigit, str(turma)))
+        
+        opcoes_encontradas = set()
+
+        if not df_diagnosticos.empty and 'TURMA' in df_diagnosticos.columns and 'ID_AVALIACAO' in df_diagnosticos.columns:
+            mask_diag = (df_diagnosticos['TURMA'] == turma) & (
+                df_diagnosticos['ID_AVALIACAO'].astype(str).str.contains(padrao_regex_trim, regex=True, case=False, na=False) |
+                (trimestre_nome == "Todos")
+            )
+            for av_id in df_diagnosticos[mask_diag]['ID_AVALIACAO'].dropna().unique():
+                av_clean = re.sub(r'\s*\(\s*VARIANTE.*?\)', '', str(av_id), flags=re.IGNORECASE).strip()
+                if av_clean and not re.search(r"2[ªA]|CHAMADA", av_clean, re.IGNORECASE):
+                    opcoes_encontradas.add(av_clean)
+
+        if not df_aulas.empty and 'ANO' in df_aulas.columns and 'TIPO_MATERIAL' in df_aulas.columns:
+            df_f = df_aulas[df_aulas['ANO'].astype(str).str.contains(serie_num)].copy()
+            permitidos = ["TESTE", "PROVA", "SONDA", "DIAGNÓSTICA", "RECUPERAÇÃO", "AVALIAÇÃO"]
+            proibidos = ["REVISAO", "REVISÃO", "APLICAÇÃO", "CORREÇÃO", "DOSSIÊ", "AULA"]
+            
+            mask_p = df_f['TIPO_MATERIAL'].astype(str).str.upper().str.contains('|'.join(permitidos)) & \
+                     (~df_f['TIPO_MATERIAL'].astype(str).str.upper().str.contains('|'.join(proibidos)))
+            
+            df_f = df_f[mask_p]
+            mask_t = df_f['CONTEUDO'].astype(str).str.contains(padrao_regex_trim, regex=True, na=False, case=False) | \
+                     df_f['TIPO_MATERIAL'].astype(str).str.contains(padrao_regex_trim, regex=True, na=False, case=False)
+            
+            for av_mat in df_f[mask_t]['TIPO_MATERIAL'].dropna().unique():
+                av_clean = re.sub(r'\s*\(\s*VARIANTE.*?\)', '', str(av_mat), flags=re.IGNORECASE).strip()
+                if av_clean and not re.search(r"2[ªA]|CHAMADA", av_clean, re.IGNORECASE):
+                    opcoes_encontradas.add(av_clean)
+
+        return sorted(list(opcoes_encontradas))
+
     # DIALOGS DECLARADOS NO TOPO DO MÓDULO (FORA DO FRAGMENT - LEI #25)
     @st.dialog("⚖️ Homologação de Atestados & Justificativas", width="large")
     def dialog_atestados_modal(alunos_turma_dialog, t_sel_dialog, tr_sel_dialog, av_alvo_dialog):
@@ -5159,7 +5251,7 @@ elif menu == "📸 Scanner de Gabaritos":
 
                                 if c_btn.button("🔍 Analisar Item", use_container_width=True, key=f"btn_autopsia_item_raiox_{v}"):
                                     stats_row = df_stats_global[df_stats_global['Questão'] == q_sel].iloc[0]
-                                    dialog_autopsia(q_sel, stats_row)
+                                    dialog_autopsia_modal(q_sel, stats_row, txt_prova_base, is_pei_view, caderno_alvo)
 
                             with c_aut2:
                                 st.markdown("#### 🧠 Inteligência Preditiva & Recomposição")
@@ -8027,6 +8119,25 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
         st.session_state.v_pei = int(time.time())
     v = st.session_state.v_pei
 
+    # ==============================================================================
+    # DIALOG OFICIAL PEI DECLARADO NO TOPO DO MÓDULO (LEI #25)
+    # ==============================================================================
+    @st.dialog("📱 Parecer Acolhedor para os Pais (WhatsApp)", width="large")
+    def dialog_zap_parecer_modal(aluno_nome, trim_ativo, parecer_diag, parecer_dir):
+        st.info("Copie o texto acolhedor abaixo e envie para a família no WhatsApp na Reunião de Pais:")
+        msg_zap_pei = f"""Olá! Tudo bem? Aqui é o professor Ronaldo Gomes (Componente de Matemática). 🏫
+Compartilho o Parecer Descritivo do(a) estudante {aluno_nome} referente ao {trim_ativo}.
+
+📌 EVOLUÇÃO E DESEMPENHO NO TRIMESTRE:
+{parecer_diag}
+
+🎯 RECOMENDAÇÕES PEDAGÓGICAS:
+{parecer_dir}
+
+Qualquer dúvida, estou à disposição na escola! Um abraço! 🚀
+Escola Municipal Flávio José Simões Costa"""
+        st.code(msg_zap_pei, language=None)
+
     # FUNÇÃO DE SALVAMENTO SEM DUPLICIDADE POR TRIMESTRE
     def salvar_relatorio_pei_sem_duplicidade(id_aluno, nome_aluno, tipo_rel, conteudo_rel):
         try:
@@ -8360,26 +8471,10 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
                     p_diag = ai.extrair_tag(txt_p_salvo, "DIAGNOSTICO_GERAL") or "Parecer ainda não preenchido para este trimestre."
                     p_dir = ai.extrair_tag(txt_p_salvo, "DIRETRIZES_CURRICULARES") or "Sem recomendações registradas."
 
-                    # MODAL WHATSAPP
-                    @st.dialog(f"📱 Parecer Acolhedor - {trim_ativo_pei}")
-                    def dialog_zap_parecer():
-                        st.info("Copie o texto acolhedor abaixo e envie para a família no WhatsApp na Reunião de Pais.")
-                        msg_zap_pei = f"""Olá! Tudo bem? Aqui é o professor Ronaldo Gomes. 🏫
-Compartilho o Parecer Descritivo do(a) estudante {aluno_p_sel} referente ao {trim_ativo_pei}.
-
-📌 EVOLUÇÃO E DESEMPENHO NO TRIMESTRE:
-{p_diag}
-
-🎯 RECOMENDAÇÕES PEDAGÓGICAS:
-{p_dir}
-
-Qualquer dúvida, estou à disposição na escola! Um abraço! 🚀"""
-                        st.code(msg_zap_pei, language=None)
-
                     c_act1, c_act2 = st.columns(2)
                     
                     if c_act1.button("📱 Gerar Texto para WhatsApp dos Pais", use_container_width=True, key=f"btn_zap_par_{v}"):
-                        dialog_zap_parecer()
+                        dialog_zap_parecer_modal(aluno_p_sel, trim_ativo_pei, p_diag, p_dir)
 
                     if c_act2.button("🖨️ Imprimir Parecer A4 do Trimestre (DOCX)", type="primary", use_container_width=True, key=f"btn_docx_par_{v}"):
                         with st.spinner("Compilando Parecer Descritivo A4..."):
