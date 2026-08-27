@@ -116,10 +116,10 @@ def sanitizar_nome_variante_soberana(nome_av):
     return nome
 
 def obter_info_trimestre(dt):
-    # Datas exatas do PDF da Prefeitura de Itabuna 2026
+    # Datas oficiais do Calendário Escolar da Prefeitura de Itabuna 2026
     t1 = (date(2026, 2, 9), date(2026, 5, 22))
     t2 = (date(2026, 5, 25), date(2026, 9, 4))
-    t3 = (date(2026, 8, 9), date(2026, 12, 17)) # Início do III em 08/09 conforme PDF
+    t3 = (date(2026, 9, 8), date(2026, 12, 17)) # Início canônico do III Trimestre em 08/09/2026
     
     if t1[0] <= dt <= t1[1]: return "I Trimestre", t1
     if t2[0] <= dt <= t2[1]: return "II Trimestre", t2
