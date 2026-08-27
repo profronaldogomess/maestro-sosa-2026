@@ -225,11 +225,12 @@ def renderizar_conteudo_com_tabelas(doc, texto_bruto):
         renderizar_tabela_markdown_no_word(doc, buffer_tabela)
 
 def configurar_cabecalho_mestre(doc, info, tipo_label, mostrar_nota=False):
-    """Gera o cabeçalho executivo oficial da Prefeitura e Escola de Itabuna"""
+    """Gera o cabeçalho executivo oficial da Prefeitura e Escola de Itabuna perfeitamente calibrado para A4"""
     table = doc.add_table(rows=3, cols=5)
     table.style = 'Table Grid'
     
-    widths = [Inches(0.8), Inches(3.2), Inches(1.0), Inches(1.1), Inches(1.8)]
+    # Calibração A4 Soberana (Total = 7.45 in para margem útil de 7.47 in)
+    widths = [Inches(0.75), Inches(3.0), Inches(0.9), Inches(1.0), Inches(1.8)]
     for i, w in enumerate(widths): 
         table.columns[i].width = w
 
@@ -953,7 +954,8 @@ def gerar_docx_pei_qualitativa(titulo_doc, conteudo, info):
         rubrica_table = doc.add_table(rows=5, cols=5)
         rubrica_table.style = 'Table Grid'
         
-        col_widths = [Inches(2.5), Inches(1.1), Inches(1.1), Inches(1.2), Inches(1.6)]
+        # Calibração A4 para Tabela de Rubricas (Total = 7.40 in)
+        col_widths = [Inches(2.45), Inches(1.1), Inches(1.1), Inches(1.15), Inches(1.6)]
         for row in rubrica_table.rows:
             set_row_height(row, 22)
             for idx_c, w in enumerate(col_widths):
