@@ -46,11 +46,16 @@ def set_cell_background(cell, fill_hex):
     except: pass
 
 def helper_sosa_float(v):
-    """Converte qualquer valor para float de forma imune a erros"""
-    if not v or str(v).strip() == "" or str(v).lower() == "nan": return 0.0
+    """Converte qualquer valor para float de forma imune a erros e textos anexados"""
+    if v is None or str(v).strip() == "" or str(v).lower() == "nan": return 0.0
     try:
-        return float(str(v).replace(" ", "").replace(",", "."))
-    except: return 0.0
+        s = str(v).strip().replace(" ", "").replace(",", ".")
+        m = re.search(r'[-+]?\d*\.?\d+', s)
+        if m:
+            return float(m.group(0))
+        return 0.0
+    except:
+        return 0.0
 
 def converter_latex_para_texto_word(texto):
     """
