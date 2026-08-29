@@ -364,25 +364,35 @@ PERSONAS = {
 # 3. MOTOR PRINCIPAL DE IA (ADEQUADO À API GEMINI 2026 - SEM TEMPERATURE)
 # ==============================================================================
 
-def gerar_ia(persona_key, comando, url_drive=None, usar_busca=True, recorte_livro=None):
+def gerar_ia(persona_key, comando, url_drive=None, usar_busca=False, recorte_livro=None):
     """
-    SOSA V2026.ULTIMATE: Motor de IA de alta performance adequado à documentação
-    oficial da API Gemini 2026 (Sem o parâmetro descontinuado 'temperature').
+    SOSA V2026.ULTIMATE - ROTEAMENTO DE ALTA EFICIÊNCIA & ECONOMIA:
+    - Nível 2 (Criação Complexa / TRI / Planos): Gemini 3.7 Flash / Gemini 3.6 Flash.
+    - Nível 1 (Rotina / Ajustes / PEI N1-N3): Gemini 3.5 Flash-Lite (Custo Quase Zero).
+    - Busca Web ativada apenas quando estritamente necessária (usar_busca=True).
     """
     client_local = obter_client_gemini()
     if not client_local:
         return "⚠️ Chave GEMINI_API_KEY não configurada no ambiente."
 
+    # Personas que exigem raciocínio psicométrico profundo e síntese avançada
     personas_alta_complexidade = [
         "ARQUITETO_EXAMES_ENEM_V2026",
         "PLANE_PEDAGOGICO", 
         "ESPECIALISTA_INCLUSAO", 
         "FORJA_AULA_TEORIA", 
         "ARQUITETO_CIENTIFICO_V33",
-        "ARQUITETO_REVISAO_V29"
+        "ARQUITETO_REVISAO_V29",
+        "ARQUITETO_RECUPERACAO_DISCURSIVA"
     ]
     
-    modelo_alvo = "gemini-3.6-flash" if persona_key in personas_alta_complexidade else "gemini-3.5-flash"
+    if persona_key in personas_alta_complexidade:
+        modelo_alvo = "gemini-3.7-flash"
+        modelos_tentativa = ["gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"]
+    else:
+        # Tarefas leves, refinadores e tarefas de rotina (Ultra-econômico)
+        modelo_alvo = "gemini-3.5-flash-lite"
+        modelos_tentativa = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.6-flash"]
 
     tools_config = []
     if usar_busca:
@@ -454,8 +464,6 @@ def gerar_ia(persona_key, comando, url_drive=None, usar_busca=True, recorte_livr
     prompt_final = f"{persona_prompt}{trava_realidade}{instrucao_livro}\n\n{comando}"
     conteudo_prompt.append(types.Part.from_text(text=prompt_final))
 
-    modelos_tentativa = [modelo_alvo, "gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-2.5-flash"]
-    
     erros_log = []
     for mod in modelos_tentativa:
         try:
@@ -488,7 +496,10 @@ def gerar_ia(persona_key, comando, url_drive=None, usar_busca=True, recorte_livr
 # ==============================================================================
 
 def gerar_ia_json(persona_key, comando, usar_busca=False):
-    """Geração de JSON estruturado ultra-rápida sem parâmetro 'temperature'."""
+    """
+    SOSA V2026: Geração de JSON estruturado de alta velocidade e custo quase zero
+    utilizando a linha Gemini 3.5 Flash-Lite com reparo automático de LaTeX.
+    """
     client_local = obter_client_gemini()
     if not client_local:
         return {"erro": "Chave GEMINI_API_KEY não configurada."}
@@ -507,7 +518,7 @@ def gerar_ia_json(persona_key, comando, usar_busca=False):
     )
     
     trava_realidade_json = (
-        "\n\n🚨 REGRAS RIGIDAS DE GROUNDING (ZERO ALUCINAÇÃO):\n"
+        "\n\n🚨 REGRAS RÍGIDAS DE GROUNDING (ZERO ALUCINAÇÃO):\n"
         "1. É PROIBIDO inventar contextos fictícios fora do fornecido.\n"
         "2. Se houver contexto de Itabuna/Bahia ou trecho de Livro Didático abaixo, 100% DAS QUESTÕES DEVEM SER EXTRAÍDAS OU ESPELHADAS DELE.\n"
         "3. ATENÇÃO COM LATEX EM JSON: Sempre use barra dupla para comandos LaTeX no JSON (exemplo: \\\\frac{1}{2}, \\\\times, \\\\div, \\\\circ).\n\n"
@@ -516,7 +527,8 @@ def gerar_ia_json(persona_key, comando, usar_busca=False):
     persona_prompt = PERSONAS.get(persona_key, PERSONAS["FORJA_LOTE_JSON"])
     conteudo_prompt = [types.Part.from_text(text=f"{persona_prompt}\n{trava_realidade_json}\n\n{comando}")]
     
-    modelos_json = ["gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-2.5-flash"]
+    # Modelos ultra-rápidos e econômicos para JSON
+    modelos_json = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.7-flash"]
     
     for mod in modelos_json:
         try:
@@ -559,6 +571,8 @@ def gerar_ia_json(persona_key, comando, usar_busca=False):
 
 def ordenar_pontos_quadrado(pts):
     """Ordena 4 pontos nas posições: [topo-esq, topo-dir, base-dir, base-esq]."""
+    if not OPENCV_DISPONIVEL:
+        return pts
     rect = np.zeros((4, 2), dtype="float32")
     s = pts.sum(axis=1)
     rect[0] = pts[np.argmin(s)] # Topo-esquerda
@@ -567,49 +581,6 @@ def ordenar_pontos_quadrado(pts):
     rect[1] = pts[np.argmin(diff)] # Topo-direita
     rect[3] = pts[np.argmax(diff)] # Base-esquerda
     return rect
-
-def analisar_gabarito_vision(imagem_bytes):
-    """Fallback via Visão Computacional Gemini Flash quando o OMR local não atinge 100%."""
-    try:
-        client_local = obter_client_gemini()
-        if not client_local:
-            return {"erro": "Chave Gemini indisponível."}
-
-        prompt = (
-            "Você é um perito em visão computacional de alta precisão. Analise a imagem do gabarito.\n"
-            "A tabela possui as colunas: Q (Questão) e as alternativas (A, B, C, D, E para regulares ou A, B, C para PEI).\n"
-            "MISSÃO:\n"
-            "1. Localize a grade de respostas.\n"
-            "2. Retorne a letra correspondente para marcação única.\n"
-            "3. Retorne 'X' para dupla marcação.\n"
-            "4. Retorne '?' se estiver vazia.\n"
-            "Retorne APENAS um JSON puro no formato: {'01': 'A', '02': 'C', ...}"
-        )
-        
-        conteudo_prompt = [
-            types.Part.from_bytes(data=imagem_bytes, mime_type="image/jpeg"),
-            types.Part.from_text(text=prompt)
-        ]
-        
-        res = client_local.models.generate_content(
-            model="gemini-3.5-flash", 
-            contents=[types.Content(role="user", parts=conteudo_prompt)],
-            config=types.GenerateContentConfig(response_mime_type="application/json")
-        )
-        import json
-        return json.loads(res.text)
-    except Exception as e:
-        try:
-            client_local = obter_client_gemini()
-            res_fb = client_local.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=[types.Content(role="user", parts=conteudo_prompt)],
-                config=types.GenerateContentConfig(response_mime_type="application/json")
-            )
-            import json
-            return json.loads(res_fb.text)
-        except Exception as e_fb:
-            return {"erro": f"Falha na leitura da imagem: {e_fb}"}
 
 def tratar_imagem_para_leitura(imagem_bytes):
     """Redimensiona e clareia a imagem suavemente antes de enviar para a IA."""
@@ -630,10 +601,48 @@ def tratar_imagem_para_leitura(imagem_bytes):
     except:
         return imagem_bytes
 
+def analisar_gabarito_vision(imagem_bytes):
+    """Fallback econômico via Visão Computacional Gemini Flash-Lite."""
+    try:
+        client_local = obter_client_gemini()
+        if not client_local:
+            return {"erro": "Chave Gemini indisponível."}
+
+        prompt = (
+            "Você é um perito em visão computacional de alta precisão. Analise a imagem do gabarito escolar.\n"
+            "MISSÃO:\n"
+            "1. Localize o campo ESTUDANTE no cabeçalho e extraia o nome do aluno escrito.\n"
+            "2. Localize a grade de respostas de múltipla escolha.\n"
+            "3. Retorne a letra marcada em cada questão. Use 'X' para dupla marcação e '?' se estiver vazia.\n"
+            "Retorne APENAS um JSON puro no formato: {'nome_estudante': 'NOME', 'respostas': {'01': 'A', '02': 'C', ...}}"
+        )
+        
+        conteudo_prompt = [
+            types.Part.from_bytes(data=imagem_bytes, mime_type="image/jpeg"),
+            types.Part.from_text(text=prompt)
+        ]
+        
+        for mod_vis in ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.5-flash"]:
+            try:
+                res = client_local.models.generate_content(
+                    model=mod_vis, 
+                    contents=[types.Content(role="user", parts=conteudo_prompt)],
+                    config=types.GenerateContentConfig(response_mime_type="application/json")
+                )
+                import json
+                return json.loads(res.text)
+            except:
+                continue
+                
+        return {"erro": "Falha na leitura visual do gabarito."}
+    except Exception as e:
+        return {"erro": f"Falha na leitura da imagem: {e}"}
+
 def analisar_gabarito_hibrido(imagem_bytes, qtd_questoes=10, is_pei=False):
     """
-    SOSA V2026.DIRECT_VISION_ANTI_TROCA: Leitura Direta por Visão Computacional Gemini Flash.
-    Lê as respostas marcadas e detecta o nome manuscrito no cabeçalho para evitar trocas acidentais de aluno.
+    SOSA V2026.DIRECT_VISION_ANTI_TROCA:
+    Leitura Direta por Visão Computacional Gemini 3.5 Flash-Lite (< 1s por prova / Custo ~R$ 0,0005).
+    Lê as alternativas marcadas e audita o nome manuscrito no cabeçalho para evitar trocas de titularidade.
     """
     imagem_pronta = tratar_imagem_para_leitura(imagem_bytes)
     
@@ -683,7 +692,7 @@ RETORNE APENAS UM JSON PURO NO FORMATO:
             response_mime_type="application/json"
         )
 
-        modelos_tentativa = ["gemini-2.5-flash", "gemini-3.5-flash-lite", "gemini-3.5-flash"]
+        modelos_tentativa = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.7-flash"]
         
         respostas_json = None
         import json
@@ -878,6 +887,7 @@ def realizar_diagnostico_v25(plano_raw, df_curriculo, ano_sel):
     }
 
 def gerar_prognostico_pedagogico(dados_stats, contexto_prova):
+    """Gera diagnóstico psicométrico ágil utilizando Gemini 3.5 Flash-Lite."""
     try:
         client_local = obter_client_gemini()
         if not client_local: return "Chave de IA indisponível."
@@ -893,11 +903,18 @@ def gerar_prognostico_pedagogico(dados_stats, contexto_prova):
             f"3. RECOMENDAÇÕES PRÁTICAS DE RECOMPOSIÇÃO."
         )
         
-        res = client_local.models.generate_content(
-            model="gemini-3.5-flash",
-            contents=[types.Part.from_text(text=prompt)]
-        )
-        return res.text.replace("**", "").replace("#", "").strip()
+        for mod_p in ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.5-flash"]:
+            try:
+                res = client_local.models.generate_content(
+                    model=mod_p,
+                    contents=[types.Content(role="user", parts=[types.Part.from_text(text=prompt)])]
+                )
+                if res and res.text:
+                    return res.text.replace("**", "").replace("#", "").strip()
+            except:
+                continue
+                
+        return "Não foi possível gerar o prognóstico no momento."
     except Exception as e:
         return f"Erro na perícia: {e}"
 
