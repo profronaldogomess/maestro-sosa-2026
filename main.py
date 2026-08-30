@@ -3,7 +3,7 @@ import streamlit as st
 import pandas as pd
 import gspread
 from datetime import date, datetime, timedelta, timezone
-import random  # 🚨 VACINA DE IMPORTAÇÃO: Habilita geradores e embaralhadores psicométricos
+import random
 import database as db
 import ai_engine as ai
 import utils as util
@@ -17,7 +17,7 @@ import re
 st.set_page_config(
     page_title="Ronaldo Gomes", 
     layout="wide", 
-    page_icon="💻", # Ícone da aba atualizado para 💻
+    page_icon="💻",
     initial_sidebar_state="expanded"
 )
 
@@ -30,50 +30,47 @@ def check_password():
     if "login_timestamp" not in st.session_state:
         st.session_state["login_timestamp"] = None
 
-    # Verifica se a sessão de 6h ainda é válida
     if st.session_state["password_correct"]:
         tempo_decorrido = time.time() - st.session_state["login_timestamp"]
-        if tempo_decorrido < 21600: # 6 horas
+        if tempo_decorrido < 21600: # 6 horas de sessão persistente
             return True
         else:
             st.session_state["password_correct"] = False
-            st.warning("Sessão expirada. Por favor, entre novamente.")
+            st.warning("Sessão expirada. Por favor, acesse novamente.")
 
     # INTERFACE DE LOGIN EXECUTIVA (Glassmorphism Bento Card)
-    _, col_login, _ = st.columns([1, 2, 1]) 
+    _, col_login, _ = st.columns([1, 1.8, 1]) 
     
     with col_login:
         st.markdown("<br><br>", unsafe_allow_html=True)
         with st.container(border=True):
             col_l1, col_l2, col_l3 = st.columns([1, 2, 1])
             with col_l2:
-                try: st.image("logo.png", width=140) 
-                except: st.markdown("<h2 style='text-align: center;'>Ronaldo Gomes</h2>", unsafe_allow_html=True)
+                try: st.image("logo.png", width=130) 
+                except: st.markdown("<h2 style='text-align: center; margin: 0;'>Ronaldo Gomes</h2>", unsafe_allow_html=True)
             
-            st.markdown("<h3 style='text-align: center; margin-top: 5px; margin-bottom: 0px;'>🔐 Portal de Soberania</h3>", unsafe_allow_html=True)
-            st.caption("Sistema de Alta Performance Pedagógica & Gestão 360°")
-            st.markdown("---")
+            st.markdown("<h3 style='text-align: center; margin-top: 10px; margin-bottom: 2px; font-weight: 800;'>Portal de Soberania Docente</h3>", unsafe_allow_html=True)
+            st.markdown("<p style='text-align: center; color: #64748B; font-size: 13px; margin-bottom: 15px;'>Gestão Pedagógica 360° & Regência de Alta Performance</p>", unsafe_allow_html=True)
             
-            st.pills("Perfil de Acesso:", ["👑 Prof. Ronaldo Gomes (Proprietário)"], default="👑 Prof. Ronaldo Gomes (Proprietário)", key="pills_login_profile")
+            st.pills("Perfil de Acesso:", ["Prof. Ronaldo Gomes"], default="Prof. Ronaldo Gomes", key="pills_login_profile")
             
-            # FORMULÁRIO DE LOGIN
             with st.form("login_portal_form"):
-                input_password = st.text_input("Chave de Acesso de Elite:", type="password", placeholder="Digite sua chave de segurança...")
-                st.checkbox("Manter conectado por 6 horas", value=True, disabled=True)
+                input_password = st.text_input("Chave de Segurança:", type="password", placeholder="Digite sua chave de acesso...")
+                st.checkbox("Manter sessão ativa por 6 horas", value=True, disabled=True)
                 
-                btn_entrar = st.form_submit_button("🚀 ENTRAR NO PAINEL", use_container_width=True, type="primary")
+                btn_entrar = st.form_submit_button("Acessar Painel", use_container_width=True, type="primary")
                 
                 if btn_entrar:
                     if input_password == "2496":
                         st.session_state["password_correct"] = True
                         st.session_state["login_timestamp"] = time.time()
-                        st.toast("Acesso Autorizado! Carregando Soberania...", icon="✅")
-                        time.sleep(0.5)
+                        st.toast("Acesso autorizado com sucesso!", icon="✅")
+                        time.sleep(0.4)
                         st.rerun()
                     else:
-                        st.error("❌ Chave incorreta. Acesso negado.")
+                        st.error("Chave de segurança incorreta.")
             
-            st.caption("🛡️ SOSA Bridge V45.9 • Servidor Online • Criptografia Ativa • Itabuna/BA")
+            st.caption("SOSA Bridge V45.9 • Servidor Online • Criptografia Ativa • Itabuna/BA")
     
     return False
 
@@ -94,78 +91,66 @@ def navegar_para(destino):
 def atualizar_menu():
     st.session_state.menu_atual = st.session_state._menu_radio
 
-# 🔬 FILTRO DE LEITURA GLOBAL (LATEX, TABELAS NATIVAS E IMAGENS V2026.MASTER)
+# FILTRO DE LEITURA GLOBAL (LATEX, TABELAS E PROMPTS)
 def preparar_para_leitura(texto):
     if not texto or not isinstance(texto, str): return ""
     
-    # Vacina de escape do Form Feed
     texto = texto.replace('\x0c', '\\f')
-    
-    # 🚨 AUTO-ENCAPSULADOR LATEX: Transforma \frac{a}{b} solto em $$ \frac{a}{b} $$
     texto = re.sub(r'(?<!\$)\\\bfrac\{([^}]+)\}\{([^}]+)\}(?!\$)', r'$$ \\frac{\1}{\2} $$', texto)
     texto = re.sub(r'(?<!\$)\\\b(times|div|sqrt|circ|degree)\b(?!\$)', r'$$ \\\1 $$', texto)
-    
-    # Corrige cifrões duplos repetidos
     texto = re.sub(r'\$\$\s*\$\$', '$$', texto)
-    
-    # Limpa tags obsoletas do GeoGebra se houver
     texto = re.sub(r'\[GEOGEBRA\](.*?)\[/GEOGEBRA\]', '', texto, flags=re.IGNORECASE | re.DOTALL)
     
-    # Prompts de Imagem transformados em caixas elegantes e compactas
     texto = re.sub(
         r'\[\s*PROMPT IMAGEM:(.*?)\s*\]', 
-        r'\n\n🖼️ **[ILUSTRAÇÃO TÉCNICA SUGERIDA]**\n```english\n\1\n```\n\n', 
+        r'\n\n**[ILUSTRAÇÃO TÉCNICA SUGERIDA]**\n```english\n\1\n```\n\n', 
         texto, 
         flags=re.IGNORECASE | re.DOTALL
     )
     
     return texto
 
-# --- ESTILIZAÇÃO DE LUXO E DEFINIÇÃO DE TEMAS (GLOBAL SOBERANO) ---
+# --- ESTILIZAÇÃO EXECUTIVA & DESIGN SYSTEM GLASSMORPHISM ---
 BRAND_BLUE = "#2962FF"
 BRAND_NAVY = "#000B1A"
 
 if "tema_sistema" not in st.session_state:
-    st.session_state.tema_sistema = "🌙 Dark"
+    st.session_state.tema_sistema = "Dark"
 
-if st.session_state.tema_sistema == "🌙 Dark":
+if st.session_state.tema_sistema == "Dark":
     cor_fundo, cor_texto, cor_sidebar, cor_card = BRAND_NAVY, "#FFFFFF", "#001226", "#001E3C"
     cor_borda = "#003366"
 else:
-    cor_fundo, cor_texto, cor_sidebar, cor_card = "#F8FAFC", "#1A202C", "#FFFFFF", "#FFFFFF"
+    cor_fundo, cor_texto, cor_sidebar, cor_card = "#F8FAFC", "#0F172A", "#FFFFFF", "#FFFFFF"
     cor_borda = "#E2E8F0"
 
 st.markdown(f"""
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
         * {{ font-family: 'Plus Jakarta Sans', sans-serif; }}
         .stApp {{ background-color: {cor_fundo} !important; color: {cor_texto} !important; }}
         [data-testid="stSidebar"] {{ background-color: {cor_sidebar} !important; border-right: 1px solid {cor_borda}; }}
-        div[data-testid="stMetric"] {{ background: {cor_card} !important; border: 1px solid {cor_borda} !important; border-radius: 16px !important; padding: 15px !important; box-shadow: 0 4px 6px rgba(0,0,0,0.05) !important; }}
-        .stButton button {{ background: linear-gradient(135deg, {BRAND_BLUE}, #0039CB) !important; color: white !important; border-radius: 12px !important; font-weight: 700 !important; width: 100%; transition: all 0.3s ease; }}
-        .stButton button:hover {{ transform: translateY(-2px); box-shadow: 0 8px 15px rgba(41, 98, 255, 0.3) !important; }}
-        .clock-container {{ background: {BRAND_BLUE}15; color: {BRAND_BLUE}; padding: 8px 15px; border-radius: 30px; font-weight: 800; font-size: 14px; text-align: center; margin: 10px 0; border: 1px solid {BRAND_BLUE}33; }}
-        /* BENTO GRID EFFECT PARA CONTAINERS */
-        div[data-testid="stVerticalBlock"] > div[style*="border"] {{ border-radius: 16px !important; box-shadow: 0 4px 10px rgba(0,0,0,0.03) !important; transition: all 0.3s ease; background: {cor_card}; border-color: {cor_borda} !important; }}
-        div[data-testid="stVerticalBlock"] > div[style*="border"]:hover {{ box-shadow: 0 8px 20px rgba(0,0,0,0.08) !important; }}
+        div[data-testid="stMetric"] {{ background: {cor_card} !important; border: 1px solid {cor_borda} !important; border-radius: 12px !important; padding: 14px !important; box-shadow: 0 2px 6px rgba(0,0,0,0.04) !important; }}
+        .stButton button {{ border-radius: 10px !important; font-weight: 600 !important; transition: all 0.2s ease; }}
+        .stButton button:hover {{ transform: translateY(-1px); }}
+        div[data-testid="stVerticalBlock"] > div[style*="border"] {{ border-radius: 14px !important; box-shadow: 0 2px 8px rgba(0,0,0,0.02) !important; background: {cor_card}; border-color: {cor_borda} !important; }}
     </style>
 """, unsafe_allow_html=True)
 
-# --- SIDEBAR: IDENTIDADE, RELÓGIO E NAVEGAÇÃO ESTRATÉGICA AGRUPADA ---
+# --- SIDEBAR: IDENTIDADE, RELÓGIO & NAVEGAÇÃO ESTRATÉGICA ---
 with st.sidebar:
     try: st.logo("logo.png", icon_image="logo.png")
     except: pass
     
     col_l1, col_l2, col_l3 = st.columns([1, 2, 1])
     with col_l2:
-        try: st.image("logo.png", width=110)
+        try: st.image("logo.png", width=95)
         except: pass
     
-    st.markdown("<h2 style='text-align: center; font-size: 20px; margin-top: 5px; margin-bottom: 0px;'>Ronaldo Gomes</h2>", unsafe_allow_html=True)
-    st.markdown(f"<p style='text-align: center; font-size: 11px; color: {BRAND_BLUE}; font-weight: 800; letter-spacing: 1px;'>SOBERANIA PEDAGÓGICA</p>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align: center; font-size: 18px; margin-top: 4px; margin-bottom: 0px; font-weight: 800;'>Ronaldo Gomes</h3>", unsafe_allow_html=True)
+    st.markdown(f"<p style='text-align: center; font-size: 11px; color: {BRAND_BLUE}; font-weight: 700; letter-spacing: 0.5px;'>SOBERANIA PEDAGÓGICA</p>", unsafe_allow_html=True)
 
-    # 🚨 SELETOR DE TEMA COM PERSISTÊNCIA SOBERANA
-    tema_sel_pills = st.segmented_control("Visual do Sistema:", ["🌙 Dark", "🌞 Light"], default=st.session_state.tema_sistema, key="seg_tema_sidebar")
+    tema_sel_pills = st.segmented_control("Aparência:", ["Dark", "Light"], default=st.session_state.tema_sistema, key="seg_tema_sidebar")
     if tema_sel_pills and tema_sel_pills != st.session_state.tema_sistema:
         st.session_state.tema_sistema = tema_sel_pills
         st.rerun()
@@ -178,76 +163,76 @@ with st.sidebar:
     data_atual_dt = agora_br.date() 
     
     with st.container(border=True):
-        st.markdown(f"<div style='text-align: center; font-weight: 800; font-size: 13px; color: {BRAND_BLUE};'>🕒 {hora_atual} | 📅 {data_atual}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='text-align: center; font-weight: 700; font-size: 12px; color: {BRAND_BLUE};'>{hora_atual} • {data_atual}</div>", unsafe_allow_html=True)
         
         feriado_hoje = util.verificar_feriado_itabuna(data_atual_dt)
         if feriado_hoje:
-            st.caption(f"🎉 FERIADO: {feriado_hoje.upper()}")
+            st.caption(f"Feriado: {feriado_hoje.upper()}")
         else:
             dias_semana = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"]
             nome_dia = dias_semana[data_atual_dt.weekday()]
-            st.caption(f"🟢 {nome_dia}-feira • Dia Letivo")
+            st.caption(f"{nome_dia}-feira • Dia Letivo")
 
-    # RADAR DE SOBERANIA
-    with st.expander("🔔 Radar de Notificações", expanded=False):
+    # RADAR EXECUTIVO DE SOBERANIA
+    with st.expander("Radar de Notificações", expanded=False):
         try:
             planos_pendentes = len(df_planos[df_planos["EIXO"].astype(str).str.contains("HUB_ATIVO", case=False, na=False)]) if not df_planos.empty else 0
             if planos_pendentes > 0:
-                st.warning(f"⏳ {planos_pendentes} Plano(s) no Hub de Produção")
-            else: st.success("✅ Nenhum plano pendente")
+                st.warning(f"{planos_pendentes} Plano(s) pendente(s) no Hub")
+            else: st.success("Planejamento em dia")
         except: pass
 
         try:
             if not df_notas.empty:
                 uti_count = len(df_notas[df_notas['MEDIA_FINAL'].apply(util.sosa_to_float) < 6.0])
                 if uti_count > 0:
-                    st.error(f"🚑 {uti_count} Aluno(s) na UTI Pedagógica")
-                else: st.success("✅ Nenhum aluno na UTI")
+                    st.error(f"{uti_count} Estudante(s) abaixo da média")
+                else: st.success("Nenhum estudante em risco")
         except: pass
 
     st.markdown("---")
 
-    # NAVEGAÇÃO ESTRATÉGICA AGRUPADA EM 3 MÓDULOS PRINCIPAIS
-    st.markdown("<p style='font-size: 11px; color: gray; font-weight: bold; letter-spacing: 1px;'>ÁREA DE ATUAÇÃO:</p>", unsafe_allow_html=True)
+    # NAVEGAÇÃO EM 3 MÓDULOS ESTRATÉGICOS
+    st.markdown("<p style='font-size: 11px; color: gray; font-weight: 700; letter-spacing: 0.5px;'>ÁREA DE ATUAÇÃO:</p>", unsafe_allow_html=True)
     
     modulos_map = {
-        "📅 Planejamento (Ponto ID)": "📚 Aulas",
-        "🧪 Criador de Aulas": "📚 Aulas",
-        "📚 Base de Conhecimento": "📚 Aulas",
+        "📅 Planejamento (Ponto ID)": "Aulas",
+        "🧪 Criador de Aulas": "Aulas",
+        "📚 Base de Conhecimento": "Aulas",
         
-        "📝 Central de Avaliações": "📝 Provas",
-        "📸 Scanner de Gabaritos": "📝 Provas",
-        "📊 Painel de Notas & Vistos": "📝 Provas",
-        "📈 Boletim Anual & Conselho": "📝 Provas",
+        "📝 Central de Avaliações": "Provas",
+        "📸 Scanner de Gabaritos": "Provas",
+        "📊 Painel de Notas & Vistos": "Provas",
+        "📈 Boletim Anual & Conselho": "Provas",
         
-        "📝 Diário de Bordo Rápido": "👥 Regência",
-        "👤 Biografia do Estudante": "👥 Regência",
-        "👥 Gestão da Turma": "👥 Regência",
-        "♿ Relatórios PEI / Perfil IA": "👥 Regência"
+        "📝 Diário de Bordo Rápido": "Regência",
+        "👤 Biografia do Estudante": "Regência",
+        "👥 Gestão da Turma": "Regência",
+        "♿ Relatórios PEI / Perfil IA": "Regência"
     }
     
-    modulo_default = modulos_map.get(st.session_state.menu_atual, "📚 Aulas")
+    modulo_default = modulos_map.get(st.session_state.menu_atual, "Aulas")
     
     modulo_ativo = st.segmented_control(
         "Módulo:", 
-        ["📚 Aulas", "📝 Provas", "👥 Regência"], 
+        ["Aulas", "Provas", "Regência"], 
         default=modulo_default,
         key="seg_modulo_sidebar"
     )
 
     paginas_por_modulo = {
-        "📚 Aulas": [
+        "Aulas": [
             "📅 Planejamento (Ponto ID)",
             "🧪 Criador de Aulas",
             "📚 Base de Conhecimento"
         ],
-        "📝 Provas": [
+        "Provas": [
             "📝 Central de Avaliações",
             "📸 Scanner de Gabaritos",
             "📊 Painel de Notas & Vistos",
             "📈 Boletim Anual & Conselho"
         ],
-        "👥 Regência": [
+        "Regência": [
             "📝 Diário de Bordo Rápido",
             "👤 Biografia do Estudante",
             "👥 Gestão da Turma",
@@ -255,12 +240,11 @@ with st.sidebar:
         ]
     }
 
-    paginas_disponiveis = paginas_por_modulo.get(modulo_ativo, paginas_por_modulo["📚 Aulas"])
-    
+    paginas_disponiveis = paginas_por_modulo.get(modulo_ativo, paginas_por_modulo["Aulas"])
     idx_pag = paginas_disponiveis.index(st.session_state.menu_atual) if st.session_state.menu_atual in paginas_disponiveis else 0
     
     pagina_selecionada = st.pills(
-        "Selecione o Painel:", 
+        "Painel:", 
         paginas_disponiveis, 
         default=paginas_disponiveis[idx_pag],
         key="pills_pagina_sidebar"
@@ -275,112 +259,91 @@ with st.sidebar:
     st.markdown("<br>", unsafe_allow_html=True)
     st.markdown("---")
     
-    with st.popover("⚙️ Conta & Sessão", use_container_width=True):
+    with st.popover("Conta & Sessão", use_container_width=True):
         st.caption("👑 **Prof. Ronaldo Gomes**")
         st.caption("Licença Ativa • SOSA 2026")
         st.markdown("---")
         
         c_pop1, c_pop2 = st.columns(2)
-        if c_pop1.button("🔄 Sync", use_container_width=True, key="btn_pop_sync"):
+        if c_pop1.button("Sincronizar", use_container_width=True, key="btn_pop_sync"):
             st.cache_data.clear()
             st.rerun()
             
-        if c_pop2.button("🚪 Sair", use_container_width=True, key="btn_pop_sair"):
+        if c_pop2.button("Sair", use_container_width=True, key="btn_pop_sair"):
             st.session_state["password_correct"] = False
             st.session_state["login_timestamp"] = None
             st.rerun()
 
     st.caption("Itabuna/BA • © 2026")
 
-
-
-
-
-# --- FUNÇÕES AUXILIARES ---
+# --- FUNÇÕES AUXILIARES DE PROCESSAMENTO ---
 def prensa_hidraulica_texto(texto, label):
     limpo = texto.replace(label, "").replace(label.upper(), "").replace(label.lower(), "")
     if limpo.startswith(":") or limpo.startswith(" :"):
         limpo = limpo.split(":", 1)[-1]
     return limpo.strip()
 
-# ==============================================================================
-# FUNÇÃO AUXILIAR DE VISUALIZAÇÃO HÍBRIDA (VERSÃO V25.11 - CONTEXTUAL)
-# ==============================================================================
-# --- FUNÇÃO DE VISUALIZAÇÃO V25.85 ---
 def exibir_material_estruturado(texto_raw, key_prefix, dados_plano=None, info_aula=None):
-    """
-    Versão V25.90: Híbrida e Blindada. 
-    Detecta automaticamente se é PLANEJAMENTO ou AULA.
-    """
     if info_aula is None: info_aula = {}
     
-    # Extração de Metadados
     f_aula = info_aula.get("aula", "Aula Geral")
     f_ano = info_aula.get("ano", "6")
     f_semana = info_aula.get("semana", "Semana Geral")
     f_trimestre = info_aula.get("trimestre", "I Trimestre")
-    f_categoria = f"{f_ano}ano" # Formato esperado pelo Apps Script
+    f_categoria = f"{f_ano}ano"
 
-    # --- LÓGICA DE DETECÇÃO DE CONTEÚDO ---
     if dados_plano:
-        # MODO PLANEJAMENTO: Usa as tags MARKER_
         ed_met = ai.extrair_tag(texto_raw, "METODOLOGIA")
         ed_obj = ai.extrair_tag(texto_raw, "OBJETIVOS_ENSINO")
         ed_ava = ai.extrair_tag(texto_raw, "AVALIACAO")
         ed_pei_plan = ai.extrair_tag(texto_raw, "ADAPTACAO_PEI")
         
-        t1, t2, t3, t4, t_exp = st.tabs(["🏫 Metodologia", "🎯 Objetivos", "📝 Avaliação", "♿ PEI", "📥 EXPORTAR/SYNC"])
+        t1, t2, t3, t4, t_exp = st.tabs(["Metodologia", "Objetivos", "Avaliação", "Acessibilidade PEI", "Sincronização"])
         
-        with t1: st.text_area("Roteiro das Aulas:", ed_met, height=400, key=f"{key_prefix}_met")
-        with t2: st.text_area("Objetivos Curriculares:", ed_obj, height=400, key=f"{key_prefix}_obj")
-        with t3: st.text_area("Critérios de Avaliação:", ed_ava, height=200, key=f"{key_prefix}_ava")
-        with t4: st.text_area("Adaptação PEI (Plano):", ed_pei_plan, height=300, key=f"{key_prefix}_pei_plan")
+        with t1: st.text_area("Roteiro:", ed_met, height=360, key=f"{key_prefix}_met")
+        with t2: st.text_area("Objetivos:", ed_obj, height=360, key=f"{key_prefix}_obj")
+        with t3: st.text_area("Avaliação:", ed_ava, height=180, key=f"{key_prefix}_ava")
+        with t4: st.text_area("Acessibilidade:", ed_pei_plan, height=260, key=f"{key_prefix}_pei_plan")
         
         modo_sync = "PLANEJAMENTO"
         nome_base = f"PLANO_{f_ano}ANO_{f_semana.replace(' ', '')}"
-        # No planejamento, o 'ed_prof' para o banco será o próprio texto do plano
         ed_prof_para_banco = texto_raw 
 
     else:
-        # MODO CRIADOR DE AULAS: Usa as tags [PROFESSOR] e [ALUNO]
         ed_prof = ai.extrair_tag(texto_raw, "PROFESSOR")
         ed_alu = ai.extrair_tag(texto_raw, "ALUNO")
         
-        t1, t2, t3, t4, t5, t_exp = st.tabs(["✍️ Lousa", "📄 Folha", "✅ Gabarito", "🎨 Imagens", "♿ PEI", "📥 EXPORTAR/SYNC"])
+        t1, t2, t3, t4, t5, t_exp = st.tabs(["Guia Docente", "Folha do Estudante", "Gabarito", "Ilustrações", "Acessibilidade PEI", "Sincronização"])
         
-        with t1: st.text_area("Esquema de Lousa:", ed_prof, height=400, key=f"{key_prefix}_lousa")
-        with t2: st.text_area("Folha do Aluno:", ed_alu, height=400, key=f"{key_prefix}_folha")
-        with t3: st.text_area("Gabarito:", ai.extrair_tag(texto_raw, "GABARITO"), height=200, key=f"{key_prefix}_gab")
-        with t4: st.text_area("Prompts de Imagem:", ai.extrair_tag(texto_raw, "IMAGENS"), height=150, key=f"{key_prefix}_img")
+        with t1: st.text_area("Guia Docente:", ed_prof, height=360, key=f"{key_prefix}_lousa")
+        with t2: st.text_area("Folha do Estudante:", ed_alu, height=360, key=f"{key_prefix}_folha")
+        with t3: st.text_area("Gabarito:", ai.extrair_tag(texto_raw, "GABARITO"), height=180, key=f"{key_prefix}_gab")
+        with t4: st.text_area("Ilustrações:", ai.extrair_tag(texto_raw, "IMAGENS"), height=140, key=f"{key_prefix}_img")
         
         with t5:
-            st.subheader("♿ Adaptação PEI (Material)")
+            st.subheader("Adaptação Inclusiva (PEI)")
             if "lab_pei" not in st.session_state:
-                if st.button("♿ GERAR ADAPTAÇÃO PEI", use_container_width=True, key=f"{key_prefix}_gen_pei"):
+                if st.button("Gerar Adaptação PEI", use_container_width=True, key=f"{key_prefix}_gen_pei"):
                     st.session_state.lab_pei = ai.gerar_ia("ARQUITETO_PEI_V24", f"ADAPTE: {ed_alu}")
                     st.rerun()
             else:
-                st.session_state.lab_pei = st.text_area("PEI:", st.session_state.lab_pei, height=400, key=f"{key_prefix}_pei_area")
+                st.session_state.lab_pei = st.text_area("PEI:", st.session_state.lab_pei, height=360, key=f"{key_prefix}_pei_area")
         
         modo_sync = "AULA"
         nome_base = f"AULA_{f_aula.replace(' ','')}_{f_ano}ANO_{datetime.now().strftime('%d%m')}"
         ed_prof_para_banco = ed_prof
 
-# --- ABA DE EXPORTAÇÃO E SINCRONIA (UNIFICADA V25.96) ---
     with t_exp:
-        st.subheader("🚀 Sincronia de Elite SOSA")
+        st.subheader("Custódia & Sincronização Google Drive")
         
-        # Definição do nome base para os arquivos
         if modo_sync == "PLANEJAMENTO":
             nome_base = f"PLANO_{f_ano}ANO_{f_semana.replace(' ', '')}"
         else:
             nome_base = f"AULA_{f_aula.replace(' ','')}_{f_ano}ANO_{datetime.now().strftime('%d%m')}"
 
-        if st.button("☁️ SINCRONIZAR TUDO NO DRIVE E BANCO", use_container_width=True, type="primary", key=f"{key_prefix}_btn_sync"):
-            with st.status("Iniciando Protocolo de Sincronia e Limpeza...", expanded=True) as status:
-                
-                # 1. LÓGICA ANTI-DUPLICIDADE (UPSERT)
-                status.write("🧹 Verificando e removendo versões obsoletas...")
+        if st.button("Sincronizar no Google Drive", use_container_width=True, type="primary", key=f"{key_prefix}_btn_sync"):
+            with st.status("Iniciando sincronização e custódia...", expanded=True) as status:
+                status.write("Verificando versões anteriores...")
                 if modo_sync == "PLANEJAMENTO":
                     filtro = df_planos[(df_planos['SEMANA'] == f_semana) & (df_planos['ANO'] == f"{f_ano}º")]
                     for _, row_antiga in filtro.iterrows():
@@ -390,12 +353,9 @@ def exibir_material_estruturado(texto_raw, key_prefix, dados_plano=None, info_au
                     for _, row_antiga in filtro.iterrows():
                         db.excluir_registro_com_drive("DB_AULAS_PRONTAS", row_antiga['CONTEUDO'])
 
-                # 2. PROCESSAMENTO POR MODO
                 if modo_sync == "PLANEJAMENTO":
-                    # Geração do DOCX do Plano
                     doc_plano = exporter.gerar_docx_plano_pedagogico_ELITE(nome_base, dados_plano, {"ano": f"{f_ano}º", "semana": f_semana, "trimestre": f_trimestre})
-                    
-                    status.write("📤 Enviando Novo Plano para a Hierarquia Oficial...")
+                    status.write("Enviando plano para o Drive...")
                     link = db.subir_e_converter_para_google_docs(doc_plano, nome_base, trimestre=f_trimestre, categoria=f"{f_ano}º Ano", semana=f_semana, modo="PLANEJAMENTO")
                     
                     if "https" in str(link):
@@ -412,42 +372,40 @@ def exibir_material_estruturado(texto_raw, key_prefix, dados_plano=None, info_au
                         
                         sucesso = db.salvar_no_banco("DB_PLANOS", [datetime.now().strftime("%d/%m/%Y"), f_semana, f"{f_ano}º", f_trimestre, "PADRÃO", final_txt, link])
                         if sucesso:
-                            status.update(label="✅ Plano Sincronizado!", state="complete")
+                            status.update(label="Plano sincronizado com sucesso!", state="complete")
                             st.balloons()
                     else:
-                        status.update(label="❌ Falha na Ponte Google.", state="error")
+                        status.update(label="Falha no envio para o Drive.", state="error")
                         st.error(link)
 
                 else:
-                    # MODO AULA (CRIADOR DE AULAS)
-                    status.write("📄 Gerando Materiais (Fluxo Nativo)...")
+                    status.write("Compilando materiais oficiais...")
                     doc_alu = exporter.gerar_docx_aluno_v24(nome_base, ed_alu, {"ano": f"{f_ano}º", "trimestre": f_trimestre})
                     doc_prof = exporter.gerar_docx_professor_v25(nome_base, ed_prof, {"ano": f"{f_ano}º", "semana": f_semana, "trimestre": f_trimestre})
                     
-                    status.write("📤 Enviando Material do Aluno...")
+                    status.write("Enviando Folha do Estudante...")
                     link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{nome_base}_ALUNO", trimestre=f_trimestre, categoria=f_categoria, semana=f_semana, modo="AULA")
                     
-                    status.write("📤 Enviando Guia do Professor...")
+                    status.write("Enviando Guia Docente...")
                     link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_base}_PROF", trimestre=f_trimestre, categoria=f_categoria, semana=f_semana, modo="AULA")
                     
                     link_pei = "N/A"
                     if "lab_pei" in st.session_state:
-                        status.write("♿ Enviando Material PEI Adaptado...")
+                        status.write("Enviando material adaptado PEI...")
                         doc_pei = exporter.gerar_docx_pei_v25(f"{nome_base}_PEI", st.session_state.lab_pei, {"ano": f"{f_ano}º", "trimestre": f_trimestre})
                         link_pei = db.subir_e_converter_para_google_docs(doc_pei, f"{nome_base}_PEI", trimestre=f_trimestre, categoria=f_categoria, semana=f_semana, modo="AULA")
 
                     if "https" in str(link_alu) and "https" in str(link_prof):
-                        # CONTEÚDO ESTRUTURADO PARA AULAS (Sem variáveis de prova)
                         conteudo_banco = f"[PROFESSOR]\n{ed_prof}\n\n[ALUNO]\n{ed_alu}\n\n--- LINKS ---\nAluno({link_alu}) Prof({link_prof}) PEI({link_pei})"
                         
                         db.salvar_no_banco("DB_AULAS_PRONTAS", [
                             datetime.now().strftime("%d/%m/%Y"), f_semana, f"{f_aula}", conteudo_banco, f"{f_ano}º", link_alu
                         ])
-                        status.update(label="✅ Aula Sincronizada!", state="complete")
+                        status.update(label="Material sincronizado com sucesso!", state="complete")
                         st.balloons()
                     else:
-                        status.update(label="❌ Erro no Upload da Aula.", state="error")
-                        st.error(f"Falha no envio dos arquivos.")
+                        status.update(label="Erro no upload do material.", state="error")
+                        st.error("Falha no envio dos arquivos.")
                        
 
 
