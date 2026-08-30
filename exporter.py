@@ -1389,15 +1389,27 @@ def gerar_docx_pei_oficial(nome_arquivo, dados_aluno, habilidades, curriculo_df,
             p_h.runs[0].font.color.rgb = RGBColor(255, 255, 255)
             p_h.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
+        def limpar_coluna_estrita(texto, tipo='OBJETIVO'):
+            if not texto or not isinstance(texto, str): return ""
+            t = str(texto).strip()
+            if tipo == 'OBJETIVO':
+                t = re.split(r'\[ESTRATEGIA\]|\[RECURSO\]|\[/ITEM\]', t, flags=re.IGNORECASE)[0]
+            elif tipo == 'ESTRATEGIA':
+                t = re.split(r'\[RECURSO\]|\[/ITEM\]', t, flags=re.IGNORECASE)[0]
+            elif tipo == 'RECURSO':
+                t = re.split(r'\[/ITEM\]|\[ITEM\]', t, flags=re.IGNORECASE)[0]
+            t = re.sub(r'\[/?(?:ITEM|OBJETIVO|ESTRATEGIA|RECURSO)\]', '', t, flags=re.IGNORECASE).strip()
+            return sanitizar_xml_str(t)
+
         if not curriculo_df.empty:
             for _, row_c in curriculo_df.iterrows():
                 row_cells = tb_curr.add_row().cells
                 set_row_height(tb_curr.rows[-1], 24)
                 
                 row_cells[0].text = "MATEMÁTICA\n(Prof. Ronaldo Gomes)"
-                row_cells[1].text = sanitizar_xml_str(str(row_c.get('Objetivos de Aprendizagem', '')))
-                row_cells[2].text = sanitizar_xml_str(str(row_c.get('Estratégias Metodológicas', '')))
-                row_cells[3].text = sanitizar_xml_str(str(row_c.get('Recursos Materiais', '')))
+                row_cells[1].text = limpar_coluna_estrita(row_c.get('Objetivos de Aprendizagem', ''), 'OBJETIVO')
+                row_cells[2].text = limpar_coluna_estrita(row_c.get('Estratégias Metodológicas', ''), 'ESTRATEGIA')
+                row_cells[3].text = limpar_coluna_estrita(row_c.get('Recursos Materiais', ''), 'RECURSO')
                 
                 for idx_c, cell in enumerate(row_cells):
                     cell.width = col_w[idx_c]
