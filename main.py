@@ -7305,7 +7305,7 @@ Escola Municipal Flávio José Simões Costa"""
             renderizar_matriz_inclusao_fragmento()
 
         # ==============================================================================
-        # ABA 2: DOSSIÊ DESCRITIVO (SOBERANIA DA ANOTAÇÃO REAL DO PROFESSOR)
+        # ABA 2: DOSSIÊ DESCRITIVO (REATIVIDADE TOTAL POR ALUNA & ZERO RETENÇÃO)
         # ==============================================================================
         with tab_forja:
             @st.fragment
@@ -7318,11 +7318,18 @@ Escola Municipal Flávio José Simões Costa"""
                 if df_todos_relatorio.empty:
                     st.info("Nenhum estudante ativo selecionado para relatório nesta turma.")
                 else:
-                    aluno_foco = st.selectbox("Selecione a Estudante:", df_todos_relatorio['NOME_ALUNO'].tolist(), key=f"foco_pei_dossie_{v}")
+                    aluno_foco = st.selectbox("Selecione a Estudante:", df_todos_relatorio['NOME_ALUNO'].tolist(), key="foco_pei_dossie_select_main")
                     dados_a = df_todos_relatorio[df_todos_relatorio['NOME_ALUNO'] == aluno_foco].iloc[0]
-                    id_a = db.limpar_id(dados_a['ID'])
+                    id_a = str(db.limpar_id(dados_a['ID']))
                     perfil_atual = str(dados_a['NECESSIDADES']).upper().strip()
 
+                    # Controle de versão para forçar atualização do texto no Streamlit
+                    key_gen_version = f"gen_v_{id_a}_{trim_ativo_pei}"
+                    if key_gen_version not in st.session_state:
+                        st.session_state[key_gen_version] = 0
+                    v_gen = st.session_state[key_gen_version]
+
+                    # 1. MINERAÇÃO DE DADOS EXCLUSIVOS DA ALUNA SELECIONADA
                     n_alu = df_notas[(df_notas['ID_ALUNO'].apply(db.limpar_id) == id_a) & (df_notas['TRIMESTRE'] == trim_ativo_pei)] if not df_notas.empty else pd.DataFrame()
                     if not n_alu.empty:
                         nota_c1 = util.sosa_to_float(n_alu.iloc[0]['NOTA_VISTOS'])
@@ -7340,7 +7347,7 @@ Escola Municipal Flávio José Simões Costa"""
                     ocorrencias_diario = []
                     faltas_cnt = 0
                     if not df_diario.empty:
-                        d_alu = df_diario[((df_diario['ID_ALUNO'].apply(db.limpar_id) == id_a) | (df_diario['ID_ALUNO'] == "GLOBAL")) & (df_diario['TURMA'] == turma_pei)].copy()
+                        d_alu = df_diario[(df_diario['ID_ALUNO'].apply(db.limpar_id) == id_a) & (df_diario['TURMA'] == turma_pei)].copy()
                         if not d_alu.empty:
                             d_alu['DATA_DT'] = pd.to_datetime(d_alu['DATA'], format="%d/%m/%Y", errors='coerce').dt.date
                             d_alu_sub = d_alu[(d_alu['DATA_DT'] >= dt_i) & (d_alu['DATA_DT'] <= dt_f)]
@@ -7363,16 +7370,17 @@ Escola Municipal Flávio José Simões Costa"""
                         if not rel_ant2.empty:
                             texto_historico_anterior = f"HISTÓRICO DO II TRIMESTRE: {str(rel_ant2.iloc[-1]['CONTEUDO'])[:400]}"
 
+                    # CARD DE EVIDÊNCIAS COM O NOME EXATO DA ALUNA SELECIONADA
                     with st.container(border=True):
                         st.markdown(f"##### Evidências Registradas ({aluno_foco} • {trim_ativo_pei})")
                         c_ctx1, c_ctx2 = st.columns([1.2, 1.8])
                         c_ctx1.info(f"**Rendimento em Matemática:**\n{notas_str}\n\n**Faltas no Período:** {faltas_cnt}")
                         c_ctx2.warning(f"**Atitude & Observações de Sala:**\n{oc_str}")
 
-                    # PAINEL TÁTIL DE MARCAÇÃO RÁPIDA
+                    # PAINEL TÁTIL DE MARCAÇÃO RÁPIDA (CHAVES EXCLUSIVAS POR ALUNA)
                     with st.container(border=True):
                         st.markdown("#### Painel Tátil de Observação Real")
-                        st.caption("Assinale as características reais vivenciadas na sala de aula:")
+                        st.caption(f"Assinale as características observadas na aluna **{aluno_foco}**:")
 
                         c_chip1, c_chip2 = st.columns(2)
                         marcas_sociais = c_chip1.pills(
@@ -7380,7 +7388,7 @@ Escola Municipal Flávio José Simões Costa"""
                             ["Isolamento e Não Interage com Colegas", "Não Participa Espontaneamente das Aulas", "Bom Comportamento mas Passiva", "Necessita de Rotina Rígida", "Apresenta Estereotipias", "Sensibilidade a Ruídos / Agitação"],
                             selection_mode="multi",
                             default=["Isolamento e Não Interage com Colegas", "Não Participa Espontaneamente das Aulas", "Bom Comportamento mas Passiva"],
-                            key=f"chips_soc_{v}"
+                            key=f"chips_soc_{id_a}_{trim_ativo_pei}"
                         )
 
                         marcas_comunicacao = c_chip2.pills(
@@ -7388,7 +7396,7 @@ Escola Municipal Flávio José Simões Costa"""
                             ["Comunicação Verbal Restrita / Rara", "Compreende Instruções Curtas", "Responde por Apontamento / Desenho", "Necessita de Apoio Visual / Concreto", "Comunicação Alternativa (PECs)"],
                             selection_mode="multi",
                             default=["Comunicação Verbal Restrita / Rara", "Compreende Instruções Curtas", "Necessita de Apoio Visual / Concreto"],
-                            key=f"chips_com_{v}"
+                            key=f"chips_com_{id_a}_{trim_ativo_pei}"
                         )
 
                         c_chip3, c_chip4 = st.columns(2)
@@ -7397,34 +7405,35 @@ Escola Municipal Flávio José Simões Costa"""
                             ["Dificilmente Apresenta Tarefas de Casa", "Dificuldade na Abstração sem Apoio", "Realiza Tarefas de Sala com Mediação Direta", "Autonomia com Material Dourado / Concreto", "Uso Funcional da Calculadora", "Reconhece Numerais Básicos"],
                             selection_mode="multi",
                             default=["Dificilmente Apresenta Tarefas de Casa", "Dificuldade na Abstração sem Apoio", "Realiza Tarefas de Sala com Mediação Direta"],
-                            key=f"chips_mat_{v}"
+                            key=f"chips_mat_{id_a}_{trim_ativo_pei}"
                         )
 
                         evolucao_selecionada = c_chip4.segmented_control(
                             "Evolução / Vínculo Pedagógico:",
                             ["Necessita de Reforço de Vínculo e Engajamento", "Desenvolvimento Estável / Em Processo", "Evolução Notória"],
                             default="Necessita de Reforço de Vínculo e Engajamento",
-                            key=f"seg_evo_{v}"
+                            key=f"seg_evo_{id_a}_{trim_ativo_pei}"
                         )
 
                         micro_anotacao_prof = st.text_input(
-                            "Anotação do Professor (Sua observação real em sala de aula):",
-                            value="A aluna não interage com os colegas, não participa das aulas e dificilmente apresenta as atividades enviadas de casa. Apresenta bom comportamento na sala, mas possui dificuldades de engajamento e abstração.",
-                            key=f"inp_micro_obs_{v}"
+                            "Anotação do Professor (Observação real sobre esta aluna):",
+                            value="",
+                            placeholder="Digite ou dite uma anotação real (ex: Não participa dos debates, mas executa contas básicas com calculadora)...",
+                            key=f"inp_micro_obs_{id_a}_{trim_ativo_pei}"
                         )
 
                         st.markdown("<br>", unsafe_allow_html=True)
 
-                        if st.button("Estruturar Dossiê Fiel às Minhas Anotações com IA", type="primary", use_container_width=True, key=f"btn_ghost_auto_{v}"):
-                            with st.spinner("A IA está redigindo o parecer técnico fiel às suas observações reais..."):
+                        if st.button(f"Estruturar Dossiê de {aluno_foco} com IA", type="primary", use_container_width=True, key=f"btn_ghost_auto_{id_a}_{trim_ativo_pei}"):
+                            with st.spinner(f"A IA está redigindo o parecer técnico de {aluno_foco}..."):
                                 prompt_auto = (
                                     f"VOCÊ É O PSICOPEDAGOGO PERITO EM EDUCAÇÃO ESPECIAL (PREFEITURA DE ITABUNA).\n"
                                     f"ESTUDANTE: {aluno_foco} | TURMA: {turma_pei} | LAUDO: {perfil_atual}\n"
                                     f"TRIMESTRE ATUAL: {trim_ativo_pei.upper()}\n\n"
                                     f"🚨 CLÁUSULA DE SOBERANIA PEDAGÓGICA (FIDELIDADE ABSOLUTA AO PROFESSOR):\n"
-                                    f"O parecer DEVE retratar EXATAMENTE a realidade descrita pelo professor abaixo. NÃO invente 'desenvolvimento excelente' nem generalize!\n\n"
-                                    f"--- OBSERVAÇÕES REAIS DO PROFESSOR DE MATEMÁTICA ---\n"
-                                    f"• ANOTAÇÃO DIRETA DO DOCENTE: {micro_anotacao_prof}\n"
+                                    f"O parecer DEVE retratar EXATAMENTE a realidade descrita pelo professor abaixo para a estudante {aluno_foco}.\n\n"
+                                    f"--- OBSERVAÇÕES REAIS DO PROFESSOR EM SALA ---\n"
+                                    f"• ANOTAÇÃO DIRETA DO DOCENTE: {micro_anotacao_prof if micro_anotacao_prof.strip() else 'A aluna apresenta bom comportamento, porém com postura passiva e sem interação espontânea.'}\n"
                                     f"• STATUS DE EVOLUÇÃO INFORMADO: {evolucao_selecionada}\n"
                                     f"• COMPORTAMENTO / INTERAÇÃO: {', '.join(marcas_sociais)}\n"
                                     f"• COMUNICAÇÃO OBSERVADA: {', '.join(marcas_comunicacao)}\n"
@@ -7433,19 +7442,24 @@ Escola Municipal Flávio José Simões Costa"""
                                     f"--- HISTÓRICO ANTERIOR ---\n"
                                     f"{texto_historico_anterior if texto_historico_anterior else 'Início do acompanhamento.'}\n\n"
                                     f"DIRETRIZES DE REDAÇÃO:\n"
-                                    f"1. No [DIAGNOSTICO_GERAL], destaque que a estudante tem bom comportamento na sala de aula, mas apresenta postura passiva, não interage com os colegas, não participa espontaneamente e tem grande dificuldade em trazer as tarefas de casa feitas, demandando mediação constante em sala de aula de Matemática.\n"
-                                    f"2. Preencha CADA TAG separadamente, sem colocar tags dentro de outras:\n"
-                                    f"[DIAGNOSTICO_GERAL] (Diagnóstico realista do {trim_ativo_pei} focado na não-participação, comportamento passivo e não-entrega de tarefas)\n"
-                                    f"[SOCIAIS] (Isolamento, falta de interação com os colegas e relação com o professor mediador)\n"
-                                    f"[COMUNICATIVAS] (Comunicação verbal restrita, necessidade de comandos curtos e apoio visual)\n"
-                                    f"[EMOCIONAIS] (Bom comportamento em sala, autorregulação e rotina)\n"
-                                    f"[FUNCIONAIS] (Dificuldade com tarefas de casa, necessidade de mediação passo a passo nas tarefas de papel)\n"
-                                    f"[DIRETRIZES_CURRICULARES] (Estratégias práticas para aumentar o engajamento, reforçar o vínculo e incentivar a realização das atividades)"
+                                    f"1. No [DIAGNOSTICO_GERAL], cite nominalmente {aluno_foco}, retratando a realidade das anotações do professor com linguagem técnica.\n"
+                                    f"2. Preencha CADA TAG separadamente, sem vazar tags dentro de outras:\n"
+                                    f"[DIAGNOSTICO_GERAL] (Diagnóstico realista do {trim_ativo_pei})\n"
+                                    f"[SOCIAIS] (Interação social e relação com os colegas)\n"
+                                    f"[COMUNICATIVAS] (Comunicação na aula de Matemática)\n"
+                                    f"[EMOCIONAIS] (Comportamento, autorregulação e rotina)\n"
+                                    f"[FUNCIONAIS] (Engajamento nas tarefas de sala e de casa)\n"
+                                    f"[DIRETRIZES_CURRICULARES] (Recomendações e estratégias de apoio)"
                                 )
                                 res_ia = ai.gerar_ia("ESPECIALISTA_INCLUSAO", prompt_auto, usar_busca=False)
                                 tipo_relatorio_chave = f"DOSSIE_PEI_{trim_ativo_pei.replace(' ', '_').upper()}"
                                 salvar_relatorio_pei_sem_duplicidade(id_a, aluno_foco, tipo_relatorio_chave, res_ia)
-                                st.success("Dossiê formal estruturado com fidelidade às suas anotações!"); time.sleep(0.5); st.rerun()
+                                
+                                # Força a atualização do widget de texto incrementando a chave
+                                st.session_state[key_gen_version] = int(time.time())
+                                st.success(f"Dossiê de {aluno_foco} gerado com sucesso!")
+                                time.sleep(0.4)
+                                st.rerun()
 
                     # FUNÇÃO DE EXTRAÇÃO PURA SEM VAZAMENTO
                     def extrair_bloco_puro(texto_completo, tag_alvo):
@@ -7467,19 +7481,20 @@ Escola Municipal Flávio José Simões Costa"""
                     text_dossie_salvo = str(rel_master.iloc[-1]['CONTEUDO']) if not rel_master.empty else ""
 
                     st.markdown("---")
-                    st.markdown(f"#### Parecer Descritivo Estruturado ({trim_ativo_pei})")
+                    st.markdown(f"#### Parecer Descritivo de **{aluno_foco}** ({trim_ativo_pei})")
 
-                    ed_diag = st.text_area("1. Diagnóstico Geral & Evolução no Trimestre:", extrair_bloco_puro(text_dossie_salvo, "DIAGNOSTICO_GERAL"), height=130, key=f"ed_diag_ghost_{v}")
+                    # Chaves atreladas à aluna e à versão gerada para atualização imediata na tela
+                    ed_diag = st.text_area("1. Diagnóstico Geral & Evolução no Trimestre:", extrair_bloco_puro(text_dossie_salvo, "DIAGNOSTICO_GERAL"), height=130, key=f"ed_diag_{id_a}_{trim_ativo_pei}_{v_gen}")
                     
                     c_h1, c_h2 = st.columns(2)
-                    ed_soc = c_h1.text_area("2. Habilidades Sociais & Interação:", extrair_bloco_puro(text_dossie_salvo, "SOCIAIS"), height=85, key=f"ed_soc_ghost_{v}")
-                    ed_com = c_h2.text_area("3. Habilidades Comunicativas:", extrair_bloco_puro(text_dossie_salvo, "COMUNICATIVAS"), height=85, key=f"ed_com_ghost_{v}")
-                    ed_emo = c_h1.text_area("4. Habilidades Emocionais & Comportamento:", extrair_bloco_puro(text_dossie_salvo, "EMOCIONAIS"), height=85, key=f"ed_emo_ghost_{v}")
-                    ed_fun = c_h2.text_area("5. Habilidades Funcionais & Tarefas:", extrair_bloco_puro(text_dossie_salvo, "FUNCIONAIS"), height=85, key=f"ed_fun_ghost_{v}")
+                    ed_soc = c_h1.text_area("2. Habilidades Sociais & Interação:", extrair_bloco_puro(text_dossie_salvo, "SOCIAIS"), height=85, key=f"ed_soc_{id_a}_{trim_ativo_pei}_{v_gen}")
+                    ed_com = c_h2.text_area("3. Habilidades Comunicativas:", extrair_bloco_puro(text_dossie_salvo, "COMUNICATIVAS"), height=85, key=f"ed_com_{id_a}_{trim_ativo_pei}_{v_gen}")
+                    ed_emo = c_h1.text_area("4. Habilidades Emocionais & Comportamento:", extrair_bloco_puro(text_dossie_salvo, "EMOCIONAIS"), height=85, key=f"ed_emo_{id_a}_{trim_ativo_pei}_{v_gen}")
+                    ed_fun = c_h2.text_area("5. Habilidades Funcionais & Tarefas:", extrair_bloco_puro(text_dossie_salvo, "FUNCIONAIS"), height=85, key=f"ed_fun_{id_a}_{trim_ativo_pei}_{v_gen}")
                     
-                    ed_dir = st.text_area("6. Diretrizes e Adaptações Recomendadas:", extrair_bloco_puro(text_dossie_salvo, "DIRETRIZES_CURRICULARES"), height=95, key=f"ed_dir_ghost_{v}")
+                    ed_dir = st.text_area("6. Diretrizes e Adaptações Recomendadas:", extrair_bloco_puro(text_dossie_salvo, "DIRETRIZES_CURRICULARES"), height=95, key=f"ed_dir_{id_a}_{trim_ativo_pei}_{v_gen}")
                     
-                    if st.button("Salvar Dossiê Trimestral", type="primary", use_container_width=True, key=f"btn_save_man_dossie_{v}"):
+                    if st.button("Salvar Dossiê Trimestral", type="primary", use_container_width=True, key=f"btn_save_man_dossie_{id_a}_{trim_ativo_pei}"):
                         texto_consolidado = f"[DIAGNOSTICO_GERAL]\n{ed_diag}\n\n[SOCIAIS]\n{ed_soc}\n\n[COMUNICATIVAS]\n{ed_com}\n\n[EMOCIONAIS]\n{ed_emo}\n\n[FUNCIONAIS]\n{ed_fun}\n\n[DIRETRIZES_CURRICULARES]\n{ed_dir}"
                         salvar_relatorio_pei_sem_duplicidade(id_a, aluno_foco, tipo_relatorio_chave, texto_consolidado)
                         st.success(f"Dossiê de {aluno_foco} salvo com sucesso!"); time.sleep(0.5); st.rerun()
