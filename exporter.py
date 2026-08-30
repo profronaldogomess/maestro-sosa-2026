@@ -1213,88 +1213,293 @@ def gerar_docx_planejamento_trimestral(nome_arquivo, info, dados_tabela):
         return file_stream
 
 # ==============================================================================
-# 10. PEI OFICIAL (PREFEITURA)
+# 10. PEI OFICIAL DA PREFEITURA DE ITABUNA (FOCO: COMPONENTE DE MATEMÁTICA)
 # ==============================================================================
-def gerar_docx_pei_oficial(nome_arquivo, dados_aluno, habilidades, curriculo_df):
+def gerar_docx_pei_oficial(nome_arquivo, dados_aluno, habilidades, curriculo_df, parecer_resultados=""):
+    """
+    SOSA V2026 - MODELO OFICIAL DA SECRETARIA MUNICIPAL DA EDUCAÇÃO DE ITABUNA:
+    Coordenação Técnica Pedagógica da Educação Especial.
+    Gera o documento institucional com foco no Componente de MATEMÁTICA:
+    - Página 1: Cabeçalho Oficial, Dados da Estudante e Programas.
+    - Páginas 2-3: Estudo de Caso (Sociais, Comunicativas, Emocionais, Funcionais) e Medida de Acesso.
+    - Páginas 4+: Tabela de Planejamento de Matemática (I, II e III Trimestres).
+    - Página Final: Resultados Obtidos em Matemática / Ciências e Assinaturas Oficiais.
+    """
     file_stream = io.BytesIO()
     try:
         doc = Document()
         section = doc.sections[0]
-        section.top_margin = section.bottom_margin = Inches(0.5)
-        section.left_margin = section.right_margin = Inches(0.5)
+        section.top_margin = Inches(0.4)
+        section.bottom_margin = Inches(0.4)
+        section.left_margin = Inches(0.5)
+        section.right_margin = Inches(0.5)
 
         style = doc.styles['Normal']
         style.font.name = 'Arial'
-        style.font.size = Pt(10)
+        style.font.size = Pt(9.5)
 
+        # -------------------------------------------------------------
+        # PÁGINA 1: CABEÇALHO OFICIAL DA PREFEITURA DE ITABUNA
+        # -------------------------------------------------------------
         p_cab = doc.add_paragraph()
         p_cab.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        run_cab = p_cab.add_run("SECRETARIA MUNICIPAL DA EDUCAÇÃO\nDEPARTAMENTO DE EDUCAÇÃO BÁSICA\nCOORDENAÇÃO TÉCNICA PEDAGÓGICA DA EDUCAÇÃO ESPECIAL\n\n")
-        run_cab.bold = True
+        p_cab.paragraph_format.space_after = Pt(2)
+        r_cab1 = p_cab.add_run("SECRETARIA MUNICIPAL DA EDUCAÇÃO\nDEPARTAMENTO DE EDUCAÇÃO BÁSICA\nCOORDENAÇÃO TÉCNICA PEDAGÓGICA DA EDUCAÇÃO ESPECIAL\n")
+        r_cab1.bold = True
+        r_cab1.font.size = Pt(10)
         
         p_tit = doc.add_paragraph()
         p_tit.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        run_tit = p_tit.add_run("PLANO EDUCACIONAL INDIVIDUALIZADO - PEI")
-        run_tit.bold = True
-        run_tit.font.size = Pt(12)
+        p_tit.paragraph_format.space_before = Pt(6)
+        p_tit.paragraph_format.space_after = Pt(4)
+        r_tit = p_tit.add_run("PLANO EDUCACIONAL INDIVIDUALIZADO - PEI\n")
+        r_tit.bold = True
+        r_tit.font.size = Pt(11.5)
         
+        p_obj = doc.add_paragraph()
+        p_obj.paragraph_format.space_after = Pt(8)
+        r_obj_lbl = p_obj.add_run("OBJETIVO: ")
+        r_obj_lbl.bold = True
+        p_obj.add_run("Planejar, adaptar e implementar estratégias pedagógicas garantindo acessibilidade curricular do aluno na Unidade Escolar.").font.size = Pt(9)
+
+        # TABELA DADOS DO ALUNO
+        p_d_title = doc.add_paragraph()
+        p_d_title.paragraph_format.space_after = Pt(2)
+        p_d_title.add_run("DADOS DO ALUNO").bold = True
+
+        tb_dados = doc.add_table(rows=6, cols=2)
+        tb_dados.style = 'Table Grid'
+        tb_dados.columns[0].width = Inches(4.5)
+        tb_dados.columns[1].width = Inches(2.9)
+        for r in tb_dados.rows: set_row_height(r, 18)
+
+        nome_al = sanitizar_xml_str(str(dados_aluno.get('nome', 'ESTUDANTE'))).upper()
+        turma_al = sanitizar_xml_str(str(dados_aluno.get('turma', '6MA'))).upper()
+        cid_al = sanitizar_xml_str(str(dados_aluno.get('cid', 'F84'))).upper()
+        idade_al = sanitizar_xml_str(str(dados_aluno.get('idade', '11')))
+        ano_letivo = "2026"
+
+        tb_dados.cell(0, 0).paragraphs[0].add_run("UNIDADE ESCOLAR: Escola Municipal Flávio José Simões Costa").font.size = Pt(8.5)
+        tb_dados.cell(0, 1).paragraphs[0].add_run(f"ANO LETIVO: {ano_letivo}").font.size = Pt(8.5)
+
+        tb_dados.cell(1, 0).paragraphs[0].add_run(f"NOME: {nome_al}").font.size = Pt(8.5)
+        tb_dados.cell(1, 1).paragraphs[0].add_run(f"TURMA: {turma_al} | IDADE: {idade_al} anos").font.size = Pt(8.5)
+
+        tb_dados.cell(2, 0).paragraphs[0].add_run("Nome do Responsável: Conforme Cadastro Escolar").font.size = Pt(8.5)
+        tb_dados.cell(2, 1).paragraphs[0].add_run("Fone: (73) 9XXXX-XXXX").font.size = Pt(8.5)
+
+        tb_dados.cell(3, 0).merge(tb_dados.cell(3, 1))
+        tb_dados.cell(3, 0).paragraphs[0].add_run("PARTICIPA DE PROJETOS/PROGRAMAS: Geia ( )  SRM ( )  CEPEI ( )  Psicólogo ( )  Psiquiatra ( )  CAPS ( )  CREADE ( )  Outros ( )").font.size = Pt(8.0)
+
+        tb_dados.cell(4, 0).paragraphs[0].add_run(f"DEFICIÊNCIA(S) / CID: {cid_al}").font.size = Pt(8.5)
+        tb_dados.cell(4, 1).paragraphs[0].add_run("SUSPEIÇÃO: ( )").font.size = Pt(8.5)
+
+        tb_dados.cell(5, 0).paragraphs[0].add_run("NÍVEL DE SUPORTE: Nível de Acessibilidade Curricular").font.size = Pt(8.5)
+        tb_dados.cell(5, 1).paragraphs[0].add_run("MONITOR: ( )").font.size = Pt(8.5)
+
         doc.add_paragraph()
-        doc.add_paragraph("DADOS DO ESTUDANTE").runs[0].bold = True
-        
-        p_d1 = doc.add_paragraph()
-        p_d1.add_run("UNIDADE ESCOLAR: ").bold = True
-        p_d1.add_run("Escola Municipal Flávio José Simões Costa\t\t")
-        p_d1.add_run("ANO LETIVO: ").bold = True
-        p_d1.add_run("2026")
-        
-        p_d2 = doc.add_paragraph()
-        p_d2.add_run("NOME: ").bold = True
-        p_d2.add_run(f"{sanitizar_xml_str(str(dados_aluno.get('nome', '')))}\t\t")
-        p_d2.add_run("TURMA: ").bold = True
-        p_d2.add_run(f"{sanitizar_xml_str(str(dados_aluno.get('turma', '')))}")
-        
-        p_d4 = doc.add_paragraph()
-        p_d4.add_run("DEFICIÊNCIA(S)/CID: ").bold = True
-        p_d4.add_run(f"{sanitizar_xml_str(str(dados_aluno.get('cid', '')))}")
-        
+
+        # -------------------------------------------------------------
+        # PÁGINA 2: 1 - PLANO DE ACESSIBILIDADE CURRICULAR (ESTUDO DE CASO)
+        # -------------------------------------------------------------
+        p_est_tit = doc.add_paragraph()
+        p_est_tit.paragraph_format.space_before = Pt(6)
+        p_est_tit.paragraph_format.space_after = Pt(2)
+        r_est = p_est_tit.add_run("1 - Plano de acessibilidade curricular.")
+        r_est.bold = True
+        r_est.font.size = Pt(10.5)
+
+        p_obs_intro = doc.add_paragraph()
+        p_obs_intro.paragraph_format.space_after = Pt(4)
+        p_obs_intro.add_run("Com base no estudo de caso: sondagem, observação em sala de aula de Matemática e devolutiva trimestral, observa-se que a estudante apresenta necessidades em:").font.size = Pt(8.5)
+
+        # 4 Dimensões Oficiais com Caixas de Texto
+        dimensoes_oficiais = [
+            ("Habilidades Sociais", "comportamentos repetitivos e restritos ( X )  estereotipias ( X )  níveis de brincadeiras ( )  rotina ( X )  isolamento ( )  atenção compartilhada ( X )  outras ( )", "Habilidades Sociais"),
+            ("Habilidades Comunicativas", "comunicação verbal ( )  comunicação não verbal ( X )  clareza de comunicação ( )  contato visual ( X )  toque físico ( )  compreensão na comunicação ( X )  comunicação alternativa ( X )  linguagem expressiva e receptiva ( X )", "Habilidades Comunicativas"),
+            ("Habilidades Emocionais", "controle inibitório ( X )  resposta emocional ( )  flexibilidade ( X )  empatia ( )", "Habilidades Emocionais"),
+            ("Habilidades Funcionais", "Auto cuidado ( )  higiene pessoal ( )  alimentação ( )  vestimentas ( )  organização de material escolar ( X )", "Habilidades Funcionais")
+        ]
+
+        for dim_titulo, dim_checks, dim_key in dimensoes_oficiais:
+            p_dim = doc.add_paragraph()
+            p_dim.paragraph_format.space_before = Pt(4)
+            p_dim.paragraph_format.space_after = Pt(1)
+            p_dim.add_run(f"• {dim_titulo}:\n").bold = True
+            r_chk = p_dim.add_run(f"{dim_checks}\n")
+            r_chk.font.size = Pt(8.0)
+            r_chk.font.color.rgb = RGBColor(71, 85, 105)
+
+            # Caixa de Descrição
+            tb_desc = doc.add_table(rows=1, cols=1)
+            tb_desc.style = 'Table Grid'
+            tb_desc.columns[0].width = Inches(7.4)
+            set_row_height(tb_desc.rows[0], 28)
+            c_desc = tb_desc.cell(0, 0)
+            set_cell_background(c_desc, "FAFAFA")
+            
+            p_c = c_desc.paragraphs[0]
+            p_c.paragraph_format.space_before = Pt(2)
+            p_c.paragraph_format.space_after = Pt(2)
+            
+            texto_hab = sanitizar_xml_str(str(habilidades.get(dim_key, 'Observação mediada nas atividades de sala de aula.'))).strip()
+            if not texto_hab: texto_hab = "Necessidade de mediação e suporte visual durante as tarefas."
+            p_c.add_run(f"Descrição: {texto_hab}").font.size = Pt(8.5)
+
+        # 2 - Plano Trimestral (Medida de Acesso)
         doc.add_paragraph()
-        doc.add_paragraph("1. PLANO DE ACESSIBILIDADE CURRICULAR").runs[0].bold = True
-        
-        for hab_name, hab_text in habilidades.items():
-            p_h = doc.add_paragraph()
-            p_h.add_run(f"• {sanitizar_xml_str(str(hab_name))}: ").bold = True
-            p_h.add_run(sanitizar_xml_str(str(hab_text)))
-        
+        p_medida = doc.add_paragraph()
+        p_medida.paragraph_format.space_before = Pt(6)
+        p_medida.paragraph_format.space_after = Pt(2)
+        p_medida.add_run("2 - Plano Trimestral (Medidas de acesso ao currículo conforme o destinatário):\n").bold = True
+        p_medida.add_run("(   ) Currículo Funcional (Ativ. de Vida Diária)     ( X ) Currículo Adaptado (Objetivos Específicos)     (   ) Currículo Suplementar").font.size = Pt(8.5)
+
         doc.add_paragraph()
-        doc.add_paragraph("2. PLANEJAMENTO POR COMPONENTE CURRICULAR").runs[0].bold = True
+
+        # -------------------------------------------------------------
+        # PÁGINAS 4+: TABELA DE PLANEJAMENTO POR COMPONENTE (MATEMÁTICA)
+        # -------------------------------------------------------------
+        p_plan_title = doc.add_paragraph()
+        p_plan_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p_plan_title.paragraph_format.space_before = Pt(8)
+        p_plan_title.paragraph_format.space_after = Pt(4)
+        r_ptit = p_plan_title.add_run("PLANEJAMENTO POR COMPONENTE CURRICULAR — MATEMÁTICA")
+        r_ptit.bold = True
+        r_ptit.font.size = Pt(11)
+        r_ptit.font.color.rgb = RGBColor(0, 51, 102)
+
+        tb_curr = doc.add_table(rows=1, cols=4)
+        tb_curr.style = 'Table Grid'
         
-        table = doc.add_table(rows=1, cols=4)
-        table.style = 'Table Grid'
-        hdr_cells = table.rows[0].cells
+        col_w = [Inches(1.3), Inches(2.3), Inches(2.1), Inches(1.7)]
+        for i_w, w in enumerate(col_w): tb_curr.columns[i_w].width = w
+
+        hdr_cells = tb_curr.rows[0].cells
         hdr_cells[0].text = 'DISCIPLINA'
         hdr_cells[1].text = 'OBJETIVOS APRENDIZAGEM'
         hdr_cells[2].text = 'ESTRATÉGIAS METODOLÓGICAS'
         hdr_cells[3].text = 'RECURSOS MATERIAIS'
-        
+
+        set_row_height(tb_curr.rows[0], 20)
         for cell in hdr_cells:
-            set_cell_background(cell, "F1F5F9")
-            cell.paragraphs[0].runs[0].bold = True
-            cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
-        
+            set_cell_background(cell, "003366")
+            p_h = cell.paragraphs[0]
+            p_h.runs[0].bold = True
+            p_h.runs[0].font.size = Pt(8.5)
+            p_h.runs[0].font.color.rgb = RGBColor(255, 255, 255)
+            p_h.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
         if not curriculo_df.empty:
-            for _, row in curriculo_df.iterrows():
-                row_cells = table.add_row().cells
-                row_cells[0].text = "MATEMÁTICA"
-                row_cells[1].text = sanitizar_xml_str(str(row.get('Objetivos de Aprendizagem', '')))
-                row_cells[2].text = sanitizar_xml_str(str(row.get('Estratégias Metodológicas', '')))
-                row_cells[3].text = sanitizar_xml_str(str(row.get('Recursos Materiais', '')))
+            for _, row_c in curriculo_df.iterrows():
+                row_cells = tb_curr.add_row().cells
+                set_row_height(tb_curr.rows[-1], 24)
+                
+                row_cells[0].text = "MATEMÁTICA\n(Prof. Ronaldo Gomes)"
+                row_cells[1].text = sanitizar_xml_str(str(row_c.get('Objetivos de Aprendizagem', '')))
+                row_cells[2].text = sanitizar_xml_str(str(row_c.get('Estratégias Metodológicas', '')))
+                row_cells[3].text = sanitizar_xml_str(str(row_c.get('Recursos Materiais', '')))
+                
+                for idx_c, cell in enumerate(row_cells):
+                    cell.width = col_w[idx_c]
+                    for p in cell.paragraphs:
+                        p.paragraph_format.space_before = Pt(2)
+                        p.paragraph_format.space_after = Pt(2)
+                        if idx_c == 0:
+                            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                            p.runs[0].font.bold = True
+                            p.runs[0].font.size = Pt(8.0)
+                        else:
+                            p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+                            p.runs[0].font.size = Pt(8.0)
+        else:
+            row_cells = tb_curr.add_row().cells
+            row_cells[0].text = "MATEMÁTICA"
+            row_cells[1].text = "Desenvolver o raciocínio lógico e a compreensão de quantidades através de representação visual e materiais concretos."
+            row_cells[2].text = "Instruções curtas e estruturadas em pequenas etapas; mediação individualizada nas tarefas; uso de cores para diferenciação."
+            row_cells[3].text = "Material Dourado, malha quadriculada, ábaco, calculadora, atividades adaptadas impressas em papel ofício."
+
+        doc.add_paragraph()
+
+        # -------------------------------------------------------------
+        # RESULTADOS OBTIDOS (PARECER DE MATEMÁTICA) & ASSINATURAS
+        # -------------------------------------------------------------
+        p_res_title = doc.add_paragraph()
+        p_res_title.paragraph_format.space_before = Pt(8)
+        p_res_title.paragraph_format.space_after = Pt(2)
+        r_rtit = p_res_title.add_run("3 - Resultados obtidos diante dos objetivos do Plano Educacional Individualizado - PEI\n(descrição por área de conhecimento):")
+        r_rtit.bold = True
+        r_rtit.font.size = Pt(9.5)
+
+        tb_res = doc.add_table(rows=3, cols=1)
+        tb_res.style = 'Table Grid'
+        tb_res.columns[0].width = Inches(7.4)
+
+        # Linha 1: Linguagens
+        c_r1 = tb_res.cell(0, 0)
+        c_r1.paragraphs[0].add_run("PORTUGUÊS / ED. FÍSICA / ARTES\n").bold = True
+        c_r1.paragraphs[0].runs[0].font.size = Pt(8.5)
+        c_r1.paragraphs[0].add_run("(A cargo dos docentes da área)").font.size = Pt(8.0)
+
+        # Linha 2: Matemática e Ciências (Destacada para Prof. Ronaldo)
+        c_r2 = tb_res.cell(1, 0)
+        set_cell_background(c_r2, "F8FAFC")
+        p_mat_res = c_r2.paragraphs[0]
+        r_m_lbl = p_mat_res.add_run("MATEMÁTICA / CIÊNCIAS\n")
+        r_m_lbl.bold = True
+        r_m_lbl.font.size = Pt(8.5)
+        r_m_lbl.font.color.rgb = RGBColor(0, 51, 102)
+
+        parecer_mat_txt = sanitizar_xml_str(str(parecer_resultados)).strip()
+        if not parecer_mat_txt:
+            parecer_mat_txt = "Matemática: A estudante encontra-se em pleno processo de desenvolvimento da aprendizagem, respondendo positivamente ao uso de materiais manipulativos concretos (Material Dourado e calculadora) e à mediação individualizada, demonstrando evolução na compreensão dos conceitos e na autonomia para a resolução de atividades."
+        p_mat_res.add_run(parecer_mat_txt).font.size = Pt(8.5)
+
+        # Linha 3: Humanas
+        c_r3 = tb_res.cell(2, 0)
+        c_r3.paragraphs[0].add_run("GEOGRAFIA / HISTÓRIA\n").bold = True
+        c_r3.paragraphs[0].runs[0].font.size = Pt(8.5)
+        c_r3.paragraphs[0].add_run("(A cargo dos docentes da área)").font.size = Pt(8.0)
+
+        for r in tb_res.rows: set_row_height(r, 32)
+
+        doc.add_paragraph()
+
+        # Data e Assinaturas Oficiais
+        hoje_dia = datetime.now().strftime("%d")
+        meses_pt = {"01":"Janeiro","02":"Fevereiro","03":"Março","04":"Abril","05":"Maio","06":"Junho","07":"Julho","08":"Agosto","09":"Setembro","10":"Outubro","11":"Novembro","12":"Dezembro"}
+        mes_atual = meses_pt.get(datetime.now().strftime("%m"), "Agosto")
         
+        p_data = doc.add_paragraph()
+        p_data.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+        p_data.paragraph_format.space_before = Pt(6)
+        p_data.add_run(f"Itabuna, {hoje_dia} de {mes_atual} de 2026.").font.size = Pt(9)
+
+        doc.add_paragraph()
+
+        # Linhas Oficiais de Assinatura
+        p_ass = doc.add_paragraph()
+        p_ass.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p_ass.paragraph_format.space_after = Pt(2)
+        p_ass.paragraph_format.line_spacing = 1.3
+        
+        p_ass.add_run("________________________________________________\nProfessor Linguagem (Língua Portuguesa, Arte e Educação Física)\n\n").font.size = Pt(8.0)
+        
+        r_ron = p_ass.add_run("_________________________________________________\nProfessor Ciências da Natureza e Matemática: Prof. Ronaldo Gomes\n\n")
+        r_ron.bold = True
+        r_ron.font.size = Pt(8.5)
+        r_ron.font.color.rgb = RGBColor(0, 51, 102)
+        
+        p_ass.add_run("_________________________________________________\nProfessor Ciências Humanas (História e Geografia)\n\n").font.size = Pt(8.0)
+        p_ass.add_run("__________________________________________________\nCoordenador Pedagógico").font.size = Pt(8.0)
+
         doc.save(file_stream)
         file_stream.seek(0)
         return file_stream
     except Exception as e:
         file_stream = io.BytesIO()
-        err_doc = Document(); err_doc.add_paragraph(f"ERRO NO PEI OFICIAL: {sanitizar_xml_str(str(e))}"); err_doc.save(file_stream)
+        err_doc = Document()
+        err_doc.add_paragraph(f"ERRO NO PEI OFICIAL: {sanitizar_xml_str(str(e))}")
+        err_doc.save(file_stream)
         file_stream.seek(0)
         return file_stream
 
