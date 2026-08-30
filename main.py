@@ -4452,7 +4452,6 @@ Escola Municipal Flávio José Simões Costa"""
                 
             aluno_b_label = c3.selectbox("Estudante:", lista_alunos['LABEL'].tolist(), key="bio_aluno_sel_react")
             
-            # Padrão é 'Todos' para exibir o histórico anual completo sem descompasso
             trim_b = c4.segmented_control("Período:", opcoes_periodo_bio, default="Todos", key="bio_periodo_sel_react")
             if not trim_b: trim_b = "Todos"
 
@@ -4540,7 +4539,6 @@ Escola Municipal Flávio José Simões Costa"""
             c3_v = max(v_c3_banco, v_c3_live)
             rec_v = max(v_rec_banco, v_rec_live)
 
-            # Verifica se este trimestre tem dados reais registrados
             tem_atividade_real = (not reg_t.empty) or (c1_v > 0) or (c2_v > 0) or (c3_v > 0) or (rec_v > 0) or (b_diario_t != 0)
 
             if tem_atividade_real:
@@ -4581,7 +4579,6 @@ Escola Municipal Flávio José Simões Costa"""
                     "iniciado": True
                 })
             else:
-                # Trimestre sem notas ainda (Em Aberto / Não Iniciado)
                 notas_consolidadas_trimestres.append({
                     "periodo": t_k,
                     "c1": "—",
@@ -4611,26 +4608,54 @@ Escola Municipal Flávio José Simões Costa"""
         else:
             status_preditivo_aluno = "Risco de Recuperação Final (≥ 10.0 pts)"
 
-        faltas_hero, perc_presenca_hero = 0, 100
-        perc_visto_hero, bonus_total_hero = 0, 0.0
+        # -------------------------------------------------------------
+        # CÁLCULO REATIVO DE ASSIDUIDADE, VISTOS E BÔNUS (SINTONIZADO AO PERÍODO)
+        # -------------------------------------------------------------
+        faltas_hero = 0
+        perc_presenca_hero_str = "100%"
+        perc_visto_hero_str = "0%"
+        bonus_total_hero_str = "+0.0 pts"
+        delta_faltas_str = "0 falta(s)"
 
         if not df_diario.empty and 'ID_ALUNO' in df_diario.columns and 'TURMA' in df_diario.columns:
             df_d_aluno_turma = df_diario[(df_diario['ID_ALUNO'].apply(db.limpar_id) == id_alu) & (df_diario['TURMA'] == turma_b)].copy()
-            if not df_d_aluno_turma.empty:
-                df_d_validas = df_d_aluno_turma[~df_d_aluno_turma['TAGS'].isin(["DIA NÃO LETIVO", "BONUS_CONSELHO", "SISTEMA_NOTA"])]
+            if not df_d_aluno_turma.empty and 'DATA' in df_d_aluno_turma.columns:
+                df_d_aluno_turma['DATA_DT'] = pd.to_datetime(df_d_aluno_turma['DATA'], format="%d/%m/%Y", errors='coerce').dt.date
+                
+                if trim_b != "Todos":
+                    df_d_periodo = df_d_aluno_turma[(df_d_aluno_turma['DATA_DT'] >= dt_ini) & (df_d_aluno_turma['DATA_DT'] <= dt_fim)]
+                else:
+                    df_d_periodo = df_d_aluno_turma
+
+                df_d_validas = df_d_periodo[~df_d_periodo['TAGS'].isin(["DIA NÃO LETIVO", "BONUS_CONSELHO", "SISTEMA_NOTA"])] if not df_d_periodo.empty else pd.DataFrame()
+                
                 tot_aulas_reg = len(df_d_validas)
-                faltas_hero = len(df_d_validas[df_d_validas['TAGS'] == "AUSÊNCIA"])
-                perc_presenca_hero = ((tot_aulas_reg - faltas_hero) / tot_aulas_reg) * 100 if tot_aulas_reg > 0 else 100
+                
+                if tot_aulas_reg > 0:
+                    faltas_hero = len(df_d_validas[df_d_validas['TAGS'] == "AUSÊNCIA"])
+                    calc_pres = ((tot_aulas_reg - faltas_hero) / tot_aulas_reg) * 100
+                    perc_presenca_hero_str = f"{calc_pres:.0f}%"
+                    delta_faltas_str = f"{faltas_hero} falta(s)"
 
-                df_vistos_calc = df_d_validas[df_d_validas.get('VISTO_ATIVIDADE', '').astype(str).str.upper() != "ISENTO"]
-                tot_vistos_poss = len(df_vistos_calc)
-                ok_vistos_cnt = len(df_vistos_calc[df_vistos_calc.get('VISTO_ATIVIDADE', '').astype(str).str.upper() == "TRUE"])
-                perc_visto_hero = (ok_vistos_cnt / tot_vistos_poss) * 100 if tot_vistos_poss > 0 else 0
-                bonus_total_hero = df_d_aluno_turma.get('BONUS', pd.Series()).apply(util.sosa_to_float).sum()
+                    df_vistos_calc = df_d_validas[df_d_validas.get('VISTO_ATIVIDADE', '').astype(str).str.upper() != "ISENTO"]
+                    tot_vistos_poss = len(df_vistos_calc)
+                    ok_vistos_cnt = len(df_vistos_calc[df_vistos_calc.get('VISTO_ATIVIDADE', '').astype(str).str.upper() == "TRUE"])
+                    calc_vistos = (ok_vistos_cnt / tot_vistos_poss) * 100 if tot_vistos_poss > 0 else 0
+                    perc_visto_hero_str = f"{calc_vistos:.0f}%"
+                    
+                    b_somado = df_d_periodo.get('BONUS', pd.Series()).apply(util.sosa_to_float).sum()
+                    bonus_total_hero_str = f"{b_somado:+.1f} pts bônus"
+                else:
+                    perc_presenca_hero_str = "—"
+                    delta_faltas_str = "A Cursar"
+                    perc_visto_hero_str = "—"
+                    bonus_total_hero_str = "Sem aulas no período"
 
+        rotulo_assiduidade = f"Assiduidade ({trim_b})" if trim_b != "Todos" else "Assiduidade Anual"
+        rotulo_vistos = f"Vistos de Caderno ({trim_b})" if trim_b != "Todos" else "Vistos de Caderno (Geral)"
         regra_arred_texto = "A Média Regimental da Prefeitura de Itabuna utiliza o arredondamento para o meio ponto (0,5 em 0,5) mais próximo. A Recuperação aplica a média aritmética: (Média do Trimestre + Recuperação) ÷ 2."
 
-        # BENTO CARD DE TOPO
+        # BENTO CARD DE TOPO DINÂMICO
         with st.container(border=True):
             c_h1, c_h2, c_h3, c_h4 = st.columns([1.8, 1.4, 1, 1])
             
@@ -4651,24 +4676,24 @@ Escola Municipal Flávio José Simões Costa"""
                     st.metric("Soma (I + II)", f"{soma_1_2_preditiva:.1f} pts", f"Meta III Tri: {meta_iii_arred:.1f} pts", help=regra_arred_texto)
                 st.caption(f"Projeção: **{status_preditivo_aluno}**")
 
-            c_h3.metric("Assiduidade", f"{perc_presenca_hero:.0f}%", f"{faltas_hero} falta(s)", delta_color="inverse" if faltas_hero > 0 else "normal")
-            c_h4.metric("Vistos de Caderno", f"{perc_visto_hero:.0f}%", f"{bonus_total_hero:+.1f} pts bônus")
+            c_h3.metric(rotulo_assiduidade, perc_presenca_hero_str, delta_faltas_str, delta_color="inverse" if faltas_hero > 0 else "normal")
+            c_h4.metric(rotulo_vistos, perc_visto_hero_str, bonus_total_hero_str)
 
         c_act_b1, c_act_b2, c_act_b3 = st.columns(3)
         
         if c_act_b1.button("Extrato para WhatsApp", use_container_width=True, key=f"btn_zap_bio_{v}"):
-            dialog_whatsapp(nome_limpo, turma_b, status_atual_aluno, soma_1_2_preditiva, meta_iii_arred, status_preditivo_aluno, perc_presenca_hero, faltas_hero, perc_visto_hero, bonus_total_hero, regra_arred_texto)
+            dialog_whatsapp(nome_limpo, turma_b, status_atual_aluno, soma_1_2_preditiva, meta_iii_arred, status_preditivo_aluno, perc_presenca_hero_str, faltas_hero, perc_visto_hero_str, bonus_total_hero_str, regra_arred_texto)
 
         if c_act_b2.button("Ficha de Rendimento Escolar (DOCX)", use_container_width=True, key=f"btn_docx_bio_{v}"):
             with st.spinner("Compilando Ficha de Rendimento Escolar em Word..."):
                 dados_ficha = [{
                     "nome": nome_limpo,
-                    "c1": f"{perc_visto_hero:.0f}%",
+                    "c1": perc_visto_hero_str,
                     "c2": "Sincronizado",
                     "c3": "Sincronizado",
-                    "bonus": f"{bonus_total_hero:+.1f}",
+                    "bonus": bonus_total_hero_str,
                     "media": f"Soma I+II: {soma_1_2_preditiva:.1f} (Meta III: {meta_iii_arred:.1f})",
-                    "status": f"{status_preditivo_aluno} • Assiduidade: {perc_presenca_hero:.0f}% ({faltas_hero} faltas)"
+                    "status": f"{status_preditivo_aluno} • Assiduidade: {perc_presenca_hero_str} ({delta_faltas_str})"
                 }]
                 info_ficha = {"turma": turma_b, "trimestre": trim_b}
                 nome_arq_ficha = f"FICHA_RENDIMENTO_{nome_limpo.replace(' ','_')}_{turma_b}"
@@ -4697,8 +4722,8 @@ Escola Municipal Flávio José Simões Costa"""
                 dados_aluno_certidao = {
                     "nome": nome_limpo, "id": id_alu, "turma": turma_b,
                     "status": status_atual_aluno, "perfil": perfil_atual,
-                    "assiduidade": f"{perc_presenca_hero:.0f}%", "faltas": faltas_hero,
-                    "vistos_perc": f"{perc_visto_hero:.0f}%", "bonus": f"{bonus_total_hero:+.1f}",
+                    "assiduidade": perc_presenca_hero_str, "faltas": faltas_hero,
+                    "vistos_perc": perc_visto_hero_str, "bonus": bonus_total_hero_str,
                     "parecer": f"Certificamos que o(a) estudante esteve vinculado(a) à turma {turma_b} sob regência do Prof. Ronaldo Gomes. Registrou-se uma soma acumulada de {soma_1_2_preditiva:.1f} pontos nos dois primeiros trimestres (Projeção para o III Trimestre: {meta_iii_arred:.1f} pts para atingir a meta anual de 18.0 pontos)."
                 }
                 
@@ -4715,7 +4740,6 @@ Escola Municipal Flávio José Simões Costa"""
 
         st.markdown("---")
 
-        # RENDERIZAÇÃO DO EXTRATO E ABAS
         abas_bio = [
             "Boletim Analítico & Metas",
             "Avaliações Escaneadas & Lacunas",
@@ -4883,25 +4907,25 @@ Escola Municipal Flávio José Simões Costa"""
                 
                 if not df_d_timeline_val.empty:
                     for _, r_t in df_d_timeline_val.iloc[::-1].head(10).iterrows():
-                        dt_t = str(r_t.get('DATA', 'N/A'))
-                        tag_t = str(r_t.get('TAGS', ''))
-                        obs_t = str(r_t.get('OBSERVACOES', ''))
-                        bonus_t = util.sosa_to_float(r_t.get('BONUS', 0))
-                        visto_t = str(r_t.get('VISTO_ATIVIDADE', '')).upper()
+                            dt_t = str(r_t.get('DATA', 'N/A'))
+                            tag_t = str(r_t.get('TAGS', ''))
+                            obs_t = str(r_t.get('OBSERVACOES', ''))
+                            bonus_t = util.sosa_to_float(r_t.get('BONUS', 0))
+                            visto_t = str(r_t.get('VISTO_ATIVIDADE', '')).upper()
 
-                        with st.container(border=True):
-                            c_t1, c_t2 = st.columns([3, 1])
-                            
-                            if tag_t == "AUSÊNCIA":
-                                c_t1.error(f"**{dt_t}** — Ausência na aula")
-                            elif bonus_t > 0 or "ARGUIÇÃO" in tag_t:
-                                c_t1.success(f"**{dt_t}** — {tag_t} ({obs_t})")
-                                c_t2.markdown(f"**+{bonus_t:.1f} pts**")
-                            elif bonus_t < 0:
-                                c_t1.warning(f"**{dt_t}** — {tag_t} ({obs_t})")
-                                c_t2.markdown(f"**{bonus_t:.1f} pts**")
-                            else:
-                                c_t1.info(f"**{dt_t}** — Visto no Caderno ({'Visto OK' if visto_t == 'TRUE' else 'Sem Visto'})")
+                            with st.container(border=True):
+                                c_t1, c_t2 = st.columns([3, 1])
+                                
+                                if tag_t == "AUSÊNCIA":
+                                    c_t1.error(f"**{dt_t}** — Ausência na aula")
+                                elif bonus_t > 0 or "ARGUIÇÃO" in tag_t:
+                                    c_t1.success(f"**{dt_t}** — {tag_t} ({obs_t})")
+                                    c_t2.markdown(f"**+{bonus_t:.1f} pts**")
+                                elif bonus_t < 0:
+                                    c_t1.warning(f"**{dt_t}** — {tag_t} ({obs_t})")
+                                    c_t2.markdown(f"**{bonus_t:.1f} pts**")
+                                else:
+                                    c_t1.info(f"**{dt_t}** — Visto no Caderno ({'Visto OK' if visto_t == 'TRUE' else 'Sem Visto'})")
 
             if is_pei_or_gap:
                 st.markdown("---")
