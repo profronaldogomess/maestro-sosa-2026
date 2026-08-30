@@ -6060,12 +6060,12 @@ Escola Municipal Flávio José Simões Costa"""
 
 
 # ==============================================================================
-# MÓDULO: GESTÃO DA TURMA (COCKPIT DE REGÊNCIA 360°) - V2026.PRO_COCKPIT
-# (TIMELINE CRONOLÓGICA ÚNICA, PROFICIÊNCIA SAEB, RADAR DUPLO & GESTÃO COMPLETA)
+# MÓDULO: GESTÃO DA TURMA (COCKPIT DE REGÊNCIA 360°) - V2026.PRO_EXECUTIVE
+# (TIMELINE CRONOLÓGICA ÚNICA, PROFICIÊNCIA SAEB, RADAR DUPLO E SECRETARIA)
 # ==============================================================================
 elif menu == "👥 Gestão da Turma":
-    st.title("👥 Cockpit de Regência: Gestão 360°")
-    st.caption("Central de comando operacional: diário de classe dinâmico, chamada e vistos em 1-toque, radiografia analítica SAEB e gestão administrativa.")
+    st.title("Gestão da Turma")
+    st.caption("Cockpit de regência: controle diário de frequência e vistos de caderno, radiografia analítica SAEB e gestão de matrículas.")
     st.markdown("---")
 
     if "v_gestao" not in st.session_state: 
@@ -6079,25 +6079,26 @@ elif menu == "👥 Gestão da Turma":
     elif not df_alunos.empty and 'TURMA' in df_alunos.columns:
         lista_turmas_segura = sorted(df_alunos['TURMA'].unique())
 
-    # DIALOGS PADRONIZADOS NO NÍVEL SUPERIOR DO MÓDULO (LEI #25)
-    @st.dialog("🎲 Esquadrão de Arguição (Com Ranking de Equidade)", width="large")
+    # ==============================================================================
+    # DIALOGS DECLARADOS NO TOPO DO MÓDULO (LEI #25)
+    # ==============================================================================
+    @st.dialog("Esquadrão de Arguição (Quadro Negro)", width="large")
     def dialog_roleta(t_roleta):
         c_rol1, c_rol2, c_rol3 = st.columns([1, 1, 1])
-        data_roleta = c_rol1.date_input("📅 Data da Arguição:", date.today(), format="DD/MM/YYYY", key=f"rol_d_{v}")
+        data_roleta = c_rol1.date_input("Data da Arguição:", date.today(), format="DD/MM/YYYY", key=f"rol_d_{v}")
         data_roleta_str = data_roleta.strftime("%d/%m/%Y")
-        qtd_sorteio = c_rol2.number_input("Quantos alunos chamar?", 1, 4, 3, key=f"rol_qtd_{v}")
+        qtd_sorteio = c_rol2.number_input("Estudantes por Rodada:", 1, 4, 3, key=f"rol_qtd_{v}")
         
-        with c_rol3.expander("⚙️ Configurar Pontuação"):
-            pt_acerto = st.number_input("Pontos por Acertar (+):", 0.0, 5.0, 0.5, step=0.1, key=f"pt_ac_{v}")
+        with c_rol3.popover("Configurar Pontuação"):
+            pt_acerto = st.number_input("Pontuação por Acerto (+):", 0.0, 5.0, 0.5, step=0.1, key=f"pt_ac_{v}")
             pt_recusa = st.number_input("Punição por Recusa (-):", -5.0, 0.0, -0.5, step=0.1, key=f"pt_rec_{v}")
 
-        # Filtro de alunos ativos da turma
         df_alunos_base_rol = df_alunos[df_alunos['TURMA'] == t_roleta].copy() if not df_alunos.empty else pd.DataFrame()
         if 'STATUS' not in df_alunos_base_rol.columns: df_alunos_base_rol['STATUS'] = "ATIVO"
         alunos_roleta = df_alunos_base_rol[~df_alunos_base_rol['STATUS'].astype(str).str.upper().isin(["INATIVO", "TRANSFERIDO", "EVADIDO", "DESISTENTE"])].sort_values(by="NOME_ALUNO")
         
         if alunos_roleta.empty: 
-            st.warning("Nenhum aluno ativo cadastrado nesta turma.")
+            st.warning("Nenhum estudante ativo cadastrado nesta turma.")
             return
         
         freq_arguicao = {}
@@ -6130,32 +6131,32 @@ elif menu == "👥 Gestão da Turma":
                 icone_a = str(row.get('ICONE', '👤'))
                 v_freq = freq_arguicao.get(id_a, 0)
                 
-                status_inicial, obs_inicial, pts_inicial = "⏳ Pendente", "", 0.0
+                status_inicial, obs_inicial, pts_inicial = "Pendente", "", 0.0
                 
                 if not diario_dia.empty:
                     reg_aluno = diario_dia[diario_dia['ID_ALUNO'].apply(db.limpar_id) == id_a]
                     if not reg_aluno.empty:
                         if any(reg_aluno.get('TAGS', '') == "AUSÊNCIA"):
-                            status_inicial, obs_inicial = "⏭️ Faltou", "Ausente no Diário."
+                            status_inicial, obs_inicial = "Ausente", "Ausente no Diário."
                         elif any(reg_aluno.get('TAGS', '').astype(str).str.contains("ARGUIÇÃO")):
                             reg_arg = reg_aluno[reg_aluno['TAGS'].astype(str).str.contains("ARGUIÇÃO")].iloc[-1]
                             obs_inicial = str(reg_arg.get('OBSERVACOES', '')).replace("Quadro Negro: ", "")
                             pts_inicial = util.sosa_to_float(reg_arg.get('BONUS', '0,00'))
-                            if pts_inicial > 0: status_inicial = "✅ Dominou"
-                            elif pts_inicial < 0: status_inicial = "❌ Recusou"
-                            elif "Isento" in obs_inicial: status_inicial = "♿ Isento"
-                            else: status_inicial = "🤝 Tentou"
-                lista_inicial.append({"ID": id_a, "Estudante": f"{icone_a} {nome_a}", "Status": status_inicial, "Diagnóstico": obs_inicial, "Pontos": pts_inicial, "Chamadas": v_freq})
+                            if pts_inicial > 0: status_inicial = "Dominou"
+                            elif pts_inicial < 0: status_inicial = "Recusou"
+                            elif "Isento" in obs_inicial: status_inicial = "Isento"
+                            else: status_inicial = "Participou"
+                lista_inicial.append({"ID": id_a, "Estudante": f"{icone_a} {nome_a}", "Situação": status_inicial, "Diagnóstico": obs_inicial, "Pontos": pts_inicial, "Chamadas": v_freq})
             st.session_state[chave_lista] = lista_inicial
             
         if chave_sorteados not in st.session_state: st.session_state[chave_sorteados] = []
 
         st.markdown("---")
-        pendentes = [a for a in st.session_state[chave_lista] if a["Status"] == "⏳ Pendente"]
+        pendentes = [a for a in st.session_state[chave_lista] if a["Situação"] == "Pendente"]
         
         c_btn_sort, c_btn_reset = st.columns([2, 1])
-        if c_btn_sort.button("🎲 SORTEAR ESQUADRÃO (PRIORIZANDO MENOS CHAMADOS)", type="primary", use_container_width=True, key=f"btn_sort_{v}"):
-            if not pendentes: st.success("Todos já foram chamados nesta aula!")
+        if c_btn_sort.button("Sortear Estudantes (Prioridade por Equidade)", type="primary", use_container_width=True, key=f"btn_sort_{v}"):
+            if not pendentes: st.success("Todos os estudantes já participaram da arguição nesta aula!")
             else: 
                 pendentes_ordenados = sorted(pendentes, key=lambda x: x["Chamadas"])
                 grupo_candidatos = pendentes_ordenados[:max(qtd_sorteio * 2, len(pendentes_ordenados))]
@@ -6163,11 +6164,11 @@ elif menu == "👥 Gestão da Turma":
                 st.session_state[chave_sorteados] = [p["ID"] for p in random.sample(grupo_candidatos, qtd_real)]
                 st.rerun()
                 
-        if c_btn_reset.button("🔄 Resetar Lista de Sorteio", use_container_width=True, key=f"btn_res_rol_{v}"):
+        if c_btn_reset.button("Reiniciar Rodada", use_container_width=True, key=f"btn_res_rol_{v}"):
             del st.session_state[chave_lista]; st.session_state[chave_sorteados] = []; st.rerun()
             
         if st.session_state[chave_sorteados]:
-            st.markdown("#### 🎯 Esquadrão no Quadro")
+            st.markdown("#### Estudantes no Quadro:")
             cols = st.columns(len(st.session_state[chave_sorteados]))
             
             for idx, id_atual in enumerate(st.session_state[chave_sorteados]):
@@ -6177,15 +6178,15 @@ elif menu == "👥 Gestão da Turma":
                     aluno_db = aluno_db_match.iloc[0] if not aluno_db_match.empty else {}
                     
                     with st.container(border=True):
-                        st.markdown(f"<h5 style='text-align: center; margin-bottom: 0px;'>{aluno_atual.get('Estudante', 'Estudante')}</h5>", unsafe_allow_html=True)
-                        st.caption(f"Perfil: {aluno_db.get('NECESSIDADES', 'TÍPICO')} | Chamadas no Tri: **{aluno_atual.get('Chamadas', 0)}**")
-                        anotacao = st.text_area("📝 Diagnóstico:", value=aluno_atual.get("Diagnóstico", ""), key=f"anotacao_{id_atual}_{v}", height=68)
+                        st.markdown(f"**{aluno_atual.get('Estudante', 'Estudante')}**")
+                        st.caption(f"Perfil: {aluno_db.get('NECESSIDADES', 'TÍPICO')} | Chamadas: **{aluno_atual.get('Chamadas', 0)}**")
+                        anotacao = st.text_area("Diagnóstico Rápido:", value=aluno_atual.get("Diagnóstico", ""), key=f"anotacao_{id_atual}_{v}", height=68)
                         
                         def registrar_arguicao(id_al, status_label, pontos, obs_padrao, anot):
                             obs_final = anot.strip() if anot.strip() else obs_padrao
                             for a in st.session_state[chave_lista]:
                                 if a["ID"] == id_al:
-                                    a["Status"], a["Pontos"], a["Diagnóstico"] = status_label, pontos, obs_final
+                                    a["Situação"], a["Pontos"], a["Diagnóstico"] = status_label, pontos, obs_final
                                     break
                             nome_limpo = str(aluno_db.get('NOME_ALUNO', 'Estudante')).replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
                             
@@ -6201,56 +6202,55 @@ elif menu == "👥 Gestão da Turma":
                             except: pass
                             st.session_state[chave_sorteados].remove(id_al)
                         
-                        if st.button(f"✅ Dominou (+{pt_acerto})", key=f"btn_dom_{id_atual}_{v}", use_container_width=True): 
-                            registrar_arguicao(id_atual, "✅ Dominou", pt_acerto, "Resolveu corretamente.", anotacao); st.rerun()
-                        if st.button("🤝 Tentou (0.0)", key=f"btn_ten_{id_atual}_{v}", use_container_width=True): 
-                            registrar_arguicao(id_atual, "🤝 Tentou", 0.0, "Apresentou dificuldades.", anotacao); st.rerun()
-                        if st.button(f"❌ Recusou ({pt_recusa})", key=f"btn_rec_{id_atual}_{v}", use_container_width=True): 
-                            registrar_arguicao(id_atual, "❌ Recusou", pt_recusa, "Recusou-se a participar.", anotacao); st.rerun()
-                        if st.button("⏭️ Pular/Isento", key=f"btn_pul_{id_atual}_{v}", use_container_width=True):
+                        if st.button(f"Dominou (+{pt_acerto})", key=f"btn_dom_{id_atual}_{v}", use_container_width=True): 
+                            registrar_arguicao(id_atual, "Dominou", pt_acerto, "Resolveu corretamente no quadro.", anotacao); st.rerun()
+                        if st.button("Participou (0.0)", key=f"btn_ten_{id_atual}_{v}", use_container_width=True): 
+                            registrar_arguicao(id_atual, "Participou", 0.0, "Demonstrou raciocínio em desenvolvimento.", anotacao); st.rerun()
+                        if st.button(f"Recusou ({pt_recusa})", key=f"btn_rec_{id_atual}_{v}", use_container_width=True): 
+                            registrar_arguicao(id_atual, "Recusou", pt_recusa, "Recusa de participação.", anotacao); st.rerun()
+                        if st.button("Pular / Isento", key=f"btn_pul_{id_atual}_{v}", use_container_width=True):
                             for a in st.session_state[chave_lista]:
-                                if a["ID"] == id_atual: a["Status"] = "⏭️ Faltou/Isento"
+                                if a["ID"] == id_atual: a["Situação"] = "Ausente/Isento"
                             st.session_state[chave_sorteados].remove(id_atual); st.rerun()
 
         st.markdown("---")
-        with st.expander("📋 Ver Lista Completa da Turma & Frequência de Chamadas"):
+        with st.expander("Histórico Completo da Classe na Arguição"):
             st.data_editor(
                 pd.DataFrame(st.session_state[chave_lista]), hide_index=True, use_container_width=True, height=280,
-                column_config={"ID": None, "Estudante": st.column_config.TextColumn(disabled=True), "Status": st.column_config.TextColumn(disabled=True), "Pontos": st.column_config.NumberColumn(disabled=True), "Chamadas": st.column_config.NumberColumn("Vezes Chamado", disabled=True)},
+                column_config={"ID": None, "Estudante": st.column_config.TextColumn(disabled=True), "Situação": st.column_config.TextColumn(disabled=True), "Pontos": st.column_config.NumberColumn(disabled=True), "Chamadas": st.column_config.NumberColumn("Vezes Chamado", disabled=True)},
                 key=f"ed_rol_{t_roleta}_{data_roleta_str}_{v}"
             )
 
-    @st.dialog("🛑 Registrar Dia Não Letivo / Paralisação")
+    @st.dialog("Registrar Dia Não Letivo / Feriado")
     def dialog_dia_nao_letivo(t_foco):
-        st.caption("Registre feriados, paralisações sindicais ou eventos institucionais. Bloqueia chamadas de falta indevidas.")
+        st.caption("Registre feriados, paralisações institucionais ou conselhos de classe:")
         data_nl = st.date_input("Data do Evento:", date.today(), format="DD/MM/YYYY", key=f"nl_dt_{v}")
-        motivo_nl = st.text_input("Motivo da Inatividade:", placeholder="Ex: Paralisação Sindical / Conselho de Classe / Feriado Municipal", key=f"nl_mot_{v}")
+        motivo_nl = st.text_input("Descrição:", placeholder="Ex: Conselho de Classe / Feriado Municipal", key=f"nl_mot_{v}")
         
-        if st.button("Confirmar Dia Não Letivo", type="primary", use_container_width=True, key=f"btn_conf_nl_{v}"):
+        if st.button("Confirmar Registro de Inatividade", type="primary", use_container_width=True, key=f"btn_conf_nl_{v}"):
             if motivo_nl:
                 data_nl_str = data_nl.strftime("%d/%m/%Y")
                 db.limpar_diario_data_turma(data_nl_str, t_foco)
                 db.excluir_aula_aberta(data_nl_str, t_foco)
                 db.salvar_no_banco("DB_DIARIO_BORDO", [data_nl_str, "GLOBAL", "TODOS OS ALUNOS", t_foco, "ISENTO", "DIA NÃO LETIVO", motivo_nl, "0,00"])
                 db.salvar_no_banco("DB_REGISTRO_AULAS", [data_nl_str, "AVULSA", t_foco, f"DIA NÃO LETIVO: {motivo_nl}", "N/A", "N/A", "NÃO LETIVO", "", ""])
-                st.success(f"✅ Dia {data_nl_str} registrado como Não Letivo!"); time.sleep(1); st.rerun()
+                st.success(f"Dia {data_nl_str} registrado como Não Letivo!"); time.sleep(0.8); st.rerun()
             else: st.error("Digite o motivo do dia não letivo.")
 
     if not lista_turmas_segura:
-        st.warning("⚠️ Nenhuma turma cadastrada. Cadastre as turmas na Central Administrativa abaixo.")
+        st.warning("Nenhuma turma cadastrada. Cadastre as turmas na aba de Secretaria.")
     else:
         hoje_dt = date.today()
         if hoje_dt <= date(2026, 5, 22): trim_detectado = "I Trimestre"
         elif hoje_dt <= date(2026, 9, 4): trim_detectado = "II Trimestre"
         else: trim_detectado = "III Trimestre"
 
-        # CABEÇALHO EXECUTIVO 360° DA TURMA
         with st.container(border=True):
             c_head1, c_head2 = st.columns([1.5, 2])
-            turma_foco = c_head1.selectbox("🎯 Turma Selecionada:", lista_turmas_segura, key=f"foco_t_{v}")
+            turma_foco = c_head1.selectbox("Turma:", lista_turmas_segura, key=f"foco_t_{v}")
             
             trim_ativo_gestao = c_head2.segmented_control(
-                "📅 Navegar Trimestres (I, II, III):",
+                "Trimestre Ativo:",
                 ["I Trimestre", "II Trimestre", "III Trimestre"],
                 default=trim_detectado,
                 key=f"seg_trim_gestao_{v}"
@@ -6263,9 +6263,8 @@ elif menu == "👥 Gestão da Turma":
             
             aulas_meta_trim = 32
             perc_safra = min(100.0, (aulas_dadas_trim / aulas_meta_trim) * 100) if aulas_meta_trim > 0 else 0
-            st.caption(f"📊 **Cumprimento de Safra ({trim_ativo_gestao}):** {aulas_dadas_trim} de {aulas_meta_trim} Aulas Ministradas ({perc_safra:.0f}%)")
+            st.caption(f"Safra de Aulas ({trim_ativo_gestao}): **{aulas_dadas_trim} de {aulas_meta_trim}** Aulas Ministradas ({perc_safra:.0f}%)")
 
-        # Trava Global: Apenas alunos ATIVOS aparecem nos fluxos diários da turma (Lei #28)
         df_alunos_base_t = df_alunos[df_alunos['TURMA'] == turma_foco].copy() if not df_alunos.empty else pd.DataFrame()
         if 'STATUS' not in df_alunos_base_t.columns: df_alunos_base_t['STATUS'] = "ATIVO"
         alunos_t = df_alunos_base_t[~df_alunos_base_t['STATUS'].astype(str).str.upper().isin(["INATIVO", "TRANSFERIDO", "EVADIDO", "DESISTENTE"])].sort_values(by="NOME_ALUNO")
@@ -6277,7 +6276,6 @@ elif menu == "👥 Gestão da Turma":
         df_mats_ano = df_aulas[df_aulas['ANO'].str.contains(ano_num)].iloc[::-1] if not df_aulas.empty and 'ANO' in df_aulas.columns else pd.DataFrame()
         historico_turma = df_registro_aulas[df_registro_aulas['TURMA'] == turma_foco].copy() if not df_registro_aulas.empty and 'TURMA' in df_registro_aulas.columns else pd.DataFrame()
 
-        # BARRA DE ALERTAS CRÍTICOS NO TOPO DO COCKPIT
         df_d_foco = df_diario[df_diario['TURMA'] == turma_foco] if not df_diario.empty and 'TURMA' in df_diario.columns else pd.DataFrame()
         df_n_foco = df_notas[(df_notas['TURMA'] == turma_foco) & (df_notas['TRIMESTRE'] == trim_ativo_gestao)] if not df_notas.empty and 'TURMA' in df_notas.columns and 'TRIMESTRE' in df_notas.columns else pd.DataFrame()
         
@@ -6301,49 +6299,40 @@ elif menu == "👥 Gestão da Turma":
 
         if cnt_uti > 0 or cnt_evasao > 0 or cnt_atestados > 0:
             with st.container(border=True):
-                st.markdown("##### 🚨 Radar de Risco & Alertas Imediatos")
+                st.markdown("##### Indicadores de Atenção da Turma")
                 c_al1, c_al2, c_al3 = st.columns(3)
                 
-                if cnt_evasao > 0: c_al1.error(f"🚨 **{cnt_evasao} Estudante(s)** em Risco de Evasão (≥ 20% faltas)")
-                else: c_al1.success("✅ Nenhum aluno em risco de evasão")
+                if cnt_evasao > 0: c_al1.error(f"Risco de Faltas: **{cnt_evasao} estudante(s)** (≥ 20% ausências)")
+                else: c_al1.success("Frequência regular")
 
-                if cnt_uti > 0: c_al2.warning(f"🚑 **{cnt_uti} Estudante(s)** na UTI Pedagógica (< 6.0)")
-                else: c_al2.success("✅ Nenhum aluno na UTI de notas")
+                if cnt_uti > 0: c_al2.warning(f"Abaixo da Média: **{cnt_uti} estudante(s)** (< 6.0)")
+                else: c_al2.success("Média consolidada")
 
-                if cnt_atestados > 0: c_al3.info(f"📑 **{cnt_atestados} Registro(s)** de Atestados / 2ª Chamada")
-                else: c_al3.caption("Nenhum atestado pendente")
+                if cnt_atestados > 0: c_al3.info(f"Atestados / 2ª Chamada: **{cnt_atestados} pendente(s)**")
+                else: c_al3.caption("Sem atestados pendentes")
 
-        # NAVEGAÇÃO EM 3 CENTRAIS DE COMANDO ESTRATÉGICAS (ZERO SCROLL INFINITO)
         visao_gestao_sel = st.segmented_control(
             "Central de Gestão:",
-            ["🚀 1. Diário de Classe & Operação", "🧠 2. Radiografia Analítica 360°", "⚙️ 3. Secretaria & Calendário"],
-            default="🚀 1. Diário de Classe & Operação",
+            ["Diário de Classe & Operação", "Radiografia Analítica da Turma", "Secretaria & Calendário"],
+            default="Diário de Classe & Operação",
             key=f"seg_gestao_hub_{v}"
         )
         st.markdown("<br>", unsafe_allow_html=True)
 
-        # ==============================================================================
-        # FRAGMENTO DE ALTA PERFORMANCE (LEI #21 - ZERO LAG)
-        # ==============================================================================
         @st.fragment
         def renderizar_cockpit_gestao_fragmento():
             
             # ==============================================================
-            # VISÃO 1: DIÁRIO DE CLASSE DINÂMICO & OPERAÇÃO DE SALA
+            # VISÃO 1: DIÁRIO DE CLASSE & OPERAÇÃO
             # ==============================================================
-            if visao_gestao_sel == "🚀 1. Diário de Classe & Operação":
-                
-                # Barra Superior de Ações Rápidas da Sala
+            if visao_gestao_sel == "Diário de Classe & Operação":
                 c_top_act1, c_top_act2, c_top_act3 = st.columns([2, 1, 1])
-                c_top_act1.markdown("#### 🚀 Diário de Classe & Timeline")
-                if c_top_act2.button("🎲 Roleta de Arguição", use_container_width=True, key=f"btn_open_rol_hub_{v}"):
+                c_top_act1.markdown("#### Diário de Classe & Frequência")
+                if c_top_act2.button("Roleta de Arguição", use_container_width=True, key=f"btn_open_rol_hub_{v}"):
                     dialog_roleta(turma_foco)
-                if c_top_act3.button("🛑 Dia Não Letivo", use_container_width=True, key=f"btn_open_nl_hub_{v}"):
+                if c_top_act3.button("Dia Não Letivo", use_container_width=True, key=f"btn_open_nl_hub_{v}"):
                     dialog_dia_nao_letivo(turma_foco)
 
-                # -------------------------------------------------------------
-                # 1. TIMELINE CRONOLÓGICA UNIFICADA (HOJE / ÚLTIMA / QUALQUER DATA)
-                # -------------------------------------------------------------
                 df_d_turma_maq = df_diario[(df_diario['TURMA'] == turma_foco) & (~df_diario['TAGS'].isin(["DIA NÃO LETIVO", "BONUS_CONSELHO", "SISTEMA_NOTA"]))] if not df_diario.empty else pd.DataFrame()
                 datas_historico_ordenadas = sorted(df_d_turma_maq['DATA'].unique(), key=lambda x: datetime.strptime(x, "%d/%m/%Y"), reverse=True) if not df_d_turma_maq.empty else []
 
@@ -6354,9 +6343,9 @@ elif menu == "👥 Gestão da Turma":
                     c_time1, c_time2 = st.columns([1.5, 2])
                     
                     modo_data_timeline = c_time1.pills(
-                        "Selecione a Aula:",
-                        [f"🟢 Aula de Hoje ({hoje_str})", f"⏪ Última Aula ({ultima_aula_str})", "📅 Escolher Outra Data"],
-                        default=f"🟢 Aula de Hoje ({hoje_str})" if hoje_str in datas_historico_ordenadas or not datas_historico_ordenadas else f"⏪ Última Aula ({ultima_aula_str})",
+                        "Data da Aula:",
+                        [f"Aula de Hoje ({hoje_str})", f"Última Aula ({ultima_aula_str})", "Outra Data"],
+                        default=f"Aula de Hoje ({hoje_str})" if hoje_str in datas_historico_ordenadas or not datas_historico_ordenadas else f"Última Aula ({ultima_aula_str})",
                         key=f"pills_timeline_{v}"
                     )
 
@@ -6365,40 +6354,33 @@ elif menu == "👥 Gestão da Turma":
                     elif "Última" in modo_data_timeline:
                         data_ativa_str = ultima_aula_str
                     else:
-                        dt_pick = c_time2.date_input("Escolha a Data do Diário:", date.today(), format="DD/MM/YYYY", key=f"dt_pick_timeline_{v}")
+                        dt_pick = c_time2.date_input("Escolha a Data:", date.today(), format="DD/MM/YYYY", key=f"dt_pick_timeline_{v}")
                         data_ativa_str = dt_pick.strftime("%d/%m/%Y")
 
-                    # DNA da Aula Selecionada
                     aula_info_ativa = historico_turma[historico_turma['DATA'] == data_ativa_str] if not historico_turma.empty else pd.DataFrame()
                     aula_aberta_existe = not aula_info_ativa.empty
 
                     if aula_aberta_existe:
                         cont_aula_ativa = str(aula_info_ativa.iloc[0].get('CONTEUDO_MINISTRADO', 'Registro de Sala'))
                         stat_aula_ativa = str(aula_info_ativa.iloc[0].get('STATUS_EXECUCAO', 'Concluído'))
-                        st.caption(f"📌 **Aula ({data_ativa_str}):** {cont_aula_ativa} • Status: `{stat_aula_ativa}`")
+                        st.caption(f"Aula ({data_ativa_str}): **{cont_aula_ativa}** • Status: `{stat_aula_ativa}`")
                     else:
-                        st.info(f"💡 **Aula do dia {data_ativa_str} ainda não foi aberta.** Você pode abrir abaixo ou lançar presença diretamente.")
+                        st.info(f"Aula de {data_ativa_str} pronta para lançamento de presença e vistos.")
 
-                # -------------------------------------------------------------
-                # 2. ABERTURA RÁPIDA DE AULA (SE NECESSÁRIO)
-                # -------------------------------------------------------------
                 if not aula_aberta_existe:
-                    with st.expander("📦 Abrir Aula e Vincular Material do Acervo", expanded=False):
+                    with st.expander("Vincular Material de Aula do Acervo", expanded=False):
                         mats_disp_bruto = df_mats_ano['TIPO_MATERIAL'].tolist() if not df_mats_ano.empty and 'TIPO_MATERIAL' in df_mats_ano.columns else []
-                        mats_sel_abertura = st.multiselect("Selecione o Material / Aula do Acervo:", options=mats_disp_bruto, max_selections=2, key=f"ms_mat_ab_{v}")
+                        mats_sel_abertura = st.multiselect("Material do Acervo:", options=mats_disp_bruto, max_selections=2, key=f"ms_mat_ab_{v}")
                         
-                        if st.button("💾 CONFIRMAR ABERTURA DESTA AULA", type="primary", use_container_width=True, key=f"btn_abrir_aula_tl_{v}"):
+                        if st.button("Confirmar Vínculo da Aula", type="primary", use_container_width=True, key=f"btn_abrir_aula_tl_{v}"):
                             if mats_sel_abertura:
                                 mat_ref = df_aulas[df_aulas['TIPO_MATERIAL'] == mats_sel_abertura[0]].iloc[0] if not df_aulas.empty else {}
                                 sem_ref_val = mat_ref.get('SEMANA_REF', 'AVULSA') if isinstance(mat_ref, pd.Series) else 'AVULSA'
                                 db.excluir_aula_aberta(data_ativa_str, turma_foco)
                                 db.salvar_no_banco("DB_REGISTRO_AULAS", [data_ativa_str, sem_ref_val, turma_foco, " + ".join(mats_sel_abertura), "PENDENTE", "ABERTA"])
-                                st.success("✅ Aula aberta com sucesso!"); time.sleep(0.5); st.rerun()
+                                st.success("Aula vinculada com sucesso!"); time.sleep(0.5); st.rerun()
 
-                # -------------------------------------------------------------
-                # 3. CHAMADA EXPRESS & VISTOS DA DATA ATIVA
-                # -------------------------------------------------------------
-                st.markdown(f"##### 📋 Chamada & Vistos — Aula de **{data_ativa_str}**")
+                st.markdown(f"##### Chamada & Vistos — {data_ativa_str}")
                 
                 diario_dia_ativo = df_diario[(df_diario['DATA'] == data_ativa_str) & (df_diario['TURMA'] == turma_foco)] if not df_diario.empty else pd.DataFrame()
                 
@@ -6434,14 +6416,12 @@ elif menu == "👥 Gestão da Turma":
                     grid_chamada_dia.append({
                         "ID": id_al_c,
                         "Estudante": nome_al_c,
-                        "Presente?": is_p_c,
-                        "Visto OK?": is_v_c,
-                        "Ocorrência / Tag": tag_c if tag_c != "AUSÊNCIA" else "",
+                        "Presente": is_p_c,
+                        "Visto OK": is_v_c,
+                        "Ocorrência": tag_c if tag_c != "AUSÊNCIA" else "",
                         "Observação": obs_c
                     })
 
-                # Botões Rápidos de Lote
-                c_lot1, c_lot2, c_lot3 = st.columns([1, 1, 2])
                 key_grid_active = f"ed_grid_chamada_tl_{data_ativa_str}_{turma_foco}_{v}"
                 
                 df_chamada_editada = st.data_editor(
@@ -6449,9 +6429,9 @@ elif menu == "👥 Gestão da Turma":
                     column_config={
                         "ID": None,
                         "Estudante": st.column_config.TextColumn("Estudante", disabled=True, width="medium"),
-                        "Presente?": st.column_config.CheckboxColumn("Presente?", default=True, width="small"),
-                        "Visto OK?": st.column_config.CheckboxColumn("Visto OK?", default=False, width="small"),
-                        "Ocorrência / Tag": st.column_config.SelectboxColumn("Ocorrência", options=["", "ARGUIÇÃO", "INDISCIPLINA", "CELULAR", "CONVERSA", "ATRASO", "DESTAQUE"], width="medium"),
+                        "Presente": st.column_config.CheckboxColumn("Presente", default=True, width="small"),
+                        "Visto OK": st.column_config.CheckboxColumn("Visto OK", default=False, width="small"),
+                        "Ocorrência": st.column_config.SelectboxColumn("Ocorrência", options=["", "ARGUIÇÃO", "INDISCIPLINA", "CELULAR", "CONVERSA", "ATRASO", "DESTAQUE"], width="medium"),
                         "Observação": st.column_config.TextColumn("Observação Rápida", width="large")
                     },
                     key=key_grid_active
@@ -6459,17 +6439,17 @@ elif menu == "👥 Gestão da Turma":
 
                 c_save_ch1, c_save_ch2 = st.columns(2)
                 
-                if c_save_ch1.button("💾 CONSOLIDAR E SALVAR DIÁRIO DESTA AULA", type="primary", use_container_width=True, key=f"btn_save_diario_tl_{v}"):
-                    with st.spinner("Gravando presenças, vistos e ocorrências no diário..."):
+                if c_save_ch1.button("Consolidar Diário desta Aula", type="primary", use_container_width=True, key=f"btn_save_diario_tl_{v}"):
+                    with st.spinner("Gravando presenças, vistos e ocorrências..."):
                         linhas_diario_save = []
-                        tot_vistos_dados = sum(1 for _, r_c in df_chamada_editada.iterrows() if r_c['Visto OK?'] and r_c['Presente?'])
+                        tot_vistos_dados = sum(1 for _, r_c in df_chamada_editada.iterrows() if r_c['Visto OK'] and r_c['Presente'])
 
                         for _, r_c in df_chamada_editada.iterrows():
                             al_id_c = r_c['ID']
                             nome_c = r_c['Estudante']
-                            p_c = r_c['Presente?']
-                            v_c = r_c['Visto OK?']
-                            t_c = str(r_c['Ocorrência / Tag']).strip()
+                            p_c = r_c['Presente']
+                            v_c = r_c['Visto OK']
+                            t_c = str(r_c['Ocorrência']).strip()
                             o_c = str(r_c['Observação']).strip()
 
                             bônus_c = "0,00"
@@ -6488,23 +6468,19 @@ elif menu == "👥 Gestão da Turma":
                         if linhas_diario_save:
                             db.limpar_diario_data_turma(data_ativa_str, turma_foco)
                             db.salvar_lote("DB_DIARIO_BORDO", linhas_diario_save)
-                            st.toast(f"✅ Diário do dia {data_ativa_str} consolidado com sucesso!", icon="✅")
+                            st.toast(f"Diário de {data_ativa_str} consolidado com sucesso!", icon="✅")
                             time.sleep(0.5); st.rerun()
 
-                # -------------------------------------------------------------
-                # 4. RADAR MÓVEL DE FALTOSOS (PARA A SECRETARIA / WHATSAPP)
-                # -------------------------------------------------------------
                 st.markdown("---")
                 qtd_ausentes_hoje = len(ids_ausentes_dia)
-                total_alunos_classe = len(alunos_t)
 
                 with st.container(border=True):
                     c_rad1, c_rad2 = st.columns([2, 1])
-                    c_rad1.markdown(f"##### 🔴 Radar de Faltosos — Aula de {data_ativa_str} ({qtd_ausentes_hoje} ausentes)")
-                    c_rad1.caption("Toque em **'Dar Presença'** para retificar qualquer falta sem precisar reabrir toda a chamada:")
+                    c_rad1.markdown(f"##### Radar de Ausências — {data_ativa_str} ({qtd_ausentes_hoje} ausentes)")
+                    c_rad1.caption("Retifique ausências diretamente sem necessidade de reabrir a chamada:")
 
                     if qtd_ausentes_hoje == 0:
-                        st.success("🎉 **100% DE PRESENÇA NESTA AULA!** Nenhum estudante ausente.")
+                        st.success("100% de presença registrada nesta aula.")
                     else:
                         alunos_faltosos_df = alunos_t[alunos_t['ID'].apply(db.limpar_id).isin(ids_ausentes_dia)]
                         
@@ -6514,32 +6490,31 @@ elif menu == "👥 Gestão da Turma":
                             
                             with st.container(border=True):
                                 c_fal1, c_fal2 = st.columns([3, 1])
-                                c_fal1.markdown(f"**🔴 {nome_fal_al}**")
+                                c_fal1.markdown(f"**{nome_fal_al}**")
                                 c_fal1.caption(f"ID: `{id_fal_al}` | Perfil: {r_fal.get('NECESSIDADES', 'TÍPICO')}")
                                 
-                                if c_fal2.button("🟢 Dar Presença", key=f"btn_quick_pres_{id_fal_al}_{data_ativa_str}_{v}", use_container_width=True):
+                                if c_fal2.button("Retificar Presença", key=f"btn_quick_pres_{id_fal_al}_{data_ativa_str}_{v}", use_container_width=True):
                                     db.salvar_no_banco("DB_DIARIO_BORDO", [
-                                        data_ativa_str, id_fal_al, nome_fal_al, turma_foco, "TRUE", "", "[PRESENÇA RETIFICADA EM 1-TOQUE]", "0,00"
+                                        data_ativa_str, id_fal_al, nome_fal_al, turma_foco, "TRUE", "", "[PRESENÇA RETIFICADA]", "0,00"
                                     ])
                                     st.toast(f"Presença atribuída a {nome_fal_al}!")
                                     time.sleep(0.5); st.rerun()
 
                         lista_faltas_formatadas = [f"• {r.get('NOME_ALUNO', 'Estudante')}" for _, r in alunos_faltosos_df.iterrows()]
-                        txt_copia_zap = f"📌 FALTAS ({turma_foco}) — AULA DO DIA {data_ativa_str}:\n" + "\n".join(lista_faltas_formatadas)
+                        txt_copia_zap = f"AUSÊNCIAS ({turma_foco}) — AULA DE {data_ativa_str}:\n" + "\n".join(lista_faltas_formatadas)
                         
-                        with st.expander("📱 Copiar Lista Formatada para o WhatsApp da Secretaria", expanded=False):
+                        with st.expander("Copiar Lista de Ausências para WhatsApp"):
                             st.code(txt_copia_zap, language=None)
 
             # ==============================================================
-            # VISÃO 2: RADIOGRAFIA ANALÍTICA 360° (INTELIGÊNCIA EXECUTIVA)
+            # VISÃO 2: RADIOGRAFIA ANALÍTICA DA TURMA
             # ==============================================================
-            elif visao_gestao_sel == "🧠 2. Radiografia Analítica 360°":
-                st.markdown("#### 🧠 Radiografia Analítica da Turma & Diagnóstico SAEB")
+            elif visao_gestao_sel == "Radiografia Analítica da Turma":
+                st.markdown("#### Radiografia Analítica & Proficiência SAEB")
                 
                 df_d_rad = df_diario[df_diario['TURMA'] == turma_foco].copy() if not df_diario.empty else pd.DataFrame()
                 df_n_rad = df_notas[(df_notas['TURMA'] == turma_foco) & (df_notas['TRIMESTRE'] == trim_ativo_gestao)].copy() if not df_notas.empty else pd.DataFrame()
 
-                # 1. Termômetro Executivo em Bento Cards
                 taxa_assiduidade, taxa_vistos, media_geral_turma = 0.0, 0.0, 0.0
                 
                 if not df_d_rad.empty and 'TAGS' in df_d_rad.columns:
@@ -6559,15 +6534,13 @@ elif menu == "👥 Gestão da Turma":
 
                 with st.container(border=True):
                     k_r1, k_r2, k_r3, k_r4 = st.columns(4)
-                    k_r1.metric("📊 Média Geral da Classe", f"{media_geral_turma:.1f} pts")
-                    k_r2.metric("📅 Assiduidade da Turma", f"{taxa_assiduidade:.1f}%")
-                    k_r3.metric("📓 Vistos de Caderno (C1)", f"{taxa_vistos:.1f}%")
-                    k_r4.metric("👥 Alunos Ativos", len(alunos_t))
+                    k_r1.metric("Média Geral da Classe", f"{media_geral_turma:.1f} pts")
+                    k_r2.metric("Assiduidade da Turma", f"{taxa_assiduidade:.1f}%")
+                    k_r3.metric("Vistos de Caderno", f"{taxa_vistos:.1f}%")
+                    k_r4.metric("Estudantes Ativos", len(alunos_t))
 
                 st.markdown("---")
-
-                # 2. Distribuição por Níveis de Proficiência (Escala SAEB)
-                st.markdown("##### 📈 Distribuição da Turma por Níveis de Proficiência (Padrão SAEB)")
+                st.markdown("##### Distribuição da Turma por Níveis de Proficiência (SAEB)")
                 
                 cnt_abaixo_basico = 0
                 cnt_basico = 0
@@ -6584,20 +6557,20 @@ elif menu == "👥 Gestão da Turma":
 
                 tot_avaliados = max(len(df_n_rad), 1)
                 dados_proficiencia = [
-                    {"Nível SAEB": "🔴 Abaixo do Básico (< 4.0)", "Qtd": cnt_abaixo_basico, "%": (cnt_abaixo_basico / tot_avaliados) * 100},
-                    {"Nível SAEB": "🟡 Básico (4.0 a 5.5)", "Qtd": cnt_basico, "%": (cnt_basico / tot_avaliados) * 100},
-                    {"Nível SAEB": "🟢 Proficiente (6.0 a 8.0)", "Qtd": cnt_proficiente, "%": (cnt_proficiente / tot_avaliados) * 100},
-                    {"Nível SAEB": "🚀 Avançado (> 8.0)", "Qtd": cnt_avancado, "%": (cnt_avancado / tot_avaliados) * 100}
+                    {"Nível SAEB": "Abaixo do Básico (< 4.0)", "Qtd": cnt_abaixo_basico, "%": (cnt_abaixo_basico / tot_avaliados) * 100},
+                    {"Nível SAEB": "Básico (4.0 a 5.5)", "Qtd": cnt_basico, "%": (cnt_basico / tot_avaliados) * 100},
+                    {"Nível SAEB": "Proficiente (6.0 a 8.0)", "Qtd": cnt_proficiente, "%": (cnt_proficiente / tot_avaliados) * 100},
+                    {"Nível SAEB": "Avançado (> 8.0)", "Qtd": cnt_avancado, "%": (cnt_avancado / tot_avaliados) * 100}
                 ]
 
                 fig_prof = px.bar(
                     pd.DataFrame(dados_proficiencia), x="Nível SAEB", y="Qtd", text="Qtd",
                     color="Nível SAEB",
                     color_discrete_map={
-                        "🔴 Abaixo do Básico (< 4.0)": "#E74C3C",
-                        "🟡 Básico (4.0 a 5.5)": "#F1C40F",
-                        "🟢 Proficiente (6.0 a 8.0)": "#2ECC71",
-                        "🚀 Avançado (> 8.0)": "#2962FF"
+                        "Abaixo do Básico (< 4.0)": "#E74C3C",
+                        "Básico (4.0 a 5.5)": "#F1C40F",
+                        "Proficiente (6.0 a 8.0)": "#2ECC71",
+                        "Avançado (> 8.0)": "#2962FF"
                     }
                 )
                 fig_prof.update_layout(height=260, margin=dict(l=20, r=20, t=20, b=20), showlegend=False)
@@ -6605,13 +6578,12 @@ elif menu == "👥 Gestão da Turma":
 
                 st.markdown("---")
 
-                # 3. Radar Duplo de Risco: UTI Pedagógica x Radar de Evasão
                 c_uti_col, c_eva_col = st.columns(2)
 
                 with c_uti_col:
                     with st.container(border=True):
-                        st.markdown("##### 🚑 UTI Pedagógica (< 6.0)")
-                        st.caption("Estudantes que necessitam de intervenção e recomposição de notas:")
+                        st.markdown("##### UTI Pedagógica (< 6.0)")
+                        st.caption("Estudantes que necessitam de intervenção formativa:")
                         
                         alunos_uti_list = []
                         if not df_n_rad.empty:
@@ -6631,15 +6603,15 @@ elif menu == "👥 Gestão da Turma":
                                 column_config={
                                     "Estudante": st.column_config.TextColumn(width="medium"),
                                     "Média Atual": st.column_config.NumberColumn(format="%.1f"),
-                                    "Falta p/ 6.0": st.column_config.ProgressColumn("Precisa de", format="%.1f", min_value=0.0, max_value=6.0)
+                                    "Falta p/ 6.0": st.column_config.ProgressColumn("Diferença", format="%.1f", min_value=0.0, max_value=6.0)
                                 }
                             )
                         else:
-                            st.success("🎉 Nenhum aluno na UTI de notas neste trimestre!")
+                            st.success("Nenhum estudante na UTI de notas neste trimestre.")
 
                 with c_eva_col:
                     with st.container(border=True):
-                        st.markdown("##### 🚨 Radar de Evasão & Faltas Críticas")
+                        st.markdown("##### Radar de Faltas & Evasão")
                         st.caption("Estudantes com ausências acumuladas acima de 20%:")
                         
                         alunos_evasao_list = []
@@ -6674,12 +6646,11 @@ elif menu == "👥 Gestão da Turma":
                                 }
                             )
                         else:
-                            st.success("✅ Nenhum estudante em risco de evasão!")
+                            st.success("Nenhum estudante em risco de frequência.")
 
-                # Botão de Exportação Oficial para Coordenação
                 st.markdown("---")
-                if st.button("🖨️ GERAR RELATÓRIO OFICIAL DA TURMA PARA A COORDENAÇÃO (DOCX)", type="primary", use_container_width=True, key=f"btn_exp_coord_hub_{v}"):
-                    with st.spinner("Compilando Ficha de Regência da Turma para a Coordenação Pedagógica..."):
+                if st.button("Gerar Relatório para Coordenação (DOCX)", type="primary", use_container_width=True, key=f"btn_exp_coord_hub_{v}"):
+                    with st.spinner("Compilando Ficha de Regência em Word A4..."):
                         dados_export_coord = []
                         for _, al_c in alunos_t.iterrows():
                             id_al_c = db.limpar_id(al_c.get('ID', ''))
@@ -6693,14 +6664,14 @@ elif menu == "👥 Gestão da Turma":
                                 d_al_sub = df_d_rad[df_d_rad['ID_ALUNO'].apply(db.limpar_id) == id_al_c]
                                 faltas_al = len(d_al_sub[d_al_sub['TAGS'] == "AUSÊNCIA"])
                                 
-                            status_c = "✅ NA MÉDIA" if m_final_c >= 6.0 else "⚠️ RECOMPOSIÇÃO"
-                            if faltas_al >= 10: status_c += " / 🚨 RISCO FALTAS"
+                            status_c = "Na Média" if m_final_c >= 6.0 else "Recomposição"
+                            if faltas_al >= 10: status_c += " / Risco de Frequência"
                             
                             dados_export_coord.append({
                                 "nome": nome_al_c,
-                                "vistos": f"{taxa_vistos:.0f}%",
-                                "teste": "Sincronizado",
-                                "prova": "Sincronizado",
+                                "c1": f"{taxa_vistos:.0f}%",
+                                "c2": "Sincronizado",
+                                "c3": "Sincronizado",
                                 "bonus": "0.0",
                                 "media": f"{m_final_c:.1f}",
                                 "status": status_c
@@ -6713,45 +6684,45 @@ elif menu == "👥 Gestão da Turma":
                         link_coord_doc = db.subir_e_converter_para_google_docs(doc_coord_stream, nome_arq_coord, trimestre=trim_ativo_gestao, categoria=turma_foco, modo="PLANEJAMENTO")
                         
                         if "https" in link_coord_doc:
-                            st.success("✅ Ficha de Regência gerada com sucesso para a Coordenação!")
-                            st.link_button("📂 ABRIR RELATÓRIO DA COORDENAÇÃO NO DRIVE", link_coord_doc, type="primary", use_container_width=True)
+                            st.success("Ficha de Regência gerada com sucesso para a Coordenação!")
+                            st.link_button("Abrir Relatório no Google Drive", link_coord_doc, type="primary", use_container_width=True)
                             st.balloons()
 
             # ==============================================================
-            # VISÃO 3: SECRETARIA, MATRÍCULAS & CALENDÁRIO
+            # VISÃO 3: SECRETARIA & CALENDÁRIO
             # ==============================================================
             else:
-                st.markdown("#### ⚙️ Secretaria, Matrículas & Gestão de Calendário")
+                st.markdown("#### Secretaria, Matrículas & Gestão de Calendário")
                 
-                modo_sec = st.pills(
-                    "Operação Desejada:",
-                    ["➕ Povoar e Cadastrar Alunos", "✏️ Edição em Cascata & Status", "📅 Gestor de Semanas & Recessos", "🏗️ Criar Turmas/Horários"],
-                    default="➕ Povoar e Cadastrar Alunos",
+                modo_sec = st.segmented_control(
+                    "Operação:",
+                    ["Cadastro de Estudantes", "Edição em Cascata & Status", "Gestão de Semanas & Recessos", "Estrutura de Turmas & Horários"],
+                    default="Cadastro de Estudantes",
                     key=f"pills_sec_sub_{v}"
                 )
                 st.markdown("---")
 
-                if modo_sec == "➕ Povoar e Cadastrar Alunos":
+                if modo_sec == "Cadastro de Estudantes":
                     t_dest = st.selectbox("Turma de Destino:", lista_turmas_segura, key=f"dest_pov_hub_{v}")
                     if t_dest:
-                        t1_man, t2_lote = st.tabs(["✍️ Cadastro Individual", "📄 Importação em Lote (CSV)"])
+                        t1_man, t2_lote = st.tabs(["Cadastro Individual", "Importação em Lote (CSV)"])
                         
                         with t1_man:
                             with st.form("f_manual_povoar_hub"):
-                                nome_a = st.text_input("Nome Completo do Aluno:").upper()
-                                perfil_base = st.multiselect("Perfil / Necessidades:", ["TÍPICO", "TEA", "TDAH", "DISLEXIA", "DEF. INTELECTUAL", "TOD", "BAIXA VISÃO", "SURDEZ", "PEI - PENDENTE", "OUTRO"], default=["TÍPICO"])
-                                if st.form_submit_button("💾 SALVAR ALUNO"):
-                                    if not nome_a: st.error("Digite o nome do estudante.")
+                                nome_a = st.text_input("Nome Completo do Estudante:").upper()
+                                perfil_base = st.multiselect("Perfil / Acessibilidade:", ["TÍPICO", "TEA", "TDAH", "DISLEXIA", "DEF. INTELECTUAL", "TOD", "BAIXA VISÃO", "SURDEZ", "PEI - PENDENTE", "OUTRO"], default=["TÍPICO"])
+                                if st.form_submit_button("Salvar Estudante"):
+                                    if not nome_a: st.error("Informe o nome do estudante.")
                                     else:
                                         if "TÍPICO" in perfil_base and len(perfil_base) > 1: perfil_base.remove("TÍPICO")
                                         perfil_str = " + ".join(perfil_base) if perfil_base else "TÍPICO"
                                         if db.salvar_no_banco("DB_ALUNOS", [db.gerar_proximo_id(df_alunos), nome_a, t_dest, "ATIVO", perfil_str, "MANUAL"]):
-                                            st.success(f"✅ {nome_a} cadastrado com sucesso!"); st.rerun()
+                                            st.success(f"Estudante {nome_a} cadastrado com sucesso!"); st.rerun()
 
                         with t2_lote:
-                            st.info("💡 Cole a lista de alunos (NOME, PERFIL). Se o nome terminar com asterisco (*), será detectado como PEI.")
-                            texto_lote = st.text_area("Cole os dados aqui:", height=180, placeholder="ADRIEL VINICIUS ALVES MARTINS,TÍPICO\nJOSE LEVI BRONZE SANTOS*,PEI - PENDENTE", key=f"txt_lote_hub_{v}")
-                            if st.button("🚀 PROCESSAR IMPORTAÇÃO EM LOTE", type="primary", use_container_width=True, key=f"btn_lote_alu_hub_{v}"):
+                            st.caption("Insira os dados no formato `NOME, PERFIL`. Nomes terminados em asterisco (*) serão detectados como PEI:")
+                            texto_lote = st.text_area("Lista de Alunos:", height=160, placeholder="ADRIEL VINICIUS ALVES MARTINS,TÍPICO\nJOSE LEVI BRONZE SANTOS*,PEI - PENDENTE", key=f"txt_lote_hub_{v}")
+                            if st.button("Processar Importação em Lote", type="primary", use_container_width=True, key=f"btn_lote_alu_hub_{v}"):
                                 if texto_lote.strip():
                                     linhas = texto_lote.strip().split('\n')
                                     novos_alunos = []
@@ -6765,10 +6736,10 @@ elif menu == "👥 Gestão da Turma":
                                         novos_alunos.append([id_atual, nome_limpo, t_dest, "ATIVO", perfil, "LOTE"])
                                         id_atual += 1 
                                     if db.salvar_lote("DB_ALUNOS", novos_alunos):
-                                        st.success(f"✅ {len(novos_alunos)} alunos importados com sucesso!")
-                                        st.balloons(); time.sleep(1); st.rerun()
+                                        st.success(f"{len(novos_alunos)} estudantes importados com sucesso!")
+                                        st.balloons(); time.sleep(0.8); st.rerun()
 
-                elif modo_sec == "✏️ Edição em Cascata & Status":
+                elif modo_sec == "Edição em Cascata & Status":
                     t_origem = st.selectbox("Selecione a Turma:", lista_turmas_segura, key=f"orig_ed_hub_{v}")
                     if t_origem:
                         alunos_opcoes = df_alunos[df_alunos['TURMA'] == t_origem].sort_values(by="NOME_ALUNO") if not df_alunos.empty else pd.DataFrame()
@@ -6779,29 +6750,29 @@ elif menu == "👥 Gestão da Turma":
                             nome_atual_ed = str(dados_atuais.get('NOME_ALUNO', 'Estudante'))
                             nec_atual_ed = str(dados_atuais.get('NECESSIDADES', 'TÍPICO'))
                             
-                            st.markdown("##### ⚡ Diagnóstico Rápido em 1-Toque")
+                            st.markdown("##### Diagnóstico Rápido em 1 Toque")
                             c_b1, c_b2, c_b3, c_b4 = st.columns(4)
-                            if c_b1.button("📚 Def. Leitura", use_container_width=True, key=f"btn_diag_dl_h_{v}"):
+                            if c_b1.button("Defasagem Leitura", use_container_width=True, key=f"btn_diag_dl_h_{v}"):
                                 db.atualizar_aluno_cascata(id_atual_ed, nome_atual_ed, t_origem, "DEFASAGEM LEITURA"); st.rerun()
-                            if c_b2.button("🧮 Def. Matemática", use_container_width=True, key=f"btn_diag_dm_h_{v}"):
+                            if c_b2.button("Defasagem Matemática", use_container_width=True, key=f"btn_diag_dm_h_{v}"):
                                 db.atualizar_aluno_cascata(id_atual_ed, nome_atual_ed, t_origem, "DEFASAGEM MATEMÁTICA"); st.rerun()
-                            if c_b3.button("🚀 Alta Performance", use_container_width=True, key=f"btn_diag_ap_h_{v}"):
+                            if c_b3.button("Alta Performance", use_container_width=True, key=f"btn_diag_ap_h_{v}"):
                                 db.atualizar_aluno_cascata(id_atual_ed, nome_atual_ed, t_origem, "ALTA PERFORMANCE"); st.rerun()
-                            if c_b4.button("👤 Típico (Limpar)", use_container_width=True, key=f"btn_diag_tip_h_{v}"):
+                            if c_b4.button("Perfil Típico (Limpar)", use_container_width=True, key=f"btn_diag_tip_h_{v}"):
                                 db.atualizar_aluno_cascata(id_atual_ed, nome_atual_ed, t_origem, "TÍPICO"); st.rerun()
                             
                             st.markdown("---")
                             with st.form("form_edicao_cascata_hub"):
                                 novo_nome = st.text_input("Nome Completo:", value=nome_atual_ed).upper()
-                                nova_turma = st.selectbox("Turma de Destino (Transferência):", lista_turmas_segura, index=lista_turmas_segura.index(t_origem) if t_origem in lista_turmas_segura else 0)
+                                nova_turma = st.selectbox("Turma:", lista_turmas_segura, index=lista_turmas_segura.index(t_origem) if t_origem in lista_turmas_segura else 0)
                                 nova_nec = st.text_input("Necessidades / CIDs / PEI:", value=nec_atual_ed).upper()
                                 
                                 status_opcoes = ["ATIVO", "TRANSFERIDO", "EVADIDO", "INATIVO"]
                                 status_atual_val = str(dados_atuais.get('STATUS', 'ATIVO')).upper()
                                 idx_status = status_opcoes.index(status_atual_val) if status_atual_val in status_opcoes else 0
-                                novo_status = st.selectbox("Status Regimental do Estudante:", status_opcoes, index=idx_status)
+                                novo_status = st.selectbox("Status Regimental:", status_opcoes, index=idx_status)
 
-                                if st.form_submit_button("💾 SALVAR ALTERAÇÕES EM CASCATA"):
+                                if st.form_submit_button("Salvar Alterações em Cascata"):
                                     try:
                                         wb_al = db.conectar()
                                         ws_al = wb_al.worksheet("DB_ALUNOS")
@@ -6811,23 +6782,23 @@ elif menu == "👥 Gestão da Turma":
                                     except: pass
 
                                     if db.atualizar_aluno_cascata(id_atual_ed, novo_nome, nova_turma, nova_nec):
-                                        st.success("✅ Cadastro e Histórico propagados com sucesso!"); time.sleep(0.8); st.rerun()
+                                        st.success("Cadastro e histórico propagados com sucesso!"); time.sleep(0.6); st.rerun()
 
-                elif modo_sec == "📅 Gestor de Semanas & Recessos":
+                elif modo_sec == "Gestão de Semanas & Recessos":
                     c_cal1, c_cal2 = st.columns([2, 1])
                     todas_semanas_cal = util.gerar_semanas()
-                    semana_alvo_cal = c_cal1.selectbox("Selecione a Semana:", todas_semanas_cal, key=f"cal_sem_sel_hub_{v}")
-                    status_semana_cal = c_cal2.selectbox("Status:", [
-                        "🟢 Semana Letiva Normal",
-                        "🏖️ RECESSO ESCOLAR",
-                        "🎉 FERIADO PROLONGADO",
-                        "📑 SEMANA DE PROVAS OFICIAIS",
-                        "🤝 JORNADA PEDAGÓGICA / PLANEJAMENTO"
+                    semana_alvo_cal = c_cal1.selectbox("Semana:", todas_semanas_cal, key=f"cal_sem_sel_hub_{v}")
+                    status_semana_cal = c_cal2.selectbox("Situação:", [
+                        "Semana Letiva Normal",
+                        "Recesso Escolar",
+                        "Feriado Prolongado",
+                        "Semana de Provas Globais",
+                        "Jornada Pedagógica / Planejamento"
                     ], key=f"cal_stat_sel_hub_{v}")
                     
-                    motivo_semana_cal = st.text_input("Descrição / Observação:", placeholder="Ex: Recesso Junino / Semana de Provas Globais", key=f"cal_mot_hub_{v}")
+                    motivo_semana_cal = st.text_input("Descrição:", placeholder="Ex: Recesso Junino / Semana de Avaliações", key=f"cal_mot_hub_{v}")
                     
-                    if st.button("💾 GRAVAR STATUS NO CALENDÁRIO", type="primary", use_container_width=True, key=f"btn_save_cal_hub_{v}"):
+                    if st.button("Gravar Status no Calendário", type="primary", use_container_width=True, key=f"btn_save_cal_hub_{v}"):
                         sem_limpa_cal = semana_alvo_cal.split(" (")[0].strip()
                         db.excluir_registro("DB_RELATORIOS", f"CONFIG_SEMANA_{sem_limpa_cal}")
                         
@@ -6835,25 +6806,24 @@ elif menu == "👥 Gestão da Turma":
                             datetime.now().strftime("%d/%m/%Y"), "GLOBAL", "SISTEMA", 
                             f"CONFIG_SEMANA_{sem_limpa_cal}", f"{status_semana_cal}|{motivo_semana_cal}"
                         ])
-                        st.success(f"✅ {sem_limpa_cal} configurada com sucesso!"); time.sleep(0.8); st.rerun()
+                        st.success(f"{sem_limpa_cal} configurada com sucesso!"); time.sleep(0.6); st.rerun()
 
                 else:
                     with st.container(border=True):
                         c1, c2, c3 = st.columns(3)
-                        ano_t_cad = c1.selectbox("Série/Ano:", [6, 7, 8, 9], index=0, key=f"ano_cad_hub_{v}")
-                        letra_t_cad = c2.selectbox("Letra da Turma:", ["A", "B", "C", "D", "E"], key=f"letra_cad_hub_{v}")
+                        ano_t_cad = c1.selectbox("Série:", [6, 7, 8, 9], index=0, key=f"ano_cad_hub_{v}")
+                        letra_t_cad = c2.selectbox("Letra:", ["A", "B", "C", "D", "E"], key=f"letra_cad_hub_{v}")
                         turno_t_cad = c3.selectbox("Turno:", ["Matutino", "Vespertino", "Noturno"], key=f"turno_cad_hub_{v}")
                         sigla_final_cad = f"{ano_t_cad}ª {turno_t_cad[0].upper()}{letra_t_cad}"
                         nome_final_cad = f"{ano_t_cad}º Ano {letra_t_cad}"
 
                         dias_aula_cad = st.multiselect("Grade de Horários:", ["Segunda (1º Tempo)", "Segunda (2º Tempo)", "Terça (1º Tempo)", "Terça (2º Tempo)", "Quarta (1º Tempo)", "Quarta (2º Tempo)", "Quinta (1º Tempo)", "Quinta (2º Tempo)", "Sexta (1º Tempo)", "Sexta (2º Tempo)"], key=f"dias_cad_hub_{v}")
                         
-                        if st.button("💾 ALOCAR TURMA NA GRADE", type="primary", use_container_width=True, key=f"btn_save_turma_hub_{v}"):
+                        if st.button("Alocar Turma na Grade", type="primary", use_container_width=True, key=f"btn_save_turma_hub_{v}"):
                             if dias_aula_cad:
                                 if db.salvar_no_banco("DB_TURMAS", [sigla_final_cad, nome_final_cad, turno_t_cad, " / ".join(dias_aula_cad), "N/A", "ATIVO"]):
-                                    st.success(f"✅ Turma {sigla_final_cad} alocada com sucesso!"); time.sleep(0.8); st.rerun()
+                                    st.success(f"Turma {sigla_final_cad} alocada com sucesso!"); time.sleep(0.6); st.rerun()
 
-        # RENDERIZAÇÃO DO COCKPIT EM FRAGMENTO
         renderizar_cockpit_gestao_fragmento()
 
 
