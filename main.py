@@ -5776,12 +5776,12 @@ Escola Municipal Flávio José Simões Costa"""
 
 
 # ==============================================================================
-# MÓDULO: PAINEL DE NOTAS & VISTOS - V2026.LIVE_DYNAMIC (SOSA SOBERANO)
-# (SINCRONIZAÇÃO INSTANTÂNEA DO SCANNER CIR, VISTOS AO VIVO E ARREDONDAMENTO 0.5)
+# MÓDULO: PAINEL DE NOTAS & VISTOS - V2026.PRO_EXECUTIVE
+# (SINCRONIZAÇÃO DINÂMICA CIR, CONSOLIDAÇÃO C1/C2/C3, VISTOS E RECUPERAÇÃO)
 # ==============================================================================
 elif menu == "📊 Painel de Notas & Vistos":
-    st.title("📊 Painel de Notas, Vistos & Ciclos")
-    st.caption("Central de Soberania Docente: Sincronização Dinâmica ao Vivo do Scanner CIR, Consolidação C1/C2/C3, Gestão Atitudinal e Recuperação Blindada.")
+    st.title("Painel de Notas & Vistos")
+    st.caption("Central de consolidação de rendimento: sincronização do Scanner CIR, gestão atitudinal de vistos de caderno, refacção solidária e recuperação regimental.")
     st.markdown("---")
 
     if "v_notas" not in st.session_state:
@@ -5796,7 +5796,7 @@ elif menu == "📊 Painel de Notas & Vistos":
         lista_turmas_notas = sorted(df_alunos['TURMA'].unique())
 
     if not lista_turmas_notas:
-        st.warning("⚠️ Nenhuma turma cadastrada. Cadastre as turmas no cockpit de Gestão da Turma.")
+        st.warning("Nenhuma turma cadastrada. Cadastre as turmas no cockpit de Gestão da Turma.")
     else:
         hoje_dt = date.today()
         if hoje_dt <= date(2026, 5, 22): trim_detectado_n = "I Trimestre"
@@ -5805,29 +5805,25 @@ elif menu == "📊 Painel de Notas & Vistos":
 
         with st.container(border=True):
             c_n1, c_n2 = st.columns([1.5, 2])
-            turma_notas = c_n1.selectbox("🎯 Selecione a Turma:", lista_turmas_notas, key=f"sel_t_notas_{v}")
+            turma_notas = c_n1.selectbox("Turma Selecionada:", lista_turmas_notas, key=f"sel_t_notas_{v}")
             
             trim_ativo_notas = c_n2.segmented_control(
-                "📅 Trimestre Ativo:",
+                "Trimestre Ativo:",
                 ["I Trimestre", "II Trimestre", "III Trimestre"],
                 default=trim_detectado_n,
                 key=f"seg_trim_notas_{v}"
             )
             if not trim_ativo_notas: trim_ativo_notas = trim_detectado_n
 
-        # TRAVA GLOBAL: APENAS ALUNOS ATIVOS NO PAINEL DE NOTAS (LEI #28)
         df_alunos_base_n = df_alunos[df_alunos['TURMA'] == turma_notas].copy() if not df_alunos.empty else pd.DataFrame()
         if 'STATUS' not in df_alunos_base_n.columns: df_alunos_base_n['STATUS'] = "ATIVO"
         alunos_notas_df = df_alunos_base_n[~df_alunos_base_n['STATUS'].astype(str).str.upper().isin(["INATIVO", "TRANSFERIDO", "EVADIDO", "DESISTENTE"])].sort_values(by="NOME_ALUNO")
 
         if alunos_notas_df.empty:
-            st.info(f"📭 Nenhum aluno ativo cadastrado na turma {turma_notas}.")
+            st.info(f"Nenhum estudante ativo cadastrado na turma {turma_notas}.")
         else:
             @st.fragment
             def renderizar_painel_notas_fragmento():
-                # -------------------------------------------------------------
-                # 1. GESTÃO DE DATAS DE CORTE DO TRIMESTRE
-                # -------------------------------------------------------------
                 data_corte_salva = None
                 if hasattr(db, 'obter_config_corte_trimestre'):
                     data_corte_salva = db.obter_config_corte_trimestre(turma_notas, trim_ativo_notas)
@@ -5846,16 +5842,11 @@ elif menu == "📊 Painel de Notas & Vistos":
 
                 dt_i_n, dt_f_n = dt_i_default, dt_f_default
 
-                # -------------------------------------------------------------
-                # 2. MOTOR DINÂMICO AO VIVO: CAPTURA DO SCANNER CIR EM TEMPO REAL
-                # -------------------------------------------------------------
                 padrao_trim_regex = util.obter_regex_trimestre(trim_ativo_notas)
 
-                # Tabelas brutas
                 df_notas_trim = df_notas[(df_notas['TURMA'] == turma_notas) & (df_notas['TRIMESTRE'] == trim_ativo_notas)] if not df_notas.empty else pd.DataFrame()
                 df_diario_trim = df_diario[(df_diario['TURMA'] == turma_notas)] if not df_diario.empty else pd.DataFrame()
 
-                # Mineração Instantânea de DB_GABARITOS_ALUNOS (Scanner CIR)
                 mapa_live_teste = {}
                 mapa_live_prova = {}
                 mapa_live_rec = {}
@@ -5876,17 +5867,14 @@ elif menu == "📊 Painel de Notas & Vistos":
                         else:
                             nota_dg = util.sosa_to_float(r_dg.get('NOTA_CALCULADA', 0.0))
 
-                        # Classificação robusta: Recuperação vs Teste (C2) vs Prova/Avaliação (C3)
                         if any(x in id_av_str for x in ["RECUPERAÇÃO", "RECUPERACAO", "REC_"]):
                             mapa_live_rec[id_al_dg] = nota_dg
                         elif any(x in id_av_str for x in ["TESTE", "SIMULADO", "TRABALHO"]):
-                            # Sonda Diagnóstica não entra no somatório de C2
                             if "SONDA" not in id_av_str:
                                 mapa_live_teste[id_al_dg] = max(mapa_live_teste.get(id_al_dg, 0.0), nota_dg)
                         elif any(x in id_av_str for x in ["PROVA", "AVALIAÇÃO", "AVALIACAO", "EXAME", "AVALIACAO_"]):
                             mapa_live_prova[id_al_dg] = max(mapa_live_prova.get(id_al_dg, 0.0), nota_dg)
 
-                # Mineração Instantânea de Vistos e Bônus de DB_DIARIO_BORDO
                 vistos_live_dict = {}
                 bonus_live_dict = {}
 
@@ -5905,15 +5893,12 @@ elif menu == "📊 Painel de Notas & Vistos":
                             grp_val = grp[grp.get('VISTO_ATIVIDADE', '').astype(str).str.upper() != "ISENTO"]
                             ok_v = len(grp_val[grp_val.get('VISTO_ATIVIDADE', '').astype(str).str.upper() == "TRUE"])
                             vistos_live_dict[id_c] = round((ok_v / tot_v_d * 3.0), 2) if tot_v_d > 0 else 0.0
-                            # Captura robusta de todos os bônus e punições do período
+                            
                             if 'BONUS' in grp.columns:
                                 bonus_live_dict[id_c] = grp['BONUS'].apply(util.sosa_to_float).sum()
                             else:
                                 bonus_live_dict[id_c] = 0.0
 
-                # -------------------------------------------------------------
-                # 3. MONTAGEM DINÂMICA DA GRADE CONSOLIDADA
-                # -------------------------------------------------------------
                 dados_grid_notas = []
                 convocados_recuperacao = []
                 alunos_liberados_refaccao = []
@@ -5930,7 +5915,6 @@ elif menu == "📊 Painel de Notas & Vistos":
                     v_c3_banco = util.sosa_to_float(reg_n.iloc[0].get('NOTA_PROVA', 0.0)) if not reg_n.empty else 0.0
                     v_rec_banco = util.sosa_to_float(reg_n.iloc[0].get('NOTA_REC', -1.0)) if not reg_n.empty else -1.0
 
-                    # Fusão Inteligente: Dá prioridade ao escaneamento ao vivo do Scanner CIR
                     v_c1_live = vistos_live_dict.get(id_al_n, 0.0)
                     v_c2_live = mapa_live_teste.get(id_al_n, 0.0)
                     v_c3_live = mapa_live_prova.get(id_al_n, 0.0)
@@ -5942,7 +5926,6 @@ elif menu == "📊 Painel de Notas & Vistos":
                     c3_val = max(v_c3_banco, v_c3_live)
                     rec_val = max(v_rec_banco, v_rec_live)
 
-                    # Transbordamento positivo de Bônus (C1 ➔ C2 ➔ C3)
                     c1_final = min(3.0, c1_val + max(0.0, bonus_diario_calc))
                     rem_bonus = max(0.0, bonus_diario_calc) - (c1_final - c1_val)
                     c2_final = min(3.0, c2_val + max(0.0, rem_bonus))
@@ -5953,7 +5936,6 @@ elif menu == "📊 Painel de Notas & Vistos":
                     media_inicial = min(10.0, round(soma_sem_rec * 2) / 2)
                     
                     if rec_val > 0 and media_inicial < 6.0:
-                        # Regra da Prefeitura: Média da Recuperação é a média aritmética entre a nota inicial e a REC
                         media_com_rec = (media_inicial + rec_val) / 2.0
                         media_arredondada = min(10.0, max(media_inicial, round(media_com_rec * 2) / 2))
                     else:
@@ -5962,74 +5944,64 @@ elif menu == "📊 Painel de Notas & Vistos":
                     is_isento_refaccao = (soma_sem_rec < 6.0 and media_arredondada >= 6.0)
                     
                     if media_arredondada >= 6.0:
-                        sit_txt = "🟢 ISENTO REC" if is_isento_refaccao else "✅ NA MÉDIA"
+                        sit_txt = "Aprovado (Refacção)" if is_isento_refaccao else "Aprovado no Trimestre"
                         if is_isento_refaccao: alunos_liberados_refaccao.append(nome_al_n)
+                    elif media_arredondada == 5.5:
+                        sit_txt = "Oportunidade de Refacção (+0.5)"
                     else:
-                        sit_txt = "🔴 CONVOCADO REC"
+                        sit_txt = "Convocado para Recuperação"
+                        nota_necessaria_rec = max(0.0, 12.0 - media_arredondada)
                         convocados_recuperacao.append({
                             "ID": id_al_n, "Estudante": nome_al_n, "Perfil": nec_al_n,
-                            "Média Atual": media_arredondada, "Precisa na Rec": round((6.0 - media_arredondada) * 2) / 2
+                            "Média Atual": media_arredondada, "Meta na Prova": nota_necessaria_rec
                         })
-
-                    def icone_perfil_n(nec):
-                        n = str(nec).upper().strip()
-                        if "PENDENTE" in n or "SUSPEITA" in n: return "🟠"
-                        if "DEFASAGEM LEITURA" in n: return "🧱"
-                        if "DEFASAGEM MATEMÁTICA" in n: return "🧮"
-                        if "ALTA PERFORMANCE" in n: return "🚀"
-                        if n in ["NENHUMA", "", "NAN", "TÍPICO", "TIPICO"]: return "👤"
-                        return "♿"
 
                     dados_grid_notas.append({
                         "ID": id_al_n,
-                        "Estudante": f"{icone_perfil_n(nec_al_n)} {nome_al_n}",
-                        "C1 (Vistos - Teto 3.0)": c1_val,
-                        "C2 (Testes - Teto 3.0)": c2_val,
-                        "C3 (Prova - Teto 4.0)": c3_val,
-                        "⭐ Bônus/Punição Líquido": bonus_diario_calc,
-                        "REC": rec_val if rec_val > 0 else 0.0,
-                        "Média Final": media_arredondada,
-                        "Situação": sit_txt
+                        "Estudante": nome_al_n,
+                        "Caderno (C1)": c1_val,
+                        "Testes (C2)": c2_val,
+                        "Prova (C3)": c3_val,
+                        "Bônus / Mérito": bonus_diario_calc,
+                        "Recuperação": rec_val if rec_val > 0 else 0.0,
+                        "Média Trimestral": media_arredondada,
+                        "Situação Regimental": sit_txt
                     })
 
                 df_grid_ed_notas = pd.DataFrame(dados_grid_notas)
 
-                # -------------------------------------------------------------
-                # 4. NAVEGAÇÃO EM 3 VISÕES EXECUTIVAS LIMPAS
-                # -------------------------------------------------------------
                 visao_selecionada = st.segmented_control(
                     "Selecione a Visão:",
-                    ["📋 1. Consolidador de Notas", "⚖️ 2. Vistos & Atitude (Controle de Sala)", "📑 3. Recuperação & Refacção"],
-                    default="📋 1. Consolidador de Notas",
+                    ["Consolidador de Notas", "Vistos de Caderno & Atitude", "Recuperação & Refacção"],
+                    default="Consolidador de Notas",
                     key=f"seg_visao_notas_{v}"
                 )
                 st.markdown("<br>", unsafe_allow_html=True)
 
                 # ==============================================================
-                # VISÃO 1: CONSOLIDADOR DE NOTAS & BOLETIM
+                # VISÃO 1: CONSOLIDADOR DE NOTAS
                 # ==============================================================
-                if visao_selecionada == "📋 1. Consolidador de Notas":
+                if visao_selecionada == "Consolidador de Notas":
                     with st.container(border=True):
                         c_head_c1, c_head_c2 = st.columns([3, 1])
-                        c_head_c1.caption(f"📅 **Período Ativo de Vistos ({trim_ativo_notas}):** {dt_i_n.strftime('%d/%m/%Y')} até {dt_f_n.strftime('%d/%m/%Y')} • *Notas escaneadas sincronizadas dinamicamente ao vivo.*")
+                        c_head_c1.caption(f"Período Ativo ({trim_ativo_notas}): **{dt_i_n.strftime('%d/%m/%Y')}** até **{dt_f_n.strftime('%d/%m/%Y')}** • *Sincronização dinâmica ativa.*")
                         
-                        with c_head_c2.popover("⚙️ Configurar Período / Cadeado", use_container_width=True):
-                            st.markdown("#### 🔒 Cadeado de Vistos & Data de Corte")
-                            st.caption("Ajuste a data de corte para fechar o trimestre e começar o próximo antecipadamente.")
-                            nova_dt_corte = st.date_input("Data de Corte dos Vistos:", dt_f_n, format="DD/MM/YYYY", key=f"inp_corte_pop_{v}")
+                        with c_head_c2.popover("Configurar Período / Corte"):
+                            st.caption("Defina a data de corte para encerramento dos vistos do trimestre:")
+                            nova_dt_corte = st.date_input("Data de Corte:", dt_f_n, format="DD/MM/YYYY", key=f"inp_corte_pop_{v}")
                             
                             c_pop_s1, c_pop_s2 = st.columns(2)
-                            if c_pop_s1.button("💾 Salvar Corte", use_container_width=True, key=f"btn_corte_pop_save_{v}"):
+                            if c_pop_s1.button("Salvar Corte", use_container_width=True, key=f"btn_corte_pop_save_{v}"):
                                 dt_str_save = nova_dt_corte.strftime("%d/%m/%Y")
                                 if hasattr(db, 'salvar_config_corte_trimestre'):
                                     db.salvar_config_corte_trimestre(turma_notas, trim_ativo_notas, dt_str_save)
                                 st.success("Data de corte atualizada!")
                                 st.rerun()
                                 
-                            if c_pop_s2.button("🔒 Trancar Vistos", use_container_width=True, key=f"btn_freeze_pop_{v}"):
+                            if c_pop_s2.button("Trancar Vistos", use_container_width=True, key=f"btn_freeze_pop_{v}"):
                                 if hasattr(db, 'salvar_config_corte_trimestre'):
                                     db.salvar_config_corte_trimestre(turma_notas, trim_ativo_notas, dt_f_n.strftime("%d/%m/%Y"))
-                                st.success("Vistos congelados!")
+                                st.success("Vistos trancados!")
                                 st.rerun()
 
                     df_notas_editado = st.data_editor(
@@ -6037,30 +6009,30 @@ elif menu == "📊 Painel de Notas & Vistos":
                         column_config={
                             "ID": None,
                             "Estudante": st.column_config.TextColumn("Estudante", disabled=True, width="medium"),
-                            "C1 (Vistos - Teto 3.0)": st.column_config.NumberColumn("C1 (Vistos)", format="%.1f", min_value=0.0, max_value=3.0, width="small"),
-                            "C2 (Testes - Teto 3.0)": st.column_config.NumberColumn("C2 (Testes)", format="%.1f", min_value=0.0, max_value=3.0, width="small"),
-                            "C3 (Prova - Teto 4.0)": st.column_config.NumberColumn("C3 (Prova)", format="%.1f", min_value=0.0, max_value=4.0, width="small"),
-                            "⭐ Bônus/Punição Líquido": st.column_config.NumberColumn("⭐ Bônus Líquido", format="%.1f", disabled=True, width="small"),
-                            "REC": st.column_config.NumberColumn("REC", format="%.1f", min_value=0.0, max_value=10.0, width="small"),
-                            "Média Final": st.column_config.NumberColumn("Média Final", format="%.1f", disabled=True, width="small"),
-                            "Situação": st.column_config.TextColumn("Situação", disabled=True, width="medium")
+                            "Caderno (C1)": st.column_config.NumberColumn("Caderno (C1)", format="%.1f", min_value=0.0, max_value=3.0, width="small"),
+                            "Testes (C2)": st.column_config.NumberColumn("Testes (C2)", format="%.1f", min_value=0.0, max_value=3.0, width="small"),
+                            "Prova (C3)": st.column_config.NumberColumn("Prova (C3)", format="%.1f", min_value=0.0, max_value=4.0, width="small"),
+                            "Bônus / Mérito": st.column_config.NumberColumn("Bônus", format="%.1f", disabled=True, width="small"),
+                            "Recuperação": st.column_config.NumberColumn("REC", format="%.1f", min_value=0.0, max_value=10.0, width="small"),
+                            "Média Trimestral": st.column_config.NumberColumn("Média Final", format="%.1f", disabled=True, width="small"),
+                            "Situação Regimental": st.column_config.TextColumn("Situação", disabled=True, width="medium")
                         },
                         key=f"ed_grid_notas_main_{turma_notas}_{trim_ativo_notas}_{v}"
                     )
 
                     c_sav_b1, c_sav_b2 = st.columns(2)
                     
-                    if c_sav_b1.button("💾 CONSOLIDAR NOTAS NO BOLETIM OFICIAL", type="primary", use_container_width=True, key=f"btn_save_boletim_{v}"):
-                        with st.spinner("Gravando notas consolidadas na planilha DB_NOTAS..."):
+                    if c_sav_b1.button("Consolidar Notas no Boletim", type="primary", use_container_width=True, key=f"btn_save_boletim_{v}"):
+                        with st.spinner("Gravando notas consolidadas no banco de dados..."):
                             linhas_boletim_save = []
                             for _, r_ed in df_notas_editado.iterrows():
                                 id_l_s = r_ed['ID']
-                                nome_l_s = r_ed['Estudante'].replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
-                                c1_s = util.sosa_to_float(r_ed['C1 (Vistos - Teto 3.0)'])
-                                c2_s = util.sosa_to_float(r_ed['C2 (Testes - Teto 3.0)'])
-                                c3_s = util.sosa_to_float(r_ed['C3 (Prova - Teto 4.0)'])
-                                bonus_s = util.sosa_to_float(r_ed['⭐ Bônus/Punição Líquido'])
-                                rec_s = util.sosa_to_float(r_ed['REC'])
+                                nome_l_s = r_ed['Estudante']
+                                c1_s = util.sosa_to_float(r_ed['Caderno (C1)'])
+                                c2_s = util.sosa_to_float(r_ed['Testes (C2)'])
+                                c3_s = util.sosa_to_float(r_ed['Prova (C3)'])
+                                bonus_s = util.sosa_to_float(r_ed['Bônus / Mérito'])
+                                rec_s = util.sosa_to_float(r_ed['Recuperação'])
                                 
                                 c1_f = min(3.0, c1_s + max(0.0, bonus_s))
                                 rem_b = max(0.0, bonus_s) - (c1_f - c1_s)
@@ -6069,7 +6041,9 @@ elif menu == "📊 Painel de Notas & Vistos":
                                 c3_f = min(4.0, c3_s + max(0.0, rem_b))
 
                                 media_s = min(10.0, round((c1_f + c2_f + c3_f) * 2) / 2)
-                                if rec_s > 0: media_s = max(media_s, rec_s)
+                                if rec_s > 0 and media_s < 6.0:
+                                    media_com_rec = (media_s + rec_s) / 2.0
+                                    media_s = min(10.0, max(media_s, round(media_com_rec * 2) / 2))
 
                                 linhas_boletim_save.append([
                                     id_l_s, nome_l_s, turma_notas, trim_ativo_notas,
@@ -6081,18 +6055,18 @@ elif menu == "📊 Painel de Notas & Vistos":
                             if linhas_boletim_save:
                                 db.limpar_notas_turma_trimestre(turma_notas, trim_ativo_notas)
                                 db.salvar_lote("DB_NOTAS", linhas_boletim_save)
-                                st.success("✅ Boletim Trimestral Consolidado com Sucesso!")
-                                st.balloons(); time.sleep(1); st.rerun()
+                                st.success("Boletim trimestral consolidado com sucesso!")
+                                st.balloons(); time.sleep(0.8); st.rerun()
 
-                    if c_sav_b2.button("🖨️ GERAR ETIQUETAS DE CADERNO EM WORD (DOCX)", use_container_width=True, key=f"btn_etiq_docx_clean_{v}"):
-                        with st.spinner("Gerando etiquetas Word A4 para 100% dos estudantes da turma..."):
+                    if c_sav_b2.button("Gerar Etiquetas para Impressão", use_container_width=True, key=f"btn_etiq_docx_clean_{v}"):
+                        with st.spinner("Compilando etiquetas executivas em Word A4..."):
                             dados_etiq = []
                             for _, r_ed in df_grid_ed_notas.iterrows():
-                                c1_val_f = util.sosa_to_float(r_ed.get('C1 (Vistos - Teto 3.0)', 0.0))
-                                c2_val_f = util.sosa_to_float(r_ed.get('C2 (Testes - Teto 3.0)', 0.0))
-                                c3_val_f = util.sosa_to_float(r_ed.get('C3 (Prova - Teto 4.0)', 0.0))
-                                bonus_val_f = util.sosa_to_float(r_ed.get('⭐ Bônus/Punição Líquido', 0.0))
-                                media_al_val = util.sosa_to_float(r_ed.get('Média Final', 0.0))
+                                c1_val_f = util.sosa_to_float(r_ed.get('Caderno (C1)', 0.0))
+                                c2_val_f = util.sosa_to_float(r_ed.get('Testes (C2)', 0.0))
+                                c3_val_f = util.sosa_to_float(r_ed.get('Prova (C3)', 0.0))
+                                bonus_val_f = util.sosa_to_float(r_ed.get('Bônus / Mérito', 0.0))
+                                media_al_val = util.sosa_to_float(r_ed.get('Média Trimestral', 0.0))
                                 
                                 dados_etiq.append({
                                     "nome": str(r_ed.get('Estudante', 'Estudante')),
@@ -6101,7 +6075,7 @@ elif menu == "📊 Painel de Notas & Vistos":
                                     "c3": c3_val_f,
                                     "bonus": bonus_val_f,
                                     "media": media_al_val,
-                                    "status": str(r_ed.get('Situação', ''))
+                                    "status": str(r_ed.get('Situação Regimental', ''))
                                 })
                             
                             info_etiq = {"turma": turma_notas, "trimestre": trim_ativo_notas}
@@ -6111,26 +6085,23 @@ elif menu == "📊 Painel de Notas & Vistos":
                             link_etiq = db.subir_e_converter_para_google_docs(doc_etiq_stream, nome_arq_etiq, trimestre=trim_ativo_notas, categoria=turma_notas, modo="PLANEJAMENTO")
                             
                             if "https" in link_etiq:
-                                st.success(f"✅ Etiquetas geradas com sucesso para todos os {len(dados_etiq)} alunos da turma!")
-                                st.link_button("📂 ABRIR ETIQUETAS NO DRIVE (DOCX)", link_etiq, type="primary", use_container_width=True)
+                                st.success(f"Etiquetas geradas com sucesso para todos os {len(dados_etiq)} estudantes da turma!")
+                                st.link_button("Abrir Etiquetas no Google Drive", link_etiq, type="primary", use_container_width=True)
                                 st.balloons()
 
                 # ==============================================================
-                # VISÃO 2: VISTOS & GESTÃO ATITUDINAL (COCKPIT EXECUTIVO COMPACTO)
+                # VISÃO 2: VISTOS DE CADERNO & ATITUDE
                 # ==============================================================
-                elif visao_selecionada == "⚖️ 2. Vistos & Atitude (Controle de Sala)":
+                elif visao_selecionada == "Vistos de Caderno & Atitude":
                     col_vis_vistos, col_vis_atitude = st.columns([1.1, 1.4])
 
-                    # ---------------------------------------------------------
-                    # SUB-PAINEL A: AUDITORIA DE AULAS DE VISTO (C1)
-                    # ---------------------------------------------------------
                     with col_vis_vistos:
                         with st.container(border=True):
-                            st.markdown("#### 📋 Aulas de Visto (C1)")
-                            st.caption(f"Controle de cobrança do caderno ({trim_ativo_notas}).")
+                            st.markdown("#### Aulas com Visto de Caderno (C1)")
+                            st.caption(f"Acompanhamento da cobrança do caderno ({trim_ativo_notas}):")
 
                             if df_diario_trim.empty:
-                                st.info("Nenhuma aula encontrada no diário.")
+                                st.info("Nenhuma aula localizada no diário.")
                             else:
                                 df_d_range = df_diario_trim.copy()
                                 df_d_range['DATA_DT'] = pd.to_datetime(df_d_range['DATA'], format="%d/%m/%Y", errors='coerce').dt.date
@@ -6155,64 +6126,59 @@ elif menu == "📊 Painel de Notas & Vistos":
                                         conteudo_dia = str(reg_aula_info.iloc[0].get('CONTEUDO_MINISTRADO', 'Registro de Sala')) if not reg_aula_info.empty else "Registro de Sala"
 
                                         if is_isento_dia:
-                                            status_label = "🛡️ ISENTO (0%)"
+                                            status_label = "Isento (0%)"
                                             tot_isentas += 1
                                         else:
-                                            status_label = "📘 COBRADO"
+                                            status_label = "Cobrado"
                                             tot_cobradas += 1
 
                                         dados_resumo_aulas.append({
                                             "Data": d_item_str,
-                                            "Conteúdo / Registro": conteudo_dia[:38] + "..." if len(conteudo_dia) > 38 else conteudo_dia,
+                                            "Conteúdo": conteudo_dia[:38] + "..." if len(conteudo_dia) > 38 else conteudo_dia,
                                             "Vistos": f"{vistos_ok_dia:02d}/{tot_alunos_dia:02d}",
                                             "Status": status_label
                                         })
 
-                                    # Métricas compactas
                                     c_k_v1, c_k_v2, c_k_v3 = st.columns(3)
                                     c_k_v1.metric("Total Aulas", len(datas_aulas_extrato))
-                                    c_k_v2.metric("📘 Cobradas", tot_cobradas)
-                                    c_k_v3.metric("🛡️ Isentas", tot_isentas)
+                                    c_k_v2.metric("Cobradas", tot_cobradas)
+                                    c_k_v3.metric("Isentas", tot_isentas)
 
                                     st.markdown("---")
 
                                     def style_status_visto(val):
-                                        if "COBRADO" in str(val): return 'color: #2962FF; font-weight: bold;'
+                                        if "Cobrado" in str(val): return 'color: #2962FF; font-weight: bold;'
                                         return 'color: #2ECC71; font-weight: bold;'
 
                                     st.dataframe(
                                         pd.DataFrame(dados_resumo_aulas).style.map(style_status_visto, subset=['Status']),
-                                        hide_index=True, use_container_width=True, height=310,
+                                        hide_index=True, use_container_width=True, height=290,
                                         column_config={
                                             "Data": st.column_config.TextColumn("Data", width="small"),
-                                            "Conteúdo / Registro": st.column_config.TextColumn("Conteúdo da Aula", width="medium"),
+                                            "Conteúdo": st.column_config.TextColumn("Conteúdo da Aula", width="medium"),
                                             "Vistos": st.column_config.TextColumn("Vistos OK", width="small"),
-                                            "Status": st.column_config.TextColumn("Cobrança", width="small")
+                                            "Status": st.column_config.TextColumn("Status", width="small")
                                         }
                                     )
 
-                                    # Ação Rápida de Isenção em 1-Toque
-                                    with st.popover("🛡️ Alternar Isenção de Data (Anular Cobrança)", use_container_width=True):
-                                        st.caption("Selecione a data para transformar em ISENTO (não prejudica a média da turma) ou reativar cobrança:")
+                                    with st.popover("Isenção de Cobrança por Data"):
+                                        st.caption("Marque uma aula como ISENTA para não penalizar os estudantes:")
                                         data_isentar_sel = st.selectbox("Selecione a Data:", datas_aulas_extrato, key=f"sel_dt_isentar_{v}")
                                         
                                         c_is1, c_is2 = st.columns(2)
-                                        if c_is1.button("🛡️ Tornar ISENTO", type="primary", use_container_width=True, key=f"btn_isentar_pop_{v}"):
+                                        if c_is1.button("Tornar Isento", type="primary", use_container_width=True, key=f"btn_isentar_pop_{v}"):
                                             if hasattr(db, 'isentar_vistos_data_turma'):
                                                 db.isentar_vistos_data_turma(data_isentar_sel, turma_notas)
-                                            st.toast(f"Aula do dia {data_isentar_sel} marcada como ISENTO!", icon="🛡️")
+                                            st.toast(f"Aula de {data_isentar_sel} marcada como isenta!")
                                             time.sleep(0.5); st.rerun()
 
-                                        if c_is2.button("🔄 Reativar Visto", use_container_width=True, key=f"btn_reativar_visto_pop_{v}"):
-                                            st.info("Para reativar a cobrança, faça o lançamento normal na Chamada Express.")
+                                        if c_is2.button("Reativar Cobrança", use_container_width=True, key=f"btn_reativar_visto_pop_{v}"):
+                                            st.info("Para reativar, registre a presença normal na chamada.")
 
-                    # ---------------------------------------------------------
-                    # SUB-PAINEL B: RAIO-X EXECUTIVO DE BÔNUS & PUNIÇÕES
-                    # ---------------------------------------------------------
                     with col_vis_atitude:
                         with st.container(border=True):
-                            st.markdown("#### ⚖️ Gestão Atitudinal & Ocorrências")
-                            st.caption(f"Painel consolidado de mérito e disciplina ({trim_ativo_notas}).")
+                            st.markdown("#### Gestão Atitudinal & Ocorrências")
+                            st.caption(f"Registro consolidado de mérito e disciplina ({trim_ativo_notas}):")
 
                             if df_diario_trim.empty:
                                 st.info("Nenhum registro atitudinal.")
@@ -6229,30 +6195,29 @@ elif menu == "📊 Painel de Notas & Vistos":
                                 tot_punicoes_turma = df_d_range_at[df_d_range_at['BONUS_FLOAT'] < 0]['BONUS_FLOAT'].sum()
 
                                 c_k_at1, c_k_at2, c_k_at3 = st.columns(3)
-                                c_k_at1.metric("⭐ Total Bônus", f"+{tot_bonus_turma:.1f} pts")
-                                c_k_at2.metric("⚠️ Total Punições", f"{tot_punicoes_turma:.1f} pts", delta_color="inverse")
-                                c_k_at3.metric("📋 Total Eventos", len(df_ocorrencias_at))
+                                c_k_at1.metric("Total Bônus", f"+{tot_bonus_turma:.1f} pts")
+                                c_k_at2.metric("Total Punições", f"{tot_punicoes_turma:.1f} pts", delta_color="inverse")
+                                c_k_at3.metric("Ocorrências", len(df_ocorrencias_at))
 
                                 st.markdown("---")
 
-                                # Filtro Pills de Navegação Rápida
-                                flt_tipo_atitude = st.pills(
+                                flt_tipo_atitude = st.segmented_control(
                                     "Filtrar Registros:",
-                                    ["Todos", "⭐ Bônus (+)", "⚠️ Punições (-)", "🎲 Arguições"],
+                                    ["Todos", "Bônus (+)", "Punições (-)", "Arguições"],
                                     default="Todos",
                                     key=f"pills_flt_atitude_{v}"
                                 )
 
                                 df_at_view = df_ocorrencias_at.copy()
-                                if flt_tipo_atitude == "⭐ Bônus (+)":
+                                if flt_tipo_atitude == "Bônus (+)":
                                     df_at_view = df_at_view[df_at_view['BONUS_FLOAT'] > 0]
-                                elif flt_tipo_atitude == "⚠️ Punições (-)":
+                                elif flt_tipo_atitude == "Punições (-)":
                                     df_at_view = df_at_view[df_at_view['BONUS_FLOAT'] < 0]
-                                elif flt_tipo_atitude == "🎲 Arguições":
+                                elif flt_tipo_atitude == "Arguições":
                                     df_at_view = df_at_view[df_at_view['TAGS'] == "ARGUIÇÃO"]
 
                                 if df_at_view.empty:
-                                    st.success("🎉 Nenhum registro atitudinal encontrado para este filtro.")
+                                    st.success("Nenhum registro localizado para este filtro.")
                                 else:
                                     dados_at_tabela = []
                                     for idx_oc, (_, r_oc) in enumerate(df_at_view.iterrows()):
@@ -6269,7 +6234,7 @@ elif menu == "📊 Painel de Notas & Vistos":
                                             "Data": dt_oc,
                                             "Estudante": nome_al_oc,
                                             "Tipo": tag_oc,
-                                            "Diagnóstico / Motivo": obs_oc if obs_oc else "Participação em sala",
+                                            "Descrição": obs_oc if obs_oc else "Participação em sala",
                                             "Impacto": impacto_txt,
                                             "_ID": id_al_oc,
                                             "_RAW_VAL": val_bonus_num
@@ -6283,20 +6248,19 @@ elif menu == "📊 Painel de Notas & Vistos":
                                         return 'color: gray;'
 
                                     st.dataframe(
-                                        df_at_display[['Data', 'Estudante', 'Tipo', 'Diagnóstico / Motivo', 'Impacto']].style.map(style_impacto_at, subset=['Impacto']),
-                                        hide_index=True, use_container_width=True, height=270,
+                                        df_at_display[['Data', 'Estudante', 'Tipo', 'Descrição', 'Impacto']].style.map(style_impacto_at, subset=['Impacto']),
+                                        hide_index=True, use_container_width=True, height=250,
                                         column_config={
                                             "Data": st.column_config.TextColumn("Data", width="small"),
                                             "Estudante": st.column_config.TextColumn("Estudante", width="medium"),
                                             "Tipo": st.column_config.TextColumn("Tipo", width="small"),
-                                            "Diagnóstico / Motivo": st.column_config.TextColumn("Descrição da Ocorrência", width="large"),
-                                            "Impacto": st.column_config.TextColumn("Pontos", width="small")
+                                            "Descrição": st.column_config.TextColumn("Descrição da Ocorrência", width="large"),
+                                            "Impacto": st.column_config.TextColumn("Pontuação", width="small")
                                         }
                                     )
 
-                                    # Ação Centralizada para Perdoar/Revogar em 1 Popover
-                                    with st.popover("⚙️ Central de Gestão: Perdoar Punição ou Revogar Bônus", use_container_width=True):
-                                        st.caption("Selecione o estudante e a data para ajustar a ocorrência com soberania:")
+                                    with st.popover("Ajustar Ocorrência / Bônus"):
+                                        st.caption("Selecione o registro para perdoar punição ou revogar bônus:")
                                         
                                         opcoes_ocorrencias = [f"{r['Data']} — {r['Estudante']} ({r['Impacto']})" for r in dados_at_tabela]
                                         oc_selecionada = st.selectbox("Selecione o Evento:", opcoes_ocorrencias, key=f"sel_oc_pop_{v}")
@@ -6305,64 +6269,58 @@ elif menu == "📊 Painel de Notas & Vistos":
                                             idx_sel_oc = opcoes_ocorrencias.index(oc_selecionada)
                                             item_oc_data = dados_at_tabela[idx_sel_oc]
                                             
-                                            c_pop_act1, c_pop_act2 = st.columns(2)
-                                            
                                             if item_oc_data["_RAW_VAL"] > 0:
-                                                st.info(f"O estudante **{item_oc_data['Estudante']}** possui **+{item_oc_data['_RAW_VAL']:.1f} pts** registrados em **{item_oc_data['Data']}**.")
-                                                if st.button("🛑 REVOGAR ESTE BÔNUS", type="primary", use_container_width=True, key=f"btn_revogar_central_{v}"):
+                                                if st.button("Revogar Bônus", type="primary", use_container_width=True, key=f"btn_revogar_central_{v}"):
                                                     if hasattr(db, 'ajustar_bonus_punicao_diario'):
-                                                        db.ajustar_bonus_punicao_diario(item_oc_data['Data'], item_oc_data['_ID'], turma_notas, "0,00", "[Bônus revogado pelo docente]")
+                                                        db.ajustar_bonus_punicao_diario(item_oc_data['Data'], item_oc_data['_ID'], turma_notas, "0,00", "[Bônus revogado]")
                                                     st.toast("Bônus revogado com sucesso!")
                                                     time.sleep(0.5); st.rerun()
                                             elif item_oc_data["_RAW_VAL"] < 0:
-                                                st.warning(f"O estudante **{item_oc_data['Estudante']}** possui punição de **{item_oc_data['_RAW_VAL']:.1f} pts** registrada em **{item_oc_data['Data']}**.")
-                                                if st.button("🛡️ PERDOAR ESTA PUNIÇÃO", type="primary", use_container_width=True, key=f"btn_perdoar_central_{v}"):
+                                                if st.button("Perdoar Punição", type="primary", use_container_width=True, key=f"btn_perdoar_central_{v}"):
                                                     if hasattr(db, 'ajustar_bonus_punicao_diario'):
-                                                        db.ajustar_bonus_punicao_diario(item_oc_data['Data'], item_oc_data['_ID'], turma_notas, "0,00", "[Punição perdoada pelo docente]")
+                                                        db.ajustar_bonus_punicao_diario(item_oc_data['Data'], item_oc_data['_ID'], turma_notas, "0,00", "[Punição perdoada]")
                                                     st.toast("Punição perdoada com sucesso!")
                                                     time.sleep(0.5); st.rerun()
-                                            else:
-                                                st.caption("Registro de participação sem impacto de pontuação.")
 
                 # ==============================================================
-                # VISÃO 3: RECUPERAÇÃO BLINDADA & REFACÇÃO (+0.5)
+                # VISÃO 3: RECUPERAÇÃO & REFACÇÃO
                 # ==============================================================
                 else:
                     col_rec_main, col_ref_main = st.columns(2)
 
                     with col_rec_main:
                         with st.container(border=True):
-                            st.markdown("#### 📑 Recuperação Paralela Blindada")
-                            st.caption("A prova de recuperação do II Trimestre alimenta exclusivamente o II Trimestre, mesmo que aplicada nas datas do III Trimestre.")
+                            st.markdown("#### Convocatória de Recuperação")
+                            st.caption("Estudantes com rendimento abaixo da média regimental:")
                             
                             trim_destino_rec = st.selectbox("Trimestre de Destino da Recuperação:", ["II Trimestre", "I Trimestre", "III Trimestre"], index=0, key=f"sel_dest_rec_clean_{v}")
                             
                             if not convocados_recuperacao:
-                                st.success(f"🏆 Todos os alunos da turma {turma_notas} estão na média!")
+                                st.success(f"Todos os estudantes da turma {turma_notas} atingiram a média!")
                             else:
                                 df_conv_rec = pd.DataFrame(convocados_recuperacao)
                                 st.dataframe(
-                                    df_conv_rec[['Estudante', 'Média Atual', 'Precisa na Rec']],
+                                    df_conv_rec[['Estudante', 'Média Atual', 'Meta na Prova']],
                                     hide_index=True, use_container_width=True, height=220,
                                     column_config={
                                         "Estudante": st.column_config.TextColumn(width="medium"),
                                         "Média Atual": st.column_config.NumberColumn(format="%.1f"),
-                                        "Precisa na Rec": st.column_config.NumberColumn("🎯 Precisa", format="%.1f")
+                                        "Meta na Prova": st.column_config.NumberColumn("Meta na Prova", format="%.1f")
                                     }
                                 )
 
-                                if st.button("🖨️ GERAR LISTA DE RECUPERAÇÃO (DOCX)", type="primary", use_container_width=True, key=f"btn_docx_conv_clean_{v}"):
-                                    with st.spinner("Gerando convocatórias e etiquetas de recuperação em Word A4..."):
+                                if st.button("Gerar Convocatória Oficial", type="primary", use_container_width=True, key=f"btn_docx_conv_clean_{v}"):
+                                    with st.spinner("Compilando convocatórias em Word A4..."):
                                         dados_convocatoria = []
                                         for _, r_conv in df_grid_ed_notas.iterrows():
-                                            m_atual_conv = util.sosa_to_float(r_conv.get('Média Final', 0.0))
+                                            m_atual_conv = util.sosa_to_float(r_conv.get('Média Trimestral', 0.0))
                                             if m_atual_conv < 6.0:
                                                 dados_convocatoria.append({
                                                     "nome": str(r_conv.get('Estudante', 'Estudante')),
-                                                    "c1": util.sosa_to_float(r_conv.get('C1 (Vistos - Teto 3.0)', 0.0)),
-                                                    "c2": util.sosa_to_float(r_conv.get('C2 (Testes - Teto 3.0)', 0.0)),
-                                                    "c3": util.sosa_to_float(r_conv.get('C3 (Prova - Teto 4.0)', 0.0)),
-                                                    "bonus": util.sosa_to_float(r_conv.get('⭐ Bônus/Punição Líquido', 0.0)),
+                                                    "c1": util.sosa_to_float(r_conv.get('Caderno (C1)', 0.0)),
+                                                    "c2": util.sosa_to_float(r_conv.get('Testes (C2)', 0.0)),
+                                                    "c3": util.sosa_to_float(r_conv.get('Prova (C3)', 0.0)),
+                                                    "bonus": util.sosa_to_float(r_conv.get('Bônus / Mérito', 0.0)),
                                                     "media": m_atual_conv,
                                                     "status": f"CONVOCADO PARA RECUPERAÇÃO ({trim_destino_rec})"
                                                 })
@@ -6374,555 +6332,48 @@ elif menu == "📊 Painel de Notas & Vistos":
                                         link_conv_doc = db.subir_e_converter_para_google_docs(doc_conv_stream, nome_arq_conv, trimestre=trim_destino_rec, categoria=turma_notas, modo="PLANEJAMENTO")
                                         
                                         if "https" in link_conv_doc:
-                                            st.success(f"✅ Convocatória gerada para os {len(dados_convocatoria)} estudantes convocados!")
-                                            st.link_button("📂 ABRIR CONVOCATÓRIA NO DRIVE", link_conv_doc, type="primary", use_container_width=True)
+                                            st.success(f"Convocatória gerada para os {len(dados_convocatoria)} estudantes convocados!")
+                                            st.link_button("Abrir Convocatória no Drive", link_conv_doc, type="primary", use_container_width=True)
                                             st.balloons()
 
                     with col_ref_main:
                         with st.container(border=True):
-                            st.markdown("#### 🔄 Radar de Refacção Solidária (+0.5)")
-                            st.caption("Atribua +0.5 para alunos que refizerem atividades ou provas para alcançar a média 6.0.")
+                            st.markdown("#### Radar de Refacção Solidária (+0.5)")
+                            st.caption("Atribua pontuação de refacção no caderno para alcance da média 6.0:")
                             
                             aluno_ref_sel = st.selectbox("Estudante:", [r['Estudante'] for _, r in df_grid_ed_notas.iterrows()], key=f"sel_al_ref_clean_{v}")
                             c_r1, c_r2 = st.columns(2)
-                            pts_refaccao = c_r1.number_input("Acréscimo (+ pts):", 0.0, 2.0, 0.5, step=0.5, key=f"inp_pts_ref_clean_{v}")
-                            alvo_refaccao = c_r2.selectbox("Aplicar em:", ["⭐ Bônus de Caderno", "C2 (Testes)", "C3 (Prova)"], key=f"sel_alvo_ref_clean_{v}")
+                            pts_refaccao = c_r1.number_input("Pontuação de Refacção:", 0.0, 2.0, 0.5, step=0.5, key=f"inp_pts_ref_clean_{v}")
+                            alvo_refaccao = c_r2.selectbox("Destino da Nota:", ["Bônus de Caderno", "Testes (C2)", "Prova (C3)"], key=f"sel_alvo_ref_clean_{v}")
 
                             if aluno_ref_sel:
                                 row_ref_al = next(r for _, r in df_grid_ed_notas.iterrows() if r['Estudante'] == aluno_ref_sel)
                                 id_al_ref = row_ref_al['ID']
-                                media_atual_ref = row_ref_al['Média Final']
-                                c1_ref = row_ref_al['C1 (Vistos - Teto 3.0)']
-                                c2_ref = row_ref_al['C2 (Testes - Teto 3.0)']
-                                c3_ref = row_ref_al['C3 (Prova - Teto 4.0)']
+                                media_atual_ref = row_ref_al['Média Trimestral']
+                                c1_ref = row_ref_al['Caderno (C1)']
+                                c2_ref = row_ref_al['Testes (C2)']
+                                c3_ref = row_ref_al['Prova (C3)']
                                 nova_m_simulada = min(10.0, round((c1_ref + c2_ref + c3_ref + pts_refaccao) * 2) / 2)
 
                                 c_m_sim1, c_m_sim2 = st.columns(2)
                                 c_m_sim1.metric("Média Atual", f"{media_atual_ref:.1f}")
-                                c_m_sim2.metric("Nova Média", f"{nova_m_simulada:.1f}", delta=f"+{nova_m_simulada - media_atual_ref:.1f} pts")
+                                c_m_sim2.metric("Média Projetada", f"{nova_m_simulada:.1f}", delta=f"+{nova_m_simulada - media_atual_ref:.1f} pts")
 
                                 if nova_m_simulada >= 6.0:
-                                    st.success("🎉 **ESTUDANTE ATINGIU A MÉDIA 6.0!**")
+                                    st.success("Estudante atinge a média 6.0 com a refacção!")
 
-                                if st.button("💾 GRAVAR REFACÇÃO NO BANCO", type="primary", use_container_width=True, key=f"btn_save_ref_al_clean_{v}"):
-                                    with st.spinner("Gravando refacção no banco..."):
+                                if st.button("Homologar Refacção (+0.5)", type="primary", use_container_width=True, key=f"btn_save_ref_al_clean_{v}"):
+                                    with st.spinner("Registrando refacção solidária..."):
                                         data_hoje_ref = datetime.now().strftime("%d/%m/%Y")
                                         db.salvar_no_banco("DB_DIARIO_BORDO", [
-                                            data_hoje_ref, id_al_ref, aluno_ref_sel.replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", ""),
+                                            data_hoje_ref, id_al_ref, aluno_ref_sel,
                                             turma_notas, "TRUE", "SISTEMA_NOTA", f"Refacção de Avaliação ({alvo_refaccao})", util.sosa_to_str(pts_refaccao)
                                         ])
                                         db.limpar_notas_turma_trimestre(turma_notas, trim_ativo_notas)
                                         st.cache_data.clear()
-                                        st.success("✅ Refacção gravada!"); time.sleep(0.8); st.rerun()
+                                        st.success("Refacção homologada com sucesso!"); time.sleep(0.6); st.rerun()
 
             renderizar_painel_notas_fragmento()
-
-
-
-
-
-
-
-# ==============================================================================
-# MÓDULO: BOLETIM ANUAL & CONSELHO DE CLASSE - V2026.PRO_PREDICTIVE
-# (VISÃO PANORÂMICA PONDERADA, SIMULADOR PREDITIVO III TRI E GERADOR DE ATA DOCX)
-# ==============================================================================
-elif menu == "📈 Boletim Anual & Conselho":
-    st.title("📈 Inteligência de Conselho & Simulador Preditivo")
-    st.caption("Visão panorâmica anual, simulador preditivo de metas para o III Trimestre, termômetro ponderado e ata oficial do Conselho de Classe.")
-    st.markdown("---")
-
-    if "v_bol" not in st.session_state: 
-        st.session_state.v_bol = int(time.time())
-    v = st.session_state.v_bol
-
-    # DIALOG PADRONIZADO DENTRO DO MÓDULO (FORA DO FRAGMENT - LEI #25)
-    @st.dialog("📱 Alerta Preditivo de Metas para WhatsApp (III Tri)", width="large")
-    def dialog_zap_metas_iii(nome_aluno, turma, soma_1_2, meta_iii, status_meta, faltas_aluno):
-        st.info(f"Copie a mensagem oficial abaixo e envie para os responsáveis de **{nome_aluno}** antes do início do III Trimestre:")
-        
-        if meta_iii == 0.0:
-            situacao_msg = "🏆 SITUAÇÃO EXCELENTE: O(A) estudante já atingiu os 18,0 pontos regimentais somando o I e II Trimestres e está APROVADO(A) POR ANTECIPAÇÃO no componente de Matemática!"
-        elif meta_iii <= 4.0:
-            situacao_msg = f"🟢 SITUAÇÃO CONFORTÁVEL: Para garantir a aprovação sem necessidade de recuperação final, o(a) estudante precisa de apenas {meta_iii:.1f} pontos no III Trimestre."
-        elif meta_iii <= 6.5:
-            situacao_msg = f"🟡 SITUAÇÃO DE ATENÇÃO: Para fechar a média anual (18,0 pontos), o(a) estudante precisa atingir a meta de {meta_iii:.1f} pontos no III Trimestre."
-        elif meta_iii <= 9.9:
-            situacao_msg = f"🟠 SITUAÇÃO DE ALERTA: O(A) estudante precisa de {meta_iii:.1f} pontos no III Trimestre. Recomendamos foco total nas tarefas de caderno e presença regular."
-        else:
-            situacao_msg = f"🔴 SITUAÇÃO CRÍTICA (RISCO DE RECUPERAÇÃO FINAL): O estudante acumulou {soma_1_2:.1f} pontos nos dois primeiros trimestres e precisará de pontuação máxima no III Trimestre e/ou Recuperação Final para atingir a meta anual de 18,0 pontos."
-
-        msg_zap_meta = f"""Olá! Tudo bem? Aqui é o Prof. Ronaldo Gomes (Componente de Matemática). 🏫
-Compartilho com a família o Relatório Preditivo de Metas para o encerramento do ano letivo de 2026 do(a) estudante {nome_aluno} ({turma}).
-
-📊 RENDIMENTO ACUMULADO (I e II TRIMESTRES):
-• Soma dos Pontos Conquistados (I Tri + II Tri): {soma_1_2:.1f} pontos.
-• Meta Anual Regimental para Aprovação: 18,0 pontos (Média 6,0 x 3 trimestres).
-• Total de Faltas Acumuladas no Ano: {faltas_aluno} ausência(s).
-
-🎯 META PROJETADA PARA O III TRIMESTRE:
-• Pontuação Necessária no III Tri: {meta_iii:.1f} pontos.
-• Status Preditivo: {status_meta}
-
-📌 PARECER PEDAGÓGICO:
-{situacao_msg}
-
-Contamos com a parceria da família no acompanhamento diário das tarefas do caderno e na assiduidade às aulas. Seguimos à disposição! 🚀
-Escola Municipal Flávio José Simões Costa"""
-
-        st.code(msg_zap_meta, language=None)
-
-    if df_notas.empty:
-        st.warning("⚠️ Sem notas lançadas no sistema. O Boletim Anual será ativado assim que houver dados.")
-    else:
-        lista_turmas_bol = []
-        if not df_turmas.empty and 'ID_TURMA' in df_turmas.columns:
-            turmas_reais_bol = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
-            lista_turmas_bol = sorted(turmas_reais_bol['ID_TURMA'].unique())
-        elif not df_alunos.empty and 'TURMA' in df_alunos.columns:
-            lista_turmas_bol = sorted(df_alunos['TURMA'].unique())
-        
-        if not lista_turmas_bol:
-            st.warning("Nenhuma turma cadastrada.")
-        else:
-            with st.container(border=True):
-                c_bol1, c_bol2 = st.columns([2, 1])
-                turma_sel = c_bol1.selectbox("🎯 Selecione a Turma para Análise:", lista_turmas_bol, key=f"bol_turma_clean_{v}")
-                
-                with c_bol2.popover("📜 Registrar Ata do Conselho de Classe", use_container_width=True):
-                    st.caption("Registre deliberações e pareceres do Conselho de Classe.")
-                    tipo_ata = st.selectbox("Tipo de Conselho:", ["Conselho Parcial (I Tri)", "Conselho Parcial (II Tri)", "Conselho Final (III Tri)"], key=f"pop_ata_tipo_{v}")
-                    texto_ata = st.text_area("Texto da Ata / Parecer da Turma:", placeholder="Ex: A turma demonstrou evolução satisfatória no II Trimestre. Alunos em recuperação foram convocados...", height=120, key=f"pop_ata_txt_{v}")
-                    
-                    if st.button("💾 Salvar Ata no Banco", type="primary", use_container_width=True, key=f"btn_save_ata_{v}"):
-                        if texto_ata.strip():
-                            data_hoje_ata = datetime.now().strftime("%d/%m/%Y")
-                            db.salvar_ata_conselho(data_hoje_ata, turma_sel, tipo_ata, texto_ata)
-                            st.success("✅ Ata do Conselho salva com sucesso!")
-                            time.sleep(1); st.rerun()
-                        else: st.error("Digite o texto da ata.")
-
-            @st.fragment
-            def renderizar_boletim_anual_fragmento():
-                df_t = df_notas[df_notas['TURMA'] == turma_sel].copy() if not df_notas.empty and 'TURMA' in df_notas.columns else pd.DataFrame()
-                
-                if df_t.empty:
-                    st.info(f"📭 Nenhuma nota lançada para a turma {turma_sel} ainda.")
-                else:
-                    # Filtro Global de Alunos Ativos (Lei #28)
-                    df_alunos_turma = df_alunos[df_alunos['TURMA'] == turma_sel].copy() if not df_alunos.empty and 'TURMA' in df_alunos.columns else pd.DataFrame()
-                    if 'STATUS' not in df_alunos_turma.columns: df_alunos_turma['STATUS'] = "ATIVO"
-
-                    c_flt1, c_flt2 = st.columns([2, 1])
-                    flt_status_alunos = c_flt1.pills("Exibição de Estudantes:", ["🟢 Apenas Ativos", "🌐 Todos (Incluir Inativos/Transferidos)"], default="🟢 Apenas Ativos", key=f"pills_flt_ativos_bol_{v}")
-
-                    visao_conselho_ativa = c_flt2.segmented_control(
-                        "Visão do Módulo:",
-                        ["📊 1. Termômetro & Boletim", "🔮 2. Simulador Preditivo (III Tri)"],
-                        default="📊 1. Termômetro & Boletim",
-                        key=f"seg_visao_conselho_{v}"
-                    )
-                    st.markdown("<br>", unsafe_allow_html=True)
-
-                    if flt_status_alunos == "🟢 Apenas Ativos":
-                        ids_ativos = df_alunos_turma[~df_alunos_turma['STATUS'].astype(str).str.upper().isin(["INATIVO", "TRANSFERIDO", "EVADIDO", "DESISTENTE"])]['ID'].apply(db.limpar_id).tolist()
-                        df_t = df_t[df_t['ID_ALUNO'].apply(db.limpar_id).isin(ids_ativos)]
-
-                    pivot = df_t.pivot_table(
-                        index=["ID_ALUNO", "NOME_ALUNO"], 
-                        columns="TRIMESTRE", 
-                        values=["MEDIA_FINAL", "NOTA_REC"], 
-                        aggfunc='first'
-                    ).reset_index()
-
-                    pivot.columns = [f"{col[0]}_{col[1]}".strip('_') for col in pivot.columns.values]
-
-                    trims = ["I Trimestre", "II Trimestre", "III Trimestre"]
-                    for t in trims:
-                        if f"MEDIA_FINAL_{t}" not in pivot.columns: pivot[f"MEDIA_FINAL_{t}"] = 0.0
-                        if f"NOTA_REC_{t}" in pivot.columns:
-                            pivot[f"NOTA_REC_{t}"] = pivot[f"NOTA_REC_{t}"].fillna(-1.0)
-                        else:
-                            pivot[f"NOTA_REC_{t}"] = -1.0
-
-                    rec_f_data = df_t[df_t['TRIMESTRE'].astype(str).str.contains("REC_FINAL|FINAL", na=False, case=False)] if 'TRIMESTRE' in df_t.columns else pd.DataFrame()
-                    if not rec_f_data.empty and 'ID_ALUNO' in rec_f_data.columns and 'MEDIA_FINAL' in rec_f_data.columns:
-                        rec_f_min = rec_f_data[['ID_ALUNO', 'MEDIA_FINAL']].rename(columns={'MEDIA_FINAL': 'RF'})
-                        pivot = pd.merge(pivot, rec_f_min, on='ID_ALUNO', how='left')
-                        pivot['RF'] = pivot['RF'].fillna(-1.0)
-                    else:
-                        pivot['RF'] = -1.0
-                    
-                    faltas_df = df_diario[(df_diario['TURMA'] == turma_sel) & (df_diario['TAGS'] == "AUSÊNCIA")] if not df_diario.empty and 'TURMA' in df_diario.columns and 'TAGS' in df_diario.columns else pd.DataFrame()
-                    
-                    if not faltas_df.empty and 'ID_ALUNO' in faltas_df.columns:
-                        faltas_count = faltas_df.groupby('ID_ALUNO').size().reset_index(name='FALTAS')
-                        faltas_count['ID_ALUNO'] = faltas_count['ID_ALUNO'].apply(db.limpar_id)
-                        
-                        pivot['ID_ALUNO_CLEAN'] = pivot['ID_ALUNO'].apply(db.limpar_id)
-                        pivot = pd.merge(pivot, faltas_count, left_on='ID_ALUNO_CLEAN', right_on='ID_ALUNO', how='left')
-                        
-                        if 'ID_ALUNO_y' in pivot.columns: pivot = pivot.drop(columns=['ID_ALUNO_y'])
-                        if 'ID_ALUNO_CLEAN' in pivot.columns: pivot = pivot.drop(columns=['ID_ALUNO_CLEAN'])
-                        if 'ID_ALUNO_x' in pivot.columns: pivot = pivot.rename(columns={'ID_ALUNO_x': 'ID_ALUNO'})
-                            
-                        pivot['FALTAS'] = pivot['FALTAS'].fillna(0).astype(int)
-                    else:
-                        pivot['FALTAS'] = 0
-
-                    pivot = pivot.fillna(0.0)
-
-                    has_t1 = pivot['MEDIA_FINAL_I Trimestre'].sum() > 0
-                    has_t2 = pivot['MEDIA_FINAL_II Trimestre'].sum() > 0
-                    has_t3 = pivot['MEDIA_FINAL_III Trimestre'].sum() > 0
-                    
-                    trimestres_ativos = sum([has_t1, has_t2, has_t3])
-                    if trimestres_ativos == 0: trimestres_ativos = 1
-
-                    meta_acumulada_parcial = trimestres_ativos * 6.0
-
-                    dias_validos = df_diario[(df_diario['TURMA'] == turma_sel) & (~df_diario['TAGS'].isin(['DIA NÃO LETIVO', 'BONUS_CONSELHO', 'SISTEMA_NOTA']))] if not df_diario.empty and 'TURMA' in df_diario.columns and 'TAGS' in df_diario.columns else pd.DataFrame()
-                    total_dias_letivos = dias_validos['DATA'].nunique() if not dias_validos.empty else 1
-                    if total_dias_letivos == 0: total_dias_letivos = 1
-                    limite_faltas = int(total_dias_letivos * 0.25)
-                    if limite_faltas == 0: limite_faltas = 1 
-
-                    def calcular_situacao_anual(row):
-                        t1 = util.sosa_to_float(row.get("MEDIA_FINAL_I Trimestre", 0))
-                        t2 = util.sosa_to_float(row.get("MEDIA_FINAL_II Trimestre", 0))
-                        t3 = util.sosa_to_float(row.get("MEDIA_FINAL_III Trimestre", 0))
-                        rf = util.sosa_to_float(row.get("RF", -1.0))
-                        faltas_aluno = row.get("FALTAS", 0)
-                        
-                        soma = t1 + t2 + t3
-                        media_parcial = soma / trimestres_ativos
-                        
-                        aluno_match = df_alunos[df_alunos['ID'].apply(db.limpar_id) == db.limpar_id(row.get('ID_ALUNO', ''))] if not df_alunos.empty and 'ID' in df_alunos.columns else pd.DataFrame()
-                        if not aluno_match.empty:
-                            aluno_info = aluno_match.iloc[0]
-                            nec_raw = str(aluno_info.get('NECESSIDADES', 'TÍPICO')).upper().strip()
-                            if "PENDENTE" in nec_raw or "SUSPEITA" in nec_raw: pei = "🟠"
-                            elif "DEFASAGEM LEITURA" in nec_raw: pei = "🧱"
-                            elif "DEFASAGEM MATEMÁTICA" in nec_raw or "DEFASAGEM MATEMATICA" in nec_raw: pei = "🧮"
-                            elif "ALTA PERFORMANCE" in nec_raw: pei = "🚀"
-                            elif nec_raw not in ["NENHUMA", "", "NAN", "TÍPICO", "TIPICO"]: pei = "♿"
-                            else: pei = "👤"
-                        else:
-                            pei = "👤"
-                        
-                        if faltas_aluno >= (total_dias_letivos * 0.5) and soma == 0: 
-                            status = "👻 EVASÃO"
-                        elif faltas_aluno > limite_faltas:
-                            status = "🚨 REPROV. FALTA"
-                        elif trimestres_ativos == 3:
-                            if soma >= 18.0: status = "✅ APROVADO"
-                            elif rf >= 6.0: status = "🔄 APROV. REC"
-                            else: status = "❌ REPROVADO"
-                        else:
-                            if media_parcial >= 6.0:
-                                status = "🟢 NA MÉDIA"
-                            elif media_parcial >= 4.5:
-                                status = "🟡 RISCO DE NOTA"
-                            else:
-                                status = "🔴 RISCO CRÍTICO"
-                        
-                        return pd.Series([pei, soma, media_parcial, status])
-
-                    pivot[['P', 'Σ', 'MÉDIA_PARCIAL', 'SITUAÇÃO']] = pivot.apply(calcular_situacao_anual, axis=1)
-
-                    # ==============================================================
-                    # VISÃO 1: TERMÔMETRO & BOLETIM ANUAL CONSOLIDADO
-                    # ==============================================================
-                    if visao_conselho_ativa == "📊 1. Termômetro & Boletim":
-                        st.markdown(f"#### 📊 Termômetro do Conselho (Ponderado: {trimestres_ativos} Trimestre(s) Ativo(s))")
-                        
-                        media_geral_parcial = pivot['MÉDIA_PARCIAL'].mean() if len(pivot) > 0 else 0.0
-                        na_media_count = len(pivot[pivot['SITUAÇÃO'].isin(["✅ APROVADO", "🟢 NA MÉDIA", "🔄 APROV. REC"])])
-                        taxa_sucesso = (na_media_count / len(pivot)) * 100 if len(pivot) > 0 else 0
-                        risco_nota_count = len(pivot[pivot['SITUAÇÃO'].isin(["🟡 RISCO DE NOTA", "🔴 RISCO CRÍTICO"])])
-                        risco_faltas_count = len(pivot[pivot['SITUAÇÃO'] == "🚨 REPROV. FALTA"])
-                        evasao_count = len(pivot[pivot['SITUAÇÃO'] == "👻 EVASÃO"])
-
-                        with st.container(border=True):
-                            k1, k2, k3, k4 = st.columns(4)
-                            k1.metric("📊 Média Parcial Turma", f"{media_geral_parcial:.1f}")
-                            k2.metric("🟢 Na Média / Aprovados", f"{na_media_count} ({taxa_sucesso:.0f}%)", f"{len(pivot)} alunos")
-                            k3.metric("🟡 Risco de Nota", risco_nota_count, delta_color="inverse" if risco_nota_count > 0 else "normal")
-                            k4.metric("🚨 Risco de Faltas", risco_faltas_count, delta_color="inverse" if risco_faltas_count > 0 else "normal")
-
-                        st.markdown("---")
-
-                        filtro_conselho = st.pills(
-                            "🔍 Filtrar Classe para a Reunião de Conselho:",
-                            ["Todos os Estudantes", "🟢 Na Média", "🟡 Risco de Nota", "🚨 Risco de Faltas", "👻 Evasão / Abandono"],
-                            default="Todos os Estudantes",
-                            key=f"pills_cons_flt_{v}"
-                        )
-
-                        pivot_exibir = pivot.copy()
-                        if filtro_conselho == "🟢 Na Média":
-                            pivot_exibir = pivot_exibir[pivot_exibir['SITUAÇÃO'].isin(["✅ APROVADO", "🟢 NA MÉDIA", "🔄 APROV. REC"])]
-                        elif filtro_conselho == "🟡 Risco de Nota":
-                            pivot_exibir = pivot_exibir[pivot_exibir['SITUAÇÃO'].isin(["🟡 RISCO DE NOTA", "🔴 RISCO CRÍTICO"])]
-                        elif filtro_conselho == "🚨 Risco de Faltas":
-                            pivot_exibir = pivot_exibir[pivot_exibir['SITUAÇÃO'] == "🚨 REPROV. FALTA"]
-                        elif filtro_conselho == "👻 Evasão / Abandono":
-                            pivot_exibir = pivot_exibir[pivot_exibir['SITUAÇÃO'] == "👻 EVASÃO"]
-
-                        st.caption(f"Exibindo **{len(pivot_exibir)} de {len(pivot)}** estudantes.")
-
-                        def style_status_anual(val):
-                            if "APROV" in str(val) or "NA MÉDIA" in str(val): return 'color: #2ECC71; font-weight: bold;'
-                            if "EVASÃO" in str(val) or "REPROV" in str(val) or "CRÍTICO" in str(val): return 'color: #E74C3C; font-weight: bold;'
-                            if "RISCO DE NOTA" in str(val): return 'color: #F1C40F; font-weight: bold;'
-                            return 'color: gray;'
-
-                        def formatar_rec(val):
-                            if pd.isna(val) or val < 0 or val == 0: return "-"
-                            return f"{val:.1f}"
-
-                        def formatar_media(val):
-                            if pd.isna(val) or val == 0: return "-"
-                            return f"{val:.1f}"
-
-                        st.dataframe(
-                            pivot_exibir[['P', 'NOME_ALUNO', 
-                                   'MEDIA_FINAL_I Trimestre', 'NOTA_REC_I Trimestre',
-                                   'MEDIA_FINAL_II Trimestre', 'NOTA_REC_II Trimestre',
-                                   'MEDIA_FINAL_III Trimestre', 'NOTA_REC_III Trimestre',
-                                   'Σ', 'RF', 'FALTAS', 'SITUAÇÃO']]
-                            .style.map(style_status_anual, subset=['SITUAÇÃO'])
-                            .format(formatar_media, subset=['MEDIA_FINAL_I Trimestre', 'MEDIA_FINAL_II Trimestre', 'MEDIA_FINAL_III Trimestre'])
-                            .format(formatar_rec, subset=['NOTA_REC_I Trimestre', 'NOTA_REC_II Trimestre', 'NOTA_REC_III Trimestre', 'RF']),
-                            use_container_width=True, hide_index=True,
-                            column_config={
-                                "P": st.column_config.TextColumn("P", width="small", help="Perfil do Aluno"),
-                                "NOME_ALUNO": st.column_config.TextColumn("Estudante", width="medium"),
-                                "MEDIA_FINAL_I Trimestre": st.column_config.TextColumn("I", width="small"),
-                                "NOTA_REC_I Trimestre": st.column_config.TextColumn("R1", width="small"),
-                                "MEDIA_FINAL_II Trimestre": st.column_config.TextColumn("II", width="small"),
-                                "NOTA_REC_II Trimestre": st.column_config.TextColumn("R2", width="small"),
-                                "MEDIA_FINAL_III Trimestre": st.column_config.TextColumn("III", width="small"),
-                                "NOTA_REC_III Trimestre": st.column_config.TextColumn("R3", width="small"),
-                                "Σ": st.column_config.ProgressColumn("Σ (Soma)", help=f"Soma acumulada (Meta parcial: {meta_acumulada_parcial:.1f} pts)", format="%.1f", min_value=0.0, max_value=meta_acumulada_parcial if meta_acumulada_parcial > 0 else 18.0),
-                                "RF": st.column_config.TextColumn("RF", width="small", help="Recuperação Final"),
-                                "FALTAS": st.column_config.ProgressColumn("Faltas", help=f"Limite máximo: {limite_faltas}", format="%d", min_value=0, max_value=max(limite_faltas, 1)),
-                                "SITUAÇÃO": st.column_config.TextColumn("Status", width="medium")
-                            }
-                        )
-                        
-                        st.caption(f"📌 **Legenda:** I, II, III (Médias) | R1, R2, R3 (Recuperações) | Σ (Soma Parcial / Meta: **{meta_acumulada_parcial:.1f}** pts) | Limite Faltas: **{limite_faltas}**.")
-
-                        st.markdown("---")
-                        
-                        if st.button("🖨️ GERAR ATA OFICIAL DO CONSELHO DE CLASSE (DOCX)", type="primary", use_container_width=True, key=f"btn_gen_ata_docx_{v}"):
-                            with st.spinner("Compilando documento oficial da Ata..."):
-                                dados_ata_export = []
-                                for _, r_p in pivot.iterrows():
-                                    dados_ata_export.append({
-                                        "nome": r_p.get('NOME_ALUNO', 'Estudante'),
-                                        "soma": f"{util.sosa_to_float(r_p.get('Σ', 0)):.1f}",
-                                        "media_parcial": f"{util.sosa_to_float(r_p.get('MÉDIA_PARCIAL', 0)):.1f}",
-                                        "faltas": str(r_p.get('FALTAS', 0)),
-                                        "status": str(r_p.get('SITUAÇÃO', 'N/A'))
-                                    })
-                                
-                                info_ata = {"turma": turma_sel, "trimestres_ativos": trimestres_ativos}
-                                nome_arq_ata = f"ATA_CONSELHO_{turma_sel.replace(' ', '')}_2026"
-                                
-                                doc_stream = exporter.gerar_docx_etiquetas_notas(nome_arq_ata, dados_ata_export, info_ata)
-                                link_doc = db.subir_e_converter_para_google_docs(doc_stream, nome_arq_ata, trimestre="Conselho", categoria=turma_sel, modo="PLANEJAMENTO")
-                                
-                                if "https" in link_doc:
-                                    st.success("✅ Ata do Conselho gerada com sucesso!")
-                                    st.link_button("📂 ABRIR ATA OFICIAL NO DRIVE", link_doc, type="primary", use_container_width=True)
-                                    st.balloons()
-                                else: st.error(f"Erro ao salvar no Drive: {link_doc}")
-
-                    # ==============================================================
-                    # VISÃO 2: SIMULADOR PREDITIVO DE METAS PARA O III TRIMESTRE
-                    # ==============================================================
-                    else:
-                        st.markdown("### 🔮 Cockpit Preditivo de Metas para o III Trimestre")
-                        st.caption(f"Projeção individual e coletiva para a aprovação regimental de **18,0 pontos** (Média 6,0 x 3 trimestres).")
-
-                        # Painel de Simulação de Cenários Interativos
-                        with st.container(border=True):
-                            c_sim1, c_sim2 = st.columns([1.5, 2])
-                            
-                            cenario_bonus_sim = c_sim1.segmented_control(
-                                "⭐ Simular Bônus Atitudinal / Refacção no III Tri:",
-                                ["0,0 pts (Padrão)", "+0,5 pts (Refacção/Atitude)", "+1,0 pt (Engajamento Máximo)"],
-                                default="0,0 pts (Padrão)",
-                                key=f"seg_bonus_sim_{v}"
-                            )
-                            bonus_sim_val = 0.0
-                            if "+0,5" in str(cenario_bonus_sim): bonus_sim_val = 0.5
-                            elif "+1,0" in str(cenario_bonus_sim): bonus_sim_val = 1.0
-
-                            c_sim2.info(f"💡 **Simulação Ativa:** Com o bônus projetado de **+{bonus_sim_val:.1f} pts**, a nota exigida na avaliação principal do III Tri diminui proporcionalmente.")
-
-                        # Cálculo de Metas Preditivas
-                        dados_preditivos = []
-                        cnt_aprov_antecipado = 0
-                        cnt_meta_tranquila = 0
-                        cnt_meta_moderada = 0
-                        cnt_meta_alta = 0
-                        cnt_risco_rec_final = 0
-
-                        for _, r_al in pivot.iterrows():
-                            id_al_p = db.limpar_id(r_al.get('ID_ALUNO', ''))
-                            nome_al_p = str(r_al.get('NOME_ALUNO', 'Estudante'))
-                            perfil_icon_p = str(r_al.get('P', '👤'))
-                            faltas_al_p = int(r_al.get('FALTAS', 0))
-
-                            t1_val = util.sosa_to_float(r_al.get("MEDIA_FINAL_I Trimestre", 0.0))
-                            t2_val = util.sosa_to_float(r_al.get("MEDIA_FINAL_II Trimestre", 0.0))
-                            soma_1_2 = t1_val + t2_val
-
-                            # Meta exata para atingir 18.0 pontos no total do ano
-                            meta_bruta_iii = max(0.0, 18.0 - soma_1_2)
-                            meta_ajustada_sim = max(0.0, meta_bruta_iii - bonus_sim_val)
-                            meta_ajustada_arred = round(meta_ajustada_sim * 2) / 2
-
-                            if soma_1_2 >= 18.0:
-                                status_pred = "🟢 APROVADO ANTECIPADO"
-                                cnt_aprov_antecipado += 1
-                                precisa_exib = "0,0 pts (Garantido)"
-                            elif meta_ajustada_arred <= 4.0:
-                                status_pred = "🟢 META TRANQUILA (≤ 4.0)"
-                                cnt_meta_tranquila += 1
-                                precisa_exib = f"{meta_ajustada_arred:.1f} pts"
-                            elif meta_ajustada_arred <= 6.5:
-                                status_pred = "🟡 META MODERADA (4.1 a 6.5)"
-                                cnt_meta_moderada += 1
-                                precisa_exib = f"{meta_ajustada_arred:.1f} pts"
-                            elif meta_ajustada_arred <= 9.9:
-                                status_pred = "🟠 META ALTA (6.6 a 9.9)"
-                                cnt_meta_alta += 1
-                                precisa_exib = f"{meta_ajustada_arred:.1f} pts"
-                            else:
-                                status_pred = "🔴 RISCO DE REC. FINAL (≥ 10.0)"
-                                cnt_risco_rec_final += 1
-                                precisa_exib = f"{meta_ajustada_arred:.1f} pts (Crítico)"
-
-                            dados_preditivos.append({
-                                "ID": id_al_p,
-                                "P": perfil_icon_p,
-                                "Estudante": nome_al_p,
-                                "I Tri": t1_val,
-                                "II Tri": t2_val,
-                                "Σ (I + II Tri)": soma_1_2,
-                                "🎯 Precisa no III Tri": meta_ajustada_arred,
-                                "Meta Exibição": precisa_exib,
-                                "Status Preditivo": status_pred,
-                                "Faltas": faltas_al_p
-                            })
-
-                        # Métricas do Cockpit Preditivo
-                        with st.container(border=True):
-                            st.markdown("##### 📊 Panorama Preditivo da Classe para o III Trimestre")
-                            k_p1, k_p2, k_p3, k_p4, k_p5 = st.columns(5)
-                            k_p1.metric("🟢 Aprovados Antecipados", cnt_aprov_antecipado, f"Soma I+II ≥ 18.0")
-                            k_p2.metric("🟢 Meta Tranquila", cnt_meta_tranquila, f"Precisa ≤ 4.0")
-                            k_p3.metric("🟡 Meta Moderada", cnt_meta_moderada, f"Precisa 4.1 a 6.5")
-                            k_p4.metric("🟠 Meta Alta", cnt_meta_alta, f"Precisa 6.6 a 9.9")
-                            k_p5.metric("🔴 Risco Rec. Final", cnt_risco_rec_final, f"Precisa ≥ 10.0", delta_color="inverse" if cnt_risco_rec_final > 0 else "normal")
-
-                        st.markdown("---")
-
-                        # Filtro de Situação Preditiva
-                        flt_pred = st.pills(
-                            "🔍 Filtrar por Meta do III Tri:",
-                            ["Todos", "🟢 Aprovados Antecipados", "🟢 Meta Tranquila (≤ 4.0)", "🟡 Meta Moderada (4.1 a 6.5)", "🟠 Meta Alta (6.6 a 9.9)", "🔴 Risco de Rec. Final (≥ 10.0)"],
-                            default="Todos",
-                            key=f"pills_flt_pred_{v}"
-                        )
-
-                        df_pred_exibir = pd.DataFrame(dados_preditivos)
-                        if flt_pred == "🟢 Aprovados Antecipados":
-                            df_pred_exibir = df_pred_exibir[df_pred_exibir['Status Preditivo'].str.contains("ANTECIPADO")]
-                        elif flt_pred == "🟢 Meta Tranquila (≤ 4.0)":
-                            df_pred_exibir = df_pred_exibir[df_pred_exibir['Status Preditivo'].str.contains("TRANQUILA")]
-                        elif flt_pred == "🟡 Meta Moderada (4.1 a 6.5)":
-                            df_pred_exibir = df_pred_exibir[df_pred_exibir['Status Preditivo'].str.contains("MODERADA")]
-                        elif flt_pred == "🟠 Meta Alta (6.6 a 9.9)":
-                            df_pred_exibir = df_pred_exibir[df_pred_exibir['Status Preditivo'].str.contains("ALTA")]
-                        elif flt_pred == "🔴 Risco de Rec. Final (≥ 10.0)":
-                            df_pred_exibir = df_pred_exibir[df_pred_exibir['Status Preditivo'].str.contains("RISCO")]
-
-                        def style_status_preditivo(val):
-                            if "ANTECIPADO" in str(val) or "TRANQUILA" in str(val): return 'color: #2ECC71; font-weight: bold;'
-                            if "MODERADA" in str(val): return 'color: #F1C40F; font-weight: bold;'
-                            if "ALTA" in str(val): return 'color: #E67E22; font-weight: bold;'
-                            if "RISCO" in str(val): return 'color: #E74C3C; font-weight: bold;'
-                            return 'color: gray;'
-
-                        st.dataframe(
-                            df_pred_exibir[['P', 'Estudante', 'I Tri', 'II Tri', 'Σ (I + II Tri)', '🎯 Precisa no III Tri', 'Status Preditivo', 'Faltas']]
-                            .style.map(style_status_preditivo, subset=['Status Preditivo'])
-                            .format({'I Tri': '{:.1f}', 'II Tri': '{:.1f}', 'Σ (I + II Tri)': '{:.1f}', '🎯 Precisa no III Tri': '{:.1f}'}),
-                            use_container_width=True, hide_index=True,
-                            column_config={
-                                "P": st.column_config.TextColumn("P", width="small"),
-                                "Estudante": st.column_config.TextColumn("Estudante", width="medium"),
-                                "I Tri": st.column_config.NumberColumn("I Tri", format="%.1f", width="small"),
-                                "II Tri": st.column_config.NumberColumn("II Tri", format="%.1f", width="small"),
-                                "Σ (I + II Tri)": st.column_config.ProgressColumn("Soma I+II", format="%.1f", min_value=0.0, max_value=20.0, help="Soma dos dois primeiros trimestres (Meta anual: 18.0)"),
-                                "🎯 Precisa no III Tri": st.column_config.NumberColumn("🎯 Meta III Tri", format="%.1f", help="Nota mínima exigida no III Trimestre para atingir 18.0"),
-                                "Status Preditivo": st.column_config.TextColumn("Situação Projetada", width="medium"),
-                                "Faltas": st.column_config.NumberColumn("Faltas", width="small")
-                            }
-                        )
-
-                        st.markdown("---")
-
-                        # Ações Rápidas do Simulador Preditivo
-                        c_act_pred1, c_act_pred2 = st.columns([1.5, 1.5])
-
-                        with c_act_pred1.popover("📱 Disparar Alerta de Metas para Pais (WhatsApp)", use_container_width=True):
-                            st.caption("Selecione o estudante para abrir o extrato preditivo pronto para cópia:")
-                            aluno_zap_sel = st.selectbox("Selecione o Estudante:", [r['Estudante'] for r in dados_preditivos], key=f"sel_al_zap_meta_{v}")
-                            
-                            if aluno_zap_sel:
-                                r_zap_data = next(r for r in dados_preditivos if r['Estudante'] == aluno_zap_sel)
-                                if st.button("📱 ABRIR TEXTO PARA WHATSAPP", type="primary", use_container_width=True, key=f"btn_open_zap_meta_dialog_{v}"):
-                                    dialog_zap_metas_iii(
-                                        nome_aluno=r_zap_data['Estudante'],
-                                        turma=turma_sel,
-                                        soma_1_2=r_zap_data['Σ (I + II Tri)'],
-                                        meta_iii=r_zap_data['🎯 Precisa no III Tri'],
-                                        status_meta=r_zap_data['Status Preditivo'],
-                                        faltas_aluno=r_zap_data['Faltas']
-                                    )
-
-                        if c_act_pred2.button("🖨️ EXPORTAR RELATÓRIO PREDITIVO DE METAS (DOCX)", type="primary", use_container_width=True, key=f"btn_docx_pred_metas_{v}"):
-                            with st.spinner("Compilando Relatório Preditivo de Metas para o Conselho..."):
-                                dados_docx_pred = []
-                                for r_pred in dados_preditivos:
-                                    dados_docx_pred.append({
-                                        "nome": r_pred['Estudante'],
-                                        "vistos": f"I Tri: {r_pred['I Tri']:.1f}",
-                                        "teste": f"II Tri: {r_pred['II Tri']:.1f}",
-                                        "prova": f"Soma: {r_pred['Σ (I + II Tri)']:.1f}",
-                                        "bonus": f"{bonus_sim_val:+.1f}",
-                                        "media": f"Meta: {r_pred['🎯 Precisa no III Tri']:.1f}",
-                                        "status": f"{r_pred['Status Preditivo']} ({r_pred['Faltas']} faltas)"
-                                    })
-                                
-                                info_doc_pred = {"turma": turma_sel, "trimestre": "PROJEÇÃO III TRIMESTRE - CONSELHO"}
-                                nome_arq_pred = f"RELATORIO_PREDITIVO_METAS_{turma_sel.replace(' ','_')}_2026"
-                                
-                                doc_stream_pred = exporter.gerar_docx_etiquetas_notas(nome_arq_pred, dados_docx_pred, info_doc_pred)
-                                link_doc_pred = db.subir_e_converter_para_google_docs(doc_stream_pred, nome_arq_pred, trimestre="Conselho", categoria=turma_sel, modo="PLANEJAMENTO")
-                                
-                                if "https" in link_doc_pred:
-                                    st.success("✅ Relatório Preditivo de Metas gerado no Drive!")
-                                    st.link_button("📂 ABRIR RELATÓRIO PREDITIVO NO DRIVE", link_doc_pred, type="primary", use_container_width=True)
-                                    st.balloons()
-                                else: st.error(f"Erro ao salvar no Drive: {link_doc_pred}")
-
-            renderizar_boletim_anual_fragmento()
 
 
 
