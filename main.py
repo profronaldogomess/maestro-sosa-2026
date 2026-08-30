@@ -7308,33 +7308,34 @@ Escola Municipal Flávio José Simões Costa"""
             renderizar_matriz_inclusao_fragmento()
 
         # ==============================================================================
-        # ABA 2: DOSSIÊ DESCRITIVO TRIMESTRAL
+        # ABA 2: DOSSIÊ DESCRITIVO (PAINEL TÁTIL DE MARCAÇÃO & EVOLUÇÃO COM IA)
         # ==============================================================================
         with tab_forja:
             @st.fragment
             def renderizar_forja_dossie_fragmento():
-                st.markdown(f"### Dossiê Descritivo — {trim_ativo_pei}")
-                st.caption("Estruture ou edite o parecer descritivo individual referente ao trimestre ativo.")
+                st.markdown(f"### Dossiê Descritivo & Evolução — {trim_ativo_pei}")
+                st.caption("Selecione as características observadas na aula de Matemática. A IA cruza com os relatórios anteriores e redige o parecer formal com a evolução da estudante.")
                 
                 df_todos_relatorio = pd.concat([df_laudados, df_defasagem]).drop_duplicates(subset=['ID']) if not df_laudados.empty or not df_defasagem.empty else pd.DataFrame()
                 
                 if df_todos_relatorio.empty:
                     st.info("Nenhum estudante ativo selecionado para relatório nesta turma.")
                 else:
-                    aluno_foco = st.selectbox("Selecione o Estudante:", df_todos_relatorio['NOME_ALUNO'].tolist(), key=f"foco_pei_dossie_{v}")
+                    aluno_foco = st.selectbox("Selecione a Estudante:", df_todos_relatorio['NOME_ALUNO'].tolist(), key=f"foco_pei_dossie_{v}")
                     dados_a = df_todos_relatorio[df_todos_relatorio['NOME_ALUNO'] == aluno_foco].iloc[0]
                     id_a = db.limpar_id(dados_a['ID'])
                     perfil_atual = str(dados_a['NECESSIDADES']).upper().strip()
 
+                    # 1. MINERAÇÃO DE DADOS DE SALA (NOTAS, VISTOS, FALTAS)
                     n_alu = df_notas[(df_notas['ID_ALUNO'].apply(db.limpar_id) == id_a) & (df_notas['TRIMESTRE'] == trim_ativo_pei)] if not df_notas.empty else pd.DataFrame()
                     if not n_alu.empty:
                         nota_c1 = util.sosa_to_float(n_alu.iloc[0]['NOTA_VISTOS'])
                         nota_c2 = util.sosa_to_float(n_alu.iloc[0]['NOTA_TESTE'])
                         nota_c3 = util.sosa_to_float(n_alu.iloc[0]['NOTA_PROVA'])
                         media_trim_f = util.sosa_to_float(n_alu.iloc[0]['MEDIA_FINAL'])
-                        notas_str = f"• C1 (Caderno): {nota_c1:.1f} | C2 (Testes): {nota_c2:.1f} | C3 (Prova): {nota_c3:.1f} ➔ Média: {media_trim_f:.1f} pts"
+                        notas_str = f"Caderno (C1): {nota_c1:.1f} | Testes (C2): {nota_c2:.1f} | Prova (C3): {nota_c3:.1f} ➔ Média: {media_trim_f:.1f} pts"
                     else:
-                        notas_str = f"Nenhuma pontuação lançada no boletim para o {trim_ativo_pei}."
+                        notas_str = f"Média em processo de consolidação no {trim_ativo_pei}."
 
                     if trim_ativo_pei == "I Trimestre": dt_i, dt_f = date(2026, 2, 9), date(2026, 5, 22)
                     elif trim_ativo_pei == "II Trimestre": dt_i, dt_f = date(2026, 5, 25), date(2026, 9, 4)
@@ -7350,61 +7351,139 @@ Escola Municipal Flávio José Simões Costa"""
                             faltas_cnt = len(d_alu_sub[d_alu_sub['TAGS'] == "AUSÊNCIA"])
                             
                             mask_oc = (d_alu_sub['TAGS'] != "") & (~d_alu_sub['TAGS'].isin(["DIA NÃO LETIVO", "SISTEMA_NOTA", "AUSÊNCIA"]))
-                            for _, r_d in d_alu_sub[mask_oc].tail(6).iterrows():
+                            for _, r_d in d_alu_sub[mask_oc].tail(5).iterrows():
                                 ocorrencias_diario.append(f"• {r_d['DATA']}: {r_d['TAGS']} ({r_d['OBSERVACOES']})")
 
-                    oc_str = "\n".join(ocorrencias_diario) if ocorrencias_diario else "Nenhuma ocorrência registrada no período."
+                    oc_str = "\n".join(ocorrencias_diario) if ocorrencias_diario else "Participação regular com acompanhamento mediado."
 
+                    # 2. RESGATE DO HISTÓRICO ANTERIOR PARA ANÁLISE DE EVOLUÇÃO
+                    hist_aluno = df_relatorios[df_relatorios['ID_ALUNO'].apply(db.limpar_id) == id_a] if not df_relatorios.empty else pd.DataFrame()
+                    
+                    texto_historico_anterior = ""
+                    if trim_ativo_pei == "II Trimestre":
+                        rel_ant = hist_aluno[hist_aluno['TIPO'] == "DOSSIE_PEI_I_TRIMESTRE"]
+                        if not rel_ant.empty:
+                            texto_historico_anterior = f"HISTÓRICO DO I TRIMESTRE: {str(rel_ant.iloc[-1]['CONTEUDO'])[:500]}"
+                    elif trim_ativo_pei == "III Trimestre":
+                        rel_ant1 = hist_aluno[hist_aluno['TIPO'] == "DOSSIE_PEI_I_TRIMESTRE"]
+                        rel_ant2 = hist_aluno[hist_aluno['TIPO'] == "DOSSIE_PEI_II_TRIMESTRE"]
+                        if not rel_ant2.empty:
+                            texto_historico_anterior = f"HISTÓRICO DO II TRIMESTRE: {str(rel_ant2.iloc[-1]['CONTEUDO'])[:500]}"
+                        elif not rel_ant1.empty:
+                            texto_historico_anterior = f"HISTÓRICO DO I TRIMESTRE: {str(rel_ant1.iloc[-1]['CONTEUDO'])[:500]}"
+
+                    # EVIDÊNCIAS DE SALA
                     with st.container(border=True):
                         st.markdown(f"##### Evidências Registradas ({aluno_foco} • {trim_ativo_pei})")
                         c_ctx1, c_ctx2 = st.columns([1.2, 1.8])
-                        c_ctx1.info(f"**Rendimento:**\n{notas_str}\n\n**Ausências:** {faltas_cnt}")
-                        c_ctx2.warning(f"**Atitude & Participação:**\n{oc_str}")
+                        c_ctx1.info(f"**Rendimento em Matemática:**\n{notas_str}\n\n**Faltas no Período:** {faltas_cnt}")
+                        c_ctx2.warning(f"**Atitude & Observações de Sala:**\n{oc_str}")
 
+                    # -------------------------------------------------------------
+                    # PAINEL TÁTIL DE MARCAÇÃO RÁPIDA (CHIPS / PILLS)
+                    # -------------------------------------------------------------
+                    with st.container(border=True):
+                        st.markdown("#### Painel Tátil de Marcação Rápida")
+                        st.caption("Assinale com 1 toque as características observadas nas aulas de Matemática:")
+
+                        c_chip1, c_chip2 = st.columns(2)
+                        
+                        marcas_sociais = c_chip1.pills(
+                            "Comportamento & Interação:",
+                            ["Necessita de Rotina Rígida", "Apresenta Estereotipias", "Interage com Apoio do Mediador", "Atenção Compartilhada em Desenvolvimento", "Sensibilidade a Ruídos / Agitação", "Isolamento Ocasional"],
+                            selection_mode="multi",
+                            default=["Necessita de Rotina Rígida", "Interage com Apoio do Mediador"],
+                            key=f"chips_soc_{v}"
+                        )
+
+                        marcas_comunicacao = c_chip2.pills(
+                            "Comunicação na Aula:",
+                            ["Comunicação Não Verbal Funcional", "Compreende Instruções Curtas", "Responde por Apontamento / Desenho", "Necessita de Apoio Visual / Concreto", "Comunicação Verbal Fluida", "Comunicação Alternativa (PECs)"],
+                            selection_mode="multi",
+                            default=["Comunicação Não Verbal Funcional", "Compreende Instruções Curtas", "Necessita de Apoio Visual / Concreto"],
+                            key=f"chips_com_{v}"
+                        )
+
+                        c_chip3, c_chip4 = st.columns(2)
+                        
+                        marcas_matematica = c_chip3.pills(
+                            "Prática Matemática & Cognição:",
+                            ["Autonomia com Material Dourado", "Uso Funcional da Calculadora", "Reconhece Numerais e Quantidades", "Desenvolvimento com Jogos Táteis", "Dificuldade na Abstração sem Apoio", "Realiza Tarefas de Papel com Mediação"],
+                            selection_mode="multi",
+                            default=["Autonomia com Material Dourado", "Uso Funcional da Calculadora", "Realiza Tarefas de Papel com Mediação"],
+                            key=f"chips_mat_{v}"
+                        )
+
+                        evolucao_selecionada = c_chip4.segmented_control(
+                            "Evolução em Relação ao Período Anterior:",
+                            ["Evolução Notória", "Desenvolvimento Estável", "Necessita de Reforço de Vínculo"],
+                            default="Evolução Notória" if trim_ativo_pei != "I Trimestre" else "Desenvolvimento Estável",
+                            key=f"seg_evo_{v}"
+                        )
+
+                        micro_anotacao_prof = st.text_input(
+                            "Micro-Anotação do Professor (Opcional - Digite ou use o Ditado por Voz do celular):",
+                            placeholder="Ex: Demonstrou muito interesse nas atividades com malha quadriculada e contagem com moedas.",
+                            key=f"inp_micro_obs_{v}"
+                        )
+
+                        st.markdown("<br>", unsafe_allow_html=True)
+
+                        # BOTÃO MÁGICO: ESTRUTURAR COM IA
+                        if st.button("Estruturar Dossiê Formal com IA (Análise de Evolução)", type="primary", use_container_width=True, key=f"btn_ghost_auto_{v}"):
+                            with st.spinner("A IA está cruzando as marcações, histórico anterior e notas para redigir o parecer técnico..."):
+                                prompt_auto = (
+                                    f"VOCÊ É O PSICOPEDAGOGO E ESPECIALISTA EM INCLUSÃO SOSA (PADRÃO PREFEITURA DE ITABUNA).\n"
+                                    f"ESTUDANTE: {aluno_foco} | TURMA: {turma_pei} | LAUDO/PERFIL: {perfil_atual}\n"
+                                    f"TRIMESTRE ATUAL: {trim_ativo_pei.upper()}\n\n"
+                                    f"--- DADOS DE OBSERVAÇÃO DO PROFESSOR (MARCAÇÕES REAIS) ---\n"
+                                    f"• COMPORTAMENTO: {', '.join(marcas_sociais)}\n"
+                                    f"• COMUNICAÇÃO: {', '.join(marcas_comunicacao)}\n"
+                                    f"• PRÁTICA EM MATEMÁTICA: {', '.join(marcas_matematica)}\n"
+                                    f"• STATUS DE EVOLUÇÃO: {evolucao_selecionada}\n"
+                                    f"• ANOTAÇÃO RÁPIDA DO DOCENTE: {micro_anotacao_prof}\n"
+                                    f"• RENDIMENTO EM MATEMÁTICA: {notas_str} | FALTAS: {faltas_cnt}\n\n"
+                                    f"--- HISTÓRICO DO TRIMESTRE ANTERIOR (PARA COMPARAR EVOLUÇÃO/INVOLUÇÃO) ---\n"
+                                    f"{texto_historico_anterior if texto_historico_anterior else 'Início do acompanhamento no ano letivo.'}\n\n"
+                                    f"MISSÃO:\n"
+                                    f"Redija um parecer descritivo empático, formal e focado nas aulas de Matemática, DESTACANDO EXPLICITAMENTE A EVOLUÇÃO em relação ao período anterior.\n"
+                                    f"Preencha rigorosamente as tags:\n"
+                                    f"[DIAGNOSTICO_GERAL] (Síntese do desenvolvimento no {trim_ativo_pei} com comparativo de evolução)\n"
+                                    f"[SOCIAIS] (Comportamento e interação na sala de Matemática)\n"
+                                    f"[COMUNICATIVAS] (Formas de comunicação e resposta aos comandos)\n"
+                                    f"[EMOCIONAIS] (Autorregulação e flexibilidade)\n"
+                                    f"[FUNCIONAIS] (Autonomia no manuseio de materiais e caderno)\n"
+                                    f"[DIRETRIZES_CURRICULARES] (Recomendações práticas para os próximos ciclos)"
+                                )
+                                res_ia = ai.gerar_ia("ESPECIALISTA_INCLUSAO", prompt_auto, usar_busca=False)
+                                tipo_relatorio_chave = f"DOSSIE_PEI_{trim_ativo_pei.replace(' ', '_').upper()}"
+                                salvar_relatorio_pei_sem_duplicidade(id_a, aluno_foco, tipo_relatorio_chave, res_ia)
+                                st.success("Dossiê formal estruturado com sucesso pela IA!"); time.sleep(0.5); st.rerun()
+
+                    # -------------------------------------------------------------
+                    # CAMPOS DE REVISÃO PREENCHIDOS (EDITÁVEIS)
+                    # -------------------------------------------------------------
                     tipo_relatorio_chave = f"DOSSIE_PEI_{trim_ativo_pei.replace(' ', '_').upper()}"
-                    
-                    hist_aluno = df_relatorios[df_relatorios['ID_ALUNO'].apply(db.limpar_id) == id_a] if not df_relatorios.empty else pd.DataFrame()
                     rel_master = hist_aluno[hist_aluno['TIPO'] == tipo_relatorio_chave] if not hist_aluno.empty else pd.DataFrame()
-                    
                     text_dossie_salvo = str(rel_master.iloc[-1]['CONTEUDO']) if not rel_master.empty else ""
 
                     st.markdown("---")
-                    st.markdown(f"#### Redação do Parecer Descritivo ({trim_ativo_pei})")
+                    st.markdown(f"#### Parecer Descritivo Estruturado ({trim_ativo_pei})")
 
-                    if st.button(f"Rascunhar Dossiê com IA", use_container_width=True, key=f"btn_ghost_exe_{v}"):
-                        with st.spinner("Estruturando parecer descritivo com IA..."):
-                            prompt_ghost = (
-                                f"Aja como um Psicopedagogo e Especialista em Inclusão. Redija um parecer descritivo empático e técnico para o {trim_ativo_pei}.\n"
-                                f"ESTUDANTE: {aluno_foco} | PERFIL: {perfil_atual}\n"
-                                f"EVIDÊNCIAS DO {trim_ativo_pei.upper()}:\n"
-                                f"1. DESEMPENHO: {notas_str} | FALTAS: {faltas_cnt}\n"
-                                f"2. DIÁRIO: {oc_str}\n\n"
-                                f"REDIJA UTILIZANDO AS TAGS:\n"
-                                f"[DIAGNOSTICO_GERAL] (Relatório descritivo do {trim_ativo_pei})\n"
-                                f"[SOCIAIS] (Interação no período)\n"
-                                f"[COMUNICATIVAS] (Expressão verbal/escrita)\n"
-                                f"[EMOCIONAIS] (Autorregulação)\n"
-                                f"[FUNCIONAIS] (Autonomia)\n"
-                                f"[DIRETRIZES_CURRICULARES] (Orientações pedagógicas)"
-                            )
-                            res_master = ai.gerar_ia("ESPECIALISTA_INCLUSAO", prompt_ghost)
-                            salvar_relatorio_pei_sem_duplicidade(id_a, aluno_foco, tipo_relatorio_chave, res_master)
-                            st.success("Rascunho gerado com sucesso!"); time.sleep(0.5); st.rerun()
-
-                    ed_diag = st.text_area("1. Diagnóstico e Evolução Geral do Trimestre:", ai.extrair_tag(text_dossie_salvo, "DIAGNOSTICO_GERAL"), height=140, key=f"ed_diag_ghost_{v}")
+                    ed_diag = st.text_area("1. Diagnóstico Geral & Evolução no Trimestre:", ai.extrair_tag(text_dossie_salvo, "DIAGNOSTICO_GERAL"), height=130, key=f"ed_diag_ghost_{v}")
                     
                     c_h1, c_h2 = st.columns(2)
-                    ed_soc = c_h1.text_area("2. Habilidades Sociais:", ai.extrair_tag(text_dossie_salvo, "SOCIAIS"), height=85, key=f"ed_soc_ghost_{v}")
+                    ed_soc = c_h1.text_area("2. Habilidades Sociais & Interação:", ai.extrair_tag(text_dossie_salvo, "SOCIAIS"), height=85, key=f"ed_soc_ghost_{v}")
                     ed_com = c_h2.text_area("3. Habilidades Comunicativas:", ai.extrair_tag(text_dossie_salvo, "COMUNICATIVAS"), height=85, key=f"ed_com_ghost_{v}")
                     ed_emo = c_h1.text_area("4. Habilidades Emocionais:", ai.extrair_tag(text_dossie_salvo, "EMOCIONAIS"), height=85, key=f"ed_emo_ghost_{v}")
-                    ed_fun = c_h2.text_area("5. Habilidades Funcionais:", ai.extrair_tag(text_dossie_salvo, "FUNCIONAIS"), height=85, key=f"ed_fun_ghost_{v}")
+                    ed_fun = c_h2.text_area("5. Habilidades Funcionais & Autonomia:", ai.extrair_tag(text_dossie_salvo, "FUNCIONAIS"), height=85, key=f"ed_fun_ghost_{v}")
                     
-                    ed_dir = st.text_area("6. Diretrizes e Adaptações Recomendadas:", ai.extrair_tag(text_dossie_salvo, "DIRETRIZES_CURRICULARES"), height=100, key=f"ed_dir_ghost_{v}")
+                    ed_dir = st.text_area("6. Diretrizes e Adaptações Recomendadas:", ai.extrair_tag(text_dossie_salvo, "DIRETRIZES_CURRICULARES"), height=95, key=f"ed_dir_ghost_{v}")
                     
-                    if st.button(f"Salvar Dossiê Trimestral", type="primary", use_container_width=True, key=f"btn_save_man_dossie_{v}"):
+                    if st.button("Salvar Dossiê Trimestral", type="primary", use_container_width=True, key=f"btn_save_man_dossie_{v}"):
                         texto_consolidado = f"[DIAGNOSTICO_GERAL]\n{ed_diag}\n\n[SOCIAIS]\n{ed_soc}\n\n[COMUNICATIVAS]\n{ed_com}\n\n[EMOCIONAIS]\n{ed_emo}\n\n[FUNCIONAIS]\n{ed_fun}\n\n[DIRETRIZES_CURRICULARES]\n{ed_dir}"
                         salvar_relatorio_pei_sem_duplicidade(id_a, aluno_foco, tipo_relatorio_chave, texto_consolidado)
-                        st.success(f"Dossiê do {trim_ativo_pei} salvo com sucesso!"); time.sleep(0.5); st.rerun()
+                        st.success(f"Dossiê de {aluno_foco} salvo com sucesso!"); time.sleep(0.5); st.rerun()
 
             renderizar_forja_dossie_fragmento()
 
