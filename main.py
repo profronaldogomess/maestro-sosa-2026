@@ -1224,8 +1224,9 @@ if menu == "📅 Planejamento (Ponto ID)":
             return re.sub(r'\[cite:.*?\]', '', texto).strip()
 
         if modo_inteligencia == "Status de Execução (Checklist)":
-            st.caption("Cruzamento automatizado entre os tópicos da matriz curricular e os planos gerados no Ponto ID.")
-            c1, c2 = st.columns(2)
+            st.caption("Cruzamento automatizado e semântico entre os tópicos da matriz curricular e os planos homologados no Ponto ID.")
+            
+            c1, c2 = st.columns([1, 1])
             ano_c = c1.selectbox("Série:", [6, 7, 8, 9], key=f"matriz_ano_{v}")
             trim_c = c2.selectbox("Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"matriz_trim_{v}")
             
@@ -1237,20 +1238,76 @@ if menu == "📅 Planejamento (Ponto ID)":
                 df_c = df_curriculo[df_curriculo[col_ano].astype(str).str.contains(str(ano_c))].copy()
                 
                 if not df_c.empty:
-                    dados_checklist = []
+                    # 1. MINERAÇÃO INTEGRAL DE TODOS OS PLANOS DO TRIMESTRE
                     planos_feitos = df_planos[(df_planos["ANO"].astype(str).str.contains(str(ano_c))) & (df_planos["TURMA"] == trim_c)] if not df_planos.empty and 'ANO' in df_planos.columns and 'TURMA' in df_planos.columns else pd.DataFrame()
-                    texto_soberano = " | ".join([ai.extrair_tag(p, "CONTEUDOS_ESPECIFICOS").upper() for p in planos_feitos.get("PLANO_TEXTO", pd.Series())]) if not planos_feitos.empty else ""
-                    texto_soberano_limpo = re.sub(r'[^A-Z0-9]', '', texto_soberano)
+                    
+                    # Concatena 100% do texto dos planos daquele trimestre
+                    todos_planos_texto = ""
+                    if not planos_feitos.empty and 'PLANO_TEXTO' in planos_feitos.columns:
+                        todos_planos_texto = " \n ".join([str(p).upper() for p in planos_feitos['PLANO_TEXTO'].dropna()])
+                    
+                    import unicodedata
+                    def normalizar_para_busca(txt):
+                        if not txt or not isinstance(txt, str): return ""
+                        nfkd = unicodedata.normalize('NFKD', txt.upper())
+                        sem_acento = "".join([c for c in nfkd if not unicodedata.combining(c)])
+                        return re.sub(r'[^A-Z0-9\s]', ' ', sem_acento)
 
+                    planos_texto_norm = normalizar_para_busca(todos_planos_texto)
+
+                    # 2. MOTOR DE RECONHECIMENTO SEMÂNTICO E PSICOMÉTRICO
+                    def verificar_conclusao_topico(topico_raw, planos_norm):
+                        if not topico_raw or not planos_norm: return False
+                        
+                        # Camada 1: Checagem por Código BNCC (ex: EF06MA01, EF06MA02)
+                        codigos_bncc = re.findall(r'EF\d{2}MA\d{2}[A-Z]?', topico_raw, re.IGNORECASE)
+                        for cod in codigos_bncc:
+                            if cod.upper() in planos_norm:
+                                return True
+                                
+                        topico_norm = normalizar_para_busca(topico_raw)
+                        topico_alpha = re.sub(r'[^A-Z0-9]', '', topico_norm)
+                        planos_alpha = re.sub(r'[^A-Z0-9]', '', planos_norm)
+                        
+                        # Camada 2: Checagem por Substring Exata
+                        if len(topico_alpha) >= 8 and topico_alpha in planos_alpha:
+                            return True
+                            
+                        # Camada 3: Checagem por Palavras-Chave Conceituais
+                        stopwords = {
+                            'A', 'O', 'AS', 'OS', 'DE', 'DA', 'DO', 'DAS', 'DOS', 'EM', 'NO', 'NA', 
+                            'NOS', 'NAS', 'POR', 'PARA', 'COM', 'SEM', 'SOB', 'SOBRE', 'E', 'OU', 
+                            'UM', 'UMA', 'UNS', 'UMAS', 'SEU', 'SUA', 'QUE', 'COMO', 'AO', 'AOS',
+                            'VALOR', 'FORMA', 'USO', 'NUMERO', 'NUMEROS'
+                        }
+                        
+                        topico_sem_cod = re.sub(r'EF\d{2}MA\d{2}[A-Z]?', '', topico_norm)
+                        palavras = [w for w in topico_sem_cod.split() if w not in stopwords and len(w) >= 4]
+                        
+                        if not palavras: return False
+                        
+                        palavras_encontradas = [w for w in palavras if w in planos_norm]
+                        taxa = len(palavras_encontradas) / len(palavras)
+                        
+                        # Se 50% ou mais das palavras-chave estiverem presentes no plano
+                        if taxa >= 0.5 or len(palavras_encontradas) >= 2:
+                            return True
+                            
+                        return False
+
+                    dados_checklist = []
                     for _, row in df_c.iterrows():
                         eixo = row.get(col_eixo, 'Geral')
                         conteudos_brutos = limpar_tags_cite(row.get(col_trim, ''))
                         topicos = [t.strip() for t in conteudos_brutos.split(';') if t.strip()]
                         
                         for topico in topicos:
-                            target = re.sub(r'[^A-Z0-9]', '', topico.upper())
-                            status = "CONCLUÍDO" if target in texto_soberano_limpo and len(target) > 5 else "PENDENTE"
-                            dados_checklist.append({"Unidade Temática (Eixo)": eixo, "Conteúdo Específico": topico, "Status": status})
+                            status = "CONCLUÍDO" if verificar_conclusao_topico(topico, planos_texto_norm) else "PENDENTE"
+                            dados_checklist.append({
+                                "Unidade Temática (Eixo)": eixo, 
+                                "Conteúdo Específico": topico, 
+                                "Status": status
+                            })
                     
                     if dados_checklist:
                         df_check = pd.DataFrame(dados_checklist)
@@ -1258,16 +1315,26 @@ if menu == "📅 Planejamento (Ponto ID)":
                         total = len(df_check)
                         progresso = (concluidos / total) * 100 if total > 0 else 0
                         
-                        st.progress(progresso / 100)
-                        st.caption(f"Progresso Curricular do Trimestre: **{concluidos} de {total}** tópicos ministrados ({progresso:.1f}%)")
+                        with st.container(border=True):
+                            c_prog1, c_prog2 = st.columns([3, 1])
+                            c_prog1.progress(progresso / 100, text=f"**Progresso Curricular do Trimestre:** {concluidos} de {total} tópicos ministrados ({progresso:.1f}%)")
+                            c_prog2.metric("Tópicos Restantes", total - concluidos)
                         
+                        st.markdown("<br>", unsafe_allow_html=True)
+
                         def colorir_status(val):
                             if "CONCLUÍDO" in str(val): return 'color: #2ECC71; font-weight: bold;'
                             return 'color: #F1C40F; font-weight: bold;'
                             
-                        st.dataframe(df_check.style.map(colorir_status, subset=['Status']), use_container_width=True, hide_index=True)
-                    else: st.info("Nenhum conteúdo cadastrado para este trimestre na matriz.")
-            else: st.error("Estrutura de colunas da matriz curricular não reconhecida.")
+                        st.dataframe(
+                            df_check.style.map(colorir_status, subset=['Status']), 
+                            use_container_width=True, 
+                            hide_index=True
+                        )
+                    else: 
+                        st.info("Nenhum conteúdo cadastrado para este trimestre na matriz curricular.")
+            else: 
+                st.error("Estrutura de colunas da matriz curricular não reconhecida.")
 
         elif modo_inteligencia == "Gerador de Plano Trimestral":
             st.markdown("#### Compilador Oficial de Plano Trimestral (DOCX)")
