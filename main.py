@@ -7087,12 +7087,12 @@ elif menu == "📚 Base de Conhecimento":
 
 
 # ==============================================================================
-# MÓDULO: CENTRO DE COMANDO DA INCLUSÃO (PEI / PERFIL IA) - V2026.NATIVO_TOTAL
-# (DOWNLOAD DIRETO .DOCX, VISUALIZADOR INTEGRADO E MODELO OFICIAL DE ITABUNA)
+# MÓDULO: CENTRO DE COMANDO DA INCLUSÃO (PEI / PERFIL IA) - V2026.PRO_INFINITY
+# (SINCRONIZAÇÃO GLOBAL DE ALUNO, MACRO-METAS PEDAGÓGICAS, EXPURGO DE RECESSO)
 # ==============================================================================
 elif menu == "♿ Relatórios PEI / Perfil IA":
     st.title("Centro de Comando da Inclusão (PEI / Perfil IA)")
-    st.caption("Gestão de acessibilidade curricular em Matemática: triagem de níveis, pareceres descritivos, estudo de caso e download nativo do PEI oficial da Prefeitura de Itabuna.")
+    st.caption("Gestão curricular individualizada de MATEMÁTICA: triagem, pareceres de evolução, estudo de caso e PEI oficial da Prefeitura de Itabuna.")
     st.markdown("---")
 
     if "v_pei" not in st.session_state: 
@@ -7105,7 +7105,7 @@ elif menu == "♿ Relatórios PEI / Perfil IA":
     @st.dialog("Parecer Acolhedor para os Pais (WhatsApp)", width="large")
     def dialog_zap_parecer_modal(aluno_nome, trim_ativo, parecer_diag, parecer_dir):
         st.caption("Texto formatado para envio à família na reunião de pais:")
-        msg_zap_pei = f"""Olá! Tudo bem? Aqui é o professor Ronaldo Gomes (Componente de Matemática). 🏫
+        msg_zap_pei = f"""Olá! Tudo bem? Aqui é o professor Ronaldo Gomes (Componente Curricular de Matemática). 🏫
 Compartilho o Parecer Descritivo do(a) estudante {aluno_nome} referente ao {trim_ativo}.
 
 📌 EVOLUÇÃO E DESEMPENHO NO TRIMESTRE:
@@ -7144,15 +7144,18 @@ Escola Municipal Flávio José Simões Costa"""
         turmas_reais_pei = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])] if not df_turmas.empty else pd.DataFrame()
         lista_turmas = sorted(turmas_reais_pei['ID_TURMA'].unique()) if not turmas_reais_pei.empty else sorted(df_alunos['TURMA'].unique())
         
+        # -------------------------------------------------------------
+        # SELEÇÃO GLOBAL SINCRONIZADA: TURMA, TRIMESTRE E ESTUDANTE (LEI #6)
+        # -------------------------------------------------------------
         with st.container(border=True):
-            c_top1, c_top2 = st.columns([1.2, 2])
-            turma_pei = c_top1.selectbox("Turma Selecionada:", lista_turmas, key=f"pei_t_clean_{v}")
+            c_top1, c_top2, c_top3 = st.columns([1.2, 1.3, 2])
+            turma_pei = c_top1.selectbox("Turma Selecionada:", lista_turmas, key="pei_turma_global_sel")
             
             trim_ativo_pei = c_top2.segmented_control(
                 "Trimestre Ativo:",
                 ["I Trimestre", "II Trimestre", "III Trimestre"],
                 default=trim_detectado,
-                key=f"seg_trim_pei_{v}"
+                key="pei_trim_global_sel"
             )
             if not trim_ativo_pei: trim_ativo_pei = trim_detectado
 
@@ -7161,39 +7164,46 @@ Escola Municipal Flávio José Simões Costa"""
             
             df_turma_foco = df_turma_raw[~df_turma_raw['STATUS'].astype(str).str.upper().isin(["INATIVO", "TRANSFERIDO", "EVADIDO", "DESISTENTE"])].copy()
 
-        if df_turma_foco.empty:
-            st.warning(f"Nenhum estudante ativo cadastrado na turma {turma_pei}.")
-            st.stop()
+            if df_turma_foco.empty:
+                st.warning(f"Nenhum estudante ativo cadastrado na turma {turma_pei}.")
+                st.stop()
 
-        def elegivel_prova_adaptada_universal(nec_str):
-            n = str(nec_str).upper().strip()
-            if n in ["NENHUMA", "", "NAN", "TÍPICO", "TIPICO"]: 
-                return False
-            
-            tem_cid_medico = bool(re.search(r'\b[A-Z]\d{2}(?:\.\d+)?\b', n))
-            tem_palavra_laudo = any(x in n for x in [
-                "LAUDO", "TEA", "TDAH", "DISLEXIA", "DEF", "SURDEZ", "CEGUEIRA", 
-                "TOD", "SÍNDROME", "SINDROME", "DOWN", "PEI", "PENDENTE", "SUSPEITA", 
-                "INVESTIGAÇÃO", "INVESTIGACAO", "ANÁLISE", "ANALISE", "AUTISMO"
-            ])
-            
-            e_pure_defasagem = ("DEFASAGEM" in n or "DIFICULDADE" in n) and (not tem_cid_medico) and (not tem_palavra_laudo)
-            if e_pure_defasagem: return False
-            return True
+            def elegivel_prova_adaptada_universal(nec_str):
+                n = str(nec_str).upper().strip()
+                if n in ["NENHUMA", "", "NAN", "TÍPICO", "TIPICO"]: return False
+                tem_cid_medico = bool(re.search(r'\b[A-Z]\d{2}(?:\.\d+)?\b', n))
+                tem_palavra_laudo = any(x in n for x in [
+                    "LAUDO", "TEA", "TDAH", "DISLEXIA", "DEF", "SURDEZ", "CEGUEIRA", 
+                    "TOD", "SÍNDROME", "SINDROME", "DOWN", "PEI", "PENDENTE", "SUSPEITA", 
+                    "INVESTIGAÇÃO", "INVESTIGACAO", "ANÁLISE", "ANALISE", "AUTISMO"
+                ])
+                if ("DEFASAGEM" in n or "DIFICULDADE" in n) and (not tem_cid_medico) and (not tem_palavra_laudo): return False
+                return True
 
-        df_turma_foco['ELEGIVEL_PEI'] = df_turma_foco['NECESSIDADES'].apply(elegivel_prova_adaptada_universal)
-        
-        df_laudados = df_turma_foco[df_turma_foco['ELEGIVEL_PEI']].copy()
-        df_defasagem = df_turma_foco[~df_turma_foco['ELEGIVEL_PEI']].copy()
-        df_defasagem = df_defasagem[df_defasagem['NECESSIDADES'].astype(str).str.upper().str.contains("DEFASAGEM|DIFICULDADE", regex=True, na=False)]
+            df_turma_foco['ELEGIVEL_PEI'] = df_turma_foco['NECESSIDADES'].apply(elegivel_prova_adaptada_universal)
+            df_laudados = df_turma_foco[df_turma_foco['ELEGIVEL_PEI']].copy()
+            df_defasagem = df_turma_foco[~df_turma_foco['ELEGIVEL_PEI']].copy()
+            df_defasagem = df_defasagem[df_defasagem['NECESSIDADES'].astype(str).str.upper().str.contains("DEFASAGEM|DIFICULDADE", regex=True, na=False)]
 
+            df_todos_estudantes_pei = pd.concat([df_laudados, df_defasagem]).drop_duplicates(subset=['ID']).sort_values(by="NOME_ALUNO") if not df_laudados.empty or not df_defasagem.empty else pd.DataFrame()
+
+            # SELETOR UNIFICADO: DEFINE A ALUNA PARA TODAS AS ABAS
+            if not df_todos_estudantes_pei.empty:
+                aluno_global_nome = c_top3.selectbox("Estudante Foco do PEI:", df_todos_estudantes_pei['NOME_ALUNO'].tolist(), key="pei_aluno_global_synced")
+                dados_aluno_global = df_todos_estudantes_pei[df_todos_estudantes_pei['NOME_ALUNO'] == aluno_global_nome].iloc[0]
+                id_aluno_global = str(db.limpar_id(dados_aluno_global['ID']))
+                perfil_aluno_global = str(dados_aluno_global['NECESSIDADES']).upper().strip()
+            else:
+                aluno_global_nome, id_aluno_global, perfil_aluno_global = "Nenhum Estudante", "", "TÍPICO"
+
+        # INDICADORES DA TURMA
         qtd_n1 = len(df_laudados[df_laudados['NECESSIDADES'].astype(str).str.contains("PEI N1", case=False, na=False)])
         qtd_n2 = len(df_laudados[df_laudados['NECESSIDADES'].astype(str).str.contains("PEI N2", case=False, na=False)])
         qtd_n3 = len(df_laudados[df_laudados['NECESSIDADES'].astype(str).str.contains("PEI N3", case=False, na=False)])
         qtd_pendentes_suspeitos = len(df_laudados[df_laudados['NECESSIDADES'].astype(str).str.contains("PENDENTE|SUSPEITA|INVESTIG", case=False, na=False)])
 
         with st.container(border=True):
-            st.markdown(f"##### Indicadores de Acessibilidade ({turma_pei} • {trim_ativo_pei})")
+            st.markdown(f"##### Indicadores de Acessibilidade ({turma_pei} • {trim_ativo_pei}) — Estudante em Foco: **{aluno_global_nome}**")
             k1, k2, k3, k4, k5 = st.columns(5)
             k1.metric("Estudantes Ativos", len(df_turma_foco))
             k2.metric("Laudados / CIDs", len(df_laudados), f"{qtd_pendentes_suspeitos} em investigação")
@@ -7305,32 +7315,24 @@ Escola Municipal Flávio José Simões Costa"""
             renderizar_matriz_inclusao_fragmento()
 
         # ==============================================================================
-        # ABA 2: DOSSIÊ DESCRITIVO (REATIVIDADE TOTAL POR ALUNA & ZERO RETENÇÃO)
+        # ABA 2: DOSSIÊ DESCRITIVO & EVOLUÇÃO (SINCRONIZADO COM A ALUNA SELECIONADA)
         # ==============================================================================
         with tab_forja:
             @st.fragment
             def renderizar_forja_dossie_fragmento():
-                st.markdown(f"### Dossiê Descritivo & Evolução — {trim_ativo_pei}")
-                st.caption("Assinale as características observadas na aula de Matemática. A IA estruturará o texto priorizando estritamente suas anotações reais:")
+                st.markdown(f"### Dossiê Descritivo & Evolução — **{aluno_global_nome}** ({trim_ativo_pei})")
+                st.caption("Assinale as características observadas na aula de Matemática. A IA estruturará o parecer priorizando estritamente suas anotações reais:")
                 
-                df_todos_relatorio = pd.concat([df_laudados, df_defasagem]).drop_duplicates(subset=['ID']) if not df_laudados.empty or not df_defasagem.empty else pd.DataFrame()
-                
-                if df_todos_relatorio.empty:
-                    st.info("Nenhum estudante ativo selecionado para relatório nesta turma.")
+                if not id_aluno_global:
+                    st.info("Nenhum estudante selecionado no topo do painel.")
                 else:
-                    aluno_foco = st.selectbox("Selecione a Estudante:", df_todos_relatorio['NOME_ALUNO'].tolist(), key="foco_pei_dossie_select_main")
-                    dados_a = df_todos_relatorio[df_todos_relatorio['NOME_ALUNO'] == aluno_foco].iloc[0]
-                    id_a = str(db.limpar_id(dados_a['ID']))
-                    perfil_atual = str(dados_a['NECESSIDADES']).upper().strip()
-
-                    # Controle de versão para forçar atualização do texto no Streamlit
-                    key_gen_version = f"gen_v_{id_a}_{trim_ativo_pei}"
+                    key_gen_version = f"gen_v_{id_aluno_global}_{trim_ativo_pei}"
                     if key_gen_version not in st.session_state:
                         st.session_state[key_gen_version] = 0
                     v_gen = st.session_state[key_gen_version]
 
-                    # 1. MINERAÇÃO DE DADOS EXCLUSIVOS DA ALUNA SELECIONADA
-                    n_alu = df_notas[(df_notas['ID_ALUNO'].apply(db.limpar_id) == id_a) & (df_notas['TRIMESTRE'] == trim_ativo_pei)] if not df_notas.empty else pd.DataFrame()
+                    # 1. MINERAÇÃO DE DADOS DA ALUNA SELECIONADA
+                    n_alu = df_notas[(df_notas['ID_ALUNO'].apply(db.limpar_id) == id_aluno_global) & (df_notas['TRIMESTRE'] == trim_ativo_pei)] if not df_notas.empty else pd.DataFrame()
                     if not n_alu.empty:
                         nota_c1 = util.sosa_to_float(n_alu.iloc[0]['NOTA_VISTOS'])
                         nota_c2 = util.sosa_to_float(n_alu.iloc[0]['NOTA_TESTE'])
@@ -7347,7 +7349,7 @@ Escola Municipal Flávio José Simões Costa"""
                     ocorrencias_diario = []
                     faltas_cnt = 0
                     if not df_diario.empty:
-                        d_alu = df_diario[(df_diario['ID_ALUNO'].apply(db.limpar_id) == id_a) & (df_diario['TURMA'] == turma_pei)].copy()
+                        d_alu = df_diario[(df_diario['ID_ALUNO'].apply(db.limpar_id) == id_aluno_global) & (df_diario['TURMA'] == turma_pei)].copy()
                         if not d_alu.empty:
                             d_alu['DATA_DT'] = pd.to_datetime(d_alu['DATA'], format="%d/%m/%Y", errors='coerce').dt.date
                             d_alu_sub = d_alu[(d_alu['DATA_DT'] >= dt_i) & (d_alu['DATA_DT'] <= dt_f)]
@@ -7359,7 +7361,7 @@ Escola Municipal Flávio José Simões Costa"""
 
                     oc_str = "\n".join(ocorrencias_diario) if ocorrencias_diario else "Participação regular com acompanhamento mediado."
 
-                    hist_aluno = df_relatorios[df_relatorios['ID_ALUNO'].apply(db.limpar_id) == id_a] if not df_relatorios.empty else pd.DataFrame()
+                    hist_aluno = df_relatorios[df_relatorios['ID_ALUNO'].apply(db.limpar_id) == id_aluno_global] if not df_relatorios.empty else pd.DataFrame()
                     texto_historico_anterior = ""
                     if trim_ativo_pei == "II Trimestre":
                         rel_ant = hist_aluno[hist_aluno['TIPO'] == "DOSSIE_PEI_I_TRIMESTRE"]
@@ -7370,17 +7372,16 @@ Escola Municipal Flávio José Simões Costa"""
                         if not rel_ant2.empty:
                             texto_historico_anterior = f"HISTÓRICO DO II TRIMESTRE: {str(rel_ant2.iloc[-1]['CONTEUDO'])[:400]}"
 
-                    # CARD DE EVIDÊNCIAS COM O NOME EXATO DA ALUNA SELECIONADA
                     with st.container(border=True):
-                        st.markdown(f"##### Evidências Registradas ({aluno_foco} • {trim_ativo_pei})")
+                        st.markdown(f"##### Evidências Registradas ({aluno_global_nome} • {trim_ativo_pei})")
                         c_ctx1, c_ctx2 = st.columns([1.2, 1.8])
                         c_ctx1.info(f"**Rendimento em Matemática:**\n{notas_str}\n\n**Faltas no Período:** {faltas_cnt}")
                         c_ctx2.warning(f"**Atitude & Observações de Sala:**\n{oc_str}")
 
-                    # PAINEL TÁTIL DE MARCAÇÃO RÁPIDA (CHAVES EXCLUSIVAS POR ALUNA)
+                    # PAINEL TÁTIL DE MARCAÇÃO RÁPIDA (CHAVES EXCLUSIVAS)
                     with st.container(border=True):
-                        st.markdown("#### Painel Tátil de Observação Real")
-                        st.caption(f"Assinale as características observadas na aluna **{aluno_foco}**:")
+                        st.markdown(f"#### Painel Tátil de Observação: **{aluno_global_nome}**")
+                        st.caption("Assinale as características observadas nas aulas de Matemática:")
 
                         c_chip1, c_chip2 = st.columns(2)
                         marcas_sociais = c_chip1.pills(
@@ -7388,7 +7389,7 @@ Escola Municipal Flávio José Simões Costa"""
                             ["Isolamento e Não Interage com Colegas", "Não Participa Espontaneamente das Aulas", "Bom Comportamento mas Passiva", "Necessita de Rotina Rígida", "Apresenta Estereotipias", "Sensibilidade a Ruídos / Agitação"],
                             selection_mode="multi",
                             default=["Isolamento e Não Interage com Colegas", "Não Participa Espontaneamente das Aulas", "Bom Comportamento mas Passiva"],
-                            key=f"chips_soc_{id_a}_{trim_ativo_pei}"
+                            key=f"chips_soc_{id_aluno_global}_{trim_ativo_pei}"
                         )
 
                         marcas_comunicacao = c_chip2.pills(
@@ -7396,44 +7397,44 @@ Escola Municipal Flávio José Simões Costa"""
                             ["Comunicação Verbal Restrita / Rara", "Compreende Instruções Curtas", "Responde por Apontamento / Desenho", "Necessita de Apoio Visual / Concreto", "Comunicação Alternativa (PECs)"],
                             selection_mode="multi",
                             default=["Comunicação Verbal Restrita / Rara", "Compreende Instruções Curtas", "Necessita de Apoio Visual / Concreto"],
-                            key=f"chips_com_{id_a}_{trim_ativo_pei}"
+                            key=f"chips_com_{id_aluno_global}_{trim_ativo_pei}"
                         )
 
                         c_chip3, c_chip4 = st.columns(2)
                         marcas_matematica = c_chip3.pills(
                             "Prática Matemática & Tarefas:",
-                            ["Dificilmente Apresenta Tarefas de Casa", "Dificuldade na Abstração sem Apoio", "Realiza Tarefas de Sala com Mediação Direta", "Autonomia com Material Dourado / Concreto", "Uso Funcional da Calculadora", "Reconhece Numerais Básicos"],
+                            ["Dificilmente Apresenta Tarefas de Casa", "Dificuldade na Abstração sem Apoio", "Realiza Tarefas de Sala com Mediação Direta", "Autonomia com Material Concreto", "Uso Funcional da Calculadora", "Reconhece Numerais Básicos"],
                             selection_mode="multi",
                             default=["Dificilmente Apresenta Tarefas de Casa", "Dificuldade na Abstração sem Apoio", "Realiza Tarefas de Sala com Mediação Direta"],
-                            key=f"chips_mat_{id_a}_{trim_ativo_pei}"
+                            key=f"chips_mat_{id_aluno_global}_{trim_ativo_pei}"
                         )
 
                         evolucao_selecionada = c_chip4.segmented_control(
                             "Evolução / Vínculo Pedagógico:",
                             ["Necessita de Reforço de Vínculo e Engajamento", "Desenvolvimento Estável / Em Processo", "Evolução Notória"],
                             default="Necessita de Reforço de Vínculo e Engajamento",
-                            key=f"seg_evo_{id_a}_{trim_ativo_pei}"
+                            key=f"seg_evo_{id_aluno_global}_{trim_ativo_pei}"
                         )
 
                         micro_anotacao_prof = st.text_input(
-                            "Anotação do Professor (Observação real sobre esta aluna):",
+                            "Anotação do Professor (Sua observação real em sala de aula):",
                             value="",
-                            placeholder="Digite ou dite uma anotação real (ex: Não participa dos debates, mas executa contas básicas com calculadora)...",
-                            key=f"inp_micro_obs_{id_a}_{trim_ativo_pei}"
+                            placeholder=f"Digite ou dite observações sobre {aluno_global_nome}...",
+                            key=f"inp_micro_obs_{id_aluno_global}_{trim_ativo_pei}"
                         )
 
                         st.markdown("<br>", unsafe_allow_html=True)
 
-                        if st.button(f"Estruturar Dossiê de {aluno_foco} com IA", type="primary", use_container_width=True, key=f"btn_ghost_auto_{id_a}_{trim_ativo_pei}"):
-                            with st.spinner(f"A IA está redigindo o parecer técnico de {aluno_foco}..."):
+                        if st.button(f"Estruturar Dossiê de {aluno_global_nome} com IA", type="primary", use_container_width=True, key=f"btn_ghost_auto_{id_aluno_global}_{trim_ativo_pei}"):
+                            with st.spinner(f"A IA está redigindo o parecer técnico fiel de {aluno_global_nome}..."):
                                 prompt_auto = (
                                     f"VOCÊ É O PSICOPEDAGOGO PERITO EM EDUCAÇÃO ESPECIAL (PREFEITURA DE ITABUNA).\n"
-                                    f"ESTUDANTE: {aluno_foco} | TURMA: {turma_pei} | LAUDO: {perfil_atual}\n"
+                                    f"ESTUDANTE: {aluno_global_nome} | TURMA: {turma_pei} | LAUDO: {perfil_aluno_global}\n"
                                     f"TRIMESTRE ATUAL: {trim_ativo_pei.upper()}\n\n"
                                     f"🚨 CLÁUSULA DE SOBERANIA PEDAGÓGICA (FIDELIDADE ABSOLUTA AO PROFESSOR):\n"
-                                    f"O parecer DEVE retratar EXATAMENTE a realidade descrita pelo professor abaixo para a estudante {aluno_foco}.\n\n"
-                                    f"--- OBSERVAÇÕES REAIS DO PROFESSOR EM SALA ---\n"
-                                    f"• ANOTAÇÃO DIRETA DO DOCENTE: {micro_anotacao_prof if micro_anotacao_prof.strip() else 'A aluna apresenta bom comportamento, porém com postura passiva e sem interação espontânea.'}\n"
+                                    f"O parecer DEVE retratar EXATAMENTE a realidade descrita pelo professor abaixo para {aluno_global_nome}. NÃO invente 'desenvolvimento excelente' se o docente apontou dificuldades!\n\n"
+                                    f"--- OBSERVAÇÕES REAIS DO PROFESSOR DE MATEMÁTICA ---\n"
+                                    f"• ANOTAÇÃO DIRETA DO DOCENTE: {micro_anotacao_prof if micro_anotacao_prof.strip() else 'A aluna apresenta bom comportamento em sala, porém postura passiva, baixa interação espontânea com colegas e resistência na entrega de tarefas de casa.'}\n"
                                     f"• STATUS DE EVOLUÇÃO INFORMADO: {evolucao_selecionada}\n"
                                     f"• COMPORTAMENTO / INTERAÇÃO: {', '.join(marcas_sociais)}\n"
                                     f"• COMUNICAÇÃO OBSERVADA: {', '.join(marcas_comunicacao)}\n"
@@ -7442,26 +7443,25 @@ Escola Municipal Flávio José Simões Costa"""
                                     f"--- HISTÓRICO ANTERIOR ---\n"
                                     f"{texto_historico_anterior if texto_historico_anterior else 'Início do acompanhamento.'}\n\n"
                                     f"DIRETRIZES DE REDAÇÃO:\n"
-                                    f"1. No [DIAGNOSTICO_GERAL], cite nominalmente {aluno_foco}, retratando a realidade das anotações do professor com linguagem técnica.\n"
+                                    f"1. No [DIAGNOSTICO_GERAL], cite nominalmente {aluno_global_nome}, retratando a realidade das anotações do professor com linguagem técnica.\n"
                                     f"2. Preencha CADA TAG separadamente, sem vazar tags dentro de outras:\n"
                                     f"[DIAGNOSTICO_GERAL] (Diagnóstico realista do {trim_ativo_pei})\n"
-                                    f"[SOCIAIS] (Interação social e relação com os colegas)\n"
-                                    f"[COMUNICATIVAS] (Comunicação na aula de Matemática)\n"
+                                    f"[SOCIAIS] (Interação social e relação com os colegas nas aulas de Matemática)\n"
+                                    f"[COMUNICATIVAS] (Comunicação na aula de Matemática e resposta aos comandos)\n"
                                     f"[EMOCIONAIS] (Comportamento, autorregulação e rotina)\n"
                                     f"[FUNCIONAIS] (Engajamento nas tarefas de sala e de casa)\n"
-                                    f"[DIRETRIZES_CURRICULARES] (Recomendações e estratégias de apoio)"
+                                    f"[DIRETRIZES_CURRICULARES] (Recomendações e estratégias de apoio ao engajamento)"
                                 )
                                 res_ia = ai.gerar_ia("ESPECIALISTA_INCLUSAO", prompt_auto, usar_busca=False)
                                 tipo_relatorio_chave = f"DOSSIE_PEI_{trim_ativo_pei.replace(' ', '_').upper()}"
-                                salvar_relatorio_pei_sem_duplicidade(id_a, aluno_foco, tipo_relatorio_chave, res_ia)
+                                salvar_relatorio_pei_sem_duplicidade(id_aluno_global, aluno_global_nome, tipo_relatorio_chave, res_ia)
                                 
-                                # Força a atualização do widget de texto incrementando a chave
                                 st.session_state[key_gen_version] = int(time.time())
-                                st.success(f"Dossiê de {aluno_foco} gerado com sucesso!")
+                                st.success(f"Dossiê de {aluno_global_nome} gerado com sucesso!")
                                 time.sleep(0.4)
                                 st.rerun()
 
-                    # FUNÇÃO DE EXTRAÇÃO PURA SEM VAZAMENTO
+                    # EXTRAÇÃO PURA SEM VAZAMENTO
                     def extrair_bloco_puro(texto_completo, tag_alvo):
                         if not texto_completo: return ""
                         tags_todas = ["DIAGNOSTICO_GERAL", "SOCIAIS", "COMUNICATIVAS", "EMOCIONAIS", "FUNCIONAIS", "DIRETRIZES_CURRICULARES"]
@@ -7481,73 +7481,74 @@ Escola Municipal Flávio José Simões Costa"""
                     text_dossie_salvo = str(rel_master.iloc[-1]['CONTEUDO']) if not rel_master.empty else ""
 
                     st.markdown("---")
-                    st.markdown(f"#### Parecer Descritivo de **{aluno_foco}** ({trim_ativo_pei})")
+                    st.markdown(f"#### Parecer Descritivo de **{aluno_global_nome}** ({trim_ativo_pei})")
 
-                    # Chaves atreladas à aluna e à versão gerada para atualização imediata na tela
-                    ed_diag = st.text_area("1. Diagnóstico Geral & Evolução no Trimestre:", extrair_bloco_puro(text_dossie_salvo, "DIAGNOSTICO_GERAL"), height=130, key=f"ed_diag_{id_a}_{trim_ativo_pei}_{v_gen}")
+                    ed_diag = st.text_area("1. Diagnóstico Geral & Evolução no Trimestre:", extrair_bloco_puro(text_dossie_salvo, "DIAGNOSTICO_GERAL"), height=130, key=f"ed_diag_{id_aluno_global}_{trim_ativo_pei}_{v_gen}")
                     
                     c_h1, c_h2 = st.columns(2)
-                    ed_soc = c_h1.text_area("2. Habilidades Sociais & Interação:", extrair_bloco_puro(text_dossie_salvo, "SOCIAIS"), height=85, key=f"ed_soc_{id_a}_{trim_ativo_pei}_{v_gen}")
-                    ed_com = c_h2.text_area("3. Habilidades Comunicativas:", extrair_bloco_puro(text_dossie_salvo, "COMUNICATIVAS"), height=85, key=f"ed_com_{id_a}_{trim_ativo_pei}_{v_gen}")
-                    ed_emo = c_h1.text_area("4. Habilidades Emocionais & Comportamento:", extrair_bloco_puro(text_dossie_salvo, "EMOCIONAIS"), height=85, key=f"ed_emo_{id_a}_{trim_ativo_pei}_{v_gen}")
-                    ed_fun = c_h2.text_area("5. Habilidades Funcionais & Tarefas:", extrair_bloco_puro(text_dossie_salvo, "FUNCIONAIS"), height=85, key=f"ed_fun_{id_a}_{trim_ativo_pei}_{v_gen}")
+                    ed_soc = c_h1.text_area("2. Habilidades Sociais & Interação:", extrair_bloco_puro(text_dossie_salvo, "SOCIAIS"), height=85, key=f"ed_soc_{id_aluno_global}_{trim_ativo_pei}_{v_gen}")
+                    ed_com = c_h2.text_area("3. Habilidades Comunicativas:", extrair_bloco_puro(text_dossie_salvo, "COMUNICATIVAS"), height=85, key=f"ed_com_{id_aluno_global}_{trim_ativo_pei}_{v_gen}")
+                    ed_emo = c_h1.text_area("4. Habilidades Emocionais & Comportamento:", extrair_bloco_puro(text_dossie_salvo, "EMOCIONAIS"), height=85, key=f"ed_emo_{id_aluno_global}_{trim_ativo_pei}_{v_gen}")
+                    ed_fun = c_h2.text_area("5. Habilidades Funcionais & Tarefas:", extrair_bloco_puro(text_dossie_salvo, "FUNCIONAIS"), height=85, key=f"ed_fun_{id_aluno_global}_{trim_ativo_pei}_{v_gen}")
                     
-                    ed_dir = st.text_area("6. Diretrizes e Adaptações Recomendadas:", extrair_bloco_puro(text_dossie_salvo, "DIRETRIZES_CURRICULARES"), height=95, key=f"ed_dir_{id_a}_{trim_ativo_pei}_{v_gen}")
+                    ed_dir = st.text_area("6. Diretrizes e Adaptações Recomendadas:", extrair_bloco_puro(text_dossie_salvo, "DIRETRIZES_CURRICULARES"), height=95, key=f"ed_dir_{id_aluno_global}_{trim_ativo_pei}_{v_gen}")
                     
-                    if st.button("Salvar Dossiê Trimestral", type="primary", use_container_width=True, key=f"btn_save_man_dossie_{id_a}_{trim_ativo_pei}"):
+                    if st.button("Salvar Dossiê Trimestral", type="primary", use_container_width=True, key=f"btn_save_man_dossie_{id_aluno_global}_{trim_ativo_pei}"):
                         texto_consolidado = f"[DIAGNOSTICO_GERAL]\n{ed_diag}\n\n[SOCIAIS]\n{ed_soc}\n\n[COMUNICATIVAS]\n{ed_com}\n\n[EMOCIONAIS]\n{ed_emo}\n\n[FUNCIONAIS]\n{ed_fun}\n\n[DIRETRIZES_CURRICULARES]\n{ed_dir}"
-                        salvar_relatorio_pei_sem_duplicidade(id_a, aluno_foco, tipo_relatorio_chave, texto_consolidado)
-                        st.success(f"Dossiê de {aluno_foco} salvo com sucesso!"); time.sleep(0.5); st.rerun()
+                        salvar_relatorio_pei_sem_duplicidade(id_aluno_global, aluno_global_nome, tipo_relatorio_chave, texto_consolidado)
+                        st.success(f"Dossiê de {aluno_global_nome} salvo com sucesso!"); time.sleep(0.5); st.rerun()
 
             renderizar_forja_dossie_fragmento()
 
         # ==============================================================================
-        # ABA 3: PARECER PARA OS PAIS (COM DOWNLOAD NATIVO .DOCX)
+        # ABA 3: PARECER PARA OS PAIS (SINCRONIZADO)
         # ==============================================================================
         with tab_provas_pei:
             @st.fragment
             def renderizar_parecer_pais_fragmento():
-                st.markdown(f"### Parecer Descritivo para a Família ({trim_ativo_pei})")
+                st.markdown(f"### Parecer Descritivo para a Família — **{aluno_global_nome}** ({trim_ativo_pei})")
                 st.caption("Exportação e download nativo do parecer descritivo em linguagem acolhedora.")
                 
-                df_todos_relatorio = pd.concat([df_laudados, df_defasagem]).drop_duplicates(subset=['ID']) if not df_laudados.empty or not df_defasagem.empty else pd.DataFrame()
-                
-                if df_todos_relatorio.empty:
+                if not id_aluno_global:
                     st.info("Nenhum estudante selecionado.")
                 else:
-                    aluno_p_sel = st.selectbox("Selecione o Estudante:", df_todos_relatorio['NOME_ALUNO'].tolist(), key=f"foco_pei_parecer_{v}")
-                    id_p = db.limpar_id(df_todos_relatorio[df_todos_relatorio['NOME_ALUNO'] == aluno_p_sel].iloc[0]['ID'])
-                    perfil_p = str(df_todos_relatorio[df_todos_relatorio['NOME_ALUNO'] == aluno_p_sel].iloc[0]['NECESSIDADES']).upper()
-                    
                     tipo_relatorio_chave = f"DOSSIE_PEI_{trim_ativo_pei.replace(' ', '_').upper()}"
-                    hist_p = df_relatorios[df_relatorios['ID_ALUNO'].apply(db.limpar_id) == id_p] if not df_relatorios.empty else pd.DataFrame()
+                    hist_p = df_relatorios[df_relatorios['ID_ALUNO'].apply(db.limpar_id) == id_aluno_global] if not df_relatorios.empty else pd.DataFrame()
                     rel_p = hist_p[hist_p['TIPO'] == tipo_relatorio_chave] if not hist_p.empty else pd.DataFrame()
                     
                     txt_p_salvo = str(rel_p.iloc[-1]['CONTEUDO']) if not rel_p.empty else ""
-                    p_diag = ai.extrair_tag(txt_p_salvo, "DIAGNOSTICO_GERAL") or "Parecer ainda não preenchido para este período."
-                    p_dir = ai.extrair_tag(txt_p_salvo, "DIRETRIZES_CURRICULARES") or "Sem recomendações registradas."
+                    
+                    def extrair_bloco_puro_par(texto_completo, tag_alvo):
+                        if not texto_completo: return ""
+                        tags_todas = ["DIAGNOSTICO_GERAL", "SOCIAIS", "COMUNICATIVAS", "EMOCIONAIS", "FUNCIONAIS", "DIRETRIZES_CURRICULARES"]
+                        outras = [t for t in tags_todas if t != tag_alvo]
+                        stop_regex = "|".join([rf"\[\s*{t}\s*\]" for t in outras])
+                        m = re.search(rf"\[\s*{tag_alvo}\s*\]\s*[:\-]*\s*(.*?)(?={stop_regex}|$)", texto_completo, re.DOTALL | re.IGNORECASE)
+                        return m.group(1).strip() if m else ""
 
-                    # Compila o arquivo DOCX em memória para download instantâneo
+                    p_diag = extrair_bloco_puro_par(txt_p_salvo, "DIAGNOSTICO_GERAL") or "Parecer ainda não preenchido para este período."
+                    p_dir = extrair_bloco_puro_par(txt_p_salvo, "DIRETRIZES_CURRICULARES") or "Sem recomendações registradas."
+
                     texto_parecer_docx = (
                         f"PARECER DESCRITIVO DE ACOMPANHAMENTO PEDAGÓGICO - {trim_ativo_pei.upper()}\n\n"
-                        f"Estudante: {aluno_p_sel} | Turma: {turma_pei} | Perfil: {perfil_p}\n\n"
+                        f"Estudante: {aluno_global_nome} | Turma: {turma_pei} | Perfil: {perfil_aluno_global}\n\n"
                         f"1. AVALIAÇÃO DESCRITIVA DO DESEMPENHO EM MATEMÁTICA:\n{p_diag}\n\n"
                         f"2. RECOMENDAÇÕES E DIRETRIZES PEDAGÓGICAS:\n{p_dir}\n\n"
                         f"Prof. Ronaldo Gomes • Componente Curricular de Matemática"
                     )
-                    nome_arq_parecer = f"PARECER_{aluno_p_sel.replace(' ','_')}_{trim_ativo_pei.replace(' ','')}"
+                    nome_arq_parecer = f"PARECER_{aluno_global_nome.replace(' ','_')}_{trim_ativo_pei.replace(' ','')}"
                     doc_p = exporter.gerar_docx_aluno_v24(nome_arq_parecer, texto_parecer_docx, {"ano": turma_pei, "trimestre": trim_ativo_pei})
                     docx_bytes_par = doc_p.getvalue()
 
                     with st.container(border=True):
-                        st.markdown("##### Prévia do Parecer na Tela")
+                        st.markdown(f"##### Prévia do Parecer de {aluno_global_nome}")
                         st.write(preparar_para_leitura(f"**Evolução:** {p_diag}"))
                         st.info(preparar_para_leitura(f"**Diretrizes:** {p_dir}"))
 
                     c_act1, c_act2 = st.columns(2)
                     
                     if c_act1.button("Abrir Texto para WhatsApp", use_container_width=True, key=f"btn_zap_par_{v}"):
-                        dialog_zap_parecer_modal(aluno_p_sel, trim_ativo_pei, p_diag, p_dir)
+                        dialog_zap_parecer_modal(aluno_global_nome, trim_ativo_pei, p_diag, p_dir)
 
                     c_act2.download_button(
                         label="📥 Baixar Parecer em Word (DOCX)",
@@ -7556,29 +7557,23 @@ Escola Municipal Flávio José Simões Costa"""
                         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                         type="primary",
                         use_container_width=True,
-                        key=f"btn_dl_par_docx_{id_p}_{v}"
+                        key=f"btn_dl_par_docx_{id_aluno_global}_{v}"
                     )
 
             renderizar_parecer_pais_fragmento()
 
         # ==============================================================================
-        # ABA 4: CURRÍCULO ADAPTADO & PEI OFICIAL COM CÓPIA DIRETA POR COLUNA
+        # ABA 4: CURRÍCULO ADAPTADO & PEI OFICIAL SOBERANO (MACRO-METAS & ANTI-REPETIÇÃO)
         # ==============================================================================
         with tab_curriculo:
             @st.fragment
             def renderizar_curriculo_exportacao_fragmento():
-                st.markdown(f"### Adaptação Curricular & PEI Oficial — {trim_ativo_pei}")
-                st.caption("Planejamento curricular individualizado de MATEMÁTICA no modelo oficial da Prefeitura de Itabuna com download nativo e cópia por coluna.")
+                st.markdown(f"### Adaptação Curricular & PEI Oficial — **{aluno_global_nome}**")
+                st.caption("Planejamento curricular estruturado em MACRO-METAS por Eixo Temático com recursos concretos diversificados.")
                 
-                df_laudados_secao = df_laudados if not df_laudados.empty else pd.DataFrame()
-                
-                if df_laudados_secao.empty:
-                    st.info("Nenhum estudante com diagnóstico laudado cadastrado nesta turma.")
+                if not id_aluno_global:
+                    st.info("Nenhum estudante selecionado.")
                 else:
-                    aluno_exp = st.selectbox("Selecione a Estudante Laudada / PEI:", df_laudados_secao['NOME_ALUNO'].tolist(), key=f"exp_alu_sel_{v}")
-                    
-                    id_exp = db.limpar_id(df_laudados_secao[df_laudados_secao['NOME_ALUNO'] == aluno_exp].iloc[0]['ID'])
-                    perfil_exp = str(df_laudados_secao[df_laudados_secao['NOME_ALUNO'] == aluno_exp].iloc[0]['NECESSIDADES']).upper()
                     ano_aluno_num = "".join(filter(str.isdigit, turma_pei))
 
                     c_esc1, c_esc2 = st.columns([1.5, 1])
@@ -7591,69 +7586,72 @@ Escola Municipal Flávio José Simões Costa"""
                     
                     is_anual_pei = "Anual" in str(escopo_pei_doc)
                     
-                    # 1. RESGATE DO DOSSIÊ CLÍNICO E OBSERVAÇÕES
-                    hist_exp = df_relatorios[df_relatorios['ID_ALUNO'].apply(db.limpar_id) == id_exp] if not df_relatorios.empty else pd.DataFrame()
+                    # 1. RESGATE DO DOSSIÊ
+                    hist_exp = df_relatorios[df_relatorios['ID_ALUNO'].apply(db.limpar_id) == id_aluno_global] if not df_relatorios.empty else pd.DataFrame()
                     rel_master_exp = hist_exp[hist_exp['TIPO'].str.contains("DOSSIE_PEI", na=False)] if not hist_exp.empty else pd.DataFrame()
                     
                     v_diag_exp = ""
                     v_soc_exp = "Interage com apoio do mediador nas atividades em grupo."
-                    v_com_exp = "Comunicação não verbal funcional e necessidade de suporte visual claro."
-                    v_emo_exp = "Necessita de rotina estruturada para manutenção da concentração."
-                    v_fun_exp = "Organização do caderno de Matemática com apoio direcionado."
-                    v_diretrizes_exp = "Uso de Material Dourado, calculadora, malha quadriculada e instruções passo a passo."
+                    v_com_exp = "Comunicação funcional com suporte visual e comandos curtos."
+                    v_emo_exp = "Necessita de rotina estruturada para manutenção da estabilidade."
+                    v_fun_exp = "Execução de tarefas de Matemática com mediação passo a passo no papel."
+                    v_diretrizes_exp = "Uso de recursos concretos diversificados, calculadora, malhas e esquemas visuais."
 
                     if not rel_master_exp.empty:
                         txt_dossie_bruto = str(rel_master_exp.iloc[-1]['CONTEUDO'])
-                        v_diag_exp = ai.extrair_tag(txt_dossie_bruto, "DIAGNOSTICO_GERAL")
-                        if ai.extrair_tag(txt_dossie_bruto, "SOCIAIS"): v_soc_exp = ai.extrair_tag(txt_dossie_bruto, "SOCIAIS")
-                        if ai.extrair_tag(txt_dossie_bruto, "COMUNICATIVAS"): v_com_exp = ai.extrair_tag(txt_dossie_bruto, "COMUNICATIVAS")
-                        if ai.extrair_tag(txt_dossie_bruto, "EMOCIONAIS"): v_emo_exp = ai.extrair_tag(txt_dossie_bruto, "EMOCIONAIS")
-                        if ai.extrair_tag(txt_dossie_bruto, "FUNCIONAIS"): v_fun_exp = ai.extrair_tag(txt_dossie_bruto, "FUNCIONAIS")
-                        if ai.extrair_tag(txt_dossie_bruto, "DIRETRIZES_CURRICULARES"): v_diretrizes_exp = ai.extrair_tag(txt_dossie_bruto, "DIRETRIZES_CURRICULARES")
+                        
+                        def extrair_bloco_puro_curr(texto_completo, tag_alvo):
+                            if not texto_completo: return ""
+                            tags_todas = ["DIAGNOSTICO_GERAL", "SOCIAIS", "COMUNICATIVAS", "EMOCIONAIS", "FUNCIONAIS", "DIRETRIZES_CURRICULARES"]
+                            outras = [t for t in tags_todas if t != tag_alvo]
+                            stop_regex = "|".join([rf"\[\s*{t}\s*\]" for t in outras])
+                            m = re.search(rf"\[\s*{tag_alvo}\s*\]\s*[:\-]*\s*(.*?)(?={stop_regex}|$)", texto_completo, re.DOTALL | re.IGNORECASE)
+                            return m.group(1).strip() if m else ""
 
-                    # 2. TABELA DE PLANEJAMENTO CURRICULAR (COM LIMPEZA AUTOMÁTICA DE TAGS)
-                    chave_tabela_curr = f"CURRICULO_ADAPTADO_ANUAL_{id_exp}" if is_anual_pei else f"CURRICULO_ADAPTADO_{trim_ativo_pei}_{id_exp}"
+                        v_diag_exp = extrair_bloco_puro_curr(txt_dossie_bruto, "DIAGNOSTICO_GERAL")
+                        if extrair_bloco_puro_curr(txt_dossie_bruto, "SOCIAIS"): v_soc_exp = extrair_bloco_puro_curr(txt_dossie_bruto, "SOCIAIS")
+                        if extrair_bloco_puro_curr(txt_dossie_bruto, "COMUNICATIVAS"): v_com_exp = extrair_bloco_puro_curr(txt_dossie_bruto, "COMUNICATIVAS")
+                        if extrair_bloco_puro_curr(txt_dossie_bruto, "EMOCIONAIS"): v_emo_exp = extrair_bloco_puro_curr(txt_dossie_bruto, "EMOCIONAIS")
+                        if extrair_bloco_puro_curr(txt_dossie_bruto, "FUNCIONAIS"): v_fun_exp = extrair_bloco_puro_curr(txt_dossie_bruto, "FUNCIONAIS")
+                        if extrair_bloco_puro_curr(txt_dossie_bruto, "DIRETRIZES_CURRICULARES"): v_diretrizes_exp = extrair_bloco_puro_curr(txt_dossie_bruto, "DIRETRIZES_CURRICULARES")
+
+                    # 2. TABELA CURRICULAR
+                    chave_tabela_curr = f"CURRICULO_ADAPTADO_ANUAL_{id_aluno_global}" if is_anual_pei else f"CURRICULO_ADAPTADO_{trim_ativo_pei}_{id_aluno_global}"
                     curr_records = hist_exp[hist_exp['TIPO'] == chave_tabela_curr] if not hist_exp.empty else pd.DataFrame()
                     
-                    def sanitizar_dataframe_pei(df_in):
-                        if df_in.empty: return df_in
-                        df_out = df_in.copy()
-                        for col in df_out.columns:
-                            if "Objetivo" in col:
-                                df_out[col] = df_out[col].apply(lambda x: re.sub(r'\[/?(?:ITEM|OBJETIVO|ESTRATEGIA|RECURSO)\]', '', re.split(r'\[ESTRATEGIA\]|\[RECURSO\]', str(x), flags=re.IGNORECASE)[0], flags=re.IGNORECASE).strip())
-                            elif "Estratégia" in col:
-                                df_out[col] = df_out[col].apply(lambda x: re.sub(r'\[/?(?:ITEM|OBJETIVO|ESTRATEGIA|RECURSO)\]', '', re.split(r'\[RECURSO\]', str(x), flags=re.IGNORECASE)[0], flags=re.IGNORECASE).strip())
-                            elif "Recurso" in col:
-                                df_out[col] = df_out[col].apply(lambda x: re.sub(r'\[/?(?:ITEM|OBJETIVO|ESTRATEGIA|RECURSO)\]', '', str(x), flags=re.IGNORECASE).strip())
-                        return df_out
-
                     if not curr_records.empty:
                         try: 
-                            df_curr_raw = pd.read_json(io.StringIO(curr_records.iloc[-1]['CONTEUDO']), orient='records')
-                            df_curr_atual = sanitizar_dataframe_pei(df_curr_raw)
+                            df_curr_atual = pd.read_json(io.StringIO(curr_records.iloc[-1]['CONTEUDO']), orient='records')
                         except: 
                             df_curr_atual = pd.DataFrame(columns=["Objetivos de Aprendizagem", "Estratégias Metodológicas", "Recursos Materiais"])
                     else: 
                         df_curr_atual = pd.DataFrame(columns=["Objetivos de Aprendizagem", "Estratégias Metodológicas", "Recursos Materiais"])
 
-                    # 3. POP-OVER PARA ADAPTAR CONTEÚDOS COM IA
-                    with st.popover("Adaptar Conteúdos de Matemática com IA"):
-                        st.caption(f"Selecione os conteúdos trabalhados na sala de Matemática ({escopo_pei_doc}):")
+                    # 3. POP-OVER: MINERAÇÃO HÍBRIDA (EXPURGA RECESSO & SINTETIZA EM MACRO-METAS)
+                    with st.popover("Adaptar Conteúdos Curriculares com IA"):
+                        st.caption(f"Selecione os eixos curriculares para gerar as MACRO-METAS adaptadas ({escopo_pei_doc}):")
                         
-                        opcoes_dos_planos = []
+                        TERMOS_EXPURGO = r"(?i)(?:RECESSO|FERIADO|JORNADA|SEM\s+ATIVIDADES|N/A|APLICAÇÃO\s+DE\s+EXAME|AVALIAÇÃO_\d+|CONCLUIDO_)"
+                        
+                        opcoes_curriculo_limpas = []
+                        
+                        # Minera Planos Reais da Turma
                         if not df_planos.empty and 'ANO' in df_planos.columns and 'TURMA' in df_planos.columns:
                             mask_p = (df_planos['ANO'].astype(str).str.contains(ano_aluno_num))
                             if not is_anual_pei: mask_p = mask_p & (df_planos['TURMA'] == trim_ativo_pei)
                             planos_da_turma = df_planos[mask_p]
+                            
                             for _, r_plano in planos_da_turma.iterrows():
                                 sem_lbl = r_plano.get('SEMANA', 'Semana')
                                 txt_plano_item = str(r_plano.get('PLANO_TEXTO', ''))
-                                obj_item = ai.extrair_tag(txt_plano_item, "OBJETO_CONHECIMENTO") or ai.extrair_tag(txt_plano_item, "CONTEUDOS_ESPECIFICOS") or "Conteúdo da Aula"
+                                obj_item = ai.extrair_tag(txt_plano_item, "OBJETO_CONHECIMENTO") or ai.extrair_tag(txt_plano_item, "CONTEUDOS_ESPECIFICOS") or ""
                                 clean_obj = re.sub(r'[*#\[\]]', '', obj_item).strip()
-                                if clean_obj and len(clean_obj) > 3 and "N/A" not in clean_obj.upper():
-                                    opcoes_dos_planos.append(f"[{sem_lbl}] {clean_obj}")
+                                
+                                # EXPURGA RECESSO E STRINGS VAZIAS
+                                if clean_obj and len(clean_obj) > 3 and not re.search(TERMOS_EXPURGO, clean_obj) and not re.search(TERMOS_EXPURGO, str(r_plano.get('EIXO', ''))):
+                                    opcoes_curriculo_limpas.append(f"[{sem_lbl}] {clean_obj}")
 
-                        opcoes_da_matriz = []
+                        # Minera Matriz Municipal (Garante III Trimestre ou Início de Ano)
                         df_matriz_ano = df_curriculo[df_curriculo['ANO'].astype(str) == ano_aluno_num].copy() if not df_curriculo.empty else pd.DataFrame()
                         if not df_matriz_ano.empty:
                             col_eixo_mat = next((c for c in df_matriz_ano.columns if any(x in c.upper() for x in ['GERAIS', 'EIXO'])), None)
@@ -7666,43 +7664,53 @@ Escola Municipal Flávio José Simões Costa"""
                                         if pd.notna(c_bruto) and c_bruto.strip() != "" and c_bruto.upper() != "NAN":
                                             for t_item in c_bruto.split(';'):
                                                 t_cl = re.sub(r'\[cite:.*?\]|[*#\[\]]', '', t_item).strip()
-                                                if t_cl and len(t_cl) > 3:
-                                                    opcoes_da_matriz.append(f"[{r_mat[col_eixo_mat]}] {t_cl}")
+                                                if t_cl and len(t_cl) > 3 and not re.search(TERMOS_EXPURGO, t_cl):
+                                                    opcoes_curriculo_limpas.append(f"[{r_mat[col_eixo_mat]}] {t_cl}")
 
-                        todos_conteudos_disponiveis = sorted(list(set(opcoes_dos_planos + opcoes_da_matriz)))
-                        default_selecionados = opcoes_dos_planos[:min(5, len(opcoes_dos_planos))] if opcoes_dos_planos else opcoes_da_matriz[:min(5, len(opcoes_da_matriz))]
+                        todos_conteudos_disponiveis = sorted(list(set(opcoes_curriculo_limpas)))
+                        default_selecionados = todos_conteudos_disponiveis[:min(6, len(todos_conteudos_disponiveis))]
                         
                         selecionados = st.multiselect(
-                            "Conteúdos de Matemática:", 
+                            "Conteúdos Pedagógicos de Matemática (Feriados e Recessos já Excluídos):", 
                             todos_conteudos_disponiveis, 
                             default=default_selecionados,
-                            key=f"sel_mat_pop_{v}"
+                            key=f"sel_mat_pop_{id_aluno_global}_{v}"
                         )
 
                         detalhes_extras_prof = st.text_input(
-                            "Diretrizes do Professor de Matemática:",
-                            placeholder="Ex: Focar em Material Dourado, calculadora, dobraduras e malhas...",
-                            key=f"obs_extra_pei_pop_{v}"
+                            "Diretrizes Específicas do Professor de Matemática:",
+                            placeholder="Ex: Focar em recursos manipulativos variados, malha quadriculada, ábaco e calculadora...",
+                            key=f"obs_extra_pei_pop_{id_aluno_global}_{v}"
                         )
                         
-                        if st.button("Gerar Planejamento de Matemática com IA", type="primary", use_container_width=True, key=f"btn_gen_curr_pop_{v}"):
+                        if st.button("Gerar Planejamento de Matemática com IA", type="primary", use_container_width=True, key=f"btn_gen_curr_pop_{id_aluno_global}_{v}"):
                             if selecionados:
-                                with st.spinner("Adaptando conteúdos de Matemática ao perfil da estudante..."):
+                                with st.spinner("Sintetizando macro-metas curriculares com recursos diversificados..."):
                                     prompt_curr = (
-                                        f"VOCÊ É O ESPECIALISTA EM INCLUSÃO E DUA PARA O COMPONENTE DE MATEMÁTICA.\n"
-                                        f"ESTUDANTE: {aluno_exp} | TURMA: {turma_pei} | LAUDO/PERFIL: {perfil_exp}\n"
+                                        f"VOCÊ É O ESPECIALISTA EM INCLUSÃO E DUA PARA O COMPONENTE DE MATEMÁTICA (PREFEITURA DE ITABUNA).\n"
+                                        f"ESTUDANTE: {aluno_global_nome} | TURMA: {turma_pei} | LAUDO: {perfil_aluno_global}\n"
                                         f"ESCOPO: {escopo_pei_doc}\n\n"
-                                        f"--- DOSSIÊ CLÍNICO DA ESTUDANTE ---\n"
-                                        f"DIAGNÓSTICO: {v_diag_exp if v_diag_exp else 'Acompanhamento de desenvolvimento em Matemática.'}\n"
+                                        f"--- DOSSIÊ CLÍNICO E DIAGNÓSTICO DA ESTUDANTE ---\n"
+                                        f"DIAGNÓSTICO: {v_diag_exp if v_diag_exp else 'Acompanhamento do desenvolvimento com adaptações funcionais em Matemática.'}\n"
                                         f"DIRETRIZES: {v_diretrizes_exp}\n"
-                                        f"OBSERVAÇÕES: {detalhes_extras_prof}\n\n"
-                                        f"--- CONTEÚDOS DE MATEMÁTICA PARA ADAPTAR ---\n"
+                                        f"OBSERVAÇÕES DO PROFESSOR: {detalhes_extras_prof}\n\n"
+                                        f"--- CONTEÚDOS SELECIONADOS PARA ADAPTAÇÃO ---\n"
                                         f"{chr(10).join(selecionados)}\n\n"
-                                        f"MISSÃO: Preencha cada bloco separando rigorosamente as 3 partes, sem misturar tags:\n"
+                                        f"🚨 REGRAS CRÍTICAS DE EXCELÊNCIA PEDAGÓGICA:\n"
+                                        f"1. SINTETIZE em no máximo 4 a 6 MACRO-METAS CONSOLIDADAS por Eixo (não crie dezenas de linhas repetitivas!).\n"
+                                        f"2. NUNCA cite 'Recesso', 'Feriado' ou 'Prova'. Apenas conteúdos matemáticos reais.\n"
+                                        f"3. DIVERSIFIQUE OS RECURSOS MATERIAIS conforme o tema de cada linha (NÃO REPITA 'Material Dourado' em tudo!):\n"
+                                        f"   - Para Sistemas e Números: Ábaco aberto, fichas de ordens, Material Dourado.\n"
+                                        f"   - Para Operações e Cálculo: Calculadora com teclas ampliadas, dinheiro fictício, tabuada visual.\n"
+                                        f"   - Para Frações e Decimais: Discos de frações em EVA, malhas quadriculadas 10x10, encartes de mercado.\n"
+                                        f"   - Para Geometria e Ângulos: Sólidos geométricos, dobraduras de papel, transferidor físico adaptado, régua.\n"
+                                        f"   - Para Medidas e Grandezas: Fita métrica, balança, recipientes graduados.\n"
+                                        f"   - Para Estatística e Gráficos: Tabelas pictóricas ampliadas, gráficos em barras coloridas de cartolina.\n\n"
+                                        f"FORMATO EXATO DE CADA BLOCO:\n"
                                         f"[ITEM]\n"
-                                        f"[OBJETIVO] (Apenas o objetivo de aprendizagem simplificado)\n"
-                                        f"[ESTRATEGIA] (Apenas a estratégia metodológica prática)\n"
-                                        f"[RECURSO] (Apenas os materiais concretos: Material Dourado, ábaco, calculadora, malha, papel ofício)\n"
+                                        f"[OBJETIVO] (Apenas o objetivo de aprendizagem simplificado e acessível)\n"
+                                        f"[ESTRATEGIA] (Estratégia prática: instrução passo a passo, apoio visual e mediação)\n"
+                                        f"[RECURSO] (Recursos concretos diversificados e adequados ao tema da linha)\n"
                                         f"[/ITEM]"
                                     )
                                     res_ia = ai.gerar_ia("TRADUTOR_CURRICULAR_V39", prompt_curr, usar_busca=False)
@@ -7725,14 +7733,14 @@ Escola Municipal Flávio José Simões Costa"""
                                         })
                                     
                                     if novas_linhas:
-                                        df_curr_atual = pd.concat([df_curr_atual, pd.DataFrame(novas_linhas)], ignore_index=True)
-                                        salvar_relatorio_pei_sem_duplicidade(id_exp, aluno_exp, chave_tabela_curr, df_curr_atual.to_json(orient='records'))
-                                        st.success("Planejamento de Matemática gerado com sucesso!")
+                                        df_curr_atual = pd.DataFrame(novas_linhas)
+                                        salvar_relatorio_pei_sem_duplicidade(id_aluno_global, aluno_global_nome, chave_tabela_curr, df_curr_atual.to_json(orient='records'))
+                                        st.success(f"Planejamento de Matemática de {aluno_global_nome} consolidado com sucesso!")
                                         time.sleep(0.5); st.rerun()
 
-                    st.markdown("**Tabela de Planejamento de Matemática (Editável)**")
+                    st.markdown(f"**Tabela de Acessibilidade Curricular de {aluno_global_nome} (Editável)**")
                     df_editado_curr = st.data_editor(
-                        df_curr_atual, num_rows="dynamic", use_container_width=True, key=f"ed_curr_frag_{v}",
+                        df_curr_atual, num_rows="dynamic", use_container_width=True, key=f"ed_curr_frag_{id_aluno_global}_{v}",
                         column_config={
                             "Objetivos de Aprendizagem": st.column_config.TextColumn(width="large"), 
                             "Estratégias Metodológicas": st.column_config.TextColumn(width="large"), 
@@ -7744,17 +7752,17 @@ Escola Municipal Flávio José Simões Costa"""
                     
                     # 4. PARECER DOS RESULTADOS OBTIDOS EM MATEMÁTICA
                     st.markdown("##### Parecer de Resultados Obtidos (Seção 3 do PEI Oficial)")
-                    chave_parecer_res = f"PARECER_RESULTADOS_PEI_{id_exp}"
+                    chave_parecer_res = f"PARECER_RESULTADOS_PEI_{id_aluno_global}"
                     reg_par_res = hist_exp[hist_exp['TIPO'] == chave_parecer_res] if not hist_exp.empty else pd.DataFrame()
-                    parecer_inicial_mat = str(reg_par_res.iloc[-1]['CONTEUDO']) if not reg_par_res.empty else f"Matemática: A estudante {aluno_exp} encontra-se em processo de desenvolvimento da aprendizagem, demonstrando evolução na compreensão dos conceitos matemáticos básicos com o suporte de recursos visuais, material concreto e mediação individualizada."
+                    parecer_inicial_mat = str(reg_par_res.iloc[-1]['CONTEUDO']) if not reg_par_res.empty else f"Matemática: A estudante {aluno_global_nome} encontra-se em processo de desenvolvimento da aprendizagem, respondendo positivamente ao uso de recursos manipulativos diversificados e mediação individualizada nas atividades."
                     
-                    parecer_mat_editavel = st.text_area("Parecer de Matemática (Para a Área de Ciências da Natureza e Matemática):", value=parecer_inicial_mat, height=75, key=f"ta_parecer_res_{v}")
+                    parecer_mat_editavel = st.text_area("Parecer de Matemática (Para a Área de Ciências da Natureza e Matemática):", value=parecer_inicial_mat, height=75, key=f"ta_parecer_res_{id_aluno_global}_{v}")
 
                     # 5. COMPILAÇÃO NATIVA EM MEMÓRIA PARA DOWNLOAD DIRETO (.DOCX)
                     dados_aluno_docx = {
-                        "nome": aluno_exp, 
+                        "nome": aluno_global_nome, 
                         "turma": turma_pei, 
-                        "cid": perfil_exp,
+                        "cid": perfil_aluno_global,
                         "idade": "11"
                     }
                     
@@ -7765,16 +7773,16 @@ Escola Municipal Flávio José Simões Costa"""
                         "Habilidades Funcionais": v_fun_exp
                     }
                     
-                    nome_arq_pei = f"PEI_OFICIAL_ITABUNA_ANUAL_{aluno_exp.replace(' ', '_')}_{ano_aluno_num}ANO" if is_anual_pei else f"PEI_OFICIAL_ITABUNA_{aluno_exp.replace(' ', '_')}_{trim_ativo_pei.replace(' ', '')}"
+                    nome_arq_pei = f"PEI_OFICIAL_ITABUNA_ANUAL_{aluno_global_nome.replace(' ', '_')}_{ano_aluno_num}ANO" if is_anual_pei else f"PEI_OFICIAL_ITABUNA_{aluno_global_nome.replace(' ', '_')}_{trim_ativo_pei.replace(' ', '')}"
                     doc_stream = exporter.gerar_docx_pei_oficial(nome_arq_pei, dados_aluno_docx, habilidades_estudo_caso, df_editado_curr, parecer_resultados=parecer_mat_editavel)
                     docx_bytes_pei = doc_stream.getvalue()
 
                     st.markdown("<br>", unsafe_allow_html=True)
                     c_btn_save, c_btn_exp = st.columns(2)
                     
-                    if c_btn_save.button("Salvar Planejamento de Matemática", use_container_width=True, key=f"btn_save_tab_curr_{v}"):
-                        salvar_relatorio_pei_sem_duplicidade(id_exp, aluno_exp, chave_tabela_curr, df_editado_curr.to_json(orient='records'))
-                        salvar_relatorio_pei_sem_duplicidade(id_exp, aluno_exp, chave_parecer_res, parecer_mat_editavel)
+                    if c_btn_save.button("Salvar Planejamento de Matemática", use_container_width=True, key=f"btn_save_tab_curr_{id_aluno_global}_{v}"):
+                        salvar_relatorio_pei_sem_duplicidade(id_aluno_global, aluno_global_nome, chave_tabela_curr, df_editado_curr.to_json(orient='records'))
+                        salvar_relatorio_pei_sem_duplicidade(id_aluno_global, aluno_global_nome, chave_parecer_res, parecer_mat_editavel)
                         st.success("Planejamento de Matemática salvo com sucesso!"); time.sleep(0.5); st.rerun()
                         
                     c_btn_exp.download_button(
@@ -7784,12 +7792,10 @@ Escola Municipal Flávio José Simões Costa"""
                         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                         type="primary",
                         use_container_width=True,
-                        key=f"btn_dl_pei_docx_{id_exp}_{v}"
+                        key=f"btn_dl_pei_docx_{id_aluno_global}_{v}"
                     )
 
-                    # -------------------------------------------------------------
                     # 6. CENTRAL DE CÓPIA DIRETA POR COLUNA (PARA A TABELA DA ESCOLA)
-                    # -------------------------------------------------------------
                     with st.expander("📋 Copiar por Colunas para a Tabela Coletiva do Google Docs da Escola", expanded=False):
                         st.caption("Clique no ícone de cópia no canto de cada bloco abaixo para colar diretamente dentro da respectiva célula da tabela compartilhada da escola:")
                         
