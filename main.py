@@ -7524,13 +7524,13 @@ Escola Municipal Flávio José Simões Costa"""
             renderizar_parecer_pais_fragmento()
 
         # ==============================================================================
-        # ABA 4: CURRÍCULO ADAPTADO & PEI OFICIAL COM DOWNLOAD DIRETO (.DOCX)
+        # ABA 4: CURRÍCULO ADAPTADO & PEI OFICIAL COM CÓPIA DIRETA POR COLUNA
         # ==============================================================================
         with tab_curriculo:
             @st.fragment
             def renderizar_curriculo_exportacao_fragmento():
                 st.markdown(f"### Adaptação Curricular & PEI Oficial — {trim_ativo_pei}")
-                st.caption("Planejamento curricular individualizado de MATEMÁTICA no modelo oficial da Prefeitura de Itabuna (Download nativo direto no sistema).")
+                st.caption("Planejamento curricular individualizado de MATEMÁTICA no modelo oficial da Prefeitura de Itabuna com download nativo e cópia por coluna.")
                 
                 df_laudados_secao = df_laudados if not df_laudados.empty else pd.DataFrame()
                 
@@ -7573,18 +7573,34 @@ Escola Municipal Flávio José Simões Costa"""
                         if ai.extrair_tag(txt_dossie_bruto, "FUNCIONAIS"): v_fun_exp = ai.extrair_tag(txt_dossie_bruto, "FUNCIONAIS")
                         if ai.extrair_tag(txt_dossie_bruto, "DIRETRIZES_CURRICULARES"): v_diretrizes_exp = ai.extrair_tag(txt_dossie_bruto, "DIRETRIZES_CURRICULARES")
 
-                    # 2. TABELA DE PLANEJAMENTO CURRICULAR
+                    # 2. TABELA DE PLANEJAMENTO CURRICULAR (COM LIMPEZA AUTOMÁTICA DE TAGS)
                     chave_tabela_curr = f"CURRICULO_ADAPTADO_ANUAL_{id_exp}" if is_anual_pei else f"CURRICULO_ADAPTADO_{trim_ativo_pei}_{id_exp}"
                     curr_records = hist_exp[hist_exp['TIPO'] == chave_tabela_curr] if not hist_exp.empty else pd.DataFrame()
                     
+                    def sanitizar_dataframe_pei(df_in):
+                        if df_in.empty: return df_in
+                        df_out = df_in.copy()
+                        for col in df_out.columns:
+                            if "Objetivo" in col:
+                                df_out[col] = df_out[col].apply(lambda x: re.sub(r'\[/?(?:ITEM|OBJETIVO|ESTRATEGIA|RECURSO)\]', '', re.split(r'\[ESTRATEGIA\]|\[RECURSO\]', str(x), flags=re.IGNORECASE)[0], flags=re.IGNORECASE).strip())
+                            elif "Estratégia" in col:
+                                df_out[col] = df_out[col].apply(lambda x: re.sub(r'\[/?(?:ITEM|OBJETIVO|ESTRATEGIA|RECURSO)\]', '', re.split(r'\[RECURSO\]', str(x), flags=re.IGNORECASE)[0], flags=re.IGNORECASE).strip())
+                            elif "Recurso" in col:
+                                df_out[col] = df_out[col].apply(lambda x: re.sub(r'\[/?(?:ITEM|OBJETIVO|ESTRATEGIA|RECURSO)\]', '', str(x), flags=re.IGNORECASE).strip())
+                        return df_out
+
                     if not curr_records.empty:
-                        try: df_curr_atual = pd.read_json(io.StringIO(curr_records.iloc[-1]['CONTEUDO']), orient='records')
-                        except: df_curr_atual = pd.DataFrame(columns=["Objetivos de Aprendizagem", "Estratégias Metodológicas", "Recursos Materiais"])
-                    else: df_curr_atual = pd.DataFrame(columns=["Objetivos de Aprendizagem", "Estratégias Metodológicas", "Recursos Materiais"])
+                        try: 
+                            df_curr_raw = pd.read_json(io.StringIO(curr_records.iloc[-1]['CONTEUDO']), orient='records')
+                            df_curr_atual = sanitizar_dataframe_pei(df_curr_raw)
+                        except: 
+                            df_curr_atual = pd.DataFrame(columns=["Objetivos de Aprendizagem", "Estratégias Metodológicas", "Recursos Materiais"])
+                    else: 
+                        df_curr_atual = pd.DataFrame(columns=["Objetivos de Aprendizagem", "Estratégias Metodológicas", "Recursos Materiais"])
 
                     # 3. POP-OVER PARA ADAPTAR CONTEÚDOS COM IA
                     with st.popover("Adaptar Conteúdos de Matemática com IA"):
-                        st.caption(f"Selecione os conteúdos trabalhados em sala ({escopo_pei_doc}):")
+                        st.caption(f"Selecione os conteúdos trabalhados na sala de Matemática ({escopo_pei_doc}):")
                         
                         opcoes_dos_planos = []
                         if not df_planos.empty and 'ANO' in df_planos.columns and 'TURMA' in df_planos.columns:
@@ -7626,7 +7642,7 @@ Escola Municipal Flávio José Simões Costa"""
                         )
 
                         detalhes_extras_prof = st.text_input(
-                            "Diretrizes Específicas do Professor de Matemática:",
+                            "Diretrizes do Professor de Matemática:",
                             placeholder="Ex: Focar em Material Dourado, calculadora, dobraduras e malhas...",
                             key=f"obs_extra_pei_pop_{v}"
                         )
@@ -7638,28 +7654,37 @@ Escola Municipal Flávio José Simões Costa"""
                                         f"VOCÊ É O ESPECIALISTA EM INCLUSÃO E DUA PARA O COMPONENTE DE MATEMÁTICA.\n"
                                         f"ESTUDANTE: {aluno_exp} | TURMA: {turma_pei} | LAUDO/PERFIL: {perfil_exp}\n"
                                         f"ESCOPO: {escopo_pei_doc}\n\n"
-                                        f"--- DOSSIÊ CLÍNICO E DIAGNÓSTICO DA ESTUDANTE ---\n"
-                                        f"DIAGNÓSTICO: {v_diag_exp if v_diag_exp else 'Acompanhamento de desenvolvimento com adaptações em Matemática.'}\n"
+                                        f"--- DOSSIÊ CLÍNICO DA ESTUDANTE ---\n"
+                                        f"DIAGNÓSTICO: {v_diag_exp if v_diag_exp else 'Acompanhamento de desenvolvimento em Matemática.'}\n"
                                         f"DIRETRIZES: {v_diretrizes_exp}\n"
-                                        f"OBSERVAÇÕES DO PROFESSOR: {detalhes_extras_prof}\n\n"
+                                        f"OBSERVAÇÕES: {detalhes_extras_prof}\n\n"
                                         f"--- CONTEÚDOS DE MATEMÁTICA PARA ADAPTAR ---\n"
                                         f"{chr(10).join(selecionados)}\n\n"
-                                        f"MISSÃO: Converta cada um dos conteúdos de Matemática acima em adaptações para a tabela oficial do PEI da Secretaria de Educação de Itabuna.\n"
-                                        f"Preencha estritamente:\n"
+                                        f"MISSÃO: Preencha cada bloco separando rigorosamente as 3 partes, sem misturar tags:\n"
                                         f"[ITEM]\n"
-                                        f"[OBJETIVO] (Objetivo de Matemática acessível e simplificado)\n"
-                                        f"[ESTRATEGIA] (Estratégia prática: instrução passo a passo, apoio visual e mediação)\n"
-                                        f"[RECURSO] (Material concreto de Matemática: Material Dourado, ábaco, calculadora, malha, papel ofício)\n"
+                                        f"[OBJETIVO] (Apenas o objetivo de aprendizagem simplificado)\n"
+                                        f"[ESTRATEGIA] (Apenas a estratégia metodológica prática)\n"
+                                        f"[RECURSO] (Apenas os materiais concretos: Material Dourado, ábaco, calculadora, malha, papel ofício)\n"
                                         f"[/ITEM]"
                                     )
                                     res_ia = ai.gerar_ia("TRADUTOR_CURRICULAR_V39", prompt_curr, usar_busca=False)
                                     
                                     blocos = re.findall(r"\[ITEM\](.*?)\[/ITEM\]", res_ia, re.DOTALL)
-                                    novas_linhas = [{
-                                        "Objetivos de Aprendizagem": ai.extrair_tag(b, "OBJETIVO"), 
-                                        "Estratégias Metodológicas": ai.extrair_tag(b, "ESTRATEGIA"), 
-                                        "Recursos Materiais": ai.extrair_tag(b, "RECURSO")
-                                    } for b in blocos]
+                                    novas_linhas = []
+                                    for b in blocos:
+                                        obj_m = re.search(r'\[OBJETIVO\]\s*[:\-]*\s*(.*?)(?=\[ESTRATEGIA\]|\[RECURSO\]|\[/ITEM\]|$)', b, re.DOTALL | re.IGNORECASE)
+                                        est_m = re.search(r'\[ESTRATEGIA\]\s*[:\-]*\s*(.*?)(?=\[RECURSO\]|\[/ITEM\]|$)', b, re.DOTALL | re.IGNORECASE)
+                                        rec_m = re.search(r'\[RECURSO\]\s*[:\-]*\s*(.*?)(?=\[/ITEM\]|$)', b, re.DOTALL | re.IGNORECASE)
+                                        
+                                        def limpar_campo(txt_raw):
+                                            if not txt_raw: return ""
+                                            return re.sub(r'\[/?(?:ITEM|OBJETIVO|ESTRATEGIA|RECURSO)\]', '', txt_raw, flags=re.IGNORECASE).strip()
+
+                                        novas_linhas.append({
+                                            "Objetivos de Aprendizagem": limpar_campo(obj_m.group(1) if obj_m else ""),
+                                            "Estratégias Metodológicas": limpar_campo(est_m.group(1) if est_m else ""),
+                                            "Recursos Materiais": limpar_campo(rec_m.group(1) if rec_m else "")
+                                        })
                                     
                                     if novas_linhas:
                                         df_curr_atual = pd.concat([df_curr_atual, pd.DataFrame(novas_linhas)], ignore_index=True)
@@ -7685,9 +7710,9 @@ Escola Municipal Flávio José Simões Costa"""
                     reg_par_res = hist_exp[hist_exp['TIPO'] == chave_parecer_res] if not hist_exp.empty else pd.DataFrame()
                     parecer_inicial_mat = str(reg_par_res.iloc[-1]['CONTEUDO']) if not reg_par_res.empty else f"Matemática: A estudante {aluno_exp} encontra-se em processo de desenvolvimento da aprendizagem, demonstrando evolução na compreensão dos conceitos matemáticos básicos com o suporte de recursos visuais, material concreto e mediação individualizada."
                     
-                    parecer_mat_editavel = st.text_area("Parecer de Matemática:", value=parecer_inicial_mat, height=75, key=f"ta_parecer_res_{v}")
+                    parecer_mat_editavel = st.text_area("Parecer de Matemática (Para a Área de Ciências da Natureza e Matemática):", value=parecer_inicial_mat, height=75, key=f"ta_parecer_res_{v}")
 
-                    # COMPILAÇÃO NATIVA EM MEMÓRIA (0.1s PARA DOWNLOAD INSTANTÂNEO)
+                    # 5. COMPILAÇÃO NATIVA EM MEMÓRIA PARA DOWNLOAD DIRETO (.DOCX)
                     dados_aluno_docx = {
                         "nome": aluno_exp, 
                         "turma": turma_pei, 
@@ -7712,7 +7737,7 @@ Escola Municipal Flávio José Simões Costa"""
                     if c_btn_save.button("Salvar Planejamento de Matemática", use_container_width=True, key=f"btn_save_tab_curr_{v}"):
                         salvar_relatorio_pei_sem_duplicidade(id_exp, aluno_exp, chave_tabela_curr, df_editado_curr.to_json(orient='records'))
                         salvar_relatorio_pei_sem_duplicidade(id_exp, aluno_exp, chave_parecer_res, parecer_mat_editavel)
-                        st.success("Planejamento e parecer de Matemática salvos!"); time.sleep(0.5); st.rerun()
+                        st.success("Planejamento de Matemática salvo com sucesso!"); time.sleep(0.5); st.rerun()
                         
                     c_btn_exp.download_button(
                         label=f"📥 Baixar {escopo_pei_doc} em Word (DOCX)",
@@ -7724,23 +7749,46 @@ Escola Municipal Flávio José Simões Costa"""
                         key=f"btn_dl_pei_docx_{id_exp}_{v}"
                     )
 
-                    # OPÇÃO: COPIAR O BLOCO DE MATEMÁTICA
-                    with st.expander("Copiar Bloco de Matemática para Arquivo Coletivo da Escola"):
-                        st.caption("Texto formatado para colar diretamente no Google Docs compartilhado da escola:")
+                    # -------------------------------------------------------------
+                    # 6. CENTRAL DE CÓPIA DIRETA POR COLUNA (PARA A TABELA DA ESCOLA)
+                    # -------------------------------------------------------------
+                    with st.expander("📋 Copiar por Colunas para a Tabela Coletiva do Google Docs da Escola", expanded=False):
+                        st.caption("Clique no ícone de cópia no canto de cada bloco abaixo para colar diretamente dentro da respectiva célula da tabela compartilhada da escola:")
                         
-                        linhas_texto_copia = []
-                        linhas_texto_copia.append(f"COMPONENTE CURRICULAR: MATEMÁTICA\nPROFESSOR: Ronaldo Gomes | TURMA: {turma_pei}\nESTUDANTE: {aluno_exp} | CID: {perfil_exp}\n" + "="*50)
+                        lista_objs = []
+                        lista_ests = []
+                        lista_recs = []
                         
                         if not df_editado_curr.empty:
-                            for idx_r, r_ed in df_editado_curr.iterrows():
-                                linhas_texto_copia.append(f"\n[ITEM {idx_r+1}]")
-                                linhas_texto_copia.append(f"• OBJETIVO DE APRENDIZAGEM: {r_ed.get('Objetivos de Aprendizagem', '')}")
-                                linhas_texto_copia.append(f"• ESTRATÉGIAS METODOLÓGICAS: {r_ed.get('Estratégias Metodológicas', '')}")
-                                linhas_texto_copia.append(f"• RECURSOS MATERIAIS: {r_ed.get('Recursos Materiais', '')}")
+                            for _, r_c in df_editado_curr.iterrows():
+                                o = str(r_c.get('Objetivos de Aprendizagem', '')).strip()
+                                e = str(r_c.get('Estratégias Metodológicas', '')).strip()
+                                r = str(r_c.get('Recursos Materiais', '')).strip()
+                                if o: lista_objs.append(f"• {o}")
+                                if e: lista_ests.append(f"• {e}")
+                                if r: lista_recs.append(f"• {r}")
                         
-                        linhas_texto_copia.append("\n" + "="*50)
-                        linhas_texto_copia.append(f"RESULTADOS OBTIDOS (SEÇÃO 3):\n{parecer_mat_editavel}")
+                        t_col1, t_col2, t_col3, t_col4 = st.tabs([
+                            "1. Objetivos de Aprendizagem", 
+                            "2. Estratégias Metodológicas", 
+                            "3. Recursos Materiais",
+                            "4. Resultados Obtidos (Seção 3)"
+                        ])
                         
-                        st.code("\n".join(linhas_texto_copia), language=None)
+                        with t_col1:
+                            st.caption("Texto pronto para colar na coluna **OBJETIVOS DE APRENDIZAGEM**:")
+                            st.code("\n\n".join(lista_objs) if lista_objs else "Nenhum objetivo cadastrado.", language=None)
+                            
+                        with t_col2:
+                            st.caption("Texto pronto para colar na coluna **ESTRATÉGIAS METODOLÓGICAS**:")
+                            st.code("\n\n".join(lista_ests) if lista_ests else "Nenhuma estratégia cadastrada.", language=None)
+                            
+                        with t_col3:
+                            st.caption("Texto pronto para colar na coluna **RECURSOS MATERIAIS**:")
+                            st.code("\n\n".join(lista_recs) if lista_recs else "Nenhum recurso cadastrado.", language=None)
+                            
+                        with t_col4:
+                            st.caption("Texto pronto para colar na Seção 3 (**MATEMÁTICA / CIÊNCIAS**):")
+                            st.code(parecer_mat_editavel, language=None)
 
             renderizar_curriculo_exportacao_fragmento()
