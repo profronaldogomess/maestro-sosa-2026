@@ -7399,6 +7399,8 @@ Escola Municipal Flávio José Simões Costa"""
                     perfil_p = str(df_todos_relatorio[df_todos_relatorio['NOME_ALUNO'] == aluno_p_sel].iloc[0]['NECESSIDADES']).upper()
                     
                     tipo_relatorio_chave = f"DOSSIE_PEI_{trim_ativo_pei.replace(' ', '_').upper()}"
+                    chave_parecer_docx = f"PARECER_DOCX_{trim_ativo_pei.replace(' ', '_').upper()}"
+                    
                     hist_p = df_relatorios[df_relatorios['ID_ALUNO'].apply(db.limpar_id) == id_p] if not df_relatorios.empty else pd.DataFrame()
                     rel_p = hist_p[hist_p['TIPO'] == tipo_relatorio_chave] if not hist_p.empty else pd.DataFrame()
                     
@@ -7406,12 +7408,25 @@ Escola Municipal Flávio José Simões Costa"""
                     p_diag = ai.extrair_tag(txt_p_salvo, "DIAGNOSTICO_GERAL") or "Parecer ainda não preenchido para este período."
                     p_dir = ai.extrair_tag(txt_p_salvo, "DIRETRIZES_CURRICULARES") or "Sem recomendações registradas."
 
+                    # VERIFICA SE O PARECER DOCX JÁ EXISTE
+                    link_parecer_existente = None
+                    rel_docx = hist_p[hist_p['TIPO'] == chave_parecer_docx] if not hist_p.empty else pd.DataFrame()
+                    if not rel_docx.empty:
+                        link_parecer_existente = str(rel_docx.iloc[-1]['CONTEUDO'])
+
                     c_act1, c_act2 = st.columns(2)
                     
                     if c_act1.button("Abrir Texto para WhatsApp", use_container_width=True, key=f"btn_zap_par_{v}"):
                         dialog_zap_parecer_modal(aluno_p_sel, trim_ativo_pei, p_diag, p_dir)
 
-                    if c_act2.button("Gerar Parecer em Word (DOCX)", type="primary", use_container_width=True, key=f"btn_docx_par_{v}"):
+                    if link_parecer_existente and "http" in link_parecer_existente:
+                        c_act2.link_button("Abrir Parecer no Drive (DOCX)", link_parecer_existente, type="primary", use_container_width=True)
+                        with st.expander("Recompilar Parecer DOCX no Drive", expanded=False):
+                            btn_gen_par_exec = st.button("Recompilar Documento", key=f"btn_re_par_{id_p}_{v}")
+                    else:
+                        btn_gen_par_exec = c_act2.button("Gerar Parecer em Word (DOCX)", type="primary", use_container_width=True, key=f"btn_docx_par_{v}")
+
+                    if btn_gen_par_exec:
                         with st.spinner("Compilando Parecer Descritivo em Word A4..."):
                             texto_parecer_docx = (
                                 f"PARECER DESCRITIVO DE ACOMPANHAMENTO PEDAGÓGICO - {trim_ativo_pei.upper()}\n\n"
@@ -7424,14 +7439,15 @@ Escola Municipal Flávio José Simões Costa"""
                             link_p = db.subir_e_converter_para_google_docs(doc_p, nome_arq_parecer, modo="AULA")
                             
                             if "https" in link_p:
-                                st.success("Parecer gerado com sucesso!")
-                                st.link_button("Abrir Parecer no Google Drive", link_p, type="primary", use_container_width=True)
+                                salvar_relatorio_pei_sem_duplicidade(id_p, aluno_p_sel, chave_parecer_docx, link_p)
+                                st.success("Parecer gerado e sincronizado no Drive!")
                                 st.balloons()
+                                time.sleep(0.6); st.rerun()
 
             renderizar_parecer_pais_fragmento()
 
         # ==============================================================================
-        # ABA 4: CURRÍCULO ADAPTADO & PEI OFICIAL
+        # ABA 4: CURRÍCULO ADAPTADO & PEI OFICIAL COM MEMÓRIA PERMANENTE
         # ==============================================================================
         with tab_curriculo:
             @st.fragment
@@ -7449,10 +7465,29 @@ Escola Municipal Flávio José Simões Costa"""
                     id_exp = db.limpar_id(df_laudados_secao[df_laudados_secao['NOME_ALUNO'] == aluno_exp].iloc[0]['ID'])
                     perfil_exp = str(df_laudados_secao[df_laudados_secao['NOME_ALUNO'] == aluno_exp].iloc[0]['NECESSIDADES']).upper()
                     
+                    chave_pei_docx = f"PEI_OFICIAL_DOCX_{trim_ativo_pei.replace(' ', '_').upper()}"
+                    
                     hist_exp = df_relatorios[df_relatorios['ID_ALUNO'].apply(db.limpar_id) == id_exp] if not df_relatorios.empty else pd.DataFrame()
                     rel_master_exp = hist_exp[hist_exp['TIPO'] == f"DOSSIE_PEI_{trim_ativo_pei.replace(' ', '_').upper()}"] if not hist_exp.empty else pd.DataFrame()
                     v_diretrizes_exp = ai.extrair_tag(str(rel_master_exp.iloc[-1]['CONTEUDO']), "DIRETRIZES_CURRICULARES") if not rel_master_exp.empty else "Sem diretrizes salvas."
                     
+                    # 1. VERIFICAÇÃO DE DOCUMENTO PEI OFICIAL JÁ GERADO
+                    link_pei_existente = None
+                    rel_pei_docx = hist_exp[hist_exp['TIPO'] == chave_pei_docx] if not hist_exp.empty else pd.DataFrame()
+                    if not rel_pei_docx.empty:
+                        link_pei_existente = str(rel_pei_docx.iloc[-1]['CONTEUDO'])
+
+                    # SE JÁ EXISTE: CARD EXECUTIVO COM LINK DIRETO
+                    if link_pei_existente and "http" in link_pei_existente:
+                        with st.container(border=True):
+                            c_pcard1, c_pcard2 = st.columns([2.5, 1.2])
+                            c_pcard1.markdown(f"##### PEI Oficial Homologado no Drive")
+                            c_pcard1.caption(f"Estudante: **{aluno_exp}** | Turma: **{turma_pei}** | Período: **{trim_ativo_pei}**")
+                            c_pcard2.link_button("Abrir PEI no Drive (DOCX)", link_pei_existente, type="primary", use_container_width=True)
+
+                    st.markdown("<br>", unsafe_allow_html=True)
+
+                    # TABELA CURRICULAR
                     curr_records = hist_exp[hist_exp['TIPO'] == f"CURRICULO_ADAPTADO_{trim_ativo_pei}"] if not hist_exp.empty else pd.DataFrame()
                     if not curr_records.empty:
                         try: df_curr_atual = pd.read_json(io.StringIO(curr_records.iloc[-1]['CONTEUDO']), orient='records')
@@ -7505,9 +7540,11 @@ Escola Municipal Flávio José Simões Costa"""
                     
                     if c_btn_save.button("Salvar Tabela Curricular", use_container_width=True, key=f"btn_save_tab_curr_{v}"):
                         salvar_relatorio_pei_sem_duplicidade(id_exp, aluno_exp, f"CURRICULO_ADAPTADO_{trim_ativo_pei}", df_editado_curr.to_json(orient='records'))
-                        st.success("Tabela salva com sucesso!"); time.sleep(0.5); st.rerun()
+                        st.success("Tabela de acessibilidade salva com sucesso!"); time.sleep(0.5); st.rerun()
                         
-                    if c_btn_exp.button("Gerar PEI Oficial em Word (DOCX)", type="primary", use_container_width=True, key=f"btn_gen_pei_docx_{v}"):
+                    rotulo_btn_pei = "Recompilar PEI Oficial (DOCX)" if (link_pei_existente and "http" in link_pei_existente) else "Gerar PEI Oficial em Word (DOCX)"
+                    
+                    if c_btn_exp.button(rotulo_btn_pei, type="primary", use_container_width=True, key=f"btn_gen_pei_docx_{v}"):
                         with st.spinner("Compilando PEI Oficial no padrão da Secretaria de Educação..."):
                             dados_aluno = {"nome": aluno_exp, "turma": turma_pei, "cid": perfil_exp}
                             
@@ -7522,10 +7559,10 @@ Escola Municipal Flávio José Simões Costa"""
                             link_doc = db.subir_e_converter_para_google_docs(doc_stream, nome_arq_pei, trimestre=trim_ativo_pei, categoria=turma_pei, modo="PLANEJAMENTO")
                             
                             if "https" in link_doc:
-                                salvar_relatorio_pei_sem_duplicidade(id_exp, aluno_exp, "PEI_EXPORTADO", f"Link: {link_doc}")
-                                st.success("PEI Oficial gerado e salvo no Google Drive com sucesso!")
-                                st.link_button("Abrir PEI Oficial no Drive", link_doc, type="primary", use_container_width=True)
+                                salvar_relatorio_pei_sem_duplicidade(id_exp, aluno_exp, chave_pei_docx, link_doc)
+                                st.success("PEI Oficial gerado e sincronizado no Google Drive com sucesso!")
                                 st.balloons()
+                                time.sleep(0.6); st.rerun()
                             else: st.error(f"Erro ao salvar no Drive: {link_doc}")
 
             renderizar_curriculo_exportacao_fragmento()
