@@ -2487,12 +2487,12 @@ elif menu == "🧪 Criador de Aulas":
 
 
 # ==============================================================================
-# MÓDULO: CENTRAL DE AVALIAÇÕES - V2026.ULTIMATE
-# (LINHA DE MONTAGEM, PERÍCIA TRI, ESTEIRA FLUIDA DE RECOMPOSIÇÃO E EXPEDIÇÃO XEROX)
+# MÓDULO: CENTRAL DE AVALIAÇÕES - V2026.PRO_EXECUTIVE
+# (LINHA DE MONTAGEM, PERÍCIA TRI, RECOMPOSIÇÃO E EXPEDIÇÃO PARA IMPRESSÃO)
 # ==============================================================================
 elif menu == "📝 Central de Avaliações":
-    st.title("📝 Central de Avaliações (Padrão ENEM / SAEB / BNCC)")
-    st.caption("Arquitetura de Avaliação de Alta Performance: Ancoragem no Livro/Lousa, Perícia TRI de Distratores, Tríade PEI On-Demand, Esteira Fluida de Recomposição e Expedição de E-mail para Xerox.")
+    st.title("Central de Avaliações")
+    st.caption("Arquitetura de instrumentos avaliativos no padrão ENEM/SAEB/BNCC: ancoragem curricular, perícia psicométrica TRI, matriz inclusiva PEI e expedição para impressão.")
     st.markdown("---")
 
     if "v_av" not in st.session_state: 
@@ -2517,10 +2517,10 @@ elif menu == "📝 Central de Avaliações":
 
     def render_indicador_fases(fase_atual):
         etapas = [
-            ("1. Briefing & Seleção", 1),
-            ("2. Forja Regular (TRI)", 2),
-            ("3. PEI On-Demand", 3),
-            ("4. Custódia & Drive", 4),
+            ("1. Parâmetros", 1),
+            ("2. Caderno Regular", 2),
+            ("3. Adaptação PEI", 3),
+            ("4. Sincronização", 4),
             ("5. Conclusão", 5)
         ]
         html_steps = []
@@ -2530,15 +2530,15 @@ elif menu == "📝 Central de Avaliações":
             elif fase_atual > f_num:
                 color = "#2ECC71"; f_weight = "bold"; border = "border-bottom: 3px solid #2ECC71;"
             else:
-                color = "gray"; f_weight = "normal"; border = "border-bottom: 3px solid gray;"
-            html_steps.append(f"<div style='flex: 1; text-align: center; padding-bottom: 8px; color: {color}; font-weight: {f_weight}; {border}'>{nome}</div>")
-        st.markdown(f"<div style='display: flex; justify-content: space-between; margin-bottom: 25px;'>{''.join(html_steps)}</div>", unsafe_allow_html=True)
+                color = "gray"; f_weight = "normal"; border = "border-bottom: 3px solid #334155;"
+            html_steps.append(f"<div style='flex: 1; text-align: center; padding-bottom: 6px; color: {color}; font-weight: {f_weight}; font-size: 13px; {border}'>{nome}</div>")
+        st.markdown(f"<div style='display: flex; justify-content: space-between; margin-bottom: 20px;'>{''.join(html_steps)}</div>", unsafe_allow_html=True)
 
     tab_forja, tab_acervo_av, tab_recomposicao, tab_expedicao = st.tabs([
-        "📝 Linha de Montagem de Provas", 
-        "📖 Acervo de Provas & Perícia TRI", 
-        "🔄 Recomposição & Cadernos de Revisão",
-        "📧 Expedição de E-mail, PDFs & Acervo Trimestral"
+        "Linha de Montagem", 
+        "Acervo de Avaliações", 
+        "Recomposição de Aprendizagem",
+        "Expedição & Impressão"
     ])
 
     # ==============================================================================
@@ -2547,45 +2547,45 @@ elif menu == "📝 Central de Avaliações":
     with tab_forja:
         if 1 < f['fase'] <= 5:
             render_indicador_fases(f['fase'])
-            if st.button("🗑️ Descartar Edição Atual e Voltar ao Início", use_container_width=True, key=f"btn_disc_av_{v}"): 
+            if st.button("Descartar Produção e Retornar ao Início", use_container_width=True, key=f"btn_disc_av_{v}"): 
                 reset_forja()
             st.markdown("---")
 
         if f['fase'] == 1:
-            st.markdown("### 📋 Fase 1: Briefing & Seleção de Conteúdos da Turma")
-            st.caption("Monte exames alinhados às matrizes legais (BNCC/SAEB) extraindo automaticamente os tópicos ministrados no seu diário/plano.")
+            st.markdown("### Parâmetros e Seleção Curricular")
+            st.caption("Defina os critérios psicométricos e selecione os objetos de conhecimento ministrados em sala de aula.")
             
-            modo_arq = st.pills(
-                "Selecione a Abordagem do Instrumento:", 
-                ["Nova Avaliação (Inédita ENEM/SAEB)", "Sonda Diagnóstica", "Variante Anti-Fraude (Clonagem)", "Recuperação Cirúrgica (Data-Driven)"], 
-                default="Nova Avaliação (Inédita ENEM/SAEB)",
+            modo_arq = st.segmented_control(
+                "Abordagem do Instrumento:", 
+                ["Avaliação Regular (Inédita)", "Sonda Diagnóstica", "Variante Anti-Fraude (Tipo B)", "Recuperação Paralela"], 
+                default="Avaliação Regular (Inédita)",
                 key=f"pills_modo_av_{v}"
             )
             st.markdown("---")
 
             if "Inédita" in modo_arq or "Sonda" in modo_arq:
                 with st.container(border=True):
-                    st.markdown("#### 1. Parâmetros da Turma e Rigor Psicométrico")
+                    st.markdown("#### 1. Parâmetros da Turma & Rigor Psicométrico")
                     c1, c2, c3, c4 = st.columns(4)
                     ano_av = c1.selectbox("Série Alvo:", [6, 7, 8, 9], index=0, key=f"ano_av_sel_{v}")
                     trim_filtro = c2.selectbox("Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"trim_av_sel_{v}")
-                    v_total = c3.number_input("Valor Total da Prova (pts):", 0.0, 10.0, 4.0 if "Inédita" in modo_arq else 10.0, step=0.5, key=f"v_tot_input_{v}")
+                    v_total = c3.number_input("Pontuação Total:", 0.0, 10.0, 4.0 if "Inédita" in modo_arq else 10.0, step=0.5, key=f"v_tot_input_{v}")
                     qtd_q = c4.number_input("Quantidade de Questões:", 1, 30, 10, key=f"qtd_q_input_{v}")
 
                     perfil_rigor = st.segmented_control(
-                        "Equilíbrio TRI & Rigor Cognitivo:", 
-                        ["⚖️ Padrão SAEB (30% F | 50% M | 20% D)", "🚀 Alta Performance (OBMEP)", "🧱 Recomposição (Acessível)"], 
-                        default="⚖️ Padrão SAEB (30% F | 50% M | 20% D)",
+                        "Equilíbrio TRI:", 
+                        ["Padrão SAEB (30% Fácil | 50% Médio | 20% Difícil)", "Olimpíada / Aprofundamento", "Recomposição (Acessível)"], 
+                        default="Padrão SAEB (30% Fácil | 50% Médio | 20% Difícil)",
                         key=f"rigor_pop_{v}"
                     )
 
                 with st.container(border=True):
-                    st.markdown("#### 2. Mineração de Fontes e Ancoragem no Livro Didático")
+                    st.markdown("#### 2. Fontes Curriculares & Livro Didático")
                     
                     fontes_ativas = st.pills(
-                        "Fontes de Dados para Extração:", 
-                        ["📚 Acervo de Aulas SOSA", "📖 Recorte do Livro Didático (PDF)", "✍️ Injeção Auxiliar do Professor"], 
-                        default=["📖 Recorte do Livro Didático (PDF)"],
+                        "Fontes de Dados:", 
+                        ["Acervo de Aulas SOSA", "Livro Didático (PDF)", "Exercícios Complementares"], 
+                        default=["Livro Didático (PDF)"],
                         selection_mode="multi",
                         key=f"pills_fontes_av_{v}"
                     )
@@ -2596,44 +2596,44 @@ elif menu == "📝 Central de Avaliações":
 
                     c_safra1, c_safra2 = st.columns(2)
 
-                    if "📚 Acervo de Aulas SOSA" in fontes_ativas:
+                    if "Acervo de Aulas SOSA" in fontes_ativas:
                         df_ref = df_aulas[df_aulas['ANO'].astype(str).str.contains(str(ano_av))].copy() if not df_aulas.empty else pd.DataFrame()
                         if not df_ref.empty:
                             termos_proibidos = ["APLICAÇÃO", "TESTE", "PROVA", "SONDA", "AVALIAÇÃO", "REVISÃO", "2ª CHAMADA"]
                             df_ref = df_ref[~df_ref['TIPO_MATERIAL'].str.upper().str.contains('|'.join(termos_proibidos))]
-                            mats_selecionados = c_safra1.multiselect("Aulas Ministradas do Acervo:", options=df_ref["TIPO_MATERIAL"].tolist(), key=f"mats_sel_av_{v}")
+                            mats_selecionados = c_safra1.multiselect("Aulas do Acervo:", options=df_ref["TIPO_MATERIAL"].tolist(), key=f"mats_sel_av_{v}")
 
-                    if "📖 Recorte do Livro Didático (PDF)" in fontes_ativas:
+                    if "Livro Didático (PDF)" in fontes_ativas:
                         livros_av_disp = df_materiais[df_materiais['TIPO'].str.contains(str(ano_av), na=False)]['NOME_ARQUIVO'].tolist() if not df_materiais.empty else []
                         sel_livro_av = c_safra2.selectbox("Livro do Cofre Digital:", [""] + livros_av_disp, key=f"sel_livro_av_{v}")
                         
                         if sel_livro_av:
                             uri_livro_av = df_materiais[df_materiais['NOME_ARQUIVO'] == sel_livro_av].iloc[0]['URI_ARQUIVO']
                             c_p_av1, c_p_av2 = st.columns(2)
-                            pags_teo_av = c_p_av1.text_input("📘 Páginas de Teoria (Leitura):", placeholder="Ex: 184-186, 189", key=f"pags_teo_av_{v}")
-                            pags_ex_av = c_p_av2.text_input("📝 Páginas de Exercícios (Fixação):", placeholder="Ex: 187-188, 190-192", key=f"pags_ex_av_{v}")
+                            pags_teo_av = c_p_av1.text_input("Páginas de Teoria:", placeholder="Ex: 184-186", key=f"pags_teo_av_{v}")
+                            pags_ex_av = c_p_av2.text_input("Páginas de Exercícios:", placeholder="Ex: 187-188", key=f"pags_ex_av_{v}")
                             
                             list_p_av_teo = util.processar_intervalos_paginas(pags_teo_av)
                             list_p_av_ex = util.processar_intervalos_paginas(pags_ex_av)
                             
                             if list_p_av_teo or list_p_av_ex:
-                                with st.spinner("🔍 Fatiando páginas do livro no Drive..."):
+                                with st.spinner("Fatiando páginas selecionadas do livro..."):
                                     bytes_pdf_av = db.baixar_bytes_arquivo_drive(uri_livro_av)
                                     if bytes_pdf_av:
                                         if list_p_av_teo: txt_av_teo_ext = util.extrair_texto_pdf_por_paginas(bytes_pdf_av, list_p_av_teo)
                                         if list_p_av_ex: txt_av_ex_ext = util.extrair_texto_pdf_por_paginas(bytes_pdf_av, list_p_av_ex)
 
-                    st.markdown("##### 📌 Pinçamento da Prática Real (Lousa e Caderno)")
+                    st.markdown("##### Prática de Sala de Aula (Questões Espelho)")
                     pincamento_pratica = st.text_area(
-                        "Exercícios ou exemplos que os alunos resolveram no quadro/caderno (para criar Questões Espelho):",
-                        placeholder="Ex: Pág. 185: exercícios 2, 4 e 5. Exemplo do quadro sobre desconto de 20% no comércio de Itabuna.",
+                        "Exercícios resolvidos em sala ou anotações da lousa:",
+                        placeholder="Ex: Pág. 185: exercícios 2, 4 e 5. Exemplo do quadro sobre porcentagem no comércio local.",
                         height=75, key=f"pincamento_pratica_input_{v}"
                     )
 
-                    if "✍️ Injeção Auxiliar do Professor" in fontes_ativas:
+                    if "Exercícios Complementares" in fontes_ativas:
                         recorte_provas_livro = st.text_area(
-                            "📖 Exercícios Autorais ou Textos do Professor:",
-                            placeholder="Cole aqui textos ou questões autorais extras...",
+                            "Exercícios Autorais Adicionais:",
+                            placeholder="Insira questões autorais ou trechos específicos...",
                             height=75, key=f"recorte_provas_input_{v}"
                         )
 
@@ -2690,25 +2690,25 @@ elif menu == "📝 Central de Avaliações":
                         topicos_candidatos_unicos = [f"Conteúdo Curricular de Matemática {ano_av}º Ano - {trim_filtro}"]
 
                     contexto_base_texto = ""
-                    if pincamento_pratica.strip(): contexto_base_texto += f"--- PINÇAMENTO DA PRÁTICA REAL (RESOLVIDO EM SALA) ---\n{pincamento_pratica.strip()}\n\n"
-                    if txt_av_teo_ext: contexto_base_texto += f"--- PÁGINAS DE TEORIA DO LIVRO DIDÁTICO ---\n{txt_av_teo_ext}\n\n"
-                    if txt_av_ex_ext: contexto_base_texto += f"--- PÁGINAS DE EXERCÍCIOS DO LIVRO DIDÁTICO ---\n{txt_av_ex_ext}\n\n"
-                    if recorte_provas_livro.strip(): contexto_base_texto += f"--- EXERCÍCIOS DO PROFESSOR ---\n{recorte_provas_livro.strip()}\n\n"
+                    if pincamento_pratica.strip(): contexto_base_texto += f"--- PRÁTICA DE SALA DE AULA ---\n{pincamento_pratica.strip()}\n\n"
+                    if txt_av_teo_ext: contexto_base_texto += f"--- TEORIA DO LIVRO DIDÁTICO ---\n{txt_av_teo_ext}\n\n"
+                    if txt_av_ex_ext: contexto_base_texto += f"--- EXERCÍCIOS DO LIVRO DIDÁTICO ---\n{txt_av_ex_ext}\n\n"
+                    if recorte_provas_livro.strip(): contexto_base_texto += f"--- EXERCÍCIOS COMPLEMENTARES ---\n{recorte_provas_livro.strip()}\n\n"
 
             with st.container(border=True):
-                st.markdown(f"#### 3. 📋 Seletor Interativo de Conteúdos por Unidades Temáticas BNCC ({ano_av}º Ano - {trim_filtro})")
-                st.caption("Marque exclusivamente os tópicos que você EFETIVAMENTE LECIONOU em sala para a IA gerar questões fiéis:")
+                st.markdown(f"#### 3. Seleção de Conteúdos da Avaliação ({ano_av}º Ano - {trim_filtro})")
+                st.caption("Marque os conteúdos que farão parte da matriz desta avaliação:")
                 
                 assuntos_marcados_prof = st.multiselect(
-                    "Selecione os Conteúdos Ministrados:",
+                    "Conteúdos Selecionados:",
                     options=topicos_candidatos_unicos,
                     default=topicos_candidatos_unicos[:min(qtd_q, len(topicos_candidatos_unicos))],
                     key=f"ms_topicos_prof_{v}"
                 )
 
                 topico_autoral_extra = st.text_input(
-                    "✍️ Adicionar outro conteúdo trabalhado não listado acima (Opcional):",
-                    placeholder="Ex: Leitura de gráficos da Campanha Maio Laranja no comércio local",
+                    "Adicionar Conteúdo Específico (Opcional):",
+                    placeholder="Ex: Leitura de gráficos de colunas e médias aritméticas",
                     key=f"topico_extra_input_{v}"
                 )
 
@@ -2717,9 +2717,9 @@ elif menu == "📝 Central de Avaliações":
                         assuntos_marcados_prof.insert(0, topico_autoral_extra.strip())
 
             st.markdown("<br>", unsafe_allow_html=True)
-            if st.button("🚀 Iniciar Linha de Montagem de Itens (Avançar para Fase 2)", type="primary", use_container_width=True, key=f"btn_fase1_av_{v}"):
+            if st.button("Iniciar Linha de Montagem", type="primary", use_container_width=True, key=f"btn_fase1_av_{v}"):
                 if not assuntos_marcados_prof:
-                    st.error("⚠️ Marque ao menos um conteúdo no seletor acima para forjar a prova.")
+                    st.error("Selecione ao menos um conteúdo no painel acima.")
                 else:
                     gabarito_mestre = util.gerar_gabarito_balanceado(qtd_q)
                     mapa_inicial = []
@@ -2743,7 +2743,7 @@ elif menu == "📝 Central de Avaliações":
 
             elif "Variante" in modo_arq:
                 with st.container(border=True):
-                    st.markdown("#### Parâmetros de Clonagem (Variante Anti-Fraude)")
+                    st.markdown("#### Configuração de Variante Anti-Fraude")
                     c_cl1, c_cl2 = st.columns([1, 2])
                     ano_clone = c_cl1.selectbox("Série:", [6, 7, 8, 9], key=f"ano_clone_sel_{v}")
                     df_provas = df_aulas[(df_aulas['ANO'].astype(str).str.contains(str(ano_clone))) & (df_aulas['SEMANA_REF'] == "AVALIAÇÃO")] if not df_aulas.empty else pd.DataFrame()
@@ -2752,17 +2752,17 @@ elif menu == "📝 Central de Avaliações":
                     if not df_provas.empty:
                         opcoes_provas = [p for p in df_provas['TIPO_MATERIAL'].tolist() if not re.search(r"2[ªA]|CHAMADA|TIPO [B-Z]", str(p), re.IGNORECASE)]
                     
-                    prova_base_sel = c_cl2.selectbox("Selecione a Prova de Origem:", [""] + opcoes_provas, key=f"p_base_sel_{v}")
+                    prova_base_sel = c_cl2.selectbox("Avaliação de Origem (Tipo A):", [""] + opcoes_provas, key=f"p_base_sel_{v}")
                 
                 if prova_base_sel:
                     match_clone = df_provas[df_provas['TIPO_MATERIAL'] == prova_base_sel]
                     txt_base = str(match_clone.iloc[0].get('CONTEUDO', '')) if not match_clone.empty else ""
                     q_reg = ai.extrair_tag(txt_base, "QUESTOES")
                     qtd_detectada = len(re.findall(r"(?i)QUEST[AÃ]O\s*0?\d+", q_reg)) or 10
-                    st.success(f"Prova localizada com {qtd_detectada} questões.")
+                    st.info(f"Avaliação selecionada: {qtd_detectada} questões identificadas.")
                     
-                    if st.button("🚀 Forjar Variante Tipo B (Embaralhada)", type="primary", use_container_width=True, key=f"btn_clone_exe_{v}"):
-                        with st.status("Forjando caderno variante...") as status:
+                    if st.button("Gerar Variante Tipo B", type="primary", use_container_width=True, key=f"btn_clone_exe_{v}"):
+                        with st.status("Estruturando caderno variante...") as status:
                             info_clone = {'ano': f"{ano_clone}º", 'trimestre': "I Trimestre", 'valor': 4.0, 'qtd': qtd_detectada}
                             existentes = df_aulas[df_aulas['TIPO_MATERIAL'].str.startswith(prova_base_sel + " - TIPO", na=False)] if not df_aulas.empty else pd.DataFrame()
                             letra = chr(66 + len(existentes))
@@ -2776,12 +2776,12 @@ elif menu == "📝 Central de Avaliações":
                             link_var = db.subir_e_converter_para_google_docs(doc_var, nome_var, modo="AVALIACAO")
                             
                             db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), "AVALIAÇÃO", nome_var, texto_final_var + f"\n--- LINKS ---\nRegular({link_var})", f"{ano_clone}º", link_var])
-                            status.update(label="Variante homologada e salva no Drive!", state="complete")
-                        st.balloons(); time.sleep(1); st.rerun()
+                            status.update(label="Variante homologada e sincronizada no Drive!", state="complete")
+                        st.balloons(); time.sleep(0.8); st.rerun()
 
         elif f['fase'] == 2:
-            st.markdown("### 🔬 Fase 2: Forja, Perícia & Lapidação dos Itens Regulares (TRI)")
-            st.caption("Revise, edite a perícia de distratores e aprove cada item regular ANTES de avançar para a Tríade PEI.")
+            st.markdown("### Fase 2: Forja & Lapidação de Itens (TRI)")
+            st.caption("Revise, edite a perícia psicométrica e homologue cada item antes de avançar para as adaptações PEI.")
 
             total_q = len(f['mapa'])
             facil_c = sum(1 for item in f['mapa'] if item['dificuldade'] == "Fácil")
@@ -2793,36 +2793,35 @@ elif menu == "📝 Central de Avaliações":
             perc_dificil = (dificil_c / total_q) * 100 if total_q > 0 else 0
 
             with st.container(border=True):
-                st.markdown("##### 📊 Régua de Equilíbrio Psicométrico da Prova (TRI)")
+                st.markdown("##### Distribuição Psicométrica dos Itens")
                 col_tri1, col_tri2, col_tri3, col_tri4 = st.columns(4)
                 col_tri1.metric("Total de Itens", total_q)
-                col_tri2.metric("🔵 Fáceis (30%)", f"{facil_c} ({perc_facil:.0f}%)")
-                col_tri3.metric("🟡 Médias (50%)", f"{media_c} ({perc_media:.0f}%)")
-                col_tri4.metric("🔴 Difíceis (20%)", f"{dificil_c} ({perc_dificil:.0f}%)")
+                col_tri2.metric("Itens Fáceis", f"{facil_c} ({perc_facil:.0f}%)")
+                col_tri3.metric("Itens Médios", f"{media_c} ({perc_media:.0f}%)")
+                col_tri4.metric("Itens Difíceis", f"{dificil_c} ({perc_dificil:.0f}%)")
 
             st.markdown("<br>", unsafe_allow_html=True)
-            modo_leitura_forja = st.toggle("👁️ Modo Leitura Real (Renderizar Matemática LaTeX e Prompts)", value=True, key=f"tog_read_forja_{v}")
+            modo_leitura_forja = st.toggle("Renderizar Visualização Matemática", value=True, key=f"tog_read_forja_{v}")
 
             pendentes = [item for item in f['mapa'] if item['status'] == 'pendente']
 
             if pendentes:
-                if st.button(f"🚀 GERAR LOTE DE {len(pendentes)} QUESTÕES REGULARES (ZERO-ALUCINAÇÃO VIA GEMINI 3.6 FLASH)", type="primary", use_container_width=True, key=f"btn_lote_av_{v}"):
-                    with st.spinner("Forjando itens ancorados estritamente nos assuntos do seu plano e na prática real..."):
+                if st.button(f"Gerar Lote de {len(pendentes)} Itens com IA", type="primary", use_container_width=True, key=f"btn_lote_av_{v}"):
+                    with st.spinner("Estruturando itens com ancoragem curricular..."):
                         prompt_lote = (
                             f"SÉRIE: {f['info']['ano']}\n"
                             f"VALOR TOTAL DA PROVA: {f['info']['valor']}\n\n"
-                            f"🚨 REGRAS INQUEBRÁVEIS DE ANCORAGEM:\n"
-                            f"- Crie cada questão estritamente focada no TEMA ESPECÍFICO atribuído a ela abaixo.\n"
-                            f"- É PROIBIDO inventar assuntos fora da matriz e da prática do professor.\n\n"
+                            f"DIRETRIZES DE ANCORAGEM:\n"
+                            f"- Desenvolva cada questão focada estritamente no TEMA ESPECÍFICO atribuído.\n\n"
                         )
                         for item in pendentes:
-                            prompt_lote += f"QUESTÃO {item['q']}:\n- TEMA ESPECÍFICO EXIGIDO: {item['tema']}\n- COMPLEXIDADE: {item['dificuldade']}\n- GABARITO EXIGIDO: Letra {item['gabarito']}\n\n"
+                            prompt_lote += f"QUESTÃO {item['q']}:\n- TEMA: {item['tema']}\n- COMPLEXIDADE: {item['dificuldade']}\n- GABARITO: Letra {item['gabarito']}\n\n"
                         
-                        prompt_lote += f"--- CONTEXTO E PINÇAMENTO DA PRÁTICA REAL (OBRIGATÓRIO USAR) ---\n{f.get('contexto_base', 'Usar a matriz do ' + str(f['info']['ano']) + ' Ano e o contexto de Itabuna/BA.')}\n"
+                        prompt_lote += f"--- CONTEXTO E PRÁTICA CURRICULAR ---\n{f.get('contexto_base', 'Matriz curricular oficial do ' + str(f['info']['ano']) + ' Ano.')}\n"
                         
                         res_json = ai.gerar_ia_json("FORJA_LOTE_JSON", prompt_lote)
                         if "erro" in res_json:
-                            st.error(f"⚠️ Erro ao processar o lote: {res_json['erro']}")
+                            st.error(f"Erro ao processar lote: {res_json['erro']}")
                         else:
                             TERMOS_PROIBIDOS_ASSUNTO = r"(?i)(?:REVIS[AÃ]O|PROVA|TESTE|SONDA|DOSSI[EÊ]|RAIO-X|AVALIA[CÇ][AÃ]O|APLICA[CÇ][AÃ]O|2[ªA]\s*CHAMADA|RECUPERA[CÇ][AÃ]O|GABARITO|AULA\s*\d+|SEMANA\s*\d+)"
                             for q_data in res_json.get("questoes", []):
@@ -2852,24 +2851,24 @@ elif menu == "📝 Central de Avaliações":
             todas_aprovadas = True
 
             for i, item in enumerate(f['mapa']):
-                label_status = "✅ Aprovado" if item['status'] == 'aprovado' else ("🔍 Em Revisão" if item['status'] == 'revisao' else "⏳ Pendente")
-                assunto_exibicao = item['tema'] if item['tema'] and item['tema'].strip() not in ["**", ""] and not re.search(r"(?i)^(?:REVIS[AÃ]O|PROVA|TESTE|DOSSI[EÊ])", item['tema']) else f"Tópico Curricular de Matemática - Item {item['q']:02d}"
+                label_status = "Aprovado" if item['status'] == 'aprovado' else ("Em Revisão" if item['status'] == 'revisao' else "Pendente")
+                assunto_exibicao = item['tema'] if item['tema'] and item['tema'].strip() not in ["**", ""] and not re.search(r"(?i)^(?:REVIS[AÃ]O|PROVA|TESTE|DOSSI[EÊ])", item['tema']) else f"Tópico Curricular - Item {item['q']:02d}"
 
                 with st.container(border=True):
                     c_card_head1, c_card_head2 = st.columns([3, 1])
-                    c_card_head1.markdown(f"**📌 ITEM {item['q']:02d} | Nível: {item['dificuldade']}**")
-                    c_card_head2.caption(f"Status: **{label_status}** | Gabarito: **({item['gabarito']})**")
+                    c_card_head1.markdown(f"**Item {item['q']:02d} | Nível: {item['dificuldade']}**")
+                    c_card_head2.caption(f"Status: **{label_status}** | Chave: **({item['gabarito']})**")
 
                     if item['status'] == 'pendente':
                         todas_aprovadas = False
                         c_t1, c_t2 = st.columns([3, 1])
-                        tema_q = c_t1.text_input("Assunto / Contexto Específico do Item:", value=assunto_exibicao, key=f"t_{i}_{v}")
+                        tema_q = c_t1.text_input("Objeto de Conhecimento do Item:", value=assunto_exibicao, key=f"t_{i}_{v}")
                         item['tema'] = tema_q
                         dif_q = c_t2.selectbox("Complexidade TRI:", ["Fácil", "Média", "Difícil"], index=["Fácil", "Média", "Difícil"].index(item['dificuldade']), key=f"d_{i}_{v}")
                         
-                        if st.button(f"Forjar Item {item['q']} Individualmente", key=f"btn_gen_ind_{i}_{v}", use_container_width=True):
-                            with st.spinner("Desenhando item ancorado no seu assunto..."):
-                                prompt = f"SÉRIE: {f['info']['ano']}\nTEMA ESPECÍFICO: {tema_q}. DIFICULDADE: {dif_q}. GABARITO: {item['gabarito']}.\n🚨 USE EXCLUSIVAMENTE O CONTEXTO FORNECIDO:\n{f.get('contexto_base', '')}"
+                        if st.button(f"Gerar Item {item['q']} Individualmente", key=f"btn_gen_ind_{i}_{v}", use_container_width=True):
+                            with st.spinner("Estruturando item..."):
+                                prompt = f"SÉRIE: {f['info']['ano']}\nTEMA: {tema_q}. DIFICULDADE: {dif_q}. GABARITO: {item['gabarito']}.\nCONTEXTO:\n{f.get('contexto_base', '')}"
                                 res_item = ai.gerar_ia("FORJA_ITEM_REGULAR", prompt)
                                 ext = {tag: ai.extrair_tag(res_item, tag) for tag in ['ENUNCIADO', 'ALT_A', 'ALT_B', 'ALT_C', 'ALT_D', 'ALT_E', 'HABILIDADE', 'JUSTIFICATIVA', 'DISTRATORES']}
                                 
@@ -2889,57 +2888,57 @@ elif menu == "📝 Central de Avaliações":
 
                         if modo_leitura_forja:
                             with st.container(border=True):
-                                st.markdown(f"**Assunto:** `{assunto_exibicao}`")
+                                st.markdown(f"**Conteúdo:** `{assunto_exibicao}`")
                                 st.markdown(preparar_para_leitura(f"**QUESTÃO {item['q']:02d} -** {d['ENUNCIADO']}"))
                                 
-                                mark_a = "✅ " if d['GABARITO'] == 'A' else ""
-                                mark_b = "✅ " if d['GABARITO'] == 'B' else ""
-                                mark_c = "✅ " if d['GABARITO'] == 'C' else ""
-                                mark_d = "✅ " if d['GABARITO'] == 'D' else ""
-                                mark_e = "✅ " if d['GABARITO'] == 'E' else ""
+                                mark_a = "(Correta) " if d['GABARITO'] == 'A' else ""
+                                mark_b = "(Correta) " if d['GABARITO'] == 'B' else ""
+                                mark_c = "(Correta) " if d['GABARITO'] == 'C' else ""
+                                mark_d = "(Correta) " if d['GABARITO'] == 'D' else ""
+                                mark_e = "(Correta) " if d['GABARITO'] == 'E' else ""
 
                                 col_alt_a, col_alt_b = st.columns(2)
                                 col_alt_a.markdown(f"**(A)** {mark_a}{preparar_para_leitura(d['ALT_A'])}")
                                 col_alt_b.markdown(f"**(B)** {mark_b}{preparar_para_leitura(d['ALT_B'])}")
                                 col_alt_a.markdown(f"**(C)** {mark_c}{preparar_para_leitura(d['ALT_C'])}")
                                 col_alt_b.markdown(f"**(D)** {mark_d}{preparar_para_leitura(d['ALT_D'])}")
-                                if d.get('ALT_E'): st.markdown(f"**(E)** {mark_e}{preparar_para_leitura(d['ALT_E'])}")
+                                if d.get('ALT_E'): col_alt_a.markdown(f"**(E)** {mark_e}{preparar_para_leitura(d['ALT_E'])}")
 
-                        with st.expander("🔬 Ver Perícia TRI e Análise Científica de Distratores", expanded=False):
-                            st.caption(f"🆔 **Descritor SAEB/BNCC:** {d.get('HABILIDADE', assunto_exibicao)}")
-                            st.write(f"🎯 **Gabarito Justificado:** {d.get('JUSTIFICATIVA', 'Não especificada')}")
-                            st.warning(f"🧠 **Distratores Científicos (Erros Mapeados):**\n{d.get('DISTRATORES', 'Não especificados')}")
+                        with st.expander("Perícia TRI e Análise de Distratores", expanded=False):
+                            st.caption(f"Descritor BNCC/SAEB: **{d.get('HABILIDADE', assunto_exibicao)}**")
+                            st.write(f"Justificativa da Chave: {d.get('JUSTIFICATIVA', 'Não informada')}")
+                            st.info(f"Análise de Distratores:\n{d.get('DISTRATORES', 'Não informada')}")
 
-                        with st.expander("✏️ Editar Enunciado, Alternativas, Descritor e Gabarito", expanded=False):
-                            item['tema'] = st.text_input("Assunto do Card:", value=assunto_exibicao, key=f"ed_tema_inp_{i}_{v}")
-                            d['ENUNCIADO'] = st.text_area("Enunciado:", value=d['ENUNCIADO'], height=100, key=f"ed_en_{i}_{v}")
+                        with st.expander("Editar Item Manualmente", expanded=False):
+                            item['tema'] = st.text_input("Rótulo do Conteúdo:", value=assunto_exibicao, key=f"ed_tema_inp_{i}_{v}")
+                            d['ENUNCIADO'] = st.text_area("Enunciado:", value=d['ENUNCIADO'], height=90, key=f"ed_en_{i}_{v}")
                             
                             c_a1, c_a2 = st.columns(2)
-                            d['ALT_A'] = c_a1.text_input("(A):", value=d['ALT_A'], key=f"ed_a_{i}_{v}")
-                            d['ALT_B'] = c_a2.text_input("(B):", value=d['ALT_B'], key=f"ed_b_{i}_{v}")
-                            d['ALT_C'] = c_a1.text_input("(C):", value=d['ALT_C'], key=f"ed_c_{i}_{v}")
-                            d['ALT_D'] = c_a2.text_input("(D):", value=d['ALT_D'], key=f"ed_d_{i}_{v}")
-                            d['ALT_E'] = c_a1.text_input("(E):", value=d['ALT_E'], key=f"ed_e_{i}_{v}")
+                            d['ALT_A'] = c_a1.text_input("Opção (A):", value=d['ALT_A'], key=f"ed_a_{i}_{v}")
+                            d['ALT_B'] = c_a2.text_input("Opção (B):", value=d['ALT_B'], key=f"ed_b_{i}_{v}")
+                            d['ALT_C'] = c_a1.text_input("Opção (C):", value=d['ALT_C'], key=f"ed_c_{i}_{v}")
+                            d['ALT_D'] = c_a2.text_input("Opção (D):", value=d['ALT_D'], key=f"ed_d_{i}_{v}")
+                            d['ALT_E'] = c_a1.text_input("Opção (E):", value=d['ALT_E'], key=f"ed_e_{i}_{v}")
                             
-                            d['GABARITO'] = st.selectbox("Gabarito Oficial:", ["A", "B", "C", "D", "E"], index=["A", "B", "C", "D", "E"].index(d['GABARITO']), key=f"ed_gab_sel_{i}_{v}")
+                            d['GABARITO'] = st.selectbox("Chave Oficial:", ["A", "B", "C", "D", "E"], index=["A", "B", "C", "D", "E"].index(d['GABARITO']), key=f"ed_gab_sel_{i}_{v}")
                             d['HABILIDADE'] = st.text_input("Descritor SAEB/BNCC:", value=d.get('HABILIDADE', assunto_exibicao), key=f"ed_hab_{i}_{v}")
-                            d['JUSTIFICATIVA'] = st.text_area("Justificativa do Gabarito:", value=d.get('JUSTIFICATIVA', ''), height=60, key=f"ed_just_{i}_{v}")
+                            d['JUSTIFICATIVA'] = st.text_area("Justificativa:", value=d.get('JUSTIFICATIVA', ''), height=50, key=f"ed_just_{i}_{v}")
 
-                        inst_ref = st.text_input("Refinar esta questão com IA (Ex: 'Incorpore a produção de cacau de Itabuna'):", key=f"inst_ref_{i}_{v}")
+                        inst_ref = st.text_input("Instrução de Refinamento com IA:", key=f"inst_ref_{i}_{v}")
                         col_b1, col_b2 = st.columns(2)
                         
                         if item['status'] == 'revisao':
-                            if col_b1.button(f"✅ Aprovar Item {item['q']}", type="primary", key=f"btn_apr_{i}_{v}", use_container_width=True):
+                            if col_b1.button(f"Aprovar Item {item['q']}", type="primary", key=f"btn_apr_{i}_{v}", use_container_width=True):
                                 item['status'] = 'aprovado'
                                 st.rerun()
                         else:
-                            if col_b1.button(f"✏️ Reabrir Item {item['q']} para Revisão", key=f"btn_reabrir_{i}_{v}", use_container_width=True):
+                            if col_b1.button(f"Reabrir Item {item['q']}", key=f"btn_reabrir_{i}_{v}", use_container_width=True):
                                 item['status'] = 'revisao'
                                 st.rerun()
 
-                        if col_b2.button(f"🔄 Regerar Item {item['q']} com IA", key=f"btn_ref_{i}_{v}", use_container_width=True):
-                            with st.spinner("Reestruturando item sem alucinação..."):
-                                prompt = f"SÉRIE: {f['info']['ano']}\nTEMA ESPECÍFICO: {assunto_exibicao}. GABARITO: {item['gabarito']}.\nAJUSTE SOLICITADO: {inst_ref}\nENUNCIADO ANTERIOR:\n{d['ENUNCIADO']}\n\n🚨 CONTEXTO OBRIGATÓRIO:\n{f.get('contexto_base', '')}"
+                        if col_b2.button(f"Regerar Item {item['q']}", key=f"btn_ref_{i}_{v}", use_container_width=True):
+                            with st.spinner("Regerando item com IA..."):
+                                prompt = f"SÉRIE: {f['info']['ano']}\nTEMA: {assunto_exibicao}. GABARITO: {item['gabarito']}.\nAJUSTE: {inst_ref}\nENUNCIADO ANTERIOR:\n{d['ENUNCIADO']}\nCONTEXTO:\n{f.get('contexto_base', '')}"
                                 res_item = ai.gerar_ia("FORJA_ITEM_REGULAR", prompt)
                                 ext = {tag: ai.extrair_tag(res_item, tag) for tag in ['ENUNCIADO', 'ALT_A', 'ALT_B', 'ALT_C', 'ALT_D', 'ALT_E', 'HABILIDADE', 'JUSTIFICATIVA', 'DISTRATORES']}
                                 item['dados'] = {
@@ -2952,22 +2951,20 @@ elif menu == "📝 Central de Avaliações":
 
             if todas_aprovadas and len(f['mapa']) > 0:
                 st.markdown("<br>", unsafe_allow_html=True)
-                st.success("🎉 **Caderno Regular 100% Homologado!** Clique abaixo para avançar para a Tríade PEI On-Demand.")
-                if st.button("🚀 APROVAR CADERNO REGULAR COMPLETO E AVANÇAR PARA FASE 3 (PEI ON-DEMAND)", type="primary", use_container_width=True, key=f"btn_fase2_next_{v}"):
+                st.success("Caderno Regular homologado com sucesso.")
+                if st.button("Aprovar Caderno Regular e Avançar", type="primary", use_container_width=True, key=f"btn_fase2_next_{v}"):
                     f['fase'] = 3
                     st.rerun()
 
         elif f['fase'] == 3:
-            st.markdown("### ♿ Fase 3: Tríade Inclusiva PEI On-Demand")
-            st.caption("Gere EXCLUSIVAMENTE os cadernos PEI que você necessita para esta turma. Níveis não marcados serão ignorados economizando tempo e arquivos.")
+            st.markdown("### Fase 3: Matriz Inclusiva PEI (Sob Demanda)")
+            st.caption("Selecione exclusivamente as adaptações necessárias para os estudantes laudados ou com necessidades específicas:")
 
             with st.container(border=True):
-                st.markdown("#### 🎯 Marque os Níveis PEI Necessários para esta Turma:")
-                
                 niveis_selecionados = st.pills(
-                    "Selecione os Níveis Desejados:",
-                    ["🔵 PEI Nível 1 (Apoio Leve - 3 Opções)", "🟡 PEI Nível 2 (Apoio Moderado - Passo a Passo)", "🔴 PEI Nível 3 (Suporte Severo - 100% no Papel)"],
-                    default=["🔵 PEI Nível 1 (Apoio Leve - 3 Opções)", "🔴 PEI Nível 3 (Suporte Severo - 100% no Papel)"],
+                    "Níveis de Acessibilidade Desejados:",
+                    ["PEI Nível 1 (Apoio Leve - 3 Opções)", "PEI Nível 2 (Apoio Moderado - Guiado)", "PEI Nível 3 (Suporte Severo - No Papel)"],
+                    default=["PEI Nível 1 (Apoio Leve - 3 Opções)", "PEI Nível 3 (Suporte Severo - No Papel)"],
                     selection_mode="multi",
                     key=f"pills_niveis_pei_{v}"
                 )
@@ -2978,79 +2975,79 @@ elif menu == "📝 Central de Avaliações":
             pede_n2 = any("Nível 2" in n for n in niveis_selecionados)
             pede_n3 = any("Nível 3" in n for n in niveis_selecionados)
 
-            if st.button("🧠 FORJAR APENAS OS NÍVEIS PEI SELECIONADOS", type="primary", use_container_width=True, key=f"btn_gen_triade_f3_{v}"):
-                with st.status("Construindo materiais de inclusão selecionados...", expanded=True) as status:
+            if st.button("Gerar Cadernos PEI", type="primary", use_container_width=True, key=f"btn_gen_triade_f3_{v}"):
+                with st.status("Estruturando materiais adaptados...", expanded=True) as status:
                     texto_base_reg = f"[VALOR: {f['info']['valor']}]\n\n"
                     for item in f['mapa']:
                         d = item['dados']
                         texto_base_reg += f"**QUESTÃO {item['q']:02d} -** {d['ENUNCIADO']}\n(A) {d['ALT_A']}\n(B) {d['ALT_B']}\n(C) {d['ALT_C']}\n(D) {d['ALT_D']}\n(E) {d['ALT_E']}\n\n"
 
                     if pede_n1:
-                        status.write("🔵 Forjando PEI Nível 1 (Apoio Leve - 3 Alternativas A, B, C)...")
+                        status.write("Estruturando PEI Nível 1 (3 Opções)...")
                         f['pei_1'] = ai.gerar_ia("FORJA_PEI_N1", f"REGULAR:\n{texto_base_reg}")
                     else: f['pei_1'] = ""
 
                     if pede_n2:
-                        status.write("🟡 Forjando PEI Nível 2 (Apoio Moderado - Passo a Passo)...")
+                        status.write("Estruturando PEI Nível 2 (Passo a Passo)...")
                         f['pei_2'] = ai.gerar_ia("FORJA_PEI_N2", f"REGULAR:\n{texto_base_reg}")
                     else: f['pei_2'] = ""
 
                     if pede_n3:
-                        status.write("🔴 Forjando PEI Nível 3 (10 Atividades Impressas no Papel: Pintar/Ligar/Pontilhado)...")
+                        status.write("Estruturando PEI Nível 3 (10 Bento Boxes no Papel)...")
                         f['pei_3'] = ai.gerar_ia("FORJA_PEI_N3", f"REGULAR:\n{texto_base_reg}")
                     else: f['pei_3'] = ""
 
-                    status.update(label="✅ Materiais PEI Selecionados Forjados!", state="complete")
+                    status.update(label="Cadernos adaptados concluídos!", state="complete")
                     st.rerun()
 
             if f.get('pei_1') or f.get('pei_2') or f.get('pei_3'):
-                modo_leitura_pei = st.toggle("👁️ Visualização Real PEI (Renderizar LaTeX)", value=True, key=f"read_pei_tog_{v}")
+                modo_leitura_pei = st.toggle("Renderizar Visualização Matemática", value=True, key=f"read_pei_tog_{v}")
                 
                 abas_existentes_pei = []
-                if pede_n1 or f.get('pei_1'): abas_existentes_pei.append("🔵 PEI Nível 1")
-                if pede_n2 or f.get('pei_2'): abas_existentes_pei.append("🟡 PEI Nível 2")
-                if pede_n3 or f.get('pei_3'): abas_existentes_pei.append("🔴 PEI Nível 3 (Papel)")
+                if pede_n1 or f.get('pei_1'): abas_existentes_pei.append("PEI Nível 1")
+                if pede_n2 or f.get('pei_2'): abas_existentes_pei.append("PEI Nível 2")
+                if pede_n3 or f.get('pei_3'): abas_existentes_pei.append("PEI Nível 3 (No Papel)")
 
                 tabs_pei = st.tabs(abas_existentes_pei)
                 
                 tab_idx = 0
-                if "🔵 PEI Nível 1" in abas_existentes_pei:
+                if "PEI Nível 1" in abas_existentes_pei:
                     with tabs_pei[tab_idx]:
                         if modo_leitura_pei:
                             with st.container(border=True): st.markdown(preparar_para_leitura(f['pei_1']))
-                        f['pei_1'] = st.text_area("Edição Manual PEI N1 (3 Alternativas A, B, C):", value=f['pei_1'], height=250, key=f"ed_p1_area_{v}")
+                        f['pei_1'] = st.text_area("Edição PEI Nível 1:", value=f['pei_1'], height=220, key=f"ed_p1_area_{v}")
                     tab_idx += 1
 
-                if "🟡 PEI Nível 2" in abas_existentes_pei:
+                if "PEI Nível 2" in abas_existentes_pei:
                     with tabs_pei[tab_idx]:
                         if modo_leitura_pei:
                             with st.container(border=True): st.markdown(preparar_para_leitura(f['pei_2']))
-                        f['pei_2'] = st.text_area("Edição Manual PEI N2 (Com Dica + Passo a Passo):", value=f['pei_2'], height=250, key=f"ed_p2_area_{v}")
+                        f['pei_2'] = st.text_area("Edição PEI Nível 2:", value=f['pei_2'], height=220, key=f"ed_p2_area_{v}")
                     tab_idx += 1
 
-                if "🔴 PEI Nível 3 (Papel)" in abas_existentes_pei:
+                if "PEI Nível 3 (No Papel)" in abas_existentes_pei:
                     with tabs_pei[tab_idx]:
                         if modo_leitura_pei:
                             with st.container(border=True):
-                                st.markdown("#### 📦 Estrutura dos 10 Bento Boxes (Atividades no Papel)")
+                                st.markdown("##### Estrutura dos 10 Bento Boxes")
                                 st.markdown(preparar_para_leitura(f['pei_3']))
-                        f['pei_3'] = st.text_area("Edição Manual PEI N3 (10 BOXES + Rubrica de Observação):", value=f['pei_3'], height=250, key=f"ed_p3_area_{v}")
+                        f['pei_3'] = st.text_area("Edição PEI Nível 3:", value=f['pei_3'], height=220, key=f"ed_p3_area_{v}")
 
                 st.markdown("<br>", unsafe_allow_html=True)
-                if st.button("✅ APROVAR MATERIAIS PEI E AVANÇAR PARA FASE 4 (CUSTÓDIA & DRIVE)", type="primary", use_container_width=True, key=f"btn_fase3_next_{v}"):
+                if st.button("Aprovar Adaptações e Avançar", type="primary", use_container_width=True, key=f"btn_fase3_next_{v}"):
                     f['fase'] = 4
                     st.rerun()
 
         elif f['fase'] == 4:
-            st.markdown("### 💾 Fase 4: Custódia & Sincronia Google Drive")
-            st.caption("Geração de arquivos oficiais no Word com Cartão OMR Fiducial, Bento Cards e links de acesso direto.")
+            st.markdown("### Fase 4: Custódia & Sincronização no Google Drive")
+            st.caption("Compilação automática em arquivos DOCX oficiais com Cartão OMR Fiducial e links permanentes.")
 
             tipo_nome = f['info'].get('tipo_prova', 'AVALIAÇÃO').upper().replace(' ', '_')
             nome_sugerido = f"{tipo_nome}_{f['info']['ano'].replace('º','')}ANO_{f['info']['trimestre'].replace(' ', '')}"
-            nome_arq = st.text_input("Identificador Técnico no Cofre Digital:", value=nome_sugerido, key=f"nome_arq_f4_{v}")
+            nome_arq = st.text_input("Identificador Oficial no Drive:", value=nome_sugerido, key=f"nome_arq_f4_{v}")
 
-            if st.button("💾 FINALIZAR E SINCRONIZAR TUDO NO GOOGLE DRIVE", type="primary", use_container_width=True, key=f"btn_fase4_sync_{v}"):
-                with st.status("Gerando Documentos Word e Enviando para o Drive...", expanded=True) as status:
+            if st.button("Sincronizar no Google Drive", type="primary", use_container_width=True, key=f"btn_fase4_sync_{v}"):
+                with st.status("Compilando arquivos oficiais e sincronizando no Drive...", expanded=True) as status:
                     txt_regular = f"[VALOR: {f['info']['valor']}]\n\n[QUESTOES]\n"
                     txt_gabarito = "[GABARITO_TEXTO]\n"
                     txt_grade = "[GRADE_DE_CORRECAO]\n"
@@ -3063,24 +3060,24 @@ elif menu == "📝 Central de Avaliações":
 
                     texto_final_padrao = txt_regular + txt_gabarito + txt_grade
 
-                    status.write("📄 Gerando Caderno Regular Word (OMR Fiducial)...")
+                    status.write("Compilando Caderno Regular DOCX...")
                     doc_reg = exporter.gerar_docx_prova_v25(nome_arq, texto_final_padrao, f['info'])
                     link_reg = db.subir_e_converter_para_google_docs(doc_reg, nome_arq, modo="AVALIACAO")
 
                     link_p1, link_p2, link_p3 = "N/A", "N/A", "N/A"
 
                     if f.get('pei_1'):
-                        status.write("🔵 Gerando Caderno PEI Nível 1 Word...")
+                        status.write("Compilando Caderno PEI Nível 1 DOCX...")
                         doc_p1 = exporter.gerar_docx_pei_v25(f"{nome_arq}_PEI_N1", f['pei_1'], f['info'])
                         link_p1 = db.subir_e_converter_para_google_docs(doc_p1, f"{nome_arq}_PEI_N1", modo="AVALIACAO")
 
                     if f.get('pei_2'):
-                        status.write("🟡 Gerando Caderno PEI Nível 2 Word...")
+                        status.write("Compilando Caderno PEI Nível 2 DOCX...")
                         doc_p2 = exporter.gerar_docx_pei_v25(f"{nome_arq}_PEI_N2", f['pei_2'], f['info'])
                         link_p2 = db.subir_e_converter_para_google_docs(doc_p2, f"{nome_arq}_PEI_N2", modo="AVALIACAO")
 
                     if f.get('pei_3'):
-                        status.write("🔴 Gerando Caderno PEI Nível 3 Word (Bento Cards + Rubrica)...")
+                        status.write("Compilando Caderno PEI Nível 3 DOCX...")
                         doc_p3 = exporter.gerar_docx_pei_qualitativa(f"{nome_arq}_PEI_N3", f['pei_3'], f['info'])
                         link_p3 = db.subir_e_converter_para_google_docs(doc_p3, f"{nome_arq}_PEI_N3", modo="AVALIACAO")
 
@@ -3101,54 +3098,47 @@ elif menu == "📝 Central de Avaliações":
 
                     f['prova_final_txt'] = texto_final_padrao
                     f['nome_base'] = nome_arq
-                    status.update(label="✅ Avaliação homologada e sincronizada no Drive!", state="complete")
-                    st.balloons(); f['fase'] = 5; time.sleep(1); st.rerun()
+                    status.update(label="Avaliação sincronizada com sucesso no Google Drive!", state="complete")
+                    st.balloons(); f['fase'] = 5; time.sleep(0.8); st.rerun()
 
         elif f['fase'] == 5:
-            st.success(f"🏆 Avaliação **{f.get('nome_base', '')}** homologada com sucesso no Acervo!")
-            st.markdown("### 🔄 Processo Concluído com Sucesso!")
-            st.info("💡 Para gerar o Caderno de Recomposição/Revisão para os alunos, acesse a **Aba 3 (Recomposição & Cadernos de Revisão)** ou vá na **Aba 4 (Expedição)** para gerar o e-mail de remessa para a xerox.")
+            st.success(f"Avaliação **{f.get('nome_base', '')}** homologada e sincronizada com sucesso no Acervo.")
+            st.info("Acesse a aba 'Recomposição de Aprendizagem' para gerar cadernos de revisão ou a aba 'Expedição & Impressão' para gerar a remessa de xerox.")
 
-            if st.button("🎉 Concluir e Voltar ao Início", use_container_width=True, key=f"btn_fin_f5_{v}"):
+            if st.button("Concluir e Retornar", use_container_width=True, key=f"btn_fin_f5_{v}"):
                 reset_forja()
 
     # ==============================================================================
-    # ABA 2: ACERVO DE PROVAS & PERÍCIA TRI (PADRÃO EXECUTIVO SOSA 2026)
+    # ABA 2: ACERVO DE AVALIAÇÕES & PERÍCIA TRI
     # ==============================================================================
     with tab_acervo_av:
-        st.markdown("### 📖 Acervo de Instrumentos Avaliativos & Perícia TRI")
-        st.caption("Repositório inteligente: busca multi-camada que nunca oculta avaliações, filtros de nova geração e custódia digital no Drive.")
+        st.markdown("### Acervo de Instrumentos Avaliativos & Perícia TRI")
+        st.caption("Repositório de avaliações, visualizador de chaves e controle de arquivos no Drive.")
 
-        # -------------------------------------------------------------
-        # 1. FILTROS DE NOVA GERAÇÃO (STREAMLIT 2026 / PILLS & SEGMENTS)
-        # -------------------------------------------------------------
         with st.container(border=True):
             c_f_tri, c_f_ano = st.columns([2, 1.5])
             
             f_trim_sel = c_f_tri.segmented_control(
-                "📅 Filtrar por Trimestre:",
+                "Trimestre:",
                 ["Todos", "I Trimestre", "II Trimestre", "III Trimestre"],
                 default="Todos",
                 key=f"acervo_seg_trim_{v}"
             )
             
             f_ano_sel = c_f_ano.segmented_control(
-                "🎓 Série / Ano:",
+                "Série:",
                 ["Todas", "6º", "7º", "8º", "9º"],
                 default="Todas",
                 key=f"acervo_seg_ano_{v}"
             )
             
             f_tipo_pills = st.pills(
-                "🏷️ Categoria da Avaliação:",
-                ["Todos", "📝 Provas", "📋 Testes", "🔄 Revisões", "📑 2ª Chamada", "🔍 Sondas"],
+                "Categoria:",
+                ["Todos", "Provas", "Testes", "Revisões", "2ª Chamada", "Sondas"],
                 default="Todos",
                 key=f"acervo_pills_tipo_{v}"
             )
 
-        # -------------------------------------------------------------
-        # 2. BUSCA MULTI-CAMADA (NUNCA MAIS PERDE AVALIAÇÃO DO II TRIMESTRE)
-        # -------------------------------------------------------------
         termos_avaliativos = [
             "AVALIAÇÃO", "AVALIACAO", "PROVA", "TESTE", "SONDA", 
             "RECUPERACAO", "RECUPERAÇÃO", "REVISAO", "REVISÃO", 
@@ -3166,7 +3156,6 @@ elif menu == "📝 Central de Avaliações":
         df_exames = df_exames_todos.copy()
 
         if not df_exames.empty:
-            # 1. Filtro Inteligente de Trimestre (Regex HD: acha I, II, III, IITrimestre, etc.)
             if f_trim_sel != "Todos":
                 padrao_regex_t = util.obter_regex_trimestre(f_trim_sel)
                 mask_t = (
@@ -3176,29 +3165,27 @@ elif menu == "📝 Central de Avaliações":
                 )
                 df_exames = df_exames[mask_t]
 
-            # 2. Filtro de Série / Ano
             if f_ano_sel != "Todas":
                 ano_num_sel = "".join(filter(str.isdigit, f_ano_sel))
                 df_exames = df_exames[df_exames['ANO'].astype(str).str.contains(ano_num_sel, na=False)]
 
-            # 3. Filtro de Categoria por Pills
-            if f_tipo_pills == "📝 Provas":
+            if f_tipo_pills == "Provas":
                 df_exames = df_exames[df_exames['TIPO_MATERIAL'].astype(str).str.upper().str.contains("PROVA") & ~df_exames['TIPO_MATERIAL'].astype(str).str.upper().str.contains("REVISAO|REVISÃO|2ª|2A|CHAMADA")]
-            elif f_tipo_pills == "📋 Testes":
+            elif f_tipo_pills == "Testes":
                 df_exames = df_exames[df_exames['TIPO_MATERIAL'].astype(str).str.upper().str.contains("TESTE") & ~df_exames['TIPO_MATERIAL'].astype(str).str.upper().str.contains("REVISAO|REVISÃO|2ª|2A|CHAMADA")]
-            elif f_tipo_pills == "🔄 Revisões":
+            elif f_tipo_pills == "Revisões":
                 df_exames = df_exames[df_exames['TIPO_MATERIAL'].astype(str).str.upper().str.contains("REVISAO|REVISÃO|RECOMPOSICAO|RECOMPOSIÇÃO")]
-            elif f_tipo_pills == "📑 2ª Chamada":
+            elif f_tipo_pills == "2ª Chamada":
                 df_exames = df_exames[df_exames['TIPO_MATERIAL'].astype(str).str.upper().str.contains("2ª|2A|CHAMADA")]
-            elif f_tipo_pills == "🔍 Sondas":
+            elif f_tipo_pills == "Sondas":
                 df_exames = df_exames[df_exames['TIPO_MATERIAL'].astype(str).str.upper().str.contains("SONDA|DIAGNÓSTICA|DIAGNOSTICA")]
 
             df_exames = df_exames.iloc[::-1]
 
-        st.caption(f"Exibindo **{len(df_exames)} de {len(df_exames_todos)}** instrumentos avaliativos cadastrados.")
+        st.caption(f"Exibindo **{len(df_exames)} de {len(df_exames_todos)}** avaliações cadastradas.")
 
         if df_exames.empty:
-            st.info("Nenhum instrumento avaliativo localizado para os filtros selecionados.")
+            st.info("Nenhuma avaliação localizada para os filtros selecionados.")
         else:
             for idx_av, (_, row) in enumerate(df_exames.iterrows()):
                 with st.container(border=True):
@@ -3208,7 +3195,6 @@ elif menu == "📝 Central de Avaliações":
                     data_exibicao = str(row.get('DATA', 'N/A'))
                     semana_ref_exibicao = str(row.get('SEMANA_REF', 'AVALIAÇÃO'))
 
-                    # Extração segura do valor da prova
                     val_raw = ai.extrair_tag(txt_f, "VALOR")
                     val_num = util.sosa_to_float(val_raw)
                     if val_num == 0:
@@ -3216,32 +3202,28 @@ elif menu == "📝 Central de Avaliações":
                         val_num = util.sosa_to_float(m_v.group(1)) if m_v else 4.0
                     val_ex = f"{val_num:.1f} pts"
 
-                    # Detecção inteligente do Trimestre para o Badge visual
-                    trim_badge = "🔵 I Trimestre"
+                    trim_badge = "I Trimestre"
                     id_upper = identificador.upper()
                     txt_upper = txt_f.upper()
                     if any(x in id_upper or x in txt_upper for x in ["IITRIMESTRE", "II TRIMESTRE", "2º TRIMESTRE", "SEMANA 27", "SEMANA 26", "SEMANA 20"]):
-                        trim_badge = "🟡 II Trimestre"
+                        trim_badge = "II Trimestre"
                     elif any(x in id_upper or x in txt_upper for x in ["IIITRIMESTRE", "III TRIMESTRE", "3º TRIMESTRE"]):
-                        trim_badge = "🟢 III Trimestre"
+                        trim_badge = "III Trimestre"
 
-                    # Detecção da Categoria para o Badge
-                    cat_badge = "📝 Prova Oficial"
-                    if "TESTE" in id_upper: cat_badge = "📋 Teste Oficial"
-                    elif "REVISAO" in id_upper or "REVISÃO" in id_upper or "RECOMPOSICAO" in id_upper: cat_badge = "🔄 Caderno de Revisão"
-                    elif "2ª" in id_upper or "2A" in id_upper or "CHAMADA" in id_upper: cat_badge = "📑 2ª Chamada"
-                    elif "SONDA" in id_upper or "DIAGNÓSTICA" in id_upper: cat_badge = "🔍 Sonda de Proficiência"
-                    elif "RECUPERACAO" in id_upper or "RECUPERAÇÃO" in id_upper: cat_badge = "📑 Prova de Recuperação"
+                    cat_badge = "Prova Oficial"
+                    if "TESTE" in id_upper: cat_badge = "Teste Oficial"
+                    elif "REVISAO" in id_upper or "REVISÃO" in id_upper or "RECOMPOSICAO" in id_upper: cat_badge = "Caderno de Revisão"
+                    elif "2ª" in id_upper or "2A" in id_upper or "CHAMADA" in id_upper: cat_badge = "Segunda Chamada"
+                    elif "SONDA" in id_upper or "DIAGNÓSTICA" in id_upper: cat_badge = "Sonda Diagnóstica"
+                    elif "RECUPERACAO" in id_upper or "RECUPERAÇÃO" in id_upper: cat_badge = "Recuperação Paralela"
 
-                    # Cabeçalho Executivo do Bento Card
                     c_card_h1, c_card_h2 = st.columns([3, 2])
-                    c_card_h1.markdown(f"#### 📋 {identificador}")
+                    c_card_h1.markdown(f"#### {identificador}")
                     c_card_h1.caption(f"Série: **{ano_exibicao}** | Data: **{data_exibicao}** | Valor: **{val_ex}** | Origem: *{semana_ref_exibicao}*")
-                    c_card_h2.markdown(f"<div style='text-align: right;'><span style='background: #2962FF22; color: #2962FF; padding: 4px 10px; border-radius: 12px; font-weight: bold; font-size: 12px;'>{trim_badge}</span> <span style='background: #00E67622; color: #00E676; padding: 4px 10px; border-radius: 12px; font-weight: bold; font-size: 12px;'>{cat_badge}</span></div>", unsafe_allow_html=True)
+                    c_card_h2.markdown(f"<div style='text-align: right;'><span style='background: #2962FF22; color: #2962FF; padding: 4px 10px; border-radius: 8px; font-weight: bold; font-size: 12px;'>{trim_badge}</span> <span style='background: #00E67622; color: #00E676; padding: 4px 10px; border-radius: 8px; font-weight: bold; font-size: 12px;'>{cat_badge}</span></div>", unsafe_allow_html=True)
 
                     st.markdown("---")
 
-                    # Extração dos links reais salvos
                     def extrair_link_acervo_real(t, tag):
                         m = re.search(rf"{tag}\s*\(\s*(https://docs\.google\.com/document/d/[^\s\)]+)\s*\)", t, re.IGNORECASE)
                         return m.group(1).strip() if m else None
@@ -3252,52 +3234,50 @@ elif menu == "📝 Central de Avaliações":
                     l_p3 = extrair_link_acervo_real(txt_f, "PEI_N3")
                     l_prof = extrair_link_acervo_real(txt_f, "Prof")
 
-                    # BOTÕES DE ABERTURA DIRETA: APENAS OS QUE EXISTEM DE VERDADE (ZERO BOTÃO CINZA FALSO)
-                    st.markdown("**📂 Cadernos Oficiais no Google Drive:**")
+                    st.markdown("**Arquivos Oficiais no Google Drive:**")
                     cols_links = st.columns(5)
                     
                     tem_algum_link = False
                     col_idx = 0
                     if l_reg and "http" in str(l_reg):
-                        cols_links[col_idx].link_button("📄 Caderno Regular", str(l_reg), type="primary", use_container_width=True)
+                        cols_links[col_idx].link_button("Caderno Regular", str(l_reg), type="primary", use_container_width=True)
                         col_idx += 1; tem_algum_link = True
                     if l_p1 and "http" in str(l_p1):
-                        cols_links[col_idx].link_button("🔵 PEI Nível 1", str(l_p1), use_container_width=True)
+                        cols_links[col_idx].link_button("PEI Nível 1", str(l_p1), use_container_width=True)
                         col_idx += 1; tem_algum_link = True
                     if l_p2 and "http" in str(l_p2):
-                        cols_links[col_idx].link_button("🟡 PEI Nível 2", str(l_p2), use_container_width=True)
+                        cols_links[col_idx].link_button("PEI Nível 2", str(l_p2), use_container_width=True)
                         col_idx += 1; tem_algum_link = True
                     if l_p3 and "http" in str(l_p3):
-                        cols_links[col_idx].link_button("🔴 PEI Nível 3", str(l_p3), use_container_width=True)
+                        cols_links[col_idx].link_button("PEI Nível 3", str(l_p3), use_container_width=True)
                         col_idx += 1; tem_algum_link = True
                     if l_prof and "http" in str(l_prof):
-                        cols_links[col_idx].link_button("👨‍🏫 Guia do Professor", str(l_prof), use_container_width=True)
+                        cols_links[col_idx].link_button("Guia Docente", str(l_prof), use_container_width=True)
                         col_idx += 1; tem_algum_link = True
 
                     if not tem_algum_link:
-                        st.info("💡 Documentos salvos no banco. Use o botão de Re-exportação abaixo para gerar os links do Drive em 1 clique.")
+                        st.info("Documentos salvos no banco. Utilize a reexportação para gerar links diretos no Drive.")
 
                     st.markdown("<br>", unsafe_allow_html=True)
 
-                    # AÇÕES AVANÇADAS ORGANIZADAS EM POPOVERS E BOTÕES LIMPOS
                     c_act1, c_act2, c_act3 = st.columns([2, 2, 1])
 
-                    with c_act1.popover("🚀 Injetar no Ponto ID (Gerar Plano de Aula)", use_container_width=True):
-                        st.caption("A IA analisará as questões desta avaliação para redigir um Plano de Aula Semanal alinhado e marcá-lo como PRODUZIDO no Ponto ID.")
+                    with c_act1.popover("Estruturar Plano no Ponto ID", use_container_width=True):
+                        st.caption("A IA analisará as questões desta avaliação para redigir o plano de aula semanal correspondente.")
                         
                         todas_semanas_inj_a2 = util.gerar_semanas()
-                        sem_dest_a2 = st.selectbox("Selecione a Semana da Aula:", [s.split(" (")[0] for s in todas_semanas_inj_a2 if "Jornada" not in s], key=f"sel_sem_inj_a2_{row.name}_{idx_av}_{v}")
+                        sem_dest_a2 = st.selectbox("Semana de Aplicação:", [s.split(" (")[0] for s in todas_semanas_inj_a2 if "Jornada" not in s], key=f"sel_sem_inj_a2_{row.name}_{idx_av}_{v}")
                         trim_dest_a2 = st.selectbox("Trimestre Alvo:", ["I Trimestre", "II Trimestre", "III Trimestre"], index=1 if "II" in trim_badge else 0, key=f"sel_trim_inj_a2_{row.name}_{idx_av}_{v}")
                         
-                        if st.button("🚀 CONFIRMAR E GERAR PLANO NO PONTO ID", type="primary", use_container_width=True, key=f"btn_inj_acervo_{row.name}_{idx_av}_{v}"):
-                            with st.spinner("Analisando questões e redigindo Plano de Aula Semanal..."):
+                        if st.button("Confirmar e Gerar Plano", type="primary", use_container_width=True, key=f"btn_inj_acervo_{row.name}_{idx_av}_{v}"):
+                            with st.spinner("Estruturando plano pedagógico..."):
                                 prompt_plano_revisao = (
                                     f"SÉRIE: {ano_exibicao} Ano.\n"
                                     f"SEMANA: {sem_dest_a2}. TRIMESTRE: {trim_dest_a2}.\n"
                                     f"INSTRUMENTO: {identificador}.\n\n"
                                     f"SITUAÇÃO: O professor está aplicando/revisando este material em sala de aula. Analise o texto do material e extraia descritores SAEB reais e tópicos matemáticos para montar o Plano Semanal Padronizado.\n\n"
                                     f"TEXTO DO MATERIAL:\n{txt_f[:3500]}\n\n"
-                                    f"🚨 USE AS TAGS OFICIAIS:\n"
+                                    f"USE AS TAGS OFICIAIS:\n"
                                     f"[HABILIDADE_BNCC] ...\n"
                                     f"[COMPETENCIAS_FOCO] Competência Específica 2 e 6 da BNCC\n"
                                     f"[OBJETO_CONHECIMENTO] {cat_badge.upper()} - {identificador}\n"
@@ -3321,16 +3301,16 @@ elif menu == "📝 Central de Avaliações":
                                     "status_final": "PRODUZIDO"
                                 }
                                 
-                                st.toast("✅ Plano gerado com sucesso no Ponto ID!", icon="🚀")
+                                st.toast("Plano estruturado no Ponto ID!", icon="✅")
                                 st.cache_data.clear()
-                                time.sleep(0.8)
+                                time.sleep(0.6)
                                 navegar_para("📅 Planejamento (Ponto ID)")
 
-                    with c_act2.popover("🔄 Re-exportar DOCX no Drive", use_container_width=True):
-                        st.caption("Re-gera os arquivos Word oficiais no Google Drive utilizando o texto preservado no banco.")
+                    with c_act2.popover("Reexportar Documento no Drive", use_container_width=True):
+                        st.caption("Recompila os arquivos oficiais DOCX no Google Drive a partir do texto preservado no banco.")
                         
-                        if st.button("🚀 EXECUTAR RE-EXPORTAÇÃO DOCX", type="primary", use_container_width=True, key=f"btn_reexp_{row.name}_{idx_av}_{v}"):
-                            with st.status("Re-gerando documentos Word...", expanded=True) as status_reexp:
+                        if st.button("Executar Reexportação", type="primary", use_container_width=True, key=f"btn_reexp_{row.name}_{idx_av}_{v}"):
+                            with st.status("Recompilando documentos DOCX...", expanded=True) as status_reexp:
                                 info_reexp = {
                                     'ano': ano_exibicao, 
                                     'trimestre': f_trim_sel if f_trim_sel != "Todos" else ('II Trimestre' if "II" in trim_badge else 'I Trimestre'), 
@@ -3338,21 +3318,21 @@ elif menu == "📝 Central de Avaliações":
                                     'qtd': len(re.findall(r'(?i)QUESTÃO\s+\d+', txt_f)) or 10
                                 }
                                 
-                                status_reexp.write("📄 Re-gerando Caderno Regular Word...")
+                                status_reexp.write("Recompilando Caderno Regular...")
                                 doc_reg_r = exporter.gerar_docx_prova_v25(identificador, txt_f, info_reexp)
                                 link_reg_r = db.subir_e_converter_para_google_docs(doc_reg_r, identificador, modo="AVALIACAO")
                                 
                                 pei1_txt_r = ai.extrair_tag(txt_f, "PEI_NIVEL_1") or ai.extrair_tag(txt_f, "NIVEL_1") or ai.extrair_tag(txt_f, "PEI")
                                 link_p1_r = "N/A"
                                 if pei1_txt_r:
-                                    status_reexp.write("🔵 Re-gerando Caderno PEI Nível 1 Word...")
+                                    status_reexp.write("Recompilando PEI Nível 1...")
                                     doc_p1_r = exporter.gerar_docx_pei_v25(f"{identificador}_PEI_N1", pei1_txt_r, info_reexp)
                                     link_p1_r = db.subir_e_converter_para_google_docs(doc_p1_r, f"{identificador}_PEI_N1", modo="AVALIACAO")
                                 
                                 pei3_txt_r = ai.extrair_tag(txt_f, "PEI_NIVEL_3")
                                 link_p3_r = "N/A"
                                 if pei3_txt_r:
-                                    status_reexp.write("🔴 Re-gerando Caderno PEI Nível 3 Word...")
+                                    status_reexp.write("Recompilando PEI Nível 3...")
                                     doc_p3_r = exporter.gerar_docx_pei_qualitativa(f"{identificador}_PEI_N3", pei3_txt_r, info_reexp)
                                     link_p3_r = db.subir_e_converter_para_google_docs(doc_p3_r, f"{identificador}_PEI_N3", modo="AVALIACAO")
                                 
@@ -3365,17 +3345,16 @@ elif menu == "📝 Central de Avaliações":
                                     data_exibicao, semana_ref_exibicao, identificador, novo_conteudo_banco, ano_exibicao, link_reg_r
                                 ])
                                 
-                                status_reexp.update(label="✅ Documentos DOCX re-exportados!", state="complete")
-                                st.balloons(); time.sleep(1); st.rerun()
+                                status_reexp.update(label="Documentos reexportados com sucesso!", state="complete")
+                                st.balloons(); time.sleep(0.8); st.rerun()
 
-                    if c_act3.button("🗑️ Apagar", key=f"del_ac_{row.name}_{idx_av}_{v}", use_container_width=True):
+                    if c_act3.button("Excluir", key=f"del_ac_{row.name}_{idx_av}_{v}", use_container_width=True):
                         if db.excluir_avaliacao_completa(identificador, semana_ref_exibicao):
-                            st.success(f"{identificador} removido com sucesso!")
+                            st.success(f"{identificador} excluído com sucesso.")
                             time.sleep(0.5); st.rerun()
 
-                    # PERÍCIA TRI & ESTRUTURA EXPANSÍVEL NO RODAPÉ DO CARD
-                    with st.expander("🔬 Analisar Estrutura Psicométrica & Perícia TRI de Distratores", expanded=False):
-                        t_pericia, t_caderno, t_inclusao = st.tabs(["🧠 Perícia de Distratores (TRI)", "📋 Caderno Regular", "♿ Inclusão PEI"])
+                    with st.expander("Perícia Psicométrica TRI & Distratores", expanded=False):
+                        t_pericia, t_caderno, t_inclusao = st.tabs(["Perícia de Distratores", "Caderno Regular", "Adaptação PEI"])
                         
                         with t_pericia:
                             grade_raw = ai.extrair_tag(txt_f, "GRADE_DE_CORRECAO")
@@ -3392,11 +3371,11 @@ elif menu == "📝 Central de Avaliações":
                                         
                                         with st.container(border=True):
                                             st.markdown(f"**Item {q_num}**")
-                                            if m_hab: st.caption(f"🆔 **Descritor:** {m_hab.group(1).strip()}")
-                                            if m_just: st.write(f"🎯 **Gabarito:** {m_just.group(1).strip()}")
-                                            if m_peri: st.warning(f"🧠 **Distratores:** {m_peri.group(1).strip()}")
+                                            if m_hab: st.caption(f"Descritor: **{m_hab.group(1).strip()}**")
+                                            if m_just: st.write(f"Chave Correta: {m_just.group(1).strip()}")
+                                            if m_peri: st.info(f"Análise de Distratores: {m_peri.group(1).strip()}")
                                 else: st.text(grade_raw)
-                            else: st.info("Perícia não anexada a este registro.")
+                            else: st.info("Perícia psicométrica não anexada a este registro.")
 
                         with t_caderno:
                             questoes_reg = ai.extrair_tag(txt_f, "QUESTOES")
@@ -3409,86 +3388,86 @@ elif menu == "📝 Central de Avaliações":
                             else: st.info("Adaptações inclusivas disponíveis no arquivo PEI do Drive.")
 
     # ==============================================================================
-    # ABA 3: RECOMPOSIÇÃO & CADERNOS DE REVISÃO DO ACERVO
+    # ABA 3: RECOMPOSIÇÃO DE APRENDIZAGEM & CADERNOS DE REVISÃO
     # ==============================================================================
     with tab_recomposicao:
-        st.markdown("### 🔄 Módulo Dedicado de Recomposição & Cadernos de Revisão")
-        st.caption("Selecione qualquer avaliação da sua biblioteca para forjar o Caderno de Recomposição Padronizado (Regular + PEI N1, N2 e N3).")
+        st.markdown("### Recomposição de Aprendizagem & Cadernos de Revisão")
+        st.caption("Gere cadernos focados na superação de lacunas a partir de qualquer avaliação do acervo.")
 
         df_provas_para_revisao = df_aulas[df_aulas['SEMANA_REF'].isin(["AVALIAÇÃO", "REVISÃO"])].copy() if not df_aulas.empty else pd.DataFrame()
 
         if df_provas_para_revisao.empty:
-            st.info("Nenhuma avaliação cadastrada no acervo para gerar caderno de recomposição.")
+            st.info("Nenhuma avaliação localizada para gerar caderno de recomposição.")
         else:
             with st.container(border=True):
                 c_rev1, c_rev2 = st.columns([2, 1])
                 opcoes_provas_origem = sorted(df_provas_para_revisao['TIPO_MATERIAL'].unique().tolist())
-                prova_sel_recomposicao = c_rev1.selectbox("📋 Selecione a Avaliação de Origem no Acervo:", opcoes_provas_origem, key=f"sel_p_recomp_{v}")
-                ano_rev_sel = c_rev2.selectbox("Série/Ano do Material:", ["6º Ano", "7º Ano", "8º Ano", "9º Ano"], key=f"sel_ano_recomp_{v}")
+                prova_sel_recomposicao = c_rev1.selectbox("Avaliação de Origem:", opcoes_provas_origem, key=f"sel_p_recomp_{v}")
+                ano_rev_sel = c_rev2.selectbox("Série:", ["6º Ano", "7º Ano", "8º Ano", "9º Ano"], key=f"sel_ano_recomp_{v}")
 
             if prova_sel_recomposicao:
                 row_prova_orig_m = df_provas_para_revisao[df_provas_para_revisao['TIPO_MATERIAL'] == prova_sel_recomposicao]
                 txt_prova_orig = str(row_prova_orig_m.iloc[0].get('CONTEUDO', '')) if not row_prova_orig_m.empty else ""
 
                 with st.container(border=True):
-                    st.markdown("#### ⚙️ Parâmetros do Caderno de Recomposição Padronizado")
+                    st.markdown("#### Parâmetros do Caderno de Recomposição")
                     c_aut_r1, c_aut_r2 = st.columns([1, 1])
                     
-                    qtd_q_recomp = c_aut_r1.pills(
-                        "Nº de Questões Espelho Desejado:",
-                        ["3 Questões (Rápida)", "5 Questões (Padrão)", "10 Questões (Completa)"],
-                        default="10 Questões (Completa)",
+                    qtd_q_recomp = c_aut_r1.segmented_control(
+                        "Quantidade de Questões:",
+                        ["3 Questões", "5 Questões", "10 Questões"],
+                        default="5 Questões",
                         key=f"pills_qtd_recomp_{v}"
                     )
                     
-                    estrat_recomp = c_aut_r2.pills(
+                    estrat_recomp = c_aut_r2.segmented_control(
                         "Estratégia Pedagógica:",
-                        ["Exercícios Espelho Diretos (SAEB)", "Clínica de Erros Comentada", "Guia de Estudo Dirigido"],
-                        default="Exercícios Espelho Diretos (SAEB)",
+                        ["Questões Espelho SAEB", "Análise Guiada de Erros", "Estudo Dirigido"],
+                        default="Questões Espelho SAEB",
                         key=f"pills_estrat_recomp_{v}"
                     )
 
                 st.markdown("---")
                 
-                if st.button("🚀 FORJAR CADERNO DE RECOMPOSIÇÃO COMPLETO (REGULAR + PEI)", type="primary", use_container_width=True, key=f"btn_exe_recomp_{v}"):
-                    with st.status("Analisando descritores e forjando material de recomposição completo...", expanded=True) as status_rec:
-                        num_q_num = int(re.search(r'\d+', qtd_q_recomp).group(0)) if re.search(r'\d+', qtd_q_recomp) else 10
+                if st.button("Gerar Caderno de Recomposição", type="primary", use_container_width=True, key=f"btn_exe_recomp_{v}"):
+                    with st.status("Estruturando material de recomposição completo...", expanded=True) as status_rec:
+                        num_q_num = int(re.search(r'\d+', str(qtd_q_recomp)).group(0)) if re.search(r'\d+', str(qtd_q_recomp)) else 5
                         
                         nome_limpo_origem = prova_sel_recomposicao.replace("REVISAO_", "").replace("AVALIAÇÃO_", "").replace("PROVA_", "")
                         nome_recomposicao_arq = f"REVISAO_{nome_limpo_origem}_{num_q_num}Q"
                         info_recomp = {"ano": ano_rev_sel, "trimestre": "II Trimestre" if "IITrimestre" in prova_sel_recomposicao else "I Trimestre", "semana": "RECOMPOSIÇÃO", "valor": "4.0"}
 
-                        status_rec.write("🧠 1/4 Forjando Caderno Regular e Guia do Professor...")
+                        status_rec.write("1/4 Estruturando Guia Docente e Exercícios...")
                         prompt_recomposicao = (
                             f"PROVA BASE DE ORIGEM:\n{txt_prova_orig}\n\n"
                             f"SÉRIE: {ano_rev_sel}.\n"
-                            f"QUANTIDADE EXIGIDA DE QUESTÕES ESPELHO: {num_q_num} questões.\n"
-                            f"ESTRATÉGIA SELECIONADA: {estrat_recomp}.\n\n"
-                            f"MISSÃO: Crie o Caderno de Recomposição com Roteiro do Professor ([PROFESSOR]), Exercícios Espelho para os Alunos ([ALUNO]), Gabarito ([GABARITO_TEXTO]), Perícia TRI ([GRADE_DE_CORRECAO]), PEI N1 ([PEI_NIVEL_1]), PEI N2 ([PEI_NIVEL_2]) e PEI N3 em 10 Bento Boxes ([PEI_NIVEL_3])."
+                            f"QUANTIDADE DE QUESTÕES: {num_q_num} questões.\n"
+                            f"ESTRATÉGIA: {estrat_recomp}.\n\n"
+                            f"MISSÃO: Crie o Caderno de Recomposição com Roteiro do Professor ([PROFESSOR]), Exercícios para os Alunos ([ALUNO]), Gabarito ([GABARITO_TEXTO]), Perícia TRI ([GRADE_DE_CORRECAO]), PEI N1 ([PEI_NIVEL_1]), PEI N2 ([PEI_NIVEL_2]) e PEI N3 em 10 Bento Boxes ([PEI_NIVEL_3])."
                         )
                         res_recomposicao = ai.gerar_ia("ARQUITETO_REVISAO_V29", prompt_recomposicao)
                         
-                        txt_prof = ai.extrair_tag(res_recomposicao, "PROFESSOR") or ai.extrair_tag(res_recomposicao, "ROTEIRO_DO_PROFESSOR") or "Guia do Professor."
-                        txt_alu = ai.extrair_tag(res_recomposicao, "ALUNO") or ai.extrair_tag(res_recomposicao, "QUESTOES") or "Exercícios da Recomposição."
+                        txt_prof = ai.extrair_tag(res_recomposicao, "PROFESSOR") or ai.extrair_tag(res_recomposicao, "ROTEIRO_DO_PROFESSOR") or "Guia Docente."
+                        txt_alu = ai.extrair_tag(res_recomposicao, "ALUNO") or ai.extrair_tag(res_recomposicao, "QUESTOES") or "Exercícios."
                         txt_gab = ai.extrair_tag(res_recomposicao, "GABARITO_TEXTO") or ai.extrair_tag(res_recomposicao, "GABARITO") or "Gabarito."
                         txt_grade = ai.extrair_tag(res_recomposicao, "GRADE_DE_CORRECAO") or "Grade."
                         txt_pei1 = ai.extrair_tag(res_recomposicao, "PEI_NIVEL_1") or "PEI N1."
                         txt_pei2 = ai.extrair_tag(res_recomposicao, "PEI_NIVEL_2") or "PEI N2."
                         txt_pei3 = ai.extrair_tag(res_recomposicao, "PEI_NIVEL_3") or "PEI N3."
 
-                        status_rec.write("📄 2/4 Gerando Caderno Regular Word (OMR Fiducial)...")
+                        status_rec.write("2/4 Compilando Caderno Regular DOCX...")
                         txt_prova_completo_reg = f"[VALOR: 4.0]\n\n[QUESTOES]\n{txt_alu}\n\n[GABARITO_TEXTO]\n{txt_gab}\n\n[GRADE_DE_CORRECAO]\n{txt_grade}"
                         doc_alu_rev = exporter.gerar_docx_prova_v25(nome_recomposicao_arq, txt_prova_completo_reg, info_recomp)
                         link_alu_rev = db.subir_e_converter_para_google_docs(doc_alu_rev, nome_recomposicao_arq, modo="AVALIACAO")
 
-                        status_rec.write("🔵 3/4 Gerando Cadernos PEI Adaptados (N1, N2 e N3)...")
+                        status_rec.write("3/4 Compilando Cadernos Inclusivos PEI...")
                         doc_p1 = exporter.gerar_docx_pei_v25(f"{nome_recomposicao_arq}_PEI_N1", txt_pei1, info_recomp)
                         link_p1 = db.subir_e_converter_para_google_docs(doc_p1, f"{nome_recomposicao_arq}_PEI_N1", modo="AVALIACAO")
 
                         doc_p3 = exporter.gerar_docx_pei_qualitativa(f"{nome_recomposicao_arq}_PEI_N3", txt_pei3, info_recomp)
                         link_p3 = db.subir_e_converter_para_google_docs(doc_p3, f"{nome_recomposicao_arq}_PEI_N3", modo="AVALIACAO")
 
-                        status_rec.write("👨‍🏫 4/4 Gerando Guia do Professor Word...")
+                        status_rec.write("4/4 Compilando Guia Docente DOCX...")
                         doc_prof_rev = exporter.gerar_docx_professor_v25(nome_recomposicao_arq, txt_prof, info_recomp)
                         link_prof_rev = db.subir_e_converter_para_google_docs(doc_prof_rev, f"{nome_recomposicao_arq}_PROF", modo="AVALIACAO")
 
@@ -3506,42 +3485,39 @@ elif menu == "📝 Central de Avaliações":
                             'nome': nome_recomposicao_arq, 'ano': ano_rev_sel,
                             'trimestre': info_recomp['trimestre']
                         }
-                        status_rec.update(label="✅ Caderno de Recomposição gerado e sincronizado no Drive!", state="complete")
+                        status_rec.update(label="Caderno de Recomposição concluído!", state="complete")
                         st.balloons(); st.rerun()
 
                 if f"recomp_gerada_{v}" in st.session_state:
                     rec_data = st.session_state[f"recomp_gerada_{v}"]
-                    st.success(f"🏆 Caderno **{rec_data['nome']}** homologado com sucesso no acervo!")
+                    st.success(f"Caderno **{rec_data['nome']}** disponível no acervo.")
                     
                     c_link1, c_link2 = st.columns(2)
-                    c_link1.link_button("📂 ABRIR CADERNO DO ALUNO NO DRIVE", rec_data['link_alu'], type="primary", use_container_width=True)
+                    c_link1.link_button("Abrir Caderno no Google Drive", rec_data['link_alu'], type="primary", use_container_width=True)
                     
-                    with c_link2.popover("🚀 INJETAR REVISÃO NO PONTO ID (PLANO DA SEMANA)"):
-                        st.caption("Envie este Caderno de Recomposição como Plano para a Semana Selecionada no Ponto ID. Ele será gravado como PRODUZIDO, isentando a semana no Criador de Aulas.")
+                    with c_link2.popover("Estruturar Plano no Ponto ID"):
+                        st.caption("Transfira este material como plano semanal no Ponto ID.")
                         
                         todas_semanas_inj = util.gerar_semanas()
-                        sem_destino_inj = st.selectbox("Selecione a Semana de Destino do Plano:", [s.split(" (")[0] for s in todas_semanas_inj if "Jornada" not in s], key=f"sel_sem_inj_{v}")
-                        trim_destino_inj = st.selectbox("Trimestre Alvo:", ["I Trimestre", "II Trimestre", "III Trimestre"], index=["I Trimestre", "II Trimestre", "III Trimestre"].index(rec_data['trimestre']) if rec_data['trimestre'] in ["I Trimestre", "II Trimestre", "III Trimestre"] else 0, key=f"sel_trim_inj_{v}")
+                        sem_destino_inj = st.selectbox("Semana de Aplicação:", [s.split(" (")[0] for s in todas_semanas_inj if "Jornada" not in s], key=f"sel_sem_inj_{v}")
+                        trim_destino_inj = st.selectbox("Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], index=["I Trimestre", "II Trimestre", "III Trimestre"].index(rec_data['trimestre']) if rec_data['trimestre'] in ["I Trimestre", "II Trimestre", "III Trimestre"] else 0, key=f"sel_trim_inj_{v}")
                         
-                        if st.button("🚀 ENVIAR PLANO PARA O PONTO ID E CONCLUIR", type="primary", use_container_width=True, key=f"btn_conf_inj_{v}"):
-                            txt_prof_rec = ai.extrair_tag(rec_data['texto'], "PROFESSOR") or "Orientação pedagógica de recomposição."
-                            txt_alu_rec = ai.extrair_tag(rec_data['texto'], "ALUNO") or ai.extrair_tag(rec_data['texto'], "QUESTOES") or "Exercícios da recomposição."
-                            
-                            roteiro_a1 = f"AULA 01 - DEVOLUTIVA PEDAGÓGICA E RECOMPOSIÇÃO:\nINÍCIO: Análise dos descritores críticos da avaliação e devolutiva dos resultados aos estudantes.\nMEIO: Resolução comentada no quadro dos exercícios do Caderno de Recomposição ({rec_data['nome']}).\nFIM: Síntese e tiragem de dúvidas."
-                            roteiro_a2 = f"AULA 02 - FIXAÇÃO DOS DESCRITORES CRÍTICOS:\nINÍCIO: Orientação para resolução autônoma do Caderno de Recomposição.\nMEIO: Acompanhamento individual e mediação para os estudantes do Grupo 1 (PEI N1, N2 e N3).\nFIM: Encerramento com verificação dos vistos nos cadernos."
+                        if st.button("Confirmar e Enviar para Ponto ID", type="primary", use_container_width=True, key=f"btn_conf_inj_{v}"):
+                            roteiro_a1 = f"AULA 01 - DEVOLUTIVA PEDAGÓGICA E RECOMPOSIÇÃO:\nINÍCIO: Análise dos descritores críticos e devolutiva formativa.\nMEIO: Resolução comentada no quadro do Caderno de Recomposição ({rec_data['nome']}).\nFIM: Síntese e esclarecimento de dúvidas."
+                            roteiro_a2 = f"AULA 02 - FIXAÇÃO DE DESCRITORES CRÍTICOS:\nINÍCIO: Orientação para resolução individual guiada.\nMEIO: Mediação individualizada aos estudantes com suporte PEI.\nFIM: Verificação de vistos nos cadernos."
 
                             plano_texto_rascunho = (
                                 f"[HABILIDADE_BNCC] Habilidades e Descritores SAEB do Caderno {rec_data['nome']}\n"
                                 f"[COMPETENCIAS_FOCO] Competência Específica 2 (Raciocínio Lógico) e 6 (Enfrentar Situações-Problema)\n"
                                 f"[OBJETO_CONHECIMENTO] RECOMPOSIÇÃO DE APRENDIZAGEM - {rec_data['nome']}\n"
-                                f"[CONTEUDOS_ESPECIFICOS] Consolidação dos conteúdos e descritores com menor índice de acerto na avaliação.\n"
-                                f"[OBJETIVOS_ENSINO] Superar as lacunas cognitivas identificadas e consolidar as habilidades do {rec_data['ano']}.\n"
+                                f"[CONTEUDOS_ESPECIFICOS] Consolidação dos conteúdos com menor índice de acerto na avaliação.\n"
+                                f"[OBJETIVOS_ENSINO] Superar lacunas cognitivas identificadas nas avaliações do {rec_data['ano']}.\n"
                                 f"[JUSTIFICATIVA_PEDAGOGICA] Recomposição contínua de aprendizagem orientada por dados.\n"
                                 f"[AULA_1] {roteiro_a1}\n"
                                 f"[AULA_2] {roteiro_a2}\n"
                                 f"[SABADO_LETIVO] N/A\n"
-                                f"[AVALIACAO_DE_MERITO] Observação direta do engajamento e visto na resolução do Caderno de Recomposição.\n"
-                                f"[ESTRATEGIA_DUA_PEI] Provas e cadernos adaptados (PEI N1, N2 e N3) com suporte visual e mediação individualizada."
+                                f"[AVALIACAO_DE_MERITO] Acompanhamento do engajamento e visto na resolução do caderno.\n"
+                                f"[ESTRATEGIA_DUA_PEI] Cadernos adaptados (PEI N1, N2 e N3) com suporte visual e mediação."
                             )
 
                             st.session_state.p_temp = plano_texto_rascunho
@@ -3553,31 +3529,31 @@ elif menu == "📝 Central de Avaliações":
                                 "status_final": "PRODUZIDO"
                             }
                             
-                            st.toast("✅ Caderno injetado no Ponto ID e marcado como PRODUZIDO!", icon="🚀")
-                            time.sleep(0.8)
+                            st.toast("Caderno transferido para o Ponto ID!", icon="✅")
+                            time.sleep(0.6)
                             navegar_para("📅 Planejamento (Ponto ID)")
 
     # ==============================================================================
-    # ABA 4: EXPEDIÇÃO DE E-MAIL, PDFS & ACERVO TRIMESTRAL
+    # ABA 4: EXPEDIÇÃO & IMPRESSÃO
     # ==============================================================================
     with tab_expedicao:
         @st.fragment
         def renderizar_expedicao_fragmento():
-            st.markdown("### 📧 Expedição de E-mail, PDFs & Acervo Trimestral")
-            st.caption("Gerador automático do e-mail oficial de remessa para a escola/xerox com discriminação por turma, alunos PEI nomeados e congelamento de PDFs por trimestre.")
+            st.markdown("### Expedição & Impressão")
+            st.caption("Gerador da remessa oficial para impressão com contagem exata de cópias por turma e alunos PEI nominalmente identificados.")
 
             c_exp1, c_exp2 = st.columns([1, 2])
-            trim_exp_sel = c_exp1.selectbox("📅 Selecione o Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"exp_trim_sel_{v}")
+            trim_exp_sel = c_exp1.selectbox("Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"exp_trim_sel_{v}")
 
             turmas_disp_exp = sorted(df_alunos['TURMA'].unique().tolist()) if not df_alunos.empty else []
-            turmas_sel_exp = c_exp2.multiselect("👥 Selecione as Turmas para Envio:", options=turmas_disp_exp, default=turmas_disp_exp[:min(3, len(turmas_disp_exp))], key=f"exp_turmas_sel_{v}")
+            turmas_sel_exp = c_exp2.multiselect("Turmas para Remessa:", options=turmas_disp_exp, default=turmas_disp_exp[:min(3, len(turmas_disp_exp))], key=f"exp_turmas_sel_{v}")
 
             if not turmas_sel_exp:
-                st.info("Selecione ao menos uma turma para compor a remessa de e-mail e xerox.")
+                st.info("Selecione ao menos uma turma para compor a remessa de impressão.")
             else:
                 df_provas_exp = df_aulas[df_aulas['SEMANA_REF'] == "AVALIAÇÃO"] if not df_aulas.empty else pd.DataFrame()
                 opcoes_provas_exp = sorted(df_provas_exp['TIPO_MATERIAL'].unique().tolist()) if not df_provas_exp.empty else []
-                nome_exame_email = st.selectbox("📋 Nome da Avaliação a Enviar:", options=["AVALIAÇÃO TRIMESTRAL DE MATEMÁTICA"] + opcoes_provas_exp, key=f"exp_exame_nome_{v}")
+                nome_exame_email = st.selectbox("Instrumento Avaliativo:", options=["AVALIAÇÃO TRIMESTRAL DE MATEMÁTICA"] + opcoes_provas_exp, key=f"exp_exame_nome_{v}")
 
                 tot_reg_geral = 0
                 tot_p1_geral = 0
@@ -3612,56 +3588,52 @@ elif menu == "📝 Central de Avaliações":
                     tot_p2_geral += len(p2_names)
                     tot_p3_geral += len(p3_names)
 
-                    bloco_t = f"📍 TURMA {t_item.upper()}:\n"
-                    bloco_t += f"• Provas Regulares: {reg_count:02d} cópias\n"
+                    bloco_t = f"TURMA {t_item.upper()}:\n"
+                    bloco_t += f"• Cadernos Regulares: {reg_count:02d} cópias\n"
                     if p1_names:
-                        bloco_t += f"• Prova PEI Nível 1: {len(p1_names):02d} cópia(s) (Aluno(s): {', '.join(p1_names)})\n"
+                        bloco_t += f"• Caderno PEI Nível 1: {len(p1_names):02d} cópia(s) (Estudante(s): {', '.join(p1_names)})\n"
                     if p2_names:
-                        bloco_t += f"• Prova PEI Nível 2: {len(p2_names):02d} cópia(s) (Aluno(s): {', '.join(p2_names)})\n"
+                        bloco_t += f"• Caderno PEI Nível 2: {len(p2_names):02d} cópia(s) (Estudante(s): {', '.join(p2_names)})\n"
                     if p3_names:
-                        bloco_t += f"• Prova PEI Nível 3 (Qualitativa): {len(p3_names):02d} cópia(s) (Aluno(s): {', '.join(p3_names)})\n"
+                        bloco_t += f"• Caderno PEI Nível 3: {len(p3_names):02d} cópia(s) (Estudante(s): {', '.join(p3_names)})\n"
 
                     linhas_email_turmas.append(bloco_t)
 
                 tot_geral_copias = tot_reg_geral + tot_p1_geral + tot_p2_geral + tot_p3_geral
 
-                corpo_email_oficial = f"""Prezados(as) da Direção, Coordenação e Setor de Impressão (Xerox),
+                corpo_email_oficial = f"""Prezados(as) da Direção, Coordenação e Setor de Impressão,
 
-Espero que estejam bem.
-
-Segue em anexo o arquivo em PDF das avaliações do {trim_exp_sel} ({nome_exame_email}) para impressão.
-
-Solicito a gentileza de providenciar as impressões conforme o detalhamento por turma abaixo:
+Encaminho o detalhamento de impressões da avaliação referente ao {trim_exp_sel} ({nome_exame_email}):
 
 """ + "\n".join(linhas_email_turmas) + f"""
 ==================================================
-📊 RESUMO CONSOLIDADO DE IMPRESSÃO (TOTAL GERAL):
-• Total de Provas Regulares: {tot_reg_geral:02d}
-• Total de Provas PEI Nível 1: {tot_p1_geral:02d}
-• Total de Provas PEI Nível 2: {tot_p2_geral:02d}
-• Total de Provas PEI Nível 3: {tot_p3_geral:02d}
-• TOTAL GERAL DE CÓPIAS A IMPRIMIR: {tot_geral_copias:02d} cópias
+RESUMO CONSOLIDADO DE CÓPIAS:
+• Cadernos Regulares: {tot_reg_geral:02d}
+• Cadernos PEI Nível 1: {tot_p1_geral:02d}
+• Cadernos PEI Nível 2: {tot_p2_geral:02d}
+• Cadernos PEI Nível 3: {tot_p3_geral:02d}
+• TOTAL GERAL DE CÓPIAS: {tot_geral_copias:02d} cópias
 
 Atenciosamente,
 Prof. Ronaldo Gomes — Componente Curricular de Matemática
 Escola Municipal Flávio José Simões Costa
 """
 
-                st.markdown("#### 📧 E-mail Oficial de Remessa (Pronto para Copiar & Enviar)")
+                st.markdown("#### Documento de Remessa Oficial")
                 st.code(corpo_email_oficial, language=None)
 
                 with st.container(border=True):
-                    st.markdown("##### 📊 Resumo de Carga de Impressão")
+                    st.markdown("##### Resumo Quantitativo de Impressão")
                     c_k1, c_k2, c_k3, c_k4, c_k5 = st.columns(5)
-                    c_k1.metric("📄 Regulares", tot_reg_geral)
-                    c_k2.metric("🔵 PEI N1", tot_p1_geral)
-                    c_k3.metric("🟡 PEI N2", tot_p2_geral)
-                    c_k4.metric("🔴 PEI N3", tot_p3_geral)
-                    c_k5.metric("🖨️ TOTAL CÓPIAS", tot_geral_copias)
+                    c_k1.metric("Regulares", tot_reg_geral)
+                    c_k2.metric("PEI N1", tot_p1_geral)
+                    c_k3.metric("PEI N2", tot_p2_geral)
+                    c_k4.metric("PEI N3", tot_p3_geral)
+                    c_k5.metric("Total Cópias", tot_geral_copias)
 
                 st.markdown("---")
-                st.markdown(f"#### 🔒 Acervo Trimestral de Segurança ({trim_exp_sel})")
-                st.caption("Arquivos em DOCX e PDF armazenados no Drive para acesso permanente sem risco de perda.")
+                st.markdown(f"#### Acervo Trimestral de Segurança ({trim_exp_sel})")
+                st.caption("Documentos congelados no Drive para impressão e custódia permanente.")
 
                 if not df_aulas.empty and 'SEMANA_REF' in df_aulas.columns and 'CONTEUDO' in df_aulas.columns:
                     padrao_regex_trim_exp = util.obter_regex_trimestre(trim_exp_sel)
@@ -3670,7 +3642,7 @@ Escola Municipal Flávio José Simões Costa
                     df_provas_trim_acervo = pd.DataFrame()
 
                 if df_provas_trim_acervo.empty:
-                    st.info(f"Nenhum exame cadastrado no acervo do {trim_exp_sel} ainda.")
+                    st.info(f"Nenhuma avaliação arquivada para o {trim_exp_sel}.")
                 else:
                     for idx_exp, (_, row_ac) in enumerate(df_provas_trim_acervo.iterrows()):
                         with st.container(border=True):
@@ -3679,22 +3651,22 @@ Escola Municipal Flávio José Simões Costa
                             ano_nome = str(row_ac.get('ANO', '6º'))
                             data_nome = str(row_ac.get('DATA', 'N/A'))
                             
-                            c_a1.markdown(f"**📋 {mat_nome}**")
+                            c_a1.markdown(f"**{mat_nome}**")
                             c_a1.caption(f"Série: {ano_nome} | Data: {data_nome}")
                             
                             l_docx = row_ac.get('LINK_DRIVE', '#')
                             if l_docx and "http" in str(l_docx):
-                                c_a2.link_button("📝 Abrir DOCX Editável", str(l_docx), use_container_width=True)
+                                c_a2.link_button("Abrir DOCX", str(l_docx), use_container_width=True)
                             else:
                                 c_a2.caption("DOCX Indisponível")
 
-                            if c_a3.button("📄 Congelar PDF no Drive", key=f"btn_pdf_freeze_{row_ac.name}_{idx_exp}_{v}", use_container_width=True):
-                                with st.spinner("Gerando PDF congelado e salvando no Drive..."):
+                            if c_a3.button("Gerar PDF no Drive", key=f"btn_pdf_freeze_{row_ac.name}_{idx_exp}_{v}", use_container_width=True):
+                                with st.spinner("Compilando PDF no Google Drive..."):
                                     txt_ac = str(row_ac.get('CONTEUDO', ''))
                                     doc_stream_p = exporter.gerar_docx_prova_v25(mat_nome, txt_ac, {"ano": ano_nome, "trimestre": trim_exp_sel})
                                     link_pdf = db.subir_e_converter_para_google_docs(doc_stream_p, f"{mat_nome}_CONGELADO", trimestre=trim_exp_sel, categoria=ano_nome, modo="SCANNER")
-                                    st.success("✅ PDF Congelado no Drive!")
-                                    st.link_button("📂 ABRIR PDF NO DRIVE", link_pdf, type="primary", use_container_width=True)
+                                    st.success("PDF gerado no Drive com sucesso!")
+                                    st.link_button("Abrir PDF no Drive", link_pdf, type="primary", use_container_width=True)
 
         renderizar_expedicao_fragmento()
 
