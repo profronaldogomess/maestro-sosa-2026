@@ -7447,92 +7447,152 @@ Escola Municipal Flávio José Simões Costa"""
             renderizar_parecer_pais_fragmento()
 
         # ==============================================================================
-        # ABA 4: CURRÍCULO ADAPTADO & PEI OFICIAL COM MEMÓRIA PERMANENTE
+        # ABA 4: CURRÍCULO ADAPTADO & PEI OFICIAL COM INTEGRAÇÃO TOTAL (PLANOS + DOSSIÊ)
         # ==============================================================================
         with tab_curriculo:
             @st.fragment
             def renderizar_curriculo_exportacao_fragmento():
                 st.markdown(f"### Adaptação Curricular & PEI Oficial — {trim_ativo_pei}")
-                st.caption("Planejamento curricular individualizado e exportação do PEI oficial da Secretaria de Educação.")
+                st.caption("Planejamento curricular individualizado com captura automática dos planos de aula do Ponto ID e do dossiê clínico da estudante.")
                 
                 df_laudados_secao = df_laudados if not df_laudados.empty else pd.DataFrame()
                 
                 if df_laudados_secao.empty:
                     st.info("Nenhum estudante com diagnóstico laudado cadastrado nesta turma para emissão do PEI oficial.")
                 else:
-                    aluno_exp = st.selectbox("Selecione o Estudante Laudado:", df_laudados_secao['NOME_ALUNO'].tolist(), key=f"exp_alu_sel_{v}")
+                    aluno_exp = st.selectbox("Selecione a Estudante Laudada / PEI:", df_laudados_secao['NOME_ALUNO'].tolist(), key=f"exp_alu_sel_{v}")
                     
                     id_exp = db.limpar_id(df_laudados_secao[df_laudados_secao['NOME_ALUNO'] == aluno_exp].iloc[0]['ID'])
                     perfil_exp = str(df_laudados_secao[df_laudados_secao['NOME_ALUNO'] == aluno_exp].iloc[0]['NECESSIDADES']).upper()
                     
                     chave_pei_docx = f"PEI_OFICIAL_DOCX_{trim_ativo_pei.replace(' ', '_').upper()}"
                     
+                    # 1. RESGATE DO DOSSIÊ CLÍNICO ESPECÍFICO DA ESTUDANTE
                     hist_exp = df_relatorios[df_relatorios['ID_ALUNO'].apply(db.limpar_id) == id_exp] if not df_relatorios.empty else pd.DataFrame()
                     rel_master_exp = hist_exp[hist_exp['TIPO'] == f"DOSSIE_PEI_{trim_ativo_pei.replace(' ', '_').upper()}"] if not hist_exp.empty else pd.DataFrame()
-                    v_diretrizes_exp = ai.extrair_tag(str(rel_master_exp.iloc[-1]['CONTEUDO']), "DIRETRIZES_CURRICULARES") if not rel_master_exp.empty else "Sem diretrizes salvas."
                     
-                    # 1. VERIFICAÇÃO DE DOCUMENTO PEI OFICIAL JÁ GERADO
+                    v_diag_exp = ""
+                    v_diretrizes_exp = ""
+                    if not rel_master_exp.empty:
+                        txt_dossie_bruto = str(rel_master_exp.iloc[-1]['CONTEUDO'])
+                        v_diag_exp = ai.extrair_tag(txt_dossie_bruto, "DIAGNOSTICO_GERAL")
+                        v_diretrizes_exp = ai.extrair_tag(txt_dossie_bruto, "DIRETRIZES_CURRICULARES")
+
+                    # 2. VERIFICAÇÃO DE DOCUMENTO PEI OFICIAL JÁ GERADO (MEMÓRIA PERMANENTE)
                     link_pei_existente = None
                     rel_pei_docx = hist_exp[hist_exp['TIPO'] == chave_pei_docx] if not hist_exp.empty else pd.DataFrame()
                     if not rel_pei_docx.empty:
                         link_pei_existente = str(rel_pei_docx.iloc[-1]['CONTEUDO'])
 
-                    # SE JÁ EXISTE: CARD EXECUTIVO COM LINK DIRETO
                     if link_pei_existente and "http" in link_pei_existente:
                         with st.container(border=True):
                             c_pcard1, c_pcard2 = st.columns([2.5, 1.2])
-                            c_pcard1.markdown(f"##### PEI Oficial Homologado no Drive")
+                            c_pcard1.markdown(f"##### PEI Oficial Homologado no Google Drive")
                             c_pcard1.caption(f"Estudante: **{aluno_exp}** | Turma: **{turma_pei}** | Período: **{trim_ativo_pei}**")
                             c_pcard2.link_button("Abrir PEI no Drive (DOCX)", link_pei_existente, type="primary", use_container_width=True)
 
                     st.markdown("<br>", unsafe_allow_html=True)
 
-                    # TABELA CURRICULAR
+                    # 3. TABELA DE PLANEJAMENTO CURRICULAR ADAPTADO
                     curr_records = hist_exp[hist_exp['TIPO'] == f"CURRICULO_ADAPTADO_{trim_ativo_pei}"] if not hist_exp.empty else pd.DataFrame()
                     if not curr_records.empty:
                         try: df_curr_atual = pd.read_json(io.StringIO(curr_records.iloc[-1]['CONTEUDO']), orient='records')
                         except: df_curr_atual = pd.DataFrame(columns=["Objetivos de Aprendizagem", "Estratégias Metodológicas", "Recursos Materiais"])
                     else: df_curr_atual = pd.DataFrame(columns=["Objetivos de Aprendizagem", "Estratégias Metodológicas", "Recursos Materiais"])
 
-                    with st.popover("Adaptar Matriz Curricular com IA"):
-                        st.caption("Selecione os conteúdos da matriz municipal para tradução pedagógica:")
-                        ano_aluno = "".join(filter(str.isdigit, turma_pei))
-                        df_matriz_ano = df_curriculo[df_curriculo['ANO'].astype(str) == ano_aluno].copy() if not df_curriculo.empty else pd.DataFrame()
+                    # 4. MINERAÇÃO INTEGRADA: PLANOS DE AULA (PONTO ID) + MATRIZ CURRICULAR
+                    with st.popover("Adaptar Conteúdos das Aulas com IA"):
+                        st.caption("Selecione os conteúdos trabalhados em sala para gerar as adaptações personalizadas ao perfil da estudante:")
                         
+                        ano_aluno_num = "".join(filter(str.isdigit, turma_pei))
+                        
+                        # Opções Mineradas dos Planos de Aula Reais (DB_PLANOS)
+                        opcoes_dos_planos = []
+                        if not df_planos.empty and 'ANO' in df_planos.columns and 'TURMA' in df_planos.columns:
+                            planos_da_turma = df_planos[(df_planos['ANO'].astype(str).str.contains(ano_aluno_num)) & (df_planos['TURMA'] == trim_ativo_pei)]
+                            for _, r_plano in planos_da_turma.iterrows():
+                                sem_lbl = r_plano.get('SEMANA', 'Semana')
+                                txt_plano_item = str(r_plano.get('PLANO_TEXTO', ''))
+                                obj_item = ai.extrair_tag(txt_plano_item, "OBJETO_CONHECIMENTO") or ai.extrair_tag(txt_plano_item, "CONTEUDOS_ESPECIFICOS") or "Conteúdo da Aula"
+                                clean_obj = re.sub(r'[*#\[\]]', '', obj_item).strip()
+                                if clean_obj and len(clean_obj) > 3 and "N/A" not in clean_obj.upper():
+                                    opcoes_dos_planos.append(f"[{sem_lbl}] {clean_obj}")
+
+                        # Opções Mineradas da Matriz Curricular Municipal (df_curriculo)
+                        opcoes_da_matriz = []
+                        df_matriz_ano = df_curriculo[df_curriculo['ANO'].astype(str) == ano_aluno_num].copy() if not df_curriculo.empty else pd.DataFrame()
                         if not df_matriz_ano.empty:
                             col_trim_mat = next((c for c in df_matriz_ano.columns if str(trim_ativo_pei).upper() in c.upper()), None)
                             col_eixo_mat = next((c for c in df_matriz_ano.columns if any(x in c.upper() for x in ['GERAIS', 'EIXO'])), None)
                             
-                            opcoes_conteudo = []
                             if col_trim_mat and col_eixo_mat:
                                 for _, r_mat in df_matriz_ano.iterrows():
                                     c_bruto = str(r_mat[col_trim_mat])
-                                    if pd.notna(c_bruto) and c_bruto.strip() != "":
+                                    if pd.notna(c_bruto) and c_bruto.strip() != "" and c_bruto.upper() != "NAN":
                                         for t_item in c_bruto.split(';'):
-                                            t_cl = re.sub(r'\[cite:.*?\]', '', t_item).strip()
+                                            t_cl = re.sub(r'\[cite:.*?\]|[*#\[\]]', '', t_item).strip()
                                             if t_cl and len(t_cl) > 3:
-                                                opcoes_conteudo.append(f"[{r_mat[col_eixo_mat]}] {t_cl}")
-                            
-                            selecionados = st.multiselect("Conteúdos da Matriz:", sorted(list(set(opcoes_conteudo))), key=f"sel_mat_pop_{v}")
-                            
-                            if st.button("Gerar Planejamento Adaptado", type="primary", use_container_width=True, key=f"btn_gen_curr_pop_{v}"):
-                                if selecionados:
-                                    with st.spinner("Adaptando matriz curricular..."):
-                                        prompt_curr = f"ESTUDANTE: {aluno_exp}. PERFIL: {perfil_exp}.\nDIRETRIZES: {v_diretrizes_exp}\nCONTEÚDOS ESCOLHIDOS: {', '.join(selecionados)}.\nGere os itens adaptados para o PEI."
-                                        res_ia = ai.gerar_ia("TRADUTOR_CURRICULAR_V39", prompt_curr)
-                                        
-                                        blocos = re.findall(r"\[ITEM\](.*?)\[/ITEM\]", res_ia, re.DOTALL)
-                                        novas_linhas = [{"Objetivos de Aprendizagem": ai.extrair_tag(b, "OBJETIVO"), "Estratégias Metodológicas": ai.extrair_tag(b, "ESTRATEGIA"), "Recursos Materiais": ai.extrair_tag(b, "RECURSO")} for b in blocos]
-                                        
-                                        if novas_linhas:
-                                            df_curr_atual = pd.concat([df_curr_atual, pd.DataFrame(novas_linhas)], ignore_index=True)
-                                            salvar_relatorio_pei_sem_duplicidade(id_exp, aluno_exp, f"CURRICULO_ADAPTADO_{trim_ativo_pei}", df_curr_atual.to_json(orient='records'))
-                                            st.rerun()
+                                                opcoes_da_matriz.append(f"[{r_mat[col_eixo_mat]}] {t_cl}")
+
+                        # Combina os planos do professor com a matriz
+                        todos_conteudos_disponiveis = sorted(list(set(opcoes_dos_planos + opcoes_da_matriz)))
+                        
+                        selecionados = st.multiselect(
+                            "Conteúdos Ministrados nas Aulas / Matriz:", 
+                            todos_conteudos_disponiveis, 
+                            default=opcoes_dos_planos[:min(4, len(opcoes_dos_planos))],
+                            key=f"sel_mat_pop_{v}"
+                        )
+
+                        detalhes_extras_prof = st.text_input(
+                            "Observações Específicas para esta Estudante (Opcional):",
+                            placeholder="Ex: Focar em material tátil, dobraduras e ábaco...",
+                            key=f"obs_extra_pei_pop_{v}"
+                        )
+                        
+                        if st.button("Gerar Planejamento Adaptado", type="primary", use_container_width=True, key=f"btn_gen_curr_pop_{v}"):
+                            if selecionados:
+                                with st.spinner("Integrando planos de aula ao dossiê clínico da estudante..."):
+                                    prompt_curr = (
+                                        f"VOCÊ É O ESPECIALISTA EM INCLUSÃO E DUA (TRADUTOR CURRICULAR PEI).\n"
+                                        f"ESTUDANTE: {aluno_exp} | TURMA: {turma_pei} | LAUDO/PERFIL: {perfil_exp}\n\n"
+                                        f"--- DOSSIÊ CLÍNICO E DIAGNÓSTICO DA ESTUDANTE ---\n"
+                                        f"DIAGNÓSTICO: {v_diag_exp if v_diag_exp else 'Acompanhamento de desenvolvimento com adaptações funcionais.'}\n"
+                                        f"DIRETRIZES PREVIAMENTE TRAÇADAS: {v_diretrizes_exp if v_diretrizes_exp else 'Uso de suporte visual e mediação passo a passo.'}\n"
+                                        f"OBSERVAÇÕES DO PROFESSOR: {detalhes_extras_prof}\n\n"
+                                        f"--- CONTEÚDOS DAS AULAS MINISTRADAS PARA ADAPTAR ---\n"
+                                        f"{chr(10).join(selecionados)}\n\n"
+                                        f"MISSÃO: Converta cada um dos conteúdos acima em adaptações funcionais para o PEI Oficial da Secretaria de Educação.\n"
+                                        f"Para cada conteúdo, responda estritamente no formato:\n"
+                                        f"[ITEM]\n"
+                                        f"[OBJETIVO] (Objetivo de aprendizagem acessível e simplificado)\n"
+                                        f"[ESTRATEGIA] (Estratégia metodológica prática com apoio visual/tátil)\n"
+                                        f"[RECURSO] (Recursos materiais concretos e adaptados)\n"
+                                        f"[/ITEM]"
+                                    )
+                                    res_ia = ai.gerar_ia("TRADUTOR_CURRICULAR_V39", prompt_curr, usar_busca=False)
+                                    
+                                    blocos = re.findall(r"\[ITEM\](.*?)\[/ITEM\]", res_ia, re.DOTALL)
+                                    novas_linhas = [{
+                                        "Objetivos de Aprendizagem": ai.extrair_tag(b, "OBJETIVO"), 
+                                        "Estratégias Metodológicas": ai.extrair_tag(b, "ESTRATEGIA"), 
+                                        "Recursos Materiais": ai.extrair_tag(b, "RECURSO")
+                                    } for b in blocos]
+                                    
+                                    if novas_linhas:
+                                        df_curr_atual = pd.concat([df_curr_atual, pd.DataFrame(novas_linhas)], ignore_index=True)
+                                        salvar_relatorio_pei_sem_duplicidade(id_exp, aluno_exp, f"CURRICULO_ADAPTADO_{trim_ativo_pei}", df_curr_atual.to_json(orient='records'))
+                                        st.success("Adaptação curricular gerada com sucesso!")
+                                        time.sleep(0.5); st.rerun()
 
                     st.markdown("**Tabela de Acessibilidade Curricular (Editável)**")
                     df_editado_curr = st.data_editor(
                         df_curr_atual, num_rows="dynamic", use_container_width=True, key=f"ed_curr_frag_{v}",
-                        column_config={"Objetivos de Aprendizagem": st.column_config.TextColumn(width="large"), "Estratégias Metodológicas": st.column_config.TextColumn(width="large"), "Recursos Materiais": st.column_config.TextColumn(width="medium")}
+                        column_config={
+                            "Objetivos de Aprendizagem": st.column_config.TextColumn(width="large"), 
+                            "Estratégias Metodológicas": st.column_config.TextColumn(width="large"), 
+                            "Recursos Materiais": st.column_config.TextColumn(width="medium")
+                        }
                     )
                     
                     st.markdown("---")
@@ -7550,9 +7610,19 @@ Escola Municipal Flávio José Simões Costa"""
                             
                             if not rel_master_exp.empty:
                                 m_txt = str(rel_master_exp.iloc[-1]['CONTEUDO'])
-                                habilidades = {"Habilidades Sociais": ai.extrair_tag(m_txt, "SOCIAIS"), "Habilidades Comunicativas": ai.extrair_tag(m_txt, "COMUNICATIVAS"), "Habilidades Emocionais": ai.extrair_tag(m_txt, "EMOCIONAIS"), "Habilidades Funcionais": ai.extrair_tag(m_txt, "FUNCIONAIS")}
+                                habilidades = {
+                                    "Habilidades Sociais": ai.extrair_tag(m_txt, "SOCIAIS"), 
+                                    "Habilidades Comunicativas": ai.extrair_tag(m_txt, "COMUNICATIVAS"), 
+                                    "Habilidades Emocionais": ai.extrair_tag(m_txt, "EMOCIONAIS"), 
+                                    "Habilidades Funcionais": ai.extrair_tag(m_txt, "FUNCIONAIS")
+                                }
                             else:
-                                habilidades = {"Habilidades Sociais": "", "Habilidades Comunicativas": "", "Habilidades Emocionais": "", "Habilidades Funcionais": ""}
+                                habilidades = {
+                                    "Habilidades Sociais": "", 
+                                    "Habilidades Comunicativas": "", 
+                                    "Habilidades Emocionais": "", 
+                                    "Habilidades Funcionais": ""
+                                }
                             
                             nome_arq_pei = f"PEI_OFICIAL_{aluno_exp.replace(' ', '_')}_{trim_ativo_pei.replace(' ', '')}"
                             doc_stream = exporter.gerar_docx_pei_oficial(nome_arq_pei, dados_aluno, habilidades, df_editado_curr)
@@ -7560,7 +7630,7 @@ Escola Municipal Flávio José Simões Costa"""
                             
                             if "https" in link_doc:
                                 salvar_relatorio_pei_sem_duplicidade(id_exp, aluno_exp, chave_pei_docx, link_doc)
-                                st.success("PEI Oficial gerado e sincronizado no Google Drive com sucesso!")
+                                st.success("PEI Oficial compilado e sincronizado no Google Drive com sucesso!")
                                 st.balloons()
                                 time.sleep(0.6); st.rerun()
                             else: st.error(f"Erro ao salvar no Drive: {link_doc}")
