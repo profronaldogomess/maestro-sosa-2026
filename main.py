@@ -1683,27 +1683,44 @@ elif menu == "📝 Central de Avaliações":
             
             modo_arq = st.segmented_control(
                 "Abordagem do Instrumento:", 
-                ["Avaliação Regular (Inédita)", "Sonda Diagnóstica", "Variante Anti-Fraude (Tipo B)", "Recuperação Paralela"], 
+                ["Avaliação Regular (Inédita)", "Sonda Diagnóstica", "Variante Anti-Fraude (Tipo B)", "Recuperação Paralela (Trimestral)", "Recuperação Final (Anual)"], 
                 default="Avaliação Regular (Inédita)",
                 key=f"pills_modo_av_{v}"
             )
             st.markdown("---")
 
-            if "Inédita" in modo_arq or "Sonda" in modo_arq:
+            is_rec_final = (modo_arq == "Recuperação Final (Anual)")
+            is_rec_paralela = (modo_arq == "Recuperação Paralela (Trimestral)")
+
+            if "Inédita" in modo_arq or "Sonda" in modo_arq or is_rec_paralela or is_rec_final:
                 with st.container(border=True):
                     st.markdown("#### 1. Parâmetros da Turma & Rigor Psicométrico")
                     c1, c2, c3, c4 = st.columns(4)
                     ano_av = c1.selectbox("Série Alvo:", [6, 7, 8, 9], index=0, key=f"ano_av_sel_{v}")
-                    trim_filtro = c2.selectbox("Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"trim_av_sel_{v}")
-                    v_total = c3.number_input("Pontuação Total:", 0.0, 10.0, 4.0 if "Inédita" in modo_arq else 10.0, step=0.5, key=f"v_tot_input_{v}")
+                    
+                    if is_rec_final:
+                        trim_filtro = "Anual (I, II e III Trimestres)"
+                        c2.text_input("Escopo Temporal:", value="Ano Completo (I, II e III Tri)", disabled=True)
+                        v_total = c3.number_input("Pontuação Total:", 0.0, 10.0, 10.0, disabled=True, key=f"v_tot_input_{v}")
+                    else:
+                        trim_filtro = c2.selectbox("Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"trim_av_sel_{v}")
+                        v_total = c3.number_input("Pontuação Total:", 0.0, 10.0, 10.0 if is_rec_paralela else (4.0 if "Inédita" in modo_arq else 10.0), step=0.5, key=f"v_tot_input_{v}")
+                    
                     qtd_q = c4.number_input("Quantidade de Questões:", 1, 30, 10, key=f"qtd_q_input_{v}")
 
-                    perfil_rigor = st.segmented_control(
-                        "Equilíbrio TRI:", 
-                        ["Padrão SAEB (30% Fácil | 50% Médio | 20% Difícil)", "Olimpíada / Aprofundamento", "Recomposição (Acessível)"], 
-                        default="Padrão SAEB (30% Fácil | 50% Médio | 20% Difícil)",
-                        key=f"rigor_pop_{v}"
-                    )
+                    if is_rec_final:
+                        st.info("ℹ️ **Diretriz de Recuperação Final:** Caderno Regular gerado em formato **ABERTO/DISCURSIVO (com caixas de cálculo)** e Cadernos PEI gerados em formato **FECHADO/ADAPTADO (N1/N2 com 3 alternativas e N3 com 10 Bento Boxes no papel)**.")
+                        perfil_rigor = "Recuperação Final Anual (Essenciais do Ano)"
+                    elif is_rec_paralela:
+                        st.info("ℹ️ **Diretriz de Recuperação Paralela:** Prova focada nos conteúdos do trimestre (0 a 10 pts). Estudantes PEI utilizam o caderno adaptado já salvo no acervo.")
+                        perfil_rigor = "Recuperação Paralela Trimestral"
+                    else:
+                        perfil_rigor = st.segmented_control(
+                            "Equilíbrio TRI:", 
+                            ["Padrão SAEB (30% Fácil | 50% Médio | 20% Difícil)", "Olimpíada / Aprofundamento", "Recomposição (Acessível)"], 
+                            default="Padrão SAEB (30% Fácil | 50% Médio | 20% Difícil)",
+                            key=f"rigor_pop_{v}"
+                        )
 
                 with st.container(border=True):
                     st.markdown("#### 2. Fontes Curriculares & Livro Didático")
@@ -1774,10 +1791,13 @@ elif menu == "📝 Central de Avaliações":
                                 topicos_candidatos.append(p_l_clean)
 
                     if not df_planos.empty:
-                        planos_trim = df_planos[
-                            (df_planos['ANO'].astype(str).str.contains(str(ano_av))) & 
-                            (df_planos['TURMA'].astype(str).str.upper().str.contains(trim_filtro.upper()))
-                        ]
+                        if is_rec_final:
+                            planos_trim = df_planos[df_planos['ANO'].astype(str).str.contains(str(ano_av))]
+                        else:
+                            planos_trim = df_planos[
+                                (df_planos['ANO'].astype(str).str.contains(str(ano_av))) & 
+                                (df_planos['TURMA'].astype(str).str.upper().str.contains(trim_filtro.upper()))
+                            ]
                         for _, r_plano in planos_trim.iterrows():
                             txt_p = str(r_plano.get('PLANO_TEXTO', ''))
                             c_espec = (
@@ -1794,18 +1814,21 @@ elif menu == "📝 Central de Avaliações":
 
                     if not df_curriculo.empty:
                         col_ano_c = next((c for c in df_curriculo.columns if 'ANO' in c.upper()), None)
-                        col_trim_c = next((c for c in df_curriculo.columns if trim_filtro.upper() in c.upper()), None)
-                        
-                        if col_ano_c and col_trim_c:
-                            df_curr_trim = df_curriculo[df_curriculo[col_ano_c].astype(str).str.contains(str(ano_av))].copy()
-                            for _, r_curr in df_curr_trim.iterrows():
-                                txt_c = str(r_curr.get(col_trim_c, ''))
-                                if txt_c and txt_c.upper() != "NAN":
-                                    partes_c = re.split(r'[;\n•]', txt_c)
-                                    for p_c in partes_c:
-                                        p_c_clean = re.sub(r'\[cite:.*?\]|[*#\[\]]', '', p_c).strip()
-                                        if len(p_c_clean) > 3 and not re.search(TERMOS_PROIBIDOS_ASSUNTO, p_c_clean):
-                                            topicos_candidatos.append(p_c_clean)
+                        if col_ano_c:
+                            df_curr_ano = df_curriculo[df_curriculo[col_ano_c].astype(str).str.contains(str(ano_av))].copy()
+                            
+                            colunas_trim_busca = [c for c in df_curr_ano.columns if any(t in c.upper() for t in ['TRIMESTRE', 'TRI'])] if is_rec_final else ([next((c for c in df_curr_ano.columns if trim_filtro.upper() in c.upper()), None)] if next((c for c in df_curr_ano.columns if trim_filtro.upper() in c.upper()), None) else [])
+
+                            for col_t in colunas_trim_busca:
+                                if col_t:
+                                    for _, r_curr in df_curr_ano.iterrows():
+                                        txt_c = str(r_curr.get(col_t, ''))
+                                        if txt_c and txt_c.upper() != "NAN":
+                                            partes_c = re.split(r'[;\n•]', txt_c)
+                                            for p_c in partes_c:
+                                                p_c_clean = re.sub(r'\[cite:.*?\]|[*#\[\]]', '', p_c).strip()
+                                                if len(p_c_clean) > 3 and not re.search(TERMOS_PROIBIDOS_ASSUNTO, p_c_clean):
+                                                    topicos_candidatos.append(p_c_clean)
 
                     topicos_candidatos_unicos = []
                     for t_item in topicos_candidatos:
@@ -1813,7 +1836,7 @@ elif menu == "📝 Central de Avaliações":
                             topicos_candidatos_unicos.append(t_item)
 
                     if not topicos_candidatos_unicos:
-                        topicos_candidatos_unicos = [f"Conteúdo Curricular de Matemática {ano_av}º Ano - {trim_filtro}"]
+                        topicos_candidatos_unicos = [f"Conteúdo Curricular Essencial de Matemática {ano_av}º Ano"]
 
                     contexto_base_texto = ""
                     if pincamento_pratica.strip(): contexto_base_texto += f"--- PRÁTICA DE SALA DE AULA ---\n{pincamento_pratica.strip()}\n\n"
@@ -1822,8 +1845,9 @@ elif menu == "📝 Central de Avaliações":
                     if recorte_provas_livro.strip(): contexto_base_texto += f"--- EXERCÍCIOS COMPLEMENTARES ---\n{recorte_provas_livro.strip()}\n\n"
 
             with st.container(border=True):
-                st.markdown(f"#### 3. Seleção de Conteúdos da Avaliação ({ano_av}º Ano - {trim_filtro})")
-                st.caption("Marque os conteúdos que farão parte da matriz desta avaliação:")
+                titulo_seletor = f"4. Seleção de Conteúdos Essenciais do Ano ({ano_av}º Ano • I, II e III Trimestres)" if is_rec_final else f"3. Seleção de Conteúdos da Avaliação ({ano_av}º Ano • {trim_filtro})"
+                st.markdown(f"#### {titulo_seletor}")
+                st.caption("Marque os conteúdos essenciais que farão parte da matriz desta avaliação:")
                 
                 assuntos_marcados_prof = st.multiselect(
                     "Conteúdos Selecionados:",
@@ -1834,7 +1858,7 @@ elif menu == "📝 Central de Avaliações":
 
                 topico_autoral_extra = st.text_input(
                     "Adicionar Conteúdo Específico (Opcional):",
-                    placeholder="Ex: Leitura de gráficos de colunas e médias aritméticas",
+                    placeholder="Ex: Resolução de situações-problema com equações e geometria",
                     key=f"topico_extra_input_{v}"
                 )
 
@@ -1843,12 +1867,16 @@ elif menu == "📝 Central de Avaliações":
                         assuntos_marcados_prof.insert(0, topico_autoral_extra.strip())
 
             st.markdown("<br>", unsafe_allow_html=True)
-            if st.button("Iniciar Linha de Montagem", type="primary", use_container_width=True, key=f"btn_fase1_av_{v}"):
+            rotulo_btn_inicio = "Iniciar Linha de Montagem da Recuperação Final" if is_rec_final else "Iniciar Linha de Montagem"
+            
+            if st.button(rotulo_btn_inicio, type="primary", use_container_width=True, key=f"btn_fase1_av_{v}"):
                 if not assuntos_marcados_prof:
                     st.error("Selecione ao menos um conteúdo no painel acima.")
                 else:
                     gabarito_mestre = util.gerar_gabarito_balanceado(qtd_q)
                     mapa_inicial = []
+                    
+                    tipo_prova_tag = "RECUPERAÇÃO FINAL" if is_rec_final else ("RECUPERAÇÃO" if is_rec_paralela else "AVALIAÇÃO")
                     
                     for i in range(qtd_q):
                         assunto_item = assuntos_marcados_prof[i % len(assuntos_marcados_prof)]
@@ -1861,7 +1889,15 @@ elif menu == "📝 Central de Avaliações":
                             'dados': {} 
                         })
                     f['mapa'] = mapa_inicial
-                    f['info'] = {'ano': f"{ano_av}º", 'trimestre': trim_filtro, 'valor': v_total, 'qtd': qtd_q, 'tipo_prova': "AVALIAÇÃO", 'rigor': perfil_rigor}
+                    f['info'] = {
+                        'ano': f"{ano_av}º", 
+                        'trimestre': trim_filtro, 
+                        'valor': v_total, 
+                        'qtd': qtd_q, 
+                        'tipo_prova': tipo_prova_tag, 
+                        'rigor': perfil_rigor,
+                        'is_rec_final': is_rec_final
+                    }
                     f['contexto_base'] = contexto_base_texto 
                     f['pincamento_lousa'] = pincamento_pratica
                     f['fase'] = 2
