@@ -1338,27 +1338,59 @@ if menu == "📅 Planejamento (Ponto ID)":
 
         elif modo_inteligencia == "Gerador de Plano Trimestral":
             st.markdown("#### Compilador Oficial de Plano Trimestral (DOCX)")
-            st.caption("Compilação institucional em formato Paisagem A4, mapeando eixos temáticos, habilidades BNCC específicas e metodologias reais mineradas dos planos.")
+            st.caption("Documento institucional em formato Paisagem A4, mapeando eixos temáticos, habilidades BNCC e metodologias aplicadas.")
             
             c_t1, c_t2 = st.columns([1, 1])
             ano_trim = c_t1.selectbox("Série Alvo:", ["6º Ano", "7º Ano", "8º Ano", "9º Ano"], key=f"sel_ano_trim_{v}")
             trim_alvo = c_t2.selectbox("Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"sel_trim_alvo_{v}")
             ano_num_trim = "".join(filter(str.isdigit, ano_trim))
             
-            if st.button("Gerar Documento Trimestral Oficial", type="primary", use_container_width=True, key=f"btn_gen_plan_trim_{v}"):
-                with st.spinner("Minerando planos semanais e estruturando documento oficial..."):
+            # CHAVE DE PERSISTÊNCIA NO BANCO
+            chave_rel_trim = f"PLANO_TRIMESTRAL_{trim_alvo.replace(' ', '_').upper()}_{ano_num_trim}ANO"
+            
+            # 1. VERIFICAÇÃO DE DOCUMENTO JÁ EXISTENTE NO ACERVO
+            link_existente = None
+            data_geracao = None
+            if not df_relatorios.empty and 'TIPO' in df_relatorios.columns and 'CONTEUDO' in df_relatorios.columns:
+                match_rel = df_relatorios[df_relatorios['TIPO'] == chave_rel_trim]
+                if not match_rel.empty:
+                    link_existente = str(match_rel.iloc[-1]['CONTEUDO'])
+                    data_geracao = str(match_rel.iloc[-1].get('DATA', 'N/A'))
+
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            # SE JÁ EXISTE: EXIBE CARD DIRETO PARA ABRIR EM 1-CLIQUE
+            if link_existente and "http" in link_existente:
+                with st.container(border=True):
+                    c_card1, c_card2 = st.columns([2.5, 1.2])
+                    c_card1.markdown(f"##### Documento Oficial Compilado")
+                    c_card1.caption(f"Série: **{ano_trim}** | Período: **{trim_alvo}** | Última Sincronização: **{data_geracao}**")
+                    
+                    c_card2.link_button("Abrir Documento no Drive", link_existente, type="primary", use_container_width=True)
+
+                st.markdown("<br>", unsafe_allow_html=True)
+                with st.expander("Recompilar ou Atualizar Documento no Drive", expanded=False):
+                    st.caption("Caso tenha adicionado novos planos semanais e deseje atualizar o DOCX oficial, clique abaixo:")
+                    btn_executar_compilacao = st.button("Recompilar e Atualizar Documento", key=f"btn_regen_{chave_rel_trim}_{v}", use_container_width=True)
+            else:
+                st.info(f"Nenhum documento compilado para o **{ano_trim} ({trim_alvo})** ainda. Clique abaixo para gerar:")
+                btn_executar_compilacao = st.button("Gerar Documento Trimestral Oficial", type="primary", use_container_width=True, key=f"btn_gen_plan_trim_{v}")
+
+            # 2. MOTOR DE COMPILAÇÃO E SINCRONIZAÇÃO
+            if btn_executar_compilacao:
+                with st.status("Minerando planos semanais e compilando documento oficial...", expanded=True) as status_comp:
                     col_ano = next((c for c in df_curriculo.columns if 'ANO' in c.upper()), None) if not df_curriculo.empty else None
                     col_eixo = next((c for c in df_curriculo.columns if any(x in c.upper() for x in ['GERAIS', 'EIXO', 'DOMÍNIO'])), None) if not df_curriculo.empty else None
                     col_trim = next((c for c in df_curriculo.columns if trim_alvo.upper() in c.upper()), None) if not df_curriculo.empty else None
                     
                     if not col_ano or not col_eixo or not col_trim:
-                        st.error("Erro na leitura da matriz curricular.")
+                        status_comp.update(label="Erro na leitura da matriz curricular.", state="error")
                         st.stop()
                         
                     df_matriz_trim = df_curriculo[df_curriculo[col_ano].astype(str).str.contains(ano_num_trim)].copy()
                     
                     if df_matriz_trim.empty:
-                        st.error("Nenhum dado localizado na matriz para esta série.")
+                        status_comp.update(label="Nenhum dado localizado na matriz para esta série.", state="error")
                     else:
                         planos_trim = df_planos[(df_planos['ANO'].astype(str).str.contains(ano_num_trim)) & (df_planos['TURMA'] == trim_alvo)] if not df_planos.empty and 'ANO' in df_planos.columns and 'TURMA' in df_planos.columns else pd.DataFrame()
                         
@@ -1370,10 +1402,9 @@ if menu == "📅 Planejamento (Ponto ID)":
                             conteudos = limpar_tags_cite(row.get(col_trim, '')).replace(";", ";\n")
                             
                             if conteudos and conteudos.upper() != "NAN":
-                                # 1. Habilidades específicas do Eixo (extraídas do currículo + validadas nos planos)
+                                # Habilidades específicas do Eixo
                                 codes_no_conteudo = re.findall(r'EF\d{2}MA\d{2}[A-Z]?', conteudos, re.IGNORECASE)
                                 
-                                # Se não houver código explícito no texto, busca códigos nos planos vinculados a este Eixo
                                 if not codes_no_conteudo and not planos_trim.empty:
                                     planos_do_eixo = [str(p) for p in planos_trim['PLANO_TEXTO'] if eixo.upper() in str(p).upper() or any(w.strip().upper() in str(p).upper() for w in conteudos.split('\n') if len(w.strip()) > 4)]
                                     text_eixo_planos = " ".join(planos_do_eixo) if planos_do_eixo else todos_planos_raw
@@ -1382,7 +1413,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                                 codes_unicos = sorted(list(set([c.upper() for c in codes_no_conteudo])))
                                 hab_str = ", ".join(codes_unicos) if codes_unicos else "Habilidades essenciais da BNCC trabalhadas no período."
                                 
-                                # 2. Metodologias contextualizadas mineradas dos planos
+                                # Metodologias reais mineradas dos planos semanais
                                 metodologias = set()
                                 text_busca_met = todos_planos_raw.lower()
                                 
@@ -1414,15 +1445,27 @@ if menu == "📅 Planejamento (Ponto ID)":
                         info_trim = {"trimestre": trim_alvo, "ano": ano_trim}
                         nome_arq = f"PLANEJAMENTO_TRIMESTRAL_{trim_alvo.replace(' ', '')}_{ano_trim.replace('º ', '')}"
                         
+                        status_comp.write("Gerando arquivo DOCX Paisagem A4...")
                         doc_stream = exporter.gerar_docx_planejamento_trimestral(nome_arq, info_trim, dados_tabela)
+                        
+                        status_comp.write("Sincronizando com o Google Drive...")
                         link_doc = db.subir_e_converter_para_google_docs(doc_stream, nome_arq, trimestre=trim_alvo, categoria=ano_trim, modo="PLANEJAMENTO")
                         
                         if "https" in link_doc:
-                            st.success("Plano Trimestral compilado e sincronizado no Google Drive!")
-                            st.link_button("Abrir Documento Oficial no Drive", link_doc, type="primary", use_container_width=True)
+                            # 3. SALVA A REFERÊNCIA NO BANCO PARA NUNCA MAIS PRECISAR GERAR DO ZERO
+                            data_hoje_comp = datetime.now().strftime("%d/%m/%Y")
+                            db.excluir_registro("DB_RELATORIOS", chave_rel_trim)
+                            db.salvar_no_banco("DB_RELATORIOS", [
+                                data_hoje_comp, "GLOBAL", "SISTEMA", chave_rel_trim, link_doc
+                            ])
+                            
+                            status_comp.update(label="Documento sincronizado e salvo no acervo permanente!", state="complete")
                             st.balloons()
+                            time.sleep(0.8)
+                            st.rerun()
                         else: 
-                            st.error(f"Erro ao sincronizar no Drive: {link_doc}")
+                            status_comp.update(label="Falha no envio para o Google Drive.", state="error")
+                            st.error(f"Erro: {link_doc}")
 
         elif modo_inteligencia == "Conciliador Cronológico":
             with st.container(border=True):
