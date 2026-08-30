@@ -7087,12 +7087,12 @@ elif menu == "📚 Base de Conhecimento":
 
 
 # ==============================================================================
-# MÓDULO: CENTRO DE COMANDO DA INCLUSÃO (RELATÓRIOS PEI / PERFIL IA)
-# (V2026.PRO_EXECUTIVE - LÓGICA INVERSA UNIVERSAL, TRIAGEM ZERO-TOKEN E PEI OFICIAL)
+# MÓDULO: CENTRO DE COMANDO DA INCLUSÃO (PEI / PERFIL IA) - V2026.NATIVO_TOTAL
+# (DOWNLOAD DIRETO .DOCX, VISUALIZADOR INTEGRADO E MODELO OFICIAL DE ITABUNA)
 # ==============================================================================
 elif menu == "♿ Relatórios PEI / Perfil IA":
     st.title("Centro de Comando da Inclusão (PEI / Perfil IA)")
-    st.caption("Gestão de suporte de acessibilidade: triagem de cadernos adaptados, pareceres descritivos trimestrais, matriz curricular adaptada e PEI oficial.")
+    st.caption("Gestão de acessibilidade curricular em Matemática: triagem de níveis, pareceres descritivos, estudo de caso e download nativo do PEI oficial da Prefeitura de Itabuna.")
     st.markdown("---")
 
     if "v_pei" not in st.session_state: 
@@ -7178,10 +7178,7 @@ Escola Municipal Flávio José Simões Costa"""
             ])
             
             e_pure_defasagem = ("DEFASAGEM" in n or "DIFICULDADE" in n) and (not tem_cid_medico) and (not tem_palavra_laudo)
-            
-            if e_pure_defasagem:
-                return False
-                
+            if e_pure_defasagem: return False
             return True
 
         df_turma_foco['ELEGIVEL_PEI'] = df_turma_foco['NECESSIDADES'].apply(elegivel_prova_adaptada_universal)
@@ -7208,7 +7205,7 @@ Escola Municipal Flávio José Simões Costa"""
 
         tab_matriz, tab_forja, tab_provas_pei, tab_curriculo = st.tabs([
             "Triagem & Níveis PEI", 
-            "Dossiê Descritivo do Trimestre", 
+            "Dossiê Descritivo & Evolução", 
             "Parecer para os Pais",
             "Adaptação Curricular & PEI Oficial"
         ])
@@ -7220,11 +7217,11 @@ Escola Municipal Flávio José Simões Costa"""
             @st.fragment
             def renderizar_matriz_inclusao_fragmento():
                 st.markdown("### Triagem de Níveis de Acessibilidade")
-                st.caption("Defina o nível de adaptação de cada estudante em 1 clique. O Scanner CIR e a Central de Avaliações sincronizam instantaneamente.")
+                st.caption("Defina o nível do caderno adaptado de cada estudante em 1 clique:")
                 
                 with st.container(border=True):
                     st.markdown("#### Grupo 1: Estudantes Laudados / CIDs / Suspeitos (Caderno Adaptado)")
-                    st.caption("Adaptações inclusivas garantidas pela legislação:")
+                    st.caption("Adaptações inclusivas garantidas por lei:")
                     
                     if df_laudados.empty:
                         st.info("Nenhum estudante ativo com laudo médico ou investigação pendente cadastrado nesta turma.")
@@ -7308,13 +7305,13 @@ Escola Municipal Flávio José Simões Costa"""
             renderizar_matriz_inclusao_fragmento()
 
         # ==============================================================================
-        # ABA 2: DOSSIÊ DESCRITIVO (PAINEL TÁTIL DE MARCAÇÃO & EVOLUÇÃO COM IA)
+        # ABA 2: DOSSIÊ DESCRITIVO (PAINEL TÁTIL & EVOLUÇÃO)
         # ==============================================================================
         with tab_forja:
             @st.fragment
             def renderizar_forja_dossie_fragmento():
                 st.markdown(f"### Dossiê Descritivo & Evolução — {trim_ativo_pei}")
-                st.caption("Selecione as características observadas na aula de Matemática. A IA cruza com os relatórios anteriores e redige o parecer formal com a evolução da estudante.")
+                st.caption("Assinale as características observadas na aula de Matemática. A IA cruza com os relatórios anteriores e redige o parecer formal:")
                 
                 df_todos_relatorio = pd.concat([df_laudados, df_defasagem]).drop_duplicates(subset=['ID']) if not df_laudados.empty or not df_defasagem.empty else pd.DataFrame()
                 
@@ -7326,7 +7323,6 @@ Escola Municipal Flávio José Simões Costa"""
                     id_a = db.limpar_id(dados_a['ID'])
                     perfil_atual = str(dados_a['NECESSIDADES']).upper().strip()
 
-                    # 1. MINERAÇÃO DE DADOS DE SALA (NOTAS, VISTOS, FALTAS)
                     n_alu = df_notas[(df_notas['ID_ALUNO'].apply(db.limpar_id) == id_a) & (df_notas['TRIMESTRE'] == trim_ativo_pei)] if not df_notas.empty else pd.DataFrame()
                     if not n_alu.empty:
                         nota_c1 = util.sosa_to_float(n_alu.iloc[0]['NOTA_VISTOS'])
@@ -7356,38 +7352,29 @@ Escola Municipal Flávio José Simões Costa"""
 
                     oc_str = "\n".join(ocorrencias_diario) if ocorrencias_diario else "Participação regular com acompanhamento mediado."
 
-                    # 2. RESGATE DO HISTÓRICO ANTERIOR PARA ANÁLISE DE EVOLUÇÃO
                     hist_aluno = df_relatorios[df_relatorios['ID_ALUNO'].apply(db.limpar_id) == id_a] if not df_relatorios.empty else pd.DataFrame()
-                    
                     texto_historico_anterior = ""
                     if trim_ativo_pei == "II Trimestre":
                         rel_ant = hist_aluno[hist_aluno['TIPO'] == "DOSSIE_PEI_I_TRIMESTRE"]
                         if not rel_ant.empty:
                             texto_historico_anterior = f"HISTÓRICO DO I TRIMESTRE: {str(rel_ant.iloc[-1]['CONTEUDO'])[:500]}"
                     elif trim_ativo_pei == "III Trimestre":
-                        rel_ant1 = hist_aluno[hist_aluno['TIPO'] == "DOSSIE_PEI_I_TRIMESTRE"]
                         rel_ant2 = hist_aluno[hist_aluno['TIPO'] == "DOSSIE_PEI_II_TRIMESTRE"]
                         if not rel_ant2.empty:
                             texto_historico_anterior = f"HISTÓRICO DO II TRIMESTRE: {str(rel_ant2.iloc[-1]['CONTEUDO'])[:500]}"
-                        elif not rel_ant1.empty:
-                            texto_historico_anterior = f"HISTÓRICO DO I TRIMESTRE: {str(rel_ant1.iloc[-1]['CONTEUDO'])[:500]}"
 
-                    # EVIDÊNCIAS DE SALA
                     with st.container(border=True):
                         st.markdown(f"##### Evidências Registradas ({aluno_foco} • {trim_ativo_pei})")
                         c_ctx1, c_ctx2 = st.columns([1.2, 1.8])
                         c_ctx1.info(f"**Rendimento em Matemática:**\n{notas_str}\n\n**Faltas no Período:** {faltas_cnt}")
                         c_ctx2.warning(f"**Atitude & Observações de Sala:**\n{oc_str}")
 
-                    # -------------------------------------------------------------
-                    # PAINEL TÁTIL DE MARCAÇÃO RÁPIDA (CHIPS / PILLS)
-                    # -------------------------------------------------------------
+                    # PAINEL TÁTIL DE MARCAÇÃO RÁPIDA
                     with st.container(border=True):
                         st.markdown("#### Painel Tátil de Marcação Rápida")
                         st.caption("Assinale com 1 toque as características observadas nas aulas de Matemática:")
 
                         c_chip1, c_chip2 = st.columns(2)
-                        
                         marcas_sociais = c_chip1.pills(
                             "Comportamento & Interação:",
                             ["Necessita de Rotina Rígida", "Apresenta Estereotipias", "Interage com Apoio do Mediador", "Atenção Compartilhada em Desenvolvimento", "Sensibilidade a Ruídos / Agitação", "Isolamento Ocasional"],
@@ -7405,7 +7392,6 @@ Escola Municipal Flávio José Simões Costa"""
                         )
 
                         c_chip3, c_chip4 = st.columns(2)
-                        
                         marcas_matematica = c_chip3.pills(
                             "Prática Matemática & Cognição:",
                             ["Autonomia com Material Dourado", "Uso Funcional da Calculadora", "Reconhece Numerais e Quantidades", "Desenvolvimento com Jogos Táteis", "Dificuldade na Abstração sem Apoio", "Realiza Tarefas de Papel com Mediação"],
@@ -7422,47 +7408,37 @@ Escola Municipal Flávio José Simões Costa"""
                         )
 
                         micro_anotacao_prof = st.text_input(
-                            "Micro-Anotação do Professor (Opcional - Digite ou use o Ditado por Voz do celular):",
+                            "Micro-Anotação Rápida do Professor (Opcional):",
                             placeholder="Ex: Demonstrou muito interesse nas atividades com malha quadriculada e contagem com moedas.",
                             key=f"inp_micro_obs_{v}"
                         )
 
                         st.markdown("<br>", unsafe_allow_html=True)
 
-                        # BOTÃO MÁGICO: ESTRUTURAR COM IA
                         if st.button("Estruturar Dossiê Formal com IA (Análise de Evolução)", type="primary", use_container_width=True, key=f"btn_ghost_auto_{v}"):
-                            with st.spinner("A IA está cruzando as marcações, histórico anterior e notas para redigir o parecer técnico..."):
+                            with st.spinner("A IA está cruzando as marcações, histórico anterior e notas para redigir o parecer..."):
                                 prompt_auto = (
                                     f"VOCÊ É O PSICOPEDAGOGO E ESPECIALISTA EM INCLUSÃO SOSA (PADRÃO PREFEITURA DE ITABUNA).\n"
                                     f"ESTUDANTE: {aluno_foco} | TURMA: {turma_pei} | LAUDO/PERFIL: {perfil_atual}\n"
                                     f"TRIMESTRE ATUAL: {trim_ativo_pei.upper()}\n\n"
-                                    f"--- DADOS DE OBSERVAÇÃO DO PROFESSOR (MARCAÇÕES REAIS) ---\n"
+                                    f"--- DADOS DE OBSERVAÇÃO DO PROFESSOR ---\n"
                                     f"• COMPORTAMENTO: {', '.join(marcas_sociais)}\n"
                                     f"• COMUNICAÇÃO: {', '.join(marcas_comunicacao)}\n"
                                     f"• PRÁTICA EM MATEMÁTICA: {', '.join(marcas_matematica)}\n"
                                     f"• STATUS DE EVOLUÇÃO: {evolucao_selecionada}\n"
-                                    f"• ANOTAÇÃO RÁPIDA DO DOCENTE: {micro_anotacao_prof}\n"
+                                    f"• ANOTAÇÃO DO DOCENTE: {micro_anotacao_prof}\n"
                                     f"• RENDIMENTO EM MATEMÁTICA: {notas_str} | FALTAS: {faltas_cnt}\n\n"
-                                    f"--- HISTÓRICO DO TRIMESTRE ANTERIOR (PARA COMPARAR EVOLUÇÃO/INVOLUÇÃO) ---\n"
-                                    f"{texto_historico_anterior if texto_historico_anterior else 'Início do acompanhamento no ano letivo.'}\n\n"
-                                    f"MISSÃO:\n"
-                                    f"Redija um parecer descritivo empático, formal e focado nas aulas de Matemática, DESTACANDO EXPLICITAMENTE A EVOLUÇÃO em relação ao período anterior.\n"
+                                    f"--- HISTÓRICO ANTERIOR ---\n"
+                                    f"{texto_historico_anterior if texto_historico_anterior else 'Início do acompanhamento.'}\n\n"
+                                    f"MISSÃO: Redija um parecer descritivo empático, formal e focado nas aulas de Matemática, DESTACANDO A EVOLUÇÃO em relação ao período anterior.\n"
                                     f"Preencha rigorosamente as tags:\n"
-                                    f"[DIAGNOSTICO_GERAL] (Síntese do desenvolvimento no {trim_ativo_pei} com comparativo de evolução)\n"
-                                    f"[SOCIAIS] (Comportamento e interação na sala de Matemática)\n"
-                                    f"[COMUNICATIVAS] (Formas de comunicação e resposta aos comandos)\n"
-                                    f"[EMOCIONAIS] (Autorregulação e flexibilidade)\n"
-                                    f"[FUNCIONAIS] (Autonomia no manuseio de materiais e caderno)\n"
-                                    f"[DIRETRIZES_CURRICULARES] (Recomendações práticas para os próximos ciclos)"
+                                    f"[DIAGNOSTICO_GERAL]\n[SOCIAIS]\n[COMUNICATIVAS]\n[EMOCIONAIS]\n[FUNCIONAIS]\n[DIRETRIZES_CURRICULARES]"
                                 )
                                 res_ia = ai.gerar_ia("ESPECIALISTA_INCLUSAO", prompt_auto, usar_busca=False)
                                 tipo_relatorio_chave = f"DOSSIE_PEI_{trim_ativo_pei.replace(' ', '_').upper()}"
                                 salvar_relatorio_pei_sem_duplicidade(id_a, aluno_foco, tipo_relatorio_chave, res_ia)
                                 st.success("Dossiê formal estruturado com sucesso pela IA!"); time.sleep(0.5); st.rerun()
 
-                    # -------------------------------------------------------------
-                    # CAMPOS DE REVISÃO PREENCHIDOS (EDITÁVEIS)
-                    # -------------------------------------------------------------
                     tipo_relatorio_chave = f"DOSSIE_PEI_{trim_ativo_pei.replace(' ', '_').upper()}"
                     rel_master = hist_aluno[hist_aluno['TIPO'] == tipo_relatorio_chave] if not hist_aluno.empty else pd.DataFrame()
                     text_dossie_salvo = str(rel_master.iloc[-1]['CONTEUDO']) if not rel_master.empty else ""
@@ -7488,13 +7464,13 @@ Escola Municipal Flávio José Simões Costa"""
             renderizar_forja_dossie_fragmento()
 
         # ==============================================================================
-        # ABA 3: PARECER PARA OS PAIS
+        # ABA 3: PARECER PARA OS PAIS (COM DOWNLOAD NATIVO .DOCX)
         # ==============================================================================
         with tab_provas_pei:
             @st.fragment
             def renderizar_parecer_pais_fragmento():
                 st.markdown(f"### Parecer Descritivo para a Família ({trim_ativo_pei})")
-                st.caption("Exportação do parecer descritivo em linguagem acolhedora para envio no WhatsApp ou impressão oficial.")
+                st.caption("Exportação e download nativo do parecer descritivo em linguagem acolhedora.")
                 
                 df_todos_relatorio = pd.concat([df_laudados, df_defasagem]).drop_duplicates(subset=['ID']) if not df_laudados.empty or not df_defasagem.empty else pd.DataFrame()
                 
@@ -7506,8 +7482,6 @@ Escola Municipal Flávio José Simões Costa"""
                     perfil_p = str(df_todos_relatorio[df_todos_relatorio['NOME_ALUNO'] == aluno_p_sel].iloc[0]['NECESSIDADES']).upper()
                     
                     tipo_relatorio_chave = f"DOSSIE_PEI_{trim_ativo_pei.replace(' ', '_').upper()}"
-                    chave_parecer_docx = f"PARECER_DOCX_{trim_ativo_pei.replace(' ', '_').upper()}"
-                    
                     hist_p = df_relatorios[df_relatorios['ID_ALUNO'].apply(db.limpar_id) == id_p] if not df_relatorios.empty else pd.DataFrame()
                     rel_p = hist_p[hist_p['TIPO'] == tipo_relatorio_chave] if not hist_p.empty else pd.DataFrame()
                     
@@ -7515,52 +7489,48 @@ Escola Municipal Flávio José Simões Costa"""
                     p_diag = ai.extrair_tag(txt_p_salvo, "DIAGNOSTICO_GERAL") or "Parecer ainda não preenchido para este período."
                     p_dir = ai.extrair_tag(txt_p_salvo, "DIRETRIZES_CURRICULARES") or "Sem recomendações registradas."
 
-                    # VERIFICA SE O PARECER DOCX JÁ EXISTE
-                    link_parecer_existente = None
-                    rel_docx = hist_p[hist_p['TIPO'] == chave_parecer_docx] if not hist_p.empty else pd.DataFrame()
-                    if not rel_docx.empty:
-                        link_parecer_existente = str(rel_docx.iloc[-1]['CONTEUDO'])
+                    # Compila o arquivo DOCX em memória para download instantâneo
+                    texto_parecer_docx = (
+                        f"PARECER DESCRITIVO DE ACOMPANHAMENTO PEDAGÓGICO - {trim_ativo_pei.upper()}\n\n"
+                        f"Estudante: {aluno_p_sel} | Turma: {turma_pei} | Perfil: {perfil_p}\n\n"
+                        f"1. AVALIAÇÃO DESCRITIVA DO DESEMPENHO EM MATEMÁTICA:\n{p_diag}\n\n"
+                        f"2. RECOMENDAÇÕES E DIRETRIZES PEDAGÓGICAS:\n{p_dir}\n\n"
+                        f"Prof. Ronaldo Gomes • Componente Curricular de Matemática"
+                    )
+                    nome_arq_parecer = f"PARECER_{aluno_p_sel.replace(' ','_')}_{trim_ativo_pei.replace(' ','')}"
+                    doc_p = exporter.gerar_docx_aluno_v24(nome_arq_parecer, texto_parecer_docx, {"ano": turma_pei, "trimestre": trim_ativo_pei})
+                    docx_bytes_par = doc_p.getvalue()
+
+                    with st.container(border=True):
+                        st.markdown("##### Prévia do Parecer na Tela")
+                        st.write(preparar_para_leitura(f"**Evolução:** {p_diag}"))
+                        st.info(preparar_para_leitura(f"**Diretrizes:** {p_dir}"))
 
                     c_act1, c_act2 = st.columns(2)
                     
                     if c_act1.button("Abrir Texto para WhatsApp", use_container_width=True, key=f"btn_zap_par_{v}"):
                         dialog_zap_parecer_modal(aluno_p_sel, trim_ativo_pei, p_diag, p_dir)
 
-                    if link_parecer_existente and "http" in link_parecer_existente:
-                        c_act2.link_button("Abrir Parecer no Drive (DOCX)", link_parecer_existente, type="primary", use_container_width=True)
-                        with st.expander("Recompilar Parecer DOCX no Drive", expanded=False):
-                            btn_gen_par_exec = st.button("Recompilar Documento", key=f"btn_re_par_{id_p}_{v}")
-                    else:
-                        btn_gen_par_exec = c_act2.button("Gerar Parecer em Word (DOCX)", type="primary", use_container_width=True, key=f"btn_docx_par_{v}")
-
-                    if btn_gen_par_exec:
-                        with st.spinner("Compilando Parecer Descritivo em Word A4..."):
-                            texto_parecer_docx = (
-                                f"PARECER DESCRITIVO DE ACOMPANHAMENTO PEDAGÓGICO - {trim_ativo_pei.upper()}\n\n"
-                                f"Estudante: {aluno_p_sel} | Turma: {turma_pei} | Perfil: {perfil_p}\n\n"
-                                f"1. AVALIAÇÃO DESCRITIVA DO DESEMPENHO:\n{p_diag}\n\n"
-                                f"2. RECOMENDAÇÕES E DIRETRIZES PARA O PRÓXIMO CICLO:\n{p_dir}"
-                            )
-                            nome_arq_parecer = f"PARECER_{aluno_p_sel.replace(' ','_')}_{trim_ativo_pei.replace(' ','')}"
-                            doc_p = exporter.gerar_docx_aluno_v24(nome_arq_parecer, texto_parecer_docx, {"ano": turma_pei, "trimestre": trim_ativo_pei})
-                            link_p = db.subir_e_converter_para_google_docs(doc_p, nome_arq_parecer, modo="AULA")
-                            
-                            if "https" in link_p:
-                                salvar_relatorio_pei_sem_duplicidade(id_p, aluno_p_sel, chave_parecer_docx, link_p)
-                                st.success("Parecer gerado e sincronizado no Drive!")
-                                st.balloons()
-                                time.sleep(0.6); st.rerun()
+                    c_act2.download_button(
+                        label="📥 Baixar Parecer em Word (DOCX)",
+                        data=docx_bytes_par,
+                        file_name=f"{nome_arq_parecer}.docx",
+                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        type="primary",
+                        use_container_width=True,
+                        key=f"btn_dl_par_docx_{id_p}_{v}"
+                    )
 
             renderizar_parecer_pais_fragmento()
 
         # ==============================================================================
-        # ABA 4: CURRÍCULO ADAPTADO & PEI OFICIAL DA PREFEITURA (FOCO: MATEMÁTICA)
+        # ABA 4: CURRÍCULO ADAPTADO & PEI OFICIAL COM DOWNLOAD DIRETO (.DOCX)
         # ==============================================================================
         with tab_curriculo:
             @st.fragment
             def renderizar_curriculo_exportacao_fragmento():
                 st.markdown(f"### Adaptação Curricular & PEI Oficial — {trim_ativo_pei}")
-                st.caption("Planejamento curricular individualizado de MATEMÁTICA no modelo oficial da Secretaria Municipal de Educação de Itabuna.")
+                st.caption("Planejamento curricular individualizado de MATEMÁTICA no modelo oficial da Prefeitura de Itabuna (Download nativo direto no sistema).")
                 
                 df_laudados_secao = df_laudados if not df_laudados.empty else pd.DataFrame()
                 
@@ -7571,7 +7541,8 @@ Escola Municipal Flávio José Simões Costa"""
                     
                     id_exp = db.limpar_id(df_laudados_secao[df_laudados_secao['NOME_ALUNO'] == aluno_exp].iloc[0]['ID'])
                     perfil_exp = str(df_laudados_secao[df_laudados_secao['NOME_ALUNO'] == aluno_exp].iloc[0]['NECESSIDADES']).upper()
-                    
+                    ano_aluno_num = "".join(filter(str.isdigit, turma_pei))
+
                     c_esc1, c_esc2 = st.columns([1.5, 1])
                     escopo_pei_doc = c_esc1.segmented_control(
                         "Escopo do Documento PEI:",
@@ -7581,9 +7552,8 @@ Escola Municipal Flávio José Simões Costa"""
                     )
                     
                     is_anual_pei = "Anual" in str(escopo_pei_doc)
-                    chave_pei_docx = f"PEI_OFICIAL_ITABUNA_ANUAL_{id_exp}" if is_anual_pei else f"PEI_OFICIAL_ITABUNA_{trim_ativo_pei.replace(' ', '_').upper()}_{id_exp}"
                     
-                    # 1. RESGATE DO DOSSIÊ CLÍNICO E OBSERVAÇÕES DE MATEMÁTICA
+                    # 1. RESGATE DO DOSSIÊ CLÍNICO E OBSERVAÇÕES
                     hist_exp = df_relatorios[df_relatorios['ID_ALUNO'].apply(db.limpar_id) == id_exp] if not df_relatorios.empty else pd.DataFrame()
                     rel_master_exp = hist_exp[hist_exp['TIPO'].str.contains("DOSSIE_PEI", na=False)] if not hist_exp.empty else pd.DataFrame()
                     
@@ -7603,22 +7573,7 @@ Escola Municipal Flávio José Simões Costa"""
                         if ai.extrair_tag(txt_dossie_bruto, "FUNCIONAIS"): v_fun_exp = ai.extrair_tag(txt_dossie_bruto, "FUNCIONAIS")
                         if ai.extrair_tag(txt_dossie_bruto, "DIRETRIZES_CURRICULARES"): v_diretrizes_exp = ai.extrair_tag(txt_dossie_bruto, "DIRETRIZES_CURRICULARES")
 
-                    # 2. VERIFICAÇÃO DE DOCUMENTO OFICIAL JÁ GERADO (ACESSO EM 1 CLIQUE)
-                    link_pei_existente = None
-                    rel_pei_docx = hist_exp[hist_exp['TIPO'] == chave_pei_docx] if not hist_exp.empty else pd.DataFrame()
-                    if not rel_pei_docx.empty:
-                        link_pei_existente = str(rel_pei_docx.iloc[-1]['CONTEUDO'])
-
-                    if link_pei_existente and "http" in link_pei_existente:
-                        with st.container(border=True):
-                            c_pcard1, c_pcard2 = st.columns([2.5, 1.2])
-                            c_pcard1.markdown(f"##### PEI Oficial Homologado no Google Drive")
-                            c_pcard1.caption(f"Estudante: **{aluno_exp}** | Escopo: **{escopo_pei_doc}** | Componente: **Matemática**")
-                            c_pcard2.link_button("Abrir PEI no Drive (DOCX)", link_pei_existente, type="primary", use_container_width=True)
-
-                    st.markdown("<br>", unsafe_allow_html=True)
-
-                    # 3. TABELA DE PLANEJAMENTO CURRICULAR DE MATEMÁTICA
+                    # 2. TABELA DE PLANEJAMENTO CURRICULAR
                     chave_tabela_curr = f"CURRICULO_ADAPTADO_ANUAL_{id_exp}" if is_anual_pei else f"CURRICULO_ADAPTADO_{trim_ativo_pei}_{id_exp}"
                     curr_records = hist_exp[hist_exp['TIPO'] == chave_tabela_curr] if not hist_exp.empty else pd.DataFrame()
                     
@@ -7627,11 +7582,9 @@ Escola Municipal Flávio José Simões Costa"""
                         except: df_curr_atual = pd.DataFrame(columns=["Objetivos de Aprendizagem", "Estratégias Metodológicas", "Recursos Materiais"])
                     else: df_curr_atual = pd.DataFrame(columns=["Objetivos de Aprendizagem", "Estratégias Metodológicas", "Recursos Materiais"])
 
-                    # 4. MINERAÇÃO DE MATEMÁTICA (PONTO ID + MATRIZ MUNICIPAL)
+                    # 3. POP-OVER PARA ADAPTAR CONTEÚDOS COM IA
                     with st.popover("Adaptar Conteúdos de Matemática com IA"):
-                        st.caption(f"Selecione os conteúdos trabalhados na sala de Matemática ({escopo_pei_doc}):")
-                        
-                        ano_aluno_num = "".join(filter(str.isdigit, turma_pei))
+                        st.caption(f"Selecione os conteúdos trabalhados em sala ({escopo_pei_doc}):")
                         
                         opcoes_dos_planos = []
                         if not df_planos.empty and 'ANO' in df_planos.columns and 'TURMA' in df_planos.columns:
@@ -7641,7 +7594,7 @@ Escola Municipal Flávio José Simões Costa"""
                             for _, r_plano in planos_da_turma.iterrows():
                                 sem_lbl = r_plano.get('SEMANA', 'Semana')
                                 txt_plano_item = str(r_plano.get('PLANO_TEXTO', ''))
-                                obj_item = ai.extrair_tag(txt_plano_item, "OBJETO_CONHECIMENTO") or ai.extrair_tag(txt_plano_item, "CONTEUDOS_ESPECIFICOS") or "Conteúdo de Matemática"
+                                obj_item = ai.extrair_tag(txt_plano_item, "OBJETO_CONHECIMENTO") or ai.extrair_tag(txt_plano_item, "CONTEUDOS_ESPECIFICOS") or "Conteúdo da Aula"
                                 clean_obj = re.sub(r'[*#\[\]]', '', obj_item).strip()
                                 if clean_obj and len(clean_obj) > 3 and "N/A" not in clean_obj.upper():
                                     opcoes_dos_planos.append(f"[{sem_lbl}] {clean_obj}")
@@ -7666,15 +7619,15 @@ Escola Municipal Flávio José Simões Costa"""
                         default_selecionados = opcoes_dos_planos[:min(5, len(opcoes_dos_planos))] if opcoes_dos_planos else opcoes_da_matriz[:min(5, len(opcoes_da_matriz))]
                         
                         selecionados = st.multiselect(
-                            "Conteúdos de Matemática para Adaptação:", 
+                            "Conteúdos de Matemática:", 
                             todos_conteudos_disponiveis, 
                             default=default_selecionados,
                             key=f"sel_mat_pop_{v}"
                         )
 
                         detalhes_extras_prof = st.text_input(
-                            "Diretrizes Específicas do Professor de Matemática (Opcional):",
-                            placeholder="Ex: Focar no uso de Material Dourado, dobraduras, calculadora e tabela de apoio...",
+                            "Diretrizes Específicas do Professor de Matemática:",
+                            placeholder="Ex: Focar em Material Dourado, calculadora, dobraduras e malhas...",
                             key=f"obs_extra_pei_pop_{v}"
                         )
                         
@@ -7686,13 +7639,13 @@ Escola Municipal Flávio José Simões Costa"""
                                         f"ESTUDANTE: {aluno_exp} | TURMA: {turma_pei} | LAUDO/PERFIL: {perfil_exp}\n"
                                         f"ESCOPO: {escopo_pei_doc}\n\n"
                                         f"--- DOSSIÊ CLÍNICO E DIAGNÓSTICO DA ESTUDANTE ---\n"
-                                        f"DIAGNÓSTICO: {v_diag_exp if v_diag_exp else 'Acompanhamento de desenvolvimento com adaptações funcionais em Matemática.'}\n"
+                                        f"DIAGNÓSTICO: {v_diag_exp if v_diag_exp else 'Acompanhamento de desenvolvimento com adaptações em Matemática.'}\n"
                                         f"DIRETRIZES: {v_diretrizes_exp}\n"
                                         f"OBSERVAÇÕES DO PROFESSOR: {detalhes_extras_prof}\n\n"
                                         f"--- CONTEÚDOS DE MATEMÁTICA PARA ADAPTAR ---\n"
                                         f"{chr(10).join(selecionados)}\n\n"
                                         f"MISSÃO: Converta cada um dos conteúdos de Matemática acima em adaptações para a tabela oficial do PEI da Secretaria de Educação de Itabuna.\n"
-                                        f"Para cada conteúdo, responda estritamente no formato:\n"
+                                        f"Preencha estritamente:\n"
                                         f"[ITEM]\n"
                                         f"[OBJETIVO] (Objetivo de Matemática acessível e simplificado)\n"
                                         f"[ESTRATEGIA] (Estratégia prática: instrução passo a passo, apoio visual e mediação)\n"
@@ -7726,13 +7679,32 @@ Escola Municipal Flávio José Simões Costa"""
                     
                     st.markdown("---")
                     
-                    # 5. PARECER DOS RESULTADOS OBTIDOS EM MATEMÁTICA
+                    # 4. PARECER DOS RESULTADOS OBTIDOS EM MATEMÁTICA
                     st.markdown("##### Parecer de Resultados Obtidos (Seção 3 do PEI Oficial)")
                     chave_parecer_res = f"PARECER_RESULTADOS_PEI_{id_exp}"
                     reg_par_res = hist_exp[hist_exp['TIPO'] == chave_parecer_res] if not hist_exp.empty else pd.DataFrame()
                     parecer_inicial_mat = str(reg_par_res.iloc[-1]['CONTEUDO']) if not reg_par_res.empty else f"Matemática: A estudante {aluno_exp} encontra-se em processo de desenvolvimento da aprendizagem, demonstrando evolução na compreensão dos conceitos matemáticos básicos com o suporte de recursos visuais, material concreto e mediação individualizada."
                     
-                    parecer_mat_editavel = st.text_area("Parecer de Matemática (Para a Área de Ciências da Natureza e Matemática):", value=parecer_inicial_mat, height=75, key=f"ta_parecer_res_{v}")
+                    parecer_mat_editavel = st.text_area("Parecer de Matemática:", value=parecer_inicial_mat, height=75, key=f"ta_parecer_res_{v}")
+
+                    # COMPILAÇÃO NATIVA EM MEMÓRIA (0.1s PARA DOWNLOAD INSTANTÂNEO)
+                    dados_aluno_docx = {
+                        "nome": aluno_exp, 
+                        "turma": turma_pei, 
+                        "cid": perfil_exp,
+                        "idade": "11"
+                    }
+                    
+                    habilidades_estudo_caso = {
+                        "Habilidades Sociais": v_soc_exp, 
+                        "Habilidades Comunicativas": v_com_exp, 
+                        "Habilidades Emocionais": v_emo_exp, 
+                        "Habilidades Funcionais": v_fun_exp
+                    }
+                    
+                    nome_arq_pei = f"PEI_OFICIAL_ITABUNA_ANUAL_{aluno_exp.replace(' ', '_')}_{ano_aluno_num}ANO" if is_anual_pei else f"PEI_OFICIAL_ITABUNA_{aluno_exp.replace(' ', '_')}_{trim_ativo_pei.replace(' ', '')}"
+                    doc_stream = exporter.gerar_docx_pei_oficial(nome_arq_pei, dados_aluno_docx, habilidades_estudo_caso, df_editado_curr, parecer_resultados=parecer_mat_editavel)
+                    docx_bytes_pei = doc_stream.getvalue()
 
                     st.markdown("<br>", unsafe_allow_html=True)
                     c_btn_save, c_btn_exp = st.columns(2)
@@ -7740,42 +7712,21 @@ Escola Municipal Flávio José Simões Costa"""
                     if c_btn_save.button("Salvar Planejamento de Matemática", use_container_width=True, key=f"btn_save_tab_curr_{v}"):
                         salvar_relatorio_pei_sem_duplicidade(id_exp, aluno_exp, chave_tabela_curr, df_editado_curr.to_json(orient='records'))
                         salvar_relatorio_pei_sem_duplicidade(id_exp, aluno_exp, chave_parecer_res, parecer_mat_editavel)
-                        st.success("Planejamento e parecer de Matemática salvos com sucesso!"); time.sleep(0.5); st.rerun()
+                        st.success("Planejamento e parecer de Matemática salvos!"); time.sleep(0.5); st.rerun()
                         
-                    rotulo_btn_pei = f"Recompilar {escopo_pei_doc} (DOCX)" if (link_pei_existente and "http" in link_pei_existente) else f"Gerar PEI Oficial da Prefeitura em Word (DOCX)"
-                    
-                    if c_btn_exp.button(rotulo_btn_pei, type="primary", use_container_width=True, key=f"btn_gen_pei_docx_{v}"):
-                        with st.spinner(f"Compilando PEI Oficial no modelo da Secretaria de Educação de Itabuna..."):
-                            dados_aluno_docx = {
-                                "nome": aluno_exp, 
-                                "turma": turma_pei, 
-                                "cid": perfil_exp,
-                                "idade": "11"
-                            }
-                            
-                            habilidades_estudo_caso = {
-                                "Habilidades Sociais": v_soc_exp, 
-                                "Habilidades Comunicativas": v_com_exp, 
-                                "Habilidades Emocionais": v_emo_exp, 
-                                "Habilidades Funcionais": v_fun_exp
-                            }
-                            
-                            nome_arq_pei = f"PEI_OFICIAL_ITABUNA_ANUAL_{aluno_exp.replace(' ', '_')}_{ano_aluno_num}ANO" if is_anual_pei else f"PEI_OFICIAL_ITABUNA_{aluno_exp.replace(' ', '_')}_{trim_ativo_pei.replace(' ', '')}"
-                            doc_stream = exporter.gerar_docx_pei_oficial(nome_arq_pei, dados_aluno_docx, habilidades_estudo_caso, df_editado_curr, parecer_resultados=parecer_mat_editavel)
-                            link_doc = db.subir_e_converter_para_google_docs(doc_stream, nome_arq_pei, trimestre="Conselho" if is_anual_pei else trim_ativo_pei, categoria=turma_pei, modo="PLANEJAMENTO")
-                            
-                            if "https" in link_doc:
-                                salvar_relatorio_pei_sem_duplicidade(id_exp, aluno_exp, chave_pei_docx, link_doc)
-                                salvar_relatorio_pei_sem_duplicidade(id_exp, aluno_exp, chave_tabela_curr, df_editado_curr.to_json(orient='records'))
-                                salvar_relatorio_pei_sem_duplicidade(id_exp, aluno_exp, chave_parecer_res, parecer_mat_editavel)
-                                st.success("PEI Oficial da Prefeitura compilado e sincronizado no Google Drive!")
-                                st.balloons()
-                                time.sleep(0.6); st.rerun()
-                            else: st.error(f"Erro ao salvar no Drive: {link_doc}")
+                    c_btn_exp.download_button(
+                        label=f"📥 Baixar {escopo_pei_doc} em Word (DOCX)",
+                        data=docx_bytes_pei,
+                        file_name=f"{nome_arq_pei}.docx",
+                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        type="primary",
+                        use_container_width=True,
+                        key=f"btn_dl_pei_docx_{id_exp}_{v}"
+                    )
 
-                    # OPÇÃO PRÁTICA: COPIAR O BLOCO DE MATEMÁTICA PARA ARQUIVO COMPARTILHADO DA ESCOLA
+                    # OPÇÃO: COPIAR O BLOCO DE MATEMÁTICA
                     with st.expander("Copiar Bloco de Matemática para Arquivo Coletivo da Escola"):
-                        st.caption("Caso a coordenação solicite apenas a sua parte para colar no documento compartilhado do Google Docs da escola:")
+                        st.caption("Texto formatado para colar diretamente no Google Docs compartilhado da escola:")
                         
                         linhas_texto_copia = []
                         linhas_texto_copia.append(f"COMPONENTE CURRICULAR: MATEMÁTICA\nPROFESSOR: Ronaldo Gomes | TURMA: {turma_pei}\nESTUDANTE: {aluno_exp} | CID: {perfil_exp}\n" + "="*50)
