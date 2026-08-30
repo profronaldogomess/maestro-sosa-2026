@@ -1338,13 +1338,15 @@ if menu == "📅 Planejamento (Ponto ID)":
 
         elif modo_inteligencia == "Gerador de Plano Trimestral":
             st.markdown("#### Compilador Oficial de Plano Trimestral (DOCX)")
-            c_t1, c_t2 = st.columns(2)
+            st.caption("Compilação institucional em formato Paisagem A4, mapeando eixos temáticos, habilidades BNCC específicas e metodologias reais mineradas dos planos.")
+            
+            c_t1, c_t2 = st.columns([1, 1])
             ano_trim = c_t1.selectbox("Série Alvo:", ["6º Ano", "7º Ano", "8º Ano", "9º Ano"], key=f"sel_ano_trim_{v}")
             trim_alvo = c_t2.selectbox("Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"sel_trim_alvo_{v}")
             ano_num_trim = "".join(filter(str.isdigit, ano_trim))
             
             if st.button("Gerar Documento Trimestral Oficial", type="primary", use_container_width=True, key=f"btn_gen_plan_trim_{v}"):
-                with st.spinner("Minerando planos e compilando documento DOCX oficial..."):
+                with st.spinner("Minerando planos semanais e estruturando documento oficial..."):
                     col_ano = next((c for c in df_curriculo.columns if 'ANO' in c.upper()), None) if not df_curriculo.empty else None
                     col_eixo = next((c for c in df_curriculo.columns if any(x in c.upper() for x in ['GERAIS', 'EIXO', 'DOMÍNIO'])), None) if not df_curriculo.empty else None
                     col_trim = next((c for c in df_curriculo.columns if trim_alvo.upper() in c.upper()), None) if not df_curriculo.empty else None
@@ -1360,27 +1362,7 @@ if menu == "📅 Planejamento (Ponto ID)":
                     else:
                         planos_trim = df_planos[(df_planos['ANO'].astype(str).str.contains(ano_num_trim)) & (df_planos['TURMA'] == trim_alvo)] if not df_planos.empty and 'ANO' in df_planos.columns and 'TURMA' in df_planos.columns else pd.DataFrame()
                         
-                        bncc_codes = set()
-                        metodologias = set()
-                        
-                        if not planos_trim.empty and 'PLANO_TEXTO' in planos_trim.columns:
-                            for txt in planos_trim['PLANO_TEXTO'].dropna():
-                                hab = ai.extrair_tag(str(txt), "HABILIDADE_BNCC")
-                                codes = re.findall(r'EF\d{2}MA\d{2}[A-Z]?', hab, re.IGNORECASE)
-                                bncc_codes.update([c.upper() for c in codes])
-                                
-                                aula1 = ai.extrair_tag(str(txt), "AULA_1").lower()
-                                if "prática" in aula1 or "quadro" in aula1: metodologias.add("Exposição dialogada e resolução no quadro")
-                                if "livro" in aula1 or "página" in aula1: metodologias.add("Leitura e fixação no livro didático")
-                                if "tecnologia" in aula1 or "news" in aula1: metodologias.add("Contextualização com notícias e tecnologia")
-                                if "jogo" in aula1 or "lúdico" in aula1: metodologias.add("Atividades práticas e desafios")
-                                if "revisão" in aula1 or "correção" in aula1: metodologias.add("Revisão e recomposição de aprendizagem")
-                        
-                        if not metodologias:
-                            metodologias = {"Aulas expositivas e dialogadas", "Resolução de exercícios de fixação", "Uso do livro didático"}
-                            
-                        hab_str = ", ".join(sorted(list(bncc_codes))) if bncc_codes else "Habilidades trabalhadas conforme planos semanais."
-                        met_str = "• " + "\n• ".join(sorted(list(metodologias)))
+                        todos_planos_raw = " ".join([str(p) for p in planos_trim.get('PLANO_TEXTO', pd.Series()).dropna()])
                         
                         dados_tabela = []
                         for _, row in df_matriz_trim.iterrows():
@@ -1388,9 +1370,45 @@ if menu == "📅 Planejamento (Ponto ID)":
                             conteudos = limpar_tags_cite(row.get(col_trim, '')).replace(";", ";\n")
                             
                             if conteudos and conteudos.upper() != "NAN":
+                                # 1. Habilidades específicas do Eixo (extraídas do currículo + validadas nos planos)
+                                codes_no_conteudo = re.findall(r'EF\d{2}MA\d{2}[A-Z]?', conteudos, re.IGNORECASE)
+                                
+                                # Se não houver código explícito no texto, busca códigos nos planos vinculados a este Eixo
+                                if not codes_no_conteudo and not planos_trim.empty:
+                                    planos_do_eixo = [str(p) for p in planos_trim['PLANO_TEXTO'] if eixo.upper() in str(p).upper() or any(w.strip().upper() in str(p).upper() for w in conteudos.split('\n') if len(w.strip()) > 4)]
+                                    text_eixo_planos = " ".join(planos_do_eixo) if planos_do_eixo else todos_planos_raw
+                                    codes_no_conteudo = re.findall(r'EF\d{2}MA\d{2}[A-Z]?', text_eixo_planos, re.IGNORECASE)
+                                
+                                codes_unicos = sorted(list(set([c.upper() for c in codes_no_conteudo])))
+                                hab_str = ", ".join(codes_unicos) if codes_unicos else "Habilidades essenciais da BNCC trabalhadas no período."
+                                
+                                # 2. Metodologias contextualizadas mineradas dos planos
+                                metodologias = set()
+                                text_busca_met = todos_planos_raw.lower()
+                                
+                                if "quadro" in text_busca_met or "exposição" in text_busca_met: 
+                                    metodologias.add("Exposição dialogada e resolução de problemas no quadro")
+                                if "livro" in text_busca_met or "página" in text_busca_met or "conquista" in text_busca_met: 
+                                    metodologias.add("Leitura orientada e exercícios de fixação no livro didático adotado")
+                                if "material dourado" in text_busca_met or "ábaco" in text_busca_met or "concreto" in text_busca_met: 
+                                    metodologias.add("Uso de materiais manipulativos e representação visual concreta")
+                                if "transferidor" in text_busca_met or "malha" in text_busca_met or "cartesiano" in text_busca_met or "ângulo" in text_busca_met: 
+                                    metodologias.add("Construções geométricas, malhas quadriculadas e instrumentos de medição")
+                                if "cotidiano" in text_busca_met or "itabuna" in text_busca_met or "notícia" in text_busca_met or "cacau" in text_busca_met: 
+                                    metodologias.add("Contextualização com situações-problema do cotidiano e economia local")
+                                if "revisão" in text_busca_met or "recomposição" in text_busca_met or "sonda" in text_busca_met: 
+                                    metodologias.add("Recomposição contínua de aprendizagem e análise formativa de erros")
+                                
+                                if not metodologias:
+                                    metodologias = {"Aulas expositivas e dialogadas", "Resolução de situações-problema", "Uso do livro didático"}
+                                    
+                                met_str = "• " + "\n• ".join(sorted(list(metodologias)))
+                                
                                 dados_tabela.append({
-                                    "eixo": eixo, "conteudos": conteudos,
-                                    "habilidades": hab_str, "metodologia": met_str
+                                    "eixo": eixo, 
+                                    "conteudos": conteudos,
+                                    "habilidades": hab_str, 
+                                    "metodologia": met_str
                                 })
                         
                         info_trim = {"trimestre": trim_alvo, "ano": ano_trim}
@@ -1400,10 +1418,11 @@ if menu == "📅 Planejamento (Ponto ID)":
                         link_doc = db.subir_e_converter_para_google_docs(doc_stream, nome_arq, trimestre=trim_alvo, categoria=ano_trim, modo="PLANEJAMENTO")
                         
                         if "https" in link_doc:
-                            st.success("Plano Trimestral gerado com sucesso!")
+                            st.success("Plano Trimestral compilado e sincronizado no Google Drive!")
                             st.link_button("Abrir Documento Oficial no Drive", link_doc, type="primary", use_container_width=True)
                             st.balloons()
-                        else: st.error(f"Erro ao sincronizar no Drive: {link_doc}")
+                        else: 
+                            st.error(f"Erro ao sincronizar no Drive: {link_doc}")
 
         elif modo_inteligencia == "Conciliador Cronológico":
             with st.container(border=True):
