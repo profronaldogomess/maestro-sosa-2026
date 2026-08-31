@@ -1845,11 +1845,11 @@ elif menu == "🧪 Criador de Aulas":
 
 # ==============================================================================
 # MÓDULO: CENTRAL DE AVALIAÇÕES - V2026.PRO_INFINITY_ULTIMATE
-# (LINHA DE MONTAGEM, RECUPERAÇÃO PARALELA INTEGRADA, TRI, PEI E DASHBOARD VISUAL)
+# (FORJA DISCURSIVA PARA RECUPERAÇÃO, ITENS TRI, PEI E CONEXÃO COM SCANNER CIR)
 # ==============================================================================
 elif menu == "📝 Central de Avaliações":
     st.title("Central de Avaliações")
-    st.caption("Arquitetura de instrumentos avaliativos: linha de montagem, recuperação paralela vinculada, perícia psicométrica TRI e dashboard visual de impressão.")
+    st.caption("Arquitetura de instrumentos avaliativos: linha de montagem, recuperação paralela discursiva vinculada, perícia psicométrica TRI e dashboard visual de impressão.")
     st.markdown("---")
 
     if "v_av" not in st.session_state: 
@@ -1899,7 +1899,7 @@ elif menu == "📝 Central de Avaliações":
     ])
 
     # ==============================================================================
-    # ABA 1: LINHA DE MONTAGEM DE PROVAS & RECUPERAÇÃO VINCULADA
+    # ABA 1: LINHA DE MONTAGEM DE PROVAS & RECUPERAÇÃO DISCURSIVA
     # ==============================================================================
     with tab_forja:
         if 1 < f['fase'] <= 5:
@@ -1925,9 +1925,9 @@ elif menu == "📝 Central de Avaliações":
             is_rec_paralela = (modo_arq == "Recuperação Paralela")
             is_variante = (modo_arq == "Variante Tipo B")
 
-            # ==============================================================
-            # FLUXO DEDICADO: SEGUNDA CHAMADA VINCULADA
-            # ==============================================================
+            # -------------------------------------------------------------
+            # SEGUNDA CHAMADA VINCULADA
+            # -------------------------------------------------------------
             if is_2a_chamada:
                 with st.container(border=True):
                     st.markdown("#### Configuração de Segunda Chamada Vinculada")
@@ -1995,9 +1995,9 @@ elif menu == "📝 Central de Avaliações":
                             status_sc.update(label="Segunda Chamada gerada e sincronizada no Google Drive!", state="complete")
                             st.balloons(); time.sleep(0.8); st.rerun()
 
-            # ==============================================================
-            # FLUXO REGULAR / RECUPERAÇÃO PARALELA / RECUPERAÇÃO FINAL
-            # ==============================================================
+            # -------------------------------------------------------------
+            # REGULAR / RECUPERAÇÃO PARALELA / RECUPERAÇÃO FINAL
+            # -------------------------------------------------------------
             elif "Regular" in modo_arq or "Sonda" in modo_arq or is_rec_paralela or is_rec_final:
                 with st.container(border=True):
                     st.markdown("#### 1. Parâmetros da Turma & Pontuação Oficial")
@@ -2018,8 +2018,8 @@ elif menu == "📝 Central de Avaliações":
                     qtd_q = c4.number_input("Quantidade de Questões:", 1, 30, 10, key=f"qtd_q_input_{v}")
 
                     if is_rec_paralela:
-                        st.info("ℹ️ **Recuperação Paralela Oficial (Itabuna):** Avaliação de 0,0 a 10,0 pontos focada nos descritores críticos do trimestre. A nota comporá a fórmula oficial: $\\text{Média Final} = \\max(\\text{Média Inicial}, (\\text{Média Inicial} + \\text{REC})/2)$ com arredondamento 0,5.")
-                        perfil_rigor = "Recuperação Paralela Trimestral"
+                        st.info("ℹ️ **Recuperação Paralela Discursiva (0 a 10 pontos):** Questões abertas para os alunos regulares e prova adaptada (A, B, C e 10 Bento Boxes) para alunos PEI. A nota comporá a fórmula oficial: $\\text{Média Final} = \\max(\\text{Média Inicial}, (\\text{Média Inicial} + \\text{REC})/2)$ com arredondamento 0,5.")
+                        perfil_rigor = "Recuperação Paralela Discursiva"
                     elif is_rec_final:
                         st.info("ℹ️ **Recuperação Final Anual:** Escopo de todo o ano letivo (10,0 pts).")
                         perfil_rigor = "Recuperação Final Anual"
@@ -2034,7 +2034,7 @@ elif menu == "📝 Central de Avaliações":
                 with st.container(border=True):
                     st.markdown("#### 2. Fontes Curriculares & Prova de Origem")
                     
-                    # Seletor inteligente Multi-Camada (Lei 10 do SOSA)
+                    # Seletor Multi-Camada da Prova Aplicada
                     txt_av_origem_puxada = ""
                     if is_rec_paralela:
                         padrao_trim_rec = util.obter_regex_trimestre(trim_filtro)
@@ -2048,7 +2048,6 @@ elif menu == "📝 Central de Avaliações":
                                 sem_ref_n = str(r_a.get('SEMANA_REF', '')).strip()
                                 conteudo_txt = str(r_a.get('CONTEUDO', ''))
                                 
-                                # Captura avaliações mesmo que salvas em "Semana 27", "Semana 26" ou "AVALIAÇÃO"
                                 if re.search(termos_busca_exames_rec, mat_nome) or sem_ref_n.upper() in ["AVALIAÇÃO", "AVALIACAO", "REVISÃO"]:
                                     if re.search(padrao_trim_rec, mat_nome) or re.search(padrao_trim_rec, conteudo_txt) or re.search(padrao_trim_rec, sem_ref_n):
                                         opcoes_provas_para_rec_set.add(mat_nome)
@@ -2094,7 +2093,6 @@ elif menu == "📝 Central de Avaliações":
                                     if bytes_pdf_av:
                                         txt_av_teo_ext = util.extrair_texto_pdf_por_paginas(bytes_pdf_av, list_p_av)
 
-                    # Preenchimento inteligente do campo de Prática da Lousa com base na prova selecionada
                     texto_padrao_pratica = ""
                     if is_rec_paralela:
                         if txt_av_origem_puxada:
@@ -2220,11 +2218,16 @@ elif menu == "📝 Central de Avaliações":
                         st.rerun()
 
         # ======================================================================
-        # FASE 2: FORJA & LAPIDAÇÃO DE ITENS (TRI)
+        # FASE 2: FORJA DISCURSIVA / ABERTA (SEM ALTERNATIVAS A, B, C, D, E)
         # ======================================================================
         elif f['fase'] == 2:
+            is_rec_paralela_fase2 = f['info'].get('is_rec_paralela', False)
+            
             st.markdown(f"### Fase 2: Forja & Lapidação de Itens — `{f['info']['tipo_prova']}`")
-            st.caption(f"Série: **{f['info']['ano']}** | Período: **{f['info']['trimestre']}** | Pontuação Total: **{f['info']['valor']:.1f} pts** ({f['info']['qtd']} questões)")
+            if is_rec_paralela_fase2:
+                st.caption(f"✍️ **Modalidade Discursiva Aberta:** Questões com memória de cálculo (sem alternativas) valendo de 0,0 a {f['info']['valor']:.1f} pontos.")
+            else:
+                st.caption(f"Série: **{f['info']['ano']}** | Período: **{f['info']['trimestre']}** | Pontuação Total: **{f['info']['valor']:.1f} pts**")
 
             total_q = len(f['mapa'])
             valor_por_item = f['info']['valor'] / max(total_q, 1)
@@ -2233,48 +2236,104 @@ elif menu == "📝 Central de Avaliações":
                 col_tri1, col_tri2, col_tri3 = st.columns(3)
                 col_tri1.metric("Total de Questões", total_q)
                 col_tri2.metric("Valor por Questão", f"{valor_por_item:.2f} pts")
-                col_tri3.metric("Escala de Pontuação", f"0,0 a {f['info']['valor']:.1f} pts")
+                col_tri3.metric("Formato da Prova", "Discursiva Aberta" if is_rec_paralela_fase2 else "Objetiva Múltipla Escolha")
 
             pendentes = [item for item in f['mapa'] if item['status'] == 'pendente']
 
             if pendentes:
-                if st.button(f"Gerar Lote de {len(pendentes)} Itens com IA", type="primary", use_container_width=True, key=f"btn_lote_av_{v}"):
-                    with st.spinner("Estruturando itens com perícia TRI e ancoragem curricular..."):
-                        prompt_lote = (
-                            f"SÉRIE: {f['info']['ano']}\n"
-                            f"VALOR TOTAL DA PROVA: {f['info']['valor']}\n"
-                            f"NATUREZA DO INSTRUMENTO: {f['info']['tipo_prova']} (Escala 0 a 10,0 pontos)\n\n"
-                            f"DIRETRIZES DE ANCORAGEM:\n"
-                            f"- Desenvolva cada questão focada no TEMA ESPECÍFICO atribuído, com situações autênticas do cotidiano/regional.\n\n"
-                        )
-                        for item in pendentes:
-                            prompt_lote += f"QUESTÃO {item['q']}:\n- TEMA: {item['tema']}\n- COMPLEXIDADE: {item['dificuldade']}\n- GABARITO: Letra {item['gabarito']}\n\n"
-                        
-                        prompt_lote += f"--- CONTEXTO E PROVA ORIGINAL ---\n{f.get('contexto_base', '')}\n"
-                        
-                        res_json = ai.gerar_ia_json("FORJA_LOTE_JSON", prompt_lote)
-                        if "erro" in res_json:
-                            st.error(f"Erro ao processar lote: {res_json['erro']}")
+                rotulo_btn_lote = "Gerar Lote de Questões Discursivas Abertas com IA" if is_rec_paralela_fase2 else f"Gerar Lote de {len(pendentes)} Itens com IA"
+                
+                if st.button(rotulo_btn_lote, type="primary", use_container_width=True, key=f"btn_lote_av_{v}"):
+                    with st.status("Estruturando itens abertos com memória de cálculo e perícia...", expanded=True) as status_lote:
+                        if is_rec_paralela_fase2:
+                            # GERAÇÃO 100% DISCURSIVA (SEM ALTERNATIVAS A, B, C, D, E)
+                            prompt_disc_rec = (
+                                f"SÉRIE: {f['info']['ano']}\n"
+                                f"VALOR TOTAL DA AVALIAÇÃO: {f['info']['valor']} pontos (Distribuir {valor_por_item:.2f} pts por questão).\n"
+                                f"NATUREZA: AVALIAÇÃO DISCURSIVA / ABERTA DE RECUPERAÇÃO PARALELA.\n\n"
+                                f"🚨 REGRAS INQUEBRÁVEIS:\n"
+                                f"1. É ESTRITAMENTE PROIBIDO incluir alternativas de múltipla escolha (A, B, C, D, E). Todas as questões DEVEM ser abertas.\n"
+                                f"2. Cada questão deve exigir do aluno a resolução por etapas, a apresentação da MEMÓRIA DE CÁLCULO e a declaração da RESPOSTA FINAL com unidade de medida.\n"
+                                f"3. Utilize tabelas em Markdown quando houver dados comparativos.\n\n"
+                                f"LISTA DE TÓPICOS PARA AS QUESTÕES:\n"
+                            )
+                            for item in pendentes:
+                                prompt_disc_rec += f"QUESTÃO {item['q']:02d}: {item['tema']} (Valor: {valor_por_item:.2f} pts)\n"
+                            
+                            prompt_disc_rec += f"\n--- PROVA ORIGINAL DE REFERÊNCIA ---\n{f.get('contexto_base', '')}\n"
+                            
+                            status_lote.write("Processando questões abertas com Gemini 3.7 Flash...")
+                            res_disc = ai.gerar_ia("ARQUITETO_RECUPERACAO_DISCURSIVA", prompt_disc_rec, usar_busca=False)
+                            
+                            # Extração dos enunciados abertos
+                            texto_questoes_disc = ai.extrair_tag(res_disc, "QUESTOES") or res_disc
+                            blocos_q = re.split(r"(?i)\*\*QUEST[AÃ]O\s*0?(\d+)[^\-\n]*[\-\:]\*\*", texto_questoes_disc)
+                            
+                            if len(blocos_q) > 2:
+                                for idx_b in range(1, len(blocos_q), 2):
+                                    q_nr = int(blocos_q[idx_b])
+                                    q_enunciado = blocos_q[idx_b+1].strip()
+                                    for item in f['mapa']:
+                                        if item['q'] == q_nr:
+                                            item['dados'] = {
+                                                'ENUNCIADO': q_enunciado,
+                                                'ALT_A': '', 'ALT_B': '', 'ALT_C': '', 'ALT_D': '', 'ALT_E': '',
+                                                'HABILIDADE': item['tema'],
+                                                'JUSTIFICATIVA': f"Resolução discursiva do item {q_nr}.",
+                                                'DISTRATORES': "Critério de pontuação: Cálculo completo (100%), Erro de conta (50%), Sem cálculo (0%).",
+                                                'GABARITO': 'DISCURSIVA'
+                                            }
+                                            item['status'] = 'revisao'
+                            else:
+                                for item in pendentes:
+                                    item['dados'] = {
+                                        'ENUNCIADO': f"Resolva o problema sobre {item['tema']}, apresentando todos os cálculos e a resposta final.",
+                                        'ALT_A': '', 'ALT_B': '', 'ALT_C': '', 'ALT_D': '', 'ALT_E': '',
+                                        'HABILIDADE': item['tema'],
+                                        'JUSTIFICATIVA': 'Resolução discursiva aberta.',
+                                        'DISTRATORES': 'Memória de cálculo obrigatória.',
+                                        'GABARITO': 'DISCURSIVA'
+                                    }
+                                    item['status'] = 'revisao'
+
                         else:
-                            for q_data in res_json.get("questoes", []):
-                                q_num = int(q_data.get("q", 0))
-                                for item in f['mapa']:
-                                    if item['q'] == q_num:
-                                        descritor_real = q_data.get('habilidade', '')
-                                        item['dados'] = {
-                                            'ENUNCIADO': q_data.get('enunciado', ''),
-                                            'ALT_A': q_data.get('alt_a', ''),
-                                            'ALT_B': q_data.get('alt_b', ''),
-                                            'ALT_C': q_data.get('alt_c', ''),
-                                            'ALT_D': q_data.get('alt_d', ''),
-                                            'ALT_E': q_data.get('alt_e', ''),
-                                            'HABILIDADE': descritor_real if descritor_real else item['tema'],
-                                            'JUSTIFICATIVA': q_data.get('justificativa', ''),
-                                            'DISTRATORES': q_data.get('distratores', ''),
-                                            'GABARITO': item['gabarito']
-                                        }
-                                        item['status'] = 'revisao'
-                            st.rerun()
+                            # GERAÇÃO REGULAR DE MÚLTIPLA ESCOLHA
+                            prompt_lote = (
+                                f"SÉRIE: {f['info']['ano']}\n"
+                                f"VALOR TOTAL DA PROVA: {f['info']['valor']}\n\n"
+                                f"DIRETRIZES DE ANCORAGEM:\n"
+                                f"- Desenvolva cada questão focada no TEMA ESPECÍFICO atribuído.\n\n"
+                            )
+                            for item in pendentes:
+                                prompt_lote += f"QUESTÃO {item['q']}:\n- TEMA: {item['tema']}\n- COMPLEXIDADE: {item['dificuldade']}\n- GABARITO: Letra {item['gabarito']}\n\n"
+                            
+                            prompt_lote += f"--- CONTEXTO E PROVA ORIGINAL ---\n{f.get('contexto_base', '')}\n"
+                            
+                            res_json = ai.gerar_ia_json("FORJA_LOTE_JSON", prompt_lote)
+                            if "erro" in res_json:
+                                st.error(f"Erro ao processar lote: {res_json['erro']}")
+                            else:
+                                for q_data in res_json.get("questoes", []):
+                                    q_num = int(q_data.get("q", 0))
+                                    for item in f['mapa']:
+                                        if item['q'] == q_num:
+                                            descritor_real = q_data.get('habilidade', '')
+                                            item['dados'] = {
+                                                'ENUNCIADO': q_data.get('enunciado', ''),
+                                                'ALT_A': q_data.get('alt_a', ''),
+                                                'ALT_B': q_data.get('alt_b', ''),
+                                                'ALT_C': q_data.get('alt_c', ''),
+                                                'ALT_D': q_data.get('alt_d', ''),
+                                                'ALT_E': q_data.get('alt_e', ''),
+                                                'HABILIDADE': descritor_real if descritor_real else item['tema'],
+                                                'JUSTIFICATIVA': q_data.get('justificativa', ''),
+                                                'DISTRATORES': q_data.get('distratores', ''),
+                                                'GABARITO': item['gabarito']
+                                            }
+                                            item['status'] = 'revisao'
+                        
+                        status_lote.update(label="Questões forjadas com sucesso!", state="complete")
+                        st.rerun()
 
             st.markdown("---")
             todas_aprovadas = True
@@ -2285,21 +2344,33 @@ elif menu == "📝 Central de Avaliações":
 
                 with st.container(border=True):
                     c_card_head1, c_card_head2 = st.columns([3, 1])
-                    c_card_head1.markdown(f"**Item {item['q']:02d} | Conteúdo: {assunto_exibicao}**")
-                    c_card_head2.caption(f"Status: **{label_status}** | Chave: **({item['gabarito']})**")
+                    c_card_head1.markdown(f"**Questão {item['q']:02d} (Valor: {valor_por_item:.2f} pts) | Conteúdo: {assunto_exibicao}**")
+                    c_card_head2.caption(f"Status: **{label_status}**")
 
                     if item['status'] == 'pendente':
                         todas_aprovadas = False
-                        if st.button(f"Gerar Item {item['q']} com IA", key=f"btn_gen_ind_{i}_{v}", use_container_width=True):
-                            with st.spinner("Estruturando item..."):
-                                prompt = f"SÉRIE: {f['info']['ano']}\nTEMA: {assunto_exibicao}. GABARITO: {item['gabarito']}.\nCONTEXTO:\n{f.get('contexto_base', '')}"
-                                res_item = ai.gerar_ia("FORJA_ITEM_REGULAR", prompt)
-                                ext = {tag: ai.extrair_tag(res_item, tag) for tag in ['ENUNCIADO', 'ALT_A', 'ALT_B', 'ALT_C', 'ALT_D', 'ALT_E', 'HABILIDADE', 'JUSTIFICATIVA', 'DISTRATORES']}
-                                item['dados'] = {
-                                    'ENUNCIADO': ext['ENUNCIADO'], 'ALT_A': ext['ALT_A'], 'ALT_B': ext['ALT_B'], 'ALT_C': ext['ALT_C'],
-                                    'ALT_D': ext['ALT_D'], 'ALT_E': ext['ALT_E'], 'HABILIDADE': ext['HABILIDADE'], 'JUSTIFICATIVA': ext['JUSTIFICATIVA'],
-                                    'DISTRATORES': ext['DISTRATORES'], 'GABARITO': item['gabarito']
-                                }
+                        if st.button(f"Gerar Questão {item['q']} com IA", key=f"btn_gen_ind_{i}_{v}", use_container_width=True):
+                            with st.spinner("Estruturando questão..."):
+                                if is_rec_paralela_fase2:
+                                    prompt_ind = f"Crie uma questão aberta/discursiva sobre {assunto_exibicao} valendo {valor_por_item:.2f} pontos para o 6º ano, sem alternativas."
+                                    res_ind = ai.gerar_ia("ARQUITETO_RECUPERACAO_DISCURSIVA", prompt_ind)
+                                    item['dados'] = {
+                                        'ENUNCIADO': ai.extrair_tag(res_ind, 'QUESTOES') or res_ind,
+                                        'ALT_A': '', 'ALT_B': '', 'ALT_C': '', 'ALT_D': '', 'ALT_E': '',
+                                        'HABILIDADE': assunto_exibicao,
+                                        'JUSTIFICATIVA': 'Resolução discursiva.',
+                                        'DISTRATORES': 'Critérios de pontuação.',
+                                        'GABARITO': 'DISCURSIVA'
+                                    }
+                                else:
+                                    prompt = f"SÉRIE: {f['info']['ano']}\nTEMA: {assunto_exibicao}. GABARITO: {item['gabarito']}.\nCONTEXTO:\n{f.get('contexto_base', '')}"
+                                    res_item = ai.gerar_ia("FORJA_ITEM_REGULAR", prompt)
+                                    ext = {tag: ai.extrair_tag(res_item, tag) for tag in ['ENUNCIADO', 'ALT_A', 'ALT_B', 'ALT_C', 'ALT_D', 'ALT_E', 'HABILIDADE', 'JUSTIFICATIVA', 'DISTRATORES']}
+                                    item['dados'] = {
+                                        'ENUNCIADO': ext['ENUNCIADO'], 'ALT_A': ext['ALT_A'], 'ALT_B': ext['ALT_B'], 'ALT_C': ext['ALT_C'],
+                                        'ALT_D': ext['ALT_D'], 'ALT_E': ext['ALT_E'], 'HABILIDADE': ext['HABILIDADE'], 'JUSTIFICATIVA': ext['JUSTIFICATIVA'],
+                                        'DISTRATORES': ext['DISTRATORES'], 'GABARITO': item['gabarito']
+                                    }
                                 item['status'] = 'revisao'
                                 st.rerun()
 
@@ -2308,31 +2379,28 @@ elif menu == "📝 Central de Avaliações":
                         d = item['dados']
 
                         with st.container(border=True):
-                            st.markdown(preparar_para_leitura(f"**QUESTÃO {item['q']:02d} ({valor_por_item:.2f} pts) -** {d['ENUNCIADO']}"))
-                            col_alt_a, col_alt_b = st.columns(2)
-                            col_alt_a.markdown(f"**(A)** {preparar_para_leitura(d['ALT_A'])}")
-                            col_alt_b.markdown(f"**(B)** {preparar_para_leitura(d['ALT_B'])}")
-                            col_alt_a.markdown(f"**(C)** {preparar_para_leitura(d['ALT_C'])}")
-                            col_alt_b.markdown(f"**(D)** {preparar_para_leitura(d['ALT_D'])}")
-                            if d.get('ALT_E'): col_alt_a.markdown(f"**(E)** {preparar_para_leitura(d['ALT_E'])}")
+                            st.markdown(preparar_para_leitura(f"**QUESTÃO {item['q']:02d} (Valor: {valor_por_item:.2f} pts) -** {d['ENUNCIADO']}"))
+                            
+                            if not is_rec_paralela_fase2 and d.get('ALT_A'):
+                                col_alt_a, col_alt_b = st.columns(2)
+                                col_alt_a.markdown(f"**(A)** {preparar_para_leitura(d['ALT_A'])}")
+                                col_alt_b.markdown(f"**(B)** {preparar_para_leitura(d['ALT_B'])}")
+                                col_alt_a.markdown(f"**(C)** {preparar_para_leitura(d['ALT_C'])}")
+                                col_alt_b.markdown(f"**(D)** {preparar_para_leitura(d['ALT_D'])}")
+                                if d.get('ALT_E'): col_alt_a.markdown(f"**(E)** {preparar_para_leitura(d['ALT_E'])}")
+                            else:
+                                st.caption("✍️ *Espaço pautado para memória de cálculo e resposta final do aluno.*")
 
-                        with st.expander("Editar Item Manualmente", expanded=False):
+                        with st.expander("Editar Enunciado Manualmente", expanded=False):
                             d['ENUNCIADO'] = st.text_area("Enunciado:", value=d['ENUNCIADO'], height=90, key=f"ed_en_{i}_{v}")
-                            c_a1, c_a2 = st.columns(2)
-                            d['ALT_A'] = c_a1.text_input("Opção (A):", value=d['ALT_A'], key=f"ed_a_{i}_{v}")
-                            d['ALT_B'] = c_a2.text_input("Opção (B):", value=d['ALT_B'], key=f"ed_b_{i}_{v}")
-                            d['ALT_C'] = c_a1.text_input("Opção (C):", value=d['ALT_C'], key=f"ed_c_{i}_{v}")
-                            d['ALT_D'] = c_a2.text_input("Opção (D):", value=d['ALT_D'], key=f"ed_d_{i}_{v}")
-                            d['ALT_E'] = c_a1.text_input("Opção (E):", value=d['ALT_E'], key=f"ed_e_{i}_{v}")
-                            d['GABARITO'] = st.selectbox("Chave Oficial:", ["A", "B", "C", "D", "E"], index=["A", "B", "C", "D", "E"].index(d['GABARITO']), key=f"ed_gab_sel_{i}_{v}")
 
                         col_b1, col_b2 = st.columns(2)
                         if item['status'] == 'revisao':
-                            if col_b1.button(f"Aprovar Item {item['q']}", type="primary", key=f"btn_apr_{i}_{v}", use_container_width=True):
+                            if col_b1.button(f"Aprovar Questão {item['q']}", type="primary", key=f"btn_apr_{i}_{v}", use_container_width=True):
                                 item['status'] = 'aprovado'
                                 st.rerun()
                         else:
-                            if col_b1.button(f"Reabrir Item {item['q']}", key=f"btn_reabrir_{i}_{v}", use_container_width=True):
+                            if col_b1.button(f"Reabrir Questão {item['q']}", key=f"btn_reabrir_{i}_{v}", use_container_width=True):
                                 item['status'] = 'revisao'
                                 st.rerun()
 
@@ -2348,7 +2416,7 @@ elif menu == "📝 Central de Avaliações":
         # ======================================================================
         elif f['fase'] == 3:
             st.markdown("### Fase 3: Matriz Inclusiva PEI (Recuperação Adaptada)")
-            st.caption("Adaptação rigorosa dos itens para os estudantes inclusivos (Escala 0,0 a 10,0 pontos):")
+            st.caption("Adaptação dos itens para estudantes com necessidades educacionais específicas (Escala 0,0 a 10,0 pontos):")
 
             with st.container(border=True):
                 niveis_selecionados = st.pills(
@@ -2368,7 +2436,7 @@ elif menu == "📝 Central de Avaliações":
                     texto_base_reg = f"[VALOR: {f['info']['valor']}]\n\n"
                     for item in f['mapa']:
                         d = item['dados']
-                        texto_base_reg += f"**QUESTÃO {item['q']:02d} -** {d['ENUNCIADO']}\n(A) {d['ALT_A']}\n(B) {d['ALT_B']}\n(C) {d['ALT_C']}\n(D) {d['ALT_D']}\n(E) {d['ALT_E']}\n\n"
+                        texto_base_reg += f"**QUESTÃO {item['q']:02d} -** {d['ENUNCIADO']}\n\n"
 
                     if pede_n1:
                         status.write("Estruturando PEI Nível 1 (3 Opções A, B, C)...")
@@ -2402,7 +2470,7 @@ elif menu == "📝 Central de Avaliações":
         # ======================================================================
         elif f['fase'] == 4:
             st.markdown("### Fase 4: Custódia & Sincronização no Google Drive")
-            st.caption("Compilação automática em arquivos DOCX oficiais com Cartão OMR Fiducial e cabeçalhos institucionais.")
+            st.caption("Compilação automática em arquivos DOCX oficiais com cabeçalhos institucionais.")
 
             tipo_nome = f['info'].get('tipo_prova', 'RECUPERACAO').upper().replace(' ', '_')
             nome_sugerido = f"{tipo_nome}_{f['info']['ano'].replace('º','')}ANO_{f['info']['trimestre'].replace(' ', '')}"
@@ -2414,15 +2482,17 @@ elif menu == "📝 Central de Avaliações":
                     txt_gabarito = "[GABARITO_TEXTO]\n"
                     txt_grade = "[GRADE_DE_CORRECAO]\n"
 
+                    valor_item_s = f['info']['valor'] / max(len(f['mapa']), 1)
+
                     for item in f['mapa']:
                         d = item['dados']
-                        txt_regular += f"**QUESTÃO {item['q']:02d} -** {d['ENUNCIADO']}\n(A) {d['ALT_A']}\n(B) {d['ALT_B']}\n(C) {d['ALT_C']}\n(D) {d['ALT_D']}\n(E) {d['ALT_E']}\n\n"
-                        txt_gabarito += f"QUESTÃO {item['q']:02d}: {d['GABARITO']}\n"
-                        txt_grade += f"QUESTÃO {item['q']:02d}: [DESCRITOR_SAEB: {d['HABILIDADE']}] | JUSTIFICATIVA: {d['JUSTIFICATIVA']} | DISTRATORES: {d['DISTRATORES']}\n"
+                        txt_regular += f"**QUESTÃO {item['q']:02d} (Valor: {valor_item_s:.2f} pts) -** {d['ENUNCIADO']}\n\n"
+                        txt_gabarito += f"QUESTÃO {item['q']:02d}: Resolução detalhada passo a passo e resposta final.\n"
+                        txt_grade += f"QUESTÃO {item['q']:02d}: [DESCRITOR_SAEB: {d['HABILIDADE']}] | CRITÉRIOS: Cálculo completo ({valor_item_s:.2f} pts), Erro de conta ({valor_item_s/2:.2f} pts), Sem cálculo (0,0 pt).\n"
 
                     texto_final_padrao = txt_regular + txt_gabarito + txt_grade
 
-                    status.write("Compilando Caderno Regular DOCX...")
+                    status.write("Compilando Caderno Regular DOCX (Discursivo)...")
                     doc_reg = exporter.gerar_docx_prova_v25(nome_arq, texto_final_padrao, f['info'])
                     link_reg = db.subir_e_converter_para_google_docs(doc_reg, nome_arq, modo="AVALIACAO")
 
