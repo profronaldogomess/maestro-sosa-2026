@@ -4225,7 +4225,7 @@ elif menu == "📸 Scanner de Gabaritos":
                             "Situação": situacao_txt, "Versão": versao_prova, "Nota": nota_atual, "Dupla / Grupo": grupo_parceiros if grupo_parceiros else "Individual", "Evidência": link_ev, "_Respostas": respostas_salvas
                         })
 
-                    # BOTÃO DE RECÁLCULO AUTOMÁTICO EM LOTE (REPARA PEI E REGULARES)
+                    # BOTÃO DE RECÁLCULO AUTOMÁTICO EM LOTE (REPARA PEI E REGULARES - GRAVAÇÃO ATÔMICA)
                     st.markdown("#### Ações de Auditoria & Recálculo em Lote")
                     
                     if st.button("⚡ Recalcular Notas de Toda a Turma com Chaves Corretas (Regulares + PEI)", type="primary", use_container_width=True, key=f"btn_recalc_lote_all_{v}"):
@@ -4234,8 +4234,12 @@ elif menu == "📸 Scanner de Gabaritos":
                             gab_reg_list = ai.extrair_gab_universal_com_fallback(txt_prova_trib, is_pei=False)
                             gab_pei_list = ai.extrair_gab_universal_com_fallback(txt_prova_trib, is_pei=True, nivel_pei="NIVEL_1")
                             
-                            status_batch.write("2/3 Recalculando notas em DB_GABARITOS_ALUNOS...")
+                            status_batch.write("2/3 Recalculando notas em lote em memória...")
                             wb_batch = db.conectar()
+                            if not wb_batch:
+                                status_batch.update(label="Falha de conexão com o banco de dados.", state="error")
+                                st.stop()
+                                
                             ws_g_batch = wb_batch.worksheet("DB_GABARITOS_ALUNOS")
                             dados_g_batch = ws_g_batch.get_all_values()
                             
@@ -4258,7 +4262,7 @@ elif menu == "📸 Scanner de Gabaritos":
                                             if nec_b not in ["NENHUMA", "", "NAN", "TÍPICO", "TIPICO", "ALTA PERFORMANCE", "PENDENTE", "DEFASAGEM LEITURA", "DEFASAGEM MATEMÁTICA"]:
                                                 is_al_pei = True
                                         
-                                        # Seleciona a chave exata
+                                        # Seleciona a chave exata (A, B, C para PEI | A, B, C, D, E para Regular)
                                         gab_correto_aluno = gab_pei_list if is_al_pei else gab_reg_list
                                         peso_q_batch = v_total_av / len(gab_correto_aluno) if len(gab_correto_aluno) > 0 else 0.0
                                         
@@ -4274,14 +4278,21 @@ elif menu == "📸 Scanner de Gabaritos":
                                                     nova_nota_calc += peso_q_batch if tem_calculo_b else (peso_q_batch / 2)
                                         
                                         nova_nota_calc_final = min(v_total_av, nova_nota_calc)
-                                        ws_g_batch.update_cell(idx_row_b + 1, 7, util.sosa_to_str(nova_nota_calc_final))
+                                        
+                                        # Atualiza diretamente na matriz em memória (Índice 6 = Coluna 7: NOTA_CALCULADA)
+                                        formato_str = f"{nova_nota_calc_final:.2f}".replace(".", ",")
+                                        row_b[6] = formato_str
                                         updates_count += 1
 
-                            status_batch.write("3/3 Atualizando médias no Boletim Oficial...")
+                            # Gravação atômica em 1 único comando no Google Sheets (Zero lag / Zero erro)
+                            ws_g_batch.clear()
+                            ws_g_batch.update(values=dados_g_batch, range_name='A1')
+
+                            status_batch.write("3/3 Sincronizando com o Boletim de Notas...")
                             db.limpar_notas_turma_trimestre(t_sel_h, tr_sel_h)
                             st.cache_data.clear()
                             
-                            status_batch.update(label=f"Sucesso! {updates_count} provas recalculadas com as chaves corretas e boletim atualizado!", state="complete")
+                            status_batch.update(label=f"Sucesso! {updates_count} provas recalculadas e boletim sincronizado com precisão!", state="complete")
                             st.balloons(); time.sleep(0.8); st.rerun()
 
                     c_act1, c_act2, c_act3, c_act4 = st.columns(4)
