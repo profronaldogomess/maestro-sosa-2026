@@ -1013,15 +1013,12 @@ def gerar_docx_pei_qualitativa(titulo_doc, conteudo, info):
         return file_stream
 
 # ==============================================================================
-# 8. ETIQUETAS DE NOTAS
+# 8. ETIQUETAS DE NOTAS (CALIBRADA PARA A4 - TOTAL 7.50 IN)
 # ==============================================================================
 def gerar_docx_etiquetas_notas(nome_arquivo, dados_alunos, info):
     """
     SOSA V2026.PRO_INFINITY - ETIQUETAS OFICIAIS DE NOTAS, REFACÇÃO (+0.5) E RECUPERAÇÃO
-    Design executivo A4 em 2 colunas, limpo, sem emojis excessivos, contemplando:
-    1. Aprovados (>= 6.0) com opção de refacção para elevar a nota (+0.5).
-    2. Estudantes com 5.5 (Refacção no caderno para fechar 6.0 e isentar prova).
-    3. Convocados (< 5.5) com cálculo da Prova de Recuperação (0 a 10) pela regra (Média+Prova)/2.
+    Design executivo A4 em 2 colunas perfeitamente calibrado para folha de papel A4.
     """
     file_stream = io.BytesIO()
     try:
@@ -1036,8 +1033,9 @@ def gerar_docx_etiquetas_notas(nome_arquivo, dados_alunos, info):
 
         table = doc.add_table(rows=0, cols=2)
         table.style = 'Table Grid'
-        table.columns[0].width = Inches(3.8)
-        table.columns[1].width = Inches(3.8)
+        # Calibração estrita A4 (3.75 in x 2 = 7.50 in <= 7.57 in úteis)
+        table.columns[0].width = Inches(3.75)
+        table.columns[1].width = Inches(3.75)
 
         turma_label = sanitizar_xml_str(str(info.get('turma', '6º Ano')))
         trim_label = sanitizar_xml_str(str(info.get('trimestre', 'II Trimestre')))
@@ -1050,6 +1048,7 @@ def gerar_docx_etiquetas_notas(nome_arquivo, dados_alunos, info):
                 if i + j < len(dados_alunos):
                     aluno = dados_alunos[i + j]
                     c = row.cells[j]
+                    c.width = Inches(3.75)
                     c.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
                     set_cell_background(c, "FAFAFA")
                     
@@ -1086,35 +1085,30 @@ def gerar_docx_etiquetas_notas(nome_arquivo, dados_alunos, info):
                     
                     # 3. Os 3 Caminhos Claros da Práxis Pedagógica
                     if media_num >= 6.0:
-                        # CASO 1: APROVADO NO TRIMESTRE
                         r_st = p.add_run("SITUAÇÃO: APROVADO NO TRIMESTRE\n")
                         r_st.bold = True
                         r_st.font.size = Pt(8.5)
                         r_st.font.color.rgb = RGBColor(0, 128, 0)
-                        
                         p.add_run("• Parabéns! Você atingiu a média e está dispensado da recuperação.\n").font.size = Pt(8.0)
                         r_ref = p.add_run("• Oportunidade de Refacção: Entregue a prova corrigida no caderno para somar +0.5 pts e elevar sua média!\n")
                         r_ref.font.size = Pt(7.5)
                         r_ref.font.italic = True
                         
                     elif media_num == 5.5:
-                        # CASO 2: ALUNO COM 5.5 (REFACÇÃO SOLIDÁRIA PARA FECHAR 6.0)
                         r_st = p.add_run("SITUAÇÃO: OPORTUNIDADE DE REFACÇÃO SOLIDÁRIA (+0.5)\n")
                         r_st.bold = True
                         r_st.font.size = Pt(8.5)
-                        r_st.font.color.rgb = RGBColor(204, 102, 0) # Laranja Alerta
-                        
+                        r_st.font.color.rgb = RGBColor(204, 102, 0)
                         p.add_run("• Refacção no Caderno: Refaça as questões que errou no caderno para somar +0.5 pts, atingir a MÉDIA 6.0 e ser dispensado da prova!\n").bold = True
                         r_rec_info = p.add_run("• Prova de Recuperação (Opcional): Caso prefira fazer a prova (0 a 10), precisará de 6.5. Regra: (Média + Prova) ÷ 2 ≥ 6.0\n")
                         r_rec_info.font.size = Pt(7.5)
                         r_rec_info.font.italic = True
                         
                     else:
-                        # CASO 3: CONVOCADO PARA RECUPERAÇÃO PARALELA (< 5.5)
                         r_st = p.add_run("SITUAÇÃO: CONVOCADO PARA RECUPERAÇÃO PARALELA\n")
                         r_st.bold = True
                         r_st.font.size = Pt(8.5)
-                        r_st.font.color.rgb = RGBColor(192, 0, 0) # Vermelho
+                        r_st.font.color.rgb = RGBColor(192, 0, 0)
                         
                         nota_necessaria_rec = max(0.0, 12.0 - media_num)
                         if nota_necessaria_rec <= 10.0:
@@ -1127,7 +1121,6 @@ def gerar_docx_etiquetas_notas(nome_arquivo, dados_alunos, info):
                         r_regra.font.size = Pt(7.5)
                         r_regra.font.italic = True
 
-                    # Rodapé da Etiqueta
                     r_prof = p.add_run("Prof. Ronaldo Gomes • Componente Curricular de Matemática")
                     r_prof.font.size = Pt(7.5)
                     r_prof.font.color.rgb = RGBColor(100, 116, 139)
