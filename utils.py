@@ -54,14 +54,123 @@ def sosa_to_float(valor):
     except ValueError:
         return 0.0
 
-def sosa_to_str(valor, casas=2):
+# FILTRO DE LEITURA GLOBAL (LATEX, TABELAS E PROMPTS)
+def preparar_para_leitura(texto):
+    if not texto or not isinstance(texto, str): return ""
+    
+    texto = texto.replace('\x0c', '\\f')
+    texto = re.sub(r'(?<!\$)\\\bfrac\{([^}]+)\}\{([^}]+)\}(?!\$)', r'$$ \\frac{\1}{\2} $$', texto)
+    texto = re.sub(r'(?<!\$)\\\b(times|div|sqrt|circ|degree)\b(?!\$)', r'$$ \\\1 $$', texto)
+    texto = re.sub(r'\$\$\s*\$\$', '$$', texto)
+    texto = re.sub(r'\[GEOGEBRA\](.*?)\[/GEOGEBRA\]', '', texto, flags=re.IGNORECASE | re.DOTALL)
+    
+    texto = re.sub(
+        r'\[\s*PROMPT IMAGEM:(.*?)\s*\]', 
+        r'\n\n**[ILUSTRAÇÃO TÉCNICA SUGERIDA]**\n```english\n\1\n```\n\n', 
+        texto, 
+        flags=re.IGNORECASE | re.DOTALL
+    )
+    
+    return texto
+
+def extrair_valor_real_prova(texto_conteudo, nome_avaliacao=""):
     """
-    FORMATADOR DE PERSISTÊNCIA (GOOGLE SHEETS)
-    Converte float para string com vírgula para manter a localidade PT-BR no Sheets.
+    SOSA V2026 - EXTRATOR INFALÍVEL DE VALOR DA AVALIAÇÃO:
+    Lê [VALOR: 4.0], [VALOR] 4.0, VALOR: 4.0 ou deduz pelo tipo do instrumento:
+    - TESTE / TRABALHO / SIMULADO -> 3.0 pts (Teto C2)
+    - PROVA / AVALIAÇÃO / EXAME -> 4.0 pts (Teto C3)
+    - RECUPERAÇÃO FINAL / REC_FINAL -> 10.0 pts (Teto RF)
     """
-    val_float = sosa_to_float(valor)
-    formato = "{:." + str(casas) + "f}"
-    return formato.format(val_float).replace(".", ",")
+    if texto_conteudo and isinstance(texto_conteudo, str):
+        m1 = re.search(r'\[\s*VALOR\s*[:\-]?\s*([\d\.,]+)\s*\]', texto_conteudo, re.IGNORECASE)
+        if m1:
+            v = sosa_to_float(m1.group(1))
+            if v > 0: return v
+        
+        m2 = re.search(r'\bVALOR\s*[:\-]\s*([\d\.,]+)', texto_conteudo, re.IGNORECASE)
+        if m2:
+            v = sosa_to_float(m2.group(1))
+            if v > 0: return v
+
+    nome_upper = str(nome_avaliacao).upper()
+    texto_upper = str(texto_conteudo).upper() if texto_conteudo else ""
+    
+    if any(x in nome_upper or x in texto_upper for x in ["FINAL", "REC_FINAL", "RECUPERAÇÃO FINAL", "RECUPERACAO FINAL"]):
+        return 10.0
+    elif any(x in nome_upper or x in texto_upper for x in ["TESTE", "SIMULADO", "TRABALHO"]):
+        return 3.0
+    elif any(x in nome_upper or x in texto_upper for x in ["PROVA", "AVALIAÇÃO", "AVALIACAO", "EXAME", "2ª CHAMADA", "2A CHAMADA"]):
+        return 4.0
+    elif any(x in nome_upper or x in texto_upper for x in ["SONDA", "DIAGNÓSTICA", "DIAGNOSTICA"]):
+        return 10.0
+
+    return 4.0
+
+def extrair_valor_real_prova(texto_conteudo, nome_avaliacao=""):
+    """
+    SOSA V2026 - EXTRATOR INFALÍVEL DE VALOR DA AVALIAÇÃO:
+    Lê [VALOR: 4.0], [VALOR] 4.0, VALOR: 4.0 ou deduz pelo tipo do instrumento:
+    - TESTE / TRABALHO / SIMULADO -> 3.0 pts (Teto C2)
+    - PROVA / AVALIAÇÃO / EXAME -> 4.0 pts (Teto C3)
+    - RECUPERAÇÃO FINAL / REC_FINAL -> 10.0 pts (Teto RF)
+    """
+    if texto_conteudo and isinstance(texto_conteudo, str):
+        m1 = re.search(r'\[\s*VALOR\s*[:\-]?\s*([\d\.,]+)\s*\]', texto_conteudo, re.IGNORECASE)
+        if m1:
+            v = sosa_to_float(m1.group(1))
+            if v > 0: return v
+        
+        m2 = re.search(r'\bVALOR\s*[:\-]\s*([\d\.,]+)', texto_conteudo, re.IGNORECASE)
+        if m2:
+            v = sosa_to_float(m2.group(1))
+            if v > 0: return v
+
+    nome_upper = str(nome_avaliacao).upper()
+    texto_upper = str(texto_conteudo).upper() if texto_conteudo else ""
+    
+    if any(x in nome_upper or x in texto_upper for x in ["FINAL", "REC_FINAL", "RECUPERAÇÃO FINAL", "RECUPERACAO FINAL"]):
+        return 10.0
+    elif any(x in nome_upper or x in texto_upper for x in ["TESTE", "SIMULADO", "TRABALHO"]):
+        return 3.0
+    elif any(x in nome_upper or x in texto_upper for x in ["PROVA", "AVALIAÇÃO", "AVALIACAO", "EXAME", "2ª CHAMADA", "2A CHAMADA"]):
+        return 4.0
+    elif any(x in nome_upper or x in texto_upper for x in ["SONDA", "DIAGNÓSTICA", "DIAGNOSTICA"]):
+        return 10.0
+
+    return 4.0
+
+def extrair_valor_real_prova(texto_conteudo, nome_avaliacao=""):
+    """
+    SOSA V2026 - EXTRATOR INFALÍVEL DE VALOR DA AVALIAÇÃO:
+    Lê [VALOR: 4.0], [VALOR] 4.0, VALOR: 4.0 ou deduz pelo tipo do instrumento:
+    - TESTE / TRABALHO / SIMULADO -> 3.0 pts (Teto C2)
+    - PROVA / AVALIAÇÃO / EXAME -> 4.0 pts (Teto C3)
+    - RECUPERAÇÃO FINAL / REC_FINAL -> 10.0 pts (Teto RF)
+    """
+    if texto_conteudo and isinstance(texto_conteudo, str):
+        m1 = re.search(r'\[\s*VALOR\s*[:\-]?\s*([\d\.,]+)\s*\]', texto_conteudo, re.IGNORECASE)
+        if m1:
+            v = sosa_to_float(m1.group(1))
+            if v > 0: return v
+        
+        m2 = re.search(r'\bVALOR\s*[:\-]\s*([\d\.,]+)', texto_conteudo, re.IGNORECASE)
+        if m2:
+            v = sosa_to_float(m2.group(1))
+            if v > 0: return v
+
+    nome_upper = str(nome_avaliacao).upper()
+    texto_upper = str(texto_conteudo).upper() if texto_conteudo else ""
+    
+    if any(x in nome_upper or x in texto_upper for x in ["FINAL", "REC_FINAL", "RECUPERAÇÃO FINAL", "RECUPERACAO FINAL"]):
+        return 10.0
+    elif any(x in nome_upper or x in texto_upper for x in ["TESTE", "SIMULADO", "TRABALHO"]):
+        return 3.0
+    elif any(x in nome_upper or x in texto_upper for x in ["PROVA", "AVALIAÇÃO", "AVALIACAO", "EXAME", "2ª CHAMADA", "2A CHAMADA"]):
+        return 4.0
+    elif any(x in nome_upper or x in texto_upper for x in ["SONDA", "DIAGNÓSTICA", "DIAGNOSTICA"]):
+        return 10.0
+
+    return 4.0
 
 def extrair_valor_real_prova(texto_conteudo, nome_avaliacao=""):
     """
