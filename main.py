@@ -4072,13 +4072,13 @@ elif menu == "📸 Scanner de Gabaritos":
                     is_sonda = "SONDA" in av_alvo_h.upper() or "DIAGNÓSTICA" in av_alvo_h.upper()
                     nome_curto_av = av_alvo_h.split("-")[0].strip()
                     
-                    df_prova_trib = df_aulas[df_aulas['TIPO_MATERIAL'] == av_alvo_h] if not df_aulas.empty else pd.DataFrame()
+                    df_prova_trib = df_aulas[df_aulas['TIPO_MATERIAL'].str.contains(nome_curto_av, case=False, na=False)] if not df_aulas.empty else pd.DataFrame()
                     if not df_prova_trib.empty:
                         txt_prova_trib = str(df_prova_trib.iloc[0].get('CONTEUDO', ''))
                         gab_oficial_trib_list = ai.extrair_gab_universal_com_fallback(txt_prova_trib, is_pei=False)
                         gab_oficial_trib = {i+1: letra for i, letra in enumerate(gab_oficial_trib_list)}
-                        val_tag = ai.extrair_tag(txt_prova_trib, "VALOR")
-                        if val_tag: v_total_av = util.sosa_to_float(val_tag)
+                        # EXTRAÇÃO BLINDADA DO VALOR REAL (Teto 4.0, 3.0 ou 10.0)
+                        v_total_av = util.extrair_valor_real_prova(txt_prova_trib, av_alvo_h)
 
                     gabaritos_lidos = pd.DataFrame()
                     if not df_diagnosticos.empty and 'TURMA' in df_diagnosticos.columns and 'ID_AVALIACAO' in df_diagnosticos.columns:
@@ -4619,7 +4619,7 @@ elif menu == "👤 Biografia do Estudante":
                     nome_busca = f"{nome_base_av.split('(')[0].strip()} - TIPO {letra}"
                 else: nome_busca = nome_base_av
                     
-                df_prova_trib = df_aulas[df_aulas['TIPO_MATERIAL'] == nome_busca] if not df_aulas.empty and 'TIPO_MATERIAL' in df_aulas.columns else pd.DataFrame()
+                df_prova_trib = df_aulas[df_aulas['TIPO_MATERIAL'].str.contains(nome_base_av.split('(')[0].strip(), case=False, na=False)] if not df_aulas.empty and 'TIPO_MATERIAL' in df_aulas.columns else pd.DataFrame()
                 
                 if not df_prova_trib.empty:
                     txt_prova_trib = str(df_prova_trib.iloc[0].get('CONTEUDO', ''))
@@ -4637,12 +4637,15 @@ elif menu == "👤 Biografia do Estudante":
                         letras = re.findall(r"\b[A-E]\b", gab_raw_trib.upper())
                         gab_oficial_trib = {i+1: letra for i, letra in enumerate(letras)}
                         
-                    qtd_questoes_trib = len(gab_oficial_trib)
+                    qtd_questoes_trib = len(gab_oficial_trib) if len(gab_oficial_trib) > 0 else 10
+                    
+                    # EXTRAÇÃO BLINDADA DO VALOR REAL DA PROVA (Ex: 4.0 ou 3.0)
+                    val_total_prova = util.extrair_valor_real_prova(txt_prova_trib, av_contestada)
                     
                     q_contestada = st.selectbox("2. Selecione o Item:", [f"Questão {i}" for i in range(1, qtd_questoes_trib + 1)], key=f"trib_q_pop_{v}")
                     q_num_trib = int(q_contestada.split(" ")[1])
                     
-                    letra_marcada_trib = respostas_aluno_trib[q_num_trib - 1] if q_num_trib <= len(respostas_aluno_trib) else "?"
+                    letra_marcada_trib = respostas_aluno_trib[q_num_trib - 1].replace("*", "") if q_num_trib <= len(respostas_aluno_trib) else "?"
                     letra_correta_trib = gab_oficial_trib.get(q_num_trib, "?")
                     
                     prefixo_q_trib = "QUEST[AÃ]O\\s*PEI" if is_pei_dialog else "QUEST[AÃ]O"
@@ -4657,7 +4660,7 @@ elif menu == "👤 Biografia do Estudante":
                     st.markdown("#### Evidência da Avaliação")
                     with st.container(border=True):
                         c_ev1, c_ev2 = st.columns([3, 1])
-                        c_ev1.markdown(f"**Estudante:** {nome_aluno_dialog} | **Avaliação:** {nome_base_av}")
+                        c_ev1.markdown(f"**Estudante:** {nome_aluno_dialog} | **Avaliação:** {nome_base_av} (Valor: **{val_total_prova:.1f} pts**)")
                         if "http" in link_foto_trib: c_ev2.link_button("Visualizar Imagem", link_foto_trib, use_container_width=True)
                         
                         st.divider()
@@ -4685,15 +4688,20 @@ elif menu == "👤 Biografia do Estudante":
                             st.caption("Modo de Retificação Ativo:")
                             nova_letra = st.selectbox("Qual alternativa foi efetivamente assinalada?", ["A", "B", "C", "D", "E"], index=["A", "B", "C", "D", "E"].index(letra_correta_trib) if letra_correta_trib in ["A", "B", "C", "D", "E"] else 0, key=f"sel_letra_trib_pop_{v}")
                             
+                            # CÁLCULO PROPORCIONAL EXATO (LEI #5)
+                            novas_respostas_sim = respostas_aluno_trib.copy()
+                            if q_num_trib - 1 < len(novas_respostas_sim): novas_respostas_sim[q_num_trib - 1] = nova_letra
+                            else: novas_respostas_sim.append(nova_letra)
+                            
+                            acertos_novos_sim = sum(1 for i, r in enumerate(novas_respostas_sim) if i+1 in gab_oficial_trib and r.replace("*","") == gab_oficial_trib[i+1])
+                            peso_item = val_total_prova / qtd_questoes_trib if qtd_questoes_trib > 0 else 0.4
+                            nova_nota_prova_sim = acertos_novos_sim * peso_item
+                            
+                            st.info(f"📊 **Simulação da Nova Nota:** {acertos_novos_sim}/{qtd_questoes_trib} acertos ➔ **{nova_nota_prova_sim:.1f} / {val_total_prova:.1f} pontos**")
+
                             if st.button("Confirmar Retificação e Recalcular Média", type="primary", key=f"btn_conf_trib_pop_{v}"):
-                                with st.spinner("Retificando gabarito e recalculando médias..."):
-                                    novas_respostas = respostas_aluno_trib.copy()
-                                    if q_num_trib - 1 < len(novas_respostas): novas_respostas[q_num_trib - 1] = nova_letra
-                                    else: novas_respostas.append(nova_letra)
-                                        
-                                    acertos_novos = sum(1 for i, r in enumerate(novas_respostas) if i+1 in gab_oficial_trib and r == gab_oficial_trib[i+1])
-                                    val_total_prova = util.sosa_to_float(ai.extrair_tag(txt_prova_trib, "VALOR")) or 10.0
-                                    nova_nota_prova = (acertos_novos / qtd_questoes_trib) * val_total_prova if qtd_questoes_trib > 0 else 0.0
+                                with st.spinner("Retificando gabarito e recalculando boletim..."):
+                                    nova_nota_prova = nova_nota_prova_sim
                                     
                                     try:
                                         wb = db.conectar()
@@ -4701,16 +4709,18 @@ elif menu == "👤 Biografia do Estudante":
                                         dados_gab = ws_gab.get_all_values()
                                         for i, row in enumerate(dados_gab):
                                             if i > 0 and db.limpar_id(row[1]) == id_aluno_dialog and row[4] == av_contestada:
-                                                ws_gab.update_cell(i+1, 6, ";".join(novas_respostas))
+                                                ws_gab.update_cell(i+1, 6, ";".join(novas_respostas_sim))
                                                 ws_gab.update_cell(i+1, 7, util.sosa_to_str(nova_nota_prova))
                                                 break
                                     except Exception as e: st.error(f"Erro ao atualizar banco: {e}")
                                         
+                                    db.limpar_notas_turma_trimestre(turma_b, trim_b)
                                     st.cache_data.clear()
-                                    prompt_retratacao = f"VEREDITO: CORRIGIR NOTA.\nALUNO: {nome_aluno_dialog}.\nQUESTÃO: {q_num_trib}.\nNOVA NOTA DA AVALIAÇÃO: {nova_nota_prova:.1f}."
+                                    prompt_retratacao = f"VEREDITO: CORRIGIR NOTA.\nALUNO: {nome_aluno_dialog}.\nQUESTÃO: {q_num_trib}.\nNOVA NOTA DA AVALIAÇÃO: {nova_nota_prova:.1f} DE {val_total_prova:.1f} PONTOS."
                                     st.session_state.msg_tribunal = ai.gerar_ia("DEFENSOR_PEDAGOGICO", prompt_retratacao)
                                     st.session_state.modo_correcao_tribunal = False
-                                    st.rerun()
+                                    st.success(f"Nota retificada com sucesso para {nova_nota_prova:.1f} pontos!")
+                                    time.sleep(0.6); st.rerun()
                                     
                     if "msg_tribunal" in st.session_state:
                         st.markdown("#### Texto de Resposta para WhatsApp")
