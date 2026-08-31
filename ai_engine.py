@@ -814,8 +814,16 @@ def extrair_tag_simples(texto, tag_busca):
     return ""
 
 def extrair_gab_universal_com_fallback(texto, is_pei=False, nivel_pei="NIVEL_1"):
+    """
+    SOSA V2026 - EXTRATOR UNIVERSAL DE GABARITO (REGULAR E PEI INTELIGENTE):
+    - Provas Regulares: Extrai chave oficial de 5 alternativas (A, B, C, D, E).
+    - Provas PEI: Extrai exclusivamente chaves de 3 alternativas (A, B, C).
+    - Se a prova PEI não tiver a tag [GABARITO_PEI], deduz a letra cruzando o texto
+      da alternativa correta regular com as opções (A, B, C) do PEI, NUNCA retornando D ou E.
+    """
     if not texto or not isinstance(texto, str): return []
     
+    # 1. EXTRAÇÃO DO GABARITO REGULAR (5 ALTERNATIVAS)
     mapa_regular = {}
     raw_reg = extrair_tag(texto, "GABARITO_TEXTO") or extrair_tag(texto, "GABARITO")
     
@@ -827,7 +835,6 @@ def extrair_gab_universal_com_fallback(texto, is_pei=False, nivel_pei="NIVEL_1")
     if not mapa_regular:
         bloco_gab_match = re.search(r"\[\s*GABARITO.*?\].*?$", texto, re.DOTALL | re.IGNORECASE)
         texto_busca = bloco_gab_match.group(0) if bloco_gab_match else texto
-        
         matches_brutos = re.findall(r"(?:QUEST[AÃ]O\s*|Q)?\s*0?(\d+)[\s\.\)\-:]+([A-E])\b", texto_busca.upper())
         for q_num_str, letra in matches_brutos:
             q_num = int(q_num_str)
@@ -841,31 +848,91 @@ def extrair_gab_universal_com_fallback(texto, is_pei=False, nivel_pei="NIVEL_1")
     if not is_pei:
         return [mapa_regular.get(n, "A") for n in range(1, qtd_oficial + 1)]
 
+    # 2. EXTRAÇÃO INTELIGENTE DO GABARITO PEI (3 ALTERNATIVAS: A, B, C)
     mapa_pei = {}
-    bloco_pei = extrair_tag(texto, nivel_pei) or extrair_tag(texto, "PEI_NIVEL_1") or extrair_tag(texto, "PEI") or extrair_tag(texto, "GABARITO_PEI")
+    bloco_pei = extrair_tag(texto, nivel_pei) or extrair_tag(texto, "PEI_NIVEL_1") or extrair_tag(texto, "NIVEL_1") or extrair_tag(texto, "PEI") or extrair_tag(texto, "GABARITO_PEI")
     
     if bloco_pei:
-        blocos_q = re.split(r"(?i)(?:QUEST[AÃ]O\s*|Q)0?(\d+)", bloco_pei)
-        if len(blocos_q) > 2:
-            for idx in range(1, len(blocos_q), 2):
-                q_num = int(blocos_q[idx])
-                q_conteudo = blocos_q[idx+1]
-                m_gab = re.search(r"(?i)GABARITO\s*[:\-]?\s*([A-E])", q_conteudo)
-                if m_gab:
-                    mapa_pei[q_num] = m_gab.group(1).upper()
+        # A) Busca tag [GABARITO_PEI] explícita no final do bloco
+        m_gab_pei_block = re.search(r"\[\s*GABARITO_PEI\s*\]\s*[:\-]*\s*(.*?)(?=\[|$)", texto, re.DOTALL | re.IGNORECASE)
+        if m_gab_pei_block:
+            matches_p = re.findall(r"(?:QUEST[AÃ]O\s*(?:PEI\s*)?|Q)?\s*0?(\d+)[\s\.\)\-:]+([A-C])\b", m_gab_pei_block.group(1).upper())
+            for q_num_str, letra in matches_p:
+                mapa_pei[int(q_num_str)] = letra
 
+        # B) Busca formato "1-A | 2-C | 3-B" no texto PEI
+        if not mapa_pei:
+            matches_inline_pipe = re.findall(r"0?(\d+)\s*[-:]\s*([A-C])\b", bloco_pei.upper())
+            for q_num_str, letra in matches_inline_pipe:
+                mapa_pei[int(q_num_str)] = letra
+
+        # C) Busca formato "Gabarito: B" ao final de cada questão
+        if not mapa_pei:
+            blocos_q = re.split(r"(?i)(?:QUEST[AÃ]O\s*(?:PEI\s*)?|Q)0?(\d+)", bloco_pei)
+            if len(blocos_q) > 2:
+                for idx in range(1, len(blocos_q), 2):
+                    q_num = int(blocos_q[idx])
+                    q_conteudo = blocos_q[idx+1]
+                    m_gab = re.search(r"(?i)GABARITO\s*[:\-]?\s*([A-C])", q_conteudo)
+                    if m_gab:
+                        mapa_pei[q_num] = m_gab.group(1).upper()
+
+        # D) DEDUÇÃO SEMÂNTICA POR TEXTO (Para provas onde o PEI não veio com gabarito explícito)
         if len(mapa_pei) < qtd_oficial:
-            matches_direct = re.findall(r"(?:QUEST[AÃ]O\s*|Q)?\s*0?(\d+)[\s\.\)\-:]+([A-E])\b", bloco_pei.upper())
-            for q_num_str, letra in matches_direct:
-                q_num = int(q_num_str)
-                if q_num not in mapa_pei and q_num <= qtd_oficial:
-                    mapa_pei[q_num] = letra
+            # Extrai o texto das alternativas da prova regular e da prova PEI
+            txt_questoes_reg = extrair_tag(texto, "QUESTOES") or texto
+            blocos_reg = re.split(r"(?i)QUEST[AÃ]O\s*0?(\d+)", txt_questoes_reg)
+            blocos_pei_split = re.split(r"(?i)(?:QUEST[AÃ]O\s*(?:PEI\s*)?|Q)0?(\d+)", bloco_pei)
+            
+            mapa_textos_reg = {}
+            if len(blocos_reg) > 2:
+                for idx_r in range(1, len(blocos_reg), 2):
+                    q_nr = int(blocos_reg[idx_r])
+                    mapa_textos_reg[q_nr] = blocos_reg[idx_r+1]
 
+            if len(blocos_pei_split) > 2:
+                for idx_p in range(1, len(blocos_pei_split), 2):
+                    q_np = int(blocos_pei_split[idx_p])
+                    if q_np not in mapa_pei:
+                        q_pei_txt = blocos_pei_split[idx_p+1]
+                        q_reg_txt = mapa_textos_reg.get(q_np, "")
+                        letra_correta_reg = mapa_regular.get(q_np, "A")
+                        
+                        # Extrai o texto da alternativa correta regular (ex: "Vale Verde")
+                        m_alt_reg = re.search(rf"\({letra_correta_reg}\)\s*(.*?)(?=\([A-E]\)|$)", q_reg_txt, re.DOTALL | re.IGNORECASE)
+                        texto_resposta_certa = m_alt_reg.group(1).strip() if m_alt_reg else ""
+                        texto_resp_clean = re.sub(r'[^A-Z0-9]', '', texto_resposta_certa.upper())
+                        
+                        # Procura em qual opção (A, B ou C) do PEI esse texto está
+                        letra_deduzida = None
+                        for letra_candidata in ["A", "B", "C"]:
+                            m_alt_pei = re.search(rf"\({letra_candidata}\)\s*(.*?)(?=\([A-C]\)|$)", q_pei_txt, re.DOTALL | re.IGNORECASE)
+                            if m_alt_pei:
+                                texto_alt_pei = re.sub(r'[^A-Z0-9]', '', m_alt_pei.group(1).upper())
+                                if len(texto_resp_clean) > 3 and (texto_resp_clean in texto_alt_pei or texto_alt_pei in texto_resp_clean):
+                                    letra_deduzida = letra_candidata
+                                    break
+                        
+                        if letra_deduzida:
+                            mapa_pei[q_np] = letra_deduzida
+
+    # 3. CONSOLIDAÇÃO BLINDADA: GARANTE QUE TODAS AS QUESTÕES PEI SEJAM STRICTLY A, B ou C
+    resultado_pei = []
     for q_n in range(1, qtd_oficial + 1):
-        if q_n not in mapa_pei:
-            mapa_pei[q_n] = mapa_regular.get(q_n, "A")
+        letra_encontrada = mapa_pei.get(q_n, None)
+        if letra_encontrada and letra_encontrada in ["A", "B", "C"]:
+            resultado_pei.append(letra_encontrada)
+        else:
+            # Fallback seguro: se a regular for D ou E, mapeia para uma opção válida (A ou B)
+            reg_letra = mapa_regular.get(q_n, "A")
+            if reg_letra in ["A", "B", "C"]:
+                resultado_pei.append(reg_letra)
+            elif reg_letra == "D":
+                resultado_pei.append("C") # Quarta opção vira C no PEI
+            else:
+                resultado_pei.append("A") # Quinta opção vira A no PEI
 
-    return [mapa_pei.get(n, "A") for n in range(1, qtd_oficial + 1)]
+    return resultado_pei
 
 def realizar_diagnostico_v25(plano_raw, df_curriculo, ano_sel):
     texto_upper = plano_raw.upper()
