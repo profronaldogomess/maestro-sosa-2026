@@ -1851,30 +1851,54 @@ elif menu == "📝 Central de Avaliações":
             is_rec_paralela = (modo_arq == "Recuperação Paralela")
 
             # ==============================================================
-            # FLUXO DEDICADO: SEGUNDA CHAMADA VINCULADA À PROVA ORIGINAL
+            # FLUXO DEDICADO: SEGUNDA CHAMADA VINCULADA (BUSCA MULTI-CAMADA)
             # ==============================================================
             if is_2a_chamada:
                 with st.container(border=True):
                     st.markdown("#### Configuração de Segunda Chamada Vinculada")
                     st.caption("Selecione a avaliação oficial que os estudantes perderam. O sistema herda a pontuação e disponibiliza os cadernos PEI automaticamente:")
                     
-                    c_sc1, c_sc2 = st.columns([1, 2])
+                    c_sc1, c_sc2, c_sc3 = st.columns([1, 1.2, 2])
                     ano_sc = c_sc1.selectbox("Série Alvo:", [6, 7, 8, 9], key=f"ano_sc_sel_{v}")
-                    
-                    df_provas_sc = df_aulas[(df_aulas['ANO'].astype(str).str.contains(str(ano_sc))) & (df_aulas['SEMANA_REF'].isin(["AVALIAÇÃO", "AVALIACAO"]))] if not df_aulas.empty else pd.DataFrame()
-                    
-                    opcoes_provas_sc = []
-                    if not df_provas_sc.empty:
-                        opcoes_provas_sc = [p for p in df_provas_sc['TIPO_MATERIAL'].tolist() if not re.search(r"2[ªA]|CHAMADA|TIPO [B-Z]|REVISAO", str(p), re.IGNORECASE)]
-                    
-                    prova_origem_sc = c_sc2.selectbox("Avaliação Oficial de Origem (Prova Perdida):", [""] + opcoes_provas_sc, key=f"p_origem_sc_sel_{v}")
+                    trim_sc = c_sc2.segmented_control("Trimestre:", ["Todos", "I Trimestre", "II Trimestre", "III Trimestre"], default="Todos", key=f"trim_sc_filter_{v}")
+                    if not trim_sc: trim_sc = "Todos"
+
+                    # BUSCA MULTI-CAMADA INTELIGENTE (LEI #10: NUNCA OCULTA II OU III TRIMESTRE)
+                    termos_busca_exames = r"(?i)(?:AVALIA[CÇ][AÃ]O|PROVA|TESTE|SONDA|EXAME)"
+                    termos_ignorar_origem = r"(?i)(?:2[ªA]|CHAMADA|TIPO\s+[B-Z]|REVISAO_LACUNAS|DOSSI[EÊ])"
+
+                    opcoes_encontradas_sc = set()
+
+                    # 1. Busca no acervo de aulas e avaliações (DB_AULAS_PRONTAS)
+                    if not df_aulas.empty and 'ANO' in df_aulas.columns and 'TIPO_MATERIAL' in df_aulas.columns:
+                        df_ano_aulas = df_aulas[df_aulas['ANO'].astype(str).str.contains(str(ano_sc))]
+                        for _, r_a in df_ano_aulas.iterrows():
+                            mat_nome = str(r_a.get('TIPO_MATERIAL', '')).strip()
+                            sem_ref_n = str(r_a.get('SEMANA_REF', '')).strip()
+                            conteudo_txt = str(r_a.get('CONTEUDO', ''))
+                            
+                            if (re.search(termos_busca_exames, mat_nome) or sem_ref_n.upper() in ["AVALIAÇÃO", "AVALIACAO"]) and not re.search(termos_ignorar_origem, mat_nome):
+                                if trim_sc == "Todos" or re.search(util.obter_regex_trimestre(trim_sc), mat_nome) or re.search(util.obter_regex_trimestre(trim_sc), conteudo_txt) or re.search(util.obter_regex_trimestre(trim_sc), sem_ref_n):
+                                    opcoes_encontradas_sc.add(mat_nome)
+
+                    # 2. Busca no histórico de gabaritos e diagnósticos (DB_GABARITOS_ALUNOS)
+                    if not df_diagnosticos.empty and 'TURMA' in df_diagnosticos.columns and 'ID_AVALIACAO' in df_diagnosticos.columns:
+                        df_ano_diag = df_diagnosticos[df_diagnosticos['TURMA'].astype(str).str.contains(str(ano_sc))]
+                        for av_id in df_ano_diag['ID_AVALIACAO'].dropna().unique():
+                            av_clean = re.sub(r'\s*\(\s*VARIANTE.*?\)', '', str(av_id), flags=re.IGNORECASE).strip()
+                            if re.search(termos_busca_exames, av_clean) and not re.search(termos_ignorar_origem, av_clean):
+                                if trim_sc == "Todos" or re.search(util.obter_regex_trimestre(trim_sc), av_clean):
+                                    opcoes_encontradas_sc.add(av_clean)
+
+                    opcoes_provas_sc = sorted(list(opcoes_encontradas_sc))
+                    prova_origem_sc = c_sc3.selectbox("Avaliação Oficial de Origem (Prova Perdida):", [""] + opcoes_provas_sc, key=f"p_origem_sc_sel_{v}")
 
                 if prova_origem_sc:
-                    match_sc = df_provas_sc[df_provas_sc['TIPO_MATERIAL'] == prova_origem_sc]
+                    match_sc = df_aulas[(df_aulas['ANO'].astype(str).str.contains(str(ano_sc))) & (df_aulas['TIPO_MATERIAL'] == prova_origem_sc)] if not df_aulas.empty else pd.DataFrame()
                     txt_origem_sc = str(match_sc.iloc[0].get('CONTEUDO', '')) if not match_sc.empty else ""
                     
                     val_origem = util.sosa_to_float(ai.extrair_tag(txt_origem_sc, "VALOR")) or 4.0
-                    q_origem_raw = ai.extrair_tag(txt_origem_sc, "QUESTOES")
+                    q_origem_raw = ai.extrair_tag(txt_origem_sc, "QUESTOES") or txt_origem_sc
                     qtd_detectada_sc = len(re.findall(r"(?i)QUESTÃO\s*0?\d+", q_origem_raw)) or 10
                     
                     def extrair_link_safe(t, tag):
@@ -2115,7 +2139,61 @@ elif menu == "📝 Central de Avaliações":
                         if topico_autoral_extra.strip() not in assuntos_marcados_prof:
                             assuntos_marcados_prof.insert(0, topico_autoral_extra.strip())
 
-                st.markdown("<br>", unsafe_allow_html=True)
+            # ==============================================================
+            # FLUXO VARIANTE TIPO B (BUSCA MULTI-CAMADA)
+            # ==============================================================
+            elif "Variante" in modo_arq:
+                with st.container(border=True):
+                    st.markdown("#### Configuração de Variante Anti-Fraude")
+                    c_cl1, c_cl2, c_cl3 = st.columns([1, 1.2, 2])
+                    ano_clone = c_cl1.selectbox("Série:", [6, 7, 8, 9], key=f"ano_clone_sel_{v}")
+                    trim_clone = c_cl2.segmented_control("Trimestre:", ["Todos", "I Trimestre", "II Trimestre", "III Trimestre"], default="Todos", key=f"trim_clone_flt_{v}")
+                    if not trim_clone: trim_clone = "Todos"
+
+                    termos_busca_exames = r"(?i)(?:AVALIA[CÇ][AÃ]O|PROVA|TESTE|SONDA|EXAME)"
+                    termos_ignorar_var = r"(?i)(?:2[ªA]|CHAMADA|TIPO\s+[B-Z]|REVISAO_LACUNAS|DOSSI[EÊ])"
+
+                    opcoes_encontradas_var = set()
+                    if not df_aulas.empty and 'ANO' in df_aulas.columns and 'TIPO_MATERIAL' in df_aulas.columns:
+                        df_ano_aulas = df_aulas[df_aulas['ANO'].astype(str).str.contains(str(ano_clone))]
+                        for _, r_a in df_ano_aulas.iterrows():
+                            mat_nome = str(r_a.get('TIPO_MATERIAL', '')).strip()
+                            sem_ref_n = str(r_a.get('SEMANA_REF', '')).strip()
+                            conteudo_txt = str(r_a.get('CONTEUDO', ''))
+                            if (re.search(termos_busca_exames, mat_nome) or sem_ref_n.upper() in ["AVALIAÇÃO", "AVALIACAO"]) and not re.search(termos_ignorar_var, mat_nome):
+                                if trim_clone == "Todos" or re.search(util.obter_regex_trimestre(trim_clone), mat_nome) or re.search(util.obter_regex_trimestre(trim_clone), conteudo_txt) or re.search(util.obter_regex_trimestre(trim_clone), sem_ref_n):
+                                    opcoes_encontradas_var.add(mat_nome)
+
+                    opcoes_provas_var = sorted(list(opcoes_encontradas_var))
+                    prova_base_sel = c_cl3.selectbox("Avaliação de Origem (Tipo A):", [""] + opcoes_provas_var, key=f"p_base_sel_{v}")
+                
+                if prova_base_sel:
+                    match_clone = df_aulas[(df_aulas['ANO'].astype(str).str.contains(str(ano_clone))) & (df_aulas['TIPO_MATERIAL'] == prova_base_sel)] if not df_aulas.empty else pd.DataFrame()
+                    txt_base = str(match_clone.iloc[0].get('CONTEUDO', '')) if not match_clone.empty else ""
+                    q_reg = ai.extrair_tag(txt_base, "QUESTOES")
+                    qtd_detectada = len(re.findall(r"(?i)QUESTÃO\s*0?\d+", q_reg)) or 10
+                    st.info(f"Avaliação selecionada: {qtd_detectada} questões identificadas.")
+                    
+                    if st.button("Gerar Variante Tipo B", type="primary", use_container_width=True, key=f"btn_clone_exe_{v}"):
+                        with st.status("Estruturando caderno variante...") as status:
+                            info_clone = {'ano': f"{ano_clone}º", 'trimestre': 'I Trimestre' if 'ITrimestre' in prova_base_sel else ('II Trimestre' if 'IITrimestre' in prova_base_sel else 'III Trimestre'), 'valor': 4.0, 'qtd': qtd_detectada}
+                            existentes = df_aulas[df_aulas['TIPO_MATERIAL'].str.startswith(prova_base_sel + " - TIPO", na=False)] if not df_aulas.empty else pd.DataFrame()
+                            letra = chr(66 + len(existentes))
+                            nome_var = f"{prova_base_sel} - TIPO {letra}"
+                            
+                            prompt = f"PROVA ORIGINAL:\n[QUESTOES]\n{q_reg}\n\n[GRADE_DE_CORRECAO]\n{ai.extrair_tag(txt_base, 'GRADE_DE_CORRECAO')}"
+                            res_hydra = ai.gerar_ia("ARQUITETO_VARIANTES_V100", prompt)
+                            
+                            texto_final_var = f"[VALOR: 4.0]\n\n[QUESTOES]\n{ai.extrair_tag(res_hydra, 'QUESTOES')}\n\n[GABARITO_TEXTO]\n{ai.extrair_tag(res_hydra, 'GABARITO_TEXTO')}\n\n[GRADE_DE_CORRECAO]\n{ai.extrair_tag(res_hydra, 'GRADE_DE_CORRECAO')}\n\n[PEI_NIVEL_1]\n{ai.extrair_tag(txt_base, 'PEI_NIVEL_1')}\n\n[PEI_NIVEL_2]\n{ai.extrair_tag(txt_base, 'PEI_NIVEL_2')}\n\n[PEI_NIVEL_3]\n{ai.extrair_tag(txt_base, 'PEI_NIVEL_3')}\n\n"
+                            doc_var = exporter.gerar_docx_prova_v25(nome_var, texto_final_var, info_clone)
+                            link_var = db.subir_e_converter_para_google_docs(doc_var, nome_var, modo="AVALIACAO")
+                            
+                            db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), "AVALIAÇÃO", nome_var, texto_final_var + f"\n--- LINKS ---\nRegular({link_var})", f"{ano_clone}º", link_var])
+                            status.update(label="Variante homologada e sincronizada no Drive!", state="complete")
+                        st.balloons(); time.sleep(0.8); st.rerun()
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            if "Regular" in modo_arq or "Sonda" in modo_arq or is_rec_paralela or is_rec_final:
                 rotulo_btn_inicio = f"Iniciar Linha de Montagem ({modo_arq})"
                 
                 if st.button(rotulo_btn_inicio, type="primary", use_container_width=True, key=f"btn_fase1_av_{v}"):
