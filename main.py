@@ -1850,7 +1850,99 @@ elif menu == "📝 Central de Avaliações":
             is_2a_chamada = (modo_arq == "Segunda Chamada")
             is_rec_paralela = (modo_arq == "Recuperação Paralela")
 
-            if "Regular" in modo_arq or "Sonda" in modo_arq or is_2a_chamada or is_rec_paralela or is_rec_final:
+            # ==============================================================
+            # FLUXO DEDICADO: SEGUNDA CHAMADA VINCULADA À PROVA ORIGINAL
+            # ==============================================================
+            if is_2a_chamada:
+                with st.container(border=True):
+                    st.markdown("#### Configuração de Segunda Chamada Vinculada")
+                    st.caption("Selecione a avaliação oficial que os estudantes perderam. O sistema herda a pontuação e disponibiliza os cadernos PEI automaticamente:")
+                    
+                    c_sc1, c_sc2 = st.columns([1, 2])
+                    ano_sc = c_sc1.selectbox("Série Alvo:", [6, 7, 8, 9], key=f"ano_sc_sel_{v}")
+                    
+                    df_provas_sc = df_aulas[(df_aulas['ANO'].astype(str).str.contains(str(ano_sc))) & (df_aulas['SEMANA_REF'].isin(["AVALIAÇÃO", "AVALIACAO"]))] if not df_aulas.empty else pd.DataFrame()
+                    
+                    opcoes_provas_sc = []
+                    if not df_provas_sc.empty:
+                        opcoes_provas_sc = [p for p in df_provas_sc['TIPO_MATERIAL'].tolist() if not re.search(r"2[ªA]|CHAMADA|TIPO [B-Z]|REVISAO", str(p), re.IGNORECASE)]
+                    
+                    prova_origem_sc = c_sc2.selectbox("Avaliação Oficial de Origem (Prova Perdida):", [""] + opcoes_provas_sc, key=f"p_origem_sc_sel_{v}")
+
+                if prova_origem_sc:
+                    match_sc = df_provas_sc[df_provas_sc['TIPO_MATERIAL'] == prova_origem_sc]
+                    txt_origem_sc = str(match_sc.iloc[0].get('CONTEUDO', '')) if not match_sc.empty else ""
+                    
+                    val_origem = util.sosa_to_float(ai.extrair_tag(txt_origem_sc, "VALOR")) or 4.0
+                    q_origem_raw = ai.extrair_tag(txt_origem_sc, "QUESTOES")
+                    qtd_detectada_sc = len(re.findall(r"(?i)QUESTÃO\s*0?\d+", q_origem_raw)) or 10
+                    
+                    def extrair_link_safe(t, tag):
+                        m = re.search(rf"{tag}\s*\(\s*(https://[^\s\)]+)\s*\)", t)
+                        return m.group(1) if m else None
+
+                    l_pei1_sc = extrair_link_safe(txt_origem_sc, "PEI_N1") or extrair_link_safe(txt_origem_sc, "PEI")
+                    l_pei3_sc = extrair_link_safe(txt_origem_sc, "PEI_N3")
+
+                    with st.container(border=True):
+                        st.markdown(f"##### Diagnóstico da Avaliação de Origem: **{prova_origem_sc}**")
+                        c_inf1, c_inf2, c_inf3 = st.columns(3)
+                        c_inf1.metric("Pontuação Oficial", f"{val_origem:.1f} pts")
+                        c_inf2.metric("Itens da Prova", f"{qtd_detectada_sc} questões")
+                        c_inf3.metric("Cadernos PEI", "Disponíveis no Drive")
+
+                        st.markdown("---")
+                        st.markdown("**Cadernos PEI para Estudantes com Necessidades Específicas (Reuso Direto):**")
+                        st.caption("Estudantes com laudo/PEI realizam o caderno adaptado já gerado para esta avaliação (sem criar prova nova):")
+                        
+                        c_l_pei1, c_l_pei2 = st.columns(2)
+                        if l_pei1_sc: c_l_pei1.link_button("Abrir Caderno PEI Nível 1 no Drive", l_pei1_sc, use_container_width=True)
+                        else: c_l_pei1.caption("PEI N1 arquivado no acervo original")
+
+                        if l_pei3_sc: c_l_pei2.link_button("Abrir Caderno PEI Nível 3 no Drive", l_pei3_sc, use_container_width=True)
+                        else: c_l_pei2.caption("PEI N3 arquivado no acervo original")
+
+                    with st.container(border=True):
+                        st.markdown("##### Geração do Caderno de 2ª Chamada para Estudantes Regulares")
+                        st.caption("Gera questões espelho inéditas para os estudantes regulares que faltaram:")
+                        
+                        nome_segunda_chamada = f"2ª_CHAMADA_{prova_origem_sc}"
+                        c_opt1, c_opt2 = st.columns([1.5, 1.5])
+                        formato_sc = c_opt1.selectbox("Formato da 2ª Chamada Regular:", ["10 Questões Espelho com Memória de Cálculo (Padrão)", "Prova Discursiva Aberta", "Prova Objetiva Múltipla Escolha"], key=f"fmt_sc_{v}")
+                        c_opt2.text_input("Identificador Oficial:", value=nome_segunda_chamada, disabled=True)
+
+                        if st.button("Gerar Caderno de 2ª Chamada Regular", type="primary", use_container_width=True, key=f"btn_gen_2a_chamada_exe_{v}"):
+                            with st.status("Forjando questões espelho inéditas para a 2ª Chamada...", expanded=True) as status_sc:
+                                prompt_sc = (
+                                    f"PROVA ORIGINAL DE ORIGEM:\n{txt_origem_sc}\n\n"
+                                    f"SÉRIE: {ano_sc}º Ano.\n"
+                                    f"VALOR TOTAL: {val_origem} pontos.\n"
+                                    f"FORMATO: {formato_sc}.\n\n"
+                                    f"MISSÃO: Crie a SEGUNDA CHAMADA para estudantes regulares baseada EXCLUSIVAMENTE nos mesmos descritores e habilidades da prova original, porém com dados numéricos e enunciados inéditos (questões espelho).\n"
+                                    f"Gere as tags: [VALOR: {val_origem}], [QUESTOES], [GABARITO_TEXTO], [GRADE_DE_CORRECAO]."
+                                )
+                                res_sc = ai.gerar_ia("FORJA_ITEM_REGULAR" if "Objetiva" in formato_sc else "ARQUITETO_RECUPERACAO_DISCURSIVA", prompt_sc, usar_busca=False)
+                                
+                                texto_final_2a = f"[VALOR: {val_origem}]\n\n[QUESTOES]\n{ai.extrair_tag(res_sc, 'QUESTOES') or res_sc}\n\n[GABARITO_TEXTO]\n{ai.extrair_tag(res_sc, 'GABARITO_TEXTO')}\n\n[GRADE_DE_CORRECAO]\n{ai.extrair_tag(res_sc, 'GRADE_DE_CORRECAO')}\n\n"
+                                
+                                trim_sc_str = 'I Trimestre' if 'ITrimestre' in prova_origem_sc else ('II Trimestre' if 'IITrimestre' in prova_origem_sc else 'III Trimestre')
+                                info_sc_doc = {'ano': f"{ano_sc}º", 'trimestre': trim_sc_str, 'valor': str(val_origem), 'tipo_prova': '2ª CHAMADA', 'qtd': qtd_detectada_sc}
+                                
+                                doc_2a = exporter.gerar_docx_prova_v25(nome_segunda_chamada, texto_final_2a, info_sc_doc)
+                                link_2a = db.subir_e_converter_para_google_docs(doc_2a, nome_segunda_chamada, modo="AVALIACAO")
+                                
+                                db.salvar_no_banco("DB_AULAS_PRONTAS", [
+                                    datetime.now().strftime("%d/%m/%Y"), "AVALIAÇÃO", nome_segunda_chamada,
+                                    texto_final_2a + f"\n--- LINKS ---\nRegular({link_2a})", f"{ano_sc}º", link_2a
+                                ])
+                                
+                                status_sc.update(label="Segunda Chamada gerada e sincronizada no Google Drive!", state="complete")
+                                st.balloons(); time.sleep(0.8); st.rerun()
+
+            # ==============================================================
+            # FLUXO REGULAR / RECUPERAÇÃO / RECUPERAÇÃO FINAL
+            # ==============================================================
+            elif "Regular" in modo_arq or "Sonda" in modo_arq or is_rec_paralela or is_rec_final:
                 with st.container(border=True):
                     st.markdown("#### 1. Parâmetros da Turma & Pontuação Oficial")
                     c1, c2, c3, c4 = st.columns(4)
@@ -1862,15 +1954,12 @@ elif menu == "📝 Central de Avaliações":
                         v_total = c3.number_input("Pontuação Total:", 0.0, 10.0, 10.0, disabled=True, key=f"v_tot_input_{v}")
                     else:
                         trim_filtro = c2.selectbox("Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"trim_av_sel_{v}")
-                        default_val = 4.0 if (is_2a_chamada or "Regular" in modo_arq) else (10.0 if is_rec_paralela else 4.0)
+                        default_val = 4.0 if "Regular" in modo_arq else (10.0 if is_rec_paralela else 4.0)
                         v_total = c3.number_input("Pontuação Total:", 0.0, 10.0, default_val, step=0.5, key=f"v_tot_input_{v}")
                     
                     qtd_q = c4.number_input("Quantidade de Questões:", 1, 30, 10, key=f"qtd_q_input_{v}")
 
-                    if is_2a_chamada:
-                        st.info(f"ℹ️ **Regra de Segunda Chamada:** A prova herda rigorosamente a pontuação da avaliação original (**{v_total:.1f} pts**). Para estudantes PEI, utilize o caderno adaptado já salvo no acervo.")
-                        perfil_rigor = "Segunda Chamada Oficial"
-                    elif is_rec_final:
+                    if is_rec_final:
                         st.info("ℹ️ **Regra de Recuperação Final:** Prova Aberta/Discursiva para Regulares (10.0 pts) e Prova Fechada/Adaptada para PEI (N1/N2 em 3 alternativas e N3 com 10 Bento Boxes no papel).")
                         perfil_rigor = "Recuperação Final Anual"
                     elif is_rec_paralela:
@@ -2005,63 +2094,101 @@ elif menu == "📝 Central de Avaliações":
                     if txt_av_ex_ext: contexto_base_texto += f"--- EXERCÍCIOS DO LIVRO DIDÁTICO ---\n{txt_av_ex_ext}\n\n"
                     if recorte_provas_livro.strip(): contexto_base_texto += f"--- EXERCÍCIOS COMPLEMENTARES ---\n{recorte_provas_livro.strip()}\n\n"
 
-            with st.container(border=True):
-                st.markdown(f"#### 3. Seleção de Conteúdos da Avaliação ({ano_av}º Ano)")
-                st.caption("Marque os conteúdos que farão parte da matriz desta avaliação:")
+                with st.container(border=True):
+                    st.markdown(f"#### 3. Seleção de Conteúdos da Avaliação ({ano_av}º Ano)")
+                    st.caption("Marque os conteúdos que farão parte da matriz desta avaliação:")
+                    
+                    assuntos_marcados_prof = st.multiselect(
+                        "Conteúdos Selecionados:",
+                        options=topicos_candidatos_unicos,
+                        default=topicos_candidatos_unicos[:min(qtd_q, len(topicos_candidatos_unicos))],
+                        key=f"ms_topicos_prof_{v}"
+                    )
+
+                    topico_autoral_extra = st.text_input(
+                        "Adicionar Conteúdo Específico (Opcional):",
+                        placeholder="Ex: Operações com números decimais e cálculo de perímetro",
+                        key=f"topico_extra_input_{v}"
+                    )
+
+                    if topico_autoral_extra.strip():
+                        if topico_autoral_extra.strip() not in assuntos_marcados_prof:
+                            assuntos_marcados_prof.insert(0, topico_autoral_extra.strip())
+
+                st.markdown("<br>", unsafe_allow_html=True)
+                rotulo_btn_inicio = f"Iniciar Linha de Montagem ({modo_arq})"
                 
-                assuntos_marcados_prof = st.multiselect(
-                    "Conteúdos Selecionados:",
-                    options=topicos_candidatos_unicos,
-                    default=topicos_candidatos_unicos[:min(qtd_q, len(topicos_candidatos_unicos))],
-                    key=f"ms_topicos_prof_{v}"
-                )
+                if st.button(rotulo_btn_inicio, type="primary", use_container_width=True, key=f"btn_fase1_av_{v}"):
+                    if not assuntos_marcados_prof:
+                        st.error("Selecione ao menos um conteúdo no painel acima.")
+                    else:
+                        gabarito_mestre = util.gerar_gabarito_balanceado(qtd_q)
+                        mapa_inicial = []
+                        
+                        tipo_prova_tag = "RECUPERAÇÃO FINAL" if is_rec_final else ("RECUPERAÇÃO" if is_rec_paralela else "AVALIAÇÃO")
+                        
+                        for i in range(qtd_q):
+                            assunto_item = assuntos_marcados_prof[i % len(assuntos_marcados_prof)]
+                            mapa_inicial.append({
+                                'q': i + 1, 
+                                'tema': assunto_item,
+                                'dificuldade': "Fácil" if i < (qtd_q*0.3) else ("Difícil" if i >= (qtd_q*0.8) else "Média"),
+                                'gabarito': gabarito_mestre[i], 
+                                'status': 'pendente', 
+                                'dados': {} 
+                            })
+                        f['mapa'] = mapa_inicial
+                        f['info'] = {
+                            'ano': f"{ano_av}º", 
+                            'trimestre': trim_filtro, 
+                            'valor': v_total, 
+                            'qtd': qtd_q, 
+                            'tipo_prova': tipo_prova_tag, 
+                            'rigor': perfil_rigor,
+                            'is_rec_final': is_rec_final
+                        }
+                        f['contexto_base'] = contexto_base_texto 
+                        f['pincamento_lousa'] = pincamento_pratica
+                        f['fase'] = 2
+                        st.rerun()
 
-                topico_autoral_extra = st.text_input(
-                    "Adicionar Conteúdo Específico (Opcional):",
-                    placeholder="Ex: Operações com números decimais e cálculo de perímetro",
-                    key=f"topico_extra_input_{v}"
-                )
-
-                if topico_autoral_extra.strip():
-                    if topico_autoral_extra.strip() not in assuntos_marcados_prof:
-                        assuntos_marcados_prof.insert(0, topico_autoral_extra.strip())
-
-            st.markdown("<br>", unsafe_allow_html=True)
-            rotulo_btn_inicio = f"Iniciar Linha de Montagem ({modo_arq})"
-            
-            if st.button(rotulo_btn_inicio, type="primary", use_container_width=True, key=f"btn_fase1_av_{v}"):
-                if not assuntos_marcados_prof:
-                    st.error("Selecione ao menos um conteúdo no painel acima.")
-                else:
-                    gabarito_mestre = util.gerar_gabarito_balanceado(qtd_q)
-                    mapa_inicial = []
+            elif "Variante" in modo_arq:
+                with st.container(border=True):
+                    st.markdown("#### Configuração de Variante Anti-Fraude")
+                    c_cl1, c_cl2 = st.columns([1, 2])
+                    ano_clone = c_cl1.selectbox("Série:", [6, 7, 8, 9], key=f"ano_clone_sel_{v}")
+                    df_provas = df_aulas[(df_aulas['ANO'].astype(str).str.contains(str(ano_clone))) & (df_aulas['SEMANA_REF'] == "AVALIAÇÃO")] if not df_aulas.empty else pd.DataFrame()
                     
-                    tipo_prova_tag = "RECUPERAÇÃO FINAL" if is_rec_final else ("2ª CHAMADA" if is_2a_chamada else ("RECUPERAÇÃO" if is_rec_paralela else "AVALIAÇÃO"))
+                    opcoes_provas = []
+                    if not df_provas.empty:
+                        opcoes_provas = [p for p in df_provas['TIPO_MATERIAL'].tolist() if not re.search(r"2[ªA]|CHAMADA|TIPO [B-Z]", str(p), re.IGNORECASE)]
                     
-                    for i in range(qtd_q):
-                        assunto_item = assuntos_marcados_prof[i % len(assuntos_marcados_prof)]
-                        mapa_inicial.append({
-                            'q': i + 1, 
-                            'tema': assunto_item,
-                            'dificuldade': "Fácil" if i < (qtd_q*0.3) else ("Difícil" if i >= (qtd_q*0.8) else "Média"),
-                            'gabarito': gabarito_mestre[i], 
-                            'status': 'pendente', 
-                            'dados': {} 
-                        })
-                    f['mapa'] = mapa_inicial
-                    f['info'] = {
-                        'ano': f"{ano_av}º", 
-                        'trimestre': trim_filtro, 
-                        'valor': v_total, 
-                        'qtd': qtd_q, 
-                        'tipo_prova': tipo_prova_tag, 
-                        'rigor': perfil_rigor,
-                        'is_rec_final': is_rec_final
-                    }
-                    f['contexto_base'] = contexto_base_texto 
-                    f['pincamento_lousa'] = pincamento_pratica
-                    f['fase'] = 2
-                    st.rerun()
+                    prova_base_sel = c_cl2.selectbox("Avaliação de Origem (Tipo A):", [""] + opcoes_provas, key=f"p_base_sel_{v}")
+                
+                if prova_base_sel:
+                    match_clone = df_provas[df_provas['TIPO_MATERIAL'] == prova_base_sel]
+                    txt_base = str(match_clone.iloc[0].get('CONTEUDO', '')) if not match_clone.empty else ""
+                    q_reg = ai.extrair_tag(txt_base, "QUESTOES")
+                    qtd_detectada = len(re.findall(r"(?i)QUESTÃO\s*0?\d+", q_reg)) or 10
+                    st.info(f"Avaliação selecionada: {qtd_detectada} questões identificadas.")
+                    
+                    if st.button("Gerar Variante Tipo B", type="primary", use_container_width=True, key=f"btn_clone_exe_{v}"):
+                        with st.status("Estruturando caderno variante...") as status:
+                            info_clone = {'ano': f"{ano_clone}º", 'trimestre': "I Trimestre", 'valor': 4.0, 'qtd': qtd_detectada}
+                            existentes = df_aulas[df_aulas['TIPO_MATERIAL'].str.startswith(prova_base_sel + " - TIPO", na=False)] if not df_aulas.empty else pd.DataFrame()
+                            letra = chr(66 + len(existentes))
+                            nome_var = f"{prova_base_sel} - TIPO {letra}"
+                            
+                            prompt = f"PROVA ORIGINAL:\n[QUESTOES]\n{q_reg}\n\n[GRADE_DE_CORRECAO]\n{ai.extrair_tag(txt_base, 'GRADE_DE_CORRECAO')}"
+                            res_hydra = ai.gerar_ia("ARQUITETO_VARIANTES_V100", prompt)
+                            
+                            texto_final_var = f"[VALOR: 4.0]\n\n[QUESTOES]\n{ai.extrair_tag(res_hydra, 'QUESTOES')}\n\n[GABARITO_TEXTO]\n{ai.extrair_tag(res_hydra, 'GABARITO_TEXTO')}\n\n[GRADE_DE_CORRECAO]\n{ai.extrair_tag(res_hydra, 'GRADE_DE_CORRECAO')}\n\n[PEI_NIVEL_1]\n{ai.extrair_tag(txt_base, 'PEI_NIVEL_1')}\n\n[PEI_NIVEL_2]\n{ai.extrair_tag(txt_base, 'PEI_NIVEL_2')}\n\n[PEI_NIVEL_3]\n{ai.extrair_tag(txt_base, 'PEI_NIVEL_3')}\n\n"
+                            doc_var = exporter.gerar_docx_prova_v25(nome_var, texto_final_var, info_clone)
+                            link_var = db.subir_e_converter_para_google_docs(doc_var, nome_var, modo="AVALIACAO")
+                            
+                            db.salvar_no_banco("DB_AULAS_PRONTAS", [datetime.now().strftime("%d/%m/%Y"), "AVALIAÇÃO", nome_var, texto_final_var + f"\n--- LINKS ---\nRegular({link_var})", f"{ano_clone}º", link_var])
+                            status.update(label="Variante homologada e sincronizada no Drive!", state="complete")
+                        st.balloons(); time.sleep(0.8); st.rerun()
 
             elif "Variante" in modo_arq:
                 with st.container(border=True):
