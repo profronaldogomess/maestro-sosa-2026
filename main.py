@@ -5507,6 +5507,24 @@ elif menu == "📊 Painel de Notas & Vistos":
     st.caption("Central de consolidação de rendimento: sincronização do Scanner CIR, gestão atitudinal de vistos de caderno, refacção solidária e recuperação regimental.")
     st.markdown("---")
 
+    with st.expander("🛠️ Central de Saneamento & Auto-Healer do Banco de Dados", expanded=False):
+        st.caption("Executa o recálculo psicométrico em lote, converte datas seriais, dedupica o diário e aplica o arredondamento oficial de 0,5 em 0,5 no banco:")
+        
+        if st.button("Executar Saneamento Soberano de Todas as Tabelas (1-Clique)", type="primary", use_container_width=True, key="btn_run_auto_healer_main"):
+            with st.status("Executando protocolo de saneamento em todas as 10 planilhas...", expanded=True) as status_heal:
+                status_heal.write("Conectando à base de dados e auditando registros...")
+                sucesso_heal, msg_heal = db.executar_saneamento_banco_soberano()
+                
+                if sucesso_heal:
+                    status_heal.update(label="Saneamento concluído com sucesso!", state="complete")
+                    st.success(f"**Relatório de Saneamento:**\n\n{msg_heal}")
+                    st.balloons()
+                    time.sleep(1.0)
+                    st.rerun()
+                else:
+                    status_heal.update(label="Erro no saneamento.", state="error")
+                    st.error(msg_heal)
+
     if "v_notas" not in st.session_state:
         st.session_state.v_notas = int(time.time())
     v = st.session_state.v_notas
