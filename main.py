@@ -2034,22 +2034,37 @@ elif menu == "📝 Central de Avaliações":
                 with st.container(border=True):
                     st.markdown("#### 2. Fontes Curriculares & Prova de Origem")
                     
-                    # Seletor inteligente para puxar a avaliação aplicada no trimestre
+                    # Seletor inteligente Multi-Camada (Lei 10 do SOSA)
                     txt_av_origem_puxada = ""
                     if is_rec_paralela:
-                        df_provas_trim = df_aulas[(df_aulas['ANO'].astype(str).str.contains(str(ano_av))) & (df_aulas['SEMANA_REF'].isin(["AVALIAÇÃO", "REVISÃO"]))].copy() if not df_aulas.empty else pd.DataFrame()
-                        opcoes_provas_para_rec = sorted(df_provas_trim['TIPO_MATERIAL'].dropna().unique().tolist()) if not df_provas_trim.empty else []
+                        padrao_trim_rec = util.obter_regex_trimestre(trim_filtro)
+                        termos_busca_exames_rec = r"(?i)(?:AVALIA[CÇ][AÃ]O|PROVA|TESTE|SIMULADO|EXAME|REVISAO|REVISÃO)"
+                        
+                        opcoes_provas_para_rec_set = set()
+                        if not df_aulas.empty and 'ANO' in df_aulas.columns and 'TIPO_MATERIAL' in df_aulas.columns:
+                            df_ano_aulas_rec = df_aulas[df_aulas['ANO'].astype(str).str.contains(str(ano_av))]
+                            for _, r_a in df_ano_aulas_rec.iterrows():
+                                mat_nome = str(r_a.get('TIPO_MATERIAL', '')).strip()
+                                sem_ref_n = str(r_a.get('SEMANA_REF', '')).strip()
+                                conteudo_txt = str(r_a.get('CONTEUDO', ''))
+                                
+                                # Captura avaliações mesmo que salvas em "Semana 27", "Semana 26" ou "AVALIAÇÃO"
+                                if re.search(termos_busca_exames_rec, mat_nome) or sem_ref_n.upper() in ["AVALIAÇÃO", "AVALIACAO", "REVISÃO"]:
+                                    if re.search(padrao_trim_rec, mat_nome) or re.search(padrao_trim_rec, conteudo_txt) or re.search(padrao_trim_rec, sem_ref_n):
+                                        opcoes_provas_para_rec_set.add(mat_nome)
+
+                        opcoes_provas_para_rec = sorted(list(opcoes_provas_para_rec_set))
                         
                         c_p_rec1, c_p_rec2 = st.columns([2.5, 1])
                         prova_rec_base_sel = c_p_rec1.selectbox(
                             "Avaliação / Teste de Origem a ser Recuperado (Opcional):",
                             [""] + opcoes_provas_para_rec,
                             key=f"sel_prova_rec_orig_{v}",
-                            help="Selecione para minerar automaticamente as questões e descritores da prova oficial aplicada."
+                            help="Selecione a avaliação do II Trimestre para minerar automaticamente os descritores e itens."
                         )
                         
                         if prova_rec_base_sel:
-                            m_orig = df_provas_trim[df_provas_trim['TIPO_MATERIAL'] == prova_rec_base_sel]
+                            m_orig = df_aulas[(df_aulas['ANO'].astype(str).str.contains(str(ano_av))) & (df_aulas['TIPO_MATERIAL'] == prova_rec_base_sel)]
                             if not m_orig.empty:
                                 txt_av_origem_puxada = str(m_orig.iloc[0].get('CONTEUDO', ''))
                                 c_p_rec2.success("Prova Carregada!")
@@ -2062,13 +2077,11 @@ elif menu == "📝 Central de Avaliações":
                         key=f"pills_fontes_av_{v}"
                     )
                     
-                    txt_av_teo_ext, txt_av_ex_ext = "", ""
-                    recorte_provas_livro = ""
-
-                    c_safra1, c_safra2 = st.columns(2)
+                    txt_av_teo_ext = ""
 
                     if "Livro Didático (PDF)" in fontes_ativas:
                         livros_av_disp = df_materiais[df_materiais['TIPO'].str.contains(str(ano_av), na=False)]['NOME_ARQUIVO'].tolist() if not df_materiais.empty else []
+                        c_safra1, c_safra2 = st.columns(2)
                         sel_livro_av = c_safra2.selectbox("Livro do Cofre Digital:", [""] + livros_av_disp, key=f"sel_livro_av_{v}")
                         
                         if sel_livro_av:
@@ -2081,10 +2094,18 @@ elif menu == "📝 Central de Avaliações":
                                     if bytes_pdf_av:
                                         txt_av_teo_ext = util.extrair_texto_pdf_por_paginas(bytes_pdf_av, list_p_av)
 
+                    # Preenchimento inteligente do campo de Prática da Lousa com base na prova selecionada
+                    texto_padrao_pratica = ""
+                    if is_rec_paralela:
+                        if txt_av_origem_puxada:
+                            texto_padrao_pratica = f"Recuperação baseada na prova '{prova_rec_base_sel}': Foco nos descritores críticos de Frações, Números Mistos, Divisão com Decimais, Área/Perímetro e Gráficos."
+                        else:
+                            texto_padrao_pratica = "Recuperação do II Trimestre: Frações (leitura, equivalência, adição/subtração com denominadores diferentes e multiplicação), Números Mistos, Divisão com decimais, Área e Perímetro, Gráficos de barras e tabelas."
+
                     st.markdown("##### Prática de Sala de Aula (Questões Espelho / Conteúdos Chave)")
                     pincamento_pratica = st.text_area(
                         "Exercícios resolvidos em sala, tópicos críticos ou anotações da lousa:",
-                        value="Recuperação do II Trimestre: Frações (leitura, equivalência, adição/subtração com denominadores diferentes e multiplicação), Números Mistos, Divisão com decimais, Área e Perímetro, Gráficos de barras e tabelas." if is_rec_paralela and not txt_av_origem_puxada else "",
+                        value=texto_padrao_pratica,
                         placeholder="Ex: Pág. 185: exercícios 2, 4 e 5. Exemplo do quadro sobre frações e divisão com vírgula.",
                         height=85, key=f"pincamento_pratica_input_{v}"
                     )
@@ -2092,9 +2113,17 @@ elif menu == "📝 Central de Avaliações":
                     topicos_candidatos = []
                     TERMOS_PROIBIDOS_ASSUNTO = r"(?i)(?:REVIS[AÃ]O|PROVA|TESTE|SONDA|DOSSI[EÊ]|RAIO-X|AVALIA[CÇ][AÃ]O|APLICA[CÇ][AÃ]O|2[ªA]\s*CHAMADA|RECUPERA[CÇ][AÃ]O|GABARITO|AULA\s*\d+|SEMANA\s*\d+)"
 
+                    if txt_av_origem_puxada:
+                        grade_orig_p = ai.extrair_tag(txt_av_origem_puxada, "GRADE_DE_CORRECAO") or ai.extrair_tag(txt_av_origem_puxada, "GRADE_DE_CORRECAO_PEI")
+                        if grade_orig_p:
+                            descritores_extraidos = re.findall(r'(?i)(?:DESCRITOR_SAEB|HABILIDADE|BNCC|DESCRITOR)\s*:\s*([^|\]\n]+)', grade_orig_p)
+                            for d_ext in descritores_extraidos:
+                                d_c = d_ext.strip()
+                                if len(d_c) > 3 and not re.search(TERMOS_PROIBIDOS_ASSUNTO, d_c):
+                                    topicos_candidatos.append(d_c)
+
                     if pincamento_pratica.strip():
-                        partes_lousa = re.split(r'[;\n•,]', pincamento_pratica)
-                        for p_l in partes_lousa:
+                        for p_l in re.split(r'[;\n•,]', pincamento_pratica):
                             p_l_clean = re.sub(r'[*#\[\]]', '', p_l).strip()
                             if len(p_l_clean) > 3 and not re.search(TERMOS_PROIBIDOS_ASSUNTO, p_l_clean):
                                 topicos_candidatos.append(p_l_clean)
@@ -2102,8 +2131,7 @@ elif menu == "📝 Central de Avaliações":
                     if not df_planos.empty:
                         planos_trim = df_planos[(df_planos['ANO'].astype(str).str.contains(str(ano_av))) & (df_planos['TURMA'].astype(str).str.upper().str.contains(trim_filtro.upper()))]
                         for _, r_plano in planos_trim.iterrows():
-                            txt_p = str(r_plano.get('PLANO_TEXTO', ''))
-                            c_espec = (ai.extrair_tag(txt_p, "CONTEUDOS_ESPECIFICOS") or ai.extrair_tag(txt_p, "OBJETO_CONHECIMENTO") or "")
+                            c_espec = ai.extrair_tag(str(r_plano.get('PLANO_TEXTO', '')), "CONTEUDOS_ESPECIFICOS") or ai.extrair_tag(str(r_plano.get('PLANO_TEXTO', '')), "OBJETO_CONHECIMENTO") or ""
                             if c_espec:
                                 for p in re.split(r'[;\n•]', c_espec):
                                     p_clean = re.sub(r'\[cite:.*?\]|[*#\[\]]', '', p).strip()
