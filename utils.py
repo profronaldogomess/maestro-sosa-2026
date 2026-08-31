@@ -4,8 +4,7 @@ import io
 import random
 import re
 import uuid
-from datetime import date, timedelta, datetime
-
+from datetime import date, timedelta, datetime, timezone
 
 # ==============================================================================
 # 1. FUNÇÕES DE LIMPEZA E FORMATAÇÃO DE TEXTO
@@ -26,9 +25,9 @@ def gerar_nome_material_elite(ano, tipo, detalhe):
     return f"{ano_limpo}º Ano - {tipo} - {detalhe}"
 
 def gerar_sosa_id(tipo, ano, trimestre):
-    """Gera um DNA único para o material respeitando o fuso de Itabuna"""
-    # Ajuste manual de fuso (UTC-3) para evitar o erro de "dia seguinte" à noite
-    data_itabuna = datetime.utcnow() - timedelta(hours=3)
+    """Gera um DNA único para o material respeitando o fuso de Itabuna (UTC-3)"""
+    fuso_itabuna = timezone(timedelta(hours=-3))
+    data_itabuna = datetime.now(fuso_itabuna)
     
     prefixo = str(tipo)[:4].upper()
     hash_curto = str(uuid.uuid4())[:4].upper()
@@ -48,14 +47,26 @@ def sosa_to_float(valor):
     if valor is None or str(valor).strip() == "" or str(valor).lower() == "nan":
         return 0.0
     try:
-        # Remove espaços e troca vírgula por ponto
         limpo = str(valor).replace(" ", "").replace(",", ".")
         return float(limpo)
     except ValueError:
         return 0.0
 
-# FILTRO DE LEITURA GLOBAL (LATEX, TABELAS E PROMPTS)
+def sosa_to_str(valor):
+    """
+    CONVERSOR FLOAT PARA GOOGLE SHEETS COM VÍRGULA (ANTI-ATTRIBUTE_ERROR)
+    Converte float/int em string formatada com vírgula padrão Google Sheets (ex: 3.5 -> '3,50' ou '3,5').
+    """
+    if valor is None or str(valor).strip() == "" or str(valor).lower() == "nan":
+        return "0,00"
+    try:
+        v_float = sosa_to_float(valor)
+        return f"{v_float:.2f}".replace(".", ",")
+    except Exception:
+        return "0,00"
+
 def preparar_para_leitura(texto):
+    """Filtro de leitura global para fórmulas LaTeX, prompts de imagem e markdown."""
     if not texto or not isinstance(texto, str): return ""
     
     texto = texto.replace('\x0c', '\\f')
@@ -70,7 +81,6 @@ def preparar_para_leitura(texto):
         texto, 
         flags=re.IGNORECASE | re.DOTALL
     )
-    
     return texto
 
 def extrair_valor_real_prova(texto_conteudo, nome_avaliacao=""):
@@ -92,108 +102,6 @@ def extrair_valor_real_prova(texto_conteudo, nome_avaliacao=""):
             v = sosa_to_float(m2.group(1))
             if v > 0: return v
 
-    nome_upper = str(nome_avaliacao).upper()
-    texto_upper = str(texto_conteudo).upper() if texto_conteudo else ""
-    
-    if any(x in nome_upper or x in texto_upper for x in ["FINAL", "REC_FINAL", "RECUPERAÇÃO FINAL", "RECUPERACAO FINAL"]):
-        return 10.0
-    elif any(x in nome_upper or x in texto_upper for x in ["TESTE", "SIMULADO", "TRABALHO"]):
-        return 3.0
-    elif any(x in nome_upper or x in texto_upper for x in ["PROVA", "AVALIAÇÃO", "AVALIACAO", "EXAME", "2ª CHAMADA", "2A CHAMADA"]):
-        return 4.0
-    elif any(x in nome_upper or x in texto_upper for x in ["SONDA", "DIAGNÓSTICA", "DIAGNOSTICA"]):
-        return 10.0
-
-    return 4.0
-
-def extrair_valor_real_prova(texto_conteudo, nome_avaliacao=""):
-    """
-    SOSA V2026 - EXTRATOR INFALÍVEL DE VALOR DA AVALIAÇÃO:
-    Lê [VALOR: 4.0], [VALOR] 4.0, VALOR: 4.0 ou deduz pelo tipo do instrumento:
-    - TESTE / TRABALHO / SIMULADO -> 3.0 pts (Teto C2)
-    - PROVA / AVALIAÇÃO / EXAME -> 4.0 pts (Teto C3)
-    - RECUPERAÇÃO FINAL / REC_FINAL -> 10.0 pts (Teto RF)
-    """
-    if texto_conteudo and isinstance(texto_conteudo, str):
-        m1 = re.search(r'\[\s*VALOR\s*[:\-]?\s*([\d\.,]+)\s*\]', texto_conteudo, re.IGNORECASE)
-        if m1:
-            v = sosa_to_float(m1.group(1))
-            if v > 0: return v
-        
-        m2 = re.search(r'\bVALOR\s*[:\-]\s*([\d\.,]+)', texto_conteudo, re.IGNORECASE)
-        if m2:
-            v = sosa_to_float(m2.group(1))
-            if v > 0: return v
-
-    nome_upper = str(nome_avaliacao).upper()
-    texto_upper = str(texto_conteudo).upper() if texto_conteudo else ""
-    
-    if any(x in nome_upper or x in texto_upper for x in ["FINAL", "REC_FINAL", "RECUPERAÇÃO FINAL", "RECUPERACAO FINAL"]):
-        return 10.0
-    elif any(x in nome_upper or x in texto_upper for x in ["TESTE", "SIMULADO", "TRABALHO"]):
-        return 3.0
-    elif any(x in nome_upper or x in texto_upper for x in ["PROVA", "AVALIAÇÃO", "AVALIACAO", "EXAME", "2ª CHAMADA", "2A CHAMADA"]):
-        return 4.0
-    elif any(x in nome_upper or x in texto_upper for x in ["SONDA", "DIAGNÓSTICA", "DIAGNOSTICA"]):
-        return 10.0
-
-    return 4.0
-
-def extrair_valor_real_prova(texto_conteudo, nome_avaliacao=""):
-    """
-    SOSA V2026 - EXTRATOR INFALÍVEL DE VALOR DA AVALIAÇÃO:
-    Lê [VALOR: 4.0], [VALOR] 4.0, VALOR: 4.0 ou deduz pelo tipo do instrumento:
-    - TESTE / TRABALHO / SIMULADO -> 3.0 pts (Teto C2)
-    - PROVA / AVALIAÇÃO / EXAME -> 4.0 pts (Teto C3)
-    - RECUPERAÇÃO FINAL / REC_FINAL -> 10.0 pts (Teto RF)
-    """
-    if texto_conteudo and isinstance(texto_conteudo, str):
-        m1 = re.search(r'\[\s*VALOR\s*[:\-]?\s*([\d\.,]+)\s*\]', texto_conteudo, re.IGNORECASE)
-        if m1:
-            v = sosa_to_float(m1.group(1))
-            if v > 0: return v
-        
-        m2 = re.search(r'\bVALOR\s*[:\-]\s*([\d\.,]+)', texto_conteudo, re.IGNORECASE)
-        if m2:
-            v = sosa_to_float(m2.group(1))
-            if v > 0: return v
-
-    nome_upper = str(nome_avaliacao).upper()
-    texto_upper = str(texto_conteudo).upper() if texto_conteudo else ""
-    
-    if any(x in nome_upper or x in texto_upper for x in ["FINAL", "REC_FINAL", "RECUPERAÇÃO FINAL", "RECUPERACAO FINAL"]):
-        return 10.0
-    elif any(x in nome_upper or x in texto_upper for x in ["TESTE", "SIMULADO", "TRABALHO"]):
-        return 3.0
-    elif any(x in nome_upper or x in texto_upper for x in ["PROVA", "AVALIAÇÃO", "AVALIACAO", "EXAME", "2ª CHAMADA", "2A CHAMADA"]):
-        return 4.0
-    elif any(x in nome_upper or x in texto_upper for x in ["SONDA", "DIAGNÓSTICA", "DIAGNOSTICA"]):
-        return 10.0
-
-    return 4.0
-
-def extrair_valor_real_prova(texto_conteudo, nome_avaliacao=""):
-    """
-    SOSA V2026 - EXTRATOR INFALÍVEL DE VALOR DA AVALIAÇÃO:
-    Lê [VALOR: 4.0], [VALOR] 4.0, VALOR: 4.0 ou deduz pelo tipo do instrumento:
-    - TESTE / TRABALHO / SIMULADO -> 3.0 pts (Teto C2)
-    - PROVA / AVALIAÇÃO / EXAME -> 4.0 pts (Teto C3)
-    - RECUPERAÇÃO FINAL / REC_FINAL -> 10.0 pts (Teto RF)
-    """
-    if texto_conteudo and isinstance(texto_conteudo, str):
-        # 1. Procura [VALOR: 4.0] ou [VALOR: 4,0] ou [VALOR] 4.0
-        m1 = re.search(r'\[\s*VALOR\s*[:\-]?\s*([\d\.,]+)\s*\]', texto_conteudo, re.IGNORECASE)
-        if m1:
-            v = sosa_to_float(m1.group(1))
-            if v > 0: return v
-        
-        # 2. Procura VALOR: 4.0 fora dos colchetes
-        m2 = re.search(r'\bVALOR\s*[:\-]\s*([\d\.,]+)', texto_conteudo, re.IGNORECASE)
-        if m2:
-            v = sosa_to_float(m2.group(1))
-            if v > 0: return v
-
-    # 3. Fallback inteligente baseado no nome do instrumento
     nome_upper = str(nome_avaliacao).upper()
     texto_upper = str(texto_conteudo).upper() if texto_conteudo else ""
     
@@ -264,7 +172,7 @@ def obter_info_trimestre(dt):
     # Datas oficiais do Calendário Escolar da Prefeitura de Itabuna 2026
     t1 = (date(2026, 2, 9), date(2026, 5, 22))
     t2 = (date(2026, 5, 25), date(2026, 9, 4))
-    t3 = (date(2026, 9, 8), date(2026, 12, 17)) # Início canônico do III Trimestre em 08/09/2026
+    t3 = (date(2026, 9, 8), date(2026, 12, 17))
     
     if t1[0] <= dt <= t1[1]: return "I Trimestre", t1
     if t2[0] <= dt <= t2[1]: return "II Trimestre", t2
@@ -290,7 +198,7 @@ def gerar_semanas():
     semanas = []
     data_atual = date(2026, 2, 2)
     fim_ano = date(2026, 12, 18)
-    semanas.append(f"Jornada Pedagógica (02/02 a 06/02)")
+    semanas.append("Jornada Pedagógica (02/02 a 06/02)")
     data_atual = date(2026, 2, 9)
     contador = 1
     while data_atual < fim_ano:
@@ -306,7 +214,7 @@ def gerar_semanas():
 # ==============================================================================
 
 def gerar_gabarito_balanceado(qtd_questoes):
-    """Gera um gabarito perfeitamente balanceado sem 3 letras seguidas iguais."""
+    """Gera um gabarito balanceado sem 3 letras consecutivas iguais."""
     letras = ['A', 'B', 'C', 'D', 'E']
     base = (letras * ((qtd_questoes // 5) + 1))[:qtd_questoes]
     
@@ -325,19 +233,14 @@ def embaralhar_item_estruturado(item_dict):
     alt_keys = ['ALT_A', 'ALT_B', 'ALT_C', 'ALT_D', 'ALT_E']
     textos_alts = [item_dict[k] for k in alt_keys]
     
-    # Identifica qual é o texto da resposta correta atual
     letra_correta_atual = item_dict['GABARITO']
-    idx_correta = ord(letra_correta_atual) - 65 # A=0, B=1...
+    idx_correta = ord(letra_correta_atual) - 65
     texto_correto = textos_alts[idx_correta]
     
-    # Embaralha os textos
     random.shuffle(textos_alts)
-    
-    # Descobre a nova letra correta
     novo_idx_correta = textos_alts.index(texto_correto)
     nova_letra_correta = chr(65 + novo_idx_correta)
     
-    # Atualiza o dicionário
     novo_item = item_dict.copy()
     for i, k in enumerate(alt_keys):
         novo_item[k] = textos_alts[i]
@@ -346,14 +249,11 @@ def embaralhar_item_estruturado(item_dict):
     return novo_item
 
 # ==============================================================================
-# 5. MOTOR DE RECORTE E PROCESSAMENTO MULTI-INTERVALO DE PDF (SOSA V2026)
+# 5. MOTOR DE RECORTE E PROCESSAMENTO MULTI-INTERVALO DE PDF
 # ==============================================================================
 
 def processar_intervalos_paginas(texto_paginas):
-    """
-    SOSA V2026: Converte strings como "184-186, 189, 192-195" em uma lista ordenada
-    de números de páginas inteiras sem duplicatas.
-    """
+    """Converte strings como '184-186, 189' em lista ordenada de números inteiros."""
     if not texto_paginas or not isinstance(texto_paginas, str):
         return []
     
@@ -361,8 +261,7 @@ def processar_intervalos_paginas(texto_paginas):
     partes = texto_paginas.replace(" e ", ",").replace(";", ",").split(",")
     for parte in partes:
         p = parte.strip()
-        if not p:
-            continue
+        if not p: continue
         if "-" in p or "a" in p.lower():
             p_intervalo = re.split(r'[\-aA]', p)
             if len(p_intervalo) == 2:
@@ -370,11 +269,9 @@ def processar_intervalos_paginas(texto_paginas):
                     p_inicio = int(re.sub(r'\D', '', p_intervalo[0]))
                     p_fim = int(re.sub(r'\D', '', p_intervalo[1]))
                     if p_inicio <= p_fim:
-                        for pag in range(p_inicio, p_fim + 1):
-                            paginas.add(pag)
+                        for pag in range(p_inicio, p_fim + 1): paginas.add(pag)
                     else:
-                        for pag in range(p_fim, p_inicio + 1):
-                            paginas.add(pag)
+                        for pag in range(p_fim, p_inicio + 1): paginas.add(pag)
                 except ValueError:
                     pass
         else:
@@ -386,11 +283,8 @@ def processar_intervalos_paginas(texto_paginas):
     return sorted(list(paginas))
 
 def extrair_texto_pdf_por_paginas(pdf_bytes, paginas_list):
-    """
-    Extrai o texto apenas das páginas solicitadas a partir dos bytes de um arquivo PDF.
-    """
-    if not pdf_bytes or not paginas_list:
-        return ""
+    """Extrai o texto apenas das páginas solicitadas a partir dos bytes de um PDF."""
+    if not pdf_bytes or not paginas_list: return ""
 
     try:
         pypdf = importlib.import_module("pypdf")
@@ -406,31 +300,14 @@ def extrair_texto_pdf_por_paginas(pdf_bytes, paginas_list):
                     texto_fatiado.append(f"--- [PÁGINA {pag_num}] ---\n{text_p.strip()}")
         return "\n\n".join(texto_fatiado)
     except Exception as e:
-        try:
-            PyPDF2 = importlib.import_module("PyPDF2")
-            reader = PyPDF2.PdfReader(io.BytesIO(pdf_bytes))
-            total_pags = len(reader.pages)
-            texto_fatiado = []
-            for pag_num in paginas_list:
-                idx = pag_num - 1
-                if 0 <= idx < total_pags:
-                    text_p = reader.pages[idx].extract_text() or ""
-                    if text_p.strip():
-                        texto_fatiado.append(f"--- [PÁGINA {pag_num}] ---\n{text_p.strip()}")
-            return "\n\n".join(texto_fatiado)
-        except Exception as ex:
-            return f"⚠️ Não foi possível extrair o texto diretamente do PDF em memória: {ex}"
+        return f"⚠️ Erro ao extrair texto do PDF: {e}"
 
 def obter_regex_trimestre(trimestre_str):
-    """
-    SOSA V2026.MASTER - DETECTOR REGEX HD DE TRIMESTRE
-    Identifica automaticamente 'SEGUNDO TRIMESTRE', 'II TRIMESTRE', '2º TRIMESTRE', etc.
-    """
+    """Detector de Trimestre com suporte a números romanos e ordinais."""
     if not trimestre_str or str(trimestre_str).strip() in ["", "Todos"]:
         return r".*"
     
     t_upper = str(trimestre_str).upper().strip()
-    
     if any(x in t_upper for x in ["III", "TERCEIRO", "3º", "3"]):
         return r"(?<!I)III(?![I])|TERCEIRO|3º|\b3\b"
     elif any(x in t_upper for x in ["II", "SEGUNDO", "2º", "2"]):
@@ -438,13 +315,9 @@ def obter_regex_trimestre(trimestre_str):
     else:
         return r"(?<!I)I(?![I])|PRIMEIRO|1º|\b1\b"
 
-# ==============================================================================
-# FATIADOR E LEITOR VISUAL DE PDF (SOSA 2026 - MOTOR HTML5 CANVAS / PDF.JS)
-# ==============================================================================
 def fatiar_pdf_bytes_por_paginas(pdf_bytes, paginas_list):
-    """Fatia um PDF mantendo apenas as páginas selecionadas e retorna os novos bytes do PDF visual."""
-    if not pdf_bytes or not paginas_list:
-        return None
+    """Fatia um PDF mantendo apenas as páginas selecionadas e retorna os novos bytes."""
+    if not pdf_bytes or not paginas_list: return None
     try:
         import pypdf
         reader = pypdf.PdfReader(io.BytesIO(pdf_bytes))
@@ -463,9 +336,8 @@ def fatiar_pdf_bytes_por_paginas(pdf_bytes, paginas_list):
         return None
 
 def renderizar_pdf_iframe(pdf_bytes, altura=550):
-    """Renderiza a página exata do PDF usando Canvas HTML5 (PDF.js), imune a bloqueios de navegadores."""
-    if not pdf_bytes:
-        return
+    """Renderiza a página exata do PDF usando Canvas HTML5 (PDF.js)."""
+    if not pdf_bytes: return
     import base64
     import streamlit.components.v1 as components
     
@@ -497,7 +369,6 @@ def renderizar_pdf_iframe(pdf_bytes, altura=550):
     </head>
     <body style="margin:0; padding:0; background-color: #000B1A;">
         <div id="pdf-container"></div>
-
         <script>
             const pdfData = atob("{base64_pdf}");
             const pdfjsLib = window['pdfjs-dist/build/pdf'];
@@ -506,24 +377,16 @@ def renderizar_pdf_iframe(pdf_bytes, altura=550):
             const loadingTask = pdfjsLib.getDocument({{data: pdfData}});
             loadingTask.promise.then(function(pdf) {{
                 const container = document.getElementById('pdf-container');
-                
                 for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {{
                     pdf.getPage(pageNum).then(function(page) {{
-                        const scale = 1.5; // Alta definição
+                        const scale = 1.5;
                         const viewport = page.getViewport({{scale: scale}});
-
                         const canvas = document.createElement('canvas');
                         const context = canvas.getContext('2d');
                         canvas.height = viewport.height;
                         canvas.width = viewport.width;
-
                         container.appendChild(canvas);
-
-                        const renderContext = {{
-                            canvasContext: context,
-                            viewport: viewport
-                        }};
-                        page.render(renderContext);
+                        page.render({{canvasContext: context, viewport: viewport}});
                     }});
                 }}
             }}).catch(function(error) {{
