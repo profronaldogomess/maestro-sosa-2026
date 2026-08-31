@@ -110,6 +110,36 @@ def preparar_para_leitura(texto):
     
     return texto
 
+def extrair_valor_real_prova(texto_conteudo, nome_avaliacao=""):
+    """Função global de extração de valor imune a falhas de cache de módulo."""
+    if texto_conteudo and isinstance(texto_conteudo, str):
+        m1 = re.search(r'\[\s*VALOR\s*[:\-]?\s*([\d\.,]+)\s*\]', texto_conteudo, re.IGNORECASE)
+        if m1:
+            v = util.sosa_to_float(m1.group(1))
+            if v > 0: return v
+        
+        m2 = re.search(r'\bVALOR\s*[:\-]\s*([\d\.,]+)', texto_conteudo, re.IGNORECASE)
+        if m2:
+            v = util.sosa_to_float(m2.group(1))
+            if v > 0: return v
+
+    nome_upper = str(nome_avaliacao).upper()
+    texto_upper = str(texto_conteudo).upper() if texto_conteudo else ""
+    
+    if any(x in nome_upper or x in texto_upper for x in ["FINAL", "REC_FINAL", "RECUPERAÇÃO FINAL", "RECUPERACAO FINAL"]):
+        return 10.0
+    elif any(x in nome_upper or x in texto_upper for x in ["TESTE", "SIMULADO", "TRABALHO"]):
+        return 3.0
+    elif any(x in nome_upper or x in texto_upper for x in ["PROVA", "AVALIAÇÃO", "AVALIACAO", "EXAME", "2ª CHAMADA", "2A CHAMADA"]):
+        return 4.0
+    elif any(x in nome_upper or x in texto_upper for x in ["SONDA", "DIAGNÓSTICA", "DIAGNOSTICA"]):
+        return 10.0
+
+    return 4.0
+
+# Vincula ao util para compatibilidade total
+util.extrair_valor_real_prova = extrair_valor_real_prova
+
 # --- ESTILIZAÇÃO EXECUTIVA & DESIGN SYSTEM GLASSMORPHISM ---
 BRAND_BLUE = "#2962FF"
 BRAND_NAVY = "#000B1A"
@@ -3388,7 +3418,7 @@ elif menu == "📸 Scanner de Gabaritos":
                 df_prova_ref = df_aulas[df_aulas['TIPO_MATERIAL'].str.contains(nome_curto_av_dialog, case=False, na=False)] if not df_aulas.empty else pd.DataFrame()
                 txt_prova_completa = str(df_prova_ref.iloc[0].get('CONTEUDO', '')) if not df_prova_ref.empty else ""
                 
-                val_real_instrumento = util.extrair_valor_real_prova(txt_prova_completa, av_alvo_dialog)
+                val_real_instrumento = extrair_valor_real_prova(txt_prova_completa, av_alvo_dialog)
 
                 c_f1, c_f2 = st.columns([1, 2])
                 if "http" in foto_atual_link: c_f1.link_button("Abrir Imagem no Drive", foto_atual_link, use_container_width=True)
@@ -4137,7 +4167,7 @@ elif menu == "📸 Scanner de Gabaritos":
                     txt_prova_trib = str(df_prova_trib.iloc[0].get('CONTEUDO', '')) if not df_prova_trib.empty else ""
                     
                     # EXTRAÇÃO BLINDADA DO VALOR REAL DO EXAME
-                    v_total_av = util.extrair_valor_real_prova(txt_prova_trib, av_alvo_h)
+                    v_total_av = extrair_valor_real_prova(txt_prova_trib, av_alvo_h)
 
                     if not df_prova_trib.empty:
                         gab_oficial_trib_list = ai.extrair_gab_universal_com_fallback(txt_prova_trib, is_pei=False)
@@ -4739,7 +4769,7 @@ elif menu == "👤 Biografia do Estudante":
                     qtd_questoes_trib = len(gab_oficial_trib) if len(gab_oficial_trib) > 0 else 10
                     
                     # EXTRAÇÃO BLINDADA DO VALOR REAL DA PROVA (Ex: 4.0 ou 3.0)
-                    val_total_prova = util.extrair_valor_real_prova(txt_prova_trib, av_contestada)
+                    val_total_prova = extrair_valor_real_prova(txt_prova_trib, av_contestada)
                     
                     q_contestada = st.selectbox("2. Selecione o Item:", [f"Questão {i}" for i in range(1, qtd_questoes_trib + 1)], key=f"trib_q_pop_{v}")
                     q_num_trib = int(q_contestada.split(" ")[1])
