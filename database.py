@@ -1120,3 +1120,288 @@ def transferir_titularidade_gabarito(id_origem, nome_origem, id_destino, nome_de
     except Exception as e:
         print(f"Erro ao transferir titularidade: {e}")
         return False
+
+# ==============================================================================
+# MOTOR DE SANEAMENTO SOBERANO & AUTO-HEALER (SOSA V2026.PRO_INFINITY)
+# ==============================================================================
+
+def executar_saneamento_banco_soberano():
+    """
+    SOSA V2026 - MOTOR DE SANEAMENTO ATÔMICO EM LOTE:
+    1. Higieniza datas seriais do Excel (46259, 46264, 46265 -> DD/MM/YYYY).
+    2. Recalcula a AVALIAÇÃO_6ANO_IITrimestre da 6ª MA com o peso real de 0,20 pt/questão (teto 4.0 pts).
+    3. Remove duplicações e consolida ocorrências no DB_DIARIO_BORDO.
+    4. Higieniza tags repetitivas em DB_RELATORIOS (limpeza de loops de IA).
+    5. Consolida C1 (Vistos), C2 (Testes), C3 (Provas) e Bônus com arredondamento oficial de 0,5 em 0,5 no DB_NOTAS.
+    """
+    wb = conectar()
+    if not wb:
+        return False, "Falha de conexão com o Google Sheets."
+
+    relatorio_execucao = []
+
+    try:
+        # ----------------------------------------------------------------------
+        # 1. SANEAMENTO DE DATAS SERIAIS EM DB_RELATORIOS E DB_AULAS_PRONTAS
+        # ----------------------------------------------------------------------
+        ws_rel = wb.worksheet("DB_RELATORIOS")
+        dados_rel = ws_rel.get_all_values()
+        if len(dados_rel) > 1:
+            modificado_rel = False
+            for idx in range(1, len(dados_rel)):
+                row = dados_rel[idx]
+                dt_str = str(row[0]).strip()
+                if dt_str.isdigit() and len(dt_str) == 5:
+                    row[0] = util.formatar_data_br(dt_str)
+                    modificado_rel = True
+                
+                # Limpeza de tags recursivas no conteúdo do PEI (Ester Souza Santos)
+                conteudo_rel = str(row[4])
+                if "[SOCIAIS]" in conteudo_rel and conteudo_rel.count("[SOCIAIS]") > 1:
+                    # Isola apenas a primeira ocorrência de cada tag
+                    tags_ordem = ["DIAGNOSTICO_GERAL", "SOCIAIS", "COMUNICATIVAS", "EMOCIONAIS", "FUNCIONAIS", "DIRETRIZES_CURRICULARES"]
+                    partes_limpas = []
+                    for t in tags_ordem:
+                        bloco = ai.extrair_tag(conteudo_rel, t)
+                        if bloco:
+                            # Remove repetições internas
+                            bloco_clean = bloco.split(f"[{t}]")[0].split("[SOCIAIS]")[0].split("[COMUNICATIVAS]")[0].strip()
+                            partes_limpas.append(f"[{t}]\n{bloco_clean}")
+                    if partes_limpas:
+                        row[4] = "\n\n".join(partes_limpas)
+                        modificado_rel = True
+
+            if modificado_rel:
+                ws_rel.clear()
+                ws_rel.update(values=dados_rel, range_name='A1')
+                relatorio_execucao.append("✅ DB_RELATORIOS: Datas seriais convertidas e tags recursivas higienizadas.")
+
+        # Saneamento de datas em DB_AULAS_PRONTAS
+        ws_aulas = wb.worksheet("DB_AULAS_PRONTAS")
+        dados_aulas = ws_aulas.get_all_values()
+        if len(dados_aulas) > 1:
+            mod_aulas = False
+            for idx in range(1, len(dados_aulas)):
+                dt_a = str(dados_aulas[idx][0]).strip()
+                if dt_a.isdigit() and len(dt_a) == 5:
+                    dados_aulas[idx][0] = util.formatar_data_br(dt_a)
+                    mod_aulas = True
+            if mod_aulas:
+                ws_aulas.clear()
+                ws_aulas.update(values=dados_aulas, range_name='A1')
+                relatorio_execucao.append("✅ DB_AULAS_PRONTAS: Datas seriais convertidas para DD/MM/YYYY.")
+
+        # ----------------------------------------------------------------------
+        # 2. RECÁLCULO PSICOMÉTRICO EM DB_GABARITOS_ALUNOS (6ª MA - AVALIAÇÃO II TRI)
+        # ----------------------------------------------------------------------
+        ws_gab = wb.worksheet("DB_GABARITOS_ALUNOS")
+        dados_gab = ws_gab.get_all_values()
+        
+        # Gabarito oficial de 20 questões da AVALIAÇÃO_6ANO_IITrimestre
+        gabarito_oficial_av_ii = [
+            "D", "A", "D", "A", "E", "A", "E", "D", "E", "B",
+            "C", "B", "A", "E", "D", "B", "C", "D", "B", "C"
+        ] # Total 20 itens | Peso = 4.0 / 20 = 0.20 pt cada
+        
+        peso_item_av_ii = 0.20
+        mod_gab = False
+        recalculados_cnt = 0
+
+        for idx in range(1, len(dados_gab)):
+            row = dados_gab[idx]
+            turma_r = str(row[3]).strip()
+            av_nome_r = str(row[4]).strip().upper()
+            resp_r = str(row[5]).strip().upper()
+
+            # Corrige datas seriais se houver
+            if str(row[0]).strip().isdigit() and len(str(row[0]).strip()) == 5:
+                row[0] = util.formatar_data_br(str(row[0]).strip())
+                mod_gab = True
+
+            # Corrige a nota inflada da 6ª MA na Avaliação do II Trimestre
+            if turma_r == "6ª MA" and "AVALIAÇÃO_6ANO_IITRIMESTRE" in av_nome_r and not resp_r.startswith("QUALITATIVA") and not resp_r.startswith("FALTOU") and resp_r != "MANUAL":
+                respostas_lista = resp_r.split("|GRUPO:")[0].split(';')
+                
+                acertos_reais = 0
+                for q_i in range(min(len(respostas_lista), len(gabarito_oficial_av_ii))):
+                    letra_aluno = respostas_lista[q_i].replace("*", "").strip()
+                    if letra_aluno == gabarito_oficial_av_ii[q_i]:
+                        acertos_reais += 1
+                
+                nota_real_calc = min(4.0, round(acertos_reais * peso_item_av_ii, 2))
+                row[6] = f"{nota_real_calc:.2f}".replace(".", ",")
+                mod_gab = True
+                recalculados_cnt += 1
+
+        if mod_gab:
+            ws_gab.clear()
+            ws_gab.update(values=dados_gab, range_name='A1')
+            relatorio_execucao.append(f"✅ DB_GABARITOS_ALUNOS: {recalculados_cnt} avaliações da 6ª MA recalculadas com peso real (0,20 pt/item).")
+
+        # ----------------------------------------------------------------------
+        # 3. DEDUPLICAÇÃO ATÔMICA EM DB_DIARIO_BORDO
+        # ----------------------------------------------------------------------
+        ws_diario = wb.worksheet("DB_DIARIO_BORDO")
+        dados_diario = ws_diario.get_all_values()
+        
+        if len(dados_diario) > 1:
+            header_d = dados_diario[0]
+            rows_d = dados_diario[1:]
+
+            # Mapeamento por chave única (DATA, ID_ALUNO, TURMA)
+            diario_dedup = {}
+            for r in rows_d:
+                dt_k = util.formatar_data_br(r[0])
+                id_k = limpar_id(r[1])
+                turma_k = str(r[3]).strip()
+                visto_k = str(r[4]).strip().upper()
+                tag_k = str(r[5]).strip()
+                obs_k = str(r[6]).strip()
+                bonus_k = util.sosa_to_float(r[7])
+
+                chave = (dt_k, id_k, turma_k)
+
+                if chave not in diario_dedup:
+                    diario_dedup[chave] = {
+                        "data": dt_k, "id": id_k, "nome": r[2], "turma": turma_k,
+                        "visto": visto_k, "tag": tag_k, "obs": obs_k, "bonus": bonus_k
+                    }
+                else:
+                    # Fusão inteligente: preserva presença se alguma linha marcou TRUE
+                    if visto_k == "TRUE":
+                        diario_dedup[chave]["visto"] = "TRUE"
+                    # Preserva a tag de arguição ou mérito
+                    if tag_k and tag_k != "AUSÊNCIA":
+                        diario_dedup[chave]["tag"] = tag_k
+                    # Concatena observações sem repetir
+                    if obs_k and obs_k not in diario_dedup[chave]["obs"]:
+                        diario_dedup[chave]["obs"] = f"{diario_dedup[chave]['obs']} | {obs_k}".strip(" | ")
+                    # Soma bônus atitudinais de eventos distintos
+                    if bonus_k != 0:
+                        diario_dedup[chave]["bonus"] = round(diario_dedup[chave]["bonus"] + bonus_k, 2)
+
+            linhas_diario_finais = [header_d]
+            for reg in diario_dedup.values():
+                b_str = f"{reg['bonus']:.2f}".replace(".", ",") if reg['bonus'] != 0 else "0,00"
+                linhas_diario_finais.append([
+                    reg["data"], reg["id"], reg["nome"], reg["turma"],
+                    reg["visto"], reg["tag"], reg["obs"], b_str
+                ])
+
+            ws_diario.clear()
+            ws_diario.update(values=linhas_diario_finais, range_name='A1')
+            relatorio_execucao.append(f"✅ DB_DIARIO_BORDO: {len(rows_d) - len(diario_dedup)} registros duplicados fundidos e saneados.")
+
+        # ----------------------------------------------------------------------
+        # 4. CONSOLIDAÇÃO TOTAL DE NOTAS NO DB_NOTAS (LEI 31 - ARREDONDAMENTO 0.5)
+        # ----------------------------------------------------------------------
+        ws_alunos = wb.worksheet("DB_ALUNOS")
+        dados_alunos = ws_alunos.get_all_values()
+        alunos_dict = {}
+        for r_al in dados_alunos[1:]:
+            id_limpo = limpar_id(r_al[0])
+            alunos_dict[id_limpo] = {
+                "id": id_limpo, "nome": r_al[1], "turma": r_al[2],
+                "status": r_al[3] if len(r_al) > 3 else "ATIVO",
+                "nec": r_al[4] if len(r_al) > 4 else "TÍPICO"
+            }
+
+        # Carrega dados limpos para consolidação
+        df_d_clean = pd.DataFrame(linhas_diario_finais[1:], columns=[c.upper() for c in header_d])
+        df_g_clean = pd.DataFrame(dados_gab[1:], columns=[c.upper() for c in dados_gab[0]])
+
+        # Intervalos de corte
+        trims_config = {
+            "I Trimestre": (date(2026, 2, 9), date(2026, 5, 22)),
+            "II Trimestre": (date(2026, 5, 25), date(2026, 9, 4))
+        }
+
+        novas_linhas_notas = [["ID_ALUNO", "NOME_ALUNO", "TURMA", "TRIMESTRE", "NOTA_VISTOS", "NOTA_TESTE", "NOTA_PROVA", "NOTA_REC", "MEDIA_FINAL"]]
+
+        for trim_nome, (dt_inicio, dt_fim) in trims_config.items():
+            padrao_t_reg = util.obter_regex_trimestre(trim_nome)
+
+            for id_aluno, al_info in alunos_dict.items():
+                turma_al = al_info["turma"]
+                nome_al = al_info["nome"]
+
+                # 1. C1 - VISTOS DE CADERNO (TETO 3.0) + BÔNUS LÍQUIDO
+                vistos_nota = 0.0
+                bonus_total = 0.0
+
+                if not df_d_clean.empty:
+                    df_d_sub = df_d_clean[(df_d_clean['ID_ALUNO'].apply(limpar_id) == id_aluno) & (df_d_clean['TURMA'] == turma_al)].copy()
+                    if not df_d_sub.empty:
+                        df_d_sub['DT_OBJ'] = pd.to_datetime(df_d_sub['DATA'], format="%d/%m/%Y", errors='coerce').dt.date
+                        df_d_trim = df_d_sub[(df_d_sub['DT_OBJ'] >= dt_inicio) & (df_d_sub['DT_OBJ'] <= dt_fim)]
+                        
+                        if not df_d_trim.empty:
+                            validas = df_d_trim[df_d_trim['VISTO_ATIVIDADE'].str.upper() != "ISENTO"]
+                            tot_v = len(validas['DATA'].unique()) if not validas.empty else 1
+                            if tot_v == 0: tot_v = 1
+                            v_ok = len(validas[validas['VISTO_ATIVIDADE'].str.upper() == "TRUE"])
+                            vistos_nota = round((v_ok / tot_v * 3.0), 2)
+                            bonus_total = df_d_trim['BONUS'].apply(util.sosa_to_float).sum()
+
+                # 2. C2 - TESTES E TRABALHOS (TETO 3.0)
+                teste_nota = 0.0
+                prova_nota = 0.0
+                rec_nota = -1.0
+
+                if not df_g_clean.empty:
+                    df_g_sub = df_g_clean[(df_g_clean['ID_ALUNO'].apply(limpar_id) == id_aluno) & (df_g_clean['TURMA'] == turma_al)]
+                    if not df_g_sub.empty:
+                        for _, r_g in df_g_sub.iterrows():
+                            av_id_txt = str(r_g['ID_AVALIACAO']).upper()
+                            resp_g_txt = str(r_g['RESPOSTAS_ALUNO']).upper()
+                            
+                            # Filtra pelo trimestre correto
+                            if re.search(padrao_t_reg, av_id_txt):
+                                if resp_g_txt.startswith("FALTOU_INJUSTIFICADO") or resp_g_txt == "FALTOU":
+                                    n_g = 0.0
+                                else:
+                                    n_g = util.sosa_to_float(r_g['NOTA_CALCULADA'])
+
+                                if any(x in av_id_txt for x in ["RECUPERAÇÃO", "RECUPERACAO", "REC_"]):
+                                    rec_nota = n_g
+                                elif any(x in av_id_txt for x in ["TESTE", "SIMULADO", "TRABALHO"]) and "SONDA" not in av_id_txt:
+                                    teste_nota = max(teste_nota, n_g)
+                                elif any(x in av_id_txt for x in ["PROVA", "AVALIAÇÃO", "AVALIACAO", "EXAME"]):
+                                    prova_nota = max(prova_nota, n_g)
+
+                # 3. FUSÃO DE BÔNUS E TRANSIÇÃO
+                c1_final = min(3.0, vistos_nota + max(0.0, bonus_total))
+                rem_b = max(0.0, bonus_total) - (c1_final - vistos_nota)
+                c2_final = min(3.0, teste_nota + max(0.0, rem_b))
+                rem_b -= (c2_final - teste_nota)
+                c3_final = min(4.0, prova_nota + max(0.0, rem_b))
+
+                # 4. FÓRMULA OFICIAL DE ARREDONDAMENTO (0,5 EM 0,5)
+                soma_bruta = c1_final + c2_final + c3_final
+                media_inicial = min(10.0, round(soma_bruta * 2) / 2)
+
+                if rec_nota > 0 and media_inicial < 6.0:
+                    media_com_rec = (media_inicial + rec_nota) / 2.0
+                    media_final = min(10.0, max(media_inicial, round(media_com_rec * 2) / 2))
+                else:
+                    media_final = media_inicial
+
+                novas_linhas_notas.append([
+                    id_aluno, nome_al, turma_al, trim_nome,
+                    f"{vistos_nota:.2f}".replace(".", ","),
+                    f"{teste_nota:.2f}".replace(".", ","),
+                    f"{prova_nota:.2f}".replace(".", ","),
+                    f"{rec_nota:.2f}".replace(".", ",") if rec_nota >= 0 else "-1",
+                    f"{media_final:.1f}".replace(".", ",")
+                ])
+
+        ws_notas = wb.worksheet("DB_NOTAS")
+        ws_notas.clear()
+        ws_notas.update(values=novas_linhas_notas, range_name='A1')
+        relatorio_execucao.append("✅ DB_NOTAS: Médias consolidadas (C1+C2+C3) com arredondamento oficial de 0,5 em 0,5 para todas as turmas.")
+
+        st.cache_data.clear()
+        return True, "\n".join(relatorio_execucao)
+
+    except Exception as e:
+        return False, f"Erro durante o saneamento: {str(e)}"
