@@ -63,6 +63,42 @@ def sosa_to_str(valor, casas=2):
     formato = "{:." + str(casas) + "f}"
     return formato.format(val_float).replace(".", ",")
 
+def extrair_valor_real_prova(texto_conteudo, nome_avaliacao=""):
+    """
+    SOSA V2026 - EXTRATOR INFALÍVEL DE VALOR DA AVALIAÇÃO:
+    Lê [VALOR: 4.0], [VALOR] 4.0, VALOR: 4.0 ou deduz pelo tipo do instrumento:
+    - TESTE / TRABALHO / SIMULADO -> 3.0 pts (Teto C2)
+    - PROVA / AVALIAÇÃO / EXAME -> 4.0 pts (Teto C3)
+    - RECUPERAÇÃO FINAL / REC_FINAL -> 10.0 pts (Teto RF)
+    """
+    if texto_conteudo and isinstance(texto_conteudo, str):
+        # 1. Procura [VALOR: 4.0] ou [VALOR: 4,0] ou [VALOR] 4.0
+        m1 = re.search(r'\[\s*VALOR\s*[:\-]?\s*([\d\.,]+)\s*\]', texto_conteudo, re.IGNORECASE)
+        if m1:
+            v = sosa_to_float(m1.group(1))
+            if v > 0: return v
+        
+        # 2. Procura VALOR: 4.0 fora dos colchetes
+        m2 = re.search(r'\bVALOR\s*[:\-]\s*([\d\.,]+)', texto_conteudo, re.IGNORECASE)
+        if m2:
+            v = sosa_to_float(m2.group(1))
+            if v > 0: return v
+
+    # 3. Fallback inteligente baseado no nome do instrumento
+    nome_upper = str(nome_avaliacao).upper()
+    texto_upper = str(texto_conteudo).upper() if texto_conteudo else ""
+    
+    if any(x in nome_upper or x in texto_upper for x in ["FINAL", "REC_FINAL", "RECUPERAÇÃO FINAL", "RECUPERACAO FINAL"]):
+        return 10.0
+    elif any(x in nome_upper or x in texto_upper for x in ["TESTE", "SIMULADO", "TRABALHO"]):
+        return 3.0
+    elif any(x in nome_upper or x in texto_upper for x in ["PROVA", "AVALIAÇÃO", "AVALIACAO", "EXAME", "2ª CHAMADA", "2A CHAMADA"]):
+        return 4.0
+    elif any(x in nome_upper or x in texto_upper for x in ["SONDA", "DIAGNÓSTICA", "DIAGNOSTICA"]):
+        return 10.0
+
+    return 4.0
+
 # ==============================================================================
 # 3. FUNÇÕES DE DATA E CALENDÁRIO (ITABUNA 2026)
 # ==============================================================================
