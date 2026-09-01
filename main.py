@@ -2034,8 +2034,9 @@ elif menu == "📝 Central de Avaliações":
                 with st.container(border=True):
                     st.markdown("#### 2. Fontes Curriculares & Prova de Origem")
                     
-                    # Seletor Multi-Camada da Prova Aplicada
                     txt_av_origem_puxada = ""
+                    topicos_extraidos_da_prova = []
+                    
                     if is_rec_paralela:
                         padrao_trim_rec = util.obter_regex_trimestre(trim_filtro)
                         termos_busca_exames_rec = r"(?i)(?:AVALIA[CÇ][AÃ]O|PROVA|TESTE|SIMULADO|EXAME|REVISAO|REVISÃO)"
@@ -2056,17 +2057,36 @@ elif menu == "📝 Central de Avaliações":
                         
                         c_p_rec1, c_p_rec2 = st.columns([2.5, 1])
                         prova_rec_base_sel = c_p_rec1.selectbox(
-                            "Avaliação / Teste de Origem a ser Recuperado (Opcional):",
+                            "Avaliação / Teste de Origem a ser Recuperado:",
                             [""] + opcoes_provas_para_rec,
                             key=f"sel_prova_rec_orig_{v}",
-                            help="Selecione a avaliação do II Trimestre para minerar automaticamente os descritores e itens."
+                            help="Selecione a avaliação oficial para minerar automaticamente os itens e descritores."
                         )
                         
                         if prova_rec_base_sel:
                             m_orig = df_aulas[(df_aulas['ANO'].astype(str).str.contains(str(ano_av))) & (df_aulas['TIPO_MATERIAL'] == prova_rec_base_sel)]
                             if not m_orig.empty:
                                 txt_av_origem_puxada = str(m_orig.iloc[0].get('CONTEUDO', ''))
-                                c_p_rec2.success("Prova Carregada!")
+                                c_p_rec2.success("Prova Minerada!")
+                                
+                                # MINERAÇÃO AUTOMÁTICA DOS TÓPICOS DA PROVA BASE
+                                grade_orig_p = ai.extrair_tag(txt_av_origem_puxada, "GRADE_DE_CORRECAO") or ai.extrair_tag(txt_av_origem_puxada, "GRADE_DE_CORRECAO_PEI")
+                                if grade_orig_p:
+                                    itens_grade = re.findall(r'(?i)(?:DESCRITOR_SAEB|HABILIDADE|BNCC|DESCRITOR)\s*:\s*([^|\]\n]+)', grade_orig_p)
+                                    for ig in itens_grade:
+                                        ig_clean = re.sub(r'[*#\[\]]', '', ig).strip()
+                                        if len(ig_clean) > 3 and ig_clean not in topicos_extraidos_da_prova:
+                                            topicos_extraidos_da_prova.append(ig_clean)
+                                            
+                                if not topicos_extraidos_da_prova:
+                                    questoes_orig_raw = ai.extrair_tag(txt_av_origem_puxada, "QUESTOES")
+                                    if questoes_orig_raw:
+                                        linhas_q = [l.strip() for l in questoes_orig_raw.split('\n') if l.strip().upper().startswith('**QUESTÃO')]
+                                        for lq in linhas_q:
+                                            lq_clean = re.sub(r'^\*\*QUEST[AÃ]O\s*\d+.*?\*\*\s*[-:]*\s*', '', lq).strip()
+                                            t_curto = lq_clean.split('.')[0][:75].strip()
+                                            if t_curto and t_curto not in topicos_extraidos_da_prova:
+                                                topicos_extraidos_da_prova.append(t_curto)
 
                     fontes_ativas = st.pills(
                         "Fontes Complementares:", 
@@ -2077,7 +2097,6 @@ elif menu == "📝 Central de Avaliações":
                     )
                     
                     txt_av_teo_ext = ""
-
                     if "Livro Didático (PDF)" in fontes_ativas:
                         livros_av_disp = df_materiais[df_materiais['TIPO'].str.contains(str(ano_av), na=False)]['NOME_ARQUIVO'].tolist() if not df_materiais.empty else []
                         c_safra1, c_safra2 = st.columns(2)
@@ -2093,55 +2112,11 @@ elif menu == "📝 Central de Avaliações":
                                     if bytes_pdf_av:
                                         txt_av_teo_ext = util.extrair_texto_pdf_por_paginas(bytes_pdf_av, list_p_av)
 
-                    texto_padrao_pratica = ""
-                    if is_rec_paralela:
-                        if txt_av_origem_puxada:
-                            texto_padrao_pratica = f"Recuperação baseada na prova '{prova_rec_base_sel}': Foco nos descritores críticos de Frações, Números Mistos, Divisão com Decimais, Área/Perímetro e Gráficos."
-                        else:
-                            texto_padrao_pratica = "Recuperação do II Trimestre: Frações (leitura, equivalência, adição/subtração com denominadores diferentes e multiplicação), Números Mistos, Divisão com decimais, Área e Perímetro, Gráficos de barras e tabelas."
-
-                    st.markdown("##### Prática de Sala de Aula (Questões Espelho / Conteúdos Chave)")
-                    pincamento_pratica = st.text_area(
-                        "Exercícios resolvidos em sala, tópicos críticos ou anotações da lousa:",
-                        value=texto_padrao_pratica,
-                        placeholder="Ex: Pág. 185: exercícios 2, 4 e 5. Exemplo do quadro sobre frações e divisão com vírgula.",
-                        height=85, key=f"pincamento_pratica_input_{v}"
-                    )
-
-                    topicos_candidatos = []
-                    TERMOS_PROIBIDOS_ASSUNTO = r"(?i)(?:REVIS[AÃ]O|PROVA|TESTE|SONDA|DOSSI[EÊ]|RAIO-X|AVALIA[CÇ][AÃ]O|APLICA[CÇ][AÃ]O|2[ªA]\s*CHAMADA|RECUPERA[CÇ][AÃ]O|GABARITO|AULA\s*\d+|SEMANA\s*\d+)"
-
-                    if txt_av_origem_puxada:
-                        grade_orig_p = ai.extrair_tag(txt_av_origem_puxada, "GRADE_DE_CORRECAO") or ai.extrair_tag(txt_av_origem_puxada, "GRADE_DE_CORRECAO_PEI")
-                        if grade_orig_p:
-                            descritores_extraidos = re.findall(r'(?i)(?:DESCRITOR_SAEB|HABILIDADE|BNCC|DESCRITOR)\s*:\s*([^|\]\n]+)', grade_orig_p)
-                            for d_ext in descritores_extraidos:
-                                d_c = d_ext.strip()
-                                if len(d_c) > 3 and not re.search(TERMOS_PROIBIDOS_ASSUNTO, d_c):
-                                    topicos_candidatos.append(d_c)
-
-                    if pincamento_pratica.strip():
-                        for p_l in re.split(r'[;\n•,]', pincamento_pratica):
-                            p_l_clean = re.sub(r'[*#\[\]]', '', p_l).strip()
-                            if len(p_l_clean) > 3 and not re.search(TERMOS_PROIBIDOS_ASSUNTO, p_l_clean):
-                                topicos_candidatos.append(p_l_clean)
-
-                    if not df_planos.empty:
-                        planos_trim = df_planos[(df_planos['ANO'].astype(str).str.contains(str(ano_av))) & (df_planos['TURMA'].astype(str).str.upper().str.contains(trim_filtro.upper()))]
-                        for _, r_plano in planos_trim.iterrows():
-                            c_espec = ai.extrair_tag(str(r_plano.get('PLANO_TEXTO', '')), "CONTEUDOS_ESPECIFICOS") or ai.extrair_tag(str(r_plano.get('PLANO_TEXTO', '')), "OBJETO_CONHECIMENTO") or ""
-                            if c_espec:
-                                for p in re.split(r'[;\n•]', c_espec):
-                                    p_clean = re.sub(r'\[cite:.*?\]|[*#\[\]]', '', p).strip()
-                                    if len(p_clean) > 3 and not re.search(TERMOS_PROIBIDOS_ASSUNTO, p_clean):
-                                        topicos_candidatos.append(p_clean)
-
-                    topicos_candidatos_unicos = []
-                    for t_item in topicos_candidatos:
-                        if t_item not in topicos_candidatos_unicos and not re.search(TERMOS_PROIBIDOS_ASSUNTO, t_item):
-                            topicos_candidatos_unicos.append(t_item)
-
-                    if not topicos_candidatos_unicos:
+                    # Se uma prova foi minerada, usa os tópicos dela; se não, usa os padrões
+                    if topicos_extraidos_da_prova:
+                        topicos_candidatos_unicos = topicos_extraidos_da_prova
+                        texto_padrao_pratica = f"Recuperação Paralela (Escala 0 a 10) baseada nos itens da prova '{prova_rec_base_sel}'."
+                    else:
                         topicos_candidatos_unicos = [
                             "Frações: Conceito de parte-todo, equivalência e leitura",
                             "Adição e Subtração de Frações com Denominadores Diferentes (MMC)",
@@ -2151,18 +2126,30 @@ elif menu == "📝 Central de Avaliações":
                             "Cálculo de Perímetro e Área de Figuras Planas",
                             "Interpretação de Gráficos de Colunas, Barras e Tabelas"
                         ]
+                        texto_padrao_pratica = "Recuperação Paralela - II Trimestre: Frações, Números Mistos, Decimais, Área/Perímetro e Gráficos."
+
+                    st.markdown("##### Prática de Sala de Aula (Questões Espelho / Diretrizes)")
+                    pincamento_pratica = st.text_area(
+                        "Diretrizes da Recuperação:",
+                        value=texto_padrao_pratica,
+                        height=75, key=f"pincamento_pratica_input_{v}"
+                    )
 
                     contexto_base_texto = ""
-                    if txt_av_origem_puxada: contexto_base_texto += f"--- PROVA ORIGINAL A SER RECUPERADA ---\n{txt_av_origem_puxada}\n\n"
-                    if pincamento_pratica.strip(): contexto_base_texto += f"--- PRÁTICA DE SALA E CONTEÚDOS ---\n{pincamento_pratica.strip()}\n\n"
+                    if txt_av_origem_puxada:
+                        # Limpa qualquer tag antiga de 4.0 da prova original para não contaminar a IA
+                        txt_limpo_origem = re.sub(r'\[\s*VALOR\s*[:\-]?\s*[\d\.,]+\s*\]', '[VALOR: 10.0]', txt_av_origem_puxada, flags=re.IGNORECASE)
+                        contexto_base_texto += f"--- PROVA ORIGINAL A SER RECUPERADA (VALOR TOTAL: 10.0 PONTOS) ---\n{txt_limpo_origem}\n\n"
+                    if pincamento_pratica.strip(): contexto_base_texto += f"--- DIRETRIZES DO PROFESSOR ---\n{pincamento_pratica.strip()}\n\n"
                     if txt_av_teo_ext: contexto_base_texto += f"--- CONTEÚDO DO LIVRO DIDÁTICO ---\n{txt_av_teo_ext}\n\n"
 
                 with st.container(border=True):
-                    st.markdown(f"#### 3. Seleção de Conteúdos da Avaliação ({ano_av}º Ano)")
-                    st.caption("Marque os conteúdos que farão parte da matriz desta avaliação:")
+                    st.markdown(f"#### 3. Conteúdos da Avaliação ({ano_av}º Ano)")
+                    st.caption("Os conteúdos da prova selecionada já estão pré-marcados abaixo. Desmarque com 'X' apenas o que não quiser cobrar:")
                     
+                    # Pré-seleção automática de 100% dos tópicos da prova selecionada!
                     assuntos_marcados_prof = st.multiselect(
-                        "Conteúdos Selecionados:",
+                        "Conteúdos Selecionados para a Recuperação:",
                         options=topicos_candidatos_unicos,
                         default=topicos_candidatos_unicos[:min(qtd_q, len(topicos_candidatos_unicos))],
                         key=f"ms_topicos_prof_{v}"
@@ -2170,14 +2157,12 @@ elif menu == "📝 Central de Avaliações":
 
                     topico_autoral_extra = st.text_input(
                         "Adicionar Conteúdo Específico (Opcional):",
-                        value=f"Recuperação Paralela - {trim_filtro} (Frações, Decimais e Geometria)" if is_rec_paralela else "",
                         placeholder="Ex: Operações com números decimais e cálculo de perímetro",
                         key=f"topico_extra_input_{v}"
                     )
 
-                    if topico_autoral_extra.strip():
-                        if topico_autoral_extra.strip() not in assuntos_marcados_prof:
-                            assuntos_marcados_prof.insert(0, topico_autoral_extra.strip())
+                    if topico_autoral_extra.strip() and topico_autoral_extra.strip() not in assuntos_marcados_prof:
+                        assuntos_marcados_prof.insert(0, topico_autoral_extra.strip())
 
             st.markdown("<br>", unsafe_allow_html=True)
             if "Regular" in modo_arq or "Sonda" in modo_arq or is_rec_paralela or is_rec_final:
@@ -2190,6 +2175,9 @@ elif menu == "📝 Central de Avaliações":
                         gabarito_mestre = util.gerar_gabarito_balanceado(qtd_q)
                         mapa_inicial = []
                         tipo_prova_tag = "RECUPERAÇÃO FINAL" if is_rec_final else ("RECUPERAÇÃO" if is_rec_paralela else "AVALIAÇÃO")
+                        
+                        # Trava rigorosa: Recuperação Paralela é SEMPRE 10.0 pontos
+                        valor_final_travado = 10.0 if (is_rec_paralela or is_rec_final) else v_total
                         
                         for i in range(qtd_q):
                             assunto_item = assuntos_marcados_prof[i % len(assuntos_marcados_prof)]
@@ -2205,7 +2193,7 @@ elif menu == "📝 Central de Avaliações":
                         f['info'] = {
                             'ano': f"{ano_av}º", 
                             'trimestre': trim_filtro, 
-                            'valor': v_total, 
+                            'valor': valor_final_travado, 
                             'qtd': qtd_q, 
                             'tipo_prova': tipo_prova_tag, 
                             'rigor': perfil_rigor,
