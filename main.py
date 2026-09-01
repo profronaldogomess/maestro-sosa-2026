@@ -4104,13 +4104,6 @@ elif menu == "👤 Biografia do Estudante":
     st.caption("Extrato individual de rendimento escolar: histórico de notas C1/C2/C3, simulador preditivo para o III Trimestre, auditoria de avaliações e registro atitudinal.")
     st.markdown("---")
 
-    def obter_regex_trimestre_local(trimestre_str):
-        if not trimestre_str or trimestre_str == "Todos": return r".*"
-        t_upper = str(trimestre_str).upper()
-        if "III" in t_upper or "TERCEIRO" in t_upper: return r"(?<!I)III(?![I])"
-        elif "II" in t_upper or "SEGUNDO" in t_upper: return r"(?<!I)II(?![I])"
-        else: return r"(?<!I)I(?![I])"
-
     if "v_bio" not in st.session_state: 
         st.session_state.v_bio = int(time.time())
     v = st.session_state.v_bio
@@ -4119,7 +4112,7 @@ elif menu == "👤 Biografia do Estudante":
     # DIALOGS DECLARADOS NO TOPO DO MÓDULO (LEI #25)
     # ==============================================================================
     @st.dialog("Tribunal de Recursos & Contestação de Avaliação", width="large")
-    def dialog_tribunal(id_aluno_dialog, nome_aluno_dialog, is_pei_dialog, df_diag_dialog):
+    def dialog_tribunal(id_aluno_dialog, nome_aluno_dialog, is_pei_dialog, df_diag_dialog, turma_dialog, trim_dialog):
         opcoes_av_tribunal = df_diag_dialog['ID_AVALIACAO'].tolist() if not df_diag_dialog.empty and 'ID_AVALIACAO' in df_diag_dialog.columns else []
         if not opcoes_av_tribunal:
             st.info("Nenhuma avaliação escaneada localizada para este estudante.")
@@ -4156,9 +4149,7 @@ elif menu == "👤 Biografia do Estudante":
                         gab_oficial_trib = {i+1: letra for i, letra in enumerate(letras)}
                         
                     qtd_questoes_trib = len(gab_oficial_trib) if len(gab_oficial_trib) > 0 else 10
-                    
-                    # EXTRAÇÃO BLINDADA DO VALOR REAL DA PROVA (Ex: 4.0 ou 3.0)
-                    val_total_prova = extrair_valor_real_prova(txt_prova_trib, av_contestada)
+                    val_total_prova = util.extrair_valor_real_prova(txt_prova_trib, av_contestada)
                     
                     q_contestada = st.selectbox("2. Selecione o Item:", [f"Questão {i}" for i in range(1, qtd_questoes_trib + 1)], key=f"trib_q_pop_{v}")
                     q_num_trib = int(q_contestada.split(" ")[1])
@@ -4182,13 +4173,13 @@ elif menu == "👤 Biografia do Estudante":
                         if "http" in link_foto_trib: c_ev2.link_button("Visualizar Imagem", link_foto_trib, use_container_width=True)
                         
                         st.divider()
-                        st.info(preparar_para_leitura(enunciado_trib).replace('\n', '\n\n'))
+                        st.info(util.preparar_para_leitura(enunciado_trib).replace('\n', '\n\n'))
                         
                         c_res1, c_res2 = st.columns(2)
                         c_res1.error(f"**Resposta Marcada:** {letra_marcada_trib}")
                         c_res2.success(f"**Chave Oficial:** {letra_correta_trib}")
                         
-                        st.warning(f"**Perícia do Item:**\n{preparar_para_leitura(pericia_trib)}")
+                        st.warning(f"**Perícia do Item:**\n{util.preparar_para_leitura(pericia_trib)}")
                         
                     st.markdown("#### Veredito Pedagógico")
                     c_ver1, c_ver2 = st.columns(2)
@@ -4206,7 +4197,6 @@ elif menu == "👤 Biografia do Estudante":
                             st.caption("Modo de Retificação Ativo:")
                             nova_letra = st.selectbox("Qual alternativa foi efetivamente assinalada?", ["A", "B", "C", "D", "E"], index=["A", "B", "C", "D", "E"].index(letra_correta_trib) if letra_correta_trib in ["A", "B", "C", "D", "E"] else 0, key=f"sel_letra_trib_pop_{v}")
                             
-                            # CÁLCULO PROPORCIONAL EXATO (LEI #5)
                             novas_respostas_sim = respostas_aluno_trib.copy()
                             if q_num_trib - 1 < len(novas_respostas_sim): novas_respostas_sim[q_num_trib - 1] = nova_letra
                             else: novas_respostas_sim.append(nova_letra)
@@ -4232,7 +4222,7 @@ elif menu == "👤 Biografia do Estudante":
                                                 break
                                     except Exception as e: st.error(f"Erro ao atualizar banco: {e}")
                                         
-                                    db.limpar_notas_turma_trimestre(turma_b, trim_b)
+                                    db.limpar_notas_turma_trimestre(turma_dialog, trim_dialog)
                                     st.cache_data.clear()
                                     prompt_retratacao = f"VEREDITO: CORRIGIR NOTA.\nALUNO: {nome_aluno_dialog}.\nQUESTÃO: {q_num_trib}.\nNOVA NOTA DA AVALIAÇÃO: {nova_nota_prova:.1f} DE {val_total_prova:.1f} PONTOS."
                                     st.session_state.msg_tribunal = ai.gerar_ia("DEFENSOR_PEDAGOGICO", prompt_retratacao)
@@ -4373,7 +4363,7 @@ Escola Municipal Flávio José Simões Costa"""
             df_dg_aluno = df_diagnosticos[(df_diagnosticos['ID_ALUNO'].apply(db.limpar_id) == id_alu) & (df_diagnosticos['TURMA'] == turma_b)].copy()
             if not df_dg_aluno.empty:
                 for t_nome in ["I Trimestre", "II Trimestre", "III Trimestre"]:
-                    padrao_t_reg = obter_regex_trimestre_local(t_nome)
+                    padrao_t_reg = util.obter_regex_trimestre(t_nome)
                     scanned_t = df_dg_aluno[df_dg_aluno['ID_AVALIACAO'].astype(str).str.contains(padrao_t_reg, regex=True, case=False, na=False)]
                     
                     if not scanned_t.empty:
@@ -4481,9 +4471,7 @@ Escola Municipal Flávio José Simões Costa"""
         else:
             status_preditivo_aluno = "Risco de Recuperação Final (≥ 10.0 pts)"
 
-        # -------------------------------------------------------------
-        # CÁLCULO REATIVO DE ASSIDUIDADE, VISTOS E BÔNUS (SINTONIZADO AO PERÍODO)
-        # -------------------------------------------------------------
+        # CÁLCULO REATIVO DE ASSIDUIDADE, VISTOS E BÔNUS
         faltas_hero = 0
         perc_presenca_hero_str = "100%"
         perc_visto_hero_str = "0%"
@@ -4621,9 +4609,7 @@ Escola Municipal Flávio José Simões Costa"""
         
         tabs = st.tabs(abas_bio)
 
-        # ---------------------------------------------------------
         # ABA 1: BOLETIM ANALÍTICO & METAS PREDITIVAS
-        # ---------------------------------------------------------
         with tabs[0]:
             st.markdown("#### Extrato Analítico de Rendimento")
             st.caption("Sincronização dinâmica ao vivo com regra oficial de recuperação e arredondamento 0,5.")
@@ -4684,9 +4670,7 @@ Escola Municipal Flávio José Simões Costa"""
                 else:
                     c_s_al2.info(f"Meta no III Trimestre: O estudante necessita de **{meta_iii_arred:.1f} pontos** no III Trimestre para aprovação sem recuperação final.")
 
-        # ---------------------------------------------------------
         # ABA 2: AVALIAÇÕES ESCANEADAS & MAPA DE LACUNAS
-        # ---------------------------------------------------------
         with tabs[1]:
             st.markdown("#### Histórico de Avaliações Escaneadas")
             
@@ -4697,7 +4681,7 @@ Escola Municipal Flávio José Simões Costa"""
             else:
                 c_trib_btn, _ = st.columns([1.5, 2])
                 if c_trib_btn.button("Tribunal de Recursos & Perícia", type="primary", use_container_width=True, key=f"btn_trib_open_{v}"):
-                    dialog_tribunal(id_alu, nome_limpo, is_pei_or_gap, df_dg_aluno_tab)
+                    dialog_tribunal(id_alu, nome_limpo, is_pei_or_gap, df_dg_aluno_tab, turma_b, trim_b)
 
                 st.markdown("<br>", unsafe_allow_html=True)
                 
@@ -4761,13 +4745,11 @@ Escola Municipal Flávio José Simões Costa"""
                 if lacunas_detectadas:
                     with st.container(border=True):
                         for lac in list(dict.fromkeys(lacunas_detectadas))[:8]:
-                            st.info(preparar_para_leitura(lac))
+                            st.info(util.preparar_para_leitura(lac))
                 else:
                     st.success("Excelente domínio conceitual. Nenhuma lacuna crítica registrada.")
 
-        # ---------------------------------------------------------
         # ABA 3: VIDA ESCOLAR, ATITUDE & PEI
-        # ---------------------------------------------------------
         with tabs[2]:
             st.markdown("#### Registro de Atitude & Vida Escolar")
             
@@ -4780,25 +4762,25 @@ Escola Municipal Flávio José Simões Costa"""
                 
                 if not df_d_timeline_val.empty:
                     for _, r_t in df_d_timeline_val.iloc[::-1].head(10).iterrows():
-                            dt_t = str(r_t.get('DATA', 'N/A'))
-                            tag_t = str(r_t.get('TAGS', ''))
-                            obs_t = str(r_t.get('OBSERVACOES', ''))
-                            bonus_t = util.sosa_to_float(r_t.get('BONUS', 0))
-                            visto_t = str(r_t.get('VISTO_ATIVIDADE', '')).upper()
+                        dt_t = str(r_t.get('DATA', 'N/A'))
+                        tag_t = str(r_t.get('TAGS', ''))
+                        obs_t = str(r_t.get('OBSERVACOES', ''))
+                        bonus_t = util.sosa_to_float(r_t.get('BONUS', 0))
+                        visto_t = str(r_t.get('VISTO_ATIVIDADE', '')).upper()
 
-                            with st.container(border=True):
-                                c_t1, c_t2 = st.columns([3, 1])
-                                
-                                if tag_t == "AUSÊNCIA":
-                                    c_t1.error(f"**{dt_t}** — Ausência na aula")
-                                elif bonus_t > 0 or "ARGUIÇÃO" in tag_t:
-                                    c_t1.success(f"**{dt_t}** — {tag_t} ({obs_t})")
-                                    c_t2.markdown(f"**+{bonus_t:.1f} pts**")
-                                elif bonus_t < 0:
-                                    c_t1.warning(f"**{dt_t}** — {tag_t} ({obs_t})")
-                                    c_t2.markdown(f"**{bonus_t:.1f} pts**")
-                                else:
-                                    c_t1.info(f"**{dt_t}** — Visto no Caderno ({'Visto OK' if visto_t == 'TRUE' else 'Sem Visto'})")
+                        with st.container(border=True):
+                            c_t1, c_t2 = st.columns([3, 1])
+                            
+                            if tag_t == "AUSÊNCIA":
+                                c_t1.error(f"**{dt_t}** — Ausência na aula")
+                            elif bonus_t > 0 or "ARGUIÇÃO" in tag_t:
+                                c_t1.success(f"**{dt_t}** — {tag_t} ({obs_t})")
+                                c_t2.markdown(f"**+{bonus_t:.1f} pts**")
+                            elif bonus_t < 0:
+                                c_t1.warning(f"**{dt_t}** — {tag_t} ({obs_t})")
+                                c_t2.markdown(f"**{bonus_t:.1f} pts**")
+                            else:
+                                c_t1.info(f"**{dt_t}** — Visto no Caderno ({'Visto OK' if visto_t == 'TRUE' else 'Sem Visto'})")
 
             if is_pei_or_gap:
                 st.markdown("---")
@@ -6668,8 +6650,8 @@ elif menu == "👥 Gestão da Turma":
         df_mats_ano = df_aulas[df_aulas['ANO'].str.contains(ano_num)].iloc[::-1] if not df_aulas.empty and 'ANO' in df_aulas.columns else pd.DataFrame()
         historico_turma = df_registro_aulas[df_registro_aulas['TURMA'] == turma_foco].copy() if not df_registro_aulas.empty and 'TURMA' in df_registro_aulas.columns else pd.DataFrame()
 
-        df_d_foco = df_diario[df_diario['TURMA'] == turma_foco] if not df_diario.empty and 'TURMA' in df_diario.columns else pd.DataFrame()
-        df_n_foco = df_notas[(df_notas['TURMA'] == turma_foco) & (df_notas['TRIMESTRE'] == trim_ativo_gestao)] if not df_notas.empty and 'TURMA' in df_notas.columns and 'TRIMESTRE' in df_notas.columns else pd.DataFrame()
+        df_d_foco = df_diario[df_diario['TURMA'] == turma_foco] if not df_diario.empty else pd.DataFrame()
+        df_n_foco = df_notas[(df_notas['TURMA'] == turma_foco) & (df_notas['TRIMESTRE'] == trim_ativo_gestao)] if not df_notas.empty else pd.DataFrame()
         
         cnt_uti = 0
         cnt_evasao = 0
@@ -6714,9 +6696,7 @@ elif menu == "👥 Gestão da Turma":
         @st.fragment
         def renderizar_cockpit_gestao_fragmento():
             
-            # ==============================================================
             # VISÃO 1: DIÁRIO DE CLASSE & OPERAÇÃO
-            # ==============================================================
             if visao_gestao_sel == "Diário de Classe & Operação":
                 c_top_act1, c_top_act2, c_top_act3 = st.columns([2, 1, 1])
                 c_top_act1.markdown("#### Diário de Classe & Frequência")
@@ -6898,9 +6878,7 @@ elif menu == "👥 Gestão da Turma":
                         with st.expander("Copiar Lista de Ausências para WhatsApp"):
                             st.code(txt_copia_zap, language=None)
 
-            # ==============================================================
             # VISÃO 2: RADIOGRAFIA ANALÍTICA DA TURMA
-            # ==============================================================
             elif visao_gestao_sel == "Radiografia Analítica da Turma":
                 st.markdown("#### Radiografia Analítica & Proficiência SAEB")
                 
@@ -7080,9 +7058,7 @@ elif menu == "👥 Gestão da Turma":
                             st.link_button("Abrir Relatório no Google Drive", link_coord_doc, type="primary", use_container_width=True)
                             st.balloons()
 
-            # ==============================================================
             # VISÃO 3: SECRETARIA & CALENDÁRIO
-            # ==============================================================
             else:
                 st.markdown("#### Secretaria, Matrículas & Gestão de Calendário")
                 
