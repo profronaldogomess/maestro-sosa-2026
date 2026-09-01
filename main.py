@@ -1,7 +1,6 @@
 import os
 import re
 import io
-import time
 import base64
 import requests
 import gspread
@@ -15,43 +14,23 @@ import utils as util
 import ai_engine as ai
 
 # ==============================================================================
-# 1. CONEXÃO E CREDENCIAIS (BLINDAGEM ANTI-503 / RETRY AUTOMÁTICO)
+# 1. CONEXÃO E CREDENCIAIS
 # ==============================================================================
 
-def conectar(max_tentativas=4):
-    """
-    SOSA V2026: Conecta ao Google Sheets com retentativa automática (Exponential Backoff)
-    blindando o sistema contra erros 503 (Service Unavailable) e 429 (Rate Limit).
-    """
-    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    
-    for tentativa in range(1, max_tentativas + 1):
-        try:
-            if os.path.exists("credentials.json"):
-                creds = service_account.Credentials.from_service_account_file("credentials.json", scopes=scope)
-            else:
-                creds = service_account.Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
-            
-            gc = gspread.authorize(creds)
-            return gc.open("SOSA_DB_2026")
-            
-        except Exception as e:
-            erro_str = str(e)
-            
-            # Se for erro 503 (Google temporariamente fora), 500, 502 ou 429, tenta novamente
-            if any(cod in erro_str for cod in ["503", "500", "502", "429", "UNAVAILABLE", "unavailable", "ResourceExhausted"]):
-                if tentativa < max_tentativas:
-                    time.sleep(tentativa * 1.2) # Pausa estratégica progressiva
-                    continue
-            
-            if tentativa == max_tentativas:
-                if "429" in erro_str:
-                    st.warning("⚠️ Limite de tráfego do Google Sheets (429). Aguarde alguns segundos...")
-                elif any(c in erro_str for c in ["503", "UNAVAILABLE", "unavailable"]):
-                    st.warning("⚠️ Servidores do Google Sheets momentaneamente instáveis (503). Recarregue a página.")
-                else:
-                    st.error(f"Erro de Conexão: {e}")
-                return None
+def conectar():
+    try:
+        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+        if os.path.exists("credentials.json"):
+            creds = service_account.Credentials.from_service_account_file("credentials.json", scopes=scope)
+        else:
+            creds = service_account.Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
+        return gspread.authorize(creds).open("SOSA_DB_2026")
+    except Exception as e:
+        if "429" in str(e):
+            st.warning("⚠️ Limite de tráfego do Google. Aguarde alguns segundos.")
+        else:
+            st.error(f"Erro de Conexão: {e}")
+        return None
 
 def obter_creds_drive():
     """Retorna as credenciais para uso direto com a API do Google Drive."""
@@ -68,7 +47,7 @@ def limpar_id(valor):
     return s_val
 
 # ==============================================================================
-# 2. CARREGAMENTO DE DADOS (CACHE RESILIENTE ANTI-FALHA)
+# 2. CARREGAMENTO DE DADOS (CACHE OTIMIZADO)
 # ==============================================================================
 
 @st.cache_data(ttl=300)
@@ -77,42 +56,35 @@ def carregar_tudo():
     if not wb_internal: 
         return None, [pd.DataFrame()] * 12
 
-    def safe_get(conn, nome, colunas_padrao=[], max_retries=3):
-        if not conn: return pd.DataFrame(columns=colunas_padrao)
-        
-        for t in range(max_retries):
-            try:
-                ws = conn.worksheet(nome)
-                dados = ws.get_all_values() 
-                if not dados or len(dados) < 1:
-                    return pd.DataFrame(columns=colunas_padrao)
-                
-                # Filtra linhas completamente vazias do Sheets
-                linhas_validas = [r for r in dados[1:] if any(str(c).strip() for c in r)]
-                if not linhas_validas:
-                    return pd.DataFrame(columns=colunas_padrao)
-                    
-                df = pd.DataFrame(linhas_validas, columns=dados[0])
-                df.columns = [str(c).strip().upper() for c in df.columns]
-                
-                # Normalização SOSA
-                for col in df.columns:
-                    df[col] = df[col].astype(str).str.strip()
-                    if any(x in col for x in ["NOTA", "MEDIA", "VALOR", "SOMA"]):
-                        df[col] = df[col].apply(util.sosa_to_float)
-                    if col == "DATA" or "DATA" in col:
-                        df[col] = df[col].apply(util.formatar_data_br)
-                    if col == "ID_AVALIACAO":
-                        df[col] = df[col].apply(util.sanitizar_nome_variante_soberana)
-
-                return df
-                
-            except Exception as e: 
-                if t < max_retries - 1 and any(c in str(e) for c in ["503", "500", "429", "UNAVAILABLE", "unavailable"]):
-                    time.sleep(1.0)
-                    continue
-                print(f"Aviso ao carregar {nome}: {e}")
+    def safe_get(conn, nome, colunas_padrao=[]):
+        try:
+            ws = conn.worksheet(nome)
+            dados = ws.get_all_values() 
+            if not dados or len(dados) < 1:
                 return pd.DataFrame(columns=colunas_padrao)
+            
+            # Filtra linhas completamente vazias do Sheets
+            linhas_validas = [r for r in dados[1:] if any(str(c).strip() for c in r)]
+            if not linhas_validas:
+                return pd.DataFrame(columns=colunas_padrao)
+                
+            df = pd.DataFrame(linhas_validas, columns=dados[0])
+            df.columns = [str(c).strip().upper() for c in df.columns]
+            
+            # VACINA DE NORMALIZAÇÃO SOSA (ANTI-ESPAÇO INVISÍVEL E ANTI-SERIAL)
+            for col in df.columns:
+                df[col] = df[col].astype(str).str.strip()
+                if any(x in col for x in ["NOTA", "MEDIA", "VALOR", "SOMA"]):
+                    df[col] = df[col].apply(util.sosa_to_float)
+                if col == "DATA" or "DATA" in col:
+                    df[col] = df[col].apply(util.formatar_data_br)
+                if col == "ID_AVALIACAO":
+                    df[col] = df[col].apply(util.sanitizar_nome_variante_soberana)
+
+            return df
+        except Exception as e: 
+            print(f"Erro ao carregar {nome}: {e}")
+            return pd.DataFrame(columns=colunas_padrao)
 
     cols_planos = ["DATA", "SEMANA", "ANO", "TURMA", "EIXO", "PLANO_TEXTO", "LINK_DRIVE"]
     cols_aulas = ["DATA", "SEMANA_REF", "TIPO_MATERIAL", "CONTEUDO", "ANO", "LINK_DRIVE"]
