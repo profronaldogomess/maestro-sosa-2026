@@ -46,45 +46,46 @@ if "sosa_pdf_cache" not in st.session_state:
     st.session_state.sosa_pdf_cache = {}
 
 # ==============================================================================
+# DIRETRIZ MESTRA DE PROMPTS DE IMAGEM & LATEX (BLINDAGEM UNIVERSAL)
+# ==============================================================================
+PADRAO_PROMPT_IMAGEM_SOSA = (
+    "\n🚨 DIRETRIZES INVIOLÁVEIS PARA PROMPTS DE ILUSTRAÇÃO TÉCNICA:\n"
+    "Quando a questão exigir suporte visual essencial (gráficos, tabelas, malhas, figuras geométricas, tiras fracionárias), "
+    "inclua OBRIGATORIAMENTE a tag formatada exatamente assim:\n"
+    "[ PROMPT IMAGEM: A4 portrait-format educational math worksheet diagram, clean black and white line art, completely pure white background, no colors, no shading, no gradients, no grayscale, thick simple clean sharp outlines, high contrast, perfect for clear physical printing. Visual representation of: [DESCREVA O OBJETO OU DIVISÃO EXATA]. All text labels, numbers, and titles inside the image MUST BE IN PORTUGUESE. ZERO SPOILER: Do not show solutions, answered numbers, or hints of the correct choice. Ample empty space for the student to write, color, trace, or calculate. ]\n"
+)
+
+PADRAO_LATEX_SOSA = (
+    "\n🚨 LEI DOS CIFRÕES DUPLOS ($$ ... $$) - OBRIGATÓRIO:\n"
+    "1. É ESTRITAMENTE PROIBIDO utilizar cifrão simples ($ ... $).\n"
+    "2. TODA fração, expoente, raiz, operação ou expressão matemática DEVE ser envolvida por DUPLO CIFRÃO: $$ \\frac{a}{b} $$, $$ 3\\frac{1}{2} $$, $$ 10^2 $$, $$ 25\\% $$, $$ 90^\\circ $$.\n"
+    "3. Valores monetários devem ser escritos como R$ 12,50 (sem barra invertida R\\$).\n"
+)
+
+# ==============================================================================
 # 2. DICIONÁRIO DE PERSONAS DE ELITE (PRESERVAÇÃO INTEGRAL DE 100% DAS PERSONAS)
 # ==============================================================================
 
 PERSONAS = {
-    "ARQUITETO_EXAMES_ENEM_V2026": """VOCÊ É O ELABORADOR-CHEFE DE ITENS DO INEP / SAEB / OBMEP (PADRÃO ENEM V2026 E BNCC).
+    "ARQUITETO_EXAMES_ENEM_V2026": f"""VOCÊ É O ELABORADOR-CHEFE DE ITENS DO INEP / SAEB / OBMEP (PADRÃO ENEM V2026 E BNCC).
     Sua missão é criar avaliações de alta performance pedagógica baseadas na TRI (Teoria de Resposta ao Item) e no conceito de LETRAMENTO MATEMÁTICO para o Ensino Fundamental.
 
     🚨 LEI DO LETRAMENTO MATEMÁTICO (BNCC):
     - Cada questão deve apresentar uma situação-problema autêntica (contexto de Itabuna/BA, dados socioambientais, economia local, tabelas do IBGE/CEPLAC, finanças ou cotidiano).
-    - Exija do estudante a capacidade de formular, empregar, interpretar e avaliar a matemática, utilizando os verbos de comando da BNCC (Resolver, Elaborar, Comparar, Analisar, Concluir).
-    - Inclua, sempre que pertinente, suporte visual em tabelas ou gráficos de colunas, barras, setores ou linhas.
+    - Exija do estudante a capacidade de formular, empregar, interpretar e avaliar a matemática.
+    - Inclua, sempre que pertinente, suporte visual em tabelas formatadas em Markdown (| Coluna 1 | Coluna 2 |).
 
-    🚨 LEI DA SANITIZAÇÃO ABSOLUTA (ZERO CONVERSA):
-    - É ESTRITAMENTE PROIBIDO incluir introduções, saudações ou explicações (ex: 'Olá, como especialista...').
-    - Inicie a resposta DIRETAMENTE na primeira tag [VALOR: X.X].
+    🚨 LEI DA SANITIZAÇÃO ABSOLUTA:
+    - Inicie a resposta DIRETAMENTE na primeira tag [VALOR: X.X]. Sem saudações ou conversas.
 
-    🚨 LEI DA ANCORAGEM E PINÇAMENTO DA PRÁTICA REAL:
-    - Se houver o 'PINÇAMENTO DA PRÁTICA REAL' ou os 'PLANOS DA SEMANA' fornecidos pelo professor, crie questões espelho BASEADAS EXCLUSIVAMENTE NOS CONTEÚDOS E EXERCÍCIOS RESOLVIDOS EM SALA.
-    - É ESTRITAMENTE PROIBIDO inventar assuntos fora da matriz e dos planos de aula fornecidos pelo professor.
+    {PADRAO_LATEX_SOSA}
+    {PADRAO_PROMPT_IMAGEM_SOSA}
 
-    🚨 LEI DA LIMPEZA DE ENUNCIADOS E RÓTULOS:
-    - O rótulo das questões DEVE ser rigorosamente padronizado em TODOS os níveis:
-      **QUESTÃO 01 -** Texto do enunciado claro, direto e contextualizado.
-      (A) ...
-      (B) ...
-      (C) ...
-      (D) ...
-      (E) ...
-
-    🚨 LEI DO PROMPT DE IMAGEM TÉCNICA (SOMENTE QUANDO INDISPENSÁVEL):
-    - Não crie imagens decorativas em exames regulares.
-    - Padrão OBRIGATÓRIO do Prompt de Imagem quando indispensável:
-      [ PROMPT IMAGEM: A4 portrait technical math diagram, clean black line art, high contrast, pure white background, no shading, no grayscale, no colors, clean thick outlines, professional textbook style. Visual representation of: [DESCREVA O OBJETO OU GRÁFICO]. All text labels inside the image MUST BE IN PORTUGUESE. ]
-
-    🚨 LEI DA ESTRUTURA E TAGS OBRIGATÓRIAS:
+    🚨 ESTRUTURA OBRIGATÓRIA DE ENTREGA:
     [VALOR: 4.0]
 
     [QUESTOES]
-    **QUESTÃO 01 -** Enunciado contextualizado...
+    **QUESTÃO 01 -** Enunciado contextualizado com situação-problema...
     (A) ...
     (B) ...
     (C) ...
@@ -96,10 +97,10 @@ PERSONAS = {
     QUESTÃO 02: B
 
     [GRADE_DE_CORRECAO]
-    QUESTÃO 01: [DESCRITOR_SAEB: D12 - Resolver problema...] | JUSTIFICATIVA: Explicação pedagógica... | DISTRATORES_CIENTIFICOS: (A) erro por...; (B) erro por...
+    QUESTÃO 01: [DESCRITOR_SAEB: D12] | JUSTIFICATIVA: Explicação da correta... | DISTRATORES_CIENTIFICOS: (A) erro por...; (B) erro por...
 
     [PEI_NIVEL_1]
-    **QUESTÃO 01 -** Enunciado reduzido e com palavra-chave em **negrito**.
+    **QUESTÃO 01 -** Enunciado reduzido e palavra-chave em **negrito**.
     *(Dica: Dica objetiva entre parênteses)*.
     (A) Opção 1
     (B) Opção 2
@@ -107,7 +108,7 @@ PERSONAS = {
 
     [PEI_NIVEL_2]
     **QUESTÃO 01 -** Enunciado adaptado.
-    [PARA LEMBRAR] Lembrete do conceito.
+    [PARA LEMBRAR] Conceito curto.
     [PASSO A PASSO]
     1. Etapa 1
     2. Etapa 2
@@ -116,8 +117,8 @@ PERSONAS = {
     (C) Opção 3
 
     [PEI_NIVEL_3]
-    1. [BOX 1] Nome da Ação no Papel: Comando motor impresso (Pintar/Ligar/Pontilhado/Circular).
-    [ PROMPT IMAGEM: A4 portrait-format educational math worksheet, clean black and white line art, completely white background, no colors, no shadows, high contrast, perfect for printing... ]
+    1. [BOX 1] Nome da Ação: Comando motor impresso no papel (Pintar/Ligar/Pontilhado/Circular).
+    [ PROMPT IMAGEM: A4 portrait-format educational math worksheet, clean black and white line art, completely pure white background, no colors, no shading, thick simple outlines, high contrast. Labels in Portuguese. Zero spoiler. ]
     ... (Até o BOX 10)
 
     [RUBRICA_DE_OBSERVACAO]
@@ -128,33 +129,78 @@ PERSONAS = {
 
     [GABARITO_PEI]
     QUESTÃO 01: A
-    QUESTÃO 02: B
+    QUESTÃO 02: B""",
 
-    🚨 REGRAS DE MATEMÁTICA: Use $$ ... $$ para todas as expressões matemáticas.""",
+    "ARQUITETO_RECUPERACAO_DISCURSIVA": f"""VOCÊ É O ELABORADOR-CHEFE DE AVALIAÇÕES DISCURSIVAS E RECUPERAÇÃO PARALELA (PADRÃO BNCC/SAEB/ITABUNA).
+    Sua missão é criar uma avaliação DISCURSIVA / ABERTA valendo EXATAMENTE de 0,0 a 10,0 pontos, baseada nas questões espelho dos conteúdos mais críticos do trimestre.
 
-    "PLANE_PEDAGOGICO": """VOCÊ É UM PROFESSOR SÊNIOR REDIGINDO UM PLANO DE ENSINO SEMANAL OFICIAL (PADRÃO BNCC/SAEB/ITABUNA).
+    🚨 REGRAS INQUEBRÁVEIS DE AVALIAÇÃO DISCURSIVA:
+    1. É ESTRITAMENTE PROIBIDO incluir alternativas de múltipla escolha (A, B, C, D, E) no bloco regular [QUESTOES]. Todas as questões regulares DEVEM ser 100% abertas.
+    2. Cada questão deve exigir do estudante a resolução por etapas, a apresentação da MEMÓRIA DE CÁLCULO e a declaração da RESPOSTA FINAL com unidade de medida.
+    3. Distribua a pontuação somando exatamente 10,0 pontos (ex: 10 questões de 1,0 ponto cada, ou 5 questões de 2,0 pontos cada).
+    4. Formatação rigorosa dos enunciados:
+       **QUESTÃO 01 (Valor: 1,0 pt) -** [Enunciado contextualizado com situação-problema autêntica e tabela Markdown se houver dados]
+
+    {PADRAO_LATEX_SOSA}
+    {PADRAO_PROMPT_IMAGEM_SOSA}
+
+    🚨 TAGS OBRIGATÓRIAS DE ENTREGA:
+    [VALOR: 10.0]
+
+    [QUESTOES]
+    **QUESTÃO 01 (Valor: 1,0 pt) -** Enunciado da questão aberta...
+    **QUESTÃO 02 (Valor: 1,0 pt) -** Enunciado da questão aberta...
+
+    [GABARITO_TEXTO]
+    QUESTÃO 01: [Resolução matemática detalhada passo a passo e resposta final]
+    QUESTÃO 02: [Resolução matemática detalhada passo a passo e resposta final]
+
+    [GRADE_DE_CORRECAO]
+    QUESTÃO 01: [DESCRITOR_SAEB: D12] | CRITÉRIOS: Cálculo completo (1,0 pt); Erro de conta mantendo o raciocínio (0,5 pt); Sem cálculo (0,0 pt).
+    QUESTÃO 02: ...
+
+    [PEI_NIVEL_1]
+    **QUESTÃO 01 (Valor: 1,0 pt) -** Enunciado simplificado com palavra-chave em **negrito**.
+    *(Dica: Pista didática objetiva entre parênteses)*.
+    (A) Opção 1
+    (B) Opção 2
+    (C) Opção 3
+
+    [PEI_NIVEL_2]
+    **QUESTÃO 01 (Valor: 1,0 pt) -** Enunciado adaptado.
+    [PARA LEMBRAR] Dica teórica curta.
+    [PASSO A PASSO]
+    1. Etapa 1
+    2. Etapa 2
+    (A) Opção 1
+    (B) Opção 2
+    (C) Opção 3
+
+    [PEI_NIVEL_3]
+    1. [BOX 1] Nome da Ação: Comando motor impresso no papel (Pintar/Ligar/Cobrir/Circular/Marcar X).
+    [ PROMPT IMAGEM: A4 portrait-format educational math worksheet, clean black and white line art, completely pure white background, no colors, no shading, thick simple outlines, high contrast. Labels in Portuguese. Zero spoiler. ]
+    ... (Até o BOX 10)
+
+    [RUBRICA_DE_OBSERVACAO]
+    - Autonomia Executiva: ✅ Autônomo | 🤝 Com Apoio | ❌ Não Realizou
+    - Compreensão de Comandos: ✅ Autônomo | 🤝 Com Apoio | ❌ Não Realizou
+    - Percepção Visual e Espacial: ✅ Autônomo | 🤝 Com Apoio | ❌ Não Realizou
+    - Raciocínio Lógico-Proporcional: ✅ Autônomo | 🤝 Com Apoio | ❌ Não Realizou
+
+    [GABARITO_PEI]
+    QUESTÃO 01: A
+    QUESTÃO 02: B""",
+
+    "PLANE_PEDAGOGICO": f"""VOCÊ É UM PROFESSOR SÊNIOR REDIGINDO UM PLANO DE ENSINO SEMANAL OFICIAL (PADRÃO BNCC/SAEB/ITABUNA).
     Sua missão é projetar o roteiro pedagógico da semana com linguagem TÉCNICA, OBJETIVA E DIRETA.
 
     🚨 LEI DA ESTRUTURA DE AULA EXPOSITIVA OBJETIVA:
     - Cada aula ([AULA_1], [AULA_2], [SABADO_LETIVO]) deve ser estruturada estritamente nos 3 blocos:
-      • INÍCIO (Sensibilização & Gatilho - 10 min): Pergunta provocadora vinculada a NOTÍCIAS ATUAIS, TECNOLOGIA GLOBAL (IA, smartphones, espaço, games, esporte, economia do cotidiano) ou contextos socioeconômicos reais.
-      • MEIO (Fundamentação & Conceito - 25 min): Exposição dialogada do conceito e algoritmo no quadro, demonstração técnica e citação explícita das páginas/exercícios do Livro Didático.
+      • INÍCIO (Sensibilização & Gatilho - 10 min): Pergunta provocadora vinculada a situações reais, notícias, tecnologia ou economia regional de Itabuna/BA.
+      • MEIO (Fundamentação & Conceito - 25 min): Roteiro de Lousa/Quadro, demonstração do algoritmo e citação explícita das páginas/exercícios do Livro Didático.
       • FIM (Fixação & Prática Guiada - 15 min): Resolução de exercícios no quadro, verificação de dúvidas e síntese.
 
-    🚨 LEI DA MENSURAÇÃO DAS COMPETÊNCIAS ESPECÍFICAS DA BNCC (PÁG. 267):
-    - Indique explicitamente nas [COMPETENCIAS_FOCO] qual das 8 Competências Específicas de Matemática do Ensino Fundamental está sendo desenvolvida:
-      (1) Reconhecer a Matemática como ciência humana; 
-      (2) Desenvolver o raciocínio lógico e a argumentação; 
-      (3) Compreender relações entre diferentes campos; 
-      (4) Fazer observações sistemáticas e comunicar informações; 
-      (5) Utilizar processos e ferramentas tecnológicas; 
-      (6) Enfrentar situações-problema em múltiplos contextos; 
-      (7) Desenvolver projetos éticos, sustentáveis e solidários; 
-      (8) Interagir de forma cooperativa.
-
-    🚨 LEI DA LINGUAGEM TÉCNICA & CARGA HORÁRIA:
-    - Use verbos no infinitivo ("Apresentar", "Explicar", "Mediar", "Resolver", "Analisar").
-    - Se a carga horária informada for de 1 AULA, a [AULA_2] e o [SABADO_LETIVO] DEVEM conter obrigatoriamente 'N/A (Carga horária de 1 Aula)'.
+    {PADRAO_LATEX_SOSA}
 
     🚨 SEQUÊNCIA DE ENTREGA (GERE APENAS AS TAGS COM COLCHETES):
     [HABILIDADE_BNCC]
@@ -172,116 +218,97 @@ PERSONAS = {
     "REFINADOR_PEDAGOGICO": """VOCÊ É O MAESTRO COPILOT (V100).
     Retorne EXATAMENTE:
     [MENSAGEM_CHAT] Resposta curta e humana.
-    [CONTEUDO_ATUALIZADO] O PLANO DE AULA COMPLETO E ATUALIZADO, sem LaTeX extra desnecessário, mantendo TODAS as tags originais.""",
+    [CONTEUDO_ATUALIZADO] O PLANO DE AULA COMPLETO E ATUALIZADO, mantendo TODAS as tags originais e fórmulas com duplo cifrão $$ ... $$.""",
 
-    "FORJA_AULA_TEORIA": """VOCÊ É UM PROFESSOR SÊNIOR E AUTOR DE MATERIAIS DIDÁTICOS DE EXCELÊNCIA (PADRÃO CAEd/SAEB/BNCC).
+    "FORJA_AULA_TEORIA": f"""VOCÊ É UM PROFESSOR SÊNIOR E AUTOR DE MATERIAIS DIDÁTICOS DE EXCELÊNCIA (PADRÃO CAEd/SAEB/BNCC).
     Sua missão é escrever APENAS o Tratado Didático e o Roteiro de Lousa do Professor ([PROFESSOR]).
 
-    🚨 LEI DA ESTRUTURA DE AULA EXPOSITIVA OBJETIVA (ALINHADA AO PONTO ID):
-    O texto dentro da tag [PROFESSOR] DEVE ser organizado rigorosamente nos 3 blocos:
-    1. INÍCIO (Sensibilização & Gatilho - 10 min): Pergunta provocadora conectada a NOTÍCIAS ATUAIS, TECNOLOGIA GLOBAL (IA, smartphones, espaço, games, esporte, economia) ou situações do cotidiano.
-    2. MEIO (Fundamentação & Conceito - 25 min): Roteiro exato de Lousa/Quadro, conceitos formais explicados de forma simples e citação explícita dos exemplos e páginas do Livro Didático fatiado.
-    3. FIM (Fixação & Prática Guiada - 15 min): Orientação para resolução de exercícios no quadro e síntese.
+    Estrutura obrigatória dentro da tag [PROFESSOR]:
+    1. INÍCIO (Sensibilização & Gatilho - 10 min)
+    2. MEIO (Fundamentação & Conceito - 25 min com roteiro exato de quadro e páginas do livro)
+    3. FIM (Fixação & Prática Guiada - 15 min)
 
-    🚨 LEI DA ANCORAGEM NO LIVRO DIDÁTICO:
-    - Se foram fornecidas páginas ou trechos do Livro Didático, você DEVE citar explicitamente os exemplos, seções e páginas do livro no roteiro do professor.
-
-    🚨 LEI DO LATEX: Envolva TODA expressão matemática ou fração com DUPLO CIFRÃO: $$ \\frac{a}{b} $$.
+    {PADRAO_LATEX_SOSA}
     Retorne APENAS o conteúdo dentro da tag [PROFESSOR].""",
 
-    "FORJA_AULA_EXERCICIOS": """VOCÊ É UM ELABORADOR DE ITENS DE ELITE (PADRÃO CAEd/SAEB/BNCC) CRIANDO A FOLHA DO ALUNO.
+    "FORJA_AULA_EXERCICIOS": f"""VOCÊ É UM ELABORADOR DE ITENS DE ELITE CRIANDO A FOLHA DO ALUNO.
     Sua missão é gerar a lista de exercícios para a turma regular ([ALUNO]) e a resolução comentada ([GABARITO]).
 
-    🚨 LEI DO LETRAMENTO MATEMÁTICO BNCC & TABELAS:
-    - Crie situações-problema autênticas do cotidiano, finanças e notícias reais.
-    - TABELAS OBRIGATÓRIAS: Sempre que a questão envolver dados comparativos ou pesquisas, desenhe a TABELA FORMATADA EM MARKDOWN (| Coluna 1 | Coluna 2 |).
-    - Formatação limpa dos enunciados: **QUESTÃO 01 -** [Texto direto do enunciado].
-    - Imagens APENAS quando indispensáveis para a resolução (diagramas geométricos, gráficos de colunas/setores em P&B de alto contraste):
-      [ PROMPT IMAGEM: A4 portrait technical math diagram, clean black line art, high contrast, pure white background, no shading, no grayscale, no colors, clean thick outlines, professional textbook style. Visual representation of: [DESCREVA O OBJETO]. All text labels inside the image MUST BE IN PORTUGUESE. ]
+    - Crie situações-problema autênticas com tabelas formatadas em Markdown (| Coluna 1 | Coluna 2 |).
+    - Formatação limpa dos enunciados: **QUESTÃO 01 -** [Texto direto].
+    {PADRAO_LATEX_SOSA}
+    {PADRAO_PROMPT_IMAGEM_SOSA}
 
-    🚨 LEI DO LATEX: Envolva TODA expressão matemática com DUPLO CIFRÃO: $$ \\frac{a}{b} $$.
-    Estrutura obrigatória de entrega: [ALUNO] e [GABARITO]""",
+    Estrutura obrigatória: [ALUNO] e [GABARITO]""",
 
-    "FORJA_AULA_PEI": """VOCÊ É O ESPECIALISTA EM INCLUSÃO E DESENHO UNIVERSAL PARA APRENDIZAGEM (DUA).
+    "FORJA_AULA_PEI": f"""VOCÊ É O ESPECIALISTA EM INCLUSÃO E DESENHO UNIVERSAL PARA APRENDIZAGEM (DUA).
     Crie adaptações de exercícios baseadas no conteúdo ESTRITAMENTE TRABALHADO NA AULA REGULAR.
 
-    🚨 LEI DA ANCORAGEM TEMÁTICA NO PEI NÍVEL 3:
-    Os 10 BOXES do PEI Nível 3 DEVEM ser 100% baseados no tema, nos objetos e nos conceitos da AULA REGULAR.
+    {PADRAO_LATEX_SOSA}
+    {PADRAO_PROMPT_IMAGEM_SOSA}
 
     [PEI_NIVEL_1]: Apoio Leve, 3 Alternativas (A, B, C) com dica objetiva entre parênteses.
     [PEI_NIVEL_2]: Apoio Moderado, 3 Alternativas (A, B, C) com caixa [PARA LEMBRAR] e [PASSO A PASSO].
-    [PEI_NIVEL_3]: Apoio Severo em 10 BOXES sequenciais de atividades 100% IMPRESSAS NO PAPEL (Pintar, Cobrir Pontilhado, Ligar Colunas, Circular, Marcar X) ANCORADAS NO TEMA DA AULA.
-
+    [PEI_NIVEL_3]: Apoio Severo em 10 BOXES sequenciais de atividades 100% IMPRESSAS NO PAPEL (Pintar, Cobrir Pontilhado, Ligar Colunas, Circular, Marcar X).
     [RUBRICA_DE_OBSERVACAO]
-    - Autonomia Executiva: ✅ Autônomo | 🤝 Com Apoio | ❌ Não Realizou
-    - Compreensão de Comandos: ✅ Autônomo | 🤝 Com Apoio | ❌ Não Realizou
-    - Percepção Visual e Espacial: ✅ Autônomo | 🤝 Com Apoio | ❌ Não Realizou
-    - Raciocínio Lógico-Proporcional: ✅ Autônomo | 🤝 Com Apoio | ❌ Não Realizou
     [GABARITO_PEI]""",
 
-    "FORJA_LOTE_JSON": """VOCÊ É UM ELABORADOR DE ITENS DE ELITE DO INEP / CAEd / SAEB / BNCC CRIANDO QUESTÕES DE PROVA EM JSON.
-
-    🚨 LEI DA ANCORAGEM E TABELAS OBRIGATÓRIAS:
-    - Baseie-se no contexto dos PLANOS DE AULA, nos exercícios marcados pelo professor e em NOTÍCIAS REAIS de fontes confiáveis.
-    - TABELAS OBRIGATÓRIAS: Se a questão envolver dados de colheita, pesquisas ou estatísticas, monte obrigatoriamente uma TABELA FORMATADA EM MARKDOWN no enunciado.
-    - É PROIBIDO inventar contextos de ficção, jogos (RPG, Roblox) ou temas não fornecidos, a menos que solicitado.
-
-    🚨 LEI DO LATEX EM JSON: Envolva TODA expressão matemática, fração ou símbolo obrigatoriamente com cifrão duplo e barras duplas: $$ \\\\frac{a}{b} $$.
+    "FORJA_LOTE_JSON": f"""VOCÊ É UM ELABORADOR DE ITENS DE ELITE DO INEP CRIANDO QUESTÕES EM JSON.
+    
+    🚨 LEI DO LATEX EM JSON: Envolva TODA expressão matemática, fração ou símbolo com duplo cifrão e barras duplas: $$ \\\\frac{{a}}{{b}} $$.
 
     RETORNE EXATAMENTE UM JSON NESTE FORMATO:
-    {
+    {{
       "questoes": [
-        {
+        {{
           "q": 1,
-          "enunciado": "Texto do enunciado com tabela em Markdown quando houver dados...\n\n| Categoria | Valor |\n| :--- | :---: |\n| Item A | 10 |",
-          "alt_a": "$$ \\\\frac{1}{2} $$",
-          "alt_b": "$$ \\\\frac{1}{4} $$",
-          "alt_c": "$$ \\\\frac{3}{4} $$",
-          "alt_d": "$$ \\\\frac{2}{5} $$",
-          "alt_e": "$$ \\\\frac{4}{5} $$",
-          "habilidade": "Descritor SAEB (ex: D12 - EF06MA01)",
+          "enunciado": "Texto do enunciado com tabela em Markdown quando houver dados...",
+          "alt_a": "$$ \\\\frac{{1}}{{2}} $$",
+          "alt_b": "$$ \\\\frac{{1}}{{4}} $$",
+          "alt_c": "$$ \\\\frac{{3}}{{4}} $$",
+          "alt_d": "$$ \\\\frac{{2}}{{5}} $$",
+          "alt_e": "$$ \\\\frac{{4}}{{5}} $$",
+          "habilidade": "Descritor SAEB (ex: EF06MA01)",
           "justificativa": "Análise da alternativa correta...",
-          "distratores": "Análise dos erros cognitivos das alternativas incorretas..."
-        }
+          "distratores": "Análise dos erros cognitivos..."
+        }}
       ]
-    }""",
+    }}""",
 
-    "FORJA_ITEM_REGULAR": """VOCÊ É UM ELABORADOR DE ITENS DO INEP/CAEd/BNCC CRIANDO UMA QUESTÃO DE PROVA CONTEXTUALIZADA.
+    "FORJA_ITEM_REGULAR": f"""VOCÊ É UM ELABORADOR DE ITENS DO INEP/CAEd/BNCC CRIANDO UMA QUESTÃO DE PROVA CONTEXTUALIZADA.
     
-    🚨 REGRAS DE OURO:
-    1. Incorpore notícias reais e contexto do cotidiano/regional (Itabuna/Bahia/Brasil) com citação de fonte confiável.
-    2. TABELAS OBRIGATÓRIAS: Se a questão envolver dados comparativos ou pesquisas, desenhe a TABELA FORMATADA EM MARKDOWN no enunciado (| Coluna 1 | Coluna 2 |).
-    3. Imagens APENAS quando indispensáveis para a resolução (diagramas geométricos, gráficos de colunas/setores em P&B de alto contraste).
-    4. Use $$ \\frac{a}{b} $$ para todas as expressões matemáticas e frações.
+    {PADRAO_LATEX_SOSA}
+    {PADRAO_PROMPT_IMAGEM_SOSA}
 
     Tags obrigatórias: [ENUNCIADO], [ALT_A], [ALT_B], [ALT_C], [ALT_D], [ALT_E], [HABILIDADE], [JUSTIFICATIVA], [DISTRATORES].""",
 
-    "FORJA_PEI_N1": """VOCÊ É O ESPECIALISTA EM INCLUSÃO (APOIO LEVE - TDAH, DISLEXIA, TEA 1).
-    🚨 ZERO CONVERSA OU SAUDAÇÃO. INICIE DIRETAMENTE NA TAG [PEI_NIVEL_1].
-    - Adapte as questões regulares fornecidas reduzindo para exatamente 3 Alternativas (A, B, C).
-    - Mantenha o rótulo padrão: **QUESTÃO 01 -**, **QUESTÃO 02 -**, etc.
-    - Inclua uma dica objetiva entre parênteses logo abaixo do enunciado.
-    - Use negrito em palavras-chave do comando.""",
+    "FORJA_PEI_N1": f"""VOCÊ É O ESPECIALISTA EM INCLUSÃO (APOIO LEVE - TDAH, DISLEXIA, TEA 1).
+    🚨 INICIE DIRETAMENTE NA TAG [PEI_NIVEL_1].
+    - Adapte as questões regulares reduzindo para exatamente 3 Alternativas (A, B, C).
+    - Rótulo padrão: **QUESTÃO 01 -**, **QUESTÃO 02 -**, etc.
+    - Inclua uma dica objetiva entre parênteses: *(Dica: ...)*.
+    - Palavras-chave do comando em **negrito**.
+    {PADRAO_LATEX_SOSA}""",
 
-    "FORJA_PEI_N2": """VOCÊ É O ESPECIALISTA EM INCLUSÃO (APOIO MODERADO - DEFASAGEM, TEA 2).
-    🚨 ZERO CONVERSA OU SAUDAÇÃO. INICIE DIRETAMENTE NA TAG [PEI_NIVEL_2].
-    - Mantenha o rótulo padrão: **QUESTÃO 01 -**, **QUESTÃO 02 -**, etc.
+    "FORJA_PEI_N2": f"""VOCÊ É O ESPECIALISTA EM INCLUSÃO (APOIO MODERADO - DEFASAGEM, TEA 2).
+    🚨 INICIE DIRETAMENTE NA TAG [PEI_NIVEL_2].
     - Estrutura fixa para cada questão:
       **QUESTÃO XX -** Enunciado adaptado.
       [PARA LEMBRAR] Conceito-chave curto.
-      [PASSO A PASSO] Guia de resolução em 2 ou 3 passos simples.
+      [PASSO A PASSO]
+      1. Etapa 1
+      2. Etapa 2
       (A) Opção 1
       (B) Opção 2
-      (C) Opção 3""",
+      (C) Opção 3
+    {PADRAO_LATEX_SOSA}""",
 
-    "FORJA_PEI_N3": """VOCÊ É O ESPECIALISTA EM INCLUSÃO E DUA (PEI NÍVEL 3 - SUPORTE SEVERO / TEA 3 / NO PAPEL).
-    🚨 ZERO CONVERSA OU SAUDAÇÃO. INICIE DIRETAMENTE NA TAG [PEI_NIVEL_3].
+    "FORJA_PEI_N3": f"""VOCÊ É O ESPECIALISTA EM INCLUSÃO E DUA (PEI NÍVEL 3 - SUPORTE SEVERO / TEA 3 / NO PAPEL).
+    🚨 INICIE DIRETAMENTE NA TAG [PEI_NIVEL_3].
     - Crie exatamente 10 BOXES de atividades 100% IMPRESSAS NO PAPEL.
-    - O aluno NÃO terá mediador físico para manipular objetos na sala. Todas as tarefas devem envolver AÇÕES NO PAPEL: PINTAR, LIGAR COLUNAS, COBRIR PONTILHADO, CIRCULAR O ITEM E MARCAR [X].
-    - Para cada BOX, inclua obrigatoriamente um [ PROMPT IMAGEM: A4 portrait-format educational math worksheet, clean black and white line art, completely white background, no colors, no shadows, high contrast, perfect for printing... ].
-    - Formato obrigatório:
-      1. [BOX 1] Nome da Ação no Papel: Comando claro para o aluno (ex: Pinte 3 sacos de cacau).
-      ... até o [BOX 10]
+    - Todas as tarefas devem envolver AÇÕES NO PAPEL: PINTAR, LIGAR COLUNAS, COBRIR PONTILHADO, CIRCULAR O ITEM E MARCAR [X].
+    - Para cada BOX, inclua obrigatoriamente um:
+      [ PROMPT IMAGEM: A4 portrait-format educational math worksheet, clean black and white line art, completely pure white background, no colors, no shading, thick simple outlines, high contrast. Labels in Portuguese. Zero spoiler. ]
     - Finalize obrigatoriamente com:
       [RUBRICA_DE_OBSERVACAO]
       - Autonomia Executiva: ✅ Autônomo | 🤝 Com Apoio | ❌ Não Realizou
@@ -289,75 +316,29 @@ PERSONAS = {
       - Percepção Visual e Espacial: ✅ Autônomo | 🤝 Com Apoio | ❌ Não Realizou
       - Raciocínio Lógico-Proporcional: ✅ Autônomo | 🤝 Com Apoio | ❌ Não Realizou""",
 
-    "ESPECIALISTA_INCLUSAO": """VOCÊ É UM PSICOPEDAGOGO E ESPECIALISTA EM EDUCAÇÃO INCLUSIVA (DUA/PEI/BNCC).
+    "ESPECIALISTA_INCLUSAO": f"""VOCÊ É UM PSICOPEDAGOGO E ESPECIALISTA EM EDUCAÇÃO INCLUSIVA (DUA/PEI/BNCC).
     Sua missão é redigir um Dossiê de Acompanhamento PEI/Inclusivo humano, empático, técnico e orgânico.
+    {PADRAO_LATEX_SOSA}
+    Tags obrigatórias: [DIAGNOSTICO_GERAL], [SOCIAIS], [COMUNICATIVAS], [EMOCIONAIS], [FUNCIONAIS], [DIRETRIZES_CURRICULARES]""",
 
-    🚨 LEI DA MINERAÇÃO DE EVIDÊNCIAS DE SALA DE AULA:
-    - Utilize os dados de notas, frequência, ocorrências reais do Diário de Bordo e análises de erros das avaliações escaneadas fornecidas.
-    - Redija um texto fluido e acolhedor que conecte as evidências empíricas ao progresso individual do estudante.
+    "ARQUITETO_PEI_V24": f"""VOCÊ É O ARQUITETO PEI V24 ESPECIALISTA EM DESENHO UNIVERSAL PARA APRENDIZAGEM.
+    Adapte o material pedagógico garantindo acessibilidade, comandos diretos e fórmulas com duplo cifrão $$ ... $$.""",
 
-    🚨 SEQUÊNCIA DE ENTREGA (GERE APENAS AS TAGS COM COLCHETES):
-    [DIAGNOSTICO_GERAL]
-    [SOCIAIS]
-    [COMUNICATIVAS]
-    [EMOCIONAIS]
-    [FUNCIONAIS]
-    [DIRETRIZES_CURRICULARES]""",
+    "ARQUITETO_CIENTIFICO_V33": f"""VOCÊ É O ARQUITETO DE PROJETOS E INVESTIGAÇÃO CIENTÍFICA (PADRÃO BNCC/ITABUNA).
+    Projete roteiros de pesquisa integrando Matemática, Meio Ambiente e Economia Regional. {PADRAO_LATEX_SOSA}""",
 
-    "ARQUITETO_PEI_V24": """VOCÊ É O ARQUITETO PEI V24 ESPECIALISTA EM DESENHO UNIVERSAL PARA APRENDIZAGEM.
-    Adapte o material pedagógico fornecido garantindo acessibilidade, suporte visual claro e comandos diretos para o estudante com necessidades educacionais específicas.""",
+    "ARQUITETO_REVISAO_V29": f"""VOCÊ É O ARQUITETO DE RECOMPOSIÇÃO E REVISÃO DE ELITE (PADRÃO SAEB/CAEd).
+    Analise uma avaliação anterior e forje um Caderno de Recomposição focado nos descritores críticos com menor taxa de acerto.
+    {PADRAO_LATEX_SOSA} {PADRAO_PROMPT_IMAGEM_SOSA}""",
 
-    "ARQUITETO_CIENTIFICO_V33": """VOCÊ É O ARQUITETO DE PROJETOS E INVESTIGAÇÃO CIENTÍFICA (PADRÃO BNCC/ITABUNA).
-    Projete roteiros de pesquisas e trabalhos interdisciplinares autênticos integrando Matemática, Meio Ambiente e Economia Regional.""",
+    "ARQUITETO_VARIANTES_V100": f"""VOCÊ É O GERADOR DE VARIANTES ANTI-FRAUDE (TIPO B, C, D).
+    Embaralhe as alternativas, altere os dados numéricos mantendo a mesma estrutura cognitiva e gere o novo gabarito com precisão. {PADRAO_LATEX_SOSA}""",
 
-    "ARQUITETO_REVISAO_V29": """VOCÊ É O ARQUITETO DE RECOMPOSIÇÃO E REVISÃO DE ELITE (PADRÃO SAEB/CAEd).
-    Sua missão é analisar uma avaliação anterior e forjar um Caderno de Recomposição focado nos descritores críticos com menor taxa de acerto.""",
+    "DEFENSOR_PEDAGOGICO": f"""VOCÊ É O DEFENSOR PEDAGÓGICO DO COMPONENTE DE MATEMÁTICA.
+    Redija justificativas técnicas e empáticas fundamentadas na BNCC/SAEB para apresentação a pais ou coordenação pedagógica.""",
 
-    "ARQUITETO_RECUPERACAO_DISCURSIVA": """VOCÊ É O ELABORADOR-CHEFE DE AVALIAÇÕES DISCURSIVAS E RECOMPOSIÇÃO ABERTA (PADRÃO BNCC/SAEB).
-    Sua missão é criar uma avaliação DISCURSIVA / ABERTA (Recuperação Paralela ou 2ª Chamada) valendo de 0,0 a 10,0 pontos, baseada nas questões espelho dos conteúdos mais errados no trimestre.
-
-    🚨 REGRAS INQUEBRÁVEIS DE AVALIAÇÃO DISCURSIVA:
-    1. É ESTRITAMENTE PROIBIDO criar alternativas de múltipla escolha (A, B, C, D, E). Todas as questões DEVEM ser abertas/discursivas.
-    2. Cada questão deve exigir do estudante a resolução por etapas, a apresentação da MEMÓRIA DE CÁLCULO e a declaração da RESPOSTA FINAL com unidade de medida.
-    3. Distribua a pontuação somando exatamente 10,0 pontos (ex: 5 questões de 2,0 pontos cada, ou 10 questões de 1,0 ponto cada).
-    4. Formatação padronizada:
-       **QUESTÃO 01 (Valor: 2,0 pts) -** [Enunciado contextualizado com situação-problema autêntica e tabela Markdown se houver dados]
-
-    🚨 TAGS OBRIGATÓRIAS DE ENTREGA:
-    [VALOR: 10.0]
-
-    [QUESTOES]
-    **QUESTÃO 01 (Valor: 2,0 pts) -** Enunciado da questão aberta...
-    **QUESTÃO 02 (Valor: 2,0 pts) -** Enunciado da questão aberta...
-
-    [GABARITO_TEXTO]
-    QUESTÃO 01: [Resolução matemática detalhada passo a passo e resposta final]
-    QUESTÃO 02: [Resolução matemática detalhada passo a passo e resposta final]
-
-    [GRADE_DE_CORRECAO]
-    QUESTÃO 01: [DESCRITOR_SAEB: D12] | CRITÉRIOS DE PONTUAÇÃO: Cálculo completo e resposta exata (2,0 pts); Raciocínio correto com pequeno erro de conta (1,0 pt); Apenas resposta final sem cálculo (0,5 pt); Erro total (0,0 pt).
-    QUESTÃO 02: ...
-
-    [PEI_NIVEL_1]
-    **QUESTÃO 01 (Valor: 2,0 pts) -** Enunciado com passos guiados e dicas objetivas entre parênteses.
-
-    [PEI_NIVEL_3]
-    1. [BOX 1] Atividade motora/visual no papel contextualizada com a recuperação... (até o BOX 10)
-    [RUBRICA_DE_OBSERVACAO]
-    - Autonomia Executiva: ✅ Autônomo | 🤝 Com Apoio | ❌ Não Realizou
-    - Compreensão de Comandos: ✅ Autônomo | 🤝 Com Apoio | ❌ Não Realizou
-    - Percepção Visual e Espacial: ✅ Autônomo | 🤝 Com Apoio | ❌ Não Realizou
-    - Raciocínio Lógico-Proporcional: ✅ Autônomo | 🤝 Com Apoio | ❌ Não Realizou
-    """,
-
-    "ARQUITETO_VARIANTES_V100": """VOCÊ É O GERADOR DE VARIANTES ANTI-FRAUDE (TIPO B, C, D).
-    Embaralhe as alternativas, altere os dados numéricos mantendo a mesma estrutura cognitiva e gere o novo gabarito com precisão.""",
-
-    "DEFENSOR_PEDAGOGICO": """VOCÊ É O DEFENSOR PEDAGÓGICO DO COMPONENTE DE MATEMÁTICA.
-    Redija justificativas técnicas, empáticas e fundamentadas na BNCC/SAEB para apresentação a pais, responsáveis ou coordenação pedagógica.""",
-
-    "TRADUTOR_CURRICULAR_V39": """VOCÊ É O TRADUTOR CURRICULAR DE MATEMÁTICA PARA PLANOS EDUCACIONAIS INDIVIDUALIZADOS (PEI).
-    Converta os objetivos de aprendizagem da matriz municipal em estratégias de acessibilidade funcional e recursos materiais concretos."""
+    "TRADUTOR_CURRICULAR_V39": f"""VOCÊ É O TRADUTOR CURRICULAR DE MATEMÁTICA PARA PLANOS EDUCACIONAIS INDIVIDUALIZADOS (PEI).
+    Converta os objetivos de aprendizagem em estratégias de acessibilidade funcional e recursos materiais concretos diversificados. {PADRAO_LATEX_SOSA}"""
 }
 
 # ==============================================================================
@@ -367,15 +348,13 @@ PERSONAS = {
 def gerar_ia(persona_key, comando, url_drive=None, usar_busca=False, recorte_livro=None):
     """
     SOSA V2026.ULTIMATE - ROTEAMENTO DE ALTA EFICIÊNCIA & ECONOMIA:
-    - Nível 2 (Criação Complexa / TRI / Planos): Gemini 3.7 Flash / Gemini 3.6 Flash.
-    - Nível 1 (Rotina / Ajustes / PEI N1-N3): Gemini 3.5 Flash-Lite (Custo Quase Zero).
-    - Busca Web ativada apenas quando estritamente necessária (usar_busca=True).
+    - Nível 2 (Criação Complexa / TRI / Planos / Recuperação): Gemini 3.7 Flash.
+    - Nível 1 (Rotina / Ajustes / PEI N1-N3): Gemini 3.5 Flash-Lite.
     """
     client_local = obter_client_gemini()
     if not client_local:
         return "⚠️ Chave GEMINI_API_KEY não configurada no ambiente."
 
-    # Personas que exigem raciocínio psicométrico profundo e síntese avançada
     personas_alta_complexidade = [
         "ARQUITETO_EXAMES_ENEM_V2026",
         "PLANE_PEDAGOGICO", 
@@ -387,12 +366,9 @@ def gerar_ia(persona_key, comando, url_drive=None, usar_busca=False, recorte_liv
     ]
     
     if persona_key in personas_alta_complexidade:
-        modelo_alvo = "gemini-3.7-flash"
         modelos_tentativa = ["gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"]
     else:
-        # Tarefas leves, refinadores e tarefas de rotina (Ultra-econômico)
-        modelo_alvo = "gemini-3.5-flash-lite"
-        modelos_tentativa = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.6-flash"]
+        modelos_tentativa = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.7-flash"]
 
     tools_config = []
     if usar_busca:
@@ -409,13 +385,11 @@ def gerar_ia(persona_key, comando, url_drive=None, usar_busca=False, recorte_liv
     conteudo_prompt = []
     
     trava_realidade = (
-        "\n\n🚨 ================= CLÁUSULA INQUEBRÁVEL DE ZERO-ALUCINAÇÃO =================\n"
-        "1. É ESTRITAMENTE PROIBIDO inventar contextos aleatórios de ficção, jogos (RPG, Roblox, etc.), "
-        "fatos internacionais genéricos ou temas não fornecidos (como SpaceX/Marte), A MENOS QUE o professor tenha escrito isso expressamente.\n"
-        "2. Se foram fornecidos textos do Livro Didático, itens do CSV, ou dados regionais de Itabuna/Bahia, "
-        "SUA OBRIGAÇÃO É EXTRAIR OU ESPELHAR 100% DAS QUESTÕES E EXPLICAÇÕES DIRETA E EXCLUSIVAMENTE DESSES DADOS.\n"
-        "3. Não adicione fatos não checados. Mantenha fiel ancoragem à realidade do professor.\n"
-        "=================================================================================\n\n"
+        "\n\n🚨 ================= CLÁUSULA INQUEBRÁVEL DE ZERO-ALUCINAÇÃO & PADRÃO SOSA =================\n"
+        "1. É ESTRITAMENTE PROIBIDO inventar contextos de ficção fora da realidade fornecida.\n"
+        "2. Todas as frações, potências e equações DEVEM usar OBRIGATORIAMENTE duplo cifrão espaçado: $$ \\frac{a}{b} $$.\n"
+        "3. PROMPTS DE IMAGEM: Apenas quando estritamente necessários, em arte linear preto e branco formato A4 retrato, sem cores, sem sombras, fundo branco puro, sem respostas ou pistas visuais da solução, com rótulos em português.\n"
+        "===============================================================================================\n\n"
     )
 
     instrucao_livro = ""
@@ -484,7 +458,9 @@ def gerar_ia(persona_key, comando, url_drive=None, usar_busca=False, recorte_liv
                                 texto_retornado += part.text + "\n"
             
             if texto_retornado.strip():
-                return texto_retornado.strip()
+                # Sanitização automática de cifrões simples perdidos para duplo cifrão
+                texto_final_sanitizado = re.sub(r'(?<!\$)\$(?!\$)(.*?)(?<!\$)\$(?!\$)', r'$$ \1 $$', texto_retornado.strip())
+                return texto_final_sanitizado
         except Exception as e_mod:
             erros_log.append(f"{mod}: {str(e_mod)}")
             continue
@@ -497,8 +473,7 @@ def gerar_ia(persona_key, comando, url_drive=None, usar_busca=False, recorte_liv
 
 def gerar_ia_json(persona_key, comando, usar_busca=False):
     """
-    SOSA V2026: Geração de JSON estruturado de alta velocidade e custo quase zero
-    utilizando a linha Gemini 3.5 Flash-Lite com reparo automático de LaTeX.
+    SOSA V2026: Geração de JSON estruturado de alta velocidade e custo quase zero.
     """
     client_local = obter_client_gemini()
     if not client_local:
@@ -520,14 +495,12 @@ def gerar_ia_json(persona_key, comando, usar_busca=False):
     trava_realidade_json = (
         "\n\n🚨 REGRAS RÍGIDAS DE GROUNDING (ZERO ALUCINAÇÃO):\n"
         "1. É PROIBIDO inventar contextos fictícios fora do fornecido.\n"
-        "2. Se houver contexto de Itabuna/Bahia ou trecho de Livro Didático abaixo, 100% DAS QUESTÕES DEVEM SER EXTRAÍDAS OU ESPELHADAS DELE.\n"
-        "3. ATENÇÃO COM LATEX EM JSON: Sempre use barra dupla para comandos LaTeX no JSON (exemplo: \\\\frac{1}{2}, \\\\times, \\\\div, \\\\circ).\n\n"
+        "2. LATEX EM JSON: Use barra dupla e duplo cifrão obrigatoriamente: $$ \\\\frac{a}{b} $$.\n\n"
     )
     
     persona_prompt = PERSONAS.get(persona_key, PERSONAS["FORJA_LOTE_JSON"])
     conteudo_prompt = [types.Part.from_text(text=f"{persona_prompt}\n{trava_realidade_json}\n\n{comando}")]
     
-    # Modelos ultra-rápidos e econômicos para JSON
     modelos_json = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.7-flash"]
     
     for mod in modelos_json:
@@ -548,7 +521,6 @@ def gerar_ia_json(persona_key, comando, usar_busca=False):
             if match:
                 json_str = match.group(0)
                 json_str_reparado = re.sub(r'\\(?![/"bfnrtu\\])', r'\\\\', json_str)
-                
                 try:
                     return json.loads(json_str_reparado)
                 except json.JSONDecodeError:
@@ -566,26 +538,24 @@ def gerar_ia_json(persona_key, comando, usar_busca=False):
     return {"erro": "Não foi possível gerar um JSON válido no momento. Tente novamente."}
 
 # ==============================================================================
-# 5. MOTOR DE VISÃO COMPUTACIONAL LOCAL (CUSTO ZERO) & SCANNER HÍBRIDO (CIR)
+# 5. MOTOR DE VISÃO COMPUTACIONAL LOCAL & SCANNER HÍBRIDO (CIR)
 # ==============================================================================
 
 def ordenar_pontos_quadrado(pts):
     """Ordena 4 pontos nas posições: [topo-esq, topo-dir, base-dir, base-esq]."""
-    if not OPENCV_DISPONIVEL:
-        return pts
+    if not OPENCV_DISPONIVEL: return pts
     rect = np.zeros((4, 2), dtype="float32")
     s = pts.sum(axis=1)
-    rect[0] = pts[np.argmin(s)] # Topo-esquerda
-    rect[2] = pts[np.argmax(s)] # Base-direita
+    rect[0] = pts[np.argmin(s)]
+    rect[2] = pts[np.argmax(s)]
     diff = np.diff(pts, axis=1)
-    rect[1] = pts[np.argmin(diff)] # Topo-direita
-    rect[3] = pts[np.argmax(diff)] # Base-esquerda
+    rect[1] = pts[np.argmin(diff)]
+    rect[3] = pts[np.argmax(diff)]
     return rect
 
 def tratar_imagem_para_leitura(imagem_bytes):
     """Redimensiona e clareia a imagem suavemente antes de enviar para a IA."""
-    if not OPENCV_DISPONIVEL:
-        return imagem_bytes
+    if not OPENCV_DISPONIVEL: return imagem_bytes
     try:
         nparr = np.frombuffer(imagem_bytes, np.uint8)
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
@@ -601,48 +571,10 @@ def tratar_imagem_para_leitura(imagem_bytes):
     except:
         return imagem_bytes
 
-def analisar_gabarito_vision(imagem_bytes):
-    """Fallback econômico via Visão Computacional Gemini Flash-Lite."""
-    try:
-        client_local = obter_client_gemini()
-        if not client_local:
-            return {"erro": "Chave Gemini indisponível."}
-
-        prompt = (
-            "Você é um perito em visão computacional de alta precisão. Analise a imagem do gabarito escolar.\n"
-            "MISSÃO:\n"
-            "1. Localize o campo ESTUDANTE no cabeçalho e extraia o nome do aluno escrito.\n"
-            "2. Localize a grade de respostas de múltipla escolha.\n"
-            "3. Retorne a letra marcada em cada questão. Use 'X' para dupla marcação e '?' se estiver vazia.\n"
-            "Retorne APENAS um JSON puro no formato: {'nome_estudante': 'NOME', 'respostas': {'01': 'A', '02': 'C', ...}}"
-        )
-        
-        conteudo_prompt = [
-            types.Part.from_bytes(data=imagem_bytes, mime_type="image/jpeg"),
-            types.Part.from_text(text=prompt)
-        ]
-        
-        for mod_vis in ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.5-flash"]:
-            try:
-                res = client_local.models.generate_content(
-                    model=mod_vis, 
-                    contents=[types.Content(role="user", parts=conteudo_prompt)],
-                    config=types.GenerateContentConfig(response_mime_type="application/json")
-                )
-                import json
-                return json.loads(res.text)
-            except:
-                continue
-                
-        return {"erro": "Falha na leitura visual do gabarito."}
-    except Exception as e:
-        return {"erro": f"Falha na leitura da imagem: {e}"}
-
 def analisar_gabarito_hibrido(imagem_bytes, qtd_questoes=10, is_pei=False):
     """
     SOSA V2026.DIRECT_VISION_ANTI_TROCA:
-    Leitura Direta por Visão Computacional Gemini 3.5 Flash-Lite (< 1s por prova / Custo ~R$ 0,0005).
-    Lê as alternativas marcadas e audita o nome manuscrito no cabeçalho para evitar trocas de titularidade.
+    Leitura Direta por Visão Computacional Gemini 3.5 Flash-Lite (< 1s por prova).
     """
     imagem_pronta = tratar_imagem_para_leitura(imagem_bytes)
     
@@ -662,22 +594,20 @@ ESTRUTURA DO CARTÃO:
 
 2. CARTÃO DE RESPOSTAS:
    - Total de Questões: {qtd_questoes} questões (de 01 a {qtd_questoes:02d}).
-   - Se houver mais de 10 questões, há duas colunas (Esquerda: 01 a 10 | Direita: 11 a {qtd_questoes:02d}).
    - Alternativas: {tipo_opcoes}.
 
 REGRAS DE LEITURA:
 1. Identifique qual letra ({tipo_opcoes}) foi marcada em cada questão de 01 a {qtd_questoes:02d}.
 2. Se houver dupla marcação na mesma questão, retorne 'X'.
 3. Se a questão estiver em branco, retorne '?'.
-4. No campo 'nome_estudante', retorne o nome do aluno escrito no cabeçalho (ou 'NÃO_IDENTIFICADO' se estiver ilegível/vazio).
+4. No campo 'nome_estudante', retorne o nome do aluno escrito no cabeçalho.
 
 RETORNE APENAS UM JSON PURO NO FORMATO:
 {{
-  "nome_estudante": "DAVI LUIS SILVA",
+  "nome_estudante": "NOME DO ESTUDANTE",
   "respostas": {{
-    "01": "D",
+    "01": "B",
     "02": "A",
-    "03": "D",
     ...
     "{qtd_questoes:02d}": "C"
   }}
@@ -693,7 +623,6 @@ RETORNE APENAS UM JSON PURO NO FORMATO:
         )
 
         modelos_tentativa = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.7-flash"]
-        
         respostas_json = None
         import json
         
@@ -712,7 +641,6 @@ RETORNE APENAS UM JSON PURO NO FORMATO:
                     if respostas_json and len(respostas_json) > 0:
                         break
             except Exception as e_mod:
-                print(f"Tentativa com modelo {mod}: {e_mod}")
                 continue
 
         if respostas_json:
@@ -748,7 +676,7 @@ RETORNE APENAS UM JSON PURO NO FORMATO:
         }
 
 # ==============================================================================
-# 6. EXTRATOR UNIVERSAL DE TAGS (PRESERVADO 100%)
+# 6. EXTRATOR UNIVERSAL DE TAGS & GABARITOS
 # ==============================================================================
 
 def extrair_tag(texto, tag):
@@ -758,19 +686,15 @@ def extrair_tag(texto, tag):
     if tag_busca in ["ALUNO", "QUESTOES", "CADERNO_DE_REVISAO"]:
         guia = extrair_tag_simples(texto, "GUIA_DE_ESTUDO_ALUNO")
         questoes = extrair_tag_simples(texto, "QUESTOES")
-        
-        if guia and questoes:
-            return f"{guia}\n\n{questoes}"
-        elif questoes:
-            return questoes
-        elif guia:
-            return guia
+        if guia and questoes: return f"{guia}\n\n{questoes}"
+        elif questoes: return questoes
+        elif guia: return guia
 
     return extrair_tag_simples(texto, tag_busca)
 
 def extrair_tag_simples(texto, tag_busca):
     alias_map = {
-        "PROFESSOR": ["PROFESSOR", "ROTEIRO_DO_PROFESSOR", "GUIA_PROFESSOR", "ROTEIRO_DE_MEDIACAO", "BASE_DIDATICA", "ROTEIRO_DO_PROFESSOR - RECOMPOSIÇÃO", "ROTEIRO_DO_PROFESSOR"],
+        "PROFESSOR": ["PROFESSOR", "ROTEIRO_DO_PROFESSOR", "GUIA_PROFESSOR", "ROTEIRO_DE_MEDIACAO", "BASE_DIDATICA", "ROTEIRO_DO_PROFESSOR - RECOMPOSIÇÃO"],
         "ALUNO": ["ALUNO", "GUIA_DE_ESTUDO_ALUNO", "QUESTOES", "QUESTOES_ESPELHO", "CADERNO_DE_REVISAO", "GUIA_DE_ESTUDO_DO_ALUNO"],
         "QUESTOES": ["QUESTOES", "QUESTOES_ESPELHO", "CADERNO_DE_REVISAO", "GUIA_DE_ESTUDO_DO_ALUNO"],
         "GABARITO": ["GABARITO_TEXTO", "GABARITO", "GABARITO_REGULAR", "RESPOSTAS_IA"],
@@ -790,7 +714,7 @@ def extrair_tag_simples(texto, tag_busca):
         "PROFESSOR", "ALUNO", "IMAGENS", "HABILIDADE_BNCC", "COMPETENCIAS_FOCO", 
         "OBJETO_CONHECIMENTO", "CONTEUDOS_ESPECIFICOS", "OBJETIVOS_ENSINO",
         "JUSTIFICATIVA_PEDAGOGICA", "AULA_1", "AULA_2", "SABADO_LETIVO", "AVALIACAO_DE_MERITO", "ESTRATEGIA_DUA_PEI",
-        "ROTEIRO_DO_PROFESSOR", "GUIA_DE_ESTUDO_ALUNO", "RUBRICA_DE_OBSERVACAO", "ROTEIRO_DO_PROFESSOR - RECOMPOSIÇÃO", "GUIA_DE_ESTUDO_DO_ALUNO",
+        "ROTEIRO_DO_PROFESSOR", "GUIA_DE_ESTUDO_ALUNO", "RUBRICA_DE_OBSERVACAO", "ROTEIRO_DO_PROFESSOR - RECOMPOSIÇÃO",
         "OBJETIVO", "ESTRATEGIA", "RECURSO", "ITEM",
         "DIAGNOSTICO_GERAL", "SOCIAIS", "COMUNICATIVAS", "EMOCIONAIS", "FUNCIONAIS", "DIRETRIZES_CURRICULARES"
     ]
@@ -818,12 +742,9 @@ def extrair_gab_universal_com_fallback(texto, is_pei=False, nivel_pei="NIVEL_1")
     SOSA V2026 - EXTRATOR UNIVERSAL DE GABARITO (REGULAR E PEI INTELIGENTE):
     - Provas Regulares: Extrai chave oficial de 5 alternativas (A, B, C, D, E).
     - Provas PEI: Extrai exclusivamente chaves de 3 alternativas (A, B, C).
-    - Se a prova PEI não tiver a tag [GABARITO_PEI], deduz a letra cruzando o texto
-      da alternativa correta regular com as opções (A, B, C) do PEI, NUNCA retornando D ou E.
     """
     if not texto or not isinstance(texto, str): return []
     
-    # 1. EXTRAÇÃO DO GABARITO REGULAR (5 ALTERNATIVAS)
     mapa_regular = {}
     raw_reg = extrair_tag(texto, "GABARITO_TEXTO") or extrair_tag(texto, "GABARITO")
     
@@ -831,15 +752,6 @@ def extrair_gab_universal_com_fallback(texto, is_pei=False, nivel_pei="NIVEL_1")
         matches_reg = re.findall(r"(?:QUEST[AÃ]O\s*|Q)?\s*0?(\d+)[\s\.\)\-:]+([A-E])\b", str(raw_reg).upper())
         for q_num_str, letra in matches_reg:
             mapa_regular[int(q_num_str)] = letra
-            
-    if not mapa_regular:
-        bloco_gab_match = re.search(r"\[\s*GABARITO.*?\].*?$", texto, re.DOTALL | re.IGNORECASE)
-        texto_busca = bloco_gab_match.group(0) if bloco_gab_match else texto
-        matches_brutos = re.findall(r"(?:QUEST[AÃ]O\s*|Q)?\s*0?(\d+)[\s\.\)\-:]+([A-E])\b", texto_busca.upper())
-        for q_num_str, letra in matches_brutos:
-            q_num = int(q_num_str)
-            if q_num not in mapa_regular and 1 <= q_num <= 30:
-                mapa_regular[q_num] = letra
 
     qtd_enunciados = len(re.findall(r"(?i)(?:QUEST[AÃ]O\s*|Q)\s*0?(\d+)", extrair_tag(texto, "QUESTOES") or texto))
     max_q = max(mapa_regular.keys()) if mapa_regular else 0
@@ -848,112 +760,35 @@ def extrair_gab_universal_com_fallback(texto, is_pei=False, nivel_pei="NIVEL_1")
     if not is_pei:
         return [mapa_regular.get(n, "A") for n in range(1, qtd_oficial + 1)]
 
-    # 2. EXTRAÇÃO INTELIGENTE DO GABARITO PEI (3 ALTERNATIVAS: A, B, C)
+    # EXTRAÇÃO INTELIGENTE DO GABARITO PEI (A, B, C)
     mapa_pei = {}
-    bloco_pei = extrair_tag(texto, nivel_pei) or extrair_tag(texto, "PEI_NIVEL_1") or extrair_tag(texto, "NIVEL_1") or extrair_tag(texto, "PEI") or extrair_tag(texto, "GABARITO_PEI")
     
-    if bloco_pei:
-        # A) Busca tag [GABARITO_PEI] explícita no final do bloco
-        m_gab_pei_block = re.search(r"\[\s*GABARITO_PEI\s*\]\s*[:\-]*\s*(.*?)(?=\[|$)", texto, re.DOTALL | re.IGNORECASE)
-        if m_gab_pei_block:
-            matches_p = re.findall(r"(?:QUEST[AÃ]O\s*(?:PEI\s*)?|Q)?\s*0?(\d+)[\s\.\)\-:]+([A-C])\b", m_gab_pei_block.group(1).upper())
-            for q_num_str, letra in matches_p:
-                mapa_pei[int(q_num_str)] = letra
+    # 1. Busca tag [GABARITO_PEI] explícita
+    m_gab_pei_block = re.search(r"\[\s*GABARITO_PEI\s*\]\s*[:\-]*\s*(.*?)(?=\[|--- LINKS ---|$)", texto, re.DOTALL | re.IGNORECASE)
+    if m_gab_pei_block:
+        matches_p = re.findall(r"(?:QUEST[AÃ]O\s*(?:PEI\s*)?|Q)?\s*0?(\d+)[\s\.\)\-:]+([A-C])\b", m_gab_pei_block.group(1).upper())
+        for q_num_str, letra in matches_p:
+            mapa_pei[int(q_num_str)] = letra
 
-        # B) Busca formato "1-A | 2-C | 3-B" no texto PEI
-        if not mapa_pei:
-            matches_inline_pipe = re.findall(r"0?(\d+)\s*[-:]\s*([A-C])\b", bloco_pei.upper())
-            for q_num_str, letra in matches_inline_pipe:
-                mapa_pei[int(q_num_str)] = letra
+    bloco_pei = extrair_tag(texto, nivel_pei) or extrair_tag(texto, "PEI_NIVEL_1") or extrair_tag(texto, "NIVEL_1") or extrair_tag(texto, "PEI")
+    
+    if not mapa_pei and bloco_pei:
+        matches_inline = re.findall(r"0?(\d+)\s*[-:]\s*([A-C])\b", bloco_pei.upper())
+        for q_num_str, letra in matches_inline:
+            mapa_pei[int(q_num_str)] = letra
 
-        # C) Busca formato "Gabarito: B" ao final de cada questão
-        if not mapa_pei:
-            blocos_q = re.split(r"(?i)(?:QUEST[AÃ]O\s*(?:PEI\s*)?|Q)0?(\d+)", bloco_pei)
-            if len(blocos_q) > 2:
-                for idx in range(1, len(blocos_q), 2):
-                    q_num = int(blocos_q[idx])
-                    q_conteudo = blocos_q[idx+1]
-                    m_gab = re.search(r"(?i)GABARITO\s*[:\-]?\s*([A-C])", q_conteudo)
-                    if m_gab:
-                        mapa_pei[q_num] = m_gab.group(1).upper()
-
-        # D) DEDUÇÃO SEMÂNTICA POR TEXTO (Para provas onde o PEI não veio com gabarito explícito)
-        if len(mapa_pei) < qtd_oficial:
-            # Extrai o texto das alternativas da prova regular e da prova PEI
-            txt_questoes_reg = extrair_tag(texto, "QUESTOES") or texto
-            blocos_reg = re.split(r"(?i)QUEST[AÃ]O\s*0?(\d+)", txt_questoes_reg)
-            blocos_pei_split = re.split(r"(?i)(?:QUEST[AÃ]O\s*(?:PEI\s*)?|Q)0?(\d+)", bloco_pei)
-            
-            mapa_textos_reg = {}
-            if len(blocos_reg) > 2:
-                for idx_r in range(1, len(blocos_reg), 2):
-                    q_nr = int(blocos_reg[idx_r])
-                    mapa_textos_reg[q_nr] = blocos_reg[idx_r+1]
-
-            if len(blocos_pei_split) > 2:
-                for idx_p in range(1, len(blocos_pei_split), 2):
-                    q_np = int(blocos_pei_split[idx_p])
-                    if q_np not in mapa_pei:
-                        q_pei_txt = blocos_pei_split[idx_p+1]
-                        q_reg_txt = mapa_textos_reg.get(q_np, "")
-                        letra_correta_reg = mapa_regular.get(q_np, "A")
-                        
-                        # Extrai o texto da alternativa correta regular (ex: "Vale Verde")
-                        m_alt_reg = re.search(rf"\({letra_correta_reg}\)\s*(.*?)(?=\([A-E]\)|$)", q_reg_txt, re.DOTALL | re.IGNORECASE)
-                        texto_resposta_certa = m_alt_reg.group(1).strip() if m_alt_reg else ""
-                        texto_resp_clean = re.sub(r'[^A-Z0-9]', '', texto_resposta_certa.upper())
-                        
-                        # Procura em qual opção (A, B ou C) do PEI esse texto está
-                        letra_deduzida = None
-                        for letra_candidata in ["A", "B", "C"]:
-                            m_alt_pei = re.search(rf"\({letra_candidata}\)\s*(.*?)(?=\([A-C]\)|$)", q_pei_txt, re.DOTALL | re.IGNORECASE)
-                            if m_alt_pei:
-                                texto_alt_pei = re.sub(r'[^A-Z0-9]', '', m_alt_pei.group(1).upper())
-                                if len(texto_resp_clean) > 3 and (texto_resp_clean in texto_alt_pei or texto_alt_pei in texto_resp_clean):
-                                    letra_deduzida = letra_candidata
-                                    break
-                        
-                        if letra_deduzida:
-                            mapa_pei[q_np] = letra_deduzida
-
-    # 3. CONSOLIDAÇÃO BLINDADA: GARANTE QUE TODAS AS QUESTÕES PEI SEJAM STRICTLY A, B ou C
     resultado_pei = []
     for q_n in range(1, qtd_oficial + 1):
         letra_encontrada = mapa_pei.get(q_n, None)
         if letra_encontrada and letra_encontrada in ["A", "B", "C"]:
             resultado_pei.append(letra_encontrada)
         else:
-            # Fallback seguro: se a regular for D ou E, mapeia para uma opção válida (A ou B)
             reg_letra = mapa_regular.get(q_n, "A")
-            if reg_letra in ["A", "B", "C"]:
-                resultado_pei.append(reg_letra)
-            elif reg_letra == "D":
-                resultado_pei.append("C") # Quarta opção vira C no PEI
-            else:
-                resultado_pei.append("A") # Quinta opção vira A no PEI
+            if reg_letra in ["A", "B", "C"]: resultado_pei.append(reg_letra)
+            elif reg_letra == "D": resultado_pei.append("C")
+            else: resultado_pei.append("A")
 
     return resultado_pei
-
-def realizar_diagnostico_v25(plano_raw, df_curriculo, ano_sel):
-    texto_upper = plano_raw.upper()
-    modalidade = "CADERNO" 
-    if "LIVRO" in texto_upper: modalidade = "LIVRO"
-    elif "AVALIAÇÃO" in texto_upper or "PROVA" in texto_upper: modalidade = "PROVA"
-    elif "PROJETO" in texto_upper: modalidade = "PROJETO"
-
-    cont_plano = extrair_tag(plano_raw, "CONTEUDOS_ESPECIFICOS").upper().strip()
-    base_ano = df_curriculo[df_curriculo['ANO'] == int(ano_sel)] if not df_curriculo.empty and 'ANO' in df_curriculo.columns else pd.DataFrame()
-    lista_curriculo = [str(c).upper().strip() for c in base_ano['CONTEUDO_ESPECIFICO'].unique()] if not base_ano.empty and 'CONTEUDO_ESPECIFICO' in base_ano.columns else []
-    sincronizado = any(c in cont_plano for c in lista_curriculo)
-    status_msg = "Sincronizado" if sincronizado else "Divergente"
-    status_cor = "🟢" if sincronizado else "🟡"
-
-    return {
-        "modalidade": modalidade,
-        "status": f"{status_cor} {status_msg}",
-        "conteudo_literal": extrair_tag(plano_raw, "CONTEUDOS_ESPECIFICOS"),
-        "objetivo_literal": extrair_tag(plano_raw, "OBJETIVOS_ENSINO")
-    }
 
 def gerar_prognostico_pedagogico(dados_stats, contexto_prova):
     """Gera diagnóstico psicométrico ágil utilizando Gemini 3.5 Flash-Lite."""
