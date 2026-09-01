@@ -609,12 +609,15 @@ def renderizar_conteudo_discursivo_com_caixas(doc, texto_bruto):
     if em_tabela and buffer_tabela:
         renderizar_tabela_markdown_no_word(doc, buffer_tabela)
 
+# ==============================================================================
+# 5. GERADOR HÍBRIDO DE AVALIAÇÕES (REGULAR DISCURSIVA OU OMR / PEI LIMPO EM 2 COLUNAS)
+# ==============================================================================
 def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
     """
-    SOSA V2026.PRO_INFINITY - GERADOR HÍBRIDO DE AVALIAÇÕES (OBJETIVAS COM OMR OU DISCURSIVAS COM PAUTAS)
-    Identifica automaticamente a natureza da prova e aplica o layout apropriado:
-    - Provas Regulares / Testes: 2 colunas com Cartão OMR Fiducial (■ e ○).
-    - Recuperação Paralela / 2ª Chamada: 1 coluna com caixas amplas de memória de cálculo.
+    SOSA V2026.PRO_INFINITY - GERADOR HÍBRIDO DE AVALIAÇÕES
+    - Provas Regulares Discursivas / 2ª Chamada: 1 coluna larga com caixas pautadas de cálculo.
+    - Provas PEI Adaptadas: 2 colunas elegantes com 3 alternativas (A, B, C), SEM caixas deformadas.
+    - Provas Regulares Objetivas: 2 colunas com Cartão OMR Fiducial (■).
     """
     file_stream = io.BytesIO()
     try:
@@ -628,20 +631,22 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         section.left_margin = section.right_margin = Inches(0.4)
         
         conteudo_ia_limpo = sanitizar_xml_str(str(conteudo_ia))
-        is_pei_doc = "PEI" in titulo_doc.upper() or "ADAPTADA" in titulo_doc.upper()
+        is_pei_doc = any(x in str(titulo_doc).upper() for x in ["PEI", "ADAPTADA", "N1", "N2", "NIVEL_1", "NIVEL_2"])
         
-        # Detector de Natureza Discursiva (Recuperação Paralela ou 2ª Chamada Aberta)
         tipo_prova_info = str(info.get('tipo_prova', '')).upper()
         titulo_upper = str(titulo_doc).upper()
+        
+        # Discursiva apenas para a prova REGULAR (PEI é sempre adaptada limpa)
         is_discursiva = any(x in titulo_upper or x in tipo_prova_info for x in [
             "RECUPERAÇÃO", "RECUPERACAO", "2ª CHAMADA", "2A CHAMADA", "2ª_CHAMADA", "DISCURSIVA", "ABERTA"
-        ]) and "FINAL" not in titulo_upper
+        ]) and "FINAL" not in titulo_upper and not is_pei_doc
 
         corpo_bruto = ""
         if is_pei_doc:
             corpo_bruto = (ai.extrair_tag(conteudo_ia_limpo, "PEI_NIVEL_1") or 
                            ai.extrair_tag(conteudo_ia_limpo, "PEI") or 
-                           ai.extrair_tag(conteudo_ia_limpo, "PEI_NIVEL_2"))
+                           ai.extrair_tag(conteudo_ia_limpo, "PEI_NIVEL_2") or 
+                           ai.extrair_tag(conteudo_ia_limpo, "NIVEL_1"))
         else:
             corpo_bruto = ai.extrair_tag(conteudo_ia_limpo, "ALUNO") or ai.extrair_tag(conteudo_ia_limpo, "QUESTOES")
 
@@ -658,19 +663,22 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         if num_total_q == 0: 
             num_total_q = int(helper_sosa_float(info.get('qtd_questoes', info.get('qtd', 10))))
         
-        # Rótulo de Cabeçalho
-        if is_discursiva:
+        # Rótulo de Cabeçalho Oficial
+        if is_pei_doc:
+            label_prova = "AVALIAÇÃO ADAPTADA (RECUPERAÇÃO PEI)" if "RECUPERA" in titulo_upper else "AVALIAÇÃO ADAPTADA (PEI)"
+        elif is_discursiva:
             if "RECUPERAÇÃO" in titulo_upper or "RECUPERACAO" in titulo_upper:
                 label_prova = "RECUPERAÇÃO PARALELA (AVALIAÇÃO DISCURSIVA)"
             else:
                 label_prova = "AVALIAÇÃO DE SEGUNDA CHAMADA (DISCURSIVA)"
         else:
-            label_prova = "AVALIAÇÃO ADAPTADA" if is_pei_doc else "AVALIAÇÃO DE MATEMÁTICA (ENEM/SAEB)"
+            label_prova = "AVALIAÇÃO DE MATEMÁTICA (ENEM/SAEB)"
 
-        val_total_num = helper_sosa_float(info.get('valor', 10.0 if is_discursiva else 4.0))
-        if val_total_num == 0: val_total_num = 10.0 if is_discursiva else 4.0
+        # Valor sempre 10.0 para recuperação
+        val_total_num = 10.0 if any(x in titulo_upper or x in tipo_prova_info for x in ["RECUPERAÇÃO", "RECUPERACAO", "REC_"]) else helper_sosa_float(info.get('valor', 4.0))
+        if val_total_num == 0: val_total_num = 10.0
 
-        val_q_calc = val_total_num / num_total_q if num_total_q > 0 else (10.0 / max(num_total_q, 1))
+        val_q_calc = val_total_num / num_total_q if num_total_q > 0 else 1.0
         val_total_str = f"{val_total_num:.1f}"
         val_q_str = f"{val_q_calc:.2f}".replace(".", ",")
         
@@ -685,7 +693,7 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         # 2. ORIENTAÇÕES DE EXECUÇÃO
         top_table = doc.add_table(rows=1, cols=1)
         top_table.style = 'Table Grid'
-        top_table.columns[0].width = Inches(7.0)
+        top_table.columns[0].width = Inches(7.2)
         c_orient = top_table.cell(0, 0)
         set_cell_background(c_orient, "F8FAFC")
         
@@ -697,16 +705,21 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         
         if is_discursiva:
             orient_list = [
-                f"Valor Total: {val_total_str} pontos | Avaliação Discursiva Aberta.",
+                f"Valor Total: {val_total_str} pontos (Escala 0 a 10) | Questões Discursivas.",
                 "Apresente de forma clara a memória de cálculo em cada questão no espaço reservado.",
                 "Respostas sem a devida demonstração matemática do cálculo não receberão pontuação integral.",
                 "Utilize caneta esferográfica preta ou azul para a declaração da resposta final."
+            ]
+        elif is_pei_doc:
+            orient_list = [
+                f"Valor Total: {val_total_str} pontos (Escala 0 a 10) | Avaliação Adaptada.",
+                "Leia atentamente as questões e marque a alternativa correta (A, B ou C).",
+                "Consulte as dicas [PARA LEMBRAR] em cada questão para auxiliar na resolução."
             ]
         else:
             orient_list = [
                 f"Valor Total: {val_total_str} pts | Valor por Questão: {val_q_str} pts.",
                 "Preencha o Cartão-Resposta com caneta esferográfica preta ou azul.",
-                "🚨 REGRA DA MEMÓRIA DE CÁLCULO: Apresente a resolução matemática no papel para validação do item.",
                 "Mantenha os 4 marcadores pretos (■) dos cantos limpos para leitura óptica."
             ]
 
@@ -717,22 +730,28 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
 
         doc.add_paragraph()
 
-        # 3. CARTÃO OMR OU TRANSIÇÃO DISCURSIVA
-        if not is_discursiva:
-            # Insere Cartão OMR Fiducial apenas para provas objetivas
-            adicionar_cartao_resposta_fiducial_word(doc, num_total_q, is_pei_doc)
+        # 3. RENDERIZAÇÃO DO CONTEÚDO
+        if is_discursiva:
+            # 1 Coluna Larga com Caixas de Cálculo para Provas Discursivas Regulares
+            renderizar_conteudo_discursivo_com_caixas(doc, corpo_bruto)
+        elif is_pei_doc:
+            # Prova PEI: 2 Colunas Limpas, Elegantes, com 3 Opções A, B, C (SEM caixas cinzas deformadas)
+            new_section = doc.add_section(WD_SECTION.CONTINUOUS)
+            sectPr = new_section._sectPr
+            cols = sectPr.xpath('./w:cols')[0]
+            cols.set(qn('w:num'), '2')
+            cols.set(qn('w:space'), '420')
+            renderizar_conteudo_com_tabelas(doc, corpo_bruto)
+        else:
+            # Prova Regular Objetiva: Cartão OMR + 2 Colunas
+            adicionar_cartao_resposta_fiducial_word(doc, num_total_q, is_pei=False)
             doc.add_paragraph()
-            
-            # 2 Colunas para Provas Objetivas
             new_section = doc.add_section(WD_SECTION.CONTINUOUS)
             sectPr = new_section._sectPr
             cols = sectPr.xpath('./w:cols')[0]
             cols.set(qn('w:num'), '2')
             cols.set(qn('w:space'), '450')
             renderizar_conteudo_com_tabelas(doc, corpo_bruto)
-        else:
-            # 1 Coluna Larga com Caixas de Cálculo para Provas Discursivas
-            renderizar_conteudo_discursivo_com_caixas(doc, corpo_bruto)
 
         doc.save(file_stream)
         file_stream.seek(0)
