@@ -11,12 +11,13 @@ from datetime import date, timedelta, datetime, timezone
 # ==============================================================================
 
 def limpar_texto(texto):
+    """Remove marcações markdown e caracteres especiais mantendo o texto limpo."""
     if not texto: return ""
     return texto.replace("**", "").replace("###", "").replace("##", "").replace("#", "").replace("__", "").replace("`", "").strip()
 
 def gerar_nome_material_elite(ano, tipo, detalhe):
     """
-    Gera o nome legível: 6º Ano - Aula 1 - Jornada Pedagógica
+    Gera o nome padronizado oficial: 6º Ano - Aula 1 - Jornada Pedagógica
     ano: int ou str (6)
     tipo: str (Aula 1, Sonda, Projeto)
     detalhe: str (Semana 01, I Trimestre, Nome do Tema)
@@ -25,7 +26,7 @@ def gerar_nome_material_elite(ano, tipo, detalhe):
     return f"{ano_limpo}º Ano - {tipo} - {detalhe}"
 
 def gerar_sosa_id(tipo, ano, trimestre):
-    """Gera um DNA único para o material respeitando o fuso de Itabuna (UTC-3)"""
+    """Gera um DNA único para o material respeitando o fuso de Itabuna (UTC-3)."""
     fuso_itabuna = timezone(timedelta(hours=-3))
     data_itabuna = datetime.now(fuso_itabuna)
     
@@ -36,25 +37,28 @@ def gerar_sosa_id(tipo, ano, trimestre):
     return f"{prefixo}-{ano_num}AN-{str(trimestre)[0]}-{data_slug}-{hash_curto}"
 
 # ==============================================================================
-# 2. FUNÇÕES DE CONVERSÃO NUMÉRICA (GOOGLE SHEETS)
+# 2. FUNÇÕES DE CONVERSÃO NUMÉRICA & LATEX (GOOGLE SHEETS / PROVAS)
 # ==============================================================================
 
 def sosa_to_float(valor):
     """
-    CONVERSOR UNIVERSAL SOSA (ANTI-ERRO 0.3)
-    Converte qualquer entrada (string com vírgula, ponto ou None) em float puro.
+    CONVERSOR UNIVERSAL SOSA (ANTI-ERRO):
+    Converte qualquer entrada (string com vírgula, ponto, moeda ou texto anexado) em float puro.
     """
     if valor is None or str(valor).strip() == "" or str(valor).lower() == "nan":
         return 0.0
     try:
-        limpo = str(valor).replace(" ", "").replace(",", ".")
-        return float(limpo)
-    except ValueError:
+        s = str(valor).strip().replace(" ", "").replace(",", ".")
+        m = re.search(r'[-+]?\d*\.?\d+', s)
+        if m:
+            return float(m.group(0))
+        return 0.0
+    except (ValueError, TypeError):
         return 0.0
 
 def sosa_to_str(valor):
     """
-    CONVERSOR FLOAT PARA GOOGLE SHEETS COM VÍRGULA (ANTI-ATTRIBUTE_ERROR)
+    CONVERSOR FLOAT PARA GOOGLE SHEETS COM VÍRGULA (ANTI-ATTRIBUTE_ERROR):
     Converte float/int em string formatada com vírgula padrão Google Sheets (ex: 3.5 -> '3,50' ou '3,5').
     """
     if valor is None or str(valor).strip() == "" or str(valor).lower() == "nan":
@@ -66,7 +70,10 @@ def sosa_to_str(valor):
         return "0,00"
 
 def preparar_para_leitura(texto):
-    """Filtro de leitura global para fórmulas LaTeX, prompts de imagem e markdown."""
+    """
+    Filtro de leitura global para fórmulas LaTeX ($$ ... $$), prompts de imagem e markdown.
+    Garante que expressões matemáticas sejam renderizadas perfeitamente no Streamlit.
+    """
     if not texto or not isinstance(texto, str): return ""
     
     texto = texto.replace('\x0c', '\\f')
@@ -122,29 +129,30 @@ def extrair_valor_real_prova(texto_conteudo, nome_avaliacao=""):
 
 def formatar_data_br(valor):
     """
-    CONVERSOR CRONOLÓGICO SOBERANO SOSA (ANTI-SERIAL EXCEL / ISO)
-    Converte números seriais (46149, 46233), datas ISO ou nulas para DD/MM/YYYY.
+    CONVERSOR CRONOLÓGICO SOBERANO SOSA (ANTI-SERIAL EXCEL / ISO):
+    Converte números seriais (46149, 46233, 46259.0), datas ISO ou nulas para DD/MM/YYYY.
     """
     if not valor or str(valor).strip() == "" or str(valor).lower() == "nan":
         return ""
     
     val_str = str(valor).strip()
     
-    # Caso 1: Número serial do Excel/Google Sheets (ex: 46149)
-    if val_str.replace('.', '', 1).isdigit():
-        try:
-            num = int(float(val_str))
-            if 40000 <= num <= 50000:
+    # Caso 1: Número serial do Excel/Google Sheets (ex: 46149 ou 46149.0)
+    try:
+        val_clean_num = val_str.split('.')[0] if '.' in val_str else val_str
+        if val_clean_num.isdigit():
+            num = int(val_clean_num)
+            if 40000 <= num <= 55000:
                 dt = date(1899, 12, 30) + timedelta(days=num)
                 return dt.strftime("%d/%m/%Y")
-        except:
-            pass
+    except Exception:
+        pass
     
     # Caso 2: Formato ISO (YYYY-MM-DD)
     if "-" in val_str and len(val_str) >= 10:
         try:
             return datetime.strptime(val_str[:10], "%Y-%m-%d").strftime("%d/%m/%Y")
-        except:
+        except Exception:
             pass
             
     # Caso 3: Formato BR já válido
@@ -169,7 +177,7 @@ def sanitizar_nome_variante_soberana(nome_av):
     return nome
 
 def obter_info_trimestre(dt):
-    # Datas oficiais do Calendário Escolar da Prefeitura de Itabuna 2026
+    """Retorna o trimestre e o intervalo oficial do Calendário Escolar de Itabuna 2026."""
     t1 = (date(2026, 2, 9), date(2026, 5, 22))
     t2 = (date(2026, 5, 25), date(2026, 9, 4))
     t3 = (date(2026, 9, 8), date(2026, 12, 17))
@@ -180,6 +188,7 @@ def obter_info_trimestre(dt):
     return "Recesso/Jornada", (dt, dt)
 
 def verificar_feriado_itabuna(dt):
+    """Feriados municipais de Itabuna e nacionais de 2026."""
     feriados = {
         date(2026, 3, 19): "São José (Padroeiro)",
         date(2026, 4, 2): "Paixão de Cristo",
@@ -195,6 +204,7 @@ def verificar_feriado_itabuna(dt):
     return feriados.get(dt, None)
 
 def gerar_semanas():
+    """Gera a grade semanal oficial do ano letivo de 2026."""
     semanas = []
     data_atual = date(2026, 2, 2)
     fim_ano = date(2026, 12, 18)
@@ -218,6 +228,10 @@ def gerar_gabarito_balanceado(qtd_questoes):
     letras = ['A', 'B', 'C', 'D', 'E']
     base = (letras * ((qtd_questoes // 5) + 1))[:qtd_questoes]
     
+    if qtd_questoes <= 2:
+        random.shuffle(base)
+        return base
+
     while True:
         random.shuffle(base)
         valido = True
@@ -229,7 +243,7 @@ def gerar_gabarito_balanceado(qtd_questoes):
             return base
 
 def embaralhar_item_estruturado(item_dict):
-    """Embaralha as alternativas de uma questão e recalcula o gabarito."""
+    """Embaralha as alternativas de uma questão e recalcula o gabarito com precisão."""
     alt_keys = ['ALT_A', 'ALT_B', 'ALT_C', 'ALT_D', 'ALT_E']
     textos_alts = [item_dict[k] for k in alt_keys]
     
@@ -303,7 +317,10 @@ def extrair_texto_pdf_por_paginas(pdf_bytes, paginas_list):
         return f"⚠️ Erro ao extrair texto do PDF: {e}"
 
 def obter_regex_trimestre(trimestre_str):
-    """Detector de Trimestre com suporte a números romanos e ordinais."""
+    """
+    Detector universal de Trimestre com suporte a algarismos romanos, ordinais e abreviações.
+    Evita falso positivo do 'I' dentro de 'II' ou 'III'.
+    """
     if not trimestre_str or str(trimestre_str).strip() in ["", "Todos"]:
         return r".*"
     
