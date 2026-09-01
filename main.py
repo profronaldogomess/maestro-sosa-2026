@@ -1,17 +1,16 @@
 import io
+import time
+import os
+import re
+import random
+from datetime import date, datetime, timedelta, timezone
 import streamlit as st
 import pandas as pd
-import gspread
-from datetime import date, datetime, timedelta, timezone
-import random
+import plotly.express as px
 import database as db
 import ai_engine as ai
 import utils as util
-import time
-import os
-import plotly.express as px
 import exporter
-import re
 
 # --- CONFIGURAÇÃO DE ALTA PERFORMANCE (BRANDING EXCLUSIVO) ---
 st.set_page_config(
@@ -24,7 +23,6 @@ st.set_page_config(
 # --- SISTEMA DE BLINDAGEM E PERSISTÊNCIA (6 HORAS) ---
 def check_password():
     """Gerencia o acesso com card Glassmorphism executivo e persistência de 6h."""
-    
     if "password_correct" not in st.session_state:
         st.session_state["password_correct"] = False
     if "login_timestamp" not in st.session_state:
@@ -77,7 +75,7 @@ def check_password():
 if not check_password():
     st.stop()
 
-# --- CARREGAMENTO DE DADOS GLOBAL SOBERANO (EXECUTADO ANTES DA SIDEBAR) ---
+# --- CARREGAMENTO DE DADOS GLOBAL SOBERANO ---
 wb, (df_alunos, df_curriculo, df_materiais, df_planos, df_aulas, df_notas, df_diario, df_turmas, df_relatorios, df_horarios, df_registro_aulas, df_diagnosticos) = db.carregar_tudo()
 
 # --- MOTOR DE NAVEGAÇÃO ONE-CLICK (GLOBAL) ---
@@ -91,54 +89,9 @@ def navegar_para(destino):
 def atualizar_menu():
     st.session_state.menu_atual = st.session_state._menu_radio
 
-# FILTRO DE LEITURA GLOBAL (LATEX, TABELAS E PROMPTS)
-def preparar_para_leitura(texto):
-    if not texto or not isinstance(texto, str): return ""
-    
-    texto = texto.replace('\x0c', '\\f')
-    texto = re.sub(r'(?<!\$)\\\bfrac\{([^}]+)\}\{([^}]+)\}(?!\$)', r'$$ \\frac{\1}{\2} $$', texto)
-    texto = re.sub(r'(?<!\$)\\\b(times|div|sqrt|circ|degree)\b(?!\$)', r'$$ \\\1 $$', texto)
-    texto = re.sub(r'\$\$\s*\$\$', '$$', texto)
-    texto = re.sub(r'\[GEOGEBRA\](.*?)\[/GEOGEBRA\]', '', texto, flags=re.IGNORECASE | re.DOTALL)
-    
-    texto = re.sub(
-        r'\[\s*PROMPT IMAGEM:(.*?)\s*\]', 
-        r'\n\n**[ILUSTRAÇÃO TÉCNICA SUGERIDA]**\n```english\n\1\n```\n\n', 
-        texto, 
-        flags=re.IGNORECASE | re.DOTALL
-    )
-    
-    return texto
-
-def extrair_valor_real_prova(texto_conteudo, nome_avaliacao=""):
-    """Função global de extração de valor imune a falhas de cache de módulo."""
-    if texto_conteudo and isinstance(texto_conteudo, str):
-        m1 = re.search(r'\[\s*VALOR\s*[:\-]?\s*([\d\.,]+)\s*\]', texto_conteudo, re.IGNORECASE)
-        if m1:
-            v = util.sosa_to_float(m1.group(1))
-            if v > 0: return v
-        
-        m2 = re.search(r'\bVALOR\s*[:\-]\s*([\d\.,]+)', texto_conteudo, re.IGNORECASE)
-        if m2:
-            v = util.sosa_to_float(m2.group(1))
-            if v > 0: return v
-
-    nome_upper = str(nome_avaliacao).upper()
-    texto_upper = str(texto_conteudo).upper() if texto_conteudo else ""
-    
-    if any(x in nome_upper or x in texto_upper for x in ["FINAL", "REC_FINAL", "RECUPERAÇÃO FINAL", "RECUPERACAO FINAL"]):
-        return 10.0
-    elif any(x in nome_upper or x in texto_upper for x in ["TESTE", "SIMULADO", "TRABALHO"]):
-        return 3.0
-    elif any(x in nome_upper or x in texto_upper for x in ["PROVA", "AVALIAÇÃO", "AVALIACAO", "EXAME", "2ª CHAMADA", "2A CHAMADA"]):
-        return 4.0
-    elif any(x in nome_upper or x in texto_upper for x in ["SONDA", "DIAGNÓSTICA", "DIAGNOSTICA"]):
-        return 10.0
-
-    return 4.0
-
-# Vincula ao util para compatibilidade total
-util.extrair_valor_real_prova = extrair_valor_real_prova
+# Centraliza helpers do utils globalmente
+preparar_para_leitura = util.preparar_para_leitura
+extrair_valor_real_prova = util.extrair_valor_real_prova
 
 # --- ESTILIZAÇÃO EXECUTIVA & DESIGN SYSTEM GLASSMORPHISM ---
 BRAND_BLUE = "#2962FF"
@@ -1925,9 +1878,7 @@ elif menu == "📝 Central de Avaliações":
             is_rec_paralela = (modo_arq == "Recuperação Paralela")
             is_variante = (modo_arq == "Variante Tipo B")
 
-            # -------------------------------------------------------------
             # SEGUNDA CHAMADA VINCULADA
-            # -------------------------------------------------------------
             if is_2a_chamada:
                 with st.container(border=True):
                     st.markdown("#### Configuração de Segunda Chamada Vinculada")
@@ -1958,7 +1909,7 @@ elif menu == "📝 Central de Avaliações":
                 if prova_origem_sc:
                     match_sc = df_aulas[(df_aulas['ANO'].astype(str).str.contains(str(ano_sc))) & (df_aulas['TIPO_MATERIAL'] == prova_origem_sc)] if not df_aulas.empty else pd.DataFrame()
                     txt_origem_sc = str(match_sc.iloc[0].get('CONTEUDO', '')) if not match_sc.empty else ""
-                    val_origem = util.sosa_to_float(ai.extrair_tag(txt_origem_sc, "VALOR")) or 4.0
+                    val_origem = util.extrair_valor_real_prova(txt_origem_sc, prova_origem_sc)
                     q_origem_raw = ai.extrair_tag(txt_origem_sc, "QUESTOES") or txt_origem_sc
                     qtd_detectada_sc = len(re.findall(r"(?i)QUESTÃO\s*0?\d+", q_origem_raw)) or 10
 
@@ -1995,9 +1946,7 @@ elif menu == "📝 Central de Avaliações":
                             status_sc.update(label="Segunda Chamada gerada e sincronizada no Google Drive!", state="complete")
                             st.balloons(); time.sleep(0.8); st.rerun()
 
-            # -------------------------------------------------------------
             # REGULAR / RECUPERAÇÃO PARALELA / RECUPERAÇÃO FINAL
-            # -------------------------------------------------------------
             elif "Regular" in modo_arq or "Sonda" in modo_arq or is_rec_paralela or is_rec_final:
                 with st.container(border=True):
                     st.markdown("#### 1. Parâmetros da Turma & Pontuação Oficial")
@@ -2018,7 +1967,7 @@ elif menu == "📝 Central de Avaliações":
                     qtd_q = c4.number_input("Quantidade de Questões:", 1, 30, 10, key=f"qtd_q_input_{v}")
 
                     if is_rec_paralela:
-                        st.info("ℹ️ **Recuperação Paralela Discursiva (0 a 10 pontos):** Questões abertas para os alunos regulares e prova adaptada (A, B, C e 10 Bento Boxes) para alunos PEI. A nota comporá a fórmula oficial: $\\text{Média Final} = \\max(\\text{Média Inicial}, (\\text{Média Inicial} + \\text{REC})/2)$ com arredondamento 0,5.")
+                        st.info("ℹ️ **Recuperação Paralela Discursiva (0 a 10 pontos):** Questões abertas para os alunos regulares e prova adaptada (A, B, C e 10 Bento Boxes) para alunos PEI. A nota comporá a fórmula oficial com arredondamento 0,5.")
                         perfil_rigor = "Recuperação Paralela Discursiva"
                     elif is_rec_final:
                         st.info("ℹ️ **Recuperação Final Anual:** Escopo de todo o ano letivo (10,0 pts).")
@@ -2069,7 +2018,6 @@ elif menu == "📝 Central de Avaliações":
                                 txt_av_origem_puxada = str(m_orig.iloc[0].get('CONTEUDO', ''))
                                 c_p_rec2.success("Prova Minerada!")
                                 
-                                # MINERAÇÃO AUTOMÁTICA DOS TÓPICOS DA PROVA BASE
                                 grade_orig_p = ai.extrair_tag(txt_av_origem_puxada, "GRADE_DE_CORRECAO") or ai.extrair_tag(txt_av_origem_puxada, "GRADE_DE_CORRECAO_PEI")
                                 if grade_orig_p:
                                     itens_grade = re.findall(r'(?i)(?:DESCRITOR_SAEB|HABILIDADE|BNCC|DESCRITOR)\s*:\s*([^|\]\n]+)', grade_orig_p)
@@ -2112,7 +2060,6 @@ elif menu == "📝 Central de Avaliações":
                                     if bytes_pdf_av:
                                         txt_av_teo_ext = util.extrair_texto_pdf_por_paginas(bytes_pdf_av, list_p_av)
 
-                    # Se uma prova foi minerada, usa os tópicos dela; se não, usa os padrões
                     if topicos_extraidos_da_prova:
                         topicos_candidatos_unicos = topicos_extraidos_da_prova
                         texto_padrao_pratica = f"Recuperação Paralela (Escala 0 a 10) baseada nos itens da prova '{prova_rec_base_sel}'."
@@ -2137,7 +2084,6 @@ elif menu == "📝 Central de Avaliações":
 
                     contexto_base_texto = ""
                     if txt_av_origem_puxada:
-                        # Limpa qualquer tag antiga de 4.0 da prova original para não contaminar a IA
                         txt_limpo_origem = re.sub(r'\[\s*VALOR\s*[:\-]?\s*[\d\.,]+\s*\]', '[VALOR: 10.0]', txt_av_origem_puxada, flags=re.IGNORECASE)
                         contexto_base_texto += f"--- PROVA ORIGINAL A SER RECUPERADA (VALOR TOTAL: 10.0 PONTOS) ---\n{txt_limpo_origem}\n\n"
                     if pincamento_pratica.strip(): contexto_base_texto += f"--- DIRETRIZES DO PROFESSOR ---\n{pincamento_pratica.strip()}\n\n"
@@ -2145,9 +2091,8 @@ elif menu == "📝 Central de Avaliações":
 
                 with st.container(border=True):
                     st.markdown(f"#### 3. Conteúdos da Avaliação ({ano_av}º Ano)")
-                    st.caption("Os conteúdos da prova selecionada já estão pré-marcados abaixo. Desmarque com 'X' apenas o que não quiser cobrar:")
+                    st.caption("Os conteúdos da prova selecionada já estão pré-marcados abaixo. Desmarque apenas o que não quiser cobrar:")
                     
-                    # Pré-seleção automática de 100% dos tópicos da prova selecionada!
                     assuntos_marcados_prof = st.multiselect(
                         "Conteúdos Selecionados para a Recuperação:",
                         options=topicos_candidatos_unicos,
@@ -2175,8 +2120,6 @@ elif menu == "📝 Central de Avaliações":
                         gabarito_mestre = util.gerar_gabarito_balanceado(qtd_q)
                         mapa_inicial = []
                         tipo_prova_tag = "RECUPERAÇÃO FINAL" if is_rec_final else ("RECUPERAÇÃO" if is_rec_paralela else "AVALIAÇÃO")
-                        
-                        # Trava rigorosa: Recuperação Paralela é SEMPRE 10.0 pontos
                         valor_final_travado = 10.0 if (is_rec_paralela or is_rec_final) else v_total
                         
                         for i in range(qtd_q):
@@ -2206,7 +2149,7 @@ elif menu == "📝 Central de Avaliações":
                         st.rerun()
 
         # ======================================================================
-        # FASE 2: FORJA DISCURSIVA / ABERTA (SEM ALTERNATIVAS A, B, C, D, E)
+        # FASE 2: FORJA DISCURSIVA / ABERTA
         # ======================================================================
         elif f['fase'] == 2:
             is_rec_paralela_fase2 = f['info'].get('is_rec_paralela', False)
@@ -2234,7 +2177,6 @@ elif menu == "📝 Central de Avaliações":
                 if st.button(rotulo_btn_lote, type="primary", use_container_width=True, key=f"btn_lote_av_{v}"):
                     with st.status("Estruturando itens abertos com memória de cálculo e perícia...", expanded=True) as status_lote:
                         if is_rec_paralela_fase2:
-                            # GERAÇÃO 100% DISCURSIVA (SEM ALTERNATIVAS A, B, C, D, E)
                             prompt_disc_rec = (
                                 f"SÉRIE: {f['info']['ano']}\n"
                                 f"VALOR TOTAL DA AVALIAÇÃO: {f['info']['valor']} pontos (Distribuir {valor_por_item:.2f} pts por questão).\n"
@@ -2253,7 +2195,6 @@ elif menu == "📝 Central de Avaliações":
                             status_lote.write("Processando questões abertas com Gemini 3.7 Flash...")
                             res_disc = ai.gerar_ia("ARQUITETO_RECUPERACAO_DISCURSIVA", prompt_disc_rec, usar_busca=False)
                             
-                            # Extração dos enunciados abertos
                             texto_questoes_disc = ai.extrair_tag(res_disc, "QUESTOES") or res_disc
                             blocos_q = re.split(r"(?i)\*\*QUEST[AÃ]O\s*0?(\d+)[^\-\n]*[\-\:]\*\*", texto_questoes_disc)
                             
@@ -2285,7 +2226,6 @@ elif menu == "📝 Central de Avaliações":
                                     item['status'] = 'revisao'
 
                         else:
-                            # GERAÇÃO REGULAR DE MÚLTIPLA ESCOLHA
                             prompt_lote = (
                                 f"SÉRIE: {f['info']['ano']}\n"
                                 f"VALOR TOTAL DA PROVA: {f['info']['valor']}\n\n"
@@ -2400,7 +2340,7 @@ elif menu == "📝 Central de Avaliações":
                     st.rerun()
 
         # ======================================================================
-        # FASE 3: MATRIZ INCLUSIVA PEI (ADAPTAÇÃO EM 3 ALTERNATIVAS & BENTO BOXES)
+        # FASE 3: MATRIZ INCLUSIVA PEI
         # ======================================================================
         elif f['fase'] == 3:
             st.markdown("### Fase 3: Matriz Inclusiva PEI (Recuperação Adaptada)")
@@ -2685,13 +2625,6 @@ elif menu == "📝 Central de Avaliações":
         renderizar_expedicao_fragmento()
 
 
-
-
-
-
-
-
-
 # ==============================================================================
 # MÓDULO: CENTRAL DE INTELIGÊNCIA DE RESULTADOS (CIR / SCANNER DE GABARITOS)
 # (V2026.PRO_EXECUTIVE - VISÃO COMPUTACIONAL, ANTI-TROCA E AUDITORIA TRI)
@@ -2712,16 +2645,9 @@ elif menu == "📸 Scanner de Gabaritos":
     elif not df_alunos.empty and 'TURMA' in df_alunos.columns:
         lista_turmas_cir = sorted(df_alunos['TURMA'].unique())
 
-    def obter_regex_trimestre(trimestre_str):
-        if not trimestre_str or trimestre_str == "Todos": return r".*"
-        t_upper = str(trimestre_str).upper()
-        if "III" in t_upper or "TERCEIRO" in t_upper: return r"(?<!I)III(?![I])"
-        elif "II" in t_upper or "SEGUNDO" in t_upper: return r"(?<!I)II(?![I])"
-        else: return r"(?<!I)I(?![I])"
-
     def obter_avaliacoes_unificadas_cir(turma, trimestre_nome):
         if not turma or not trimestre_nome: return []
-        padrao_regex_trim = obter_regex_trimestre(trimestre_nome)
+        padrao_regex_trim = util.obter_regex_trimestre(trimestre_nome)
         serie_num = "".join(filter(str.isdigit, str(turma)))
         
         opcoes_encontradas = set()
@@ -2879,13 +2805,9 @@ elif menu == "📸 Scanner de Gabaritos":
                 sit_atual = str(al_data.get('Situação', ''))
                 perfil_estudante = str(al_data.get('Perfil', 'REGULAR')).upper()
                 
-                # Identifica se o exame é discursivo/aberto ou objetivo
                 is_exame_discursivo = any(x in av_alvo_dialog.upper() for x in ["2ª_CHAMADA", "2A_CHAMADA", "DISCURSIVA", "RECUPERACAO", "RECUPERAÇÃO"]) and "TIPO" not in av_alvo_dialog.upper()
-                
-                # Identifica se o estudante é PEI N1/N2
                 is_estudante_pei = (perfil_estudante == "PEI") or ("PEI" in str(al_data.get('Versão', '')).upper())
 
-                # Resgata o texto completo da prova para extração precisa da chave
                 df_prova_ref = df_aulas[df_aulas['TIPO_MATERIAL'].str.contains(nome_curto_av_dialog, case=False, na=False)] if not df_aulas.empty else pd.DataFrame()
                 txt_prova_completa = str(df_prova_ref.iloc[0].get('CONTEUDO', '')) if not df_prova_ref.empty else ""
                 
@@ -2897,9 +2819,7 @@ elif menu == "📸 Scanner de Gabaritos":
                 
                 nova_foto_pericia = c_f2.file_uploader("Anexar / Substituir Imagem JPG:", type=["jpg", "jpeg", "png"], key=f"up_modal_foto_{id_al_pericia}_{v}")
 
-                # -------------------------------------------------------------
-                # CASO 1: AVALIAÇÃO DISCURSIVA / ABERTA (SEGUNDA CHAMADA)
-                # -------------------------------------------------------------
+                # CASO 1: AVALIAÇÃO DISCURSIVA / ABERTA
                 if is_exame_discursivo:
                     st.markdown(f"#### Lançamento Discursivo Oficial (Teto: **{val_real_instrumento:.1f} pts**)")
                     st.caption("Avaliação aberta com memória de cálculo. Lance a pontuação real obtida pelo estudante:")
@@ -2935,11 +2855,8 @@ elif menu == "📸 Scanner de Gabaritos":
                             db.limpar_notas_turma_trimestre(t_sel_dialog, tr_sel_dialog)
                             st.cache_data.clear(); st.success(f"Nota de {aluno_pericia_nome} ({nova_nota_disc:.1f} pts) homologada!"); time.sleep(0.5); st.rerun()
 
-                # -------------------------------------------------------------
                 # CASO 2: AVALIAÇÃO OBJETIVA (REGULAR OU PEI N1/N2)
-                # -------------------------------------------------------------
                 else:
-                    # EXTRAÇÃO DA CHAVE CORRETA (PEI = A, B, C | REGULAR = A, B, C, D, E)
                     gab_aluno_especifico_list = ai.extrair_gab_universal_com_fallback(txt_prova_completa, is_pei=is_estudante_pei, nivel_pei="NIVEL_1")
                     gab_aluno_dict = {i+1: letra for i, letra in enumerate(gab_aluno_especifico_list)}
                     
@@ -3102,7 +3019,7 @@ elif menu == "📸 Scanner de Gabaritos":
             else:
                 nome_filtro_pendente = at_sel.split("-")[0].strip()
                 df_diag_turma = df_diagnosticos[df_diagnosticos['TURMA'] == t_sel] if not df_diagnosticos.empty else pd.DataFrame()
-                padrao_trim = obter_regex_trimestre(tr_sel)
+                padrao_trim = util.obter_regex_trimestre(tr_sel)
                 tipo_base = at_sel.split("-")[0].strip().upper()
                 serie_num = "".join(filter(str.isdigit, t_sel))
 
@@ -3250,11 +3167,7 @@ elif menu == "📸 Scanner de Gabaritos":
 
                             if material_ref is not None:
                                 txt_ref = str(material_ref.get('CONTEUDO', ''))
-                                val_tag = ai.extrair_tag(txt_ref, "VALOR")
-                                if not val_tag or util.sosa_to_float(val_tag) == 0:
-                                    m_v = re.search(r"VALOR\s*[:\-]*\s*([\d\.,]+)", txt_ref, re.IGNORECASE)
-                                    val_tag = m_v.group(1) if m_v else "3.0"
-                                v_total_at = util.sosa_to_float(val_tag) if util.sosa_to_float(val_tag) > 0 else 3.0
+                                v_total_at = util.extrair_valor_real_prova(txt_ref, at_sel)
 
                                 gab_alvo = ai.extrair_gab_universal_com_fallback(txt_ref, is_pei_grading, nivel_alvo_pei)
                                 if not gab_alvo:
@@ -3610,7 +3523,7 @@ elif menu == "📸 Scanner de Gabaritos":
                         renderizar_mesa_correcao_fragmento()
 
         # ==============================================================================
-        # ABA 2: TRIBUNAL DE AUDITORIA (COM RECÁLCULO AUTOMÁTICO EM LOTE)
+        # ABA 2: TRIBUNAL DE AUDITORIA
         # ==============================================================================
         with tab_auditoria:
             st.markdown("### Tribunal de Auditoria de Resultados")
@@ -3620,7 +3533,7 @@ elif menu == "📸 Scanner de Gabaritos":
                 tr_sel_h = c_h2.selectbox("Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], key=f"tr_h_{v}")
 
             if t_sel_h and tr_sel_h:
-                padrao_regex_trim = obter_regex_trimestre(tr_sel_h)
+                padrao_regex_trim = util.obter_regex_trimestre(tr_sel_h)
                 serie_num = "".join(filter(str.isdigit, t_sel_h))
                 
                 df_prova_trib = pd.DataFrame()
@@ -3637,7 +3550,6 @@ elif menu == "📸 Scanner de Gabaritos":
                     df_prova_trib = df_aulas[df_aulas['TIPO_MATERIAL'].str.contains(nome_curto_av, case=False, na=False)] if not df_aulas.empty else pd.DataFrame()
                     txt_prova_trib = str(df_prova_trib.iloc[0].get('CONTEUDO', '')) if not df_prova_trib.empty else ""
                     
-                    # EXTRAÇÃO BLINDADA DO VALOR REAL DO EXAME
                     v_total_av = extrair_valor_real_prova(txt_prova_trib, av_alvo_h)
 
                     if not df_prova_trib.empty:
@@ -3696,7 +3608,6 @@ elif menu == "📸 Scanner de Gabaritos":
                             "Situação": situacao_txt, "Versão": versao_prova, "Nota": nota_atual, "Dupla / Grupo": grupo_parceiros if grupo_parceiros else "Individual", "Evidência": link_ev, "_Respostas": respostas_salvas
                         })
 
-                    # BOTÃO DE RECÁLCULO AUTOMÁTICO EM LOTE (REPARA PEI E REGULARES - GRAVAÇÃO ATÔMICA)
                     st.markdown("#### Ações de Auditoria & Recálculo em Lote")
                     
                     if st.button("⚡ Recalcular Notas de Toda a Turma com Chaves Corretas (Regulares + PEI)", type="primary", use_container_width=True, key=f"btn_recalc_lote_all_{v}"):
@@ -3725,7 +3636,6 @@ elif menu == "📸 Scanner de Gabaritos":
                                         resp_limpa_b = resp_bruta_b.split("|GRUPO:")[0]
                                         respostas_al_lista = resp_limpa_b.split(';')
                                         
-                                        # Identifica se o aluno é PEI
                                         is_al_pei = False
                                         al_match_b = alunos_turma_h[alunos_turma_h['ID'].apply(db.limpar_id) == id_al_b]
                                         if not al_match_b.empty:
@@ -3733,7 +3643,6 @@ elif menu == "📸 Scanner de Gabaritos":
                                             if nec_b not in ["NENHUMA", "", "NAN", "TÍPICO", "TIPICO", "ALTA PERFORMANCE", "PENDENTE", "DEFASAGEM LEITURA", "DEFASAGEM MATEMÁTICA"]:
                                                 is_al_pei = True
                                         
-                                        # Seleciona a chave exata (A, B, C para PEI | A, B, C, D, E para Regular)
                                         gab_correto_aluno = gab_pei_list if is_al_pei else gab_reg_list
                                         peso_q_batch = v_total_av / len(gab_correto_aluno) if len(gab_correto_aluno) > 0 else 0.0
                                         
@@ -3750,12 +3659,10 @@ elif menu == "📸 Scanner de Gabaritos":
                                         
                                         nova_nota_calc_final = min(v_total_av, nova_nota_calc)
                                         
-                                        # Atualiza diretamente na matriz em memória (Índice 6 = Coluna 7: NOTA_CALCULADA)
                                         formato_str = f"{nova_nota_calc_final:.2f}".replace(".", ",")
                                         row_b[6] = formato_str
                                         updates_count += 1
 
-                            # Gravação atômica em 1 único comando no Google Sheets (Zero lag / Zero erro)
                             ws_g_batch.clear()
                             ws_g_batch.update(values=dados_g_batch, range_name='A1')
 
@@ -3988,7 +3895,7 @@ elif menu == "📸 Scanner de Gabaritos":
                 st.info("Selecione a Turma e o Instrumento acima para carregar o Raio-X.")
             else:
                 nome_curto_av = at_sel_r.split("-")[0].strip()
-                padrao_regex_trim = obter_regex_trimestre(tr_sel_r)
+                padrao_regex_trim = util.obter_regex_trimestre(tr_sel_r)
                 serie_num_r = "".join(filter(str.isdigit, t_sel_r))
                 
                 mask_diag = (df_diagnosticos['TURMA'] == t_sel_r) & (
