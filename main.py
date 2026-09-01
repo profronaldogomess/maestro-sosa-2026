@@ -7203,106 +7203,6 @@ elif menu == "👥 Gestão da Turma":
 
 
 
-elif menu == "📚 Base de Conhecimento":
-    st.title("Biblioteca Digital & Cofre de Materiais")
-    st.caption("Repositório central de livros didáticos, referenciais curriculares e diretrizes pedagógicas.")
-    st.markdown("---")
-    
-    if "v_bib" not in st.session_state: 
-        st.session_state.v_bib = int(time.time())
-    v = st.session_state.v_bib
-
-    tab_upload, tab_acervo_lib = st.tabs(["Upload de Novo Documento", "Acervo de Obras Guardadas"])
-    
-    with tab_upload:
-        with st.form("form_upload_drive", clear_on_submit=True):
-            st.markdown("#### Armazenamento de Material no Cofre Digital")
-            c1, c2 = st.columns(2)
-            tipo_doc = c1.selectbox("Categoria do Material:", ["Livro Didático", "Referencial Curricular", "Documento PEI", "Outros"], key=f"up_cat_{v}")
-            ano_doc = c2.selectbox("Série de Referência:", ["6º Ano", "7º Ano", "8º Ano", "9º Ano", "Geral"], key=f"up_ano_{v}")
-            
-            nome_arq = st.text_input("Título do Documento:", placeholder="Ex: Livro A Conquista da Matemática 6º Ano", key=f"up_nome_{v}")
-            uploaded_file = st.file_uploader("Arquivo PDF:", type=["pdf"], key=f"up_pdf_{v}")
-            
-            if st.form_submit_button("Armazenar no Google Drive"):
-                if uploaded_file and nome_arq:
-                    with st.spinner("Enviando material para o Google Drive..."):
-                        link_drive = db.subir_e_converter_para_google_docs(
-                            uploaded_file, 
-                            nome_arq, 
-                            categoria=ano_doc, 
-                            modo="BIBLIOTECA"
-                        )
-                        
-                        if "http" in link_drive:
-                            db.salvar_no_banco("DB_MATERIAIS", [
-                                datetime.now().strftime("%d/%m/%Y"), 
-                                nome_arq, 
-                                link_drive, 
-                                f"{tipo_doc} - {ano_doc}"
-                            ])
-                            st.success(f"'{nome_arq}' armazenado com sucesso no Google Drive!")
-                            st.balloons(); time.sleep(0.8); st.rerun()
-                        else:
-                            st.error(f"Erro no upload: {link_drive}")
-                else:
-                    st.warning("Preencha o título do material e selecione o arquivo PDF.")
-
-    with tab_acervo_lib:
-        @st.fragment
-        def renderizar_acervo_biblioteca_fragmento():
-            st.markdown("#### Acervo de Documentos e Livros")
-            
-            if not df_materiais.empty:
-                filtro_cat_lib = st.segmented_control(
-                    "Filtrar por Categoria:", 
-                    ["Todos", "Livro Didático", "Referencial Curricular", "Documento PEI", "Outros"], 
-                    default="Todos",
-                    key=f"pills_lib_cat_{v}"
-                )
-                
-                df_lib_filtrado = df_materiais.copy()
-                if filtro_cat_lib != "Todos":
-                    df_lib_filtrado = df_lib_filtrado[df_lib_filtrado['TIPO'].str.contains(filtro_cat_lib, case=False, na=False)]
-                
-                st.caption(f"Exibindo **{len(df_lib_filtrado)} de {len(df_materiais)}** materiais cadastrados.")
-                st.markdown("---")
-                
-                if df_lib_filtrado.empty:
-                    st.info("Nenhum material localizado para a categoria selecionada.")
-                else:
-                    for _, row in df_lib_filtrado.iloc[::-1].iterrows():
-                        with st.container(border=True):
-                            c_txt, c_btn1, c_btn2 = st.columns([3, 1, 1])
-                            
-                            nome_m = row['NOME_ARQUIVO']
-                            tipo_m = str(row['TIPO'])
-                            data_up = row.get('DATA_UPLOAD', 'N/A')
-                            
-                            c_txt.markdown(f"##### {nome_m}")
-                            c_txt.caption(f"Categoria: **{tipo_m}** | Data de Inclusão: **{data_up}**")
-                            
-                            c_btn1.link_button("Abrir no Drive", row['URI_ARQUIVO'], use_container_width=True)
-                            
-                            if c_btn2.button("Excluir Obra", key=f"del_mat_{row.name}_{v}", use_container_width=True):
-                                if db.excluir_registro_com_drive("DB_MATERIAIS", nome_m):
-                                    st.success("Material removido do acervo!"); time.sleep(0.5); st.rerun()
-            else:
-                st.info("A biblioteca digital está vazia. Faça o upload de livros e documentos no formulário ao lado.")
-
-        renderizar_acervo_biblioteca_fragmento()
-
-
-
-
-
-
-
-
-
-
-
-
 # ==============================================================================
 # MÓDULO: CENTRO DE COMANDO DA INCLUSÃO (PEI / PERFIL IA) - V2026.PRO_INFINITY
 # (SINCRONIZAÇÃO GLOBAL DE ALUNO, MACRO-METAS PEDAGÓGICAS, EXPURGO DE RECESSO)
@@ -7361,9 +7261,7 @@ Escola Municipal Flávio José Simões Costa"""
         turmas_reais_pei = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])] if not df_turmas.empty else pd.DataFrame()
         lista_turmas = sorted(turmas_reais_pei['ID_TURMA'].unique()) if not turmas_reais_pei.empty else sorted(df_alunos['TURMA'].unique())
         
-        # -------------------------------------------------------------
         # SELEÇÃO GLOBAL SINCRONIZADA: TURMA, TRIMESTRE E ESTUDANTE (LEI #6)
-        # -------------------------------------------------------------
         with st.container(border=True):
             c_top1, c_top2, c_top3 = st.columns([1.2, 1.3, 2])
             turma_pei = c_top1.selectbox("Turma Selecionada:", lista_turmas, key="pei_turma_global_sel")
@@ -7404,7 +7302,6 @@ Escola Municipal Flávio José Simões Costa"""
 
             df_todos_estudantes_pei = pd.concat([df_laudados, df_defasagem]).drop_duplicates(subset=['ID']).sort_values(by="NOME_ALUNO") if not df_laudados.empty or not df_defasagem.empty else pd.DataFrame()
 
-            # SELETOR UNIFICADO: DEFINE A ALUNA PARA TODAS AS ABAS
             if not df_todos_estudantes_pei.empty:
                 aluno_global_nome = c_top3.selectbox("Estudante Foco do PEI:", df_todos_estudantes_pei['NOME_ALUNO'].tolist(), key="pei_aluno_global_synced")
                 dados_aluno_global = df_todos_estudantes_pei[df_todos_estudantes_pei['NOME_ALUNO'] == aluno_global_nome].iloc[0]
@@ -7548,7 +7445,6 @@ Escola Municipal Flávio José Simões Costa"""
                         st.session_state[key_gen_version] = 0
                     v_gen = st.session_state[key_gen_version]
 
-                    # 1. MINERAÇÃO DE DADOS DA ALUNA SELECIONADA
                     n_alu = df_notas[(df_notas['ID_ALUNO'].apply(db.limpar_id) == id_aluno_global) & (df_notas['TRIMESTRE'] == trim_ativo_pei)] if not df_notas.empty else pd.DataFrame()
                     if not n_alu.empty:
                         nota_c1 = util.sosa_to_float(n_alu.iloc[0]['NOTA_VISTOS'])
@@ -7595,7 +7491,6 @@ Escola Municipal Flávio José Simões Costa"""
                         c_ctx1.info(f"**Rendimento em Matemática:**\n{notas_str}\n\n**Faltas no Período:** {faltas_cnt}")
                         c_ctx2.warning(f"**Atitude & Observações de Sala:**\n{oc_str}")
 
-                    # PAINEL TÁTIL DE MARCAÇÃO RÁPIDA (CHAVES EXCLUSIVAS)
                     with st.container(border=True):
                         st.markdown(f"#### Painel Tátil de Observação: **{aluno_global_nome}**")
                         st.caption("Assinale as características observadas nas aulas de Matemática:")
@@ -7678,7 +7573,6 @@ Escola Municipal Flávio José Simões Costa"""
                                 time.sleep(0.4)
                                 st.rerun()
 
-                    # EXTRAÇÃO PURA SEM VAZAMENTO
                     def extrair_bloco_puro(texto_completo, tag_alvo):
                         if not texto_completo: return ""
                         tags_todas = ["DIAGNOSTICO_GERAL", "SOCIAIS", "COMUNICATIVAS", "EMOCIONAIS", "FUNCIONAIS", "DIRETRIZES_CURRICULARES"]
@@ -7718,7 +7612,7 @@ Escola Municipal Flávio José Simões Costa"""
             renderizar_forja_dossie_fragmento()
 
         # ==============================================================================
-        # ABA 3: PARECER PARA OS PAIS (SINCRONIZADO)
+        # ABA 3: PARECER PARA OS PAIS (SINCRONIZADO COM DOWNLOAD .DOCX)
         # ==============================================================================
         with tab_provas_pei:
             @st.fragment
@@ -7759,8 +7653,8 @@ Escola Municipal Flávio José Simões Costa"""
 
                     with st.container(border=True):
                         st.markdown(f"##### Prévia do Parecer de {aluno_global_nome}")
-                        st.write(preparar_para_leitura(f"**Evolução:** {p_diag}"))
-                        st.info(preparar_para_leitura(f"**Diretrizes:** {p_dir}"))
+                        st.write(util.preparar_para_leitura(f"**Evolução:** {p_diag}"))
+                        st.info(util.preparar_para_leitura(f"**Diretrizes:** {p_dir}"))
 
                     c_act1, c_act2 = st.columns(2)
                     
@@ -7803,7 +7697,6 @@ Escola Municipal Flávio José Simões Costa"""
                     
                     is_anual_pei = "Anual" in str(escopo_pei_doc)
                     
-                    # 1. RESGATE DO DOSSIÊ
                     hist_exp = df_relatorios[df_relatorios['ID_ALUNO'].apply(db.limpar_id) == id_aluno_global] if not df_relatorios.empty else pd.DataFrame()
                     rel_master_exp = hist_exp[hist_exp['TIPO'].str.contains("DOSSIE_PEI", na=False)] if not hist_exp.empty else pd.DataFrame()
                     
@@ -7832,7 +7725,6 @@ Escola Municipal Flávio José Simões Costa"""
                         if extrair_bloco_puro_curr(txt_dossie_bruto, "FUNCIONAIS"): v_fun_exp = extrair_bloco_puro_curr(txt_dossie_bruto, "FUNCIONAIS")
                         if extrair_bloco_puro_curr(txt_dossie_bruto, "DIRETRIZES_CURRICULARES"): v_diretrizes_exp = extrair_bloco_puro_curr(txt_dossie_bruto, "DIRETRIZES_CURRICULARES")
 
-                    # 2. TABELA CURRICULAR
                     chave_tabela_curr = f"CURRICULO_ADAPTADO_ANUAL_{id_aluno_global}" if is_anual_pei else f"CURRICULO_ADAPTADO_{trim_ativo_pei}_{id_aluno_global}"
                     curr_records = hist_exp[hist_exp['TIPO'] == chave_tabela_curr] if not hist_exp.empty else pd.DataFrame()
                     
@@ -7844,7 +7736,6 @@ Escola Municipal Flávio José Simões Costa"""
                     else: 
                         df_curr_atual = pd.DataFrame(columns=["Objetivos de Aprendizagem", "Estratégias Metodológicas", "Recursos Materiais"])
 
-                    # 3. POP-OVER: MINERAÇÃO HÍBRIDA (EXPURGA RECESSO & SINTETIZA EM MACRO-METAS)
                     with st.popover("Adaptar Conteúdos Curriculares com IA"):
                         st.caption(f"Selecione os eixos curriculares para gerar as MACRO-METAS adaptadas ({escopo_pei_doc}):")
                         
@@ -7852,7 +7743,6 @@ Escola Municipal Flávio José Simões Costa"""
                         
                         opcoes_curriculo_limpas = []
                         
-                        # Minera Planos Reais da Turma
                         if not df_planos.empty and 'ANO' in df_planos.columns and 'TURMA' in df_planos.columns:
                             mask_p = (df_planos['ANO'].astype(str).str.contains(ano_aluno_num))
                             if not is_anual_pei: mask_p = mask_p & (df_planos['TURMA'] == trim_ativo_pei)
@@ -7864,11 +7754,9 @@ Escola Municipal Flávio José Simões Costa"""
                                 obj_item = ai.extrair_tag(txt_plano_item, "OBJETO_CONHECIMENTO") or ai.extrair_tag(txt_plano_item, "CONTEUDOS_ESPECIFICOS") or ""
                                 clean_obj = re.sub(r'[*#\[\]]', '', obj_item).strip()
                                 
-                                # EXPURGA RECESSO E STRINGS VAZIAS
                                 if clean_obj and len(clean_obj) > 3 and not re.search(TERMOS_EXPURGO, clean_obj) and not re.search(TERMOS_EXPURGO, str(r_plano.get('EIXO', ''))):
                                     opcoes_curriculo_limpas.append(f"[{sem_lbl}] {clean_obj}")
 
-                        # Minera Matriz Municipal (Garante III Trimestre ou Início de Ano)
                         df_matriz_ano = df_curriculo[df_curriculo['ANO'].astype(str) == ano_aluno_num].copy() if not df_curriculo.empty else pd.DataFrame()
                         if not df_matriz_ano.empty:
                             col_eixo_mat = next((c for c in df_matriz_ano.columns if any(x in c.upper() for x in ['GERAIS', 'EIXO'])), None)
@@ -7967,7 +7855,6 @@ Escola Municipal Flávio José Simões Costa"""
                     
                     st.markdown("---")
                     
-                    # 4. PARECER DOS RESULTADOS OBTIDOS EM MATEMÁTICA
                     st.markdown("##### Parecer de Resultados Obtidos (Seção 3 do PEI Oficial)")
                     chave_parecer_res = f"PARECER_RESULTADOS_PEI_{id_aluno_global}"
                     reg_par_res = hist_exp[hist_exp['TIPO'] == chave_parecer_res] if not hist_exp.empty else pd.DataFrame()
@@ -7975,7 +7862,6 @@ Escola Municipal Flávio José Simões Costa"""
                     
                     parecer_mat_editavel = st.text_area("Parecer de Matemática (Para a Área de Ciências da Natureza e Matemática):", value=parecer_inicial_mat, height=75, key=f"ta_parecer_res_{id_aluno_global}_{v}")
 
-                    # 5. COMPILAÇÃO NATIVA EM MEMÓRIA PARA DOWNLOAD DIRETO (.DOCX)
                     dados_aluno_docx = {
                         "nome": aluno_global_nome, 
                         "turma": turma_pei, 
@@ -8012,7 +7898,6 @@ Escola Municipal Flávio José Simões Costa"""
                         key=f"btn_dl_pei_docx_{id_aluno_global}_{v}"
                     )
 
-                    # 6. CENTRAL DE CÓPIA DIRETA POR COLUNA (PARA A TABELA DA ESCOLA)
                     with st.expander("📋 Copiar por Colunas para a Tabela Coletiva do Google Docs da Escola", expanded=False):
                         st.caption("Clique no ícone de cópia no canto de cada bloco abaixo para colar diretamente dentro da respectiva célula da tabela compartilhada da escola:")
                         
@@ -8053,3 +7938,96 @@ Escola Municipal Flávio José Simões Costa"""
                             st.code(parecer_mat_editavel, language=None)
 
             renderizar_curriculo_exportacao_fragmento()
+
+
+# ==============================================================================
+# MÓDULO: BIBLIOTECA DIGITAL & BASE DE CONHECIMENTO - V2026.PRO_EXECUTIVE
+# ==============================================================================
+elif menu == "📚 Base de Conhecimento":
+    st.title("Biblioteca Digital & Cofre de Materiais")
+    st.caption("Repositório central de livros didáticos, referenciais curriculares e diretrizes pedagógicas.")
+    st.markdown("---")
+    
+    if "v_bib" not in st.session_state: 
+        st.session_state.v_bib = int(time.time())
+    v = st.session_state.v_bib
+
+    tab_upload, tab_acervo_lib = st.tabs(["Upload de Novo Documento", "Acervo de Obras Guardadas"])
+    
+    with tab_upload:
+        with st.form("form_upload_drive", clear_on_submit=True):
+            st.markdown("#### Armazenamento de Material no Cofre Digital")
+            c1, c2 = st.columns(2)
+            tipo_doc = c1.selectbox("Categoria do Material:", ["Livro Didático", "Referencial Curricular", "Documento PEI", "Outros"], key=f"up_cat_{v}")
+            ano_doc = c2.selectbox("Série de Referência:", ["6º Ano", "7º Ano", "8º Ano", "9º Ano", "Geral"], key=f"up_ano_{v}")
+            
+            nome_arq = st.text_input("Título do Documento:", placeholder="Ex: Livro A Conquista da Matemática 6º Ano", key=f"up_nome_{v}")
+            uploaded_file = st.file_uploader("Arquivo PDF:", type=["pdf"], key=f"up_pdf_{v}")
+            
+            if st.form_submit_button("Armazenar no Google Drive"):
+                if uploaded_file and nome_arq:
+                    with st.spinner("Enviando material para o Google Drive..."):
+                        link_drive = db.subir_e_converter_para_google_docs(
+                            uploaded_file, 
+                            nome_arq, 
+                            categoria=ano_doc, 
+                            modo="BIBLIOTECA"
+                        )
+                        
+                        if "http" in link_drive:
+                            db.salvar_no_banco("DB_MATERIAIS", [
+                                datetime.now().strftime("%d/%m/%Y"), 
+                                nome_arq, 
+                                link_drive, 
+                                f"{tipo_doc} - {ano_doc}"
+                            ])
+                            st.success(f"'{nome_arq}' armazenado com sucesso no Google Drive!")
+                            st.balloons(); time.sleep(0.8); st.rerun()
+                        else:
+                            st.error(f"Erro no upload: {link_drive}")
+                else:
+                    st.warning("Preencha o título do material e selecione o arquivo PDF.")
+
+    with tab_acervo_lib:
+        @st.fragment
+        def renderizar_acervo_biblioteca_fragmento():
+            st.markdown("#### Acervo de Documentos e Livros")
+            
+            if not df_materiais.empty:
+                filtro_cat_lib = st.segmented_control(
+                    "Filtrar por Categoria:", 
+                    ["Todos", "Livro Didático", "Referencial Curricular", "Documento PEI", "Outros"], 
+                    default="Todos",
+                    key=f"pills_lib_cat_{v}"
+                )
+                
+                df_lib_filtrado = df_materiais.copy()
+                if filtro_cat_lib != "Todos":
+                    df_lib_filtrado = df_lib_filtrado[df_lib_filtrado['TIPO'].str.contains(filtro_cat_lib, case=False, na=False)]
+                
+                st.caption(f"Exibindo **{len(df_lib_filtrado)} de {len(df_materiais)}** materiais cadastrados.")
+                st.markdown("---")
+                
+                if df_lib_filtrado.empty:
+                    st.info("Nenhum material localizado para a categoria selecionada.")
+                else:
+                    for _, row in df_lib_filtrado.iloc[::-1].iterrows():
+                        with st.container(border=True):
+                            c_txt, c_btn1, c_btn2 = st.columns([3, 1, 1])
+                            
+                            nome_m = row['NOME_ARQUIVO']
+                            tipo_m = str(row['TIPO'])
+                            data_up = row.get('DATA_UPLOAD', 'N/A')
+                            
+                            c_txt.markdown(f"##### {nome_m}")
+                            c_txt.caption(f"Categoria: **{tipo_m}** | Data de Inclusão: **{data_up}**")
+                            
+                            c_btn1.link_button("Abrir no Drive", row['URI_ARQUIVO'], use_container_width=True)
+                            
+                            if c_btn2.button("Excluir Obra", key=f"del_mat_{row.name}_{v}", use_container_width=True):
+                                if db.excluir_registro_com_drive("DB_MATERIAIS", nome_m):
+                                    st.success("Material removido do acervo!"); time.sleep(0.5); st.rerun()
+            else:
+                st.info("A biblioteca digital está vazia. Faça o upload de livros e documentos no formulário ao lado.")
+
+        renderizar_acervo_biblioteca_fragmento()
