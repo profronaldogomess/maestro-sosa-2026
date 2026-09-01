@@ -5,12 +5,10 @@ google-genai
 python-dotenv
 plotly
 google-auth
-oauth2client
 python-docx
 google-api-python-client
 google-auth-httplib2
 google-auth-oauthlib
-python-pptx
 pypdf
 opencv-python-headless
 numpy
