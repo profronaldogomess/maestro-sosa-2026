@@ -6433,6 +6433,324 @@ Escola Municipal Flávio José Simões Costa"""
 
 
 
+
+
+
+# ==============================================================================
+# MÓDULO: DIÁRIO DE BORDO RÁPIDO - V2026.PRO_INFINITY_EXPRESS
+# (CHAMADA TURBO, VISTOS 1-CLIQUE, ARGUIÇÃO NO QUADRO E DISPARO WHATSAPP)
+# ==============================================================================
+elif menu == "📝 Diário de Bordo Rápido":
+    st.title("Diário de Bordo Rápido")
+    st.caption("Cockpit operacional de sala de aula: chamada express, visto de caderno em lote, arguição no quadro negro e registro atitudinal.")
+    st.markdown("---")
+
+    if "v_diario_rapido" not in st.session_state:
+        st.session_state.v_diario_rapido = int(time.time())
+    v_dr = st.session_state.v_diario_rapido
+
+    lista_turmas_diario = []
+    if not df_turmas.empty and 'ID_TURMA' in df_turmas.columns:
+        turmas_reais_d = df_turmas[~df_turmas['ID_TURMA'].isin(["PI", "PC", "AC", "HTPC", "OUTRO"])]
+        lista_turmas_diario = sorted(turmas_reais_d['ID_TURMA'].unique())
+    elif not df_alunos.empty and 'TURMA' in df_alunos.columns:
+        lista_turmas_diario = sorted(df_alunos['TURMA'].unique())
+
+    if not lista_turmas_diario:
+        st.warning("Nenhuma turma cadastrada no sistema. Cadastre na aba de Secretaria.")
+    else:
+        with st.container(border=True):
+            c_d1, c_d2, c_d3 = st.columns([1.5, 1.2, 2])
+            turma_rapida = c_d1.selectbox("Turma:", lista_turmas_diario, key=f"sel_t_rapida_{v_dr}")
+            data_rapida = c_d2.date_input("Data da Aula:", date.today(), format="DD/MM/YYYY", key=f"dt_rapida_{v_dr}")
+            data_rapida_str = data_rapida.strftime("%d/%m/%Y")
+            
+            conteudo_aula_rapida = c_d3.text_input(
+                "Conteúdo / Objeto de Conhecimento Ministrado:",
+                placeholder="Ex: Operações com Frações e Resolução de Exercícios na Lousa",
+                key=f"inp_cont_rapido_{v_dr}"
+            )
+
+        df_alunos_turma_dr = df_alunos[df_alunos['TURMA'] == turma_rapida].copy() if not df_alunos.empty else pd.DataFrame()
+        if 'STATUS' not in df_alunos_turma_dr.columns: df_alunos_turma_dr['STATUS'] = "ATIVO"
+        alunos_ativos_dr = df_alunos_turma_dr[~df_alunos_turma_dr['STATUS'].astype(str).str.upper().isin(["INATIVO", "TRANSFERIDO", "EVADIDO", "DESISTENTE"])].sort_values(by="NOME_ALUNO")
+
+        if alunos_ativos_dr.empty:
+            st.info(f"Nenhum estudante ativo cadastrado na turma {turma_rapida}.")
+        else:
+            @st.fragment
+            def renderizar_diario_rapido_fragmento():
+                # 1. Carrega dados já existentes no diário para essa data/turma
+                diario_existente = df_diario[(df_diario['DATA'] == data_rapida_str) & (df_diario['TURMA'] == turma_rapida)] if not df_diario.empty else pd.DataFrame()
+                
+                def definir_icone_perfil(nec):
+                    n = str(nec).upper().strip()
+                    if "PENDENTE" in n or "SUSPEITA" in n: return "🟠"
+                    if "DEFASAGEM LEITURA" in n: return "🧱"
+                    if "DEFASAGEM MATEMÁTICA" in n or "DEFASAGEM MATEMATICA" in n: return "🧮"
+                    if "ALTA PERFORMANCE" in n: return "🚀"
+                    if n in ["NENHUMA", "", "NAN", "TÍPICO", "TIPICO"]: return "👤"
+                    return "♿"
+
+                alunos_ativos_dr['ICONE'] = alunos_ativos_dr['NECESSIDADES'].apply(definir_icone_perfil)
+
+                # Inicializa estado da chamada na sessão para permitir botões de 1-toque
+                chave_grid_state = f"state_chamada_{turma_rapida}_{data_rapida_str}_{v_dr}"
+                
+                if chave_grid_state not in st.session_state:
+                    linhas_iniciais = []
+                    for _, r_al in alunos_ativos_dr.iterrows():
+                        id_clean = db.limpar_id(r_al['ID'])
+                        nome_fmt = f"{r_al['ICONE']} {r_al['NOME_ALUNO']}"
+                        
+                        reg_al = diario_existente[diario_existente['ID_ALUNO'].apply(db.limpar_id) == id_clean] if not diario_existente.empty else pd.DataFrame()
+                        
+                        p_ini = True
+                        v_ini = False
+                        tag_ini = ""
+                        obs_ini = ""
+                        
+                        if not reg_al.empty:
+                            tag_ini = str(reg_al.iloc[-1].get('TAGS', ''))
+                            visto_raw = str(reg_al.iloc[-1].get('VISTO_ATIVIDADE', '')).upper()
+                            obs_ini = str(reg_al.iloc[-1].get('OBSERVACOES', ''))
+                            
+                            if tag_ini == "AUSÊNCIA": p_ini = False
+                            else: p_ini = True
+                            
+                            if visto_raw == "TRUE": v_ini = True
+                        
+                        linhas_iniciais.append({
+                            "ID": id_clean,
+                            "NOME_PURO": r_al['NOME_ALUNO'],
+                            "Estudante": nome_fmt,
+                            "Presente": p_ini,
+                            "Visto Caderno (C1)": v_ini,
+                            "Ocorrência": tag_ini if tag_ini != "AUSÊNCIA" else "",
+                            "Observação": obs_ini
+                        })
+                    st.session_state[chave_grid_state] = linhas_iniciais
+
+                # BOTÕES DE AÇÃO RÁPIDA (TURBO)
+                st.markdown("##### Ações Rápidas em 1 Toque")
+                c_btn_a1, c_btn_a2, c_btn_a3, c_btn_a4 = st.columns(4)
+                
+                if c_btn_a1.button("✅ Todos Presentes", use_container_width=True, key=f"btn_all_pres_{v_dr}"):
+                    for item in st.session_state[chave_grid_state]:
+                        item["Presente"] = True
+                        if item["Ocorrência"] == "AUSÊNCIA": item["Ocorrência"] = ""
+                    st.rerun()
+
+                if c_btn_a2.button("✍️ Visto em Todos os Presentes", type="primary", use_container_width=True, key=f"btn_all_visto_{v_dr}"):
+                    for item in st.session_state[chave_grid_state]:
+                        if item["Presente"]:
+                            item["Visto Caderno (C1)"] = True
+                    st.rerun()
+
+                if c_btn_a3.button("🛡️ Isentar Vistos na Aula", use_container_width=True, key=f"btn_all_isento_{v_dr}"):
+                    for item in st.session_state[chave_grid_state]:
+                        item["Visto Caderno (C1)"] = False
+                    st.rerun()
+
+                if c_btn_a4.button("🔄 Restaurar Dados", use_container_width=True, key=f"btn_reset_grid_{v_dr}"):
+                    del st.session_state[chave_grid_state]
+                    st.rerun()
+
+                st.markdown("<br>", unsafe_allow_html=True)
+
+                tab_chamada, tab_roleta_exp, tab_radar_faltas = st.tabs([
+                    "1. Chamada & Vistos de Caderno",
+                    "2. Roleta de Arguição (Quadro)",
+                    "3. Radar de Ausências & WhatsApp"
+                ])
+
+                # -------------------------------------------------------------
+                # TAB 1: CHAMADA & VISTOS TURBO
+                # -------------------------------------------------------------
+                with tab_chamada:
+                    df_chamada_turbo = pd.DataFrame(st.session_state[chave_grid_state])
+                    
+                    df_editado_diario = st.data_editor(
+                        df_chamada_turbo,
+                        hide_index=True,
+                        use_container_width=True,
+                        height=380,
+                        column_config={
+                            "ID": None,
+                            "NOME_PURO": None,
+                            "Estudante": st.column_config.TextColumn("Estudante", disabled=True, width="medium"),
+                            "Presente": st.column_config.CheckboxColumn("Presente", default=True, width="small"),
+                            "Visto Caderno (C1)": st.column_config.CheckboxColumn("Visto OK", default=False, width="small"),
+                            "Ocorrência": st.column_config.SelectboxColumn(
+                                "Ocorrência / Atitude",
+                                options=["", "DESTAQUE (+0.5)", "ARGUIÇÃO (+0.5)", "INDISCIPLINA (-0.5)", "CELULAR (-0.5)", "CONVERSA", "ATRASO"],
+                                width="medium"
+                            ),
+                            "Observação": st.column_config.TextColumn("Observação Pedagógica", width="large")
+                        },
+                        key=f"ed_grid_diario_rapido_{turma_rapida}_{data_rapida_str}_{v_dr}"
+                    )
+
+                    # Atualiza o estado da sessão com as edições do professor
+                    st.session_state[chave_grid_state] = df_editado_diario.to_dict('records')
+
+                    # Contadores ao vivo
+                    tot_presentes = sum(1 for r in st.session_state[chave_grid_state] if r["Presente"])
+                    tot_ausentes = len(st.session_state[chave_grid_state]) - tot_presentes
+                    tot_vistos = sum(1 for r in st.session_state[chave_grid_state] if r["Visto Caderno (C1)"] and r["Presente"])
+
+                    with st.container(border=True):
+                        c_kpi1, c_kpi2, c_kpi3, c_kpi4 = st.columns(4)
+                        c_kpi1.metric("Estudantes na Turma", len(st.session_state[chave_grid_state]))
+                        c_kpi2.metric("Presentes", tot_presentes)
+                        c_kpi3.metric("Ausentes", tot_ausentes, delta_color="inverse" if tot_ausentes > 0 else "normal")
+                        c_kpi4.metric("Vistos Concedidos (C1)", f"{tot_vistos:02d} / {tot_presentes:02d}")
+
+                    st.markdown("<br>", unsafe_allow_html=True)
+
+                    if st.button("💾 Consolidar e Gravar Diário de Bordo no Banco", type="primary", use_container_width=True, key=f"btn_save_diario_final_{v_dr}"):
+                        with st.status("Gravando registros no Diário de Bordo e Livro de Aulas...", expanded=True) as status_save:
+                            linhas_diario_gravar = []
+                            status_save.write("1/3 Processando presenças, vistos e bônus atitudinais...")
+                            
+                            for r_item in st.session_state[chave_grid_state]:
+                                id_al_item = r_item["ID"]
+                                nome_puro_item = r_item["NOME_PURO"]
+                                is_pres = r_item["Presente"]
+                                is_visto = r_item["Visto Caderno (C1)"]
+                                ocorrencia_txt = str(r_item["Ocorrência"]).strip()
+                                obs_txt = str(r_item["Observação"]).strip()
+
+                                bonus_val = "0,00"
+                                if "+0.5" in ocorrencia_txt or "DESTAQUE" in ocorrencia_txt or "ARGUIÇÃO" in ocorrencia_txt:
+                                    bonus_val = "0,50"
+                                elif "-0.5" in ocorrencia_txt or "INDISCIPLINA" in ocorrencia_txt or "CELULAR" in ocorrencia_txt:
+                                    bonus_val = "-0,50"
+
+                                if not is_pres:
+                                    tag_final = "AUSÊNCIA"
+                                    visto_final = "FALSE"
+                                else:
+                                    tag_final = ocorrencia_txt
+                                    visto_final = "ISENTO" if tot_vistos == 0 else ("TRUE" if is_visto else "FALSE")
+
+                                linhas_diario_gravar.append([
+                                    data_rapida_str, id_al_item, nome_puro_item, turma_rapida,
+                                    visto_final, tag_final, obs_txt, bonus_val
+                                ])
+
+                            status_save.write("2/3 Sincronizando com DB_DIARIO_BORDO...")
+                            db.limpar_diario_data_turma(data_rapida_str, turma_rapida)
+                            db.salvar_lote("DB_DIARIO_BORDO", linhas_diario_gravar)
+
+                            status_save.write("3/3 Registrando conteúdo oficial em DB_REGISTRO_AULAS...")
+                            cont_salvar = conteudo_aula_rapida.strip() if conteudo_aula_rapida.strip() else "Aula Regular de Matemática"
+                            db.salvar_no_banco("DB_REGISTRO_AULAS", [
+                                data_rapida_str, "REGULAR", turma_rapida, cont_salvar,
+                                "Acompanhamento em Sala", "N/A", "🟢 Concluído", "", ""
+                            ])
+
+                            status_save.update(label="Diário de Bordo consolidado com sucesso!", state="complete")
+                            st.balloons()
+                            time.sleep(0.8)
+                            st.rerun()
+
+                # -------------------------------------------------------------
+                # TAB 2: ROLETA DE ARGUIÇÃO EXPRESS (QUADRO NEGRO)
+                # -------------------------------------------------------------
+                with tab_roleta_exp:
+                    st.markdown("#### Roleta de Arguição no Quadro Negro")
+                    st.caption("Sorteie estudantes para resolver itens no quadro com lançamento automático de pontuação atitudinal:")
+
+                    c_r_cfg1, c_r_cfg2 = st.columns([1, 2])
+                    qtd_sorteio_r = c_r_cfg1.number_input("Estudantes por Rodada:", 1, 4, 2, key=f"qtd_sort_r_{v_dr}")
+
+                    presentes_candidatos = [r for r in st.session_state[chave_grid_state] if r["Presente"]]
+                    
+                    if not presentes_candidatos:
+                        st.info("Nenhum estudante presente na chamada para sortear.")
+                    else:
+                        if c_r_cfg2.button("🎲 Sortear Estudantes", type="primary", use_container_width=True, key=f"btn_spin_r_{v_dr}"):
+                            sorteados = random.sample(presentes_candidatos, min(qtd_sorteio_r, len(presentes_candidatos)))
+                            st.session_state[f"sorteados_r_{v_dr}"] = [s["ID"] for s in sorteados]
+                            st.rerun()
+
+                        chave_sorteados_atual = f"sorteados_r_{v_dr}"
+                        if chave_sorteados_atual in st.session_state and st.session_state[chave_sorteados_atual]:
+                            st.markdown("##### Estudantes Sorteados para o Quadro:")
+                            cols_sort = st.columns(len(st.session_state[chave_sorteados_atual]))
+                            
+                            for idx_s, id_sorteado in enumerate(st.session_state[chave_sorteados_atual]):
+                                with cols_sort[idx_s]:
+                                    item_al = next((a for a in st.session_state[chave_grid_state] if a["ID"] == id_sorteado), {})
+                                    with st.container(border=True):
+                                        st.markdown(f"**{item_al.get('Estudante', 'Estudante')}**")
+                                        obs_arg = st.text_input("Diagnóstico:", value="Resolveu no quadro", key=f"inp_obs_r_{id_sorteado}_{v_dr}")
+                                        
+                                        c_b_ac1, c_b_ac2, c_b_ac3 = st.columns(3)
+                                        if c_b_ac1.button("✅ Dominou (+0.5)", key=f"btn_dom_r_{id_sorteado}_{v_dr}", use_container_width=True):
+                                            item_al["Ocorrência"] = "ARGUIÇÃO (+0.5)"
+                                            item_al["Observação"] = f"Quadro Negro: {obs_arg}"
+                                            st.session_state[chave_sorteados_atual].remove(id_sorteado)
+                                            st.rerun()
+                                            
+                                        if c_b_ac2.button("🤝 Participou (0.0)", key=f"btn_part_r_{id_sorteado}_{v_dr}", use_container_width=True):
+                                            item_al["Ocorrência"] = "ARGUIÇÃO"
+                                            item_al["Observação"] = f"Quadro Negro: {obs_arg}"
+                                            st.session_state[chave_sorteados_atual].remove(id_sorteado)
+                                            st.rerun()
+
+                                        if c_b_ac3.button("❌ Recusou (-0.5)", key=f"btn_rec_r_{id_sorteado}_{v_dr}", use_container_width=True):
+                                            item_al["Ocorrência"] = "INDISCIPLINA (-0.5)"
+                                            item_al["Observação"] = "Recusa de participação no quadro"
+                                            st.session_state[chave_sorteados_atual].remove(id_sorteado)
+                                            st.rerun()
+
+                # -------------------------------------------------------------
+                # TAB 3: RADAR DE AUSÊNCIAS & WHATSAPP
+                # -------------------------------------------------------------
+                with tab_radar_faltas:
+                    st.markdown(f"#### Radar de Ausências — {data_rapida_str}")
+                    st.caption("Acompanhamento nominal dos ausentes com botão de retificação de presença direta:")
+
+                    ausentes_lista = [r for r in st.session_state[chave_grid_state] if not r["Presente"]]
+
+                    if not ausentes_lista:
+                        st.success("🎉 Parabéns! 100% de presença registrada na aula de hoje.")
+                    else:
+                        st.error(f"Total de {len(ausentes_lista)} ausência(s) registrada(s) na turma.")
+                        
+                        for r_aus in ausentes_lista:
+                            with st.container(border=True):
+                                c_aus1, c_aus2 = st.columns([3, 1])
+                                c_aus1.markdown(f"**{r_aus['Estudante']}**")
+                                c_aus1.caption(f"ID: `{r_aus['ID']}`")
+                                
+                                if c_aus2.button("Retificar Presença", key=f"btn_retif_pres_{r_aus['ID']}_{v_dr}", use_container_width=True):
+                                    r_aus["Presente"] = True
+                                    if r_aus["Ocorrência"] == "AUSÊNCIA": r_aus["Ocorrência"] = ""
+                                    st.toast(f"Presença retificada para {r_aus['NOME_PURO']}!")
+                                    st.rerun()
+
+                        st.markdown("---")
+                        linhas_zap_faltas = [f"• {r['NOME_PURO']}" for r in ausentes_lista]
+                        txt_zap_ausencias = (
+                            f"📋 *REGISTRO DE AUSÊNCIAS ({turma_rapida})*\n"
+                            f"📅 *Data:* {data_rapida_str} | *Prof:* Ronaldo Gomes (Matemática)\n\n"
+                            f"Estudantes Ausentes:\n"
+                            + "\n".join(linhas_zap_faltas)
+                            + "\n\n_Escola Municipal Flávio José Simões Costa_"
+                        )
+
+                        st.markdown("##### Texto Formatado para WhatsApp da Coordenação:")
+                        st.code(txt_zap_ausencias, language=None)
+
+            renderizar_diario_rapido_fragmento()
+
+
+
+
+
 # ==============================================================================
 # MÓDULO: GESTÃO DA TURMA (COCKPIT DE REGÊNCIA 360°) - V2026.PRO_EXECUTIVE
 # (TIMELINE CRONOLÓGICA ÚNICA, PROFICIÊNCIA SAEB, RADAR DUPLO E SECRETARIA)
