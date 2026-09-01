@@ -2627,11 +2627,11 @@ elif menu == "📝 Central de Avaliações":
 
 # ==============================================================================
 # MÓDULO: CENTRAL DE INTELIGÊNCIA DE RESULTADOS (CIR / SCANNER DE GABARITOS)
-# (V2026.PRO_EXECUTIVE - VISÃO COMPUTACIONAL, ANTI-TROCA E AUDITORIA TRI)
+# (V2026.PRO_EXECUTIVE - VISÃO COMPUTACIONAL, ANTI-TROCA, SEGUNDA CHAMADA & RECUPERAÇÃO)
 # ==============================================================================
 elif menu == "📸 Scanner de Gabaritos":
     st.title("Central de Inteligência de Resultados (CIR)")
-    st.caption("Leitura óptica de gabaritos por visão computacional direta, auditoria psicométrica TRI, validação de titularidade e tribunal de recursos.")
+    st.caption("Leitura óptica de gabaritos por visão computacional direta, mesa de lançamento discursivo, perícia psicométrica TRI e tribunal de recursos.")
     st.markdown("---")
 
     if "v_scan" not in st.session_state: 
@@ -2664,7 +2664,7 @@ elif menu == "📸 Scanner de Gabaritos":
 
         if not df_aulas.empty and 'ANO' in df_aulas.columns and 'TIPO_MATERIAL' in df_aulas.columns:
             df_f = df_aulas[df_aulas['ANO'].astype(str).str.contains(serie_num)].copy()
-            permitidos = ["TESTE", "PROVA", "SONDA", "DIAGNÓSTICA", "RECUPERAÇÃO", "AVALIAÇÃO"]
+            permitidos = ["TESTE", "PROVA", "SONDA", "DIAGNÓSTICA", "RECUPERAÇÃO", "RECUPERACAO", "AVALIAÇÃO", "AVALIACAO"]
             proibidos = ["REVISAO", "REVISÃO", "APLICAÇÃO", "CORREÇÃO", "DOSSIÊ", "AULA"]
             
             mask_p = df_f['TIPO_MATERIAL'].astype(str).str.upper().str.contains('|'.join(permitidos)) & \
@@ -2805,13 +2805,13 @@ elif menu == "📸 Scanner de Gabaritos":
                 sit_atual = str(al_data.get('Situação', ''))
                 perfil_estudante = str(al_data.get('Perfil', 'REGULAR')).upper()
                 
-                is_exame_discursivo = any(x in av_alvo_dialog.upper() for x in ["2ª_CHAMADA", "2A_CHAMADA", "DISCURSIVA", "RECUPERACAO", "RECUPERAÇÃO"]) and "TIPO" not in av_alvo_dialog.upper()
+                is_exame_discursivo = any(x in av_alvo_dialog.upper() for x in ["2ª_CHAMADA", "2A_CHAMADA", "2ª CHAMADA", "2A CHAMADA", "DISCURSIVA", "RECUPERACAO", "RECUPERAÇÃO", "ABERTA"]) and "TIPO" not in av_alvo_dialog.upper()
                 is_estudante_pei = (perfil_estudante == "PEI") or ("PEI" in str(al_data.get('Versão', '')).upper())
 
                 df_prova_ref = df_aulas[df_aulas['TIPO_MATERIAL'].str.contains(nome_curto_av_dialog, case=False, na=False)] if not df_aulas.empty else pd.DataFrame()
                 txt_prova_completa = str(df_prova_ref.iloc[0].get('CONTEUDO', '')) if not df_prova_ref.empty else ""
                 
-                val_real_instrumento = extrair_valor_real_prova(txt_prova_completa, av_alvo_dialog)
+                val_real_instrumento = util.extrair_valor_real_prova(txt_prova_completa, av_alvo_dialog)
 
                 c_f1, c_f2 = st.columns([1, 2])
                 if "http" in foto_atual_link: c_f1.link_button("Abrir Imagem no Drive", foto_atual_link, use_container_width=True)
@@ -2819,7 +2819,7 @@ elif menu == "📸 Scanner de Gabaritos":
                 
                 nova_foto_pericia = c_f2.file_uploader("Anexar / Substituir Imagem JPG:", type=["jpg", "jpeg", "png"], key=f"up_modal_foto_{id_al_pericia}_{v}")
 
-                # CASO 1: AVALIAÇÃO DISCURSIVA / ABERTA
+                # CASO 1: AVALIAÇÃO DISCURSIVA (SEGUNDA CHAMADA / RECUPERAÇÃO)
                 if is_exame_discursivo:
                     st.markdown(f"#### Lançamento Discursivo Oficial (Teto: **{val_real_instrumento:.1f} pts**)")
                     st.caption("Avaliação aberta com memória de cálculo. Lance a pontuação real obtida pelo estudante:")
@@ -2830,9 +2830,9 @@ elif menu == "📸 Scanner de Gabaritos":
                         min_value=0.0, max_value=float(val_real_instrumento), value=float(min(val_real_instrumento, nota_atual_disc)), step=0.1,
                         key=f"inp_disc_pericia_{id_al_pericia}_{v}"
                     )
-                    obs_disc_pericia = st.text_input("Observação Pedagógica da 2ª Chamada:", value="Segunda Chamada Discursiva Homologada", key=f"txt_obs_disc_{id_al_pericia}_{v}")
+                    obs_disc_pericia = st.text_input("Observação Pedagógica da Avaliação Discursiva:", value="Avaliação Discursiva Homologada", key=f"txt_obs_disc_{id_al_pericia}_{v}")
 
-                    if st.button("Homologar Segunda Chamada Discursiva", type="primary", use_container_width=True, key=f"btn_save_disc_pericia_{v}"):
+                    if st.button("Homologar Avaliação Discursiva", type="primary", use_container_width=True, key=f"btn_save_disc_pericia_{v}"):
                         with st.spinner("Registrando nota discursiva..."):
                             link_foto_final = foto_atual_link
                             if nova_foto_pericia is not None:
@@ -2972,7 +2972,7 @@ elif menu == "📸 Scanner de Gabaritos":
         c_left, c_right = st.columns([1.5, 1])
         with c_left:
             st.markdown(f"### Enunciado Oficial ({q_str})")
-            if m_q_reg: st.write(preparar_para_leitura(m_q_reg.group(1).strip()))
+            if m_q_reg: st.write(util.preparar_para_leitura(m_q_reg.group(1).strip()))
             else: st.info("Enunciado da questão disponível na impressão oficial.")
         
         with c_right:
@@ -2986,7 +2986,7 @@ elif menu == "📸 Scanner de Gabaritos":
             st.markdown("### Perícia de Distratores")
             if m_p_reg:
                 p_completa = re.sub(r'[*#]', '', m_p_reg.group(1).strip())
-                st.info(preparar_para_leitura(p_completa))
+                st.info(util.preparar_para_leitura(p_completa))
             else: st.caption("Perícia não localizada.")
 
     tab_correcao, tab_auditoria, tab_raiox = st.tabs([
@@ -2994,7 +2994,7 @@ elif menu == "📸 Scanner de Gabaritos":
     ])
 
     # ==============================================================================
-    # ABA 1: MESA DE CORREÇÃO (COM DETECTOR ANTI-TROCA DE NOME)
+    # ABA 1: MESA DE CORREÇÃO (BLINDADA PARA SEGUNDA CHAMADA & RECUPERAÇÃO)
     # ==============================================================================
     with tab_correcao:
         modo_lancamento = st.segmented_control(
@@ -3144,6 +3144,7 @@ elif menu == "📸 Scanner de Gabaritos":
                             nivel_alvo_pei = "NIVEL_1" if ("NÍVEL 1" in lente_upper or "NIVEL 1" in lente_upper) else "NIVEL_2"
                             is_qualitativa = "NÍVEL 3" in lente_upper or "NIVEL 3" in lente_upper or "QUALITATIVA" in lente_upper
                             modo_2a = False
+                            at_segunda = None
                             
                             if "REGULAR" in lente_upper:
                                 c_reg1, c_reg2 = st.columns(2)
@@ -3151,7 +3152,8 @@ elif menu == "📸 Scanner de Gabaritos":
                                 
                                 if modo_2a:
                                     df_2a = df_aulas[(df_aulas['TIPO_MATERIAL'].str.upper().str.contains("2ª|2CHAMADA", regex=True)) & (df_aulas['TIPO_MATERIAL'].str.contains(padrao_trim, regex=True, case=False)) & (df_aulas['ANO'].str.contains(serie_num))] if not df_aulas.empty else pd.DataFrame()
-                                    at_segunda = c_reg2.selectbox("Caderno de 2ª Chamada:", [""] + df_2a['TIPO_MATERIAL'].unique().tolist() if not df_2a.empty else [""], key=f"s2a_{v}")
+                                    opcoes_2a = df_2a['TIPO_MATERIAL'].unique().tolist() if not df_2a.empty else []
+                                    at_segunda = c_reg2.selectbox("Caderno de 2ª Chamada:", [""] + opcoes_2a, key=f"s2a_{v}")
                                     if at_segunda:
                                         df_busca = df_aulas[df_aulas['TIPO_MATERIAL'] == at_segunda]
                                         if not df_busca.empty: material_ref = df_busca.iloc[0]
@@ -3167,85 +3169,135 @@ elif menu == "📸 Scanner de Gabaritos":
 
                             if material_ref is not None:
                                 txt_ref = str(material_ref.get('CONTEUDO', ''))
-                                v_total_at = util.extrair_valor_real_prova(txt_ref, at_sel)
+                                nome_material_efetivo = str(material_ref.get('TIPO_MATERIAL', at_sel))
+                                v_total_at = util.extrair_valor_real_prova(txt_ref, nome_material_efetivo)
 
-                                gab_alvo = ai.extrair_gab_universal_com_fallback(txt_ref, is_pei_grading, nivel_alvo_pei)
-                                if not gab_alvo:
-                                    q_raw_check = ai.extrair_tag(txt_ref, "QUESTOES") or txt_ref
-                                    qtd_q_estimada = len(re.findall(r"(?i)QUESTÃO\s*0?\d+", q_raw_check)) or 10
-                                    gab_alvo = ["A"] * qtd_q_estimada
-
-                                tag_grade_ref = "GRADE_DE_CORRECAO_PEI" if is_pei_grading else "GRADE_DE_CORRECAO"
-                                grade_raw_ref = ai.extrair_tag(txt_ref, tag_grade_ref) or ai.extrair_tag(txt_ref, "GRADE_DE_CORRECAO")
-
-                                with st.popover("Conferir Chave de Respostas", use_container_width=True):
-                                    st.caption(f"Chave oficial ({len(gab_alvo)} questões | Pontuação: {v_total_at:.1f} pts).")
-                                    grid_gab_pre = [{"Q": f"{i+1:02d}", "Chave": gab_alvo[i] if i < len(gab_alvo) else "A"} for i in range(len(gab_alvo))]
-                                    df_gab_pre = st.data_editor(
-                                        pd.DataFrame(grid_gab_pre), hide_index=True, use_container_width=True,
-                                        column_config={"Q": st.column_config.TextColumn(disabled=True), "Chave": st.column_config.SelectboxColumn("Resposta Oficial", options=["A", "B", "C", "D", "E"], required=True)},
-                                        key=f"ed_pre_gab_{v}_{nivel_alvo_pei}"
-                                    )
-                                    if not df_gab_pre.empty and "Chave" in df_gab_pre.columns:
-                                        gab_alvo = df_gab_pre["Chave"].tolist()
-
-                                is_av_discursiva = any(x in str(at_sel).upper() for x in [
-                                    "RECUPERAÇÃO", "RECUPERACAO", "2ª CHAMADA", "2A CHAMADA", "2ª_CHAMADA", "DISCURSIVA", "ABERTA"
-                                ]) and "FINAL" not in str(at_sel).upper()
+                                # -------------------------------------------------------------
+                                # DETECÇÃO BLINDADA: AVALIAÇÃO DISCURSIVA / ABERTA
+                                # -------------------------------------------------------------
+                                is_av_discursiva = (
+                                    modo_2a 
+                                    or any(x in str(nome_material_efetivo).upper() for x in ["RECUPERAÇÃO", "RECUPERACAO", "2ª CHAMADA", "2A CHAMADA", "2ª_CHAMADA", "DISCURSIVA", "ABERTA"])
+                                    or any(x in str(at_sel).upper() for x in ["RECUPERAÇÃO", "RECUPERACAO", "DISCURSIVA", "ABERTA"])
+                                    or ("(A)" not in txt_ref and "A)" not in txt_ref and "[QUESTOES]" in txt_ref and not is_pei_grading and not is_qualitativa)
+                                ) and "FINAL" not in str(nome_material_efetivo).upper() and not is_pei_grading and not is_qualitativa
 
                                 if is_av_discursiva:
-                                    st.info(f"Mesa de Lançamento Discursivo: Instrumento aberto valendo de 0,0 a {v_total_at:.1f} pontos.")
-                                    
-                                    c_disc1, c_disc2 = st.columns([1.2, 1.8])
-                                    nota_discursiva_inp = c_disc1.number_input(
-                                        f"Pontuação Obtida (0.0 a {v_total_at:.1f}):",
-                                        min_value=0.0, max_value=float(v_total_at), value=float(min(v_total_at, 6.0)), step=0.5,
-                                        key=f"inp_nota_disc_{v}"
-                                    )
-                                    
-                                    img_disc_file = c_disc2.file_uploader("Anexar Imagem da Avaliação (Opcional):", type=["jpg", "jpeg", "png"], key=f"up_disc_ev_{v}")
+                                    with st.container(border=True):
+                                        st.markdown(f"#### ✍️ Mesa de Lançamento Discursivo: **{nome_material_efetivo}**")
+                                        st.caption(f"Avaliação aberta com memória de cálculo. Pontuação Máxima: **{v_total_at:.1f} pontos**.")
+                                        
+                                        q_raw_disc = ai.extrair_tag(txt_ref, "QUESTOES")
+                                        num_q_disc = len(re.findall(r"(?i)QUESTÃO\s*0?\d+", q_raw_disc)) or 8
+                                        valor_por_item_disc = v_total_at / num_q_disc if num_q_disc > 0 else 0.5
+                                        
+                                        tab_disc_direta, tab_disc_itens = st.tabs(["Lançamento da Nota Total", "Lançamento por Questão"])
+                                        
+                                        with tab_disc_direta:
+                                            c_disc1, c_disc2 = st.columns([1.2, 1.8])
+                                            nota_discursiva_inp = c_disc1.number_input(
+                                                f"Pontuação Conquistada (0.0 a {v_total_at:.1f}):",
+                                                min_value=0.0, max_value=float(v_total_at), value=float(min(v_total_at, 4.0 if v_total_at == 4.0 else 6.0)), step=0.1,
+                                                key=f"inp_nota_disc_{v}"
+                                            )
+                                            obs_disc_pericia = c_disc2.text_input("Observação Pedagógica:", value="Avaliação Discursiva Homologada", key=f"txt_obs_disc_{v}")
 
-                                    c_b_disc1, c_b_disc2 = st.columns(2)
-                                    if c_b_disc1.button("Consolidar Nota Discursiva", type="primary", use_container_width=True, key=f"btn_save_disc_{v}"):
-                                        with st.spinner("Registrando pontuação discursiva..."):
-                                            link_evidencia_disc = "N/A"
-                                            if img_disc_file is not None:
-                                                link_evidencia_disc = db.subir_e_converter_para_google_docs(
-                                                    img_disc_file.getvalue(), 
-                                                    alunos_alvo[0].replace(" ", "_"), 
-                                                    trimestre=tr_sel, categoria=t_sel, semana=str(at_sel), modo="SCANNER"
-                                                )
+                                        with tab_disc_itens:
+                                            st.caption(f"Preencha a nota de cada questão ({num_q_disc} itens de {valor_por_item_disc:.2f} pts):")
+                                            grid_itens_disc = []
+                                            for q_i in range(num_q_disc):
+                                                grid_itens_disc.append({
+                                                    "Questão": f"Questão {q_i+1:02d}",
+                                                    "Valor do Item": valor_por_item_disc,
+                                                    "Nota do Aluno": valor_por_item_disc
+                                                })
+                                            df_itens_disc_ed = st.data_editor(
+                                                pd.DataFrame(grid_itens_disc), hide_index=True, use_container_width=True,
+                                                column_config={
+                                                    "Questão": st.column_config.TextColumn(disabled=True),
+                                                    "Valor do Item": st.column_config.NumberColumn(format="%.2f", disabled=True),
+                                                    "Nota do Aluno": st.column_config.NumberColumn(format="%.2f", min_value=0.0, max_value=float(valor_por_item_disc))
+                                                },
+                                                key=f"ed_grid_disc_itens_{v}"
+                                            )
+                                            soma_itens_calc = df_itens_disc_ed["Nota do Aluno"].sum()
+                                            st.metric("Soma dos Itens", f"{soma_itens_calc:.2f} / {v_total_at:.1f} pts")
 
-                                            df_turma_completa = df_alunos[df_alunos['TURMA'] == t_sel] if not df_alunos.empty else pd.DataFrame()
+                                        img_disc_file = st.file_uploader("Anexar Imagem da Folha / Caderno de Resolução (JPG/PNG):", type=["jpg", "jpeg", "png"], key=f"up_disc_ev_{v}")
+
+                                        c_b_disc1, c_b_disc2 = st.columns(2)
+                                        if c_b_disc1.button("Consolidar e Gravar Nota Discursiva", type="primary", use_container_width=True, key=f"btn_save_disc_{v}"):
+                                            with st.spinner("Gravando nota discursiva e atualizando boletim..."):
+                                                nota_final_gravar = soma_itens_calc if 'soma_itens_calc' in locals() and tab_disc_itens else nota_discursiva_inp
+                                                
+                                                link_evidencia_disc = "N/A"
+                                                if img_disc_file is not None:
+                                                    link_evidencia_disc = db.subir_e_converter_para_google_docs(
+                                                        img_disc_file.getvalue(), 
+                                                        alunos_alvo[0].replace(" ", "_"), 
+                                                        trimestre=tr_sel, categoria=t_sel, semana=nome_material_efetivo, modo="SCANNER"
+                                                    )
+
+                                                df_turma_completa = df_alunos[df_alunos['TURMA'] == t_sel] if not df_alunos.empty else pd.DataFrame()
+                                                for aluno_nome in alunos_alvo:
+                                                    match_al_d = df_turma_completa[df_turma_completa['NOME_ALUNO'] == aluno_nome]
+                                                    if not match_al_d.empty:
+                                                        id_al_d = db.limpar_id(match_al_d.iloc[0].get('ID', ''))
+                                                        
+                                                        try:
+                                                            wb_del = db.conectar()
+                                                            ws_del = wb_del.worksheet("DB_GABARITOS_ALUNOS")
+                                                            dados_del = ws_del.get_all_values()
+                                                            for idx_d in range(len(dados_del) - 1, 0, -1):
+                                                                row_d = dados_del[idx_d]
+                                                                if len(row_d) > 4 and db.limpar_id(row_d[1]) == id_al_d and (nome_filtro_pendente in row_d[4] or nome_material_efetivo in row_d[4]):
+                                                                    ws_del.delete_rows(idx_d + 1)
+                                                        except: pass
+                                                        
+                                                        respostas_salvar_disc = f"DISCURSIVA|{obs_disc_pericia}"
+                                                        db.salvar_no_banco("DB_GABARITOS_ALUNOS", [
+                                                            datetime.now().strftime("%d/%m/%Y"), id_al_d, aluno_nome, t_sel, nome_material_efetivo,
+                                                            respostas_salvar_disc, util.sosa_to_str(nota_final_gravar), link_evidencia_disc
+                                                        ])
+                                                
+                                                db.limpar_notas_turma_trimestre(t_sel, tr_sel)
+                                                st.cache_data.clear()
+                                                st.success(f"Nota discursiva de {alunos_alvo[0]} ({nota_final_gravar:.1f} pts) homologada com sucesso!")
+                                                time.sleep(0.6); st.rerun()
+
+                                        if c_b_disc2.button("Registrar Ausência na Avaliação", use_container_width=True, key=f"btn_aus_disc_{v}"):
                                             for aluno_nome in alunos_alvo:
-                                                match_al_d = df_turma_completa[df_turma_completa['NOME_ALUNO'] == aluno_nome]
-                                                if not match_al_d.empty:
-                                                    id_al_d = db.limpar_id(match_al_d.iloc[0].get('ID', ''))
-                                                    db.excluir_registro("DB_GABARITOS_ALUNOS", id_al_d)
-                                                    
-                                                    respostas_salvar_disc = f"DISCURSIVA|NOTA:{nota_discursiva_inp:.2f}"
+                                                match_al_aus = alunos_turma_df[alunos_turma_df['NOME_ALUNO'] == aluno_nome]
+                                                if not match_al_aus.empty:
+                                                    id_al = db.limpar_id(match_al_aus.iloc[0].get('ID', ''))
+                                                    db.excluir_registro("DB_GABARITOS_ALUNOS", id_al)
                                                     db.salvar_no_banco("DB_GABARITOS_ALUNOS", [
-                                                        datetime.now().strftime("%d/%m/%Y"), id_al_d, aluno_nome, t_sel, str(at_sel),
-                                                        respostas_salvar_disc, util.sosa_to_str(nota_discursiva_inp), link_evidencia_disc
+                                                        datetime.now().strftime("%d/%m/%Y"), id_al, aluno_nome, t_sel, nome_material_efetivo, "FALTOU_INJUSTIFICADO|Ausente", "0,00", "N/A"
                                                     ])
-                                            
                                             db.limpar_notas_turma_trimestre(t_sel, tr_sel)
-                                            st.success(f"Nota de {alunos_alvo[0]} ({nota_discursiva_inp:.1f} pts) homologada com sucesso!")
-                                            time.sleep(0.6); st.rerun()
-
-                                    if c_b_disc2.button("Registrar Ausência", use_container_width=True, key=f"btn_aus_disc_{v}"):
-                                        for aluno_nome in alunos_alvo:
-                                            match_al_aus = alunos_turma_df[alunos_turma_df['NOME_ALUNO'] == aluno_nome]
-                                            if not match_al_aus.empty:
-                                                id_al = db.limpar_id(match_al_aus.iloc[0].get('ID', ''))
-                                                db.excluir_registro("DB_GABARITOS_ALUNOS", id_al)
-                                                db.salvar_no_banco("DB_GABARITOS_ALUNOS", [
-                                                    datetime.now().strftime("%d/%m/%Y"), id_al, aluno_nome, t_sel, at_sel, "FALTOU_INJUSTIFICADO|Ausente na Recuperação", "0,00", "N/A"
-                                                ])
-                                        db.limpar_notas_turma_trimestre(t_sel, tr_sel)
-                                        st.rerun()
+                                            st.rerun()
 
                                 elif is_pei_grading or "REGULAR" in lente_upper:
+                                    gab_alvo = ai.extrair_gab_universal_com_fallback(txt_ref, is_pei_grading, nivel_alvo_pei)
+                                    if not gab_alvo:
+                                        q_raw_check = ai.extrair_tag(txt_ref, "QUESTOES") or txt_ref
+                                        qtd_q_estimada = len(re.findall(r"(?i)QUESTÃO\s*0?\d+", q_raw_check)) or 10
+                                        gab_alvo = ["A"] * qtd_q_estimada
+
+                                    tag_grade_ref = "GRADE_DE_CORRECAO_PEI" if is_pei_grading else "GRADE_DE_CORRECAO"
+                                    grade_raw_ref = ai.extrair_tag(txt_ref, tag_grade_ref) or ai.extrair_tag(txt_ref, "GRADE_DE_CORRECAO")
+
+                                    with st.popover("Conferir Chave de Respostas", use_container_width=True):
+                                        st.caption(f"Chave oficial ({len(gab_alvo)} questões | Pontuação: {v_total_at:.1f} pts).")
+                                        grid_gab_pre = [{"Q": f"{i+1:02d}", "Chave": gab_alvo[i] if i < len(gab_alvo) else "A"} for i in range(len(gab_alvo))]
+                                        df_gab_pre = st.data_editor(
+                                            pd.DataFrame(grid_gab_pre), hide_index=True, use_container_width=True,
+                                            column_config={"Q": st.column_config.TextColumn(disabled=True), "Chave": st.column_config.SelectboxColumn("Resposta Oficial", options=["A", "B", "C", "D", "E"], required=True)},
+                                            key=f"ed_pre_gab_{v}_{nivel_alvo_pei}"
+                                        )
+                                        if not df_gab_pre.empty and "Chave" in df_gab_pre.columns:
+                                            gab_alvo = df_gab_pre["Chave"].tolist()
+
                                     c_m1, c_m2 = st.columns([2, 1])
                                     modo_correcao = c_m1.segmented_control("Modo de Leitura:", ["Leitor Óptico (Câmera/Arquivo)", "Digitação Direta"], default="Leitor Óptico (Câmera/Arquivo)", key=f"mc_pills_{v}")
                                     
@@ -3366,7 +3418,7 @@ elif menu == "📸 Scanner de Gabaritos":
                                             if erros_detalhados_tri:
                                                 with st.expander("Diagnóstico de Distratores dos Itens Incorretos", expanded=False):
                                                     for err_txt in erros_detalhados_tri:
-                                                        st.info(preparar_para_leitura(err_txt))
+                                                        st.info(util.preparar_para_leitura(err_txt))
 
                                             col_s1, col_s2 = st.columns(2)
                                             if col_s1.button("Homologar Correção", type="primary", use_container_width=True, key=f"btn_save_corr_{v}"):
@@ -3550,7 +3602,7 @@ elif menu == "📸 Scanner de Gabaritos":
                     df_prova_trib = df_aulas[df_aulas['TIPO_MATERIAL'].str.contains(nome_curto_av, case=False, na=False)] if not df_aulas.empty else pd.DataFrame()
                     txt_prova_trib = str(df_prova_trib.iloc[0].get('CONTEUDO', '')) if not df_prova_trib.empty else ""
                     
-                    v_total_av = extrair_valor_real_prova(txt_prova_trib, av_alvo_h)
+                    v_total_av = util.extrair_valor_real_prova(txt_prova_trib, av_alvo_h)
 
                     if not df_prova_trib.empty:
                         gab_oficial_trib_list = ai.extrair_gab_universal_com_fallback(txt_prova_trib, is_pei=False)
@@ -3600,6 +3652,8 @@ elif menu == "📸 Scanner de Gabaritos":
                                 situacao_txt, versao_prova = "REALIZADA", "SEGUNDA CHAMADA"
                             elif "TIPO" in id_av_banco:
                                 situacao_txt, versao_prova = "REALIZADA", f"VARIANTE ({id_av_banco.split('-')[-1].strip()})"
+                            elif respostas_salvas.startswith("DISCURSIVA"):
+                                situacao_txt, versao_prova = "REALIZADA", "DISCURSIVA"
                             else:
                                 situacao_txt, versao_prova = "REALIZADA", "PROVA ORIGINAL"
 
@@ -3632,6 +3686,7 @@ elif menu == "📸 Scanner de Gabaritos":
                                     id_al_b = db.limpar_id(row_b[1])
                                     resp_bruta_b = str(row_b[5])
                                     
+                                    # Pula provas discursivas, qualitativas ou ausências para não sobreescrever
                                     if not resp_bruta_b.startswith("FALTOU") and not resp_bruta_b.startswith("QUALITATIVA") and not resp_bruta_b.startswith("DISCURSIVA") and resp_bruta_b != "MANUAL":
                                         resp_limpa_b = resp_bruta_b.split("|GRUPO:")[0]
                                         respostas_al_lista = resp_limpa_b.split(';')
@@ -3800,14 +3855,14 @@ elif menu == "📸 Scanner de Gabaritos":
                                     m_p = re.search(padrao_q, grade_raw_text, re.IGNORECASE | re.DOTALL)
                                     
                                     st.markdown(f"**Enunciado Oficial ({num_q_inspect}):**")
-                                    if m_q: st.write(preparar_para_leitura(m_q.group(1).strip()))
+                                    if m_q: st.write(util.preparar_para_leitura(m_q.group(1).strip()))
                                     else: st.info("Enunciado da questão disponível na impressão oficial.")
                                     
                                     st.divider()
                                     st.markdown("**Perícia Pedagógica (Descritor & Distratores):**")
                                     if m_p:
                                         p_texto = re.sub(r'[*#]', '', m_p.group(1).strip())
-                                        st.info(preparar_para_leitura(p_texto))
+                                        st.info(util.preparar_para_leitura(p_texto))
                                     else: st.caption("Perícia não vinculada a este item.")
 
                     renderizar_espelho_tribunal_fragmento()
@@ -3865,10 +3920,16 @@ elif menu == "📸 Scanner de Gabaritos":
                                     
                                     nota_boletim = nota_s if r['Situação'] == "REALIZADA" else "0,00"
                                     if "TESTE" in av_alvo_h.upper(): v_teste = nota_boletim
+                                    elif any(x in av_alvo_h.upper() for x in ["RECUPERAÇÃO", "RECUPERACAO", "REC_"]): v_rec = nota_boletim
                                     else: v_prova = nota_boletim
                                         
-                                    nova_media_final = min(10.0, util.sosa_to_float(v_vistos) + util.sosa_to_float(v_teste) + util.sosa_to_float(v_prova))
-                                    if util.sosa_to_float(v_rec) > 0: nova_media_final = max(nova_media_final, util.sosa_to_float(v_rec))
+                                    soma_primaria = min(10.0, util.sosa_to_float(v_vistos) + util.sosa_to_float(v_teste) + util.sosa_to_float(v_prova))
+                                    if util.sosa_to_float(v_rec) > 0 and soma_primaria < 6.0:
+                                        media_calculada_rec = (soma_primaria + util.sosa_to_float(v_rec)) / 2.0
+                                        nova_media_final = min(10.0, max(soma_primaria, round(media_calculada_rec * 2) / 2))
+                                    else:
+                                        nova_media_final = soma_primaria
+                                        
                                     lista_boletim.append([id_l, nome_limpo, t_sel_h, tr_sel_h, v_vistos, v_teste, v_prova, v_rec, util.sosa_to_str(nova_media_final)])
                             
                             ws_g.clear(); ws_g.update(values=dados_atualizados, range_name='A1')
@@ -3923,7 +3984,7 @@ elif menu == "📸 Scanner de Gabaritos":
                         
                         if resp.startswith("FALTOU"): return "AUSÊNCIA"
                         if resp.startswith("QUALITATIVA"): return "PEI Nível 3 (Qualitativa)"
-                        if "2ª" in id_av or "2CHAMADA" in id_av: return "Segunda Chamada (Discursiva)"
+                        if "2ª" in id_av or "2CHAMADA" in id_av or "DISCURSIVA" in id_av: return "Segunda Chamada / Discursiva"
                         if "TIPO" in id_av: return f"Variante ({id_av.split('-')[-1].strip()})"
                         
                         is_pei = nec not in ["NENHUMA", "", "NAN", "TÍPICO", "TIPICO", "ALTA PERFORMANCE", "PENDENTE", "SUSPEITA", "DEFASAGEM LEITURA", "DEFASAGEM MATEMÁTICA"]
@@ -3946,10 +4007,10 @@ elif menu == "📸 Scanner de Gabaritos":
                         
                         material_ref = None
                         is_pei_view = "PEI" in str(caderno_alvo)
-                        is_2a_chamada = "Segunda Chamada" in str(caderno_alvo)
+                        is_2a_chamada = "Segunda Chamada" in str(caderno_alvo) or "Discursiva" in str(caderno_alvo)
                         
                         if is_2a_chamada:
-                            df_busca = df_aulas[(df_aulas['TIPO_MATERIAL'].str.upper().str.contains("2ª|2CHAMADA", regex=True)) & (df_aulas['TIPO_MATERIAL'].str.contains(padrao_regex_trim, regex=True, case=False)) & (df_aulas['ANO'].str.contains(serie_num_r))] if not df_aulas.empty else pd.DataFrame()
+                            df_busca = df_aulas[(df_aulas['TIPO_MATERIAL'].str.upper().str.contains("2ª|2CHAMADA|DISCURSIVA|RECUPERA", regex=True)) & (df_aulas['TIPO_MATERIAL'].str.contains(padrao_regex_trim, regex=True, case=False)) & (df_aulas['ANO'].str.contains(serie_num_r))] if not df_aulas.empty else pd.DataFrame()
                             if not df_busca.empty: material_ref = df_busca.iloc[0]
                         elif "Variante" in str(caderno_alvo):
                             tipo_letra = str(caderno_alvo).split("TIPO")[-1].replace(")", "").strip()
@@ -3965,17 +4026,7 @@ elif menu == "📸 Scanner de Gabaritos":
                             
                         stats_list = []
                         if is_2a_chamada:
-                            q_raw = ai.extrair_tag(txt_prova_base, "QUESTOES")
-                            num_q_total = len(re.findall(r"(?i)QUESTÃO\s*0?\d+", q_raw)) or 10
-                            matriz_respostas = [str(r.get('RESPOSTAS_ALUNO', '')).split('|GRUPO:')[0].split(';') for _, r in df_filtrado.iterrows()]
-                            
-                            for i in range(1, num_q_total + 1):
-                                votos = [res[i-1] if len(res) >= i else "?" for res in matriz_respostas]
-                                acertos_integrais = votos.count("Acerto Integral")
-                                acertos_parciais = votos.count("Acerto Parcial")
-                                pontos_obtidos = acertos_integrais + (acertos_parciais * 0.5)
-                                perc = (pontos_obtidos / len(votos)) * 100 if len(votos) > 0 else 0
-                                stats_list.append({"Questão": f"Q{i:02d}", "Acerto %": perc, "Gabarito": "Discursiva"})
+                            st.info("Avaliação discursiva/segunda chamada com pontuação lançada na folha do estudante.")
                         elif "Qualitativa" in str(caderno_alvo):
                             st.info("Avaliação qualitativa baseada em rubricas no Dossiê do Estudante.")
                         else:
@@ -3994,98 +4045,97 @@ elif menu == "📸 Scanner de Gabaritos":
                                 perc = (acertos / validos) * 100 if validos > 0 else 0.0
                                 stats_list.append({"Questão": f"Q{i:02d}", "Acerto %": perc, "Gabarito": gab_ativo.get(i, "?") if gab_ativo else "?"})
                             
-                        df_stats_global = pd.DataFrame(stats_list)
-                        
-                        if not df_stats_global.empty:
-                            worst_q = df_stats_global.loc[df_stats_global['Acerto %'].idxmin()]
-                            best_q = df_stats_global.loc[df_stats_global['Acerto %'].idxmax()]
-                            avg_ret = df_stats_global['Acerto %'].mean()
+                            df_stats_global = pd.DataFrame(stats_list)
                             
-                            with st.container(border=True):
-                                c_m1, c_m2, c_m3 = st.columns(3)
-                                c_m1.metric("Menor Taxa de Acerto", f"{worst_q['Questão']} ({worst_q['Acerto %']:.1f}%)", delta_color="inverse")
-                                c_m2.metric("Maior Domínio", f"{best_q['Questão']} ({best_q['Acerto %']:.1f}%)")
-                                c_m3.metric("Retenção Média da Classe", f"{avg_ret:.1f}%")
-
-                            st.markdown(f"#### Desempenho por Item: **{caderno_alvo}**")
-                            fig_global = px.bar(df_stats_global, x="Questão", y="Acerto %", text_auto='.0f', color="Acerto %", color_continuous_scale="RdYlGn")
-                            fig_global.update_layout(yaxis_range=[0, 110], height=260, margin=dict(l=20, r=20, t=20, b=20))
-                            st.plotly_chart(fig_global, use_container_width=True)
-
-                            st.markdown("---")
-                            
-                            c_aut1, c_aut2 = st.columns([1.5, 1.5])
-                            
-                            with c_aut1:
-                                st.markdown("#### Autópsia do Item")
-                                c_sel, c_btn = st.columns([2, 1])
-                                q_sel = c_sel.selectbox("Selecione o Item:", df_stats_global["Questão"].tolist(), key=f"sel_q_inspect_raiox_{v}", label_visibility="collapsed")
-
-                                if c_btn.button("Analisar Item", use_container_width=True, key=f"btn_autopsia_item_raiox_{v}"):
-                                    stats_row = df_stats_global[df_stats_global['Questão'] == q_sel].iloc[0]
-                                    dialog_autopsia_modal(q_sel, stats_row, txt_prova_base, is_pei_view, caderno_alvo)
-
-                            with c_aut2:
-                                st.markdown("#### Inteligência & Recomposição")
-                                c_pr1, c_pr2 = st.columns(2)
+                            if not df_stats_global.empty:
+                                worst_q = df_stats_global.loc[df_stats_global['Acerto %'].idxmin()]
+                                best_q = df_stats_global.loc[df_stats_global['Acerto %'].idxmax()]
+                                avg_ret = df_stats_global['Acerto %'].mean()
                                 
-                                if c_pr1.button("Diagnóstico Psicométrico", use_container_width=True, key=f"btn_gen_prog_raiox_{v}"):
-                                    with st.spinner("Analisando padrões de resposta..."):
-                                        worst_3 = df_stats_global.sort_values(by="Acerto %").head(3)
-                                        stats_str = "\n".join([f"{r['Questão']}: {r['Acerto %']:.1f}% de acerto" for _, r in worst_3.iterrows()])
-                                        
-                                        contexto_str = ""
-                                        tag_grade = "GRADE_DE_CORRECAO_PEI" if is_pei_view else "GRADE_DE_CORRECAO"
-                                        grade_raw = ai.extrair_tag(txt_prova_base, tag_grade)
-                                        prefixo_q = r"(?:QUEST[AÃ]O\s*(?:PEI\s*)?|Q)"
-                                        
-                                        for _, r in worst_3.iterrows():
-                                            idx_num = int(r['Questão'].replace("Q", ""))
-                                            padrao_q = rf"(?si)({prefixo_q}\s*0?{idx_num}\b.*?)(?={prefixo_q}\s*0?{idx_num+1}\b|GABARITO|RESPOSTAS|GRADE|$)"
-                                            m_p_reg = re.search(padrao_q, grade_raw)
-                                            if m_p_reg: contexto_str += f"Erro na {r['Questão']}: {re.sub(r'[*#]', '', m_p_reg.group(1).strip())}\n"
-                                        
-                                        res_prog = ai.gerar_prognostico_pedagogico(stats_str, contexto_str)
-                                        st.session_state[f"prog_{v}"] = res_prog
+                                with st.container(border=True):
+                                    c_m1, c_m2, c_m3 = st.columns(3)
+                                    c_m1.metric("Menor Taxa de Acerto", f"{worst_q['Questão']} ({worst_q['Acerto %']:.1f}%)", delta_color="inverse")
+                                    c_m2.metric("Maior Domínio", f"{best_q['Questão']} ({best_q['Acerto %']:.1f}%)")
+                                    c_m3.metric("Retenção Média da Classe", f"{avg_ret:.1f}%")
 
-                                if c_pr2.button("Gerar Caderno de Recomposição", type="primary", use_container_width=True, key=f"btn_ponte_recomp_raiox_{v}"):
-                                    with st.status("Estruturando caderno de recomposição focado nos itens críticos...", expanded=True) as status_rec_auto:
-                                        worst_3 = df_stats_global.sort_values(by="Acerto %").head(3)
-                                        itens_criticos_str = ", ".join(worst_3['Questão'].tolist())
-                                        
-                                        prompt_recomp_auto = (
-                                            f"PROVA ORIGINAL:\n{txt_prova_base}\n\n"
-                                            f"ITENS CRÍTICOS COM MAIOR ÍNDICE DE ERRO NA TURMA {t_sel_r}: {itens_criticos_str}.\n"
-                                            f"SÉRIE: {t_sel_r}.\n"
-                                            f"MISSÃO: Crie o Caderno de Recomposição FOCADO ESTRITAMENTE nesses 3 itens críticos, gerando Roteiro do Professor e Exercícios Espelho para os alunos."
-                                        )
-                                        res_recomp_auto = ai.gerar_ia("ARQUITETO_REVISAO_V29", prompt_recomp_auto)
-                                        
-                                        nome_recomp_auto = f"RECOMPO_{at_sel_r}_LACUNAS"
-                                        info_recomp_auto = {"ano": f"{serie_num_r}º", "trimestre": tr_sel_r, "semana": "RECOMPOSIÇÃO"}
+                                st.markdown(f"#### Desempenho por Item: **{caderno_alvo}**")
+                                fig_global = px.bar(df_stats_global, x="Questão", y="Acerto %", text_auto='.0f', color="Acerto %", color_continuous_scale="RdYlGn")
+                                fig_global.update_layout(yaxis_range=[0, 110], height=260, margin=dict(l=20, r=20, t=20, b=20))
+                                st.plotly_chart(fig_global, use_container_width=True)
 
-                                        status_rec_auto.write("Compilando Folha do Estudante...")
-                                        doc_alu_rec = exporter.gerar_docx_aluno_v24(nome_recomp_auto, ai.extrair_tag(res_recomp_auto, "ALUNO"), info_recomp_auto)
-                                        link_alu_rec = db.subir_e_converter_para_google_docs(doc_alu_rec, f"{nome_recomp_auto}_ALUNO", modo="AULA")
+                                st.markdown("---")
+                                
+                                c_aut1, c_aut2 = st.columns([1.5, 1.5])
+                                
+                                with c_aut1:
+                                    st.markdown("#### Autópsia do Item")
+                                    c_sel, c_btn = st.columns([2, 1])
+                                    q_sel = c_sel.selectbox("Selecione o Item:", df_stats_global["Questão"].tolist(), key=f"sel_q_inspect_raiox_{v}", label_visibility="collapsed")
 
-                                        status_rec_auto.write("Compilando Guia Docente...")
-                                        doc_prof_rec = exporter.gerar_docx_professor_v25(nome_recomp_auto, ai.extrair_tag(res_recomp_auto, "PROFESSOR"), info_recomp_auto)
-                                        link_prof_rec = db.subir_e_converter_para_google_docs(doc_prof_rec, f"{nome_recomp_auto}_PROF", modo="AULA")
+                                    if c_btn.button("Analisar Item", use_container_width=True, key=f"btn_autopsia_item_raiox_{v}"):
+                                        stats_row = df_stats_global[df_stats_global['Questão'] == q_sel].iloc[0]
+                                        dialog_autopsia_modal(q_sel, stats_row, txt_prova_base, is_pei_view, caderno_alvo)
 
-                                        conteudo_final_rec = f"{res_recomp_auto}\n\n--- LINKS ---\nRegular({link_alu_rec}) Prof({link_prof_rec})"
+                                with c_aut2:
+                                    st.markdown("#### Inteligência & Recomposição")
+                                    c_pr1, c_pr2 = st.columns(2)
+                                    
+                                    if c_pr1.button("Diagnóstico Psicométrico", use_container_width=True, key=f"btn_gen_prog_raiox_{v}"):
+                                        with st.spinner("Analisando padrões de resposta..."):
+                                            worst_3 = df_stats_global.sort_values(by="Acerto %").head(3)
+                                            stats_str = "\n".join([f"{r['Questão']}: {r['Acerto %']:.1f}% de acerto" for _, r in worst_3.iterrows()])
+                                            
+                                            contexto_str = ""
+                                            tag_grade = "GRADE_DE_CORRECAO_PEI" if is_pei_view else "GRADE_DE_CORRECAO"
+                                            grade_raw = ai.extrair_tag(txt_prova_base, tag_grade)
+                                            prefixo_q = r"(?:QUEST[AÃ]O\s*(?:PEI\s*)?|Q)"
+                                            
+                                            for _, r in worst_3.iterrows():
+                                                idx_num = int(r['Questão'].replace("Q", ""))
+                                                padrao_q = rf"(?si)({prefixo_q}\s*0?{idx_num}\b.*?)(?={prefixo_q}\s*0?{idx_num+1}\b|GABARITO|RESPOSTAS|GRADE|$)"
+                                                m_p_reg = re.search(padrao_q, grade_raw)
+                                                if m_p_reg: contexto_str += f"Erro na {r['Questão']}: {re.sub(r'[*#]', '', m_p_reg.group(1).strip())}\n"
+                                            
+                                            res_prog = ai.gerar_prognostico_pedagogico(stats_str, contexto_str)
+                                            st.session_state[f"prog_{v}"] = res_prog
 
-                                        db.salvar_no_banco("DB_AULAS_PRONTAS", [
-                                            datetime.now().strftime("%d/%m/%Y"), "REVISÃO", nome_recomp_auto,
-                                            conteudo_final_rec, f"{serie_num_r}º", link_alu_rec
-                                        ])
+                                    if c_pr2.button("Gerar Caderno de Recomposição", type="primary", use_container_width=True, key=f"btn_ponte_recomp_raiox_{v}"):
+                                        with st.status("Estruturando caderno de recomposição focado nos itens críticos...", expanded=True) as status_rec_auto:
+                                            worst_3 = df_stats_global.sort_values(by="Acerto %").head(3)
+                                            itens_criticos_str = ", ".join(worst_3['Questão'].tolist())
+                                            
+                                            prompt_recomp_auto = (
+                                                f"PROVA ORIGINAL:\n{txt_prova_base}\n\n"
+                                                f"ITENS CRÍTICOS COM MAIOR ÍNDICE DE ERRO NA TURMA {t_sel_r}: {itens_criticos_str}.\n"
+                                                f"SÉRIE: {t_sel_r}.\n"
+                                                f"MISSÃO: Crie o Caderno de Recomposição FOCADO ESTRITAMENTE nesses 3 itens críticos, gerando Roteiro do Professor e Exercícios Espelho para os alunos."
+                                            )
+                                            res_recomp_auto = ai.gerar_ia("ARQUITETO_REVISAO_V29", prompt_recomp_auto)
+                                            
+                                            nome_recomp_auto = f"RECOMPO_{at_sel_r}_LACUNAS"
+                                            info_recomp_auto = {"ano": f"{serie_num_r}º", "trimestre": tr_sel_r, "semana": "RECOMPOSIÇÃO"}
 
-                                        status_rec_auto.update(label="Caderno de Recomposição sincronizado no Google Drive!", state="complete")
-                                        st.balloons()
-                                        st.link_button("Abrir Caderno no Drive", link_alu_rec, type="primary", use_container_width=True)
+                                            status_rec_auto.write("Compilando Folha do Estudante...")
+                                            doc_alu_rec = exporter.gerar_docx_aluno_v24(nome_recomp_auto, ai.extrair_tag(res_recomp_auto, "ALUNO"), info_recomp_auto)
+                                            link_alu_rec = db.subir_e_converter_para_google_docs(doc_alu_rec, f"{nome_recomp_auto}_ALUNO", modo="AULA")
 
-                            if f"prog_{v}" in st.session_state:
-                                st.info(f"**Prognóstico Psicométrico:**\n\n{st.session_state[f'prog_{v}']}")
+                                            status_rec_auto.write("Compilando Guia Docente...")
+                                            doc_prof_rec = exporter.gerar_docx_professor_v25(nome_recomp_auto, ai.extrair_tag(res_recomp_auto, "PROFESSOR"), info_recomp_auto)
+                                            link_prof_rec = db.subir_e_converter_para_google_docs(doc_prof_rec, f"{nome_recomp_auto}_PROF", modo="AULA")
 
+                                            conteudo_final_rec = f"{res_recomp_auto}\n\n--- LINKS ---\nRegular({link_alu_rec}) Prof({link_prof_rec})"
+
+                                            db.salvar_no_banco("DB_AULAS_PRONTAS", [
+                                                datetime.now().strftime("%d/%m/%Y"), "REVISÃO", nome_recomp_auto,
+                                                conteudo_final_rec, f"{serie_num_r}º", link_alu_rec
+                                            ])
+
+                                            status_rec_auto.update(label="Caderno de Recomposição sincronizado no Google Drive!", state="complete")
+                                            st.balloons()
+                                            st.link_button("Abrir Caderno no Drive", link_alu_rec, type="primary", use_container_width=True)
+
+                                if f"prog_{v}" in st.session_state:
+                                    st.info(f"**Prognóstico Psicométrico:**\n\n{st.session_state[f'prog_{v}']}")
 
 
 
