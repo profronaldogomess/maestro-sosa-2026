@@ -1,6 +1,7 @@
 import os
 import re
 import io
+import json
 import requests
 import pandas as pd
 import streamlit as st
@@ -458,7 +459,6 @@ def gerar_ia(persona_key, comando, url_drive=None, usar_busca=False, recorte_liv
                                 texto_retornado += part.text + "\n"
             
             if texto_retornado.strip():
-                # Sanitização automática de cifrões simples perdidos para duplo cifrão
                 texto_final_sanitizado = re.sub(r'(?<!\$)\$(?!\$)(.*?)(?<!\$)\$(?!\$)', r'$$ \1 $$', texto_retornado.strip())
                 return texto_final_sanitizado
         except Exception as e_mod:
@@ -512,7 +512,6 @@ def gerar_ia_json(persona_key, comando, usar_busca=False):
             )
             if not res.text: continue
             
-            import json
             texto_limpo = res.text.strip()
             texto_limpo = re.sub(r'^```[a-zA-Z]*\n', '', texto_limpo, flags=re.IGNORECASE)
             texto_limpo = re.sub(r'\n```$', '', texto_limpo)
@@ -574,7 +573,7 @@ def tratar_imagem_para_leitura(imagem_bytes):
 def analisar_gabarito_hibrido(imagem_bytes, qtd_questoes=10, is_pei=False):
     """
     SOSA V2026.DIRECT_VISION_ANTI_TROCA:
-    Leitura Direta por Visão Computacional Gemini 3.5 Flash-Lite (< 1s por prova).
+    Leitura Direta por Visão Computacional Gemini 3.5 Flash-Lite com parser JSON blindado.
     """
     imagem_pronta = tratar_imagem_para_leitura(imagem_bytes)
     
@@ -624,7 +623,6 @@ RETORNE APENAS UM JSON PURO NO FORMATO:
 
         modelos_tentativa = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.7-flash"]
         respostas_json = None
-        import json
         
         for mod in modelos_tentativa:
             try:
@@ -637,7 +635,18 @@ RETORNE APENAS UM JSON PURO NO FORMATO:
                     texto_limpo = res.text.strip()
                     texto_limpo = re.sub(r'^```[a-zA-Z]*\n', '', texto_limpo, flags=re.IGNORECASE)
                     texto_limpo = re.sub(r'\n```$', '', texto_limpo)
-                    respostas_json = json.loads(texto_limpo)
+                    
+                    match = re.search(r'\{.*\}', texto_limpo, re.DOTALL)
+                    if match:
+                        json_str = match.group(0)
+                        json_str_reparado = re.sub(r'\\(?![/"bfnrtu\\])', r'\\\\', json_str)
+                        try:
+                            respostas_json = json.loads(json_str_reparado)
+                        except json.JSONDecodeError:
+                            respostas_json = json.loads(json_str)
+                    else:
+                        respostas_json = json.loads(texto_limpo)
+
                     if respostas_json and len(respostas_json) > 0:
                         break
             except Exception as e_mod:
@@ -742,6 +751,7 @@ def extrair_gab_universal_com_fallback(texto, is_pei=False, nivel_pei="NIVEL_1")
     SOSA V2026 - EXTRATOR UNIVERSAL DE GABARITO (REGULAR E PEI INTELIGENTE):
     - Provas Regulares: Extrai chave oficial de 5 alternativas (A, B, C, D, E).
     - Provas PEI: Extrai exclusivamente chaves de 3 alternativas (A, B, C).
+    - Respeita o número real de questões de testes curtos sem forçar 10 itens.
     """
     if not texto or not isinstance(texto, str): return []
     
@@ -755,7 +765,10 @@ def extrair_gab_universal_com_fallback(texto, is_pei=False, nivel_pei="NIVEL_1")
 
     qtd_enunciados = len(re.findall(r"(?i)(?:QUEST[AÃ]O\s*|Q)\s*0?(\d+)", extrair_tag(texto, "QUESTOES") or texto))
     max_q = max(mapa_regular.keys()) if mapa_regular else 0
-    qtd_oficial = max(max_q, qtd_enunciados, 10)
+    
+    # Contagem dinâmica real (não infla testes curtos de 4 ou 5 questões para 10)
+    qtd_detectada = max(max_q, qtd_enunciados)
+    qtd_oficial = qtd_detectada if qtd_detectada > 0 else 10
     
     if not is_pei:
         return [mapa_regular.get(n, "A") for n in range(1, qtd_oficial + 1)]
