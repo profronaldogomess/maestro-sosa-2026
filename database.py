@@ -38,10 +38,9 @@ def conectar(max_tentativas=4):
         except Exception as e:
             erro_str = str(e)
             
-            # Se for erro 503 (Google temporariamente fora), 500, 502 ou 429, tenta novamente
             if any(cod in erro_str for cod in ["503", "500", "502", "429", "UNAVAILABLE", "unavailable", "ResourceExhausted"]):
                 if tentativa < max_tentativas:
-                    time.sleep(tentativa * 1.2) # Pausa estratégica progressiva
+                    time.sleep(tentativa * 1.2)
                     continue
             
             if tentativa == max_tentativas:
@@ -87,7 +86,6 @@ def carregar_tudo():
                 if not dados or len(dados) < 1:
                     return pd.DataFrame(columns=colunas_padrao)
                 
-                # Filtra linhas completamente vazias do Sheets
                 linhas_validas = [r for r in dados[1:] if any(str(c).strip() for c in r)]
                 if not linhas_validas:
                     return pd.DataFrame(columns=colunas_padrao)
@@ -95,7 +93,6 @@ def carregar_tudo():
                 df = pd.DataFrame(linhas_validas, columns=dados[0])
                 df.columns = [str(c).strip().upper() for c in df.columns]
                 
-                # Normalização SOSA
                 for col in df.columns:
                     df[col] = df[col].astype(str).str.strip()
                     if any(x in col for x in ["NOTA", "MEDIA", "VALOR", "SOMA"]):
@@ -139,7 +136,7 @@ def carregar_tudo():
     )
 
 # ==============================================================================
-# 3. FUNÇÕES DE ESCRITA E ATUALIZAÇÃO (UPSERT)
+# 3. FUNÇÕES DE ESCRITA E ATUALIZAÇÃO (UPSERT & BATCH ATÔMICO)
 # ==============================================================================
 
 def salvar_no_banco(aba_nome, linha):
@@ -188,7 +185,7 @@ def atualizar_necessidade_aluno(id_aluno, nova_necessidade):
     except: return False
 
 def atualizar_aluno_cascata(id_aluno, novo_nome, nova_turma, nova_nec):
-    """MOTOR DE PROPAGAÇÃO EM CASCATA V48"""
+    """MOTOR DE PROPAGAÇÃO EM CASCATA EM LOTE"""
     try:
         wb = conectar()
         id_str = str(limpar_id(id_aluno))
@@ -202,7 +199,7 @@ def atualizar_aluno_cascata(id_aluno, novo_nome, nova_turma, nova_nec):
                 ws_alunos.update_cell(i + 1, 5, nova_nec)
                 break
         
-        def update_tab(aba, col_id, col_nome, col_turma=None):
+        def update_tab_batch(aba, col_id, col_nome, col_turma=None):
             try:
                 ws = wb.worksheet(aba)
                 dados = ws.get_all_values()
@@ -217,10 +214,10 @@ def atualizar_aluno_cascata(id_aluno, novo_nome, nova_turma, nova_nec):
             except Exception as e:
                 print(f"Erro ao atualizar {aba}: {e}")
 
-        update_tab("DB_DIARIO_BORDO", 1, 2, 3)
-        update_tab("DB_NOTAS", 0, 1, 2)
-        update_tab("DB_RELATORIOS", 1, 2, None)
-        update_tab("DB_GABARITOS_ALUNOS", 1, 2, 3)
+        update_tab_batch("DB_DIARIO_BORDO", 1, 2, 3)
+        update_tab_batch("DB_NOTAS", 0, 1, 2)
+        update_tab_batch("DB_RELATORIOS", 1, 2, None)
+        update_tab_batch("DB_GABARITOS_ALUNOS", 1, 2, 3)
         
         st.cache_data.clear()
         return True
@@ -451,7 +448,7 @@ def excluir_registro_com_drive(aba_nome, valor_conteudo):
         ws = wb.worksheet(aba_nome)
         dados = ws.get_all_values()
         creds = obter_creds_drive()
-        service = build('drive', 'v3', credentials=creds)
+        service = build('drive', 'v3', credentials=creds) if creds else None
         
         padrao_id = r"(?:/d/|id=)([a-zA-Z0-9-_]+)"
 
@@ -460,12 +457,13 @@ def excluir_registro_com_drive(aba_nome, valor_conteudo):
             linha_completa_txt = " ".join(map(str, row))
             
             if valor_conteudo in linha_completa_txt:
-                ids_encontrados = re.findall(padrao_id, linha_completa_txt)
-                for file_id in ids_encontrados:
-                    try:
-                        if len(file_id) > 20:
-                            service.files().delete(fileId=file_id).execute()
-                    except: pass 
+                if service:
+                    ids_encontrados = re.findall(padrao_id, linha_completa_txt)
+                    for file_id in ids_encontrados:
+                        try:
+                            if len(file_id) > 20:
+                                service.files().delete(fileId=file_id).execute()
+                        except: pass 
                 
                 ws.delete_rows(i + 1)
                 st.cache_data.clear()
@@ -482,7 +480,7 @@ def excluir_plano_completo(semana, ano):
         ws = wb.worksheet("DB_PLANOS")
         dados = ws.get_all_values()
         creds = obter_creds_drive()
-        service = build('drive', 'v3', credentials=creds)
+        service = build('drive', 'v3', credentials=creds) if creds else None
         
         padrao_id = r"(?:/d/|id=)([a-zA-Z0-9-_]{25,})"
         linha_para_deletar = -1
@@ -490,11 +488,12 @@ def excluir_plano_completo(semana, ano):
         for i, row in enumerate(dados):
             if i == 0: continue 
             if len(row) > 2 and row[1].strip() == semana.strip() and row[2].strip() == ano.strip():
-                linha_txt = " ".join(map(str, row))
-                ids_encontrados = re.findall(padrao_id, linha_txt)
-                for file_id in ids_encontrados:
-                    try: service.files().delete(fileId=file_id).execute()
-                    except: pass
+                if service:
+                    linha_txt = " ".join(map(str, row))
+                    ids_encontrados = re.findall(padrao_id, linha_txt)
+                    for file_id in ids_encontrados:
+                        try: service.files().delete(fileId=file_id).execute()
+                        except: pass
                 linha_para_deletar = i + 1
                 break 
         
@@ -512,16 +511,17 @@ def excluir_avaliacao_completa(identificador, tipo_prova_nome):
     try:
         wb = conectar()
         creds = obter_creds_drive()
-        service = build('drive', 'v3', credentials=creds)
+        service = build('drive', 'v3', credentials=creds) if creds else None
         
         ws_gaveta = wb.worksheet("DB_AULAS_PRONTAS")
         dados_gaveta = ws_gaveta.get_all_values()
         for i, row in enumerate(dados_gaveta):
             if i > 0 and row[2] == identificador:
-                ids = re.findall(r"(?:/d/|id=)([a-zA-Z0-9-_]{25,})", " ".join(row))
-                for f_id in ids:
-                    try: service.files().delete(fileId=f_id).execute()
-                    except: pass
+                if service:
+                    ids = re.findall(r"(?:/d/|id=)([a-zA-Z0-9-_]{25,})", " ".join(row))
+                    for f_id in ids:
+                        try: service.files().delete(fileId=f_id).execute()
+                        except: pass
                 ws_gaveta.delete_rows(i + 1)
                 break
         
@@ -547,7 +547,6 @@ def salvar_foto_gabarito_drive(imagem_bytes, nome_aluno, turma, avaliacao_nome):
     prioritariamente via Apps Script Bridge que possui cota de usuário, evitando o erro 403.
     """
     try:
-        # Tenta envio prioritário via Ponte Apps Script para utilizar a cota do usuário
         link_ponte = subir_e_converter_para_google_docs(
             imagem_bytes, 
             f"GABARITO_{turma}_{nome_aluno.replace(' ', '_')}", 
@@ -559,7 +558,6 @@ def salvar_foto_gabarito_drive(imagem_bytes, nome_aluno, turma, avaliacao_nome):
         if "http" in str(link_ponte):
             return link_ponte
 
-        # Fallback via Drive API Nativa com verificação de pasta
         creds = obter_creds_drive()
         service = build('drive', 'v3', credentials=creds)
         
@@ -643,7 +641,7 @@ def subir_e_converter_para_google_docs(file_stream, nome_arquivo, trimestre="I T
         return "N/A"
 
 # ==============================================================================
-# MOTOR DE RELOCAÇÃO TEMPORAL EM CASCATA (SOSA V202.6 - PRESERVAÇÃO DE DOCS)
+# MOTOR DE RELOCAÇÃO TEMPORAL EM CASCATA (SOSA V2026 - PRESERVAÇÃO DE DOCS)
 # ==============================================================================
 def renomear_arquivo_drive(link_drive, novo_nome):
     """Renomeia um arquivo no Google Drive preservando seu ID e link original."""
@@ -665,8 +663,9 @@ def renomear_arquivo_drive(link_drive, novo_nome):
 
 def relocador_plano_semana(semana_antiga, ano, nova_semana, link_drive):
     """
-    SOSA V202.6: Muda a semana de um plano e de TODAS as suas aulas vinculadas em CASCATA,
+    SOSA V2026: Muda a semana de um plano e de TODAS as suas aulas vinculadas em CASCATA,
     renomeando os títulos no Google Drive e PRESERVANDO 100% os arquivos Google Docs originais.
+    Operações em lote para evitar erro 429.
     """
     try:
         wb = conectar()
@@ -679,14 +678,17 @@ def relocador_plano_semana(semana_antiga, ano, nova_semana, link_drive):
                 ws_planos.update_cell(i + 1, 2, nova_semana.strip())
                 break
         
-        # 2. MIGRAÇÃO EM CASCATA: Atualiza a referência de TODAS as Aulas em DB_AULAS_PRONTAS
+        # 2. MIGRAÇÃO EM CASCATA EM LOTE: Atualiza a referência de TODAS as Aulas em DB_AULAS_PRONTAS
         try:
             ws_aulas = wb.worksheet("DB_AULAS_PRONTAS")
             dados_a = ws_aulas.get_all_values()
             ano_num = "".join(filter(str.isdigit, str(ano)))
+            updates_aulas = []
             for j, row_a in enumerate(dados_a):
                 if j > 0 and len(row_a) > 4 and row_a[1].strip() == semana_antiga.strip() and ano_num in row_a[4]:
-                    ws_aulas.update_cell(j + 1, 2, nova_semana.strip())
+                    updates_aulas.append(gspread.Cell(row=j+1, col=2, value=nova_semana.strip()))
+            if updates_aulas:
+                ws_aulas.update_cells(updates_aulas)
         except Exception as e_a:
             print(f"Aviso na cascata de aulas: {e_a}")
                 
@@ -726,13 +728,13 @@ def baixar_bytes_arquivo_drive(url_ou_id):
     return None
 
 # ==============================================================================
-# 6. CONCILIADOR CRONOLÓGICO SOBERANO POR JANELA SEMANAL (SOSA V2026)
+# 7. CONCILIADOR CRONOLÓGICO SOBERANO POR JANELA SEMANAL (SOSA V2026)
 # ==============================================================================
 def conciliar_calendario_e_planos_cronologicos(ano_alvo="6º"):
     """
     SOSA V2026: CONCILIADOR CRONOLÓGICO POR JANELA DE 7 DIAS.
     Re-indexa as semanas de DB_PLANOS em ordem cronológica e vincula
-    automaticamente as aulas 'AVULSA / Registro via Diário' do DB_REGISTRO_AULAS.
+    automaticamente as aulas 'AVULSA / Registro via Diário' do DB_REGISTRO_AULAS em lote.
     """
     try:
         wb = conectar()
@@ -740,14 +742,12 @@ def conciliar_calendario_e_planos_cronologicos(ano_alvo="6º"):
         
         ano_num = "".join(filter(str.isdigit, str(ano_alvo)))
         
-        # 1. ORDENAR E RE-INDEXAR DB_PLANOS POR DATA CRONOLÓGICA
         ws_planos = wb.worksheet("DB_PLANOS")
         dados_p = ws_planos.get_all_values()
         if len(dados_p) <= 1: return False
         
         rows_p = dados_p[1:]
         
-        # Filtra e ordena planos do ano alvo por data real
         planos_ano = []
         for idx_r, r in enumerate(rows_p):
             if len(r) > 2 and ano_num in str(r[2]):
@@ -756,18 +756,17 @@ def conciliar_calendario_e_planos_cronologicos(ano_alvo="6º"):
                     planos_ano.append((dt_obj, idx_r + 2, r))
                 except: pass
         
-        # Ordena por data cronológica crescente
         planos_ano.sort(key=lambda x: x[0])
         
-        # Cria janelas de 7 dias para cada semana
         intervalos_semanas = []
+        updates_planos = []
         
         for seq_idx, (dt_obj, row_num, row_data) in enumerate(planos_ano, start=1):
             nova_sem_label = f"Semana {seq_idx:02d}"
-            ws_planos.update_cell(row_num, 2, nova_sem_label) # Atualiza Coluna SEMANA em DB_PLANOS
+            updates_planos.append(gspread.Cell(row=row_num, col=2, value=nova_sem_label))
             
             dt_inicio = dt_obj.date() if isinstance(dt_obj, datetime) else dt_obj
-            dt_fim = dt_inicio + timedelta(days=6) # Janela de 7 dias (Segunda a Domingo)
+            dt_fim = dt_inicio + timedelta(days=6)
             
             plano_txt = row_data[5] if len(row_data) > 5 else ""
             obj_c = ai.extrair_tag(plano_txt, "OBJETO_CONHECIMENTO") or ai.extrair_tag(plano_txt, "CONTEUDOS_ESPECIFICOS") or "Conteúdo Programático"
@@ -779,10 +778,14 @@ def conciliar_calendario_e_planos_cronologicos(ano_alvo="6º"):
                 "conteudo": obj_c
             })
 
-        # 2. RECONCILIAR E VINCULAR DB_REGISTRO_AULAS PELA JANELA DE 7 DIAS
+        if updates_planos:
+            ws_planos.update_cells(updates_planos)
+
+        # RECONCILIAR E VINCULAR DB_REGISTRO_AULAS EM LOTE
         ws_reg = wb.worksheet("DB_REGISTRO_AULAS")
         dados_r = ws_reg.get_all_values()
         if len(dados_r) > 1:
+            updates_reg = []
             for idx_r, r in enumerate(dados_r[1:], start=2):
                 if len(r) >= 4 and ano_num in str(r[2]):
                     try:
@@ -790,7 +793,6 @@ def conciliar_calendario_e_planos_cronologicos(ano_alvo="6º"):
                         sem_r = r[1].strip()
                         cont_r = r[3].strip()
                         
-                        # Procura qual janela semanal de 7 dias engloba a data desta aula
                         semana_encontrada = None
                         for window in intervalos_semanas:
                             if window["inicio"] <= dt_aula <= window["fim"]:
@@ -798,12 +800,15 @@ def conciliar_calendario_e_planos_cronologicos(ano_alvo="6º"):
                                 break
                         
                         if semana_encontrada:
-                            ws_reg.update_cell(idx_r, 2, semana_encontrada) # Atualiza coluna SEMANA
+                            updates_reg.append(gspread.Cell(row=idx_r, col=2, value=semana_encontrada))
                             if sem_r == "AVULSA" or "Registro via Diário" in cont_r or cont_r == "":
                                 novo_titulo = f"{ano_alvo} Ano - Aula - {semana_encontrada}"
-                                ws_reg.update_cell(idx_r, 4, novo_titulo) # Atualiza CONTEUDO
+                                updates_reg.append(gspread.Cell(row=idx_r, col=4, value=novo_titulo))
                     except Exception as e_row:
                         print(f"Erro linha {idx_r}: {e_row}")
+
+            if updates_reg:
+                ws_reg.update_cells(updates_reg)
 
         st.cache_data.clear()
         return True
@@ -930,7 +935,7 @@ def dar_baixa_plano_evento(semana, ano, motivo_ou_status="RECESSO", data_str="N/
         for i, row in enumerate(dados_p[1:], start=2):
             if len(row) > 2:
                 if normalizar_semana_chave(row[1]).upper() == sem_limpa.upper() and "".join(filter(str.isdigit, str(row[2]))) == ano_num:
-                    ws_planos.update_cell(i, 5, status_chave) # Atualiza coluna EIXO / Status
+                    ws_planos.update_cell(i, 5, status_chave)
                     encontrado = True
                     break
         
@@ -946,7 +951,6 @@ def dar_baixa_plano_evento(semana, ano, motivo_ou_status="RECESSO", data_str="N/
                 "N/A"
             ], value_input_option="USER_ENTERED")
 
-        # Registra no diário de registro de aulas se houver turma e data especificadas
         if turma != "GLOBAL" and data_str != "N/A":
             limpar_diario_data_turma(data_str, turma)
             salvar_no_banco("DB_DIARIO_BORDO", [data_str, "GLOBAL", "TODOS OS ALUNOS", turma, "ISENTO", "DIA NÃO LETIVO", str(motivo_ou_status), "0,00"])
@@ -971,7 +975,6 @@ def dar_baixa_aula_livro_offline(semana, ano, turma="GLOBAL", data_str="N/A", de
         ano_num = "".join(filter(str.isdigit, str(ano)))
         ano_fmt = f"{ano_num}º" if ano_num else str(ano)
 
-        # 1. Arquiva o plano em DB_PLANOS com o status CONCLUIDO_LIVRO
         ws_planos = wb.worksheet("DB_PLANOS")
         dados_p = ws_planos.get_all_values()
         
@@ -995,7 +998,6 @@ def dar_baixa_aula_livro_offline(semana, ano, turma="GLOBAL", data_str="N/A", de
                 "N/A"
             ], value_input_option="USER_ENTERED")
 
-        # 2. Registra no Diário Oficial de Registro de Aulas para a burocracia
         ws_reg = wb.worksheet("DB_REGISTRO_AULAS")
         conteudo_reg = f"Livro Didático / Lousa ({detalhes_livro})"
         ws_reg.append_row([
@@ -1017,11 +1019,11 @@ def dar_baixa_aula_livro_offline(semana, ano, turma="GLOBAL", data_str="N/A", de
         return False
 
 # ==============================================================================
-# 7. MOTOR DE SOBERANIA REGIMENTAL (VISTOS, CADEADO & CONTROLE ATITUDINAL)
+# 8. MOTOR DE SOBERANIA REGIMENTAL (VISTOS, CADEADO & CONTROLE ATITUDINAL)
 # ==============================================================================
 
 def isentar_vistos_data_turma(data_str, turma):
-    """Transforma todas as chamadas de visto de uma data em 'ISENTO'."""
+    """Transforma todas as chamadas de visto de uma data em 'ISENTO' em lote."""
     try:
         wb = conectar()
         if not wb: return False
@@ -1150,14 +1152,14 @@ def transferir_titularidade_gabarito(id_origem, nome_origem, id_destino, nome_de
         return False
 
 # ==============================================================================
-# MOTOR DE SANEAMENTO SOBERANO & AUTO-HEALER (SOSA V2026.PRO_INFINITY)
+# MOTOR DE SANEAMENTO SOBERANO & AUTO-HEALER DINÂMICO (SOSA V2026.PRO_INFINITY)
 # ==============================================================================
 
 def executar_saneamento_banco_soberano():
     """
-    SOSA V2026 - MOTOR DE SANEAMENTO ATÔMICO EM LOTE:
-    1. Higieniza datas seriais do Excel (46259, 46264, 46265 -> DD/MM/YYYY).
-    2. Recalcula a AVALIAÇÃO_6ANO_IITrimestre da 6ª MA com o peso real de 0,20 pt/questão (teto 4.0 pts).
+    SOSA V2026 - MOTOR DE SANEAMENTO ATÔMICO UNIVERSAL:
+    1. Higieniza datas seriais do Excel (46259, 46264 -> DD/MM/YYYY) em todas as abas.
+    2. Recalcula avaliações escaneadas de forma dinâmica e proporcional ao valor real da prova.
     3. Remove duplicações e consolida ocorrências no DB_DIARIO_BORDO.
     4. Higieniza tags repetitivas em DB_RELATORIOS (limpeza de loops de IA).
     5. Consolida C1 (Vistos), C2 (Testes), C3 (Provas) e Bônus com arredondamento oficial de 0,5 em 0,5 no DB_NOTAS.
@@ -1183,16 +1185,13 @@ def executar_saneamento_banco_soberano():
                     row[0] = util.formatar_data_br(dt_str)
                     modificado_rel = True
                 
-                # Limpeza de tags recursivas no conteúdo do PEI (Ester Souza Santos)
                 conteudo_rel = str(row[4])
                 if "[SOCIAIS]" in conteudo_rel and conteudo_rel.count("[SOCIAIS]") > 1:
-                    # Isola apenas a primeira ocorrência de cada tag
                     tags_ordem = ["DIAGNOSTICO_GERAL", "SOCIAIS", "COMUNICATIVAS", "EMOCIONAIS", "FUNCIONAIS", "DIRETRIZES_CURRICULARES"]
                     partes_limpas = []
                     for t in tags_ordem:
                         bloco = ai.extrair_tag(conteudo_rel, t)
                         if bloco:
-                            # Remove repetições internas
                             bloco_clean = bloco.split(f"[{t}]")[0].split("[SOCIAIS]")[0].split("[COMUNICATIVAS]")[0].strip()
                             partes_limpas.append(f"[{t}]\n{bloco_clean}")
                     if partes_limpas:
@@ -1204,7 +1203,6 @@ def executar_saneamento_banco_soberano():
                 ws_rel.update(values=dados_rel, range_name='A1')
                 relatorio_execucao.append("✅ DB_RELATORIOS: Datas seriais convertidas e tags recursivas higienizadas.")
 
-        # Saneamento de datas em DB_AULAS_PRONTAS
         ws_aulas = wb.worksheet("DB_AULAS_PRONTAS")
         dados_aulas = ws_aulas.get_all_values()
         if len(dados_aulas) > 1:
@@ -1220,51 +1218,71 @@ def executar_saneamento_banco_soberano():
                 relatorio_execucao.append("✅ DB_AULAS_PRONTAS: Datas seriais convertidas para DD/MM/YYYY.")
 
         # ----------------------------------------------------------------------
-        # 2. RECÁLCULO PSICOMÉTRICO EM DB_GABARITOS_ALUNOS (6ª MA - AVALIAÇÃO II TRI)
+        # 2. RECÁLCULO PSICOMÉTRICO DINÂMICO EM DB_GABARITOS_ALUNOS
         # ----------------------------------------------------------------------
         ws_gab = wb.worksheet("DB_GABARITOS_ALUNOS")
         dados_gab = ws_gab.get_all_values()
         
-        # Gabarito oficial de 20 questões da AVALIAÇÃO_6ANO_IITrimestre
-        gabarito_oficial_av_ii = [
-            "D", "A", "D", "A", "E", "A", "E", "D", "E", "B",
-            "C", "B", "A", "E", "D", "B", "C", "D", "B", "C"
-        ] # Total 20 itens | Peso = 4.0 / 20 = 0.20 pt cada
-        
-        peso_item_av_ii = 0.20
+        # Constrói dicionário de avaliações conhecidas para recuperação dinâmica do gabarito e valor
+        mapa_provas_acervo = {}
+        for row_a in dados_aulas[1:]:
+            if len(row_a) > 3:
+                tipo_mat = str(row_a[2]).strip().upper()
+                txt_cont = str(row_a[3])
+                v_real = util.extrair_valor_real_prova(txt_cont, tipo_mat)
+                g_reg = ai.extrair_gab_universal_com_fallback(txt_cont, is_pei=False)
+                g_pei = ai.extrair_gab_universal_com_fallback(txt_cont, is_pei=True, nivel_pei="NIVEL_1")
+                mapa_provas_acervo[tipo_mat] = {
+                    "valor": v_real,
+                    "gab_reg": g_reg,
+                    "gab_pei": g_pei
+                }
+
         mod_gab = False
         recalculados_cnt = 0
 
         for idx in range(1, len(dados_gab)):
             row = dados_gab[idx]
-            turma_r = str(row[3]).strip()
             av_nome_r = str(row[4]).strip().upper()
             resp_r = str(row[5]).strip().upper()
 
-            # Corrige datas seriais se houver
             if str(row[0]).strip().isdigit() and len(str(row[0]).strip()) == 5:
                 row[0] = util.formatar_data_br(str(row[0]).strip())
                 mod_gab = True
 
-            # Corrige a nota inflada da 6ª MA na Avaliação do II Trimestre
-            if turma_r == "6ª MA" and "AVALIAÇÃO_6ANO_IITRIMESTRE" in av_nome_r and not resp_r.startswith("QUALITATIVA") and not resp_r.startswith("FALTOU") and resp_r != "MANUAL":
-                respostas_lista = resp_r.split("|GRUPO:")[0].split(';')
+            if not resp_r.startswith("QUALITATIVA") and not resp_r.startswith("FALTOU") and not resp_r.startswith("DISCURSIVA") and resp_r != "MANUAL":
+                prova_info = None
+                for k_p, val_p in mapa_provas_acervo.items():
+                    if k_p in av_nome_r or av_nome_r in k_p:
+                        prova_info = val_p
+                        break
                 
-                acertos_reais = 0
-                for q_i in range(min(len(respostas_lista), len(gabarito_oficial_av_ii))):
-                    letra_aluno = respostas_lista[q_i].replace("*", "").strip()
-                    if letra_aluno == gabarito_oficial_av_ii[q_i]:
-                        acertos_reais += 1
-                
-                nota_real_calc = min(4.0, round(acertos_reais * peso_item_av_ii, 2))
-                row[6] = f"{nota_real_calc:.2f}".replace(".", ",")
-                mod_gab = True
-                recalculados_cnt += 1
+                if prova_info and prova_info["gab_reg"]:
+                    respostas_lista = resp_r.split("|GRUPO:")[0].split(';')
+                    gab_alvo = prova_info["gab_pei"] if len(respostas_lista) <= 10 and len(prova_info["gab_pei"]) <= 10 and "PEI" in av_nome_r else prova_info["gab_reg"]
+                    
+                    peso_item = prova_info["valor"] / len(gab_alvo) if len(gab_alvo) > 0 else 0.20
+                    acertos_reais = 0
+                    for q_i in range(min(len(respostas_lista), len(gab_alvo))):
+                        item_al = respostas_lista[q_i].strip().upper()
+                        letra_aluno = item_al.replace("*", "").strip()
+                        tem_calc = "*" not in item_al
+                        g_corr = gab_alvo[q_i]
+                        
+                        if g_corr == "ANULADA" or letra_aluno == g_corr:
+                            acertos_reais += 1 if tem_calc else 0.5
+                    
+                    nota_real_calc = min(prova_info["valor"], round(acertos_reais * peso_item, 2))
+                    novo_str = f"{nota_real_calc:.2f}".replace(".", ",")
+                    if row[6] != novo_str:
+                        row[6] = novo_str
+                        mod_gab = True
+                        recalculados_cnt += 1
 
         if mod_gab:
             ws_gab.clear()
             ws_gab.update(values=dados_gab, range_name='A1')
-            relatorio_execucao.append(f"✅ DB_GABARITOS_ALUNOS: {recalculados_cnt} avaliações da 6ª MA recalculadas com peso real (0,20 pt/item).")
+            relatorio_execucao.append(f"✅ DB_GABARITOS_ALUNOS: {recalculados_cnt} avaliações recalculadas de forma dinâmica e proporcional.")
 
         # ----------------------------------------------------------------------
         # 3. DEDUPLICAÇÃO ATÔMICA EM DB_DIARIO_BORDO
@@ -1276,7 +1294,6 @@ def executar_saneamento_banco_soberano():
             header_d = dados_diario[0]
             rows_d = dados_diario[1:]
 
-            # Mapeamento por chave única (DATA, ID_ALUNO, TURMA)
             diario_dedup = {}
             for r in rows_d:
                 dt_k = util.formatar_data_br(r[0])
@@ -1295,16 +1312,12 @@ def executar_saneamento_banco_soberano():
                         "visto": visto_k, "tag": tag_k, "obs": obs_k, "bonus": bonus_k
                     }
                 else:
-                    # Fusão inteligente: preserva presença se alguma linha marcou TRUE
                     if visto_k == "TRUE":
                         diario_dedup[chave]["visto"] = "TRUE"
-                    # Preserva a tag de arguição ou mérito
                     if tag_k and tag_k != "AUSÊNCIA":
                         diario_dedup[chave]["tag"] = tag_k
-                    # Concatena observações sem repetir
                     if obs_k and obs_k not in diario_dedup[chave]["obs"]:
                         diario_dedup[chave]["obs"] = f"{diario_dedup[chave]['obs']} | {obs_k}".strip(" | ")
-                    # Soma bônus atitudinais de eventos distintos
                     if bonus_k != 0:
                         diario_dedup[chave]["bonus"] = round(diario_dedup[chave]["bonus"] + bonus_k, 2)
 
@@ -1334,14 +1347,13 @@ def executar_saneamento_banco_soberano():
                 "nec": r_al[4] if len(r_al) > 4 else "TÍPICO"
             }
 
-        # Carrega dados limpos para consolidação
         df_d_clean = pd.DataFrame(linhas_diario_finais[1:], columns=[c.upper() for c in header_d])
         df_g_clean = pd.DataFrame(dados_gab[1:], columns=[c.upper() for c in dados_gab[0]])
 
-        # Intervalos de corte
         trims_config = {
             "I Trimestre": (date(2026, 2, 9), date(2026, 5, 22)),
-            "II Trimestre": (date(2026, 5, 25), date(2026, 9, 4))
+            "II Trimestre": (date(2026, 5, 25), date(2026, 9, 4)),
+            "III Trimestre": (date(2026, 9, 8), date(2026, 12, 17))
         }
 
         novas_linhas_notas = [["ID_ALUNO", "NOME_ALUNO", "TURMA", "TRIMESTRE", "NOTA_VISTOS", "NOTA_TESTE", "NOTA_PROVA", "NOTA_REC", "MEDIA_FINAL"]]
@@ -1371,7 +1383,7 @@ def executar_saneamento_banco_soberano():
                             vistos_nota = round((v_ok / tot_v * 3.0), 2)
                             bonus_total = df_d_trim['BONUS'].apply(util.sosa_to_float).sum()
 
-                # 2. C2 - TESTES E TRABALHOS (TETO 3.0)
+                # 2. C2 - TESTES E TRABALHOS (TETO 3.0) & C3 - PROVA (TETO 4.0)
                 teste_nota = 0.0
                 prova_nota = 0.0
                 rec_nota = -1.0
@@ -1383,7 +1395,6 @@ def executar_saneamento_banco_soberano():
                             av_id_txt = str(r_g['ID_AVALIACAO']).upper()
                             resp_g_txt = str(r_g['RESPOSTAS_ALUNO']).upper()
                             
-                            # Filtra pelo trimestre correto
                             if re.search(padrao_t_reg, av_id_txt):
                                 if resp_g_txt.startswith("FALTOU_INJUSTIFICADO") or resp_g_txt == "FALTOU":
                                     n_g = 0.0
