@@ -25,7 +25,6 @@ def sanitizar_xml_str(texto):
     """
     if not texto or not isinstance(texto, str):
         return ""
-    # Elimina \x00-\x08, \x0B, \x0C (Form Feed de PDFs), \x0E-\x1F e \x7F-\x9F
     return re.sub(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]', '', texto)
 
 def set_row_height(row, height_pt):
@@ -63,7 +62,6 @@ def converter_latex_para_texto_word(texto):
     1. Higieniza o texto contra caracteres de controle XML inválidos.
     2. Preserva 100% dos marcadores $$ para compatibilidade com o Google Docs Apps Script.
     3. Corrige R\$ para R$ (dinheiro) e \% para %.
-    4. NUNCA remove cifrões $$.
     """
     if not texto or not isinstance(texto, str): return ""
     t = sanitizar_xml_str(texto)
@@ -71,7 +69,7 @@ def converter_latex_para_texto_word(texto):
     t = t.replace(r'\$', '$').replace(r'\%', '%')
     return t.strip()
 
-def adicionar_texto_formatado(paragraph, texto):
+def adicionar_texto_formatado(paragraph, texto, cor_rgb=None, tamanho_pt=None):
     """Converte padrões **texto** em negrito real preservando expressões matemáticas $$"""
     if not texto: return
     texto_limpo = converter_latex_para_texto_word(texto)
@@ -83,7 +81,12 @@ def adicionar_texto_formatado(paragraph, texto):
             run = paragraph.add_run(parte.replace('**', ''))
             run.bold = True
         else:
-            paragraph.add_run(parte)
+            run = paragraph.add_run(parte)
+            
+        if cor_rgb:
+            run.font.color.rgb = cor_rgb
+        if tamanho_pt:
+            run.font.size = Pt(tamanho_pt)
 
 def adicionar_box_imagem_word(doc, legenda_prompt="ESPAÇO PARA ILUSTRAÇÃO / DESENHO"):
     """Cria uma moldura visual elegante para o prompt de ilustração no Word sem poluir o layout"""
@@ -116,7 +119,7 @@ def adicionar_box_imagem_word(doc, legenda_prompt="ESPAÇO PARA ILUSTRAÇÃO / D
 def renderizar_tabela_markdown_no_word(doc, linhas_tabela):
     """
     SOSA V2026: Converte linhas brutas de tabela Markdown (| Coluna 1 | Coluna 2 |)
-    em uma tabela nativa oficial do Word com cabeçalho azul e bordas limpas.
+    em uma tabela nativa oficial do Word com suporte a negrito e LaTeX formatado.
     """
     if not linhas_tabela: return
     
@@ -124,7 +127,6 @@ def renderizar_tabela_markdown_no_word(doc, linhas_tabela):
     for linha in linhas_tabela:
         linha_limpa = linha.strip()
         if not linha_limpa: continue
-        # Ignora linhas divisórias como | :--- | :---: |
         if re.match(r'^\|?\s*:?-+:?\s*(\|?\s*:?-+:?\s*)*\|?$', linha_limpa):
             continue
         celulas = [c.strip() for c in linha_limpa.strip('|').split('|')]
@@ -153,16 +155,13 @@ def renderizar_tabela_markdown_no_word(doc, linhas_tabela):
                 if r_idx == 0:
                     set_cell_background(cell, "003366")
                     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                    run = p.add_run(sanitizar_xml_str(cell_text))
-                    run.bold = True
-                    run.font.size = Pt(8.5)
-                    run.font.color.rgb = RGBColor(255, 255, 255)
+                    adicionar_texto_formatado(p, cell_text, cor_rgb=RGBColor(255, 255, 255), tamanho_pt=8.5)
+                    for r in p.runs: r.bold = True
                 else:
                     if r_idx % 2 == 0:
                         set_cell_background(cell, "F8FAFC")
                     p.alignment = WD_ALIGN_PARAGRAPH.LEFT if c_idx == 0 else WD_ALIGN_PARAGRAPH.CENTER
-                    run = p.add_run(sanitizar_xml_str(cell_text))
-                    run.font.size = Pt(8.5)
+                    adicionar_texto_formatado(p, cell_text, tamanho_pt=8.5)
     doc.add_paragraph()
 
 def renderizar_conteudo_com_tabelas(doc, texto_bruto):
@@ -174,7 +173,6 @@ def renderizar_conteudo_com_tabelas(doc, texto_bruto):
     for linha in linhas:
         l_s = linha.strip()
         
-        # Verifica se a linha faz parte de uma tabela Markdown
         if l_s.startswith('|') and l_s.endswith('|'):
             em_tabela = True
             buffer_tabela.append(l_s)
@@ -234,7 +232,6 @@ def configurar_cabecalho_mestre(doc, info, tipo_label, mostrar_nota=False):
     table = doc.add_table(rows=3, cols=5)
     table.style = 'Table Grid'
     
-    # Calibração A4 Soberana (Total = 7.45 in para margem útil de 7.47 in)
     widths = [Inches(0.75), Inches(3.0), Inches(0.9), Inches(1.0), Inches(1.8)]
     for i, w in enumerate(widths): 
         table.columns[i].width = w
@@ -302,7 +299,7 @@ def configurar_cabecalho_mestre(doc, info, tipo_label, mostrar_nota=False):
     return table
 
 # ==============================================================================
-# 2. MATERIAL DO ALUNO REGULAR (COM PARSER DE TABELAS)
+# 2. MATERIAL DO ALUNO REGULAR
 # ==============================================================================
 def gerar_docx_aluno_v24(titulo_doc, conteudo, info):
     file_stream = io.BytesIO()
@@ -415,7 +412,7 @@ def gerar_docx_professor_v25(titulo_doc, conteudo, info):
     return file_stream
 
 # ==============================================================================
-# 5. PROVA OFICIAL (PADRÃO ENEM / SAEB COM PARSER DE TABELAS)
+# 5. PROVA OFICIAL & CARTÃO OMR FIDUCIAL (PADRÃO ENEM / SAEB)
 # ==============================================================================
 
 def adicionar_cartao_resposta_fiducial_word(doc, num_total_q, is_pei=False):
@@ -522,20 +519,21 @@ def adicionar_cartao_resposta_fiducial_word(doc, num_total_q, is_pei=False):
             row_idx = r if r <= half else r - half
             col_offset = 0 if r <= half else col_count
             
-            set_row_height(gab_grid.rows[row_idx], 20)
-            c_q = gab_grid.cell(row_idx, col_offset)
-            set_cell_background(c_q, "F1F5F9")
-            p_q = c_q.paragraphs[0]
-            p_q.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            r_q = p_q.add_run(f"{r:02d}")
-            r_q.font.size = Pt(9.0)
-            r_q.font.bold = True
-            
-            for col in range(1, col_count):
-                c_b = gab_grid.cell(row_idx, col_offset + col)
-                p_b = c_b.paragraphs[0]
-                p_b.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                p_b.add_run("○").font.size = Pt(12)
+            if row_idx < len(gab_grid.rows):
+                set_row_height(gab_grid.rows[row_idx], 20)
+                c_q = gab_grid.cell(row_idx, col_offset)
+                set_cell_background(c_q, "F1F5F9")
+                p_q = c_q.paragraphs[0]
+                p_q.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                r_q = p_q.add_run(f"{r:02d}")
+                r_q.font.size = Pt(9.0)
+                r_q.font.bold = True
+                
+                for col in range(1, col_count):
+                    c_b = gab_grid.cell(row_idx, col_offset + col)
+                    p_b = c_b.paragraphs[0]
+                    p_b.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    p_b.add_run("○").font.size = Pt(12)
 
 def adicionar_box_calculo_discursivo_word(doc):
     """Cria uma caixa pautada oficial para resolução de cálculo e resposta final do aluno."""
@@ -546,7 +544,7 @@ def adicionar_box_calculo_discursivo_word(doc):
     cell.width = Inches(7.2)
     
     set_cell_background(cell, "FAFAFA")
-    set_row_height(table.rows[0], 90) # Altura ampla para cálculos
+    set_row_height(table.rows[0], 90)
     
     p = cell.paragraphs[0]
     p.alignment = WD_ALIGN_PARAGRAPH.LEFT
@@ -600,7 +598,6 @@ def renderizar_conteudo_discursivo_com_caixas(doc, texto_bruto):
                 run_r.font.size = Pt(10.5)
                 run_r.font.color.rgb = RGBColor(0, 51, 102)
                 adicionar_texto_formatado(p, match.group(4).strip())
-                # Adiciona caixa de cálculo para a questão
                 adicionar_box_calculo_discursivo_word(doc)
                 continue
 
@@ -636,7 +633,6 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         tipo_prova_info = str(info.get('tipo_prova', '')).upper()
         titulo_upper = str(titulo_doc).upper()
         
-        # Discursiva apenas para a prova REGULAR (PEI é sempre adaptada limpa)
         is_discursiva = any(x in titulo_upper or x in tipo_prova_info for x in [
             "RECUPERAÇÃO", "RECUPERACAO", "2ª CHAMADA", "2A CHAMADA", "2ª_CHAMADA", "DISCURSIVA", "ABERTA"
         ]) and "FINAL" not in titulo_upper and not is_pei_doc
@@ -663,7 +659,6 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         if num_total_q == 0: 
             num_total_q = int(helper_sosa_float(info.get('qtd_questoes', info.get('qtd', 10))))
         
-        # Rótulo de Cabeçalho Oficial
         if is_pei_doc:
             label_prova = "AVALIAÇÃO ADAPTADA (RECUPERAÇÃO PEI)" if "RECUPERA" in titulo_upper else "AVALIAÇÃO ADAPTADA (PEI)"
         elif is_discursiva:
@@ -674,7 +669,6 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
         else:
             label_prova = "AVALIAÇÃO DE MATEMÁTICA (ENEM/SAEB)"
 
-        # Valor sempre 10.0 para recuperação
         val_total_num = 10.0 if any(x in titulo_upper or x in tipo_prova_info for x in ["RECUPERAÇÃO", "RECUPERACAO", "REC_"]) else helper_sosa_float(info.get('valor', 4.0))
         if val_total_num == 0: val_total_num = 10.0
 
@@ -732,10 +726,8 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
 
         # 3. RENDERIZAÇÃO DO CONTEÚDO
         if is_discursiva:
-            # 1 Coluna Larga com Caixas de Cálculo para Provas Discursivas Regulares
             renderizar_conteudo_discursivo_com_caixas(doc, corpo_bruto)
         elif is_pei_doc:
-            # Prova PEI: 2 Colunas Limpas, Elegantes, com 3 Opções A, B, C (SEM caixas cinzas deformadas)
             new_section = doc.add_section(WD_SECTION.CONTINUOUS)
             sectPr = new_section._sectPr
             cols = sectPr.xpath('./w:cols')[0]
@@ -743,7 +735,6 @@ def gerar_docx_prova_v25(titulo_doc, conteudo_ia, info):
             cols.set(qn('w:space'), '420')
             renderizar_conteudo_com_tabelas(doc, corpo_bruto)
         else:
-            # Prova Regular Objetiva: Cartão OMR + 2 Colunas
             adicionar_cartao_resposta_fiducial_word(doc, num_total_q, is_pei=False)
             doc.add_paragraph()
             new_section = doc.add_section(WD_SECTION.CONTINUOUS)
@@ -852,11 +843,9 @@ def gerar_docx_pei_qualitativa(titulo_doc, conteudo, info):
         style.font.name = 'Arial'
         style.font.size = Pt(10.5)
 
-        # Cabeçalho Oficial
         configurar_cabecalho_mestre(doc, info, "AVALIAÇÃO ADAPTADA (NÍVEL 3)", mostrar_nota=False)
         doc.add_paragraph()
 
-        # Painel de Instruções de Mediação
         panel_info = doc.add_table(rows=1, cols=1)
         panel_info.style = 'Table Grid'
         cell_info = panel_info.cell(0, 0)
@@ -880,7 +869,6 @@ def gerar_docx_pei_qualitativa(titulo_doc, conteudo, info):
 
         doc.add_paragraph()
 
-        # Processamento das Linhas e renderização dos CARDS DE BOX (BENTO GRID)
         linhas = sanitizar_xml_str(str(conteudo)).split('\n')
         
         i = 0
@@ -965,7 +953,6 @@ def gerar_docx_pei_qualitativa(titulo_doc, conteudo, info):
             adicionar_texto_formatado(p_norm, linha)
             i += 1
 
-        # Tabela Oficial de Rubrica de Observação Pedagógica
         doc.add_paragraph()
         p_rub_title = doc.add_paragraph()
         p_rub_title.paragraph_format.space_before = Pt(10)
@@ -978,7 +965,6 @@ def gerar_docx_pei_qualitativa(titulo_doc, conteudo, info):
         rubrica_table = doc.add_table(rows=5, cols=5)
         rubrica_table.style = 'Table Grid'
         
-        # Calibração A4 para Tabela de Rubricas (Total = 7.40 in)
         col_widths = [Inches(2.45), Inches(1.1), Inches(1.1), Inches(1.15), Inches(1.6)]
         for row in rubrica_table.rows:
             set_row_height(row, 22)
@@ -1052,7 +1038,6 @@ def gerar_docx_etiquetas_notas(nome_arquivo, dados_alunos, info):
 
         table = doc.add_table(rows=0, cols=2)
         table.style = 'Table Grid'
-        # Calibração estrita A4 (3.75 in x 2 = 7.50 in <= 7.57 in úteis)
         table.columns[0].width = Inches(3.75)
         table.columns[1].width = Inches(3.75)
 
@@ -1076,7 +1061,6 @@ def gerar_docx_etiquetas_notas(nome_arquivo, dados_alunos, info):
                     p.paragraph_format.space_after = Pt(2)
                     p.paragraph_format.line_spacing = 1.1
                     
-                    # 1. Cabeçalho Oficial
                     r_esc = p.add_run("ESCOLA MUNICIPAL FLÁVIO JOSÉ SIMÕES COSTA\n")
                     r_esc.bold = True
                     r_esc.font.size = Pt(8.5)
@@ -1086,7 +1070,6 @@ def gerar_docx_etiquetas_notas(nome_arquivo, dados_alunos, info):
                     p.add_run(f"Estudante: {nome_al_limpo}\n").bold = True
                     p.add_run(f"Turma: {turma_label} | Período: {trim_label}\n").font.size = Pt(8.0)
                     
-                    # 2. Discriminação dos Pontos
                     c1_v = sanitizar_xml_str(str(aluno.get('c1', aluno.get('vistos', '0.0'))))
                     c2_v = sanitizar_xml_str(str(aluno.get('c2', aluno.get('teste', '0.0'))))
                     c3_v = sanitizar_xml_str(str(aluno.get('c3', aluno.get('prova', '0.0'))))
@@ -1094,7 +1077,7 @@ def gerar_docx_etiquetas_notas(nome_arquivo, dados_alunos, info):
                     media_v = sanitizar_xml_str(str(aluno.get('media', '0.0')))
                     media_num = helper_sosa_float(media_v)
 
-                    p_comp = p.add_run(f"Caderno (C1): {c1_v} | Teste (C2): {c2_v} | Prova (C3): {c3_v} | Bônus: {bonus_v}\n")
+                    p_comp = p.add_run(f"Caderno (C1): {c1_v} | Testes (C2): {c2_v} | Prova (C3): {c3_v} | Bônus: {bonus_v}\n")
                     p_comp.font.size = Pt(8.0)
                     p_comp.font.color.rgb = RGBColor(71, 85, 105)
                     
@@ -1102,7 +1085,6 @@ def gerar_docx_etiquetas_notas(nome_arquivo, dados_alunos, info):
                     r_med.bold = True
                     r_med.font.size = Pt(9.5)
                     
-                    # 3. Os 3 Caminhos Claros da Práxis Pedagógica
                     if media_num >= 6.0:
                         r_st = p.add_run("SITUAÇÃO: APROVADO NO TRIMESTRE\n")
                         r_st.bold = True
@@ -1250,9 +1232,6 @@ def gerar_docx_pei_oficial(nome_arquivo, dados_aluno, habilidades, curriculo_df,
         style.font.name = 'Arial'
         style.font.size = Pt(9.5)
 
-        # -------------------------------------------------------------
-        # PÁGINA 1: CABEÇALHO OFICIAL DA PREFEITURA DE ITABUNA
-        # -------------------------------------------------------------
         p_cab = doc.add_paragraph()
         p_cab.alignment = WD_ALIGN_PARAGRAPH.CENTER
         p_cab.paragraph_format.space_after = Pt(2)
@@ -1274,7 +1253,6 @@ def gerar_docx_pei_oficial(nome_arquivo, dados_aluno, habilidades, curriculo_df,
         r_obj_lbl.bold = True
         p_obj.add_run("Planejar, adaptar e implementar estratégias pedagógicas garantindo acessibilidade curricular do aluno na Unidade Escolar.").font.size = Pt(9)
 
-        # TABELA DADOS DO ALUNO
         p_d_title = doc.add_paragraph()
         p_d_title.paragraph_format.space_after = Pt(2)
         p_d_title.add_run("DADOS DO ALUNO").bold = True
@@ -1311,9 +1289,6 @@ def gerar_docx_pei_oficial(nome_arquivo, dados_aluno, habilidades, curriculo_df,
 
         doc.add_paragraph()
 
-        # -------------------------------------------------------------
-        # PÁGINA 2: 1 - PLANO DE ACESSIBILIDADE CURRICULAR (ESTUDO DE CASO)
-        # -------------------------------------------------------------
         p_est_tit = doc.add_paragraph()
         p_est_tit.paragraph_format.space_before = Pt(6)
         p_est_tit.paragraph_format.space_after = Pt(2)
@@ -1325,7 +1300,6 @@ def gerar_docx_pei_oficial(nome_arquivo, dados_aluno, habilidades, curriculo_df,
         p_obs_intro.paragraph_format.space_after = Pt(4)
         p_obs_intro.add_run("Com base no estudo de caso: sondagem, observação em sala de aula de Matemática e devolutiva trimestral, observa-se que a estudante apresenta necessidades em:").font.size = Pt(8.5)
 
-        # 4 Dimensões Oficiais com Caixas de Texto
         dimensoes_oficiais = [
             ("Habilidades Sociais", "comportamentos repetitivos e restritos ( X )  estereotipias ( X )  níveis de brincadeiras ( )  rotina ( X )  isolamento ( )  atenção compartilhada ( X )  outras ( )", "Habilidades Sociais"),
             ("Habilidades Comunicativas", "comunicação verbal ( )  comunicação não verbal ( X )  clareza de comunicação ( )  contato visual ( X )  toque físico ( )  compreensão na comunicação ( X )  comunicação alternativa ( X )  linguagem expressiva e receptiva ( X )", "Habilidades Comunicativas"),
@@ -1342,7 +1316,6 @@ def gerar_docx_pei_oficial(nome_arquivo, dados_aluno, habilidades, curriculo_df,
             r_chk.font.size = Pt(8.0)
             r_chk.font.color.rgb = RGBColor(71, 85, 105)
 
-            # Caixa de Descrição
             tb_desc = doc.add_table(rows=1, cols=1)
             tb_desc.style = 'Table Grid'
             tb_desc.columns[0].width = Inches(7.4)
@@ -1358,7 +1331,6 @@ def gerar_docx_pei_oficial(nome_arquivo, dados_aluno, habilidades, curriculo_df,
             if not texto_hab: texto_hab = "Necessidade de mediação e suporte visual durante as tarefas."
             p_c.add_run(f"Descrição: {texto_hab}").font.size = Pt(8.5)
 
-        # 2 - Plano Trimestral (Medida de Acesso)
         doc.add_paragraph()
         p_medida = doc.add_paragraph()
         p_medida.paragraph_format.space_before = Pt(6)
@@ -1368,9 +1340,6 @@ def gerar_docx_pei_oficial(nome_arquivo, dados_aluno, habilidades, curriculo_df,
 
         doc.add_paragraph()
 
-        # -------------------------------------------------------------
-        # PÁGINAS 4+: TABELA DE PLANEJAMENTO POR COMPONENTE (MATEMÁTICA)
-        # -------------------------------------------------------------
         p_plan_title = doc.add_paragraph()
         p_plan_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
         p_plan_title.paragraph_format.space_before = Pt(8)
@@ -1444,9 +1413,6 @@ def gerar_docx_pei_oficial(nome_arquivo, dados_aluno, habilidades, curriculo_df,
 
         doc.add_paragraph()
 
-        # -------------------------------------------------------------
-        # RESULTADOS OBTIDOS (PARECER DE MATEMÁTICA) & ASSINATURAS
-        # -------------------------------------------------------------
         p_res_title = doc.add_paragraph()
         p_res_title.paragraph_format.space_before = Pt(8)
         p_res_title.paragraph_format.space_after = Pt(2)
@@ -1458,13 +1424,11 @@ def gerar_docx_pei_oficial(nome_arquivo, dados_aluno, habilidades, curriculo_df,
         tb_res.style = 'Table Grid'
         tb_res.columns[0].width = Inches(7.4)
 
-        # Linha 1: Linguagens
         c_r1 = tb_res.cell(0, 0)
         c_r1.paragraphs[0].add_run("PORTUGUÊS / ED. FÍSICA / ARTES\n").bold = True
         c_r1.paragraphs[0].runs[0].font.size = Pt(8.5)
         c_r1.paragraphs[0].add_run("(A cargo dos docentes da área)").font.size = Pt(8.0)
 
-        # Linha 2: Matemática e Ciências (Destacada para Prof. Ronaldo)
         c_r2 = tb_res.cell(1, 0)
         set_cell_background(c_r2, "F8FAFC")
         p_mat_res = c_r2.paragraphs[0]
@@ -1475,10 +1439,9 @@ def gerar_docx_pei_oficial(nome_arquivo, dados_aluno, habilidades, curriculo_df,
 
         parecer_mat_txt = sanitizar_xml_str(str(parecer_resultados)).strip()
         if not parecer_mat_txt:
-            parecer_mat_txt = "Matemática: A estudante encontra-se em pleno processo de desenvolvimento da aprendizagem, respondendo positivamente ao uso de materiais manipulativos concretos (Material Dourado e calculadora) e à mediação individualizada, demonstrando evolução na compreensão dos conceitos e na autonomia para a resolução de atividades."
+            parecer_mat_txt = "Matemática: A estudante encontra-se em pleno processo de desenvolvimento da aprendizagem, respondendo positivamente ao uso de materiais manipulativos concretos e à mediação individualizada, demonstrando evolução na compreensão dos conceitos e na autonomia para a resolução de atividades."
         p_mat_res.add_run(parecer_mat_txt).font.size = Pt(8.5)
 
-        # Linha 3: Humanas
         c_r3 = tb_res.cell(2, 0)
         c_r3.paragraphs[0].add_run("GEOGRAFIA / HISTÓRIA\n").bold = True
         c_r3.paragraphs[0].runs[0].font.size = Pt(8.5)
@@ -1488,7 +1451,6 @@ def gerar_docx_pei_oficial(nome_arquivo, dados_aluno, habilidades, curriculo_df,
 
         doc.add_paragraph()
 
-        # Data e Assinaturas Oficiais
         hoje_dia = datetime.now().strftime("%d")
         meses_pt = {"01":"Janeiro","02":"Fevereiro","03":"Março","04":"Abril","05":"Maio","06":"Junho","07":"Julho","08":"Agosto","09":"Setembro","10":"Outubro","11":"Novembro","12":"Dezembro"}
         mes_atual = meses_pt.get(datetime.now().strftime("%m"), "Agosto")
@@ -1500,7 +1462,6 @@ def gerar_docx_pei_oficial(nome_arquivo, dados_aluno, habilidades, curriculo_df,
 
         doc.add_paragraph()
 
-        # Linhas Oficiais de Assinatura
         p_ass = doc.add_paragraph()
         p_ass.alignment = WD_ALIGN_PARAGRAPH.CENTER
         p_ass.paragraph_format.space_after = Pt(2)
@@ -1528,7 +1489,7 @@ def gerar_docx_pei_oficial(nome_arquivo, dados_aluno, habilidades, curriculo_df,
         return file_stream
 
 # ==============================================================================
-# 11. CERTIDÃO OFICIAL DE PRODUÇÃO E RENDIMENTO (ALUNOS TRANSFERIDOS/INATIVOS)
+# 11. CERTIDÃO OFICIAL DE PRODUÇÃO E RENDIMENTO
 # ==============================================================================
 def gerar_docx_certidao_producao(nome_arquivo, dados_aluno, notas_trimestres, info_escola):
     """
@@ -1546,11 +1507,9 @@ def gerar_docx_certidao_producao(nome_arquivo, dados_aluno, notas_trimestres, in
         style.font.name = 'Arial'
         style.font.size = Pt(10)
 
-        # Cabeçalho Mestre da Escola
         configurar_cabecalho_mestre(doc, info_escola, "CERTIDÃO DE RENDIMENTO E PRODUÇÃO", mostrar_nota=False)
         doc.add_paragraph()
 
-        # Título da Certidão
         p_tit = doc.add_paragraph()
         p_tit.alignment = WD_ALIGN_PARAGRAPH.CENTER
         run_t = p_tit.add_run("CERTIDÃO OFICIAL DE RENDIMENTO E PRODUÇÃO PEDAGÓGICA")
@@ -1560,7 +1519,6 @@ def gerar_docx_certidao_producao(nome_arquivo, dados_aluno, notas_trimestres, in
 
         doc.add_paragraph()
 
-        # Dados Identificadores do Aluno
         p_d = doc.add_paragraph()
         p_d.paragraph_format.space_after = Pt(4)
         p_d.add_run("ESTUDANTE: ").bold = True
@@ -1584,7 +1542,6 @@ def gerar_docx_certidao_producao(nome_arquivo, dados_aluno, notas_trimestres, in
 
         doc.add_paragraph()
 
-        # Tabela de Desempenho por Trimestre
         p_tb_t = doc.add_paragraph()
         p_tb_t.add_run("1. HISTÓRICO DE NOTAS E AVALIAÇÕES ACUMULADAS:").bold = True
         p_tb_t.runs[0].font.color.rgb = RGBColor(0, 51, 102)
@@ -1612,11 +1569,11 @@ def gerar_docx_certidao_producao(nome_arquivo, dados_aluno, notas_trimestres, in
             set_row_height(table_n.rows[-1], 18)
             vals = [
                 reg_trim.get('periodo', ''),
-                f"{reg_trim.get('c1', 0.0):.1f}",
-                f"{reg_trim.get('c2', 0.0):.1f}",
-                f"{reg_trim.get('c3', 0.0):.1f}",
+                f"{helper_sosa_float(reg_trim.get('c1', 0.0)):.1f}",
+                f"{helper_sosa_float(reg_trim.get('c2', 0.0)):.1f}",
+                f"{helper_sosa_float(reg_trim.get('c3', 0.0)):.1f}",
                 reg_trim.get('rec', '-'),
-                f"{reg_trim.get('media', 0.0):.1f}"
+                f"{helper_sosa_float(reg_trim.get('media', 0.0)):.1f}"
             ]
             for idx_v, val in enumerate(vals):
                 c = row_cells[idx_v]
@@ -1627,7 +1584,6 @@ def gerar_docx_certidao_producao(nome_arquivo, dados_aluno, notas_trimestres, in
 
         doc.add_paragraph()
 
-        # Resumo de Assiduidade e Caderno
         p_ass = doc.add_paragraph()
         p_ass.add_run("2. REGISTRO DE FREQUÊNCIA E ENGAJAMENTO EM SALA:\n").bold = True
         p_ass.runs[0].font.color.rgb = RGBColor(0, 51, 102)
@@ -1639,7 +1595,6 @@ def gerar_docx_certidao_producao(nome_arquivo, dados_aluno, notas_trimestres, in
 
         doc.add_paragraph()
 
-        # Parecer Final do Professor
         p_par = doc.add_paragraph()
         p_par.add_run("3. PARECER DESCRITIVO DE REGÊNCIA:\n").bold = True
         p_par.runs[0].font.color.rgb = RGBColor(0, 51, 102)
@@ -1651,7 +1606,6 @@ def gerar_docx_certidao_producao(nome_arquivo, dados_aluno, notas_trimestres, in
         doc.add_paragraph()
         doc.add_paragraph()
 
-        # Assinaturas
         p_sig = doc.add_paragraph()
         p_sig.alignment = WD_ALIGN_PARAGRAPH.CENTER
         p_sig.add_run("_________________________________________\n").bold = True
