@@ -5839,11 +5839,11 @@ elif menu == "📊 Painel de Notas & Vistos":
                                             st.link_button("Abrir Convocatória no Drive", link_conv_doc, type="primary", use_container_width=True)
                                             st.balloons()
 
-                    # COLUNA 2: RADAR DE REFACÇÃO SOLIDÁRIA (COM AUDITORIA VISUAL E FÓRMULA BLINDADA)
+                    # COLUNA 2: RADAR DE REFACÇÃO SOLIDÁRIA (COM AUDITORIA VISUAL, TRAVA ANTI-SPAM E BOTÃO DE REVOGAR)
                     with col_ref_main:
                         with st.container(border=True):
                             st.markdown("#### Radar de Refacção Solidária (+0.5)")
-                            st.caption("Atribua pontuação de refacção no caderno para todos os alunos que refizerem a prova:")
+                            st.caption("Atribua pontuação de refacção no caderno com proteção anti-duplicidade:")
                             
                             tab_ref_lancar, tab_ref_auditoria = st.tabs(["Lançamento de Refacção", "Rastreabilidade (Quem já entregou)"])
                             
@@ -5862,14 +5862,16 @@ elif menu == "📊 Painel de Notas & Vistos":
                                     c3_ref = util.sosa_to_float(row_ref_al['Prova (C3)'])
                                     bonus_atual_al = util.sosa_to_float(row_ref_al['Bônus / Mérito'])
 
-                                    # Alerta de Duplicidade se o aluno já tiver refacção gravada
                                     ja_tem_refaccao = id_al_ref in mapa_refaccao_diario
+                                    
+                                    # FÓRMULA MATEMÁTICA REAL E BLINDADA
                                     if ja_tem_refaccao:
                                         info_ref_ja = mapa_refaccao_diario[id_al_ref]
-                                        st.warning(f"⚠️ **Atenção:** {aluno_ref_sel} já possui refacção lançada em {info_ref_ja['data']} (+{info_ref_ja['valor']:.1f} pts).")
+                                        st.success(f"✅ **Refacção Ativa:** {aluno_ref_sel} já possui refacção lançada em {info_ref_ja['data']} (+{info_ref_ja['valor']:.1f} pts).")
+                                        novo_bonus_total = bonus_atual_al # Já está incluído na média atual
+                                    else:
+                                        novo_bonus_total = bonus_atual_al + pts_refaccao
 
-                                    # FÓRMULA MATEMÁTICA BLINDADA COM PRESERVAÇÃO DE BÔNUS ANTERIOR
-                                    novo_bonus_total = bonus_atual_al + pts_refaccao
                                     c1_sim = min(3.0, c1_ref + max(0.0, novo_bonus_total))
                                     rem_b_sim = max(0.0, novo_bonus_total) - (c1_sim - c1_ref)
                                     c2_sim = min(3.0, c2_ref + max(0.0, rem_b_sim))
@@ -5881,24 +5883,33 @@ elif menu == "📊 Painel de Notas & Vistos":
 
                                     c_m_sim1, c_m_sim2 = st.columns(2)
                                     c_m_sim1.metric("Média Atual Real", f"{media_atual_ref:.1f}")
-                                    c_m_sim2.metric("Média Projetada", f"{nova_m_simulada:.1f}", delta=f"+{nova_m_simulada - media_atual_ref:.1f} pts")
+                                    
+                                    if ja_tem_refaccao:
+                                        c_m_sim2.metric("Média Consolidada", f"{media_atual_ref:.1f}", "Já inclui +0.5")
+                                    else:
+                                        c_m_sim2.metric("Média Projetada", f"{nova_m_simulada:.1f}", delta=f"+{nova_m_simulada - media_atual_ref:.1f} pts")
 
-                                    if media_atual_ref < 6.0 and nova_m_simulada >= 6.0:
-                                        st.success("🎉 Com a refacção, o estudante atinge a média 6.0 e é dispensado da recuperação!")
-                                    elif media_atual_ref >= 6.0:
-                                        st.info(f"✨ Estudante já aprovado. A refacção elevará a média de {media_atual_ref:.1f} para {nova_m_simulada:.1f} pontos!")
-
-                                    if st.button("Homologar Refacção (+0.5)", type="primary", use_container_width=True, key=f"btn_save_ref_al_clean_{v}"):
-                                        with st.spinner("Registrando refacção solidária..."):
+                                    c_btn_hom, c_btn_rev = st.columns([2, 1])
+                                    
+                                    label_btn_hom = "🔄 Atualizar Refacção (+0.5)" if ja_tem_refaccao else "Homologar Refacção (+0.5)"
+                                    if c_btn_hom.button(label_btn_hom, type="primary", use_container_width=True, key=f"btn_save_ref_al_clean_{v}"):
+                                        with st.spinner("Gravando refacção com trava anti-duplicidade..."):
                                             data_hoje_ref = datetime.now().strftime("%d/%m/%Y")
-                                            db.salvar_no_banco("DB_DIARIO_BORDO", [
-                                                data_hoje_ref, id_al_ref, aluno_ref_sel,
-                                                turma_notas, "TRUE", "SISTEMA_NOTA", f"Refacção de Avaliação ({alvo_refaccao})", util.sosa_to_str(pts_refaccao)
-                                            ])
+                                            db.salvar_refaccao_soberana(data_hoje_ref, id_al_ref, aluno_ref_sel, turma_notas, pts_refaccao, alvo_refaccao)
                                             db.limpar_notas_turma_trimestre(turma_notas, trim_ativo_notas)
                                             st.cache_data.clear()
-                                            st.success(f"Refacção de {aluno_ref_sel} homologada com sucesso (+{pts_refaccao:.1f} pts)!")
+                                            st.success(f"Refacção de {aluno_ref_sel} homologada com valor único de +{pts_refaccao:.1f} pts!")
                                             time.sleep(0.6); st.rerun()
+
+                                    if ja_tem_refaccao:
+                                        if c_btn_rev.button("🗑️ Revogar Bônus", use_container_width=True, key=f"btn_rev_ref_{id_al_ref}_{v}"):
+                                            with st.spinner("Revogando refacção e restaurando nota original..."):
+                                                data_hoje_ref = datetime.now().strftime("%d/%m/%Y")
+                                                db.salvar_refaccao_soberana(data_hoje_ref, id_al_ref, aluno_ref_sel, turma_notas, 0.0, "[REVOGADO]")
+                                                db.limpar_notas_turma_trimestre(turma_notas, trim_ativo_notas)
+                                                st.cache_data.clear()
+                                                st.warning(f"Refacção de {aluno_ref_sel} revogada com sucesso!")
+                                                time.sleep(0.6); st.rerun()
 
                             with tab_ref_auditoria:
                                 dados_rastreio = []
