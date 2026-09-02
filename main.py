@@ -4784,7 +4784,7 @@ Escola Municipal Flávio José Simões Costa"""
                             elif any(x in id_av_sc for x in ["TESTE", "SIMULADO", "TRABALHO"]):
                                 if "SONDA" not in id_av_sc:
                                     scanned_teste_by_trim[t_nome] = max(scanned_teste_by_trim.get(t_nome, 0.0), nota_sc)
-                            elif any(x in id_av_sc for x in ["PROVA", "AVALIAÇÃO", "AVALIACAO", "EXAME"]):
+                            elif any(x in id_av_sc for x in ["PROVA", "AVALIAÇÃO", "AVALIACAO", "EXAME", "2ª"]):
                                 scanned_prova_by_trim[t_nome] = max(scanned_prova_by_trim.get(t_nome, 0.0), nota_sc)
 
         notas_consolidadas_trimestres = []
@@ -4793,26 +4793,43 @@ Escola Municipal Flávio José Simões Costa"""
         for t_k in ["I Trimestre", "II Trimestre", "III Trimestre"]:
             reg_t = n_alu[n_alu['TRIMESTRE'] == t_k] if not n_alu.empty and 'TRIMESTRE' in n_alu.columns else pd.DataFrame()
             
+            # 1. Prioridade Absoluta: Valores Consolidados Oficiais em DB_NOTAS
             v_c1_banco = util.sosa_to_float(reg_t.iloc[0].get('NOTA_VISTOS', 0.0)) if not reg_t.empty else 0.0
             v_c2_banco = util.sosa_to_float(reg_t.iloc[0].get('NOTA_TESTE', 0.0)) if not reg_t.empty else 0.0
             v_c3_banco = util.sosa_to_float(reg_t.iloc[0].get('NOTA_PROVA', 0.0)) if not reg_t.empty else 0.0
             v_rec_banco = util.sosa_to_float(reg_t.iloc[0].get('NOTA_REC', -1.0)) if not reg_t.empty else -1.0
             m_final_banco = util.sosa_to_float(reg_t.iloc[0].get('MEDIA_FINAL', 0.0)) if not reg_t.empty else 0.0
 
+            # 2. Fallbacks de Leitura ao Vivo
             v_c1_live = vistos_live_by_trim.get(t_k, 0.0)
             v_c2_live = scanned_teste_by_trim.get(t_k, 0.0)
             v_c3_live = scanned_prova_by_trim.get(t_k, 0.0)
             v_rec_live = scanned_rec_by_trim.get(t_k, -1.0)
             b_diario_t = bonus_live_by_trim.get(t_k, 0.0)
 
-            c1_v = max(v_c1_banco, v_c1_live)
-            c2_v = max(v_c2_banco, v_c2_live)
-            c3_v = max(v_c3_banco, v_c3_live)
-            rec_v = max(v_rec_banco, v_rec_live)
+            # Se o trimestre já está consolidado no boletim oficial (DB_NOTAS), exibe os valores exatos do banco
+            if not reg_t.empty and m_final_banco > 0:
+                c1_v = v_c1_banco
+                c2_v = v_c2_banco
+                c3_v = v_c3_banco
+                rec_v = v_rec_banco
+                m_final_usada = m_final_banco
+                
+                # Reconstrói a soma bruta com o bônus real consolidado
+                c1_fin = min(3.0, c1_v + max(0.0, b_diario_t))
+                rem_b = max(0.0, b_diario_t) - (c1_fin - c1_v)
+                c2_fin = min(3.0, c2_v + max(0.0, rem_b))
+                rem_b -= (c2_fin - c2_v)
+                c3_fin = min(4.0, c3_v + max(0.0, rem_b))
+                soma_bruta_t = c1_fin + c2_fin + c3_fin
+                media_inicial_t = min(10.0, round(soma_bruta_t * 2) / 2)
 
-            tem_atividade_real = (not reg_t.empty) or (c1_v > 0) or (c2_v > 0) or (c3_v > 0) or (rec_v > 0) or (b_diario_t != 0)
+            else:
+                c1_v = max(v_c1_banco, v_c1_live)
+                c2_v = max(v_c2_banco, v_c2_live)
+                c3_v = max(v_c3_banco, v_c3_live)
+                rec_v = max(v_rec_banco, v_rec_live)
 
-            if tem_atividade_real:
                 c1_fin = min(3.0, c1_v + max(0.0, b_diario_t))
                 rem_b = max(0.0, b_diario_t) - (c1_fin - c1_v)
                 c2_fin = min(3.0, c2_v + max(0.0, rem_b))
@@ -4827,13 +4844,12 @@ Escola Municipal Flávio José Simões Costa"""
                     m_live_t = min(10.0, max(media_inicial_t, round(media_com_rec * 2) / 2))
                 else:
                     m_live_t = media_inicial_t
+                
+                m_final_usada = m_live_t
 
-                # Se o banco já tiver nota consolidada fechada pelo professor, respeita a nota consolidada
-                if not reg_t.empty and m_final_banco > 0:
-                    m_final_usada = m_final_banco
-                else:
-                    m_final_usada = m_live_t
+            tem_atividade_real = (not reg_t.empty) or (c1_v > 0) or (c2_v > 0) or (c3_v > 0) or (rec_v > 0) or (b_diario_t != 0)
 
+            if tem_atividade_real:
                 if t_k in ["I Trimestre", "II Trimestre"]:
                     soma_1_2_preditiva += m_final_usada
 
@@ -4885,7 +4901,7 @@ Escola Municipal Flávio José Simões Costa"""
         else:
             status_preditivo_aluno = "Risco de Recuperação Final (≥ 10.0 pts)"
 
-        # CÁLCULO REATIVO DE ASSIDUIDADE, VISTOS E BÔNUS (SINTONIZADO COM CADEADO E PERÍODO)
+        # CÁLCULO REATIVO DE ASSIDUIDADE, VISTOS E BÔNUS
         faltas_hero = 0
         perc_presenca_hero_str = "100%"
         perc_visto_hero_str = "0%"
@@ -5022,7 +5038,7 @@ Escola Municipal Flávio José Simões Costa"""
         # ABA 1: BOLETIM ANALÍTICO & METAS PREDITIVAS
         with tabs[0]:
             st.markdown("#### Extrato Analítico de Rendimento")
-            st.caption("Sincronização dinâmica ao vivo com regra oficial de recuperação e arredondamento 0,5.")
+            st.caption("Sincronização dinâmica com a tabela oficial consolidada (DB_NOTAS) e arredondamento 0,5.")
 
             dados_tabela_boletim = []
             for n_c in notas_consolidadas_trimestres:
@@ -5035,8 +5051,8 @@ Escola Municipal Flávio José Simões Costa"""
                     "Testes (C2)": n_c["c2"],
                     "Prova (C3)": n_c["c3"],
                     "Bônus": n_c["bonus"],
-                    "Soma Bruta": n_c["soma_bruta"],
-                    "Média Inicial": n_c["media_inicial"],
+                    "Soma": n_c["soma_bruta"],
+                    "Média Pré-Rec": n_c["media_inicial"],
                     "REC": n_c["rec"],
                     "Média Final": n_c["media_final"],
                     "Situação": n_c["situacao"]
@@ -5058,8 +5074,8 @@ Escola Municipal Flávio José Simões Costa"""
                         "Testes (C2)": st.column_config.TextColumn("C2", width="small"),
                         "Prova (C3)": st.column_config.TextColumn("C3", width="small"),
                         "Bônus": st.column_config.TextColumn("Bônus", width="small"),
-                        "Soma Bruta": st.column_config.TextColumn("Soma", width="small"),
-                        "Média Inicial": st.column_config.TextColumn("Média Pré-Rec", width="small"),
+                        "Soma": st.column_config.TextColumn("Soma", width="small"),
+                        "Média Pré-Rec": st.column_config.TextColumn("Média Pré-Rec", width="small"),
                         "REC": st.column_config.TextColumn("REC", width="small"),
                         "Média Final": st.column_config.TextColumn("Média Final", width="small"),
                         "Situação": st.column_config.TextColumn("Situação", width="medium")
