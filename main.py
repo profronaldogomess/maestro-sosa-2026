@@ -5839,22 +5839,57 @@ elif menu == "📊 Painel de Notas & Vistos":
                                             st.link_button("Abrir Convocatória no Drive", link_conv_doc, type="primary", use_container_width=True)
                                             st.balloons()
 
-                    # COLUNA 2: RADAR DE REFACÇÃO SOLIDÁRIA (COM AUDITORIA VISUAL, TRAVA ANTI-SPAM E BOTÃO DE REVOGAR)
+                    # COLUNA 2: RADAR DE REFACÇÃO SOLIDÁRIA (BLINDAGEM TOTAL ANTI-DUPLICIDADE E DETECÇÃO IMEDIATA)
                     with col_ref_main:
                         with st.container(border=True):
                             st.markdown("#### Radar de Refacção Solidária (+0.5)")
-                            st.caption("Atribua pontuação de refacção no caderno com proteção anti-duplicidade:")
+                            st.caption("Atribua pontuação de refacção com rastreamento visual e trava anti-duplicidade:")
                             
+                            # 1. RASTREAMENTO GLOBAL NO DIÁRIO (SEM BLOQUEIO POR DATA DE CORTE)
+                            mapa_refaccao_diario = {}
+                            if not df_diario_trim.empty:
+                                for _, r_ref_d in df_diario_trim.iterrows():
+                                    id_al_ref_clean = db.limpar_id(r_ref_d.get('ID_ALUNO', ''))
+                                    obs_d = str(r_ref_d.get('OBSERVACOES', ''))
+                                    tag_d = str(r_ref_d.get('TAGS', ''))
+                                    b_num = util.sosa_to_float(r_ref_d.get('BONUS', 0))
+                                    
+                                    # Detecta lançamentos de refacção ou bônus de sistema
+                                    if "Refacção" in obs_d or "Refaccao" in obs_d or "REFACÇÃO" in obs_d or tag_d == "SISTEMA_NOTA":
+                                        mapa_refaccao_diario[id_al_ref_clean] = {
+                                            "data": str(r_ref_d.get('DATA', 'N/A')),
+                                            "valor": b_num if b_num > 0 else 0.5,
+                                            "obs": obs_d
+                                        }
+
                             tab_ref_lancar, tab_ref_auditoria = st.tabs(["Lançamento de Refacção", "Rastreabilidade (Quem já entregou)"])
                             
                             with tab_ref_lancar:
-                                aluno_ref_sel = st.selectbox("Selecione o Estudante:", [r['Estudante'] for _, r in df_grid_ed_notas.iterrows()], key=f"sel_al_ref_clean_{v}")
-                                c_r1, c_r2 = st.columns(2)
-                                pts_refaccao = c_r1.number_input("Pontuação de Refacção:", 0.0, 2.0, 0.5, step=0.1, key=f"inp_pts_ref_clean_{v}")
-                                alvo_refaccao = c_r2.selectbox("Destino da Nota:", ["Bônus de Caderno", "Testes (C2)", "Prova (C3)"], key=f"sel_alvo_ref_clean_{v}")
+                                # Constrói lista com badges visuais para o professor não se perder
+                                opcoes_alunos_select = []
+                                mapa_label_para_row = {}
+                                
+                                for _, r_al in df_grid_ed_notas.iterrows():
+                                    id_al_r = str(r_al['ID'])
+                                    nome_al_r = str(r_al['Estudante'])
+                                    b_al_r = util.sosa_to_float(r_al['Bônus / Mérito'])
+                                    
+                                    # Checagem dupla infalível: mapa do diário OU bônus ativo
+                                    ja_entregou_flag = (id_al_r in mapa_refaccao_diario) or (b_al_r > 0)
+                                    
+                                    if ja_entregou_flag:
+                                        label_al = f"✅ {nome_al_r} (Refacção Já Aplicada)"
+                                    else:
+                                        label_al = f"🟡 {nome_al_r} (Pendente de Entrega)"
+                                        
+                                    opcoes_alunos_select.append(label_al)
+                                    mapa_label_para_row[label_al] = r_al
 
-                                if aluno_ref_sel:
-                                    row_ref_al = next(r for _, r in df_grid_ed_notas.iterrows() if r['Estudante'] == aluno_ref_sel)
+                                aluno_sel_label = st.selectbox("Selecione o Estudante:", opcoes_alunos_select, key=f"sel_al_ref_clean_{v}")
+                                
+                                if aluno_sel_label:
+                                    row_ref_al = mapa_label_para_row[aluno_sel_label]
+                                    aluno_ref_sel = str(row_ref_al['Estudante'])
                                     id_al_ref = str(row_ref_al['ID'])
                                     media_atual_ref = util.sosa_to_float(row_ref_al['Média Trimestral'])
                                     c1_ref = util.sosa_to_float(row_ref_al['Caderno (C1)'])
@@ -5862,13 +5897,17 @@ elif menu == "📊 Painel de Notas & Vistos":
                                     c3_ref = util.sosa_to_float(row_ref_al['Prova (C3)'])
                                     bonus_atual_al = util.sosa_to_float(row_ref_al['Bônus / Mérito'])
 
-                                    ja_tem_refaccao = id_al_ref in mapa_refaccao_diario
-                                    
-                                    # FÓRMULA MATEMÁTICA REAL E BLINDADA
+                                    ja_tem_refaccao = (id_al_ref in mapa_refaccao_diario) or (bonus_atual_al > 0)
+
+                                    c_r1, c_r2 = st.columns(2)
+                                    pts_refaccao = c_r1.number_input("Pontuação de Refacção:", 0.0, 2.0, 0.5, step=0.1, key=f"inp_pts_ref_clean_{v}")
+                                    alvo_refaccao = c_r2.selectbox("Destino da Nota:", ["Bônus de Caderno", "Testes (C2)", "Prova (C3)"], key=f"sel_alvo_ref_clean_{v}")
+
+                                    # Cálculo e Simulação com Preservação de Bônus
                                     if ja_tem_refaccao:
-                                        info_ref_ja = mapa_refaccao_diario[id_al_ref]
-                                        st.success(f"✅ **Refacção Ativa:** {aluno_ref_sel} já possui refacção lançada em {info_ref_ja['data']} (+{info_ref_ja['valor']:.1f} pts).")
-                                        novo_bonus_total = bonus_atual_al # Já está incluído na média atual
+                                        dt_lan = mapa_refaccao_diario[id_al_ref]['data'] if id_al_ref in mapa_refaccao_diario else "Recente"
+                                        st.success(f"✅ **Refacção Ativa:** {aluno_ref_sel} já teve a refacção lançada ({dt_lan}) com bônus de **{bonus_atual_al:+.1f} pts** incluído na média.")
+                                        novo_bonus_total = bonus_atual_al
                                     else:
                                         novo_bonus_total = bonus_atual_al + pts_refaccao
 
@@ -5885,31 +5924,33 @@ elif menu == "📊 Painel de Notas & Vistos":
                                     c_m_sim1.metric("Média Atual Real", f"{media_atual_ref:.1f}")
                                     
                                     if ja_tem_refaccao:
-                                        c_m_sim2.metric("Média Consolidada", f"{media_atual_ref:.1f}", "Já inclui +0.5")
+                                        c_m_sim2.metric("Média Consolidada", f"{media_atual_ref:.1f}", "Já inclui refacção")
                                     else:
                                         c_m_sim2.metric("Média Projetada", f"{nova_m_simulada:.1f}", delta=f"+{nova_m_simulada - media_atual_ref:.1f} pts")
 
                                     c_btn_hom, c_btn_rev = st.columns([2, 1])
                                     
-                                    label_btn_hom = "🔄 Atualizar Refacção (+0.5)" if ja_tem_refaccao else "Homologar Refacção (+0.5)"
-                                    if c_btn_hom.button(label_btn_hom, type="primary", use_container_width=True, key=f"btn_save_ref_al_clean_{v}"):
-                                        with st.spinner("Gravando refacção com trava anti-duplicidade..."):
-                                            data_hoje_ref = datetime.now().strftime("%d/%m/%Y")
-                                            db.salvar_refaccao_soberana(data_hoje_ref, id_al_ref, aluno_ref_sel, turma_notas, pts_refaccao, alvo_refaccao)
-                                            db.limpar_notas_turma_trimestre(turma_notas, trim_ativo_notas)
-                                            st.cache_data.clear()
-                                            st.success(f"Refacção de {aluno_ref_sel} homologada com valor único de +{pts_refaccao:.1f} pts!")
-                                            time.sleep(0.6); st.rerun()
-
-                                    if ja_tem_refaccao:
+                                    # Se já tem refacção, o botão de homologar é travado contra cliques acidentais
+                                    if not ja_tem_refaccao:
+                                        if c_btn_hom.button("Homologar Refacção (+0.5)", type="primary", use_container_width=True, key=f"btn_save_ref_al_clean_{v}"):
+                                            with st.spinner("Gravando refacção com trava anti-duplicidade..."):
+                                                data_hoje_ref = datetime.now().strftime("%d/%m/%Y")
+                                                db.salvar_refaccao_soberana(data_hoje_ref, id_al_ref, aluno_ref_sel, turma_notas, pts_refaccao, alvo_refaccao)
+                                                db.limpar_notas_turma_trimestre(turma_notas, trim_ativo_notas)
+                                                st.cache_data.clear()
+                                                st.toast(f"Refacção de {aluno_ref_sel} homologada com sucesso (+{pts_refaccao:.1f} pts)!", icon="✅")
+                                                time.sleep(0.5); st.rerun()
+                                    else:
+                                        c_btn_hom.button("🔒 Refacção Já Homologada", disabled=True, use_container_width=True, key=f"btn_lock_{id_al_ref}_{v}")
+                                        
                                         if c_btn_rev.button("🗑️ Revogar Bônus", use_container_width=True, key=f"btn_rev_ref_{id_al_ref}_{v}"):
                                             with st.spinner("Revogando refacção e restaurando nota original..."):
                                                 data_hoje_ref = datetime.now().strftime("%d/%m/%Y")
                                                 db.salvar_refaccao_soberana(data_hoje_ref, id_al_ref, aluno_ref_sel, turma_notas, 0.0, "[REVOGADO]")
                                                 db.limpar_notas_turma_trimestre(turma_notas, trim_ativo_notas)
                                                 st.cache_data.clear()
-                                                st.warning(f"Refacção de {aluno_ref_sel} revogada com sucesso!")
-                                                time.sleep(0.6); st.rerun()
+                                                st.toast(f"Refacção de {aluno_ref_sel} revogada com sucesso!", icon="🗑️")
+                                                time.sleep(0.5); st.rerun()
 
                             with tab_ref_auditoria:
                                 dados_rastreio = []
@@ -5919,9 +5960,12 @@ elif menu == "📊 Painel de Notas & Vistos":
                                     m_aud = util.sosa_to_float(r_aud['Média Trimestral'])
                                     b_aud = util.sosa_to_float(r_aud['Bônus / Mérito'])
                                     
-                                    tem_ref = id_aud in mapa_refaccao_diario
+                                    # Detecção dupla: diário ou bônus ativo
+                                    tem_ref = (id_aud in mapa_refaccao_diario) or (b_aud > 0)
+                                    
                                     if tem_ref:
-                                        status_ref_txt = f"✅ Entregou ({mapa_refaccao_diario[id_aud]['data']})"
+                                        dt_txt = mapa_refaccao_diario[id_aud]['data'] if id_aud in mapa_refaccao_diario else "Ativo"
+                                        status_ref_txt = f"✅ Entregou ({dt_txt})"
                                     else:
                                         status_ref_txt = "🟡 Pendente de Entrega"
 
@@ -5940,7 +5984,7 @@ elif menu == "📊 Painel de Notas & Vistos":
 
                                 st.dataframe(
                                     df_rastreio_view.style.map(style_rastreio, subset=['Status Refacção']),
-                                    hide_index=True, use_container_width=True, height=260,
+                                    hide_index=True, use_container_width=True, height=290,
                                     column_config={
                                         "Estudante": st.column_config.TextColumn(width="medium"),
                                         "Status Refacção": st.column_config.TextColumn(width="medium"),
