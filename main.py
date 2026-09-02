@@ -4715,11 +4715,6 @@ Escola Municipal Flávio José Simões Costa"""
             trim_b = c4.segmented_control("Período:", opcoes_periodo_bio, default="Todos", key="bio_periodo_sel_react")
             if not trim_b: trim_b = "Todos"
 
-        if trim_b == "I Trimestre": dt_ini, dt_fim = date(2026, 2, 9), date(2026, 5, 22)
-        elif trim_b == "II Trimestre": dt_ini, dt_fim = date(2026, 5, 25), date(2026, 9, 4)
-        elif trim_b == "III Trimestre": dt_ini, dt_fim = date(2026, 9, 8), date(2026, 12, 17)
-        else: dt_ini, dt_fim = date(2026, 1, 1), date(2026, 12, 31)
-
         nome_limpo = aluno_b_label.split(" ", 1)[1].strip() 
         info_alu = lista_alunos[lista_alunos['NOME_ALUNO'] == nome_limpo].iloc[0]
         id_alu = db.limpar_id(info_alu.get('ID', ''))
@@ -4729,11 +4724,26 @@ Escola Municipal Flávio José Simões Costa"""
         
         n_alu = df_notas[df_notas['ID_ALUNO'].apply(db.limpar_id) == id_alu] if not df_notas.empty and 'ID_ALUNO' in df_notas.columns else pd.DataFrame()
 
+        # Resgate das datas oficiais com aplicação estrita do Cadeado / Data de Corte de Vistos
         calendario_trims = {
             "I Trimestre": (date(2026, 2, 9), date(2026, 5, 22)),
             "II Trimestre": (date(2026, 5, 25), date(2026, 9, 4)),
             "III Trimestre": (date(2026, 9, 8), date(2026, 12, 17))
         }
+
+        # Ajusta a data final com base no corte configurado para cada trimestre
+        for t_k in calendario_trims.keys():
+            corte_salvo = db.obter_config_corte_trimestre(turma_b, t_k)
+            if corte_salvo:
+                try:
+                    dt_corte_obj = datetime.strptime(corte_salvo, "%d/%m/%Y").date()
+                    calendario_trims[t_k] = (calendario_trims[t_k][0], dt_corte_obj)
+                except: pass
+
+        if trim_b != "Todos":
+            dt_ini, dt_fim = calendario_trims.get(trim_b, (date(2026, 1, 1), date(2026, 12, 31)))
+        else:
+            dt_ini, dt_fim = date(2026, 1, 1), date(2026, 12, 31)
 
         vistos_live_by_trim = {}
         bonus_live_by_trim = {}
@@ -4787,6 +4797,7 @@ Escola Municipal Flávio José Simões Costa"""
             v_c2_banco = util.sosa_to_float(reg_t.iloc[0].get('NOTA_TESTE', 0.0)) if not reg_t.empty else 0.0
             v_c3_banco = util.sosa_to_float(reg_t.iloc[0].get('NOTA_PROVA', 0.0)) if not reg_t.empty else 0.0
             v_rec_banco = util.sosa_to_float(reg_t.iloc[0].get('NOTA_REC', -1.0)) if not reg_t.empty else -1.0
+            m_final_banco = util.sosa_to_float(reg_t.iloc[0].get('MEDIA_FINAL', 0.0)) if not reg_t.empty else 0.0
 
             v_c1_live = vistos_live_by_trim.get(t_k, 0.0)
             v_c2_live = scanned_teste_by_trim.get(t_k, 0.0)
@@ -4817,11 +4828,17 @@ Escola Municipal Flávio José Simões Costa"""
                 else:
                     m_live_t = media_inicial_t
 
-                if t_k in ["I Trimestre", "II Trimestre"]:
-                    soma_1_2_preditiva += m_live_t
+                # Se o banco já tiver nota consolidada fechada pelo professor, respeita a nota consolidada
+                if not reg_t.empty and m_final_banco > 0:
+                    m_final_usada = m_final_banco
+                else:
+                    m_final_usada = m_live_t
 
-                if m_live_t >= 6.0: sit_trim = "Na Média"
-                elif m_live_t == 5.5: sit_trim = "Refacção (+0.5)"
+                if t_k in ["I Trimestre", "II Trimestre"]:
+                    soma_1_2_preditiva += m_final_usada
+
+                if m_final_usada >= 6.0: sit_trim = "Na Média"
+                elif m_final_usada == 5.5: sit_trim = "Refacção (+0.5)"
                 else: sit_trim = "Recomposição"
 
                 notas_consolidadas_trimestres.append({
@@ -4833,8 +4850,8 @@ Escola Municipal Flávio José Simões Costa"""
                     "soma_bruta": f"{soma_bruta_t:.2f}",
                     "media_inicial": f"{media_inicial_t:.1f}",
                     "rec": f"{rec_v:.1f}" if rec_v > 0 else "-",
-                    "media_final": f"{m_live_t:.1f}",
-                    "media_final_num": m_live_t,
+                    "media_final": f"{m_final_usada:.1f}",
+                    "media_final_num": m_final_usada,
                     "situacao": sit_trim,
                     "iniciado": True
                 })
@@ -4868,7 +4885,7 @@ Escola Municipal Flávio José Simões Costa"""
         else:
             status_preditivo_aluno = "Risco de Recuperação Final (≥ 10.0 pts)"
 
-        # CÁLCULO REATIVO DE ASSIDUIDADE, VISTOS E BÔNUS
+        # CÁLCULO REATIVO DE ASSIDUIDADE, VISTOS E BÔNUS (SINTONIZADO COM CADEADO E PERÍODO)
         faltas_hero = 0
         perc_presenca_hero_str = "100%"
         perc_visto_hero_str = "0%"
@@ -4880,11 +4897,7 @@ Escola Municipal Flávio José Simões Costa"""
             if not df_d_aluno_turma.empty and 'DATA' in df_d_aluno_turma.columns:
                 df_d_aluno_turma['DATA_DT'] = pd.to_datetime(df_d_aluno_turma['DATA'], format="%d/%m/%Y", errors='coerce').dt.date
                 
-                if trim_b != "Todos":
-                    df_d_periodo = df_d_aluno_turma[(df_d_aluno_turma['DATA_DT'] >= dt_ini) & (df_d_aluno_turma['DATA_DT'] <= dt_fim)]
-                else:
-                    df_d_periodo = df_d_aluno_turma
-
+                df_d_periodo = df_d_aluno_turma[(df_d_aluno_turma['DATA_DT'] >= dt_ini) & (df_d_aluno_turma['DATA_DT'] <= dt_fim)]
                 df_d_validas = df_d_periodo[~df_d_periodo['TAGS'].isin(["DIA NÃO LETIVO", "BONUS_CONSELHO", "SISTEMA_NOTA"])] if not df_d_periodo.empty else pd.DataFrame()
                 
                 tot_aulas_reg = len(df_d_validas)
@@ -5093,6 +5106,7 @@ Escola Municipal Flávio José Simões Costa"""
                     if resp_al.startswith("FALTOU_JUSTIFICADO"): status_av = "Justificado (Atestado)"
                     elif resp_al.startswith("FALTOU_INJUSTIFICADO") or resp_al == "FALTOU": status_av = "Ausência"
                     elif resp_al.startswith("QUALITATIVA"): status_av = "PEI Nível 3 (Qualitativa)"
+                    elif resp_al.startswith("DISCURSIVA"): status_av = "Discursiva"
                     else: status_av = "Corrigida"
 
                     dados_provas_view.append({
