@@ -5770,17 +5770,36 @@ elif menu == "📊 Painel de Notas & Vistos":
                 # VISÃO 3: RECUPERAÇÃO & REFACÇÃO
                 # ==============================================================
                 else:
-                    col_rec_main, col_ref_main = st.columns(2)
+                    # Mapeia quem já possui lançamento de Refacção no Diário do Trimestre
+                    mapa_refaccao_diario = {}
+                    if not df_diario_trim.empty and 'OBSERVACOES' in df_diario_trim.columns:
+                        df_d_range_ref = df_diario_trim.copy()
+                        df_d_range_ref['DATA_DT'] = pd.to_datetime(df_d_range_ref['DATA'], format="%d/%m/%Y", errors='coerce').dt.date
+                        df_d_sub_ref = df_d_range_ref[(df_d_range_ref['DATA_DT'] >= dt_i_n) & (df_d_range_ref['DATA_DT'] <= dt_f_n)]
+                        
+                        mask_ref_ja_feita = df_d_sub_ref['OBSERVACOES'].astype(str).str.contains("Refacção|Refaccao|REFACÇÃO", case=False, na=False) | \
+                                            df_d_sub_ref['TAGS'].astype(str).str.contains("SISTEMA_NOTA", case=False, na=False)
+                        
+                        for _, r_ref_d in df_d_sub_ref[mask_ref_ja_feita].iterrows():
+                            id_al_ref_clean = db.limpar_id(r_ref_d.get('ID_ALUNO', ''))
+                            mapa_refaccao_diario[id_al_ref_clean] = {
+                                "data": str(r_ref_d.get('DATA', 'N/A')),
+                                "valor": util.sosa_to_float(r_ref_d.get('BONUS', 0.5)),
+                                "obs": str(r_ref_d.get('OBSERVACOES', 'Refacção de Prova'))
+                            }
 
+                    col_rec_main, col_ref_main = st.columns([1.1, 1.4])
+
+                    # COLUNA 1: CONVOCATÓRIA DE RECUPERAÇÃO
                     with col_rec_main:
                         with st.container(border=True):
                             st.markdown("#### Convocatória de Recuperação")
-                            st.caption("Estudantes com rendimento abaixo da média regimental:")
+                            st.caption("Estudantes com rendimento abaixo da média regimental (escala 0 a 10):")
                             
-                            trim_destino_rec = st.selectbox("Trimestre de Destino da Recuperação:", ["II Trimestre", "I Trimestre", "III Trimestre"], index=0, key=f"sel_dest_rec_clean_{v}")
+                            trim_destino_rec = st.selectbox("Trimestre da Recuperação:", ["II Trimestre", "I Trimestre", "III Trimestre"], index=0, key=f"sel_dest_rec_clean_{v}")
                             
                             if not convocados_recuperacao:
-                                st.success(f"Todos os estudantes da turma {turma_notas} atingiram a média!")
+                                st.success(f"Todos os estudantes da turma {turma_notas} estão com média ≥ 6.0!")
                             else:
                                 df_conv_rec = pd.DataFrame(convocados_recuperacao)
                                 st.dataframe(
@@ -5789,11 +5808,11 @@ elif menu == "📊 Painel de Notas & Vistos":
                                     column_config={
                                         "Estudante": st.column_config.TextColumn(width="medium"),
                                         "Média Atual": st.column_config.NumberColumn(format="%.1f"),
-                                        "Meta na Prova": st.column_config.NumberColumn("Meta na Prova", format="%.1f")
+                                        "Meta na Prova": st.column_config.NumberColumn("Meta (0 a 10)", format="%.1f")
                                     }
                                 )
 
-                                if st.button("Gerar Convocatória Oficial", type="primary", use_container_width=True, key=f"btn_docx_conv_clean_{v}"):
+                                if st.button("Gerar Convocatória Oficial (DOCX)", type="primary", use_container_width=True, key=f"btn_docx_conv_clean_{v}"):
                                     with st.spinner("Compilando convocatórias em Word A4..."):
                                         dados_convocatoria = []
                                         for _, r_conv in df_grid_ed_notas.iterrows():
@@ -5820,42 +5839,104 @@ elif menu == "📊 Painel de Notas & Vistos":
                                             st.link_button("Abrir Convocatória no Drive", link_conv_doc, type="primary", use_container_width=True)
                                             st.balloons()
 
+                    # COLUNA 2: RADAR DE REFACÇÃO SOLIDÁRIA (COM AUDITORIA VISUAL E FÓRMULA BLINDADA)
                     with col_ref_main:
                         with st.container(border=True):
                             st.markdown("#### Radar de Refacção Solidária (+0.5)")
-                            st.caption("Atribua pontuação de refacção no caderno para alcance da média 6.0:")
+                            st.caption("Atribua pontuação de refacção no caderno para todos os alunos que refizerem a prova:")
                             
-                            aluno_ref_sel = st.selectbox("Estudante:", [r['Estudante'] for _, r in df_grid_ed_notas.iterrows()], key=f"sel_al_ref_clean_{v}")
-                            c_r1, c_r2 = st.columns(2)
-                            pts_refaccao = c_r1.number_input("Pontuação de Refacção:", 0.0, 2.0, 0.5, step=0.5, key=f"inp_pts_ref_clean_{v}")
-                            alvo_refaccao = c_r2.selectbox("Destino da Nota:", ["Bônus de Caderno", "Testes (C2)", "Prova (C3)"], key=f"sel_alvo_ref_clean_{v}")
+                            tab_ref_lancar, tab_ref_auditoria = st.tabs(["Lançamento de Refacção", "Rastreabilidade (Quem já entregou)"])
+                            
+                            with tab_ref_lancar:
+                                aluno_ref_sel = st.selectbox("Selecione o Estudante:", [r['Estudante'] for _, r in df_grid_ed_notas.iterrows()], key=f"sel_al_ref_clean_{v}")
+                                c_r1, c_r2 = st.columns(2)
+                                pts_refaccao = c_r1.number_input("Pontuação de Refacção:", 0.0, 2.0, 0.5, step=0.1, key=f"inp_pts_ref_clean_{v}")
+                                alvo_refaccao = c_r2.selectbox("Destino da Nota:", ["Bônus de Caderno", "Testes (C2)", "Prova (C3)"], key=f"sel_alvo_ref_clean_{v}")
 
-                            if aluno_ref_sel:
-                                row_ref_al = next(r for _, r in df_grid_ed_notas.iterrows() if r['Estudante'] == aluno_ref_sel)
-                                id_al_ref = row_ref_al['ID']
-                                media_atual_ref = row_ref_al['Média Trimestral']
-                                c1_ref = row_ref_al['Caderno (C1)']
-                                c2_ref = row_ref_al['Testes (C2)']
-                                c3_ref = row_ref_al['Prova (C3)']
-                                nova_m_simulada = min(10.0, round((c1_ref + c2_ref + c3_ref + pts_refaccao) * 2) / 2)
+                                if aluno_ref_sel:
+                                    row_ref_al = next(r for _, r in df_grid_ed_notas.iterrows() if r['Estudante'] == aluno_ref_sel)
+                                    id_al_ref = str(row_ref_al['ID'])
+                                    media_atual_ref = util.sosa_to_float(row_ref_al['Média Trimestral'])
+                                    c1_ref = util.sosa_to_float(row_ref_al['Caderno (C1)'])
+                                    c2_ref = util.sosa_to_float(row_ref_al['Testes (C2)'])
+                                    c3_ref = util.sosa_to_float(row_ref_al['Prova (C3)'])
+                                    bonus_atual_al = util.sosa_to_float(row_ref_al['Bônus / Mérito'])
 
-                                c_m_sim1, c_m_sim2 = st.columns(2)
-                                c_m_sim1.metric("Média Atual", f"{media_atual_ref:.1f}")
-                                c_m_sim2.metric("Média Projetada", f"{nova_m_simulada:.1f}", delta=f"+{nova_m_simulada - media_atual_ref:.1f} pts")
+                                    # Alerta de Duplicidade se o aluno já tiver refacção gravada
+                                    ja_tem_refaccao = id_al_ref in mapa_refaccao_diario
+                                    if ja_tem_refaccao:
+                                        info_ref_ja = mapa_refaccao_diario[id_al_ref]
+                                        st.warning(f"⚠️ **Atenção:** {aluno_ref_sel} já possui refacção lançada em {info_ref_ja['data']} (+{info_ref_ja['valor']:.1f} pts).")
 
-                                if nova_m_simulada >= 6.0:
-                                    st.success("Estudante atinge a média 6.0 com a refacção!")
+                                    # FÓRMULA MATEMÁTICA BLINDADA COM PRESERVAÇÃO DE BÔNUS ANTERIOR
+                                    novo_bonus_total = bonus_atual_al + pts_refaccao
+                                    c1_sim = min(3.0, c1_ref + max(0.0, novo_bonus_total))
+                                    rem_b_sim = max(0.0, novo_bonus_total) - (c1_sim - c1_ref)
+                                    c2_sim = min(3.0, c2_ref + max(0.0, rem_b_sim))
+                                    rem_b_sim -= (c2_sim - c2_ref)
+                                    c3_sim = min(4.0, c3_ref + max(0.0, rem_b_sim))
 
-                                if st.button("Homologar Refacção (+0.5)", type="primary", use_container_width=True, key=f"btn_save_ref_al_clean_{v}"):
-                                    with st.spinner("Registrando refacção solidária..."):
-                                        data_hoje_ref = datetime.now().strftime("%d/%m/%Y")
-                                        db.salvar_no_banco("DB_DIARIO_BORDO", [
-                                            data_hoje_ref, id_al_ref, aluno_ref_sel,
-                                            turma_notas, "TRUE", "SISTEMA_NOTA", f"Refacção de Avaliação ({alvo_refaccao})", util.sosa_to_str(pts_refaccao)
-                                        ])
-                                        db.limpar_notas_turma_trimestre(turma_notas, trim_ativo_notas)
-                                        st.cache_data.clear()
-                                        st.success("Refacção homologada com sucesso!"); time.sleep(0.6); st.rerun()
+                                    soma_simulada = c1_sim + c2_sim + c3_sim
+                                    nova_m_simulada = min(10.0, round(soma_simulada * 2) / 2)
+
+                                    c_m_sim1, c_m_sim2 = st.columns(2)
+                                    c_m_sim1.metric("Média Atual Real", f"{media_atual_ref:.1f}")
+                                    c_m_sim2.metric("Média Projetada", f"{nova_m_simulada:.1f}", delta=f"+{nova_m_simulada - media_atual_ref:.1f} pts")
+
+                                    if media_atual_ref < 6.0 and nova_m_simulada >= 6.0:
+                                        st.success("🎉 Com a refacção, o estudante atinge a média 6.0 e é dispensado da recuperação!")
+                                    elif media_atual_ref >= 6.0:
+                                        st.info(f"✨ Estudante já aprovado. A refacção elevará a média de {media_atual_ref:.1f} para {nova_m_simulada:.1f} pontos!")
+
+                                    if st.button("Homologar Refacção (+0.5)", type="primary", use_container_width=True, key=f"btn_save_ref_al_clean_{v}"):
+                                        with st.spinner("Registrando refacção solidária..."):
+                                            data_hoje_ref = datetime.now().strftime("%d/%m/%Y")
+                                            db.salvar_no_banco("DB_DIARIO_BORDO", [
+                                                data_hoje_ref, id_al_ref, aluno_ref_sel,
+                                                turma_notas, "TRUE", "SISTEMA_NOTA", f"Refacção de Avaliação ({alvo_refaccao})", util.sosa_to_str(pts_refaccao)
+                                            ])
+                                            db.limpar_notas_turma_trimestre(turma_notas, trim_ativo_notas)
+                                            st.cache_data.clear()
+                                            st.success(f"Refacção de {aluno_ref_sel} homologada com sucesso (+{pts_refaccao:.1f} pts)!")
+                                            time.sleep(0.6); st.rerun()
+
+                            with tab_ref_auditoria:
+                                dados_rastreio = []
+                                for _, r_aud in df_grid_ed_notas.iterrows():
+                                    id_aud = str(r_aud['ID'])
+                                    nome_aud = str(r_aud['Estudante'])
+                                    m_aud = util.sosa_to_float(r_aud['Média Trimestral'])
+                                    b_aud = util.sosa_to_float(r_aud['Bônus / Mérito'])
+                                    
+                                    tem_ref = id_aud in mapa_refaccao_diario
+                                    if tem_ref:
+                                        status_ref_txt = f"✅ Entregou ({mapa_refaccao_diario[id_aud]['data']})"
+                                    else:
+                                        status_ref_txt = "🟡 Pendente de Entrega"
+
+                                    dados_rastreio.append({
+                                        "Estudante": nome_aud,
+                                        "Status Refacção": status_ref_txt,
+                                        "Bônus Acumulado": f"{b_aud:+.1f} pts",
+                                        "Média Atual": m_aud
+                                    })
+
+                                df_rastreio_view = pd.DataFrame(dados_rastreio)
+                                
+                                def style_rastreio(val):
+                                    if "Entregou" in str(val): return 'color: #2ECC71; font-weight: bold;'
+                                    return 'color: #F1C40F; font-weight: bold;'
+
+                                st.dataframe(
+                                    df_rastreio_view.style.map(style_rastreio, subset=['Status Refacção']),
+                                    hide_index=True, use_container_width=True, height=260,
+                                    column_config={
+                                        "Estudante": st.column_config.TextColumn(width="medium"),
+                                        "Status Refacção": st.column_config.TextColumn(width="medium"),
+                                        "Bônus Acumulado": st.column_config.TextColumn(width="small"),
+                                        "Média Atual": st.column_config.NumberColumn(format="%.1f", width="small")
+                                    }
+                                )
 
             renderizar_painel_notas_fragmento()
 
