@@ -1444,3 +1444,329 @@ def executar_saneamento_banco_soberano():
 
     except Exception as e:
         return False, f"Erro durante o saneamento: {str(e)}"
+
+def ajustar_bonus_punicao_diario(data_str, id_aluno, turma, novo_bonus_str, nova_obs_sufixo=""):
+    """Permite perdoar punições ou revogar bônus com registro no Diário."""
+    try:
+        wb = conectar()
+        if not wb: return False
+        ws = wb.worksheet("DB_DIARIO_BORDO")
+        dados = ws.get_all_values()
+        id_busca = str(limpar_id(id_aluno))
+        for i, row in enumerate(dados):
+            if i > 0 and len(row) > 7:
+                if row[0].strip() == data_str.strip() and limpar_id(row[1]) == id_busca and row[3].strip() == turma.strip():
+                    obs_antiga = row[6]
+                    obs_final = f"{obs_antiga} | {nova_obs_sufixo}".strip(" | ") if nova_obs_sufixo else obs_antiga
+                    ws.update_cell(i + 1, 7, obs_final)
+                    ws.update_cell(i + 1, 8, novo_bonus_str)
+                    st.cache_data.clear()
+                    return True
+        return False
+    except Exception as e:
+        print(f"Erro ao ajustar bônus: {e}")
+        return False
+
+def salvar_refaccao_soberana(data_str, id_aluno, nome_aluno, turma, pts_refaccao, alvo_refaccao):
+    """
+    SOSA V2026 - GRAVAÇÃO DE REFACÇÃO COM UPSERT BLINDADO (ANTI-DUPLICIDADE):
+    Apaga qualquer registro anterior de refacção do aluno antes de gravar o novo bônus,
+    impedindo que múltiplos cliques acumulem pontos indevidos.
+    """
+    try:
+        wb = conectar()
+        if not wb: return False
+        ws = wb.worksheet("DB_DIARIO_BORDO")
+        dados = ws.get_all_values()
+        id_clean = str(limpar_id(id_aluno))
+        
+        # 1. Remove qualquer lançamento de refacção existente para este aluno (Elimina duplicatas)
+        linhas_para_deletar = []
+        for i in range(1, len(dados)):
+            row = dados[i]
+            if len(row) > 6 and str(limpar_id(row[1])) == id_clean and row[3].strip() == turma.strip():
+                if "Refacção" in str(row[6]) or "Refaccao" in str(row[6]) or "REFACÇÃO" in str(row[6]) or "SISTEMA_NOTA" in str(row[5]):
+                    linhas_para_deletar.append(i + 1)
+                    
+        for idx_del in reversed(linhas_para_deletar):
+            ws.delete_rows(idx_del)
+            
+        # 2. Grava a nova linha única de refacção
+        if pts_refaccao > 0:
+            nome_limpo = str(nome_aluno).replace("♿ ", "").replace("👤 ", "").replace("🟠 ", "").replace("🧱 ", "").replace("🧮 ", "").replace("🚀 ", "")
+            ws.append_row([
+                data_str, id_clean, nome_limpo, turma, "TRUE", "SISTEMA_NOTA",
+                f"Refacção de Avaliação ({alvo_refaccao})", util.sosa_to_str(pts_refaccao)
+            ], value_input_option="USER_ENTERED")
+            
+        st.cache_data.clear()
+        return True
+    except Exception as e:
+        print(f"Erro no salvamento de refacção: {e}")
+        return False
+
+def salvar_config_corte_trimestre(turma, trimestre, data_corte_str):
+    tipo_chave = f"CORTE_TRIMESTRE_{turma}_{trimestre.replace(' ', '_').upper()}"
+    return salvar_ata_conselho(datetime.now().strftime("%d/%m/%Y"), turma, tipo_chave, data_corte_str)
+
+def obter_config_corte_trimestre(turma, trimestre):
+    try:
+        wb = conectar()
+        if not wb: return None
+        ws = wb.worksheet("DB_RELATORIOS")
+        dados = ws.get_all_values()
+        tipo_chave = f"CORTE_TRIMESTRE_{turma}_{trimestre.replace(' ', '_').upper()}"
+        for i in range(len(dados) - 1, 0, -1):
+            row = dados[i]
+            if len(row) > 4 and row[2] == turma and row[3] == tipo_chave:
+                return row[4].strip()
+        return None
+    except:
+        return None
+
+def transferir_titularidade_gabarito(id_origem, nome_origem, id_destino, nome_destino, turma, trimestre, id_avaliacao, status_origem_apos="PENDENTE"):
+    """
+    SOSA V2026.MASTER - TROCA DE TITULARIDADE SOBERANA:
+    Transfere o gabarito, nota e evidência da prova de um aluno para o verdadeiro dono.
+    """
+    try:
+        wb = conectar()
+        if not wb: return False
+        
+        id_origem_clean = str(limpar_id(id_origem))
+        id_destino_clean = str(limpar_id(id_destino))
+        nome_curto_av = id_avaliacao.split("-")[0].strip()
+        
+        ws_gab = wb.worksheet("DB_GABARITOS_ALUNOS")
+        dados_gab = ws_gab.get_all_values()
+        
+        registro_origem = None
+        for i in range(1, len(dados_gab)):
+            row = dados_gab[i]
+            if len(row) > 4 and row[3] == turma and nome_curto_av in row[4]:
+                if str(limpar_id(row[1])) == id_origem_clean:
+                    registro_origem = row
+                    break
+                    
+        if not registro_origem:
+            return False
+            
+        data_prova = registro_origem[0]
+        id_av_real = registro_origem[4]
+        respostas_aluno = registro_origem[5]
+        nota_calc = registro_origem[6]
+        link_foto = registro_origem[7] if len(registro_origem) > 7 else "N/A"
+        
+        for i in range(len(dados_gab) - 1, 0, -1):
+            row = dados_gab[i]
+            if len(row) > 4 and row[3] == turma and nome_curto_av in row[4]:
+                if str(limpar_id(row[1])) == id_destino_clean:
+                    ws_gab.delete_rows(i + 1)
+        
+        salvar_no_banco("DB_GABARITOS_ALUNOS", [
+            data_prova, id_destino_clean, nome_destino, turma, id_av_real, respostas_aluno, nota_calc, link_foto
+        ])
+        
+        dados_gab_atual = ws_gab.get_all_values()
+        for i in range(len(dados_gab_atual) - 1, 0, -1):
+            row = dados_gab_atual[i]
+            if len(row) > 4 and row[3] == turma and nome_curto_av in row[4]:
+                if str(limpar_id(row[1])) == id_origem_clean:
+                    if "PENDENTE" in status_origem_apos.upper():
+                        ws_gab.delete_rows(i + 1)
+                    elif "FALTOU" in status_origem_apos.upper() or "JUSTIFICADO" in status_origem_apos.upper():
+                        ws_gab.update_cell(i + 1, 6, status_origem_apos)
+                        ws_gab.update_cell(i + 1, 7, "0,00")
+                        ws_gab.update_cell(i + 1, 8, "N/A")
+                        
+        limpar_notas_turma_trimestre(turma, trimestre)
+        st.cache_data.clear()
+        return True
+    except Exception as e:
+        print(f"Erro ao transferir titularidade: {e}")
+        return False
+
+def executar_saneamento_banco_soberano():
+    """
+    SOSA V2026 - MOTOR DE SANEAMENTO ATÔMICO UNIVERSAL:
+    Dedupica refacções acumuladas por múltiplos cliques e restaura as médias justas.
+    """
+    wb = conectar()
+    if not wb:
+        return False, "Falha de conexão com o Google Sheets."
+
+    relatorio_execucao = []
+
+    try:
+        # 1. SANEAMENTO DE DATAS SERIAIS
+        ws_rel = wb.worksheet("DB_RELATORIOS")
+        dados_rel = ws_rel.get_all_values()
+        if len(dados_rel) > 1:
+            modificado_rel = False
+            for idx in range(1, len(dados_rel)):
+                row = dados_rel[idx]
+                dt_str = str(row[0]).strip()
+                if dt_str.isdigit() and len(dt_str) == 5:
+                    row[0] = util.formatar_data_br(dt_str)
+                    modificado_rel = True
+            if modificado_rel:
+                ws_rel.clear()
+                ws_rel.update(values=dados_rel, range_name='A1')
+
+        # 2. DEDUPLICAÇÃO BLINDADA DO DIÁRIO (LIMITA A 1 REFACÇÃO POR ALUNO NO TRIMESTRE)
+        ws_diario = wb.worksheet("DB_DIARIO_BORDO")
+        dados_diario = ws_diario.get_all_values()
+        
+        if len(dados_diario) > 1:
+            header_d = dados_diario[0]
+            rows_d = dados_diario[1:]
+
+            diario_dedup = {}
+            refaccao_rastreada = set() # Trava de refacção única por aluno
+
+            for r in rows_d:
+                dt_k = util.formatar_data_br(r[0])
+                id_k = limpar_id(r[1])
+                turma_k = str(r[3]).strip()
+                visto_k = str(r[4]).strip().upper()
+                tag_k = str(r[5]).strip()
+                obs_k = str(r[6]).strip()
+                bonus_k = util.sosa_to_float(r[7])
+
+                # Se for lançamento de refacção repetido para o mesmo aluno, ignora as repetições
+                is_refaccao_entry = ("Refacção" in obs_k or "Refaccao" in obs_k or "REFACÇÃO" in obs_k or tag_k == "SISTEMA_NOTA")
+                if is_refaccao_entry:
+                    chave_ref = (id_k, turma_k)
+                    if chave_ref in refaccao_rastreada:
+                        continue # Pula a linha duplicada de múltiplos cliques!
+                    refaccao_rastreada.add(chave_ref)
+                    bonus_k = 0.50 # Força o valor exato de +0,50!
+
+                chave = (dt_k, id_k, turma_k, tag_k if is_refaccao_entry else "")
+
+                if chave not in diario_dedup:
+                    diario_dedup[chave] = {
+                        "data": dt_k, "id": id_k, "nome": r[2], "turma": turma_k,
+                        "visto": visto_k, "tag": tag_k, "obs": obs_k, "bonus": bonus_k
+                    }
+                else:
+                    if visto_k == "TRUE": diario_dedup[chave]["visto"] = "TRUE"
+                    if tag_k and tag_k != "AUSÊNCIA": diario_dedup[chave]["tag"] = tag_k
+                    if obs_k and obs_k not in diario_dedup[chave]["obs"]:
+                        diario_dedup[chave]["obs"] = f"{diario_dedup[chave]['obs']} | {obs_k}".strip(" | ")
+                    if not is_refaccao_entry and bonus_k != 0:
+                        diario_dedup[chave]["bonus"] = round(diario_dedup[chave]["bonus"] + bonus_k, 2)
+
+            linhas_diario_finais = [header_d]
+            for reg in diario_dedup.values():
+                b_str = f"{reg['bonus']:.2f}".replace(".", ",") if reg['bonus'] != 0 else "0,00"
+                linhas_diario_finais.append([
+                    reg["data"], reg["id"], reg["nome"], reg["turma"],
+                    reg["visto"], reg["tag"], reg["obs"], b_str
+                ])
+
+            ws_diario.clear()
+            ws_diario.update(values=linhas_diario_finais, range_name='A1')
+            relatorio_execucao.append("✅ DB_DIARIO_BORDO: Bônus de refacção duplicados purgados e limitados a 1 por aluno.")
+
+        # 3. RECONSOLIDAÇÃO DE TODAS AS NOTAS (RESTAURA PRINCE PARA 6,0)
+        ws_alunos = wb.worksheet("DB_ALUNOS")
+        dados_alunos = ws_alunos.get_all_values()
+        alunos_dict = {limpar_id(r[0]): {"id": limpar_id(r[0]), "nome": r[1], "turma": r[2]} for r in dados_alunos[1:]}
+
+        ws_gab = wb.worksheet("DB_GABARITOS_ALUNOS")
+        dados_gab = ws_gab.get_all_values()
+
+        df_d_clean = pd.DataFrame(linhas_diario_finais[1:], columns=[c.upper() for c in header_d])
+        df_g_clean = pd.DataFrame(dados_gab[1:], columns=[c.upper() for c in dados_gab[0]])
+
+        trims_config = {
+            "I Trimestre": (date(2026, 2, 9), date(2026, 5, 22)),
+            "II Trimestre": (date(2026, 5, 25), date(2026, 9, 4)),
+            "III Trimestre": (date(2026, 9, 8), date(2026, 12, 17))
+        }
+
+        novas_linhas_notas = [["ID_ALUNO", "NOME_ALUNO", "TURMA", "TRIMESTRE", "NOTA_VISTOS", "NOTA_TESTE", "NOTA_PROVA", "NOTA_REC", "MEDIA_FINAL"]]
+
+        for trim_nome, (dt_inicio, dt_fim) in trims_config.items():
+            padrao_t_reg = util.obter_regex_trimestre(trim_nome)
+
+            for id_aluno, al_info in alunos_dict.items():
+                turma_al = al_info["turma"]
+                nome_al = al_info["nome"]
+
+                vistos_nota = 0.0
+                bonus_total = 0.0
+
+                if not df_d_clean.empty:
+                    df_d_sub = df_d_clean[(df_d_clean['ID_ALUNO'].apply(limpar_id) == id_aluno) & (df_d_clean['TURMA'] == turma_al)].copy()
+                    if not df_d_sub.empty:
+                        df_d_sub['DT_OBJ'] = pd.to_datetime(df_d_sub['DATA'], format="%d/%m/%Y", errors='coerce').dt.date
+                        df_d_trim = df_d_sub[(df_d_sub['DT_OBJ'] >= dt_inicio) & (df_d_sub['DT_OBJ'] <= dt_fim)]
+                        
+                        if not df_d_trim.empty:
+                            validas = df_d_trim[df_d_trim['VISTO_ATIVIDADE'].str.upper() != "ISENTO"]
+                            tot_v = len(validas['DATA'].unique()) if not validas.empty else 1
+                            if tot_v == 0: tot_v = 1
+                            v_ok = len(validas[validas['VISTO_ATIVIDADE'].str.upper() == "TRUE"])
+                            vistos_nota = round((v_ok / tot_v * 3.0), 2)
+                            bonus_total = df_d_trim['BONUS'].apply(util.sosa_to_float).sum()
+
+                teste_nota = 0.0
+                prova_nota = 0.0
+                rec_nota = -1.0
+
+                if not df_g_clean.empty:
+                    df_g_sub = df_g_clean[(df_g_clean['ID_ALUNO'].apply(limpar_id) == id_aluno) & (df_g_clean['TURMA'] == turma_al)]
+                    if not df_g_sub.empty:
+                        for _, r_g in df_g_sub.iterrows():
+                            av_id_txt = str(r_g['ID_AVALIACAO']).upper()
+                            resp_g_txt = str(r_g['RESPOSTAS_ALUNO']).upper()
+                            
+                            if re.search(padrao_t_reg, av_id_txt):
+                                if resp_g_txt.startswith("FALTOU_INJUSTIFICADO") or resp_g_txt == "FALTOU":
+                                    n_g = 0.0
+                                else:
+                                    n_g = util.sosa_to_float(r_g['NOTA_CALCULADA'])
+
+                                if any(x in av_id_txt for x in ["RECUPERAÇÃO", "RECUPERACAO", "REC_"]):
+                                    rec_nota = n_g
+                                elif any(x in av_id_txt for x in ["TESTE", "SIMULADO", "TRABALHO"]) and "SONDA" not in av_id_txt:
+                                    teste_nota = max(teste_nota, n_g)
+                                elif any(x in av_id_txt for x in ["PROVA", "AVALIAÇÃO", "AVALIACAO", "EXAME", "2ª"]):
+                                    prova_nota = max(prova_nota, n_g)
+
+                c1_final = min(3.0, vistos_nota + max(0.0, bonus_total))
+                rem_b = max(0.0, bonus_total) - (c1_final - vistos_nota)
+                c2_final = min(3.0, teste_nota + max(0.0, rem_b))
+                rem_b -= (c2_final - teste_nota)
+                c3_final = min(4.0, prova_nota + max(0.0, rem_b))
+
+                soma_bruta = c1_final + c2_final + c3_final
+                media_inicial = min(10.0, round(soma_bruta * 2) / 2)
+
+                if rec_nota > 0 and media_inicial < 6.0:
+                    media_com_rec = (media_inicial + rec_nota) / 2.0
+                    media_final = min(10.0, max(media_inicial, round(media_com_rec * 2) / 2))
+                else:
+                    media_final = media_inicial
+
+                novas_linhas_notas.append([
+                    id_aluno, nome_al, turma_al, trim_nome,
+                    f"{vistos_nota:.2f}".replace(".", ","),
+                    f"{teste_nota:.2f}".replace(".", ","),
+                    f"{prova_nota:.2f}".replace(".", ","),
+                    f"{rec_nota:.2f}".replace(".", ",") if rec_nota >= 0 else "-1",
+                    f"{media_final:.1f}".replace(".", ",")
+                ])
+
+        ws_notas = wb.worksheet("DB_NOTAS")
+        ws_notas.clear()
+        ws_notas.update(values=novas_linhas_notas, range_name='A1')
+        relatorio_execucao.append("✅ DB_NOTAS: Médias consolidadas restauradas para todas as turmas.")
+
+        st.cache_data.clear()
+        return True, "\n".join(relatorio_execucao)
+
+    except Exception as e:
+        return False, f"Erro durante o saneamento: {str(e)}"
