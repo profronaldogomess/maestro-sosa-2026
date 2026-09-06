@@ -5557,12 +5557,10 @@ elif menu == "📊 Painel de Notas & Vistos":
                                 rem_b -= (c2_f - c2_s)
                                 c3_f = min(4.0, c3_s + max(0.0, rem_b))
 
-                                import math
-                                def arred_05(v): return min(10.0, math.floor(v * 2.0 + 0.5) / 2.0)
-                                media_calculada = arred_05(c1_f + c2_f + c3_f)
+                                media_calculada = min(10.0, round((c1_f + c2_f + c3_f) * 2) / 2)
                                 if rec_s > 0 and media_calculada < 6.0:
                                     media_com_rec = (media_calculada + rec_s) / 2.0
-                                    media_calculada = max(media_calculada, arred_05(media_com_rec))
+                                    media_calculada = min(10.0, max(media_calculada, round(media_com_rec * 2) / 2))
 
                                 # SOBERANIA DOCENTE: Preserva sempre a maior média (calculada ou ajustada na tabela)
                                 media_final_salvar = max(media_calculada, media_digitada)
@@ -6309,20 +6307,20 @@ Escola Municipal Flávio José Simões Costa"""
                             column_config={
                                 "P": st.column_config.TextColumn("P", width="small", help="Perfil de Acessibilidade"),
                                 "NOME_ALUNO": st.column_config.TextColumn("Estudante", width="medium"),
-                                "MEDIA_FINAL_I Trimestre": st.column_config.TextColumn("I Tri", width="small"),
-                                "NOTA_REC_I Trimestre": st.column_config.TextColumn("R1", width="small"),
-                                "MEDIA_FINAL_II Trimestre": st.column_config.TextColumn("II Tri", width="small"),
-                                "NOTA_REC_II Trimestre": st.column_config.TextColumn("R2", width="small"),
-                                "MEDIA_FINAL_III Trimestre": st.column_config.TextColumn("III Tri", width="small"),
-                                "NOTA_REC_III Trimestre": st.column_config.TextColumn("R3", width="small"),
-                                "Σ": st.column_config.ProgressColumn("Soma Total", help=f"Soma acumulada (Meta parcial: {meta_acumulada_parcial:.1f} pts)", format="%.1f", min_value=0.0, max_value=meta_acumulada_parcial if meta_acumulada_parcial > 0 else 18.0),
+                                "MEDIA_FINAL_I Trimestre": st.column_config.TextColumn("I Tri (Final)", width="small", help="Média Final Homologada do I Tri"),
+                                "NOTA_REC_I Trimestre": st.column_config.TextColumn("R1 (Cálc)", width="small", help="Nota da REC: (Média + Prova)/2"),
+                                "MEDIA_FINAL_II Trimestre": st.column_config.TextColumn("II Tri (Final)", width="small", help="Média Final Homologada do II Tri"),
+                                "NOTA_REC_II Trimestre": st.column_config.TextColumn("R2 (Cálc)", width="small", help="Nota da REC: (Média + Prova)/2"),
+                                "MEDIA_FINAL_III Trimestre": st.column_config.TextColumn("III Tri (Final)", width="small", help="Média Final Homologada do III Tri"),
+                                "NOTA_REC_III Trimestre": st.column_config.TextColumn("R3 (Cálc)", width="small", help="Nota da REC: (Média + Prova)/2"),
+                                "Σ": st.column_config.ProgressColumn("Soma Total", help=f"Soma das Médias Finais (Meta: {meta_acumulada_parcial:.1f} pts)", format="%.1f", min_value=0.0, max_value=meta_acumulada_parcial if meta_acumulada_parcial > 0 else 18.0),
                                 "RF": st.column_config.TextColumn("Rec Final", width="small"),
-                                "FALTAS": st.column_config.ProgressColumn("Faltas", help=f"Limite de faltas: {limite_faltas}", format="%d", min_value=0, max_value=max(limite_faltas, 1)),
+                                "FALTAS": st.column_config.ProgressColumn("Faltas", help=f"Limite: {limite_faltas}", format="%d", min_value=0, max_value=max(limite_faltas, 1)),
                                 "SITUAÇÃO": st.column_config.TextColumn("Situação", width="medium")
                             }
                         )
                         
-                        st.caption(f"Legenda: I, II, III (Médias Trimestrais) | R1, R2, R3 (Recuperações) | Soma Total (Meta parcial: **{meta_acumulada_parcial:.1f}** pts) | Limite Faltas: **{limite_faltas}**.")
+                        st.caption(f"📋 Legenda Regimental: I, II, III (Média Final Homologada) | R1, R2, R3 (Nota da Recuperação calculada por (Média + Prova)/2) | A Média Final é o maior valor: max(Média, REC) | Limite Faltas: {limite_faltas}.")
 
                         st.markdown("---")
                         
@@ -6643,12 +6641,35 @@ Escola Municipal Flávio José Simões Costa"""
                         ids_ativos = df_alunos_turma[~df_alunos_turma['STATUS'].astype(str).str.upper().isin(["INATIVO", "TRANSFERIDO", "EVADIDO", "DESISTENTE"])]['ID'].apply(db.limpar_id).tolist()
                         df_t = df_t[df_t['ID_ALUNO'].apply(db.limpar_id).isin(ids_ativos)]
 
+                    # SOSA V2026 - PIVOT REGIMENTAL OFICIAL DE ITABUNA:
+                    # R1, R2, R3 = Nota da Recuperação já calculada ((Média + Prova)/2)
+                    # Trimestre = Média Final oficial que compõe a Soma Anual
                     pivot = df_t.pivot_table(
                         index=["ID_ALUNO", "NOME_ALUNO"], 
                         columns="TRIMESTRE", 
                         values=["MEDIA_FINAL", "NOTA_REC"], 
                         aggfunc='first'
                     ).reset_index()
+
+                    pivot.columns = [f"{col[0]}_{col[1]}".strip('_') for col in pivot.columns.values]
+
+                    trims = ["I Trimestre", "II Trimestre", "III Trimestre"]
+                    for t in trims:
+                        if f"MEDIA_FINAL_{t}" not in pivot.columns: pivot[f"MEDIA_FINAL_{t}"] = 0.0
+                        if f"NOTA_REC_{t}" in pivot.columns:
+                            pivot[f"NOTA_REC_{t}"] = pivot[f"NOTA_REC_{t}"].fillna(-1.0)
+                        else:
+                            pivot[f"NOTA_REC_{t}"] = -1.0
+
+                    pivot.columns = [f"{col[0]}_{col[1]}".strip('_') for col in pivot.columns.values]
+
+                    trims = ["I Trimestre", "II Trimestre", "III Trimestre"]
+                    for t in trims:
+                        if f"MEDIA_FINAL_{t}" not in pivot.columns: pivot[f"MEDIA_FINAL_{t}"] = 0.0
+                        if f"NOTA_REC_{t}" in pivot.columns:
+                            pivot[f"NOTA_REC_{t}"] = pivot[f"NOTA_REC_{t}"].fillna(-1.0)
+                        else:
+                            pivot[f"NOTA_REC_{t}"] = -1.0
 
                     pivot.columns = [f"{col[0]}_{col[1]}".strip('_') for col in pivot.columns.values]
 
@@ -6813,20 +6834,20 @@ Escola Municipal Flávio José Simões Costa"""
                             column_config={
                                 "P": st.column_config.TextColumn("P", width="small", help="Perfil de Acessibilidade"),
                                 "NOME_ALUNO": st.column_config.TextColumn("Estudante", width="medium"),
-                                "MEDIA_FINAL_I Trimestre": st.column_config.TextColumn("I Tri", width="small"),
-                                "NOTA_REC_I Trimestre": st.column_config.TextColumn("R1", width="small"),
-                                "MEDIA_FINAL_II Trimestre": st.column_config.TextColumn("II Tri", width="small"),
-                                "NOTA_REC_II Trimestre": st.column_config.TextColumn("R2", width="small"),
-                                "MEDIA_FINAL_III Trimestre": st.column_config.TextColumn("III Tri", width="small"),
-                                "NOTA_REC_III Trimestre": st.column_config.TextColumn("R3", width="small"),
-                                "Σ": st.column_config.ProgressColumn("Soma Total", help=f"Soma acumulada (Meta parcial: {meta_acumulada_parcial:.1f} pts)", format="%.1f", min_value=0.0, max_value=meta_acumulada_parcial if meta_acumulada_parcial > 0 else 18.0),
+                                "MEDIA_FINAL_I Trimestre": st.column_config.TextColumn("I Tri (Final)", width="small", help="Média Final Homologada do I Tri"),
+                                "NOTA_REC_I Trimestre": st.column_config.TextColumn("R1 (Cálc)", width="small", help="Nota da REC: (Média + Prova)/2"),
+                                "MEDIA_FINAL_II Trimestre": st.column_config.TextColumn("II Tri (Final)", width="small", help="Média Final Homologada do II Tri"),
+                                "NOTA_REC_II Trimestre": st.column_config.TextColumn("R2 (Cálc)", width="small", help="Nota da REC: (Média + Prova)/2"),
+                                "MEDIA_FINAL_III Trimestre": st.column_config.TextColumn("III Tri (Final)", width="small", help="Média Final Homologada do III Tri"),
+                                "NOTA_REC_III Trimestre": st.column_config.TextColumn("R3 (Cálc)", width="small", help="Nota da REC: (Média + Prova)/2"),
+                                "Σ": st.column_config.ProgressColumn("Soma Total", help=f"Soma das Médias Finais (Meta: {meta_acumulada_parcial:.1f} pts)", format="%.1f", min_value=0.0, max_value=meta_acumulada_parcial if meta_acumulada_parcial > 0 else 18.0),
                                 "RF": st.column_config.TextColumn("Rec Final", width="small"),
-                                "FALTAS": st.column_config.ProgressColumn("Faltas", help=f"Limite de faltas: {limite_faltas}", format="%d", min_value=0, max_value=max(limite_faltas, 1)),
+                                "FALTAS": st.column_config.ProgressColumn("Faltas", help=f"Limite: {limite_faltas}", format="%d", min_value=0, max_value=max(limite_faltas, 1)),
                                 "SITUAÇÃO": st.column_config.TextColumn("Situação", width="medium")
                             }
                         )
                         
-                        st.caption(f"Legenda: I, II, III (Médias Trimestrais) | R1, R2, R3 (Recuperações) | Soma Total (Meta parcial: **{meta_acumulada_parcial:.1f}** pts) | Limite Faltas: **{limite_faltas}**.")
+                        st.caption(f"📋 Legenda Regimental: I, II, III (Média Final Homologada) | R1, R2, R3 (Nota da Recuperação calculada por (Média + Prova)/2) | A Média Final é o maior valor: max(Média, REC) | Limite Faltas: {limite_faltas}.")
 
                         st.markdown("---")
                         
