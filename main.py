@@ -5492,72 +5492,71 @@ elif menu == "📊 Painel de Notas & Vistos":
                 st.markdown("<br>", unsafe_allow_html=True)
 
                 # ==============================================================
-                # VISÃO: ESPELHO PONTO ID (BALANCEAMENTO AUTOMÁTICO DE BÔNUS 1:1)
+                # VISÃO: ESPELHO PONTO ID (TABELA LIMPA 1:1 - ZERO RECUPERAÇÃO)
+                # Contempla estritamente: 1ª AV + 2ª AV + 3ª AV = Média Normal (com bônus)
+                # A RECUPERAÇÃO FICA 100% DE FORA (será lançada pelo Boletim na outra tela)
                 # ==============================================================
                 if visao_selecionada == "🏛️ Digitação Ponto ID (Prefeitura)":
                     with st.container(border=True):
-                        c_ponto_h1, c_ponto_h2 = st.columns([2.5, 1.5])
-                        c_ponto_h1.markdown(f"#### 🏛️ Tabela de Digitação — Ponto ID ({turma_notas})")
-                        c_ponto_h1.caption("Bônus diários, refacções e arredondamentos distribuídos nas 3 avaliações. A soma bate 100% com a Média da Prefeitura!")
-                        
-                        modo_base_pid = c_ponto_h2.segmented_control(
-                            "Base das Notas:",
-                            ["Média Final (Com REC/Bônus)", "Média Normal (Pré-REC)"],
-                            default="Média Final (Com REC/Bônus)",
-                            key=f"seg_base_pid_{v}"
+                        c_ponto_h1, c_ponto_h2 = st.columns([3, 1])
+                        c_ponto_h1.markdown(f"#### 🏛️ Tabela de Digitação — Ponto ID ({turma_notas} • {trim_ativo_notas})")
+                        c_ponto_h1.caption(
+                            "Espelho da tela 'Avaliação ➔ Notas' da Prefeitura. "
+                            "Notas regulares com bônus diários e de refacção absorvidos nos limites de 3.0, 3.0 e 4.0. "
+                            "A RECUPERAÇÃO ESTÁ 100% FORA DESTA TABELA."
                         )
-                        if not modo_base_pid:
-                            modo_base_pid = "Média Final (Com REC/Bônus)"
 
-                    def balancear_avaliacoes_ponto_id(c1_base, c2_base, c3_base, media_alvo):
+                    def balancear_avaliacoes_normais_ponto_id(c1_base, c2_base, c3_base, bonus_total, media_normal_alvo):
                         """
-                        Distribui bônus e ajustes para que 1ª AV + 2ª AV + 3ª AV == media_alvo exata.
-                        Respeita rigorosamente os tetos: AV1 <= 3.0, AV2 <= 3.0, AV3 <= 4.0.
+                        Distribui os bônus diários e refacções estritamente dentro da Média Normal do Trimestre.
+                        Garante que: 1ª AV + 2ª AV + 3ª AV == media_normal_alvo (ZERO recuperação aqui).
                         """
-                        av1 = min(3.0, max(0.0, round(c1_base, 1)))
-                        av2 = min(3.0, max(0.0, round(c2_base, 1)))
-                        av3 = min(4.0, max(0.0, round(c3_base, 1)))
-                        alvo = min(10.0, max(0.0, round(media_alvo, 1)))
+                        # 1. Absorve bônus nos tetos regimentais
+                        av1 = min(3.0, c1_base + max(0.0, bonus_total))
+                        rem_b = max(0.0, bonus_total) - (av1 - c1_base)
+                        av2 = min(3.0, c2_base + max(0.0, rem_b))
+                        rem_b -= (av2 - c2_base)
+                        av3 = min(4.0, c3_base + max(0.0, rem_b))
+
+                        alvo = min(10.0, max(0.0, round(media_normal_alvo, 1)))
                         
+                        # 2. Ajuste fino para cravar exatamente a Média Normal
                         dif = round(alvo - (av1 + av2 + av3), 1)
-                        
+
                         if dif > 0:
-                            # 1. Absorve no Caderno (até 3.0)
                             espaco_1 = round(3.0 - av1, 1)
                             add_1 = min(dif, espaco_1)
                             av1 = round(av1 + add_1, 1)
                             dif = round(dif - add_1, 1)
-                            
-                            # 2. Absorve no Teste (até 3.0)
+
                             if dif > 0:
                                 espaco_2 = round(3.0 - av2, 1)
                                 add_2 = min(dif, espaco_2)
                                 av2 = round(av2 + add_2, 1)
                                 dif = round(dif - add_2, 1)
-                                
-                            # 3. Absorve na Prova (até 4.0)
+
                             if dif > 0:
                                 espaco_3 = round(4.0 - av3, 1)
                                 add_3 = min(dif, espaco_3)
                                 av3 = round(av3 + add_3, 1)
                                 dif = round(dif - add_3, 1)
-                                
+
                         elif dif < 0:
                             sobra = abs(dif)
                             ded_1 = min(sobra, av1)
                             av1 = round(av1 - ded_1, 1)
                             sobra = round(sobra - ded_1, 1)
-                            
+
                             if sobra > 0:
                                 ded_2 = min(sobra, av2)
                                 av2 = round(av2 - ded_2, 1)
                                 sobra = round(sobra - ded_2, 1)
-                                
+
                             if sobra > 0:
                                 ded_3 = min(sobra, av3)
                                 av3 = round(av3 - ded_3, 1)
                                 sobra = round(sobra - ded_3, 1)
-                                
+
                         return av1, av2, av3, alvo
 
                     dados_ponto_id_limpo = []
@@ -5565,14 +5564,13 @@ elif menu == "📊 Painel de Notas & Vistos":
                         c1_b = util.sosa_to_float(r_ed.get('Caderno (C1)', 0.0))
                         c2_b = util.sosa_to_float(r_ed.get('Testes (C2)', 0.0))
                         c3_b = util.sosa_to_float(r_ed.get('Prova (C3)', 0.0))
+                        b_total = util.sosa_to_float(r_ed.get('Bônus / Mérito', 0.0))
                         
-                        if modo_base_pid == "Média Normal (Pré-REC)":
-                            media_alvo_estudante = util.sosa_to_float(r_ed.get('Média Normal', 0.0))
-                        else:
-                            media_alvo_estudante = util.sosa_to_float(r_ed.get('Média Final', r_ed.get('Média Trimestral', 0.0)))
+                        # ALVO ESTRITO: Média Normal do Trimestre (Sem nenhuma influência de REC!)
+                        media_normal_estudante = util.sosa_to_float(r_ed.get('Média Normal', 0.0))
 
-                        av1_final, av2_final, av3_final, media_soma = balancear_avaliacoes_ponto_id(
-                            c1_b, c2_b, c3_b, media_alvo_estudante
+                        av1_final, av2_final, av3_final, media_soma = balancear_avaliacoes_normais_ponto_id(
+                            c1_b, c2_b, c3_b, b_total, media_normal_estudante
                         )
 
                         dados_ponto_id_limpo.append({
@@ -5597,11 +5595,11 @@ elif menu == "📊 Painel de Notas & Vistos":
                             "1ª AV - Valor: 3,0": st.column_config.TextColumn("1ª AV - Valor: 3,0", width="small"),
                             "2ª AV - Valor: 3,0": st.column_config.TextColumn("2ª AV - Valor: 3,0", width="small"),
                             "3ª AV - Valor: 4,0": st.column_config.TextColumn("3ª AV - Valor: 4,0", width="small"),
-                            "Média": st.column_config.TextColumn("Média", width="small", help="Soma exata das 3 avaliações")
+                            "Média": st.column_config.TextColumn("Média", width="small", help="Soma exata das 3 avaliações normais")
                         }
                     )
 
-                    st.caption("✅ Verificação Ativa: A soma de 1ª AV + 2ª AV + 3ª AV resulta exatamente no valor exibido na coluna Média!")
+                    st.caption("✅ Verificação: 1ª AV + 2ª AV + 3ª AV somam exatamente a Média Normal do período com bônus. A recuperação está 100% fora.")
 
                 # ==============================================================
                 # VISÃO 1: CONSOLIDADOR DE NOTAS (DETALHADO COM RECUPERAÇÃO)
