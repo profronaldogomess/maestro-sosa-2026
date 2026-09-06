@@ -5492,99 +5492,107 @@ elif menu == "📊 Painel de Notas & Vistos":
                 st.markdown("<br>", unsafe_allow_html=True)
 
                 # ==============================================================
-                # VISÃO: ESPELHO PONTO ID (CALIBRAÇÃO ESTREITA EM MÚLTIPLOS DE 0,5)
-                # Todas as colunas (1ª AV, 2ª AV, 3ª AV) travadas em degraus de 0.5
-                # Fim das divergências de arredondamento: soma 100% idêntica à Prefeitura!
+                # VISÃO: ESPELHO PONTO ID (34 ALUNOS ALINHADOS 1:1 COM A PREFEITURA)
                 # ==============================================================
                 if visao_selecionada == "🏛️ Digitação Ponto ID (Prefeitura)":
                     with st.container(border=True):
                         c_ponto_h1, c_ponto_h2 = st.columns([3, 1])
                         c_ponto_h1.markdown(f"#### 🏛️ Tabela de Digitação — Ponto ID ({turma_notas} • {trim_ativo_notas})")
                         c_ponto_h1.caption(
-                            "Espelho 1:1 da Prefeitura de Itabuna. Todas as avaliações calibradas estritamente em degraus de 0,5 "
-                            "(0,0 • 0,5 • 1,0 • 1,5 • 2,0 • 2,5 • 3,0 • 3,5 • 4,0). Zero divergência na soma da Média!"
+                            "Espelho 1:1 da chamada oficial da Prefeitura de Itabuna (com todos os 34 alunos ordenados). "
+                            "Notas em degraus de 0,5 com bônus e refacções absorvidos. Zero divergência!"
                         )
 
                     import math
                     def arred_meio_ponto(val):
-                        """Arredonda estritamente para o múltiplo de 0,5 mais próximo."""
                         if val is None: return 0.0
                         return math.floor(float(val) * 2.0 + 0.5) / 2.0
 
                     def calibrar_avaliacoes_itabuna_05(c1_b, c2_b, c3_b, b_tot, media_alvo):
-                        """
-                        Distribui bônus e ajusta 1ª AV, 2ª AV e 3ª AV para que TODAS sejam múltiplos de 0.5
-                        e somem rigorosamente a media_alvo (que também é múltiplo de 0.5).
-                        """
-                        # Garante que a média alvo seja múltiplo de 0.5 (teto 10.0)
                         alvo = min(10.0, max(0.0, arred_meio_ponto(media_alvo)))
 
-                        # 1. Absorve o bônus no Caderno (C1) até o teto de 3.0
+                        # 1. Absorve bônus nos tetos regimentais
                         c1_com_b = c1_b + max(0.0, b_tot)
                         av1 = min(3.0, arred_meio_ponto(c1_com_b))
                         sobra_b = max(0.0, c1_com_b - av1)
 
-                        # 2. Transborda bônus excedente para Testes (C2) até o teto de 3.0
                         c2_com_b = c2_b + sobra_b
                         av2 = min(3.0, arred_meio_ponto(c2_com_b))
                         sobra_b2 = max(0.0, c2_com_b - av2)
 
-                        # 3. Transborda bônus restante para a Prova (C3) até o teto de 4.0
                         c3_com_b = c3_b + sobra_b2
                         av3 = min(4.0, arred_meio_ponto(c3_com_b))
 
-                        # 4. Ajuste fino em degraus de 0.5 para casar perfeitamente com a Média Alvo
+                        # 2. Ajuste fino em degraus de 0.5 para bater exatamente com a Média Alvo
                         soma_atual = round(av1 + av2 + av3, 1)
                         dif = round(alvo - soma_atual, 1)
 
-                        # Se falta nota para fechar a média (injeta em degraus de 0.5)
                         while dif >= 0.5:
                             if av1 + 0.5 <= 3.0:
-                                av1 = round(av1 + 0.5, 1)
-                                dif = round(dif - 0.5, 1)
+                                av1 = round(av1 + 0.5, 1); dif = round(dif - 0.5, 1)
                             elif av2 + 0.5 <= 3.0:
-                                av2 = round(av2 + 0.5, 1)
-                                dif = round(dif - 0.5, 1)
+                                av2 = round(av2 + 0.5, 1); dif = round(dif - 0.5, 1)
                             elif av3 + 0.5 <= 4.0:
-                                av3 = round(av3 + 0.5, 1)
-                                dif = round(dif - 0.5, 1)
+                                av3 = round(av3 + 0.5, 1); dif = round(dif - 0.5, 1)
                             else:
                                 break
 
-                        # Se a soma passou da média (deduz em degraus de 0.5)
                         while dif <= -0.5:
                             if av1 - 0.5 >= 0.0:
-                                av1 = round(av1 - 0.5, 1)
-                                dif = round(dif + 0.5, 1)
+                                av1 = round(av1 - 0.5, 1); dif = round(dif + 0.5, 1)
                             elif av2 - 0.5 >= 0.0:
-                                av2 = round(av2 - 0.5, 1)
-                                dif = round(dif + 0.5, 1)
+                                av2 = round(av2 - 0.5, 1); dif = round(dif + 0.5, 1)
                             elif av3 - 0.5 >= 0.0:
-                                av3 = round(av3 - 0.5, 1)
-                                dif = round(dif + 0.5, 1)
+                                av3 = round(av3 - 0.5, 1); dif = round(dif + 0.5, 1)
                             else:
                                 break
 
-                        soma_final = round(av1 + av2 + av3, 1)
-                        return av1, av2, av3, soma_final
+                        return av1, av2, av3, round(av1 + av2 + av3, 1)
+
+                    # ALINHAMENTO COM A LISTA COMPLETA DA PREFEITURA (TODOS OS 34 ALUNOS)
+                    todos_alunos_turma_ordenados = df_turma_raw.sort_values(by="NOME_ALUNO") if not df_turma_raw.empty else alunos_notas_df
 
                     dados_ponto_id_limpo = []
-                    for idx_num, (_, r_ed) in enumerate(df_grid_ed_notas.iterrows(), start=1):
-                        c1_b = util.sosa_to_float(r_ed.get('Caderno (C1)', 0.0))
-                        c2_b = util.sosa_to_float(r_ed.get('Testes (C2)', 0.0))
-                        c3_b = util.sosa_to_float(r_ed.get('Prova (C3)', 0.0))
-                        b_tot = util.sosa_to_float(r_ed.get('Bônus / Mérito', 0.0))
-                        
-                        # Alvo: Média Normal do período (sem REC)
-                        media_normal_estudante = util.sosa_to_float(r_ed.get('Média Normal', 0.0))
+                    for idx_num, (_, al_ponto) in enumerate(todos_alunos_turma_ordenados.iterrows(), start=1):
+                        id_clean_p = db.limpar_id(al_ponto.get('ID', ''))
+                        nome_p = al_ponto.get('NOME_ALUNO', 'Estudante')
+                        status_p = str(al_ponto.get('STATUS', 'ATIVO')).upper()
+
+                        # Se for aluno inativo/evadido na lista da escola (como Karyne e Miguel), lança zerado
+                        if status_p in ["INATIVO", "EVADIDO", "TRANSFERIDO", "DESISTENTE"]:
+                            dados_ponto_id_limpo.append({
+                                "Nº": idx_num,
+                                "Alunos": nome_p,
+                                "1ª AV - Valor: 3,0": "0,0",
+                                "2ª AV - Valor: 3,0": "0,0",
+                                "3ª AV - Valor: 4,0": "0,0",
+                                "Média": "0,0"
+                            })
+                            continue
+
+                        # Para alunos ativos, busca os dados da grade
+                        r_match = df_grid_ed_notas[df_grid_ed_notas['ID'] == id_clean_p]
+                        if not r_match.empty:
+                            r_ed = r_match.iloc[0]
+                            c1_b = util.sosa_to_float(r_ed.get('Caderno (C1)', 0.0))
+                            c2_b = util.sosa_to_float(r_ed.get('Testes (C2)', 0.0))
+                            c3_b = util.sosa_to_float(r_ed.get('Prova (C3)', 0.0))
+                            b_tot = util.sosa_to_float(r_ed.get('Bônus / Mérito', 0.0))
+                            
+                            # Alvo prioritário: preserva a maior média atribuída pelo professor
+                            m_normal_raw = util.sosa_to_float(r_ed.get('Média Normal', 0.0))
+                            m_final_raw = util.sosa_to_float(r_ed.get('Média Final', r_ed.get('Média Trimestral', 0.0)))
+                            media_alvo = max(m_normal_raw, m_final_raw)
+                        else:
+                            c1_b, c2_b, c3_b, b_tot, media_alvo = 0.0, 0.0, 0.0, 0.0, 0.0
 
                         av1_f, av2_f, av3_f, media_soma = calibrar_avaliacoes_itabuna_05(
-                            c1_b, c2_b, c3_b, b_tot, media_normal_estudante
+                            c1_b, c2_b, c3_b, b_tot, media_alvo
                         )
 
                         dados_ponto_id_limpo.append({
                             "Nº": idx_num,
-                            "Alunos": r_ed.get('Estudante', 'Estudante'),
+                            "Alunos": nome_p,
                             "1ª AV - Valor: 3,0": f"{av1_f:.1f}".replace(".", ","),
                             "2ª AV - Valor: 3,0": f"{av2_f:.1f}".replace(".", ","),
                             "3ª AV - Valor: 4,0": f"{av3_f:.1f}".replace(".", ","),
@@ -5608,7 +5616,7 @@ elif menu == "📊 Painel de Notas & Vistos":
                         }
                     )
 
-                    st.caption("✅ Padrão Oficial Itabuna Ativo: Todos os valores estão rigorosamente em múltiplos de 0,5. A soma de 1ª AV + 2ª AV + 3ª AV bate 100% com a Média do Ponto ID!")
+                    st.caption(f"✅ Tabela Oficial Espelhada: 34 alunos ordenados de 1 a 34 (incluindo inativos com 0,0). Bônus de mérito totalmente absorvidos!")
 
                 # ==============================================================
                 # VISÃO 1: CONSOLIDADOR DE NOTAS (DETALHADO COM RECUPERAÇÃO)
