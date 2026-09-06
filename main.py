@@ -5492,14 +5492,14 @@ elif menu == "📊 Painel de Notas & Vistos":
                 st.markdown("<br>", unsafe_allow_html=True)
 
                 # ==============================================================
-                # VISÃO: ESPELHO PONTO ID (34 ALUNOS ALINHADOS 1:1 COM A PREFEITURA)
+                # VISÃO: ESPELHO PONTO ID (TODOS OS ALUNOS ORDENADOS - 1:1 PREFEITURA)
                 # ==============================================================
                 if visao_selecionada == "🏛️ Digitação Ponto ID (Prefeitura)":
                     with st.container(border=True):
                         c_ponto_h1, c_ponto_h2 = st.columns([3, 1])
                         c_ponto_h1.markdown(f"#### 🏛️ Tabela de Digitação — Ponto ID ({turma_notas} • {trim_ativo_notas})")
                         c_ponto_h1.caption(
-                            "Espelho 1:1 da chamada oficial da Prefeitura de Itabuna (com todos os 34 alunos ordenados). "
+                            "Espelho 1:1 da chamada oficial da Prefeitura de Itabuna (com todos os alunos ordenados). "
                             "Notas em degraus de 0,5 com bônus e refacções absorvidos. Zero divergência!"
                         )
 
@@ -5549,8 +5549,10 @@ elif menu == "📊 Painel de Notas & Vistos":
 
                         return av1, av2, av3, round(av1 + av2 + av3, 1)
 
-                    # ALINHAMENTO COM A LISTA COMPLETA DA PREFEITURA (TODOS OS 34 ALUNOS)
-                    todos_alunos_turma_ordenados = df_turma_raw.sort_values(by="NOME_ALUNO") if not df_turma_raw.empty else alunos_notas_df
+                    # ALINHAMENTO COM A LISTA COMPLETA DA PREFEITURA (TODOS OS ALUNOS DA TURMA)
+                    # Busca direto da base completa de alunos da turma (incluindo inativos como Karyne e Miguel)
+                    df_todos_alunos_turma = df_alunos[df_alunos['TURMA'] == turma_notas].copy() if not df_alunos.empty else pd.DataFrame()
+                    todos_alunos_turma_ordenados = df_todos_alunos_turma.sort_values(by="NOME_ALUNO") if not df_todos_alunos_turma.empty else alunos_notas_df
 
                     dados_ponto_id_limpo = []
                     for idx_num, (_, al_ponto) in enumerate(todos_alunos_turma_ordenados.iterrows(), start=1):
@@ -5558,7 +5560,7 @@ elif menu == "📊 Painel de Notas & Vistos":
                         nome_p = al_ponto.get('NOME_ALUNO', 'Estudante')
                         status_p = str(al_ponto.get('STATUS', 'ATIVO')).upper()
 
-                        # Se for aluno inativo/evadido na lista da escola (como Karyne e Miguel), lança zerado
+                        # Se for aluno inativo/evadido na lista da escola (ex: Karyne e Miguel), lança zerado
                         if status_p in ["INATIVO", "EVADIDO", "TRANSFERIDO", "DESISTENTE"]:
                             dados_ponto_id_limpo.append({
                                 "Nº": idx_num,
@@ -5616,7 +5618,7 @@ elif menu == "📊 Painel de Notas & Vistos":
                         }
                     )
 
-                    st.caption(f"✅ Tabela Oficial Espelhada: 34 alunos ordenados de 1 a 34 (incluindo inativos com 0,0). Bônus de mérito totalmente absorvidos!")
+                    st.caption(f"✅ Tabela Oficial Espelhada: Todos os alunos da turma ordenados de 1 a {len(dados_ponto_id_limpo)} (incluindo inativos com 0,0). Bônus de mérito totalmente absorvidos!")
 
                 # ==============================================================
                 # VISÃO 1: CONSOLIDADOR DE NOTAS (DETALHADO COM RECUPERAÇÃO)
