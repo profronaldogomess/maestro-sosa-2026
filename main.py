@@ -5282,22 +5282,32 @@ elif menu == "📊 Painel de Notas & Vistos":
     if not lista_turmas_notas:
         st.warning("Nenhuma turma cadastrada. Cadastre as turmas no cockpit de Gestão da Turma.")
     else:
+        # SOSA V2026 - DETECÇÃO INTELIGENTE COM MEMÓRIA DE SESSÃO:
+        # A janela padrão do II Trimestre acolhe até 11/09/2026 para fechamento de recuperação
         hoje_dt = date.today()
         if hoje_dt <= date(2026, 5, 22): trim_detectado_n = "I Trimestre"
-        elif hoje_dt <= date(2026, 9, 4): trim_detectado_n = "II Trimestre"
+        elif hoje_dt <= date(2026, 9, 11): trim_detectado_n = "II Trimestre"
         else: trim_detectado_n = "III Trimestre"
+
+        if "trim_notas_ativo" not in st.session_state:
+            st.session_state.trim_notas_ativo = trim_detectado_n
 
         with st.container(border=True):
             c_n1, c_n2 = st.columns([1.5, 2])
             turma_notas = c_n1.selectbox("Turma Selecionada:", lista_turmas_notas, key=f"sel_t_notas_{v}")
             
+            idx_trim_default = ["I Trimestre", "II Trimestre", "III Trimestre"].index(st.session_state.trim_notas_ativo) if st.session_state.trim_notas_ativo in ["I Trimestre", "II Trimestre", "III Trimestre"] else 1
+
             trim_ativo_notas = c_n2.segmented_control(
                 "Trimestre Ativo:",
                 ["I Trimestre", "II Trimestre", "III Trimestre"],
-                default=trim_detectado_n,
+                default=["I Trimestre", "II Trimestre", "III Trimestre"][idx_trim_default],
                 key=f"seg_trim_notas_{v}"
             )
-            if not trim_ativo_notas: trim_ativo_notas = trim_detectado_n
+            if not trim_ativo_notas: 
+                trim_ativo_notas = st.session_state.trim_notas_ativo
+            else:
+                st.session_state.trim_notas_ativo = trim_ativo_notas
 
         df_alunos_base_n = df_alunos[df_alunos['TURMA'] == turma_notas].copy() if not df_alunos.empty else pd.DataFrame()
         if 'STATUS' not in df_alunos_base_n.columns: df_alunos_base_n['STATUS'] = "ATIVO"
@@ -5315,9 +5325,9 @@ elif menu == "📊 Painel de Notas & Vistos":
                 if trim_ativo_notas == "I Trimestre":
                     dt_i_default, dt_f_default = date(2026, 2, 9), date(2026, 5, 22)
                 elif trim_ativo_notas == "II Trimestre":
-                    dt_i_default, dt_f_default = date(2026, 5, 25), date(2026, 9, 4)
+                    dt_i_default, dt_f_default = date(2026, 5, 25), date(2026, 9, 11)
                 else:
-                    dt_i_default, dt_f_default = date(2026, 9, 8), date(2026, 12, 17)
+                    dt_i_default, dt_f_default = date(2026, 9, 12), date(2026, 12, 17)
 
                 if data_corte_salva:
                     try:
@@ -5398,6 +5408,7 @@ elif menu == "📊 Painel de Notas & Vistos":
                     v_c2_banco = util.sosa_to_float(reg_n.iloc[0].get('NOTA_TESTE', 0.0)) if not reg_n.empty else 0.0
                     v_c3_banco = util.sosa_to_float(reg_n.iloc[0].get('NOTA_PROVA', 0.0)) if not reg_n.empty else 0.0
                     v_rec_banco = util.sosa_to_float(reg_n.iloc[0].get('NOTA_REC', -1.0)) if not reg_n.empty else -1.0
+                    v_media_banco = util.sosa_to_float(reg_n.iloc[0].get('MEDIA_FINAL', 0.0)) if not reg_n.empty else 0.0
 
                     v_c1_live = vistos_live_dict.get(id_al_n, 0.0)
                     v_c2_live = mapa_live_teste.get(id_al_n, 0.0)
@@ -5405,6 +5416,7 @@ elif menu == "📊 Painel de Notas & Vistos":
                     v_rec_live = mapa_live_rec.get(id_al_n, -1.0)
                     bonus_diario_calc = bonus_live_dict.get(id_al_n, 0.0)
 
+                    # BLINDAGEM SOBERANA: Preserva notas maiores concedidas pelo professor
                     c1_val = max(v_c1_banco, v_c1_live)
                     c2_val = max(v_c2_banco, v_c2_live)
                     c3_val = max(v_c3_banco, v_c3_live)
@@ -5425,19 +5437,22 @@ elif menu == "📊 Painel de Notas & Vistos":
                     else:
                         media_arredondada = media_inicial
 
-                    is_isento_refaccao = (soma_sem_rec < 6.0 and media_arredondada >= 6.0)
+                    # Proteção: se o banco já tinha média superior homologada pelo professor, mantém a maior!
+                    media_final_apresentada = max(media_arredondada, v_media_banco)
+
+                    is_isento_refaccao = (soma_sem_rec < 6.0 and media_final_apresentada >= 6.0)
                     
-                    if media_arredondada >= 6.0:
+                    if media_final_apresentada >= 6.0:
                         sit_txt = "Aprovado (Refacção)" if is_isento_refaccao else "Aprovado no Trimestre"
                         if is_isento_refaccao: alunos_liberados_refaccao.append(nome_al_n)
-                    elif media_arredondada == 5.5:
+                    elif media_final_apresentada == 5.5:
                         sit_txt = "Oportunidade de Refacção (+0.5)"
                     else:
                         sit_txt = "Convocado para Recuperação"
-                        nota_necessaria_rec = max(0.0, 12.0 - media_arredondada)
+                        nota_necessaria_rec = max(0.0, 12.0 - media_final_apresentada)
                         convocados_recuperacao.append({
                             "ID": id_al_n, "Estudante": nome_al_n, "Perfil": nec_al_n,
-                            "Média Atual": media_arredondada, "Meta na Prova": nota_necessaria_rec
+                            "Média Atual": media_final_apresentada, "Meta na Prova": nota_necessaria_rec
                         })
 
                     dados_grid_notas.append({
@@ -5448,7 +5463,7 @@ elif menu == "📊 Painel de Notas & Vistos":
                         "Prova (C3)": c3_val,
                         "Bônus / Mérito": bonus_diario_calc,
                         "Recuperação": rec_val if rec_val > 0 else 0.0,
-                        "Média Trimestral": media_arredondada,
+                        "Média Trimestral": media_final_apresentada,
                         "Situação Regimental": sit_txt
                     })
 
@@ -5507,7 +5522,7 @@ elif menu == "📊 Painel de Notas & Vistos":
                     c_sav_b1, c_sav_b2 = st.columns(2)
                     
                     if c_sav_b1.button("Consolidar Notas no Boletim", type="primary", use_container_width=True, key=f"btn_save_boletim_{v}"):
-                        with st.spinner("Gravando notas consolidadas no banco de dados..."):
+                        with st.spinner("Gravando notas consolidadas no banco de dados com proteção soberana..."):
                             linhas_boletim_save = []
                             for _, r_ed in df_notas_editado.iterrows():
                                 id_l_s = r_ed['ID']
@@ -5517,6 +5532,7 @@ elif menu == "📊 Painel de Notas & Vistos":
                                 c3_s = util.sosa_to_float(r_ed['Prova (C3)'])
                                 bonus_s = util.sosa_to_float(r_ed['Bônus / Mérito'])
                                 rec_s = util.sosa_to_float(r_ed['Recuperação'])
+                                media_digitada = util.sosa_to_float(r_ed['Média Trimestral'])
                                 
                                 c1_f = min(3.0, c1_s + max(0.0, bonus_s))
                                 rem_b = max(0.0, bonus_s) - (c1_f - c1_s)
@@ -5524,20 +5540,24 @@ elif menu == "📊 Painel de Notas & Vistos":
                                 rem_b -= (c2_f - c2_s)
                                 c3_f = min(4.0, c3_s + max(0.0, rem_b))
 
-                                media_s = min(10.0, round((c1_f + c2_f + c3_f) * 2) / 2)
-                                if rec_s > 0 and media_s < 6.0:
-                                    media_com_rec = (media_s + rec_s) / 2.0
-                                    media_s = min(10.0, max(media_s, round(media_com_rec * 2) / 2))
+                                media_calculada = min(10.0, round((c1_f + c2_f + c3_f) * 2) / 2)
+                                if rec_s > 0 and media_calculada < 6.0:
+                                    media_com_rec = (media_calculada + rec_s) / 2.0
+                                    media_calculada = min(10.0, max(media_calculada, round(media_com_rec * 2) / 2))
+
+                                # SOBERANIA DOCENTE: Preserva sempre a maior média (calculada ou ajustada na tabela)
+                                media_final_salvar = max(media_calculada, media_digitada)
 
                                 linhas_boletim_save.append([
                                     id_l_s, nome_l_s, turma_notas, trim_ativo_notas,
                                     util.sosa_to_str(c1_s), util.sosa_to_str(c2_s), util.sosa_to_str(c3_s),
-                                    util.sosa_to_str(rec_s) if rec_s > 0 else "0,0",
-                                    util.sosa_to_str(media_s)
+                                    util.sosa_to_str(rec_s) if rec_s > 0 else "-1",
+                                    util.sosa_to_str(media_final_salvar)
                                 ])
 
                             if linhas_boletim_save:
-                                db.limpar_notas_turma_trimestre(turma_notas, trim_ativo_notas)
+                                # Chama limpar_notas com forcar=True de forma explícita e controlada
+                                db.limpar_notas_turma_trimestre(turma_notas, trim_ativo_notas, forcar=True)
                                 db.salvar_lote("DB_NOTAS", linhas_boletim_save)
                                 st.success("Boletim trimestral consolidado com sucesso!")
                                 st.balloons(); time.sleep(0.8); st.rerun()
