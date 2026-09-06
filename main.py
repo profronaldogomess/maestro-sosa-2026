@@ -5434,23 +5434,37 @@ elif menu == "📊 Painel de Notas & Vistos":
                         # Garante que 3.75 vá para 4.0 e 5.25 vá para 5.5 sem o corte do Python
                         return min(10.0, math.floor(valor * 2.0 + 0.5) / 2.0)
 
+                    # SOSA V2026 - ARREDONDAMENTO ESCOLAR REAL (0.5 EM 0.5):
+                    import math
+                    def arredondar_05_escolar(valor):
+                        return min(10.0, math.floor(valor * 2.0 + 0.5) / 2.0)
+
+                    c1_final = min(3.0, c1_val + max(0.0, bonus_diario_calc))
+                    rem_bonus = max(0.0, bonus_diario_calc) - (c1_final - c1_val)
+                    c2_final = min(3.0, c2_val + max(0.0, rem_bonus))
+                    rem_bonus -= (c2_final - c2_val)
+                    c3_final = min(4.0, c3_val + max(0.0, rem_bonus))
+
+                    # 1. MÉDIA NORMAL (Antes da Recuperação)
                     soma_sem_rec = c1_final + c2_final + c3_final
-                    media_inicial = arredondar_05_escolar(soma_sem_rec)
-                    
-                    tem_recuperacao_feita = (rec_val >= 0.0 and v_rec_live >= 0.0)
+                    media_normal = arredondar_05_escolar(soma_sem_rec)
 
-                    if rec_val > 0 and media_inicial < 6.0:
-                        media_com_rec = (media_inicial + rec_val) / 2.0
-                        media_arredondada = max(media_inicial, arredondar_05_escolar(media_com_rec))
+                    # 2. MÉDIA PÓS-REC (Fórmula Oficial: (Média Normal + REC) / 2)
+                    tem_rec = (rec_val > 0)
+                    if tem_rec:
+                        media_com_rec = (media_normal + rec_val) / 2.0
+                        media_pos_rec = arredondar_05_escolar(media_com_rec)
+                        media_calculada = max(media_normal, media_pos_rec)
                     else:
-                        media_arredondada = media_inicial
+                        media_pos_rec = 0.0
+                        media_calculada = media_normal
 
-                    # SOBERANIA DOCENTE: Preserva sempre a maior média registrada pelo professor
-                    media_final_apresentada = max(media_arredondada, v_media_banco)
+                    # 3. MÉDIA FINAL (Maior nota soberana com proteção não-regressiva)
+                    media_final_apresentada = max(media_calculada, v_media_banco)
 
-                    is_aprovado_com_rec = (rec_val > 0 and media_final_apresentada >= 6.0)
+                    is_aprovado_com_rec = (tem_rec and media_final_apresentada >= 6.0 and media_normal < 6.0)
                     is_isento_refaccao = (soma_sem_rec < 6.0 and media_final_apresentada >= 6.0 and not is_aprovado_com_rec)
-                    
+
                     if media_final_apresentada >= 6.0:
                         if is_aprovado_com_rec:
                             sit_txt = "Aprovado com REC"
@@ -5459,8 +5473,7 @@ elif menu == "📊 Painel de Notas & Vistos":
                         else:
                             sit_txt = "Aprovado no Trimestre"
                         alunos_liberados_refaccao.append(nome_al_n)
-                    elif tem_recuperacao_feita:
-                        # Se o aluno já fez a recuperação e ainda assim não chegou a 6.0:
+                    elif tem_rec:
                         sit_txt = "Não Atingiu a Média (Pós-REC)"
                     elif media_final_apresentada == 5.5:
                         sit_txt = "Oportunidade de Refacção (+0.5)"
@@ -5479,8 +5492,10 @@ elif menu == "📊 Painel de Notas & Vistos":
                         "Testes (C2)": c2_val,
                         "Prova (C3)": c3_val,
                         "Bônus / Mérito": bonus_diario_calc,
+                        "Média Normal": media_normal,
                         "Recuperação": rec_val if rec_val > 0 else 0.0,
-                        "Média Trimestral": media_final_apresentada,
+                        "Média pós-REC": media_pos_rec if tem_rec else 0.0,
+                        "Média Final": media_final_apresentada,
                         "Situação Regimental": sit_txt
                     })
 
@@ -5529,8 +5544,10 @@ elif menu == "📊 Painel de Notas & Vistos":
                             "Testes (C2)": st.column_config.NumberColumn("Testes (C2)", format="%.1f", min_value=0.0, max_value=3.0, width="small"),
                             "Prova (C3)": st.column_config.NumberColumn("Prova (C3)", format="%.1f", min_value=0.0, max_value=4.0, width="small"),
                             "Bônus / Mérito": st.column_config.NumberColumn("Bônus", format="%.1f", disabled=True, width="small"),
-                            "Recuperação": st.column_config.NumberColumn("REC", format="%.1f", min_value=0.0, max_value=10.0, width="small"),
-                            "Média Trimestral": st.column_config.NumberColumn("Média Final", format="%.1f", disabled=True, width="small"),
+                            "Média Normal": st.column_config.NumberColumn("Média Normal", format="%.1f", disabled=True, width="small", help="Média do trimestre antes da recuperação (C1+C2+C3)"),
+                            "Recuperação": st.column_config.NumberColumn("Prova REC", format="%.1f", min_value=0.0, max_value=10.0, width="small", help="Nota obtida na prova de recuperação"),
+                            "Média pós-REC": st.column_config.NumberColumn("Média pós-REC", format="%.1f", disabled=True, width="small", help="(Média Normal + REC) / 2"),
+                            "Média Final": st.column_config.NumberColumn("Média Final", format="%.1f", width="small", help="Maior nota entre Média Normal e Média pós-REC"),
                             "Situação Regimental": st.column_config.TextColumn("Situação", disabled=True, width="medium")
                         },
                         key=f"ed_grid_notas_main_{turma_notas}_{trim_ativo_notas}_{v}"
@@ -6139,10 +6156,20 @@ Escola Municipal Flávio José Simões Costa"""
                         ids_ativos = df_alunos_turma[~df_alunos_turma['STATUS'].astype(str).str.upper().isin(["INATIVO", "TRANSFERIDO", "EVADIDO", "DESISTENTE"])]['ID'].apply(db.limpar_id).tolist()
                         df_t = df_t[df_t['ID_ALUNO'].apply(db.limpar_id).isin(ids_ativos)]
 
+                    # SOSA V2026 - ESPELHAMENTO OFICIAL DO PONTO ID (PREFEITURA DE ITABUNA):
+                    # Calcula a Média Normal (C1+C2+C3), Prova REC e Média Final para cada trimestre
+                    import math
+                    def arred_05_bol(v): return min(10.0, math.floor(v * 2.0 + 0.5) / 2.0)
+
+                    df_t['C1_N'] = df_t['NOTA_VISTOS'].apply(util.sosa_to_float)
+                    df_t['C2_N'] = df_t['NOTA_TESTE'].apply(util.sosa_to_float)
+                    df_t['C3_N'] = df_t['NOTA_PROVA'].apply(util.sosa_to_float)
+                    df_t['MEDIA_NORMAL'] = df_t.apply(lambda r: arred_05_bol(r['C1_N'] + r['C2_N'] + r['C3_N']), axis=1)
+
                     pivot = df_t.pivot_table(
                         index=["ID_ALUNO", "NOME_ALUNO"], 
                         columns="TRIMESTRE", 
-                        values=["MEDIA_FINAL", "NOTA_REC"], 
+                        values=["MEDIA_NORMAL", "NOTA_REC", "MEDIA_FINAL"], 
                         aggfunc='first'
                     ).reset_index()
 
@@ -6150,6 +6177,7 @@ Escola Municipal Flávio José Simões Costa"""
 
                     trims = ["I Trimestre", "II Trimestre", "III Trimestre"]
                     for t in trims:
+                        if f"MEDIA_NORMAL_{t}" not in pivot.columns: pivot[f"MEDIA_NORMAL_{t}"] = 0.0
                         if f"MEDIA_FINAL_{t}" not in pivot.columns: pivot[f"MEDIA_FINAL_{t}"] = 0.0
                         if f"NOTA_REC_{t}" in pivot.columns:
                             pivot[f"NOTA_REC_{t}"] = pivot[f"NOTA_REC_{t}"].fillna(-1.0)
