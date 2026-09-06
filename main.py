@@ -5492,38 +5492,96 @@ elif menu == "📊 Painel de Notas & Vistos":
                 st.markdown("<br>", unsafe_allow_html=True)
 
                 # ==============================================================
-                # VISÃO NOVA: ESPELHO PONTO ID (TABELA LIMPA 1:1 PARA A PREFEITURA)
+                # VISÃO: ESPELHO PONTO ID (BALANCEAMENTO AUTOMÁTICO DE BÔNUS 1:1)
                 # ==============================================================
                 if visao_selecionada == "🏛️ Digitação Ponto ID (Prefeitura)":
                     with st.container(border=True):
-                        c_ponto_h1, c_ponto_h2 = st.columns([3, 1])
+                        c_ponto_h1, c_ponto_h2 = st.columns([2.5, 1.5])
                         c_ponto_h1.markdown(f"#### 🏛️ Tabela de Digitação — Ponto ID ({turma_notas})")
-                        c_ponto_h1.caption(f"Espelho 1:1 da tela da Prefeitura de Itabuna. Bônus já absorvidos com tetos de 3.0, 3.0 e 4.0. Basta passar para o sistema oficial!")
+                        c_ponto_h1.caption("Bônus diários, refacções e arredondamentos distribuídos nas 3 avaliações. A soma bate 100% com a Média da Prefeitura!")
+                        
+                        modo_base_pid = c_ponto_h2.segmented_control(
+                            "Base das Notas:",
+                            ["Média Final (Com REC/Bônus)", "Média Normal (Pré-REC)"],
+                            default="Média Final (Com REC/Bônus)",
+                            key=f"seg_base_pid_{v}"
+                        )
+                        if not modo_base_pid:
+                            modo_base_pid = "Média Final (Com REC/Bônus)"
+
+                    def balancear_avaliacoes_ponto_id(c1_base, c2_base, c3_base, media_alvo):
+                        """
+                        Distribui bônus e ajustes para que 1ª AV + 2ª AV + 3ª AV == media_alvo exata.
+                        Respeita rigorosamente os tetos: AV1 <= 3.0, AV2 <= 3.0, AV3 <= 4.0.
+                        """
+                        av1 = min(3.0, max(0.0, round(c1_base, 1)))
+                        av2 = min(3.0, max(0.0, round(c2_base, 1)))
+                        av3 = min(4.0, max(0.0, round(c3_base, 1)))
+                        alvo = min(10.0, max(0.0, round(media_alvo, 1)))
+                        
+                        dif = round(alvo - (av1 + av2 + av3), 1)
+                        
+                        if dif > 0:
+                            # 1. Absorve no Caderno (até 3.0)
+                            espaco_1 = round(3.0 - av1, 1)
+                            add_1 = min(dif, espaco_1)
+                            av1 = round(av1 + add_1, 1)
+                            dif = round(dif - add_1, 1)
+                            
+                            # 2. Absorve no Teste (até 3.0)
+                            if dif > 0:
+                                espaco_2 = round(3.0 - av2, 1)
+                                add_2 = min(dif, espaco_2)
+                                av2 = round(av2 + add_2, 1)
+                                dif = round(dif - add_2, 1)
+                                
+                            # 3. Absorve na Prova (até 4.0)
+                            if dif > 0:
+                                espaco_3 = round(4.0 - av3, 1)
+                                add_3 = min(dif, espaco_3)
+                                av3 = round(av3 + add_3, 1)
+                                dif = round(dif - add_3, 1)
+                                
+                        elif dif < 0:
+                            sobra = abs(dif)
+                            ded_1 = min(sobra, av1)
+                            av1 = round(av1 - ded_1, 1)
+                            sobra = round(sobra - ded_1, 1)
+                            
+                            if sobra > 0:
+                                ded_2 = min(sobra, av2)
+                                av2 = round(av2 - ded_2, 1)
+                                sobra = round(sobra - ded_2, 1)
+                                
+                            if sobra > 0:
+                                ded_3 = min(sobra, av3)
+                                av3 = round(av3 - ded_3, 1)
+                                sobra = round(sobra - ded_3, 1)
+                                
+                        return av1, av2, av3, alvo
 
                     dados_ponto_id_limpo = []
                     for idx_num, (_, r_ed) in enumerate(df_grid_ed_notas.iterrows(), start=1):
                         c1_b = util.sosa_to_float(r_ed.get('Caderno (C1)', 0.0))
                         c2_b = util.sosa_to_float(r_ed.get('Testes (C2)', 0.0))
                         c3_b = util.sosa_to_float(r_ed.get('Prova (C3)', 0.0))
-                        b_total = util.sosa_to_float(r_ed.get('Bônus / Mérito', 0.0))
+                        
+                        if modo_base_pid == "Média Normal (Pré-REC)":
+                            media_alvo_estudante = util.sosa_to_float(r_ed.get('Média Normal', 0.0))
+                        else:
+                            media_alvo_estudante = util.sosa_to_float(r_ed.get('Média Final', r_ed.get('Média Trimestral', 0.0)))
 
-                        # Distribuição proporcional do bônus com tetos regimentais
-                        c1_f = min(3.0, c1_b + max(0.0, b_total))
-                        rem_b = max(0.0, b_total) - (c1_f - c1_b)
-                        c2_f = min(3.0, c2_b + max(0.0, rem_b))
-                        rem_b -= (c2_f - c2_b)
-                        c3_f = min(4.0, c3_b + max(0.0, rem_b))
-
-                        soma_avs = c1_f + c2_f + c3_f
-                        media_avs = arredondar_05_escolar(soma_avs)
+                        av1_final, av2_final, av3_final, media_soma = balancear_avaliacoes_ponto_id(
+                            c1_b, c2_b, c3_b, media_alvo_estudante
+                        )
 
                         dados_ponto_id_limpo.append({
                             "Nº": idx_num,
                             "Alunos": r_ed.get('Estudante', 'Estudante'),
-                            "1ª AV - Valor: 3,0": f"{c1_f:.1f}".replace(".", ","),
-                            "2ª AV - Valor: 3,0": f"{c2_f:.1f}".replace(".", ","),
-                            "3ª AV - Valor: 4,0": f"{c3_f:.1f}".replace(".", ","),
-                            "Média": f"{media_avs:.1f}".replace(".", ",")
+                            "1ª AV - Valor: 3,0": f"{av1_final:.1f}".replace(".", ","),
+                            "2ª AV - Valor: 3,0": f"{av2_final:.1f}".replace(".", ","),
+                            "3ª AV - Valor: 4,0": f"{av3_final:.1f}".replace(".", ","),
+                            "Média": f"{media_soma:.1f}".replace(".", ",")
                         })
 
                     df_ponto_id_display = pd.DataFrame(dados_ponto_id_limpo)
@@ -5532,18 +5590,18 @@ elif menu == "📊 Painel de Notas & Vistos":
                         df_ponto_id_display,
                         hide_index=True,
                         use_container_width=True,
-                        height=520,
+                        height=540,
                         column_config={
                             "Nº": st.column_config.NumberColumn("Nº", width="small"),
-                            "Alunos": st.column_config.TextColumn("Alunos", width="large"),
-                            "1ª AV - Valor: 3,0": st.column_config.TextColumn("1ª AV - Valor: 3,0", width="medium"),
-                            "2ª AV - Valor: 3,0": st.column_config.TextColumn("2ª AV - Valor: 3,0", width="medium"),
-                            "3ª AV - Valor: 4,0": st.column_config.TextColumn("3ª AV - Valor: 4,0", width="medium"),
-                            "Média": st.column_config.TextColumn("Média", width="small")
+                            "Alunos": st.column_config.TextColumn("Alunos", width="medium"),
+                            "1ª AV - Valor: 3,0": st.column_config.TextColumn("1ª AV - Valor: 3,0", width="small"),
+                            "2ª AV - Valor: 3,0": st.column_config.TextColumn("2ª AV - Valor: 3,0", width="small"),
+                            "3ª AV - Valor: 4,0": st.column_config.TextColumn("3ª AV - Valor: 4,0", width="small"),
+                            "Média": st.column_config.TextColumn("Média", width="small", help="Soma exata das 3 avaliações")
                         }
                     )
 
-                    st.caption("ℹ️ Dica de Produtividade: Coloque a janela do SOSA ao lado da tela do Ponto ID no navegador para digitar diretamente os valores de cada coluna!")
+                    st.caption("✅ Verificação Ativa: A soma de 1ª AV + 2ª AV + 3ª AV resulta exatamente no valor exibido na coluna Média!")
 
                 # ==============================================================
                 # VISÃO 1: CONSOLIDADOR DE NOTAS (DETALHADO COM RECUPERAÇÃO)
