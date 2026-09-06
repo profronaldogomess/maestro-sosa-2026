@@ -5492,93 +5492,102 @@ elif menu == "📊 Painel de Notas & Vistos":
                 st.markdown("<br>", unsafe_allow_html=True)
 
                 # ==============================================================
-                # VISÃO: ESPELHO PONTO ID (TABELA LIMPA 1:1 - ZERO RECUPERAÇÃO)
-                # Contempla estritamente: 1ª AV + 2ª AV + 3ª AV = Média Normal (com bônus)
-                # A RECUPERAÇÃO FICA 100% DE FORA (será lançada pelo Boletim na outra tela)
+                # VISÃO: ESPELHO PONTO ID (CALIBRAÇÃO ESTREITA EM MÚLTIPLOS DE 0,5)
+                # Todas as colunas (1ª AV, 2ª AV, 3ª AV) travadas em degraus de 0.5
+                # Fim das divergências de arredondamento: soma 100% idêntica à Prefeitura!
                 # ==============================================================
                 if visao_selecionada == "🏛️ Digitação Ponto ID (Prefeitura)":
                     with st.container(border=True):
                         c_ponto_h1, c_ponto_h2 = st.columns([3, 1])
                         c_ponto_h1.markdown(f"#### 🏛️ Tabela de Digitação — Ponto ID ({turma_notas} • {trim_ativo_notas})")
                         c_ponto_h1.caption(
-                            "Espelho da tela 'Avaliação ➔ Notas' da Prefeitura. "
-                            "Notas regulares com bônus diários e de refacção absorvidos nos limites de 3.0, 3.0 e 4.0. "
-                            "A RECUPERAÇÃO ESTÁ 100% FORA DESTA TABELA."
+                            "Espelho 1:1 da Prefeitura de Itabuna. Todas as avaliações calibradas estritamente em degraus de 0,5 "
+                            "(0,0 • 0,5 • 1,0 • 1,5 • 2,0 • 2,5 • 3,0 • 3,5 • 4,0). Zero divergência na soma da Média!"
                         )
 
-                    def balancear_avaliacoes_normais_ponto_id(c1_base, c2_base, c3_base, bonus_total, media_normal_alvo):
+                    import math
+                    def arred_meio_ponto(val):
+                        """Arredonda estritamente para o múltiplo de 0,5 mais próximo."""
+                        if val is None: return 0.0
+                        return math.floor(float(val) * 2.0 + 0.5) / 2.0
+
+                    def calibrar_avaliacoes_itabuna_05(c1_b, c2_b, c3_b, b_tot, media_alvo):
                         """
-                        Distribui os bônus diários e refacções estritamente dentro da Média Normal do Trimestre.
-                        Garante que: 1ª AV + 2ª AV + 3ª AV == media_normal_alvo (ZERO recuperação aqui).
+                        Distribui bônus e ajusta 1ª AV, 2ª AV e 3ª AV para que TODAS sejam múltiplos de 0.5
+                        e somem rigorosamente a media_alvo (que também é múltiplo de 0.5).
                         """
-                        # 1. Absorve bônus nos tetos regimentais
-                        av1 = min(3.0, c1_base + max(0.0, bonus_total))
-                        rem_b = max(0.0, bonus_total) - (av1 - c1_base)
-                        av2 = min(3.0, c2_base + max(0.0, rem_b))
-                        rem_b -= (av2 - c2_base)
-                        av3 = min(4.0, c3_base + max(0.0, rem_b))
+                        # Garante que a média alvo seja múltiplo de 0.5 (teto 10.0)
+                        alvo = min(10.0, max(0.0, arred_meio_ponto(media_alvo)))
 
-                        alvo = min(10.0, max(0.0, round(media_normal_alvo, 1)))
-                        
-                        # 2. Ajuste fino para cravar exatamente a Média Normal
-                        dif = round(alvo - (av1 + av2 + av3), 1)
+                        # 1. Absorve o bônus no Caderno (C1) até o teto de 3.0
+                        c1_com_b = c1_b + max(0.0, b_tot)
+                        av1 = min(3.0, arred_meio_ponto(c1_com_b))
+                        sobra_b = max(0.0, c1_com_b - av1)
 
-                        if dif > 0:
-                            espaco_1 = round(3.0 - av1, 1)
-                            add_1 = min(dif, espaco_1)
-                            av1 = round(av1 + add_1, 1)
-                            dif = round(dif - add_1, 1)
+                        # 2. Transborda bônus excedente para Testes (C2) até o teto de 3.0
+                        c2_com_b = c2_b + sobra_b
+                        av2 = min(3.0, arred_meio_ponto(c2_com_b))
+                        sobra_b2 = max(0.0, c2_com_b - av2)
 
-                            if dif > 0:
-                                espaco_2 = round(3.0 - av2, 1)
-                                add_2 = min(dif, espaco_2)
-                                av2 = round(av2 + add_2, 1)
-                                dif = round(dif - add_2, 1)
+                        # 3. Transborda bônus restante para a Prova (C3) até o teto de 4.0
+                        c3_com_b = c3_b + sobra_b2
+                        av3 = min(4.0, arred_meio_ponto(c3_com_b))
 
-                            if dif > 0:
-                                espaco_3 = round(4.0 - av3, 1)
-                                add_3 = min(dif, espaco_3)
-                                av3 = round(av3 + add_3, 1)
-                                dif = round(dif - add_3, 1)
+                        # 4. Ajuste fino em degraus de 0.5 para casar perfeitamente com a Média Alvo
+                        soma_atual = round(av1 + av2 + av3, 1)
+                        dif = round(alvo - soma_atual, 1)
 
-                        elif dif < 0:
-                            sobra = abs(dif)
-                            ded_1 = min(sobra, av1)
-                            av1 = round(av1 - ded_1, 1)
-                            sobra = round(sobra - ded_1, 1)
+                        # Se falta nota para fechar a média (injeta em degraus de 0.5)
+                        while dif >= 0.5:
+                            if av1 + 0.5 <= 3.0:
+                                av1 = round(av1 + 0.5, 1)
+                                dif = round(dif - 0.5, 1)
+                            elif av2 + 0.5 <= 3.0:
+                                av2 = round(av2 + 0.5, 1)
+                                dif = round(dif - 0.5, 1)
+                            elif av3 + 0.5 <= 4.0:
+                                av3 = round(av3 + 0.5, 1)
+                                dif = round(dif - 0.5, 1)
+                            else:
+                                break
 
-                            if sobra > 0:
-                                ded_2 = min(sobra, av2)
-                                av2 = round(av2 - ded_2, 1)
-                                sobra = round(sobra - ded_2, 1)
+                        # Se a soma passou da média (deduz em degraus de 0.5)
+                        while dif <= -0.5:
+                            if av1 - 0.5 >= 0.0:
+                                av1 = round(av1 - 0.5, 1)
+                                dif = round(dif + 0.5, 1)
+                            elif av2 - 0.5 >= 0.0:
+                                av2 = round(av2 - 0.5, 1)
+                                dif = round(dif + 0.5, 1)
+                            elif av3 - 0.5 >= 0.0:
+                                av3 = round(av3 - 0.5, 1)
+                                dif = round(dif + 0.5, 1)
+                            else:
+                                break
 
-                            if sobra > 0:
-                                ded_3 = min(sobra, av3)
-                                av3 = round(av3 - ded_3, 1)
-                                sobra = round(sobra - ded_3, 1)
-
-                        return av1, av2, av3, alvo
+                        soma_final = round(av1 + av2 + av3, 1)
+                        return av1, av2, av3, soma_final
 
                     dados_ponto_id_limpo = []
                     for idx_num, (_, r_ed) in enumerate(df_grid_ed_notas.iterrows(), start=1):
                         c1_b = util.sosa_to_float(r_ed.get('Caderno (C1)', 0.0))
                         c2_b = util.sosa_to_float(r_ed.get('Testes (C2)', 0.0))
                         c3_b = util.sosa_to_float(r_ed.get('Prova (C3)', 0.0))
-                        b_total = util.sosa_to_float(r_ed.get('Bônus / Mérito', 0.0))
+                        b_tot = util.sosa_to_float(r_ed.get('Bônus / Mérito', 0.0))
                         
-                        # ALVO ESTRITO: Média Normal do Trimestre (Sem nenhuma influência de REC!)
+                        # Alvo: Média Normal do período (sem REC)
                         media_normal_estudante = util.sosa_to_float(r_ed.get('Média Normal', 0.0))
 
-                        av1_final, av2_final, av3_final, media_soma = balancear_avaliacoes_normais_ponto_id(
-                            c1_b, c2_b, c3_b, b_total, media_normal_estudante
+                        av1_f, av2_f, av3_f, media_soma = calibrar_avaliacoes_itabuna_05(
+                            c1_b, c2_b, c3_b, b_tot, media_normal_estudante
                         )
 
                         dados_ponto_id_limpo.append({
                             "Nº": idx_num,
                             "Alunos": r_ed.get('Estudante', 'Estudante'),
-                            "1ª AV - Valor: 3,0": f"{av1_final:.1f}".replace(".", ","),
-                            "2ª AV - Valor: 3,0": f"{av2_final:.1f}".replace(".", ","),
-                            "3ª AV - Valor: 4,0": f"{av3_final:.1f}".replace(".", ","),
+                            "1ª AV - Valor: 3,0": f"{av1_f:.1f}".replace(".", ","),
+                            "2ª AV - Valor: 3,0": f"{av2_f:.1f}".replace(".", ","),
+                            "3ª AV - Valor: 4,0": f"{av3_f:.1f}".replace(".", ","),
                             "Média": f"{media_soma:.1f}".replace(".", ",")
                         })
 
@@ -5595,11 +5604,11 @@ elif menu == "📊 Painel de Notas & Vistos":
                             "1ª AV - Valor: 3,0": st.column_config.TextColumn("1ª AV - Valor: 3,0", width="small"),
                             "2ª AV - Valor: 3,0": st.column_config.TextColumn("2ª AV - Valor: 3,0", width="small"),
                             "3ª AV - Valor: 4,0": st.column_config.TextColumn("3ª AV - Valor: 4,0", width="small"),
-                            "Média": st.column_config.TextColumn("Média", width="small", help="Soma exata das 3 avaliações normais")
+                            "Média": st.column_config.TextColumn("Média", width="small", help="Soma exata das 3 avaliações")
                         }
                     )
 
-                    st.caption("✅ Verificação: 1ª AV + 2ª AV + 3ª AV somam exatamente a Média Normal do período com bônus. A recuperação está 100% fora.")
+                    st.caption("✅ Padrão Oficial Itabuna Ativo: Todos os valores estão rigorosamente em múltiplos de 0,5. A soma de 1ª AV + 2ª AV + 3ª AV bate 100% com a Média do Ponto ID!")
 
                 # ==============================================================
                 # VISÃO 1: CONSOLIDADOR DE NOTAS (DETALHADO COM RECUPERAÇÃO)
