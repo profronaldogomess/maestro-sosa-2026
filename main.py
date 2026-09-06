@@ -5428,23 +5428,40 @@ elif menu == "📊 Painel de Notas & Vistos":
                     rem_bonus -= (c2_final - c2_val)
                     c3_final = min(4.0, c3_val + max(0.0, rem_bonus))
 
+                    # SOSA V2026 - ARREDONDAMENTO ESCOLAR REAL (ROUND HALF UP - 0.5 EM 0.5):
+                    import math
+                    def arredondar_05_escolar(valor):
+                        # Garante que 3.75 vá para 4.0 e 5.25 vá para 5.5 sem o corte do Python
+                        return min(10.0, math.floor(valor * 2.0 + 0.5) / 2.0)
+
                     soma_sem_rec = c1_final + c2_final + c3_final
-                    media_inicial = min(10.0, round(soma_sem_rec * 2) / 2)
+                    media_inicial = arredondar_05_escolar(soma_sem_rec)
                     
+                    tem_recuperacao_feita = (rec_val >= 0.0 and v_rec_live >= 0.0)
+
                     if rec_val > 0 and media_inicial < 6.0:
                         media_com_rec = (media_inicial + rec_val) / 2.0
-                        media_arredondada = min(10.0, max(media_inicial, round(media_com_rec * 2) / 2))
+                        media_arredondada = max(media_inicial, arredondar_05_escolar(media_com_rec))
                     else:
                         media_arredondada = media_inicial
 
-                    # Proteção: se o banco já tinha média superior homologada pelo professor, mantém a maior!
+                    # SOBERANIA DOCENTE: Preserva sempre a maior média registrada pelo professor
                     media_final_apresentada = max(media_arredondada, v_media_banco)
 
-                    is_isento_refaccao = (soma_sem_rec < 6.0 and media_final_apresentada >= 6.0)
+                    is_aprovado_com_rec = (rec_val > 0 and media_final_apresentada >= 6.0)
+                    is_isento_refaccao = (soma_sem_rec < 6.0 and media_final_apresentada >= 6.0 and not is_aprovado_com_rec)
                     
                     if media_final_apresentada >= 6.0:
-                        sit_txt = "Aprovado (Refacção)" if is_isento_refaccao else "Aprovado no Trimestre"
-                        if is_isento_refaccao: alunos_liberados_refaccao.append(nome_al_n)
+                        if is_aprovado_com_rec:
+                            sit_txt = "Aprovado com REC"
+                        elif is_isento_refaccao:
+                            sit_txt = "Aprovado (Refacção)"
+                        else:
+                            sit_txt = "Aprovado no Trimestre"
+                        alunos_liberados_refaccao.append(nome_al_n)
+                    elif tem_recuperacao_feita:
+                        # Se o aluno já fez a recuperação e ainda assim não chegou a 6.0:
+                        sit_txt = "Não Atingiu a Média (Pós-REC)"
                     elif media_final_apresentada == 5.5:
                         sit_txt = "Oportunidade de Refacção (+0.5)"
                     else:
@@ -5540,10 +5557,12 @@ elif menu == "📊 Painel de Notas & Vistos":
                                 rem_b -= (c2_f - c2_s)
                                 c3_f = min(4.0, c3_s + max(0.0, rem_b))
 
-                                media_calculada = min(10.0, round((c1_f + c2_f + c3_f) * 2) / 2)
+                                import math
+                                def arred_05(v): return min(10.0, math.floor(v * 2.0 + 0.5) / 2.0)
+                                media_calculada = arred_05(c1_f + c2_f + c3_f)
                                 if rec_s > 0 and media_calculada < 6.0:
                                     media_com_rec = (media_calculada + rec_s) / 2.0
-                                    media_calculada = min(10.0, max(media_calculada, round(media_com_rec * 2) / 2))
+                                    media_calculada = max(media_calculada, arred_05(media_com_rec))
 
                                 # SOBERANIA DOCENTE: Preserva sempre a maior média (calculada ou ajustada na tabela)
                                 media_final_salvar = max(media_calculada, media_digitada)
