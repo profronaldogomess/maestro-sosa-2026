@@ -6208,6 +6208,7 @@ Escola Municipal Flávio José Simões Costa"""
                         else: st.error("Digite o texto da ata antes de salvar.")
 
             @st.fragment
+            @st.fragment
             def renderizar_boletim_anual_fragmento():
                 df_t = df_notas[df_notas['TURMA'] == turma_sel].copy() if not df_notas.empty and 'TURMA' in df_notas.columns else pd.DataFrame()
                 
@@ -6232,25 +6233,58 @@ Escola Municipal Flávio José Simões Costa"""
                         ids_ativos = df_alunos_turma[~df_alunos_turma['STATUS'].astype(str).str.upper().isin(["INATIVO", "TRANSFERIDO", "EVADIDO", "DESISTENTE"])]['ID'].apply(db.limpar_id).tolist()
                         df_t = df_t[df_t['ID_ALUNO'].apply(db.limpar_id).isin(ids_ativos)]
 
-                    # SOSA V2026 - PIVOT REGIMENTAL OFICIAL DE ITABUNA
-                    # As colunas de Recuperação (1ª Rec, 2ª Rec, 3ª Rec) exibem a nota CALCULADA: (Média + Prova) / 2
-                    # A prova crua (0 a 10) fica guardada no Painel de Notas
                     import math
                     def arred_05_bol(v): return min(10.0, math.floor(v * 2.0 + 0.5) / 2.0)
 
-                    # SOSA V2026 - PIVOT REGIMENTAL OFICIAL DE ITABUNA
-                    # 1. As colunas de REC exibem a nota calculada: (Média + Prova) / 2
-                    # 2. Contempla alunos que tiraram ZERO na recuperação (sem esconder com traço)
-                    # 3. Média Normal absorve bônus para evitar divergência (ex: Maria Eduarda 5.5 | 7.5 | 7.5)
-                    import math
-                    def arred_05_bol(v): return min(10.0, math.floor(v * 2.0 + 0.5) / 2.0)
+                    calendario_trims = {
+                        "I Trimestre": (date(2026, 2, 9), date(2026, 5, 22)),
+                        "II Trimestre": (date(2026, 5, 25), date(2026, 9, 11)),
+                        "III Trimestre": (date(2026, 9, 12), date(2026, 12, 17))
+                    }
+
+                    for t_k in calendario_trims.keys():
+                        corte_salvo = db.obter_config_corte_trimestre(turma_sel, t_k) if hasattr(db, 'obter_config_corte_trimestre') else None
+                        if corte_salvo:
+                            try:
+                                dt_corte_obj = datetime.strptime(corte_salvo, "%d/%m/%Y").date()
+                                calendario_trims[t_k] = (calendario_trims[t_k][0], dt_corte_obj)
+                            except: pass
+
+                    # Mapeamento do bônus atitudinal por estudante e trimestre a partir do Diário de Bordo
+                    mapa_bonus_trim = {}
+                    if not df_diario.empty and 'TURMA' in df_diario.columns and 'BONUS' in df_diario.columns:
+                        df_d_turma = df_diario[df_diario['TURMA'] == turma_sel].copy()
+                        if not df_d_turma.empty and 'DATA' in df_d_turma.columns:
+                            df_d_turma['DT_OBJ'] = pd.to_datetime(df_d_turma['DATA'], format="%d/%m/%Y", errors='coerce').dt.date
+                            for t_k, (d_ini, d_fim) in calendario_trims.items():
+                                df_d_sub = df_d_turma[(df_d_turma['DT_OBJ'] >= d_ini) & (df_d_turma['DT_OBJ'] <= d_fim)]
+                                if not df_d_sub.empty:
+                                    for id_raw, grp in df_d_sub.groupby('ID_ALUNO'):
+                                        b_sum = grp['BONUS'].apply(util.sosa_to_float).sum()
+                                        mapa_bonus_trim[(db.limpar_id(id_raw), t_k)] = b_sum
+
+                    # Mapeamento de notas de recuperação diretamente do Scanner CIR (caso ainda não estejam consolidadas)
+                    mapa_live_rec = {}
+                    if not df_diagnosticos.empty and 'TURMA' in df_diagnosticos.columns and 'ID_AVALIACAO' in df_diagnosticos.columns:
+                        mask_diag_turma = (df_diagnosticos['TURMA'] == turma_sel)
+                        df_diag_sub = df_diagnosticos[mask_diag_turma]
+                        for _, r_dg in df_diag_sub.iterrows():
+                            id_al_dg = db.limpar_id(r_dg.get('ID_ALUNO', ''))
+                            id_av_str = str(r_dg.get('ID_AVALIACAO', '')).upper()
+                            resp_al_str = str(r_dg.get('RESPOSTAS_ALUNO', '')).upper()
+                            if any(x in id_av_str for x in ["RECUPERAÇÃO", "RECUPERACAO", "REC_"]):
+                                for t_k in ["I Trimestre", "II Trimestre", "III Trimestre"]:
+                                    if re.search(util.obter_regex_trimestre(t_k), id_av_str):
+                                        if resp_al_str.startswith("FALTOU_INJUSTIFICADO") or resp_al_str == "FALTOU":
+                                            mapa_live_rec[(id_al_dg, t_k)] = 0.0
+                                        else:
+                                            mapa_live_rec[(id_al_dg, t_k)] = util.sosa_to_float(r_dg.get('NOTA_CALCULADA', 0.0))
 
                     df_t['C1_N'] = df_t['NOTA_VISTOS'].apply(util.sosa_to_float)
                     df_t['C2_N'] = df_t['NOTA_TESTE'].apply(util.sosa_to_float)
                     df_t['C3_N'] = df_t['NOTA_PROVA'].apply(util.sosa_to_float)
                     df_t['MF_BANCO'] = df_t['MEDIA_FINAL'].apply(util.sosa_to_float)
 
-                    # Leitura da prova crua: se não fez é -1.0; se fez (inclusive nota 0.0), preserva a nota!
                     def extrair_rec_crua(v):
                         if pd.isna(v) or str(v).strip() in ["-1", "", "NAN"]:
                             return -1.0
@@ -6258,37 +6292,52 @@ Escola Municipal Flávio José Simões Costa"""
 
                     df_t['REC_PROVA_CRUA'] = df_t['NOTA_REC'].apply(extrair_rec_crua)
 
-                    # 1. Média do Trimestre (Normal antes da REC) absorvendo bônus se houver
-                    def calc_media_normal_com_bonus(r):
-                        soma_crua = r['C1_N'] + r['C2_N'] + r['C3_N']
-                        m_calc = arred_05_bol(soma_crua)
-                        # Se o aluno não fez REC, a média normal é a própria média do banco
-                        if r['REC_PROVA_CRUA'] < 0:
+                    # 1. Média do Trimestre (Normal antes da REC)
+                    def calc_media_normal(r):
+                        id_al = db.limpar_id(r.get('ID_ALUNO', ''))
+                        t_nome = str(r.get('TRIMESTRE', '')).strip()
+                        c1 = r['C1_N']
+                        c2 = r['C2_N']
+                        c3 = r['C3_N']
+                        b_tot = mapa_bonus_trim.get((id_al, t_nome), 0.0)
+
+                        c1_f = min(3.0, c1 + max(0.0, b_tot))
+                        sobra_1 = max(0.0, b_tot) - (c1_f - c1)
+                        c2_f = min(3.0, c2 + max(0.0, sobra_1))
+                        sobra_2 = max(0.0, sobra_1) - (c2_f - c2)
+                        c3_f = min(4.0, c3 + max(0.0, sobra_2))
+
+                        soma_normal = c1_f + c2_f + c3_f
+                        m_calc = arred_05_bol(soma_normal)
+
+                        rec_crua = r['REC_PROVA_CRUA']
+                        if rec_crua < 0 and (id_al, t_nome) in mapa_live_rec:
+                            rec_crua = mapa_live_rec[(id_al, t_nome)]
+
+                        if rec_crua < 0:
                             return max(m_calc, r['MF_BANCO'])
-                        # Se fez REC e a MF do banco indica bônus (como Maria Eduarda com 5.5 antes da REC):
-                        if r['MF_BANCO'] > 0 and r['REC_PROVA_CRUA'] > 0:
-                            # Estima a média pré-rec com bônus: (2 * MF) - Prova
-                            m_reversa = (2.0 * r['MF_BANCO']) - r['REC_PROVA_CRUA']
-                            if m_reversa > m_calc:
-                                return arred_05_bol(m_reversa)
+
                         return m_calc
 
-                    df_t['MEDIA_NORMAL'] = df_t.apply(calc_media_normal_com_bonus, axis=1)
+                    df_t['MEDIA_NORMAL'] = df_t.apply(calc_media_normal, axis=1)
 
                     # 2. Nota da Recuperação Calculada: (Média Normal + Prova REC) / 2
-                    # Inclui quem tirou ZERO (>= 0.0)
                     def calc_rec_regimental(r):
-                        prova_rec = r['REC_PROVA_CRUA']
-                        if prova_rec >= 0.0:
+                        id_al = db.limpar_id(r.get('ID_ALUNO', ''))
+                        t_nome = str(r.get('TRIMESTRE', '')).strip()
+                        rec_crua = r['REC_PROVA_CRUA']
+                        if rec_crua < 0 and (id_al, t_nome) in mapa_live_rec:
+                            rec_crua = mapa_live_rec[(id_al, t_nome)]
+
+                        if rec_crua >= 0.0:
                             m_norm = r['MEDIA_NORMAL']
-                            rec_calc = arred_05_bol((m_norm + prova_rec) / 2.0)
-                            # Garante harmonia: se a MF do banco for maior por arredondamento/bônus, emparelha
-                            return max(rec_calc, r['MF_BANCO']) if r['MF_BANCO'] >= 6.0 and rec_calc >= 6.0 else rec_calc
+                            rec_calc = arred_05_bol((m_norm + rec_crua) / 2.0)
+                            return rec_calc
                         return -1.0
 
                     df_t['REC_CALCULADA'] = df_t.apply(calc_rec_regimental, axis=1)
 
-                    # 3. Média Final do Trimestre: maior nota entre Média Normal, Recuperação e Banco
+                    # 3. Média Final do Trimestre: maior nota entre Média Normal e Recuperação Calculada
                     def calc_mf_soberana(r):
                         m_norm = r['MEDIA_NORMAL']
                         r_calc = r['REC_CALCULADA']
