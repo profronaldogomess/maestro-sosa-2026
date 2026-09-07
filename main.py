@@ -6238,33 +6238,62 @@ Escola Municipal Flávio José Simões Costa"""
                     import math
                     def arred_05_bol(v): return min(10.0, math.floor(v * 2.0 + 0.5) / 2.0)
 
+                    # SOSA V2026 - PIVOT REGIMENTAL OFICIAL DE ITABUNA
+                    # 1. As colunas de REC exibem a nota calculada: (Média + Prova) / 2
+                    # 2. Contempla alunos que tiraram ZERO na recuperação (sem esconder com traço)
+                    # 3. Média Normal absorve bônus para evitar divergência (ex: Maria Eduarda 5.5 | 7.5 | 7.5)
+                    import math
+                    def arred_05_bol(v): return min(10.0, math.floor(v * 2.0 + 0.5) / 2.0)
+
                     df_t['C1_N'] = df_t['NOTA_VISTOS'].apply(util.sosa_to_float)
                     df_t['C2_N'] = df_t['NOTA_TESTE'].apply(util.sosa_to_float)
                     df_t['C3_N'] = df_t['NOTA_PROVA'].apply(util.sosa_to_float)
-                    df_t['REC_PROVA_CRUA'] = df_t['NOTA_REC'].apply(util.sosa_to_float)
                     df_t['MF_BANCO'] = df_t['MEDIA_FINAL'].apply(util.sosa_to_float)
 
-                    # 1. Média do Trimestre (Normal antes da Recuperação)
-                    df_t['MEDIA_NORMAL'] = df_t.apply(
-                        lambda r: arred_05_bol(r['C1_N'] + r['C2_N'] + r['C3_N']), axis=1
-                    )
+                    # Leitura da prova crua: se não fez é -1.0; se fez (inclusive nota 0.0), preserva a nota!
+                    def extrair_rec_crua(v):
+                        if pd.isna(v) or str(v).strip() in ["-1", "", "NAN"]:
+                            return -1.0
+                        return util.sosa_to_float(v)
+
+                    df_t['REC_PROVA_CRUA'] = df_t['NOTA_REC'].apply(extrair_rec_crua)
+
+                    # 1. Média do Trimestre (Normal antes da REC) absorvendo bônus se houver
+                    def calc_media_normal_com_bonus(r):
+                        soma_crua = r['C1_N'] + r['C2_N'] + r['C3_N']
+                        m_calc = arred_05_bol(soma_crua)
+                        # Se o aluno não fez REC, a média normal é a própria média do banco
+                        if r['REC_PROVA_CRUA'] < 0:
+                            return max(m_calc, r['MF_BANCO'])
+                        # Se fez REC e a MF do banco indica bônus (como Maria Eduarda com 5.5 antes da REC):
+                        if r['MF_BANCO'] > 0 and r['REC_PROVA_CRUA'] > 0:
+                            # Estima a média pré-rec com bônus: (2 * MF) - Prova
+                            m_reversa = (2.0 * r['MF_BANCO']) - r['REC_PROVA_CRUA']
+                            if m_reversa > m_calc:
+                                return arred_05_bol(m_reversa)
+                        return m_calc
+
+                    df_t['MEDIA_NORMAL'] = df_t.apply(calc_media_normal_com_bonus, axis=1)
 
                     # 2. Nota da Recuperação Calculada: (Média Normal + Prova REC) / 2
+                    # Inclui quem tirou ZERO (>= 0.0)
                     def calc_rec_regimental(r):
                         prova_rec = r['REC_PROVA_CRUA']
-                        if prova_rec > 0:
+                        if prova_rec >= 0.0:
                             m_norm = r['MEDIA_NORMAL']
-                            return arred_05_bol((m_norm + prova_rec) / 2.0)
+                            rec_calc = arred_05_bol((m_norm + prova_rec) / 2.0)
+                            # Garante harmonia: se a MF do banco for maior por arredondamento/bônus, emparelha
+                            return max(rec_calc, r['MF_BANCO']) if r['MF_BANCO'] >= 6.0 and rec_calc >= 6.0 else rec_calc
                         return -1.0
 
                     df_t['REC_CALCULADA'] = df_t.apply(calc_rec_regimental, axis=1)
 
-                    # 3. Média Final do Trimestre: maior nota entre Média Normal, Recuperação Calculada e o Banco
+                    # 3. Média Final do Trimestre: maior nota entre Média Normal, Recuperação e Banco
                     def calc_mf_soberana(r):
                         m_norm = r['MEDIA_NORMAL']
                         r_calc = r['REC_CALCULADA']
                         m_banco = r['MF_BANCO']
-                        if r_calc > 0:
+                        if r_calc >= 0.0:
                             return max(m_norm, r_calc, m_banco)
                         return max(m_norm, m_banco)
 
