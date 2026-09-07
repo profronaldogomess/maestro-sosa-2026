@@ -4493,8 +4493,8 @@ elif menu == "📝 Diário de Bordo Rápido":
 
 
 # ==============================================================================
-# MÓDULO: BIOGRAFIA DO ESTUDANTE - V2026.PRO_INFINITY_TRANSPARENCIA_FORENSE
-# (DOSSIÊ 360°, EXTRATO FORENSE DE OPORTUNIDADES, BLINDAGEM ANTI-RECLAMAÇÃO E PREDITIVO)
+# MÓDULO: BIOGRAFIA DO ESTUDANTE - V2026.PRO_INFINITY_FINAL_INTELIGENTE_HD
+# (DOSSIÊ 360°, EXTRATO FORENSE RESPONSIVO, STATUS ANTI-FALSO POSITIVO E PREDITIVO)
 # ==============================================================================
 elif menu == "👤 Biografia do Estudante":
     st.title("Biografia do Estudante (Dossiê 360°)")
@@ -4692,7 +4692,7 @@ Seguimos à disposição para acolher e orientar o estudante rumo à aprovação
         st.code(msg_zap, language=None)
 
     # ==============================================================================
-    # CARREGAMENTO E SINCRONIZAÇÃO GLOBAL DE ESTUDANTE
+    # CARREGAMENTO E SINCRONIZAÇÃO GLOBAL DE ESTUDANTE (LAYOUT DESAFOGADO HD)
     # ==============================================================================
     if df_alunos.empty:
         st.warning("Base de estudantes vazia. Cadastre as turmas na Gestão da Turma.")
@@ -4700,7 +4700,7 @@ Seguimos à disposição para acolher e orientar o estudante rumo à aprovação
         opcoes_periodo_bio = ["Todos", "I Trimestre", "II Trimestre", "III Trimestre"]
 
         with st.container(border=True):
-            c1, c2, c3, c4 = st.columns([1, 1.2, 1.5, 1])
+            c_f1, c_f2, c_f3 = st.columns([1.2, 1.2, 2.6])
             
             lista_turmas_bio = []
             if not df_turmas.empty and 'ID_TURMA' in df_turmas.columns:
@@ -4709,8 +4709,8 @@ Seguimos à disposição para acolher e orientar o estudante rumo à aprovação
             elif not df_alunos.empty and 'TURMA' in df_alunos.columns:
                 lista_turmas_bio = sorted(df_alunos['TURMA'].unique())
             
-            turma_b = c1.selectbox("Turma:", lista_turmas_bio, key="bio_turma_sel_react")
-            flt_status_bio = c2.segmented_control("Status:", ["Ativos", "Inativos / Transferidos"], default="Ativos", key="bio_status_sel_react")
+            turma_b = c_f1.selectbox("Turma:", lista_turmas_bio, key="bio_turma_sel_react")
+            flt_status_bio = c_f2.segmented_control("Status:", ["Ativos", "Inativos / Transferidos"], default="Ativos", key="bio_status_sel_react")
             
             df_alunos_turma_raw = df_alunos[df_alunos['TURMA'] == turma_b].copy() if not df_alunos.empty and 'TURMA' in df_alunos.columns else pd.DataFrame()
             if 'STATUS' not in df_alunos_turma_raw.columns: df_alunos_turma_raw['STATUS'] = "ATIVO"
@@ -4736,9 +4736,10 @@ Seguimos à disposição para acolher e orientar o estudante rumo à aprovação
             lista_alunos['STATUS_ICON'] = lista_alunos['NECESSIDADES'].apply(definir_icone_status)
             lista_alunos['LABEL'] = lista_alunos.apply(lambda x: f"{x['STATUS_ICON']} {x['NOME_ALUNO']}", axis=1)
                 
-            aluno_b_label = c3.selectbox("Estudante:", lista_alunos['LABEL'].tolist(), key="bio_aluno_sel_react")
+            aluno_b_label = c_f3.selectbox("Estudante:", lista_alunos['LABEL'].tolist(), key="bio_aluno_sel_react")
             
-            trim_b = c4.segmented_control("Período:", opcoes_periodo_bio, default="Todos", key="bio_periodo_sel_react")
+            st.markdown("<div style='height: 4px;'></div>", unsafe_allow_html=True)
+            trim_b = st.pills("Período Letivo em Análise:", opcoes_periodo_bio, default="Todos", key="bio_periodo_sel_react")
             if not trim_b: trim_b = "Todos"
 
         nome_limpo = aluno_b_label.split(" ", 1)[1].strip() 
@@ -4828,7 +4829,7 @@ Seguimos à disposição para acolher e orientar o estudante rumo à aprovação
                                 scanned_prova_by_trim[t_nome] = max(scanned_prova_by_trim.get(t_nome, 0.0), nota_sc)
 
         # ----------------------------------------------------------------------
-        # CONSTRUÇÃO DO EXTRATO FORENSE DOS TRIMESTRES
+        # CONSTRUÇÃO DO EXTRATO FORENSE DOS TRIMESTRES (FINAL INTELIGENTE CALIBRADO)
         # ----------------------------------------------------------------------
         notas_consolidadas_trimestres = []
         soma_1_2_preditiva = 0.0
@@ -4880,35 +4881,52 @@ Seguimos à disposição para acolher e orientar o estudante rumo à aprovação
 
             tem_atividade_real = (not reg_t.empty) or (c1_v > 0) or (c2_v > 0) or (c3_v > 0) or tem_rec or (b_diario_t != 0)
 
-            # Classificação Forense do Selo de Transparência da Média
             refaccao_dado = refaccao_info_by_trim.get(t_k)
             teve_refaccao = refaccao_dado is not None
             refaccao_txt = f"Entregue em {refaccao_dado['data']} (+{refaccao_dado['bonus']:.1f} pts)" if teve_refaccao else "Pendente / Não Entregue"
 
+            # ------------------------------------------------------------------
+            # CLASSIFICAÇÃO RIGOROSA DO FINAL INTELIGENTE (SEM FALSOS APROVADOS)
+            # ------------------------------------------------------------------
             if not tem_atividade_real:
                 selo_transparencia = "⏳ A Cursar"
                 cor_selo = "gray"
                 calculo_rec_str = "—"
-            elif tem_rec and rec_calculada > media_normal:
-                selo_transparencia = "🔵 Aprovado por Recuperação Paralela"
+            # CASO 1: Fez recuperação e ATINGIU a média regimental (>= 6.0)
+            elif tem_rec and media_final >= 6.0 and media_normal < 6.0:
+                selo_transparencia = "🔵 Aprovado com Recuperação Paralela (Meta 6.0 Atingida)"
                 cor_selo = "#2962FF"
                 calculo_rec_str = f"({media_normal:.1f} + {rec_val:.1f}) ÷ 2 = {rec_calculada:.1f}"
+            # CASO 2: Aprovado com apoio de Refacção / Vistos (provas puras < 4.0 mas media final >= 6.0)
             elif media_final >= 6.0 and soma_provas_puras < 4.0:
-                selo_transparencia = "🟡 Aprovado com Apoio Pedagógico (Caderno/Refacção)"
+                selo_transparencia = "🟡 Aprovado com Apoio Pedagógico (Caderno / Refacção)"
                 cor_selo = "#F1C40F"
                 calculo_rec_str = f"Protegida em {media_final:.1f} (Não-Regressão)" if tem_rec else "Dispensado da REC"
+            # CASO 3: Aprovado autônomo nas provas
             elif media_final >= 6.0:
                 selo_transparencia = "🟢 Aprovação Autônoma em Provas"
                 cor_selo = "#2ECC71"
                 calculo_rec_str = "Dispensado da REC"
+            # CASO 4: Fez recuperação, melhorou a nota, mas CONTINUA ABAIXO DE 6.0 (Caso do Angelo Miguel!)
+            elif tem_rec and rec_calculada > media_normal and media_final < 6.0:
+                selo_transparencia = f"🟠 Recuperação Parcial (Subiu de {media_normal:.1f} para {media_final:.1f}, mas Permanece Abaixo da Média 6.0)"
+                cor_selo = "#E67E22"
+                calculo_rec_str = f"({media_normal:.1f} + {rec_val:.1f}) ÷ 2 = {rec_calculada:.1f} (Insuficiente para 6.0)"
+            # CASO 5: Fez recuperação, mas a nota da rec foi menor que a nota anterior (não regrediu)
+            elif tem_rec and media_final < 6.0:
+                selo_transparencia = f"🔴 Recuperação Ineficaz (Nota {media_normal:.1f} Preservada por Não-Regressão)"
+                cor_selo = "#E74C3C"
+                calculo_rec_str = f"({media_normal:.1f} + {rec_val:.1f}) ÷ 2 = {rec_calculada:.1f} ➔ Mantida {media_final:.1f}"
+            # CASO 6: Aluno em 5.5 (margem de refacção)
             elif media_final == 5.5:
                 selo_transparencia = "🟠 Em Recomposição (Margem de 0.5)"
                 cor_selo = "#E67E22"
-                calculo_rec_str = f"({media_normal:.1f} + {rec_val:.1f}) ÷ 2 = {rec_calculada:.1f} ➔ Mantida 5.5" if tem_rec else "Refacção Já Utilizada / REC Pendente"
+                calculo_rec_str = "Refacção Já Utilizada / REC Pendente"
+            # CASO 7: Abaixo da média sem recuperação
             else:
-                selo_transparencia = "🔴 Convocado para Recuperação / Abaixo da Média"
+                selo_transparencia = "🔴 Abaixo da Média Regimental (< 6.0)"
                 cor_selo = "#E74C3C"
-                calculo_rec_str = f"({media_normal:.1f} + {rec_val:.1f}) ÷ 2 = {rec_calculada:.1f}" if tem_rec else "Pendente de Avaliação"
+                calculo_rec_str = "Pendente de Avaliação"
 
             if tem_atividade_real:
                 if t_k in ["I Trimestre", "II Trimestre"]:
@@ -4959,12 +4977,12 @@ Seguimos à disposição para acolher e orientar o estudante rumo à aprovação
             status_preditivo_aluno = "Aprovado Antecipado (≥ 18.0)"
         elif meta_iii_arred <= 4.0:
             status_preditivo_aluno = "Meta Confortável (≤ 4.0 pts)"
-        elif meta_iii_arred <= 6.5:
-            status_preditivo_aluno = "Meta Moderada (4.1 a 6.5 pts)"
-        elif meta_iii_arred <= 9.9:
-            status_preditivo_aluno = "Meta Alta (6.6 a 9.9 pts)"
+        elif meta_iii_arred <= 6.0:
+            status_preditivo_aluno = "Meta Regular (4.1 a 6.0 pts)"
+        elif meta_iii_arred <= 7.5:
+            status_preditivo_aluno = "Meta Exigente (6.1 a 7.5 pts)"
         else:
-            status_preditivo_aluno = "Risco de Recuperação Final (≥ 10.0 pts)"
+            status_preditivo_aluno = "Alerta Crítico: Risco de Recuperação Final (> 7.5 pts)"
 
         # CÁLCULO REATIVO DE ASSIDUIDADE, VISTOS E BÔNUS
         faltas_hero = 0
@@ -5010,7 +5028,7 @@ Seguimos à disposição para acolher e orientar o estudante rumo à aprovação
         rotulo_vistos = f"Vistos de Caderno ({trim_b})" if trim_b != "Todos" else "Vistos de Caderno (Geral)"
 
         # ==============================================================================
-        # BENTO CARD DE TOPO (IDENTIDADE, SOMA ANUAL & META III TRI)
+        # BENTO CARD DE TOPO (COM CALIBRAÇÃO DE COR DE RISCO PARA O III TRI)
         # ==============================================================================
         with st.container(border=True):
             c_h1, c_h2, c_h3, c_h4 = st.columns([1.8, 1.4, 1, 1])
@@ -5029,7 +5047,14 @@ Seguimos à disposição para acolher e orientar o estudante rumo à aprovação
                 if soma_1_2_preditiva >= 18.0:
                     st.metric("Soma (I + II Tri)", f"{soma_1_2_preditiva:.1f} pts", "Aprovado Antecipado")
                 else:
-                    st.metric("Soma (I + II Tri)", f"{soma_1_2_preditiva:.1f} pts", f"Meta III Tri: {meta_iii_arred:.1f} pts")
+                    # Inverte para cor de alerta caso a meta no III Tri seja exigente (> 6.0)
+                    delta_cor_meta = "inverse" if meta_iii_arred > 6.0 else "normal"
+                    st.metric(
+                        "Soma (I + II Tri)", 
+                        f"{soma_1_2_preditiva:.1f} pts", 
+                        f"Meta III Tri: {meta_iii_arred:.1f} pts", 
+                        delta_color=delta_cor_meta
+                    )
                 st.caption(f"Projeção: **{status_preditivo_aluno}**")
 
             c_h3.metric(rotulo_assiduidade, perc_presenca_hero_str, delta_faltas_str, delta_color="inverse" if faltas_hero > 0 else "normal")
@@ -5123,25 +5148,43 @@ Seguimos à disposição para acolher e orientar o estudante rumo à aprovação
             st.markdown("#### Extrato Analítico de Construção da Nota")
             st.caption("Visão aberta da composição de notas: distinção entre proficiência em provas e oportunidades/bônus concedidos pelo professor:")
 
-            # CARDS DE TRANSPARÊNCIA POR TRIMESTRE
+            # BENTO BOXES RESPONSIVOS (SEM CORTE DE TEXTO)
             for n_c in notas_consolidadas_trimestres:
                 if trim_b != "Todos" and n_c["periodo"] != trim_b:
                     continue
 
                 if n_c["iniciado"]:
                     with st.container(border=True):
-                        c_t_h1, c_t_h2 = st.columns([2.5, 1.5])
+                        c_t_h1, c_t_h2 = st.columns([2.8, 1.2])
                         c_t_h1.markdown(f"##### {n_c['periodo']}")
                         c_t_h1.markdown(f"**Origem Pedagógica da Nota:** `{n_c['selo_transparencia']}`")
                         
                         c_t_h2.metric("Média Final Oficial", f"{n_c['media_final']} pts")
 
-                        st.markdown("<br>", unsafe_allow_html=True)
-                        c_sub1, c_sub2, c_sub3, c_sub4 = st.columns(4)
-                        c_sub1.metric("Provas e Testes (C2+C3)", f"{n_c['provas_puras']} / 7.0 pts", help="Nota cognitiva demonstrada sem consulta nas avaliações.")
-                        c_sub2.metric("Caderno & Tarefas (C1)", f"{n_c['c1']} / 3.0 pts", help="Compromisso do estudante com as lições de sala e casa.")
-                        c_sub3.metric("Bônus Concedidos (Prof.)", f"{n_c['bonus']} pts", f"Refacção: {n_c['status_refaccao']}", help="Ajudas atitudinais e refacção no caderno atribuídas pelo professor Ronaldo.")
-                        c_sub4.metric("Recuperação Paralela", f"{n_c['rec']}", f"Cálculo: {n_c['calculo_rec']}")
+                        st.markdown("<div style='height: 4px;'></div>", unsafe_allow_html=True)
+                        
+                        # 4 BENTO BOXES EXECUTIVOS COM FORMATAÇÃO INTEGRAL (ZERO ELLIPSIS)
+                        c_box1, c_box2, c_box3, c_box4 = st.columns(4)
+                        
+                        with c_box1.container(border=True):
+                            st.markdown("<span style='font-size:11px; color:#94A3B8; font-weight:700;'>PROVAS E TESTES (C2+C3)</span>", unsafe_allow_html=True)
+                            st.markdown(f"<h3 style='margin:2px 0; font-weight:800;'>{n_c['provas_puras']} <span style='font-size:13px; color:#94A3B8;'>/ 7.0 pts</span></h3>", unsafe_allow_html=True)
+                            st.caption("Nota cognitiva demonstrada sem consulta.")
+
+                        with c_box2.container(border=True):
+                            st.markdown("<span style='font-size:11px; color:#94A3B8; font-weight:700;'>CADERNO & TAREFAS (C1)</span>", unsafe_allow_html=True)
+                            st.markdown(f"<h3 style='margin:2px 0; font-weight:800;'>{n_c['c1']} <span style='font-size:13px; color:#94A3B8;'>/ 3.0 pts</span></h3>", unsafe_allow_html=True)
+                            st.caption("Compromisso com as lições.")
+
+                        with c_box3.container(border=True):
+                            st.markdown("<span style='font-size:11px; color:#94A3B8; font-weight:700;'>BÔNUS DO PROFESSOR</span>", unsafe_allow_html=True)
+                            st.markdown(f"<h3 style='margin:2px 0; font-weight:800; color:#2962FF;'>{n_c['bonus']} pts</h3>", unsafe_allow_html=True)
+                            st.caption(f"Refacção: {n_c['status_refaccao']}")
+
+                        with c_box4.container(border=True):
+                            st.markdown("<span style='font-size:11px; color:#94A3B8; font-weight:700;'>RECUPERAÇÃO PARALELA</span>", unsafe_allow_html=True)
+                            st.markdown(f"<h3 style='margin:2px 0; font-weight:800;'>{n_c['rec']}</h3>", unsafe_allow_html=True)
+                            st.caption(f"Cálculo: {n_c['calculo_rec']}")
 
             st.markdown("---")
             st.markdown("##### Tabela Detalhada de Composição Regimental")
@@ -5157,7 +5200,7 @@ Seguimos à disposição para acolher e orientar o estudante rumo à aprovação
                     "Caderno (C1)": n_c["c1"],
                     "Bônus / Refacção": n_c["bonus"],
                     "Média Pré-Rec": n_c["media_inicial"],
-                    "Prova REC (0-10)": n_c["rec"],
+                    "Prova REC": n_c["rec"],
                     "REC Calculada": n_c["rec_calculada"],
                     "Média Final": n_c["media_final"],
                     "Origem da Média": n_c["selo_transparencia"]
@@ -5167,9 +5210,9 @@ Seguimos à disposição para acolher e orientar o estudante rumo à aprovação
                 def style_status_bio_tabela(val):
                     if "Autônoma" in str(val): return 'color: #2ECC71; font-weight: bold;'
                     if "Apoio Pedagógico" in str(val): return 'color: #F1C40F; font-weight: bold;'
-                    if "Recuperação Paralela" in str(val): return 'color: #2962FF; font-weight: bold;'
-                    if "Recomposição" in str(val): return 'color: #E67E22; font-weight: bold;'
-                    if "Convocado" in str(val) or "Abaixo" in str(val): return 'color: #E74C3C; font-weight: bold;'
+                    if "Recuperação Paralela (Meta 6.0 Atingida)" in str(val): return 'color: #2962FF; font-weight: bold;'
+                    if "Recuperação Parcial" in str(val) or "Recomposição" in str(val): return 'color: #E67E22; font-weight: bold;'
+                    if "Ineficaz" in str(val) or "Abaixo" in str(val): return 'color: #E74C3C; font-weight: bold;'
                     return 'color: #94A3B8;'
 
                 st.dataframe(
@@ -5177,13 +5220,13 @@ Seguimos à disposição para acolher e orientar o estudante rumo à aprovação
                     hide_index=True, use_container_width=True,
                     column_config={
                         "Período": st.column_config.TextColumn("Período", width="medium"),
-                        "Provas (C2+C3)": st.column_config.TextColumn("Provas Puras", width="small", help="Soma dos testes e provas sem bônus"),
-                        "Caderno (C1)": st.column_config.TextColumn("Caderno", width="small"),
+                        "Provas (C2+C3)": st.column_config.TextColumn("Provas (C2+C3)", width="small", help="Soma dos testes e provas sem bônus"),
+                        "Caderno (C1)": st.column_config.TextColumn("Caderno (C1)", width="small"),
                         "Bônus / Refacção": st.column_config.TextColumn("Bônus Prof.", width="small"),
                         "Média Pré-Rec": st.column_config.TextColumn("Média Normal", width="small"),
-                        "Prova REC (0-10)": st.column_config.TextColumn("Prova REC", width="small"),
+                        "Prova REC": st.column_config.TextColumn("Prova REC (0-10)", width="small"),
                         "REC Calculada": st.column_config.TextColumn("REC Oficial", width="small", help="(Média Normal + Prova REC) / 2"),
-                        "Média Final": st.column_config.TextColumn("Média Final", width="small", help="Maior nota (não-regressiva)"),
+                        "Média Final": st.column_config.TextColumn("Média Final", width="small", help="Maior nota soberana"),
                         "Origem da Média": st.column_config.TextColumn("Diagnóstico de Origem", width="large")
                     }
                 )
@@ -5229,17 +5272,23 @@ Seguimos à disposição para acolher e orientar o estudante rumo à aprovação
                             st.write(f"• Nota Obtida na Prova Discursiva de Recuperação: **{rec_val_chk:.1f} / 10.0 pts**")
                             st.write(f"• Aplicação da Fórmula da Prefeitura: `({dados_trim_chk['media_inicial']} + {rec_val_chk:.1f}) ÷ 2 = {dados_trim_chk['rec_calculada']}`")
                             
-                            if util.sosa_to_float(dados_trim_chk['rec_calculada']) < util.sosa_to_float(dados_trim_chk['media_inicial']):
-                                st.success(f"🛡️ **Proteção Regimental Aplicada:** O cálculo pós-rec daria {dados_trim_chk['rec_calculada']} pts. O Prof. Ronaldo assegurou a média anterior de **{dados_trim_chk['media_final']} pts**, impedindo que a nota do aluno diminuísse.")
+                            media_final_val = util.sosa_to_float(dados_trim_chk['media_final'])
+                            media_inicial_val = util.sosa_to_float(dados_trim_chk['media_inicial'])
+
+                            # CALIBRAÇÃO INTELIGENTE: SÓ É SUPERAÇÃO SE ATINGIR A MÉDIA 6.0!
+                            if media_final_val >= 6.0 and media_inicial_val < 6.0:
+                                st.success(f"📈 **Superação Comprovada:** O aluno elevou sua média de {dados_trim_chk['media_inicial']} para **{dados_trim_chk['media_final']} pontos** e alcançou a média regimental.")
+                            elif media_final_val > media_inicial_val:
+                                st.warning(f"⚠️ **Evolução Parcial:** O aluno melhorou sua pontuação de {dados_trim_chk['media_inicial']} para **{dados_trim_chk['media_final']} pontos**, porém ainda não atingiu a média regimental de 6,0 pontos (permanece em recomposição).")
                             else:
-                                st.success(f"📈 **Superação Comprovada:** O aluno elevou sua média de {dados_trim_chk['media_inicial']} para **{dados_trim_chk['media_final']} pontos**.")
+                                st.info(f"🛡️ **Proteção Regimental Aplicada:** O cálculo pós-rec daria {dados_trim_chk['rec_calculada']} pts. O Prof. Ronaldo assegurou a média anterior de **{dados_trim_chk['media_final']} pts**, impedindo que a nota do aluno diminuísse.")
                         else:
                             if util.sosa_to_float(dados_trim_chk['media_final']) >= 6.0:
                                 st.write("• Estudante dispensado da recuperação por ter alcançado a média regimental.")
                             else:
                                 st.warning("⚠️ Convocado para a recuperação paralela, porém ausente ou sem registro de realização.")
 
-            # SIMULAÇÃO PREDITIVA PARA O III TRIMESTRE
+            # SIMULAÇÃO PREDITIVA INTELIGENTE PARA O III TRIMESTRE
             st.markdown("---")
             with st.container(border=True):
                 st.markdown("##### Simulação Preditiva para o III Trimestre (Meta Anual: 18,0 pontos)")
@@ -5248,9 +5297,13 @@ Seguimos à disposição para acolher e orientar o estudante rumo à aprovação
                 c_s_al1.metric("Soma Acumulada (I + II Tri)", f"{soma_1_2_preditiva:.1f} / 18.0 pts")
                 
                 if soma_1_2_preditiva >= 18.0:
-                    c_s_al2.success("O estudante atingiu a pontuação regimental anual necessária e já está aprovado por antecipação em Matemática!")
+                    c_s_al2.success("🏆 O estudante atingiu a pontuação regimental anual necessária e já está aprovado por antecipação em Matemática!")
+                elif meta_iii_arred <= 6.0:
+                    c_s_al2.info(f"🎯 **Meta Regular:** O estudante necessita de **{meta_iii_arred:.1f} pontos** no III Trimestre. Mantendo o ritmo habitual de sala, a aprovação direta será alcançada.")
+                elif meta_iii_arred <= 7.5:
+                    c_s_al2.warning(f"⚠️ **Meta Exigente:** O estudante necessita de **{meta_iii_arred:.1f} pontos** no III Trimestre. Será fundamental entregar 100% das tarefas de casa e refazer avaliações para somar bônus.")
                 else:
-                    c_s_al2.info(f"Projeção Oficial: Para fechar o ano letivo aprovado direto, o estudante necessita de **{meta_iii_arred:.1f} pontos** no III Trimestre ({status_preditivo_aluno}).")
+                    c_s_al2.error(f"🚨 **Alerta de Conselho Final:** Com soma de {soma_1_2_preditiva:.1f} pts, a meta direta no III Tri seria de **{meta_iii_arred:.1f} pontos**. Há probabilidade de o estudante necessitar da Recuperação Final Anual (dezembro) para integralizar os 18,0 pontos.")
 
         # ==============================================================================
         # ABA 2: AVALIAÇÕES ESCANEADAS & MAPA DE LACUNAS
