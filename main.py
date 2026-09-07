@@ -6131,20 +6131,17 @@ elif menu == "📊 Painel de Notas & Vistos":
 
 # ==============================================================================
 # MÓDULO: BOLETIM ANUAL & CONSELHO DE CLASSE - V2026.PRO_INFINITY_SOBERANIA_TOTAL
-# (ESPELHO 1:1 DO PONTO ID OFICIAL DA PREFEITURA DE ITABUNA)
+# (ESPELHO 1:1 DO PONTO ID: RECUPERAÇÃO CALCULADA POR (MÉDIA + PROVA)/2 E MAIOR NOTA NA MÉDIA)
 # ==============================================================================
 elif menu == "📈 Boletim Anual & Conselho":
     st.title("Boletim Anual & Conselho de Classe")
-    st.caption("Visão panorâmica do ano letivo espelhada no padrão oficial Ponto ID da Prefeitura de Itabuna: [Tri | Rec | Média], simulador preditivo para o III Tri e ata oficial.")
+    st.caption("Visão panorâmica do ano letivo espelhada no padrão oficial Ponto ID da Prefeitura de Itabuna: [Tri | Rec Calculada | Média Final], simulador preditivo para o III Tri e ata oficial.")
     st.markdown("---")
 
     if "v_bol" not in st.session_state: 
         st.session_state.v_bol = int(time.time())
     v = st.session_state.v_bol
 
-    # ==============================================================================
-    # DIALOG DECLARADO NO TOPO DO MÓDULO (LEI #25)
-    # ==============================================================================
     @st.dialog("Alerta Preditivo de Metas para WhatsApp", width="large")
     def dialog_zap_metas_iii(nome_aluno, turma, soma_1_2, meta_iii, status_meta, faltas_aluno):
         st.caption(f"Texto acolhedor pronto para cópia e envio aos responsáveis de **{nome_aluno}**:")
@@ -6235,20 +6232,48 @@ Escola Municipal Flávio José Simões Costa"""
                         ids_ativos = df_alunos_turma[~df_alunos_turma['STATUS'].astype(str).str.upper().isin(["INATIVO", "TRANSFERIDO", "EVADIDO", "DESISTENTE"])]['ID'].apply(db.limpar_id).tolist()
                         df_t = df_t[df_t['ID_ALUNO'].apply(db.limpar_id).isin(ids_ativos)]
 
-                    # SOSA V2026 - PIVOT REGIMENTAL ESPELHO DO PONTO ID DA PREFEITURA DE ITABUNA:
-                    # Calcula Média Normal (C1+C2+C3), Prova REC e Média Final Consolidada para cada trimestre
+                    # SOSA V2026 - PIVOT REGIMENTAL OFICIAL DE ITABUNA
+                    # As colunas de Recuperação (1ª Rec, 2ª Rec, 3ª Rec) exibem a nota CALCULADA: (Média + Prova) / 2
+                    # A prova crua (0 a 10) fica guardada no Painel de Notas
                     import math
                     def arred_05_bol(v): return min(10.0, math.floor(v * 2.0 + 0.5) / 2.0)
 
                     df_t['C1_N'] = df_t['NOTA_VISTOS'].apply(util.sosa_to_float)
                     df_t['C2_N'] = df_t['NOTA_TESTE'].apply(util.sosa_to_float)
                     df_t['C3_N'] = df_t['NOTA_PROVA'].apply(util.sosa_to_float)
-                    df_t['MEDIA_NORMAL'] = df_t.apply(lambda r: arred_05_bol(r['C1_N'] + r['C2_N'] + r['C3_N']), axis=1)
+                    df_t['REC_PROVA_CRUA'] = df_t['NOTA_REC'].apply(util.sosa_to_float)
+                    df_t['MF_BANCO'] = df_t['MEDIA_FINAL'].apply(util.sosa_to_float)
+
+                    # 1. Média do Trimestre (Normal antes da Recuperação)
+                    df_t['MEDIA_NORMAL'] = df_t.apply(
+                        lambda r: arred_05_bol(r['C1_N'] + r['C2_N'] + r['C3_N']), axis=1
+                    )
+
+                    # 2. Nota da Recuperação Calculada: (Média Normal + Prova REC) / 2
+                    def calc_rec_regimental(r):
+                        prova_rec = r['REC_PROVA_CRUA']
+                        if prova_rec > 0:
+                            m_norm = r['MEDIA_NORMAL']
+                            return arred_05_bol((m_norm + prova_rec) / 2.0)
+                        return -1.0
+
+                    df_t['REC_CALCULADA'] = df_t.apply(calc_rec_regimental, axis=1)
+
+                    # 3. Média Final do Trimestre: maior nota entre Média Normal, Recuperação Calculada e o Banco
+                    def calc_mf_soberana(r):
+                        m_norm = r['MEDIA_NORMAL']
+                        r_calc = r['REC_CALCULADA']
+                        m_banco = r['MF_BANCO']
+                        if r_calc > 0:
+                            return max(m_norm, r_calc, m_banco)
+                        return max(m_norm, m_banco)
+
+                    df_t['MEDIA_FINAL_SOBERANA'] = df_t.apply(calc_mf_soberana, axis=1)
 
                     pivot = df_t.pivot_table(
                         index=["ID_ALUNO", "NOME_ALUNO"], 
                         columns="TRIMESTRE", 
-                        values=["MEDIA_NORMAL", "NOTA_REC", "MEDIA_FINAL"], 
+                        values=["MEDIA_NORMAL", "REC_CALCULADA", "MEDIA_FINAL_SOBERANA"], 
                         aggfunc='first'
                     ).reset_index()
 
@@ -6257,11 +6282,9 @@ Escola Municipal Flávio José Simões Costa"""
                     trims = ["I Trimestre", "II Trimestre", "III Trimestre"]
                     for t in trims:
                         if f"MEDIA_NORMAL_{t}" not in pivot.columns: pivot[f"MEDIA_NORMAL_{t}"] = 0.0
-                        if f"MEDIA_FINAL_{t}" not in pivot.columns: pivot[f"MEDIA_FINAL_{t}"] = 0.0
-                        if f"NOTA_REC_{t}" in pivot.columns:
-                            pivot[f"NOTA_REC_{t}"] = pivot[f"NOTA_REC_{t}"].fillna(-1.0)
-                        else:
-                            pivot[f"NOTA_REC_{t}"] = -1.0
+                        if f"REC_CALCULADA_{t}" not in pivot.columns: pivot[f"REC_CALCULADA_{t}"] = -1.0
+                        if f"MEDIA_FINAL_SOBERANA_{t}" not in pivot.columns: pivot[f"MEDIA_FINAL_SOBERANA_{t}"] = 0.0
+                        pivot[f"REC_CALCULADA_{t}"] = pivot[f"REC_CALCULADA_{t}"].fillna(-1.0)
 
                     rec_f_data = df_t[df_t['TRIMESTRE'].astype(str).str.contains("REC_FINAL|FINAL", na=False, case=False)] if 'TRIMESTRE' in df_t.columns else pd.DataFrame()
                     if not rec_f_data.empty and 'ID_ALUNO' in rec_f_data.columns and 'MEDIA_FINAL' in rec_f_data.columns:
@@ -6290,9 +6313,9 @@ Escola Municipal Flávio José Simões Costa"""
 
                     pivot = pivot.fillna(0.0)
 
-                    has_t1 = pivot['MEDIA_FINAL_I Trimestre'].sum() > 0
-                    has_t2 = pivot['MEDIA_FINAL_II Trimestre'].sum() > 0
-                    has_t3 = pivot['MEDIA_FINAL_III Trimestre'].sum() > 0
+                    has_t1 = pivot['MEDIA_FINAL_SOBERANA_I Trimestre'].sum() > 0
+                    has_t2 = pivot['MEDIA_FINAL_SOBERANA_II Trimestre'].sum() > 0
+                    has_t3 = pivot['MEDIA_FINAL_SOBERANA_III Trimestre'].sum() > 0
                     
                     trimestres_ativos = sum([has_t1, has_t2, has_t3])
                     if trimestres_ativos == 0: trimestres_ativos = 1
@@ -6306,9 +6329,9 @@ Escola Municipal Flávio José Simões Costa"""
                     if limite_faltas == 0: limite_faltas = 1 
 
                     def calcular_situacao_anual(row):
-                        t1 = util.sosa_to_float(row.get("MEDIA_FINAL_I Trimestre", 0))
-                        t2 = util.sosa_to_float(row.get("MEDIA_FINAL_II Trimestre", 0))
-                        t3 = util.sosa_to_float(row.get("MEDIA_FINAL_III Trimestre", 0))
+                        t1 = util.sosa_to_float(row.get("MEDIA_FINAL_SOBERANA_I Trimestre", 0))
+                        t2 = util.sosa_to_float(row.get("MEDIA_FINAL_SOBERANA_II Trimestre", 0))
+                        t3 = util.sosa_to_float(row.get("MEDIA_FINAL_SOBERANA_III Trimestre", 0))
                         rf = util.sosa_to_float(row.get("RF", -1.0))
                         faltas_aluno = row.get("FALTAS", 0)
                         
@@ -6395,7 +6418,7 @@ Escola Municipal Flávio José Simões Costa"""
                             return 'color: gray;'
 
                         def formatar_rec(val):
-                            if pd.isna(val) or val < 0 or val == 0: return "-"
+                            if pd.isna(val) or val < 0: return "-"
                             return f"{val:.1f}"
 
                         def formatar_media(val):
@@ -6404,30 +6427,30 @@ Escola Municipal Flávio José Simões Costa"""
 
                         colunas_espelho_prefeitura = [
                             'P', 'NOME_ALUNO',
-                            'MEDIA_NORMAL_I Trimestre', 'NOTA_REC_I Trimestre', 'MEDIA_FINAL_I Trimestre',
-                            'MEDIA_NORMAL_II Trimestre', 'NOTA_REC_II Trimestre', 'MEDIA_FINAL_II Trimestre',
-                            'MEDIA_NORMAL_III Trimestre', 'NOTA_REC_III Trimestre', 'MEDIA_FINAL_III Trimestre',
+                            'MEDIA_NORMAL_I Trimestre', 'REC_CALCULADA_I Trimestre', 'MEDIA_FINAL_SOBERANA_I Trimestre',
+                            'MEDIA_NORMAL_II Trimestre', 'REC_CALCULADA_II Trimestre', 'MEDIA_FINAL_SOBERANA_II Trimestre',
+                            'MEDIA_NORMAL_III Trimestre', 'REC_CALCULADA_III Trimestre', 'MEDIA_FINAL_SOBERANA_III Trimestre',
                             'Σ', 'RF', 'FALTAS', 'SITUAÇÃO'
                         ]
 
                         st.dataframe(
                             pivot_exibir[colunas_espelho_prefeitura]
                             .style.map(style_status_anual, subset=['SITUAÇÃO'])
-                            .format(formatar_media, subset=['MEDIA_NORMAL_I Trimestre', 'MEDIA_FINAL_I Trimestre', 'MEDIA_NORMAL_II Trimestre', 'MEDIA_FINAL_II Trimestre', 'MEDIA_NORMAL_III Trimestre', 'MEDIA_FINAL_III Trimestre'])
-                            .format(formatar_rec, subset=['NOTA_REC_I Trimestre', 'NOTA_REC_II Trimestre', 'NOTA_REC_III Trimestre', 'RF']),
+                            .format(formatar_media, subset=['MEDIA_NORMAL_I Trimestre', 'MEDIA_FINAL_SOBERANA_I Trimestre', 'MEDIA_NORMAL_II Trimestre', 'MEDIA_FINAL_SOBERANA_II Trimestre', 'MEDIA_NORMAL_III Trimestre', 'MEDIA_FINAL_SOBERANA_III Trimestre'])
+                            .format(formatar_rec, subset=['REC_CALCULADA_I Trimestre', 'REC_CALCULADA_II Trimestre', 'REC_CALCULADA_III Trimestre', 'RF']),
                             use_container_width=True, hide_index=True,
                             column_config={
                                 "P": st.column_config.TextColumn("P", width="small", help="Perfil de Acessibilidade"),
                                 "NOME_ALUNO": st.column_config.TextColumn("Estudante", width="medium"),
-                                "MEDIA_NORMAL_I Trimestre": st.column_config.TextColumn("1º Tri", width="small", help="Média Normal (C1+C2+C3)"),
-                                "NOTA_REC_I Trimestre": st.column_config.TextColumn("1ª Rec", width="small", help="Nota da Prova de Recuperação"),
-                                "MEDIA_FINAL_I Trimestre": st.column_config.TextColumn("Média 1º", width="small", help="Média Final Consolidada"),
-                                "MEDIA_NORMAL_II Trimestre": st.column_config.TextColumn("2º Tri", width="small", help="Média Normal (C1+C2+C3)"),
-                                "NOTA_REC_II Trimestre": st.column_config.TextColumn("2ª Rec", width="small", help="Nota da Prova de Recuperação"),
-                                "MEDIA_FINAL_II Trimestre": st.column_config.TextColumn("Média 2º", width="small", help="Média Final Consolidada"),
-                                "MEDIA_NORMAL_III Trimestre": st.column_config.TextColumn("3º Tri", width="small", help="Média Normal (C1+C2+C3)"),
-                                "NOTA_REC_III Trimestre": st.column_config.TextColumn("3ª Rec", width="small", help="Nota da Prova de Recuperação"),
-                                "MEDIA_FINAL_III Trimestre": st.column_config.TextColumn("Média 3º", width="small", help="Média Final Consolidada"),
+                                "MEDIA_NORMAL_I Trimestre": st.column_config.TextColumn("1º Tri", width="small", help="Média Normal do 1º Tri"),
+                                "REC_CALCULADA_I Trimestre": st.column_config.TextColumn("1ª Rec", width="small", help="Nota da REC: (Média + Prova)/2"),
+                                "MEDIA_FINAL_SOBERANA_I Trimestre": st.column_config.TextColumn("Média 1º", width="small", help="Média Final do 1º Tri (maior nota)"),
+                                "MEDIA_NORMAL_II Trimestre": st.column_config.TextColumn("2º Tri", width="small", help="Média Normal do 2º Tri"),
+                                "REC_CALCULADA_II Trimestre": st.column_config.TextColumn("2ª Rec", width="small", help="Nota da REC: (Média + Prova)/2"),
+                                "MEDIA_FINAL_SOBERANA_II Trimestre": st.column_config.TextColumn("Média 2º", width="small", help="Média Final do 2º Tri (maior nota)"),
+                                "MEDIA_NORMAL_III Trimestre": st.column_config.TextColumn("3º Tri", width="small", help="Média Normal do 3º Tri"),
+                                "REC_CALCULADA_III Trimestre": st.column_config.TextColumn("3ª Rec", width="small", help="Nota da REC: (Média + Prova)/2"),
+                                "MEDIA_FINAL_SOBERANA_III Trimestre": st.column_config.TextColumn("Média 3º", width="small", help="Média Final do 3º Tri (maior nota)"),
                                 "Σ": st.column_config.ProgressColumn("Soma Total", help=f"Soma das Médias Finais (Meta: {meta_acumulada_parcial:.1f} pts)", format="%.1f", min_value=0.0, max_value=meta_acumulada_parcial if meta_acumulada_parcial > 0 else 18.0),
                                 "RF": st.column_config.TextColumn("Rec Final", width="small"),
                                 "FALTAS": st.column_config.ProgressColumn("Faltas", help=f"Limite: {limite_faltas}", format="%d", min_value=0, max_value=max(limite_faltas, 1)),
@@ -6435,7 +6458,7 @@ Escola Municipal Flávio José Simões Costa"""
                             }
                         )
                         
-                        st.caption(f"📋 Padrão Oficial Ponto ID (Prefeitura de Itabuna): [Xº Tri] Média Normal | [Xª Rec] Prova de REC | [Média Xº] Média Final (permanece a maior) | Limite Faltas: {limite_faltas}.")
+                        st.caption(f"📋 Padrão Oficial Ponto ID (Prefeitura de Itabuna): [Xº Tri] Média Normal | [Xª Rec] Nota da Recuperação ((Média+Prova)/2) | [Média Xº] Média Final (permanece a maior) | Limite Faltas: {limite_faltas}.")
 
                         st.markdown("---")
                         
@@ -6494,8 +6517,8 @@ Escola Municipal Flávio José Simões Costa"""
                             perfil_icon_p = str(r_al.get('P', '👤'))
                             faltas_al_p = int(r_al.get('FALTAS', 0))
 
-                            t1_val = util.sosa_to_float(r_al.get("MEDIA_FINAL_I Trimestre", 0.0))
-                            t2_val = util.sosa_to_float(r_al.get("MEDIA_FINAL_II Trimestre", 0.0))
+                            t1_val = util.sosa_to_float(r_al.get("MEDIA_FINAL_SOBERANA_I Trimestre", 0.0))
+                            t2_val = util.sosa_to_float(r_al.get("MEDIA_FINAL_SOBERANA_II Trimestre", 0.0))
                             soma_1_2 = t1_val + t2_val
 
                             meta_bruta_iii = max(0.0, 18.0 - soma_1_2)
