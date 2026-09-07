@@ -4493,17 +4493,21 @@ elif menu == "📝 Diário de Bordo Rápido":
 
 
 # ==============================================================================
-# MÓDULO: BIOGRAFIA DO ESTUDANTE - V2026.PRO_EXECUTIVE_REACTIVE
-# (DOSSIÊ 360°, BOLETIM ANALÍTICO, META PREDITIVA III TRI, PROVAS E PEI)
+# MÓDULO: BIOGRAFIA DO ESTUDANTE - V2026.PRO_INFINITY_TRANSPARENCIA_FORENSE
+# (DOSSIÊ 360°, EXTRATO FORENSE DE OPORTUNIDADES, BLINDAGEM ANTI-RECLAMAÇÃO E PREDITIVO)
 # ==============================================================================
 elif menu == "👤 Biografia do Estudante":
     st.title("Biografia do Estudante (Dossiê 360°)")
-    st.caption("Extrato individual de rendimento escolar: histórico de notas C1/C2/C3, simulador preditivo para o III Trimestre, auditoria de avaliações e registro atitudinal.")
+    st.caption("Extrato pedagógico individual: rastreamento forense de notas, oportunidades concedidas pelo professor, histórico de recuperação e simulador preditivo.")
     st.markdown("---")
 
     if "v_bio" not in st.session_state: 
         st.session_state.v_bio = int(time.time())
     v = st.session_state.v_bio
+
+    import math
+    def arred_05_bio(valor):
+        return min(10.0, math.floor(util.sosa_to_float(valor) * 2.0 + 0.5) / 2.0)
 
     # ==============================================================================
     # DIALOGS DECLARADOS NO TOPO DO MÓDULO (LEI #25)
@@ -4633,41 +4637,63 @@ elif menu == "👤 Biografia do Estudante":
                         st.code(st.session_state.msg_tribunal, language=None)
                 else: st.warning("A avaliação original não foi localizada no acervo para perícia.")
 
-    @st.dialog("Extrato de Rendimento para WhatsApp", width="large")
-    def dialog_whatsapp(nome_limpo_dialog, turma_dialog, status_aluno_dialog, soma_acumulada_dialog, meta_iii_dialog, status_meta_dialog, assiduidade_dialog, faltas_dialog, engajamento_dialog, bonus_dialog, regra_arredondamento_text):
-        st.caption("Texto executivo pronto para cópia e envio à família:")
+    @st.dialog("Extrato Pedagógico Transparente para WhatsApp", width="large")
+    def dialog_whatsapp(nome_limpo_dialog, turma_dialog, status_aluno_dialog, soma_acumulada_dialog, meta_iii_dialog, status_meta_dialog, assiduidade_dialog, faltas_dialog, engajamento_dialog, relatorio_detalhado_trims):
+        st.caption("Mensagem executiva estruturada e transparente pronta para cópia e envio à família:")
         
         soma_fmt = f"{util.sosa_to_float(soma_acumulada_dialog):.1f}"
         meta_iii_fmt = f"{util.sosa_to_float(meta_iii_dialog):.1f}"
         assid_fmt = f"{util.sosa_to_float(assiduidade_dialog):.0f}"
         engaj_fmt = f"{util.sosa_to_float(engajamento_dialog):.0f}"
-        bonus_fmt = f"{util.sosa_to_float(bonus_dialog):+.1f}"
+
+        linhas_trimestres_zap = []
+        for t_info in relatorio_detalhado_trims:
+            if t_info.get("iniciado"):
+                bloco_t = (
+                    f"📌 *{t_info['periodo'].upper()}:*\n"
+                    f"• Desempenho em Provas e Testes (C2+C3): {t_info['provas_puras']} pts\n"
+                    f"• Compromisso com Tarefas de Casa (Caderno C1): {t_info['c1']} pts\n"
+                    f"• Oportunidades & Bônus Concedidos pelo Professor: {t_info['bonus']} pts ({t_info['status_refaccao']})\n"
+                    f"• Média Pré-Recuperação: {t_info['media_inicial']} pts\n"
+                    f"• Exame de Recuperação: {t_info['rec']} (Cálculo Oficial: {t_info['calculo_rec']})\n"
+                    f"• *MÉDIA FINAL DO TRIMESTRE:* *{t_info['media_final']} pontos* ({t_info['selo_transparencia']})\n"
+                )
+                linhas_trimestres_zap.append(bloco_t)
+
+        bloco_trims_txt = "\n".join(linhas_trimestres_zap)
 
         if meta_iii_dialog == 0.0:
-            parecer_iii = "SITUAÇÃO EXCELENTE: O(A) estudante já acumulou os 18,0 pontos regimentais (soma do I e II Tri) e está APROVADO(A) POR ANTECIPAÇÃO no componente de Matemática!"
+            parecer_iii = "🏆 SITUAÇÃO EXCELENTE: O(A) estudante já acumulou os 18,0 pontos regimentais necessários somando o I e II Tri e está APROVADO(A) POR ANTECIPAÇÃO em Matemática!"
         else:
-            parecer_iii = f"Para garantir a aprovação sem recuperação final, o(a) estudante precisa de {meta_iii_fmt} pontos no III Trimestre ({status_meta_dialog})."
-        
+            parecer_iii = f"🎯 META PARA O III TRIMESTRE: O(A) estudante necessita de *{meta_iii_fmt} pontos* no III Trimestre para alcançar a meta anual de 18,0 pontos sem necessidade de conselho final."
+
         msg_zap = f"""Olá! Tudo bem? Aqui é o Prof. Ronaldo Gomes (Componente Curricular de Matemática). 🏫
-Compartilho com a família o Dossiê de Rendimento e Participação do(a) estudante {nome_limpo_dialog} ({turma_dialog}).
+Compartilho com a família o *Extrato Detalhado de Rendimento e Oportunidades Pedagógicas* do(a) estudante *{nome_limpo_dialog}* ({turma_dialog}).
 
-📌 SITUAÇÃO REGIMENTAL: {status_aluno_dialog}
-📊 RENDIMENTO ACUMULADO NO ANO (I e II TRIMESTRES):
-• Soma Total dos Pontos Conquistados: {soma_fmt} pontos (Meta Anual: 18,0 pts).
-• Projeção para o III Trimestre: {parecer_iii}
+Nosso objetivo é garantir total transparência sobre como a nota é construída, destacando tanto o empenho do aluno quanto todas as chances que foram oferecidas em sala de aula.
 
-🎯 ASSIDUIDADE E COMPROMISSO COM O CADERNO:
+📊 *SITUAÇÃO REGIMENTAL GERAL:* {status_aluno_dialog}
 • Frequência em Sala de Aula: {assid_fmt}% ({faltas_dialog} ausência(s) registrada(s)).
-• Cumprimento de Tarefas de Caderno (Vistos C1): {engaj_fmt}% das atividades concluídas.
-• Bônus Pedagógico de Mérito/Atitude: {bonus_fmt} pts acumulados!
+• Engajamento em Tarefas do Caderno: {engaj_fmt}% das atividades cumpridas.
+• Soma dos Pontos Acumulados (I + II Tri): *{soma_fmt} pontos* (Meta anual: 18,0).
 
-ℹ️ NOTA EXPLICATIVA SOBRE O ARREDONDAMENTO:
-{regra_arredondamento_text}
+📋 *HISTÓRICO DETALHADO POR PERÍODO:*
+{bloco_trims_txt}
 
-Seguimos à disposição para acompanhar o desenvolvimento do estudante. Um abraço! 🚀
-Escola Municipal Flávio José Simões Costa"""
+🔍 *PROJEÇÃO E METAS:*
+{parecer_iii}
+
+ℹ️ *NOTA ESCLARECEDORA:*
+O sistema de avaliação da Prefeitura de Itabuna utiliza degraus de 0,5 em 0,5 pontos e aplica a média ponderada na recuperação: (Média Anterior + Prova REC) ÷ 2. O professor assegura o princípio da não-regressão: a nota final nunca é reduzida após a recuperação.
+
+Seguimos à disposição para acolher e orientar o estudante rumo à aprovação plena. Um forte abraço! 🚀
+*Escola Municipal Flávio José Simões Costa*"""
+
         st.code(msg_zap, language=None)
 
+    # ==============================================================================
+    # CARREGAMENTO E SINCRONIZAÇÃO GLOBAL DE ESTUDANTE
+    # ==============================================================================
     if df_alunos.empty:
         st.warning("Base de estudantes vazia. Cadastre as turmas na Gestão da Turma.")
     else:
@@ -4727,11 +4753,10 @@ Escola Municipal Flávio José Simões Costa"""
         # Resgate das datas oficiais com aplicação estrita do Cadeado / Data de Corte de Vistos
         calendario_trims = {
             "I Trimestre": (date(2026, 2, 9), date(2026, 5, 22)),
-            "II Trimestre": (date(2026, 5, 25), date(2026, 9, 4)),
-            "III Trimestre": (date(2026, 9, 8), date(2026, 12, 17))
+            "II Trimestre": (date(2026, 5, 25), date(2026, 9, 11)),
+            "III Trimestre": (date(2026, 9, 12), date(2026, 12, 17))
         }
 
-        # Ajusta a data final com base no corte configurado para cada trimestre
         for t_k in calendario_trims.keys():
             corte_salvo = db.obter_config_corte_trimestre(turma_b, t_k)
             if corte_salvo:
@@ -4745,8 +4770,12 @@ Escola Municipal Flávio José Simões Costa"""
         else:
             dt_ini, dt_fim = date(2026, 1, 1), date(2026, 12, 31)
 
+        # ----------------------------------------------------------------------
+        # MINERAÇÃO FORENSE DE DIÁRIO E GABARITOS
+        # ----------------------------------------------------------------------
         vistos_live_by_trim = {}
         bonus_live_by_trim = {}
+        refaccao_info_by_trim = {}
         scanned_teste_by_trim = {}
         scanned_prova_by_trim = {}
         scanned_rec_by_trim = {}
@@ -4754,7 +4783,7 @@ Escola Municipal Flávio José Simões Costa"""
         if not df_diario.empty and 'ID_ALUNO' in df_diario.columns and 'TURMA' in df_diario.columns:
             df_d_aluno_all = df_diario[(df_diario['ID_ALUNO'].apply(db.limpar_id) == id_alu) & (df_diario['TURMA'] == turma_b)].copy()
             if not df_d_aluno_all.empty and 'DATA' in df_d_aluno_all.columns:
-                df_d_aluno_all['DATA_DT'] = pd.to_datetime(df_d_aluno_all['DATA'], format="%d/%m/%Y", errors='coerce').dt.date
+                df_d_aluno_all['DATA_DT'] = pd.to_datetime(df_d_aluno_all['DATA'].apply(util.formatar_data_br), format="%d/%m/%Y", errors='coerce').dt.date
                 
                 for t_nome, (t_i, t_f) in calendario_trims.items():
                     df_d_t_sub = df_d_aluno_all[(df_d_aluno_all['DATA_DT'] >= t_i) & (df_d_aluno_all['DATA_DT'] <= t_f)]
@@ -4765,6 +4794,17 @@ Escola Municipal Flávio José Simões Costa"""
                         if tot_v == 0: tot_v = 1
                         vistos_live_by_trim[t_nome] = round((v_ok / tot_v * 3.0), 2) if tot_v > 0 else 0.0
                         bonus_live_by_trim[t_nome] = df_d_t_sub.get('BONUS', pd.Series()).apply(util.sosa_to_float).sum()
+
+                        # Rastreia se entregou Refacção
+                        for _, r_ref in df_d_t_sub.iterrows():
+                            obs_r = str(r_ref.get('OBSERVACOES', ''))
+                            tag_r = str(r_ref.get('TAGS', ''))
+                            if "Refacção" in obs_r or "Refaccao" in obs_r or "REFACÇÃO" in obs_r or tag_r == "SISTEMA_NOTA":
+                                refaccao_info_by_trim[t_nome] = {
+                                    "data": str(r_ref.get('DATA', 'N/A')),
+                                    "bonus": util.sosa_to_float(r_ref.get('BONUS', 0.5)),
+                                    "obs": obs_r
+                                }
 
         if not df_diagnosticos.empty and 'ID_ALUNO' in df_diagnosticos.columns and 'TURMA' in df_diagnosticos.columns:
             df_dg_aluno = df_diagnosticos[(df_diagnosticos['ID_ALUNO'].apply(db.limpar_id) == id_alu) & (df_diagnosticos['TURMA'] == turma_b)].copy()
@@ -4787,88 +4827,109 @@ Escola Municipal Flávio José Simões Costa"""
                             elif any(x in id_av_sc for x in ["PROVA", "AVALIAÇÃO", "AVALIACAO", "EXAME", "2ª"]):
                                 scanned_prova_by_trim[t_nome] = max(scanned_prova_by_trim.get(t_nome, 0.0), nota_sc)
 
+        # ----------------------------------------------------------------------
+        # CONSTRUÇÃO DO EXTRATO FORENSE DOS TRIMESTRES
+        # ----------------------------------------------------------------------
         notas_consolidadas_trimestres = []
         soma_1_2_preditiva = 0.0
 
         for t_k in ["I Trimestre", "II Trimestre", "III Trimestre"]:
             reg_t = n_alu[n_alu['TRIMESTRE'] == t_k] if not n_alu.empty and 'TRIMESTRE' in n_alu.columns else pd.DataFrame()
             
-            # 1. Prioridade Absoluta: Valores Consolidados Oficiais em DB_NOTAS
             v_c1_banco = util.sosa_to_float(reg_t.iloc[0].get('NOTA_VISTOS', 0.0)) if not reg_t.empty else 0.0
             v_c2_banco = util.sosa_to_float(reg_t.iloc[0].get('NOTA_TESTE', 0.0)) if not reg_t.empty else 0.0
             v_c3_banco = util.sosa_to_float(reg_t.iloc[0].get('NOTA_PROVA', 0.0)) if not reg_t.empty else 0.0
             v_rec_banco = util.sosa_to_float(reg_t.iloc[0].get('NOTA_REC', -1.0)) if not reg_t.empty else -1.0
             m_final_banco = util.sosa_to_float(reg_t.iloc[0].get('MEDIA_FINAL', 0.0)) if not reg_t.empty else 0.0
 
-            # 2. Fallbacks de Leitura ao Vivo
             v_c1_live = vistos_live_by_trim.get(t_k, 0.0)
             v_c2_live = scanned_teste_by_trim.get(t_k, 0.0)
             v_c3_live = scanned_prova_by_trim.get(t_k, 0.0)
             v_rec_live = scanned_rec_by_trim.get(t_k, -1.0)
             b_diario_t = bonus_live_by_trim.get(t_k, 0.0)
 
-            # Se o trimestre já está consolidado no boletim oficial (DB_NOTAS), exibe os valores exatos do banco
-            if not reg_t.empty and m_final_banco > 0:
-                c1_v = v_c1_banco
-                c2_v = v_c2_banco
-                c3_v = v_c3_banco
-                rec_v = v_rec_banco
-                m_final_usada = m_final_banco
-                
-                # Reconstrói a soma bruta com o bônus real consolidado
-                c1_fin = min(3.0, c1_v + max(0.0, b_diario_t))
-                rem_b = max(0.0, b_diario_t) - (c1_fin - c1_v)
-                c2_fin = min(3.0, c2_v + max(0.0, rem_b))
-                rem_b -= (c2_fin - c2_v)
-                c3_fin = min(4.0, c3_v + max(0.0, rem_b))
-                soma_bruta_t = c1_fin + c2_fin + c3_fin
-                media_inicial_t = min(10.0, round(soma_bruta_t * 2) / 2)
+            c1_v = max(v_c1_banco, v_c1_live)
+            c2_v = max(v_c2_banco, v_c2_live)
+            c3_v = max(v_c3_banco, v_c3_live)
+            
+            # Nota bruta exclusiva de avaliações escritas (sem bônus nem vistos de caderno)
+            soma_provas_puras = c2_v + c3_v
 
+            # Distribuição do bônus atitudinal nos tetos regimentais
+            c1_fin = min(3.0, c1_v + max(0.0, b_diario_t))
+            rem_b = max(0.0, b_diario_t) - (c1_fin - c1_v)
+            c2_fin = min(3.0, c2_v + max(0.0, rem_b))
+            rem_b -= (c2_fin - c2_v)
+            c3_fin = min(4.0, c3_v + max(0.0, rem_b))
+
+            soma_bruta_t = c1_fin + c2_fin + c3_fin
+            media_normal_calc = arred_05_bio(soma_bruta_t)
+
+            # Recuperação
+            rec_val = max(v_rec_banco, v_rec_live)
+            tem_rec = (rec_val >= 0.0)
+
+            if tem_rec:
+                media_normal = media_normal_calc
+                rec_calculada = arred_05_bio((media_normal + rec_val) / 2.0)
+                media_final = max(media_normal, rec_calculada, m_final_banco)
             else:
-                c1_v = max(v_c1_banco, v_c1_live)
-                c2_v = max(v_c2_banco, v_c2_live)
-                c3_v = max(v_c3_banco, v_c3_live)
-                rec_v = max(v_rec_banco, v_rec_live)
+                media_normal = max(media_normal_calc, m_final_banco)
+                rec_calculada = -1.0
+                media_final = media_normal
 
-                c1_fin = min(3.0, c1_v + max(0.0, b_diario_t))
-                rem_b = max(0.0, b_diario_t) - (c1_fin - c1_v)
-                c2_fin = min(3.0, c2_v + max(0.0, rem_b))
-                rem_b -= (c2_fin - c2_v)
-                c3_fin = min(4.0, c3_v + max(0.0, rem_b))
+            tem_atividade_real = (not reg_t.empty) or (c1_v > 0) or (c2_v > 0) or (c3_v > 0) or tem_rec or (b_diario_t != 0)
 
-                soma_bruta_t = c1_fin + c2_fin + c3_fin
-                media_inicial_t = min(10.0, round(soma_bruta_t * 2) / 2)
+            # Classificação Forense do Selo de Transparência da Média
+            refaccao_dado = refaccao_info_by_trim.get(t_k)
+            teve_refaccao = refaccao_dado is not None
+            refaccao_txt = f"Entregue em {refaccao_dado['data']} (+{refaccao_dado['bonus']:.1f} pts)" if teve_refaccao else "Pendente / Não Entregue"
 
-                if rec_v > 0 and media_inicial_t < 6.0:
-                    media_com_rec = (media_inicial_t + rec_v) / 2.0
-                    m_live_t = min(10.0, max(media_inicial_t, round(media_com_rec * 2) / 2))
-                else:
-                    m_live_t = media_inicial_t
-                
-                m_final_usada = m_live_t
-
-            tem_atividade_real = (not reg_t.empty) or (c1_v > 0) or (c2_v > 0) or (c3_v > 0) or (rec_v > 0) or (b_diario_t != 0)
+            if not tem_atividade_real:
+                selo_transparencia = "⏳ A Cursar"
+                cor_selo = "gray"
+                calculo_rec_str = "—"
+            elif tem_rec and rec_calculada > media_normal:
+                selo_transparencia = "🔵 Aprovado por Recuperação Paralela"
+                cor_selo = "#2962FF"
+                calculo_rec_str = f"({media_normal:.1f} + {rec_val:.1f}) ÷ 2 = {rec_calculada:.1f}"
+            elif media_final >= 6.0 and soma_provas_puras < 4.0:
+                selo_transparencia = "🟡 Aprovado com Apoio Pedagógico (Caderno/Refacção)"
+                cor_selo = "#F1C40F"
+                calculo_rec_str = f"Protegida em {media_final:.1f} (Não-Regressão)" if tem_rec else "Dispensado da REC"
+            elif media_final >= 6.0:
+                selo_transparencia = "🟢 Aprovação Autônoma em Provas"
+                cor_selo = "#2ECC71"
+                calculo_rec_str = "Dispensado da REC"
+            elif media_final == 5.5:
+                selo_transparencia = "🟠 Em Recomposição (Margem de 0.5)"
+                cor_selo = "#E67E22"
+                calculo_rec_str = f"({media_normal:.1f} + {rec_val:.1f}) ÷ 2 = {rec_calculada:.1f} ➔ Mantida 5.5" if tem_rec else "Refacção Já Utilizada / REC Pendente"
+            else:
+                selo_transparencia = "🔴 Convocado para Recuperação / Abaixo da Média"
+                cor_selo = "#E74C3C"
+                calculo_rec_str = f"({media_normal:.1f} + {rec_val:.1f}) ÷ 2 = {rec_calculada:.1f}" if tem_rec else "Pendente de Avaliação"
 
             if tem_atividade_real:
                 if t_k in ["I Trimestre", "II Trimestre"]:
-                    soma_1_2_preditiva += m_final_usada
-
-                if m_final_usada >= 6.0: sit_trim = "Na Média"
-                elif m_final_usada == 5.5: sit_trim = "Refacção (+0.5)"
-                else: sit_trim = "Recomposição"
+                    soma_1_2_preditiva += media_final
 
                 notas_consolidadas_trimestres.append({
                     "periodo": t_k,
                     "c1": f"{c1_v:.1f}",
                     "c2": f"{c2_v:.1f}",
                     "c3": f"{c3_v:.1f}",
+                    "provas_puras": f"{soma_provas_puras:.1f}",
                     "bonus": f"{b_diario_t:+.1f}",
-                    "soma_bruta": f"{soma_bruta_t:.2f}",
-                    "media_inicial": f"{media_inicial_t:.1f}",
-                    "rec": f"{rec_v:.1f}" if rec_v > 0 else "-",
-                    "media_final": f"{m_final_usada:.1f}",
-                    "media_final_num": m_final_usada,
-                    "situacao": sit_trim,
+                    "status_refaccao": refaccao_txt,
+                    "media_inicial": f"{media_normal:.1f}",
+                    "rec": f"{rec_val:.1f}" if tem_rec else "-",
+                    "calculo_rec": calculo_rec_str,
+                    "rec_calculada": f"{rec_calculada:.1f}" if tem_rec else "-",
+                    "media_final": f"{media_final:.1f}",
+                    "media_final_num": media_final,
+                    "selo_transparencia": selo_transparencia,
+                    "cor_selo": cor_selo,
                     "iniciado": True
                 })
             else:
@@ -4877,13 +4938,17 @@ Escola Municipal Flávio José Simões Costa"""
                     "c1": "—",
                     "c2": "—",
                     "c3": "—",
+                    "provas_puras": "—",
                     "bonus": "—",
-                    "soma_bruta": "—",
+                    "status_refaccao": "—",
                     "media_inicial": "—",
                     "rec": "—",
+                    "calculo_rec": "—",
+                    "rec_calculada": "—",
                     "media_final": "—",
                     "media_final_num": 0.0,
-                    "situacao": "⏳ Em Aberto (A Cursar)",
+                    "selo_transparencia": "⏳ A Cursar",
+                    "cor_selo": "gray",
                     "iniciado": False
                 })
 
@@ -4891,7 +4956,7 @@ Escola Municipal Flávio José Simões Costa"""
         meta_iii_arred = round(meta_iii_necessaria * 2) / 2
 
         if soma_1_2_preditiva >= 18.0:
-            status_preditivo_aluno = "Aprovado Antecipado"
+            status_preditivo_aluno = "Aprovado Antecipado (≥ 18.0)"
         elif meta_iii_arred <= 4.0:
             status_preditivo_aluno = "Meta Confortável (≤ 4.0 pts)"
         elif meta_iii_arred <= 6.5:
@@ -4907,27 +4972,30 @@ Escola Municipal Flávio José Simões Costa"""
         perc_visto_hero_str = "0%"
         bonus_total_hero_str = "+0.0 pts"
         delta_faltas_str = "0 falta(s)"
+        total_aulas_contadas = 0
+        aulas_visto_ok = 0
+        aulas_visto_total = 0
 
         if not df_diario.empty and 'ID_ALUNO' in df_diario.columns and 'TURMA' in df_diario.columns:
             df_d_aluno_turma = df_diario[(df_diario['ID_ALUNO'].apply(db.limpar_id) == id_alu) & (df_diario['TURMA'] == turma_b)].copy()
             if not df_d_aluno_turma.empty and 'DATA' in df_d_aluno_turma.columns:
-                df_d_aluno_turma['DATA_DT'] = pd.to_datetime(df_d_aluno_turma['DATA'], format="%d/%m/%Y", errors='coerce').dt.date
+                df_d_aluno_turma['DATA_DT'] = pd.to_datetime(df_d_aluno_turma['DATA'].apply(util.formatar_data_br), format="%d/%m/%Y", errors='coerce').dt.date
                 
                 df_d_periodo = df_d_aluno_turma[(df_d_aluno_turma['DATA_DT'] >= dt_ini) & (df_d_aluno_turma['DATA_DT'] <= dt_fim)]
                 df_d_validas = df_d_periodo[~df_d_periodo['TAGS'].isin(["DIA NÃO LETIVO", "BONUS_CONSELHO", "SISTEMA_NOTA"])] if not df_d_periodo.empty else pd.DataFrame()
                 
-                tot_aulas_reg = len(df_d_validas)
+                total_aulas_contadas = len(df_d_validas)
                 
-                if tot_aulas_reg > 0:
+                if total_aulas_contadas > 0:
                     faltas_hero = len(df_d_validas[df_d_validas['TAGS'] == "AUSÊNCIA"])
-                    calc_pres = ((tot_aulas_reg - faltas_hero) / tot_aulas_reg) * 100
+                    calc_pres = ((total_aulas_contadas - faltas_hero) / total_aulas_contadas) * 100
                     perc_presenca_hero_str = f"{calc_pres:.0f}%"
                     delta_faltas_str = f"{faltas_hero} falta(s)"
 
                     df_vistos_calc = df_d_validas[df_d_validas.get('VISTO_ATIVIDADE', '').astype(str).str.upper() != "ISENTO"]
-                    tot_vistos_poss = len(df_vistos_calc)
-                    ok_vistos_cnt = len(df_vistos_calc[df_vistos_calc.get('VISTO_ATIVIDADE', '').astype(str).str.upper() == "TRUE"])
-                    calc_vistos = (ok_vistos_cnt / tot_vistos_poss) * 100 if tot_vistos_poss > 0 else 0
+                    aulas_visto_total = len(df_vistos_calc)
+                    aulas_visto_ok = len(df_vistos_calc[df_vistos_calc.get('VISTO_ATIVIDADE', '').astype(str).str.upper() == "TRUE"])
+                    calc_vistos = (aulas_visto_ok / aulas_visto_total) * 100 if aulas_visto_total > 0 else 0
                     perc_visto_hero_str = f"{calc_vistos:.0f}%"
                     
                     b_somado = df_d_periodo.get('BONUS', pd.Series()).apply(util.sosa_to_float).sum()
@@ -4940,15 +5008,16 @@ Escola Municipal Flávio José Simões Costa"""
 
         rotulo_assiduidade = f"Assiduidade ({trim_b})" if trim_b != "Todos" else "Assiduidade Anual"
         rotulo_vistos = f"Vistos de Caderno ({trim_b})" if trim_b != "Todos" else "Vistos de Caderno (Geral)"
-        regra_arred_texto = "A Média Regimental da Prefeitura de Itabuna utiliza o arredondamento para o meio ponto (0,5 em 0,5) mais próximo. A Recuperação aplica a média aritmética: (Média do Trimestre + Recuperação) ÷ 2."
 
-        # BENTO CARD DE TOPO DINÂMICO
+        # ==============================================================================
+        # BENTO CARD DE TOPO (IDENTIDADE, SOMA ANUAL & META III TRI)
+        # ==============================================================================
         with st.container(border=True):
             c_h1, c_h2, c_h3, c_h4 = st.columns([1.8, 1.4, 1, 1])
             
             with c_h1:
                 st.markdown(f"### {aluno_b_label}")
-                st.caption(f"**ID:** {id_alu} | **Turma:** {turma_b} | **Status:** `{status_atual_aluno}`")
+                st.caption(f"**ID:** `{id_alu}` | **Turma:** {turma_b} | **Status:** `{status_atual_aluno}`")
                 
                 if "PENDENTE" in perfil_atual or "SUSPEITA" in perfil_atual: st.caption(f"Perfil: Radar Clínico ({perfil_atual})")
                 elif "DEFASAGEM" in perfil_atual: st.caption(f"Perfil: Defasagem Pedagógica ({perfil_atual})")
@@ -4958,18 +5027,30 @@ Escola Municipal Flávio José Simões Costa"""
                 
             with c_h2:
                 if soma_1_2_preditiva >= 18.0:
-                    st.metric("Soma (I + II)", f"{soma_1_2_preditiva:.1f} pts", "Aprovado Antecipado", help=regra_arred_texto)
+                    st.metric("Soma (I + II Tri)", f"{soma_1_2_preditiva:.1f} pts", "Aprovado Antecipado")
                 else:
-                    st.metric("Soma (I + II)", f"{soma_1_2_preditiva:.1f} pts", f"Meta III Tri: {meta_iii_arred:.1f} pts", help=regra_arred_texto)
+                    st.metric("Soma (I + II Tri)", f"{soma_1_2_preditiva:.1f} pts", f"Meta III Tri: {meta_iii_arred:.1f} pts")
                 st.caption(f"Projeção: **{status_preditivo_aluno}**")
 
             c_h3.metric(rotulo_assiduidade, perc_presenca_hero_str, delta_faltas_str, delta_color="inverse" if faltas_hero > 0 else "normal")
             c_h4.metric(rotulo_vistos, perc_visto_hero_str, bonus_total_hero_str)
 
+        # BARRA DE AÇÕES RÁPIDAS EXECUTIVAS
         c_act_b1, c_act_b2, c_act_b3 = st.columns(3)
         
-        if c_act_b1.button("Extrato para WhatsApp", use_container_width=True, key=f"btn_zap_bio_{v}"):
-            dialog_whatsapp(nome_limpo, turma_b, status_atual_aluno, soma_1_2_preditiva, meta_iii_arred, status_preditivo_aluno, perc_presenca_hero_str, faltas_hero, perc_visto_hero_str, bonus_total_hero_str, regra_arred_texto)
+        if c_act_b1.button("Extrato Transparente para WhatsApp", type="primary", use_container_width=True, key=f"btn_zap_bio_{v}"):
+            dialog_whatsapp(
+                nome_limpo_dialog=nome_limpo,
+                turma_dialog=turma_b,
+                status_aluno_dialog=status_atual_aluno,
+                soma_acumulada_dialog=soma_1_2_preditiva,
+                meta_iii_dialog=meta_iii_arred,
+                status_meta_dialog=status_preditivo_aluno,
+                assiduidade_dialog=perc_presenca_hero_str.replace('%',''),
+                faltas_dialog=faltas_hero,
+                engajamento_dialog=perc_visto_hero_str.replace('%',''),
+                relatorio_detalhado_trims=notas_consolidadas_trimestres
+            )
 
         if c_act_b2.button("Ficha de Rendimento Escolar (DOCX)", use_container_width=True, key=f"btn_docx_bio_{v}"):
             with st.spinner("Compilando Ficha de Rendimento Escolar em Word..."):
@@ -4993,7 +5074,7 @@ Escola Municipal Flávio José Simões Costa"""
                     st.link_button("Abrir Ficha no Google Drive", link_doc, type="primary", use_container_width=True)
                     st.balloons()
 
-        if c_act_b3.button("Certidão Oficial de Produção (DOCX)", type="primary", use_container_width=True, key=f"btn_certidao_transf_{v}"):
+        if c_act_b3.button("Certidão Oficial de Produção (DOCX)", use_container_width=True, key=f"btn_certidao_transf_{v}"):
             with st.spinner("Compilando Certidão Oficial de Produção em Word..."):
                 lista_notas_certidao = []
                 for n_t in notas_consolidadas_trimestres:
@@ -5028,18 +5109,43 @@ Escola Municipal Flávio José Simões Costa"""
         st.markdown("---")
 
         abas_bio = [
-            "Boletim Analítico & Metas",
+            "Extrato Forense & Transparência",
             "Avaliações Escaneadas & Lacunas",
             "Vida Escolar, Atitude & PEI"
         ]
         
         tabs = st.tabs(abas_bio)
 
-        # ABA 1: BOLETIM ANALÍTICO & METAS PREDITIVAS
+        # ==============================================================================
+        # ABA 1: EXTRATO FORENSE DE RENDIMENTO & CONSTRUÇÃO TRANSPARENTE DA NOTA
+        # ==============================================================================
         with tabs[0]:
-            st.markdown("#### Extrato Analítico de Rendimento")
-            st.caption("Sincronização dinâmica com a tabela oficial consolidada (DB_NOTAS) e arredondamento 0,5.")
+            st.markdown("#### Extrato Analítico de Construção da Nota")
+            st.caption("Visão aberta da composição de notas: distinção entre proficiência em provas e oportunidades/bônus concedidos pelo professor:")
 
+            # CARDS DE TRANSPARÊNCIA POR TRIMESTRE
+            for n_c in notas_consolidadas_trimestres:
+                if trim_b != "Todos" and n_c["periodo"] != trim_b:
+                    continue
+
+                if n_c["iniciado"]:
+                    with st.container(border=True):
+                        c_t_h1, c_t_h2 = st.columns([2.5, 1.5])
+                        c_t_h1.markdown(f"##### {n_c['periodo']}")
+                        c_t_h1.markdown(f"**Origem Pedagógica da Nota:** `{n_c['selo_transparencia']}`")
+                        
+                        c_t_h2.metric("Média Final Oficial", f"{n_c['media_final']} pts")
+
+                        st.markdown("<br>", unsafe_allow_html=True)
+                        c_sub1, c_sub2, c_sub3, c_sub4 = st.columns(4)
+                        c_sub1.metric("Provas e Testes (C2+C3)", f"{n_c['provas_puras']} / 7.0 pts", help="Nota cognitiva demonstrada sem consulta nas avaliações.")
+                        c_sub2.metric("Caderno & Tarefas (C1)", f"{n_c['c1']} / 3.0 pts", help="Compromisso do estudante com as lições de sala e casa.")
+                        c_sub3.metric("Bônus Concedidos (Prof.)", f"{n_c['bonus']} pts", f"Refacção: {n_c['status_refaccao']}", help="Ajudas atitudinais e refacção no caderno atribuídas pelo professor Ronaldo.")
+                        c_sub4.metric("Recuperação Paralela", f"{n_c['rec']}", f"Cálculo: {n_c['calculo_rec']}")
+
+            st.markdown("---")
+            st.markdown("##### Tabela Detalhada de Composição Regimental")
+            
             dados_tabela_boletim = []
             for n_c in notas_consolidadas_trimestres:
                 if trim_b != "Todos" and n_c["periodo"] != trim_b:
@@ -5047,56 +5153,108 @@ Escola Municipal Flávio José Simões Costa"""
 
                 dados_tabela_boletim.append({
                     "Período": n_c["periodo"],
+                    "Provas (C2+C3)": n_c["provas_puras"],
                     "Caderno (C1)": n_c["c1"],
-                    "Testes (C2)": n_c["c2"],
-                    "Prova (C3)": n_c["c3"],
-                    "Bônus": n_c["bonus"],
-                    "Soma": n_c["soma_bruta"],
+                    "Bônus / Refacção": n_c["bonus"],
                     "Média Pré-Rec": n_c["media_inicial"],
-                    "REC": n_c["rec"],
+                    "Prova REC (0-10)": n_c["rec"],
+                    "REC Calculada": n_c["rec_calculada"],
                     "Média Final": n_c["media_final"],
-                    "Situação": n_c["situacao"]
+                    "Origem da Média": n_c["selo_transparencia"]
                 })
 
             if dados_tabela_boletim:
                 def style_status_bio_tabela(val):
-                    if "Na Média" in str(val): return 'color: #2ECC71; font-weight: bold;'
-                    if "Refacção" in str(val): return 'color: #F1C40F; font-weight: bold;'
-                    if "Recomposição" in str(val): return 'color: #E74C3C; font-weight: bold;'
+                    if "Autônoma" in str(val): return 'color: #2ECC71; font-weight: bold;'
+                    if "Apoio Pedagógico" in str(val): return 'color: #F1C40F; font-weight: bold;'
+                    if "Recuperação Paralela" in str(val): return 'color: #2962FF; font-weight: bold;'
+                    if "Recomposição" in str(val): return 'color: #E67E22; font-weight: bold;'
+                    if "Convocado" in str(val) or "Abaixo" in str(val): return 'color: #E74C3C; font-weight: bold;'
                     return 'color: #94A3B8;'
 
                 st.dataframe(
-                    pd.DataFrame(dados_tabela_boletim).style.map(style_status_bio_tabela, subset=['Situação']),
+                    pd.DataFrame(dados_tabela_boletim).style.map(style_status_bio_tabela, subset=['Origem da Média']),
                     hide_index=True, use_container_width=True,
                     column_config={
                         "Período": st.column_config.TextColumn("Período", width="medium"),
-                        "Caderno (C1)": st.column_config.TextColumn("C1", width="small"),
-                        "Testes (C2)": st.column_config.TextColumn("C2", width="small"),
-                        "Prova (C3)": st.column_config.TextColumn("C3", width="small"),
-                        "Bônus": st.column_config.TextColumn("Bônus", width="small"),
-                        "Soma": st.column_config.TextColumn("Soma", width="small"),
-                        "Média Pré-Rec": st.column_config.TextColumn("Média Pré-Rec", width="small"),
-                        "REC": st.column_config.TextColumn("REC", width="small"),
-                        "Média Final": st.column_config.TextColumn("Média Final", width="small"),
-                        "Situação": st.column_config.TextColumn("Situação", width="medium")
+                        "Provas (C2+C3)": st.column_config.TextColumn("Provas Puras", width="small", help="Soma dos testes e provas sem bônus"),
+                        "Caderno (C1)": st.column_config.TextColumn("Caderno", width="small"),
+                        "Bônus / Refacção": st.column_config.TextColumn("Bônus Prof.", width="small"),
+                        "Média Pré-Rec": st.column_config.TextColumn("Média Normal", width="small"),
+                        "Prova REC (0-10)": st.column_config.TextColumn("Prova REC", width="small"),
+                        "REC Calculada": st.column_config.TextColumn("REC Oficial", width="small", help="(Média Normal + Prova REC) / 2"),
+                        "Média Final": st.column_config.TextColumn("Média Final", width="small", help="Maior nota (não-regressiva)"),
+                        "Origem da Média": st.column_config.TextColumn("Diagnóstico de Origem", width="large")
                     }
                 )
-            else:
-                st.info("Nenhuma nota cadastrada para o período selecionado.")
 
+            # CHECKLIST FORENSE DE OPORTUNIDADES OFERECIDAS
             st.markdown("---")
             with st.container(border=True):
-                st.markdown("##### Simulação Preditiva para o III Trimestre")
+                st.markdown(f"#### 🛡️ Checklist de Oportunidades Pedagógicas Ofertadas pelo Prof. Ronaldo")
+                st.caption(f"Registro objetivo de todas as instâncias de avaliação e recuperação disponibilizadas a **{nome_limpo}**:")
+
+                trim_foco_chk = "II Trimestre" if trim_b == "Todos" else trim_b
+                dados_trim_chk = next((n for n in notas_consolidadas_trimestres if n["periodo"] == trim_foco_chk), None)
+
+                if dados_trim_chk and dados_trim_chk["iniciado"]:
+                    c_chk1, c_chk2 = st.columns(2)
+
+                    with c_chk1:
+                        st.markdown("**1. Avaliações Regulares de Sala:**")
+                        st.write(f"• Testes e Simulados (C2): **{dados_trim_chk['c2']} / 3.0 pts**")
+                        st.write(f"• Avaliação Bimestral Oficial (C3): **{dados_trim_chk['c3']} / 4.0 pts**")
+                        st.write(f"• Total Cognitivo em Provas: **{dados_trim_chk['provas_puras']} / 7.0 pts**")
+
+                        st.markdown("**2. Compromisso com Tarefas de Casa (Caderno C1):**")
+                        if aulas_visto_total > 0:
+                            st.write(f"• Vistos Concluídos: **{aulas_visto_ok} de {aulas_visto_total} tarefas cobradas** ({perc_visto_hero_str})")
+                            perda_vistos = 3.0 - util.sosa_to_float(dados_trim_chk['c1'])
+                            if perda_vistos > 0.5:
+                                st.warning(f"⚠️ O estudante deixou de somar **{perda_vistos:.1f} pontos** por tarefas não apresentadas no caderno.")
+                            else:
+                                st.success("✅ Excelente engajamento com as tarefas do caderno.")
+
+                    with c_chk2:
+                        st.markdown("**3. Oportunidades Extras Concedidas pelo Professor:**")
+                        ref_info = refaccao_info_by_trim.get(trim_foco_chk)
+                        if ref_info:
+                            st.success(f"✅ **Refacção Solidária Entregue:** O estudante refez a avaliação no caderno e recebeu **+{ref_info['bonus']:.1f} pontos** adicionados à nota em {ref_info['data']}.")
+                        else:
+                            st.info("🟡 **Refacção Solidária:** Oportunidade de refazer as questões erradas no caderno para somar +0.5 pts foi ofertada em sala.")
+
+                        st.markdown("**4. Exame de Recuperação Paralela (Escala 0 a 10):**")
+                        rec_val_chk = util.sosa_to_float(dados_trim_chk['rec'])
+                        if rec_val_chk >= 0:
+                            st.write(f"• Nota Obtida na Prova Discursiva de Recuperação: **{rec_val_chk:.1f} / 10.0 pts**")
+                            st.write(f"• Aplicação da Fórmula da Prefeitura: `({dados_trim_chk['media_inicial']} + {rec_val_chk:.1f}) ÷ 2 = {dados_trim_chk['rec_calculada']}`")
+                            
+                            if util.sosa_to_float(dados_trim_chk['rec_calculada']) < util.sosa_to_float(dados_trim_chk['media_inicial']):
+                                st.success(f"🛡️ **Proteção Regimental Aplicada:** O cálculo pós-rec daria {dados_trim_chk['rec_calculada']} pts. O Prof. Ronaldo assegurou a média anterior de **{dados_trim_chk['media_final']} pts**, impedindo que a nota do aluno diminuísse.")
+                            else:
+                                st.success(f"📈 **Superação Comprovada:** O aluno elevou sua média de {dados_trim_chk['media_inicial']} para **{dados_trim_chk['media_final']} pontos**.")
+                        else:
+                            if util.sosa_to_float(dados_trim_chk['media_final']) >= 6.0:
+                                st.write("• Estudante dispensado da recuperação por ter alcançado a média regimental.")
+                            else:
+                                st.warning("⚠️ Convocado para a recuperação paralela, porém ausente ou sem registro de realização.")
+
+            # SIMULAÇÃO PREDITIVA PARA O III TRIMESTRE
+            st.markdown("---")
+            with st.container(border=True):
+                st.markdown("##### Simulação Preditiva para o III Trimestre (Meta Anual: 18,0 pontos)")
                 c_s_al1, c_s_al2 = st.columns([1.5, 2])
                 
-                c_s_al1.metric("Soma Acumulada (I + II)", f"{soma_1_2_preditiva:.1f} / 18.0 pts")
+                c_s_al1.metric("Soma Acumulada (I + II Tri)", f"{soma_1_2_preditiva:.1f} / 18.0 pts")
                 
                 if soma_1_2_preditiva >= 18.0:
-                    c_s_al2.success("O estudante atingiu a pontuação regimental anual necessária para aprovação direta!")
+                    c_s_al2.success("O estudante atingiu a pontuação regimental anual necessária e já está aprovado por antecipação em Matemática!")
                 else:
-                    c_s_al2.info(f"Meta no III Trimestre: O estudante necessita de **{meta_iii_arred:.1f} pontos** no III Trimestre para aprovação sem recuperação final.")
+                    c_s_al2.info(f"Projeção Oficial: Para fechar o ano letivo aprovado direto, o estudante necessita de **{meta_iii_arred:.1f} pontos** no III Trimestre ({status_preditivo_aluno}).")
 
+        # ==============================================================================
         # ABA 2: AVALIAÇÕES ESCANEADAS & MAPA DE LACUNAS
+        # ==============================================================================
         with tabs[1]:
             st.markdown("#### Histórico de Avaliações Escaneadas")
             
@@ -5176,7 +5334,9 @@ Escola Municipal Flávio José Simões Costa"""
                 else:
                     st.success("Excelente domínio conceitual. Nenhuma lacuna crítica registrada.")
 
+        # ==============================================================================
         # ABA 3: VIDA ESCOLAR, ATITUDE & PEI
+        # ==============================================================================
         with tabs[2]:
             st.markdown("#### Registro de Atitude & Vida Escolar")
             
@@ -5230,7 +5390,7 @@ Escola Municipal Flávio José Simões Costa"""
                 else:
                     st.info(f"Nenhum Dossiê PEI específico arquivado para o {trim_b}.")
 
-        st.caption(f"Dossiê individual auditado e sincronizado em: {datetime.now().strftime('%d/%m/%Y às %H:%M')}")
+        st.caption(f"Dossiê individual auditado e sincronizado com o banco de dados em: {datetime.now().strftime('%d/%m/%Y às %H:%M')}")
 
 
 
@@ -6208,7 +6368,6 @@ Escola Municipal Flávio José Simões Costa"""
                         else: st.error("Digite o texto da ata antes de salvar.")
 
             @st.fragment
-            @st.fragment
             def renderizar_boletim_anual_fragmento():
                 df_t = df_notas[df_notas['TURMA'] == turma_sel].copy() if not df_notas.empty and 'TURMA' in df_notas.columns else pd.DataFrame()
                 
@@ -6250,12 +6409,12 @@ Escola Municipal Flávio José Simões Costa"""
                                 calendario_trims[t_k] = (calendario_trims[t_k][0], dt_corte_obj)
                             except: pass
 
-                    # Mapeamento do bônus atitudinal por estudante e trimestre a partir do Diário de Bordo
+                    # 1. MAPEAMENTO DE BÔNUS ATITUDINAIS E REFACÇÕES DO DIÁRIO DE BORDO
                     mapa_bonus_trim = {}
                     if not df_diario.empty and 'TURMA' in df_diario.columns and 'BONUS' in df_diario.columns:
                         df_d_turma = df_diario[df_diario['TURMA'] == turma_sel].copy()
                         if not df_d_turma.empty and 'DATA' in df_d_turma.columns:
-                            df_d_turma['DT_OBJ'] = pd.to_datetime(df_d_turma['DATA'], format="%d/%m/%Y", errors='coerce').dt.date
+                            df_d_turma['DT_OBJ'] = pd.to_datetime(df_d_turma['DATA'].apply(util.formatar_data_br), format="%d/%m/%Y", errors='coerce').dt.date
                             for t_k, (d_ini, d_fim) in calendario_trims.items():
                                 df_d_sub = df_d_turma[(df_d_turma['DT_OBJ'] >= d_ini) & (df_d_turma['DT_OBJ'] <= d_fim)]
                                 if not df_d_sub.empty:
@@ -6263,7 +6422,7 @@ Escola Municipal Flávio José Simões Costa"""
                                         b_sum = grp['BONUS'].apply(util.sosa_to_float).sum()
                                         mapa_bonus_trim[(db.limpar_id(id_raw), t_k)] = b_sum
 
-                    # Mapeamento de notas de recuperação diretamente do Scanner CIR (caso ainda não estejam consolidadas)
+                    # 2. MAPEAMENTO DE NOTAS DE RECUPERAÇÃO DO SCANNER CIR (FALLBACK INTEGRAL)
                     mapa_live_rec = {}
                     if not df_diagnosticos.empty and 'TURMA' in df_diagnosticos.columns and 'ID_AVALIACAO' in df_diagnosticos.columns:
                         mask_diag_turma = (df_diagnosticos['TURMA'] == turma_sel)
@@ -6292,8 +6451,8 @@ Escola Municipal Flávio José Simões Costa"""
 
                     df_t['REC_PROVA_CRUA'] = df_t['NOTA_REC'].apply(extrair_rec_crua)
 
-                    # 1. Média do Trimestre (Normal antes da REC)
-                    def calc_media_normal(r):
+                    # 3. TRÍADE REGIMENTAL OFICIAL: MÉDIA NORMAL | REC CALCULADA | MÉDIA FINAL
+                    def calc_triade_notas(r):
                         id_al = db.limpar_id(r.get('ID_ALUNO', ''))
                         t_nome = str(r.get('TRIMESTRE', '')).strip()
                         c1 = r['C1_N']
@@ -6308,45 +6467,28 @@ Escola Municipal Flávio José Simões Costa"""
                         c3_f = min(4.0, c3 + max(0.0, sobra_2))
 
                         soma_normal = c1_f + c2_f + c3_f
-                        m_calc = arred_05_bol(soma_normal)
+                        m_normal_calc = arred_05_bol(soma_normal)
 
                         rec_crua = r['REC_PROVA_CRUA']
                         if rec_crua < 0 and (id_al, t_nome) in mapa_live_rec:
                             rec_crua = mapa_live_rec[(id_al, t_nome)]
 
+                        mf_banco = r['MF_BANCO']
+
+                        # CENÁRIO A: Aluno NÃO realizou recuperação
                         if rec_crua < 0:
-                            return max(m_calc, r['MF_BANCO'])
+                            m_normal = max(m_normal_calc, mf_banco)
+                            rec_calc = -1.0
+                            m_final = m_normal
+                        # CENÁRIO B: Aluno REALIZOU recuperação
+                        else:
+                            m_normal = m_normal_calc
+                            rec_calc = arred_05_bol((m_normal + rec_crua) / 2.0)
+                            m_final = max(m_normal, rec_calc, mf_banco)
 
-                        return m_calc
+                        return pd.Series([m_normal, rec_calc, m_final])
 
-                    df_t['MEDIA_NORMAL'] = df_t.apply(calc_media_normal, axis=1)
-
-                    # 2. Nota da Recuperação Calculada: (Média Normal + Prova REC) / 2
-                    def calc_rec_regimental(r):
-                        id_al = db.limpar_id(r.get('ID_ALUNO', ''))
-                        t_nome = str(r.get('TRIMESTRE', '')).strip()
-                        rec_crua = r['REC_PROVA_CRUA']
-                        if rec_crua < 0 and (id_al, t_nome) in mapa_live_rec:
-                            rec_crua = mapa_live_rec[(id_al, t_nome)]
-
-                        if rec_crua >= 0.0:
-                            m_norm = r['MEDIA_NORMAL']
-                            rec_calc = arred_05_bol((m_norm + rec_crua) / 2.0)
-                            return rec_calc
-                        return -1.0
-
-                    df_t['REC_CALCULADA'] = df_t.apply(calc_rec_regimental, axis=1)
-
-                    # 3. Média Final do Trimestre: maior nota entre Média Normal e Recuperação Calculada
-                    def calc_mf_soberana(r):
-                        m_norm = r['MEDIA_NORMAL']
-                        r_calc = r['REC_CALCULADA']
-                        m_banco = r['MF_BANCO']
-                        if r_calc >= 0.0:
-                            return max(m_norm, r_calc, m_banco)
-                        return max(m_norm, m_banco)
-
-                    df_t['MEDIA_FINAL_SOBERANA'] = df_t.apply(calc_mf_soberana, axis=1)
+                    df_t[['MEDIA_NORMAL', 'REC_CALCULADA', 'MEDIA_FINAL_SOBERANA']] = df_t.apply(calc_triade_notas, axis=1)
 
                     pivot = df_t.pivot_table(
                         index=["ID_ALUNO", "NOME_ALUNO"], 
