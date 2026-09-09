@@ -1077,9 +1077,9 @@ def ajustar_bonus_punicao_diario(data_str, id_aluno, turma, novo_bonus_str, nova
 
 def salvar_refaccao_soberana(data_str, id_aluno, nome_aluno, turma, pts_refaccao, alvo_refaccao):
     """
-    SOSA V2026 - GRAVAÇÃO DE REFACÇÃO COM UPSERT BLINDADO (ANTI-DUPLICIDADE):
-    Apaga qualquer registro anterior de refacção do aluno antes de gravar o novo bônus,
-    impedindo que múltiplos cliques acumulem pontos indevidos.
+    SOSA V2026 - GRAVAÇÃO DE REFACÇÃO COM UPSERT BLINDADO E CADEADO TRIMESTRAL:
+    Apaga apenas registros de refacção do mesmo estudante no MESMO TRIMESTRE,
+    protegendo integralmente os lançamentos de outros períodos do ano letivo.
     """
     try:
         wb = conectar()
@@ -1088,12 +1088,23 @@ def salvar_refaccao_soberana(data_str, id_aluno, nome_aluno, turma, pts_refaccao
         dados = ws.get_all_values()
         id_clean = str(limpar_id(id_aluno))
         
+        # Identifica o intervalo de datas do trimestre da refacção lançada
+        dt_ref = pd.to_datetime(util.formatar_data_br(data_str), format="%d/%m/%Y", errors='coerce').date()
+        if dt_ref <= date(2026, 5, 22):
+            dt_ini_trim, dt_fim_trim = date(2026, 2, 9), date(2026, 5, 22)
+        elif dt_ref <= date(2026, 9, 11):
+            dt_ini_trim, dt_fim_trim = date(2026, 5, 25), date(2026, 9, 11)
+        else:
+            dt_ini_trim, dt_fim_trim = date(2026, 9, 12), date(2026, 12, 17)
+        
         linhas_para_deletar = []
         for i in range(1, len(dados)):
             row = dados[i]
             if len(row) > 6 and str(limpar_id(row[1])) == id_clean and row[3].strip() == turma.strip():
-                if "Refacção" in str(row[6]) or "Refaccao" in str(row[6]) or "REFACÇÃO" in str(row[6]) or "SISTEMA_NOTA" in str(row[5]):
-                    linhas_para_deletar.append(i + 1)
+                dt_row = pd.to_datetime(util.formatar_data_br(row[0]), format="%d/%m/%Y", errors='coerce').date()
+                if dt_ini_trim <= dt_row <= dt_fim_trim:
+                    if "Refacção" in str(row[6]) or "Refaccao" in str(row[6]) or "REFACÇÃO" in str(row[6]) or "SISTEMA_NOTA" in str(row[5]):
+                        linhas_para_deletar.append(i + 1)
                     
         for idx_del in reversed(linhas_para_deletar):
             ws.delete_rows(idx_del)
@@ -1109,6 +1120,41 @@ def salvar_refaccao_soberana(data_str, id_aluno, nome_aluno, turma, pts_refaccao
         return True
     except Exception as e:
         print(f"Erro no salvamento de refacção: {e}")
+        return False
+
+def salvar_gabarito_escaneado_atomico(data_prova, id_aluno, nome_aluno, turma, id_avaliacao, respostas_aluno, nota_calc, link_foto="N/A"):
+    """
+    SOSA V2026 - UPSERT ATÔMICO DE GABARITO (ANTI-DUPLICIDADE TOTAL):
+    Localiza e purga qualquer registro prévio do mesmo estudante para a mesma avaliação
+    antes de gravar o novo resultado, eliminando duplicatas históricas.
+    """
+    try:
+        wb = conectar()
+        if not wb: return False
+        ws = wb.worksheet("DB_GABARITOS_ALUNOS")
+        dados = ws.get_all_values()
+        
+        id_clean = str(limpar_id(id_aluno))
+        av_clean = str(id_avaliacao).split("-")[0].strip().upper()
+        
+        linhas_del = []
+        for i in range(1, len(dados)):
+            row = dados[i]
+            if len(row) > 4 and str(limpar_id(row[1])) == id_clean and row[3].strip() == turma.strip():
+                if av_clean in str(row[4]).upper():
+                    linhas_del.append(i + 1)
+                    
+        for idx in reversed(linhas_del):
+            ws.delete_rows(idx)
+            
+        ws.append_row([
+            util.formatar_data_br(data_prova), id_clean, nome_aluno, turma, id_avaliacao, respostas_aluno, util.sosa_to_str(nota_calc), link_foto
+        ], value_input_option="USER_ENTERED")
+        
+        st.cache_data.clear()
+        return True
+    except Exception as e:
+        print(f"Erro no UPSERT atômico de gabarito: {e}")
         return False
 
 def salvar_config_corte_trimestre(turma, trimestre, data_corte_str):
@@ -1141,7 +1187,7 @@ def transferir_titularidade_gabarito(id_origem, nome_origem, id_destino, nome_de
         
         id_origem_clean = str(limpar_id(id_origem))
         id_destino_clean = str(limpar_id(id_destino))
-        nome_curto_av = id_avaliacao.split("-")[0].strip()
+        nome_curto_av = id_avaliacao.split("-")[0].strip().upper()
         
         ws_gab = wb.worksheet("DB_GABARITOS_ALUNOS")
         dados_gab = ws_gab.get_all_values()
@@ -1149,7 +1195,7 @@ def transferir_titularidade_gabarito(id_origem, nome_origem, id_destino, nome_de
         registro_origem = None
         for i in range(1, len(dados_gab)):
             row = dados_gab[i]
-            if len(row) > 4 and row[3] == turma and nome_curto_av in row[4]:
+            if len(row) > 4 and row[3] == turma and nome_curto_av in str(row[4]).upper():
                 if str(limpar_id(row[1])) == id_origem_clean:
                     registro_origem = row
                     break
@@ -1163,20 +1209,14 @@ def transferir_titularidade_gabarito(id_origem, nome_origem, id_destino, nome_de
         nota_calc = registro_origem[6]
         link_foto = registro_origem[7] if len(registro_origem) > 7 else "N/A"
         
-        for i in range(len(dados_gab) - 1, 0, -1):
-            row = dados_gab[i]
-            if len(row) > 4 and row[3] == turma and nome_curto_av in row[4]:
-                if str(limpar_id(row[1])) == id_destino_clean:
-                    ws_gab.delete_rows(i + 1)
+        # Purga registro prévio do destino e grava o correto
+        salvar_gabarito_escaneado_atomico(data_prova, id_destino_clean, nome_destino, turma, id_av_real, respostas_aluno, nota_calc, link_foto)
         
-        salvar_no_banco("DB_GABARITOS_ALUNOS", [
-            data_prova, id_destino_clean, nome_destino, turma, id_av_real, respostas_aluno, nota_calc, link_foto
-        ])
-        
+        # Atualiza a situação do estudante de origem
         dados_gab_atual = ws_gab.get_all_values()
         for i in range(len(dados_gab_atual) - 1, 0, -1):
             row = dados_gab_atual[i]
-            if len(row) > 4 and row[3] == turma and nome_curto_av in row[4]:
+            if len(row) > 4 and row[3] == turma and nome_curto_av in str(row[4]).upper():
                 if str(limpar_id(row[1])) == id_origem_clean:
                     if "PENDENTE" in status_origem_apos.upper():
                         ws_gab.delete_rows(i + 1)
@@ -1194,10 +1234,10 @@ def transferir_titularidade_gabarito(id_origem, nome_origem, id_destino, nome_de
 def executar_saneamento_banco_soberano():
     """
     SOSA V2026 - MOTOR DE SANEAMENTO ATÔMICO UNIVERSAL BLINDADO:
-    1. Higieniza datas seriais (46259, 46270 -> DD/MM/YYYY).
-    2. Dedupica refacções acumuladas por múltiplos cliques.
-    3. PRESERVA bônus manuais já existentes em DB_NOTAS (regra do maior valor: max(banco, live)).
-    4. Estende a janela do II Trimestre até 11/09/2026 para acolher a recuperação.
+    1. Higieniza datas seriais (46259, 46270.0 -> DD/MM/YYYY) em todas as abas.
+    2. Dedupica DB_GABARITOS_ALUNOS (mantendo a maior nota/registro válido).
+    3. Dedupica DB_DIARIO_BORDO (preserva 1 refacção por trimestre por aluno).
+    4. Sincroniza e calibra DB_NOTAS para que C1+C2+C3 coincidam fisicamente com a Média Final.
     """
     wb = conectar()
     if not wb:
@@ -1207,7 +1247,7 @@ def executar_saneamento_banco_soberano():
 
     try:
         # 1. SANEAMENTO DE DATAS SERIAIS EM TODAS AS ABAS
-        for aba_nome in ["DB_RELATORIOS", "DB_AULAS_PRONTAS", "DB_GABARITOS_ALUNOS"]:
+        for aba_nome in ["DB_RELATORIOS", "DB_AULAS_PRONTAS", "DB_GABARITOS_ALUNOS", "DB_DIARIO_BORDO", "DB_REGISTRO_AULAS"]:
             try:
                 ws_temp = wb.worksheet(aba_nome)
                 dados_temp = ws_temp.get_all_values()
@@ -1215,8 +1255,9 @@ def executar_saneamento_banco_soberano():
                     mod_d = False
                     for idx in range(1, len(dados_temp)):
                         dt_val = str(dados_temp[idx][0]).strip()
-                        if dt_val.isdigit() and len(dt_val) == 5:
-                            dados_temp[idx][0] = util.formatar_data_br(dt_val)
+                        val_num = dt_val.split('.')[0] if '.' in dt_val else dt_val
+                        if val_num.isdigit() and len(val_num) == 5:
+                            dados_temp[idx][0] = util.formatar_data_br(val_num)
                             mod_d = True
                     if mod_d:
                         ws_temp.clear()
@@ -1224,9 +1265,44 @@ def executar_saneamento_banco_soberano():
             except Exception as e_dt:
                 print(f"Aviso serial {aba_nome}: {e_dt}")
 
-        # 2. DEDUPLICAÇÃO BLINDADA DO DIÁRIO (LIMITA A 1 REFACÇÃO POR ALUNO NO TRIMESTRE)
+        # 2. DEDUPLICAÇÃO DE DB_GABARITOS_ALUNOS (ELIMINA LINHAS DUPLICADAS HISTÓRICAS)
+        ws_gab = wb.worksheet("DB_GABARITOS_ALUNOS")
+        dados_gab = ws_gab.get_all_values()
+        if len(dados_gab) > 1:
+            header_g = dados_gab[0]
+            gabaritos_dedup = {}
+            for r in dados_gab[1:]:
+                if len(r) > 6:
+                    dt_g = util.formatar_data_br(r[0])
+                    id_g = str(limpar_id(r[1]))
+                    nome_g = r[2]
+                    turma_g = str(r[3]).strip()
+                    id_av_g = str(r[4]).strip()
+                    resp_g = r[5]
+                    nota_g = r[6]
+                    link_g = r[7] if len(r) > 7 else "N/A"
+                    
+                    av_canonica = re.sub(r'\s*\(\s*VARIANTE.*?\)', '', id_av_g, flags=re.IGNORECASE).strip().upper()
+                    chave_g = (id_g, turma_g, av_canonica)
+                    
+                    if chave_g not in gabaritos_dedup:
+                        gabaritos_dedup[chave_g] = [dt_g, id_g, nome_g, turma_g, id_av_g, resp_g, nota_g, link_g]
+                    else:
+                        nota_existente = util.sosa_to_float(gabaritos_dedup[chave_g][6])
+                        nota_nova = util.sosa_to_float(nota_g)
+                        # Preserva o registro com maior pontuação ou evidência real
+                        if nota_nova >= nota_existente:
+                            gabaritos_dedup[chave_g] = [dt_g, id_g, nome_g, turma_g, id_av_g, resp_g, nota_g, link_g]
+
+            linhas_gab_finais = [header_g] + list(gabaritos_dedup.values())
+            ws_gab.clear()
+            ws_gab.update(values=linhas_gab_finais, range_name='A1')
+            relatorio_execucao.append(f"✅ DB_GABARITOS_ALUNOS: Deduplicado com sucesso ({len(gabaritos_dedup)} registros consolidados).")
+
+        # 3. DEDUPLICAÇÃO BLINDADA DO DIÁRIO (LIMITA A 1 REFACÇÃO POR TRIMESTRE)
         ws_diario = wb.worksheet("DB_DIARIO_BORDO")
         dados_diario = ws_diario.get_all_values()
+        linhas_diario_finais = []
         
         if len(dados_diario) > 1:
             header_d = dados_diario[0]
@@ -1237,16 +1313,22 @@ def executar_saneamento_banco_soberano():
 
             for r in rows_d:
                 dt_k = util.formatar_data_br(r[0])
-                id_k = limpar_id(r[1])
+                id_k = str(limpar_id(r[1]))
                 turma_k = str(r[3]).strip()
                 visto_k = str(r[4]).strip().upper()
                 tag_k = str(r[5]).strip()
                 obs_k = str(r[6]).strip()
                 bonus_k = util.sosa_to_float(r[7])
 
+                # Identifica trimestre para não apagar refacção de outros períodos
+                dt_obj_d = pd.to_datetime(dt_k, format="%d/%m/%Y", errors='coerce').date()
+                if dt_obj_d <= date(2026, 5, 22): t_nome_d = "I Trimestre"
+                elif dt_obj_d <= date(2026, 9, 11): t_nome_d = "II Trimestre"
+                else: t_nome_d = "III Trimestre"
+
                 is_refaccao_entry = ("Refacção" in obs_k or "Refaccao" in obs_k or "REFACÇÃO" in obs_k or tag_k == "SISTEMA_NOTA")
                 if is_refaccao_entry:
-                    chave_ref = (id_k, turma_k)
+                    chave_ref = (id_k, turma_k, t_nome_d)
                     if chave_ref in refaccao_rastreada:
                         continue
                     refaccao_rastreada.add(chave_ref)
@@ -1277,21 +1359,20 @@ def executar_saneamento_banco_soberano():
 
             ws_diario.clear()
             ws_diario.update(values=linhas_diario_finais, range_name='A1')
-            relatorio_execucao.append("✅ DB_DIARIO_BORDO: Deduplicado com preservação atitudinal.")
+            relatorio_execucao.append("✅ DB_DIARIO_BORDO: Deduplicado com preservação de bônus.")
 
-        # 3. RECONSOLIDAÇÃO SOBERANA COM PRESERVAÇÃO DE BÔNUS MANUAIS DO BANCO
+        # 4. RECONSOLIDAÇÃO SOBERANA COM ABSORÇÃO DE BÔNUS EM C1, C2, C3
         ws_alunos = wb.worksheet("DB_ALUNOS")
         dados_alunos = ws_alunos.get_all_values()
-        alunos_dict = {limpar_id(r[0]): {"id": limpar_id(r[0]), "nome": r[1], "turma": r[2]} for r in dados_alunos[1:]}
+        alunos_dict = {str(limpar_id(r[0])): {"id": str(limpar_id(r[0])), "nome": r[1], "turma": r[2]} for r in dados_alunos[1:]}
 
         ws_notas = wb.worksheet("DB_NOTAS")
         dados_notas_atuais = ws_notas.get_all_values()
         
-        # Mapeia notas que o professor já havia alterado/bonificado manualmente no DB_NOTAS
         mapa_banco_existente = {}
         for r_n in dados_notas_atuais[1:]:
             if len(r_n) > 8:
-                chave_n = (limpar_id(r_n[0]), str(r_n[2]).strip(), str(r_n[3]).strip())
+                chave_n = (str(limpar_id(r_n[0])), str(r_n[2]).strip(), str(r_n[3]).strip())
                 mapa_banco_existente[chave_n] = {
                     "c1": util.sosa_to_float(r_n[4]),
                     "c2": util.sosa_to_float(r_n[5]),
@@ -1300,13 +1381,9 @@ def executar_saneamento_banco_soberano():
                     "media": util.sosa_to_float(r_n[8])
                 }
 
-        ws_gab = wb.worksheet("DB_GABARITOS_ALUNOS")
-        dados_gab = ws_gab.get_all_values()
+        df_d_clean = pd.DataFrame(linhas_diario_finais[1:], columns=[c.upper() for c in header_d]) if linhas_diario_finais else pd.DataFrame()
+        df_g_clean = pd.DataFrame(linhas_gab_finais[1:], columns=[c.upper() for c in header_g]) if 'linhas_gab_finais' in locals() else pd.DataFrame()
 
-        df_d_clean = pd.DataFrame(linhas_diario_finais[1:], columns=[c.upper() for c in header_d])
-        df_g_clean = pd.DataFrame(dados_gab[1:], columns=[c.upper() for c in dados_gab[0]])
-
-        # Janela do II Trimestre estendida para 11/09/2026 para acolher a recuperação de 05/09!
         trims_config = {
             "I Trimestre": (date(2026, 2, 9), date(2026, 5, 22)),
             "II Trimestre": (date(2026, 5, 25), date(2026, 9, 11)),
@@ -1314,6 +1391,36 @@ def executar_saneamento_banco_soberano():
         }
 
         novas_linhas_notas = [["ID_ALUNO", "NOME_ALUNO", "TURMA", "TRIMESTRE", "NOTA_VISTOS", "NOTA_TESTE", "NOTA_PROVA", "NOTA_REC", "MEDIA_FINAL"]]
+
+        def calibrar_avaliacoes_itabuna_05(c1_b, c2_b, c3_b, b_tot, media_alvo):
+            alvo = min(10.0, max(0.0, round(media_alvo * 2.0) / 2.0))
+            c1_com_b = c1_b + max(0.0, b_tot)
+            av1 = min(3.0, round(c1_com_b * 2.0) / 2.0)
+            sobra_1 = max(0.0, c1_com_b - av1)
+
+            c2_com_b = c2_b + sobra_1
+            av2 = min(3.0, round(c2_com_b * 2.0) / 2.0)
+            sobra_2 = max(0.0, c2_com_b - av2)
+
+            c3_com_b = c3_b + sobra_2
+            av3 = min(4.0, round(c3_com_b * 2.0) / 2.0)
+
+            soma_atual = round(av1 + av2 + av3, 1)
+            dif = round(alvo - soma_atual, 1)
+
+            while dif >= 0.5:
+                if av1 + 0.5 <= 3.0: av1 = round(av1 + 0.5, 1); dif = round(dif - 0.5, 1)
+                elif av2 + 0.5 <= 3.0: av2 = round(av2 + 0.5, 1); dif = round(dif - 0.5, 1)
+                elif av3 + 0.5 <= 4.0: av3 = round(av3 + 0.5, 1); dif = round(dif - 0.5, 1)
+                else: break
+
+            while dif <= -0.5:
+                if av1 - 0.5 >= 0.0: av1 = round(av1 - 0.5, 1); dif = round(dif + 0.5, 1)
+                elif av2 - 0.5 >= 0.0: av2 = round(av2 - 0.5, 1); dif = round(dif + 0.5, 1)
+                elif av3 - 0.5 >= 0.0: av3 = round(av3 - 0.5, 1); dif = round(dif + 0.5, 1)
+                else: break
+
+            return av1, av2, av3, round(av1 + av2 + av3, 1)
 
         for trim_nome, (dt_inicio, dt_fim) in trims_config.items():
             padrao_t_reg = util.obter_regex_trimestre(trim_nome)
@@ -1328,7 +1435,7 @@ def executar_saneamento_banco_soberano():
                 if not df_d_clean.empty:
                     df_d_sub = df_d_clean[(df_d_clean['ID_ALUNO'].apply(limpar_id) == id_aluno) & (df_d_clean['TURMA'] == turma_al)].copy()
                     if not df_d_sub.empty:
-                        df_d_sub['DT_OBJ'] = pd.to_datetime(df_d_sub['DATA'], format="%d/%m/%Y", errors='coerce').dt.date
+                        df_d_sub['DT_OBJ'] = pd.to_datetime(df_d_sub['DATA'].apply(util.formatar_data_br), format="%d/%m/%Y", errors='coerce').dt.date
                         df_d_trim = df_d_sub[(df_d_sub['DT_OBJ'] >= dt_inicio) & (df_d_sub['DT_OBJ'] <= dt_fim)]
                         
                         if not df_d_trim.empty:
@@ -1363,43 +1470,38 @@ def executar_saneamento_banco_soberano():
                                 elif any(x in av_id_txt for x in ["PROVA", "AVALIAÇÃO", "AVALIACAO", "EXAME", "2ª"]):
                                     prova_live = max(prova_live, n_g)
 
-                # BLINDAGEM SOBERANA: Se o professor já tinha dado nota maior no banco com bônus, preserva a maior!
                 dados_antigos = mapa_banco_existente.get((id_aluno, turma_al, trim_nome), {})
-                c1_final_base = max(dados_antigos.get("c1", 0.0), vistos_live)
-                teste_final = max(dados_antigos.get("c2", 0.0), teste_live)
-                prova_final = max(dados_antigos.get("c3", 0.0), prova_live)
+                c1_base = max(dados_antigos.get("c1", 0.0), vistos_live)
+                teste_base = max(dados_antigos.get("c2", 0.0), teste_live)
+                prova_base = max(dados_antigos.get("c3", 0.0), prova_live)
                 rec_final = max(dados_antigos.get("rec", -1.0), rec_live)
 
-                c1_final = min(3.0, c1_final_base + max(0.0, bonus_live))
-                rem_b = max(0.0, bonus_live) - (c1_final - c1_final_base)
-                c2_final = min(3.0, teste_final + max(0.0, rem_b))
-                rem_b -= (c2_final - teste_final)
-                c3_final = min(4.0, prova_final + max(0.0, rem_b))
+                soma_bruta_sem_rec = c1_base + teste_base + prova_base + bonus_live
+                media_normal_calc = min(10.0, round(soma_bruta_sem_rec * 2.0) / 2.0)
 
-                soma_bruta = c1_final + c2_final + c3_final
-                media_calculada = min(10.0, round(soma_bruta * 2) / 2)
-
-                if rec_final > 0 and media_calculada < 6.0:
-                    media_com_rec = (media_calculada + rec_final) / 2.0
-                    media_final = min(10.0, max(media_calculada, round(media_com_rec * 2) / 2))
+                if rec_final >= 0.0:
+                    media_pos_rec = min(10.0, round(((media_normal_calc + rec_final) / 2.0) * 2.0) / 2.0)
+                    media_final_calc = max(media_normal_calc, media_pos_rec)
                 else:
-                    media_final = media_calculada
+                    media_final_calc = media_normal_calc
 
-                # Preserva média manual lançada no conselho se for superior
-                media_salvar = max(media_final, dados_antigos.get("media", 0.0))
+                media_salvar = max(media_final_calc, dados_antigos.get("media", 0.0))
+
+                # Calibra C1, C2, C3 absorvendo bônus para que a soma no Google Sheets coincida exatamente
+                av1_f, av2_f, av3_f, _ = calibrar_avaliacoes_itabuna_05(c1_base, teste_base, prova_base, bonus_live, media_normal_calc)
 
                 novas_linhas_notas.append([
                     id_aluno, nome_al, turma_al, trim_nome,
-                    f"{c1_final_base:.2f}".replace(".", ","),
-                    f"{teste_final:.2f}".replace(".", ","),
-                    f"{prova_final:.2f}".replace(".", ","),
-                    f"{rec_final:.2f}".replace(".", ",") if rec_final >= 0 else "-1",
+                    f"{av1_f:.1f}".replace(".", ","),
+                    f"{av2_f:.1f}".replace(".", ","),
+                    f"{av3_f:.1f}".replace(".", ","),
+                    f"{rec_final:.1f}".replace(".", ",") if rec_final >= 0 else "-1",
                     f"{media_salvar:.1f}".replace(".", ",")
                 ])
 
         ws_notas.clear()
         ws_notas.update(values=novas_linhas_notas, range_name='A1')
-        relatorio_execucao.append("✅ DB_NOTAS: Consolidação concluída com proteção não-regressiva de bônus!")
+        relatorio_execucao.append("✅ DB_NOTAS: Calibrado com exatidão física (C1+C2+C3 coincidem com a média no Sheets).")
 
         st.cache_data.clear()
         return True, "\n".join(relatorio_execucao)
