@@ -47,7 +47,7 @@ if "sosa_pdf_cache" not in st.session_state:
     st.session_state.sosa_pdf_cache = {}
 
 # ==============================================================================
-# DIRETRIZ MESTRA DE PROMPTS DE IMAGEM & LATEX (BLINDAGEM UNIVERSAL)
+# DIRETRIZ MESTRA DE PROMPTS DE IMAGEM & RIGOR NOTACIONAL PROFMAT
 # ==============================================================================
 PADRAO_PROMPT_IMAGEM_SOSA = (
     "\n🚨 DIRETRIZES INVIOLÁVEIS PARA PROMPTS DE ILUSTRAÇÃO TÉCNICA:\n"
@@ -61,6 +61,22 @@ PADRAO_LATEX_SOSA = (
     "1. É ESTRITAMENTE PROIBIDO utilizar cifrão simples ($ ... $).\n"
     "2. TODA fração, expoente, raiz, operação ou expressão matemática DEVE ser envolvida por DUPLO CIFRÃO: $$ \\frac{a}{b} $$, $$ 3\\frac{1}{2} $$, $$ 10^2 $$, $$ 25\\% $$, $$ 90^\\circ $$.\n"
     "3. Valores monetários devem ser escritos como R$ 12,50 (sem barra invertida R\\$).\n"
+)
+
+PADRAO_NOTACAO_PROFMAT_SOSA = (
+    "\n🚨 PADRÃO OFICIAL DE NOTAÇÃO MATEMÁTICA E RIGOR PROFMAT (INEGOCIÁVEL):\n"
+    "1. PONTOS, RETAS E PLANOS: Pontos em maiúsculas ($A, B, C$). Retas em minúsculas ($r, s, t$). Planos em letras gregas minúsculas ($\\alpha, \\beta$).\n"
+    "2. SEGMENTOS vs. MEDIDAS: Use $$ \\overline{AB} $$ com barra para o segmento (objeto geométrico). Para a medida/comprimento numérico, use $$ AB $$ ou $$ m(\\overline{AB}) $$ sem barra acompanhado da unidade ($$ AB = 6\\text{ cm} $$).\n"
+    "3. SEMIRRETAS: Indique origem e direção: $$ \\vec{AB} $$.\n"
+    "4. ÂNGULOS E MEDIDAS: Escreva $$ \\angle ABC $$ ou $$ A\\hat{B}C $$ com circunflexo no vértice. Medida de ângulo com símbolo de graus: $$ m(\\angle ABC) = 60^\\circ $$.\n"
+    "5. CONGRUÊNCIA vs. IGUALDADE: Figuras geométricas, segmentos e ângulos NUNCA são iguais, são CONGRUENTES: $$ \\Delta ABC \\cong \\Delta DEF $$, $$ \\overline{AB} \\cong \\overline{CD} $$, $$ \\angle A \\cong \\angle B $$. Reserve o sinal de igualdade ($=$) EXCLUSIVAMENTE para números e medidas escalares ($$ AB = CD $$, $$ m(\\angle A) = m(\\angle B) $$).\n"
+    "6. PARALELISMO E PERPENDICULARISMO: Use rigorosamente $$ r \\parallel s $$ para retas paralelas e $$ r \\perp s $$ para retas perpendiculares.\n"
+    "7. TRIÂNGULOS E SEMELHANÇA: Use $$ \\Delta ABC $$ para triângulos e $$ \\Delta ABC \\sim \\Delta DEF $$ para semelhança com razão de proporcionalidade clara.\n"
+    "8. PROTOCOLO DE CONSTRUÇÃO DE LOUSA MANUAL (GUIA DOCENTE NO BLOCO [PROFESSOR]):\n"
+    "   O professor Ronaldo Gomes constrói as figuras MANUALMENTE NO QUADRO com seus instrumentos (régua, compasso, transferidor e esquadro). Portanto, em aulas que envolvam Geometria, o bloco [PROFESSOR] DEVE fornecer o ROTEIRO MECÂNICO DE DESENHO DE QUADRO:\n"
+    "   • Passo 1 (Com Régua): Comprimento sugerido para a lousa (escala ampliada em cm) e marcação dos vértices com letras maiúsculas.\n"
+    "   • Passo 2 (Com Compasso/Transferidor): Onde fixar a ponta-seca, abertura do raio ou centro do transferidor para traçado dos arcos e ângulos exatos.\n"
+    "   • Passo 3 (Código de Giz de Lousa): Instruir giz branco para a figura principal, giz colorido/amarelo pontilhado para construções auxiliares (alturas, bissetrizes, retas paralelas), quadradinho com ponto interno ($$ \\llcorner\\cdot $$) para ângulo reto e tracinhos iguais (hatch marks $|$ ou $||$) para lados congruentes.\n"
 )
 
 # ==============================================================================
@@ -436,7 +452,7 @@ def gerar_ia(persona_key, comando, url_drive=None, usar_busca=False, recorte_liv
             print(f"Aviso leitura Drive PDF: {e}")
 
     persona_prompt = PERSONAS.get(persona_key, PERSONAS["ARQUITETO_EXAMES_ENEM_V2026"])
-    prompt_final = f"{persona_prompt}{trava_realidade}{instrucao_livro}\n\n{comando}"
+    prompt_final = f"{persona_prompt}{PADRAO_NOTACAO_PROFMAT_SOSA}{trava_realidade}{instrucao_livro}\n\n{comando}"
     conteudo_prompt.append(types.Part.from_text(text=prompt_final))
 
     erros_log = []
