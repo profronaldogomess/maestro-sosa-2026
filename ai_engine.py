@@ -383,7 +383,7 @@ def gerar_ia(persona_key, comando, url_drive=None, usar_busca=False, recorte_liv
     ]
     
     if persona_key in personas_alta_complexidade:
-        modelos_tentativa = ["gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"]
+        modelos_tentativa = ["gemini-3.7-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"]
     else:
         modelos_tentativa = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.7-flash"]
 
@@ -628,8 +628,9 @@ RETORNE APENAS UM JSON PURO NO FORMATO:
   }}
 }}"""
 
+        mime_detectado = "image/png" if imagem_pronta[:8] == b'\x89PNG\r\n\x1a\n' else "image/jpeg"
         conteudo_prompt = [
-            types.Part.from_bytes(data=imagem_pronta, mime_type="image/jpeg"),
+            types.Part.from_bytes(data=imagem_pronta, mime_type=mime_detectado),
             types.Part.from_text(text=prompt)
         ]
 
