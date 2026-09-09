@@ -71,17 +71,38 @@ def sosa_to_str(valor):
 
 def preparar_para_leitura(texto):
     """
-    Filtro de leitura global para fórmulas LaTeX ($$ ... $$), prompts de imagem e markdown.
-    Garante que expressões matemáticas sejam renderizadas perfeitamente no Streamlit.
+    SOSA V2026 - LEITOR MATEMÁTICO UNIVERSAL (PROFMAT / GEOMETRIA / LATEX):
+    Envolve operadores geométricos, frações, expoentes e símbolos em duplo cifrão ($$ ... $$)
+    garantindo renderização perfeita de Geometria e Álgebra no Streamlit.
     """
     if not texto or not isinstance(texto, str): return ""
     
     texto = texto.replace('\x0c', '\\f')
-    texto = re.sub(r'(?<!\$)\\\bfrac\{([^}]+)\}\{([^}]+)\}(?!\$)', r'$$ \\frac{\1}{\2} $$', texto)
-    texto = re.sub(r'(?<!\$)\\\b(times|div|sqrt|circ|degree)\b(?!\$)', r'$$ \\\1 $$', texto)
+    
+    # 1. Envolve fórmulas estruturadas que estejam soltas sem cifrões
+    padroes_estruturados = [
+        r'(?<!\$)\\frac\{([^}]+)\}\{([^}]+)\}(?!\$)',
+        r'(?<!\$)\\overline\{([^}]+)\}(?!\$)',
+        r'(?<!\$)\\vec\{([^}]+)\}(?!\$)',
+        r'(?<!\$)\\angle\s*([A-Za-z0-9\^]+)(?!\$)',
+        r'(?<!\$)\\Delta\s*([A-Za-z0-9]+)(?!\$)',
+        r'(?<!\$)\\triangle\s*([A-Za-z0-9]+)(?!\$)'
+    ]
+    for p in padroes_estruturados:
+        texto = re.sub(p, r'$$ \g<0> $$', texto)
+
+    # 2. Operadores matemáticos e geométricos do PROFMAT
+    operadores_profmat = (
+        r'times|div|sqrt|circ|degree|parallel|perp|cong|sim|approx|pm|'
+        r'neq|leq|geq|infty|cdot|alpha|beta|theta|pi|Delta|triangle|angle'
+    )
+    texto = re.sub(rf'(?<!\$)\\\b({operadores_profmat})\b(?!\$)', r'$$ \\\1 $$', texto)
+    
+    # Higienização de cifrões duplicados acidentalmente
     texto = re.sub(r'\$\$\s*\$\$', '$$', texto)
     texto = re.sub(r'\[GEOGEBRA\](.*?)\[/GEOGEBRA\]', '', texto, flags=re.IGNORECASE | re.DOTALL)
     
+    # Destaque limpo para ilustrações técnicas sugeridas
     texto = re.sub(
         r'\[\s*PROMPT IMAGEM:(.*?)\s*\]', 
         r'\n\n**[ILUSTRAÇÃO TÉCNICA SUGERIDA]**\n```english\n\1\n```\n\n', 
