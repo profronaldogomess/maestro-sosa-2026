@@ -1506,7 +1506,7 @@ if menu == "📅 Planejamento (Ponto ID)":
 
 # ==============================================================================
 # MÓDULO: LABORATÓRIO PEDAGÓGICO (CRIADOR DE AULAS & FORJA SEMIÓTICA)
-# (V2026.PRO_INFINITY - TRÍADE SOSA: GUIA DOCENTE, FOLHA DO ALUNO & PEI ON-DEMAND)
+# (V2026.PRO_INFINITY - INSPEÇÃO IMEDIATA, HERANÇA DE LOUSA PROFMAT & PEI ON-DEMAND)
 # ==============================================================================
 elif menu == "🧪 Criador de Aulas":
     st.title("Criador de Aulas & Forja Semiótica")
@@ -1527,7 +1527,7 @@ elif menu == "🧪 Criador de Aulas":
     tab_criar, tab_acervo_aulas = st.tabs(["Forja de Aula (Tríade SOSA)", "Acervo de Aulas Prontas"])
 
     # --------------------------------------------------------------------------
-    # ABA 1: FORJA DE AULA (TRÍADE SOSA)
+    # ABA 1: FORJA DE AULA (TRÍADE SOSA COM INSPEÇÃO IMEDIATA)
     # --------------------------------------------------------------------------
     with tab_criar:
         with st.container(border=True):
@@ -1535,24 +1535,51 @@ elif menu == "🧪 Criador de Aulas":
             
             c_l1, c_l2, c_l3, c_l4 = st.columns([1, 1.2, 1.5, 1.5])
             ano_lab = c_l1.selectbox("Série Alvo:", [6, 7, 8, 9], index=0, key=f"ano_lab_{v_l}")
-            trim_lab = c_l2.segmented_control("Trimestre:", ["I Trimestre", "II Trimestre", "III Trimestre"], default="I Trimestre", key=f"trim_lab_{v_l}")
-            if not trim_lab: trim_lab = "I Trimestre"
+            
+            trim_lab = c_l2.segmented_control(
+                "Trimestre:", 
+                ["I Trimestre", "II Trimestre", "III Trimestre"], 
+                default="III Trimestre" if date.today() > date(2026, 9, 4) else "II Trimestre", 
+                key=f"trim_lab_{v_l}"
+            )
+            if not trim_lab: trim_lab = "III Trimestre"
 
-            origem_lab = c_l3.selectbox("Origem do Conteúdo:", ["Plano do Ponto ID (Hub Ativo)", "Livro Didático (Cofre Digital)", "Tema Livre / Autoral"], key=f"orig_lab_{v_l}")
-            tipo_aula_lab = c_l4.selectbox("Tipo de Material:", ["Aula 1 (Conceito & Prática)", "Aula 2 (Fixação & Exercícios)", "Sábado Letivo (Oficina)", "Aula Única"], key=f"tipo_lab_{v_l}")
+            origem_lab = c_l3.selectbox(
+                "Origem do Conteúdo:", 
+                ["Plano do Ponto ID (Hub Ativo)", "Livro Didático (Cofre Digital)", "Tema Livre / Autoral"], 
+                key=f"orig_lab_{v_l}"
+            )
+            tipo_aula_lab = c_l4.selectbox(
+                "Tipo de Material:", 
+                ["Aula 1 (Conceito & Prática)", "Aula 2 (Fixação & Exercícios)", "Sábado Letivo (Oficina)", "Aula Única"], 
+                key=f"tipo_lab_{v_l}"
+            )
 
         # Configurações de Origem
         contexto_plano_lab = ""
         uri_livro_lab = None
         texto_teoria_lab = ""
         texto_exercicios_lab = ""
+        semana_ref_lab = "Semana 01"
+        link_drive_plano = ""
+        roteiro_aula_selecionada = ""
+        objeto_conhecimento_plano = ""
+        habilidade_bncc_plano = ""
+        info_livro_detectado = ""
+
+        # Identificação da tag exata da aula selecionada
+        if "Aula 1" in tipo_aula_lab: tag_aula_alvo = "AULA_1"
+        elif "Aula 2" in tipo_aula_lab: tag_aula_alvo = "AULA_2"
+        elif "Sábado" in tipo_aula_lab: tag_aula_alvo = "SABADO_LETIVO"
+        else: tag_aula_alvo = "AULA_1"
 
         if origem_lab == "Plano do Ponto ID (Hub Ativo)":
             planos_ativos_ano = df_planos[(df_planos['ANO'] == f"{ano_lab}º") & (df_planos['TURMA'] == trim_lab)] if not df_planos.empty else pd.DataFrame()
+            
             if planos_ativos_ano.empty:
-                st.info(f"Nenhum plano cadastrado no Ponto ID para o {ano_lab}º Ano ({trim_lab}). Você pode forjar via Livro Didático ou Tema Livre.")
+                st.info(f"Nenhum plano cadastrado no Ponto ID para o {ano_lab}º Ano ({trim_lab}). Cadastre o plano no Ponto ID ou selecione a opção 'Livro Didático' acima.")
             else:
-                opcoes_planos = [f"{r['SEMANA']} — {ai.extrair_tag(str(r['PLANO_TEXTO']), 'OBJETO_CONHECIMENTO') or 'Plano'}" for _, r in planos_ativos_ano.iterrows()]
+                opcoes_planos = [f"{r['SEMANA']} — {ai.extrair_tag(str(r['PLANO_TEXTO']), 'OBJETO_CONHECIMENTO') or 'Plano Semanal'}" for _, r in planos_ativos_ano.iterrows()]
                 sel_plano_hub = st.selectbox("Selecione o Plano Base:", opcoes_planos, key=f"sel_plano_hub_{v_l}")
                 
                 if sel_plano_hub:
@@ -1560,15 +1587,51 @@ elif menu == "🧪 Criador de Aulas":
                     row_plano_sel = planos_ativos_ano.iloc[idx_p]
                     contexto_plano_lab = str(row_plano_sel.get('PLANO_TEXTO', ''))
                     semana_ref_lab = str(row_plano_sel.get('SEMANA', 'Semana Geral'))
+                    link_drive_plano = str(row_plano_sel.get('LINK_DRIVE', ''))
+
+                    # Mineração cirúrgica dos blocos do plano
+                    objeto_conhecimento_plano = ai.extrair_tag(contexto_plano_lab, "OBJETO_CONHECIMENTO") or ai.extrair_tag(contexto_plano_lab, "CONTEUDO_GERAL")
+                    habilidade_bncc_plano = ai.extrair_tag(contexto_plano_lab, "HABILIDADE_BNCC") or "EF06MA28"
+                    roteiro_aula_selecionada = ai.extrair_tag(contexto_plano_lab, tag_aula_alvo)
+
+                    # Detecção automática do livro didático nas anotações do plano
+                    m_livro = re.search(r'(?i)Livro:?\s*([^|\n]+)', contexto_plano_lab)
+                    if m_livro: info_livro_detectado = m_livro.group(1).strip()
+                    else: info_livro_detectado = "Livro Didático Adotado (A Conquista da Matemática)"
+
+                    # Vínculo automático com o PDF no cofre de materiais se disponível
+                    if not df_materiais.empty:
+                        m_pdf = df_materiais[df_materiais['TIPO'].str.contains(str(ano_lab), na=False)]
+                        if not m_pdf.empty:
+                            uri_livro_lab = m_pdf.iloc[0]['URI_ARQUIVO']
+
+                    # ==========================================================
+                    # BENTO CARD DE INSPEÇÃO IMEDIATA DO PLANO (FIM DA TELA VAZIA)
+                    # ==========================================================
+                    with st.container(border=True):
+                        c_p_h1, c_p_h2 = st.columns([2.8, 1.2])
+                        c_p_h1.markdown(f"##### 📋 Plano Vinculado: **{semana_ref_lab}** ({ano_lab}º Ano • {trim_lab})")
+                        c_p_h1.caption(f"**Objeto de Conhecimento:** {objeto_conhecimento_plano}")
+                        
+                        if link_drive_plano and "http" in link_drive_plano:
+                            c_p_h2.link_button("Abrir Plano no Drive", link_drive_plano, use_container_width=True)
+
+                        c_b1, c_b2, c_b3 = st.columns(3)
+                        c_b1.info(f"**BNCC / Habilidades:**\n{habilidade_bncc_plano}")
+                        c_b2.success(f"**Referência Didática:**\n{info_livro_detectado}")
+                        c_b3.warning(f"**Escopo da Forja:**\n{tipo_aula_lab} (Cirúrgica)")
+
+                        with st.expander(f"👁️ Inspecionar Roteiro da {tipo_aula_lab} (Início, Meio, Fim e Lousa)", expanded=True):
+                            st.markdown(util.preparar_para_leitura(roteiro_aula_selecionada if roteiro_aula_selecionada else "Roteiro estruturado no plano semanal."))
 
         elif origem_lab == "Livro Didático (Cofre Digital)":
-            semana_ref_lab = st.text_input("Identificador da Semana (ex: Semana 05):", value="Semana 01", key=f"sem_ref_livro_{v_l}")
+            semana_ref_lab = st.text_input("Identificador da Semana (ex: Semana 32):", value="Semana 32", key=f"sem_ref_livro_{v_l}")
             livros_disp_lab = df_materiais[df_materiais['TIPO'].str.contains(str(ano_lab), na=False)]['NOME_ARQUIVO'].tolist() if not df_materiais.empty else []
             
             c_liv1, c_liv2, c_liv3 = st.columns([2, 1, 1])
             sel_livro_f = c_liv1.selectbox("Livro Didático:", [""] + livros_disp_lab, key=f"sel_liv_f_{v_l}")
-            pags_teo_f = c_liv2.text_input("Páginas de Teoria:", placeholder="Ex: 184-186", key=f"pags_teo_f_{v_l}")
-            pags_ex_f = c_liv3.text_input("Páginas de Exercícios:", placeholder="Ex: 187-188", key=f"pags_ex_f_{v_l}")
+            pags_teo_f = c_liv2.text_input("Páginas de Teoria:", placeholder="Ex: 78-83", key=f"pags_teo_f_{v_l}")
+            pags_ex_f = c_liv3.text_input("Páginas de Exercícios:", placeholder="Ex: 81", key=f"pags_ex_f_{v_l}")
 
             if sel_livro_f:
                 uri_livro_lab = df_materiais[df_materiais['NOME_ARQUIVO'] == sel_livro_f].iloc[0]['URI_ARQUIVO']
@@ -1582,53 +1645,72 @@ elif menu == "🧪 Criador de Aulas":
                             if list_p_teo: texto_teoria_lab = util.extrair_texto_pdf_por_paginas(bytes_pdf_l, list_p_teo)
                             if list_p_ex: texto_exercicios_lab = util.extrair_texto_pdf_por_paginas(bytes_pdf_l, list_p_ex)
         else:
-            semana_ref_lab = st.text_input("Identificador da Semana:", value="Semana 01", key=f"sem_ref_livre_{v_l}")
-            tema_autoral_txt = st.text_area("Tema da Aula & Diretrizes Pedagógicas:", placeholder="Ex: Operações com frações aplicadas a receitas culinárias regionais de Itabuna...", height=80, key=f"ta_autoral_{v_l}")
-            contexto_plano_lab = f"[OBJETO_CONHECIMENTO] {tema_autoral_txt}\n[CONTEUDOS_ESPECIFICOS] {tema_autoral_txt}"
+            semana_ref_lab = st.text_input("Identificador da Semana:", value="Semana 32", key=f"sem_ref_livre_{v_l}")
+            tema_autoral_txt = st.text_area("Tema da Aula & Diretrizes Pedagógicas:", placeholder="Ex: Noções primitivas de Geometria e posições de retas no trânsito de Itabuna...", height=80, key=f"ta_autoral_{v_l}")
+            contexto_plano_lab = f"[OBJETO_CONHECIMENTO] {tema_autoral_txt}\n[CONTEUDOS_ESPECIFICOS] {tema_autoral_txt}\n[AULA_1] {tema_autoral_txt}"
+            roteiro_aula_selecionada = tema_autoral_txt
 
         recorte_adicional_lab = st.text_area(
             "Exercícios Adicionais ou Anotações do Quadro (Opcional):",
-            placeholder="Insira exercícios adicionais que deseja incluir na folha do estudante...",
+            placeholder="Insira exercícios ou comandos específicos que deseja forçar na folha do estudante...",
             height=70, key=f"recorte_add_lab_{v_l}"
         )
 
         st.markdown("<br>", unsafe_allow_html=True)
+        c_btn_forja1, c_btn_forja2 = st.columns([2, 1])
 
-        if st.button("Forjar Aula com IA (Tríade SOSA)", type="primary", use_container_width=True, key=f"btn_forjar_aula_{v_l}"):
-            with st.status("Forjando materiais estruturados com IA...", expanded=True) as status_forja:
+        # ======================================================================
+        # BOTÃO 1: FORJA INTELIGENTE COM HERANÇA DE LOUSA PROFMAT
+        # ======================================================================
+        if c_btn_forja1.button("Forjar Aula com IA (Honrando o Roteiro do Plano)", type="primary", use_container_width=True, key=f"btn_forjar_aula_{v_l}"):
+            with st.status("Forjando materiais didáticos ancorados no plano...", expanded=True) as status_forja:
                 dna_sosa = util.gerar_sosa_id("AULA", ano_lab, trim_lab)
                 st.session_state.sosa_id_atual = dna_sosa
 
-                pacote_contexto = ""
-                if contexto_plano_lab: pacote_contexto += f"--- PLANO DE AULA ---\n{contexto_plano_lab}\n\n"
-                if texto_teoria_lab: pacote_contexto += f"--- TEORIA DO LIVRO DIDÁTICO ---\n{texto_teoria_lab}\n\n"
-                if texto_exercicios_lab: pacote_contexto += f"--- EXERCÍCIOS DO LIVRO ---\n{texto_exercicios_lab}\n\n"
-                if recorte_adicional_lab.strip(): pacote_contexto += f"--- ANOTAÇÕES DO PROFESSOR ---\n{recorte_adicional_lab.strip()}\n\n"
+                # 1. Guia Docente de Lousa: Preserva o roteiro do plano e enriquece com a lousa manual
+                status_forja.write("1/3 Consolidando Guia Docente de Lousa (Passo a Passo com Régua e Compasso)...")
+                
+                if roteiro_aula_selecionada and len(roteiro_aula_selecionada.strip()) > 30:
+                    txt_prof_res = f"[PROFESSOR]\n{roteiro_aula_selecionada.strip()}"
+                else:
+                    prompt_prof = (
+                        f"SÉRIE: {ano_lab}º Ano. TRIMESTRE: {trim_lab}. ESCOPO: {tipo_aula_lab}.\n"
+                        f"OBJETO DE CONHECIMENTO: {objeto_conhecimento_plano}\n"
+                        f"CONTEXTO DO PLANO:\n{contexto_plano_lab}\n\n"
+                        f"MISSÃO: Escreva o bloco [PROFESSOR] com INÍCIO (Gatilho 10 min), MEIO (Conceito e Lousa 25 min) e FIM (Fixação 15 min).\n"
+                        f"Inclua OBRIGATORIAMENTE o Roteiro de Construção de Lousa com Passo 1 (Régua), Passo 2 (Compasso) e Passo 3 (Giz colorido)."
+                    )
+                    txt_prof_res = ai.gerar_ia("FORJA_AULA_TEORIA", prompt_prof, url_drive=uri_livro_lab, usar_busca=False)
 
-                # 1. Guia Docente de Lousa
-                status_forja.write("1/3 Estruturando Guia Docente de Lousa (Início, Meio, Fim)...")
-                prompt_prof = (
-                    f"SÉRIE: {ano_lab}º Ano. TRIMESTRE: {trim_lab}. TIPO DE AULA: {tipo_aula_lab}.\n"
-                    f"ESTRUTURA: [PROFESSOR] com INÍCIO (Gatilho 10 min), MEIO (Fundamentação & Livro 25 min) e FIM (Exercícios no Quadro 15 min).\n\n"
-                    f"CONTEXTO:\n{pacote_contexto}"
-                )
-                txt_prof_res = ai.gerar_ia("FORJA_AULA_TEORIA", prompt_prof, url_drive=uri_livro_lab, usar_busca=False)
-
-                # 2. Folha do Estudante & Gabarito
-                status_forja.write("2/3 Estruturando Folha do Estudante com Tabelas Markdown...")
+                # 2. Folha do Estudante & Gabarito Comentado
+                status_forja.write("2/3 Forjando Folha do Estudante com Exercícios Contextualizados e Tabelas...")
                 prompt_alu = (
                     f"SÉRIE: {ano_lab}º Ano. TRIMESTRE: {trim_lab}.\n"
-                    f"MISSÃO: Crie a lista de exercícios para os alunos regulares ([ALUNO]) com tabelas Markdown quando houver dados e o gabarito comentado ([GABARITO]).\n\n"
-                    f"CONTEXTO:\n{pacote_contexto}"
+                    f"AULA ESPECÍFICA: {tipo_aula_lab}.\n"
+                    f"OBJETO: {objeto_conhecimento_plano}\n"
+                    f"ROTEIRO MINISTRADO PELO PROFESSOR:\n{roteiro_aula_selecionada}\n\n"
+                    f"REFERÊNCIA DIDÁTICA: {info_livro_detectado}\n"
+                    f"ANOTAÇÕES ADICIONAIS: {recorte_adicional_lab}\n\n"
+                    f"MISSÃO INQUEBRÁVEL:\n"
+                    f"1. Crie a lista de exercícios [ALUNO] para a turma regular focada ESTRITAMENTE no tema desta aula.\n"
+                    f"2. Formatação dos enunciados: **QUESTÃO 01 -** [Texto direto].\n"
+                    f"3. Utilize tabelas em Markdown (| Coluna 1 | Coluna 2 |) para classificação de conceitos.\n"
+                    f"4. Quando exigir suporte visual, inclua o [ PROMPT IMAGEM: ... ] técnico em preto e branco A4.\n"
+                    f"5. Gere o gabarito comentado no bloco [GABARITO]."
                 )
                 txt_alu_res = ai.gerar_ia("FORJA_AULA_EXERCICIOS", prompt_alu, url_drive=uri_livro_lab, usar_busca=False)
 
-                # 3. Adaptações Inclusivas PEI
-                status_forja.write("3/3 Estruturando Tríade PEI On-Demand (N1, N2 e 10 Bento Boxes N3 no Papel)...")
+                # 3. Tríade PEI On-Demand
+                status_forja.write("3/3 Estruturando Tríade PEI On-Demand (N1, N2 e 10 Bento Boxes no Papel)...")
                 prompt_pei = (
                     f"SÉRIE: {ano_lab}º Ano.\n"
-                    f"MISSÃO: Adapte os exercícios regulares abaixo para PEI Nível 1 ([PEI_NIVEL_1] - 3 opções A, B, C), PEI Nível 2 ([PEI_NIVEL_2] - Passo a Passo) e PEI Nível 3 ([PEI_NIVEL_3] - 10 Bento Boxes de ações no papel: pintar, ligar, cobrir pontilhado) + [RUBRICA_DE_OBSERVACAO] e [GABARITO_PEI].\n\n"
-                    f"EXERCÍCIOS REGULARES:\n{ai.extrair_tag(txt_alu_res, 'ALUNO') or txt_alu_res}"
+                    f"TEMA DA AULA: {objeto_conhecimento_plano}\n"
+                    f"EXERCÍCIOS REGULARES DA AULA:\n{ai.extrair_tag(txt_alu_res, 'ALUNO') or txt_alu_res}\n\n"
+                    f"MISSÃO DE ACESSIBILIDADE CURRICULAR:\n"
+                    f"1. [PEI_NIVEL_1]: Adapte as questões com 3 opções (A, B, C), palavra-chave em negrito e dica objetiva entre parênteses.\n"
+                    f"2. [PEI_NIVEL_2]: Caixa [PARA LEMBRAR] e [PASSO A PASSO] com 3 opções (A, B, C).\n"
+                    f"3. [PEI_NIVEL_3]: Crie EXATAMENTE 10 BOXES de atividades motoras impressas no papel (Pintar retas paralelas, Cobrir pontilhado com régua/lápis de cor, Ligar colunas, Circular ponto de encontro) + [ PROMPT IMAGEM: ... ] técnico para cada box + [RUBRICA_DE_OBSERVACAO].\n"
+                    f"4. [GABARITO_PEI]: Gabarito oficial exclusivo A, B, C."
                 )
                 txt_pei_res = ai.gerar_ia("FORJA_AULA_PEI", prompt_pei, usar_busca=False)
 
@@ -1637,81 +1719,134 @@ elif menu == "🧪 Criador de Aulas":
                 st.session_state.lab_meta = {
                     "ano": f"{ano_lab}º",
                     "trimestre": trim_lab,
-                    "semana": semana_ref_lab if 'semana_ref_lab' in locals() else "Semana Geral",
+                    "semana": semana_ref_lab,
                     "tipo_aula": tipo_aula_lab,
                     "sosa_id": dna_sosa
                 }
                 status_forja.update(label="Tríade de Materiais forjada com sucesso!", state="complete")
                 st.balloons(); time.sleep(0.6); st.rerun()
 
-        # Mesa de Edição da Aula Forjada
+        # ======================================================================
+        # BOTÃO 2: INJEÇÃO INSTANTÂNEA DIRETA DO ROTEIRO (SEM ESPERAR IA)
+        # ======================================================================
+        if c_btn_forja2.button("⚡ Injeção Instantânea", use_container_width=True, key=f"btn_inj_rapida_{v_l}", help="Carrega a mesa de lapidação imediatamente aproveitando o roteiro já salvo no plano."):
+            dna_sosa = util.gerar_sosa_id("AULA", ano_lab, trim_lab)
+            conteudo_direto = (
+                f"[SOSA_ID: {dna_sosa}]\n\n"
+                f"[PROFESSOR]\n{roteiro_aula_selecionada if roteiro_aula_selecionada else 'Roteiro de sala estruturado no plano.'}\n\n"
+                f"[ALUNO]\n**QUESTÃO 01 -** Identifique os entes primitivos e classifique as retas conforme o roteiro ministrado.\n\n"
+                f"**QUESTÃO 02 -** Utilizando a régua graduada, meça os segmentos e determine se são congruentes.\n\n"
+                f"[GABARITO]\nQUESTÃO 01: Resolução orientada conforme exercícios da página 81 do livro didático.\n\n"
+                f"[PEI_NIVEL_1]\n**QUESTÃO 01 -** Observe as retas desenhadas. Elas se cruzam?\n*(Dica: Retas paralelas nunca se encontram)*.\n(A) Sim\n(B) Não\n(C) São a mesma reta\n\n"
+                f"[PEI_NIVEL_3]\n1. [BOX 1] Identificação de Retas: Pinte com lápis azul as retas que nunca se cruzam (retas paralelas).\n"
+                f"[ PROMPT IMAGEM: A4 portrait-format educational math worksheet, clean black and white line art, flat pure white background. Two horizontal parallel lines r and s. ]\n\n"
+                f"[RUBRICA_DE_OBSERVACAO]\n- Autonomia Executiva: ✅ Autônomo | 🤝 Com Apoio | ❌ Não Realizou"
+            )
+            st.session_state.lab_temp = conteudo_direto
+            st.session_state.lab_meta = {
+                "ano": f"{ano_lab}º", "trimestre": trim_lab, "semana": semana_ref_lab, "tipo_aula": tipo_aula_lab, "sosa_id": dna_sosa
+            }
+            st.toast("Roteiro do plano carregado instantaneamente na Mesa de Lapidação!", icon="⚡")
+            time.sleep(0.4); st.rerun()
+
+        # ======================================================================
+        # MESA DE LAPIDAÇÃO DOS MATERIAIS FORJADOS
+        # ======================================================================
         if st.session_state.lab_temp:
             txt_lab_atual = st.session_state.lab_temp
             meta_lab = st.session_state.get("lab_meta", {})
             
             st.markdown("---")
-            st.markdown(f"### Mesa de Lapidação da Aula — `{meta_lab.get('sosa_id', 'DNA-SOSA')}`")
+            st.markdown(f"### Mesa de Lapidação — `{meta_lab.get('semana', 'Semana')} • {meta_lab.get('tipo_aula', 'Aula')}`")
+            st.caption(f"Código SOSA: `{meta_lab.get('sosa_id', 'DNA')}` | Série: **{meta_lab.get('ano', '6º')}** ({meta_lab.get('trimestre', 'III Trimestre')})")
             
             t_guia, t_folha, t_gab, t_pei_lab, t_sync_lab = st.tabs([
                 "Guia Docente (Lousa)", "Folha do Estudante", "Gabarito Comentado", "Adaptações PEI", "Sincronização Drive"
             ])
 
             with t_guia:
-                ed_prof_lab = st.text_area("Roteiro do Professor ([PROFESSOR]):", ai.extrair_tag(txt_lab_atual, "PROFESSOR") or txt_lab_atual, height=340, key=f"ta_guia_{v_l}")
+                ed_prof_lab = st.text_area(
+                    "Roteiro Docente de Lousa ([PROFESSOR]):", 
+                    ai.extrair_tag(txt_lab_atual, "PROFESSOR") or txt_lab_atual, 
+                    height=360, 
+                    key=f"ta_guia_{v_l}"
+                )
             
             with t_folha:
-                ed_alu_lab = st.text_area("Folha do Estudante ([ALUNO]):", ai.extrair_tag(txt_lab_atual, "ALUNO"), height=340, key=f"ta_folha_{v_l}")
+                ed_alu_lab = st.text_area(
+                    "Folha do Estudante Regular ([ALUNO]):", 
+                    ai.extrair_tag(txt_lab_atual, "ALUNO"), 
+                    height=360, 
+                    key=f"ta_folha_{v_l}"
+                )
             
             with t_gab:
-                ed_gab_lab = st.text_area("Gabarito Comentado ([GABARITO]):", ai.extrair_tag(txt_lab_atual, "GABARITO") or ai.extrair_tag(txt_lab_atual, "GABARITO_TEXTO"), height=240, key=f"ta_gab_{v_l}")
+                ed_gab_lab = st.text_area(
+                    "Gabarito Comentado ([GABARITO]):", 
+                    ai.extrair_tag(txt_lab_atual, "GABARITO") or ai.extrair_tag(txt_lab_atual, "GABARITO_TEXTO"), 
+                    height=240, 
+                    key=f"ta_gab_{v_l}"
+                )
 
             with t_pei_lab:
-                t_p1_l, t_p2_l, t_p3_l = st.tabs(["PEI Nível 1", "PEI Nível 2", "PEI Nível 3 (Bento Boxes)"])
+                t_p1_l, t_p2_l, t_p3_l = st.tabs(["PEI Nível 1 (A, B, C)", "PEI Nível 2 (Passo a Passo)", "PEI Nível 3 (10 Bento Boxes)"])
                 with t_p1_l:
-                    ed_p1_lab = st.text_area("PEI N1 (3 Alternativas A, B, C):", ai.extrair_tag(txt_lab_atual, "PEI_NIVEL_1"), height=260, key=f"ta_p1_{v_l}")
+                    ed_p1_lab = st.text_area("PEI N1 (3 Alternativas):", ai.extrair_tag(txt_lab_atual, "PEI_NIVEL_1") or ai.extrair_tag(txt_lab_atual, "NIVEL_1"), height=260, key=f"ta_p1_{v_l}")
                 with t_p2_l:
-                    ed_p2_lab = st.text_area("PEI N2 (Passo a Passo):", ai.extrair_tag(txt_lab_atual, "PEI_NIVEL_2"), height=260, key=f"ta_p2_{v_l}")
+                    ed_p2_lab = st.text_area("PEI N2 (Passo a Passo):", ai.extrair_tag(txt_lab_atual, "PEI_NIVEL_2") or ai.extrair_tag(txt_lab_atual, "NIVEL_2"), height=260, key=f"ta_p2_{v_l}")
                 with t_p3_l:
-                    ed_p3_lab = st.text_area("PEI N3 (10 Boxes no Papel):", ai.extrair_tag(txt_lab_atual, "PEI_NIVEL_3"), height=260, key=f"ta_p3_{v_l}")
+                    ed_p3_lab = st.text_area("PEI N3 (10 Boxes no Papel):", ai.extrair_tag(txt_lab_atual, "PEI_NIVEL_3") or ai.extrair_tag(txt_lab_atual, "NIVEL_3"), height=260, key=f"ta_p3_{v_l}")
 
             with t_sync_lab:
                 st.markdown("#### Custódia & Sincronização Google Drive")
                 st.caption("Compilação automática dos documentos oficiais Word (.docx) com cabeçalhos institucionais.")
 
-                nome_base_lab = f"AULA_{meta_lab.get('tipo_aula','AULA').replace(' ','_')}_{meta_lab.get('ano','6º').replace('º','')}_{datetime.now().strftime('%d%m')}"
+                nome_base_lab = f"AULA_{meta_lab.get('semana','SEM').replace(' ','_')}_{meta_lab.get('tipo_aula','AULA').split('(')[0].strip().replace(' ','_')}_{meta_lab.get('ano','6º').replace('º','')}_{datetime.now().strftime('%d%m')}"
                 nome_arq_sync = st.text_input("Identificador do Arquivo no Drive:", value=nome_base_lab, key=f"inp_sync_name_{v_l}")
 
                 if st.button("Sincronizar Todos os Materiais no Google Drive", type="primary", use_container_width=True, key=f"btn_sync_aula_drive_{v_l}"):
                     with st.status("Compilando arquivos oficiais e sincronizando no Drive...", expanded=True) as status_sync:
                         info_exp_lab = {
                             "ano": meta_lab.get("ano", "6º"),
-                            "trimestre": meta_lab.get("trimestre", "I Trimestre"),
+                            "trimestre": meta_lab.get("trimestre", "III Trimestre"),
                             "semana": meta_lab.get("semana", "Semana Geral")
                         }
 
                         # 1. Folha do Estudante Regular DOCX
                         status_sync.write("Compilando Folha do Estudante DOCX...")
                         doc_alu = exporter.gerar_docx_aluno_v24(nome_arq_sync, ed_alu_lab, info_exp_lab)
-                        link_alu = db.subir_e_converter_para_google_docs(doc_alu, f"{nome_arq_sync}_ALUNO", trimestre=info_exp_lab['trimestre'], categoria=info_exp_lab['ano'], semana=info_exp_lab['semana'], modo="AULA")
+                        link_alu = db.subir_e_converter_para_google_docs(
+                            doc_alu, f"{nome_arq_sync}_ALUNO", 
+                            trimestre=info_exp_lab['trimestre'], categoria=info_exp_lab['ano'], semana=info_exp_lab['semana'], modo="AULA"
+                        )
 
                         # 2. Guia Docente DOCX
                         status_sync.write("Compilando Guia Docente DOCX...")
                         doc_prof = exporter.gerar_docx_professor_v25(nome_arq_sync, ed_prof_lab, info_exp_lab)
-                        link_prof = db.subir_e_converter_para_google_docs(doc_prof, f"{nome_arq_sync}_PROF", trimestre=info_exp_lab['trimestre'], categoria=info_exp_lab['ano'], semana=info_exp_lab['semana'], modo="AULA")
+                        link_prof = db.subir_e_converter_para_google_docs(
+                            doc_prof, f"{nome_arq_sync}_PROF", 
+                            trimestre=info_exp_lab['trimestre'], categoria=info_exp_lab['ano'], semana=info_exp_lab['semana'], modo="AULA"
+                        )
 
                         # 3. PEI Nível 1 DOCX
                         link_p1 = "N/A"
                         if ed_p1_lab:
                             status_sync.write("Compilando PEI Nível 1 DOCX...")
                             doc_p1 = exporter.gerar_docx_pei_v25(f"{nome_arq_sync}_PEI_N1", ed_p1_lab, info_exp_lab)
-                            link_p1 = db.subir_e_converter_para_google_docs(doc_p1, f"{nome_arq_sync}_PEI_N1", trimestre=info_exp_lab['trimestre'], categoria=info_exp_lab['ano'], semana=info_exp_lab['semana'], modo="AULA")
+                            link_p1 = db.subir_e_converter_para_google_docs(
+                                doc_p1, f"{nome_arq_sync}_PEI_N1", 
+                                trimestre=info_exp_lab['trimestre'], categoria=info_exp_lab['ano'], semana=info_exp_lab['semana'], modo="AULA"
+                            )
 
                         # 4. PEI Nível 3 DOCX
                         link_p3 = "N/A"
                         if ed_p3_lab:
                             status_sync.write("Compilando PEI Nível 3 DOCX (10 Bento Boxes)...")
                             doc_p3 = exporter.gerar_docx_pei_qualitativa(f"{nome_arq_sync}_PEI_N3", ed_p3_lab, info_exp_lab)
-                            link_p3 = db.subir_e_converter_para_google_docs(doc_p3, f"{nome_arq_sync}_PEI_N3", trimestre=info_exp_lab['trimestre'], categoria=info_exp_lab['ano'], semana=info_exp_lab['semana'], modo="AULA")
+                            link_p3 = db.subir_e_converter_para_google_docs(
+                                doc_p3, f"{nome_arq_sync}_PEI_N3", 
+                                trimestre=info_exp_lab['trimestre'], categoria=info_exp_lab['ano'], semana=info_exp_lab['semana'], modo="AULA"
+                            )
 
                         links_final_str = f"--- LINKS ---\nAluno({link_alu}) Prof({link_prof}) PEI_N1({link_p1}) PEI_N3({link_p3})"
 
@@ -1726,7 +1861,7 @@ elif menu == "🧪 Criador de Aulas":
                             f"{links_final_str}"
                         )
 
-                        # Remove duplicatas e salva no banco
+                        # Purga duplicatas e salva no banco
                         db.excluir_aula_pronta_canonica(info_exp_lab['semana'], meta_lab.get('tipo_aula', 'Aula'), info_exp_lab['ano'])
                         db.salvar_no_banco("DB_AULAS_PRONTAS", [
                             datetime.now().strftime("%d/%m/%Y"), info_exp_lab['semana'],
@@ -1737,7 +1872,7 @@ elif menu == "🧪 Criador de Aulas":
                         # Arquiva o plano no Ponto ID como PRODUZIDO
                         db.arquivar_plano_produzido(info_exp_lab['semana'], info_exp_lab['ano'])
 
-                        status_sync.update(label="Material sincronizado e homologado no Google Drive!", state="complete")
+                        status_sync.update(label="Material sincronizado e homologado no Google Drive com sucesso!", state="complete")
                         st.balloons(); time.sleep(0.8); st.rerun()
 
     # --------------------------------------------------------------------------
@@ -1754,6 +1889,7 @@ elif menu == "🧪 Criador de Aulas":
         else:
             c_f_a1, c_f_a2 = st.columns(2)
             f_ano_ac_aula = c_f_a1.segmented_control("Filtrar Série:", ["Todas", "6º", "7º", "8º", "9º"], default="Todas", key=f"f_ano_ac_a_{v_l}")
+            if not f_ano_ac_aula: f_ano_ac_aula = "Todas"
             
             df_aulas_view = df_aulas_reais.copy()
             if f_ano_ac_aula != "Todas":
@@ -1771,7 +1907,6 @@ elif menu == "🧪 Criador de Aulas":
                     c_a_h1.markdown(f"#### {tit_aula}")
                     c_a_h1.caption(f"Série: **{ano_aula}** | Semana: **{sem_aula}** | Data: **{data_aula}**")
 
-                    # Extração de Links
                     def extrair_link_safe(t, tag):
                         m = re.search(rf"{tag}\s*\(\s*(https://docs\.google\.com/document/d/[^\s\)]+)\s*\)", t, re.IGNORECASE)
                         return m.group(1).strip() if m else None
@@ -1788,7 +1923,7 @@ elif menu == "🧪 Criador de Aulas":
                     if l_p3 and "http" in str(l_p3): c_l_btns[3].link_button("PEI Nível 3", str(l_p3), use_container_width=True)
 
                     with st.expander("Visualizar Conteúdo da Aula", expanded=False):
-                        st.markdown(preparar_para_leitura(ai.extrair_tag(txt_aula_c, "PROFESSOR") or txt_aula_c[:1200]))
+                        st.markdown(util.preparar_para_leitura(ai.extrair_tag(txt_aula_c, "PROFESSOR") or txt_aula_c[:1200]))
 
 
 
