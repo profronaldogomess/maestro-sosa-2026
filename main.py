@@ -3422,7 +3422,7 @@ elif menu == "📸 Scanner de Gabaritos":
 
                                             col_s1, col_s2 = st.columns(2)
                                             if col_s1.button("Homologar Correção", type="primary", use_container_width=True, key=f"btn_save_corr_{v}"):
-                                                with st.spinner("Sincronizando imagem no Drive e registrando pontuação..."):
+                                                with st.spinner("Sincronizando imagem no Drive e registrando pontuação com UPSERT atômico..."):
                                                     mat_nome_ref = str(material_ref.get('TIPO_MATERIAL', at_sel))
                                                     link_foto_jpg = db.subir_e_converter_para_google_docs(
                                                         st.session_state.current_scan_img, 
@@ -3440,28 +3440,18 @@ elif menu == "📸 Scanner de Gabaritos":
                                                     for aluno_nome in alunos_alvo:
                                                         match_al = df_turma_completa[df_turma_completa['NOME_ALUNO'] == aluno_nome]
                                                         if not match_al.empty:
-                                                            id_al = db.limpar_id(match_al.iloc[0].get('ID', ''))
-                                                            
-                                                            try:
-                                                                wb_del = db.conectar()
-                                                                ws_del = wb_del.worksheet("DB_GABARITOS_ALUNOS")
-                                                                dados_del = ws_del.get_all_values()
-                                                                for idx_d in range(len(dados_del) - 1, 0, -1):
-                                                                    row_d = dados_del[idx_d]
-                                                                    if len(row_d) > 4 and db.limpar_id(row_d[1]) == id_al and at_sel.split('-')[0].strip() in row_d[4]:
-                                                                        ws_del.delete_rows(idx_d + 1)
-                                                            except: pass
-                                                            
-                                                            db.salvar_no_banco("DB_GABARITOS_ALUNOS", [
-                                                                datetime.now().strftime("%d/%m/%Y"), id_al, aluno_nome, t_sel, mat_nome_ref, respostas_salvar, util.sosa_to_str(nota_f), link_foto_jpg
-                                                            ])
+                                                            id_al = str(db.limpar_id(match_al.iloc[0].get('ID', '')))
+                                                            # Grava com o UPSERT Atômico Blindado (elimina duplicatas prévias)
+                                                            db.salvar_gabarito_escaneado_atomico(
+                                                                datetime.now().strftime("%d/%m/%Y"), id_al, aluno_nome, t_sel, mat_nome_ref, respostas_salvar, nota_f, link_foto_jpg
+                                                            )
                                                     
                                                     db.limpar_notas_turma_trimestre(t_sel, tr_sel)
                                                     del st.session_state.current_scan_res
                                                     del st.session_state.current_scan_img
                                                     if "current_scan_nome_det" in st.session_state:
                                                         del st.session_state.current_scan_nome_det
-                                                    st.success("Avaliação homologada com sucesso!")
+                                                    st.success("Avaliação homologada com sucesso e duplicatas purgadas!")
                                                     time.sleep(0.5)
                                                     st.rerun()
 
@@ -5880,18 +5870,16 @@ elif menu == "📊 Painel de Notas & Vistos":
                     c_sav_b1, c_sav_b2 = st.columns(2)
                     
                     if c_sav_b1.button("Consolidar Notas no Boletim", type="primary", use_container_width=True, key=f"btn_save_boletim_{v}"):
-                        with st.spinner("Gravando notas consolidadas no banco com proteção soberana..."):
+                        with st.spinner("Gravando notas consolidadas no banco com calibração física..."):
                             linhas_boletim_save = []
                             for _, r_ed in df_notas_editado.iterrows():
-                                id_l_s = r_ed['ID']
-                                nome_l_s = r_ed['Estudante']
+                                id_l_s = str(r_ed['ID'])
+                                nome_l_s = str(r_ed['Estudante'])
                                 c1_s = util.sosa_to_float(r_ed.get('Caderno (C1)', 0.0))
                                 c2_s = util.sosa_to_float(r_ed.get('Testes (C2)', 0.0))
                                 c3_s = util.sosa_to_float(r_ed.get('Prova (C3)', 0.0))
                                 bonus_s = util.sosa_to_float(r_ed.get('Bônus / Mérito', 0.0))
                                 rec_s = util.sosa_to_float(r_ed.get('Recuperação', 0.0))
-                                
-                                # RESOLVIDO: Busca blindada evitando KeyError
                                 media_digitada = util.sosa_to_float(r_ed.get('Média Final', r_ed.get('Média Trimestral', 0.0)))
                                 
                                 c1_f = min(3.0, c1_s + max(0.0, bonus_s))
@@ -5908,20 +5896,31 @@ elif menu == "📊 Painel de Notas & Vistos":
                                 else:
                                     media_calculada = media_normal_calc
 
-                                # Preserva a maior nota (calculada ou ajustada na tabela pelo professor)
                                 media_final_salvar = max(media_calculada, media_digitada)
+
+                                # Calibra C1, C2, C3 fisicamente com bônus para coincidir no Sheets
+                                alvo_calibracao = media_normal_calc
+                                av1_cal, av2_cal, av3_cal = c1_s, c2_s, c3_s
+                                if bonus_s > 0:
+                                    av1_cal = min(3.0, round((c1_s + bonus_s) * 2.0) / 2.0)
+                                    sobra_cal = max(0.0, (c1_s + bonus_s) - av1_cal)
+                                    av2_cal = min(3.0, round((c2_s + sobra_cal) * 2.0) / 2.0)
+                                    sobra_cal2 = max(0.0, (c2_s + sobra_cal) - av2_cal)
+                                    av3_cal = min(4.0, round((c3_s + sobra_cal2) * 2.0) / 2.0)
 
                                 linhas_boletim_save.append([
                                     id_l_s, nome_l_s, turma_notas, trim_ativo_notas,
-                                    util.sosa_to_str(c1_s), util.sosa_to_str(c2_s), util.sosa_to_str(c3_s),
+                                    f"{av1_cal:.1f}".replace(".", ","),
+                                    f"{av2_cal:.1f}".replace(".", ","),
+                                    f"{av3_cal:.1f}".replace(".", ","),
                                     util.sosa_to_str(rec_s) if rec_s > 0 else "-1",
-                                    util.sosa_to_str(media_final_salvar)
+                                    f"{media_final_salvar:.1f}".replace(".", ",")
                                 ])
 
                             if linhas_boletim_save:
                                 db.limpar_notas_turma_trimestre(turma_notas, trim_ativo_notas, forcar=True)
                                 db.salvar_lote("DB_NOTAS", linhas_boletim_save)
-                                st.success("Boletim trimestral consolidado com sucesso!")
+                                st.success("Boletim trimestral consolidado com exatidão física no Sheets!")
                                 st.balloons(); time.sleep(0.8); st.rerun()
 
                     if c_sav_b2.button("Gerar Etiquetas para Impressão", use_container_width=True, key=f"btn_etiq_docx_clean_{v}"):
